@@ -2045,6 +2045,7 @@ namespace SpyroNativeEditor
         {
             if (moby == null) return true;
             string text = MobySearchText(moby);
+            if (moby.Type != 0x18) return true;
             if (moby.Type == 0x00) return true;
             if (HasAny(text,
                 "dragon", "pedestal", "fairy", "whirlwind", "return home", "portal", "sound trigger",
@@ -2059,20 +2060,20 @@ namespace SpyroNativeEditor
         private static string TrueAddSafetyWarning(Moby moby)
         {
             if (!IsExperimentalTrueAddTemplate(moby))
-                return "This looks like a simple/self-contained template. It should be the safest true-add class we currently know.";
+                return "This looks like a standalone gem/simple loose collectible. It is the safest true-add class we currently export by default.";
 
             string text = MobySearchText(moby);
             if (HasAny(text, "dragon", "pedestal", "fairy"))
-                return "Warning: dragons are linked clusters. Adding one dragon record does not yet clone the pedestal, fairy/control, rescue camera, and save-state linkage, so it can crash or behave incorrectly.";
+                return "Warning: dragons are linked clusters. Adding one dragon record does not yet clone the pedestal, fairy/control, rescue camera, and save-state linkage, so it can crash or behave incorrectly. Normal BIN export skips this true-add for now.";
             if (text.IndexOf("whirlwind", StringComparison.Ordinal) >= 0)
-                return "Warning: whirlwinds are controller-style records. Adding one standalone record can reference missing trigger/activation data and may crash.";
+                return "Warning: whirlwinds are controller-style records. Adding one standalone record can reference missing trigger/activation data and may crash. Normal BIN export skips this true-add for now.";
             if (HasAny(text, "enemy", "ram", "shepherd", "gnorc", "thief"))
-                return "Warning: enemies can share AI/path/reward state with the donor. Test one true-added enemy at a time before combining it with other experimental adds.";
+                return "Warning: enemies can share AI/path/reward state with the donor. Test one true-added enemy at a time before combining it with other experimental adds. Normal BIN export skips this true-add for now.";
             if (HasAny(text, "chest", "treasure", "life chest", "locked", "charge", "flame"))
-                return "Warning: chests can share collision/reward helper data with the donor. Test one true-added chest at a time before combining it with other experimental adds.";
+                return "Warning: chests can share collision/reward helper data with the donor. Test one true-added chest at a time before combining it with other experimental adds. Normal BIN export skips this true-add for now.";
             if (moby.Type == 0x00)
-                return "Warning: type 0x00 records are usually helpers/controllers, not standalone objects. True-adding these is experimental.";
-            return "Warning: this template has behavior or special-data linkage. Test it by itself before mixing it with other experimental true-adds.";
+                return "Warning: type 0x00 records are usually helpers/controllers, not standalone objects. True-adding these is experimental. Normal BIN export skips this true-add for now.";
+            return "Warning: this template is not a proven standalone gem. It may have behavior, collision, rendering, or special-data linkage. Normal BIN export skips this true-add for now.";
         }
 
         private bool CanUseAsAddSlot(Moby moby)

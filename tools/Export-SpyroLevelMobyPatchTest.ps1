@@ -8,6 +8,8 @@ param(
     [string]$PlanPath = "",
     [switch]$RuntimeInitAppended,
     [string]$RuntimeTemplateRamPath = ".\duckstation-mainram-fresh-stonehill.bin",
+    [ValidateSet("LooseGemsOnly", "All", "None")]
+    [string]$AppendPolicy = "LooseGemsOnly",
     [switch]$PlanOnly
 )
 
@@ -82,6 +84,19 @@ function Get-ArrayField($Object, [string]$Name) {
     if ($null -eq $value) { return @() }
     if ($value -is [System.Array]) { return @($value) }
     return @($value)
+}
+
+function Get-AppendSkipReason($Edit, [string]$Policy) {
+    if ($Policy -eq "All") { return "" }
+    if ($Policy -eq "None") { return "AppendPolicy=None skips all true-added source records." }
+
+    $typeHex = ([string](Get-Field $Edit "typeHex" "")).Trim()
+    if ($Policy -eq "LooseGemsOnly") {
+        if ($typeHex -eq "0x18" -or $typeHex -eq "18") { return "" }
+        return "AppendPolicy=LooseGemsOnly only exports standalone gem true-adds; behavior, controller, chest, enemy, and scenery appends need linked-data handling first."
+    }
+
+    return "Unknown append policy: $Policy"
 }
 
 function Convert-BytesToHex([byte[]]$Bytes) {
@@ -285,12 +300,13 @@ if ([string]::IsNullOrWhiteSpace($PlanPath)) {
 $resolvedPlanPath = Resolve-WorkspacePath $PlanPath
 
 if (-not (Test-Path -LiteralPath $resolvedImagePath)) { throw "Missing source image: $resolvedImagePath" }
-if ($RuntimeInitAppended -and -not (Test-Path -LiteralPath $resolvedRuntimeTemplateRamPath)) {
-    throw "RuntimeInitAppended needs a fresh matching RAM template: $resolvedRuntimeTemplateRamPath"
+if ($RuntimeInitAppended) {
+    throw "RuntimeInitAppended is disabled. The live test showed that copying runtime-layout records into source-table append slots corrupts Stone Hill during load. Source-table appends must clone source records instead."
 }
 
 $layout = Detect-DiscLayout $resolvedImagePath
 $patches = New-Object System.Collections.ArrayList
+$skippedAppends = New-Object System.Collections.ArrayList
 $editSources = New-Object System.Collections.ArrayList
 $runtimeTemplateRam = $null
 if ($RuntimeInitAppended) {
@@ -339,6 +355,22 @@ try {
             $mutationMode = [string](Get-Field $recordMutation "mode" "")
 
             if ($mutationMode -eq "appendFromSource") {
+                $appendSkipReason = Get-AppendSkipReason $edit $AppendPolicy
+                if (-not [string]::IsNullOrWhiteSpace($appendSkipReason)) {
+                    $skippedLabel = [string](Get-Field $edit "label" "")
+                    [void]$skippedAppends.Add([ordered]@{
+                        levelKey = [string]$table.levelKey
+                        levelName = [string]$table.displayName
+                        index = [int](Get-Field $edit "index" -1)
+                        trueIndex = $trueIndex
+                        label = $skippedLabel
+                        typeHex = [string](Get-Field $edit "typeHex" "")
+                        reason = $appendSkipReason
+                    })
+                    Write-Warning "Skipping $($table.displayName) true-add T$trueIndex '$skippedLabel': $appendSkipReason"
+                    continue
+                }
+
                 $sourceTrueIndex = [int](Get-Field $recordMutation "sourceTrueIndex" -1)
                 if ($sourceTrueIndex -lt 0 -or $sourceTrueIndex -ge [int]$table.recordCount) {
                     throw "Append source T$sourceTrueIndex is outside $($table.displayName) source table range."
@@ -464,6 +496,7 @@ $plan = [ordered]@{
     generatedAt = (Get-Date).ToString("s")
     generatedBy = "Export-SpyroLevelMobyPatchTest.ps1"
     warning = "Experimental level moby source-table patch. Use disposable BIN/CUE outputs only."
+    appendPolicy = $AppendPolicy
     imagePath = (Resolve-Path -LiteralPath $resolvedImagePath).Path
     outPath = $(if ($PlanOnly) { $null } else { $resolvedOutPath })
     cuePath = $(if ($PlanOnly) { $null } else { $resolvedCuePath })
@@ -489,6 +522,8 @@ $plan = [ordered]@{
     level = $(if ($tables.Count -eq 1) { $tables[0] } else { [ordered]@{ levelKey = "All"; displayName = "All mapped levels" } })
     editCount = $totalEditCount
     patchCount = $patches.Count
+    skippedAppendCount = $skippedAppends.Count
+    skippedAppends = @($skippedAppends.ToArray())
     patches = @($patches.ToArray())
     binaryPatches = @($patches.ToArray())
 }
@@ -528,3 +563,6 @@ else {
 }
 $patchedRecordKeys = @($patches | Where-Object { [int]$_["trueIndex"] -ge 0 } | ForEach-Object { ([string]$_["levelKey"]) + ":T" + ([int]$_["trueIndex"]).ToString() } | Select-Object -Unique)
 Write-Host ("Patches: {0} source-table writes across {1} edited mobys" -f $patches.Count, $patchedRecordKeys.Count)
+if ($skippedAppends.Count -gt 0) {
+    Write-Host ("Skipped true-add records by append policy: {0}" -f $skippedAppends.Count)
+}
