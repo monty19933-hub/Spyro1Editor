@@ -20,7 +20,7 @@ Updated: 2026-05-13
 - The native editor now exposes slot reuse directly:
   - `Copy Obj` copies the selected source-table object as a donor.
   - `Clone/Add` clones that donor into the selected slot while keeping the selected slot's XYZ.
-  - `Add at Click` lets the user pick an object template and a target slot, clone the template into that slot, then click the terrain map to place it.
+  - `Add at Click` lets the user pick an object template and a reusable/hidden-looking target slot, clone the template into that slot, then click the terrain map to place it.
   - `Remove Slot` soft-removes the selected object by moving its source-table XYZ out of bounds.
 - Artisans has initial linked dragon/pedestal move groups for `T90/T91`, `T92/T93`, and `T142/T143`.
 
@@ -38,6 +38,7 @@ Updated: 2026-05-13
 ## Still Needs Validation
 
 - True add/remove by expanding the source table is not proven yet. Slot reuse is safer because it does not change loader counts or nearby tables.
+- The editor intentionally hides normal visible objects from the `Reuse Slot` dropdown so "add" does not accidentally replace existing scenery/enemies/chests. True new table slots still require finding and patching the level moby count/table allocation safely.
 - Enemy reward-byte behavior needs a focused test per enemy family. Chest `+0x53` is proven; enemies likely use the same byte when they directly drop gems, but path/special-data behavior may still be tied to donor records.
 - Runtime records beyond Artisans `T173` are visible in RAM but are not covered by the mapped Artisans source table yet.
 - True add/remove still means "slot reuse" for now. We can create extra-looking gems/enemies/chests by converting unused or less important slots, but we are not yet expanding the loader table count safely.

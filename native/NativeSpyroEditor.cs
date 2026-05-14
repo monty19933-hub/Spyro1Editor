@@ -770,7 +770,7 @@ namespace SpyroNativeEditor
             TableLayoutPanel objectActions = NewActionPanel(5);
             AddActionLabel(objectActions, 0, "Template");
             objectActions.Controls.Add(addTemplateBox, 1, 0);
-            AddActionLabel(objectActions, 1, "Use Slot");
+            AddActionLabel(objectActions, 1, "Reuse Slot");
             objectActions.Controls.Add(addSlotBox, 1, 1);
             objectActions.Controls.Add(addObjectButton, 0, 2);
             objectActions.SetColumnSpan(addObjectButton, 2);
@@ -1987,23 +1987,17 @@ namespace SpyroNativeEditor
         {
             List<MobyChoice> choices = new List<MobyChoice>();
             HashSet<int> added = new HashSet<int>();
-            if (selectedMobyIndex >= 0 && selectedMobyIndex < mobys.Count && CanUseAsAddSlot(mobys[selectedMobyIndex]))
+            if (selectedMobyIndex >= 0 && selectedMobyIndex < mobys.Count && CanUseAsAddSlot(mobys[selectedMobyIndex]) && IsLikelyReusableSlot(mobys[selectedMobyIndex]))
             {
                 choices.Add(new MobyChoice(selectedMobyIndex, "Selected: " + MobyId(mobys[selectedMobyIndex]) + " " + mobys[selectedMobyIndex].DisplayLabel));
                 added.Add(selectedMobyIndex);
             }
 
-            for (int pass = 0; pass < 2; pass++)
+            for (int i = 0; i < mobys.Count; i++)
             {
-                for (int i = 0; i < mobys.Count; i++)
-                {
-                    if (added.Contains(i) || !CanUseAsAddSlot(mobys[i])) continue;
-                    bool reusable = IsLikelyReusableSlot(mobys[i]);
-                    if ((pass == 0) != reusable) continue;
-                    string prefix = reusable ? "Reusable: " : "Replace: ";
-                    choices.Add(new MobyChoice(i, prefix + MobyId(mobys[i]) + " " + mobys[i].DisplayLabel));
-                    added.Add(i);
-                }
+                if (added.Contains(i) || !CanUseAsAddSlot(mobys[i]) || !IsLikelyReusableSlot(mobys[i])) continue;
+                choices.Add(new MobyChoice(i, "Reusable: " + MobyId(mobys[i]) + " " + mobys[i].DisplayLabel));
+                added.Add(i);
             }
             return choices;
         }
@@ -2101,13 +2095,10 @@ namespace SpyroNativeEditor
 
             Moby source = mobys[sourceChoice.Index];
             Moby target = mobys[targetChoice.Index];
-            string reuseWarning = IsLikelyReusableSlot(target)
-                ? "This slot looks reusable/hidden."
-                : "This will replace an existing visible or functional slot.";
             DialogResult result = MessageBox.Show(
                 this,
-                "Add " + source.DisplayLabel + " by cloning " + MobyId(source) + " into " + MobyId(target) + " " + target.DisplayLabel + "?\n\n" + reuseWarning + "\n\nAfter confirming, click the map to place it.",
-                "Add object by slot reuse",
+                "Add " + source.DisplayLabel + " by cloning " + MobyId(source) + " into reusable slot " + MobyId(target) + " " + target.DisplayLabel + "?\n\nThis does not expand the level's moby table yet. It uses a hidden/reusable source-table slot, then lets you click the map to place it.",
+                "Add object using reusable slot",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
             if (result != DialogResult.Yes) return;
@@ -4875,6 +4866,7 @@ namespace SpyroNativeEditor
             if (e.Button != MouseButtons.Left) return;
             if (editorMode == EditorMode.Terrain)
             {
+                SelectMoby(-1);
                 if (view3D) SelectTerrainAt3D(e.Location);
                 else SelectTerrainAt(e.Location);
                 return;
@@ -4903,6 +4895,13 @@ namespace SpyroNativeEditor
                 PointF world = ScreenToWorld(e.X, e.Y);
                 MoveSelectedToWorldPoint(world.X, world.Y);
                 UpdateTerrainHover(e.Location);
+                canvas.Invalidate();
+            }
+            else
+            {
+                SelectMoby(-1);
+                UpdateTerrainHover(e.Location);
+                statusLabel.Text = "No moby selected.";
                 canvas.Invalidate();
             }
         }
