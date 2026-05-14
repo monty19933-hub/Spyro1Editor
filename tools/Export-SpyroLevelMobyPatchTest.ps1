@@ -6,6 +6,8 @@ param(
     [string]$OutPath = "",
     [string]$CuePath = "",
     [string]$PlanPath = "",
+    [switch]$RuntimeInitAppended,
+    [string]$RuntimeTemplateRamPath = ".\duckstation-mainram-fresh-stonehill.bin",
     [switch]$PlanOnly
 )
 
@@ -15,6 +17,8 @@ $ErrorActionPreference = "Stop"
 $WorkspaceRoot = Split-Path -Parent $PSScriptRoot
 $WadLba = 37
 $RecordStride = 0x58
+$MainRamBase = [Convert]::ToUInt64("80000000", 16)
+$UInt32Mask = [Convert]::ToUInt64("FFFFFFFF", 16)
 $LegacyStride = 0x50
 $CoordOffsets = [ordered]@{ x = 0x0C; y = 0x10; z = 0x14 }
 
@@ -33,6 +37,7 @@ function Get-LevelSourceTable([string]$Key) {
                 wadEntry = 12
                 tableWadOffset = [Convert]::ToInt64("D72B38", 16)
                 recordCount = 195
+                runtimeMobyPointer = [uint64][Convert]::ToUInt64("80173658", 16)
                 confidence = "live/source-proven"
             }
         }
@@ -96,9 +101,25 @@ function Write-Int32LE([byte[]]$Bytes, [int]$Offset, [int]$Value) {
     [Array]::Copy($raw, 0, $Bytes, $Offset, 4)
 }
 
+function Write-UInt32LE([byte[]]$Bytes, [int]$Offset, [uint64]$Value) {
+    [byte[]]$raw = [BitConverter]::GetBytes([uint32]($Value -band $UInt32Mask))
+    [Array]::Copy($raw, 0, $Bytes, $Offset, 4)
+}
+
 function Get-UInt32LE([byte[]]$Bytes, [int]$Offset) {
     if ($Offset -lt 0 -or ($Offset + 4) -gt $Bytes.Length) { return 0 }
     return [BitConverter]::ToUInt32($Bytes, $Offset)
+}
+
+function Get-RuntimeTemplateRecord([byte[]]$RuntimeRam, [uint64]$RuntimeMobyPointer, [int]$TrueIndex) {
+    if ($null -eq $RuntimeRam) { throw "RuntimeInitAppended needs a runtime template RAM dump." }
+    $runtimeOffset = [int](($RuntimeMobyPointer - $MainRamBase) + ([uint64]$TrueIndex * [uint64]$RecordStride))
+    if ($runtimeOffset -lt 0 -or ($runtimeOffset + $RecordStride) -gt $RuntimeRam.Length) {
+        throw "Runtime template record T$TrueIndex is outside the supplied RAM dump."
+    }
+    $record = New-Object byte[] $RecordStride
+    [Array]::Copy($RuntimeRam, $runtimeOffset, $record, 0, $RecordStride)
+    return $record
 }
 
 function Test-AllZero([byte[]]$Bytes) {
@@ -253,6 +274,7 @@ if ([string]::IsNullOrWhiteSpace($OutPath)) {
 
 $resolvedImagePath = Resolve-WorkspacePath $ImagePath
 $resolvedOutPath = Resolve-WorkspacePath $OutPath
+$resolvedRuntimeTemplateRamPath = Resolve-WorkspacePath $RuntimeTemplateRamPath
 if ([string]::IsNullOrWhiteSpace($CuePath)) {
     $CuePath = [System.IO.Path]::ChangeExtension($resolvedOutPath, ".cue")
 }
@@ -263,10 +285,17 @@ if ([string]::IsNullOrWhiteSpace($PlanPath)) {
 $resolvedPlanPath = Resolve-WorkspacePath $PlanPath
 
 if (-not (Test-Path -LiteralPath $resolvedImagePath)) { throw "Missing source image: $resolvedImagePath" }
+if ($RuntimeInitAppended -and -not (Test-Path -LiteralPath $resolvedRuntimeTemplateRamPath)) {
+    throw "RuntimeInitAppended needs a fresh matching RAM template: $resolvedRuntimeTemplateRamPath"
+}
 
 $layout = Detect-DiscLayout $resolvedImagePath
 $patches = New-Object System.Collections.ArrayList
 $editSources = New-Object System.Collections.ArrayList
+$runtimeTemplateRam = $null
+if ($RuntimeInitAppended) {
+    $runtimeTemplateRam = [IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $resolvedRuntimeTemplateRamPath).Path)
+}
 
 $stream = [IO.File]::OpenRead($resolvedImagePath)
 try {
@@ -319,6 +348,17 @@ try {
 
                 $sourceWadOffset = [int64]$table.tableWadOffset + ([int64]$sourceTrueIndex * $RecordStride)
                 [byte[]]$recordBytes = Read-WadBytes $stream $layout $sourceWadOffset $RecordStride
+                $runtimeInitDescription = ""
+                if ($RuntimeInitAppended) {
+                    if ($table.levelKey -ne "StoneHill" -or -not $table.Contains("runtimeMobyPointer")) {
+                        throw "RuntimeInitAppended is only mapped for Stone Hill right now."
+                    }
+                    [byte[]]$runtimeRecordBytes = Get-RuntimeTemplateRecord $runtimeTemplateRam ([uint64]$table.runtimeMobyPointer) $sourceTrueIndex
+                    [Array]::Copy($runtimeRecordBytes, $recordBytes, $RecordStride)
+                    $appendRuntimePointer = ([uint64]$table.runtimeMobyPointer + ([uint64]$trueIndex * [uint64]$RecordStride)) -band $UInt32Mask
+                    Write-UInt32LE $recordBytes 0x00 $appendRuntimePointer
+                    $runtimeInitDescription = " Runtime-initialized from donor T$sourceTrueIndex template and self pointer set to 0x$($appendRuntimePointer.ToString('X8'))."
+                }
                 foreach ($axis in @("x", "y", "z")) {
                     Write-Int32LE $recordBytes ([int]$CoordOffsets[$axis]) (Get-RawEditedAxis $edit $axis)
                 }
@@ -341,7 +381,7 @@ try {
                     throw "$($table.displayName) append target T$trueIndex at WAD 0x$($appendWadOffset.ToString('X')) is not empty in the source image."
                 }
 
-                $description = "Append source record T$trueIndex cloned from donor T$sourceTrueIndex, preserving edited position."
+                $description = "Append source record T$trueIndex cloned from donor T$sourceTrueIndex, preserving edited position." + $runtimeInitDescription
                 if ($savedTrueIndex -ge [int]$table.recordCount -and $savedTrueIndex -ne $trueIndex) {
                     $description += " Compacted from saved append target T$savedTrueIndex to avoid a gap."
                 }
@@ -427,6 +467,8 @@ $plan = [ordered]@{
     imagePath = (Resolve-Path -LiteralPath $resolvedImagePath).Path
     outPath = $(if ($PlanOnly) { $null } else { $resolvedOutPath })
     cuePath = $(if ($PlanOnly) { $null } else { $resolvedCuePath })
+    runtimeInitAppended = [bool]$RuntimeInitAppended
+    runtimeTemplateRamPath = $(if ($RuntimeInitAppended) { (Resolve-Path -LiteralPath $resolvedRuntimeTemplateRamPath).Path } else { $null })
     nativeEditsPath = $(if ($LevelKey -eq "All") { $null } else { @($editSources.ToArray())[0].nativeEditsPath })
     editSources = @($editSources.ToArray())
     discLayout = $layout
