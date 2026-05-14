@@ -43,6 +43,17 @@ Spyro the Dragon (USA)-*
 *texture-vram*.json
 stonehill-wad-ground-model-*.json
 
+# Generated local research reports and edit scratch
+artisans-*.json
+artisans-*.md
+artisans-*.csv
+stonehill-*.json
+stonehill-*.md
+spyro-*.json
+spyro-*.md
+!spyro-moby-mutation-status.md
+!sample-artisans.splevel.json
+
 # Rendered/generated images and texture dumps
 *.png
 *.bmp
