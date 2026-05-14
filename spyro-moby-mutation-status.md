@@ -50,6 +50,7 @@ Updated: 2026-05-13
   - linked clusters like dragons need multi-record append templates rather than single records
 - A mixed Stone Hill true-add test with chests, a ram, a whirlwind, trees, and loose gems could freeze or load into a broken entry state. Normal exports now default to `AppendPolicy=LooseGemsOnly`, so non-gem true-adds remain saved in the editor but are skipped in BIN output until linked-data handling is decoded.
 - `RuntimeInitAppended` was proven unsafe: it copied runtime-layout records into source-table append slots and produced a Stone Hill load with only a handful of plausible mobys. The exporter now rejects that switch. True-add source exports should clone source-table records, like the proven purple loose-gem test.
+- Isolated true-add testing is now wired through `SingleAppendTrueIndex`. The editor's `Test Selected Add BIN` button exports only the selected appended object and skips normal moves plus all other appends, so non-gem true-adds can be tested one at a time.
 - The editor still offers reusable hidden slots for controlled slot-reuse experiments, but true-add is now the default add path.
 - Enemy reward-byte behavior needs a focused test per enemy family. Chest `+0x53` is proven; enemies likely use the same byte when they directly drop gems, but path/special-data behavior may still be tied to donor records.
 - Runtime records beyond Artisans `T173` are visible in RAM but are not covered by the mapped Artisans source table yet.

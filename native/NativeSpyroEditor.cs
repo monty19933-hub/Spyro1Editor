@@ -174,6 +174,7 @@ namespace SpyroNativeEditor
         private Button copyMutationSourceButton;
         private Button pasteMutationButton;
         private Button hideSelectedButton;
+        private Button testSelectedAppendButton;
         private Button liveApplyButton;
         private Button liveRevertButton;
         private Button patchTopRankedButton;
@@ -738,6 +739,7 @@ namespace SpyroNativeEditor
             copyMutationSourceButton = NewPanelButton("Copy Obj");
             pasteMutationButton = NewPanelButton("Clone/Add");
             hideSelectedButton = NewPanelButton("Remove Slot");
+            testSelectedAppendButton = NewPanelButton("Test Selected Add BIN");
             liveApplyButton = NewPanelButton("Live Apply");
             liveRevertButton = NewPanelButton("Live Revert");
             patchTopRankedButton = NewPanelButton("Create Loader BIN");
@@ -768,7 +770,7 @@ namespace SpyroNativeEditor
             gemActions.Controls.Add(setPurpleGemButton, 0, 2);
             gemActions.SetColumnSpan(setPurpleGemButton, 2);
 
-            TableLayoutPanel objectActions = NewActionPanel(5);
+            TableLayoutPanel objectActions = NewActionPanel(6);
             AddActionLabel(objectActions, 0, "Template");
             objectActions.Controls.Add(addTemplateBox, 1, 0);
             AddActionLabel(objectActions, 1, "Add As");
@@ -779,6 +781,8 @@ namespace SpyroNativeEditor
             objectActions.Controls.Add(pasteMutationButton, 1, 3);
             objectActions.Controls.Add(hideSelectedButton, 0, 4);
             objectActions.SetColumnSpan(hideSelectedButton, 2);
+            objectActions.Controls.Add(testSelectedAppendButton, 0, 5);
+            objectActions.SetColumnSpan(testSelectedAppendButton, 2);
 
             TableLayoutPanel toolActions = NewActionPanel(4);
             toolActions.Controls.Add(combinedPatchButton, 0, 0);
@@ -810,6 +814,7 @@ namespace SpyroNativeEditor
             copyMutationSourceButton.Click += delegate { CopySelectedMutationSource(); };
             pasteMutationButton.Click += delegate { PasteMutationIntoSelected(); };
             hideSelectedButton.Click += delegate { HideSelectedMobySlot(); };
+            testSelectedAppendButton.Click += delegate { RunSingleAppendExporter(); };
             liveApplyButton.Click += delegate { if (editorMode == EditorMode.Terrain) RunLiveTerrainMove(false); else RunLiveMobyMove(false); };
             liveRevertButton.Click += delegate { if (editorMode == EditorMode.Terrain) RunLiveTerrainMove(true); else RunLiveMobyMove(true); };
             patchTopRankedButton.Click += delegate { RunPatchExporter(true); };
@@ -1934,6 +1939,8 @@ namespace SpyroNativeEditor
                 hideSelectedButton.Enabled = canUseSelectedSlot;
             if (pasteMutationButton != null)
                 pasteMutationButton.Enabled = canUseSelectedSlot && mutationClipboardMobyIndex >= 0 && mutationClipboardMobyIndex < mobys.Count && mutationClipboardMobyIndex != selectedMobyIndex;
+            if (testSelectedAppendButton != null)
+                testSelectedAppendButton.Enabled = currentLevelSupportsSourcePatchers && moby != null && moby.IsAppendedRecord && moby.TrueIndex >= SourceRecordCountForLevel(currentLevelKey);
             UpdateAddObjectButton();
         }
 
@@ -2637,6 +2644,7 @@ namespace SpyroNativeEditor
                 notes.AppendLine("Live Apply writes only runtime XYZ into DuckStation. Use it to identify visible mobys, not to prove collision or rewards.");
                 notes.AppendLine("Create Loader BIN writes saved Stone Hill + Artisans moby edits into one disposable disc image. Fresh-load that CUE for permanent placement, collision, and rewards.");
                 notes.AppendLine("Add New at Click appends a true new source moby record. Copy Obj/Clone-Add remains available for slot reuse experiments.");
+                notes.AppendLine("Test Selected Add BIN writes only the selected true-added object into a disposable CUE, which is the safe path for chest/enemy/scenery experiments.");
                 if (IsStoneHillLevel())
                 {
                     notes.AppendLine("Create Terrain BIN writes saved terrain Z edits through the exact runtime scene-sector source found in the WAD.");
@@ -3378,6 +3386,66 @@ namespace SpyroNativeEditor
             catch (Exception ex)
             {
                 MessageBox.Show(this, ex.Message, "Could not start patch exporter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void RunSingleAppendExporter()
+        {
+            if (!currentLevelSupportsSourcePatchers)
+            {
+                MessageBox.Show(this, currentLevelName + " source BIN export is not wired yet.", "Exporter not available", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (selectedMobyIndex < 0 || selectedMobyIndex >= mobys.Count)
+            {
+                MessageBox.Show(this, "Select one true-added object first.", "No added object selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            Moby moby = mobys[selectedMobyIndex];
+            if (!moby.IsAppendedRecord || moby.TrueIndex < SourceRecordCountForLevel(currentLevelKey))
+            {
+                MessageBox.Show(this, "Select a true-added object first. This test exporter only writes one appended source record and ignores other edits.", "Not a true-added object", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            DialogResult result = MessageBox.Show(
+                this,
+                "Create an isolated test BIN for only " + MobyId(moby) + " " + moby.DisplayLabel + "?\n\nThis ignores normal moves and every other added object. Use it to test one experimental true-add safely.",
+                "Test one true-added object",
+                MessageBoxButtons.YesNo,
+                IsExperimentalTrueAddTemplate(moby) ? MessageBoxIcon.Warning : MessageBoxIcon.Question);
+            if (result != DialogResult.Yes) return;
+
+            SaveEdits();
+
+            string scriptPath = Path.Combine(workspace, "tools", "Export-SpyroLevelMobyPatchTest.ps1");
+            if (!File.Exists(scriptPath))
+            {
+                MessageBox.Show(this, "Missing patch exporter script: " + scriptPath, "Patch exporter missing", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            try
+            {
+                string outName = "Spyro the Dragon (USA)-" + currentLevelKey.ToLowerInvariant() + "-singleadd-T" + moby.TrueIndex.ToString() + ".bin";
+                string outPath = Path.Combine(workspace, outName);
+                StringBuilder args = new StringBuilder();
+                args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
+                args.Append(QuoteArgument(scriptPath));
+                args.Append(" -LevelKey ").Append(QuoteArgument(ScriptLevelKey(currentLevelKey)));
+                args.Append(" -SingleAppendTrueIndex ").Append(moby.TrueIndex.ToString());
+                args.Append(" -AppendPolicy All");
+                args.Append(" -OutPath ").Append(QuoteArgument(outPath));
+                args.Append(" -CuePath ").Append(QuoteArgument(Path.ChangeExtension(outPath, ".cue")));
+                args.Append(" -PlanPath ").Append(QuoteArgument(outPath + ".patchplan.json"));
+
+                StartWorkspaceProcess("powershell.exe", args.ToString());
+                statusLabel.Text = "Started isolated true-add BIN export for " + MobyId(moby) + ".";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not start single-add exporter", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

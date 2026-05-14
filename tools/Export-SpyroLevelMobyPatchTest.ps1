@@ -10,6 +10,7 @@ param(
     [string]$RuntimeTemplateRamPath = ".\duckstation-mainram-fresh-stonehill.bin",
     [ValidateSet("LooseGemsOnly", "All", "None")]
     [string]$AppendPolicy = "LooseGemsOnly",
+    [int]$SingleAppendTrueIndex = -1,
     [switch]$PlanOnly
 )
 
@@ -355,7 +356,20 @@ try {
             $mutationMode = [string](Get-Field $recordMutation "mode" "")
 
             if ($mutationMode -eq "appendFromSource") {
-                $appendSkipReason = Get-AppendSkipReason $edit $AppendPolicy
+                if ($SingleAppendTrueIndex -ge 0 -and $trueIndex -ne $SingleAppendTrueIndex) {
+                    [void]$skippedAppends.Add([ordered]@{
+                        levelKey = [string]$table.levelKey
+                        levelName = [string]$table.displayName
+                        index = [int](Get-Field $edit "index" -1)
+                        trueIndex = $trueIndex
+                        label = [string](Get-Field $edit "label" "")
+                        typeHex = [string](Get-Field $edit "typeHex" "")
+                        reason = "SingleAppendTrueIndex selected T$SingleAppendTrueIndex for isolated testing."
+                    })
+                    continue
+                }
+
+                $appendSkipReason = if ($SingleAppendTrueIndex -ge 0) { "" } else { Get-AppendSkipReason $edit $AppendPolicy }
                 if (-not [string]::IsNullOrWhiteSpace($appendSkipReason)) {
                     $skippedLabel = [string](Get-Field $edit "label" "")
                     [void]$skippedAppends.Add([ordered]@{
@@ -420,6 +434,10 @@ try {
                 [void]$patches.Add((New-PatchRecord $table $layout $edit $trueIndex "moby-record-append" 0x00 $recordBytes $description))
                 $appendMaxTrueIndex = [Math]::Max($appendMaxTrueIndex, $trueIndex)
                 $hasAppend = $true
+                continue
+            }
+
+            if ($SingleAppendTrueIndex -ge 0) {
                 continue
             }
 
@@ -497,6 +515,7 @@ $plan = [ordered]@{
     generatedBy = "Export-SpyroLevelMobyPatchTest.ps1"
     warning = "Experimental level moby source-table patch. Use disposable BIN/CUE outputs only."
     appendPolicy = $AppendPolicy
+    singleAppendTrueIndex = $SingleAppendTrueIndex
     imagePath = (Resolve-Path -LiteralPath $resolvedImagePath).Path
     outPath = $(if ($PlanOnly) { $null } else { $resolvedOutPath })
     cuePath = $(if ($PlanOnly) { $null } else { $resolvedCuePath })
@@ -564,5 +583,5 @@ else {
 $patchedRecordKeys = @($patches | Where-Object { [int]$_["trueIndex"] -ge 0 } | ForEach-Object { ([string]$_["levelKey"]) + ":T" + ([int]$_["trueIndex"]).ToString() } | Select-Object -Unique)
 Write-Host ("Patches: {0} source-table writes across {1} edited mobys" -f $patches.Count, $patchedRecordKeys.Count)
 if ($skippedAppends.Count -gt 0) {
-    Write-Host ("Skipped true-add records by append policy: {0}" -f $skippedAppends.Count)
+    Write-Host ("Skipped true-add records: {0}" -f $skippedAppends.Count)
 }
