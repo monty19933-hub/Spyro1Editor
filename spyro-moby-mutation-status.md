@@ -12,6 +12,7 @@ Updated: 2026-05-13
   - Artisans: `0x9D42A8`, current value `174`.
 - Both mapped source tables currently have a zero-filled append area after the mapped source records, so true-add can be tested without relocating the WAD file.
 - True add is now proven for simple standalone mobys. Stone Hill append test cloned `T79` into new source record `T195`, changed it to purple, and the fresh-loaded game showed the gem and awarded 25 treasure.
+- Isolated Stone Hill scenery true-add is now partially proven. A focused single-add test cloned Skinny Tree donor `T63` from saved appended edit `T197` into new source record `T195`; Stone Hill fly-in did not crash.
 - Normal moby moves are permanent when the source-table XYZ fields at `+0x0C/+0x10/+0x14` are patched.
 - Slot reuse can create a working enemy/object from another same-level source record. Artisans test: sheep slot `T110` cloned from Treasure Gnorc `T7` became a Treasure Gnorc in game.
 - Slot-reused enemies may still carry donor-linked behavior/path data. Artisans Treasure Gnorc clone ran back toward the original donor route before doing its normal path.
