@@ -314,12 +314,8 @@ try {
                 if ($sourceTrueIndex -lt 0 -or $sourceTrueIndex -ge [int]$table.recordCount) {
                     throw "Append source T$sourceTrueIndex is outside $($table.displayName) source table range."
                 }
-                if ($trueIndex -lt [int]$table.recordCount) {
-                    $trueIndex = $appendMaxTrueIndex + 1
-                }
-                if ($trueIndex -lt [int]$table.recordCount) {
-                    throw "Append target T$trueIndex must be at or after $($table.displayName) source count $($table.recordCount)."
-                }
+                $savedTrueIndex = $trueIndex
+                $trueIndex = $appendMaxTrueIndex + 1
 
                 $sourceWadOffset = [int64]$table.tableWadOffset + ([int64]$sourceTrueIndex * $RecordStride)
                 [byte[]]$recordBytes = Read-WadBytes $stream $layout $sourceWadOffset $RecordStride
@@ -346,6 +342,9 @@ try {
                 }
 
                 $description = "Append source record T$trueIndex cloned from donor T$sourceTrueIndex, preserving edited position."
+                if ($savedTrueIndex -ge [int]$table.recordCount -and $savedTrueIndex -ne $trueIndex) {
+                    $description += " Compacted from saved append target T$savedTrueIndex to avoid a gap."
+                }
                 [void]$patches.Add((New-PatchRecord $table $layout $edit $trueIndex "moby-record-append" 0x00 $recordBytes $description))
                 $appendMaxTrueIndex = [Math]::Max($appendMaxTrueIndex, $trueIndex)
                 $hasAppend = $true

@@ -2287,10 +2287,16 @@ namespace SpyroNativeEditor
         private void HideSelectedMobySlot()
         {
             if (selectedMobyIndex < 0 || selectedMobyIndex >= mobys.Count) return;
-            Moby moby = mobys[selectedMobyIndex];
+            HideMobySlot(selectedMobyIndex);
+        }
+
+        private void HideMobySlot(int mobyIndex)
+        {
+            if (mobyIndex < 0 || mobyIndex >= mobys.Count) return;
+            Moby moby = mobys[mobyIndex];
             if (moby.IsAppendedRecord)
             {
-                RemoveAppendedMoby(selectedMobyIndex, "Removed new object " + MobyId(moby) + ". Save Edits to keep it removed.");
+                RemoveAppendedMoby(mobyIndex, "Removed new object " + MobyId(moby) + ". Save Edits to keep it removed.");
                 return;
             }
             if (!moby.Patchable || moby.TrueIndex < 0 || moby.TrueIndex >= SourceRecordCountForLevel(currentLevelKey))
@@ -2310,7 +2316,8 @@ namespace SpyroNativeEditor
             moby.SetHiddenSlotOverride();
             hasUnsavedEdits = true;
             BuildSelectionGroups();
-            RefreshMobyListRow(selectedMobyIndex);
+            RefreshMobyListRow(mobyIndex);
+            SelectMoby(mobyIndex);
             UpdateInspector();
             canvas.Invalidate();
             statusLabel.Text = "Hid " + MobyId(moby) + ". Save Edits, then Create Loader BIN.";
@@ -2988,11 +2995,7 @@ namespace SpyroNativeEditor
         {
             if (mobyIndex < 0 || mobyIndex >= mobys.Count) return;
             mobys.RemoveAt(mobyIndex);
-            for (int i = 0; i < mobys.Count; i++)
-            {
-                if (mobys[i].IsAppendedRecord)
-                    mobys[i].Index = i;
-            }
+            NormalizeAppendedTrueIndexes();
             selectedMobyIndex = Math.Min(mobyIndex, mobys.Count - 1);
             hasUnsavedEdits = true;
             BuildSelectionGroups();
@@ -3000,6 +3003,20 @@ namespace SpyroNativeEditor
             UpdateInspector();
             canvas.Invalidate();
             statusLabel.Text = message;
+        }
+
+        private void NormalizeAppendedTrueIndexes()
+        {
+            int nextTrueIndex = SourceRecordCountForLevel(currentLevelKey);
+            for (int i = 0; i < mobys.Count; i++)
+            {
+                Moby moby = mobys[i];
+                if (!moby.IsAppendedRecord) continue;
+                moby.Index = i;
+                moby.TrueIndex = nextTrueIndex;
+                moby.PatchLead = "append source record T" + nextTrueIndex.ToString() + " from donor T" + moby.AppendSourceTrueIndex.ToString();
+                nextTrueIndex++;
+            }
         }
 
         private void SnapSelectedToGround()
@@ -3158,6 +3175,7 @@ namespace SpyroNativeEditor
         {
             try
             {
+                NormalizeAppendedTrueIndexes();
                 savedEditCount = MobyEditStore.Save(editPath, mobys, currentLevelName);
                 savedTerrainEditCount = TerrainEditStore.Save(terrainEditPath, geometry == null ? null : geometry.Polygons, currentLevelName);
                 hasUnsavedEdits = false;
@@ -3539,6 +3557,7 @@ namespace SpyroNativeEditor
             try
             {
                 int count = MobyEditStore.Load(editPath, mobys, currentLevelKey);
+                NormalizeAppendedTrueIndexes();
                 savedTerrainEditCount = TerrainEditStore.Load(terrainEditPath, geometry == null ? null : geometry.Polygons);
                 savedEditCount = count;
                 hasUnsavedEdits = false;
@@ -4869,6 +4888,11 @@ namespace SpyroNativeEditor
             undoItem.Enabled = moby.IsEdited;
             undoItem.Click += delegate { UndoSingleMobyEdit(mobyIndex); };
             menu.Items.Add(undoItem);
+            menu.Items.Add(new ToolStripSeparator());
+            ToolStripMenuItem removeItem = new ToolStripMenuItem(moby.IsAppendedRecord ? "Remove new object" : "Hide/remove source object");
+            removeItem.Enabled = moby.IsAppendedRecord || (moby.Patchable && moby.TrueIndex >= 0 && moby.TrueIndex < SourceRecordCountForLevel(currentLevelKey));
+            removeItem.Click += delegate { HideMobySlot(mobyIndex); };
+            menu.Items.Add(removeItem);
             menu.Show(canvas, location);
         }
 
