@@ -1,6 +1,6 @@
 # Spyro Moby Mutation Status
 
-Updated: 2026-05-13
+Updated: 2026-05-14
 
 ## Proven
 
@@ -14,6 +14,9 @@ Updated: 2026-05-13
 - True add is now proven for simple standalone mobys. Stone Hill append test cloned `T79` into new source record `T195`, changed it to purple, and the fresh-loaded game showed the gem and awarded 25 treasure.
 - Isolated Stone Hill scenery true-add is now partially proven. A focused single-add test cloned Skinny Tree donor `T63` from saved appended edit `T197` into new source record `T195`; Stone Hill fly-in did not crash. A focused Wider Tree donor `T46` test from saved appended edit `T200` did not crash, but the tree was not visible in game.
 - Isolated Stone Hill chest true-add is proven for at least Charge Chest donor `T148`. A focused single-add test from saved appended edit `T195` loaded without crashing, showed the chest, had collision, and dropped a yellow gem that added to the score.
+- Stone Hill donor `T144` is not a safe standalone life chest template. A focused single-add test from saved appended edit `T196` spawned a dragon-like object, played the collect/rescue noise, disappeared without adding to the dragon count, then crashed after a few moments. Treat it as dragon-linked/control data until the dragon cluster is decoded.
+- Stone Hill donor `T6` can be true-added visually as a ram, but the focused test showed it inert and invulnerable. Enemy true-adds likely need linked AI, hit, and path state in addition to the visible source record.
+- Stone Hill donor `T70` can be true-added as a delayed whirlwind without an immediate crash, but the first focused test placed it underground. A raised-placement CUE is now the next validation step.
 - Normal moby moves are permanent when the source-table XYZ fields at `+0x0C/+0x10/+0x14` are patched.
 - Slot reuse can create a working enemy/object from another same-level source record. Artisans test: sheep slot `T110` cloned from Treasure Gnorc `T7` became a Treasure Gnorc in game.
 - Slot-reused enemies may still carry donor-linked behavior/path data. Artisans Treasure Gnorc clone ran back toward the original donor route before doing its normal path.
@@ -48,7 +51,9 @@ Updated: 2026-05-13
 
 - True add should be broadened beyond simple loose gems:
   - more chest types need append testing, but charge chest collision/break/reward behavior is proven when isolated
-  - enemies need append testing for AI/home/path behavior
+  - enemies need linked AI/home/path/hit behavior, since the isolated ram append appeared but could not be flamed or charged
+  - `T144` needs reclassification before any life chest add path; current evidence points to dragon-linked/control behavior, not a standalone chest
+  - whirlwinds need raised-placement activation testing
   - linked clusters like dragons need multi-record append templates rather than single records
 - A mixed Stone Hill true-add test with chests, a ram, a whirlwind, trees, and loose gems could freeze or load into a broken entry state. Normal exports now default to `AppendPolicy=LooseGemsOnly`, so non-gem true-adds remain saved in the editor but are skipped in BIN output until linked-data handling is decoded.
 - `RuntimeInitAppended` was proven unsafe: it copied runtime-layout records into source-table append slots and produced a Stone Hill load with only a handful of plausible mobys. The exporter now rejects that switch. True-add source exports should clone source-table records, like the proven purple loose-gem test.
