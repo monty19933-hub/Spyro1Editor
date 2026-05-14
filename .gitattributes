@@ -1,0 +1,13 @@
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.cs text eol=crlf
+*.md text eol=lf
+*.json text eol=lf
+
+*.bin binary
+*.cue text eol=crlf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.bmp binary

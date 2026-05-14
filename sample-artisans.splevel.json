@@ -1,0 +1,76 @@
+{
+  "format": "spyro-level-editor-project-v1",
+  "game": "Spyro the Dragon (PS1)",
+  "levelName": "Artisans Sample Meadow",
+  "source": "Sample project for the Windows editor prototype.",
+  "dimensions": {
+    "width": 2600,
+    "height": 1700
+  },
+  "palette": {
+    "name": "Artisans Day",
+    "background": "#7AB5FF",
+    "terrain": "#6CC46F",
+    "accent": "#E8CE6D"
+  },
+  "music": {
+    "id": "stone_hill",
+    "name": "Stone Hill"
+  },
+  "discImage": {
+    "path": "",
+    "fileName": "",
+    "sizeBytes": 0,
+    "sha1": "",
+    "format": "",
+    "serial": "",
+    "volumeId": "",
+    "importedAt": "",
+    "analysis": [],
+    "spyroWad": null,
+    "files": []
+  },
+  "binaryPatches": [],
+  "entities": [
+    {
+      "id": "sample-gem-red-01",
+      "type": "Gem",
+      "name": "Red Gem Near Start",
+      "x": 360,
+      "y": 420,
+      "z": 0,
+      "color": "#D93C36",
+      "notes": "Sample gem placement."
+    },
+    {
+      "id": "sample-gem-blue-01",
+      "type": "Gem",
+      "name": "Blue Gem Ridge",
+      "x": 900,
+      "y": 560,
+      "z": 24,
+      "color": "#2F65D9",
+      "notes": ""
+    },
+    {
+      "id": "sample-enemy-01",
+      "type": "Enemy",
+      "name": "Gnorc Patrol",
+      "x": 1320,
+      "y": 840,
+      "z": 0,
+      "color": "#865832",
+      "notes": "Drag to reposition the spawn anchor."
+    },
+    {
+      "id": "sample-dragon-01",
+      "type": "Dragon",
+      "name": "Dragon Platform",
+      "x": 1860,
+      "y": 1050,
+      "z": 80,
+      "color": "#E9D14C",
+      "notes": "Dragon save location."
+    }
+  ]
+}

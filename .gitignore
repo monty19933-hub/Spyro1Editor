@@ -1,0 +1,73 @@
+# Game images, patched discs, and emulator media
+*.bin
+*.cue
+*.iso
+*.img
+*.chd
+*.ecm
+*.m3u
+*.ccd
+*.sub
+*.toc
+
+# Emulator saves, states, memory, and VRAM captures
+*.sav
+*.srm
+*.mcr
+*.mcd
+*.dmp
+*.dump
+*.state
+*.state.*
+duckstation-*
+*-mainram*
+*-vram*
+*-before-clean.bin
+*-live-capture-*.bin
+
+# Generated patched-disc outputs and patch plans
+Spyro the Dragon (USA)-*
+*.patchplan.json
+*.planonly.json
+*patchplan*.json
+*loaderpatchtest*.json
+*nativepatchtest*.json
+
+# Large generated analysis/overlay data
+*-runtime-*.json
+*runtime-scene*.json
+*runtime-moby*.json
+*terrain-source-links*.json
+*source-window-layouts*.json
+*pointer-tables*.json
+*texture-vram*.json
+stonehill-wad-ground-model-*.json
+
+# Rendered/generated images and texture dumps
+*.png
+*.bmp
+*.jpg
+*.jpeg
+*.tga
+*.webp
+
+# Build outputs
+native/*.exe
+native/*.dll
+native/*.pdb
+native/*.obj
+native/*.ilk
+native/*.cache
+
+# Logs and transient command output
+*.log
+*.out.txt
+*.err.txt
+native-startup-error.txt
+
+# Local/archive scratch
+archive/
+tmp/
+temp/
+.vs/
+.vscode/
