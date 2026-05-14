@@ -1,0 +1,41 @@
+{
+  "generatedAt": "2026-05-13T23:40:00",
+  "purpose": "Artisans Home behavior-link pass. linkedMove=true groups are conservative editor move links for dragon/pedestal pairs observed during focused identity tests.",
+  "summary": {
+    "totalGroups": 3,
+    "linkedMoveGroups": 3,
+    "reviewGroups": 0
+  },
+  "linkGroups": [
+    {
+      "key": "artisans:dragon-pedestal-t90-t91",
+      "name": "Behavior: Dragon/pedestal T90/T91",
+      "linkedMove": true,
+      "confidence": "live-observed",
+      "basis": "T90 is a dragon pedestal and T91 is the co-located visible dragon actor.",
+      "reason": "Move the dragon actor and pedestal together so the rescue platform stays aligned.",
+      "trueIndexes": [90, 91],
+      "memberIds": ["T90", "T91"]
+    },
+    {
+      "key": "artisans:dragon-pedestal-t92-t93",
+      "name": "Behavior: Dragon/pedestal T92/T93",
+      "linkedMove": true,
+      "confidence": "strong-inferred",
+      "basis": "Catalog identifies T92 as a dragon pedestal and T93 as the co-located visible dragon actor.",
+      "reason": "Move the dragon actor and pedestal together so the rescue platform stays aligned.",
+      "trueIndexes": [92, 93],
+      "memberIds": ["T92", "T93"]
+    },
+    {
+      "key": "artisans:dragon-pedestal-t142-t143",
+      "name": "Behavior: Dragon/pedestal T142/T143",
+      "linkedMove": true,
+      "confidence": "strong-inferred",
+      "basis": "Catalog identifies T142 as a dragon pedestal and T143 as the co-located visible dragon actor.",
+      "reason": "Move the dragon actor and pedestal together so the rescue platform stays aligned.",
+      "trueIndexes": [142, 143],
+      "memberIds": ["T142", "T143"]
+    }
+  ]
+}

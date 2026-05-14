@@ -20,7 +20,9 @@ Updated: 2026-05-13
 - The native editor now exposes slot reuse directly:
   - `Copy Obj` copies the selected source-table object as a donor.
   - `Clone/Add` clones that donor into the selected slot while keeping the selected slot's XYZ.
+  - `Add at Click` lets the user pick an object template and a target slot, clone the template into that slot, then click the terrain map to place it.
   - `Remove Slot` soft-removes the selected object by moving its source-table XYZ out of bounds.
+- Artisans has initial linked dragon/pedestal move groups for `T90/T91`, `T92/T93`, and `T142/T143`.
 
 ## Working Experiments
 

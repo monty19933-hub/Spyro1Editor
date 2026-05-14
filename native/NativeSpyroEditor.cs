@@ -168,6 +168,9 @@ namespace SpyroNativeEditor
         private Button setBlueGemButton;
         private Button setYellowGemButton;
         private Button setPurpleGemButton;
+        private ComboBox addTemplateBox;
+        private ComboBox addSlotBox;
+        private Button addObjectButton;
         private Button copyMutationSourceButton;
         private Button pasteMutationButton;
         private Button hideSelectedButton;
@@ -234,6 +237,7 @@ namespace SpyroNativeEditor
         private int savedTerrainEditCount;
         private int activeSelectionGroupIndex = -1;
         private int mutationClipboardMobyIndex = -1;
+        private bool updatingAddObjectChoices;
         private bool updatingGroupSelection;
         private Bitmap terrainTextureAtlas;
         private Bitmap terrainTextureLumaAtlas;
@@ -727,6 +731,9 @@ namespace SpyroNativeEditor
             setBlueGemButton = NewPanelButton("Set Blue 5");
             setYellowGemButton = NewPanelButton("Set Yellow 10");
             setPurpleGemButton = NewPanelButton("Set Purple 25");
+            addTemplateBox = NewPanelComboBox();
+            addSlotBox = NewPanelComboBox();
+            addObjectButton = NewPanelButton("Add at Click");
             copyMutationSourceButton = NewPanelButton("Copy Obj");
             pasteMutationButton = NewPanelButton("Clone/Add");
             hideSelectedButton = NewPanelButton("Remove Slot");
@@ -760,10 +767,16 @@ namespace SpyroNativeEditor
             gemActions.Controls.Add(setPurpleGemButton, 0, 2);
             gemActions.SetColumnSpan(setPurpleGemButton, 2);
 
-            TableLayoutPanel objectActions = NewActionPanel(2);
-            objectActions.Controls.Add(copyMutationSourceButton, 0, 0);
-            objectActions.Controls.Add(pasteMutationButton, 1, 0);
-            objectActions.Controls.Add(hideSelectedButton, 0, 1);
+            TableLayoutPanel objectActions = NewActionPanel(5);
+            AddActionLabel(objectActions, 0, "Template");
+            objectActions.Controls.Add(addTemplateBox, 1, 0);
+            AddActionLabel(objectActions, 1, "Use Slot");
+            objectActions.Controls.Add(addSlotBox, 1, 1);
+            objectActions.Controls.Add(addObjectButton, 0, 2);
+            objectActions.SetColumnSpan(addObjectButton, 2);
+            objectActions.Controls.Add(copyMutationSourceButton, 0, 3);
+            objectActions.Controls.Add(pasteMutationButton, 1, 3);
+            objectActions.Controls.Add(hideSelectedButton, 0, 4);
             objectActions.SetColumnSpan(hideSelectedButton, 2);
 
             TableLayoutPanel toolActions = NewActionPanel(4);
@@ -790,6 +803,9 @@ namespace SpyroNativeEditor
             setBlueGemButton.Click += delegate { SetSelectedGemColor("blue"); };
             setYellowGemButton.Click += delegate { SetSelectedGemColor("yellow"); };
             setPurpleGemButton.Click += delegate { SetSelectedGemColor("purple"); };
+            addTemplateBox.SelectedIndexChanged += delegate { if (!updatingAddObjectChoices) UpdateAddObjectButton(); };
+            addSlotBox.SelectedIndexChanged += delegate { if (!updatingAddObjectChoices) UpdateAddObjectButton(); };
+            addObjectButton.Click += delegate { AddObjectFromTemplateAtClick(); };
             copyMutationSourceButton.Click += delegate { CopySelectedMutationSource(); };
             pasteMutationButton.Click += delegate { PasteMutationIntoSelected(); };
             hideSelectedButton.Click += delegate { HideSelectedMobySlot(); };
@@ -829,6 +845,16 @@ namespace SpyroNativeEditor
             return panel;
         }
 
+        private static void AddActionLabel(TableLayoutPanel panel, int row, string text)
+        {
+            Label label = new Label();
+            label.Text = text;
+            label.Dock = DockStyle.Fill;
+            label.TextAlign = ContentAlignment.MiddleLeft;
+            label.AutoEllipsis = true;
+            panel.Controls.Add(label, 0, row);
+        }
+
         private static TabPage NewActionTab(string title, Control content)
         {
             TabPage page = new TabPage(title);
@@ -837,6 +863,17 @@ namespace SpyroNativeEditor
             content.Dock = DockStyle.Fill;
             page.Controls.Add(content);
             return page;
+        }
+
+        private static ComboBox NewPanelComboBox()
+        {
+            ComboBox box = new ComboBox();
+            box.Dock = DockStyle.Fill;
+            box.DropDownStyle = ComboBoxStyle.DropDownList;
+            box.IntegralHeight = false;
+            box.MaxDropDownItems = 14;
+            box.Margin = new Padding(3);
+            return box;
         }
 
         private static Label NewDetailLabel()
@@ -1371,7 +1408,7 @@ namespace SpyroNativeEditor
             selectionGroups.Clear();
 
             int behaviorGroups = AddBehaviorLinkSelectionGroups();
-            if (behaviorGroups == 0)
+            if (behaviorGroups == 0 && IsStoneHillLevel())
                 AddSelectionGroupByTrueIndexes("Linked: Dragon platform set", "linked:dragon-platform", true, new int[] { 86, 140, 185 });
             AddSelectionGroupByPredicate("Special: Dragons and pedestals", "special:dragons", false, delegate(Moby moby) { return string.Equals(CatalogCategory(moby), CatalogDragons, StringComparison.Ordinal); });
             AddSelectionGroupByPredicate("Special: Whirlwinds and exits", "special:whirlwinds-exits", false, delegate(Moby moby)
@@ -1388,7 +1425,7 @@ namespace SpyroNativeEditor
 
         private int AddBehaviorLinkSelectionGroups()
         {
-            string path = Path.Combine(workspace, "stonehill-behavior-links.json");
+            string path = Path.Combine(workspace, currentLevelKey + "-behavior-links.json");
             if (!File.Exists(path)) return 0;
 
             try
@@ -1896,6 +1933,196 @@ namespace SpyroNativeEditor
                 hideSelectedButton.Enabled = canUseSelectedSlot;
             if (pasteMutationButton != null)
                 pasteMutationButton.Enabled = canUseSelectedSlot && mutationClipboardMobyIndex >= 0 && mutationClipboardMobyIndex < mobys.Count && mutationClipboardMobyIndex != selectedMobyIndex;
+            UpdateAddObjectButton();
+        }
+
+        private void RefreshObjectAddChoices()
+        {
+            if (addTemplateBox == null || addSlotBox == null) return;
+            int previousTemplate = SelectedChoiceIndex(addTemplateBox);
+            int previousSlot = SelectedChoiceIndex(addSlotBox);
+            updatingAddObjectChoices = true;
+            try
+            {
+                addTemplateBox.BeginUpdate();
+                addTemplateBox.Items.Clear();
+                foreach (MobyChoice choice in BuildAddTemplateChoices())
+                    addTemplateBox.Items.Add(choice);
+                SelectChoice(addTemplateBox, previousTemplate);
+                addTemplateBox.EndUpdate();
+
+                addSlotBox.BeginUpdate();
+                addSlotBox.Items.Clear();
+                foreach (MobyChoice choice in BuildAddSlotChoices())
+                    addSlotBox.Items.Add(choice);
+                int preferredSlot = selectedMobyIndex >= 0 ? selectedMobyIndex : previousSlot;
+                SelectChoice(addSlotBox, preferredSlot);
+                addSlotBox.EndUpdate();
+            }
+            finally
+            {
+                updatingAddObjectChoices = false;
+            }
+            UpdateAddObjectButton();
+        }
+
+        private List<MobyChoice> BuildAddTemplateChoices()
+        {
+            List<MobyChoice> choices = new List<MobyChoice>();
+            HashSet<string> seen = new HashSet<string>();
+            for (int i = 0; i < mobys.Count; i++)
+            {
+                Moby moby = mobys[i];
+                if (!CanUseAsAddTemplate(moby)) continue;
+                string key = CatalogCategory(moby) + "|" + moby.DisplayLabel + "|" + moby.Type.ToString("X2") + "|" + moby.State.ToString("X2") + "|" + moby.Flag4A.ToString("X2") + "|" + moby.Flag4B.ToString("X2");
+                if (seen.Contains(key)) continue;
+                seen.Add(key);
+                choices.Add(new MobyChoice(i, CatalogCategory(moby).Replace("/", "+") + ": " + moby.DisplayLabel + " (" + MobyId(moby) + ")"));
+            }
+            choices.Sort(CompareMobyChoices);
+            return choices;
+        }
+
+        private List<MobyChoice> BuildAddSlotChoices()
+        {
+            List<MobyChoice> choices = new List<MobyChoice>();
+            HashSet<int> added = new HashSet<int>();
+            if (selectedMobyIndex >= 0 && selectedMobyIndex < mobys.Count && CanUseAsAddSlot(mobys[selectedMobyIndex]))
+            {
+                choices.Add(new MobyChoice(selectedMobyIndex, "Selected: " + MobyId(mobys[selectedMobyIndex]) + " " + mobys[selectedMobyIndex].DisplayLabel));
+                added.Add(selectedMobyIndex);
+            }
+
+            for (int pass = 0; pass < 2; pass++)
+            {
+                for (int i = 0; i < mobys.Count; i++)
+                {
+                    if (added.Contains(i) || !CanUseAsAddSlot(mobys[i])) continue;
+                    bool reusable = IsLikelyReusableSlot(mobys[i]);
+                    if ((pass == 0) != reusable) continue;
+                    string prefix = reusable ? "Reusable: " : "Replace: ";
+                    choices.Add(new MobyChoice(i, prefix + MobyId(mobys[i]) + " " + mobys[i].DisplayLabel));
+                    added.Add(i);
+                }
+            }
+            return choices;
+        }
+
+        private static int CompareMobyChoices(MobyChoice a, MobyChoice b)
+        {
+            return string.Compare(a.Text, b.Text, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool CanUseAsAddTemplate(Moby moby)
+        {
+            if (moby == null || !moby.Patchable || moby.TrueIndex < 0) return false;
+            string category = CatalogCategory(moby);
+            if (string.Equals(category, CatalogHelpers, StringComparison.Ordinal) || string.Equals(category, CatalogPortals, StringComparison.Ordinal))
+                return false;
+            string text = MobySearchText(moby);
+            if (text.IndexOf("invisible", StringComparison.Ordinal) >= 0 || text.IndexOf("nonvisual", StringComparison.Ordinal) >= 0 || text.IndexOf("control", StringComparison.Ordinal) >= 0)
+                return false;
+            return true;
+        }
+
+        private bool CanUseAsAddSlot(Moby moby)
+        {
+            return moby != null && moby.Patchable && moby.TrueIndex >= 0 && moby.TrueIndex < SourceRecordCountForLevel(currentLevelKey);
+        }
+
+        private static bool IsLikelyReusableSlot(Moby moby)
+        {
+            if (moby == null) return false;
+            if (moby.HasHiddenSlotEdit) return true;
+            string text = MobySearchText(moby);
+            return text.IndexOf("invisible", StringComparison.Ordinal) >= 0
+                || text.IndexOf("nonvisual", StringComparison.Ordinal) >= 0
+                || text.IndexOf("placeholder", StringComparison.Ordinal) >= 0
+                || text.IndexOf("helper", StringComparison.Ordinal) >= 0
+                || text.IndexOf("control", StringComparison.Ordinal) >= 0
+                || text.IndexOf("sound trigger", StringComparison.Ordinal) >= 0;
+        }
+
+        private static int SelectedChoiceIndex(ComboBox box)
+        {
+            MobyChoice choice = box == null ? null : box.SelectedItem as MobyChoice;
+            return choice == null ? -1 : choice.Index;
+        }
+
+        private static void SelectChoice(ComboBox box, int mobyIndex)
+        {
+            if (box == null || box.Items.Count == 0)
+                return;
+            for (int i = 0; i < box.Items.Count; i++)
+            {
+                MobyChoice choice = box.Items[i] as MobyChoice;
+                if (choice != null && choice.Index == mobyIndex)
+                {
+                    box.SelectedIndex = i;
+                    return;
+                }
+            }
+            box.SelectedIndex = 0;
+        }
+
+        private static MobyChoice SelectedChoice(ComboBox box)
+        {
+            return box == null ? null : box.SelectedItem as MobyChoice;
+        }
+
+        private void UpdateAddObjectButton()
+        {
+            if (addObjectButton == null) return;
+            MobyChoice source = SelectedChoice(addTemplateBox);
+            MobyChoice target = SelectedChoice(addSlotBox);
+            addObjectButton.Enabled = source != null
+                && target != null
+                && source.Index >= 0
+                && source.Index < mobys.Count
+                && target.Index >= 0
+                && target.Index < mobys.Count
+                && source.Index != target.Index;
+        }
+
+        private void AddObjectFromTemplateAtClick()
+        {
+            MobyChoice sourceChoice = SelectedChoice(addTemplateBox);
+            MobyChoice targetChoice = SelectedChoice(addSlotBox);
+            if (sourceChoice == null || targetChoice == null || sourceChoice.Index < 0 || sourceChoice.Index >= mobys.Count || targetChoice.Index < 0 || targetChoice.Index >= mobys.Count)
+            {
+                statusLabel.Text = "Choose an object template and a source-table slot first.";
+                return;
+            }
+            if (sourceChoice.Index == targetChoice.Index)
+            {
+                statusLabel.Text = "Choose a different slot than the source template.";
+                return;
+            }
+
+            Moby source = mobys[sourceChoice.Index];
+            Moby target = mobys[targetChoice.Index];
+            string reuseWarning = IsLikelyReusableSlot(target)
+                ? "This slot looks reusable/hidden."
+                : "This will replace an existing visible or functional slot.";
+            DialogResult result = MessageBox.Show(
+                this,
+                "Add " + source.DisplayLabel + " by cloning " + MobyId(source) + " into " + MobyId(target) + " " + target.DisplayLabel + "?\n\n" + reuseWarning + "\n\nAfter confirming, click the map to place it.",
+                "Add object by slot reuse",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (result != DialogResult.Yes) return;
+
+            target.SetRecordCloneOverride(source);
+            SelectMoby(targetChoice.Index);
+            if (clickPlaceButton != null)
+                clickPlaceButton.Checked = true;
+            hasUnsavedEdits = true;
+            BuildSelectionGroups();
+            RefreshMobyList();
+            RefreshObjectAddChoices();
+            UpdateInspector();
+            canvas.Invalidate();
+            statusLabel.Text = "Added " + source.DisplayLabel + " into " + MobyId(target) + ". Click the terrain map to place it, then Save Edits and Create Loader BIN.";
         }
 
         private void SetSelectedGemColor(string color)
@@ -2202,6 +2429,7 @@ namespace SpyroNativeEditor
                     updatingSelection = false;
                 }
             }
+            RefreshObjectAddChoices();
             UpdateInspector();
             canvas.Invalidate();
         }
@@ -2696,7 +2924,7 @@ namespace SpyroNativeEditor
                         result.Add(linkedGroup.Members[i]);
                 }
             }
-            else if (IsDragonPlatformMoby(mobys[listIndex]))
+            else if (IsStoneHillLevel() && IsDragonPlatformMoby(mobys[listIndex]))
             {
                 AddLinkedTrueIndex(result, 86);
                 AddLinkedTrueIndex(result, 140);
@@ -6614,6 +6842,23 @@ namespace SpyroNativeEditor
         public void Sort()
         {
             Members.Sort();
+        }
+    }
+
+    internal sealed class MobyChoice
+    {
+        public readonly int Index;
+        public readonly string Text;
+
+        public MobyChoice(int index, string text)
+        {
+            Index = index;
+            Text = text ?? "";
+        }
+
+        public override string ToString()
+        {
+            return Text;
         }
     }
 
