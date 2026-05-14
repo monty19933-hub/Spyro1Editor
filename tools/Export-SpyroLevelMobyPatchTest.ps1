@@ -96,6 +96,18 @@ function Write-Int32LE([byte[]]$Bytes, [int]$Offset, [int]$Value) {
     [Array]::Copy($raw, 0, $Bytes, $Offset, 4)
 }
 
+function Get-UInt32LE([byte[]]$Bytes, [int]$Offset) {
+    if ($Offset -lt 0 -or ($Offset + 4) -gt $Bytes.Length) { return 0 }
+    return [BitConverter]::ToUInt32($Bytes, $Offset)
+}
+
+function Test-AllZero([byte[]]$Bytes) {
+    foreach ($b in $Bytes) {
+        if ($b -ne 0) { return $false }
+    }
+    return $true
+}
+
 function Convert-LegacyIndexToTrue([int]$LegacyIndex) {
     $trueNumerator = ($LegacyIndex * $LegacyStride) - 8
     if ($trueNumerator -lt 0 -or ($trueNumerator % $RecordStride) -ne 0) { return $null }
@@ -216,6 +228,23 @@ function New-PatchRecord($Table, $Layout, $Edit, [int]$TrueIndex, [string]$Kind,
     }
 }
 
+function New-RawPatch($Table, $Layout, [string]$Kind, [int64]$WadOffset, [byte[]]$Bytes, [string]$Description) {
+    return [ordered]@{
+        levelKey = [string]$Table.levelKey
+        levelName = [string]$Table.displayName
+        sourceEntry = [int]$Table.wadEntry
+        index = -1
+        trueIndex = -1
+        label = ""
+        kind = $Kind
+        description = $Description
+        recordOffset = ""
+        wadRelativeOffset = ("0x{0:X}" -f $WadOffset)
+        imageOffset = Convert-DiscFileOffsetToImageOffset $Layout $WadLba $WadOffset
+        bytesHex = Convert-BytesToHex $Bytes
+    }
+}
+
 $tables = @(Get-LevelSourceTables $LevelKey)
 if ([string]::IsNullOrWhiteSpace($OutPath)) {
     $outSlug = if ($LevelKey -eq "All") { "loaderpatchtest" } else { "$($tables[0].editSlug)-loaderpatchtest" }
@@ -262,15 +291,56 @@ try {
             editCount = $edits.Count
         })
 
+        $appendMaxTrueIndex = [int]$table.recordCount - 1
+        $hasAppend = $false
         foreach ($edit in $edits) {
             $trueIndex = Resolve-EditTrueIndex $edit
+            $recordMutation = Get-Field $edit "recordMutation" $null
+            $mutationMode = [string](Get-Field $recordMutation "mode" "")
+
+            if ($mutationMode -eq "appendFromSource") {
+                $sourceTrueIndex = [int](Get-Field $recordMutation "sourceTrueIndex" -1)
+                if ($sourceTrueIndex -lt 0 -or $sourceTrueIndex -ge [int]$table.recordCount) {
+                    throw "Append source T$sourceTrueIndex is outside $($table.displayName) source table range."
+                }
+                if ($trueIndex -lt [int]$table.recordCount) {
+                    $trueIndex = $appendMaxTrueIndex + 1
+                }
+                if ($trueIndex -lt [int]$table.recordCount) {
+                    throw "Append target T$trueIndex must be at or after $($table.displayName) source count $($table.recordCount)."
+                }
+
+                $sourceWadOffset = [int64]$table.tableWadOffset + ([int64]$sourceTrueIndex * $RecordStride)
+                [byte[]]$recordBytes = Read-WadBytes $stream $layout $sourceWadOffset $RecordStride
+                foreach ($axis in @("x", "y", "z")) {
+                    Write-Int32LE $recordBytes ([int]$CoordOffsets[$axis]) (Get-RawEditedAxis $edit $axis)
+                }
+                foreach ($byteEdit in @(Get-ArrayField $edit "sourceByteEdits")) {
+                    $byteOffset = Convert-PatchInt (Get-Field $byteEdit "offset" (Get-Field $byteEdit "offsetHex" $null)) "sourceByteEdits.offset"
+                    $value = Convert-PatchInt (Get-Field $byteEdit "value" (Get-Field $byteEdit "valueHex" $null)) "sourceByteEdits.value"
+                    if ($byteOffset -lt 0 -or $byteOffset -ge $RecordStride) { throw "Byte edit offset 0x$($byteOffset.ToString('X')) is outside loader record stride 0x58." }
+                    if ($value -lt 0 -or $value -gt 255) { throw "Byte edit value 0x$($value.ToString('X')) is outside byte range." }
+                    $recordBytes[$byteOffset] = [byte]$value
+                }
+
+                $appendWadOffset = [int64]$table.tableWadOffset + ([int64]$trueIndex * $RecordStride)
+                [byte[]]$appendBefore = Read-WadBytes $stream $layout $appendWadOffset $RecordStride
+                if (-not (Test-AllZero $appendBefore)) {
+                    throw "$($table.displayName) append target T$trueIndex at WAD 0x$($appendWadOffset.ToString('X')) is not empty in the source image."
+                }
+
+                $description = "Append source record T$trueIndex cloned from donor T$sourceTrueIndex, preserving edited position."
+                [void]$patches.Add((New-PatchRecord $table $layout $edit $trueIndex "moby-record-append" 0x00 $recordBytes $description))
+                $appendMaxTrueIndex = [Math]::Max($appendMaxTrueIndex, $trueIndex)
+                $hasAppend = $true
+                continue
+            }
+
             if ($trueIndex -lt 0 -or $trueIndex -ge [int]$table.recordCount) {
                 Write-Warning "Skipping $($table.displayName) T$trueIndex; it is outside source table range 0..$([int]$table.recordCount - 1)."
                 continue
             }
 
-            $recordMutation = Get-Field $edit "recordMutation" $null
-            $mutationMode = [string](Get-Field $recordMutation "mode" "")
             if ($mutationMode -eq "cloneIntoSlot") {
                 $sourceTrueIndex = [int](Get-Field $recordMutation "sourceTrueIndex" -1)
                 if ($sourceTrueIndex -lt 0 -or $sourceTrueIndex -ge [int]$table.recordCount) {
@@ -309,6 +379,18 @@ try {
                 $field = [string](Get-Field $byteEdit "field" "source-byte")
                 [void]$patches.Add((New-PatchRecord $table $layout $edit $trueIndex "moby-source-byte" $byteOffset $bytes ("Set " + $field + " to 0x" + $value.ToString("X2"))))
             }
+        }
+
+        if ($hasAppend) {
+            $newCount = $appendMaxTrueIndex + 1
+            $countWadOffset = [int64]$table.tableWadOffset - 4
+            [byte[]]$countBefore = Read-WadBytes $stream $layout $countWadOffset 4
+            $currentCount = [int](Get-UInt32LE $countBefore 0)
+            if ($currentCount -ne [int]$table.recordCount) {
+                throw "$($table.displayName) source-count field at 0x$($countWadOffset.ToString('X')) is $currentCount, expected $($table.recordCount)."
+            }
+            [byte[]]$countBytes = [BitConverter]::GetBytes([uint32]$newCount)
+            [void]$patches.Add((New-RawPatch $table $layout "moby-source-count" $countWadOffset $countBytes ("Increase $($table.displayName) source moby count from $($table.recordCount) to $newCount.")))
         }
     }
 }
@@ -387,5 +469,5 @@ else {
     Write-Host "Wrote patched BIN to $resolvedOutPath"
     Write-Host "Wrote CUE to $resolvedCuePath"
 }
-$patchedRecordKeys = @($patches | ForEach-Object { ([string]$_["levelKey"]) + ":T" + ([int]$_["trueIndex"]).ToString() } | Select-Object -Unique)
+$patchedRecordKeys = @($patches | Where-Object { [int]$_["trueIndex"] -ge 0 } | ForEach-Object { ([string]$_["levelKey"]) + ":T" + ([int]$_["trueIndex"]).ToString() } | Select-Object -Unique)
 Write-Host ("Patches: {0} source-table writes across {1} edited mobys" -f $patches.Count, $patchedRecordKeys.Count)

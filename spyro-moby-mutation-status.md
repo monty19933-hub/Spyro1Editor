@@ -11,6 +11,7 @@ Updated: 2026-05-13
   - Stone Hill: `0xD72B34`, current value `195`.
   - Artisans: `0x9D42A8`, current value `174`.
 - Both mapped source tables currently have a zero-filled append area after the mapped source records, so true-add can be tested without relocating the WAD file.
+- True add is now proven for simple standalone mobys. Stone Hill append test cloned `T79` into new source record `T195`, changed it to purple, and the fresh-loaded game showed the gem and awarded 25 treasure.
 - Normal moby moves are permanent when the source-table XYZ fields at `+0x0C/+0x10/+0x14` are patched.
 - Slot reuse can create a working enemy/object from another same-level source record. Artisans test: sheep slot `T110` cloned from Treasure Gnorc `T7` became a Treasure Gnorc in game.
 - Slot-reused enemies may still carry donor-linked behavior/path data. Artisans Treasure Gnorc clone ran back toward the original donor route before doing its normal path.
@@ -21,16 +22,17 @@ Updated: 2026-05-13
   - yellow: `+0x36=0x56`, `+0x4F=0x04`
   - purple: `+0x36=0x57`, `+0x4F=0x05`
 - Type `0x20` chest reward color/value byte is confirmed at `+0x53` for at least normal reward chests. Artisans test: Flame/Charge chest `T50` changed from green `0x54` to purple `0x57` and dropped a purple 25 gem.
-- The native editor now exposes slot reuse directly:
+- The native editor now exposes true-add and slot reuse directly:
+  - `Add New at Click` appends a true new source-table record, then lets the user click terrain to place it.
   - `Copy Obj` copies the selected source-table object as a donor.
   - `Clone/Add` clones that donor into the selected slot while keeping the selected slot's XYZ.
-  - `Add at Click` lets the user pick an object template and a reusable/hidden-looking target slot, clone the template into that slot, then click the terrain map to place it.
   - `Remove Slot` soft-removes the selected object by moving its source-table XYZ out of bounds.
 - Artisans has initial linked dragon/pedestal move groups for `T90/T91`, `T92/T93`, and `T142/T143`.
 
 ## Working Experiments
 
 - `tools/Export-SpyroLevelMobyPatchTest.ps1` reads saved native editor edits and exports a fresh-loadable loader-table BIN for Stone Hill, Artisans, or all mapped levels together.
+- `tools/Export-SpyroLevelMobyPatchTest.ps1` now understands editor `appendFromSource` edits: it writes appended full records and bumps each level's source count once to include them.
 - Native editor `Create Loader BIN` exports saved Stone Hill + Artisans moby edits into `Spyro the Dragon (USA)-loaderpatchtest.bin`, so editing both levels no longer requires separate CUEs.
 - `tools/Export-SpyroMobyRecordMutation.ps1` can do focused source-record experiments:
   - `CloneIntoSlot`: clone one existing source record into another slot while keeping the target position. This is the current practical "add by reusing a slot" method.
@@ -42,11 +44,14 @@ Updated: 2026-05-13
 
 ## Still Needs Validation
 
-- True add/remove by expanding the source table is now ready for in-game validation, but not proven yet. The first test appends Stone Hill `T195` as a new purple gem cloned from `T79`.
-- The editor intentionally hides normal visible objects from the `Reuse Slot` dropdown so "add" does not accidentally replace existing scenery/enemies/chests. True new table slots still require finding and patching the level moby count/table allocation safely.
+- True add should be broadened beyond simple loose gems:
+  - chests need append testing for collision/break/reward behavior
+  - enemies need append testing for AI/home/path behavior
+  - linked clusters like dragons need multi-record append templates rather than single records
+- The editor still offers reusable hidden slots for controlled slot-reuse experiments, but true-add is now the default add path.
 - Enemy reward-byte behavior needs a focused test per enemy family. Chest `+0x53` is proven; enemies likely use the same byte when they directly drop gems, but path/special-data behavior may still be tied to donor records.
 - Runtime records beyond Artisans `T173` are visible in RAM but are not covered by the mapped Artisans source table yet.
-- If the append test works, the editor should switch from "slot reuse add" to a real append workflow for simple standalone objects first, then expand to linked clusters once count/index side effects are understood.
+- Editor true-add currently uses single-record append templates. Slot reuse remains useful for experiments, but new loose gems/simple objects should use append by default.
 
 ## Handy Tests
 

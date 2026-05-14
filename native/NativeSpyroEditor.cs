@@ -260,6 +260,7 @@ namespace SpyroNativeEditor
         private const string CatalogHelpers = "Helpers";
         private const string CatalogPortals = "Audio/Portal";
         private const string CatalogOther = "Other";
+        private const int AppendObjectChoiceIndex = -2000000000;
 
         private enum EditorMode
         {
@@ -733,7 +734,7 @@ namespace SpyroNativeEditor
             setPurpleGemButton = NewPanelButton("Set Purple 25");
             addTemplateBox = NewPanelComboBox();
             addSlotBox = NewPanelComboBox();
-            addObjectButton = NewPanelButton("Add at Click");
+            addObjectButton = NewPanelButton("Add New at Click");
             copyMutationSourceButton = NewPanelButton("Copy Obj");
             pasteMutationButton = NewPanelButton("Clone/Add");
             hideSelectedButton = NewPanelButton("Remove Slot");
@@ -770,7 +771,7 @@ namespace SpyroNativeEditor
             TableLayoutPanel objectActions = NewActionPanel(5);
             AddActionLabel(objectActions, 0, "Template");
             objectActions.Controls.Add(addTemplateBox, 1, 0);
-            AddActionLabel(objectActions, 1, "Reuse Slot");
+            AddActionLabel(objectActions, 1, "Add As");
             objectActions.Controls.Add(addSlotBox, 1, 1);
             objectActions.Controls.Add(addObjectButton, 0, 2);
             objectActions.SetColumnSpan(addObjectButton, 2);
@@ -1955,7 +1956,7 @@ namespace SpyroNativeEditor
                 addSlotBox.Items.Clear();
                 foreach (MobyChoice choice in BuildAddSlotChoices())
                     addSlotBox.Items.Add(choice);
-                int preferredSlot = selectedMobyIndex >= 0 ? selectedMobyIndex : previousSlot;
+                int preferredSlot = previousSlot != -1 ? previousSlot : AppendObjectChoiceIndex;
                 SelectChoice(addSlotBox, preferredSlot);
                 addSlotBox.EndUpdate();
             }
@@ -1987,6 +1988,10 @@ namespace SpyroNativeEditor
         {
             List<MobyChoice> choices = new List<MobyChoice>();
             HashSet<int> added = new HashSet<int>();
+            int nextAppend = NextAppendTrueIndex();
+            if (nextAppend >= SourceRecordCountForLevel(currentLevelKey))
+                choices.Add(new MobyChoice(AppendObjectChoiceIndex, "New source record: T" + nextAppend.ToString() + " (true add)"));
+
             if (selectedMobyIndex >= 0 && selectedMobyIndex < mobys.Count && CanUseAsAddSlot(mobys[selectedMobyIndex]) && IsLikelyReusableSlot(mobys[selectedMobyIndex]))
             {
                 choices.Add(new MobyChoice(selectedMobyIndex, "Selected: " + MobyId(mobys[selectedMobyIndex]) + " " + mobys[selectedMobyIndex].DisplayLabel));
@@ -2002,6 +2007,17 @@ namespace SpyroNativeEditor
             return choices;
         }
 
+        private int NextAppendTrueIndex()
+        {
+            int next = SourceRecordCountForLevel(currentLevelKey);
+            foreach (Moby moby in mobys)
+            {
+                if (moby != null && moby.IsAppendedRecord && moby.TrueIndex >= next)
+                    next = moby.TrueIndex + 1;
+            }
+            return next;
+        }
+
         private static int CompareMobyChoices(MobyChoice a, MobyChoice b)
         {
             return string.Compare(a.Text, b.Text, StringComparison.OrdinalIgnoreCase);
@@ -2010,6 +2026,7 @@ namespace SpyroNativeEditor
         private static bool CanUseAsAddTemplate(Moby moby)
         {
             if (moby == null || !moby.Patchable || moby.TrueIndex < 0) return false;
+            if (moby.IsAppendedRecord) return false;
             string category = CatalogCategory(moby);
             if (string.Equals(category, CatalogHelpers, StringComparison.Ordinal) || string.Equals(category, CatalogPortals, StringComparison.Ordinal))
                 return false;
@@ -2073,8 +2090,7 @@ namespace SpyroNativeEditor
                 && target != null
                 && source.Index >= 0
                 && source.Index < mobys.Count
-                && target.Index >= 0
-                && target.Index < mobys.Count
+                && (target.Index == AppendObjectChoiceIndex || (target.Index >= 0 && target.Index < mobys.Count))
                 && source.Index != target.Index;
         }
 
@@ -2082,22 +2098,53 @@ namespace SpyroNativeEditor
         {
             MobyChoice sourceChoice = SelectedChoice(addTemplateBox);
             MobyChoice targetChoice = SelectedChoice(addSlotBox);
-            if (sourceChoice == null || targetChoice == null || sourceChoice.Index < 0 || sourceChoice.Index >= mobys.Count || targetChoice.Index < 0 || targetChoice.Index >= mobys.Count)
+            if (sourceChoice == null || targetChoice == null || sourceChoice.Index < 0 || sourceChoice.Index >= mobys.Count)
             {
-                statusLabel.Text = "Choose an object template and a source-table slot first.";
+                statusLabel.Text = "Choose an object template first.";
                 return;
             }
-            if (sourceChoice.Index == targetChoice.Index)
+            if (targetChoice.Index != AppendObjectChoiceIndex && (targetChoice.Index < 0 || targetChoice.Index >= mobys.Count))
+            {
+                statusLabel.Text = "Choose a new append record or a reusable source-table slot.";
+                return;
+            }
+            if (targetChoice.Index != AppendObjectChoiceIndex && sourceChoice.Index == targetChoice.Index)
             {
                 statusLabel.Text = "Choose a different slot than the source template.";
                 return;
             }
 
             Moby source = mobys[sourceChoice.Index];
+            if (targetChoice.Index == AppendObjectChoiceIndex)
+            {
+                int appendTrueIndex = NextAppendTrueIndex();
+                DialogResult appendResult = MessageBox.Show(
+                    this,
+                    "Add a new " + source.DisplayLabel + " by appending source record T" + appendTrueIndex.ToString() + " from donor " + MobyId(source) + "?\n\nThis expands the level source moby table. After confirming, click the terrain map to place it, then Save Edits and Create Loader BIN.",
+                    "Add true new object",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+                if (appendResult != DialogResult.Yes) return;
+
+                Moby appended = Moby.CreateAppendedFromSource(source, mobys.Count, appendTrueIndex);
+                mobys.Add(appended);
+                SelectMoby(mobys.Count - 1);
+                if (clickPlaceButton != null)
+                    clickPlaceButton.Checked = true;
+                hasUnsavedEdits = true;
+                BuildSelectionGroups();
+                RefreshMobyList();
+                RefreshObjectAddChoices();
+                UpdateInspector();
+                canvas.Invalidate();
+                statusLabel.Text = "Added new " + source.DisplayLabel + " as " + MobyId(appended) + ". Click the terrain map to place it, then Save Edits and Create Loader BIN.";
+                return;
+            }
+
             Moby target = mobys[targetChoice.Index];
             DialogResult result = MessageBox.Show(
                 this,
-                "Add " + source.DisplayLabel + " by cloning " + MobyId(source) + " into reusable slot " + MobyId(target) + " " + target.DisplayLabel + "?\n\nThis does not expand the level's moby table yet. It uses a hidden/reusable source-table slot, then lets you click the map to place it.",
+                "Add " + source.DisplayLabel + " by cloning " + MobyId(source) + " into reusable slot " + MobyId(target) + " " + target.DisplayLabel + "?\n\nThis is the older slot-reuse path. It does not expand the level's moby table.",
                 "Add object using reusable slot",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
@@ -2201,6 +2248,11 @@ namespace SpyroNativeEditor
         {
             if (selectedMobyIndex < 0 || selectedMobyIndex >= mobys.Count) return;
             Moby moby = mobys[selectedMobyIndex];
+            if (moby.IsAppendedRecord)
+            {
+                RemoveAppendedMoby(selectedMobyIndex, "Removed new object " + MobyId(moby) + ". Save Edits to keep it removed.");
+                return;
+            }
             if (!moby.Patchable || moby.TrueIndex < 0 || moby.TrueIndex >= SourceRecordCountForLevel(currentLevelKey))
             {
                 statusLabel.Text = "Select a source-table moby before hiding a slot.";
@@ -2260,6 +2312,9 @@ namespace SpyroNativeEditor
         private static string DescribeEditStatus(Moby moby)
         {
             if (moby == null || !moby.IsEdited) return "unchanged";
+            if (moby.IsAppendedRecord && moby.HasGemColorEdit) return "true-added source record and gem value edited";
+            if (moby.IsAppendedRecord && moby.HasRewardColorEdit) return "true-added source record and reward edited";
+            if (moby.IsAppendedRecord) return "true-added source record";
             if (moby.HasHiddenSlotEdit) return "removed by hiding source-table slot";
             if (moby.HasRecordCloneEdit && moby.HasGemColorEdit) return "cloned object type and gem value edited";
             if (moby.HasRecordCloneEdit && moby.HasRewardColorEdit) return "cloned object type and reward edited";
@@ -2520,6 +2575,8 @@ namespace SpyroNativeEditor
                     notes.AppendLine("Object type edit: clone source record T" + m.RecordCloneSourceTrueIndex.ToString() + " " + m.RecordCloneSourceLabel + " into this slot, keeping current XYZ.");
                 if (m.HasHiddenSlotEdit)
                     notes.AppendLine("Object remove edit: hide this slot by moving it out of the level.");
+                if (m.IsAppendedRecord)
+                    notes.AppendLine("True-add edit: append source record T" + m.TrueIndex.ToString() + " from donor T" + m.AppendSourceTrueIndex.ToString() + " " + m.AppendSourceLabel + ".");
                 if (mutationClipboardMobyIndex >= 0 && mutationClipboardMobyIndex < mobys.Count)
                     notes.AppendLine("Copied type donor: " + MobyId(mobys[mutationClipboardMobyIndex]) + " " + mobys[mutationClipboardMobyIndex].DisplayLabel + ".");
                 notes.AppendLine();
@@ -2531,7 +2588,7 @@ namespace SpyroNativeEditor
                 notes.AppendLine();
                 notes.AppendLine("Live Apply writes only runtime XYZ into DuckStation. Use it to identify visible mobys, not to prove collision or rewards.");
                 notes.AppendLine("Create Loader BIN writes saved Stone Hill + Artisans moby edits into one disposable disc image. Fresh-load that CUE for permanent placement, collision, and rewards.");
-                notes.AppendLine("Copy Obj/Clone-Add performs slot reuse: it adds or changes gems, chests, enemies, and scenery by cloning one source record into another selected slot. Remove Slot is the current safe remove.");
+                notes.AppendLine("Add New at Click appends a true new source moby record. Copy Obj/Clone-Add remains available for slot reuse experiments.");
                 if (IsStoneHillLevel())
                 {
                     notes.AppendLine("Create Terrain BIN writes saved terrain Z edits through the exact runtime scene-sector source found in the WAD.");
@@ -2644,7 +2701,7 @@ namespace SpyroNativeEditor
         private static string MobyId(Moby moby)
         {
             if (moby == null) return "";
-            string id = "T" + moby.TrueIndex.ToString();
+            string id = "T" + moby.TrueIndex.ToString() + (moby.IsAppendedRecord ? "+" : "");
             if (moby.LegacyIndex >= 0)
                 id += "/L" + moby.LegacyIndex.ToString();
             return id;
@@ -2874,12 +2931,35 @@ namespace SpyroNativeEditor
         {
             if (selectedMobyIndex < 0 || selectedMobyIndex >= mobys.Count) return;
             Moby m = mobys[selectedMobyIndex];
+            if (m.IsAppendedRecord)
+            {
+                RemoveAppendedMoby(selectedMobyIndex, "Removed new object " + MobyId(m) + ". Save Edits to keep it removed.");
+                return;
+            }
             SetMobyPosition(selectedMobyIndex, m.OriginalX, m.OriginalY, m.OriginalZ, true, true, false);
             m.ClearGemColorOverride();
             BuildSelectionGroups();
             RefreshMobyListRow(selectedMobyIndex);
             UpdateInspector();
             canvas.Invalidate();
+        }
+
+        private void RemoveAppendedMoby(int mobyIndex, string message)
+        {
+            if (mobyIndex < 0 || mobyIndex >= mobys.Count) return;
+            mobys.RemoveAt(mobyIndex);
+            for (int i = 0; i < mobys.Count; i++)
+            {
+                if (mobys[i].IsAppendedRecord)
+                    mobys[i].Index = i;
+            }
+            selectedMobyIndex = Math.Min(mobyIndex, mobys.Count - 1);
+            hasUnsavedEdits = true;
+            BuildSelectionGroups();
+            RefreshMobyList();
+            UpdateInspector();
+            canvas.Invalidate();
+            statusLabel.Text = message;
         }
 
         private void SnapSelectedToGround()
@@ -3418,7 +3498,7 @@ namespace SpyroNativeEditor
         {
             try
             {
-                int count = MobyEditStore.Load(editPath, mobys);
+                int count = MobyEditStore.Load(editPath, mobys, currentLevelKey);
                 savedTerrainEditCount = TerrainEditStore.Load(terrainEditPath, geometry == null ? null : geometry.Polygons);
                 savedEditCount = count;
                 hasUnsavedEdits = false;
@@ -3460,8 +3540,13 @@ namespace SpyroNativeEditor
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
             if (result != DialogResult.Yes) return;
-            foreach (Moby moby in mobys)
-                moby.ResetToOriginal();
+            for (int i = mobys.Count - 1; i >= 0; i--)
+            {
+                if (mobys[i].IsAppendedRecord)
+                    mobys.RemoveAt(i);
+                else
+                    mobys[i].ResetToOriginal();
+            }
             if (geometry != null)
             {
                 foreach (TerrainPolygon polygon in geometry.Polygons)
@@ -4832,6 +4917,12 @@ namespace SpyroNativeEditor
                 return;
             }
 
+            if (moby.IsAppendedRecord)
+            {
+                RemoveAppendedMoby(mobyIndex, "Removed new object " + MobyId(moby) + ". Save Edits to keep it removed.");
+                return;
+            }
+
             moby.ResetToOriginal();
             hasUnsavedEdits = true;
             BuildSelectionGroups();
@@ -6144,6 +6235,8 @@ namespace SpyroNativeEditor
                 }
                 if (moby.HasRecordCloneEdit)
                     edit["recordMutation"] = NewRecordCloneMutation(moby);
+                else if (moby.IsAppendedRecord)
+                    edit["recordMutation"] = NewAppendMutation(moby);
                 else if (moby.HasHiddenSlotEdit)
                     edit["recordMutation"] = NewHideMutation(moby);
                 if (sourceByteEdits.Count > 0)
@@ -6165,7 +6258,7 @@ namespace SpyroNativeEditor
             return edits.Count;
         }
 
-        public static int Load(string path, List<Moby> mobys)
+        public static int Load(string path, List<Moby> mobys, string levelKey)
         {
             if (!File.Exists(path)) return 0;
 
@@ -6184,6 +6277,7 @@ namespace SpyroNativeEditor
             }
 
             int applied = 0;
+            int sourceRecordCount = SourceRecordCountForLevel(levelKey);
             object[] edits = GeometryLoader.GetArray(root, "edits");
             foreach (object obj in edits)
             {
@@ -6192,6 +6286,23 @@ namespace SpyroNativeEditor
                 int index = GetInt(edit, "index", -1);
                 int trueIndex = GetInt(edit, "trueIndex", -1);
                 int legacyIndex = GetInt(edit, "legacyIndex", -1);
+                Dictionary<string, object> recordMutation = edit.ContainsKey("recordMutation") ? edit["recordMutation"] as Dictionary<string, object> : null;
+                string mutationMode = GetString(recordMutation, "mode", "");
+                if (string.Equals(mutationMode, "appendFromSource", StringComparison.OrdinalIgnoreCase))
+                {
+                    int sourceTrueIndex = GetInt(recordMutation, "sourceTrueIndex", -1);
+                    if (sourceTrueIndex < 0 || sourceTrueIndex >= sourceRecordCount) continue;
+                    Moby source;
+                    if (!byTrueIndex.TryGetValue(sourceTrueIndex, out source)) continue;
+                    int appendTrueIndex = trueIndex >= sourceRecordCount ? trueIndex : NextAppendedTrueIndex(mobys, sourceRecordCount);
+                    Moby appended = Moby.CreateAppendedFromSource(source, mobys.Count, appendTrueIndex);
+                    ApplyEditToMoby(appended, edit, byTrueIndex, byIndex);
+                    mobys.Add(appended);
+                    byIndex[appended.Index] = appended;
+                    applied++;
+                    continue;
+                }
+
                 Moby moby;
                 if (trueIndex >= 0)
                 {
@@ -6213,18 +6324,29 @@ namespace SpyroNativeEditor
                         continue;
                     }
                 }
-                bool changed = false;
-                Dictionary<string, object> edited = edit.ContainsKey("edited") ? edit["edited"] as Dictionary<string, object> : null;
-                if (edited != null)
-                {
-                    moby.X = (float)GeometryLoader.GetDouble(edited, "x", moby.X);
-                    moby.Y = (float)GeometryLoader.GetDouble(edited, "y", moby.Y);
-                    moby.Z = (float)GeometryLoader.GetDouble(edited, "z", moby.Z);
-                    changed = true;
-                }
+                ApplyEditToMoby(moby, edit, byTrueIndex, byIndex);
+                applied++;
+            }
+            return applied;
+        }
 
-                Dictionary<string, object> recordMutation = edit.ContainsKey("recordMutation") ? edit["recordMutation"] as Dictionary<string, object> : null;
-                string mutationMode = GetString(recordMutation, "mode", "");
+        private static bool ApplyEditToMoby(Moby moby, Dictionary<string, object> edit, Dictionary<int, Moby> byTrueIndex, Dictionary<int, Moby> byIndex)
+        {
+            if (moby == null || edit == null) return false;
+            bool changed = false;
+            Dictionary<string, object> edited = edit.ContainsKey("edited") ? edit["edited"] as Dictionary<string, object> : null;
+            if (edited != null)
+            {
+                moby.X = (float)GeometryLoader.GetDouble(edited, "x", moby.X);
+                moby.Y = (float)GeometryLoader.GetDouble(edited, "y", moby.Y);
+                moby.Z = (float)GeometryLoader.GetDouble(edited, "z", moby.Z);
+                changed = true;
+            }
+
+            Dictionary<string, object> recordMutation = edit.ContainsKey("recordMutation") ? edit["recordMutation"] as Dictionary<string, object> : null;
+            string mutationMode = GetString(recordMutation, "mode", "");
+            if (!moby.IsAppendedRecord)
+            {
                 if (string.Equals(mutationMode, "cloneIntoSlot", StringComparison.OrdinalIgnoreCase))
                 {
                     int sourceTrueIndex = GetInt(recordMutation, "sourceTrueIndex", -1);
@@ -6242,31 +6364,29 @@ namespace SpyroNativeEditor
                     moby.SetHiddenSlotOverride();
                     changed = true;
                 }
-
-                Dictionary<string, object> gemColorEdit = edit.ContainsKey("gemColorEdit") ? edit["gemColorEdit"] as Dictionary<string, object> : null;
-                string gemColor = GetString(gemColorEdit, "color", "");
-                if (string.IsNullOrEmpty(gemColor))
-                    gemColor = InferGemColorFromSourceByteEdits(edit);
-                if (Moby.IsSupportedGemColor(gemColor))
-                {
-                    moby.SetGemColorOverride(gemColor);
-                    changed = true;
-                }
-
-                Dictionary<string, object> rewardColorEdit = edit.ContainsKey("rewardColorEdit") ? edit["rewardColorEdit"] as Dictionary<string, object> : null;
-                string rewardColor = GetString(rewardColorEdit, "color", "");
-                if (string.IsNullOrEmpty(rewardColor))
-                    rewardColor = InferRewardColorFromSourceByteEdits(edit);
-                if (Moby.IsSupportedGemColor(rewardColor))
-                {
-                    moby.SetRewardColorOverride(rewardColor);
-                    changed = true;
-                }
-
-                if (changed)
-                    applied++;
             }
-            return applied;
+
+            Dictionary<string, object> gemColorEdit = edit.ContainsKey("gemColorEdit") ? edit["gemColorEdit"] as Dictionary<string, object> : null;
+            string gemColor = GetString(gemColorEdit, "color", "");
+            if (string.IsNullOrEmpty(gemColor))
+                gemColor = InferGemColorFromSourceByteEdits(edit);
+            if (Moby.IsSupportedGemColor(gemColor))
+            {
+                moby.SetGemColorOverride(gemColor);
+                changed = true;
+            }
+
+            Dictionary<string, object> rewardColorEdit = edit.ContainsKey("rewardColorEdit") ? edit["rewardColorEdit"] as Dictionary<string, object> : null;
+            string rewardColor = GetString(rewardColorEdit, "color", "");
+            if (string.IsNullOrEmpty(rewardColor))
+                rewardColor = InferRewardColorFromSourceByteEdits(edit);
+            if (Moby.IsSupportedGemColor(rewardColor))
+            {
+                moby.SetRewardColorOverride(rewardColor);
+                changed = true;
+            }
+
+            return changed;
         }
 
         private static Dictionary<string, object> NewVector(float x, float y, float z)
@@ -6326,6 +6446,18 @@ namespace SpyroNativeEditor
             edit["sourceTrueIndex"] = moby.RecordCloneSourceTrueIndex;
             edit["sourceLabel"] = moby.RecordCloneSourceLabel ?? "";
             edit["note"] = "Slot reuse/add: clone the source loader record into this target slot, then write the target XYZ and supported source-byte edits.";
+            return edit;
+        }
+
+        private static Dictionary<string, object> NewAppendMutation(Moby moby)
+        {
+            Dictionary<string, object> edit = new Dictionary<string, object>();
+            edit["mode"] = "appendFromSource";
+            edit["sourceIndex"] = moby.AppendSourceIndex;
+            edit["sourceTrueIndex"] = moby.AppendSourceTrueIndex;
+            edit["sourceLabel"] = moby.AppendSourceLabel ?? "";
+            edit["targetTrueIndex"] = moby.TrueIndex;
+            edit["note"] = "True add: increment the level source moby count and append a cloned source record at this target true index.";
             return edit;
         }
 
@@ -6403,6 +6535,25 @@ namespace SpyroNativeEditor
             if (byte53 == 0x56) return "yellow";
             if (byte53 == 0x57) return "purple";
             return "";
+        }
+
+        private static int SourceRecordCountForLevel(string levelKey)
+        {
+            if (string.Equals(levelKey, "artisans", StringComparison.OrdinalIgnoreCase)) return 174;
+            if (string.Equals(levelKey, "stonehill", StringComparison.OrdinalIgnoreCase)) return 195;
+            return 0;
+        }
+
+        private static int NextAppendedTrueIndex(List<Moby> mobys, int sourceRecordCount)
+        {
+            int next = sourceRecordCount;
+            if (mobys == null) return next;
+            foreach (Moby moby in mobys)
+            {
+                if (moby != null && moby.IsAppendedRecord && moby.TrueIndex >= next)
+                    next = moby.TrueIndex + 1;
+            }
+            return next;
         }
 
         private static int ToRawCoordinate(float value)
@@ -6914,6 +7065,10 @@ namespace SpyroNativeEditor
         public int RecordCloneSourceTrueIndex = -1;
         public int RecordCloneSourceIndex = -1;
         public string RecordCloneSourceLabel;
+        public bool IsAppendedRecord;
+        public int AppendSourceTrueIndex = -1;
+        public int AppendSourceIndex = -1;
+        public string AppendSourceLabel;
 
         public string DisplayLabel
         {
@@ -6927,7 +7082,7 @@ namespace SpyroNativeEditor
         {
             get
             {
-                return HasPositionEdit || HasGemColorEdit || HasRewardColorEdit || HasHiddenSlotEdit || HasRecordCloneEdit;
+                return IsAppendedRecord || HasPositionEdit || HasGemColorEdit || HasRewardColorEdit || HasHiddenSlotEdit || HasRecordCloneEdit;
             }
         }
 
@@ -6970,6 +7125,44 @@ namespace SpyroNativeEditor
             {
                 return !string.IsNullOrEmpty(PatchStatus) && PatchStatus.IndexOf("patchable", StringComparison.OrdinalIgnoreCase) >= 0;
             }
+        }
+
+        public static Moby CreateAppendedFromSource(Moby source, int listIndex, int appendTrueIndex)
+        {
+            if (source == null) throw new ArgumentNullException("source");
+            Moby moby = new Moby();
+            moby.Index = listIndex;
+            moby.TrueIndex = appendTrueIndex;
+            moby.LegacyIndex = -1;
+            moby.X = source.X;
+            moby.Y = source.Y;
+            moby.Z = source.Z;
+            moby.OriginalX = source.X;
+            moby.OriginalY = source.Y;
+            moby.OriginalZ = source.Z;
+            moby.Type = source.Type;
+            moby.State = source.State;
+            moby.RuntimeAddress = 0;
+            moby.SpecialDataPointer = source.SpecialDataPointer;
+            moby.Flag4A = source.Flag4A;
+            moby.Flag4B = source.Flag4B;
+            moby.Color = source.Color;
+            moby.Label = source.DisplayLabel + " (new)";
+            moby.Zone = source.Zone;
+            moby.Kind = source.Kind;
+            moby.Confidence = "editor true-add";
+            moby.Evidence = "new source record appended from donor T" + source.TrueIndex.ToString() + " by Create Loader BIN";
+            moby.BehaviorNote = source.BehaviorNote;
+            moby.SpecialDataNote = source.SpecialDataNote;
+            moby.PatchStatus = "append-patchable";
+            moby.PatchLead = "append source record T" + appendTrueIndex.ToString() + " from donor T" + source.TrueIndex.ToString();
+            moby.PatchPriority = 1;
+            moby.IsAppendedRecord = true;
+            moby.AppendSourceTrueIndex = source.TrueIndex;
+            moby.AppendSourceIndex = source.Index;
+            moby.AppendSourceLabel = source.DisplayLabel;
+            moby.CaptureBaseIdentity();
+            return moby;
         }
 
         public void CaptureBaseIdentity()
