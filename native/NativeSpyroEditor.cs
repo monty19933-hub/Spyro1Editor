@@ -559,7 +559,7 @@ namespace SpyroNativeEditor
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 42f));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 142f));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 270f));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 178f));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 58f));
 
             inspectorHeaderLabel = new Label();
@@ -718,14 +718,6 @@ namespace SpyroNativeEditor
             AddDetailRow(details, 4, "Z", zBox);
             root.Controls.Add(details, 0, 5);
 
-            TableLayoutPanel buttons = new TableLayoutPanel();
-            buttons.Dock = DockStyle.Fill;
-            buttons.ColumnCount = 2;
-            buttons.RowCount = 12;
-            buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
-            buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
-            for (int i = 0; i < buttons.RowCount; i++)
-                buttons.RowStyles.Add(new RowStyle(SizeType.Percent, 100f / buttons.RowCount));
             saveEditsButton = NewPanelButton("Save Edits");
             loadEditsButton = NewPanelButton("Load Edits");
             resetSelectedButton = NewPanelButton("Reset Selected");
@@ -745,6 +737,50 @@ namespace SpyroNativeEditor
             combinedPatchButton = NewPanelButton("Create Combined BIN");
             validateSourceButton = NewPanelButton("Validate Source");
             behaviorDiffButton = NewPanelButton("Behavior Diff");
+
+            TabControl actionTabs = new TabControl();
+            actionTabs.Dock = DockStyle.Fill;
+            actionTabs.Margin = new Padding(0, 2, 0, 6);
+
+            TableLayoutPanel mainActions = NewActionPanel(4);
+            mainActions.Controls.Add(saveEditsButton, 0, 0);
+            mainActions.Controls.Add(loadEditsButton, 1, 0);
+            mainActions.Controls.Add(resetSelectedButton, 0, 1);
+            mainActions.Controls.Add(clearEditsButton, 1, 1);
+            mainActions.Controls.Add(liveApplyButton, 0, 2);
+            mainActions.Controls.Add(liveRevertButton, 1, 2);
+            mainActions.Controls.Add(patchTopRankedButton, 0, 3);
+            mainActions.SetColumnSpan(patchTopRankedButton, 2);
+
+            TableLayoutPanel gemActions = NewActionPanel(3);
+            gemActions.Controls.Add(setRedGemButton, 0, 0);
+            gemActions.Controls.Add(setGreenGemButton, 1, 0);
+            gemActions.Controls.Add(setBlueGemButton, 0, 1);
+            gemActions.Controls.Add(setYellowGemButton, 1, 1);
+            gemActions.Controls.Add(setPurpleGemButton, 0, 2);
+            gemActions.SetColumnSpan(setPurpleGemButton, 2);
+
+            TableLayoutPanel objectActions = NewActionPanel(2);
+            objectActions.Controls.Add(copyMutationSourceButton, 0, 0);
+            objectActions.Controls.Add(pasteMutationButton, 1, 0);
+            objectActions.Controls.Add(hideSelectedButton, 0, 1);
+            objectActions.SetColumnSpan(hideSelectedButton, 2);
+
+            TableLayoutPanel toolActions = NewActionPanel(4);
+            toolActions.Controls.Add(combinedPatchButton, 0, 0);
+            toolActions.SetColumnSpan(combinedPatchButton, 2);
+            toolActions.Controls.Add(patchBroadButton, 0, 1);
+            toolActions.SetColumnSpan(patchBroadButton, 2);
+            toolActions.Controls.Add(validateSourceButton, 0, 2);
+            toolActions.SetColumnSpan(validateSourceButton, 2);
+            toolActions.Controls.Add(behaviorDiffButton, 0, 3);
+            toolActions.SetColumnSpan(behaviorDiffButton, 2);
+
+            actionTabs.TabPages.Add(NewActionTab("Main", mainActions));
+            actionTabs.TabPages.Add(NewActionTab("Gems", gemActions));
+            actionTabs.TabPages.Add(NewActionTab("Objects", objectActions));
+            actionTabs.TabPages.Add(NewActionTab("Tools", toolActions));
+
             saveEditsButton.Click += delegate { SaveEdits(); };
             loadEditsButton.Click += delegate { LoadSavedEdits(true); };
             resetSelectedButton.Click += delegate { ResetSelectedMoby(); };
@@ -764,31 +800,7 @@ namespace SpyroNativeEditor
             combinedPatchButton.Click += delegate { RunCombinedPatchExporter(); };
             validateSourceButton.Click += delegate { RunSourceValidation(); };
             behaviorDiffButton.Click += delegate { RunBehaviorDiff(); };
-            buttons.Controls.Add(saveEditsButton, 0, 0);
-            buttons.Controls.Add(loadEditsButton, 1, 0);
-            buttons.Controls.Add(resetSelectedButton, 0, 1);
-            buttons.Controls.Add(clearEditsButton, 1, 1);
-            buttons.Controls.Add(liveApplyButton, 0, 2);
-            buttons.Controls.Add(liveRevertButton, 1, 2);
-            buttons.Controls.Add(patchTopRankedButton, 0, 3);
-            buttons.Controls.Add(patchBroadButton, 1, 3);
-            buttons.Controls.Add(combinedPatchButton, 0, 4);
-            buttons.SetColumnSpan(combinedPatchButton, 2);
-            buttons.Controls.Add(validateSourceButton, 0, 5);
-            buttons.SetColumnSpan(validateSourceButton, 2);
-            buttons.Controls.Add(setRedGemButton, 0, 6);
-            buttons.Controls.Add(setGreenGemButton, 1, 6);
-            buttons.Controls.Add(setBlueGemButton, 0, 7);
-            buttons.Controls.Add(setYellowGemButton, 1, 7);
-            buttons.Controls.Add(setPurpleGemButton, 0, 8);
-            buttons.SetColumnSpan(setPurpleGemButton, 2);
-            buttons.Controls.Add(copyMutationSourceButton, 0, 9);
-            buttons.Controls.Add(hideSelectedButton, 1, 9);
-            buttons.Controls.Add(pasteMutationButton, 0, 10);
-            buttons.SetColumnSpan(pasteMutationButton, 2);
-            buttons.Controls.Add(behaviorDiffButton, 0, 11);
-            buttons.SetColumnSpan(behaviorDiffButton, 2);
-            root.Controls.Add(buttons, 0, 6);
+            root.Controls.Add(actionTabs, 0, 6);
 
             notesBox = new TextBox();
             notesBox.Dock = DockStyle.Fill;
@@ -801,6 +813,30 @@ namespace SpyroNativeEditor
             root.Controls.Add(notesBox, 0, 7);
 
             return root;
+        }
+
+        private static TableLayoutPanel NewActionPanel(int rows)
+        {
+            TableLayoutPanel panel = new TableLayoutPanel();
+            panel.Dock = DockStyle.Fill;
+            panel.Padding = new Padding(4, 5, 4, 4);
+            panel.ColumnCount = 2;
+            panel.RowCount = rows;
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            for (int i = 0; i < rows; i++)
+                panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100f / rows));
+            return panel;
+        }
+
+        private static TabPage NewActionTab(string title, Control content)
+        {
+            TabPage page = new TabPage(title);
+            page.Padding = new Padding(0);
+            page.BackColor = Color.FromArgb(236, 239, 243);
+            content.Dock = DockStyle.Fill;
+            page.Controls.Add(content);
+            return page;
         }
 
         private static Label NewDetailLabel()
