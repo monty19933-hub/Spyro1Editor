@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("StoneHill", "Artisans")]
+    [ValidateSet("StoneHill", "Artisans", "All")]
     [string]$LevelKey = "StoneHill",
     [string]$NativeEditsPath = "",
     [string]$ImagePath = ".\Spyro the Dragon (USA).bin",
@@ -51,6 +51,16 @@ function Get-LevelSourceTable([string]$Key) {
     throw "Unsupported level key: $Key"
 }
 
+function Get-LevelSourceTables([string]$Key) {
+    if ($Key -eq "All") {
+        return @(
+            (Get-LevelSourceTable "StoneHill"),
+            (Get-LevelSourceTable "Artisans")
+        )
+    }
+    return @((Get-LevelSourceTable $Key))
+}
+
 function Get-Field($Object, [string]$Name, $Default = $null) {
     if ($null -eq $Object) { return $Default }
     if ($Object -is [System.Collections.IDictionary]) {
@@ -79,6 +89,11 @@ function Convert-HexToBytes([string]$Hex) {
         $bytes[$i] = [Convert]::ToByte($Hex.Substring($i * 2, 2), 16)
     }
     return $bytes
+}
+
+function Write-Int32LE([byte[]]$Bytes, [int]$Offset, [int]$Value) {
+    [byte[]]$raw = [BitConverter]::GetBytes([int32]$Value)
+    [Array]::Copy($raw, 0, $Bytes, $Offset, 4)
 }
 
 function Convert-LegacyIndexToTrue([int]$LegacyIndex) {
@@ -165,9 +180,30 @@ function Convert-DiscFileOffsetToImageOffset($Layout, [int]$FileLba, [int64]$Fil
     return ([int64]$sector * [int64]$Layout.sectorSize) + [int64]$Layout.userOffset + $sectorOffset
 }
 
+function Read-WadBytes([IO.FileStream]$Stream, $Layout, [int64]$Offset, [int]$Length) {
+    $result = New-Object byte[] $Length
+    $remaining = $Length
+    $written = 0
+    $absolute = $Offset
+    while ($remaining -gt 0) {
+        $imageOffset = Convert-DiscFileOffsetToImageOffset $Layout $WadLba $absolute
+        $sectorOffset = [int]($absolute % 2048)
+        $toRead = [Math]::Min(2048 - $sectorOffset, $remaining)
+        $Stream.Position = $imageOffset
+        [void]$Stream.Read($result, $written, $toRead)
+        $written += $toRead
+        $remaining -= $toRead
+        $absolute += $toRead
+    }
+    return $result
+}
+
 function New-PatchRecord($Table, $Layout, $Edit, [int]$TrueIndex, [string]$Kind, [int]$RecordOffset, [byte[]]$Bytes, [string]$Description) {
     $wadOffset = [int64]$Table.tableWadOffset + ([int64]$TrueIndex * $RecordStride) + [int64]$RecordOffset
     return [ordered]@{
+        levelKey = [string]$Table.levelKey
+        levelName = [string]$Table.displayName
+        sourceEntry = [int]$Table.wadEntry
         index = [int](Get-Field $Edit "index" -1)
         trueIndex = $TrueIndex
         label = [string](Get-Field $Edit "label" "")
@@ -180,15 +216,12 @@ function New-PatchRecord($Table, $Layout, $Edit, [int]$TrueIndex, [string]$Kind,
     }
 }
 
-$table = Get-LevelSourceTable $LevelKey
-if ([string]::IsNullOrWhiteSpace($NativeEditsPath)) {
-    $NativeEditsPath = ".\$($table.editSlug)-native-edits.json"
-}
+$tables = @(Get-LevelSourceTables $LevelKey)
 if ([string]::IsNullOrWhiteSpace($OutPath)) {
-    $OutPath = ".\Spyro the Dragon (USA)-$($table.editSlug)-loaderpatchtest.bin"
+    $outSlug = if ($LevelKey -eq "All") { "loaderpatchtest" } else { "$($tables[0].editSlug)-loaderpatchtest" }
+    $OutPath = ".\Spyro the Dragon (USA)-$outSlug.bin"
 }
 
-$resolvedNativeEditsPath = Resolve-WorkspacePath $NativeEditsPath
 $resolvedImagePath = Resolve-WorkspacePath $ImagePath
 $resolvedOutPath = Resolve-WorkspacePath $OutPath
 if ([string]::IsNullOrWhiteSpace($CuePath)) {
@@ -200,38 +233,95 @@ if ([string]::IsNullOrWhiteSpace($PlanPath)) {
 }
 $resolvedPlanPath = Resolve-WorkspacePath $PlanPath
 
-if (-not (Test-Path -LiteralPath $resolvedNativeEditsPath)) { throw "Missing native edits: $resolvedNativeEditsPath" }
 if (-not (Test-Path -LiteralPath $resolvedImagePath)) { throw "Missing source image: $resolvedImagePath" }
 
 $layout = Detect-DiscLayout $resolvedImagePath
-$editsRoot = Get-Content -Raw -LiteralPath $resolvedNativeEditsPath | ConvertFrom-Json
 $patches = New-Object System.Collections.ArrayList
+$editSources = New-Object System.Collections.ArrayList
 
-foreach ($edit in @(Get-ArrayField $editsRoot "edits")) {
-    $trueIndex = Resolve-EditTrueIndex $edit
-    if ($trueIndex -lt 0 -or $trueIndex -ge [int]$table.recordCount) {
-        Write-Warning "Skipping T$trueIndex; it is outside $($table.displayName) source table range 0..$([int]$table.recordCount - 1)."
-        continue
-    }
+$stream = [IO.File]::OpenRead($resolvedImagePath)
+try {
+    foreach ($table in $tables) {
+        $nativePath = if ([string]::IsNullOrWhiteSpace($NativeEditsPath) -or $LevelKey -eq "All") {
+            Resolve-WorkspacePath ".\$($table.editSlug)-native-edits.json"
+        }
+        else {
+            Resolve-WorkspacePath $NativeEditsPath
+        }
+        if (-not (Test-Path -LiteralPath $nativePath)) {
+            if ($LevelKey -eq "All") { continue }
+            throw "Missing native edits: $nativePath"
+        }
 
-    foreach ($axis in @("x", "y", "z")) {
-        $raw = Get-RawEditedAxis $edit $axis
-        [byte[]]$bytes = [BitConverter]::GetBytes([int32]$raw)
-        [void]$patches.Add((New-PatchRecord $table $layout $edit $trueIndex "moby-coordinate" ([int]$CoordOffsets[$axis]) $bytes ("Set " + $axis.ToUpperInvariant() + " to raw " + $raw.ToString())))
-    }
+        $editsRoot = Get-Content -Raw -LiteralPath $nativePath | ConvertFrom-Json
+        $edits = @(Get-ArrayField $editsRoot "edits")
+        [void]$editSources.Add([ordered]@{
+            levelKey = $table.levelKey
+            displayName = $table.displayName
+            nativeEditsPath = (Resolve-Path -LiteralPath $nativePath).Path
+            editCount = $edits.Count
+        })
 
-    foreach ($byteEdit in @(Get-ArrayField $edit "sourceByteEdits")) {
-        $byteOffset = Convert-PatchInt (Get-Field $byteEdit "offset" (Get-Field $byteEdit "offsetHex" $null)) "sourceByteEdits.offset"
-        $value = Convert-PatchInt (Get-Field $byteEdit "value" (Get-Field $byteEdit "valueHex" $null)) "sourceByteEdits.value"
-        if ($byteOffset -lt 0 -or $byteOffset -ge $RecordStride) { throw "Byte edit offset 0x$($byteOffset.ToString('X')) is outside loader record stride 0x58." }
-        if ($value -lt 0 -or $value -gt 255) { throw "Byte edit value 0x$($value.ToString('X')) is outside byte range." }
-        [byte[]]$bytes = @([byte]$value)
-        $field = [string](Get-Field $byteEdit "field" "source-byte")
-        [void]$patches.Add((New-PatchRecord $table $layout $edit $trueIndex "moby-source-byte" $byteOffset $bytes ("Set " + $field + " to 0x" + $value.ToString("X2"))))
+        foreach ($edit in $edits) {
+            $trueIndex = Resolve-EditTrueIndex $edit
+            if ($trueIndex -lt 0 -or $trueIndex -ge [int]$table.recordCount) {
+                Write-Warning "Skipping $($table.displayName) T$trueIndex; it is outside source table range 0..$([int]$table.recordCount - 1)."
+                continue
+            }
+
+            $recordMutation = Get-Field $edit "recordMutation" $null
+            $mutationMode = [string](Get-Field $recordMutation "mode" "")
+            if ($mutationMode -eq "cloneIntoSlot") {
+                $sourceTrueIndex = [int](Get-Field $recordMutation "sourceTrueIndex" -1)
+                if ($sourceTrueIndex -lt 0 -or $sourceTrueIndex -ge [int]$table.recordCount) {
+                    throw "Clone source T$sourceTrueIndex is outside $($table.displayName) source table range."
+                }
+                $sourceWadOffset = [int64]$table.tableWadOffset + ([int64]$sourceTrueIndex * $RecordStride)
+                [byte[]]$recordBytes = Read-WadBytes $stream $layout $sourceWadOffset $RecordStride
+                foreach ($axis in @("x", "y", "z")) {
+                    Write-Int32LE $recordBytes ([int]$CoordOffsets[$axis]) (Get-RawEditedAxis $edit $axis)
+                }
+                foreach ($byteEdit in @(Get-ArrayField $edit "sourceByteEdits")) {
+                    $byteOffset = Convert-PatchInt (Get-Field $byteEdit "offset" (Get-Field $byteEdit "offsetHex" $null)) "sourceByteEdits.offset"
+                    $value = Convert-PatchInt (Get-Field $byteEdit "value" (Get-Field $byteEdit "valueHex" $null)) "sourceByteEdits.value"
+                    if ($byteOffset -lt 0 -or $byteOffset -ge $RecordStride) { throw "Byte edit offset 0x$($byteOffset.ToString('X')) is outside loader record stride 0x58." }
+                    if ($value -lt 0 -or $value -gt 255) { throw "Byte edit value 0x$($value.ToString('X')) is outside byte range." }
+                    $recordBytes[$byteOffset] = [byte]$value
+                }
+                $description = "Clone source record T$sourceTrueIndex into T$trueIndex, preserving edited target position."
+                [void]$patches.Add((New-PatchRecord $table $layout $edit $trueIndex "moby-record-clone-into-slot" 0x00 $recordBytes $description))
+                continue
+            }
+
+            foreach ($axis in @("x", "y", "z")) {
+                $raw = Get-RawEditedAxis $edit $axis
+                [byte[]]$bytes = [BitConverter]::GetBytes([int32]$raw)
+                $kind = if ($mutationMode -eq "hide") { "moby-coordinate-hide" } else { "moby-coordinate" }
+                [void]$patches.Add((New-PatchRecord $table $layout $edit $trueIndex $kind ([int]$CoordOffsets[$axis]) $bytes ("Set " + $axis.ToUpperInvariant() + " to raw " + $raw.ToString())))
+            }
+
+            foreach ($byteEdit in @(Get-ArrayField $edit "sourceByteEdits")) {
+                $byteOffset = Convert-PatchInt (Get-Field $byteEdit "offset" (Get-Field $byteEdit "offsetHex" $null)) "sourceByteEdits.offset"
+                $value = Convert-PatchInt (Get-Field $byteEdit "value" (Get-Field $byteEdit "valueHex" $null)) "sourceByteEdits.value"
+                if ($byteOffset -lt 0 -or $byteOffset -ge $RecordStride) { throw "Byte edit offset 0x$($byteOffset.ToString('X')) is outside loader record stride 0x58." }
+                if ($value -lt 0 -or $value -gt 255) { throw "Byte edit value 0x$($value.ToString('X')) is outside byte range." }
+                [byte[]]$bytes = @([byte]$value)
+                $field = [string](Get-Field $byteEdit "field" "source-byte")
+                [void]$patches.Add((New-PatchRecord $table $layout $edit $trueIndex "moby-source-byte" $byteOffset $bytes ("Set " + $field + " to 0x" + $value.ToString("X2"))))
+            }
+        }
     }
 }
+finally {
+    $stream.Dispose()
+}
 
-if ($patches.Count -eq 0) { throw "No patchable moby edits were found for $($table.displayName)." }
+if ($patches.Count -eq 0) { throw "No patchable moby edits were found for $LevelKey." }
+
+$totalEditCount = 0
+foreach ($source in @($editSources.ToArray())) {
+    $totalEditCount += [int]$source["editCount"]
+}
 
 $plan = [ordered]@{
     generatedAt = (Get-Date).ToString("s")
@@ -240,19 +330,25 @@ $plan = [ordered]@{
     imagePath = (Resolve-Path -LiteralPath $resolvedImagePath).Path
     outPath = $(if ($PlanOnly) { $null } else { $resolvedOutPath })
     cuePath = $(if ($PlanOnly) { $null } else { $resolvedCuePath })
-    nativeEditsPath = (Resolve-Path -LiteralPath $resolvedNativeEditsPath).Path
+    nativeEditsPath = $(if ($LevelKey -eq "All") { $null } else { @($editSources.ToArray())[0].nativeEditsPath })
+    editSources = @($editSources.ToArray())
     discLayout = $layout
-    source = [ordered]@{
-        wadLba = $WadLba
-        wadEntry = $table.wadEntry
-        tableWadOffset = ("0x{0:X}" -f [int64]$table.tableWadOffset)
-        recordCount = $table.recordCount
-        recordStride = "0x58"
-        coordinateOffsets = [ordered]@{ x = "+0x0C"; y = "+0x10"; z = "+0x14" }
-        confidence = $table.confidence
-    }
-    level = $table
-    editCount = @(Get-ArrayField $editsRoot "edits").Count
+    sources = @($tables | ForEach-Object {
+        [ordered]@{
+            levelKey = $_.levelKey
+            displayName = $_.displayName
+            wadLba = $WadLba
+            wadEntry = $_.wadEntry
+            tableWadOffset = ("0x{0:X}" -f [int64]$_.tableWadOffset)
+            recordCount = $_.recordCount
+            recordStride = "0x58"
+            coordinateOffsets = [ordered]@{ x = "+0x0C"; y = "+0x10"; z = "+0x14" }
+            confidence = $_.confidence
+        }
+    })
+    source = $(if ($tables.Count -eq 1) { $tables[0] } else { $null })
+    level = $(if ($tables.Count -eq 1) { $tables[0] } else { [ordered]@{ levelKey = "All"; displayName = "All mapped levels" } })
+    editCount = $totalEditCount
     patchCount = $patches.Count
     patches = @($patches.ToArray())
     binaryPatches = @($patches.ToArray())
@@ -282,7 +378,8 @@ if (-not $PlanOnly) {
     ) | Set-Content -LiteralPath $resolvedCuePath -Encoding ASCII
 }
 
-Write-Host "Wrote $($table.displayName) moby patch plan to $resolvedPlanPath"
+$levelText = if ($LevelKey -eq "All") { "all mapped levels" } else { $tables[0].displayName }
+Write-Host "Wrote $levelText moby patch plan to $resolvedPlanPath"
 if ($PlanOnly) {
     Write-Host "PlanOnly set; no BIN/CUE was written."
 }
@@ -290,5 +387,5 @@ else {
     Write-Host "Wrote patched BIN to $resolvedOutPath"
     Write-Host "Wrote CUE to $resolvedCuePath"
 }
-$patchedTrueIndexes = @($patches | ForEach-Object { [int]$_["trueIndex"] } | Select-Object -Unique)
-Write-Host ("Patches: {0} source-table writes across {1} edited mobys" -f $patches.Count, $patchedTrueIndexes.Count)
+$patchedRecordKeys = @($patches | ForEach-Object { ([string]$_["levelKey"]) + ":T" + ([int]$_["trueIndex"]).ToString() } | Select-Object -Unique)
+Write-Host ("Patches: {0} source-table writes across {1} edited mobys" -f $patches.Count, $patchedRecordKeys.Count)

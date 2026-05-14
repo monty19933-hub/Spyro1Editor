@@ -17,10 +17,15 @@ Updated: 2026-05-13
   - yellow: `+0x36=0x56`, `+0x4F=0x04`
   - purple: `+0x36=0x57`, `+0x4F=0x05`
 - Type `0x20` chest reward color/value byte is confirmed at `+0x53` for at least normal reward chests. Artisans test: Flame/Charge chest `T50` changed from green `0x54` to purple `0x57` and dropped a purple 25 gem.
+- The native editor now exposes slot reuse directly:
+  - `Copy Obj` copies the selected source-table object as a donor.
+  - `Clone/Add` clones that donor into the selected slot while keeping the selected slot's XYZ.
+  - `Remove Slot` soft-removes the selected object by moving its source-table XYZ out of bounds.
 
 ## Working Experiments
 
-- `tools/Export-SpyroLevelMobyPatchTest.ps1` reads saved native editor edits and exports a fresh-loadable loader-table BIN for Stone Hill or Artisans.
+- `tools/Export-SpyroLevelMobyPatchTest.ps1` reads saved native editor edits and exports a fresh-loadable loader-table BIN for Stone Hill, Artisans, or all mapped levels together.
+- Native editor `Create Loader BIN` exports saved Stone Hill + Artisans moby edits into `Spyro the Dragon (USA)-loaderpatchtest.bin`, so editing both levels no longer requires separate CUEs.
 - `tools/Export-SpyroMobyRecordMutation.ps1` can do focused source-record experiments:
   - `CloneIntoSlot`: clone one existing source record into another slot while keeping the target position. This is the current practical "add by reusing a slot" method.
   - `Swap`: swap two source-record identities while preserving both positions.
@@ -33,10 +38,12 @@ Updated: 2026-05-13
 - True add/remove by expanding the source table is not proven yet. Slot reuse is safer because it does not change loader counts or nearby tables.
 - Enemy reward-byte behavior needs a focused test per enemy family. Chest `+0x53` is proven; enemies likely use the same byte when they directly drop gems, but path/special-data behavior may still be tied to donor records.
 - Runtime records beyond Artisans `T173` are visible in RAM but are not covered by the mapped Artisans source table yet.
+- True add/remove still means "slot reuse" for now. We can create extra-looking gems/enemies/chests by converting unused or less important slots, but we are not yet expanding the loader table count safely.
 
 ## Handy Tests
 
 - `Create Artisans Loader Patch Test.bat`: exports saved Artisans editor moby edits.
+- `Create All Mapped Levels Loader Patch Test.bat`: exports saved Stone Hill + Artisans editor moby edits into one CUE/BIN.
 - `Create Artisans Slot Reuse Treasure Gnorc Test.bat`: clones Treasure Gnorc `T7` into sheep slot `T110`.
 - `Create Artisans Hide Sheep T110 Test.bat`: soft-removes sheep `T110`.
 - `Create Artisans Loose Gem Purple Test.bat`: proven loose gem purple/value test on `T165`.

@@ -168,6 +168,9 @@ namespace SpyroNativeEditor
         private Button setBlueGemButton;
         private Button setYellowGemButton;
         private Button setPurpleGemButton;
+        private Button copyMutationSourceButton;
+        private Button pasteMutationButton;
+        private Button hideSelectedButton;
         private Button liveApplyButton;
         private Button liveRevertButton;
         private Button patchTopRankedButton;
@@ -230,6 +233,7 @@ namespace SpyroNativeEditor
         private int savedEditCount;
         private int savedTerrainEditCount;
         private int activeSelectionGroupIndex = -1;
+        private int mutationClipboardMobyIndex = -1;
         private bool updatingGroupSelection;
         private Bitmap terrainTextureAtlas;
         private Bitmap terrainTextureLumaAtlas;
@@ -717,7 +721,7 @@ namespace SpyroNativeEditor
             TableLayoutPanel buttons = new TableLayoutPanel();
             buttons.Dock = DockStyle.Fill;
             buttons.ColumnCount = 2;
-            buttons.RowCount = 10;
+            buttons.RowCount = 12;
             buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
             buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
             for (int i = 0; i < buttons.RowCount; i++)
@@ -731,6 +735,9 @@ namespace SpyroNativeEditor
             setBlueGemButton = NewPanelButton("Set Blue 5");
             setYellowGemButton = NewPanelButton("Set Yellow 10");
             setPurpleGemButton = NewPanelButton("Set Purple 25");
+            copyMutationSourceButton = NewPanelButton("Copy Obj");
+            pasteMutationButton = NewPanelButton("Clone/Add");
+            hideSelectedButton = NewPanelButton("Remove Slot");
             liveApplyButton = NewPanelButton("Live Apply");
             liveRevertButton = NewPanelButton("Live Revert");
             patchTopRankedButton = NewPanelButton("Create Loader BIN");
@@ -747,6 +754,9 @@ namespace SpyroNativeEditor
             setBlueGemButton.Click += delegate { SetSelectedGemColor("blue"); };
             setYellowGemButton.Click += delegate { SetSelectedGemColor("yellow"); };
             setPurpleGemButton.Click += delegate { SetSelectedGemColor("purple"); };
+            copyMutationSourceButton.Click += delegate { CopySelectedMutationSource(); };
+            pasteMutationButton.Click += delegate { PasteMutationIntoSelected(); };
+            hideSelectedButton.Click += delegate { HideSelectedMobySlot(); };
             liveApplyButton.Click += delegate { if (editorMode == EditorMode.Terrain) RunLiveTerrainMove(false); else RunLiveMobyMove(false); };
             liveRevertButton.Click += delegate { if (editorMode == EditorMode.Terrain) RunLiveTerrainMove(true); else RunLiveMobyMove(true); };
             patchTopRankedButton.Click += delegate { RunPatchExporter(true); };
@@ -772,7 +782,11 @@ namespace SpyroNativeEditor
             buttons.Controls.Add(setYellowGemButton, 1, 7);
             buttons.Controls.Add(setPurpleGemButton, 0, 8);
             buttons.SetColumnSpan(setPurpleGemButton, 2);
-            buttons.Controls.Add(behaviorDiffButton, 0, 9);
+            buttons.Controls.Add(copyMutationSourceButton, 0, 9);
+            buttons.Controls.Add(hideSelectedButton, 1, 9);
+            buttons.Controls.Add(pasteMutationButton, 0, 10);
+            buttons.SetColumnSpan(pasteMutationButton, 2);
+            buttons.Controls.Add(behaviorDiffButton, 0, 11);
             buttons.SetColumnSpan(behaviorDiffButton, 2);
             root.Controls.Add(buttons, 0, 6);
 
@@ -870,6 +884,7 @@ namespace SpyroNativeEditor
                 currentLevelKey = levelKey;
                 currentLevelId = ExpectedLevelIdForKey(levelKey);
                 currentLevelSupportsSourcePatchers = supportsSourcePatchers;
+                mutationClipboardMobyIndex = -1;
                 editPath = Path.Combine(workspace, levelKey + "-native-edits.json");
                 terrainEditPath = Path.Combine(workspace, levelKey + "-terrain-edits.json");
                 terrainMaterialOverridesPath = Path.Combine(workspace, levelKey + "-terrain-material-overrides.json");
@@ -1836,6 +1851,17 @@ namespace SpyroNativeEditor
                 setPurpleGemButton.Enabled = canEdit;
         }
 
+        private void UpdateMutationButtons(Moby moby)
+        {
+            bool canUseSelectedSlot = moby != null && moby.Patchable && moby.TrueIndex >= 0 && moby.TrueIndex < SourceRecordCountForLevel(currentLevelKey);
+            if (copyMutationSourceButton != null)
+                copyMutationSourceButton.Enabled = canUseSelectedSlot;
+            if (hideSelectedButton != null)
+                hideSelectedButton.Enabled = canUseSelectedSlot;
+            if (pasteMutationButton != null)
+                pasteMutationButton.Enabled = canUseSelectedSlot && mutationClipboardMobyIndex >= 0 && mutationClipboardMobyIndex < mobys.Count && mutationClipboardMobyIndex != selectedMobyIndex;
+        }
+
         private void SetSelectedGemColor(string color)
         {
             if (selectedMobyIndex < 0 || selectedMobyIndex >= mobys.Count) return;
@@ -1860,6 +1886,88 @@ namespace SpyroNativeEditor
             statusLabel.Text = standaloneGem
                 ? "Set " + MobyId(moby) + " to " + moby.GemColorName + " gem (" + moby.GemValueOverride.ToString() + "). Save Edits, then Create Loader BIN."
                 : "Set " + MobyId(moby) + " reward drop to " + moby.RewardColorName + " gem (" + moby.RewardValueOverride.ToString() + "). Save Edits, then Create Loader BIN.";
+        }
+
+        private void CopySelectedMutationSource()
+        {
+            if (selectedMobyIndex < 0 || selectedMobyIndex >= mobys.Count) return;
+            Moby source = mobys[selectedMobyIndex];
+            if (!source.Patchable || source.TrueIndex < 0 || source.TrueIndex >= SourceRecordCountForLevel(currentLevelKey))
+            {
+                statusLabel.Text = "Select a source-table moby before copying an object type.";
+                return;
+            }
+
+            mutationClipboardMobyIndex = selectedMobyIndex;
+            UpdateMutationButtons(source);
+            statusLabel.Text = "Copied " + MobyId(source) + " " + source.DisplayLabel + " as the type donor.";
+            UpdateInspector();
+        }
+
+        private void PasteMutationIntoSelected()
+        {
+            if (selectedMobyIndex < 0 || selectedMobyIndex >= mobys.Count) return;
+            if (mutationClipboardMobyIndex < 0 || mutationClipboardMobyIndex >= mobys.Count)
+            {
+                statusLabel.Text = "Copy a source object type first.";
+                return;
+            }
+            if (mutationClipboardMobyIndex == selectedMobyIndex)
+            {
+                statusLabel.Text = "Pick a different target slot before pasting the copied type.";
+                return;
+            }
+
+            Moby source = mobys[mutationClipboardMobyIndex];
+            Moby target = mobys[selectedMobyIndex];
+            if (!source.Patchable || !target.Patchable)
+            {
+                statusLabel.Text = "Both source and target must be source-table mobys.";
+                return;
+            }
+
+            DialogResult result = MessageBox.Show(
+                this,
+                "Replace " + MobyId(target) + " " + target.DisplayLabel + " with cloned type " + MobyId(source) + " " + source.DisplayLabel + "?\n\nThe target keeps its current XYZ, but behavior/path data may still come from the donor record.",
+                "Paste object type",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (result != DialogResult.Yes) return;
+
+            target.SetRecordCloneOverride(source);
+            hasUnsavedEdits = true;
+            BuildSelectionGroups();
+            RefreshMobyListRow(selectedMobyIndex);
+            UpdateInspector();
+            canvas.Invalidate();
+            statusLabel.Text = "Pasted " + MobyId(source) + " type into " + MobyId(target) + ". Save Edits, then Create Loader BIN.";
+        }
+
+        private void HideSelectedMobySlot()
+        {
+            if (selectedMobyIndex < 0 || selectedMobyIndex >= mobys.Count) return;
+            Moby moby = mobys[selectedMobyIndex];
+            if (!moby.Patchable || moby.TrueIndex < 0 || moby.TrueIndex >= SourceRecordCountForLevel(currentLevelKey))
+            {
+                statusLabel.Text = "Select a source-table moby before hiding a slot.";
+                return;
+            }
+
+            DialogResult result = MessageBox.Show(
+                this,
+                "Hide " + MobyId(moby) + " " + moby.DisplayLabel + " by moving its source record out of the level?\n\nUse Reset Selected to undo before exporting.",
+                "Hide object slot",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (result != DialogResult.Yes) return;
+
+            moby.SetHiddenSlotOverride();
+            hasUnsavedEdits = true;
+            BuildSelectionGroups();
+            RefreshMobyListRow(selectedMobyIndex);
+            UpdateInspector();
+            canvas.Invalidate();
+            statusLabel.Text = "Hid " + MobyId(moby) + ". Save Edits, then Create Loader BIN.";
         }
 
         private static bool CanEditGemColor(Moby moby)
@@ -1898,6 +2006,11 @@ namespace SpyroNativeEditor
         private static string DescribeEditStatus(Moby moby)
         {
             if (moby == null || !moby.IsEdited) return "unchanged";
+            if (moby.HasHiddenSlotEdit) return "removed by hiding source-table slot";
+            if (moby.HasRecordCloneEdit && moby.HasGemColorEdit) return "cloned object type and gem value edited";
+            if (moby.HasRecordCloneEdit && moby.HasRewardColorEdit) return "cloned object type and reward edited";
+            if (moby.HasRecordCloneEdit && moby.HasPositionEdit) return "cloned object type and moved";
+            if (moby.HasRecordCloneEdit) return "cloned object type into this slot";
             if (moby.HasPositionEdit && moby.HasGemColorEdit && moby.HasRewardColorEdit) return "moved, gem value edited, and reward edited";
             if (moby.HasPositionEdit && moby.HasRewardColorEdit) return "moved and reward edited";
             if (moby.HasPositionEdit && moby.HasGemColorEdit) return "moved and gem value edited";
@@ -2092,12 +2205,14 @@ namespace SpyroNativeEditor
                     SetCoordinateBox(zBox, 0);
                     notesBox.Text = "Select a moby to inspect its decoded identity and edit status.";
                     UpdateGemButtons(null);
+                    UpdateMutationButtons(null);
                     UpdateGroupNavigationButtons();
                     return;
                 }
 
                 Moby m = mobys[selectedMobyIndex];
                 UpdateGemButtons(m);
+                UpdateMutationButtons(m);
                 UpdateGroupNavigationButtons();
                 selectedTitleLabel.Text = MobyId(m) + " " + m.DisplayLabel + (m.IsEdited ? " *" : "");
                 identityLabel.Text = CatalogCategory(m) + " | Type 0x" + m.Type.ToString("X2") + "  State 0x" + m.State.ToString("X2") + DetailSuffix(m.Confidence);
@@ -2146,6 +2261,12 @@ namespace SpyroNativeEditor
                     notes.AppendLine("Reward color edit: drops " + m.RewardColorName + " gem (" + m.RewardValueOverride.ToString() + "), source +0x53=0x" + m.RewardByte53Override.ToString("X2"));
                 else if (CanEditRewardColor(m))
                     notes.AppendLine("Reward byte: type 0x20 +0x53 controls gem drop color/value. Red 0x53, green 0x54, blue 0x55, yellow 0x56, purple 0x57.");
+                if (m.HasRecordCloneEdit)
+                    notes.AppendLine("Object type edit: clone source record T" + m.RecordCloneSourceTrueIndex.ToString() + " " + m.RecordCloneSourceLabel + " into this slot, keeping current XYZ.");
+                if (m.HasHiddenSlotEdit)
+                    notes.AppendLine("Object remove edit: hide this slot by moving it out of the level.");
+                if (mutationClipboardMobyIndex >= 0 && mutationClipboardMobyIndex < mobys.Count)
+                    notes.AppendLine("Copied type donor: " + MobyId(mobys[mutationClipboardMobyIndex]) + " " + mobys[mutationClipboardMobyIndex].DisplayLabel + ".");
                 notes.AppendLine();
                 notes.AppendLine("Edit status: " + DescribeEditStatus(m));
                 notes.AppendLine("Disc patch status: " + (m.Patchable ? "loader-table patchable" : "waiting for WAD source link"));
@@ -2154,7 +2275,8 @@ namespace SpyroNativeEditor
                 if (!string.IsNullOrEmpty(functionalNote)) notes.AppendLine("Functional test: " + functionalNote);
                 notes.AppendLine();
                 notes.AppendLine("Live Apply writes only runtime XYZ into DuckStation. Use it to identify visible mobys, not to prove collision or rewards.");
-                notes.AppendLine("Create Loader BIN writes the confirmed 0x58 loader-table source into a disposable disc image. Fresh-load that CUE for permanent placement, collision, and rewards.");
+                notes.AppendLine("Create Loader BIN writes saved Stone Hill + Artisans moby edits into one disposable disc image. Fresh-load that CUE for permanent placement, collision, and rewards.");
+                notes.AppendLine("Copy Obj/Clone-Add performs slot reuse: it adds or changes gems, chests, enemies, and scenery by cloning one source record into another selected slot. Remove Slot is the current safe remove.");
                 if (IsStoneHillLevel())
                 {
                     notes.AppendLine("Create Terrain BIN writes saved terrain Z edits through the exact runtime scene-sector source found in the WAD.");
@@ -2178,6 +2300,7 @@ namespace SpyroNativeEditor
         {
             SetCoordinateControlsEnabled(false);
             UpdateGemButtons(null);
+            UpdateMutationButtons(null);
             if (selectedTerrainIndex < 0 || geometry == null || selectedTerrainIndex >= geometry.Polygons.Count)
             {
                 selectedTitleLabel.Text = "Terrain Mode";
@@ -2809,7 +2932,15 @@ namespace SpyroNativeEditor
             }
 
             SaveEdits();
-            if (CountEditedMobys() == 0)
+            if (topRankedOnly)
+            {
+                if (!HasAnySavedMobyEdits())
+                {
+                    MessageBox.Show(this, "Make and save at least one Stone Hill or Artisans moby edit before creating a loader BIN.", "No moby edits", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+            }
+            else if (CountEditedMobys() == 0)
             {
                 MessageBox.Show(this, "Make and save at least one moby edit before creating a loader BIN.", "No moby edits", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
@@ -2835,20 +2966,19 @@ namespace SpyroNativeEditor
                 args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
                 args.Append(QuoteArgument(scriptPath));
                 string outName = topRankedOnly
-                    ? (IsStoneHillLevel() ? "Spyro the Dragon (USA)-loaderpatchtest.bin" : "Spyro the Dragon (USA)-" + currentLevelKey + "-loaderpatchtest.bin")
+                    ? "Spyro the Dragon (USA)-loaderpatchtest.bin"
                     : "Spyro the Dragon (USA)-nativepatchtest-broad.bin";
                 string outPath = Path.Combine(workspace, outName);
                 if (topRankedOnly)
                 {
-                    args.Append(" -LevelKey ").Append(QuoteArgument(ScriptLevelKey(currentLevelKey)));
-                    args.Append(" -NativeEditsPath ").Append(QuoteArgument(editPath));
+                    args.Append(" -LevelKey All");
                 }
                 args.Append(" -OutPath ").Append(QuoteArgument(outPath));
                 args.Append(" -PlanPath ").Append(QuoteArgument(outPath + ".patchplan.json"));
 
                 StartWorkspaceProcess("powershell.exe", args.ToString());
                 statusLabel.Text = topRankedOnly
-                    ? "Started " + currentLevelName + " loader-table BIN export."
+                    ? "Started all mapped levels loader-table BIN export."
                     : "Started old broad source-window diagnostic export.";
             }
             catch (Exception ex)
@@ -3098,6 +3228,27 @@ namespace SpyroNativeEditor
                 if (moby.IsEdited) count++;
             }
             return count;
+        }
+
+        private bool HasAnySavedMobyEdits()
+        {
+            foreach (string levelKey in new string[] { "stonehill", "artisans" })
+            {
+                string path = Path.Combine(workspace, levelKey + "-native-edits.json");
+                if (!File.Exists(path)) continue;
+                try
+                {
+                    JavaScriptSerializer serializer = new JavaScriptSerializer();
+                    serializer.MaxJsonLength = int.MaxValue;
+                    Dictionary<string, object> root = serializer.DeserializeObject(File.ReadAllText(path, Encoding.UTF8)) as Dictionary<string, object>;
+                    if (root != null && root.ContainsKey("editCount") && Convert.ToInt32(root["editCount"]) > 0)
+                        return true;
+                }
+                catch
+                {
+                }
+            }
+            return false;
         }
 
         private int CountEditedTerrainFaces()
@@ -5728,6 +5879,10 @@ namespace SpyroNativeEditor
                     edit["rewardColorEdit"] = NewRewardColorEdit(moby);
                     sourceByteEdits.AddRange(NewRewardSourceByteEdits(moby));
                 }
+                if (moby.HasRecordCloneEdit)
+                    edit["recordMutation"] = NewRecordCloneMutation(moby);
+                else if (moby.HasHiddenSlotEdit)
+                    edit["recordMutation"] = NewHideMutation(moby);
                 if (sourceByteEdits.Count > 0)
                     edit["sourceByteEdits"] = sourceByteEdits;
                 edits.Add(edit);
@@ -5805,6 +5960,26 @@ namespace SpyroNativeEditor
                     changed = true;
                 }
 
+                Dictionary<string, object> recordMutation = edit.ContainsKey("recordMutation") ? edit["recordMutation"] as Dictionary<string, object> : null;
+                string mutationMode = GetString(recordMutation, "mode", "");
+                if (string.Equals(mutationMode, "cloneIntoSlot", StringComparison.OrdinalIgnoreCase))
+                {
+                    int sourceTrueIndex = GetInt(recordMutation, "sourceTrueIndex", -1);
+                    int sourceIndex = GetInt(recordMutation, "sourceIndex", -1);
+                    Moby source;
+                    if ((sourceTrueIndex >= 0 && byTrueIndex.TryGetValue(sourceTrueIndex, out source))
+                        || (sourceIndex >= 0 && byIndex.TryGetValue(sourceIndex, out source)))
+                    {
+                        moby.SetRecordCloneOverride(source);
+                        changed = true;
+                    }
+                }
+                else if (string.Equals(mutationMode, "hide", StringComparison.OrdinalIgnoreCase))
+                {
+                    moby.SetHiddenSlotOverride();
+                    changed = true;
+                }
+
                 Dictionary<string, object> gemColorEdit = edit.ContainsKey("gemColorEdit") ? edit["gemColorEdit"] as Dictionary<string, object> : null;
                 string gemColor = GetString(gemColorEdit, "color", "");
                 if (string.IsNullOrEmpty(gemColor))
@@ -5877,6 +6052,25 @@ namespace SpyroNativeEditor
             edit["value"] = moby.RewardValueOverride;
             edit["sourceByte53Hex"] = "0x" + moby.RewardByte53Override.ToString("X2");
             edit["validation"] = "Confirmed on Artisans Flame/Charge chest T50; expected to apply to matching type 0x20 reward-bearing chests/enemies.";
+            return edit;
+        }
+
+        private static Dictionary<string, object> NewRecordCloneMutation(Moby moby)
+        {
+            Dictionary<string, object> edit = new Dictionary<string, object>();
+            edit["mode"] = "cloneIntoSlot";
+            edit["sourceIndex"] = moby.RecordCloneSourceIndex;
+            edit["sourceTrueIndex"] = moby.RecordCloneSourceTrueIndex;
+            edit["sourceLabel"] = moby.RecordCloneSourceLabel ?? "";
+            edit["note"] = "Slot reuse/add: clone the source loader record into this target slot, then write the target XYZ and supported source-byte edits.";
+            return edit;
+        }
+
+        private static Dictionary<string, object> NewHideMutation(Moby moby)
+        {
+            Dictionary<string, object> edit = new Dictionary<string, object>();
+            edit["mode"] = "hide";
+            edit["note"] = "Soft remove: keep the source-table record but move XYZ far out of bounds.";
             return edit;
         }
 
@@ -6424,6 +6618,11 @@ namespace SpyroNativeEditor
         public string BaseConfidence;
         public string BaseEvidence;
         public Color BaseColor;
+        public int BaseType;
+        public int BaseState;
+        public uint BaseSpecialDataPointer;
+        public int BaseFlag4A;
+        public int BaseFlag4B;
         public string GemColorOverride;
         public int GemValueOverride;
         public int GemSourceByte36Override = -1;
@@ -6431,6 +6630,10 @@ namespace SpyroNativeEditor
         public string RewardColorOverride;
         public int RewardValueOverride;
         public int RewardByte53Override = -1;
+        public bool HasHiddenSlotEdit;
+        public int RecordCloneSourceTrueIndex = -1;
+        public int RecordCloneSourceIndex = -1;
+        public string RecordCloneSourceLabel;
 
         public string DisplayLabel
         {
@@ -6444,7 +6647,7 @@ namespace SpyroNativeEditor
         {
             get
             {
-                return HasPositionEdit || HasGemColorEdit || HasRewardColorEdit;
+                return HasPositionEdit || HasGemColorEdit || HasRewardColorEdit || HasHiddenSlotEdit || HasRecordCloneEdit;
             }
         }
 
@@ -6476,6 +6679,11 @@ namespace SpyroNativeEditor
             get { return string.IsNullOrEmpty(RewardColorOverride) ? "" : RewardColorOverride; }
         }
 
+        public bool HasRecordCloneEdit
+        {
+            get { return RecordCloneSourceTrueIndex >= 0; }
+        }
+
         public bool Patchable
         {
             get
@@ -6491,7 +6699,27 @@ namespace SpyroNativeEditor
             BaseConfidence = Confidence;
             BaseEvidence = Evidence;
             BaseColor = Color;
+            BaseType = Type;
+            BaseState = State;
+            BaseSpecialDataPointer = SpecialDataPointer;
+            BaseFlag4A = Flag4A;
+            BaseFlag4B = Flag4B;
             HasBaseIdentity = true;
+        }
+
+        private void RestoreBaseIdentity()
+        {
+            if (!HasBaseIdentity) return;
+            Label = BaseLabel;
+            Kind = BaseKind;
+            Confidence = BaseConfidence;
+            Evidence = BaseEvidence;
+            Color = BaseColor;
+            Type = BaseType;
+            State = BaseState;
+            SpecialDataPointer = BaseSpecialDataPointer;
+            Flag4A = BaseFlag4A;
+            Flag4B = BaseFlag4B;
         }
 
         public void SetGemColorOverride(string color)
@@ -6522,6 +6750,63 @@ namespace SpyroNativeEditor
             RewardByte53Override = GemIdByteForColor(normalized);
             Confidence = "editor reward override";
             Evidence = "source reward byte +0x53 will be patched by Create Loader BIN";
+        }
+
+        public void SetRecordCloneOverride(Moby source)
+        {
+            if (source == null) return;
+            if (!HasBaseIdentity)
+                CaptureBaseIdentity();
+
+            HasHiddenSlotEdit = false;
+            RecordCloneSourceTrueIndex = source.TrueIndex;
+            RecordCloneSourceIndex = source.Index;
+            RecordCloneSourceLabel = source.DisplayLabel;
+            GemColorOverride = null;
+            GemValueOverride = 0;
+            GemSourceByte36Override = -1;
+            GemSourceByte4FOverride = -1;
+            RewardColorOverride = null;
+            RewardValueOverride = 0;
+            RewardByte53Override = -1;
+
+            Type = source.Type;
+            State = source.State;
+            SpecialDataPointer = source.SpecialDataPointer;
+            Flag4A = source.Flag4A;
+            Flag4B = source.Flag4B;
+            Label = source.DisplayLabel + " (cloned type)";
+            Kind = source.Kind;
+            Zone = source.Zone;
+            Color = source.Color;
+            Confidence = "editor record clone";
+            Evidence = "source record T" + source.TrueIndex.ToString() + " will be cloned into this slot by Create Loader BIN";
+        }
+
+        public void SetHiddenSlotOverride()
+        {
+            if (!HasBaseIdentity)
+                CaptureBaseIdentity();
+
+            HasHiddenSlotEdit = true;
+            RecordCloneSourceTrueIndex = -1;
+            RecordCloneSourceIndex = -1;
+            RecordCloneSourceLabel = null;
+            GemColorOverride = null;
+            GemValueOverride = 0;
+            GemSourceByte36Override = -1;
+            GemSourceByte4FOverride = -1;
+            RewardColorOverride = null;
+            RewardValueOverride = 0;
+            RewardByte53Override = -1;
+            X = -30000f;
+            Y = -30000f;
+            Z = -30000f;
+            Label = "Hidden slot: " + (string.IsNullOrEmpty(BaseLabel) ? DisplayLabel : BaseLabel);
+            Kind = "hidden source-table slot";
+            Color = System.Drawing.Color.FromArgb(120, 120, 120);
+            Confidence = "editor hidden";
+            Evidence = "source XYZ will be moved out of bounds by Create Loader BIN";
         }
 
         public static bool IsSupportedGemColor(string color)
@@ -6595,14 +6880,8 @@ namespace SpyroNativeEditor
             GemValueOverride = 0;
             GemSourceByte36Override = -1;
             GemSourceByte4FOverride = -1;
-            if (HasBaseIdentity)
-            {
-                Label = BaseLabel;
-                Kind = BaseKind;
-                Confidence = BaseConfidence;
-                Evidence = BaseEvidence;
-                Color = BaseColor;
-            }
+            if (HasBaseIdentity && !HasRewardColorEdit && !HasRecordCloneEdit && !HasHiddenSlotEdit)
+                RestoreBaseIdentity();
         }
 
         public void ClearRewardColorOverride()
@@ -6610,14 +6889,18 @@ namespace SpyroNativeEditor
             RewardColorOverride = null;
             RewardValueOverride = 0;
             RewardByte53Override = -1;
-            if (HasBaseIdentity && !HasGemColorEdit)
-            {
-                Label = BaseLabel;
-                Kind = BaseKind;
-                Confidence = BaseConfidence;
-                Evidence = BaseEvidence;
-                Color = BaseColor;
-            }
+            if (HasBaseIdentity && !HasGemColorEdit && !HasRecordCloneEdit && !HasHiddenSlotEdit)
+                RestoreBaseIdentity();
+        }
+
+        public void ClearRecordMutationOverride()
+        {
+            HasHiddenSlotEdit = false;
+            RecordCloneSourceTrueIndex = -1;
+            RecordCloneSourceIndex = -1;
+            RecordCloneSourceLabel = null;
+            if (HasBaseIdentity && !HasGemColorEdit && !HasRewardColorEdit)
+                RestoreBaseIdentity();
         }
 
         public void ResetToOriginal()
@@ -6628,6 +6911,8 @@ namespace SpyroNativeEditor
             GroundOffset = OriginalGroundOffset;
             ClearGemColorOverride();
             ClearRewardColorOverride();
+            ClearRecordMutationOverride();
+            RestoreBaseIdentity();
         }
     }
 }
