@@ -7162,6 +7162,10 @@ namespace SpyroNativeEditor
             moby.AppendSourceIndex = source.Index;
             moby.AppendSourceLabel = source.DisplayLabel;
             moby.CaptureBaseIdentity();
+            if (source.HasGemColorEdit)
+                moby.SetGemColorOverride(source.GemColorName);
+            if (source.HasRewardColorEdit)
+                moby.SetRewardColorOverride(source.RewardColorName);
             return moby;
         }
 

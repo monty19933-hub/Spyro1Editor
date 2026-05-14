@@ -291,6 +291,17 @@ try {
             editCount = $edits.Count
         })
 
+        $sourceEditsByTrueIndex = @{}
+        foreach ($candidateEdit in $edits) {
+            $candidateMutation = Get-Field $candidateEdit "recordMutation" $null
+            $candidateMutationMode = [string](Get-Field $candidateMutation "mode" "")
+            if ($candidateMutationMode -eq "appendFromSource") { continue }
+            $candidateTrueIndex = Resolve-EditTrueIndex $candidateEdit
+            if ($candidateTrueIndex -ge 0 -and $candidateTrueIndex -lt [int]$table.recordCount) {
+                $sourceEditsByTrueIndex[$candidateTrueIndex] = $candidateEdit
+            }
+        }
+
         $appendMaxTrueIndex = [int]$table.recordCount - 1
         $hasAppend = $false
         foreach ($edit in $edits) {
@@ -315,7 +326,12 @@ try {
                 foreach ($axis in @("x", "y", "z")) {
                     Write-Int32LE $recordBytes ([int]$CoordOffsets[$axis]) (Get-RawEditedAxis $edit $axis)
                 }
-                foreach ($byteEdit in @(Get-ArrayField $edit "sourceByteEdits")) {
+                $appendByteEdits = @()
+                if ($sourceEditsByTrueIndex.ContainsKey($sourceTrueIndex)) {
+                    $appendByteEdits += @(Get-ArrayField $sourceEditsByTrueIndex[$sourceTrueIndex] "sourceByteEdits")
+                }
+                $appendByteEdits += @(Get-ArrayField $edit "sourceByteEdits")
+                foreach ($byteEdit in $appendByteEdits) {
                     $byteOffset = Convert-PatchInt (Get-Field $byteEdit "offset" (Get-Field $byteEdit "offsetHex" $null)) "sourceByteEdits.offset"
                     $value = Convert-PatchInt (Get-Field $byteEdit "value" (Get-Field $byteEdit "valueHex" $null)) "sourceByteEdits.value"
                     if ($byteOffset -lt 0 -or $byteOffset -ge $RecordStride) { throw "Byte edit offset 0x$($byteOffset.ToString('X')) is outside loader record stride 0x58." }
