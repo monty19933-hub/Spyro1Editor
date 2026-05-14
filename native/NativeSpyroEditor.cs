@@ -1978,7 +1978,7 @@ namespace SpyroNativeEditor
                 string key = CatalogCategory(moby) + "|" + moby.DisplayLabel + "|" + moby.Type.ToString("X2") + "|" + moby.State.ToString("X2") + "|" + moby.Flag4A.ToString("X2") + "|" + moby.Flag4B.ToString("X2");
                 if (seen.Contains(key)) continue;
                 seen.Add(key);
-                choices.Add(new MobyChoice(i, CatalogCategory(moby).Replace("/", "+") + ": " + moby.DisplayLabel + " (" + MobyId(moby) + ")"));
+                choices.Add(new MobyChoice(i, TrueAddSafetyPrefix(moby) + " - " + CatalogCategory(moby).Replace("/", "+") + ": " + moby.DisplayLabel + " (" + MobyId(moby) + ")"));
             }
             choices.Sort(CompareMobyChoices);
             return choices;
@@ -2034,6 +2034,45 @@ namespace SpyroNativeEditor
             if (text.IndexOf("invisible", StringComparison.Ordinal) >= 0 || text.IndexOf("nonvisual", StringComparison.Ordinal) >= 0 || text.IndexOf("control", StringComparison.Ordinal) >= 0)
                 return false;
             return true;
+        }
+
+        private static string TrueAddSafetyPrefix(Moby moby)
+        {
+            return IsExperimentalTrueAddTemplate(moby) ? "Experimental" : "Simple";
+        }
+
+        private static bool IsExperimentalTrueAddTemplate(Moby moby)
+        {
+            if (moby == null) return true;
+            string text = MobySearchText(moby);
+            if (moby.Type == 0x00) return true;
+            if (HasAny(text,
+                "dragon", "pedestal", "fairy", "whirlwind", "return home", "portal", "sound trigger",
+                "enemy", "ram", "shepherd", "gnorc", "thief", "sheep", "fodder",
+                "chest", "treasure", "life chest", "locked", "charge", "flame", "key", "balloon"))
+                return true;
+            if (moby.Type == 0x20 && moby.SpecialDataPointer != 0)
+                return true;
+            return false;
+        }
+
+        private static string TrueAddSafetyWarning(Moby moby)
+        {
+            if (!IsExperimentalTrueAddTemplate(moby))
+                return "This looks like a simple/self-contained template. It should be the safest true-add class we currently know.";
+
+            string text = MobySearchText(moby);
+            if (HasAny(text, "dragon", "pedestal", "fairy"))
+                return "Warning: dragons are linked clusters. Adding one dragon record does not yet clone the pedestal, fairy/control, rescue camera, and save-state linkage, so it can crash or behave incorrectly.";
+            if (text.IndexOf("whirlwind", StringComparison.Ordinal) >= 0)
+                return "Warning: whirlwinds are controller-style records. Adding one standalone record can reference missing trigger/activation data and may crash.";
+            if (HasAny(text, "enemy", "ram", "shepherd", "gnorc", "thief"))
+                return "Warning: enemies can share AI/path/reward state with the donor. Test one true-added enemy at a time before combining it with other experimental adds.";
+            if (HasAny(text, "chest", "treasure", "life chest", "locked", "charge", "flame"))
+                return "Warning: chests can share collision/reward helper data with the donor. Test one true-added chest at a time before combining it with other experimental adds.";
+            if (moby.Type == 0x00)
+                return "Warning: type 0x00 records are usually helpers/controllers, not standalone objects. True-adding these is experimental.";
+            return "Warning: this template has behavior or special-data linkage. Test it by itself before mixing it with other experimental true-adds.";
         }
 
         private bool CanUseAsAddSlot(Moby moby)
@@ -2118,12 +2157,13 @@ namespace SpyroNativeEditor
             if (targetChoice.Index == AppendObjectChoiceIndex)
             {
                 int appendTrueIndex = NextAppendTrueIndex();
+                bool experimentalAdd = IsExperimentalTrueAddTemplate(source);
                 DialogResult appendResult = MessageBox.Show(
                     this,
-                    "Add a new " + source.DisplayLabel + " by appending source record T" + appendTrueIndex.ToString() + " from donor " + MobyId(source) + "?\n\nThis expands the level source moby table. After confirming, click the terrain map to place it, then Save Edits and Create Loader BIN.",
-                    "Add true new object",
+                    "Add a new " + source.DisplayLabel + " by appending source record T" + appendTrueIndex.ToString() + " from donor " + MobyId(source) + "?\n\n" + TrueAddSafetyWarning(source) + "\n\nThis expands the level source moby table. After confirming, click the terrain map to place it, then Save Edits and Create Loader BIN.",
+                    experimentalAdd ? "Add experimental true object" : "Add true new object",
                     MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question);
+                    experimentalAdd ? MessageBoxIcon.Warning : MessageBoxIcon.Question);
                 if (appendResult != DialogResult.Yes) return;
 
                 Moby appended = Moby.CreateAppendedFromSource(source, mobys.Count, appendTrueIndex);
@@ -2137,7 +2177,7 @@ namespace SpyroNativeEditor
                 RefreshObjectAddChoices();
                 UpdateInspector();
                 canvas.Invalidate();
-                statusLabel.Text = "Added new " + source.DisplayLabel + " as " + MobyId(appended) + ". Click the terrain map to place it, then Save Edits and Create Loader BIN.";
+                statusLabel.Text = "Added " + (experimentalAdd ? "experimental " : "new ") + source.DisplayLabel + " as " + MobyId(appended) + ". Click the terrain map to place it, then Save Edits and Create Loader BIN.";
                 return;
             }
 
