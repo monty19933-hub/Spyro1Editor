@@ -52,6 +52,7 @@ stonehill-*.md
 spyro-*.json
 spyro-*.md
 !spyro-moby-mutation-status.md
+!spyro-player-editing-status.md
 !sample-artisans.splevel.json
 
 # Rendered/generated images and texture dumps
