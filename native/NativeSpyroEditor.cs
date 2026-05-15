@@ -118,6 +118,7 @@ namespace SpyroNativeEditor
         private string terrainEditPath;
         private string terrainMaterialOverridesPath;
         private string liveOriginalsPath;
+        private string playerEditPath;
         private string currentRamPath;
         private string currentLevelName = "Stone Hill";
         private string currentLevelKey = "stonehill";
@@ -200,6 +201,15 @@ namespace SpyroNativeEditor
         private Button combinedPatchButton;
         private Button validateSourceButton;
         private Button behaviorDiffButton;
+        private CheckBox spyroRecolorBox;
+        private ComboBox spyroColorBox;
+        private Panel spyroColorSwatch;
+        private CheckBox crystalDragonRecolorBox;
+        private ComboBox crystalDragonColorBox;
+        private Panel crystalDragonColorSwatch;
+        private Button savePlayerColorsButton;
+        private Button resetPlayerColorsButton;
+        private Label playerColorStatusLabel;
 
         private GeometryCandidate geometry;
         private readonly List<Moby> mobys = new List<Moby>();
@@ -258,6 +268,11 @@ namespace SpyroNativeEditor
         private int mutationClipboardMobyIndex = -1;
         private bool updatingAddObjectChoices;
         private bool updatingGroupSelection;
+        private bool updatingPlayerColorControls;
+        private bool spyroRecolorEnabled;
+        private bool crystalDragonRecolorEnabled;
+        private string spyroColorPreset = "Classic Purple";
+        private string crystalDragonColorPreset = "Classic Green";
         private Bitmap terrainTextureAtlas;
         private Bitmap terrainTextureLumaAtlas;
         private string terrainTextureAtlasPath = "";
@@ -310,6 +325,7 @@ namespace SpyroNativeEditor
             terrainEditPath = Path.Combine(workspace, "stonehill-terrain-edits.json");
             terrainMaterialOverridesPath = Path.Combine(workspace, "stonehill-terrain-material-overrides.json");
             liveOriginalsPath = Path.Combine(workspace, "stonehill-live-moby-originals.json");
+            playerEditPath = Path.Combine(workspace, "spyro-player-edits.json");
             currentRamPath = Program.ResolveStoneHillRamPath(workspace);
             Text = "Spyro Native Level Editor - Stone Hill Prototype";
             StartPosition = FormStartPosition.CenterScreen;
@@ -515,6 +531,7 @@ namespace SpyroNativeEditor
             statusStrip = new StatusStrip();
             statusLabel = new ToolStripStatusLabel("Ready");
             statusStrip.Items.Add(statusLabel);
+            LoadPlayerColorOptions(false);
 
             Controls.Add(mainSplit);
             Controls.Add(statusStrip);
@@ -583,7 +600,7 @@ namespace SpyroNativeEditor
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 42f));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 142f));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 178f));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 206f));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 58f));
 
             inspectorHeaderLabel = new Label();
@@ -765,6 +782,24 @@ namespace SpyroNativeEditor
             combinedPatchButton = NewPanelButton("Create Combined BIN");
             validateSourceButton = NewPanelButton("Validate Source");
             behaviorDiffButton = NewPanelButton("Behavior Diff");
+            spyroRecolorBox = new CheckBox();
+            spyroRecolorBox.Text = "Change Spyro color";
+            spyroRecolorBox.Dock = DockStyle.Fill;
+            spyroRecolorBox.TextAlign = ContentAlignment.MiddleLeft;
+            spyroColorBox = NewPanelComboBox();
+            spyroColorBox.Items.AddRange(PlayerColorPresetNames());
+            spyroColorSwatch = NewColorSwatchPanel();
+            crystalDragonRecolorBox = new CheckBox();
+            crystalDragonRecolorBox.Text = "Change crystal dragons";
+            crystalDragonRecolorBox.Dock = DockStyle.Fill;
+            crystalDragonRecolorBox.TextAlign = ContentAlignment.MiddleLeft;
+            crystalDragonColorBox = NewPanelComboBox();
+            crystalDragonColorBox.Items.AddRange(CrystalDragonColorPresetNames());
+            crystalDragonColorSwatch = NewColorSwatchPanel();
+            savePlayerColorsButton = NewPanelButton("Save Colors");
+            resetPlayerColorsButton = NewPanelButton("Reset Colors");
+            playerColorStatusLabel = NewDetailLabel();
+            playerColorStatusLabel.Text = "Color patch bytes are pending proof.";
 
             TabControl actionTabs = new TabControl();
             actionTabs.Dock = DockStyle.Fill;
@@ -812,9 +847,28 @@ namespace SpyroNativeEditor
             toolActions.Controls.Add(behaviorDiffButton, 0, 3);
             toolActions.SetColumnSpan(behaviorDiffButton, 2);
 
+            TableLayoutPanel colorActions = NewActionPanel(8);
+            colorActions.Controls.Add(spyroRecolorBox, 0, 0);
+            colorActions.SetColumnSpan(spyroRecolorBox, 2);
+            AddActionLabel(colorActions, 1, "Spyro");
+            colorActions.Controls.Add(spyroColorBox, 1, 1);
+            colorActions.Controls.Add(spyroColorSwatch, 0, 2);
+            colorActions.SetColumnSpan(spyroColorSwatch, 2);
+            colorActions.Controls.Add(crystalDragonRecolorBox, 0, 3);
+            colorActions.SetColumnSpan(crystalDragonRecolorBox, 2);
+            AddActionLabel(colorActions, 4, "Crystal");
+            colorActions.Controls.Add(crystalDragonColorBox, 1, 4);
+            colorActions.Controls.Add(crystalDragonColorSwatch, 0, 5);
+            colorActions.SetColumnSpan(crystalDragonColorSwatch, 2);
+            colorActions.Controls.Add(savePlayerColorsButton, 0, 6);
+            colorActions.Controls.Add(resetPlayerColorsButton, 1, 6);
+            colorActions.Controls.Add(playerColorStatusLabel, 0, 7);
+            colorActions.SetColumnSpan(playerColorStatusLabel, 2);
+
             actionTabs.TabPages.Add(NewActionTab("Main", mainActions));
             actionTabs.TabPages.Add(NewActionTab("Gems", gemActions));
             actionTabs.TabPages.Add(NewActionTab("Objects", objectActions));
+            actionTabs.TabPages.Add(NewActionTab("Colors", colorActions));
             actionTabs.TabPages.Add(NewActionTab("Tools", toolActions));
 
             saveEditsButton.Click += delegate { SaveEdits(); };
@@ -840,6 +894,12 @@ namespace SpyroNativeEditor
             combinedPatchButton.Click += delegate { RunCombinedPatchExporter(); };
             validateSourceButton.Click += delegate { RunSourceValidation(); };
             behaviorDiffButton.Click += delegate { RunBehaviorDiff(); };
+            spyroRecolorBox.CheckedChanged += delegate { PlayerColorControlsChanged(); };
+            spyroColorBox.SelectedIndexChanged += delegate { PlayerColorControlsChanged(); };
+            crystalDragonRecolorBox.CheckedChanged += delegate { PlayerColorControlsChanged(); };
+            crystalDragonColorBox.SelectedIndexChanged += delegate { PlayerColorControlsChanged(); };
+            savePlayerColorsButton.Click += delegate { SavePlayerColorOptions(true); };
+            resetPlayerColorsButton.Click += delegate { ResetPlayerColorOptions(); };
             root.Controls.Add(actionTabs, 0, 6);
 
             notesBox = new TextBox();
@@ -916,6 +976,83 @@ namespace SpyroNativeEditor
             button.Dock = DockStyle.Fill;
             button.Margin = new Padding(3);
             return button;
+        }
+
+        private static Panel NewColorSwatchPanel()
+        {
+            Panel panel = new Panel();
+            panel.Dock = DockStyle.Fill;
+            panel.Margin = new Padding(5, 3, 5, 3);
+            panel.BorderStyle = BorderStyle.FixedSingle;
+            panel.BackColor = Color.MediumPurple;
+            return panel;
+        }
+
+        private static object[] PlayerColorPresetNames()
+        {
+            return new object[]
+            {
+                "Classic Purple",
+                "Red",
+                "Blue",
+                "Green",
+                "Gold",
+                "Pink",
+                "Teal",
+                "White",
+                "Black"
+            };
+        }
+
+        private static object[] CrystalDragonColorPresetNames()
+        {
+            return new object[]
+            {
+                "Classic Green",
+                "Blue",
+                "Purple",
+                "Red",
+                "Gold",
+                "Pink",
+                "White",
+                "Teal"
+            };
+        }
+
+        private static Color PlayerPresetColor(string preset)
+        {
+            switch (preset)
+            {
+                case "Red": return Color.FromArgb(198, 54, 64);
+                case "Blue": return Color.FromArgb(65, 105, 210);
+                case "Green": return Color.FromArgb(58, 166, 92);
+                case "Gold": return Color.FromArgb(229, 177, 54);
+                case "Pink": return Color.FromArgb(222, 92, 182);
+                case "Teal": return Color.FromArgb(52, 180, 178);
+                case "White": return Color.FromArgb(232, 232, 222);
+                case "Black": return Color.FromArgb(46, 43, 57);
+                default: return Color.FromArgb(114, 74, 178);
+            }
+        }
+
+        private static Color CrystalDragonPresetColor(string preset)
+        {
+            switch (preset)
+            {
+                case "Blue": return Color.FromArgb(80, 185, 234);
+                case "Purple": return Color.FromArgb(160, 100, 225);
+                case "Red": return Color.FromArgb(230, 75, 84);
+                case "Gold": return Color.FromArgb(236, 202, 80);
+                case "Pink": return Color.FromArgb(236, 126, 198);
+                case "White": return Color.FromArgb(220, 245, 240);
+                case "Teal": return Color.FromArgb(70, 220, 190);
+                default: return Color.FromArgb(84, 228, 142);
+            }
+        }
+
+        private static string ColorToHex(Color color)
+        {
+            return "#" + color.R.ToString("X2") + color.G.ToString("X2") + color.B.ToString("X2");
         }
 
         private static NumericUpDown NewCoordinateBox()
@@ -1018,7 +1155,7 @@ namespace SpyroNativeEditor
                 SelectMoby(mobys.Count > 0 ? 0 : -1);
                 FitGeometry();
                 statusLabel.Text = string.Format(
-                    "Loaded {0}: {1} faces, {2} lines, {3} mobys, {4} named, {5} moby edit(s), {6} terrain edit(s), {7} material labels. Wheel zoom, right-drag pan, left-drag mobys.",
+                    "Loaded {0}: {1} faces, {2} lines, {3} mobys, {4} named, {5} moby edit(s), {6} terrain edit(s), {7} color option(s), {8} material labels. Wheel zoom, right-drag pan, left-drag mobys.",
                     levelName,
                     geometry.Polygons.Count,
                     geometry.Edges.Count,
@@ -1026,6 +1163,7 @@ namespace SpyroNativeEditor
                     namedMobys,
                     savedEditCount,
                     savedTerrainEditCount,
+                    CountActivePlayerColorOptions(),
                     materialOverrideCount);
             }
             catch (Exception ex)
@@ -3207,15 +3345,174 @@ namespace SpyroNativeEditor
                 NormalizeAppendedTrueIndexes();
                 savedEditCount = MobyEditStore.Save(editPath, mobys, currentLevelName);
                 savedTerrainEditCount = TerrainEditStore.Save(terrainEditPath, geometry == null ? null : geometry.Polygons, currentLevelName);
+                SavePlayerColorOptions(false);
                 hasUnsavedEdits = false;
                 RefreshMobyList();
                 UpdateInspector();
-                statusLabel.Text = "Saved " + savedEditCount.ToString() + " moby edit(s) and " + savedTerrainEditCount.ToString() + " terrain edit(s).";
+                statusLabel.Text = "Saved " + savedEditCount.ToString() + " moby edit(s), " + savedTerrainEditCount.ToString() + " terrain edit(s), and " + CountActivePlayerColorOptions().ToString() + " color option(s).";
             }
             catch (Exception ex)
             {
                 MessageBox.Show(this, ex.Message, "Save edits failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void PlayerColorControlsChanged()
+        {
+            if (updatingPlayerColorControls) return;
+
+            spyroRecolorEnabled = spyroRecolorBox != null && spyroRecolorBox.Checked;
+            crystalDragonRecolorEnabled = crystalDragonRecolorBox != null && crystalDragonRecolorBox.Checked;
+            spyroColorPreset = SelectedComboText(spyroColorBox, "Classic Purple");
+            crystalDragonColorPreset = SelectedComboText(crystalDragonColorBox, "Classic Green");
+            UpdatePlayerColorControls();
+            if (statusLabel != null)
+                statusLabel.Text = PlayerColorSummary() + " Save Colors or Save Edits to keep this choice.";
+        }
+
+        private void UpdatePlayerColorControls()
+        {
+            if (spyroRecolorBox == null || spyroColorBox == null || crystalDragonRecolorBox == null || crystalDragonColorBox == null)
+                return;
+
+            updatingPlayerColorControls = true;
+            try
+            {
+                spyroRecolorBox.Checked = spyroRecolorEnabled;
+                crystalDragonRecolorBox.Checked = crystalDragonRecolorEnabled;
+                SelectComboValue(spyroColorBox, spyroColorPreset, "Classic Purple");
+                SelectComboValue(crystalDragonColorBox, crystalDragonColorPreset, "Classic Green");
+                spyroColorBox.Enabled = spyroRecolorEnabled;
+                crystalDragonColorBox.Enabled = crystalDragonRecolorEnabled;
+                if (spyroColorSwatch != null)
+                    spyroColorSwatch.BackColor = spyroRecolorEnabled ? PlayerPresetColor(spyroColorPreset) : Color.FromArgb(198, 201, 207);
+                if (crystalDragonColorSwatch != null)
+                    crystalDragonColorSwatch.BackColor = crystalDragonRecolorEnabled ? CrystalDragonPresetColor(crystalDragonColorPreset) : Color.FromArgb(198, 201, 207);
+                if (playerColorStatusLabel != null)
+                    playerColorStatusLabel.Text = PlayerColorSummary();
+            }
+            finally
+            {
+                updatingPlayerColorControls = false;
+            }
+        }
+
+        private void SavePlayerColorOptions(bool showMessage)
+        {
+            JavaScriptSerializer serializer = new JavaScriptSerializer();
+            serializer.MaxJsonLength = int.MaxValue;
+
+            Dictionary<string, object> spyro = new Dictionary<string, object>();
+            spyro["enabled"] = spyroRecolorEnabled;
+            spyro["preset"] = spyroColorPreset;
+            spyro["previewHex"] = ColorToHex(PlayerPresetColor(spyroColorPreset));
+
+            Dictionary<string, object> crystal = new Dictionary<string, object>();
+            crystal["enabled"] = crystalDragonRecolorEnabled;
+            crystal["preset"] = crystalDragonColorPreset;
+            crystal["previewHex"] = ColorToHex(CrystalDragonPresetColor(crystalDragonColorPreset));
+
+            Dictionary<string, object> root = new Dictionary<string, object>();
+            root["editor"] = "NativeSpyroEditor";
+            root["generatedAt"] = DateTime.UtcNow.ToString("s") + "Z";
+            root["patchStatus"] = "pending-color-byte-map";
+            root["activeCount"] = CountActivePlayerColorOptions();
+            root["spyro"] = spyro;
+            root["crystalDragon"] = crystal;
+
+            File.WriteAllText(playerEditPath, serializer.Serialize(root), Encoding.UTF8);
+            UpdatePlayerColorControls();
+            if (showMessage && statusLabel != null)
+                statusLabel.Text = "Saved " + CountActivePlayerColorOptions().ToString() + " player color option(s) to " + Path.GetFileName(playerEditPath) + ".";
+        }
+
+        private void LoadPlayerColorOptions(bool showMessage)
+        {
+            try
+            {
+                spyroRecolorEnabled = false;
+                crystalDragonRecolorEnabled = false;
+                spyroColorPreset = "Classic Purple";
+                crystalDragonColorPreset = "Classic Green";
+
+                if (File.Exists(playerEditPath))
+                {
+                    JavaScriptSerializer serializer = new JavaScriptSerializer();
+                    serializer.MaxJsonLength = int.MaxValue;
+                    Dictionary<string, object> root = serializer.DeserializeObject(File.ReadAllText(playerEditPath, Encoding.UTF8)) as Dictionary<string, object>;
+                    if (root != null)
+                    {
+                        Dictionary<string, object> spyro = root.ContainsKey("spyro") ? root["spyro"] as Dictionary<string, object> : null;
+                        Dictionary<string, object> crystal = root.ContainsKey("crystalDragon") ? root["crystalDragon"] as Dictionary<string, object> : null;
+                        spyroRecolorEnabled = GeometryLoader.GetBool(spyro, "enabled", false);
+                        crystalDragonRecolorEnabled = GeometryLoader.GetBool(crystal, "enabled", false);
+                        spyroColorPreset = ValidComboValue(spyroColorBox, GeometryLoader.GetString(spyro, "preset", "Classic Purple"), "Classic Purple");
+                        crystalDragonColorPreset = ValidComboValue(crystalDragonColorBox, GeometryLoader.GetString(crystal, "preset", "Classic Green"), "Classic Green");
+                    }
+                }
+
+                UpdatePlayerColorControls();
+                if (showMessage && statusLabel != null)
+                    statusLabel.Text = "Loaded player color options. " + PlayerColorSummary();
+            }
+            catch (Exception ex)
+            {
+                if (showMessage)
+                    MessageBox.Show(this, ex.Message, "Load player colors failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ResetPlayerColorOptions()
+        {
+            spyroRecolorEnabled = false;
+            crystalDragonRecolorEnabled = false;
+            spyroColorPreset = "Classic Purple";
+            crystalDragonColorPreset = "Classic Green";
+            UpdatePlayerColorControls();
+            SavePlayerColorOptions(false);
+            if (statusLabel != null)
+                statusLabel.Text = "Reset player color options.";
+        }
+
+        private int CountActivePlayerColorOptions()
+        {
+            int count = 0;
+            if (spyroRecolorEnabled) count++;
+            if (crystalDragonRecolorEnabled) count++;
+            return count;
+        }
+
+        private string PlayerColorSummary()
+        {
+            if (CountActivePlayerColorOptions() == 0)
+                return "No player color patches selected.";
+            List<string> parts = new List<string>();
+            if (spyroRecolorEnabled) parts.Add("Spyro " + spyroColorPreset);
+            if (crystalDragonRecolorEnabled) parts.Add("Crystal " + crystalDragonColorPreset);
+            return "Selected: " + string.Join(", ", parts.ToArray()) + ".";
+        }
+
+        private static string SelectedComboText(ComboBox combo, string fallback)
+        {
+            if (combo == null || combo.SelectedItem == null) return fallback;
+            string value = combo.SelectedItem.ToString();
+            return string.IsNullOrEmpty(value) ? fallback : value;
+        }
+
+        private static string ValidComboValue(ComboBox combo, string value, string fallback)
+        {
+            if (combo == null) return fallback;
+            if (string.IsNullOrEmpty(value)) return fallback;
+            return combo.FindStringExact(value) >= 0 ? value : fallback;
+        }
+
+        private static void SelectComboValue(ComboBox combo, string value, string fallback)
+        {
+            if (combo == null || combo.Items.Count == 0) return;
+            int index = combo.FindStringExact(value);
+            if (index < 0) index = combo.FindStringExact(fallback);
+            if (index < 0) index = 0;
+            combo.SelectedIndex = index;
         }
 
         private void RunLiveMobyMove(bool revert)
@@ -3648,6 +3945,7 @@ namespace SpyroNativeEditor
                 int count = MobyEditStore.Load(editPath, mobys, currentLevelKey);
                 NormalizeAppendedTrueIndexes();
                 savedTerrainEditCount = TerrainEditStore.Load(terrainEditPath, geometry == null ? null : geometry.Polygons);
+                LoadPlayerColorOptions(false);
                 savedEditCount = count;
                 hasUnsavedEdits = false;
                 BuildSelectionGroups();
@@ -3655,7 +3953,7 @@ namespace SpyroNativeEditor
                 UpdateInspector();
                 canvas.Invalidate();
                 if (showMessage)
-                    statusLabel.Text = "Loaded " + count.ToString() + " saved moby edit(s) and " + savedTerrainEditCount.ToString() + " terrain edit(s).";
+                    statusLabel.Text = "Loaded " + count.ToString() + " saved moby edit(s), " + savedTerrainEditCount.ToString() + " terrain edit(s), and " + CountActivePlayerColorOptions().ToString() + " color option(s).";
                 return count;
             }
             catch (Exception ex)
