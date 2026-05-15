@@ -21,7 +21,7 @@ namespace SpyroNativeEditor
                 {
                     string workspace = FindWorkspace();
                     GeometryCandidate geometry = GeometryLoader.LoadFirstCandidate(Path.Combine(workspace, "stonehill-runtime-scene-editor-overlay.json"));
-                    List<Moby> mobys = MobyLoader.Load(Path.Combine(workspace, "stonehill-before-gem-clean.bin"));
+                    List<Moby> mobys = MobyLoader.Load(ResolveStoneHillRamPath(workspace));
                     MobyMetadataLoader.Apply(workspace, mobys);
                     bool hasNamedMoby = false;
                     foreach (Moby moby in mobys)
@@ -90,6 +90,24 @@ namespace SpyroNativeEditor
                 return parent;
 
             return current;
+        }
+
+        internal static string ResolveStoneHillRamPath(string workspace)
+        {
+            string[] candidates = new string[]
+            {
+                "stonehill-before-gem-clean.bin",
+                "duckstation-mainram-fresh-stonehill.bin"
+            };
+
+            foreach (string candidate in candidates)
+            {
+                string path = Path.Combine(workspace, candidate);
+                if (File.Exists(path))
+                    return path;
+            }
+
+            return Path.Combine(workspace, candidates[0]);
         }
     }
 
@@ -292,7 +310,7 @@ namespace SpyroNativeEditor
             terrainEditPath = Path.Combine(workspace, "stonehill-terrain-edits.json");
             terrainMaterialOverridesPath = Path.Combine(workspace, "stonehill-terrain-material-overrides.json");
             liveOriginalsPath = Path.Combine(workspace, "stonehill-live-moby-originals.json");
-            currentRamPath = Path.Combine(workspace, "stonehill-before-gem-clean.bin");
+            currentRamPath = Program.ResolveStoneHillRamPath(workspace);
             Text = "Spyro Native Level Editor - Stone Hill Prototype";
             StartPosition = FormStartPosition.CenterScreen;
             Width = 1420;
@@ -1030,7 +1048,7 @@ namespace SpyroNativeEditor
         private string GetLevelRamPath(string levelKey)
         {
             if (string.Equals(levelKey, "stonehill", StringComparison.OrdinalIgnoreCase))
-                return Path.Combine(workspace, "stonehill-before-gem-clean.bin");
+                return Program.ResolveStoneHillRamPath(workspace);
             return Path.Combine(workspace, levelKey + "-before-clean.bin");
         }
 
@@ -1045,6 +1063,8 @@ namespace SpyroNativeEditor
         {
             if (string.Equals(levelName, "Artisans", StringComparison.OrdinalIgnoreCase))
                 return "Missing Artisans " + assetName + ". Stand in Artisans in DuckStation and run Capture Artisans Workbench From DuckStation.bat once to refresh the cached editor files.";
+            if (string.Equals(levelName, "Stone Hill", StringComparison.OrdinalIgnoreCase) && string.Equals(assetName, "RAM dump", StringComparison.OrdinalIgnoreCase))
+                return "Missing Stone Hill RAM dump. Expected cached editor file stonehill-before-gem-clean.bin or duckstation-mainram-fresh-stonehill.bin.";
             return "Missing " + levelName + " " + assetName + ". This should be a cached editor file, not a live DuckStation requirement.";
         }
 
