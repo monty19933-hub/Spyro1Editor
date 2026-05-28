@@ -100,21 +100,17 @@ public static class DuckStationMobyRamScanner {
     }
 
     private static bool IsPlausibleMoby(byte[] ram, int offset) {
-        if (offset < 0 || offset + 0x50 > ram.Length)
+        if (offset < 0 || offset + 0x58 > ram.Length)
             return false;
 
-        int type = ram[offset + 0x48];
-        int state = ram[offset + 0x49];
+        int type = ram[offset + 0x50];
+        int state = ram[offset + 0x51];
         if (type <= 0 || type > 0x7F || state > 0x7F)
             return false;
 
-        uint special = GetUInt32LE(ram, offset);
-        if (special != 0 && !IsPsxPointer(special))
-            return false;
-
-        int x = GetInt32LE(ram, offset + 4);
-        int y = GetInt32LE(ram, offset + 8);
-        int z = GetInt32LE(ram, offset + 12);
+        int x = GetInt32LE(ram, offset + 0x0C);
+        int y = GetInt32LE(ram, offset + 0x10);
+        int z = GetInt32LE(ram, offset + 0x14);
         if (Math.Abs((long)x) > 4000000L || Math.Abs((long)y) > 4000000L || Math.Abs((long)z) > 4000000L)
             return false;
         if (Math.Abs((long)x) < 16L && Math.Abs((long)y) < 16L && Math.Abs((long)z) < 16L)
@@ -125,14 +121,14 @@ public static class DuckStationMobyRamScanner {
 
     private static int CountPlausibleMobys(byte[] ram, uint pointer) {
         int start = PointerToOffset(pointer);
-        if (start < 0 || start + 0x50 > ram.Length)
+        if (start < 0 || start + 0x58 > ram.Length)
             return 0;
 
         int count = 0;
         int badRun = 0;
         for (int i = 0; i < 512; i++) {
-            int offset = start + (i * 0x50);
-            if (offset + 0x50 > ram.Length)
+            int offset = start + (i * 0x58);
+            if (offset + 0x58 > ram.Length)
                 break;
 
             if (IsPlausibleMoby(ram, offset)) {
@@ -338,7 +334,14 @@ function Find-LiveRamWindow($Handle) {
         $address = $next
     }
 
-    $ranked = @($allCandidates | Sort-Object -Property @{ Expression = { $_.score }; Descending = $true }, @{ Expression = { $_.nonZeroCount }; Descending = $true }, absoluteAddress | Select-Object -First ([Math]::Max(1, $MaxCandidates)))
+    $rankingPool = @($allCandidates)
+    if (-not $ListCandidates -and $ExpectedLevelId -ge 0) {
+        $rankingPool = @($rankingPool | Where-Object { $_.Contains("levelId") -and ([uint32]$_.levelId -eq [uint32]$ExpectedLevelId) })
+        if ($rankingPool.Count -eq 0) {
+            throw ("Could not find a live Spyro RAM window for expected level 0x{0:X2}. Run with -ListCandidates to inspect candidates." -f [uint32]$ExpectedLevelId)
+        }
+    }
+    $ranked = @($rankingPool | Sort-Object -Property @{ Expression = { $_.score }; Descending = $true }, @{ Expression = { $_.nonZeroCount }; Descending = $true }, absoluteAddress | Select-Object -First ([Math]::Max(1, $MaxCandidates)))
     if ($ListCandidates) {
         $rows = @()
         for ($i = 0; $i -lt $ranked.Count; $i++) {
@@ -363,12 +366,6 @@ function Find-LiveRamWindow($Handle) {
     }
     if ($ranked.Count -eq 0) {
         throw "Could not find Spyro's live 2 MB main RAM window. Make sure DuckStation is running in the expected Spyro level."
-    }
-    if ($ExpectedLevelId -ge 0) {
-        $ranked = @($ranked | Where-Object { $_.Contains("levelId") -and ([uint32]$_.levelId -eq [uint32]$ExpectedLevelId) })
-        if ($ranked.Count -eq 0) {
-            throw ("Could not find a live Spyro RAM window for expected level 0x{0:X2}. Run with -ListCandidates to inspect candidates." -f [uint32]$ExpectedLevelId)
-        }
     }
     if ($CandidateIndex -ge 0) {
         if ($CandidateIndex -ge $ranked.Count) {
@@ -463,11 +460,22 @@ function Get-NativeEditTarget([int]$Index, [string]$Path) {
 
 function Get-MobyLabelMap {
     $map = @{}
-    $catalogPaths = if ([string]::IsNullOrWhiteSpace($CatalogPath)) {
-        @(".\stonehill-moby-catalog.json", ".\stonehill-live-validation-overrides.json")
+    if ([string]::IsNullOrWhiteSpace($CatalogPath)) {
+        $catalogPaths = @()
+        $nativeName = [System.IO.Path]::GetFileNameWithoutExtension((Resolve-WorkspacePath $NativeEditsPath))
+        $suffix = "-native-edits"
+        if ($nativeName.EndsWith($suffix, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $levelSlug = $nativeName.Substring(0, $nativeName.Length - $suffix.Length)
+            $catalogPaths += ".\$levelSlug-moby-user-overrides.json"
+            $catalogPaths += ".\$levelSlug-moby-catalog.json"
+            $catalogPaths += ".\$levelSlug-live-validation-overrides.json"
+        }
+        if ($catalogPaths.Count -eq 0) {
+            $catalogPaths = @(".\stonehill-moby-user-overrides.json", ".\stonehill-moby-catalog.json", ".\stonehill-live-validation-overrides.json")
+        }
     }
     else {
-        @($CatalogPath)
+        $catalogPaths = @($CatalogPath)
     }
     foreach ($relativePath in $catalogPaths) {
         $catalogPath = Resolve-WorkspacePath $relativePath
@@ -588,18 +596,17 @@ try {
             continue
         }
 
-        Add-OriginalRecord $store $record
-        Save-Originals $originalsPath $store
-
         if ($FromNativeEdit) {
             $target = Get-NativeEditTarget $activeMobyIndex (Resolve-WorkspacePath $NativeEditsPath)
             $targetRawX = [int]$target.rawX
             $targetRawY = [int]$target.rawY
             $targetRawZ = [int]$target.rawZ
-            Write-Host "Using saved native editor target for T$activeMobyIndex $($target.label)."
+            $targetLabel = if ($labelMap.ContainsKey($activeMobyIndex)) { [string]$labelMap[$activeMobyIndex] } else { [string]$target.label }
+            Write-Host "Using saved native editor target for T$activeMobyIndex $targetLabel."
         }
         else {
             $original = Get-OriginalRecord $store $activeMobyIndex
+            if ($null -eq $original) { $original = $record }
             $targetRawX = [int]$original.rawX + [int][Math]::Round($DeltaX * 16.0)
             $targetRawY = [int]$original.rawY + [int][Math]::Round($DeltaY * 16.0)
             $targetRawZ = [int]$original.rawZ + [int][Math]::Round($DeltaZ * 16.0)
@@ -610,6 +617,9 @@ try {
             Write-Host "Dry run only. Re-run with -Apply to write this position into DuckStation RAM."
             continue
         }
+
+        Add-OriginalRecord $store $record
+        Save-Originals $originalsPath $store
 
         $end = (Get-Date).AddSeconds([Math]::Max(0, $HoldSeconds))
         do {

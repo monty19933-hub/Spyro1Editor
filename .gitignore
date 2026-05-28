@@ -32,6 +32,9 @@ Spyro the Dragon (USA)-*
 *patchplan*.json
 *loaderpatchtest*.json
 *nativepatchtest*.json
+*loaderpatch*.json
+*-loaderpatch-*.json
+*-loaderpatch-planonly.json
 
 # Large generated analysis/overlay data
 *-runtime-*.json
@@ -44,6 +47,17 @@ Spyro the Dragon (USA)-*
 stonehill-wad-ground-model-*.json
 
 # Generated local research reports and edit scratch
+current-level-*
+*-capture-summary.json
+*-capture-summary.md
+*-behavior-links.json
+*-live-moby-originals.json
+*-moby-user-overrides.json
+*-native-edits.json
+*-terrain-edits.json
+*-custom-terrain-textures.json
+*-terrain-material-overrides.json
+*-live-validation-overrides.json
 artisans-*.json
 artisans-*.md
 artisans-*.csv
@@ -51,6 +65,8 @@ stonehill-*.json
 stonehill-*.md
 spyro-*.json
 spyro-*.md
+!spyro-level-catalog.json
+!spyro-object-templates.json
 !spyro-moby-mutation-status.md
 !spyro-player-editing-status.md
 !sample-artisans.splevel.json
@@ -70,16 +86,50 @@ native/*.pdb
 native/*.obj
 native/*.ilk
 native/*.cache
+dist/
+release/
+*.zip
 
 # Logs and transient command output
 *.log
 *.out.txt
 *.err.txt
 native-startup-error.txt
+Apply * Live.bat
+Revert * Live.bat
+wad-entry*-atlas.json
+wad-entry*-atlas.png
+wad-entry*-*.bin
 
 # Local/archive scratch
+_local/
+_skybox_probe/
+cleanup-manifests/
+editor-runtime/
 archive/
 tmp/
 temp/
+actor-texture-atlases/
+color-research-snapshots/
+unsafe-tests/
 .vs/
 .vscode/
+
+# Local research probes that are useful while reversing but should be promoted
+# intentionally before release.
+tools/Find-*.ps1
+tools/Inspect-*.ps1
+tools/Decode-*.ps1
+tools/Render-Spyro*.ps1
+tools/Test-Spyro*.ps1
+tools/New-Spyro*.ps1
+tools/Export-SpyroPlayerColorPatchTest.ps1
+tools/Capture-DuckStationWindow.ps1
+tools/Move-DuckStationWindow.ps1
+!tools/New-SpyroEditorRelease.ps1
+!tools/New-SpyroSkyboxIsolationReport.ps1
+!tools/New-SpyroSkyboxCatalog.ps1
+!tools/New-SpyroObjectDependencyTrace.ps1
+!tools/New-SpyroCrossLevelObjectImportPlan.ps1
+!tools/Test-ReleaseReadiness.ps1
+!tools/Capture-SpyroCurrentLevelWorkbench.ps1

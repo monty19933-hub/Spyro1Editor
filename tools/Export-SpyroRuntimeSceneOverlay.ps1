@@ -6,9 +6,9 @@ param(
     [int]$MaxSceneCandidates = 4,
     [int]$MaxSectors = 4096,
     [int]$MaxOverlayCandidates = 18,
-    [int]$MaxPointsPerCandidate = 16000,
-    [int]$MaxEdgesPerCandidate = 22000,
-    [int]$MaxPolygonsPerCandidate = 4500,
+    [int]$MaxPointsPerCandidate = 0,
+    [int]$MaxEdgesPerCandidate = 0,
+    [int]$MaxPolygonsPerCandidate = 0,
     [string[]]$Projections = @("xy", "yx", "xz", "zx", "yz", "zy"),
     [switch]$IncludeBruteForce,
     [switch]$BruteForceOnly
@@ -187,6 +187,7 @@ function Project-Polygon($Polygon, [string]$Projection) {
 
 function Select-SampledItems($Items, [int]$MaxItems) {
     $array = @($Items)
+    if ($MaxItems -le 0) { return $array }
     if ($array.Count -le $MaxItems) { return $array }
     $step = [Math]::Max(1, [int][Math]::Ceiling($array.Count / [double]$MaxItems))
     $sample = New-Object System.Collections.Generic.List[object]

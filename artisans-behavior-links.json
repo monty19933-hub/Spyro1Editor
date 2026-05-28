@@ -1,12 +1,22 @@
 {
   "generatedAt": "2026-05-13T23:40:00",
-  "purpose": "Artisans Home behavior-link pass. linkedMove=true groups are conservative editor move links for dragon/pedestal pairs observed during focused identity tests.",
+  "purpose": "Artisans Home behavior-link pass. linkedMove=true groups are conservative editor move links for dragon/pedestal pairs and portal pad/trigger clusters.",
   "summary": {
-    "totalGroups": 3,
-    "linkedMoveGroups": 3,
+    "totalGroups": 10,
+    "linkedMoveGroups": 10,
     "reviewGroups": 0
   },
   "linkGroups": [
+    {
+      "key": "artisans:dragon-pedestal-t88-t89",
+      "name": "Behavior: Dragon/pedestal T88/T89",
+      "linkedMove": true,
+      "confidence": "user-observed correction",
+      "basis": "T88 is the visible dragon actor and T89 is the co-located dragon pedestal. Nearby nonvisual records T23/T161 are kept unlinked until their camera/helper role is tested.",
+      "reason": "Move only the visible dragon actor and pedestal together.",
+      "trueIndexes": [88, 89],
+      "memberIds": ["T88", "T89"]
+    },
     {
       "key": "artisans:dragon-pedestal-t90-t91",
       "name": "Behavior: Dragon/pedestal T90/T91",
@@ -36,6 +46,66 @@
       "reason": "Move the dragon actor and pedestal together so the rescue platform stays aligned.",
       "trueIndexes": [142, 143],
       "memberIds": ["T142", "T143"]
+    },
+    {
+      "key": "artisans:portal-entry-stone-hill",
+      "name": "Behavior: Stone Hill portal entry",
+      "linkedMove": true,
+      "confidence": "nearby-linked",
+      "basis": "T144 is the user-observed Stone Hill level-name sign. T157 is the nearest invisible type 0x00 record at the same portal position and is likely the working entry/warp trigger.",
+      "reason": "Move the gold Stone Hill lettering and its likely invisible portal entry trigger together.",
+      "trueIndexes": [144, 157],
+      "memberIds": ["T144", "T157"]
+    },
+    {
+      "key": "artisans:portal-entry-east",
+      "name": "Behavior: East portal entry",
+      "linkedMove": true,
+      "confidence": "nearby-linked",
+      "basis": "T145 is a portal level-name candidate. T158 is the nearest invisible type 0x00 record at the same portal position and is likely the working entry/warp trigger.",
+      "reason": "Move the portal lettering and its likely invisible entry trigger together.",
+      "trueIndexes": [145, 158],
+      "memberIds": ["T145", "T158"]
+    },
+    {
+      "key": "artisans:portal-entry-upper-east",
+      "name": "Behavior: Upper east portal entry",
+      "linkedMove": true,
+      "confidence": "nearby-linked",
+      "basis": "T146 is a portal level-name candidate. T159 and T160 are nearby invisible type 0x00 records around the same entrance and likely participate in the working entry/warp trigger.",
+      "reason": "Move the portal lettering and both likely invisible entry records together.",
+      "trueIndexes": [146, 159, 160],
+      "memberIds": ["T146", "T159", "T160"]
+    },
+    {
+      "key": "artisans:portal-entry-south",
+      "name": "Behavior: South portal entry",
+      "linkedMove": true,
+      "confidence": "nearby-linked",
+      "basis": "T147 is a portal level-name candidate. T155 is the nearest invisible type 0x00 record at the same portal position and is likely the working entry/warp trigger.",
+      "reason": "Move the portal lettering and its likely invisible entry trigger together.",
+      "trueIndexes": [147, 155],
+      "memberIds": ["T147", "T155"]
+    },
+    {
+      "key": "artisans:portal-entry-pad-cluster",
+      "name": "Behavior: Portal pad entry cluster",
+      "linkedMove": true,
+      "confidence": "nearby-linked",
+      "basis": "T148 is a portal level-name candidate. T133-T137 are the visible portal pad/arch pieces, and T138/T141/T149-T154/T156 are nearby invisible type 0x00 records around the same portal pad cluster.",
+      "reason": "Move the visible pad/arch pieces, portal lettering, and likely entry/collision/warp helpers together.",
+      "trueIndexes": [133, 134, 135, 136, 137, 138, 141, 148, 149, 150, 151, 152, 153, 154, 156],
+      "memberIds": ["T133", "T134", "T135", "T136", "T137", "T138", "T141", "T148", "T149", "T150", "T151", "T152", "T153", "T154", "T156"]
+    },
+    {
+      "key": "artisans:portal-pad-trigger-cluster",
+      "name": "Behavior: All portal pad/trigger clusters",
+      "linkedMove": true,
+      "confidence": "editor-scaffold",
+      "basis": "T133-T137 are the identified visible portal pad/arch pieces. T144 is the user-observed forward-facing Stone Hill level-name sign; T145-T148 are same-family portal level-name candidates. T138, T141, and T149-T160 are nearby nonvisual records in the same portal hub area and should stay aligned when moving all portal pieces together.",
+      "reason": "Move every currently identified visible portal pad/name piece and likely invisible trigger record together as a broad fallback group.",
+      "trueIndexes": [133, 134, 135, 136, 137, 138, 141, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160],
+      "memberIds": ["T133", "T134", "T135", "T136", "T137", "T138", "T141", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T154", "T155", "T156", "T157", "T158", "T159", "T160"]
     }
   ]
 }

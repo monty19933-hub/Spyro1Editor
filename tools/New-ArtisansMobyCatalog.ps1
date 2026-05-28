@@ -132,6 +132,14 @@ function New-MobyEntry($Record) {
             $evidence = "Observed in DuckStation Artisans identity Batch 01 after moving T46 to the open test point."
             $behaviorNote = "Visible balloon object. This is not the balloonist NPC."
         }
+        45 {
+            $label = "Balloonist"
+            $kind = "transport NPC / balloonist"
+            $confidence = "user-observed"
+            $color = "#F8C471"
+            $evidence = "Corrected from the prior long side flag label after the in-editor/game view matched the Artisans balloonist next to the transport balloon."
+            $behaviorNote = "Balloonist NPC; likely paired with nearby balloon record T46."
+        }
         102 {
             $label = "Skinny Tree"
             $kind = "scenery tree"
@@ -174,12 +182,14 @@ function New-MobyEntry($Record) {
         }
     }
 
-    $treasureGnorcIndexes = @(7, 29, 30, 31, 32, 33)
+    $treasureGnorcIndexes = @(7, 31)
+    $regularGnorcIndexes = @(29, 30, 32, 33)
     $flameChargeChestIndexes = @(50, 51, 52, 58, 59, 77, 78, 79, 80, 83, 173, 175)
     $towerFlagIndexes = @(0, 1, 2, 3, 4, 5)
-    $towerSideFlagLongIndexes = @(6, 45, 88)
+    $towerSideFlagLongIndexes = @(6)
     $dragonPedestalIndexes = @(89, 90, 92, 142)
-    $dragonActorIndexes = @(91, 93, 143)
+    $dragonActorIndexes = @(88, 91, 93, 143)
+    $dragonLinkedControlIndexes = @(23, 161)
     $lifeChestIndexes = @(94)
     $towerFlagTopIndexes = @(95, 96)
     $ceilingLampCandidateIndexes = @(109)
@@ -192,6 +202,9 @@ function New-MobyEntry($Record) {
     $padBottomLeftFacingFsIndexes = @(135)
     $padBottomMiddleFacingSfIndexes = @(136)
     $padBottomRightFacingSfIndexes = @(137)
+    $portalLevelNameForwardIndexes = @(144)
+    $portalLevelNameCandidateIndexes = @(145, 146, 147, 148)
+    $portalEntryTriggerCandidateIndexes = @(138, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160)
     $liveUnavailableIndexes = @(176, 177, 178, 179, 180, 181, 182, 183)
 
     if ($treasureGnorcIndexes -contains $Record.index) {
@@ -199,8 +212,16 @@ function New-MobyEntry($Record) {
         $kind = "enemy / treasure thief"
         $confidence = "live-observed"
         $color = "#F39C12"
-        $evidence = "Observed in DuckStation Artisans identity Batches 07-08; moved records appeared as Treasure Gnorc enemies that took three hits."
-        $behaviorNote = "Treat as an active enemy object, not a loose gem or passive reward marker."
+        $evidence = "Observed in DuckStation Artisans identity tests as Treasure Gnorc enemies; T7 was also proven as a slot-reuse donor for a working Treasure Gnorc."
+        $behaviorNote = "Treat as one of the two Artisans three-hit gnorc records unless a focused retest proves otherwise."
+    }
+    elseif ($regularGnorcIndexes -contains $Record.index) {
+        $label = "Regular Gnorc"
+        $kind = "enemy / regular gnorc"
+        $confidence = "user-observed"
+        $color = "#7DCEA0"
+        $evidence = "User focused retest confirmed T29, T30, T32, and T33 are regular one-hit Artisans gnorcs, not the three-hit Treasure Gnorc records."
+        $behaviorNote = "One-hit enemy that drops a gem. Keep distinct from the two three-hit Treasure Gnorc records."
     }
     elseif ($flameChargeChestIndexes -contains $Record.index) {
         $label = "Flame/Charge Chest"
@@ -237,10 +258,18 @@ function New-MobyEntry($Record) {
     elseif ($dragonActorIndexes -contains $Record.index) {
         $label = "Dragon"
         $kind = "dragon actor/model"
-        $confidence = "live-observed"
+        $confidence = $(if ($Record.index -eq 88) { "user-observed correction" } else { "live-observed" })
         $color = "#B78CFF"
-        $evidence = "Observed in DuckStation Artisans focused identity retest; moved record appeared as a dragon."
-        $behaviorNote = "Actual visible dragon actor. Link to the matching pedestal/control records during the Artisans behavior-link pass."
+        $evidence = $(if ($Record.index -eq 88) { "User corrected the prior Tower Side Flag Long label: this nearby dragon/pedestal cluster record is the visible dragon actor, not a flag. It also shares the +0x36 0xFA dragon-actor byte used by T91/T93/T143." } else { "Observed in DuckStation Artisans focused identity retest; moved record appeared as a dragon." })
+        $behaviorNote = "Actual visible dragon actor. Move with the matching pedestal/control records in the Artisans dragon linked group."
+    }
+    elseif ($dragonLinkedControlIndexes -contains $Record.index) {
+        $label = "Dragon linked helper"
+        $kind = "dragon rescue control/helper"
+        $confidence = "nearby-linked"
+        $color = "#8FA6B8"
+        $evidence = "Nonvisual record is co-located with the T88/T89 dragon and pedestal cluster; grouped conservatively so the complete dragon rescue setup moves together."
+        $behaviorNote = "Invisible dragon helper/control record. Move with T88 and T89 until the exact rescue behavior field is decoded."
     }
     elseif ($lifeChestIndexes -contains $Record.index) {
         $label = "Life Chest"
@@ -299,44 +328,68 @@ function New-MobyEntry($Record) {
         $behaviorNote = "Visible scenery prop."
     }
     elseif ($padTopRightFacingSfIndexes -contains $Record.index) {
-        $label = "Pad (Top Right facing SF)"
-        $kind = "scenery pad"
+        $label = "Portal Pad (Top Right facing SF)"
+        $kind = "level portal pad / arch piece"
         $confidence = "live-observed"
         $color = "#D2B48C"
-        $evidence = "Observed in DuckStation Artisans solo identity tester; user reported pad orientation as top right facing SF."
-        $behaviorNote = "Visible pad prop. Orientation naming is user-observed and may need a later naming cleanup."
+        $evidence = "Observed in DuckStation Artisans solo identity tester; user reported pad orientation as top right facing SF. Later grouped as part of a home-world portal pad/arch cluster."
+        $behaviorNote = "Visible portal pad or arch piece. Move with its portal behavior group once the full portal cluster is selected."
     }
     elseif ($padTopLeftFacingSfIndexes -contains $Record.index) {
-        $label = "Pad (Top Left facing SF)"
-        $kind = "scenery pad"
+        $label = "Portal Pad (Top Left facing SF)"
+        $kind = "level portal pad / arch piece"
         $confidence = "live-observed"
         $color = "#D2B48C"
-        $evidence = "Observed in DuckStation Artisans solo identity tester; user reported pad orientation as top left facing SF."
-        $behaviorNote = "Visible pad prop. Orientation naming is user-observed and may need a later naming cleanup."
+        $evidence = "Observed in DuckStation Artisans solo identity tester; user reported pad orientation as top left facing SF. Later grouped as part of a home-world portal pad/arch cluster."
+        $behaviorNote = "Visible portal pad or arch piece. Move with its portal behavior group once the full portal cluster is selected."
     }
     elseif ($padBottomLeftFacingFsIndexes -contains $Record.index) {
-        $label = "Pad (Bottom Left facing FS)"
-        $kind = "scenery pad"
+        $label = "Portal Pad (Bottom Left facing FS)"
+        $kind = "level portal pad / arch piece"
         $confidence = "live-observed"
         $color = "#D2B48C"
-        $evidence = "Observed in DuckStation Artisans solo identity tester; user reported pad orientation as bottom left facing FS."
-        $behaviorNote = "Visible pad prop. Orientation naming is user-observed and may need a later naming cleanup."
+        $evidence = "Observed in DuckStation Artisans solo identity tester; user reported pad orientation as bottom left facing FS. Later grouped as part of a home-world portal pad/arch cluster."
+        $behaviorNote = "Visible portal pad or arch piece. Move with its portal behavior group once the full portal cluster is selected."
     }
     elseif ($padBottomMiddleFacingSfIndexes -contains $Record.index) {
-        $label = "Pad (Bottom Middle facing SF)"
-        $kind = "scenery pad"
+        $label = "Portal Pad (Bottom Middle facing SF)"
+        $kind = "level portal pad / arch piece"
         $confidence = "live-observed"
         $color = "#D2B48C"
-        $evidence = "Observed in DuckStation Artisans solo identity tester; user reported pad orientation as bottom middle facing SF."
-        $behaviorNote = "Visible pad prop. Orientation naming is user-observed and may need a later naming cleanup."
+        $evidence = "Observed in DuckStation Artisans solo identity tester; user reported pad orientation as bottom middle facing SF. Later grouped as part of a home-world portal pad/arch cluster."
+        $behaviorNote = "Visible portal pad or arch piece. Move with its portal behavior group once the full portal cluster is selected."
     }
     elseif ($padBottomRightFacingSfIndexes -contains $Record.index) {
-        $label = "Pad (Bottom Right facing SF)"
-        $kind = "scenery pad"
+        $label = "Portal Pad (Bottom Right facing SF)"
+        $kind = "level portal pad / arch piece"
         $confidence = "live-observed"
         $color = "#D2B48C"
-        $evidence = "Observed in DuckStation Artisans solo identity tester; user reported pad orientation as bottom right facing SF."
-        $behaviorNote = "Visible pad prop. Orientation naming is user-observed and may need a later naming cleanup."
+        $evidence = "Observed in DuckStation Artisans solo identity tester; user reported pad orientation as bottom right facing SF. Later grouped as part of a home-world portal pad/arch cluster."
+        $behaviorNote = "Visible portal pad or arch piece. Move with its portal behavior group once the full portal cluster is selected."
+    }
+    elseif ($portalLevelNameForwardIndexes -contains $Record.index) {
+        $label = "Stone Hill Level Name (faces forward)"
+        $kind = "level portal name sign / forward-facing label"
+        $confidence = "user-observed"
+        $color = "#F4D03F"
+        $evidence = "User observation in Artisans: this record is the forward-facing Stone Hill level-name sign on a home-world portal. Similar portal-name records may label the other level portals."
+        $behaviorNote = "Treat as a visible portal label/sign piece. Keep near the matching portal art and trigger cluster when portal move groups are expanded."
+    }
+    elseif ($portalLevelNameCandidateIndexes -contains $Record.index) {
+        $label = "Portal Level Name candidate"
+        $kind = "level portal name sign candidate"
+        $confidence = "user-inferred candidate"
+        $color = "#F4D03F"
+        $evidence = "Same Artisans type/byte family as confirmed T144 Stone Hill level-name sign; likely one of the other home-world portal level-name signs."
+        $behaviorNote = "Candidate visible portal label/sign piece. Verify destination text and facing direction before assigning a specific level name."
+    }
+    elseif ($portalEntryTriggerCandidateIndexes -contains $Record.index) {
+        $label = "Portal Entry Trigger candidate"
+        $kind = "level portal entry / warp trigger candidate"
+        $confidence = "nearby-linked"
+        $color = "#45B39D"
+        $evidence = "Invisible type 0x00 record sits at or near an Artisans portal name/sign or portal pad cluster. Likely part of the working portal entry/warp collision setup."
+        $behaviorNote = "Move with the matching portal name/pad group so the visible portal and its functional entry trigger stay aligned."
     }
     elseif ($liveUnavailableIndexes -contains $Record.index) {
         $label = "Inactive linked reward marker"

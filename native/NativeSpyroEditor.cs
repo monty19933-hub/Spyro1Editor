@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -20,7 +20,10 @@ namespace SpyroNativeEditor
                 if (args != null && args.Length > 0 && string.Equals(args[0], "--smoke", StringComparison.OrdinalIgnoreCase))
                 {
                     string workspace = FindWorkspace();
-                    GeometryCandidate geometry = GeometryLoader.LoadFirstCandidate(Path.Combine(workspace, "stonehill-runtime-scene-editor-overlay.json"));
+                    List<LevelDefinition> levels = SpyroLevelCatalog.Load(workspace);
+                    if (levels.Count < 30 || SpyroLevelCatalog.FindByKey(levels, "darkhollow") == null || SpyroLevelCatalog.FindByKey(levels, "peacekeepers") == null)
+                        throw new InvalidOperationException("Level catalog did not load from workspace; editor would fall back to the two-level starter list.");
+                    GeometryCandidate geometry = GeometryLoader.LoadFirstCandidate(ResolveWorkspaceFile(workspace, "stonehill-runtime-scene-editor-overlay.json", "generated-research"));
                     List<Moby> mobys = MobyLoader.Load(ResolveStoneHillRamPath(workspace));
                     MobyMetadataLoader.Apply(workspace, mobys);
                     bool hasNamedMoby = false;
@@ -75,39 +78,389 @@ namespace SpyroNativeEditor
             }
         }
 
-        private static string FindWorkspace()
+        internal static string FindWorkspace()
         {
             string current = Directory.GetCurrentDirectory();
-            if (File.Exists(Path.Combine(current, "stonehill-runtime-scene-editor-overlay.json")))
-                return current;
-
             string exeDir = AppDomain.CurrentDomain.BaseDirectory;
-            if (File.Exists(Path.Combine(exeDir, "stonehill-runtime-scene-editor-overlay.json")))
-                return exeDir;
-
             string parent = Path.GetFullPath(Path.Combine(exeDir, ".."));
-            if (File.Exists(Path.Combine(parent, "stonehill-runtime-scene-editor-overlay.json")))
-                return parent;
+            string currentParent = Path.GetFullPath(Path.Combine(current, ".."));
+            string grandParent = Path.GetFullPath(Path.Combine(parent, ".."));
+
+            string[] candidates = new string[] { current, exeDir, parent, currentParent, grandParent };
+            foreach (string candidate in candidates)
+            {
+                if (IsWorkspaceCandidate(candidate))
+                    return Path.GetFullPath(candidate);
+            }
 
             return current;
+        }
+
+        private static bool IsWorkspaceCandidate(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+            if (File.Exists(Path.Combine(path, "spyro-level-catalog.json"))) return true;
+            return Directory.Exists(Path.Combine(path, "native")) && Directory.Exists(Path.Combine(path, "tools"));
+        }
+
+        internal static string ResolveWorkspaceFile(string workspace, string fileName, params string[] cleanupBuckets)
+        {
+            string direct = Path.Combine(workspace, fileName);
+            if (File.Exists(direct))
+                return direct;
+
+            string localRoot = Path.Combine(workspace, "_local");
+            if (Directory.Exists(localRoot))
+            {
+                string[] cleanupDirs = Directory.GetDirectories(localRoot, "cleanup-*");
+                Array.Sort(cleanupDirs, StringComparer.OrdinalIgnoreCase);
+                string[] buckets = cleanupBuckets != null && cleanupBuckets.Length > 0
+                    ? cleanupBuckets
+                    : new string[] { "generated-research", "game-and-capture-artifacts" };
+
+                for (int i = cleanupDirs.Length - 1; i >= 0; i--)
+                {
+                    foreach (string bucket in buckets)
+                    {
+                        string candidate = Path.Combine(Path.Combine(cleanupDirs[i], bucket), fileName);
+                        if (File.Exists(candidate))
+                            return candidate;
+                    }
+                }
+            }
+
+            return direct;
         }
 
         internal static string ResolveStoneHillRamPath(string workspace)
         {
             string[] candidates = new string[]
             {
+                "stonehill-before-clean.bin",
                 "stonehill-before-gem-clean.bin",
                 "duckstation-mainram-fresh-stonehill.bin"
             };
 
             foreach (string candidate in candidates)
             {
-                string path = Path.Combine(workspace, candidate);
+                string path = ResolveWorkspaceFile(workspace, candidate, "game-and-capture-artifacts");
                 if (File.Exists(path))
                     return path;
             }
 
             return Path.Combine(workspace, candidates[0]);
+        }
+    }
+
+    internal sealed class LevelDefinition
+    {
+        public string Key;
+        public string ScriptKey;
+        public string DisplayName;
+        public int LevelId;
+        public int SourceWadEntry;
+        public string SourceTableWadOffset;
+        public int SourceRecordCount;
+        public string Confidence;
+        public string RuntimeMobyPointer;
+
+        public bool ApplyStoneHillMetadata
+        {
+            get { return string.Equals(Key, "stonehill", StringComparison.OrdinalIgnoreCase); }
+        }
+
+        public bool HasSourceTable
+        {
+            get { return SourceWadEntry >= 0 && SourceRecordCount > 0 && !string.IsNullOrEmpty(SourceTableWadOffset); }
+        }
+
+        public override string ToString()
+        {
+            return string.IsNullOrEmpty(DisplayName) ? Key : DisplayName;
+        }
+    }
+
+    internal static class SpyroLevelCatalog
+    {
+        private static List<LevelDefinition> defaultLevels;
+
+        public static List<LevelDefinition> Load(string workspace)
+        {
+            string path = Path.Combine(workspace, "spyro-level-catalog.json");
+            if (File.Exists(path))
+            {
+                try
+                {
+                    JavaScriptSerializer serializer = new JavaScriptSerializer();
+                    serializer.MaxJsonLength = int.MaxValue;
+                    Dictionary<string, object> root = serializer.DeserializeObject(File.ReadAllText(path, Encoding.UTF8)) as Dictionary<string, object>;
+                    object[] entries = root != null && root.ContainsKey("levels") ? root["levels"] as object[] : null;
+                    if (entries != null)
+                    {
+                        List<LevelDefinition> levels = new List<LevelDefinition>();
+                        foreach (object obj in entries)
+                        {
+                            Dictionary<string, object> entry = obj as Dictionary<string, object>;
+                            if (entry == null) continue;
+                            LevelDefinition level = new LevelDefinition();
+                            level.Key = GetString(entry, "key", "");
+                            level.ScriptKey = GetString(entry, "scriptKey", level.Key);
+                            level.DisplayName = GetString(entry, "displayName", level.Key);
+                            level.LevelId = GetInt(entry, "levelId", -1);
+                            level.SourceWadEntry = GetInt(entry, "sourceWadEntry", -1);
+                            level.SourceTableWadOffset = GetString(entry, "sourceTableWadOffset", "");
+                            level.SourceRecordCount = GetInt(entry, "sourceRecordCount", 0);
+                            level.Confidence = GetString(entry, "confidence", "");
+                            level.RuntimeMobyPointer = GetString(entry, "runtimeMobyPointer", "");
+                            if (!string.IsNullOrEmpty(level.Key) && !string.IsNullOrEmpty(level.DisplayName))
+                                levels.Add(level);
+                        }
+                        if (levels.Count > 0)
+                            return levels;
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return BuiltInFallback();
+        }
+
+        public static List<LevelDefinition> LoadDefault()
+        {
+            if (defaultLevels == null)
+                defaultLevels = Load(Program.FindWorkspace());
+            return defaultLevels;
+        }
+
+        public static LevelDefinition FindByKey(List<LevelDefinition> levels, string key)
+        {
+            if (levels == null || string.IsNullOrEmpty(key)) return null;
+            string normalized = NormalizeKey(key);
+            foreach (LevelDefinition level in levels)
+            {
+                if (level == null) continue;
+                if (NormalizeKey(level.Key) == normalized || NormalizeKey(level.ScriptKey) == normalized || NormalizeKey(level.DisplayName) == normalized)
+                    return level;
+            }
+            return null;
+        }
+
+        public static int SourceRecordCountForKey(string key)
+        {
+            LevelDefinition level = FindByKey(LoadDefault(), key);
+            return level == null ? 0 : level.SourceRecordCount;
+        }
+
+        internal static string NormalizeKey(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return "";
+            StringBuilder builder = new StringBuilder();
+            foreach (char ch in value)
+            {
+                if (char.IsLetterOrDigit(ch))
+                    builder.Append(char.ToLowerInvariant(ch));
+            }
+            return builder.ToString();
+        }
+
+        private static string GetString(Dictionary<string, object> entry, string name, string fallback)
+        {
+            if (entry == null || !entry.ContainsKey(name) || entry[name] == null) return fallback;
+            return Convert.ToString(entry[name]);
+        }
+
+        private static int GetInt(Dictionary<string, object> entry, string name, int fallback)
+        {
+            if (entry == null || !entry.ContainsKey(name) || entry[name] == null) return fallback;
+            try { return Convert.ToInt32(entry[name]); }
+            catch { return fallback; }
+        }
+
+        private static List<LevelDefinition> BuiltInFallback()
+        {
+            List<LevelDefinition> levels = new List<LevelDefinition>();
+            levels.Add(new LevelDefinition { Key = "artisans", ScriptKey = "Artisans", DisplayName = "Artisans", LevelId = 0x0A, SourceWadEntry = 10, SourceTableWadOffset = "0x9D42AC", SourceRecordCount = 174, Confidence = "fallback" });
+            levels.Add(new LevelDefinition { Key = "stonehill", ScriptKey = "StoneHill", DisplayName = "Stone Hill", LevelId = 0x0B, SourceWadEntry = 12, SourceTableWadOffset = "0xD72B38", SourceRecordCount = 195, Confidence = "fallback", RuntimeMobyPointer = "0x80173658" });
+            return levels;
+        }
+    }
+
+    internal sealed class ObjectTemplate
+    {
+        public string Id;
+        public string Family;
+        public string DisplayName;
+        public string Category;
+        public string SourceLevelKey;
+        public string SourceLevelSlug;
+        public string SourceLevelName;
+        public int SourceTrueIndex = -1;
+        public string Label;
+        public string Kind;
+        public int Type;
+        public int State;
+        public uint SpecialDataPointer;
+        public int SourceByte36;
+        public int SourceByte37;
+        public int SourceByte4F;
+        public int Flag4A;
+        public int Flag4B;
+        public Color Color;
+        public bool ShowInAddList = true;
+        public bool LoaderTransformed;
+        public string AddSupportStatus;
+        public string RequiredExporterFeature;
+        public string TestedStatus;
+        public string TestedResult;
+        public string DonorMapConfidence;
+        public string DependencyRisk;
+        public string Note;
+
+        public string SourceDescription
+        {
+            get
+            {
+                string level = string.IsNullOrEmpty(SourceLevelName) ? SourceLevelKey : SourceLevelName;
+                return level + " T" + SourceTrueIndex.ToString();
+            }
+        }
+    }
+
+    internal static class ObjectTemplateLoader
+    {
+        public static List<ObjectTemplate> Load(string workspace, List<LevelDefinition> levels)
+        {
+            List<ObjectTemplate> result = new List<ObjectTemplate>();
+            string path = Path.Combine(workspace, "spyro-object-templates.json");
+            if (!File.Exists(path)) return result;
+
+            try
+            {
+                JavaScriptSerializer serializer = new JavaScriptSerializer();
+                serializer.MaxJsonLength = int.MaxValue;
+                Dictionary<string, object> root = serializer.DeserializeObject(File.ReadAllText(path, Encoding.UTF8)) as Dictionary<string, object>;
+                object[] entries = root != null && root.ContainsKey("templates") ? root["templates"] as object[] : null;
+                if (entries == null) return result;
+
+                foreach (object obj in entries)
+                {
+                    Dictionary<string, object> entry = obj as Dictionary<string, object>;
+                    if (entry == null) continue;
+                    bool enabled = GetBool(entry, "enabled", true);
+                    if (!enabled) continue;
+
+                    ObjectTemplate template = new ObjectTemplate();
+                    template.Id = GetString(entry, "id", "");
+                    template.Family = GetString(entry, "family", "");
+                    template.DisplayName = GetString(entry, "displayName", GetString(entry, "label", ""));
+                    template.Category = GetString(entry, "category", "Other");
+                    template.SourceLevelKey = GetString(entry, "sourceLevelKey", "");
+                    template.SourceLevelSlug = GetString(entry, "sourceLevelSlug", "");
+                    template.SourceLevelName = GetString(entry, "sourceLevelName", template.SourceLevelKey);
+                    template.SourceTrueIndex = GetFlexibleInt(entry, "sourceTrueIndex", -1);
+                    template.Label = GetString(entry, "label", template.DisplayName);
+                    template.Kind = GetString(entry, "kind", template.Family);
+                    template.Type = GetFlexibleInt(entry, "typeHex", GetFlexibleInt(entry, "typeId", 0));
+                    template.State = GetFlexibleInt(entry, "stateHex", 0);
+                    template.SpecialDataPointer = (uint)GetFlexibleInt64(entry, "specialDataPointer", 0);
+                    template.SourceByte36 = GetFlexibleInt(entry, "sourceByte36Hex", 0);
+                    template.SourceByte37 = GetFlexibleInt(entry, "sourceByte37Hex", 0);
+                    template.SourceByte4F = GetFlexibleInt(entry, "sourceByte4FHex", 0);
+                    template.Flag4A = GetFlexibleInt(entry, "flag4AHex", 0);
+                    template.Flag4B = GetFlexibleInt(entry, "flag4BHex", 0);
+                    template.Color = ParseColor(GetString(entry, "color", ""), FallbackColor(template.Type));
+                    template.ShowInAddList = GetBool(entry, "showInAddList", true);
+                    template.LoaderTransformed = GetBool(entry, "loaderTransformed", false);
+                    template.AddSupportStatus = GetString(entry, "addSupportStatus", "");
+                    template.RequiredExporterFeature = GetString(entry, "requiredExporterFeature", "");
+                    template.TestedStatus = GetString(entry, "testedStatus", "");
+                    template.TestedResult = GetString(entry, "testedResult", "");
+                    template.DonorMapConfidence = GetString(entry, "donorMapConfidence", "");
+                    template.DependencyRisk = GetString(entry, "dependencyRisk", "");
+                    template.Note = GetString(entry, "note", "");
+
+                    LevelDefinition sourceLevel = SpyroLevelCatalog.FindByKey(levels, template.SourceLevelKey);
+                    if (sourceLevel == null || !sourceLevel.HasSourceTable) continue;
+                    if (template.SourceTrueIndex < 0 || template.SourceTrueIndex >= sourceLevel.SourceRecordCount) continue;
+                    if (string.IsNullOrEmpty(template.SourceLevelSlug)) template.SourceLevelSlug = sourceLevel.Key;
+                    if (string.IsNullOrEmpty(template.SourceLevelName)) template.SourceLevelName = sourceLevel.DisplayName;
+                    if (string.IsNullOrEmpty(template.SourceLevelKey)) template.SourceLevelKey = sourceLevel.ScriptKey;
+                    if (string.IsNullOrEmpty(template.DisplayName)) template.DisplayName = template.Label;
+                    if (string.IsNullOrEmpty(template.Label)) template.Label = template.DisplayName;
+                    result.Add(template);
+                }
+            }
+            catch
+            {
+            }
+
+            return result;
+        }
+
+        private static string GetString(Dictionary<string, object> entry, string name, string fallback)
+        {
+            if (entry == null || !entry.ContainsKey(name) || entry[name] == null) return fallback;
+            return Convert.ToString(entry[name]);
+        }
+
+        private static bool GetBool(Dictionary<string, object> entry, string name, bool fallback)
+        {
+            if (entry == null || !entry.ContainsKey(name) || entry[name] == null) return fallback;
+            try { return Convert.ToBoolean(entry[name]); }
+            catch { return fallback; }
+        }
+
+        private static int GetFlexibleInt(Dictionary<string, object> entry, string name, int fallback)
+        {
+            long value = GetFlexibleInt64(entry, name, fallback);
+            if (value < int.MinValue || value > int.MaxValue) return fallback;
+            return (int)value;
+        }
+
+        private static long GetFlexibleInt64(Dictionary<string, object> entry, string name, long fallback)
+        {
+            if (entry == null || !entry.ContainsKey(name) || entry[name] == null) return fallback;
+            object value = entry[name];
+            try
+            {
+                string text = Convert.ToString(value).Trim();
+                if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                    return Convert.ToInt64(text.Substring(2), 16);
+                if (text.Length == 0) return fallback;
+                return Convert.ToInt64(value);
+            }
+            catch
+            {
+                return fallback;
+            }
+        }
+
+        private static Color ParseColor(string value, Color fallback)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return fallback;
+            string text = value.Trim();
+            if (text.StartsWith("#", StringComparison.Ordinal)) text = text.Substring(1);
+            if (text.Length != 6) return fallback;
+            try
+            {
+                int raw = Convert.ToInt32(text, 16);
+                return Color.FromArgb((raw >> 16) & 0xFF, (raw >> 8) & 0xFF, raw & 0xFF);
+            }
+            catch
+            {
+                return fallback;
+            }
+        }
+
+        private static Color FallbackColor(int type)
+        {
+            if (type == 0x20) return Color.FromArgb(244, 212, 77);
+            if (type == 0x30) return Color.FromArgb(183, 140, 255);
+            if (type == 0x18) return Color.FromArgb(255, 140, 90);
+            if (type == 0x00) return Color.FromArgb(143, 166, 184);
+            return Color.FromArgb(93, 173, 226);
         }
     }
 
@@ -117,13 +470,18 @@ namespace SpyroNativeEditor
         private string editPath;
         private string terrainEditPath;
         private string terrainMaterialOverridesPath;
+        private string customTerrainTexturesPath;
         private string liveOriginalsPath;
         private string playerEditPath;
         private string currentRamPath;
-        private string currentLevelName = "Stone Hill";
-        private string currentLevelKey = "stonehill";
-        private int currentLevelId = 0x0B;
-        private bool currentLevelSupportsSourcePatchers = true;
+        private readonly List<LevelDefinition> levelDefinitions;
+        private readonly List<ObjectTemplate> objectTemplates;
+        private LevelDefinition loadedLevelDefinition;
+        private bool suppressLevelSelectionLoad;
+        private string currentLevelName = "No level loaded";
+        private string currentLevelKey = "";
+        private int currentLevelId = -1;
+        private bool currentLevelSupportsSourcePatchers;
         private SplitContainer mainSplit;
         private readonly CanvasView canvas;
         private readonly StatusStrip statusStrip;
@@ -159,6 +517,7 @@ namespace SpyroNativeEditor
         private readonly ToolStripMenuItem snapGroundButton;
         private readonly ToolStripMenuItem clickPlaceButton;
         private readonly ToolStripMenuItem dragLockButton;
+        private readonly ToolStripComboBox levelSelectBox;
         private readonly ToolStripComboBox nudgeStepBox;
         private readonly ToolStripMenuItem mirrorXButton;
         private readonly ToolStripMenuItem mirrorYButton;
@@ -167,6 +526,7 @@ namespace SpyroNativeEditor
         private ComboBox catalogFilterBox;
         private TextBox catalogSearchBox;
         private Label catalogSummaryLabel;
+        private Label treasureSummaryLabel;
         private ComboBox selectionGroupBox;
         private Button previousGroupMemberButton;
         private Button nextGroupMemberButton;
@@ -190,17 +550,22 @@ namespace SpyroNativeEditor
         private ComboBox addTemplateBox;
         private ComboBox addSlotBox;
         private Button addObjectButton;
+        private Button changeSelectedButton;
+        private Button editContentsButton;
         private Button copyMutationSourceButton;
         private Button pasteMutationButton;
         private Button hideSelectedButton;
+        private Button objectAddLabButton;
         private Button testSelectedAppendButton;
         private Button liveApplyButton;
         private Button liveRevertButton;
         private Button patchTopRankedButton;
         private Button patchBroadButton;
         private Button combinedPatchButton;
+        private Button teaserDemoButton;
         private Button validateSourceButton;
         private Button behaviorDiffButton;
+        private Button springChestHelperButton;
         private CheckBox spyroRecolorBox;
         private ComboBox spyroColorBox;
         private Panel spyroColorSwatch;
@@ -209,12 +574,42 @@ namespace SpyroNativeEditor
         private Panel crystalDragonColorSwatch;
         private Button savePlayerColorsButton;
         private Button resetPlayerColorsButton;
+        private Button createPlayerColorPatchButton;
         private Label playerColorStatusLabel;
+        private ComboBox skyboxTargetBox;
+        private ComboBox skyboxDonorBox;
+        private Button swapSkyboxButton;
+        private Button buildSkyboxCatalogButton;
+        private Label skyboxStatusLabel;
+        private ComboBox skyColorPresetBox;
+        private TextBox skyColorPaletteBox;
+        private Button createSkyColorPatchButton;
+        private ComboBox levelTextTargetBox;
+        private TextBox levelTextReplacementBox;
+        private Button createLevelTextPatchButton;
+        private Label levelTextStatusLabel;
+        private ComboBox exeStringBox;
+        private TextBox exeStringReplacementBox;
+        private Button buildExeStringCatalogButton;
+        private Button createExeStringPatchButton;
+        private Label exeStringStatusLabel;
+        private ComboBox terrainDonorLevelBox;
+        private ComboBox terrainTextureList;
+        private PictureBox terrainTexturePreview;
+        private Label terrainTextureSummaryLabel;
+        private Button terrainApplyTextureButton;
+        private Button terrainReplaceTextureButton;
+        private Button terrainRefreshTextureButton;
+        private Button terrainImportTextureButton;
+        private Button terrainDarkHollowPaletteButton;
+        private Button terrainDarkHollowTexturePackButton;
 
         private GeometryCandidate geometry;
         private readonly List<Moby> mobys = new List<Moby>();
         private readonly List<SelectionGroup> selectionGroups = new List<SelectionGroup>();
         private readonly Dictionary<int, string> terrainMaterialOverrides = new Dictionary<int, string>();
+        private readonly Dictionary<int, CustomTerrainTexture> customTerrainTextures = new Dictionary<int, CustomTerrainTexture>();
+        private readonly List<TerrainTextureChoice> terrainTextureChoices = new List<TerrainTextureChoice>();
         private float zoom = 0.08f;
         private PointF pan = new PointF(40, 40);
         private bool showFaces = true;
@@ -266,6 +661,7 @@ namespace SpyroNativeEditor
         private int savedTerrainEditCount;
         private int activeSelectionGroupIndex = -1;
         private int mutationClipboardMobyIndex = -1;
+        private int copiedTerrainTextureId = -1;
         private bool updatingAddObjectChoices;
         private bool updatingGroupSelection;
         private bool updatingPlayerColorControls;
@@ -291,10 +687,12 @@ namespace SpyroNativeEditor
         private const string CatalogWhirlwinds = "Whirlwinds";
         private const string CatalogScenery = "Scenery";
         private const string CatalogKeys = "Keys";
+        private const string CatalogCameras = "Camera";
         private const string CatalogHelpers = "Helpers";
         private const string CatalogPortals = "Audio/Portal";
         private const string CatalogOther = "Other";
         private const int AppendObjectChoiceIndex = -2000000000;
+        private const int ExternalTemplateChoiceIndexBase = -1900000000;
 
         private enum EditorMode
         {
@@ -318,16 +716,26 @@ namespace SpyroNativeEditor
             Word4High4
         }
 
+        private sealed class LevelTreasureSummary
+        {
+            public int BaseTotal;
+            public int CurrentTotal;
+            public int EditedRecords;
+        }
+
         public EditorForm(string workspace)
         {
             this.workspace = workspace;
-            editPath = Path.Combine(workspace, "stonehill-native-edits.json");
-            terrainEditPath = Path.Combine(workspace, "stonehill-terrain-edits.json");
-            terrainMaterialOverridesPath = Path.Combine(workspace, "stonehill-terrain-material-overrides.json");
-            liveOriginalsPath = Path.Combine(workspace, "stonehill-live-moby-originals.json");
+            levelDefinitions = SpyroLevelCatalog.Load(workspace);
+            objectTemplates = ObjectTemplateLoader.Load(workspace, levelDefinitions);
+            editPath = "";
+            terrainEditPath = "";
+            terrainMaterialOverridesPath = "";
+            customTerrainTexturesPath = "";
+            liveOriginalsPath = "";
             playerEditPath = Path.Combine(workspace, "spyro-player-edits.json");
-            currentRamPath = Program.ResolveStoneHillRamPath(workspace);
-            Text = "Spyro Native Level Editor - Stone Hill Prototype";
+            currentRamPath = "";
+            Text = "Spyro Native Level Editor";
             StartPosition = FormStartPosition.CenterScreen;
             Width = 1420;
             Height = 900;
@@ -335,8 +743,13 @@ namespace SpyroNativeEditor
 
             ToolStrip tools = new ToolStrip();
             tools.GripStyle = ToolStripGripStyle.Hidden;
-            ToolStripButton loadButton = new ToolStripButton("Load Stone Hill");
-            ToolStripButton loadArtisansButton = new ToolStripButton("Load Artisans");
+            levelSelectBox = new ToolStripComboBox();
+            levelSelectBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            levelSelectBox.AutoSize = false;
+            levelSelectBox.Width = 176;
+            foreach (LevelDefinition level in levelDefinitions)
+                levelSelectBox.Items.Add(level);
+            ToolStripButton captureCurrentLevelButton = new ToolStripButton("Capture Current");
             ToolStripButton fitButton = new ToolStripButton("Fit");
             ToolStripMenuItem resetButton = new ToolStripMenuItem("Reset View");
             ToolStripButton resetEditsToolButton = new ToolStripButton("Reset Edits");
@@ -354,7 +767,7 @@ namespace SpyroNativeEditor
             terrainStyleButton = new ToolStripMenuItem("Game Terrain") { CheckOnClick = true, Checked = true };
             sourceTextureButton = new ToolStripMenuItem("Source Textures") { CheckOnClick = true, Checked = false };
             sourceTextureButton.Enabled = false;
-            surfaceColorAssistButton = new ToolStripMenuItem("Stone Hill Surface Assist") { CheckOnClick = true, Checked = true };
+            surfaceColorAssistButton = new ToolStripMenuItem("Surface Assist") { CheckOnClick = true, Checked = true };
             completeTerrainDrawButton = new ToolStripMenuItem("Complete Terrain Draw") { CheckOnClick = true, Checked = true };
             textureFamilyHighlightButton = new ToolStripMenuItem("Same Texture Highlight") { CheckOnClick = true, Checked = true };
             sourceTextureRawButton = new ToolStripMenuItem("Raw Atlas Colors") { CheckOnClick = true, Checked = false };
@@ -388,14 +801,15 @@ namespace SpyroNativeEditor
             viewMenuButton.ToolTipText = "View controls: reset orientation and mirror the map without changing saved coordinates.";
             terrainMenuButton.ToolTipText = "Terrain display controls for faces, lines, labels, materials, height tint, contours, and ground cues.";
             placementMenuButton.ToolTipText = "Placement controls for linked moves, ground snapping, click-place, and drag lock.";
-            loadArtisansButton.ToolTipText = "Load the current Artisans Home World RAM capture and decoded runtime terrain overlay.";
+            levelSelectBox.ToolTipText = "Choose a captured Spyro level workbench to load. Selecting a level loads it immediately.";
+            captureCurrentLevelButton.ToolTipText = "Capture the level currently running in DuckStation into the editor cache.";
             resetEditsToolButton.ToolTipText = "Reset all active moby and terrain edits back to the original loaded level state.";
             mobyModeButton.ToolTipText = "Edit moby/object positions and object parameters.";
             terrainModeButton.ToolTipText = "Inspect terrain faces and vertices without moving mobys.";
             view3DButton.ToolTipText = "Show an angled height view. Right-drag pans; Shift+right-drag rotates. Object dragging remains top-down only.";
             terrainStyleButton.ToolTipText = "Use a Stone Hill-like terrain palette instead of pure height debug colors.";
             sourceTextureButton.ToolTipText = "Draw WAD-source 64x64 texture tiles on decoded terrain faces when the Stone Hill atlas is available.";
-            surfaceColorAssistButton.ToolTipText = "Bias known Stone Hill surface IDs toward grass, water, or stone while keeping the texture/detail data visible.";
+            surfaceColorAssistButton.ToolTipText = "Use manual terrain material labels and level-aware automatic surface hints while keeping the texture/detail data visible.";
             completeTerrainDrawButton.ToolTipText = "Draw every terrain face/edge at zoomed-out views. Disable only if navigation gets slow.";
             textureFamilyHighlightButton.ToolTipText = "When a terrain face is selected, softly highlight every face with the same texture/material ID.";
             sourceTextureRawButton.ToolTipText = "Draw the atlas colors directly, without the face-color lighting pass. Useful for spotting palette/descriptor issues.";
@@ -409,15 +823,23 @@ namespace SpyroNativeEditor
             groundCuesButton.ToolTipText = "Draw moby ground-offset rings and selected-object Z offset labels.";
             mirrorXButton.ToolTipText = "Mirror the map view horizontally only. Saved XYZ coordinates are unchanged.";
             mirrorYButton.ToolTipText = "Mirror the map view vertically only. Saved XYZ coordinates are unchanged.";
-            linkedMoveButton.ToolTipText = "Move known linked records together, such as dragon/pedestal/helper clusters.";
+            linkedMoveButton.ToolTipText = "Move known linked records together. Dragon links only move confirmed dragon and pedestal records.";
             groundSnapButton.ToolTipText = "When moving in X/Y, keep each moby at its original terrain-ground offset.";
             snapGroundButton.ToolTipText = "Snap the selected moby, and any linked records, to the terrain height at their current X/Y.";
             clickPlaceButton.ToolTipText = "Place the selected moby or linked group on the clicked terrain point.";
             dragLockButton.ToolTipText = "Select mobys without starting a drag.";
             nudgeStepBox.ToolTipText = "Arrow-key placement step in world units.";
 
-            loadButton.Click += delegate { LoadStoneHill(); };
-            loadArtisansButton.Click += delegate { LoadArtisans(); };
+            levelSelectBox.SelectedIndexChanged += delegate
+            {
+                if (suppressLevelSelectionLoad) return;
+                LevelDefinition requested = levelSelectBox.SelectedItem as LevelDefinition;
+                if (requested == null) return;
+                LevelDefinition previous = loadedLevelDefinition;
+                if (!LoadLevel(requested))
+                    SelectLevelInToolbar(previous == null ? "" : previous.Key);
+            };
+            captureCurrentLevelButton.Click += delegate { RunCurrentLevelCapture(); };
             fitButton.Click += delegate { FitGeometry(); };
             resetButton.Click += delegate { ResetViewOrientation(); FitGeometry(); };
             resetEditsToolButton.Click += delegate { ResetAllEdits(); };
@@ -501,8 +923,10 @@ namespace SpyroNativeEditor
             placementMenuButton.DropDownItems.Add(clickPlaceButton);
             placementMenuButton.DropDownItems.Add(dragLockButton);
 
-            tools.Items.Add(loadButton);
-            tools.Items.Add(loadArtisansButton);
+            tools.Items.Add(new ToolStripLabel("Level"));
+            tools.Items.Add(levelSelectBox);
+            tools.Items.Add(captureCurrentLevelButton);
+            tools.Items.Add(new ToolStripSeparator());
             tools.Items.Add(fitButton);
             tools.Items.Add(resetEditsToolButton);
             tools.Items.Add(new ToolStripSeparator());
@@ -553,7 +977,7 @@ namespace SpyroNativeEditor
             Shown += delegate
             {
                 ApplyInitialPanelLayout();
-                BeginInvoke(new MethodInvoker(delegate { LoadStoneHill(); }));
+                BeginInvoke(new MethodInvoker(delegate { InitializeNoLevelLoadedState(); }));
             };
             FormClosing += delegate(object sender, FormClosingEventArgs e)
             {
@@ -593,14 +1017,15 @@ namespace SpyroNativeEditor
             root.Padding = new Padding(8);
             root.BackColor = Color.FromArgb(236, 239, 243);
             root.ColumnCount = 1;
-            root.RowCount = 8;
+            root.RowCount = 9;
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28f));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28f));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 42f));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 142f));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 206f));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 252f));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 58f));
 
             inspectorHeaderLabel = new Label();
@@ -635,6 +1060,7 @@ namespace SpyroNativeEditor
                 CatalogWhirlwinds,
                 CatalogScenery,
                 CatalogKeys,
+                CatalogCameras,
                 CatalogHelpers,
                 CatalogPortals,
                 CatalogOther
@@ -663,6 +1089,15 @@ namespace SpyroNativeEditor
             catalogSummaryLabel.Text = "0/0";
             catalogTools.Controls.Add(catalogSummaryLabel, 3, 0);
             root.Controls.Add(catalogTools, 0, 1);
+
+            treasureSummaryLabel = new Label();
+            treasureSummaryLabel.Dock = DockStyle.Fill;
+            treasureSummaryLabel.TextAlign = ContentAlignment.MiddleLeft;
+            treasureSummaryLabel.AutoEllipsis = true;
+            treasureSummaryLabel.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
+            treasureSummaryLabel.ForeColor = Color.FromArgb(68, 80, 92);
+            treasureSummaryLabel.Text = "Treasure: 0";
+            root.Controls.Add(treasureSummaryLabel, 0, 2);
 
             TableLayoutPanel groupTools = new TableLayoutPanel();
             groupTools.Dock = DockStyle.Fill;
@@ -703,7 +1138,7 @@ namespace SpyroNativeEditor
             nextGroupMemberButton = NewPanelButton(">");
             nextGroupMemberButton.Click += delegate { SelectAdjacentGroupMember(1); };
             groupTools.Controls.Add(nextGroupMemberButton, 3, 0);
-            root.Controls.Add(groupTools, 0, 2);
+            root.Controls.Add(groupTools, 0, 3);
 
             mobyList = new ListView();
             mobyList.Dock = DockStyle.Fill;
@@ -723,8 +1158,17 @@ namespace SpyroNativeEditor
                 object tag = mobyList.SelectedItems[0].Tag;
                 if (tag is int) SelectMoby((int)tag);
             };
+            mobyList.MouseUp += delegate(object sender, MouseEventArgs e)
+            {
+                if (e.Button != MouseButtons.Right) return;
+                ListViewItem item = mobyList.GetItemAt(e.X, e.Y);
+                if (item == null || !(item.Tag is int)) return;
+                int mobyIndex = (int)item.Tag;
+                SelectMoby(mobyIndex);
+                ShowMobyContextMenu(mobyIndex, mobyList, e.Location);
+            };
             mobyList.Resize += delegate { AdjustMobyListColumns(); };
-            root.Controls.Add(mobyList, 0, 3);
+            root.Controls.Add(mobyList, 0, 4);
 
             selectedTitleLabel = new Label();
             selectedTitleLabel.Dock = DockStyle.Fill;
@@ -732,7 +1176,7 @@ namespace SpyroNativeEditor
             selectedTitleLabel.TextAlign = ContentAlignment.MiddleLeft;
             selectedTitleLabel.AutoEllipsis = true;
             selectedTitleLabel.Text = "No moby selected";
-            root.Controls.Add(selectedTitleLabel, 0, 4);
+            root.Controls.Add(selectedTitleLabel, 0, 5);
 
             TableLayoutPanel details = new TableLayoutPanel();
             details.Dock = DockStyle.Fill;
@@ -757,7 +1201,7 @@ namespace SpyroNativeEditor
             AddDetailRow(details, 2, "X", xBox);
             AddDetailRow(details, 3, "Y", yBox);
             AddDetailRow(details, 4, "Z", zBox);
-            root.Controls.Add(details, 0, 5);
+            root.Controls.Add(details, 0, 6);
 
             saveEditsButton = NewPanelButton("Save Edits");
             loadEditsButton = NewPanelButton("Load Edits");
@@ -771,17 +1215,22 @@ namespace SpyroNativeEditor
             addTemplateBox = NewPanelComboBox();
             addSlotBox = NewPanelComboBox();
             addObjectButton = NewPanelButton("Add New at Click");
+            changeSelectedButton = NewPanelButton("Change Selected");
+            editContentsButton = NewPanelButton("Edit Contents");
             copyMutationSourceButton = NewPanelButton("Copy Obj");
             pasteMutationButton = NewPanelButton("Clone/Add");
             hideSelectedButton = NewPanelButton("Remove Slot");
+            objectAddLabButton = NewPanelButton("Object Add Lab");
             testSelectedAppendButton = NewPanelButton("Test Selected Add BIN");
             liveApplyButton = NewPanelButton("Live Apply");
             liveRevertButton = NewPanelButton("Live Revert");
             patchTopRankedButton = NewPanelButton("Create Loader BIN");
             patchBroadButton = NewPanelButton("Create Terrain BIN");
             combinedPatchButton = NewPanelButton("Create Combined BIN");
+            teaserDemoButton = NewPanelButton("Teaser Demo CUE");
             validateSourceButton = NewPanelButton("Validate Source");
             behaviorDiffButton = NewPanelButton("Behavior Diff");
+            springChestHelperButton = NewPanelButton("Spring Helper");
             spyroRecolorBox = new CheckBox();
             spyroRecolorBox.Text = "Change Spyro color";
             spyroRecolorBox.Dock = DockStyle.Fill;
@@ -796,10 +1245,65 @@ namespace SpyroNativeEditor
             crystalDragonColorBox = NewPanelComboBox();
             crystalDragonColorBox.Items.AddRange(CrystalDragonColorPresetNames());
             crystalDragonColorSwatch = NewColorSwatchPanel();
-            savePlayerColorsButton = NewPanelButton("Save Colors");
+            savePlayerColorsButton = NewPanelButton("Save Choice");
             resetPlayerColorsButton = NewPanelButton("Reset Colors");
+            createPlayerColorPatchButton = NewPanelButton("Color BIN (not solved)");
+            createPlayerColorPatchButton.Enabled = false;
             playerColorStatusLabel = NewDetailLabel();
-            playerColorStatusLabel.Text = "Color patch bytes are pending proof.";
+            playerColorStatusLabel.Text = "Research only: color choices save, but export is disabled until the real source is mapped.";
+            terrainDonorLevelBox = NewPanelComboBox();
+            terrainTextureList = NewPanelComboBox();
+            terrainTextureList.Dock = DockStyle.Fill;
+            terrainTextureList.SelectedIndexChanged += delegate { UpdateTerrainTexturePreview(); };
+            terrainTexturePreview = new PictureBox();
+            terrainTexturePreview.Dock = DockStyle.Fill;
+            terrainTexturePreview.BorderStyle = BorderStyle.FixedSingle;
+            terrainTexturePreview.BackColor = Color.White;
+            terrainTexturePreview.SizeMode = PictureBoxSizeMode.CenterImage;
+            terrainTextureSummaryLabel = NewDetailLabel();
+            terrainTextureSummaryLabel.TextAlign = ContentAlignment.MiddleLeft;
+            terrainTextureSummaryLabel.Text = "Choose a terrain texture source.";
+            terrainApplyTextureButton = NewPanelButton("Apply to Face");
+            terrainReplaceTextureButton = NewPanelButton("Replace Same");
+            terrainRefreshTextureButton = NewPanelButton("Refresh");
+            terrainImportTextureButton = NewPanelButton("Import PNG");
+            terrainDarkHollowPaletteButton = NewPanelButton("Dark Hollow Match");
+            terrainDarkHollowTexturePackButton = NewPanelButton("DH Texture Pack");
+            skyboxTargetBox = NewPanelComboBox();
+            skyboxDonorBox = NewPanelComboBox();
+            PopulateSkyboxChoices(skyboxTargetBox);
+            PopulateSkyboxChoices(skyboxDonorBox);
+            swapSkyboxButton = NewPanelButton("Plan Only");
+            buildSkyboxCatalogButton = NewPanelButton("Build Catalog");
+            skyboxStatusLabel = NewDetailLabel();
+            skyboxStatusLabel.Text = "Plan-only research. Do not boot old skybox CUEs.";
+            skyColorPresetBox = NewPanelComboBox();
+            PopulateSkyColorPresetChoices(skyColorPresetBox);
+            skyColorPaletteBox = new TextBox();
+            skyColorPaletteBox.Dock = DockStyle.Fill;
+            skyColorPaletteBox.Font = new Font("Consolas", 8.0f);
+            skyColorPaletteBox.Text = "#081132 #111D4D #1F316F #314A8C #667CA8 #9DAED0 #CDD5EA";
+            createSkyColorPatchButton = NewPanelButton("Create Color CUE");
+            levelTextTargetBox = NewPanelComboBox();
+            PopulateLevelTextChoices(levelTextTargetBox);
+            levelTextReplacementBox = new TextBox();
+            levelTextReplacementBox.Dock = DockStyle.Fill;
+            levelTextReplacementBox.Font = new Font("Consolas", 8.5f);
+            levelTextReplacementBox.CharacterCasing = CharacterCasing.Upper;
+            createLevelTextPatchButton = NewPanelButton("Create Text CUE");
+            levelTextStatusLabel = NewDetailLabel();
+            levelTextStatusLabel.Text = "Fixed-length level name string patch. Good first test for fly-in and portal labels.";
+            exeStringBox = NewPanelComboBox();
+            exeStringReplacementBox = new TextBox();
+            exeStringReplacementBox.Dock = DockStyle.Fill;
+            exeStringReplacementBox.Font = new Font("Consolas", 8.5f);
+            buildExeStringCatalogButton = NewPanelButton("Build/Refresh Words");
+            createExeStringPatchButton = NewPanelButton("Create Word CUE");
+            exeStringStatusLabel = NewDetailLabel();
+            exeStringStatusLabel.Text = "Build the word catalog to edit other fixed-length executable strings.";
+            UpdateLevelTextStatus();
+            LoadExeStringChoices(false);
+            UpdateExeStringStatus();
 
             TabControl actionTabs = new TabControl();
             actionTabs.Dock = DockStyle.Fill;
@@ -823,21 +1327,27 @@ namespace SpyroNativeEditor
             gemActions.Controls.Add(setPurpleGemButton, 0, 2);
             gemActions.SetColumnSpan(setPurpleGemButton, 2);
 
-            TableLayoutPanel objectActions = NewActionPanel(6);
+            TableLayoutPanel objectActions = NewActionPanel(9);
             AddActionLabel(objectActions, 0, "Template");
             objectActions.Controls.Add(addTemplateBox, 1, 0);
             AddActionLabel(objectActions, 1, "Add As");
             objectActions.Controls.Add(addSlotBox, 1, 1);
             objectActions.Controls.Add(addObjectButton, 0, 2);
             objectActions.SetColumnSpan(addObjectButton, 2);
-            objectActions.Controls.Add(copyMutationSourceButton, 0, 3);
-            objectActions.Controls.Add(pasteMutationButton, 1, 3);
-            objectActions.Controls.Add(hideSelectedButton, 0, 4);
+            objectActions.Controls.Add(changeSelectedButton, 0, 3);
+            objectActions.SetColumnSpan(changeSelectedButton, 2);
+            objectActions.Controls.Add(editContentsButton, 0, 4);
+            objectActions.SetColumnSpan(editContentsButton, 2);
+            objectActions.Controls.Add(copyMutationSourceButton, 0, 5);
+            objectActions.Controls.Add(pasteMutationButton, 1, 5);
+            objectActions.Controls.Add(hideSelectedButton, 0, 6);
             objectActions.SetColumnSpan(hideSelectedButton, 2);
-            objectActions.Controls.Add(testSelectedAppendButton, 0, 5);
+            objectActions.Controls.Add(objectAddLabButton, 0, 7);
+            objectActions.SetColumnSpan(objectAddLabButton, 2);
+            objectActions.Controls.Add(testSelectedAppendButton, 0, 8);
             objectActions.SetColumnSpan(testSelectedAppendButton, 2);
 
-            TableLayoutPanel toolActions = NewActionPanel(4);
+            TableLayoutPanel toolActions = NewActionPanel(6);
             toolActions.Controls.Add(combinedPatchButton, 0, 0);
             toolActions.SetColumnSpan(combinedPatchButton, 2);
             toolActions.Controls.Add(patchBroadButton, 0, 1);
@@ -846,8 +1356,12 @@ namespace SpyroNativeEditor
             toolActions.SetColumnSpan(validateSourceButton, 2);
             toolActions.Controls.Add(behaviorDiffButton, 0, 3);
             toolActions.SetColumnSpan(behaviorDiffButton, 2);
+            toolActions.Controls.Add(springChestHelperButton, 0, 4);
+            toolActions.SetColumnSpan(springChestHelperButton, 2);
+            toolActions.Controls.Add(teaserDemoButton, 0, 5);
+            toolActions.SetColumnSpan(teaserDemoButton, 2);
 
-            TableLayoutPanel colorActions = NewActionPanel(8);
+            TableLayoutPanel colorActions = NewColorActionPanel();
             colorActions.Controls.Add(spyroRecolorBox, 0, 0);
             colorActions.SetColumnSpan(spyroRecolorBox, 2);
             AddActionLabel(colorActions, 1, "Spyro");
@@ -862,13 +1376,67 @@ namespace SpyroNativeEditor
             colorActions.SetColumnSpan(crystalDragonColorSwatch, 2);
             colorActions.Controls.Add(savePlayerColorsButton, 0, 6);
             colorActions.Controls.Add(resetPlayerColorsButton, 1, 6);
-            colorActions.Controls.Add(playerColorStatusLabel, 0, 7);
+            colorActions.Controls.Add(createPlayerColorPatchButton, 0, 7);
+            colorActions.SetColumnSpan(createPlayerColorPatchButton, 2);
+            colorActions.Controls.Add(playerColorStatusLabel, 0, 8);
             colorActions.SetColumnSpan(playerColorStatusLabel, 2);
 
+            TableLayoutPanel terrainActions = NewTerrainActionPanel();
+            AddActionLabel(terrainActions, 0, "Source");
+            terrainActions.Controls.Add(terrainDonorLevelBox, 1, 0);
+            terrainActions.Controls.Add(terrainTexturePreview, 0, 1);
+            terrainActions.SetColumnSpan(terrainTexturePreview, 2);
+            terrainActions.Controls.Add(terrainTextureList, 0, 2);
+            terrainActions.SetColumnSpan(terrainTextureList, 2);
+            terrainActions.Controls.Add(terrainApplyTextureButton, 0, 3);
+            terrainActions.Controls.Add(terrainReplaceTextureButton, 1, 3);
+            terrainActions.Controls.Add(terrainRefreshTextureButton, 0, 4);
+            terrainActions.Controls.Add(terrainImportTextureButton, 1, 4);
+            terrainActions.Controls.Add(terrainDarkHollowPaletteButton, 0, 5);
+            terrainActions.Controls.Add(terrainDarkHollowTexturePackButton, 1, 5);
+            terrainActions.Controls.Add(terrainTextureSummaryLabel, 0, 6);
+            terrainActions.SetColumnSpan(terrainTextureSummaryLabel, 2);
+
+            TableLayoutPanel textActions = NewActionPanel(8);
+            AddActionLabel(textActions, 0, "Target");
+            textActions.Controls.Add(levelTextTargetBox, 1, 0);
+            AddActionLabel(textActions, 1, "Name");
+            textActions.Controls.Add(levelTextReplacementBox, 1, 1);
+            textActions.Controls.Add(createLevelTextPatchButton, 0, 2);
+            textActions.SetColumnSpan(createLevelTextPatchButton, 2);
+            AddActionLabel(textActions, 3, "Word");
+            textActions.Controls.Add(exeStringBox, 1, 3);
+            AddActionLabel(textActions, 4, "Text");
+            textActions.Controls.Add(exeStringReplacementBox, 1, 4);
+            textActions.Controls.Add(buildExeStringCatalogButton, 0, 5);
+            textActions.Controls.Add(createExeStringPatchButton, 1, 5);
+            textActions.Controls.Add(levelTextStatusLabel, 0, 6);
+            textActions.SetColumnSpan(levelTextStatusLabel, 2);
+            textActions.Controls.Add(exeStringStatusLabel, 0, 7);
+            textActions.SetColumnSpan(exeStringStatusLabel, 2);
+
+            TableLayoutPanel skyboxActions = NewActionPanel(7);
+            AddActionLabel(skyboxActions, 0, "Target");
+            skyboxActions.Controls.Add(skyboxTargetBox, 1, 0);
+            AddActionLabel(skyboxActions, 1, "Skybox");
+            skyboxActions.Controls.Add(skyboxDonorBox, 1, 1);
+            skyboxActions.Controls.Add(swapSkyboxButton, 0, 2);
+            skyboxActions.Controls.Add(buildSkyboxCatalogButton, 1, 2);
+            AddActionLabel(skyboxActions, 3, "Colors");
+            skyboxActions.Controls.Add(skyColorPresetBox, 1, 3);
+            skyboxActions.Controls.Add(skyColorPaletteBox, 0, 4);
+            skyboxActions.SetColumnSpan(skyColorPaletteBox, 2);
+            skyboxActions.Controls.Add(createSkyColorPatchButton, 0, 5);
+            skyboxActions.SetColumnSpan(createSkyColorPatchButton, 2);
+            skyboxActions.Controls.Add(skyboxStatusLabel, 0, 6);
+            skyboxActions.SetColumnSpan(skyboxStatusLabel, 2);
             actionTabs.TabPages.Add(NewActionTab("Main", mainActions));
             actionTabs.TabPages.Add(NewActionTab("Gems", gemActions));
             actionTabs.TabPages.Add(NewActionTab("Objects", objectActions));
+            actionTabs.TabPages.Add(NewActionTab("Terrain", terrainActions));
             actionTabs.TabPages.Add(NewActionTab("Colors", colorActions));
+            actionTabs.TabPages.Add(NewActionTab("Text", textActions));
+            actionTabs.TabPages.Add(NewActionTab("Skybox", skyboxActions));
             actionTabs.TabPages.Add(NewActionTab("Tools", toolActions));
 
             saveEditsButton.Click += delegate { SaveEdits(); };
@@ -883,9 +1451,12 @@ namespace SpyroNativeEditor
             addTemplateBox.SelectedIndexChanged += delegate { if (!updatingAddObjectChoices) UpdateAddObjectButton(); };
             addSlotBox.SelectedIndexChanged += delegate { if (!updatingAddObjectChoices) UpdateAddObjectButton(); };
             addObjectButton.Click += delegate { AddObjectFromTemplateAtClick(); };
+            changeSelectedButton.Click += delegate { ChangeSelectedMobyToTemplate(); };
+            editContentsButton.Click += delegate { ShowChestContentsEditor(); };
             copyMutationSourceButton.Click += delegate { CopySelectedMutationSource(); };
             pasteMutationButton.Click += delegate { PasteMutationIntoSelected(); };
             hideSelectedButton.Click += delegate { HideSelectedMobySlot(); };
+            objectAddLabButton.Click += delegate { RunObjectAddLab(); };
             testSelectedAppendButton.Click += delegate { RunSingleAppendExporter(); };
             liveApplyButton.Click += delegate { if (editorMode == EditorMode.Terrain) RunLiveTerrainMove(false); else RunLiveMobyMove(false); };
             liveRevertButton.Click += delegate { if (editorMode == EditorMode.Terrain) RunLiveTerrainMove(true); else RunLiveMobyMove(true); };
@@ -894,13 +1465,48 @@ namespace SpyroNativeEditor
             combinedPatchButton.Click += delegate { RunCombinedPatchExporter(); };
             validateSourceButton.Click += delegate { RunSourceValidation(); };
             behaviorDiffButton.Click += delegate { RunBehaviorDiff(); };
+            springChestHelperButton.Click += delegate { RunSpringChestRuntimeHelper(); };
             spyroRecolorBox.CheckedChanged += delegate { PlayerColorControlsChanged(); };
             spyroColorBox.SelectedIndexChanged += delegate { PlayerColorControlsChanged(); };
             crystalDragonRecolorBox.CheckedChanged += delegate { PlayerColorControlsChanged(); };
             crystalDragonColorBox.SelectedIndexChanged += delegate { PlayerColorControlsChanged(); };
             savePlayerColorsButton.Click += delegate { SavePlayerColorOptions(true); };
             resetPlayerColorsButton.Click += delegate { ResetPlayerColorOptions(); };
-            root.Controls.Add(actionTabs, 0, 6);
+            createPlayerColorPatchButton.Click += delegate { RunPlayerColorPatchExporter(); };
+            skyboxTargetBox.SelectedIndexChanged += delegate { UpdateSkyboxStatus(); };
+            skyboxDonorBox.SelectedIndexChanged += delegate { UpdateSkyboxStatus(); };
+            skyColorPresetBox.SelectedIndexChanged += delegate { UpdateSkyboxStatus(); };
+            levelTextTargetBox.SelectedIndexChanged += delegate
+            {
+                LevelTextChoice choice = SelectedLevelTextChoice();
+                if (choice != null && levelTextReplacementBox != null)
+                    levelTextReplacementBox.Text = choice.OriginalName;
+                UpdateLevelTextStatus();
+            };
+            levelTextReplacementBox.TextChanged += delegate { UpdateLevelTextStatus(); };
+            exeStringBox.SelectedIndexChanged += delegate
+            {
+                ExeStringChoice choice = SelectedExeStringChoice();
+                if (choice != null && exeStringReplacementBox != null)
+                    exeStringReplacementBox.Text = choice.Text;
+                UpdateExeStringStatus();
+            };
+            exeStringReplacementBox.TextChanged += delegate { UpdateExeStringStatus(); };
+            swapSkyboxButton.Click += delegate { RunSkyboxPatchExporter(); };
+            buildSkyboxCatalogButton.Click += delegate { RunSkyboxCatalogBuilder(); };
+            createSkyColorPatchButton.Click += delegate { RunSkyColorPatchExporter(); };
+            createLevelTextPatchButton.Click += delegate { RunLevelTextPatchExporter(); };
+            buildExeStringCatalogButton.Click += delegate { RunExeStringCatalogBuilder(); };
+            createExeStringPatchButton.Click += delegate { RunExeStringPatchExporter(); };
+            terrainDonorLevelBox.SelectedIndexChanged += delegate { RefreshTerrainTextureLibrary(); };
+            terrainApplyTextureButton.Click += delegate { ApplySelectedTerrainTextureToFace(); };
+            terrainReplaceTextureButton.Click += delegate { ReplaceSelectedTerrainTextureFamily(); };
+            terrainRefreshTextureButton.Click += delegate { RefreshTerrainTextureLibrary(); };
+            terrainImportTextureButton.Click += delegate { ImportCustomTerrainTexture(); };
+            terrainDarkHollowPaletteButton.Click += delegate { ApplyDarkHollowTerrainPaletteMatch(); };
+            terrainDarkHollowTexturePackButton.Click += delegate { CreateDarkHollowTerrainTexturePack(); };
+            teaserDemoButton.Click += delegate { RunTeaserDemoExporter(); };
+            root.Controls.Add(actionTabs, 0, 7);
 
             notesBox = new TextBox();
             notesBox.Dock = DockStyle.Fill;
@@ -910,7 +1516,7 @@ namespace SpyroNativeEditor
             notesBox.BackColor = Color.White;
             notesBox.Font = new Font("Consolas", 8.5f);
             notesBox.Text = "Select a moby to inspect its decoded identity and edit status.";
-            root.Controls.Add(notesBox, 0, 7);
+            root.Controls.Add(notesBox, 0, 8);
 
             return root;
         }
@@ -926,6 +1532,47 @@ namespace SpyroNativeEditor
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
             for (int i = 0; i < rows; i++)
                 panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100f / rows));
+            return panel;
+        }
+
+        private static TableLayoutPanel NewColorActionPanel()
+        {
+            TableLayoutPanel panel = new TableLayoutPanel();
+            panel.Dock = DockStyle.Fill;
+            panel.AutoScroll = true;
+            panel.Padding = new Padding(4, 8, 4, 4);
+            panel.ColumnCount = 2;
+            panel.RowCount = 9;
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 52f));
+            return panel;
+        }
+
+        private static TableLayoutPanel NewTerrainActionPanel()
+        {
+            TableLayoutPanel panel = new TableLayoutPanel();
+            panel.Dock = DockStyle.Fill;
+            panel.Padding = new Padding(4, 5, 4, 4);
+            panel.ColumnCount = 2;
+            panel.RowCount = 7;
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 88f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
+            panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
             return panel;
         }
 
@@ -957,7 +1604,22 @@ namespace SpyroNativeEditor
             box.IntegralHeight = false;
             box.MaxDropDownItems = 14;
             box.Margin = new Padding(3);
+            box.DropDown += delegate { UpdateComboBoxDropDownWidth(box, 420); };
             return box;
+        }
+
+        private static void UpdateComboBoxDropDownWidth(ComboBox box, int minimumWidth)
+        {
+            if (box == null) return;
+            int width = Math.Max(minimumWidth, box.Width);
+            for (int i = 0; i < box.Items.Count; i++)
+            {
+                string text = Convert.ToString(box.Items[i]);
+                if (string.IsNullOrEmpty(text)) continue;
+                int measured = TextRenderer.MeasureText(text, box.Font).Width + SystemInformation.VerticalScrollBarWidth + 32;
+                if (measured > width) width = measured;
+            }
+            box.DropDownWidth = Math.Min(width, 1100);
         }
 
         private static Label NewDetailLabel()
@@ -1090,22 +1752,144 @@ namespace SpyroNativeEditor
             settleTimer.Start();
         }
 
-        private void LoadStoneHill()
+        private void InitializeNoLevelLoadedState()
         {
-            LoadLevel("Stone Hill", "stonehill", true, true);
+            loadedLevelDefinition = null;
+            currentLevelName = "No level loaded";
+            currentLevelKey = "";
+            currentLevelId = -1;
+            currentLevelSupportsSourcePatchers = false;
+            editPath = "";
+            terrainEditPath = "";
+            terrainMaterialOverridesPath = "";
+            customTerrainTexturesPath = "";
+            liveOriginalsPath = "";
+            currentRamPath = "";
+            geometry = null;
+            mobys.Clear();
+            selectionGroups.Clear();
+            selectedMobyIndex = -1;
+            selectedTerrainIndex = -1;
+            hoverTerrainIndex = -1;
+            hasHoverTerrainZ = false;
+            hasUnsavedEdits = false;
+            savedEditCount = 0;
+            savedTerrainEditCount = 0;
+            DisposeTerrainTextureAtlas();
+            DisposeCustomTerrainTextures();
+            SelectLevelInToolbar("");
+            if (inspectorHeaderLabel != null)
+                inspectorHeaderLabel.Text = "Choose a Level";
+            Text = "Spyro Native Level Editor";
+            UpdateLevelActionButtons();
+            RefreshMobyList();
+            RefreshTerrainTextureLibrary();
+            UpdateInspector();
+            if (statusLabel != null)
+                statusLabel.Text = "Choose a level from the dropdown. Use Capture Current while standing in Dark Hollow to create its editor cache.";
+            if (canvas != null)
+                canvas.Invalidate();
         }
 
-        private void LoadArtisans()
+        private bool HasLoadedLevel()
         {
-            LoadLevel("Artisans", "artisans", false, true);
+            return loadedLevelDefinition != null && !string.IsNullOrEmpty(currentLevelKey) && geometry != null;
         }
 
-        private void LoadLevel(string levelName, string levelKey, bool applyStoneHillMetadata, bool supportsSourcePatchers)
+        private bool LoadLevelByKey(string levelKey)
+        {
+            LevelDefinition level = FindLevelDefinition(levelKey);
+            if (level == null)
+            {
+                MessageBox.Show(this, "Level is not in spyro-level-catalog.json: " + levelKey, "Level not found", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+            return LoadLevel(level);
+        }
+
+        private LevelDefinition FindLevelDefinition(string levelKey)
+        {
+            return SpyroLevelCatalog.FindByKey(levelDefinitions, levelKey);
+        }
+
+        private void SelectLevelInToolbar(string levelKey)
+        {
+            if (levelSelectBox == null) return;
+            LevelDefinition level = FindLevelDefinition(levelKey);
+            suppressLevelSelectionLoad = true;
+            try
+            {
+                if (level != null)
+                {
+                    if (!object.ReferenceEquals(levelSelectBox.SelectedItem, level))
+                        levelSelectBox.SelectedItem = level;
+                }
+                else if (levelSelectBox.SelectedIndex >= 0)
+                {
+                    levelSelectBox.SelectedIndex = -1;
+                }
+            }
+            finally
+            {
+                suppressLevelSelectionLoad = false;
+            }
+        }
+
+        private void SelectTerrainDonorLevel(string levelKey)
+        {
+            if (terrainDonorLevelBox == null || string.IsNullOrEmpty(levelKey)) return;
+            if (terrainDonorLevelBox.Items.Count == 0)
+            {
+                foreach (LevelDefinition level in levelDefinitions)
+                {
+                    string overlayPath = GetLevelGeometryPath(level.Key);
+                    if (File.Exists(overlayPath))
+                        terrainDonorLevelBox.Items.Add(level);
+                }
+            }
+
+            foreach (object item in terrainDonorLevelBox.Items)
+            {
+                LevelDefinition level = item as LevelDefinition;
+                if (level != null && string.Equals(level.Key, levelKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    terrainDonorLevelBox.SelectedItem = level;
+                    return;
+                }
+            }
+        }
+
+        private void RunCurrentLevelCapture()
+        {
+            string scriptPath = Path.Combine(workspace, "tools", "Capture-SpyroCurrentLevelWorkbench.ps1");
+            if (!File.Exists(scriptPath))
+            {
+                MessageBox.Show(this, "Missing current-level capture script: " + scriptPath, "Capture script missing", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            try
+            {
+                StringBuilder args = new StringBuilder();
+                args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
+                args.Append(QuoteArgument(scriptPath));
+                StartWorkspaceProcess("powershell.exe", args.ToString());
+                statusLabel.Text = "Started current DuckStation level capture. Select the captured level from the dropdown when it finishes.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not start current-level capture", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private bool LoadLevel(LevelDefinition level)
         {
             try
             {
+                string levelName = level.DisplayName;
+                string levelKey = level.Key;
                 if (!ConfirmDiscardEdits("reload " + levelName))
-                    return;
+                    return false;
 
                 string geometryPath = GetLevelGeometryPath(levelKey);
                 string ramPath = GetLevelRamPath(levelKey);
@@ -1116,17 +1900,21 @@ namespace SpyroNativeEditor
 
                 currentLevelName = levelName;
                 currentLevelKey = levelKey;
-                currentLevelId = ExpectedLevelIdForKey(levelKey);
-                currentLevelSupportsSourcePatchers = supportsSourcePatchers;
+                currentLevelId = level.LevelId;
+                currentLevelSupportsSourcePatchers = level.HasSourceTable;
+                loadedLevelDefinition = level;
                 mutationClipboardMobyIndex = -1;
                 editPath = Path.Combine(workspace, levelKey + "-native-edits.json");
                 terrainEditPath = Path.Combine(workspace, levelKey + "-terrain-edits.json");
                 terrainMaterialOverridesPath = Path.Combine(workspace, levelKey + "-terrain-material-overrides.json");
+                customTerrainTexturesPath = Path.Combine(workspace, levelKey + "-custom-terrain-textures.json");
                 liveOriginalsPath = Path.Combine(workspace, levelKey + "-live-moby-originals.json");
                 currentRamPath = ramPath;
                 Text = "Spyro Native Level Editor - " + levelName;
                 if (inspectorHeaderLabel != null)
                     inspectorHeaderLabel.Text = levelName + " Objects";
+                SelectLevelInToolbar(levelKey);
+                SelectSkyboxTargetForLevel(levelKey);
                 UpdateLevelActionButtons();
 
                 Cursor = Cursors.WaitCursor;
@@ -1135,10 +1923,11 @@ namespace SpyroNativeEditor
                 geometry = GeometryLoader.LoadFirstCandidate(geometryPath);
                 int materialOverrideCount = LoadTerrainMaterialOverrides();
                 LoadTerrainTextureAtlas();
+                LoadCustomTerrainTextures();
                 mobys.Clear();
                 mobys.AddRange(MobyLoader.Load(ramPath));
-                int namedMobys = MobyMetadataLoader.Apply(workspace, mobys, levelKey, applyStoneHillMetadata);
-                if (supportsSourcePatchers)
+                int namedMobys = MobyMetadataLoader.Apply(workspace, mobys, levelKey, level.ApplyStoneHillMetadata);
+                if (level.HasSourceTable)
                     ApplyLevelSourcePatchStatus(levelKey, levelName);
                 else
                     ApplyRuntimeOnlyPatchStatus(levelName);
@@ -1149,13 +1938,16 @@ namespace SpyroNativeEditor
                 hoverTerrainIndex = -1;
                 hasHoverTerrainZ = false;
                 savedEditCount = LoadSavedEdits(false);
+                SelectTerrainDonorLevel(levelKey);
+                RefreshTerrainTextureLibrary();
                 BuildSelectionGroups();
                 hasUnsavedEdits = false;
                 RefreshMobyList();
                 SelectMoby(mobys.Count > 0 ? 0 : -1);
+                UpdateLevelActionButtons();
                 FitGeometry();
                 statusLabel.Text = string.Format(
-                    "Loaded {0}: {1} faces, {2} lines, {3} mobys, {4} named, {5} moby edit(s), {6} terrain edit(s), {7} color option(s), {8} material labels. Wheel zoom, right-drag pan, left-drag mobys.",
+                    "Loaded {0}: {1} faces, {2} lines, {3} mobys, {4} named, {5} moby edit(s), {6} terrain edit(s), {7} color option(s), {8} material labels. {9}.",
                     levelName,
                     geometry.Polygons.Count,
                     geometry.Edges.Count,
@@ -1164,12 +1956,15 @@ namespace SpyroNativeEditor
                     savedEditCount,
                     savedTerrainEditCount,
                     CountActivePlayerColorOptions(),
-                    materialOverrideCount);
+                    materialOverrideCount,
+                    TreasureSummaryText(CalculateTreasureSummary()));
+                return true;
             }
             catch (Exception ex)
             {
                 MessageBox.Show(this, ex.Message, "Load level failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 statusLabel.Text = "Load failed";
+                return false;
             }
             finally
             {
@@ -1180,41 +1975,194 @@ namespace SpyroNativeEditor
 
         private string GetLevelGeometryPath(string levelKey)
         {
-            return Path.Combine(workspace, levelKey + "-runtime-scene-editor-overlay.json");
+            return Program.ResolveWorkspaceFile(workspace, levelKey + "-runtime-scene-editor-overlay.json", "generated-research");
         }
 
         private string GetLevelRamPath(string levelKey)
         {
             if (string.Equals(levelKey, "stonehill", StringComparison.OrdinalIgnoreCase))
                 return Program.ResolveStoneHillRamPath(workspace);
-            return Path.Combine(workspace, levelKey + "-before-clean.bin");
-        }
-
-        private static int ExpectedLevelIdForKey(string levelKey)
-        {
-            if (string.Equals(levelKey, "stonehill", StringComparison.OrdinalIgnoreCase)) return 0x0B;
-            if (string.Equals(levelKey, "artisans", StringComparison.OrdinalIgnoreCase)) return 0x0A;
-            return -1;
+            return Program.ResolveWorkspaceFile(workspace, levelKey + "-before-clean.bin", "game-and-capture-artifacts");
         }
 
         private static string MissingLevelAssetMessage(string levelName, string assetName)
         {
             if (string.Equals(levelName, "Artisans", StringComparison.OrdinalIgnoreCase))
-                return "Missing Artisans " + assetName + ". Stand in Artisans in DuckStation and run Capture Artisans Workbench From DuckStation.bat once to refresh the cached editor files.";
+                return "Missing Artisans " + assetName + ". Stand in Artisans in DuckStation and run Capture Current Level Workbench From DuckStation.bat once to refresh the cached editor files.";
             if (string.Equals(levelName, "Stone Hill", StringComparison.OrdinalIgnoreCase) && string.Equals(assetName, "RAM dump", StringComparison.OrdinalIgnoreCase))
                 return "Missing Stone Hill RAM dump. Expected cached editor file stonehill-before-gem-clean.bin or duckstation-mainram-fresh-stonehill.bin.";
-            return "Missing " + levelName + " " + assetName + ". This should be a cached editor file, not a live DuckStation requirement.";
+            return "Missing " + levelName + " " + assetName + ". Stand in that level in DuckStation and run Capture Current Level Workbench From DuckStation.bat once to create the cached editor files.";
         }
 
         private void UpdateLevelActionButtons()
         {
-            bool mobySourcePatchers = currentLevelSupportsSourcePatchers;
-            bool stoneHillTerrainPatchers = IsStoneHillLevel();
+            bool loaded = HasLoadedLevel();
+            bool mobySourcePatchers = loaded && currentLevelSupportsSourcePatchers;
+            bool stoneHillTerrainPatchers = loaded && IsStoneHillLevel();
+            if (saveEditsButton != null) saveEditsButton.Enabled = loaded;
+            if (loadEditsButton != null) loadEditsButton.Enabled = loaded;
+            if (clearEditsButton != null) clearEditsButton.Enabled = loaded;
+            if (resetSelectedButton != null) resetSelectedButton.Enabled = loaded;
+            if (liveApplyButton != null) liveApplyButton.Enabled = loaded;
+            if (liveRevertButton != null) liveRevertButton.Enabled = loaded;
+            if (addObjectButton != null) addObjectButton.Enabled = loaded;
+            if (changeSelectedButton != null) changeSelectedButton.Enabled = loaded;
+            if (editContentsButton != null) editContentsButton.Enabled = loaded;
+            if (copyMutationSourceButton != null) copyMutationSourceButton.Enabled = loaded;
+            if (pasteMutationButton != null) pasteMutationButton.Enabled = loaded;
+            if (hideSelectedButton != null) hideSelectedButton.Enabled = loaded;
+            if (objectAddLabButton != null) objectAddLabButton.Enabled = loaded && currentLevelSupportsSourcePatchers;
+            if (testSelectedAppendButton != null) testSelectedAppendButton.Enabled = loaded && currentLevelSupportsSourcePatchers;
             if (patchTopRankedButton != null) patchTopRankedButton.Enabled = mobySourcePatchers;
             if (patchBroadButton != null) patchBroadButton.Enabled = stoneHillTerrainPatchers;
             if (combinedPatchButton != null) combinedPatchButton.Enabled = stoneHillTerrainPatchers;
+            if (teaserDemoButton != null) teaserDemoButton.Enabled = loaded;
             if (validateSourceButton != null) validateSourceButton.Enabled = stoneHillTerrainPatchers;
             if (behaviorDiffButton != null) behaviorDiffButton.Enabled = stoneHillTerrainPatchers;
+            if (terrainApplyTextureButton != null) terrainApplyTextureButton.Enabled = loaded;
+            if (terrainReplaceTextureButton != null) terrainReplaceTextureButton.Enabled = loaded;
+            if (terrainRefreshTextureButton != null) terrainRefreshTextureButton.Enabled = loaded;
+            if (terrainImportTextureButton != null) terrainImportTextureButton.Enabled = stoneHillTerrainPatchers;
+            if (terrainDarkHollowPaletteButton != null) terrainDarkHollowPaletteButton.Enabled = stoneHillTerrainPatchers;
+            if (terrainDarkHollowTexturePackButton != null) terrainDarkHollowTexturePackButton.Enabled = stoneHillTerrainPatchers;
+        }
+
+        private void PopulateSkyboxChoices(ComboBox box)
+        {
+            if (box == null) return;
+            box.Items.Clear();
+            foreach (SkyboxChoice choice in SkyboxChoice.All())
+                box.Items.Add(choice);
+            if (box.Items.Count > 0)
+                box.SelectedIndex = 0;
+        }
+
+        private void PopulateSkyColorPresetChoices(ComboBox box)
+        {
+            if (box == null) return;
+            box.Items.Clear();
+            foreach (SkyColorPresetChoice choice in SkyColorPresetChoice.All())
+                box.Items.Add(choice);
+            if (box.Items.Count > 0)
+                box.SelectedIndex = 0;
+        }
+
+        private void SelectSkyboxTargetForLevel(string levelKey)
+        {
+            if (skyboxTargetBox == null) return;
+            string normalized = SpyroLevelCatalog.NormalizeKey(levelKey);
+            for (int i = 0; i < skyboxTargetBox.Items.Count; i++)
+            {
+                SkyboxChoice choice = skyboxTargetBox.Items[i] as SkyboxChoice;
+                if (choice != null && SpyroLevelCatalog.NormalizeKey(choice.Key) == normalized)
+                {
+                    skyboxTargetBox.SelectedIndex = i;
+                    UpdateSkyboxStatus();
+                    return;
+                }
+            }
+            UpdateSkyboxStatus();
+        }
+
+        private void UpdateSkyboxStatus()
+        {
+            if (skyboxStatusLabel == null) return;
+            SkyboxChoice target = SelectedSkyboxChoice(skyboxTargetBox);
+            SkyboxChoice donor = SelectedSkyboxChoice(skyboxDonorBox);
+            if (target == null || donor == null)
+            {
+                skyboxStatusLabel.Text = "Choose target level and donor skybox. Plan-only research; no bootable CUE.";
+                return;
+            }
+            SkyColorPresetChoice colorPreset = SelectedSkyColorPresetChoice();
+            string colorText = colorPreset == null ? "" : " Color CUE preset: " + colorPreset.Description;
+            skyboxStatusLabel.Text = GetSkyboxStatusText(target, donor) + colorText;
+        }
+
+        private static SkyboxChoice SelectedSkyboxChoice(ComboBox box)
+        {
+            return box == null ? null : box.SelectedItem as SkyboxChoice;
+        }
+
+        private SkyColorPresetChoice SelectedSkyColorPresetChoice()
+        {
+            return skyColorPresetBox == null ? null : skyColorPresetBox.SelectedItem as SkyColorPresetChoice;
+        }
+
+        private string GetSkyboxStatusText(SkyboxChoice target, SkyboxChoice donor)
+        {
+            string baseText = target.DisplayName + " skybox <- " + donor.DisplayName + ".";
+            Dictionary<string, object> targetRow;
+            Dictionary<string, object> donorRow;
+            string catalogError;
+            if (!TryReadSkyboxCatalogPair(target, donor, out targetRow, out donorRow, out catalogError))
+            {
+                return baseText + " Build catalog to check archive-size-compatible donors.";
+            }
+
+            string targetStatus = GetJsonString(targetRow, "status", "");
+            string donorStatus = GetJsonString(donorRow, "status", "");
+            if (!string.Equals(targetStatus, "cataloged", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(donorStatus, "cataloged", StringComparison.OrdinalIgnoreCase))
+            {
+                return baseText + " Catalog needs probe refresh for this pair.";
+            }
+
+            int targetSize = GetJsonInt(targetRow, "skySubfileSize", -1);
+            int donorSize = GetJsonInt(donorRow, "skySubfileSize", -1);
+            if (targetSize > 0 && targetSize == donorSize)
+                return baseText + " Same-size only (" + FormatHex(targetSize) + "); whole-subfile BIN export is terrain-unsafe.";
+
+            return baseText + " Catalog blocks size mismatch: target " + FormatHex(targetSize) + ", donor " + FormatHex(donorSize) + ".";
+        }
+
+        private bool TryReadSkyboxCatalogPair(SkyboxChoice target, SkyboxChoice donor, out Dictionary<string, object> targetRow, out Dictionary<string, object> donorRow, out string error)
+        {
+            targetRow = null;
+            donorRow = null;
+            error = "";
+            string path = Path.Combine(workspace, "spyro-skybox-catalog.json");
+            if (!File.Exists(path)) return false;
+            try
+            {
+                JavaScriptSerializer serializer = new JavaScriptSerializer();
+                serializer.MaxJsonLength = int.MaxValue;
+                Dictionary<string, object> root = serializer.DeserializeObject(File.ReadAllText(path, Encoding.UTF8)) as Dictionary<string, object>;
+                targetRow = FindSkyboxCatalogRow(root, target);
+                donorRow = FindSkyboxCatalogRow(root, donor);
+                return targetRow != null && donorRow != null;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        private static Dictionary<string, object> FindSkyboxCatalogRow(Dictionary<string, object> root, SkyboxChoice choice)
+        {
+            if (root == null || choice == null || !root.ContainsKey("levels")) return null;
+            object[] levels = root["levels"] as object[];
+            if (levels == null) return null;
+            string wantedKey = SpyroLevelCatalog.NormalizeKey(choice.Key);
+            string wantedScriptKey = SpyroLevelCatalog.NormalizeKey(choice.ScriptKey);
+            string wantedName = SpyroLevelCatalog.NormalizeKey(choice.DisplayName);
+            foreach (object raw in levels)
+            {
+                Dictionary<string, object> row = raw as Dictionary<string, object>;
+                if (row == null) continue;
+                string key = SpyroLevelCatalog.NormalizeKey(GetJsonString(row, "key", ""));
+                string scriptKey = SpyroLevelCatalog.NormalizeKey(GetJsonString(row, "scriptKey", ""));
+                string displayName = SpyroLevelCatalog.NormalizeKey(GetJsonString(row, "displayName", ""));
+                if (key == wantedKey || scriptKey == wantedScriptKey || displayName == wantedName)
+                    return row;
+            }
+            return null;
+        }
+
+        private static string FormatHex(int value)
+        {
+            return value < 0 ? "unknown" : "0x" + value.ToString("X");
         }
 
         private bool IsStoneHillLevel()
@@ -1222,24 +2170,30 @@ namespace SpyroNativeEditor
             return string.Equals(currentLevelKey, "stonehill", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string ScriptLevelKey(string levelKey)
+        private bool IsPeacekeepersLevel()
         {
-            if (string.Equals(levelKey, "artisans", StringComparison.OrdinalIgnoreCase)) return "Artisans";
-            return "StoneHill";
+            return string.Equals(currentLevelKey, "peacekeepers", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static int SourceRecordCountForLevel(string levelKey)
+        private string ScriptLevelKey(string levelKey)
         {
-            if (string.Equals(levelKey, "artisans", StringComparison.OrdinalIgnoreCase)) return 174;
-            if (string.Equals(levelKey, "stonehill", StringComparison.OrdinalIgnoreCase)) return 195;
-            return 0;
+            LevelDefinition level = FindLevelDefinition(levelKey);
+            return level == null || string.IsNullOrEmpty(level.ScriptKey) ? levelKey : level.ScriptKey;
         }
 
-        private static string SourcePatchLeadForLevel(string levelKey, int trueIndex)
+        private int SourceRecordCountForLevel(string levelKey)
         {
-            if (string.Equals(levelKey, "artisans", StringComparison.OrdinalIgnoreCase))
-                return "WAD entry 10, true record " + trueIndex.ToString() + ", XYZ +0x0C/+0x10/+0x14";
-            return MobyLoader.LoaderTablePatchLead(trueIndex);
+            LevelDefinition level = FindLevelDefinition(levelKey);
+            return level == null ? 0 : level.SourceRecordCount;
+        }
+
+        private string SourcePatchLeadForLevel(string levelKey, int trueIndex)
+        {
+            LevelDefinition level = FindLevelDefinition(levelKey);
+            if (level == null || !level.HasSourceTable)
+                return "Source table pending for true record " + trueIndex.ToString() + ".";
+            string confidence = string.IsNullOrEmpty(level.Confidence) ? "" : " (" + level.Confidence + ")";
+            return "WAD entry " + level.SourceWadEntry.ToString() + ", true record " + trueIndex.ToString() + ", XYZ +0x0C/+0x10/+0x14" + confidence;
         }
 
         private void ApplyLevelSourcePatchStatus(string levelKey, string levelName)
@@ -1347,11 +2301,379 @@ namespace SpyroNativeEditor
         {
             if (string.IsNullOrEmpty(surface)) return "";
             surface = surface.Trim().ToLowerInvariant();
-            if (surface == "grass" || surface == "water" || surface == "stone" || surface == "unknown")
+            if (surface == "grass" || surface == "water" || surface == "stone" || surface == "dirt" || surface == "cliff" || surface == "unknown")
                 return surface;
             if (surface == "sand" || surface == "beach")
                 return "sand";
+            if (surface == "dry" || surface == "dry ground" || surface == "ground" || surface == "desert")
+                return "dirt";
+            if (surface == "wall" || surface == "rock")
+                return "cliff";
             return "";
+        }
+
+        private int LoadCustomTerrainTextures()
+        {
+            DisposeCustomTerrainTextures();
+            if (string.IsNullOrEmpty(customTerrainTexturesPath) || !File.Exists(customTerrainTexturesPath))
+                return 0;
+
+            try
+            {
+                JavaScriptSerializer serializer = new JavaScriptSerializer();
+                serializer.MaxJsonLength = int.MaxValue;
+                Dictionary<string, object> root = serializer.DeserializeObject(File.ReadAllText(customTerrainTexturesPath, Encoding.UTF8)) as Dictionary<string, object>;
+                object[] entries = root != null && root.ContainsKey("textures") ? root["textures"] as object[] : null;
+                if (entries == null) return 0;
+
+                foreach (object entry in entries)
+                {
+                    Dictionary<string, object> item = entry as Dictionary<string, object>;
+                    if (item == null) continue;
+                    int textureId = DictionaryInt(item, "textureId", -1);
+                    string sourceImagePath = DictionaryString(item, "sourceImagePath", "");
+                    if (textureId < 0 || string.IsNullOrEmpty(sourceImagePath) || !File.Exists(sourceImagePath))
+                        continue;
+
+                    Bitmap bitmap = LoadBitmapCopy(sourceImagePath);
+                    customTerrainTextures[textureId] = new CustomTerrainTexture(
+                        textureId,
+                        sourceImagePath,
+                        DictionaryString(item, "sourceImageName", Path.GetFileName(sourceImagePath)),
+                        DictionaryString(item, "descriptorTier", "hqData"),
+                        DictionaryInt(item, "tileSize", 64),
+                        bitmap);
+                }
+            }
+            catch (Exception ex)
+            {
+                statusLabel.Text = "Could not load custom terrain textures: " + ex.Message;
+            }
+            return customTerrainTextures.Count;
+        }
+
+        private void DisposeCustomTerrainTextures()
+        {
+            foreach (CustomTerrainTexture texture in customTerrainTextures.Values)
+            {
+                if (texture != null && texture.PreviewImage != null)
+                    texture.PreviewImage.Dispose();
+            }
+            customTerrainTextures.Clear();
+        }
+
+        private void ImportCustomTerrainTexture()
+        {
+            if (!HasLoadedLevel() || !IsStoneHillLevel())
+            {
+                MessageBox.Show(this, "Custom terrain texture export is currently wired for Stone Hill.", "Texture importer unavailable", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            int textureId = TargetTextureIdForCustomImport();
+            if (textureId < 0)
+            {
+                MessageBox.Show(this, "Select a terrain face or a same-level texture ID first.", "No texture slot selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using (OpenFileDialog dialog = new OpenFileDialog())
+            {
+                dialog.Title = "Import terrain texture image";
+                dialog.Filter = "Image files|*.png;*.bmp;*.jpg;*.jpeg;*.gif;*.tif;*.tiff|All files|*.*";
+                dialog.CheckFileExists = true;
+                if (dialog.ShowDialog(this) != DialogResult.OK)
+                    return;
+
+                Bitmap validation = null;
+                try
+                {
+                    validation = LoadBitmapCopy(dialog.FileName);
+                    if (validation.Width <= 0 || validation.Height <= 0)
+                        throw new InvalidOperationException("Image has no pixels.");
+
+                    string customDir = Path.Combine(Path.Combine(workspace, "_local"), "custom-textures");
+                    Directory.CreateDirectory(customDir);
+                    string extension = Path.GetExtension(dialog.FileName);
+                    if (string.IsNullOrEmpty(extension)) extension = ".png";
+                    string fileName = SafeFilePart(currentLevelKey) + "-texture-" + textureId.ToString("000") + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + extension.ToLowerInvariant();
+                    string stagedPath = Path.Combine(customDir, fileName);
+                    File.Copy(dialog.FileName, stagedPath, true);
+
+                    string descriptorTier = "hqData";
+                    int tileSize = 64;
+                    AddOrReplaceCustomTerrainTexture(textureId, stagedPath, Path.GetFileName(dialog.FileName), descriptorTier, tileSize);
+                    SaveCustomTerrainTexturesManifest();
+                    LoadCustomTerrainTextures();
+                    RefreshTerrainTextureLibrary();
+                    UpdateInspector();
+                    canvas.Invalidate();
+                    statusLabel.Text = "Imported custom texture art for " + currentLevelName + " texture ID " + textureId.ToString() + ". Create Terrain BIN will write it into the disposable game image.";
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, ex.Message, "Could not import terrain texture", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                finally
+                {
+                    if (validation != null) validation.Dispose();
+                }
+            }
+        }
+
+        private void CreateDarkHollowTerrainTexturePack()
+        {
+            if (!HasLoadedLevel() || geometry == null || !IsStoneHillLevel())
+            {
+                MessageBox.Show(this, "Dark Hollow texture-pack export is currently wired for Stone Hill.", "Stone Hill only", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (terrainTextureAtlas == null)
+                LoadTerrainTextureAtlas();
+
+            if (terrainTextureAtlas == null)
+            {
+                MessageBox.Show(this, "Stone Hill source texture atlas is not loaded. Run the WAD texture atlas tool, then try again.", "Missing texture atlas", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            SortedDictionary<int, bool> textureIds = new SortedDictionary<int, bool>();
+            foreach (TerrainPolygon polygon in geometry.Polygons)
+            {
+                if (polygon == null) continue;
+                if (polygon.OriginalTextureId >= 0) textureIds[polygon.OriginalTextureId] = true;
+                if (polygon.TextureId >= 0) textureIds[polygon.TextureId] = true;
+            }
+
+            if (textureIds.Count == 0)
+            {
+                MessageBox.Show(this, "The loaded Stone Hill terrain overlay does not expose texture IDs.", "No texture IDs", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            DialogResult confirm = MessageBox.Show(
+                this,
+                "Generate Dark Hollow-style PNG texture imports for " + textureIds.Count.ToString() + " Stone Hill texture slot(s)?\n\nThis replaces matching custom imports in the editor manifest. Create Terrain BIN will write the staged PNGs into the disposable game image.",
+                "Generate Dark Hollow texture pack",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (confirm != DialogResult.Yes)
+                return;
+
+            try
+            {
+                string customRoot = Path.Combine(Path.Combine(workspace, "_local"), "custom-textures");
+                string packDir = Path.Combine(customRoot, "darkhollow-pack");
+                Directory.CreateDirectory(packDir);
+
+                int generated = 0;
+                int skipped = 0;
+                foreach (int textureId in textureIds.Keys)
+                {
+                    Rectangle source = TerrainTextureSourceRect(textureId);
+                    if (source.IsEmpty)
+                    {
+                        skipped++;
+                        continue;
+                    }
+
+                    string fileName = SafeFilePart(currentLevelKey) + "-texture-" + textureId.ToString("000") + "-darkhollow.png";
+                    string stagedPath = Path.Combine(packDir, fileName);
+                    using (Bitmap tile = CreateDarkHollowTerrainTextureTile(source))
+                    {
+                        tile.Save(stagedPath, ImageFormat.Png);
+                    }
+
+                    AddOrReplaceCustomTerrainTexture(textureId, stagedPath, fileName, "hqData", 64);
+                    generated++;
+                }
+
+                SaveCustomTerrainTexturesManifest();
+                LoadCustomTerrainTextures();
+                RefreshTerrainTextureLibrary();
+                UpdateInspector();
+                canvas.Invalidate();
+
+                statusLabel.Text = "Generated Dark Hollow texture pack for " + generated.ToString() + " Stone Hill texture slot(s)" + (skipped > 0 ? "; skipped " + skipped.ToString() + " atlas-missing slot(s)" : "") + ". Create Terrain BIN will write these custom PNGs.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not generate Dark Hollow texture pack", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private Bitmap CreateDarkHollowTerrainTextureTile(Rectangle source)
+        {
+            Bitmap tile = new Bitmap(64, 64, PixelFormat.Format32bppArgb);
+            using (Graphics g = Graphics.FromImage(tile))
+            {
+                g.CompositingMode = CompositingMode.SourceCopy;
+                g.InterpolationMode = InterpolationMode.NearestNeighbor;
+                g.PixelOffsetMode = PixelOffsetMode.Half;
+                g.DrawImage(terrainTextureAtlas, new Rectangle(0, 0, tile.Width, tile.Height), source, GraphicsUnit.Pixel);
+            }
+
+            for (int y = 0; y < tile.Height; y++)
+            {
+                for (int x = 0; x < tile.Width; x++)
+                {
+                    tile.SetPixel(x, y, DarkHollowTerrainGradeColor(tile.GetPixel(x, y)));
+                }
+            }
+            return tile;
+        }
+
+        private static Color DarkHollowTerrainGradeColor(Color color)
+        {
+            if (color.A == 0)
+                return color;
+
+            double r = color.R / 255.0;
+            double g = color.G / 255.0;
+            double b = color.B / 255.0;
+            double luma = Math.Max(0.0, Math.Min(1.0, (0.299 * r) + (0.587 * g) + (0.114 * b)));
+
+            bool water = color.B >= color.R + 18 && color.B >= color.G - 10;
+            bool grass = color.G >= color.R + 12 && color.G >= color.B - 5;
+            bool stone = !water && !grass && color.R >= color.B - 6 && color.G >= color.B - 18;
+
+            int lowR;
+            int lowG;
+            int lowB;
+            int highR;
+            int highG;
+            int highB;
+
+            if (water)
+            {
+                lowR = 6; lowG = 22; lowB = 54;
+                highR = 36; highG = 68; highB = 116;
+            }
+            else if (grass)
+            {
+                lowR = 8; lowG = 48; lowB = 38;
+                highR = 50; highG = 112; highB = 70;
+            }
+            else if (stone)
+            {
+                lowR = 56; lowG = 54; lowB = 64;
+                highR = 138; highG = 130; highB = 146;
+            }
+            else
+            {
+                lowR = 10; lowG = 34; lowB = 58;
+                highR = 82; highG = 88; highB = 112;
+            }
+
+            double t = Math.Max(0.0, Math.Min(1.0, (luma - 0.10) / 0.78));
+            double detail = (luma - 0.50) * 18.0;
+            return Color.FromArgb(
+                color.A,
+                DarkHollowClampByte(DarkHollowLerp(lowR, highR, t) + detail),
+                DarkHollowClampByte(DarkHollowLerp(lowG, highG, t) + detail),
+                DarkHollowClampByte(DarkHollowLerp(lowB, highB, t) + detail));
+        }
+
+        private static int DarkHollowLerp(int a, int b, double t)
+        {
+            return (int)Math.Round(a + ((b - a) * Math.Max(0.0, Math.Min(1.0, t))));
+        }
+
+        private static int DarkHollowClampByte(double value)
+        {
+            return Math.Max(0, Math.Min(255, (int)Math.Round(value)));
+        }
+
+        private void AddOrReplaceCustomTerrainTexture(int textureId, string sourceImagePath, string sourceImageName, string descriptorTier, int tileSize)
+        {
+            CustomTerrainTexture old;
+            if (customTerrainTextures.TryGetValue(textureId, out old) && old != null && old.PreviewImage != null)
+                old.PreviewImage.Dispose();
+
+            customTerrainTextures[textureId] = new CustomTerrainTexture(
+                textureId,
+                sourceImagePath,
+                sourceImageName,
+                descriptorTier,
+                tileSize,
+                LoadBitmapCopy(sourceImagePath));
+        }
+
+        private void SaveCustomTerrainTexturesManifest()
+        {
+            List<object> entries = new List<object>();
+            List<int> keys = new List<int>(customTerrainTextures.Keys);
+            keys.Sort();
+            foreach (int textureId in keys)
+            {
+                CustomTerrainTexture texture = customTerrainTextures[textureId];
+                if (texture == null) continue;
+                Dictionary<string, object> entry = new Dictionary<string, object>();
+                entry["textureId"] = texture.TextureId;
+                entry["sourceImagePath"] = texture.SourceImagePath;
+                entry["sourceImageName"] = texture.SourceImageName;
+                entry["descriptorTier"] = string.IsNullOrEmpty(texture.DescriptorTier) ? "hqData" : texture.DescriptorTier;
+                entry["tileSize"] = texture.TileSize > 0 ? texture.TileSize : 64;
+                entries.Add(entry);
+            }
+
+            Dictionary<string, object> root = new Dictionary<string, object>();
+            root["generatedBy"] = "NativeSpyroEditor";
+            root["levelName"] = currentLevelName;
+            root["levelKey"] = currentLevelKey;
+            root["purpose"] = currentLevelName + " custom terrain texture imports for the Stone Hill texture-page patch exporter.";
+            root["updatedUtc"] = DateTime.UtcNow.ToString("o");
+            root["textureCount"] = entries.Count;
+            root["textures"] = entries.ToArray();
+            JavaScriptSerializer serializer = new JavaScriptSerializer();
+            serializer.MaxJsonLength = int.MaxValue;
+            File.WriteAllText(customTerrainTexturesPath, serializer.Serialize(root), Encoding.UTF8);
+        }
+
+        private int TargetTextureIdForCustomImport()
+        {
+            if (selectedTerrainIndex >= 0 && geometry != null && selectedTerrainIndex < geometry.Polygons.Count)
+                return geometry.Polygons[selectedTerrainIndex].TextureId;
+
+            TerrainTextureChoice choice = SelectedTerrainTextureChoice();
+            if (choice != null && string.Equals(choice.LevelKey, currentLevelKey, StringComparison.OrdinalIgnoreCase))
+                return choice.TextureId;
+
+            return copiedTerrainTextureId;
+        }
+
+        private int CountCustomTerrainTextureImports()
+        {
+            return customTerrainTextures.Count;
+        }
+
+        private bool TryGetCustomTerrainTexture(int textureId, out CustomTerrainTexture texture)
+        {
+            return customTerrainTextures.TryGetValue(textureId, out texture) && texture != null && texture.PreviewImage != null;
+        }
+
+        private static Bitmap LoadBitmapCopy(string path)
+        {
+            byte[] bytes = File.ReadAllBytes(path);
+            using (MemoryStream stream = new MemoryStream(bytes))
+            using (Image image = Image.FromStream(stream))
+            {
+                return new Bitmap(image);
+            }
+        }
+
+        private static int DictionaryInt(Dictionary<string, object> dict, string name, int fallback)
+        {
+            if (dict == null || !dict.ContainsKey(name) || dict[name] == null) return fallback;
+            try { return Convert.ToInt32(dict[name]); }
+            catch { return fallback; }
+        }
+
+        private static string DictionaryString(Dictionary<string, object> dict, string name, string fallback)
+        {
+            if (dict == null || !dict.ContainsKey(name) || dict[name] == null) return fallback;
+            return Convert.ToString(dict[name]);
         }
 
         private void LoadTerrainTextureAtlas()
@@ -1372,8 +2694,8 @@ namespace SpyroNativeEditor
                 return;
             }
 
-            string closePath = Path.Combine(workspace, "stonehill-texture-atlas-close-from-wad-subfile00.png");
-            string standardPath = Path.Combine(workspace, "stonehill-texture-atlas-from-wad-subfile00.png");
+            string closePath = Program.ResolveWorkspaceFile(workspace, "stonehill-texture-atlas-close-from-wad-subfile00.png", "game-and-capture-artifacts", "generated-research");
+            string standardPath = Program.ResolveWorkspaceFile(workspace, "stonehill-texture-atlas-from-wad-subfile00.png", "game-and-capture-artifacts", "generated-research");
             if (terrainTextureAtlasPreference == TerrainTextureAtlasPreference.HqClose)
             {
                 terrainTextureAtlasPath = closePath;
@@ -1423,6 +2745,230 @@ namespace SpyroNativeEditor
                 sourceTextureButton.Enabled = true;
                 sourceTextureButton.ToolTipText = "Draw WAD-source " + terrainTextureTileSize.ToString() + "x" + terrainTextureTileSize.ToString() + " " + terrainTextureAtlasTier + " texture tiles mapped to terrain face corners.";
             }
+        }
+
+        private static Dictionary<int, TerrainTextureChoice> BuildTerrainTextureChoiceMap(string levelKey, string levelName, GeometryCandidate candidate)
+        {
+            Dictionary<int, TerrainTextureChoice> byTexture = new Dictionary<int, TerrainTextureChoice>();
+            if (candidate == null || candidate.Polygons == null)
+                return byTexture;
+
+            foreach (TerrainPolygon polygon in candidate.Polygons)
+            {
+                if (polygon == null || polygon.TextureId < 0) continue;
+                TerrainTextureChoice choice;
+                if (!byTexture.TryGetValue(polygon.TextureId, out choice))
+                {
+                    choice = new TerrainTextureChoice(levelKey, levelName, polygon.TextureId, polygon);
+                    byTexture[polygon.TextureId] = choice;
+                }
+                choice.FaceCount++;
+            }
+            return byTexture;
+        }
+
+        private void RefreshTerrainTextureLibrary()
+        {
+            if (terrainDonorLevelBox == null || terrainTextureList == null)
+                return;
+
+            if (terrainDonorLevelBox.Items.Count == 0)
+            {
+                foreach (LevelDefinition level in levelDefinitions)
+                {
+                    string overlayPath = GetLevelGeometryPath(level.Key);
+                    if (File.Exists(overlayPath))
+                        terrainDonorLevelBox.Items.Add(level);
+                }
+            }
+
+            if (terrainDonorLevelBox.SelectedIndex < 0 && terrainDonorLevelBox.Items.Count > 0)
+            {
+                LevelDefinition current = FindLevelDefinition(currentLevelKey);
+                if (current != null && terrainDonorLevelBox.Items.Contains(current))
+                    terrainDonorLevelBox.SelectedItem = current;
+                else
+                    terrainDonorLevelBox.SelectedIndex = 0;
+                return;
+            }
+
+            terrainTextureChoices.Clear();
+            terrainTextureList.BeginUpdate();
+            try
+            {
+                terrainTextureList.Items.Clear();
+                LevelDefinition donor = terrainDonorLevelBox.SelectedItem as LevelDefinition;
+                if (donor == null)
+                {
+                    terrainTextureSummaryLabel.Text = "No terrain source selected.";
+                    UpdateTerrainTexturePreview();
+                    return;
+                }
+
+                string overlayPath = GetLevelGeometryPath(donor.Key);
+                if (!File.Exists(overlayPath))
+                {
+                    terrainTextureSummaryLabel.Text = donor.DisplayName + " overlay is not captured.";
+                    UpdateTerrainTexturePreview();
+                    return;
+                }
+
+                GeometryCandidate donorGeometry = string.Equals(donor.Key, currentLevelKey, StringComparison.OrdinalIgnoreCase) && geometry != null
+                    ? geometry
+                    : GeometryLoader.LoadFirstCandidate(overlayPath);
+
+                Dictionary<int, TerrainTextureChoice> byTexture = BuildTerrainTextureChoiceMap(donor.Key, donor.DisplayName, donorGeometry);
+
+                List<int> ids = new List<int>(byTexture.Keys);
+                ids.Sort();
+                foreach (int id in ids)
+                {
+                    TerrainTextureChoice choice = byTexture[id];
+                    terrainTextureChoices.Add(choice);
+                    terrainTextureList.Items.Add(choice);
+                }
+
+                string exportNote = string.Equals(donor.Key, currentLevelKey, StringComparison.OrdinalIgnoreCase)
+                    ? "Same-level IDs export to BIN for Stone Hill."
+                    : "Cross-level IDs are preview/remap only until donor texture import is decoded.";
+                if (string.Equals(donor.Key, currentLevelKey, StringComparison.OrdinalIgnoreCase) && CountCustomTerrainTextureImports() > 0)
+                    exportNote += " Custom PNG imports: " + CountCustomTerrainTextureImports().ToString() + ".";
+                terrainTextureSummaryLabel.Text = donor.DisplayName + ": " + terrainTextureChoices.Count.ToString() + " texture IDs. " + exportNote;
+            }
+            catch (Exception ex)
+            {
+                terrainTextureSummaryLabel.Text = "Could not load terrain textures: " + ex.Message;
+            }
+            finally
+            {
+                terrainTextureList.EndUpdate();
+            }
+
+            UpdateComboBoxDropDownWidth(terrainTextureList, 360);
+            UpdateTerrainTexturePreview();
+        }
+
+        private TerrainTextureChoice SelectedTerrainTextureChoice()
+        {
+            if (terrainTextureList == null || terrainTextureList.SelectedItem == null)
+                return null;
+            return terrainTextureList.SelectedItem as TerrainTextureChoice;
+        }
+
+        private void UpdateTerrainTexturePreview()
+        {
+            if (terrainTexturePreview == null)
+                return;
+
+            Image old = terrainTexturePreview.Image;
+            terrainTexturePreview.Image = null;
+            if (old != null) old.Dispose();
+
+            TerrainTextureChoice choice = SelectedTerrainTextureChoice();
+            if (choice == null)
+                return;
+
+            terrainTexturePreview.Image = CreateTerrainTexturePreview(choice);
+            copiedTerrainTextureId = choice.TextureId;
+            if (terrainTextureSummaryLabel != null)
+            {
+                string scope = string.Equals(choice.LevelKey, currentLevelKey, StringComparison.OrdinalIgnoreCase)
+                    ? "same-level/exportable"
+                    : "cross-level id preview";
+                CustomTerrainTexture custom;
+                if (TryGetCustomTerrainTexture(choice.TextureId, out custom))
+                    scope += ", custom PNG";
+                terrainTextureSummaryLabel.Text = choice.DisplayText + " selected (" + scope + ").";
+            }
+        }
+
+        private Bitmap CreateTerrainTexturePreview(TerrainTextureChoice choice)
+        {
+            Bitmap preview = new Bitmap(172, 78);
+            using (Graphics g = Graphics.FromImage(preview))
+            {
+                g.Clear(Color.White);
+                Rectangle tileBounds = new Rectangle(8, 8, 62, 62);
+                bool drewTile = false;
+                CustomTerrainTexture custom;
+                if (choice != null && string.Equals(choice.LevelKey, currentLevelKey, StringComparison.OrdinalIgnoreCase) && TryGetCustomTerrainTexture(choice.TextureId, out custom))
+                {
+                    g.InterpolationMode = InterpolationMode.NearestNeighbor;
+                    g.PixelOffsetMode = PixelOffsetMode.Half;
+                    g.DrawImage(custom.PreviewImage, tileBounds);
+                    drewTile = true;
+                }
+                else if (choice != null && string.Equals(choice.LevelKey, currentLevelKey, StringComparison.OrdinalIgnoreCase) && terrainTextureAtlas != null)
+                {
+                    Rectangle source = TerrainTextureSourceRect(choice.TextureId);
+                    if (!source.IsEmpty)
+                    {
+                        g.InterpolationMode = InterpolationMode.NearestNeighbor;
+                        g.PixelOffsetMode = PixelOffsetMode.Half;
+                        g.DrawImage(terrainTextureAtlas, tileBounds, source, GraphicsUnit.Pixel);
+                        drewTile = true;
+                    }
+                }
+                if (!drewTile)
+                {
+                    using (SolidBrush brush = new SolidBrush(choice == null ? Color.LightGray : choice.SampleColor))
+                        g.FillRectangle(brush, tileBounds);
+                    using (Pen pen = new Pen(Color.FromArgb(80, 80, 80)))
+                        g.DrawRectangle(pen, tileBounds);
+                }
+
+                using (Font titleFont = new Font("Segoe UI", 9f, FontStyle.Bold))
+                using (Font smallFont = new Font("Segoe UI", 8f))
+                using (Brush textBrush = new SolidBrush(Color.FromArgb(40, 46, 52)))
+                {
+                    string title = choice == null ? "No texture" : "Texture ID " + choice.TextureId.ToString();
+                    g.DrawString(title, titleFont, textBrush, new RectangleF(78, 9, 88, 18));
+                    string line2 = choice == null ? "" : choice.LevelName;
+                    g.DrawString(line2, smallFont, textBrush, new RectangleF(78, 30, 88, 18));
+                    string line3 = choice == null ? "" : choice.FaceCount.ToString() + " faces";
+                    g.DrawString(line3, smallFont, textBrush, new RectangleF(78, 49, 88, 18));
+                }
+            }
+            return preview;
+        }
+
+        private void ApplySelectedTerrainTextureToFace()
+        {
+            TerrainTextureChoice choice = SelectedTerrainTextureChoice();
+            if (choice == null)
+            {
+                MessageBox.Show(this, "Choose a terrain texture first.", "No terrain texture selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (selectedTerrainIndex < 0 || geometry == null || selectedTerrainIndex >= geometry.Polygons.Count)
+            {
+                MessageBox.Show(this, "Select a target terrain face first.", "No target face selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            SetTerrainFaceTexture(selectedTerrainIndex, choice.TextureId);
+            if (!string.Equals(choice.LevelKey, currentLevelKey, StringComparison.OrdinalIgnoreCase))
+                statusLabel.Text += " Cross-level donor art is not imported yet, so this writes the target level's texture ID slot.";
+        }
+
+        private void ReplaceSelectedTerrainTextureFamily()
+        {
+            TerrainTextureChoice choice = SelectedTerrainTextureChoice();
+            if (choice == null)
+            {
+                MessageBox.Show(this, "Choose a terrain texture first.", "No terrain texture selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (selectedTerrainIndex < 0 || geometry == null || selectedTerrainIndex >= geometry.Polygons.Count)
+            {
+                MessageBox.Show(this, "Select a target terrain face first.", "No target face selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            TerrainPolygon target = geometry.Polygons[selectedTerrainIndex];
+            ReplaceTerrainTextureFamily(target.OriginalTextureId, choice.TextureId);
+            if (!string.Equals(choice.LevelKey, currentLevelKey, StringComparison.OrdinalIgnoreCase))
+                statusLabel.Text += " Cross-level donor art is not imported yet, so this writes the target level's texture ID slot.";
         }
 
         private void SetTerrainTextureAtlasPreference(TerrainTextureAtlasPreference preference)
@@ -1495,6 +3041,7 @@ namespace SpyroNativeEditor
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             DisposeTerrainTextureAtlas();
+            DisposeCustomTerrainTextures();
             base.OnFormClosed(e);
         }
 
@@ -1509,8 +3056,11 @@ namespace SpyroNativeEditor
                 MessageBoxIcon.Warning);
             if (result == DialogResult.Cancel) return false;
             if (result == DialogResult.Yes)
+            {
                 SaveEdits();
-            return !hasUnsavedEdits;
+                return !hasUnsavedEdits;
+            }
+            return true;
         }
 
         private void RefreshMobyList()
@@ -1553,11 +3103,96 @@ namespace SpyroNativeEditor
                 }
                 if (catalogSummaryLabel != null)
                     catalogSummaryLabel.Text = visibleCount.ToString() + "/" + mobys.Count.ToString();
+                RefreshTreasureSummary();
             }
             finally
             {
                 mobyList.EndUpdate();
                 updatingSelection = false;
+            }
+        }
+
+        private void RefreshTreasureSummary()
+        {
+            if (treasureSummaryLabel == null) return;
+            treasureSummaryLabel.Text = TreasureSummaryText(CalculateTreasureSummary());
+        }
+
+        private LevelTreasureSummary CalculateTreasureSummary()
+        {
+            LevelTreasureSummary summary = new LevelTreasureSummary();
+            int sourceRecordCount = SourceRecordCountForLevel(currentLevelKey);
+            foreach (Moby moby in mobys)
+            {
+                int baseValue = TreasureValueForMoby(moby, true, sourceRecordCount);
+                int currentValue = TreasureValueForMoby(moby, false, sourceRecordCount);
+                summary.BaseTotal += baseValue;
+                summary.CurrentTotal += currentValue;
+                if (currentValue != baseValue)
+                    summary.EditedRecords++;
+            }
+            return summary;
+        }
+
+        private static string TreasureSummaryText(LevelTreasureSummary summary)
+        {
+            if (summary == null || (summary.BaseTotal == 0 && summary.CurrentTotal == 0))
+                return "Treasure: unknown";
+            if (summary.BaseTotal == summary.CurrentTotal)
+                return "Treasure: " + summary.CurrentTotal.ToString() + " current total";
+            int delta = summary.CurrentTotal - summary.BaseTotal;
+            string sign = delta >= 0 ? "+" : "";
+            return "Treasure: " + summary.CurrentTotal.ToString() + " current total (vanilla " + summary.BaseTotal.ToString() + ", " + sign + delta.ToString() + ")";
+        }
+
+        private static int TreasureValueForMoby(Moby moby, bool baseIdentity, int sourceRecordCount)
+        {
+            if (moby == null) return 0;
+            if (!baseIdentity && moby.HasHiddenSlotEdit) return 0;
+            if (!baseIdentity && moby.IsAppendedRecord && IsPotentialChestContentMarker(moby) && !moby.HasChestContentLinkEdit) return 0;
+            if (baseIdentity && moby.IsAppendedRecord) return 0;
+            if (baseIdentity && sourceRecordCount > 0 && moby.TrueIndex >= sourceRecordCount) return 0;
+
+            string label = baseIdentity && moby.HasBaseIdentity ? (moby.BaseLabel ?? "") : moby.DisplayLabel;
+            int loose = LooseGemValueFromLabel(label);
+            int reward = baseIdentity && moby.HasBaseIdentity ? GemValueFromGemIdByte(moby.BaseFlag4B) : GemValueFromGemIdByte(moby.Flag4B);
+
+            if (!baseIdentity)
+            {
+                if (moby.HasGemColorEdit)
+                    loose = moby.GemValueOverride;
+                if (moby.HasRewardColorEdit)
+                    reward = moby.RewardValueOverride;
+            }
+
+            if (IsChestContentMarker(moby))
+                return reward;
+
+            return loose + reward;
+        }
+
+        private static int LooseGemValueFromLabel(string label)
+        {
+            if (string.IsNullOrEmpty(label)) return 0;
+            string text = label.ToLowerInvariant();
+            if (HasAny(text, "purple gem", "25-gem", "gem (25)", "(25)")) return 25;
+            if (HasAny(text, "yellow gem", "10-gem", "gem (10)", "(10)")) return 10;
+            if (HasAny(text, "blue gem", "5-gem", "gem (5)", "(5)")) return 5;
+            if (HasAny(text, "green gem", "2-gem", "gem (2)", "(2)")) return 2;
+            if (HasAny(text, "red gem", "1-gem", "gem (1)", "(1)")) return 1;
+            return 0;
+        }
+
+        private static int GemValueFromGemIdByte(int value)
+        {
+            switch (value)
+            {
+                case 0x53: return 1;
+                case 0x54: return 2;
+                case 0x55: return 5;
+                case 0x56: return 10;
+                case 0x57: return 25;
+                default: return 0;
             }
         }
 
@@ -1571,15 +3206,15 @@ namespace SpyroNativeEditor
             string preferredKey = ActiveSelectionGroupKey();
             selectionGroups.Clear();
 
-            int behaviorGroups = AddBehaviorLinkSelectionGroups();
-            if (behaviorGroups == 0 && IsStoneHillLevel())
-                AddSelectionGroupByTrueIndexes("Linked: Dragon platform set", "linked:dragon-platform", true, new int[] { 86, 140, 185 });
+            AddBehaviorLinkSelectionGroups();
+            AddGlobalBehaviorInferenceSelectionGroups();
             AddSelectionGroupByPredicate("Special: Dragons and pedestals", "special:dragons", false, delegate(Moby moby) { return string.Equals(CatalogCategory(moby), CatalogDragons, StringComparison.Ordinal); });
             AddSelectionGroupByPredicate("Special: Whirlwinds and exits", "special:whirlwinds-exits", false, delegate(Moby moby)
             {
                 string category = CatalogCategory(moby);
                 return string.Equals(category, CatalogWhirlwinds, StringComparison.Ordinal) || string.Equals(category, CatalogPortals, StringComparison.Ordinal);
             });
+            AddSelectionGroupByPredicate("Special: Cameras", "special:cameras", false, delegate(Moby moby) { return string.Equals(CatalogCategory(moby), CatalogCameras, StringComparison.Ordinal); });
             AddSelectionGroupByPredicate("Special: Nonvisual controls", "special:controls", false, delegate(Moby moby) { return string.Equals(CatalogCategory(moby), CatalogHelpers, StringComparison.Ordinal); });
 
             AddIdentitySelectionGroups();
@@ -1622,6 +3257,9 @@ namespace SpyroNativeEditor
                             group.Add(mobyIndex);
                     }
 
+                    if (linkedMove && IsDragonBehaviorLinkEntry(entry, key, name))
+                        KeepOnlyDragonAndPedestalMembers(group);
+
                     if (AddSelectionGroup(group, false))
                         added++;
                 }
@@ -1631,6 +3269,169 @@ namespace SpyroNativeEditor
             {
                 return 0;
             }
+        }
+
+        private int AddGlobalBehaviorInferenceSelectionGroups()
+        {
+            int added = 0;
+            added += AddInferredDragonPedestalSelectionGroups();
+            added += AddInferredPortalEntrySelectionGroups();
+            added += AddInferredLockedChestContentSelectionGroups();
+            added += AddInferredSpringChestPairSelectionGroups();
+            return added;
+        }
+
+        private int AddInferredDragonPedestalSelectionGroups()
+        {
+            int added = 0;
+            HashSet<int> usedPedestals = new HashSet<int>();
+            for (int actorIndex = 0; actorIndex < mobys.Count; actorIndex++)
+            {
+                Moby actor = mobys[actorIndex];
+                if (!IsDragonActorMoby(actor)) continue;
+                if (LinkedMoveSelectionGroupForMoby(actorIndex) != null) continue;
+
+                int pedestalIndex = FindNearestMobyIndex(actorIndex, delegate(Moby candidate, int candidateIndex)
+                {
+                    return !usedPedestals.Contains(candidateIndex)
+                        && IsDragonPedestalMoby(candidate)
+                        && LinkedMoveSelectionGroupForMoby(candidateIndex) == null;
+                }, 256f, 384f);
+
+                if (pedestalIndex < 0) continue;
+                usedPedestals.Add(pedestalIndex);
+
+                SelectionGroup group = new SelectionGroup("auto-dragon-pedestal:t" + actor.TrueIndex.ToString() + "-t" + mobys[pedestalIndex].TrueIndex.ToString(),
+                    "Behavior: Dragon/pedestal T" + actor.TrueIndex.ToString() + "/T" + mobys[pedestalIndex].TrueIndex.ToString() + " (inferred)", true);
+                group.Add(actorIndex);
+                group.Add(pedestalIndex);
+                if (AddSelectionGroup(group, false))
+                    added++;
+            }
+            return added;
+        }
+
+        private int AddInferredPortalEntrySelectionGroups()
+        {
+            int added = 0;
+            for (int anchorIndex = 0; anchorIndex < mobys.Count; anchorIndex++)
+            {
+                Moby anchor = mobys[anchorIndex];
+                if (!IsPortalLinkAnchor(anchor)) continue;
+                if (LinkedMoveSelectionGroupForMoby(anchorIndex) != null) continue;
+
+                SelectionGroup group = new SelectionGroup("auto-portal-entry:t" + anchor.TrueIndex.ToString(),
+                    "Behavior: Portal entry T" + anchor.TrueIndex.ToString() + " (inferred)", true);
+                group.Add(anchorIndex);
+
+                for (int memberIndex = 0; memberIndex < mobys.Count; memberIndex++)
+                {
+                    if (memberIndex == anchorIndex) continue;
+                    Moby member = mobys[memberIndex];
+                    if (!IsPortalLinkedNeighbor(anchor, member)) continue;
+                    if (LinkedMoveSelectionGroupForMoby(memberIndex) != null) continue;
+                    group.Add(memberIndex);
+                }
+
+                if (AddSelectionGroup(group, false))
+                    added++;
+            }
+            return added;
+        }
+
+        private int AddInferredLockedChestContentSelectionGroups()
+        {
+            int added = 0;
+            for (int chestIndex = 0; chestIndex < mobys.Count; chestIndex++)
+            {
+                Moby chest = mobys[chestIndex];
+                if (!IsLinkedContentsChestLike(chest)) continue;
+                if (ChestContentSelectionGroupForMoby(chestIndex) != null) continue;
+
+                SelectionGroup group = new SelectionGroup("auto-chest-contents:t" + chest.TrueIndex.ToString(),
+                    "Behavior: " + ChestContentGroupTitle(chest) + " T" + chest.TrueIndex.ToString() + " (inferred)", true);
+                group.Add(chestIndex);
+
+                for (int contentIndex = 0; contentIndex < mobys.Count; contentIndex++)
+                {
+                    if (contentIndex == chestIndex) continue;
+                    Moby content = mobys[contentIndex];
+                    if (!IsPotentialChestContentMarker(content)) continue;
+                    if (IsLikelyChestContentNearChest(chest, content))
+                        group.Add(contentIndex);
+                }
+
+                if (AddSelectionGroup(group, false))
+                    added++;
+            }
+            return added;
+        }
+
+        private int AddInferredSpringChestPairSelectionGroups()
+        {
+            int added = 0;
+            Dictionary<int, int> byTrueIndex = new Dictionary<int, int>();
+            for (int i = 0; i < mobys.Count; i++)
+            {
+                if (mobys[i] != null && mobys[i].TrueIndex >= 0)
+                    byTrueIndex[mobys[i].TrueIndex] = i;
+            }
+
+            HashSet<string> seen = new HashSet<string>();
+            for (int i = 0; i < mobys.Count; i++)
+            {
+                Moby moby = mobys[i];
+                if (moby == null || moby.SpringChestPartnerTrueIndex < 0) continue;
+                int partnerIndex;
+                if (!byTrueIndex.TryGetValue(moby.SpringChestPartnerTrueIndex, out partnerIndex)) continue;
+                if (partnerIndex < 0 || partnerIndex >= mobys.Count || partnerIndex == i) continue;
+
+                int a = Math.Min(moby.TrueIndex, mobys[partnerIndex].TrueIndex);
+                int b = Math.Max(moby.TrueIndex, mobys[partnerIndex].TrueIndex);
+                string key = "auto-spring-chest-pair:t" + a.ToString() + "-t" + b.ToString();
+                if (seen.Contains(key)) continue;
+                seen.Add(key);
+
+                SelectionGroup group = new SelectionGroup(key, "Behavior: Spring chest pair T" + a.ToString() + "/T" + b.ToString(), true);
+                group.Add(i);
+                group.Add(partnerIndex);
+                if (AddSelectionGroup(group, false))
+                    added++;
+            }
+            return added;
+        }
+
+        private delegate bool MobyIndexPredicate(Moby moby, int mobyIndex);
+
+        private int FindNearestMobyIndex(int sourceIndex, MobyIndexPredicate predicate, float maxXyDistance, float maxZDistance)
+        {
+            if (sourceIndex < 0 || sourceIndex >= mobys.Count || predicate == null) return -1;
+            Moby source = mobys[sourceIndex];
+            int bestIndex = -1;
+            float bestDistanceSquared = maxXyDistance * maxXyDistance;
+            for (int i = 0; i < mobys.Count; i++)
+            {
+                if (i == sourceIndex) continue;
+                Moby candidate = mobys[i];
+                if (!predicate(candidate, i)) continue;
+                if (Math.Abs(candidate.Z - source.Z) > maxZDistance) continue;
+                float dx = candidate.X - source.X;
+                float dy = candidate.Y - source.Y;
+                float distanceSquared = (dx * dx) + (dy * dy);
+                if (distanceSquared > bestDistanceSquared) continue;
+                bestDistanceSquared = distanceSquared;
+                bestIndex = i;
+            }
+            return bestIndex;
+        }
+
+        private static bool IsLikelyChestContentNearChest(Moby chest, Moby content)
+        {
+            if (chest == null || content == null) return false;
+            float dx = chest.X - content.X;
+            float dy = chest.Y - content.Y;
+            float dz = chest.Z - content.Z;
+            return (dx * dx) + (dy * dy) <= 96f * 96f && Math.Abs(dz) <= 96f;
         }
 
         private static string GetJsonString(Dictionary<string, object> dict, string name, string fallback)
@@ -1644,6 +3445,33 @@ namespace SpyroNativeEditor
             if (dict == null || !dict.ContainsKey(name) || dict[name] == null) return fallback;
             try { return Convert.ToBoolean(dict[name]); }
             catch { return fallback; }
+        }
+
+        private static int GetJsonInt(Dictionary<string, object> dict, string name, int fallback)
+        {
+            if (dict == null || !dict.ContainsKey(name) || dict[name] == null) return fallback;
+            try { return Convert.ToInt32(dict[name]); }
+            catch { return fallback; }
+        }
+
+        private static bool IsDragonBehaviorLinkEntry(Dictionary<string, object> entry, string key, string name)
+        {
+            string text = ((key ?? "") + " "
+                + (name ?? "") + " "
+                + GetJsonString(entry, "basis", "") + " "
+                + GetJsonString(entry, "reason", "")).ToLowerInvariant();
+            return text.IndexOf("dragon", StringComparison.Ordinal) >= 0;
+        }
+
+        private void KeepOnlyDragonAndPedestalMembers(SelectionGroup group)
+        {
+            if (group == null) return;
+            for (int i = group.Members.Count - 1; i >= 0; i--)
+            {
+                int mobyIndex = group.Members[i];
+                if (mobyIndex < 0 || mobyIndex >= mobys.Count || !IsDragonOrPedestalMoby(mobys[mobyIndex]))
+                    group.Members.RemoveAt(i);
+            }
         }
 
         private string ActiveSelectionGroupKey()
@@ -1895,6 +3723,7 @@ namespace SpyroNativeEditor
             if (HasAny(text, "blue gem", "5-gem", "gem (5)", "(5)")) return "Blue gems (5)";
             if (HasAny(text, "green gem", "2-gem", "gem (2)", "(2)")) return "Green gems (2)";
             if (HasAny(text, "red gem", "1-gem", "gem (1)", "(1)")) return "Red gems (1)";
+            if (text.IndexOf("chest content", StringComparison.Ordinal) >= 0 || text.IndexOf("linked reward marker", StringComparison.Ordinal) >= 0) return "Locked chest contents";
             if (text.IndexOf("locked treasure chest", StringComparison.Ordinal) >= 0) return "Locked treasure chest";
             if (text.IndexOf("life chest", StringComparison.Ordinal) >= 0) return "Life chest";
             if (text.IndexOf("flame/charge chest", StringComparison.Ordinal) >= 0 && text.IndexOf("green gem", StringComparison.Ordinal) >= 0) return "Flame/charge chests with green reward";
@@ -1909,6 +3738,7 @@ namespace SpyroNativeEditor
             if (text.IndexOf("whirlwind", StringComparison.Ordinal) >= 0) return "Whirlwinds";
             if (text.IndexOf("return home", StringComparison.Ordinal) >= 0) return "Return Home platform";
             if (text.IndexOf("portal sound trigger", StringComparison.Ordinal) >= 0) return "Portal sound triggers";
+            if (text.IndexOf("camera", StringComparison.Ordinal) >= 0) return "Camera points";
             if (text.IndexOf("taller 2 ball tree", StringComparison.Ordinal) >= 0 || text.IndexOf("tall 2 ball tree", StringComparison.Ordinal) >= 0) return "Tall 2-ball trees";
             if (text.IndexOf("wider tree", StringComparison.Ordinal) >= 0 || text.IndexOf("wide tree", StringComparison.Ordinal) >= 0) return "Wider trees";
             if (text.IndexOf("skinny tree", StringComparison.Ordinal) >= 0) return "Skinny trees";
@@ -1980,12 +3810,16 @@ namespace SpyroNativeEditor
             {
                 case MobyIconKind.Gem: return CatalogGems;
                 case MobyIconKind.Chest: return CatalogChests;
+                case MobyIconKind.SpringChest: return CatalogChests;
+                case MobyIconKind.LockedChest: return CatalogChests;
+                case MobyIconKind.BlastChest: return CatalogChests;
                 case MobyIconKind.Dragon:
                 case MobyIconKind.Pedestal:
                 case MobyIconKind.Fairy:
                     return CatalogDragons;
                 case MobyIconKind.Whirlwind: return CatalogWhirlwinds;
                 case MobyIconKind.Key: return CatalogKeys;
+                case MobyIconKind.Camera: return CatalogCameras;
                 case MobyIconKind.Enemy: return CatalogEnemies;
                 case MobyIconKind.Scenery: return CatalogScenery;
                 case MobyIconKind.Portal: return CatalogPortals;
@@ -2009,11 +3843,15 @@ namespace SpyroNativeEditor
             {
                 case MobyIconKind.Gem: return GemIconText(moby);
                 case MobyIconKind.Chest: return "Box";
+                case MobyIconKind.SpringChest: return "Spr";
+                case MobyIconKind.LockedChest: return "Lck";
+                case MobyIconKind.BlastChest: return "Bst";
                 case MobyIconKind.Dragon: return "Drg";
                 case MobyIconKind.Pedestal: return "Ped";
                 case MobyIconKind.Fairy: return "Lgt";
                 case MobyIconKind.Whirlwind: return "Whl";
                 case MobyIconKind.Key: return "Key";
+                case MobyIconKind.Camera: return "Cam";
                 case MobyIconKind.Enemy: return "Act";
                 case MobyIconKind.Scenery: return "Scn";
                 case MobyIconKind.Portal: return "Prt";
@@ -2024,6 +3862,8 @@ namespace SpyroNativeEditor
 
         private static string GemIconText(Moby moby)
         {
+            if (moby != null && moby.HasRewardColorEdit)
+                return GemIconTextForColor(moby.RewardColorName);
             string text = MobySearchText(moby);
             if (HasAny(text, "purple gem", "25-gem", "25 value", "gem (25)", "(25)")) return "P25";
             if (HasAny(text, "yellow gem", "10-gem", "10 value", "gem (10)", "(10)")) return "Y10";
@@ -2033,16 +3873,38 @@ namespace SpyroNativeEditor
             return "Gem";
         }
 
+        private static string GemIconTextForColor(string color)
+        {
+            if (string.Equals(color, "purple", StringComparison.OrdinalIgnoreCase)) return "P25";
+            if (string.Equals(color, "yellow", StringComparison.OrdinalIgnoreCase)) return "Y10";
+            if (string.Equals(color, "blue", StringComparison.OrdinalIgnoreCase)) return "B5";
+            if (string.Equals(color, "green", StringComparison.OrdinalIgnoreCase)) return "G2";
+            return "R1";
+        }
+
+        private static bool IsChestContentMarker(Moby moby)
+        {
+            if (moby == null) return false;
+            if (moby.Type != 0x00 || moby.Flag4A != 0xFF || GemValueFromGemIdByte(moby.Flag4B) == 0)
+                return false;
+            string text = MobySearchText(moby);
+            return HasAny(text, "chest content", "contained gem", "linked reward marker", "reward marker", "gem explosion");
+        }
+
         private enum MobyIconKind
         {
             Generic,
             Gem,
             Chest,
+            SpringChest,
+            LockedChest,
+            BlastChest,
             Dragon,
             Pedestal,
             Fairy,
             Whirlwind,
             Key,
+            Camera,
             Enemy,
             Scenery,
             Portal,
@@ -2053,14 +3915,21 @@ namespace SpyroNativeEditor
         {
             if (moby == null) return MobyIconKind.Generic;
             string text = MobySearchText(moby);
+            if (IsChestContentMarker(moby)) return MobyIconKind.Gem;
+            if (text.IndexOf("camera", StringComparison.Ordinal) >= 0 || text.IndexOf("view point", StringComparison.Ordinal) >= 0 || text.IndexOf("viewpoint", StringComparison.Ordinal) >= 0) return MobyIconKind.Camera;
+            if (HasAny(text, "nonvisual", "invisible", "control", "helper") && !IsDragonOrPedestalIdentityText(text)) return MobyIconKind.Helper;
             if (text.IndexOf("whirlwind", StringComparison.Ordinal) >= 0) return MobyIconKind.Whirlwind;
             if (text.IndexOf("fairy", StringComparison.Ordinal) >= 0 || text.IndexOf("pedestal light", StringComparison.Ordinal) >= 0 || text.IndexOf("pedestal-light", StringComparison.Ordinal) >= 0) return MobyIconKind.Fairy;
-            if (text.IndexOf("dragon pedestal", StringComparison.Ordinal) >= 0 || text.IndexOf("pedestal", StringComparison.Ordinal) >= 0) return MobyIconKind.Pedestal;
-            if (text.IndexOf("dragon", StringComparison.Ordinal) >= 0) return MobyIconKind.Dragon;
+            if (IsDragonPedestalIdentityText(text)) return MobyIconKind.Pedestal;
+            if (IsDragonActorIdentityText(text)) return MobyIconKind.Dragon;
             if (text.IndexOf("key", StringComparison.Ordinal) >= 0) return MobyIconKind.Key;
+            if (IsSpringChestLike(moby)) return MobyIconKind.SpringChest;
+            if (IsLockedChestLike(moby)) return MobyIconKind.LockedChest;
+            if (IsBlastChestLike(moby)) return MobyIconKind.BlastChest;
             if (text.IndexOf("chest", StringComparison.Ordinal) >= 0 || text.IndexOf("container", StringComparison.Ordinal) >= 0 || text.IndexOf("box", StringComparison.Ordinal) >= 0) return MobyIconKind.Chest;
             if (text.IndexOf("gem", StringComparison.Ordinal) >= 0 || text.IndexOf("treasure", StringComparison.Ordinal) >= 0 || text.IndexOf("collectible", StringComparison.Ordinal) >= 0) return MobyIconKind.Gem;
             if (text.IndexOf("enemy", StringComparison.Ordinal) >= 0 || text.IndexOf("fodder", StringComparison.Ordinal) >= 0 || text.IndexOf("sheep", StringComparison.Ordinal) >= 0 || text.IndexOf("shepherd", StringComparison.Ordinal) >= 0 || text.IndexOf("shepard", StringComparison.Ordinal) >= 0 || text.IndexOf("ram", StringComparison.Ordinal) >= 0 || text.IndexOf("thief", StringComparison.Ordinal) >= 0) return MobyIconKind.Enemy;
+            if (text.IndexOf("balloonist", StringComparison.Ordinal) >= 0 || text.IndexOf("transport npc", StringComparison.Ordinal) >= 0) return MobyIconKind.Portal;
             if (text.IndexOf("scenery", StringComparison.Ordinal) >= 0 || text.IndexOf("tree", StringComparison.Ordinal) >= 0 || text.IndexOf("lamp", StringComparison.Ordinal) >= 0 || text.IndexOf("flag", StringComparison.Ordinal) >= 0) return MobyIconKind.Scenery;
             if (text.IndexOf("portal", StringComparison.Ordinal) >= 0 || text.IndexOf("return home", StringComparison.Ordinal) >= 0 || text.IndexOf("sound trigger", StringComparison.Ordinal) >= 0) return MobyIconKind.Portal;
             if (moby.Type == 0x00 || text.IndexOf("nonvisual", StringComparison.Ordinal) >= 0 || text.IndexOf("invisible", StringComparison.Ordinal) >= 0 || text.IndexOf("control", StringComparison.Ordinal) >= 0 || text.IndexOf("helper", StringComparison.Ordinal) >= 0) return MobyIconKind.Helper;
@@ -2099,6 +3968,8 @@ namespace SpyroNativeEditor
                 pasteMutationButton.Enabled = canUseSelectedSlot && mutationClipboardMobyIndex >= 0 && mutationClipboardMobyIndex < mobys.Count && mutationClipboardMobyIndex != selectedMobyIndex;
             if (testSelectedAppendButton != null)
                 testSelectedAppendButton.Enabled = currentLevelSupportsSourcePatchers && moby != null && moby.IsAppendedRecord && moby.TrueIndex >= SourceRecordCountForLevel(currentLevelKey);
+            if (editContentsButton != null)
+                editContentsButton.Enabled = CanOpenChestContentEditor(selectedMobyIndex);
             UpdateAddObjectButton();
         }
 
@@ -2116,6 +3987,7 @@ namespace SpyroNativeEditor
                     addTemplateBox.Items.Add(choice);
                 SelectChoice(addTemplateBox, previousTemplate);
                 addTemplateBox.EndUpdate();
+                UpdateComboBoxDropDownWidth(addTemplateBox, 720);
 
                 addSlotBox.BeginUpdate();
                 addSlotBox.Items.Clear();
@@ -2124,6 +3996,7 @@ namespace SpyroNativeEditor
                 int preferredSlot = previousSlot != -1 ? previousSlot : AppendObjectChoiceIndex;
                 SelectChoice(addSlotBox, preferredSlot);
                 addSlotBox.EndUpdate();
+                UpdateComboBoxDropDownWidth(addSlotBox, 560);
             }
             finally
             {
@@ -2139,14 +4012,66 @@ namespace SpyroNativeEditor
             for (int i = 0; i < mobys.Count; i++)
             {
                 Moby moby = mobys[i];
+                if (ShouldSkipLocalAddTemplate(moby)) continue;
                 if (!CanUseAsAddTemplate(moby)) continue;
                 string key = CatalogCategory(moby) + "|" + moby.DisplayLabel + "|" + moby.Type.ToString("X2") + "|" + moby.State.ToString("X2") + "|" + moby.Flag4A.ToString("X2") + "|" + moby.Flag4B.ToString("X2");
                 if (seen.Contains(key)) continue;
                 seen.Add(key);
                 choices.Add(new MobyChoice(i, TrueAddSafetyPrefix(moby) + " - " + CatalogCategory(moby).Replace("/", "+") + ": " + moby.DisplayLabel + " (" + MobyId(moby) + ")"));
             }
+            int templateOffset = 0;
+            foreach (ObjectTemplate template in objectTemplates)
+            {
+                if (template == null || !template.ShowInAddList) continue;
+                if (IsTemplateFromCurrentLevel(template)) continue;
+                if (!CanOfferExternalTemplate(template)) continue;
+                string key = "external|" + template.Id;
+                if (seen.Contains(key)) continue;
+                seen.Add(key);
+                choices.Add(new MobyChoice(ExternalTemplateChoiceIndexBase - templateOffset, "Object Library - " + template.Category.Replace("/", "+") + ": " + template.DisplayName + " (" + template.SourceDescription + ")", template));
+                templateOffset++;
+            }
             choices.Sort(CompareMobyChoices);
             return choices;
+        }
+
+        private bool ShouldSkipLocalAddTemplate(Moby moby)
+        {
+            if (moby == null) return false;
+            if (string.Equals(currentLevelKey, "artisans", StringComparison.OrdinalIgnoreCase)
+                && moby.SpecialDataPointer == 0x80148370
+                && MobySearchText(moby).IndexOf("spring chest", StringComparison.Ordinal) >= 0)
+                return true;
+            return false;
+        }
+
+        private bool IsTemplateFromCurrentLevel(ObjectTemplate template)
+        {
+            if (template == null || string.IsNullOrEmpty(currentLevelKey)) return false;
+            string current = SpyroLevelCatalog.NormalizeKey(currentLevelKey);
+            return SpyroLevelCatalog.NormalizeKey(template.SourceLevelKey) == current
+                || SpyroLevelCatalog.NormalizeKey(template.SourceLevelSlug) == current
+                || SpyroLevelCatalog.NormalizeKey(template.SourceLevelName) == current;
+        }
+
+        private bool CanOfferExternalTemplate(ObjectTemplate template)
+        {
+            if (template == null) return false;
+            if (template.SourceTrueIndex < 0) return false;
+            if (IsBlockedExternalTemplate(template)) return false;
+            string family = (template.Family ?? "").Trim().ToLowerInvariant();
+            if (family == "chestcontent") return false;
+            return family == "key" || family == "lockedchest" || family == "springchest";
+        }
+
+        private static bool IsBlockedExternalTemplate(ObjectTemplate template)
+        {
+            if (template == null) return false;
+            string status = ((template.AddSupportStatus ?? "") + " " + (template.TestedStatus ?? "")).Trim().ToLowerInvariant();
+            if (string.IsNullOrEmpty(status)) return false;
+            return status.StartsWith("blocked", StringComparison.Ordinal)
+                || status.IndexOf("missing-target-actor-package", StringComparison.Ordinal) >= 0
+                || status.IndexOf("missing actor package", StringComparison.Ordinal) >= 0;
         }
 
         private List<MobyChoice> BuildAddSlotChoices()
@@ -2192,8 +4117,9 @@ namespace SpyroNativeEditor
         {
             if (moby == null || !moby.Patchable || moby.TrueIndex < 0) return false;
             if (moby.IsAppendedRecord) return false;
+            if (IsChestContentMarker(moby)) return false;
             string category = CatalogCategory(moby);
-            if (string.Equals(category, CatalogHelpers, StringComparison.Ordinal) || string.Equals(category, CatalogPortals, StringComparison.Ordinal))
+            if (string.Equals(category, CatalogHelpers, StringComparison.Ordinal) || string.Equals(category, CatalogPortals, StringComparison.Ordinal) || string.Equals(category, CatalogCameras, StringComparison.Ordinal))
                 return false;
             string text = MobySearchText(moby);
             if (text.IndexOf("invisible", StringComparison.Ordinal) >= 0 || text.IndexOf("nonvisual", StringComparison.Ordinal) >= 0 || text.IndexOf("control", StringComparison.Ordinal) >= 0)
@@ -2203,7 +4129,20 @@ namespace SpyroNativeEditor
 
         private static string TrueAddSafetyPrefix(Moby moby)
         {
+            if (IsLevelLocalRewardChestTemplate(moby)) return "Supported";
             return IsExperimentalTrueAddTemplate(moby) ? "Experimental" : "Simple";
+        }
+
+        private static bool IsLevelLocalRewardChestTemplate(Moby moby)
+        {
+            if (moby == null) return false;
+            if (moby.Type != 0x20 || moby.Flag4A != 0x10) return false;
+            if (GemValueFromGemIdByte(moby.Flag4B) <= 0 && !moby.HasRewardColorEdit) return false;
+
+            string text = MobySearchText(moby);
+            if (HasAny(text, "locked chest", "unlock chest", "spring chest", "life chest", "extra life"))
+                return false;
+            return HasAny(text, "chest", "box", "container", "charge", "flame");
         }
 
         private static bool IsExperimentalTrueAddTemplate(Moby moby)
@@ -2222,8 +4161,52 @@ namespace SpyroNativeEditor
             return false;
         }
 
+        private static bool IsExternalChestTemplate(Moby moby)
+        {
+            if (moby == null) return false;
+            string family = (moby.AppendSourceFamily ?? "").Trim();
+            if (string.Equals(family, "lockedChest", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(family, "springChest", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            string text = MobySearchText(moby);
+            return HasAny(text, "locked chest", "unlock chest", "spring chest");
+        }
+
+        private static bool IsExternalLockedChestTemplate(Moby moby)
+        {
+            if (moby == null) return false;
+            string family = (moby.AppendSourceFamily ?? "").Trim();
+            if (string.Equals(family, "lockedChest", StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(family, "springChest", StringComparison.OrdinalIgnoreCase)) return false;
+
+            string text = MobySearchText(moby);
+            return HasAny(text, "locked chest", "unlock chest") && !HasAny(text, "spring chest");
+        }
+
+        private static bool IsExternalSpringChestTemplate(Moby moby)
+        {
+            if (moby == null) return false;
+            string family = (moby.AppendSourceFamily ?? "").Trim();
+            if (string.Equals(family, "springChest", StringComparison.OrdinalIgnoreCase)) return true;
+
+            string text = MobySearchText(moby);
+            return HasAny(text, "spring chest");
+        }
+
+        private static bool IsSpringChestObjectTemplate(ObjectTemplate template)
+        {
+            if (template == null) return false;
+            string family = (template.Family ?? "").Trim();
+            if (string.Equals(family, "springChest", StringComparison.OrdinalIgnoreCase)) return true;
+            string text = ((template.DisplayName ?? "") + " " + (template.Label ?? "") + " " + (template.Kind ?? "") + " " + (template.Note ?? "")).ToLowerInvariant();
+            return text.IndexOf("spring chest", StringComparison.Ordinal) >= 0;
+        }
+
         private static string TrueAddSafetyWarning(Moby moby)
         {
+            if (IsLevelLocalRewardChestTemplate(moby))
+                return "Supported: this is a level-local reward chest/box. Create Loader BIN can export it as a true-add, and the gem buttons patch its confirmed +0x53 reward color byte.";
             if (!IsExperimentalTrueAddTemplate(moby))
                 return "This looks like a standalone gem/simple loose collectible. It is the safest true-add class we currently export by default.";
 
@@ -2232,13 +4215,65 @@ namespace SpyroNativeEditor
                 return "Warning: dragons are linked clusters. Adding one dragon record does not yet clone the pedestal, fairy/control, rescue camera, and save-state linkage, so it can crash or behave incorrectly. Normal BIN export skips this true-add for now.";
             if (text.IndexOf("whirlwind", StringComparison.Ordinal) >= 0)
                 return "Warning: whirlwinds are controller-style records. Adding one standalone record can reference missing trigger/activation data and may crash. Normal BIN export skips this true-add for now.";
-            if (HasAny(text, "enemy", "ram", "shepherd", "gnorc", "thief"))
-                return "Warning: enemies can share AI/path/reward state with the donor. Test one true-added enemy at a time before combining it with other experimental adds. Normal BIN export skips this true-add for now.";
+            if (HasAny(text, "enemy", "ram", "shepherd", "shepard", "gnorc", "norc", "torro", "bull", "thief", "theif", "sheep", "fodder"))
+                return "Warning: enemies can share AI/path/reward state with the donor. Create Loader BIN now exports named enemy/fodder true-adds and copies their source special data, but test one new enemy at a time before stacking a lot of them.";
+            if (IsExternalLockedChestTemplate(moby))
+                return "Paused: cross-level locked chest actor-package/root imports currently soft-lock Artisans even without an appended chest row. Normal exports and Test Selected Add skip this until the package import is fixed.";
+            if (IsExternalSpringChestTemplate(moby))
+                return "Supported for Artisans and Stone Hill through Test Selected Add BIN: the exporter adds the paired source records, applies the level-specific spring chest package profile, and injects the in-game pop/collect patch. Dark Hollow is deferred because its reward gem currently renders only sparkle with no visible gem mesh.";
             if (HasAny(text, "chest", "treasure", "life chest", "locked", "charge", "flame"))
-                return "Warning: chests can share collision/reward helper data with the donor. Test one true-added chest at a time before combining it with other experimental adds. Normal BIN export skips this true-add for now.";
+                return "Warning: level-local reward chests can now export through Create Loader BIN, including reward color edits. Cross-level locked/spring chest templates are still blocked because they need asset/package remap support first.";
             if (moby.Type == 0x00)
-                return "Warning: type 0x00 records are usually helpers/controllers, not standalone objects. True-adding these is experimental. Normal BIN export skips this true-add for now.";
-            return "Warning: this template is not a proven standalone gem. It may have behavior, collision, rendering, or special-data linkage. Normal BIN export skips this true-add for now.";
+                return "Warning: type 0x00 records are usually helpers/controllers, not standalone objects. True-adding these is experimental. Normal BIN export skips this true-add unless you use the isolated Test Selected Add BIN path.";
+            return "Warning: this template is not a proven standalone gem or named enemy/fodder. It may have behavior, collision, rendering, or special-data linkage. Normal BIN export skips this true-add unless you use the isolated Test Selected Add BIN path.";
+        }
+
+        private static string ObjectTemplateSafetyWarning(ObjectTemplate template)
+        {
+            if (template == null)
+                return "Warning: this Object Library template is experimental until it is tested in-game.";
+            string family = (template.Family ?? "").Trim().ToLowerInvariant();
+            string suffix = "";
+            if (template.LoaderTransformed)
+                suffix += " The saved edit will preserve loader-transformed identity bytes from the donor map.";
+            if (!string.IsNullOrEmpty(template.DependencyRisk))
+                suffix += " Risk note: " + template.DependencyRisk;
+            if (IsBlockedExternalTemplate(template))
+            {
+                string reason = !string.IsNullOrEmpty(template.TestedResult)
+                    ? template.TestedResult
+                    : "The dependency trace says the target level is missing this object's actor package.";
+                string required = !string.IsNullOrEmpty(template.RequiredExporterFeature)
+                    ? " Required editor support: " + template.RequiredExporterFeature + "."
+                    : "";
+                return "Object Library template is blocked for adding right now. " + reason + required + suffix;
+            }
+            if (family == "key")
+                return "Object Library key template. Export copies the donor key record from the user's legal ROM and forces the loader-transformed key identity bytes. Normal Create Loader BIN skips cross-level Object Library objects; use Test Selected Add BIN first." + suffix;
+            if (family == "springchest")
+                return "Object Library spring chest template. Artisans and Stone Hill exports create a controller/shell pair and Test Selected Add BIN injects the working in-game pop/collect patch automatically. Dark Hollow is deferred for now because the reward mesh is invisible there." + suffix;
+            if (family == "lockedchest")
+                return "Paused Object Library locked chest template. The actor-package/root import currently soft-locks Artisans even in package-only tests, so normal Create Loader BIN and Test Selected Add skip this until the importer is fixed. Add a Key template separately in levels that do not already have a key." + suffix;
+            return "Object Library template. Export copies the donor source record from the user's legal ROM; test one new object at a time when using it in a level that never had this object family." + suffix;
+        }
+
+        private void PlaceExternalTemplateAtUsefulDefault(Moby moby)
+        {
+            if (moby == null) return;
+            if (selectedMobyIndex >= 0 && selectedMobyIndex < mobys.Count)
+            {
+                Moby selected = mobys[selectedMobyIndex];
+                moby.X = selected.X;
+                moby.Y = selected.Y;
+                moby.Z = selected.Z;
+                return;
+            }
+            if (geometry != null && !geometry.Bounds.IsEmpty)
+            {
+                moby.X = geometry.Bounds.Left + (geometry.Bounds.Width / 2f);
+                moby.Y = geometry.Bounds.Top + (geometry.Bounds.Height / 2f);
+                moby.Z = 0;
+            }
         }
 
         private bool CanUseAsAddSlot(Moby moby)
@@ -2293,17 +4328,75 @@ namespace SpyroNativeEditor
             MobyChoice target = SelectedChoice(addSlotBox);
             addObjectButton.Enabled = source != null
                 && target != null
-                && source.Index >= 0
-                && source.Index < mobys.Count
+                && (source.IsExternalTemplate || (source.Index >= 0 && source.Index < mobys.Count))
                 && (target.Index == AppendObjectChoiceIndex || (target.Index >= 0 && target.Index < mobys.Count))
-                && source.Index != target.Index;
+                && (source.IsExternalTemplate ? target.Index == AppendObjectChoiceIndex : source.Index != target.Index);
+
+            if (changeSelectedButton != null)
+            {
+                bool canChangeSelected = source != null
+                    && !source.IsExternalTemplate
+                    && selectedMobyIndex >= 0
+                    && selectedMobyIndex < mobys.Count
+                    && source.Index >= 0
+                    && source.Index < mobys.Count
+                    && source.Index != selectedMobyIndex
+                    && CanUseAsAddTemplate(mobys[source.Index])
+                    && CanUseAsAddSlot(mobys[selectedMobyIndex]);
+                changeSelectedButton.Enabled = canChangeSelected;
+            }
+        }
+
+        private void ChangeSelectedMobyToTemplate()
+        {
+            MobyChoice sourceChoice = SelectedChoice(addTemplateBox);
+            if (selectedMobyIndex < 0 || selectedMobyIndex >= mobys.Count)
+            {
+                statusLabel.Text = "Select the moby slot to change first.";
+                return;
+            }
+            if (sourceChoice == null || sourceChoice.Index < 0 || sourceChoice.Index >= mobys.Count)
+            {
+                statusLabel.Text = "Choose an object template first.";
+                return;
+            }
+            if (sourceChoice.Index == selectedMobyIndex)
+            {
+                statusLabel.Text = "Choose a different template than the selected moby.";
+                return;
+            }
+
+            Moby source = mobys[sourceChoice.Index];
+            Moby target = mobys[selectedMobyIndex];
+            if (!CanUseAsAddTemplate(source) || !CanUseAsAddSlot(target))
+            {
+                statusLabel.Text = "The template and selected target must both be source-table mobys.";
+                return;
+            }
+
+            DialogResult result = MessageBox.Show(
+                this,
+                "Change " + MobyId(target) + " " + target.DisplayLabel + " into " + MobyId(source) + " " + source.DisplayLabel + "?\n\nThe selected moby keeps its current XYZ, but object behavior, collision, reward, and visuals come from the template record.",
+                "Change selected object type",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (result != DialogResult.Yes) return;
+
+            target.SetRecordCloneOverride(source);
+            hasUnsavedEdits = true;
+            BuildSelectionGroups();
+            RefreshMobyListRow(selectedMobyIndex);
+            RefreshObjectAddChoices();
+            UpdateInspector();
+            canvas.Invalidate();
+            statusLabel.Text = "Changed " + MobyId(target) + " into " + source.DisplayLabel + ". Save Edits, then Create Loader BIN.";
         }
 
         private void AddObjectFromTemplateAtClick()
         {
             MobyChoice sourceChoice = SelectedChoice(addTemplateBox);
             MobyChoice targetChoice = SelectedChoice(addSlotBox);
-            if (sourceChoice == null || targetChoice == null || sourceChoice.Index < 0 || sourceChoice.Index >= mobys.Count)
+            if (sourceChoice == null || targetChoice == null || (!sourceChoice.IsExternalTemplate && (sourceChoice.Index < 0 || sourceChoice.Index >= mobys.Count)))
             {
                 statusLabel.Text = "Choose an object template first.";
                 return;
@@ -2313,26 +4406,46 @@ namespace SpyroNativeEditor
                 statusLabel.Text = "Choose a new append record or a reusable source-table slot.";
                 return;
             }
-            if (targetChoice.Index != AppendObjectChoiceIndex && sourceChoice.Index == targetChoice.Index)
+            if (sourceChoice.IsExternalTemplate && targetChoice.Index != AppendObjectChoiceIndex)
+            {
+                statusLabel.Text = "Object Library templates must be added as new source records.";
+                return;
+            }
+            if (!sourceChoice.IsExternalTemplate && targetChoice.Index != AppendObjectChoiceIndex && sourceChoice.Index == targetChoice.Index)
             {
                 statusLabel.Text = "Choose a different slot than the source template.";
                 return;
             }
 
-            Moby source = mobys[sourceChoice.Index];
             if (targetChoice.Index == AppendObjectChoiceIndex)
             {
                 int appendTrueIndex = NextAppendTrueIndex();
-                bool experimentalAdd = IsExperimentalTrueAddTemplate(source);
+                Moby source = sourceChoice.IsExternalTemplate ? null : mobys[sourceChoice.Index];
+                bool experimentalAdd = sourceChoice.IsExternalTemplate || IsExperimentalTrueAddTemplate(source);
+                string sourceLabel = sourceChoice.IsExternalTemplate ? sourceChoice.Template.DisplayName : source.DisplayLabel;
+                string sourceWarning = sourceChoice.IsExternalTemplate ? ObjectTemplateSafetyWarning(sourceChoice.Template) : TrueAddSafetyWarning(source);
+                string donorText = sourceChoice.IsExternalTemplate
+                    ? sourceChoice.Template.SourceDescription
+                    : MobyId(source);
+                if (sourceChoice.IsExternalTemplate && IsSpringChestObjectTemplate(sourceChoice.Template))
+                {
+                    AddSpringChestPairFromTemplate(sourceChoice.Template, appendTrueIndex, sourceWarning, donorText);
+                    return;
+                }
+
                 DialogResult appendResult = MessageBox.Show(
                     this,
-                    "Add a new " + source.DisplayLabel + " by appending source record T" + appendTrueIndex.ToString() + " from donor " + MobyId(source) + "?\n\n" + TrueAddSafetyWarning(source) + "\n\nThis expands the level source moby table. After confirming, click the terrain map to place it, then Save Edits and Create Loader BIN.",
+                    "Add a new " + sourceLabel + " by appending source record T" + appendTrueIndex.ToString() + " from donor " + donorText + "?\n\n" + sourceWarning + "\n\nThis expands the level source moby table. After confirming, click the terrain map to place it, then Save Edits and Create Loader BIN.",
                     experimentalAdd ? "Add experimental true object" : "Add true new object",
                     MessageBoxButtons.YesNo,
                     experimentalAdd ? MessageBoxIcon.Warning : MessageBoxIcon.Question);
                 if (appendResult != DialogResult.Yes) return;
 
-                Moby appended = Moby.CreateAppendedFromSource(source, mobys.Count, appendTrueIndex);
+                Moby appended = sourceChoice.IsExternalTemplate
+                    ? Moby.CreateAppendedFromTemplate(sourceChoice.Template, mobys.Count, appendTrueIndex)
+                    : Moby.CreateAppendedFromSource(source, mobys.Count, appendTrueIndex);
+                if (sourceChoice.IsExternalTemplate)
+                    PlaceExternalTemplateAtUsefulDefault(appended);
                 mobys.Add(appended);
                 SelectMoby(mobys.Count - 1);
                 if (clickPlaceButton != null)
@@ -2343,20 +4456,21 @@ namespace SpyroNativeEditor
                 RefreshObjectAddChoices();
                 UpdateInspector();
                 canvas.Invalidate();
-                statusLabel.Text = "Added " + (experimentalAdd ? "experimental " : "new ") + source.DisplayLabel + " as " + MobyId(appended) + ". Click the terrain map to place it, then Save Edits and Create Loader BIN.";
+                statusLabel.Text = "Added " + (experimentalAdd ? "experimental " : "new ") + sourceLabel + " as " + MobyId(appended) + ". Click the terrain map to place it, then Save Edits and Create Loader BIN.";
                 return;
             }
 
+            Moby slotSource = mobys[sourceChoice.Index];
             Moby target = mobys[targetChoice.Index];
             DialogResult result = MessageBox.Show(
                 this,
-                "Add " + source.DisplayLabel + " by cloning " + MobyId(source) + " into reusable slot " + MobyId(target) + " " + target.DisplayLabel + "?\n\nThis is the older slot-reuse path. It does not expand the level's moby table.",
+                "Add " + slotSource.DisplayLabel + " by cloning " + MobyId(slotSource) + " into reusable slot " + MobyId(target) + " " + target.DisplayLabel + "?\n\nThis is the older slot-reuse path. It does not expand the level's moby table.",
                 "Add object using reusable slot",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
             if (result != DialogResult.Yes) return;
 
-            target.SetRecordCloneOverride(source);
+            target.SetRecordCloneOverride(slotSource);
             SelectMoby(targetChoice.Index);
             if (clickPlaceButton != null)
                 clickPlaceButton.Checked = true;
@@ -2366,7 +4480,197 @@ namespace SpyroNativeEditor
             RefreshObjectAddChoices();
             UpdateInspector();
             canvas.Invalidate();
-            statusLabel.Text = "Added " + source.DisplayLabel + " into " + MobyId(target) + ". Click the terrain map to place it, then Save Edits and Create Loader BIN.";
+            statusLabel.Text = "Added " + slotSource.DisplayLabel + " into " + MobyId(target) + ". Click the terrain map to place it, then Save Edits and Create Loader BIN.";
+        }
+
+        private void AddSpringChestPairFromTemplate(ObjectTemplate template, int controllerTrueIndex, string sourceWarning, string donorText)
+        {
+            if (template == null) return;
+            int shellTrueIndex = controllerTrueIndex + 1;
+            DialogResult appendResult = MessageBox.Show(
+                this,
+                "Add a new " + template.DisplayName + " as a paired spring chest?\n\nThis creates controller T" + controllerTrueIndex.ToString() + " and visible shell T" + shellTrueIndex.ToString() + " from donor " + donorText + ".\n\n" + sourceWarning + "\n\nAfter confirming, click the terrain map to place the linked pair, then Save Edits and use Test Selected Add BIN.",
+                "Add spring chest pair",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+            if (appendResult != DialogResult.Yes) return;
+
+            Moby controller = Moby.CreateSpringChestControllerFromTemplate(template, mobys.Count, controllerTrueIndex);
+            Moby shell = Moby.CreateAppendedFromTemplate(template, mobys.Count + 1, shellTrueIndex);
+            PrepareSpringChestPair(controller, shell);
+            ApplySpringChestPairExportProfile(controller, shell);
+
+            PlaceExternalTemplateAtUsefulDefault(shell);
+            AlignSpringChestControllerToShell(controller, shell);
+
+            mobys.Add(controller);
+            mobys.Add(shell);
+            SelectMoby(mobys.Count - 1);
+            if (clickPlaceButton != null)
+                clickPlaceButton.Checked = true;
+            hasUnsavedEdits = true;
+            BuildSelectionGroups();
+            RefreshMobyList();
+            RefreshObjectAddChoices();
+            UpdateInspector();
+            canvas.Invalidate();
+            statusLabel.Text = "Added spring chest pair " + MobyId(controller) + "/" + MobyId(shell) + ". Click the terrain map to place both, then Save Edits and Test Selected Add BIN.";
+        }
+
+        private void AddDarkHollowNativeSpringChestFromTemplate(ObjectTemplate template, int appendTrueIndex, string sourceWarning)
+        {
+            Moby donor = FindDarkHollowNativeSpringChestDonor();
+            if (donor == null)
+            {
+                MessageBox.Show(this, "Dark Hollow native spring chest donor T61 was not found in the loaded level cache. Reload Dark Hollow in the editor, then try adding the Spring Chest again.", "Dark Hollow spring chest", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            DialogResult appendResult = MessageBox.Show(
+                this,
+                "Add a new " + template.DisplayName + " as a native Dark Hollow spring chest?\n\nThis creates one local 0x00C2 chest record T" + appendTrueIndex.ToString() + " from Dark Hollow donor " + MobyId(donor) + ".\n\n" + sourceWarning + "\n\nAfter confirming, click the terrain map to place it, then Save Edits and use Test Selected Add BIN.",
+                "Add Dark Hollow spring chest",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+            if (appendResult != DialogResult.Yes) return;
+
+            Moby appended = Moby.CreateAppendedFromSource(donor, mobys.Count, appendTrueIndex);
+            ApplyDarkHollowNativeSpringChestProfile(appended, donor);
+            PlaceExternalTemplateAtUsefulDefault(appended);
+
+            mobys.Add(appended);
+            SelectMoby(mobys.Count - 1);
+            if (clickPlaceButton != null)
+                clickPlaceButton.Checked = true;
+            hasUnsavedEdits = true;
+            BuildSelectionGroups();
+            RefreshMobyList();
+            RefreshObjectAddChoices();
+            UpdateInspector();
+            canvas.Invalidate();
+            statusLabel.Text = "Added Dark Hollow native spring chest " + MobyId(appended) + ". Click the terrain map to place it, then Save Edits and Test Selected Add BIN.";
+        }
+
+        private bool IsDarkHollowLevel()
+        {
+            return string.Equals(SpyroLevelCatalog.NormalizeKey(currentLevelKey), "darkhollow", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private Moby FindDarkHollowNativeSpringChestDonor()
+        {
+            if (!IsDarkHollowLevel()) return null;
+            for (int i = 0; i < mobys.Count; i++)
+            {
+                Moby moby = mobys[i];
+                if (moby == null) continue;
+                if (moby.TrueIndex == 61 && IsDarkHollowNativeSpringChestRecord(moby))
+                    return moby;
+            }
+            for (int i = 0; i < mobys.Count; i++)
+            {
+                Moby moby = mobys[i];
+                if (IsDarkHollowNativeSpringChestRecord(moby))
+                    return moby;
+            }
+            return null;
+        }
+
+        private static bool IsDarkHollowNativeSpringChestRecord(Moby moby)
+        {
+            return moby != null &&
+                moby.Type == 0x20 &&
+                moby.State == 0x00 &&
+                moby.SourceByte36 == 0xC2 &&
+                moby.SourceByte37 == 0x00 &&
+                moby.SourceByte4F == 0x00 &&
+                moby.Flag4A == 0x10 &&
+                moby.SpecialDataPointer != 0;
+        }
+
+        private void ApplyDarkHollowNativeSpringChestProfile(Moby moby, Moby donor)
+        {
+            if (moby == null) return;
+            moby.Type = 0x20;
+            moby.State = 0x00;
+            moby.SourceByte36 = 0xC2;
+            moby.SourceByte37 = 0x00;
+            moby.SourceByte4F = 0x00;
+            moby.Flag4A = 0x10;
+            if (moby.Flag4B < 0x53 || moby.Flag4B > 0x57)
+                moby.Flag4B = 0x54;
+            moby.Label = "Spring Chest (new)";
+            moby.Kind = "Spring Chest";
+            moby.Confidence = "editor Dark Hollow native spring chest";
+            moby.Evidence = "new native Dark Hollow 0x00C2 spring chest cloned from donor " + (donor == null ? "T61" : MobyId(donor)) + " by Test Selected Add BIN";
+            moby.BehaviorNote = "Native Dark Hollow spring/flame-charge chest clone. Export copies a local 0x00C2 donor row and does not use the Artisans/Stone Hill helper pair.";
+            moby.SpecialDataNote = "Copies local Dark Hollow spring chest special data during export.";
+            moby.AppendSourceTrueIndex = donor == null ? 61 : donor.TrueIndex;
+            moby.AppendSourceIndex = donor == null ? -1 : donor.Index;
+            moby.AppendSourceLabel = "Dark Hollow native spring chest donor";
+            moby.AppendSourceLevelKey = "DarkHollow";
+            moby.AppendSourceLevelName = "Dark Hollow";
+            moby.AppendSourceFamily = "springChest";
+            moby.AppendPackageImportProfile = "";
+            moby.AppendRuntimeIdentityPolicy = "darkhollow-native-00c2-spring-chest";
+            moby.CaptureBaseIdentity();
+        }
+
+        private static void PrepareSpringChestPair(Moby controller, Moby shell)
+        {
+            if (controller == null || shell == null) return;
+            controller.SpringChestPairRole = "controller";
+            controller.SpringChestPartnerTrueIndex = shell.TrueIndex;
+            shell.SpringChestPairRole = "shell";
+            shell.SpringChestPartnerTrueIndex = controller.TrueIndex;
+
+            string policy = "private-town-controller-alias-with-editor-helper-pair";
+            controller.AppendPackageImportProfile = "Alias00C2Root14";
+            controller.AppendRuntimeIdentityPolicy = policy;
+            shell.AppendPackageImportProfile = "Alias00C2Root14";
+            shell.AppendRuntimeIdentityPolicy = policy;
+            shell.BehaviorNote = (string.IsNullOrEmpty(shell.BehaviorNote) ? "" : shell.BehaviorNote + " ") + "Paired with the spring chest controller; move/export both records together. The Artisans Test Selected Add BIN path injects the pop/collect patch automatically.";
+        }
+
+        private static void AlignSpringChestControllerToShell(Moby controller, Moby shell)
+        {
+            if (controller == null || shell == null) return;
+            controller.X = shell.X;
+            controller.Y = shell.Y;
+            controller.Z = shell.Z;
+            controller.OriginalX = shell.OriginalX;
+            controller.OriginalY = shell.OriginalY;
+            controller.OriginalZ = shell.OriginalZ;
+        }
+
+        private void ApplySpringChestPairExportProfile(Moby controller, Moby shell)
+        {
+            if (controller == null || shell == null) return;
+            string levelKey = SpyroLevelCatalog.NormalizeKey(currentLevelKey);
+            if (string.Equals(levelKey, "stonehill", StringComparison.OrdinalIgnoreCase))
+            {
+                string policy = "stonehill-local-00c2-controller-with-imported-0149-shell";
+                controller.Type = 0x20;
+                controller.State = 0x00;
+                controller.SourceByte36 = 0xC2;
+                controller.SourceByte37 = 0x00;
+                controller.SourceByte4F = 0x00;
+                controller.Flag4A = 0x10;
+                controller.Flag4B = 0x53;
+                controller.AppendPackageImportProfile = "Local00C2Shell0149Over000E";
+                controller.AppendRuntimeIdentityPolicy = policy;
+                controller.BehaviorNote = "Paired with the visible spring chest shell. The Stone Hill in-game patch uses the local 0x00C2 controller row for hit/pop state.";
+                shell.Type = 0x20;
+                shell.State = 0x00;
+                shell.Flag4A = 0x10;
+                shell.AppendPackageImportProfile = "Local00C2Shell0149Over000E";
+                shell.AppendRuntimeIdentityPolicy = policy;
+                shell.BehaviorNote = (string.IsNullOrEmpty(shell.BehaviorNote) ? "" : shell.BehaviorNote + " ") + "Paired with the Stone Hill local 0x00C2 spring controller; move/export both records together. The Stone Hill Test Selected Add BIN path injects the pop/collect patch automatically.";
+            }
+            else if (string.Equals(levelKey, "darkhollow", StringComparison.OrdinalIgnoreCase))
+            {
+                controller.BehaviorNote = "Dark Hollow spring chest export is deferred: the helper can create collectible sparkle, but the visible reward gem mesh is not solved yet.";
+                shell.BehaviorNote = (string.IsNullOrEmpty(shell.BehaviorNote) ? "" : shell.BehaviorNote + " ") + "Dark Hollow spring chest export is deferred until the invisible reward mesh issue is solved.";
+            }
         }
 
         private void SetSelectedGemColor(string color)
@@ -2383,6 +4687,8 @@ namespace SpyroNativeEditor
 
             if (standaloneGem)
                 moby.SetGemColorOverride(color);
+            else if (IsPotentialChestContentMarker(moby))
+                moby.SetContainedGemColorOverride(color);
             else
                 moby.SetRewardColorOverride(color);
             hasUnsavedEdits = true;
@@ -2392,7 +4698,9 @@ namespace SpyroNativeEditor
             canvas.Invalidate();
             statusLabel.Text = standaloneGem
                 ? "Set " + MobyId(moby) + " to " + moby.GemColorName + " gem (" + moby.GemValueOverride.ToString() + "). Save Edits, then Create Loader BIN."
-                : "Set " + MobyId(moby) + " reward drop to " + moby.RewardColorName + " gem (" + moby.RewardValueOverride.ToString() + "). Save Edits, then Create Loader BIN.";
+                : (IsPotentialChestContentMarker(moby)
+                    ? "Set " + MobyId(moby) + " contained gem to " + moby.RewardColorName + " (" + moby.RewardValueOverride.ToString() + "). Save Edits, then Create Loader BIN."
+                    : "Set " + MobyId(moby) + " reward drop to " + moby.RewardColorName + " gem (" + moby.RewardValueOverride.ToString() + "). Save Edits, then Create Loader BIN.");
         }
 
         private void CopySelectedMutationSource()
@@ -2509,9 +4817,15 @@ namespace SpyroNativeEditor
         private static bool CanEditRewardColor(Moby moby)
         {
             if (moby == null) return false;
+            if (IsPotentialChestContentMarker(moby))
+                return true;
+            if (IsLockedChestRewardMarker(moby))
+                return true;
             if (moby.Type != 0x20 || moby.Flag4A != 0x10)
                 return false;
             if (moby.HasRewardColorEdit)
+                return true;
+            if (IsSpringChestLike(moby))
                 return true;
 
             string text = MobySearchText(moby);
@@ -2534,8 +4848,10 @@ namespace SpyroNativeEditor
             if (moby.HasRecordCloneEdit && moby.HasPositionEdit) return "cloned object type and moved";
             if (moby.HasRecordCloneEdit) return "cloned object type into this slot";
             if (moby.HasPositionEdit && moby.HasGemColorEdit && moby.HasRewardColorEdit) return "moved, gem value edited, and reward edited";
+            if (moby.HasPositionEdit && moby.HasRewardColorEdit && IsChestContentMarker(moby)) return "moved and contained gem value edited";
             if (moby.HasPositionEdit && moby.HasRewardColorEdit) return "moved and reward edited";
             if (moby.HasPositionEdit && moby.HasGemColorEdit) return "moved and gem value edited";
+            if (moby.HasRewardColorEdit && IsChestContentMarker(moby)) return "contained gem value edited";
             if (moby.HasRewardColorEdit) return "reward edited";
             if (moby.HasGemColorEdit) return "gem value edited";
             return "moved in editor";
@@ -2569,6 +4885,8 @@ namespace SpyroNativeEditor
         {
             editorMode = mode;
             dragMobyIndex = -1;
+            if (mode == EditorMode.Terrain)
+                ApplyTerrainModeVisualPreset();
             if (mobyModeButton != null)
                 mobyModeButton.Checked = mode == EditorMode.Mobys;
             if (terrainModeButton != null)
@@ -2581,8 +4899,25 @@ namespace SpyroNativeEditor
             canvas.Invalidate();
             if (statusLabel != null)
                 statusLabel.Text = mode == EditorMode.Terrain
-                    ? "Terrain Mode: click a face to inspect vertices and height."
+                    ? "Terrain Mode: filled terrain view enabled; click a face to inspect vertices and height."
                     : "Moby Mode: click or drag objects to edit placement.";
+        }
+
+        private void ApplyTerrainModeVisualPreset()
+        {
+            showFaces = true;
+            showLines = true;
+            useGameTerrainStyle = true;
+            useSurfaceColorAssist = true;
+            completeTerrainDraw = true;
+            showHeightTint = true;
+
+            if (facesButton != null) facesButton.Checked = true;
+            if (linesButton != null) linesButton.Checked = true;
+            if (terrainStyleButton != null) terrainStyleButton.Checked = true;
+            if (surfaceColorAssistButton != null) surfaceColorAssistButton.Checked = true;
+            if (completeTerrainDrawButton != null) completeTerrainDrawButton.Checked = true;
+            if (heightTintButton != null) heightTintButton.Checked = true;
         }
 
         private string EditorModeText()
@@ -2774,16 +5109,31 @@ namespace SpyroNativeEditor
                 string linkedGroup = LinkedMoveGroupText(selectedMobyIndex);
                 if (!string.IsNullOrEmpty(linkedGroup))
                     notes.AppendLine("Linked move group: " + linkedGroup + (LinkedMoveEnabled ? " (on)" : " (off)"));
+                SelectionGroup chestContents = ChestContentSelectionGroupForMoby(selectedMobyIndex);
+                if (chestContents != null)
+                    notes.AppendLine("Chest contents editor: Objects tab > Edit Contents opens the contained gem records without moving the whole linked group.");
+                else if (IsSingleRewardChestEditorTarget(m))
+                    notes.AppendLine("Chest reward editor: Objects tab > Edit Contents changes this chest's own +0x53 spawned gem value.");
                 if (m.HasGroundOffset)
                     notes.AppendLine("Ground Z offset: " + m.GroundOffset.ToString("0.00") + " from terrain" + (GroundSnapEnabled ? " (auto)" : " (off)"));
                 if (m.HasGemColorEdit)
                     notes.AppendLine("Gem color edit: " + m.GemColorName + " gem (" + m.GemValueOverride.ToString() + "), source +0x36=0x" + m.GemSourceByte36Override.ToString("X2") + " and +0x4F=0x" + m.GemSourceByte4FOverride.ToString("X2"));
                 else if (CanEditGemColor(m))
-                    notes.AppendLine("Gem color source bytes: red 0x53/01, green 0x54/02, blue 0x55/03, yellow 0x56/04, purple 0x57/05.");
+                {
+                    string sourceGemColor = m.SourceGemColorName;
+                    if (!string.IsNullOrEmpty(sourceGemColor))
+                        notes.AppendLine("Gem color source bytes: +0x36=0x" + m.SourceByte36.ToString("X2") + ", +0x4F=0x" + m.SourceByte4F.ToString("X2") + " (" + sourceGemColor + ").");
+                    else
+                        notes.AppendLine("Gem color source bytes: red 0x53/01, green 0x54/02, blue 0x55/03, yellow 0x56/04, purple 0x57/05.");
+                }
                 if (m.HasRewardColorEdit)
                     notes.AppendLine("Reward color edit: drops " + m.RewardColorName + " gem (" + m.RewardValueOverride.ToString() + "), source +0x53=0x" + m.RewardByte53Override.ToString("X2"));
                 else if (CanEditRewardColor(m))
-                    notes.AppendLine("Reward byte: type 0x20 +0x53 controls gem drop color/value. Red 0x53, green 0x54, blue 0x55, yellow 0x56, purple 0x57.");
+                    notes.AppendLine(IsChestContentMarker(m)
+                        ? "Contained-gem byte: +0x53 appears to control this locked chest content value. Red 0x53, green 0x54, blue 0x55, yellow 0x56, purple 0x57."
+                        : (IsLockedChestRewardMarker(m)
+                            ? "Locked chest reward byte: +0x53 appears to control one spawned chest gem. Red 0x53, green 0x54, blue 0x55, yellow 0x56, purple 0x57."
+                            : "Reward byte: type 0x20 +0x53 controls gem drop color/value. Red 0x53, green 0x54, blue 0x55, yellow 0x56, purple 0x57."));
                 if (m.HasRecordCloneEdit)
                     notes.AppendLine("Object type edit: clone source record T" + m.RecordCloneSourceTrueIndex.ToString() + " " + m.RecordCloneSourceLabel + " into this slot, keeping current XYZ.");
                 if (m.HasHiddenSlotEdit)
@@ -2800,12 +5150,12 @@ namespace SpyroNativeEditor
                 if (!string.IsNullOrEmpty(functionalNote)) notes.AppendLine("Functional test: " + functionalNote);
                 notes.AppendLine();
                 notes.AppendLine("Live Apply writes only runtime XYZ into DuckStation. Use it to identify visible mobys, not to prove collision or rewards.");
-                notes.AppendLine("Create Loader BIN writes saved Stone Hill + Artisans moby edits into one disposable disc image. Fresh-load that CUE for permanent placement, collision, and rewards.");
+                notes.AppendLine("Create Loader BIN writes saved moby edits for every mapped level into one disposable disc image. Fresh-load that CUE for permanent placement, collision, and rewards.");
                 notes.AppendLine("Add New at Click appends a true new source moby record. Copy Obj/Clone-Add remains available for slot reuse experiments.");
-                notes.AppendLine("Test Selected Add BIN writes only the selected true-added object into a disposable CUE, which is the safe path for chest/enemy/scenery experiments.");
+                notes.AppendLine("Test Selected Add BIN writes only the selected true-added object into a disposable CUE, which is the safe path for cross-level Object Library and scenery experiments.");
                 if (IsStoneHillLevel())
                 {
-                    notes.AppendLine("Create Terrain BIN writes saved terrain Z edits through the exact runtime scene-sector source found in the WAD.");
+                    notes.AppendLine("Create Terrain BIN writes saved terrain Z edits, same-level texture-ID swaps, and staged custom PNG texture imports through the exact runtime scene-sector/source texture data found in the WAD.");
                     notes.AppendLine("Create Combined BIN applies both saved moby edits and saved terrain edits into one fresh-loadable CUE.");
                     notes.AppendLine("Validate Source captures current DuckStation RAM and checks whether a fresh-loaded source BIN rebuilt the moved coordinates.");
                     notes.AppendLine("Behavior Diff captures current DuckStation RAM and compares chest, gem, and fodder records plus linked special-data blocks for collision/reward/AI proof.");
@@ -2840,7 +5190,7 @@ namespace SpyroNativeEditor
                     "Click a face in the map to inspect its decoded runtime vertices and height. This mode does not move mobys.\n\n" +
                     "Use Height Tint, Contours, and Ground Cues from the toolbar to read elevation while placing mobys.\n\n" +
                     "Source Textures uses the decoded Stone Hill WAD texture-page atlas when available.\n\n" +
-                    "Current terrain source is the runtime scene-sector geometry overlay. Saved terrain height edits can be exported with Create Terrain BIN.";
+                    "Current terrain source is the runtime scene-sector geometry overlay. Saved Stone Hill terrain height edits, same-level texture-ID swaps, and staged custom PNG texture imports can be exported with Create Terrain BIN.";
                 return;
             }
 
@@ -2850,7 +5200,9 @@ namespace SpyroNativeEditor
             bool hasZ = polygon.TryGetZ(selectedTerrainPoint.X, selectedTerrainPoint.Y, out terrainZ);
             selectedTitleLabel.Text = "Terrain Face " + selectedTerrainIndex.ToString();
             identityLabel.Text = polygon.Points.Length.ToString() + " vertices  Avg Z " + polygon.AvgZ.ToString("0.0");
-            patchLabel.Text = polygon.IsTerrainEdited ? "Terrain edit ready for live/source BIN" : "Runtime geometry view";
+            patchLabel.Text = polygon.IsTerrainEdited
+                ? (polygon.HasTextureEdit ? "Terrain texture edit ready for Stone Hill BIN" : "Terrain edit ready for live/source BIN")
+                : "Runtime geometry view";
             SetCoordinateBox(xBox, selectedTerrainPoint.X);
             SetCoordinateBox(yBox, selectedTerrainPoint.Y);
             SetCoordinateBox(zBox, hasZ ? terrainZ : polygon.AvgZ);
@@ -2870,8 +5222,13 @@ namespace SpyroNativeEditor
             }
             if (polygon.HasTextureId)
             {
-                notes.AppendLine("Texture/material id: " + polygon.TextureId.ToString());
+                notes.AppendLine("Texture/material id: " + polygon.TextureId.ToString() + (polygon.HasTextureEdit ? " (was " + polygon.OriginalTextureId.ToString() + ")" : ""));
                 notes.AppendLine("Texture id face count: " + CountTerrainTextureFaces(polygon.TextureId).ToString());
+                CustomTerrainTexture custom;
+                if (TryGetCustomTerrainTexture(polygon.TextureId, out custom))
+                    notes.AppendLine("Custom texture import: " + custom.SourceImageName + " -> " + custom.DescriptorTier + " " + custom.TileSize.ToString() + "x" + custom.TileSize.ToString());
+                if (copiedTerrainTextureId >= 0)
+                    notes.AppendLine("Copied texture id: " + copiedTerrainTextureId.ToString());
                 notes.AppendLine("Face depth: " + polygon.FaceDepth.ToString() + "  Flip: " + (polygon.FaceFlip ? "yes" : "no"));
                 notes.AppendLine("Source texture tile: " + (HasSourceTextureTile(polygon.TextureId) ? "atlas " + terrainTextureTileSize.ToString() + "x" + terrainTextureTileSize.ToString() + " tile available" : "not found in loaded atlas"));
                 if (!string.IsNullOrEmpty(terrainTextureAtlasTier))
@@ -2888,7 +5245,7 @@ namespace SpyroNativeEditor
                 if (!string.IsNullOrEmpty(polygon.Word3) || !string.IsNullOrEmpty(polygon.Word4))
                     notes.AppendLine("Packed face words: " + polygon.Word3 + " / " + polygon.Word4);
             }
-            notes.AppendLine("Source texture display: " + (showSourceTextures ? "on" : "off") + (terrainTextureAtlas == null ? " (atlas not loaded)" : " (" + terrainTextureAtlasTier + ")"));
+            notes.AppendLine("Source texture display: " + (showSourceTextures ? "on" : "off") + (terrainTextureAtlas == null ? " (atlas not loaded)" : " (" + terrainTextureAtlasTier + ")") + (CountCustomTerrainTextureImports() > 0 ? ", custom imports " + CountCustomTerrainTextureImports().ToString() : ""));
             notes.AppendLine("Terrain draw coverage: " + (completeTerrainDraw ? "complete" : "sampled at distant zoom"));
             notes.AppendLine("Height assist: " + HeightAssistText());
             notes.AppendLine();
@@ -2896,7 +5253,7 @@ namespace SpyroNativeEditor
             for (int i = 0; i < polygon.Points.Length; i++)
                 notes.AppendLine("  V" + i.ToString() + ": " + polygon.Points[i].X.ToString("0.0") + ", " + polygon.Points[i].Y.ToString("0.0") + ", " + polygon.ZValues[i].ToString("0.0"));
             notes.AppendLine();
-            notes.AppendLine("Terrain editing: PageUp/PageDown nudges the selected face Z by the toolbar step. The Z box sets the selected face average height. Live Apply writes the selected face's terrain vertex Z into DuckStation RAM. Create Terrain BIN writes saved terrain Z edits into a fresh-loadable CUE/BIN; Create Combined BIN includes object edits too.");
+            notes.AppendLine("Terrain editing: PageUp/PageDown nudges the selected face Z by the toolbar step. The Z box sets the selected face average height. Right-click a face or use the Terrain tab to copy/paste texture ids, replace all matching original texture ids, and import PNG art into the chosen texture slot. Create Terrain BIN writes Stone Hill Z edits, same-level texture-ID swaps, and staged custom texture-page imports.");
             notesBox.Text = notes.ToString();
         }
 
@@ -3147,6 +5504,11 @@ namespace SpyroNativeEditor
             Moby m = mobys[selectedMobyIndex];
             if (m.IsAppendedRecord)
             {
+                if (m.SpringChestPartnerTrueIndex >= 0)
+                {
+                    RemoveAppendedSpringChestPair(selectedMobyIndex);
+                    return;
+                }
                 RemoveAppendedMoby(selectedMobyIndex, "Removed new object " + MobyId(m) + ". Save Edits to keep it removed.");
                 return;
             }
@@ -3172,17 +5534,50 @@ namespace SpyroNativeEditor
             statusLabel.Text = message;
         }
 
+        private void RemoveAppendedSpringChestPair(int mobyIndex)
+        {
+            if (mobyIndex < 0 || mobyIndex >= mobys.Count) return;
+            Moby selected = mobys[mobyIndex];
+            int partnerIndex = IndexOfTrueIndex(selected.SpringChestPartnerTrueIndex);
+            List<int> remove = new List<int>();
+            remove.Add(mobyIndex);
+            if (partnerIndex >= 0 && partnerIndex < mobys.Count && mobys[partnerIndex].IsAppendedRecord)
+                remove.Add(partnerIndex);
+            remove.Sort();
+            for (int i = remove.Count - 1; i >= 0; i--)
+                mobys.RemoveAt(remove[i]);
+            NormalizeAppendedTrueIndexes();
+            selectedMobyIndex = Math.Min(mobyIndex, mobys.Count - 1);
+            hasUnsavedEdits = true;
+            BuildSelectionGroups();
+            RefreshMobyList();
+            UpdateInspector();
+            canvas.Invalidate();
+            statusLabel.Text = "Removed spring chest pair. Save Edits to keep it removed.";
+        }
+
         private void NormalizeAppendedTrueIndexes()
         {
             int nextTrueIndex = SourceRecordCountForLevel(currentLevelKey);
+            Dictionary<int, int> trueIndexMap = new Dictionary<int, int>();
             for (int i = 0; i < mobys.Count; i++)
             {
                 Moby moby = mobys[i];
                 if (!moby.IsAppendedRecord) continue;
+                int oldTrueIndex = moby.TrueIndex;
                 moby.Index = i;
                 moby.TrueIndex = nextTrueIndex;
                 moby.PatchLead = "append source record T" + nextTrueIndex.ToString() + " from donor T" + moby.AppendSourceTrueIndex.ToString();
+                if (oldTrueIndex >= 0)
+                    trueIndexMap[oldTrueIndex] = nextTrueIndex;
                 nextTrueIndex++;
+            }
+            foreach (Moby moby in mobys)
+            {
+                if (moby == null || moby.SpringChestPartnerTrueIndex < 0) continue;
+                int remapped;
+                if (trueIndexMap.TryGetValue(moby.SpringChestPartnerTrueIndex, out remapped))
+                    moby.SpringChestPartnerTrueIndex = remapped;
             }
         }
 
@@ -3219,26 +5614,9 @@ namespace SpyroNativeEditor
                         result.Add(linkedGroup.Members[i]);
                 }
             }
-            else if (IsStoneHillLevel() && IsDragonPlatformMoby(mobys[listIndex]))
-            {
-                AddLinkedTrueIndex(result, 86);
-                AddLinkedTrueIndex(result, 140);
-                AddLinkedTrueIndex(result, 185);
-            }
 
             result.Sort();
             return result;
-        }
-
-        private void AddLinkedTrueIndex(List<int> result, int trueIndex)
-        {
-            for (int i = 0; i < mobys.Count; i++)
-            {
-                if (mobys[i].TrueIndex != trueIndex) continue;
-                if (!result.Contains(i))
-                    result.Add(i);
-                return;
-            }
         }
 
         private bool IsLinkedToSelected(int listIndex)
@@ -3249,13 +5627,122 @@ namespace SpyroNativeEditor
             return group.Contains(listIndex);
         }
 
-        private static bool IsDragonPlatformMoby(Moby moby)
+        private static bool IsDragonOrPedestalMoby(Moby moby)
+        {
+            return moby != null && IsDragonOrPedestalIdentityText(MobySearchText(moby));
+        }
+
+        private static bool IsDragonActorMoby(Moby moby)
+        {
+            return moby != null && IsDragonActorIdentityText(MobySearchText(moby));
+        }
+
+        private static bool IsDragonPedestalMoby(Moby moby)
+        {
+            return moby != null && IsDragonPedestalIdentityText(MobySearchText(moby));
+        }
+
+        private static bool IsDragonOrPedestalIdentityText(string text)
+        {
+            return IsDragonPedestalIdentityText(text) || IsDragonActorIdentityText(text);
+        }
+
+        private static bool IsDragonActorIdentityText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            if (HasAny(text, "not a dragon", "not dragon", "nonvisual", "invisible", "control", "helper", "camera", "fairy", "pedestal light", "pedestal-light"))
+                return false;
+            if (HasAny(text, "tree", "lamp", "flower", "grass", "flag") && !HasAny(text, "dragon actor", "dragon model", "visible dragon", "actual visible dragon", "actor/model"))
+                return false;
+            return text.IndexOf("dragon actor", StringComparison.Ordinal) >= 0
+                || text.IndexOf("dragon model", StringComparison.Ordinal) >= 0
+                || text.IndexOf("actual visible dragon", StringComparison.Ordinal) >= 0
+                || text.IndexOf("visible dragon actor", StringComparison.Ordinal) >= 0
+                || text.IndexOf("actor/model", StringComparison.Ordinal) >= 0
+                || string.Equals(text.Trim(), "dragon", StringComparison.Ordinal);
+        }
+
+        private static bool IsDragonPedestalIdentityText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            if (HasAny(text, "nonvisual", "invisible", "control", "helper", "camera", "fairy", "pedestal light", "pedestal-light"))
+                return false;
+            return text.IndexOf("dragon pedestal", StringComparison.Ordinal) >= 0
+                || text.IndexOf("rescue platform", StringComparison.Ordinal) >= 0
+                || text.IndexOf(" dragon platform", StringComparison.Ordinal) >= 0;
+        }
+
+        private static bool IsPortalLinkAnchor(Moby moby)
         {
             if (moby == null) return false;
-            if (moby.TrueIndex == 86 || moby.TrueIndex == 140 || moby.TrueIndex == 185)
+            string text = MobySearchText(moby);
+            if (HasAny(text, "balloonist", "transport npc"))
+                return false;
+            return IsPortalLevelNameMoby(moby) || IsReturnHomeMoby(moby) || IsPortalStructureMoby(moby);
+        }
+
+        private static bool IsPortalLinkedNeighbor(Moby anchor, Moby candidate)
+        {
+            if (anchor == null || candidate == null) return false;
+            if (IsDragonOrPedestalMoby(candidate) || IsLockedChestLike(candidate) || IsSpringChestLike(candidate) || IsChestEditableContentValue(candidate))
+                return false;
+            if (GetMobyIconKind(candidate) == MobyIconKind.Enemy || GetMobyIconKind(candidate) == MobyIconKind.Gem || GetMobyIconKind(candidate) == MobyIconKind.Key || GetMobyIconKind(candidate) == MobyIconKind.Camera)
+                return false;
+
+            bool closeStructure = IsNearMoby(anchor, candidate, 512f, 512f);
+            if (!closeStructure) return false;
+
+            if (IsPortalLevelNameMoby(candidate) || IsReturnHomeMoby(candidate) || IsPortalStructureMoby(candidate) || IsPortalTriggerMoby(candidate))
                 return true;
-            string text = ((moby.Zone ?? "") + " " + (moby.Kind ?? "") + " " + (moby.DisplayLabel ?? "")).ToLowerInvariant();
-            return text.IndexOf("dragon platform", StringComparison.Ordinal) >= 0;
+
+            return IsNearMoby(anchor, candidate, 160f, 384f) && IsGenericPortalHelperCandidate(candidate);
+        }
+
+        private static bool IsPortalLevelNameMoby(Moby moby)
+        {
+            if (moby == null) return false;
+            string text = MobySearchText(moby);
+            return HasAny(text, "level name", "level-name", "portal name", "portal lettering", "gold lettering");
+        }
+
+        private static bool IsReturnHomeMoby(Moby moby)
+        {
+            if (moby == null) return false;
+            return MobySearchText(moby).IndexOf("return home", StringComparison.Ordinal) >= 0;
+        }
+
+        private static bool IsPortalStructureMoby(Moby moby)
+        {
+            if (moby == null) return false;
+            string text = MobySearchText(moby);
+            if (HasAny(text, "portal pad", "portal arch", "portal frame", "portal entry", "portal platform", "return-home platform", "return home platform"))
+                return true;
+            return text.IndexOf("portal", StringComparison.Ordinal) >= 0 && HasAny(text, "pad", "arch", "frame", "platform", "scenery");
+        }
+
+        private static bool IsPortalTriggerMoby(Moby moby)
+        {
+            if (moby == null) return false;
+            string text = MobySearchText(moby);
+            return HasAny(text, "portal sound trigger", "sound trigger", "portal trigger", "entry trigger", "warp trigger", "level entry", "portal control");
+        }
+
+        private static bool IsGenericPortalHelperCandidate(Moby moby)
+        {
+            if (moby == null || moby.Type != 0x00) return false;
+            string text = MobySearchText(moby);
+            if (HasAny(text, "dragon", "chest", "gem", "treasure", "enemy", "fodder", "sheep", "gnorc", "key", "camera", "view point", "viewpoint"))
+                return false;
+            return string.IsNullOrEmpty(text.Trim()) || HasAny(text, "nonvisual", "invisible", "control", "helper", "object?");
+        }
+
+        private static bool IsNearMoby(Moby a, Moby b, float maxXyDistance, float maxZDistance)
+        {
+            if (a == null || b == null) return false;
+            if (Math.Abs(a.Z - b.Z) > maxZDistance) return false;
+            float dx = a.X - b.X;
+            float dy = a.Y - b.Y;
+            return (dx * dx) + (dy * dy) <= maxXyDistance * maxXyDistance;
         }
 
         private string LinkedMoveGroupText(int listIndex)
@@ -3266,6 +5753,772 @@ namespace SpyroNativeEditor
             foreach (int index in group)
                 labels.Add(MobyId(mobys[index]));
             return string.Join(", ", labels.ToArray());
+        }
+
+        private SelectionGroup ChestContentSelectionGroupForMoby(int mobyIndex)
+        {
+            if (mobyIndex < 0 || mobyIndex >= mobys.Count) return null;
+            for (int i = 0; i < selectionGroups.Count; i++)
+            {
+                SelectionGroup group = selectionGroups[i];
+                if (IsChestContentGroup(group) && group.Contains(mobyIndex))
+                    return group;
+            }
+            return null;
+        }
+
+        private static bool IsChestContentGroup(SelectionGroup group)
+        {
+            if (group == null) return false;
+            string text = ((group.Key ?? "") + " " + (group.Name ?? "")).ToLowerInvariant();
+            return text.IndexOf("chest", StringComparison.Ordinal) >= 0
+                && (text.IndexOf("content", StringComparison.Ordinal) >= 0 || text.IndexOf("reward", StringComparison.Ordinal) >= 0);
+        }
+
+        private bool CanOpenChestContentEditor(int mobyIndex)
+        {
+            int chestIndex;
+            List<int> contentIndexes;
+            return TryGetChestContentMembers(mobyIndex, out chestIndex, out contentIndexes);
+        }
+
+        private bool TryGetChestContentMembers(int mobyIndex, out int chestIndex, out List<int> contentIndexes)
+        {
+            chestIndex = -1;
+            contentIndexes = new List<int>();
+            SelectionGroup group = ChestContentSelectionGroupForMoby(mobyIndex);
+            if (group == null)
+            {
+                if (mobyIndex >= 0 && mobyIndex < mobys.Count && IsSingleRewardChestEditorTarget(mobys[mobyIndex]))
+                {
+                    chestIndex = mobyIndex;
+                    contentIndexes.Add(mobyIndex);
+                    return true;
+                }
+                return false;
+            }
+
+            for (int i = 0; i < group.Members.Count; i++)
+            {
+                int memberIndex = group.Members[i];
+                if (memberIndex < 0 || memberIndex >= mobys.Count) continue;
+                Moby member = mobys[memberIndex];
+                if (chestIndex < 0 && (IsLinkedContentsChestLike(member) || IsSingleRewardChestEditorTarget(member)))
+                    chestIndex = memberIndex;
+                if (IsChestEditableContentValue(member))
+                    contentIndexes.Add(memberIndex);
+            }
+
+            if (chestIndex < 0)
+            {
+                for (int i = 0; i < group.Members.Count; i++)
+                {
+                    int memberIndex = group.Members[i];
+                    if (memberIndex >= 0 && memberIndex < mobys.Count && !contentIndexes.Contains(memberIndex))
+                    {
+                        chestIndex = memberIndex;
+                        break;
+                    }
+                }
+            }
+
+            contentIndexes.Sort();
+            return chestIndex >= 0 && contentIndexes.Count > 0;
+        }
+
+        private static bool IsLockedChestLike(Moby moby)
+        {
+            if (moby == null) return false;
+            string text = MobySearchText(moby);
+            return HasAny(text, "locked chest", "unlock chest", "locked container");
+        }
+
+        private static bool IsBlastChestLike(Moby moby)
+        {
+            if (moby == null) return false;
+            string text = MobySearchText(moby);
+            if (HasAny(text, "super flame chest", "superflame chest", "super flame gem explosion", "cannon chest", "firework chest", "blast chest", "metal chest", "armored chest", "armoured chest"))
+                return true;
+            return moby.Type == 0x20 && moby.Flag4A == 0x10 && moby.SpecialDataPointer == 0x8016AB40;
+        }
+
+        private static bool IsLinkedContentsChestLike(Moby moby)
+        {
+            if (IsPotentialChestContentMarker(moby)) return false;
+            return IsLockedChestLike(moby) || IsBlastChestLike(moby);
+        }
+
+        private static string ChestContentGroupTitle(Moby moby)
+        {
+            if (IsBlastChestLike(moby)) return "Blast chest contents";
+            return "Locked chest contents";
+        }
+
+        private static bool IsSpringChestLike(Moby moby)
+        {
+            if (moby == null) return false;
+            string text = MobySearchText(moby);
+            if (text.IndexOf("spring chest", StringComparison.Ordinal) >= 0)
+                return true;
+            return moby.Type == 0x20 && moby.Flag4A == 0x10 && moby.SpecialDataPointer == 0x8016B9F8;
+        }
+
+        private static bool IsSingleRewardChestEditorTarget(Moby moby)
+        {
+            if (moby == null) return false;
+            if (IsLockedChestRewardMarker(moby)) return true;
+            if (moby.Type != 0x20 || moby.Flag4A != 0x10)
+                return false;
+            if (GemValueFromGemIdByte(moby.Flag4B) <= 0 && !moby.HasRewardColorEdit)
+                return false;
+            string text = MobySearchText(moby);
+            if (IsSpringChestLike(moby)) return true;
+            if (IsBlastChestLike(moby)) return true;
+            return HasAny(text, "chest", "box", "container") && !HasAny(text, "life chest", "extra life");
+        }
+
+        private static bool IsLockedChestRewardMarker(Moby moby)
+        {
+            if (moby == null) return false;
+            return IsLockedChestLike(moby) && GemValueFromGemIdByte(moby.Flag4B) > 0;
+        }
+
+        private static bool IsPotentialChestContentMarker(Moby moby)
+        {
+            if (IsChestContentMarker(moby)) return true;
+            return moby != null && moby.Type == 0x00 && moby.Flag4A == 0xFF && GemValueFromGemIdByte(moby.Flag4B) > 0;
+        }
+
+        private static bool IsChestEditableContentValue(Moby moby)
+        {
+            return IsPotentialChestContentMarker(moby) || IsLockedChestRewardMarker(moby) || IsSingleRewardChestEditorTarget(moby);
+        }
+
+        private void ShowChestContentsEditor()
+        {
+            int chestIndex;
+            List<int> contentIndexes;
+            if (!TryGetChestContentMembers(selectedMobyIndex, out chestIndex, out contentIndexes))
+            {
+                MessageBox.Show(this, "Select a locked chest, spring chest, reward-bearing chest, or one of its linked content records first.", "No editable chest reward", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using (ChestContentsEditorDialog dialog = new ChestContentsEditorDialog(this, chestIndex, contentIndexes))
+                dialog.ShowDialog(this);
+        }
+
+        private void SetChestContentGemColor(int contentIndex, string color)
+        {
+            if (contentIndex < 0 || contentIndex >= mobys.Count) return;
+            Moby moby = mobys[contentIndex];
+            if (!IsChestEditableContentValue(moby)) return;
+            if (IsPotentialChestContentMarker(moby))
+                moby.SetContainedGemColorOverride(color);
+            else
+                moby.SetRewardColorOverride(color);
+            hasUnsavedEdits = true;
+            BuildSelectionGroups();
+            RefreshMobyListRow(contentIndex);
+            RefreshObjectAddChoices();
+            UpdateInspector();
+            canvas.Invalidate();
+            statusLabel.Text = "Set " + MobyId(moby) + " chest content to " + moby.RewardColorName + " gem (" + moby.RewardValueOverride.ToString() + "). Save Edits, then Create Loader BIN.";
+        }
+
+        private void SetChestContentPosition(int contentIndex, float x, float y, float z)
+        {
+            if (contentIndex < 0 || contentIndex >= mobys.Count) return;
+            Moby moby = mobys[contentIndex];
+            if (!IsPotentialChestContentMarker(moby)) return;
+            ApplyMobyPosition(contentIndex, x, y, z, true, true);
+            int chestIndex;
+            List<int> contentIndexes;
+            if (TryGetChestContentMembers(contentIndex, out chestIndex, out contentIndexes) && chestIndex >= 0 && chestIndex < mobys.Count)
+                moby.SetChestContentLinkOverride(mobys[chestIndex]);
+            hasUnsavedEdits = true;
+            UpdateInspector();
+            canvas.Invalidate();
+            statusLabel.Text = "Moved " + MobyId(moby) + " chest content and updated its chest-link offset. Save Edits, then Create Loader BIN.";
+        }
+
+        private void StackChestContentsAtChest(int chestIndex, List<int> contentIndexes)
+        {
+            if (chestIndex < 0 || chestIndex >= mobys.Count || contentIndexes == null) return;
+            Moby chest = mobys[chestIndex];
+            int moved = 0;
+            for (int i = 0; i < contentIndexes.Count; i++)
+            {
+                int contentIndex = contentIndexes[i];
+                if (contentIndex < 0 || contentIndex >= mobys.Count || !IsPotentialChestContentMarker(mobys[contentIndex])) continue;
+                ApplyMobyPosition(contentIndex, chest.X, chest.Y, chest.Z, true, true);
+                mobys[contentIndex].SetChestContentLinkOverride(chest);
+                moved++;
+            }
+            if (moved == 0) return;
+            hasUnsavedEdits = true;
+            UpdateInspector();
+            canvas.Invalidate();
+            statusLabel.Text = "Stacked " + moved.ToString() + " chest content record(s) at " + MobyId(chest) + ". Save Edits, then Create Loader BIN.";
+        }
+
+        private int AddChestContentGem(int chestIndex, string color)
+        {
+            if (chestIndex < 0 || chestIndex >= mobys.Count) return -1;
+            int contentIndex = FindReusableChestContentSlotIndex();
+
+            Moby chest = mobys[chestIndex];
+            bool appended = false;
+            if (contentIndex < 0)
+            {
+                int templateIndex = FindChestContentTemplateIndex(chestIndex);
+                ObjectTemplate externalTemplate = null;
+                if (templateIndex < 0)
+                    externalTemplate = FindObjectTemplateByFamily("chestContent");
+                if (templateIndex < 0 && externalTemplate == null)
+                {
+                    MessageBox.Show(this,
+                        "I could not find a source chest-content marker to clone for this level yet.\n\nTry editing an existing linked chest/explosion gem first so the editor has a known contained-gem template.",
+                        "No chest-content template",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    return -1;
+                }
+
+                int appendTrueIndex = NextAppendTrueIndex();
+                Moby added = externalTemplate != null
+                    ? Moby.CreateAppendedFromTemplate(externalTemplate, mobys.Count, appendTrueIndex)
+                    : Moby.CreateAppendedFromSource(mobys[templateIndex], mobys.Count, appendTrueIndex);
+                mobys.Add(added);
+                contentIndex = mobys.Count - 1;
+                appended = true;
+            }
+
+            Moby content = mobys[contentIndex];
+            content.ClearGemColorOverride();
+            content.ClearRewardColorOverride();
+            content.ClearRecordMutationOverride();
+            content.SetContainedGemColorOverride(color);
+            ApplyMobyPosition(contentIndex, chest.X, chest.Y, chest.Z, true, true);
+            content.SetChestContentLinkOverride(chest);
+            hasUnsavedEdits = true;
+            BuildSelectionGroups();
+            if (appended)
+                RefreshMobyList();
+            else
+                RefreshMobyListRow(contentIndex);
+            RefreshObjectAddChoices();
+            UpdateInspector();
+            canvas.Invalidate();
+            statusLabel.Text = (appended ? "Added linked " : "Reused hidden source slot ")
+                + MobyId(content) + " as " + content.RewardColorName + " gem content for " + MobyId(chest) + ". Save Edits, then Create Loader BIN.";
+            return contentIndex;
+        }
+
+        private ObjectTemplate FindObjectTemplateByFamily(string family)
+        {
+            if (string.IsNullOrEmpty(family)) return null;
+            foreach (ObjectTemplate template in objectTemplates)
+            {
+                if (template == null) continue;
+                if (string.Equals(template.Family, family, StringComparison.OrdinalIgnoreCase))
+                    return template;
+            }
+            return null;
+        }
+
+        private bool RemoveChestContentGem(int contentIndex)
+        {
+            if (contentIndex < 0 || contentIndex >= mobys.Count) return false;
+            Moby moby = mobys[contentIndex];
+            if (!CanRemoveChestContentGem(moby))
+            {
+                statusLabel.Text = "Only linked hidden/appended content gems can be removed; the chest's own reward byte can be recolored but not removed safely yet.";
+                return false;
+            }
+
+            string label = MobyId(moby);
+            if (moby.IsAppendedRecord)
+            {
+                RemoveAppendedMoby(contentIndex, "Removed added chest content " + label + ". Save Edits to keep it removed.");
+                return true;
+            }
+
+            moby.SetHiddenSlotOverride();
+            hasUnsavedEdits = true;
+            BuildSelectionGroups();
+            RefreshMobyListRow(contentIndex);
+            RefreshObjectAddChoices();
+            UpdateInspector();
+            canvas.Invalidate();
+            statusLabel.Text = "Removed chest content " + label + " by hiding its source slot. Save Edits, then Create Loader BIN.";
+            return true;
+        }
+
+        private int FindReusableChestContentSlotIndex()
+        {
+            int sourceRecordCount = SourceRecordCountForLevel(currentLevelKey);
+            if (sourceRecordCount <= 0) return -1;
+
+            for (int i = 0; i < mobys.Count; i++)
+            {
+                if (IsReusableChestContentSlot(i, sourceRecordCount))
+                    return i;
+            }
+            return -1;
+        }
+
+        private bool IsReusableChestContentSlot(int mobyIndex, int sourceRecordCount)
+        {
+            if (mobyIndex < 0 || mobyIndex >= mobys.Count) return false;
+            Moby moby = mobys[mobyIndex];
+            if (moby == null || moby.IsAppendedRecord) return false;
+            if (moby.TrueIndex < 0 || moby.TrueIndex >= sourceRecordCount) return false;
+            if (!moby.HasHiddenSlotEdit) return false;
+            return IsPotentialChestContentMarker(moby);
+        }
+
+        private int FindChestContentTemplateIndex(int chestIndex)
+        {
+            int sourceRecordCount = SourceRecordCountForLevel(currentLevelKey);
+            if (sourceRecordCount <= 0) return -1;
+
+            SelectionGroup group = ChestContentSelectionGroupForMoby(chestIndex);
+            if (group != null)
+            {
+                for (int i = 0; i < group.Members.Count; i++)
+                {
+                    int memberIndex = group.Members[i];
+                    if (IsChestContentTemplateCandidate(memberIndex, sourceRecordCount, false))
+                        return memberIndex;
+                }
+                for (int i = 0; i < group.Members.Count; i++)
+                {
+                    int memberIndex = group.Members[i];
+                    if (IsChestContentTemplateCandidate(memberIndex, sourceRecordCount, true))
+                        return memberIndex;
+                }
+            }
+
+            int nearest = FindNearestMobyIndex(chestIndex,
+                delegate(Moby moby, int mobyIndex) { return IsChestContentTemplateCandidate(mobyIndex, sourceRecordCount, false); },
+                320f,
+                192f);
+            if (nearest >= 0) return nearest;
+
+            nearest = FindNearestMobyIndex(chestIndex,
+                delegate(Moby moby, int mobyIndex) { return IsChestContentTemplateCandidate(mobyIndex, sourceRecordCount, true); },
+                320f,
+                192f);
+            if (nearest >= 0) return nearest;
+
+            for (int i = 0; i < mobys.Count; i++)
+            {
+                if (IsChestContentTemplateCandidate(i, sourceRecordCount, false))
+                    return i;
+            }
+            for (int i = 0; i < mobys.Count; i++)
+            {
+                if (IsChestContentTemplateCandidate(i, sourceRecordCount, true))
+                    return i;
+            }
+            return -1;
+        }
+
+        private bool IsChestContentTemplateCandidate(int mobyIndex, int sourceRecordCount, bool allowHidden)
+        {
+            if (mobyIndex < 0 || mobyIndex >= mobys.Count) return false;
+            Moby moby = mobys[mobyIndex];
+            if (moby == null || moby.IsAppendedRecord) return false;
+            if (moby.TrueIndex < 0 || moby.TrueIndex >= sourceRecordCount) return false;
+            if (!allowHidden && moby.HasHiddenSlotEdit) return false;
+            return IsPotentialChestContentMarker(moby);
+        }
+
+        private static bool CanRemoveChestContentGem(Moby moby)
+        {
+            return moby != null && (moby.IsAppendedRecord || IsPotentialChestContentMarker(moby));
+        }
+
+        private static string ChestContentValueText(Moby moby)
+        {
+            if (moby == null) return "";
+            int value = moby.HasRewardColorEdit ? moby.RewardValueOverride : GemValueFromGemIdByte(moby.Flag4B);
+            string color = moby.HasRewardColorEdit ? moby.RewardColorName : GemColorNameFromGemIdByte(moby.Flag4B);
+            if (string.IsNullOrEmpty(color) || value <= 0)
+                return "unknown";
+            return color + " (" + value.ToString() + ")";
+        }
+
+        private static string GemColorNameFromGemIdByte(int value)
+        {
+            switch (value)
+            {
+                case 0x54: return "green";
+                case 0x55: return "blue";
+                case 0x56: return "yellow";
+                case 0x57: return "purple";
+                case 0x53: return "red";
+                default: return "";
+            }
+        }
+
+        private string ChestRewardEditorTitle(int chestIndex)
+        {
+            if (chestIndex >= 0 && chestIndex < mobys.Count)
+            {
+                Moby chest = mobys[chestIndex];
+                if (IsSpringChestLike(chest)) return "Spring Chest Gem";
+                if (IsLockedChestLike(chest)) return "Locked Chest Contents";
+                if (IsBlastChestLike(chest)) return "Blast Chest Contents";
+            }
+            return "Chest Gem Editor";
+        }
+
+        private string ChestRewardEditorHeader(int chestIndex, int contentCount)
+        {
+            if (chestIndex < 0 || chestIndex >= mobys.Count) return "Chest reward records";
+            Moby chest = mobys[chestIndex];
+            string prefix = contentCount == 1 && IsSingleRewardChestEditorTarget(chest) ? "Reward on " : "Linked to ";
+            return prefix + MobyId(chest) + " " + chest.DisplayLabel;
+        }
+
+        private sealed class ChestContentsEditorDialog : Form
+        {
+            private readonly EditorForm editor;
+            private readonly int chestIndex;
+            private readonly List<int> contentIndexes;
+            private readonly ListView contentList;
+            private readonly NumericUpDown xBox;
+            private readonly NumericUpDown yBox;
+            private readonly NumericUpDown zBox;
+            private readonly Button redButton;
+            private readonly Button greenButton;
+            private readonly Button blueButton;
+            private readonly Button yellowButton;
+            private readonly Button purpleButton;
+            private readonly Button addRedButton;
+            private readonly Button addGreenButton;
+            private readonly Button addBlueButton;
+            private readonly Button addYellowButton;
+            private readonly Button addPurpleButton;
+            private readonly Button removeButton;
+            private readonly Button applyPositionButton;
+            private readonly Button selectButton;
+            private bool updating;
+
+            public ChestContentsEditorDialog(EditorForm editor, int chestIndex, List<int> contentIndexes)
+            {
+                this.editor = editor;
+                this.chestIndex = chestIndex;
+                this.contentIndexes = new List<int>(contentIndexes ?? new List<int>());
+
+                Text = editor.ChestRewardEditorTitle(chestIndex);
+                StartPosition = FormStartPosition.CenterParent;
+                MinimizeBox = false;
+                ShowInTaskbar = false;
+                ClientSize = new Size(680, 468);
+
+                TableLayoutPanel root = new TableLayoutPanel();
+                root.Dock = DockStyle.Fill;
+                root.Padding = new Padding(10);
+                root.ColumnCount = 1;
+                root.RowCount = 6;
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28f));
+                root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76f));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42f));
+                Controls.Add(root);
+
+                Label header = new Label();
+                header.Dock = DockStyle.Fill;
+                header.TextAlign = ContentAlignment.MiddleLeft;
+                header.Text = editor.ChestRewardEditorHeader(chestIndex, this.contentIndexes.Count);
+                root.Controls.Add(header, 0, 0);
+
+                contentList = new ListView();
+                contentList.Dock = DockStyle.Fill;
+                contentList.View = View.Details;
+                contentList.FullRowSelect = true;
+                contentList.HideSelection = false;
+                contentList.Columns.Add("Record", 78);
+                contentList.Columns.Add("Value", 92);
+                contentList.Columns.Add("Label", 200);
+                contentList.Columns.Add("XYZ", 220);
+                contentList.SelectedIndexChanged += delegate { UpdateSelectedFields(); };
+                root.Controls.Add(contentList, 0, 1);
+
+                FlowLayoutPanel colorTools = new FlowLayoutPanel();
+                colorTools.Dock = DockStyle.Fill;
+                colorTools.FlowDirection = FlowDirection.LeftToRight;
+                redButton = NewDialogButton("Red 1");
+                greenButton = NewDialogButton("Green 2");
+                blueButton = NewDialogButton("Blue 5");
+                yellowButton = NewDialogButton("Yellow 10");
+                purpleButton = NewDialogButton("Purple 25");
+                redButton.Click += delegate { SetSelectedColor("red"); };
+                greenButton.Click += delegate { SetSelectedColor("green"); };
+                blueButton.Click += delegate { SetSelectedColor("blue"); };
+                yellowButton.Click += delegate { SetSelectedColor("yellow"); };
+                purpleButton.Click += delegate { SetSelectedColor("purple"); };
+                colorTools.Controls.Add(redButton);
+                colorTools.Controls.Add(greenButton);
+                colorTools.Controls.Add(blueButton);
+                colorTools.Controls.Add(yellowButton);
+                colorTools.Controls.Add(purpleButton);
+                root.Controls.Add(colorTools, 0, 2);
+
+                FlowLayoutPanel addRemoveTools = new FlowLayoutPanel();
+                addRemoveTools.Dock = DockStyle.Fill;
+                addRemoveTools.FlowDirection = FlowDirection.LeftToRight;
+                addRedButton = NewDialogButton("Add Red");
+                addGreenButton = NewDialogButton("Add Green");
+                addBlueButton = NewDialogButton("Add Blue");
+                addYellowButton = NewDialogButton("Add Yellow");
+                addPurpleButton = NewDialogButton("Add Purple");
+                removeButton = NewDialogButton("Remove Gem");
+                addRedButton.Click += delegate { AddContentGem("red"); };
+                addGreenButton.Click += delegate { AddContentGem("green"); };
+                addBlueButton.Click += delegate { AddContentGem("blue"); };
+                addYellowButton.Click += delegate { AddContentGem("yellow"); };
+                addPurpleButton.Click += delegate { AddContentGem("purple"); };
+                removeButton.Click += delegate { RemoveSelectedContentGem(); };
+                addRemoveTools.Controls.Add(addRedButton);
+                addRemoveTools.Controls.Add(addGreenButton);
+                addRemoveTools.Controls.Add(addBlueButton);
+                addRemoveTools.Controls.Add(addYellowButton);
+                addRemoveTools.Controls.Add(addPurpleButton);
+                addRemoveTools.Controls.Add(removeButton);
+                root.Controls.Add(addRemoveTools, 0, 3);
+
+                TableLayoutPanel positionTools = new TableLayoutPanel();
+                positionTools.Dock = DockStyle.Fill;
+                positionTools.ColumnCount = 6;
+                positionTools.RowCount = 2;
+                positionTools.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 26f));
+                positionTools.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33f));
+                positionTools.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 26f));
+                positionTools.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33f));
+                positionTools.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 26f));
+                positionTools.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34f));
+                positionTools.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
+                positionTools.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
+                xBox = NewCoordinateEditor();
+                yBox = NewCoordinateEditor();
+                zBox = NewCoordinateEditor();
+                AddPositionCell(positionTools, "X", xBox, 0, 0);
+                AddPositionCell(positionTools, "Y", yBox, 2, 0);
+                AddPositionCell(positionTools, "Z", zBox, 4, 0);
+                applyPositionButton = NewDialogButton("Apply Position");
+                applyPositionButton.Click += delegate { ApplySelectedPosition(); };
+                selectButton = NewDialogButton("Select On Map");
+                selectButton.Click += delegate { SelectCurrentOnMap(); };
+                Button stackButton = NewDialogButton("Stack at Chest");
+                stackButton.Click += delegate { editor.StackChestContentsAtChest(this.chestIndex, this.contentIndexes); RefreshRows(); };
+                positionTools.Controls.Add(applyPositionButton, 1, 1);
+                positionTools.Controls.Add(selectButton, 3, 1);
+                positionTools.Controls.Add(stackButton, 5, 1);
+                root.Controls.Add(positionTools, 0, 4);
+
+                FlowLayoutPanel bottom = new FlowLayoutPanel();
+                bottom.Dock = DockStyle.Fill;
+                bottom.FlowDirection = FlowDirection.RightToLeft;
+                Button closeButton = NewDialogButton("Close");
+                closeButton.DialogResult = DialogResult.OK;
+                bottom.Controls.Add(closeButton);
+                root.Controls.Add(bottom, 0, 5);
+
+                AcceptButton = closeButton;
+                RefreshRows();
+                if (contentList.Items.Count > 0)
+                    contentList.Items[0].Selected = true;
+                UpdateSelectedFields();
+            }
+
+            private static Button NewDialogButton(string text)
+            {
+                Button button = new Button();
+                button.Text = text;
+                button.Width = 104;
+                button.Height = 26;
+                button.Margin = new Padding(3);
+                return button;
+            }
+
+            private static NumericUpDown NewCoordinateEditor()
+            {
+                NumericUpDown box = new NumericUpDown();
+                box.DecimalPlaces = 2;
+                box.Minimum = -100000;
+                box.Maximum = 100000;
+                box.Increment = 16;
+                box.Dock = DockStyle.Fill;
+                return box;
+            }
+
+            private static void AddPositionCell(TableLayoutPanel panel, string label, Control editor, int labelColumn, int row)
+            {
+                Label text = new Label();
+                text.Text = label;
+                text.TextAlign = ContentAlignment.MiddleLeft;
+                text.Dock = DockStyle.Fill;
+                panel.Controls.Add(text, labelColumn, row);
+                panel.Controls.Add(editor, labelColumn + 1, row);
+            }
+
+            private int SelectedContentIndex()
+            {
+                if (contentList.SelectedItems.Count == 0) return -1;
+                object tag = contentList.SelectedItems[0].Tag;
+                return tag is int ? (int)tag : -1;
+            }
+
+            private void RefreshRows()
+            {
+                int selectedTrueIndex = -1;
+                int selectedIndex = SelectedContentIndex();
+                if (selectedIndex >= 0 && selectedIndex < editor.mobys.Count)
+                    selectedTrueIndex = editor.mobys[selectedIndex].TrueIndex;
+
+                updating = true;
+                try
+                {
+                    contentList.BeginUpdate();
+                    contentList.Items.Clear();
+                    for (int i = 0; i < contentIndexes.Count; i++)
+                    {
+                        int contentIndex = contentIndexes[i];
+                        if (contentIndex < 0 || contentIndex >= editor.mobys.Count) continue;
+                        Moby moby = editor.mobys[contentIndex];
+                        ListViewItem item = new ListViewItem(MobyId(moby));
+                        item.SubItems.Add(ChestContentValueText(moby));
+                        item.SubItems.Add(moby.DisplayLabel);
+                        item.SubItems.Add(FormatVector(moby.X, moby.Y, moby.Z));
+                        item.Tag = contentIndex;
+                        contentList.Items.Add(item);
+                        if (moby.TrueIndex == selectedTrueIndex)
+                            item.Selected = true;
+                    }
+                    if (contentList.SelectedItems.Count == 0 && contentList.Items.Count > 0)
+                        contentList.Items[0].Selected = true;
+                }
+                finally
+                {
+                    contentList.EndUpdate();
+                    updating = false;
+                }
+            }
+
+            private void UpdateSelectedFields()
+            {
+                if (updating) return;
+                int contentIndex = SelectedContentIndex();
+                bool enabled = contentIndex >= 0 && contentIndex < editor.mobys.Count;
+                redButton.Enabled = enabled;
+                greenButton.Enabled = enabled;
+                blueButton.Enabled = enabled;
+                yellowButton.Enabled = enabled;
+                purpleButton.Enabled = enabled;
+                applyPositionButton.Enabled = enabled;
+                selectButton.Enabled = enabled;
+                addRedButton.Enabled = chestIndex >= 0 && chestIndex < editor.mobys.Count;
+                addGreenButton.Enabled = addRedButton.Enabled;
+                addBlueButton.Enabled = addRedButton.Enabled;
+                addYellowButton.Enabled = addRedButton.Enabled;
+                addPurpleButton.Enabled = addRedButton.Enabled;
+                removeButton.Enabled = enabled && CanRemoveChestContentGem(editor.mobys[contentIndex]);
+                xBox.Enabled = enabled;
+                yBox.Enabled = enabled;
+                zBox.Enabled = enabled;
+                if (!enabled) return;
+
+                Moby moby = editor.mobys[contentIndex];
+                bool canMoveContent = IsPotentialChestContentMarker(moby);
+                removeButton.Enabled = CanRemoveChestContentGem(moby);
+                applyPositionButton.Enabled = canMoveContent;
+                xBox.Enabled = canMoveContent;
+                yBox.Enabled = canMoveContent;
+                zBox.Enabled = canMoveContent;
+                xBox.Value = ClampDecimal(moby.X, xBox.Minimum, xBox.Maximum);
+                yBox.Value = ClampDecimal(moby.Y, yBox.Minimum, yBox.Maximum);
+                zBox.Value = ClampDecimal(moby.Z, zBox.Minimum, zBox.Maximum);
+            }
+
+            private static decimal ClampDecimal(float value, decimal min, decimal max)
+            {
+                decimal result = (decimal)value;
+                if (result < min) return min;
+                if (result > max) return max;
+                return result;
+            }
+
+            private void SetSelectedColor(string color)
+            {
+                int contentIndex = SelectedContentIndex();
+                if (contentIndex < 0) return;
+                editor.SetChestContentGemColor(contentIndex, color);
+                RefreshRows();
+                SelectContentIndex(contentIndex);
+                UpdateSelectedFields();
+            }
+
+            private void AddContentGem(string color)
+            {
+                int addedIndex = editor.AddChestContentGem(chestIndex, color);
+                if (addedIndex < 0) return;
+                if (!contentIndexes.Contains(addedIndex))
+                    contentIndexes.Add(addedIndex);
+                contentIndexes.Sort();
+                RefreshRows();
+                SelectContentIndex(addedIndex);
+                UpdateSelectedFields();
+            }
+
+            private void RemoveSelectedContentGem()
+            {
+                int contentIndex = SelectedContentIndex();
+                if (contentIndex < 0) return;
+                bool removedAppendedRecord = contentIndex < editor.mobys.Count && editor.mobys[contentIndex].IsAppendedRecord;
+                bool removed = editor.RemoveChestContentGem(contentIndex);
+                if (!removed) return;
+                contentIndexes.Remove(contentIndex);
+                if (removedAppendedRecord)
+                {
+                    for (int i = 0; i < contentIndexes.Count; i++)
+                    {
+                        if (contentIndexes[i] > contentIndex)
+                            contentIndexes[i] = contentIndexes[i] - 1;
+                    }
+                }
+                RefreshRows();
+                UpdateSelectedFields();
+            }
+
+            private void ApplySelectedPosition()
+            {
+                int contentIndex = SelectedContentIndex();
+                if (contentIndex < 0) return;
+                editor.SetChestContentPosition(contentIndex, (float)xBox.Value, (float)yBox.Value, (float)zBox.Value);
+                RefreshRows();
+                SelectContentIndex(contentIndex);
+                UpdateSelectedFields();
+            }
+
+            private void SelectCurrentOnMap()
+            {
+                int contentIndex = SelectedContentIndex();
+                if (contentIndex < 0) return;
+                editor.SelectMoby(contentIndex);
+                editor.statusLabel.Text = "Selected " + MobyId(editor.mobys[contentIndex]) + " from the chest contents editor.";
+            }
+
+            private void SelectContentIndex(int contentIndex)
+            {
+                foreach (ListViewItem item in contentList.Items)
+                    item.Selected = item.Tag is int && (int)item.Tag == contentIndex;
+            }
         }
 
         private void InitializeGroundOffsets()
@@ -3340,6 +6593,13 @@ namespace SpyroNativeEditor
 
         private void SaveEdits()
         {
+            if (!HasLoadedLevel())
+            {
+                MessageBox.Show(this, "Choose a level from the dropdown before saving edits.", "No level loaded", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                statusLabel.Text = "Choose a level before saving edits.";
+                return;
+            }
+
             try
             {
                 NormalizeAppendedTrueIndexes();
@@ -3349,7 +6609,7 @@ namespace SpyroNativeEditor
                 hasUnsavedEdits = false;
                 RefreshMobyList();
                 UpdateInspector();
-                statusLabel.Text = "Saved " + savedEditCount.ToString() + " moby edit(s), " + savedTerrainEditCount.ToString() + " terrain edit(s), and " + CountActivePlayerColorOptions().ToString() + " color option(s).";
+                statusLabel.Text = "Saved " + savedEditCount.ToString() + " moby edit(s), " + savedTerrainEditCount.ToString() + " terrain edit(s), and " + CountActivePlayerColorOptions().ToString() + " color option(s). " + TreasureSummaryText(CalculateTreasureSummary()) + ".";
             }
             catch (Exception ex)
             {
@@ -3388,6 +6648,11 @@ namespace SpyroNativeEditor
                     spyroColorSwatch.BackColor = spyroRecolorEnabled ? PlayerPresetColor(spyroColorPreset) : Color.FromArgb(198, 201, 207);
                 if (crystalDragonColorSwatch != null)
                     crystalDragonColorSwatch.BackColor = crystalDragonRecolorEnabled ? CrystalDragonPresetColor(crystalDragonColorPreset) : Color.FromArgb(198, 201, 207);
+                if (createPlayerColorPatchButton != null)
+                {
+                    createPlayerColorPatchButton.Enabled = false;
+                    createPlayerColorPatchButton.Text = "Color BIN (not solved)";
+                }
                 if (playerColorStatusLabel != null)
                     playerColorStatusLabel.Text = PlayerColorSummary();
             }
@@ -3655,7 +6920,7 @@ namespace SpyroNativeEditor
             {
                 if (!HasAnySavedMobyEdits())
                 {
-                    MessageBox.Show(this, "Make and save at least one Stone Hill or Artisans moby edit before creating a loader BIN.", "No moby edits", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(this, "Make and save at least one mapped-level moby edit before creating a loader BIN.", "No moby edits", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
             }
@@ -3684,6 +6949,7 @@ namespace SpyroNativeEditor
                 StringBuilder args = new StringBuilder();
                 args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
                 args.Append(QuoteArgument(scriptPath));
+                AppendSourceImageArgument(args);
                 string outName = topRankedOnly
                     ? "Spyro the Dragon (USA)-loaderpatchtest.bin"
                     : "Spyro the Dragon (USA)-nativepatchtest-broad.bin";
@@ -3691,6 +6957,7 @@ namespace SpyroNativeEditor
                 if (topRankedOnly)
                 {
                     args.Append(" -LevelKey All");
+                    args.Append(" -AppendPolicy GemsAndEnemies");
                 }
                 args.Append(" -OutPath ").Append(QuoteArgument(outPath));
                 args.Append(" -PlanPath ").Append(QuoteArgument(outPath + ".patchplan.json"));
@@ -3704,6 +6971,60 @@ namespace SpyroNativeEditor
             {
                 MessageBox.Show(this, ex.Message, "Could not start patch exporter", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void RunPlayerColorPatchExporter()
+        {
+            SavePlayerColorOptions(false);
+            MessageBox.Show(this, "Spyro/crystal color export is disabled for now. The WAD 83/WAD 85 actor-package tests and Artisans source-window tests did not affect the visible colors, and live RAM probes proved unsafe. The saved choices remain in spyro-player-edits.json for when the real color source is mapped.", "Color source not solved", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+#if false
+            if (CountActivePlayerColorOptions() == 0)
+            {
+                MessageBox.Show(this, "Choose at least one Spyro or crystal-dragon color option first.", "No color patch selected", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string scriptPath = Path.Combine(workspace, "tools", "Export-SpyroPlayerColorPatchTest.ps1");
+            if (!File.Exists(scriptPath))
+            {
+                MessageBox.Show(this, "Missing player color exporter script: " + scriptPath, "Color exporter missing", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            try
+            {
+                DialogResult result = MessageBox.Show(
+                    this,
+                    "The Spyro/crystal color source is not confirmed yet. The generated BIN is a disposable research test and may not visibly change the game.\n\nCreate it anyway?",
+                    "Research color patch",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+                if (result != DialogResult.Yes) return;
+
+                List<string> targets = new List<string>();
+                if (spyroRecolorEnabled) targets.Add("Spyro");
+                if (crystalDragonRecolorEnabled) targets.Add("CrystalDragon");
+
+                string outPath = Path.Combine(workspace, "Spyro the Dragon (USA)-colorpatchtest-actor85.bin");
+                StringBuilder args = new StringBuilder();
+                args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
+                args.Append(QuoteArgument(scriptPath));
+                args.Append(" -PlayerEditsPath ").Append(QuoteArgument(playerEditPath));
+                args.Append(" -Targets ").Append(QuoteArgument(string.Join(",", targets.ToArray())));
+                args.Append(" -ActorHueFallback -SkipRawSourceWindows -ActorEntryIndexes 85");
+                args.Append(" -OutPath ").Append(QuoteArgument(outPath));
+                args.Append(" -CuePath ").Append(QuoteArgument(Path.ChangeExtension(outPath, ".cue")));
+                args.Append(" -PlanPath ").Append(QuoteArgument(outPath + ".patchplan.json"));
+
+                StartWorkspaceProcess("powershell.exe", args.ToString());
+                statusLabel.Text = "Started research-only player/crystal color BIN export.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not start color patch exporter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+#endif
         }
 
         private void RunSingleAppendExporter()
@@ -3725,13 +7046,25 @@ namespace SpyroNativeEditor
                 MessageBox.Show(this, "Select a true-added object first. This test exporter only writes one appended source record and ignores other edits.", "Not a true-added object", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
+            bool externalChest = IsExternalChestTemplate(moby);
+            bool externalLockedChest = IsExternalLockedChestTemplate(moby);
+            if (externalLockedChest)
+            {
+                MessageBox.Show(this, "Locked chest true-adds are paused for the normal editor path. The current actor-package/root import soft-locks Artisans even when no chest row is appended, so I am keeping this out of the button path while we isolate package bytes vs root table vs actor-id table.", "Locked chest test paused", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (IsExternalSpringChestTemplate(moby))
+            {
+                RunSpringChestPairExporter(moby);
+                return;
+            }
 
             DialogResult result = MessageBox.Show(
                 this,
                 "Create an isolated test BIN for only " + MobyId(moby) + " " + moby.DisplayLabel + "?\n\nThis ignores normal moves and every other added object. Use it to test one experimental true-add safely.",
                 "Test one true-added object",
                 MessageBoxButtons.YesNo,
-                IsExperimentalTrueAddTemplate(moby) ? MessageBoxIcon.Warning : MessageBoxIcon.Question);
+                IsExperimentalTrueAddTemplate(moby) || externalChest ? MessageBoxIcon.Warning : MessageBoxIcon.Question);
             if (result != DialogResult.Yes) return;
 
             SaveEdits();
@@ -3751,6 +7084,7 @@ namespace SpyroNativeEditor
                 args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
                 args.Append(QuoteArgument(scriptPath));
                 args.Append(" -LevelKey ").Append(QuoteArgument(ScriptLevelKey(currentLevelKey)));
+                AppendSourceImageArgument(args);
                 args.Append(" -SingleAppendTrueIndex ").Append(moby.TrueIndex.ToString());
                 args.Append(" -AppendPolicy All");
                 args.Append(" -OutPath ").Append(QuoteArgument(outPath));
@@ -3764,6 +7098,470 @@ namespace SpyroNativeEditor
             {
                 MessageBox.Show(this, ex.Message, "Could not start single-add exporter", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private bool IsDarkHollowNativeSpringChestAppend(Moby moby)
+        {
+            if (!IsDarkHollowLevel() || moby == null) return false;
+            if (!moby.IsAppendedRecord) return false;
+            return string.Equals(moby.AppendSourceLevelKey, "DarkHollow", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(moby.AppendRuntimeIdentityPolicy, "darkhollow-native-00c2-spring-chest", StringComparison.OrdinalIgnoreCase) &&
+                IsDarkHollowNativeSpringChestRecord(moby);
+        }
+
+        private void RunDarkHollowNativeSpringChestExporter(Moby moby)
+        {
+            DialogResult result = MessageBox.Show(
+                this,
+                "Create an isolated Dark Hollow native spring chest BIN for " + MobyId(moby) + "?\n\nThis exports one local 0x00C2 spring chest clone and does not inject the Artisans/Stone Hill helper wrapper.",
+                "Test Dark Hollow spring chest",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+            if (result != DialogResult.Yes) return;
+
+            SaveEdits();
+
+            string scriptPath = Path.Combine(workspace, "tools", "Export-SpyroLevelMobyPatchTest.ps1");
+            if (!File.Exists(scriptPath))
+            {
+                MessageBox.Show(this, "Missing patch exporter script: " + scriptPath, "Patch exporter missing", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            try
+            {
+                string experimentsDir = Path.Combine(workspace, "_local", "experiments");
+                Directory.CreateDirectory(experimentsDir);
+                ApplyDarkHollowNativeSpringChestProfile(moby, null);
+
+                string stem = "editor-darkhollow-native-spring-T" + moby.TrueIndex.ToString();
+                string editsPath = Path.Combine(experimentsDir, stem + "-edits.json");
+                string outPath = Path.Combine(experimentsDir, stem + ".bin");
+                int editCount = MobyEditStore.Save(editsPath, new List<Moby>(new Moby[] { moby }), currentLevelName);
+                if (editCount != 1)
+                {
+                    MessageBox.Show(this, "Dark Hollow spring chest export expected one saved record, but wrote " + editCount.ToString() + ". I stopped before creating a broken BIN.", "Dark Hollow spring chest", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                StringBuilder args = new StringBuilder();
+                args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
+                args.Append(QuoteArgument(scriptPath));
+                args.Append(" -LevelKey DarkHollow");
+                args.Append(" -NativeEditsPath ").Append(QuoteArgument(editsPath));
+                AppendSourceImageArgument(args);
+                args.Append(" -AppendPolicy All -SkipTreasureTotalPatch");
+                args.Append(" -OutPath ").Append(QuoteArgument(outPath));
+                args.Append(" -CuePath ").Append(QuoteArgument(Path.ChangeExtension(outPath, ".cue")));
+                args.Append(" -PlanPath ").Append(QuoteArgument(outPath + ".patchplan.json"));
+
+                StartWorkspaceProcess("powershell.exe", args.ToString());
+                statusLabel.Text = "Started Dark Hollow native spring chest BIN export for " + MobyId(moby) + ". Load the CUE, then flame or charge the chest.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not start Dark Hollow spring chest exporter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void RunSpringChestPairExporter(Moby selected)
+        {
+            string normalizedLevelKey = SpyroLevelCatalog.NormalizeKey(currentLevelKey);
+            if (!string.Equals(normalizedLevelKey, "artisans", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(normalizedLevelKey, "stonehill", StringComparison.OrdinalIgnoreCase))
+            {
+                MessageBox.Show(this, "Spring chest pair export is currently official for Artisans and Stone Hill only. Dark Hollow is deferred because the helper can create a collectible sparkle there but the gem mesh is still invisible.", "Spring chest pair export", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            int controllerIndex;
+            int shellIndex;
+            if (!TryResolveSpringChestRuntimePair(selected, out controllerIndex, out shellIndex))
+            {
+                MessageBox.Show(this, "Select a spring chest shell or its paired controller first. New spring chests must be added with the Spring Chest Object Library template so the editor creates both records.", "Spring chest pair needed", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            DialogResult result = MessageBox.Show(
+                this,
+                "Create an isolated " + currentLevelName + " spring chest pair BIN for " + MobyId(mobys[controllerIndex]) + "/" + MobyId(mobys[shellIndex]) + "?\n\nThis exports the paired controller/shell and injects the working in-game pop/collect patch automatically. After loading the CUE, flame or charge the chest; no separate Spring Helper pass is needed. This path is official for Artisans and Stone Hill.",
+                "Test spring chest pair",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+            if (result != DialogResult.Yes) return;
+
+            SaveEdits();
+
+            string scriptPath = Path.Combine(workspace, "tools", "Export-SpyroSpringChestPairInGamePatchTest.ps1");
+            if (!File.Exists(scriptPath))
+            {
+                MessageBox.Show(this, "Missing spring chest in-game exporter script: " + scriptPath, "Patch exporter missing", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            try
+            {
+                string experimentsDir = Path.Combine(workspace, "_local", "experiments");
+                Directory.CreateDirectory(experimentsDir);
+                Moby controller = mobys[controllerIndex];
+                Moby shell = mobys[shellIndex];
+                PrepareSpringChestPair(controller, shell);
+                ApplySpringChestPairExportProfile(controller, shell);
+                AlignSpringChestControllerToShell(controller, shell);
+                if (!EnsureSpringChestPairAppendMetadata(controller, shell))
+                {
+                    MessageBox.Show(this, "Spring chest pair export needs the new controller/shell pair created from the Spring Chest Object Library template. Select the new spring chest shell or controller, then run Test Selected Add BIN.", "Spring chest pair export", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                string stem = "editor-" + normalizedLevelKey + "-springpair-T" + controller.TrueIndex.ToString() + "-T" + shell.TrueIndex.ToString();
+                string editsPath = Path.Combine(experimentsDir, stem + "-edits.json");
+                string outPath = Path.Combine(experimentsDir, stem + ".bin");
+                int pairEditCount = MobyEditStore.Save(editsPath, new List<Moby>(new Moby[] { controller, shell }), currentLevelName);
+                if (pairEditCount != 2)
+                {
+                    MessageBox.Show(this, "Spring chest pair export expected two saved records, but wrote " + pairEditCount.ToString() + ". I stopped before creating a broken shell-only BIN.", "Spring chest pair export", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                StringBuilder args = new StringBuilder();
+                args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
+                args.Append(QuoteArgument(scriptPath));
+                args.Append(" -LevelKey ").Append(QuoteArgument(ScriptLevelKey(currentLevelKey)));
+                args.Append(" -NativeEditsPath ").Append(QuoteArgument(editsPath));
+                AppendSourceImageArgument(args);
+                args.Append(" -RewardGemIdByte 0x").Append(RewardGemIdByteForSpringShell(shell).ToString("X2"));
+                args.Append(" -OutPath ").Append(QuoteArgument(outPath));
+                args.Append(" -CuePath ").Append(QuoteArgument(Path.ChangeExtension(outPath, ".cue")));
+                args.Append(" -PlanPath ").Append(QuoteArgument(outPath + ".patchplan.json"));
+
+                StartWorkspaceProcess("powershell.exe", args.ToString());
+                statusLabel.Text = "Started spring chest in-game BIN export for " + MobyId(mobys[controllerIndex]) + "/" + MobyId(mobys[shellIndex]) + ". Load the CUE, then flame or charge the chest.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not start spring chest pair exporter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private bool EnsureSpringChestPairAppendMetadata(Moby controller, Moby shell)
+        {
+            if (controller == null || shell == null) return false;
+            int sourceCount = SourceRecordCountForLevel(currentLevelKey);
+            if (controller.TrueIndex < sourceCount || shell.TrueIndex < sourceCount) return false;
+
+            controller.IsAppendedRecord = true;
+            shell.IsAppendedRecord = true;
+
+            controller.AppendSourceTrueIndex = 30;
+            controller.AppendSourceIndex = -1;
+            controller.AppendSourceLabel = "Spring Chest controller";
+            controller.AppendSourceLevelKey = "TownSquare";
+            controller.AppendSourceLevelName = "Town Square";
+            controller.AppendSourceFamily = "springChest";
+            controller.AppendLoaderTransformedDonor = true;
+            controller.AppendDonorMapConfidence = "source-row-transform";
+            controller.AppendDependencyRisk = "External spring chest donor. Export copies the donor row and applies the level-specific spring chest package profile.";
+
+            shell.AppendSourceTrueIndex = 82;
+            shell.AppendSourceIndex = -1;
+            shell.AppendSourceLabel = "Spring Chest";
+            shell.AppendSourceLevelKey = "TownSquare";
+            shell.AppendSourceLevelName = "Town Square";
+            shell.AppendSourceFamily = "springChest";
+            shell.AppendLoaderTransformedDonor = true;
+            shell.AppendDonorMapConfidence = "source-row-transform";
+            shell.AppendDependencyRisk = "External spring chest donor. Export copies the donor row and applies the level-specific spring chest package profile.";
+
+            return true;
+        }
+
+        private void RunObjectAddLab()
+        {
+            if (!currentLevelSupportsSourcePatchers)
+            {
+                MessageBox.Show(this, currentLevelName + " source BIN export is not wired yet.", "Object Add Lab", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (selectedMobyIndex < 0 || selectedMobyIndex >= mobys.Count)
+            {
+                MessageBox.Show(this, "Select the source object to test first. The lab will clone that selected source into a temporary experiment BIN.", "Object Add Lab", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            int sourceRecordCount = SourceRecordCountForLevel(currentLevelKey);
+            Moby source = mobys[selectedMobyIndex];
+            if (source == null || source.TrueIndex < 0 || source.TrueIndex >= sourceRecordCount)
+            {
+                MessageBox.Show(this, "Select an existing source-table moby first. The lab cannot use appended, runtime-only, or unmapped records as donors yet.", "Object Add Lab", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            int slotIndex = FindDefaultObjectAddLabSlotIndex(source.Index);
+            string experiment;
+            if (!ShowObjectAddLabDialog(source, slotIndex, out experiment))
+                return;
+
+            if (experiment == "slot" && (slotIndex < 0 || slotIndex >= mobys.Count))
+            {
+                MessageBox.Show(this, "I could not find a reusable same-level source slot for the slot-reuse test. Mark or select a helper/nonvisual slot, then try again.", "Object Add Lab", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            try
+            {
+                bool append = experiment == "append";
+                Moby target = append ? null : mobys[slotIndex];
+                int targetTrueIndex = append ? sourceRecordCount : target.TrueIndex;
+                int targetListIndex = append ? mobys.Count : target.Index;
+
+                string experimentName = append ? "append" : "slotreuse";
+                string fileStem = "object-add-lab-" + SafeFilePart(currentLevelKey) + "-" + experimentName + "-srcT" + source.TrueIndex.ToString();
+                if (append)
+                    fileStem += "-newT" + targetTrueIndex.ToString();
+                else
+                    fileStem += "-slotT" + targetTrueIndex.ToString();
+
+                string editsPath = Path.Combine(workspace, fileStem + ".json");
+                string outPath = Path.Combine(workspace, "Spyro the Dragon (USA)-" + fileStem + ".bin");
+                WriteObjectAddLabEdits(editsPath, source, target, targetTrueIndex, targetListIndex, append);
+                StartObjectAddLabExporter(editsPath, outPath, append, targetTrueIndex);
+
+                statusLabel.Text = append
+                    ? "Started Object Add Lab append BIN for source T" + source.TrueIndex.ToString() + "."
+                    : "Started Object Add Lab slot-reuse BIN for source T" + source.TrueIndex.ToString() + " into T" + targetTrueIndex.ToString() + ".";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not start Object Add Lab", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private bool ShowObjectAddLabDialog(Moby source, int slotIndex, out string experiment)
+        {
+            experiment = null;
+            Moby slot = (slotIndex >= 0 && slotIndex < mobys.Count) ? mobys[slotIndex] : null;
+
+            using (Form dialog = new Form())
+            using (TableLayoutPanel root = new TableLayoutPanel())
+            using (Label info = new Label())
+            using (Button appendButton = new Button())
+            using (Button slotButton = new Button())
+            using (Button cancelButton = new Button())
+            {
+                dialog.Text = "Object Add Lab";
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
+                dialog.MinimizeBox = false;
+                dialog.MaximizeBox = false;
+                dialog.ClientSize = new Size(520, 220);
+
+                root.Dock = DockStyle.Fill;
+                root.Padding = new Padding(12);
+                root.ColumnCount = 2;
+                root.RowCount = 4;
+                root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+                root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+                root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34f));
+
+                StringBuilder message = new StringBuilder();
+                message.AppendLine("Selected source: " + MobyId(source) + " " + source.DisplayLabel);
+                message.AppendLine("Append test: clone this same-level source as one new source record.");
+                if (slot != null)
+                    message.AppendLine("Slot test: clone it into " + MobyId(slot) + " " + slot.DisplayLabel + " without growing the table.");
+                else
+                    message.AppendLine("Slot test: no reusable helper/nonvisual slot was found yet.");
+                message.AppendLine();
+                message.AppendLine("Each option writes a temporary lab edit JSON and a disposable BIN/CUE. Your real saved edits are not changed.");
+                if (IsExperimentalTrueAddTemplate(source))
+                    message.AppendLine("This source looks behavior-linked, so test only one BIN at a time.");
+
+                info.Text = message.ToString();
+                info.Dock = DockStyle.Fill;
+                info.AutoSize = false;
+
+                appendButton.Text = "Append New Record BIN";
+                appendButton.Dock = DockStyle.Fill;
+                appendButton.Click += delegate { dialog.Tag = "append"; dialog.DialogResult = DialogResult.OK; dialog.Close(); };
+
+                slotButton.Text = "Slot-Reuse BIN";
+                slotButton.Dock = DockStyle.Fill;
+                slotButton.Enabled = slot != null;
+                slotButton.Click += delegate { dialog.Tag = "slot"; dialog.DialogResult = DialogResult.OK; dialog.Close(); };
+
+                cancelButton.Text = "Cancel";
+                cancelButton.Dock = DockStyle.Fill;
+                cancelButton.Click += delegate { dialog.DialogResult = DialogResult.Cancel; dialog.Close(); };
+
+                root.Controls.Add(info, 0, 0);
+                root.SetColumnSpan(info, 2);
+                root.Controls.Add(appendButton, 0, 1);
+                root.SetColumnSpan(appendButton, 2);
+                root.Controls.Add(slotButton, 0, 2);
+                root.SetColumnSpan(slotButton, 2);
+                root.Controls.Add(cancelButton, 0, 3);
+                root.SetColumnSpan(cancelButton, 2);
+                dialog.Controls.Add(root);
+                dialog.AcceptButton = appendButton;
+                dialog.CancelButton = cancelButton;
+
+                DialogResult result = dialog.ShowDialog(this);
+                experiment = dialog.Tag as string;
+                return result == DialogResult.OK && !string.IsNullOrEmpty(experiment);
+            }
+        }
+
+        private int FindDefaultObjectAddLabSlotIndex(int sourceIndex)
+        {
+            MobyChoice selectedSlot = SelectedChoice(addSlotBox);
+            if (selectedSlot != null
+                && selectedSlot.Index >= 0
+                && selectedSlot.Index < mobys.Count
+                && selectedSlot.Index != sourceIndex
+                && CanUseAsAddSlot(mobys[selectedSlot.Index]))
+                return selectedSlot.Index;
+
+            for (int i = 0; i < mobys.Count; i++)
+            {
+                if (i == sourceIndex) continue;
+                if (!CanUseAsAddSlot(mobys[i])) continue;
+                if (IsLikelyReusableSlot(mobys[i]))
+                    return i;
+            }
+            return -1;
+        }
+
+        private void WriteObjectAddLabEdits(string editsPath, Moby source, Moby target, int targetTrueIndex, int targetListIndex, bool append)
+        {
+            float labX = source.X + 128f;
+            float labY = source.Y;
+            float labZ = source.Z;
+            float originalX = append || target == null ? 0f : target.OriginalX;
+            float originalY = append || target == null ? 0f : target.OriginalY;
+            float originalZ = append || target == null ? 0f : target.OriginalZ;
+
+            Dictionary<string, object> mutation = new Dictionary<string, object>();
+            mutation["mode"] = append ? "appendFromSource" : "cloneIntoSlot";
+            mutation["sourceIndex"] = source.Index;
+            mutation["sourceTrueIndex"] = source.TrueIndex;
+            mutation["sourceLabel"] = source.DisplayLabel ?? "";
+            if (append)
+            {
+                mutation["targetTrueIndex"] = targetTrueIndex;
+                mutation["note"] = "Object Add Lab: append one same-level source record for an isolated runtime test.";
+            }
+            else
+            {
+                mutation["note"] = "Object Add Lab: clone the selected source into one same-level slot without growing the source table.";
+            }
+
+            Dictionary<string, object> edit = new Dictionary<string, object>();
+            edit["index"] = targetListIndex;
+            edit["trueIndex"] = targetTrueIndex;
+            edit["label"] = source.DisplayLabel + (append ? " (lab append)" : " (lab slot reuse)");
+            edit["typeHex"] = "0x" + source.Type.ToString("X2");
+            edit["stateHex"] = "0x" + source.State.ToString("X2");
+            edit["runtimeAddress"] = "0x00000000";
+            edit["specialDataPointer"] = FormatAddress(source.SpecialDataPointer);
+            edit["sourceByte36Hex"] = "0x" + source.SourceByte36.ToString("X2");
+            edit["sourceByte37Hex"] = "0x" + source.SourceByte37.ToString("X2");
+            edit["sourceByte4FHex"] = "0x" + source.SourceByte4F.ToString("X2");
+            edit["flag4AHex"] = "0x" + source.Flag4A.ToString("X2");
+            edit["flag4BHex"] = "0x" + source.Flag4B.ToString("X2");
+            edit["patchStatus"] = append ? "object-add-lab-append" : "object-add-lab-slot-reuse";
+            edit["patchLead"] = append
+                ? "Object Add Lab append from source T" + source.TrueIndex.ToString()
+                : "Object Add Lab clone source T" + source.TrueIndex.ToString() + " into slot T" + targetTrueIndex.ToString();
+            edit["behaviorNote"] = "Temporary Object Add Lab experiment. This file is not the level's saved edit file.";
+            edit["specialDataNote"] = append ? "Exporter may copy same-level source special data for this isolated append." : "Slot reuse avoids growing the source moby table.";
+            edit["original"] = NewLabVector(originalX, originalY, originalZ);
+            edit["edited"] = NewLabVector(labX, labY, labZ);
+            edit["rawOriginal"] = NewLabRawVector(originalX, originalY, originalZ);
+            edit["rawEdited"] = NewLabRawVector(labX, labY, labZ);
+            edit["rawDelta"] = NewLabRawDelta(originalX, originalY, originalZ, labX, labY, labZ);
+            edit["recordMutation"] = mutation;
+
+            Dictionary<string, object> root = new Dictionary<string, object>();
+            root["generatedAt"] = DateTime.Now.ToString("s");
+            root["editor"] = "NativeSpyroEditor Object Add Lab";
+            root["levelName"] = currentLevelName;
+            root["levelKey"] = currentLevelKey;
+            root["note"] = "Temporary single-experiment Object Add Lab edits. Safe to delete after testing.";
+            root["editCount"] = 1;
+            root["edits"] = new object[] { edit };
+
+            JavaScriptSerializer serializer = new JavaScriptSerializer();
+            serializer.MaxJsonLength = int.MaxValue;
+            File.WriteAllText(editsPath, serializer.Serialize(root), Encoding.UTF8);
+        }
+
+        private void StartObjectAddLabExporter(string editsPath, string outPath, bool append, int targetTrueIndex)
+        {
+            string scriptPath = Path.Combine(workspace, "tools", "Export-SpyroLevelMobyPatchTest.ps1");
+            if (!File.Exists(scriptPath))
+                throw new FileNotFoundException("Missing patch exporter script.", scriptPath);
+
+            StringBuilder args = new StringBuilder();
+            args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
+            args.Append(QuoteArgument(scriptPath));
+            args.Append(" -LevelKey ").Append(QuoteArgument(ScriptLevelKey(currentLevelKey)));
+            args.Append(" -NativeEditsPath ").Append(QuoteArgument(editsPath));
+            AppendSourceImageArgument(args);
+            args.Append(" -AppendPolicy All");
+            args.Append(" -SkipTreasureTotalPatch");
+            if (append)
+            {
+                args.Append(" -SingleAppendTrueIndex ").Append(targetTrueIndex.ToString());
+            }
+            args.Append(" -OutPath ").Append(QuoteArgument(outPath));
+            args.Append(" -CuePath ").Append(QuoteArgument(Path.ChangeExtension(outPath, ".cue")));
+            args.Append(" -PlanPath ").Append(QuoteArgument(outPath + ".patchplan.json"));
+
+            StartWorkspaceProcess("powershell.exe", args.ToString());
+        }
+
+        private static Dictionary<string, object> NewLabVector(float x, float y, float z)
+        {
+            Dictionary<string, object> vector = new Dictionary<string, object>();
+            vector["x"] = Math.Round(x, 4);
+            vector["y"] = Math.Round(y, 4);
+            vector["z"] = Math.Round(z, 4);
+            return vector;
+        }
+
+        private static Dictionary<string, object> NewLabRawVector(float x, float y, float z)
+        {
+            Dictionary<string, object> vector = new Dictionary<string, object>();
+            vector["x"] = ToRawCoordinate(x);
+            vector["y"] = ToRawCoordinate(y);
+            vector["z"] = ToRawCoordinate(z);
+            return vector;
+        }
+
+        private static Dictionary<string, object> NewLabRawDelta(float originalX, float originalY, float originalZ, float editedX, float editedY, float editedZ)
+        {
+            Dictionary<string, object> delta = new Dictionary<string, object>();
+            delta["x"] = ToRawCoordinate(editedX) - ToRawCoordinate(originalX);
+            delta["y"] = ToRawCoordinate(editedY) - ToRawCoordinate(originalY);
+            delta["z"] = ToRawCoordinate(editedZ) - ToRawCoordinate(originalZ);
+            return delta;
+        }
+
+        private static string SafeFilePart(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return "unknown";
+            StringBuilder builder = new StringBuilder();
+            foreach (char ch in value)
+            {
+                if (char.IsLetterOrDigit(ch))
+                    builder.Append(char.ToLowerInvariant(ch));
+                else if (ch == '-' || ch == '_')
+                    builder.Append(ch);
+            }
+            return builder.Length == 0 ? "unknown" : builder.ToString();
         }
 
         private void RunTerrainPatchExporter()
@@ -3780,9 +7578,9 @@ namespace SpyroNativeEditor
             }
 
             SaveEdits();
-            if (CountEditedTerrainFaces() == 0)
+            if (CountEditedTerrainFaces() == 0 && CountCustomTerrainTextureImports() == 0)
             {
-                MessageBox.Show(this, "Make and save at least one terrain Z edit before creating a terrain BIN.", "No terrain edits", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, "Make and save at least one terrain height edit, texture-ID swap, or custom PNG texture import before creating a terrain BIN.", "No terrain edits", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -3798,14 +7596,443 @@ namespace SpyroNativeEditor
                 StringBuilder args = new StringBuilder();
                 args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
                 args.Append(QuoteArgument(scriptPath));
+                AppendSourceImageArgument(args);
+                if (!string.IsNullOrEmpty(currentRamPath) && File.Exists(currentRamPath))
+                    args.Append(" -RamPath ").Append(QuoteArgument(currentRamPath));
+                args.Append(" -TerrainEditsPath ").Append(QuoteArgument(terrainEditPath));
+                if (!string.IsNullOrEmpty(customTerrainTexturesPath) && File.Exists(customTerrainTexturesPath))
+                    args.Append(" -CustomTexturesPath ").Append(QuoteArgument(customTerrainTexturesPath));
                 args.Append(" -OutPath ").Append(QuoteArgument(Path.Combine(workspace, "Spyro the Dragon (USA)-runtime-terrainpatchtest.bin")));
 
                 StartWorkspaceProcess("powershell.exe", args.ToString());
-                statusLabel.Text = "Started exact runtime-sector terrain BIN export.";
+                statusLabel.Text = "Started exact runtime-sector terrain BIN export" + (CountCustomTerrainTextureImports() > 0 ? " with custom texture imports." : ".");
             }
             catch (Exception ex)
             {
                 MessageBox.Show(this, ex.Message, "Could not start terrain patch exporter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void PopulateLevelTextChoices(ComboBox box)
+        {
+            if (box == null) return;
+            box.Items.Clear();
+            LevelTextChoice[] choices = LevelTextChoice.All();
+            for (int i = 0; i < choices.Length; i++)
+                box.Items.Add(choices[i]);
+            for (int i = 0; i < box.Items.Count; i++)
+            {
+                LevelTextChoice choice = box.Items[i] as LevelTextChoice;
+                if (choice != null && string.Equals(choice.ScriptKey, "StoneHill", StringComparison.OrdinalIgnoreCase))
+                {
+                    box.SelectedIndex = i;
+                    break;
+                }
+            }
+            if (box.SelectedIndex < 0 && box.Items.Count > 0)
+                box.SelectedIndex = 0;
+        }
+
+        private LevelTextChoice SelectedLevelTextChoice()
+        {
+            if (levelTextTargetBox == null) return null;
+            return levelTextTargetBox.SelectedItem as LevelTextChoice;
+        }
+
+        private void UpdateLevelTextStatus()
+        {
+            if (levelTextStatusLabel == null || levelTextReplacementBox == null) return;
+            LevelTextChoice target = SelectedLevelTextChoice();
+            if (target == null)
+            {
+                levelTextStatusLabel.Text = "Choose a level text target.";
+                if (createLevelTextPatchButton != null) createLevelTextPatchButton.Enabled = false;
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(levelTextReplacementBox.Text))
+                levelTextReplacementBox.Text = target.OriginalName;
+
+            string replacement = levelTextReplacementBox.Text.Trim().ToUpperInvariant();
+            int max = target.OriginalName.Length;
+            bool ok = replacement.Length > 0 && replacement.Length <= max;
+            if (createLevelTextPatchButton != null) createLevelTextPatchButton.Enabled = ok;
+            levelTextStatusLabel.Text = ok
+                ? "Writes " + target.DisplayName + " as '" + replacement + "' in the executable string table."
+                : "Name is too long for this fixed slot. Max " + max.ToString() + " characters.";
+        }
+
+        private void RunLevelTextPatchExporter()
+        {
+            LevelTextChoice target = SelectedLevelTextChoice();
+            if (target == null || levelTextReplacementBox == null || string.IsNullOrWhiteSpace(levelTextReplacementBox.Text))
+            {
+                MessageBox.Show(this, "Choose a target and enter a replacement name.", "Text patch choice missing", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            string replacement = levelTextReplacementBox.Text.Trim().ToUpperInvariant();
+            if (replacement.Length > target.OriginalName.Length)
+            {
+                MessageBox.Show(this, "Replacement is too long for this fixed text slot. Use " + target.OriginalName.Length.ToString() + " characters or fewer.", "Text patch too long", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string scriptPath = Path.Combine(workspace, "tools", "Export-SpyroLevelTextPatchTest.ps1");
+            if (!File.Exists(scriptPath))
+            {
+                MessageBox.Show(this, "Missing level text exporter script: " + scriptPath, "Text exporter missing", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            try
+            {
+                string outputPrefix = Path.Combine(workspace, "Spyro the Dragon (USA)-text-" + target.Key + "-" + SafeFilePart(replacement));
+                StringBuilder args = new StringBuilder();
+                args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
+                args.Append(QuoteArgument(scriptPath));
+                AppendSourceImageArgument(args);
+                args.Append(" -TargetLevelKey ").Append(QuoteArgument(target.ScriptKey));
+                args.Append(" -ReplacementName ").Append(QuoteArgument(replacement));
+                args.Append(" -OutputPrefix ").Append(QuoteArgument(outputPrefix));
+
+                StartWorkspaceProcess("powershell.exe", args.ToString());
+                string cueName = Path.GetFileName(outputPrefix + ".cue");
+                statusLabel.Text = "Started level text CUE export: " + target.DisplayName + " -> " + replacement + ".";
+                if (levelTextStatusLabel != null)
+                    levelTextStatusLabel.Text = "Writing " + cueName + ". Test fly-in first; portal labels may share this table.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not start level text exporter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private string ExeStringCatalogPath()
+        {
+            return Path.Combine(Path.Combine(workspace, "_local"), Path.Combine("text", "spyro-exe-string-catalog.json"));
+        }
+
+        private void LoadExeStringChoices(bool showStatus)
+        {
+            if (exeStringBox == null) return;
+            exeStringBox.Items.Clear();
+            string catalogPath = ExeStringCatalogPath();
+            if (!File.Exists(catalogPath))
+            {
+                if (exeStringStatusLabel != null)
+                    exeStringStatusLabel.Text = "No word catalog yet. Click Build/Refresh Words.";
+                if (createExeStringPatchButton != null)
+                    createExeStringPatchButton.Enabled = false;
+                return;
+            }
+
+            try
+            {
+                JavaScriptSerializer serializer = new JavaScriptSerializer();
+                serializer.MaxJsonLength = int.MaxValue;
+                Dictionary<string, object> root = serializer.DeserializeObject(File.ReadAllText(catalogPath, Encoding.UTF8)) as Dictionary<string, object>;
+                object[] strings = root != null && root.ContainsKey("strings") ? root["strings"] as object[] : null;
+                if (strings != null)
+                {
+                    foreach (object item in strings)
+                    {
+                        Dictionary<string, object> row = item as Dictionary<string, object>;
+                        if (row == null || !GetJsonBool(row, "safeFixedSlot", false)) continue;
+                        string text = GetJsonString(row, "text", "");
+                        string offset = GetJsonString(row, "offset", "");
+                        string kind = GetJsonString(row, "kind", "unknown");
+                        int length = GetJsonInt(row, "length", 0);
+                        if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(offset) || length <= 0) continue;
+                        exeStringBox.Items.Add(new ExeStringChoice(text, offset, kind, length));
+                    }
+                }
+
+                if (exeStringBox.Items.Count > 0)
+                {
+                    int preferred = 0;
+                    for (int i = 0; i < exeStringBox.Items.Count; i++)
+                    {
+                        ExeStringChoice choice = exeStringBox.Items[i] as ExeStringChoice;
+                        if (choice != null && string.Equals(choice.Text, "ENTERING %s...", StringComparison.OrdinalIgnoreCase))
+                        {
+                            preferred = i;
+                            break;
+                        }
+                    }
+                    exeStringBox.SelectedIndex = preferred;
+                }
+
+                if (showStatus && exeStringStatusLabel != null)
+                    exeStringStatusLabel.Text = "Loaded " + exeStringBox.Items.Count.ToString() + " editable fixed-slot word(s).";
+            }
+            catch (Exception ex)
+            {
+                if (exeStringStatusLabel != null)
+                    exeStringStatusLabel.Text = "Could not load word catalog: " + ex.Message;
+            }
+        }
+
+        private ExeStringChoice SelectedExeStringChoice()
+        {
+            if (exeStringBox == null) return null;
+            return exeStringBox.SelectedItem as ExeStringChoice;
+        }
+
+        private void UpdateExeStringStatus()
+        {
+            if (exeStringStatusLabel == null || exeStringReplacementBox == null) return;
+            ExeStringChoice choice = SelectedExeStringChoice();
+            if (choice == null)
+            {
+                exeStringStatusLabel.Text = "Build the word catalog to edit other fixed-length executable strings.";
+                if (createExeStringPatchButton != null) createExeStringPatchButton.Enabled = false;
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(exeStringReplacementBox.Text))
+                exeStringReplacementBox.Text = choice.Text;
+
+            string replacement = exeStringReplacementBox.Text.Trim();
+            bool ok = replacement.Length > 0 && Encoding.ASCII.GetByteCount(replacement) <= choice.Length;
+            if (createExeStringPatchButton != null) createExeStringPatchButton.Enabled = ok;
+            exeStringStatusLabel.Text = ok
+                ? choice.Kind + " @ " + choice.Offset + ", max " + choice.Length.ToString() + " bytes."
+                : "Replacement is too long for this fixed slot. Max " + choice.Length.ToString() + " bytes.";
+        }
+
+        private void RunExeStringCatalogBuilder()
+        {
+            string scriptPath = Path.Combine(workspace, "tools", "Export-SpyroExeStringPatchTest.ps1");
+            if (!File.Exists(scriptPath))
+            {
+                MessageBox.Show(this, "Missing executable text exporter script: " + scriptPath, "Text exporter missing", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            try
+            {
+                string catalogPath = ExeStringCatalogPath();
+                string dir = Path.GetDirectoryName(catalogPath);
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                StringBuilder args = new StringBuilder();
+                args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
+                args.Append(QuoteArgument(scriptPath));
+                AppendSourceImageArgument(args);
+                args.Append(" -CatalogOnly");
+                args.Append(" -OutCatalogPath ").Append(QuoteArgument(catalogPath));
+
+                string output = RunWorkspaceProcessAndCapture("powershell.exe", args.ToString());
+                LoadExeStringChoices(true);
+                statusLabel.Text = "Built executable word catalog.";
+                if (exeStringStatusLabel != null && !string.IsNullOrWhiteSpace(output))
+                    exeStringStatusLabel.Text = output.Replace("\r", " ").Replace("\n", " ").Trim();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not build word catalog", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void RunExeStringPatchExporter()
+        {
+            ExeStringChoice choice = SelectedExeStringChoice();
+            if (choice == null || exeStringReplacementBox == null || string.IsNullOrWhiteSpace(exeStringReplacementBox.Text))
+            {
+                MessageBox.Show(this, "Choose a word and enter replacement text.", "Word patch choice missing", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string replacement = exeStringReplacementBox.Text.Trim();
+            if (Encoding.ASCII.GetByteCount(replacement) > choice.Length)
+            {
+                MessageBox.Show(this, "Replacement is too long for this fixed text slot. Use " + choice.Length.ToString() + " bytes or fewer.", "Word patch too long", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string scriptPath = Path.Combine(workspace, "tools", "Export-SpyroExeStringPatchTest.ps1");
+            if (!File.Exists(scriptPath))
+            {
+                MessageBox.Show(this, "Missing executable text exporter script: " + scriptPath, "Text exporter missing", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            try
+            {
+                string outputPrefix = Path.Combine(workspace, "Spyro the Dragon (USA)-text-" + SafeFilePart(choice.Text) + "-" + SafeFilePart(replacement));
+                StringBuilder args = new StringBuilder();
+                args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
+                args.Append(QuoteArgument(scriptPath));
+                AppendSourceImageArgument(args);
+                args.Append(" -StringOffsetHex ").Append(QuoteArgument(choice.Offset));
+                args.Append(" -OriginalText ").Append(QuoteArgument(choice.Text));
+                args.Append(" -ReplacementText ").Append(QuoteArgument(replacement));
+                args.Append(" -OutputPrefix ").Append(QuoteArgument(outputPrefix));
+
+                StartWorkspaceProcess("powershell.exe", args.ToString());
+                string cueName = Path.GetFileName(outputPrefix + ".cue");
+                statusLabel.Text = "Started word CUE export: " + choice.Text + " -> " + replacement + ".";
+                if (exeStringStatusLabel != null)
+                    exeStringStatusLabel.Text = "Writing " + cueName + ".";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not start word exporter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void RunSkyboxPatchExporter()
+        {
+            SkyboxChoice target = SelectedSkyboxChoice(skyboxTargetBox);
+            SkyboxChoice donor = SelectedSkyboxChoice(skyboxDonorBox);
+            if (target == null || donor == null)
+            {
+                MessageBox.Show(this, "Choose both a target level and a donor skybox.", "Skybox choice missing", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            string blockReason;
+            if (ShouldBlockSkyboxExportFromCatalog(target, donor, out blockReason))
+            {
+                MessageBox.Show(this, blockReason, "Skybox swap blocked by catalog", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (skyboxStatusLabel != null)
+                    skyboxStatusLabel.Text = blockReason;
+                return;
+            }
+
+            string scriptPath = Path.Combine(workspace, "tools", "Export-SpyroSkyboxPatchTest.ps1");
+            if (!File.Exists(scriptPath))
+            {
+                MessageBox.Show(this, "Missing skybox exporter script: " + scriptPath, "Skybox exporter missing", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            try
+            {
+                string planDir = Path.Combine(workspace, "_skybox_probe");
+                if (!Directory.Exists(planDir)) Directory.CreateDirectory(planDir);
+                string planPath = Path.Combine(planDir, "whole-subfile-" + target.Key + "-from-" + donor.Key + ".patchplan.json");
+                StringBuilder args = new StringBuilder();
+                args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
+                args.Append(QuoteArgument(scriptPath));
+                args.Append(" -TargetLevelKey ").Append(QuoteArgument(target.ScriptKey));
+                args.Append(" -DonorLevelKey ").Append(QuoteArgument(donor.ScriptKey));
+                args.Append(" -PlanOnly");
+                args.Append(" -PlanPath ").Append(QuoteArgument(planPath));
+
+                StartWorkspaceProcess("powershell.exe", args.ToString());
+                statusLabel.Text = "Started skybox whole-subfile plan: " + target.DisplayName + " <- " + donor.DisplayName + ".";
+                if (skyboxStatusLabel != null)
+                    skyboxStatusLabel.Text = "Plan-only output: " + Path.GetFileName(planPath) + ".";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not start skybox exporter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void RunSkyColorPatchExporter()
+        {
+            SkyboxChoice target = SelectedSkyboxChoice(skyboxTargetBox);
+            SkyColorPresetChoice preset = SelectedSkyColorPresetChoice();
+            if (target == null || preset == null)
+            {
+                MessageBox.Show(this, "Choose Stone Hill and a sky color preset.", "Sky color choice missing", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (!string.Equals(SpyroLevelCatalog.NormalizeKey(target.Key), "stonehill", StringComparison.OrdinalIgnoreCase))
+            {
+                MessageBox.Show(this, "Safe sky-color CUE export is currently wired for Stone Hill only. Other levels need their safe sky primitive records mapped first.", "Stone Hill only", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (string.Equals(preset.ScriptKey, "Custom", StringComparison.OrdinalIgnoreCase) &&
+                (skyColorPaletteBox == null || string.IsNullOrWhiteSpace(skyColorPaletteBox.Text)))
+            {
+                MessageBox.Show(this, "Enter a custom palette like #081132 #314A8C #CDD5EA.", "Custom palette missing", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string scriptPath = Path.Combine(workspace, "tools", "Export-SpyroSkyPrimitiveColorPalette.ps1");
+            if (!File.Exists(scriptPath))
+            {
+                MessageBox.Show(this, "Missing sky color exporter script: " + scriptPath, "Sky color exporter missing", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            try
+            {
+                string outputPrefix = Path.Combine(workspace, "Spyro the Dragon (USA)-stonehill-skycolors-" + preset.FileSlug);
+                StringBuilder args = new StringBuilder();
+                args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
+                args.Append(QuoteArgument(scriptPath));
+                args.Append(" -Preset ").Append(QuoteArgument(preset.ScriptKey));
+                args.Append(" -OutputPrefix ").Append(QuoteArgument(outputPrefix));
+                if (string.Equals(preset.ScriptKey, "Custom", StringComparison.OrdinalIgnoreCase))
+                    args.Append(" -PaletteHex ").Append(QuoteArgument(skyColorPaletteBox.Text.Trim()));
+
+                StartWorkspaceProcess("powershell.exe", args.ToString());
+                string cueName = Path.GetFileName(outputPrefix + ".cue");
+                statusLabel.Text = "Started Stone Hill sky color CUE export: " + preset.DisplayName + ".";
+                if (skyboxStatusLabel != null)
+                    skyboxStatusLabel.Text = "Writing " + cueName + ". This preserves Stone Hill sky geometry and changes only safe color words.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not start sky color exporter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private bool ShouldBlockSkyboxExportFromCatalog(SkyboxChoice target, SkyboxChoice donor, out string message)
+        {
+            message = "";
+            Dictionary<string, object> targetRow;
+            Dictionary<string, object> donorRow;
+            string catalogError;
+            if (!TryReadSkyboxCatalogPair(target, donor, out targetRow, out donorRow, out catalogError))
+                return false;
+
+            string targetStatus = GetJsonString(targetRow, "status", "");
+            string donorStatus = GetJsonString(donorRow, "status", "");
+            if (!string.Equals(targetStatus, "cataloged", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(donorStatus, "cataloged", StringComparison.OrdinalIgnoreCase))
+            {
+                message = "Catalog needs a verified WAD probe for this pair before the editor will export it.";
+                return true;
+            }
+
+            int targetSize = GetJsonInt(targetRow, "skySubfileSize", -1);
+            int donorSize = GetJsonInt(donorRow, "skySubfileSize", -1);
+            if (targetSize <= 0 || donorSize <= 0 || targetSize != donorSize)
+            {
+                message = "Catalog blocks this skybox swap because the sizes differ: target " + FormatHex(targetSize) + ", donor " + FormatHex(donorSize) + ".";
+                return true;
+            }
+            return false;
+        }
+
+        private void RunSkyboxCatalogBuilder()
+        {
+            string scriptPath = Path.Combine(workspace, "tools", "New-SpyroSkyboxCatalog.ps1");
+            if (!File.Exists(scriptPath))
+            {
+                MessageBox.Show(this, "Missing skybox catalog script: " + scriptPath, "Skybox catalog missing", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            try
+            {
+                string outPath = Path.Combine(workspace, "spyro-skybox-catalog.json");
+                string markdownPath = Path.Combine(workspace, "spyro-skybox-catalog.md");
+                StringBuilder args = new StringBuilder();
+                args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
+                args.Append(QuoteArgument(scriptPath));
+                args.Append(" -OutPath ").Append(QuoteArgument(outPath));
+                args.Append(" -MarkdownPath ").Append(QuoteArgument(markdownPath));
+
+                StartWorkspaceProcess("powershell.exe", args.ToString());
+                statusLabel.Text = "Started skybox catalog scan.";
+                if (skyboxStatusLabel != null)
+                    skyboxStatusLabel.Text = "Scanning skybox sizes and same-size donors.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not start skybox catalog", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -3825,9 +8052,10 @@ namespace SpyroNativeEditor
             SaveEdits();
             int editedMobys = CountEditedMobys();
             int editedTerrain = CountEditedTerrainFaces();
-            if (editedMobys == 0 && editedTerrain == 0)
+            int customTextures = CountCustomTerrainTextureImports();
+            if (editedMobys == 0 && editedTerrain == 0 && customTextures == 0)
             {
-                MessageBox.Show(this, "Make and save at least one moby or terrain edit before creating a combined BIN.", "No edits", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, "Make and save at least one moby edit, terrain edit, or custom texture import before creating a combined BIN.", "No edits", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -3843,14 +8071,77 @@ namespace SpyroNativeEditor
                 StringBuilder args = new StringBuilder();
                 args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
                 args.Append(QuoteArgument(scriptPath));
+                AppendSourceImageArgument(args);
+                if (!string.IsNullOrEmpty(customTerrainTexturesPath) && File.Exists(customTerrainTexturesPath))
+                    args.Append(" -CustomTexturesPath ").Append(QuoteArgument(customTerrainTexturesPath));
                 args.Append(" -OutPath ").Append(QuoteArgument(Path.Combine(workspace, "Spyro the Dragon (USA)-combinedpatchtest.bin")));
 
                 StartWorkspaceProcess("powershell.exe", args.ToString());
-                statusLabel.Text = "Started combined moby + terrain BIN export.";
+                statusLabel.Text = "Started combined moby + terrain BIN export" + (customTextures > 0 ? " with custom texture imports." : ".");
             }
             catch (Exception ex)
             {
                 MessageBox.Show(this, ex.Message, "Could not start combined patch exporter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void RunTeaserDemoExporter()
+        {
+            if (!HasLoadedLevel())
+            {
+                MessageBox.Show(this, "Load any mapped level first so the editor can save current edits before making the demo CUE.", "No level loaded", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string scriptPath = Path.Combine(workspace, "tools", "Create-SpyroArtisansTeaserDemo.ps1");
+            if (!File.Exists(scriptPath))
+            {
+                MessageBox.Show(this, "Missing teaser demo builder: " + scriptPath, "Demo builder missing", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            DialogResult confirm = MessageBox.Show(
+                this,
+                "Create a disposable Artisans teaser CUE that stacks saved mapped-level edits, one supported spring chest pair per Artisans/Stone Hill, Stone Hill terrain/custom texture imports when present, optional current level-text replacement, and the Stone Hill Night Keeper sky?\n\nThis does not overwrite your clean source image.",
+                "Create teaser demo CUE",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (confirm != DialogResult.Yes)
+                return;
+
+            try
+            {
+                SaveEdits();
+
+                string demoDir = Path.Combine(Path.Combine(workspace, "_local"), "demo");
+                Directory.CreateDirectory(demoDir);
+                string outPath = Path.Combine(demoDir, "Spyro Artisans Teaser Demo.bin");
+
+                StringBuilder args = new StringBuilder();
+                args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
+                args.Append(QuoteArgument(scriptPath));
+                AppendSourceImageArgument(args);
+                args.Append(" -OutPath ").Append(QuoteArgument(outPath));
+                args.Append(" -CuePath ").Append(QuoteArgument(Path.ChangeExtension(outPath, ".cue")));
+                args.Append(" -PlanPath ").Append(QuoteArgument(outPath + ".demo-plan.json"));
+                args.Append(" -SkyPreset StoneHillNightKeeper");
+
+                LevelTextChoice textTarget = SelectedLevelTextChoice();
+                if (textTarget != null && levelTextReplacementBox != null)
+                {
+                    string replacement = levelTextReplacementBox.Text.Trim().ToUpperInvariant();
+                    if (replacement.Length > 0 && replacement.Length <= textTarget.OriginalName.Length && !string.Equals(replacement, textTarget.OriginalName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        args.Append(" -LevelTextPatch ").Append(QuoteArgument(textTarget.ScriptKey + "=" + replacement));
+                    }
+                }
+
+                StartWorkspaceProcess("powershell.exe", args.ToString());
+                statusLabel.Text = "Started Artisans teaser demo CUE export. Output: " + Path.GetFileName(Path.ChangeExtension(outPath, ".cue")) + ".";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not start teaser demo exporter", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -3924,12 +8215,183 @@ namespace SpyroNativeEditor
             }
         }
 
+        private void RunSpringChestRuntimeHelper()
+        {
+            if (!HasLoadedLevel())
+            {
+                MessageBox.Show(this, "Load Artisans before running the spring chest helper.", "No level loaded", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (!string.Equals(SpyroLevelCatalog.NormalizeKey(currentLevelKey), "artisans", StringComparison.OrdinalIgnoreCase))
+            {
+                MessageBox.Show(this, "The spring chest helper is currently mapped for the Artisans T32/T38 import only. Other levels need their controller and shell row pair mapped before this helper can run safely there.", "Spring helper scope", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string scriptPath = Path.Combine(workspace, "tools", "Run-SpyroSpringChestRuntimeHelper.ps1");
+            if (!File.Exists(scriptPath))
+            {
+                MessageBox.Show(this, "Missing spring chest helper script: " + scriptPath, "Spring helper missing", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            try
+            {
+                int controllerTrueIndex = 32;
+                int shellTrueIndex = 38;
+                int rewardGemIdByte = 0x55;
+                if (selectedMobyIndex >= 0 && selectedMobyIndex < mobys.Count)
+                {
+                    int controllerIndex;
+                    int shellIndex;
+                    if (TryResolveSpringChestRuntimePair(mobys[selectedMobyIndex], out controllerIndex, out shellIndex))
+                    {
+                        controllerTrueIndex = mobys[controllerIndex].TrueIndex;
+                        shellTrueIndex = mobys[shellIndex].TrueIndex;
+                        rewardGemIdByte = RewardGemIdByteForSpringShell(mobys[shellIndex]);
+                    }
+                }
+
+                StringBuilder args = new StringBuilder();
+                args.Append("-NoProfile -ExecutionPolicy Bypass -File ");
+                args.Append(QuoteArgument(scriptPath));
+                args.Append(" -OutPrefix ").Append(QuoteArgument(@".\_local\experiments\editor-spring-runtime-helper"));
+                args.Append(" -ControllerIndex ").Append(controllerTrueIndex.ToString());
+                args.Append(" -ShellIndex ").Append(shellTrueIndex.ToString());
+                args.Append(" -RewardGemIdByte 0x").Append(rewardGemIdByte.ToString("X2"));
+                args.Append(" -RepeatSeconds 90 -PostTriggerWatchSeconds 45");
+
+                StartWorkspaceProcess("powershell.exe", args.ToString());
+                statusLabel.Text = "Started Artisans spring chest helper for T" + controllerTrueIndex.ToString() + "/T" + shellTrueIndex.ToString() + " with reward 0x" + rewardGemIdByte.ToString("X2") + ". Flame or charge the chest, then collect the gem.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not start spring chest helper", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private static int RewardGemIdByteForSpringShell(Moby shell)
+        {
+            if (shell == null) return 0x55;
+            int value = shell.HasRewardColorEdit ? shell.RewardByte53Override : shell.Flag4B;
+            if (value < 0x53 || value > 0x57)
+                value = 0x55;
+            return value;
+        }
+
+        private bool TryResolveSpringChestRuntimePair(Moby selected, out int controllerIndex, out int shellIndex)
+        {
+            controllerIndex = -1;
+            shellIndex = -1;
+            if (selected == null) return false;
+
+            int selectedIndex = mobys.IndexOf(selected);
+            if (selectedIndex < 0) return false;
+
+            int partnerIndex = -1;
+            if (selected.SpringChestPartnerTrueIndex >= 0)
+            {
+                for (int i = 0; i < mobys.Count; i++)
+                {
+                    if (mobys[i] != null && mobys[i].TrueIndex == selected.SpringChestPartnerTrueIndex)
+                    {
+                        partnerIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            if (partnerIndex < 0)
+            {
+                if (selected.TrueIndex == 38 && selectedIndex >= 0)
+                    partnerIndex = IndexOfTrueIndex(32);
+                else if (selected.TrueIndex == 32 && selectedIndex >= 0)
+                    partnerIndex = IndexOfTrueIndex(38);
+            }
+
+            if (partnerIndex < 0) return false;
+            Moby partner = mobys[partnerIndex];
+            if (partner == null) return false;
+
+            bool selectedController = IsSpringChestControllerRole(selected);
+            bool partnerController = IsSpringChestControllerRole(partner);
+            if (selectedController && !partnerController)
+            {
+                controllerIndex = selectedIndex;
+                shellIndex = partnerIndex;
+                return true;
+            }
+            if (!selectedController && partnerController)
+            {
+                controllerIndex = partnerIndex;
+                shellIndex = selectedIndex;
+                return true;
+            }
+
+            if (selected.TrueIndex == 32 && partner.TrueIndex == 38)
+            {
+                controllerIndex = selectedIndex;
+                shellIndex = partnerIndex;
+                return true;
+            }
+            if (selected.TrueIndex == 38 && partner.TrueIndex == 32)
+            {
+                controllerIndex = partnerIndex;
+                shellIndex = selectedIndex;
+                return true;
+            }
+
+            controllerIndex = Math.Min(selectedIndex, partnerIndex);
+            shellIndex = Math.Max(selectedIndex, partnerIndex);
+            return true;
+        }
+
+        private int IndexOfTrueIndex(int trueIndex)
+        {
+            for (int i = 0; i < mobys.Count; i++)
+            {
+                if (mobys[i] != null && mobys[i].TrueIndex == trueIndex)
+                    return i;
+            }
+            return -1;
+        }
+
+        private static bool IsSpringChestControllerRole(Moby moby)
+        {
+            if (moby == null) return false;
+            if (string.Equals(moby.SpringChestPairRole, "controller", StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(moby.SpringChestPairRole, "shell", StringComparison.OrdinalIgnoreCase)) return false;
+            if (moby.AppendSourceTrueIndex == 30) return true;
+            if (moby.SourceByte36 == 0xFE && moby.SourceByte37 == 0x01) return true;
+            string text = ((moby.DisplayLabel ?? "") + " " + (moby.AppendSourceLabel ?? "")).ToLowerInvariant();
+            return text.IndexOf("controller", StringComparison.Ordinal) >= 0;
+        }
+
         private void StartWorkspaceProcess(string fileName, string arguments)
         {
             System.Diagnostics.ProcessStartInfo info = new System.Diagnostics.ProcessStartInfo(fileName, arguments);
             info.WorkingDirectory = workspace;
             info.UseShellExecute = true;
             System.Diagnostics.Process.Start(info);
+        }
+
+        private string RunWorkspaceProcessAndCapture(string fileName, string arguments)
+        {
+            System.Diagnostics.ProcessStartInfo info = new System.Diagnostics.ProcessStartInfo(fileName, arguments);
+            info.WorkingDirectory = workspace;
+            info.UseShellExecute = false;
+            info.CreateNoWindow = true;
+            info.RedirectStandardOutput = true;
+            info.RedirectStandardError = true;
+            using (System.Diagnostics.Process process = System.Diagnostics.Process.Start(info))
+            {
+                string output = process.StandardOutput.ReadToEnd();
+                string error = process.StandardError.ReadToEnd();
+                process.WaitForExit();
+                if (process.ExitCode != 0)
+                    throw new InvalidOperationException(string.IsNullOrWhiteSpace(error) ? output : error);
+                return string.IsNullOrWhiteSpace(output) ? error : output;
+            }
         }
 
         private static string QuoteArgument(string value)
@@ -3940,6 +8402,16 @@ namespace SpyroNativeEditor
 
         private int LoadSavedEdits(bool showMessage)
         {
+            if (!HasLoadedLevel())
+            {
+                if (showMessage)
+                {
+                    MessageBox.Show(this, "Choose a level from the dropdown before loading edits.", "No level loaded", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    statusLabel.Text = "Choose a level before loading edits.";
+                }
+                return 0;
+            }
+
             try
             {
                 int count = MobyEditStore.Load(editPath, mobys, currentLevelKey);
@@ -3953,7 +8425,7 @@ namespace SpyroNativeEditor
                 UpdateInspector();
                 canvas.Invalidate();
                 if (showMessage)
-                    statusLabel.Text = "Loaded " + count.ToString() + " saved moby edit(s), " + savedTerrainEditCount.ToString() + " terrain edit(s), and " + CountActivePlayerColorOptions().ToString() + " color option(s).";
+                    statusLabel.Text = "Loaded " + count.ToString() + " saved moby edit(s), " + savedTerrainEditCount.ToString() + " terrain edit(s), and " + CountActivePlayerColorOptions().ToString() + " color option(s). " + TreasureSummaryText(CalculateTreasureSummary()) + ".";
                 return count;
             }
             catch (Exception ex)
@@ -4018,9 +8490,10 @@ namespace SpyroNativeEditor
 
         private bool HasAnySavedMobyEdits()
         {
-            foreach (string levelKey in new string[] { "stonehill", "artisans" })
+            foreach (LevelDefinition level in levelDefinitions)
             {
-                string path = Path.Combine(workspace, levelKey + "-native-edits.json");
+                if (level == null || string.IsNullOrEmpty(level.Key)) continue;
+                string path = Path.Combine(workspace, level.Key + "-native-edits.json");
                 if (!File.Exists(path)) continue;
                 try
                 {
@@ -4035,6 +8508,41 @@ namespace SpyroNativeEditor
                 }
             }
             return false;
+        }
+
+        private string ResolveSourceImagePath()
+        {
+            string rootImage = Path.Combine(workspace, "Spyro the Dragon (USA).bin");
+            if (File.Exists(rootImage)) return rootImage;
+
+            string localRoot = Path.Combine(workspace, "_local");
+            if (Directory.Exists(localRoot))
+            {
+                try
+                {
+                    string[] matches = Directory.GetFiles(localRoot, "Spyro the Dragon (USA).bin", SearchOption.AllDirectories);
+                    if (matches.Length > 0)
+                    {
+                        Array.Sort(matches, delegate(string a, string b)
+                        {
+                            return File.GetLastWriteTimeUtc(b).CompareTo(File.GetLastWriteTimeUtc(a));
+                        });
+                        return matches[0];
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return rootImage;
+        }
+
+        private void AppendSourceImageArgument(StringBuilder args)
+        {
+            string sourceImage = ResolveSourceImagePath();
+            if (!string.IsNullOrEmpty(sourceImage) && File.Exists(sourceImage))
+                args.Append(" -ImagePath ").Append(QuoteArgument(sourceImage));
         }
 
         private int CountEditedTerrainFaces()
@@ -4209,14 +8717,14 @@ namespace SpyroNativeEditor
             if (geometry == null)
             {
                 using (Brush b = new SolidBrush(Color.White))
-                    g.DrawString("Click Load Stone Hill to load the native renderer.", Font, b, 20, 20);
+                    g.DrawString("Choose a level from the dropdown to load the native renderer.", Font, b, 20, 20);
                 return;
             }
 
             RectangleF worldView = GetWorldViewBounds(clientSize);
 
             bool fast = FastMode;
-            if (showFaces && !fast)
+            if (showFaces && (!fast || editorMode == EditorMode.Terrain))
                 DrawPolygons(g, worldView);
             if (showLines && !view3D)
                 DrawEdges(g, worldView, fast);
@@ -4287,17 +8795,26 @@ namespace SpyroNativeEditor
         {
             if (IsWaterSurface(polygon)) return 0;
             if (IsSandSurface(polygon)) return 1;
-            if (IsGrassSurface(polygon)) return 2;
-            if (IsStoneSurface(polygon)) return 3;
-            return 2;
+            if (IsDirtSurface(polygon)) return 2;
+            if (IsGrassSurface(polygon)) return 3;
+            if (IsStoneSurface(polygon)) return 4;
+            if (IsCliffSurface(polygon)) return 5;
+            return 3;
         }
 
         private bool TryDrawSourceTexturePolygon(Graphics g, TerrainPolygon polygon, PointF[] screenPoints)
         {
-            if (!showSourceTextures || (terrainTextureAtlas == null && terrainTextureLumaAtlas == null) || polygon == null || !polygon.HasTextureId)
+            if (!showSourceTextures || polygon == null || !polygon.HasTextureId)
                 return false;
 
-            Rectangle sourceRect = TerrainTextureSourceRect(polygon);
+            CustomTerrainTexture customTexture;
+            bool useCustomTexture = TryGetCustomTerrainTexture(polygon.TextureId, out customTexture);
+            if (!useCustomTexture && terrainTextureAtlas == null && terrainTextureLumaAtlas == null)
+                return false;
+
+            Rectangle sourceRect = useCustomTexture
+                ? CustomTerrainTextureSourceRect(customTexture, polygon)
+                : TerrainTextureSourceRect(polygon);
             if (sourceRect.Width <= 0 || sourceRect.Height <= 0)
                 return false;
 
@@ -4327,8 +8844,10 @@ namespace SpyroNativeEditor
                         Point.Round(destPointsF[1]),
                         Point.Round(destPointsF[2])
                     };
-                    Image sourceImage = useRawSourceTexture ? terrainTextureAtlas : (terrainTextureLumaAtlas ?? terrainTextureAtlas);
-                    if (useRawSourceTexture)
+                    Image sourceImage = useCustomTexture
+                        ? customTexture.PreviewImage
+                        : (useRawSourceTexture ? terrainTextureAtlas : (terrainTextureLumaAtlas ?? terrainTextureAtlas));
+                    if (useRawSourceTexture || useCustomTexture)
                     {
                         g.DrawImage(sourceImage, destPoints, sourceRect, GraphicsUnit.Pixel);
                     }
@@ -4449,9 +8968,40 @@ namespace SpyroNativeEditor
                 cellSize);
         }
 
+        private Rectangle CustomTerrainTextureSourceRect(CustomTerrainTexture texture, TerrainPolygon polygon)
+        {
+            if (texture == null || texture.PreviewImage == null)
+                return Rectangle.Empty;
+
+            Rectangle whole = new Rectangle(0, 0, texture.PreviewImage.Width, texture.PreviewImage.Height);
+            if (sourceTextureWindowMode == SourceTextureWindowMode.WholeTile || polygon == null)
+                return whole;
+
+            int cellSize = texture.PreviewImage.Width >= 128 ? 32 : Math.Max(16, texture.PreviewImage.Width / 2);
+            int columns = Math.Max(1, texture.PreviewImage.Width / Math.Max(1, cellSize));
+            int rows = Math.Max(1, texture.PreviewImage.Height / Math.Max(1, cellSize));
+            int cellCount = Math.Max(1, columns * rows);
+            int index = TextureWindowIndex(polygon);
+            if (index < 0)
+                return whole;
+
+            index %= cellCount;
+            if (index < 0) index += cellCount;
+            int x = (index % columns) * cellSize;
+            int y = (index / columns) * cellSize;
+            if (x >= texture.PreviewImage.Width || y >= texture.PreviewImage.Height)
+                return whole;
+            return new Rectangle(
+                x,
+                y,
+                Math.Min(cellSize, texture.PreviewImage.Width - x),
+                Math.Min(cellSize, texture.PreviewImage.Height - y));
+        }
+
         private bool HasSourceTextureTile(int textureId)
         {
-            return !TerrainTextureSourceRect(textureId).IsEmpty;
+            CustomTerrainTexture custom;
+            return TryGetCustomTerrainTexture(textureId, out custom) || !TerrainTextureSourceRect(textureId).IsEmpty;
         }
 
         private int TextureWindowIndex(TerrainPolygon polygon)
@@ -4602,29 +9152,65 @@ namespace SpyroNativeEditor
 
             Color light = polygon.HasFaceColor ? polygon.FaceColor : polygon.GameFill;
             Color lightRgb = Color.FromArgb(255, light.R, light.G, light.B);
+            string manual = TerrainMaterialOverrideFor(polygon);
+
+            if (!string.IsNullOrEmpty(manual) && manual != "unknown")
+            {
+                color = SurfaceAssistColor(manual, lightRgb);
+                return true;
+            }
+            if (manual == "unknown")
+                return false;
 
             if (IsWaterSurface(polygon))
             {
-                color = BlendColor(Color.FromArgb(255, 42, 124, 188), lightRgb, 0.12f);
+                color = SurfaceAssistColor("water", lightRgb);
+                return true;
+            }
+            if (IsCliffSurface(polygon))
+            {
+                color = SurfaceAssistColor("cliff", lightRgb);
                 return true;
             }
             if (IsStoneSurface(polygon))
             {
-                color = BlendColor(Color.FromArgb(255, 130, 136, 146), lightRgb, 0.24f);
+                color = SurfaceAssistColor("stone", lightRgb);
                 return true;
             }
             if (IsSandSurface(polygon))
             {
-                color = BlendColor(Color.FromArgb(255, 165, 156, 118), lightRgb, 0.16f);
+                color = SurfaceAssistColor("sand", lightRgb);
+                return true;
+            }
+            if (IsDirtSurface(polygon))
+            {
+                color = SurfaceAssistColor("dirt", lightRgb);
                 return true;
             }
             if (IsGrassSurface(polygon))
             {
-                color = BlendColor(Color.FromArgb(255, 70, 162, 70), lightRgb, 0.14f);
+                color = SurfaceAssistColor("grass", lightRgb);
                 return true;
             }
 
             return false;
+        }
+
+        private static Color SurfaceAssistColor(string surface, Color lightRgb)
+        {
+            if (surface == "water")
+                return BlendColor(Color.FromArgb(255, 34, 132, 194), lightRgb, 0.10f);
+            if (surface == "stone")
+                return BlendColor(Color.FromArgb(255, 132, 140, 138), lightRgb, 0.22f);
+            if (surface == "sand")
+                return BlendColor(Color.FromArgb(255, 178, 162, 108), lightRgb, 0.15f);
+            if (surface == "dirt")
+                return BlendColor(Color.FromArgb(255, 151, 132, 82), lightRgb, 0.18f);
+            if (surface == "cliff")
+                return BlendColor(Color.FromArgb(255, 178, 183, 121), lightRgb, 0.18f);
+            if (surface == "grass")
+                return BlendColor(Color.FromArgb(255, 70, 162, 70), lightRgb, 0.14f);
+            return lightRgb;
         }
 
         private string StoneHillSurfaceKindText(TerrainPolygon polygon)
@@ -4634,8 +9220,10 @@ namespace SpyroNativeEditor
             if (!string.IsNullOrEmpty(manual))
                 return "manual " + manual;
             if (IsWaterSurface(polygon)) return "water bias";
+            if (IsCliffSurface(polygon)) return "cliff bias";
             if (IsStoneSurface(polygon)) return "stone bias";
             if (IsSandSurface(polygon)) return "sand bias";
+            if (IsDirtSurface(polygon)) return "dry dirt bias";
             if (IsGrassSurface(polygon)) return "grass bias";
             return "on, no material override";
         }
@@ -4665,7 +9253,10 @@ namespace SpyroNativeEditor
             if (polygon == null) return false;
             string manual = TerrainMaterialOverrideFor(polygon);
             if (manual == "water") return true;
-            if (manual == "grass" || manual == "sand" || manual == "stone" || manual == "unknown") return false;
+            if (IsExplicitNonWaterSurface(manual)) return false;
+            if (IsPeacekeepersLevel())
+                return IsPeacekeepersWaterSurface(polygon);
+            if (!IsStoneHillLevel()) return IsGenericBlueWaterSurface(polygon);
             if (polygon.TextureId == 32)
                 return true;
             float zSpread = polygon.MaxZ - polygon.MinZ;
@@ -4683,7 +9274,10 @@ namespace SpyroNativeEditor
             if (polygon == null) return false;
             string manual = TerrainMaterialOverrideFor(polygon);
             if (manual == "stone") return true;
-            if (manual == "grass" || manual == "sand" || manual == "water" || manual == "unknown") return false;
+            if (IsExplicitNonStoneSurface(manual)) return false;
+            if (IsPeacekeepersLevel())
+                return IsPeacekeepersStoneSurface(polygon);
+            if (!IsStoneHillLevel()) return false;
             if (IsStoneTextureId(polygon.TextureId))
                 return true;
             if ((polygon.MaxZ - polygon.MinZ) > 220f)
@@ -4697,7 +9291,32 @@ namespace SpyroNativeEditor
                 return false;
             string manual = TerrainMaterialOverrideFor(polygon);
             if (manual == "sand") return true;
-            if (manual == "grass" || manual == "water" || manual == "stone" || manual == "unknown") return false;
+            if (IsExplicitNonSandSurface(manual)) return false;
+            if (!IsStoneHillLevel()) return false;
+            return false;
+        }
+
+        private bool IsDirtSurface(TerrainPolygon polygon)
+        {
+            if (polygon == null)
+                return false;
+            string manual = TerrainMaterialOverrideFor(polygon);
+            if (manual == "dirt") return true;
+            if (IsExplicitNonDirtSurface(manual)) return false;
+            if (IsPeacekeepersLevel())
+                return IsPeacekeepersDirtSurface(polygon);
+            return false;
+        }
+
+        private bool IsCliffSurface(TerrainPolygon polygon)
+        {
+            if (polygon == null)
+                return false;
+            string manual = TerrainMaterialOverrideFor(polygon);
+            if (manual == "cliff") return true;
+            if (IsExplicitNonCliffSurface(manual)) return false;
+            if (IsPeacekeepersLevel())
+                return IsPeacekeepersCliffSurface(polygon);
             return false;
         }
 
@@ -4707,7 +9326,8 @@ namespace SpyroNativeEditor
                 return false;
             string manual = TerrainMaterialOverrideFor(polygon);
             if (manual == "grass") return true;
-            if (manual == "water" || manual == "sand" || manual == "stone" || manual == "unknown") return false;
+            if (IsExplicitNonGrassSurface(manual)) return false;
+            if (!IsStoneHillLevel()) return false;
             if (IsWaterSurface(polygon) || IsSandSurface(polygon) || IsStoneSurface(polygon))
                 return false;
             if (IsGrassTextureId(polygon.TextureId))
@@ -4716,6 +9336,91 @@ namespace SpyroNativeEditor
             if (zSpread <= 160f && polygon.AvgZ >= 1180f && polygon.TextureId >= 1 && polygon.TextureId <= 29)
                 return true;
             return zSpread <= 120f && polygon.AvgZ >= 1120f;
+        }
+
+        private static bool IsExplicitNonWaterSurface(string manual)
+        {
+            return manual == "grass" || manual == "sand" || manual == "stone" || manual == "dirt" || manual == "cliff" || manual == "unknown";
+        }
+
+        private static bool IsExplicitNonStoneSurface(string manual)
+        {
+            return manual == "grass" || manual == "sand" || manual == "water" || manual == "dirt" || manual == "cliff" || manual == "unknown";
+        }
+
+        private static bool IsExplicitNonSandSurface(string manual)
+        {
+            return manual == "grass" || manual == "water" || manual == "stone" || manual == "dirt" || manual == "cliff" || manual == "unknown";
+        }
+
+        private static bool IsExplicitNonDirtSurface(string manual)
+        {
+            return manual == "grass" || manual == "water" || manual == "sand" || manual == "stone" || manual == "cliff" || manual == "unknown";
+        }
+
+        private static bool IsExplicitNonCliffSurface(string manual)
+        {
+            return manual == "grass" || manual == "water" || manual == "sand" || manual == "stone" || manual == "dirt" || manual == "unknown";
+        }
+
+        private static bool IsExplicitNonGrassSurface(string manual)
+        {
+            return manual == "water" || manual == "sand" || manual == "stone" || manual == "dirt" || manual == "cliff" || manual == "unknown";
+        }
+
+        private bool IsPeacekeepersWaterSurface(TerrainPolygon polygon)
+        {
+            if (polygon == null) return false;
+            if (polygon.TextureId == 0 || polygon.TextureId == 1 || polygon.TextureId == 2)
+                return true;
+            return IsGenericBlueWaterSurface(polygon) && (polygon.MaxZ - polygon.MinZ) <= 72f;
+        }
+
+        private static bool IsGenericBlueWaterSurface(TerrainPolygon polygon)
+        {
+            if (polygon == null || !polygon.HasFaceColor) return false;
+            return polygon.FaceColor.B >= polygon.FaceColor.R + 34
+                && polygon.FaceColor.G >= polygon.FaceColor.R + 26
+                && (polygon.MaxZ - polygon.MinZ) <= 96f;
+        }
+
+        private bool IsPeacekeepersCliffSurface(TerrainPolygon polygon)
+        {
+            if (polygon == null || IsWaterSurface(polygon)) return false;
+            float zSpread = polygon.MaxZ - polygon.MinZ;
+            if (zSpread >= 180f)
+                return true;
+            return polygon.TextureId == 30
+                || polygon.TextureId == 31
+                || polygon.TextureId == 32
+                || polygon.TextureId == 33
+                || polygon.TextureId == 34
+                || polygon.TextureId == 35
+                || polygon.TextureId == 36;
+        }
+
+        private bool IsPeacekeepersStoneSurface(TerrainPolygon polygon)
+        {
+            if (polygon == null || IsWaterSurface(polygon) || IsCliffSurface(polygon)) return false;
+            return polygon.TextureId == 12
+                || polygon.TextureId == 13
+                || polygon.TextureId == 14
+                || polygon.TextureId == 15
+                || polygon.TextureId == 16
+                || polygon.TextureId == 18
+                || polygon.TextureId == 19
+                || polygon.TextureId == 23
+                || polygon.TextureId == 24
+                || polygon.TextureId == 25
+                || polygon.TextureId == 26;
+        }
+
+        private bool IsPeacekeepersDirtSurface(TerrainPolygon polygon)
+        {
+            if (polygon == null) return false;
+            if (IsWaterSurface(polygon) || IsCliffSurface(polygon) || IsStoneSurface(polygon))
+                return false;
+            return polygon.HasTextureId;
         }
 
         private static bool IsGrassTextureId(int textureId)
@@ -4984,15 +9689,17 @@ namespace SpyroNativeEditor
             using (Brush textBrush = new SolidBrush(Color.White))
             using (Brush labelBack = new SolidBrush(Color.FromArgb(150, 10, 12, 16)))
             {
-                for (int i = 0; i < mobys.Count; i++)
+                List<int> drawOrder = BuildMobyDrawOrder(worldView);
+                for (int orderIndex = 0; orderIndex < drawOrder.Count; orderIndex++)
                 {
+                    int i = drawOrder[orderIndex];
                     Moby m = mobys[i];
-                    if (!worldView.Contains(m.X, m.Y)) continue;
                     PointF s = WorldToScreen(m.X, m.Y, m.Z);
                     bool selected = i == selectedMobyIndex || i == dragMobyIndex;
                     bool linkedSelected = !selected && IsLinkedToSelected(i);
                     bool groupSelected = !selected && !linkedSelected && IsInActiveSelectionGroup(i);
-                    float r = selected ? 8f : 6f;
+                    bool priorityLabel = IsAlwaysTopMoby(m);
+                    float r = selected ? 8f : (priorityLabel ? 7f : 6f);
                     if (showGroundCues && zoom > 0.035f)
                         DrawMobyGroundCue(g, m, s, r, selected || linkedSelected || groupSelected || m.IsEdited);
                     using (Brush brush = new SolidBrush(m.Color))
@@ -5010,10 +9717,9 @@ namespace SpyroNativeEditor
                     else if (groupSelected)
                         g.DrawEllipse(groupPen, s.X - r - 3, s.Y - r - 3, (r + 3) * 2, (r + 3) * 2);
 
-                    if (editorMode == EditorMode.Mobys && showLabels && zoom > 0.055f)
+                    if (editorMode == EditorMode.Mobys && (showLabels || priorityLabel) && zoom > (priorityLabel ? 0.035f : 0.055f))
                     {
-                        string iconText = MobyIconText(m);
-                        string label = MobyId(m) + (iconText == "Mby" ? " " : " " + iconText + " ") + m.DisplayLabel;
+                        string label = MapLabelForMoby(m);
                         SizeF size = g.MeasureString(label, small);
                         RectangleF rect = new RectangleF(s.X + 9, s.Y - 10, size.Width + 8, 18);
                         g.FillRectangle(labelBack, rect);
@@ -5021,6 +9727,81 @@ namespace SpyroNativeEditor
                     }
                 }
             }
+        }
+
+        private List<int> BuildMobyDrawOrder(RectangleF worldView)
+        {
+            List<int> drawOrder = new List<int>();
+            for (int i = 0; i < mobys.Count; i++)
+            {
+                Moby moby = mobys[i];
+                if (moby != null && worldView.Contains(moby.X, moby.Y))
+                    drawOrder.Add(i);
+            }
+            drawOrder.Sort(CompareMobyDrawOrder);
+            return drawOrder;
+        }
+
+        private int CompareMobyDrawOrder(int a, int b)
+        {
+            int priority = MobyLayerPriority(a).CompareTo(MobyLayerPriority(b));
+            if (priority != 0) return priority;
+            return a.CompareTo(b);
+        }
+
+        private int MobyLayerPriority(int mobyIndex)
+        {
+            if (mobyIndex < 0 || mobyIndex >= mobys.Count) return 0;
+            Moby moby = mobys[mobyIndex];
+            int priority = 0;
+            if (IsChestContentMarker(moby)) priority = Math.Max(priority, 20);
+            if (IsAlwaysTopMoby(moby)) priority = Math.Max(priority, 80);
+            if (IsInActiveSelectionGroup(mobyIndex)) priority = Math.Max(priority, 95);
+            if (IsLinkedToSelected(mobyIndex)) priority = Math.Max(priority, 110);
+            if (mobyIndex == selectedMobyIndex) priority = Math.Max(priority, 130);
+            if (mobyIndex == dragMobyIndex) priority = Math.Max(priority, 140);
+            return priority;
+        }
+
+        private static bool IsAlwaysTopMoby(Moby moby)
+        {
+            if (moby == null) return false;
+            if (IsLinkedContentsChestLike(moby)) return true;
+            MobyIconKind kind = GetMobyIconKind(moby);
+            return kind == MobyIconKind.Chest || kind == MobyIconKind.SpringChest || kind == MobyIconKind.LockedChest || kind == MobyIconKind.BlastChest || kind == MobyIconKind.Dragon || kind == MobyIconKind.Pedestal;
+        }
+
+        private static string MapLabelForMoby(Moby moby)
+        {
+            if (moby == null) return "";
+            string iconText = MobyIconText(moby);
+            string label = moby.DisplayLabel;
+            if (GetMobyIconKind(moby) == MobyIconKind.Dragon)
+                label = DragonMapName(moby);
+            return MobyId(moby) + (iconText == "Mby" ? " " : " " + iconText + " ") + label;
+        }
+
+        private static string DragonMapName(Moby moby)
+        {
+            string known = KnownDragonName(moby);
+            if (!string.IsNullOrEmpty(known)) return known;
+            string label = moby == null ? "" : moby.DisplayLabel;
+            if (string.IsNullOrEmpty(label) || string.Equals(label, "Dragon", StringComparison.OrdinalIgnoreCase) || string.Equals(label, "Dragon/NPC?", StringComparison.OrdinalIgnoreCase))
+                return "Dragon";
+            return label;
+        }
+
+        private static string KnownDragonName(Moby moby)
+        {
+            if (moby == null) return "";
+            string text = ((moby.DisplayLabel ?? "") + " " + (moby.Kind ?? "") + " " + (moby.Zone ?? "") + " " + (moby.Evidence ?? "")).ToLowerInvariant();
+            string[] names = new string[] { "Nestor", "Delbin", "Tomas", "Argus", "Astor", "Lindar", "Gildas", "Gavin" };
+            for (int i = 0; i < names.Length; i++)
+            {
+                if (text.IndexOf(names[i].ToLowerInvariant(), StringComparison.Ordinal) >= 0)
+                    return names[i] + (text.IndexOf(names[i].ToLowerInvariant() + "?", StringComparison.Ordinal) >= 0 ? "?" : "");
+            }
+            return "";
         }
 
         private void DrawMobyGroundCue(Graphics g, Moby moby, PointF screen, float radius, bool labelOffset)
@@ -5077,6 +9858,42 @@ namespace SpyroNativeEditor
                     g.DrawRectangle(outline, chest.X, chest.Y, chest.Width, chest.Height);
                     g.DrawLine(outline, chest.Left, center.Y, chest.Right, center.Y);
                     break;
+                case MobyIconKind.SpringChest:
+                    RectangleF springChest = new RectangleF(center.X - r - 1f, center.Y - (r * 0.68f), (r + 1f) * 2f, r * 1.36f);
+                    g.FillRectangle(brush, springChest);
+                    g.DrawRectangle(outline, springChest.X, springChest.Y, springChest.Width, springChest.Height);
+                    g.DrawLine(outline, springChest.Left, center.Y, springChest.Right, center.Y);
+                    g.DrawLine(outline, center.X - r * 0.58f, center.Y + r * 0.42f, center.X - r * 0.3f, center.Y + r * 0.12f);
+                    g.DrawLine(outline, center.X - r * 0.3f, center.Y + r * 0.12f, center.X, center.Y + r * 0.42f);
+                    g.DrawLine(outline, center.X, center.Y + r * 0.42f, center.X + r * 0.3f, center.Y + r * 0.12f);
+                    g.DrawLine(outline, center.X + r * 0.3f, center.Y + r * 0.12f, center.X + r * 0.58f, center.Y + r * 0.42f);
+                    DrawSmallRewardGem(g, moby, center.X, center.Y - r * 0.34f, Math.Max(3f, r * 0.46f), outline);
+                    break;
+                case MobyIconKind.LockedChest:
+                    RectangleF lockedChest = new RectangleF(center.X - r - 1f, center.Y - (r * 0.72f), (r + 1f) * 2f, r * 1.44f);
+                    g.FillRectangle(brush, lockedChest);
+                    g.DrawRectangle(outline, lockedChest.X, lockedChest.Y, lockedChest.Width, lockedChest.Height);
+                    g.DrawLine(outline, lockedChest.Left, center.Y, lockedChest.Right, center.Y);
+                    RectangleF lockBody = new RectangleF(center.X - r * 0.28f, center.Y - r * 0.02f, r * 0.56f, r * 0.48f);
+                    using (Brush lockBrush = new SolidBrush(Color.FromArgb(225, 34, 28, 22)))
+                        g.FillRectangle(lockBrush, lockBody);
+                    g.DrawRectangle(outline, lockBody.X, lockBody.Y, lockBody.Width, lockBody.Height);
+                    g.DrawArc(outline, center.X - r * 0.34f, center.Y - r * 0.54f, r * 0.68f, r * 0.72f, 200f, 140f);
+                    break;
+                case MobyIconKind.BlastChest:
+                    RectangleF blastChest = new RectangleF(center.X - r - 1f, center.Y - (r * 0.7f), (r + 1f) * 2f, r * 1.4f);
+                    g.FillRectangle(brush, blastChest);
+                    g.DrawRectangle(outline, blastChest.X, blastChest.Y, blastChest.Width, blastChest.Height);
+                    g.DrawLine(outline, blastChest.Left, center.Y, blastChest.Right, center.Y);
+                    g.DrawLine(outline, blastChest.Left + r * 0.22f, blastChest.Top + r * 0.18f, blastChest.Right - r * 0.22f, blastChest.Bottom - r * 0.18f);
+                    g.DrawLine(outline, blastChest.Right - r * 0.22f, blastChest.Top + r * 0.18f, blastChest.Left + r * 0.22f, blastChest.Bottom - r * 0.18f);
+                    using (Pen fusePen = new Pen(Color.FromArgb(230, 248, 222, 94), 1.4f))
+                    {
+                        g.DrawLine(fusePen, center.X + r * 0.52f, center.Y - r * 0.64f, center.X + r * 0.88f, center.Y - r * 1.05f);
+                        g.DrawLine(fusePen, center.X + r * 0.78f, center.Y - r * 0.98f, center.X + r * 1.02f, center.Y - r * 0.86f);
+                    }
+                    DrawSmallRewardGem(g, moby, center.X, center.Y + r * 0.12f, Math.Max(3f, r * 0.42f), outline);
+                    break;
                 case MobyIconKind.Dragon:
                     PointF[] dragon = new PointF[]
                     {
@@ -5125,6 +9942,21 @@ namespace SpyroNativeEditor
                     g.DrawLine(outline, center.X + r * 0.72f, center.Y + r * 0.72f, center.X + r * 1.15f, center.Y + r * 0.3f);
                     g.DrawLine(outline, center.X + r * 0.98f, center.Y + r * 0.98f, center.X + r * 1.42f, center.Y + r * 0.56f);
                     break;
+                case MobyIconKind.Camera:
+                    RectangleF cameraBody = new RectangleF(center.X - r, center.Y - r * 0.62f, r * 1.45f, r * 1.24f);
+                    PointF[] cameraLens = new PointF[]
+                    {
+                        new PointF(center.X + r * 0.45f, center.Y - r * 0.36f),
+                        new PointF(center.X + r + 2f, center.Y - r * 0.72f),
+                        new PointF(center.X + r + 2f, center.Y + r * 0.72f),
+                        new PointF(center.X + r * 0.45f, center.Y + r * 0.36f)
+                    };
+                    g.FillRectangle(brush, cameraBody);
+                    g.FillPolygon(brush, cameraLens);
+                    g.DrawRectangle(outline, cameraBody.X, cameraBody.Y, cameraBody.Width, cameraBody.Height);
+                    g.DrawPolygon(outline, cameraLens);
+                    g.DrawEllipse(outline, center.X - r * 0.42f, center.Y - r * 0.42f, r * 0.84f, r * 0.84f);
+                    break;
                 case MobyIconKind.Enemy:
                     PointF[] active = new PointF[]
                     {
@@ -5151,6 +9983,36 @@ namespace SpyroNativeEditor
                     g.FillEllipse(brush, box);
                     g.DrawEllipse(outline, box);
                     break;
+            }
+        }
+
+        private static void DrawSmallRewardGem(Graphics g, Moby moby, float x, float y, float r, Pen outline)
+        {
+            PointF[] gem = new PointF[]
+            {
+                new PointF(x, y - r),
+                new PointF(x + r, y),
+                new PointF(x, y + r),
+                new PointF(x - r, y)
+            };
+            using (Brush gemBrush = new SolidBrush(GemDrawColorForReward(moby)))
+                g.FillPolygon(gemBrush, gem);
+            g.DrawPolygon(outline, gem);
+        }
+
+        private static Color GemDrawColorForReward(Moby moby)
+        {
+            int gemByte = 0;
+            if (moby != null)
+                gemByte = moby.HasRewardColorEdit ? moby.RewardByte53Override : moby.Flag4B;
+            switch (gemByte)
+            {
+                case 0x54: return Color.FromArgb(46, 204, 113);
+                case 0x55: return Color.FromArgb(52, 152, 219);
+                case 0x56: return Color.FromArgb(241, 196, 15);
+                case 0x57: return Color.FromArgb(155, 89, 182);
+                case 0x53: return Color.FromArgb(231, 76, 60);
+                default: return Color.FromArgb(245, 245, 238);
             }
         }
 
@@ -5268,9 +10130,23 @@ namespace SpyroNativeEditor
 
         private void ShowMobyContextMenu(int mobyIndex, Point location)
         {
+            ShowMobyContextMenu(mobyIndex, canvas, location);
+        }
+
+        private void ShowMobyContextMenu(int mobyIndex, Control menuTarget, Point location)
+        {
             if (mobyIndex < 0 || mobyIndex >= mobys.Count) return;
             Moby moby = mobys[mobyIndex];
             ContextMenuStrip menu = new ContextMenuStrip();
+            ToolStripMenuItem identityItem = new ToolStripMenuItem("Edit editor name/type...");
+            identityItem.Enabled = moby.TrueIndex >= 0;
+            identityItem.Click += delegate { EditMobyIdentityOverride(mobyIndex); };
+            menu.Items.Add(identityItem);
+            ToolStripMenuItem contentsItem = new ToolStripMenuItem("Edit chest reward...");
+            contentsItem.Enabled = CanOpenChestContentEditor(mobyIndex);
+            contentsItem.Click += delegate { SelectMoby(mobyIndex); ShowChestContentsEditor(); };
+            menu.Items.Add(contentsItem);
+            menu.Items.Add(new ToolStripSeparator());
             ToolStripMenuItem undoItem = new ToolStripMenuItem(moby.IsEdited ? "Undo " + MobyId(moby) + " edit" : "No edit to undo");
             undoItem.Enabled = moby.IsEdited;
             undoItem.Click += delegate { UndoSingleMobyEdit(mobyIndex); };
@@ -5280,7 +10156,265 @@ namespace SpyroNativeEditor
             removeItem.Enabled = moby.IsAppendedRecord || (moby.Patchable && moby.TrueIndex >= 0 && moby.TrueIndex < SourceRecordCountForLevel(currentLevelKey));
             removeItem.Click += delegate { HideMobySlot(mobyIndex); };
             menu.Items.Add(removeItem);
-            menu.Show(canvas, location);
+            menu.Show(menuTarget == null ? canvas : menuTarget, location);
+        }
+
+        private void EditMobyIdentityOverride(int mobyIndex)
+        {
+            if (mobyIndex < 0 || mobyIndex >= mobys.Count) return;
+            Moby moby = mobys[mobyIndex];
+            if (moby.TrueIndex < 0)
+            {
+                statusLabel.Text = "This moby has no loader record index for a saved editor identity override.";
+                return;
+            }
+
+            int signatureMatchCount = CountMobyIdentitySignatureMatches(moby);
+            using (MobyIdentityOverrideDialog dialog = new MobyIdentityOverrideDialog(MobyId(moby), moby.DisplayLabel, moby.Kind, signatureMatchCount))
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                string label = CleanIdentityOverrideText(dialog.IdentityName, 80);
+                string kind = CleanIdentityOverrideText(dialog.IdentityKind, 120);
+                if (string.IsNullOrEmpty(label))
+                {
+                    MessageBox.Show(this, "Enter a name for this moby.", "Name required", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                try
+                {
+                    List<Moby> targets = dialog.ApplyToMatchingSignature ? FindMobyIdentitySignatureMatches(moby) : new List<Moby>(new Moby[] { moby });
+                    foreach (Moby target in targets)
+                        ApplyMobyIdentityOverride(target, label, kind);
+                    SaveMobyIdentityOverrides(targets, label, kind);
+                    BuildSelectionGroups();
+                    RefreshMobyList();
+                    SelectMoby(mobyIndex);
+                    RefreshObjectAddChoices();
+                    UpdateInspector();
+                    canvas.Invalidate();
+                    statusLabel.Text = "Saved editor identity override for " + targets.Count.ToString() + " moby record(s) to " + Path.GetFileName(MobyIdentityOverridesPath()) + ".";
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, ex.Message, "Could not save editor identity", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    statusLabel.Text = "Could not save editor identity override.";
+                }
+            }
+        }
+
+        private int CountMobyIdentitySignatureMatches(Moby seed)
+        {
+            return FindMobyIdentitySignatureMatches(seed).Count;
+        }
+
+        private List<Moby> FindMobyIdentitySignatureMatches(Moby seed)
+        {
+            List<Moby> matches = new List<Moby>();
+            if (seed == null) return matches;
+            if (!CanUseMobyIdentityBatchSignature(seed))
+            {
+                if (seed.TrueIndex >= 0)
+                    matches.Add(seed);
+                return matches;
+            }
+            for (int i = 0; i < mobys.Count; i++)
+            {
+                Moby candidate = mobys[i];
+                if (IsMobyIdentitySignatureMatch(seed, candidate))
+                    matches.Add(candidate);
+            }
+            return matches;
+        }
+
+        private static bool IsMobyIdentitySignatureMatch(Moby seed, Moby candidate)
+        {
+            if (seed == null || candidate == null) return false;
+            if (candidate.TrueIndex < 0) return false;
+            if (seed.Type != candidate.Type) return false;
+            if (seed.SpecialDataPointer != candidate.SpecialDataPointer) return false;
+            if (seed.Flag4A != candidate.Flag4A || seed.Flag4B != candidate.Flag4B) return false;
+            if (seed.SpecialDataPointer == 0 && seed.State != candidate.State) return false;
+            return true;
+        }
+
+        private static bool CanUseMobyIdentityBatchSignature(Moby seed)
+        {
+            if (seed == null || seed.TrueIndex < 0) return false;
+            if (IsStandaloneGemIdentityBatchCandidate(seed)) return false;
+            return seed.SpecialDataPointer != 0;
+        }
+
+        private static bool IsStandaloneGemIdentityBatchCandidate(Moby moby)
+        {
+            if (moby == null) return false;
+            if (moby.Type != 0x18 || moby.SpecialDataPointer != 0 || moby.Flag4A != 0x40 || moby.Flag4B != 0xFF)
+                return false;
+            string text = MobySearchText(moby);
+            return text.IndexOf("key", StringComparison.Ordinal) < 0;
+        }
+
+        private string MobyIdentityOverridesPath()
+        {
+            return Path.Combine(workspace, currentLevelKey + "-moby-user-overrides.json");
+        }
+
+        private static string CleanIdentityOverrideText(string text, int maxLength)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            text = text.Trim();
+            while (text.IndexOf("  ", StringComparison.Ordinal) >= 0)
+                text = text.Replace("  ", " ");
+            if (maxLength > 0 && text.Length > maxLength)
+                text = text.Substring(0, maxLength).Trim();
+            return text;
+        }
+
+        private void ApplyMobyIdentityOverride(Moby moby, string label, string kind)
+        {
+            if (moby == null) return;
+            Color identityColor = ColorForIdentityText(label, kind, moby.Color);
+            string evidence = "Manual editor identity override; runtime type/state unchanged.";
+
+            if (moby.HasBaseIdentity)
+            {
+                moby.BaseLabel = label;
+                moby.BaseKind = kind;
+                moby.BaseConfidence = "user override";
+                moby.BaseEvidence = evidence;
+                moby.BaseColor = identityColor;
+            }
+
+            bool identityControlledByEdit = moby.HasGemColorEdit || moby.HasRewardColorEdit || moby.HasRecordCloneEdit || moby.HasHiddenSlotEdit;
+            if (!identityControlledByEdit)
+            {
+                moby.Label = label;
+                moby.Kind = kind;
+                moby.Confidence = "user override";
+                moby.Evidence = evidence;
+                moby.Color = identityColor;
+                if (!moby.HasBaseIdentity)
+                    moby.CaptureBaseIdentity();
+            }
+        }
+
+        private void SaveMobyIdentityOverride(Moby moby, string label, string kind)
+        {
+            SaveMobyIdentityOverrides(new List<Moby>(new Moby[] { moby }), label, kind);
+        }
+
+        private void SaveMobyIdentityOverrides(List<Moby> targets, string label, string kind)
+        {
+            string path = MobyIdentityOverridesPath();
+            List<Dictionary<string, object>> entries = LoadMobyIdentityOverrideEntries(path);
+            if (targets == null) return;
+
+            foreach (Moby moby in targets)
+            {
+                if (moby == null || moby.TrueIndex < 0) continue;
+                Dictionary<string, object> target = null;
+                for (int i = 0; i < entries.Count; i++)
+                {
+                    if (GetDictionaryInt(entries[i], "trueIndex", -1) == moby.TrueIndex)
+                    {
+                        target = entries[i];
+                        break;
+                    }
+                }
+
+                if (target == null)
+                {
+                    target = new Dictionary<string, object>();
+                    entries.Add(target);
+                }
+
+                Color identityColor = ColorForIdentityText(label, kind, moby.Color);
+                target["trueIndex"] = moby.TrueIndex;
+                if (moby.LegacyIndex >= 0)
+                    target["legacyIndex"] = moby.LegacyIndex;
+                target["displayTargetLabel"] = label;
+                target["candidateKind"] = kind;
+                target["typeId"] = moby.Type;
+                target["typeHex"] = "0x" + moby.Type.ToString("X2");
+                target["stateHex"] = "0x" + moby.State.ToString("X2");
+                target["specialDataPointer"] = FormatAddress(moby.SpecialDataPointer);
+                target["flag4AHex"] = "0x" + moby.Flag4A.ToString("X2");
+                target["flag4BHex"] = "0x" + moby.Flag4B.ToString("X2");
+                if (moby.IsStandaloneGemSourceRecord)
+                {
+                    target["sourceByte36Hex"] = "0x" + moby.SourceByte36.ToString("X2");
+                    target["sourceByte37Hex"] = "0x" + moby.SourceByte37.ToString("X2");
+                    target["sourceByte4FHex"] = "0x" + moby.SourceByte4F.ToString("X2");
+                }
+                target["confidence"] = "user override";
+                target["evidence"] = "Manual editor identity override saved from the right-click menu. Runtime type/state unchanged.";
+                target["color"] = ColorToHtml(identityColor);
+                target["updatedAt"] = DateTime.UtcNow.ToString("o");
+            }
+
+            Dictionary<string, object> root = new Dictionary<string, object>();
+            root["generatedAt"] = DateTime.UtcNow.ToString("o");
+            root["editor"] = "NativeSpyroEditor";
+            root["levelKey"] = currentLevelKey;
+            root["note"] = "Manual editor-only moby identity overrides. These change labels, categories, and map colors in the editor, not game runtime behavior.";
+            root["mobys"] = entries.ToArray();
+
+            JavaScriptSerializer serializer = new JavaScriptSerializer();
+            serializer.MaxJsonLength = int.MaxValue;
+            File.WriteAllText(path, serializer.Serialize(root), Encoding.UTF8);
+        }
+
+        private static List<Dictionary<string, object>> LoadMobyIdentityOverrideEntries(string path)
+        {
+            List<Dictionary<string, object>> entries = new List<Dictionary<string, object>>();
+            if (!File.Exists(path)) return entries;
+
+            JavaScriptSerializer serializer = new JavaScriptSerializer();
+            serializer.MaxJsonLength = int.MaxValue;
+            Dictionary<string, object> root = serializer.DeserializeObject(File.ReadAllText(path, Encoding.UTF8)) as Dictionary<string, object>;
+            if (root == null) return entries;
+
+            object[] rawEntries = GeometryLoader.GetArray(root, "mobys");
+            foreach (object obj in rawEntries)
+            {
+                Dictionary<string, object> entry = obj as Dictionary<string, object>;
+                if (entry != null)
+                    entries.Add(new Dictionary<string, object>(entry));
+            }
+            return entries;
+        }
+
+        private static int GetDictionaryInt(Dictionary<string, object> dict, string name, int fallback)
+        {
+            if (dict == null || !dict.ContainsKey(name) || dict[name] == null) return fallback;
+            try { return Convert.ToInt32(dict[name]); }
+            catch { return fallback; }
+        }
+
+        private static Color ColorForIdentityText(string label, string kind, Color fallback)
+        {
+            string text = ((label ?? "") + " " + (kind ?? "")).ToLowerInvariant();
+            if (HasAny(text, "purple gem", "25-gem", "gem (25)")) return Color.FromArgb(155, 89, 182);
+            if (HasAny(text, "yellow gem", "10-gem", "gem (10)")) return Color.FromArgb(241, 196, 15);
+            if (HasAny(text, "blue gem", "5-gem", "gem (5)")) return Color.FromArgb(52, 152, 219);
+            if (HasAny(text, "green gem", "2-gem", "gem (2)")) return Color.FromArgb(46, 204, 113);
+            if (HasAny(text, "red gem", "1-gem", "gem (1)")) return Color.FromArgb(231, 76, 60);
+            if (HasAny(text, "gem", "treasure", "collectible")) return Color.FromArgb(241, 196, 15);
+            if (HasAny(text, "dragon", "pedestal", "fairy")) return Color.FromArgb(166, 126, 255);
+            if (HasAny(text, "portal", "return home", "balloonist", "transport npc")) return Color.FromArgb(62, 191, 196);
+            if (HasAny(text, "camera", "view point", "viewpoint")) return Color.FromArgb(109, 169, 232);
+            if (HasAny(text, "chest", "container", "box")) return Color.FromArgb(230, 126, 34);
+            if (HasAny(text, "enemy", "gnorc", "fodder", "sheep", "shepherd", "shepard", "ram", "thief")) return Color.FromArgb(230, 91, 67);
+            if (HasAny(text, "scenery", "grass", "flower", "tree", "lamp", "flag")) return Color.FromArgb(91, 176, 92);
+            if (HasAny(text, "nonvisual", "invisible", "control", "helper")) return Color.FromArgb(150, 162, 166);
+            return fallback.IsEmpty ? Color.FromArgb(255, 230, 80) : fallback;
+        }
+
+        private static string ColorToHtml(Color color)
+        {
+            if (color.IsEmpty)
+                color = Color.FromArgb(255, 230, 80);
+            return "#" + color.R.ToString("X2") + color.G.ToString("X2") + color.B.ToString("X2");
         }
 
         private void ShowTerrainContextMenu(int terrainIndex, Point location)
@@ -5288,7 +10422,7 @@ namespace SpyroNativeEditor
             if (geometry == null || terrainIndex < 0 || terrainIndex >= geometry.Polygons.Count) return;
             TerrainPolygon polygon = geometry.Polygons[terrainIndex];
             ContextMenuStrip menu = new ContextMenuStrip();
-            ToolStripMenuItem undoItem = new ToolStripMenuItem(polygon.IsTerrainEdited ? "Undo terrain face Z edit" : "No terrain edit to undo");
+            ToolStripMenuItem undoItem = new ToolStripMenuItem(polygon.IsTerrainEdited ? "Undo terrain face edits" : "No terrain edit to undo");
             undoItem.Enabled = polygon.IsTerrainEdited;
             undoItem.Click += delegate { UndoTerrainFaceEdit(terrainIndex); };
             menu.Items.Add(undoItem);
@@ -5309,10 +10443,38 @@ namespace SpyroNativeEditor
             menu.Items.Add(title);
             if (textureId >= 0)
             {
+                ToolStripMenuItem copyTextureItem = new ToolStripMenuItem("Copy Texture ID " + textureId.ToString());
+                copyTextureItem.Click += delegate { CopyTerrainTextureId(textureId); };
+                menu.Items.Add(copyTextureItem);
+
+                ToolStripMenuItem pasteTextureItem = new ToolStripMenuItem(copiedTerrainTextureId >= 0
+                    ? "Paste Texture ID " + copiedTerrainTextureId.ToString() + " to This Face"
+                    : "Paste Texture ID to This Face");
+                pasteTextureItem.Enabled = copiedTerrainTextureId >= 0;
+                pasteTextureItem.Click += delegate { SetTerrainFaceTexture(terrainIndex, copiedTerrainTextureId); };
+                menu.Items.Add(pasteTextureItem);
+
+                ToolStripMenuItem pasteAllTextureItem = new ToolStripMenuItem(copiedTerrainTextureId >= 0
+                    ? "Replace All Original Texture " + polygon.OriginalTextureId.ToString() + " With " + copiedTerrainTextureId.ToString()
+                    : "Replace All Matching Original Texture");
+                pasteAllTextureItem.Enabled = copiedTerrainTextureId >= 0;
+                pasteAllTextureItem.Click += delegate { ReplaceTerrainTextureFamily(polygon.OriginalTextureId, copiedTerrainTextureId); };
+                menu.Items.Add(pasteAllTextureItem);
+
+                ToolStripMenuItem undoTextureItem = new ToolStripMenuItem(polygon.HasTextureEdit
+                    ? "Undo Texture ID Override"
+                    : "No texture override to undo");
+                undoTextureItem.Enabled = polygon.HasTextureEdit;
+                undoTextureItem.Click += delegate { ResetTerrainFaceTexture(terrainIndex); };
+                menu.Items.Add(undoTextureItem);
+                menu.Items.Add(new ToolStripSeparator());
+
                 AddTerrainMaterialMenuItem(menu, textureId, "Grass", "grass", current);
                 AddTerrainMaterialMenuItem(menu, textureId, "Water", "water", current);
                 AddTerrainMaterialMenuItem(menu, textureId, "Sand / Beach", "sand", current);
+                AddTerrainMaterialMenuItem(menu, textureId, "Dry Dirt", "dirt", current);
                 AddTerrainMaterialMenuItem(menu, textureId, "Stone / Building", "stone", current);
+                AddTerrainMaterialMenuItem(menu, textureId, "Cliff / Wall", "cliff", current);
                 AddTerrainMaterialMenuItem(menu, textureId, "Known Unknown", "unknown", current);
                 ToolStripMenuItem clearItem = new ToolStripMenuItem("Clear Manual Label");
                 clearItem.Enabled = !string.IsNullOrEmpty(current);
@@ -5338,6 +10500,179 @@ namespace SpyroNativeEditor
             menu.Show(canvas, location);
         }
 
+        private void CopyTerrainTextureId(int textureId)
+        {
+            if (textureId < 0) return;
+            copiedTerrainTextureId = textureId;
+            statusLabel.Text = "Copied terrain texture id " + textureId.ToString() + ". Right-click another terrain face to paste it.";
+            UpdateInspector();
+        }
+
+        private void SetTerrainFaceTexture(int terrainIndex, int textureId)
+        {
+            if (geometry == null || terrainIndex < 0 || terrainIndex >= geometry.Polygons.Count || textureId < 0) return;
+            TerrainPolygon polygon = geometry.Polygons[terrainIndex];
+            polygon.ApplyTextureOverride(textureId);
+            hasUnsavedEdits = true;
+            selectedTerrainIndex = terrainIndex;
+            UpdateInspector();
+            canvas.Invalidate();
+            statusLabel.Text = "Set terrain face " + terrainIndex.ToString() + " texture preview to " + textureId.ToString() + ". Save Edits to keep this texture override.";
+        }
+
+        private void ResetTerrainFaceTexture(int terrainIndex)
+        {
+            if (geometry == null || terrainIndex < 0 || terrainIndex >= geometry.Polygons.Count) return;
+            TerrainPolygon polygon = geometry.Polygons[terrainIndex];
+            polygon.ResetTextureEdit();
+            hasUnsavedEdits = true;
+            selectedTerrainIndex = terrainIndex;
+            UpdateInspector();
+            canvas.Invalidate();
+            statusLabel.Text = "Reset terrain face " + terrainIndex.ToString() + " texture preview to original texture " + polygon.OriginalTextureId.ToString() + ".";
+        }
+
+        private void ReplaceTerrainTextureFamily(int originalTextureId, int newTextureId)
+        {
+            if (geometry == null || originalTextureId < 0 || newTextureId < 0) return;
+            int changed = 0;
+            foreach (TerrainPolygon candidate in geometry.Polygons)
+            {
+                if (candidate == null || candidate.OriginalTextureId != originalTextureId) continue;
+                candidate.ApplyTextureOverride(newTextureId);
+                changed++;
+            }
+            if (changed <= 0) return;
+            hasUnsavedEdits = true;
+            UpdateInspector();
+            canvas.Invalidate();
+            statusLabel.Text = "Set " + changed.ToString() + " terrain face texture preview(s) from original " + originalTextureId.ToString() + " to " + newTextureId.ToString() + ". Save Edits to keep the batch.";
+        }
+
+        private void ApplyDarkHollowTerrainPaletteMatch()
+        {
+            if (!HasLoadedLevel() || geometry == null)
+            {
+                MessageBox.Show(this, "Load Stone Hill first.", "No terrain loaded", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (!IsStoneHillLevel())
+            {
+                MessageBox.Show(this, "Dark Hollow terrain matching is currently wired to Stone Hill because Create Terrain BIN exports Stone Hill texture-id swaps.", "Stone Hill only", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            LevelDefinition donorLevel = FindLevelDefinition("darkhollow");
+            if (donorLevel == null)
+            {
+                MessageBox.Show(this, "Dark Hollow is not in the level catalog.", "Missing donor level", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            string overlayPath = GetLevelGeometryPath(donorLevel.Key);
+            if (!File.Exists(overlayPath))
+            {
+                MessageBox.Show(this, MissingLevelAssetMessage(donorLevel.DisplayName, "geometry overlay"), "Missing Dark Hollow capture", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            DialogResult confirm = MessageBox.Show(
+                this,
+                "Apply a full Stone Hill terrain texture-id remap matched to Dark Hollow captured terrain colors?\n\nThis stays exportable by choosing Stone Hill texture slots only. Save Edits, then Create Terrain BIN to test it in game.",
+                "Apply Dark Hollow terrain match",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (confirm != DialogResult.Yes)
+                return;
+
+            try
+            {
+                GeometryCandidate donorGeometry = GeometryLoader.LoadFirstCandidate(overlayPath);
+                Dictionary<int, TerrainTextureChoice> currentByTexture = BuildTerrainTextureChoiceMap(currentLevelKey, currentLevelName, geometry);
+                Dictionary<int, TerrainTextureChoice> donorByTexture = BuildTerrainTextureChoiceMap(donorLevel.Key, donorLevel.DisplayName, donorGeometry);
+                if (currentByTexture.Count == 0 || donorByTexture.Count == 0)
+                {
+                    MessageBox.Show(this, "The terrain overlays do not expose texture IDs to match.", "No texture IDs", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                List<TerrainTextureChoice> currentChoices = new List<TerrainTextureChoice>(currentByTexture.Values);
+                List<TerrainTextureChoice> donorChoices = new List<TerrainTextureChoice>(donorByTexture.Values);
+                Dictionary<int, int> remap = new Dictionary<int, int>();
+                int changedFamilies = 0;
+                foreach (KeyValuePair<int, TerrainTextureChoice> pair in currentByTexture)
+                {
+                    TerrainTextureChoice nearestDonor = FindNearestTerrainTextureChoice(pair.Value.SampleColor, donorChoices);
+                    TerrainTextureChoice nearestCurrent = nearestDonor == null ? null : FindNearestTerrainTextureChoice(nearestDonor.SampleColor, currentChoices);
+                    if (nearestCurrent == null)
+                        continue;
+
+                    remap[pair.Key] = nearestCurrent.TextureId;
+                    if (nearestCurrent.TextureId != pair.Key)
+                        changedFamilies++;
+                }
+
+                int changedFaces = 0;
+                foreach (TerrainPolygon polygon in geometry.Polygons)
+                {
+                    if (polygon == null || polygon.OriginalTextureId < 0) continue;
+                    int newTextureId;
+                    if (!remap.TryGetValue(polygon.OriginalTextureId, out newTextureId))
+                        continue;
+                    if (polygon.TextureId != newTextureId)
+                        changedFaces++;
+                    polygon.ApplyTextureOverride(newTextureId);
+                }
+
+                SelectTerrainDonorLevel(donorLevel.Key);
+                RefreshTerrainTextureLibrary();
+                UpdateInspector();
+                canvas.Invalidate();
+
+                if (changedFaces > 0)
+                {
+                    hasUnsavedEdits = true;
+                    statusLabel.Text = "Applied Dark Hollow terrain match: " + changedFaces.ToString() + " Stone Hill face(s) across " + changedFamilies.ToString() + " texture family swap(s). Save Edits, then Create Terrain BIN.";
+                }
+                else
+                {
+                    statusLabel.Text = "Dark Hollow terrain match found no better same-level Stone Hill texture swaps. Cross-level texture import is the next step.";
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Could not apply Dark Hollow terrain match", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private static TerrainTextureChoice FindNearestTerrainTextureChoice(Color color, List<TerrainTextureChoice> choices)
+        {
+            if (choices == null || choices.Count == 0)
+                return null;
+
+            TerrainTextureChoice best = null;
+            int bestScore = int.MaxValue;
+            foreach (TerrainTextureChoice choice in choices)
+            {
+                if (choice == null) continue;
+                int score = ColorDistanceSquared(color, choice.SampleColor);
+                if (best == null || score < bestScore)
+                {
+                    best = choice;
+                    bestScore = score;
+                }
+            }
+            return best;
+        }
+
+        private static int ColorDistanceSquared(Color a, Color b)
+        {
+            int dr = (int)a.R - (int)b.R;
+            int dg = (int)a.G - (int)b.G;
+            int db = (int)a.B - (int)b.B;
+            return (dr * dr) + (dg * dg) + (db * db);
+        }
+
         private void UndoTerrainFaceEdit(int terrainIndex)
         {
             if (geometry == null || terrainIndex < 0 || terrainIndex >= geometry.Polygons.Count) return;
@@ -5347,7 +10682,7 @@ namespace SpyroNativeEditor
             selectedTerrainIndex = terrainIndex;
             UpdateInspector();
             canvas.Invalidate();
-            statusLabel.Text = "Undid terrain face " + terrainIndex.ToString() + " Z edit. Save Edits to keep the reset.";
+            statusLabel.Text = "Undid terrain face " + terrainIndex.ToString() + " edits. Save Edits to keep the reset.";
         }
 
         private void AddTerrainMaterialMenuItem(ContextMenuStrip menu, int textureId, string label, string surface, string current)
@@ -5508,6 +10843,22 @@ namespace SpyroNativeEditor
             canvas.Invalidate();
         }
 
+        internal void CanvasMouseDoubleClick(MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left || editorMode != EditorMode.Mobys)
+                return;
+
+            int hit = HitMoby(e.Location);
+            if (hit < 0) return;
+            SelectMoby(hit);
+            dragMobyIndex = -1;
+            if (CanOpenChestContentEditor(hit))
+            {
+                ShowChestContentsEditor();
+                canvas.Invalidate();
+            }
+        }
+
         private bool RightMouseDragExceeded(Point location)
         {
             int dx = location.X - rightMouseDownPoint.X;
@@ -5529,15 +10880,26 @@ namespace SpyroNativeEditor
 
         private int HitMoby(Point screen)
         {
-            for (int i = mobys.Count - 1; i >= 0; i--)
+            int best = -1;
+            int bestPriority = int.MinValue;
+            float bestDistance = float.MaxValue;
+            for (int i = 0; i < mobys.Count; i++)
             {
                 PointF s = WorldToScreen(mobys[i].X, mobys[i].Y, mobys[i].Z);
                 float dx = screen.X - s.X;
                 float dy = screen.Y - s.Y;
-                if ((dx * dx) + (dy * dy) <= 144f)
-                    return i;
+                float distance = (dx * dx) + (dy * dy);
+                if (distance > 144f) continue;
+
+                int priority = MobyLayerPriority(i);
+                if (priority > bestPriority || (priority == bestPriority && distance < bestDistance))
+                {
+                    best = i;
+                    bestPriority = priority;
+                    bestDistance = distance;
+                }
             }
-            return -1;
+            return best;
         }
 
         private void SelectTerrainAt(Point screen)
@@ -5705,6 +11067,11 @@ namespace SpyroNativeEditor
             protected override void OnMouseUp(MouseEventArgs e)
             {
                 owner.CanvasMouseUp(e);
+            }
+
+            protected override void OnMouseDoubleClick(MouseEventArgs e)
+            {
+                owner.CanvasMouseDoubleClick(e);
             }
 
             protected override void OnMouseWheel(MouseEventArgs e)
@@ -6083,6 +11450,9 @@ namespace SpyroNativeEditor
                     State = state,
                     RuntimeAddress = (uint)(0x80000000u + (uint)offset),
                     SpecialDataPointer = specialDataPointer,
+                    SourceByte36 = ram[offset + 0x36],
+                    SourceByte37 = ram[offset + 0x37],
+                    SourceByte4F = ram[offset + 0x4F],
                     Flag4A = ram[offset + 0x52],
                     Flag4B = ram[offset + 0x53],
                     Color = ColorForType(type),
@@ -6165,6 +11535,7 @@ namespace SpyroNativeEditor
         public static int Apply(string workspace, List<Moby> mobys, string levelKey, bool includeStoneHillMetadata)
         {
             Dictionary<int, MobyMetadata> metadata = new Dictionary<int, MobyMetadata>();
+            Dictionary<string, MobyMetadata> globalSignatureMetadata = BuildGlobalSignatureMetadata(workspace);
             if (includeStoneHillMetadata)
             {
                 MergeFile(Path.Combine(workspace, "stonehill-full-moby-inventory.json"), "mobys", metadata, false);
@@ -6182,39 +11553,110 @@ namespace SpyroNativeEditor
                 MergeFile(Path.Combine(workspace, levelKey + "-moby-identity-audit.json"), "records", metadata, false);
                 MergeFile(Path.Combine(workspace, levelKey + "-live-validation-overrides.json"), "mobys", metadata, false);
             }
+            if (!string.IsNullOrEmpty(levelKey))
+                MergeFile(Path.Combine(workspace, levelKey + "-moby-user-overrides.json"), "mobys", metadata, false);
 
             int applied = 0;
             foreach (Moby moby in mobys)
             {
-                MobyMetadata item;
+                MobyMetadata item = null;
                 int lookupIndex = moby.TrueIndex >= 0 ? moby.TrueIndex : moby.Index;
+                bool appliedMetadata = false;
                 if (metadata.TryGetValue(lookupIndex, out item))
                 {
-                    if (!string.IsNullOrEmpty(item.Label))
-                    {
-                        moby.Label = item.Label;
+                    if (ApplyLevelMetadataToMoby(moby, item))
                         applied++;
-                    }
-                    moby.Zone = item.Zone;
-                    moby.Kind = item.Kind;
-                    moby.Confidence = item.Confidence;
-                    moby.Evidence = item.Evidence;
-                    moby.BehaviorNote = item.BehaviorNote;
-                    moby.SpecialDataNote = item.SpecialDataNote;
-                    moby.PatchStatus = item.PatchStatus;
-                    moby.PatchLead = item.PatchLead;
-                    moby.PatchPriority = item.PatchPriority;
-                    if (item.HasColor)
-                        moby.Color = item.Color;
+                    appliedMetadata = true;
                 }
-                else if (string.IsNullOrEmpty(moby.Label))
+
+                MobyMetadata globalItem;
+                string signatureKey = GlobalSignatureKey(moby);
+                if (!string.IsNullOrEmpty(signatureKey)
+                    && globalSignatureMetadata.TryGetValue(signatureKey, out globalItem)
+                    && ShouldApplyGlobalSignatureMetadata(item, moby))
+                {
+                    if (ApplyGlobalMetadataToMoby(moby, globalItem))
+                    {
+                        applied++;
+                        appliedMetadata = true;
+                    }
+                }
+
+                if (string.IsNullOrEmpty(moby.Label))
                 {
                     moby.Label = MobyLoader.FallbackLabel(moby.Type);
+                }
+                if (moby.ShouldUseSourceGemIdentity(appliedMetadata ? item : null) && moby.ApplySourceGemIdentity())
+                {
+                    if (!appliedMetadata)
+                        applied++;
                 }
                 if (includeStoneHillMetadata)
                     ApplyLoaderTablePatchMetadata(moby);
             }
             return applied;
+        }
+
+        private static bool ApplyLevelMetadataToMoby(Moby moby, MobyMetadata item)
+        {
+            if (moby == null || item == null) return false;
+            bool labeled = false;
+            if (!string.IsNullOrEmpty(item.Label))
+            {
+                moby.Label = item.Label;
+                labeled = true;
+            }
+            moby.Zone = item.Zone;
+            moby.Kind = item.Kind;
+            moby.Confidence = item.Confidence;
+            moby.Evidence = item.Evidence;
+            moby.BehaviorNote = item.BehaviorNote;
+            moby.SpecialDataNote = item.SpecialDataNote;
+            moby.PatchStatus = item.PatchStatus;
+            moby.PatchLead = item.PatchLead;
+            moby.PatchPriority = item.PatchPriority;
+            if (item.HasColor)
+                moby.Color = item.Color;
+            return labeled;
+        }
+
+        private static bool ApplyGlobalMetadataToMoby(Moby moby, MobyMetadata item)
+        {
+            if (moby == null || item == null || string.IsNullOrEmpty(item.Label)) return false;
+            moby.Label = item.Label;
+            moby.Kind = item.Kind;
+            moby.Confidence = "global signature: " + (string.IsNullOrEmpty(item.Confidence) ? "known moby identity" : item.Confidence);
+            string evidence = "Reused known moby identity from matching type/special-data signature across levels.";
+            if (!string.IsNullOrEmpty(item.Evidence))
+                evidence += " " + item.Evidence;
+            moby.Evidence = CleanEvidence(evidence);
+            if (item.HasColor)
+                moby.Color = item.Color;
+            return true;
+        }
+
+        private static bool ShouldApplyGlobalSignatureMetadata(MobyMetadata currentMetadata, Moby moby)
+        {
+            if (moby == null) return false;
+            if (currentMetadata == null) return true;
+            if (currentMetadata.IsUserOverride) return false;
+            return IsWeakIdentityMetadata(currentMetadata, moby);
+        }
+
+        private static bool IsWeakIdentityMetadata(MobyMetadata metadata, Moby moby)
+        {
+            if (metadata == null) return true;
+            string label = metadata.Label ?? "";
+            string text = (label + " " + (metadata.Kind ?? "") + " " + (metadata.Confidence ?? "")).ToLowerInvariant();
+            if (string.IsNullOrEmpty(label)) return true;
+            if (moby != null && string.Equals(label, MobyLoader.FallbackLabel(moby.Type), StringComparison.OrdinalIgnoreCase)) return true;
+            return text.IndexOf("0x", StringComparison.Ordinal) >= 0
+                || text.IndexOf("object?", StringComparison.Ordinal) >= 0
+                || text.IndexOf("enemy/object", StringComparison.Ordinal) >= 0
+                || text.IndexOf("gem treasure/gem", StringComparison.Ordinal) >= 0
+                || text.IndexOf("treasure/gem", StringComparison.Ordinal) >= 0
+                || text.IndexOf("unknown", StringComparison.Ordinal) >= 0
+                || text.IndexOf("candidate", StringComparison.Ordinal) >= 0;
         }
 
         private static void ApplyLoaderTablePatchMetadata(Moby moby)
@@ -6245,6 +11687,198 @@ namespace SpyroNativeEditor
                 MobyMetadata incoming = BuildMetadata(entry);
                 MergeMetadataAtIndex(metadata, index, incoming);
             }
+        }
+
+        private static Dictionary<string, MobyMetadata> BuildGlobalSignatureMetadata(string workspace)
+        {
+            Dictionary<string, MobyMetadata> result = new Dictionary<string, MobyMetadata>();
+            Dictionary<string, int> priorities = new Dictionary<string, int>();
+            HashSet<string> blocked = new HashSet<string>();
+            if (string.IsNullOrEmpty(workspace) || !Directory.Exists(workspace))
+                return result;
+
+            foreach (string path in Directory.GetFiles(workspace, "*-moby-catalog.json"))
+                MergeGlobalSignatureFile(path, "mobys", result, priorities, blocked, 1);
+            foreach (string path in Directory.GetFiles(workspace, "*-moby-user-overrides.json"))
+                MergeGlobalSignatureFile(path, "mobys", result, priorities, blocked, 3);
+
+            foreach (string key in blocked)
+                result.Remove(key);
+            return result;
+        }
+
+        private static void MergeGlobalSignatureFile(string path, string arrayName, Dictionary<string, MobyMetadata> result, Dictionary<string, int> priorities, HashSet<string> blocked, int filePriority)
+        {
+            if (!File.Exists(path)) return;
+            JavaScriptSerializer serializer = new JavaScriptSerializer();
+            serializer.MaxJsonLength = int.MaxValue;
+            Dictionary<string, object> root = serializer.DeserializeObject(File.ReadAllText(path, Encoding.UTF8)) as Dictionary<string, object>;
+            if (root == null) return;
+
+            object[] entries = GeometryLoader.GetArray(root, arrayName);
+            foreach (object obj in entries)
+            {
+                Dictionary<string, object> entry = obj as Dictionary<string, object>;
+                if (entry == null) continue;
+
+                string key = GlobalSignatureKey(entry);
+                if (string.IsNullOrEmpty(key) || blocked.Contains(key)) continue;
+
+                int type = MetadataTypeFromEntry(entry);
+                MobyMetadata incoming = BuildMetadata(entry);
+                if (!IsShareableGlobalSignatureMetadata(type, incoming)) continue;
+
+                int priority = incoming.IsUserOverride ? Math.Max(filePriority, 3) : filePriority;
+                MobyMetadata existing;
+                int existingPriority;
+                if (!result.TryGetValue(key, out existing))
+                {
+                    result[key] = CloneMetadata(incoming);
+                    priorities[key] = priority;
+                    continue;
+                }
+                if (!priorities.TryGetValue(key, out existingPriority))
+                    existingPriority = 0;
+
+                if (GlobalIdentityLabel(existing) == GlobalIdentityLabel(incoming))
+                {
+                    MergeMetadata(existing, incoming);
+                    priorities[key] = Math.Max(existingPriority, priority);
+                }
+                else if (priority > existingPriority)
+                {
+                    result[key] = CloneMetadata(incoming);
+                    priorities[key] = priority;
+                }
+                else if (priority == existingPriority)
+                {
+                    blocked.Add(key);
+                    result.Remove(key);
+                    priorities.Remove(key);
+                }
+            }
+        }
+
+        private static bool IsShareableGlobalSignatureMetadata(int type, MobyMetadata metadata)
+        {
+            if (metadata == null || string.IsNullOrEmpty(metadata.Label)) return false;
+            if (type == 0x00 || type == 0x18) return false;
+
+            string text = (metadata.Label + " " + metadata.Kind + " " + metadata.Confidence).ToLowerInvariant();
+            if (ContainsAny(text, "object?", "unknown", "candidate", "related to", "scenery", "tree", "grass", "flower", "lamp", "flag", "fountain", "camera", "nonvisual", "invisible", "helper", "control"))
+            {
+                if (!ContainsAny(text, "dragon", "pedestal", "portal", "return home", "locked chest", "spring chest"))
+                    return false;
+            }
+
+            return ContainsAny(text,
+                "chest", "box", "container", "enemy", "gnorc", "norc", "torro", "bull", "fodder", "sheep", "chicken", "ram", "shepherd", "shepard", "thief", "theif",
+                "key", "dragon", "pedestal", "whirlwind", "fairy", "portal", "return home", "balloonist", "transport npc");
+        }
+
+        private static string GlobalIdentityLabel(MobyMetadata metadata)
+        {
+            if (metadata == null) return "";
+            string label = metadata.Label ?? "";
+            return label.Trim().ToLowerInvariant();
+        }
+
+        private static MobyMetadata CloneMetadata(MobyMetadata source)
+        {
+            if (source == null) return null;
+            MobyMetadata clone = new MobyMetadata();
+            clone.Label = source.Label;
+            clone.Zone = source.Zone;
+            clone.Kind = source.Kind;
+            clone.Confidence = source.Confidence;
+            clone.IsUserOverride = source.IsUserOverride;
+            clone.Evidence = source.Evidence;
+            clone.BehaviorNote = source.BehaviorNote;
+            clone.SpecialDataNote = source.SpecialDataNote;
+            clone.PatchStatus = source.PatchStatus;
+            clone.PatchLead = source.PatchLead;
+            clone.PatchPriority = source.PatchPriority;
+            clone.HasColor = source.HasColor;
+            clone.Color = source.Color;
+            return clone;
+        }
+
+        private static string GlobalSignatureKey(Moby moby)
+        {
+            if (moby == null) return "";
+            if (moby.SpecialDataPointer == 0) return "";
+            if (moby.Type == 0x00 || moby.Type == 0x18) return "";
+            return moby.Type.ToString("X2") + "|" + moby.SpecialDataPointer.ToString("X8") + "|" + moby.Flag4A.ToString("X2");
+        }
+
+        private static string GlobalSignatureKey(Dictionary<string, object> entry)
+        {
+            int type = MetadataTypeFromEntry(entry);
+            uint specialDataPointer = MetadataAddressFromEntry(entry, "specialDataPointer");
+            int flag4A = MetadataByteFromEntry(entry, "flag4A", "flag4AHex");
+            if (type < 0 || specialDataPointer == 0 || flag4A < 0) return "";
+            if (type == 0x00 || type == 0x18) return "";
+            return type.ToString("X2") + "|" + specialDataPointer.ToString("X8") + "|" + flag4A.ToString("X2");
+        }
+
+        private static int MetadataTypeFromEntry(Dictionary<string, object> entry)
+        {
+            int type = GetInt(entry, "typeId", -1);
+            if (type < 0)
+                type = TypeFromHex(GeometryLoader.GetString(entry, "typeHex", ""));
+            return type;
+        }
+
+        private static int MetadataByteFromEntry(Dictionary<string, object> entry, string intName, string hexName)
+        {
+            int value = GetInt(entry, intName, -1);
+            if (value >= 0) return value;
+            return TypeFromHex(GeometryLoader.GetString(entry, hexName, ""));
+        }
+
+        private static uint MetadataAddressFromEntry(Dictionary<string, object> entry, string name)
+        {
+            if (entry == null || !entry.ContainsKey(name) || entry[name] == null) return 0;
+            object raw = entry[name];
+            try
+            {
+                if (raw is int || raw is long || raw is uint || raw is ulong)
+                    return Convert.ToUInt32(raw);
+            }
+            catch
+            {
+                return 0;
+            }
+
+            string text = Convert.ToString(raw);
+            if (string.IsNullOrEmpty(text)) return 0;
+            text = text.Trim();
+            try
+            {
+                if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                    return uint.Parse(text.Substring(2), System.Globalization.NumberStyles.HexNumber);
+                uint value;
+                if (uint.TryParse(text, out value))
+                    return value;
+                if (uint.TryParse(text, System.Globalization.NumberStyles.HexNumber, null, out value))
+                    return value;
+            }
+            catch
+            {
+            }
+            return 0;
+        }
+
+        private static bool ContainsAny(string text, params string[] terms)
+        {
+            if (string.IsNullOrEmpty(text) || terms == null) return false;
+            for (int i = 0; i < terms.Length; i++)
+            {
+                string term = terms[i];
+                if (!string.IsNullOrEmpty(term) && text.IndexOf(term, StringComparison.Ordinal) >= 0)
+                    return true;
+            }
+            return false;
         }
 
         private static void MergeMetadataAtIndex(Dictionary<int, MobyMetadata> metadata, int index, MobyMetadata incoming)
@@ -6295,6 +11929,7 @@ namespace SpyroNativeEditor
             if (!string.IsNullOrEmpty(source.Zone)) target.Zone = source.Zone;
             if (!string.IsNullOrEmpty(source.Kind)) target.Kind = source.Kind;
             if (!string.IsNullOrEmpty(source.Confidence)) target.Confidence = source.Confidence;
+            if (source.IsUserOverride) target.IsUserOverride = true;
             if (!string.IsNullOrEmpty(source.Evidence)) target.Evidence = source.Evidence;
             if (!string.IsNullOrEmpty(source.BehaviorNote)) target.BehaviorNote = source.BehaviorNote;
             if (!string.IsNullOrEmpty(source.SpecialDataNote)) target.SpecialDataNote = source.SpecialDataNote;
@@ -6446,11 +12081,14 @@ namespace SpyroNativeEditor
             if (type < 0)
                 type = TypeFromHex(GeometryLoader.GetString(entry, "typeHex", ""));
 
-            string label = CleanLabel(GeometryLoader.GetString(entry, "displayTargetLabel", ""));
+            string confidence = CleanLabel(GeometryLoader.GetString(entry, "confidence", ""));
+            bool preserveUserText = confidence.IndexOf("user override", StringComparison.OrdinalIgnoreCase) >= 0;
+
+            string label = CleanMetadataText(GeometryLoader.GetString(entry, "displayTargetLabel", ""), preserveUserText, 80);
             if (string.IsNullOrEmpty(label))
-                label = CleanLabel(GeometryLoader.GetString(entry, "displayLabel", ""));
+                label = CleanMetadataText(GeometryLoader.GetString(entry, "displayLabel", ""), preserveUserText, 80);
             if (string.IsNullOrEmpty(label))
-                label = CleanLabel(GeometryLoader.GetString(entry, "label", ""));
+                label = CleanMetadataText(GeometryLoader.GetString(entry, "label", ""), preserveUserText, 80);
             if (string.IsNullOrEmpty(label))
             {
                 Dictionary<string, object> guess = entry.ContainsKey("publicTargetGuess") ? entry["publicTargetGuess"] as Dictionary<string, object> : null;
@@ -6466,10 +12104,11 @@ namespace SpyroNativeEditor
             metadata.Zone = CleanLabel(GeometryLoader.GetString(entry, "zoneLabel", ""));
             if (string.IsNullOrEmpty(metadata.Zone))
                 metadata.Zone = CleanLabel(GeometryLoader.GetString(entry, "zone", ""));
-            metadata.Kind = CleanLabel(GeometryLoader.GetString(entry, "candidateKind", ""));
+            metadata.Kind = CleanMetadataText(GeometryLoader.GetString(entry, "candidateKind", ""), preserveUserText, 120);
             if (string.IsNullOrEmpty(metadata.Kind))
-                metadata.Kind = CleanLabel(GeometryLoader.GetString(entry, "kind", ""));
-            metadata.Confidence = CleanLabel(GeometryLoader.GetString(entry, "confidence", ""));
+                metadata.Kind = CleanMetadataText(GeometryLoader.GetString(entry, "kind", ""), preserveUserText, 120);
+            metadata.Confidence = confidence;
+            metadata.IsUserOverride = preserveUserText;
             metadata.Evidence = CleanEvidence(GeometryLoader.GetString(entry, "evidence", ""));
             metadata.BehaviorNote = CleanEvidence(GeometryLoader.GetString(entry, "behaviorNote", ""));
             if (string.IsNullOrEmpty(metadata.BehaviorNote))
@@ -6582,6 +12221,19 @@ namespace SpyroNativeEditor
             return label;
         }
 
+        private static string CleanMetadataText(string text, bool preserveUserText, int maxLength)
+        {
+            if (!preserveUserText)
+                return CleanLabel(text);
+            if (string.IsNullOrEmpty(text)) return "";
+            text = text.Trim();
+            while (text.IndexOf("  ", StringComparison.Ordinal) >= 0)
+                text = text.Replace("  ", " ");
+            if (maxLength > 0 && text.Length > maxLength)
+                text = text.Substring(0, maxLength).Trim();
+            return text;
+        }
+
         private static string RemoveCatalogSuffixes(string label)
         {
             if (string.IsNullOrEmpty(label)) return "";
@@ -6633,6 +12285,7 @@ namespace SpyroNativeEditor
         public string Zone;
         public string Kind;
         public string Confidence;
+        public bool IsUserOverride;
         public string Evidence;
         public string BehaviorNote;
         public string SpecialDataNote;
@@ -6643,6 +12296,192 @@ namespace SpyroNativeEditor
         public Color Color;
     }
 
+    internal sealed class LevelTextChoice
+    {
+        public readonly string Key;
+        public readonly string ScriptKey;
+        public readonly string DisplayName;
+        public readonly string OriginalName;
+
+        public LevelTextChoice(string key, string scriptKey, string displayName, string originalName)
+        {
+            Key = key;
+            ScriptKey = scriptKey;
+            DisplayName = displayName;
+            OriginalName = originalName;
+        }
+
+        public override string ToString()
+        {
+            return DisplayName;
+        }
+
+        public static LevelTextChoice[] All()
+        {
+            return new LevelTextChoice[]
+            {
+                new LevelTextChoice("artisans", "Artisans", "Artisans", "ARTISANS"),
+                new LevelTextChoice("stonehill", "StoneHill", "Stone Hill", "STONE HILL"),
+                new LevelTextChoice("darkhollow", "DarkHollow", "Dark Hollow", "DARK HOLLOW"),
+                new LevelTextChoice("townsquare", "TownSquare", "Town Square", "TOWN SQUARE"),
+                new LevelTextChoice("sunnyflight", "SunnyFlight", "Sunny Flight", "SUNNY FLIGHT"),
+                new LevelTextChoice("drycanyon", "DryCanyon", "Dry Canyon", "DRY CANYON"),
+                new LevelTextChoice("clifftown", "CliffTown", "Cliff Town", "CLIFF TOWN"),
+                new LevelTextChoice("icecavern", "IceCavern", "Ice Cavern", "ICE CAVERN"),
+                new LevelTextChoice("doctorshemp", "DoctorShemp", "Doctor Shemp", "DOCTOR SHEMP"),
+                new LevelTextChoice("nightflight", "NightFlight", "Night Flight", "NIGHT FLIGHT"),
+                new LevelTextChoice("peacekeepers", "PeaceKeepers", "Peace Keepers", "PEACE KEEPERS"),
+                new LevelTextChoice("magiccrafters", "MagicCrafters", "Magic Crafters", "MAGIC CRAFTERS"),
+                new LevelTextChoice("alpineridge", "AlpineRidge", "Alpine Ridge", "ALPINE RIDGE"),
+                new LevelTextChoice("highcaves", "HighCaves", "High Caves", "HIGH CAVES"),
+                new LevelTextChoice("wizardpeak", "WizardPeak", "Wizard Peak", "WIZARD PEAK"),
+                new LevelTextChoice("blowhard", "Blowhard", "Blowhard", "BLOWHARD"),
+                new LevelTextChoice("crystalflight", "CrystalFlight", "Crystal Flight", "CRYSTAL FLIGHT"),
+                new LevelTextChoice("beastmakers", "BeastMakers", "Beast Makers", "BEAST MAKERS"),
+                new LevelTextChoice("terracevillage", "TerraceVillage", "Terrace Village", "TERRACE VILLAGE"),
+                new LevelTextChoice("mistybog", "MistyBog", "Misty Bog", "MISTY BOG"),
+                new LevelTextChoice("treetops", "TreeTops", "Tree Tops", "TREE TOPS"),
+                new LevelTextChoice("metalhead", "Metalhead", "Metalhead", "METALHEAD"),
+                new LevelTextChoice("wildflight", "WildFlight", "Wild Flight", "WILD FLIGHT"),
+                new LevelTextChoice("dreamweavers", "DreamWeavers", "Dream Weavers", "DREAM WEAVERS"),
+                new LevelTextChoice("darkpassage", "DarkPassage", "Dark Passage", "DARK PASSAGE"),
+                new LevelTextChoice("loftycastle", "LoftyCastle", "Lofty Castle", "LOFTY CASTLE"),
+                new LevelTextChoice("hauntedtowers", "HauntedTowers", "Haunted Towers", "HAUNTED TOWERS"),
+                new LevelTextChoice("icyflight", "IcyFlight", "Icy Flight", "ICY FLIGHT"),
+                new LevelTextChoice("gnastyworld", "GnastyWorld", "Gnasty's World", "GNASTY'S WORLD"),
+                new LevelTextChoice("gnorccove", "GnorcCove", "Gnorc Cove", "GNORC COVE"),
+                new LevelTextChoice("twilightharbor", "TwilightHarbor", "Twilight Harbor", "TWILIGHT HARBOR"),
+                new LevelTextChoice("gnastygnorc", "GnastyGnorc", "Gnasty Gnorc", "GNASTY GNORC"),
+                new LevelTextChoice("gnastyloot", "GnastyLoot", "Gnasty's Loot", "GNASTY'S LOOT")
+            };
+        }
+    }
+
+    internal sealed class ExeStringChoice
+    {
+        public readonly string Text;
+        public readonly string Offset;
+        public readonly string Kind;
+        public readonly int Length;
+
+        public ExeStringChoice(string text, string offset, string kind, int length)
+        {
+            Text = text ?? "";
+            Offset = offset ?? "";
+            Kind = string.IsNullOrEmpty(kind) ? "unknown" : kind;
+            Length = length;
+        }
+
+        public override string ToString()
+        {
+            string text = Text.Replace("\r", " ").Replace("\n", " ");
+            if (text.Length > 64) text = text.Substring(0, 61) + "...";
+            return "[" + Kind + "] " + text + " (" + Offset + ", " + Length.ToString() + ")";
+        }
+    }
+
+    internal sealed class SkyboxChoice
+    {
+        public readonly string Key;
+        public readonly string ScriptKey;
+        public readonly string DisplayName;
+
+        public SkyboxChoice(string key, string scriptKey, string displayName)
+        {
+            Key = key;
+            ScriptKey = scriptKey;
+            DisplayName = displayName;
+        }
+
+        public override string ToString()
+        {
+            return DisplayName;
+        }
+
+        public static SkyboxChoice[] All()
+        {
+            return new SkyboxChoice[]
+            {
+                new SkyboxChoice("stonehill", "StoneHill", "Stone Hill"),
+                new SkyboxChoice("darkhollow", "DarkHollow", "Dark Hollow"),
+                new SkyboxChoice("townsquare", "TownSquare", "Town Square"),
+                new SkyboxChoice("toasty", "Toasty", "Toasty"),
+                new SkyboxChoice("sunnyflight", "SunnyFlight", "Sunny Flight"),
+                new SkyboxChoice("peacekeepers", "PeaceKeepers", "Peace Keepers"),
+                new SkyboxChoice("drycanyon", "DryCanyon", "Dry Canyon"),
+                new SkyboxChoice("clifftown", "CliffTown", "Cliff Town"),
+                new SkyboxChoice("icecavern", "IceCavern", "Ice Cavern"),
+                new SkyboxChoice("doctorshemp", "DoctorShemp", "Doctor Shemp"),
+                new SkyboxChoice("nightflight", "NightFlight", "Night Flight"),
+                new SkyboxChoice("magiccrafters", "MagicCrafters", "Magic Crafters"),
+                new SkyboxChoice("alpineridge", "AlpineRidge", "Alpine Ridge"),
+                new SkyboxChoice("highcaves", "HighCaves", "High Caves"),
+                new SkyboxChoice("wizardpeak", "WizardPeak", "Wizard Peak"),
+                new SkyboxChoice("blowhard", "Blowhard", "Blowhard"),
+                new SkyboxChoice("crystalflight", "CrystalFlight", "Crystal Flight"),
+                new SkyboxChoice("beastmakers", "BeastMakers", "Beast Makers"),
+                new SkyboxChoice("terracevillage", "TerraceVillage", "Terrace Village"),
+                new SkyboxChoice("mistybog", "MistyBog", "Misty Bog"),
+                new SkyboxChoice("treetops", "TreeTops", "Tree Tops"),
+                new SkyboxChoice("metalhead", "Metalhead", "Metalhead"),
+                new SkyboxChoice("wildflight", "WildFlight", "Wild Flight"),
+                new SkyboxChoice("dreamweavers", "DreamWeavers", "Dream Weavers"),
+                new SkyboxChoice("darkpassage", "DarkPassage", "Dark Passage"),
+                new SkyboxChoice("loftycastle", "LoftyCastle", "Lofty Castle"),
+                new SkyboxChoice("hauntedtowers", "HauntedTowers", "Haunted Towers"),
+                new SkyboxChoice("jacques", "Jacques", "Jacques"),
+                new SkyboxChoice("icyflight", "IcyFlight", "Icy Flight"),
+                new SkyboxChoice("gnastysworld", "GnastysWorld", "Gnasty's World"),
+                new SkyboxChoice("gnorccove", "GnorcCove", "Gnorc Cove"),
+                new SkyboxChoice("twilightharbor", "TwilightHarbor", "Twilight Harbor"),
+                new SkyboxChoice("gnastygnorc", "GnastyGnorc", "Gnasty Gnorc"),
+                new SkyboxChoice("gnastysloot", "GnastysLoot", "Gnasty's Loot")
+            };
+        }
+    }
+
+    internal sealed class SkyColorPresetChoice
+    {
+        public readonly string ScriptKey;
+        public readonly string DisplayName;
+        public readonly string Description;
+        public readonly string FileSlug;
+
+        public SkyColorPresetChoice(string scriptKey, string displayName, string description, string fileSlug)
+        {
+            ScriptKey = scriptKey;
+            DisplayName = displayName;
+            Description = description;
+            FileSlug = fileSlug;
+        }
+
+        public override string ToString()
+        {
+            return DisplayName;
+        }
+
+        public static SkyColorPresetChoice[] All()
+        {
+            return new SkyColorPresetChoice[]
+            {
+                new SkyColorPresetChoice("DarkHollowMixed", "Dark Hollow Mixed", "the blue-gray Dark Hollow feel from the 3rd test cue.", "darkhollow-mixed"),
+                new SkyColorPresetChoice("StoneHillNight", "Stone Hill Night", "a custom blue night palette on the safe Stone Hill sky pieces.", "stonehill-night"),
+                new SkyColorPresetChoice("StoneHillBestNight", "Stone Hill Best Night", "the current best Stone Hill night build: base sky combined plus the loaded 0x8FB98 cleanup.", "stonehill-best-night"),
+                new SkyColorPresetChoice("StoneHillNightKeeper", "Stone Hill Night Keeper", "the current keeper night build: dark loaded Stone Hill sky and water, with the small fly-in cyan strip left for later.", "stonehill-night-keeper"),
+                new SkyColorPresetChoice("StoneHillMoonAtmosphere", "Moon Atmosphere", "experimental keeper plus pale moon word and purple-blue Stone Hill cloud shading; color words only.", "stonehill-moon-atmosphere"),
+                new SkyColorPresetChoice("StoneHillMoonStarProbe", "Moon + Star Probe", "experimental Moon Atmosphere plus a few tiny loaded-level spot words recolored as star candidates.", "stonehill-moon-star-probe"),
+                new SkyColorPresetChoice("StoneHillStableNight", "Stone Hill Stable Night", "a conservative low-contrast night grade on the proven Stone Hill primitive-color records.", "stonehill-stable-night"),
+                new SkyColorPresetChoice("StoneHillDeepNight", "Stone Hill Deep Night", "a broader night grade on the known safe Stone Hill sky records.", "stonehill-deep-night"),
+                new SkyColorPresetChoice("StoneHillFullNight", "Stone Hill Full Night", "the widest RGB-only night grade for the portal/fly-in and loaded Stone Hill sky records.", "stonehill-full-night"),
+                new SkyColorPresetChoice("StoneHillSmoothNight", "Stone Hill Smooth Night", "a lower-contrast full night grade that hides the bright Stone Hill triangle shapes.", "stonehill-smooth-night"),
+                new SkyColorPresetChoice("StoneHillFlatNight", "Stone Hill Flat Night", "a full night pass that collapses Stone Hill sky pieces to one dark blue.", "stonehill-flat-night"),
+                new SkyColorPresetChoice("DarkHollowDark", "Dark Hollow Dark", "the darkest sampled Dark Hollow sky colors.", "darkhollow-dark"),
+                new SkyColorPresetChoice("DarkHollowMid", "Dark Hollow Mid", "brighter Dark Hollow sky colors.", "darkhollow-mid"),
+                new SkyColorPresetChoice("DarkHollowPlus19Dark", "Dark Hollow Broad", "a broader color-only pass that may affect more panels.", "darkhollow-plus19-dark"),
+                new SkyColorPresetChoice("Custom", "Custom Palette", "your typed #RRGGBB palette, repeated across the safe sky pieces.", "custom")
+            };
+        }
+    }
     internal static class MobyEditStore
     {
         public static int Save(string path, List<Moby> mobys, string levelName)
@@ -6662,6 +12501,9 @@ namespace SpyroNativeEditor
                 edit["stateHex"] = "0x" + moby.State.ToString("X2");
                 edit["runtimeAddress"] = FormatAddress(moby.RuntimeAddress);
                 edit["specialDataPointer"] = FormatAddress(moby.SpecialDataPointer);
+                edit["sourceByte36Hex"] = "0x" + moby.SourceByte36.ToString("X2");
+                edit["sourceByte37Hex"] = "0x" + moby.SourceByte37.ToString("X2");
+                edit["sourceByte4FHex"] = "0x" + moby.SourceByte4F.ToString("X2");
                 edit["flag4AHex"] = "0x" + moby.Flag4A.ToString("X2");
                 edit["flag4BHex"] = "0x" + moby.Flag4B.ToString("X2");
                 edit["patchStatus"] = moby.PatchStatus ?? "";
@@ -6673,6 +12515,8 @@ namespace SpyroNativeEditor
                 edit["rawOriginal"] = NewRawVector(moby.OriginalX, moby.OriginalY, moby.OriginalZ);
                 edit["rawEdited"] = NewRawVector(moby.X, moby.Y, moby.Z);
                 edit["rawDelta"] = NewRawDelta(moby);
+                if (!string.IsNullOrEmpty(moby.SpringChestPairRole) && moby.SpringChestPartnerTrueIndex >= 0)
+                    edit["springChestRuntimeHelper"] = NewSpringChestRuntimeHelperEdit(moby);
                 List<Dictionary<string, object>> sourceByteEdits = new List<Dictionary<string, object>>();
                 if (moby.HasGemColorEdit)
                 {
@@ -6684,6 +12528,8 @@ namespace SpyroNativeEditor
                     edit["rewardColorEdit"] = NewRewardColorEdit(moby);
                     sourceByteEdits.AddRange(NewRewardSourceByteEdits(moby));
                 }
+                if (moby.HasChestContentLinkEdit)
+                    edit["chestContentLinkEdit"] = NewChestContentLinkEdit(moby);
                 if (moby.HasRecordCloneEdit)
                     edit["recordMutation"] = NewRecordCloneMutation(moby);
                 else if (moby.IsAppendedRecord)
@@ -6742,11 +12588,21 @@ namespace SpyroNativeEditor
                 if (string.Equals(mutationMode, "appendFromSource", StringComparison.OrdinalIgnoreCase))
                 {
                     int sourceTrueIndex = GetInt(recordMutation, "sourceTrueIndex", -1);
-                    if (sourceTrueIndex < 0 || sourceTrueIndex >= sourceRecordCount) continue;
-                    Moby source;
-                    if (!byTrueIndex.TryGetValue(sourceTrueIndex, out source)) continue;
+                    string sourceLevelKey = GetString(recordMutation, "sourceLevelKey", "");
+                    bool externalSource = !string.IsNullOrEmpty(sourceLevelKey) && SpyroLevelCatalog.NormalizeKey(sourceLevelKey) != SpyroLevelCatalog.NormalizeKey(levelKey);
                     int appendTrueIndex = trueIndex >= sourceRecordCount ? trueIndex : NextAppendedTrueIndex(mobys, sourceRecordCount);
-                    Moby appended = Moby.CreateAppendedFromSource(source, mobys.Count, appendTrueIndex);
+                    Moby appended;
+                    if (externalSource)
+                    {
+                        appended = CreateAppendedFromSavedEdit(edit, recordMutation, mobys.Count, appendTrueIndex);
+                    }
+                    else
+                    {
+                        if (sourceTrueIndex < 0 || sourceTrueIndex >= sourceRecordCount) continue;
+                        Moby source;
+                        if (!byTrueIndex.TryGetValue(sourceTrueIndex, out source)) continue;
+                        appended = Moby.CreateAppendedFromSource(source, mobys.Count, appendTrueIndex);
+                    }
                     ApplyEditToMoby(appended, edit, byTrueIndex, byIndex);
                     mobys.Add(appended);
                     byIndex[appended.Index] = appended;
@@ -6779,6 +12635,68 @@ namespace SpyroNativeEditor
                 applied++;
             }
             return applied;
+        }
+
+        private static Moby CreateAppendedFromSavedEdit(Dictionary<string, object> edit, Dictionary<string, object> recordMutation, int listIndex, int appendTrueIndex)
+        {
+            Moby moby = new Moby();
+            moby.Index = listIndex;
+            moby.TrueIndex = appendTrueIndex;
+            moby.LegacyIndex = -1;
+            moby.X = 0;
+            moby.Y = 0;
+            moby.Z = 0;
+            moby.OriginalX = 0;
+            moby.OriginalY = 0;
+            moby.OriginalZ = 0;
+            moby.Type = GetFlexibleInt(edit, "typeHex", GetInt(edit, "typeId", 0));
+            moby.State = GetFlexibleInt(edit, "stateHex", 0);
+            moby.RuntimeAddress = 0;
+            moby.SpecialDataPointer = (uint)GetFlexibleInt64(edit, "specialDataPointer", 0);
+            moby.SourceByte36 = GetFlexibleInt(edit, "sourceByte36Hex", 0);
+            moby.SourceByte37 = GetFlexibleInt(edit, "sourceByte37Hex", 0);
+            moby.SourceByte4F = GetFlexibleInt(edit, "sourceByte4FHex", 0);
+            moby.Flag4A = GetFlexibleInt(edit, "flag4AHex", 0);
+            moby.Flag4B = GetFlexibleInt(edit, "flag4BHex", 0);
+            moby.Color = FallbackTemplateColor(moby.Type);
+            moby.Label = GetString(edit, "label", GetString(recordMutation, "sourceLabel", "Object Library object"));
+            moby.Zone = "Object Library";
+            moby.Kind = GetString(recordMutation, "sourceFamily", "Object Library template");
+            moby.Confidence = "loaded object library true-add";
+            moby.Evidence = "saved cross-level append from " + GetString(recordMutation, "sourceLevelName", GetString(recordMutation, "sourceLevelKey", "")) + " T" + GetInt(recordMutation, "sourceTrueIndex", -1).ToString();
+            moby.BehaviorNote = GetString(edit, "behaviorNote", "");
+            moby.SpecialDataNote = GetString(edit, "specialDataNote", "");
+            moby.PatchStatus = GetString(edit, "patchStatus", "append-patchable");
+            moby.PatchLead = GetString(edit, "patchLead", "append source record T" + appendTrueIndex.ToString());
+            moby.PatchPriority = 1;
+            moby.IsAppendedRecord = true;
+            moby.AppendSourceTrueIndex = GetInt(recordMutation, "sourceTrueIndex", -1);
+            moby.AppendSourceIndex = GetInt(recordMutation, "sourceIndex", -1);
+            moby.AppendSourceLabel = GetString(recordMutation, "sourceLabel", moby.Label);
+            moby.AppendSourceLevelKey = GetString(recordMutation, "sourceLevelKey", "");
+            moby.AppendSourceLevelName = GetString(recordMutation, "sourceLevelName", "");
+            moby.AppendSourceFamily = GetString(recordMutation, "sourceFamily", "");
+            moby.AppendLoaderTransformedDonor = GetBool(recordMutation, "loaderTransformedDonor", false);
+            moby.AppendDonorMapConfidence = GetString(recordMutation, "donorMapConfidence", "");
+            moby.AppendDependencyRisk = GetString(recordMutation, "dependencyRisk", "");
+            moby.AppendPackageImportProfile = GetString(recordMutation, "packageImportProfile", "");
+            moby.AppendRuntimeIdentityPolicy = GetString(recordMutation, "runtimeIdentityPolicy", "");
+            Dictionary<string, object> springHelper = edit.ContainsKey("springChestRuntimeHelper") ? edit["springChestRuntimeHelper"] as Dictionary<string, object> : null;
+            if (springHelper != null)
+            {
+                moby.SpringChestPairRole = GetString(springHelper, "role", "");
+                moby.SpringChestPartnerTrueIndex = GetInt(springHelper, "partnerTrueIndex", -1);
+            }
+            moby.CaptureBaseIdentity();
+            return moby;
+        }
+
+        private static Color FallbackTemplateColor(int type)
+        {
+            if (type == 0x20) return Color.FromArgb(244, 212, 77);
+            if (type == 0x18) return Color.FromArgb(255, 140, 90);
+            if (type == 0x00) return Color.FromArgb(143, 166, 184);
+            return Color.FromArgb(93, 173, 226);
         }
 
         private static bool ApplyEditToMoby(Moby moby, Dictionary<string, object> edit, Dictionary<int, Moby> byTrueIndex, Dictionary<int, Moby> byIndex)
@@ -6833,7 +12751,24 @@ namespace SpyroNativeEditor
                 rewardColor = InferRewardColorFromSourceByteEdits(edit);
             if (Moby.IsSupportedGemColor(rewardColor))
             {
-                moby.SetRewardColorOverride(rewardColor);
+                if (IsContainedGemMarkerEdit(moby, rewardColorEdit))
+                    moby.SetContainedGemColorOverride(rewardColor);
+                else
+                    moby.SetRewardColorOverride(rewardColor);
+                changed = true;
+            }
+
+            Dictionary<string, object> chestContentLinkEdit = edit.ContainsKey("chestContentLinkEdit") ? edit["chestContentLinkEdit"] as Dictionary<string, object> : null;
+            if (chestContentLinkEdit != null)
+            {
+                Dictionary<string, object> rawOffset = chestContentLinkEdit.ContainsKey("rawOffset") ? chestContentLinkEdit["rawOffset"] as Dictionary<string, object> : null;
+                moby.SetChestContentLinkOverride(
+                    GetInt(chestContentLinkEdit, "chestTrueIndex", -1),
+                    GetInt(chestContentLinkEdit, "chestIndex", -1),
+                    GetString(chestContentLinkEdit, "chestLabel", ""),
+                    GetInt(rawOffset, "x", 0),
+                    GetInt(rawOffset, "y", 0),
+                    GetInt(rawOffset, "z", 0));
                 changed = true;
             }
 
@@ -6881,11 +12816,20 @@ namespace SpyroNativeEditor
         private static Dictionary<string, object> NewRewardColorEdit(Moby moby)
         {
             Dictionary<string, object> edit = new Dictionary<string, object>();
-            edit["mode"] = "type20-reward-byte";
+            bool containedGem = IsContainedGemMarker(moby);
+            bool lockedChestReward = IsLockedChestRewardMarker(moby);
+            bool springChestReward = IsSpringChestRewardMarker(moby);
+            edit["mode"] = containedGem ? "contained-gem-marker" : (lockedChestReward ? "locked-chest-reward-byte" : (springChestReward ? "spring-chest-reward-byte" : "type20-reward-byte"));
             edit["color"] = moby.RewardColorName;
             edit["value"] = moby.RewardValueOverride;
             edit["sourceByte53Hex"] = "0x" + moby.RewardByte53Override.ToString("X2");
-            edit["validation"] = "Confirmed on Artisans Flame/Charge chest T50; expected to apply to matching type 0x20 reward-bearing chests/enemies.";
+            edit["validation"] = containedGem
+                ? "Inferred for inactive locked-chest content markers. Patch writes the marker +0x53 contained-gem value byte."
+                : (lockedChestReward
+                    ? "Locked chest controller reward byte. Patch writes +0x53 so the chest's own spawned gem matches its linked contents."
+                    : (springChestReward
+                        ? "Spring chest reward byte. Patch writes +0x53 so the spring chest itself spawns the selected gem value."
+                        : "Confirmed on Artisans Flame/Charge chest T50; expected to apply to matching type 0x20 reward-bearing chests/enemies."));
             return edit;
         }
 
@@ -6907,8 +12851,37 @@ namespace SpyroNativeEditor
             edit["sourceIndex"] = moby.AppendSourceIndex;
             edit["sourceTrueIndex"] = moby.AppendSourceTrueIndex;
             edit["sourceLabel"] = moby.AppendSourceLabel ?? "";
+            if (!string.IsNullOrEmpty(moby.AppendSourceLevelKey))
+                edit["sourceLevelKey"] = moby.AppendSourceLevelKey;
+            if (!string.IsNullOrEmpty(moby.AppendSourceLevelName))
+                edit["sourceLevelName"] = moby.AppendSourceLevelName;
+            if (!string.IsNullOrEmpty(moby.AppendSourceFamily))
+                edit["sourceFamily"] = moby.AppendSourceFamily;
+            if (!string.IsNullOrEmpty(moby.AppendPackageImportProfile))
+                edit["packageImportProfile"] = moby.AppendPackageImportProfile;
+            if (moby.AppendLoaderTransformedDonor)
+            {
+                edit["loaderTransformedDonor"] = true;
+                edit["runtimeIdentityPolicy"] = string.IsNullOrEmpty(moby.AppendRuntimeIdentityPolicy) ? "force-template-runtime-identity-bytes" : moby.AppendRuntimeIdentityPolicy;
+            }
+            else if (!string.IsNullOrEmpty(moby.AppendRuntimeIdentityPolicy))
+                edit["runtimeIdentityPolicy"] = moby.AppendRuntimeIdentityPolicy;
+            if (!string.IsNullOrEmpty(moby.AppendDonorMapConfidence))
+                edit["donorMapConfidence"] = moby.AppendDonorMapConfidence;
+            if (!string.IsNullOrEmpty(moby.AppendDependencyRisk))
+                edit["dependencyRisk"] = moby.AppendDependencyRisk;
             edit["targetTrueIndex"] = moby.TrueIndex;
             edit["note"] = "True add: increment the level source moby count and append a cloned source record at this target true index.";
+            return edit;
+        }
+
+        private static Dictionary<string, object> NewSpringChestRuntimeHelperEdit(Moby moby)
+        {
+            Dictionary<string, object> edit = new Dictionary<string, object>();
+            edit["mode"] = "spring-chest-runtime-helper-pair";
+            edit["role"] = moby.SpringChestPairRole ?? "";
+            edit["partnerTrueIndex"] = moby.SpringChestPartnerTrueIndex;
+            edit["note"] = "The Artisans/Stone Hill spring chest test exporter uses this pair to inject the in-game pop, collectible reward gem, and post-collect hide behavior.";
             return edit;
         }
 
@@ -6931,8 +12904,81 @@ namespace SpyroNativeEditor
         private static List<Dictionary<string, object>> NewRewardSourceByteEdits(Moby moby)
         {
             List<Dictionary<string, object>> edits = new List<Dictionary<string, object>>();
-            edits.Add(NewSourceByteEdit(0x53, moby.RewardByte53Override, "type20-reward-gem-id-byte"));
+            edits.Add(NewSourceByteEdit(0x53, moby.RewardByte53Override, IsContainedGemMarker(moby) ? "contained-gem-id-byte" : "type20-reward-gem-id-byte"));
             return edits;
+        }
+
+        private static Dictionary<string, object> NewChestContentLinkEdit(Moby moby)
+        {
+            Dictionary<string, object> edit = new Dictionary<string, object>();
+            edit["mode"] = "contained-gem-chest-link";
+            edit["chestIndex"] = moby.ChestContentLinkIndex;
+            edit["chestTrueIndex"] = moby.ChestContentLinkTrueIndex;
+            edit["chestLabel"] = moby.ChestContentLinkLabel ?? "";
+            edit["rawOffset"] = NewRawVectorFromRaw(moby.ChestContentRawOffsetX, moby.ChestContentRawOffsetY, moby.ChestContentRawOffsetZ);
+            edit["note"] = "Patch contained-gem special data +0x00 to the owning chest true index and +0x04/+0x08/+0x0C to the gem explosion offset.";
+            return edit;
+        }
+
+        private static Dictionary<string, object> NewRawVectorFromRaw(int x, int y, int z)
+        {
+            Dictionary<string, object> vector = new Dictionary<string, object>();
+            vector["x"] = x;
+            vector["y"] = y;
+            vector["z"] = z;
+            return vector;
+        }
+
+        private static bool IsContainedGemMarkerEdit(Moby moby, Dictionary<string, object> rewardColorEdit)
+        {
+            string mode = GetString(rewardColorEdit, "mode", "");
+            if (string.Equals(mode, "contained-gem-marker", StringComparison.OrdinalIgnoreCase))
+                return true;
+            return IsContainedGemMarker(moby);
+        }
+
+        private static bool IsContainedGemMarker(Moby moby)
+        {
+            if (moby == null) return false;
+            if (moby.Type != 0x00 || moby.Flag4A != 0xFF)
+                return false;
+            string text = ((moby.DisplayLabel ?? "") + " " + (moby.Kind ?? "") + " " + (moby.Evidence ?? "")).ToLowerInvariant();
+            return text.IndexOf("chest content", StringComparison.Ordinal) >= 0
+                || text.IndexOf("contained gem", StringComparison.Ordinal) >= 0
+                || text.IndexOf("gem explosion", StringComparison.Ordinal) >= 0
+                || text.IndexOf("linked reward marker", StringComparison.Ordinal) >= 0
+                || text.IndexOf("reward marker", StringComparison.Ordinal) >= 0;
+        }
+
+        private static bool IsLockedChestRewardMarker(Moby moby)
+        {
+            if (moby == null || GemValueFromSavedGemIdByte(moby.Flag4B) <= 0) return false;
+            string text = ((moby.DisplayLabel ?? "") + " " + (moby.Kind ?? "") + " " + (moby.Evidence ?? "")).ToLowerInvariant();
+            return text.IndexOf("locked chest", StringComparison.Ordinal) >= 0
+                || text.IndexOf("locked container", StringComparison.Ordinal) >= 0
+                || text.IndexOf("unlock chest", StringComparison.Ordinal) >= 0;
+        }
+
+        private static bool IsSpringChestRewardMarker(Moby moby)
+        {
+            if (moby == null) return false;
+            if (moby.Type != 0x20 || moby.Flag4A != 0x10)
+                return false;
+            string text = ((moby.DisplayLabel ?? "") + " " + (moby.Kind ?? "") + " " + (moby.Evidence ?? "")).ToLowerInvariant();
+            return text.IndexOf("spring chest", StringComparison.Ordinal) >= 0 || moby.SpecialDataPointer == 0x8016B9F8;
+        }
+
+        private static int GemValueFromSavedGemIdByte(int value)
+        {
+            switch (value)
+            {
+                case 0x53: return 1;
+                case 0x54: return 2;
+                case 0x55: return 5;
+                case 0x56: return 10;
+                case 0x57: return 25;
+                default: return 0;
+            }
         }
 
         private static Dictionary<string, object> NewSourceByteEdit(int offset, int value, string field)
@@ -6990,9 +13036,7 @@ namespace SpyroNativeEditor
 
         private static int SourceRecordCountForLevel(string levelKey)
         {
-            if (string.Equals(levelKey, "artisans", StringComparison.OrdinalIgnoreCase)) return 174;
-            if (string.Equals(levelKey, "stonehill", StringComparison.OrdinalIgnoreCase)) return 195;
-            return 0;
+            return SpyroLevelCatalog.SourceRecordCountForKey(levelKey);
         }
 
         private static int NextAppendedTrueIndex(List<Moby> mobys, int sourceRecordCount)
@@ -7024,6 +13068,34 @@ namespace SpyroNativeEditor
             catch { return fallback; }
         }
 
+        private static bool GetBool(Dictionary<string, object> dict, string name, bool fallback)
+        {
+            if (dict == null || !dict.ContainsKey(name) || dict[name] == null) return fallback;
+            try { return Convert.ToBoolean(dict[name]); }
+            catch { return fallback; }
+        }
+
+        private static int GetFlexibleInt(Dictionary<string, object> dict, string name, int fallback)
+        {
+            long value = GetFlexibleInt64(dict, name, fallback);
+            if (value < int.MinValue || value > int.MaxValue) return fallback;
+            return (int)value;
+        }
+
+        private static long GetFlexibleInt64(Dictionary<string, object> dict, string name, long fallback)
+        {
+            if (dict == null || !dict.ContainsKey(name) || dict[name] == null) return fallback;
+            try
+            {
+                string text = Convert.ToString(dict[name]).Trim();
+                if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                    return Convert.ToInt64(text.Substring(2), 16);
+                if (text.Length == 0) return fallback;
+                return Convert.ToInt64(dict[name]);
+            }
+            catch { return fallback; }
+        }
+
         private static string GetString(Dictionary<string, object> dict, string name, string fallback)
         {
             if (dict == null || !dict.ContainsKey(name) || dict[name] == null) return fallback;
@@ -7048,7 +13120,13 @@ namespace SpyroNativeEditor
                     edit["detail"] = polygon.Detail;
                     edit["sectorOffset"] = polygon.SectorOffset;
                     edit["faceOffset"] = polygon.FaceOffset;
-                    edit["textureId"] = polygon.TextureId;
+                    edit["textureId"] = polygon.OriginalTextureId;
+                    if (polygon.HasTextureEdit)
+                    {
+                        edit["textureEditMode"] = "texture-id-preview";
+                        edit["textureIdOriginal"] = polygon.OriginalTextureId;
+                        edit["textureIdEdited"] = polygon.TextureId;
+                    }
                     edit["word3"] = polygon.Word3;
                     edit["word4"] = polygon.Word4;
                     edit["deltaZ"] = polygon.TerrainEditDeltaZ;
@@ -7063,7 +13141,7 @@ namespace SpyroNativeEditor
             root["generatedAt"] = DateTime.Now.ToString("s");
             root["editor"] = "NativeSpyroEditor";
             root["levelName"] = string.IsNullOrEmpty(levelName) ? "Unknown" : levelName;
-            root["note"] = "Editor-side terrain face Z edits keyed by runtime scene-sector face handles. These are ready for runtime/source terrain patch experiments.";
+            root["note"] = "Editor-side terrain edits keyed by runtime scene-sector face handles. Z edits and same-level texture-id swaps are ready for the Stone Hill runtime/source terrain patch exporter. Custom PNG texture-page imports are saved separately in <level>-custom-terrain-textures.json.";
             root["editCount"] = edits.Count;
             root["edits"] = edits;
 
@@ -7105,6 +13183,9 @@ namespace SpyroNativeEditor
                 TerrainPolygon polygon;
                 if (!byKey.TryGetValue(key, out polygon)) continue;
                 polygon.ApplyTerrainDeltaZ(GetFloat(edit, "deltaZ", 0f));
+                int textureIdEdited = GetInt(edit, "textureIdEdited", -1);
+                if (textureIdEdited >= 0)
+                    polygon.ApplyTextureOverride(textureIdEdited);
                 applied++;
             }
             return applied;
@@ -7147,6 +13228,60 @@ namespace SpyroNativeEditor
         }
     }
 
+    internal sealed class TerrainTextureChoice
+    {
+        public readonly string LevelKey;
+        public readonly string LevelName;
+        public readonly int TextureId;
+        public readonly Color SampleColor;
+        public int FaceCount;
+
+        public TerrainTextureChoice(string levelKey, string levelName, int textureId, TerrainPolygon sample)
+        {
+            LevelKey = levelKey ?? "";
+            LevelName = string.IsNullOrEmpty(levelName) ? LevelKey : levelName;
+            TextureId = textureId;
+            SampleColor = sample != null && sample.HasFaceColor
+                ? sample.FaceColor
+                : (sample != null ? sample.MaterialFill : Color.LightGray);
+        }
+
+        public string SampleText
+        {
+            get { return LevelName + " texture " + TextureId.ToString(); }
+        }
+
+        public string DisplayText
+        {
+            get { return LevelName + " texture ID " + TextureId.ToString(); }
+        }
+
+        public override string ToString()
+        {
+            return "ID " + TextureId.ToString() + " - " + FaceCount.ToString() + " faces - " + LevelName;
+        }
+    }
+
+    internal sealed class CustomTerrainTexture
+    {
+        public readonly int TextureId;
+        public readonly string SourceImagePath;
+        public readonly string SourceImageName;
+        public readonly string DescriptorTier;
+        public readonly int TileSize;
+        public readonly Bitmap PreviewImage;
+
+        public CustomTerrainTexture(int textureId, string sourceImagePath, string sourceImageName, string descriptorTier, int tileSize, Bitmap previewImage)
+        {
+            TextureId = textureId;
+            SourceImagePath = sourceImagePath ?? "";
+            SourceImageName = string.IsNullOrEmpty(sourceImageName) ? Path.GetFileName(SourceImagePath) : sourceImageName;
+            DescriptorTier = string.IsNullOrEmpty(descriptorTier) ? "hqData" : descriptorTier;
+            TileSize = tileSize > 0 ? tileSize : 64;
+            PreviewImage = previewImage;
+        }
+    }
+
     internal sealed class GeometryCandidate
     {
         public string Name;
@@ -7185,7 +13320,8 @@ namespace SpyroNativeEditor
         public readonly RectangleF Bounds;
         public readonly Color HeightFill;
         public readonly Color GameFill;
-        public readonly int TextureId;
+        public readonly int OriginalTextureId;
+        public int TextureId;
         public readonly Color MaterialFill;
         public readonly int SectorIndex;
         public readonly int FaceIndex;
@@ -7209,6 +13345,11 @@ namespace SpyroNativeEditor
             get { return TextureId >= 0; }
         }
 
+        public bool HasTextureEdit
+        {
+            get { return OriginalTextureId >= 0 && TextureId != OriginalTextureId; }
+        }
+
         public bool HasTextureCorners
         {
             get { return TextureTopLeft != null && TextureTopRight != null && TextureBottomLeft != null; }
@@ -7222,6 +13363,7 @@ namespace SpyroNativeEditor
             AvgZ = avgZ;
             HeightFill = heightFill;
             GameFill = gameFill;
+            OriginalTextureId = textureId;
             TextureId = textureId;
             MaterialFill = materialFill;
             SectorIndex = sectorIndex;
@@ -7267,7 +13409,7 @@ namespace SpyroNativeEditor
 
         public bool IsTerrainEdited
         {
-            get { return Math.Abs(TerrainEditDeltaZ) > 0.001f; }
+            get { return Math.Abs(TerrainEditDeltaZ) > 0.001f || HasTextureEdit; }
         }
 
         public string RuntimeKey
@@ -7290,6 +13432,18 @@ namespace SpyroNativeEditor
         public void ResetTerrainEdit()
         {
             ApplyTerrainDeltaZ(0f);
+            ResetTextureEdit();
+        }
+
+        public void ApplyTextureOverride(int textureId)
+        {
+            if (textureId < 0) return;
+            TextureId = textureId;
+        }
+
+        public void ResetTextureEdit()
+        {
+            TextureId = OriginalTextureId;
         }
 
         private void RecomputeZStats()
@@ -7409,6 +13563,106 @@ namespace SpyroNativeEditor
         }
     }
 
+    internal sealed class MobyIdentityOverrideDialog : Form
+    {
+        private readonly TextBox nameBox;
+        private readonly TextBox kindBox;
+        private readonly CheckBox signatureBox;
+
+        public string IdentityName
+        {
+            get { return nameBox.Text; }
+        }
+
+        public string IdentityKind
+        {
+            get { return kindBox.Text; }
+        }
+
+        public bool ApplyToMatchingSignature
+        {
+            get { return signatureBox != null && signatureBox.Checked && signatureBox.Enabled; }
+        }
+
+        public MobyIdentityOverrideDialog(string mobyId, string currentName, string currentKind, int signatureMatchCount)
+        {
+            Text = "Edit " + (string.IsNullOrEmpty(mobyId) ? "moby" : mobyId) + " editor identity";
+            StartPosition = FormStartPosition.CenterParent;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            ShowInTaskbar = false;
+            ClientSize = new Size(430, 210);
+
+            TableLayoutPanel root = new TableLayoutPanel();
+            root.Dock = DockStyle.Fill;
+            root.Padding = new Padding(10);
+            root.ColumnCount = 2;
+            root.RowCount = 4;
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112f));
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 36f));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 36f));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 36f));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            Controls.Add(root);
+
+            Label nameLabel = new Label();
+            nameLabel.Text = "Editor name";
+            nameLabel.TextAlign = ContentAlignment.MiddleLeft;
+            nameLabel.Dock = DockStyle.Fill;
+            root.Controls.Add(nameLabel, 0, 0);
+
+            nameBox = new TextBox();
+            nameBox.Dock = DockStyle.Fill;
+            nameBox.Text = currentName ?? "";
+            root.Controls.Add(nameBox, 1, 0);
+
+            Label kindLabel = new Label();
+            kindLabel.Text = "Editor type/kind";
+            kindLabel.TextAlign = ContentAlignment.MiddleLeft;
+            kindLabel.Dock = DockStyle.Fill;
+            root.Controls.Add(kindLabel, 0, 1);
+
+            kindBox = new TextBox();
+            kindBox.Dock = DockStyle.Fill;
+            kindBox.Text = currentKind ?? "";
+            root.Controls.Add(kindBox, 1, 1);
+
+            signatureBox = new CheckBox();
+            signatureBox.Dock = DockStyle.Fill;
+            signatureBox.TextAlign = ContentAlignment.MiddleLeft;
+            signatureBox.Text = signatureMatchCount > 1
+                ? "Apply to " + signatureMatchCount.ToString() + " matching records"
+                : "No safe matching behavior batch";
+            signatureBox.Enabled = signatureMatchCount > 1;
+            root.SetColumnSpan(signatureBox, 2);
+            root.Controls.Add(signatureBox, 0, 2);
+
+            FlowLayoutPanel buttons = new FlowLayoutPanel();
+            buttons.FlowDirection = FlowDirection.RightToLeft;
+            buttons.Dock = DockStyle.Fill;
+            buttons.Padding = new Padding(0, 10, 0, 0);
+            root.SetColumnSpan(buttons, 2);
+            root.Controls.Add(buttons, 0, 3);
+
+            Button okButton = new Button();
+            okButton.Text = "Save";
+            okButton.Width = 86;
+            okButton.DialogResult = DialogResult.OK;
+            buttons.Controls.Add(okButton);
+
+            Button cancelButton = new Button();
+            cancelButton.Text = "Cancel";
+            cancelButton.Width = 86;
+            cancelButton.DialogResult = DialogResult.Cancel;
+            buttons.Controls.Add(cancelButton);
+
+            AcceptButton = okButton;
+            CancelButton = cancelButton;
+        }
+    }
+
     internal sealed class SelectionGroup
     {
         public readonly string Key;
@@ -7450,11 +13704,23 @@ namespace SpyroNativeEditor
     {
         public readonly int Index;
         public readonly string Text;
+        public readonly ObjectTemplate Template;
 
         public MobyChoice(int index, string text)
+            : this(index, text, null)
+        {
+        }
+
+        public MobyChoice(int index, string text, ObjectTemplate template)
         {
             Index = index;
             Text = text ?? "";
+            Template = template;
+        }
+
+        public bool IsExternalTemplate
+        {
+            get { return Template != null; }
         }
 
         public override string ToString()
@@ -7478,6 +13744,9 @@ namespace SpyroNativeEditor
         public int State;
         public uint RuntimeAddress;
         public uint SpecialDataPointer;
+        public int SourceByte36;
+        public int SourceByte37;
+        public int SourceByte4F;
         public int Flag4A;
         public int Flag4B;
         public Color Color;
@@ -7503,6 +13772,9 @@ namespace SpyroNativeEditor
         public int BaseType;
         public int BaseState;
         public uint BaseSpecialDataPointer;
+        public int BaseSourceByte36;
+        public int BaseSourceByte37;
+        public int BaseSourceByte4F;
         public int BaseFlag4A;
         public int BaseFlag4B;
         public string GemColorOverride;
@@ -7520,6 +13792,22 @@ namespace SpyroNativeEditor
         public int AppendSourceTrueIndex = -1;
         public int AppendSourceIndex = -1;
         public string AppendSourceLabel;
+        public string AppendSourceLevelKey;
+        public string AppendSourceLevelName;
+        public string AppendSourceFamily;
+        public bool AppendLoaderTransformedDonor;
+        public string AppendDonorMapConfidence;
+        public string AppendDependencyRisk;
+        public string AppendPackageImportProfile;
+        public string AppendRuntimeIdentityPolicy;
+        public string SpringChestPairRole;
+        public int SpringChestPartnerTrueIndex = -1;
+        public int ChestContentLinkTrueIndex = -1;
+        public int ChestContentLinkIndex = -1;
+        public string ChestContentLinkLabel;
+        public int ChestContentRawOffsetX;
+        public int ChestContentRawOffsetY;
+        public int ChestContentRawOffsetZ;
 
         public string DisplayLabel
         {
@@ -7533,7 +13821,7 @@ namespace SpyroNativeEditor
         {
             get
             {
-                return IsAppendedRecord || HasPositionEdit || HasGemColorEdit || HasRewardColorEdit || HasHiddenSlotEdit || HasRecordCloneEdit;
+                return IsAppendedRecord || HasPositionEdit || HasGemColorEdit || HasRewardColorEdit || HasHiddenSlotEdit || HasRecordCloneEdit || HasChestContentLinkEdit;
             }
         }
 
@@ -7548,6 +13836,16 @@ namespace SpyroNativeEditor
         public bool HasGemColorEdit
         {
             get { return !string.IsNullOrEmpty(GemColorOverride); }
+        }
+
+        public bool IsStandaloneGemSourceRecord
+        {
+            get { return Type == 0x18 && SpecialDataPointer == 0 && Flag4A == 0x40 && Flag4B == 0xFF; }
+        }
+
+        public string SourceGemColorName
+        {
+            get { return GemColorFromSourceBytes(SourceByte36, SourceByte4F); }
         }
 
         public string GemColorName
@@ -7568,6 +13866,11 @@ namespace SpyroNativeEditor
         public bool HasRecordCloneEdit
         {
             get { return RecordCloneSourceTrueIndex >= 0; }
+        }
+
+        public bool HasChestContentLinkEdit
+        {
+            get { return ChestContentLinkTrueIndex >= 0; }
         }
 
         public bool Patchable
@@ -7595,6 +13898,9 @@ namespace SpyroNativeEditor
             moby.State = source.State;
             moby.RuntimeAddress = 0;
             moby.SpecialDataPointer = source.SpecialDataPointer;
+            moby.SourceByte36 = source.SourceByte36;
+            moby.SourceByte37 = source.SourceByte37;
+            moby.SourceByte4F = source.SourceByte4F;
             moby.Flag4A = source.Flag4A;
             moby.Flag4B = source.Flag4B;
             moby.Color = source.Color;
@@ -7612,6 +13918,11 @@ namespace SpyroNativeEditor
             moby.AppendSourceTrueIndex = source.TrueIndex;
             moby.AppendSourceIndex = source.Index;
             moby.AppendSourceLabel = source.DisplayLabel;
+            moby.AppendSourceLevelKey = source.AppendSourceLevelKey;
+            moby.AppendSourceLevelName = source.AppendSourceLevelName;
+            moby.AppendSourceFamily = source.AppendSourceFamily;
+            moby.AppendPackageImportProfile = source.AppendPackageImportProfile;
+            moby.AppendRuntimeIdentityPolicy = source.AppendRuntimeIdentityPolicy;
             moby.HasGroundOffset = source.HasGroundOffset;
             moby.GroundOffset = source.GroundOffset;
             moby.OriginalGroundOffset = source.OriginalGroundOffset;
@@ -7620,6 +13931,80 @@ namespace SpyroNativeEditor
                 moby.SetGemColorOverride(source.GemColorName);
             if (source.HasRewardColorEdit)
                 moby.SetRewardColorOverride(source.RewardColorName);
+            return moby;
+        }
+
+        public static Moby CreateSpringChestControllerFromTemplate(ObjectTemplate template, int listIndex, int appendTrueIndex)
+        {
+            if (template == null) throw new ArgumentNullException("template");
+            Moby moby = CreateAppendedFromTemplate(template, listIndex, appendTrueIndex);
+            moby.SourceByte36 = 0xFE;
+            moby.SourceByte37 = 0x01;
+            moby.SourceByte4F = 0x00;
+            moby.Flag4A = 0x10;
+            moby.Flag4B = 0x53;
+            moby.Label = "Spring Chest controller (new)";
+            moby.Kind = "Spring Chest controller";
+            moby.Confidence = "editor object library spring chest pair";
+            moby.Evidence = "new paired spring chest controller cloned from Town Square T30 by Test Selected Add BIN";
+            moby.BehaviorNote = "Paired with the visible spring chest shell. The Artisans in-game patch uses this controller row for hit/pop state.";
+            moby.PatchLead = "append source record T" + appendTrueIndex.ToString() + " from Town Square spring controller T30";
+            moby.AppendSourceTrueIndex = 30;
+            moby.AppendSourceIndex = -1;
+            moby.AppendSourceLabel = "Spring Chest controller";
+            moby.AppendSourceFamily = "springChest";
+            moby.CaptureBaseIdentity();
+            return moby;
+        }
+
+        public static Moby CreateAppendedFromTemplate(ObjectTemplate template, int listIndex, int appendTrueIndex)
+        {
+            if (template == null) throw new ArgumentNullException("template");
+            Moby moby = new Moby();
+            moby.Index = listIndex;
+            moby.TrueIndex = appendTrueIndex;
+            moby.LegacyIndex = -1;
+            moby.X = 0;
+            moby.Y = 0;
+            moby.Z = 0;
+            moby.OriginalX = 0;
+            moby.OriginalY = 0;
+            moby.OriginalZ = 0;
+            moby.Type = template.Type;
+            moby.State = template.State;
+            moby.RuntimeAddress = 0;
+            moby.SpecialDataPointer = template.SpecialDataPointer;
+            moby.SourceByte36 = template.SourceByte36;
+            moby.SourceByte37 = template.SourceByte37;
+            moby.SourceByte4F = template.SourceByte4F;
+            moby.Flag4A = template.Flag4A;
+            moby.Flag4B = template.Flag4B;
+            moby.Color = template.Color;
+            moby.Label = template.DisplayName + " (new)";
+            moby.Zone = "Object Library";
+            moby.Kind = string.IsNullOrEmpty(template.Kind) ? template.Family : template.Kind;
+            moby.Confidence = "editor object library true-add";
+            moby.Evidence = "new source record appended from " + template.SourceDescription + " by Create Loader BIN";
+            moby.BehaviorNote = template.Note;
+            if (!string.IsNullOrEmpty(template.DependencyRisk))
+                moby.BehaviorNote = (string.IsNullOrEmpty(moby.BehaviorNote) ? "" : moby.BehaviorNote + " ") + template.DependencyRisk;
+            moby.SpecialDataNote = "External donor source record; special data is copied from the user's legal ROM during export when present.";
+            if (template.LoaderTransformed)
+                moby.SpecialDataNote += " Loader-transformed identity bytes are saved with the edit and forced during selected-add export.";
+            moby.PatchStatus = "append-patchable";
+            moby.PatchLead = "append source record T" + appendTrueIndex.ToString() + " from " + template.SourceDescription;
+            moby.PatchPriority = 1;
+            moby.IsAppendedRecord = true;
+            moby.AppendSourceTrueIndex = template.SourceTrueIndex;
+            moby.AppendSourceIndex = -1;
+            moby.AppendSourceLabel = template.DisplayName;
+            moby.AppendSourceLevelKey = template.SourceLevelKey;
+            moby.AppendSourceLevelName = template.SourceLevelName;
+            moby.AppendSourceFamily = template.Family;
+            moby.AppendLoaderTransformedDonor = template.LoaderTransformed;
+            moby.AppendDonorMapConfidence = template.DonorMapConfidence;
+            moby.AppendDependencyRisk = template.DependencyRisk;
+            moby.CaptureBaseIdentity();
             return moby;
         }
 
@@ -7633,6 +14018,9 @@ namespace SpyroNativeEditor
             BaseType = Type;
             BaseState = State;
             BaseSpecialDataPointer = SpecialDataPointer;
+            BaseSourceByte36 = SourceByte36;
+            BaseSourceByte37 = SourceByte37;
+            BaseSourceByte4F = SourceByte4F;
             BaseFlag4A = Flag4A;
             BaseFlag4B = Flag4B;
             HasBaseIdentity = true;
@@ -7649,6 +14037,9 @@ namespace SpyroNativeEditor
             Type = BaseType;
             State = BaseState;
             SpecialDataPointer = BaseSpecialDataPointer;
+            SourceByte36 = BaseSourceByte36;
+            SourceByte37 = BaseSourceByte37;
+            SourceByte4F = BaseSourceByte4F;
             Flag4A = BaseFlag4A;
             Flag4B = BaseFlag4B;
         }
@@ -7683,6 +14074,57 @@ namespace SpyroNativeEditor
             Evidence = "source reward byte +0x53 will be patched by Create Loader BIN";
         }
 
+        public void SetContainedGemColorOverride(string color)
+        {
+            if (!HasBaseIdentity)
+                CaptureBaseIdentity();
+
+            string normalized = NormalizeGemColor(color);
+            RewardColorOverride = normalized;
+            RewardValueOverride = GemValueForColor(normalized);
+            RewardByte53Override = GemIdByteForColor(normalized);
+            Label = "Chest content: " + GemDisplayName(normalized);
+            Kind = "chest contained " + normalized + " " + RewardValueOverride.ToString() + "-gem reward marker";
+            Color = GemColorForColor(normalized);
+            Confidence = "editor chest-content override";
+            Evidence = "source contained-gem byte +0x53 will be patched by Create Loader BIN";
+        }
+
+        public void SetChestContentLinkOverride(Moby chest)
+        {
+            if (chest == null) return;
+            SetChestContentLinkOverride(
+                chest.TrueIndex,
+                chest.Index,
+                chest.DisplayLabel,
+                ToRawCoordinate(X) - ToRawCoordinate(chest.X),
+                ToRawCoordinate(Y) - ToRawCoordinate(chest.Y),
+                ToRawCoordinate(Z) - ToRawCoordinate(chest.Z));
+        }
+
+        public void SetChestContentLinkOverride(int chestTrueIndex, int chestIndex, string chestLabel, int rawOffsetX, int rawOffsetY, int rawOffsetZ)
+        {
+            if (chestTrueIndex < 0) return;
+            ChestContentLinkTrueIndex = chestTrueIndex;
+            ChestContentLinkIndex = chestIndex;
+            ChestContentLinkLabel = chestLabel ?? "";
+            ChestContentRawOffsetX = rawOffsetX;
+            ChestContentRawOffsetY = rawOffsetY;
+            ChestContentRawOffsetZ = rawOffsetZ;
+            Confidence = "editor chest-content link override";
+            Evidence = "source contained-gem special data +0x00/+0x04/+0x08/+0x0C will be patched by Create Loader BIN";
+        }
+
+        public void ClearChestContentLinkOverride()
+        {
+            ChestContentLinkTrueIndex = -1;
+            ChestContentLinkIndex = -1;
+            ChestContentLinkLabel = null;
+            ChestContentRawOffsetX = 0;
+            ChestContentRawOffsetY = 0;
+            ChestContentRawOffsetZ = 0;
+        }
+
         public void SetRecordCloneOverride(Moby source)
         {
             if (source == null) return;
@@ -7693,6 +14135,7 @@ namespace SpyroNativeEditor
             RecordCloneSourceTrueIndex = source.TrueIndex;
             RecordCloneSourceIndex = source.Index;
             RecordCloneSourceLabel = source.DisplayLabel;
+            ClearChestContentLinkOverride();
             GemColorOverride = null;
             GemValueOverride = 0;
             GemSourceByte36Override = -1;
@@ -7704,6 +14147,9 @@ namespace SpyroNativeEditor
             Type = source.Type;
             State = source.State;
             SpecialDataPointer = source.SpecialDataPointer;
+            SourceByte36 = source.SourceByte36;
+            SourceByte37 = source.SourceByte37;
+            SourceByte4F = source.SourceByte4F;
             Flag4A = source.Flag4A;
             Flag4B = source.Flag4B;
             Label = source.DisplayLabel + " (cloned type)";
@@ -7723,6 +14169,7 @@ namespace SpyroNativeEditor
             RecordCloneSourceTrueIndex = -1;
             RecordCloneSourceIndex = -1;
             RecordCloneSourceLabel = null;
+            ClearChestContentLinkOverride();
             GemColorOverride = null;
             GemValueOverride = 0;
             GemSourceByte36Override = -1;
@@ -7738,6 +14185,49 @@ namespace SpyroNativeEditor
             Color = System.Drawing.Color.FromArgb(120, 120, 120);
             Confidence = "editor hidden";
             Evidence = "source XYZ will be moved out of bounds by Create Loader BIN";
+        }
+
+        public bool ShouldUseSourceGemIdentity(MobyMetadata metadata)
+        {
+            if (!IsStandaloneGemSourceRecord) return false;
+            if (string.IsNullOrEmpty(SourceGemColorName)) return false;
+            if (metadata == null) return true;
+            return metadata.IsUserOverride && IsGenericGemIdentityText(metadata.Label, metadata.Kind);
+        }
+
+        public bool ApplySourceGemIdentity()
+        {
+            string normalized = SourceGemColorName;
+            if (string.IsNullOrEmpty(normalized)) return false;
+            int value = GemValueForColor(normalized);
+            Label = GemDisplayName(normalized);
+            Kind = normalized + " " + value.ToString() + "-gem collectible";
+            Color = GemColorForColor(normalized);
+            Confidence = "source gem bytes";
+            Evidence = "source bytes +0x36/+0x4F identify this standalone gem value";
+            return true;
+        }
+
+        private static bool IsGenericGemIdentityText(string label, string kind)
+        {
+            string labelText = string.IsNullOrEmpty(label) ? "" : label.Trim().ToLowerInvariant();
+            string kindText = string.IsNullOrEmpty(kind) ? "" : kind.Trim().ToLowerInvariant();
+            string text = (labelText + " " + kindText).Trim();
+            if (text.IndexOf("gem", StringComparison.Ordinal) < 0 && text.IndexOf("treasure", StringComparison.Ordinal) < 0)
+                return false;
+            if (text.IndexOf("chest", StringComparison.Ordinal) >= 0 || text.IndexOf("reward", StringComparison.Ordinal) >= 0 || text.IndexOf("key", StringComparison.Ordinal) >= 0)
+                return false;
+
+            if (labelText == "gem" || labelText == "gem collectible" || labelText == "treasure/gem" || labelText == "gem treasure/gem")
+                return true;
+            if (labelText == "red gem" || labelText == "red gem (1)") return true;
+            if (labelText == "green gem" || labelText == "green gem (2)") return true;
+            if (labelText == "blue gem" || labelText == "blue gem (5)") return true;
+            if (labelText == "yellow gem" || labelText == "yellow gem (10)") return true;
+            if (labelText == "purple gem" || labelText == "purple gem (25)") return true;
+            if (kindText == "gem" || kindText == "gems" || kindText == "gem collectible")
+                return true;
+            return kindText.EndsWith("-gem collectible", StringComparison.Ordinal);
         }
 
         public static bool IsSupportedGemColor(string color)
@@ -7796,6 +14286,27 @@ namespace SpyroNativeEditor
             return "Red gem (1)";
         }
 
+        private static string GemColorFromSourceBytes(int sourceByte36, int sourceByte4F)
+        {
+            switch (sourceByte4F)
+            {
+                case 0x01: return "red";
+                case 0x02: return "green";
+                case 0x03: return "blue";
+                case 0x04: return "yellow";
+                case 0x05: return "purple";
+            }
+            switch (sourceByte36)
+            {
+                case 0x53: return "red";
+                case 0x54: return "green";
+                case 0x55: return "blue";
+                case 0x56: return "yellow";
+                case 0x57: return "purple";
+            }
+            return "";
+        }
+
         private static Color GemColorForColor(string normalized)
         {
             if (normalized == "green") return System.Drawing.Color.FromArgb(46, 204, 113);
@@ -7842,8 +14353,14 @@ namespace SpyroNativeEditor
             GroundOffset = OriginalGroundOffset;
             ClearGemColorOverride();
             ClearRewardColorOverride();
+            ClearChestContentLinkOverride();
             ClearRecordMutationOverride();
             RestoreBaseIdentity();
+        }
+
+        private static int ToRawCoordinate(float value)
+        {
+            return (int)Math.Round(value * 16f);
         }
     }
 }

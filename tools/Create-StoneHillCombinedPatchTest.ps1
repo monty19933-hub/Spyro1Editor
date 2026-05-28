@@ -2,6 +2,7 @@ param(
     [string]$ImagePath = ".\Spyro the Dragon (USA).bin",
     [string]$NativeEditsPath = ".\stonehill-native-edits.json",
     [string]$TerrainEditsPath = ".\stonehill-terrain-edits.json",
+    [string]$CustomTexturesPath = ".\stonehill-custom-terrain-textures.json",
     [string]$RamPath = ".\stonehill-before-gem-clean.bin",
     [string]$OutPath = ".\Spyro the Dragon (USA)-combinedpatchtest.bin",
     [string]$CuePath = "",
@@ -67,13 +68,18 @@ $loaderPlan = "$resolvedOut.loaderpatchplan.json"
 $terrainSearch = Resolve-WorkspacePath ".\stonehill-runtime-terrain-source-search.json"
 $terrainPlan = "$resolvedOut.terrainpatchplan.json"
 $terrainPlanMd = "$resolvedOut.terrainpatchplan.md"
+$resolvedCustomTextures = Resolve-WorkspacePath $CustomTexturesPath
 
 if (-not (Test-Path -LiteralPath $resolvedImage)) { throw "Missing source image: $resolvedImage" }
 
 $mobyEditCount = Read-EditCount $NativeEditsPath
 $terrainEditCount = Read-EditCount $TerrainEditsPath
-if (($mobyEditCount + $terrainEditCount) -le 0) {
-    throw "No saved moby or terrain edits were found. Save edits in the editor before creating a combined BIN."
+$customTextureCount = if (Test-Path -LiteralPath $resolvedCustomTextures) {
+    $customRoot = Get-Content -LiteralPath $resolvedCustomTextures -Raw | ConvertFrom-Json
+    @(Get-ArrayField $customRoot "textures").Count
+} else { 0 }
+if (($mobyEditCount + $terrainEditCount + $customTextureCount) -le 0) {
+    throw "No saved moby edits, terrain edits, or custom texture imports were found. Save edits in the editor before creating a combined BIN."
 }
 
 if ($mobyEditCount -gt 0) {
@@ -97,18 +103,20 @@ elseif (-not $PlanOnly) {
     Write-Cue $resolvedOut $resolvedCue
 }
 
-if ($terrainEditCount -gt 0) {
-    Write-Host "Searching WAD for exact runtime terrain sectors..."
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $findTerrainScript `
-        -ImagePath $resolvedImage `
-        -RamPath (Resolve-WorkspacePath $RamPath) `
-        -TerrainEditsPath (Resolve-WorkspacePath $TerrainEditsPath) `
-        -QuickSectorOnly `
-        -OutJsonPath $terrainSearch `
-        -OutMarkdownPath (Resolve-WorkspacePath ".\stonehill-runtime-terrain-source-search.md")
-    if ($LASTEXITCODE -ne 0) { throw "Runtime terrain source search failed." }
+if ($terrainEditCount -gt 0 -or $customTextureCount -gt 0) {
+    if ($terrainEditCount -gt 0) {
+        Write-Host "Searching WAD for exact runtime terrain sectors..."
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $findTerrainScript `
+            -ImagePath $resolvedImage `
+            -RamPath (Resolve-WorkspacePath $RamPath) `
+            -TerrainEditsPath (Resolve-WorkspacePath $TerrainEditsPath) `
+            -QuickSectorOnly `
+            -OutJsonPath $terrainSearch `
+            -OutMarkdownPath (Resolve-WorkspacePath ".\stonehill-runtime-terrain-source-search.md")
+        if ($LASTEXITCODE -ne 0) { throw "Runtime terrain source search failed." }
+    }
 
-    Write-Host "Applying $terrainEditCount terrain edit(s) to combined image..."
+    Write-Host "Applying $terrainEditCount terrain edit(s) and $customTextureCount custom texture import(s) to combined image..."
     $terrainArgs = @(
         "-NoProfile", "-ExecutionPolicy", "Bypass",
         "-File", $terrainScript,
@@ -121,6 +129,14 @@ if ($terrainEditCount -gt 0) {
         "-PlanPath", $terrainPlan,
         "-MarkdownPath", $terrainPlanMd
     )
+    if ($terrainEditCount -gt 0) {
+        $terrainArgs += "-SourceSearchPath"
+        $terrainArgs += $terrainSearch
+    }
+    if ($customTextureCount -gt 0) {
+        $terrainArgs += "-CustomTexturesPath"
+        $terrainArgs += $resolvedCustomTextures
+    }
     if ($PlanOnly) { $terrainArgs += "-PlanOnly" } else { $terrainArgs += "-AllowExperimentalWrite" }
     if ($IncludeCollisionLp) { $terrainArgs += "-IncludeCollisionLp" }
     & powershell.exe @terrainArgs
@@ -135,6 +151,7 @@ $summary = [ordered]@{
     cuePath = $resolvedCue
     mobyEditCount = $mobyEditCount
     terrainEditCount = $terrainEditCount
+    customTextureCount = $customTextureCount
     loaderPlanPath = $loaderPlan
     terrainSourceSearchPath = $terrainSearch
     terrainPlanPath = $terrainPlan
@@ -150,6 +167,7 @@ $lines = New-Object System.Collections.ArrayList
 [void]$lines.Add("- Status: $($summary.status)")
 [void]$lines.Add("- Moby edits: $mobyEditCount")
 [void]$lines.Add("- Terrain edits: $terrainEditCount")
+[void]$lines.Add("- Custom texture imports: $customTextureCount")
 [void]$lines.Add("- Collision LP companion terrain patching: $IncludeCollisionLp")
 [void]$lines.Add("- BIN: $resolvedOut")
 [void]$lines.Add("- CUE: $resolvedCue")
