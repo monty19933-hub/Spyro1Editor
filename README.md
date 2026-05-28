@@ -117,6 +117,16 @@ Capture Current Level Workbench From DuckStation.bat
 
 The capture writes `<level>-before-clean.bin`, `<level>-runtime-moby-tables.json`, and `<level>-runtime-scene-editor-overlay.json`. These are local generated files and should not be shipped. After capture finishes, choose that level from the native editor dropdown; selection loads it automatically. **Create Loader BIN** uses the shared catalog and saved `<level>-native-edits.json` files so mapped-level moby edits can be exported together into one disposable CUE/BIN.
 
+## Portable Editor Cache
+
+After capturing levels from DuckStation, run:
+
+```text
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\New-SpyroPortableEditorCache.ps1 -Force
+```
+
+This creates `editor-cache\` with portable per-level moby JSON plus copied terrain overlays. The native editor loads `editor-cache` first, so the raw `*-before-clean.bin` RAM dumps are no longer required for normal level browsing/editing once the cache exists. Keep the RAM dumps only when you want to refresh/rebuild the cache from live DuckStation captures.
+
 Native source-BIN patch plans include `functionalTests` entries for each saved move. These label risky classes such as chests and fodder separately from simple collectible/scenery moves, and spell out the success signal to check after a fresh patched-CUE boot: chest collision plus reward/drop behavior, actor AI/home behavior, or gem counter/collectable-flag changes. If a source BIN moves a model but the functional signal fails, keep the placement source lead and search for the linked behavior/home/contents record instead of trusting the live RAM visual move.
 
 The native editor inspector also loads `stonehill-moby-special-data.json` and shows linked special-data chains for selected mobys. This matters for containers: `L109` now shows six linked special-data pointers, while `L120`/`L131` share a regular-chest block with fifteen linked pointers. Treat those as collision/contents/behavior leads to preserve or map after a placement source lead is proven.

@@ -23,8 +23,14 @@ namespace SpyroNativeEditor
                     List<LevelDefinition> levels = SpyroLevelCatalog.Load(workspace);
                     if (levels.Count < 30 || SpyroLevelCatalog.FindByKey(levels, "darkhollow") == null || SpyroLevelCatalog.FindByKey(levels, "peacekeepers") == null)
                         throw new InvalidOperationException("Level catalog did not load from workspace; editor would fall back to the two-level starter list.");
-                    GeometryCandidate geometry = GeometryLoader.LoadFirstCandidate(ResolveWorkspaceFile(workspace, "stonehill-runtime-scene-editor-overlay.json", "generated-research"));
-                    List<Moby> mobys = MobyLoader.Load(ResolveStoneHillRamPath(workspace));
+                    string stoneHillGeometry = Path.Combine(workspace, "editor-cache", "stonehill-runtime-scene-editor-overlay.json");
+                    if (!File.Exists(stoneHillGeometry))
+                        stoneHillGeometry = ResolveWorkspaceFile(workspace, "stonehill-runtime-scene-editor-overlay.json", "generated-research");
+                    string stoneHillMobyCache = Path.Combine(workspace, "editor-cache", "stonehill-mobys.json");
+                    GeometryCandidate geometry = GeometryLoader.LoadFirstCandidate(stoneHillGeometry);
+                    List<Moby> mobys = File.Exists(stoneHillMobyCache)
+                        ? MobyLoader.LoadCached(stoneHillMobyCache)
+                        : MobyLoader.Load(ResolveStoneHillRamPath(workspace));
                     MobyMetadataLoader.Apply(workspace, mobys);
                     bool hasNamedMoby = false;
                     foreach (Moby moby in mobys)
@@ -1892,10 +1898,12 @@ namespace SpyroNativeEditor
                     return false;
 
                 string geometryPath = GetLevelGeometryPath(levelKey);
+                string mobyCachePath = GetLevelMobyCachePath(levelKey);
                 string ramPath = GetLevelRamPath(levelKey);
+                bool hasMobyCache = File.Exists(mobyCachePath);
                 if (!File.Exists(geometryPath))
                     throw new FileNotFoundException(MissingLevelAssetMessage(levelName, "geometry overlay"), geometryPath);
-                if (!File.Exists(ramPath))
+                if (!hasMobyCache && !File.Exists(ramPath))
                     throw new FileNotFoundException(MissingLevelAssetMessage(levelName, "RAM dump"), ramPath);
 
                 currentLevelName = levelName;
@@ -1909,7 +1917,7 @@ namespace SpyroNativeEditor
                 terrainMaterialOverridesPath = Path.Combine(workspace, levelKey + "-terrain-material-overrides.json");
                 customTerrainTexturesPath = Path.Combine(workspace, levelKey + "-custom-terrain-textures.json");
                 liveOriginalsPath = Path.Combine(workspace, levelKey + "-live-moby-originals.json");
-                currentRamPath = ramPath;
+                currentRamPath = File.Exists(ramPath) ? ramPath : "";
                 Text = "Spyro Native Level Editor - " + levelName;
                 if (inspectorHeaderLabel != null)
                     inspectorHeaderLabel.Text = levelName + " Objects";
@@ -1925,7 +1933,10 @@ namespace SpyroNativeEditor
                 LoadTerrainTextureAtlas();
                 LoadCustomTerrainTextures();
                 mobys.Clear();
-                mobys.AddRange(MobyLoader.Load(ramPath));
+                if (hasMobyCache)
+                    mobys.AddRange(MobyLoader.LoadCached(mobyCachePath));
+                else
+                    mobys.AddRange(MobyLoader.Load(ramPath));
                 int namedMobys = MobyMetadataLoader.Apply(workspace, mobys, levelKey, level.ApplyStoneHillMetadata);
                 if (level.HasSourceTable)
                     ApplyLevelSourcePatchStatus(levelKey, levelName);
@@ -1947,7 +1958,7 @@ namespace SpyroNativeEditor
                 UpdateLevelActionButtons();
                 FitGeometry();
                 statusLabel.Text = string.Format(
-                    "Loaded {0}: {1} faces, {2} lines, {3} mobys, {4} named, {5} moby edit(s), {6} terrain edit(s), {7} color option(s), {8} material labels. {9}.",
+                    "Loaded {0}{10}: {1} faces, {2} lines, {3} mobys, {4} named, {5} moby edit(s), {6} terrain edit(s), {7} color option(s), {8} material labels. {9}.",
                     levelName,
                     geometry.Polygons.Count,
                     geometry.Edges.Count,
@@ -1957,7 +1968,8 @@ namespace SpyroNativeEditor
                     savedTerrainEditCount,
                     CountActivePlayerColorOptions(),
                     materialOverrideCount,
-                    TreasureSummaryText(CalculateTreasureSummary()));
+                    TreasureSummaryText(CalculateTreasureSummary()),
+                    hasMobyCache ? " from portable cache" : "");
                 return true;
             }
             catch (Exception ex)
@@ -1975,7 +1987,15 @@ namespace SpyroNativeEditor
 
         private string GetLevelGeometryPath(string levelKey)
         {
+            string cached = Path.Combine(workspace, "editor-cache", levelKey + "-runtime-scene-editor-overlay.json");
+            if (File.Exists(cached))
+                return cached;
             return Program.ResolveWorkspaceFile(workspace, levelKey + "-runtime-scene-editor-overlay.json", "generated-research");
+        }
+
+        private string GetLevelMobyCachePath(string levelKey)
+        {
+            return Path.Combine(workspace, "editor-cache", levelKey + "-mobys.json");
         }
 
         private string GetLevelRamPath(string levelKey)
@@ -11463,6 +11483,84 @@ namespace SpyroNativeEditor
                 });
             }
             return result;
+        }
+
+        public static List<Moby> LoadCached(string cachePath)
+        {
+            JavaScriptSerializer serializer = new JavaScriptSerializer();
+            serializer.MaxJsonLength = int.MaxValue;
+            Dictionary<string, object> root = serializer.DeserializeObject(File.ReadAllText(cachePath, Encoding.UTF8)) as Dictionary<string, object>;
+            object[] entries = GeometryLoader.GetArray(root, "mobys");
+            List<Moby> result = new List<Moby>();
+
+            for (int i = 0; i < entries.Length; i++)
+            {
+                Dictionary<string, object> entry = entries[i] as Dictionary<string, object>;
+                if (entry == null) continue;
+
+                int trueIndex = GeometryLoader.GetInt(entry, "trueIndex", GeometryLoader.GetInt(entry, "index", i));
+                int type = FlexibleInt(entry, "typeHex", GeometryLoader.GetInt(entry, "type", 0));
+                int state = FlexibleInt(entry, "stateHex", GeometryLoader.GetInt(entry, "state", 0));
+                float x = (float)GeometryLoader.GetDouble(entry, "x", 0);
+                float y = (float)GeometryLoader.GetDouble(entry, "y", 0);
+                float z = (float)GeometryLoader.GetDouble(entry, "z", 0);
+
+                result.Add(new Moby
+                {
+                    Index = GeometryLoader.GetInt(entry, "index", trueIndex),
+                    TrueIndex = trueIndex,
+                    LegacyIndex = GeometryLoader.GetInt(entry, "legacyIndex", GetLegacyAliasIndex(trueIndex)),
+                    X = x,
+                    Y = y,
+                    Z = z,
+                    OriginalX = x,
+                    OriginalY = y,
+                    OriginalZ = z,
+                    Type = type,
+                    State = state,
+                    RuntimeAddress = (uint)FlexibleInt64(entry, "runtimeAddress", 0),
+                    SpecialDataPointer = (uint)FlexibleInt64(entry, "specialDataPointer", 0),
+                    SourceByte36 = FlexibleInt(entry, "sourceByte36Hex", 0),
+                    SourceByte37 = FlexibleInt(entry, "sourceByte37Hex", 0),
+                    SourceByte4F = FlexibleInt(entry, "sourceByte4FHex", 0),
+                    Flag4A = FlexibleInt(entry, "flag4AHex", 0),
+                    Flag4B = FlexibleInt(entry, "flag4BHex", 0),
+                    Color = ColorForType(type),
+                    Label = FallbackLabel(type),
+                    PatchStatus = "portable-cache",
+                    PatchLead = "Loaded from editor-cache; source patch status is applied after level load.",
+                    PatchPriority = 0
+                });
+            }
+
+            return result;
+        }
+
+        private static int FlexibleInt(Dictionary<string, object> entry, string name, int fallback)
+        {
+            long value = FlexibleInt64(entry, name, fallback);
+            if (value < int.MinValue || value > int.MaxValue)
+                return fallback;
+            return (int)value;
+        }
+
+        private static long FlexibleInt64(Dictionary<string, object> entry, string name, long fallback)
+        {
+            if (entry == null || !entry.ContainsKey(name) || entry[name] == null)
+                return fallback;
+
+            object raw = entry[name];
+            try
+            {
+                string text = Convert.ToString(raw).Trim();
+                if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                    return Convert.ToInt64(text.Substring(2), 16);
+                return Convert.ToInt64(raw);
+            }
+            catch
+            {
+                return fallback;
+            }
         }
 
         internal static int GetLegacyAliasIndex(int trueIndex)

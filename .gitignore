@@ -106,6 +106,7 @@ _local/
 _skybox_probe/
 cleanup-manifests/
 editor-runtime/
+editor-cache/
 archive/
 tmp/
 temp/
@@ -131,5 +132,6 @@ tools/Move-DuckStationWindow.ps1
 !tools/New-SpyroSkyboxCatalog.ps1
 !tools/New-SpyroObjectDependencyTrace.ps1
 !tools/New-SpyroCrossLevelObjectImportPlan.ps1
+!tools/New-SpyroPortableEditorCache.ps1
 !tools/Test-ReleaseReadiness.ps1
 !tools/Capture-SpyroCurrentLevelWorkbench.ps1
