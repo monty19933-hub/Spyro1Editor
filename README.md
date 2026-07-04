@@ -32,10 +32,11 @@ Current release-candidate features include:
   scenery, and other decoded mobys.
 - Same-level slot replacement for enemies and object classes that are not safe
   to add as brand-new source records yet.
-- Same-level donor clone adds for testing one extra object that already exists
-  in the loaded level.
-- Same-level object copy/paste preserves the source donor record, so pasted
-  objects use the same native clone export path as Add Object.
+- Same-level donor metadata is preserved for future safe enemy/chest export
+  work, while current test BINs skip unsafe true-add actor/chest clones.
+- Same-level object copy/paste preserves the source donor record, so the editor
+  can save it now and the exporter can keep unsafe enemy/chest true-adds out of
+  the test disc until they are proven.
 - Terrain snapping for placed objects, including indoor/enclosed placement.
 - Multi-level `Create BIN` output that includes all saved editor changes.
 - Object edits auto-save when changing levels so cross-level test builds do not
@@ -46,12 +47,11 @@ Current release-candidate features include:
 
 Some object classes are still experimental. For enemies such as Large Gnorc or
 Big Armor Gnorc, replace an existing same-level object slot instead of adding a
-brand-new one when you need the safest test. `Create BIN` currently writes at
-most one experimental same-level enemy/chest true-add per level; additional
-saved enemy/chest adds remain in the editor but are skipped from the test disc
-to avoid known in-game freezes. If something appears, disappears, clips,
-soft-locks, or changes behavior in-game, please file an issue with steps to
-reproduce.
+brand-new one when you need the safest test. `Create BIN` keeps brand-new
+same-level enemy/chest true-adds saved in the editor but skips them in the test
+disc until their behavior data is fully solved, because native actor/chest
+clones can freeze in-game. If something appears, disappears, clips, soft-locks,
+or changes behavior in-game, please file an issue with steps to reproduce.
 
 ## Reporting Issues
 

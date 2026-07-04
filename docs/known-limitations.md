@@ -27,11 +27,11 @@ Generally safer:
 - Editing existing gem value bytes that are already proven by smoke tests.
 - Replacing an existing object slot with a same-level donor object through
   `Edit Object` > `Change To`.
-- Adding a new same-level donor clone for testing when that object already
-  exists in the loaded level.
 
 Still guarded:
 
+- Adding or copy/pasting extra same-level enemies or chests as brand-new source
+  records.
 - Copy/pasting arbitrary extra enemies, copied scenery, and copied chests as new
   source records.
 - Cross-level object imports.
@@ -44,10 +44,11 @@ Still guarded:
 If an object appears visually but does not react correctly in-game, do not promote it as working.
 
 Enemy adds need extra behavior/home/path data that a single new source row may
-not carry correctly. Same-level donor clone adds are available for testing, but
-same-level slot replacement is still the safest route for enemies like Large
-Gnorc or Big Armor Gnorc because it consumes an existing level object slot and
-keeps the donor's fuller behavior record.
+not carry correctly. `Create BIN` keeps those brand-new enemy/chest true-adds
+saved in the editor but skips them in the test disc for now. Same-level slot
+replacement is the safe route for enemies like Large Gnorc or Big Armor Gnorc
+because it consumes an existing level object slot and keeps the donor's fuller
+behavior record.
 
 ## Spring Chest Status
 

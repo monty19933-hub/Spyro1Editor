@@ -124,7 +124,6 @@ public static class MobySourcePatchExporter
         Dictionary<string, CrossLevelSharedSpecialCluster> sharedCrossLevelSpecialClusters = new(StringComparer.OrdinalIgnoreCase);
         int appendNextTrueIndex = level.SourceRecordCount;
         bool hasAppend = false;
-        int guardedNativeCloneAppendCount = 0;
         List<JsonElement> exportedTreasureEdits = new();
         int springChestControllerAppendTrueIndex = -1;
         int springChestShellAppendTrueIndex = -1;
@@ -143,16 +142,13 @@ public static class MobySourcePatchExporter
             if (JsonValue.GetBoolean(edit, "added") || string.Equals(JsonValue.GetString(edit, "editKind"), "add", StringComparison.OrdinalIgnoreCase))
             {
                 int assignedAppendTrueIndex = appendNextTrueIndex;
-                bool isGuardedNativeCloneAppend = IsGuardedNativeCloneAppend(edit);
-                if (TryAddAppendPatch(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, tableRelativeOffset, appendNextTrueIndex, label, edit, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, suppressActorPackageImports, guardedNativeCloneAppendCount == 0, patches, packageImportPreviews, writtenWadOffsets, writtenActorPackageRecipes, sharedCrossLevelSpecialClusters, skippedEdits))
+                if (TryAddAppendPatch(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, tableRelativeOffset, appendNextTrueIndex, label, edit, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, suppressActorPackageImports, allowGuardedNativeCloneAppend: false, patches, packageImportPreviews, writtenWadOffsets, writtenActorPackageRecipes, sharedCrossLevelSpecialClusters, skippedEdits))
                 {
                     exportedTreasureEdits.Add(edit);
                     TrackSpringChestPairAppend(edit, assignedAppendTrueIndex, packageImportPreviews, ref springChestControllerAppendTrueIndex, ref springChestShellAppendTrueIndex, ref springChestControllerActorId);
                     TrackPeaceKeepersSpringChestAppend(edit, assignedAppendTrueIndex, peaceKeepersSpringChestAnchors);
                     appendNextTrueIndex++;
                     hasAppend = true;
-                    if (isGuardedNativeCloneAppend)
-                        guardedNativeCloneAppendCount++;
                 }
 
                 continue;
@@ -1076,7 +1072,7 @@ public static class MobySourcePatchExporter
             "Movement edits write raw X/Y/Z coordinates at record offsets 0x0C/0x10/0x14.",
             "Remove edits are exported as a soft remove by moving the source record to -30000, -30000, -30000 world units.",
             "Type, state, and chest/gem source-byte edits write one-byte source table fields.",
-            "Simple same-level true adds clone a matching source record into the next empty slot and bump the source count.",
+            "Loose gems and proven lightweight same-level true adds clone a matching source record into the next empty slot and bump the source count; unsafe enemy/chest true-adds are skipped until their behavior data is solved.",
             "Treasure edits update the level's in-game pause/inventory treasure target so added gems count toward completion.",
             "Existing contained-gem chest content recolors export as +0x53 source-byte patches; brand-new contained-gem markers still need the special-data chest-link append path."
         ];
@@ -1899,7 +1895,7 @@ public static class MobySourcePatchExporter
 
         if (crossLevelDonor == null && isGuardedNativeCloneAppend && !allowGuardedNativeCloneAppend)
         {
-            skippedEdits.Add($"{label}: extra same-level enemy/chest adds are kept saved but skipped from Create BIN for now because repeated native actor/chest clones can freeze in-game. Use Change To / slot replacement for multiple safe enemy or chest swaps.");
+            skippedEdits.Add($"{label}: same-level enemy/chest true-adds are kept saved but skipped from Create BIN for now because native actor/chest clones can freeze in-game. Use Change To / slot replacement for safe enemy or chest swaps.");
             return false;
         }
 

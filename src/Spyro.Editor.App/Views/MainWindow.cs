@@ -14800,7 +14800,7 @@ public sealed class MainWindow : Window
         string patchLead = pasteContainedGemAsLooseGem
             ? $"Pasted from copied contained gem {clipboard.Label}; converted to a loose native gem so it appears and can be collected in-game."
             : clipboard.SourceCloneTrueIndex >= 0 && _currentLevel != null && string.Equals(clipboard.SourceCloneLevelKey, _currentLevel.Key, StringComparison.OrdinalIgnoreCase)
-            ? $"Pasted from same-level donor T{clipboard.SourceCloneTrueIndex}; Create BIN appends a native clone with same-level donor data."
+            ? $"Pasted from same-level donor T{clipboard.SourceCloneTrueIndex}; saved in the editor, but Create BIN skips new enemy/chest true-adds until their behavior data is fully solved."
             : $"Pasted from copied object {clipboard.Label}; it exports as a new native source-table record when supported.";
         string patchStatus = pasteContainedGemAsLooseGem
             ? "new-native-editor-object-copy"
@@ -14949,7 +14949,7 @@ public sealed class MainWindow : Window
                 : template.FromCrossLevelTemplate
                 ? BuildCrossLevelPatchLead(template)
                 : template.FromLevelTemplate
-                ? $"Added in the native editor from same-level donor T{template.SourceTrueIndex}; Create BIN can write one experimental same-level enemy/chest clone per level. Use Change To / slot replacement for multiple safer swaps."
+                ? $"Added in the native editor from same-level donor T{template.SourceTrueIndex}; Create BIN keeps new enemy/chest true-adds saved but skips them until their behavior data is fully solved. Use Change To / slot replacement for safe swaps."
                 : template.UsesGem
                 ? "Added in the native editor; simple gem adds export through the native source-table append path."
                 : "Added in the native editor; this custom object may need actor-package support before it is playable.",
@@ -15373,7 +15373,7 @@ public sealed class MainWindow : Window
                 return template.TemplateNote;
 
             return template.FromLevelTemplate
-                ? "This clones a same-level source record. Create BIN writes one experimental enemy/chest true-add per level; use Change To / slot replacement for multiple safer swaps."
+                ? "This clones a same-level source record. Create BIN keeps new enemy/chest true-adds saved but skips them until their behavior data is fully solved; use Change To / slot replacement for safe swaps."
                 : "Objects with simple 0x18/0x20 source records export to the test BIN now. Bigger actors may need actor-package support before they are playable.";
         }
 

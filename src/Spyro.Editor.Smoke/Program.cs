@@ -10551,35 +10551,21 @@ async Task ReportNativeCloneAppendPatch(string levelKey)
         NativeEditsPath: path,
         WriteImage: true));
     MobySourcePatchPlan plan = exportResult.Plan;
-    if (!exportResult.WroteImage)
-        throw new InvalidOperationException($"{level.DisplayName} native clone append did not write a disposable BIN.");
-    VerifyPatchBytes(exportResult.OutputImagePath, plan);
-    if (plan.SkippedEdits.Count != 0)
-        throw new InvalidOperationException($"{level.DisplayName} native clone append skipped edit(s): {string.Join("; ", plan.SkippedEdits)}");
-
-    MobySourcePatch? appendPatch = plan.Patches.FirstOrDefault(patch =>
-        string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase));
-    if (appendPatch == null || appendPatch.TrueIndex != level.SourceRecordCount)
-        throw new InvalidOperationException($"{level.DisplayName} native clone append did not append at T{level.SourceRecordCount}.");
-    MobySourcePatch? sourceCountPatch = plan.Patches.FirstOrDefault(patch =>
-        string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase));
-    if (sourceCountPatch == null || BitConverter.ToInt32(ParseHexPreview(sourceCountPatch.AfterHexPreview), 0) != level.SourceRecordCount + 1)
-        throw new InvalidOperationException($"{level.DisplayName} native clone append did not increase the source count by one.");
-
-    byte[] after = ParseHexPreview(appendPatch.AfterHexPreview);
-    if (after.Length < 0x58 ||
-        after[0x50] != donor.Type ||
-        after[0x51] != donor.State ||
-        after[0x36] != donor.SourceByte36 ||
-        after[0x37] != donor.SourceByte37 ||
-        after[0x4F] != donor.SourceByte4F ||
-        after[0x52] != donor.Flag4A ||
-        after[0x53] != donor.Flag4B)
+    if (exportResult.WroteImage)
+        throw new InvalidOperationException($"{level.DisplayName} native clone append guard wrote a BIN for an unsafe same-level clone.");
+    if (plan.Patches.Any(patch =>
+        string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)))
     {
-        throw new InvalidOperationException($"{level.DisplayName} native clone append did not preserve donor identity bytes.");
+        throw new InvalidOperationException($"{level.DisplayName} native clone append guard wrote append/count patch(es).");
+    }
+    if (plan.SkippedEdits.Count != 1 ||
+        !plan.SkippedEdits[0].Contains("same-level enemy/chest true-adds", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException($"{level.DisplayName} native clone append guard skipped unexpected edit(s): {string.Join("; ", plan.SkippedEdits)}");
     }
 
-    Console.WriteLine($"{level.DisplayName} native clone append patch: appended donor T{donor.TrueIndex} as T{level.SourceRecordCount}, source count {level.SourceRecordCount}->{level.SourceRecordCount + 1}, BIN bytes verified");
+    Console.WriteLine($"{level.DisplayName} native clone append guard: skipped unsafe same-level donor T{donor.TrueIndex}, no source-count bump");
 }
 
 async Task ReportRepeatedNativeCloneAppendGuard(string levelKey)
@@ -10644,27 +10630,26 @@ async Task ReportRepeatedNativeCloneAppendGuard(string levelKey)
         NativeEditsPath: path,
         WriteImage: true));
     MobySourcePatchPlan plan = exportResult.Plan;
-    if (!exportResult.WroteImage)
-        throw new InvalidOperationException($"{level.DisplayName} repeated native clone guard did not write a disposable BIN for the first clone.");
-    VerifyPatchBytes(exportResult.OutputImagePath, plan);
+    if (exportResult.WroteImage)
+        throw new InvalidOperationException($"{level.DisplayName} repeated native clone guard wrote a BIN for unsafe same-level clones.");
 
     List<MobySourcePatch> appendPatches = plan.Patches
         .Where(patch => string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase))
         .ToList();
-    if (appendPatches.Count != 1 || appendPatches[0].TrueIndex != level.SourceRecordCount)
-        throw new InvalidOperationException($"{level.DisplayName} repeated native clone guard wrote {appendPatches.Count} append patch(es), expected exactly one at T{level.SourceRecordCount}.");
-    if (plan.SkippedEdits.Count != 1 ||
-        !plan.SkippedEdits[0].Contains("extra same-level enemy/chest adds", StringComparison.OrdinalIgnoreCase))
+    if (appendPatches.Count != 0)
+        throw new InvalidOperationException($"{level.DisplayName} repeated native clone guard wrote {appendPatches.Count} append patch(es), expected none.");
+    if (plan.SkippedEdits.Count != 2 ||
+        plan.SkippedEdits.Any(skipped => !skipped.Contains("same-level enemy/chest true-adds", StringComparison.OrdinalIgnoreCase)))
     {
         throw new InvalidOperationException($"{level.DisplayName} repeated native clone guard skipped unexpected edit(s): {string.Join("; ", plan.SkippedEdits)}");
     }
 
     MobySourcePatch? sourceCountPatch = plan.Patches.FirstOrDefault(patch =>
         string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase));
-    if (sourceCountPatch == null || BitConverter.ToInt32(ParseHexPreview(sourceCountPatch.AfterHexPreview), 0) != level.SourceRecordCount + 1)
-        throw new InvalidOperationException($"{level.DisplayName} repeated native clone guard did not limit the source count to one extra native clone.");
+    if (sourceCountPatch != null)
+        throw new InvalidOperationException($"{level.DisplayName} repeated native clone guard unexpectedly wrote a source-count patch.");
 
-    Console.WriteLine($"{level.DisplayName} repeated native clone guard: exported 1 native clone, skipped {plan.SkippedEdits.Count} repeated unsafe clone, source count {level.SourceRecordCount}->{level.SourceRecordCount + 1}");
+    Console.WriteLine($"{level.DisplayName} repeated native clone guard: skipped {plan.SkippedEdits.Count} unsafe same-level clone(s), source count stays {level.SourceRecordCount}");
 }
 
 async Task ReportPastedNativeCloneAppendPatch(string levelKey)
@@ -10717,7 +10702,7 @@ async Task ReportPastedNativeCloneAppendPatch(string levelKey)
     int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 1;
     Moby pasted = CopyAsAddedMoby(donor, nextIndex, nextTrueIndex, $"Copy of {donor.DisplayLabel}", 6);
     pasted.PatchStatus = "native-clone";
-    pasted.PatchLead = $"Pasted from same-level donor T{donor.TrueIndex}; Create BIN appends a native clone with same-level donor data.";
+    pasted.PatchLead = $"Pasted from same-level donor T{donor.TrueIndex}; saved in the editor, but Create BIN skips new enemy/chest true-adds until their behavior data is fully solved.";
     pasted.Confidence = "same-level-native-clone";
     pasted.Evidence = $"Copied from same-level donor T{donor.TrueIndex}.";
     pasted.SourceCloneLevelKey = level.Key;
@@ -10745,33 +10730,21 @@ async Task ReportPastedNativeCloneAppendPatch(string levelKey)
         NativeEditsPath: path,
         WriteImage: true));
     MobySourcePatchPlan plan = exportResult.Plan;
-    if (!exportResult.WroteImage)
-        throw new InvalidOperationException($"{level.DisplayName} pasted native clone append did not write a disposable BIN.");
-    VerifyPatchBytes(exportResult.OutputImagePath, plan);
-    if (plan.SkippedEdits.Count != 0)
-        throw new InvalidOperationException($"{level.DisplayName} pasted native clone append skipped edit(s): {string.Join("; ", plan.SkippedEdits)}");
-
-    MobySourcePatch? appendPatch = plan.Patches.FirstOrDefault(patch =>
-        string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase));
-    if (appendPatch == null || appendPatch.TrueIndex != level.SourceRecordCount)
-        throw new InvalidOperationException($"{level.DisplayName} pasted native clone append did not append at T{level.SourceRecordCount}.");
-    if (!appendPatch.Description.Contains($"donor T{donor.TrueIndex}", StringComparison.OrdinalIgnoreCase))
-        throw new InvalidOperationException($"{level.DisplayName} pasted native clone append did not use explicit donor T{donor.TrueIndex}: {appendPatch.Description}");
-
-    byte[] after = ParseHexPreview(appendPatch.AfterHexPreview);
-    if (after.Length < 0x58 ||
-        after[0x50] != donor.Type ||
-        after[0x51] != donor.State ||
-        after[0x36] != donor.SourceByte36 ||
-        after[0x37] != donor.SourceByte37 ||
-        after[0x4F] != donor.SourceByte4F ||
-        after[0x52] != donor.Flag4A ||
-        after[0x53] != donor.Flag4B)
+    if (exportResult.WroteImage)
+        throw new InvalidOperationException($"{level.DisplayName} pasted native clone guard wrote a BIN for an unsafe pasted clone.");
+    if (plan.Patches.Any(patch =>
+        string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)))
     {
-        throw new InvalidOperationException($"{level.DisplayName} pasted native clone append did not preserve pasted donor identity bytes.");
+        throw new InvalidOperationException($"{level.DisplayName} pasted native clone guard wrote append/count patch(es).");
+    }
+    if (plan.SkippedEdits.Count != 1 ||
+        !plan.SkippedEdits[0].Contains("same-level enemy/chest true-adds", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException($"{level.DisplayName} pasted native clone guard skipped unexpected edit(s): {string.Join("; ", plan.SkippedEdits)}");
     }
 
-    Console.WriteLine($"{level.DisplayName} pasted native clone append patch: copied donor T{donor.TrueIndex} as T{level.SourceRecordCount}, source count {level.SourceRecordCount}->{level.SourceRecordCount + 1}, BIN bytes verified");
+    Console.WriteLine($"{level.DisplayName} pasted native clone guard: preserved donor T{donor.TrueIndex} metadata but skipped unsafe pasted true-add");
 }
 
 int ToSmokeRawCoordinate(float value) => (int)Math.Round(value * 16f);
