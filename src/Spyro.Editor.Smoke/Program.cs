@@ -241,6 +241,7 @@ if (File.Exists(cachePath))
     ReportStoneHillKeyChestIdentity(mobys);
     ReportLinkedMoveTraversal("Stone Hill", mobys);
     await ReportMobySourcePatchPlan(stoneHill, mobys);
+    await ReportMultiLevelSavedObjectExportPatch(stoneHill, mobys);
     await ReportMobyIdentityBytePatchPlan(stoneHill, mobys);
     await ReportAddedMobyRoundTrip(mobys);
     await ReportCrossLevelMobyTemplateRoundTripAndPatch(stoneHill, mobys);
@@ -264,6 +265,7 @@ if (HasAnyMobyCache())
     await ReportPastedLooseGemPatch("darkhollow");
     await ReportMixedCopiedObjectAppendGuard("darkhollow");
     await ReportNativeSlotReusePatch("darkhollow");
+    await ReportNativeCloneAppendPatch("darkhollow");
     await ReportAllLevelLooseGemPlacementSectors();
     ReportHomeWorldBalloonistIdentities();
     ReportArtisansSelectionLinks();
@@ -9709,6 +9711,78 @@ async Task ReportMobySourcePatchPlan(LevelDefinition level, List<Moby> sourceMob
     await ReportStoneHillNativeKeyChestPairPatch(level, sourceMobys);
 }
 
+async Task ReportMultiLevelSavedObjectExportPatch(LevelDefinition stoneHillLevel, List<Moby> stoneHillMobys)
+{
+    if (!File.Exists(sourceImage))
+    {
+        Console.WriteLine("Multi-level saved object export: source disc not found; skipping.");
+        return;
+    }
+
+    LevelDefinition? artisans = catalog.FindByKey("artisans");
+    string artisansPath = Path.Combine(workspace.RootPath, "editor-cache", "artisans-mobys.json");
+    if (artisans == null || !artisans.HasSourceTable || !File.Exists(artisansPath))
+    {
+        Console.WriteLine("Multi-level saved object export: Artisans source cache not found; skipping.");
+        return;
+    }
+
+    Moby? stoneDonor = stoneHillMobys.FirstOrDefault(moby => moby.TrueIndex >= 0 && moby.TrueIndex < stoneHillLevel.SourceRecordCount);
+    List<Moby> artisansMobys = MobyLoader.LoadCached(artisansPath).ToList();
+    Moby? artisansDonor = artisansMobys.FirstOrDefault(moby => moby.TrueIndex >= 0 && moby.TrueIndex < artisans.SourceRecordCount);
+    if (stoneDonor == null || artisansDonor == null)
+    {
+        Console.WriteLine("Multi-level saved object export: source donors missing; skipping.");
+        return;
+    }
+
+    string smokeDir = Path.Combine(workspace.RootPath, "_local", "smoke", "multi-level-saved-edits");
+    string objectDir = Path.Combine(workspace.RootPath, "_local", "objects", "multi-level-saved-edits");
+    Directory.CreateDirectory(smokeDir);
+    Directory.CreateDirectory(objectDir);
+
+    Moby stoneEdit = BuildMovedSmokeMoby(stoneDonor, 6, -3, 1, "Stone Hill multi-level saved smoke");
+    Moby artisansEdit = BuildMovedSmokeMoby(artisansDonor, -5, 4, 1, "Artisans multi-level saved smoke");
+    string stoneEditsPath = Path.Combine(smokeDir, "stonehill-native-edits.json");
+    string artisansEditsPath = Path.Combine(smokeDir, "artisans-native-edits.json");
+    await MobyEditStore.SaveAsync(stoneEditsPath, [stoneEdit], "Stone Hill multi-level saved smoke");
+    await MobyEditStore.SaveAsync(artisansEditsPath, [artisansEdit], "Artisans multi-level saved smoke");
+
+    MobySourcePatchResult stoneResult = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        OutputPrefix: Path.Combine(objectDir, "01-stonehill-objects"),
+        Level: stoneHillLevel,
+        NativeEditsPath: stoneEditsPath,
+        WriteImage: true));
+    MobySourcePatchResult artisansResult = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: stoneResult.OutputImagePath,
+        SourceCuePath: stoneResult.OutputCuePath,
+        OutputPrefix: Path.Combine(objectDir, "02-artisans-objects"),
+        Level: artisans,
+        NativeEditsPath: artisansEditsPath,
+        WriteImage: true));
+
+    if (!stoneResult.WroteImage || !artisansResult.WroteImage)
+        throw new InvalidOperationException("Multi-level saved object export did not write both staged BINs.");
+    if (stoneResult.Plan.SkippedEdits.Count != 0 || artisansResult.Plan.SkippedEdits.Count != 0)
+        throw new InvalidOperationException($"Multi-level saved object export skipped edit(s): {string.Join("; ", stoneResult.Plan.SkippedEdits.Concat(artisansResult.Plan.SkippedEdits))}");
+
+    VerifyPatchBytes(artisansResult.OutputImagePath, stoneResult.Plan);
+    VerifyPatchBytes(artisansResult.OutputImagePath, artisansResult.Plan);
+    Console.WriteLine($"Multi-level saved object export: Stone Hill + Artisans patches preserved in final BIN ({stoneResult.Plan.PatchCount}+{artisansResult.Plan.PatchCount})");
+}
+
+Moby BuildMovedSmokeMoby(Moby donor, float dx, float dy, float dz, string label)
+{
+    Moby moved = CloneMoby(donor);
+    moved.Position = new Vector3f(donor.OriginalPosition.X + dx, donor.OriginalPosition.Y + dy, donor.OriginalPosition.Z + dz);
+    moved.Label = label;
+    moved.PatchStatus = "smoke";
+    moved.PatchLead = "multi-level saved object export";
+    return moved;
+}
+
 async Task ReportStoneHillMultiGemAddPatch(LevelDefinition level, List<Moby> sourceMobys)
 {
     Moby? donor = sourceMobys.FirstOrDefault(moby =>
@@ -10415,6 +10489,95 @@ async Task ReportNativeSlotReusePatch(string levelKey)
     }
 
     Console.WriteLine($"{level.DisplayName} native slot reuse patch: cloned donor T{donor.TrueIndex} into slot T{target.TrueIndex}, no append/count patch, BIN bytes verified");
+}
+
+async Task ReportNativeCloneAppendPatch(string levelKey)
+{
+    if (!File.Exists(sourceImage))
+    {
+        Console.WriteLine($"{levelKey} native clone append patch: source disc not found; skipping.");
+        return;
+    }
+
+    LevelDefinition? level = catalog.FindByKey(levelKey);
+    if (level == null || !level.HasSourceTable)
+    {
+        Console.WriteLine($"{levelKey} native clone append patch: source table is not mapped; skipping.");
+        return;
+    }
+
+    string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
+    if (!File.Exists(mobyPath))
+    {
+        Console.WriteLine($"{levelKey} native clone append patch: moby cache not found; skipping.");
+        return;
+    }
+
+    List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+    Moby? donor = sourceMobys.FirstOrDefault(moby =>
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex < level.SourceRecordCount &&
+        moby.Type == 0x20 &&
+        moby.SourceByte36 == 0xA6 &&
+        moby.Flag4A == 0x10)
+        ?? sourceMobys.FirstOrDefault(moby =>
+            moby.TrueIndex >= 0 &&
+            moby.TrueIndex < level.SourceRecordCount &&
+            moby.Type == 0x20 &&
+            moby.Flag4A == 0x10);
+    if (donor == null)
+    {
+        Console.WriteLine($"{level.DisplayName} native clone append patch: donor object not found; skipping.");
+        return;
+    }
+
+    int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
+    int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 1;
+    Moby added = CopyAsAddedMoby(donor, nextIndex, nextTrueIndex, $"New native clone {donor.DisplayLabel}", 4);
+    added.PatchStatus = "native-clone";
+    added.PatchLead = $"Smoke native clone append from same-level donor T{donor.TrueIndex}.";
+    added.Confidence = "same-level-native-clone";
+    added.Evidence = $"Added from same-level donor T{donor.TrueIndex}.";
+
+    string path = Path.Combine(workspace.RootPath, "_local", "smoke", $"{levelKey}-native-clone-append-native-edits.json");
+    await MobyEditStore.SaveAsync(path, [added], $"{level.DisplayName} native clone append");
+    MobySourcePatchResult exportResult = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        OutputPrefix: Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-native-clone-append"),
+        Level: level,
+        NativeEditsPath: path,
+        WriteImage: true));
+    MobySourcePatchPlan plan = exportResult.Plan;
+    if (!exportResult.WroteImage)
+        throw new InvalidOperationException($"{level.DisplayName} native clone append did not write a disposable BIN.");
+    VerifyPatchBytes(exportResult.OutputImagePath, plan);
+    if (plan.SkippedEdits.Count != 0)
+        throw new InvalidOperationException($"{level.DisplayName} native clone append skipped edit(s): {string.Join("; ", plan.SkippedEdits)}");
+
+    MobySourcePatch? appendPatch = plan.Patches.FirstOrDefault(patch =>
+        string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase));
+    if (appendPatch == null || appendPatch.TrueIndex != level.SourceRecordCount)
+        throw new InvalidOperationException($"{level.DisplayName} native clone append did not append at T{level.SourceRecordCount}.");
+    MobySourcePatch? sourceCountPatch = plan.Patches.FirstOrDefault(patch =>
+        string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase));
+    if (sourceCountPatch == null || BitConverter.ToInt32(ParseHexPreview(sourceCountPatch.AfterHexPreview), 0) != level.SourceRecordCount + 1)
+        throw new InvalidOperationException($"{level.DisplayName} native clone append did not increase the source count by one.");
+
+    byte[] after = ParseHexPreview(appendPatch.AfterHexPreview);
+    if (after.Length < 0x58 ||
+        after[0x50] != donor.Type ||
+        after[0x51] != donor.State ||
+        after[0x36] != donor.SourceByte36 ||
+        after[0x37] != donor.SourceByte37 ||
+        after[0x4F] != donor.SourceByte4F ||
+        after[0x52] != donor.Flag4A ||
+        after[0x53] != donor.Flag4B)
+    {
+        throw new InvalidOperationException($"{level.DisplayName} native clone append did not preserve donor identity bytes.");
+    }
+
+    Console.WriteLine($"{level.DisplayName} native clone append patch: appended donor T{donor.TrueIndex} as T{level.SourceRecordCount}, source count {level.SourceRecordCount}->{level.SourceRecordCount + 1}, BIN bytes verified");
 }
 
 int ToSmokeRawCoordinate(float value) => (int)Math.Round(value * 16f);

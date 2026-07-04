@@ -37,6 +37,8 @@ contain copied disc data.
 - Moving, removing, cloning, and editing supported objects.
 - Replacing an existing object slot with another object from the same level for
   enemies or other classes that are not safe as brand-new adds yet.
+- Adding same-level donor clones for testing when that object already exists in
+  the loaded level.
 - Creating local patched BIN/CUE test output from the user's selected disc image.
 
 ## What Is Hidden

@@ -202,6 +202,7 @@ public sealed class MainWindow : Window
     private string _activeTerrainBrushVerb = "";
     private string _lastTerrainBrushSummary = "";
     private string _savedTerrainEditSignature = "";
+    private string _savedMobyEditSignature = "";
     private IReadOnlyList<CustomTerrainTextureImport> _customTerrainTextures = Array.Empty<CustomTerrainTextureImport>();
     private MobyMetadataResult _mobyMetadata;
     private bool _syncingLevelSelection;
@@ -326,7 +327,7 @@ public sealed class MainWindow : Window
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
-        if (_allowCloseWithUnsavedTerrain || !HasUnsavedTerrainEdits())
+        if (_allowCloseWithUnsavedTerrain || !HasUnsavedTerrainEdits() && !HasUnsavedMobyEdits())
         {
             base.OnClosing(e);
             return;
@@ -1208,6 +1209,11 @@ public sealed class MainWindow : Window
                 SyncLevelPickers(_currentLevel);
                 return;
             }
+            if (!await PersistCurrentMobyEditsBeforeLeavingLevelAsync(level))
+            {
+                SyncLevelPickers(_currentLevel);
+                return;
+            }
 
             _loadingLevel = true;
             RefreshLevelSelectionAvailability();
@@ -1264,6 +1270,11 @@ public sealed class MainWindow : Window
             SyncLevelPickers(_currentLevel);
             return;
         }
+        if (!await PersistCurrentMobyEditsBeforeLeavingLevelAsync(next))
+        {
+            SyncLevelPickers(_currentLevel);
+            return;
+        }
 
         _loadingLevel = true;
         RefreshLevelSelectionAvailability();
@@ -1300,36 +1311,76 @@ public sealed class MainWindow : Window
         return await ApplyUnsavedTerrainDecisionAsync(decision, "changing levels");
     }
 
-    private async Task<bool> ConfirmLeaveWorkspaceWithUnsavedTerrainAsync(string folderPath)
+    private async Task<bool> PersistCurrentMobyEditsBeforeLeavingLevelAsync(LevelDefinition nextLevel)
     {
-        if (_currentLevel == null || !HasUnsavedTerrainEdits())
+        if (_currentLevel == null || !HasUnsavedMobyEdits())
+            return true;
+        if (string.Equals(nextLevel.Key, _currentLevel.Key, StringComparison.OrdinalIgnoreCase))
             return true;
 
-        string destination = Path.GetFileName(folderPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        if (string.IsNullOrWhiteSpace(destination))
-            destination = "the selected workspace";
+        return await PersistCurrentMobyEditsBeforeActionAsync("changing levels");
+    }
 
-        UnsavedTerrainDecision decision = await ShowUnsavedTerrainDialogAsync(
-            "Save terrain before opening workspace?",
-            $"{_currentLevel.DisplayName} has unsaved terrain edits. Save them before opening {destination}, leave without saving, or stay in this workspace.");
-        return await ApplyUnsavedTerrainDecisionAsync(decision, "opening workspace");
+    private async Task<bool> PersistCurrentMobyEditsBeforeActionAsync(string actionLabel)
+    {
+        if (_currentLevel == null || !HasUnsavedMobyEdits())
+            return true;
+
+        try
+        {
+            int saved = await PersistCurrentMobyEditsAsync();
+            _statusText.Text = $"Saved {saved} object edit(s) for {_currentLevel.DisplayName}.";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = $"Could not save object edits before {actionLabel}: {ex.Message}";
+            return false;
+        }
+    }
+
+    private async Task<bool> ConfirmLeaveWorkspaceWithUnsavedTerrainAsync(string folderPath)
+    {
+        if (_currentLevel == null)
+            return true;
+
+        if (HasUnsavedTerrainEdits())
+        {
+            string destination = Path.GetFileName(folderPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (string.IsNullOrWhiteSpace(destination))
+                destination = "the selected workspace";
+
+            UnsavedTerrainDecision decision = await ShowUnsavedTerrainDialogAsync(
+                "Save terrain before opening workspace?",
+                $"{_currentLevel.DisplayName} has unsaved terrain edits. Save them before opening {destination}, leave without saving, or stay in this workspace.");
+            if (!await ApplyUnsavedTerrainDecisionAsync(decision, "opening workspace"))
+                return false;
+        }
+
+        return await PersistCurrentMobyEditsBeforeActionAsync("opening workspace");
     }
 
     private async Task ConfirmCloseWithUnsavedTerrainAsync()
     {
         try
         {
-            if (_currentLevel == null || !HasUnsavedTerrainEdits())
+            if (_currentLevel == null || !HasUnsavedTerrainEdits() && !HasUnsavedMobyEdits())
             {
                 _allowCloseWithUnsavedTerrain = true;
                 Close();
                 return;
             }
 
-            UnsavedTerrainDecision decision = await ShowUnsavedTerrainDialogAsync(
-                "Save terrain before closing?",
-                $"{_currentLevel.DisplayName} has unsaved terrain edits. Save them before closing the editor, close without saving, or stay in the editor.");
-            if (await ApplyUnsavedTerrainDecisionAsync(decision, "closing editor"))
+            bool canClose = true;
+            if (HasUnsavedTerrainEdits())
+            {
+                UnsavedTerrainDecision decision = await ShowUnsavedTerrainDialogAsync(
+                    "Save terrain before closing?",
+                    $"{_currentLevel.DisplayName} has unsaved terrain edits. Save them before closing the editor, close without saving, or stay in the editor.");
+                canClose = await ApplyUnsavedTerrainDecisionAsync(decision, "closing editor");
+            }
+
+            if (canClose && await PersistCurrentMobyEditsBeforeActionAsync("closing editor"))
             {
                 _allowCloseWithUnsavedTerrain = true;
                 Close();
@@ -1638,6 +1689,7 @@ public sealed class MainWindow : Window
         _savedTerrainEditSignature = BuildTerrainEditSignature(_currentGeometry);
         _currentMobys = loaded.Mobys;
         _loadedMobyEdits = loaded.LoadedMobyEdits;
+        _savedMobyEditSignature = BuildMobyEditSignature(_currentMobys);
         _mobyMetadata = loaded.MobyMetadata;
         _viewport.TerrainPatchSafetyClassifier = ClassifyTerrainPatchSafety;
         RefreshTerrainBrushSafetyState(updateStatus: false, defaultToSafe: true);
@@ -1717,9 +1769,8 @@ public sealed class MainWindow : Window
             return;
         }
 
-        string mobyEditsPath = Path.Combine(_workspace.RootPath, $"{_currentLevel.Key}-native-edits.json");
         string terrainEditsPath = Path.Combine(_workspace.RootPath, $"{_currentLevel.Key}-terrain-edits.json");
-        int mobyCount = await MobyEditStore.SaveAsync(mobyEditsPath, _currentMobys, _currentLevel.DisplayName);
+        int mobyCount = await PersistCurrentMobyEditsAsync();
         int terrainCount = _currentGeometry == null
             ? 0
             : await TerrainEditStore.SaveAsync(terrainEditsPath, _currentGeometry.Polygons, _currentLevel.DisplayName);
@@ -1733,6 +1784,17 @@ public sealed class MainWindow : Window
             ? $"; custom terrain art {_customTerrainTextures.Count}"
             : "";
         _statusText.Text = $"Saved {mobyCount} object edit(s). Terrain: {BuildTerrainEditSummary()}{customArt}.";
+    }
+
+    private async Task<int> PersistCurrentMobyEditsAsync()
+    {
+        if (_currentLevel == null)
+            return 0;
+
+        string mobyEditsPath = Path.Combine(_workspace.RootPath, $"{_currentLevel.Key}-native-edits.json");
+        _loadedMobyEdits = await MobyEditStore.SaveAsync(mobyEditsPath, _currentMobys, _currentLevel.DisplayName);
+        _savedMobyEditSignature = BuildMobyEditSignature(_currentMobys);
+        return _loadedMobyEdits;
     }
 
     private async Task SaveCurrentTerrainEditsAsync()
@@ -6142,9 +6204,15 @@ public sealed class MainWindow : Window
             return;
 
         bool hasUnsavedTerrainEdits = HasUnsavedTerrainEdits();
-        _levelTitle.Text = hasUnsavedTerrainEdits
-            ? $"{_currentLevel.DisplayName} - unsaved terrain"
-            : _currentLevel.DisplayName;
+        bool hasUnsavedMobyEdits = HasUnsavedMobyEdits();
+        string unsavedText = hasUnsavedMobyEdits && hasUnsavedTerrainEdits
+            ? " - unsaved objects/terrain"
+            : hasUnsavedMobyEdits
+            ? " - unsaved objects"
+            : hasUnsavedTerrainEdits
+            ? " - unsaved terrain"
+            : "";
+        _levelTitle.Text = $"{_currentLevel.DisplayName}{unsavedText}";
         if (_terrainTaskSaveButton != null)
             _terrainTaskSaveButton.Content = hasUnsavedTerrainEdits ? "Save Terrain *" : "Save Terrain";
         _gemCounterText.Text = BuildLevelGemCounter();
@@ -6155,7 +6223,7 @@ public sealed class MainWindow : Window
             $"Surfaces: {BuildSurfaceSummary(_currentGeometry)}\n" +
             $"Terrain proof: {BuildTerrainProofReadinessSummary()}\n" +
             $"{_terrainCollisionReadinessMessage}\n" +
-            $"Object edits: {_loadedMobyEdits}\n" +
+            $"Object edits: {BuildMobyEditSummary()}\n" +
             $"Terrain edits: {BuildTerrainEditSummary()}\n" +
             $"Custom terrain art: {BuildCustomTerrainArtStageSummary()}";
         RefreshTerrainExportReadiness();
@@ -6433,6 +6501,29 @@ public sealed class MainWindow : Window
     {
         return _currentGeometry != null
             && !string.Equals(BuildTerrainEditSignature(_currentGeometry), _savedTerrainEditSignature, StringComparison.Ordinal);
+    }
+
+    private bool HasUnsavedMobyEdits()
+    {
+        return !string.Equals(BuildMobyEditSignature(_currentMobys), _savedMobyEditSignature, StringComparison.Ordinal);
+    }
+
+    private string BuildMobyEditSummary()
+    {
+        int live = _currentMobys.Count(moby => moby.HasAnyEdit);
+        if (live == 0)
+            return HasUnsavedMobyEdits()
+                ? _loadedMobyEdits > 0 ? $"0 live, {_loadedMobyEdits} saved, unsaved" : "none, unsaved"
+                : _loadedMobyEdits > 0 ? $"0 live, {_loadedMobyEdits} saved" : "none";
+
+        List<string> parts = new()
+        {
+            $"{live} live",
+            HasUnsavedMobyEdits() ? "unsaved" : "saved"
+        };
+        if (_loadedMobyEdits != live)
+            parts.Add($"{_loadedMobyEdits} saved");
+        return string.Join(", ", parts);
     }
 
     private string BuildLevelGemCounter()
@@ -6776,6 +6867,56 @@ public sealed class MainWindow : Window
                     .Append(',');
             }
             builder.AppendLine();
+        }
+
+        return builder.ToString();
+    }
+
+    private static string BuildMobyEditSignature(IEnumerable<Moby> mobys)
+    {
+        StringBuilder builder = new();
+        foreach (Moby moby in mobys.Where(moby => moby.HasAnyEdit).OrderBy(moby => moby.TrueIndex).ThenBy(moby => moby.Index))
+        {
+            builder.Append(moby.Index)
+                .Append('|')
+                .Append(moby.TrueIndex)
+                .Append('|')
+                .Append(moby.IsAdded)
+                .Append('|')
+                .Append(moby.IsRemoved)
+                .Append('|')
+                .Append(MathF.Round(moby.Position.X, 4).ToString("0.####", CultureInfo.InvariantCulture))
+                .Append(',')
+                .Append(MathF.Round(moby.Position.Y, 4).ToString("0.####", CultureInfo.InvariantCulture))
+                .Append(',')
+                .Append(MathF.Round(moby.Position.Z, 4).ToString("0.####", CultureInfo.InvariantCulture))
+                .Append('|')
+                .Append(moby.Type)
+                .Append('|')
+                .Append(moby.State)
+                .Append('|')
+                .Append(moby.SourceByte36)
+                .Append('|')
+                .Append(moby.SourceByte37)
+                .Append('|')
+                .Append(moby.SourceByte4F)
+                .Append('|')
+                .Append(moby.Flag4A)
+                .Append('|')
+                .Append(moby.Flag4B)
+                .Append('|')
+                .Append(moby.Label)
+                .Append('|')
+                .Append(moby.CrossLevelTemplateId)
+                .Append('|')
+                .Append(moby.CrossLevelSourceLevelKey)
+                .Append('|')
+                .Append(moby.CrossLevelSourceTrueIndex)
+                .Append('|')
+                .Append(moby.SourceCloneLevelKey)
+                .Append('|')
+                .Append(moby.SourceCloneTrueIndex)
+                .AppendLine();
         }
 
         return builder.ToString();
@@ -14778,17 +14919,27 @@ public sealed class MainWindow : Window
             Label = label,
             OriginalLabel = label,
             CandidateKind = template.CandidateKind,
-            Confidence = template.FromCrossLevelTemplate ? "cross-level-template" : "native-editor-added",
+            Confidence = template.FromCrossLevelTemplate
+                ? "cross-level-template"
+                : template.FromLevelTemplate
+                ? "same-level-native-clone"
+                : "native-editor-added",
             Evidence = template.FromCrossLevelTemplate
                 ? $"Added from {template.SourceLevelName} template {template.TemplateId}."
+                : template.FromLevelTemplate
+                ? $"Added from same-level donor T{template.SourceTrueIndex}."
                 : "Added through the Mac native object editor.",
-            PatchStatus = template.FromCrossLevelTemplate ? template.AddSupportStatus : "new-native-editor-object",
+            PatchStatus = template.FromCrossLevelTemplate
+                ? template.AddSupportStatus
+                : template.FromLevelTemplate
+                ? "native-clone"
+                : "new-native-editor-object",
             PatchLead = template.CopiesSelected
                 ? $"Added in the native editor by cloning {_selectedMoby?.DisplayLabel ?? "the selected object"}; simple 0x18/0x20 clones can use the native source-table append path."
                 : template.FromCrossLevelTemplate
                 ? BuildCrossLevelPatchLead(template)
                 : template.FromLevelTemplate
-                ? $"Added in the native editor from a {_currentLevel?.DisplayName ?? "level"} template; simple 0x18/0x20 records use the native source-table append path."
+                ? $"Added in the native editor from same-level donor T{template.SourceTrueIndex}; Create BIN appends a native clone with same-level donor data. Enemy/chest behavior still needs in-game validation."
                 : template.UsesGem
                 ? "Added in the native editor; simple gem adds export through the native source-table append path."
                 : "Added in the native editor; this custom object may need actor-package support before it is playable.",
@@ -15016,9 +15167,7 @@ public sealed class MainWindow : Window
             ? AddMobyTemplate.Known.Where(IsReleaseSafeTrueAddTemplate)
             : AddMobyTemplate.Known);
         List<AddMobyTemplate> levelObjectTemplates = BuildLevelObjectTemplates(currentMobys).ToList();
-        templates.AddRange(_releaseMode
-            ? levelObjectTemplates.Where(IsReleaseSafeTrueAddTemplate)
-            : levelObjectTemplates);
+        templates.AddRange(levelObjectTemplates);
         if (_releaseMode)
             return templates;
 
