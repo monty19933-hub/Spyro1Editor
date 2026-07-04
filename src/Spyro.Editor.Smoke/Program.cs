@@ -262,6 +262,7 @@ if (HasAnyMobyCache())
     await ReportChestContentSourcePatch("darkhollow");
     await ReportLockedChestShellRewardGuard("darkhollow");
     await ReportPastedLooseGemPatch("darkhollow");
+    await ReportMixedCopiedObjectAppendGuard("darkhollow");
     await ReportAllLevelLooseGemPlacementSectors();
     ReportHomeWorldBalloonistIdentities();
     ReportArtisansSelectionLinks();
@@ -10171,6 +10172,142 @@ async Task ReportPastedLooseGemPatch(string levelKey)
         ? $", placement sectors {string.Join(",", expectedPlacementSectors.Select(sector => $"0x{sector:X2}"))}"
         : "";
     Console.WriteLine($"{level.DisplayName} pasted gem source patch: {appendPatches.Count} loose gem append(s), source count {level.SourceRecordCount}->{level.SourceRecordCount + pastedCount}, treasure +{expectedTreasureDelta}{placementSectorSummary}, BIN bytes verified");
+}
+
+async Task ReportMixedCopiedObjectAppendGuard(string levelKey)
+{
+    if (!File.Exists(sourceImage))
+    {
+        Console.WriteLine($"{levelKey} mixed copied object guard: source disc not found; skipping.");
+        return;
+    }
+
+    LevelDefinition? level = catalog.FindByKey(levelKey);
+    if (level == null || !level.HasSourceTable)
+    {
+        Console.WriteLine($"{levelKey} mixed copied object guard: source table is not mapped; skipping.");
+        return;
+    }
+
+    string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
+    if (!File.Exists(mobyPath))
+    {
+        Console.WriteLine($"{levelKey} mixed copied object guard: moby cache not found; skipping.");
+        return;
+    }
+
+    List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+    Moby? gemDonor = sourceMobys.FirstOrDefault(moby =>
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex < level.SourceRecordCount &&
+        moby.Type == 0x18 &&
+        moby.SourceByte37 == 0x00 &&
+        moby.Flag4A == 0x40 &&
+        moby.Flag4B == 0xFF &&
+        GemValue.TryFromIdByte(moby.SourceByte36, out _));
+    Moby? gnorcDonor = sourceMobys.FirstOrDefault(moby =>
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex < level.SourceRecordCount &&
+        moby.Type == 0x20 &&
+        moby.SourceByte36 == 0xA5 &&
+        moby.Flag4A == 0x10);
+    Moby? flameChestDonor = sourceMobys.FirstOrDefault(moby =>
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex < level.SourceRecordCount &&
+        moby.Type == 0x20 &&
+        moby.SourceByte36 == 0xC2 &&
+        moby.Flag4A == 0x10);
+    Moby? treeDonor = sourceMobys.FirstOrDefault(moby =>
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex < level.SourceRecordCount &&
+        moby.Type == 0x20 &&
+        moby.SourceByte36 == 0x7F &&
+        moby.Flag4A == 0x10);
+    if (gemDonor == null || !GemValue.TryFromIdByte(gemDonor.SourceByte36, out GemValue gemValue) || gnorcDonor == null || flameChestDonor == null || treeDonor == null)
+    {
+        Console.WriteLine($"{level.DisplayName} mixed copied object guard: required donor set not found; skipping.");
+        return;
+    }
+
+    int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
+    int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 1;
+    List<Moby> copiedObjects =
+    [
+        CopyAsAddedMoby(gemDonor, nextIndex, nextTrueIndex, "Guard copied red gem", 0),
+        CopyAsAddedMoby(gnorcDonor, nextIndex + 1, nextTrueIndex + 1, "Guard copied small gnorc", 1),
+        CopyAsAddedMoby(flameChestDonor, nextIndex + 2, nextTrueIndex + 2, "Guard copied flame chest", 2),
+        CopyAsAddedMoby(treeDonor, nextIndex + 3, nextTrueIndex + 3, "Guard copied tree", 3),
+        CopyAsAddedMoby(gemDonor, nextIndex + 4, nextTrueIndex + 4, "Guard copied red gem 2", 4)
+    ];
+
+    string path = Path.Combine(workspace.RootPath, "_local", "smoke", $"{levelKey}-mixed-copy-guard-native-edits.json");
+    await MobyEditStore.SaveAsync(path, copiedObjects, $"{level.DisplayName} mixed copied object guard");
+    MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        DiscImageLocator.FindCueForImage(sourceImage),
+        Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-mixed-copy-guard.bin"),
+        Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-mixed-copy-guard.cue"),
+        level,
+        path);
+
+    List<MobySourcePatch> appendPatches = plan.Patches
+        .Where(patch => string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(patch => patch.TrueIndex)
+        .ToList();
+    if (appendPatches.Count != 2 || appendPatches.Any(patch => !patch.MobyLabel.Contains("gem", StringComparison.OrdinalIgnoreCase)))
+        throw new InvalidOperationException($"{level.DisplayName} mixed copied object guard appended unsafe copied object(s).");
+    if (plan.SkippedEdits.Count != 3)
+        throw new InvalidOperationException($"{level.DisplayName} mixed copied object guard skipped {plan.SkippedEdits.Count} edit(s), expected 3 unsafe copied objects.");
+
+    MobySourcePatch? sourceCountPatch = plan.Patches.FirstOrDefault(patch =>
+        string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase));
+    if (sourceCountPatch == null || BitConverter.ToInt32(ParseHexPreview(sourceCountPatch.AfterHexPreview), 0) != level.SourceRecordCount + 2)
+        throw new InvalidOperationException($"{level.DisplayName} mixed copied object guard did not limit the source count to the exported gems.");
+
+    MobySourcePatch? treasurePatch = plan.Patches.FirstOrDefault(patch =>
+        string.Equals(patch.Kind, "level-treasure-total", StringComparison.OrdinalIgnoreCase));
+    int expectedTreasureDelta = gemValue.Value * 2;
+    if (treasurePatch == null)
+        throw new InvalidOperationException($"{level.DisplayName} mixed copied object guard did not update treasure for exported gems.");
+    int beforeTreasure = BitConverter.ToUInt16(ParseHexPreview(treasurePatch.BeforeHexPreview), 0);
+    int afterTreasure = BitConverter.ToUInt16(ParseHexPreview(treasurePatch.AfterHexPreview), 0);
+    if (afterTreasure - beforeTreasure != expectedTreasureDelta)
+        throw new InvalidOperationException($"{level.DisplayName} mixed copied object guard changed treasure by {afterTreasure - beforeTreasure}, expected {expectedTreasureDelta}.");
+
+    Console.WriteLine($"{level.DisplayName} mixed copied object guard: exported {appendPatches.Count} gem append(s), skipped {plan.SkippedEdits.Count} unsafe copied object(s), treasure +{expectedTreasureDelta}");
+}
+
+Moby CopyAsAddedMoby(Moby donor, int index, int trueIndex, string label, int offsetStep)
+{
+    Vector3f position = new(donor.Position.X + (offsetStep * 24), donor.Position.Y, donor.Position.Z);
+    return new Moby
+    {
+        Index = index,
+        TrueIndex = trueIndex,
+        LegacyIndex = MobyLoader.GetLegacyAliasIndex(trueIndex),
+        Position = position,
+        OriginalPosition = position,
+        Type = donor.Type,
+        OriginalType = donor.Type,
+        State = donor.State,
+        OriginalState = donor.State,
+        SourceByte36 = donor.SourceByte36,
+        OriginalSourceByte36 = donor.SourceByte36,
+        SourceByte37 = donor.SourceByte37,
+        OriginalSourceByte37 = donor.SourceByte37,
+        SourceByte4F = donor.SourceByte4F,
+        OriginalSourceByte4F = donor.SourceByte4F,
+        Flag4A = donor.Flag4A,
+        OriginalFlag4A = donor.Flag4A,
+        Flag4B = donor.Flag4B,
+        OriginalFlag4B = donor.Flag4B,
+        Color = donor.Color,
+        Label = label,
+        OriginalLabel = label,
+        PatchStatus = "smoke-copy-paste",
+        PatchLead = $"Pasted from copied {donor.DisplayLabel}.",
+        IsAdded = true
+    };
 }
 
 async Task ReportAllLevelLooseGemPlacementSectors()

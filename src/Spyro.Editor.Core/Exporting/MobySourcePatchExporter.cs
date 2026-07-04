@@ -124,6 +124,7 @@ public static class MobySourcePatchExporter
         Dictionary<string, CrossLevelSharedSpecialCluster> sharedCrossLevelSpecialClusters = new(StringComparer.OrdinalIgnoreCase);
         int appendNextTrueIndex = level.SourceRecordCount;
         bool hasAppend = false;
+        List<JsonElement> exportedTreasureEdits = new();
         int springChestControllerAppendTrueIndex = -1;
         int springChestShellAppendTrueIndex = -1;
         int springChestControllerActorId = 0x00C2;
@@ -143,6 +144,7 @@ public static class MobySourcePatchExporter
                 int assignedAppendTrueIndex = appendNextTrueIndex;
                 if (TryAddAppendPatch(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, tableRelativeOffset, appendNextTrueIndex, label, edit, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, suppressActorPackageImports, patches, packageImportPreviews, writtenWadOffsets, writtenActorPackageRecipes, sharedCrossLevelSpecialClusters, skippedEdits))
                 {
+                    exportedTreasureEdits.Add(edit);
                     TrackSpringChestPairAppend(edit, assignedAppendTrueIndex, packageImportPreviews, ref springChestControllerAppendTrueIndex, ref springChestShellAppendTrueIndex, ref springChestControllerActorId);
                     TrackPeaceKeepersSpringChestAppend(edit, assignedAppendTrueIndex, peaceKeepersSpringChestAnchors);
                     appendNextTrueIndex++;
@@ -161,6 +163,7 @@ public static class MobySourcePatchExporter
             if (JsonValue.GetBoolean(edit, "removed") || string.Equals(JsonValue.GetString(edit, "editKind"), "remove", StringComparison.OrdinalIgnoreCase))
             {
                 AddRemoveHidePatches(imageStream, layout, level, tableWadOffset, trueIndex, label, patches, writtenWadOffsets);
+                exportedTreasureEdits.Add(edit);
                 continue;
             }
 
@@ -179,6 +182,7 @@ public static class MobySourcePatchExporter
             AddChangedBytePatch(imageStream, layout, level, tableWadOffset, trueIndex, label, "type", TypeOffset, edit, "typeOriginalHex", "typeEditedHex", patches, writtenWadOffsets);
             AddChangedBytePatch(imageStream, layout, level, tableWadOffset, trueIndex, label, "state", StateOffset, edit, "stateOriginalHex", "stateEditedHex", patches, writtenWadOffsets);
             AddSourceByteEdits(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
+            exportedTreasureEdits.Add(edit);
         }
 
         bool addStoneHillSpringChestRewardRowOnly = packageImportPreviews.Any(preview =>
@@ -1054,7 +1058,7 @@ public static class MobySourcePatchExporter
             AddSourceCountPatch(imageStream, layout, level, tableWadOffset, appendNextTrueIndex, patches, writtenWadOffsets, sourceCountNotes);
         }
 
-        AddTreasureTotalPatch(imageStream, catalog, level, editDocument.RootElement, patches, sourceCountNotes);
+        AddTreasureTotalPatch(imageStream, catalog, level, exportedTreasureEdits, patches, sourceCountNotes);
 
         List<string> notes =
         [
@@ -1773,7 +1777,26 @@ public static class MobySourcePatchExporter
             }
         }
 
+        int targetSourceByte36 = JsonValue.GetInt32(edit, "sourceByte36EditedHex", JsonValue.GetInt32(edit, "sourceByte36Hex", -1));
+        int targetSourceByte37 = JsonValue.GetInt32(edit, "sourceByte37EditedHex", JsonValue.GetInt32(edit, "sourceByte37Hex", -1));
+        int targetSourceByte4F = JsonValue.GetInt32(edit, "sourceByte4FEditedHex", JsonValue.GetInt32(edit, "sourceByte4FHex", -1));
+        int targetFlag4A = JsonValue.GetInt32(edit, "flag4AEditedHex", JsonValue.GetInt32(edit, "flag4AHex", -1));
+        int targetFlag4B = JsonValue.GetInt32(edit, "flag4BEditedHex", JsonValue.GetInt32(edit, "flag4BHex", -1));
         bool isContainedGemAppend = IsContainedGemAppend(edit, targetType);
+        bool isLooseVisibleGemAppend = IsLooseVisibleGemIdentity(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B);
+        bool isKnownSameLevelLightweightAppend = IsKnownSameLevelLightweightAppend(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B);
+        bool isProvenNativeCloneAppend = IsProvenNativeCloneAppend(edit);
+
+        if (crossLevelDonor == null &&
+            !isContainedGemAppend &&
+            !isLooseVisibleGemAppend &&
+            !isKnownSameLevelLightweightAppend &&
+            !isProvenNativeCloneAppend)
+        {
+            skippedEdits.Add($"{label}: copied object export is guarded because this object class does not yet have a proven native append recipe; it remains saved in the editor.");
+            return false;
+        }
+
         if (targetType is not (0x18 or 0x20) && !isContainedGemAppend)
         {
             skippedEdits.Add($"{label}: true-add export for type 0x{Math.Clamp(targetType, 0, 255):X2} needs actor-package handling first.");
@@ -1788,12 +1811,6 @@ public static class MobySourcePatchExporter
             return false;
         }
 
-        int targetSourceByte36 = JsonValue.GetInt32(edit, "sourceByte36EditedHex", JsonValue.GetInt32(edit, "sourceByte36Hex", -1));
-        int targetSourceByte37 = JsonValue.GetInt32(edit, "sourceByte37EditedHex", JsonValue.GetInt32(edit, "sourceByte37Hex", -1));
-        int targetSourceByte4F = JsonValue.GetInt32(edit, "sourceByte4FEditedHex", JsonValue.GetInt32(edit, "sourceByte4FHex", -1));
-        int targetFlag4A = JsonValue.GetInt32(edit, "flag4AEditedHex", JsonValue.GetInt32(edit, "flag4AHex", -1));
-        int targetFlag4B = JsonValue.GetInt32(edit, "flag4BEditedHex", JsonValue.GetInt32(edit, "flag4BHex", -1));
-        bool isLooseVisibleGemAppend = IsLooseVisibleGemIdentity(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B);
         int donorTrueIndex = crossLevelDonor?.SourceTrueIndex ?? (isContainedGemAppend
             ? FindContainedGemDonor(stream, layout, tableWadOffset, tableRelativeOffset, level.SourceRecordCount)
             : isLooseVisibleGemAppend && TryFindNearestLooseVisibleGemDonor(
@@ -2059,6 +2076,28 @@ public static class MobySourcePatchExporter
             flag4A == 0x40 &&
             flag4B == 0xFF &&
             GemIdByteValue(sourceByte36) > 0;
+    }
+
+    private static bool IsKnownSameLevelLightweightAppend(int type, int sourceByte36, int sourceByte37, int flag4A, int flag4B)
+    {
+        if (sourceByte37 != 0x00)
+            return false;
+
+        bool isNativeKey = type == 0x18 &&
+            sourceByte36 == 0xAD &&
+            flag4A == 0x40 &&
+            flag4B == 0xFF;
+        bool isNativeKeyChest = type == 0x20 &&
+            sourceByte36 == 0xAE &&
+            flag4A == 0x10 &&
+            GemIdByteValue(flag4B) > 0;
+
+        return isNativeKey || isNativeKeyChest;
+    }
+
+    private static bool IsProvenNativeCloneAppend(JsonElement edit)
+    {
+        return string.Equals(JsonValue.GetString(edit, "patchStatus"), "native-clone", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryFindNearestLooseVisibleGemDonor(
@@ -3289,11 +3328,11 @@ public static class MobySourcePatchExporter
         FileStream stream,
         LevelCatalog catalog,
         LevelDefinition level,
-        JsonElement editRoot,
+        IReadOnlyCollection<JsonElement> exportedTreasureEdits,
         List<MobySourcePatch> patches,
         List<string> notes)
     {
-        int delta = ComputeTreasureTotalDelta(editRoot);
+        int delta = ComputeTreasureTotalDelta(exportedTreasureEdits);
         if (delta == 0)
             return;
 
@@ -3343,13 +3382,10 @@ public static class MobySourcePatchExporter
         notes.Add($"Updated {level.DisplayName}'s in-game treasure target from {originalTotal} to {editedTotal}.");
     }
 
-    private static int ComputeTreasureTotalDelta(JsonElement editRoot)
+    private static int ComputeTreasureTotalDelta(IEnumerable<JsonElement> edits)
     {
-        if (!editRoot.TryGetProperty("edits", out JsonElement edits) || edits.ValueKind != JsonValueKind.Array)
-            return 0;
-
         int delta = 0;
-        foreach (JsonElement edit in edits.EnumerateArray())
+        foreach (JsonElement edit in edits)
         {
             bool added = JsonValue.GetBoolean(edit, "added") || string.Equals(JsonValue.GetString(edit, "editKind"), "add", StringComparison.OrdinalIgnoreCase);
             bool removed = JsonValue.GetBoolean(edit, "removed") || string.Equals(JsonValue.GetString(edit, "editKind"), "remove", StringComparison.OrdinalIgnoreCase);
