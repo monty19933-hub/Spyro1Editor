@@ -1,4 +1,5 @@
 # Game images, patched discs, and emulator media
+.DS_Store
 *.bin
 *.cue
 *.iso
@@ -67,9 +68,17 @@ spyro-*.json
 spyro-*.md
 !spyro-level-catalog.json
 !spyro-object-templates.json
-!spyro-moby-mutation-status.md
-!spyro-player-editing-status.md
-!sample-artisans.splevel.json
+!artisans-behavior-links.json
+!artisans-live-validation-overrides.json
+!artisans-moby-user-overrides.json
+!darkhollow-moby-user-overrides.json
+!drycanyon-moby-user-overrides.json
+!peacekeepers-moby-user-overrides.json
+!stonehill-live-validation-overrides.json
+!stonehill-moby-user-overrides.json
+!sunnyflight-moby-user-overrides.json
+!toasty-moby-user-overrides.json
+!townsquare-moby-user-overrides.json
 
 # Rendered/generated images and texture dumps
 *.png
@@ -78,6 +87,9 @@ spyro-*.md
 *.jpeg
 *.tga
 *.webp
+!src/Spyro.Editor.App/Assets/Brand/app-icon.png
+src/Spyro.Editor.App/Assets/Brand/spyro-editor-title.png
+src/Spyro.Editor.App/Assets/Markers/
 
 # Build outputs
 native/*.exe
@@ -86,7 +98,10 @@ native/*.pdb
 native/*.obj
 native/*.ilk
 native/*.cache
+bin/
+obj/
 dist/
+output/
 release/
 *.zip
 
@@ -115,6 +130,25 @@ color-research-snapshots/
 unsafe-tests/
 .vs/
 .vscode/
+.dotnet-home/
+
+# Legacy local research/diagnostic files kept off the public release branch.
+/*.bat
+/*.command
+/SpyroLevelEditor.ps1
+/RELEASE.md
+/UNSAFE-SKYBOX-OUTPUTS-DO-NOT-BOOT.md
+/NEW_WORKSTATION_HANDOFF.md
+/sample-artisans.splevel.json
+/native/
+/src/Spyro.Editor.LiveRam/
+/docs/beta-release-checklist.md
+/docs/beta-tester-guide.md
+/docs/native-3d-editor-roadmap.md
+/docs/spring-chest-cross-level-status.md
+/docs/terrain-side-collision-plan.md
+/tools/*
+!/tools/Build-SpyroEditorRelease.sh
 
 # Local research probes that are useful while reversing but should be promoted
 # intentionally before release.
@@ -127,11 +161,3 @@ tools/New-Spyro*.ps1
 tools/Export-SpyroPlayerColorPatchTest.ps1
 tools/Capture-DuckStationWindow.ps1
 tools/Move-DuckStationWindow.ps1
-!tools/New-SpyroEditorRelease.ps1
-!tools/New-SpyroSkyboxIsolationReport.ps1
-!tools/New-SpyroSkyboxCatalog.ps1
-!tools/New-SpyroObjectDependencyTrace.ps1
-!tools/New-SpyroCrossLevelObjectImportPlan.ps1
-!tools/New-SpyroPortableEditorCache.ps1
-!tools/Test-ReleaseReadiness.ps1
-!tools/Capture-SpyroCurrentLevelWorkbench.ps1

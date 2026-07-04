@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ApplicationIcon>Assets/Brand/app-icon.ico</ApplicationIcon>
+    <AssemblyName>Spyro.Editor.App</AssemblyName>
+    <RootNamespace>Spyro.Editor.App</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.0.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.3" />
+    <ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="../../spyro-level-catalog.json" CopyToOutputDirectory="PreserveNewest" Link="%(Filename)%(Extension)" />
+    <Content Include="../../spyro-object-templates.json" CopyToOutputDirectory="PreserveNewest" Link="%(Filename)%(Extension)" />
+    <Content Include="../../*-moby-user-overrides.json" CopyToOutputDirectory="PreserveNewest" Link="%(Filename)%(Extension)" />
+    <Content Include="../../*-live-validation-overrides.json" CopyToOutputDirectory="PreserveNewest" Link="%(Filename)%(Extension)" />
+    <Content Include="../../*-behavior-links.json" CopyToOutputDirectory="PreserveNewest" Link="%(Filename)%(Extension)" />
+    <AvaloniaResource Include="Assets/Brand/app-icon.png" />
+    <Content Include="Assets/Brand/app-icon.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets/Brand/app-icon.icns" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
