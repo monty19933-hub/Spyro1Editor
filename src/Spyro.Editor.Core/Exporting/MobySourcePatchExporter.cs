@@ -124,6 +124,7 @@ public static class MobySourcePatchExporter
         Dictionary<string, CrossLevelSharedSpecialCluster> sharedCrossLevelSpecialClusters = new(StringComparer.OrdinalIgnoreCase);
         int appendNextTrueIndex = level.SourceRecordCount;
         bool hasAppend = false;
+        int guardedNativeCloneAppendCount = 0;
         List<JsonElement> exportedTreasureEdits = new();
         int springChestControllerAppendTrueIndex = -1;
         int springChestShellAppendTrueIndex = -1;
@@ -142,13 +143,16 @@ public static class MobySourcePatchExporter
             if (JsonValue.GetBoolean(edit, "added") || string.Equals(JsonValue.GetString(edit, "editKind"), "add", StringComparison.OrdinalIgnoreCase))
             {
                 int assignedAppendTrueIndex = appendNextTrueIndex;
-                if (TryAddAppendPatch(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, tableRelativeOffset, appendNextTrueIndex, label, edit, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, suppressActorPackageImports, patches, packageImportPreviews, writtenWadOffsets, writtenActorPackageRecipes, sharedCrossLevelSpecialClusters, skippedEdits))
+                bool isGuardedNativeCloneAppend = IsGuardedNativeCloneAppend(edit);
+                if (TryAddAppendPatch(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, tableRelativeOffset, appendNextTrueIndex, label, edit, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, suppressActorPackageImports, guardedNativeCloneAppendCount == 0, patches, packageImportPreviews, writtenWadOffsets, writtenActorPackageRecipes, sharedCrossLevelSpecialClusters, skippedEdits))
                 {
                     exportedTreasureEdits.Add(edit);
                     TrackSpringChestPairAppend(edit, assignedAppendTrueIndex, packageImportPreviews, ref springChestControllerAppendTrueIndex, ref springChestShellAppendTrueIndex, ref springChestControllerActorId);
                     TrackPeaceKeepersSpringChestAppend(edit, assignedAppendTrueIndex, peaceKeepersSpringChestAnchors);
                     appendNextTrueIndex++;
                     hasAppend = true;
+                    if (isGuardedNativeCloneAppend)
+                        guardedNativeCloneAppendCount++;
                 }
 
                 continue;
@@ -1820,6 +1824,7 @@ public static class MobySourcePatchExporter
         string workspaceRoot,
         bool allowPlanOnlyActorPackageImports,
         bool suppressActorPackageImports,
+        bool allowGuardedNativeCloneAppend,
         List<MobySourcePatch> patches,
         List<MobyActorPackageImportPreview> packageImportPreviews,
         HashSet<long> writtenWadOffsets,
@@ -1874,6 +1879,13 @@ public static class MobySourcePatchExporter
         bool isLooseVisibleGemAppend = IsLooseVisibleGemIdentity(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B);
         bool isKnownSameLevelLightweightAppend = IsKnownSameLevelLightweightAppend(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B);
         bool isProvenNativeCloneAppend = IsProvenNativeCloneAppend(edit);
+        bool isGuardedNativeCloneAppend = IsGuardedNativeCloneAppend(
+            edit,
+            targetType,
+            targetSourceByte36,
+            targetSourceByte37,
+            targetFlag4A,
+            targetFlag4B);
 
         if (crossLevelDonor == null &&
             !isContainedGemAppend &&
@@ -1882,6 +1894,12 @@ public static class MobySourcePatchExporter
             !isProvenNativeCloneAppend)
         {
             skippedEdits.Add($"{label}: copied object export is guarded because this object class does not yet have a proven native append recipe; it remains saved in the editor.");
+            return false;
+        }
+
+        if (crossLevelDonor == null && isGuardedNativeCloneAppend && !allowGuardedNativeCloneAppend)
+        {
+            skippedEdits.Add($"{label}: extra same-level enemy/chest adds are kept saved but skipped from Create BIN for now because repeated native actor/chest clones can freeze in-game. Use Change To / slot replacement for multiple safe enemy or chest swaps.");
             return false;
         }
 
@@ -2186,6 +2204,39 @@ public static class MobySourcePatchExporter
     private static bool IsProvenNativeCloneAppend(JsonElement edit)
     {
         return string.Equals(JsonValue.GetString(edit, "patchStatus"), "native-clone", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsGuardedNativeCloneAppend(JsonElement edit)
+    {
+        int targetType = JsonValue.GetInt32(edit, "typeEditedHex", JsonValue.GetInt32(edit, "typeHex", -1));
+        int targetSourceByte36 = JsonValue.GetInt32(edit, "sourceByte36EditedHex", JsonValue.GetInt32(edit, "sourceByte36Hex", -1));
+        int targetSourceByte37 = JsonValue.GetInt32(edit, "sourceByte37EditedHex", JsonValue.GetInt32(edit, "sourceByte37Hex", -1));
+        int targetFlag4A = JsonValue.GetInt32(edit, "flag4AEditedHex", JsonValue.GetInt32(edit, "flag4AHex", -1));
+        int targetFlag4B = JsonValue.GetInt32(edit, "flag4BEditedHex", JsonValue.GetInt32(edit, "flag4BHex", -1));
+        return IsGuardedNativeCloneAppend(edit, targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B);
+    }
+
+    private static bool IsGuardedNativeCloneAppend(
+        JsonElement edit,
+        int targetType,
+        int targetSourceByte36,
+        int targetSourceByte37,
+        int targetFlag4A,
+        int targetFlag4B)
+    {
+        if (!IsProvenNativeCloneAppend(edit))
+            return false;
+        if (string.Equals(JsonValue.GetString(edit, "confidence"), "native-clone-proof", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (JsonValue.GetString(edit, "patchLead").Contains("no actor-package import expected", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (IsContainedGemAppend(edit, targetType))
+            return false;
+        if (IsLooseVisibleGemIdentity(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B))
+            return false;
+        if (IsKnownSameLevelLightweightAppend(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B))
+            return false;
+        return true;
     }
 
     private static bool TryFindNearestLooseVisibleGemDonor(

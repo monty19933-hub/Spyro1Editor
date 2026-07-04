@@ -266,6 +266,7 @@ if (HasAnyMobyCache())
     await ReportMixedCopiedObjectAppendGuard("darkhollow");
     await ReportNativeSlotReusePatch("darkhollow");
     await ReportNativeCloneAppendPatch("darkhollow");
+    await ReportRepeatedNativeCloneAppendGuard("darkhollow");
     await ReportAllLevelLooseGemPlacementSectors();
     ReportHomeWorldBalloonistIdentities();
     ReportArtisansSelectionLinks();
@@ -10578,6 +10579,91 @@ async Task ReportNativeCloneAppendPatch(string levelKey)
     }
 
     Console.WriteLine($"{level.DisplayName} native clone append patch: appended donor T{donor.TrueIndex} as T{level.SourceRecordCount}, source count {level.SourceRecordCount}->{level.SourceRecordCount + 1}, BIN bytes verified");
+}
+
+async Task ReportRepeatedNativeCloneAppendGuard(string levelKey)
+{
+    if (!File.Exists(sourceImage))
+    {
+        Console.WriteLine($"{levelKey} repeated native clone guard: source disc not found; skipping.");
+        return;
+    }
+
+    LevelDefinition? level = catalog.FindByKey(levelKey);
+    if (level == null || !level.HasSourceTable)
+    {
+        Console.WriteLine($"{levelKey} repeated native clone guard: source table is not mapped; skipping.");
+        return;
+    }
+
+    string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
+    if (!File.Exists(mobyPath))
+    {
+        Console.WriteLine($"{levelKey} repeated native clone guard: moby cache not found; skipping.");
+        return;
+    }
+
+    List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+    Moby? donor = sourceMobys.FirstOrDefault(moby =>
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex < level.SourceRecordCount &&
+        moby.Type == 0x20 &&
+        moby.SourceByte36 == 0xA6 &&
+        moby.Flag4A == 0x10)
+        ?? sourceMobys.FirstOrDefault(moby =>
+            moby.TrueIndex >= 0 &&
+            moby.TrueIndex < level.SourceRecordCount &&
+            moby.Type == 0x20 &&
+            moby.Flag4A == 0x10);
+    if (donor == null)
+    {
+        Console.WriteLine($"{level.DisplayName} repeated native clone guard: donor object not found; skipping.");
+        return;
+    }
+
+    int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
+    int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 1;
+    Moby first = CopyAsAddedMoby(donor, nextIndex, nextTrueIndex, $"Guard native clone A {donor.DisplayLabel}", 5);
+    Moby second = CopyAsAddedMoby(donor, nextIndex + 1, nextTrueIndex + 1, $"Guard native clone B {donor.DisplayLabel}", 9);
+    foreach (Moby added in new[] { first, second })
+    {
+        added.PatchStatus = "native-clone";
+        added.PatchLead = $"Smoke repeated native clone guard from same-level donor T{donor.TrueIndex}.";
+        added.Confidence = "same-level-native-clone";
+        added.Evidence = $"Added from same-level donor T{donor.TrueIndex}.";
+    }
+
+    string path = Path.Combine(workspace.RootPath, "_local", "smoke", $"{levelKey}-repeated-native-clone-guard-native-edits.json");
+    await MobyEditStore.SaveAsync(path, [first, second], $"{level.DisplayName} repeated native clone guard");
+    MobySourcePatchResult exportResult = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        OutputPrefix: Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-repeated-native-clone-guard"),
+        Level: level,
+        NativeEditsPath: path,
+        WriteImage: true));
+    MobySourcePatchPlan plan = exportResult.Plan;
+    if (!exportResult.WroteImage)
+        throw new InvalidOperationException($"{level.DisplayName} repeated native clone guard did not write a disposable BIN for the first clone.");
+    VerifyPatchBytes(exportResult.OutputImagePath, plan);
+
+    List<MobySourcePatch> appendPatches = plan.Patches
+        .Where(patch => string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    if (appendPatches.Count != 1 || appendPatches[0].TrueIndex != level.SourceRecordCount)
+        throw new InvalidOperationException($"{level.DisplayName} repeated native clone guard wrote {appendPatches.Count} append patch(es), expected exactly one at T{level.SourceRecordCount}.");
+    if (plan.SkippedEdits.Count != 1 ||
+        !plan.SkippedEdits[0].Contains("extra same-level enemy/chest adds", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException($"{level.DisplayName} repeated native clone guard skipped unexpected edit(s): {string.Join("; ", plan.SkippedEdits)}");
+    }
+
+    MobySourcePatch? sourceCountPatch = plan.Patches.FirstOrDefault(patch =>
+        string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase));
+    if (sourceCountPatch == null || BitConverter.ToInt32(ParseHexPreview(sourceCountPatch.AfterHexPreview), 0) != level.SourceRecordCount + 1)
+        throw new InvalidOperationException($"{level.DisplayName} repeated native clone guard did not limit the source count to one extra native clone.");
+
+    Console.WriteLine($"{level.DisplayName} repeated native clone guard: exported 1 native clone, skipped {plan.SkippedEdits.Count} repeated unsafe clone, source count {level.SourceRecordCount}->{level.SourceRecordCount + 1}");
 }
 
 int ToSmokeRawCoordinate(float value) => (int)Math.Round(value * 16f);

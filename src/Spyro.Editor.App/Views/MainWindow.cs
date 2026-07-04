@@ -14939,7 +14939,7 @@ public sealed class MainWindow : Window
                 : template.FromCrossLevelTemplate
                 ? BuildCrossLevelPatchLead(template)
                 : template.FromLevelTemplate
-                ? $"Added in the native editor from same-level donor T{template.SourceTrueIndex}; Create BIN appends a native clone with same-level donor data. Enemy/chest behavior still needs in-game validation."
+                ? $"Added in the native editor from same-level donor T{template.SourceTrueIndex}; Create BIN can write one experimental same-level enemy/chest clone per level. Use Change To / slot replacement for multiple safer swaps."
                 : template.UsesGem
                 ? "Added in the native editor; simple gem adds export through the native source-table append path."
                 : "Added in the native editor; this custom object may need actor-package support before it is playable.",
@@ -15360,7 +15360,7 @@ public sealed class MainWindow : Window
                 return template.TemplateNote;
 
             return template.FromLevelTemplate
-                ? "This clones a same-level source record, which is the safest object-add path for objects already native to this level."
+                ? "This clones a same-level source record. Create BIN writes one experimental enemy/chest true-add per level; use Change To / slot replacement for multiple safer swaps."
                 : "Objects with simple 0x18/0x20 source records export to the test BIN now. Bigger actors may need actor-package support before they are playable.";
         }
 

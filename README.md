@@ -32,8 +32,8 @@ Current release-candidate features include:
   scenery, and other decoded mobys.
 - Same-level slot replacement for enemies and object classes that are not safe
   to add as brand-new source records yet.
-- Same-level donor clone adds for testing extra objects that already exist in
-  the loaded level.
+- Same-level donor clone adds for testing one extra object that already exists
+  in the loaded level.
 - Terrain snapping for placed objects, including indoor/enclosed placement.
 - Multi-level `Create BIN` output that includes all saved editor changes.
 - Object edits auto-save when changing levels so cross-level test builds do not
@@ -44,10 +44,12 @@ Current release-candidate features include:
 
 Some object classes are still experimental. For enemies such as Large Gnorc or
 Big Armor Gnorc, replace an existing same-level object slot instead of adding a
-brand-new one when you need the safest test. Same-level donor clone adds are
-available for testing extra copies, but their behavior still needs in-game
-validation. If something appears, disappears, clips, soft-locks, or changes
-behavior in-game, please file an issue with steps to reproduce.
+brand-new one when you need the safest test. `Create BIN` currently writes at
+most one experimental same-level enemy/chest true-add per level; additional
+saved enemy/chest adds remain in the editor but are skipped from the test disc
+to avoid known in-game freezes. If something appears, disappears, clips,
+soft-locks, or changes behavior in-game, please file an issue with steps to
+reproduce.
 
 ## Reporting Issues
 
