@@ -14989,7 +14989,13 @@ public sealed class MainWindow : Window
     private IReadOnlyList<AddMobyTemplate> BuildAddMobyTemplates(Moby? selected, IEnumerable<Moby> currentMobys)
     {
         List<AddMobyTemplate> templates = new();
-        if (selected != null && !selected.IsRemoved)
+        if (selected != null && !selected.IsRemoved && (!_releaseMode || IsReleaseSafeTrueAddIdentity(
+            selected.Type,
+            selected.SourceByte36,
+            selected.SourceByte37,
+            selected.SourceByte4F,
+            selected.Flag4A,
+            selected.Flag4B)))
         {
             templates.Add(new AddMobyTemplate(
                 "Clone selected object",
@@ -15006,9 +15012,13 @@ public sealed class MainWindow : Window
                 DefaultGem: selected.IsGemLike && selected.Gem != GemValue.Unknown ? selected.Gem : null));
         }
 
-        templates.AddRange(AddMobyTemplate.Known);
+        templates.AddRange(_releaseMode
+            ? AddMobyTemplate.Known.Where(IsReleaseSafeTrueAddTemplate)
+            : AddMobyTemplate.Known);
         List<AddMobyTemplate> levelObjectTemplates = BuildLevelObjectTemplates(currentMobys).ToList();
-        templates.AddRange(levelObjectTemplates);
+        templates.AddRange(_releaseMode
+            ? levelObjectTemplates.Where(IsReleaseSafeTrueAddTemplate)
+            : levelObjectTemplates);
         if (_releaseMode)
             return templates;
 
@@ -15028,6 +15038,41 @@ public sealed class MainWindow : Window
             return false;
 
         return true;
+    }
+
+    private static bool IsReleaseSafeTrueAddTemplate(AddMobyTemplate template) =>
+        IsReleaseSafeTrueAddIdentity(
+            template.Type,
+            template.SourceByte36,
+            template.SourceByte37,
+            template.SourceByte4F,
+            template.Flag4A,
+            template.Flag4B);
+
+    private static bool IsReleaseSafeTrueAddIdentity(
+        int type,
+        int sourceByte36,
+        int sourceByte37,
+        int sourceByte4F,
+        int flag4A,
+        int flag4B)
+    {
+        bool isLooseGem = type == 0x18 &&
+            sourceByte37 == 0x00 &&
+            flag4A == 0x40 &&
+            flag4B == 0xFF &&
+            GemValue.TryFromIdByte(sourceByte36, out _);
+        bool isNativeKey = type == 0x18 &&
+            sourceByte36 == 0xAD &&
+            sourceByte37 == 0x00 &&
+            flag4A == 0x40 &&
+            flag4B == 0xFF;
+        bool isNativeKeyChest = type == 0x20 &&
+            sourceByte36 == 0xAE &&
+            sourceByte37 == 0x00 &&
+            flag4A == 0x10 &&
+            GemValue.TryFromIdByte(flag4B, out _);
+        return isLooseGem || isNativeKey || isNativeKeyChest;
     }
 
     private static IEnumerable<AddMobyTemplate> BuildCrossLevelTemplateBundles(IReadOnlyList<AddMobyTemplate> templates)
@@ -15288,6 +15333,13 @@ public sealed class MainWindow : Window
         return $"From this level: {label}";
     }
 
+    private static string StripNewPrefix(string label)
+    {
+        return label.StartsWith("New ", StringComparison.OrdinalIgnoreCase)
+            ? label[4..]
+            : label;
+    }
+
     private static string NativeTemplateFamily(string label)
     {
         string lower = label.ToLowerInvariant();
@@ -15510,10 +15562,10 @@ public sealed class MainWindow : Window
             transformBox.SelectionChanged += (_, _) =>
             {
                 AddMobyTemplate selected = transformBox.SelectedItem as AddMobyTemplate ?? transformTemplates[0];
-                transformNote.Text = selected.FromCrossLevelTemplate
+                transformNote.Text = selected.FromCrossLevelTemplate || selected.FromLevelTemplate
                     ? BuildAddMobyTemplateNote(selected)
                     : "Keeps this object's current identity bytes.";
-                if (selected.FromCrossLevelTemplate)
+                if (selected.FromCrossLevelTemplate || selected.FromLevelTemplate)
                 {
                     typeBox.Text = $"0x{selected.Type:X2}";
                     stateBox.Text = $"0x{selected.State:X2}";
@@ -15544,11 +15596,13 @@ public sealed class MainWindow : Window
         if (TryParseByte(stateBox.Text, out int state))
             moby.State = state;
         AddMobyTemplate? transformTemplate = transformBox?.SelectedItem as AddMobyTemplate;
-        if (transformTemplate?.FromCrossLevelTemplate == true)
+        if (transformTemplate?.FromLevelTemplate == true)
+            ApplyLevelTemplateToExistingMoby(moby, transformTemplate);
+        else if (transformTemplate?.FromCrossLevelTemplate == true)
             ApplyCrossLevelTemplateToExistingMoby(moby, transformTemplate);
         GemValue editedGem = GemValue.Unknown;
         bool changedGemBytes = false;
-        if (transformTemplate?.FromCrossLevelTemplate != true && gemBox?.SelectedItem is GemValue selectedGem)
+        if (transformTemplate?.FromCrossLevelTemplate != true && transformTemplate?.FromLevelTemplate != true && gemBox?.SelectedItem is GemValue selectedGem)
         {
             editedGem = selectedGem;
             changedGemBytes = editsRewardGem
@@ -15607,6 +15661,22 @@ public sealed class MainWindow : Window
             false,
             moby.DisplayLabel);
 
+        foreach (AddMobyTemplate template in BuildLevelObjectTemplates(_currentMobys))
+        {
+            if (template.SourceTrueIndex < 0 || template.SourceTrueIndex == moby.TrueIndex)
+                continue;
+
+            string label = StripNewPrefix(template.DefaultLabel);
+            yield return template with
+            {
+                Name = $"Replace slot with this level: {label} (donor T{template.SourceTrueIndex})",
+                DefaultLabel = label,
+                AddSupportStatus = "native-slot-reuse",
+                RequiredExporterFeature = "CloneSourceRecordIntoSlot",
+                TemplateNote = $"Reuses this existing object slot by cloning the full same-level source record from T{template.SourceTrueIndex}, while preserving this slot's placed position. This is the safer enemy/object route; true-add enemies still need linked behavior data."
+            };
+        }
+
         if (_releaseMode)
             yield break;
 
@@ -15615,6 +15685,33 @@ public sealed class MainWindow : Window
             if (template.CurrentLevelReady && CrossLevelEditorTemplateSupport.CanTransform(moby.VisualKind, template.Family))
                 yield return template;
         }
+    }
+
+    private void ApplyLevelTemplateToExistingMoby(Moby moby, AddMobyTemplate template)
+    {
+        moby.SetType(template.Type);
+        moby.State = template.State;
+        moby.SourceByte36 = template.SourceByte36;
+        moby.SourceByte37 = template.SourceByte37;
+        moby.SourceByte4F = template.SourceByte4F;
+        moby.Flag4A = template.Flag4A;
+        moby.Flag4B = template.Flag4B;
+        moby.Label = template.DefaultLabel;
+        moby.Color = template.DefaultColor ?? Moby.ColorForType(template.Type);
+        moby.CandidateKind = template.CandidateKind;
+        moby.Confidence = "native-slot-reuse";
+        moby.Evidence = $"Changed to same-level donor T{template.SourceTrueIndex}.";
+        moby.PatchStatus = "native-slot-reuse";
+        moby.PatchLead = $"Clone same-level donor T{template.SourceTrueIndex} into existing slot T{moby.TrueIndex}, preserving this slot's placed position.";
+        moby.CrossLevelTemplateId = "";
+        moby.CrossLevelFamily = "";
+        moby.CrossLevelSourceLevelKey = "";
+        moby.CrossLevelSourceLevelName = "";
+        moby.CrossLevelSourceTrueIndex = -1;
+        moby.CrossLevelRequiredExporterFeature = "";
+        moby.SourceCloneLevelKey = _currentLevel?.Key ?? "";
+        moby.SourceCloneLevelName = _currentLevel?.DisplayName ?? "";
+        moby.SourceCloneTrueIndex = template.SourceTrueIndex;
     }
 
     private static void ApplyCrossLevelTemplateToExistingMoby(Moby moby, AddMobyTemplate template)
@@ -15639,6 +15736,9 @@ public sealed class MainWindow : Window
         moby.CrossLevelSourceLevelName = template.SourceLevelName;
         moby.CrossLevelSourceTrueIndex = template.SourceTrueIndex;
         moby.CrossLevelRequiredExporterFeature = template.RequiredExporterFeature;
+        moby.SourceCloneLevelKey = "";
+        moby.SourceCloneLevelName = "";
+        moby.SourceCloneTrueIndex = -1;
     }
 
     private int ApplyExactMobyPositionEdit(Moby moby, TextBox xBox, TextBox yBox, TextBox zBox)

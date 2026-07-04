@@ -167,6 +167,12 @@ public static class MobySourcePatchExporter
                 continue;
             }
 
+            if (TryPatchSourceRecordCloneIntoSlot(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets, skippedEdits))
+            {
+                exportedTreasureEdits.Add(edit);
+                continue;
+            }
+
             if (TryGetCrossLevelTemplate(edit, out JsonElement crossLevelTemplate) && !IsSimpleCrossLevelTemplate(crossLevelTemplate))
             {
                 MobyActorPackageImportPreview preview = AddActorPackageImportPreview(imageStream, layout, catalog, level, tableWadOffset, tableRelativeOffset, label, crossLevelTemplate, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, packageImportPreviews, patches, writtenWadOffsets, writtenActorPackageRecipes);
@@ -1714,6 +1720,88 @@ public static class MobySourcePatchExporter
             patches.Add(helperPatch);
         }
 
+        return true;
+    }
+
+    private static bool TryPatchSourceRecordCloneIntoSlot(
+        FileStream stream,
+        DiscLayout layout,
+        LevelCatalog catalog,
+        LevelDefinition targetLevel,
+        GeometryCandidate? levelGeometry,
+        long targetTableWadOffset,
+        int targetTrueIndex,
+        string label,
+        JsonElement edit,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets,
+        List<string> skippedEdits)
+    {
+        if (!edit.TryGetProperty("recordMutation", out JsonElement mutation) || mutation.ValueKind != JsonValueKind.Object)
+            return false;
+
+        string mode = JsonValue.GetString(mutation, "mode");
+        if (!string.Equals(mode, "cloneSourceRecordIntoSlot", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        string sourceLevelKey = JsonValue.GetString(mutation, "sourceLevelKey");
+        int sourceTrueIndex = JsonValue.GetInt32(mutation, "sourceTrueIndex", -1);
+        if (sourceTrueIndex < 0)
+        {
+            skippedEdits.Add($"{label}: native slot reuse is missing a donor source index.");
+            return true;
+        }
+
+        LevelDefinition? sourceLevel = string.IsNullOrWhiteSpace(sourceLevelKey)
+            ? targetLevel
+            : catalog.FindByKey(sourceLevelKey);
+        if (sourceLevel == null || !sourceLevel.HasSourceTable || sourceTrueIndex >= sourceLevel.SourceRecordCount)
+        {
+            skippedEdits.Add($"{label}: native slot reuse donor T{sourceTrueIndex} is not mapped.");
+            return true;
+        }
+
+        if (!string.Equals(LevelCatalog.NormalizeKey(sourceLevel.Key), LevelCatalog.NormalizeKey(targetLevel.Key), StringComparison.OrdinalIgnoreCase))
+        {
+            skippedEdits.Add($"{label}: cross-level slot reuse still needs actor-package import support; use a same-level donor first.");
+            return true;
+        }
+
+        long sourceTableWadOffset = string.Equals(sourceLevel.Key, targetLevel.Key, StringComparison.OrdinalIgnoreCase)
+            ? targetTableWadOffset
+            : ParseRequiredLong(sourceLevel.SourceTableWadOffset, "sourceLevel.sourceTableWadOffset");
+        byte[] targetRecord = ReadWadBytes(stream, layout, targetTableWadOffset + ((long)targetTrueIndex * RecordStride), RecordStride);
+        byte[] donorRecord = ReadWadBytes(stream, layout, sourceTableWadOffset + ((long)sourceTrueIndex * RecordStride), RecordStride);
+
+        WriteInt32(donorRecord, XOffset, ReadRawAxis(edit, "x", targetRecord, XOffset));
+        WriteInt32(donorRecord, YOffset, ReadRawAxis(edit, "y", targetRecord, YOffset));
+        WriteInt32(donorRecord, ZOffset, ReadRawAxis(edit, "z", targetRecord, ZOffset));
+        WriteByteFromEdit(donorRecord, TypeOffset, edit, "typeEditedHex", "typeHex");
+        WriteByteFromEdit(donorRecord, StateOffset, edit, "stateEditedHex", "stateHex");
+        WriteByteFromEdit(donorRecord, 0x36, edit, "sourceByte36EditedHex", "sourceByte36Hex");
+        WriteByteFromEdit(donorRecord, 0x37, edit, "sourceByte37EditedHex", "sourceByte37Hex");
+        WriteByteFromEdit(donorRecord, 0x4F, edit, "sourceByte4FEditedHex", "sourceByte4FHex");
+        WriteByteFromEdit(donorRecord, 0x52, edit, "flag4AEditedHex", "flag4AHex");
+        WriteByteFromEdit(donorRecord, 0x53, edit, "flag4BEditedHex", "flag4BHex");
+        ApplySourceByteEdits(donorRecord, edit);
+
+        string placementSectorDescription = "";
+        if (TryApplySourceRecordPlacementSector(levelGeometry, edit, donorRecord, out int placementSectorIndex))
+            placementSectorDescription = $" Placement sector byte set to 0x{placementSectorIndex:X2}.";
+
+        AddRawPatch(
+            stream,
+            layout,
+            targetLevel,
+            targetTableWadOffset + ((long)targetTrueIndex * RecordStride),
+            donorRecord,
+            "moby-record-slot-clone",
+            label,
+            targetTrueIndex,
+            "0x0",
+            $"Clone same-level donor T{sourceTrueIndex} into existing source slot T{targetTrueIndex}, preserving this slot's placement and donor behavior data.{placementSectorDescription}",
+            patches,
+            writtenWadOffsets);
         return true;
     }
 

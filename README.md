@@ -30,15 +30,18 @@ Current release-candidate features include:
 - Level terrain and object maps rebuilt from the user's selected BIN/CUE.
 - Moving, cloning, removing, and editing supported gems, chests, enemies, keys,
   scenery, and other decoded mobys.
+- Same-level slot replacement for enemies and object classes that are not safe
+  to add as brand-new source records yet.
 - Terrain snapping for placed objects, including indoor/enclosed placement.
 - Multi-level `Create BIN` output that includes all saved editor changes.
 - Local patched BIN/CUE output folder opening after export.
 - Focused smoke checks for multi-gem placement, chest/object copy-paste,
   all-level placement-sector coverage, and release packaging safety.
 
-Some object classes are still experimental. If something appears, disappears,
-clips, soft-locks, or changes behavior in-game, please file an issue with steps
-to reproduce.
+Some object classes are still experimental. For enemies such as Large Gnorc or
+Big Armor Gnorc, replace an existing same-level object slot instead of adding a
+brand-new one. If something appears, disappears, clips, soft-locks, or changes
+behavior in-game, please file an issue with steps to reproduce.
 
 ## Reporting Issues
 

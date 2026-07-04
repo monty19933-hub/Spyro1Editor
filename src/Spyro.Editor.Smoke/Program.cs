@@ -263,6 +263,7 @@ if (HasAnyMobyCache())
     await ReportLockedChestShellRewardGuard("darkhollow");
     await ReportPastedLooseGemPatch("darkhollow");
     await ReportMixedCopiedObjectAppendGuard("darkhollow");
+    await ReportNativeSlotReusePatch("darkhollow");
     await ReportAllLevelLooseGemPlacementSectors();
     ReportHomeWorldBalloonistIdentities();
     ReportArtisansSelectionLinks();
@@ -10276,6 +10277,147 @@ async Task ReportMixedCopiedObjectAppendGuard(string levelKey)
 
     Console.WriteLine($"{level.DisplayName} mixed copied object guard: exported {appendPatches.Count} gem append(s), skipped {plan.SkippedEdits.Count} unsafe copied object(s), treasure +{expectedTreasureDelta}");
 }
+
+async Task ReportNativeSlotReusePatch(string levelKey)
+{
+    if (!File.Exists(sourceImage))
+    {
+        Console.WriteLine($"{levelKey} native slot reuse patch: source disc not found; skipping.");
+        return;
+    }
+
+    LevelDefinition? level = catalog.FindByKey(levelKey);
+    if (level == null || !level.HasSourceTable)
+    {
+        Console.WriteLine($"{levelKey} native slot reuse patch: source table is not mapped; skipping.");
+        return;
+    }
+
+    string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
+    if (!File.Exists(mobyPath))
+    {
+        Console.WriteLine($"{levelKey} native slot reuse patch: moby cache not found; skipping.");
+        return;
+    }
+
+    List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+    Moby? donor = sourceMobys.FirstOrDefault(moby =>
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex < level.SourceRecordCount &&
+        moby.Type == 0x20 &&
+        moby.SourceByte36 == 0xA6 &&
+        moby.Flag4A == 0x10)
+        ?? sourceMobys.FirstOrDefault(moby =>
+            moby.TrueIndex >= 0 &&
+            moby.TrueIndex < level.SourceRecordCount &&
+            moby.Type == 0x20 &&
+            moby.SourceByte36 == 0x73 &&
+            moby.Flag4A == 0x10);
+    Moby? target = sourceMobys.FirstOrDefault(moby =>
+        donor != null &&
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex < level.SourceRecordCount &&
+        moby.TrueIndex != donor.TrueIndex &&
+        moby.Type == 0x20 &&
+        moby.SourceByte36 == 0x7F &&
+        moby.Flag4A == 0x10)
+        ?? sourceMobys.FirstOrDefault(moby =>
+            donor != null &&
+            moby.TrueIndex >= 0 &&
+            moby.TrueIndex < level.SourceRecordCount &&
+            moby.TrueIndex != donor.TrueIndex &&
+            moby.Type == 0x20);
+    if (donor == null || target == null)
+    {
+        Console.WriteLine($"{level.DisplayName} native slot reuse patch: required donor/target objects not found; skipping.");
+        return;
+    }
+
+    Vector3f placedPosition = new(target.OriginalPosition.X + 32f, target.OriginalPosition.Y + 16f, target.OriginalPosition.Z);
+    Moby slotReuse = new()
+    {
+        Index = target.Index,
+        TrueIndex = target.TrueIndex,
+        LegacyIndex = target.LegacyIndex,
+        Position = placedPosition,
+        OriginalPosition = target.OriginalPosition,
+        Type = donor.Type,
+        OriginalType = target.Type,
+        State = donor.State,
+        OriginalState = target.State,
+        SourceByte36 = donor.SourceByte36,
+        OriginalSourceByte36 = target.SourceByte36,
+        SourceByte37 = donor.SourceByte37,
+        OriginalSourceByte37 = target.SourceByte37,
+        SourceByte4F = donor.SourceByte4F,
+        OriginalSourceByte4F = target.SourceByte4F,
+        Flag4A = donor.Flag4A,
+        OriginalFlag4A = target.Flag4A,
+        Flag4B = donor.Flag4B,
+        OriginalFlag4B = target.Flag4B,
+        Color = donor.Color,
+        Label = donor.DisplayLabel,
+        OriginalLabel = target.DisplayLabel,
+        CandidateKind = donor.CandidateKind,
+        Confidence = "native-slot-reuse",
+        Evidence = $"Smoke cloned same-level donor T{donor.TrueIndex}.",
+        PatchStatus = "native-slot-reuse",
+        PatchLead = $"Clone same-level donor T{donor.TrueIndex} into existing slot T{target.TrueIndex}, preserving this slot's placed position.",
+        SourceCloneLevelKey = level.Key,
+        SourceCloneLevelName = level.DisplayName,
+        SourceCloneTrueIndex = donor.TrueIndex
+    };
+
+    string path = Path.Combine(workspace.RootPath, "_local", "smoke", $"{levelKey}-native-slot-reuse-native-edits.json");
+    await MobyEditStore.SaveAsync(path, [slotReuse], $"{level.DisplayName} native slot reuse");
+    MobySourcePatchResult exportResult = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        OutputPrefix: Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-native-slot-reuse"),
+        Level: level,
+        NativeEditsPath: path,
+        WriteImage: true));
+    MobySourcePatchPlan plan = exportResult.Plan;
+    if (!exportResult.WroteImage)
+        throw new InvalidOperationException($"{level.DisplayName} native slot reuse did not write a disposable BIN.");
+    VerifyPatchBytes(exportResult.OutputImagePath, plan);
+    if (plan.SkippedEdits.Count != 0)
+        throw new InvalidOperationException($"{level.DisplayName} native slot reuse skipped edit(s): {string.Join("; ", plan.SkippedEdits)}");
+
+    List<MobySourcePatch> slotClonePatches = plan.Patches
+        .Where(patch => string.Equals(patch.Kind, "moby-record-slot-clone", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    if (slotClonePatches.Count != 1 || slotClonePatches[0].TrueIndex != target.TrueIndex)
+        throw new InvalidOperationException($"{level.DisplayName} native slot reuse wrote {slotClonePatches.Count} slot clone patch(es), expected one at T{target.TrueIndex}.");
+    if (plan.Patches.Any(patch => string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)))
+        throw new InvalidOperationException($"{level.DisplayName} native slot reuse unexpectedly appended a new source record.");
+
+    byte[] after = ParseHexPreview(slotClonePatches[0].AfterHexPreview);
+    const int xOffset = 0x0C;
+    const int yOffset = 0x10;
+    const int zOffset = 0x14;
+    const int typeOffset = 0x50;
+    const int stateOffset = 0x51;
+    if (after.Length < 0x58 ||
+        after[typeOffset] != donor.Type ||
+        after[stateOffset] != donor.State ||
+        after[0x36] != donor.SourceByte36 ||
+        after[0x37] != donor.SourceByte37 ||
+        after[0x4F] != donor.SourceByte4F ||
+        after[0x52] != donor.Flag4A ||
+        after[0x53] != donor.Flag4B ||
+        BitConverter.ToInt32(after, xOffset) != ToSmokeRawCoordinate(placedPosition.X) ||
+        BitConverter.ToInt32(after, yOffset) != ToSmokeRawCoordinate(placedPosition.Y) ||
+        BitConverter.ToInt32(after, zOffset) != ToSmokeRawCoordinate(placedPosition.Z))
+    {
+        throw new InvalidOperationException($"{level.DisplayName} native slot reuse did not clone donor identity while preserving the placed position.");
+    }
+
+    Console.WriteLine($"{level.DisplayName} native slot reuse patch: cloned donor T{donor.TrueIndex} into slot T{target.TrueIndex}, no append/count patch, BIN bytes verified");
+}
+
+int ToSmokeRawCoordinate(float value) => (int)Math.Round(value * 16f);
 
 Moby CopyAsAddedMoby(Moby donor, int index, int trueIndex, string label, int offsetStep)
 {

@@ -25,9 +25,13 @@ Generally safer:
 - Moving known keys.
 - Moving known chests that already exist in that level.
 - Editing existing gem value bytes that are already proven by smoke tests.
+- Replacing an existing object slot with a same-level donor object through
+  `Edit Object` > `Change To`.
 
 Still guarded:
 
+- Adding brand-new extra enemies, copied enemies, and copied scenery/chests as
+  new source records.
 - Cross-level object imports.
 - Actor/package imports.
 - Spring Chest.
@@ -36,6 +40,11 @@ Still guarded:
 - Anything that needs linked controller, reward, collision, or behavior records.
 
 If an object appears visually but does not react correctly in-game, do not promote it as working.
+
+Enemy adds need extra behavior/home/path data that a single new source row does
+not carry yet. For now, use same-level slot replacement for enemies like Large
+Gnorc or Big Armor Gnorc. It consumes an existing level object slot, but keeps
+the donor's fuller behavior record and is the safer in-game test route.
 
 ## Spring Chest Status
 

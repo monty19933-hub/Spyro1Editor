@@ -36,6 +36,9 @@ public static class MobyEditStore
             moby.CrossLevelSourceLevelName = "";
             moby.CrossLevelSourceTrueIndex = -1;
             moby.CrossLevelRequiredExporterFeature = "";
+            moby.SourceCloneLevelKey = "";
+            moby.SourceCloneLevelName = "";
+            moby.SourceCloneTrueIndex = -1;
             moby.IsRemoved = false;
             moby.HasLoadedNativeEdit = false;
             moby.LoadedNativeEditSummary = "";
@@ -140,6 +143,7 @@ public static class MobyEditStore
                 ["patchStatus"] = moby.PatchStatus,
                 ["patchLead"] = moby.PatchLead,
                 ["crossLevelTemplate"] = NewCrossLevelTemplate(moby),
+                ["recordMutation"] = NewRecordMutation(moby),
                 ["gem"] = moby.IsGemLike ? NewGem(moby) : null,
                 ["sourceByteEdits"] = NewSourceByteEdits(moby),
                 ["chestContentLinkEdit"] = NewChestContentLinkEdit(moby, byTrueIndex),
@@ -359,10 +363,27 @@ public static class MobyEditStore
         }
 
         ApplyGemColor(moby);
+        ApplyRecordMutation(edit, moby);
         if (ApplyCrossLevelTemplate(edit, moby))
+            changed = true;
+        if (moby.SourceCloneTrueIndex >= 0)
             changed = true;
 
         return changed;
+    }
+
+    private static void ApplyRecordMutation(JsonElement edit, Moby moby)
+    {
+        if (!edit.TryGetProperty("recordMutation", out JsonElement mutation) || mutation.ValueKind != JsonValueKind.Object)
+            return;
+
+        string mode = JsonValue.GetString(mutation, "mode");
+        if (!string.Equals(mode, "cloneSourceRecordIntoSlot", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        moby.SourceCloneLevelKey = JsonValue.GetString(mutation, "sourceLevelKey");
+        moby.SourceCloneLevelName = JsonValue.GetString(mutation, "sourceLevelName");
+        moby.SourceCloneTrueIndex = JsonValue.GetInt32(mutation, "sourceTrueIndex", -1);
     }
 
     private static bool ApplyCrossLevelTemplate(JsonElement edit, Moby moby)
@@ -473,6 +494,21 @@ public static class MobyEditStore
             sourceTrueIndex = moby.CrossLevelSourceTrueIndex >= 0 ? moby.CrossLevelSourceTrueIndex : null as int?,
             addSupportStatus = moby.PatchStatus,
             requiredExporterFeature = moby.CrossLevelRequiredExporterFeature
+        };
+    }
+
+    private static object? NewRecordMutation(Moby moby)
+    {
+        if (moby.SourceCloneTrueIndex < 0 || string.IsNullOrWhiteSpace(moby.SourceCloneLevelKey))
+            return null;
+
+        return new
+        {
+            mode = "cloneSourceRecordIntoSlot",
+            sourceLevelKey = moby.SourceCloneLevelKey,
+            sourceLevelName = moby.SourceCloneLevelName,
+            sourceTrueIndex = moby.SourceCloneTrueIndex,
+            preserveTargetPosition = true
         };
     }
 

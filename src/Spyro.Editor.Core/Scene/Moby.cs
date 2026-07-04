@@ -36,6 +36,9 @@ public sealed class Moby
     public string CrossLevelSourceLevelName { get; set; } = "";
     public int CrossLevelSourceTrueIndex { get; set; } = -1;
     public string CrossLevelRequiredExporterFeature { get; set; } = "";
+    public string SourceCloneLevelKey { get; set; } = "";
+    public string SourceCloneLevelName { get; set; } = "";
+    public int SourceCloneTrueIndex { get; set; } = -1;
     public string CandidateKind { get; set; } = "";
     public string Confidence { get; set; } = "";
     public string Evidence { get; set; } = "";
@@ -125,6 +128,7 @@ public sealed class Moby
         || OriginalSourceByte4F >= 0 && SourceByte4F != OriginalSourceByte4F
         || OriginalFlag4A >= 0 && Flag4A != OriginalFlag4A
         || OriginalFlag4B >= 0 && Flag4B != OriginalFlag4B
+        || SourceCloneTrueIndex >= 0
         || !string.Equals(Label, OriginalLabel, StringComparison.Ordinal);
     public bool HasAnyEdit => IsAdded || IsRemoved || HasPositionEdit || HasMetadataEdit || HasLoadedNativeEdit;
 
@@ -158,6 +162,9 @@ public sealed class Moby
         CrossLevelSourceLevelName = "";
         CrossLevelSourceTrueIndex = -1;
         CrossLevelRequiredExporterFeature = "";
+        SourceCloneLevelKey = "";
+        SourceCloneLevelName = "";
+        SourceCloneTrueIndex = -1;
         HasLoadedNativeEdit = false;
         LoadedNativeEditSummary = "";
         IsRemoved = false;
