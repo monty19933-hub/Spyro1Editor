@@ -14741,7 +14741,7 @@ public sealed class MainWindow : Window
             return;
         }
 
-        _mobyClipboard = MobyClipboard.From(_selectedMoby);
+        _mobyClipboard = MobyClipboard.From(_selectedMoby, _currentLevel);
         RefreshActionAvailability();
         _statusText.Text = $"Copied {_selectedMoby.DisplayLabel}. Paste with Ctrl+V on Windows or Command+V on Mac.";
     }
@@ -14799,7 +14799,14 @@ public sealed class MainWindow : Window
                 : $"Copy of {clipboard.Label}";
         string patchLead = pasteContainedGemAsLooseGem
             ? $"Pasted from copied contained gem {clipboard.Label}; converted to a loose native gem so it appears and can be collected in-game."
+            : clipboard.SourceCloneTrueIndex >= 0 && _currentLevel != null && string.Equals(clipboard.SourceCloneLevelKey, _currentLevel.Key, StringComparison.OrdinalIgnoreCase)
+            ? $"Pasted from same-level donor T{clipboard.SourceCloneTrueIndex}; Create BIN appends a native clone with same-level donor data."
             : $"Pasted from copied object {clipboard.Label}; it exports as a new native source-table record when supported.";
+        string patchStatus = pasteContainedGemAsLooseGem
+            ? "new-native-editor-object-copy"
+            : clipboard.SourceCloneTrueIndex >= 0 && _currentLevel != null && string.Equals(clipboard.SourceCloneLevelKey, _currentLevel.Key, StringComparison.OrdinalIgnoreCase)
+            ? "native-clone"
+            : "new-native-editor-object-copy";
 
         return new Moby
         {
@@ -14825,7 +14832,7 @@ public sealed class MainWindow : Window
             Color = color,
             Label = label,
             OriginalLabel = label,
-            PatchStatus = "new-native-editor-object-copy",
+            PatchStatus = patchStatus,
             PatchLead = patchLead,
             CrossLevelTemplateId = pasteContainedGemAsLooseGem ? "" : clipboard.CrossLevelTemplateId,
             CrossLevelFamily = pasteContainedGemAsLooseGem ? "" : clipboard.CrossLevelFamily,
@@ -14838,6 +14845,9 @@ public sealed class MainWindow : Window
             Evidence = $"Copied from {clipboard.Label} in the native editor.",
             BehaviorNote = pasteContainedGemAsLooseGem ? "" : clipboard.BehaviorNote,
             ZoneLabel = clipboard.ZoneLabel,
+            SourceCloneLevelKey = patchStatus == "native-clone" ? clipboard.SourceCloneLevelKey : "",
+            SourceCloneLevelName = patchStatus == "native-clone" ? clipboard.SourceCloneLevelName : "",
+            SourceCloneTrueIndex = patchStatus == "native-clone" ? clipboard.SourceCloneTrueIndex : -1,
             IsAdded = true
         };
     }
@@ -14949,6 +14959,9 @@ public sealed class MainWindow : Window
             CrossLevelSourceLevelName = template.FromCrossLevelTemplate ? template.SourceLevelName : "",
             CrossLevelSourceTrueIndex = template.FromCrossLevelTemplate ? template.SourceTrueIndex : -1,
             CrossLevelRequiredExporterFeature = template.FromCrossLevelTemplate ? template.RequiredExporterFeature : "",
+            SourceCloneLevelKey = template.FromLevelTemplate ? _currentLevel?.Key ?? "" : "",
+            SourceCloneLevelName = template.FromLevelTemplate ? _currentLevel?.DisplayName ?? "" : "",
+            SourceCloneTrueIndex = template.FromLevelTemplate ? template.SourceTrueIndex : -1,
             IsAdded = true
         };
     }
@@ -20944,12 +20957,30 @@ public sealed class MainWindow : Window
         string Evidence,
         string BehaviorNote,
         string ZoneLabel,
+        string SourceCloneLevelKey,
+        string SourceCloneLevelName,
+        int SourceCloneTrueIndex,
         bool CopiedGemLike,
         bool CopiedVisibleGem,
         GemValue CopiedGem)
     {
-        public static MobyClipboard From(Moby moby)
+        public static MobyClipboard From(Moby moby, LevelDefinition? currentLevel)
         {
+            int sourceTrueIndex = moby.SourceCloneTrueIndex >= 0
+                ? moby.SourceCloneTrueIndex
+                : moby.IsAdded
+                ? -1
+                : moby.TrueIndex;
+            string sourceLevelKey = moby.SourceCloneTrueIndex >= 0
+                ? moby.SourceCloneLevelKey
+                : sourceTrueIndex >= 0
+                ? currentLevel?.Key ?? ""
+                : "";
+            string sourceLevelName = moby.SourceCloneTrueIndex >= 0
+                ? moby.SourceCloneLevelName
+                : sourceTrueIndex >= 0
+                ? currentLevel?.DisplayName ?? ""
+                : "";
             return new MobyClipboard(
                 moby.DisplayLabel,
                 moby.Type,
@@ -20973,6 +21004,9 @@ public sealed class MainWindow : Window
                 moby.Evidence,
                 moby.BehaviorNote,
                 moby.ZoneLabel,
+                sourceLevelKey,
+                sourceLevelName,
+                sourceTrueIndex,
                 moby.IsGemLike,
                 moby.IsVisibleGem,
                 moby.Gem);

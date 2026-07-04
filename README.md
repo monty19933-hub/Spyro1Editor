@@ -34,6 +34,8 @@ Current release-candidate features include:
   to add as brand-new source records yet.
 - Same-level donor clone adds for testing one extra object that already exists
   in the loaded level.
+- Same-level object copy/paste preserves the source donor record, so pasted
+  objects use the same native clone export path as Add Object.
 - Terrain snapping for placed objects, including indoor/enclosed placement.
 - Multi-level `Create BIN` output that includes all saved editor changes.
 - Object edits auto-save when changing levels so cross-level test builds do not

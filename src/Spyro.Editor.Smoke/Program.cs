@@ -266,6 +266,7 @@ if (HasAnyMobyCache())
     await ReportMixedCopiedObjectAppendGuard("darkhollow");
     await ReportNativeSlotReusePatch("darkhollow");
     await ReportNativeCloneAppendPatch("darkhollow");
+    await ReportPastedNativeCloneAppendPatch("darkhollow");
     await ReportRepeatedNativeCloneAppendGuard("darkhollow");
     await ReportAllLevelLooseGemPlacementSectors();
     ReportHomeWorldBalloonistIdentities();
@@ -10664,6 +10665,113 @@ async Task ReportRepeatedNativeCloneAppendGuard(string levelKey)
         throw new InvalidOperationException($"{level.DisplayName} repeated native clone guard did not limit the source count to one extra native clone.");
 
     Console.WriteLine($"{level.DisplayName} repeated native clone guard: exported 1 native clone, skipped {plan.SkippedEdits.Count} repeated unsafe clone, source count {level.SourceRecordCount}->{level.SourceRecordCount + 1}");
+}
+
+async Task ReportPastedNativeCloneAppendPatch(string levelKey)
+{
+    if (!File.Exists(sourceImage))
+    {
+        Console.WriteLine($"{levelKey} pasted native clone append patch: source disc not found; skipping.");
+        return;
+    }
+
+    LevelDefinition? level = catalog.FindByKey(levelKey);
+    if (level == null || !level.HasSourceTable)
+    {
+        Console.WriteLine($"{levelKey} pasted native clone append patch: source table is not mapped; skipping.");
+        return;
+    }
+
+    string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
+    if (!File.Exists(mobyPath))
+    {
+        Console.WriteLine($"{levelKey} pasted native clone append patch: moby cache not found; skipping.");
+        return;
+    }
+
+    List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+    IGrouping<string, Moby>? duplicateGroup = sourceMobys
+        .Where(moby =>
+            moby.TrueIndex >= 0 &&
+            moby.TrueIndex < level.SourceRecordCount &&
+            moby.Type == 0x20 &&
+            moby.Flag4A == 0x10)
+        .GroupBy(moby => $"{moby.Type:X2}:{moby.State:X2}:{moby.SourceByte36:X2}:{moby.SourceByte37:X2}:{moby.SourceByte4F:X2}:{moby.Flag4A:X2}:{moby.Flag4B:X2}", StringComparer.OrdinalIgnoreCase)
+        .Where(group => group.Count() > 1)
+        .OrderByDescending(group => group.Count())
+        .FirstOrDefault();
+    Moby? donor = duplicateGroup?.OrderBy(moby => moby.TrueIndex).Last()
+        ?? sourceMobys.FirstOrDefault(moby =>
+            moby.TrueIndex >= 0 &&
+            moby.TrueIndex < level.SourceRecordCount &&
+            moby.Type == 0x20 &&
+            moby.SourceByte36 == 0xA6 &&
+            moby.Flag4A == 0x10);
+    if (donor == null)
+    {
+        Console.WriteLine($"{level.DisplayName} pasted native clone append patch: donor object not found; skipping.");
+        return;
+    }
+
+    int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
+    int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 1;
+    Moby pasted = CopyAsAddedMoby(donor, nextIndex, nextTrueIndex, $"Copy of {donor.DisplayLabel}", 6);
+    pasted.PatchStatus = "native-clone";
+    pasted.PatchLead = $"Pasted from same-level donor T{donor.TrueIndex}; Create BIN appends a native clone with same-level donor data.";
+    pasted.Confidence = "same-level-native-clone";
+    pasted.Evidence = $"Copied from same-level donor T{donor.TrueIndex}.";
+    pasted.SourceCloneLevelKey = level.Key;
+    pasted.SourceCloneLevelName = level.DisplayName;
+    pasted.SourceCloneTrueIndex = donor.TrueIndex;
+
+    string path = Path.Combine(workspace.RootPath, "_local", "smoke", $"{levelKey}-pasted-native-clone-append-native-edits.json");
+    await MobyEditStore.SaveAsync(path, [pasted], $"{level.DisplayName} pasted native clone append");
+
+    using (FileStream editStream = File.OpenRead(path))
+    using (JsonDocument editDocument = JsonDocument.Parse(editStream))
+    {
+        JsonElement edit = editDocument.RootElement.GetProperty("edits")[0];
+        string mode = edit.GetProperty("recordMutation").GetProperty("mode").GetString() ?? "";
+        int sourceTrueIndex = edit.GetProperty("recordMutation").GetProperty("sourceTrueIndex").GetInt32();
+        if (!string.Equals(mode, "appendSourceRecordClone", StringComparison.OrdinalIgnoreCase) || sourceTrueIndex != donor.TrueIndex)
+            throw new InvalidOperationException($"{level.DisplayName} pasted native clone append did not persist append donor metadata.");
+    }
+
+    MobySourcePatchResult exportResult = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        OutputPrefix: Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-pasted-native-clone-append"),
+        Level: level,
+        NativeEditsPath: path,
+        WriteImage: true));
+    MobySourcePatchPlan plan = exportResult.Plan;
+    if (!exportResult.WroteImage)
+        throw new InvalidOperationException($"{level.DisplayName} pasted native clone append did not write a disposable BIN.");
+    VerifyPatchBytes(exportResult.OutputImagePath, plan);
+    if (plan.SkippedEdits.Count != 0)
+        throw new InvalidOperationException($"{level.DisplayName} pasted native clone append skipped edit(s): {string.Join("; ", plan.SkippedEdits)}");
+
+    MobySourcePatch? appendPatch = plan.Patches.FirstOrDefault(patch =>
+        string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase));
+    if (appendPatch == null || appendPatch.TrueIndex != level.SourceRecordCount)
+        throw new InvalidOperationException($"{level.DisplayName} pasted native clone append did not append at T{level.SourceRecordCount}.");
+    if (!appendPatch.Description.Contains($"donor T{donor.TrueIndex}", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException($"{level.DisplayName} pasted native clone append did not use explicit donor T{donor.TrueIndex}: {appendPatch.Description}");
+
+    byte[] after = ParseHexPreview(appendPatch.AfterHexPreview);
+    if (after.Length < 0x58 ||
+        after[0x50] != donor.Type ||
+        after[0x51] != donor.State ||
+        after[0x36] != donor.SourceByte36 ||
+        after[0x37] != donor.SourceByte37 ||
+        after[0x4F] != donor.SourceByte4F ||
+        after[0x52] != donor.Flag4A ||
+        after[0x53] != donor.Flag4B)
+    {
+        throw new InvalidOperationException($"{level.DisplayName} pasted native clone append did not preserve pasted donor identity bytes.");
+    }
+
+    Console.WriteLine($"{level.DisplayName} pasted native clone append patch: copied donor T{donor.TrueIndex} as T{level.SourceRecordCount}, source count {level.SourceRecordCount}->{level.SourceRecordCount + 1}, BIN bytes verified");
 }
 
 int ToSmokeRawCoordinate(float value) => (int)Math.Round(value * 16f);

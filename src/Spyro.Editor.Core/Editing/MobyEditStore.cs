@@ -378,7 +378,8 @@ public static class MobyEditStore
             return;
 
         string mode = JsonValue.GetString(mutation, "mode");
-        if (!string.Equals(mode, "cloneSourceRecordIntoSlot", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(mode, "cloneSourceRecordIntoSlot", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(mode, "appendSourceRecordClone", StringComparison.OrdinalIgnoreCase))
             return;
 
         moby.SourceCloneLevelKey = JsonValue.GetString(mutation, "sourceLevelKey");
@@ -504,7 +505,7 @@ public static class MobyEditStore
 
         return new
         {
-            mode = "cloneSourceRecordIntoSlot",
+            mode = moby.IsAdded ? "appendSourceRecordClone" : "cloneSourceRecordIntoSlot",
             sourceLevelKey = moby.SourceCloneLevelKey,
             sourceLevelName = moby.SourceCloneLevelName,
             sourceTrueIndex = moby.SourceCloneTrueIndex,

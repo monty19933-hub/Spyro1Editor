@@ -1917,6 +1917,9 @@ public static class MobySourcePatchExporter
             return false;
         }
 
+        int sameLevelAppendDonorTrueIndex = TryGetSameLevelAppendDonor(edit, level, out int explicitSameLevelDonorTrueIndex)
+            ? explicitSameLevelDonorTrueIndex
+            : -1;
         int donorTrueIndex = crossLevelDonor?.SourceTrueIndex ?? (isContainedGemAppend
             ? FindContainedGemDonor(stream, layout, tableWadOffset, tableRelativeOffset, level.SourceRecordCount)
             : isLooseVisibleGemAppend && TryFindNearestLooseVisibleGemDonor(
@@ -1929,6 +1932,8 @@ public static class MobySourcePatchExporter
                 targetSourceByte36,
                 out int nearestLooseGemDonor)
             ? nearestLooseGemDonor
+            : sameLevelAppendDonorTrueIndex >= 0
+            ? sameLevelAppendDonorTrueIndex
             : FindSameLevelDonor(
                 stream,
                 layout,
@@ -2204,6 +2209,29 @@ public static class MobySourcePatchExporter
     private static bool IsProvenNativeCloneAppend(JsonElement edit)
     {
         return string.Equals(JsonValue.GetString(edit, "patchStatus"), "native-clone", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryGetSameLevelAppendDonor(JsonElement edit, LevelDefinition level, out int sourceTrueIndex)
+    {
+        sourceTrueIndex = -1;
+        if (!edit.TryGetProperty("recordMutation", out JsonElement mutation) || mutation.ValueKind != JsonValueKind.Object)
+            return false;
+
+        string mode = JsonValue.GetString(mutation, "mode");
+        if (!string.Equals(mode, "appendSourceRecordClone", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        string sourceLevelKey = JsonValue.GetString(mutation, "sourceLevelKey");
+        if (!string.IsNullOrWhiteSpace(sourceLevelKey) &&
+            !string.Equals(LevelCatalog.NormalizeKey(sourceLevelKey), LevelCatalog.NormalizeKey(level.Key), StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        int candidate = JsonValue.GetInt32(mutation, "sourceTrueIndex", -1);
+        if (candidate < 0 || candidate >= level.SourceRecordCount)
+            return false;
+
+        sourceTrueIndex = candidate;
+        return true;
     }
 
     private static bool IsGuardedNativeCloneAppend(JsonElement edit)
