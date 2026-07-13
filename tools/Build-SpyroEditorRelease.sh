@@ -3,11 +3,15 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIGURATION="${CONFIGURATION:-Release}"
-RELEASE_NAME="${1:-SpyroEditor-release}"
+RELEASE_NAME="${1:-SpyroEditor-0.1.0-beta.15}"
 DIST_DIR="$ROOT_DIR/dist/release"
 APP_PROJECT="$ROOT_DIR/src/Spyro.Editor.App/Spyro.Editor.App.csproj"
 
 mkdir -p "$DIST_DIR"
+
+is_research_build() {
+    [[ "$RELEASE_NAME" == *research* ]]
+}
 
 copy_release_files() {
     local package_dir="$1"
@@ -23,8 +27,30 @@ copy_release_files() {
         \( -name '*-moby-user-overrides.json' -o -name '*-live-validation-overrides.json' -o -name '*-behavior-links.json' \) \
         -exec cp {} "$support_dir/" \;
 
-    cat > "$package_dir/README.txt" <<'README'
-Spyro Editor release build
+    if is_research_build; then
+        cat > "$package_dir/README.txt" <<'README'
+Spyro Editor research build
+
+Start with Launch Spyro Editor Research.
+
+Use Open BIN/CUE inside the editor and choose your own Spyro the Dragon disc
+image. The editor rebuilds terrain maps and object placement from that selected
+disc image, then writes patched test BIN/CUE output to the output folder.
+
+This package does not include game data, BIOS files, emulator files, RAM dumps,
+patched discs, or extracted assets.
+
+This research build exposes Advanced tools for disposable candidate tests.
+Unsafe append research BINs bypass normal enemy/chest export guards and may
+create inert, invisible, or broken objects.
+
+More detail:
+  support/docs/release-user-guide.md
+  support/docs/known-limitations.md
+README
+    else
+        cat > "$package_dir/README.txt" <<README
+$RELEASE_NAME
 
 Start with Launch Spyro Editor.
 
@@ -35,26 +61,45 @@ disc image, then writes patched test BIN/CUE output to the output folder.
 This package does not include game data, BIOS files, emulator files, RAM dumps,
 patched discs, or extracted assets.
 
-Only the cleaner release workflow is exposed here. Research tools, candidate
-exporters, terrain beta controls, smoke tests, and Spring Chest import experiments
-are intentionally hidden from this build.
+The beta includes native all-level sky recoloring, guarded same-disc sky swaps,
+three original sky recipes, one-click level terrain palette matching, native
+.sky imports, guarded native object lighting with zero object-row reroutes, cross-level
+terrain/building texture art, and custom PNG texture imports. Research probes,
+unsafe object candidate exporters, smoke tests, and Spring Chest import
+experiments are intentionally hidden.
 
 More detail:
   support/docs/release-user-guide.md
   support/docs/known-limitations.md
 README
+    fi
 }
 
 write_mac_launcher() {
     local package_dir="$1"
-    cat > "$package_dir/Launch Spyro Editor.command" <<'LAUNCHER'
+    if is_research_build; then
+        cat > "$package_dir/Launch Spyro Editor Research.command" <<'LAUNCHER'
 #!/bin/zsh
 set -e
 cd "$(dirname "$0")"
 mkdir -p output
-open "./Spyro Editor.app"
+export SPYRO_EDITOR_WORKSPACE="$PWD"
+export SPYRO_EDITOR_RELEASE=0
+"./Spyro Editor.app/Contents/MacOS/Spyro.Editor.App"
 LAUNCHER
-    chmod +x "$package_dir/Launch Spyro Editor.command"
+        chmod +x "$package_dir/Launch Spyro Editor Research.command"
+    else
+        cat > "$package_dir/Launch Spyro Editor.command" <<'LAUNCHER'
+#!/bin/zsh
+set -e
+cd "$(dirname "$0")"
+mkdir -p output
+export SPYRO_EDITOR_WORKSPACE="$PWD"
+export SPYRO_EDITOR_RELEASE=1
+"./Spyro Editor.app/Contents/MacOS/Spyro.Editor.App"
+LAUNCHER
+        chmod +x "$package_dir/Launch Spyro Editor.command"
+    fi
 }
 
 write_mac_app_bundle() {
@@ -89,9 +134,9 @@ write_mac_app_bundle() {
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>0.1.0</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>15</string>
     <key>LSMinimumSystemVersion</key>
     <string>12.0</string>
     <key>NSHighResolutionCapable</key>
@@ -106,7 +151,18 @@ PLIST
 
 write_windows_launcher() {
     local package_dir="$1"
-    cat > "$package_dir/Launch Spyro Editor.bat" <<'LAUNCHER'
+    if is_research_build; then
+        cat > "$package_dir/Launch Spyro Editor Research.bat" <<'LAUNCHER'
+@echo off
+setlocal
+cd /d "%~dp0"
+if not exist "%~dp0output" mkdir "%~dp0output"
+set "SPYRO_EDITOR_WORKSPACE=%CD%"
+set "SPYRO_EDITOR_RELEASE=0"
+"%~dp0support\app\Spyro.Editor.App.exe"
+LAUNCHER
+    else
+        cat > "$package_dir/Launch Spyro Editor.bat" <<'LAUNCHER'
 @echo off
 setlocal
 cd /d "%~dp0"
@@ -115,6 +171,7 @@ set "SPYRO_EDITOR_WORKSPACE=%CD%"
 set "SPYRO_EDITOR_RELEASE=1"
 "%~dp0support\app\Spyro.Editor.App.exe"
 LAUNCHER
+    fi
 }
 
 publish_release_package() {
@@ -130,12 +187,18 @@ publish_release_package() {
         --runtime "$rid" \
         --self-contained true \
         -p:PublishSingleFile=false \
+        -p:DebugType=None \
+        -p:DebugSymbols=false \
         --output "$package_dir/support/app"
+    find "$package_dir/support/app" -type f -name '*.pdb' -delete
 
     copy_release_files "$package_dir"
     if [[ "$rid" == osx-* ]]; then
         write_mac_app_bundle "$package_dir"
         write_mac_launcher "$package_dir"
+        if command -v codesign >/dev/null 2>&1; then
+            codesign --force --deep --sign - "$package_dir/Spyro Editor.app"
+        fi
     elif [[ "$rid" == win-* ]]; then
         write_windows_launcher "$package_dir"
     fi
@@ -145,6 +208,7 @@ publish_release_package() {
     echo "Wrote $zip_path"
 }
 
+dotnet clean "$APP_PROJECT" --configuration "$CONFIGURATION"
 dotnet build "$APP_PROJECT" --configuration "$CONFIGURATION"
 
 publish_release_package "osx-arm64"

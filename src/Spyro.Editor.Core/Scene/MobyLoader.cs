@@ -36,6 +36,7 @@ public static class MobyLoader
             int rawY = BitConverter.ToInt32(ram, offset + 0x10);
             int rawZ = BitConverter.ToInt32(ram, offset + 0x14);
             int type = ram[offset + 0x50];
+            int yawByte = ReadYawByteFromRuntimeRecord(ram, offset);
             string label = Moby.FallbackLabel(type);
             Vector3f position = new(rawX / 16f, rawY / 16f, rawZ / 16f);
 
@@ -50,6 +51,8 @@ public static class MobyLoader
                 OriginalType = type,
                 State = ram[offset + 0x51],
                 OriginalState = ram[offset + 0x51],
+                YawByte = yawByte,
+                OriginalYawByte = yawByte,
                 RuntimeAddress = 0x80000000u + (uint)offset,
                 SpecialDataPointer = BitConverter.ToUInt32(ram, offset + 0x08),
                 SourceByte36 = ram[offset + 0x36],
@@ -86,6 +89,7 @@ public static class MobyLoader
         {
             int trueIndex = JsonValue.GetInt32(item, "trueIndex", JsonValue.GetInt32(item, "index", fallbackIndex));
             int type = JsonValue.GetInt32(item, "typeHex", JsonValue.GetInt32(item, "type", 0));
+            int yawByte = JsonValue.GetInt32(item, "yawByteHex", JsonValue.GetInt32(item, "facingByteHex", -1));
             string label = Moby.FallbackLabel(type);
             Vector3f position = new(
                 JsonValue.GetSingle(item, "x"),
@@ -103,6 +107,8 @@ public static class MobyLoader
                 OriginalType = type,
                 State = JsonValue.GetInt32(item, "stateHex", JsonValue.GetInt32(item, "state", 0)),
                 OriginalState = JsonValue.GetInt32(item, "stateHex", JsonValue.GetInt32(item, "state", 0)),
+                YawByte = yawByte,
+                OriginalYawByte = yawByte,
                 RuntimeAddress = (uint)JsonValue.GetInt64(item, "runtimeAddress"),
                 SpecialDataPointer = (uint)JsonValue.GetInt64(item, "specialDataPointer"),
                 SourceByte36 = JsonValue.GetInt32(item, "sourceByte36Hex"),
@@ -149,5 +155,15 @@ public static class MobyLoader
     public static string LoaderTablePatchLead(int trueIndex)
     {
         return $"WAD entry 12, true record {trueIndex}, XYZ +0x0C/+0x10/+0x14";
+    }
+
+    private static int ReadYawByteFromRuntimeRecord(byte[] bytes, int offset)
+    {
+        if (offset < 0 || offset + RuntimeRecordStride > bytes.Length)
+            return -1;
+
+        short cos = BitConverter.ToInt16(bytes, offset + 0x20);
+        short sin = BitConverter.ToInt16(bytes, offset + 0x24);
+        return Moby.TryMatrixToYawByte(cos, sin, out int yawByte) ? yawByte : -1;
     }
 }

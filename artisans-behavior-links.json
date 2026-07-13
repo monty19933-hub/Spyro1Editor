@@ -1,111 +1,319 @@
 {
   "generatedAt": "2026-05-13T23:40:00",
-  "purpose": "Artisans Home behavior-link pass. linkedMove=true groups are conservative editor move links for dragon/pedestal pairs and portal pad/trigger clusters.",
+  "purpose": "Artisans Home behavior-link pass. Dragon and Treasure Gnorc reward groups remain linked; legacy proximity-based portal guesses are review-only because exact native portal triplets now come from HomeworldPortalControlCatalog.",
   "summary": {
-    "totalGroups": 10,
-    "linkedMoveGroups": 10,
-    "reviewGroups": 0
+    "totalGroups": 12,
+    "linkedMoveGroups": 6,
+    "reviewGroups": 6
   },
   "linkGroups": [
     {
-      "key": "artisans:dragon-pedestal-t88-t89",
-      "name": "Behavior: Dragon/pedestal T88/T89",
-      "linkedMove": true,
-      "confidence": "user-observed correction",
-      "basis": "T88 is the visible dragon actor and T89 is the co-located dragon pedestal. Nearby nonvisual records T23/T161 are kept unlinked until their camera/helper role is tested.",
-      "reason": "Move only the visible dragon actor and pedestal together.",
-      "trueIndexes": [88, 89],
-      "memberIds": ["T88", "T89"]
+    "key": "artisans:dragon-pedestal-t88-t89",
+    "name": "Behavior: Dragon scene T88/T89/T161",
+    "kind": "dragon scene",
+    "linkedMove": true,
+      "confidence": "native-byte-family plus user camera observation",
+      "basis": "T88 is the native dragon actor, T89 is its pedestal, and T161 is the matching 0x6E dragon/pedestal scene-link control. The approach camera and later cinematic camera track are linked through T88. T23 remains unlinked.",
+      "reason": "Move the dragon, pedestal, and scene-link control together; Create BIN shifts both linked camera phases by the dragon's XYZ delta.",
+      "trueIndexes": [
+        88,
+        89,
+        161
+      ],
+      "memberIds": [
+        "T88",
+        "T89",
+        "T161"
+      ]
     },
     {
-      "key": "artisans:dragon-pedestal-t90-t91",
-      "name": "Behavior: Dragon/pedestal T90/T91",
-      "linkedMove": true,
-      "confidence": "live-observed",
-      "basis": "T90 is a dragon pedestal and T91 is the co-located visible dragon actor.",
-      "reason": "Move the dragon actor and pedestal together so the rescue platform stays aligned.",
-      "trueIndexes": [90, 91],
-      "memberIds": ["T90", "T91"]
+    "key": "artisans:dragon-pedestal-t90-t91",
+    "name": "Behavior: Dragon scene T90/T91/T162",
+    "kind": "dragon scene",
+    "linkedMove": true,
+      "confidence": "native-byte-family plus user camera observation",
+      "basis": "T91 is the native dragon actor, T90 is its pedestal, and T162 is the matching 0x6E dragon/pedestal scene-link control. The approach camera and later cinematic camera track are linked through T91.",
+      "reason": "Move the dragon, pedestal, and scene-link control together; Create BIN shifts both linked camera phases by the dragon's XYZ delta.",
+      "trueIndexes": [
+        90,
+        91,
+        162
+      ],
+      "memberIds": [
+        "T90",
+        "T91",
+        "T162"
+      ]
     },
     {
-      "key": "artisans:dragon-pedestal-t92-t93",
-      "name": "Behavior: Dragon/pedestal T92/T93",
-      "linkedMove": true,
-      "confidence": "strong-inferred",
-      "basis": "Catalog identifies T92 as a dragon pedestal and T93 as the co-located visible dragon actor.",
-      "reason": "Move the dragon actor and pedestal together so the rescue platform stays aligned.",
-      "trueIndexes": [92, 93],
-      "memberIds": ["T92", "T93"]
+    "key": "artisans:dragon-pedestal-t92-t93",
+    "name": "Behavior: Dragon scene T92/T93/T163",
+    "kind": "dragon scene",
+    "linkedMove": true,
+      "confidence": "native-byte-family plus user camera observation",
+      "basis": "T93 is the native dragon actor, T92 is its pedestal, and T163 is the matching 0x6E dragon/pedestal scene-link control. The approach camera and later cinematic camera track are linked through T93.",
+      "reason": "Move the dragon, pedestal, and scene-link control together; Create BIN shifts both linked camera phases by the dragon's XYZ delta.",
+      "trueIndexes": [
+        92,
+        93,
+        163
+      ],
+      "memberIds": [
+        "T92",
+        "T93",
+        "T163"
+      ]
     },
     {
-      "key": "artisans:dragon-pedestal-t142-t143",
-      "name": "Behavior: Dragon/pedestal T142/T143",
-      "linkedMove": true,
-      "confidence": "strong-inferred",
-      "basis": "Catalog identifies T142 as a dragon pedestal and T143 as the co-located visible dragon actor.",
-      "reason": "Move the dragon actor and pedestal together so the rescue platform stays aligned.",
-      "trueIndexes": [142, 143],
-      "memberIds": ["T142", "T143"]
+    "key": "artisans:dragon-pedestal-t142-t143",
+    "name": "Behavior: Dragon scene T142/T143/T164",
+    "kind": "dragon scene",
+    "linkedMove": true,
+      "confidence": "native-byte-family plus user camera observation",
+      "basis": "T143 is the native dragon actor, T142 is its pedestal, and T164 is the matching 0x6E dragon/pedestal scene-link control. The approach camera and later cinematic camera track are linked through T143.",
+      "reason": "Move the dragon, pedestal, and scene-link control together; Create BIN shifts both linked camera phases by the dragon's XYZ delta.",
+      "trueIndexes": [
+        142,
+        143,
+        164
+      ],
+      "memberIds": [
+        "T142",
+        "T143",
+        "T164"
+      ]
     },
     {
-      "key": "artisans:portal-entry-stone-hill",
-      "name": "Behavior: Stone Hill portal entry",
-      "linkedMove": true,
+    "key": "artisans:portal-entry-stone-hill",
+    "name": "Behavior: Stone Hill portal entry",
+    "kind": "portal group",
+    "linkedMove": false,
       "confidence": "nearby-linked",
       "basis": "T144 is the user-observed Stone Hill level-name sign. T157 is the nearest invisible type 0x00 record at the same portal position and is likely the working entry/warp trigger.",
       "reason": "Move the gold Stone Hill lettering and its likely invisible portal entry trigger together.",
-      "trueIndexes": [144, 157],
-      "memberIds": ["T144", "T157"]
+      "trueIndexes": [
+        144,
+        157
+      ],
+      "memberIds": [
+        "T144",
+        "T157"
+      ]
     },
     {
-      "key": "artisans:portal-entry-east",
-      "name": "Behavior: East portal entry",
-      "linkedMove": true,
+    "key": "artisans:portal-entry-east",
+    "name": "Behavior: East portal entry",
+    "kind": "portal group",
+    "linkedMove": false,
       "confidence": "nearby-linked",
       "basis": "T145 is a portal level-name candidate. T158 is the nearest invisible type 0x00 record at the same portal position and is likely the working entry/warp trigger.",
       "reason": "Move the portal lettering and its likely invisible entry trigger together.",
-      "trueIndexes": [145, 158],
-      "memberIds": ["T145", "T158"]
+      "trueIndexes": [
+        145,
+        158
+      ],
+      "memberIds": [
+        "T145",
+        "T158"
+      ]
     },
     {
-      "key": "artisans:portal-entry-upper-east",
-      "name": "Behavior: Upper east portal entry",
-      "linkedMove": true,
+    "key": "artisans:portal-entry-upper-east",
+    "name": "Behavior: Upper east portal entry",
+    "kind": "portal group",
+    "linkedMove": false,
       "confidence": "nearby-linked",
       "basis": "T146 is a portal level-name candidate. T159 and T160 are nearby invisible type 0x00 records around the same entrance and likely participate in the working entry/warp trigger.",
       "reason": "Move the portal lettering and both likely invisible entry records together.",
-      "trueIndexes": [146, 159, 160],
-      "memberIds": ["T146", "T159", "T160"]
+      "trueIndexes": [
+        146,
+        159,
+        160
+      ],
+      "memberIds": [
+        "T146",
+        "T159",
+        "T160"
+      ]
     },
     {
-      "key": "artisans:portal-entry-south",
-      "name": "Behavior: South portal entry",
-      "linkedMove": true,
+    "key": "artisans:portal-entry-south",
+    "name": "Behavior: South portal entry",
+    "kind": "portal group",
+    "linkedMove": false,
       "confidence": "nearby-linked",
       "basis": "T147 is a portal level-name candidate. T155 is the nearest invisible type 0x00 record at the same portal position and is likely the working entry/warp trigger.",
       "reason": "Move the portal lettering and its likely invisible entry trigger together.",
-      "trueIndexes": [147, 155],
-      "memberIds": ["T147", "T155"]
+      "trueIndexes": [
+        147,
+        155
+      ],
+      "memberIds": [
+        "T147",
+        "T155"
+      ]
     },
     {
       "key": "artisans:portal-entry-pad-cluster",
       "name": "Behavior: Portal pad entry cluster",
-      "linkedMove": true,
+      "linkedMove": false,
       "confidence": "nearby-linked",
       "basis": "T148 is a portal level-name candidate. T133-T137 are the visible portal pad/arch pieces, and T138/T141/T149-T154/T156 are nearby invisible type 0x00 records around the same portal pad cluster.",
       "reason": "Move the visible pad/arch pieces, portal lettering, and likely entry/collision/warp helpers together.",
-      "trueIndexes": [133, 134, 135, 136, 137, 138, 141, 148, 149, 150, 151, 152, 153, 154, 156],
-      "memberIds": ["T133", "T134", "T135", "T136", "T137", "T138", "T141", "T148", "T149", "T150", "T151", "T152", "T153", "T154", "T156"]
+      "trueIndexes": [
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        141,
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+        154,
+        156
+      ],
+      "memberIds": [
+        "T133",
+        "T134",
+        "T135",
+        "T136",
+        "T137",
+        "T138",
+        "T141",
+        "T148",
+        "T149",
+        "T150",
+        "T151",
+        "T152",
+        "T153",
+        "T154",
+        "T156"
+      ]
     },
     {
       "key": "artisans:portal-pad-trigger-cluster",
       "name": "Behavior: All portal pad/trigger clusters",
-      "linkedMove": true,
+      "linkedMove": false,
       "confidence": "editor-scaffold",
       "basis": "T133-T137 are the identified visible portal pad/arch pieces. T144 is the user-observed forward-facing Stone Hill level-name sign; T145-T148 are same-family portal level-name candidates. T138, T141, and T149-T160 are nearby nonvisual records in the same portal hub area and should stay aligned when moving all portal pieces together.",
       "reason": "Move every currently identified visible portal pad/name piece and likely invisible trigger record together as a broad fallback group.",
-      "trueIndexes": [133, 134, 135, 136, 137, 138, 141, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160],
-      "memberIds": ["T133", "T134", "T135", "T136", "T137", "T138", "T141", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T154", "T155", "T156", "T157", "T158", "T159", "T160"]
+      "trueIndexes": [
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        141,
+        144,
+        145,
+        146,
+        147,
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+        154,
+        155,
+        156,
+        157,
+        158,
+        159,
+        160
+      ],
+      "memberIds": [
+        "T133",
+        "T134",
+        "T135",
+        "T136",
+        "T137",
+        "T138",
+        "T141",
+        "T144",
+        "T145",
+        "T146",
+        "T147",
+        "T148",
+        "T149",
+        "T150",
+        "T151",
+        "T152",
+        "T153",
+        "T154",
+        "T155",
+        "T156",
+        "T157",
+        "T158",
+        "T159",
+        "T160"
+      ]
+    },
+    {
+      "key": "artisans:treasure-thief-t7-reward-triggers",
+      "name": "Behavior: Treasure Thief T7 reward triggers",
+      "kind": "reward trigger group",
+      "linkedMove": true,
+      "confidence": "user-confirmed-live",
+      "basis": "User confirmed the four nearby type 0x00 marker rows are the reward triggers for Treasure Gnorc T7. Left-to-right: T17 spawns red gem 1, T18 spawns red gem 2, and T19/T20 spawn red gems 3-5; T7 carries the visible gnorc actor reward byte.",
+      "reason": "Move, copy, paste, and edit the Treasure Gnorc together with its hidden reward trigger rows.",
+      "trueIndexes": [
+        7,
+        17,
+        18,
+        19,
+        20
+      ],
+      "memberIds": [
+        "T7",
+        "T17",
+        "T18",
+        "T19",
+        "T20"
+      ],
+      "memberLabels": {
+        "T7": "Treasure Gnorc",
+        "T17": "Treasure Thief Red Gem 1",
+        "T18": "Treasure Thief Red Gem 2",
+        "T19": "Treasure Thief Red Gems 3-4",
+        "T20": "Treasure Thief Red Gem 5"
+      }
+    },
+    {
+      "key": "artisans:treasure-thief-t31-reward-triggers",
+      "name": "Behavior: Treasure Thief T31 reward triggers",
+      "kind": "reward trigger group",
+      "linkedMove": true,
+      "confidence": "user-confirmed-live",
+      "basis": "Second Artisans Treasure Gnorc cluster. T31 is the matching visible Treasure Gnorc actor and T34-T37 are the same nearby reward trigger marker family as T17-T20.",
+      "reason": "Move, copy, paste, and edit the second Treasure Gnorc together with its hidden reward trigger rows.",
+      "trueIndexes": [
+        31,
+        34,
+        35,
+        36,
+        37
+      ],
+      "memberIds": [
+        "T31",
+        "T34",
+        "T35",
+        "T36",
+        "T37"
+      ],
+      "memberLabels": {
+        "T31": "Treasure Gnorc",
+        "T34": "Treasure Thief Red Gem 1",
+        "T35": "Treasure Thief Red Gem 2",
+        "T36": "Treasure Thief Red Gems 3-4",
+        "T37": "Treasure Thief Red Gem 5"
+      }
     }
   ]
 }

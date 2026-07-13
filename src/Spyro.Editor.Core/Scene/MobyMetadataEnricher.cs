@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Workspace;
@@ -185,6 +186,7 @@ public static class MobyMetadataEnricher
         return !text.Contains("?") &&
             !text.Contains("unknown") &&
             !text.Contains("candidate") &&
+            !text.Contains("placeholder") &&
             !text.Contains("related") &&
             !IsVagueObservationLabel(text);
     }
@@ -311,14 +313,25 @@ public static class MobyMetadataEnricher
 
     private static int ApplyBehaviorLinks(EditorWorkspace workspace, string levelKey, IList<Moby> mobys)
     {
-        string path = ResolveMetadataPath(workspace, $"{levelKey}-behavior-links.json");
-        if (!File.Exists(path))
-            return 0;
-
         Dictionary<int, Moby> byTrueIndex = mobys
             .Where(moby => moby.TrueIndex >= 0)
             .ToDictionary(moby => moby.TrueIndex);
 
+        int applied = 0;
+        HashSet<string> seenPaths = new(StringComparer.OrdinalIgnoreCase);
+        foreach (string path in BehaviorLinkMetadataPaths(workspace, levelKey))
+        {
+            if (!File.Exists(path) || !seenPaths.Add(path))
+                continue;
+
+            applied += ApplyBehaviorLinkFile(path, levelKey, byTrueIndex);
+        }
+
+        return applied;
+    }
+
+    private static int ApplyBehaviorLinkFile(string path, string levelKey, IReadOnlyDictionary<int, Moby> byTrueIndex)
+    {
         int applied = 0;
         try
         {
@@ -337,7 +350,7 @@ public static class MobyMetadataEnricher
                 {
                     Key = JsonValue.GetString(group, "key", $"{levelKey}:link:{applied}"),
                     Name = JsonValue.GetString(group, "name", "Linked objects"),
-                    Kind = InferLinkKind(JsonValue.GetString(group, "name"), JsonValue.GetString(group, "basis")),
+                    Kind = FirstNonEmpty(JsonValue.GetString(group, "kind"), InferLinkKind(JsonValue.GetString(group, "name"), JsonValue.GetString(group, "basis"))),
                     LinkedMove = JsonValue.GetBoolean(group, "linkedMove", true) && !IsBroadEditorScaffoldGroup(group),
                     Confidence = JsonValue.GetString(group, "confidence"),
                     Reason = FirstNonEmpty(JsonValue.GetString(group, "reason"), JsonValue.GetString(group, "basis")),
@@ -347,7 +360,10 @@ public static class MobyMetadataEnricher
                 foreach (int trueIndex in indexes)
                 {
                     if (byTrueIndex.TryGetValue(trueIndex, out Moby? moby))
+                    {
                         AddUniqueLink(moby, link);
+                        ApplyBehaviorLinkMemberMetadata(group, moby);
+                    }
                 }
 
                 applied++;
@@ -359,6 +375,94 @@ public static class MobyMetadataEnricher
         }
 
         return applied;
+    }
+
+    private static void ApplyBehaviorLinkMemberMetadata(JsonElement group, Moby moby)
+    {
+        string label = ReadMemberString(group, "memberLabels", moby.TrueIndex);
+        if (!string.IsNullOrWhiteSpace(label) && ShouldApplyBehaviorLinkMemberLabel(moby))
+        {
+            moby.Label = label;
+            moby.OriginalLabel = label;
+        }
+
+        string kind = ReadMemberString(group, "memberKinds", moby.TrueIndex);
+        if (string.IsNullOrWhiteSpace(kind) &&
+            IsTreasureThiefRewardTriggerGroup(group) &&
+            moby.Type == 0x00)
+        {
+            kind = "treasure thief reward trigger marker";
+        }
+
+        if (!string.IsNullOrWhiteSpace(kind))
+            moby.CandidateKind = FirstNonEmpty(kind, moby.CandidateKind);
+
+        string note = ReadMemberString(group, "memberNotes", moby.TrueIndex);
+        if (string.IsNullOrWhiteSpace(note) && IsTreasureThiefRewardTriggerGroup(group))
+        {
+            note = moby.Type == 0x00
+                ? "User-confirmed hidden reward trigger for the linked Treasure Gnorc; edit its reward gem byte through the Treasure Gnorc dialog."
+                : "User-confirmed Treasure Gnorc reward root; linked hidden trigger rows control its spawned red gems.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(note))
+            moby.BehaviorNote = FirstNonEmpty(note, moby.BehaviorNote);
+    }
+
+    private static bool ShouldApplyBehaviorLinkMemberLabel(Moby moby)
+    {
+        string label = moby.Label.Trim();
+        if (string.IsNullOrWhiteSpace(label) || label.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        string lowerLabel = label.ToLowerInvariant();
+        if (lowerLabel.Contains("scene control", StringComparison.Ordinal) ||
+            lowerLabel.Contains("scene/route", StringComparison.Ordinal) ||
+            lowerLabel.Contains("class 0x1e passive control", StringComparison.Ordinal) ||
+            lowerLabel.Contains("control marker", StringComparison.Ordinal) ||
+            lowerLabel.Contains("system/trigger", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        string proof = $"{moby.Confidence} {moby.Evidence} {moby.BehaviorNote}";
+        return proof.Contains("pattern-inferred", StringComparison.OrdinalIgnoreCase) ||
+            proof.Contains("needs live", StringComparison.OrdinalIgnoreCase) ||
+            proof.Contains("until live-tested", StringComparison.OrdinalIgnoreCase) ||
+            proof.Contains("scene/route", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ReadMemberString(JsonElement group, string propertyName, int trueIndex)
+    {
+        if (!group.TryGetProperty(propertyName, out JsonElement values) || values.ValueKind != JsonValueKind.Object)
+            return "";
+
+        string numericKey = trueIndex.ToString(CultureInfo.InvariantCulture);
+        string prefixedKey = $"T{numericKey}";
+        if (values.TryGetProperty(prefixedKey, out JsonElement prefixed) && prefixed.ValueKind == JsonValueKind.String)
+            return prefixed.GetString() ?? "";
+        if (values.TryGetProperty(numericKey, out JsonElement numeric) && numeric.ValueKind == JsonValueKind.String)
+            return numeric.GetString() ?? "";
+        return "";
+    }
+
+    private static bool IsTreasureThiefRewardTriggerGroup(JsonElement group)
+    {
+        string text = $"{JsonValue.GetString(group, "key")} {JsonValue.GetString(group, "name")} {JsonValue.GetString(group, "kind")} {JsonValue.GetString(group, "basis")} {JsonValue.GetString(group, "reason")}";
+        return text.Contains("treasure", StringComparison.OrdinalIgnoreCase) &&
+            text.Contains("reward", StringComparison.OrdinalIgnoreCase) &&
+            text.Contains("trigger", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<string> BehaviorLinkMetadataPaths(EditorWorkspace workspace, string levelKey)
+    {
+        yield return ResolveMetadataPath(workspace, $"{levelKey}-behavior-links.json");
+        yield return Path.Combine(
+            workspace.RootPath,
+            "_local",
+            "control-role-proof-review",
+            "promoted-behavior-links",
+            $"{levelKey}-behavior-links.json");
     }
 
     private static int ApplyGlobalSignatureLabels(EditorWorkspace workspace, IList<Moby> mobys)
@@ -728,6 +832,16 @@ public static class MobyMetadataEnricher
     private static bool IsBroadEditorScaffoldGroup(JsonElement group)
     {
         string text = $"{JsonValue.GetString(group, "key")} {JsonValue.GetString(group, "name")} {JsonValue.GetString(group, "confidence")} {JsonValue.GetString(group, "reason")} {JsonValue.GetString(group, "basis")}";
+        if (text.Contains("live-proof-control-role", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("control-role-proof", StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (text.Contains("treasure", StringComparison.OrdinalIgnoreCase) &&
+            text.Contains("reward", StringComparison.OrdinalIgnoreCase) &&
+            text.Contains("trigger", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         return text.Contains("editor-scaffold", StringComparison.OrdinalIgnoreCase) ||
             text.Contains("broad fallback", StringComparison.OrdinalIgnoreCase) ||
             text.Contains("cluster", StringComparison.OrdinalIgnoreCase) ||
@@ -749,6 +863,7 @@ public static class MobyMetadataEnricher
         int count = 0;
         count += InferChestContentLinks(levelKey, mobys);
         count += InferDragonPedestalLinks(levelKey, mobys);
+        count += ApplySourceProvenPortalControlLinks(levelKey, mobys);
         return count;
     }
 
@@ -827,11 +942,15 @@ public static class MobyMetadataEnricher
         List<Moby> pedestals = mobys
             .Where(IsDragonPedestal)
             .ToList();
+        List<Moby> sceneLinkControls = mobys
+            .Where(IsDragonSceneLinkControl)
+            .ToList();
         List<Moby> supports = mobys
             .Where(IsDragonSupport)
             .ToList();
 
         HashSet<int> usedPedestals = new();
+        HashSet<int> usedSceneLinkControls = new();
         int count = 0;
         foreach (Moby dragon in dragons)
         {
@@ -844,12 +963,24 @@ public static class MobyMetadataEnricher
 
             usedPedestals.Add(pedestal.TrueIndex);
             List<int> indexes = new() { dragon.TrueIndex, pedestal.TrueIndex };
-            indexes.AddRange(supports
-                .Where(support => support.TrueIndex != dragon.TrueIndex && support.TrueIndex != pedestal.TrueIndex)
-                .Where(support => IsNearbyDragonSupport(support, dragon, pedestal))
-                .OrderBy(support => Math.Min(DistanceSquared(support.Position, dragon.Position), DistanceSquared(support.Position, pedestal.Position)))
-                .Take(1)
-                .Select(support => support.TrueIndex));
+            Moby? sceneLinkControl = sceneLinkControls
+                .Where(item => !usedSceneLinkControls.Contains(item.TrueIndex))
+                .OrderBy(item => DistanceSquared(item.Position, dragon.Position))
+                .FirstOrDefault(item => IsNearbyDragonSceneLinkControl(item, dragon, pedestal));
+            if (sceneLinkControl != null)
+            {
+                usedSceneLinkControls.Add(sceneLinkControl.TrueIndex);
+                indexes.Add(sceneLinkControl.TrueIndex);
+            }
+            else
+            {
+                indexes.AddRange(supports
+                    .Where(support => support.TrueIndex != dragon.TrueIndex && support.TrueIndex != pedestal.TrueIndex)
+                    .Where(support => IsNearbyDragonSupport(support, dragon, pedestal))
+                    .OrderBy(support => Math.Min(DistanceSquared(support.Position, dragon.Position), DistanceSquared(support.Position, pedestal.Position)))
+                    .Take(2)
+                    .Select(support => support.TrueIndex));
+            }
 
             MobyLink link = new()
             {
@@ -859,9 +990,11 @@ public static class MobyMetadataEnricher
                     : $"Dragon/pedestal T{dragon.TrueIndex}/T{pedestal.TrueIndex}",
                 Kind = indexes.Count > 2 ? "dragon scene" : "dragon pedestal",
                 LinkedMove = true,
-                Confidence = "nearby-inferred",
-                Reason = indexes.Count > 2
-                    ? "Dragon, pedestal, and nearby dragon camera/helper records are near each other in the imported editor metadata."
+                Confidence = sceneLinkControl != null ? "native-byte-family" : "nearby-inferred",
+                Reason = sceneLinkControl != null
+                    ? "Native dragon actor, pedestal, and 0x6E scene-link control form the repeated three-row dragon scene; linked data stores the approach camera and later cinematic camera track."
+                    : indexes.Count > 2
+                    ? "Dragon, pedestal, and nearby dragon camera/helper/trigger records are near each other in the imported editor metadata."
                     : "Dragon and pedestal labels are near each other in the imported editor metadata.",
                 TrueIndexes = indexes
             };
@@ -879,6 +1012,11 @@ public static class MobyMetadataEnricher
 
     private static bool IsDragonActor(Moby moby)
     {
+        if (IsNativeDragonActor(moby))
+            return true;
+        if (IsNativeDragonPedestal(moby) || IsDragonSceneLinkControl(moby))
+            return false;
+
         return ContainsAny(moby, "dragon") &&
             !ContainsAny(moby, "pedestal") &&
             !ContainsAny(moby, "control", "marker") &&
@@ -888,22 +1026,140 @@ public static class MobyMetadataEnricher
 
     private static bool IsDragonPedestal(Moby moby)
     {
+        if (IsNativeDragonPedestal(moby))
+            return true;
+        if (IsNativeDragonActor(moby) || IsDragonSceneLinkControl(moby))
+            return false;
+
         return ContainsAny(moby, "dragon") && ContainsAny(moby, "pedestal");
     }
 
     private static bool IsDragonSupport(Moby moby)
     {
-        return ContainsAll(moby, "dragon", "helper") ||
+        return IsDragonSceneLinkControl(moby) ||
+            ContainsAll(moby, "dragon", "helper") ||
             ContainsAll(moby, "dragon", "camera") ||
             ContainsAll(moby, "dragon", "control") ||
             ContainsAll(moby, "rescue", "camera");
     }
 
+    private static bool IsNativeDragonActor(Moby moby)
+    {
+        return moby.Type is 0x20 or 0x3C &&
+            moby.SourceByte36 == 0xFA &&
+            moby.SourceByte37 == 0x00 &&
+            moby.SourceByte4F == 0x00 &&
+            moby.Flag4A == 0x10 &&
+            moby.Flag4B == 0xFF;
+    }
+
+    private static bool IsNativeDragonPedestal(Moby moby)
+    {
+        return moby.Type == 0x20 &&
+            moby.SourceByte36 is 0x4B or 0x4C or 0x4D &&
+            moby.SourceByte37 == 0x01 &&
+            moby.SourceByte4F == 0x00 &&
+            moby.Flag4A == 0x10 &&
+            moby.Flag4B == 0xFF;
+    }
+
+    private static bool IsDragonSceneLinkControl(Moby moby)
+    {
+        return moby.Type == 0x00 &&
+            moby.SourceByte36 == 0x6E &&
+            moby.SourceByte37 == 0x00 &&
+            moby.SourceByte4F == 0x00 &&
+            moby.Flag4A == 0x10 &&
+            moby.Flag4B == 0xFF;
+    }
+
+    private static bool IsNearbyDragonSceneLinkControl(Moby control, Moby dragon, Moby pedestal)
+    {
+        const float MaxDistanceSquared = 96 * 96;
+        return DistanceSquared(control.Position, dragon.Position) <= MaxDistanceSquared &&
+            DistanceSquared(control.Position, pedestal.Position) <= MaxDistanceSquared;
+    }
+
     private static bool IsNearbyDragonSupport(Moby support, Moby dragon, Moby pedestal)
     {
-        const float maxDragonSupportDistance = 256 * 256;
-        return DistanceSquared(support.Position, dragon.Position) <= maxDragonSupportDistance &&
-            DistanceSquared(support.Position, pedestal.Position) <= maxDragonSupportDistance;
+        const float maxDistance = 256 * 256;
+        return DistanceSquared(support.Position, dragon.Position) <= maxDistance &&
+            DistanceSquared(support.Position, pedestal.Position) <= maxDistance;
+    }
+
+    private static int ApplySourceProvenPortalControlLinks(string levelKey, IList<Moby> mobys)
+    {
+        IReadOnlyList<HomeworldPortalControlDefinition> definitions = HomeworldPortalControlCatalog.ForLevel(levelKey);
+        if (definitions.Count == 0)
+            return 0;
+
+        Dictionary<int, Moby> byTrueIndex = mobys
+            .Where(moby => !moby.IsRemoved && moby.TrueIndex >= 0)
+            .GroupBy(moby => moby.TrueIndex)
+            .ToDictionary(group => group.Key, group => group.First());
+        int count = 0;
+        foreach (HomeworldPortalControlDefinition definition in definitions)
+        {
+            if (!byTrueIndex.TryGetValue(definition.PathTrueIndex, out Moby? path) ||
+                !byTrueIndex.TryGetValue(definition.LetteringTrueIndex, out Moby? lettering) ||
+                !byTrueIndex.TryGetValue(definition.CompanionTrueIndex, out Moby? companion) ||
+                !IsPortalPathControl(path) ||
+                !IsPortalDestinationControl(lettering) ||
+                !IsPortalRouteControl(companion))
+            {
+                continue;
+            }
+
+            List<int> indexes = definition.TrueIndexes.Distinct().OrderBy(index => index).ToList();
+
+            MobyLink link = new()
+            {
+                Key = $"{levelKey}:portal-controls:level-{definition.DestinationLevelId}",
+                Name = $"{definition.DestinationName} portal location",
+                Kind = "portal controls",
+                LinkedMove = true,
+                Confidence = "source-proven",
+                Reason = $"The native homeworld portal table maps destination {definition.DestinationLevelId} to path T{definition.PathTrueIndex}; its unique nearby class 0x01 lettering and class 0x1E companion rows are T{definition.LetteringTrueIndex}/T{definition.CompanionTrueIndex}. Create BIN also moves the dedicated portal plane and type-6 entry collision surface. Decorative arch terrain remains separate.",
+                TrueIndexes = indexes
+            };
+
+            foreach (int trueIndex in indexes)
+            {
+                Moby? moby = mobys.FirstOrDefault(item => item.TrueIndex == trueIndex);
+                if (moby != null)
+                    AddUniqueLink(moby, link);
+            }
+            count++;
+        }
+
+        return count;
+    }
+
+    private static bool IsPortalPathControl(Moby moby)
+    {
+        return !moby.IsRemoved &&
+            moby.Type == 0x00 &&
+            moby.SourceByte36 == 0x8E &&
+            moby.Flag4A == 0x10 &&
+            moby.Flag4B == 0xFF;
+    }
+
+    private static bool IsPortalDestinationControl(Moby moby)
+    {
+        return !moby.IsRemoved &&
+            moby.Type == 0x00 &&
+            moby.SourceByte36 == 0x01 &&
+            moby.Flag4A == 0x10 &&
+            moby.Flag4B == 0xFF;
+    }
+
+    private static bool IsPortalRouteControl(Moby moby)
+    {
+        return !moby.IsRemoved &&
+            moby.Type == 0x00 &&
+            moby.SourceByte36 == 0x1E &&
+            moby.Flag4A == 0x10 &&
+            moby.Flag4B == 0xFF;
     }
 
     private static string ResolveMetadataPath(EditorWorkspace workspace, string fileName)

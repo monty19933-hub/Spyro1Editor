@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -14,9 +15,13 @@ public static class MobySourcePatchExporter
     private const int WadLba = 37;
     private const uint ExeDestination = 0x80010000;
     private const int RecordStride = 0x58;
+    private const string CrossLevelSourceRecordCandidateAppendFeature = "CrossLevelSourceRecordCandidateAppend";
+    private const string CrossLevelSourceRecordCandidateRecipeMode = "SourceRecordCandidateAppend";
     private const int XOffset = 0x0C;
     private const int YOffset = 0x10;
     private const int ZOffset = 0x14;
+    private const int YawMatrixOffset = 0x20;
+    private const int YawByteOffset = 0x46;
     private const int TypeOffset = 0x50;
     private const int StateOffset = 0x51;
     private const int HiddenRawCoordinate = -480000;
@@ -43,7 +48,8 @@ public static class MobySourcePatchExporter
             outputCuePath,
             request.Level,
             request.NativeEditsPath,
-            request.AllowPlanOnlyActorPackageImports);
+            request.AllowPlanOnlyActorPackageImports,
+            request.AllowGuardedNativeCloneAppend);
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPlanPath) ?? ".");
         await File.WriteAllTextAsync(outputPlanPath, JsonSerializer.Serialize(plan, new JsonSerializerOptions { WriteIndented = true }), cancellationToken);
@@ -51,7 +57,11 @@ public static class MobySourcePatchExporter
         if (request.WriteImage)
         {
             if (plan.PatchCount == 0)
+            {
+                DeleteStaleOutput(outputImagePath);
+                DeleteStaleOutput(outputCuePath);
                 return new MobySourcePatchResult(outputImagePath, outputCuePath, outputPlanPath, plan, false);
+            }
 
             File.Copy(request.SourceImagePath, outputImagePath, true);
             DiscLayout layout = DiscImage.DetectLayout(outputImagePath);
@@ -87,6 +97,18 @@ public static class MobySourcePatchExporter
         return new MobySourcePatchResult(outputImagePath, outputCuePath, outputPlanPath, plan, request.WriteImage && plan.PatchCount > 0);
     }
 
+    private static void DeleteStaleOutput(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
     public static MobySourcePatchPlan BuildPlan(
         string sourceImagePath,
         string sourceCuePath,
@@ -94,7 +116,8 @@ public static class MobySourcePatchExporter
         string outputCuePath,
         LevelDefinition level,
         string nativeEditsPath,
-        bool allowPlanOnlyActorPackageImports = false)
+        bool allowPlanOnlyActorPackageImports = false,
+        bool allowGuardedNativeCloneAppend = false)
     {
         if (!level.HasSourceTable)
             throw new InvalidOperationException($"{level.DisplayName} does not have a mapped source moby table yet.");
@@ -124,7 +147,7 @@ public static class MobySourcePatchExporter
         Dictionary<string, CrossLevelSharedSpecialCluster> sharedCrossLevelSpecialClusters = new(StringComparer.OrdinalIgnoreCase);
         int appendNextTrueIndex = level.SourceRecordCount;
         bool hasAppend = false;
-        List<JsonElement> exportedTreasureEdits = new();
+        int exportedTreasureDelta = 0;
         int springChestControllerAppendTrueIndex = -1;
         int springChestShellAppendTrueIndex = -1;
         int springChestControllerActorId = 0x00C2;
@@ -134,17 +157,39 @@ public static class MobySourcePatchExporter
         string workspaceRoot = FindCatalogRoot(Path.GetDirectoryName(nativeEditsPath) ?? ".");
         LevelCatalog catalog = LevelCatalog.Load(workspaceRoot);
         GeometryCandidate? levelGeometry = TryLoadLevelGeometry(workspaceRoot, level.Key);
+        HashSet<int> protectedSourceSlots = BuildProtectedSourceSlots(editsElement, level.SourceRecordCount);
+        HashSet<int> autoReuseTargetSlots = new();
+        Lazy<IReadOnlyDictionary<int, DragonRescueCameraData>> dragonRescueCameras = new(() =>
+            DragonRescueCameraLocator.Locate(imageStream, layout, level));
+        Lazy<FlyInLandingData> flyInLanding = new(() =>
+            FlyInLandingLocator.Locate(imageStream, layout, level));
+        Lazy<PortalSourceLevelData> portalSourceData = new(() =>
+            PortalSourceDataLocator.Locate(imageStream, layout, level));
+        List<PortalSourceMovement> portalMovements = [];
 
         foreach (JsonElement edit in editsElement.EnumerateArray())
         {
             int trueIndex = JsonValue.GetInt32(edit, "trueIndex", -1);
             string label = JsonValue.GetString(edit, "label", JsonValue.GetString(edit, "labelEdited", trueIndex >= 0 ? $"T{trueIndex}" : "moby"));
+            if (IsFlyInLandingEdit(edit))
+            {
+                AddFlyInLandingPatches(imageStream, layout, level, label, edit, flyInLanding, patches, writtenWadOffsets);
+                continue;
+            }
+
             if (JsonValue.GetBoolean(edit, "added") || string.Equals(JsonValue.GetString(edit, "editKind"), "add", StringComparison.OrdinalIgnoreCase))
             {
-                int assignedAppendTrueIndex = appendNextTrueIndex;
-                if (TryAddAppendPatch(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, tableRelativeOffset, appendNextTrueIndex, label, edit, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, suppressActorPackageImports, allowGuardedNativeCloneAppend: false, patches, packageImportPreviews, writtenWadOffsets, writtenActorPackageRecipes, sharedCrossLevelSpecialClusters, skippedEdits))
+                if (!allowGuardedNativeCloneAppend &&
+                    TryPatchAddedNativeCloneIntoAutoSlot(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, label, edit, protectedSourceSlots, autoReuseTargetSlots, patches, writtenWadOffsets, skippedEdits, out int autoSlotTreasureDelta))
                 {
-                    exportedTreasureEdits.Add(edit);
+                    exportedTreasureDelta += autoSlotTreasureDelta;
+                    continue;
+                }
+
+                int assignedAppendTrueIndex = appendNextTrueIndex;
+                if (TryAddAppendPatch(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, tableRelativeOffset, appendNextTrueIndex, label, edit, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, suppressActorPackageImports, allowGuardedNativeCloneAppend, patches, packageImportPreviews, writtenWadOffsets, writtenActorPackageRecipes, sharedCrossLevelSpecialClusters, skippedEdits))
+                {
+                    exportedTreasureDelta += ComputeTreasureDelta(edit);
                     TrackSpringChestPairAppend(edit, assignedAppendTrueIndex, packageImportPreviews, ref springChestControllerAppendTrueIndex, ref springChestShellAppendTrueIndex, ref springChestControllerActorId);
                     TrackPeaceKeepersSpringChestAppend(edit, assignedAppendTrueIndex, peaceKeepersSpringChestAnchors);
                     appendNextTrueIndex++;
@@ -163,13 +208,13 @@ public static class MobySourcePatchExporter
             if (JsonValue.GetBoolean(edit, "removed") || string.Equals(JsonValue.GetString(edit, "editKind"), "remove", StringComparison.OrdinalIgnoreCase))
             {
                 AddRemoveHidePatches(imageStream, layout, level, tableWadOffset, trueIndex, label, patches, writtenWadOffsets);
-                exportedTreasureEdits.Add(edit);
+                exportedTreasureDelta += ComputeTreasureDelta(edit);
                 continue;
             }
 
             if (TryPatchSourceRecordCloneIntoSlot(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets, skippedEdits))
             {
-                exportedTreasureEdits.Add(edit);
+                exportedTreasureDelta += ComputeTreasureDelta(edit);
                 continue;
             }
 
@@ -185,11 +230,24 @@ public static class MobySourcePatchExporter
             }
 
             AddCoordinatePatches(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
+            TrackMovedPortalSourceData(level, trueIndex, label, edit, portalSourceData, portalMovements);
+            AddMovedDragonRescueCameraPatches(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, dragonRescueCameras, patches, writtenWadOffsets);
+            AddMovedExistingPlacementSectorPatch(imageStream, layout, level, levelGeometry, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
             AddChangedBytePatch(imageStream, layout, level, tableWadOffset, trueIndex, label, "type", TypeOffset, edit, "typeOriginalHex", "typeEditedHex", patches, writtenWadOffsets);
             AddChangedBytePatch(imageStream, layout, level, tableWadOffset, trueIndex, label, "state", StateOffset, edit, "stateOriginalHex", "stateEditedHex", patches, writtenWadOffsets);
+            AddYawPatches(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
             AddSourceByteEdits(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
-            exportedTreasureEdits.Add(edit);
+            exportedTreasureDelta += ComputeTreasureDelta(edit);
         }
+
+        AddMovedPortalSourcePatches(
+            imageStream,
+            layout,
+            level,
+            portalSourceData,
+            portalMovements,
+            patches,
+            writtenWadOffsets);
 
         bool addStoneHillSpringChestRewardRowOnly = packageImportPreviews.Any(preview =>
             string.Equals(preview.Family, "springChest", StringComparison.OrdinalIgnoreCase) &&
@@ -1064,19 +1122,29 @@ public static class MobySourcePatchExporter
             AddSourceCountPatch(imageStream, layout, level, tableWadOffset, appendNextTrueIndex, patches, writtenWadOffsets, sourceCountNotes);
         }
 
-        AddTreasureTotalPatch(imageStream, catalog, level, exportedTreasureEdits, patches, sourceCountNotes);
+        AddTreasureTotalPatch(imageStream, catalog, level, exportedTreasureDelta, patches, sourceCountNotes);
 
         List<string> notes =
         [
             "Patches existing source moby records only.",
             "Movement edits write raw X/Y/Z coordinates at record offsets 0x0C/0x10/0x14.",
+            "Yaw/facing edits write the native source rotation matrix at record offset 0x20, plus the legacy yaw byte at 0x46 for compatibility.",
+            "Fly-in landing edits use the separate destination entry record: XYZ at +0x00/+0x04/+0x08 and the direct flight heading byte at +0x0E.",
             "Remove edits are exported as a soft remove by moving the source record to -30000, -30000, -30000 world units.",
             "Type, state, and chest/gem source-byte edits write one-byte source table fields.",
             "Loose gems and proven lightweight same-level true adds clone a matching source record into the next empty slot and bump the source count; unsafe enemy/chest true-adds are skipped until their behavior data is solved.",
             "Treasure edits update the level's in-game pause/inventory treasure target so added gems count toward completion.",
             "Existing contained-gem chest content recolors export as +0x53 source-byte patches; brand-new contained-gem markers still need the special-data chest-link append path."
         ];
+        if (patches.Any(patch => patch.Kind.StartsWith("portal-", StringComparison.OrdinalIgnoreCase)))
+        {
+            notes.Add("Homeworld portal location edits move the linked source mobys, dedicated portal center/points, and type-6 walk-in collision triangles, then rebuild and rebalance the native collision lookup. Decorative stone arches remain terrain scenery.");
+        }
         notes.AddRange(sourceCountNotes);
+        if (allowGuardedNativeCloneAppend)
+        {
+            notes.Add("Disposable native-clone append research mode is enabled: guarded same-level enemy/chest true-add rows may write for emulator testing. Normal Create BIN keeps these guarded unless this research flag is explicitly enabled.");
+        }
         if (patches.Any(patch =>
             string.Equals(patch.Kind, "spring-chest-helper-hook", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(patch.Kind, "spring-chest-helper-payload", StringComparison.OrdinalIgnoreCase)))
@@ -1744,8 +1812,226 @@ public static class MobySourcePatchExporter
         if (!string.Equals(mode, "cloneSourceRecordIntoSlot", StringComparison.OrdinalIgnoreCase))
             return false;
 
-        string sourceLevelKey = JsonValue.GetString(mutation, "sourceLevelKey");
-        int sourceTrueIndex = JsonValue.GetInt32(mutation, "sourceTrueIndex", -1);
+        return TryPatchSourceRecordCloneIntoSlotCore(
+            stream,
+            layout,
+            catalog,
+            targetLevel,
+            levelGeometry,
+            targetTableWadOffset,
+            JsonValue.GetString(mutation, "sourceLevelKey"),
+            JsonValue.GetInt32(mutation, "sourceTrueIndex", -1),
+            targetTrueIndex,
+            label,
+            edit,
+            "moby-record-slot-clone",
+            $"Clone same-level donor T{{0}} into existing source slot T{{1}}, preserving this slot's placement and donor behavior data.",
+            preserveDonorState: false,
+            updatePlacementSectorFromPlacement: true,
+            patches,
+            writtenWadOffsets,
+            skippedEdits);
+    }
+
+    private static bool TryPatchAddedNativeCloneIntoAutoSlot(
+        FileStream stream,
+        DiscLayout layout,
+        LevelCatalog catalog,
+        LevelDefinition targetLevel,
+        GeometryCandidate? levelGeometry,
+        long targetTableWadOffset,
+        string label,
+        JsonElement edit,
+        HashSet<int> protectedSourceSlots,
+        HashSet<int> autoReuseTargetSlots,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets,
+        List<string> skippedEdits,
+        out int treasureDelta)
+    {
+        treasureDelta = 0;
+        if (JsonValue.GetBoolean(edit, "disableAutoSlotReuse"))
+            return false;
+        if (!TryGetAutoSlotReuseIdentity(edit, out int targetType, out int targetState, out int targetSourceByte36, out int targetSourceByte37, out int targetSourceByte4F, out int targetFlag4A, out int targetFlag4B))
+            return false;
+        if (IsNativeLifeChestIdentity(
+                targetType,
+                targetSourceByte36,
+                targetSourceByte37,
+                targetSourceByte4F,
+                targetFlag4A,
+                targetFlag4B))
+        {
+            // A Life Chest row is an active object, not a spare slot. Reusing its donor
+            // moves the original chest instead of creating a copy.
+            return false;
+        }
+        bool canTrueAppendAfterReuseSlots = IsPromotedSameLevelNativeCloneAppendIdentity(
+            targetLevel.Key,
+            targetType,
+            targetSourceByte36,
+            targetSourceByte37,
+            targetSourceByte4F,
+            targetFlag4A,
+            targetFlag4B);
+        int sourceTrueIndex = TryGetSameLevelAppendDonor(edit, targetLevel, out int explicitSourceTrueIndex)
+            ? explicitSourceTrueIndex
+            : FindExactSameLevelDonor(
+                stream,
+                layout,
+                targetTableWadOffset,
+                targetLevel.SourceRecordCount,
+                targetType,
+                targetState,
+                targetSourceByte36,
+                targetSourceByte37,
+                targetSourceByte4F,
+                targetFlag4A,
+                targetFlag4B);
+        if (sourceTrueIndex < 0)
+        {
+            if (IsGuardedNativeCloneAppend(edit))
+            {
+                skippedEdits.Add($"{label}: same-level enemy/chest copy was kept saved but skipped because no exact same-level donor record could be proven.");
+                return true;
+            }
+
+            return false;
+        }
+
+        int targetTrueIndex = FindAutoReuseTargetSlot(
+            stream,
+            layout,
+            targetLevel,
+            targetTableWadOffset,
+            sourceTrueIndex,
+            targetType,
+            targetState,
+            targetSourceByte36,
+            targetSourceByte37,
+            targetSourceByte4F,
+            targetFlag4A,
+            targetFlag4B,
+            protectedSourceSlots,
+            autoReuseTargetSlots,
+            writtenWadOffsets);
+        if (targetTrueIndex < 0)
+        {
+            if (canTrueAppendAfterReuseSlots)
+                return false;
+
+            skippedEdits.Add($"{label}: same-level enemy/chest copy was kept saved but skipped because no matching source slot is available to reuse.");
+            return true;
+        }
+
+        int patchCountBefore = patches.Count;
+        bool patched = TryPatchSourceRecordCloneIntoSlotCore(
+            stream,
+            layout,
+            catalog,
+            targetLevel,
+            levelGeometry,
+            targetTableWadOffset,
+            targetLevel.Key,
+            sourceTrueIndex,
+            targetTrueIndex,
+            label,
+            edit,
+            "moby-record-auto-slot-clone",
+            $"Export added/pasted same-level clone by reusing source slot T{{1}} instead of appending a crash-prone new enemy/chest row; cloned donor T{{0}} and preserved the pasted placement.",
+            preserveDonorState: true,
+            updatePlacementSectorFromPlacement: true,
+            patches,
+            writtenWadOffsets,
+            skippedEdits);
+        if (patched && patches.Count > patchCountBefore)
+        {
+            autoReuseTargetSlots.Add(targetTrueIndex);
+            MobySourcePatch? slotPatch = patches
+                .Skip(patchCountBefore)
+                .FirstOrDefault(patch =>
+                    string.Equals(patch.Kind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase) &&
+                    patch.TrueIndex == targetTrueIndex);
+            if (slotPatch != null)
+            {
+                treasureDelta =
+                    TreasureValueFromRecordBytes(HexToBytes(slotPatch.AfterHexPreview)) -
+                    TreasureValueFromRecordBytes(HexToBytes(slotPatch.BeforeHexPreview));
+            }
+        }
+        return patched;
+    }
+
+    private static bool TryGetAutoSlotReuseIdentity(
+        JsonElement edit,
+        out int targetType,
+        out int targetState,
+        out int targetSourceByte36,
+        out int targetSourceByte37,
+        out int targetSourceByte4F,
+        out int targetFlag4A,
+        out int targetFlag4B)
+    {
+        targetType = JsonValue.GetInt32(edit, "typeEditedHex", JsonValue.GetInt32(edit, "typeHex", -1));
+        targetState = JsonValue.GetInt32(edit, "stateEditedHex", JsonValue.GetInt32(edit, "stateHex", -1));
+        targetSourceByte36 = JsonValue.GetInt32(edit, "sourceByte36EditedHex", JsonValue.GetInt32(edit, "sourceByte36Hex", -1));
+        targetSourceByte37 = JsonValue.GetInt32(edit, "sourceByte37EditedHex", JsonValue.GetInt32(edit, "sourceByte37Hex", -1));
+        targetSourceByte4F = JsonValue.GetInt32(edit, "sourceByte4FEditedHex", JsonValue.GetInt32(edit, "sourceByte4FHex", -1));
+        targetFlag4A = JsonValue.GetInt32(edit, "flag4AEditedHex", JsonValue.GetInt32(edit, "flag4AHex", -1));
+        targetFlag4B = JsonValue.GetInt32(edit, "flag4BEditedHex", JsonValue.GetInt32(edit, "flag4BHex", -1));
+        if (targetType < 0 || targetState < 0 || targetSourceByte36 < 0 || targetSourceByte37 < 0 || targetSourceByte4F < 0 || targetFlag4A < 0 || targetFlag4B < 0)
+            return false;
+        bool linkedCompanionClone = IsLinkedCompanionNativeClone(edit);
+        if (targetType is not (0x18 or 0x20) && !linkedCompanionClone)
+            return false;
+        if (linkedCompanionClone && !IsCloneableLinkedCompanionType(targetType))
+            return false;
+        if (TryGetCrossLevelTemplate(edit, out _))
+            return false;
+        if (IsContainedGemAppend(edit, targetType))
+            return false;
+        if (IsLooseVisibleGemIdentity(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B))
+            return false;
+        if (IsKnownSameLevelLightweightAppend(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B))
+            return false;
+
+        return true;
+    }
+
+    private static bool IsLinkedCompanionNativeClone(JsonElement edit)
+    {
+        if (!string.Equals(JsonValue.GetString(edit, "patchStatus"), "native-clone", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        string text = $"{JsonValue.GetString(edit, "patchLead")} {JsonValue.GetString(edit, "confidence")} {JsonValue.GetString(edit, "label")} {JsonValue.GetString(edit, "labelEdited")}";
+        return MobyCompanionClonePlanner.IsLinkedCompanionCloneText(text);
+    }
+
+    private static bool IsCloneableLinkedCompanionType(int targetType)
+    {
+        return targetType is 0x00 or 0x0A or 0x10 or 0x18 or 0x20 or 0x30 or 0x33 or 0x52;
+    }
+
+    private static bool TryPatchSourceRecordCloneIntoSlotCore(
+        FileStream stream,
+        DiscLayout layout,
+        LevelCatalog catalog,
+        LevelDefinition targetLevel,
+        GeometryCandidate? levelGeometry,
+        long targetTableWadOffset,
+        string sourceLevelKey,
+        int sourceTrueIndex,
+        int targetTrueIndex,
+        string label,
+        JsonElement edit,
+        string patchKind,
+        string descriptionFormat,
+        bool preserveDonorState,
+        bool updatePlacementSectorFromPlacement,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets,
+        List<string> skippedEdits)
+    {
         if (sourceTrueIndex < 0)
         {
             skippedEdits.Add($"{label}: native slot reuse is missing a donor source index.");
@@ -1772,12 +2058,17 @@ public static class MobySourcePatchExporter
             : ParseRequiredLong(sourceLevel.SourceTableWadOffset, "sourceLevel.sourceTableWadOffset");
         byte[] targetRecord = ReadWadBytes(stream, layout, targetTableWadOffset + ((long)targetTrueIndex * RecordStride), RecordStride);
         byte[] donorRecord = ReadWadBytes(stream, layout, sourceTableWadOffset + ((long)sourceTrueIndex * RecordStride), RecordStride);
+        bool preserveTargetBehaviorData = ShouldPreserveTargetBehaviorDataForSlotReuse(patchKind, targetRecord, donorRecord);
+        if (preserveTargetBehaviorData)
+            PreserveTargetBehaviorData(targetRecord, donorRecord);
 
         WriteInt32(donorRecord, XOffset, ReadRawAxis(edit, "x", targetRecord, XOffset));
         WriteInt32(donorRecord, YOffset, ReadRawAxis(edit, "y", targetRecord, YOffset));
         WriteInt32(donorRecord, ZOffset, ReadRawAxis(edit, "z", targetRecord, ZOffset));
+        WriteYawFromEdit(donorRecord, edit);
         WriteByteFromEdit(donorRecord, TypeOffset, edit, "typeEditedHex", "typeHex");
-        WriteByteFromEdit(donorRecord, StateOffset, edit, "stateEditedHex", "stateHex");
+        if (!preserveDonorState)
+            WriteByteFromEdit(donorRecord, StateOffset, edit, "stateEditedHex", "stateHex");
         WriteByteFromEdit(donorRecord, 0x36, edit, "sourceByte36EditedHex", "sourceByte36Hex");
         WriteByteFromEdit(donorRecord, 0x37, edit, "sourceByte37EditedHex", "sourceByte37Hex");
         WriteByteFromEdit(donorRecord, 0x4F, edit, "sourceByte4FEditedHex", "sourceByte4FHex");
@@ -1786,8 +2077,18 @@ public static class MobySourcePatchExporter
         ApplySourceByteEdits(donorRecord, edit);
 
         string placementSectorDescription = "";
-        if (TryApplySourceRecordPlacementSector(levelGeometry, edit, donorRecord, out int placementSectorIndex))
+        if (updatePlacementSectorFromPlacement && !HasSourceByteEdit(edit, 0x4A) && targetRecord.Length > 0x4A && donorRecord.Length > 0x4A)
+        {
+            donorRecord[0x4A] = targetRecord[0x4A];
+            placementSectorDescription = $" Placement sector byte preserved from reused slot as 0x{donorRecord[0x4A]:X2}.";
+        }
+
+        bool allowPlacementSector = updatePlacementSectorFromPlacement || ShouldApplyPlacementSector(donorRecord);
+        if (TryApplySourceRecordPlacementSector(levelGeometry, edit, donorRecord, allowPlacementSector, out int placementSectorIndex))
             placementSectorDescription = $" Placement sector byte set to 0x{placementSectorIndex:X2}.";
+        string behaviorDescription = preserveTargetBehaviorData
+            ? " Reused slot behavior data preserved for this behavior-linked native actor."
+            : "";
 
         AddRawPatch(
             stream,
@@ -1795,15 +2096,162 @@ public static class MobySourcePatchExporter
             targetLevel,
             targetTableWadOffset + ((long)targetTrueIndex * RecordStride),
             donorRecord,
-            "moby-record-slot-clone",
+            patchKind,
             label,
             targetTrueIndex,
             "0x0",
-            $"Clone same-level donor T{sourceTrueIndex} into existing source slot T{targetTrueIndex}, preserving this slot's placement and donor behavior data.{placementSectorDescription}",
+            $"{string.Format(CultureInfo.InvariantCulture, descriptionFormat, sourceTrueIndex, targetTrueIndex)}{placementSectorDescription}{behaviorDescription}",
             patches,
             writtenWadOffsets);
         return true;
     }
+
+    private static bool ShouldPreserveTargetBehaviorDataForSlotReuse(string patchKind, byte[] targetRecord, byte[] donorRecord)
+    {
+        if (!string.Equals(patchKind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(patchKind, "moby-record-slot-clone", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (targetRecord.Length <= 0x53 || donorRecord.Length <= 0x53)
+            return false;
+        if (targetRecord[TypeOffset] != 0x20 || donorRecord[TypeOffset] != 0x20)
+            return false;
+        if (targetRecord[0x36] != donorRecord[0x36] || targetRecord[0x37] != donorRecord[0x37])
+            return false;
+
+        ushort targetBehaviorMarker = BitConverter.ToUInt16(targetRecord, 0x38);
+        ushort donorBehaviorMarker = BitConverter.ToUInt16(donorRecord, 0x38);
+        return targetRecord[0x4F] != 0x00 ||
+            donorRecord[0x4F] != 0x00 ||
+            targetBehaviorMarker != 0x0000 ||
+            donorBehaviorMarker != 0x0000;
+    }
+
+    private static void PreserveTargetBehaviorData(byte[] targetRecord, byte[] donorRecord)
+    {
+        Array.Copy(targetRecord, 0x00, donorRecord, 0x00, 0x04);
+        Array.Copy(targetRecord, 0x38, donorRecord, 0x38, 0x0E);
+    }
+
+    private static HashSet<int> BuildProtectedSourceSlots(JsonElement editsElement, int sourceRecordCount)
+    {
+        HashSet<int> protectedSlots = new();
+        foreach (JsonElement edit in editsElement.EnumerateArray())
+        {
+            bool added = JsonValue.GetBoolean(edit, "added") ||
+                string.Equals(JsonValue.GetString(edit, "editKind"), "add", StringComparison.OrdinalIgnoreCase);
+            if (added)
+            {
+                if (IsLinkedCompanionNativeClone(edit) &&
+                    edit.TryGetProperty("recordMutation", out JsonElement mutation) &&
+                    mutation.ValueKind == JsonValueKind.Object)
+                {
+                    int sourceTrueIndex = JsonValue.GetInt32(mutation, "sourceTrueIndex", -1);
+                    if (sourceTrueIndex >= 0 && sourceTrueIndex < sourceRecordCount)
+                        protectedSlots.Add(sourceTrueIndex);
+                }
+                continue;
+            }
+
+            int trueIndex = JsonValue.GetInt32(edit, "trueIndex", -1);
+            if (trueIndex >= 0 && trueIndex < sourceRecordCount)
+                protectedSlots.Add(trueIndex);
+        }
+
+        return protectedSlots;
+    }
+
+    private static int FindAutoReuseTargetSlot(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        long tableWadOffset,
+        int donorTrueIndex,
+        int targetType,
+        int targetState,
+        int targetSourceByte36,
+        int targetSourceByte37,
+        int targetSourceByte4F,
+        int targetFlag4A,
+        int targetFlag4B,
+        HashSet<int> protectedSourceSlots,
+        HashSet<int> autoReuseTargetSlots,
+        HashSet<long> writtenWadOffsets)
+    {
+        if (donorTrueIndex < 0 || donorTrueIndex >= level.SourceRecordCount)
+            return -1;
+
+        List<AutoReuseSlotCandidate> candidates = new();
+        for (int trueIndex = 0; trueIndex < level.SourceRecordCount; trueIndex++)
+        {
+            if (autoReuseTargetSlots.Contains(trueIndex) ||
+                protectedSourceSlots.Contains(trueIndex))
+                continue;
+
+            long recordWadOffset = tableWadOffset + ((long)trueIndex * RecordStride);
+            if (OverlapsWrittenOffsets(recordWadOffset, RecordStride, writtenWadOffsets))
+                continue;
+
+            byte[] record = ReadWadBytes(stream, layout, recordWadOffset, RecordStride);
+            int score = ScoreAutoReuseSlot(
+                record,
+                trueIndex == donorTrueIndex,
+                targetType,
+                targetState,
+                targetSourceByte36,
+                targetSourceByte37,
+                targetSourceByte4F,
+                targetFlag4A,
+                targetFlag4B);
+            if (score >= 0)
+                candidates.Add(new AutoReuseSlotCandidate(trueIndex, score));
+        }
+
+        return candidates
+            .OrderBy(candidate => candidate.Score)
+            .ThenBy(candidate => candidate.TrueIndex)
+            .Select(candidate => candidate.TrueIndex)
+            .FirstOrDefault(-1);
+    }
+
+    private static int ScoreAutoReuseSlot(
+        byte[] record,
+        bool isDonorSlot,
+        int targetType,
+        int targetState,
+        int targetSourceByte36,
+        int targetSourceByte37,
+        int targetSourceByte4F,
+        int targetFlag4A,
+        int targetFlag4B)
+    {
+        if (record.Length <= 0x53)
+            return -1;
+        if (record[TypeOffset] != (byte)targetType)
+            return -1;
+
+        bool exactFamily =
+            record[0x36] == (byte)targetSourceByte36 &&
+            record[0x37] == (byte)targetSourceByte37 &&
+            record[0x4F] == (byte)targetSourceByte4F &&
+            record[0x52] == (byte)targetFlag4A &&
+            record[0x53] == (byte)targetFlag4B;
+        if (exactFamily)
+            return (record[StateOffset] == (byte)targetState ? 0 : 2) + (isDonorSlot ? 10 : 0);
+
+        bool sameActorOrChestFamily =
+            record[0x36] == (byte)targetSourceByte36 &&
+            record[0x37] == (byte)targetSourceByte37 &&
+            record[0x52] == (byte)targetFlag4A;
+        if (sameActorOrChestFamily)
+            return (record[StateOffset] == (byte)targetState ? 20 : 22) + (isDonorSlot ? 10 : 0);
+
+        return -1;
+    }
+
+    private readonly record struct AutoReuseSlotCandidate(int TrueIndex, int Score);
 
     private static bool TryAddAppendPatch(
         FileStream stream,
@@ -1835,10 +2283,17 @@ public static class MobySourcePatchExporter
             string templateId = JsonValue.GetString(crossLevelTemplate, "id", "cross-level template");
             string sourceLevelName = JsonValue.GetString(crossLevelTemplate, "sourceLevelName", "another level");
             int sourceTrueIndex = JsonValue.GetInt32(crossLevelTemplate, "sourceTrueIndex", -1);
-            if (!IsSimpleCrossLevelTemplate(crossLevelTemplate))
+            bool isSourceRecordCandidate = IsCrossLevelSourceRecordCandidateTemplate(crossLevelTemplate);
+            if (isSourceRecordCandidate || !IsSimpleCrossLevelTemplate(crossLevelTemplate))
             {
-                string recipeMode = "";
-                if (!suppressActorPackageImports)
+                if (isSourceRecordCandidate && !allowPlanOnlyActorPackageImports)
+                {
+                    skippedEdits.Add($"{label}: {templateId} is a guarded cross-level source-record candidate. Use Create Candidate BIN to write a disposable test; normal Create BIN keeps it saved but skipped.");
+                    return false;
+                }
+
+                string recipeMode = isSourceRecordCandidate ? CrossLevelSourceRecordCandidateRecipeMode : "";
+                if (!isSourceRecordCandidate && !suppressActorPackageImports)
                 {
                     MobyActorPackageImportPreview preview = AddActorPackageImportPreview(stream, layout, catalog, level, tableWadOffset, tableRelativeOffset, label, crossLevelTemplate, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, packageImportPreviews, patches, writtenWadOffsets, writtenActorPackageRecipes);
                     recipeMode = preview.RecipeMode;
@@ -1874,6 +2329,14 @@ public static class MobySourcePatchExporter
         bool isContainedGemAppend = IsContainedGemAppend(edit, targetType);
         bool isLooseVisibleGemAppend = IsLooseVisibleGemIdentity(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B);
         bool isKnownSameLevelLightweightAppend = IsKnownSameLevelLightweightAppend(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B);
+        bool isPromotedSameLevelNativeCloneAppend = crossLevelDonor == null && IsPromotedSameLevelNativeCloneAppendIdentity(
+            level.Key,
+            targetType,
+            targetSourceByte36,
+            targetSourceByte37,
+            targetSourceByte4F,
+            targetFlag4A,
+            targetFlag4B);
         bool isProvenNativeCloneAppend = IsProvenNativeCloneAppend(edit);
         bool isGuardedNativeCloneAppend = IsGuardedNativeCloneAppend(
             edit,
@@ -1887,19 +2350,25 @@ public static class MobySourcePatchExporter
             !isContainedGemAppend &&
             !isLooseVisibleGemAppend &&
             !isKnownSameLevelLightweightAppend &&
+            !isPromotedSameLevelNativeCloneAppend &&
             !isProvenNativeCloneAppend)
         {
             skippedEdits.Add($"{label}: copied object export is guarded because this object class does not yet have a proven native append recipe; it remains saved in the editor.");
             return false;
         }
 
-        if (crossLevelDonor == null && isGuardedNativeCloneAppend && !allowGuardedNativeCloneAppend)
+        if (crossLevelDonor == null &&
+            isGuardedNativeCloneAppend &&
+            !allowGuardedNativeCloneAppend &&
+            !isPromotedSameLevelNativeCloneAppend)
         {
             skippedEdits.Add($"{label}: same-level enemy/chest true-adds are kept saved but skipped from Create BIN for now because native actor/chest clones can freeze in-game. Use Change To / slot replacement for safe enemy or chest swaps.");
             return false;
         }
 
-        if (targetType is not (0x18 or 0x20) && !isContainedGemAppend)
+        if (targetType is not (0x18 or 0x20) &&
+            !isContainedGemAppend &&
+            !isKnownSameLevelLightweightAppend)
         {
             skippedEdits.Add($"{label}: true-add export for type 0x{Math.Clamp(targetType, 0, 255):X2} needs actor-package handling first.");
             return false;
@@ -1949,22 +2418,83 @@ public static class MobySourcePatchExporter
             return false;
         }
 
+        int requestedDonorTrueIndex = donorTrueIndex;
+        if (crossLevelDonor == null)
+        {
+            donorTrueIndex = SelectBehaviorLinkedAppendDonorWithUsableSpecialData(
+                stream,
+                layout,
+                tableWadOffset,
+                tableRelativeOffset,
+                level.SourceRecordCount,
+                donorTrueIndex,
+                targetType,
+                targetSourceByte36,
+                targetSourceByte37,
+                targetSourceByte4F,
+                targetFlag4A,
+                targetFlag4B);
+        }
+
         long donorTableWadOffset = crossLevelDonor?.SourceTableWadOffset ?? tableWadOffset;
         byte[] recordBytes = ReadWadBytes(stream, layout, donorTableWadOffset + (donorTrueIndex * RecordStride), RecordStride);
+        bool preserveDonorStartupBytesForNativeCloneAppend =
+            crossLevelDonor == null &&
+            isProvenNativeCloneAppend &&
+            targetType == 0x20 &&
+            (allowGuardedNativeCloneAppend || isPromotedSameLevelNativeCloneAppend);
+        byte donorSourceState = recordBytes.Length > StateOffset ? recordBytes[StateOffset] : (byte)0;
+        byte donorPlacementSector = recordBytes.Length > 0x4A ? recordBytes[0x4A] : (byte)0;
+        byte donorFlag4A = recordBytes.Length > 0x52 ? recordBytes[0x52] : (byte)0;
         WriteInt32(recordBytes, XOffset, ReadRawAxis(edit, "x", recordBytes, XOffset));
         WriteInt32(recordBytes, YOffset, ReadRawAxis(edit, "y", recordBytes, YOffset));
         WriteInt32(recordBytes, ZOffset, ReadRawAxis(edit, "z", recordBytes, ZOffset));
+        WriteYawFromEdit(recordBytes, edit);
         WriteByteFromEdit(recordBytes, TypeOffset, edit, "typeEditedHex", "typeHex");
-        WriteByteFromEdit(recordBytes, StateOffset, edit, "stateEditedHex", "stateHex");
+        if (!preserveDonorStartupBytesForNativeCloneAppend || HasSourceByteEdit(edit, StateOffset))
+            WriteByteFromEdit(recordBytes, StateOffset, edit, "stateEditedHex", "stateHex");
         WriteByteFromEdit(recordBytes, 0x36, edit, "sourceByte36EditedHex", "sourceByte36Hex");
         WriteByteFromEdit(recordBytes, 0x37, edit, "sourceByte37EditedHex", "sourceByte37Hex");
         WriteByteFromEdit(recordBytes, 0x4F, edit, "sourceByte4FEditedHex", "sourceByte4FHex");
-        WriteByteFromEdit(recordBytes, 0x52, edit, "flag4AEditedHex", "flag4AHex");
+        bool preserveDonorFlag4AForNativeCloneAppend =
+            preserveDonorStartupBytesForNativeCloneAppend &&
+            targetSourceByte37 != 0x00 &&
+            !HasExplicitSourceByteEdit(edit, 0x52);
+        if (!preserveDonorFlag4AForNativeCloneAppend)
+            WriteByteFromEdit(recordBytes, 0x52, edit, "flag4AEditedHex", "flag4AHex");
         WriteByteFromEdit(recordBytes, 0x53, edit, "flag4BEditedHex", "flag4BHex");
         ApplySourceByteEdits(recordBytes, edit);
+        if (preserveDonorFlag4AForNativeCloneAppend && recordBytes.Length > 0x52)
+            recordBytes[0x52] = donorFlag4A;
+        if (isLooseVisibleGemAppend)
+            NormalizeLooseVisibleGemRecord(recordBytes);
+        bool preserveDonorPlacementSectorForGuardedNativeCloneAppend =
+            allowGuardedNativeCloneAppend &&
+            LevelCatalog.NormalizeKey(level.Key).Equals("townsquare", StringComparison.OrdinalIgnoreCase) &&
+            !isPromotedSameLevelNativeCloneAppend &&
+            preserveDonorStartupBytesForNativeCloneAppend &&
+            donorPlacementSector == 0xFF &&
+            !HasSourceByteEdit(edit, 0x4A);
+        bool forcePlacementSectorFromPlacement = !preserveDonorPlacementSectorForGuardedNativeCloneAppend &&
+            (allowGuardedNativeCloneAppend || isPromotedSameLevelNativeCloneAppend) &&
+            crossLevelDonor == null &&
+            isProvenNativeCloneAppend;
         string placementSectorDescription = "";
-        if (TryApplySourceRecordPlacementSector(levelGeometry, edit, recordBytes, out int placementSectorIndex))
+        if (preserveDonorPlacementSectorForGuardedNativeCloneAppend && recordBytes.Length > 0x4A)
+        {
+            recordBytes[0x4A] = donorPlacementSector;
+            placementSectorDescription = $" Donor placement sector preserved as 0x{donorPlacementSector:X2} for guarded native clone append.";
+        }
+        else if (TryApplySourceRecordPlacementSector(levelGeometry, edit, recordBytes, forcePlacementSectorFromPlacement || ShouldApplyPlacementSector(recordBytes), out int placementSectorIndex))
             placementSectorDescription = $" Placement sector byte set to 0x{placementSectorIndex:X2}.";
+        string donorUpgradeDescription = donorTrueIndex != requestedDonorTrueIndex
+            ? $" Behavior donor upgraded from copied T{requestedDonorTrueIndex} to same-family T{donorTrueIndex} because the copied donor's behavior data was blank."
+            : "";
+        string sourceStateDescription = preserveDonorStartupBytesForNativeCloneAppend
+            ? $" Source startup state preserved from donor as 0x{donorSourceState:X2} for native clone append."
+            : "";
+        if (preserveDonorFlag4AForNativeCloneAppend)
+            sourceStateDescription += $" Donor flag4A preserved as 0x{donorFlag4A:X2} for native clone append.";
         if (IsSpringChestControllerAliasAppend(edit, packageImportPreviews))
         {
             recordBytes[0x36] = 0xFE;
@@ -2046,20 +2576,62 @@ public static class MobySourcePatchExporter
         }
         else if (TryHasSameLevelSourceSpecialData(tableRelativeOffset, recordBytes))
         {
-            if (!TryAppendSameLevelSpecialData(
-                stream,
-                layout,
-                level,
-                tableWadOffset,
-                tableRelativeOffset,
-                donorTrueIndex,
-                appendTrueIndex,
-                label,
-                recordBytes,
-                patches,
-                writtenWadOffsets,
-                skippedEdits,
-                out specialDataDescription))
+            bool aliasNativeLifeChestSpecialData = IsNativeLifeChestIdentity(
+                recordBytes[TypeOffset],
+                recordBytes[0x36],
+                recordBytes[0x37],
+                recordBytes[0x4F],
+                recordBytes[0x52],
+                recordBytes[0x53]);
+            bool usePrivateLifeChestRuntimePointer =
+                TryGetPrivateLifeChestRuntimeBase(level.Key, edit, recordBytes, out uint privateLifeChestRuntimeBase);
+            bool aliasSpecialDataForResearch = edit.TryGetProperty("aliasSameLevelSpecialData", out JsonElement aliasSpecialData) &&
+                aliasSpecialData.ValueKind == JsonValueKind.True;
+            if (usePrivateLifeChestRuntimePointer)
+            {
+                if (!TryAppendLifeChestPrivateSpecialData(
+                        stream,
+                        layout,
+                        level,
+                        tableWadOffset,
+                        donorTrueIndex,
+                        appendTrueIndex,
+                        label,
+                        recordBytes,
+                        patches,
+                        writtenWadOffsets,
+                        skippedEdits,
+                        out specialDataDescription))
+                {
+                    return false;
+                }
+
+                uint privateSourceOffset = BitConverter.ToUInt32(recordBytes, 0);
+                uint privateRuntimePointer = checked(privateLifeChestRuntimeBase + privateSourceOffset);
+                WriteInt32(recordBytes, 0, unchecked((int)privateRuntimePointer));
+                specialDataDescription +=
+                    $" Wrote pre-relocated private runtime pointer 0x{privateRuntimePointer:X8} " +
+                    $"(base 0x{privateLifeChestRuntimeBase:X8} + source offset 0x{privateSourceOffset:X}) for appended T{appendTrueIndex}.";
+            }
+            else if (aliasNativeLifeChestSpecialData || aliasSpecialDataForResearch)
+            {
+                uint donorSpecialDataOffset = BitConverter.ToUInt32(recordBytes, 0);
+                specialDataDescription = $" Reused same-level donor T{donorTrueIndex} source special-data offset 0x{donorSpecialDataOffset:X} so the native loader can relocate it for appended T{appendTrueIndex}.";
+            }
+            else if (!TryAppendSameLevelSpecialData(
+                         stream,
+                         layout,
+                         level,
+                         tableWadOffset,
+                         tableRelativeOffset,
+                         donorTrueIndex,
+                         appendTrueIndex,
+                         label,
+                         recordBytes,
+                         patches,
+                         writtenWadOffsets,
+                         skippedEdits,
+                         out specialDataDescription))
             {
                 return false;
             }
@@ -2076,10 +2648,66 @@ public static class MobySourcePatchExporter
             "moby-record-append",
             label,
             crossLevelDonor == null
-                ? $"Append {label} as source record T{appendTrueIndex} cloned from same-level donor T{donorTrueIndex}.{specialDataDescription}{placementSectorDescription}"
+                ? $"Append {label} as source record T{appendTrueIndex} cloned from same-level donor T{donorTrueIndex}.{specialDataDescription}{placementSectorDescription}{donorUpgradeDescription}{sourceStateDescription}"
+                : string.Equals(crossLevelDonor.RecipeMode, CrossLevelSourceRecordCandidateRecipeMode, StringComparison.OrdinalIgnoreCase)
+                ? $"Append {label} as guarded cross-level source-record candidate T{appendTrueIndex} cloned from {crossLevelDonor.SourceLevel.DisplayName} donor T{donorTrueIndex}.{specialDataDescription}{placementSectorDescription}"
                 : $"Append {label} as source record T{appendTrueIndex} cloned from {crossLevelDonor.SourceLevel.DisplayName} donor T{donorTrueIndex}.{specialDataDescription}{placementSectorDescription}",
             patches,
             writtenWadOffsets);
+        return true;
+    }
+
+    private static bool TryAppendLifeChestPrivateSpecialData(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        long tableWadOffset,
+        int donorTrueIndex,
+        int appendTrueIndex,
+        string label,
+        byte[] recordBytes,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets,
+        List<string> skippedEdits,
+        out string description)
+    {
+        description = "";
+        uint donorSpecialDataOffset = BitConverter.ToUInt32(recordBytes, 0);
+        LevelSceneSourceLayout scene = ReadLevelSceneSourceLayout(stream, layout, level, tableWadOffset);
+        if (!IsSourceSpecialDataOffset(scene.ByteLength, donorSpecialDataOffset))
+        {
+            skippedEdits.Add($"{label}: Life Chest donor T{donorTrueIndex} has no valid level-scene special-data offset.");
+            return false;
+        }
+
+        SpecialDataAllocator allocator = BuildSpecialDataAllocatorCore(
+            stream,
+            layout,
+            tableWadOffset,
+            level.SourceRecordCount,
+            scene.WadBaseOffset,
+            scene.ByteLength);
+        int specialDataLength = GetSpecialDataLength(allocator, donorSpecialDataOffset, recordBytes);
+        uint appendSpecialDataOffset = ReserveSpecialDataOffset(stream, layout, allocator, specialDataLength, writtenWadOffsets);
+        long donorSpecialWadOffset = scene.WadBaseOffset + donorSpecialDataOffset;
+        long appendSpecialWadOffset = scene.WadBaseOffset + appendSpecialDataOffset;
+        byte[] specialBytes = ReadWadBytes(stream, layout, donorSpecialWadOffset, specialDataLength);
+
+        AddRawPatch(
+            stream,
+            layout,
+            level,
+            appendSpecialWadOffset,
+            specialBytes,
+            "moby-special-data-clone",
+            label,
+            appendTrueIndex,
+            "special",
+            $"Clone same-level Life Chest donor T{donorTrueIndex} scene data to source offset 0x{appendSpecialDataOffset:X} for appended T{appendTrueIndex}.",
+            patches,
+            writtenWadOffsets);
+        WriteInt32(recordBytes, 0, (int)appendSpecialDataOffset);
+        description = $" Cloned same-level Life Chest scene data to source offset 0x{appendSpecialDataOffset:X}.";
         return true;
     }
 
@@ -2113,9 +2741,65 @@ public static class MobySourcePatchExporter
         return null;
     }
 
-    private static bool TryApplySourceRecordPlacementSector(GeometryCandidate? geometry, JsonElement edit, byte[] recordBytes, out int sectorIndex)
+    private static bool ShouldApplyPlacementSector(byte[] recordBytes)
+    {
+        if (recordBytes.Length <= 0x53)
+            return false;
+
+        return IsLooseVisibleGemRecord(recordBytes) ||
+            IsKnownSameLevelLightweightAppend(recordBytes[TypeOffset], recordBytes[0x36], recordBytes[0x37], recordBytes[0x52], recordBytes[0x53]);
+    }
+
+    private static bool ShouldApplyMovedExistingPlacementSector(byte[] recordBytes)
+    {
+        return recordBytes.Length > 0x53 && recordBytes[TypeOffset] is 0x18 or 0x20;
+    }
+
+    private static void AddMovedExistingPlacementSectorPatch(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        GeometryCandidate? levelGeometry,
+        long tableWadOffset,
+        int trueIndex,
+        string label,
+        JsonElement edit,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets)
+    {
+        if (!HasPositionEdit(edit) || HasSourceByteEdit(edit, 0x4A))
+            return;
+
+        byte[] recordBytes = ReadWadBytes(stream, layout, tableWadOffset + ((long)trueIndex * RecordStride), RecordStride);
+        if (!ShouldApplyMovedExistingPlacementSector(recordBytes))
+            return;
+
+        byte[] updatedRecord = recordBytes.ToArray();
+        if (!TryApplySourceRecordPlacementSector(levelGeometry, edit, updatedRecord, allowPlacementSector: true, out int sectorIndex))
+            return;
+        if (updatedRecord[0x4A] == recordBytes[0x4A])
+            return;
+
+        AddPatch(
+            stream,
+            layout,
+            level,
+            tableWadOffset,
+            trueIndex,
+            0x4A,
+            [updatedRecord[0x4A]],
+            "moby-placement-sector",
+            label,
+            $"Set {label} placement/culling sector byte to 0x{sectorIndex:X2} for its edited position.",
+            patches,
+            writtenWadOffsets);
+    }
+
+    private static bool TryApplySourceRecordPlacementSector(GeometryCandidate? geometry, JsonElement edit, byte[] recordBytes, bool allowPlacementSector, out int sectorIndex)
     {
         sectorIndex = -1;
+        if (!allowPlacementSector)
+            return false;
         if (geometry == null || geometry.Polygons.Count == 0 || recordBytes.Length <= 0x4A)
             return false;
         if (HasSourceByteEdit(edit, 0x4A))
@@ -2170,6 +2854,25 @@ public static class MobySourcePatchExporter
         return false;
     }
 
+    private static bool HasExplicitSourceByteEdit(JsonElement edit, int offset)
+    {
+        if (!edit.TryGetProperty("sourceByteEdits", out JsonElement sourceByteEdits) || sourceByteEdits.ValueKind != JsonValueKind.Array)
+            return false;
+
+        foreach (JsonElement byteEdit in sourceByteEdits.EnumerateArray())
+        {
+            int editedOffset = JsonValue.GetInt32(byteEdit, "offset", JsonValue.GetInt32(byteEdit, "offsetHex", -1));
+            if (editedOffset != offset)
+                continue;
+
+            string field = JsonValue.GetString(byteEdit, "field");
+            if (!string.Equals(field, "flag4A-identity-byte", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
     private static bool IsLooseVisibleGemRecord(byte[] recordBytes)
     {
         return recordBytes.Length > 0x53 &&
@@ -2181,8 +2884,20 @@ public static class MobySourcePatchExporter
         return type == 0x18 &&
             sourceByte37 == 0x00 &&
             flag4A == 0x40 &&
-            flag4B == 0xFF &&
-            GemIdByteValue(sourceByte36) > 0;
+            GemIdByteValue(sourceByte36) > 0 &&
+            (flag4B == 0xFF || GemIdByteValue(flag4B) > 0);
+    }
+
+    private static void NormalizeLooseVisibleGemRecord(byte[] recordBytes)
+    {
+        if (recordBytes.Length <= 0x53 || recordBytes[TypeOffset] != 0x18)
+            return;
+        if (GemIdByteValue(recordBytes[0x36]) <= 0)
+            return;
+
+        recordBytes[0x37] = 0x00;
+        recordBytes[0x52] = 0x40;
+        recordBytes[0x53] = 0xFF;
     }
 
     private static bool IsKnownSameLevelLightweightAppend(int type, int sourceByte36, int sourceByte37, int flag4A, int flag4B)
@@ -2190,16 +2905,103 @@ public static class MobySourcePatchExporter
         if (sourceByte37 != 0x00)
             return false;
 
-        bool isNativeKey = type == 0x18 &&
-            sourceByte36 == 0xAD &&
-            flag4A == 0x40 &&
-            flag4B == 0xFF;
+        bool isNativeKey = sourceByte36 == 0xAD &&
+            flag4B == 0xFF &&
+            (type == 0x18 && flag4A == 0x40 ||
+                type == 0x00 && flag4A == 0x00);
         bool isNativeKeyChest = type == 0x20 &&
             sourceByte36 == 0xAE &&
             flag4A == 0x10 &&
             GemIdByteValue(flag4B) > 0;
 
         return isNativeKey || isNativeKeyChest;
+    }
+
+    private static bool IsNativeLifeChestIdentity(
+        int type,
+        int sourceByte36,
+        int sourceByte37,
+        int sourceByte4F,
+        int flag4A,
+        int flag4B)
+    {
+        return type == 0x20 &&
+            sourceByte36 == 0xA5 &&
+            sourceByte37 == 0x01 &&
+            sourceByte4F == 0x00 &&
+            flag4A == 0x10 &&
+            flag4B == 0x0E;
+    }
+
+    private static bool TryGetPrivateLifeChestRuntimeBase(string levelKey, JsonElement edit, byte[] recordBytes, out uint runtimeBase)
+    {
+        runtimeBase = 0;
+        if (recordBytes.Length <= 0x53 ||
+            !IsNativeLifeChestIdentity(
+                recordBytes[TypeOffset],
+                recordBytes[0x36],
+                recordBytes[0x37],
+                recordBytes[0x4F],
+                recordBytes[0x52],
+                recordBytes[0x53]))
+        {
+            return false;
+        }
+
+        string text = JsonValue.GetString(edit, "lifeChestPrivateRuntimeBase").Trim();
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                return uint.TryParse(text[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out runtimeBase);
+            return uint.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out runtimeBase);
+        }
+
+        return TryGetPromotedLifeChestPrivateRuntimeBase(levelKey, out runtimeBase);
+    }
+
+    private static bool TryGetPromotedLifeChestPrivateRuntimeBase(string levelKey, out uint runtimeBase)
+    {
+        return LifeChestRuntimeLayout.TryGetRuntimeBase(levelKey, out runtimeBase);
+    }
+
+    private static bool IsPromotedSameLevelNativeCloneAppendIdentity(
+        string levelKey,
+        int type,
+        int sourceByte36,
+        int sourceByte37,
+        int sourceByte4F,
+        int flag4A,
+        int flag4B)
+    {
+        if (IsNativeLifeChestIdentity(type, sourceByte36, sourceByte37, sourceByte4F, flag4A, flag4B))
+        {
+            return TryGetPromotedLifeChestPrivateRuntimeBase(levelKey, out _);
+        }
+
+        if (type != 0x20 ||
+            sourceByte4F != 0x00 ||
+            flag4A != 0x10 ||
+            flag4B != 0x54)
+        {
+            return false;
+        }
+
+        string normalizedLevelKey = LevelCatalog.NormalizeKey(levelKey);
+        if (normalizedLevelKey.Equals("townsquare", StringComparison.OrdinalIgnoreCase))
+        {
+            // User live-test on 2026-07-05: true-appended Town Square Bulls behave.
+            // Torro Gnorcs, 0xC2 flame/charge chests, and 0xC3 charge chests remain guarded.
+            return sourceByte36 == 0x17 && sourceByte37 == 0x00;
+        }
+
+        if (sourceByte37 != 0x00)
+            return false;
+
+        // Live Dark Hollow/Artisans testing proved these same-level true-appends in those levels only.
+        // Small/Regular Gnorc and Town Square chest families are intentionally not included yet.
+        bool darkHollowOrArtisans = normalizedLevelKey.Equals("darkhollow", StringComparison.OrdinalIgnoreCase) ||
+            normalizedLevelKey.Equals("artisans", StringComparison.OrdinalIgnoreCase);
+        return darkHollowOrArtisans && (sourceByte36 == 0x73 || sourceByte36 == 0xC2);
     }
 
     private static bool IsProvenNativeCloneAppend(JsonElement edit)
@@ -2351,6 +3153,30 @@ public static class MobySourcePatchExporter
         }
 
         return false;
+    }
+
+    private static bool HasPositionEdit(JsonElement edit)
+    {
+        if (!edit.TryGetProperty("rawEdited", out JsonElement rawEdited) || rawEdited.ValueKind != JsonValueKind.Object)
+            return false;
+        if (!edit.TryGetProperty("rawOriginal", out JsonElement rawOriginal) || rawOriginal.ValueKind != JsonValueKind.Object)
+            return rawEdited.TryGetProperty("x", out _) ||
+                rawEdited.TryGetProperty("y", out _) ||
+                rawEdited.TryGetProperty("z", out _);
+
+        return HasRawAxisEdit(rawEdited, rawOriginal, "x") ||
+            HasRawAxisEdit(rawEdited, rawOriginal, "y") ||
+            HasRawAxisEdit(rawEdited, rawOriginal, "z");
+    }
+
+    private static bool HasRawAxisEdit(JsonElement rawEdited, JsonElement rawOriginal, string axis)
+    {
+        if (!rawEdited.TryGetProperty(axis, out _))
+            return false;
+
+        int edited = JsonValue.GetInt32(rawEdited, axis);
+        int original = JsonValue.GetInt32(rawOriginal, axis, edited);
+        return edited != original;
     }
 
     private static long SquaredDistance(int ax, int ay, int az, int bx, int by, int bz)
@@ -2663,6 +3489,14 @@ public static class MobySourcePatchExporter
         string supportStatus = JsonValue.GetString(crossLevelTemplate, "addSupportStatus");
         return string.Equals(requiredFeature, "DirectSourceRecordAppend", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(supportStatus, "supported-lightweight-object", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCrossLevelSourceRecordCandidateTemplate(JsonElement crossLevelTemplate)
+    {
+        string requiredFeature = JsonValue.GetString(crossLevelTemplate, "requiredExporterFeature");
+        string supportStatus = JsonValue.GetString(crossLevelTemplate, "addSupportStatus");
+        return string.Equals(requiredFeature, CrossLevelSourceRecordCandidateAppendFeature, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(supportStatus, "experimental-source-record-candidate", StringComparison.OrdinalIgnoreCase);
     }
 
     private static MobyActorPackageImportPreview AddActorPackageImportPreview(
@@ -3257,6 +4091,123 @@ public static class MobySourcePatchExporter
         return true;
     }
 
+    private static int SelectBehaviorLinkedAppendDonorWithUsableSpecialData(
+        FileStream stream,
+        DiscLayout layout,
+        long tableWadOffset,
+        long tableRelativeOffset,
+        int sourceRecordCount,
+        int donorTrueIndex,
+        int targetType,
+        int sourceByte36,
+        int sourceByte37,
+        int sourceByte4F,
+        int flag4A,
+        int flag4B)
+    {
+        if (targetType != 0x20 ||
+            sourceByte4F == 0x00 ||
+            donorTrueIndex < 0 ||
+            donorTrueIndex >= sourceRecordCount ||
+            tableRelativeOffset <= 0)
+        {
+            return donorTrueIndex;
+        }
+
+        SpecialDataAllocator allocator = BuildSpecialDataAllocator(stream, layout, tableWadOffset, tableRelativeOffset, sourceRecordCount);
+        byte[] requestedRecord = ReadWadBytes(stream, layout, tableWadOffset + ((long)donorTrueIndex * RecordStride), RecordStride);
+        if (!HasBlankSourceSpecialData(stream, layout, allocator, tableRelativeOffset, requestedRecord))
+            return donorTrueIndex;
+
+        ushort requestedBehaviorMarker = requestedRecord.Length > 0x39
+            ? BitConverter.ToUInt16(requestedRecord, 0x38)
+            : (ushort)0;
+        int bestTrueIndex = -1;
+        int bestScore = int.MaxValue;
+        for (int trueIndex = 0; trueIndex < sourceRecordCount; trueIndex++)
+        {
+            byte[] candidate = ReadWadBytes(stream, layout, tableWadOffset + ((long)trueIndex * RecordStride), RecordStride);
+            if (candidate.Length <= 0x53 ||
+                candidate[TypeOffset] != (byte)targetType ||
+                candidate[0x36] != (byte)sourceByte36 ||
+                candidate[0x37] != (byte)sourceByte37 ||
+                candidate[0x4F] != (byte)sourceByte4F ||
+                candidate[0x52] != (byte)flag4A)
+            {
+                continue;
+            }
+
+            if (requestedBehaviorMarker != 0 &&
+                candidate.Length > 0x39 &&
+                BitConverter.ToUInt16(candidate, 0x38) != requestedBehaviorMarker)
+            {
+                continue;
+            }
+
+            if (!HasNonBlankSourceSpecialData(stream, layout, allocator, tableRelativeOffset, candidate))
+                continue;
+
+            int score = 0;
+            if (candidate[0x53] != (byte)flag4B)
+                score += 100;
+            score += Math.Abs(trueIndex - donorTrueIndex);
+            if (score < bestScore)
+            {
+                bestScore = score;
+                bestTrueIndex = trueIndex;
+            }
+        }
+
+        return bestTrueIndex >= 0 ? bestTrueIndex : donorTrueIndex;
+    }
+
+    private static bool HasBlankSourceSpecialData(
+        FileStream stream,
+        DiscLayout layout,
+        SpecialDataAllocator allocator,
+        long tableRelativeOffset,
+        byte[] recordBytes)
+    {
+        if (!TryReadSourceSpecialData(stream, layout, allocator, tableRelativeOffset, recordBytes, out byte[] bytes))
+            return false;
+        return bytes.All(value => value == 0);
+    }
+
+    private static bool HasNonBlankSourceSpecialData(
+        FileStream stream,
+        DiscLayout layout,
+        SpecialDataAllocator allocator,
+        long tableRelativeOffset,
+        byte[] recordBytes)
+    {
+        return TryReadSourceSpecialData(stream, layout, allocator, tableRelativeOffset, recordBytes, out byte[] bytes) &&
+            bytes.Any(value => value != 0);
+    }
+
+    private static bool TryReadSourceSpecialData(
+        FileStream stream,
+        DiscLayout layout,
+        SpecialDataAllocator allocator,
+        long tableRelativeOffset,
+        byte[] recordBytes,
+        out byte[] bytes)
+    {
+        bytes = [];
+        if (recordBytes.Length <= TypeOffset)
+            return false;
+
+        uint offset = BitConverter.ToUInt32(recordBytes, 0);
+        if (!IsSourceSpecialDataOffset(tableRelativeOffset, offset))
+            return false;
+
+        int length = GetSpecialDataLength(allocator, offset, recordBytes);
+        if (length <= 0)
+            return false;
+
+        bytes = ReadWadBytes(stream, layout, allocator.WadBaseOffset + offset, length);
+        return true;
+    }
+
     private static void WriteChestContentLinkBytes(byte[] bytes, JsonElement edit, LevelDefinition level, string label, int appendTrueIndex)
     {
         if (bytes.Length < 16)
@@ -3279,12 +4230,29 @@ public static class MobySourcePatchExporter
 
     private static SpecialDataAllocator BuildSpecialDataAllocator(FileStream stream, DiscLayout layout, long tableWadOffset, long tableRelativeOffset, int sourceRecordCount)
     {
+        return BuildSpecialDataAllocatorCore(
+            stream,
+            layout,
+            tableWadOffset,
+            sourceRecordCount,
+            tableWadOffset - tableRelativeOffset,
+            checked((uint)tableRelativeOffset));
+    }
+
+    private static SpecialDataAllocator BuildSpecialDataAllocatorCore(
+        FileStream stream,
+        DiscLayout layout,
+        long tableWadOffset,
+        int sourceRecordCount,
+        long wadBaseOffset,
+        uint maximumSourceOffset)
+    {
         List<SpecialDataEntry> entries = new();
         for (int trueIndex = 0; trueIndex < sourceRecordCount; trueIndex++)
         {
             byte[] record = ReadWadBytes(stream, layout, tableWadOffset + (trueIndex * RecordStride), RecordStride);
             uint offset = BitConverter.ToUInt32(record, 0);
-            if (IsSourceSpecialDataOffset(tableRelativeOffset, offset))
+            if (IsSourceSpecialDataOffset(maximumSourceOffset, offset))
                 entries.Add(new SpecialDataEntry(offset, record[TypeOffset]));
         }
 
@@ -3312,7 +4280,36 @@ public static class MobySourcePatchExporter
             maxEnd = Math.Max(maxEnd, entry.Offset + (uint)length);
         }
 
-        return new SpecialDataAllocator(tableWadOffset - tableRelativeOffset, (uint)tableRelativeOffset, Align(maxEnd, 4), lengths);
+        return new SpecialDataAllocator(wadBaseOffset, maximumSourceOffset, Align(maxEnd, 4), lengths);
+    }
+
+    private static LevelSceneSourceLayout ReadLevelSceneSourceLayout(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        long tableWadOffset)
+    {
+        if (level.SourceWadEntry < 0)
+            throw new InvalidOperationException($"{level.DisplayName} has no source WAD entry for its Life Chest scene data.");
+
+        byte[] entryHeader = ReadWadBytes(stream, layout, level.SourceWadEntry * 8L, 8);
+        long entryWadOffset = BitConverter.ToUInt32(entryHeader, 0);
+        byte[] levelHeader = ReadWadBytes(stream, layout, entryWadOffset, 0x20);
+        uint sceneRelativeOffset = BitConverter.ToUInt32(levelHeader, 0x18);
+        uint sceneByteLength = BitConverter.ToUInt32(levelHeader, 0x1C);
+        long sceneWadOffset = checked(entryWadOffset + sceneRelativeOffset);
+        long tableRelativeToScene = tableWadOffset - sceneWadOffset;
+        long tableEndRelativeToScene = tableRelativeToScene + ((long)level.SourceRecordCount * RecordStride);
+        if (sceneRelativeOffset == 0 ||
+            sceneByteLength == 0 ||
+            tableRelativeToScene < 0 ||
+            tableEndRelativeToScene > sceneByteLength)
+        {
+            throw new InvalidOperationException(
+                $"{level.DisplayName}'s Life Chest table is not contained in its mapped level-scene block.");
+        }
+
+        return new LevelSceneSourceLayout(sceneWadOffset, sceneByteLength);
     }
 
     private static int GetSpecialDataLength(SpecialDataAllocator allocator, uint sourceOffset, byte[] recordBytes)
@@ -3487,15 +4484,45 @@ public static class MobySourcePatchExporter
         return fallback;
     }
 
+    private static int FindExactSameLevelDonor(
+        FileStream stream,
+        DiscLayout layout,
+        long tableWadOffset,
+        int sourceRecordCount,
+        int targetType,
+        int targetState,
+        int sourceByte36,
+        int sourceByte37,
+        int sourceByte4F,
+        int flag4A,
+        int flag4B)
+    {
+        for (int trueIndex = 0; trueIndex < sourceRecordCount; trueIndex++)
+        {
+            byte[] record = ReadWadBytes(stream, layout, tableWadOffset + ((long)trueIndex * RecordStride), RecordStride);
+            if (record.Length > 0x53 &&
+                record[TypeOffset] == (byte)targetType &&
+                record[0x36] == (byte)sourceByte36 &&
+                record[0x37] == (byte)sourceByte37 &&
+                record[0x4F] == (byte)sourceByte4F &&
+                record[0x52] == (byte)flag4A &&
+                record[0x53] == (byte)flag4B)
+            {
+                return trueIndex;
+            }
+        }
+
+        return -1;
+    }
+
     private static void AddTreasureTotalPatch(
         FileStream stream,
         LevelCatalog catalog,
         LevelDefinition level,
-        IReadOnlyCollection<JsonElement> exportedTreasureEdits,
+        int delta,
         List<MobySourcePatch> patches,
         List<string> notes)
     {
-        int delta = ComputeTreasureTotalDelta(exportedTreasureEdits);
         if (delta == 0)
             return;
 
@@ -3550,26 +4577,31 @@ public static class MobySourcePatchExporter
         int delta = 0;
         foreach (JsonElement edit in edits)
         {
-            bool added = JsonValue.GetBoolean(edit, "added") || string.Equals(JsonValue.GetString(edit, "editKind"), "add", StringComparison.OrdinalIgnoreCase);
-            bool removed = JsonValue.GetBoolean(edit, "removed") || string.Equals(JsonValue.GetString(edit, "editKind"), "remove", StringComparison.OrdinalIgnoreCase);
-
-            int originalType = ReadEditByte(edit, "typeOriginalHex", "typeHex", "typeEditedHex");
-            int editedType = ReadEditByte(edit, "typeEditedHex", "typeHex", "typeOriginalHex");
-            int originalSourceByte36 = ReadEditByte(edit, "sourceByte36OriginalHex", "sourceByte36Hex", "sourceByte36EditedHex");
-            int editedSourceByte36 = ReadEditByte(edit, "sourceByte36EditedHex", "sourceByte36Hex", "sourceByte36OriginalHex");
-            int originalSourceByte4F = ReadEditByte(edit, "sourceByte4FOriginalHex", "sourceByte4FHex", "sourceByte4FEditedHex");
-            int editedSourceByte4F = ReadEditByte(edit, "sourceByte4FEditedHex", "sourceByte4FHex", "sourceByte4FOriginalHex");
-            int originalFlag4A = ReadEditByte(edit, "flag4AOriginalHex", "flag4AHex", "flag4AEditedHex");
-            int editedFlag4A = ReadEditByte(edit, "flag4AEditedHex", "flag4AHex", "flag4AOriginalHex");
-            int originalFlag4B = ReadEditByte(edit, "flag4BOriginalHex", "flag4BHex", "flag4BEditedHex");
-            int editedFlag4B = ReadEditByte(edit, "flag4BEditedHex", "flag4BHex", "flag4BOriginalHex");
-
-            int originalValue = TreasureValueFromSourceBytes(originalType, originalSourceByte36, originalSourceByte4F, originalFlag4A, originalFlag4B);
-            int editedValue = TreasureValueFromSourceBytes(editedType, editedSourceByte36, editedSourceByte4F, editedFlag4A, editedFlag4B);
-            delta += removed ? -originalValue : added ? editedValue : editedValue - originalValue;
+            delta += ComputeTreasureDelta(edit);
         }
 
         return delta;
+    }
+
+    private static int ComputeTreasureDelta(JsonElement edit)
+    {
+        bool added = JsonValue.GetBoolean(edit, "added") || string.Equals(JsonValue.GetString(edit, "editKind"), "add", StringComparison.OrdinalIgnoreCase);
+        bool removed = JsonValue.GetBoolean(edit, "removed") || string.Equals(JsonValue.GetString(edit, "editKind"), "remove", StringComparison.OrdinalIgnoreCase);
+
+        int originalType = ReadEditByte(edit, "typeOriginalHex", "typeHex", "typeEditedHex");
+        int editedType = ReadEditByte(edit, "typeEditedHex", "typeHex", "typeOriginalHex");
+        int originalSourceByte36 = ReadEditByte(edit, "sourceByte36OriginalHex", "sourceByte36Hex", "sourceByte36EditedHex");
+        int editedSourceByte36 = ReadEditByte(edit, "sourceByte36EditedHex", "sourceByte36Hex", "sourceByte36OriginalHex");
+        int originalSourceByte4F = ReadEditByte(edit, "sourceByte4FOriginalHex", "sourceByte4FHex", "sourceByte4FEditedHex");
+        int editedSourceByte4F = ReadEditByte(edit, "sourceByte4FEditedHex", "sourceByte4FHex", "sourceByte4FOriginalHex");
+        int originalFlag4A = ReadEditByte(edit, "flag4AOriginalHex", "flag4AHex", "flag4AEditedHex");
+        int editedFlag4A = ReadEditByte(edit, "flag4AEditedHex", "flag4AHex", "flag4AOriginalHex");
+        int originalFlag4B = ReadEditByte(edit, "flag4BOriginalHex", "flag4BHex", "flag4BEditedHex");
+        int editedFlag4B = ReadEditByte(edit, "flag4BEditedHex", "flag4BHex", "flag4BOriginalHex");
+
+        int originalValue = TreasureValueFromSourceBytes(originalType, originalSourceByte36, originalSourceByte4F, originalFlag4A, originalFlag4B);
+        int editedValue = TreasureValueFromSourceBytes(editedType, editedSourceByte36, editedSourceByte4F, editedFlag4A, editedFlag4B);
+        return removed ? -originalValue : added ? editedValue : editedValue - originalValue;
     }
 
     private static int TreasureValueFromSourceBytes(int type, int sourceByte36, int sourceByte4F, int flag4A, int flag4B)
@@ -3587,6 +4619,19 @@ public static class MobySourcePatchExporter
             return rewardGem.Value;
 
         return 0;
+    }
+
+    private static int TreasureValueFromRecordBytes(byte[] recordBytes)
+    {
+        if (recordBytes.Length <= 0x53)
+            return 0;
+
+        return TreasureValueFromSourceBytes(
+            recordBytes[TypeOffset],
+            recordBytes[0x36],
+            recordBytes[0x4F],
+            recordBytes[0x52],
+            recordBytes[0x53]);
     }
 
     private static int ReadEditByte(JsonElement edit, string primaryName, string secondaryName, string tertiaryName)
@@ -3633,28 +4678,46 @@ public static class MobySourcePatchExporter
         long wadOffset = tableWadOffset - 4;
         byte[] before = ReadWadBytes(stream, layout, wadOffset, 4);
         int currentCount = BitConverter.ToInt32(before, 0);
+        int catalogPrefixRows = 0;
         if (currentCount != level.SourceRecordCount)
         {
-            if (currentCount > newCount)
+            long oneRowLaterWadOffset = tableWadOffset + RecordStride - 4;
+            byte[] oneRowLaterBefore = ReadWadBytes(stream, layout, oneRowLaterWadOffset, 4);
+            int oneRowLaterCount = BitConverter.ToInt32(oneRowLaterBefore, 0);
+            if (oneRowLaterCount == level.SourceRecordCount - 1)
+            {
+                catalogPrefixRows = 1;
+                wadOffset = oneRowLaterWadOffset;
+                before = oneRowLaterBefore;
+                currentCount = oneRowLaterCount;
+            }
+            else if (currentCount > newCount)
             {
                 notes.Add($"{level.DisplayName}'s bytes before the source moby table read as {currentCount}, not the catalog count {level.SourceRecordCount}. The exporter left that suspicious field unchanged and appended records into the already-addressable table range; this needs emulator validation before treating new objects as promoted for this level.");
                 return;
             }
-
-            throw new InvalidOperationException($"{level.DisplayName}'s source-count field is {currentCount}, expected {level.SourceRecordCount}.");
+            else
+            {
+                throw new InvalidOperationException(
+                    $"{level.DisplayName}'s source-count fields are {currentCount} and {oneRowLaterCount}, expected {level.SourceRecordCount} or one-row-prefix count {level.SourceRecordCount - 1}.");
+            }
         }
+
+        int newRuntimeCount = newCount - catalogPrefixRows;
 
         AddRawPatch(
             stream,
             layout,
             level,
             wadOffset,
-            BitConverter.GetBytes(newCount),
+            BitConverter.GetBytes(newRuntimeCount),
             "moby-source-count",
             "source count",
             -1,
-            "0x-4",
-            $"Increase {level.DisplayName} source moby count from {level.SourceRecordCount} to {newCount}.",
+            catalogPrefixRows == 0 ? "0x-4" : "prefix+0x54",
+            catalogPrefixRows == 0
+                ? $"Increase {level.DisplayName} source moby count from {level.SourceRecordCount} to {newCount}."
+                : $"Increase {level.DisplayName} one-row-prefix source moby count from {currentCount} to {newRuntimeCount} (catalog rows {level.SourceRecordCount} to {newCount}).",
             patches,
             writtenWadOffsets);
     }
@@ -3708,6 +4771,644 @@ public static class MobySourcePatchExporter
             $"Soft-remove {label} by moving Z to hidden raw {HiddenRawCoordinate}.",
             patches,
             writtenWadOffsets);
+    }
+
+    private static bool IsFlyInLandingEdit(JsonElement edit) =>
+        string.Equals(
+            JsonValue.GetString(edit, "editorControlKind"),
+            Moby.FlyInLandingControlKind,
+            StringComparison.OrdinalIgnoreCase);
+
+    private static void AddFlyInLandingPatches(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        string label,
+        JsonElement edit,
+        Lazy<FlyInLandingData> flyInLanding,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets)
+    {
+        if (!edit.TryGetProperty("rawEdited", out JsonElement rawEdited) || rawEdited.ValueKind != JsonValueKind.Object)
+            return;
+
+        FlyInLandingData landing = flyInLanding.Value;
+        if (edit.TryGetProperty("rawOriginal", out JsonElement rawOriginal) && rawOriginal.ValueKind == JsonValueKind.Object)
+        {
+            int manifestX = JsonValue.GetInt32(rawOriginal, "x", landing.RawX);
+            int manifestY = JsonValue.GetInt32(rawOriginal, "y", landing.RawY);
+            int manifestZ = JsonValue.GetInt32(rawOriginal, "z", landing.RawZ);
+            if (manifestX != landing.RawX || manifestY != landing.RawY || manifestZ != landing.RawZ)
+            {
+                throw new InvalidOperationException(
+                    $"{level.DisplayName}'s saved fly-in landing source XYZ does not match the selected disc. Reopen that BIN/CUE before exporting this entry edit.");
+            }
+        }
+
+        int manifestHeading = JsonValue.GetInt32(
+            edit,
+            "yawByteOriginalHex",
+            JsonValue.GetInt32(edit, "yawByteHex", landing.YawByte));
+        if (manifestHeading != landing.YawByte)
+        {
+            throw new InvalidOperationException(
+                $"{level.DisplayName}'s saved fly-in heading does not match the selected disc. Reopen that BIN/CUE before exporting this entry edit.");
+        }
+
+        AddFlyInLandingAxisPatch(stream, layout, level, label, landing.WadOffset, "x", 0x00, landing.RawX, rawEdited, patches, writtenWadOffsets);
+        AddFlyInLandingAxisPatch(stream, layout, level, label, landing.WadOffset, "y", 0x04, landing.RawY, rawEdited, patches, writtenWadOffsets);
+        AddFlyInLandingAxisPatch(stream, layout, level, label, landing.WadOffset, "z", 0x08, landing.RawZ, rawEdited, patches, writtenWadOffsets);
+        AddFlyInLandingHeadingPatch(stream, layout, level, label, landing, edit, patches, writtenWadOffsets);
+    }
+
+    private static void AddFlyInLandingHeadingPatch(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        string label,
+        FlyInLandingData landing,
+        JsonElement edit,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets)
+    {
+        int edited = JsonValue.GetInt32(
+            edit,
+            "yawByteEditedHex",
+            JsonValue.GetInt32(edit, "yawByteHex", landing.YawByte));
+        edited = Math.Clamp(edited, 0, 255);
+        if (edited == landing.YawByte)
+            return;
+
+        AddRawPatch(
+            stream,
+            layout,
+            level,
+            landing.WadOffset + 0x0E,
+            [(byte)edited],
+            "fly-in-landing-heading",
+            label,
+            -1,
+            "entry+0x0E",
+            $"Set {level.DisplayName}'s homeworld-to-level fly-in heading to {FlyInLandingEditorControl.HeadingByteToDegrees(edited):0.#} degrees; return-home data is unchanged.",
+            patches,
+            writtenWadOffsets);
+    }
+
+    private static void AddFlyInLandingAxisPatch(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        string label,
+        long landingWadOffset,
+        string axis,
+        int fieldOffset,
+        int original,
+        JsonElement rawEdited,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets)
+    {
+        if (!rawEdited.TryGetProperty(axis, out _))
+            return;
+
+        int edited = JsonValue.GetInt32(rawEdited, axis, original);
+        if (edited == original)
+            return;
+
+        AddRawPatch(
+            stream,
+            layout,
+            level,
+            landingWadOffset + fieldOffset,
+            BitConverter.GetBytes(edited),
+            $"fly-in-landing-position-{axis}",
+            label,
+            -1,
+            $"entry+0x{fieldOffset:X}",
+            $"Move {level.DisplayName}'s homeworld-to-level fly-in landing {axis.ToUpperInvariant()} to raw {edited}; return-home data is unchanged.",
+            patches,
+            writtenWadOffsets);
+    }
+
+    private static void TrackMovedPortalSourceData(
+        LevelDefinition level,
+        int trueIndex,
+        string label,
+        JsonElement edit,
+        Lazy<PortalSourceLevelData> portalSourceData,
+        List<PortalSourceMovement> movements)
+    {
+        if (level.LevelId <= 0 || level.LevelId % 10 != 0 ||
+            JsonValue.GetInt32(edit, "sourceByte36OriginalHex", -1) != 0x8E ||
+            !edit.TryGetProperty("rawOriginal", out JsonElement rawOriginal) || rawOriginal.ValueKind != JsonValueKind.Object ||
+            !edit.TryGetProperty("rawEdited", out JsonElement rawEdited) || rawEdited.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        int originalX = JsonValue.GetInt32(rawOriginal, "x");
+        int originalY = JsonValue.GetInt32(rawOriginal, "y");
+        int originalZ = JsonValue.GetInt32(rawOriginal, "z");
+        int deltaX = checked(JsonValue.GetInt32(rawEdited, "x", originalX) - originalX);
+        int deltaY = checked(JsonValue.GetInt32(rawEdited, "y", originalY) - originalY);
+        int deltaZ = checked(JsonValue.GetInt32(rawEdited, "z", originalZ) - originalZ);
+        if (deltaX == 0 && deltaY == 0 && deltaZ == 0)
+            return;
+
+        PortalSourceRecord? portal = portalSourceData.Value.Portals
+            .SingleOrDefault(candidate => candidate.SourcePathMobyTrueIndex == trueIndex);
+        if (portal == null)
+            return;
+        if (movements.Any(movement => movement.Portal.Index == portal.Index))
+            throw new InvalidOperationException($"{level.DisplayName} portal {portal.Index} has more than one movement edit.");
+
+        movements.Add(new PortalSourceMovement(
+            portal,
+            label,
+            deltaX,
+            deltaY,
+            deltaZ,
+            RawDeltaToCollisionDelta(deltaX),
+            RawDeltaToCollisionDelta(deltaY),
+            RawDeltaToCollisionDelta(deltaZ)));
+    }
+
+    private static void AddMovedPortalSourcePatches(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        Lazy<PortalSourceLevelData> portalSourceData,
+        IReadOnlyList<PortalSourceMovement> movements,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets)
+    {
+        if (movements.Count == 0)
+            return;
+
+        PortalSourceLevelData source = portalSourceData.Value;
+        PortalCollisionSourceLayout collision = source.Collision;
+        int triangleTableLength = checked(collision.TriangleCount * 12);
+        byte[] translatedTriangleTable = ReadWadBytes(stream, layout, collision.TriangleTableWadOffset, triangleTableLength);
+        List<(PortalSourceMovement Movement, PortalTriggerTriangle Triangle, byte[] After)> trianglePatches = [];
+
+        foreach (PortalSourceMovement movement in movements)
+        {
+            if (movement.CollisionDeltaX == 0 && movement.CollisionDeltaY == 0 && movement.CollisionDeltaZ == 0)
+                continue;
+
+            PortalTriggerTriangle[] triggers = source.TriggerTriangles
+                .Where(triangle => triangle.PortalIndex == movement.Portal.Index &&
+                    triangle.DestinationLevelId == movement.Portal.DestinationLevelId)
+                .ToArray();
+            if (triggers.Length == 0)
+            {
+                throw new InvalidOperationException(
+                    $"{level.DisplayName} portal {movement.Portal.Index} to level {movement.Portal.DestinationLevelId} has no proven entry collision triangles.");
+            }
+
+            foreach (PortalTriggerTriangle triangle in triggers)
+            {
+                byte[] translated = TranslatePortalTriggerTriangle(level, movement, triangle, translatedTriangleTable, collision);
+                int tableOffset = checked((int)(triangle.WadOffset - collision.TriangleTableWadOffset));
+                translated.CopyTo(translatedTriangleTable, tableOffset);
+                trianglePatches.Add((movement, triangle, translated));
+            }
+        }
+
+        TerrainPatchExporter.CollisionIndexBytes? rebuiltIndex = null;
+        int combinedCollisionIndexCapacity = checked(collision.BlockTreeByteCapacity + collision.BlocksByteCapacity);
+        if (trianglePatches.Count > 0 &&
+            (!TerrainPatchExporter.TryBuildCollisionIndexBytes(
+                translatedTriangleTable,
+                collision.TriangleCount,
+                combinedCollisionIndexCapacity,
+                combinedCollisionIndexCapacity,
+                out rebuiltIndex,
+                out string collisionIndexFailure) || rebuiltIndex == null))
+        {
+            throw new InvalidOperationException(
+                $"{level.DisplayName}'s portal entry moved, but its collision lookup could not be rebuilt: {collisionIndexFailure}");
+        }
+
+        foreach (PortalSourceMovement movement in movements)
+        {
+            AddPortalRecordMovementPatches(stream, layout, level, movement, patches, writtenWadOffsets);
+            AddPortalPathMovementPatches(stream, layout, level, movement, patches, writtenWadOffsets);
+        }
+
+        foreach ((PortalSourceMovement movement, PortalTriggerTriangle triangle, byte[] after) in trianglePatches)
+        {
+            AddRawPatch(
+                stream,
+                layout,
+                level,
+                triangle.WadOffset,
+                after,
+                "portal-entry-collision-triangle",
+                $"{movement.Label} walk-in trigger",
+                movement.Portal.SourcePathMobyTrueIndex,
+                $"collision-triangle-{triangle.TriangleIndex}",
+                $"Move portal {movement.Portal.Index}'s level-{movement.Portal.DestinationLevelId} walk-in collision triangle {triangle.TriangleIndex} by ({movement.CollisionDeltaX}, {movement.CollisionDeltaY}, {movement.CollisionDeltaZ}) world units.",
+                patches,
+                writtenWadOffsets);
+        }
+
+        if (rebuiltIndex != null)
+        {
+            long rebuiltBlocksWadOffset = collision.BlocksWadOffset;
+            if (rebuiltIndex.TreeBytes.Length > collision.BlockTreeByteCapacity)
+                rebuiltBlocksWadOffset = AlignUp(collision.BlockTreeWadOffset + rebuiltIndex.TreeBytes.Length, 4);
+            int rebuiltBlockCapacity = checked((int)(collision.TriangleTableWadOffset - rebuiltBlocksWadOffset));
+            if (rebuiltBlockCapacity < rebuiltIndex.BlockBytes.Length)
+            {
+                throw new InvalidOperationException(
+                    $"{level.DisplayName}'s moved portal collision index needs {rebuiltIndex.TreeBytes.Length + rebuiltIndex.BlockBytes.Length} bytes, but its native tree/block region has {combinedCollisionIndexCapacity} bytes.");
+            }
+
+            long collisionBodyWadOffset = source.CollisionComponentWadOffset + 4;
+            int rebuiltBlocksRelativeOffset = checked((int)(rebuiltBlocksWadOffset - collisionBodyWadOffset));
+            AddRawPatchIfChanged(
+                stream,
+                layout,
+                level,
+                collisionBodyWadOffset + 0x0C,
+                BitConverter.GetBytes(rebuiltBlocksRelativeOffset),
+                "portal-entry-collision-blocks-pointer",
+                "Portal entry collision lookup",
+                "collision-header-blocks-pointer",
+                $"Point the collision header at the rebalanced block lookup table (+0x{rebuiltBlocksRelativeOffset:X}).",
+                patches,
+                writtenWadOffsets);
+            AddRawPatchIfChanged(
+                stream,
+                layout,
+                level,
+                collision.BlockTreeWadOffset,
+                rebuiltIndex.TreeBytes,
+                "portal-entry-collision-index-tree",
+                "Portal entry collision lookup",
+                "collision-block-tree",
+                "Rebuild the collision block tree so moved portal entry surfaces are found at their edited locations.",
+                patches,
+                writtenWadOffsets);
+            AddRawPatchIfChanged(
+                stream,
+                layout,
+                level,
+                rebuiltBlocksWadOffset,
+                rebuiltIndex.BlockBytes,
+                "portal-entry-collision-index-blocks",
+                "Portal entry collision lookup",
+                "collision-blocks",
+                "Rebuild the collision block lookup so moved portal entry surfaces are found at their edited locations.",
+                patches,
+                writtenWadOffsets);
+        }
+    }
+
+    private static void AddPortalRecordMovementPatches(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        PortalSourceMovement movement,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets)
+    {
+        PortalSourceRecord portal = movement.Portal;
+        AddPortalAxisPatch(stream, layout, level, movement, portal.WadOffset + 0x20, "center-x", portal.CenterX, movement.RawDeltaX, patches, writtenWadOffsets);
+        AddPortalAxisPatch(stream, layout, level, movement, portal.WadOffset + 0x24, "center-y", portal.CenterY, movement.RawDeltaY, patches, writtenWadOffsets);
+        AddPortalAxisPatch(stream, layout, level, movement, portal.WadOffset + 0x28, "center-z", portal.CenterZ, movement.RawDeltaZ, patches, writtenWadOffsets);
+        for (int pointIndex = 0; pointIndex < portal.Points.Count; pointIndex++)
+        {
+            PortalSourcePoint point = portal.Points[pointIndex];
+            AddPortalAxisPatch(stream, layout, level, movement, point.WadOffset, $"point-{pointIndex}-x", point.X, movement.RawDeltaX, patches, writtenWadOffsets);
+            AddPortalAxisPatch(stream, layout, level, movement, point.WadOffset + 4, $"point-{pointIndex}-y", point.Y, movement.RawDeltaY, patches, writtenWadOffsets);
+            AddPortalAxisPatch(stream, layout, level, movement, point.WadOffset + 8, $"point-{pointIndex}-z", point.Z, movement.RawDeltaZ, patches, writtenWadOffsets);
+        }
+    }
+
+    private static void AddPortalPathMovementPatches(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        PortalSourceMovement movement,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets)
+    {
+        PortalPathSourceRecord path = movement.Portal.Path;
+        if (path.Nodes.Count < 2)
+        {
+            throw new InvalidOperationException(
+                $"{level.DisplayName} portal {movement.Portal.Index} does not have the two native transition nodes required by the level loader.");
+        }
+
+        foreach (PortalPathSourceNode node in path.Nodes)
+        {
+            AddPortalPathAxisPatch(stream, layout, level, movement, node, 0, "x", node.X, movement.RawDeltaX, patches, writtenWadOffsets);
+            AddPortalPathAxisPatch(stream, layout, level, movement, node, 4, "y", node.Y, movement.RawDeltaY, patches, writtenWadOffsets);
+            AddPortalPathAxisPatch(stream, layout, level, movement, node, 8, "z", node.Z, movement.RawDeltaZ, patches, writtenWadOffsets);
+        }
+    }
+
+    private static void AddPortalPathAxisPatch(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        PortalSourceMovement movement,
+        PortalPathSourceNode node,
+        int axisOffset,
+        string axis,
+        int original,
+        int delta,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets)
+    {
+        if (delta == 0)
+            return;
+
+        long wadOffset = node.WadOffset + axisOffset;
+        int sourceValue = BitConverter.ToInt32(ReadWadBytes(stream, layout, wadOffset, 4));
+        if (sourceValue != original)
+        {
+            throw new InvalidOperationException(
+                $"{level.DisplayName} portal {movement.Portal.Index} path node {node.Index} {axis.ToUpperInvariant()} changed from the decoded source value {original} to {sourceValue}; refusing an unsafe portal move.");
+        }
+
+        int edited = checked(original + delta);
+        AddRawPatch(
+            stream,
+            layout,
+            level,
+            wadOffset,
+            BitConverter.GetBytes(edited),
+            $"portal-transition-path-node-{node.Index}-{axis}",
+            $"{movement.Label} transition path",
+            movement.Portal.SourcePathMobyTrueIndex,
+            $"portal-{movement.Portal.Index}-path-node-{node.Index}-{axis}",
+            $"Move portal {movement.Portal.Index}'s transition path node {node.Index} {axis.ToUpperInvariant()} by raw {delta:+#;-#;0} to {edited} so Spyro enters and exits at the edited doorway.",
+            patches,
+            writtenWadOffsets);
+    }
+
+    private static void AddPortalAxisPatch(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        PortalSourceMovement movement,
+        long wadOffset,
+        string field,
+        int original,
+        int delta,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets)
+    {
+        if (delta == 0)
+            return;
+
+        int edited = checked(original + delta);
+        AddRawPatch(
+            stream,
+            layout,
+            level,
+            wadOffset,
+            BitConverter.GetBytes(edited),
+            $"portal-plane-{field}",
+            movement.Label,
+            movement.Portal.SourcePathMobyTrueIndex,
+            $"portal-{movement.Portal.Index}-{field}",
+            $"Move portal {movement.Portal.Index}'s native {field} by raw {delta:+#;-#;0} to {edited}.",
+            patches,
+            writtenWadOffsets);
+    }
+
+    private static byte[] TranslatePortalTriggerTriangle(
+        LevelDefinition level,
+        PortalSourceMovement movement,
+        PortalTriggerTriangle triangle,
+        byte[] triangleTable,
+        PortalCollisionSourceLayout collision)
+    {
+        int tableOffset = checked((int)(triangle.WadOffset - collision.TriangleTableWadOffset));
+        if (tableOffset < 0 || tableOffset + 12 > triangleTable.Length || tableOffset % 12 != 0)
+            throw new InvalidOperationException($"{level.DisplayName} portal collision triangle {triangle.TriangleIndex} is outside its native table.");
+
+        ValidateTranslatedPortalPoint(level, movement, triangle.TriangleIndex, triangle.P1);
+        ValidateTranslatedPortalPoint(level, movement, triangle.TriangleIndex, triangle.P2);
+        ValidateTranslatedPortalPoint(level, movement, triangle.TriangleIndex, triangle.P3);
+
+        uint xWord = BinaryPrimitives.ReadUInt32LittleEndian(triangleTable.AsSpan(tableOffset, 4));
+        uint yWord = BinaryPrimitives.ReadUInt32LittleEndian(triangleTable.AsSpan(tableOffset + 4, 4));
+        uint zWord = BinaryPrimitives.ReadUInt32LittleEndian(triangleTable.AsSpan(tableOffset + 8, 4));
+        int translatedX = triangle.P1.X + movement.CollisionDeltaX;
+        int translatedY = triangle.P1.Y + movement.CollisionDeltaY;
+        int translatedZ = triangle.P1.Z + movement.CollisionDeltaZ;
+        xWord = (xWord & 0xFFFFC000u) | (uint)translatedX;
+        yWord = (yWord & 0xFFFFC000u) | (uint)translatedY;
+        zWord = (zWord & 0xFFFFC000u) | (uint)translatedZ;
+
+        byte[] after = new byte[12];
+        BinaryPrimitives.WriteUInt32LittleEndian(after.AsSpan(0, 4), xWord);
+        BinaryPrimitives.WriteUInt32LittleEndian(after.AsSpan(4, 4), yWord);
+        BinaryPrimitives.WriteUInt32LittleEndian(after.AsSpan(8, 4), zWord);
+        return after;
+    }
+
+    private static void ValidateTranslatedPortalPoint(
+        LevelDefinition level,
+        PortalSourceMovement movement,
+        int triangleIndex,
+        PortalSourcePoint point)
+    {
+        int x = point.X + movement.CollisionDeltaX;
+        int y = point.Y + movement.CollisionDeltaY;
+        int z = point.Z + movement.CollisionDeltaZ;
+        if (x is < 0 or > 0x3FFF || y is < 0 or > 0x3FFF || z is < 0 or > 0x3FFF)
+        {
+            throw new InvalidOperationException(
+                $"{level.DisplayName} portal {movement.Portal.Index} cannot move to that location because collision triangle {triangleIndex} would leave the native 0..16383 coordinate range.");
+        }
+    }
+
+    private static void AddRawPatchIfChanged(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        long wadOffset,
+        byte[] after,
+        string kind,
+        string label,
+        string recordOffset,
+        string description,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets)
+    {
+        byte[] before = ReadWadBytes(stream, layout, wadOffset, after.Length);
+        if (before.SequenceEqual(after))
+            return;
+
+        AddRawPatch(
+            stream,
+            layout,
+            level,
+            wadOffset,
+            after,
+            kind,
+            label,
+            -1,
+            recordOffset,
+            description,
+            patches,
+            writtenWadOffsets);
+    }
+
+    private static int RawDeltaToCollisionDelta(int rawDelta) =>
+        checked((int)Math.Round(rawDelta / 16d, MidpointRounding.AwayFromZero));
+
+    private static long AlignUp(long value, int alignment)
+    {
+        long mask = alignment - 1L;
+        return checked((value + mask) & ~mask);
+    }
+
+    private static void AddMovedDragonRescueCameraPatches(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        long tableWadOffset,
+        int trueIndex,
+        string label,
+        JsonElement edit,
+        Lazy<IReadOnlyDictionary<int, DragonRescueCameraData>> dragonRescueCameras,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets)
+    {
+        if (!edit.TryGetProperty("rawOriginal", out JsonElement rawOriginal) || rawOriginal.ValueKind != JsonValueKind.Object ||
+            !edit.TryGetProperty("rawEdited", out JsonElement rawEdited) || rawEdited.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        int originalX = JsonValue.GetInt32(rawOriginal, "x");
+        int originalY = JsonValue.GetInt32(rawOriginal, "y");
+        int originalZ = JsonValue.GetInt32(rawOriginal, "z");
+        int deltaX = checked(JsonValue.GetInt32(rawEdited, "x", originalX) - originalX);
+        int deltaY = checked(JsonValue.GetInt32(rawEdited, "y", originalY) - originalY);
+        int deltaZ = checked(JsonValue.GetInt32(rawEdited, "z", originalZ) - originalZ);
+        if (deltaX == 0 && deltaY == 0 && deltaZ == 0)
+            return;
+
+        byte[] sourceRecord = ReadWadBytes(stream, layout, tableWadOffset + ((long)trueIndex * RecordStride), RecordStride);
+        if (!IsNativeDragonActorRecord(sourceRecord))
+            return;
+
+        int editedType = JsonValue.GetInt32(edit, "typeEditedHex", sourceRecord[TypeOffset]);
+        int editedSourceByte36 = JsonValue.GetInt32(edit, "sourceByte36EditedHex", sourceRecord[0x36]);
+        if (editedType is not (0x20 or 0x3C) || editedSourceByte36 != 0xFA)
+            return;
+
+        if (!dragonRescueCameras.Value.TryGetValue(trueIndex, out DragonRescueCameraData? camera))
+        {
+            throw new InvalidOperationException(
+                $"{level.DisplayName} dragon T{trueIndex} does not have one proven packed rescue-camera record.");
+        }
+
+        AddDragonCameraAxisPatch(stream, layout, level, trueIndex, label, camera.CameraDataWadOffset, 0x00, "x", camera.CameraRawX, deltaX, patches, writtenWadOffsets);
+        AddDragonCameraAxisPatch(stream, layout, level, trueIndex, label, camera.CameraDataWadOffset, 0x04, "y", camera.CameraRawY, deltaY, patches, writtenWadOffsets);
+        AddDragonCameraAxisPatch(stream, layout, level, trueIndex, label, camera.CameraDataWadOffset, 0x08, "z", camera.CameraRawZ, deltaZ, patches, writtenWadOffsets);
+        AddDragonCutsceneCameraTrackPatch(
+            stream,
+            layout,
+            level,
+            trueIndex,
+            label,
+            camera,
+            deltaX,
+            deltaY,
+            deltaZ,
+            patches,
+            writtenWadOffsets);
+    }
+
+    private static void AddDragonCameraAxisPatch(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        int trueIndex,
+        string label,
+        long cameraDataWadOffset,
+        int cameraFieldOffset,
+        string axis,
+        int originalCameraValue,
+        int delta,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets)
+    {
+        if (delta == 0)
+            return;
+
+        int editedCameraValue = checked(originalCameraValue + delta);
+        AddRawPatch(
+            stream,
+            layout,
+            level,
+            cameraDataWadOffset + cameraFieldOffset,
+            BitConverter.GetBytes(editedCameraValue),
+            $"dragon-rescue-camera-position-{axis}",
+            $"{label} rescue camera",
+            trueIndex,
+            $"camera+0x{cameraFieldOffset:X}",
+            $"Move {label}'s rescue camera {axis.ToUpperInvariant()} by raw {delta:+#;-#;0} to {editedCameraValue}, preserving the native shot framing and angles.",
+            patches,
+            writtenWadOffsets);
+    }
+
+    private static void AddDragonCutsceneCameraTrackPatch(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        int trueIndex,
+        string label,
+        DragonRescueCameraData camera,
+        int deltaX,
+        int deltaY,
+        int deltaZ,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets)
+    {
+        byte[] cameraTrack = ReadWadBytes(
+            stream,
+            layout,
+            camera.CutsceneCameraTrackWadOffset,
+            camera.CutsceneCameraTrackByteLength);
+        for (int frameOffset = 0; frameOffset < cameraTrack.Length; frameOffset += 0x18)
+        {
+            WriteInt32(cameraTrack, frameOffset, checked(BitConverter.ToInt32(cameraTrack, frameOffset) + deltaX));
+            WriteInt32(cameraTrack, frameOffset + 4, checked(BitConverter.ToInt32(cameraTrack, frameOffset + 4) + deltaY));
+            WriteInt32(cameraTrack, frameOffset + 8, checked(BitConverter.ToInt32(cameraTrack, frameOffset + 8) + deltaZ));
+        }
+
+        AddRawPatch(
+            stream,
+            layout,
+            level,
+            camera.CutsceneCameraTrackWadOffset,
+            cameraTrack,
+            "dragon-rescue-cutscene-camera-track",
+            $"{label} rescue cinematic",
+            trueIndex,
+            $"cutscene-{camera.CutsceneIndex}-camera-track",
+            $"Translate all {camera.CutsceneCameraFrameCount} frames of {label}'s later rescue cinematic by raw ({deltaX:+#;-#;0}, {deltaY:+#;-#;0}, {deltaZ:+#;-#;0}), preserving camera angles and timing.",
+            patches,
+            writtenWadOffsets);
+    }
+
+    private static bool IsNativeDragonActorRecord(byte[] record)
+    {
+        return record[TypeOffset] is 0x20 or 0x3C &&
+            record[0x36] == 0xFA &&
+            record[0x37] == 0x00 &&
+            record[0x4F] == 0x00 &&
+            record[0x52] == 0x10 &&
+            record[0x53] == 0xFF;
     }
 
     private static void AddCoordinatePatches(
@@ -3801,6 +5502,53 @@ public static class MobySourcePatchExporter
             $"moby-{field}",
             label,
             $"Set {label} {field} to 0x{edited:X2}.",
+            patches,
+            writtenWadOffsets);
+    }
+
+    private static void AddYawPatches(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        long tableWadOffset,
+        int trueIndex,
+        string label,
+        JsonElement edit,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets)
+    {
+        int edited = ReadYawByteFromEdit(edit, -1);
+        if (edited < 0)
+            return;
+
+        int original = JsonValue.GetInt32(edit, "yawByteOriginalHex", edited);
+        if (edited == original)
+            return;
+
+        AddPatch(
+            stream,
+            layout,
+            level,
+            tableWadOffset,
+            trueIndex,
+            YawMatrixOffset,
+            Moby.YawByteToMatrixBytes(edited),
+            "moby-yaw-facing-matrix",
+            label,
+            $"Set {label} yaw/facing matrix to {Moby.YawByteToDegrees(edited):0.#} degrees.",
+            patches,
+            writtenWadOffsets);
+        AddPatch(
+            stream,
+            layout,
+            level,
+            tableWadOffset,
+            trueIndex,
+            YawByteOffset,
+            [(byte)Math.Clamp(edited, 0, 255)],
+            "moby-yaw-facing-byte",
+            label,
+            $"Set {label} legacy yaw/facing byte to 0x{edited:X2}.",
             patches,
             writtenWadOffsets);
     }
@@ -3937,6 +5685,28 @@ public static class MobySourcePatchExporter
         int value = JsonValue.GetInt32(edit, primaryName, JsonValue.GetInt32(edit, fallbackName, -1));
         if (value >= 0)
             bytes[offset] = (byte)Math.Clamp(value, 0, 255);
+    }
+
+    private static void WriteYawFromEdit(byte[] bytes, JsonElement edit)
+    {
+        int yawByte = ReadYawByteFromEdit(edit, -1);
+        if (yawByte < 0)
+            return;
+
+        byte[] matrixBytes = Moby.YawByteToMatrixBytes(yawByte);
+        Array.Copy(matrixBytes, 0, bytes, YawMatrixOffset, matrixBytes.Length);
+        bytes[YawByteOffset] = (byte)Math.Clamp(yawByte, 0, 255);
+    }
+
+    private static int ReadYawByteFromEdit(JsonElement edit, int fallback)
+    {
+        return JsonValue.GetInt32(
+            edit,
+            "yawByteEditedHex",
+            JsonValue.GetInt32(
+                edit,
+                "yawByteHex",
+                JsonValue.GetInt32(edit, "facingByteHex", fallback)));
     }
 
     private static void ApplySourceByteEdits(byte[] bytes, JsonElement edit)
@@ -4102,7 +5872,8 @@ public sealed record MobySourcePatchRequest(
     LevelDefinition Level,
     string NativeEditsPath,
     bool WriteImage,
-    bool AllowPlanOnlyActorPackageImports = false);
+    bool AllowPlanOnlyActorPackageImports = false,
+    bool AllowGuardedNativeCloneAppend = false);
 
 internal sealed record CrossLevelAppendDonor(
     LevelDefinition SourceLevel,
@@ -4122,6 +5893,16 @@ internal sealed record SpringChestAppendAnchor(
     int RawX,
     int RawY,
     int RawZ);
+
+internal sealed record PortalSourceMovement(
+    PortalSourceRecord Portal,
+    string Label,
+    int RawDeltaX,
+    int RawDeltaY,
+    int RawDeltaZ,
+    int CollisionDeltaX,
+    int CollisionDeltaY,
+    int CollisionDeltaZ);
 
 public sealed record MobySourcePatchResult(
     string OutputImagePath,
@@ -4230,6 +6011,8 @@ public sealed record MobyActorPackageRootPreview(
     string Note);
 
 internal sealed record SpecialDataEntry(uint Offset, int Type);
+
+internal sealed record LevelSceneSourceLayout(long WadBaseOffset, uint ByteLength);
 
 internal sealed record SpringChestRewardRowSet(
     SpringChestAppendAnchor Anchor,

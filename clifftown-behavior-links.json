@@ -1,0 +1,28 @@
+{
+  "generatedAt": "2026-07-05T00:40:09-07:00",
+  "purpose": "Checked-in behavior links loaded by Spyro Editor so proven trigger/control companions move and clone with their visible/root object. Broad scaffold groups remain review-only in code; these control-role-proof groups are the safe promoted subset.",
+  "summary": {
+    "totalGroups": 1,
+    "checkedInControlRoleProofGroups": 1,
+    "existingGroupsPreserved": 0
+  },
+  "linkGroups": [
+    {
+      "key": "clifftown:control-role-proof:t153",
+      "name": "Editor proof: Cliff Town Return Home helper pair",
+      "kind": "linked group",
+      "linkedMove": true,
+      "confidence": "control-role-proof-editor-smoke",
+      "basis": "Checked-in control-role proof metadata for the Return Home helper pair. Editor smoke verified that copying the visible/root member also clones the hidden trigger/control companion rows and that the linked group survives save/reload.",
+      "reason": "Keep this proven trigger/control group together when a user moves, adds, copies, or pastes one of its visible/root objects.",
+      "trueIndexes": [
+        153,
+        151
+      ],
+      "memberIds": [
+        "T153",
+        "T151"
+      ]
+    }
+  ]
+}

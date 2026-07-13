@@ -7,6 +7,10 @@
     <ApplicationIcon>Assets/Brand/app-icon.ico</ApplicationIcon>
     <AssemblyName>Spyro.Editor.App</AssemblyName>
     <RootNamespace>Spyro.Editor.App</RootNamespace>
+    <Version>0.1.0-beta.15</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
+    <InformationalVersion>0.1.0-beta.15</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,6 +27,8 @@
     <Content Include="../../*-live-validation-overrides.json" CopyToOutputDirectory="PreserveNewest" Link="%(Filename)%(Extension)" />
     <Content Include="../../*-behavior-links.json" CopyToOutputDirectory="PreserveNewest" Link="%(Filename)%(Extension)" />
     <AvaloniaResource Include="Assets/Brand/app-icon.png" />
+    <AvaloniaResource Include="Assets/Brand/spyro-editor-title.png" />
+    <AvaloniaResource Include="Assets/SkyPresets/*.png" />
     <Content Include="Assets/Brand/app-icon.ico" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets/Brand/app-icon.icns" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

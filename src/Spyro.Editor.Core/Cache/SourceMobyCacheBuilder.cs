@@ -39,6 +39,11 @@ public static class SourceMobyCacheBuilder
             int rawY = BitConverter.ToInt32(record, 0x10);
             int rawZ = BitConverter.ToInt32(record, 0x14);
             int type = record[0x50];
+            short yawCos = BitConverter.ToInt16(record, 0x20);
+            short yawSin = BitConverter.ToInt16(record, 0x24);
+            int yawByte = Moby.TryMatrixToYawByte(yawCos, yawSin, out int matrixYawByte)
+                ? matrixYawByte
+                : record[0x46];
             int sourceByte36 = record[0x36];
             int sourceByte4F = record[0x4F];
             int flag4A = record[0x52];
@@ -61,6 +66,10 @@ public static class SourceMobyCacheBuilder
                 runtimeAddress = 0,
                 sourceRuntimeAddress = $"source-wad:0x{recordWadOffset:X}",
                 specialDataPointer = $"0x{BitConverter.ToUInt32(record, 0x08):X8}",
+                yawByteHex = $"0x{yawByte:X2}",
+                yawDegrees = Math.Round(Moby.YawByteToDegrees(yawByte), 4),
+                yawMatrixCos = yawCos,
+                yawMatrixSin = yawSin,
                 sourceByte36Hex = $"0x{sourceByte36:X2}",
                 sourceByte37Hex = $"0x{record[0x37]:X2}",
                 sourceByte4FHex = $"0x{sourceByte4F:X2}",

@@ -1,0 +1,45 @@
+{
+  "generatedAt": "2026-07-05T00:40:09-07:00",
+  "purpose": "Checked-in behavior links loaded by Spyro Editor so proven trigger/control companions move and clone with their visible/root object. Broad scaffold groups remain review-only in code; these control-role-proof groups are the safe promoted subset.",
+  "summary": {
+    "totalGroups": 2,
+    "checkedInControlRoleProofGroups": 2,
+    "existingGroupsPreserved": 0
+  },
+  "linkGroups": [
+    {
+      "key": "townsquare:control-role-proof:t97",
+      "name": "Editor proof: Town Square Return Home helper pair",
+      "kind": "linked group",
+      "linkedMove": true,
+      "confidence": "control-role-proof-editor-smoke",
+      "basis": "Checked-in control-role proof metadata for the Return Home helper pair. Editor smoke verified that copying the visible/root member also clones the hidden trigger/control companion rows and that the linked group survives save/reload.",
+      "reason": "Keep this proven trigger/control group together when a user moves, adds, copies, or pastes one of its visible/root objects.",
+      "trueIndexes": [
+        97,
+        96
+      ],
+      "memberIds": [
+        "T97",
+        "T96"
+      ]
+    },
+    {
+      "key": "townsquare:control-role-proof:t69-t108",
+      "name": "Editor proof: Town Square 3x Flame Chest fan companion",
+      "kind": "linked group",
+      "linkedMove": true,
+      "confidence": "control-role-proof-editor-smoke",
+      "basis": "Town Square T108 is a colocated runtime fan/control row for the T69 3x Flame Chest. The source table count stops before T108, so this relationship is tracked explicitly for move/copy/paste research.",
+      "reason": "Keep the 3x Flame Chest shell and its fan/control companion together when a user moves, adds, copies, or pastes the chest.",
+      "trueIndexes": [
+        69,
+        108
+      ],
+      "memberIds": [
+        "T69",
+        "T108"
+      ]
+    }
+  ]
+}

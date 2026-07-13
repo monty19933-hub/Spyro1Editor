@@ -15,12 +15,13 @@ public static class MobyIdentityClassifier
             bool replaceLabel = IsUserOverride(identity) ||
                 HasWeakLabel(moby) ||
                 HasReviewFamilyLabel(moby, identity) ||
+                ShouldReplaceWithPassiveClassIdentity(moby, identity) ||
                 (IsStrongIdentity(identity) && (HasPlaceholderControlLabel(moby) || HasCandidateLabel(moby) || HasValidationQualifierLabel(moby) || HasStaleConflictingLabel(moby, identity)));
             if (replaceLabel)
             {
                 moby.Label = identity.Label;
                 moby.OriginalLabel = identity.Label;
-                if (IsStrongIdentity(identity))
+                if (IsStrongIdentity(identity) || IsPassiveClassIdentity(identity))
                 {
                     moby.CandidateKind = identity.Kind;
                     moby.Confidence = identity.Confidence;
@@ -56,6 +57,9 @@ public static class MobyIdentityClassifier
         if (TryClassifyContainedGem(moby, out identity))
             return true;
 
+        if (TryClassifyNativeDragonScene(moby, out identity))
+            return true;
+
         if (TryClassifyFlightTarget(levelKey, moby, out identity))
             return true;
 
@@ -82,16 +86,65 @@ public static class MobyIdentityClassifier
         if (moby.Type is 0x0A or 0x33 or 0x52)
         {
             identity = new MobyIdentity(
-                "Helper/system marker",
-                "level helper or engine control marker",
+                "System/helper marker",
+                "level helper, trigger, or engine control marker",
                 "pattern-inferred",
-                $"Type 0x{moby.Type:X2} is a recurring helper/system family.",
+                $"Type 0x{moby.Type:X2} is a recurring helper/system family, usually safer to treat as trigger or control data than as a visible placeable object.",
                 ColorRgba.FromRgb(143, 166, 184));
             return true;
         }
 
         if (TryClassifyGenericSpecial(levelKey, moby, out identity))
             return true;
+
+        identity = default;
+        return false;
+    }
+
+    private static bool TryClassifyNativeDragonScene(Moby moby, out MobyIdentity identity)
+    {
+        bool commonTail = moby.SourceByte4F == 0x00 && moby.Flag4A == 0x10 && moby.Flag4B == 0xFF;
+        if (commonTail &&
+            moby.Type is 0x20 or 0x3C &&
+            moby.SourceByte36 == 0xFA &&
+            moby.SourceByte37 == 0x00)
+        {
+            identity = new MobyIdentity(
+                "Dragon",
+                "native dragon actor/model",
+                "native-scene-family",
+                "All 79 native dragon actors use the 0xFA/0x00/0x00/0x10/0xFF scene signature and pair one-to-one with a pedestal, a scene-link control, an approach camera, and a later cinematic camera track.",
+                ColorRgba.FromRgb(183, 140, 255));
+            return true;
+        }
+
+        if (commonTail &&
+            moby.Type == 0x20 &&
+            moby.SourceByte36 is 0x4B or 0x4C or 0x4D &&
+            moby.SourceByte37 == 0x01)
+        {
+            identity = new MobyIdentity(
+                "Dragon pedestal",
+                "native dragon pedestal / linked rescue prop",
+                "native-scene-family",
+                "All 79 native dragon pedestals use the 0x4B-0x4D/0x01/0x00/0x10/0xFF scene family and pair one-to-one with a dragon and scene-link control.",
+                ColorRgba.FromRgb(183, 140, 255));
+            return true;
+        }
+
+        if (commonTail &&
+            moby.Type == 0x00 &&
+            moby.SourceByte36 == 0x6E &&
+            moby.SourceByte37 == 0x00)
+        {
+            identity = new MobyIdentity(
+                "Dragon scene link control",
+                "dragon/pedestal scene link control",
+                "native-scene-family",
+                "All 79 native 0x6E controls pair one-to-one with a dragon and pedestal. The approach camera and later cinematic camera track live in separate data linked through the dragon.",
+                ColorRgba.FromRgb(183, 140, 255));
+            return true;
+        }
 
         identity = default;
         return false;
@@ -222,13 +275,13 @@ public static class MobyIdentityClassifier
             return true;
         }
 
-        if (moby.Type == 0x18 && moby.SourceByte36 == 0xAD)
+        if (moby.HasNativeKeyFingerprint)
         {
             identity = new MobyIdentity(
                 "Key",
                 "key collectible",
                 "byte-pattern",
-                "Type 0x18 with source byte 0xAD is the key collectible family; the value byte alone can look like a green gem.",
+                "The 0xAD/0x02 key family is type 0x00/flag 0x00 in the source table and becomes type 0x18/flag 0x40 after the level loader transforms it.",
                 ColorRgba.FromRgb(245, 214, 92));
             return true;
         }
@@ -1038,10 +1091,10 @@ public static class MobyIdentityClassifier
         if (moby.SourceByte36 == 0x8E && moby.Flag4A == 0x10 && moby.Flag4B == 0xFF)
         {
             identity = new MobyIdentity(
-                "Portal pad trigger marker",
-                "home-world portal pad trigger/control marker",
-                "byte-pattern",
-                "Home-world caches pair source byte 0x8E records with portal destination markers around portal pads.",
+                "Portal travel path marker",
+                "home-world portal travel-path marker",
+                "source-proven",
+                "Native homeworld portal records point to source byte 0x8E mobys as the travel path used when Spyro enters a portal; the actual walk-in trigger is a separate type-6 collision surface.",
                 ColorRgba.FromRgb(73, 192, 211));
             return true;
         }
@@ -1071,10 +1124,10 @@ public static class MobyIdentityClassifier
         if (moby.SourceByte36 == 0x6E && moby.Flag4A == 0x10 && moby.Flag4B == 0xFF)
         {
             identity = new MobyIdentity(
-                "Dragon rescue control marker",
-                "dragon rescue control marker",
-                "byte-pattern",
-                "Full-cache sweep shows source byte 0x6E type 0x00 records sitting directly on dragon and pedestal rescue pairs across home worlds and realms.",
+                "Dragon scene link control",
+                "dragon/pedestal scene link control",
+                "native-scene-family",
+                "All 79 source byte 0x6E type 0x00 records pair one-to-one with native dragon actors and pedestals. Separate linked data stores the approach camera and later cinematic camera track.",
                 ColorRgba.FromRgb(183, 140, 255));
             return true;
         }
@@ -1082,10 +1135,10 @@ public static class MobyIdentityClassifier
         if (moby.SourceByte36 == 0x1E && moby.Flag4A == 0x10 && moby.Flag4B == 0xFF)
         {
             identity = new MobyIdentity(
-                "Scene/route control marker",
-                "level scene/route control marker",
-                "byte-pattern",
-                "Full-cache sweep shows source byte 0x1E type 0x00 records as non-rendered routing helpers beside portals, return-home pads, scene triggers, treasure, or encounter clusters.",
+                "Class 0x1E passive control",
+                "unresolved passive native control point",
+                "native-passive-class",
+                "Native class 0x1E has no standalone Stone Hill actor update handler. These non-rendered points are consumed by other level systems, but each point's exact role is unresolved; do not assume every row is a scene or route marker.",
                 ColorRgba.FromRgb(143, 166, 184));
             return true;
         }
@@ -1269,10 +1322,10 @@ public static class MobyIdentityClassifier
         }
 
         identity = new MobyIdentity(
-            "Nonvisual control marker?",
-            "nonvisual control or helper candidate",
+            "System/trigger marker?",
+            "nonvisual trigger, camera, reward, or helper/control candidate",
             "pattern-inferred",
-            $"Type 0x00 source byte 0x{moby.SourceByte36:X2}; visible object not confirmed.",
+            $"Type 0x00 source byte 0x{moby.SourceByte36:X2}; visible object not confirmed. Treat as system data until a focused move test proves whether it controls camera, cutscene, reward, route, or encounter behavior.",
             ColorRgba.FromRgb(143, 166, 184));
         return true;
     }
@@ -1849,6 +1902,22 @@ public static class MobyIdentityClassifier
             (text.Contains("nonvisual") && text.Contains("control"));
     }
 
+    private static bool ShouldReplaceWithPassiveClassIdentity(Moby moby, MobyIdentity identity)
+    {
+        if (!IsPassiveClassIdentity(identity))
+            return false;
+
+        string text = $"{moby.Label} {moby.CandidateKind}".ToLowerInvariant();
+        return HasPlaceholderControlLabel(moby) ||
+            text.Contains("scene/route control") ||
+            text.Contains("0x1e scene/route");
+    }
+
+    private static bool IsPassiveClassIdentity(MobyIdentity identity)
+    {
+        return identity.Confidence.Contains("native-passive-class", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool HasCandidateLabel(Moby moby)
     {
         string text = $"{moby.Label} {moby.CandidateKind} {moby.Confidence}".ToLowerInvariant();
@@ -1885,6 +1954,10 @@ public static class MobyIdentityClassifier
         string incoming = $"{identity.Label} {identity.Kind}".ToLowerInvariant();
         if (incoming.Contains("life chest") && existing.Contains("dragon"))
             return true;
+        if (incoming.Contains("dragon actor") && existing.Contains("pedestal"))
+            return true;
+        if (incoming.Contains("dragon pedestal") && existing.Contains("dragon") && !existing.Contains("pedestal"))
+            return true;
         if (incoming.Contains("balloonist") && existing.Contains("baloonist"))
             return true;
         if (incoming.Contains("egg thief") && existing.Contains("egg theif"))
@@ -1901,6 +1974,7 @@ public static class MobyIdentityClassifier
     private static bool IsStrongIdentity(MobyIdentity identity)
     {
         return identity.Confidence.Contains("byte-pattern", StringComparison.OrdinalIgnoreCase) ||
+            identity.Confidence.Contains("native-scene", StringComparison.OrdinalIgnoreCase) ||
             identity.Confidence.Contains("user", StringComparison.OrdinalIgnoreCase) ||
             identity.Confidence.Contains("live", StringComparison.OrdinalIgnoreCase) ||
             identity.Confidence.Contains("observed", StringComparison.OrdinalIgnoreCase) ||

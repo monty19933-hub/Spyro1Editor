@@ -9,6 +9,7 @@ using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using System.Diagnostics;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -18,6 +19,7 @@ using Spyro.Editor.Core.Cache;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
+using Spyro.Editor.Core.Music;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Skyboxes;
@@ -33,7 +35,7 @@ public sealed class MainWindow : Window
     private const double DefaultTerrainBrushStrength = 48;
     private const double DefaultTerrainBrushFeather = 68;
     private const float DefaultTerrainAddCopyOffset = 64f;
-    private const float TerrainPlacedObjectLift = 8f;
+    private const float DefaultTerrainGroundOffset = 0f;
 
     private static readonly string[] MobyCategoryOptions =
     [
@@ -82,10 +84,16 @@ public sealed class MainWindow : Window
         new("Purple magic", ColorRgba.FromRgb(142, 90, 190)),
         new("Dark earth", ColorRgba.FromRgb(92, 64, 42))
     ];
+    private static readonly SkyboxEditModeOption[] SkyboxEditModeOptions =
+    [
+        new(NativeSkyEditPlan.PaletteMode, "Recolor"),
+        new(NativeSkyEditPlan.SwapMode, "Swap From Level"),
+        new(NativeSkyEditPlan.OriginalPresetMode, "Original Sky Preset"),
+        new(NativeSkyEditPlan.ImportMode, "Import Native .sky")
+    ];
 
     private EditorWorkspace _workspace;
     private LevelCatalog _catalog;
-    private SkyboxCatalog _skyboxCatalog;
     private readonly TextTargetCatalog _textTargets = TextTargetCatalog.CreateDefault();
     private readonly EditorViewport _viewport = new();
     private readonly List<Button> _mapOrientationButtons = new();
@@ -96,12 +104,54 @@ public sealed class MainWindow : Window
     private readonly TextBlock _levelDetails = new();
     private readonly TextBlock _gemCounterText = new();
     private readonly TextBlock _skyboxDetails = new();
+    private readonly ComboBox _skyboxModeBox = new();
     private readonly ComboBox _skyboxPresetBox = new();
+    private readonly ComboBox _skyboxOriginalPresetBox = new();
+    private readonly Image _skyboxOriginalPresetPreview = new();
     private readonly TextBox _skyboxCustomPaletteBox = new();
+    private readonly ComboBox _skyboxDonorBox = new();
+    private readonly TextBox _skyboxImportPathBox = new();
+    private readonly StackPanel _skyboxPalettePanel = new() { Spacing = 6 };
+    private readonly StackPanel _skyboxCustomPalettePanel = new() { Spacing = 4 };
+    private readonly StackPanel _skyboxSwapPanel = new() { Spacing = 6 };
+    private readonly StackPanel _skyboxOriginalPresetPanel = new() { Spacing = 6 };
+    private readonly StackPanel _skyboxImportPanel = new() { Spacing = 6 };
+    private readonly TextBlock _skyboxEnvironmentDetails = new();
+    private readonly CheckBox _skyboxEnvironmentEnabledBox = new() { Content = "Apply terrain palette match" };
+    private readonly Slider _skyboxEnvironmentStrengthSlider = new() { Minimum = 0, Maximum = 100, Value = 100 };
+    private readonly Slider _skyboxEnvironmentBrightnessSlider = new() { Minimum = 40, Maximum = 160, Value = 100 };
+    private readonly Slider _skyboxEnvironmentSaturationSlider = new() { Minimum = 0, Maximum = 160, Value = 100 };
+    private readonly Slider _skyboxEnvironmentTintStrengthSlider = new() { Minimum = 0, Maximum = 100, Value = 0 };
+    private readonly TextBlock _skyboxEnvironmentStrengthText = new();
+    private readonly TextBlock _skyboxEnvironmentBrightnessText = new();
+    private readonly TextBlock _skyboxEnvironmentSaturationText = new();
+    private readonly TextBlock _skyboxEnvironmentTintStrengthText = new();
+    private readonly TextBox _skyboxEnvironmentTintBox = new() { PlaceholderText = "#8098C8" };
+    private readonly Border _skyboxEnvironmentTintSwatch = new();
+    private readonly CheckBox _skyboxEnvironmentSceneBox = new() { Content = "Landscape lighting", IsChecked = true };
+    private readonly CheckBox _skyboxEnvironmentTextureBox = new() { Content = "Landscape texture palettes", IsChecked = true };
+    private readonly ToggleSwitch _skyboxEnvironmentMobyBox = new()
+    {
+        OffContent = "Match scenery, chests, and creatures",
+        OnContent = "Scenery, chests, and creatures matched",
+        IsVisible = NativeEnvironmentGradePlan.SupportsObjectPaletteMatching,
+        IsChecked = false,
+        Foreground = new SolidColorBrush(Color.FromRgb(31, 38, 45))
+    };
+    private readonly CheckBox _skyboxEnvironmentActorBox = new() { Content = "Enemies and fodder", IsVisible = NativeEnvironmentGradePlan.SupportsScopedObjectPaletteMatching };
+    private readonly CheckBox _skyboxEnvironmentChestBox = new() { Content = "Chests", IsVisible = NativeEnvironmentGradePlan.SupportsScopedObjectPaletteMatching };
+    private readonly CheckBox _skyboxEnvironmentSceneryBox = new() { Content = "Scenery", IsVisible = NativeEnvironmentGradePlan.SupportsScopedObjectPaletteMatching };
+    private readonly CheckBox _skyboxEnvironmentDragonBox = new() { Content = "Dragons and pedestals", IsVisible = NativeEnvironmentGradePlan.SupportsScopedObjectPaletteMatching };
+    private Button? _skyboxMatchEnvironmentButton;
     private readonly TextBox _skyboxDiscImagePathBox = new();
     private readonly TextBox _skyboxWadAnalysisPathBox = new();
     private readonly TextBlock _levelTextDetails = new();
+    private readonly ComboBox _levelTextTargetBox = new();
     private readonly TextBox _levelTextReplacementBox = new();
+    private readonly TextBlock _levelMusicDetails = new();
+    private readonly ComboBox _levelMusicTrackBox = new();
+    private readonly TextBlock _portalControlDetails = new();
+    private readonly ComboBox _portalControlBox = new();
     private readonly ComboBox _exeStringPresetBox = new();
     private readonly TextBox _exeStringOriginalBox = new();
     private readonly TextBox _exeStringReplacementBox = new();
@@ -144,6 +194,8 @@ public sealed class MainWindow : Window
     private Button? _objectEditButton;
     private Button? _objectCopyButton;
     private Button? _objectPasteButton;
+    private Button? _objectLayerDownButton;
+    private Button? _objectLayerUpButton;
     private Button? _objectUndoButton;
     private Button? _objectUndoRemoveButton;
     private Button? _toolbarCreateBinButton;
@@ -218,18 +270,21 @@ public sealed class MainWindow : Window
     private bool _syncingLinkedMobyList;
     private bool _syncingTerrainBrushSafety;
     private bool _syncingTerrainSurfaceQuick;
+    private bool _syncingSkyboxControls;
     private int _levelLoadRequestId;
     private IdentityBatchRestoreSet _activeIdentityBatchRestore = new(new Dictionary<int, IdentityBatchRestoreState>());
     private string _activeIdentityBatchName = "";
     private IdentityBatchCandidate? _identityPriorityCandidate;
     private readonly bool _releaseMode;
+    private Spyro1SkyBlockReport? _nativeSkyReport;
+    private string _nativeSkyReportSourcePath = "";
+    private NativeEnvironmentGradeMatch? _activeEnvironmentGradeMatch;
 
     public MainWindow()
     {
         _workspace = EditorWorkspace.Find();
         _releaseMode = IsReleaseMode(_workspace);
         _catalog = LevelCatalog.Load(_workspace.RootPath);
-        _skyboxCatalog = SkyboxCatalog.Load(_workspace);
         _skyboxDiscImagePathBox.Text = DiscImageLocator.FindImage(_workspace);
         _skyboxWadAnalysisPathBox.Text = WadAnalysisLocator.Find(_workspace);
         _discImagePathBox.Text = DiscImageLocator.FindImage(_workspace);
@@ -248,10 +303,11 @@ public sealed class MainWindow : Window
         _viewport.TerrainBrushModeRequested += (_, e) => SelectTerrainBrushMode(e.Action);
         _viewport.TerrainBrushStrokeFinished += (_, _) => FinishTerrainBrushUndo();
         _viewport.MobyMoveRequested += (_, e) => MoveMobyFromViewport(e);
-        _viewport.ObjectPlacementRequested += (_, e) => PlacePendingMobyAtViewport(e.ScreenPoint);
+        _viewport.MobyRotateRequested += (_, e) => RotateMobyFromViewport(e);
+        _viewport.ObjectPlacementRequested += async (_, e) => await PlacePendingMobyAtViewportAsync(e.ScreenPoint);
         _viewport.ObjectPlacementCanceled += (_, _) => CancelPendingMobyPlacement();
         _viewport.ObjectCopyRequested += (_, _) => CopySelectedMoby();
-        _viewport.ObjectPasteRequested += (_, e) => PasteMobyClipboardAtViewport(e.ScreenPoint);
+        _viewport.ObjectPasteRequested += async (_, e) => await PasteMobyClipboardAtViewportAsync(e.ScreenPoint);
         _viewport.ViewModeChanged += (_, mode) => _statusText.Text = mode == ViewportViewMode.Fly3D
             ? "Fly 3D mode: use W/A/S/D, Q/E, arrow keys, right-drag, and scroll to fly around. Use Ctrl/Command+C and Ctrl/Command+V to copy and paste objects."
             : $"Map mode: {MapOrientationStatus()} Drag objects to move them. Use Ctrl/Command+C and Ctrl/Command+V to copy and paste objects.";
@@ -294,7 +350,7 @@ public sealed class MainWindow : Window
         RefreshTerrainBrushMode();
         RefreshSourceDiscStatus();
 
-        Title = _releaseMode ? "Spyro Editor Release" : "Spyro Editor";
+        Title = _releaseMode ? "Spyro Editor 0.1.0-beta.15" : "Spyro Editor";
         Icon = LoadAppIcon();
         Width = 1320;
         Height = 860;
@@ -434,22 +490,94 @@ public sealed class MainWindow : Window
     {
         try
         {
-            return new Image
+            Grid brand = new()
             {
-                Source = LoadAssetBitmap("Assets/Brand/spyro-editor-title.png"),
-                Width = 220,
-                Height = 46,
-                Stretch = Stretch.Uniform,
+                Width = 326,
+                Height = 62,
+                ColumnSpacing = 10,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 16, 0)
+                Margin = new Thickness(0, 0, 16, 0),
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition(new GridLength(58)),
+                    new ColumnDefinition(GridLength.Star)
+                }
             };
+
+            brand.Children.Add(new Image
+            {
+                Source = LoadAssetBitmap("Assets/Brand/app-icon.png"),
+                Width = 58,
+                Height = 58,
+                Stretch = Stretch.Uniform,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+
+            Grid wording = new()
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                RowSpacing = 3,
+                RowDefinitions =
+                {
+                    new RowDefinition(GridLength.Auto),
+                    new RowDefinition(new GridLength(3)),
+                    new RowDefinition(GridLength.Auto)
+                }
+            };
+
+            wording.Children.Add(new TextBlock
+            {
+                Text = "Spyro the Dragon",
+                FontSize = 22,
+                FontWeight = FontWeight.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(255, 177, 0)),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+
+            Grid divider = new()
+            {
+                Height = 3,
+                ColumnSpacing = 6,
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition(GridLength.Star),
+                    new ColumnDefinition(new GridLength(28))
+                }
+            };
+            divider.Children.Add(new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0, 197, 216))
+            });
+            Border goldDivider = new()
+            {
+                Background = new SolidColorBrush(Color.FromRgb(244, 159, 0))
+            };
+            Grid.SetColumn(goldDivider, 1);
+            divider.Children.Add(goldDivider);
+            Grid.SetRow(divider, 1);
+            wording.Children.Add(divider);
+
+            TextBlock subtitle = new()
+            {
+                Text = "LEVEL EDITOR",
+                FontSize = 11,
+                FontWeight = FontWeight.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(78, 88, 101)),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetRow(subtitle, 2);
+            wording.Children.Add(subtitle);
+
+            Grid.SetColumn(wording, 1);
+            brand.Children.Add(wording);
+            return brand;
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException)
         {
             Debug.WriteLine(ex);
             return new TextBlock
             {
-                Text = "Spyro Editor",
+                Text = "Spyro the Dragon - Level Editor",
                 FontSize = 18,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = new SolidColorBrush(Color.FromRgb(32, 38, 45)),
@@ -665,8 +793,21 @@ public sealed class MainWindow : Window
         panel.Children.Add(NewDivider());
         panel.Children.Add(SectionLabel("Selection"));
         panel.Children.Add(BuildSelectionSummaryPanel());
+        panel.Children.Add(NewDivider());
+        panel.Children.Add(SectionLabel("Level Name"));
+        panel.Children.Add(BuildLevelTextPanel());
+        panel.Children.Add(NewDivider());
+        panel.Children.Add(SectionLabel("Music"));
+        panel.Children.Add(BuildLevelMusicPanel());
+        panel.Children.Add(NewDivider());
+        panel.Children.Add(SectionLabel("Skybox"));
+        panel.Children.Add(BuildSkyboxPanel());
+        panel.Children.Add(NewDivider());
+        _homeworldTextGroup = BuildHomeworldTextGroup();
+        panel.Children.Add(_homeworldTextGroup);
         if (!_releaseMode)
         {
+            panel.Children.Add(NewDivider());
             panel.Children.Add(BuildCollapsedPanel("Observed ID / naming", BuildIdentityObservationPanel()));
             panel.Children.Add(NewDivider());
             panel.Children.Add(BuildAdvancedEditorPanel());
@@ -697,14 +838,8 @@ public sealed class MainWindow : Window
         panel.Children.Add(SectionLabel("Level"));
         panel.Children.Add(BuildLevelSummaryPanel());
         panel.Children.Add(NewDivider());
-        panel.Children.Add(SectionLabel("Skybox"));
-        panel.Children.Add(BuildSkyboxPanel());
-        panel.Children.Add(NewDivider());
         panel.Children.Add(SectionLabel("Original Disc"));
         panel.Children.Add(BuildDiscImagePanel());
-        panel.Children.Add(NewDivider());
-        _homeworldTextGroup = BuildHomeworldTextGroup();
-        panel.Children.Add(_homeworldTextGroup);
         panel.Children.Add(NewDivider());
         panel.Children.Add(SectionLabel("UI Text"));
         panel.Children.Add(BuildUiTextPanel());
@@ -772,8 +907,30 @@ public sealed class MainWindow : Window
         StackPanel panel = new() { Spacing = 8 };
         panel.Children.Add(NewSmallNote("Candidate BINs are disposable tests for cross-level objects that are still guarded by the normal Create BIN button."));
         panel.Children.Add(NewAsyncButton("Create Candidate BIN", async () => await CreateObjectCandidateBinAsync()));
+        panel.Children.Add(NewSmallNote("Unsafe append research BINs bypass the normal enemy/chest guards and can create inert, invisible, or broken objects. Use only for one-off emulator research."));
+        panel.Children.Add(NewAsyncButton("Create Unsafe Append Research BIN", async () => await CreateNativeAppendResearchBinAsync()));
         panel.Children.Add(NewButton("Open Candidate Tests", OpenCandidateTestsLauncher));
         panel.Children.Add(NewAsyncButton("Record Test Result", async () => await RecordCandidateTestResultAsync()));
+        panel.Children.Add(NewSmallNote("Trigger/control proof locations open the current local guide, tester sheet, and disposable proof BIN/CUE folder."));
+        Grid controlProofGrid = new()
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(GridLength.Star),
+                new ColumnDefinition(GridLength.Star)
+            },
+            RowDefinitions =
+            {
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto)
+            }
+        };
+        AddGridButton(controlProofGrid, NewButton("Control Guide", OpenControlRoleFieldGuide), 0, 0);
+        AddGridButton(controlProofGrid, NewButton("Proof Review", OpenControlRoleProofReviewFolder), 1, 0);
+        Button proofBins = NewButton("Proof BIN/CUE Folder", OpenControlRoleProofBinsFolder);
+        Grid.SetColumnSpan(proofBins, 2);
+        AddGridButton(controlProofGrid, proofBins, 0, 1);
+        panel.Children.Add(controlProofGrid);
         return panel;
     }
 
@@ -819,8 +976,8 @@ public sealed class MainWindow : Window
     private Control BuildHomeworldTextGroup()
     {
         StackPanel panel = new() { Spacing = 8 };
-        panel.Children.Add(SectionLabel("Homeworld Portal/Text"));
-        panel.Children.Add(BuildLevelTextPanel());
+        panel.Children.Add(SectionLabel("Portal Location"));
+        panel.Children.Add(BuildPortalControlPanel());
         return panel;
     }
 
@@ -1041,7 +1198,7 @@ public sealed class MainWindow : Window
         {
             Text = item == null
                 ? ""
-                : $"{item.Relationship}: T{item.Moby.TrueIndex}  {item.Moby.DisplayLabel}",
+                : $"{item.Relationship}: T{item.Moby.TrueIndex}  {item.Moby.DisplayLabel}{(item.AutoPasteCompanion ? " (auto-pastes)" : "")}",
             Foreground = new SolidColorBrush(Color.FromRgb(36, 45, 55)),
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
@@ -1068,25 +1225,267 @@ public sealed class MainWindow : Window
         _skyboxDetails.Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92));
         _skyboxDetails.LineHeight = 20;
 
-        _skyboxPresetBox.ItemsSource = SkyboxPresetCatalog.Presets;
+        _skyboxModeBox.ItemsSource = SkyboxEditModeOptions;
+        _skyboxModeBox.SelectedItem = SkyboxEditModeOptions[0];
+        _skyboxModeBox.MinHeight = 34;
+        _skyboxModeBox.SelectionChanged += (_, _) => RefreshSkyboxModeControls();
+
+        _skyboxPresetBox.ItemsSource = SkyboxPresetCatalog.NativePresets;
+        _skyboxPresetBox.SelectedItem = SkyboxPresetCatalog.NativeDefault;
         _skyboxPresetBox.MinHeight = 34;
+        _skyboxPresetBox.SelectionChanged += (_, _) => RefreshSkyboxModeControls();
+
+        _skyboxOriginalPresetBox.ItemsSource = SkyboxPresetCatalog.OriginalPresets;
+        _skyboxOriginalPresetBox.SelectedItem = SkyboxPresetCatalog.OriginalPresets[0];
+        _skyboxOriginalPresetBox.MinHeight = 34;
+        _skyboxOriginalPresetBox.SelectionChanged += (_, _) => RefreshOriginalSkyPresetPreview();
+
+        _skyboxOriginalPresetPreview.Height = 132;
+        _skyboxOriginalPresetPreview.Stretch = Stretch.UniformToFill;
 
         _skyboxCustomPaletteBox.PlaceholderText = "#0B1038 #243A80 #AAB6D8";
         _skyboxCustomPaletteBox.MinHeight = 34;
 
-        _skyboxDiscImagePathBox.PlaceholderText = "Spyro the Dragon (USA).bin";
-        _skyboxDiscImagePathBox.MinHeight = 34;
-        _skyboxWadAnalysisPathBox.PlaceholderText = "spyro-wad-analysis.json";
-        _skyboxWadAnalysisPathBox.MinHeight = 34;
+        _skyboxDonorBox.ItemsSource = _catalog.Levels;
+        _skyboxDonorBox.MinHeight = 34;
+        _skyboxDonorBox.SelectionChanged += (_, _) =>
+        {
+            if (_syncingSkyboxControls)
+                return;
+            _activeEnvironmentGradeMatch = null;
+            _viewport.SetEnvironmentGradePreview(null);
+            RefreshEnvironmentGradeDetails();
+        };
+
+        _skyboxImportPathBox.IsReadOnly = true;
+        _skyboxImportPathBox.PlaceholderText = "No native .sky selected";
+        _skyboxImportPathBox.MinHeight = 34;
+
+        _skyboxPalettePanel.Children.Add(new TextBlock { Text = "Palette", FontWeight = FontWeight.SemiBold });
+        _skyboxPalettePanel.Children.Add(_skyboxPresetBox);
+        _skyboxPalettePanel.Children.Add(NewAsyncButton("Import Colors From PNG", async () => await ChooseSkyPaletteImageAsync()));
+        _skyboxCustomPalettePanel.Children.Add(new TextBlock { Text = "Custom colors", FontWeight = FontWeight.SemiBold });
+        _skyboxCustomPalettePanel.Children.Add(_skyboxCustomPaletteBox);
+        _skyboxPalettePanel.Children.Add(_skyboxCustomPalettePanel);
+
+        _skyboxSwapPanel.Children.Add(new TextBlock { Text = "Sky source", FontWeight = FontWeight.SemiBold });
+        _skyboxSwapPanel.Children.Add(_skyboxDonorBox);
+        _skyboxMatchEnvironmentButton = NewAsyncButton("Match Level Terrain Palette", MatchLevelTerrainPaletteAsync);
+        _skyboxMatchEnvironmentButton.MinHeight = 42;
+        _skyboxMatchEnvironmentButton.Background = new SolidColorBrush(Color.FromRgb(16, 126, 145));
+        _skyboxMatchEnvironmentButton.Foreground = Brushes.White;
+        _skyboxSwapPanel.Children.Add(_skyboxMatchEnvironmentButton);
+        _skyboxSwapPanel.Children.Add(new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(232, 240, 246)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(115, 145, 164)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(10, 7),
+            Child = new StackPanel
+            {
+                Spacing = 3,
+                Children =
+                {
+                    _skyboxEnvironmentMobyBox,
+                    new TextBlock
+                    {
+                        Text = "Uses the level's native neutral object lighting. Gem and special-effect materials stay unchanged.",
+                        Foreground = new SolidColorBrush(Color.FromRgb(62, 76, 88)),
+                        FontSize = 11,
+                        TextWrapping = TextWrapping.Wrap
+                    }
+                }
+            }
+        });
+        _skyboxEnvironmentDetails.TextWrapping = TextWrapping.Wrap;
+        _skyboxEnvironmentDetails.Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92));
+        _skyboxSwapPanel.Children.Add(_skyboxEnvironmentDetails);
+        _skyboxSwapPanel.Children.Add(BuildCollapsedPanel("Advanced Options", BuildEnvironmentGradeAdvancedPanel()));
+
+        _skyboxOriginalPresetPanel.Children.Add(new TextBlock { Text = "Original sky", FontWeight = FontWeight.SemiBold });
+        _skyboxOriginalPresetPanel.Children.Add(_skyboxOriginalPresetBox);
+        _skyboxOriginalPresetPanel.Children.Add(new Border
+        {
+            Height = 132,
+            CornerRadius = new CornerRadius(6),
+            ClipToBounds = true,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(184, 191, 199)),
+            BorderThickness = new Thickness(1),
+            Child = _skyboxOriginalPresetPreview
+        });
+
+        _skyboxImportPanel.Children.Add(_skyboxImportPathBox);
+        _skyboxImportPanel.Children.Add(NewAsyncButton("Choose .sky", async () => await ChooseCustomSkyAsync()));
+
+        WrapPanel buttons = new() { Orientation = Orientation.Horizontal };
+        buttons.Children.Add(NewAsyncButton("Save Skybox", async () => { await SaveSkyboxPlanAsync(); }));
+        buttons.Children.Add(NewAsyncButton("Create Sky Test", async () => await CreateSkyboxCueAsync()));
+        Button resetButton = NewButton("Reset to Normal Level Palette and Skybox", ResetSkyboxPlan);
+        resetButton.HorizontalAlignment = HorizontalAlignment.Stretch;
+        resetButton.HorizontalContentAlignment = HorizontalAlignment.Center;
+        resetButton.MinHeight = 40;
+        resetButton.FontSize = 12;
 
         panel.Children.Add(_skyboxDetails);
-        panel.Children.Add(_skyboxPresetBox);
-        panel.Children.Add(_skyboxCustomPaletteBox);
-        panel.Children.Add(_skyboxDiscImagePathBox);
-        panel.Children.Add(_skyboxWadAnalysisPathBox);
-        panel.Children.Add(NewAsyncButton("Save Skybox Plan", async () => await SaveSkyboxPlanAsync()));
-        panel.Children.Add(NewAsyncButton("Create Skybox CUE", async () => await CreateSkyboxCueAsync()));
+        panel.Children.Add(_skyboxModeBox);
+        panel.Children.Add(_skyboxPalettePanel);
+        panel.Children.Add(_skyboxSwapPanel);
+        panel.Children.Add(_skyboxOriginalPresetPanel);
+        panel.Children.Add(_skyboxImportPanel);
+        panel.Children.Add(buttons);
+        panel.Children.Add(resetButton);
+        RefreshOriginalSkyPresetPreview();
+        RefreshSkyboxModeControls();
         return panel;
+    }
+
+    private Control BuildEnvironmentGradeAdvancedPanel()
+    {
+        StackPanel panel = new() { Spacing = 8, Margin = new Thickness(0, 8, 0, 2) };
+        panel.Children.Add(_skyboxEnvironmentEnabledBox);
+        panel.Children.Add(BuildEnvironmentGradeSliderRow("Strength", _skyboxEnvironmentStrengthSlider, _skyboxEnvironmentStrengthText));
+        panel.Children.Add(BuildEnvironmentGradeSliderRow("Brightness", _skyboxEnvironmentBrightnessSlider, _skyboxEnvironmentBrightnessText));
+        panel.Children.Add(BuildEnvironmentGradeSliderRow("Saturation", _skyboxEnvironmentSaturationSlider, _skyboxEnvironmentSaturationText));
+
+        Grid tintRow = new()
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(new GridLength(92)),
+                new ColumnDefinition(new GridLength(30)),
+                new ColumnDefinition(GridLength.Star)
+            },
+            ColumnSpacing = 8
+        };
+        tintRow.Children.Add(new TextBlock
+        {
+            Text = "Tint",
+            VerticalAlignment = VerticalAlignment.Center,
+            FontWeight = FontWeight.SemiBold
+        });
+        _skyboxEnvironmentTintSwatch.Width = 26;
+        _skyboxEnvironmentTintSwatch.Height = 26;
+        _skyboxEnvironmentTintSwatch.BorderBrush = new SolidColorBrush(Color.FromRgb(150, 158, 168));
+        _skyboxEnvironmentTintSwatch.BorderThickness = new Thickness(1);
+        _skyboxEnvironmentTintSwatch.CornerRadius = new CornerRadius(4);
+        AddGridControl(tintRow, _skyboxEnvironmentTintSwatch, 1, 0);
+        AddGridControl(tintRow, _skyboxEnvironmentTintBox, 2, 0);
+        panel.Children.Add(tintRow);
+        panel.Children.Add(BuildEnvironmentGradeSliderRow("Tint amount", _skyboxEnvironmentTintStrengthSlider, _skyboxEnvironmentTintStrengthText));
+
+        StackPanel scope = new() { Orientation = Orientation.Vertical, Spacing = 6 };
+        scope.Children.Add(_skyboxEnvironmentSceneBox);
+        scope.Children.Add(_skyboxEnvironmentTextureBox);
+        scope.Children.Add(_skyboxEnvironmentActorBox);
+        scope.Children.Add(_skyboxEnvironmentChestBox);
+        scope.Children.Add(_skyboxEnvironmentSceneryBox);
+        scope.Children.Add(_skyboxEnvironmentDragonBox);
+        panel.Children.Add(scope);
+
+        void Changed()
+        {
+            if (_syncingSkyboxControls)
+                return;
+            UpdateEnvironmentGradeControlLabels();
+            ApplyEnvironmentGradePreviewFromControls();
+            RefreshEnvironmentGradeDetails();
+        }
+
+        foreach (Slider slider in new[]
+        {
+            _skyboxEnvironmentStrengthSlider,
+            _skyboxEnvironmentBrightnessSlider,
+            _skyboxEnvironmentSaturationSlider,
+            _skyboxEnvironmentTintStrengthSlider
+        })
+        {
+            slider.TickFrequency = 1;
+            slider.IsSnapToTickEnabled = true;
+            slider.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == RangeBase.ValueProperty)
+                    Changed();
+            };
+        }
+        _skyboxEnvironmentEnabledBox.IsCheckedChanged += (_, _) => Changed();
+        _skyboxEnvironmentSceneBox.IsCheckedChanged += (_, _) => Changed();
+        _skyboxEnvironmentTextureBox.IsCheckedChanged += (_, _) => Changed();
+        _skyboxEnvironmentMobyBox.IsCheckedChanged += (_, _) =>
+        {
+            if (_syncingSkyboxControls)
+                return;
+            bool enabled = _skyboxEnvironmentMobyBox.IsChecked == true;
+            _syncingSkyboxControls = true;
+            try
+            {
+                _skyboxEnvironmentActorBox.IsChecked = enabled;
+                _skyboxEnvironmentChestBox.IsChecked = enabled;
+                _skyboxEnvironmentSceneryBox.IsChecked = enabled;
+                _skyboxEnvironmentDragonBox.IsChecked = enabled;
+            }
+            finally
+            {
+                _syncingSkyboxControls = false;
+            }
+            Changed();
+        };
+        foreach (CheckBox category in new[]
+        {
+            _skyboxEnvironmentActorBox,
+            _skyboxEnvironmentChestBox,
+            _skyboxEnvironmentSceneryBox,
+            _skyboxEnvironmentDragonBox
+        })
+        {
+            category.IsCheckedChanged += (_, _) =>
+            {
+                if (_syncingSkyboxControls)
+                    return;
+                _syncingSkyboxControls = true;
+                try
+                {
+                    _skyboxEnvironmentMobyBox.IsChecked =
+                        _skyboxEnvironmentActorBox.IsChecked == true ||
+                        _skyboxEnvironmentChestBox.IsChecked == true ||
+                        _skyboxEnvironmentSceneryBox.IsChecked == true ||
+                        _skyboxEnvironmentDragonBox.IsChecked == true;
+                }
+                finally
+                {
+                    _syncingSkyboxControls = false;
+                }
+                Changed();
+            };
+        }
+        _skyboxEnvironmentTintBox.TextChanged += (_, _) => Changed();
+        UpdateEnvironmentGradeControlLabels();
+        return panel;
+    }
+
+    private static Control BuildEnvironmentGradeSliderRow(string label, Slider slider, TextBlock valueText)
+    {
+        Grid row = new()
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(new GridLength(92)),
+                new ColumnDefinition(GridLength.Star),
+                new ColumnDefinition(new GridLength(48))
+            },
+            ColumnSpacing = 8
+        };
+        row.Children.Add(new TextBlock
+        {
+            Text = label,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontWeight = FontWeight.SemiBold
+        });
+        valueText.HorizontalAlignment = HorizontalAlignment.Right;
+        valueText.VerticalAlignment = VerticalAlignment.Center;
+        AddGridControl(row, slider, 1, 0);
+        AddGridControl(row, valueText, 2, 0);
+        return row;
     }
 
     private Control BuildLevelTextPanel()
@@ -1096,12 +1495,87 @@ public sealed class MainWindow : Window
         _levelTextDetails.Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92));
         _levelTextDetails.LineHeight = 20;
 
+        _levelTextTargetBox.ItemsSource = _textTargets.Targets;
+        _levelTextTargetBox.MinHeight = 34;
+        _levelTextTargetBox.PlaceholderText = "Level";
+        _levelTextTargetBox.SelectionChanged += (_, _) => RefreshLevelTextTargetEditor();
         _levelTextReplacementBox.MinHeight = 34;
-        _levelTextReplacementBox.PlaceholderText = "Replacement text";
+        _levelTextReplacementBox.PlaceholderText = "New level name";
+        StackPanel buttons = new()
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6
+        };
+        buttons.Children.Add(NewAsyncButton("Save Name", async () => await SaveLevelTextPlanAsync()));
+        buttons.Children.Add(NewButton("Reset", ResetLevelTextPlan));
+
+        panel.Children.Add(_levelTextTargetBox);
         panel.Children.Add(_levelTextDetails);
         panel.Children.Add(_levelTextReplacementBox);
-        panel.Children.Add(NewAsyncButton("Save Lettering Plan", async () => await SaveLevelTextPlanAsync()));
-        panel.Children.Add(NewAsyncButton("Create Lettering CUE", async () => await CreateLevelTextCueAsync()));
+        panel.Children.Add(buttons);
+        return panel;
+    }
+
+    private Control BuildLevelMusicPanel()
+    {
+        StackPanel panel = new() { Spacing = 8 };
+        _levelMusicDetails.TextWrapping = TextWrapping.Wrap;
+        _levelMusicDetails.Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92));
+        _levelMusicDetails.LineHeight = 20;
+
+        _levelMusicTrackBox.ItemsSource = MusicTrackCatalog.SelectableTracks;
+        _levelMusicTrackBox.MinHeight = 34;
+        _levelMusicTrackBox.PlaceholderText = "Music track";
+        _levelMusicTrackBox.SelectionChanged += (_, _) => RefreshLevelMusicDetails();
+
+        StackPanel buttons = new()
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6
+        };
+        buttons.Children.Add(NewAsyncButton("Save Music", async () => await SaveLevelMusicPlanAsync()));
+        buttons.Children.Add(NewButton("Reset", ResetLevelMusicPlan));
+
+        panel.Children.Add(_levelMusicTrackBox);
+        panel.Children.Add(_levelMusicDetails);
+        panel.Children.Add(buttons);
+        return panel;
+    }
+
+    private Control BuildPortalControlPanel()
+    {
+        StackPanel panel = new() { Spacing = 8 };
+        _portalControlDetails.TextWrapping = TextWrapping.Wrap;
+        _portalControlDetails.Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92));
+        _portalControlDetails.LineHeight = 20;
+        _portalControlBox.MinHeight = 34;
+        _portalControlBox.PlaceholderText = "Portal set";
+        _portalControlBox.SelectionChanged += (_, _) => RefreshPortalControlDetails();
+
+        WrapPanel buttons = new() { Orientation = Orientation.Horizontal };
+        Button selectEntry = NewButton("Select Portal");
+        Button frameSet = NewButton("Frame Set");
+        selectEntry.Click += (_, _) => SelectPortalControlSet();
+        frameSet.Click += (_, _) => FrameSelectedPortalControlSet();
+        buttons.Children.Add(selectEntry);
+        buttons.Children.Add(frameSet);
+
+        if (!_releaseMode)
+        {
+            Button selectLettering = NewButton("Lettering");
+            Button selectLocation = NewButton("Location");
+            Button selectTrigger = NewButton("Travel Path");
+            selectLettering.Click += (_, _) => SelectPortalControlPart(row => row.Lettering);
+            selectLocation.Click += (_, _) => SelectPortalControlPart(row => row.Location);
+            selectTrigger.Click += (_, _) => SelectPortalControlPart(row => row.EntryTrigger);
+            buttons.Children.Add(selectLettering);
+            buttons.Children.Add(selectLocation);
+            buttons.Children.Add(selectTrigger);
+        }
+
+        panel.Children.Add(_portalControlDetails);
+        panel.Children.Add(_portalControlBox);
+        panel.Children.Add(buttons);
         return panel;
     }
 
@@ -1516,7 +1990,8 @@ public sealed class MainWindow : Window
 
             _workspace = new EditorWorkspace(folderPath);
             _catalog = LevelCatalog.Load(_workspace.RootPath);
-            _skyboxCatalog = SkyboxCatalog.Load(_workspace);
+            _nativeSkyReport = null;
+            _nativeSkyReportSourcePath = "";
             _skyboxDiscImagePathBox.Text = DiscImageLocator.FindImage(_workspace);
             _skyboxWadAnalysisPathBox.Text = WadAnalysisLocator.Find(_workspace);
             _discImagePathBox.Text = DiscImageLocator.FindImage(_workspace);
@@ -1562,6 +2037,8 @@ public sealed class MainWindow : Window
                 return;
 
             DiscImageSelection selection = DiscImageLocator.ConfigureImage(_workspace, selectedPath);
+            _nativeSkyReport = null;
+            _nativeSkyReportSourcePath = "";
             _discImagePathBox.Text = selection.ImagePath;
             _skyboxDiscImagePathBox.Text = selection.ImagePath;
             RefreshSourceDiscStatus();
@@ -2099,9 +2576,9 @@ public sealed class MainWindow : Window
             AllowMultiple = false,
             FileTypeFilter =
             [
-                new FilePickerFileType("Image files")
+                new FilePickerFileType("PNG image")
                 {
-                    Patterns = ["*.png", "*.bmp", "*.jpg", "*.jpeg", "*.gif", "*.tif", "*.tiff"]
+                    Patterns = ["*.png"]
                 },
                 FilePickerFileTypes.All
             ]
@@ -2111,13 +2588,19 @@ public sealed class MainWindow : Window
         if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
             return;
 
+        try
+        {
+            PngRgbaImage.ReadRgba(sourcePath, out _, out _);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _statusText.Text = $"Could not import that PNG: {ex.Message}";
+            return;
+        }
+
         string customDir = Path.Combine(_workspace.RootPath, "_local", "custom-textures");
         Directory.CreateDirectory(customDir);
-        string extension = Path.GetExtension(sourcePath);
-        if (string.IsNullOrWhiteSpace(extension))
-            extension = ".png";
-
-        string stagedName = $"{SafeFilePart(_currentLevel.Key)}-texture-{_selectedTerrain.TextureId:000}-{DateTime.Now:yyyyMMdd-HHmmss}{extension.ToLowerInvariant()}";
+        string stagedName = $"{SafeFilePart(_currentLevel.Key)}-texture-{_selectedTerrain.TextureId:000}-{DateTime.Now:yyyyMMdd-HHmmss}.png";
         string stagedPath = Path.Combine(customDir, stagedName);
         File.Copy(sourcePath, stagedPath, true);
 
@@ -2132,10 +2615,12 @@ public sealed class MainWindow : Window
             64,
             "imported-image");
 
+        int previewFaces = ApplyCustomTerrainTexturePreviews();
         RefreshCurrentLevelDetails();
+        _viewport.InvalidateVisual();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         string exportScope = "Create Test BIN will include normal and close-detail texture patches for this level.";
-        _statusText.Text = $"Imported custom art for texture ID {_selectedTerrain.TextureId}. {exportScope}";
+        _statusText.Text = $"Imported custom art for texture ID {_selectedTerrain.TextureId} and previewed it on {previewFaces} face(s). {exportScope}";
     }
 
     private async Task CompareTerrainBehaviorRamPairAsync()
@@ -6216,10 +6701,12 @@ public sealed class MainWindow : Window
         if (_terrainTaskSaveButton != null)
             _terrainTaskSaveButton.Content = hasUnsavedTerrainEdits ? "Save Terrain *" : "Save Terrain";
         _gemCounterText.Text = BuildLevelGemCounter();
-        int visibleObjects = _currentMobys.Count(moby => !moby.IsRemoved);
+        int visibleObjects = _currentMobys.Count(moby => !moby.IsRemoved && !moby.IsEditorControl);
+        int visibleEntryControls = _currentMobys.Count(moby => !moby.IsRemoved && moby.IsFlyInLandingControl);
         _levelDetails.Text =
             $"Terrain faces: {_currentGeometry?.Polygons.Count ?? 0}\n" +
             $"Objects: {visibleObjects}\n" +
+            (visibleEntryControls > 0 ? $"Level entry markers: {visibleEntryControls}\n" : "") +
             $"Surfaces: {BuildSurfaceSummary(_currentGeometry)}\n" +
             $"Terrain proof: {BuildTerrainProofReadinessSummary()}\n" +
             $"{_terrainCollisionReadinessMessage}\n" +
@@ -6235,6 +6722,9 @@ public sealed class MainWindow : Window
         bool hasLevel = _currentLevel != null;
         bool hasObject = _selectedMoby != null && !_selectedMoby.IsRemoved;
         bool objectHasEdits = hasObject && (_selectedMoby!.HasAnyEdit || _selectedMoby.IsAdded);
+        bool selectedProtectedControl = hasObject && IsReleaseProtectedControlMoby(_selectedMoby!);
+        bool selectedEditorControl = hasObject && _selectedMoby!.IsEditorControl;
+        bool clipboardProtectedControl = _mobyClipboard != null && IsReleaseProtectedControlClipboard(_mobyClipboard);
         bool hasTerrain = _selectedTerrain != null && _selectedTerrainIndex >= 0;
         bool terrainHasEdits = hasTerrain && _selectedTerrain!.IsTerrainEdited;
         bool hasUnsavedTerrainEdits = HasUnsavedTerrainEdits();
@@ -6245,10 +6735,12 @@ public sealed class MainWindow : Window
         bool canUseTerrainAddCopyInLevel = CanUseTerrainAddCopyInCurrentLevel();
 
         SetButtonEnabled(_objectAddButton, hasLevel);
-        SetButtonEnabled(_objectRemoveButton, hasObject);
+        SetButtonEnabled(_objectRemoveButton, hasObject && !selectedEditorControl && !(_releaseMode && selectedProtectedControl));
         SetButtonEnabled(_objectEditButton, hasObject);
-        SetButtonEnabled(_objectCopyButton, hasObject);
-        SetButtonEnabled(_objectPasteButton, hasLevel && _mobyClipboard != null);
+        SetButtonEnabled(_objectCopyButton, hasObject && !selectedEditorControl && !(_releaseMode && selectedProtectedControl));
+        SetButtonEnabled(_objectPasteButton, hasLevel && _mobyClipboard != null && !(_releaseMode && clipboardProtectedControl));
+        SetButtonEnabled(_objectLayerDownButton, hasObject && CanMoveMobyToAdjacentTerrainLayer(_selectedMoby!, -1));
+        SetButtonEnabled(_objectLayerUpButton, hasObject && CanMoveMobyToAdjacentTerrainLayer(_selectedMoby!, 1));
         SetButtonEnabled(_objectUndoButton, objectHasEdits);
         SetButtonEnabled(_objectUndoRemoveButton, _lastRemovedMoby != null);
         SetButtonEnabled(_toolbarCreateBinButton, hasLevel);
@@ -6364,9 +6856,62 @@ public sealed class MainWindow : Window
             return _lastRemovedMoby == null
                 ? "Select an object to edit, remove, copy, or undo it. Add Object lets you choose a kind, then click the view to place it."
                 : $"Select an object to edit, or restore the recently removed {_lastRemovedMoby.DisplayLabel}.";
+        if (_selectedMoby!.IsFlyInLandingControl)
+        {
+            string undoHint = objectHasEdits ? " Undo is available for the staged landing change." : "";
+            return $"Selected {_selectedMoby.DisplayLabel}; drag it or use Edit Object to set the exact homeworld-to-level landing position.{undoHint}";
+        }
+        if (_releaseMode && IsMappedPortalControlMoby(_selectedMoby!))
+        {
+            string undoHint = objectHasEdits ? " Undo is available for the staged portal move." : "";
+            return $"Selected {_selectedMoby!.DisplayLabel}; drag it or use Edit Object to move its linked lettering, travel path, portal plane, and walk-in surface together.{undoHint}";
+        }
+        if (_releaseMode && IsReleaseProtectedControlMoby(_selectedMoby!))
+        {
+            string undoHint = objectHasEdits ? " Undo is still available for staged changes." : "";
+            return $"Selected {_selectedMoby!.DisplayLabel}; this looks like trigger, camera, reward, route, or helper data rather than a standalone visible object. Copy and remove are disabled in release until that behavior is proven.{undoHint}";
+        }
         if (objectHasEdits)
             return $"Selected {_selectedMoby!.DisplayLabel}; undo is available for this object's staged changes.";
         return $"Selected {_selectedMoby!.DisplayLabel}; use Edit Object for details, Copy Object to duplicate it, or Remove Object to stage removal.";
+    }
+
+    private static bool IsReleaseProtectedControlMoby(Moby moby)
+    {
+        return moby.IsEditorControl || moby.VisualKind == MobyVisualKind.Control;
+    }
+
+    private static bool IsMappedPortalControlMoby(Moby moby)
+    {
+        return moby.Links.Any(IsPortalControlEditLink);
+    }
+
+    private static bool IsReleaseProtectedControlClipboard(MobyClipboard clipboard)
+    {
+        if (IsReleaseSafeTrueAddIdentity(
+                clipboard.Type,
+                clipboard.SourceByte36,
+                clipboard.SourceByte37,
+                clipboard.SourceByte4F,
+                clipboard.Flag4A,
+                clipboard.Flag4B))
+        {
+            return false;
+        }
+
+        if (clipboard.Type is 0x00 or 0x0A or 0x33 or 0x52)
+            return true;
+
+        string text = $"{clipboard.Label} {clipboard.CandidateKind} {clipboard.BehaviorNote}".ToLowerInvariant();
+        return text.Contains("control", StringComparison.Ordinal) ||
+            text.Contains("trigger", StringComparison.Ordinal) ||
+            text.Contains("helper", StringComparison.Ordinal) ||
+            text.Contains("placeholder", StringComparison.Ordinal) ||
+            text.Contains("cutscene", StringComparison.Ordinal) ||
+            text.Contains("camera", StringComparison.Ordinal) ||
+            text.Contains("route marker", StringComparison.Ordinal) ||
+            text.Contains("reward link", StringComparison.Ordinal) ||
+            text.Contains("reward-linked", StringComparison.Ordinal);
     }
 
     private string BuildTerrainActionHint(bool hasLevel, bool hasTerrain, bool terrainHasEdits, bool hasUnsavedTerrainEdits, bool canUseTerrainRemoveInLevel, bool canRemoveSelectedTerrain)
@@ -6916,6 +7461,8 @@ public sealed class MainWindow : Window
                 .Append(moby.SourceCloneLevelKey)
                 .Append('|')
                 .Append(moby.SourceCloneTrueIndex)
+                .Append('|')
+                .Append(moby.EditorControlKind)
                 .AppendLine();
         }
 
@@ -6924,51 +7471,255 @@ public sealed class MainWindow : Window
 
     private void UpdateLevelToolPanels(LevelDefinition level)
     {
-        SkyboxLevelEntry? skybox = _skyboxCatalog.FindForLevel(level.Key);
-        if (skybox == null)
+        _activeEnvironmentGradeMatch = null;
+        _viewport.SetEnvironmentGradePreview(null);
+        _syncingSkyboxControls = true;
+        try
         {
-            _skyboxDetails.Text = "No skybox catalog entry is loaded for this level yet.";
+            _skyboxModeBox.SelectedItem = SkyboxEditModeOptions[0];
+            _skyboxPresetBox.SelectedItem = SkyboxPresetCatalog.NativeDefault;
+            _skyboxOriginalPresetBox.SelectedItem = SkyboxPresetCatalog.OriginalPresets[0];
+            _skyboxCustomPaletteBox.Text = "";
+            _skyboxImportPathBox.Text = "";
+            SetEnvironmentGradeControls(NativeEnvironmentGradePlan.Disabled);
+            List<LevelDefinition> donors = _catalog.Levels
+                .Where(candidate => !string.Equals(LevelCatalog.NormalizeKey(candidate.Key), LevelCatalog.NormalizeKey(level.Key), StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            _skyboxDonorBox.ItemsSource = donors;
+            _skyboxDonorBox.SelectedItem = donors.FirstOrDefault();
+            LoadSavedSkyboxPlan(level);
         }
-        else
+        finally
         {
-            string donors = skybox.CompatibleDonorNames.Count > 0
-                ? string.Join(", ", skybox.CompatibleDonorNames)
-                : "none listed";
-            string note = skybox.Notes.Count > 0 ? $"\n{skybox.Notes[0]}" : "";
-            _skyboxDetails.Text =
-                $"Catalog: {skybox.Status}\n" +
-                $"WAD entry {skybox.AssetWadEntry}, subfile {skybox.SkySubfileIndex}, {skybox.SkySubfileSize:N0} bytes\n" +
-                $"Compatible donors: {donors}" +
-                note;
+            _syncingSkyboxControls = false;
         }
-
-        _skyboxPresetBox.SelectedItem = SkyboxPresetCatalog.DefaultForLevel(level.Key);
-        _skyboxCustomPaletteBox.Text = "";
-        LoadSavedSkyboxPlan(level);
+        RefreshSkyboxModeControls();
+        _ = RefreshSavedEnvironmentGradePreviewAsync(level, _levelLoadRequestId);
 
         bool isHomeWorld = IsHomeWorld(level);
         if (_homeworldTextGroup != null)
             _homeworldTextGroup.IsVisible = isHomeWorld;
 
-        TextTargetEntry? textTarget = isHomeWorld ? _textTargets.FindForLevel(level) : null;
-        if (!isHomeWorld)
+        _levelTextTargetBox.SelectedItem = _textTargets.FindForLevel(level) ?? _textTargets.Targets.FirstOrDefault();
+        RefreshLevelTextTargetEditor();
+        RefreshLevelMusicEditor(level);
+        RefreshPortalControlPanel();
+    }
+
+    private void RefreshLevelTextTargetEditor()
+    {
+        if (_levelTextTargetBox.SelectedItem is not TextTargetEntry target)
         {
-            _levelTextDetails.Text = "";
+            _levelTextDetails.Text = "No level-name slot selected.";
             _levelTextReplacementBox.Text = "";
+            return;
         }
-        else if (textTarget == null)
+
+        LevelTextEditPlan? saved = LevelTextEditStore.Load(_workspace.RootPath, target);
+        string scope = target.AffectsPortalLettering
+            ? "Portal / transition / guidebook"
+            : "Homeworld title / balloon / guidebook";
+        _levelTextDetails.Text =
+            $"Original: {target.OriginalText}\n" +
+            $"Maximum: {target.MaxLength} characters\n" +
+            $"Used by: {scope}" +
+            (saved == null ? "" : $"\nSaved: {saved.ReplacementText}");
+        _levelTextReplacementBox.Text = saved?.ReplacementText ?? target.OriginalText;
+    }
+
+    private void RefreshLevelMusicEditor(LevelDefinition level)
+    {
+        LevelMusicEditPlan? saved = LevelMusicEditStore.Load(_workspace.RootPath, level);
+        int trackId = saved?.SelectedTrackId ?? MusicTrackCatalog.GetNativeTrackId(level);
+        _levelMusicTrackBox.SelectedItem = MusicTrackCatalog.Find(trackId);
+        RefreshLevelMusicDetails();
+    }
+
+    private void RefreshLevelMusicDetails()
+    {
+        if (_currentLevel == null || _levelMusicTrackBox.SelectedItem is not MusicTrackEntry selected)
         {
-            _levelTextDetails.Text = "No fixed text slot has been mapped for this level yet.";
-            _levelTextReplacementBox.Text = "";
+            _levelMusicDetails.Text = "No level music selected.";
+            return;
         }
+
+        int nativeTrackId = MusicTrackCatalog.GetNativeTrackId(_currentLevel);
+        MusicTrackEntry nativeTrack = MusicTrackCatalog.Find(nativeTrackId)
+            ?? throw new InvalidOperationException($"Native music track {nativeTrackId} was not found.");
+        LevelMusicEditPlan? saved = LevelMusicEditStore.Load(_workspace.RootPath, _currentLevel);
+        string current = saved == null
+            ? $"Native: {nativeTrack.DisplayName}"
+            : $"Saved: {saved.SelectedTrackName}";
+        string selection = selected.TrackId == nativeTrackId
+            ? "Uses this level's original music and late alternate rotation."
+            : "Create BIN will keep this track looping during long play.";
+        _levelMusicDetails.Text = $"{current}\nSelected: {selected.DisplayName}\n{selection}";
+    }
+
+    private void RefreshPortalControlPanel()
+    {
+        List<PortalControlEditorRow> rows = BuildPortalControlEditorRows()
+            .OrderBy(row => row.IsPartial)
+            .ThenBy(row => row.EntryTrigger?.TrueIndex ?? int.MaxValue)
+            .ToList();
+        _portalControlBox.ItemsSource = rows;
+        _portalControlBox.SelectedItem = rows.FirstOrDefault();
+        if (rows.Count == 0)
+            _portalControlDetails.Text = "No source-proven portal locations are mapped for this level.";
         else
+            RefreshPortalControlDetails();
+    }
+
+    private IEnumerable<PortalControlEditorRow> BuildPortalControlEditorRows()
+    {
+        Dictionary<int, Moby> byTrueIndex = _currentMobys
+            .Where(moby => !moby.IsRemoved && moby.TrueIndex >= 0)
+            .GroupBy(moby => moby.TrueIndex)
+            .ToDictionary(group => group.Key, group => group.First());
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach (Moby moby in _currentMobys.Where(moby => !moby.IsRemoved))
         {
-            _levelTextDetails.Text =
-                $"Original: {textTarget.OriginalText}\n" +
-                $"Maximum length: {textTarget.MaxLength} characters. Shorter text is padded safely.";
-            _levelTextReplacementBox.Text = textTarget.OriginalText;
+            foreach (MobyLink link in moby.Links.Where(IsPortalControlEditLink))
+            {
+                if (!seen.Add(link.Key))
+                    continue;
+
+                List<Moby> members = link.TrueIndexes
+                    .Where(byTrueIndex.ContainsKey)
+                    .Select(trueIndex => byTrueIndex[trueIndex])
+                    .DistinctBy(item => item.TrueIndex)
+                    .OrderBy(item => item.TrueIndex)
+                    .ToList();
+                Moby? entryTrigger = members.FirstOrDefault(IsPortalEntryTriggerMoby);
+                Moby? lettering = members.FirstOrDefault(IsPortalLetteringMoby);
+                Moby? location = members.FirstOrDefault(IsPortalLocationMoby);
+                if (entryTrigger == null)
+                    continue;
+
+                bool partial = lettering == null || location == null;
+                string label = lettering != null
+                    ? $"{link.Name} / T{entryTrigger.TrueIndex}{(partial ? " (partial)" : "")}"
+                    : $"Entry T{entryTrigger.TrueIndex} (partial mapping)";
+                yield return new PortalControlEditorRow(
+                    label,
+                    lettering,
+                    location,
+                    entryTrigger,
+                    members,
+                    partial);
+            }
         }
-        LoadSavedLevelTextPlan(level, textTarget);
+    }
+
+    private void RefreshPortalControlDetails()
+    {
+        if (_portalControlBox.SelectedItem is not PortalControlEditorRow row)
+            return;
+
+        string lettering = FormatPortalPart(row.Lettering, "not mapped");
+        string location = FormatPortalPart(row.Location, "not mapped");
+        string path = FormatPortalPart(row.EntryTrigger, "not mapped");
+        _portalControlDetails.Text =
+            $"Portal lettering: {lettering}\n" +
+            $"Companion control: {location}\n" +
+            $"Travel path: {path}\n" +
+            "Create BIN also moves Spyro's two-node transition route, the blue portal plane, and its real walk-in collision surface. The stone arch is terrain scenery.\n" +
+            $"Set: {string.Join(", ", row.Members.Select(moby => $"T{moby.TrueIndex}"))}";
+    }
+
+    private void SelectPortalControlSet()
+    {
+        if (_portalControlBox.SelectedItem is not PortalControlEditorRow row)
+        {
+            _statusText.Text = "Choose a portal location first.";
+            return;
+        }
+
+        Moby? target = row.EntryTrigger;
+        if (target == null || target.IsRemoved)
+        {
+            _statusText.Text = "That portal travel path is not mapped.";
+            return;
+        }
+
+        _viewport.SelectMoby(target, true);
+        _viewport.FocusMobys(row.Members);
+        _statusText.Text = $"Selected {row.DisplayName}. Drag its travel-path marker to move the linked portal data together.";
+    }
+
+    private void SelectPortalControlPart(Func<PortalControlEditorRow, Moby?> select)
+    {
+        if (_portalControlBox.SelectedItem is not PortalControlEditorRow row)
+        {
+            _statusText.Text = "Choose a portal set first.";
+            return;
+        }
+
+        Moby? target = select(row);
+        if (target == null || target.IsRemoved)
+        {
+            _statusText.Text = "That portal part is not mapped for this set yet.";
+            return;
+        }
+
+        _viewport.SelectMoby(target, true);
+        _statusText.Text = $"Selected {target.DisplayLabel} (T{target.TrueIndex}).";
+    }
+
+    private void FrameSelectedPortalControlSet()
+    {
+        if (_portalControlBox.SelectedItem is not PortalControlEditorRow row)
+        {
+            _statusText.Text = "Choose a portal set first.";
+            return;
+        }
+
+        List<Moby> members = row.Members.Where(moby => !moby.IsRemoved).ToList();
+        if (members.Count == 0)
+        {
+            _statusText.Text = "That portal set has no mapped objects to frame.";
+            return;
+        }
+
+        _viewport.FocusMobys(members);
+        _statusText.Text = $"Framed portal set with {members.Count} object(s).";
+    }
+
+    private static bool IsPortalControlEditLink(MobyLink link)
+    {
+        return string.Equals(link.Kind, "portal controls", StringComparison.OrdinalIgnoreCase) &&
+            link.LinkedMove &&
+            MobyLinkTraversal.IsVisibleLink(link);
+    }
+
+    private static bool IsPortalLetteringMoby(Moby moby)
+    {
+        return moby.Type == 0x00 &&
+            moby.SourceByte36 == 0x01 &&
+            moby.Flag4A == 0x10 &&
+            moby.Flag4B == 0xFF;
+    }
+
+    private static bool IsPortalLocationMoby(Moby moby)
+    {
+        return moby.Type == 0x00 &&
+            moby.SourceByte36 == 0x1E &&
+            moby.Flag4A == 0x10 &&
+            moby.Flag4B == 0xFF;
+    }
+
+    private static bool IsPortalEntryTriggerMoby(Moby moby)
+    {
+        return moby.Type == 0x00 &&
+            moby.SourceByte36 == 0x8E &&
+            moby.Flag4A == 0x10 &&
+            moby.Flag4B == 0xFF;
+    }
+
+    private static string FormatPortalPart(Moby? moby, string fallback)
+    {
+        return moby == null ? fallback : $"T{moby.TrueIndex} {moby.DisplayLabel}";
     }
 
     private static bool IsHomeWorld(LevelDefinition level)
@@ -6979,65 +7730,396 @@ public sealed class MainWindow : Window
 
     private void LoadSavedSkyboxPlan(LevelDefinition level)
     {
-        string path = Path.Combine(_workspace.RootPath, $"{level.Key}-skybox-edit-plan.json");
-        if (!File.Exists(path))
+        NativeSkyEditPlan? saved = NativeSkyEditStore.Load(_workspace.RootPath, level);
+        if (saved != null)
+        {
+            _skyboxModeBox.SelectedItem = SkyboxEditModeOptions.First(option => string.Equals(option.Id, saved.Mode, StringComparison.OrdinalIgnoreCase));
+            _skyboxPresetBox.SelectedItem = SkyboxPresetCatalog.FindNative(saved.PalettePreset);
+            _skyboxOriginalPresetBox.SelectedItem = SkyboxPresetCatalog.FindOriginal(saved.PalettePreset);
+            _skyboxCustomPaletteBox.Text = saved.CustomPaletteHex;
+            _skyboxImportPathBox.Text = saved.ImportedSkyPath;
+            SetEnvironmentGradeControls(saved.EnvironmentGrade);
+            if (_skyboxDonorBox.ItemsSource is IEnumerable<LevelDefinition> donors)
+            {
+                _skyboxDonorBox.SelectedItem = donors.FirstOrDefault(candidate =>
+                    string.Equals(LevelCatalog.NormalizeKey(candidate.Key), LevelCatalog.NormalizeKey(saved.DonorLevelKey), StringComparison.OrdinalIgnoreCase))
+                    ?? donors.FirstOrDefault();
+            }
+        }
+
+        if (saved == null)
+            SetEnvironmentGradeControls(NativeEnvironmentGradePlan.Disabled);
+        RefreshOriginalSkyPresetPreview();
+        RefreshSkyboxDetails(level, saved);
+    }
+
+    private void RefreshSkyboxModeControls()
+    {
+        if (_syncingSkyboxControls)
             return;
 
+        string mode = (_skyboxModeBox.SelectedItem as SkyboxEditModeOption)?.Id ?? NativeSkyEditPlan.PaletteMode;
+        bool paletteMode = string.Equals(mode, NativeSkyEditPlan.PaletteMode, StringComparison.OrdinalIgnoreCase);
+        _skyboxPalettePanel.IsVisible = paletteMode;
+        _skyboxSwapPanel.IsVisible = string.Equals(mode, NativeSkyEditPlan.SwapMode, StringComparison.OrdinalIgnoreCase);
+        _skyboxOriginalPresetPanel.IsVisible = string.Equals(mode, NativeSkyEditPlan.OriginalPresetMode, StringComparison.OrdinalIgnoreCase);
+        _skyboxImportPanel.IsVisible = string.Equals(mode, NativeSkyEditPlan.ImportMode, StringComparison.OrdinalIgnoreCase);
+        _skyboxCustomPalettePanel.IsVisible = paletteMode &&
+            _skyboxPresetBox.SelectedItem is SkyboxPreset preset &&
+            string.Equals(preset.Id, "custom", StringComparison.OrdinalIgnoreCase);
+        if (_skyboxMatchEnvironmentButton != null)
+            _skyboxMatchEnvironmentButton.IsEnabled = string.Equals(mode, NativeSkyEditPlan.SwapMode, StringComparison.OrdinalIgnoreCase) && _skyboxDonorBox.SelectedItem is LevelDefinition;
+        if (!string.Equals(mode, NativeSkyEditPlan.SwapMode, StringComparison.OrdinalIgnoreCase))
+            _viewport.SetEnvironmentGradePreview(null);
+        else
+            ApplyEnvironmentGradePreviewFromControls();
+        RefreshEnvironmentGradeDetails();
+    }
+
+    private void RefreshOriginalSkyPresetPreview()
+    {
+        OriginalSkyboxPreset preset = _skyboxOriginalPresetBox.SelectedItem as OriginalSkyboxPreset
+            ?? SkyboxPresetCatalog.OriginalPresets[0];
         try
         {
-            using FileStream stream = File.OpenRead(path);
-            using JsonDocument document = JsonDocument.Parse(stream);
-            JsonElement root = document.RootElement;
-            string planLevel = GetJsonString(root, "levelKey");
-            if (!string.IsNullOrWhiteSpace(planLevel) &&
-                !string.Equals(LevelCatalog.NormalizeKey(planLevel), LevelCatalog.NormalizeKey(level.Key), StringComparison.OrdinalIgnoreCase))
-                return;
-
-            string presetId = GetJsonString(root, "preset");
-            SkyboxPreset? preset = SkyboxPresetCatalog.Presets.FirstOrDefault(item =>
-                string.Equals(item.Id, presetId, StringComparison.OrdinalIgnoreCase) && item.SupportsLevel(level.Key));
-            if (preset != null)
-                _skyboxPresetBox.SelectedItem = preset;
-
-            string paletteHex = GetJsonString(root, "customPaletteHex");
-            if (!string.IsNullOrWhiteSpace(paletteHex))
-                _skyboxCustomPaletteBox.Text = paletteHex;
-
-            string savedName = preset?.DisplayName ?? GetJsonString(root, "presetName", "saved skybox plan");
-            _skyboxDetails.Text += $"\nSaved plan: {savedName}.";
+            _skyboxOriginalPresetPreview.Source = LoadAssetBitmap(preset.PreviewAssetPath);
+            ToolTip.SetTip(_skyboxOriginalPresetPreview, preset.Description);
         }
-        catch
+        catch (Exception ex) when (ex is IOException or InvalidOperationException)
         {
-            _skyboxDetails.Text += "\nSaved skybox plan could not be loaded.";
+            Debug.WriteLine(ex);
+            _skyboxOriginalPresetPreview.Source = null;
         }
     }
 
-    private void LoadSavedLevelTextPlan(LevelDefinition level, TextTargetEntry? textTarget)
+    private void RefreshSkyboxDetails(LevelDefinition level, NativeSkyEditPlan? saved)
     {
-        string path = Path.Combine(_workspace.RootPath, $"{level.Key}-level-text-edit-plan.json");
-        if (!File.Exists(path))
+        Spyro1LevelSkyBlockLayout? layout = _nativeSkyReport?.Levels.FirstOrDefault(candidate =>
+            string.Equals(LevelCatalog.NormalizeKey(candidate.Key), LevelCatalog.NormalizeKey(level.Key), StringComparison.OrdinalIgnoreCase));
+        string nativeStatus;
+        if (layout?.SkyBlocks.FirstOrDefault() is Spyro1SkyBlockLayout primary)
+        {
+            int linkedPortalCopies = Math.Max(0, layout.LinkedPrimarySkyCopies.Count - 1);
+            int sameDiscDonors = Math.Max(0, (_nativeSkyReport?.Levels.Count ?? _catalog.Levels.Count) - 1);
+            int expandedDonors = Math.Max(0, sameDiscDonors - layout.CapacityCompatiblePrimaryDonorKeys.Count);
+            nativeStatus =
+                $"Native sky: {primary.ByteLength:N0} bytes, {primary.PartCount} parts, {primary.PaletteWordCount} colors.\n" +
+                $"Same-disc skies: {sameDiscDonors}; {layout.CapacityCompatiblePrimaryDonorKeys.Count} fit in place and {expandedDonors} use guarded WAD expansion. Linked portal copies: {linkedPortalCopies}.\n" +
+                "Geometry swaps automatically bypass the target level's sky-occlusion list so every donor part reaches the normal renderer culling pass.";
+        }
+        else
+        {
+            nativeStatus = "Native sky layout: ready to verify from the selected original BIN.";
+        }
+
+        _skyboxDetails.Text = saved == null
+            ? nativeStatus
+            : $"{nativeStatus}\nSaved: {DescribeSkyboxEdit(saved)}. Create BIN will include it.";
+    }
+
+    private string DescribeSkyboxEdit(NativeSkyEditPlan edit)
+    {
+        string donorName = _catalog.FindByKey(edit.EnvironmentGrade.DonorLevelKey)?.DisplayName
+            ?? edit.EnvironmentGrade.DonorLevelKey;
+        string environment = edit.EnvironmentGrade.Enabled
+            ? $", environment matched to {donorName}"
+            : "";
+        if (edit.IsSwap)
+        {
+            string skyDonorName = _catalog.FindByKey(edit.DonorLevelKey)?.DisplayName ?? edit.DonorLevelKey;
+            return $"sky from {skyDonorName}{environment}";
+        }
+        if (edit.IsOriginalPreset)
+            return $"original {SkyboxPresetCatalog.FindOriginal(edit.PalettePreset).DisplayName} sky";
+        if (edit.IsImport)
+            return $"custom {Path.GetFileName(edit.ImportedSkyPath)}{environment}";
+        SkyboxPreset preset = SkyboxPresetCatalog.FindNative(edit.PalettePreset);
+        return $"{preset.DisplayName}{environment}";
+    }
+
+    private async Task MatchLevelTerrainPaletteAsync()
+    {
+        if (_currentLevel == null || _skyboxDonorBox.SelectedItem is not LevelDefinition donor)
+        {
+            _statusText.Text = "Choose a level and a sky source first.";
+            return;
+        }
+
+        _skyboxEnvironmentEnabledBox.IsChecked = true;
+        _skyboxEnvironmentSceneBox.IsChecked = true;
+        _skyboxEnvironmentTextureBox.IsChecked = true;
+        if (!await SaveSkyboxPlanAsync())
+            return;
+
+        RefreshEnvironmentGradeDetails();
+        string objectStatus = _skyboxEnvironmentMobyBox.IsChecked == true
+            ? " Native scenery, chest, and creature lighting is included."
+            : "";
+        _statusText.Text = $"Matched {_currentLevel.DisplayName}'s terrain lighting and landscape palettes to {donor.DisplayName}.{objectStatus} Create BIN will include the sky and environment match.";
+    }
+
+    private NativeEnvironmentGradePlan ReadEnvironmentGradeControls(string donorLevelKey)
+    {
+        string tint = _skyboxEnvironmentTintBox.Text?.Trim() ?? "";
+        int tintStrength = (int)Math.Round(_skyboxEnvironmentTintStrengthSlider.Value);
+        if (tintStrength > 0 && !ColorRgba.TryParseHex(tint, out _))
+            throw new InvalidOperationException("Advanced tint needs a six-digit color such as #8098C8.");
+
+        bool gradeObjects = NativeEnvironmentGradePlan.SupportsObjectPaletteMatching &&
+            _skyboxEnvironmentMobyBox.IsChecked == true;
+        return new NativeEnvironmentGradePlan(
+            Version: 1,
+            Enabled: _skyboxEnvironmentEnabledBox.IsChecked == true,
+            Mode: NativeEnvironmentGradePlan.MatchSkySourceMode,
+            DonorLevelKey: donorLevelKey,
+            StrengthPercent: (int)Math.Round(_skyboxEnvironmentStrengthSlider.Value),
+            BrightnessPercent: (int)Math.Round(_skyboxEnvironmentBrightnessSlider.Value),
+            SaturationPercent: (int)Math.Round(_skyboxEnvironmentSaturationSlider.Value),
+            TintHex: tint,
+            TintStrengthPercent: tintStrength,
+            GradeSceneColors: _skyboxEnvironmentSceneBox.IsChecked == true,
+            GradeTexturePalettes: _skyboxEnvironmentTextureBox.IsChecked == true,
+            GradeActors: gradeObjects,
+            GradeChests: gradeObjects,
+            GradeScenery: gradeObjects,
+            GradeDragons: gradeObjects)
+            .Normalize(donorLevelKey);
+    }
+
+    private void SetEnvironmentGradeControls(NativeEnvironmentGradePlan grade)
+    {
+        NativeEnvironmentGradePlan normalized = grade.Normalize();
+        _skyboxEnvironmentEnabledBox.IsChecked = normalized.Enabled;
+        _skyboxEnvironmentStrengthSlider.Value = normalized.StrengthPercent;
+        _skyboxEnvironmentBrightnessSlider.Value = normalized.BrightnessPercent;
+        _skyboxEnvironmentSaturationSlider.Value = normalized.SaturationPercent;
+        _skyboxEnvironmentTintBox.Text = normalized.TintHex;
+        _skyboxEnvironmentTintStrengthSlider.Value = normalized.TintStrengthPercent;
+        _skyboxEnvironmentSceneBox.IsChecked = normalized.GradeSceneColors;
+        _skyboxEnvironmentTextureBox.IsChecked = normalized.GradeTexturePalettes;
+        bool gradeObjects = normalized.GradeAnyMobys;
+        _skyboxEnvironmentActorBox.IsChecked = gradeObjects;
+        _skyboxEnvironmentChestBox.IsChecked = gradeObjects;
+        _skyboxEnvironmentSceneryBox.IsChecked = gradeObjects;
+        _skyboxEnvironmentDragonBox.IsChecked = gradeObjects;
+        _skyboxEnvironmentMobyBox.IsChecked = gradeObjects;
+        UpdateEnvironmentGradeControlLabels();
+    }
+
+    private void UpdateEnvironmentGradeControlLabels()
+    {
+        _skyboxEnvironmentStrengthText.Text = $"{Math.Round(_skyboxEnvironmentStrengthSlider.Value):0}%";
+        _skyboxEnvironmentBrightnessText.Text = $"{Math.Round(_skyboxEnvironmentBrightnessSlider.Value):0}%";
+        _skyboxEnvironmentSaturationText.Text = $"{Math.Round(_skyboxEnvironmentSaturationSlider.Value):0}%";
+        _skyboxEnvironmentTintStrengthText.Text = $"{Math.Round(_skyboxEnvironmentTintStrengthSlider.Value):0}%";
+        _skyboxEnvironmentTintSwatch.Background = ColorRgba.TryParseHex(_skyboxEnvironmentTintBox.Text, out ColorRgba tint)
+            ? new SolidColorBrush(Color.FromRgb(tint.R, tint.G, tint.B))
+            : new SolidColorBrush(Color.FromRgb(230, 233, 237));
+    }
+
+    private void RefreshEnvironmentGradeDetails()
+    {
+        if (_skyboxDonorBox.SelectedItem is not LevelDefinition donor)
+        {
+            _skyboxEnvironmentDetails.Text = "Choose a sky source for the level terrain palette match.";
+            return;
+        }
+        if (_skyboxEnvironmentEnabledBox.IsChecked != true)
+        {
+            _skyboxEnvironmentDetails.Text = $"Sky source: {donor.DisplayName}. Level terrain palette match is off.";
+            return;
+        }
+        if (_activeEnvironmentGradeMatch is NativeEnvironmentGradeMatch match &&
+            string.Equals(LevelCatalog.NormalizeKey(match.DonorLevelKey), LevelCatalog.NormalizeKey(donor.Key), StringComparison.OrdinalIgnoreCase))
+        {
+            int objectCount = match.TargetActorMobyCount + match.TargetChestMobyCount +
+                match.TargetSceneryMobyCount + match.TargetDragonMobyCount;
+            string objectStatus = _skyboxEnvironmentMobyBox.IsChecked == true
+                ? $" Native object lighting {match.MobyMaterialColorHex} covers {objectCount} classified scenery, chest, creature, and dragon rows; gem materials remain unchanged."
+                : "";
+            string harmonizationStatus = match.SceneTransform.HarmonizationPercent >= 20
+                ? $" Strong palette shift: {match.SceneTransform.HarmonizationPercent}% terrain and {match.TextureTransform.HarmonizationPercent}% landscape-palette harmonization."
+                : "";
+            _skyboxEnvironmentDetails.Text =
+                $"Environment matched to {donor.DisplayName}: {match.TargetSceneColorTableCount} scene color tables and {match.TargetTexturePaletteCount} landscape palettes.{harmonizationStatus}{objectStatus}";
+            return;
+        }
+        _skyboxEnvironmentDetails.Text = _skyboxEnvironmentMobyBox.IsChecked == true
+            ? $"Level terrain and native material-0 object lighting will match {donor.DisplayName} when saved."
+            : $"Level terrain palette will match {donor.DisplayName} when saved.";
+    }
+
+    private void ApplyEnvironmentGradePreviewFromControls()
+    {
+        if (_activeEnvironmentGradeMatch == null || _skyboxDonorBox.SelectedItem is not LevelDefinition donor ||
+            _skyboxEnvironmentEnabledBox.IsChecked != true)
+        {
+            _viewport.SetEnvironmentGradePreview(null);
+            return;
+        }
+
+        try
+        {
+            NativeEnvironmentGradePlan grade = ReadEnvironmentGradeControls(donor.Key);
+            NativeEnvironmentColorTransform transform = NativeEnvironmentColorTransform.Build(
+                _activeEnvironmentGradeMatch.TargetSceneColors,
+                _activeEnvironmentGradeMatch.DonorSceneColors,
+                grade);
+            _viewport.SetEnvironmentGradePreview(grade.GradeSceneColors ? transform : null);
+        }
+        catch (InvalidOperationException)
+        {
+            _viewport.SetEnvironmentGradePreview(null);
+        }
+    }
+
+    private async Task RefreshSavedEnvironmentGradePreviewAsync(LevelDefinition level, int requestId)
+    {
+        _activeEnvironmentGradeMatch = null;
+        _viewport.SetEnvironmentGradePreview(null);
+        NativeSkyEditPlan? saved = NativeSkyEditStore.Load(_workspace.RootPath, level);
+        if (saved?.EnvironmentGrade.Enabled != true || !saved.IsSwap)
+            return;
+        LevelDefinition? donor = _catalog.FindByKey(saved.EnvironmentGrade.DonorLevelKey);
+        string sourceImage = FirstExistingDiscImagePath(_skyboxDiscImagePathBox.Text, _discImagePathBox.Text, DiscImageLocator.FindImage(_workspace));
+        string analysisPath = _skyboxWadAnalysisPathBox.Text?.Trim() ?? WadAnalysisLocator.Find(_workspace);
+        if (donor == null || !File.Exists(sourceImage) || !File.Exists(analysisPath))
             return;
 
         try
         {
-            using FileStream stream = File.OpenRead(path);
-            using JsonDocument document = JsonDocument.Parse(stream);
-            JsonElement root = document.RootElement;
-            string planLevel = GetJsonString(root, "levelKey");
-            if (!string.IsNullOrWhiteSpace(planLevel) &&
-                !string.Equals(LevelCatalog.NormalizeKey(planLevel), LevelCatalog.NormalizeKey(level.Key), StringComparison.OrdinalIgnoreCase))
+            NativeEnvironmentGradeMatch match = await Task.Run(() => NativeEnvironmentGradeExporter.AnalyzeMatch(
+                sourceImage,
+                analysisPath,
+                level,
+                donor,
+                saved.EnvironmentGrade));
+            if (requestId != _levelLoadRequestId || _currentLevel == null ||
+                !string.Equals(LevelCatalog.NormalizeKey(_currentLevel.Key), LevelCatalog.NormalizeKey(level.Key), StringComparison.OrdinalIgnoreCase))
+                return;
+            _activeEnvironmentGradeMatch = match;
+            ApplyEnvironmentGradePreviewFromControls();
+            RefreshEnvironmentGradeDetails();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or JsonException)
+        {
+            Debug.WriteLine(ex);
+        }
+    }
+
+    private async Task ChooseSkyPaletteImageAsync()
+    {
+        if (_currentLevel == null)
+        {
+            _statusText.Text = "Choose a level before importing sky colors.";
+            return;
+        }
+
+        try
+        {
+            IStorageProvider? storage = StorageProvider;
+            if (storage == null)
+            {
+                _statusText.Text = "File picker is not available in this environment.";
+                return;
+            }
+
+            IReadOnlyList<IStorageFile> files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Choose a PNG for sky colors",
+                AllowMultiple = false,
+                FileTypeFilter =
+                [
+                    new FilePickerFileType("PNG image") { Patterns = ["*.png"] },
+                    FilePickerFileTypes.All
+                ]
+            });
+            string? sourcePath = files.FirstOrDefault()?.Path.LocalPath;
+            if (string.IsNullOrWhiteSpace(sourcePath))
                 return;
 
-            string replacement = TextTargetCatalog.NormalizeReplacement(GetJsonString(root, "replacementText"));
-            if (textTarget != null && TextTargetCatalog.IsSafeReplacement(replacement, textTarget.MaxLength))
-                _levelTextReplacementBox.Text = replacement;
-
-            if (!string.IsNullOrWhiteSpace(replacement))
-                _levelTextDetails.Text += $"\nSaved plan: {replacement}.";
+            SkyboxImagePalette palette = SkyboxPaletteImporter.ImportPng(sourcePath);
+            _syncingSkyboxControls = true;
+            try
+            {
+                _skyboxModeBox.SelectedItem = SkyboxEditModeOptions.First(option => option.Id == NativeSkyEditPlan.PaletteMode);
+                _skyboxPresetBox.SelectedItem = SkyboxPresetCatalog.FindNative("custom");
+                _skyboxCustomPaletteBox.Text = palette.PaletteText;
+            }
+            finally
+            {
+                _syncingSkyboxControls = false;
+            }
+            RefreshSkyboxModeControls();
+            _statusText.Text = $"Sampled {palette.GradientColors.Count} sky gradient colors from {palette.SourceName} ({palette.SourceColorCount} visible source colors). Save Skybox will keep this level's native sky geometry.";
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            _levelTextDetails.Text += "\nSaved lettering plan could not be loaded.";
+            _statusText.Text = $"Could not import sky colors from that PNG: {ex.Message}";
+        }
+    }
+
+    private async Task ChooseCustomSkyAsync()
+    {
+        if (_currentLevel == null)
+        {
+            _statusText.Text = "Choose a level before importing a sky.";
+            return;
+        }
+
+        try
+        {
+            IStorageProvider? storage = StorageProvider;
+            if (storage == null)
+            {
+                _statusText.Text = "File picker is not available in this environment.";
+                return;
+            }
+
+            IReadOnlyList<IStorageFile> files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Choose a native Spyro 1 sky block",
+                AllowMultiple = false,
+                FileTypeFilter =
+                [
+                    new FilePickerFileType("Native sky block") { Patterns = ["*.sky"] },
+                    FilePickerFileTypes.All
+                ]
+            });
+            string? sourcePath = files.FirstOrDefault()?.Path.LocalPath;
+            if (string.IsNullOrWhiteSpace(sourcePath))
+                return;
+
+            byte[] sourceBytes = await File.ReadAllBytesAsync(sourcePath);
+            if (sourceBytes.Length > 1_048_576)
+                throw new InvalidDataException("The .sky file is larger than the 1 MB import limit.");
+            Spyro1SkyBlockAnalyzer.NormalizeStandaloneSkyFile(sourceBytes);
+            string hash = Convert.ToHexString(SHA256.HashData(sourceBytes));
+            string importDirectory = Path.Combine(_workspace.RootPath, "custom-skyboxes", LevelCatalog.NormalizeKey(_currentLevel.Key));
+            Directory.CreateDirectory(importDirectory);
+            string destinationPath = Path.Combine(
+                importDirectory,
+                $"{hash[..12].ToLowerInvariant()}-{SafeFilePart(Path.GetFileNameWithoutExtension(sourcePath))}.sky");
+            if (!PathsEqual(sourcePath, destinationPath))
+                File.Copy(sourcePath, destinationPath, true);
+
+            string relativePath = Path.GetRelativePath(_workspace.RootPath, destinationPath);
+            _syncingSkyboxControls = true;
+            try
+            {
+                _skyboxModeBox.SelectedItem = SkyboxEditModeOptions.First(option => option.Id == NativeSkyEditPlan.ImportMode);
+                _skyboxImportPathBox.Text = relativePath;
+            }
+            finally
+            {
+                _syncingSkyboxControls = false;
+            }
+            RefreshSkyboxModeControls();
+            _statusText.Text = $"Imported {Path.GetFileName(sourcePath)} into this workspace. Save Skybox will validate its native structure and choose in-place storage or guarded WAD expansion.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            _statusText.Text = $"Could not import that .sky file: {ex.Message}";
         }
     }
 
@@ -7081,136 +8163,291 @@ public sealed class MainWindow : Window
         }
     }
 
-    private async Task SaveSkyboxPlanAsync()
+    private async Task<string> EnsureSkyboxWadAnalysisAsync(string sourceImage)
+    {
+        string wadAnalysis = _skyboxWadAnalysisPathBox.Text?.Trim() ?? "";
+        if (File.Exists(wadAnalysis))
+            return wadAnalysis;
+
+        wadAnalysis = Path.Combine(_workspace.RootPath, "spyro-wad-analysis.json");
+        await WadAnalysisBuilder.BuildAsync(sourceImage, wadAnalysis);
+        _skyboxWadAnalysisPathBox.Text = wadAnalysis;
+        return wadAnalysis;
+    }
+
+    private async Task<Spyro1SkyBlockReport> EnsureNativeSkyReportAsync(string sourceImage)
+    {
+        string sourceKey = Path.GetFullPath(sourceImage);
+        if (_nativeSkyReport != null && PathsEqual(sourceKey, _nativeSkyReportSourcePath))
+            return _nativeSkyReport;
+
+        string wadAnalysis = await EnsureSkyboxWadAnalysisAsync(sourceImage);
+        _nativeSkyReport = await Task.Run(() => Spyro1SkyBlockAnalyzer.Analyze(sourceImage, wadAnalysis, _catalog));
+        _nativeSkyReportSourcePath = sourceKey;
+        return _nativeSkyReport;
+    }
+
+    private async Task<bool> SaveSkyboxPlanAsync()
     {
         if (_currentLevel == null)
         {
             _statusText.Text = "Choose a level before saving a skybox plan.";
-            return;
+            return false;
         }
 
-        if (_skyboxPresetBox.SelectedItem is not SkyboxPreset preset)
-            preset = SkyboxPresetCatalog.DefaultForLevel(_currentLevel.Key);
-
-        if (!preset.SupportsLevel(_currentLevel.Key))
+        string sourceImage = FirstExistingDiscImagePath(_skyboxDiscImagePathBox.Text, _discImagePathBox.Text, DiscImageLocator.FindImage(_workspace));
+        if (!File.Exists(sourceImage))
         {
-            _statusText.Text = $"{preset.DisplayName} is not marked safe for {_currentLevel.DisplayName} yet.";
-            return;
+            _statusText.Text = "Choose the original Spyro BIN/CUE before saving a skybox edit.";
+            return false;
         }
+
+        string mode = (_skyboxModeBox.SelectedItem as SkyboxEditModeOption)?.Id ?? NativeSkyEditPlan.PaletteMode;
+        if (_skyboxPresetBox.SelectedItem is not SkyboxPreset preset)
+            preset = SkyboxPresetCatalog.NativeDefault;
 
         string paletteHex = _skyboxCustomPaletteBox.Text?.Trim() ?? "";
-        if (preset.Id == "Custom" && !IsSafePaletteText(paletteHex))
+        string palettePresetId = preset.Id;
+        string savedPaletteHex = string.Equals(preset.Id, "custom", StringComparison.OrdinalIgnoreCase) ? paletteHex : "";
+        if (string.Equals(mode, NativeSkyEditPlan.PaletteMode, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(preset.Id, "custom", StringComparison.OrdinalIgnoreCase) &&
+            !IsSafePaletteText(paletteHex))
         {
             _statusText.Text = "Custom skybox colors need to be #RRGGBB values separated by spaces.";
-            return;
+            return false;
         }
 
-        SkyboxLevelEntry? skybox = _skyboxCatalog.FindForLevel(_currentLevel.Key);
-        string path = Path.Combine(_workspace.RootPath, $"{_currentLevel.Key}-skybox-edit-plan.json");
-        var plan = new
+        try
         {
-            generatedAt = DateTimeOffset.UtcNow,
-            kind = "skybox-color-palette-plan",
-            levelKey = _currentLevel.Key,
-            levelName = _currentLevel.DisplayName,
-            preset = preset.Id,
-            presetName = preset.DisplayName,
-            customPaletteHex = preset.Id == "Custom" ? paletteHex : "",
-            sourceTool = "tools/Export-SpyroSkyPrimitiveColorPalette.ps1",
-            planOnlyArguments = BuildSkyboxToolArguments(preset, paletteHex),
-            catalog = skybox == null
-                ? null
-                : new
-                {
-                    skybox.AssetWadEntry,
-                    skybox.MetadataWadEntry,
-                    skybox.SkySubfileIndex,
-                    skybox.SkySubfileSize,
-                    skybox.SkyWadOffset,
-                    skybox.SkyImageOffset,
-                    skybox.CompatibleDonorNames,
-                    skybox.Notes
-                },
-            notes = new[]
-            {
-                "This plan uses the safer RGB sky primitive path, not whole-subfile skybox swaps.",
-                "The native Mac editor can export this plan for supported Stone Hill presets."
-            }
-        };
+            _statusText.Text = $"Checking {_currentLevel.DisplayName}'s native sky layout...";
+            Spyro1SkyBlockReport report = await EnsureNativeSkyReportAsync(sourceImage);
+            Spyro1LevelSkyBlockLayout targetLayout = report.Levels.FirstOrDefault(candidate =>
+                string.Equals(LevelCatalog.NormalizeKey(candidate.Key), LevelCatalog.NormalizeKey(_currentLevel.Key), StringComparison.OrdinalIgnoreCase))
+                ?? throw new InvalidDataException($"No native sky block was found for {_currentLevel.DisplayName}.");
+            Spyro1SkyBlockLayout targetSky = targetLayout.SkyBlocks.FirstOrDefault()
+                ?? throw new InvalidDataException($"No native sky block was found for {_currentLevel.DisplayName}.");
 
-        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(plan, NewJsonOptions()));
-        _statusText.Text = $"Saved skybox plan for {_currentLevel.DisplayName}: {preset.DisplayName}.";
+            string donorKey = "";
+            string importPath = "";
+            string importHash = "";
+            int replacementByteLength = targetSky.ByteLength;
+            bool usesExpandedWad = false;
+            NativeEnvironmentGradePlan environmentGrade = NativeEnvironmentGradePlan.Disabled;
+            NativeEnvironmentGradeMatch? environmentMatch = null;
+            if (string.Equals(mode, NativeSkyEditPlan.SwapMode, StringComparison.OrdinalIgnoreCase))
+            {
+                LevelDefinition donor = _skyboxDonorBox.SelectedItem as LevelDefinition
+                    ?? throw new InvalidOperationException("Choose a level to use as the sky source.");
+                Spyro1LevelSkyBlockLayout donorLayout = report.Levels.FirstOrDefault(candidate =>
+                    string.Equals(LevelCatalog.NormalizeKey(candidate.Key), LevelCatalog.NormalizeKey(donor.Key), StringComparison.OrdinalIgnoreCase))
+                    ?? throw new InvalidDataException($"No native sky block was found for {donor.DisplayName}.");
+                Spyro1SkyBlockLayout donorSky = donorLayout.SkyBlocks.FirstOrDefault()
+                    ?? throw new InvalidDataException($"No native sky block was found for {donor.DisplayName}.");
+                replacementByteLength = donorSky.ByteLength;
+                usesExpandedWad = donorSky.ByteLength > targetSky.ByteLength;
+                donorKey = donor.Key;
+                environmentGrade = ReadEnvironmentGradeControls(donor.Key);
+                if (environmentGrade.Enabled && !environmentGrade.GradeSceneColors && !environmentGrade.GradeTexturePalettes)
+                    throw new InvalidOperationException("Enable landscape lighting or landscape texture palettes in Advanced Options.");
+                if (environmentGrade.Enabled)
+                {
+                    string wadAnalysis = await EnsureSkyboxWadAnalysisAsync(sourceImage);
+                    environmentMatch = await Task.Run(() => NativeEnvironmentGradeExporter.AnalyzeMatch(
+                        sourceImage,
+                        wadAnalysis,
+                        _currentLevel,
+                        donor,
+                        environmentGrade));
+                }
+            }
+            else if (string.Equals(mode, NativeSkyEditPlan.OriginalPresetMode, StringComparison.OrdinalIgnoreCase))
+            {
+                OriginalSkyboxPreset originalPreset = _skyboxOriginalPresetBox.SelectedItem as OriginalSkyboxPreset
+                    ?? SkyboxPresetCatalog.OriginalPresets[0];
+                LevelDefinition donor = originalPreset.ResolveDonor(_catalog, _currentLevel.Key);
+                Spyro1LevelSkyBlockLayout donorLayout = report.Levels.FirstOrDefault(candidate =>
+                    string.Equals(LevelCatalog.NormalizeKey(candidate.Key), LevelCatalog.NormalizeKey(donor.Key), StringComparison.OrdinalIgnoreCase))
+                    ?? throw new InvalidDataException($"No native sky geometry was found for {donor.DisplayName}.");
+                Spyro1SkyBlockLayout donorSky = donorLayout.SkyBlocks.FirstOrDefault()
+                    ?? throw new InvalidDataException($"No native sky geometry was found for {donor.DisplayName}.");
+                replacementByteLength = donorSky.ByteLength;
+                usesExpandedWad = donorSky.ByteLength > targetSky.ByteLength;
+                donorKey = donor.Key;
+                palettePresetId = originalPreset.Id;
+                savedPaletteHex = originalPreset.PaletteHex;
+            }
+            else if (string.Equals(mode, NativeSkyEditPlan.ImportMode, StringComparison.OrdinalIgnoreCase))
+            {
+                importPath = _skyboxImportPathBox.Text?.Trim() ?? "";
+                string resolvedPath = ResolveSkyboxImportPath(importPath);
+                if (!File.Exists(resolvedPath))
+                    throw new FileNotFoundException("Choose a native .sky file before saving this edit.", resolvedPath);
+                byte[] raw = await File.ReadAllBytesAsync(resolvedPath);
+                if (raw.Length is <= 0 or > 1_048_576)
+                    throw new InvalidDataException("The custom .sky file must be between 1 byte and 1 MB.");
+                byte[] normalized = Spyro1SkyBlockAnalyzer.NormalizeStandaloneSkyFile(raw);
+                replacementByteLength = normalized.Length;
+                usesExpandedWad = normalized.Length > targetSky.ByteLength;
+                importHash = Convert.ToHexString(SHA256.HashData(raw));
+            }
+            else if (!string.Equals(mode, NativeSkyEditPlan.PaletteMode, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"Unknown skybox edit mode '{mode}'.");
+            }
+
+            NativeSkyEditPlan plan = new(
+                Version: 2,
+                SavedAt: DateTimeOffset.UtcNow,
+                LevelKey: _currentLevel.Key,
+                LevelName: _currentLevel.DisplayName,
+                Mode: mode,
+                PalettePreset: palettePresetId,
+                CustomPaletteHex: savedPaletteHex,
+                DonorLevelKey: donorKey,
+                ImportedSkyPath: importPath,
+                ImportedSkySha256: importHash)
+            {
+                EnvironmentGrade = environmentGrade
+            };
+            await NativeSkyEditStore.SaveAsync(_workspace.RootPath, plan);
+            _activeEnvironmentGradeMatch = environmentMatch;
+            ApplyEnvironmentGradePreviewFromControls();
+            RefreshSkyboxDetails(_currentLevel, plan);
+            RefreshEnvironmentGradeDetails();
+            string storageStatus = usesExpandedWad
+                ? $" Guarded WAD expansion will store the {replacementByteLength:N0}-byte sky beyond the original {targetSky.ByteLength:N0}-byte capacity."
+                : " This edit fits the existing native sky capacity.";
+            string occlusionStatus = plan.IsPalette
+                ? ""
+                : " Sky occlusion will be adapted automatically so all donor parts can render.";
+            string gradeStatus = environmentGrade.Enabled && environmentMatch != null
+                ? $" Environment grade covers {environmentMatch.TargetSceneColorTableCount} scene color tables and {environmentMatch.TargetTexturePaletteCount} landscape palettes" +
+                  (environmentGrade.GradeAnyMobys ? ", plus native scenery/chest/creature lighting." : ".")
+                : "";
+            _statusText.Text = $"Saved {_currentLevel.DisplayName} skybox: {DescribeSkyboxEdit(plan)}.{storageStatus}{occlusionStatus}{gradeStatus} Create BIN will include it.";
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or JsonException)
+        {
+            _statusText.Text = $"Could not save this skybox edit: {ex.Message}";
+            return false;
+        }
+    }
+
+    private string ResolveSkyboxImportPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return "";
+        return Path.IsPathRooted(path) ? path : Path.GetFullPath(Path.Combine(_workspace.RootPath, path));
+    }
+
+    private void ResetSkyboxPlan()
+    {
+        if (_currentLevel == null)
+            return;
+
+        NativeSkyEditStore.Delete(_workspace.RootPath, _currentLevel.Key);
+        _syncingSkyboxControls = true;
+        try
+        {
+            _skyboxModeBox.SelectedItem = SkyboxEditModeOptions[0];
+            _skyboxPresetBox.SelectedItem = SkyboxPresetCatalog.NativeDefault;
+            _skyboxOriginalPresetBox.SelectedItem = SkyboxPresetCatalog.OriginalPresets[0];
+            _skyboxCustomPaletteBox.Text = "";
+            _skyboxImportPathBox.Text = "";
+            SetEnvironmentGradeControls(NativeEnvironmentGradePlan.Disabled);
+            if (_skyboxDonorBox.ItemsSource is IEnumerable<LevelDefinition> donors)
+                _skyboxDonorBox.SelectedItem = donors.FirstOrDefault();
+        }
+        finally
+        {
+            _syncingSkyboxControls = false;
+        }
+        _activeEnvironmentGradeMatch = null;
+        _viewport.SetEnvironmentGradePreview(null);
+        RefreshSkyboxModeControls();
+        RefreshOriginalSkyPresetPreview();
+        RefreshSkyboxDetails(_currentLevel, null);
+        _statusText.Text = $"Reset {_currentLevel.DisplayName} to its normal level palette and skybox.";
     }
 
     private async Task CreateSkyboxCueAsync()
     {
         if (_currentLevel == null)
         {
-            _statusText.Text = "Choose Stone Hill before creating a skybox test.";
+            _statusText.Text = "Choose a level before creating a skybox test.";
             return;
         }
 
-        if (!string.Equals(LevelCatalog.NormalizeKey(_currentLevel.Key), "stonehill", StringComparison.OrdinalIgnoreCase))
-        {
-            _statusText.Text = "Native skybox export is currently mapped for Stone Hill only.";
+        if (!await SaveSkyboxPlanAsync())
             return;
-        }
-
-        if (_skyboxPresetBox.SelectedItem is not SkyboxPreset preset)
-            preset = SkyboxPresetCatalog.DefaultForLevel(_currentLevel.Key);
-
-        if (!SkyboxColorPatchExporter.NativePresetIds.Contains(preset.Id))
-        {
-            _statusText.Text = $"{preset.DisplayName} still needs a native exporter port.";
-            return;
-        }
 
         string sourceImage = FirstExistingDiscImagePath(_skyboxDiscImagePathBox.Text, _discImagePathBox.Text, DiscImageLocator.FindImage(_workspace));
-        if (!File.Exists(sourceImage))
-        {
-            _statusText.Text = "Choose the original Spyro BIN/CUE before creating a skybox test.";
-            return;
-        }
-
-        string wadAnalysis = _skyboxWadAnalysisPathBox.Text?.Trim() ?? "";
-        if (!File.Exists(wadAnalysis))
-        {
-            try
-            {
-                wadAnalysis = Path.Combine(_workspace.RootPath, "spyro-wad-analysis.json");
-                await WadAnalysisBuilder.BuildAsync(sourceImage, wadAnalysis);
-                _skyboxWadAnalysisPathBox.Text = wadAnalysis;
-            }
-            catch (Exception ex)
-            {
-                _statusText.Text = $"Could not build spyro-wad-analysis.json from the selected BIN/CUE: {ex.Message}";
-                return;
-            }
-        }
-
-        string paletteHex = _skyboxCustomPaletteBox.Text?.Trim() ?? "";
-        if (preset.Id == "Custom" && !IsSafePaletteText(paletteHex))
-        {
-            _statusText.Text = "Custom skybox colors need to be #RRGGBB values separated by spaces.";
-            return;
-        }
-
-        string outputDir = EnsureUserOutputDirectory();
-        string outputPrefix = Path.Combine(outputDir, $"Spyro Editor - Stone Hill - Skybox - {FriendlyFilePart(preset.DisplayName)}");
-
-        _statusText.Text = $"Creating skybox test: {preset.DisplayName}...";
         try
         {
-            SkyboxColorPatchResult result = await SkyboxColorPatchExporter.ExportAsync(new SkyboxColorPatchRequest(
-                SourceImagePath: sourceImage,
-                SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
-                WadAnalysisPath: wadAnalysis,
-                OutputPrefix: outputPrefix,
-                Preset: preset,
-                CustomPaletteHex: paletteHex,
-                WriteImage: true));
+            NativeSkyEditPlan plan = NativeSkyEditStore.Load(_workspace.RootPath, _currentLevel)
+                ?? throw new InvalidOperationException("The skybox edit was not saved.");
+            string wadAnalysis = await EnsureSkyboxWadAnalysisAsync(sourceImage);
+            string outputDir = EnsureUserOutputDirectory();
+            string outputPrefix = Path.Combine(
+                outputDir,
+                $"Spyro Editor - {_currentLevel.DisplayName} - Sky - {FriendlyFilePart(DescribeSkyboxEdit(plan))}");
+            _statusText.Text = $"Creating {_currentLevel.DisplayName} skybox test...";
+            string skySourceImage = sourceImage;
+            string skySourceCue = DiscImageLocator.FindCueForImage(sourceImage);
+            NativeEnvironmentGradePatchResult? gradeResult = null;
+            try
+            {
+                if (plan.EnvironmentGrade.Enabled)
+                {
+                    string stageDirectory = Path.Combine(outputDir, "_sky-build");
+                    Directory.CreateDirectory(stageDirectory);
+                    gradeResult = await NativeEnvironmentGradeExporter.ExportBatchAsync(new NativeEnvironmentGradeBatchPatchRequest(
+                        SourceImagePath: sourceImage,
+                        SourceCuePath: skySourceCue,
+                        WadAnalysisPath: wadAnalysis,
+                        OutputPrefix: Path.Combine(stageDirectory, $"{LevelCatalog.NormalizeKey(_currentLevel.Key)}-environment"),
+                        Catalog: _catalog,
+                        Edits: [new NativeEnvironmentGradeBatchEdit(_currentLevel, plan.EnvironmentGrade)],
+                        WriteImage: true));
+                    if (!gradeResult.WroteImage)
+                        throw new InvalidOperationException("The environment grade did not produce any native color patches.");
+                    skySourceImage = gradeResult.OutputImagePath;
+                    skySourceCue = gradeResult.OutputCuePath;
+                }
 
-            _statusText.Text = $"Created {Path.GetFileName(result.OutputCuePath)} with {result.Plan.PatchCount} sky color patches.";
+                NativeSkyPatchResult result = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+                    SourceImagePath: skySourceImage,
+                    SourceCuePath: skySourceCue,
+                    WadAnalysisPath: wadAnalysis,
+                    WorkspacePath: _workspace.RootPath,
+                    OutputPrefix: outputPrefix,
+                    Catalog: _catalog,
+                    Edits: [new NativeSkyBatchEdit(_currentLevel, plan)],
+                    WriteImage: true));
+
+                string folderStatus = OpenContainingFolderStatus(result.OutputCuePath);
+                string relocationStatus = result.Plan.RelocatedWad
+                    ? $" Guarded WAD expansion added {result.Plan.WadGrowthBytes:N0} bytes and moved the executable +{result.Plan.ExecutableLbaDelta} sector(s)."
+                    : " The sky fit without WAD relocation.";
+                string occlusionStatus = result.Plan.SkyOcclusionBypassApplied
+                    ? " Target-level sky occlusion was bypassed for complete donor coverage."
+                    : " Native sky occlusion was preserved.";
+                string gradeStatus = gradeResult == null
+                    ? ""
+                    : $" Environment match patched {gradeResult.Plan.SceneColorPatchCount} scene tables and {gradeResult.Plan.TexturePalettePatchCount} landscape palettes" +
+                      (gradeResult.Plan.MobyRuntimePatchCount > 0 ? ", plus native object lighting." : ".");
+                _statusText.Text = $"Created {Path.GetFileName(result.OutputCuePath)} with {result.Plan.PatchCount} linked native sky block patch(es).{gradeStatus}{relocationStatus}{occlusionStatus}{folderStatus}";
+            }
+            finally
+            {
+                if (gradeResult != null)
+                {
+                    DeleteFileIfExists(gradeResult.OutputImagePath);
+                    DeleteFileIfExists(gradeResult.OutputCuePath);
+                    DeleteFileIfExists(gradeResult.OutputPlanPath);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -7220,59 +8457,66 @@ public sealed class MainWindow : Window
 
     private async Task SaveLevelTextPlanAsync()
     {
-        if (_currentLevel == null)
+        if (_levelTextTargetBox.SelectedItem is not TextTargetEntry target)
         {
-            _statusText.Text = "Choose a level before saving a lettering plan.";
-            return;
-        }
-        if (!IsHomeWorld(_currentLevel))
-        {
-            _statusText.Text = "Portal/name lettering edits are available only on homeworlds.";
-            return;
-        }
-
-        TextTargetEntry? target = _textTargets.FindForLevel(_currentLevel);
-        if (target == null)
-        {
-            _statusText.Text = "This level does not have a mapped fixed text slot yet.";
+            _statusText.Text = "Choose a level name first.";
             return;
         }
 
         string replacement = TextTargetCatalog.NormalizeReplacement(_levelTextReplacementBox.Text ?? "");
         if (!TextTargetCatalog.IsSafeReplacement(replacement, target.MaxLength))
         {
-            _statusText.Text = $"Use {target.MaxLength} or fewer safe characters for {target.OriginalText}.";
+            _statusText.Text = $"Use {target.MaxLength} or fewer letters, spaces, or apostrophes for {target.OriginalText}.";
             return;
         }
 
-        string path = Path.Combine(_workspace.RootPath, $"{_currentLevel.Key}-level-text-edit-plan.json");
-        var plan = new
-        {
-            generatedAt = DateTimeOffset.UtcNow,
-            kind = "exe-level-name-string-plan",
-            levelKey = _currentLevel.Key,
-            levelName = _currentLevel.DisplayName,
-            scriptKey = target.ScriptKey,
-            originalText = target.OriginalText,
-            replacementText = replacement,
-            maxLength = target.MaxLength,
-            nulledByteCount = target.MaxLength - replacement.Length,
-            sourceTool = "tools/Export-SpyroLevelTextPatchTest.ps1",
-            planOnlyArguments = new[]
-            {
-                "-TargetLevelKey", target.ScriptKey,
-                "-ReplacementName", replacement,
-                "-PlanOnly"
-            },
-            notes = new[]
-            {
-                "This edits the anchored executable level-name string table.",
-                "It is expected to affect fly-in title lettering; portal label behavior still needs in-game confirmation."
-            }
-        };
+        await LevelTextEditStore.SaveAsync(_workspace.RootPath, target, replacement);
+        RefreshLevelTextTargetEditor();
+        _statusText.Text = string.Equals(replacement, target.OriginalText, StringComparison.Ordinal)
+            ? $"Reset {target.DisplayName} to {target.OriginalText}."
+            : $"Saved {target.DisplayName}: {target.OriginalText} -> {replacement}. Create BIN will include it.";
+    }
 
-        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(plan, NewJsonOptions()));
-        _statusText.Text = $"Saved lettering plan: {target.OriginalText} -> {replacement}.";
+    private void ResetLevelTextPlan()
+    {
+        if (_levelTextTargetBox.SelectedItem is not TextTargetEntry target)
+        {
+            _statusText.Text = "Choose a level name first.";
+            return;
+        }
+
+        LevelTextEditStore.Delete(_workspace.RootPath, target);
+        RefreshLevelTextTargetEditor();
+        _statusText.Text = $"Reset {target.DisplayName} to {target.OriginalText}.";
+    }
+
+    private async Task SaveLevelMusicPlanAsync()
+    {
+        if (_currentLevel == null || _levelMusicTrackBox.SelectedItem is not MusicTrackEntry selected)
+        {
+            _statusText.Text = "Choose a level and music track first.";
+            return;
+        }
+
+        int nativeTrackId = MusicTrackCatalog.GetNativeTrackId(_currentLevel);
+        await LevelMusicEditStore.SaveAsync(_workspace.RootPath, _currentLevel, selected.TrackId);
+        RefreshLevelMusicEditor(_currentLevel);
+        _statusText.Text = selected.TrackId == nativeTrackId
+            ? $"Reset {_currentLevel.DisplayName} to its original music."
+            : $"Saved {_currentLevel.DisplayName} music: {selected.DisplayName}. Create BIN will include it.";
+    }
+
+    private void ResetLevelMusicPlan()
+    {
+        if (_currentLevel == null)
+        {
+            _statusText.Text = "Choose a level first.";
+            return;
+        }
+
+        LevelMusicEditStore.Delete(_workspace.RootPath, _currentLevel);
+        RefreshLevelMusicEditor(_currentLevel);
+        _statusText.Text = $"Reset {_currentLevel.DisplayName} to its original music.";
     }
 
     private async Task SaveExeStringPlanAsync()
@@ -7317,62 +8561,6 @@ public sealed class MainWindow : Window
 
         await File.WriteAllTextAsync(path, JsonSerializer.Serialize(plan, NewJsonOptions()));
         _statusText.Text = $"Saved UI text plan: {original} -> {replacement}.";
-    }
-
-    private async Task CreateLevelTextCueAsync()
-    {
-        if (_currentLevel == null)
-        {
-            _statusText.Text = "Choose a level before creating a lettering test.";
-            return;
-        }
-        if (!IsHomeWorld(_currentLevel))
-        {
-            _statusText.Text = "Portal/name lettering tests are available only on homeworlds.";
-            return;
-        }
-
-        TextTargetEntry? target = _textTargets.FindForLevel(_currentLevel);
-        if (target == null)
-        {
-            _statusText.Text = "This level does not have a mapped fixed text slot yet.";
-            return;
-        }
-
-        string sourceImage = FirstExistingDiscImagePath(_discImagePathBox.Text, _skyboxDiscImagePathBox.Text, DiscImageLocator.FindImage(_workspace));
-        if (!File.Exists(sourceImage))
-        {
-            _statusText.Text = "Choose the original Spyro BIN/CUE before creating a lettering test.";
-            return;
-        }
-
-        string replacement = TextTargetCatalog.NormalizeReplacement(_levelTextReplacementBox.Text ?? "");
-        if (!TextTargetCatalog.IsSafeReplacement(replacement, target.MaxLength))
-        {
-            _statusText.Text = $"Use {target.MaxLength} or fewer safe characters for {target.OriginalText}.";
-            return;
-        }
-
-        string outputDir = EnsureUserOutputDirectory();
-        string outputPrefix = Path.Combine(outputDir, $"Spyro Editor - {_currentLevel.DisplayName} - Lettering - {FriendlyFilePart(replacement)}");
-
-        _statusText.Text = $"Creating lettering test for {_currentLevel.DisplayName}...";
-        try
-        {
-            LevelTextPatchResult result = await LevelTextPatchExporter.ExportAsync(new LevelTextPatchRequest(
-                SourceImagePath: sourceImage,
-                SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
-                OutputPrefix: outputPrefix,
-                Target: target,
-                ReplacementText: replacement,
-                WriteImage: true));
-
-            _statusText.Text = $"Created {Path.GetFileName(result.OutputCuePath)} for {target.OriginalText} -> {replacement}.";
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = $"Could not create lettering test: {ex.Message}";
-        }
     }
 
     private async Task CreateExeStringCueAsync()
@@ -7439,7 +8627,7 @@ public sealed class MainWindow : Window
         IReadOnlyList<EditedLevelExportTarget> targets = FindEditedLevelExportTargets();
         if (targets.Count == 0)
         {
-            _statusText.Text = "No saved edits were found. Move, edit, add, remove an object, or change terrain first.";
+            _statusText.Text = "No saved edits were found. Change a level name, music track, skybox, object, or terrain first.";
             return;
         }
 
@@ -7471,19 +8659,18 @@ public sealed class MainWindow : Window
             {
                 string skipped = result.SkippedEdits > 0
                     ? $" Skipped {result.SkippedEdits} edit(s) that are not export-ready yet."
-                    : " Move, edit, add, remove an object, or raise/lower terrain first.";
-                _statusText.Text = $"No source patches were ready across the saved edits.{skipped}";
+                    : " Change a level name, music track, skybox, object, or terrain first.";
+                _statusText.Text = $"No source patches were ready across the saved edits.{skipped} Older All Saved Edits BIN/CUE output was removed so DuckStation cannot load a stale test.";
                 return;
             }
 
             string levelSummary = result.PatchedLevelNames.Count == 0
                 ? ""
                 : $" for {FormatShortList(result.PatchedLevelNames, 4)}";
-            string skippedSummary = result.SkippedEdits > 0
-                ? $" Skipped {result.SkippedEdits} edit(s) that are not export-ready yet."
-                : "";
+            string treasureSummary = BuildExportedTreasureStatus(result.ExportedTreasureTargets);
+            string skippedSummary = BuildSkippedExportStatus(result.SkippedEdits, result.SkippedEditDetails);
             string folderStatus = OpenContainingFolderStatus(result.OutputCuePath);
-            _statusText.Text = $"Created all-edits test {Path.GetFileName(result.OutputCuePath)}{levelSummary}: {result.ObjectPatches} object patch(es), {result.TerrainPatches} terrain patch(es).{skippedSummary}{folderStatus}";
+            _statusText.Text = $"Created all-edits test {Path.GetFileName(result.OutputCuePath)}{levelSummary}: {result.ObjectPatches} object patch(es), {result.TerrainPatches} terrain patch(es), {result.EnvironmentGradePatches} environment patch(es), {result.SkyboxPatches} sky block patch(es), {result.LevelNamePatches} level name(s), {result.MusicLevelPatches} music level(s).{treasureSummary}{skippedSummary}{folderStatus}";
         }
         catch (Exception ex)
         {
@@ -7499,8 +8686,12 @@ public sealed class MainWindow : Window
             bool hasObjectEdits = level.HasSourceTable && NativeEditFileHasEdits(Path.Combine(_workspace.RootPath, $"{level.Key}-native-edits.json"));
             bool hasTerrainEdits = TerrainEditFileHasEdits(Path.Combine(_workspace.RootPath, $"{level.Key}-terrain-edits.json"));
             bool hasCustomTerrainTextures = CustomTerrainTextureFileHasTextures(CustomTerrainTextureStore.ManifestPath(_workspace.RootPath, level.Key));
-            if (hasObjectEdits || hasTerrainEdits || hasCustomTerrainTextures)
-                targets.Add(new EditedLevelExportTarget(level, hasObjectEdits, hasTerrainEdits, hasCustomTerrainTextures));
+            TextTargetEntry? textTarget = _textTargets.FindForLevel(level);
+            bool hasLevelTextEdit = textTarget != null && LevelTextEditStore.Load(_workspace.RootPath, textTarget) != null;
+            bool hasLevelMusicEdit = LevelMusicEditStore.Load(_workspace.RootPath, level) != null;
+            bool hasSkyboxEdit = NativeSkyEditStore.Load(_workspace.RootPath, level) != null;
+            if (hasObjectEdits || hasTerrainEdits || hasCustomTerrainTextures || hasLevelTextEdit || hasLevelMusicEdit || hasSkyboxEdit)
+                targets.Add(new EditedLevelExportTarget(level, hasObjectEdits, hasTerrainEdits, hasCustomTerrainTextures, hasLevelTextEdit, hasLevelMusicEdit, hasSkyboxEdit));
         }
 
         return targets;
@@ -7514,11 +8705,18 @@ public sealed class MainWindow : Window
     {
         string tempDir = Path.Combine(outputDir, "_combined-build");
         Directory.CreateDirectory(tempDir);
-        foreach (string staleImage in Directory.EnumerateFiles(tempDir, "*.bin").Concat(Directory.EnumerateFiles(tempDir, "*.cue")))
+        string finalPrefix = Path.Combine(outputDir, "Spyro Editor - All Saved Edits");
+        string finalImage = $"{finalPrefix}.bin";
+        string finalCue = $"{finalPrefix}.cue";
+        string finalSummary = $"{finalPrefix}.combined-export-summary.json";
+        foreach (string staleImage in Directory.EnumerateFiles(tempDir, "*.bin")
+            .Concat(Directory.EnumerateFiles(tempDir, "*.cue"))
+            .Concat(new[] { finalImage, finalCue, finalSummary }))
         {
             try
             {
-                File.Delete(staleImage);
+                if (File.Exists(staleImage))
+                    File.Delete(staleImage);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -7530,8 +8728,18 @@ public sealed class MainWindow : Window
         int step = 0;
         int objectPatches = 0;
         int terrainPatches = 0;
+        int environmentGradePatches = 0;
+        int skyboxPatches = 0;
+        int levelNamePatches = 0;
+        int musicLevelPatches = 0;
         int skippedEdits = 0;
         List<string> patchedLevelNames = [];
+        List<string> skippedEditDetails = [];
+        List<ExportedTreasureTarget> exportedTreasureTargets = [];
+        List<LevelTextReplacement> levelTextEdits = [];
+        List<LevelMusicReplacement> levelMusicEdits = [];
+        List<NativeSkyBatchEdit> skyboxEdits = [];
+        List<NativeEnvironmentGradeBatchEdit> environmentGradeEdits = [];
         List<object> stepSummaries = [];
 
         foreach (EditedLevelExportTarget target in targets)
@@ -7551,6 +8759,10 @@ public sealed class MainWindow : Window
 
                 objectPatches += objectResult.Plan.PatchCount;
                 skippedEdits += objectResult.Plan.SkippedEdits.Count;
+                skippedEditDetails.AddRange(objectResult.Plan.SkippedEdits.Select(skipped => $"{target.Level.DisplayName}: {skipped}"));
+                ExportedTreasureTarget? treasureTarget = ExtractExportedTreasureTarget(objectResult.Plan);
+                if (treasureTarget != null)
+                    exportedTreasureTargets.Add(treasureTarget);
                 patchedThisLevel |= objectResult.WroteImage;
                 stepSummaries.Add(new
                 {
@@ -7558,6 +8770,7 @@ public sealed class MainWindow : Window
                     kind = "objects",
                     objectResult.Plan.PatchCount,
                     skipped = objectResult.Plan.SkippedEdits.Count,
+                    exportedTreasureTarget = treasureTarget,
                     plan = objectResult.OutputPlanPath
                 });
                 if (objectResult.WroteImage)
@@ -7575,6 +8788,7 @@ public sealed class MainWindow : Window
                 {
                     terrainPatches += terrainResult.Plan.PatchCount;
                     skippedEdits += terrainResult.Plan.SkippedEdits.Count;
+                    skippedEditDetails.AddRange(terrainResult.Plan.SkippedEdits.Select(skipped => $"{target.Level.DisplayName}: {skipped}"));
                     patchedThisLevel |= terrainResult.WroteImage;
                     stepSummaries.Add(new
                     {
@@ -7594,15 +8808,173 @@ public sealed class MainWindow : Window
 
             if (patchedThisLevel && !patchedLevelNames.Contains(target.Level.DisplayName, StringComparer.OrdinalIgnoreCase))
                 patchedLevelNames.Add(target.Level.DisplayName);
+
+            if (target.HasLevelTextEdit && _textTargets.FindForLevel(target.Level) is TextTargetEntry textTarget)
+            {
+                LevelTextEditPlan? textEdit = LevelTextEditStore.Load(_workspace.RootPath, textTarget);
+                if (textEdit != null)
+                    levelTextEdits.Add(new LevelTextReplacement(textTarget, textEdit.ReplacementText));
+            }
+
+            if (target.HasLevelMusicEdit)
+            {
+                LevelMusicEditPlan? musicEdit = LevelMusicEditStore.Load(_workspace.RootPath, target.Level);
+                if (musicEdit != null)
+                    levelMusicEdits.Add(new LevelMusicReplacement(target.Level, musicEdit.SelectedTrackId));
+            }
+
+            if (target.HasSkyboxEdit)
+            {
+                NativeSkyEditPlan? skyboxEdit = NativeSkyEditStore.Load(_workspace.RootPath, target.Level);
+                if (skyboxEdit != null)
+                {
+                    skyboxEdits.Add(new NativeSkyBatchEdit(target.Level, skyboxEdit));
+                    if (skyboxEdit.EnvironmentGrade.Enabled)
+                        environmentGradeEdits.Add(new NativeEnvironmentGradeBatchEdit(target.Level, skyboxEdit.EnvironmentGrade));
+                }
+            }
         }
 
-        if (objectPatches + terrainPatches == 0 || !File.Exists(currentImage))
-            return new CombinedTestBinResult("", "", objectPatches, terrainPatches, skippedEdits, patchedLevelNames, false);
+        if (environmentGradeEdits.Count > 0)
+        {
+            string wadAnalysis = await EnsureSkyboxWadAnalysisAsync(sourceImage);
+            string outputPrefix = Path.Combine(tempDir, $"{++step:00}-environment-grades");
+            NativeEnvironmentGradePatchResult gradeResult = await NativeEnvironmentGradeExporter.ExportBatchAsync(new NativeEnvironmentGradeBatchPatchRequest(
+                SourceImagePath: currentImage,
+                SourceCuePath: currentCue,
+                WadAnalysisPath: wadAnalysis,
+                OutputPrefix: outputPrefix,
+                Catalog: _catalog,
+                Edits: environmentGradeEdits,
+                WriteImage: true));
+            environmentGradePatches += gradeResult.Plan.PatchCount;
+            stepSummaries.Add(new
+            {
+                kind = "environment-grades",
+                gradeResult.Plan.EditedLevelCount,
+                gradeResult.Plan.PatchCount,
+                gradeResult.Plan.SceneColorPatchCount,
+                gradeResult.Plan.TexturePalettePatchCount,
+                gradeResult.Plan.MobyMaterialRowPatchCount,
+                gradeResult.Plan.MobyRuntimePatchCount,
+                gradeResult.Plan.TotalColorCount,
+                levels = gradeResult.Plan.Matches.Select(match => match.TargetLevelName),
+                plan = gradeResult.OutputPlanPath
+            });
+            if (gradeResult.WroteImage)
+            {
+                currentImage = gradeResult.OutputImagePath;
+                currentCue = gradeResult.OutputCuePath;
+                foreach (string levelName in gradeResult.Plan.Matches.Select(match => match.TargetLevelName))
+                {
+                    if (!patchedLevelNames.Contains(levelName, StringComparer.OrdinalIgnoreCase))
+                        patchedLevelNames.Add(levelName);
+                }
+            }
+        }
 
-        string finalPrefix = Path.Combine(outputDir, "Spyro Editor - All Saved Edits");
-        string finalImage = $"{finalPrefix}.bin";
-        string finalCue = $"{finalPrefix}.cue";
-        string finalSummary = $"{finalPrefix}.combined-export-summary.json";
+        if (skyboxEdits.Count > 0)
+        {
+            string wadAnalysis = await EnsureSkyboxWadAnalysisAsync(sourceImage);
+            string outputPrefix = Path.Combine(tempDir, $"{++step:00}-skyboxes");
+            NativeSkyPatchResult skyboxResult = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+                SourceImagePath: currentImage,
+                SourceCuePath: currentCue,
+                WadAnalysisPath: wadAnalysis,
+                WorkspacePath: _workspace.RootPath,
+                OutputPrefix: outputPrefix,
+                Catalog: _catalog,
+                Edits: skyboxEdits,
+                WriteImage: true));
+            skyboxPatches += skyboxResult.Plan.PatchCount;
+            stepSummaries.Add(new
+            {
+                kind = "skyboxes",
+                skyboxResult.Plan.EditedLevelCount,
+                skyboxResult.Plan.PatchCount,
+                skyboxResult.Plan.RelocatedWad,
+                skyboxResult.Plan.WadGrowthBytes,
+                skyboxResult.Plan.ExecutableLbaDelta,
+                skyboxResult.Plan.SkyOcclusionBypassApplied,
+                skyboxResult.Plan.ExecutablePatchCount,
+                levels = skyboxResult.Plan.EditedLevelNames,
+                plan = skyboxResult.OutputPlanPath
+            });
+            if (skyboxResult.WroteImage)
+            {
+                currentImage = skyboxResult.OutputImagePath;
+                currentCue = skyboxResult.OutputCuePath;
+                foreach (string levelName in skyboxResult.Plan.EditedLevelNames)
+                {
+                    if (!patchedLevelNames.Contains(levelName, StringComparer.OrdinalIgnoreCase))
+                        patchedLevelNames.Add(levelName);
+                }
+            }
+        }
+
+        if (levelTextEdits.Count > 0)
+        {
+            string outputPrefix = Path.Combine(tempDir, $"{++step:00}-level-names");
+            LevelTextBatchPatchResult textResult = await LevelTextPatchExporter.ExportBatchAsync(new LevelTextBatchPatchRequest(
+                SourceImagePath: currentImage,
+                SourceCuePath: currentCue,
+                OutputPrefix: outputPrefix,
+                Edits: levelTextEdits,
+                WriteImage: true));
+            levelNamePatches += textResult.Plan.PatchCount;
+            stepSummaries.Add(new
+            {
+                kind = "level-names",
+                textResult.Plan.PatchCount,
+                levels = textResult.Plan.LevelNames,
+                plan = textResult.OutputPlanPath
+            });
+            if (textResult.WroteImage)
+            {
+                currentImage = textResult.OutputImagePath;
+                currentCue = textResult.OutputCuePath;
+                foreach (string levelName in textResult.Plan.LevelNames)
+                {
+                    if (!patchedLevelNames.Contains(levelName, StringComparer.OrdinalIgnoreCase))
+                        patchedLevelNames.Add(levelName);
+                }
+            }
+        }
+
+        if (levelMusicEdits.Count > 0)
+        {
+            string outputPrefix = Path.Combine(tempDir, $"{++step:00}-level-music");
+            LevelMusicBatchPatchResult musicResult = await LevelMusicPatchExporter.ExportBatchAsync(new LevelMusicBatchPatchRequest(
+                SourceImagePath: currentImage,
+                SourceCuePath: currentCue,
+                OutputPrefix: outputPrefix,
+                Edits: levelMusicEdits,
+                WriteImage: true));
+            if (musicResult.WroteImage)
+                musicLevelPatches += musicResult.Plan.EditedLevelCount;
+            stepSummaries.Add(new
+            {
+                kind = "level-music",
+                musicResult.Plan.EditedLevelCount,
+                musicResult.Plan.PatchCount,
+                levels = musicResult.Plan.Levels,
+                plan = musicResult.OutputPlanPath
+            });
+            if (musicResult.WroteImage)
+            {
+                currentImage = musicResult.OutputImagePath;
+                currentCue = musicResult.OutputCuePath;
+                foreach (string levelName in musicResult.Plan.Levels)
+                {
+                    if (!patchedLevelNames.Contains(levelName, StringComparer.OrdinalIgnoreCase))
+                        patchedLevelNames.Add(levelName);
+                }
+            }
+        }
+
+        if (objectPatches + terrainPatches + environmentGradePatches + skyboxPatches + levelNamePatches + musicLevelPatches == 0 || !File.Exists(currentImage))
+            return new CombinedTestBinResult("", "", objectPatches, terrainPatches, environmentGradePatches, skyboxPatches, levelNamePatches, musicLevelPatches, skippedEdits, skippedEditDetails, exportedTreasureTargets, patchedLevelNames, false);
+
         File.Copy(currentImage, finalImage, true);
         string cueText = BuildCueText(currentCue, Path.GetFileName(finalImage));
         await File.WriteAllTextAsync(finalCue, cueText, Encoding.ASCII);
@@ -7616,11 +8988,104 @@ public sealed class MainWindow : Window
             levels = patchedLevelNames,
             objectPatches,
             terrainPatches,
+            environmentGradePatches,
+            skyboxPatches,
+            levelNamePatches,
+            musicLevelPatches,
             skippedEdits,
+            skippedEditDetails,
+            exportedTreasureTargets,
             steps = stepSummaries
         }, new JsonSerializerOptions { WriteIndented = true }));
+        WriteSkippedExportDetails(finalPrefix, skippedEditDetails);
 
-        return new CombinedTestBinResult(finalImage, finalCue, objectPatches, terrainPatches, skippedEdits, patchedLevelNames, true);
+        return new CombinedTestBinResult(finalImage, finalCue, objectPatches, terrainPatches, environmentGradePatches, skyboxPatches, levelNamePatches, musicLevelPatches, skippedEdits, skippedEditDetails, exportedTreasureTargets, patchedLevelNames, true);
+    }
+
+    private static string BuildExportedTreasureStatus(IReadOnlyList<ExportedTreasureTarget> exportedTreasureTargets)
+    {
+        if (exportedTreasureTargets.Count == 0)
+            return "";
+
+        string targets = string.Join("; ", exportedTreasureTargets
+            .Take(4)
+            .Select(target => $"{target.LevelName} {target.After}"));
+        if (exportedTreasureTargets.Count > 4)
+            targets += "; ...";
+        return $" Exported treasure target: {targets}.";
+    }
+
+    private static ExportedTreasureTarget? ExtractExportedTreasureTarget(MobySourcePatchPlan plan)
+    {
+        MobySourcePatch? treasurePatch = plan.Patches.FirstOrDefault(patch =>
+            string.Equals(patch.Kind, "level-treasure-total", StringComparison.OrdinalIgnoreCase));
+        if (treasurePatch == null)
+            return null;
+        if (!TryParseLittleEndianUInt16Preview(treasurePatch.BeforeHexPreview, out int before) ||
+            !TryParseLittleEndianUInt16Preview(treasurePatch.AfterHexPreview, out int after))
+        {
+            return null;
+        }
+
+        return new ExportedTreasureTarget(plan.LevelName, before, after);
+    }
+
+    private static bool TryParseLittleEndianUInt16Preview(string hexPreview, out int value)
+    {
+        value = 0;
+        string[] parts = (hexPreview ?? "")
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length < 2 ||
+            !byte.TryParse(parts[0], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte low) ||
+            !byte.TryParse(parts[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte high))
+        {
+            return false;
+        }
+
+        value = low | (high << 8);
+        return true;
+    }
+
+    private static string BuildSkippedExportStatus(int skippedEdits, IReadOnlyList<string> skippedEditDetails)
+    {
+        if (skippedEdits <= 0)
+            return "";
+
+        string samples = string.Join("; ", skippedEditDetails
+            .Select(detail => detail.Split(':', 2).Last().Trim())
+            .Where(detail => !string.IsNullOrWhiteSpace(detail))
+            .Take(3));
+        string sampleText = string.IsNullOrWhiteSpace(samples)
+            ? ""
+            : $" Examples: {samples}{(skippedEditDetails.Count > 3 ? "; ..." : "")}";
+        return $" Skipped {skippedEdits} saved edit(s) that stayed saved but are not export-ready yet.{sampleText}";
+    }
+
+    private static void WriteSkippedExportDetails(string finalPrefix, IReadOnlyList<string> skippedEditDetails)
+    {
+        string path = $"{finalPrefix}.skipped-edits.txt";
+        if (skippedEditDetails.Count == 0)
+        {
+            try
+            {
+                if (File.Exists(path))
+                    File.Delete(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+            return;
+        }
+
+        List<string> lines =
+        [
+            "Saved edits skipped from this BIN/CUE",
+            "",
+            "These edits are still saved in the editor workspace. They were not written into this test disc because the current exporter does not have a proven safe native route for them yet.",
+            ""
+        ];
+        lines.AddRange(skippedEditDetails.Select(detail => $"- {detail}"));
+        File.WriteAllLines(path, lines, Encoding.UTF8);
     }
 
     private static string BuildCueText(string sourceCuePath, string outputBinName)
@@ -7665,7 +9130,7 @@ public sealed class MainWindow : Window
         string levelList = names.Count == 1
             ? names[0]
             : string.Join(", ", names.Take(names.Count - 1)) + ", and " + names[^1];
-        return $" Other saved object edits exist for {levelList}; switch to that level and run Create BIN to make its test disc too.";
+        return $" Other saved object edits exist for {levelList}; Create BIN includes saved edits from every level in one all-edits test.";
     }
 
     private static bool NativeEditFileHasEdits(string path)
@@ -7805,7 +9270,10 @@ public sealed class MainWindow : Window
                      string.Equals(preview.RecipeStatus, "experimental-image-write", StringComparison.OrdinalIgnoreCase)) &&
                     preview.GuardReason.Contains("disposable candidate mode", StringComparison.OrdinalIgnoreCase))
                 .ToList();
-            if (candidatePreviews.Count == 0)
+            List<MobySourcePatch> sourceRecordCandidatePatches = candidatePlan.Patches
+                .Where(IsCrossLevelSourceRecordCandidatePatch)
+                .ToList();
+            if (candidatePreviews.Count == 0 && sourceRecordCandidatePatches.Count == 0)
             {
                 string skipped = candidatePlan.SkippedEdits.Count > 0 ? $" {candidatePlan.SkippedEdits[0]}" : "";
                 _statusText.Text = $"No guarded cross-level candidate is ready for {_currentLevel.DisplayName}.{skipped}";
@@ -7823,6 +9291,7 @@ public sealed class MainWindow : Window
 
             string labels = string.Join(", ", candidatePreviews
                 .Select(preview => string.IsNullOrWhiteSpace(preview.Label) ? preview.TemplateId : preview.Label)
+                .Concat(sourceRecordCandidatePatches.Select(patch => string.IsNullOrWhiteSpace(patch.MobyLabel) ? patch.Label : patch.MobyLabel))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Take(3));
             _statusText.Text = result.WroteImage
@@ -7833,6 +9302,96 @@ public sealed class MainWindow : Window
         {
             _statusText.Text = $"Could not create candidate test: {ex.Message}";
         }
+    }
+
+    private async Task CreateNativeAppendResearchBinAsync()
+    {
+        if (_currentLevel == null)
+        {
+            _statusText.Text = "Choose a level before creating a native append research test.";
+            return;
+        }
+
+        if (!_currentLevel.HasSourceTable)
+        {
+            _statusText.Text = $"{_currentLevel.DisplayName} does not have source moby patching mapped yet.";
+            return;
+        }
+
+        string sourceImage = FirstExistingDiscImagePath(_discImagePathBox.Text, _skyboxDiscImagePathBox.Text, DiscImageLocator.FindImage(_workspace));
+        if (!File.Exists(sourceImage))
+        {
+                _statusText.Text = "Choose the original Spyro BIN/CUE before creating an unsafe append research test.";
+            return;
+        }
+
+        await SaveCurrentEditsAsync();
+        string editsPath = Path.Combine(_workspace.RootPath, $"{_currentLevel.Key}-native-edits.json");
+        if (!File.Exists(editsPath))
+        {
+            _statusText.Text = "Add or paste a same-level enemy/chest before creating an unsafe append research test.";
+            return;
+        }
+
+        string outputDir = EnsureUserOutputDirectory();
+        string outputPrefix = Path.Combine(outputDir, $"Spyro Editor - {_currentLevel.DisplayName} - Native Append Research");
+        string outputBin = $"{outputPrefix}.bin";
+        string outputCue = $"{outputPrefix}.cue";
+
+        try
+        {
+            MobySourcePatchPlan researchPlan = MobySourcePatchExporter.BuildPlan(
+                sourceImage,
+                DiscImageLocator.FindCueForImage(sourceImage),
+                outputBin,
+                outputCue,
+                _currentLevel,
+                editsPath,
+                allowGuardedNativeCloneAppend: true);
+            List<MobySourcePatch> nativeAppendPatches = researchPlan.Patches
+                .Where(IsSameLevelNativeCloneAppendResearchPatch)
+                .ToList();
+            if (nativeAppendPatches.Count == 0)
+            {
+                string skipped = researchPlan.SkippedEdits.Count > 0 ? $" {researchPlan.SkippedEdits[0]}" : "";
+                _statusText.Text = $"No unsafe same-level enemy/chest true-append would be written for {_currentLevel.DisplayName}. Add more copies than the safe slot counter can reuse, then create the research BIN again.{skipped}";
+                return;
+            }
+
+            MobySourcePatchResult result = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+                SourceImagePath: sourceImage,
+                SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+                OutputPrefix: outputPrefix,
+                Level: _currentLevel,
+                NativeEditsPath: editsPath,
+                WriteImage: true,
+                AllowGuardedNativeCloneAppend: true));
+
+            string labels = string.Join(", ", nativeAppendPatches
+                .Select(patch => string.IsNullOrWhiteSpace(patch.MobyLabel) ? patch.Label : patch.MobyLabel)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(3));
+            _statusText.Text = result.WroteImage
+                ? $"Created unsafe append research BIN/CUE for {labels}. This bypasses normal Create BIN and may create inert, invisible, or broken objects. Checklist: {Path.GetFileName(await MobyCandidateValidationReportWriter.WriteAsync(result))}{OpenContainingFolderStatus(result.OutputCuePath)}"
+                : $"No unsafe append research patches were written for {_currentLevel.DisplayName}.";
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = $"Could not create native append research test: {ex.Message}";
+        }
+    }
+
+    private static bool IsCrossLevelSourceRecordCandidatePatch(MobySourcePatch patch)
+    {
+        return string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) &&
+            patch.Description.Contains("cross-level source-record candidate", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsSameLevelNativeCloneAppendResearchPatch(MobySourcePatch patch)
+    {
+        return string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) &&
+            patch.Description.Contains("cloned from same-level donor", StringComparison.OrdinalIgnoreCase) &&
+            !patch.Description.Contains("donor gem visual data", StringComparison.OrdinalIgnoreCase);
     }
 
     private void OpenCandidateTestsLauncher()
@@ -7867,6 +9426,66 @@ public sealed class MainWindow : Window
             ? Path.Combine(_workspace.RootPath, "Launch Cross-Level Candidate Tests.command")
             : Path.Combine(_workspace.RootPath, "Launch Cross-Level Candidate Tests.bat");
         return File.Exists(fallback) ? fallback : "";
+    }
+
+    private void OpenControlRoleFieldGuide()
+    {
+        string guidePath = Path.Combine(_workspace.RootPath, "_local", "smoke", "control-role-field-guide.md");
+        if (!File.Exists(guidePath))
+        {
+            _statusText.Text = $"Control guide was not found at {guidePath}. Run the smoke report once, then open it here.";
+            return;
+        }
+
+        try
+        {
+            OpenPath(guidePath);
+            _statusText.Text = $"Opened trigger/control guide: {guidePath}";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
+        {
+            _statusText.Text = $"Could not open trigger/control guide at {guidePath}: {ex.Message}";
+        }
+    }
+
+    private void OpenControlRoleProofReviewFolder()
+    {
+        string reviewRoot = Path.Combine(_workspace.RootPath, "_local", "control-role-proof-review");
+        if (!Directory.Exists(reviewRoot))
+        {
+            _statusText.Text = $"Control proof review folder was not found at {reviewRoot}. Run the smoke report once, then open it here.";
+            return;
+        }
+
+        try
+        {
+            OpenPath(reviewRoot);
+            _statusText.Text = $"Opened trigger/control proof review folder: {reviewRoot}";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
+        {
+            _statusText.Text = $"Could not open trigger/control proof review folder at {reviewRoot}: {ex.Message}";
+        }
+    }
+
+    private void OpenControlRoleProofBinsFolder()
+    {
+        string proofBinRoot = Path.Combine(_workspace.RootPath, "_local", "objects", "control-role-proof-bins");
+        if (!Directory.Exists(proofBinRoot))
+        {
+            _statusText.Text = $"Control proof BIN/CUE folder was not found at {proofBinRoot}. Run the smoke proof export once, then open it here.";
+            return;
+        }
+
+        try
+        {
+            OpenPath(proofBinRoot);
+            _statusText.Text = $"Opened trigger/control proof BIN/CUE folder: {proofBinRoot}";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
+        {
+            _statusText.Text = $"Could not open trigger/control proof BIN/CUE folder at {proofBinRoot}: {ex.Message}";
+        }
     }
 
     private void OpenCandidateCue(CandidateResultItem candidate)
@@ -7921,7 +9540,7 @@ public sealed class MainWindow : Window
         try
         {
             OpenPath(folder);
-            return " Opened the output folder.";
+            return $" Opened the output folder: {folder}";
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
         {
@@ -9425,23 +11044,33 @@ public sealed class MainWindow : Window
             SelectMobyInList(moby);
             RefreshLinkedMobyList(moby);
             RefreshTerrainSurfaceQuickState();
-        _selectionTitle.Text = moby.DisplayLabel;
-            _selectionDetails.Text =
-                $"True index: {moby.TrueIndex}\n" +
-                $"Category: {MobyListBadge(moby)}\n" +
-                $"Identity: {BuildMobyIdentityStatus(moby)}\n" +
-                $"Type/state: 0x{moby.Type:X2} / 0x{moby.State:X2}\n" +
-                $"XYZ: {moby.Position.X:0.0}, {moby.Position.Y:0.0}, {moby.Position.Z:0.0}\n" +
-                BuildMobyMetadataDetails(moby) +
-                $"Technical: {moby.TechnicalSummary}\n" +
-                $"Edited: {(moby.HasAnyEdit ? "yes" : "no")}\n" +
-                $"Patch: {moby.PatchStatus}" +
-                (moby.HasLoadedNativeEdit ? $"\nLoaded edit: {moby.LoadedNativeEditSummary}" : "");
+            _selectionTitle.Text = moby.DisplayLabel;
+            _selectionDetails.Text = moby.IsFlyInLandingControl
+                ? $"Level entry: homeworld to this level\n" +
+                  $"Identity: {BuildMobyIdentityStatus(moby)}\n" +
+                  $"XYZ: {moby.Position.X:0.0}, {moby.Position.Y:0.0}, {moby.Position.Z:0.0}\n" +
+                  $"Fly-in heading: {FlyInLandingEditorControl.HeadingByteToDegrees(moby.YawByte):0.#} deg\n" +
+                  $"Return-home data: unchanged\n" +
+                  $"Edited: {(moby.HasAnyEdit ? "yes" : "no")}\n" +
+                  $"Patch: {moby.PatchStatus}" +
+                  (moby.HasLoadedNativeEdit ? $"\nLoaded edit: {moby.LoadedNativeEditSummary}" : "")
+                : $"True index: {moby.TrueIndex}\n" +
+                  $"Category: {MobyListBadge(moby)}\n" +
+                  $"Identity: {BuildMobyIdentityStatus(moby)}\n" +
+                  $"Type/state: 0x{moby.Type:X2} / 0x{moby.State:X2}\n" +
+                  $"XYZ: {moby.Position.X:0.0}, {moby.Position.Y:0.0}, {moby.Position.Z:0.0}\n" +
+                  BuildMobyMetadataDetails(moby) +
+                  $"Technical: {moby.TechnicalSummary}\n" +
+                  $"Edited: {(moby.HasAnyEdit ? "yes" : "no")}\n" +
+                  $"Patch: {moby.PatchStatus}" +
+                  (moby.HasLoadedNativeEdit ? $"\nLoaded edit: {moby.LoadedNativeEditSummary}" : "");
             _identityObservationHint.Text = $"{BuildIdentityFamilySummary(moby)}\nFingerprint: {IdentityFingerprint(moby)}";
             RefreshIdentityObservationSuggestions(moby);
             RefreshObjectReadinessHint();
             RefreshActionAvailability();
-            _statusText.Text = $"Selected moby {moby.DisplayLabel} at true index {moby.TrueIndex}.";
+            _statusText.Text = moby.IsEditorControl
+                ? $"Selected {moby.DisplayLabel}."
+                : $"Selected moby {moby.DisplayLabel} at true index {moby.TrueIndex}.";
             return;
         }
 
@@ -9561,7 +11190,9 @@ public sealed class MainWindow : Window
                 await EditMobyAsync(_selectedMoby);
         });
         _objectCopyButton = NewButton("Copy Object", CopySelectedMoby);
-        _objectPasteButton = NewButton("Paste Object", PasteMobyClipboardAtLastPointer);
+        _objectPasteButton = NewAsyncButton("Paste Object", PasteMobyClipboardAtLastPointerAsync);
+        _objectLayerDownButton = NewButton("Lower Layer", () => MoveSelectedMobyToAdjacentTerrainLayer(-1));
+        _objectLayerUpButton = NewButton("Upper Layer", () => MoveSelectedMobyToAdjacentTerrainLayer(1));
         _objectUndoButton = NewButton("Undo Object", () =>
         {
             if (_selectedMoby != null)
@@ -9574,6 +11205,8 @@ public sealed class MainWindow : Window
         StyleObjectEditButton(_objectEditButton);
         StyleObjectEditButton(_objectCopyButton);
         StyleObjectEditButton(_objectPasteButton);
+        StyleObjectEditButton(_objectLayerDownButton);
+        StyleObjectEditButton(_objectLayerUpButton);
         StyleObjectEditButton(_objectUndoButton);
         StyleObjectEditButton(_objectUndoRemoveButton);
         StyleRestoreLevelButton(_objectRestoreLevelButton);
@@ -9583,9 +11216,14 @@ public sealed class MainWindow : Window
         objectActions.Children.Add(_objectEditButton);
         objectActions.Children.Add(_objectCopyButton);
         objectActions.Children.Add(_objectPasteButton);
+        objectActions.Children.Add(_objectLayerDownButton);
+        objectActions.Children.Add(_objectLayerUpButton);
         objectActions.Children.Add(_objectUndoButton);
         objectActions.Children.Add(_objectUndoRemoveButton);
         objectActions.Children.Add(_objectRestoreLevelButton);
+
+        ToolTip.SetTip(_objectLayerDownButton, "Snap the selected object to the next terrain surface below at the same X/Y.");
+        ToolTip.SetTip(_objectLayerUpButton, "Snap the selected object to the next terrain surface above at the same X/Y.");
 
         _objectActionHint.TextWrapping = TextWrapping.Wrap;
         _objectActionHint.Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92));
@@ -11967,19 +13605,13 @@ public sealed class MainWindow : Window
             return;
         }
 
-        List<Moby> moved = GetLinkedMoveMobys(_selectedMoby).ToList();
         bool snapToTerrain = Math.Abs(dz) <= 0.001f && (Math.Abs(dx) > 0.001f || Math.Abs(dy) > 0.001f);
-        int snapped = 0;
-        foreach (Moby moby in moved)
-        {
-            if (MoveMoby(moby, dx, dy, dz, snapToTerrain))
-                snapped++;
-        }
+        (List<Moby> moved, bool snapped) = MoveLinkedMobyGroup(_selectedMoby, dx, dy, dz, snapToTerrain);
 
         _viewport.InvalidateVisual();
         ShowSelection(ViewportSelectionChangedEventArgs.ForMoby(_selectedMoby));
         RefreshMobyList(_selectedMoby);
-        string snapText = snapped > 0 ? $" Snapped {snapped} object(s) to terrain Z." : "";
+        string snapText = snapped ? " Snapped the linked scene to terrain Z." : "";
         _statusText.Text = moved.Count > 1
             ? $"Moved {_selectedMoby.DisplayLabel} with {moved.Count - 1} linked object(s).{snapText}"
             : $"Moved {_selectedMoby.DisplayLabel}.{snapText}";
@@ -11987,22 +13619,37 @@ public sealed class MainWindow : Window
 
     private void MoveMobyFromViewport(MobyMoveRequestedEventArgs e)
     {
-        List<Moby> moved = GetLinkedMoveMobys(e.Moby).ToList();
         bool snapToTerrain = Math.Abs(e.Dz) <= 0.001f && (Math.Abs(e.Dx) > 0.001f || Math.Abs(e.Dy) > 0.001f);
-        int snapped = 0;
-        foreach (Moby moby in moved)
-        {
-            if (MoveMoby(moby, e.Dx, e.Dy, e.Dz, snapToTerrain))
-                snapped++;
-        }
+        (List<Moby> moved, bool snapped) = MoveLinkedMobyGroup(e.Moby, e.Dx, e.Dy, e.Dz, snapToTerrain);
 
         _viewport.InvalidateVisual();
         ShowSelection(ViewportSelectionChangedEventArgs.ForMoby(e.Moby));
         RefreshMobyList(e.Moby);
-        string snapText = snapped > 0 ? $" Snapped {snapped} object(s) to terrain Z." : "";
+        string snapText = snapped ? " Snapped the linked scene to terrain Z." : "";
         _statusText.Text = moved.Count > 1
             ? $"Moved {e.Moby.DisplayLabel} with {moved.Count - 1} linked object(s).{snapText}"
             : $"Moved {e.Moby.DisplayLabel}.{snapText}";
+    }
+
+    private void RotateMobyFromViewport(MobyRotateRequestedEventArgs e)
+    {
+        if (e.Moby.YawByte == e.YawByte)
+            return;
+
+        e.Moby.YawByte = e.YawByte;
+        e.Moby.HasLoadedNativeEdit = true;
+        double degrees = e.Moby.IsFlyInLandingControl
+            ? FlyInLandingEditorControl.HeadingByteToDegrees(e.YawByte)
+            : Moby.YawByteToDegrees(e.YawByte);
+        string editLabel = e.Moby.IsFlyInLandingControl ? "Fly-in heading" : "Yaw";
+        e.Moby.LoadedNativeEditSummary = $"{editLabel} {degrees:0.#} deg";
+
+        _viewport.InvalidateVisual();
+        ShowSelection(ViewportSelectionChangedEventArgs.ForMoby(e.Moby));
+        RefreshMobyList(e.Moby);
+        _statusText.Text = e.Moby.IsFlyInLandingControl
+            ? $"Set the fly-in direction to {degrees:0.#} deg."
+            : $"Rotated {e.Moby.DisplayLabel} to {degrees:0.#} deg.";
     }
 
     private void ApplyViewportTerrainBrush(ViewportTerrainBrushRequestedEventArgs e)
@@ -14355,6 +16002,29 @@ public sealed class MainWindow : Window
         return snapped;
     }
 
+    private (List<Moby> Mobys, bool Snapped) MoveLinkedMobyGroup(
+        Moby anchor,
+        float dx,
+        float dy,
+        float dz,
+        bool snapToTerrain)
+    {
+        List<Moby> moved = GetLinkedMoveMobys(anchor)
+            .DistinctBy(moby => moby.TrueIndex)
+            .ToList();
+        Vector3f originalAnchorPosition = anchor.Position;
+        bool snapped = MoveMoby(anchor, dx, dy, dz, snapToTerrain);
+        Vector3f appliedDelta = new(
+            anchor.Position.X - originalAnchorPosition.X,
+            anchor.Position.Y - originalAnchorPosition.Y,
+            anchor.Position.Z - originalAnchorPosition.Z);
+
+        foreach (Moby companion in moved.Where(moby => !ReferenceEquals(moby, anchor)))
+            MoveMoby(companion, appliedDelta.X, appliedDelta.Y, appliedDelta.Z);
+
+        return (moved, snapped);
+    }
+
     private bool TryFindTerrainZAt(float x, float y, float referenceZ, out float z, int preferredTerrainIndex = -1, bool preferTopSurface = false)
     {
         z = 0;
@@ -14371,13 +16041,60 @@ public sealed class MainWindow : Window
             preferTopSurface);
     }
 
-    private static bool ShouldSnapMobyToTerrain(Moby moby)
+    private bool CanMoveMobyToAdjacentTerrainLayer(Moby moby, int direction)
     {
-        return moby.VisualKind != MobyVisualKind.Control;
+        return TryGetAdjacentTerrainLayerPosition(moby, direction, out _);
     }
 
-    private static Vector3f ApplyTerrainPlacementLift(Vector3f position, PendingMobyAdd pending)
+    private bool TryGetAdjacentTerrainLayerPosition(Moby moby, int direction, out Vector3f position)
     {
+        position = moby.Position;
+        if (_currentGeometry == null ||
+            _currentGeometry.Polygons.Count == 0 ||
+            !ShouldSnapMobyToTerrain(moby) ||
+            !TryFindTerrainZAt(moby.Position.X, moby.Position.Y, moby.Position.Z, out float currentGroundZ) ||
+            !TerrainSnapper.TryFindAdjacentZAt(
+                _currentGeometry.Polygons,
+                moby.Position.X,
+                moby.Position.Y,
+                currentGroundZ,
+                direction,
+                out float targetGroundZ))
+        {
+            return false;
+        }
+
+        float groundOffset = moby.Position.Z - currentGroundZ;
+        position = new Vector3f(moby.Position.X, moby.Position.Y, targetGroundZ + groundOffset);
+        return true;
+    }
+
+    private void MoveSelectedMobyToAdjacentTerrainLayer(int direction)
+    {
+        if (_selectedMoby == null || !TryGetAdjacentTerrainLayerPosition(_selectedMoby, direction, out Vector3f target))
+            return;
+
+        float dz = target.Z - _selectedMoby.Position.Z;
+        (List<Moby> moved, _) = MoveLinkedMobyGroup(_selectedMoby, 0, 0, dz, snapToTerrain: false);
+        _viewport.InvalidateVisual();
+        ShowSelection(ViewportSelectionChangedEventArgs.ForMoby(_selectedMoby));
+        RefreshMobyList(_selectedMoby);
+        string directionLabel = direction < 0 ? "lower" : "upper";
+        _statusText.Text = moved.Count > 1
+            ? $"Moved {_selectedMoby.DisplayLabel} and {moved.Count - 1} linked object(s) to the next {directionLabel} terrain layer."
+            : $"Moved {_selectedMoby.DisplayLabel} to the next {directionLabel} terrain layer.";
+    }
+
+    private static bool ShouldSnapMobyToTerrain(Moby moby)
+    {
+        return moby.SupportsTerrainSnap;
+    }
+
+    private Vector3f ApplyTerrainPlacementLift(Vector3f position, PendingMobyAdd pending)
+    {
+        if (pending.Template.TerrainGroundOffset is float groundOffset)
+            return ApplyTerrainGroundOffset(position, groundOffset);
+
         return ApplyTerrainPlacementLift(
             position,
             pending.Type,
@@ -14391,13 +16108,14 @@ public sealed class MainWindow : Window
             pending.Template.TemplateNote);
     }
 
-    private static Vector3f ApplyTerrainPlacementLift(Vector3f position, MobyClipboard clipboard)
+    private Vector3f ApplyTerrainPlacementLift(Vector3f position, MobyClipboard clipboard)
     {
-        bool pasteContainedGemAsLooseGem = clipboard.CopiedGemLike &&
-            !clipboard.CopiedVisibleGem &&
+        bool pasteGemAsLooseGem = clipboard.CopiedGemLike &&
             clipboard.CopiedGem != GemValue.Unknown;
-        if (pasteContainedGemAsLooseGem)
+        if (pasteGemAsLooseGem)
             return position;
+        if (clipboard.TerrainGroundOffset is float groundOffset)
+            return ApplyTerrainGroundOffset(position, groundOffset);
 
         return ApplyTerrainPlacementLift(
             position,
@@ -14412,14 +16130,17 @@ public sealed class MainWindow : Window
             clipboard.BehaviorNote);
     }
 
-    private static Vector3f ApplyTerrainPlacementLift(Vector3f position, Moby moby)
+    private Vector3f ApplyTerrainPlacementLift(Vector3f position, Moby moby)
     {
+        if (TryGetPreferredTerrainGroundOffset(moby, out float groundOffset))
+            return ApplyTerrainGroundOffset(position, groundOffset);
+
         return ShouldApplyTerrainPlacementLift(moby)
-            ? new Vector3f(position.X, position.Y, position.Z + TerrainPlacedObjectLift)
+            ? ApplyTerrainGroundOffset(position, DefaultTerrainGroundOffset)
             : position;
     }
 
-    private static Vector3f ApplyTerrainPlacementLift(
+    private Vector3f ApplyTerrainPlacementLift(
         Vector3f position,
         int type,
         int sourceByte36,
@@ -14446,6 +16167,42 @@ public sealed class MainWindow : Window
         return ApplyTerrainPlacementLift(position, classifier);
     }
 
+    private static Vector3f ApplyTerrainGroundOffset(Vector3f position, float groundOffset)
+    {
+        return new Vector3f(position.X, position.Y, position.Z + groundOffset);
+    }
+
+    private bool TryGetTerrainGroundOffset(Moby moby, out float groundOffset)
+    {
+        groundOffset = 0f;
+        if (!ShouldSnapMobyToTerrain(moby))
+            return false;
+        if (!TryFindTerrainZAt(moby.Position.X, moby.Position.Y, moby.Position.Z, out float terrainZ))
+            return false;
+
+        groundOffset = moby.Position.Z - terrainZ;
+        return true;
+    }
+
+    private bool TryGetPreferredTerrainGroundOffset(Moby moby, out float groundOffset)
+    {
+        groundOffset = 0f;
+        if (moby.SourceCloneTrueIndex >= 0 &&
+            (string.IsNullOrWhiteSpace(moby.SourceCloneLevelKey) ||
+             _currentLevel == null ||
+             string.Equals(moby.SourceCloneLevelKey, _currentLevel.Key, StringComparison.OrdinalIgnoreCase)))
+        {
+            Moby? donor = _currentMobys.FirstOrDefault(candidate =>
+                !candidate.IsAdded &&
+                !candidate.IsRemoved &&
+                candidate.TrueIndex == moby.SourceCloneTrueIndex);
+            if (donor != null && TryGetTerrainGroundOffset(donor, out groundOffset))
+                return true;
+        }
+
+        return TryGetTerrainGroundOffset(moby, out groundOffset);
+    }
+
     private static bool ShouldApplyTerrainPlacementLift(Moby moby)
     {
         MobyVisualKind kind = moby.VisualKind;
@@ -14470,6 +16227,54 @@ public sealed class MainWindow : Window
             if (!moby.IsRemoved && linkedTrueIndexes.Contains(moby.TrueIndex) && moby.IsChestContent)
                 yield return moby;
         }
+    }
+
+    private IEnumerable<Moby> GetTreasureThiefRewardTriggerMobys(Moby root)
+    {
+        if (!IsTreasureThiefRewardRoot(root))
+            yield break;
+
+        HashSet<int> linkedTrueIndexes = root.Links
+            .Where(IsTreasureThiefRewardTriggerLink)
+            .SelectMany(link => link.TrueIndexes)
+            .Where(trueIndex => trueIndex != root.TrueIndex)
+            .ToHashSet();
+
+        foreach (Moby moby in _currentMobys)
+        {
+            if (!moby.IsRemoved && linkedTrueIndexes.Contains(moby.TrueIndex) && IsTreasureThiefRewardTriggerMoby(moby))
+                yield return moby;
+        }
+    }
+
+    private static bool IsTreasureThiefRewardRoot(Moby moby)
+    {
+        string text = $"{moby.DisplayLabel} {moby.CandidateKind} {moby.BehaviorNote}";
+        return moby.Type == 0x20 &&
+            (text.Contains("treasure gnorc", StringComparison.OrdinalIgnoreCase) ||
+                text.Contains("treasure thief", StringComparison.OrdinalIgnoreCase) ||
+                moby.SourceByte36 == 0x53 && moby.SourceByte37 == 0x01 && moby.RewardGem != GemValue.Unknown);
+    }
+
+    private static bool IsTreasureThiefRewardTriggerMoby(Moby moby)
+    {
+        if (moby.Type != 0x00 || moby.RewardGem == GemValue.Unknown)
+            return false;
+
+        string text = $"{moby.DisplayLabel} {moby.CandidateKind} {moby.BehaviorNote}";
+        return text.Contains("reward", StringComparison.OrdinalIgnoreCase) &&
+            text.Contains("trigger", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsTreasureThiefRewardTriggerLink(MobyLink link)
+    {
+        if (!MobyLinkTraversal.IsVisibleLink(link))
+            return false;
+
+        string text = $"{link.Key} {link.Name} {link.Kind} {link.Confidence} {link.Reason}";
+        return text.Contains("treasure", StringComparison.OrdinalIgnoreCase) &&
+            text.Contains("reward", StringComparison.OrdinalIgnoreCase) &&
+            text.Contains("trigger", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task AddMobyNearSelectionAsync()
@@ -14502,6 +16307,7 @@ public sealed class MainWindow : Window
         TextBox xBox = NewPositionBox(position.X);
         TextBox yBox = NewPositionBox(position.Y);
         TextBox zBox = NewPositionBox(position.Z);
+        TextBox yawBox = NewYawBox(0);
         TextBlock placementHint = NewSmallNote(selectedPlacement.Description);
         TextBlock note = new()
         {
@@ -14515,6 +16321,7 @@ public sealed class MainWindow : Window
             AddMobyTemplate template = kindBox.SelectedItem as AddMobyTemplate ?? templates[0];
             typeBox.Text = $"0x{template.Type:X2}";
             stateBox.Text = $"0x{template.State:X2}";
+            yawBox.Text = FormatYaw(Moby.YawByteToDegrees(template.YawByte));
             if (template.DefaultGem != null)
                 gemBox.SelectedItem = template.DefaultGem.Value;
             if (template.UsesGem && gemBox.SelectedItem is GemValue gem)
@@ -14547,7 +16354,7 @@ public sealed class MainWindow : Window
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = true
         };
-        dialog.Content = ScrollableDialogContent(BuildAddMobyDialogContent(dialog, placementBox, placementHint, kindBox, gemBox, nameBox, typeBox, stateBox, xBox, yBox, zBox, note));
+        dialog.Content = ScrollableDialogContent(BuildAddMobyDialogContent(dialog, placementBox, placementHint, kindBox, gemBox, nameBox, typeBox, stateBox, xBox, yBox, zBox, yawBox, note));
 
         bool accepted = await dialog.ShowDialog<bool>(this);
         if (!accepted)
@@ -14563,10 +16370,13 @@ public sealed class MainWindow : Window
         GemValue selectedGem = gemBox.SelectedItem is GemValue gemValue ? gemValue : GemValue.Red;
         int type = selectedTemplate.Type;
         int state = selectedTemplate.State;
+        int yawByte = selectedTemplate.YawByte;
         if (TryParseByte(typeBox.Text, out int parsedType))
             type = parsedType;
         if (TryParseByte(stateBox.Text, out int parsedState))
             state = parsedState;
+        if (TryParseYawByte(yawBox.Text, out int parsedYaw))
+            yawByte = parsedYaw;
         if (TryParseFloat(xBox.Text, out float parsedX) &&
             TryParseFloat(yBox.Text, out float parsedY) &&
             TryParseFloat(zBox.Text, out float parsedZ))
@@ -14584,6 +16394,7 @@ public sealed class MainWindow : Window
             label,
             type,
             state,
+            yawByte,
             sourceByte36,
             sourceByte4F,
             flag4B,
@@ -14603,7 +16414,7 @@ public sealed class MainWindow : Window
             position = ApplyTerrainPlacementLift(position, pending);
         }
 
-        AddPendingMobyAtPosition(pending, position);
+        await AddPendingMobyAtPositionAsync(pending, position);
     }
 
     private void BeginPendingMobyPlacement(PendingMobyAdd pending, Vector3f fallbackPosition)
@@ -14614,7 +16425,7 @@ public sealed class MainWindow : Window
         _statusText.Text = $"Click the map or Fly 3D view to place {pending.Label}. Press Escape to cancel.";
     }
 
-    private void PlacePendingMobyAtViewport(Point screenPoint)
+    private async Task PlacePendingMobyAtViewportAsync(Point screenPoint)
     {
         if (_pendingMobyAdd == null)
             return;
@@ -14632,7 +16443,7 @@ public sealed class MainWindow : Window
 
         _pendingMobyAdd = null;
         _viewport.ObjectPlacementMode = false;
-        AddPendingMobyAtPosition(pending, position);
+        await AddPendingMobyAtPositionAsync(pending, position);
     }
 
     private void CancelPendingMobyPlacement()
@@ -14647,10 +16458,23 @@ public sealed class MainWindow : Window
         _statusText.Text = $"Canceled placement for {label}.";
     }
 
-    private void AddPendingMobyAtPosition(PendingMobyAdd pending, Vector3f position)
+    private async Task AddPendingMobyAtPositionAsync(PendingMobyAdd pending, Vector3f position)
     {
         AddMobyTemplate selectedTemplate = pending.Template;
         GemValue selectedGem = pending.SelectedGem;
+        int safeSlotsBefore = selectedTemplate.FromLevelTemplate
+            ? CountSafeNativeCloneExtraExportSlots(selectedTemplate, _currentMobys)
+            : -1;
+        bool trueAppendSupported = selectedTemplate.FromLevelTemplate &&
+            (IsReleaseSafeTrueAddTemplate(selectedTemplate) ||
+             IsPromotedNativeCloneAppendIdentity(
+                 _currentLevel?.Key ?? selectedTemplate.SourceLevelKey,
+                 selectedTemplate.Type,
+                 selectedTemplate.SourceByte36,
+                 selectedTemplate.SourceByte37,
+                 selectedTemplate.SourceByte4F,
+                 selectedTemplate.Flag4A,
+                 selectedTemplate.Flag4B));
         int index = _currentMobys.Count == 0 ? 0 : _currentMobys.Max(moby => moby.Index) + 1;
         int trueIndex = _currentMobys.Count == 0 ? 0 : _currentMobys.Max(moby => moby.TrueIndex) + 1;
         List<Moby> addedMobys;
@@ -14669,8 +16493,9 @@ public sealed class MainWindow : Window
                 controllerTemplate.SourceByte36,
                 controllerTemplate.SourceByte4F,
                 controllerTemplate.Flag4B,
+                controllerTemplate.YawByte,
                 selectedGem);
-            moby = CreateAddedMobyFromTemplate(selectedTemplate, pending.Label, position, index + 1, trueIndex + 1, pending.Type, pending.State, pending.SourceByte36, pending.SourceByte4F, pending.Flag4B, selectedGem);
+            moby = CreateAddedMobyFromTemplate(selectedTemplate, pending.Label, position, index + 1, trueIndex + 1, pending.Type, pending.State, pending.SourceByte36, pending.SourceByte4F, pending.Flag4B, pending.YawByte, selectedGem);
             controller.BehaviorNote = "Hidden paired controller for the visible Spring Chest; move and export both records together.";
             moby.BehaviorNote = "Visible Spring Chest shell paired with the hidden controller record.";
             addedMobys = [controller, moby];
@@ -14679,7 +16504,7 @@ public sealed class MainWindow : Window
         }
         else
         {
-            moby = CreateAddedMobyFromTemplate(selectedTemplate, pending.Label, position, index, trueIndex, pending.Type, pending.State, pending.SourceByte36, pending.SourceByte4F, pending.Flag4B, selectedGem);
+            moby = CreateAddedMobyFromTemplate(selectedTemplate, pending.Label, position, index, trueIndex, pending.Type, pending.State, pending.SourceByte36, pending.SourceByte4F, pending.Flag4B, pending.YawByte, selectedGem);
             addedMobys = [moby];
             index++;
             trueIndex++;
@@ -14716,8 +16541,17 @@ public sealed class MainWindow : Window
                     companion.SourceByte36,
                     companion.SourceByte4F,
                     companion.Flag4B,
+                    companion.YawByte,
                     selectedGem));
+                index++;
+                trueIndex++;
             }
+        }
+
+        if (selectedTemplate.FromLevelTemplate &&
+            ResolveSameLevelCloneSource(selectedTemplate.SourceTrueIndex) is Moby sourceRoot)
+        {
+            AddLinkedCompanionClones(sourceRoot, moby, addedMobys, ref index, ref trueIndex);
         }
 
         _currentMobys.AddRange(addedMobys);
@@ -14726,11 +16560,18 @@ public sealed class MainWindow : Window
         RefreshCurrentLevelDetails();
         _viewport.SelectMoby(moby, true);
         string candidateNote = selectedTemplate.FromCrossLevelTemplate && !selectedTemplate.CurrentLevelReady && selectedTemplate.CurrentLevelPlaceable
-            ? " Use Advanced > Create Candidate BIN to make a disposable test disc for it."
+            ? " Use Object Tests > Create Candidate BIN to make a disposable test disc for it."
             : "";
+        string exportSlotNote = BuildTemplateExportSlotStatus(selectedTemplate);
         _statusText.Text = addedMobys.Count > 1
-            ? $"Added {moby.DisplayLabel} and {addedMobys.Count - 1} companion object(s).{candidateNote}"
-            : $"Added {moby.DisplayLabel}.{candidateNote}";
+            ? $"Added {moby.DisplayLabel} and {addedMobys.Count - 1} companion object(s).{candidateNote}{exportSlotNote}"
+            : $"Added {moby.DisplayLabel}.{candidateNote}{exportSlotNote}";
+
+        int safeSlotsAfter = selectedTemplate.FromLevelTemplate
+            ? CountSafeNativeCloneExtraExportSlots(selectedTemplate, _currentMobys)
+            : -1;
+        if (!trueAppendSupported && safeSlotsBefore > 0 && safeSlotsAfter == 0)
+            await ShowLastSafeObjectSlotWarningAsync(moby.DisplayLabel);
     }
 
     private void CopySelectedMoby()
@@ -14741,21 +16582,49 @@ public sealed class MainWindow : Window
             return;
         }
 
-        _mobyClipboard = MobyClipboard.From(_selectedMoby, _currentLevel);
+        if (_selectedMoby.IsEditorControl)
+        {
+            _statusText.Text = $"{_selectedMoby.DisplayLabel} is native level-entry data and cannot be copied as an object.";
+            return;
+        }
+
+        if (_releaseMode && IsReleaseProtectedControlMoby(_selectedMoby))
+        {
+            _statusText.Text = $"{_selectedMoby.DisplayLabel} looks like system/trigger data. It can be inspected, but release builds do not copy it as a normal placeable object yet.";
+            return;
+        }
+
+        float? terrainGroundOffset = TryGetTerrainGroundOffset(_selectedMoby, out float copiedGroundOffset)
+            ? copiedGroundOffset
+            : null;
+        _mobyClipboard = MobyClipboard.From(_selectedMoby, _currentLevel, terrainGroundOffset);
         RefreshActionAvailability();
-        _statusText.Text = $"Copied {_selectedMoby.DisplayLabel}. Paste with Ctrl+V on Windows or Command+V on Mac.";
+        int linkedCompanions = MobyCompanionClonePlanner.GetCompanionDonors(_selectedMoby, _currentMobys).Count;
+        string companionNote = _selectedMoby.VisualKind == MobyVisualKind.Dragon && linkedCompanions == 2
+            ? " Its linked pedestal and dragon scene control will paste with it."
+            : linkedCompanions > 0
+                ? $" {linkedCompanions} linked companion object(s) will paste with it."
+                : "";
+        string exportSlotNote = BuildClipboardExportSlotStatus(_selectedMoby);
+        _statusText.Text = $"Copied {_selectedMoby.DisplayLabel}.{companionNote}{exportSlotNote} Paste with Ctrl+V on Windows or Command+V on Mac.";
     }
 
-    private void PasteMobyClipboardAtLastPointer()
+    private async Task PasteMobyClipboardAtLastPointerAsync()
     {
-        PasteMobyClipboardAtViewport(_viewport.LastPointerPosition);
+        await PasteMobyClipboardAtViewportAsync(_viewport.LastPointerPosition);
     }
 
-    private void PasteMobyClipboardAtViewport(Point screenPoint)
+    private async Task PasteMobyClipboardAtViewportAsync(Point screenPoint)
     {
         if (_mobyClipboard == null)
         {
             _statusText.Text = "Copy an object before pasting.";
+            return;
+        }
+
+        if (_releaseMode && IsReleaseProtectedControlClipboard(_mobyClipboard))
+        {
+            _statusText.Text = $"{_mobyClipboard.Label} looks like system/trigger data. It was not pasted as a standalone object.";
             return;
         }
 
@@ -14770,12 +16639,50 @@ public sealed class MainWindow : Window
         position = ApplyTerrainPlacementLift(position, _mobyClipboard);
 
         Moby pasted = CreateMobyFromClipboard(_mobyClipboard, position);
-        _currentMobys.Add(pasted);
+        Moby? safeSlotDonor = null;
+        int safeSlotsBefore = -1;
+        bool trueAppendSupported = false;
+        if (TryResolveNativeCloneDonor(pasted, out Moby? resolvedDonor) && resolvedDonor != null)
+        {
+            safeSlotDonor = resolvedDonor;
+            safeSlotsBefore = CountSafeNativeCloneExtraExportSlots(resolvedDonor, _currentMobys);
+            trueAppendSupported = IsReleaseSafeTrueAddIdentity(
+                    resolvedDonor.Type,
+                    resolvedDonor.SourceByte36,
+                    resolvedDonor.SourceByte37,
+                    resolvedDonor.SourceByte4F,
+                    resolvedDonor.Flag4A,
+                    resolvedDonor.Flag4B) ||
+                IsPromotedNativeCloneAppendIdentity(
+                    _currentLevel?.Key ?? "",
+                    resolvedDonor.Type,
+                    resolvedDonor.SourceByte36,
+                    resolvedDonor.SourceByte37,
+                    resolvedDonor.SourceByte4F,
+                    resolvedDonor.Flag4A,
+                    resolvedDonor.Flag4B);
+        }
+        List<Moby> pastedMobys = [pasted];
+        int nextIndex = pasted.Index + 1;
+        int nextTrueIndex = pasted.TrueIndex + 1;
+        if (ResolveSameLevelCloneSource(pasted.SourceCloneTrueIndex) is Moby sourceRoot)
+            AddLinkedCompanionClones(sourceRoot, pasted, pastedMobys, ref nextIndex, ref nextTrueIndex);
+
+        _currentMobys.AddRange(pastedMobys);
         _viewport.Mobys = _currentMobys;
         RefreshMobyList(pasted);
         RefreshCurrentLevelDetails();
         _viewport.SelectMoby(pasted, true);
-        _statusText.Text = $"Pasted {pasted.DisplayLabel} at the cursor.";
+        string exportSlotNote = BuildPastedExportSlotStatus(pasted);
+        _statusText.Text = pastedMobys.Count > 1
+            ? $"Pasted {pasted.DisplayLabel} and {pastedMobys.Count - 1} linked companion object(s) at the cursor.{exportSlotNote}"
+            : $"Pasted {pasted.DisplayLabel} at the cursor.{exportSlotNote}";
+
+        int safeSlotsAfter = safeSlotDonor == null
+            ? -1
+            : CountSafeNativeCloneExtraExportSlots(safeSlotDonor, _currentMobys);
+        if (!trueAppendSupported && safeSlotsBefore > 0 && safeSlotsAfter == 0)
+            await ShowLastSafeObjectSlotWarningAsync(pasted.DisplayLabel);
     }
 
     private Moby CreateMobyFromClipboard(MobyClipboard clipboard, Vector3f position)
@@ -14785,24 +16692,29 @@ public sealed class MainWindow : Window
         bool pasteContainedGemAsLooseGem = clipboard.CopiedGemLike &&
             !clipboard.CopiedVisibleGem &&
             clipboard.CopiedGem != GemValue.Unknown;
-        int type = pasteContainedGemAsLooseGem ? 0x18 : clipboard.Type;
-        int state = pasteContainedGemAsLooseGem ? 0x00 : clipboard.State;
-        int sourceByte36 = pasteContainedGemAsLooseGem ? clipboard.CopiedGem.IdByte : clipboard.SourceByte36;
-        int sourceByte4F = pasteContainedGemAsLooseGem ? clipboard.CopiedGem.ValueByte : clipboard.SourceByte4F;
-        int flag4A = pasteContainedGemAsLooseGem ? 0x40 : clipboard.Flag4A;
-        int flag4B = pasteContainedGemAsLooseGem ? 0xFF : clipboard.Flag4B;
-        ColorRgba color = pasteContainedGemAsLooseGem ? clipboard.CopiedGem.Color : clipboard.Color;
+        bool pasteVisibleGemAsLooseGem = clipboard.CopiedVisibleGem &&
+            clipboard.CopiedGem != GemValue.Unknown;
+        bool pasteGemAsLooseGem = pasteContainedGemAsLooseGem || pasteVisibleGemAsLooseGem;
+        int type = pasteGemAsLooseGem ? 0x18 : clipboard.Type;
+        int state = pasteGemAsLooseGem ? 0x00 : clipboard.State;
+        int sourceByte36 = pasteGemAsLooseGem ? clipboard.CopiedGem.IdByte : clipboard.SourceByte36;
+        int sourceByte4F = pasteGemAsLooseGem ? clipboard.CopiedGem.ValueByte : clipboard.SourceByte4F;
+        int flag4A = pasteGemAsLooseGem ? 0x40 : clipboard.Flag4A;
+        int flag4B = pasteGemAsLooseGem ? 0xFF : clipboard.Flag4B;
+        ColorRgba color = pasteGemAsLooseGem ? clipboard.CopiedGem.Color : clipboard.Color;
         string label = clipboard.Label.StartsWith("Copy of ", StringComparison.Ordinal)
             ? clipboard.Label
-            : pasteContainedGemAsLooseGem
+            : pasteGemAsLooseGem
                 ? $"Copy of {clipboard.CopiedGem.DisplayName}"
                 : $"Copy of {clipboard.Label}";
-        string patchLead = pasteContainedGemAsLooseGem
-            ? $"Pasted from copied contained gem {clipboard.Label}; converted to a loose native gem so it appears and can be collected in-game."
+        string patchLead = pasteGemAsLooseGem
+            ? pasteContainedGemAsLooseGem
+                ? $"Pasted from copied contained gem {clipboard.Label}; converted to a loose native gem so it appears and can be collected in-game."
+                : $"Pasted from copied gem {clipboard.Label}; kept as a loose native gem so it exports as a collectible."
             : clipboard.SourceCloneTrueIndex >= 0 && _currentLevel != null && string.Equals(clipboard.SourceCloneLevelKey, _currentLevel.Key, StringComparison.OrdinalIgnoreCase)
-            ? $"Pasted from same-level donor T{clipboard.SourceCloneTrueIndex}; saved in the editor, but Create BIN skips new enemy/chest true-adds until their behavior data is fully solved."
+            ? $"Pasted from same-level donor T{clipboard.SourceCloneTrueIndex}; Create BIN exports enemy/chest copies by reusing a matching same-level source slot when one is available."
             : $"Pasted from copied object {clipboard.Label}; it exports as a new native source-table record when supported.";
-        string patchStatus = pasteContainedGemAsLooseGem
+        string patchStatus = pasteGemAsLooseGem
             ? "new-native-editor-object-copy"
             : clipboard.SourceCloneTrueIndex >= 0 && _currentLevel != null && string.Equals(clipboard.SourceCloneLevelKey, _currentLevel.Key, StringComparison.OrdinalIgnoreCase)
             ? "native-clone"
@@ -14819,6 +16731,8 @@ public sealed class MainWindow : Window
             OriginalType = type,
             State = state,
             OriginalState = state,
+            YawByte = clipboard.YawByte,
+            OriginalYawByte = clipboard.YawByte,
             SourceByte36 = sourceByte36,
             OriginalSourceByte36 = sourceByte36,
             SourceByte37 = clipboard.SourceByte37,
@@ -14834,16 +16748,16 @@ public sealed class MainWindow : Window
             OriginalLabel = label,
             PatchStatus = patchStatus,
             PatchLead = patchLead,
-            CrossLevelTemplateId = pasteContainedGemAsLooseGem ? "" : clipboard.CrossLevelTemplateId,
-            CrossLevelFamily = pasteContainedGemAsLooseGem ? "" : clipboard.CrossLevelFamily,
-            CrossLevelSourceLevelKey = pasteContainedGemAsLooseGem ? "" : clipboard.CrossLevelSourceLevelKey,
-            CrossLevelSourceLevelName = pasteContainedGemAsLooseGem ? "" : clipboard.CrossLevelSourceLevelName,
-            CrossLevelSourceTrueIndex = pasteContainedGemAsLooseGem ? -1 : clipboard.CrossLevelSourceTrueIndex,
-            CrossLevelRequiredExporterFeature = pasteContainedGemAsLooseGem ? "" : clipboard.CrossLevelRequiredExporterFeature,
-            CandidateKind = pasteContainedGemAsLooseGem ? "loose gem collectible" : clipboard.CandidateKind,
+            CrossLevelTemplateId = pasteGemAsLooseGem ? "" : clipboard.CrossLevelTemplateId,
+            CrossLevelFamily = pasteGemAsLooseGem ? "" : clipboard.CrossLevelFamily,
+            CrossLevelSourceLevelKey = pasteGemAsLooseGem ? "" : clipboard.CrossLevelSourceLevelKey,
+            CrossLevelSourceLevelName = pasteGemAsLooseGem ? "" : clipboard.CrossLevelSourceLevelName,
+            CrossLevelSourceTrueIndex = pasteGemAsLooseGem ? -1 : clipboard.CrossLevelSourceTrueIndex,
+            CrossLevelRequiredExporterFeature = pasteGemAsLooseGem ? "" : clipboard.CrossLevelRequiredExporterFeature,
+            CandidateKind = pasteGemAsLooseGem ? "loose gem collectible" : clipboard.CandidateKind,
             Confidence = clipboard.Confidence,
             Evidence = $"Copied from {clipboard.Label} in the native editor.",
-            BehaviorNote = pasteContainedGemAsLooseGem ? "" : clipboard.BehaviorNote,
+            BehaviorNote = pasteGemAsLooseGem ? "" : clipboard.BehaviorNote,
             ZoneLabel = clipboard.ZoneLabel,
             SourceCloneLevelKey = patchStatus == "native-clone" ? clipboard.SourceCloneLevelKey : "",
             SourceCloneLevelName = patchStatus == "native-clone" ? clipboard.SourceCloneLevelName : "",
@@ -14856,6 +16770,7 @@ public sealed class MainWindow : Window
     {
         return template.FromCrossLevelTemplate &&
             string.Equals(template.Family, "springChest", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(template.AddSupportStatus, "experimental-source-record-candidate", StringComparison.OrdinalIgnoreCase) &&
             !template.TemplateId.Contains("controller", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -14894,6 +16809,7 @@ public sealed class MainWindow : Window
         int sourceByte36,
         int sourceByte4F,
         int flag4B,
+        int yawByte,
         GemValue selectedGem)
     {
         ColorRgba color = template.UsesGem
@@ -14917,6 +16833,8 @@ public sealed class MainWindow : Window
             OriginalType = type,
             State = state,
             OriginalState = state,
+            YawByte = yawByte,
+            OriginalYawByte = yawByte,
             SourceByte36 = sourceByte36,
             OriginalSourceByte36 = sourceByte36,
             SourceByte37 = template.SourceByte37,
@@ -14949,7 +16867,7 @@ public sealed class MainWindow : Window
                 : template.FromCrossLevelTemplate
                 ? BuildCrossLevelPatchLead(template)
                 : template.FromLevelTemplate
-                ? $"Added in the native editor from same-level donor T{template.SourceTrueIndex}; Create BIN keeps new enemy/chest true-adds saved but skips them until their behavior data is fully solved. Use Change To / slot replacement for safe swaps."
+                ? $"Added in the native editor from same-level donor T{template.SourceTrueIndex}; Create BIN exports enemy/chest adds by reusing a matching same-level source slot when one is available."
                 : template.UsesGem
                 ? "Added in the native editor; simple gem adds export through the native source-table append path."
                 : "Added in the native editor; this custom object may need actor-package support before it is playable.",
@@ -14964,6 +16882,30 @@ public sealed class MainWindow : Window
             SourceCloneTrueIndex = template.FromLevelTemplate ? template.SourceTrueIndex : -1,
             IsAdded = true
         };
+    }
+
+    private Moby? ResolveSameLevelCloneSource(int sourceTrueIndex)
+    {
+        if (sourceTrueIndex < 0 || _currentLevel == null)
+            return null;
+
+        return _currentMobys.FirstOrDefault(moby =>
+            !moby.IsAdded &&
+            !moby.IsRemoved &&
+            moby.TrueIndex == sourceTrueIndex);
+    }
+
+    private int AddLinkedCompanionClones(Moby sourceRoot, Moby addedRoot, List<Moby> addedMobys, ref int nextIndex, ref int nextTrueIndex)
+    {
+        return MobyCompanionCloneBuilder.AddLinkedCompanionClones(
+            sourceRoot,
+            addedRoot,
+            _currentMobys,
+            addedMobys,
+            ref nextIndex,
+            ref nextTrueIndex,
+            _currentLevel?.Key ?? "",
+            _currentLevel?.DisplayName ?? "");
     }
 
     private async Task AddChestContentGemAsync()
@@ -15159,8 +17101,12 @@ public sealed class MainWindow : Window
             selected.SourceByte37,
             selected.SourceByte4F,
             selected.Flag4A,
-            selected.Flag4B)))
+            selected.Flag4B)) &&
+            !(_releaseMode && IsReleaseProtectedControlMoby(selected)))
         {
+            float? selectedTerrainGroundOffset = TryGetTerrainGroundOffset(selected, out float selectedGroundOffset)
+                ? selectedGroundOffset
+                : null;
             templates.Add(new AddMobyTemplate(
                 "Clone selected object",
                 selected.Type,
@@ -15173,7 +17119,9 @@ public sealed class MainWindow : Window
                 false,
                 $"Copy of {selected.DisplayLabel}",
                 CopiesSelected: true,
-                DefaultGem: selected.IsGemLike && selected.Gem != GemValue.Unknown ? selected.Gem : null));
+                DefaultGem: selected.IsGemLike && selected.Gem != GemValue.Unknown ? selected.Gem : null,
+                YawByte: selected.YawByte >= 0 ? selected.YawByte : 0,
+                TerrainGroundOffset: selectedTerrainGroundOffset));
         }
 
         templates.AddRange(_releaseMode
@@ -15181,13 +17129,13 @@ public sealed class MainWindow : Window
             : AddMobyTemplate.Known);
         List<AddMobyTemplate> levelObjectTemplates = BuildLevelObjectTemplates(currentMobys).ToList();
         templates.AddRange(levelObjectTemplates);
-        if (_releaseMode)
-            return templates;
-
-        List<AddMobyTemplate> crossLevelTemplates = SortCrossLevelTemplatesForCurrentLevel(LoadCrossLevelObjectTemplates()
-            .Where(template => !ShouldHideCrossLevelTemplateInNormalAddList(template, levelObjectTemplates))).ToList();
-        templates.AddRange(BuildCrossLevelTemplateBundles(crossLevelTemplates));
-        templates.AddRange(crossLevelTemplates);
+        if (!_releaseMode)
+        {
+            List<AddMobyTemplate> crossLevelTemplates = SortCrossLevelTemplatesForCurrentLevel(LoadCrossLevelObjectTemplates()
+                .Where(template => !ShouldHideCrossLevelTemplateInNormalAddList(template, levelObjectTemplates))).ToList();
+            templates.AddRange(BuildCrossLevelTemplateBundles(crossLevelTemplates));
+            templates.AddRange(crossLevelTemplates);
+        }
         return templates;
     }
 
@@ -15199,7 +17147,7 @@ public sealed class MainWindow : Window
         if (!string.Equals(template.Family, "springChest", StringComparison.OrdinalIgnoreCase))
             return false;
 
-        return true;
+        return !string.Equals(template.AddSupportStatus, "experimental-source-record-candidate", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsReleaseSafeTrueAddTemplate(AddMobyTemplate template) =>
@@ -15224,17 +17172,60 @@ public sealed class MainWindow : Window
             flag4A == 0x40 &&
             flag4B == 0xFF &&
             GemValue.TryFromIdByte(sourceByte36, out _);
-        bool isNativeKey = type == 0x18 &&
-            sourceByte36 == 0xAD &&
+        bool isNativeKey = sourceByte36 == 0xAD &&
             sourceByte37 == 0x00 &&
-            flag4A == 0x40 &&
-            flag4B == 0xFF;
+            sourceByte4F == 0x02 &&
+            flag4B == 0xFF &&
+            (type == 0x18 && flag4A == 0x40 ||
+                type == 0x00 && flag4A == 0x00);
         bool isNativeKeyChest = type == 0x20 &&
             sourceByte36 == 0xAE &&
             sourceByte37 == 0x00 &&
             flag4A == 0x10 &&
             GemValue.TryFromIdByte(flag4B, out _);
         return isLooseGem || isNativeKey || isNativeKeyChest;
+    }
+
+    private static bool IsPromotedNativeCloneAppendIdentity(
+        string levelKey,
+        int type,
+        int sourceByte36,
+        int sourceByte37,
+        int sourceByte4F,
+        int flag4A,
+        int flag4B)
+    {
+        bool isNativeLifeChest = type == 0x20 &&
+            sourceByte36 == 0xA5 &&
+            sourceByte37 == 0x01 &&
+            sourceByte4F == 0x00 &&
+            flag4A == 0x10 &&
+            flag4B == 0x0E;
+        if (isNativeLifeChest)
+        {
+            return LifeChestRuntimeLayout.TryGetRuntimeBase(levelKey, out _);
+        }
+
+        if (type != 0x20 ||
+            sourceByte4F != 0x00 ||
+            flag4A != 0x10 ||
+            flag4B != 0x54)
+        {
+            return false;
+        }
+
+        string normalizedLevelKey = LevelCatalog.NormalizeKey(levelKey);
+        if (normalizedLevelKey.Equals("townsquare", StringComparison.OrdinalIgnoreCase))
+        {
+            return sourceByte36 == 0x17 && sourceByte37 == 0x00;
+        }
+
+        if (sourceByte37 != 0x00)
+            return false;
+
+        bool darkHollowOrArtisans = normalizedLevelKey.Equals("darkhollow", StringComparison.OrdinalIgnoreCase) ||
+            normalizedLevelKey.Equals("artisans", StringComparison.OrdinalIgnoreCase);
+        return darkHollowOrArtisans && (sourceByte36 == 0x73 || sourceByte36 == 0xC2);
     }
 
     private static IEnumerable<AddMobyTemplate> BuildCrossLevelTemplateBundles(IReadOnlyList<AddMobyTemplate> templates)
@@ -15276,12 +17267,14 @@ public sealed class MainWindow : Window
             "key" => 0,
             "lockedChest" => 1,
             "springChest" => 2,
-            "enemyTransform" => 3,
+            "fireworkChest" => 3,
+            "multiGemChest" => 4,
+            "enemyTransform" => 5,
             _ => 9
         };
     }
 
-    private IReadOnlyList<AddMobyTemplate> LoadCrossLevelObjectTemplates()
+    private IReadOnlyList<AddMobyTemplate> LoadCrossLevelObjectTemplates(bool includeReleaseCandidates = false)
     {
         string path = _workspace.ResolveFile("spyro-object-templates.json");
         if (!File.Exists(path))
@@ -15298,7 +17291,9 @@ public sealed class MainWindow : Window
             List<AddMobyTemplate> templates = new();
             foreach (JsonElement template in templatesElement.EnumerateArray())
             {
-                if (!GetJsonBoolean(template, "showInAddList"))
+                bool showInAddList = GetJsonBoolean(template, "showInAddList");
+                bool showInReleaseAddList = GetJsonBoolean(template, "showInReleaseAddList");
+                if (!showInAddList && !(includeReleaseCandidates && showInReleaseAddList))
                     continue;
 
                 string displayName = FormatCrossLevelObjectTemplateName(template);
@@ -15343,7 +17338,8 @@ public sealed class MainWindow : Window
                     CurrentLevelSupportLabel: levelStatus.FullLabel,
                     CurrentLevelRecipeId: levelStatus.RecipeId,
                     CurrentLevelReady: levelStatus.Ready,
-                    CurrentLevelPlaceable: levelStatus.Placeable));
+                    CurrentLevelPlaceable: levelStatus.Placeable,
+                    YawByte: GetJsonInt32(template, "yawByteHex", 0)));
             }
 
             return templates;
@@ -15373,7 +17369,7 @@ public sealed class MainWindow : Window
                 return template.TemplateNote;
 
             return template.FromLevelTemplate
-                ? "This clones a same-level source record. Create BIN keeps new enemy/chest true-adds saved but skips them until their behavior data is fully solved; use Change To / slot replacement for safe swaps."
+                ? "This clones a same-level source record. Create BIN exports enemy/chest adds by reusing a matching same-level source slot when one is available; use Change To when you want to choose the exact slot yourself."
                 : "Objects with simple 0x18/0x20 source records export to the test BIN now. Bigger actors may need actor-package support before they are playable.";
         }
 
@@ -15404,8 +17400,10 @@ public sealed class MainWindow : Window
             ? template.CurrentLevelReady
                 ? " Create BIN will include this because the current level has a mapped package recipe."
                 : template.CurrentLevelPlaceable
-                ? " Normal Create BIN keeps this guarded; use Advanced > Create Candidate BIN for a disposable test."
+                ? " Normal Create BIN keeps this guarded; use Object Tests > Create Candidate BIN for a disposable test."
                 : " Create BIN will include this only when the current level has a mapped package recipe."
+            : string.Equals(template.AddSupportStatus, "experimental-source-record-candidate", StringComparison.OrdinalIgnoreCase)
+            ? " Normal Create BIN keeps this guarded; use Object Tests > Create Candidate BIN for a disposable source-record test."
             : "";
         string levelNote = string.IsNullOrWhiteSpace(template.CurrentLevelSupportLabel)
             ? ""
@@ -15420,17 +17418,20 @@ public sealed class MainWindow : Window
             "supported-lightweight-object" => "lightweight object support",
             "experimental-actor-package-swap" => "experimental actor package support",
             "experimental-actor-package-import" => "experimental actor package import",
+            "experimental-source-record-candidate" => "guarded source-record candidate",
             "experimental-image-write" => "experimental test BIN writer",
             "" => "unknown",
             _ => status.Replace('-', ' ')
         };
     }
 
-    private static IEnumerable<AddMobyTemplate> BuildLevelObjectTemplates(IEnumerable<Moby> currentMobys)
+    private IEnumerable<AddMobyTemplate> BuildLevelObjectTemplates(IEnumerable<Moby> currentMobys)
     {
+        IReadOnlyList<Moby> mobyList = currentMobys as IReadOnlyList<Moby> ?? currentMobys.ToList();
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
-        foreach (Moby moby in currentMobys
-            .Where(moby => !moby.IsRemoved && !moby.IsAdded && moby.Type is 0x18 or 0x20)
+        foreach (Moby moby in mobyList
+            .Where(moby => !moby.IsRemoved && !moby.IsAdded && (moby.Type is 0x18 or 0x20 || moby.HasNativeKeyFingerprint))
+            .Where(moby => !_releaseMode || !IsReleaseProtectedControlMoby(moby))
             .OrderBy(moby => NativeTemplateRank(moby))
             .ThenBy(moby => moby.Type)
             .ThenBy(moby => moby.DisplayLabel)
@@ -15443,6 +17444,10 @@ public sealed class MainWindow : Window
 
             GemValue? defaultGem = moby.IsGemLike && moby.Gem != GemValue.Unknown ? moby.Gem : null;
             int rank = NativeTemplateRank(moby);
+            float? terrainGroundOffset = TryGetTerrainGroundOffset(moby, out float groundOffset)
+                ? groundOffset
+                : null;
+            int safeExportSlots = CountSafeNativeCloneExtraExportSlots(moby, mobyList);
             yield return new AddMobyTemplate(
                 BuildNativeTemplateName(label, rank),
                 moby.Type,
@@ -15457,9 +17462,14 @@ public sealed class MainWindow : Window
                 FromLevelTemplate: true,
                 DefaultGem: defaultGem,
                 SourceTrueIndex: moby.TrueIndex,
+                SourceLevelKey: _currentLevel?.Key ?? "",
+                SourceLevelName: _currentLevel?.DisplayName ?? "",
                 Family: NativeTemplateFamily(label),
                 CandidateKind: moby.CandidateKind,
-                TemplateNote: BuildNativeTemplateNote(label, moby.TrueIndex, rank));
+                TemplateNote: BuildNativeTemplateNote(label, moby.TrueIndex, rank, safeExportSlots),
+                YawByte: moby.YawByte >= 0 ? moby.YawByte : 0,
+                TerrainGroundOffset: terrainGroundOffset,
+                SafeExportSlots: safeExportSlots);
 
             if (seen.Count >= 32)
                 yield break;
@@ -15516,14 +17526,312 @@ public sealed class MainWindow : Window
         return "";
     }
 
-    private static string BuildNativeTemplateNote(string label, int trueIndex, int rank)
+    private static string BuildNativeTemplateNote(string label, int trueIndex, int rank, int safeExportSlots)
     {
         string donor = trueIndex >= 0 ? $" Native donor: T{trueIndex}." : "";
+        string slotNote = safeExportSlots < 0
+            ? ""
+            : safeExportSlots == 0
+            ? " Safe extra export slots right now: 0. Use Edit Object / Change To when you want to choose the exact slot yourself."
+            : $" Safe extra export slots right now: {safeExportSlots}.";
         if (rank == 0)
-            return $"Best option for adding a Spring Chest in this level: clone the level's own Spring Chest record and special data instead of importing a cross-level actor package.{donor}";
+            return $"Best option for adding a Spring Chest in this level: clone the level's own Spring Chest record and special data instead of importing a cross-level actor package.{donor}{slotNote}";
         if (rank <= 2)
-            return $"Best option for adding this chest type in this level: clone the level's own native chest record and special data.{donor}";
-        return $"This clones a same-level source record and is safer than importing this object from another level.{donor}";
+            return $"Best option for adding this chest type in this level: clone the level's own native chest record and special data.{donor}{slotNote}";
+        return $"This clones a same-level source record and is safer than importing this object from another level. Create BIN reuses a matching same-family source slot for enemy/chest adds when one is available.{donor}{slotNote}";
+    }
+
+    private int CountSafeNativeCloneExtraExportSlots(Moby donor, IEnumerable<Moby> currentMobys)
+    {
+        return CountSafeNativeCloneExtraExportSlots(
+            donor.Type,
+            donor.State,
+            donor.SourceByte36,
+            donor.SourceByte37,
+            donor.SourceByte4F,
+            donor.Flag4A,
+            donor.Flag4B,
+            donor.TrueIndex,
+            currentMobys);
+    }
+
+    private int CountSafeNativeCloneExtraExportSlots(AddMobyTemplate template, IEnumerable<Moby> currentMobys)
+    {
+        return CountSafeNativeCloneExtraExportSlots(
+            template.Type,
+            template.State,
+            template.SourceByte36,
+            template.SourceByte37,
+            template.SourceByte4F,
+            template.Flag4A,
+            template.Flag4B,
+            template.SourceTrueIndex,
+            currentMobys);
+    }
+
+    private int CountSafeNativeCloneExtraExportSlots(
+        int type,
+        int state,
+        int sourceByte36,
+        int sourceByte37,
+        int sourceByte4F,
+        int flag4A,
+        int flag4B,
+        int donorTrueIndex,
+        IEnumerable<Moby> currentMobys)
+    {
+        if (_currentLevel == null || donorTrueIndex < 0 || donorTrueIndex >= _currentLevel.SourceRecordCount)
+            return 0;
+        if (!IsNativeCloneAutoSlotIdentity(type, sourceByte36, sourceByte37, sourceByte4F, flag4A, flag4B))
+            return -1;
+
+        IReadOnlyList<Moby> mobyList = currentMobys as IReadOnlyList<Moby> ?? currentMobys.ToList();
+        int candidateSlots = mobyList.Count(candidate =>
+            !candidate.IsAdded &&
+            !candidate.IsRemoved &&
+            !candidate.HasAnyEdit &&
+            candidate.TrueIndex >= 0 &&
+            candidate.TrueIndex < _currentLevel.SourceRecordCount &&
+            candidate.TrueIndex != donorTrueIndex &&
+            (!_releaseMode || !IsReleaseProtectedControlMoby(candidate)) &&
+            MatchesNativeCloneAutoSlotFamily(candidate, type, state, sourceByte36, sourceByte37, sourceByte4F, flag4A, flag4B));
+
+        string levelKey = _currentLevel.Key;
+        int pendingUses = mobyList.Count(moby =>
+            moby.IsAdded &&
+            moby.SourceCloneTrueIndex >= 0 &&
+            (string.IsNullOrWhiteSpace(moby.SourceCloneLevelKey) ||
+             string.Equals(moby.SourceCloneLevelKey, levelKey, StringComparison.OrdinalIgnoreCase)) &&
+            IsNativeCloneAutoSlotIdentity(moby.Type, moby.SourceByte36, moby.SourceByte37, moby.SourceByte4F, moby.Flag4A, moby.Flag4B) &&
+            MatchesNativeCloneAutoSlotFamily(moby, type, state, sourceByte36, sourceByte37, sourceByte4F, flag4A, flag4B));
+
+        return Math.Max(0, candidateSlots - pendingUses);
+    }
+
+    private static bool IsNativeCloneAutoSlotIdentity(
+        int type,
+        int sourceByte36,
+        int sourceByte37,
+        int sourceByte4F,
+        int flag4A,
+        int flag4B)
+    {
+        if (type is not (0x18 or 0x20))
+            return false;
+        if (IsReleaseSafeTrueAddIdentity(type, sourceByte36, sourceByte37, sourceByte4F, flag4A, flag4B))
+            return false;
+        if (type == 0x18 &&
+            sourceByte37 == 0x00 &&
+            flag4A == 0x40 &&
+            GemValue.TryFromIdByte(sourceByte36, out _))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool MatchesNativeCloneAutoSlotFamily(
+        Moby candidate,
+        int targetType,
+        int targetState,
+        int targetSourceByte36,
+        int targetSourceByte37,
+        int targetSourceByte4F,
+        int targetFlag4A,
+        int targetFlag4B)
+    {
+        return MatchesNativeCloneAutoSlotFamily(
+            candidate.Type,
+            candidate.State,
+            candidate.SourceByte36,
+            candidate.SourceByte37,
+            candidate.SourceByte4F,
+            candidate.Flag4A,
+            candidate.Flag4B,
+            targetType,
+            targetState,
+            targetSourceByte36,
+            targetSourceByte37,
+            targetSourceByte4F,
+            targetFlag4A,
+            targetFlag4B);
+    }
+
+    private static bool MatchesNativeCloneAutoSlotFamily(
+        int candidateType,
+        int candidateState,
+        int candidateSourceByte36,
+        int candidateSourceByte37,
+        int candidateSourceByte4F,
+        int candidateFlag4A,
+        int candidateFlag4B,
+        int targetType,
+        int targetState,
+        int targetSourceByte36,
+        int targetSourceByte37,
+        int targetSourceByte4F,
+        int targetFlag4A,
+        int targetFlag4B)
+    {
+        if (candidateType != targetType)
+            return false;
+
+        bool exactFamily =
+            candidateSourceByte36 == targetSourceByte36 &&
+            candidateSourceByte37 == targetSourceByte37 &&
+            candidateSourceByte4F == targetSourceByte4F &&
+            candidateFlag4A == targetFlag4A &&
+            candidateFlag4B == targetFlag4B;
+        if (exactFamily)
+            return true;
+
+        return candidateSourceByte36 == targetSourceByte36 &&
+            candidateSourceByte37 == targetSourceByte37 &&
+            candidateFlag4A == targetFlag4A;
+    }
+
+    private string BuildClipboardExportSlotStatus(Moby moby)
+    {
+        if (!TryResolveNativeCloneDonor(moby, out Moby? donor) || donor == null)
+            return "";
+
+        int slots = CountSafeNativeCloneExtraExportSlots(donor, _currentMobys);
+        return BuildSafeExportSlotStatus(slots, "copy", IsPromotedNativeCloneAppendIdentity(
+            _currentLevel?.Key ?? "",
+            donor.Type,
+            donor.SourceByte36,
+            donor.SourceByte37,
+            donor.SourceByte4F,
+            donor.Flag4A,
+            donor.Flag4B));
+    }
+
+    private string BuildPastedExportSlotStatus(Moby pasted)
+    {
+        if (!TryResolveNativeCloneDonor(pasted, out Moby? donor) || donor == null)
+            return "";
+
+        int slots = CountSafeNativeCloneExtraExportSlots(donor, _currentMobys);
+        return BuildSafeExportSlotStatus(slots, "paste", IsPromotedNativeCloneAppendIdentity(
+            _currentLevel?.Key ?? "",
+            donor.Type,
+            donor.SourceByte36,
+            donor.SourceByte37,
+            donor.SourceByte4F,
+            donor.Flag4A,
+            donor.Flag4B));
+    }
+
+    private string BuildTemplateExportSlotStatus(AddMobyTemplate template)
+    {
+        if (!template.FromLevelTemplate ||
+            string.Equals(template.AddSupportStatus, "native-slot-reuse", StringComparison.OrdinalIgnoreCase))
+        {
+            return "";
+        }
+
+        int slots = CountSafeNativeCloneExtraExportSlots(template, _currentMobys);
+        return BuildSafeExportSlotStatus(slots, "add", IsPromotedNativeCloneAppendIdentity(
+            _currentLevel?.Key ?? template.SourceLevelKey,
+            template.Type,
+            template.SourceByte36,
+            template.SourceByte37,
+            template.SourceByte4F,
+            template.Flag4A,
+            template.Flag4B));
+    }
+
+    private static string BuildSafeExportSlotStatus(int slots, string action, bool trueAppendSupported)
+    {
+        if (slots < 0)
+            return "";
+        if (trueAppendSupported)
+        {
+            return slots == 0
+                ? $" No reusable export slots left for this {action}; this proven family can continue as a true-add in Create BIN."
+                : $" Safe extra export slots left for this {action}: {slots}; after those, this proven family can true-add in Create BIN.";
+        }
+
+        return slots == 0
+            ? $" No safe extra export slots left for this {action}; it stays saved, but normal Create BIN may skip more copies/adds until you use Change To on a slot."
+            : $" Safe extra export slots left for this {action}: {slots}.";
+    }
+
+    private async Task ShowLastSafeObjectSlotWarningAsync(string objectLabel)
+    {
+        Window dialog = new()
+        {
+            Title = "Object Limit Reached",
+            Width = 500,
+            Height = 270,
+            MinWidth = 440,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false
+        };
+
+        StackPanel panel = new()
+        {
+            Spacing = 14,
+            Margin = new Thickness(20)
+        };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Last known-safe object slot used",
+            FontSize = 19,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(126, 72, 18)),
+            TextWrapping = TextWrapping.Wrap
+        });
+        panel.Children.Add(new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(255, 246, 224)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(220, 166, 75)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(14),
+            Child = new TextBlock
+            {
+                Text = $"{objectLabel} used the last known-safe extra slot for this kind of object. Objects of this kind placed after this one might not work as intended in-game. This is planned to be fixed in a later update.",
+                FontSize = 13,
+                Foreground = new SolidColorBrush(Color.FromRgb(78, 61, 34)),
+                TextWrapping = TextWrapping.Wrap
+            }
+        });
+
+        Button close = NewButton("Got it", () => dialog.Close());
+        close.HorizontalAlignment = HorizontalAlignment.Right;
+        close.MinWidth = 96;
+        panel.Children.Add(close);
+        dialog.Content = panel;
+        await dialog.ShowDialog(this);
+    }
+
+    private bool TryResolveNativeCloneDonor(Moby moby, out Moby? donor)
+    {
+        donor = null;
+        if (_currentLevel == null)
+            return false;
+
+        int sourceTrueIndex = moby.SourceCloneTrueIndex >= 0 ? moby.SourceCloneTrueIndex : moby.IsAdded ? -1 : moby.TrueIndex;
+        if (sourceTrueIndex < 0 || sourceTrueIndex >= _currentLevel.SourceRecordCount)
+            return false;
+
+        if (moby.SourceCloneTrueIndex >= 0 &&
+            !string.IsNullOrWhiteSpace(moby.SourceCloneLevelKey) &&
+            !string.Equals(moby.SourceCloneLevelKey, _currentLevel.Key, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        donor = _currentMobys.FirstOrDefault(candidate =>
+            !candidate.IsAdded &&
+            !candidate.IsRemoved &&
+            candidate.TrueIndex == sourceTrueIndex);
+        if (donor == null)
+            return false;
+
+        return IsNativeCloneAutoSlotIdentity(donor.Type, donor.SourceByte36, donor.SourceByte37, donor.SourceByte4F, donor.Flag4A, donor.Flag4B);
     }
 
     private static bool IsNativeSpringChestTemplate(AddMobyTemplate template)
@@ -15534,12 +17842,13 @@ public sealed class MainWindow : Window
              template.Name.Contains("Spring Chest", StringComparison.OrdinalIgnoreCase));
     }
 
-    private Control BuildAddMobyDialogContent(Window dialog, ComboBox placementBox, TextBlock placementHint, ComboBox kindBox, ComboBox gemBox, TextBox nameBox, TextBox typeBox, TextBox stateBox, TextBox xBox, TextBox yBox, TextBox zBox, TextBlock note)
+    private Control BuildAddMobyDialogContent(Window dialog, ComboBox placementBox, TextBlock placementHint, ComboBox kindBox, ComboBox gemBox, TextBox nameBox, TextBox typeBox, TextBox stateBox, TextBox xBox, TextBox yBox, TextBox zBox, TextBox yawBox, TextBlock note)
     {
         Grid fields = new()
         {
             RowDefinitions =
             {
+                new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Auto),
@@ -15564,6 +17873,7 @@ public sealed class MainWindow : Window
         AddLabeledFieldWithHelp(fields, "Type", typeBox, 4, async () => await ShowMobyTypeStateHelpAsync("Type", typeBox, stateBox));
         AddLabeledFieldWithHelp(fields, "State", stateBox, 5, async () => await ShowMobyTypeStateHelpAsync("State", typeBox, stateBox));
         AddLabeledField(fields, "Position", BuildMobyPositionFields(xBox, yBox, zBox), 6);
+        AddLabeledField(fields, "Yaw", BuildMobyRotationFields(yawBox), 7);
 
         StackPanel panel = new()
         {
@@ -15605,6 +17915,11 @@ public sealed class MainWindow : Window
         if (_selectedMoby == null)
         {
             _statusText.Text = "Select an object before removing it.";
+            return;
+        }
+        if (_selectedMoby.IsEditorControl)
+        {
+            _statusText.Text = $"{_selectedMoby.DisplayLabel} is native level-entry data and cannot be removed.";
             return;
         }
 
@@ -15698,16 +18013,31 @@ public sealed class MainWindow : Window
 
     private async Task EditMobyAsync(Moby moby)
     {
+        if (moby.IsFlyInLandingControl)
+        {
+            await EditFlyInLandingAsync(moby);
+            return;
+        }
+        if (_releaseMode && IsMappedPortalControlMoby(moby))
+        {
+            await EditPortalControlAsync(moby);
+            return;
+        }
+
         TextBox nameBox = new() { Text = moby.Label, MinWidth = 240 };
         TextBox typeBox = new() { Text = $"0x{moby.Type:X2}", MinWidth = 120 };
         TextBox stateBox = new() { Text = $"0x{moby.State:X2}", MinWidth = 120 };
         TextBox xBox = NewPositionBox(moby.Position.X);
         TextBox yBox = NewPositionBox(moby.Position.Y);
         TextBox zBox = NewPositionBox(moby.Position.Z);
+        TextBox yawBox = NewYawBox(moby.YawByte);
         bool editsRewardGem = IsRewardGemCarrier(moby);
         ComboBox? gemBox = HasEditableGemValue(moby) ? BuildMobyGemEditBox(moby, nameBox, editsRewardGem) : null;
         List<ChestContentEditorRow> chestRows = GetChestContentMobys(moby)
             .Select(BuildChestContentEditorRow)
+            .ToList();
+        List<RewardTriggerEditorRow> rewardRows = GetTreasureThiefRewardTriggerMobys(moby)
+            .Select(BuildRewardTriggerEditorRow)
             .ToList();
         List<AddMobyTemplate> transformTemplates = BuildMobyTransformTemplates(moby).ToList();
         ComboBox? transformBox = null;
@@ -15731,6 +18061,7 @@ public sealed class MainWindow : Window
                 {
                     typeBox.Text = $"0x{selected.Type:X2}";
                     stateBox.Text = $"0x{selected.State:X2}";
+                    yawBox.Text = FormatYaw(Moby.YawByteToDegrees(selected.YawByte));
                     if (string.IsNullOrWhiteSpace(nameBox.Text) || string.Equals(nameBox.Text, moby.DisplayLabel, StringComparison.Ordinal))
                         nameBox.Text = selected.DefaultLabel;
                 }
@@ -15740,13 +18071,13 @@ public sealed class MainWindow : Window
         Window dialog = new()
         {
             Title = "Edit Object",
-            Width = chestRows.Count > 0 ? 720 : 620,
-            Height = chestRows.Count > 0 ? 760 : 680,
+            Width = chestRows.Count > 0 || rewardRows.Count > 0 ? 720 : 620,
+            Height = chestRows.Count > 0 || rewardRows.Count > 0 ? 760 : 680,
             MinHeight = 560,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = true
         };
-        dialog.Content = ScrollableDialogContent(BuildMobyEditDialogContent(dialog, nameBox, typeBox, stateBox, xBox, yBox, zBox, gemBox, chestRows, transformBox, transformNote));
+        dialog.Content = ScrollableDialogContent(BuildMobyEditDialogContent(dialog, nameBox, typeBox, stateBox, xBox, yBox, zBox, yawBox, gemBox, editsRewardGem, rewardRows, chestRows, transformBox, transformNote));
 
         bool accepted = await dialog.ShowDialog<bool>(this);
         if (!accepted)
@@ -15762,6 +18093,7 @@ public sealed class MainWindow : Window
             ApplyLevelTemplateToExistingMoby(moby, transformTemplate);
         else if (transformTemplate?.FromCrossLevelTemplate == true)
             ApplyCrossLevelTemplateToExistingMoby(moby, transformTemplate);
+        ApplyMobyYawEdit(moby, yawBox);
         GemValue editedGem = GemValue.Unknown;
         bool changedGemBytes = false;
         if (transformTemplate?.FromCrossLevelTemplate != true && transformTemplate?.FromLevelTemplate != true && gemBox?.SelectedItem is GemValue selectedGem)
@@ -15790,6 +18122,12 @@ public sealed class MainWindow : Window
         }
         if (chestRows.Count > 0)
             RefreshChestContentLink(moby);
+        int editedRewardTriggers = 0;
+        foreach (RewardTriggerEditorRow row in rewardRows)
+        {
+            if (ApplyRewardTriggerRow(row))
+                editedRewardTriggers++;
+        }
 
         if (changedGemBytes && editedGem != GemValue.Unknown)
         {
@@ -15804,9 +18142,132 @@ public sealed class MainWindow : Window
         ShowSelection(ViewportSelectionChangedEventArgs.ForMoby(moby));
         _statusText.Text = removedChestContents > 0
             ? $"Updated {moby.DisplayLabel} and removed {removedChestContents} chest content marker(s)."
+            : editedRewardTriggers > 0
+            ? $"Updated {moby.DisplayLabel} and {editedRewardTriggers} reward trigger gem(s)."
             : linkedMoveCount > 1
             ? $"Updated {moby.DisplayLabel} and moved {linkedMoveCount - 1} linked object(s)."
             : $"Updated {moby.DisplayLabel}.";
+    }
+
+    private async Task EditPortalControlAsync(Moby moby)
+    {
+        TextBox xBox = NewPositionBox(moby.Position.X);
+        TextBox yBox = NewPositionBox(moby.Position.Y);
+        TextBox zBox = NewPositionBox(moby.Position.Z);
+        Window dialog = new()
+        {
+            Title = "Edit Portal Location",
+            Width = 520,
+            Height = 330,
+            MinWidth = 440,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false
+        };
+
+        StackPanel panel = new()
+        {
+            Spacing = 14,
+            Margin = new Thickness(18)
+        };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Linked homeworld portal location",
+            FontSize = 18,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(31, 38, 45))
+        });
+        panel.Children.Add(BuildMobyPositionFields(xBox, yBox, zBox));
+        panel.Children.Add(NewSmallNote(
+            "The same XYZ change is applied to the lettering, companion control, private two-node Spyro transition route, blue portal plane, and walk-in collision surface. The stone arch remains terrain scenery."));
+
+        StackPanel buttons = new()
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 8
+        };
+        Button cancel = NewButton("Cancel");
+        Button apply = NewButton("Apply");
+        cancel.Click += (_, _) => dialog.Close(false);
+        apply.Click += (_, _) => dialog.Close(true);
+        buttons.Children.Add(cancel);
+        buttons.Children.Add(apply);
+        panel.Children.Add(buttons);
+        dialog.Content = panel;
+
+        bool accepted = await dialog.ShowDialog<bool>(this);
+        if (!accepted)
+            return;
+
+        int linkedMoveCount = ApplyExactMobyPositionEdit(moby, xBox, yBox, zBox);
+        _viewport.InvalidateVisual();
+        RefreshMobyList(moby);
+        RefreshCurrentLevelDetails();
+        ShowSelection(ViewportSelectionChangedEventArgs.ForMoby(moby));
+        _statusText.Text = linkedMoveCount > 1
+            ? $"Moved {moby.DisplayLabel} with {linkedMoveCount - 1} linked portal control(s)."
+            : $"Moved {moby.DisplayLabel}.";
+    }
+
+    private async Task EditFlyInLandingAsync(Moby moby)
+    {
+        TextBox xBox = NewPositionBox(moby.Position.X);
+        TextBox yBox = NewPositionBox(moby.Position.Y);
+        TextBox zBox = NewPositionBox(moby.Position.Z);
+        TextBox headingBox = NewFlyInHeadingBox(moby.YawByte);
+        Window dialog = new()
+        {
+            Title = "Edit Fly-in Landing",
+            Width = 520,
+            Height = 390,
+            MinWidth = 440,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false
+        };
+
+        StackPanel panel = new()
+        {
+            Spacing = 14,
+            Margin = new Thickness(18)
+        };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Homeworld-to-level landing",
+            FontSize = 18,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(31, 38, 45))
+        });
+        panel.Children.Add(BuildMobyPositionFields(xBox, yBox, zBox));
+        panel.Children.Add(BuildFlyInHeadingFields(headingBox));
+        panel.Children.Add(NewSmallNote(
+            "This changes where Spyro finishes the fly-in and the direction he enters from. The return-home position is separate and remains unchanged."));
+
+        StackPanel buttons = new()
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 8
+        };
+        Button cancel = NewButton("Cancel");
+        Button apply = NewButton("Apply");
+        cancel.Click += (_, _) => dialog.Close(false);
+        apply.Click += (_, _) => dialog.Close(true);
+        buttons.Children.Add(cancel);
+        buttons.Children.Add(apply);
+        panel.Children.Add(buttons);
+        dialog.Content = panel;
+
+        bool accepted = await dialog.ShowDialog<bool>(this);
+        if (!accepted)
+            return;
+
+        ApplyExactMobyPositionEdit(moby, xBox, yBox, zBox);
+        ApplyFlyInHeadingEdit(moby, headingBox);
+        _viewport.InvalidateVisual();
+        RefreshMobyList(moby);
+        RefreshCurrentLevelDetails();
+        ShowSelection(ViewportSelectionChangedEventArgs.ForMoby(moby));
+        _statusText.Text = $"Updated {moby.DisplayLabel}. Create BIN will patch this level's destination landing and fly-in heading.";
     }
 
     private IEnumerable<AddMobyTemplate> BuildMobyTransformTemplates(Moby moby)
@@ -15821,7 +18282,8 @@ public sealed class MainWindow : Window
             moby.Flag4A,
             moby.Flag4B,
             false,
-            moby.DisplayLabel);
+            moby.DisplayLabel,
+            YawByte: moby.YawByte >= 0 ? moby.YawByte : 0);
 
         foreach (AddMobyTemplate template in BuildLevelObjectTemplates(_currentMobys))
         {
@@ -15835,7 +18297,7 @@ public sealed class MainWindow : Window
                 DefaultLabel = label,
                 AddSupportStatus = "native-slot-reuse",
                 RequiredExporterFeature = "CloneSourceRecordIntoSlot",
-                TemplateNote = $"Reuses this existing object slot by cloning the full same-level source record from T{template.SourceTrueIndex}, while preserving this slot's placed position. This is the safer enemy/object route; true-add enemies still need linked behavior data."
+                TemplateNote = $"Reuses this existing object slot by cloning the full same-level source record from T{template.SourceTrueIndex}, while preserving this slot's placed position. This remains the most predictable route because you choose exactly which source slot is consumed."
             };
         }
 
@@ -15916,11 +18378,30 @@ public sealed class MainWindow : Window
         if (Math.Abs(dx) <= 0.001f && Math.Abs(dy) <= 0.001f && Math.Abs(dz) <= 0.001f)
             return 1;
 
-        List<Moby> moved = GetLinkedMoveMobys(moby).ToList();
         bool snapToTerrain = Math.Abs(dz) <= 0.001f && (Math.Abs(dx) > 0.001f || Math.Abs(dy) > 0.001f);
-        foreach (Moby item in moved)
-            MoveMoby(item, dx, dy, dz, snapToTerrain);
-        return moved.Count;
+        return MoveLinkedMobyGroup(moby, dx, dy, dz, snapToTerrain).Mobys.Count;
+    }
+
+    private static bool ApplyMobyYawEdit(Moby moby, TextBox yawBox)
+    {
+        if (!TryParseYawByte(yawBox.Text, out int yawByte) || moby.YawByte == yawByte)
+            return false;
+
+        moby.YawByte = yawByte;
+        moby.HasLoadedNativeEdit = true;
+        moby.LoadedNativeEditSummary = $"Yaw {moby.YawDegrees:0.#} deg";
+        return true;
+    }
+
+    private static bool ApplyFlyInHeadingEdit(Moby moby, TextBox headingBox)
+    {
+        if (!TryParseFlyInHeadingByte(headingBox.Text, out int headingByte) || moby.YawByte == headingByte)
+            return false;
+
+        moby.YawByte = headingByte;
+        moby.HasLoadedNativeEdit = true;
+        moby.LoadedNativeEditSummary = $"Fly-in heading {FlyInLandingEditorControl.HeadingByteToDegrees(headingByte):0.#} deg";
+        return true;
     }
 
     private static TextBox NewPositionBox(float value)
@@ -15937,7 +18418,52 @@ public sealed class MainWindow : Window
         return value.ToString("0.###", CultureInfo.InvariantCulture);
     }
 
-    private Control BuildMobyEditDialogContent(Window dialog, TextBox nameBox, TextBox typeBox, TextBox stateBox, TextBox xBox, TextBox yBox, TextBox zBox, ComboBox? gemBox, IReadOnlyList<ChestContentEditorRow> chestRows, ComboBox? transformBox, TextBlock? transformNote)
+    private static TextBox NewYawBox(int yawByte)
+    {
+        return new TextBox
+        {
+            Text = yawByte >= 0 ? FormatYaw(Moby.YawByteToDegrees(yawByte)) : "",
+            PlaceholderText = "0",
+            MinWidth = 90
+        };
+    }
+
+    private static TextBox NewFlyInHeadingBox(int headingByte)
+    {
+        return new TextBox
+        {
+            Text = headingByte >= 0 ? FormatYaw(FlyInLandingEditorControl.HeadingByteToDegrees(headingByte)) : "",
+            PlaceholderText = "0",
+            MinWidth = 90
+        };
+    }
+
+    private static string FormatYaw(double value)
+    {
+        return value.ToString("0.###", CultureInfo.InvariantCulture);
+    }
+
+    private static bool TryParseYawByte(string? text, out int yawByte)
+    {
+        yawByte = -1;
+        if (!TryParseFloat(text, out float degrees))
+            return false;
+
+        yawByte = Moby.DegreesToYawByte(degrees);
+        return true;
+    }
+
+    private static bool TryParseFlyInHeadingByte(string? text, out int headingByte)
+    {
+        headingByte = -1;
+        if (!TryParseFloat(text, out float degrees))
+            return false;
+
+        headingByte = FlyInLandingEditorControl.DegreesToHeadingByte(degrees);
+        return true;
+    }
+
+    private Control BuildMobyEditDialogContent(Window dialog, TextBox nameBox, TextBox typeBox, TextBox stateBox, TextBox xBox, TextBox yBox, TextBox zBox, TextBox yawBox, ComboBox? gemBox, bool editsRewardGem, IReadOnlyList<RewardTriggerEditorRow> rewardRows, IReadOnlyList<ChestContentEditorRow> chestRows, ComboBox? transformBox, TextBlock? transformNote)
     {
         StackPanel panel = new()
         {
@@ -15958,11 +18484,22 @@ public sealed class MainWindow : Window
         panel.Children.Add(stateBox);
         panel.Children.Add(SectionLabel("Position"));
         panel.Children.Add(BuildMobyPositionFields(xBox, yBox, zBox));
+        panel.Children.Add(SectionLabel("Rotation"));
+        panel.Children.Add(BuildMobyRotationFields(yawBox));
         if (gemBox != null)
         {
-            panel.Children.Add(SectionLabel("Gem Value"));
+            panel.Children.Add(SectionLabel(editsRewardGem ? "Reward Gem" : "Gem Value"));
             panel.Children.Add(gemBox);
-            panel.Children.Add(NewSmallNote("Changing this writes the gem ID/value bytes used by Save Edits and Create Test BIN."));
+            panel.Children.Add(NewSmallNote(editsRewardGem
+                ? "Changing this writes the object's reward gem byte used by Save Edits and Create BIN."
+                : "Changing this writes the gem ID/value bytes used by Save Edits and Create BIN."));
+        }
+        if (rewardRows.Count > 0)
+        {
+            panel.Children.Add(SectionLabel("Treasure Thief Reward Triggers"));
+            panel.Children.Add(NewSmallNote(BuildRewardTriggerSummary(rewardRows.Select(row => row.Moby))));
+            foreach (RewardTriggerEditorRow row in rewardRows)
+                panel.Children.Add(BuildRewardTriggerRow(row));
         }
         if (chestRows.Count > 0)
         {
@@ -16023,7 +18560,13 @@ public sealed class MainWindow : Window
         AddHelpSection(panel, "Start", [
             "Open BIN/CUE: choose the Spyro disc image you want this editor session to use.",
             "Level list: choose the level to load objects and map data from that disc.",
-            "Create BIN: build one patched test disc from all saved level edits."
+            "Create BIN: build one patched test disc from all saved level-name, object, and terrain edits."
+        ]);
+
+        AddHelpSection(panel, "Level Names", [
+            "Choose any catalog level in Level Name, enter a name that fits the shown maximum, then use Save Name.",
+            "Regular level names change portal lettering, transition text, and the guidebook together.",
+            "Names support uppercase letters, spaces, and apostrophes."
         ]);
 
         AddHelpSection(panel, "View", [
@@ -16052,6 +18595,8 @@ public sealed class MainWindow : Window
             "Copy Object: copies the currently selected object's editable data.",
             "Paste Object: creates a new object from the copied data at the cursor.",
             "Edit Object: change name, type, state, gem values, or position.",
+            "Fly-in Landing: destination levels show one ENTRY marker for where Spyro finishes the flight from a homeworld. Moving it does not change return-home travel.",
+            "Dragons: moving an existing dragon keeps its pedestal and scene link aligned, and Create BIN moves both the approach camera and later rescue cinematic by the same amount.",
             "Remove Object: stages the selected object for removal.",
             "Undo Object: clears staged changes on the selected object."
         ]);
@@ -16273,7 +18818,7 @@ public sealed class MainWindow : Window
 
     private static bool IsRewardGemCarrier(Moby moby)
     {
-        return !moby.IsLockedChestShell && !moby.IsGemLike && moby.RewardGem != GemValue.Unknown;
+        return !moby.IsGemLike && moby.RewardGem != GemValue.Unknown;
     }
 
     private static GemValue EditableGemValue(Moby moby)
@@ -16349,6 +18894,97 @@ public sealed class MainWindow : Window
         return grid;
     }
 
+    private static Control BuildMobyRotationFields(TextBox yawBox)
+    {
+        YawFacingPreview facingPreview = new()
+        {
+            Width = 176,
+            Height = 48,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        UpdateYawFacingPreview(yawBox, facingPreview);
+        yawBox.TextChanged += (_, _) => UpdateYawFacingPreview(yawBox, facingPreview);
+
+        Grid grid = new()
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(new GridLength(120)),
+                new ColumnDefinition(GridLength.Star)
+            },
+            RowDefinitions =
+            {
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto)
+            },
+            ColumnSpacing = 8,
+            RowSpacing = 4
+        };
+
+        AddGridControl(grid, NewFieldLabel("Yaw"), 0, 0);
+        AddGridControl(grid, NewFieldLabel("Facing"), 1, 0);
+        AddGridControl(grid, yawBox, 0, 1);
+        AddGridControl(grid, facingPreview, 1, 1);
+        return grid;
+    }
+
+    private static Control BuildFlyInHeadingFields(TextBox headingBox)
+    {
+        YawFacingPreview facingPreview = new()
+        {
+            Width = 176,
+            Height = 48,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Verb = "Flies in"
+        };
+        UpdateFlyInHeadingPreview(headingBox, facingPreview);
+        headingBox.TextChanged += (_, _) => UpdateFlyInHeadingPreview(headingBox, facingPreview);
+
+        Grid grid = new()
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(new GridLength(120)),
+                new ColumnDefinition(GridLength.Star)
+            },
+            RowDefinitions =
+            {
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto)
+            },
+            ColumnSpacing = 8,
+            RowSpacing = 4
+        };
+
+        AddGridControl(grid, NewFieldLabel("Fly-in heading"), 0, 0);
+        AddGridControl(grid, NewFieldLabel("Direction"), 1, 0);
+        AddGridControl(grid, headingBox, 0, 1);
+        AddGridControl(grid, facingPreview, 1, 1);
+        return grid;
+    }
+
+    private static void UpdateYawFacingPreview(TextBox yawBox, YawFacingPreview preview)
+    {
+        if (!TryParseYawByte(yawBox.Text, out int yawByte))
+        {
+            preview.Clear();
+            return;
+        }
+
+        preview.SetYaw(Moby.YawByteToDegrees(yawByte));
+    }
+
+    private static void UpdateFlyInHeadingPreview(TextBox headingBox, YawFacingPreview preview)
+    {
+        if (!TryParseFlyInHeadingByte(headingBox.Text, out int headingByte))
+        {
+            preview.Clear();
+            return;
+        }
+
+        preview.SetYaw(FlyInLandingEditorControl.HeadingByteToDegrees(headingByte));
+    }
+
     private static TextBlock NewFieldLabel(string text)
     {
         return new TextBlock
@@ -16391,6 +19027,50 @@ public sealed class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center
         };
         return new ChestContentEditorRow(moby, labelBox, gemBox, removeBox);
+    }
+
+    private static RewardTriggerEditorRow BuildRewardTriggerEditorRow(Moby moby)
+    {
+        GemValue current = moby.RewardGem != GemValue.Unknown ? moby.RewardGem : GemValue.Red;
+        ComboBox gemBox = new()
+        {
+            ItemsSource = GemValue.Known,
+            SelectedItem = GemValue.Known.FirstOrDefault(gem => gem.IdByte == current.IdByte),
+            MinWidth = 150
+        };
+        if (gemBox.SelectedItem == null)
+            gemBox.SelectedIndex = 0;
+
+        TextBox labelBox = new()
+        {
+            Text = moby.Label,
+            MinWidth = 260
+        };
+        return new RewardTriggerEditorRow(moby, labelBox, gemBox);
+    }
+
+    private static Control BuildRewardTriggerRow(RewardTriggerEditorRow row)
+    {
+        Grid grid = new()
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(new GridLength(54)),
+                new ColumnDefinition(GridLength.Star),
+                new ColumnDefinition(new GridLength(160))
+            },
+            ColumnSpacing = 8
+        };
+        TextBlock index = new()
+        {
+            Text = $"T{row.Moby.TrueIndex}",
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92))
+        };
+        grid.Children.Add(index);
+        AddGridControl(grid, row.LabelBox, 1, 0);
+        AddGridControl(grid, row.GemBox, 2, 0);
+        return grid;
     }
 
     private static Control BuildChestContentRow(ChestContentEditorRow row)
@@ -16454,6 +19134,27 @@ public sealed class MainWindow : Window
         row.Moby.HasLoadedNativeEdit = true;
         row.Moby.LoadedNativeEditSummary = $"Chest content {row.Moby.Gem.DisplayName}";
         return false;
+    }
+
+    private bool ApplyRewardTriggerRow(RewardTriggerEditorRow row)
+    {
+        int oldFlag4B = row.Moby.Flag4B;
+        string oldLabel = row.Moby.Label;
+
+        if (row.GemBox.SelectedItem is GemValue gem)
+            row.Moby.Flag4B = gem.IdByte;
+
+        if (!string.IsNullOrWhiteSpace(row.LabelBox.Text))
+            row.Moby.Label = row.LabelBox.Text.Trim();
+
+        bool changed = row.Moby.Flag4B != oldFlag4B ||
+            !string.Equals(row.Moby.Label, oldLabel, StringComparison.Ordinal);
+        if (!changed)
+            return false;
+
+        row.Moby.HasLoadedNativeEdit = true;
+        row.Moby.LoadedNativeEditSummary = $"Reward trigger {row.Moby.RewardGem.DisplayName}";
+        return true;
     }
 
     private Vector3f NewMobyDefaultPosition()
@@ -16643,17 +19344,6 @@ public sealed class MainWindow : Window
         return (dx * dx) + (dy * dy) + (dz * dz);
     }
 
-    private static string[] BuildSkyboxToolArguments(SkyboxPreset preset, string paletteHex)
-    {
-        List<string> args = ["-Preset", preset.Id, "-PlanOnly"];
-        if (preset.Id == "Custom")
-        {
-            args.InsertRange(2, ["-PaletteHex", paletteHex]);
-        }
-
-        return args.ToArray();
-    }
-
     private static bool IsSafePaletteText(string value)
     {
         string[] tokens = value
@@ -16761,6 +19451,18 @@ public sealed class MainWindow : Window
         return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal);
+    }
+
+    private static void DeleteFileIfExists(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     private void RefreshSourceDiscStatus()
@@ -19419,7 +22121,10 @@ public sealed class MainWindow : Window
     private static List<Moby> OrderMobysForList(IReadOnlyList<Moby> all, IReadOnlyList<Moby> visible, int categoryIndex)
     {
         if (!IsNeedsIdCategory(categoryIndex))
-            return visible.ToList();
+            return visible
+                .OrderByDescending(moby => moby.IsEditorControl)
+                .ThenBy(moby => moby.Index)
+                .ToList();
 
         Dictionary<string, int> familyCounts = BuildIdentityFamilyCounts(all);
         return visible
@@ -19453,15 +22158,17 @@ public sealed class MainWindow : Window
         int unknown = all.Count(moby => moby.VisualKind == MobyVisualKind.Unknown);
         int edited = all.Count(moby => moby.HasAnyEdit);
         int treasure = all.Sum(moby => moby.TreasureValue);
+        int nativeObjects = all.Count(moby => !moby.IsEditorControl);
+        int entryControls = all.Count(moby => moby.IsFlyInLandingControl);
         string category = categoryIndex >= 0 && categoryIndex < MobyCategoryOptions.Length
             ? MobyCategoryOptions[categoryIndex]
             : MobyCategoryOptions[0];
         string scope = string.IsNullOrWhiteSpace(filter) && categoryIndex <= 0
-            ? $"{all.Count} object(s)"
+            ? $"{nativeObjects} object(s){(entryControls > 0 ? $" + {entryControls} level entry" : "")}"
             : $"{visible.Count} of {all.Count} shown for {category.ToLowerInvariant()}";
 
         if (_releaseMode)
-            return $"{scope}. Treasure {treasure}; edited {edited}.";
+            return $"{scope}. Editor treasure {treasure}; edited {edited}.";
 
         string priorityHint = "";
         if (IsNeedsIdCategory(categoryIndex) && visible.Count > 0)
@@ -19551,6 +22258,9 @@ public sealed class MainWindow : Window
 
     private static bool IsTransportMoby(Moby moby)
     {
+        if (moby.IsFlyInLandingControl)
+            return true;
+
         string text = $"{moby.DisplayLabel} {moby.CandidateKind}".ToLowerInvariant();
         return text.Contains("balloonist") ||
             text.Contains("baloonist") ||
@@ -19615,7 +22325,7 @@ public sealed class MainWindow : Window
     private static string FormatMobyListItem(Moby moby)
     {
         string badge = MobyListBadge(moby);
-        return $"{moby.TrueIndex,3}  [{badge}] {moby.DisplayLabel}  0x{moby.Type:X2}{(moby.HasAnyEdit ? " *" : "")}";
+        return $"{moby.DisplayIndex,5}  [{badge}] {moby.DisplayLabel}{(moby.IsEditorControl ? "" : $"  0x{moby.Type:X2}")}{(moby.HasAnyEdit ? " *" : "")}";
     }
 
     private Control BuildMobyListItemControl(Moby? moby)
@@ -19638,7 +22348,7 @@ public sealed class MainWindow : Window
         StackPanel stack = new() { Spacing = 2 };
         stack.Children.Add(new TextBlock
         {
-            Text = $"T{moby.TrueIndex}  {MobyListBadge(moby)}  {moby.DisplayLabel}{(moby.HasAnyEdit ? "  edited" : "")}",
+            Text = $"{moby.DisplayIndex}  {MobyListBadge(moby)}  {moby.DisplayLabel}{(moby.HasAnyEdit ? "  edited" : "")}",
             Foreground = new SolidColorBrush(Color.FromRgb(31, 38, 45)),
             FontWeight = FontWeight.SemiBold,
             FontSize = 12,
@@ -19692,6 +22402,9 @@ public sealed class MainWindow : Window
 
     private static string BuildFriendlyMobySummary(Moby moby)
     {
+        if (moby.IsFlyInLandingControl)
+            return "Homeworld entry landing";
+
         string text = $"{moby.DisplayLabel} {moby.CandidateKind}".ToLowerInvariant();
         if (moby.VisualKind == MobyVisualKind.Gem && moby.Gem != GemValue.Unknown)
             return moby.Gem.DisplayName;
@@ -19754,6 +22467,9 @@ public sealed class MainWindow : Window
 
     private static string MobyListBadge(Moby moby)
     {
+        if (moby.IsFlyInLandingControl)
+            return "Fly-in";
+
         string text = $"{moby.DisplayLabel} {moby.CandidateKind}".ToLowerInvariant();
         if (moby.VisualKind == MobyVisualKind.Key)
             return "Key";
@@ -20108,8 +22824,20 @@ public sealed class MainWindow : Window
             ? "Select an object to see its related mobys."
             : linked.Count == 0
                 ? "No linked objects mapped for this moby yet."
-                : $"{linked.Count} related object(s). {BuildLinkedSummary(selected)}";
+                : BuildLinkedMobyHint(selected, linked);
         _syncingLinkedMobyList = false;
+    }
+
+    private string BuildLinkedMobyHint(Moby selected, IReadOnlyList<LinkedMobyItem> linked)
+    {
+        int autoPasteCompanions = linked.Count(item => item.AutoPasteCompanion);
+        string summary = BuildLinkedSummary(selected);
+        string autoPasteNote = selected.VisualKind == MobyVisualKind.Dragon && autoPasteCompanions == 2
+            ? " Its pedestal and dragon scene control move, copy, and paste with it."
+            : autoPasteCompanions > 0
+                ? $" {autoPasteCompanions} proven companion(s) copy and paste with this object."
+                : "";
+        return $"{linked.Count} related object(s). {summary}{autoPasteNote}".TrimEnd();
     }
 
     private string BuildLinkedSummary(Moby selected)
@@ -20160,6 +22888,10 @@ public sealed class MainWindow : Window
     private IEnumerable<LinkedMobyItem> BuildLinkedMobyItems(Moby selected)
     {
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<int> autoPasteCompanionTrueIndexes = MobyCompanionClonePlanner
+            .GetCompanionDonors(selected, _currentMobys)
+            .Select(moby => moby.TrueIndex)
+            .ToHashSet();
         foreach (MobyLink link in MobyLinkTraversal.GetVisibleLinks(selected))
         {
             string relationship = string.IsNullOrWhiteSpace(link.DisplayName) ? link.Kind : link.DisplayName;
@@ -20171,7 +22903,7 @@ public sealed class MainWindow : Window
 
                 string key = $"{relationship}|{linked.TrueIndex}";
                 if (seen.Add(key))
-                    yield return new LinkedMobyItem(linked, relationship);
+                    yield return new LinkedMobyItem(linked, relationship, autoPasteCompanionTrueIndexes.Contains(linked.TrueIndex));
             }
         }
     }
@@ -20327,6 +23059,7 @@ public sealed class MainWindow : Window
     {
         int loadedMobyEdits = 0;
         string cachePath = Path.Combine(_workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
+        LevelDefinition? level = _catalog.FindByKey(levelKey);
 
         try
         {
@@ -20337,7 +23070,6 @@ public sealed class MainWindow : Window
             }
             else
             {
-                LevelDefinition? level = _catalog.FindByKey(levelKey);
                 if (level != null && TryRecoverMobyCacheFromSourceQuiet(level, cachePath))
                 {
                     mobys = MobyLoader.LoadCached(cachePath).ToList();
@@ -20354,6 +23086,7 @@ public sealed class MainWindow : Window
                 }
             }
             MobyMetadataResult metadata = MobyMetadataEnricher.Apply(_workspace, levelKey, mobys);
+            TryAddFlyInLandingEditorControl(level, mobys);
             string editsPath = Path.Combine(_workspace.RootPath, $"{levelKey}-native-edits.json");
             loadedMobyEdits = MobyEditStore.Load(editsPath, mobys);
             MobyRelationshipRepair.RepairChestContentLinks(levelKey, mobys);
@@ -20363,6 +23096,26 @@ public sealed class MainWindow : Window
         {
             Debug.WriteLine(ex);
             return new MobyLoadData(new List<Moby>(), loadedMobyEdits, default);
+        }
+    }
+
+    private void TryAddFlyInLandingEditorControl(LevelDefinition? level, List<Moby> mobys)
+    {
+        if (level == null || !FlyInLandingEditorControl.SupportsLevel(level))
+            return;
+
+        string sourceImage = FirstExistingDiscImagePath(DiscImageLocator.FindImage(_workspace));
+        if (!File.Exists(sourceImage))
+            return;
+
+        try
+        {
+            FlyInLandingData landing = FlyInLandingLocator.Locate(sourceImage, level);
+            mobys.Add(FlyInLandingEditorControl.Create(level, landing));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or EndOfStreamException)
+        {
+            Debug.WriteLine(ex);
         }
     }
 
@@ -20493,6 +23246,14 @@ public sealed class MainWindow : Window
             lines.Add($"Gem: {moby.Gem.DisplayName}");
         }
 
+        List<Moby> rewardTriggers = GetTreasureThiefRewardTriggerMobys(moby).ToList();
+        if (rewardTriggers.Count > 0)
+        {
+            lines.Add($"Treasure thief reward triggers: {BuildRewardTriggerSummary(rewardTriggers)}");
+            foreach (Moby trigger in rewardTriggers.OrderBy(trigger => trigger.TrueIndex))
+                lines.Add($"  T{trigger.TrueIndex}: {trigger.RewardGem.DisplayName}");
+        }
+
         if (lines.Count == 0)
             return "";
 
@@ -20504,6 +23265,13 @@ public sealed class MainWindow : Window
         List<Moby> gems = contents.ToList();
         int total = gems.Sum(gem => gem.Gem.Value);
         return $"{gems.Count} gem record(s), total value {total}";
+    }
+
+    private static string BuildRewardTriggerSummary(IEnumerable<Moby> triggers)
+    {
+        List<Moby> rows = triggers.ToList();
+        int total = rows.Sum(row => row.RewardGem.Value);
+        return $"{rows.Count} linked reward trigger row(s), current visible value {total}";
     }
 
     private static Button NewButton(string text, Action? onClick = null)
@@ -20639,6 +23407,11 @@ public sealed class MainWindow : Window
         string SourceLabel,
         IReadOnlyList<CustomTerrainTextureImport> CustomTextures);
 
+    private sealed record SkyboxEditModeOption(string Id, string Label)
+    {
+        public override string ToString() => Label;
+    }
+
     private sealed record LevelLoadData(
         GeometryCandidate? Geometry,
         string TerrainCacheHealthMessage,
@@ -20660,16 +23433,27 @@ public sealed class MainWindow : Window
         LevelDefinition Level,
         bool HasObjectEdits,
         bool HasTerrainEdits,
-        bool HasCustomTerrainTextures);
+        bool HasCustomTerrainTextures,
+        bool HasLevelTextEdit,
+        bool HasLevelMusicEdit,
+        bool HasSkyboxEdit);
 
     private sealed record CombinedTestBinResult(
         string OutputImagePath,
         string OutputCuePath,
         int ObjectPatches,
         int TerrainPatches,
+        int EnvironmentGradePatches,
+        int SkyboxPatches,
+        int LevelNamePatches,
+        int MusicLevelPatches,
         int SkippedEdits,
+        IReadOnlyList<string> SkippedEditDetails,
+        IReadOnlyList<ExportedTreasureTarget> ExportedTreasureTargets,
         IReadOnlyList<string> PatchedLevelNames,
         bool WroteImage);
+
+    private sealed record ExportedTreasureTarget(string LevelName, int Before, int After);
 
     private sealed record RestoredTerrainLoadData(
         TerrainGeometryLoadData Geometry,
@@ -20924,6 +23708,7 @@ public sealed class MainWindow : Window
         string Label,
         int Type,
         int State,
+        int YawByte,
         int SourceByte36,
         int SourceByte4F,
         int Flag4B,
@@ -20938,6 +23723,7 @@ public sealed class MainWindow : Window
         string Label,
         int Type,
         int State,
+        int YawByte,
         int SourceByte36,
         int SourceByte37,
         int SourceByte4F,
@@ -20962,9 +23748,10 @@ public sealed class MainWindow : Window
         int SourceCloneTrueIndex,
         bool CopiedGemLike,
         bool CopiedVisibleGem,
-        GemValue CopiedGem)
+        GemValue CopiedGem,
+        float? TerrainGroundOffset)
     {
-        public static MobyClipboard From(Moby moby, LevelDefinition? currentLevel)
+        public static MobyClipboard From(Moby moby, LevelDefinition? currentLevel, float? terrainGroundOffset)
         {
             int sourceTrueIndex = moby.SourceCloneTrueIndex >= 0
                 ? moby.SourceCloneTrueIndex
@@ -20985,6 +23772,7 @@ public sealed class MainWindow : Window
                 moby.DisplayLabel,
                 moby.Type,
                 moby.State,
+                moby.YawByte >= 0 ? moby.YawByte : 0,
                 moby.SourceByte36,
                 moby.SourceByte37,
                 moby.SourceByte4F,
@@ -21009,7 +23797,8 @@ public sealed class MainWindow : Window
                 sourceTrueIndex,
                 moby.IsGemLike,
                 moby.IsVisibleGem,
-                moby.Gem);
+                moby.Gem,
+                terrainGroundOffset);
         }
     }
 
@@ -21059,7 +23848,10 @@ public sealed class MainWindow : Window
         string CurrentLevelRecipeId = "",
         bool CurrentLevelReady = false,
         bool CurrentLevelPlaceable = false,
-        string CompanionTemplateId = "")
+        string CompanionTemplateId = "",
+        int YawByte = 0,
+        float? TerrainGroundOffset = null,
+        int SafeExportSlots = -1)
     {
         public static IReadOnlyList<AddMobyTemplate> Known { get; } =
         [
@@ -21070,6 +23862,22 @@ public sealed class MainWindow : Window
 
         public override string ToString()
         {
+            if (FromLevelTemplate &&
+                SafeExportSlots >= 0 &&
+                !string.Equals(AddSupportStatus, "native-slot-reuse", StringComparison.OrdinalIgnoreCase))
+            {
+                if (MainWindow.IsReleaseSafeTrueAddIdentity(Type, SourceByte36, SourceByte37, SourceByte4F, Flag4A, Flag4B) ||
+                    MainWindow.IsPromotedNativeCloneAppendIdentity(SourceLevelKey, Type, SourceByte36, SourceByte37, SourceByte4F, Flag4A, Flag4B))
+                {
+                    return SafeExportSlots == 0
+                        ? $"{Name} (true-add supported)"
+                        : $"{Name} ({SafeExportSlots} reuse slots + true-add)";
+                }
+
+                string suffix = SafeExportSlots == 1 ? "slot" : "slots";
+                return $"{Name} ({SafeExportSlots} extra export {suffix})";
+            }
+
             return Name;
         }
     }
@@ -21119,7 +23927,21 @@ public sealed class MainWindow : Window
         }
     }
 
-    private sealed record LinkedMobyItem(Moby Moby, string Relationship);
+    private sealed record LinkedMobyItem(Moby Moby, string Relationship, bool AutoPasteCompanion);
+
+    private sealed record PortalControlEditorRow(
+        string DisplayName,
+        Moby? Lettering,
+        Moby? Location,
+        Moby? EntryTrigger,
+        IReadOnlyList<Moby> Members,
+        bool IsPartial)
+    {
+        public override string ToString()
+        {
+            return DisplayName;
+        }
+    }
 
     private sealed record ToolbarAction(string Label, Func<Task> Execute)
     {
@@ -21548,6 +24370,8 @@ public sealed class MainWindow : Window
         }
     }
 
+    private sealed record RewardTriggerEditorRow(Moby Moby, TextBox LabelBox, ComboBox GemBox);
+
     private sealed record ChestContentEditorRow(Moby Moby, TextBox LabelBox, ComboBox GemBox, CheckBox RemoveBox);
 
     private sealed record KnownMobyEntity(
@@ -21824,6 +24648,125 @@ public sealed class MainWindow : Window
             _swatch.Background = new SolidColorBrush(ToAvaloniaColor(color));
             _hex.Text = NormalizeHex(color);
             _rgbText.Text = $"RGB {color.R}, {color.G}, {color.B}";
+        }
+    }
+
+    private sealed class YawFacingPreview : Control
+    {
+        private bool _hasYaw;
+        private double _yawDegrees;
+
+        public string Verb { get; init; } = "Faces";
+
+        public void SetYaw(double yawDegrees)
+        {
+            _hasYaw = true;
+            _yawDegrees = NormalizeDegrees(yawDegrees);
+            InvalidateVisual();
+        }
+
+        public void Clear()
+        {
+            _hasYaw = false;
+            InvalidateVisual();
+        }
+
+        public override void Render(DrawingContext context)
+        {
+            Rect bounds = new(Bounds.Size);
+            if (bounds.Width <= 0 || bounds.Height <= 0)
+                return;
+
+            Rect background = new(bounds.Left, bounds.Top, bounds.Width, bounds.Height);
+            context.FillRectangle(new SolidColorBrush(Color.FromRgb(238, 243, 248)), background, 5);
+            context.DrawRectangle(
+                null,
+                new Pen(new SolidColorBrush(Color.FromRgb(199, 211, 223)), 1),
+                background,
+                5,
+                5);
+
+            double compassRadius = Math.Clamp(Math.Min(bounds.Height, bounds.Width * 0.42) * 0.35, 13, 18);
+            Point center = new(bounds.Left + 25, bounds.Center.Y);
+            Pen axisPen = new(new SolidColorBrush(Color.FromArgb(90, 90, 104, 118)), 0.8);
+            context.DrawEllipse(new SolidColorBrush(Color.FromRgb(248, 251, 253)), axisPen, center, compassRadius, compassRadius);
+            context.DrawLine(axisPen, new Point(center.X - compassRadius + 4, center.Y), new Point(center.X + compassRadius - 4, center.Y));
+            context.DrawLine(axisPen, new Point(center.X, center.Y - compassRadius + 4), new Point(center.X, center.Y + compassRadius - 4));
+
+            string label = "Enter yaw";
+            IBrush labelBrush = new SolidColorBrush(Color.FromRgb(88, 97, 108));
+            if (_hasYaw)
+            {
+                label = $"{Verb} {_yawDegrees:0.#} deg";
+                labelBrush = new SolidColorBrush(Color.FromRgb(36, 74, 84));
+                DrawPreviewArrow(context, center, compassRadius, _yawDegrees);
+            }
+
+            FormattedText text = new(
+                label,
+                CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight,
+                new Typeface("Inter", FontStyle.Normal, FontWeight.SemiBold),
+                11,
+                labelBrush)
+            {
+                MaxTextWidth = Math.Max(80, bounds.Width - 58)
+            };
+            context.DrawText(text, new Point(bounds.Left + 54, bounds.Center.Y - (text.Height * 0.52)));
+        }
+
+        private static void DrawPreviewArrow(DrawingContext context, Point center, double radius, double yawDegrees)
+        {
+            double radians = yawDegrees * Math.PI / 180.0;
+            Vector direction = new(
+                Math.Cos(radians) * EditorUiDefaults.MapXAxisScreenSign(EditorUiDefaults.UseGameViewMapOrientation),
+                Math.Sin(radians) * EditorUiDefaults.MapYAxisScreenSign(EditorUiDefaults.UseGameViewMapOrientation));
+            if (direction.Length <= 0.001)
+                return;
+
+            direction /= direction.Length;
+            Vector perpendicular = new(-direction.Y, direction.X);
+            Point start = center - (direction * 3);
+            Point end = center + (direction * Math.Max(8, radius - 2));
+            Color accent = Color.FromRgb(46, 182, 205);
+            Pen shadow = new(new SolidColorBrush(Color.FromArgb(140, 10, 22, 28)), 4.2);
+            Pen line = new(new SolidColorBrush(accent), 2.4);
+            context.DrawLine(shadow, start + new Vector(0, 1), end + new Vector(0, 1));
+            context.DrawLine(line, start, end);
+
+            Point[] head =
+            [
+                end,
+                end - (direction * 7) + (perpendicular * 4.6),
+                end - (direction * 7) - (perpendicular * 4.6)
+            ];
+            DrawPreviewPolygon(
+                context,
+                head,
+                new SolidColorBrush(accent),
+                new Pen(new SolidColorBrush(Color.FromArgb(220, 14, 31, 38)), 0.9));
+        }
+
+        private static void DrawPreviewPolygon(DrawingContext context, IReadOnlyList<Point> points, IBrush fill, Pen pen)
+        {
+            StreamGeometry geometry = new();
+            using (StreamGeometryContext stream = geometry.Open())
+            {
+                stream.BeginFigure(points[0], true);
+                for (int i = 1; i < points.Count; i++)
+                    stream.LineTo(points[i]);
+                stream.EndFigure(true);
+            }
+
+            context.DrawGeometry(fill, pen, geometry);
+        }
+
+        private static double NormalizeDegrees(double degrees)
+        {
+            degrees %= 360.0;
+            if (degrees < 0)
+                degrees += 360.0;
+            return degrees;
         }
     }
 

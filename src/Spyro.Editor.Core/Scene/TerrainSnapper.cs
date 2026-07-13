@@ -2,6 +2,8 @@ namespace Spyro.Editor.Core.Scene;
 
 public static class TerrainSnapper
 {
+    private const float SurfaceLayerEpsilon = 0.5f;
+
     public static bool TryFindZAt(
         IReadOnlyList<TerrainPolygon> polygons,
         float x,
@@ -47,6 +49,42 @@ public static class TerrainSnapper
 
         z = best.Value.Z;
         return true;
+    }
+
+    public static bool TryFindAdjacentZAt(
+        IReadOnlyList<TerrainPolygon> polygons,
+        float x,
+        float y,
+        float currentZ,
+        int direction,
+        out float z)
+    {
+        z = 0;
+        if (direction == 0)
+            return false;
+
+        bool moveUp = direction > 0;
+        float bestDistance = float.MaxValue;
+        bool found = false;
+        for (int i = 0; i < polygons.Count; i++)
+        {
+            if (!TryGetTerrainZOnPolygon(polygons[i], x, y, out float candidateZ))
+                continue;
+
+            float delta = candidateZ - currentZ;
+            if (moveUp ? delta <= SurfaceLayerEpsilon : delta >= -SurfaceLayerEpsilon)
+                continue;
+
+            float distance = Math.Abs(delta);
+            if (distance >= bestDistance)
+                continue;
+
+            z = candidateZ;
+            bestDistance = distance;
+            found = true;
+        }
+
+        return found;
     }
 
     private static bool TryGetTerrainZOnPolygon(TerrainPolygon polygon, float x, float y, out float z)

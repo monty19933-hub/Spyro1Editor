@@ -68,7 +68,21 @@ spyro-*.json
 spyro-*.md
 !spyro-level-catalog.json
 !spyro-object-templates.json
+!alpineridge-behavior-links.json
 !artisans-behavior-links.json
+!blowhard-behavior-links.json
+!clifftown-behavior-links.json
+!darkhollow-behavior-links.json
+!doctorshemp-behavior-links.json
+!drycanyon-behavior-links.json
+!gnastysloot-behavior-links.json
+!gnorccove-behavior-links.json
+!highcaves-behavior-links.json
+!icecavern-behavior-links.json
+!stonehill-behavior-links.json
+!toasty-behavior-links.json
+!townsquare-behavior-links.json
+!wizardpeak-behavior-links.json
 !artisans-live-validation-overrides.json
 !artisans-moby-user-overrides.json
 !darkhollow-moby-user-overrides.json
@@ -88,7 +102,9 @@ spyro-*.md
 *.tga
 *.webp
 !src/Spyro.Editor.App/Assets/Brand/app-icon.png
-src/Spyro.Editor.App/Assets/Brand/spyro-editor-title.png
+!src/Spyro.Editor.App/Assets/Brand/spyro-editor-title.png
+!src/Spyro.Editor.App/Assets/SkyPresets/
+!src/Spyro.Editor.App/Assets/SkyPresets/*.png
 src/Spyro.Editor.App/Assets/Markers/
 
 # Build outputs
@@ -118,6 +134,7 @@ wad-entry*-*.bin
 
 # Local/archive scratch
 _local/
+work/
 _skybox_probe/
 cleanup-manifests/
 editor-runtime/

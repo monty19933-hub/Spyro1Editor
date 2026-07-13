@@ -37,13 +37,18 @@ public static class CustomTerrainTexturePreview
     public static bool TryGetPreviewColor(CustomTerrainTextureImport import, out ColorRgba color)
     {
         color = default;
+        bool imageFirst = string.Equals(import.SourceKind, "imported-image", StringComparison.OrdinalIgnoreCase) ||
+            import.SourceKind.Contains("texture-art", StringComparison.OrdinalIgnoreCase) ||
+            import.SourceKind.Contains("custom-art", StringComparison.OrdinalIgnoreCase);
+        if (imageFirst && TryGetImagePreviewColor(import.SourceImagePath, out color))
+            return true;
         if (TryGetPaletteRampPreviewColor(import, out color))
             return true;
 
         if (!ColorRgba.TryParseHex(import.PaletteLowHex, out ColorRgba low) ||
             !ColorRgba.TryParseHex(import.PaletteHighHex, out ColorRgba high))
         {
-            return false;
+            return TryGetImagePreviewColor(import.SourceImagePath, out color);
         }
 
         color = ColorRgba.FromRgb(
@@ -51,6 +56,41 @@ public static class CustomTerrainTexturePreview
             (low.G + high.G) / 2,
             (low.B + high.B) / 2);
         return true;
+    }
+
+    private static bool TryGetImagePreviewColor(string path, out ColorRgba color)
+    {
+        color = default;
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            return false;
+
+        try
+        {
+            Rgba32[] pixels = PngRgbaImage.ReadRgba(path, out _, out _);
+            Rgba32[] visible = pixels.Where(pixel => pixel.A >= 32).ToArray();
+            IReadOnlyList<Rgba32> sample = visible.Length > 0 ? visible : pixels;
+            if (sample.Count == 0)
+                return false;
+
+            long red = 0;
+            long green = 0;
+            long blue = 0;
+            foreach (Rgba32 pixel in sample)
+            {
+                red += pixel.R;
+                green += pixel.G;
+                blue += pixel.B;
+            }
+            color = ColorRgba.FromRgb(
+                (int)(red / sample.Count),
+                (int)(green / sample.Count),
+                (int)(blue / sample.Count));
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return false;
+        }
     }
 
     private static bool TryGetPaletteRampPreviewColor(CustomTerrainTextureImport import, out ColorRgba color)

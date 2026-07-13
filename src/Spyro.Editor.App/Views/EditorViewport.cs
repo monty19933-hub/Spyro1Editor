@@ -7,6 +7,7 @@ using Spyro.Editor.Core;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
+using Spyro.Editor.Core.Skyboxes;
 
 namespace Spyro.Editor.App.Views;
 
@@ -36,14 +37,17 @@ public sealed class EditorViewport : Control
     private readonly List<ScreenTerrainFace> _screenTerrainFaces = new();
     private readonly List<ScreenMoby> _screenMobys = new();
     private readonly List<ScreenTerrainSurfaceLabel> _screenTerrainSurfaceLabels = new();
+    private ScreenFacingGuide? _screenFacingGuide;
     private Point _lastPointerPosition;
     private bool _isPanning;
     private bool _isDraggingMoby;
+    private bool _isDraggingMobyFacing;
     private bool _isDraggingTerrainFace;
     private bool _isDraggingTerrainPoint;
     private bool _draggingTerrainAsAddCopy;
     private bool _isPaintingTerrain;
     private int _draggingMobyIndex = -1;
+    private int _draggingMobyFacingIndex = -1;
     private int _draggingTerrainFaceIndex = -1;
     private int _draggingTerrainIndex = -1;
     private int _draggingTerrainPointIndex = -1;
@@ -71,6 +75,7 @@ public sealed class EditorViewport : Control
     private Func<Moby, bool>? _mobyFilter;
     private Func<TerrainPolygon, TerrainPatchSafetyKind>? _terrainPatchSafetyClassifier;
     private Func<TerrainPolygon, int, TerrainBrushPreviewVertexKind>? _terrainBrushVertexClassifier;
+    private NativeEnvironmentColorTransform? _environmentGradePreview;
 
     public event EventHandler<ViewportSelectionChangedEventArgs>? SelectionChanged;
     public event EventHandler<Moby>? MobyEditRequested;
@@ -87,6 +92,7 @@ public sealed class EditorViewport : Control
     public event EventHandler<ViewportTerrainBrushModeRequestedEventArgs>? TerrainBrushModeRequested;
     public event EventHandler? TerrainBrushStrokeFinished;
     public event EventHandler<MobyMoveRequestedEventArgs>? MobyMoveRequested;
+    public event EventHandler<MobyRotateRequestedEventArgs>? MobyRotateRequested;
     public event EventHandler<ViewportObjectPlacementRequestedEventArgs>? ObjectPlacementRequested;
     public event EventHandler? ObjectPlacementCanceled;
     public event EventHandler? ObjectCopyRequested;
@@ -120,6 +126,12 @@ public sealed class EditorViewport : Control
     public bool IsMapYFlipped => _flipMapY;
 
     public Point LastPointerPosition => _lastPointerPosition;
+
+    public void SetEnvironmentGradePreview(NativeEnvironmentColorTransform? transform)
+    {
+        _environmentGradePreview = transform;
+        InvalidateVisual();
+    }
 
     public bool ObjectPlacementMode
     {
@@ -285,6 +297,9 @@ public sealed class EditorViewport : Control
 
     public void ResetSelection()
     {
+        _isDraggingMobyFacing = false;
+        _draggingMobyFacingIndex = -1;
+        _screenFacingGuide = null;
         _selectedTerrainIndex = -1;
         _selectedTerrainPointIndex = -1;
         _selectedMobyIndex = -1;
@@ -418,6 +433,7 @@ public sealed class EditorViewport : Control
         _screenTerrainFaces.Clear();
         _screenMobys.Clear();
         _screenTerrainSurfaceLabels.Clear();
+        _screenFacingGuide = null;
 
         context.FillRectangle(new SolidColorBrush(Color.FromRgb(19, 24, 30)), bounds);
         if (_viewMode == ViewportViewMode.Fly3D)
@@ -473,6 +489,18 @@ public sealed class EditorViewport : Control
             }
 
             bool terrainFirst = ShouldPrioritizeTerrainInteraction();
+            ScreenFacingGuide? facingGuide = terrainFirst ? null : FindScreenFacingGuide(_lastPointerPosition);
+            if (facingGuide != null)
+            {
+                SelectMoby(facingGuide.Index, false);
+                _isDraggingMobyFacing = true;
+                _draggingMobyFacingIndex = facingGuide.Index;
+                SetViewportCursor(StandardCursorType.Cross);
+                e.Pointer.Capture(this);
+                e.Handled = true;
+                return;
+            }
+
             ScreenMoby? moby = terrainFirst ? null : FindScreenMoby(_lastPointerPosition);
             if (e.ClickCount >= 2)
             {
@@ -578,6 +606,17 @@ public sealed class EditorViewport : Control
             return;
         }
 
+        if (_isDraggingMobyFacing && _draggingMobyFacingIndex >= 0 && _draggingMobyFacingIndex < Mobys.Count)
+        {
+            Moby moby = Mobys[_draggingMobyFacingIndex];
+            if (!moby.IsRemoved && TryGetMobyYawByteAtScreenPoint(moby, position, out int yawByte) && moby.YawByte != yawByte)
+                MobyRotateRequested?.Invoke(this, new MobyRotateRequestedEventArgs(moby, yawByte));
+
+            _lastPointerPosition = position;
+            e.Handled = true;
+            return;
+        }
+
         if (_isPaintingTerrain && Geometry != null)
         {
             ScreenTerrainFace? terrain = FindScreenTerrain(position);
@@ -671,8 +710,8 @@ public sealed class EditorViewport : Control
                 float dy;
                 if (_viewMode == ViewportViewMode.Fly3D)
                 {
-                    if (!TryUnprojectFlyToZ(new Rect(Bounds.Size), _lastPointerPosition, moby.Position.Z + 32, out Point previousWorld) ||
-                        !TryUnprojectFlyToZ(new Rect(Bounds.Size), position, moby.Position.Z + 32, out Point currentWorld))
+                    if (!TryUnprojectFlyToZ(new Rect(Bounds.Size), _lastPointerPosition, moby.Position.Z, out Point previousWorld) ||
+                        !TryUnprojectFlyToZ(new Rect(Bounds.Size), position, moby.Position.Z, out Point currentWorld))
                     {
                         _lastPointerPosition = position;
                         e.Handled = true;
@@ -724,6 +763,14 @@ public sealed class EditorViewport : Control
         {
             _isDraggingMoby = false;
             _draggingMobyIndex = -1;
+            e.Pointer.Capture(null);
+            e.Handled = true;
+        }
+
+        if (_isDraggingMobyFacing)
+        {
+            _isDraggingMobyFacing = false;
+            _draggingMobyFacingIndex = -1;
             e.Pointer.Capture(null);
             e.Handled = true;
         }
@@ -1115,6 +1162,20 @@ public sealed class EditorViewport : Control
             .FirstOrDefault(item => DistanceSquared(item.Center, point) <= 144);
     }
 
+    private ScreenFacingGuide? FindScreenFacingGuide(Point point)
+    {
+        ScreenFacingGuide? guide = _screenFacingGuide;
+        if (guide == null || guide.Index != _selectedMobyIndex)
+            return null;
+
+        const double shaftHitRadius = 9;
+        const double handleHitRadius = 16;
+        return DistanceSquared(point, guide.End) <= handleHitRadius * handleHitRadius ||
+            DistanceToSegmentSquared(point, guide.Start, guide.End) <= shaftHitRadius * shaftHitRadius
+                ? guide
+                : null;
+    }
+
     private int ScreenMobyHitPriority(ScreenMoby item)
     {
         if (item.Index < 0 || item.Index >= Mobys.Count)
@@ -1416,7 +1477,7 @@ public sealed class EditorViewport : Control
             if (!IsMobyVisible(moby))
                 continue;
 
-            if (!TryProjectFly(bounds, moby.Position.X, moby.Position.Y, moby.Position.Z + 32, out ProjectedPoint point))
+            if (!TryProjectFly(bounds, moby.Position.X, moby.Position.Y, moby.Position.Z, out ProjectedPoint point))
                 continue;
 
             if (!bounds.Inflate(80).Contains(point.Screen))
@@ -1450,6 +1511,7 @@ public sealed class EditorViewport : Control
         foreach (VisibleMoby item in visible.Where(item => item.Index == _selectedMobyIndex))
             DrawMobyWithOpacity(context, item.Point, item.Moby, true, false, item.Size + 2.5, selectedOpacity);
 
+        DrawSelectedMobyFacingGuide(context, bounds, visible, flyView: true);
         DrawMobyLabels(context, bounds, visible, linkedTrueIndexes);
     }
 
@@ -1531,16 +1593,16 @@ public sealed class EditorViewport : Control
             TerrainPolygon polygon = geometry.Polygons[index];
             if (ShouldDrawAddCopySourcePreview(polygon))
             {
-                Point[] sourcePoints = polygon.OriginalPoints
-                    .Select(point => transform.Project(point.X, point.Y, OriginalAverageZ(polygon)))
-                    .ToArray();
+                Point[] sourcePoints = ProjectMapTerrainPoints(
+                    transform,
+                    polygon.OriginalPoints,
+                    polygon.OriginalZValues,
+                    OriginalAverageZ(polygon));
                 if (IntersectsBounds(sourcePoints, visibleBounds))
                     visibleFaces.Add(new ProjectedTerrainFace(index, polygon, sourcePoints, 0, true));
             }
 
-            Point[] points = polygon.Points
-                .Select(point => transform.Project(point.X, point.Y, polygon.AvgZ))
-                .ToArray();
+            Point[] points = ProjectMapTerrainPoints(transform, polygon.Points, polygon.ZValues, polygon.AvgZ);
 
             if (!IntersectsBounds(points, visibleBounds))
                 continue;
@@ -1586,6 +1648,22 @@ public sealed class EditorViewport : Control
         DrawSelectedTerrainPointHandles(context, orderedFaces, flyView: false);
         DrawTerrainBrushFootprint(context, bounds, geometry, transform);
         BuildTerrainSurfaceLabels(orderedFaces, bounds);
+    }
+
+    private static Point[] ProjectMapTerrainPoints(
+        SceneTransform transform,
+        IReadOnlyList<Vector2f> points,
+        IReadOnlyList<float> zValues,
+        double fallbackZ)
+    {
+        Point[] projected = new Point[points.Count];
+        for (int i = 0; i < points.Count; i++)
+        {
+            double z = i < zValues.Count ? zValues[i] : fallbackZ;
+            projected[i] = transform.Project(points[i].X, points[i].Y, z);
+        }
+
+        return projected;
     }
 
     private IReadOnlyList<ProjectedTerrainFace> OrderMapTerrainFacesForDrawing(IReadOnlyList<ProjectedTerrainFace> faces)
@@ -1992,8 +2070,9 @@ public sealed class EditorViewport : Control
 
         TerrainPolygon polygon = geometry.Polygons[terrainIndex];
         Vector2f brushCenter = _terrainBrushPreviewWorldPoint ?? polygon.Center;
-        Point center = transform.Project(brushCenter.X, brushCenter.Y, polygon.AvgZ);
-        Point edge = transform.Project(brushCenter.X + _terrainBrushRadius, brushCenter.Y, polygon.AvgZ);
+        Point center = transform.Project(brushCenter.X, brushCenter.Y, TerrainZAt(polygon, brushCenter));
+        Vector2f brushEdge = new((float)(brushCenter.X + _terrainBrushRadius), brushCenter.Y);
+        Point edge = transform.Project(brushEdge.X, brushEdge.Y, TerrainZAt(polygon, brushEdge));
         double radius = Math.Max(4, Math.Abs(edge.X - center.X));
         Color color = TerrainBrushActionColor(_terrainBrushAction);
         IBrush fill = new SolidColorBrush(Color.FromArgb(16, color.R, color.G, color.B));
@@ -2243,6 +2322,7 @@ public sealed class EditorViewport : Control
         foreach (VisibleMoby item in visible.Where(item => item.Index == _selectedMobyIndex))
             DrawMobyWithOpacity(context, item.Point, item.Moby, true, false, item.Size + 2.4, selectedOpacity);
 
+        DrawSelectedMobyFacingGuide(context, bounds, visible, flyView: false);
         DrawMobyLabels(context, bounds, visible, linkedTrueIndexes);
     }
 
@@ -2317,6 +2397,214 @@ public sealed class EditorViewport : Control
             DrawRelationshipLabel(context, labelPoint, relationship);
             labelsDrawn++;
         }
+    }
+
+    private void DrawSelectedMobyFacingGuide(DrawingContext context, Rect bounds, IReadOnlyList<VisibleMoby> visible, bool flyView)
+    {
+        if (_selectedMobyIndex < 0)
+            return;
+
+        VisibleMoby? selected = visible.FirstOrDefault(item => item.Index == _selectedMobyIndex);
+        if (selected == null || selected.Moby.YawByte < 0)
+            return;
+
+        if (!TryGetMobyFacingScreenVector(bounds, selected.Moby, flyView, out Vector screenVector))
+            return;
+
+        if (!TryCreateFacingGuideGeometry(selected.Point, selected.Size, screenVector, flyView, out FacingGuideGeometry guide))
+            return;
+
+        _screenFacingGuide = new ScreenFacingGuide(selected.Index, guide.Start, guide.End);
+        DrawFacingGuide(context, bounds, selected.Moby, selected.Size, guide);
+    }
+
+    private bool TryGetMobyFacingScreenVector(Rect bounds, Moby moby, bool flyView, out Vector screenVector)
+    {
+        screenVector = default;
+        Vector2f direction = MobyFacingDirection(moby);
+        double guideWorldLength = FacingGuideWorldLength(moby);
+
+        if (flyView)
+        {
+            double z = moby.Position.Z;
+            if (TryProjectFly(bounds, moby.Position.X, moby.Position.Y, z, out ProjectedPoint origin) &&
+                TryProjectFly(
+                    bounds,
+                    moby.Position.X + (direction.X * guideWorldLength),
+                    moby.Position.Y + (direction.Y * guideWorldLength),
+                    z,
+                    out ProjectedPoint target))
+            {
+                screenVector = target.Screen - origin.Screen;
+                if (screenVector.Length >= 0.2)
+                    return true;
+            }
+        }
+        else
+        {
+            SceneTransform transform = CreateMobyTransform(bounds, Mobys);
+            Point origin = transform.Project(moby.Position.X, moby.Position.Y, moby.Position.Z);
+            Point target = transform.Project(
+                moby.Position.X + (direction.X * guideWorldLength),
+                moby.Position.Y + (direction.Y * guideWorldLength),
+                moby.Position.Z);
+            screenVector = target - origin;
+            if (screenVector.Length >= 0.2)
+                return true;
+        }
+
+        screenVector = new Vector(
+            direction.X * EditorUiDefaults.MapXAxisScreenSign(_flipMapY),
+            direction.Y * EditorUiDefaults.MapYAxisScreenSign(_flipMapY));
+        return screenVector.Length >= 0.2;
+    }
+
+    private static Vector2f MobyFacingDirection(Moby moby)
+    {
+        if (moby.IsFlyInLandingControl)
+            return FlyInLandingEditorControl.HeadingByteToWorldDirection(moby.YawByte);
+
+        double radians = Moby.YawByteToDegrees(moby.YawByte) * Math.PI / 180.0;
+        return new Vector2f((float)Math.Cos(radians), (float)Math.Sin(radians));
+    }
+
+    private bool TryGetMobyYawByteAtScreenPoint(Moby moby, Point screenPoint, out int yawByte)
+    {
+        yawByte = moby.YawByte;
+        Rect bounds = new(Bounds.Size);
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+            return false;
+
+        Point world;
+        if (_viewMode == ViewportViewMode.Fly3D)
+        {
+            if (!TryUnprojectFlyToZ(bounds, screenPoint, moby.Position.Z, out world))
+                return false;
+        }
+        else
+        {
+            SceneTransform transform = CreateMobyTransform(bounds, Mobys);
+            world = transform.Unproject(screenPoint, moby.Position.Z);
+        }
+
+        double dx = world.X - moby.Position.X;
+        double dy = world.Y - moby.Position.Y;
+        if ((dx * dx) + (dy * dy) < 0.0001)
+            return false;
+
+        double degrees = Math.Atan2(dy, dx) * 180.0 / Math.PI;
+        yawByte = moby.IsFlyInLandingControl
+            ? FlyInLandingEditorControl.DegreesToHeadingByte(degrees)
+            : Moby.DegreesToYawByte(degrees);
+        return true;
+    }
+
+    private static double FacingGuideWorldLength(Moby moby)
+    {
+        return moby.VisualKind switch
+        {
+            MobyVisualKind.Actor or MobyVisualKind.Dragon => 560,
+            MobyVisualKind.Chest or MobyVisualKind.Scenery or MobyVisualKind.Portal => 440,
+            MobyVisualKind.Gem or MobyVisualKind.Key => 300,
+            _ => 380
+        };
+    }
+
+    private static bool TryCreateFacingGuideGeometry(
+        Point point,
+        double markerSize,
+        Vector screenVector,
+        bool flyView,
+        out FacingGuideGeometry guide)
+    {
+        double vectorLength = screenVector.Length;
+        if (vectorLength < 0.2)
+        {
+            guide = default;
+            return false;
+        }
+
+        Vector direction = screenVector / vectorLength;
+        double arrowLength = Math.Clamp(markerSize * (flyView ? 5.0 : 4.5), flyView ? 34 : 30, flyView ? 64 : 56);
+        Point start = point + (direction * (markerSize + 6));
+        Point end = point + (direction * arrowLength);
+        guide = new FacingGuideGeometry(start, end, direction);
+        return true;
+    }
+
+    private static void DrawFacingGuide(
+        DrawingContext context,
+        Rect bounds,
+        Moby moby,
+        double markerSize,
+        FacingGuideGeometry guide)
+    {
+        Vector direction = guide.Direction;
+        Point start = guide.Start;
+        Point end = guide.End;
+        Vector perpendicular = new(-direction.Y, direction.X);
+
+        Color accent = Color.FromRgb(82, 225, 246);
+        Color shadow = Color.FromArgb(176, 8, 13, 18);
+        Pen shadowPen = new(new SolidColorBrush(shadow), 5.2);
+        Pen linePen = new(new SolidColorBrush(accent), 3.0);
+        Pen rimPen = new(new SolidColorBrush(Color.FromArgb(230, 7, 15, 22)), 1.2);
+        context.DrawLine(shadowPen, start + new Vector(0, 1.5), end + new Vector(0, 1.5));
+        context.DrawLine(linePen, start, end);
+
+        double headLength = Math.Clamp(markerSize * 0.9, 7.5, 11.5);
+        double headWidth = Math.Clamp(markerSize * 0.62, 5.5, 9.5);
+        Point[] head =
+        [
+            end,
+            end - (direction * headLength) + (perpendicular * headWidth),
+            end - (direction * headLength) - (perpendicular * headWidth)
+        ];
+        DrawPolygon(context, head, new SolidColorBrush(accent), rimPen);
+        context.DrawEllipse(new SolidColorBrush(accent), rimPen, start, 2.8, 2.8);
+        context.DrawEllipse(
+            new SolidColorBrush(Color.FromRgb(238, 253, 255)),
+            new Pen(new SolidColorBrush(Color.FromRgb(20, 65, 75)), 1.2),
+            end,
+            3.8,
+            3.8);
+
+        if (bounds.Width >= 260 && bounds.Height >= 160)
+        {
+            string label = moby.IsFlyInLandingControl
+                ? $"Flies in {FlyInLandingEditorControl.HeadingByteToDegrees(moby.YawByte):0.#} deg"
+                : $"Faces {Moby.YawByteToDegrees(moby.YawByte):0.#} deg";
+            DrawFacingGuideLabel(context, bounds, end, direction, label);
+        }
+    }
+
+    private static void DrawFacingGuideLabel(DrawingContext context, Rect bounds, Point anchor, Vector direction, string label)
+    {
+        FormattedText text = new(
+            label,
+            System.Globalization.CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            new Typeface("Inter", FontStyle.Normal, FontWeight.SemiBold),
+            10.5,
+            new SolidColorBrush(Color.FromRgb(231, 250, 255)))
+        {
+            MaxTextWidth = 116
+        };
+
+        Vector offset = new(direction.X >= 0 ? 8 : -text.Width - 8, direction.Y >= 0 ? 5 : -text.Height - 5);
+        Point origin = anchor + offset;
+        origin = new Point(
+            Math.Clamp(origin.X, bounds.Left + 8, Math.Max(bounds.Left + 8, bounds.Right - text.Width - 14)),
+            Math.Clamp(origin.Y, bounds.Top + 44, Math.Max(bounds.Top + 44, bounds.Bottom - text.Height - 12)));
+        Rect background = new(origin - new Vector(5, 3), new Size(text.Width + 10, text.Height + 6));
+        context.FillRectangle(new SolidColorBrush(Color.FromArgb(226, 23, 38, 48)), background, 4);
+        context.DrawRectangle(
+            null,
+            new Pen(new SolidColorBrush(Color.FromArgb(180, 82, 225, 246)), 1),
+            background,
+            4,
+            4);
+        context.DrawText(text, origin);
     }
 
     private static void DrawRelationshipLabel(DrawingContext context, Point point, string relationship)
@@ -5790,7 +6078,7 @@ public sealed class EditorViewport : Control
             label = moby.VisualKind == MobyVisualKind.Unknown ? "Unknown moby" : moby.VisualKind.ToString();
 
         return includeIndex
-            ? $"T{moby.TrueIndex} {label}"
+            ? $"{moby.DisplayIndex} {label}"
             : label;
     }
 
@@ -6318,9 +6606,10 @@ public sealed class EditorViewport : Control
             return true;
         }
 
-        SceneTransform transform = CreateGeometryTransform(bounds, geometry);
-        Point world = transform.Unproject(screenPoint, terrain.AvgZ);
-        worldPoint = new Vector2f((float)world.X, (float)world.Y);
+        if (!TryGetMapTerrainWorldPoint(bounds, screenPoint, terrain, out Vector3f mapHit))
+            return false;
+
+        worldPoint = new Vector2f(mapHit.X, mapHit.Y);
         return true;
     }
 
@@ -6340,32 +6629,23 @@ public sealed class EditorViewport : Control
         GeometryCandidate? geometry = Geometry;
         if (geometry != null && geometry.Polygons.Count > 0)
         {
-            ScreenTerrainFace? terrainHit = FindScreenTerrain(screenPoint, fallback.Z);
+            if (_viewMode == ViewportViewMode.Fly3D &&
+                TryFindFlyTerrainHit(bounds, screenPoint, out terrainIndex, out Vector3f flyHit))
+            {
+                position = flyHit;
+                return true;
+            }
+
+            ScreenTerrainFace? terrainHit = _viewMode == ViewportViewMode.Fly3D
+                ? null
+                : FindScreenTerrain(screenPoint, fallback.Z);
             if (terrainHit != null && terrainHit.Index >= 0 && terrainHit.Index < geometry.Polygons.Count)
             {
                 TerrainPolygon terrain = geometry.Polygons[terrainHit.Index];
                 terrainIndex = terrainHit.Index;
-                if (_viewMode == ViewportViewMode.Fly3D)
+                if (TryGetMapTerrainWorldPoint(bounds, screenPoint, terrain, out Vector3f mapHit))
                 {
-                    if (TryGetFlyTerrainWorldPoint(bounds, screenPoint, terrain, out Vector2f worldPoint))
-                    {
-                        float z = terrain.AvgZ;
-                        if (!terrain.TryGetZ(worldPoint.X, worldPoint.Y, out z))
-                            z = terrain.AvgZ;
-                        position = new Vector3f(worldPoint.X, worldPoint.Y, z);
-                        return true;
-                    }
-                }
-                else
-                {
-                    SceneTransform transform = CreateGeometryTransform(bounds, geometry);
-                    Point world = transform.Unproject(screenPoint, terrain.AvgZ);
-                    float x = (float)world.X;
-                    float y = (float)world.Y;
-                    float z = terrain.AvgZ;
-                    if (!terrain.TryGetZ(x, y, out z))
-                        z = terrain.AvgZ;
-                    position = new Vector3f(x, y, z);
+                    position = mapHit;
                     return true;
                 }
             }
@@ -6453,35 +6733,95 @@ public sealed class EditorViewport : Control
         return (float)((previousScreen.Y - currentScreen.Y) * unitsPerPixel);
     }
 
-    private bool TryGetFlyTerrainWorldPoint(Rect bounds, Point screenPoint, TerrainPolygon terrain, out Vector2f worldPoint)
+    private bool TryFindFlyTerrainHit(Rect bounds, Point screenPoint, out int terrainIndex, out Vector3f hit)
     {
-        worldPoint = default;
-        int count = Math.Min(terrain.Points.Count, terrain.ZValues.Length);
-        if (count < 3)
+        terrainIndex = -1;
+        hit = default;
+        GeometryCandidate? geometry = Geometry;
+        if (geometry == null || !TryGetFlyRay(bounds, screenPoint, out Vector3f origin, out Vector3f direction))
             return false;
 
+        return TerrainRaycaster.TryFindClosestHit(
+            geometry.Polygons,
+            origin,
+            direction,
+            out terrainIndex,
+            out hit,
+            out _);
+    }
+
+    private bool TryGetFlyRay(Rect bounds, Point screenPoint, out Vector3f origin, out Vector3f direction)
+    {
+        origin = default;
+        direction = default;
+        double focal = Math.Min(bounds.Width, bounds.Height) * 0.9;
+        if (focal <= 0)
+            return false;
+
+        double right = (screenPoint.X - bounds.Center.X) / focal;
+        double vertical = -(screenPoint.Y - bounds.Center.Y) / focal;
+        double sinPitch = Math.Sin(_flyCamera.Pitch);
+        double cosPitch = Math.Cos(_flyCamera.Pitch);
+        double forwardHorizontal = cosPitch - (vertical * sinPitch);
+        double dz = sinPitch + (vertical * cosPitch);
+        double cosYaw = Math.Cos(_flyCamera.Yaw);
+        double sinYaw = Math.Sin(_flyCamera.Yaw);
+        double viewDx = (cosYaw * forwardHorizontal) - (sinYaw * right);
+        double viewDy = (sinYaw * forwardHorizontal) + (cosYaw * right);
+        double worldDx = FromFlyViewX(viewDx);
+        double worldDy = FromFlyViewY(viewDy);
+        double length = Math.Sqrt((worldDx * worldDx) + (worldDy * worldDy) + (dz * dz));
+        if (length <= 0.0001)
+            return false;
+
+        origin = new Vector3f(
+            (float)FromFlyViewX(_flyCamera.X),
+            (float)FromFlyViewY(_flyCamera.Y),
+            (float)_flyCamera.Z);
+        direction = new Vector3f(
+            (float)(worldDx / length),
+            (float)(worldDy / length),
+            (float)(dz / length));
+        return true;
+    }
+
+    private bool TryGetMapTerrainWorldPoint(Rect bounds, Point screenPoint, TerrainPolygon terrain, out Vector3f worldPoint)
+    {
+        worldPoint = default;
+        GeometryCandidate? geometry = Geometry;
+        int count = Math.Min(terrain.Points.Count, terrain.ZValues.Length);
+        if (geometry == null || count < 3)
+            return false;
+
+        SceneTransform transform = CreateGeometryTransform(bounds, geometry);
         for (int i = 1; i < count - 1; i++)
         {
-            if (!TryProjectFly(bounds, terrain.Points[0].X, terrain.Points[0].Y, terrain.ZValues[0], out ProjectedPoint p0) ||
-                !TryProjectFly(bounds, terrain.Points[i].X, terrain.Points[i].Y, terrain.ZValues[i], out ProjectedPoint p1) ||
-                !TryProjectFly(bounds, terrain.Points[i + 1].X, terrain.Points[i + 1].Y, terrain.ZValues[i + 1], out ProjectedPoint p2))
-            {
-                continue;
-            }
-
-            if (!TryGetBarycentric(screenPoint, p0.Screen, p1.Screen, p2.Screen, out double w0, out double w1, out double w2))
+            Point p0 = transform.Project(terrain.Points[0].X, terrain.Points[0].Y, terrain.ZValues[0]);
+            Point p1 = transform.Project(terrain.Points[i].X, terrain.Points[i].Y, terrain.ZValues[i]);
+            Point p2 = transform.Project(terrain.Points[i + 1].X, terrain.Points[i + 1].Y, terrain.ZValues[i + 1]);
+            if (!TryGetBarycentric(screenPoint, p0, p1, p2, out double w0, out double w1, out double w2))
                 continue;
 
-            double x = (terrain.Points[0].X * w0) + (terrain.Points[i].X * w1) + (terrain.Points[i + 1].X * w2);
-            double y = (terrain.Points[0].Y * w0) + (terrain.Points[i].Y * w1) + (terrain.Points[i + 1].Y * w2);
-            worldPoint = new Vector2f((float)x, (float)y);
+            worldPoint = new Vector3f(
+                (float)((terrain.Points[0].X * w0) + (terrain.Points[i].X * w1) + (terrain.Points[i + 1].X * w2)),
+                (float)((terrain.Points[0].Y * w0) + (terrain.Points[i].Y * w1) + (terrain.Points[i + 1].Y * w2)),
+                (float)((terrain.ZValues[0] * w0) + (terrain.ZValues[i] * w1) + (terrain.ZValues[i + 1] * w2)));
             return true;
         }
 
-        if (!TryUnprojectFlyToZ(bounds, screenPoint, terrain.AvgZ, out Point flyWorld))
-            return false;
+        return false;
+    }
 
-        worldPoint = new Vector2f((float)flyWorld.X, (float)flyWorld.Y);
+    private bool TryGetFlyTerrainWorldPoint(Rect bounds, Point screenPoint, TerrainPolygon terrain, out Vector2f worldPoint)
+    {
+        worldPoint = default;
+        if (!TryGetFlyRay(bounds, screenPoint, out Vector3f origin, out Vector3f direction) ||
+            !TerrainRaycaster.TryIntersect(terrain, origin, direction, out Vector3f hit, out _))
+        {
+            return false;
+        }
+
+        worldPoint = new Vector2f(hit.X, hit.Y);
         return true;
     }
 
@@ -6576,7 +6916,7 @@ public sealed class EditorViewport : Control
 
     private void UpdateTerrainHover(Point screenPoint)
     {
-        if (Geometry == null || !ShouldPrioritizeTerrainInteraction() || _isPanning || _isDraggingMoby || _isDraggingTerrainFace || _isDraggingTerrainPoint)
+        if (Geometry == null || !ShouldPrioritizeTerrainInteraction() || _isPanning || _isDraggingMoby || _isDraggingMobyFacing || _isDraggingTerrainFace || _isDraggingTerrainPoint)
         {
             SetHoverTerrain(-1);
             return;
@@ -6597,6 +6937,12 @@ public sealed class EditorViewport : Control
 
     private void UpdateViewportCursor(Point screenPoint)
     {
+        if (_isDraggingMobyFacing)
+        {
+            SetViewportCursor(StandardCursorType.Cross);
+            return;
+        }
+
         if (_isPanning || _isDraggingMoby || _isDraggingTerrainFace || _isDraggingTerrainPoint)
         {
             SetViewportCursor(StandardCursorType.SizeAll);
@@ -6606,6 +6952,12 @@ public sealed class EditorViewport : Control
         if (_objectPlacementMode)
         {
             SetViewportCursor(StandardCursorType.Cross);
+            return;
+        }
+
+        if (!ShouldPrioritizeTerrainInteraction() && FindScreenFacingGuide(screenPoint) != null)
+        {
+            SetViewportCursor(StandardCursorType.Hand);
             return;
         }
 
@@ -7426,13 +7778,13 @@ public sealed class EditorViewport : Control
             : BlendColor(tinted, Colors.Black, -shade);
     }
 
-    private static Dictionary<string, Color> BuildTerrainToneCache(GeometryCandidate geometry)
+    private Dictionary<string, Color> BuildTerrainToneCache(GeometryCandidate geometry)
     {
         Dictionary<string, (long R, long G, long B, int Count)> sums = new(StringComparer.OrdinalIgnoreCase);
         foreach (TerrainPolygon polygon in geometry.Polygons)
         {
             string key = TerrainToneKey(polygon);
-            Spyro.Editor.Core.Primitives.ColorRgba color = polygon.SurfaceColor;
+            Spyro.Editor.Core.Primitives.ColorRgba color = PreviewEnvironmentColor(polygon.SurfaceColor);
             if (!sums.TryGetValue(key, out (long R, long G, long B, int Count) sum))
                 sum = default;
 
@@ -7463,17 +7815,17 @@ public sealed class EditorViewport : Control
         return "unknown";
     }
 
-    private static Color TerrainDisplayColor(TerrainPolygon polygon, GeometryCandidate geometry, IReadOnlyDictionary<string, Color> toneCache)
+    private Color TerrainDisplayColor(TerrainPolygon polygon, GeometryCandidate geometry, IReadOnlyDictionary<string, Color> toneCache)
     {
         double height = Math.Clamp((polygon.AvgZ - geometry.MinZ) / Math.Max(1, geometry.MaxZ - geometry.MinZ), 0, 1);
-        Color color = TintSurfaceColor(polygon.SurfaceColor, height);
+        Color color = TintSurfaceColor(PreviewEnvironmentColor(polygon.SurfaceColor), height);
         if (toneCache.TryGetValue(TerrainToneKey(polygon), out Color sharedTone))
             color = BlendColor(color, sharedTone, TerrainSharedToneBlendAmount(polygon.Surface));
 
         if (TryGetTerrainFamilyColor(polygon.Surface, out Color familyColor))
         {
             double amount = TerrainFamilyBlendAmount(polygon.Surface);
-            color = BlendColor(color, familyColor, amount);
+            color = BlendColor(color, PreviewEnvironmentColor(familyColor), amount);
         }
 
         double localRelief = Math.Clamp((polygon.MaxZ - polygon.MinZ) / 900.0, 0, 1);
@@ -7481,6 +7833,16 @@ public sealed class EditorViewport : Control
             color = BlendColor(color, Colors.White, localRelief * 0.022);
 
         return color;
+    }
+
+    private Spyro.Editor.Core.Primitives.ColorRgba PreviewEnvironmentColor(Spyro.Editor.Core.Primitives.ColorRgba color) =>
+        _environmentGradePreview?.ApplyTerrainSmoothing(color) ?? color;
+
+    private Color PreviewEnvironmentColor(Color color)
+    {
+        Spyro.Editor.Core.Primitives.ColorRgba graded = PreviewEnvironmentColor(
+            Spyro.Editor.Core.Primitives.ColorRgba.FromArgb(color.A, color.R, color.G, color.B));
+        return Color.FromArgb(graded.A, graded.R, graded.G, graded.B);
     }
 
     private static double TerrainSharedToneBlendAmount(string surface)
@@ -7740,6 +8102,19 @@ public sealed class EditorViewport : Control
         return (dx * dx) + (dy * dy);
     }
 
+    private static double DistanceToSegmentSquared(Point point, Point start, Point end)
+    {
+        Vector segment = end - start;
+        double lengthSquared = (segment.X * segment.X) + (segment.Y * segment.Y);
+        if (lengthSquared <= 0.0001)
+            return DistanceSquared(point, start);
+
+        Vector relative = point - start;
+        double t = Math.Clamp(((relative.X * segment.X) + (relative.Y * segment.Y)) / lengthSquared, 0, 1);
+        Point closest = start + (segment * t);
+        return DistanceSquared(point, closest);
+    }
+
     private static double WorldDistance(Vector2f a, Vector2f b)
     {
         double dx = a.X - b.X;
@@ -7763,7 +8138,9 @@ public sealed class EditorViewport : Control
     private sealed record ScreenTerrainPoint(int TerrainIndex, int PointIndex, Point Point);
     private sealed record ScreenTerrainSurfaceLabel(string Text, Point Point, Color Color, double Score);
     private sealed record ScreenMoby(int Index, Point Center);
+    private sealed record ScreenFacingGuide(int Index, Point Start, Point End);
     private sealed record VisibleMoby(int Index, Moby Moby, Point Point, double Size, double Depth);
+    private readonly record struct FacingGuideGeometry(Point Start, Point End, Vector Direction);
     private sealed record ProjectedTerrainFace(int Index, TerrainPolygon Polygon, IReadOnlyList<Point> Points, double Depth, bool IsAddCopySourcePreview = false);
     private sealed record ProjectedTerrainSideWall(int PolygonIndex, int EdgeIndex, TerrainPolygon Polygon, IReadOnlyList<Point> Points, double Depth, Color FillColor, Color LineColor);
     private sealed record TerrainSideWallPreviewCandidate(
@@ -7847,6 +8224,18 @@ public sealed class MobyMoveRequestedEventArgs : EventArgs
     public float Dx { get; }
     public float Dy { get; }
     public float Dz { get; }
+}
+
+public sealed class MobyRotateRequestedEventArgs : EventArgs
+{
+    public MobyRotateRequestedEventArgs(Moby moby, int yawByte)
+    {
+        Moby = moby;
+        YawByte = yawByte & 0xFF;
+    }
+
+    public Moby Moby { get; }
+    public int YawByte { get; }
 }
 
 public sealed class ViewportObjectPlacementRequestedEventArgs : EventArgs

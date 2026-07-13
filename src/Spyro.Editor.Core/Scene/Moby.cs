@@ -4,6 +4,8 @@ namespace Spyro.Editor.Core.Scene;
 
 public sealed class Moby
 {
+    public const string FlyInLandingControlKind = "fly-in-landing";
+
     public int Index { get; init; }
     public int TrueIndex { get; init; } = -1;
     public int LegacyIndex { get; init; } = -1;
@@ -13,6 +15,8 @@ public sealed class Moby
     public int OriginalType { get; init; } = -1;
     public int State { get; set; }
     public int OriginalState { get; init; } = -1;
+    public int YawByte { get; set; } = -1;
+    public int OriginalYawByte { get; init; } = -1;
     public uint RuntimeAddress { get; init; }
     public uint SpecialDataPointer { get; init; }
     public int SourceByte36 { get; set; }
@@ -44,15 +48,28 @@ public sealed class Moby
     public string Evidence { get; set; } = "";
     public string BehaviorNote { get; set; } = "";
     public string ZoneLabel { get; set; } = "";
+    public string EditorControlKind { get; init; } = "";
     public List<MobyLink> Links { get; } = new();
     public bool HasLoadedNativeEdit { get; set; }
     public string LoadedNativeEditSummary { get; set; } = "";
     public bool IsAdded { get; set; }
     public bool IsRemoved { get; set; }
 
+    public bool IsEditorControl => !string.IsNullOrWhiteSpace(EditorControlKind);
+    public bool IsFlyInLandingControl => string.Equals(
+        EditorControlKind,
+        FlyInLandingControlKind,
+        StringComparison.OrdinalIgnoreCase);
+    public string DisplayIndex => IsFlyInLandingControl
+        ? "ENTRY"
+        : TrueIndex >= 0
+            ? $"T{TrueIndex}"
+            : "NEW";
     public string DisplayLabel => string.IsNullOrWhiteSpace(Label) ? $"0x{Type:X2}" : Label;
+    public double YawDegrees => YawByte >= 0 ? YawByteToDegrees(YawByte) : 0;
     public string TechnicalSummary =>
         $"T{TrueIndex} / L{LegacyIndex}, type 0x{Type:X2}, state 0x{State:X2}, " +
+        $"yaw {(YawByte >= 0 ? $"{YawDegrees:0.#} deg" : "unknown")}, " +
         $"bytes 36/4A/4B/4F = 0x{SourceByte36:X2}/0x{Flag4A:X2}/0x{Flag4B:X2}/0x{SourceByte4F:X2}";
     public MobyVisualKind VisualKind
     {
@@ -62,16 +79,24 @@ public sealed class Moby
             string text = $"{DisplayLabel} {CandidateKind} {BehaviorNote}".ToLowerInvariant();
             if (displayText == "whirlwind")
                 return MobyVisualKind.Whirlwind;
+            if (displayText.Contains("controller") ||
+                displayText.Contains("helper") ||
+                ContainsNonvisualControlText(displayText, Type))
+                return MobyVisualKind.Control;
             if (IsChest)
                 return MobyVisualKind.Chest;
             if (IsKey)
                 return MobyVisualKind.Key;
             if (IsGemLike)
                 return MobyVisualKind.Gem;
-            if (ContainsNonvisualControlText(text, Type))
-                return MobyVisualKind.Control;
             if (Type == 0x18 && ContainsGemObjectText(text))
                 return MobyVisualKind.Gem;
+            if (ContainsFlightTargetText(text, Type))
+                return MobyVisualKind.FlightTarget;
+            if (ContainsActorText(displayText) && !ContainsNonvisualControlText(displayText, Type))
+                return MobyVisualKind.Actor;
+            if (ContainsNonvisualControlText(text, Type))
+                return MobyVisualKind.Control;
             if (text.Contains("dragon-eating plant") || text.Contains("dragon eating plant"))
                 return MobyVisualKind.Actor;
             if (text.Contains("fairy cage") || text.Contains("cage prop") || text.Contains("cage scenery"))
@@ -82,15 +107,13 @@ public sealed class Moby
                 return MobyVisualKind.Actor;
             if (text.Contains("dragon"))
                 return MobyVisualKind.Dragon;
-            if (ContainsFlightTargetText(text, Type))
-                return MobyVisualKind.FlightTarget;
             if (text.Contains("whirlwind"))
                 return MobyVisualKind.Whirlwind;
             if (text.Contains("portal") || text.Contains("return-home"))
                 return MobyVisualKind.Portal;
             if (ContainsExplicitSceneryText(text))
                 return MobyVisualKind.Scenery;
-            if (text.Contains("enemy") || text.Contains("gnorc") || text.Contains("kamikaze") || text.Contains("kamikazi") || text.Contains("druid") || text.Contains("wizard") || text.Contains("ram") || text.Contains("shepherd") || text.Contains("thief") || text.Contains("fodder") || text.Contains("sheep") || text.Contains("chicken") || text.Contains("dog") || text.Contains("bird") || text.Contains("fairy") || text.Contains("grenadier") || text.Contains("shocker") || text.Contains("toasty") || text.Contains("copter") || text.Contains("airplane") || text.Contains("balloonist") || text.Contains("baloonist") || text.Contains("fat lady") || text.Contains("fat momma"))
+            if (ContainsActorText(text))
                 return MobyVisualKind.Actor;
             if (text.Contains("tree") || text.Contains("lamp") || text.Contains("torch") || text.Contains("flag") || text.Contains("flower") || text.Contains("grass") || text.Contains("scenery") || text.Contains("prop") || text.Contains("arch") || text.Contains("lighthouse") || text.Contains("boat") || text.Contains("train") || text.Contains("barrel") || text.Contains("balloon") || text.Contains("cannon"))
                 return MobyVisualKind.Scenery;
@@ -120,9 +143,37 @@ public sealed class Moby
         || text.Contains("turtle")
         || text.Contains("mushroom");
 
+    private static bool ContainsActorText(string text) =>
+        text.Contains("enemy") ||
+        text.Contains("gnorc") ||
+        text.Contains("kamikaze") ||
+        text.Contains("kamikazi") ||
+        text.Contains("druid") ||
+        text.Contains("wizard") ||
+        text.Contains("ram") ||
+        text.Contains("shepherd") ||
+        text.Contains("thief") ||
+        text.Contains("fodder") ||
+        text.Contains("sheep") ||
+        text.Contains("chicken") ||
+        text.Contains("dog") ||
+        text.Contains("bird") ||
+        text.Contains("fairy") ||
+        text.Contains("grenadier") ||
+        text.Contains("shocker") ||
+        text.Contains("toasty") ||
+        text.Contains("copter") ||
+        text.Contains("airplane") ||
+        text.Contains("balloonist") ||
+        text.Contains("baloonist") ||
+        text.Contains("fat lady") ||
+        text.Contains("fat momma");
+
     public bool HasPositionEdit => DistanceSquared(Position, OriginalPosition) > 0.0001f;
+    public bool HasRotationEdit => OriginalYawByte >= 0 && YawByte >= 0 && YawByte != OriginalYawByte;
     public bool HasMetadataEdit => OriginalType >= 0 && Type != OriginalType
         || OriginalState >= 0 && State != OriginalState
+        || HasRotationEdit
         || OriginalSourceByte36 >= 0 && SourceByte36 != OriginalSourceByte36
         || OriginalSourceByte37 >= 0 && SourceByte37 != OriginalSourceByte37
         || OriginalSourceByte4F >= 0 && SourceByte4F != OriginalSourceByte4F
@@ -145,6 +196,8 @@ public sealed class Moby
             SetType(OriginalType);
         if (OriginalState >= 0)
             State = OriginalState;
+        if (OriginalYawByte >= 0)
+            YawByte = OriginalYawByte;
         if (OriginalSourceByte36 >= 0)
             SourceByte36 = OriginalSourceByte36;
         if (OriginalSourceByte37 >= 0)
@@ -176,9 +229,24 @@ public sealed class Moby
     public bool IsLockedChestShell => !IsChestContent &&
         ((SourceByte36 == 0xAE && Type is 0x18 or 0x20) ||
             ContainsLabelOrKind("key chest", "locked chest", "unlock chest", "locked/unlock chest"));
+    public bool HasNativeKeyFingerprint =>
+        SourceByte36 == 0xAD &&
+        SourceByte37 == 0x00 &&
+        SourceByte4F == 0x02 &&
+        Flag4B == 0xFF &&
+        (Type == 0x18 && Flag4A == 0x40 ||
+            Type == 0x00 && Flag4A == 0x00);
     public bool IsKey => !IsChest && !IsChestContent &&
-        (Type == 0x18 && SourceByte36 == 0xAD ||
-            ContainsLabelOrKind("key collectible"));
+        (HasNativeKeyFingerprint || ContainsLabelOrKind("key collectible"));
+    public bool IsHomeworldPortalControl =>
+        Type == 0x00 &&
+        (SourceByte36 is 0x01 or 0x8E ||
+            SourceByte36 == 0x1E && Links.Any(link =>
+                link.Kind.Equals("portal controls", StringComparison.OrdinalIgnoreCase))) &&
+        Flag4A == 0x10 &&
+        Flag4B == 0xFF;
+    public bool SupportsTerrainSnap =>
+        VisualKind != MobyVisualKind.Control || IsHomeworldPortalControl;
     public bool IsVisibleGem => !IsKey &&
         (Type == 0x18 && (GemValue.TryFromIdByte(SourceByte36, out _) || GemValue.TryFromValueByte(SourceByte4F, out _)) ||
             IsAdded && ContainsLabelOrKind("gem") && GemValue.TryFromIdByte(SourceByte36, out _));
@@ -227,6 +295,68 @@ public sealed class Moby
             ? $"Locked chest content: {gem.DisplayName}"
             : gem.DisplayName;
         Color = gem.Color;
+    }
+
+    public static double YawByteToDegrees(int yawByte)
+    {
+        int byteValue = yawByte & 0xFF;
+        int steps = (256 - byteValue) & 0xFF;
+        return steps * (360.0 / 256.0);
+    }
+
+    public static int DegreesToYawByte(double degrees)
+    {
+        double normalized = degrees % 360.0;
+        if (normalized < 0)
+            normalized += 360.0;
+
+        return (int)Math.Round((360.0 - normalized) * 256.0 / 360.0) & 0xFF;
+    }
+
+    public static (short Cos, short Sin) YawByteToMatrix(int yawByte)
+    {
+        double radians = YawByteToDegrees(yawByte) * Math.PI / 180.0;
+        return (
+            ClampToInt16(Math.Round(Math.Cos(radians) * 4096.0)),
+            ClampToInt16(Math.Round(Math.Sin(radians) * 4096.0)));
+    }
+
+    public static byte[] YawByteToMatrixBytes(int yawByte)
+    {
+        (short cos, short sin) = YawByteToMatrix(yawByte);
+        short negSin = ClampToInt16(-sin);
+        byte[] bytes = new byte[18];
+        WriteInt16LittleEndian(bytes, 0x00, cos);
+        WriteInt16LittleEndian(bytes, 0x02, 0);
+        WriteInt16LittleEndian(bytes, 0x04, sin);
+        WriteInt16LittleEndian(bytes, 0x06, 0);
+        WriteInt16LittleEndian(bytes, 0x08, 4096);
+        WriteInt16LittleEndian(bytes, 0x0A, 0);
+        WriteInt16LittleEndian(bytes, 0x0C, negSin);
+        WriteInt16LittleEndian(bytes, 0x0E, 0);
+        WriteInt16LittleEndian(bytes, 0x10, cos);
+        return bytes;
+    }
+
+    public static bool TryMatrixToYawByte(short cos, short sin, out int yawByte)
+    {
+        if (cos == 0 && sin == 0)
+        {
+            yawByte = -1;
+            return false;
+        }
+
+        double degrees = Math.Atan2(sin, cos) * 180.0 / Math.PI;
+        yawByte = DegreesToYawByte(degrees);
+        return true;
+    }
+
+    private static short ClampToInt16(double value) => (short)Math.Clamp(value, short.MinValue, short.MaxValue);
+
+    private static void WriteInt16LittleEndian(byte[] bytes, int offset, short value)
+    {
+        bytes[offset] = (byte)(value & 0xFF);
+        bytes[offset + 1] = (byte)((value >> 8) & 0xFF);
     }
 
     public static string FallbackLabel(int type)
@@ -290,12 +420,25 @@ public sealed class Moby
             return true;
 
         return text.Contains("nonvisual", StringComparison.Ordinal) ||
+            text.Contains("placeholder", StringComparison.Ordinal) ||
+            text.Contains("trigger", StringComparison.Ordinal) ||
+            text.Contains("cutscene", StringComparison.Ordinal) ||
+            text.Contains("camera", StringComparison.Ordinal) ||
             text.Contains("control link", StringComparison.Ordinal) ||
+            text.Contains("control data", StringComparison.Ordinal) ||
             text.Contains("linked record", StringComparison.Ordinal) ||
+            text.Contains("linked data", StringComparison.Ordinal) ||
             text.Contains("control marker", StringComparison.Ordinal) ||
+            text.Contains("reward link", StringComparison.Ordinal) ||
+            text.Contains("reward-linked", StringComparison.Ordinal) ||
+            text.Contains("reward control", StringComparison.Ordinal) ||
+            text.Contains("route marker", StringComparison.Ordinal) ||
+            text.Contains("route/control", StringComparison.Ordinal) ||
             text.Contains("route control", StringComparison.Ordinal) ||
             text.Contains("scene control", StringComparison.Ordinal) ||
+            text.Contains("scene link", StringComparison.Ordinal) ||
             text.Contains("scene/route control", StringComparison.Ordinal) ||
+            text.Contains("support/control", StringComparison.Ordinal) ||
             text.Contains("system anchor", StringComparison.Ordinal) ||
             text.Contains("support marker", StringComparison.Ordinal) ||
             text.Contains("helper marker", StringComparison.Ordinal) ||

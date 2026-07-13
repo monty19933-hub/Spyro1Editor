@@ -230,7 +230,12 @@ public static class TerrainPatchExporter
         Directory.CreateDirectory(Path.GetDirectoryName(outputPlanPath) ?? ".");
         await File.WriteAllTextAsync(outputPlanPath, JsonSerializer.Serialize(plan, new JsonSerializerOptions { WriteIndented = true }), cancellationToken);
 
-        if (request.WriteImage && plan.PatchCount > 0)
+        if (request.WriteImage && plan.PatchCount == 0)
+        {
+            DeleteStaleOutput(outputImagePath);
+            DeleteStaleOutput(outputCuePath);
+        }
+        else if (request.WriteImage)
         {
             File.Copy(request.SourceImagePath, outputImagePath, true);
             DiscLayout layout = DiscImage.DetectLayout(outputImagePath);
@@ -246,6 +251,18 @@ public static class TerrainPatchExporter
         }
 
         return new TerrainPatchResult(outputImagePath, outputCuePath, outputPlanPath, plan, request.WriteImage && plan.PatchCount > 0);
+    }
+
+    private static void DeleteStaleOutput(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     public static TerrainPatchPlan BuildPlan(
@@ -3605,6 +3622,26 @@ public static class TerrainPatchExporter
             ((b.X - a.X) * (c.Y - a.Y)) - ((b.Y - a.Y) * (c.X - a.X)) == 0;
     }
 
+    private static bool IsZeroAreaCollisionTriangle3D(SpyroCollisionTriangle triangle)
+    {
+        SpyroCollisionPoint a = triangle.P1;
+        SpyroCollisionPoint b = triangle.P2;
+        SpyroCollisionPoint c = triangle.P3;
+        if (a == b || a == c || b == c)
+            return true;
+
+        long abX = b.X - a.X;
+        long abY = b.Y - a.Y;
+        long abZ = b.Z - a.Z;
+        long acX = c.X - a.X;
+        long acY = c.Y - a.Y;
+        long acZ = c.Z - a.Z;
+        long crossX = (abY * acZ) - (abZ * acY);
+        long crossY = (abZ * acX) - (abX * acZ);
+        long crossZ = (abX * acY) - (abY * acX);
+        return crossX == 0 && crossY == 0 && crossZ == 0;
+    }
+
     private static SpyroCollisionTriangle BuildCollisionTriangleFromWords(int index, int offset, uint xWord, uint yWord, uint zWord)
     {
         int p1X = (int)(xWord & 0x3FFF);
@@ -3803,7 +3840,7 @@ public static class TerrainPatchExporter
         return true;
     }
 
-    private static bool TryBuildCollisionIndexBytes(
+    internal static bool TryBuildCollisionIndexBytes(
         byte[] triangleBytes,
         int numTriangles,
         int treeCapacityBytes,
@@ -3826,7 +3863,7 @@ public static class TerrainPatchExporter
         for (int i = 0; i < numTriangles; i++)
         {
             SpyroCollisionTriangle triangle = ReadCollisionTriangleFromBytes(triangleBytes, i * 12, i);
-            if (IsDegenerateCollisionTriangle(triangle))
+            if (IsZeroAreaCollisionTriangle3D(triangle))
                 continue;
             if (triangle.Index > 0x7FFF)
             {
@@ -3896,10 +3933,87 @@ public static class TerrainPatchExporter
                 xBlocks[x].Add(i);
         }
 
+        Dictionary<(int X, int Y, int Z), int[]> triangleIndexesByCell = new();
+        for (int z = minZBlock; z <= maxZBlock; z++)
+        {
+            for (int y = minYBlock; y <= maxYBlock; y++)
+            {
+                for (int x = minXBlock; x <= maxXBlock; x++)
+                {
+                    List<int> triangleIndexesHere = [];
+                    if (xBlocks[x] != null)
+                    {
+                        foreach (int triangleIndex in xBlocks[x])
+                        {
+                            CollisionTriangleBounds? bound = bounds[triangleIndex];
+                            if (bound == null ||
+                                bound.MinYBlock > y ||
+                                bound.MaxYBlock < y ||
+                                bound.MinZBlock > z ||
+                                bound.MaxZBlock < z ||
+                                !CollisionTriangleTouchesBlock(bound, x, y, z))
+                            {
+                                continue;
+                            }
+
+                            triangleIndexesHere.Add(triangleIndex);
+                        }
+                    }
+
+                    if (triangleIndexesHere.Count > 0)
+                        triangleIndexesByCell[(x, y, z)] = triangleIndexesHere.ToArray();
+                }
+            }
+        }
+
+        Dictionary<string, int[]> uniqueTriangleSets = new(StringComparer.Ordinal);
+        foreach (int[] triangleSet in triangleIndexesByCell.Values)
+            uniqueTriangleSets.TryAdd(string.Join(',', triangleSet), triangleSet);
+
+        List<ushort> blockList = new();
+        Dictionary<string, int> blockOffsetsByTriangleSet = new(StringComparer.Ordinal);
+        List<(int Offset, int[] Triangles)> emittedBlockSupersets = [];
+        foreach ((string triangleSetKey, int[] triangleSet) in uniqueTriangleSets
+            .OrderByDescending(pair => pair.Value.Length)
+            .ThenBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            (int Offset, int[] Triangles)? smallestSuperset = null;
+            foreach ((int candidateOffset, int[] candidateTriangles) in emittedBlockSupersets)
+            {
+                if (candidateTriangles.Length < triangleSet.Length ||
+                    !triangleSet.All(triangleIndex => Array.BinarySearch(candidateTriangles, triangleIndex) >= 0))
+                {
+                    continue;
+                }
+
+                if (smallestSuperset == null || candidateTriangles.Length < smallestSuperset.Value.Triangles.Length)
+                    smallestSuperset = (candidateOffset, candidateTriangles);
+            }
+
+            int blockOffset;
+            if (smallestSuperset != null)
+            {
+                blockOffset = smallestSuperset.Value.Offset;
+            }
+            else
+            {
+                blockOffset = blockList.Count;
+                for (int triangleIndex = 0; triangleIndex < triangleSet.Length; triangleIndex++)
+                {
+                    int word = triangleSet[triangleIndex] | (triangleIndex == 0 ? 0x8000 : 0);
+                    if (!TryAddCollisionIndexUInt16(blockList, word, out skipReason))
+                        return false;
+                }
+                emittedBlockSupersets.Add((blockOffset, triangleSet));
+            }
+            blockOffsetsByTriangleSet[triangleSetKey] = blockOffset;
+        }
+
         List<ushort> zList = new();
         List<ushort> yList = new();
         List<ushort> xList = new();
-        List<ushort> blockList = new();
+        Dictionary<string, int> xSegmentOffsetsByContent = new(StringComparer.Ordinal);
+        Dictionary<string, int> ySegmentOffsetsByContent = new(StringComparer.Ordinal);
 
         for (int i = 0; i <= maxZBlock + 1; i++)
         {
@@ -3911,55 +4025,25 @@ public static class TerrainPatchExporter
         for (int z = 0; z <= maxZBlock; z++)
         {
             int maxZYSection = -1;
-            int ySegmentStart = yList.Count;
-            for (int i = 0; i <= maxYBlock + 1; i++)
-            {
-                if (!TryAddCollisionIndexUInt16(yList, 0xFFFF, out skipReason))
-                    return false;
-            }
+            List<ushort> ySegment = Enumerable.Repeat((ushort)0xFFFF, maxYBlock + 2).ToList();
 
             if (z >= minZBlock)
             {
                 for (int y = 0; y <= maxYBlock; y++)
                 {
                     int maxZYXSection = -1;
-                    int xSegmentStart = xList.Count;
-                    for (int i = 0; i <= maxXBlock + 1; i++)
-                    {
-                        if (!TryAddCollisionIndexUInt16(xList, 0xFFFF, out skipReason))
-                            return false;
-                    }
+                    List<ushort> xSegment = Enumerable.Repeat((ushort)0xFFFF, maxXBlock + 2).ToList();
 
                     if (y >= minYBlock)
                     {
                         for (int x = 0; x <= maxXBlock; x++)
                         {
-                            int numTrisHere = 0;
-                            if (x >= minXBlock && xBlocks[x] != null)
+                            if (triangleIndexesByCell.TryGetValue((x, y, z), out int[]? triangleSet))
                             {
-                                foreach (int triIndex in xBlocks[x])
-                                {
-                                    CollisionTriangleBounds? bound = bounds[triIndex];
-                                    if (bound == null ||
-                                        bound.MinYBlock > y ||
-                                        bound.MaxYBlock < y ||
-                                        bound.MinZBlock > z ||
-                                        bound.MaxZBlock < z ||
-                                        !CollisionTriangleTouchesBlock(bound, x, y, z))
-                                    {
-                                        continue;
-                                    }
+                                string triangleSetKey = string.Join(',', triangleSet);
+                                int blockOffset = blockOffsetsByTriangleSet[triangleSetKey];
 
-                                    int word = triIndex | (numTrisHere == 0 ? 0x8000 : 0);
-                                    if (!TryAddCollisionIndexUInt16(blockList, word, out skipReason))
-                                        return false;
-                                    numTrisHere++;
-                                }
-                            }
-
-                            if (numTrisHere > 0)
-                            {
-                                if (!TrySetCollisionIndexUInt16(xList, xSegmentStart + 1 + x, blockList.Count - numTrisHere, out skipReason))
+                                if (!TrySetCollisionIndexUInt16(xSegment, 1 + x, blockOffset, out skipReason))
                                     return false;
                                 maxZYXSection = x;
                             }
@@ -3968,42 +4052,44 @@ public static class TerrainPatchExporter
 
                     if (maxZYXSection != -1)
                     {
-                        if (!TrySetCollisionIndexUInt16(xList, xSegmentStart, maxZYXSection + 1, out skipReason) ||
-                            !TrySetCollisionIndexUInt16(yList, ySegmentStart + 1 + y, xSegmentStart * 2, out skipReason))
-                        {
+                        if (!TrySetCollisionIndexUInt16(xSegment, 0, maxZYXSection + 1, out skipReason))
                             return false;
-                        }
 
                         int keep = maxZYXSection + 2;
-                        int segmentLength = maxXBlock + 2;
-                        if (keep < segmentLength)
-                            xList.RemoveRange(xSegmentStart + keep, segmentLength - keep);
+                        if (keep < xSegment.Count)
+                            xSegment.RemoveRange(keep, xSegment.Count - keep);
+                        string xSegmentKey = string.Join(',', xSegment);
+                        if (!xSegmentOffsetsByContent.TryGetValue(xSegmentKey, out int xSegmentStart))
+                        {
+                            xSegmentStart = xList.Count;
+                            xList.AddRange(xSegment);
+                            xSegmentOffsetsByContent[xSegmentKey] = xSegmentStart;
+                        }
+                        if (!TrySetCollisionIndexUInt16(ySegment, 1 + y, xSegmentStart * 2, out skipReason))
+                            return false;
                         maxZYSection = y;
-                    }
-                    else
-                    {
-                        xList.RemoveRange(xSegmentStart, maxXBlock + 2);
                     }
                 }
             }
 
             if (maxZYSection != -1)
             {
-                if (!TrySetCollisionIndexUInt16(yList, ySegmentStart, maxZYSection + 1, out skipReason) ||
-                    !TrySetCollisionIndexUInt16(zList, 1 + z, ySegmentStart * 2, out skipReason))
-                {
+                if (!TrySetCollisionIndexUInt16(ySegment, 0, maxZYSection + 1, out skipReason))
                     return false;
-                }
 
                 int keep = maxZYSection + 2;
-                int segmentLength = maxYBlock + 2;
-                if (keep < segmentLength)
-                    yList.RemoveRange(ySegmentStart + keep, segmentLength - keep);
+                if (keep < ySegment.Count)
+                    ySegment.RemoveRange(keep, ySegment.Count - keep);
+                string ySegmentKey = string.Join(',', ySegment);
+                if (!ySegmentOffsetsByContent.TryGetValue(ySegmentKey, out int ySegmentStart))
+                {
+                    ySegmentStart = yList.Count;
+                    yList.AddRange(ySegment);
+                    ySegmentOffsetsByContent[ySegmentKey] = ySegmentStart;
+                }
+                if (!TrySetCollisionIndexUInt16(zList, 1 + z, ySegmentStart * 2, out skipReason))
+                    return false;
                 maxZSection = z;
-            }
-            else
-            {
-                yList.RemoveRange(ySegmentStart, maxYBlock + 2);
             }
         }
 
@@ -5429,7 +5515,7 @@ public static class TerrainPatchExporter
         int Offset,
         ushort Word);
 
-    private sealed record CollisionIndexBytes(
+    internal sealed record CollisionIndexBytes(
         byte[] TreeBytes,
         byte[] BlockBytes);
 

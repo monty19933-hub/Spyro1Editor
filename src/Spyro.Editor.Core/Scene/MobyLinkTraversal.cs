@@ -33,11 +33,7 @@ public static class MobyLinkTraversal
 
     public static IEnumerable<int> GetVisibleLinkTrueIndexes(Moby selected, MobyLink link)
     {
-        IEnumerable<int> trueIndexes = IsDragonSceneLink(link) && link.TrueIndexes.Count > 2
-            ? link.TrueIndexes.Take(2)
-            : link.TrueIndexes;
-
-        return trueIndexes.Where(trueIndex => trueIndex != selected.TrueIndex);
+        return link.TrueIndexes.Where(trueIndex => trueIndex != selected.TrueIndex);
     }
 
     public static bool IsActiveMoveLink(MobyLink link)
@@ -53,6 +49,18 @@ public static class MobyLinkTraversal
     private static bool IsBroadEditorScaffold(MobyLink link)
     {
         string text = $"{link.Key} {link.Name} {link.Kind} {link.Confidence} {link.Reason}";
+        if (text.Contains("live-proof-control-role", StringComparison.OrdinalIgnoreCase) ||
+            text.Contains("control-role-proof", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+        if (text.Contains("treasure", StringComparison.OrdinalIgnoreCase) &&
+            text.Contains("reward", StringComparison.OrdinalIgnoreCase) &&
+            text.Contains("trigger", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         return text.Contains("editor-scaffold", StringComparison.OrdinalIgnoreCase) ||
             text.Contains("broad fallback", StringComparison.OrdinalIgnoreCase) ||
             text.Contains("cluster", StringComparison.OrdinalIgnoreCase) ||
@@ -69,8 +77,4 @@ public static class MobyLinkTraversal
                 text.Contains("collision/warp", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool IsDragonSceneLink(MobyLink link)
-    {
-        return string.Equals(link.Kind, "dragon scene", StringComparison.OrdinalIgnoreCase);
-    }
 }

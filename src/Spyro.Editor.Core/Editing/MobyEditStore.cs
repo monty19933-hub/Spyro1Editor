@@ -19,6 +19,8 @@ public static class MobyEditStore
                 moby.SetType(moby.OriginalType);
             if (moby.OriginalState >= 0)
                 moby.State = moby.OriginalState;
+            if (moby.OriginalYawByte >= 0)
+                moby.YawByte = moby.OriginalYawByte;
             if (moby.OriginalSourceByte36 >= 0)
                 moby.SourceByte36 = moby.OriginalSourceByte36;
             if (moby.OriginalSourceByte37 >= 0)
@@ -53,11 +55,14 @@ public static class MobyEditStore
         Dictionary<int, Moby> byTrueIndex = mobys
             .Where(moby => moby.TrueIndex >= 0)
             .ToDictionary(moby => moby.TrueIndex);
+        Dictionary<string, Moby> byEditorControlKind = mobys
+            .Where(moby => moby.IsEditorControl)
+            .ToDictionary(moby => moby.EditorControlKind, StringComparer.OrdinalIgnoreCase);
 
         int applied = 0;
         foreach (JsonElement edit in editsElement.EnumerateArray())
         {
-            Moby? moby = ResolveMoby(edit, byIndex, byTrueIndex);
+            Moby? moby = ResolveMoby(edit, byIndex, byTrueIndex, byEditorControlKind);
             if (moby == null && IsAddEdit(edit))
             {
                 moby = CreateAddedMoby(edit, mobys);
@@ -91,6 +96,7 @@ public static class MobyEditStore
             applied++;
         }
 
+        ApplySavedLinkedCompanionGroups(editsElement, byTrueIndex);
         return applied;
     }
 
@@ -121,6 +127,16 @@ public static class MobyEditStore
                 ["stateHex"] = $"0x{moby.State:X2}",
                 ["stateOriginalHex"] = moby.OriginalState >= 0 ? $"0x{moby.OriginalState:X2}" : null,
                 ["stateEditedHex"] = $"0x{moby.State:X2}",
+                ["yawByteHex"] = moby.YawByte >= 0 ? $"0x{moby.YawByte:X2}" : null,
+                ["yawByteOriginalHex"] = moby.OriginalYawByte >= 0 ? $"0x{moby.OriginalYawByte:X2}" : null,
+                ["yawByteEditedHex"] = moby.YawByte >= 0 ? $"0x{moby.YawByte:X2}" : null,
+                ["yawDegrees"] = moby.YawByte >= 0
+                    ? Math.Round(
+                        moby.IsFlyInLandingControl
+                            ? FlyInLandingEditorControl.HeadingByteToDegrees(moby.YawByte)
+                            : moby.YawDegrees,
+                        4)
+                    : null,
                 ["removed"] = moby.IsRemoved,
                 ["added"] = moby.IsAdded,
                 ["runtimeAddress"] = $"0x{moby.RuntimeAddress:X8}",
@@ -142,10 +158,12 @@ public static class MobyEditStore
                 ["flag4BEditedHex"] = $"0x{moby.Flag4B:X2}",
                 ["patchStatus"] = moby.PatchStatus,
                 ["patchLead"] = moby.PatchLead,
+                ["editorControlKind"] = moby.IsEditorControl ? moby.EditorControlKind : null,
                 ["crossLevelTemplate"] = NewCrossLevelTemplate(moby),
                 ["recordMutation"] = NewRecordMutation(moby),
                 ["gem"] = moby.IsGemLike ? NewGem(moby) : null,
                 ["sourceByteEdits"] = NewSourceByteEdits(moby),
+                ["linkedCompanionLinks"] = NewLinkedCompanionLinks(moby, byTrueIndex),
                 ["chestContentLinkEdit"] = NewChestContentLinkEdit(moby, byTrueIndex),
                 ["original"] = NewVector(moby.OriginalPosition),
                 ["edited"] = NewVector(moby.Position),
@@ -170,8 +188,19 @@ public static class MobyEditStore
         return edits.Count;
     }
 
-    private static Moby? ResolveMoby(JsonElement edit, IReadOnlyDictionary<int, Moby> byIndex, IReadOnlyDictionary<int, Moby> byTrueIndex)
+    private static Moby? ResolveMoby(
+        JsonElement edit,
+        IReadOnlyDictionary<int, Moby> byIndex,
+        IReadOnlyDictionary<int, Moby> byTrueIndex,
+        IReadOnlyDictionary<string, Moby> byEditorControlKind)
     {
+        string editorControlKind = JsonValue.GetString(edit, "editorControlKind");
+        if (!string.IsNullOrWhiteSpace(editorControlKind) &&
+            byEditorControlKind.TryGetValue(editorControlKind, out Moby? editorControl))
+        {
+            return editorControl;
+        }
+
         int trueIndex = JsonValue.GetInt32(edit, "trueIndex", -1);
         if (trueIndex >= 0 && byTrueIndex.TryGetValue(trueIndex, out Moby? byTrue))
             return byTrue;
@@ -205,6 +234,7 @@ public static class MobyEditStore
         int trueIndex = JsonValue.GetInt32(edit, "trueIndex", NextTrueIndex(mobys));
         int type = Math.Clamp(JsonValue.GetInt32(edit, "typeEditedHex", JsonValue.GetInt32(edit, "typeHex", 0x20)), 0, 255);
         int state = Math.Clamp(JsonValue.GetInt32(edit, "stateEditedHex", JsonValue.GetInt32(edit, "stateHex", 0)), 0, 255);
+        int yawByte = ReadYawByte(edit, 0);
         int sourceByte36 = Math.Clamp(JsonValue.GetInt32(edit, "sourceByte36EditedHex", JsonValue.GetInt32(edit, "sourceByte36Hex", 0x53)), 0, 255);
         int sourceByte37 = Math.Clamp(JsonValue.GetInt32(edit, "sourceByte37EditedHex", JsonValue.GetInt32(edit, "sourceByte37Hex", 0)), 0, 255);
         int sourceByte4F = Math.Clamp(JsonValue.GetInt32(edit, "sourceByte4FEditedHex", JsonValue.GetInt32(edit, "sourceByte4FHex", 0x01)), 0, 255);
@@ -227,6 +257,8 @@ public static class MobyEditStore
             OriginalType = type,
             State = state,
             OriginalState = state,
+            YawByte = yawByte,
+            OriginalYawByte = yawByte,
             RuntimeAddress = ReadUInt32(edit, "runtimeAddress"),
             SpecialDataPointer = ReadUInt32(edit, "specialDataPointer"),
             SourceByte36 = sourceByte36,
@@ -291,6 +323,25 @@ public static class MobyEditStore
         return uint.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out uint parsed) ? parsed : 0;
     }
 
+    private static int ReadYawByte(JsonElement edit, int fallback)
+    {
+        int yawByte = JsonValue.GetInt32(
+            edit,
+            "yawByteEditedHex",
+            JsonValue.GetInt32(
+                edit,
+                "yawByteHex",
+                JsonValue.GetInt32(edit, "facingByteHex", -1)));
+        if (yawByte >= 0)
+            return Math.Clamp(yawByte, 0, 255);
+
+        float degrees = JsonValue.GetSingle(
+            edit,
+            "yawDegreesEdited",
+            JsonValue.GetSingle(edit, "yawDegrees", float.NaN));
+        return float.IsNaN(degrees) ? fallback : Moby.DegreesToYawByte(degrees);
+    }
+
     private static bool ApplyPositionEdit(JsonElement edit, Moby moby)
     {
         if (!edit.TryGetProperty("edited", out JsonElement edited) || edited.ValueKind != JsonValueKind.Object)
@@ -317,6 +368,13 @@ public static class MobyEditStore
         if (state >= 0)
         {
             moby.State = Math.Clamp(state, 0, 255);
+            changed = true;
+        }
+
+        int yawByte = ReadYawByte(edit, -1);
+        if (yawByte >= 0)
+        {
+            moby.YawByte = yawByte;
             changed = true;
         }
 
@@ -358,7 +416,10 @@ public static class MobyEditStore
         string label = JsonValue.GetString(edit, "labelEdited", JsonValue.GetString(edit, "label"));
         if (!string.IsNullOrWhiteSpace(label))
         {
-            moby.Label = label;
+            moby.Label = label.Equals("Portal pad trigger marker", StringComparison.OrdinalIgnoreCase) &&
+                moby.SourceByte36 == 0x8E && moby.Flag4A == 0x10 && moby.Flag4B == 0xFF
+                ? "Portal travel path marker"
+                : label;
             changed = true;
         }
 
@@ -427,6 +488,18 @@ public static class MobyEditStore
 
         if (!string.IsNullOrWhiteSpace(mutationMode))
             parts.Add($"mutation {mutationMode}");
+
+        int yawByte = ReadYawByte(edit, -1);
+        if (yawByte >= 0)
+        {
+            bool isFlyInLanding = string.Equals(
+                JsonValue.GetString(edit, "editorControlKind"),
+                Moby.FlyInLandingControlKind,
+                StringComparison.OrdinalIgnoreCase);
+            parts.Add(isFlyInLanding
+                ? $"fly-in heading {FlyInLandingEditorControl.HeadingByteToDegrees(yawByte):0.#} deg"
+                : $"yaw {Moby.YawByteToDegrees(yawByte):0.#} deg");
+        }
 
         string editKind = JsonValue.GetString(edit, "editKind");
         if (!string.IsNullOrWhiteSpace(editKind))
@@ -565,7 +638,7 @@ public static class MobyEditStore
             });
         }
 
-        if (moby.OriginalFlag4B >= 0 && moby.Flag4B != moby.OriginalFlag4B && !moby.IsLockedChestShell)
+        if (moby.OriginalFlag4B >= 0 && moby.Flag4B != moby.OriginalFlag4B)
         {
             edits.Add(new
             {
@@ -619,6 +692,105 @@ public static class MobyEditStore
         }
 
         return null;
+    }
+
+    private static List<object>? NewLinkedCompanionLinks(Moby moby, IReadOnlyDictionary<int, Moby> byTrueIndex)
+    {
+        List<object> links = new();
+        foreach (MobyLink link in moby.Links.Where(MobyCompanionClonePlanner.IsCompanionCloneLink))
+        {
+            if (!link.TrueIndexes.Contains(moby.TrueIndex))
+                continue;
+
+            List<Moby> members = link.TrueIndexes
+                .Select(trueIndex => byTrueIndex.TryGetValue(trueIndex, out Moby? member) ? member : null)
+                .Where(member => member != null)
+                .Cast<Moby>()
+                .ToList();
+            if (members.Count < 2 || !members.Any(member => member.IsAdded))
+                continue;
+
+            links.Add(new
+            {
+                key = link.Key,
+                name = link.Name,
+                kind = link.Kind,
+                linkedMove = link.LinkedMove,
+                confidence = link.Confidence,
+                reason = link.Reason,
+                trueIndexes = members.Select(member => member.TrueIndex).ToArray()
+            });
+        }
+
+        return links.Count == 0 ? null : links;
+    }
+
+    private static void ApplySavedLinkedCompanionGroups(JsonElement editsElement, IReadOnlyDictionary<int, Moby> byTrueIndex)
+    {
+        HashSet<string> appliedKeys = new(StringComparer.OrdinalIgnoreCase);
+        foreach (JsonElement edit in editsElement.EnumerateArray())
+        {
+            if (!edit.TryGetProperty("linkedCompanionLinks", out JsonElement links) || links.ValueKind != JsonValueKind.Array)
+                continue;
+
+            foreach (JsonElement group in links.EnumerateArray())
+            {
+                List<int> trueIndexes = ReadTrueIndexes(group);
+                if (trueIndexes.Count < 2)
+                    continue;
+
+                string key = JsonValue.GetString(group, "key");
+                if (string.IsNullOrWhiteSpace(key))
+                    key = $"native-editor:loaded-companion:{string.Join("-", trueIndexes)}";
+                if (!appliedKeys.Add(key))
+                    continue;
+
+                List<Moby> members = trueIndexes
+                    .Select(trueIndex => byTrueIndex.TryGetValue(trueIndex, out Moby? member) ? member : null)
+                    .Where(member => member != null)
+                    .Cast<Moby>()
+                    .ToList();
+                if (members.Count < 2)
+                    continue;
+
+                MobyLink link = new()
+                {
+                    Key = key,
+                    Name = JsonValue.GetString(group, "name", "Linked companion objects"),
+                    Kind = JsonValue.GetString(group, "kind", "linked group"),
+                    LinkedMove = JsonValue.GetBoolean(group, "linkedMove", true),
+                    Confidence = JsonValue.GetString(group, "confidence", "native-editor-companion"),
+                    Reason = JsonValue.GetString(group, "reason", "Loaded from native editor linked companion metadata."),
+                    TrueIndexes = trueIndexes
+                };
+                if (!MobyCompanionClonePlanner.IsCompanionCloneLink(link))
+                    continue;
+
+                foreach (Moby member in members)
+                    AddUniqueLink(member, link);
+            }
+        }
+    }
+
+    private static List<int> ReadTrueIndexes(JsonElement group)
+    {
+        List<int> indexes = new();
+        if (!group.TryGetProperty("trueIndexes", out JsonElement values) || values.ValueKind != JsonValueKind.Array)
+            return indexes;
+
+        foreach (JsonElement value in values.EnumerateArray())
+        {
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out int trueIndex) && trueIndex >= 0)
+                indexes.Add(trueIndex);
+        }
+
+        return indexes;
+    }
+
+    private static void AddUniqueLink(Moby moby, MobyLink link)
+    {
+        if (!moby.Links.Any(existing => string.Equals(existing.Key, link.Key, StringComparison.OrdinalIgnoreCase)))
+            moby.Links.Add(link);
     }
 
     private static int ToRawCoordinate(float value)

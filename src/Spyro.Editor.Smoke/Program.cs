@@ -11,6 +11,7 @@ using Spyro.Editor.Core.Cache;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
+using Spyro.Editor.Core.Music;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Skyboxes;
@@ -20,9 +21,49 @@ using Spyro.Editor.Core.Workspace;
 bool buildCache = args.Contains("--build-cache", StringComparer.OrdinalIgnoreCase);
 bool exportTextTest = args.Contains("--export-text-test", StringComparer.OrdinalIgnoreCase);
 bool exportSkyboxTest = args.Contains("--export-skybox-test", StringComparer.OrdinalIgnoreCase);
+bool skyboxLayoutSmokeOnly = args.Contains("--skybox-layout-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool skyboxColorRunSmokeOnly = args.Contains("--skybox-color-run-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool skyboxSceneColorSmokeOnly = args.Contains("--skybox-scene-color-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool skyboxBlockSmokeOnly = args.Contains("--skybox-block-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool nativeSkyExportSmokeOnly = args.Contains("--native-sky-export-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool nativeSkyWriteSmokeOnly = args.Contains("--native-sky-write-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool environmentGradeSmokeOnly = args.Contains("--environment-grade-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool keepEnvironmentGradeSmoke = args.Contains("--keep-environment-grade-smoke", StringComparer.OrdinalIgnoreCase);
+string? environmentGradeInspectImage = args
+    .FirstOrDefault(arg => arg.StartsWith("--environment-grade-inspect-image=", StringComparison.OrdinalIgnoreCase))?
+    ["--environment-grade-inspect-image=".Length..];
+bool expandedSkySmokeOnly = args.Contains("--expanded-sky-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool exportExpandedSkyTest = args.Contains("--export-expanded-sky-test", StringComparer.OrdinalIgnoreCase);
+bool terrainTextureSmokeOnly = args.Contains("--terrain-texture-smoke-only", StringComparer.OrdinalIgnoreCase);
 bool exportCrossLevelObjectTest = args.Contains("--export-cross-level-object-test", StringComparer.OrdinalIgnoreCase);
 bool exportCurrentSpringCandidate = args.Contains("--export-current-spring-candidate", StringComparer.OrdinalIgnoreCase);
 bool springChestDiagnosticOnly = args.Contains("--spring-chest-diagnostic-only", StringComparer.OrdinalIgnoreCase);
+bool objectSmokeOnly = args.Contains("--object-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool visualCategorySmokeOnly = args.Contains("--visual-category-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool dragonCameraSmokeOnly = args.Contains("--dragon-camera-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool flyInLandingSmokeOnly = args.Contains("--fly-in-landing-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool portalSourceSmokeOnly = args.Contains("--portal-source-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool keyPortalSnapSmokeOnly = args.Contains("--key-portal-snap-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool placementSmokeOnly = args.Contains("--placement-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool releaseLinkSmokeOnly = args.Contains("--release-link-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool legacyArtisansPortalCloneSmokeOnly = args.Contains("--legacy-artisans-portal-clone-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool exportSavedPortalMoveTest = args.Contains("--export-saved-portal-move-test", StringComparer.OrdinalIgnoreCase);
+string? portalEditsOption = args
+    .FirstOrDefault(arg => arg.StartsWith("--portal-edits=", StringComparison.OrdinalIgnoreCase))?
+    ["--portal-edits=".Length..];
+string? portalOutputOption = args
+    .FirstOrDefault(arg => arg.StartsWith("--portal-output=", StringComparison.OrdinalIgnoreCase))?
+    ["--portal-output=".Length..];
+bool stoneHillClass1ESmokeOnly = args.Contains("--stonehill-class1e-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool lifeChestSmokeOnly = args.Contains("--life-chest-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool levelTextSmokeOnly = args.Contains("--level-text-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool levelMusicSmokeOnly = args.Contains("--level-music-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool exportMusicTest = args.Contains("--export-music-test", StringComparer.OrdinalIgnoreCase);
+bool lifeChestFixupScan = args.Contains("--life-chest-fixup-scan", StringComparer.OrdinalIgnoreCase);
+bool exportLifeChestCandidate = args.Contains("--export-life-chest-candidate", StringComparer.OrdinalIgnoreCase);
+bool exportLifeChestDemoCandidate = args.Contains("--export-life-chest-demo-candidate", StringComparer.OrdinalIgnoreCase);
+bool exportArtisansLifeChestMultiCandidate = args.Contains("--export-artisans-life-chest-multi-candidate", StringComparer.OrdinalIgnoreCase);
+bool exportStrictTriggerProofBins = args.Contains("--export-strict-trigger-proof-bins", StringComparer.OrdinalIgnoreCase);
 bool repairGnastyLootCache = args.Contains("--repair-gnastysloot-cache", StringComparer.OrdinalIgnoreCase);
 string? workspaceArg = args.FirstOrDefault(arg => !arg.StartsWith("--", StringComparison.Ordinal));
 EditorWorkspace workspace = EditorWorkspace.Find(workspaceArg);
@@ -34,6 +75,9 @@ const int IdentityMicroscopeLimit = 80;
 const string CurrentStoneHillSpringRecipeId = "stonehill.peacekeepers.springChest.package.native0149T70LocalControllerOver000ERuntime01A6BluePreHitSafeNativeSpringEffectOnlyNoPickupBlueGemNativeSpringEffectVisualBlueGemNativeSpringEffectOrdinalManualSpyroDelayedJumpTouchCollectBlankVisualAwardPlainTreasureWordsManualRewardPopArcNativeEffectVisualNativeStateZeroShellStackHelper.v136";
 const string CurrentStoneHillSpringTemplateId = "common.spring_chest.peacekeepers.t70";
 const string CurrentStoneHillSpringCandidateSlug = "stonehill-springchest-v159-peacekeepers-t70-blueprehit-native-effect-bluegem-delayed-jumptouch-blankvisual-plain-treasure-poparc-stable-restored";
+const string GnastyLootSpringTemplateId = "common.spring_chest.gnastysloot.t19";
+const string GnastyLootFireworkTemplateId = "common.firework_chest.gnastysloot.t92";
+const string GnastyLootMultiGemChestTemplateId = "common.multi_gem_chest.gnastysloot.t24";
 int[][] SourceDerivedCollisionPointOrders =
 [
     [0, 1, 2],
@@ -49,6 +93,1410 @@ Console.WriteLine($"Workspace: {workspace.RootPath}");
 Console.WriteLine($"Levels: {catalog.Levels.Count}");
 ReportEditorUiDefaults();
 ReportCrossLevelObjectTemplateCatalog();
+string sourceImage = DiscImageLocator.FindImage(workspace);
+
+if (!string.IsNullOrWhiteSpace(environmentGradeInspectImage))
+{
+    string inspectImage = Path.GetFullPath(environmentGradeInspectImage);
+    string analysisPath = WadAnalysisLocator.Find(workspace);
+    LevelDefinition target = catalog.FindByKey("stonehill") ?? throw new InvalidOperationException("Stone Hill is missing.");
+    LevelDefinition donor = catalog.FindByKey("darkhollow") ?? throw new InvalidOperationException("Dark Hollow is missing.");
+    NativeEnvironmentGradeMatch inspected = NativeEnvironmentGradeExporter.AnalyzeMatch(
+        inspectImage,
+        analysisPath,
+        target,
+        donor,
+        NativeEnvironmentGradePlan.MatchSkySource(donor.Key));
+    Console.WriteLine($"Inspected image: {inspectImage}");
+    Console.WriteLine($"Scene median: {inspected.TargetSceneColors.MedianLuminance:F3}; close {inspected.TargetHighDetailSceneColors.MedianLuminance:F3}; far {inspected.TargetLowDetailSceneColors.MedianLuminance:F3}");
+    Console.WriteLine($"Texture median: {inspected.TargetTextureColors.MedianLuminance:F3}; mean {inspected.TargetTextureColors.MeanLuminance:F3}; contrast {inspected.TargetTextureColors.LuminanceStandardDeviation:F3}; deep shadows {inspected.TargetTextureColors.DeepShadowPercent:F1}%");
+    string textureInspectDirectory = Path.Combine(workspace.RootPath, "_local", "skybox-research", "environment-grade-inspect");
+    Directory.CreateDirectory(textureInspectDirectory);
+    string cleanTexturePath = Path.Combine(textureInspectDirectory, "stonehill-texture-40-clean.png");
+    string gradedTexturePath = Path.Combine(textureInspectDirectory, "stonehill-texture-40-graded.png");
+    TerrainTextureImageExport? cleanTexture = await TerrainPatchExporter.TryExportTerrainTextureImageAsync(
+        sourceImage,
+        target,
+        40,
+        cleanTexturePath);
+    TerrainTextureImageExport? gradedTexture = await TerrainPatchExporter.TryExportTerrainTextureImageAsync(
+        inspectImage,
+        target,
+        40,
+        gradedTexturePath);
+    Console.WriteLine($"Texture 40 clean: {(cleanTexture == null ? "unavailable" : cleanTexturePath)}");
+    Console.WriteLine($"Texture 40 graded: {(gradedTexture == null ? "unavailable" : gradedTexturePath)}");
+    if (cleanTexture != null && gradedTexture != null)
+    {
+        Rgba32[] cleanPixels = PngRgbaImage.ReadRgba(cleanTexturePath, out _, out _);
+        Rgba32[] gradedPixels = PngRgbaImage.ReadRgba(gradedTexturePath, out _, out _);
+        NativeEnvironmentColorStatistics cleanTextureStats = NativeEnvironmentColorStatistics.FromColors(
+            cleanPixels.Where(pixel => pixel.A > 0).Select(pixel => ColorRgba.FromRgb(pixel.R, pixel.G, pixel.B)));
+        NativeEnvironmentColorStatistics gradedTextureStats = NativeEnvironmentColorStatistics.FromColors(
+            gradedPixels.Where(pixel => pixel.A > 0).Select(pixel => ColorRgba.FromRgb(pixel.R, pixel.G, pixel.B)));
+        Console.WriteLine($"Texture 40 pixel median: {cleanTextureStats.MedianLuminance:F3} -> {gradedTextureStats.MedianLuminance:F3}; saturation {cleanTextureStats.MeanSaturation:F3} -> {gradedTextureStats.MeanSaturation:F3}");
+    }
+    return 0;
+}
+
+if (skyboxLayoutSmokeOnly)
+{
+    SkyboxNativeLayoutReport report = SkyboxNativeLayoutAnalyzer.Analyze(sourceImage, catalog);
+    string reportDirectory = Path.Combine(workspace.RootPath, "_local", "skybox-research");
+    SkyboxNativeLayoutWriteResult written = await SkyboxNativeLayoutReportWriter.WriteAsync(
+        report,
+        Path.Combine(reportDirectory, "native-layout-report.json"),
+        Path.Combine(reportDirectory, "native-layout-report.md"));
+
+    if (report.LevelCount != catalog.Levels.Count || report.LoadedArchiveCoverage != catalog.Levels.Count)
+        throw new InvalidOperationException($"Skybox layout coverage is incomplete: {report.LoadedArchiveCoverage}/{catalog.Levels.Count} loaded archives.");
+    if (report.Levels.Any(level => level.MetadataMatchCount > 1))
+        throw new InvalidOperationException("Skybox layout metadata scan found an ambiguous level ID.");
+    if (report.CompatibilityGroups.Any(group => group.Classification != "archive-size-compatible-only"))
+        throw new InvalidOperationException("Skybox layout compatibility groups must remain research-only.");
+
+    Console.WriteLine($"Skybox native layout: {report.LoadedArchiveCoverage}/{report.LevelCount} loaded archives, {report.LoadedCandidateSubfile3Coverage}/{report.LevelCount} candidate subfile 3 rows.");
+    Console.WriteLine($"Metadata relationships: {report.MetadataCoverage}/{report.LevelCount}; metadata-adjacent archives: {report.MetadataAdjacentArchiveCoverage}/{report.LevelCount}.");
+    Console.WriteLine($"Same-size research groups: {report.CompatibilityGroups.Count}; no BIN/CUE written.");
+    Console.WriteLine($"JSON: {written.JsonPath}");
+    Console.WriteLine($"Markdown: {written.MarkdownPath}");
+    return 0;
+}
+
+if (skyboxColorRunSmokeOnly)
+{
+    string analysisPath = WadAnalysisLocator.Find(workspace);
+    SkyboxColorRunResearchReport report = SkyboxColorRunResearchAnalyzer.Analyze(sourceImage, analysisPath, catalog);
+    string reportDirectory = Path.Combine(workspace.RootPath, "_local", "skybox-research");
+    SkyboxColorRunResearchWriteResult written = await SkyboxColorRunResearchReportWriter.WriteAsync(
+        report,
+        Path.Combine(reportDirectory, "color-run-report.json"),
+        Path.Combine(reportDirectory, "color-run-report.md"));
+
+    if (report.ModelSubfileCoverage != catalog.Levels.Count)
+        throw new InvalidOperationException($"Skybox color-run coverage is incomplete: {report.ModelSubfileCoverage}/{catalog.Levels.Count} model subfiles.");
+    SkyboxLevelColorRunResearch stoneHillRuns = report.Levels.Single(level => level.Key == "stonehill");
+    SkyboxColorRunThresholdScore singleWord = stoneHillRuns.VerifiedThresholdScores.Single(score => score.MinimumRunWords == 1);
+    SkyboxColorRunThresholdScore conservativeCore = stoneHillRuns.VerifiedThresholdScores.Single(score => score.MinimumRunWords == 16);
+    if (conservativeCore.SelectedWordCount == 0 || conservativeCore.Precision < 0.999999)
+        throw new InvalidOperationException("Stone Hill conservative 0x30 color-run core includes unverified words.");
+
+    Console.WriteLine($"Skybox color runs: {report.ModelSubfileCoverage}/{report.LevelCount} model subfiles; no BIN/CUE written.");
+    Console.WriteLine($"Stone Hill 0x30 coverage: {singleWord.VerifiedSelectedWordCount}/{singleWord.VerifiedWordCount} verified words; all-word precision {singleWord.Precision:P1}.");
+    Console.WriteLine($"Stone Hill conservative >=16-word core: {conservativeCore.SelectedWordCount} words, precision {conservativeCore.Precision:P1}, recall {conservativeCore.Recall:P1}.");
+    Console.WriteLine($"JSON: {written.JsonPath}");
+    Console.WriteLine($"Markdown: {written.MarkdownPath}");
+    return 0;
+}
+
+if (skyboxSceneColorSmokeOnly)
+{
+    string analysisPath = WadAnalysisLocator.Find(workspace);
+    SkyboxSceneColorResearchReport report = SkyboxSceneColorResearchAnalyzer.Analyze(sourceImage, analysisPath, catalog);
+    string reportDirectory = Path.Combine(workspace.RootPath, "_local", "skybox-research");
+    SkyboxSceneColorResearchWriteResult written = await SkyboxSceneColorResearchReportWriter.WriteAsync(
+        report,
+        Path.Combine(reportDirectory, "scene-color-report.json"),
+        Path.Combine(reportDirectory, "scene-color-report.md"));
+
+    if (report.ModelSubfileCoverage != catalog.Levels.Count)
+        throw new InvalidOperationException($"Skybox scene-color coverage is incomplete: {report.ModelSubfileCoverage}/{catalog.Levels.Count} model subfiles.");
+    SkyboxLevelSceneColorResearch stoneHillScene = report.Levels.Single(level => level.Key == "stonehill");
+    if (!stoneHillScene.CandidateTables.Any(candidate => candidate.VerifiedStoneHillWordCount >= 16))
+        throw new InvalidOperationException("Stone Hill scene-color parser did not recover a verified sky table.");
+
+    Console.WriteLine($"Skybox scene colors: {report.ModelSubfileCoverage}/{report.LevelCount} model subfiles; no BIN/CUE written.");
+    Console.WriteLine($"Stone Hill: {stoneHillScene.ParsedSectorCount} parsed sectors, {stoneHillScene.CandidateTableCount} all-0x30 LP color tables.");
+    Console.WriteLine($"JSON: {written.JsonPath}");
+    Console.WriteLine($"Markdown: {written.MarkdownPath}");
+    return 0;
+}
+
+if (skyboxBlockSmokeOnly)
+{
+    string analysisPath = WadAnalysisLocator.Find(workspace);
+    Spyro1SkyBlockReport report = Spyro1SkyBlockAnalyzer.Analyze(sourceImage, analysisPath, catalog);
+    string reportDirectory = Path.Combine(workspace.RootPath, "_local", "skybox-research");
+    Spyro1SkyBlockWriteResult written = await Spyro1SkyBlockReportWriter.WriteAsync(
+        report,
+        Path.Combine(reportDirectory, "native-sky-block-report.json"),
+        Path.Combine(reportDirectory, "native-sky-block-report.md"));
+
+    if (report.ModelSubfileCoverage != catalog.Levels.Count)
+        throw new InvalidOperationException($"Native sky-block coverage is incomplete: {report.ModelSubfileCoverage}/{catalog.Levels.Count} model subfiles.");
+    Spyro1LevelSkyBlockLayout stoneHillBlockLevel = report.Levels.Single(level => level.Key == "stonehill");
+    Spyro1SkyBlockLayout stoneHillPrimary = stoneHillBlockLevel.SkyBlocks.Single();
+    if (stoneHillPrimary.BlockOffset != 0x8FB94 || stoneHillPrimary.ByteLength != 0x83AC || stoneHillPrimary.PartCount != 35)
+        throw new InvalidOperationException($"Stone Hill native sky layout changed: offset=0x{stoneHillPrimary.BlockOffset:X}, size=0x{stoneHillPrimary.ByteLength:X}, parts={stoneHillPrimary.PartCount}.");
+    if (report.StoneHillVerification.VerifiedParsedWordCount < 400)
+        throw new InvalidOperationException("Native sky parser recovered too few Stone Hill verified palette targets.");
+
+    Console.WriteLine($"Native sky blocks: {report.LevelsWithSkyBlocks}/{report.LevelCount} levels, {report.TotalSkyBlocks} blocks; no BIN/CUE written.");
+    Console.WriteLine($"Stone Hill: 0x{stoneHillPrimary.BlockOffset:X}, {stoneHillPrimary.ByteLength} bytes, {stoneHillPrimary.PartCount} parts, {stoneHillPrimary.PaletteWordCount} palette words.");
+    Console.WriteLine($"Stone Hill verified palette overlap: {report.StoneHillVerification.VerifiedParsedWordCount}/{report.StoneHillVerification.VerifiedWordCount}; precision {report.StoneHillVerification.Precision:P1}.");
+    Console.WriteLine($"JSON: {written.JsonPath}");
+    Console.WriteLine($"Markdown: {written.MarkdownPath}");
+    return 0;
+}
+
+if (environmentGradeSmokeOnly)
+{
+    string analysisPath = WadAnalysisLocator.Find(workspace);
+    LevelDefinition stoneHillLevel = catalog.FindByKey("stonehill") ?? throw new InvalidOperationException("Stone Hill is missing.");
+    LevelDefinition artisansLevel = catalog.FindByKey("artisans") ?? throw new InvalidOperationException("Artisans is missing.");
+    LevelDefinition darkHollowLevel = catalog.FindByKey("darkhollow") ?? throw new InvalidOperationException("Dark Hollow is missing.");
+    LevelDefinition doctorShempLevel = catalog.FindByKey("doctorshemp") ?? throw new InvalidOperationException("Doctor Shemp is missing.");
+    NativeEnvironmentGradePlan grade = NativeEnvironmentGradePlan.MatchSkySource(darkHollowLevel.Key) with
+    {
+        GradeActors = true,
+        GradeChests = true,
+        GradeScenery = true,
+        GradeDragons = true
+    };
+    NativeEnvironmentGradeMatch match = NativeEnvironmentGradeExporter.AnalyzeMatch(
+        sourceImage,
+        analysisPath,
+        stoneHillLevel,
+        darkHollowLevel,
+        grade);
+    if (match.LowDetailSceneTransform != match.HighDetailSceneTransform ||
+        match.SceneTransform != match.LowDetailSceneTransform)
+    {
+        throw new InvalidOperationException("Environment grading must use one coherent transform for both native terrain LODs.");
+    }
+    ColorRgba blendStart = ColorRgba.FromRgb(72, 108, 88);
+    ColorRgba blendEnd = ColorRgba.FromRgb(156, 196, 144);
+    ColorRgba sourceMidpoint = ColorRgba.FromRgb(
+        (blendStart.R + blendEnd.R) / 2,
+        (blendStart.G + blendEnd.G) / 2,
+        (blendStart.B + blendEnd.B) / 2);
+    ColorRgba transformedStart = match.SceneTransform.ApplyTerrainSmoothing(blendStart);
+    ColorRgba transformedEnd = match.SceneTransform.ApplyTerrainSmoothing(blendEnd);
+    ColorRgba transformedMidpoint = match.SceneTransform.ApplyTerrainSmoothing(sourceMidpoint);
+    if (Math.Abs(transformedMidpoint.R - ((transformedStart.R + transformedEnd.R) / 2)) > 1 ||
+        Math.Abs(transformedMidpoint.G - ((transformedStart.G + transformedEnd.G) / 2)) > 1 ||
+        Math.Abs(transformedMidpoint.B - ((transformedStart.B + transformedEnd.B) / 2)) > 1)
+    {
+        throw new InvalidOperationException("Environment terrain smoothing no longer preserves native vertex-color interpolation.");
+    }
+    string smokeDirectory = Path.Combine(workspace.RootPath, "_local", "skybox-research", "environment-grade-smoke");
+    Directory.CreateDirectory(smokeDirectory);
+    string outputPrefix = Path.Combine(smokeDirectory, "stonehill-match-darkhollow");
+    NativeEnvironmentGradePatchResult result = await NativeEnvironmentGradeExporter.ExportBatchAsync(new NativeEnvironmentGradeBatchPatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        WadAnalysisPath: analysisPath,
+        OutputPrefix: outputPrefix,
+        Catalog: catalog,
+        Edits: [new NativeEnvironmentGradeBatchEdit(stoneHillLevel, grade)],
+        WriteImage: true));
+    NativeSkyPatchResult? relocatedSkyResult = null;
+    string relocatedAnalysisPath = Path.Combine(smokeDirectory, "stonehill-darkhollow-relocated-wad-analysis.json");
+    try
+    {
+        if (!result.WroteImage || result.Plan.SceneColorPatchCount == 0 || result.Plan.TexturePalettePatchCount == 0)
+            throw new InvalidOperationException("Stone Hill environment match did not patch both scene colors and landscape palettes.");
+        int classifiedMobyRows = match.TargetActorMobyCount + match.TargetChestMobyCount + match.TargetSceneryMobyCount + match.TargetDragonMobyCount;
+        if (classifiedMobyRows <= 0 ||
+            result.Plan.MobyMaterialRowPatchCount != 0 ||
+            result.Plan.MobyRuntimePatchCount != 2 ||
+            result.Plan.Patches.Any(item => item.Kind == "environment-moby-material-route") ||
+            !grade.Normalize(darkHollowLevel.Key).GradeAnyMobys)
+        {
+            throw new InvalidOperationException(
+                $"Native object-lighting plan failed: {result.Plan.MobyMaterialRowPatchCount} row(s), {result.Plan.MobyRuntimePatchCount} runtime patch(es)."
+            );
+        }
+        NativeEnvironmentGradePatch mobyHook = result.Plan.Patches.Single(item => item.Kind == "environment-moby-runtime-hook");
+        NativeEnvironmentGradePatch mobyPayload = result.Plan.Patches.Single(item => item.Kind == "environment-moby-runtime-payload");
+        if (mobyHook.WadOffset != "exe:0x80012230" || mobyPayload.WadOffset != "exe:0x8007314C")
+            throw new InvalidOperationException("Native object lighting did not use the guarded game-loop hook and payload cave.");
+
+        const int mobyRecordStride = 0x58;
+        const int mobyMaterialOffset = 0x4F;
+        const int mobyGradeLevelTableOffset = 0x80;
+        const uint neutralMobyMaterialWord = 0x00808080;
+        const long mobyGradePayloadFileOffset = 0x800 + (0x8007314C - 0x80010000);
+        uint expectedStoneHillMaterial = Convert.ToUInt32(match.MobyMaterialColorHex[1..], 16);
+        expectedStoneHillMaterial =
+            ((expectedStoneHillMaterial & 0xFF0000) >> 16) |
+            (expectedStoneHillMaterial & 0x00FF00) |
+            ((expectedStoneHillMaterial & 0x0000FF) << 16);
+        SourceDiscLayout sourceLayout = DetectSourceDiscLayout(sourceImage);
+        SourceDiscLayout gradedLayout = DetectSourceDiscLayout(result.OutputImagePath);
+        using (FileStream source = File.OpenRead(sourceImage))
+        using (FileStream graded = File.OpenRead(result.OutputImagePath))
+        {
+            SourceDiscFileRecord executable = FindSourceExecutable(graded, gradedLayout);
+            byte[] actualHook = ReadSourceFileBytes(
+                graded,
+                gradedLayout,
+                executable.Lba,
+                0x800 + (0x80012230 - 0x80010000),
+                4);
+            if (!actualHook.SequenceEqual(Convert.FromHexString(mobyHook.AfterHexPreview)))
+                throw new InvalidOperationException("Generated BIN does not contain the native object-lighting hook.");
+
+            byte[] stoneHillMaterial = ReadSourceFileBytes(
+                graded,
+                gradedLayout,
+                executable.Lba,
+                mobyGradePayloadFileOffset + mobyGradeLevelTableOffset + (stoneHillLevel.LevelId * 4L),
+                4);
+            if (BinaryPrimitives.ReadUInt32LittleEndian(stoneHillMaterial) != expectedStoneHillMaterial)
+                throw new InvalidOperationException("Stone Hill's native object-lighting table entry does not match the analyzed environment color.");
+
+            byte[] artisansMaterial = ReadSourceFileBytes(
+                graded,
+                gradedLayout,
+                executable.Lba,
+                mobyGradePayloadFileOffset + mobyGradeLevelTableOffset + (artisansLevel.LevelId * 4L),
+                4);
+            if (BinaryPrimitives.ReadUInt32LittleEndian(artisansMaterial) != neutralMobyMaterialWord)
+                throw new InvalidOperationException("An ungraded level did not restore the neutral native object-lighting material.");
+
+            long sourceTableWadOffset = ParseFlexibleLong(stoneHillLevel.SourceTableWadOffset);
+            for (int trueIndex = 0; trueIndex < stoneHillLevel.SourceRecordCount; trueIndex++)
+            {
+                long materialWadOffset = sourceTableWadOffset + (trueIndex * mobyRecordStride) + mobyMaterialOffset;
+                byte sourceMaterial = ReadSourceWadBytes(source, sourceLayout, materialWadOffset, 1)[0];
+                byte gradedMaterial = ReadSourceWadBytes(graded, gradedLayout, materialWadOffset, 1)[0];
+                if (sourceMaterial != gradedMaterial)
+                    throw new InvalidOperationException($"Native object lighting rewrote Stone Hill source row T{trueIndex}'s material byte.");
+            }
+        }
+        bool foundDualLaneWrite = false;
+        foreach (NativeEnvironmentGradePatch patch in result.Plan.Patches.Where(item => item.Kind == "environment-scene-hp-colors"))
+        {
+            byte[] beforePreview = Convert.FromHexString(patch.BeforeHexPreview);
+            byte[] afterPreview = Convert.FromHexString(patch.AfterHexPreview);
+            for (int offset = 0; offset + 8 <= Math.Min(beforePreview.Length, afterPreview.Length); offset += 8)
+            {
+                if (beforePreview[offset + 3] != afterPreview[offset + 3] ||
+                    beforePreview[offset + 7] != afterPreview[offset + 7])
+                {
+                    throw new InvalidOperationException("High-detail environment grading changed a native color command byte.");
+                }
+                bool firstLaneChanged = !beforePreview.AsSpan(offset, 3).SequenceEqual(afterPreview.AsSpan(offset, 3));
+                bool secondLaneChanged = !beforePreview.AsSpan(offset + 4, 3).SequenceEqual(afterPreview.AsSpan(offset + 4, 3));
+                foundDualLaneWrite |= firstLaneChanged && secondLaneChanged;
+            }
+        }
+        if (!foundDualLaneWrite)
+            throw new InvalidOperationException("High-detail environment grading did not transform both rendered RGB lanes.");
+        NativeEnvironmentGradeMatch readback = NativeEnvironmentGradeExporter.AnalyzeMatch(
+            result.OutputImagePath,
+            analysisPath,
+            stoneHillLevel,
+            darkHollowLevel,
+            grade);
+        double beforeDistance = Math.Abs(match.TargetSceneColors.MedianLuminance - match.DonorSceneColors.MedianLuminance);
+        double afterDistance = Math.Abs(readback.TargetSceneColors.MedianLuminance - readback.DonorSceneColors.MedianLuminance);
+        if (afterDistance >= beforeDistance)
+            throw new InvalidOperationException("Environment-grade readback did not move Stone Hill's scene luminance toward Dark Hollow.");
+        double highDetailBeforeDistance = Math.Abs(
+            match.TargetHighDetailSceneColors.MedianLuminance - match.DonorHighDetailSceneColors.MedianLuminance);
+        double highDetailAfterDistance = Math.Abs(
+            readback.TargetHighDetailSceneColors.MedianLuminance - readback.DonorHighDetailSceneColors.MedianLuminance);
+        if (highDetailAfterDistance >= highDetailBeforeDistance)
+            throw new InvalidOperationException("Environment-grade readback did not move Stone Hill's close-detail colors toward Dark Hollow.");
+        if (readback.TargetHighDetailSceneColors.LuminanceStandardDeviation >= match.TargetHighDetailSceneColors.LuminanceStandardDeviation)
+            throw new InvalidOperationException("Close-detail scene grading did not reduce the original high-detail lighting contrast.");
+
+        NativeSkyEditPlan skyEdit = new(
+            Version: 3,
+            SavedAt: DateTimeOffset.UtcNow,
+            LevelKey: stoneHillLevel.Key,
+            LevelName: stoneHillLevel.DisplayName,
+            Mode: NativeSkyEditPlan.SwapMode,
+            PalettePreset: "",
+            CustomPaletteHex: "",
+            DonorLevelKey: darkHollowLevel.Key,
+            ImportedSkyPath: "",
+            ImportedSkySha256: "")
+        {
+            EnvironmentGrade = grade
+        };
+        relocatedSkyResult = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+            SourceImagePath: result.OutputImagePath,
+            SourceCuePath: result.OutputCuePath,
+            WadAnalysisPath: analysisPath,
+            WorkspacePath: workspace.RootPath,
+            OutputPrefix: Path.Combine(smokeDirectory, "stonehill-darkhollow-grade-and-sky"),
+            Catalog: catalog,
+            Edits: [new NativeSkyBatchEdit(stoneHillLevel, skyEdit)],
+            WriteImage: true));
+        if (!relocatedSkyResult.WroteImage || !relocatedSkyResult.Plan.RelocatedWad || relocatedSkyResult.Plan.WadGrowthBytes <= 0)
+            throw new InvalidOperationException("Stone Hill/Dark Hollow combined grade and sky smoke did not use the expected guarded WAD expansion.");
+        await WadAnalysisBuilder.BuildAsync(relocatedSkyResult.OutputImagePath, relocatedAnalysisPath);
+        NativeEnvironmentGradeMatch relocatedReadback = NativeEnvironmentGradeExporter.AnalyzeMatch(
+            relocatedSkyResult.OutputImagePath,
+            relocatedAnalysisPath,
+            stoneHillLevel,
+            darkHollowLevel,
+            grade);
+        if (Math.Abs(relocatedReadback.TargetSceneColors.MedianLuminance - readback.TargetSceneColors.MedianLuminance) > 0.01)
+            throw new InvalidOperationException("The environment grade changed or disappeared during oversized sky WAD relocation.");
+        SourceDiscLayout relocatedLayout = DetectSourceDiscLayout(relocatedSkyResult.OutputImagePath);
+        using (FileStream relocated = File.OpenRead(relocatedSkyResult.OutputImagePath))
+        {
+            SourceDiscFileRecord executable = FindSourceExecutable(relocated, relocatedLayout);
+            byte[] actualHook = ReadSourceFileBytes(
+                relocated,
+                relocatedLayout,
+                executable.Lba,
+                0x800 + (0x80012230 - 0x80010000),
+                4);
+            if (!actualHook.SequenceEqual(Convert.FromHexString(mobyHook.AfterHexPreview)))
+                throw new InvalidOperationException("Oversized sky relocation removed the native object-lighting hook.");
+            byte[] stoneHillMaterial = ReadSourceFileBytes(
+                relocated,
+                relocatedLayout,
+                executable.Lba,
+                mobyGradePayloadFileOffset + mobyGradeLevelTableOffset + (stoneHillLevel.LevelId * 4L),
+                4);
+            if (BinaryPrimitives.ReadUInt32LittleEndian(stoneHillMaterial) != expectedStoneHillMaterial)
+                throw new InvalidOperationException("Oversized sky relocation changed Stone Hill's native object-lighting table entry.");
+        }
+        Console.WriteLine($"Environment grade: {match.TargetLevelName} -> {match.DonorLevelName}");
+        Console.WriteLine($"Scene median: {match.TargetSceneColors.MedianLuminance:F3} -> {readback.TargetSceneColors.MedianLuminance:F3}; donor {match.DonorSceneColors.MedianLuminance:F3}");
+        Console.WriteLine($"Far detail: {match.TargetLowDetailSceneColors.MedianLuminance:F3} -> {readback.TargetLowDetailSceneColors.MedianLuminance:F3}; donor {match.DonorLowDetailSceneColors.MedianLuminance:F3}");
+        Console.WriteLine($"Close detail: {match.TargetHighDetailSceneColors.MedianLuminance:F3} -> {readback.TargetHighDetailSceneColors.MedianLuminance:F3}; donor {match.DonorHighDetailSceneColors.MedianLuminance:F3}");
+        Console.WriteLine($"Close contrast: {match.TargetHighDetailSceneColors.LuminanceStandardDeviation:F3} -> {readback.TargetHighDetailSceneColors.LuminanceStandardDeviation:F3}; deep shadows {match.TargetHighDetailSceneColors.DeepShadowPercent:F1}% -> {readback.TargetHighDetailSceneColors.DeepShadowPercent:F1}%");
+        Console.WriteLine("High-detail RGB lanes: both transformed; command bytes preserved");
+        Console.WriteLine($"Scene tables: {result.Plan.SceneColorPatchCount}; landscape palettes: {result.Plan.TexturePalettePatchCount}; changed bytes: {result.Plan.TotalChangedBytes:N0}");
+        Console.WriteLine($"Native object lighting: {classifiedMobyRows} material-0 row(s) classified, zero row reroutes, one guarded hook/payload; Stone Hill {match.MobyMaterialColorHex}");
+        Console.WriteLine($"Combined oversized sky: +{relocatedSkyResult.Plan.WadGrowthBytes:N0} WAD bytes, terrain and native object lighting survived relocation at median {relocatedReadback.TargetSceneColors.MedianLuminance:F3}");
+        Console.WriteLine($"Plan: {result.OutputPlanPath}");
+
+        NativeEnvironmentGradePlan artisansGrade = NativeEnvironmentGradePlan.MatchSkySource(darkHollowLevel.Key);
+        NativeEnvironmentGradeMatch artisansMatch = NativeEnvironmentGradeExporter.AnalyzeMatch(
+            sourceImage,
+            analysisPath,
+            artisansLevel,
+            darkHollowLevel,
+            artisansGrade);
+        NativeEnvironmentGradePatchResult artisansResult = await NativeEnvironmentGradeExporter.ExportBatchAsync(new NativeEnvironmentGradeBatchPatchRequest(
+            SourceImagePath: sourceImage,
+            SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+            WadAnalysisPath: analysisPath,
+            OutputPrefix: Path.Combine(smokeDirectory, "artisans-match-darkhollow"),
+            Catalog: catalog,
+            Edits: [new NativeEnvironmentGradeBatchEdit(artisansLevel, artisansGrade)],
+            WriteImage: true));
+        try
+        {
+            NativeEnvironmentGradeMatch artisansReadback = NativeEnvironmentGradeExporter.AnalyzeMatch(
+                artisansResult.OutputImagePath,
+                analysisPath,
+                artisansLevel,
+                darkHollowLevel,
+                artisansGrade);
+            double artisansBeforeDistance = Math.Abs(
+                artisansMatch.TargetHighDetailSceneColors.MedianLuminance - artisansMatch.DonorHighDetailSceneColors.MedianLuminance);
+            double artisansAfterDistance = Math.Abs(
+                artisansReadback.TargetHighDetailSceneColors.MedianLuminance - artisansReadback.DonorHighDetailSceneColors.MedianLuminance);
+            if (artisansAfterDistance >= artisansBeforeDistance ||
+                artisansReadback.TargetHighDetailSceneColors.LuminanceStandardDeviation >= artisansMatch.TargetHighDetailSceneColors.LuminanceStandardDeviation)
+            {
+                throw new InvalidOperationException("Artisans close-detail grade did not move toward Dark Hollow with reduced lighting contrast.");
+            }
+            Console.WriteLine($"Artisans close detail: {artisansMatch.TargetHighDetailSceneColors.MedianLuminance:F3} -> {artisansReadback.TargetHighDetailSceneColors.MedianLuminance:F3}; contrast {artisansMatch.TargetHighDetailSceneColors.LuminanceStandardDeviation:F3} -> {artisansReadback.TargetHighDetailSceneColors.LuminanceStandardDeviation:F3}");
+        }
+        finally
+        {
+            if (File.Exists(artisansResult.OutputImagePath))
+                File.Delete(artisansResult.OutputImagePath);
+            if (File.Exists(artisansResult.OutputCuePath))
+                File.Delete(artisansResult.OutputCuePath);
+        }
+
+        NativeEnvironmentGradePlan desertGrade = NativeEnvironmentGradePlan.MatchSkySource(doctorShempLevel.Key) with
+        {
+            TintHex = "#BE6400",
+            TintStrengthPercent = 28,
+            GradeActors = true,
+            GradeChests = true,
+            GradeScenery = true,
+            GradeDragons = true
+        };
+        NativeEnvironmentGradeMatch desertMatch = NativeEnvironmentGradeExporter.AnalyzeMatch(
+            sourceImage,
+            analysisPath,
+            darkHollowLevel,
+            doctorShempLevel,
+            desertGrade);
+        ColorRgba expectedDesertMobyMaterial = (desertMatch.SceneTransform with
+        {
+            TintStrengthPercent = desertGrade.TintStrengthPercent
+        }).Apply(ColorRgba.FromRgb(128, 128, 128));
+        string expectedDesertMobyMaterialHex = $"#{expectedDesertMobyMaterial.R:X2}{expectedDesertMobyMaterial.G:X2}{expectedDesertMobyMaterial.B:X2}";
+        if (desertMatch.TargetSceneColorTableCount != desertMatch.TargetSectorCount * 2 ||
+            desertMatch.SceneTransform.HarmonizationPercent != 100 ||
+            desertMatch.TextureTransform.HarmonizationPercent != 100 ||
+            desertMatch.SceneTransform.TintStrengthPercent != 15 ||
+            desertMatch.TextureTransform.TintStrengthPercent != 15 ||
+            !string.Equals(desertMatch.MobyMaterialColorHex, expectedDesertMobyMaterialHex, StringComparison.OrdinalIgnoreCase) ||
+            desertMatch.TargetTextureRuntimeVariantCount == 0 ||
+            desertMatch.TargetTextureUsage.DescriptorCount == 0 ||
+            desertMatch.TargetTextureUsage.VisibleTexelCount == 0)
+        {
+            throw new InvalidOperationException(
+                $"Dark Hollow's drastic warm-shift guard is incomplete: {desertMatch.TargetSceneColorTableCount}/{desertMatch.TargetSectorCount * 2} tables, scene/texture harmonization {desertMatch.SceneTransform.HarmonizationPercent}%/{desertMatch.TextureTransform.HarmonizationPercent}%, tint {desertMatch.SceneTransform.TintStrengthPercent}%/{desertMatch.TextureTransform.TintStrengthPercent}%, {desertMatch.TargetTextureRuntimeVariantCount} runtime palette variant(s), {desertMatch.TargetTextureUsage.VisibleTexelCount} visible terrain texels.");
+        }
+
+        ColorRgba coolGreen = ColorRgba.FromRgb(28, 110, 52);
+        ColorRgba warmGreen = ColorRgba.FromRgb(76, 76, 30);
+        ColorRgba greenMidpoint = ColorRgba.FromRgb(
+            (coolGreen.R + warmGreen.R) / 2,
+            (coolGreen.G + warmGreen.G) / 2,
+            (coolGreen.B + warmGreen.B) / 2);
+        NativeEnvironmentColorTransform unharmonizedTransform = desertMatch.SceneTransform with { HarmonizationPercent = 0 };
+        double unharmonizedGreenDistance = EnvironmentColorBalanceDistance(
+            unharmonizedTransform.ApplyTerrainSmoothing(coolGreen),
+            unharmonizedTransform.ApplyTerrainSmoothing(warmGreen));
+        ColorRgba harmonizedCool = desertMatch.SceneTransform.ApplyTerrainSmoothing(coolGreen);
+        ColorRgba harmonizedWarm = desertMatch.SceneTransform.ApplyTerrainSmoothing(warmGreen);
+        ColorRgba harmonizedMidpoint = desertMatch.SceneTransform.ApplyTerrainSmoothing(greenMidpoint);
+        double harmonizedGreenDistance = EnvironmentColorBalanceDistance(harmonizedCool, harmonizedWarm);
+        ColorRgba compoundTerrain = EnvironmentModulate(
+            desertMatch.SceneTransform.ApplyTerrainSmoothing(ColorRgba.FromRgb(36, 112, 52)),
+            desertMatch.TextureTransform.ApplyTerrainSmoothing(ColorRgba.FromRgb(48, 132, 56)));
+        if (harmonizedGreenDistance >= unharmonizedGreenDistance * 0.45 ||
+            compoundTerrain.G > compoundTerrain.R ||
+            Math.Abs(harmonizedMidpoint.R - ((harmonizedCool.R + harmonizedWarm.R) / 2)) > 1 ||
+            Math.Abs(harmonizedMidpoint.G - ((harmonizedCool.G + harmonizedWarm.G) / 2)) > 1 ||
+            Math.Abs(harmonizedMidpoint.B - ((harmonizedCool.B + harmonizedWarm.B) / 2)) > 1)
+        {
+            throw new InvalidOperationException("Drastic warm-shift harmonization did not reduce source-sector hue separation while preserving interpolation.");
+        }
+
+        NativeEnvironmentGradePatchResult desertResult = await NativeEnvironmentGradeExporter.ExportBatchAsync(new NativeEnvironmentGradeBatchPatchRequest(
+            SourceImagePath: sourceImage,
+            SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+            WadAnalysisPath: analysisPath,
+            OutputPrefix: Path.Combine(smokeDirectory, "darkhollow-match-doctorshemp-harmonized"),
+            Catalog: catalog,
+            Edits: [new NativeEnvironmentGradeBatchEdit(darkHollowLevel, desertGrade)],
+            WriteImage: true));
+        NativeEnvironmentGradePatchResult? dualGradeResult = null;
+        NativeSkyPatchResult? desertSkyResult = null;
+        string desertRelocatedAnalysisPath = Path.Combine(smokeDirectory, "stonehill-darkhollow-dual-relocated-wad-analysis.json");
+        try
+        {
+            if (desertResult.Plan.SceneColorPatchCount != desertMatch.TargetSceneColorTableCount ||
+                desertResult.Plan.TexturePalettePatchCount != desertMatch.TargetTexturePaletteCount ||
+                !desertResult.Plan.Patches.Any(patch =>
+                    patch.Kind == "environment-terrain-texture-palette" &&
+                    patch.Label.EndsWith("palette-0x2C00", StringComparison.OrdinalIgnoreCase) &&
+                    patch.ByteLength == 512) ||
+                desertResult.Plan.MobyMaterialRowPatchCount != 0 ||
+                desertResult.Plan.MobyRuntimePatchCount != 2)
+            {
+                throw new InvalidOperationException("Dark Hollow's harmonized export did not cover every decoded terrain table and guarded object-lighting patch.");
+            }
+            foreach ((int offset, int byteLength) in new[]
+            {
+                (0x2800, 512),
+                (0x2C00, 512),
+                (0xC800, 512),
+                (0x6E560, 32),
+                (0x6C0C0, 32),
+                (0x6C140, 32),
+                (0x740A0, 32),
+                (0x74180, 32),
+                (0x74160, 32),
+                (0x75560, 32),
+                (0x7C440, 32),
+                (0x7C080, 32),
+                (0x72CE0, 32),
+                (0x7D4A0, 32),
+                (0x7ECA0, 32),
+                (0x7F0A0, 32),
+                (0x7E540, 32),
+                (0x7F500, 32)
+            })
+            {
+                string suffix = $"palette-0x{offset:X}";
+                if (!desertResult.Plan.Patches.Any(patch =>
+                    patch.Kind == "environment-terrain-texture-palette" &&
+                    patch.ByteLength == byteLength &&
+                    patch.Label.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)))
+                {
+                    throw new InvalidOperationException(
+                        $"Dark Hollow's runtime terrain source palette {suffix} was not patched as a {byteLength}-byte row.");
+                }
+            }
+            var desertPaletteIntervals = desertResult.Plan.Patches
+                .Where(patch => patch.Kind == "environment-terrain-texture-palette")
+                .Select(patch => (Start: ParseFlexibleLong(patch.WadOffset), End: ParseFlexibleLong(patch.WadOffset) + patch.ByteLength))
+                .OrderBy(interval => interval.Start)
+                .ToArray();
+            if (desertPaletteIntervals.Zip(desertPaletteIntervals.Skip(1), (previous, next) => next.Start < previous.End).Any(overlaps => overlaps))
+            {
+                throw new InvalidOperationException("Dark Hollow's GPU-proven texture palette patches overlap.");
+            }
+            foreach (int protectedOffset in new[]
+            {
+                0x6B7A0, 0x78FE0, 0x793E0, 0x7A3E0, 0x7AFE0,
+                0x7C460, 0x7D060, 0x7E440, 0x7EC40, 0x7F040
+            })
+            {
+                string suffix = $"palette-0x{protectedOffset:X}";
+                if (desertResult.Plan.Patches.Any(patch =>
+                    patch.Kind == "environment-terrain-texture-palette" &&
+                    patch.Label.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)))
+                {
+                    throw new InvalidOperationException($"Dark Hollow's protected player/tree palette {suffix} was graded.");
+                }
+            }
+
+            NativeEnvironmentGradeMatch desertReadback = NativeEnvironmentGradeExporter.AnalyzeMatch(
+                desertResult.OutputImagePath,
+                analysisPath,
+                darkHollowLevel,
+                doctorShempLevel,
+                desertGrade);
+            double desertBalanceBefore = EnvironmentStatisticsBalanceDistance(desertMatch.TargetSceneColors, desertMatch.DonorSceneColors);
+            double desertBalanceAfter = EnvironmentStatisticsBalanceDistance(desertReadback.TargetSceneColors, desertReadback.DonorSceneColors);
+            double desertFarBalanceBefore = EnvironmentStatisticsBalanceDistance(desertMatch.TargetLowDetailSceneColors, desertMatch.DonorLowDetailSceneColors);
+            double desertFarBalanceAfter = EnvironmentStatisticsBalanceDistance(desertReadback.TargetLowDetailSceneColors, desertReadback.DonorLowDetailSceneColors);
+            double desertCloseBalanceBefore = EnvironmentStatisticsBalanceDistance(desertMatch.TargetHighDetailSceneColors, desertMatch.DonorHighDetailSceneColors);
+            double desertCloseBalanceAfter = EnvironmentStatisticsBalanceDistance(desertReadback.TargetHighDetailSceneColors, desertReadback.DonorHighDetailSceneColors);
+            double desertTextureGreenBefore = desertMatch.TargetTextureUsage.GreenDominantPercent;
+            double desertTextureGreenAfter = desertReadback.TargetTextureUsage.GreenDominantPercent;
+            if (desertBalanceAfter >= desertBalanceBefore ||
+                desertFarBalanceAfter >= desertFarBalanceBefore ||
+                desertCloseBalanceAfter >= desertCloseBalanceBefore ||
+                desertTextureGreenBefore < 5 ||
+                desertTextureGreenAfter > 0.25)
+            {
+                throw new InvalidOperationException(
+                    $"Dark Hollow's near/far colors did not converge coherently toward Doctor Shemp: overall {desertBalanceBefore:F3}->{desertBalanceAfter:F3}, far {desertFarBalanceBefore:F3}->{desertFarBalanceAfter:F3}, close {desertCloseBalanceBefore:F3}->{desertCloseBalanceAfter:F3}, green terrain texels {desertTextureGreenBefore:F2}%->{desertTextureGreenAfter:F2}%.");
+            }
+
+            NativeSkyEditPlan desertSkyEdit = new(
+                Version: 3,
+                SavedAt: DateTimeOffset.UtcNow,
+                LevelKey: darkHollowLevel.Key,
+                LevelName: darkHollowLevel.DisplayName,
+                Mode: NativeSkyEditPlan.SwapMode,
+                PalettePreset: "",
+                CustomPaletteHex: "",
+                DonorLevelKey: doctorShempLevel.Key,
+                ImportedSkyPath: "",
+                ImportedSkySha256: "")
+            {
+                EnvironmentGrade = desertGrade
+            };
+            dualGradeResult = await NativeEnvironmentGradeExporter.ExportBatchAsync(new NativeEnvironmentGradeBatchPatchRequest(
+                SourceImagePath: sourceImage,
+                SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+                WadAnalysisPath: analysisPath,
+                OutputPrefix: Path.Combine(smokeDirectory, "stonehill-darkhollow-dual-harmonized-grade"),
+                Catalog: catalog,
+                Edits:
+                [
+                    new NativeEnvironmentGradeBatchEdit(stoneHillLevel, grade),
+                    new NativeEnvironmentGradeBatchEdit(darkHollowLevel, desertGrade)
+                ],
+                WriteImage: true));
+            desertSkyResult = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+                SourceImagePath: dualGradeResult.OutputImagePath,
+                SourceCuePath: dualGradeResult.OutputCuePath,
+                WadAnalysisPath: analysisPath,
+                WorkspacePath: workspace.RootPath,
+                OutputPrefix: Path.Combine(smokeDirectory, "stonehill-darkhollow-dual-harmonized-skies"),
+                Catalog: catalog,
+                Edits:
+                [
+                    new NativeSkyBatchEdit(stoneHillLevel, skyEdit),
+                    new NativeSkyBatchEdit(darkHollowLevel, desertSkyEdit)
+                ],
+                WriteImage: true));
+            if (!desertSkyResult.WroteImage ||
+                desertSkyResult.Plan.WadGrowthBytes != 24_576 ||
+                desertSkyResult.Plan.ExecutableLbaDelta != 12)
+            {
+                throw new InvalidOperationException(
+                    $"The dual-level harmonized runtime test did not reproduce the saved-edit layout: +{desertSkyResult.Plan.WadGrowthBytes} WAD bytes, EXE delta {desertSkyResult.Plan.ExecutableLbaDelta}.");
+            }
+            await WadAnalysisBuilder.BuildAsync(desertSkyResult.OutputImagePath, desertRelocatedAnalysisPath);
+            NativeEnvironmentGradeMatch desertRelocatedReadback = NativeEnvironmentGradeExporter.AnalyzeMatch(
+                desertSkyResult.OutputImagePath,
+                desertRelocatedAnalysisPath,
+                darkHollowLevel,
+                doctorShempLevel,
+                desertGrade);
+            if (Math.Abs(
+                    EnvironmentStatisticsBalanceDistance(desertRelocatedReadback.TargetSceneColors, desertRelocatedReadback.DonorSceneColors) -
+                    desertBalanceAfter) > 0.01 ||
+                Math.Abs(desertRelocatedReadback.TargetTextureUsage.GreenDominantPercent - desertTextureGreenAfter) > 0.01)
+            {
+                throw new InvalidOperationException("Dark Hollow's hue harmonization changed during Doctor Shemp sky relocation.");
+            }
+
+            Console.WriteLine($"Drastic warm-shift grade: Dark Hollow -> Doctor Shemp, scene/texture harmonization {desertMatch.SceneTransform.HarmonizationPercent}%/{desertMatch.TextureTransform.HarmonizationPercent}%, green-sector balance {unharmonizedGreenDistance:F3}->{harmonizedGreenDistance:F3}");
+            Console.WriteLine($"Dark Hollow scene balance: {desertBalanceBefore:F3}->{desertBalanceAfter:F3}; far {desertFarBalanceBefore:F3}->{desertFarBalanceAfter:F3}; close {desertCloseBalanceBefore:F3}->{desertCloseBalanceAfter:F3}; {desertResult.Plan.SceneColorPatchCount} scene tables");
+            Console.WriteLine($"Dark Hollow weighted terrain texels: {desertMatch.TargetTextureUsage.VisibleTexelCount:N0} visible samples across {desertMatch.TargetTextureRuntimeVariantCount} runtime palette variant(s), green-dominant {desertTextureGreenBefore:F2}%->{desertTextureGreenAfter:F2}%");
+            if (keepEnvironmentGradeSmoke)
+                Console.WriteLine($"Kept drastic-shift runtime test: {desertSkyResult.OutputCuePath}");
+        }
+        finally
+        {
+            if (File.Exists(desertResult.OutputImagePath))
+                File.Delete(desertResult.OutputImagePath);
+            if (File.Exists(desertResult.OutputCuePath))
+                File.Delete(desertResult.OutputCuePath);
+            if (dualGradeResult != null)
+            {
+                if (File.Exists(dualGradeResult.OutputImagePath))
+                    File.Delete(dualGradeResult.OutputImagePath);
+                if (File.Exists(dualGradeResult.OutputCuePath))
+                    File.Delete(dualGradeResult.OutputCuePath);
+            }
+            if (desertSkyResult != null && !keepEnvironmentGradeSmoke)
+            {
+                if (File.Exists(desertSkyResult.OutputImagePath))
+                    File.Delete(desertSkyResult.OutputImagePath);
+                if (File.Exists(desertSkyResult.OutputCuePath))
+                    File.Delete(desertSkyResult.OutputCuePath);
+            }
+            if (File.Exists(desertRelocatedAnalysisPath) && !keepEnvironmentGradeSmoke)
+                File.Delete(desertRelocatedAnalysisPath);
+        }
+    }
+    finally
+    {
+        if (File.Exists(result.OutputImagePath))
+            File.Delete(result.OutputImagePath);
+        if (File.Exists(result.OutputCuePath))
+            File.Delete(result.OutputCuePath);
+        if (relocatedSkyResult != null && !keepEnvironmentGradeSmoke)
+        {
+            if (File.Exists(relocatedSkyResult.OutputImagePath))
+                File.Delete(relocatedSkyResult.OutputImagePath);
+            if (File.Exists(relocatedSkyResult.OutputCuePath))
+                File.Delete(relocatedSkyResult.OutputCuePath);
+        }
+        if (File.Exists(relocatedAnalysisPath) && !keepEnvironmentGradeSmoke)
+            File.Delete(relocatedAnalysisPath);
+        if (relocatedSkyResult != null && keepEnvironmentGradeSmoke)
+            Console.WriteLine($"Kept runtime test: {relocatedSkyResult.OutputCuePath}");
+    }
+    ReportNativeEnvironmentGradePlan();
+    return 0;
+}
+
+if (nativeSkyExportSmokeOnly || nativeSkyWriteSmokeOnly || expandedSkySmokeOnly || exportExpandedSkyTest)
+{
+    string analysisPath = WadAnalysisLocator.Find(workspace);
+    string smokeDirectory = Path.Combine(workspace.RootPath, "_local", "skybox-research", "export-smoke");
+    Directory.CreateDirectory(smokeDirectory);
+    foreach (string stale in Directory.EnumerateFiles(smokeDirectory, "*.bin", SearchOption.AllDirectories)
+        .Concat(Directory.EnumerateFiles(smokeDirectory, "*.cue", SearchOption.AllDirectories)))
+    {
+        File.Delete(stale);
+    }
+
+    NativeSkyBatchEdit[] allPaletteEdits = catalog.Levels
+        .Select(level => new NativeSkyBatchEdit(level, new NativeSkyEditPlan(
+            Version: 1,
+            SavedAt: DateTimeOffset.UtcNow,
+            LevelKey: level.Key,
+            LevelName: level.DisplayName,
+            Mode: NativeSkyEditPlan.PaletteMode,
+            PalettePreset: "night",
+            CustomPaletteHex: "",
+            DonorLevelKey: "",
+            ImportedSkyPath: "",
+            ImportedSkySha256: "")))
+        .ToArray();
+    string allPrefix = Path.Combine(smokeDirectory, "all-level-native-sky-palette-plan");
+    NativeSkyPatchResult allResult = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        WadAnalysisPath: analysisPath,
+        WorkspacePath: workspace.RootPath,
+        OutputPrefix: allPrefix,
+        Catalog: catalog,
+        Edits: allPaletteEdits,
+        WriteImage: false));
+    if (allResult.Plan.EditedLevelCount != 35 || allResult.Plan.PatchCount != 64 ||
+        allResult.Plan.SkyOcclusionBypassApplied || allResult.Plan.ExecutablePatchCount != 0 || allResult.WroteImage)
+        throw new InvalidOperationException($"All-level native sky palette smoke expected 35 levels/64 linked blocks/plan-only, got {allResult.Plan.EditedLevelCount}/{allResult.Plan.PatchCount}/{allResult.WroteImage}.");
+
+    LevelDefinition stoneHillLevel = catalog.FindByKey("stonehill") ?? throw new InvalidOperationException("Stone Hill is missing.");
+    NativeSkyEditPlan swapEdit = new(
+        Version: 1,
+        SavedAt: DateTimeOffset.UtcNow,
+        LevelKey: stoneHillLevel.Key,
+        LevelName: stoneHillLevel.DisplayName,
+        Mode: NativeSkyEditPlan.SwapMode,
+        PalettePreset: "",
+        CustomPaletteHex: "",
+        DonorLevelKey: "crystalflight",
+        ImportedSkyPath: "",
+        ImportedSkySha256: "");
+    NativeSkyPatchResult swapResult = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        WadAnalysisPath: analysisPath,
+        WorkspacePath: workspace.RootPath,
+        OutputPrefix: Path.Combine(smokeDirectory, "stonehill-from-crystalflight-plan"),
+        Catalog: catalog,
+        Edits: [new NativeSkyBatchEdit(stoneHillLevel, swapEdit)],
+        WriteImage: false));
+    if (swapResult.Plan.PatchCount != 2 || swapResult.Plan.Patches.Count(patch => patch.PortalCopy) != 1 ||
+        !swapResult.Plan.SkyOcclusionBypassApplied || swapResult.Plan.ExecutablePatchCount != 1 || swapResult.WroteImage)
+        throw new InvalidOperationException("Stone Hill same-disc sky swap did not plan one loaded and one portal-copy patch.");
+
+    if (SkyboxPresetCatalog.OriginalPresets.Count != 3 ||
+        SkyboxPresetCatalog.OriginalPresets.Select(preset => preset.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != 3)
+    {
+        throw new InvalidOperationException("The original sky preset catalog should contain three unique presets.");
+    }
+    foreach (OriginalSkyboxPreset originalPreset in SkyboxPresetCatalog.OriginalPresets)
+    {
+        LevelDefinition donor = originalPreset.ResolveDonor(catalog, stoneHillLevel.Key);
+        NativeSkyEditPlan originalPresetEdit = swapEdit with
+        {
+            Mode = NativeSkyEditPlan.OriginalPresetMode,
+            PalettePreset = originalPreset.Id,
+            CustomPaletteHex = originalPreset.PaletteHex,
+            DonorLevelKey = donor.Key
+        };
+        NativeSkyPatchResult originalPresetResult = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+            SourceImagePath: sourceImage,
+            SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+            WadAnalysisPath: analysisPath,
+            WorkspacePath: workspace.RootPath,
+            OutputPrefix: Path.Combine(smokeDirectory, $"stonehill-original-{originalPreset.Id}-plan"),
+            Catalog: catalog,
+            Edits: [new NativeSkyBatchEdit(stoneHillLevel, originalPresetEdit)],
+            WriteImage: false));
+        if (originalPresetResult.Plan.PatchCount != 2 ||
+            originalPresetResult.Plan.Patches.Any(patch => patch.Kind != "native-sky-original-preset") ||
+            originalPresetResult.Plan.TotalChangedBytes <= 0 ||
+            !originalPresetResult.Plan.SkyOcclusionBypassApplied ||
+            originalPresetResult.WroteImage)
+        {
+            throw new InvalidOperationException($"{originalPreset.DisplayName} did not plan a guarded, recolored original sky for both Stone Hill copies.");
+        }
+    }
+    OriginalSkyboxPreset stormySpring = SkyboxPresetCatalog.FindOriginal("stormy-spring");
+    if (string.Equals(stormySpring.ResolveDonor(catalog, "darkhollow").Key, "darkhollow", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException("Stormy Spring did not select fallback geometry when its primary donor was the target level.");
+
+    string syntheticPath = Path.Combine(smokeDirectory, "synthetic-user-created.sky");
+    byte[] syntheticSky = BuildSyntheticNativeSkyBlock();
+    await File.WriteAllBytesAsync(syntheticPath, syntheticSky);
+    NativeSkyEditPlan importEdit = swapEdit with
+    {
+        Mode = NativeSkyEditPlan.ImportMode,
+        DonorLevelKey = "",
+        ImportedSkyPath = syntheticPath,
+        ImportedSkySha256 = Convert.ToHexString(SHA256.HashData(syntheticSky))
+    };
+    NativeSkyPatchResult importResult = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        WadAnalysisPath: analysisPath,
+        WorkspacePath: workspace.RootPath,
+        OutputPrefix: Path.Combine(smokeDirectory, "stonehill-synthetic-import-plan"),
+        Catalog: catalog,
+        Edits: [new NativeSkyBatchEdit(stoneHillLevel, importEdit)],
+        WriteImage: false));
+    if (importResult.Plan.PatchCount != 2 || !importResult.Plan.SkyOcclusionBypassApplied ||
+        importResult.Plan.ExecutablePatchCount != 1 || importResult.WroteImage)
+        throw new InvalidOperationException("Synthetic custom .sky import did not plan both Stone Hill copies without writing a BIN.");
+
+    string skyPalettePngPath = Path.Combine(smokeDirectory, "synthetic-user-sky-colors.png");
+    await WriteSmokePngAsync(skyPalettePngPath, 64, 32);
+    SkyboxImagePalette imagePalette = SkyboxPaletteImporter.ImportPng(skyPalettePngPath);
+    NativeSkyBatchEdit[] allImagePaletteEdits = allPaletteEdits
+        .Select(edit => new NativeSkyBatchEdit(edit.Level, edit.Edit with
+        {
+            PalettePreset = "custom",
+            CustomPaletteHex = imagePalette.PaletteText
+        }))
+        .ToArray();
+    NativeSkyPatchResult imagePaletteResult = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        WadAnalysisPath: analysisPath,
+        WorkspacePath: workspace.RootPath,
+        OutputPrefix: Path.Combine(smokeDirectory, "all-level-user-image-palette-plan"),
+        Catalog: catalog,
+        Edits: allImagePaletteEdits,
+        WriteImage: false));
+    if (imagePalette.GradientColors.Count is < 2 or > 8 || imagePaletteResult.Plan.PatchCount != 64 || imagePaletteResult.WroteImage)
+        throw new InvalidOperationException("User PNG sky-color import did not produce an all-level custom gradient plan.");
+
+    string storeDirectory = Path.Combine(smokeDirectory, "edit-store");
+    await NativeSkyEditStore.SaveAsync(storeDirectory, importEdit);
+    NativeSkyEditPlan? loadedEdit = NativeSkyEditStore.Load(storeDirectory, stoneHillLevel);
+    if (loadedEdit?.Mode != NativeSkyEditPlan.ImportMode || loadedEdit.ImportedSkySha256 != importEdit.ImportedSkySha256)
+        throw new InvalidOperationException("Native sky edit store did not round-trip the custom import plan.");
+    NativeSkyEditPlan originalStoreEdit = swapEdit with
+    {
+        Mode = NativeSkyEditPlan.OriginalPresetMode,
+        PalettePreset = stormySpring.Id,
+        CustomPaletteHex = stormySpring.PaletteHex,
+        DonorLevelKey = stormySpring.ResolveDonor(catalog, stoneHillLevel.Key).Key
+    };
+    await NativeSkyEditStore.SaveAsync(storeDirectory, originalStoreEdit);
+    NativeSkyEditPlan? loadedOriginalEdit = NativeSkyEditStore.Load(storeDirectory, stoneHillLevel);
+    if (loadedOriginalEdit?.Mode != NativeSkyEditPlan.OriginalPresetMode ||
+        loadedOriginalEdit.PalettePreset != stormySpring.Id ||
+        loadedOriginalEdit.CustomPaletteHex != stormySpring.PaletteHex)
+    {
+        throw new InvalidOperationException("Native sky edit store did not round-trip the original preset recipe.");
+    }
+    if (!NativeSkyEditStore.Delete(storeDirectory, stoneHillLevel.Key) ||
+        NativeSkyEditStore.Load(storeDirectory, stoneHillLevel) != null)
+    {
+        throw new InvalidOperationException("Native sky reset did not remove both the saved sky and its nested terrain palette match plan.");
+    }
+    NativeSkyEditPlan gradedStoreEdit = swapEdit with
+    {
+        DonorLevelKey = "darkhollow",
+        EnvironmentGrade = NativeEnvironmentGradePlan.MatchSkySource("darkhollow") with
+        {
+            StrengthPercent = 82,
+            BrightnessPercent = 94,
+            SaturationPercent = 88,
+            TintHex = "#8098C8",
+            TintStrengthPercent = 12,
+            GradeActors = true,
+            GradeChests = true,
+            GradeScenery = true,
+            GradeDragons = true
+        }
+    };
+    await NativeSkyEditStore.SaveAsync(storeDirectory, gradedStoreEdit);
+    NativeSkyEditPlan? loadedGradedEdit = NativeSkyEditStore.Load(storeDirectory, stoneHillLevel);
+    if (loadedGradedEdit?.EnvironmentGrade.Enabled != true ||
+        loadedGradedEdit.EnvironmentGrade.StrengthPercent != 82 ||
+        loadedGradedEdit.EnvironmentGrade.TintHex != "#8098C8" ||
+        loadedGradedEdit.EnvironmentGrade.DonorLevelKey != "darkhollow" ||
+        !loadedGradedEdit.EnvironmentGrade.GradeAnyMobys ||
+        !loadedGradedEdit.EnvironmentGrade.GradeActors ||
+        !loadedGradedEdit.EnvironmentGrade.GradeChests ||
+        !loadedGradedEdit.EnvironmentGrade.GradeScenery ||
+        !loadedGradedEdit.EnvironmentGrade.GradeDragons)
+    {
+        throw new InvalidOperationException("Native sky edit store did not round-trip the native object-lighting scope.");
+    }
+
+    if (nativeSkyWriteSmokeOnly)
+    {
+        NativeSkyPatchResult writeResult = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+            SourceImagePath: sourceImage,
+            SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+            WadAnalysisPath: analysisPath,
+            WorkspacePath: workspace.RootPath,
+            OutputPrefix: Path.Combine(smokeDirectory, "all-level-native-sky-write-readback"),
+            Catalog: catalog,
+            Edits: allPaletteEdits,
+            WriteImage: true));
+        try
+        {
+            if (!writeResult.WroteImage || !File.Exists(writeResult.OutputImagePath) || !File.Exists(writeResult.OutputCuePath))
+                throw new InvalidOperationException("Native sky write smoke did not create its disposable BIN/CUE.");
+            if (writeResult.Plan.SkyOcclusionBypassApplied ||
+                AssertSkyOcclusionRendererInstruction(writeResult.OutputImagePath, 0x8CC40000) <= 0)
+            {
+                throw new InvalidOperationException("Palette-only sky writes must preserve the native occlusion-group load instruction.");
+            }
+            Spyro1SkyBlockReport sourceReport = Spyro1SkyBlockAnalyzer.Analyze(sourceImage, analysisPath, catalog);
+            Spyro1SkyBlockReport outputReport = Spyro1SkyBlockAnalyzer.Analyze(writeResult.OutputImagePath, analysisPath, catalog);
+            if (outputReport.LevelsWithSkyBlocks != catalog.Levels.Count || outputReport.TotalSkyBlocks != sourceReport.TotalSkyBlocks)
+                throw new InvalidOperationException("Native sky write readback changed the parsed sky-block layout.");
+            foreach (Spyro1LevelSkyBlockLayout sourceLevel in sourceReport.Levels)
+            {
+                Spyro1LevelSkyBlockLayout outputLevel = outputReport.Levels.Single(level => level.Key == sourceLevel.Key);
+                if (outputLevel.SkyBlocks[0].Sha256 == sourceLevel.SkyBlocks[0].Sha256)
+                    throw new InvalidOperationException($"{sourceLevel.DisplayName} palette did not change in the all-level write smoke.");
+                foreach (Spyro1SkyBlockReference reference in sourceLevel.LinkedPrimarySkyCopies)
+                {
+                    Spyro1LevelSkyBlockLayout storageLevel = outputReport.Levels.Single(level => level.Key == reference.LevelKey);
+                    if (storageLevel.SkyBlocks.Single(block => block.Index == reference.BlockIndex).Sha256 != outputLevel.SkyBlocks[0].Sha256)
+                        throw new InvalidOperationException($"{sourceLevel.DisplayName} did not keep its linked portal sky copy identical after writeback.");
+                }
+            }
+            Console.WriteLine($"Disposable all-level write/readback: {writeResult.Plan.PatchCount} sky blocks remained structurally valid and linked.");
+        }
+        finally
+        {
+            if (File.Exists(writeResult.OutputImagePath))
+                File.Delete(writeResult.OutputImagePath);
+            if (File.Exists(writeResult.OutputCuePath))
+                File.Delete(writeResult.OutputCuePath);
+        }
+
+        NativeSkyPatchResult customWriteResult = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+            SourceImagePath: sourceImage,
+            SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+            WadAnalysisPath: analysisPath,
+            WorkspacePath: workspace.RootPath,
+            OutputPrefix: Path.Combine(smokeDirectory, "stonehill-synthetic-native-sky-write-readback"),
+            Catalog: catalog,
+            Edits: [new NativeSkyBatchEdit(stoneHillLevel, importEdit)],
+            WriteImage: true));
+        try
+        {
+            Spyro1SkyBlockReport customOutputReport = Spyro1SkyBlockAnalyzer.Analyze(customWriteResult.OutputImagePath, analysisPath, catalog);
+            Spyro1LevelSkyBlockLayout customStoneHill = customOutputReport.Levels.Single(level => level.Key == "stonehill");
+            if (!customWriteResult.WroteImage ||
+                customStoneHill.SkyBlocks[0].PartCount != 1 ||
+                customStoneHill.SkyBlocks[0].ColorCount != 3 ||
+                customStoneHill.LinkedPrimarySkyCopies.Count != 2 ||
+                !customWriteResult.Plan.SkyOcclusionBypassApplied ||
+                AssertSkyOcclusionRendererInstruction(customWriteResult.OutputImagePath, 0x2404FFFF) != customWriteResult.Plan.SkyOcclusionPatchExecutableLba)
+            {
+                throw new InvalidOperationException("Synthetic native .sky write/readback did not preserve its one-part geometry and linked portal copy.");
+            }
+            Console.WriteLine("Disposable custom .sky write/readback: one-part user geometry remained valid in Stone Hill and its Artisans portal copy.");
+        }
+        finally
+        {
+            if (File.Exists(customWriteResult.OutputImagePath))
+                File.Delete(customWriteResult.OutputImagePath);
+            if (File.Exists(customWriteResult.OutputCuePath))
+                File.Delete(customWriteResult.OutputCuePath);
+        }
+
+        LevelDefinition stormDonor = stormySpring.ResolveDonor(catalog, stoneHillLevel.Key);
+        NativeSkyEditPlan stormWriteEdit = swapEdit with
+        {
+            Mode = NativeSkyEditPlan.OriginalPresetMode,
+            PalettePreset = stormySpring.Id,
+            CustomPaletteHex = stormySpring.PaletteHex,
+            DonorLevelKey = stormDonor.Key
+        };
+        NativeSkyPatchResult stormWriteResult = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+            SourceImagePath: sourceImage,
+            SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+            WadAnalysisPath: analysisPath,
+            WorkspacePath: workspace.RootPath,
+            OutputPrefix: Path.Combine(smokeDirectory, "stonehill-stormy-spring-write-readback"),
+            Catalog: catalog,
+            Edits: [new NativeSkyBatchEdit(stoneHillLevel, stormWriteEdit)],
+            WriteImage: true));
+        string stormAnalysisPath = Path.Combine(smokeDirectory, "stonehill-stormy-spring-write-readback-wad.json");
+        try
+        {
+            await WadAnalysisBuilder.BuildAsync(stormWriteResult.OutputImagePath, stormAnalysisPath);
+            Spyro1SkyBlockReport sourceSkyReport = Spyro1SkyBlockAnalyzer.Analyze(sourceImage, analysisPath, catalog);
+            Spyro1SkyBlockReport stormOutputReport = Spyro1SkyBlockAnalyzer.Analyze(stormWriteResult.OutputImagePath, stormAnalysisPath, catalog);
+            Spyro1SkyBlockLayout donorSky = sourceSkyReport.Levels.Single(level => level.Key == stormDonor.Key).SkyBlocks[0];
+            Spyro1LevelSkyBlockLayout stormStoneHill = stormOutputReport.Levels.Single(level => level.Key == "stonehill");
+            if (!stormWriteResult.WroteImage ||
+                !stormWriteResult.Plan.RelocatedWad ||
+                !stormWriteResult.Plan.SkyOcclusionBypassApplied ||
+                stormStoneHill.SkyBlocks[0].GeometrySha256 != donorSky.GeometrySha256 ||
+                stormStoneHill.SkyBlocks[0].Sha256 == donorSky.Sha256 ||
+                stormStoneHill.LinkedPrimarySkyCopies.Count != 2 ||
+                AssertSkyOcclusionRendererInstruction(stormWriteResult.OutputImagePath, 0x2404FFFF) != stormWriteResult.Plan.SkyOcclusionPatchExecutableLba)
+            {
+                throw new InvalidOperationException("Stormy Spring write/readback did not preserve donor geometry, apply its original palette, and keep both Stone Hill copies linked.");
+            }
+            Console.WriteLine("Disposable Stormy Spring write/readback: original palette, expanded sky geometry, and linked portal copy remained valid.");
+        }
+        finally
+        {
+            if (File.Exists(stormWriteResult.OutputImagePath))
+                File.Delete(stormWriteResult.OutputImagePath);
+            if (File.Exists(stormWriteResult.OutputCuePath))
+                File.Delete(stormWriteResult.OutputCuePath);
+            if (File.Exists(stormAnalysisPath))
+                File.Delete(stormAnalysisPath);
+        }
+    }
+
+    if (expandedSkySmokeOnly || exportExpandedSkyTest)
+    {
+        LevelDefinition darkHollowLevel = catalog.FindByKey("darkhollow") ?? throw new InvalidOperationException("Dark Hollow is missing.");
+        Spyro1SkyBlockReport sourceReport = Spyro1SkyBlockAnalyzer.Analyze(sourceImage, analysisPath, catalog);
+        Dictionary<string, Spyro1LevelSkyBlockLayout> sourceSkyByKey = sourceReport.Levels.ToDictionary(level => level.Key, StringComparer.OrdinalIgnoreCase);
+        LevelDefinition[] donorsBySize = catalog.Levels
+            .OrderByDescending(level => sourceSkyByKey[level.Key].SkyBlocks[0].ByteLength)
+            .ToArray();
+        Dictionary<string, LevelDefinition> worstDonorByTarget = catalog.Levels.ToDictionary(
+            target => target.Key,
+            target => donorsBySize.First(donor => !string.Equals(donor.Key, target.Key, StringComparison.OrdinalIgnoreCase)),
+            StringComparer.OrdinalIgnoreCase);
+        NativeSkyBatchEdit[] worstCaseEdits = catalog.Levels
+            .Select(target => new NativeSkyBatchEdit(target, swapEdit with
+            {
+                LevelKey = target.Key,
+                LevelName = target.DisplayName,
+                DonorLevelKey = worstDonorByTarget[target.Key].Key
+            }))
+            .ToArray();
+        string expandedDirectory = Path.Combine(workspace.RootPath, "_local", "skybox-research", "expanded-smoke");
+        Directory.CreateDirectory(expandedDirectory);
+        string worstPrefix = Path.Combine(expandedDirectory, "all-level-worst-case-expanded-sky-write");
+        NativeSkyPatchResult worstResult = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+            SourceImagePath: sourceImage,
+            SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+            WadAnalysisPath: analysisPath,
+            WorkspacePath: workspace.RootPath,
+            OutputPrefix: worstPrefix,
+            Catalog: catalog,
+            Edits: worstCaseEdits,
+            WriteImage: true));
+        string worstAnalysisPath = Path.Combine(expandedDirectory, "all-level-worst-case-wad-analysis.json");
+        try
+        {
+            WadAnalysisBuildResult worstAnalysis = await WadAnalysisBuilder.BuildAsync(worstResult.OutputImagePath, worstAnalysisPath);
+            Spyro1SkyBlockReport worstReport = Spyro1SkyBlockAnalyzer.Analyze(worstResult.OutputImagePath, worstAnalysis.OutputPath, catalog);
+            if (!worstResult.Plan.RelocatedWad || worstResult.Plan.EditedLevelCount != 35 || worstResult.Plan.PatchCount != 64 ||
+                !worstResult.Plan.SkyOcclusionBypassApplied ||
+                AssertSkyOcclusionRendererInstruction(worstResult.OutputImagePath, 0x2404FFFF) != worstResult.Plan.SkyOcclusionPatchExecutableLba ||
+                worstReport.LevelsWithSkyBlocks != 35 || worstReport.TotalSkyBlocks != 64 ||
+                worstResult.Plan.WadGrowthBytes > worstResult.Plan.AvailableWadGrowthBytes)
+            {
+                throw new InvalidOperationException("Worst-case all-level expanded sky batch did not fit or preserve the complete sky layout.");
+            }
+            foreach (LevelDefinition target in catalog.Levels)
+            {
+                Spyro1SkyBlockLayout expected = sourceSkyByKey[worstDonorByTarget[target.Key].Key].SkyBlocks[0];
+                Spyro1SkyBlockLayout originalTarget = sourceSkyByKey[target.Key].SkyBlocks[0];
+                Spyro1LevelSkyBlockLayout actualTarget = worstReport.Levels.Single(level => level.Key == target.Key);
+                Spyro1SkyBlockLayout actual = actualTarget.SkyBlocks[0];
+                bool exactExpandedMatch = expected.ByteLength > originalTarget.ByteLength && actual.Sha256 == expected.Sha256;
+                bool paddedSmallerMatch = expected.ByteLength <= originalTarget.ByteLength &&
+                    actual.ByteLength == originalTarget.ByteLength &&
+                    actual.PartCount == expected.PartCount &&
+                    actual.VertexCount == expected.VertexCount &&
+                    actual.ColorCount == expected.ColorCount &&
+                    actual.PolygonCount == expected.PolygonCount;
+                if (!exactExpandedMatch && !paddedSmallerMatch)
+                    throw new InvalidOperationException($"Worst-case expanded batch did not write the expected donor into {target.DisplayName}.");
+                foreach (Spyro1SkyBlockReference originalCopy in sourceSkyByKey[target.Key].LinkedPrimarySkyCopies.Where(reference => reference.LevelKey != target.Key))
+                {
+                    Spyro1LevelSkyBlockLayout storage = worstReport.Levels.Single(level => level.Key == originalCopy.LevelKey);
+                    if (storage.SkyBlocks.Single(block => block.Index == originalCopy.BlockIndex).Sha256 != actual.Sha256)
+                        throw new InvalidOperationException($"Worst-case expanded batch did not update {target.DisplayName}'s linked {originalCopy.LevelName} copy.");
+                }
+            }
+
+            string compatibilityJson = Path.Combine(expandedDirectory, "expanded-sky-compatibility.json");
+            string compatibilityMarkdown = Path.Combine(expandedDirectory, "expanded-sky-compatibility.md");
+            await File.WriteAllTextAsync(compatibilityJson, JsonSerializer.Serialize(new
+            {
+                generatedAt = DateTimeOffset.UtcNow,
+                status = "structural-pass",
+                levels = 35,
+                targetDonorPairs = 35 * 34,
+                worstCasePatchCount = worstResult.Plan.PatchCount,
+                worstCaseWadGrowthBytes = worstResult.Plan.WadGrowthBytes,
+                availableWadGrowthBytes = worstResult.Plan.AvailableWadGrowthBytes,
+                executableLbaDelta = worstResult.Plan.ExecutableLbaDelta,
+                skyOcclusionBypass = worstResult.Plan.SkyOcclusionBypassApplied,
+                proof = "Every level received the largest source sky other than itself in one simultaneous write/readback batch. All native blocks and linked portal copies remained structurally valid, and the stale target-level sky-occlusion lists were bypassed."
+            }, new JsonSerializerOptions { WriteIndented = true }));
+            await File.WriteAllTextAsync(compatibilityMarkdown,
+                $"# Expanded Sky Compatibility\n\n" +
+                $"- Status: structural pass\n" +
+                $"- Levels: 35\n" +
+                $"- Proven target/donor pairs: {35 * 34:N0}\n" +
+                $"- Worst-case simultaneous patches: {worstResult.Plan.PatchCount}\n" +
+                $"- Worst-case WAD growth: {worstResult.Plan.WadGrowthBytes:N0} bytes\n" +
+                $"- Available ISO growth: {worstResult.Plan.AvailableWadGrowthBytes:N0} bytes\n" +
+                $"- Executable relocation: +{worstResult.Plan.ExecutableLbaDelta} sectors\n\n" +
+                "Every level received the largest source sky other than itself in one simultaneous write/readback batch. All native sky blocks and linked homeworld portal copies remained structurally valid. Cross-level geometry swaps bypass stale target-level sky-occlusion lists so all donor sectors reach the normal renderer culling pass.\n");
+            Console.WriteLine($"Expanded all-pair proof: 1,190 pairs covered by a 35-level worst-case batch, {worstResult.Plan.WadGrowthBytes:N0}/{worstResult.Plan.AvailableWadGrowthBytes:N0} growth bytes used.");
+            Console.WriteLine($"Compatibility report: {compatibilityMarkdown}");
+        }
+        finally
+        {
+            if (File.Exists(worstResult.OutputImagePath))
+                File.Delete(worstResult.OutputImagePath);
+            if (File.Exists(worstResult.OutputCuePath))
+                File.Delete(worstResult.OutputCuePath);
+            if (File.Exists(worstAnalysisPath))
+                File.Delete(worstAnalysisPath);
+        }
+
+        NativeSkyEditPlan expandedSwap = swapEdit with { DonorLevelKey = darkHollowLevel.Key };
+        string expandedPrefix = Path.Combine(expandedDirectory, "Spyro Editor - Stone Hill - Dark Hollow Sky Expanded");
+        NativeSkyPatchResult expandedResult = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+            SourceImagePath: sourceImage,
+            SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+            WadAnalysisPath: analysisPath,
+            WorkspacePath: workspace.RootPath,
+            OutputPrefix: expandedPrefix,
+            Catalog: catalog,
+            Edits: [new NativeSkyBatchEdit(stoneHillLevel, expandedSwap)],
+            WriteImage: true));
+        string expandedAnalysisPath = Path.Combine(expandedDirectory, "expanded-wad-analysis.json");
+        try
+        {
+            if (!expandedResult.Plan.RelocatedWad || expandedResult.Plan.WadGrowthBytes != 12_288 || expandedResult.Plan.ExecutableLbaDelta != 6 ||
+                !expandedResult.Plan.SkyOcclusionBypassApplied || expandedResult.Plan.ExecutablePatchCount != 1 ||
+                AssertSkyOcclusionRendererInstruction(expandedResult.OutputImagePath, 0x2404FFFF) != expandedResult.Plan.SkyOcclusionPatchExecutableLba)
+                throw new InvalidOperationException($"Expanded Stone Hill plan expected 12,288 WAD bytes and a 6-sector executable move, got {expandedResult.Plan.WadGrowthBytes} and {expandedResult.Plan.ExecutableLbaDelta}.");
+            WadAnalysisBuildResult rebuiltAnalysis = await WadAnalysisBuilder.BuildAsync(expandedResult.OutputImagePath, expandedAnalysisPath);
+            Spyro1SkyBlockReport expandedReport = Spyro1SkyBlockAnalyzer.Analyze(expandedResult.OutputImagePath, rebuiltAnalysis.OutputPath, catalog);
+            Spyro1SkyBlockLayout sourceDarkHollow = sourceReport.Levels.Single(level => level.Key == "darkhollow").SkyBlocks[0];
+            Spyro1LevelSkyBlockLayout expandedStoneHill = expandedReport.Levels.Single(level => level.Key == "stonehill");
+            if (expandedReport.LevelsWithSkyBlocks != 35 || expandedReport.TotalSkyBlocks != 64 ||
+                expandedStoneHill.SkyBlocks[0].ByteLength != sourceDarkHollow.ByteLength ||
+                expandedStoneHill.SkyBlocks[0].Sha256 != sourceDarkHollow.Sha256 ||
+                expandedStoneHill.LinkedPrimarySkyCopies.Count != 3)
+            {
+                throw new InvalidOperationException(
+                    $"Expanded Stone Hill readback mismatch: levels={expandedReport.LevelsWithSkyBlocks}, blocks={expandedReport.TotalSkyBlocks}, " +
+                    $"length={expandedStoneHill.SkyBlocks[0].ByteLength}/{sourceDarkHollow.ByteLength}, " +
+                    $"hashMatch={expandedStoneHill.SkyBlocks[0].Sha256 == sourceDarkHollow.Sha256}, linked={expandedStoneHill.LinkedPrimarySkyCopies.Count}.");
+            }
+            Spyro1SkyBlockReference portalReference = sourceReport.Levels
+                .Single(level => level.Key == "stonehill")
+                .LinkedPrimarySkyCopies
+                .Single(reference => reference.LevelKey == "artisans");
+            Spyro1LevelSkyBlockLayout expandedArtisans = expandedReport.Levels.Single(level => level.Key == "artisans");
+            if (expandedArtisans.SkyBlocks.Single(block => block.Index == portalReference.BlockIndex).Sha256 != sourceDarkHollow.Sha256)
+                throw new InvalidOperationException("Expanded Stone Hill did not keep its Artisans portal sky copy identical.");
+            Console.WriteLine($"Expanded sky write/readback: Stone Hill <- Dark Hollow, {expandedResult.Plan.WadGrowthBytes:N0} WAD bytes, executable +{expandedResult.Plan.ExecutableLbaDelta} sectors, all {expandedReport.TotalSkyBlocks} blocks valid.");
+            if (expandedSkySmokeOnly)
+            {
+                string textPrefix = Path.Combine(expandedDirectory, "expanded-sky-plus-level-text");
+                string musicPrefix = Path.Combine(expandedDirectory, "expanded-sky-plus-text-plus-music");
+                string combinedAnalysisPath = Path.Combine(expandedDirectory, "expanded-sky-combined-wad-analysis.json");
+                LevelTextBatchPatchResult? textResult = null;
+                LevelMusicBatchPatchResult? musicResult = null;
+                try
+                {
+                    TextTargetEntry stoneHillText = textTargets.Find("stonehill")
+                        ?? throw new InvalidOperationException("Stone Hill text target is missing.");
+                    textResult = await LevelTextPatchExporter.ExportBatchAsync(new LevelTextBatchPatchRequest(
+                        SourceImagePath: expandedResult.OutputImagePath,
+                        SourceCuePath: expandedResult.OutputCuePath,
+                        OutputPrefix: textPrefix,
+                        Edits: [new LevelTextReplacement(stoneHillText, "STONE HILL SKY")],
+                        WriteImage: true));
+                    int alternateTrack = MusicTrackCatalog.GetNativeTrackId(stoneHillLevel) == 0 ? 1 : 0;
+                    musicResult = await LevelMusicPatchExporter.ExportBatchAsync(new LevelMusicBatchPatchRequest(
+                        SourceImagePath: textResult.OutputImagePath,
+                        SourceCuePath: textResult.OutputCuePath,
+                        OutputPrefix: musicPrefix,
+                        Edits: [new LevelMusicReplacement(stoneHillLevel, alternateTrack)],
+                        WriteImage: true));
+
+                    int relocatedTextExeLba = textResult.Plan.Patches.Select(patch => patch.ExeLba).Distinct().Single();
+                    if (relocatedTextExeLba == 53_875 || musicResult.Plan.ExeLba != relocatedTextExeLba)
+                        throw new InvalidOperationException("Combined sky/text/music export did not follow the relocated executable extent.");
+
+                    WadAnalysisBuildResult combinedAnalysis = await WadAnalysisBuilder.BuildAsync(musicResult.OutputImagePath, combinedAnalysisPath);
+                    Spyro1SkyBlockReport combinedReport = Spyro1SkyBlockAnalyzer.Analyze(musicResult.OutputImagePath, combinedAnalysis.OutputPath, catalog);
+                    Spyro1SkyBlockLayout combinedStoneHill = combinedReport.Levels.Single(level => level.Key == "stonehill").SkyBlocks[0];
+                    if (combinedStoneHill.Sha256 != sourceDarkHollow.Sha256)
+                        throw new InvalidOperationException("Later level-name/music patches changed the expanded Stone Hill sky.");
+                    if (AssertSkyOcclusionRendererInstruction(musicResult.OutputImagePath, 0x2404FFFF) != relocatedTextExeLba)
+                        throw new InvalidOperationException("Later level-name/music patches changed the expanded sky occlusion bypass.");
+
+                    await using FileStream combinedImage = File.OpenRead(musicResult.OutputImagePath);
+                    foreach ((long imageOffset, string expectedHex, string label) in textResult.Plan.Patches
+                        .Select(patch => (patch.ImageOffset, patch.AfterHexPreview, $"text {patch.LevelDisplayName}"))
+                        .Concat(musicResult.Plan.Patches.Select(patch => (patch.ImageOffset, patch.AfterHexPreview, $"music {patch.LevelName} {patch.Kind}"))))
+                    {
+                        byte[] expected = ParseHexPreview(expectedHex);
+                        byte[] actual = new byte[expected.Length];
+                        combinedImage.Position = imageOffset;
+                        combinedImage.ReadExactly(actual);
+                        if (!actual.SequenceEqual(expected))
+                            throw new InvalidOperationException($"Combined expanded-sky output lost {label} bytes.");
+                    }
+                    Console.WriteLine($"Combined export proof: expanded sky + relocated level name + music persisted at executable LBA {musicResult.Plan.ExeLba}.");
+                }
+                finally
+                {
+                    foreach (string path in new[]
+                    {
+                        textResult?.OutputImagePath ?? "",
+                        textResult?.OutputCuePath ?? "",
+                        textResult?.OutputPlanPath ?? "",
+                        musicResult?.OutputImagePath ?? "",
+                        musicResult?.OutputCuePath ?? "",
+                        musicResult?.OutputPlanPath ?? "",
+                        combinedAnalysisPath
+                    }.Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path)))
+                    {
+                        File.Delete(path);
+                    }
+                }
+            }
+            if (exportExpandedSkyTest)
+            {
+                Console.WriteLine($"Expanded runtime test CUE: {expandedResult.OutputCuePath}");
+                Console.WriteLine($"Expanded WAD analysis: {expandedAnalysisPath}");
+            }
+        }
+        finally
+        {
+            if (!exportExpandedSkyTest)
+            {
+                if (File.Exists(expandedResult.OutputImagePath))
+                    File.Delete(expandedResult.OutputImagePath);
+                if (File.Exists(expandedResult.OutputCuePath))
+                    File.Delete(expandedResult.OutputCuePath);
+                if (File.Exists(expandedAnalysisPath))
+                    File.Delete(expandedAnalysisPath);
+            }
+        }
+    }
+
+    if (!exportExpandedSkyTest &&
+        (Directory.EnumerateFiles(smokeDirectory, "*.bin", SearchOption.AllDirectories).Any() ||
+         Directory.EnumerateFiles(smokeDirectory, "*.cue", SearchOption.AllDirectories).Any()))
+    {
+        throw new InvalidOperationException("Native sky plan-only smoke wrote an unexpected BIN/CUE.");
+    }
+
+    Console.WriteLine($"Native sky export smoke: all 35 levels -> {allResult.Plan.PatchCount} linked block plans.");
+    Console.WriteLine($"Same-disc swap: {swapResult.Plan.PatchCount} Stone Hill block plans; custom synthetic import: {importResult.Plan.PatchCount}.");
+    Console.WriteLine($"User PNG sky colors: {imagePalette.GradientColors.Count} gradient stops -> {imagePaletteResult.Plan.PatchCount} all-level linked block plans.");
+    Console.WriteLine(exportExpandedSkyTest ? "Expanded runtime BIN/CUE retained." : "Plan-only verified; no BIN/CUE retained.");
+    Console.WriteLine($"Reports: {smokeDirectory}");
+    return 0;
+}
+
+if (levelTextSmokeOnly)
+{
+    await ReportAllLevelNameEdits(sourceImage, keepOutput: exportTextTest);
+    return 0;
+}
+
+if (levelMusicSmokeOnly)
+{
+    await ReportLevelMusicEdits(sourceImage, keepOutput: exportMusicTest);
+    return 0;
+}
+
+if (visualCategorySmokeOnly)
+{
+    ReportObjectVisualCategoryCleanliness();
+    ReportGnastyLootAircraftVisuals();
+    ReportGnastyLootChestVisuals();
+    ReportIcyFlightCopterIdentities();
+    ReportMetalheadBirdSupportIdentities();
+    return 0;
+}
+
+if (dragonCameraSmokeOnly)
+{
+    ReportAllDragonRescueCameraLinks(sourceImage);
+    await ReportMovedExistingDragonPlacementSectorPatch("artisans");
+    ReportLatestSavedArtisansDragonCameraPatch();
+    return 0;
+}
+
+if (flyInLandingSmokeOnly)
+{
+    await ReportAllFlyInLandingLinks(sourceImage);
+    return 0;
+}
+
+if (portalSourceSmokeOnly)
+{
+    foreach (string homeworldKey in new[] { "artisans", "peacekeepers", "magiccrafters", "beastmakers", "dreamweavers", "gnastysworld" })
+        ReportPortalSourceLayout(sourceImage, homeworldKey);
+    await ReportAllPortalSourceMovePlans(sourceImage);
+    return 0;
+}
+
+if (keyPortalSnapSmokeOnly)
+{
+    await ReportKeyAndPortalTerrainSnap(sourceImage);
+    return 0;
+}
+
+if (placementSmokeOnly)
+{
+    ReportTerrainTopSurfaceSnapSmoke();
+    ReportTerrainRaycastPlacementSmoke();
+    return 0;
+}
+
+if (releaseLinkSmokeOnly)
+{
+    ReportArtisansTreasureThiefRewardLinks();
+    ReportArtisansSelectionLinks();
+    ReportPortalControlEditLinks();
+    ReportCheckedInControlRoleCompanionLinks();
+    await ReportLinkedCompanionCloneRoundTrip();
+    await ReportReturnHomeCompanionCloneRoundTrip();
+    await ReportPortalTripletCompanionCloneRoundTrip();
+    ReportControlRoleProofPromotionCloneRoundTrip();
+    await ReportControlRoleProofPromotionEditStoreRoundTrip();
+    return 0;
+}
+
+if (legacyArtisansPortalCloneSmokeOnly)
+{
+    await ReportArtisansPortalEntryCompanionCloneRoundTrip();
+    return 0;
+}
+
+if (exportSavedPortalMoveTest)
+{
+    if (string.IsNullOrWhiteSpace(portalEditsOption))
+        throw new InvalidOperationException("--export-saved-portal-move-test requires --portal-edits=/absolute/path/to/artisans-native-edits.json.");
+
+    string outputPrefix = string.IsNullOrWhiteSpace(portalOutputOption)
+        ? Path.Combine(workspace.RootPath, "_local", "portal-path-fixed-test", "Spyro Editor - Artisans Portal Path Fixed Test")
+        : portalOutputOption;
+    await ExportSavedPortalMoveTest(sourceImage, portalEditsOption, outputPrefix);
+    return 0;
+}
+
+if (stoneHillClass1ESmokeOnly)
+{
+    string stoneHillCachePath = Path.Combine(workspace.RootPath, "editor-cache", "stonehill-mobys.json");
+    List<Moby> stoneHillMobys = MobyLoader.LoadCached(stoneHillCachePath).ToList();
+    MobyMetadataEnricher.Apply(workspace, "stonehill", stoneHillMobys);
+    ReportStoneHillClass1EIdentity(stoneHillMobys);
+    return 0;
+}
+
+if (lifeChestSmokeOnly)
+{
+    ReportLifeChestIdentityFamily();
+    await ReportLifeChestAppendResearch();
+    await ReportAllNativeLifeChestMultiReleasePlans();
+    return 0;
+}
+
+if (lifeChestFixupScan)
+{
+    ReportLifeChestFixupScan(sourceImage);
+    return 0;
+}
+
+if (exportLifeChestCandidate)
+{
+    await ExportLifeChestAppendCandidate();
+    return 0;
+}
+
+if (exportLifeChestDemoCandidate)
+{
+    await ExportLifeChestAppendCandidate(
+        "wizardpeak",
+        new Vector3f(2572, 4560, 1750),
+        "WizardPeak-Alias-Route",
+        aliasSameLevelSpecialData: true);
+    return 0;
+}
+
+if (exportArtisansLifeChestMultiCandidate)
+{
+    await ExportArtisansLifeChestMultiCandidate();
+    return 0;
+}
 
 LevelDefinition? stoneHill = catalog.FindByKey("stonehill");
 if (stoneHill == null)
@@ -58,8 +1506,73 @@ if (stoneHill == null)
 }
 
 Console.WriteLine($"Stone Hill source records: {stoneHill.SourceRecordCount}");
-string sourceImage = DiscImageLocator.FindImage(workspace);
 string wadAnalysis = WadAnalysisLocator.Find(workspace);
+if (terrainTextureSmokeOnly)
+{
+    await ReportCustomTerrainTextureManifestRoundTrip();
+    await ReportImportedTerrainPaletteRoundTrip();
+    await ReportCrossLevelTerrainTexturePatchPlan();
+    await ReportCrossLevelNativeTerrainArtSwapPlan();
+    await ReportCustomTerrainPngWriteReadback();
+    return 0;
+}
+if (objectSmokeOnly)
+{
+    if (HasAnyMobyCache())
+    {
+        string stoneHillMobyPath = Path.Combine(workspace.RootPath, "editor-cache", "stonehill-mobys.json");
+        List<Moby>? stoneHillMobys = null;
+        if (File.Exists(stoneHillMobyPath))
+        {
+            stoneHillMobys = MobyLoader.LoadCached(stoneHillMobyPath).ToList();
+            await ReportMobyYawPatchPlan(stoneHill, stoneHillMobys);
+            ReportCrossLevelEditorTemplateReadiness();
+            await ReportToastyWizardPackageWritePlan();
+            await ReportCrossLevelSourceRecordCandidateAppend(stoneHill, stoneHillMobys);
+        }
+        ReportChestContents("darkhollow");
+        ReportArtisansTreasureThiefRewardLinks();
+        await ReportChestContentSourcePatch("darkhollow");
+        await ReportLockedChestShellRewardGuard("darkhollow");
+        await ReportMovedExistingDragonPlacementSectorPatch("darkhollow");
+        await ReportPastedLooseGemPatch("darkhollow");
+        await ReportMixedCopiedObjectAppendGuard("darkhollow");
+        await ReportNativeSlotReusePatch("darkhollow");
+        await ReportBehaviorLinkedNativeCloneSlotReuseData("darkhollow");
+        await ReportNativeCloneAppendPatch("darkhollow");
+        await ReportPastedNativeCloneAppendPatch("darkhollow");
+        await ReportRepeatedNativeCloneAppendGuard("darkhollow");
+        await ReportPromotedNativeCloneTrueAppend("darkhollow", 0x73, "Large Gnorc");
+        await ReportPromotedNativeCloneTrueAppend("darkhollow", 0xC2, "Flame/Charge Chest");
+        await ReportPromotedNativeCloneTrueAppend("townsquare", 0x17, "Bull");
+        await ReportGuardedNativeCloneTrueAppend("townsquare", 0x8B, 0x01, 0x54, "Torro Gnorc");
+        await ReportGuardedNativeCloneTrueAppend("townsquare", 0xC2, 0x00, 0x54, "Flame/Charge Chest");
+        await ReportGuardedNativeCloneTrueAppend("townsquare", 0xC3, 0x00, 0x54, "Charge Chest");
+        await ReportNativeActorChestAppendAllocationResearch();
+        await ReportAllNativeLifeChestMultiReleasePlans();
+        await ReportBehaviorLinkedNativeCloneAppendState("darkhollow");
+        await ReportAllLevelNativeCloneAutoSlotReuse();
+        await ReportAllLevelLooseGemPlacementSectors();
+        await ReportLinkedCompanionCloneRoundTrip();
+        await ReportReturnHomeCompanionCloneRoundTrip();
+        await ReportPortalTripletCompanionCloneRoundTrip();
+        ReportPortalControlEditLinks();
+        ReportCheckedInControlRoleCompanionLinks();
+        ReportControlRoleProofPromotionCloneRoundTrip();
+        await ReportControlRoleProofPromotionEditStoreRoundTrip();
+        await ReportAllFlyInLandingLinks(sourceImage);
+        ReportAllDragonRescueCameraLinks(sourceImage);
+        ReportControlCompanionCandidateSummary();
+        await ReportControlRoleInvestigationSummary();
+    }
+    else
+    {
+        Console.WriteLine("Object smoke: editor-cache moby files not found; skipping object export checks.");
+    }
+
+    return 0;
+}
+
 if (springChestDiagnosticOnly)
 {
     await ReportSpringChestInteractionDiagnostic();
@@ -113,61 +1626,16 @@ else
 {
     Console.WriteLine("Stone Hill native skybox patch: source disc or WAD analysis not found; skipping export smoke.");
 }
-TextTargetEntry? stoneHillText = textTargets.FindForLevel(stoneHill);
-Console.WriteLine(stoneHillText == null
-    ? "Stone Hill text target: missing"
-    : $"Stone Hill text target: {stoneHillText.OriginalText}, max {stoneHillText.MaxLength}");
 List<LevelDefinition> missingTextTargets = catalog.Levels
     .Where(level => textTargets.FindForLevel(level) == null)
     .ToList();
-string[] expectedFreeTextLevelKeys = ["toasty", "jacques"];
 List<LevelDefinition> unexpectedMissingTextTargets = missingTextTargets
-    .Where(level => !expectedFreeTextLevelKeys.Contains(LevelCatalog.NormalizeKey(level.Key), StringComparer.OrdinalIgnoreCase))
     .ToList();
-Console.WriteLine($"Anchored level-name target coverage: {catalog.Levels.Count - missingTextTargets.Count}/{catalog.Levels.Count}");
-if (missingTextTargets.Count > 0)
-    Console.WriteLine("Free-text-only targets: " + string.Join(", ", missingTextTargets.Select(level => level.DisplayName)));
-if (stoneHillText != null && File.Exists(sourceImage))
-{
-    LevelTextPatchPlan plan = LevelTextPatchExporter.BuildPlan(
-        sourceImage,
-        DiscImageLocator.FindCueForImage(sourceImage),
-        Path.Combine(workspace.RootPath, "_local", "text", "smoke.bin"),
-        Path.Combine(workspace.RootPath, "_local", "text", "smoke.cue"),
-        stoneHillText,
-        "MOON HILL");
-    Console.WriteLine($"Stone Hill native text patch: EXE {plan.ExeName}, offset 0x{plan.ExeFileOffset:X}, {plan.ByteLength} bytes");
-    if (exportTextTest)
-    {
-        Directory.CreateDirectory(Path.Combine(workspace.RootPath, "_local", "text"));
-        LevelTextPatchResult result = await LevelTextPatchExporter.ExportAsync(new LevelTextPatchRequest(
-            SourceImagePath: sourceImage,
-            SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
-            OutputPrefix: Path.Combine(workspace.RootPath, "_local", "text", "Spyro the Dragon (USA)-text-stonehill-moon-hill"),
-            Target: stoneHillText,
-            ReplacementText: "MOON HILL",
-            WriteImage: true));
-        Console.WriteLine($"Stone Hill native text export: {result.OutputCuePath}");
-    }
-}
-else
-{
-    Console.WriteLine("Stone Hill native text patch: source disc not found; skipping export smoke.");
-}
+Console.WriteLine($"Indexed level-name target coverage: {catalog.Levels.Count - missingTextTargets.Count}/{catalog.Levels.Count}");
 if (File.Exists(sourceImage))
-{
-    foreach ((string original, string replacement) in new[] { ("TOASTY", "ROASTY"), ("JACQUES", "JESTER") })
-    {
-        ExeStringPatchPlan bossPlan = ExeStringPatchExporter.BuildPlan(
-            sourceImage,
-            DiscImageLocator.FindCueForImage(sourceImage),
-            Path.Combine(workspace.RootPath, "_local", "text", $"{original.ToLowerInvariant()}-smoke.bin"),
-            Path.Combine(workspace.RootPath, "_local", "text", $"{original.ToLowerInvariant()}-smoke.cue"),
-            original,
-            replacement);
-        Console.WriteLine($"Free UI text target: {bossPlan.OriginalText} -> {bossPlan.ReplacementText}, offset 0x{bossPlan.ExeFileOffset:X}, {bossPlan.ByteLength} bytes");
-    }
-}
+    await ReportAllLevelNameEdits(sourceImage, keepOutput: exportTextTest);
+else
+    Console.WriteLine("Indexed level-name patch: source disc not found; skipping export smoke.");
 if (File.Exists(sourceImage))
 {
     ExeStringPatchPlan exeStringPlan = ExeStringPatchExporter.BuildPlan(
@@ -200,6 +1668,7 @@ if (File.Exists(overlayPath))
     ReportTerrainBrushPathSamplerSmoke();
     ReportTerrainCopyPlacementSmoke();
     ReportTerrainTopSurfaceSnapSmoke();
+    ReportTerrainRaycastPlacementSmoke();
     await ReportTerrainPatchPlan(stoneHill, geometry);
 }
 else
@@ -208,6 +1677,7 @@ else
 }
 await ReportGeometryCacheHealth();
 await ReportSourceSceneOverlayRecovery(repairGnastyLootCache);
+ReportNativeEnvironmentGradePlan();
 await ReportSourceMobyRecovery(repairGnastyLootCache);
 ReportTerrainColorFidelity();
 await ReportTerrainMaterialBehaviorAudit();
@@ -223,6 +1693,8 @@ await ReportTerrainBehaviorProofSummary();
 await ReportCustomTerrainTextureManifestRoundTrip();
 await ReportImportedTerrainPaletteRoundTrip();
 await ReportCrossLevelTerrainTexturePatchPlan();
+await ReportCrossLevelNativeTerrainArtSwapPlan();
+await ReportCustomTerrainPngWriteReadback();
 await ReportCrossLevelTerrainGeometryPatchPlan();
 await ReportCrossLevelTerrainSideWallPatchPlan();
 await ReportCrossLevelTerrainStructurePatchPlan();
@@ -239,14 +1711,17 @@ if (File.Exists(cachePath))
     ReportStoneHillLifeChestIdentity(mobys);
     ReportStoneHillKeyIdentity(mobys);
     ReportStoneHillKeyChestIdentity(mobys);
+    ReportStoneHillClass1EIdentity(mobys);
     ReportLinkedMoveTraversal("Stone Hill", mobys);
-    await ReportMobySourcePatchPlan(stoneHill, mobys);
-    await ReportMultiLevelSavedObjectExportPatch(stoneHill, mobys);
-    await ReportMobyIdentityBytePatchPlan(stoneHill, mobys);
-    await ReportAddedMobyRoundTrip(mobys);
+        await ReportMobySourcePatchPlan(stoneHill, mobys);
+        await ReportMultiLevelSavedObjectExportPatch(stoneHill, mobys);
+        await ReportMobyIdentityBytePatchPlan(stoneHill, mobys);
+        await ReportMobyYawPatchPlan(stoneHill, mobys);
+        await ReportAddedMobyRoundTrip(mobys);
     await ReportCrossLevelMobyTemplateRoundTripAndPatch(stoneHill, mobys);
     await ReportArtisansKeyChestPackagePreview();
     await ReportToastyWizardPackageWritePlan();
+    await ReportCrossLevelSourceRecordCandidateAppend(stoneHill, mobys);
     await ReportCrossLevelCandidateValidationChecklist();
     ReportCrossLevelCandidateLaunchers();
     await ReportExistingGemValueRoundTrip();
@@ -262,18 +1737,39 @@ if (HasAnyMobyCache())
     ReportChestContents("darkhollow");
     await ReportChestContentSourcePatch("darkhollow");
     await ReportLockedChestShellRewardGuard("darkhollow");
+    await ReportMovedExistingDragonPlacementSectorPatch("darkhollow");
     await ReportPastedLooseGemPatch("darkhollow");
     await ReportMixedCopiedObjectAppendGuard("darkhollow");
     await ReportNativeSlotReusePatch("darkhollow");
+    await ReportBehaviorLinkedNativeCloneSlotReuseData("darkhollow");
     await ReportNativeCloneAppendPatch("darkhollow");
     await ReportPastedNativeCloneAppendPatch("darkhollow");
     await ReportRepeatedNativeCloneAppendGuard("darkhollow");
+    await ReportPromotedNativeCloneTrueAppend("darkhollow", 0x73, "Large Gnorc");
+    await ReportPromotedNativeCloneTrueAppend("darkhollow", 0xC2, "Flame/Charge Chest");
+    await ReportPromotedNativeCloneTrueAppend("townsquare", 0x17, "Bull");
+    await ReportGuardedNativeCloneTrueAppend("townsquare", 0x8B, 0x01, 0x54, "Torro Gnorc");
+    await ReportGuardedNativeCloneTrueAppend("townsquare", 0xC2, 0x00, 0x54, "Flame/Charge Chest");
+    await ReportGuardedNativeCloneTrueAppend("townsquare", 0xC3, 0x00, 0x54, "Charge Chest");
+    await ReportAllLevelNativeCloneAutoSlotReuse();
     await ReportAllLevelLooseGemPlacementSectors();
     ReportHomeWorldBalloonistIdentities();
     ReportArtisansSelectionLinks();
+    await ReportLinkedCompanionCloneRoundTrip();
+    await ReportReturnHomeCompanionCloneRoundTrip();
+    await ReportPortalTripletCompanionCloneRoundTrip();
+    ReportPortalControlEditLinks();
+    ReportCheckedInControlRoleCompanionLinks();
+    ReportControlRoleProofPromotionCloneRoundTrip();
+    await ReportControlRoleProofPromotionEditStoreRoundTrip();
+    await ReportAllFlyInLandingLinks(sourceImage);
     ReportDragonLinks("peacekeepers");
+    ReportAllDragonRescueCameraLinks(sourceImage);
+    ReportControlCompanionCandidateSummary();
+    await ReportControlRoleInvestigationSummary();
     ReportAllWhirlwindIdentities();
     ReportLifeChestIdentityFamily();
+    await ReportAllNativeLifeChestMultiReleasePlans();
     ReportEggThiefIdentities();
     ReportType18FlameChargeChestIdentities();
     ReportObjectVisualCategoryCleanliness();
@@ -293,6 +1789,367 @@ else
 }
 
 return catalog.Levels.Count > 30 && unexpectedMissingTextTargets.Count == 0 ? 0 : 1;
+
+static byte[] BuildSyntheticNativeSkyBlock()
+{
+    byte[] bytes = new byte[72];
+    BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(0, 4), bytes.Length);
+    bytes[4] = 0x18;
+    bytes[5] = 0x38;
+    bytes[6] = 0x78;
+    BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(8, 4), 1);
+    BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(12, 4), 12);
+    int part = 16;
+    BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(part + 12, 2), 3);
+    BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(part + 16, 2), 1);
+    BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(part + 18, 2), 3);
+    BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(part + 20, 2), 0xFFFF);
+    BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(part + 22, 2), 0xFFFF);
+    byte[] colors =
+    [
+        0x20, 0x40, 0x90, 0x30,
+        0x70, 0x90, 0xD0, 0x30,
+        0xD0, 0xE0, 0xFF, 0x30
+    ];
+    colors.CopyTo(bytes, 52);
+    return bytes;
+}
+
+async Task ReportAllLevelNameEdits(string selectedSourceImage, bool keepOutput)
+{
+    if (!File.Exists(selectedSourceImage))
+        throw new FileNotFoundException("Level-name smoke needs the selected source BIN.", selectedSourceImage);
+
+    string smokeRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "all-level-name-edits");
+    Directory.CreateDirectory(smokeRoot);
+    List<TextTargetEntry> targets = textTargets.Targets.ToList();
+    HashSet<string> catalogKeys = catalog.Levels
+        .Select(level => LevelCatalog.NormalizeKey(level.Key))
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    HashSet<string> targetKeys = targets
+        .Select(target => LevelCatalog.NormalizeKey(target.LevelKey))
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    if (targets.Count != catalog.Levels.Count || !catalogKeys.SetEquals(targetKeys))
+        throw new InvalidOperationException($"Level-name catalog should cover all {catalog.Levels.Count} levels exactly, got {targets.Count} target(s).");
+    if (targets.Count(target => target.TableKind == LevelTextTableKind.HomeworldNames) != 6 ||
+        targets.Count(target => target.TableKind == LevelTextTableKind.LevelNames) != 29)
+    {
+        throw new InvalidOperationException("Level-name catalog should contain 6 homeworld title slots and 29 portal/level-name slots.");
+    }
+    if (targets.GroupBy(target => (target.TableKind, target.TableIndex)).Any(group => group.Count() != 1))
+        throw new InvalidOperationException("Two editor levels map to the same executable name-table slot.");
+
+    string sourceCue = DiscImageLocator.FindCueForImage(selectedSourceImage);
+    List<LevelTextPatchPlan> slotPlans = [];
+    foreach (TextTargetEntry target in targets)
+    {
+        string replacement = (target.OriginalText[0] == 'Z' ? "Y" : "Z") + target.OriginalText[1..];
+        LevelTextPatchPlan plan = LevelTextPatchExporter.BuildPlan(
+            selectedSourceImage,
+            sourceCue,
+            Path.Combine(smokeRoot, "slot-proof.bin"),
+            Path.Combine(smokeRoot, "slot-proof.cue"),
+            target,
+            replacement);
+        if (!string.Equals(plan.BeforeName, target.OriginalText, StringComparison.Ordinal) ||
+            plan.TableKind != target.TableKind ||
+            plan.TableIndex != target.TableIndex ||
+            plan.ByteLength != target.OriginalSlotLength)
+        {
+            throw new InvalidOperationException($"{target.DisplayName}'s indexed name plan did not resolve its canonical slot.");
+        }
+        slotPlans.Add(plan);
+    }
+
+    if (slotPlans.Select(plan => plan.ExeFileOffset).Distinct().Count() != targets.Count)
+        throw new InvalidOperationException("Every editor level should resolve to a distinct executable string slot.");
+    int[] levelPointerTables = slotPlans
+        .Where(plan => plan.TableKind == LevelTextTableKind.LevelNames)
+        .Select(plan => plan.PointerTableFileOffset)
+        .Distinct()
+        .ToArray();
+    int[] homeworldPointerTables = slotPlans
+        .Where(plan => plan.TableKind == LevelTextTableKind.HomeworldNames)
+        .Select(plan => plan.PointerTableFileOffset)
+        .Distinct()
+        .ToArray();
+    if (levelPointerTables.Length != 1 || homeworldPointerTables.Length != 1 ||
+        levelPointerTables[0] - homeworldPointerTables[0] != 7 * sizeof(uint))
+    {
+        throw new InvalidOperationException("The executable homeworld and level-name pointer tables did not resolve as adjacent indexed tables.");
+    }
+    foreach (string bossKey in new[] { "toasty", "jacques" })
+    {
+        LevelTextPatchPlan boss = slotPlans.Single(plan => LevelCatalog.NormalizeKey(plan.TargetLevelKey) == bossKey);
+        if (boss.TableKind != LevelTextTableKind.LevelNames || boss.ExeFileOffset < 0x60000)
+            throw new InvalidOperationException($"{boss.LevelDisplayName} should resolve through its high executable level-name slot.");
+    }
+
+    string storeRoot = Path.Combine(smokeRoot, "store-roundtrip");
+    if (Directory.Exists(storeRoot))
+        Directory.Delete(storeRoot, true);
+    Directory.CreateDirectory(storeRoot);
+    try
+    {
+        foreach ((string key, string replacement) in new[]
+        {
+            ("artisans", "ARTISAN KINGDOM"),
+            ("stonehill", "CRYSTAL STONE HILL"),
+            ("toasty", "TOASTY MOUNTAIN"),
+            ("jacques", "JACQUES CASTLE")
+        })
+        {
+            TextTargetEntry target = textTargets.Find(key)
+                ?? throw new InvalidOperationException($"Missing level-name smoke target {key}.");
+            await LevelTextEditStore.SaveAsync(storeRoot, target, replacement);
+            LevelTextEditPlan loaded = LevelTextEditStore.Load(storeRoot, target)
+                ?? throw new InvalidOperationException($"Saved level-name edit for {target.DisplayName} did not reload.");
+            if (!string.Equals(loaded.ReplacementText, replacement, StringComparison.Ordinal))
+                throw new InvalidOperationException($"Saved level-name edit for {target.DisplayName} changed during roundtrip.");
+        }
+    }
+    finally
+    {
+        if (Directory.Exists(storeRoot))
+            Directory.Delete(storeRoot, true);
+    }
+
+    IReadOnlyList<LevelTextReplacement> batchEdits =
+    [
+        new(textTargets.Find("artisans")!, "ARTISAN KINGDOM"),
+        new(textTargets.Find("stonehill")!, "CRYSTAL STONE HILL"),
+        new(textTargets.Find("toasty")!, "TOASTY MOUNTAIN"),
+        new(textTargets.Find("jacques")!, "JACQUES CASTLE")
+    ];
+    string batchPrefix = Path.Combine(smokeRoot, "level-name-batch-proof");
+    foreach (string stale in new[] { $"{batchPrefix}.bin", $"{batchPrefix}.cue" })
+    {
+        if (File.Exists(stale))
+            File.Delete(stale);
+    }
+
+    LevelTextBatchPatchResult batchResult = await LevelTextPatchExporter.ExportBatchAsync(new LevelTextBatchPatchRequest(
+        SourceImagePath: selectedSourceImage,
+        SourceCuePath: sourceCue,
+        OutputPrefix: batchPrefix,
+        Edits: batchEdits,
+        WriteImage: true));
+    if (!batchResult.WroteImage || batchResult.Plan.PatchCount != batchEdits.Count || !File.Exists(batchResult.OutputCuePath))
+        throw new InvalidOperationException("The multi-level name batch did not create one BIN/CUE containing every requested name.");
+    if (!string.Equals(batchResult.Plan.StorageMode, "repacked-name-pool", StringComparison.Ordinal) ||
+        batchResult.Plan.BinaryPatchCount != batchResult.Plan.BinaryPatches.Count ||
+        batchResult.Plan.BinaryPatchCount < 3 ||
+        batchResult.Plan.StringPoolCapacity <= 0 ||
+        batchResult.Plan.StringPoolBytesRemaining < 0)
+    {
+        throw new InvalidOperationException("The longer-name batch did not use a bounded shared-pool repack plan.");
+    }
+
+    SourceDiscLayout sourceLayout = DetectSourceDiscLayout(selectedSourceImage);
+    SourceDiscFileRecord sourceExecutable;
+    byte[] sourceExecutableBytes;
+    using (FileStream source = File.OpenRead(selectedSourceImage))
+    {
+        sourceExecutable = FindSourceExecutable(source, sourceLayout);
+        sourceExecutableBytes = ReadSourceFileBytes(source, sourceLayout, sourceExecutable.Lba, 0, sourceExecutable.Size);
+    }
+    SourceDiscLayout outputLayout = DetectSourceDiscLayout(batchResult.OutputImagePath);
+    await using (FileStream output = File.OpenRead(batchResult.OutputImagePath))
+    {
+        foreach (LevelTextPatchPlan patch in batchResult.Plan.Patches)
+        {
+            byte[] expected = ParseHexPreview(patch.AfterHexPreview);
+            byte[] actual = ReadSourceFileBytes(output, outputLayout, patch.ExeLba, patch.ExeFileOffset, expected.Length);
+            if (!actual.SequenceEqual(expected))
+                throw new InvalidOperationException($"Generated BIN bytes do not contain {patch.LevelDisplayName}'s replacement name.");
+
+            byte[] pointerBytes = ReadSourceFileBytes(
+                output,
+                outputLayout,
+                patch.ExeLba,
+                patch.PointerTableFileOffset + patch.TableIndex * sizeof(uint),
+                sizeof(uint));
+            uint actualPointer = BinaryPrimitives.ReadUInt32LittleEndian(pointerBytes);
+            uint expectedPointer = Convert.ToUInt32(patch.StringPointer[2..], 16);
+            if (actualPointer != expectedPointer)
+                throw new InvalidOperationException($"Generated BIN does not point {patch.LevelDisplayName} at its repacked name.");
+        }
+        foreach (LevelTextBinaryPatch patch in batchResult.Plan.BinaryPatches)
+        {
+            byte[] expected = ParseHexPreview(patch.AfterHexPreview);
+            byte[] actual = ReadSourceFileBytes(output, outputLayout, patch.ExeLba, patch.ExeFileOffset, expected.Length);
+            if (!actual.SequenceEqual(expected))
+                throw new InvalidOperationException($"Generated BIN does not contain the expected {patch.Kind} rewrite.");
+        }
+
+        LevelTextBinaryPatch titleLengths = batchResult.Plan.BinaryPatches.Single(patch =>
+            string.Equals(patch.Kind, "homeworld-title-lengths", StringComparison.Ordinal));
+        if (ParseHexPreview(titleLengths.AfterHexPreview)[0] != "ARTISAN KINGDOM".Count(ch => ch != ' '))
+            throw new InvalidOperationException("The longer Artisans name did not update its homeworld title character count.");
+
+        byte[] protectedText = Encoding.ASCII.GetBytes("GNORC GNEXUS\0");
+        int protectedOffset = sourceExecutableBytes.AsSpan().IndexOf(protectedText);
+        if (protectedOffset < 0 || sourceExecutableBytes.AsSpan(protectedOffset + 1).IndexOf(protectedText) >= 0)
+            throw new InvalidOperationException("The protected GNORC GNEXUS native string was not uniquely located in the source executable.");
+        byte[] protectedOutput = ReadSourceFileBytes(output, outputLayout, sourceExecutable.Lba, protectedOffset, protectedText.Length);
+        if (!protectedOutput.SequenceEqual(protectedText))
+            throw new InvalidOperationException("The guarded longer-name export overwrote the directly referenced GNORC GNEXUS string.");
+    }
+
+    string reportPath = Path.Combine(smokeRoot, "all-level-name-edit-proof.json");
+    await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.UtcNow,
+        sourceImage = selectedSourceImage,
+        catalogLevelCount = catalog.Levels.Count,
+        homeworldTitleSlots = targets.Count(target => target.TableKind == LevelTextTableKind.HomeworldNames),
+        portalLevelNameSlots = targets.Count(target => target.TableKind == LevelTextTableKind.LevelNames),
+        homeworldPointerTable = $"0x{homeworldPointerTables[0]:X}",
+        levelPointerTable = $"0x{levelPointerTables[0]:X}",
+        slotPlans = slotPlans.Select(plan => new
+        {
+            plan.LevelDisplayName,
+            plan.TargetLevelKey,
+            plan.TableKind,
+            plan.TableIndex,
+            exeFileOffset = $"0x{plan.ExeFileOffset:X}",
+            plan.OriginalName
+        }),
+        batchResult.Plan.PatchCount,
+        batchResult.Plan.StorageMode,
+        batchResult.Plan.StringPoolCapacity,
+        batchResult.Plan.StringPoolBytesUsed,
+        batchResult.Plan.StringPoolBytesRemaining,
+        batchResult.Plan.BinaryPatchCount,
+        batchNames = batchResult.Plan.Patches.Select(plan => new { plan.LevelDisplayName, plan.BeforeName, plan.ReplacementName }),
+        actualBinBytesVerified = true,
+        protectedGnorcGnexusVerified = true
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    if (!keepOutput)
+    {
+        File.Delete(batchResult.OutputImagePath);
+        File.Delete(batchResult.OutputCuePath);
+    }
+
+    Console.WriteLine($"Indexed level-name edits: {targets.Count}/{catalog.Levels.Count} slots, 4 longer names and pointers verified, report={reportPath}");
+}
+
+async Task ReportLevelMusicEdits(string selectedSourceImage, bool keepOutput)
+{
+    if (!File.Exists(selectedSourceImage))
+        throw new FileNotFoundException("Level-music smoke needs the selected source BIN.", selectedSourceImage);
+    if (MusicTrackCatalog.Tracks.Count != 48 || MusicTrackCatalog.SelectableTracks.Count != 46)
+        throw new InvalidOperationException("Music catalog should expose 48 physical XA tracks and reserve exactly two unused slots for future custom audio.");
+    if (MusicTrackCatalog.Find(30)?.IsSelectable != false || MusicTrackCatalog.Find(35)?.IsSelectable != false)
+        throw new InvalidOperationException("Physical tracks 30 and 35 should stay reserved rather than appear in the built-in music selector.");
+    if (catalog.Levels.Count != 35 || catalog.Levels.Select(MusicTrackCatalog.GetLevelIndex).Distinct().Count() != 35)
+        throw new InvalidOperationException("Every catalog level should resolve to one distinct executable music slot.");
+
+    string smokeRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "level-music");
+    Directory.CreateDirectory(smokeRoot);
+    string storeRoot = Path.Combine(smokeRoot, "store-roundtrip");
+    if (Directory.Exists(storeRoot))
+        Directory.Delete(storeRoot, true);
+    Directory.CreateDirectory(storeRoot);
+    LevelDefinition artisans = catalog.FindByKey("artisans")!;
+    try
+    {
+        await LevelMusicEditStore.SaveAsync(storeRoot, artisans, 2);
+        LevelMusicEditPlan stored = LevelMusicEditStore.Load(storeRoot, artisans)
+            ?? throw new InvalidOperationException("Saved Artisans music edit did not reload.");
+        if (stored.SelectedTrackId != 2 || !stored.LockLongPlayToSelectedTrack)
+            throw new InvalidOperationException("Saved Artisans music edit lost its selected track or long-play lock.");
+        await LevelMusicEditStore.SaveAsync(storeRoot, artisans, MusicTrackCatalog.GetNativeTrackId(artisans));
+        if (LevelMusicEditStore.Load(storeRoot, artisans) != null)
+            throw new InvalidOperationException("Selecting a level's native track should remove its saved music override.");
+    }
+    finally
+    {
+        if (Directory.Exists(storeRoot))
+            Directory.Delete(storeRoot, true);
+    }
+
+    IReadOnlyList<LevelMusicReplacement> edits =
+    [
+        new(artisans, 2),
+        new(catalog.FindByKey("stonehill")!, 17),
+        new(catalog.FindByKey("darkhollow")!, 0),
+        new(catalog.FindByKey("townsquare")!, 31)
+    ];
+    string outputPrefix = Path.Combine(smokeRoot, "level-music-batch-proof");
+    foreach (string stale in new[] { $"{outputPrefix}.bin", $"{outputPrefix}.cue", $"{outputPrefix}.level-music-batch-plan.json" })
+    {
+        if (File.Exists(stale))
+            File.Delete(stale);
+    }
+
+    LevelMusicBatchPatchResult result = await LevelMusicPatchExporter.ExportBatchAsync(new LevelMusicBatchPatchRequest(
+        SourceImagePath: selectedSourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(selectedSourceImage),
+        OutputPrefix: outputPrefix,
+        Edits: edits,
+        WriteImage: true));
+    if (!result.WroteImage || result.Plan.EditedLevelCount != edits.Count || !File.Exists(result.OutputCuePath))
+        throw new InvalidOperationException("The multi-level music batch did not create one BIN/CUE containing every requested track.");
+    if (result.Plan.MappingTableFileOffset + (48 + 35 * 3) * sizeof(int) != result.Plan.PeteXaStartTableFileOffset ||
+        result.Plan.LateAlternateTableFileOffset != result.Plan.MappingTableFileOffset + 48 * sizeof(int))
+    {
+        throw new InvalidOperationException("Level music, late alternate, and PETEXA start tables were not resolved as one contiguous layout.");
+    }
+    foreach (LevelMusicReplacement edit in edits)
+    {
+        LevelMusicPatch initial = result.Plan.Patches.Single(patch =>
+            patch.LevelKey.Equals(edit.Level.Key, StringComparison.OrdinalIgnoreCase) &&
+            patch.Kind == "level-track");
+        if (initial.AfterValue != edit.TrackId)
+            throw new InvalidOperationException($"{edit.Level.DisplayName}'s music patch selected track {initial.AfterValue}, expected {edit.TrackId}.");
+    }
+
+    await using (FileStream output = File.OpenRead(result.OutputImagePath))
+    {
+        foreach (LevelMusicPatch patch in result.Plan.Patches)
+        {
+            byte[] expected = ParseHexPreview(patch.AfterHexPreview);
+            byte[] actual = new byte[expected.Length];
+            output.Position = patch.ImageOffset;
+            int read = await output.ReadAsync(actual);
+            if (read != actual.Length || !actual.SequenceEqual(expected))
+                throw new InvalidOperationException($"Generated BIN bytes do not contain {patch.LevelName}'s {patch.Kind} music patch.");
+        }
+    }
+
+    string reportPath = Path.Combine(smokeRoot, "level-music-proof.json");
+    await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.UtcNow,
+        sourceImage = selectedSourceImage,
+        physicalXaTracks = MusicTrackCatalog.Tracks.Count,
+        selectableBuiltInTracks = MusicTrackCatalog.SelectableTracks.Count,
+        reservedCustomSlots = new[] { 30, 35 },
+        result.Plan.MappingTableFileOffset,
+        result.Plan.LateAlternateTableFileOffset,
+        result.Plan.PeteXaStartTableFileOffset,
+        result.Plan.EditedLevelCount,
+        result.Plan.PatchCount,
+        edits = edits.Select(edit => new
+        {
+            edit.Level.Key,
+            edit.Level.DisplayName,
+            edit.TrackId,
+            track = MusicTrackCatalog.Find(edit.TrackId)?.DisplayName
+        }),
+        actualBinBytesVerified = true
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    if (!keepOutput)
+    {
+        File.Delete(result.OutputImagePath);
+        File.Delete(result.OutputCuePath);
+    }
+
+    Console.WriteLine($"Level music edits: 46 built-in choices, 4-level BIN bytes verified, report={reportPath}");
+}
 
 void ReportEditorUiDefaults()
 {
@@ -338,6 +2195,57 @@ void ReportChestContents(string levelKey)
     ReportSyntheticChestContentLink(levelKey, mobys);
 }
 
+void ReportArtisansTreasureThiefRewardLinks()
+{
+    string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", "artisans-mobys.json");
+    if (!File.Exists(mobyPath))
+        return;
+
+    List<Moby> mobys = MobyLoader.LoadCached(mobyPath).ToList();
+    MobyMetadataEnricher.Apply(workspace, "artisans", mobys);
+    AssertTreasureThiefRewardLink(mobys, 7, [17, 18, 19, 20]);
+    AssertTreasureThiefRewardLink(mobys, 31, [34, 35, 36, 37]);
+    Console.WriteLine("Artisans treasure thief reward links: T7->T17/T18/T19/T20, T31->T34/T35/T36/T37; reward trigger companions are editable/copyable");
+}
+
+void AssertTreasureThiefRewardLink(IReadOnlyList<Moby> mobys, int rootTrueIndex, int[] triggerTrueIndexes)
+{
+    Moby root = mobys.Single(moby => moby.TrueIndex == rootTrueIndex);
+    if (!root.DisplayLabel.Contains("Treasure Gnorc", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException($"Artisans T{rootTrueIndex} should be labeled Treasure Gnorc, got {root.DisplayLabel}.");
+
+    MobyLink link = root.Links.SingleOrDefault(IsTreasureThiefRewardSmokeLink)
+        ?? throw new InvalidOperationException($"Artisans T{rootTrueIndex} should have a treasure thief reward trigger link.");
+    foreach (int triggerTrueIndex in triggerTrueIndexes)
+    {
+        if (!link.TrueIndexes.Contains(triggerTrueIndex))
+            throw new InvalidOperationException($"Artisans T{rootTrueIndex} reward link is missing T{triggerTrueIndex}.");
+
+        Moby trigger = mobys.Single(moby => moby.TrueIndex == triggerTrueIndex);
+        if (!trigger.DisplayLabel.Contains("Treasure Thief Red", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Artisans T{triggerTrueIndex} should be labeled as a Treasure Thief red-gem reward trigger, got {trigger.DisplayLabel}.");
+        if (trigger.Type != 0x00 || trigger.RewardGem != GemValue.Red)
+            throw new InvalidOperationException($"Artisans T{triggerTrueIndex} should be a red reward trigger marker.");
+    }
+
+    HashSet<int> cloneCompanions = MobyCompanionClonePlanner.GetCompanionDonors(root, mobys)
+        .Select(moby => moby.TrueIndex)
+        .ToHashSet();
+    foreach (int triggerTrueIndex in triggerTrueIndexes)
+    {
+        if (!cloneCompanions.Contains(triggerTrueIndex))
+            throw new InvalidOperationException($"Artisans T{triggerTrueIndex} should copy/paste as a Treasure Gnorc reward companion.");
+    }
+}
+
+bool IsTreasureThiefRewardSmokeLink(MobyLink link)
+{
+    string text = $"{link.Key} {link.Name} {link.Kind} {link.Confidence} {link.Reason}";
+    return text.Contains("treasure", StringComparison.OrdinalIgnoreCase) &&
+        text.Contains("reward", StringComparison.OrdinalIgnoreCase) &&
+        text.Contains("trigger", StringComparison.OrdinalIgnoreCase);
+}
+
 void ReportIdentityCoverage(string label, IReadOnlyList<Moby> mobys)
 {
     int weak = mobys.Count(IsWeakIdentityLabel);
@@ -378,6 +2286,9 @@ void ReportObjectVisualCategoryCleanliness()
     AssertRepresentativeVisualKind(allMobys, "Treasure Gnorc", MobyVisualKind.Actor);
     AssertRepresentativeVisualKind(allMobys, "Tulip flower", MobyVisualKind.Scenery);
     AssertRepresentativeVisualKind(allMobys, "Tulip flowers", MobyVisualKind.Scenery);
+    AssertSyntheticControlVisualKind("Spring Chest controller", "Control");
+    AssertSyntheticControlVisualKind("Firework chest trigger", "firework chest trigger record");
+    AssertSyntheticControlVisualKind("Dragon rescue camera marker", "dragon cutscene camera/control marker");
 
     int rewardObjectCount = allMobys.Count(item =>
         item.Moby.RewardGem.Value > 0 &&
@@ -385,6 +2296,19 @@ void ReportObjectVisualCategoryCleanliness()
         item.Moby.VisualKind is MobyVisualKind.Actor or MobyVisualKind.Scenery or MobyVisualKind.Chest);
     int visibleGemCount = allMobys.Count(item => item.Moby.VisualKind == MobyVisualKind.Gem);
     Console.WriteLine($"Object visual categories: no non-gem gem markers, visible/contained gems={visibleGemCount}, reward-bearing objects={rewardObjectCount}");
+}
+
+void AssertSyntheticControlVisualKind(string label, string candidateKind)
+{
+    Moby moby = new()
+    {
+        Type = 0x20,
+        Label = label,
+        CandidateKind = candidateKind,
+        BehaviorNote = "Synthetic release guard smoke."
+    };
+    if (moby.VisualKind != MobyVisualKind.Control)
+        throw new InvalidOperationException($"{label} should render as a control marker, not {moby.VisualKind}.");
 }
 
 void AssertRepresentativeVisualKind(
@@ -476,10 +2400,10 @@ void ReportStoneHillKeyChestIdentity(IReadOnlyList<Moby> mobys)
 void ReportStoneHillKeyIdentity(IReadOnlyList<Moby> mobys)
 {
     Moby key = mobys.First(moby => moby.TrueIndex == 26);
-    bool isKey = key.Type == 0x18
-        && key.SourceByte36 == 0xAD
+    bool isKey = key.HasNativeKeyFingerprint
         && key.DisplayLabel.Contains("Key", StringComparison.OrdinalIgnoreCase)
         && key.VisualKind == MobyVisualKind.Key
+        && key.SupportsTerrainSnap
         && !key.IsGemLike;
     if (!isKey)
     {
@@ -487,6 +2411,260 @@ void ReportStoneHillKeyIdentity(IReadOnlyList<Moby> mobys)
     }
 
     Console.WriteLine($"Stone Hill key identity: T{key.TrueIndex} {key.DisplayLabel}, {key.Confidence}, visual={key.VisualKind}");
+}
+
+void ReportStoneHillClass1EIdentity(IReadOnlyList<Moby> mobys)
+{
+    int[] screenshotTrueIndexes = [160, 161, 162, 163, 164];
+    List<Moby> controls = screenshotTrueIndexes
+        .Select(trueIndex => mobys.SingleOrDefault(moby => moby.TrueIndex == trueIndex))
+        .Where(moby => moby != null)
+        .Cast<Moby>()
+        .ToList();
+
+    if (controls.Count != screenshotTrueIndexes.Length)
+        throw new InvalidOperationException("Stone Hill class 0x1E identity check could not find T160-T164.");
+
+    List<Moby> incorrect = controls
+        .Where(moby =>
+            moby.SourceByte36 != 0x1E ||
+            !moby.DisplayLabel.Equals("Class 0x1E passive control", StringComparison.Ordinal) ||
+            moby.VisualKind != MobyVisualKind.Control ||
+            moby.SupportsTerrainSnap)
+        .ToList();
+    if (incorrect.Count > 0)
+    {
+        string summary = string.Join(", ", incorrect.Select(moby =>
+            $"T{moby.TrueIndex} {moby.DisplayLabel} / class 0x{moby.SourceByte36:X2} / {moby.VisualKind} / snap={moby.SupportsTerrainSnap}"));
+        throw new InvalidOperationException($"Stone Hill passive class 0x1E controls were misclassified: {summary}");
+    }
+
+    Console.WriteLine($"Stone Hill class 0x1E identity: {string.Join(", ", controls.Select(moby => $"T{moby.TrueIndex}"))} remain unresolved passive controls without terrain snap.");
+}
+
+async Task ReportKeyAndPortalTerrainSnap(string selectedSourceImage)
+{
+    if (!File.Exists(selectedSourceImage))
+        throw new FileNotFoundException("Key/portal terrain snap smoke needs the selected source BIN.", selectedSourceImage);
+
+    string smokeRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "key-portal-terrain-snap");
+    Directory.CreateDirectory(smokeRoot);
+
+    LevelDefinition stoneHillLevel = catalog.FindByKey("stonehill")
+        ?? throw new InvalidOperationException("Stone Hill is missing from the level catalog.");
+    string stoneHillCache = Path.Combine(smokeRoot, "stonehill-source-mobys.json");
+    await SourceMobyCacheBuilder.BuildAsync(selectedSourceImage, stoneHillLevel, stoneHillCache);
+    List<Moby> stoneHillMobys = MobyLoader.LoadCached(stoneHillCache).ToList();
+    MobyMetadataEnricher.Apply(workspace, stoneHillLevel.Key, stoneHillMobys);
+    Moby sourceKey = stoneHillMobys.Single(moby => moby.TrueIndex == 26);
+    if (sourceKey.Type != 0x00 ||
+        sourceKey.Flag4A != 0x00 ||
+        !sourceKey.HasNativeKeyFingerprint ||
+        !sourceKey.IsKey ||
+        sourceKey.IsGemLike ||
+        sourceKey.VisualKind != MobyVisualKind.Key ||
+        !sourceKey.SupportsTerrainSnap ||
+        !sourceKey.DisplayLabel.Equals("Key", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException(
+            $"Stone Hill source T26 should decode as a terrain-snappable Key, got {sourceKey.DisplayLabel} / type 0x{sourceKey.Type:X2} / flag 0x{sourceKey.Flag4A:X2} / {sourceKey.VisualKind}.");
+    }
+    if (sourceKey.Links.Any(link => link.Kind.Contains("dragon", StringComparison.OrdinalIgnoreCase)))
+        throw new InvalidOperationException("Stone Hill's source-form Key was incorrectly linked into a dragon scene.");
+
+    Moby runtimeKey = new()
+    {
+        Type = 0x18,
+        SourceByte36 = 0xAD,
+        SourceByte37 = 0x00,
+        SourceByte4F = 0x02,
+        Flag4A = 0x40,
+        Flag4B = 0xFF,
+        Label = "0x18",
+        OriginalLabel = "0x18"
+    };
+    MobyIdentityClassifier.Apply("stonehill", [runtimeKey]);
+    if (!runtimeKey.HasNativeKeyFingerprint ||
+        !runtimeKey.IsKey ||
+        runtimeKey.VisualKind != MobyVisualKind.Key ||
+        !runtimeKey.SupportsTerrainSnap)
+    {
+        throw new InvalidOperationException("The loader-transformed type 0x18 key form no longer resolves as a terrain-snappable Key.");
+    }
+
+    LevelDefinition artisansLevel = catalog.FindByKey("artisans")
+        ?? throw new InvalidOperationException("Artisans is missing from the level catalog.");
+    string artisansCache = Path.Combine(smokeRoot, "artisans-source-mobys.json");
+    await SourceMobyCacheBuilder.BuildAsync(selectedSourceImage, artisansLevel, artisansCache);
+    List<Moby> artisansMobys = MobyLoader.LoadCached(artisansCache).ToList();
+    MobyMetadataEnricher.Apply(workspace, artisansLevel.Key, artisansMobys);
+    int[] portalTrueIndexes = [38, 144, 157];
+    List<Moby> portalControls = portalTrueIndexes
+        .Select(trueIndex => artisansMobys.Single(moby => moby.TrueIndex == trueIndex))
+        .ToList();
+    if (portalControls.Any(moby => !moby.IsHomeworldPortalControl || !moby.SupportsTerrainSnap))
+        throw new InvalidOperationException("The Artisans Stone Hill portal lettering/location/entry triplet is not fully terrain-snappable.");
+    bool linkedPortalTriplet = portalControls[0].Links.Any(link =>
+        string.Equals(link.Kind, "portal controls", StringComparison.OrdinalIgnoreCase) &&
+        portalTrueIndexes.All(link.TrueIndexes.Contains));
+    if (!linkedPortalTriplet)
+        throw new InvalidOperationException("The Artisans Stone Hill portal triplet is no longer linked for relative-height movement.");
+
+    Vector3f portalMoveDelta = new(402, 1019.6875f, -26.4375f);
+    foreach (Moby portalControl in portalControls)
+    {
+        portalControl.Position = new Vector3f(
+            portalControl.OriginalPosition.X + portalMoveDelta.X,
+            portalControl.OriginalPosition.Y + portalMoveDelta.Y,
+            portalControl.OriginalPosition.Z + portalMoveDelta.Z);
+    }
+    string portalEditsPath = Path.Combine(smokeRoot, "artisans-stone-hill-portal-move-native-edits.json");
+    await MobyEditStore.SaveAsync(portalEditsPath, portalControls, "Artisans Stone Hill complete portal move smoke");
+    MobySourcePatchPlan portalPlan = MobySourcePatchExporter.BuildPlan(
+        selectedSourceImage,
+        DiscImageLocator.FindCueForImage(selectedSourceImage),
+        Path.Combine(smokeRoot, "artisans-stone-hill-portal-move.bin"),
+        Path.Combine(smokeRoot, "artisans-stone-hill-portal-move.cue"),
+        artisansLevel,
+        portalEditsPath);
+    MobySourcePatch[] portalPlanePatches = portalPlan.Patches
+        .Where(patch => patch.Kind.StartsWith("portal-plane-", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    MobySourcePatch[] portalTriggerPatches = portalPlan.Patches
+        .Where(patch => string.Equals(patch.Kind, "portal-entry-collision-triangle", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    MobySourcePatch[] portalPathPatches = portalPlan.Patches
+        .Where(patch => patch.Kind.StartsWith("portal-transition-path-node-", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    if (portalPlanePatches.Length != 15)
+        throw new InvalidOperationException($"Stone Hill portal move produced {portalPlanePatches.Length} native plane patches instead of 15.");
+    if (portalTriggerPatches.Length != 6)
+        throw new InvalidOperationException($"Stone Hill portal move produced {portalTriggerPatches.Length} walk-in collision patches instead of 6.");
+    if (portalPathPatches.Length != 6)
+        throw new InvalidOperationException($"Stone Hill portal move produced {portalPathPatches.Length} transition-path XYZ patches instead of 6.");
+    if (!portalPlan.Patches.Any(patch => string.Equals(patch.Kind, "portal-entry-collision-index-tree", StringComparison.OrdinalIgnoreCase)) ||
+        !portalPlan.Patches.Any(patch => string.Equals(patch.Kind, "portal-entry-collision-index-blocks", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("Stone Hill portal move did not rebuild both native collision lookup tables.");
+    }
+
+    MobySourcePatch portalBlocksPatch = portalPlan.Patches.Single(patch =>
+        string.Equals(patch.Kind, "portal-entry-collision-index-blocks", StringComparison.OrdinalIgnoreCase));
+    byte[] rebuiltPortalBlocks = ParseHexPreview(portalBlocksPatch.AfterHexPreview);
+    HashSet<int> rebuiltPortalTriangleReferences = Enumerable.Range(0, rebuiltPortalBlocks.Length / 2)
+        .Select(index => BinaryPrimitives.ReadUInt16LittleEndian(rebuiltPortalBlocks.AsSpan(index * 2, 2)) & 0x7FFF)
+        .ToHashSet();
+    PortalSourceLevelData artisansPortalSource = PortalSourceDataLocator.Locate(selectedSourceImage, artisansLevel);
+    PortalSourceRecord movedStoneHillPortal = artisansPortalSource.Portals.Single(portal =>
+        portal.SourcePathMobyTrueIndex == portalTrueIndexes[0]);
+    int[] missingUntouchedPortalTriangles = artisansPortalSource.TriggerTriangles
+        .Where(triangle => triangle.PortalIndex != movedStoneHillPortal.Index)
+        .Select(triangle => triangle.TriangleIndex)
+        .Distinct()
+        .Where(triangleIndex => !rebuiltPortalTriangleReferences.Contains(triangleIndex))
+        .OrderBy(triangleIndex => triangleIndex)
+        .ToArray();
+    if (missingUntouchedPortalTriangles.Length > 0)
+    {
+        throw new InvalidOperationException(
+            $"Moving Stone Hill dropped untouched portal collision triangles from the rebuilt Artisans lookup: {string.Join(", ", missingUntouchedPortalTriangles)}.");
+    }
+
+    MobySourcePatch centerXPatch = portalPlanePatches.Single(patch =>
+        string.Equals(patch.Kind, "portal-plane-center-x", StringComparison.OrdinalIgnoreCase));
+    int centerXBefore = BinaryPrimitives.ReadInt32LittleEndian(ParseHexPreview(centerXPatch.BeforeHexPreview));
+    int centerXAfter = BinaryPrimitives.ReadInt32LittleEndian(ParseHexPreview(centerXPatch.AfterHexPreview));
+    if (centerXAfter - centerXBefore != 6432)
+        throw new InvalidOperationException($"Stone Hill portal center X moved by raw {centerXAfter - centerXBefore}, expected 6432.");
+
+    MobySourcePatch pathNodeXPatch = portalPathPatches.Single(patch =>
+        string.Equals(patch.Kind, "portal-transition-path-node-0-x", StringComparison.OrdinalIgnoreCase));
+    int pathNodeXBefore = BinaryPrimitives.ReadInt32LittleEndian(ParseHexPreview(pathNodeXPatch.BeforeHexPreview));
+    int pathNodeXAfter = BinaryPrimitives.ReadInt32LittleEndian(ParseHexPreview(pathNodeXPatch.AfterHexPreview));
+    if (pathNodeXAfter - pathNodeXBefore != 6432)
+        throw new InvalidOperationException($"Stone Hill portal transition node X moved by raw {pathNodeXAfter - pathNodeXBefore}, expected 6432.");
+
+    MobySourcePatch firstTriggerPatch = portalTriggerPatches.OrderBy(patch => patch.WadRelativeOffset).First();
+    byte[] triggerBefore = ParseHexPreview(firstTriggerPatch.BeforeHexPreview);
+    byte[] triggerAfter = ParseHexPreview(firstTriggerPatch.AfterHexPreview);
+    int triggerXBefore = (int)(BinaryPrimitives.ReadUInt32LittleEndian(triggerBefore.AsSpan(0, 4)) & 0x3FFF);
+    int triggerYBefore = (int)(BinaryPrimitives.ReadUInt32LittleEndian(triggerBefore.AsSpan(4, 4)) & 0x3FFF);
+    int triggerZBefore = (int)(BinaryPrimitives.ReadUInt32LittleEndian(triggerBefore.AsSpan(8, 4)) & 0x3FFF);
+    int triggerXAfter = (int)(BinaryPrimitives.ReadUInt32LittleEndian(triggerAfter.AsSpan(0, 4)) & 0x3FFF);
+    int triggerYAfter = (int)(BinaryPrimitives.ReadUInt32LittleEndian(triggerAfter.AsSpan(4, 4)) & 0x3FFF);
+    int triggerZAfter = (int)(BinaryPrimitives.ReadUInt32LittleEndian(triggerAfter.AsSpan(8, 4)) & 0x3FFF);
+    if (triggerXAfter - triggerXBefore != 402 || triggerYAfter - triggerYBefore != 1020 || triggerZAfter - triggerZBefore != -26)
+    {
+        throw new InvalidOperationException(
+            $"Stone Hill portal trigger moved by ({triggerXAfter - triggerXBefore}, {triggerYAfter - triggerYBefore}, {triggerZAfter - triggerZBefore}), expected (402, 1020, -26).");
+    }
+
+    int addedIndex = stoneHillMobys.Max(moby => moby.Index) + 1;
+    int addedTrueIndex = stoneHillMobys.Max(moby => moby.TrueIndex) + 1;
+    Vector3f addedPosition = new(sourceKey.Position.X + 64, sourceKey.Position.Y, sourceKey.Position.Z);
+    Moby copiedSourceKey = new()
+    {
+        Index = addedIndex,
+        TrueIndex = addedTrueIndex,
+        LegacyIndex = MobyLoader.GetLegacyAliasIndex(addedTrueIndex),
+        Position = addedPosition,
+        OriginalPosition = addedPosition,
+        Type = sourceKey.Type,
+        OriginalType = sourceKey.Type,
+        State = sourceKey.State,
+        OriginalState = sourceKey.State,
+        YawByte = sourceKey.YawByte,
+        OriginalYawByte = sourceKey.YawByte,
+        SourceByte36 = sourceKey.SourceByte36,
+        OriginalSourceByte36 = sourceKey.SourceByte36,
+        SourceByte37 = sourceKey.SourceByte37,
+        OriginalSourceByte37 = sourceKey.SourceByte37,
+        SourceByte4F = sourceKey.SourceByte4F,
+        OriginalSourceByte4F = sourceKey.SourceByte4F,
+        Flag4A = sourceKey.Flag4A,
+        OriginalFlag4A = sourceKey.Flag4A,
+        Flag4B = sourceKey.Flag4B,
+        OriginalFlag4B = sourceKey.Flag4B,
+        Color = sourceKey.Color,
+        Label = "Copy of Key",
+        OriginalLabel = "Copy of Key",
+        CandidateKind = "key collectible",
+        PatchStatus = "native-clone",
+        PatchLead = "Source-form key copy smoke.",
+        SourceCloneLevelKey = stoneHillLevel.Key,
+        SourceCloneLevelName = stoneHillLevel.DisplayName,
+        SourceCloneTrueIndex = sourceKey.TrueIndex,
+        IsAdded = true
+    };
+    string editsPath = Path.Combine(smokeRoot, "stonehill-source-key-copy-native-edits.json");
+    await MobyEditStore.SaveAsync(editsPath, [copiedSourceKey], "Stone Hill source-form key copy");
+    MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(
+        selectedSourceImage,
+        DiscImageLocator.FindCueForImage(selectedSourceImage),
+        Path.Combine(smokeRoot, "stonehill-source-key-copy.bin"),
+        Path.Combine(smokeRoot, "stonehill-source-key-copy.cue"),
+        stoneHillLevel,
+        editsPath);
+    MobySourcePatch keyAppend = plan.Patches.SingleOrDefault(patch =>
+        string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(patch.MobyLabel, "Copy of Key", StringComparison.OrdinalIgnoreCase))
+        ?? throw new InvalidOperationException($"Source-form Key copy did not produce a native append: {string.Join("; ", plan.SkippedEdits)}");
+    byte[] keyBytes = ParseHexPreview(keyAppend.AfterHexPreview);
+    if (keyBytes.Length <= 0x53 ||
+        keyBytes[0x50] != 0x00 ||
+        keyBytes[0x36] != 0xAD ||
+        keyBytes[0x37] != 0x00 ||
+        keyBytes[0x4F] != 0x02 ||
+        keyBytes[0x52] != 0x00 ||
+        keyBytes[0x53] != 0xFF)
+    {
+        throw new InvalidOperationException("Source-form Key copy did not preserve the native pre-loader key identity bytes.");
+    }
+
+    Console.WriteLine(
+        $"Key/portal terrain snap: Stone Hill T26 source+runtime key forms mapped and copy-exported; " +
+        $"Artisans portal T{string.Join("/T", portalTrueIndexes)} linked and terrain-snappable; " +
+        $"portal record + {portalPathPatches.Length} transition-path axes + {portalTriggerPatches.Length} walk-in triangles + collision index patched");
 }
 
 void ReportType18FlameChargeChestIdentities()
@@ -814,6 +2992,24 @@ bool HasAnyMobyCache()
     return Directory.Exists(cacheDir) && Directory.EnumerateFiles(cacheDir, "*-mobys.json").Any();
 }
 
+List<(LevelDefinition Level, Moby Moby)> LoadAllCachedMobysWithMetadata()
+{
+    List<(LevelDefinition Level, Moby Moby)> allMobys = new();
+    foreach (LevelDefinition level in catalog.Levels)
+    {
+        string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{level.Key}-mobys.json");
+        if (!File.Exists(mobyPath))
+            continue;
+
+        List<Moby> mobys = MobyLoader.LoadCached(mobyPath).ToList();
+        MobyMetadataEnricher.Apply(workspace, level.Key, mobys);
+        MobyRelationshipRepair.RepairChestContentLinks(level.Key, mobys);
+        allMobys.AddRange(mobys.Select(moby => (level, moby)));
+    }
+
+    return allMobys;
+}
+
 void ReportLinkedMoveTraversal(string label, IReadOnlyList<Moby> mobys)
 {
     Moby? linked = mobys.FirstOrDefault(moby => moby.Links.Any(link => MobyLinkTraversal.IsActiveMoveLink(link) && link.TrueIndexes.Count > 1));
@@ -847,8 +3043,8 @@ void ReportArtisansSelectionLinks()
 
     Moby stoneHillPortalName = mobys.First(moby => moby.TrueIndex == 144);
     HashSet<int> visiblePortalLinks = MobyLinkTraversal.GetVisibleLinkedTrueIndexes(stoneHillPortalName);
-    if (visiblePortalLinks.Count != 1 || !visiblePortalLinks.Contains(157))
-        throw new InvalidOperationException($"Artisans Stone Hill portal selection should only highlight T157, got {string.Join(", ", visiblePortalLinks.Order())}.");
+    if (!visiblePortalLinks.SetEquals(new[] { 38, 157 }))
+        throw new InvalidOperationException($"Artisans Stone Hill portal selection should highlight entry trigger T38 and location marker T157, got {string.Join(", ", visiblePortalLinks.Order())}.");
 
     bool broadPortalMoveActive = stoneHillPortalName.Links.Any(link =>
         MobyLinkTraversal.IsActiveMoveLink(link) &&
@@ -856,17 +3052,22 @@ void ReportArtisansSelectionLinks()
     if (broadPortalMoveActive)
         throw new InvalidOperationException("Artisans broad portal scaffold is still active as a move link.");
 
-    Moby portalClusterMarker = mobys.First(moby => moby.TrueIndex == 141);
-    HashSet<int> visiblePortalClusterLinks = MobyLinkTraversal.GetVisibleLinkedTrueIndexes(portalClusterMarker);
-    if (visiblePortalClusterLinks.Count != 0)
-        throw new InvalidOperationException($"Artisans portal cluster helper T141 should not visibly highlight broad scaffold links, got {string.Join(", ", visiblePortalClusterLinks.Order())}.");
+    Moby sunnyFlightPortalPath = mobys.First(moby => moby.TrueIndex == 141);
+    HashSet<int> sunnyFlightPortalLinks = MobyLinkTraversal.GetVisibleLinkedTrueIndexes(sunnyFlightPortalPath);
+    if (!sunnyFlightPortalLinks.SetEquals(new[] { 148, 156 }))
+        throw new InvalidOperationException($"Artisans Sunny Flight portal path T141 should highlight lettering T148 and companion T156, got {string.Join(", ", sunnyFlightPortalLinks.Order())}.");
+    bool broadPortalClusterMoveActive = sunnyFlightPortalPath.Links.Any(link =>
+        MobyLinkTraversal.IsActiveMoveLink(link) &&
+        link.TrueIndexes.Count > 10);
+    if (broadPortalClusterMoveActive)
+        throw new InvalidOperationException("Artisans broad portal scaffold is still active as a portal-cluster move link.");
 
     Moby dragon = mobys.First(moby => moby.TrueIndex == 91);
     HashSet<int> dragonLinks = MobyLinkTraversal.GetVisibleLinkedTrueIndexes(dragon);
-    if (!dragonLinks.SetEquals(new[] { 90 }))
-        throw new InvalidOperationException($"Artisans dragon T91 should only highlight pedestal T90, got {string.Join(", ", dragonLinks.Order())}.");
+    if (!dragonLinks.SetEquals(new[] { 90, 162 }))
+        throw new InvalidOperationException($"Artisans dragon T91 should highlight pedestal T90 and rescue camera T162, got {string.Join(", ", dragonLinks.Order())}.");
 
-    Console.WriteLine($"Artisans focused selection links: portal T144->{string.Join(",", visiblePortalLinks.Order())}; dragon T91->{string.Join(",", dragonLinks.Order())}");
+    Console.WriteLine($"Artisans focused selection links: Stone Hill T144->{string.Join(",", visiblePortalLinks.Order())}; Sunny Flight T141->{string.Join(",", sunnyFlightPortalLinks.Order())}; dragon T91->{string.Join(",", dragonLinks.Order())}");
 }
 
 bool IsWeakIdentityLabel(Moby moby)
@@ -927,18 +3128,7 @@ void ReportAllLevelIdentityCoverage()
 
 async Task ReportDeepIdentityAudit()
 {
-    List<(LevelDefinition Level, Moby Moby)> allMobys = new();
-    foreach (LevelDefinition level in catalog.Levels)
-    {
-        string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{level.Key}-mobys.json");
-        if (!File.Exists(mobyPath))
-            continue;
-
-        List<Moby> mobys = MobyLoader.LoadCached(mobyPath).ToList();
-        MobyMetadataEnricher.Apply(workspace, level.Key, mobys);
-        MobyRelationshipRepair.RepairChestContentLinks(level.Key, mobys);
-        allMobys.AddRange(mobys.Select(moby => (level, moby)));
-    }
+    List<(LevelDefinition Level, Moby Moby)> allMobys = LoadAllCachedMobysWithMetadata();
 
     int exact = allMobys.Count(item => IsExactIdentity(item.Moby));
     int questionable = allMobys.Count(item => IsQuestionableIdentity(item.Moby));
@@ -1066,6 +3256,10 @@ async Task ReportDeepIdentityAudit()
     string legacyEvidencePath = WriteLegacyIdentityEvidenceReport(outDir, rankedGroups);
     string levelWorkbenchPath = WriteIdentityLevelWorkbenchReport(outDir, rankedGroups, allMobys, observedFingerprints, testBatches);
     string unknownTriagePath = WriteUnknownMobyTriageReport(outDir, rankedGroups, allMobys, observedFingerprints, testBatches);
+    string controlCompanionPath = WriteControlCompanionCandidateReport(outDir, allMobys);
+    List<ControlRoleInvestigationRow> controlRoleRowsForProof = BuildControlRoleInvestigationRows(allMobys);
+    string controlRoleProofPath = await WriteControlRoleProofBatchArtifacts(outDir, allMobys, controlRoleRowsForProof);
+    string controlRolePath = WriteControlRoleInvestigationReport(outDir, allMobys);
     string unknownClusterPath = WriteUnknownMobyClusterMapReport(outDir, allMobys, testBatches);
     string unknownClusterReviewPath = WriteUnknownMobyClusterReviewPacket(outDir, allMobys, testBatches);
     string familyObservationPath = WriteIdentityFamilyObservationTemplate(outDir, allMobys, testBatches);
@@ -1074,7 +3268,7 @@ async Task ReportDeepIdentityAudit()
     string rawSignaturePath = WriteRawSpecialDataSignatureReport(outDir, rankedGroups, allMobys);
     string releaseReviewPath = WriteIdentityReleaseReviewPacket(outDir, rankedGroups, observedFingerprints, testBatches, quickWinBatches);
 
-    Console.WriteLine($"Deep identity audit: exact/observed={exact}, inferred={inferred}, still-questionable={questionable}, report={markdownPath}, json={jsonPath}, microscope={microscopePath}, workbench={levelWorkbenchPath}, unknownTriage={unknownTriagePath}, unknownClusters={unknownClusterPath}, clusterReview={unknownClusterReviewPath}, modelFamilies={modelFamilyPath}, familyObservations={familyObservationPath}, rawSignatures={rawSignaturePath}, legacyEvidence={legacyEvidencePath}, observations={workingObservationPath}, releaseReview={releaseReviewPath}, testBatches={testBatches.Count}, quickWins={quickWinBatches.Count}");
+    Console.WriteLine($"Deep identity audit: exact/observed={exact}, inferred={inferred}, still-questionable={questionable}, report={markdownPath}, json={jsonPath}, microscope={microscopePath}, workbench={levelWorkbenchPath}, unknownTriage={unknownTriagePath}, controlCompanions={controlCompanionPath}, controlRoles={controlRolePath}, controlRoleProofs={controlRoleProofPath}, unknownClusters={unknownClusterPath}, clusterReview={unknownClusterReviewPath}, modelFamilies={modelFamilyPath}, familyObservations={familyObservationPath}, rawSignatures={rawSignaturePath}, legacyEvidence={legacyEvidencePath}, observations={workingObservationPath}, releaseReview={releaseReviewPath}, testBatches={testBatches.Count}, quickWins={quickWinBatches.Count}");
     foreach (PrecisionIdentityGroup group in groups.Values.OrderByDescending(group => group.Count).Take(5))
         Console.WriteLine($"  questionable {group.Count}x {group.Key}: {group.LabelSummary} ({string.Join(", ", group.Samples.Take(3).Select(sample => sample.Display))})");
 }
@@ -2865,6 +5059,3985 @@ string WriteUnknownMobyTriageReport(
     return markdownPath;
 }
 
+void ReportControlCompanionCandidateSummary()
+{
+    string outDir = Path.Combine(workspace.RootPath, "_local", "smoke");
+    Directory.CreateDirectory(outDir);
+    string reportPath = WriteControlCompanionCandidateReport(outDir, LoadAllCachedMobysWithMetadata());
+    Console.WriteLine($"Control companion candidates: report={reportPath}");
+}
+
+string WriteControlCompanionCandidateReport(
+    string outDir,
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys)
+{
+    string markdownPath = Path.Combine(outDir, "moby-control-companion-candidates.md");
+    string jsonPath = Path.Combine(outDir, "moby-control-companion-candidates.json");
+    string groupsMarkdownPath = Path.Combine(outDir, "moby-control-companion-groups.md");
+    string groupsJsonPath = Path.Combine(outDir, "moby-control-companion-groups.json");
+    List<ControlCompanionCandidateRow> rows = BuildControlCompanionCandidateRows(allMobys);
+    ValidateControlCompanionCandidateRows(rows);
+    List<ControlCompanionGroupRow> groupRows = BuildControlCompanionGroupRows(allMobys);
+    ValidateControlCompanionGroupRows(groupRows);
+
+    StringBuilder markdown = new();
+    markdown.AppendLine("# Control Companion Candidates");
+    markdown.AppendLine();
+    markdown.AppendLine("This report separates control/trigger rows that the editor is allowed to clone from control-like rows that still need live proof. A report-only row is intentionally not auto-cloned when a user copies, pastes, or imports a visible object.");
+    markdown.AppendLine();
+    markdown.AppendLine($"- Candidate rows: {rows.Count}");
+    markdown.AppendLine($"- Proven auto-clone links: {rows.Count(row => row.Status.Equals("promoted-link", StringComparison.OrdinalIgnoreCase))}");
+    markdown.AppendLine($"- Proven companion-only rows: {rows.Count(row => row.Status.Equals("promoted-companion", StringComparison.OrdinalIgnoreCase))}");
+    markdown.AppendLine($"- Report-only strict 0xAD trigger cues: {rows.Count(row => row.StrictTriggerCue && row.Status.StartsWith("report-only", StringComparison.OrdinalIgnoreCase))}");
+    markdown.AppendLine($"- Review-only linked controls: {rows.Count(row => row.Status.Equals("review-linked-control", StringComparison.OrdinalIgnoreCase))}");
+    markdown.AppendLine();
+    markdown.AppendLine("## Highest Priority Rows");
+    markdown.AppendLine();
+    markdown.AppendLine("| Priority | Level | Moby | Current read | Fingerprint | Status | Action | Linked companions | Cloned by | Relationship lead | Nearest anchors |");
+    markdown.AppendLine("|---:|---|---:|---|---|---|---|---:|---|---|---|");
+    foreach (ControlCompanionCandidateRow row in rows.Take(100))
+        markdown.AppendLine($"| {row.Priority} | {EscapeMarkdown(row.LevelName)} | T{row.TrueIndex} | {EscapeMarkdown(row.CurrentRead)} | `{row.Fingerprint}` | {EscapeMarkdown(row.Status)} | {EscapeMarkdown(row.Action)} | {row.CompanionCount} | {EscapeMarkdown(row.CloneRootSummary)} | {EscapeMarkdown(row.DirectLinks)} | {EscapeMarkdown(row.NearestAnchors)} |");
+
+    foreach (IGrouping<string, ControlCompanionCandidateRow> statusGroup in rows
+        .GroupBy(row => row.Status, StringComparer.OrdinalIgnoreCase)
+        .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase))
+    {
+        markdown.AppendLine();
+        markdown.AppendLine($"## {statusGroup.Key}");
+        markdown.AppendLine();
+        markdown.AppendLine("| Level | Moby | Current read | Action | Linked companions | Cloned by | Direct links | Nearby anchors |");
+        markdown.AppendLine("|---|---:|---|---|---:|---|---|---|");
+        foreach (ControlCompanionCandidateRow row in statusGroup.OrderBy(row => row.Priority).ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase).ThenBy(row => row.TrueIndex).Take(40))
+            markdown.AppendLine($"| {EscapeMarkdown(row.LevelName)} | T{row.TrueIndex} | {EscapeMarkdown(row.CurrentRead)} | {EscapeMarkdown(row.Action)} | {row.CompanionCount} | {EscapeMarkdown(row.CloneRootSummary)} | {EscapeMarkdown(row.DirectLinks)} | {EscapeMarkdown(row.NearestAnchors)} |");
+    }
+
+    File.WriteAllText(markdownPath, markdown.ToString());
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        note = "Control and trigger companion candidates. Report-only rows require live proof before editor auto-cloning.",
+        rows
+    }, new JsonSerializerOptions { WriteIndented = true }));
+    WriteControlCompanionGroupReport(groupsMarkdownPath, groupsJsonPath, groupRows);
+
+    Console.WriteLine($"Control companion candidate rows: {rows.Count}, proven={rows.Count(row => row.Status.Equals("promoted-link", StringComparison.OrdinalIgnoreCase))}, companionOnly={rows.Count(row => row.Status.Equals("promoted-companion", StringComparison.OrdinalIgnoreCase))}, cloneableGroups={groupRows.Count}, reportOnlyStrict0xAD={rows.Count(row => row.StrictTriggerCue && row.Status.StartsWith("report-only", StringComparison.OrdinalIgnoreCase))}");
+    return markdownPath;
+}
+
+void WriteControlCompanionGroupReport(
+    string markdownPath,
+    string jsonPath,
+    IReadOnlyList<ControlCompanionGroupRow> rows)
+{
+    StringBuilder markdown = new();
+    markdown.AppendLine("# Control Companion Link Groups");
+    markdown.AppendLine();
+    markdown.AppendLine("Group-level view of every link that the editor is allowed to clone. Each row names the root object(s) a user can add/copy and the companion control/content rows that will come with it.");
+    markdown.AppendLine();
+    markdown.AppendLine($"- Cloneable groups: {rows.Count}");
+    markdown.AppendLine($"- Groups with control/trigger companions: {rows.Count(row => row.HasControlCompanion)}");
+    markdown.AppendLine($"- Return Home helper groups: {rows.Count(row => row.GroupFamily.Equals("return-home", StringComparison.OrdinalIgnoreCase))}");
+    markdown.AppendLine($"- Portal entry groups: {rows.Count(row => row.GroupFamily.Equals("portal-entry", StringComparison.OrdinalIgnoreCase))}");
+    markdown.AppendLine($"- Dragon/camera groups: {rows.Count(row => row.GroupFamily.Equals("dragon-scene", StringComparison.OrdinalIgnoreCase))}");
+    markdown.AppendLine($"- Chest/content groups: {rows.Count(row => row.GroupFamily.Equals("chest-contents", StringComparison.OrdinalIgnoreCase))}");
+    markdown.AppendLine();
+    markdown.AppendLine("| Family | Level | Link | Root object(s) | Companion row(s) | Members | Evidence |");
+    markdown.AppendLine("|---|---|---|---|---|---|---|");
+    foreach (ControlCompanionGroupRow row in rows.OrderBy(row => row.Priority).ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase).ThenBy(row => row.LinkKey, StringComparer.OrdinalIgnoreCase))
+    {
+        markdown.AppendLine($"| {EscapeMarkdown(row.GroupFamily)} | {EscapeMarkdown(row.LevelName)} | `{EscapeMarkdown(row.LinkKey)}` {EscapeMarkdown(row.LinkName)} | {EscapeMarkdown(row.Roots)} | {EscapeMarkdown(row.Companions)} | {EscapeMarkdown(row.Members)} | {EscapeMarkdown(row.Evidence)} |");
+    }
+
+    File.WriteAllText(markdownPath, markdown.ToString());
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        note = "Cloneable companion link groups. These are the root-to-companion relationships used by the editor when adding, copying, or pasting linked objects.",
+        rows
+    }, new JsonSerializerOptions { WriteIndented = true }));
+}
+
+List<ControlCompanionCandidateRow> BuildControlCompanionCandidateRows(
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys)
+{
+    Dictionary<string, List<(LevelDefinition Level, Moby Moby)>> byLevel = allMobys
+        .GroupBy(item => item.Level.Key, StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+
+    return allMobys
+        .Where(item => IsControlCompanionCandidate(item.Moby))
+        .Select(item => new
+        {
+            item.Moby,
+            Row = BuildControlCompanionCandidateRow(item, byLevel)
+        })
+        .Where(item => item.Row.StrictTriggerCue ||
+            item.Row.CompanionCount > 0 ||
+            IsControlCompanionReviewRow(item.Moby))
+        .Select(item => item.Row)
+        .OrderBy(row => row.Priority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .ToList();
+}
+
+List<ControlCompanionGroupRow> BuildControlCompanionGroupRows(
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys)
+{
+    List<ControlCompanionGroupRow> rows = new();
+    foreach (IGrouping<string, (LevelDefinition Level, Moby Moby)> levelGroup in allMobys.GroupBy(item => item.Level.Key, StringComparer.OrdinalIgnoreCase))
+    {
+        LevelDefinition level = levelGroup.First().Level;
+        List<Moby> levelMobys = levelGroup.Select(item => item.Moby).ToList();
+        Dictionary<int, Moby> byTrueIndex = levelMobys
+            .Where(moby => moby.TrueIndex >= 0)
+            .ToDictionary(moby => moby.TrueIndex);
+        foreach (MobyLink link in levelMobys
+            .SelectMany(moby => moby.Links)
+            .Where(MobyCompanionClonePlanner.IsCompanionCloneLink)
+            .GroupBy(link => link.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First()))
+        {
+            List<Moby> members = link.TrueIndexes
+                .Select(trueIndex => byTrueIndex.TryGetValue(trueIndex, out Moby? moby) ? moby : null)
+                .Where(moby => moby != null && !moby!.IsRemoved)
+                .Select(moby => moby!)
+                .ToList();
+            List<Moby> rootCandidates = members
+                .Where(moby => MobyCompanionClonePlanner.GetCompanionDonors(moby, levelMobys).Count > 0)
+                .OrderBy(moby => !IsLikelyUserFacingCloneRoot(moby))
+                .ThenBy(moby => moby.TrueIndex)
+                .ToList();
+            List<Moby> visibleRoots = rootCandidates
+                .Where(IsLikelyUserFacingCloneRoot)
+                .ToList();
+            List<Moby> roots = visibleRoots.Count > 0 ? visibleRoots : rootCandidates;
+            List<Moby> companions = roots
+                .SelectMany(root => MobyCompanionClonePlanner.GetCompanionDonors(root, levelMobys))
+                .GroupBy(moby => moby.TrueIndex)
+                .Select(group => group.First())
+                .OrderBy(moby => moby.TrueIndex)
+                .ToList();
+            List<Moby> nonRootCompanions = companions
+                .Where(companion => !roots.Any(root => root.TrueIndex == companion.TrueIndex))
+                .ToList();
+            if (nonRootCompanions.Any(IsControlOrTriggerCompanion) ||
+                nonRootCompanions.Any(moby => moby.IsChestContent))
+            {
+                companions = nonRootCompanions;
+            }
+            string groupFamily = ControlCompanionGroupFamily(link);
+            rows.Add(new ControlCompanionGroupRow(
+                level.Key,
+                level.DisplayName,
+                link.Key,
+                link.DisplayName,
+                link.Kind,
+                groupFamily,
+                FormatControlCompanionMobyList(roots),
+                FormatControlCompanionMobyList(companions),
+                FormatControlCompanionMobyList(members.OrderBy(moby => moby.TrueIndex)),
+                link.Confidence,
+                link.Reason,
+                companions.Any(IsControlOrTriggerCompanion),
+                roots.Count,
+                companions.Count,
+                ControlCompanionGroupPriority(groupFamily)));
+        }
+    }
+
+    return rows
+        .OrderBy(row => row.Priority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.LinkKey, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+}
+
+string FormatControlCompanionMobyList(IEnumerable<Moby> mobys)
+{
+    return string.Join(", ", mobys.Select(moby => $"T{moby.TrueIndex} {moby.DisplayLabel}"));
+}
+
+bool IsLikelyUserFacingCloneRoot(Moby moby)
+{
+    if (moby.IsChestContent)
+        return false;
+    if (moby.IsKey)
+        return true;
+
+    string text = $"{moby.DisplayLabel} {moby.CandidateKind} {moby.BehaviorNote} {moby.Evidence}".ToLowerInvariant();
+    if (text.Contains("level name", StringComparison.Ordinal) ||
+        text.Contains("portal name", StringComparison.Ordinal) ||
+        text.Contains("portal level", StringComparison.Ordinal) ||
+        text.Contains("return home", StringComparison.Ordinal))
+    {
+        return true;
+    }
+
+    if (moby.Type == 0x00 && moby.SourceByte36 is 0x0B or 0x1E or 0x42 or 0x48 or 0x8E or 0xAD or 0xC2)
+        return false;
+
+    return !IsControlOrTriggerCompanion(moby);
+}
+
+string ControlCompanionGroupFamily(MobyLink link)
+{
+    string kind = link.Kind.ToLowerInvariant();
+    string text = $"{link.Key} {link.Name} {link.Kind} {link.Confidence} {link.Reason}".ToLowerInvariant();
+    if (text.Contains("return home", StringComparison.Ordinal))
+        return "return-home";
+    if (kind == "portal group")
+        return "portal-entry";
+    if (kind is "dragon scene" or "dragon pedestal")
+        return "dragon-scene";
+    if (kind == "chest contents")
+        return "chest-contents";
+    if (text.Contains("control-role-proof", StringComparison.Ordinal) ||
+        text.Contains("live-proof-control-role", StringComparison.Ordinal))
+        return "control-role-proof";
+    return "linked-control";
+}
+
+bool IsControlOrTriggerCompanion(Moby moby)
+{
+    if (IsNativeDragonRescueCameraRecord(moby))
+        return true;
+    if (IsNativeDragonActorRecord(moby) || IsNativeDragonPedestalRecord(moby))
+        return false;
+    if (moby.IsKey)
+        return false;
+    if (moby.VisualKind == MobyVisualKind.Control)
+        return true;
+    if (moby.Type == 0x00 && moby.SourceByte36 is 0x0B or 0x1E or 0x42 or 0x48 or 0x8E or 0xAD or 0xC2)
+        return true;
+
+    string text = $"{moby.DisplayLabel} {moby.CandidateKind} {moby.BehaviorNote} {moby.Evidence}".ToLowerInvariant();
+    return text.Contains("control", StringComparison.Ordinal) ||
+        text.Contains("trigger", StringComparison.Ordinal) ||
+        text.Contains("helper", StringComparison.Ordinal) ||
+        text.Contains("marker", StringComparison.Ordinal);
+}
+
+int ControlCompanionGroupPriority(string groupFamily) => groupFamily switch
+{
+    "return-home" => 1,
+    "portal-entry" => 2,
+    "dragon-scene" => 3,
+    "control-role-proof" => 4,
+    "chest-contents" => 8,
+    _ => 20
+};
+
+ControlCompanionCandidateRow BuildControlCompanionCandidateRow(
+    (LevelDefinition Level, Moby Moby) item,
+    IReadOnlyDictionary<string, List<(LevelDefinition Level, Moby Moby)>> byLevel)
+{
+    List<Moby> levelMobys = byLevel.TryGetValue(item.Level.Key, out List<(LevelDefinition Level, Moby Moby)>? rows)
+        ? rows.Select(row => row.Moby).ToList()
+        : new List<Moby>();
+    IReadOnlyList<Moby> companions = MobyCompanionClonePlanner.GetCompanionDonors(item.Moby, levelMobys);
+    IReadOnlyList<Moby> cloneRoots = FindCompanionCloneRoots(item.Moby, levelMobys);
+    string fingerprint = IdentityFingerprint(item.Moby);
+    bool strictTriggerCue = IsStrict0xAdTriggerCue(item.Moby);
+    bool promoted = companions.Count > 0 && item.Moby.Links.Any(MobyCompanionClonePlanner.IsCompanionCloneLink);
+    bool promotedCompanion = cloneRoots.Count > 0;
+    string directLinks = BuildUnknownDirectLinkSummary(item, byLevel);
+    string nearestAnchors = BuildControlCompanionAnchorSummary(item, fingerprint, byLevel);
+    string status = ControlCompanionStatus(item.Moby, strictTriggerCue, promoted, promotedCompanion, directLinks, nearestAnchors);
+    string action = status switch
+    {
+        "promoted-link" => "auto-clones with linked object",
+        "promoted-companion" => "auto-clones when the linked visible/root object is copied",
+        "review-linked-control" => "review link before enabling auto-clone",
+        _ => "needs live proof before auto-clone"
+    };
+    int priority = ControlCompanionPriority(strictTriggerCue, status, directLinks, nearestAnchors);
+
+    return new ControlCompanionCandidateRow(
+        item.Level.Key,
+        item.Level.DisplayName,
+        item.Moby.TrueIndex,
+        item.Moby.DisplayLabel,
+        fingerprint,
+        strictTriggerCue,
+        status,
+        action,
+        directLinks,
+        nearestAnchors,
+        companions.Count,
+        BuildCloneRootSummary(cloneRoots),
+        priority);
+}
+
+IReadOnlyList<Moby> FindCompanionCloneRoots(Moby companion, IReadOnlyList<Moby> levelMobys)
+{
+    return levelMobys
+        .Where(moby => !moby.IsRemoved && moby.TrueIndex != companion.TrueIndex)
+        .Where(moby => MobyCompanionClonePlanner.GetCompanionDonors(moby, levelMobys).Any(donor => donor.TrueIndex == companion.TrueIndex))
+        .OrderBy(moby => MobyCompanionClonePlanner.GetCompanionDonors(moby, levelMobys).Count)
+        .ThenBy(moby => moby.TrueIndex)
+        .Take(4)
+        .ToList();
+}
+
+string BuildCloneRootSummary(IReadOnlyList<Moby> cloneRoots)
+{
+    if (cloneRoots.Count == 0)
+        return "";
+
+    return string.Join(", ", cloneRoots.Select(moby => $"T{moby.TrueIndex} {moby.DisplayLabel}"));
+}
+
+bool IsControlCompanionCandidate(Moby moby)
+{
+    if (IsStrict0xAdTriggerCue(moby))
+        return true;
+    if (moby.Links.Any(MobyCompanionClonePlanner.IsCompanionCloneLink))
+        return true;
+    return IsControlCompanionReviewRow(moby);
+}
+
+bool IsControlCompanionReviewRow(Moby moby)
+{
+    if (moby.VisualKind != MobyVisualKind.Control || !moby.Links.Any(MobyLinkTraversal.IsVisibleLink))
+        return false;
+
+    string text = $"{moby.DisplayLabel} {moby.CandidateKind} {moby.BehaviorNote} {moby.Evidence}".ToLowerInvariant();
+    return text.Contains("control", StringComparison.Ordinal) ||
+        text.Contains("helper", StringComparison.Ordinal) ||
+        text.Contains("trigger", StringComparison.Ordinal) ||
+        text.Contains("camera", StringComparison.Ordinal) ||
+        text.Contains("route", StringComparison.Ordinal) ||
+        text.Contains("portal", StringComparison.Ordinal) ||
+        text.Contains("dragon", StringComparison.Ordinal);
+}
+
+bool IsStrict0xAdTriggerCue(Moby moby)
+{
+    return moby.Type == 0x00 &&
+        moby.SourceByte36 == 0xAD &&
+        moby.SourceByte4F == 0x02 &&
+        moby.Flag4A == 0x00 &&
+        moby.Flag4B == 0xFF &&
+        !moby.HasNativeKeyFingerprint;
+}
+
+string ControlCompanionStatus(Moby moby, bool strictTriggerCue, bool promoted, bool promotedCompanion, string directLinks, string nearestAnchors)
+{
+    if (promoted)
+        return "promoted-link";
+    if (promotedCompanion)
+        return "promoted-companion";
+    if (!strictTriggerCue)
+        return "review-linked-control";
+
+    string text = $"{moby.DisplayLabel} {moby.CandidateKind} {moby.BehaviorNote} {directLinks} {nearestAnchors}".ToLowerInvariant();
+    if (text.Contains("chest", StringComparison.Ordinal) ||
+        text.Contains("gem", StringComparison.Ordinal) ||
+        text.Contains("reward", StringComparison.Ordinal) ||
+        text.Contains("container", StringComparison.Ordinal))
+        return "report-only-container-cue";
+    if (text.Contains("dragon", StringComparison.Ordinal) || text.Contains("pedestal", StringComparison.Ordinal))
+        return "report-only-dragon-cue";
+    if (text.Contains("route", StringComparison.Ordinal) ||
+        text.Contains("portal", StringComparison.Ordinal) ||
+        text.Contains("bird", StringComparison.Ordinal) ||
+        text.Contains("gnorc", StringComparison.Ordinal) ||
+        text.Contains("orc", StringComparison.Ordinal) ||
+        text.Contains("enemy", StringComparison.Ordinal) ||
+        text.Contains("actor", StringComparison.Ordinal))
+        return "report-only-actor-route-cue";
+    return "report-only-trigger-cue";
+}
+
+string BuildControlCompanionAnchorSummary(
+    (LevelDefinition Level, Moby Moby) sample,
+    string fingerprint,
+    IReadOnlyDictionary<string, List<(LevelDefinition Level, Moby Moby)>> byLevel)
+{
+    string nearestKnown = BuildNearestExactObjectSummary(sample, fingerprint, byLevel);
+    string nearestUnknown = BuildNearbyQuestionableSummary(sample, fingerprint, byLevel);
+    if (nearestUnknown.StartsWith("none", StringComparison.OrdinalIgnoreCase))
+        return nearestKnown;
+    return $"{nearestKnown}; unresolved: {nearestUnknown}";
+}
+
+int ControlCompanionPriority(bool strictTriggerCue, string status, string directLinks, string nearestAnchors)
+{
+    int priority = status switch
+    {
+        "promoted-link" => 1,
+        "promoted-companion" => 2,
+        "report-only-container-cue" => 10,
+        "report-only-dragon-cue" => 12,
+        "report-only-actor-route-cue" => 14,
+        "report-only-trigger-cue" => 18,
+        _ => 30
+    };
+    if (strictTriggerCue)
+        priority -= 2;
+    if (!directLinks.StartsWith("none", StringComparison.OrdinalIgnoreCase) &&
+        !directLinks.StartsWith("hidden", StringComparison.OrdinalIgnoreCase))
+        priority -= 3;
+    if (nearestAnchors.Contains("dragon", StringComparison.OrdinalIgnoreCase) ||
+        nearestAnchors.Contains("chest", StringComparison.OrdinalIgnoreCase) ||
+        nearestAnchors.Contains("portal", StringComparison.OrdinalIgnoreCase))
+        priority -= 2;
+    return Math.Clamp(priority, 1, 99);
+}
+
+void ValidateControlCompanionCandidateRows(IReadOnlyList<ControlCompanionCandidateRow> rows)
+{
+    if (rows.Any(row => row.StrictTriggerCue))
+        throw new InvalidOperationException("Source-form 0xAD key rows must not remain in the trigger/control companion report.");
+
+    List<ControlCompanionCandidateRow> dragonRescueCameras = rows.Where(row =>
+        row.Fingerprint.Contains("type=0x00", StringComparison.OrdinalIgnoreCase) &&
+        row.Fingerprint.Contains("b36=0x6E", StringComparison.OrdinalIgnoreCase) &&
+        row.Fingerprint.Contains("f4A=0x10", StringComparison.OrdinalIgnoreCase) &&
+        row.Fingerprint.Contains("f4B=0xFF", StringComparison.OrdinalIgnoreCase) &&
+        row.Fingerprint.Contains("b4F=0x00", StringComparison.OrdinalIgnoreCase)).ToList();
+    if (dragonRescueCameras.Count != 79 || dragonRescueCameras.Any(row =>
+            row.Status.StartsWith("report-only", StringComparison.OrdinalIgnoreCase) ||
+            row.CompanionCount == 0 ||
+            string.IsNullOrWhiteSpace(row.CloneRootSummary)))
+    {
+        throw new InvalidOperationException("All 79 native 0x6E dragon rescue-camera controls must be proven linked companions of their dragon scene.");
+    }
+
+    foreach ((string levelKey, int helperTrueIndex) in KnownReturnHomeHelperProofPairs())
+    {
+        ControlCompanionCandidateRow? row = rows.FirstOrDefault(row =>
+            row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) &&
+            row.TrueIndex == helperTrueIndex);
+        if (row == null ||
+            !row.Status.Equals("promoted-companion", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(row.CloneRootSummary))
+        {
+            throw new InvalidOperationException($"{levelKey} Return Home helper T{helperTrueIndex} should be reported as a proven companion cloned by its linked visible Return Home root.");
+        }
+    }
+
+    List<ControlCompanionCandidateRow> unsafeRows = rows
+        .Where(row => row.Status.StartsWith("report-only", StringComparison.OrdinalIgnoreCase) && row.CompanionCount > 0)
+        .Take(5)
+        .ToList();
+    if (unsafeRows.Count > 0)
+    {
+        string summary = string.Join("; ", unsafeRows.Select(row => $"{row.LevelName} T{row.TrueIndex} {row.Status}/{row.CompanionCount}"));
+        throw new InvalidOperationException($"Report-only control cues must not have companion clone donors: {summary}");
+    }
+}
+
+void ValidateControlCompanionGroupRows(IReadOnlyList<ControlCompanionGroupRow> rows)
+{
+    if (rows.Count == 0)
+        throw new InvalidOperationException("Control companion group report should include cloneable link groups.");
+
+    List<ControlCompanionGroupRow> rootless = rows
+        .Where(row => row.RootCount == 0 || row.CompanionCount == 0)
+        .Take(8)
+        .ToList();
+    if (rootless.Count > 0)
+    {
+        string summary = string.Join("; ", rootless.Select(row => $"{row.LevelName} {row.LinkKey} roots={row.RootCount} companions={row.CompanionCount}"));
+        throw new InvalidOperationException($"Cloneable companion groups must have both root and companion rows: {summary}");
+    }
+
+    foreach ((string levelKey, int helperTrueIndex) in KnownReturnHomeHelperProofPairs())
+    {
+        bool covered = rows.Any(row =>
+            row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) &&
+            row.GroupFamily.Equals("return-home", StringComparison.OrdinalIgnoreCase) &&
+            row.Companions.Contains($"T{helperTrueIndex} ", StringComparison.Ordinal));
+        if (!covered)
+            throw new InvalidOperationException($"{levelKey} Return Home helper T{helperTrueIndex} is missing from the group-level companion report.");
+    }
+
+    bool hasDragonSceneControl = rows.Any(row =>
+        row.GroupFamily.Equals("dragon-scene", StringComparison.OrdinalIgnoreCase) &&
+        row.HasControlCompanion);
+    if (!hasDragonSceneControl)
+        throw new InvalidOperationException("Dragon scene groups should still report cloneable control/camera companions.");
+
+    List<ControlCompanionGroupRow> mixedRootControls = rows
+        .Where(row =>
+            row.RootCount > 1 &&
+            row.Roots.Contains("control", StringComparison.OrdinalIgnoreCase) &&
+            row.Companions.Contains("control", StringComparison.OrdinalIgnoreCase))
+        .Take(4)
+        .ToList();
+    if (mixedRootControls.Count > 0)
+    {
+        string summary = string.Join("; ", mixedRootControls.Select(row => $"{row.LevelName} {row.LinkKey} roots={row.Roots} companions={row.Companions} members={row.Members}"));
+        throw new InvalidOperationException($"Control companion group roots should prefer visible/user-facing objects when a hidden control companion exists: {summary}");
+    }
+}
+
+async Task ReportControlRoleInvestigationSummary()
+{
+    string outDir = Path.Combine(workspace.RootPath, "_local", "smoke");
+    Directory.CreateDirectory(outDir);
+    List<(LevelDefinition Level, Moby Moby)> allMobys = LoadAllCachedMobysWithMetadata();
+    List<ControlRoleInvestigationRow> rows = BuildControlRoleInvestigationRows(allMobys);
+    string proofPath = await WriteControlRoleProofBatchArtifacts(outDir, allMobys, rows, writeBinExports: true);
+    string reportPath = WriteControlRoleInvestigationReport(outDir, allMobys);
+    string fieldGuidePath = WriteControlRoleFieldGuide(outDir, rows);
+    Console.WriteLine($"Control role investigation: report={reportPath}, proofBatches={proofPath}, fieldGuide={fieldGuidePath}");
+}
+
+string WriteControlRoleInvestigationReport(
+    string outDir,
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys)
+{
+    string markdownPath = Path.Combine(outDir, "moby-control-role-investigation.md");
+    string jsonPath = Path.Combine(outDir, "moby-control-role-investigation.json");
+    List<ControlRoleInvestigationRow> rows = BuildControlRoleInvestigationRows(allMobys);
+    ValidateControlRoleInvestigationRows(rows, allMobys);
+    string strictCueLinkagePath = WriteStrictTriggerCueLinkageReport(outDir, allMobys, rows);
+    string dossierPath = WriteControlRoleDossierReport(outDir, allMobys, rows, strictCueLinkagePath);
+    string sceneRouteFamilyPath = WriteSceneRouteMarkerFamilyReport(outDir, allMobys, rows);
+    string portalReturnHomePath = WritePortalReturnHomeControlMapReport(outDir, allMobys, rows);
+    string fingerprintFamilyPath = WriteControlRoleFingerprintFamilyGuide(outDir, rows);
+
+    StringBuilder markdown = new();
+    markdown.AppendLine("# Trigger, Scene, And Scenery Control Investigation");
+    markdown.AppendLine();
+    markdown.AppendLine("This report tracks nonvisual trigger/control rows and linked scenery/control rows. It is proof planning, not an automatic naming or clone-approval list.");
+    markdown.AppendLine();
+    markdown.AppendLine($"- Investigation rows: {rows.Count}");
+    markdown.AppendLine($"- Rows already safe through a proven linked companion: {rows.Count(row => row.AutoCloneSafe)}");
+    markdown.AppendLine($"- Report-only strict `0xAD` trigger cues: {rows.Count(row => row.StrictTriggerCue && !row.AutoCloneSafe)}");
+    markdown.AppendLine($"- Rows with terrain/hazard proximity evidence: {rows.Count(row => !row.TerrainEvidence.StartsWith("none", StringComparison.OrdinalIgnoreCase))}");
+    markdown.AppendLine($"- Strict trigger cue linkage report: `{Path.GetRelativePath(workspace.RootPath, strictCueLinkagePath)}`");
+    markdown.AppendLine($"- Control role dossier report: `{Path.GetRelativePath(workspace.RootPath, dossierPath)}`");
+    markdown.AppendLine($"- Passive control family report: `{Path.GetRelativePath(workspace.RootPath, sceneRouteFamilyPath)}`");
+    markdown.AppendLine($"- Portal/return-home control map: `{Path.GetRelativePath(workspace.RootPath, portalReturnHomePath)}`");
+    markdown.AppendLine($"- Exact byte-family guide: `{Path.GetRelativePath(workspace.RootPath, fingerprintFamilyPath)}`");
+    markdown.AppendLine();
+    markdown.AppendLine("## Highest Priority Rows");
+    markdown.AppendLine();
+    markdown.AppendLine("| Priority | Level | Moby | Current read | Fingerprint | Status | Likely role | Action | Terrain evidence | Relationship lead | Proof step |");
+    markdown.AppendLine("|---:|---|---:|---|---|---|---|---|---|---|---|");
+    foreach (ControlRoleInvestigationRow row in rows.Take(120))
+    {
+        string relationship = FirstMeaningfulLead(row.DirectLinks, row.NearestAnchors, row.TerrainEvidence);
+        markdown.AppendLine($"| {row.Priority} | {EscapeMarkdown(row.LevelName)} | T{row.TrueIndex} | {EscapeMarkdown(row.CurrentRead)} | `{row.Fingerprint}` | {EscapeMarkdown(row.Status)} | {EscapeMarkdown(row.LikelyRole)} | {EscapeMarkdown(row.Action)} | {EscapeMarkdown(row.TerrainEvidence)} | {EscapeMarkdown(relationship)} | {EscapeMarkdown(row.ProofStep)} |");
+    }
+
+    List<ControlRoleInvestigationRow> screenshotFamily = rows
+        .Where(row => row.SourceByte36Hex.Equals("0x1E", StringComparison.OrdinalIgnoreCase) ||
+            row.CurrentRead.Contains("Scene/route", StringComparison.OrdinalIgnoreCase) ||
+            row.LevelKey.Equals("stonehill", StringComparison.OrdinalIgnoreCase) && row.TrueIndex is 149 or 150 or 151)
+        .OrderBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .Take(80)
+        .ToList();
+    if (screenshotFamily.Count > 0)
+    {
+        markdown.AppendLine();
+        markdown.AppendLine("## Class 0x1E Passive Control Family");
+        markdown.AppendLine();
+        markdown.AppendLine("These are the yellow control rows like the screenshot. They are not visible scenery, and class 0x1E alone does not prove a scene or route role; each row needs a direct link or live test before receiving a more specific name.");
+        markdown.AppendLine();
+        markdown.AppendLine("| Level | Moby | Facing | Position | Terrain evidence | Nearby anchors | Proof step |");
+        markdown.AppendLine("|---|---:|---|---|---|---|---|");
+        foreach (ControlRoleInvestigationRow row in screenshotFamily)
+            markdown.AppendLine($"| {EscapeMarkdown(row.LevelName)} | T{row.TrueIndex} | {EscapeMarkdown(row.Facing)} | `{row.Position}` | {EscapeMarkdown(row.TerrainEvidence)} | {EscapeMarkdown(row.NearestAnchors)} | {EscapeMarkdown(row.ProofStep)} |");
+    }
+
+    foreach (IGrouping<string, ControlRoleInvestigationRow> roleGroup in rows
+        .GroupBy(row => row.LikelyRole, StringComparer.OrdinalIgnoreCase)
+        .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+        .Take(12))
+    {
+        markdown.AppendLine();
+        markdown.AppendLine($"## {roleGroup.Key}");
+        markdown.AppendLine();
+        markdown.AppendLine("| Level | Moby | Current read | Status | Direct links | Nearby anchors | Terrain evidence |");
+        markdown.AppendLine("|---|---:|---|---|---|---|---|");
+        foreach (ControlRoleInvestigationRow row in roleGroup.OrderBy(row => row.Priority).ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase).ThenBy(row => row.TrueIndex).Take(32))
+            markdown.AppendLine($"| {EscapeMarkdown(row.LevelName)} | T{row.TrueIndex} | {EscapeMarkdown(row.CurrentRead)} | {EscapeMarkdown(row.Status)} | {EscapeMarkdown(row.DirectLinks)} | {EscapeMarkdown(row.NearestAnchors)} | {EscapeMarkdown(row.TerrainEvidence)} |");
+    }
+
+    File.WriteAllText(markdownPath, markdown.ToString());
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        note = "Role investigation for trigger, scene, route, camera, terrain, and scenery control rows. Report-only rows are not clone approval.",
+        rows
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Control role investigation rows: {rows.Count}, terrainHints={rows.Count(row => !row.TerrainEvidence.StartsWith("none", StringComparison.OrdinalIgnoreCase))}, reportOnlyStrict0xAD={rows.Count(row => row.StrictTriggerCue && !row.AutoCloneSafe)}");
+    return markdownPath;
+}
+
+string WriteControlRoleFieldGuide(string outDir, IReadOnlyList<ControlRoleInvestigationRow> rows)
+{
+    string markdownPath = Path.Combine(outDir, "control-role-field-guide.md");
+    string jsonPath = Path.Combine(outDir, "control-role-field-guide.json");
+    Dictionary<string, string> proofCueByKey = ReadControlRoleProofCueIndex();
+    List<ControlRoleInvestigationRow> proofQueue = SelectControlRoleProofCandidates(rows)
+        .OrderBy(row => row.Priority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .ToList();
+    List<ControlRoleFieldGuideFamilyRow> familyRows = rows
+        .GroupBy(ControlRoleFieldGuideFamily, StringComparer.OrdinalIgnoreCase)
+        .OrderBy(group => ControlRoleFieldGuideFamilyRank(group.Key))
+        .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+        .Select(group => new ControlRoleFieldGuideFamilyRow(
+            group.Key,
+            ControlRoleFieldGuideMeaning(group.Key),
+            group.Count(),
+            group.Count(row => row.AutoCloneSafe),
+            group.Count(row => !row.AutoCloneSafe),
+            group
+                .OrderBy(row => row.Priority)
+                .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(row => row.TrueIndex)
+                .Take(5)
+                .Select(row => $"{row.LevelName} T{row.TrueIndex} {row.CurrentRead}")
+                .ToList()))
+        .ToList();
+
+    int checkedInReturnHomePairs = KnownReturnHomeHelperProofPairs().Count(pair =>
+        CheckedInBehaviorLinkExists(pair.LevelKey, $"{pair.LevelKey}:control-role-proof:t{pair.TrueIndex}"));
+    int proofOnlyPortalTriplets = KnownPortalTripletProofRows().Count(pair =>
+        !CheckedInBehaviorLinkExists(pair.LevelKey, $"{pair.LevelKey}:control-role-proof:t{pair.TrueIndex}"));
+    int proofCueRows = proofQueue.Count(row =>
+        !string.IsNullOrWhiteSpace(ControlRoleProofCuePath(proofCueByKey, row.LevelKey, row.TrueIndex, "marker-only")) ||
+        !string.IsNullOrWhiteSpace(ControlRoleProofCuePath(proofCueByKey, row.LevelKey, row.TrueIndex, "cluster")));
+
+    StringBuilder markdown = new();
+    markdown.AppendLine("# Trigger/Control Field Guide");
+    markdown.AppendLine();
+    markdown.AppendLine("Compact release-facing guide for the nonvisual trigger/control rows. This is intentionally conservative: a row becomes automatic editor companion data only after it has behavior-link metadata, not merely because its byte pattern looks related.");
+    markdown.AppendLine();
+    markdown.AppendLine("## Current State");
+    markdown.AppendLine();
+    markdown.AppendLine($"- Investigation rows: {rows.Count}");
+    markdown.AppendLine($"- Proven auto-clone rows: {rows.Count(row => row.AutoCloneSafe)}");
+    markdown.AppendLine($"- Rows still needing live proof: {rows.Count(row => !row.AutoCloneSafe)}");
+    markdown.AppendLine($"- Checked-in Return Home helper pairs: {checkedInReturnHomePairs}/{KnownReturnHomeHelperProofPairs().Length}");
+    markdown.AppendLine($"- Portal/control triplets kept proof-only: {proofOnlyPortalTriplets}/{KnownPortalTripletProofRows().Length}");
+    markdown.AppendLine($"- Proof queue rows with local CUE exports: {proofCueRows}");
+    markdown.AppendLine($"- Checked-in behavior links: `{workspace.RootPath}/*-behavior-links.json`");
+    markdown.AppendLine($"- Local proof discs: `{Path.Combine(workspace.RootPath, "_local", "objects", "control-role-proof-bins")}`");
+    markdown.AppendLine($"- Proof review TSV: `{Path.Combine(workspace.RootPath, "_local", "control-role-proof-review", "results", "control-role-proof-results.tsv")}`");
+    markdown.AppendLine();
+    markdown.AppendLine("## Byte Families");
+    markdown.AppendLine();
+    markdown.AppendLine("| Family | Current read | Rows | Proven | Needs proof | Example rows |");
+    markdown.AppendLine("|---|---|---:|---:|---:|---|");
+    foreach (ControlRoleFieldGuideFamilyRow family in familyRows)
+    {
+        markdown.AppendLine($"| {EscapeMarkdown(family.Family)} | {EscapeMarkdown(family.Meaning)} | {family.Rows} | {family.Proven} | {family.NeedsProof} | {EscapeMarkdown(string.Join("; ", family.ExampleRows))} |");
+    }
+
+    markdown.AppendLine();
+    markdown.AppendLine("## Release Rules");
+    markdown.AppendLine();
+    markdown.AppendLine("- If a row is in checked-in behavior-link metadata, copy/paste/add should bring it with the linked visible/root object.");
+    markdown.AppendLine("- If a row is report-only, it stays inspectable and protected; do not add it as a standalone release object or hidden companion yet.");
+    markdown.AppendLine("- Portal pad/control triplets have static cluster proof and disposable test discs, but remain proof-only until live behavior confirms the portal still works after moving the cluster.");
+    markdown.AppendLine("- The yellow control icon is a visual category, not one object type. Proven Return Home, portal, dragon/camera, hazard, and reward controls keep their specific links; unresolved class 0x1E rows remain neutral.");
+    markdown.AppendLine();
+    markdown.AppendLine("## Next Live Proof Targets");
+    markdown.AppendLine();
+    markdown.AppendLine("| Priority | Level | Moby | Family | Likely role | Marker CUE | Cluster CUE | What to compare |");
+    markdown.AppendLine("|---:|---|---:|---|---|---|---|---|");
+    foreach (ControlRoleInvestigationRow row in proofQueue.Take(16))
+    {
+        string markerCue = ControlRoleProofCuePath(proofCueByKey, row.LevelKey, row.TrueIndex, "marker-only");
+        string clusterCue = ControlRoleProofCuePath(proofCueByKey, row.LevelKey, row.TrueIndex, "cluster");
+        markdown.AppendLine($"| {row.Priority} | {EscapeMarkdown(row.LevelName)} | T{row.TrueIndex} | {EscapeMarkdown(ControlRoleFieldGuideFamily(row))} | {EscapeMarkdown(row.LikelyRole)} | {ControlRoleFieldGuidePathCell(markerCue)} | {ControlRoleFieldGuidePathCell(clusterCue)} | {EscapeMarkdown(ControlRoleFieldGuideProofCompare(row))} |");
+    }
+
+    File.WriteAllText(markdownPath, markdown.ToString());
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        investigationRows = rows.Count,
+        provenAutoCloneRows = rows.Count(row => row.AutoCloneSafe),
+        needsLiveProofRows = rows.Count(row => !row.AutoCloneSafe),
+        checkedInReturnHomePairs,
+        proofOnlyPortalTriplets,
+        proofCueRows,
+        checkedInBehaviorLinks = Path.Combine(workspace.RootPath, "*-behavior-links.json"),
+        localProofDiscs = Path.Combine(workspace.RootPath, "_local", "objects", "control-role-proof-bins"),
+        proofReviewTsv = Path.Combine(workspace.RootPath, "_local", "control-role-proof-review", "results", "control-role-proof-results.tsv"),
+        families = familyRows,
+        nextProofTargets = proofQueue.Take(16).Select(row => new
+        {
+            row.Priority,
+            row.LevelKey,
+            row.LevelName,
+            row.TrueIndex,
+            family = ControlRoleFieldGuideFamily(row),
+            row.CurrentRead,
+            row.LikelyRole,
+            markerCue = ControlRoleProofCuePath(proofCueByKey, row.LevelKey, row.TrueIndex, "marker-only"),
+            clusterCue = ControlRoleProofCuePath(proofCueByKey, row.LevelKey, row.TrueIndex, "cluster"),
+            compare = ControlRoleFieldGuideProofCompare(row)
+        }).ToList()
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    ValidateControlRoleFieldGuide(markdownPath, checkedInReturnHomePairs, proofOnlyPortalTriplets);
+    Console.WriteLine($"Control role field guide: report={markdownPath}");
+    return markdownPath;
+}
+
+void ValidateControlRoleFieldGuide(string markdownPath, int checkedInReturnHomePairs, int proofOnlyPortalTriplets)
+{
+    if (!File.Exists(markdownPath))
+        throw new FileNotFoundException("Control role field guide was not written.", markdownPath);
+    if (checkedInReturnHomePairs != KnownReturnHomeHelperProofPairs().Length)
+        throw new InvalidOperationException($"Control role field guide expected all Return Home helper pairs checked in, got {checkedInReturnHomePairs}.");
+    if (proofOnlyPortalTriplets != KnownPortalTripletProofRows().Length)
+        throw new InvalidOperationException($"Control role field guide expected all mapped portal triplets to remain proof-only, got {proofOnlyPortalTriplets}.");
+}
+
+string ControlRoleFieldGuideFamily(ControlRoleInvestigationRow row)
+{
+    string text = $"{row.CurrentRead} {row.LikelyRole} {row.Fingerprint}".ToLowerInvariant();
+    if (row.StrictTriggerCue || row.SourceByte36Hex.Equals("0xAD", StringComparison.OrdinalIgnoreCase))
+        return "0xAD strict trigger/cue";
+    if (row.SourceByte36Hex.Equals("0x8E", StringComparison.OrdinalIgnoreCase))
+        return "0x8E portal pad trigger";
+    if (row.SourceByte36Hex.Equals("0x01", StringComparison.OrdinalIgnoreCase))
+        return "0x01 portal destination/name";
+    if (row.SourceByte36Hex.Equals("0x1E", StringComparison.OrdinalIgnoreCase))
+        return "0x1E passive control point";
+    if (row.SourceByte36Hex.Equals("0x0B", StringComparison.OrdinalIgnoreCase))
+        return "0x0B route-control cluster";
+    if (text.Contains("chest", StringComparison.Ordinal) || text.Contains("reward", StringComparison.Ordinal) || text.Contains("container", StringComparison.Ordinal))
+        return "reward/container control";
+    if (text.Contains("dragon", StringComparison.Ordinal) || text.Contains("camera", StringComparison.Ordinal) || text.Contains("rescue", StringComparison.Ordinal))
+        return "dragon/camera control";
+    return "other trigger/control";
+}
+
+int ControlRoleFieldGuideFamilyRank(string family) =>
+    family switch
+    {
+        "0x8E portal pad trigger" => 0,
+        "0x01 portal destination/name" => 1,
+        "0x1E passive control point" => 2,
+        "0x0B route-control cluster" => 3,
+        "0xAD strict trigger/cue" => 4,
+        "dragon/camera control" => 5,
+        "reward/container control" => 6,
+        _ => 9
+    };
+
+string ControlRoleFieldGuideMeaning(string family) =>
+    family switch
+    {
+        "0x8E portal pad trigger" => "Looks like the portal pad/entry trigger member. Mapped triplets are still proof-only until live portal behavior confirms the link.",
+        "0x01 portal destination/name" => "Usually sits beside portal pad triggers and route controls; current evidence says destination/name/portal-routing support, not a standalone visible object.",
+        "0x1E passive control point" => "Passive native control points with no standalone actor update. A more specific role requires a direct behavior link or live proof.",
+        "0x0B route-control cluster" => "Route-control cluster candidate. Often appears in groups and needs marker-only vs cluster live proof.",
+        "0xAD strict trigger/cue" => "Strict cue/trigger marker. Keep report-only until exact camera, cutscene, spawn, or rescue behavior is observed.",
+        "dragon/camera control" => "Likely dragon rescue, camera, or cutscene control. Promote only when moving the visible rescue cluster proves behavior follows.",
+        "reward/container control" => "Likely reward, chest, or contained-gem control. Promote only after shell, reward spawn, and collection count are verified.",
+        _ => "Unresolved trigger/control infrastructure. Keep inspectable but not automatically cloned."
+    };
+
+string ControlRoleFieldGuideProofCompare(ControlRoleInvestigationRow row)
+{
+    string family = ControlRoleFieldGuideFamily(row);
+    string text = $"{row.LikelyRole} {row.CurrentRead} {row.TerrainEvidence}".ToLowerInvariant();
+    if (family.Contains("portal", StringComparison.OrdinalIgnoreCase) || text.Contains("portal", StringComparison.Ordinal))
+        return "Compare marker-only vs cluster CUEs by walking into/near the portal, checking level entry, portal name/sign behavior, return-home behavior, and camera/position changes.";
+    if (family.Contains("reward", StringComparison.OrdinalIgnoreCase) || text.Contains("chest", StringComparison.Ordinal) || text.Contains("reward", StringComparison.Ordinal) || text.Contains("container", StringComparison.Ordinal))
+        return "Compare marker-only vs cluster CUEs by hitting/opening the linked shell, watching spawned rewards, and checking treasure/count updates after collection.";
+    if (family.Contains("dragon", StringComparison.OrdinalIgnoreCase) || text.Contains("dragon", StringComparison.Ordinal) || text.Contains("camera", StringComparison.Ordinal) || text.Contains("rescue", StringComparison.Ordinal))
+        return "Compare marker-only vs cluster CUEs by rescuing or approaching the dragon scene, then check camera start, rescue animation, pedestal alignment, and post-rescue state.";
+    if (text.Contains("terrain", StringComparison.Ordinal) || text.Contains("hazard", StringComparison.Ordinal) || text.Contains("water", StringComparison.Ordinal) || text.Contains("lava", StringComparison.Ordinal) || text.Contains("ooze", StringComparison.Ordinal))
+        return "Compare marker-only vs cluster CUEs by repeating the same terrain/hazard touch and checking damage, reset, camera, and collision behavior.";
+    if (family.Contains("strict trigger", StringComparison.OrdinalIgnoreCase))
+        return "Compare marker-only vs cluster CUEs and record exactly what appears, disappears, starts, stops, or breaks.";
+    return "Compare marker-only first, then cluster, and promote only if the visible behavior clearly follows the linked group.";
+}
+
+string ControlRoleFieldGuidePathCell(string path) =>
+    string.IsNullOrWhiteSpace(path) ? "" : $"`{path}`";
+
+string WriteControlRoleFingerprintFamilyGuide(string outDir, IReadOnlyList<ControlRoleInvestigationRow> rows)
+{
+    string markdownPath = Path.Combine(outDir, "control-role-fingerprint-family-guide.md");
+    string jsonPath = Path.Combine(outDir, "control-role-fingerprint-family-guide.json");
+    List<ControlRoleFingerprintFamilyRow> familyRows = rows
+        .GroupBy(row => row.Fingerprint, StringComparer.OrdinalIgnoreCase)
+        .Select(BuildControlRoleFingerprintFamilyRow)
+        .OrderBy(row => row.Priority)
+        .ThenByDescending(row => row.Rows)
+        .ThenBy(row => row.Fingerprint, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+    List<ControlRoleFingerprintFamilyRow> screenshotFamilies = familyRows
+        .Where(row => IsArtisansScreenshotControlFingerprint(row.Fingerprint))
+        .OrderBy(row => row.Priority)
+        .ToList();
+    List<ControlRoleFingerprintFamilyRow> priorityFamilies = familyRows
+        .Where(row => row.NeedsProof > 0)
+        .OrderBy(row => row.Priority)
+        .ThenByDescending(row => row.Rows)
+        .Take(32)
+        .ToList();
+
+    StringBuilder markdown = new();
+    markdown.AppendLine("# Exact Trigger/Control Byte-Family Guide");
+    markdown.AppendLine();
+    markdown.AppendLine("This report groups every trigger/control investigation row by its exact byte fingerprint. It is meant to answer \"what kind of hidden/control thing is this?\" without accidentally promoting a whole byte family into copy/paste behavior.");
+    markdown.AppendLine();
+    markdown.AppendLine("## Current State");
+    markdown.AppendLine();
+    markdown.AppendLine($"- Investigation rows: {rows.Count}");
+    markdown.AppendLine($"- Exact byte families: {familyRows.Count}");
+    markdown.AppendLine($"- Families with some proven auto-clone rows: {familyRows.Count(row => row.Proven > 0)}");
+    markdown.AppendLine($"- Families that still contain proof-only rows: {familyRows.Count(row => row.NeedsProof > 0)}");
+    markdown.AppendLine($"- Screenshot-style Artisans scene/control families: {screenshotFamilies.Count}");
+    markdown.AppendLine();
+
+    if (screenshotFamilies.Count > 0)
+    {
+        markdown.AppendLine("## Screenshot-Style Artisans Families");
+        markdown.AppendLine();
+        markdown.AppendLine("These are the yellow control/scenery markers that look like the screenshot. The current evidence says they are level-logic controls, not ordinary scenery, and they stay report-only until a live marker-only vs cluster test proves the exact behavior.");
+        markdown.AppendLine();
+        markdown.AppendLine("| Fingerprint | Working role | Rows | Proven | Needs proof | Strongest evidence | Editor behavior | Next proof | Examples |");
+        markdown.AppendLine("|---|---|---:|---:|---:|---|---|---|---|");
+        foreach (ControlRoleFingerprintFamilyRow family in screenshotFamilies)
+        {
+            markdown.AppendLine($"| `{family.Fingerprint}` | {EscapeMarkdown(family.WorkingRole)} | {family.Rows} | {family.Proven} | {family.NeedsProof} | {EscapeMarkdown(family.StrongestEvidence)} | {EscapeMarkdown(family.EditorBehavior)} | {EscapeMarkdown(family.NextProof)} | {EscapeMarkdown(string.Join("; ", family.ExampleRows))} |");
+        }
+    }
+
+    markdown.AppendLine();
+    markdown.AppendLine("## Priority Families");
+    markdown.AppendLine();
+    markdown.AppendLine("| Priority | Fingerprint | Working role | Levels | Rows | Proven | Needs proof | Common reads | Likely roles | Strongest evidence | Editor behavior |");
+    markdown.AppendLine("|---:|---|---|---|---:|---:|---:|---|---|---|---|");
+    foreach (ControlRoleFingerprintFamilyRow family in priorityFamilies)
+    {
+        markdown.AppendLine($"| {family.Priority} | `{family.Fingerprint}` | {EscapeMarkdown(family.WorkingRole)} | {EscapeMarkdown(family.Levels)} | {family.Rows} | {family.Proven} | {family.NeedsProof} | {EscapeMarkdown(family.CommonReads)} | {EscapeMarkdown(family.LikelyRoles)} | {EscapeMarkdown(family.StrongestEvidence)} | {EscapeMarkdown(family.EditorBehavior)} |");
+    }
+
+    markdown.AppendLine();
+    markdown.AppendLine("## All Exact Families");
+    markdown.AppendLine();
+    markdown.AppendLine("| Fingerprint | Working role | Levels | Rows | Proven | Needs proof | Status | Next proof | Examples |");
+    markdown.AppendLine("|---|---|---|---:|---:|---:|---|---|---|");
+    foreach (ControlRoleFingerprintFamilyRow family in familyRows)
+    {
+        markdown.AppendLine($"| `{family.Fingerprint}` | {EscapeMarkdown(family.WorkingRole)} | {EscapeMarkdown(family.Levels)} | {family.Rows} | {family.Proven} | {family.NeedsProof} | {EscapeMarkdown(family.StatusSummary)} | {EscapeMarkdown(family.NextProof)} | {EscapeMarkdown(string.Join("; ", family.ExampleRows))} |");
+    }
+
+    File.WriteAllText(markdownPath, markdown.ToString());
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        note = "Exact byte-family guide for trigger/control reverse-engineering. Mixed or proof-only families must not become automatic editor companion data without behavior-link proof.",
+        families = familyRows,
+        screenshotFamilies,
+        priorityFamilies
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    ValidateControlRoleFingerprintFamilyGuide(familyRows);
+    Console.WriteLine($"Control role exact byte-family guide: families={familyRows.Count}, screenshotFamilies={screenshotFamilies.Count}, report={markdownPath}");
+    return markdownPath;
+}
+
+ControlRoleFingerprintFamilyRow BuildControlRoleFingerprintFamilyRow(IGrouping<string, ControlRoleInvestigationRow> group)
+{
+    List<ControlRoleInvestigationRow> samples = group
+        .OrderBy(row => row.Priority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .ToList();
+    int proven = samples.Count(row => row.AutoCloneSafe);
+    int needsProof = samples.Count - proven;
+    string workingRole = BuildControlRoleFingerprintWorkingRole(group.Key, samples);
+    string levels = BuildControlRoleLimitedList(samples.Select(row => row.LevelName), 10);
+    string commonReads = BuildControlRoleValueCountSummary(samples.Select(row => row.CurrentRead), 5);
+    string likelyRoles = BuildControlRoleValueCountSummary(samples.Select(row => row.LikelyRole), 5);
+    string statusSummary = BuildControlRoleValueCountSummary(samples.Select(row => row.Status), 4);
+    string strongestEvidence = BuildControlRoleFingerprintStrongestEvidence(samples);
+    string editorBehavior = BuildControlRoleFingerprintEditorBehavior(group.Key, samples, proven, needsProof);
+    string nextProof = BuildControlRoleFingerprintNextProof(group.Key, samples);
+    IReadOnlyList<string> exampleRows = samples
+        .Take(6)
+        .Select(row => $"{row.LevelName} T{row.TrueIndex} {row.CurrentRead} ({row.LikelyRole})")
+        .ToList();
+
+    return new ControlRoleFingerprintFamilyRow(
+        group.Key,
+        workingRole,
+        levels,
+        samples.Count,
+        proven,
+        needsProof,
+        commonReads,
+        likelyRoles,
+        statusSummary,
+        strongestEvidence,
+        editorBehavior,
+        nextProof,
+        exampleRows,
+        BuildControlRoleFingerprintPriority(group.Key, samples, proven, needsProof));
+}
+
+string BuildControlRoleFingerprintWorkingRole(string fingerprint, IReadOnlyList<ControlRoleInvestigationRow> samples)
+{
+    IdentityFingerprintParts parts = ParseIdentityFingerprint(fingerprint);
+    string text = string.Join(" ", samples.Select(row => $"{row.CurrentRead} {row.LikelyRole} {row.Status}")).ToLowerInvariant();
+
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0x8E", StringComparison.OrdinalIgnoreCase))
+        return "portal pad trigger/control marker";
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0x01", StringComparison.OrdinalIgnoreCase))
+        return "portal destination or level-name support marker";
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0x1E", StringComparison.OrdinalIgnoreCase))
+        return "scene/route control marker";
+    if (IsArtisansScreenshotControlFingerprint(fingerprint))
+        return parts.SourceByte36Hex.Equals("0x0B", StringComparison.OrdinalIgnoreCase)
+            ? "Artisans screenshot scene/route control marker"
+            : "Artisans local treasure/scenery control scaffold";
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0xAD", StringComparison.OrdinalIgnoreCase))
+        return "strict trigger/cue marker";
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0x6E", StringComparison.OrdinalIgnoreCase))
+        return "dragon rescue control marker";
+    if (text.Contains("sparx/player anchor", StringComparison.Ordinal) || text.Contains("sparx behavior", StringComparison.Ordinal))
+        return "Sparx/player anchor or behavior control";
+    if (text.Contains("dragon", StringComparison.Ordinal) || text.Contains("pedestal", StringComparison.Ordinal) || text.Contains("rescue", StringComparison.Ordinal))
+        return "dragon rescue/camera companion family";
+    if (text.Contains("portal", StringComparison.Ordinal) || text.Contains("return-home", StringComparison.Ordinal) || text.Contains("destination", StringComparison.Ordinal))
+        return "portal or return-home control family";
+    if (text.Contains("chest", StringComparison.Ordinal) || text.Contains("reward", StringComparison.Ordinal) || text.Contains("container", StringComparison.Ordinal) || text.Contains("treasure", StringComparison.Ordinal))
+        return "reward/container control family";
+    if (text.Contains("terrain", StringComparison.Ordinal) || text.Contains("hazard", StringComparison.Ordinal) || text.Contains("water", StringComparison.Ordinal))
+        return "terrain/hazard control candidate";
+    if (text.Contains("whirlwind", StringComparison.Ordinal))
+        return "whirlwind/route control candidate";
+    return "unresolved trigger/control family";
+}
+
+bool IsArtisansScreenshotControlFingerprint(string fingerprint)
+{
+    return fingerprint.Equals("type=0x00 b36=0x0B f4A=0x10 f4B=0xFF b4F=0x00", StringComparison.OrdinalIgnoreCase) ||
+        fingerprint.Equals("type=0x00 b36=0x5F f4A=0x10 f4B=0x53 b4F=0x00", StringComparison.OrdinalIgnoreCase);
+}
+
+string BuildControlRoleFingerprintStrongestEvidence(IReadOnlyList<ControlRoleInvestigationRow> samples)
+{
+    ControlRoleInvestigationRow? linked = samples.FirstOrDefault(row => HasMeaningfulDirectLinks(row.DirectLinks));
+    if (linked != null)
+        return linked.DirectLinks;
+
+    ControlRoleInvestigationRow? terrain = samples.FirstOrDefault(row => !row.TerrainEvidence.StartsWith("none", StringComparison.OrdinalIgnoreCase));
+    if (terrain != null)
+    {
+        int terrainRows = samples.Count(row => !row.TerrainEvidence.StartsWith("none", StringComparison.OrdinalIgnoreCase));
+        return $"{terrainRows} terrain/hazard-near row(s); example {terrain.LevelName} T{terrain.TrueIndex}: {terrain.TerrainEvidence}";
+    }
+
+    ControlRoleInvestigationRow? anchor = samples.FirstOrDefault(row => !row.NearestAnchors.StartsWith("none", StringComparison.OrdinalIgnoreCase));
+    if (anchor != null)
+        return $"{anchor.LevelName} T{anchor.TrueIndex}: {anchor.NearestAnchors}";
+
+    return samples.Count == 0 ? "none" : samples[0].Evidence;
+}
+
+string BuildControlRoleFingerprintEditorBehavior(
+    string fingerprint,
+    IReadOnlyList<ControlRoleInvestigationRow> samples,
+    int proven,
+    int needsProof)
+{
+    if (needsProof == 0)
+        return "Auto-clone is allowed for this family where it appears in behavior-link metadata.";
+
+    if (IsArtisansScreenshotControlFingerprint(fingerprint))
+        return "Report-only. Keep visible/inspectable for reverse-engineering; do not add as an automatic companion or normal placeable object yet.";
+
+    IdentityFingerprintParts parts = ParseIdentityFingerprint(fingerprint);
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) &&
+        (parts.SourceByte36Hex.Equals("0x8E", StringComparison.OrdinalIgnoreCase) ||
+            parts.SourceByte36Hex.Equals("0xAD", StringComparison.OrdinalIgnoreCase)))
+    {
+        return "Report-only until a live marker-only vs cluster proof confirms the linked behavior.";
+    }
+
+    if (proven > 0)
+        return "Mixed. Proven linked rows auto-clone; unproven rows in the same byte family stay report-only.";
+
+    return "Report-only. Do not auto-clone, add, or expose as a standalone release object until live proof creates behavior-link metadata.";
+}
+
+string BuildControlRoleFingerprintNextProof(string fingerprint, IReadOnlyList<ControlRoleInvestigationRow> samples)
+{
+    IdentityFingerprintParts parts = ParseIdentityFingerprint(fingerprint);
+    string text = string.Join(" ", samples.Select(row => $"{row.CurrentRead} {row.LikelyRole} {row.Status} {row.TerrainEvidence}")).ToLowerInvariant();
+
+    if (IsArtisansScreenshotControlFingerprint(fingerprint))
+    {
+        if (parts.SourceByte36Hex.Equals("0x0B", StringComparison.OrdinalIgnoreCase))
+            return "In Artisans, compare T149-T154 marker-only and cluster CUEs. Check portal/name behavior, route or camera changes, and water/hazard response before promoting any link.";
+
+        return "In Artisans, compare T17-T20 and T34-T37 marker-only and cluster CUEs. Check nearby treasure gnorcs, trees/scenery, chests, rewards, and camera behavior before promoting any link.";
+    }
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) &&
+        (parts.SourceByte36Hex.Equals("0x8E", StringComparison.OrdinalIgnoreCase) ||
+            parts.SourceByte36Hex.Equals("0x01", StringComparison.OrdinalIgnoreCase) ||
+            parts.SourceByte36Hex.Equals("0x1E", StringComparison.OrdinalIgnoreCase)) &&
+        text.Contains("portal", StringComparison.Ordinal))
+    {
+        return "Move the pad, destination/name, and route-control cluster together in a disposable BIN; compare portal entry, level-name text, return-home, and camera/position behavior.";
+    }
+
+    if (text.Contains("dragon", StringComparison.Ordinal) || text.Contains("pedestal", StringComparison.Ordinal) || text.Contains("rescue", StringComparison.Ordinal))
+        return "Move the visible dragon, pedestal, and control marker together, then compare rescue scene, camera start, pedestal alignment, and post-rescue state.";
+    if (text.Contains("chest", StringComparison.Ordinal) || text.Contains("reward", StringComparison.Ordinal) || text.Contains("container", StringComparison.Ordinal) || text.Contains("treasure", StringComparison.Ordinal))
+        return "Move marker-only first, then marker with the nearest shell/reward rows; compare hit response, spawned rewards, treasure total, and collection behavior.";
+    if (text.Contains("terrain", StringComparison.Ordinal) || text.Contains("hazard", StringComparison.Ordinal) || text.Contains("water", StringComparison.Ordinal) || text.Contains("lava", StringComparison.Ordinal))
+        return "Move marker-only first and repeat the same hazard/terrain touch; compare damage, reset, collision, and camera behavior.";
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0xAD", StringComparison.OrdinalIgnoreCase))
+        return "Use marker-only before cluster. Record exactly what appears, disappears, starts, stops, or breaks, then promote only the confirmed linked true indexes.";
+    if (text.Contains("sparx", StringComparison.Ordinal))
+        return "Move with its nearest Sparx/player behavior partner and visible cluster; check collection, rescue, or camera side effects before naming it.";
+    return "Move marker-only first, then move it with the nearest visible cluster; promote only if live behavior clearly follows the linked cluster.";
+}
+
+int BuildControlRoleFingerprintPriority(
+    string fingerprint,
+    IReadOnlyList<ControlRoleInvestigationRow> samples,
+    int proven,
+    int needsProof)
+{
+    IdentityFingerprintParts parts = ParseIdentityFingerprint(fingerprint);
+    if (IsArtisansScreenshotControlFingerprint(fingerprint))
+        return parts.SourceByte36Hex.Equals("0x0B", StringComparison.OrdinalIgnoreCase) ? 1 : 2;
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0x8E", StringComparison.OrdinalIgnoreCase))
+        return 3;
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0x01", StringComparison.OrdinalIgnoreCase))
+        return 4;
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0x1E", StringComparison.OrdinalIgnoreCase))
+        return 5;
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0xAD", StringComparison.OrdinalIgnoreCase))
+        return 6;
+    if (needsProof > 0 && samples.Any(row => row.Status.Contains("terrain", StringComparison.OrdinalIgnoreCase)))
+        return 8;
+    if (needsProof > 0 && proven > 0)
+        return 10;
+    if (needsProof > 0)
+        return 20;
+    return 50;
+}
+
+string BuildControlRoleLimitedList(IEnumerable<string> values, int maxItems)
+{
+    List<string> distinct = values
+        .Where(value => !string.IsNullOrWhiteSpace(value))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+    if (distinct.Count <= maxItems)
+        return string.Join(", ", distinct);
+
+    return $"{string.Join(", ", distinct.Take(maxItems))}, +{distinct.Count - maxItems} more";
+}
+
+string BuildControlRoleValueCountSummary(IEnumerable<string> values, int maxItems)
+{
+    List<string> parts = values
+        .Where(value => !string.IsNullOrWhiteSpace(value))
+        .GroupBy(value => value, StringComparer.OrdinalIgnoreCase)
+        .OrderByDescending(group => group.Count())
+        .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+        .Take(maxItems)
+        .Select(group => $"{group.Key} ({group.Count()})")
+        .ToList();
+    return parts.Count == 0 ? "none" : string.Join("; ", parts);
+}
+
+void ValidateControlRoleFingerprintFamilyGuide(IReadOnlyList<ControlRoleFingerprintFamilyRow> familyRows)
+{
+    ControlRoleFingerprintFamilyRow? artisansSceneControl = familyRows.FirstOrDefault(row =>
+        row.Fingerprint.Equals("type=0x00 b36=0x0B f4A=0x10 f4B=0xFF b4F=0x00", StringComparison.OrdinalIgnoreCase));
+    if (artisansSceneControl == null)
+        throw new InvalidOperationException("Exact byte-family guide must include the Artisans screenshot-style 0x0B control family.");
+    if (artisansSceneControl.Proven != 0 || !artisansSceneControl.EditorBehavior.Contains("Report-only", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException("Artisans screenshot-style 0x0B control family must remain report-only.");
+
+    ControlRoleFingerprintFamilyRow? portalPadFamily = familyRows.FirstOrDefault(row =>
+        row.Fingerprint.Equals("type=0x00 b36=0x8E f4A=0x10 f4B=0xFF b4F=0x00", StringComparison.OrdinalIgnoreCase));
+    if (portalPadFamily == null || portalPadFamily.Proven != 0 || portalPadFamily.NeedsProof == 0)
+        throw new InvalidOperationException("Portal pad trigger family must remain proof-only until live portal behavior is confirmed.");
+
+    ControlRoleFingerprintFamilyRow? sceneRouteFamily = familyRows.FirstOrDefault(row =>
+        row.Fingerprint.Equals("type=0x00 b36=0x1E f4A=0x10 f4B=0xFF b4F=0x00", StringComparison.OrdinalIgnoreCase));
+    if (sceneRouteFamily == null || sceneRouteFamily.Proven == 0 || sceneRouteFamily.NeedsProof == 0)
+        throw new InvalidOperationException("Scene/route 0x1E family should stay mixed: some proven companions, some proof-only rows.");
+
+    List<ControlRoleFingerprintFamilyRow> unsafeRows = familyRows
+        .Where(row => row.NeedsProof > 0 && row.EditorBehavior.Contains("Auto-clone is allowed for this family", StringComparison.OrdinalIgnoreCase))
+        .Take(5)
+        .ToList();
+    if (unsafeRows.Count > 0)
+    {
+        string summary = string.Join("; ", unsafeRows.Select(row => row.Fingerprint));
+        throw new InvalidOperationException($"Proof-only byte families cannot recommend whole-family auto-clone: {summary}");
+    }
+}
+
+string WriteControlRoleDossierReport(
+    string outDir,
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys,
+    IReadOnlyList<ControlRoleInvestigationRow> controlRoleRows,
+    string strictCueLinkagePath)
+{
+    string markdownPath = Path.Combine(outDir, "control-role-dossiers.md");
+    string jsonPath = Path.Combine(outDir, "control-role-dossiers.json");
+    Dictionary<string, string> proofCueByKey = ReadControlRoleProofCueIndex();
+    Dictionary<string, string> proofManifestByKey = ReadControlRoleProofManifestIndex();
+    Dictionary<string, StrictTriggerCueLinkageRow> strictRowsByKey = BuildStrictTriggerCueLinkageRows(allMobys, controlRoleRows)
+        .ToDictionary(row => $"{row.LevelKey}|{row.TrueIndex}", StringComparer.OrdinalIgnoreCase);
+
+    List<ControlRoleDossierRow> dossierRows = SelectControlRoleDossierRows(controlRoleRows, strictRowsByKey, proofCueByKey, proofManifestByKey);
+    List<ControlRoleDossierRow> stoneHillSceneRoutes = dossierRows
+        .Where(row => row.LevelKey.Equals("stonehill", StringComparison.OrdinalIgnoreCase) && row.TrueIndex is 149 or 150 or 151)
+        .OrderBy(row => row.TrueIndex)
+        .ToList();
+    List<ControlRoleDossierRow> proofNeeded = dossierRows
+        .Where(row => row.NeedsLiveProof)
+        .OrderBy(row => row.Priority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .ToList();
+    List<ControlRoleDossierRow> provenExamples = dossierRows
+        .Where(row => row.AutoCloneSafe)
+        .OrderBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .Take(24)
+        .ToList();
+
+    StringBuilder markdown = new();
+    markdown.AppendLine("# Control Role Dossiers");
+    markdown.AppendLine();
+    markdown.AppendLine("This is the release-facing map for trigger/control rows: what is already safe to clone, what is only a static guess, and what live proof would promote it into editor companion behavior.");
+    markdown.AppendLine();
+    markdown.AppendLine($"- Source investigation: `{Path.GetRelativePath(workspace.RootPath, Path.Combine(outDir, "moby-control-role-investigation.md"))}`");
+    markdown.AppendLine($"- Strict trigger cue linkage: `{Path.GetRelativePath(workspace.RootPath, strictCueLinkagePath)}`");
+    markdown.AppendLine($"- Dossier rows: {dossierRows.Count}");
+    markdown.AppendLine($"- Proven auto-clone rows in dossier: {dossierRows.Count(row => row.AutoCloneSafe)}");
+    markdown.AppendLine($"- Rows still needing live proof in dossier: {proofNeeded.Count}");
+    markdown.AppendLine($"- Proof-needed rows with native-edit manifests: {proofNeeded.Count(row => !string.IsNullOrWhiteSpace(row.MarkerManifest))}");
+    markdown.AppendLine($"- Proof-needed rows with full marker/cluster CUE exports: {proofNeeded.Count(row => !string.IsNullOrWhiteSpace(row.MarkerCue) && !string.IsNullOrWhiteSpace(row.ClusterCue))}");
+    markdown.AppendLine();
+    markdown.AppendLine("## Release Rule");
+    markdown.AppendLine();
+    markdown.AppendLine("- Proven linked companions: the editor should add/copy/paste the linked trigger/control rows with the visible donor.");
+    markdown.AppendLine("- Report-only markers: the editor should keep them inspectable but not add them as automatic companions until marker-only vs cluster live proof confirms the exact link.");
+    markdown.AppendLine("- Native-edit manifests cover the full proof queue; full BIN/CUE exports stay focused because each disc image is large.");
+    markdown.AppendLine("- Promoted proof rows must come through `_local/control-role-proof-review/results/control-role-proof-results.tsv`; generated behavior-link JSON is the switch that makes copy/paste clone them.");
+
+    if (stoneHillSceneRoutes.Count > 0)
+    {
+        markdown.AppendLine();
+        markdown.AppendLine("## Stone Hill Scene/Route Markers");
+        markdown.AppendLine();
+        markdown.AppendLine("These are the yellow marker rows like the screenshot. Current evidence says they are level-logic anchors near water/hazard terrain, not ordinary scenery and not yet proven chest/gem companions.");
+        markdown.AppendLine();
+        markdown.AppendLine("| Moby | Fingerprint | Current best read | Evidence | Nearby candidates | Marker manifest | Cluster manifest | Marker CUE | Cluster CUE | Editor action |");
+        markdown.AppendLine("|---:|---|---|---|---|---|---|---|---|---|");
+        foreach (ControlRoleDossierRow row in stoneHillSceneRoutes)
+        {
+            markdown.AppendLine($"| T{row.TrueIndex} | `{row.Fingerprint}` | {EscapeMarkdown(row.LikelyRole)} | {EscapeMarkdown(row.EvidenceSummary)} | {EscapeMarkdown(row.NearbyAnchors)} | {EscapeMarkdown(row.MarkerManifest)} | {EscapeMarkdown(row.ClusterManifest)} | {EscapeMarkdown(row.MarkerCue)} | {EscapeMarkdown(row.ClusterCue)} | {EscapeMarkdown(row.EditorAction)} |");
+        }
+    }
+
+    markdown.AppendLine();
+    markdown.AppendLine("## Proof Needed Before Auto-Clone");
+    markdown.AppendLine();
+    markdown.AppendLine("| Priority | Level | Moby | Current read | Likely role | Strongest evidence | Suggested linked indexes | Proof artifacts | Editor action |");
+    markdown.AppendLine("|---:|---|---:|---|---|---|---|---|---|");
+    foreach (ControlRoleDossierRow row in proofNeeded.Take(48))
+    {
+        string suggested = string.IsNullOrWhiteSpace(row.SuggestedLinkedTrueIndexes)
+            ? ""
+            : $"`{EscapeMarkdown(row.SuggestedLinkedTrueIndexes)}`";
+        string artifacts = BuildControlRoleDossierArtifactCell(row);
+        markdown.AppendLine($"| {row.Priority} | {EscapeMarkdown(row.LevelName)} | T{row.TrueIndex} | {EscapeMarkdown(row.CurrentRead)} | {EscapeMarkdown(row.LikelyRole)} | {EscapeMarkdown(row.EvidenceSummary)} | {suggested} | {artifacts} | {EscapeMarkdown(row.EditorAction)} |");
+    }
+
+    markdown.AppendLine();
+    markdown.AppendLine("## Proven Auto-Clone Examples");
+    markdown.AppendLine();
+    markdown.AppendLine("| Level | Moby | Current read | Proven link evidence | Editor action |");
+    markdown.AppendLine("|---|---:|---|---|---|");
+    foreach (ControlRoleDossierRow row in provenExamples)
+        markdown.AppendLine($"| {EscapeMarkdown(row.LevelName)} | T{row.TrueIndex} | {EscapeMarkdown(row.CurrentRead)} | {EscapeMarkdown(row.DirectLinks)} | {EscapeMarkdown(row.EditorAction)} |");
+
+    File.WriteAllText(markdownPath, markdown.ToString());
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        note = "Release-facing dossiers for trigger/control rows. Auto-clone is allowed only for proven linked companions or generated live-proof behavior links.",
+        rows = dossierRows,
+        stoneHillSceneRoutes,
+        proofNeeded,
+        provenExamples
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    ValidateControlRoleDossierRows(dossierRows);
+    Console.WriteLine($"Control role dossiers: rows={dossierRows.Count}, proofNeeded={proofNeeded.Count}, report={markdownPath}");
+    return markdownPath;
+}
+
+List<ControlRoleDossierRow> SelectControlRoleDossierRows(
+    IReadOnlyList<ControlRoleInvestigationRow> controlRoleRows,
+    IReadOnlyDictionary<string, StrictTriggerCueLinkageRow> strictRowsByKey,
+    IReadOnlyDictionary<string, string> proofCueByKey,
+    IReadOnlyDictionary<string, string> proofManifestByKey)
+{
+    List<ControlRoleInvestigationRow> selected = new();
+    void AddRows(IEnumerable<ControlRoleInvestigationRow> rows)
+    {
+        foreach (ControlRoleInvestigationRow row in rows)
+        {
+            if (selected.Any(existing =>
+                existing.LevelKey.Equals(row.LevelKey, StringComparison.OrdinalIgnoreCase) &&
+                existing.TrueIndex == row.TrueIndex))
+            {
+                continue;
+            }
+
+            selected.Add(row);
+        }
+    }
+
+    AddRows(controlRoleRows.Where(row => row.LevelKey.Equals("stonehill", StringComparison.OrdinalIgnoreCase) && row.TrueIndex is 149 or 150 or 151));
+    AddRows(controlRoleRows.Where(row => row.StrictTriggerCue));
+    AddRows(SelectControlRoleProofCandidates(controlRoleRows));
+    AddRows(controlRoleRows
+        .Where(row => row.AutoCloneSafe)
+        .OrderBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .Take(32));
+
+    return selected
+        .OrderBy(row => row.Priority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .Select(row => BuildControlRoleDossierRow(row, strictRowsByKey, proofCueByKey, proofManifestByKey))
+        .ToList();
+}
+
+ControlRoleDossierRow BuildControlRoleDossierRow(
+    ControlRoleInvestigationRow row,
+    IReadOnlyDictionary<string, StrictTriggerCueLinkageRow> strictRowsByKey,
+    IReadOnlyDictionary<string, string> proofCueByKey,
+    IReadOnlyDictionary<string, string> proofManifestByKey)
+{
+    strictRowsByKey.TryGetValue($"{row.LevelKey}|{row.TrueIndex}", out StrictTriggerCueLinkageRow? strictRow);
+    string markerManifest = ControlRoleProofManifestPath(proofManifestByKey, row, "marker-only");
+    string clusterManifest = ControlRoleProofManifestPath(proofManifestByKey, row, "cluster");
+    string markerCue = FirstNonEmpty(
+        strictRow?.MarkerOnlyCue ?? "",
+        ControlRoleProofCuePath(proofCueByKey, row.LevelKey, row.TrueIndex, "marker-only"));
+    string clusterCue = FirstNonEmpty(
+        strictRow?.ClusterCue ?? "",
+        ControlRoleProofCuePath(proofCueByKey, row.LevelKey, row.TrueIndex, "cluster"));
+    string evidence = FirstNonEmpty(
+        strictRow?.StrongestStaticClue ?? "",
+        FirstMeaningfulLead(row.DirectLinks, row.NearestAnchors, row.TerrainEvidence));
+    string suggestedLinkedTrueIndexes = strictRow?.SuggestedLinkedTrueIndexes ?? "";
+    bool needsLiveProof = !row.AutoCloneSafe;
+
+    return new ControlRoleDossierRow(
+        row.LevelKey,
+        row.LevelName,
+        row.TrueIndex,
+        row.CurrentRead,
+        row.Fingerprint,
+        row.Status,
+        row.LikelyRole,
+        evidence,
+        row.DirectLinks,
+        row.NearestAnchors,
+        row.TerrainEvidence,
+        suggestedLinkedTrueIndexes,
+        markerManifest,
+        clusterManifest,
+        markerCue,
+        clusterCue,
+        BuildControlRoleDossierEditorAction(row, suggestedLinkedTrueIndexes),
+        row.ProofStep,
+        row.AutoCloneSafe,
+        needsLiveProof,
+        row.Priority);
+}
+
+string BuildControlRoleDossierEditorAction(ControlRoleInvestigationRow row, string suggestedLinkedTrueIndexes)
+{
+    if (row.AutoCloneSafe)
+        return "Auto-clone with the linked visible donor; this row already has proven companion-link metadata.";
+
+    string proofTarget = string.IsNullOrWhiteSpace(suggestedLinkedTrueIndexes)
+        ? "the exact linked true indexes"
+        : $"linked true indexes {suggestedLinkedTrueIndexes}";
+    if (row.StrictTriggerCue)
+        return $"Keep report-only. Run marker-only vs cluster proof; if live behavior confirms {proofTarget}, promote it in the proof TSV.";
+    if (row.Status.Contains("terrain", StringComparison.OrdinalIgnoreCase))
+        return "Keep report-only. Test terrain/water/hazard behavior first; do not auto-add as a chest/gem companion yet.";
+    if (row.Status.Contains("scenery", StringComparison.OrdinalIgnoreCase))
+        return "Keep report-only. Move marker and visible prop separately, then together, before allowing companion cloning.";
+    return "Keep inspectable but not placeable as a standalone release object until live behavior proof exists.";
+}
+
+string BuildControlRoleDossierArtifactCell(ControlRoleDossierRow row)
+{
+    List<string> artifacts = new();
+    AddArtifact("marker manifest", row.MarkerManifest);
+    AddArtifact("cluster manifest", row.ClusterManifest);
+    AddArtifact("marker CUE", row.MarkerCue);
+    AddArtifact("cluster CUE", row.ClusterCue);
+    return string.Join("<br>", artifacts);
+
+    void AddArtifact(string label, string path)
+    {
+        if (!string.IsNullOrWhiteSpace(path))
+            artifacts.Add($"{label}: {EscapeMarkdown(path)}");
+    }
+}
+
+string FirstNonEmpty(params string[] values)
+{
+    foreach (string value in values)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+            return value;
+    }
+
+    return "";
+}
+
+void ValidateControlRoleDossierRows(IReadOnlyList<ControlRoleDossierRow> rows)
+{
+    ControlRoleDossierRow? stoneHillT150 = rows.FirstOrDefault(row =>
+        row.LevelKey.Equals("stonehill", StringComparison.OrdinalIgnoreCase) &&
+        row.TrueIndex == 150);
+    if (stoneHillT150 == null)
+        throw new InvalidOperationException("Control role dossier must include Stone Hill T150.");
+    if (stoneHillT150.AutoCloneSafe || !stoneHillT150.NeedsLiveProof)
+        throw new InvalidOperationException("Stone Hill T150 is not live-proven and must remain report-only in the dossier.");
+    if (!stoneHillT150.EditorAction.Contains("Keep report-only", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException("Stone Hill T150 dossier row must keep the editor action report-only.");
+    if (string.IsNullOrWhiteSpace(stoneHillT150.MarkerManifest) || string.IsNullOrWhiteSpace(stoneHillT150.ClusterManifest))
+        throw new InvalidOperationException("Stone Hill T150 dossier row must show native-edit proof manifests even when full proof CUEs are focused elsewhere.");
+
+    List<ControlRoleDossierRow> unsafeRows = rows
+        .Where(row => row.NeedsLiveProof && row.EditorAction.Contains("Auto-clone", StringComparison.OrdinalIgnoreCase))
+        .Take(5)
+        .ToList();
+    if (unsafeRows.Count > 0)
+    {
+        string summary = string.Join("; ", unsafeRows.Select(row => $"{row.LevelName} T{row.TrueIndex}"));
+        throw new InvalidOperationException($"Unproven dossier rows cannot recommend auto-clone: {summary}");
+    }
+}
+
+string WriteSceneRouteMarkerFamilyReport(
+    string outDir,
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys,
+    IReadOnlyList<ControlRoleInvestigationRow> controlRoleRows)
+{
+    string markdownPath = Path.Combine(outDir, "scene-route-marker-family.md");
+    string jsonPath = Path.Combine(outDir, "scene-route-marker-family.json");
+    List<SceneRouteMarkerFamilyRow> rows = BuildSceneRouteMarkerFamilyRows(allMobys, controlRoleRows);
+    List<SceneRouteMarkerFamilyRow> stoneHillRows = rows
+        .Where(row => row.LevelKey.Equals("stonehill", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(row => row.TrueIndex)
+        .ToList();
+    List<SceneRouteMarkerFamilyRow> needsProofRows = rows
+        .Where(row => row.NeedsLiveProof)
+        .OrderBy(row => row.Priority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .ToList();
+    List<SceneRouteMarkerFamilyRow> provenRows = rows
+        .Where(row => row.AutoCloneSafe)
+        .OrderBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .ToList();
+
+    StringBuilder markdown = new();
+    markdown.AppendLine("# Passive Control Marker Family");
+    markdown.AppendLine();
+    markdown.AppendLine("Focused analysis for the yellow control family, including unresolved class `0x1E` points, portal pad/destination rows, and proven portal/dragon companion rows. This report keeps icon similarity separate from behavior proof.");
+    markdown.AppendLine();
+    markdown.AppendLine($"- Rows: {rows.Count}");
+    markdown.AppendLine($"- Proven auto-clone rows: {provenRows.Count}");
+    markdown.AppendLine($"- Rows still needing live proof: {needsProofRows.Count}");
+    markdown.AppendLine($"- Stone Hill rows: {stoneHillRows.Count}");
+    markdown.AppendLine();
+    markdown.AppendLine("## Stone Hill Focus");
+    markdown.AppendLine();
+    markdown.AppendLine("| Moby | Current read | Family bucket | Link state | Terrain evidence | Route/control neighbors | Visible anchors | Editor behavior |");
+    markdown.AppendLine("|---:|---|---|---|---|---|---|---|");
+    foreach (SceneRouteMarkerFamilyRow row in stoneHillRows)
+    {
+        markdown.AppendLine($"| T{row.TrueIndex} | {EscapeMarkdown(row.CurrentRead)} | {EscapeMarkdown(row.FamilyBucket)} | {EscapeMarkdown(row.LinkState)} | {EscapeMarkdown(row.TerrainEvidence)} | {EscapeMarkdown(row.RouteNeighbors)} | {EscapeMarkdown(row.VisibleAnchors)} | {EscapeMarkdown(row.EditorBehavior)} |");
+    }
+
+    markdown.AppendLine();
+    markdown.AppendLine("## Needs Live Proof");
+    markdown.AppendLine();
+    markdown.AppendLine("| Priority | Level | Moby | Fingerprint | Family bucket | Strongest evidence | Proof artifacts | Editor behavior |");
+    markdown.AppendLine("|---:|---|---:|---|---|---|---|---|");
+    foreach (SceneRouteMarkerFamilyRow row in needsProofRows.Take(80))
+    {
+        string artifacts = string.Join("<br>", new[] { row.MarkerCue, row.ClusterCue }.Where(text => !string.IsNullOrWhiteSpace(text)).Select(EscapeMarkdown));
+        markdown.AppendLine($"| {row.Priority} | {EscapeMarkdown(row.LevelName)} | T{row.TrueIndex} | `{row.Fingerprint}` | {EscapeMarkdown(row.FamilyBucket)} | {EscapeMarkdown(row.StrongestEvidence)} | {artifacts} | {EscapeMarkdown(row.EditorBehavior)} |");
+    }
+
+    markdown.AppendLine();
+    markdown.AppendLine("## Proven Companion Rows");
+    markdown.AppendLine();
+    markdown.AppendLine("| Level | Moby | Current read | Family bucket | Proven links | Editor behavior |");
+    markdown.AppendLine("|---|---:|---|---|---|---|");
+    foreach (SceneRouteMarkerFamilyRow row in provenRows.Take(80))
+    {
+        markdown.AppendLine($"| {EscapeMarkdown(row.LevelName)} | T{row.TrueIndex} | {EscapeMarkdown(row.CurrentRead)} | {EscapeMarkdown(row.FamilyBucket)} | {EscapeMarkdown(row.LinkedObjects)} | {EscapeMarkdown(row.EditorBehavior)} |");
+    }
+
+    File.WriteAllText(markdownPath, markdown.ToString());
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        note = "Passive control family analysis. Unproven class 0x1E controls stay report-only; proven portal/dragon links can auto-clone through behavior-link metadata.",
+        rows,
+        stoneHillRows,
+        needsProofRows,
+        provenRows
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    ValidateSceneRouteMarkerFamilyRows(rows);
+    Console.WriteLine($"Passive control marker family: rows={rows.Count}, proofNeeded={needsProofRows.Count}, report={markdownPath}");
+    return markdownPath;
+}
+
+List<SceneRouteMarkerFamilyRow> BuildSceneRouteMarkerFamilyRows(
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys,
+    IReadOnlyList<ControlRoleInvestigationRow> controlRoleRows)
+{
+    Dictionary<string, List<(LevelDefinition Level, Moby Moby)>> byLevel = allMobys
+        .GroupBy(item => item.Level.Key, StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+    Dictionary<string, Moby> mobyByKey = allMobys
+        .Where(item => item.Moby.TrueIndex >= 0)
+        .GroupBy(item => $"{item.Level.Key}|{item.Moby.TrueIndex}", StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(group => group.Key, group => group.First().Moby, StringComparer.OrdinalIgnoreCase);
+    Dictionary<string, string> proofCueByKey = ReadControlRoleProofCueIndex();
+
+    return controlRoleRows
+        .Where(IsSceneRouteMarkerFamilyCandidate)
+        .Select(row =>
+        {
+            mobyByKey.TryGetValue($"{row.LevelKey}|{row.TrueIndex}", out Moby? moby);
+            byLevel.TryGetValue(row.LevelKey, out List<(LevelDefinition Level, Moby Moby)>? levelRows);
+            IReadOnlyList<Moby> levelMobys = levelRows?.Select(item => item.Moby).ToList() ?? [];
+            return BuildSceneRouteMarkerFamilyRow(row, moby, levelMobys, proofCueByKey);
+        })
+        .OrderBy(row => row.Priority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .ToList();
+}
+
+bool IsSceneRouteMarkerFamilyCandidate(ControlRoleInvestigationRow row)
+{
+    string text = $"{row.CurrentRead} {row.LikelyRole} {row.Status}".ToLowerInvariant();
+    return row.SourceByte36Hex is "0x1E" or "0x01" or "0x8E" or "0x0B" ||
+        text.Contains("scene/route", StringComparison.Ordinal) ||
+        text.Contains("scene route", StringComparison.Ordinal) ||
+        text.Contains("route control", StringComparison.Ordinal) ||
+        text.Contains("route marker", StringComparison.Ordinal) ||
+        text.Contains("portal", StringComparison.Ordinal) ||
+        text.Contains("destination", StringComparison.Ordinal) ||
+        text.Contains("pad trigger", StringComparison.Ordinal);
+}
+
+SceneRouteMarkerFamilyRow BuildSceneRouteMarkerFamilyRow(
+    ControlRoleInvestigationRow row,
+    Moby? moby,
+    IReadOnlyList<Moby> levelMobys,
+    IReadOnlyDictionary<string, string> proofCueByKey)
+{
+    string routeNeighbors = moby == null ? "none" : BuildSceneRouteNeighborSummary(moby, levelMobys);
+    string linkedObjects = moby == null ? "none" : BuildSceneRouteLinkedObjectSummary(moby, levelMobys);
+    string visibleAnchors = row.NearestAnchors;
+    string familyBucket = BuildSceneRouteFamilyBucket(row, routeNeighbors, linkedObjects);
+    string linkState = row.AutoCloneSafe
+        ? "proven linked companion"
+        : HasMeaningfulDirectLinks(row.DirectLinks)
+            ? "static link metadata needs role proof"
+            : "report-only, needs marker-only vs cluster live proof";
+    string markerCue = ControlRoleProofCuePath(proofCueByKey, row.LevelKey, row.TrueIndex, "marker-only");
+    string clusterCue = ControlRoleProofCuePath(proofCueByKey, row.LevelKey, row.TrueIndex, "cluster");
+    string strongestEvidence = FirstMeaningfulLead(linkedObjects, routeNeighbors, visibleAnchors, row.TerrainEvidence);
+    string editorBehavior = BuildSceneRouteEditorBehavior(row, familyBucket);
+
+    return new SceneRouteMarkerFamilyRow(
+        row.LevelKey,
+        row.LevelName,
+        row.TrueIndex,
+        row.CurrentRead,
+        row.Fingerprint,
+        row.SourceByte36Hex,
+        familyBucket,
+        linkState,
+        linkedObjects,
+        routeNeighbors,
+        visibleAnchors,
+        row.TerrainEvidence,
+        strongestEvidence,
+        markerCue,
+        clusterCue,
+        editorBehavior,
+        row.ProofStep,
+        row.AutoCloneSafe,
+        !row.AutoCloneSafe,
+        row.Priority);
+}
+
+string BuildSceneRouteNeighborSummary(Moby marker, IReadOnlyList<Moby> levelMobys)
+{
+    List<string> neighbors = levelMobys
+        .Where(moby => moby.TrueIndex != marker.TrueIndex)
+        .Where(moby => IsSceneRouteMarkerMoby(moby))
+        .Select(moby => new
+        {
+            Moby = moby,
+            Distance = Math.Sqrt(DistanceSquared(moby.Position, marker.Position))
+        })
+        .Where(item => item.Distance <= 768)
+        .OrderBy(item => item.Distance)
+        .ThenBy(item => item.Moby.TrueIndex)
+        .Take(6)
+        .Select(item => $"T{item.Moby.TrueIndex} {item.Moby.DisplayLabel} @ {item.Distance:0}u")
+        .ToList();
+    return neighbors.Count == 0 ? "none nearby" : string.Join(", ", neighbors);
+}
+
+bool IsSceneRouteMarkerMoby(Moby moby)
+{
+    string text = $"{moby.DisplayLabel} {moby.CandidateKind} {moby.BehaviorNote}".ToLowerInvariant();
+    return moby.SourceByte36 is 0x1E or 0x01 or 0x8E or 0x0B ||
+        text.Contains("scene/route", StringComparison.Ordinal) ||
+        text.Contains("route control", StringComparison.Ordinal) ||
+        text.Contains("route marker", StringComparison.Ordinal) ||
+        text.Contains("portal destination", StringComparison.Ordinal) ||
+        text.Contains("portal pad", StringComparison.Ordinal);
+}
+
+string BuildSceneRouteLinkedObjectSummary(Moby marker, IReadOnlyList<Moby> levelMobys)
+{
+    Dictionary<int, Moby> byTrueIndex = levelMobys
+        .Where(moby => moby.TrueIndex >= 0)
+        .ToDictionary(moby => moby.TrueIndex);
+    List<string> linked = marker.Links
+        .Where(MobyCompanionClonePlanner.IsCompanionCloneLink)
+        .SelectMany(link => link.TrueIndexes.Select(trueIndex => new { Link = link, TrueIndex = trueIndex }))
+        .Where(item => item.TrueIndex != marker.TrueIndex)
+        .DistinctBy(item => item.TrueIndex)
+        .OrderBy(item => item.TrueIndex)
+        .Select(item =>
+        {
+            string label = byTrueIndex.TryGetValue(item.TrueIndex, out Moby? linkedMoby)
+                ? linkedMoby.DisplayLabel
+                : "unresolved";
+            return $"T{item.TrueIndex} {label} ({item.Link.Kind})";
+        })
+        .ToList();
+    return linked.Count == 0 ? "none" : string.Join(", ", linked);
+}
+
+string BuildSceneRouteFamilyBucket(
+    ControlRoleInvestigationRow row,
+    string routeNeighbors,
+    string linkedObjects)
+{
+    string text = $"{row.CurrentRead} {row.LikelyRole} {row.DirectLinks} {row.NearestAnchors} {row.TerrainEvidence} {routeNeighbors} {linkedObjects}".ToLowerInvariant();
+    if (row.AutoCloneSafe && text.Contains("portal", StringComparison.Ordinal))
+        return "proven portal-entry companion";
+    if (row.AutoCloneSafe && (text.Contains("dragon", StringComparison.Ordinal) || text.Contains("pedestal", StringComparison.Ordinal) || text.Contains("rescue", StringComparison.Ordinal)))
+        return "proven dragon-scene companion";
+    if (row.AutoCloneSafe)
+        return "proven scene/route companion";
+    if (row.SourceByte36Hex.Equals("0x8E", StringComparison.OrdinalIgnoreCase))
+        return "portal pad trigger candidate";
+    if (row.SourceByte36Hex.Equals("0x01", StringComparison.OrdinalIgnoreCase))
+        return "portal destination candidate";
+    if (row.SourceByte36Hex.Equals("0x1E", StringComparison.OrdinalIgnoreCase) &&
+        !row.TerrainEvidence.StartsWith("none", StringComparison.OrdinalIgnoreCase))
+        return "terrain/hazard scene-route marker candidate";
+    if (!routeNeighbors.StartsWith("none", StringComparison.OrdinalIgnoreCase))
+        return "route-control cluster candidate";
+    return "scene/route marker candidate";
+}
+
+string BuildSceneRouteEditorBehavior(ControlRoleInvestigationRow row, string familyBucket)
+{
+    if (row.AutoCloneSafe)
+        return "Auto-clone with the linked visible donor through behavior-link metadata.";
+    if (familyBucket.Contains("terrain/hazard", StringComparison.OrdinalIgnoreCase))
+        return "Keep report-only; test water/lava/hazard response before linking this to any visible object.";
+    if (familyBucket.Contains("portal", StringComparison.OrdinalIgnoreCase))
+        return "Keep report-only; test portal pad, destination, and level-name behavior before promoting a link.";
+    return "Keep report-only; move marker-only first, then route cluster, and promote only after live behavior proves the link.";
+}
+
+void ValidateSceneRouteMarkerFamilyRows(IReadOnlyList<SceneRouteMarkerFamilyRow> rows)
+{
+    SceneRouteMarkerFamilyRow? stoneHillT150 = rows.FirstOrDefault(row =>
+        row.LevelKey.Equals("stonehill", StringComparison.OrdinalIgnoreCase) &&
+        row.TrueIndex == 150);
+    if (stoneHillT150 == null)
+        throw new InvalidOperationException("Scene/route marker family report must include Stone Hill T150.");
+    if (stoneHillT150.AutoCloneSafe || !stoneHillT150.NeedsLiveProof)
+        throw new InvalidOperationException("Stone Hill T150 must remain live-proof-only in the scene/route marker family report.");
+    if (!stoneHillT150.FamilyBucket.Contains("terrain/hazard", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException($"Stone Hill T150 should be classified as terrain/hazard-adjacent, got {stoneHillT150.FamilyBucket}.");
+    if (!stoneHillT150.EditorBehavior.Contains("Keep report-only", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException("Stone Hill T150 scene/route editor behavior must remain report-only.");
+
+    List<SceneRouteMarkerFamilyRow> unsafeRows = rows
+        .Where(row => row.NeedsLiveProof && row.EditorBehavior.Contains("Auto-clone", StringComparison.OrdinalIgnoreCase))
+        .Take(5)
+        .ToList();
+    if (unsafeRows.Count > 0)
+    {
+        string summary = string.Join("; ", unsafeRows.Select(row => $"{row.LevelName} T{row.TrueIndex}"));
+        throw new InvalidOperationException($"Unproven scene/route markers cannot recommend auto-clone: {summary}");
+    }
+}
+
+string WritePortalReturnHomeControlMapReport(
+    string outDir,
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys,
+    IReadOnlyList<ControlRoleInvestigationRow> controlRoleRows)
+{
+    string markdownPath = Path.Combine(outDir, "portal-return-home-control-map.md");
+    string jsonPath = Path.Combine(outDir, "portal-return-home-control-map.json");
+    List<PortalReturnHomeControlRow> rows = BuildPortalReturnHomeControlRows(allMobys, controlRoleRows);
+    ValidatePortalReturnHomeControlRows(rows);
+
+    List<PortalReturnHomeControlRow> provenRows = rows
+        .Where(row => row.RowKind.StartsWith("proven", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.PrimaryTrueIndex)
+        .ToList();
+    List<PortalReturnHomeControlRow> returnHomeRows = rows
+        .Where(row => row.RowKind.Equals("return-home helper pair", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.PrimaryTrueIndex)
+        .ToList();
+    List<PortalReturnHomeControlRow> portalTripletRows = rows
+        .Where(row => row.RowKind.Equals("portal control triplet", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.PrimaryTrueIndex)
+        .ToList();
+
+    StringBuilder markdown = new();
+    markdown.AppendLine("# Portal And Return-Home Control Map");
+    markdown.AppendLine();
+    markdown.AppendLine("Focused map for `0x8E` portal pad triggers, `0x01` portal destinations/name rows, `0x1E` route markers, and the common return-home helper pairs. This report is intentionally conservative: only rows with existing companion-link metadata are editor auto-clone safe.");
+    markdown.AppendLine();
+    markdown.AppendLine($"- Rows: {rows.Count}");
+    markdown.AppendLine($"- Proven editor auto-clone rows: {provenRows.Count}");
+    markdown.AppendLine($"- Portal control triplets needing proof: {portalTripletRows.Count(row => row.NeedsLiveProof)}");
+    markdown.AppendLine($"- Return-home helper pairs needing proof: {returnHomeRows.Count(row => row.NeedsLiveProof)}");
+    markdown.AppendLine();
+
+    markdown.AppendLine("## Proven Editor Links");
+    markdown.AppendLine();
+    markdown.AppendLine("| Level | Visible object | Controls/helpers | Evidence | Editor behavior |");
+    markdown.AppendLine("|---|---|---|---|---|");
+    foreach (PortalReturnHomeControlRow row in provenRows.Take(80))
+        markdown.AppendLine($"| {EscapeMarkdown(row.LevelName)} | {EscapeMarkdown(row.VisibleObject)} | {EscapeMarkdown(row.TriggerControls)} | {EscapeMarkdown(row.Evidence)} | {EscapeMarkdown(row.EditorBehavior)} |");
+
+    markdown.AppendLine();
+    markdown.AppendLine("## Portal Control Triplets");
+    markdown.AppendLine();
+    markdown.AppendLine("| Level | Primary | Controls/helpers | Nearest visible object | Evidence | Editor behavior |");
+    markdown.AppendLine("|---|---|---|---|---|---|");
+    foreach (PortalReturnHomeControlRow row in portalTripletRows.Take(120))
+        markdown.AppendLine($"| {EscapeMarkdown(row.LevelName)} | {EscapeMarkdown(row.Primary)} | {EscapeMarkdown(row.TriggerControls)} | {EscapeMarkdown(row.VisibleObject)} | {EscapeMarkdown(row.Evidence)} | {EscapeMarkdown(row.EditorBehavior)} |");
+
+    markdown.AppendLine();
+    markdown.AppendLine("## Return-Home Helper Pairs");
+    markdown.AppendLine();
+    markdown.AppendLine("| Level | Helper/control | Visible return-home object | Evidence | Editor behavior |");
+    markdown.AppendLine("|---|---|---|---|---|");
+    foreach (PortalReturnHomeControlRow row in returnHomeRows.Take(80))
+        markdown.AppendLine($"| {EscapeMarkdown(row.LevelName)} | {EscapeMarkdown(row.Primary)} | {EscapeMarkdown(row.VisibleObject)} | {EscapeMarkdown(row.Evidence)} | {EscapeMarkdown(row.EditorBehavior)} |");
+
+    File.WriteAllText(markdownPath, markdown.ToString());
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        note = "Portal and return-home control grouping. Auto-clone is allowed only for existing proven companion links; all other rows stay proof-only.",
+        rows,
+        provenRows,
+        portalTripletRows,
+        returnHomeRows
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Portal/return-home control map: rows={rows.Count}, proven={provenRows.Count}, report={markdownPath}");
+    return markdownPath;
+}
+
+List<PortalReturnHomeControlRow> BuildPortalReturnHomeControlRows(
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys,
+    IReadOnlyList<ControlRoleInvestigationRow> controlRoleRows)
+{
+    Dictionary<string, ControlRoleInvestigationRow> controlRoleByKey = controlRoleRows
+        .GroupBy(row => $"{row.LevelKey}|{row.TrueIndex}", StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+    List<PortalReturnHomeControlRow> rows = new();
+    HashSet<string> seenRows = new(StringComparer.OrdinalIgnoreCase);
+
+    foreach (IGrouping<string, (LevelDefinition Level, Moby Moby)> levelGroup in allMobys.GroupBy(item => item.Level.Key, StringComparer.OrdinalIgnoreCase))
+    {
+        LevelDefinition level = levelGroup.First().Level;
+        List<Moby> levelMobys = levelGroup.Select(item => item.Moby).Where(moby => !moby.IsRemoved).ToList();
+
+        foreach (Moby moby in levelMobys)
+        {
+            foreach (MobyLink link in moby.Links.Where(MobyCompanionClonePlanner.IsCompanionCloneLink))
+            {
+                string linkText = $"{link.Kind} {link.Name} {link.Reason}".ToLowerInvariant();
+                if (!linkText.Contains("portal", StringComparison.Ordinal) && !linkText.Contains("return", StringComparison.Ordinal))
+                    continue;
+                if (moby.VisualKind is MobyVisualKind.Control or MobyVisualKind.Unknown &&
+                    !IsPortalReturnHomeVisibleControlLabel(moby))
+                {
+                    continue;
+                }
+
+                AddPortalReturnHomeRow(
+                    rows,
+                    seenRows,
+                    new PortalReturnHomeControlRow(
+                        level.Key,
+                        level.DisplayName,
+                        linkText.Contains("return", StringComparison.Ordinal) ? "proven return-home link" : "proven portal-entry link",
+                        FormatPortalReturnHomeMoby(moby),
+                        moby.TrueIndex,
+                        FormatPortalReturnHomeLinkMembers(link, moby, levelMobys),
+                        FormatPortalReturnHomeMoby(moby),
+                        $"{link.DisplayName}: {FirstNonEmpty(link.Reason, link.Confidence, "existing companion-link metadata")}",
+                        "Auto-clone with the linked visible object through existing behavior-link metadata.",
+                        true,
+                        false,
+                        1));
+            }
+        }
+
+        foreach (Moby pad in levelMobys.Where(IsPortalPadControlMoby).OrderBy(moby => moby.TrueIndex))
+        {
+            Moby? destination = FindNearestMoby(pad, levelMobys.Where(IsPortalDestinationControlMoby), 384);
+            Moby? route = FindNearestMoby(pad, levelMobys.Where(moby => IsPortalRouteControlMoby(moby) && moby.TrueIndex != pad.TrueIndex), 384);
+            if (destination == null && route == null)
+                continue;
+
+            Moby? visible = FindNearestMoby(pad, levelMobys.Where(IsPortalVisibleAnchorMoby), 768);
+            List<Moby> controls = new[] { pad, destination, route }
+                .Where(moby => moby != null)
+                .Select(moby => moby!)
+                .DistinctBy(moby => moby.TrueIndex)
+                .OrderBy(moby => moby.TrueIndex)
+                .ToList();
+            bool autoCloneSafe = PortalControlClusterHasFullCompanionCoverage(controls);
+            string editorBehavior = autoCloneSafe
+                ? "Already covered by proven companion-link metadata; regression-test copy/paste of the linked portal object."
+                : "Keep proof-only. If moving this portal/pad/destination cluster proves the visible portal behavior follows, promote it through the proof TSV before editor auto-add.";
+
+            AddPortalReturnHomeRow(
+                rows,
+                seenRows,
+                new PortalReturnHomeControlRow(
+                    level.Key,
+                    level.DisplayName,
+                    "portal control triplet",
+                    FormatPortalReturnHomeMoby(pad),
+                    pad.TrueIndex,
+                    string.Join(", ", controls.Select(FormatPortalReturnHomeMoby)),
+                    visible == null ? "no visible portal/sign anchor within 768u" : FormatPortalReturnHomeMoby(visible),
+                    BuildPortalControlTripletEvidence(pad, destination, route, visible),
+                    editorBehavior,
+                    autoCloneSafe,
+                    !autoCloneSafe,
+                    autoCloneSafe ? 5 : 20));
+        }
+
+        foreach (Moby route in levelMobys.Where(moby => IsPortalRouteControlMoby(moby)).OrderBy(moby => moby.TrueIndex))
+        {
+            Moby? returnHome = FindNearestMoby(route, levelMobys.Where(IsReturnHomeVisibleMoby), 128);
+            if (returnHome == null)
+                continue;
+
+            bool autoCloneSafe = route.Links.Any(MobyCompanionClonePlanner.IsCompanionCloneLink) ||
+                returnHome.Links.Any(MobyCompanionClonePlanner.IsCompanionCloneLink);
+            string editorBehavior = autoCloneSafe
+                ? "Auto-clone through existing behavior-link metadata."
+                : "Keep proof-only. This is a likely return-home warp/helper pair; promote only after marker-only vs paired live proof.";
+            string roleText = controlRoleByKey.TryGetValue($"{level.Key}|{route.TrueIndex}", out ControlRoleInvestigationRow? roleRow)
+                ? roleRow.LikelyRole
+                : "scene/route marker";
+            double distance = Math.Sqrt(DistanceSquared(route.Position, returnHome.Position));
+
+            AddPortalReturnHomeRow(
+                rows,
+                seenRows,
+                new PortalReturnHomeControlRow(
+                    level.Key,
+                    level.DisplayName,
+                    "return-home helper pair",
+                    FormatPortalReturnHomeMoby(route),
+                    route.TrueIndex,
+                    FormatPortalReturnHomeMoby(route),
+                    FormatPortalReturnHomeMoby(returnHome),
+                    $"{roleText}; helper is {distance:0}u from visible return-home object.",
+                    editorBehavior,
+                    autoCloneSafe,
+                    !autoCloneSafe,
+                    autoCloneSafe ? 6 : 12));
+        }
+    }
+
+    return rows
+        .OrderBy(row => row.Priority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.PrimaryTrueIndex)
+        .ThenBy(row => row.RowKind, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+}
+
+void AddPortalReturnHomeRow(
+    List<PortalReturnHomeControlRow> rows,
+    HashSet<string> seenRows,
+    PortalReturnHomeControlRow row)
+{
+    string key = $"{row.LevelKey}|{row.RowKind}|{row.PrimaryTrueIndex}|{row.TriggerControls}";
+    if (seenRows.Add(key))
+        rows.Add(row);
+}
+
+bool IsPortalPadControlMoby(Moby moby)
+{
+    string text = PortalReturnHomeControlText(moby);
+    return moby.SourceByte36 == 0x8E ||
+        text.Contains("portal pad", StringComparison.Ordinal) ||
+        text.Contains("pad trigger", StringComparison.Ordinal);
+}
+
+bool IsPortalDestinationControlMoby(Moby moby)
+{
+    string text = PortalReturnHomeControlText(moby);
+    return moby.SourceByte36 == 0x01 ||
+        text.Contains("portal destination", StringComparison.Ordinal) ||
+        text.Contains("level name", StringComparison.Ordinal);
+}
+
+bool IsPortalRouteControlMoby(Moby moby)
+{
+    string text = PortalReturnHomeControlText(moby);
+    return moby.SourceByte36 == 0x1E ||
+        text.Contains("scene/route", StringComparison.Ordinal) ||
+        text.Contains("route control", StringComparison.Ordinal) ||
+        text.Contains("route marker", StringComparison.Ordinal) ||
+        text.Contains("return home helper", StringComparison.Ordinal);
+}
+
+bool IsPortalVisibleAnchorMoby(Moby moby)
+{
+    string text = PortalReturnHomeControlText(moby);
+    if (moby.VisualKind is MobyVisualKind.Control or MobyVisualKind.Unknown)
+        return IsPortalReturnHomeVisibleControlLabel(moby);
+
+    return text.Contains("portal", StringComparison.Ordinal) ||
+        text.Contains("level name", StringComparison.Ordinal) ||
+        text.Contains("return home", StringComparison.Ordinal);
+}
+
+bool IsReturnHomeVisibleMoby(Moby moby)
+{
+    return PortalReturnHomeControlText(moby).Contains("return home", StringComparison.Ordinal);
+}
+
+string PortalReturnHomeControlText(Moby moby) =>
+    $"{moby.DisplayLabel} {moby.CandidateKind} {moby.BehaviorNote} {moby.Evidence}".ToLowerInvariant();
+
+bool IsPortalReturnHomeVisibleControlLabel(Moby moby)
+{
+    string text = PortalReturnHomeControlText(moby);
+    return text.Contains("level name", StringComparison.Ordinal) ||
+        text.Contains("return home", StringComparison.Ordinal);
+}
+
+Moby? FindNearestMoby(Moby source, IEnumerable<Moby> candidates, double maxDistance)
+{
+    return candidates
+        .Where(candidate => candidate.TrueIndex != source.TrueIndex && !candidate.IsRemoved)
+        .Select(candidate => new
+        {
+            Moby = candidate,
+            Distance = Math.Sqrt(DistanceSquared(candidate.Position, source.Position))
+        })
+        .Where(item => item.Distance <= maxDistance)
+        .OrderBy(item => item.Distance)
+        .ThenBy(item => Math.Abs(item.Moby.TrueIndex - source.TrueIndex))
+        .ThenBy(item => item.Moby.TrueIndex)
+        .Select(item => item.Moby)
+        .FirstOrDefault();
+}
+
+string FormatPortalReturnHomeMoby(Moby moby) =>
+    $"T{moby.TrueIndex} {moby.DisplayLabel}";
+
+string FormatPortalReturnHomeLinkMembers(MobyLink link, Moby root, IReadOnlyList<Moby> levelMobys)
+{
+    Dictionary<int, Moby> byTrueIndex = levelMobys
+        .Where(moby => moby.TrueIndex >= 0)
+        .GroupBy(moby => moby.TrueIndex)
+        .ToDictionary(group => group.Key, group => group.First());
+
+    List<string> members = link.TrueIndexes
+        .Where(trueIndex => trueIndex != root.TrueIndex)
+        .Distinct()
+        .OrderBy(trueIndex => trueIndex)
+        .Select(trueIndex => byTrueIndex.TryGetValue(trueIndex, out Moby? moby)
+            ? FormatPortalReturnHomeMoby(moby)
+            : $"T{trueIndex}")
+        .ToList();
+    return members.Count == 0 ? "none" : string.Join(", ", members);
+}
+
+string BuildPortalControlTripletEvidence(Moby pad, Moby? destination, Moby? route, Moby? visible)
+{
+    List<string> evidence = new()
+    {
+        $"pad fingerprint {IdentityFingerprint(pad)}"
+    };
+    if (destination != null)
+        evidence.Add($"destination {FormatPortalReturnHomeMoby(destination)} @ {Math.Sqrt(DistanceSquared(destination.Position, pad.Position)):0}u");
+    if (route != null)
+        evidence.Add($"route {FormatPortalReturnHomeMoby(route)} @ {Math.Sqrt(DistanceSquared(route.Position, pad.Position)):0}u");
+    if (visible != null)
+        evidence.Add($"visible anchor {FormatPortalReturnHomeMoby(visible)} @ {Math.Sqrt(DistanceSquared(visible.Position, pad.Position)):0}u");
+    return string.Join("; ", evidence);
+}
+
+bool PortalControlClusterHasFullCompanionCoverage(IReadOnlyList<Moby> controls)
+{
+    return controls.Count > 0 &&
+        controls.All(control => control.Links.Any(MobyCompanionClonePlanner.IsCompanionCloneLink));
+}
+
+void ValidatePortalReturnHomeControlRows(IReadOnlyList<PortalReturnHomeControlRow> rows)
+{
+    bool hasDarkHollowReturnHome = rows.Any(row =>
+        row.LevelKey.Equals("darkhollow", StringComparison.OrdinalIgnoreCase) &&
+        row.RowKind.Equals("return-home helper pair", StringComparison.OrdinalIgnoreCase) &&
+        row.VisibleObject.Contains("Return Home", StringComparison.OrdinalIgnoreCase));
+    if (!hasDarkHollowReturnHome)
+        throw new InvalidOperationException("Portal/return-home control map must include the Dark Hollow return-home helper pair.");
+
+    bool artisansPadStillNeedsProof = rows.Any(row =>
+        row.LevelKey.Equals("artisans", StringComparison.OrdinalIgnoreCase) &&
+        row.RowKind.Equals("portal control triplet", StringComparison.OrdinalIgnoreCase) &&
+        row.Primary.Contains("T38 ", StringComparison.OrdinalIgnoreCase) &&
+        !row.AutoCloneSafe &&
+        row.NeedsLiveProof);
+    if (!artisansPadStillNeedsProof)
+        throw new InvalidOperationException("Artisans T38 portal pad trigger must remain proof-only until the pad record itself is live-proven.");
+
+    List<PortalReturnHomeControlRow> unsafeRows = rows
+        .Where(row => row.NeedsLiveProof && row.EditorBehavior.Contains("Auto-clone", StringComparison.OrdinalIgnoreCase))
+        .Take(5)
+        .ToList();
+    if (unsafeRows.Count > 0)
+    {
+        string summary = string.Join("; ", unsafeRows.Select(row => $"{row.LevelName} {row.RowKind} T{row.PrimaryTrueIndex}"));
+        throw new InvalidOperationException($"Unproven portal/return-home rows cannot recommend auto-clone: {summary}");
+    }
+}
+
+string WriteStrictTriggerCueLinkageReport(
+    string outDir,
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys,
+    IReadOnlyList<ControlRoleInvestigationRow> controlRoleRows)
+{
+    string markdownPath = Path.Combine(outDir, "strict-trigger-cue-linkage.md");
+    string jsonPath = Path.Combine(outDir, "strict-trigger-cue-linkage.json");
+    List<StrictTriggerCueLinkageRow> rows = BuildStrictTriggerCueLinkageRows(allMobys, controlRoleRows);
+
+    StringBuilder markdown = new();
+    markdown.AppendLine("# Strict 0xAD Trigger Cue Linkage");
+    markdown.AppendLine();
+    markdown.AppendLine("This narrows the remaining strict `type=0x00 b36=0xAD f4A=0x00 f4B=0xFF b4F=0x02` cue family. These rows are still report-only unless a live proof confirms the linked true indexes.");
+    markdown.AppendLine();
+    markdown.AppendLine($"- Strict cue rows: {rows.Count}");
+    markdown.AppendLine($"- Already promoted through proven companion links: {rows.Count(row => row.PromotionState.StartsWith("already", StringComparison.OrdinalIgnoreCase))}");
+    markdown.AppendLine($"- Still report-only: {rows.Count(row => row.PromotionState.StartsWith("report-only", StringComparison.OrdinalIgnoreCase))}");
+    markdown.AppendLine();
+    markdown.AppendLine("## Linkage Candidates");
+    markdown.AppendLine();
+    markdown.AppendLine("| Level | Cue | Role guess | Strongest static clue | Suggested `linkedTrueIndexes` | Likely linked cluster | Record neighbors | Marker CUE | Cluster CUE | Promotion state |");
+    markdown.AppendLine("|---|---:|---|---|---|---|---|---|---|---|");
+    foreach (StrictTriggerCueLinkageRow row in rows)
+    {
+        string markerCue = string.IsNullOrWhiteSpace(row.MarkerOnlyCue) ? "" : $"`{row.MarkerOnlyCue}`";
+        string clusterCue = string.IsNullOrWhiteSpace(row.ClusterCue) ? "" : $"`{row.ClusterCue}`";
+        markdown.AppendLine($"| {EscapeMarkdown(row.LevelName)} | T{row.TrueIndex} | {EscapeMarkdown(row.RoleGuess)} | {EscapeMarkdown(row.StrongestStaticClue)} | `{EscapeMarkdown(row.SuggestedLinkedTrueIndexes)}` | {EscapeMarkdown(row.LikelyLinkedCluster)} | {EscapeMarkdown(row.RecordNeighbors)} | {markerCue} | {clusterCue} | {EscapeMarkdown(row.PromotionState)} |");
+    }
+
+    markdown.AppendLine();
+    markdown.AppendLine("## How To Promote One");
+    markdown.AppendLine();
+    markdown.AppendLine("1. Open the marker-only CUE and check what changes when only the cue moves.");
+    markdown.AppendLine("2. Open the cluster CUE and check whether the visible object, reward, camera, or route behaves correctly only when the nearby cluster moves with it.");
+    markdown.AppendLine("3. Put the confirmed linked true indexes and evidence notes into `_local/control-role-proof-review/results/control-role-proof-results.tsv`.");
+    markdown.AppendLine("4. Rerun object smoke; confirmed rows generate `_local/control-role-proof-review/promoted-behavior-links/{levelKey}-behavior-links.json`, which the editor loads for copy/paste companion cloning.");
+    markdown.AppendLine();
+    markdown.AppendLine("## Detail");
+    markdown.AppendLine();
+    markdown.AppendLine("| Level | Cue | Position | Fingerprint siblings | Direct links | Terrain evidence | Recommended live test |");
+    markdown.AppendLine("|---|---:|---|---|---|---|---|");
+    foreach (StrictTriggerCueLinkageRow row in rows)
+        markdown.AppendLine($"| {EscapeMarkdown(row.LevelName)} | T{row.TrueIndex} | `{row.Position}` | {EscapeMarkdown(row.SameFingerprintSiblings)} | {EscapeMarkdown(row.DirectLinks)} | {EscapeMarkdown(row.TerrainEvidence)} | {EscapeMarkdown(row.RecommendedLiveTest)} |");
+
+    File.WriteAllText(markdownPath, markdown.ToString());
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        note = "Static linkage clues for strict 0xAD trigger cues. Report-only until live evidence promotes linked true indexes.",
+        rows
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Strict trigger cue linkage: rows={rows.Count}, report={markdownPath}");
+    return markdownPath;
+}
+
+List<StrictTriggerCueLinkageRow> BuildStrictTriggerCueLinkageRows(
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys,
+    IReadOnlyList<ControlRoleInvestigationRow> controlRoleRows)
+{
+    Dictionary<string, List<(LevelDefinition Level, Moby Moby)>> byLevel = allMobys
+        .GroupBy(item => item.Level.Key, StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+    Dictionary<string, ControlRoleInvestigationRow> roleByKey = controlRoleRows
+        .GroupBy(row => $"{row.LevelKey}|{row.TrueIndex}", StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+    Dictionary<string, string> proofCueByKey = ReadControlRoleProofCueIndex();
+    List<(LevelDefinition Level, Moby Moby)> strictCues = allMobys
+        .Where(item => IsStrict0xAdTriggerCue(item.Moby))
+        .OrderBy(item => item.Level.DisplayName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(item => item.Moby.TrueIndex)
+        .ToList();
+
+    return strictCues
+        .Select(item =>
+        {
+            string key = $"{item.Level.Key}|{item.Moby.TrueIndex}";
+            roleByKey.TryGetValue(key, out ControlRoleInvestigationRow? roleRow);
+            string directLinks = BuildUnknownDirectLinkSummary(item, byLevel);
+            bool autoCloneSafe = item.Moby.Links.Any(MobyCompanionClonePlanner.IsCompanionCloneLink);
+            string nearbyCluster = autoCloneSafe
+                ? BuildStrictTriggerCueDirectCompanionCluster(item, byLevel)
+                : BuildStrictTriggerCueNearbyCluster(item, byLevel);
+            string recordNeighbors = BuildStrictTriggerCueRecordNeighbors(item, byLevel);
+            string siblings = BuildStrictTriggerCueSiblingSummary(item, strictCues);
+            string terrainEvidence = roleRow?.TerrainEvidence ?? "none";
+            string roleGuess = StrictTriggerCueRoleGuess(item.Moby, roleRow, nearbyCluster, terrainEvidence);
+            string markerCue = ControlRoleProofCuePath(proofCueByKey, item.Level.Key, item.Moby.TrueIndex, "marker-only");
+            string clusterCue = ControlRoleProofCuePath(proofCueByKey, item.Level.Key, item.Moby.TrueIndex, "cluster");
+            string suggestedLinkedTrueIndexes = autoCloneSafe
+                ? BuildStrictTriggerCueDirectCompanionIndexes(item.Moby)
+                : BuildStrictTriggerCueSuggestedTrueIndexes(item, byLevel);
+
+            return new StrictTriggerCueLinkageRow(
+                item.Level.Key,
+                item.Level.DisplayName,
+                item.Moby.TrueIndex,
+                item.Moby.DisplayLabel,
+                IdentityFingerprint(item.Moby),
+                FormatControlRolePosition(item.Moby.Position),
+                roleGuess,
+                StrictTriggerCueStrongestClue(directLinks, nearbyCluster, recordNeighbors, terrainEvidence),
+                nearbyCluster,
+                suggestedLinkedTrueIndexes,
+                recordNeighbors,
+                siblings,
+                directLinks,
+                terrainEvidence,
+                markerCue,
+                clusterCue,
+                autoCloneSafe
+                    ? "already promoted through a proven companion link"
+                    : "report-only; needs live marker-only vs cluster proof",
+                StrictTriggerCueRecommendedTest(roleGuess, markerCue, clusterCue, suggestedLinkedTrueIndexes, autoCloneSafe),
+                autoCloneSafe ? 50 : 1);
+        })
+        .OrderBy(row => row.Priority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .ToList();
+}
+
+string BuildStrictTriggerCueNearbyCluster(
+    (LevelDefinition Level, Moby Moby) sample,
+    IReadOnlyDictionary<string, List<(LevelDefinition Level, Moby Moby)>> byLevel)
+{
+    if (!byLevel.TryGetValue(sample.Level.Key, out List<(LevelDefinition Level, Moby Moby)>? levelRows))
+        return "none";
+
+    List<string> anchors = levelRows
+        .Select(row => row.Moby)
+        .Where(moby => moby.TrueIndex != sample.Moby.TrueIndex)
+        .Where(moby => !moby.IsRemoved)
+        .Where(moby => moby.VisualKind is not MobyVisualKind.Control and not MobyVisualKind.Unknown)
+        .Select(moby => new
+        {
+            Moby = moby,
+            Distance = Math.Sqrt(DistanceSquared(moby.Position, sample.Moby.Position)),
+            Rank = StrictTriggerCueAnchorRank(moby)
+        })
+        .Where(item => item.Distance <= 896)
+        .OrderBy(item => item.Rank)
+        .ThenBy(item => item.Distance)
+        .ThenBy(item => Math.Abs(item.Moby.TrueIndex - sample.Moby.TrueIndex))
+        .ThenBy(item => item.Moby.TrueIndex)
+        .Take(5)
+        .Select(item => FormatStrictTriggerCueAnchor(sample.Moby, item.Moby, item.Distance))
+        .ToList();
+
+    return anchors.Count == 0 ? "none within 896" : string.Join(", ", anchors);
+}
+
+string BuildStrictTriggerCueDirectCompanionCluster(
+    (LevelDefinition Level, Moby Moby) sample,
+    IReadOnlyDictionary<string, List<(LevelDefinition Level, Moby Moby)>> byLevel)
+{
+    if (!byLevel.TryGetValue(sample.Level.Key, out List<(LevelDefinition Level, Moby Moby)>? levelRows))
+        return BuildStrictTriggerCueDirectCompanionIndexes(sample.Moby);
+
+    Dictionary<int, Moby> byTrueIndex = levelRows
+        .Select(row => row.Moby)
+        .Where(moby => moby.TrueIndex >= 0)
+        .GroupBy(moby => moby.TrueIndex)
+        .ToDictionary(group => group.Key, group => group.First());
+
+    List<string> anchors = sample.Moby.Links
+        .Where(MobyCompanionClonePlanner.IsCompanionCloneLink)
+        .SelectMany(link => link.TrueIndexes)
+        .Where(trueIndex => trueIndex != sample.Moby.TrueIndex)
+        .Distinct()
+        .OrderBy(trueIndex => trueIndex)
+        .Select(trueIndex =>
+        {
+            if (!byTrueIndex.TryGetValue(trueIndex, out Moby? moby))
+                return $"T{trueIndex}";
+            double distance = Math.Sqrt(DistanceSquared(moby.Position, sample.Moby.Position));
+            return FormatStrictTriggerCueAnchor(sample.Moby, moby, distance);
+        })
+        .ToList();
+
+    return anchors.Count == 0 ? "proven companion link metadata, no resolved targets" : string.Join(", ", anchors);
+}
+
+string BuildStrictTriggerCueDirectCompanionIndexes(Moby moby)
+{
+    List<int> indexes = moby.Links
+        .Where(MobyCompanionClonePlanner.IsCompanionCloneLink)
+        .SelectMany(link => link.TrueIndexes)
+        .Where(trueIndex => trueIndex != moby.TrueIndex)
+        .Distinct()
+        .OrderBy(trueIndex => trueIndex)
+        .ToList();
+    return string.Join(", ", indexes);
+}
+
+string BuildStrictTriggerCueSuggestedTrueIndexes(
+    (LevelDefinition Level, Moby Moby) sample,
+    IReadOnlyDictionary<string, List<(LevelDefinition Level, Moby Moby)>> byLevel)
+{
+    if (!byLevel.TryGetValue(sample.Level.Key, out List<(LevelDefinition Level, Moby Moby)>? levelRows))
+        return "";
+
+    List<int> indexes = levelRows
+        .Select(row => row.Moby)
+        .Where(moby => moby.TrueIndex != sample.Moby.TrueIndex)
+        .Where(moby => !moby.IsRemoved)
+        .Where(moby => moby.VisualKind is not MobyVisualKind.Control and not MobyVisualKind.Unknown)
+        .Select(moby => new
+        {
+            Moby = moby,
+            Distance = Math.Sqrt(DistanceSquared(moby.Position, sample.Moby.Position)),
+            Rank = StrictTriggerCueAnchorRank(moby)
+        })
+        .Where(item => item.Distance <= 896)
+        .OrderBy(item => item.Rank)
+        .ThenBy(item => item.Distance)
+        .ThenBy(item => Math.Abs(item.Moby.TrueIndex - sample.Moby.TrueIndex))
+        .ThenBy(item => item.Moby.TrueIndex)
+        .Take(5)
+        .Select(item => item.Moby.TrueIndex)
+        .ToList();
+    return string.Join(", ", indexes);
+}
+
+int StrictTriggerCueAnchorRank(Moby moby)
+{
+    string text = $"{moby.DisplayLabel} {moby.CandidateKind} {moby.BehaviorNote}".ToLowerInvariant();
+    if (moby.VisualKind == MobyVisualKind.Chest || text.Contains("chest", StringComparison.Ordinal) || text.Contains("container", StringComparison.Ordinal))
+        return 0;
+    if (moby.VisualKind == MobyVisualKind.Actor || text.Contains("enemy", StringComparison.Ordinal) || text.Contains("gnorc", StringComparison.Ordinal) || text.Contains("bird", StringComparison.Ordinal))
+        return 1;
+    if (moby.VisualKind is MobyVisualKind.Dragon or MobyVisualKind.Portal or MobyVisualKind.Key or MobyVisualKind.Whirlwind)
+        return 2;
+    if (moby.VisualKind == MobyVisualKind.Gem || text.Contains("gem", StringComparison.Ordinal) || text.Contains("reward", StringComparison.Ordinal))
+        return 3;
+    if (moby.VisualKind == MobyVisualKind.Scenery)
+        return 4;
+    return 9;
+}
+
+string FormatStrictTriggerCueAnchor(Moby cue, Moby anchor, double distance)
+{
+    int delta = anchor.TrueIndex - cue.TrueIndex;
+    string recordDelta = delta == 0 ? "same row" : $"T{(delta > 0 ? "+" : "")}{delta}";
+    return $"T{anchor.TrueIndex} {anchor.DisplayLabel} ({anchor.VisualKind}, {distance:0}u, {recordDelta})";
+}
+
+string BuildStrictTriggerCueRecordNeighbors(
+    (LevelDefinition Level, Moby Moby) sample,
+    IReadOnlyDictionary<string, List<(LevelDefinition Level, Moby Moby)>> byLevel)
+{
+    if (!byLevel.TryGetValue(sample.Level.Key, out List<(LevelDefinition Level, Moby Moby)>? levelRows))
+        return "none";
+
+    List<string> neighbors = levelRows
+        .Select(row => row.Moby)
+        .Where(moby => moby.TrueIndex != sample.Moby.TrueIndex)
+        .Where(moby => Math.Abs(moby.TrueIndex - sample.Moby.TrueIndex) <= 4)
+        .OrderBy(moby => Math.Abs(moby.TrueIndex - sample.Moby.TrueIndex))
+        .ThenBy(moby => moby.TrueIndex)
+        .Select(moby => $"T{moby.TrueIndex} {moby.DisplayLabel} ({moby.VisualKind})")
+        .Take(8)
+        .ToList();
+    return neighbors.Count == 0 ? "none within +/-4 records" : string.Join(", ", neighbors);
+}
+
+string BuildStrictTriggerCueSiblingSummary(
+    (LevelDefinition Level, Moby Moby) sample,
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> strictCues)
+{
+    List<string> siblings = strictCues
+        .Where(item => !item.Level.Key.Equals(sample.Level.Key, StringComparison.OrdinalIgnoreCase) || item.Moby.TrueIndex != sample.Moby.TrueIndex)
+        .Take(8)
+        .Select(item => $"{item.Level.DisplayName}:T{item.Moby.TrueIndex}")
+        .ToList();
+    return siblings.Count == 0 ? "none" : string.Join(", ", siblings);
+}
+
+string StrictTriggerCueRoleGuess(
+    Moby moby,
+    ControlRoleInvestigationRow? roleRow,
+    string nearbyCluster,
+    string terrainEvidence)
+{
+    if (roleRow != null && !roleRow.LikelyRole.Equals("unproven trigger cue", StringComparison.OrdinalIgnoreCase))
+        return roleRow.LikelyRole;
+
+    string text = $"{moby.DisplayLabel} {moby.CandidateKind} {nearbyCluster} {terrainEvidence}".ToLowerInvariant();
+    if (text.Contains("chest", StringComparison.Ordinal) || text.Contains("gem", StringComparison.Ordinal) || text.Contains("reward", StringComparison.Ordinal))
+        return "container/reward trigger cue";
+    if (text.Contains("bird", StringComparison.Ordinal) || text.Contains("gnorc", StringComparison.Ordinal) || text.Contains("enemy", StringComparison.Ordinal))
+        return "actor/enemy route or reward trigger cue";
+    if (text.Contains("dragon", StringComparison.Ordinal) || text.Contains("pedestal", StringComparison.Ordinal))
+        return "dragon rescue cue";
+    if (text.Contains("portal", StringComparison.Ordinal) || text.Contains("route", StringComparison.Ordinal))
+        return "route trigger cue";
+    return "unproven trigger cue";
+}
+
+string StrictTriggerCueStrongestClue(
+    string directLinks,
+    string nearbyCluster,
+    string recordNeighbors,
+    string terrainEvidence)
+{
+    if (HasMeaningfulDirectLinks(directLinks))
+        return directLinks;
+    if (!nearbyCluster.StartsWith("none", StringComparison.OrdinalIgnoreCase))
+        return nearbyCluster;
+    if (!terrainEvidence.StartsWith("none", StringComparison.OrdinalIgnoreCase))
+        return terrainEvidence;
+    return recordNeighbors;
+}
+
+string StrictTriggerCueRecommendedTest(
+    string roleGuess,
+    string markerCue,
+    string clusterCue,
+    string suggestedLinkedTrueIndexes,
+    bool autoCloneSafe)
+{
+    if (autoCloneSafe)
+        return "Regression-test copy/paste of the linked visible donor; this cue should already move with the proven companion group.";
+
+    string cueText = !string.IsNullOrWhiteSpace(markerCue) && !string.IsNullOrWhiteSpace(clusterCue)
+        ? "Use the marker-only CUE first, then the cluster CUE."
+        : "Generate strict proof BINs, then run marker-only before cluster.";
+    string roleText = roleGuess.Contains("reward", StringComparison.OrdinalIgnoreCase) || roleGuess.Contains("container", StringComparison.OrdinalIgnoreCase)
+        ? "Compare hit response, spawned rewards, collection count, and whether nearby reward rows appear or disappear."
+        : "Compare what appears, disappears, starts, routes differently, or breaks.";
+    string indexText = string.IsNullOrWhiteSpace(suggestedLinkedTrueIndexes)
+        ? "enter the exact linked true indexes in the proof results TSV"
+        : $"enter `{suggestedLinkedTrueIndexes}` in the `linkedTrueIndexes` column";
+    return $"{cueText} {roleText} If the cluster behavior proves a linked object, {indexText}.";
+}
+
+List<ControlRoleInvestigationRow> BuildControlRoleInvestigationRows(
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys)
+{
+    Dictionary<string, List<(LevelDefinition Level, Moby Moby)>> byLevel = allMobys
+        .GroupBy(item => item.Level.Key, StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+    Dictionary<string, TerrainControlProximitySample> terrainHints = ReadTerrainControlProximityHints();
+
+    return allMobys
+        .Where(item => IsControlRoleInvestigationCandidate(item.Moby))
+        .Select(item => BuildControlRoleInvestigationRow(item, byLevel, terrainHints))
+        .OrderBy(row => row.Priority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .ToList();
+}
+
+ControlRoleInvestigationRow BuildControlRoleInvestigationRow(
+    (LevelDefinition Level, Moby Moby) item,
+    IReadOnlyDictionary<string, List<(LevelDefinition Level, Moby Moby)>> byLevel,
+    IReadOnlyDictionary<string, TerrainControlProximitySample> terrainHints)
+{
+    string fingerprint = IdentityFingerprint(item.Moby);
+    string directLinks = BuildUnknownDirectLinkSummary(item, byLevel);
+    string nearestAnchors = BuildControlCompanionAnchorSummary(item, fingerprint, byLevel);
+    string terrainEvidence = BuildControlRoleTerrainEvidence(item, terrainHints, out double? hazardDistance);
+    bool strictTriggerCue = IsStrict0xAdTriggerCue(item.Moby);
+    bool autoCloneSafe = item.Moby.Links.Any(MobyCompanionClonePlanner.IsCompanionCloneLink);
+    string likelyRole = BuildControlRoleLikelyRole(item.Moby, directLinks, nearestAnchors, terrainEvidence, hazardDistance);
+    string status = BuildControlRoleStatus(item.Moby, strictTriggerCue, autoCloneSafe, directLinks, terrainEvidence, hazardDistance);
+    string action = autoCloneSafe
+        ? "moves with proven linked visible donor"
+        : "report-only until a live proof confirms the role";
+    string proofStep = BuildControlRoleProofStep(likelyRole, item.Moby, directLinks, nearestAnchors, terrainEvidence, autoCloneSafe);
+    int priority = ControlRolePriority(item, status, likelyRole, directLinks, terrainEvidence, hazardDistance, strictTriggerCue, autoCloneSafe);
+
+    return new ControlRoleInvestigationRow(
+        item.Level.Key,
+        item.Level.DisplayName,
+        item.Moby.TrueIndex,
+        item.Moby.DisplayLabel,
+        fingerprint,
+        $"0x{item.Moby.SourceByte36:X2}",
+        strictTriggerCue,
+        status,
+        likelyRole,
+        action,
+        directLinks,
+        nearestAnchors,
+        terrainEvidence,
+        item.Moby.YawByte >= 0 ? $"{Moby.YawByteToDegrees(item.Moby.YawByte):0.#} deg" : "unknown",
+        FormatControlRolePosition(item.Moby.Position),
+        CompactEvidence(item.Moby),
+        proofStep,
+        autoCloneSafe,
+        priority);
+}
+
+bool IsControlRoleInvestigationCandidate(Moby moby)
+{
+    if (moby.IsGemLike || moby.IsKey)
+        return false;
+
+    string text = ControlRoleText(moby);
+    bool visibleLink = moby.Links.Any(MobyLinkTraversal.IsVisibleLink);
+    if (IsStrict0xAdTriggerCue(moby))
+        return true;
+    if (moby.VisualKind == MobyVisualKind.Control)
+        return true;
+    if (moby.Type == 0x00 && (moby.Flag4A == 0x10 || moby.Flag4A == 0x00) && HasControlRoleText(text))
+        return true;
+    if (visibleLink && HasControlRoleText(text))
+        return true;
+    if (moby.VisualKind == MobyVisualKind.Scenery && (visibleLink || HasSceneryControlRoleText(text)))
+        return true;
+    return false;
+}
+
+bool HasControlRoleText(string text)
+{
+    return text.Contains("control", StringComparison.Ordinal) ||
+        text.Contains("helper", StringComparison.Ordinal) ||
+        text.Contains("trigger", StringComparison.Ordinal) ||
+        text.Contains("camera", StringComparison.Ordinal) ||
+        text.Contains("route", StringComparison.Ordinal) ||
+        text.Contains("marker", StringComparison.Ordinal) ||
+        text.Contains("scene", StringComparison.Ordinal) ||
+        text.Contains("portal", StringComparison.Ordinal) ||
+        text.Contains("pad", StringComparison.Ordinal) ||
+        text.Contains("destination", StringComparison.Ordinal) ||
+        text.Contains("rescue", StringComparison.Ordinal);
+}
+
+bool HasSceneryControlRoleText(string text)
+{
+    return text.Contains("scenery/control", StringComparison.Ordinal) ||
+        text.Contains("linked prop", StringComparison.Ordinal) ||
+        text.Contains("route/control", StringComparison.Ordinal) ||
+        text.Contains("support/control", StringComparison.Ordinal) ||
+        text.Contains("special control", StringComparison.Ordinal);
+}
+
+string ControlRoleText(Moby moby)
+{
+    return $"{moby.DisplayLabel} {moby.CandidateKind} {moby.Confidence} {moby.Evidence} {moby.BehaviorNote}".ToLowerInvariant();
+}
+
+string BuildControlRoleLikelyRole(
+    Moby moby,
+    string directLinks,
+    string nearestAnchors,
+    string terrainEvidence,
+    double? hazardDistance)
+{
+    string text = $"{moby.DisplayLabel} {moby.CandidateKind} {moby.BehaviorNote} {directLinks} {nearestAnchors} {terrainEvidence}".ToLowerInvariant();
+    if (text.Contains("dragon", StringComparison.Ordinal) || text.Contains("pedestal", StringComparison.Ordinal) || text.Contains("rescue", StringComparison.Ordinal))
+        return "dragon rescue scene control";
+    if (text.Contains("portal", StringComparison.Ordinal) || text.Contains("return-home", StringComparison.Ordinal) || text.Contains("destination", StringComparison.Ordinal) || text.Contains("pad", StringComparison.Ordinal))
+        return "portal route or destination control";
+    if (moby.SourceByte36 == 0x1E && moby.Flag4A == 0x10 && moby.Flag4B == 0xFF)
+        return "unresolved passive native class 0x1E control point";
+    if (text.Contains("chest", StringComparison.Ordinal) || text.Contains("container", StringComparison.Ordinal) || text.Contains("contained", StringComparison.Ordinal) || text.Contains("reward", StringComparison.Ordinal))
+        return "container or reward control";
+    if (IsStrict0xAdTriggerCue(moby))
+        return "unproven trigger cue";
+    if (hazardDistance <= 64)
+        return "possible terrain or hazard response marker";
+    if (text.Contains("flight", StringComparison.Ordinal) || text.Contains("course", StringComparison.Ordinal))
+        return "flight course route/control";
+    if (text.Contains("scenery", StringComparison.Ordinal) || text.Contains("prop", StringComparison.Ordinal))
+        return "scenery or prop control";
+    if (text.Contains("camera", StringComparison.Ordinal) || text.Contains("scene", StringComparison.Ordinal) || text.Contains("route", StringComparison.Ordinal))
+        return "scene camera or route control";
+    return "unknown control or trigger infrastructure";
+}
+
+string BuildControlRoleStatus(
+    Moby moby,
+    bool strictTriggerCue,
+    bool autoCloneSafe,
+    string directLinks,
+    string terrainEvidence,
+    double? hazardDistance)
+{
+    if (autoCloneSafe)
+        return "proven-linked-companion";
+    if (strictTriggerCue)
+        return "report-only-strict-trigger-cue";
+    if (hazardDistance <= 64)
+        return "terrain-proximity-needs-live-proof";
+    if (HasMeaningfulDirectLinks(directLinks))
+        return "linked-control-needs-role-proof";
+    if (moby.VisualKind == MobyVisualKind.Scenery)
+        return "scenery-link-needs-role-proof";
+    if (moby.Confidence.Contains("byte-pattern", StringComparison.OrdinalIgnoreCase) ||
+        moby.Confidence.Contains("observed", StringComparison.OrdinalIgnoreCase) ||
+        moby.Confidence.Contains("user", StringComparison.OrdinalIgnoreCase))
+        return "byte-pattern-control-needs-behavior-proof";
+    if (!terrainEvidence.StartsWith("none", StringComparison.OrdinalIgnoreCase))
+        return "terrain-neighbor-needs-live-proof";
+    return "control-role-needs-proof";
+}
+
+string BuildControlRoleProofStep(
+    string likelyRole,
+    Moby moby,
+    string directLinks,
+    string nearestAnchors,
+    string terrainEvidence,
+    bool autoCloneSafe)
+{
+    string text = $"{likelyRole} {directLinks} {nearestAnchors} {terrainEvidence}".ToLowerInvariant();
+    if (autoCloneSafe)
+        return "Already tied to a proven linked companion; regression-test copy/paste with the visible donor before release.";
+    if (text.Contains("terrain", StringComparison.Ordinal) || text.Contains("hazard", StringComparison.Ordinal) || text.Contains("water", StringComparison.Ordinal) || text.Contains("lava", StringComparison.Ordinal) || text.Contains("ooze", StringComparison.Ordinal))
+        return "In a disposable BIN, move or disable only this marker and repeat the same terrain touch; if health/reset/camera behavior changes, promote it as terrain behavior control.";
+    if (text.Contains("dragon", StringComparison.Ordinal) || text.Contains("pedestal", StringComparison.Ordinal) || text.Contains("rescue", StringComparison.Ordinal))
+        return "Move it with the dragon, pedestal, and visible rescue cluster, then verify rescue/camera behavior before naming the exact control role.";
+    if (text.Contains("portal", StringComparison.Ordinal) || text.Contains("return-home", StringComparison.Ordinal) || text.Contains("destination", StringComparison.Ordinal) || text.Contains("pad", StringComparison.Ordinal))
+        return "Move it with the portal/pad/name cluster in a disposable BIN and verify entry, return-home, and level-name behavior.";
+    if (text.Contains("chest", StringComparison.Ordinal) || text.Contains("container", StringComparison.Ordinal) || text.Contains("reward", StringComparison.Ordinal))
+        return "Move it with the shell and reward rows, then verify hit response, spawned reward, and collection count.";
+    if (text.Contains("scenery", StringComparison.Ordinal) || text.Contains("prop", StringComparison.Ordinal))
+        return "Move the marker and nearest prop separately, then together; only promote if the visible prop, collision, camera, or script follows.";
+    if (IsStrict0xAdTriggerCue(moby))
+        return "Keep report-only. Move it with the nearest visible cluster and record exactly what appears, disappears, starts, or breaks.";
+    return "Move only this marker first, then move it with the nearest visible cluster; compare camera, route, trigger, and visibility behavior.";
+}
+
+int ControlRolePriority(
+    (LevelDefinition Level, Moby Moby) item,
+    string status,
+    string likelyRole,
+    string directLinks,
+    string terrainEvidence,
+    double? hazardDistance,
+    bool strictTriggerCue,
+    bool autoCloneSafe)
+{
+    int priority = status switch
+    {
+        "terrain-proximity-needs-live-proof" => 2,
+        "report-only-strict-trigger-cue" => 6,
+        "linked-control-needs-role-proof" => 10,
+        "scenery-link-needs-role-proof" => 16,
+        "byte-pattern-control-needs-behavior-proof" => 22,
+        "proven-linked-companion" => 35,
+        _ => 28
+    };
+    if (item.Level.Key.Equals("stonehill", StringComparison.OrdinalIgnoreCase) && item.Moby.TrueIndex is 149 or 150 or 151)
+        priority = 1;
+    if (hazardDistance <= 16)
+        priority -= 2;
+    if (strictTriggerCue)
+        priority -= 1;
+    if (HasMeaningfulDirectLinks(directLinks))
+        priority -= 2;
+    if (!terrainEvidence.StartsWith("none", StringComparison.OrdinalIgnoreCase))
+        priority -= 1;
+    if (likelyRole.Contains("dragon", StringComparison.OrdinalIgnoreCase) ||
+        likelyRole.Contains("portal", StringComparison.OrdinalIgnoreCase) ||
+        likelyRole.Contains("reward", StringComparison.OrdinalIgnoreCase))
+        priority -= 1;
+    if (autoCloneSafe)
+        priority += 10;
+    return Math.Clamp(priority, 1, 99);
+}
+
+bool HasMeaningfulDirectLinks(string directLinks)
+{
+    return !directLinks.StartsWith("none", StringComparison.OrdinalIgnoreCase) &&
+        !directLinks.StartsWith("hidden", StringComparison.OrdinalIgnoreCase);
+}
+
+string BuildControlRoleTerrainEvidence(
+    (LevelDefinition Level, Moby Moby) item,
+    IReadOnlyDictionary<string, TerrainControlProximitySample> terrainHints,
+    out double? hazardDistance)
+{
+    hazardDistance = null;
+    if (!terrainHints.TryGetValue(ControlRoleTerrainKey(item.Level.Key, item.Moby.TrueIndex), out TerrainControlProximitySample? sample))
+        return "none";
+
+    hazardDistance = sample.NearestHazardDistance;
+    string solid = sample.NearestSolidDistance.HasValue
+        ? $", nearest solid d {sample.NearestSolidDistance.Value:0.##}"
+        : "";
+    return $"{sample.NearestHazardSurface} texture {sample.NearestHazardTextureId} `{sample.NearestHazardRuntimeKey}` hazard d {sample.NearestHazardDistance:0.##}, dz {sample.NearestHazardZDelta:0.##}{solid}";
+}
+
+Dictionary<string, TerrainControlProximitySample> ReadTerrainControlProximityHints()
+{
+    string jsonPath = Path.Combine(workspace.RootPath, "_local", "smoke", "terrain-behavior-evidence.json");
+    if (!File.Exists(jsonPath))
+        return new Dictionary<string, TerrainControlProximitySample>(StringComparer.OrdinalIgnoreCase);
+
+    try
+    {
+        TerrainBehaviorEvidenceReport? report = JsonSerializer.Deserialize<TerrainBehaviorEvidenceReport>(
+            File.ReadAllText(jsonPath),
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Dictionary<string, TerrainControlProximitySample> hints = new(StringComparer.OrdinalIgnoreCase);
+        foreach (TerrainControlProximitySample sample in report?.NearestControlSamples ?? [])
+        {
+            if (!TryParseControlTrueIndex(sample.ControlId, out int trueIndex))
+                continue;
+
+            string key = ControlRoleTerrainKey(sample.LevelKey, trueIndex);
+            if (!hints.TryGetValue(key, out TerrainControlProximitySample? existing) ||
+                sample.NearestHazardDistance < existing.NearestHazardDistance)
+            {
+                hints[key] = sample;
+            }
+        }
+
+        return hints;
+    }
+    catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+    {
+        Console.WriteLine($"Control role terrain hints: unable to read terrain behavior evidence ({ex.Message}); continuing without terrain proximity hints.");
+        return new Dictionary<string, TerrainControlProximitySample>(StringComparer.OrdinalIgnoreCase);
+    }
+}
+
+bool TryParseControlTrueIndex(string value, out int trueIndex)
+{
+    trueIndex = -1;
+    if (string.IsNullOrWhiteSpace(value))
+        return false;
+
+    string text = value.Trim();
+    if (text.StartsWith("T", StringComparison.OrdinalIgnoreCase))
+        text = text[1..];
+    return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out trueIndex) && trueIndex >= 0;
+}
+
+string ControlRoleTerrainKey(string levelKey, int trueIndex)
+{
+    return $"{levelKey}:T{trueIndex}";
+}
+
+string FormatControlRolePosition(Vector3f position)
+{
+    return FormattableString.Invariant($"{position.X:0.##}, {position.Y:0.##}, {position.Z:0.##}");
+}
+
+void ValidateControlRoleInvestigationRows(
+    IReadOnlyList<ControlRoleInvestigationRow> rows,
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys)
+{
+    bool hasStoneHillT150 = allMobys.Any(item =>
+        item.Level.Key.Equals("stonehill", StringComparison.OrdinalIgnoreCase) &&
+        item.Moby.TrueIndex == 150);
+    if (hasStoneHillT150)
+    {
+        ControlRoleInvestigationRow? row = rows.FirstOrDefault(row =>
+            row.LevelKey.Equals("stonehill", StringComparison.OrdinalIgnoreCase) &&
+            row.TrueIndex == 150);
+        if (row == null || !row.CurrentRead.Equals("Class 0x1E passive control", StringComparison.Ordinal))
+            throw new InvalidOperationException("Stone Hill T150 should remain in the control role report as an unresolved class 0x1E passive control.");
+    }
+
+    int strictCueSourceCount = allMobys.Count(item => IsStrict0xAdTriggerCue(item.Moby));
+    int strictCueRowCount = rows.Count(row => row.StrictTriggerCue);
+    if (strictCueRowCount < strictCueSourceCount)
+        throw new InvalidOperationException($"Control role report missed strict 0xAD trigger cue rows: source={strictCueSourceCount}, report={strictCueRowCount}.");
+
+    List<ControlRoleInvestigationRow> unsafeActions = rows
+        .Where(row => !row.AutoCloneSafe && row.Action.Contains("auto", StringComparison.OrdinalIgnoreCase))
+        .Take(5)
+        .ToList();
+    if (unsafeActions.Count > 0)
+    {
+        string summary = string.Join("; ", unsafeActions.Select(row => $"{row.LevelName} T{row.TrueIndex} {row.Action}"));
+        throw new InvalidOperationException($"Unproven control role rows must stay report-only: {summary}");
+    }
+
+    foreach (int trueIndex in new[] { 155, 158 })
+    {
+        bool sourceHasRow = allMobys.Any(item =>
+            item.Level.Key.Equals("artisans", StringComparison.OrdinalIgnoreCase) &&
+            item.Moby.TrueIndex == trueIndex);
+        bool reportHasRow = rows.Any(row =>
+            row.LevelKey.Equals("artisans", StringComparison.OrdinalIgnoreCase) &&
+            row.TrueIndex == trueIndex);
+        if (sourceHasRow && !reportHasRow)
+            throw new InvalidOperationException($"Artisans T{trueIndex} should remain in the linked control review report.");
+    }
+}
+
+async Task<string> WriteControlRoleProofBatchArtifacts(
+    string outDir,
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys,
+    IReadOnlyList<ControlRoleInvestigationRow> rows,
+    bool writeBinExports = false)
+{
+    string batchDir = Path.Combine(outDir, "control-role-proof-batches");
+    Directory.CreateDirectory(batchDir);
+    foreach (string stalePath in Directory.GetFiles(batchDir, "*-native-edits.json"))
+        File.Delete(stalePath);
+
+    Dictionary<string, List<(LevelDefinition Level, Moby Moby)>> byLevel = allMobys
+        .GroupBy(item => item.Level.Key, StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+
+    List<ControlRoleProofBatchRow> proofRows = new();
+    foreach (ControlRoleInvestigationRow row in SelectControlRoleProofCandidates(rows))
+    {
+        if (!byLevel.TryGetValue(row.LevelKey, out List<(LevelDefinition Level, Moby Moby)>? levelRows))
+            continue;
+
+        (LevelDefinition Level, Moby Moby)? targetItem = levelRows.FirstOrDefault(item => item.Moby.TrueIndex == row.TrueIndex);
+        if (targetItem == null || targetItem.Value.Moby.TrueIndex < 0)
+            continue;
+
+        LevelDefinition level = targetItem.Value.Level;
+        Moby target = targetItem.Value.Moby;
+        List<Moby> levelMobys = levelRows.Select(item => item.Moby).ToList();
+        List<Moby> anchors = SelectControlRoleProofAnchors(target, levelMobys);
+        Moby? suggestedVisibleOwner = SelectControlRoleSuggestedVisibleOwner(target, anchors);
+        int suggestedVisibleOwnerTrueIndex = suggestedVisibleOwner?.TrueIndex ?? -1;
+        string suggestedVisibleOwnerLabel = FormatControlRoleSuggestedVisibleOwner(suggestedVisibleOwner);
+        List<int> suggestedLinkedIndexes = anchors.Select(anchor => anchor.TrueIndex).ToList();
+        if (suggestedVisibleOwner != null &&
+            suggestedVisibleOwner.TrueIndex != target.TrueIndex &&
+            !suggestedLinkedIndexes.Contains(suggestedVisibleOwner.TrueIndex))
+        {
+            suggestedLinkedIndexes.Add(suggestedVisibleOwner.TrueIndex);
+        }
+
+        string suggestedLinkedTrueIndexes = IsStrict0xAdTriggerCue(target) || IsPortalReturnHomeProofTarget(target, levelMobys)
+            ? string.Join(", ", suggestedLinkedIndexes)
+            : "";
+        string slug = ControlRoleProofSlug(level.Key, target.TrueIndex, row.CurrentRead);
+        Vector3f markerDelta = new(512, 0, 128);
+        Vector3f clusterDelta = new(768, 0, 128);
+
+        string markerOnlyPath = Path.Combine(batchDir, $"{slug}-marker-only-native-edits.json");
+        await MobyEditStore.SaveAsync(
+            markerOnlyPath,
+            [BuildControlRoleProofEdit(target, markerDelta, $"Control proof marker-only T{target.TrueIndex}: {target.DisplayLabel}", "control-role-proof marker-only")],
+            $"{level.DisplayName} control role proof T{target.TrueIndex} marker-only");
+
+        string clusterPath = "";
+        if (anchors.Count > 0)
+        {
+            List<Moby> clusterEdits = new()
+            {
+                BuildControlRoleProofEdit(target, clusterDelta, $"Control proof cluster T{target.TrueIndex}: {target.DisplayLabel}", "control-role-proof cluster")
+            };
+            for (int i = 0; i < anchors.Count; i++)
+            {
+                Moby anchor = anchors[i];
+                string anchorKind = anchor.VisualKind is MobyVisualKind.Control or MobyVisualKind.Unknown
+                    ? "control/helper anchor"
+                    : "visible anchor";
+                clusterEdits.Add(BuildControlRoleProofEdit(
+                    anchor,
+                    clusterDelta,
+                    $"Control proof anchor {i + 1} for T{target.TrueIndex}: {anchor.DisplayLabel}",
+                    $"control-role-proof {anchorKind}"));
+            }
+
+            clusterPath = Path.Combine(batchDir, $"{slug}-cluster-native-edits.json");
+            await MobyEditStore.SaveAsync(clusterPath, clusterEdits, $"{level.DisplayName} control role proof T{target.TrueIndex} cluster");
+        }
+
+        proofRows.Add(new ControlRoleProofBatchRow(
+            level.Key,
+            level.DisplayName,
+            target.TrueIndex,
+            row.CurrentRead,
+            row.Status,
+            row.LikelyRole,
+            row.TerrainEvidence,
+            row.NearestAnchors,
+            anchors.Select(anchor => $"T{anchor.TrueIndex} {anchor.DisplayLabel}").ToList(),
+            suggestedVisibleOwnerTrueIndex,
+            suggestedVisibleOwnerLabel,
+            suggestedLinkedTrueIndexes,
+            Path.GetRelativePath(workspace.RootPath, markerOnlyPath),
+            string.IsNullOrWhiteSpace(clusterPath) ? "" : Path.GetRelativePath(workspace.RootPath, clusterPath),
+            row.ProofStep,
+            row.Priority));
+    }
+
+    string markdownPath = Path.Combine(batchDir, "control-role-proof-batches.md");
+    string jsonPath = Path.Combine(batchDir, "control-role-proof-batches.json");
+    StringBuilder markdown = new();
+    markdown.AppendLine("# Control Role Proof Batches");
+    markdown.AppendLine();
+    markdown.AppendLine("Disposable native-edit manifests for proving whether suspicious trigger/control rows act alone or only with nearby visible anchors. These are not release features and do not promote automatic cloning by themselves.");
+    markdown.AppendLine();
+    markdown.AppendLine($"- Proof candidates: {proofRows.Count}");
+    markdown.AppendLine($"- Folder: `{batchDir}`");
+    markdown.AppendLine();
+    markdown.AppendLine("| Priority | Level | Moby | Current read | Likely role | Marker-only manifest | Cluster manifest | Anchors | Suggested visible owner | Owner index | Suggested `linkedTrueIndexes` | Proof step |");
+    markdown.AppendLine("|---:|---|---:|---|---|---|---|---|---|---:|---|---|");
+    foreach (ControlRoleProofBatchRow row in proofRows)
+    {
+        string markerLink = string.IsNullOrWhiteSpace(row.MarkerOnlyManifest) ? "" : $"`{row.MarkerOnlyManifest}`";
+        string clusterLink = string.IsNullOrWhiteSpace(row.ClusterManifest) ? "" : $"`{row.ClusterManifest}`";
+        string suggested = string.IsNullOrWhiteSpace(row.SuggestedLinkedTrueIndexes) ? "" : $"`{EscapeMarkdown(row.SuggestedLinkedTrueIndexes)}`";
+        string ownerIndex = row.SuggestedVisibleOwnerTrueIndex >= 0 ? row.SuggestedVisibleOwnerTrueIndex.ToString(CultureInfo.InvariantCulture) : "";
+        markdown.AppendLine($"| {row.Priority} | {EscapeMarkdown(row.LevelName)} | T{row.TrueIndex} | {EscapeMarkdown(row.CurrentRead)} | {EscapeMarkdown(row.LikelyRole)} | {markerLink} | {clusterLink} | {EscapeMarkdown(string.Join(", ", row.AnchorSummary))} | {EscapeMarkdown(row.SuggestedVisibleOwner)} | {ownerIndex} | {suggested} | {EscapeMarkdown(row.ProofStep)} |");
+    }
+
+    File.WriteAllText(markdownPath, markdown.ToString());
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        note = "Disposable control-role proof batches. Use marker-only first, then cluster, and only promote links after live behavior matches.",
+        outputDirectory = batchDir,
+        rows = proofRows
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    ValidateControlRoleProofBatches(proofRows, rows);
+    if (writeBinExports)
+        await WriteControlRoleProofBinExports(batchDir, proofRows);
+    WriteControlRoleProofReviewPacket(proofRows, allMobys);
+    Console.WriteLine($"Control role proof batches: {proofRows.Count} candidate(s), folder={batchDir}, index={markdownPath}");
+    return markdownPath;
+}
+
+string WriteControlRoleProofReviewPacket(
+    IReadOnlyList<ControlRoleProofBatchRow> proofRows,
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys)
+{
+    string reviewRoot = Path.Combine(workspace.RootPath, "_local", "control-role-proof-review");
+    string resultsRoot = Path.Combine(reviewRoot, "results");
+    string screenshotRoot = Path.Combine(reviewRoot, "screenshots");
+    string promotedRoot = Path.Combine(reviewRoot, "promoted-behavior-links");
+    Directory.CreateDirectory(resultsRoot);
+    Directory.CreateDirectory(screenshotRoot);
+    Directory.CreateDirectory(promotedRoot);
+
+    Dictionary<string, string> proofCueByKey = ReadControlRoleProofCueIndex();
+    List<ControlRoleProofReviewRow> rows = proofRows
+        .Where(row => !row.Status.Equals("proven-linked-companion", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(row => row.Priority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .Select(row => new ControlRoleProofReviewRow(
+            row.Priority,
+            row.LevelKey,
+            row.LevelName,
+            row.TrueIndex,
+            row.CurrentRead,
+            row.Status,
+            row.LikelyRole,
+            row.MarkerOnlyManifest,
+            row.ClusterManifest,
+            ControlRoleProofCuePath(proofCueByKey, row.LevelKey, row.TrueIndex, "marker-only"),
+            ControlRoleProofCuePath(proofCueByKey, row.LevelKey, row.TrueIndex, "cluster"),
+            row.AnchorSummary,
+            row.SuggestedVisibleOwnerTrueIndex,
+            row.SuggestedVisibleOwner,
+            row.SuggestedLinkedTrueIndexes,
+            row.ProofStep,
+            Path.GetRelativePath(workspace.RootPath, Path.Combine(screenshotRoot, $"{row.Priority:00}-{row.LevelKey}-t{row.TrueIndex}"))))
+        .ToList();
+
+    string templatePath = Path.Combine(resultsRoot, "control-role-proof-results-template.tsv");
+    string workingPath = Path.Combine(resultsRoot, "control-role-proof-results.tsv");
+    WriteControlRoleProofResultsTsv(templatePath, rows);
+    if (!File.Exists(workingPath) || !HasControlRoleProofTesterResults(workingPath))
+        WriteControlRoleProofResultsTsv(workingPath, rows);
+
+    ControlRoleProofPromotionReadResult promotionRead = ReadControlRoleProofPromotions(workingPath, rows, allMobys);
+    List<ControlRoleProofPromotion> promotions = promotionRead.Promotions.ToList();
+    WritePromotedControlRoleBehaviorLinks(promotedRoot, promotions);
+
+    string markdownPath = Path.Combine(reviewRoot, "control-role-proof-review.md");
+    string jsonPath = Path.Combine(reviewRoot, "control-role-proof-review.json");
+    StringBuilder markdown = new();
+    markdown.AppendLine("# Control Role Proof Review");
+    markdown.AppendLine();
+    markdown.AppendLine("This is the live-test bridge for trigger/control rows. Blank rows do nothing; confirmed rows with evidence and linked true indexes generate local behavior-link files that the editor loads on the next cache/app run.");
+    markdown.AppendLine();
+    markdown.AppendLine($"- Review folder: `{Path.GetRelativePath(workspace.RootPath, reviewRoot)}`");
+    markdown.AppendLine($"- Working results: `{Path.GetRelativePath(workspace.RootPath, workingPath)}`");
+    markdown.AppendLine($"- Generated behavior links: `{Path.GetRelativePath(workspace.RootPath, promotedRoot)}`");
+    markdown.AppendLine($"- Rows queued: {rows.Count}");
+    markdown.AppendLine($"- Confirmed promotions: {promotions.Count}");
+    markdown.AppendLine($"- Ignored confirmed rows needing cleanup: {promotionRead.Rejections.Count}");
+    markdown.AppendLine("- Marker/cluster manifests are lightweight edit plans for the full queue; marker/cluster CUEs appear only for rows with focused full-disc exports.");
+    markdown.AppendLine();
+    markdown.AppendLine("## Promotion Rules");
+    markdown.AppendLine();
+    markdown.AppendLine("- `resultStatus` must be `confirmed-linked`, `confirmed`, `proven`, or `promote`.");
+    markdown.AppendLine("- `linkedTrueIndexes` must list the visible object(s) or helper row(s) that should move with the control marker.");
+    markdown.AppendLine("- `suggestedVisibleOwnerTrueIndex` is the exact donor object index to copy into `linkedTrueIndexes` when live behavior proves the marker belongs to that visible object.");
+    markdown.AppendLine("- `evidenceNotes` or screenshot evidence is required; the generated link is local proof data, not a byte-pattern guess.");
+    markdown.AppendLine();
+    markdown.AppendLine("## Queue");
+    markdown.AppendLine();
+    markdown.AppendLine("| Priority | Level | Moby | Status | Likely role | Anchors | Suggested visible owner | Owner index | Suggested `linkedTrueIndexes` | Marker manifest | Cluster manifest | Marker CUE | Cluster CUE |");
+    markdown.AppendLine("|---:|---|---:|---|---|---|---|---:|---|---|---|---|---|");
+    foreach (ControlRoleProofReviewRow row in rows.Take(80))
+    {
+        string suggested = string.IsNullOrWhiteSpace(row.SuggestedLinkedTrueIndexes) ? "" : $"`{EscapeMarkdown(row.SuggestedLinkedTrueIndexes)}`";
+        string ownerIndex = row.SuggestedVisibleOwnerTrueIndex >= 0 ? row.SuggestedVisibleOwnerTrueIndex.ToString(CultureInfo.InvariantCulture) : "";
+        markdown.AppendLine($"| {row.Priority} | {EscapeMarkdown(row.LevelName)} | T{row.TrueIndex} | {EscapeMarkdown(row.Status)} | {EscapeMarkdown(row.LikelyRole)} | {EscapeMarkdown(string.Join(", ", row.AnchorSummary))} | {EscapeMarkdown(row.SuggestedVisibleOwner)} | {ownerIndex} | {suggested} | {EscapeMarkdown(row.MarkerOnlyManifest)} | {EscapeMarkdown(row.ClusterManifest)} | {EscapeMarkdown(row.MarkerOnlyCue)} | {EscapeMarkdown(row.ClusterCue)} |");
+    }
+
+    if (promotions.Count > 0)
+    {
+        markdown.AppendLine();
+        markdown.AppendLine("## Generated Promotions");
+        markdown.AppendLine();
+        markdown.AppendLine("| Level | Control | Linked true indexes | Link name | Evidence |");
+        markdown.AppendLine("|---|---:|---|---|---|");
+        foreach (ControlRoleProofPromotion promotion in promotions)
+        {
+            markdown.AppendLine($"| {EscapeMarkdown(promotion.LevelName)} | T{promotion.TrueIndex} | {EscapeMarkdown(string.Join(", ", promotion.TrueIndexes.Select(index => $"T{index}")))} | {EscapeMarkdown(promotion.LinkName)} | {EscapeMarkdown(promotion.EvidenceNotes)} |");
+        }
+    }
+
+    if (promotionRead.Rejections.Count > 0)
+    {
+        markdown.AppendLine();
+        markdown.AppendLine("## Ignored Confirmed Rows");
+        markdown.AppendLine();
+        markdown.AppendLine("These rows have a confirmed-style status but are not safe to turn into editor auto-clone links yet.");
+        markdown.AppendLine();
+        markdown.AppendLine("| Level | Moby | Reason | Cleanup |");
+        markdown.AppendLine("|---|---:|---|---|");
+        foreach (ControlRoleProofPromotionRejection rejection in promotionRead.Rejections)
+            markdown.AppendLine($"| {EscapeMarkdown(rejection.LevelName)} | T{rejection.TrueIndex} | {EscapeMarkdown(rejection.Reason)} | {EscapeMarkdown(rejection.Cleanup)} |");
+    }
+
+    File.WriteAllText(markdownPath, markdown.ToString());
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        reviewRoot = Path.GetRelativePath(workspace.RootPath, reviewRoot),
+        workingResults = Path.GetRelativePath(workspace.RootPath, workingPath),
+        promotedBehaviorLinks = Path.GetRelativePath(workspace.RootPath, promotedRoot),
+        rows,
+        promotions,
+        rejectedPromotions = promotionRead.Rejections
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Control role proof review: rows={rows.Count}, promotions={promotions.Count}, results={workingPath}, links={promotedRoot}");
+    return markdownPath;
+}
+
+Dictionary<string, string> ReadControlRoleProofCueIndex()
+{
+    string path = Path.Combine(workspace.RootPath, "_local", "objects", "control-role-proof-bins", "control-role-proof-bin-exports.json");
+    Dictionary<string, string> result = new(StringComparer.OrdinalIgnoreCase);
+    if (!File.Exists(path))
+        return result;
+
+    using FileStream stream = File.OpenRead(path);
+    using JsonDocument document = JsonDocument.Parse(stream);
+    if (!document.RootElement.TryGetProperty("rows", out JsonElement rows) || rows.ValueKind != JsonValueKind.Array)
+        return result;
+
+    foreach (JsonElement row in rows.EnumerateArray())
+    {
+        string levelKey = ReadJsonString(row, "LevelKey", ReadJsonString(row, "levelKey"));
+        int trueIndex = ReadJsonInt32(row, "TrueIndex", ReadJsonInt32(row, "trueIndex", -1));
+        string mode = ReadJsonString(row, "Mode", ReadJsonString(row, "mode"));
+        string cuePath = ReadJsonString(row, "OutputCuePath", ReadJsonString(row, "outputCuePath"));
+        if (!string.IsNullOrWhiteSpace(levelKey) && trueIndex >= 0 && !string.IsNullOrWhiteSpace(mode) && !string.IsNullOrWhiteSpace(cuePath))
+            result[ControlRoleProofCueKey(levelKey, trueIndex, mode)] = cuePath;
+    }
+
+    return result;
+}
+
+Dictionary<string, string> ReadControlRoleProofManifestIndex()
+{
+    string path = Path.Combine(workspace.RootPath, "_local", "smoke", "control-role-proof-batches", "control-role-proof-batches.json");
+    Dictionary<string, string> result = new(StringComparer.OrdinalIgnoreCase);
+    if (!File.Exists(path))
+        return result;
+
+    using FileStream stream = File.OpenRead(path);
+    using JsonDocument document = JsonDocument.Parse(stream);
+    if (!document.RootElement.TryGetProperty("rows", out JsonElement rows) || rows.ValueKind != JsonValueKind.Array)
+        return result;
+
+    foreach (JsonElement row in rows.EnumerateArray())
+    {
+        string levelKey = ReadJsonString(row, "LevelKey", ReadJsonString(row, "levelKey"));
+        int trueIndex = ReadJsonInt32(row, "TrueIndex", ReadJsonInt32(row, "trueIndex", -1));
+        string markerManifest = ReadJsonString(row, "MarkerOnlyManifest", ReadJsonString(row, "markerOnlyManifest"));
+        string clusterManifest = ReadJsonString(row, "ClusterManifest", ReadJsonString(row, "clusterManifest"));
+        if (!string.IsNullOrWhiteSpace(levelKey) && trueIndex >= 0)
+        {
+            if (!string.IsNullOrWhiteSpace(markerManifest))
+                result[ControlRoleProofCueKey(levelKey, trueIndex, "marker-only")] = markerManifest;
+            if (!string.IsNullOrWhiteSpace(clusterManifest))
+                result[ControlRoleProofCueKey(levelKey, trueIndex, "cluster")] = clusterManifest;
+        }
+    }
+
+    return result;
+}
+
+string ControlRoleProofCueKey(string levelKey, int trueIndex, string mode) =>
+    $"{levelKey}|{trueIndex}|{mode}";
+
+string ControlRoleProofManifestPath(
+    IReadOnlyDictionary<string, string> proofManifestByKey,
+    ControlRoleInvestigationRow row,
+    string mode)
+{
+    if (proofManifestByKey.TryGetValue(ControlRoleProofCueKey(row.LevelKey, row.TrueIndex, mode), out string? indexedPath) &&
+        !string.IsNullOrWhiteSpace(indexedPath))
+    {
+        return indexedPath;
+    }
+
+    if (row.AutoCloneSafe)
+        return "";
+
+    string slug = ControlRoleProofSlug(row.LevelKey, row.TrueIndex, row.CurrentRead);
+    return Path.Combine("_local", "smoke", "control-role-proof-batches", $"{slug}-{mode}-native-edits.json");
+}
+
+string ControlRoleProofCuePath(
+    IReadOnlyDictionary<string, string> proofCueByKey,
+    string levelKey,
+    int trueIndex,
+    string mode)
+{
+    if (proofCueByKey.TryGetValue(ControlRoleProofCueKey(levelKey, trueIndex, mode), out string? indexedPath) &&
+        !string.IsNullOrWhiteSpace(indexedPath))
+    {
+        return indexedPath;
+    }
+
+    string existingPath = Path.Combine(
+        workspace.RootPath,
+        "_local",
+        "objects",
+        "control-role-proof-bins",
+        $"{levelKey}-t{trueIndex}-{mode}.cue");
+    return File.Exists(existingPath) ? existingPath : "";
+}
+
+void WriteControlRoleProofResultsTsv(string path, IReadOnlyList<ControlRoleProofReviewRow> rows)
+{
+    StringBuilder builder = new();
+    builder.AppendLine(string.Join('\t', ControlRoleProofReviewHeader()));
+    foreach (ControlRoleProofReviewRow row in rows)
+        builder.AppendLine(string.Join('\t', ControlRoleProofReviewValues(row).Select(EscapeTsv)));
+    File.WriteAllText(path, builder.ToString());
+}
+
+string[] ControlRoleProofReviewHeader() =>
+[
+    "priority",
+    "levelKey",
+    "levelName",
+    "trueIndex",
+    "currentRead",
+    "status",
+    "likelyRole",
+    "markerOnlyManifest",
+    "clusterManifest",
+    "markerOnlyCue",
+    "clusterCue",
+    "anchorSummary",
+    "suggestedVisibleOwnerTrueIndex",
+    "suggestedVisibleOwner",
+    "suggestedLinkedTrueIndexes",
+    "proofStep",
+    "screenshotFolder",
+    "resultStatus",
+    "markerOnlyOutcome",
+    "clusterOutcome",
+    "linkedTrueIndexes",
+    "linkName",
+    "evidenceNotes"
+];
+
+IEnumerable<string> ControlRoleProofReviewValues(ControlRoleProofReviewRow row)
+{
+    yield return row.Priority.ToString(CultureInfo.InvariantCulture);
+    yield return row.LevelKey;
+    yield return row.LevelName;
+    yield return row.TrueIndex.ToString(CultureInfo.InvariantCulture);
+    yield return row.CurrentRead;
+    yield return row.Status;
+    yield return row.LikelyRole;
+    yield return row.MarkerOnlyManifest;
+    yield return row.ClusterManifest;
+    yield return row.MarkerOnlyCue;
+    yield return row.ClusterCue;
+    yield return string.Join("; ", row.AnchorSummary);
+    yield return row.SuggestedVisibleOwnerTrueIndex >= 0
+        ? row.SuggestedVisibleOwnerTrueIndex.ToString(CultureInfo.InvariantCulture)
+        : "";
+    yield return row.SuggestedVisibleOwner;
+    yield return row.SuggestedLinkedTrueIndexes;
+    yield return row.ProofStep;
+    yield return row.ScreenshotFolder;
+    yield return "";
+    yield return "";
+    yield return "";
+    yield return "";
+    yield return "";
+    yield return "";
+}
+
+bool HasControlRoleProofTesterResults(string path)
+{
+    if (!File.Exists(path))
+        return false;
+
+    string[] lines = File.ReadAllLines(path);
+    if (lines.Length < 2)
+        return false;
+
+    string[] headers = lines[0].Split('\t');
+    Dictionary<string, int> headerIndex = headers
+        .Select((name, index) => (name, index))
+        .ToDictionary(item => item.name, item => item.index, StringComparer.OrdinalIgnoreCase);
+    return lines.Skip(1)
+        .Where(line => !string.IsNullOrWhiteSpace(line))
+        .Select(line => line.Split('\t'))
+        .Any(cells =>
+            !string.IsNullOrWhiteSpace(ReadTsvCell(cells, headerIndex, "resultStatus")) ||
+            !string.IsNullOrWhiteSpace(ReadTsvCell(cells, headerIndex, "linkedTrueIndexes")) ||
+            !string.IsNullOrWhiteSpace(ReadTsvCell(cells, headerIndex, "evidenceNotes")));
+}
+
+ControlRoleProofPromotionReadResult ReadControlRoleProofPromotions(
+    string path,
+    IReadOnlyList<ControlRoleProofReviewRow> reviewRows,
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys)
+{
+    if (!File.Exists(path))
+        return new ControlRoleProofPromotionReadResult([], []);
+
+    string[] lines = File.ReadAllLines(path);
+    if (lines.Length < 2)
+        return new ControlRoleProofPromotionReadResult([], []);
+
+    string[] headers = lines[0].Split('\t');
+    Dictionary<string, int> headerIndex = headers
+        .Select((name, index) => (name, index))
+        .ToDictionary(item => item.name, item => item.index, StringComparer.OrdinalIgnoreCase);
+    Dictionary<string, ControlRoleProofReviewRow> rowsByKey = reviewRows.ToDictionary(
+        row => $"{row.LevelKey}|{row.TrueIndex}",
+        StringComparer.OrdinalIgnoreCase);
+    Dictionary<string, Moby> mobysByKey = allMobys
+        .Where(item => item.Moby.TrueIndex >= 0)
+        .GroupBy(item => $"{item.Level.Key}|{item.Moby.TrueIndex}", StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(group => group.Key, group => group.First().Moby, StringComparer.OrdinalIgnoreCase);
+    List<ControlRoleProofPromotion> promotions = new();
+    List<ControlRoleProofPromotionRejection> rejections = new();
+    for (int i = 1; i < lines.Length; i++)
+    {
+        if (string.IsNullOrWhiteSpace(lines[i]))
+            continue;
+
+        string[] cells = lines[i].Split('\t');
+        string status = ReadTsvCell(cells, headerIndex, "resultStatus").Trim();
+        if (!IsConfirmedControlRoleProofStatus(status))
+            continue;
+
+        string levelKey = ReadTsvCell(cells, headerIndex, "levelKey").Trim();
+        string levelName = ReadTsvCell(cells, headerIndex, "levelName").Trim();
+        int trueIndex = int.TryParse(ReadTsvCell(cells, headerIndex, "trueIndex"), NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsedTrueIndex)
+            ? parsedTrueIndex
+            : -1;
+        if (!rowsByKey.TryGetValue($"{levelKey}|{trueIndex}", out ControlRoleProofReviewRow? reviewRow))
+        {
+            rejections.Add(new ControlRoleProofPromotionRejection(
+                levelKey,
+                FirstIdentityValue(levelName, levelKey),
+                trueIndex,
+                "The row no longer matches the current proof queue.",
+                "Regenerate the proof review TSV, then copy the live evidence into the matching row."));
+            continue;
+        }
+
+        List<int> linkedTrueIndexes = ParseTrueIndexList(ReadTsvCell(cells, headerIndex, "linkedTrueIndexes"));
+        List<int> trueIndexes = new[] { trueIndex }
+            .Concat(linkedTrueIndexes)
+            .Where(index => index >= 0)
+            .Distinct()
+            .OrderBy(index => index)
+            .ToList();
+        if (trueIndexes.Count < 2)
+        {
+            rejections.Add(new ControlRoleProofPromotionRejection(
+                reviewRow.LevelKey,
+                reviewRow.LevelName,
+                reviewRow.TrueIndex,
+                "`linkedTrueIndexes` does not name any object to clone with the control row.",
+                "Enter the visible object true index, such as the chest, dragon, portal sign, Return Home platform, scenery prop, gem, or enemy that live behavior followed."));
+            continue;
+        }
+
+        string evidenceNotes = ReadTsvCell(cells, headerIndex, "evidenceNotes").Trim();
+        string screenshotFolder = ReadTsvCell(cells, headerIndex, "screenshotFolder").Trim();
+        bool hasScreenshotEvidence = !string.IsNullOrWhiteSpace(screenshotFolder) &&
+            Directory.Exists(Path.Combine(workspace.RootPath, screenshotFolder)) &&
+            Directory.EnumerateFiles(Path.Combine(workspace.RootPath, screenshotFolder)).Any();
+        if (string.IsNullOrWhiteSpace(evidenceNotes) && !hasScreenshotEvidence)
+        {
+            rejections.Add(new ControlRoleProofPromotionRejection(
+                reviewRow.LevelKey,
+                reviewRow.LevelName,
+                reviewRow.TrueIndex,
+                "Confirmed status needs evidence notes or screenshot files.",
+                "Add what changed in marker-only versus cluster testing, or put screenshots in the row's screenshot folder."));
+            continue;
+        }
+
+        if (!TryFindControlRolePromotionRootCandidate(reviewRow, trueIndexes, mobysByKey, out string rootCandidateSummary))
+        {
+            rejections.Add(new ControlRoleProofPromotionRejection(
+                reviewRow.LevelKey,
+                reviewRow.LevelName,
+                reviewRow.TrueIndex,
+                "No user-facing donor/root object was found in the linked true indexes.",
+                "Include a visible/placeable donor object, portal destination/name marker, Return Home platform, scenery prop, gem, enemy, dragon, or chest; pure hidden-control clusters stay report-only."));
+            continue;
+        }
+
+        string linkName = FirstIdentityValue(
+            ReadTsvCell(cells, headerIndex, "linkName"),
+            $"Live proof: {reviewRow.LevelName} T{reviewRow.TrueIndex} trigger/control link");
+        promotions.Add(new ControlRoleProofPromotion(
+            reviewRow.LevelKey,
+            reviewRow.LevelName,
+            reviewRow.TrueIndex,
+            linkName,
+            trueIndexes,
+            status,
+            ReadTsvCell(cells, headerIndex, "markerOnlyOutcome").Trim(),
+            ReadTsvCell(cells, headerIndex, "clusterOutcome").Trim(),
+            FirstIdentityValue(evidenceNotes, $"Screenshot evidence accepted. Non-control donor: {rootCandidateSummary}"),
+            screenshotFolder));
+    }
+
+    return new ControlRoleProofPromotionReadResult(promotions, rejections);
+}
+
+bool TryFindControlRolePromotionRootCandidate(
+    ControlRoleProofReviewRow reviewRow,
+    IReadOnlyList<int> trueIndexes,
+    IReadOnlyDictionary<string, Moby> mobysByKey,
+    out string summary)
+{
+    foreach (int trueIndex in trueIndexes)
+    {
+        if (!mobysByKey.TryGetValue($"{reviewRow.LevelKey}|{trueIndex}", out Moby? moby))
+            continue;
+        if (moby.IsRemoved || !IsControlRolePromotionRootCandidate(moby))
+            continue;
+
+        summary = $"T{moby.TrueIndex} {moby.DisplayLabel}";
+        return true;
+    }
+
+    summary = "";
+    return false;
+}
+
+bool IsControlRolePromotionRootCandidate(Moby moby)
+{
+    if (moby.IsRemoved || moby.IsChestContent)
+        return false;
+    if (moby.VisualKind is not MobyVisualKind.Control and not MobyVisualKind.Unknown)
+        return true;
+
+    return IsLikelyUserFacingCloneRoot(moby) || IsPortalDestinationProofRoot(moby);
+}
+
+bool IsPortalDestinationProofRoot(Moby moby)
+{
+    if (moby.Type != 0x00 || moby.SourceByte36 != 0x01)
+        return false;
+
+    string text = PortalReturnHomeControlText(moby);
+    return text.Contains("portal destination", StringComparison.Ordinal) ||
+        text.Contains("portal label", StringComparison.Ordinal) ||
+        text.Contains("level-name", StringComparison.Ordinal) ||
+        text.Contains("level name", StringComparison.Ordinal);
+}
+
+bool IsConfirmedControlRoleProofStatus(string status)
+{
+    return status.Equals("confirmed-linked", StringComparison.OrdinalIgnoreCase) ||
+        IsConfirmedIdentityResultStatus(status);
+}
+
+List<int> ParseTrueIndexList(string value)
+{
+    return (value ?? "")
+        .Split(new[] { ',', ';', ' ', '/', '|', 'T', 't' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Select(item => int.TryParse(item, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed) ? parsed : -1)
+        .Where(index => index >= 0)
+        .Distinct()
+        .ToList();
+}
+
+void WritePromotedControlRoleBehaviorLinks(
+    string promotedRoot,
+    IReadOnlyList<ControlRoleProofPromotion> promotions)
+{
+    Directory.CreateDirectory(promotedRoot);
+    foreach (string stalePath in Directory.GetFiles(promotedRoot, "*-behavior-links.json"))
+        File.Delete(stalePath);
+
+    foreach (IGrouping<string, ControlRoleProofPromotion> levelGroup in promotions.GroupBy(promotion => promotion.LevelKey, StringComparer.OrdinalIgnoreCase))
+    {
+        string path = Path.Combine(promotedRoot, $"{levelGroup.Key}-behavior-links.json");
+        File.WriteAllText(path, JsonSerializer.Serialize(new
+        {
+            generatedAt = DateTimeOffset.Now,
+            purpose = "Generated from confirmed control-role proof results. These links are local proof data loaded by the editor so copied visible objects bring their proven trigger/control companions.",
+            sourceResults = Path.GetRelativePath(workspace.RootPath, Path.Combine(workspace.RootPath, "_local", "control-role-proof-review", "results", "control-role-proof-results.tsv")),
+            linkGroups = levelGroup
+                .OrderBy(promotion => promotion.TrueIndex)
+                .Select(promotion => new
+                {
+                    key = $"{promotion.LevelKey}:control-role-proof:t{promotion.TrueIndex}",
+                    name = promotion.LinkName,
+                    kind = "linked group",
+                    linkedMove = true,
+                    confidence = "live-proof-control-role",
+                    basis = $"Marker-only outcome: {promotion.MarkerOnlyOutcome}; cluster outcome: {promotion.ClusterOutcome}; evidence: {promotion.EvidenceNotes}",
+                    reason = $"Confirmed live control-role proof for T{promotion.TrueIndex}; clone these linked rows together in the editor.",
+                    trueIndexes = promotion.TrueIndexes,
+                    memberIds = promotion.TrueIndexes.Select(index => $"T{index}").ToList()
+                })
+        }, new JsonSerializerOptions { WriteIndented = true }));
+    }
+}
+
+List<ControlRoleInvestigationRow> SelectControlRoleProofCandidates(IReadOnlyList<ControlRoleInvestigationRow> rows)
+{
+    List<ControlRoleInvestigationRow> selected = new();
+    void AddRange(IEnumerable<ControlRoleInvestigationRow> candidates)
+    {
+        foreach (ControlRoleInvestigationRow row in candidates)
+        {
+            if (row.AutoCloneSafe)
+                continue;
+            if (selected.Any(existing =>
+                existing.LevelKey.Equals(row.LevelKey, StringComparison.OrdinalIgnoreCase) &&
+                existing.TrueIndex == row.TrueIndex))
+            {
+                continue;
+            }
+
+            selected.Add(row);
+        }
+    }
+
+    AddRange(rows.Where(IsKnownFocusedSceneRouteProofInvestigationRow));
+    AddRange(rows.Where(IsKnownPortalTripletProofInvestigationRow));
+    AddRange(rows.Where(IsKnownReturnHomeHelperProofInvestigationRow));
+    AddRange(rows.Where(row => row.StrictTriggerCue));
+    AddRange(rows.Where(IsPortalReturnHomeProofCandidate)
+        .OrderBy(row => row.Priority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex));
+    AddRange(rows.Where(row => row.Status.Equals("scenery-link-needs-role-proof", StringComparison.OrdinalIgnoreCase)));
+    AddRange(rows.Where(row => row.Status.Equals("terrain-proximity-needs-live-proof", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(row => row.Priority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .Take(12));
+    AddRange(rows.Where(row => row.Status.Equals("terrain-neighbor-needs-live-proof", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(row => row.Priority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .Take(6));
+
+    return selected
+        .OrderBy(ControlRoleProofQueuePriority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .Take(96)
+        .ToList();
+}
+
+int ControlRoleProofQueuePriority(ControlRoleInvestigationRow row)
+{
+    string text = $"{row.CurrentRead} {row.LikelyRole} {row.NearestAnchors} {row.ProofStep}".ToLowerInvariant();
+    int priority = row.Priority;
+    if (IsKnownPortalTripletProofInvestigationRow(row))
+        priority = Math.Min(priority, 2);
+    if (IsKnownReturnHomeHelperProofInvestigationRow(row))
+        priority = Math.Min(priority, 3);
+    if (text.Contains("return home", StringComparison.Ordinal))
+        priority = Math.Min(priority, 3);
+    if (text.Contains("portal pad trigger", StringComparison.Ordinal) ||
+        text.Contains("portal destination", StringComparison.Ordinal) ||
+        text.Contains("portal/pad/name cluster", StringComparison.Ordinal))
+    {
+        priority = Math.Min(priority, 8);
+    }
+
+    return priority;
+}
+
+bool IsKnownPortalTripletProofInvestigationRow(ControlRoleInvestigationRow row)
+{
+    return KnownPortalTripletProofRows().Any(pair =>
+        row.LevelKey.Equals(pair.LevelKey, StringComparison.OrdinalIgnoreCase) &&
+        row.TrueIndex == pair.TrueIndex);
+}
+
+bool IsKnownFocusedSceneRouteProofInvestigationRow(ControlRoleInvestigationRow row)
+{
+    return KnownFocusedSceneRouteProofRows().Any(pair =>
+        row.LevelKey.Equals(pair.LevelKey, StringComparison.OrdinalIgnoreCase) &&
+        row.TrueIndex == pair.TrueIndex);
+}
+
+bool IsKnownReturnHomeHelperProofInvestigationRow(ControlRoleInvestigationRow row)
+{
+    return KnownReturnHomeHelperProofPairs().Any(pair =>
+        row.LevelKey.Equals(pair.LevelKey, StringComparison.OrdinalIgnoreCase) &&
+        row.TrueIndex == pair.TrueIndex);
+}
+
+List<Moby> SelectControlRoleProofAnchors(Moby target, IReadOnlyList<Moby> levelMobys)
+{
+    if (IsStrict0xAdTriggerCue(target))
+        return SelectStrictTriggerCueProofAnchors(target, levelMobys);
+
+    if (IsPortalReturnHomeProofTarget(target, levelMobys))
+        return SelectPortalReturnHomeProofAnchors(target, levelMobys);
+
+    return levelMobys
+        .Where(moby => moby.TrueIndex != target.TrueIndex)
+        .Where(moby => !moby.IsRemoved)
+        .Where(moby => moby.VisualKind is not MobyVisualKind.Control and not MobyVisualKind.Unknown)
+        .Select(moby => new
+        {
+            Moby = moby,
+            Distance = Math.Sqrt(DistanceSquared(moby.OriginalPosition, target.OriginalPosition))
+        })
+        .Where(item => item.Distance <= 640)
+        .OrderBy(item => item.Distance)
+        .ThenBy(item => ControlRoleAnchorRank(item.Moby))
+        .ThenBy(item => item.Moby.TrueIndex)
+        .Take(3)
+        .Select(item => item.Moby)
+        .ToList();
+}
+
+Moby? SelectControlRoleSuggestedVisibleOwner(Moby target, IReadOnlyList<Moby> anchors)
+{
+    return IsControlRolePromotionRootCandidate(target)
+        ? target
+        : anchors.FirstOrDefault(IsControlRolePromotionRootCandidate);
+}
+
+string FormatControlRoleSuggestedVisibleOwner(Moby? owner)
+{
+    return owner == null ? "" : $"T{owner.TrueIndex} {owner.DisplayLabel}";
+}
+
+bool IsPortalReturnHomeProofCandidate(ControlRoleInvestigationRow row)
+{
+    if (row.AutoCloneSafe)
+        return false;
+
+    string text = $"{row.CurrentRead} {row.LikelyRole} {row.NearestAnchors} {row.ProofStep}".ToLowerInvariant();
+    return text.Contains("return home", StringComparison.Ordinal) ||
+        text.Contains("portal pad trigger", StringComparison.Ordinal) ||
+        text.Contains("portal destination", StringComparison.Ordinal) ||
+        text.Contains("portal/pad/name cluster", StringComparison.Ordinal);
+}
+
+bool IsPortalReturnHomeProofTarget(Moby target, IReadOnlyList<Moby> levelMobys)
+{
+    string text = PortalReturnHomeControlText(target);
+    return IsPortalPadControlMoby(target) ||
+        IsPortalDestinationControlMoby(target) ||
+        IsPortalRouteControlMoby(target) &&
+            (text.Contains("return home", StringComparison.Ordinal) ||
+                FindNearestMoby(target, levelMobys.Where(IsReturnHomeVisibleMoby), 128) != null);
+}
+
+List<Moby> SelectPortalReturnHomeProofAnchors(Moby target, IReadOnlyList<Moby> levelMobys)
+{
+    List<Moby> anchors = new();
+
+    void AddIfPresent(Moby? moby)
+    {
+        if (moby == null || moby.TrueIndex == target.TrueIndex || moby.IsRemoved)
+            return;
+        if (anchors.Any(existing => existing.TrueIndex == moby.TrueIndex))
+            return;
+        anchors.Add(moby);
+    }
+
+    if (IsPortalPadControlMoby(target))
+    {
+        AddIfPresent(FindNearestMoby(target, levelMobys.Where(IsPortalDestinationControlMoby), 384));
+        AddIfPresent(FindNearestMoby(target, levelMobys.Where(moby => IsPortalRouteControlMoby(moby) && moby.TrueIndex != target.TrueIndex), 384));
+        AddIfPresent(FindNearestMoby(target, levelMobys.Where(IsPortalVisibleAnchorMoby), 768));
+    }
+    else if (IsPortalDestinationControlMoby(target))
+    {
+        AddIfPresent(FindNearestMoby(target, levelMobys.Where(IsPortalPadControlMoby), 384));
+        AddIfPresent(FindNearestMoby(target, levelMobys.Where(moby => IsPortalRouteControlMoby(moby) && moby.TrueIndex != target.TrueIndex), 384));
+        AddIfPresent(FindNearestMoby(target, levelMobys.Where(IsPortalVisibleAnchorMoby), 768));
+    }
+    else if (IsPortalRouteControlMoby(target))
+    {
+        AddIfPresent(FindNearestMoby(target, levelMobys.Where(IsReturnHomeVisibleMoby), 128));
+        AddIfPresent(FindNearestMoby(target, levelMobys.Where(IsPortalPadControlMoby), 384));
+        AddIfPresent(FindNearestMoby(target, levelMobys.Where(IsPortalDestinationControlMoby), 384));
+    }
+
+    if (anchors.Count == 0)
+        return SelectVisibleControlRoleProofAnchors(target, levelMobys, 3);
+
+    if (!IsControlRolePromotionRootCandidate(target) && !anchors.Any(IsControlRolePromotionRootCandidate))
+    {
+        foreach (Moby visibleAnchor in SelectVisibleControlRoleProofAnchors(target, levelMobys, 6))
+            AddIfPresent(visibleAnchor);
+    }
+
+    return anchors.Take(6).ToList();
+}
+
+List<Moby> SelectVisibleControlRoleProofAnchors(Moby target, IReadOnlyList<Moby> levelMobys, int limit)
+{
+    return levelMobys
+        .Where(moby => moby.TrueIndex != target.TrueIndex)
+        .Where(moby => !moby.IsRemoved)
+        .Where(moby => moby.VisualKind is not MobyVisualKind.Control and not MobyVisualKind.Unknown)
+        .Select(moby => new
+        {
+            Moby = moby,
+            Distance = Math.Sqrt(DistanceSquared(moby.OriginalPosition, target.OriginalPosition))
+        })
+        .Where(item => item.Distance <= 640)
+        .OrderBy(item => item.Distance)
+        .ThenBy(item => ControlRoleAnchorRank(item.Moby))
+        .ThenBy(item => item.Moby.TrueIndex)
+        .Take(limit)
+        .Select(item => item.Moby)
+        .ToList();
+}
+
+List<Moby> SelectStrictTriggerCueProofAnchors(Moby target, IReadOnlyList<Moby> levelMobys)
+{
+    return levelMobys
+        .Where(moby => moby.TrueIndex != target.TrueIndex)
+        .Where(moby => !moby.IsRemoved)
+        .Where(moby => moby.VisualKind is not MobyVisualKind.Control and not MobyVisualKind.Unknown)
+        .Select(moby => new
+        {
+            Moby = moby,
+            Distance = Math.Sqrt(DistanceSquared(moby.Position, target.Position)),
+            Rank = StrictTriggerCueAnchorRank(moby)
+        })
+        .Where(item => item.Distance <= 896)
+        .OrderBy(item => item.Rank)
+        .ThenBy(item => item.Distance)
+        .ThenBy(item => Math.Abs(item.Moby.TrueIndex - target.TrueIndex))
+        .ThenBy(item => item.Moby.TrueIndex)
+        .Take(5)
+        .Select(item => item.Moby)
+        .ToList();
+}
+
+int ControlRoleAnchorRank(Moby moby)
+{
+    return moby.VisualKind switch
+    {
+        MobyVisualKind.Dragon or MobyVisualKind.Portal => 0,
+        MobyVisualKind.Chest or MobyVisualKind.Actor or MobyVisualKind.Scenery => 1,
+        MobyVisualKind.Key or MobyVisualKind.Whirlwind => 2,
+        MobyVisualKind.Gem => 3,
+        _ => 4
+    };
+}
+
+Moby BuildControlRoleProofEdit(Moby source, Vector3f delta, string label, string patchLead)
+{
+    Moby edited = CloneMoby(source);
+    edited.Position = OffsetPosition(source.OriginalPosition, delta);
+    edited.Label = label;
+    edited.PatchStatus = string.IsNullOrWhiteSpace(edited.PatchStatus) ? "control-role-proof" : edited.PatchStatus;
+    edited.PatchLead = patchLead;
+    return edited;
+}
+
+string ControlRoleProofSlug(string levelKey, int trueIndex, string label)
+{
+    string clean = new string(label
+        .ToLowerInvariant()
+        .Select(ch => char.IsLetterOrDigit(ch) ? ch : '-')
+        .ToArray());
+    while (clean.Contains("--", StringComparison.Ordinal))
+        clean = clean.Replace("--", "-", StringComparison.Ordinal);
+    clean = clean.Trim('-');
+    if (clean.Length > 40)
+        clean = clean[..40].Trim('-');
+    return $"{levelKey}-t{trueIndex}-{clean}";
+}
+
+void ValidateControlRoleProofBatches(
+    IReadOnlyList<ControlRoleProofBatchRow> proofRows,
+    IReadOnlyList<ControlRoleInvestigationRow> investigationRows)
+{
+    foreach ((string levelKey, int trueIndex) in KnownFocusedSceneRouteProofRows())
+    {
+        bool sourceHasRow = investigationRows.Any(row =>
+            row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) &&
+            row.TrueIndex == trueIndex);
+        bool proofHasRow = proofRows.Any(row =>
+            row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) &&
+            row.TrueIndex == trueIndex &&
+            !string.IsNullOrWhiteSpace(row.MarkerOnlyManifest));
+        if (sourceHasRow && !proofHasRow)
+            throw new InvalidOperationException($"Control role proof batches should include focused scene/route row {levelKey} T{trueIndex}.");
+    }
+
+    int strictCueRows = investigationRows.Count(row => row.StrictTriggerCue && !row.AutoCloneSafe);
+    int strictCueProofs = proofRows.Count(row =>
+        investigationRows.Any(source =>
+            source.StrictTriggerCue &&
+            !source.AutoCloneSafe &&
+            source.LevelKey.Equals(row.LevelKey, StringComparison.OrdinalIgnoreCase) &&
+            source.TrueIndex == row.TrueIndex));
+    if (strictCueProofs < strictCueRows)
+        throw new InvalidOperationException($"Control role proof batches missed report-only strict trigger cue rows: source={strictCueRows}, proof={strictCueProofs}.");
+
+    List<ControlRoleProofBatchRow> strictProofRowsWithoutSuggestions = proofRows
+        .Where(row =>
+            investigationRows.Any(source =>
+                source.StrictTriggerCue &&
+                !source.AutoCloneSafe &&
+                source.LevelKey.Equals(row.LevelKey, StringComparison.OrdinalIgnoreCase) &&
+                source.TrueIndex == row.TrueIndex))
+        .Where(row => string.IsNullOrWhiteSpace(row.SuggestedLinkedTrueIndexes))
+        .ToList();
+    if (strictProofRowsWithoutSuggestions.Count > 0)
+    {
+        string summary = string.Join("; ", strictProofRowsWithoutSuggestions.Select(row => $"{row.LevelName} T{row.TrueIndex}"));
+        throw new InvalidOperationException($"Strict trigger cue proof rows should include suggested linked true indexes: {summary}.");
+    }
+
+    foreach ((string levelKey, int trueIndex) in KnownPortalTripletProofRows())
+    {
+        bool sourceHasRow = investigationRows.Any(row =>
+            row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) &&
+            row.TrueIndex == trueIndex);
+        bool proofHasRow = proofRows.Any(row =>
+            row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) &&
+            row.TrueIndex == trueIndex &&
+            !string.IsNullOrWhiteSpace(row.MarkerOnlyManifest));
+        if (sourceHasRow && !proofHasRow)
+            throw new InvalidOperationException($"Control role proof batches should include mapped portal triplet {levelKey} T{trueIndex}.");
+    }
+
+    foreach ((string levelKey, int trueIndex) in KnownReturnHomeHelperProofPairs())
+    {
+        bool sourceHasRow = investigationRows.Any(row =>
+            row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) &&
+            row.TrueIndex == trueIndex);
+        bool sourceAutoCloneSafe = investigationRows.Any(row =>
+            row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) &&
+            row.TrueIndex == trueIndex &&
+            row.AutoCloneSafe);
+        bool proofHasRow = proofRows.Any(row =>
+            row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) &&
+            row.TrueIndex == trueIndex &&
+            !string.IsNullOrWhiteSpace(row.MarkerOnlyManifest));
+        if (sourceHasRow && !sourceAutoCloneSafe && !proofHasRow)
+            throw new InvalidOperationException($"Control role proof batches should include mapped return-home helper {levelKey} T{trueIndex}.");
+    }
+}
+
+async Task<string> WriteControlRoleProofBinExports(
+    string batchDir,
+    IReadOnlyList<ControlRoleProofBatchRow> proofRows)
+{
+    string exportDir = Path.Combine(workspace.RootPath, "_local", "objects", "control-role-proof-bins");
+    Directory.CreateDirectory(exportDir);
+    ClearControlRoleProofBinExportFolder(exportDir);
+    string markdownPath = Path.Combine(exportDir, "control-role-proof-bin-exports.md");
+    string jsonPath = Path.Combine(exportDir, "control-role-proof-bin-exports.json");
+
+    List<ControlRoleProofBatchRow> selected = proofRows
+        .Where(IsControlRoleProofBinExportCandidate)
+        .OrderBy(row => row.Priority)
+        .ThenBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.TrueIndex)
+        .ToList();
+    ValidateControlRoleProofBinExportSelection(selected, proofRows);
+    List<ControlRoleProofBinExportRow> exports = new();
+
+    if (!File.Exists(sourceImage))
+    {
+        WriteControlRoleProofBinExportIndex(markdownPath, jsonPath, exportDir, exports, "Source BIN image was not found; only native-edit proof manifests were written.");
+        Console.WriteLine($"Control role proof BIN exports skipped: source image not found, index={markdownPath}");
+        return markdownPath;
+    }
+
+    foreach (ControlRoleProofBatchRow row in selected)
+    {
+        LevelDefinition? level = catalog.FindByKey(row.LevelKey);
+        if (level == null)
+            continue;
+
+        await ExportControlRoleProofManifest(row, level, "marker-only", row.MarkerOnlyManifest, exportDir, exports);
+        await ExportControlRoleProofManifest(row, level, "cluster", row.ClusterManifest, exportDir, exports);
+    }
+
+    string note = exportStrictTriggerProofBins
+        ? "Disposable BIN/CUE exports for focused scene/route rows, every report-only strict 0xAD trigger cue, and every currently mapped portal control triplet that still needs live behavior proof. Checked-in Return Home helper pairs are excluded from this proof-disc queue. These are local test-disc files and should not be committed or uploaded."
+        : "Disposable BIN/CUE exports for top control-role proof batches. These are local test-disc files and should not be committed or uploaded.";
+    WriteControlRoleProofBinExportIndex(markdownPath, jsonPath, exportDir, exports, note);
+    if (exports.Count == 0)
+        throw new InvalidOperationException("Control role proof BIN export should create the focused marker-only and cluster discs when source media is available.");
+
+    Console.WriteLine($"Control role proof BIN exports: {exports.Count} disposable disc(s), folder={exportDir}, index={markdownPath}");
+    return markdownPath;
+}
+
+void ClearControlRoleProofBinExportFolder(string exportDir)
+{
+    if (!Directory.Exists(exportDir))
+        return;
+
+    foreach (string path in Directory.EnumerateFiles(exportDir))
+    {
+        string extension = Path.GetExtension(path);
+        if (extension.Equals(".bin", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".cue", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".json", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".md", StringComparison.OrdinalIgnoreCase))
+        {
+            File.Delete(path);
+        }
+    }
+}
+
+bool IsControlRoleProofBinExportCandidate(ControlRoleProofBatchRow row)
+{
+    if (IsKnownFocusedSceneRouteProofBinExport(row))
+        return true;
+    if (exportStrictTriggerProofBins && row.Status.Equals("report-only-strict-trigger-cue", StringComparison.OrdinalIgnoreCase))
+        return true;
+
+    return IsFocusedPortalReturnHomeProofBinExport(row);
+}
+
+bool IsFocusedPortalReturnHomeProofBinExport(ControlRoleProofBatchRow row)
+{
+    if (IsKnownPortalTripletProofBinExport(row))
+        return true;
+    if (IsKnownReturnHomeHelperProofBinExport(row))
+        return true;
+    return false;
+}
+
+bool IsKnownPortalTripletProofBinExport(ControlRoleProofBatchRow row)
+{
+    return KnownPortalTripletProofRows().Any(pair =>
+        row.LevelKey.Equals(pair.LevelKey, StringComparison.OrdinalIgnoreCase) &&
+        row.TrueIndex == pair.TrueIndex);
+}
+
+bool IsKnownFocusedSceneRouteProofBinExport(ControlRoleProofBatchRow row)
+{
+    return KnownFocusedSceneRouteProofRows().Any(pair =>
+        row.LevelKey.Equals(pair.LevelKey, StringComparison.OrdinalIgnoreCase) &&
+        row.TrueIndex == pair.TrueIndex);
+}
+
+bool IsKnownReturnHomeHelperProofBinExport(ControlRoleProofBatchRow row)
+{
+    return KnownReturnHomeHelperProofPairs().Any(pair =>
+        row.LevelKey.Equals(pair.LevelKey, StringComparison.OrdinalIgnoreCase) &&
+        row.TrueIndex == pair.TrueIndex);
+}
+
+(string LevelKey, int TrueIndex)[] KnownFocusedSceneRouteProofRows() =>
+[
+    ("artisans", 25),
+    ("artisans", 26),
+    ("artisans", 149),
+    ("artisans", 150),
+    ("artisans", 151),
+    ("stonehill", 149),
+    ("stonehill", 150),
+    ("stonehill", 151)
+];
+
+(string LevelKey, int TrueIndex)[] KnownPortalTripletProofRows() =>
+[
+    ("alpineridge", 158),
+    ("artisans", 38),
+    ("artisans", 39),
+    ("artisans", 41),
+    ("artisans", 141),
+    ("beastmakers", 75),
+    ("beastmakers", 78),
+    ("beastmakers", 178),
+    ("beastmakers", 182),
+    ("beastmakers", 184),
+    ("dreamweavers", 34),
+    ("dreamweavers", 37),
+    ("dreamweavers", 39),
+    ("dreamweavers", 43),
+    ("dreamweavers", 48),
+    ("gnastysworld", 4),
+    ("gnastysworld", 7),
+    ("gnastysworld", 10),
+    ("gnastysworld", 13),
+    ("magiccrafters", 84),
+    ("magiccrafters", 86),
+    ("magiccrafters", 87),
+    ("magiccrafters", 88),
+    ("peacekeepers", 47),
+    ("peacekeepers", 48),
+    ("peacekeepers", 49),
+    ("peacekeepers", 50)
+];
+
+(string LevelKey, int TrueIndex)[] KnownReturnHomeHelperProofPairs() =>
+[
+    ("alpineridge", 170),
+    ("blowhard", 72),
+    ("clifftown", 153),
+    ("darkhollow", 119),
+    ("doctorshemp", 76),
+    ("drycanyon", 152),
+    ("gnastysloot", 127),
+    ("gnorccove", 218),
+    ("highcaves", 136),
+    ("icecavern", 209),
+    ("stonehill", 179),
+    ("toasty", 56),
+    ("townsquare", 97),
+    ("wizardpeak", 158)
+];
+
+void ValidateControlRoleProofBinExportSelection(
+    IReadOnlyList<ControlRoleProofBatchRow> selected,
+    IReadOnlyList<ControlRoleProofBatchRow> proofRows)
+{
+    foreach ((string levelKey, int trueIndex) in KnownReturnHomeHelperProofPairs())
+    {
+        if (proofRows.Any(row => row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) && row.TrueIndex == trueIndex) &&
+            !selected.Any(row => row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) && row.TrueIndex == trueIndex))
+        {
+            throw new InvalidOperationException($"Focused proof BIN exports must include {levelKey} T{trueIndex} return-home helper.");
+        }
+    }
+
+    foreach ((string levelKey, int trueIndex) in KnownPortalTripletProofRows())
+    {
+        if (proofRows.Any(row => row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) && row.TrueIndex == trueIndex) &&
+            !selected.Any(row => row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) && row.TrueIndex == trueIndex))
+        {
+            throw new InvalidOperationException($"Focused proof BIN exports must include {levelKey} T{trueIndex} portal pad/control row.");
+        }
+    }
+
+    foreach ((string levelKey, int trueIndex) in KnownFocusedSceneRouteProofRows())
+    {
+        if (proofRows.Any(row => row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) && row.TrueIndex == trueIndex) &&
+            !selected.Any(row => row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) && row.TrueIndex == trueIndex))
+        {
+            throw new InvalidOperationException($"Focused proof BIN exports must include {levelKey} T{trueIndex} scene/route row.");
+        }
+    }
+}
+
+async Task ExportControlRoleProofManifest(
+    ControlRoleProofBatchRow row,
+    LevelDefinition level,
+    string mode,
+    string manifestPath,
+    string exportDir,
+    List<ControlRoleProofBinExportRow> exports)
+{
+    if (string.IsNullOrWhiteSpace(manifestPath))
+        return;
+
+    string nativeEditsPath = Path.IsPathRooted(manifestPath)
+        ? manifestPath
+        : Path.Combine(workspace.RootPath, manifestPath);
+    if (!File.Exists(nativeEditsPath))
+        throw new FileNotFoundException($"Control role proof manifest missing for {row.LevelName} T{row.TrueIndex} {mode}.", nativeEditsPath);
+
+    string outputPrefix = Path.Combine(exportDir, $"{row.LevelKey}-t{row.TrueIndex}-{mode}");
+    MobySourcePatchResult result = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        OutputPrefix: outputPrefix,
+        Level: level,
+        NativeEditsPath: nativeEditsPath,
+        WriteImage: true));
+
+    if (!result.WroteImage || !File.Exists(result.OutputImagePath) || !File.Exists(result.OutputCuePath))
+        throw new InvalidOperationException($"Control role proof export did not write a BIN/CUE for {row.LevelName} T{row.TrueIndex} {mode}.");
+    if (result.Plan.SkippedEdits.Count > 0)
+        throw new InvalidOperationException($"Control role proof export skipped edit(s) for {row.LevelName} T{row.TrueIndex} {mode}: {string.Join("; ", result.Plan.SkippedEdits)}");
+
+    VerifyPatchBytes(result.OutputImagePath, result.Plan);
+    exports.Add(new ControlRoleProofBinExportRow(
+        row.LevelKey,
+        row.LevelName,
+        row.TrueIndex,
+        mode,
+        row.CurrentRead,
+        row.LikelyRole,
+        Path.GetRelativePath(workspace.RootPath, nativeEditsPath),
+        result.OutputCuePath,
+        result.OutputImagePath,
+        result.OutputPlanPath,
+        result.Plan.PatchCount,
+        result.Plan.Patches.Select(patch => patch.Kind).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(kind => kind, StringComparer.OrdinalIgnoreCase).ToList()));
+}
+
+void WriteControlRoleProofBinExportIndex(
+    string markdownPath,
+    string jsonPath,
+    string exportDir,
+    IReadOnlyList<ControlRoleProofBinExportRow> exports,
+    string note)
+{
+    StringBuilder markdown = new();
+    markdown.AppendLine("# Control Role Proof BIN Exports");
+    markdown.AppendLine();
+    markdown.AppendLine(note);
+    markdown.AppendLine();
+    markdown.AppendLine($"- Folder: `{exportDir}`");
+    markdown.AppendLine($"- Exports: {exports.Count}");
+    markdown.AppendLine();
+    if (exports.Count == 0)
+    {
+        markdown.AppendLine("No disposable BIN/CUE files were written.");
+    }
+    else
+    {
+        markdown.AppendLine("| Level | Moby | Mode | Current read | Likely role | CUE | Patch plan | Patch count | Patch kinds |");
+        markdown.AppendLine("|---|---:|---|---|---|---|---|---:|---|");
+        foreach (ControlRoleProofBinExportRow row in exports)
+        {
+            markdown.AppendLine($"| {EscapeMarkdown(row.LevelName)} | T{row.TrueIndex} | {EscapeMarkdown(row.Mode)} | {EscapeMarkdown(row.CurrentRead)} | {EscapeMarkdown(row.LikelyRole)} | `{row.OutputCuePath}` | `{row.OutputPlanPath}` | {row.PatchCount} | {EscapeMarkdown(string.Join(", ", row.PatchKinds))} |");
+        }
+    }
+
+    File.WriteAllText(markdownPath, markdown.ToString());
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        note,
+        exportDirectory = exportDir,
+        rows = exports
+    }, new JsonSerializerOptions { WriteIndented = true }));
+}
+
 string WriteUnknownMobyClusterMapReport(
     string outDir,
     IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys,
@@ -4301,6 +10474,27 @@ SourceDiscFileRecord FindSourceExecutable(FileStream stream, SourceDiscLayout la
     throw new InvalidOperationException("Could not find source executable file.");
 }
 
+int AssertSkyOcclusionRendererInstruction(string imagePath, uint expectedInstruction)
+{
+    SourceDiscLayout layout = DetectSourceDiscLayout(imagePath);
+    using FileStream stream = File.OpenRead(imagePath);
+    SourceDiscFileRecord executable = FindSourceExecutable(stream, layout);
+    byte[] header = ReadSourceFileBytes(stream, layout, executable.Lba, 0, 0x800);
+    uint loadAddress = BitConverter.ToUInt32(header, 0x18);
+    const uint runtimeAddress = 0x80051F90;
+    if (runtimeAddress < loadAddress)
+        throw new InvalidOperationException("Sky occlusion renderer address is below the executable load address.");
+    int fileOffset = checked(0x800 + (int)(runtimeAddress - loadAddress));
+    byte[] instructionBytes = ReadSourceFileBytes(stream, layout, executable.Lba, fileOffset, 4);
+    uint actualInstruction = BitConverter.ToUInt32(instructionBytes);
+    if (actualInstruction != expectedInstruction)
+    {
+        throw new InvalidOperationException(
+            $"Sky occlusion renderer instruction mismatch at 0x{runtimeAddress:X8}: expected 0x{expectedInstruction:X8}, got 0x{actualInstruction:X8}.");
+    }
+    return executable.Lba;
+}
+
 byte[] ReadSourceFileBytes(FileStream stream, SourceDiscLayout layout, int fileLba, long fileOffset, int length)
 {
     byte[] result = new byte[length];
@@ -4336,6 +10530,34 @@ long ParseFlexibleLong(string text)
         ? long.Parse(trimmed[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture)
         : long.Parse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture);
 }
+
+double EnvironmentStatisticsBalanceDistance(
+    NativeEnvironmentColorStatistics first,
+    NativeEnvironmentColorStatistics second)
+{
+    double firstTotal = Math.Max(0.01, first.MeanRed + first.MeanGreen + first.MeanBlue);
+    double secondTotal = Math.Max(0.01, second.MeanRed + second.MeanGreen + second.MeanBlue);
+    return Math.Sqrt(
+        Math.Pow((first.MeanRed / firstTotal) - (second.MeanRed / secondTotal), 2) +
+        Math.Pow((first.MeanGreen / firstTotal) - (second.MeanGreen / secondTotal), 2) +
+        Math.Pow((first.MeanBlue / firstTotal) - (second.MeanBlue / secondTotal), 2));
+}
+
+double EnvironmentColorBalanceDistance(ColorRgba first, ColorRgba second)
+{
+    double firstTotal = Math.Max(1, first.R + first.G + first.B);
+    double secondTotal = Math.Max(1, second.R + second.G + second.B);
+    return Math.Sqrt(
+        Math.Pow((first.R / firstTotal) - (second.R / secondTotal), 2) +
+        Math.Pow((first.G / firstTotal) - (second.G / secondTotal), 2) +
+        Math.Pow((first.B / firstTotal) - (second.B / secondTotal), 2));
+}
+
+ColorRgba EnvironmentModulate(ColorRgba first, ColorRgba second) =>
+    ColorRgba.FromRgb(
+        Math.Min(255, (first.R * second.R) / 128),
+        Math.Min(255, (first.G * second.G) / 128),
+        Math.Min(255, (first.B * second.B) / 128));
 
 RawSpecialDataSignature? TryBuildRawSpecialDataSignature(uint specialDataPointer, byte[] ram)
 {
@@ -4941,11 +11163,17 @@ void ReportCrossLevelObjectTemplateCatalog()
     JsonElement[] addTemplates = templates
         .Where(template => ReadJsonBool(template, "showInAddList"))
         .ToArray();
+    JsonElement[] releaseTemplates = templates
+        .Where(template => ReadJsonBool(template, "showInReleaseAddList"))
+        .ToArray();
     string[] requiredIds =
     [
         "common.key.peacekeepers.t78",
         "common.locked_chest.peacekeepers.t79",
-        "enemy.green_wizard.wizardpeak.t6"
+        "enemy.green_wizard.wizardpeak.t6",
+        GnastyLootSpringTemplateId,
+        GnastyLootFireworkTemplateId,
+        GnastyLootMultiGemChestTemplateId
     ];
     string[] missing = requiredIds
         .Where(id => !addTemplates.Any(template => string.Equals(ReadJsonString(template, "id"), id, StringComparison.OrdinalIgnoreCase)))
@@ -4956,6 +11184,8 @@ void ReportCrossLevelObjectTemplateCatalog()
         throw new InvalidOperationException("Cross-level object template catalog is missing the diagnostic Spring Chest template metadata.");
     if (addTemplates.Any(template => string.Equals(ReadJsonString(template, "id"), CurrentStoneHillSpringTemplateId, StringComparison.OrdinalIgnoreCase)))
         throw new InvalidOperationException("Cross-level Spring Chest should stay hidden from the normal Add Object list until it passes in-game.");
+    if (releaseTemplates.Length != 0)
+        throw new InvalidOperationException($"Release Add Object candidates should be empty until cross-level objects are proven, found: {string.Join(", ", releaseTemplates.Select(template => ReadJsonString(template, "id", "?")))}.");
 
     foreach (JsonElement template in addTemplates)
     {
@@ -4966,7 +11196,8 @@ void ReportCrossLevelObjectTemplateCatalog()
     }
 
     string visible = string.Join(", ", addTemplates.Select(template => ReadJsonString(template, "displayName", ReadJsonString(template, "id"))));
-    Console.WriteLine($"Cross-level object templates: {addTemplates.Length} Add Object template(s): {visible}");
+    string releaseVisible = string.Join(", ", releaseTemplates.Select(template => ReadJsonString(template, "displayName", ReadJsonString(template, "id"))));
+    Console.WriteLine($"Cross-level object templates: {addTemplates.Length} research Add Object template(s): {visible}; {releaseTemplates.Length} release candidate template(s): {releaseVisible}");
 }
 
 async Task ReportCrossLevelObjectImportAnalysis()
@@ -5289,25 +11520,32 @@ async Task<UniversalNativeChestCloneExportReport> ReportUniversalNativeChestClon
             throw new InvalidOperationException($"{strategyLevel.LevelName} native chest clone proof should not use actor-package imports.");
 
         bool hasSourceCountPatch = plan.Patches.Any(patch => string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase));
-        string rowStatus = hasSourceCountPatch ? "proved" : "candidate-no-count-field";
-        string rowNotes = hasSourceCountPatch
-            ? ""
-            : string.Join(" ", plan.Notes.Where(note => note.Contains("bytes before the source moby table", StringComparison.OrdinalIgnoreCase)));
 
         foreach (Moby edit in edits)
         {
             MobySourcePatch? append = plan.Patches.FirstOrDefault(patch =>
                 string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(patch.MobyLabel, edit.Label, StringComparison.OrdinalIgnoreCase));
-            if (append == null)
-                throw new InvalidOperationException($"{strategyLevel.LevelName} native clone proof did not append {edit.Label}.");
+            MobySourcePatch? autoSlot = plan.Patches.FirstOrDefault(patch =>
+                string.Equals(patch.Kind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(patch.MobyLabel, edit.Label, StringComparison.OrdinalIgnoreCase));
+            MobySourcePatch? recordPatch = append ?? autoSlot;
+            if (recordPatch == null)
+                throw new InvalidOperationException($"{strategyLevel.LevelName} native clone proof did not export {edit.Label} through append or auto-slot reuse.");
 
-            byte[] after = ParseHexPreview(append.AfterHexPreview);
+            byte[] after = ParseHexPreview(recordPatch.AfterHexPreview);
             int actorId = after[0x36] | (after[0x37] << 8);
             if (edit.SourceByte36 != after[0x36] || edit.SourceByte37 != after[0x37])
                 throw new InvalidOperationException($"{strategyLevel.LevelName} native clone proof wrote the wrong actor bytes for {edit.Label}.");
 
-            bool shouldHaveSpecialClone = edit.Type == 0x20 && edit.SpecialDataPointer != 0;
+            bool reusedSourceSlot = autoSlot != null;
+            string rowStatus = reusedSourceSlot || hasSourceCountPatch ? "proved" : "candidate-no-count-field";
+            string rowNotes = reusedSourceSlot
+                ? $"Reused source slot T{autoSlot!.TrueIndex}; no new source row was appended."
+                : hasSourceCountPatch
+                ? ""
+                : string.Join(" ", plan.Notes.Where(note => note.Contains("bytes before the source moby table", StringComparison.OrdinalIgnoreCase)));
+            bool shouldHaveSpecialClone = !reusedSourceSlot && edit.Type == 0x20 && edit.SpecialDataPointer != 0;
             bool hasSpecialClone = plan.Patches.Any(patch =>
                 string.Equals(patch.Kind, "moby-special-data-clone", StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(patch.MobyLabel, edit.Label, StringComparison.OrdinalIgnoreCase));
@@ -5319,7 +11557,7 @@ async Task<UniversalNativeChestCloneExportReport> ReportUniversalNativeChestClon
                 LevelName: strategyLevel.LevelName,
                 ObjectName: edit.Label,
                 ActorIdHex: $"0x{actorId:X4}",
-                TrueIndex: edit.TrueIndex,
+                TrueIndex: recordPatch.TrueIndex,
                 PatchCount: plan.PatchCount,
                 HasSpecialClone: hasSpecialClone,
                 EditPath: editPath,
@@ -5402,6 +11640,8 @@ Moby CreateNativeChestCloneMoby(FileStream stream, SourceDiscLayout layout, Leve
         OriginalType = record[0x50],
         State = record[0x51],
         OriginalState = record[0x51],
+        YawByte = record[0x46],
+        OriginalYawByte = record[0x46],
         SourceByte36 = record[0x36],
         OriginalSourceByte36 = record[0x36],
         SourceByte37 = record[0x37],
@@ -5545,6 +11785,9 @@ void ReportCrossLevelEditorTemplateReadiness()
     JsonElement springChest = FindTemplate(allTemplates, CurrentStoneHillSpringTemplateId);
     JsonElement keyChest = FindTemplate(templates, "common.locked_chest.peacekeepers.t79");
     JsonElement greenWizard = FindTemplate(templates, "enemy.green_wizard.wizardpeak.t6");
+    JsonElement gnastySpringChest = FindTemplate(templates, GnastyLootSpringTemplateId);
+    JsonElement fireworkChest = FindTemplate(templates, GnastyLootFireworkTemplateId);
+    JsonElement multiGemChest = FindTemplate(templates, GnastyLootMultiGemChestTemplateId);
     if (templates.Any(template => string.Equals(ReadJsonString(template, "id"), CurrentStoneHillSpringTemplateId, StringComparison.OrdinalIgnoreCase)))
         throw new InvalidOperationException("Editor Add Object templates should hide cross-level Spring Chest until it passes in-game.");
 
@@ -5558,6 +11801,9 @@ void ReportCrossLevelEditorTemplateReadiness()
     CrossLevelTemplateLevelStatus artisansSpring = ResolveTemplateStatus(artisans, springChest);
     CrossLevelTemplateLevelStatus toastyWizard = ResolveTemplateStatus(toasty, greenWizard);
     CrossLevelTemplateLevelStatus stoneHillWizard = ResolveTemplateStatus(stoneHillLevel, greenWizard);
+    CrossLevelTemplateLevelStatus stoneHillGnastySpring = ResolveTemplateStatus(stoneHillLevel, gnastySpringChest);
+    CrossLevelTemplateLevelStatus stoneHillFirework = ResolveTemplateStatus(stoneHillLevel, fireworkChest);
+    CrossLevelTemplateLevelStatus stoneHillMultiGemChest = ResolveTemplateStatus(stoneHillLevel, multiGemChest);
     bool hasSourceDiscForCandidateChecks = File.Exists(sourceImage);
 
     if (!artisansKey.Ready || !artisansKey.Placeable || !string.Equals(artisansKey.ShortLabel, "ready", StringComparison.OrdinalIgnoreCase))
@@ -5608,12 +11854,42 @@ void ReportCrossLevelEditorTemplateReadiness()
     if (!CrossLevelEditorTemplateSupport.CanTransform(MobyVisualKind.Actor, "enemyTransform") ||
         CrossLevelEditorTemplateSupport.CanTransform(MobyVisualKind.Chest, "enemyTransform") ||
         CrossLevelEditorTemplateSupport.CanTransform(MobyVisualKind.Actor, "lockedChest") ||
-        !CrossLevelEditorTemplateSupport.CanTransform(MobyVisualKind.Chest, "lockedChest"))
+        !CrossLevelEditorTemplateSupport.CanTransform(MobyVisualKind.Chest, "lockedChest") ||
+        !CrossLevelEditorTemplateSupport.CanTransform(MobyVisualKind.Chest, "springChest") ||
+        !CrossLevelEditorTemplateSupport.CanTransform(MobyVisualKind.Chest, "fireworkChest") ||
+        !CrossLevelEditorTemplateSupport.CanTransform(MobyVisualKind.Chest, "multiGemChest"))
     {
         throw new InvalidOperationException("Editor transform filtering should keep enemy transforms on actors and chest transforms on chests.");
     }
+    if (stoneHillGnastySpring.Ready ||
+        !stoneHillGnastySpring.Placeable ||
+        !string.Equals(stoneHillGnastySpring.ShortLabel, "candidate here", StringComparison.OrdinalIgnoreCase) ||
+        stoneHillFirework.Ready ||
+        !stoneHillFirework.Placeable ||
+        !string.Equals(stoneHillFirework.ShortLabel, "candidate here", StringComparison.OrdinalIgnoreCase) ||
+        stoneHillMultiGemChest.Ready ||
+        !stoneHillMultiGemChest.Placeable ||
+        !string.Equals(stoneHillMultiGemChest.ShortLabel, "candidate here", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Gnasty's Loot Spring, Firework, and 3x Flame chests should be placeable guarded source-record candidates.");
+    }
 
-    Console.WriteLine("Cross-level editor readiness: Spring Chest is diagnostic-only; Artisans Key Chest and Toasty Green Wizard remain guarded candidate tests.");
+    JsonElement[] gnastyChestCandidates = [gnastySpringChest, fireworkChest, multiGemChest];
+    foreach (LevelDefinition level in catalog.Levels.Where(level => level.HasSourceTable))
+    {
+        foreach (JsonElement template in gnastyChestCandidates)
+        {
+            CrossLevelTemplateLevelStatus status = ResolveTemplateStatus(level, template);
+            if (status.Ready ||
+                !status.Placeable ||
+                !string.Equals(status.ShortLabel, "candidate here", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"Gnasty's Loot chest template {ReadJsonString(template, "id")} should be a guarded candidate in {level.DisplayName}.");
+            }
+        }
+    }
+
+    Console.WriteLine("Cross-level editor readiness: Peace Keepers Spring Chest stays diagnostic; Artisans Key Chest, Toasty Green Wizard, and Gnasty's Loot Spring/Firework/3x chests remain guarded candidate tests.");
 
     JsonElement FindTemplate(IEnumerable<JsonElement> templates, string id)
     {
@@ -5990,6 +12266,1387 @@ void ReportSyntheticChestContentLink(string levelKey, List<Moby> mobys)
     Console.WriteLine($"{levelKey} synthetic chest content: repaired {repaired} link(s), added T{added.TrueIndex} linked={linked}, removedLinked={removedLinked}");
 }
 
+async Task ReportLinkedCompanionCloneRoundTrip()
+{
+    Vector3f rootPosition = new(128, 256, 64);
+    Vector3f helperPosition = new(160, 256, 64);
+    Moby root = new()
+    {
+        Index = 1,
+        TrueIndex = 1,
+        LegacyIndex = 1,
+        Position = rootPosition,
+        OriginalPosition = rootPosition,
+        Type = 0x20,
+        OriginalType = 0x20,
+        State = 0,
+        OriginalState = 0,
+        SourceByte36 = 0xFA,
+        OriginalSourceByte36 = 0xFA,
+        SourceByte37 = 0,
+        OriginalSourceByte37 = 0,
+        SourceByte4F = 0,
+        OriginalSourceByte4F = 0,
+        Flag4A = 0x10,
+        OriginalFlag4A = 0x10,
+        Flag4B = 0xFF,
+        OriginalFlag4B = 0xFF,
+        Color = Moby.ColorForType(0x20),
+        Label = "Dragon",
+        OriginalLabel = "Dragon"
+    };
+    Moby helper = new()
+    {
+        Index = 2,
+        TrueIndex = 2,
+        LegacyIndex = 2,
+        Position = helperPosition,
+        OriginalPosition = helperPosition,
+        Type = 0x00,
+        OriginalType = 0x00,
+        State = 0,
+        OriginalState = 0,
+        SourceByte36 = 0x6E,
+        OriginalSourceByte36 = 0x6E,
+        SourceByte37 = 0,
+        OriginalSourceByte37 = 0,
+        SourceByte4F = 0,
+        OriginalSourceByte4F = 0,
+        Flag4A = 0x10,
+        OriginalFlag4A = 0x10,
+        Flag4B = 0xFF,
+        OriginalFlag4B = 0xFF,
+        Color = Moby.ColorForType(0x00),
+        Label = "Dragon rescue control marker",
+        OriginalLabel = "Dragon rescue control marker",
+        CandidateKind = "dragon rescue control/helper"
+    };
+    MobyLink sourceLink = new()
+    {
+        Key = "smoke:dragon-scene:1:2",
+        Name = "Dragon scene T1/T2",
+        Kind = "dragon scene",
+        LinkedMove = true,
+        Confidence = "smoke",
+        Reason = "Synthetic dragon helper companion link.",
+        TrueIndexes = [1, 2]
+    };
+    root.Links.Add(sourceLink);
+    helper.Links.Add(sourceLink);
+    IReadOnlyList<Moby> companions = MobyCompanionClonePlanner.GetCompanionDonors(root, [root, helper]);
+    if (companions.Count != 1 || companions[0].TrueIndex != helper.TrueIndex)
+        throw new InvalidOperationException("Linked companion planner did not identify the synthetic helper donor.");
+
+    Moby clonedRoot = CopyAsAddedMoby(root, 100, 100, "Copy of Dragon", 5);
+    clonedRoot.PatchStatus = "native-clone";
+    clonedRoot.PatchLead = "Smoke root clone with linked companion.";
+    clonedRoot.SourceCloneLevelKey = "smoke";
+    clonedRoot.SourceCloneLevelName = "Smoke";
+    clonedRoot.SourceCloneTrueIndex = root.TrueIndex;
+    Moby clonedHelper = CopyAsAddedMoby(helper, 101, 101, "Linked companion for Copy of Dragon: Dragon rescue control marker", 5);
+    clonedHelper.PatchStatus = "native-clone";
+    clonedHelper.PatchLead = "Linked companion cloned with Copy of Dragon from same-level donor T2; source root was T1.";
+    clonedHelper.Confidence = "same-level-linked-companion-clone";
+    clonedHelper.SourceCloneLevelKey = "smoke";
+    clonedHelper.SourceCloneLevelName = "Smoke";
+    clonedHelper.SourceCloneTrueIndex = helper.TrueIndex;
+    MobyLink clonedLink = new()
+    {
+        Key = "native-editor:companion:1:100:0",
+        Name = "Copied Dragon scene T1/T2",
+        Kind = "dragon scene",
+        LinkedMove = true,
+        Confidence = "native-editor-companion",
+        Reason = "Copied from source link smoke:dragon-scene:1:2.",
+        TrueIndexes = [100, 101]
+    };
+    clonedRoot.Links.Add(clonedLink);
+    clonedHelper.Links.Add(clonedLink);
+
+    string path = Path.Combine(workspace.RootPath, "_local", "smoke", "linked-companion-clone-roundtrip-native-edits.json");
+    await MobyEditStore.SaveAsync(path, [clonedRoot, clonedHelper], "Linked companion clone smoke");
+    List<Moby> loaded = [root, helper];
+    int applied = MobyEditStore.Load(path, loaded);
+    Moby loadedRoot = loaded.First(moby => moby.TrueIndex == clonedRoot.TrueIndex);
+    HashSet<int> moved = MobyLinkTraversal.GetLinkedMoveMobys(loadedRoot, loaded)
+        .Select(moby => moby.TrueIndex)
+        .ToHashSet();
+    if (applied != 2 || !moved.SetEquals(new[] { clonedRoot.TrueIndex, clonedHelper.TrueIndex }))
+        throw new InvalidOperationException($"Linked companion clone roundtrip failed: applied={applied}, moved={string.Join(",", moved.Order())}.");
+
+    Console.WriteLine($"Linked companion clone roundtrip: saved/reloaded T{clonedRoot.TrueIndex}->T{clonedHelper.TrueIndex}");
+}
+
+async Task ReportArtisansPortalEntryCompanionCloneRoundTrip()
+{
+    string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", "artisans-mobys.json");
+    if (!File.Exists(mobyPath))
+        return;
+
+    List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+    MobyMetadataEnricher.Apply(workspace, "artisans", sourceMobys);
+    (int RootTrueIndex, int[] CompanionTrueIndexes, string ProofLabel)[] cases =
+    [
+        (144, [157], "Stone Hill portal name"),
+        (145, [158], "east portal name"),
+        (146, [159, 160], "multi-entry portal name"),
+        (147, [155], "south portal name")
+    ];
+
+    string smokeRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "portal-entry-companion-clone-roundtrip");
+    Directory.CreateDirectory(smokeRoot);
+    List<Moby> addedMobys = new();
+    List<object> summaries = new();
+    List<string> summaryRows = new();
+    int nextIndex = sourceMobys.Max(moby => moby.Index) + 100;
+    int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 100;
+
+    foreach ((int rootTrueIndex, int[] companionTrueIndexes, string proofLabel) in cases)
+    {
+        Moby sourceRoot = sourceMobys.First(moby => moby.TrueIndex == rootTrueIndex);
+        HashSet<int> expectedSourceCompanions = companionTrueIndexes.ToHashSet();
+        IReadOnlyList<Moby> donorCompanions = MobyCompanionClonePlanner.GetCompanionDonors(sourceRoot, sourceMobys);
+        HashSet<int> donorTrueIndexes = donorCompanions.Select(moby => moby.TrueIndex).ToHashSet();
+        if (!expectedSourceCompanions.IsSubsetOf(donorTrueIndexes))
+            throw new InvalidOperationException($"Artisans {proofLabel} T{rootTrueIndex} companion donors were {string.Join(",", donorTrueIndexes.Order())}, expected at least {string.Join(",", expectedSourceCompanions.Order())}.");
+
+        int rootCloneIndex = nextIndex++;
+        int rootCloneTrueIndex = nextTrueIndex++;
+        Moby clonedRoot = CopyAsAddedMoby(sourceRoot, rootCloneIndex, rootCloneTrueIndex, $"Portal smoke copy of {sourceRoot.DisplayLabel}", rootCloneIndex - sourceRoot.Index);
+        clonedRoot.PatchStatus = "native-clone";
+        clonedRoot.PatchLead = $"Smoke app-style same-level portal entry clone with linked trigger/control companions from Artisans T{rootTrueIndex}.";
+        clonedRoot.SourceCloneLevelKey = "artisans";
+        clonedRoot.SourceCloneLevelName = "Artisans";
+        clonedRoot.SourceCloneTrueIndex = sourceRoot.TrueIndex;
+        addedMobys.Add(clonedRoot);
+
+        int companionCount = MobyCompanionCloneBuilder.AddLinkedCompanionClones(
+            sourceRoot,
+            clonedRoot,
+            sourceMobys,
+            addedMobys,
+            ref nextIndex,
+            ref nextTrueIndex,
+            "artisans",
+            "Artisans");
+        if (companionCount != donorTrueIndexes.Count)
+            throw new InvalidOperationException($"Artisans {proofLabel} T{rootTrueIndex} cloned {companionCount} companion(s), expected {donorTrueIndexes.Count}.");
+
+        List<Moby> clonedCompanions = addedMobys
+            .Where(moby => donorTrueIndexes.Contains(moby.SourceCloneTrueIndex))
+            .OrderBy(moby => moby.SourceCloneTrueIndex)
+            .ToList();
+        if (clonedCompanions.Count != donorTrueIndexes.Count)
+            throw new InvalidOperationException($"Artisans {proofLabel} T{rootTrueIndex} did not create every expected companion clone.");
+
+        foreach (Moby companionClone in clonedCompanions)
+        {
+            Moby donor = sourceMobys.First(moby => moby.TrueIndex == companionClone.SourceCloneTrueIndex);
+            Vector3f expectedPosition = new(
+                clonedRoot.Position.X + donor.Position.X - sourceRoot.Position.X,
+                clonedRoot.Position.Y + donor.Position.Y - sourceRoot.Position.Y,
+                clonedRoot.Position.Z + donor.Position.Z - sourceRoot.Position.Z);
+            if (companionClone.Position != expectedPosition)
+                throw new InvalidOperationException($"Artisans {proofLabel} companion T{donor.TrueIndex} clone position was {companionClone.Position}, expected {expectedPosition}.");
+        }
+
+        HashSet<int> expectedCloneMoveGroup = clonedCompanions
+            .Select(moby => moby.TrueIndex)
+            .Append(clonedRoot.TrueIndex)
+            .ToHashSet();
+        HashSet<int> clonedMoveGroup = MobyLinkTraversal.GetLinkedMoveMobys(clonedRoot, addedMobys)
+            .Select(moby => moby.TrueIndex)
+            .ToHashSet();
+        if (!clonedMoveGroup.SetEquals(expectedCloneMoveGroup))
+            throw new InvalidOperationException($"Artisans {proofLabel} T{rootTrueIndex} cloned move group was {string.Join(",", clonedMoveGroup.Order())}, expected {string.Join(",", expectedCloneMoveGroup.Order())}.");
+
+        summaries.Add(new
+        {
+            proofLabel,
+            sourceRoot = new { sourceRoot.TrueIndex, sourceRoot.DisplayLabel, VisualKind = sourceRoot.VisualKind.ToString() },
+            sourceCompanions = donorCompanions.Select(moby => new { moby.TrueIndex, moby.DisplayLabel, VisualKind = moby.VisualKind.ToString() }).ToList(),
+            clonedRoot = new { clonedRoot.TrueIndex, clonedRoot.DisplayLabel, clonedRoot.SourceCloneTrueIndex },
+            clonedCompanions = clonedCompanions.Select(moby => new { moby.TrueIndex, moby.DisplayLabel, moby.SourceCloneTrueIndex, VisualKind = moby.VisualKind.ToString() }).ToList(),
+            clonedMoveGroup = clonedMoveGroup.Order().ToList()
+        });
+        summaryRows.Add($"| {EscapeMarkdown(proofLabel)} | T{sourceRoot.TrueIndex} {EscapeMarkdown(sourceRoot.DisplayLabel)} | {EscapeMarkdown(string.Join(", ", donorCompanions.Select(moby => $"T{moby.TrueIndex} {moby.DisplayLabel}")))} | T{clonedRoot.TrueIndex} | {EscapeMarkdown(string.Join(", ", clonedCompanions.Select(moby => $"T{moby.TrueIndex} from T{moby.SourceCloneTrueIndex}")))} | {EscapeMarkdown(string.Join(", ", clonedMoveGroup.Order().Select(trueIndex => $"T{trueIndex}")))} |");
+    }
+
+    string editPath = Path.Combine(smokeRoot, "artisans-portal-entry-companion-clone-native-edits.json");
+    await MobyEditStore.SaveAsync(editPath, addedMobys, "Artisans portal entry companion clone smoke");
+
+    List<Moby> loadedMobys = MobyLoader.LoadCached(mobyPath).ToList();
+    MobyMetadataEnricher.Apply(workspace, "artisans", loadedMobys);
+    int applied = MobyEditStore.Load(editPath, loadedMobys);
+    if (applied != addedMobys.Count)
+        throw new InvalidOperationException($"Artisans portal entry companion clone roundtrip reloaded {applied} edit(s), expected {addedMobys.Count}.");
+
+    foreach (Moby clonedRoot in addedMobys.Where(moby => cases.Any(testCase => testCase.RootTrueIndex == moby.SourceCloneTrueIndex)))
+    {
+        HashSet<int> expectedLoadedGroup = MobyLinkTraversal.GetLinkedMoveMobys(clonedRoot, addedMobys)
+            .Select(moby => moby.TrueIndex)
+            .ToHashSet();
+        Moby loadedRoot = loadedMobys.First(moby => moby.TrueIndex == clonedRoot.TrueIndex);
+        HashSet<int> loadedMoveGroup = MobyLinkTraversal.GetLinkedMoveMobys(loadedRoot, loadedMobys)
+            .Select(moby => moby.TrueIndex)
+            .ToHashSet();
+        if (!loadedMoveGroup.SetEquals(expectedLoadedGroup))
+            throw new InvalidOperationException($"Artisans portal entry companion clone roundtrip reloaded T{clonedRoot.TrueIndex} move group as {string.Join(",", loadedMoveGroup.Order())}, expected {string.Join(",", expectedLoadedGroup.Order())}.");
+    }
+
+    string markdownPath = Path.Combine(smokeRoot, "artisans-portal-entry-companion-clone-roundtrip.md");
+    string jsonPath = Path.Combine(smokeRoot, "artisans-portal-entry-companion-clone-roundtrip.json");
+    File.WriteAllText(markdownPath, string.Join(Environment.NewLine, [
+        "# Artisans Portal Entry Companion Clone Roundtrip",
+        "",
+        "Smoke proof that real Artisans portal-name objects clone their linked portal-entry trigger/control rows through the same helper used by the editor add/copy/paste path, then survive native edit save/reload as linked move groups.",
+        "",
+        $"- Source cache: `{mobyPath}`",
+        $"- Saved edit manifest: `{editPath}`",
+        $"- Reloaded edits applied: {applied}",
+        $"- Tested portal rows: {string.Join(", ", cases.Select(testCase => $"T{testCase.RootTrueIndex}->" + string.Join("/", testCase.CompanionTrueIndexes.Select(trueIndex => $"T{trueIndex}"))))}",
+        "",
+        "## Clone Groups",
+        "",
+        "| Proof | Source donor | Source companions | Cloned root | Cloned companions | Reloaded move group |",
+        "|---|---|---|---|---|---|",
+        .. summaryRows
+    ]));
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        sourceCache = mobyPath,
+        editManifest = editPath,
+        applied,
+        addedCount = addedMobys.Count,
+        cases = summaries
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Artisans portal entry companion clone roundtrip: {cases.Length} portal donor(s), {addedMobys.Count} saved edit(s), report={markdownPath}");
+}
+
+async Task ReportReturnHomeCompanionCloneRoundTrip()
+{
+    string smokeRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "return-home-companion-clone-roundtrip");
+    string tempWorkspaceRoot = Path.Combine(smokeRoot, "workspace");
+    if (Directory.Exists(tempWorkspaceRoot))
+        Directory.Delete(tempWorkspaceRoot, recursive: true);
+
+    string promotedRoot = Path.Combine(tempWorkspaceRoot, "_local", "control-role-proof-review", "promoted-behavior-links");
+    Directory.CreateDirectory(promotedRoot);
+
+    List<ControlRoleProofPromotion> promotions = new();
+    foreach ((string levelKey, int helperTrueIndex) in KnownReturnHomeHelperProofPairs())
+    {
+        LevelDefinition? level = catalog.FindByKey(levelKey);
+        string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
+        if (level == null || !File.Exists(mobyPath))
+            continue;
+
+        List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+        MobyMetadataEnricher.Apply(workspace, levelKey, sourceMobys);
+        Moby helper = sourceMobys.First(moby => moby.TrueIndex == helperTrueIndex);
+        Moby returnHome = FindNearestMoby(helper, sourceMobys.Where(IsReturnHomeVisibleMoby), 128)
+            ?? throw new InvalidOperationException($"{level.DisplayName} Return Home helper T{helperTrueIndex} did not find a visible Return Home object within 128u.");
+
+        promotions.Add(new ControlRoleProofPromotion(
+            levelKey,
+            level.DisplayName,
+            helperTrueIndex,
+            $"Smoke live proof: {level.DisplayName} Return Home helper pair",
+            [helperTrueIndex, returnHome.TrueIndex],
+            "confirmed-linked",
+            "marker-only return-home helper moved without the visible Return Home object",
+            $"paired Return Home behavior followed visible T{returnHome.TrueIndex} with helper T{helperTrueIndex}",
+            "Smoke proof uses the mapped Return Home helper pair so confirmed results must become cloneable helper data.",
+            ""));
+    }
+
+    WritePromotedControlRoleBehaviorLinks(promotedRoot, promotions);
+
+    EditorWorkspace tempWorkspace = new(tempWorkspaceRoot);
+    Directory.CreateDirectory(smokeRoot);
+    List<object> summaries = new();
+    List<string> summaryRows = new();
+
+    foreach (ControlRoleProofPromotion promotion in promotions.OrderBy(promotion => promotion.LevelName, StringComparer.OrdinalIgnoreCase))
+    {
+        string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{promotion.LevelKey}-mobys.json");
+        List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+        MobyMetadataResult metadata = MobyMetadataEnricher.Apply(tempWorkspace, promotion.LevelKey, sourceMobys);
+        if (metadata.BehaviorLinkGroups != 1)
+            throw new InvalidOperationException($"{promotion.LevelName} Return Home companion clone roundtrip loaded {metadata.BehaviorLinkGroups} behavior link group(s), expected 1.");
+
+        int helperTrueIndex = promotion.TrueIndex;
+        int returnHomeTrueIndex = promotion.TrueIndexes.First(index => index != helperTrueIndex);
+        Moby helper = sourceMobys.First(moby => moby.TrueIndex == helperTrueIndex);
+        Moby returnHome = sourceMobys.First(moby => moby.TrueIndex == returnHomeTrueIndex);
+        MobyLink link = returnHome.Links.FirstOrDefault(link =>
+            MobyCompanionClonePlanner.IsCompanionCloneLink(link) &&
+            link.TrueIndexes.Contains(helper.TrueIndex) &&
+            link.TrueIndexes.Contains(returnHome.TrueIndex))
+            ?? throw new InvalidOperationException($"{promotion.LevelName} Return Home T{returnHome.TrueIndex} did not load a cloneable helper link to T{helper.TrueIndex}.");
+        IReadOnlyList<Moby> companions = MobyCompanionClonePlanner.GetCompanionDonors(returnHome, sourceMobys);
+        if (companions.Count != 1 || companions[0].TrueIndex != helper.TrueIndex)
+            throw new InvalidOperationException($"{promotion.LevelName} Return Home T{returnHome.TrueIndex} companion donors were {string.Join(",", companions.Select(moby => moby.TrueIndex))}, expected T{helper.TrueIndex}.");
+
+        int nextIndex = sourceMobys.Max(moby => moby.Index) + 100;
+        int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 100;
+        Moby clonedReturnHome = CopyAsAddedMoby(returnHome, nextIndex++, nextTrueIndex++, $"Smoke copy of {promotion.LevelName} Return Home", 8);
+        clonedReturnHome.PatchStatus = "native-clone";
+        clonedReturnHome.PatchLead = "Smoke app-style same-level Return Home clone with proof-linked helper companion.";
+        clonedReturnHome.SourceCloneLevelKey = promotion.LevelKey;
+        clonedReturnHome.SourceCloneLevelName = promotion.LevelName;
+        clonedReturnHome.SourceCloneTrueIndex = returnHome.TrueIndex;
+        List<Moby> addedMobys = [clonedReturnHome];
+
+        int companionCount = MobyCompanionCloneBuilder.AddLinkedCompanionClones(
+            returnHome,
+            clonedReturnHome,
+            sourceMobys,
+            addedMobys,
+            ref nextIndex,
+            ref nextTrueIndex,
+            promotion.LevelKey,
+            promotion.LevelName);
+        if (companionCount != 1)
+            throw new InvalidOperationException($"{promotion.LevelName} Return Home T{returnHome.TrueIndex} cloned {companionCount} companion(s), expected 1.");
+
+        Moby clonedHelper = addedMobys.FirstOrDefault(moby => moby.SourceCloneTrueIndex == helper.TrueIndex)
+            ?? throw new InvalidOperationException($"{promotion.LevelName} return-home companion clone roundtrip did not create a cloned T{helper.TrueIndex} helper.");
+        Vector3f expectedHelperPosition = new(
+            clonedReturnHome.Position.X + helper.Position.X - returnHome.Position.X,
+            clonedReturnHome.Position.Y + helper.Position.Y - returnHome.Position.Y,
+            clonedReturnHome.Position.Z + helper.Position.Z - returnHome.Position.Z);
+        if (clonedHelper.Position != expectedHelperPosition)
+            throw new InvalidOperationException($"{promotion.LevelName} cloned Return Home helper position was {clonedHelper.Position}, expected {expectedHelperPosition}.");
+
+        HashSet<int> clonedMoveGroup = MobyLinkTraversal.GetLinkedMoveMobys(clonedReturnHome, addedMobys)
+            .Select(moby => moby.TrueIndex)
+            .ToHashSet();
+        if (!clonedMoveGroup.SetEquals(new[] { clonedReturnHome.TrueIndex, clonedHelper.TrueIndex }))
+            throw new InvalidOperationException($"{promotion.LevelName} cloned Return Home move group was {string.Join(",", clonedMoveGroup.Order())}, expected T{clonedReturnHome.TrueIndex}/T{clonedHelper.TrueIndex}.");
+
+        string editPath = Path.Combine(smokeRoot, $"{promotion.LevelKey}-return-home-companion-clone-native-edits.json");
+        await MobyEditStore.SaveAsync(editPath, addedMobys, $"{promotion.LevelName} Return Home companion clone smoke");
+
+        List<Moby> loadedMobys = MobyLoader.LoadCached(mobyPath).ToList();
+        MobyMetadataEnricher.Apply(tempWorkspace, promotion.LevelKey, loadedMobys);
+        int applied = MobyEditStore.Load(editPath, loadedMobys);
+        Moby loadedRoot = loadedMobys.First(moby => moby.TrueIndex == clonedReturnHome.TrueIndex);
+        HashSet<int> loadedMoveGroup = MobyLinkTraversal.GetLinkedMoveMobys(loadedRoot, loadedMobys)
+            .Select(moby => moby.TrueIndex)
+            .ToHashSet();
+        if (applied != addedMobys.Count || !loadedMoveGroup.SetEquals(new[] { clonedReturnHome.TrueIndex, clonedHelper.TrueIndex }))
+            throw new InvalidOperationException($"{promotion.LevelName} return-home companion clone roundtrip failed reload: applied={applied}, moved={string.Join(",", loadedMoveGroup.Order())}.");
+
+        summaries.Add(new
+        {
+            promotion.LevelKey,
+            promotion.LevelName,
+            source = new
+            {
+                visible = new { returnHome.TrueIndex, returnHome.DisplayLabel, VisualKind = returnHome.VisualKind.ToString() },
+                helper = new { helper.TrueIndex, helper.DisplayLabel, VisualKind = helper.VisualKind.ToString() }
+            },
+            generatedLinkFile = Path.Combine(promotedRoot, $"{promotion.LevelKey}-behavior-links.json"),
+            editManifest = editPath,
+            applied,
+            link = new { link.Key, link.Name, link.Kind, link.LinkedMove, link.Confidence, link.Reason, link.TrueIndexes },
+            clones = addedMobys.Select(moby => new
+            {
+                moby.TrueIndex,
+                moby.DisplayLabel,
+                moby.SourceCloneTrueIndex,
+                VisualKind = moby.VisualKind.ToString()
+            }).ToList(),
+            loadedMoveGroup = loadedMoveGroup.Order().ToList()
+        });
+        summaryRows.Add($"| {EscapeMarkdown(promotion.LevelName)} | T{returnHome.TrueIndex} {EscapeMarkdown(returnHome.DisplayLabel)} | T{helper.TrueIndex} {EscapeMarkdown(helper.DisplayLabel)} | T{clonedReturnHome.TrueIndex} | T{clonedHelper.TrueIndex} from T{helper.TrueIndex} | {EscapeMarkdown(string.Join(", ", loadedMoveGroup.Order().Select(trueIndex => $"T{trueIndex}")))} |");
+    }
+
+    if (summaries.Count == 0)
+    {
+        Console.WriteLine("Return Home companion clone roundtrip: no cached Return Home proof pairs found; skipping.");
+        return;
+    }
+
+    string markdownPath = Path.Combine(smokeRoot, "all-return-home-companion-clone-roundtrip.md");
+    string jsonPath = Path.Combine(smokeRoot, "all-return-home-companion-clone-roundtrip.json");
+    File.WriteAllText(markdownPath, string.Join(Environment.NewLine, [
+        "# Return Home Companion Clone Roundtrip",
+        "",
+        "Smoke proof that confirmed Return Home helper pairs become editor clone data: copying the visible Return Home object also copies its hidden helper/control row, then the linked move group survives native edit save/reload.",
+        "",
+        $"- Generated behavior link folder: `{promotedRoot}`",
+        $"- Tested helper pairs: {summaries.Count}",
+        "",
+        "## Clone Groups",
+        "",
+        "| Level | Source visible object | Source helper/control | Cloned visible object | Cloned helper/control | Reloaded move group |",
+        "|---|---|---|---|---|---|",
+        .. summaryRows
+    ]));
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        generatedBehaviorLinkFolder = promotedRoot,
+        testedPairs = summaries.Count,
+        rows = summaries
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Return Home companion clone roundtrip: {summaries.Count} helper pair(s), report={markdownPath}");
+}
+
+async Task ReportPortalTripletCompanionCloneRoundTrip()
+{
+    string smokeRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "portal-triplet-companion-clone-roundtrip");
+    string workspacesRoot = Path.Combine(smokeRoot, "workspaces");
+    if (Directory.Exists(workspacesRoot))
+        Directory.Delete(workspacesRoot, recursive: true);
+
+    Directory.CreateDirectory(smokeRoot);
+    Directory.CreateDirectory(workspacesRoot);
+    List<object> summaries = new();
+    List<string> summaryRows = new();
+    List<string> missing = new();
+
+    foreach ((string levelKey, int targetTrueIndex) in KnownPortalTripletProofRows())
+    {
+        LevelDefinition? level = catalog.FindByKey(levelKey);
+        string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
+        if (level == null || !File.Exists(mobyPath))
+        {
+            missing.Add($"{levelKey} T{targetTrueIndex}");
+            continue;
+        }
+
+        List<Moby> probeMobys = MobyLoader.LoadCached(mobyPath).ToList();
+        MobyMetadataEnricher.Apply(workspace, levelKey, probeMobys);
+        Moby target = probeMobys.First(moby => moby.TrueIndex == targetTrueIndex);
+        List<Moby> anchors = SelectPortalReturnHomeProofAnchors(target, probeMobys);
+        if (anchors.Count == 0)
+            throw new InvalidOperationException($"{level.DisplayName} portal triplet T{targetTrueIndex} did not find any proof anchors.");
+
+        List<int> linkedTrueIndexes = new[] { target.TrueIndex }
+            .Concat(anchors.Select(anchor => anchor.TrueIndex))
+            .Distinct()
+            .OrderBy(index => index)
+            .ToList();
+        Moby rootProbe = SelectPortalTripletCloneRoot(target, anchors);
+        if (!linkedTrueIndexes.Contains(rootProbe.TrueIndex))
+            linkedTrueIndexes.Add(rootProbe.TrueIndex);
+
+        string testWorkspaceRoot = Path.Combine(workspacesRoot, $"{levelKey}-t{targetTrueIndex}");
+        string promotedRoot = Path.Combine(testWorkspaceRoot, "_local", "control-role-proof-review", "promoted-behavior-links");
+        Directory.CreateDirectory(promotedRoot);
+        WritePromotedControlRoleBehaviorLinks(promotedRoot, [
+            new ControlRoleProofPromotion(
+                levelKey,
+                level.DisplayName,
+                targetTrueIndex,
+                $"Smoke live proof: {level.DisplayName} portal control triplet T{targetTrueIndex}",
+                linkedTrueIndexes,
+                "confirmed-linked",
+                "marker-only portal control moved without the linked cluster behavior",
+                "paired portal control behavior followed the linked cluster",
+                "Smoke proof uses the mapped portal pad/destination/route cluster so confirmed results must become cloneable companion data.",
+                "")
+        ]);
+
+        EditorWorkspace tempWorkspace = new(testWorkspaceRoot);
+        List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+        MobyMetadataResult metadata = MobyMetadataEnricher.Apply(tempWorkspace, levelKey, sourceMobys);
+        if (metadata.BehaviorLinkGroups != 1)
+            throw new InvalidOperationException($"{level.DisplayName} portal triplet T{targetTrueIndex} loaded {metadata.BehaviorLinkGroups} behavior link group(s), expected 1.");
+
+        Moby root = sourceMobys.First(moby => moby.TrueIndex == rootProbe.TrueIndex);
+        MobyLink link = root.Links.FirstOrDefault(link =>
+            MobyCompanionClonePlanner.IsCompanionCloneLink(link) &&
+            linkedTrueIndexes.All(link.TrueIndexes.Contains))
+            ?? throw new InvalidOperationException($"{level.DisplayName} portal triplet T{targetTrueIndex} did not attach a cloneable link to root T{root.TrueIndex}.");
+        List<Moby> expectedCompanions = link.TrueIndexes
+            .Where(trueIndex => trueIndex != root.TrueIndex)
+            .Select(trueIndex => sourceMobys.FirstOrDefault(moby => moby.TrueIndex == trueIndex))
+            .Where(moby => moby != null)
+            .Select(moby => moby!)
+            .Where(moby => MobyCompanionClonePlanner.IsCloneableCompanion(root, moby, link))
+            .OrderBy(moby => moby.TrueIndex)
+            .ToList();
+        if (expectedCompanions.Count == 0)
+            throw new InvalidOperationException($"{level.DisplayName} portal triplet T{targetTrueIndex} had no cloneable companions for root T{root.TrueIndex}.");
+
+        IReadOnlyList<Moby> companions = MobyCompanionClonePlanner.GetCompanionDonors(root, sourceMobys);
+        HashSet<int> expectedCompanionIndexes = expectedCompanions.Select(moby => moby.TrueIndex).ToHashSet();
+        HashSet<int> actualCompanionIndexes = companions.Select(moby => moby.TrueIndex).ToHashSet();
+        if (!actualCompanionIndexes.SetEquals(expectedCompanionIndexes))
+            throw new InvalidOperationException($"{level.DisplayName} portal triplet T{targetTrueIndex} companion donors were {string.Join(",", actualCompanionIndexes.Order())}, expected {string.Join(",", expectedCompanionIndexes.Order())}.");
+
+        int nextIndex = sourceMobys.Max(moby => moby.Index) + 100;
+        int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 100;
+        Moby clonedRoot = CopyAsAddedMoby(root, nextIndex++, nextTrueIndex++, $"Smoke copy of {level.DisplayName} portal triplet root", 8);
+        clonedRoot.PatchStatus = "native-clone";
+        clonedRoot.PatchLead = "Smoke app-style same-level portal triplet clone with proof-linked control companions.";
+        clonedRoot.SourceCloneLevelKey = levelKey;
+        clonedRoot.SourceCloneLevelName = level.DisplayName;
+        clonedRoot.SourceCloneTrueIndex = root.TrueIndex;
+        List<Moby> addedMobys = [clonedRoot];
+
+        int companionCount = MobyCompanionCloneBuilder.AddLinkedCompanionClones(
+            root,
+            clonedRoot,
+            sourceMobys,
+            addedMobys,
+            ref nextIndex,
+            ref nextTrueIndex,
+            levelKey,
+            level.DisplayName);
+        if (companionCount != expectedCompanions.Count)
+            throw new InvalidOperationException($"{level.DisplayName} portal triplet T{targetTrueIndex} cloned {companionCount} companion(s), expected {expectedCompanions.Count}.");
+
+        foreach (Moby companion in expectedCompanions)
+        {
+            Moby clonedCompanion = addedMobys.FirstOrDefault(moby => moby.SourceCloneTrueIndex == companion.TrueIndex)
+                ?? throw new InvalidOperationException($"{level.DisplayName} portal triplet T{targetTrueIndex} did not clone companion T{companion.TrueIndex}.");
+            Vector3f expectedPosition = new(
+                clonedRoot.Position.X + companion.Position.X - root.Position.X,
+                clonedRoot.Position.Y + companion.Position.Y - root.Position.Y,
+                clonedRoot.Position.Z + companion.Position.Z - root.Position.Z);
+            if (clonedCompanion.Position != expectedPosition)
+                throw new InvalidOperationException($"{level.DisplayName} portal triplet T{targetTrueIndex} cloned T{companion.TrueIndex} at {clonedCompanion.Position}, expected {expectedPosition}.");
+        }
+
+        HashSet<int> expectedMoveGroup = addedMobys
+            .Select(moby => moby.TrueIndex)
+            .ToHashSet();
+        HashSet<int> clonedMoveGroup = MobyLinkTraversal.GetLinkedMoveMobys(clonedRoot, addedMobys)
+            .Select(moby => moby.TrueIndex)
+            .ToHashSet();
+        if (!clonedMoveGroup.SetEquals(expectedMoveGroup))
+            throw new InvalidOperationException($"{level.DisplayName} portal triplet T{targetTrueIndex} cloned move group was {string.Join(",", clonedMoveGroup.Order())}, expected {string.Join(",", expectedMoveGroup.Order())}.");
+
+        string editPath = Path.Combine(smokeRoot, $"{levelKey}-t{targetTrueIndex}-portal-triplet-companion-clone-native-edits.json");
+        await MobyEditStore.SaveAsync(editPath, addedMobys, $"{level.DisplayName} portal triplet T{targetTrueIndex} companion clone smoke");
+
+        List<Moby> loadedMobys = MobyLoader.LoadCached(mobyPath).ToList();
+        MobyMetadataEnricher.Apply(tempWorkspace, levelKey, loadedMobys);
+        int applied = MobyEditStore.Load(editPath, loadedMobys);
+        Moby loadedRoot = loadedMobys.First(moby => moby.TrueIndex == clonedRoot.TrueIndex);
+        HashSet<int> loadedMoveGroup = MobyLinkTraversal.GetLinkedMoveMobys(loadedRoot, loadedMobys)
+            .Select(moby => moby.TrueIndex)
+            .ToHashSet();
+        if (applied != addedMobys.Count || !loadedMoveGroup.SetEquals(expectedMoveGroup))
+            throw new InvalidOperationException($"{level.DisplayName} portal triplet T{targetTrueIndex} failed reload: applied={applied}, moved={string.Join(",", loadedMoveGroup.Order())}.");
+
+        summaries.Add(new
+        {
+            levelKey,
+            levelName = level.DisplayName,
+            target = new { target.TrueIndex, target.DisplayLabel, VisualKind = target.VisualKind.ToString() },
+            root = new { root.TrueIndex, root.DisplayLabel, VisualKind = root.VisualKind.ToString() },
+            linkedTrueIndexes,
+            cloneableCompanions = expectedCompanions.Select(moby => new { moby.TrueIndex, moby.DisplayLabel, VisualKind = moby.VisualKind.ToString() }).ToList(),
+            generatedLinkFile = Path.Combine(promotedRoot, $"{levelKey}-behavior-links.json"),
+            editManifest = editPath,
+            applied,
+            clones = addedMobys.Select(moby => new
+            {
+                moby.TrueIndex,
+                moby.DisplayLabel,
+                moby.SourceCloneTrueIndex,
+                VisualKind = moby.VisualKind.ToString()
+            }).ToList(),
+            loadedMoveGroup = loadedMoveGroup.Order().ToList()
+        });
+        summaryRows.Add($"| {EscapeMarkdown(level.DisplayName)} | T{target.TrueIndex} {EscapeMarkdown(target.DisplayLabel)} | T{root.TrueIndex} {EscapeMarkdown(root.DisplayLabel)} | {EscapeMarkdown(string.Join(", ", expectedCompanions.Select(moby => $"T{moby.TrueIndex} {moby.DisplayLabel}")))} | T{clonedRoot.TrueIndex} | {EscapeMarkdown(string.Join(", ", addedMobys.Where(moby => moby.TrueIndex != clonedRoot.TrueIndex).Select(moby => $"T{moby.TrueIndex} from T{moby.SourceCloneTrueIndex}")))} | {EscapeMarkdown(string.Join(", ", loadedMoveGroup.Order().Select(trueIndex => $"T{trueIndex}")))} |");
+    }
+
+    if (missing.Count > 0)
+        throw new InvalidOperationException($"Portal triplet companion clone roundtrip missed source cache for: {string.Join(", ", missing)}.");
+    if (summaries.Count != KnownPortalTripletProofRows().Length)
+        throw new InvalidOperationException($"Portal triplet companion clone roundtrip tested {summaries.Count} pair(s), expected {KnownPortalTripletProofRows().Length}.");
+
+    string markdownPath = Path.Combine(smokeRoot, "all-portal-triplet-companion-clone-roundtrip.md");
+    string jsonPath = Path.Combine(smokeRoot, "all-portal-triplet-companion-clone-roundtrip.json");
+    File.WriteAllText(markdownPath, string.Join(Environment.NewLine, [
+        "# Portal Triplet Companion Clone Roundtrip",
+        "",
+        "Smoke proof that confirmed portal pad/destination/route clusters become editor clone data: copying the chosen root object also copies its hidden portal control companions, then the linked move group survives native edit save/reload.",
+        "",
+        $"- Tested portal triplets: {summaries.Count}",
+        $"- Temporary workspaces: `{workspacesRoot}`",
+        "",
+        "## Clone Groups",
+        "",
+        "| Level | Proof target | Clone root | Source companions | Cloned root | Cloned companions | Reloaded move group |",
+        "|---|---|---|---|---|---|---|",
+        .. summaryRows
+    ]));
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        testedTriplets = summaries.Count,
+        temporaryWorkspaces = workspacesRoot,
+        rows = summaries
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Portal triplet companion clone roundtrip: {summaries.Count} triplet(s), report={markdownPath}");
+}
+
+void ReportPortalControlEditLinks()
+{
+    List<(LevelDefinition Level, Moby Moby)> allMobys = LoadAllCachedMobysWithMetadata();
+    List<PortalControlEditLinkSmokeRow> rows = allMobys
+        .GroupBy(item => item.Level.Key, StringComparer.OrdinalIgnoreCase)
+        .SelectMany(levelGroup =>
+        {
+            LevelDefinition level = levelGroup.First().Level;
+            Dictionary<int, Moby> mobysByTrueIndex = levelGroup
+                .Select(item => item.Moby)
+                .Where(moby => !moby.IsRemoved && moby.TrueIndex >= 0)
+                .GroupBy(moby => moby.TrueIndex)
+                .ToDictionary(group => group.Key, group => group.First());
+            return levelGroup
+                .SelectMany(item => item.Moby.Links)
+                .Where(IsPortalControlEditLink)
+                .GroupBy(link => link.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(group => BuildPortalControlEditLinkSmokeRow(level, group.First(), mobysByTrueIndex));
+        })
+        .OrderBy(row => row.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(row => row.EntryTriggerTrueIndex)
+        .ToList();
+
+    int expectedHomeworldPortalSets = HomeworldPortalControlCatalog.All.Count;
+    if (rows.Count != expectedHomeworldPortalSets)
+        throw new InvalidOperationException($"Portal edit links expected {expectedHomeworldPortalSets} homeworld portal set(s), got {rows.Count}.");
+
+    PortalControlEditLinkSmokeRow? artisansStoneHill = rows.FirstOrDefault(row =>
+        row.LevelKey.Equals("artisans", StringComparison.OrdinalIgnoreCase) &&
+        row.EntryTriggerTrueIndex == 38);
+    if (artisansStoneHill == null ||
+        artisansStoneHill.LetteringTrueIndex != 144 ||
+        artisansStoneHill.LocationTrueIndex != 157)
+    {
+        throw new InvalidOperationException("Artisans Stone Hill portal edit link should connect entry trigger T38, lettering T144, and location T157.");
+    }
+
+    List<PortalControlEditLinkSmokeRow> cloneApprovedRows = rows
+        .Where(row => row.CloneApproved)
+        .ToList();
+    if (cloneApprovedRows.Count > 0)
+    {
+        string summary = string.Join("; ", cloneApprovedRows.Select(row => $"{row.LevelName} T{row.EntryTriggerTrueIndex}"));
+        throw new InvalidOperationException($"Portal edit-only links must not be clone-approved yet: {summary}");
+    }
+
+    Console.WriteLine($"Portal control edit links: {rows.Count} homeworld portal set(s), Artisans T38/T144/T157 linked, clone-approved=0");
+}
+
+bool IsPortalControlEditLink(MobyLink link)
+{
+    return string.Equals(link.Kind, "portal controls", StringComparison.OrdinalIgnoreCase) &&
+        link.LinkedMove &&
+        MobyLinkTraversal.IsVisibleLink(link);
+}
+
+PortalControlEditLinkSmokeRow BuildPortalControlEditLinkSmokeRow(
+    LevelDefinition level,
+    MobyLink link,
+    IReadOnlyDictionary<int, Moby> mobysByTrueIndex)
+{
+    List<Moby> members = link.TrueIndexes
+        .Where(mobysByTrueIndex.ContainsKey)
+        .Select(trueIndex => mobysByTrueIndex[trueIndex])
+        .DistinctBy(moby => moby.TrueIndex)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToList();
+    Moby entryTrigger = members.FirstOrDefault(IsPortalEntryTriggerMoby)
+        ?? throw new InvalidOperationException($"{level.DisplayName} portal edit link {link.Key} is missing a pad/entry trigger.");
+    Moby? lettering = members.FirstOrDefault(IsPortalLetteringMoby);
+    Moby? location = members.FirstOrDefault(IsPortalLocationMoby);
+    if (members.Any(moby => !moby.IsHomeworldPortalControl || !moby.SupportsTerrainSnap))
+        throw new InvalidOperationException($"{level.DisplayName} portal edit link {link.Key} contains a control that cannot snap to terrain Z.");
+
+    return new PortalControlEditLinkSmokeRow(
+        level.Key,
+        level.DisplayName,
+        link.Key,
+        entryTrigger.TrueIndex,
+        lettering?.TrueIndex ?? -1,
+        location?.TrueIndex ?? -1,
+        members.Select(moby => moby.TrueIndex).ToList(),
+        MobyCompanionClonePlanner.IsCompanionCloneLink(link));
+}
+
+bool IsPortalLetteringMoby(Moby moby)
+{
+    return moby.Type == 0x00 &&
+        moby.SourceByte36 == 0x01 &&
+        moby.Flag4A == 0x10 &&
+        moby.Flag4B == 0xFF;
+}
+
+bool IsPortalLocationMoby(Moby moby)
+{
+    return moby.Type == 0x00 &&
+        moby.SourceByte36 == 0x1E &&
+        moby.Flag4A == 0x10 &&
+        moby.Flag4B == 0xFF;
+}
+
+bool IsPortalEntryTriggerMoby(Moby moby)
+{
+    return moby.Type == 0x00 &&
+        moby.SourceByte36 == 0x8E &&
+        moby.Flag4A == 0x10 &&
+        moby.Flag4B == 0xFF;
+}
+
+void ReportCheckedInControlRoleCompanionLinks()
+{
+    string smokeRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "checked-in-control-role-companion-links");
+    Directory.CreateDirectory(smokeRoot);
+
+    List<object> rows = new();
+    List<string> summaryRows = new();
+
+    foreach ((string levelKey, int helperTrueIndex) in KnownReturnHomeHelperProofPairs())
+    {
+        LevelDefinition level = catalog.FindByKey(levelKey)
+            ?? throw new InvalidOperationException($"Known Return Home proof level is missing from catalog: {levelKey}.");
+        string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
+        if (!File.Exists(mobyPath))
+            throw new FileNotFoundException($"Checked-in companion link smoke needs {level.DisplayName} moby cache.", mobyPath);
+
+        string linkKey = $"{levelKey}:control-role-proof:t{helperTrueIndex}";
+        IReadOnlyList<int> checkedInIndexes = ReadCheckedInBehaviorLinkIndexes(levelKey, linkKey);
+        if (!checkedInIndexes.Contains(helperTrueIndex))
+            throw new InvalidOperationException($"{level.DisplayName} checked-in behavior link {linkKey} does not include helper T{helperTrueIndex}.");
+
+        List<Moby> mobys = MobyLoader.LoadCached(mobyPath).ToList();
+        MobyMetadataEnricher.Apply(workspace, levelKey, mobys);
+        Moby helper = mobys.First(moby => moby.TrueIndex == helperTrueIndex);
+        List<Moby> checkedInMembers = checkedInIndexes
+            .Select(index => mobys.FirstOrDefault(moby => moby.TrueIndex == index))
+            .Where(moby => moby != null)
+            .Select(moby => moby!)
+            .ToList();
+        Moby returnHome = checkedInMembers
+            .FirstOrDefault(moby => moby.TrueIndex != helperTrueIndex && IsReturnHomeVisibleMoby(moby))
+            ?? checkedInMembers.FirstOrDefault(moby => moby.TrueIndex != helperTrueIndex)
+            ?? throw new InvalidOperationException($"{level.DisplayName} checked-in Return Home link {linkKey} does not include a visible Return Home object.");
+
+        MobyLink link = returnHome.Links.FirstOrDefault(link =>
+            string.Equals(link.Key, linkKey, StringComparison.OrdinalIgnoreCase) &&
+            MobyCompanionClonePlanner.IsCompanionCloneLink(link))
+            ?? throw new InvalidOperationException($"{level.DisplayName} Return Home T{returnHome.TrueIndex} did not load cloneable checked-in link {linkKey}.");
+        IReadOnlyList<Moby> companions = MobyCompanionClonePlanner.GetCompanionDonors(returnHome, mobys);
+        if (!companions.Any(companion => companion.TrueIndex == helper.TrueIndex))
+            throw new InvalidOperationException($"{level.DisplayName} Return Home T{returnHome.TrueIndex} checked-in companion donors missed helper T{helper.TrueIndex}.");
+
+        rows.Add(new
+        {
+            kind = "return-home",
+            levelKey,
+            levelName = level.DisplayName,
+            linkKey,
+            checkedInIndexes,
+            root = new { returnHome.TrueIndex, returnHome.DisplayLabel, VisualKind = returnHome.VisualKind.ToString() },
+            expectedCompanions = new[] { helper.TrueIndex },
+            plannerCompanions = companions.Select(moby => moby.TrueIndex).Order().ToList()
+        });
+        summaryRows.Add($"| Return Home | {EscapeMarkdown(level.DisplayName)} | `{EscapeMarkdown(linkKey)}` | T{returnHome.TrueIndex} {EscapeMarkdown(returnHome.DisplayLabel)} | T{helper.TrueIndex} {EscapeMarkdown(helper.DisplayLabel)} | {EscapeMarkdown(string.Join(", ", companions.OrderBy(moby => moby.TrueIndex).Select(moby => $"T{moby.TrueIndex}")))} |");
+    }
+
+    int proofOnlyPortalTriplets = 0;
+    foreach ((string levelKey, int targetTrueIndex) in KnownPortalTripletProofRows())
+    {
+        LevelDefinition level = catalog.FindByKey(levelKey)
+            ?? throw new InvalidOperationException($"Known portal triplet proof level is missing from catalog: {levelKey}.");
+
+        string linkKey = $"{levelKey}:control-role-proof:t{targetTrueIndex}";
+        if (CheckedInBehaviorLinkExists(levelKey, linkKey))
+            throw new InvalidOperationException($"{level.DisplayName} T{targetTrueIndex} portal pad/control link must remain proof-only until live behavior is confirmed.");
+        proofOnlyPortalTriplets++;
+    }
+
+    string markdownPath = Path.Combine(smokeRoot, "checked-in-control-role-companion-links.md");
+    string jsonPath = Path.Combine(smokeRoot, "checked-in-control-role-companion-links.json");
+    File.WriteAllText(markdownPath, string.Join(Environment.NewLine, [
+        "# Checked-In Control Role Companion Links",
+        "",
+        "Regression proof that checked-in behavior-link JSON files are loaded by normal editor metadata and feed the same companion clone planner used by Add Object and Paste Object.",
+        "",
+        $"- Checked groups: {rows.Count}",
+        $"- Portal/control triplets kept proof-only: {proofOnlyPortalTriplets}",
+        $"- Checked-in files: `{workspace.RootPath}/*-behavior-links.json`",
+        "",
+        "| Role | Level | Link key | Clone root | Expected companions | Planner companions |",
+        "|---|---|---|---|---|---|",
+        .. summaryRows
+    ]));
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        checkedInBehaviorLinkPattern = Path.Combine(workspace.RootPath, "*-behavior-links.json"),
+        checkedGroups = rows.Count,
+        proofOnlyPortalTriplets,
+        rows
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Checked-in control-role companion links: {rows.Count} group(s), report={markdownPath}");
+}
+
+bool CheckedInBehaviorLinkExists(string levelKey, string linkKey)
+{
+    string path = Path.Combine(workspace.RootPath, $"{levelKey}-behavior-links.json");
+    if (!File.Exists(path))
+        return false;
+
+    using FileStream stream = File.OpenRead(path);
+    using JsonDocument document = JsonDocument.Parse(stream);
+    if (!document.RootElement.TryGetProperty("linkGroups", out JsonElement groups) || groups.ValueKind != JsonValueKind.Array)
+        return false;
+
+    return groups.EnumerateArray().Any(group =>
+        string.Equals(ReadJsonString(group, "key"), linkKey, StringComparison.OrdinalIgnoreCase));
+}
+
+IReadOnlyList<int> ReadCheckedInBehaviorLinkIndexes(string levelKey, string linkKey)
+{
+    string path = Path.Combine(workspace.RootPath, $"{levelKey}-behavior-links.json");
+    if (!File.Exists(path))
+        throw new FileNotFoundException($"Checked-in behavior link file is missing for {levelKey}.", path);
+
+    using FileStream stream = File.OpenRead(path);
+    using JsonDocument document = JsonDocument.Parse(stream);
+    if (!document.RootElement.TryGetProperty("linkGroups", out JsonElement groups) || groups.ValueKind != JsonValueKind.Array)
+        throw new InvalidOperationException($"{path} does not contain a linkGroups array.");
+
+    foreach (JsonElement group in groups.EnumerateArray())
+    {
+        if (!string.Equals(ReadJsonString(group, "key"), linkKey, StringComparison.OrdinalIgnoreCase))
+            continue;
+
+        if (!group.TryGetProperty("trueIndexes", out JsonElement values) || values.ValueKind != JsonValueKind.Array)
+            throw new InvalidOperationException($"{path} link {linkKey} does not contain trueIndexes.");
+
+        List<int> indexes = new();
+        foreach (JsonElement value in values.EnumerateArray())
+        {
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out int trueIndex) && trueIndex >= 0)
+                indexes.Add(trueIndex);
+        }
+
+        if (indexes.Count < 2)
+            throw new InvalidOperationException($"{path} link {linkKey} must include at least two true indexes.");
+
+        return indexes;
+    }
+
+    throw new InvalidOperationException($"{path} is missing checked-in behavior link {linkKey}.");
+}
+
+Moby SelectPortalTripletCloneRoot(Moby target, IReadOnlyList<Moby> anchors)
+{
+    return anchors.FirstOrDefault(IsPortalVisibleAnchorMoby) ??
+        anchors.FirstOrDefault(IsReturnHomeVisibleMoby) ??
+        target;
+}
+
+void ReportControlRoleProofPromotionCloneRoundTrip()
+{
+    string smokeRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "control-role-proof-promotion-roundtrip");
+    ValidateControlRoleProofPromotionReaderSafety(smokeRoot);
+
+    string tempWorkspaceRoot = Path.Combine(smokeRoot, "workspace");
+    if (Directory.Exists(tempWorkspaceRoot))
+        Directory.Delete(tempWorkspaceRoot, recursive: true);
+
+    string promotedRoot = Path.Combine(tempWorkspaceRoot, "_local", "control-role-proof-review", "promoted-behavior-links");
+    Directory.CreateDirectory(promotedRoot);
+
+    WritePromotedControlRoleBehaviorLinks(promotedRoot, [
+        new ControlRoleProofPromotion(
+            "treetops",
+            "Tree Tops",
+            104,
+            "Smoke live proof: Tree Tops T104 trigger/control cluster link",
+            [104, 128],
+            "confirmed-linked",
+            "marker-only cue moved without visible-object behavior",
+            "cluster behavior followed the chest",
+            "Smoke proof note intentionally uses a cluster-named link so generated live-proof links do not get filtered as broad editor scaffolds.",
+            "")
+    ]);
+
+    EditorWorkspace tempWorkspace = new(tempWorkspaceRoot);
+    Vector3f cuePosition = new(6743.0625f, 2711.6875f, 2054.3125f);
+    Vector3f chestPosition = new(6972.0f, 2530.0f, 2054.3125f);
+    Moby cue = new()
+    {
+        Index = 104,
+        TrueIndex = 104,
+        LegacyIndex = MobyLoader.GetLegacyAliasIndex(104),
+        Position = cuePosition,
+        OriginalPosition = cuePosition,
+        Type = 0x00,
+        OriginalType = 0x00,
+        State = 0,
+        OriginalState = 0,
+        SourceByte36 = 0x1E,
+        OriginalSourceByte36 = 0x1E,
+        SourceByte37 = 0,
+        OriginalSourceByte37 = 0,
+        SourceByte4F = 0x00,
+        OriginalSourceByte4F = 0x00,
+        Flag4A = 0x10,
+        OriginalFlag4A = 0x10,
+        Flag4B = 0xFF,
+        OriginalFlag4B = 0xFF,
+        Color = Moby.ColorForType(0x00),
+        Label = "Scene/route control marker",
+        OriginalLabel = "Scene/route control marker",
+        CandidateKind = "scene/route control proof cue"
+    };
+    Moby chest = new()
+    {
+        Index = 128,
+        TrueIndex = 128,
+        LegacyIndex = MobyLoader.GetLegacyAliasIndex(128),
+        Position = chestPosition,
+        OriginalPosition = chestPosition,
+        Type = 0x20,
+        OriginalType = 0x20,
+        State = 0,
+        OriginalState = 0,
+        SourceByte36 = 0x86,
+        OriginalSourceByte36 = 0x86,
+        SourceByte37 = 0,
+        OriginalSourceByte37 = 0,
+        SourceByte4F = 0,
+        OriginalSourceByte4F = 0,
+        Flag4A = 0xFF,
+        OriginalFlag4A = 0xFF,
+        Flag4B = 0x55,
+        OriginalFlag4B = 0x55,
+        Color = Moby.ColorForType(0x20),
+        Label = "3x flame chest (Blue reward)",
+        OriginalLabel = "3x flame chest (Blue reward)",
+        CandidateKind = "actor/container object"
+    };
+
+    List<Moby> mobys = [cue, chest];
+    MobyMetadataResult metadata = MobyMetadataEnricher.Apply(tempWorkspace, "treetops", mobys);
+    if (metadata.BehaviorLinkGroups != 1)
+        throw new InvalidOperationException($"Control role proof promotion roundtrip loaded {metadata.BehaviorLinkGroups} behavior link group(s), expected 1.");
+
+    MobyLink link = chest.Links.FirstOrDefault(link => string.Equals(link.Key, "treetops:control-role-proof:t104", StringComparison.OrdinalIgnoreCase))
+        ?? throw new InvalidOperationException("Control role proof promotion roundtrip did not attach the generated link to the visible object.");
+    if (!link.LinkedMove ||
+        !string.Equals(link.Kind, "linked group", StringComparison.OrdinalIgnoreCase) ||
+        !MobyCompanionClonePlanner.IsCompanionCloneLink(link))
+    {
+        throw new InvalidOperationException($"Control role proof promotion roundtrip loaded a non-cloneable link: kind={link.Kind}, linkedMove={link.LinkedMove}, confidence={link.Confidence}.");
+    }
+
+    IReadOnlyList<Moby> companions = MobyCompanionClonePlanner.GetCompanionDonors(chest, mobys);
+    if (companions.Count != 1 || companions[0].TrueIndex != cue.TrueIndex)
+        throw new InvalidOperationException("Control role proof promotion roundtrip did not make the confirmed trigger/control cue clone with the visible object.");
+
+    string markdownPath = Path.Combine(smokeRoot, "control-role-proof-promotion-roundtrip.md");
+    string jsonPath = Path.Combine(smokeRoot, "control-role-proof-promotion-roundtrip.json");
+    Directory.CreateDirectory(smokeRoot);
+    File.WriteAllText(markdownPath, string.Join(Environment.NewLine, [
+        "# Control Role Proof Promotion Roundtrip",
+        "",
+        "Synthetic smoke proof that a confirmed control-role TSV result can generate a behavior link that the editor loads as a cloneable companion group.",
+        "",
+        $"- Isolated workspace: `{tempWorkspaceRoot}`",
+        $"- Generated link file: `{Path.Combine(promotedRoot, "treetops-behavior-links.json")}`",
+        $"- Visible donor: T{chest.TrueIndex} {chest.DisplayLabel}",
+        $"- Confirmed companion: T{cue.TrueIndex} {cue.DisplayLabel}",
+        $"- Link kind: `{link.Kind}`",
+        $"- Linked move: {link.LinkedMove}",
+        $"- Companion planner donors: {string.Join(", ", companions.Select(moby => $"T{moby.TrueIndex} {moby.DisplayLabel}"))}"
+    ]));
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        isolatedWorkspace = tempWorkspaceRoot,
+        generatedLinkFile = Path.Combine(promotedRoot, "treetops-behavior-links.json"),
+        metadata.BehaviorLinkGroups,
+        link = new
+        {
+            link.Key,
+            link.Name,
+            link.Kind,
+            link.LinkedMove,
+            link.Confidence,
+            link.Reason,
+            link.TrueIndexes
+        },
+        root = new { chest.TrueIndex, chest.DisplayLabel, chest.VisualKind },
+        companions = companions.Select(moby => new { moby.TrueIndex, moby.DisplayLabel, moby.VisualKind }).ToList()
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Control role proof promotion roundtrip: generated link kind={link.Kind}, visible T{chest.TrueIndex} clones companion T{cue.TrueIndex}, report={markdownPath}");
+}
+
+void ValidateControlRoleProofPromotionReaderSafety(string smokeRoot)
+{
+    Directory.CreateDirectory(smokeRoot);
+    LevelDefinition level = new() { Key = "treetops", DisplayName = "Tree Tops" };
+    Moby cue = new()
+    {
+        TrueIndex = 104,
+        Type = 0x00,
+        SourceByte36 = 0x1E,
+        SourceByte4F = 0x00,
+        Flag4A = 0x10,
+        Flag4B = 0xFF,
+        Label = "Scene/route control marker"
+    };
+    Moby visibleChest = new()
+    {
+        TrueIndex = 128,
+        Type = 0x20,
+        SourceByte36 = 0x86,
+        Flag4B = 0x55,
+        Label = "3x flame chest (Blue reward)"
+    };
+    Moby hiddenControl = new()
+    {
+        TrueIndex = 201,
+        Type = 0x00,
+        SourceByte36 = 0x1E,
+        Flag4B = 0xFF,
+        Label = "Scene/route control marker"
+    };
+
+    ControlRoleProofReviewRow reviewRow = new(
+        4,
+        level.Key,
+        level.DisplayName,
+        cue.TrueIndex,
+        cue.DisplayLabel,
+        "report-only-control-role",
+        "scene or route control",
+        "_local/smoke/control-role-proof-batches/treetops-t104-scene-route-control-marker-only-native-edits.json",
+        "_local/smoke/control-role-proof-batches/treetops-t104-scene-route-control-cluster-native-edits.json",
+        "",
+        "",
+        ["T128 3x flame chest (Blue reward)", "T201 Scene/route control marker"],
+        128,
+        "T128 3x flame chest (Blue reward)",
+        "128",
+        "Move it with the shell and reward rows, then verify hit response, spawned reward, and collection count.",
+        "_local/control-role-proof-review/screenshots/04-treetops-t104");
+
+    string testPath = Path.Combine(smokeRoot, "control-role-proof-promotion-reader-safety.tsv");
+    string[] header = ControlRoleProofReviewHeader();
+    File.WriteAllLines(testPath, new[]
+    {
+        string.Join('\t', header),
+        BuildControlRoleProofPromotionSafetyRow(header, reviewRow, "confirmed-linked", "", "observed marker-only behavior"),
+        BuildControlRoleProofPromotionSafetyRow(header, reviewRow, "confirmed-linked", "201", "observed hidden-only behavior"),
+        BuildControlRoleProofPromotionSafetyRow(header, reviewRow, "confirmed-linked", "128", ""),
+        BuildControlRoleProofPromotionSafetyRow(header, reviewRow, "confirmed-linked", "128", "cluster behavior followed the chest")
+    });
+
+    ControlRoleProofPromotionReadResult result = ReadControlRoleProofPromotions(
+        testPath,
+        [reviewRow],
+        [(level, cue), (level, visibleChest), (level, hiddenControl)]);
+    bool acceptedExpectedPair = result.Promotions.Count == 1 &&
+        result.Promotions[0].TrueIndexes.Order().SequenceEqual(new[] { cue.TrueIndex, visibleChest.TrueIndex });
+    if (!acceptedExpectedPair)
+        throw new InvalidOperationException($"Control role proof promotion reader accepted {result.Promotions.Count} valid promotion(s), expected only T104/T128.");
+    if (result.Rejections.Count != 3)
+        throw new InvalidOperationException($"Control role proof promotion reader rejected {result.Rejections.Count} row(s), expected 3 invalid confirmed rows.");
+}
+
+string BuildControlRoleProofPromotionSafetyRow(
+    IReadOnlyList<string> header,
+    ControlRoleProofReviewRow reviewRow,
+    string resultStatus,
+    string linkedTrueIndexes,
+    string evidenceNotes)
+{
+    Dictionary<string, int> headerIndex = header
+        .Select((name, index) => (name, index))
+        .ToDictionary(item => item.name, item => item.index, StringComparer.OrdinalIgnoreCase);
+    string[] values = Enumerable.Repeat("", header.Count).ToArray();
+    Set("priority", reviewRow.Priority.ToString(CultureInfo.InvariantCulture));
+    Set("levelKey", reviewRow.LevelKey);
+    Set("levelName", reviewRow.LevelName);
+    Set("trueIndex", reviewRow.TrueIndex.ToString(CultureInfo.InvariantCulture));
+    Set("currentRead", reviewRow.CurrentRead);
+    Set("status", reviewRow.Status);
+    Set("likelyRole", reviewRow.LikelyRole);
+    Set("markerOnlyManifest", reviewRow.MarkerOnlyManifest);
+    Set("clusterManifest", reviewRow.ClusterManifest);
+    Set("anchorSummary", string.Join("; ", reviewRow.AnchorSummary));
+    Set("suggestedVisibleOwnerTrueIndex", reviewRow.SuggestedVisibleOwnerTrueIndex >= 0
+        ? reviewRow.SuggestedVisibleOwnerTrueIndex.ToString(CultureInfo.InvariantCulture)
+        : "");
+    Set("suggestedVisibleOwner", reviewRow.SuggestedVisibleOwner);
+    Set("suggestedLinkedTrueIndexes", reviewRow.SuggestedLinkedTrueIndexes);
+    Set("proofStep", reviewRow.ProofStep);
+    Set("screenshotFolder", reviewRow.ScreenshotFolder);
+    Set("resultStatus", resultStatus);
+    Set("markerOnlyOutcome", "marker-only moved without the visible shell");
+    Set("clusterOutcome", "cluster behavior followed the linked rows");
+    Set("linkedTrueIndexes", linkedTrueIndexes);
+    Set("evidenceNotes", evidenceNotes);
+    return string.Join('\t', values.Select(EscapeTsv));
+
+    void Set(string name, string value)
+    {
+        if (headerIndex.TryGetValue(name, out int index))
+            values[index] = value;
+    }
+}
+
+async Task ReportControlRoleProofPromotionEditStoreRoundTrip()
+{
+    string smokeRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "control-role-proof-promotion-roundtrip");
+    string tempWorkspaceRoot = Path.Combine(smokeRoot, "editstore-workspace");
+    if (Directory.Exists(tempWorkspaceRoot))
+        Directory.Delete(tempWorkspaceRoot, recursive: true);
+
+    string promotedRoot = Path.Combine(tempWorkspaceRoot, "_local", "control-role-proof-review", "promoted-behavior-links");
+    Directory.CreateDirectory(promotedRoot);
+
+    WritePromotedControlRoleBehaviorLinks(promotedRoot, [
+        new ControlRoleProofPromotion(
+            "treetops",
+            "Tree Tops",
+            104,
+            "Smoke live proof: Tree Tops T104 trigger/control cluster link",
+            [104, 128],
+            "confirmed-linked",
+            "marker-only cue moved without visible-object behavior",
+            "cluster behavior followed the chest",
+            "Smoke proof for app-style copy/paste edit-store roundtrip with a cluster-named confirmed link.",
+            "")
+    ]);
+
+    EditorWorkspace tempWorkspace = new(tempWorkspaceRoot);
+    Vector3f cuePosition = new(6743.0625f, 2711.6875f, 2054.3125f);
+    Vector3f chestPosition = new(6972.0f, 2530.0f, 2054.3125f);
+    Moby cue = new()
+    {
+        Index = 104,
+        TrueIndex = 104,
+        LegacyIndex = MobyLoader.GetLegacyAliasIndex(104),
+        Position = cuePosition,
+        OriginalPosition = cuePosition,
+        Type = 0x00,
+        OriginalType = 0x00,
+        State = 0,
+        OriginalState = 0,
+        SourceByte36 = 0x1E,
+        OriginalSourceByte36 = 0x1E,
+        SourceByte37 = 0,
+        OriginalSourceByte37 = 0,
+        SourceByte4F = 0x00,
+        OriginalSourceByte4F = 0x00,
+        Flag4A = 0x10,
+        OriginalFlag4A = 0x10,
+        Flag4B = 0xFF,
+        OriginalFlag4B = 0xFF,
+        Color = Moby.ColorForType(0x00),
+        Label = "Scene/route control marker",
+        OriginalLabel = "Scene/route control marker",
+        CandidateKind = "scene/route control proof cue"
+    };
+    Moby chest = new()
+    {
+        Index = 128,
+        TrueIndex = 128,
+        LegacyIndex = MobyLoader.GetLegacyAliasIndex(128),
+        Position = chestPosition,
+        OriginalPosition = chestPosition,
+        Type = 0x20,
+        OriginalType = 0x20,
+        State = 0,
+        OriginalState = 0,
+        SourceByte36 = 0x86,
+        OriginalSourceByte36 = 0x86,
+        SourceByte37 = 0,
+        OriginalSourceByte37 = 0,
+        SourceByte4F = 0,
+        OriginalSourceByte4F = 0,
+        Flag4A = 0xFF,
+        OriginalFlag4A = 0xFF,
+        Flag4B = 0x55,
+        OriginalFlag4B = 0x55,
+        Color = Moby.ColorForType(0x20),
+        Label = "3x flame chest (Blue reward)",
+        OriginalLabel = "3x flame chest (Blue reward)",
+        CandidateKind = "actor/container object"
+    };
+
+    List<Moby> sourceMobys = [cue, chest];
+    MobyMetadataResult metadata = MobyMetadataEnricher.Apply(tempWorkspace, "treetops", sourceMobys);
+    if (metadata.BehaviorLinkGroups != 1)
+        throw new InvalidOperationException($"Control role proof edit-store roundtrip loaded {metadata.BehaviorLinkGroups} behavior link group(s), expected 1.");
+
+    Moby sourceLinkRoot = chest.Links.Any(MobyCompanionClonePlanner.IsCompanionCloneLink)
+        ? chest
+        : throw new InvalidOperationException("Control role proof edit-store roundtrip did not attach a cloneable source link to the visible donor.");
+
+    Moby clonedRoot = CopyAsAddedMoby(chest, 200, 200, "Copy of 3x flame chest (Blue reward)", 7);
+    clonedRoot.PatchStatus = "native-clone";
+    clonedRoot.PatchLead = "Smoke app-style same-level native clone with proof-linked control companion.";
+    clonedRoot.SourceCloneLevelKey = "treetops";
+    clonedRoot.SourceCloneLevelName = "Tree Tops";
+    clonedRoot.SourceCloneTrueIndex = chest.TrueIndex;
+    List<Moby> addedMobys = [clonedRoot];
+    int nextIndex = clonedRoot.Index + 1;
+    int nextTrueIndex = clonedRoot.TrueIndex + 1;
+    int companionCount = MobyCompanionCloneBuilder.AddLinkedCompanionClones(
+        sourceLinkRoot,
+        clonedRoot,
+        sourceMobys,
+        addedMobys,
+        ref nextIndex,
+        ref nextTrueIndex,
+        "treetops",
+        "Tree Tops");
+    if (companionCount != 1)
+        throw new InvalidOperationException($"Control role proof edit-store roundtrip cloned {companionCount} companion(s), expected 1.");
+
+    Moby clonedCue = addedMobys.FirstOrDefault(moby => moby.SourceCloneTrueIndex == cue.TrueIndex)
+        ?? throw new InvalidOperationException("Control role proof edit-store roundtrip did not create a cloned trigger/control cue.");
+    HashSet<int> clonedMoveGroup = MobyLinkTraversal.GetLinkedMoveMobys(clonedRoot, addedMobys)
+        .Select(moby => moby.TrueIndex)
+        .ToHashSet();
+    if (!clonedMoveGroup.SetEquals(new[] { clonedRoot.TrueIndex, clonedCue.TrueIndex }))
+        throw new InvalidOperationException($"Control role proof edit-store roundtrip made the wrong cloned move group: {string.Join(",", clonedMoveGroup.Order())}.");
+
+    Directory.CreateDirectory(smokeRoot);
+    string editPath = Path.Combine(smokeRoot, "control-role-proof-editstore-roundtrip-native-edits.json");
+    await MobyEditStore.SaveAsync(editPath, addedMobys, "Tree Tops proof-linked companion edit-store roundtrip");
+
+    bool savedLinkedGroup = false;
+    using (JsonDocument savedDocument = JsonDocument.Parse(File.ReadAllText(editPath)))
+    {
+        JsonElement edits = savedDocument.RootElement.GetProperty("edits");
+        foreach (JsonElement edit in edits.EnumerateArray())
+        {
+            int editTrueIndex = -1;
+            if (edit.TryGetProperty("trueIndex", out JsonElement editTrueIndexElement) &&
+                editTrueIndexElement.ValueKind == JsonValueKind.Number)
+            {
+                editTrueIndexElement.TryGetInt32(out editTrueIndex);
+            }
+
+            if (editTrueIndex != clonedRoot.TrueIndex ||
+                !edit.TryGetProperty("linkedCompanionLinks", out JsonElement links) ||
+                links.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (JsonElement group in links.EnumerateArray())
+            {
+                string groupKind = group.TryGetProperty("kind", out JsonElement kindElement) && kindElement.ValueKind == JsonValueKind.String
+                    ? kindElement.GetString() ?? ""
+                    : "";
+                bool linkedMove = group.TryGetProperty("linkedMove", out JsonElement linkedMoveElement) &&
+                    linkedMoveElement.ValueKind is JsonValueKind.True;
+                if (!string.Equals(groupKind, "linked group", StringComparison.OrdinalIgnoreCase) || !linkedMove)
+                {
+                    continue;
+                }
+
+                HashSet<int> trueIndexes = new();
+                if (group.TryGetProperty("trueIndexes", out JsonElement values) && values.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (JsonElement value in values.EnumerateArray())
+                    {
+                        if (value.TryGetInt32(out int trueIndex))
+                            trueIndexes.Add(trueIndex);
+                    }
+                }
+
+                if (trueIndexes.SetEquals(new[] { clonedRoot.TrueIndex, clonedCue.TrueIndex }))
+                    savedLinkedGroup = true;
+            }
+        }
+    }
+
+    if (!savedLinkedGroup)
+        throw new InvalidOperationException("Control role proof edit-store roundtrip did not save the cloned linked companion group.");
+
+    List<Moby> loadedMobys = [cue, chest];
+    int applied = MobyEditStore.Load(editPath, loadedMobys);
+    Moby loadedRoot = loadedMobys.FirstOrDefault(moby => moby.TrueIndex == clonedRoot.TrueIndex)
+        ?? throw new InvalidOperationException("Control role proof edit-store roundtrip did not reload the visible clone.");
+    Moby loadedCue = loadedMobys.FirstOrDefault(moby => moby.TrueIndex == clonedCue.TrueIndex)
+        ?? throw new InvalidOperationException("Control role proof edit-store roundtrip did not reload the companion clone.");
+    HashSet<int> loadedMoveGroup = MobyLinkTraversal.GetLinkedMoveMobys(loadedRoot, loadedMobys)
+        .Select(moby => moby.TrueIndex)
+        .ToHashSet();
+    if (applied != addedMobys.Count || !loadedMoveGroup.SetEquals(new[] { loadedRoot.TrueIndex, loadedCue.TrueIndex }))
+        throw new InvalidOperationException($"Control role proof edit-store roundtrip failed reload: applied={applied}, moved={string.Join(",", loadedMoveGroup.Order())}.");
+
+    string markdownPath = Path.Combine(smokeRoot, "control-role-proof-editstore-roundtrip.md");
+    string jsonPath = Path.Combine(smokeRoot, "control-role-proof-editstore-roundtrip.json");
+    File.WriteAllText(markdownPath, string.Join(Environment.NewLine, [
+        "# Control Role Proof Edit-Store Roundtrip",
+        "",
+        "Synthetic smoke proof that a confirmed control-role behavior link flows through the same reusable companion-clone helper that the editor uses for add/copy/paste, and survives save/reload as a linked move group.",
+        "",
+        $"- Isolated workspace: `{tempWorkspaceRoot}`",
+        $"- Generated link file: `{Path.Combine(promotedRoot, "treetops-behavior-links.json")}`",
+        $"- Saved edit manifest: `{editPath}`",
+        $"- Visible donor: T{chest.TrueIndex} {chest.DisplayLabel}",
+        $"- Control companion donor: T{cue.TrueIndex} {cue.DisplayLabel}",
+        $"- Visible clone: T{clonedRoot.TrueIndex} {clonedRoot.DisplayLabel}",
+        $"- Companion clone: T{clonedCue.TrueIndex} {clonedCue.DisplayLabel}",
+        $"- Saved linked group present: {savedLinkedGroup}",
+        $"- Reloaded edits applied: {applied}",
+        $"- Reloaded linked move group: {string.Join(", ", loadedMoveGroup.Order().Select(trueIndex => $"T{trueIndex}"))}"
+    ]));
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        isolatedWorkspace = tempWorkspaceRoot,
+        generatedLinkFile = Path.Combine(promotedRoot, "treetops-behavior-links.json"),
+        editManifest = editPath,
+        metadata.BehaviorLinkGroups,
+        source = new
+        {
+            root = new { chest.TrueIndex, chest.DisplayLabel, chest.VisualKind },
+            companion = new { cue.TrueIndex, cue.DisplayLabel, cue.VisualKind }
+        },
+        clones = addedMobys.Select(moby => new
+        {
+            moby.TrueIndex,
+            moby.DisplayLabel,
+            moby.SourceCloneTrueIndex,
+            moby.PatchStatus,
+            moby.Confidence,
+            links = moby.Links.Select(link => new
+            {
+                link.Key,
+                link.Kind,
+                link.LinkedMove,
+                link.Confidence,
+                link.TrueIndexes
+            }).ToList()
+        }).ToList(),
+        savedLinkedGroup,
+        applied,
+        loadedMoveGroup = loadedMoveGroup.Order().ToList()
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Control role proof edit-store roundtrip: saved/reloaded visible T{clonedRoot.TrueIndex} with companion T{clonedCue.TrueIndex}, report={markdownPath}");
+}
+
 async Task ReportChestContentSourcePatch(string levelKey)
 {
     if (!File.Exists(sourceImage))
@@ -6172,21 +13829,487 @@ async Task ReportLockedChestShellRewardGuard(string levelKey)
     int sourceByteEditCount = edit.TryGetProperty("sourceByteEdits", out JsonElement sourceByteEdits) && sourceByteEdits.ValueKind == JsonValueKind.Array
         ? sourceByteEdits.GetArrayLength()
         : 0;
-    if (sourceByteEditCount != 0)
-        throw new InvalidOperationException($"{levelKey} locked chest shell wrote {sourceByteEditCount} source byte edit(s); shell reward bytes must stay untouched.");
+    if (sourceByteEditCount != 1)
+        throw new InvalidOperationException($"{levelKey} locked chest shell reward edit should write one source byte edit, got {sourceByteEditCount}.");
 
     MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(
         sourceImage,
         DiscImageLocator.FindCueForImage(sourceImage),
-        Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-locked-chest-shell-guard-smoke.bin"),
-        Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-locked-chest-shell-guard-smoke.cue"),
+        Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-locked-chest-shell-reward-smoke.bin"),
+        Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-locked-chest-shell-reward-smoke.cue"),
         level,
         path);
     bool patchedShellReward = plan.Patches.Any(patch => patch.TrueIndex == chest.TrueIndex && string.Equals(patch.RecordOffset, "0x53", StringComparison.OrdinalIgnoreCase));
-    if (patchedShellReward)
-        throw new InvalidOperationException($"{levelKey} locked chest shell exported a +0x53 patch; edit the contained gem records instead.");
+    if (!patchedShellReward)
+        throw new InvalidOperationException($"{levelKey} locked chest shell reward edit did not export a +0x53 patch.");
 
-    Console.WriteLine($"{levelKey} locked chest shell guard: T{chest.TrueIndex} shell protected, source byte edits={sourceByteEditCount}, patch count={plan.PatchCount}");
+    Console.WriteLine($"{levelKey} locked chest shell reward patch: T{chest.TrueIndex}, source byte edits={sourceByteEditCount}, patch count={plan.PatchCount}");
+}
+
+async Task ReportAllFlyInLandingLinks(string landingSourceImage)
+{
+    const int ExpectedDestinationLevels = 29;
+    if (!File.Exists(landingSourceImage))
+        throw new FileNotFoundException("Fly-in landing smoke needs the selected source BIN.", landingSourceImage);
+
+    (int HeadingByte, float X, float Y, double Degrees)[] cardinalHeadings =
+    [
+        (0x00, 1, 0, 0),
+        (0x40, 0, 1, 90),
+        (0x80, -1, 0, 180),
+        (0xC0, 0, -1, 270)
+    ];
+    foreach ((int headingByte, float expectedX, float expectedY, double expectedDegrees) in cardinalHeadings)
+    {
+        Vector2f direction = FlyInLandingEditorControl.HeadingByteToWorldDirection(headingByte);
+        double degrees = FlyInLandingEditorControl.HeadingByteToDegrees(headingByte);
+        int roundTripHeadingByte = FlyInLandingEditorControl.DegreesToHeadingByte(degrees);
+        if (Math.Abs(direction.X - expectedX) > 0.0001 ||
+            Math.Abs(direction.Y - expectedY) > 0.0001 ||
+            Math.Abs(degrees - expectedDegrees) > 0.0001 ||
+            roundTripHeadingByte != headingByte)
+        {
+            throw new InvalidOperationException(
+                $"Fly-in heading 0x{headingByte:X2} resolved to ({direction.X:0.###}, {direction.Y:0.###}) / {degrees:0.#} deg and round-tripped to 0x{roundTripHeadingByte:X2}.");
+        }
+    }
+
+    List<LevelDefinition> destinationLevels = catalog.Levels
+        .Where(FlyInLandingEditorControl.SupportsLevel)
+        .OrderBy(level => level.LevelId)
+        .ToList();
+    if (destinationLevels.Count != ExpectedDestinationLevels)
+    {
+        throw new InvalidOperationException(
+            $"Fly-in landing coverage found {destinationLevels.Count} destination level(s), expected {ExpectedDestinationLevels}.");
+    }
+
+    HashSet<long> wadOffsets = [];
+    List<string> reportRows = [];
+    foreach (LevelDefinition level in destinationLevels)
+    {
+        FlyInLandingData landing = FlyInLandingLocator.Locate(landingSourceImage, level);
+        if (!wadOffsets.Add(landing.WadOffset))
+            throw new InvalidOperationException($"{level.DisplayName} shares fly-in landing WAD offset 0x{landing.WadOffset:X} with another level.");
+
+        Moby marker = FlyInLandingEditorControl.Create(level, landing);
+        if (!marker.IsFlyInLandingControl ||
+            (int)Math.Round(marker.Position.X * 16f) != landing.RawX ||
+            (int)Math.Round(marker.Position.Y * 16f) != landing.RawY ||
+            (int)Math.Round(marker.Position.Z * 16f) != landing.RawZ ||
+            marker.YawByte != landing.YawByte)
+        {
+            throw new InvalidOperationException($"{level.DisplayName} did not create one exact source-derived fly-in landing marker.");
+        }
+
+        reportRows.Add(
+            $"| {level.DisplayName} | {level.LevelId} | `0x{landing.WadOffset:X}` | " +
+            $"{landing.RawX}, {landing.RawY}, {landing.RawZ} | {FlyInLandingEditorControl.HeadingByteToDegrees(landing.YawByte):0.#} deg |");
+    }
+
+    LevelDefinition smokeLevel = destinationLevels.Single(level =>
+        string.Equals(level.Key, "darkhollow", StringComparison.OrdinalIgnoreCase));
+    FlyInLandingData smokeLanding = FlyInLandingLocator.Locate(landingSourceImage, smokeLevel);
+    Moby editedMarker = FlyInLandingEditorControl.Create(smokeLevel, smokeLanding);
+    editedMarker.Position = new Vector3f(
+        editedMarker.Position.X + 20,
+        editedMarker.Position.Y - 12,
+        editedMarker.Position.Z + 4);
+    editedMarker.YawByte = (smokeLanding.YawByte + 32) & 0xFF;
+
+    string smokeRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "fly-in-landing");
+    Directory.CreateDirectory(smokeRoot);
+    string editsPath = Path.Combine(smokeRoot, "darkhollow-fly-in-landing-native-edits.json");
+    int saved = await MobyEditStore.SaveAsync(editsPath, [editedMarker], "Dark Hollow fly-in landing smoke");
+    if (saved != 1)
+        throw new InvalidOperationException($"Fly-in landing roundtrip saved {saved} edit(s), expected one.");
+
+    Moby reloadedMarker = FlyInLandingEditorControl.Create(smokeLevel, smokeLanding);
+    List<Moby> reloaded = [reloadedMarker];
+    int loaded = MobyEditStore.Load(editsPath, reloaded);
+    if (loaded != 1 ||
+        !reloadedMarker.IsFlyInLandingControl ||
+        reloadedMarker.Position != editedMarker.Position ||
+        reloadedMarker.YawByte != editedMarker.YawByte)
+    {
+        throw new InvalidOperationException("Fly-in landing XYZ/heading edit did not survive save/reload by its stable editor control kind.");
+    }
+
+    MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(
+        landingSourceImage,
+        DiscImageLocator.FindCueForImage(landingSourceImage),
+        Path.Combine(smokeRoot, "darkhollow-fly-in-landing-smoke.bin"),
+        Path.Combine(smokeRoot, "darkhollow-fly-in-landing-smoke.cue"),
+        smokeLevel,
+        editsPath);
+    (string Axis, int FieldOffset, int Original, int Edited)[] expectedAxes =
+    [
+        ("x", 0x00, smokeLanding.RawX, smokeLanding.RawX + 320),
+        ("y", 0x04, smokeLanding.RawY, smokeLanding.RawY - 192),
+        ("z", 0x08, smokeLanding.RawZ, smokeLanding.RawZ + 64)
+    ];
+    if (plan.PatchCount != expectedAxes.Length + 1 || plan.SkippedEdits.Count != 0)
+        throw new InvalidOperationException($"Fly-in landing export produced {plan.PatchCount} patch(es) and {plan.SkippedEdits.Count} skip(s); expected three exact XYZ patches and one heading patch.");
+
+    foreach ((string axis, int fieldOffset, int original, int edited) in expectedAxes)
+    {
+        MobySourcePatch patch = plan.Patches.Single(candidate =>
+            string.Equals(candidate.Kind, $"fly-in-landing-position-{axis}", StringComparison.OrdinalIgnoreCase));
+        if (patch.TrueIndex >= 0 ||
+            !string.Equals(patch.WadRelativeOffset, $"0x{smokeLanding.WadOffset + fieldOffset:X}", StringComparison.OrdinalIgnoreCase) ||
+            BitConverter.ToInt32(ParseHexPreview(patch.BeforeHexPreview), 0) != original ||
+            BitConverter.ToInt32(ParseHexPreview(patch.AfterHexPreview), 0) != edited)
+        {
+            throw new InvalidOperationException($"Dark Hollow fly-in landing {axis.ToUpperInvariant()} patch did not target the exact destination entry field.");
+        }
+    }
+
+    MobySourcePatch headingPatch = plan.Patches.Single(candidate =>
+        string.Equals(candidate.Kind, "fly-in-landing-heading", StringComparison.OrdinalIgnoreCase));
+    if (headingPatch.TrueIndex >= 0 ||
+        !string.Equals(headingPatch.WadRelativeOffset, $"0x{smokeLanding.WadOffset + 0x0E:X}", StringComparison.OrdinalIgnoreCase) ||
+        ParseHexPreview(headingPatch.BeforeHexPreview).Single() != smokeLanding.YawByte ||
+        ParseHexPreview(headingPatch.AfterHexPreview).Single() != editedMarker.YawByte)
+    {
+        throw new InvalidOperationException("Dark Hollow fly-in heading patch did not target the exact destination entry heading byte.");
+    }
+
+    Moby headingOnlyMarker = FlyInLandingEditorControl.Create(smokeLevel, smokeLanding);
+    headingOnlyMarker.YawByte = editedMarker.YawByte;
+    string headingOnlyEditsPath = Path.Combine(smokeRoot, "darkhollow-fly-in-heading-only-native-edits.json");
+    int headingOnlySaved = await MobyEditStore.SaveAsync(
+        headingOnlyEditsPath,
+        [headingOnlyMarker],
+        "Dark Hollow fly-in heading-only smoke");
+    MobySourcePatchPlan headingOnlyPlan = MobySourcePatchExporter.BuildPlan(
+        landingSourceImage,
+        DiscImageLocator.FindCueForImage(landingSourceImage),
+        Path.Combine(smokeRoot, "darkhollow-fly-in-heading-only-smoke.bin"),
+        Path.Combine(smokeRoot, "darkhollow-fly-in-heading-only-smoke.cue"),
+        smokeLevel,
+        headingOnlyEditsPath);
+    if (headingOnlySaved != 1 ||
+        headingOnlyPlan.PatchCount != 1 ||
+        headingOnlyPlan.SkippedEdits.Count != 0 ||
+        !string.Equals(headingOnlyPlan.Patches.Single().Kind, "fly-in-landing-heading", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Fly-in heading-only edit did not export as exactly one native entry heading patch.");
+    }
+
+    if (plan.Patches.Any(patch =>
+        patch.Kind.Contains("return", StringComparison.OrdinalIgnoreCase) ||
+        patch.Kind.StartsWith("moby-", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("Fly-in landing export touched return-home or ordinary moby data.");
+    }
+
+    string reportPath = Path.Combine(workspace.RootPath, "_local", "smoke", "all-fly-in-landing-links.md");
+    await File.WriteAllLinesAsync(reportPath,
+    [
+        "# All Fly-in Landing Links",
+        "",
+        "Exact source-derived destination landing data used when Spyro enters a level from its homeworld. Homeworld arrival/return data is deliberately outside this first pass.",
+        "",
+        "| Destination | Level ID | Landing WAD offset | Raw XYZ | Fly-in heading |",
+        "|---|---:|---:|---:|---:|",
+        .. reportRows,
+        "",
+        $"Dark Hollow export smoke: three XYZ patches plus heading byte `+0x0E` at `0x{smokeLanding.WadOffset:X}`; heading-only export is one patch; no moby or return-home patch kinds."
+    ]);
+
+    Console.WriteLine(
+        $"All-level fly-in landings: {destinationLevels.Count} destination level(s), {wadOffsets.Count} unique entry blocks; " +
+        $"cardinal heading conversion + Dark Hollow XYZ/heading save/reload/export passed, report={reportPath}");
+}
+
+void AssertDragonCutsceneCameraTrackPatch(
+    string levelKey,
+    int dragonTrueIndex,
+    DragonRescueCameraData camera,
+    MobySourcePatchPlan plan,
+    int deltaX,
+    int deltaY,
+    int deltaZ)
+{
+    MobySourcePatch? trackPatch = plan.Patches.SingleOrDefault(patch =>
+        patch.TrueIndex == dragonTrueIndex &&
+        string.Equals(patch.Kind, "dragon-rescue-cutscene-camera-track", StringComparison.OrdinalIgnoreCase));
+    if (trackPatch == null ||
+        trackPatch.ByteLength != camera.CutsceneCameraTrackByteLength ||
+        !string.Equals(trackPatch.WadRelativeOffset, $"0x{camera.CutsceneCameraTrackWadOffset:X}", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException(
+            $"{levelKey} dragon T{dragonTrueIndex} did not export its complete packed rescue-cinematic camera track.");
+    }
+
+    byte[] before = ParseHexPreview(trackPatch.BeforeHexPreview);
+    byte[] after = ParseHexPreview(trackPatch.AfterHexPreview);
+    if (before.Length != camera.CutsceneCameraTrackByteLength || after.Length != before.Length)
+        throw new InvalidOperationException($"{levelKey} dragon T{dragonTrueIndex} cinematic camera patch has an incorrect byte length.");
+
+    for (int frameOffset = 0; frameOffset < before.Length; frameOffset += 0x18)
+    {
+        int frameIndex = frameOffset / 0x18;
+        int expectedX = BitConverter.ToInt32(before, frameOffset) + deltaX;
+        int expectedY = BitConverter.ToInt32(before, frameOffset + 4) + deltaY;
+        int expectedZ = BitConverter.ToInt32(before, frameOffset + 8) + deltaZ;
+        if (BitConverter.ToInt32(after, frameOffset) != expectedX ||
+            BitConverter.ToInt32(after, frameOffset + 4) != expectedY ||
+            BitConverter.ToInt32(after, frameOffset + 8) != expectedZ)
+        {
+            throw new InvalidOperationException(
+                $"{levelKey} dragon T{dragonTrueIndex} cinematic camera frame {frameIndex} did not receive the full XYZ delta.");
+        }
+
+        if (!before.AsSpan(frameOffset + 0x0C, 0x0C).SequenceEqual(after.AsSpan(frameOffset + 0x0C, 0x0C)))
+        {
+            throw new InvalidOperationException(
+                $"{levelKey} dragon T{dragonTrueIndex} cinematic camera frame {frameIndex} changed angle/timing bytes.");
+        }
+    }
+}
+
+void ReportLatestSavedArtisansDragonCameraPatch()
+{
+    string nativeEditsPath = Path.Combine(
+        workspace.RootPath,
+        "dist",
+        "release",
+        "SpyroEditor-release-osx-arm64",
+        "artisans-native-edits.json");
+    if (!File.Exists(nativeEditsPath) || !File.Exists(sourceImage))
+    {
+        Console.WriteLine("Latest saved Artisans dragon camera patch: release edit file or source BIN not available; skipped.");
+        return;
+    }
+
+    LevelDefinition level = catalog.FindByKey("artisans")
+        ?? throw new InvalidOperationException("Artisans is missing from the level catalog.");
+    IReadOnlyDictionary<int, DragonRescueCameraData> cameras = DragonRescueCameraLocator.Locate(sourceImage, level);
+    MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        DiscImageLocator.FindCueForImage(sourceImage),
+        Path.Combine(workspace.RootPath, "_local", "objects", "artisans-latest-saved-dragon-camera-smoke.bin"),
+        Path.Combine(workspace.RootPath, "_local", "objects", "artisans-latest-saved-dragon-camera-smoke.cue"),
+        level,
+        nativeEditsPath);
+
+    using FileStream stream = File.OpenRead(nativeEditsPath);
+    using JsonDocument document = JsonDocument.Parse(stream);
+    List<string> results = [];
+    foreach (JsonElement edit in document.RootElement.GetProperty("edits").EnumerateArray())
+    {
+        int trueIndex = edit.GetProperty("trueIndex").GetInt32();
+        if (!cameras.TryGetValue(trueIndex, out DragonRescueCameraData? camera) ||
+            !edit.TryGetProperty("rawOriginal", out JsonElement rawOriginal) ||
+            !edit.TryGetProperty("rawEdited", out JsonElement rawEdited))
+        {
+            continue;
+        }
+
+        (string Axis, int OriginalCamera, int Delta)[] axes =
+        [
+            ("x", camera.CameraRawX, rawEdited.GetProperty("x").GetInt32() - rawOriginal.GetProperty("x").GetInt32()),
+            ("y", camera.CameraRawY, rawEdited.GetProperty("y").GetInt32() - rawOriginal.GetProperty("y").GetInt32()),
+            ("z", camera.CameraRawZ, rawEdited.GetProperty("z").GetInt32() - rawOriginal.GetProperty("z").GetInt32())
+        ];
+        if (axes.All(axis => axis.Delta == 0))
+            continue;
+
+        List<string> editedCoordinates = [];
+        foreach ((string axis, int originalCamera, int delta) in axes)
+        {
+            int expected = originalCamera + delta;
+            MobySourcePatch? patch = delta == 0
+                ? null
+                : plan.Patches.SingleOrDefault(candidate =>
+                    candidate.TrueIndex == trueIndex &&
+                    string.Equals(candidate.Kind, $"dragon-rescue-camera-position-{axis}", StringComparison.OrdinalIgnoreCase));
+            if (delta != 0 && (patch == null || BitConverter.ToInt32(ParseHexPreview(patch.AfterHexPreview), 0) != expected))
+            {
+                throw new InvalidOperationException(
+                    $"Latest saved Artisans dragon T{trueIndex} did not patch rescue-camera {axis.ToUpperInvariant()} to {expected}.");
+            }
+
+            editedCoordinates.Add($"{axis.ToUpperInvariant()} {originalCamera}->{expected}");
+        }
+
+        AssertDragonCutsceneCameraTrackPatch(
+            "artisans",
+            trueIndex,
+            camera,
+            plan,
+            axes[0].Delta,
+            axes[1].Delta,
+            axes[2].Delta);
+        results.Add(
+            $"T{trueIndex} approach camera 0x{camera.CameraDataWadOffset:X}: {string.Join(", ", editedCoordinates)}; " +
+            $"cinematic track 0x{camera.CutsceneCameraTrackWadOffset:X}, {camera.CutsceneCameraFrameCount} frame(s)");
+    }
+
+    if (results.Count == 0)
+        throw new InvalidOperationException("Latest saved Artisans edit file contains no moved native dragon camera to verify.");
+
+    Console.WriteLine($"Latest saved Artisans dragon camera patch: {string.Join("; ", results)}");
+}
+
+async Task ReportMovedExistingDragonPlacementSectorPatch(string levelKey)
+{
+    if (!File.Exists(sourceImage))
+        return;
+
+    LevelDefinition? level = catalog.FindByKey(levelKey);
+    if (level == null || !level.HasSourceTable)
+        return;
+
+    string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
+    string geometryPath = Path.Combine(workspace.RootPath, "editor-cache", $"{levelKey}-runtime-scene-editor-overlay.json");
+    if (!File.Exists(mobyPath) || !File.Exists(geometryPath))
+        return;
+
+    List<Moby> mobys = MobyLoader.LoadCached(mobyPath).ToList();
+    MobyMetadataEnricher.Apply(workspace, levelKey, mobys);
+    Moby? dragon = mobys.FirstOrDefault(moby =>
+        IsNativeDragonActorRecord(moby) &&
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex < level.SourceRecordCount);
+    if (dragon == null)
+    {
+        Console.WriteLine($"{levelKey} moved dragon sector patch: no source-table dragon found.");
+        return;
+    }
+
+    List<Moby> dragonScene = MobyLinkTraversal.GetLinkedMoveMobys(dragon, mobys)
+        .DistinctBy(moby => moby.TrueIndex)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToList();
+    if (dragonScene.Count != 3 ||
+        dragonScene.Count(IsNativeDragonActorRecord) != 1 ||
+        dragonScene.Count(IsNativeDragonPedestalRecord) != 1 ||
+        dragonScene.Count(IsNativeDragonRescueCameraRecord) != 1)
+    {
+        throw new InvalidOperationException($"{levelKey} moved dragon smoke did not resolve an exact actor/pedestal/rescue-camera scene.");
+    }
+    DragonRescueCameraData packedCamera = DragonRescueCameraLocator.Locate(sourceImage, level)[dragon.TrueIndex];
+
+    GeometryCandidate geometry = GeometryOverlayLoader.LoadFirstCandidate(geometryPath);
+    List<TerrainPolygon> targetFaces = geometry.Polygons
+        .Where(polygon => !polygon.IsTerrainRemoved && polygon.SectorIndex is >= 0 and <= 255)
+        .OrderByDescending(polygon =>
+        {
+            float dx = polygon.Center.X - dragon.Position.X;
+            float dy = polygon.Center.Y - dragon.Position.Y;
+            return (dx * dx) + (dy * dy);
+        })
+        .Take(40)
+        .ToList();
+    if (targetFaces.Count == 0)
+    {
+        Console.WriteLine($"{levelKey} moved dragon sector patch: no target terrain face found.");
+        return;
+    }
+
+    Directory.CreateDirectory(Path.Combine(workspace.RootPath, "_local", "smoke"));
+    foreach (TerrainPolygon targetFace in targetFaces)
+    {
+        float z = targetFace.TryGetZ(targetFace.Center.X, targetFace.Center.Y, out float terrainZ)
+            ? terrainZ
+            : targetFace.AvgZ;
+        if (Math.Abs(z - dragon.Position.Z) < 8)
+            z += 16;
+        Vector3f delta = new(
+            targetFace.Center.X - dragon.Position.X,
+            targetFace.Center.Y - dragon.Position.Y,
+            z - dragon.Position.Z);
+        List<Moby> editedScene = dragonScene
+            .Select(member =>
+            {
+                Moby edited = CloneMoby(member);
+                edited.Position = new Vector3f(
+                    member.Position.X + delta.X,
+                    member.Position.Y + delta.Y,
+                    member.Position.Z + delta.Z);
+                edited.PatchStatus = "smoke";
+                edited.PatchLead = "moved-existing-dragon-scene-placement-sector";
+                return edited;
+            })
+            .ToList();
+
+        foreach (Moby member in dragonScene)
+        {
+            Moby edited = editedScene.Single(item => item.TrueIndex == member.TrueIndex);
+            AssertSameRelativePosition(levelKey, dragon, editedScene.Single(IsNativeDragonActorRecord), member, edited);
+        }
+
+        string path = Path.Combine(workspace.RootPath, "_local", "smoke", $"{levelKey}-moved-dragon-sector-native-edits.json");
+        await MobyEditStore.SaveAsync(path, editedScene, $"{level.DisplayName} moved dragon scene sector smoke");
+        MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(
+            sourceImage,
+            DiscImageLocator.FindCueForImage(sourceImage),
+            Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-moved-dragon-sector-smoke.bin"),
+            Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-moved-dragon-sector-smoke.cue"),
+            level,
+            path);
+        Moby editedDragon = editedScene.Single(IsNativeDragonActorRecord);
+        (string Axis, int Delta, int OriginalCamera)[] expectedCameraAxes =
+        [
+            ("x", (int)Math.Round(editedDragon.Position.X * 16f) - (int)Math.Round(dragon.Position.X * 16f), packedCamera.CameraRawX),
+            ("y", (int)Math.Round(editedDragon.Position.Y * 16f) - (int)Math.Round(dragon.Position.Y * 16f), packedCamera.CameraRawY),
+            ("z", (int)Math.Round(editedDragon.Position.Z * 16f) - (int)Math.Round(dragon.Position.Z * 16f), packedCamera.CameraRawZ)
+        ];
+        foreach ((string axis, int rawDelta, int originalCamera) in expectedCameraAxes.Where(item => item.Delta != 0))
+        {
+            MobySourcePatch? cameraPatch = plan.Patches.SingleOrDefault(patch =>
+                patch.TrueIndex == dragon.TrueIndex &&
+                string.Equals(patch.Kind, $"dragon-rescue-camera-position-{axis}", StringComparison.OrdinalIgnoreCase));
+            int expectedCamera = originalCamera + rawDelta;
+            int patchedCamera = cameraPatch == null
+                ? int.MinValue
+                : BitConverter.ToInt32(ParseHexPreview(cameraPatch.AfterHexPreview), 0);
+            if (patchedCamera != expectedCamera)
+            {
+                throw new InvalidOperationException(
+                    $"{levelKey} moved dragon camera {axis.ToUpperInvariant()} patched to {patchedCamera}, expected {expectedCamera}.");
+            }
+        }
+        AssertDragonCutsceneCameraTrackPatch(
+            levelKey,
+            dragon.TrueIndex,
+            packedCamera,
+            plan,
+            expectedCameraAxes[0].Delta,
+            expectedCameraAxes[1].Delta,
+            expectedCameraAxes[2].Delta);
+        MobySourcePatch? sectorPatch = plan.Patches.FirstOrDefault(patch =>
+            patch.TrueIndex == dragon.TrueIndex &&
+            string.Equals(patch.Kind, "moby-placement-sector", StringComparison.OrdinalIgnoreCase));
+        if (sectorPatch != null)
+        {
+            foreach (Moby member in dragonScene)
+            {
+                HashSet<string> positionKinds = plan.Patches
+                    .Where(patch => patch.TrueIndex == member.TrueIndex)
+                    .Select(patch => patch.Kind)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                string[] expectedKinds = ["moby-position-x", "moby-position-y", "moby-position-z"];
+                if (expectedKinds.Any(kind => !positionKinds.Contains(kind)))
+                {
+                    throw new InvalidOperationException(
+                        $"{levelKey} moved dragon scene T{member.TrueIndex} did not export all XYZ coordinate patches.");
+                }
+            }
+
+            Moby pedestal = dragonScene.Single(IsNativeDragonPedestalRecord);
+            Moby sceneLinkControl = dragonScene.Single(IsNativeDragonRescueCameraRecord);
+            Console.WriteLine(
+                $"{levelKey} moved dragon scene patch: actor T{dragon.TrueIndex}, pedestal T{pedestal.TrueIndex}, scene link T{sceneLinkControl.TrueIndex}, " +
+                $"approach camera 0x{packedCamera.CameraDataWadOffset:X}, cinematic track 0x{packedCamera.CutsceneCameraTrackWadOffset:X}/{packedCamera.CutsceneCameraFrameCount} frames; " +
+                $"all XYZ rows exported; {sectorPatch.Description}");
+            return;
+        }
+    }
+
+    throw new InvalidOperationException($"{levelKey} moved dragon did not produce a placement/culling sector patch for any sampled target face.");
 }
 
 void ReportDragonLinks(string levelKey)
@@ -6212,7 +14335,7 @@ void ReportDragonLinks(string levelKey)
             Links = MobyLinkTraversal.GetVisibleLinks(moby).ToList(),
             Visible = MobyLinkTraversal.GetVisibleLinkedTrueIndexes(moby)
         })
-        .Where(item => item.Visible.Count > 3 || item.Links.Any(link => link.Name.Contains("cluster", StringComparison.OrdinalIgnoreCase)))
+        .Where(item => item.Visible.Count > 4 || item.Links.Any(link => link.Name.Contains("cluster", StringComparison.OrdinalIgnoreCase)))
         .Select(item => $"T{item.Moby.TrueIndex}->{string.Join(",", item.Visible.Order())}")
         .ToList();
     if (broadVisibleDragonLinks.Count > 0)
@@ -6220,6 +14343,296 @@ void ReportDragonLinks(string levelKey)
 
     int linksWithSupport = dragonLinks.Count(link => link.TrueIndexes.Count > 2);
     Console.WriteLine($"{levelKey} dragon links: {dragonLinks.Count} group(s), {linksWithSupport} with camera/helper support, {metadata.InferredLinkGroups} inferred link(s)");
+}
+
+void ReportAllDragonRescueCameraLinks(string dragonSourceImage)
+{
+    const int ExpectedDragonLevels = 28;
+    const int ExpectedDragonScenes = 79;
+    Vector3f cloneDelta = new(111, -73, 37);
+    List<string> reportRows = new();
+    int dragonLevels = 0;
+    int dragonScenes = 0;
+    int pedestalRows = 0;
+    int sceneLinkRows = 0;
+    int packedCameraRows = 0;
+    int cinematicCameraFrames = 0;
+    HashSet<long> cinematicCameraTracks = [];
+    int companionClones = 0;
+
+    if (!File.Exists(dragonSourceImage))
+        throw new FileNotFoundException("All-level dragon camera smoke needs the selected source BIN.", dragonSourceImage);
+
+    foreach (LevelDefinition level in catalog.Levels)
+    {
+        string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{level.Key}-mobys.json");
+        if (!File.Exists(mobyPath))
+            continue;
+
+        List<Moby> mobys = MobyLoader.LoadCached(mobyPath).ToList();
+        MobyMetadataEnricher.Apply(workspace, level.Key, mobys);
+        List<Moby> actors = mobys.Where(IsNativeDragonActorRecord).OrderBy(moby => moby.TrueIndex).ToList();
+        if (actors.Count == 0)
+            continue;
+
+        List<Moby> pedestals = mobys.Where(IsNativeDragonPedestalRecord).OrderBy(moby => moby.TrueIndex).ToList();
+        List<Moby> sceneLinkControls = mobys.Where(IsNativeDragonRescueCameraRecord).OrderBy(moby => moby.TrueIndex).ToList();
+        if (actors.Count != pedestals.Count || actors.Count != sceneLinkControls.Count)
+        {
+            throw new InvalidOperationException(
+                $"{level.Key} native dragon rows are unbalanced: {actors.Count} actor(s), {pedestals.Count} pedestal(s), {sceneLinkControls.Count} scene-link control(s).");
+        }
+
+        IReadOnlyDictionary<int, DragonRescueCameraData> packedCameras = DragonRescueCameraLocator.Locate(dragonSourceImage, level);
+        if (packedCameras.Count != actors.Count)
+            throw new InvalidOperationException($"{level.Key} decoded {packedCameras.Count} packed rescue-camera record(s) for {actors.Count} dragon actor(s).");
+
+        dragonLevels++;
+        dragonScenes += actors.Count;
+        pedestalRows += pedestals.Count;
+        sceneLinkRows += sceneLinkControls.Count;
+        packedCameraRows += packedCameras.Count;
+        Dictionary<int, Moby> byTrueIndex = mobys
+            .Where(moby => moby.TrueIndex >= 0)
+            .ToDictionary(moby => moby.TrueIndex);
+        HashSet<int> pairedPedestals = new();
+        HashSet<int> pairedSceneLinks = new();
+        List<string> levelScenes = new();
+
+        foreach (Moby actor in actors)
+        {
+            MobyLink? sceneLink = actor.Links
+                .Where(MobyLinkTraversal.IsActiveMoveLink)
+                .Where(link => string.Equals(link.Kind, "dragon scene", StringComparison.OrdinalIgnoreCase))
+                .Where(link => link.TrueIndexes.Count(index => byTrueIndex.TryGetValue(index, out Moby? member) && IsNativeDragonPedestalRecord(member)) == 1)
+                .Where(link => link.TrueIndexes.Count(index => byTrueIndex.TryGetValue(index, out Moby? member) && IsNativeDragonRescueCameraRecord(member)) == 1)
+                .OrderByDescending(link => link.Confidence.Contains("native", StringComparison.OrdinalIgnoreCase))
+                .FirstOrDefault();
+            if (sceneLink == null)
+                throw new InvalidOperationException($"{level.Key} dragon T{actor.TrueIndex} has no exact dragon/pedestal/scene-link group.");
+
+            Moby pedestal = sceneLink.TrueIndexes
+                .Select(index => byTrueIndex[index])
+                .Single(IsNativeDragonPedestalRecord);
+            Moby sceneLinkControl = sceneLink.TrueIndexes
+                .Select(index => byTrueIndex[index])
+                .Single(IsNativeDragonRescueCameraRecord);
+            if (!pairedPedestals.Add(pedestal.TrueIndex))
+                throw new InvalidOperationException($"{level.Key} pedestal T{pedestal.TrueIndex} is linked to more than one dragon.");
+            if (!pairedSceneLinks.Add(sceneLinkControl.TrueIndex))
+                throw new InvalidOperationException($"{level.Key} scene-link T{sceneLinkControl.TrueIndex} is linked to more than one dragon.");
+            if (MobyDistanceSquared(actor, sceneLinkControl) > 96 * 96 || MobyDistanceSquared(pedestal, sceneLinkControl) > 96 * 96)
+                throw new InvalidOperationException($"{level.Key} scene-link T{sceneLinkControl.TrueIndex} is outside the proven native dragon-scene offset.");
+            if (actor.VisualKind != MobyVisualKind.Dragon || pedestal.VisualKind != MobyVisualKind.Dragon || sceneLinkControl.VisualKind != MobyVisualKind.Control)
+            {
+                throw new InvalidOperationException(
+                    $"{level.Key} dragon scene T{actor.TrueIndex}/T{pedestal.TrueIndex}/T{sceneLinkControl.TrueIndex} has incorrect editor visual categories.");
+            }
+
+            DragonRescueCameraData packedCamera = packedCameras[actor.TrueIndex];
+            if (packedCamera.PedestalTrueIndex != pedestal.TrueIndex)
+            {
+                throw new InvalidOperationException(
+                    $"{level.Key} packed camera for dragon T{actor.TrueIndex} points to pedestal T{packedCamera.PedestalTrueIndex}, not linked pedestal T{pedestal.TrueIndex}.");
+            }
+            if (packedCamera.CutsceneCameraTrackByteLength != packedCamera.CutsceneCameraFrameCount * 0x18 ||
+                packedCamera.CutsceneCameraFrameCount <= 0)
+            {
+                throw new InvalidOperationException(
+                    $"{level.Key} dragon T{actor.TrueIndex} has an invalid rescue-cinematic camera-track length.");
+            }
+            if (!cinematicCameraTracks.Add(packedCamera.CutsceneCameraTrackWadOffset))
+            {
+                throw new InvalidOperationException(
+                    $"{level.Key} dragon T{actor.TrueIndex} shares rescue-cinematic camera track 0x{packedCamera.CutsceneCameraTrackWadOffset:X}.");
+            }
+            cinematicCameraFrames += packedCamera.CutsceneCameraFrameCount;
+
+            HashSet<int> linkedMoveRows = MobyLinkTraversal.GetLinkedMoveMobys(actor, mobys)
+                .Select(moby => moby.TrueIndex)
+                .ToHashSet();
+            HashSet<int> expectedRows = [actor.TrueIndex, pedestal.TrueIndex, sceneLinkControl.TrueIndex];
+            if (!linkedMoveRows.SetEquals(expectedRows))
+            {
+                throw new InvalidOperationException(
+                    $"{level.Key} dragon T{actor.TrueIndex} moves [{string.Join(",", linkedMoveRows.Order())}] instead of exact scene [{string.Join(",", expectedRows.Order())}].");
+            }
+
+            IReadOnlyList<Moby> donors = MobyCompanionClonePlanner.GetCompanionDonors(actor, mobys);
+            if (donors.Count != 2 || !donors.Select(moby => moby.TrueIndex).ToHashSet().SetEquals([pedestal.TrueIndex, sceneLinkControl.TrueIndex]))
+                throw new InvalidOperationException($"{level.Key} dragon T{actor.TrueIndex} does not clone exactly its pedestal and scene-link row.");
+
+            int addedRootIndex = 1_000_000 + companionClones;
+            Vector3f addedRootPosition = new(
+                actor.Position.X + cloneDelta.X,
+                actor.Position.Y + cloneDelta.Y,
+                actor.Position.Z + cloneDelta.Z);
+            Moby addedRoot = CreateAddedDragonSmokeRoot(actor, addedRootIndex, addedRootPosition);
+            List<Moby> addedScene = [addedRoot];
+            int nextIndex = addedRoot.Index + 1;
+            int nextTrueIndex = addedRoot.TrueIndex + 1;
+            int addedCompanions = MobyCompanionCloneBuilder.AddLinkedCompanionClones(
+                actor,
+                addedRoot,
+                mobys,
+                addedScene,
+                ref nextIndex,
+                ref nextTrueIndex,
+                level.Key,
+                level.DisplayName);
+            if (addedCompanions != 2)
+                throw new InvalidOperationException($"{level.Key} copied dragon T{actor.TrueIndex} produced {addedCompanions} companion(s), expected 2.");
+
+            foreach (Moby donor in donors)
+            {
+                Moby clone = addedScene.Single(moby => moby.SourceCloneTrueIndex == donor.TrueIndex);
+                AssertSameRelativePosition(level.Key, actor, addedRoot, donor, clone);
+            }
+
+            HashSet<int> clonedMoveRows = MobyLinkTraversal.GetLinkedMoveMobys(addedRoot, addedScene)
+                .Select(moby => moby.TrueIndex)
+                .ToHashSet();
+            if (clonedMoveRows.Count != 3 || !clonedMoveRows.Contains(addedRoot.TrueIndex))
+                throw new InvalidOperationException($"{level.Key} copied dragon T{actor.TrueIndex} did not retain one linked three-row scene.");
+
+            companionClones += addedCompanions;
+            levelScenes.Add(
+                $"T{actor.TrueIndex} / T{pedestal.TrueIndex} / T{sceneLinkControl.TrueIndex} / " +
+                $"approach 0x{packedCamera.CameraDataWadOffset:X} / cinematic 0x{packedCamera.CutsceneCameraTrackWadOffset:X} ({packedCamera.CutsceneCameraFrameCount}f)");
+        }
+
+        if (pairedPedestals.Count != pedestals.Count || pairedSceneLinks.Count != sceneLinkControls.Count)
+            throw new InvalidOperationException($"{level.Key} did not pair every native dragon pedestal and scene-link control exactly once.");
+        reportRows.Add($"| {level.DisplayName} | {actors.Count} | {string.Join("<br>", levelScenes)} |");
+    }
+
+    if (dragonLevels != ExpectedDragonLevels || dragonScenes != ExpectedDragonScenes ||
+        pedestalRows != ExpectedDragonScenes || sceneLinkRows != ExpectedDragonScenes ||
+        packedCameraRows != ExpectedDragonScenes || cinematicCameraTracks.Count != ExpectedDragonScenes)
+    {
+        throw new InvalidOperationException(
+            $"All-level dragon audit found {dragonLevels} level(s), {dragonScenes} actor(s), {pedestalRows} pedestal(s), {sceneLinkRows} scene-link control(s), " +
+            $"{packedCameraRows} approach-camera record(s), and {cinematicCameraTracks.Count} cinematic camera track(s); expected {ExpectedDragonLevels} and five sets of {ExpectedDragonScenes}.");
+    }
+    if (companionClones != ExpectedDragonScenes * 2)
+        throw new InvalidOperationException($"All-level dragon copy smoke produced {companionClones} companions, expected {ExpectedDragonScenes * 2}.");
+
+    string reportPath = Path.Combine(workspace.RootPath, "_local", "smoke", "all-dragon-rescue-camera-links.md");
+    Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
+    File.WriteAllLines(reportPath,
+    [
+        "# All-level dragon rescue camera data smoke",
+        "",
+        $"- Verified {dragonScenes} dragon scenes across {dragonLevels} levels.",
+        $"- Matched {dragonScenes} native dragon actors, {pedestalRows} pedestals, {sceneLinkRows} 0x6E scene-link controls, {packedCameraRows} approach-camera records, and {cinematicCameraTracks.Count} later cinematic tracks with no unmatched rows.",
+        $"- Verified movement selects exactly three editor rows per scene and resolves one approach camera plus one unique cinematic track per dragon ({cinematicCameraFrames} total cinematic keyframes).",
+        $"- Copy/paste still creates {companionClones} linked editor-row companions while preserving every XYZ offset; allocating extra packed rescue-scene data remains beta research.",
+        "",
+        "| Level | Scenes | Actor / pedestal / scene link / approach camera / cinematic track |",
+        "| --- | ---: | --- |",
+        .. reportRows
+    ]);
+
+    Console.WriteLine(
+        $"All-level dragon rescue cameras: {dragonScenes} scene(s) across {dragonLevels} level(s), exact 79 approach + 79 cinematic camera sources, " +
+        $"{cinematicCameraFrames} cinematic keyframes, {companionClones} copy companions; report {reportPath}");
+}
+
+Moby CreateAddedDragonSmokeRoot(Moby actor, int index, Vector3f position)
+{
+    string label = $"Smoke copy of {actor.DisplayLabel}";
+    return new Moby
+    {
+        Index = index,
+        TrueIndex = index,
+        LegacyIndex = MobyLoader.GetLegacyAliasIndex(index),
+        Position = position,
+        OriginalPosition = position,
+        Type = actor.Type,
+        OriginalType = actor.Type,
+        State = actor.State,
+        OriginalState = actor.State,
+        YawByte = actor.YawByte,
+        OriginalYawByte = actor.YawByte,
+        RuntimeAddress = actor.RuntimeAddress,
+        SpecialDataPointer = actor.SpecialDataPointer,
+        SourceByte36 = actor.SourceByte36,
+        OriginalSourceByte36 = actor.SourceByte36,
+        SourceByte37 = actor.SourceByte37,
+        OriginalSourceByte37 = actor.SourceByte37,
+        SourceByte4F = actor.SourceByte4F,
+        OriginalSourceByte4F = actor.SourceByte4F,
+        Flag4A = actor.Flag4A,
+        OriginalFlag4A = actor.Flag4A,
+        Flag4B = actor.Flag4B,
+        OriginalFlag4B = actor.Flag4B,
+        Color = actor.Color,
+        Label = label,
+        OriginalLabel = label,
+        PatchStatus = "native-clone",
+        PatchLead = $"Dragon smoke copy from T{actor.TrueIndex}",
+        CandidateKind = actor.CandidateKind,
+        Confidence = "smoke",
+        Evidence = "All-level dragon rescue-camera companion clone smoke.",
+        BehaviorNote = actor.BehaviorNote,
+        ZoneLabel = actor.ZoneLabel,
+        SourceCloneTrueIndex = actor.TrueIndex,
+        IsAdded = true
+    };
+}
+
+void AssertSameRelativePosition(string levelKey, Moby sourceRoot, Moby addedRoot, Moby sourceCompanion, Moby addedCompanion)
+{
+    const float Epsilon = 0.001f;
+    float sourceDx = sourceCompanion.Position.X - sourceRoot.Position.X;
+    float sourceDy = sourceCompanion.Position.Y - sourceRoot.Position.Y;
+    float sourceDz = sourceCompanion.Position.Z - sourceRoot.Position.Z;
+    float addedDx = addedCompanion.Position.X - addedRoot.Position.X;
+    float addedDy = addedCompanion.Position.Y - addedRoot.Position.Y;
+    float addedDz = addedCompanion.Position.Z - addedRoot.Position.Z;
+    if (Math.Abs(sourceDx - addedDx) > Epsilon || Math.Abs(sourceDy - addedDy) > Epsilon || Math.Abs(sourceDz - addedDz) > Epsilon)
+    {
+        throw new InvalidOperationException(
+            $"{levelKey} copied dragon companion T{sourceCompanion.TrueIndex} did not preserve its XYZ offset from T{sourceRoot.TrueIndex}.");
+    }
+}
+
+float MobyDistanceSquared(Moby left, Moby right)
+{
+    float dx = left.Position.X - right.Position.X;
+    float dy = left.Position.Y - right.Position.Y;
+    float dz = left.Position.Z - right.Position.Z;
+    return (dx * dx) + (dy * dy) + (dz * dz);
+}
+
+bool IsNativeDragonActorRecord(Moby moby)
+{
+    return moby.Type is 0x20 or 0x3C &&
+        moby.SourceByte36 == 0xFA &&
+        moby.SourceByte37 == 0x00 &&
+        moby.SourceByte4F == 0x00 &&
+        moby.Flag4A == 0x10 &&
+        moby.Flag4B == 0xFF;
+}
+
+bool IsNativeDragonPedestalRecord(Moby moby)
+{
+    return moby.Type == 0x20 &&
+        moby.SourceByte36 is 0x4B or 0x4C or 0x4D &&
+        moby.SourceByte37 == 0x01 &&
+        moby.SourceByte4F == 0x00 &&
+        moby.Flag4A == 0x10 &&
+        moby.Flag4B == 0xFF;
+}
+
+bool IsNativeDragonRescueCameraRecord(Moby moby)
+{
+    return moby.Type == 0x00 &&
+        moby.SourceByte36 == 0x6E &&
+        moby.SourceByte37 == 0x00 &&
+        moby.SourceByte4F == 0x00 &&
+        moby.Flag4A == 0x10 &&
+        moby.Flag4B == 0xFF;
 }
 
 bool IsDragonSelectionMoby(Moby moby)
@@ -6248,6 +14661,8 @@ async Task ReportAddedMobyRoundTrip(List<Moby> sourceMobys)
         OriginalType = 0x18,
         State = 0,
         OriginalState = 0,
+        YawByte = Moby.DegreesToYawByte(90),
+        OriginalYawByte = Moby.DegreesToYawByte(90),
         SourceByte36 = 0x55,
         OriginalSourceByte36 = 0x55,
         SourceByte4F = 0x03,
@@ -6269,9 +14684,11 @@ async Task ReportAddedMobyRoundTrip(List<Moby> sourceMobys)
     List<Moby> loadedMobys = [];
     int applied = MobyEditStore.Load(path, loadedMobys);
     Moby? loadedAdded = loadedMobys.FirstOrDefault(moby => moby.TrueIndex == nextTrueIndex);
+    if (loadedAdded != null && loadedAdded.YawByte != added.YawByte)
+        throw new InvalidOperationException($"Moby add roundtrip lost yaw byte 0x{added.YawByte:X2}; loaded 0x{loadedAdded.YawByte:X2}.");
     Console.WriteLine(loadedAdded == null
         ? "Moby add roundtrip: failed"
-        : $"Moby add roundtrip: {applied} edit(s), loaded {loadedAdded.DisplayLabel} at T{loadedAdded.TrueIndex}");
+        : $"Moby add roundtrip: {applied} edit(s), loaded {loadedAdded.DisplayLabel} at T{loadedAdded.TrueIndex}, yaw {loadedAdded.YawDegrees:0.#} deg");
 }
 
 async Task ReportMobyIdentityBytePatchPlan(LevelDefinition level, List<Moby> sourceMobys)
@@ -6309,6 +14726,58 @@ async Task ReportMobyIdentityBytePatchPlan(LevelDefinition level, List<Moby> sou
         throw new InvalidOperationException($"Moby identity byte patch missing expected offsets: +0x37={has37}, +0x52={has52}.");
 
     Console.WriteLine($"Moby identity byte patch: T{donor.TrueIndex} writes +0x37 and +0x52 for transform/export support");
+}
+
+async Task ReportMobyYawPatchPlan(LevelDefinition level, List<Moby> sourceMobys)
+{
+    if (!File.Exists(sourceImage))
+    {
+        Console.WriteLine("Moby yaw patch: source disc not found; skipping export smoke.");
+        return;
+    }
+
+    Moby? donor = sourceMobys.FirstOrDefault(moby => moby.TrueIndex >= 0 && moby.TrueIndex < level.SourceRecordCount && moby.YawByte >= 0);
+    if (donor == null)
+    {
+        Console.WriteLine("Moby yaw patch: no source-table moby with yaw found.");
+        return;
+    }
+
+    Moby edited = CloneMoby(donor);
+    int yawByte = Moby.DegreesToYawByte(90);
+    if (yawByte == donor.YawByte)
+        yawByte = Moby.DegreesToYawByte(45);
+    edited.YawByte = yawByte;
+    edited.Label = $"{donor.DisplayLabel} yaw smoke";
+
+    string path = Path.Combine(workspace.RootPath, "_local", "smoke", "moby-yaw-native-edits.json");
+    await MobyEditStore.SaveAsync(path, [edited], "Yaw smoke");
+    MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        DiscImageLocator.FindCueForImage(sourceImage),
+        Path.Combine(workspace.RootPath, "_local", "objects", "yaw-smoke.bin"),
+        Path.Combine(workspace.RootPath, "_local", "objects", "yaw-smoke.cue"),
+        level,
+        path);
+    MobySourcePatch? yawPatch = plan.Patches.FirstOrDefault(patch =>
+        patch.TrueIndex == donor.TrueIndex &&
+        string.Equals(patch.Kind, "moby-yaw-facing-matrix", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(patch.RecordOffset, "0x20", StringComparison.OrdinalIgnoreCase));
+    if (yawPatch == null)
+        throw new InvalidOperationException("Moby yaw patch missing expected +0x20 source matrix patch.");
+    byte[] after = ParseHexPreview(yawPatch.AfterHexPreview);
+    VerifyYawMatrixBytes("Moby yaw patch", after, yawByte);
+    MobySourcePatch? legacyPatch = plan.Patches.FirstOrDefault(patch =>
+        patch.TrueIndex == donor.TrueIndex &&
+        string.Equals(patch.Kind, "moby-yaw-facing-byte", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(patch.RecordOffset, "0x46", StringComparison.OrdinalIgnoreCase));
+    if (legacyPatch == null)
+        throw new InvalidOperationException("Moby yaw patch missing expected +0x46 compatibility byte patch.");
+    byte[] legacyAfter = ParseHexPreview(legacyPatch.AfterHexPreview);
+    if (legacyAfter.Length != 1 || legacyAfter[0] != yawByte)
+        throw new InvalidOperationException($"Moby yaw compatibility byte wrote 0x{(legacyAfter.Length == 0 ? -1 : legacyAfter[0]):X2}, expected 0x{yawByte:X2}.");
+
+    Console.WriteLine($"Moby yaw patch: T{donor.TrueIndex} writes +0x20 matrix and +0x46 byte for {Moby.YawByteToDegrees(yawByte):0.#} deg");
 }
 
 void AddSpringChestRuntimeArmedSourceByteEdits(string editManifestPath)
@@ -7936,6 +16405,135 @@ async Task ReportToastyWizardPackageWritePlan()
     Console.WriteLine($"Toasty wizard transform package write plan: {preview.RecipeId}, overwrite {preview.CopySegments[0].TargetStart}+0x{preview.CopySegments[0].ByteLength:X}, root {preview.RootEntries[0].TargetRootSlot}");
 }
 
+async Task ReportCrossLevelSourceRecordCandidateAppend(LevelDefinition level, List<Moby> sourceMobys)
+{
+    if (!File.Exists(sourceImage))
+        return;
+
+    Directory.CreateDirectory(Path.Combine(workspace.RootPath, "_local", "smoke"));
+    Moby anchor = sourceMobys.First(moby => moby.TrueIndex >= 0 && moby.TrueIndex < level.SourceRecordCount);
+    int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
+    int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 1;
+    (string Label, string TemplateId, string Family, int SourceTrueIndex, int SourceByte36, int SourceByte37, int SourceByte4F, int Flag4A, int Flag4B, int YawByte)[] candidates =
+    [
+        ("Spring Chest", GnastyLootSpringTemplateId, "springChest", 19, 0x49, 0x01, 0x00, 0xFF, 0x57, 0xDC),
+        ("Firework Chest", GnastyLootFireworkTemplateId, "fireworkChest", 92, 0x38, 0x01, 0x00, 0x10, 0x57, 0xB9),
+        ("3x Flame Chest", GnastyLootMultiGemChestTemplateId, "multiGemChest", 24, 0x86, 0x01, 0x00, 0xFF, 0x57, 0x00)
+    ];
+    List<Moby> candidateMobys = [];
+    for (int i = 0; i < candidates.Length; i++)
+    {
+        var candidate = candidates[i];
+        Vector3f position = new(anchor.OriginalPosition.X + (i * 96), anchor.OriginalPosition.Y, anchor.OriginalPosition.Z);
+        candidateMobys.Add(new Moby
+        {
+            Index = nextIndex + i,
+            TrueIndex = nextTrueIndex + i,
+            LegacyIndex = MobyLoader.GetLegacyAliasIndex(nextTrueIndex + i),
+            Position = position,
+            OriginalPosition = position,
+            Type = 0x20,
+            OriginalType = 0x20,
+            State = 0x00,
+            OriginalState = 0x00,
+            SourceByte36 = candidate.SourceByte36,
+            OriginalSourceByte36 = candidate.SourceByte36,
+            SourceByte37 = candidate.SourceByte37,
+            OriginalSourceByte37 = candidate.SourceByte37,
+            SourceByte4F = candidate.SourceByte4F,
+            OriginalSourceByte4F = candidate.SourceByte4F,
+            Flag4A = candidate.Flag4A,
+            OriginalFlag4A = candidate.Flag4A,
+            Flag4B = candidate.Flag4B,
+            OriginalFlag4B = candidate.Flag4B,
+            YawByte = candidate.YawByte,
+            OriginalYawByte = candidate.YawByte,
+            Color = Moby.ColorForType(0x20),
+            Label = candidate.Label,
+            OriginalLabel = candidate.Label,
+            PatchStatus = "experimental-source-record-candidate",
+            PatchLead = $"cross-level Gnasty's Loot {candidate.Label} source-record candidate smoke",
+            CrossLevelTemplateId = candidate.TemplateId,
+            CrossLevelFamily = candidate.Family,
+            CrossLevelSourceLevelKey = "GnastysLoot",
+            CrossLevelSourceLevelName = "Gnasty's Loot",
+            CrossLevelSourceTrueIndex = candidate.SourceTrueIndex,
+            CrossLevelRequiredExporterFeature = "CrossLevelSourceRecordCandidateAppend",
+            IsAdded = true
+        });
+    }
+
+    string path = Path.Combine(workspace.RootPath, "_local", "smoke", "moby-cross-level-source-record-candidate-native-edits.json");
+    await MobyEditStore.SaveAsync(path, candidateMobys, "Cross-level source-record candidate smoke");
+
+    MobySourcePatchPlan guardedPlan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        DiscImageLocator.FindCueForImage(sourceImage),
+        Path.Combine(workspace.RootPath, "_local", "objects", "stonehill-gnasty-chests-source-record-candidate-smoke.bin"),
+        Path.Combine(workspace.RootPath, "_local", "objects", "stonehill-gnasty-chests-source-record-candidate-smoke.cue"),
+        level,
+        path);
+    if (guardedPlan.Patches.Any(IsCrossLevelSourceRecordCandidatePatch) ||
+        candidates.Any(candidate => !guardedPlan.SkippedEdits.Any(skip =>
+            skip.Contains(candidate.TemplateId, StringComparison.OrdinalIgnoreCase) &&
+            skip.Contains("Create Candidate BIN", StringComparison.OrdinalIgnoreCase))))
+    {
+        throw new InvalidOperationException("Normal Create BIN should keep Gnasty's Loot source-record candidates guarded.");
+    }
+
+    MobySourcePatchPlan candidatePlan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        DiscImageLocator.FindCueForImage(sourceImage),
+        Path.Combine(workspace.RootPath, "_local", "objects", "stonehill-gnasty-chests-source-record-candidate-smoke.bin"),
+        Path.Combine(workspace.RootPath, "_local", "objects", "stonehill-gnasty-chests-source-record-candidate-smoke.cue"),
+        level,
+        path,
+        allowPlanOnlyActorPackageImports: true);
+    MobySourcePatch[] appends = candidatePlan.Patches
+        .Where(IsCrossLevelSourceRecordCandidatePatch)
+        .ToArray();
+    if (appends.Length != candidates.Length ||
+        candidatePlan.PackageImportPreviews.Count != 0 ||
+        candidatePlan.SkippedEdits.Count != 0)
+    {
+        throw new InvalidOperationException("Candidate BIN mode did not emit the expected Gnasty's Loot source-record appends.");
+    }
+
+    foreach (var candidate in candidates)
+    {
+        MobySourcePatch? append = appends.FirstOrDefault(patch =>
+            string.Equals(patch.MobyLabel, candidate.Label, StringComparison.OrdinalIgnoreCase) &&
+            patch.Description.Contains($"Gnasty's Loot donor T{candidate.SourceTrueIndex}", StringComparison.OrdinalIgnoreCase));
+        if (append == null)
+            throw new InvalidOperationException($"Candidate BIN mode did not emit Gnasty's Loot donor T{candidate.SourceTrueIndex}.");
+
+        byte[] bytes = ParseHexPreview(append.AfterHexPreview);
+        if (bytes.Length <= 0x53 ||
+            bytes[0x36] != candidate.SourceByte36 ||
+            bytes[0x37] != candidate.SourceByte37 ||
+            bytes[0x4F] != candidate.SourceByte4F ||
+            bytes[0x52] != candidate.Flag4A ||
+            bytes[0x53] != candidate.Flag4B ||
+            bytes[0x46] != candidate.YawByte)
+        {
+            throw new InvalidOperationException($"Gnasty's Loot {candidate.Label} candidate append did not preserve donor identity/yaw bytes.");
+        }
+    }
+
+    MobySourcePatch? sourceCountPatch = candidatePlan.Patches.FirstOrDefault(patch =>
+        string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase));
+    if (sourceCountPatch == null || BitConverter.ToInt32(ParseHexPreview(sourceCountPatch.AfterHexPreview), 0) != level.SourceRecordCount + candidates.Length)
+        throw new InvalidOperationException("Gnasty's Loot source-record candidate appends did not bump the source moby count for all candidates.");
+
+    Console.WriteLine($"Cross-level source-record candidate appends: Gnasty's Loot T19/T92/T24 into {level.DisplayName}");
+
+    static bool IsCrossLevelSourceRecordCandidatePatch(MobySourcePatch patch)
+    {
+        return string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) &&
+            patch.Description.Contains("cross-level source-record candidate", StringComparison.OrdinalIgnoreCase);
+    }
+}
+
 async Task ExportCurrentStoneHillSpringCandidateOnly(LevelDefinition level)
 {
     if (!File.Exists(sourceImage))
@@ -8973,7 +17571,7 @@ void ReportCrossLevelCandidateLaunchers()
 
     if (!LauncherContains(macPath, expected) || !LauncherContains(windowsPath, expected.Replace('/', '\\')))
     {
-        Console.WriteLine("Cross-level candidate launchers: stale Spring Chest diagnostic launcher detected; normal editor Add Object keeps cross-level Spring Chests hidden.");
+        Console.WriteLine("Cross-level candidate launchers: stale Spring Chest diagnostic launcher detected; normal Add Object list keeps cross-level Spring Chests hidden outside the guarded release-candidate path.");
         return;
     }
 
@@ -9538,6 +18136,8 @@ Moby CloneMoby(Moby source)
         OriginalType = source.OriginalType,
         State = source.State,
         OriginalState = source.OriginalState,
+        YawByte = source.YawByte,
+        OriginalYawByte = source.OriginalYawByte,
         RuntimeAddress = source.RuntimeAddress,
         SpecialDataPointer = source.SpecialDataPointer,
         SourceByte36 = source.SourceByte36,
@@ -10065,6 +18665,7 @@ async Task ReportPastedLooseGemPatch(string levelKey)
     }
 
     List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+    MobyMetadataEnricher.Apply(workspace, level.Key, sourceMobys);
     Moby? donor = sourceMobys.FirstOrDefault(moby =>
         moby.TrueIndex >= 0 &&
         moby.TrueIndex < level.SourceRecordCount &&
@@ -10121,6 +18722,7 @@ async Task ReportPastedLooseGemPatch(string levelKey)
     for (int i = 0; i < pastedCount; i++)
     {
         GemValue gem = pastedGemValues[i];
+        bool legacyCopiedVisibleGemShape = i == 0;
         Vector3f position = isDarkHollow
             ? darkHollowPlatformPlacements[i]
             : new Vector3f(
@@ -10153,13 +18755,18 @@ async Task ReportPastedLooseGemPatch(string levelKey)
             OriginalSourceByte4F = gem.ValueByte,
             Flag4A = donor.Flag4A,
             OriginalFlag4A = donor.Flag4A,
-            Flag4B = donor.Flag4B,
-            OriginalFlag4B = donor.Flag4B,
+            Flag4B = legacyCopiedVisibleGemShape ? gem.IdByte : donor.Flag4B,
+            OriginalFlag4B = legacyCopiedVisibleGemShape ? gem.IdByte : donor.Flag4B,
             Color = gem.Color,
             Label = string.Equals(gem.Name, copiedGem.Name, StringComparison.OrdinalIgnoreCase) ? $"Copy of {donor.DisplayLabel}" : $"Smoke added {gem.Name}",
             OriginalLabel = string.Equals(gem.Name, copiedGem.Name, StringComparison.OrdinalIgnoreCase) ? $"Copy of {donor.DisplayLabel}" : $"Smoke added {gem.Name}",
-            PatchStatus = "smoke-copy-paste",
-            PatchLead = $"Pasted from copied {donor.DisplayLabel}; exports as a new native source-table record.",
+            PatchStatus = legacyCopiedVisibleGemShape ? "native-clone" : "smoke-copy-paste",
+            PatchLead = legacyCopiedVisibleGemShape
+                ? $"Pasted from same-level donor T{donor.TrueIndex}; legacy copied visible gem shape should still export as a loose gem append."
+                : $"Pasted from copied {donor.DisplayLabel}; exports as a new native source-table record.",
+            SourceCloneLevelKey = legacyCopiedVisibleGemShape ? level.Key : "",
+            SourceCloneLevelName = legacyCopiedVisibleGemShape ? level.DisplayName : "",
+            SourceCloneTrueIndex = legacyCopiedVisibleGemShape ? donor.TrueIndex : -1,
             IsAdded = true
         });
     }
@@ -10332,26 +18939,32 @@ async Task ReportMixedCopiedObjectAppendGuard(string levelKey)
         .OrderBy(patch => patch.TrueIndex)
         .ToList();
     if (appendPatches.Count != 2 || appendPatches.Any(patch => !patch.MobyLabel.Contains("gem", StringComparison.OrdinalIgnoreCase)))
-        throw new InvalidOperationException($"{level.DisplayName} mixed copied object guard appended unsafe copied object(s).");
-    if (plan.SkippedEdits.Count != 3)
-        throw new InvalidOperationException($"{level.DisplayName} mixed copied object guard skipped {plan.SkippedEdits.Count} edit(s), expected 3 unsafe copied objects.");
+        throw new InvalidOperationException($"{level.DisplayName} mixed copied object routing appended unsafe copied object(s).");
+    List<MobySourcePatch> autoSlotPatches = plan.Patches
+        .Where(patch => string.Equals(patch.Kind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(patch => patch.TrueIndex)
+        .ToList();
+    if (autoSlotPatches.Count != 3)
+        throw new InvalidOperationException($"{level.DisplayName} mixed copied object routing wrote {autoSlotPatches.Count} auto slot clone(s), expected 3 copied native object slot clones. Patches: {string.Join(", ", plan.Patches.Select(patch => $"{patch.Kind}:{patch.MobyLabel}:T{patch.TrueIndex}"))}. Skips: {string.Join("; ", plan.SkippedEdits)}");
+    if (plan.SkippedEdits.Count != 0)
+        throw new InvalidOperationException($"{level.DisplayName} mixed copied object routing skipped edit(s): {string.Join("; ", plan.SkippedEdits)}");
 
     MobySourcePatch? sourceCountPatch = plan.Patches.FirstOrDefault(patch =>
         string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase));
     if (sourceCountPatch == null || BitConverter.ToInt32(ParseHexPreview(sourceCountPatch.AfterHexPreview), 0) != level.SourceRecordCount + 2)
-        throw new InvalidOperationException($"{level.DisplayName} mixed copied object guard did not limit the source count to the exported gems.");
+        throw new InvalidOperationException($"{level.DisplayName} mixed copied object routing did not limit the source count to the exported gems.");
 
     MobySourcePatch? treasurePatch = plan.Patches.FirstOrDefault(patch =>
         string.Equals(patch.Kind, "level-treasure-total", StringComparison.OrdinalIgnoreCase));
     int expectedTreasureDelta = gemValue.Value * 2;
     if (treasurePatch == null)
-        throw new InvalidOperationException($"{level.DisplayName} mixed copied object guard did not update treasure for exported gems.");
+        throw new InvalidOperationException($"{level.DisplayName} mixed copied object routing did not update treasure for exported gems.");
     int beforeTreasure = BitConverter.ToUInt16(ParseHexPreview(treasurePatch.BeforeHexPreview), 0);
     int afterTreasure = BitConverter.ToUInt16(ParseHexPreview(treasurePatch.AfterHexPreview), 0);
     if (afterTreasure - beforeTreasure != expectedTreasureDelta)
-        throw new InvalidOperationException($"{level.DisplayName} mixed copied object guard changed treasure by {afterTreasure - beforeTreasure}, expected {expectedTreasureDelta}.");
+        throw new InvalidOperationException($"{level.DisplayName} mixed copied object routing changed treasure by {afterTreasure - beforeTreasure}, expected {expectedTreasureDelta}.");
 
-    Console.WriteLine($"{level.DisplayName} mixed copied object guard: exported {appendPatches.Count} gem append(s), skipped {plan.SkippedEdits.Count} unsafe copied object(s), treasure +{expectedTreasureDelta}");
+    Console.WriteLine($"{level.DisplayName} mixed copied object routing: exported {appendPatches.Count} gem append(s), {autoSlotPatches.Count} native copied object slot clone(s), treasure +{expectedTreasureDelta}");
 }
 
 async Task ReportNativeSlotReusePatch(string levelKey)
@@ -10377,7 +18990,8 @@ async Task ReportNativeSlotReusePatch(string levelKey)
     }
 
     List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
-    Moby? donor = sourceMobys.FirstOrDefault(moby =>
+    Moby? donor = sourceMobys.FirstOrDefault(moby => moby.TrueIndex == 37)
+        ?? sourceMobys.FirstOrDefault(moby =>
         moby.TrueIndex >= 0 &&
         moby.TrueIndex < level.SourceRecordCount &&
         moby.Type == 0x20 &&
@@ -10421,6 +19035,8 @@ async Task ReportNativeSlotReusePatch(string levelKey)
         OriginalType = target.Type,
         State = donor.State,
         OriginalState = target.State,
+        YawByte = Moby.DegreesToYawByte(135),
+        OriginalYawByte = target.YawByte,
         SourceByte36 = donor.SourceByte36,
         OriginalSourceByte36 = target.SourceByte36,
         SourceByte37 = donor.SourceByte37,
@@ -10474,23 +19090,130 @@ async Task ReportNativeSlotReusePatch(string levelKey)
     const int yOffset = 0x10;
     const int zOffset = 0x14;
     const int typeOffset = 0x50;
-    const int stateOffset = 0x51;
     if (after.Length < 0x58 ||
         after[typeOffset] != donor.Type ||
-        after[stateOffset] != donor.State ||
         after[0x36] != donor.SourceByte36 ||
         after[0x37] != donor.SourceByte37 ||
         after[0x4F] != donor.SourceByte4F ||
         after[0x52] != donor.Flag4A ||
         after[0x53] != donor.Flag4B ||
+        after[0x46] != slotReuse.YawByte ||
         BitConverter.ToInt32(after, xOffset) != ToSmokeRawCoordinate(placedPosition.X) ||
         BitConverter.ToInt32(after, yOffset) != ToSmokeRawCoordinate(placedPosition.Y) ||
         BitConverter.ToInt32(after, zOffset) != ToSmokeRawCoordinate(placedPosition.Z))
     {
         throw new InvalidOperationException($"{level.DisplayName} native slot reuse did not clone donor identity while preserving the placed position.");
     }
+    VerifyYawMatrixBytes($"{level.DisplayName} native slot reuse", after.AsSpan(0x20, 18).ToArray(), slotReuse.YawByte);
 
     Console.WriteLine($"{level.DisplayName} native slot reuse patch: cloned donor T{donor.TrueIndex} into slot T{target.TrueIndex}, no append/count patch, BIN bytes verified");
+}
+
+async Task ReportBehaviorLinkedNativeCloneSlotReuseData(string levelKey)
+{
+    if (!File.Exists(sourceImage))
+    {
+        Console.WriteLine($"{levelKey} behavior-linked native slot reuse data: source disc not found; skipping.");
+        return;
+    }
+
+    LevelDefinition? level = catalog.FindByKey(levelKey);
+    if (level == null || !level.HasSourceTable)
+    {
+        Console.WriteLine($"{levelKey} behavior-linked native slot reuse data: source table is not mapped; skipping.");
+        return;
+    }
+
+    string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
+    if (!File.Exists(mobyPath))
+    {
+        Console.WriteLine($"{levelKey} behavior-linked native slot reuse data: moby cache not found; skipping.");
+        return;
+    }
+
+    List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+    Moby? donor = sourceMobys.FirstOrDefault(moby => moby.TrueIndex == 42)
+        ?? sourceMobys.FirstOrDefault(moby =>
+            moby.TrueIndex >= 0 &&
+            moby.TrueIndex < level.SourceRecordCount &&
+            moby.Type == 0x20 &&
+            moby.SourceByte36 == 0xA5 &&
+            moby.SourceByte37 == 0x00 &&
+            moby.SourceByte4F != 0x00 &&
+            moby.Flag4A == 0x10);
+    if (donor == null)
+    {
+        Console.WriteLine($"{level.DisplayName} behavior-linked native slot reuse data: Small Gnorc donor object not found; skipping.");
+        return;
+    }
+
+    int reusableSlotCount = sourceMobys.Count(moby =>
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex < level.SourceRecordCount &&
+        moby.TrueIndex != donor.TrueIndex &&
+        moby.Type == donor.Type &&
+        moby.SourceByte36 == donor.SourceByte36 &&
+        moby.SourceByte37 == donor.SourceByte37 &&
+        moby.Flag4A == donor.Flag4A);
+    if (reusableSlotCount == 0)
+    {
+        Console.WriteLine($"{level.DisplayName} behavior-linked native slot reuse data: no same-family reuse target found; skipping.");
+        return;
+    }
+
+    int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
+    int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 1;
+    Moby added = CopyAsAddedMoby(donor, nextIndex, nextTrueIndex, $"Behavior-linked Small Gnorc slot reuse {donor.TrueIndex}", 8);
+    added.PatchStatus = "native-clone";
+    added.PatchLead = $"Smoke behavior-linked Small Gnorc auto-slot reuse from same-level donor T{donor.TrueIndex}.";
+    added.Confidence = "same-level-native-clone";
+    added.Evidence = $"Copied from behavior-linked same-level Small Gnorc donor T{donor.TrueIndex}; reused slots must keep their own behavior data.";
+    added.SourceCloneLevelKey = level.Key;
+    added.SourceCloneLevelName = level.DisplayName;
+    added.SourceCloneTrueIndex = donor.TrueIndex;
+
+    string path = Path.Combine(workspace.RootPath, "_local", "smoke", $"{levelKey}-behavior-linked-small-gnorc-slot-reuse-native-edits.json");
+    await MobyEditStore.SaveAsync(path, [added], $"{level.DisplayName} behavior-linked Small Gnorc slot reuse");
+    MobySourcePatchResult exportResult = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        OutputPrefix: Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-behavior-linked-small-gnorc-slot-reuse"),
+        Level: level,
+        NativeEditsPath: path,
+        WriteImage: true));
+    MobySourcePatchPlan plan = exportResult.Plan;
+    if (!exportResult.WroteImage)
+        throw new InvalidOperationException($"{level.DisplayName} behavior-linked Small Gnorc slot reuse did not write a BIN.");
+    VerifyPatchBytes(exportResult.OutputImagePath, plan);
+    if (plan.SkippedEdits.Count != 0)
+        throw new InvalidOperationException($"{level.DisplayName} behavior-linked Small Gnorc slot reuse skipped edit(s): {string.Join("; ", plan.SkippedEdits)}");
+    if (plan.Patches.Any(patch =>
+        string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException($"{level.DisplayName} behavior-linked Small Gnorc slot reuse unexpectedly appended a source record.");
+    }
+
+    MobySourcePatch slotPatch = plan.Patches.SingleOrDefault(patch =>
+        string.Equals(patch.Kind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase))
+        ?? throw new InvalidOperationException($"{level.DisplayName} behavior-linked Small Gnorc slot reuse did not write an auto slot clone patch.");
+    if (slotPatch.TrueIndex == donor.TrueIndex)
+        throw new InvalidOperationException($"{level.DisplayName} behavior-linked Small Gnorc slot reuse reused the donor slot instead of an available same-family slot.");
+    VerifySlotClonePatchIdentity($"{level.DisplayName} behavior-linked Small Gnorc slot reuse", slotPatch, donor, added.Position);
+
+    byte[] before = ParseHexPreview(slotPatch.BeforeHexPreview);
+    byte[] after = ParseHexPreview(slotPatch.AfterHexPreview);
+    if (before.Length < MobyLoader.RuntimeRecordStride || after.Length < MobyLoader.RuntimeRecordStride)
+        throw new InvalidOperationException($"{level.DisplayName} behavior-linked Small Gnorc slot reuse record previews were too short.");
+    if (!after.AsSpan(0x00, 0x04).SequenceEqual(before.AsSpan(0x00, 0x04)) ||
+        !after.AsSpan(0x38, 0x0E).SequenceEqual(before.AsSpan(0x38, 0x0E)))
+    {
+        throw new InvalidOperationException($"{level.DisplayName} behavior-linked Small Gnorc slot reuse did not preserve the reused slot behavior data.");
+    }
+    if (!slotPatch.Description.Contains("Reused slot behavior data preserved", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException($"{level.DisplayName} behavior-linked Small Gnorc slot reuse did not describe behavior data preservation.");
+
+    Console.WriteLine($"{level.DisplayName} behavior-linked Small Gnorc slot reuse: preserved slot T{slotPatch.TrueIndex} behavior data while cloning donor T{donor.TrueIndex}");
 }
 
 async Task ReportNativeCloneAppendPatch(string levelKey)
@@ -10516,7 +19239,8 @@ async Task ReportNativeCloneAppendPatch(string levelKey)
     }
 
     List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
-    Moby? donor = sourceMobys.FirstOrDefault(moby =>
+    Moby? donor = sourceMobys.FirstOrDefault(moby => moby.TrueIndex == 37)
+        ?? sourceMobys.FirstOrDefault(moby =>
         moby.TrueIndex >= 0 &&
         moby.TrueIndex < level.SourceRecordCount &&
         moby.Type == 0x20 &&
@@ -10551,21 +19275,43 @@ async Task ReportNativeCloneAppendPatch(string levelKey)
         NativeEditsPath: path,
         WriteImage: true));
     MobySourcePatchPlan plan = exportResult.Plan;
-    if (exportResult.WroteImage)
-        throw new InvalidOperationException($"{level.DisplayName} native clone append guard wrote a BIN for an unsafe same-level clone.");
+    if (!exportResult.WroteImage)
+        throw new InvalidOperationException($"{level.DisplayName} native clone auto-slot route did not write a BIN.");
+    VerifyPatchBytes(exportResult.OutputImagePath, plan);
     if (plan.Patches.Any(patch =>
         string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)))
     {
-        throw new InvalidOperationException($"{level.DisplayName} native clone append guard wrote append/count patch(es).");
+        throw new InvalidOperationException($"{level.DisplayName} native clone auto-slot route wrote append/count patch(es).");
     }
-    if (plan.SkippedEdits.Count != 1 ||
-        !plan.SkippedEdits[0].Contains("same-level enemy/chest true-adds", StringComparison.OrdinalIgnoreCase))
-    {
-        throw new InvalidOperationException($"{level.DisplayName} native clone append guard skipped unexpected edit(s): {string.Join("; ", plan.SkippedEdits)}");
-    }
+    if (plan.SkippedEdits.Count != 0)
+        throw new InvalidOperationException($"{level.DisplayName} native clone auto-slot route skipped edit(s): {string.Join("; ", plan.SkippedEdits)}");
+    MobySourcePatch slotPatch = plan.Patches.Single(patch => string.Equals(patch.Kind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase));
+    VerifySlotClonePatchIdentity($"{level.DisplayName} native clone auto-slot route", slotPatch, donor, added.Position);
 
-    Console.WriteLine($"{level.DisplayName} native clone append guard: skipped unsafe same-level donor T{donor.TrueIndex}, no source-count bump");
+    MobySourcePatchPlan researchPlan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        DiscImageLocator.FindCueForImage(sourceImage),
+        Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-native-clone-append-research.bin"),
+        Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-native-clone-append-research.cue"),
+        level,
+        path,
+        allowGuardedNativeCloneAppend: true);
+    List<MobySourcePatch> researchAppendPatches = researchPlan.Patches
+        .Where(patch => string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    if (researchAppendPatches.Count != 1)
+        throw new InvalidOperationException($"{level.DisplayName} native append research route wrote {researchAppendPatches.Count} append patch(es), expected 1.");
+    if (!researchPlan.Patches.Any(patch => string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)))
+        throw new InvalidOperationException($"{level.DisplayName} native append research route did not bump the source count.");
+    if (researchPlan.Patches.Any(patch => string.Equals(patch.Kind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase)))
+        throw new InvalidOperationException($"{level.DisplayName} native append research route still used auto-slot reuse.");
+    if (researchPlan.SkippedEdits.Count != 0)
+        throw new InvalidOperationException($"{level.DisplayName} native append research route skipped edit(s): {string.Join("; ", researchPlan.SkippedEdits)}");
+    if (!researchAppendPatches[0].Description.Contains("Placement sector byte set", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException($"{level.DisplayName} native append research route did not recalculate the placement sector byte.");
+
+    Console.WriteLine($"{level.DisplayName} native clone auto-slot route: cloned donor T{donor.TrueIndex} into slot T{slotPatch.TrueIndex}, no source-count bump; research mode appends T{researchAppendPatches[0].TrueIndex}");
 }
 
 async Task ReportRepeatedNativeCloneAppendGuard(string levelKey)
@@ -10591,6 +19337,7 @@ async Task ReportRepeatedNativeCloneAppendGuard(string levelKey)
     }
 
     List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+    MobyMetadataEnricher.Apply(workspace, level.Key, sourceMobys);
     Moby? donor = sourceMobys.FirstOrDefault(moby =>
         moby.TrueIndex >= 0 &&
         moby.TrueIndex < level.SourceRecordCount &&
@@ -10630,26 +19377,1753 @@ async Task ReportRepeatedNativeCloneAppendGuard(string levelKey)
         NativeEditsPath: path,
         WriteImage: true));
     MobySourcePatchPlan plan = exportResult.Plan;
-    if (exportResult.WroteImage)
-        throw new InvalidOperationException($"{level.DisplayName} repeated native clone guard wrote a BIN for unsafe same-level clones.");
+    if (!exportResult.WroteImage)
+        throw new InvalidOperationException($"{level.DisplayName} repeated native clone auto-slot route did not write a BIN.");
+    VerifyPatchBytes(exportResult.OutputImagePath, plan);
 
     List<MobySourcePatch> appendPatches = plan.Patches
         .Where(patch => string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase))
         .ToList();
     if (appendPatches.Count != 0)
-        throw new InvalidOperationException($"{level.DisplayName} repeated native clone guard wrote {appendPatches.Count} append patch(es), expected none.");
-    if (plan.SkippedEdits.Count != 2 ||
-        plan.SkippedEdits.Any(skipped => !skipped.Contains("same-level enemy/chest true-adds", StringComparison.OrdinalIgnoreCase)))
-    {
-        throw new InvalidOperationException($"{level.DisplayName} repeated native clone guard skipped unexpected edit(s): {string.Join("; ", plan.SkippedEdits)}");
-    }
+        throw new InvalidOperationException($"{level.DisplayName} repeated native clone auto-slot route wrote {appendPatches.Count} append patch(es), expected none.");
+    if (plan.SkippedEdits.Count != 0)
+        throw new InvalidOperationException($"{level.DisplayName} repeated native clone auto-slot route skipped edit(s): {string.Join("; ", plan.SkippedEdits)}");
 
     MobySourcePatch? sourceCountPatch = plan.Patches.FirstOrDefault(patch =>
         string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase));
     if (sourceCountPatch != null)
-        throw new InvalidOperationException($"{level.DisplayName} repeated native clone guard unexpectedly wrote a source-count patch.");
+        throw new InvalidOperationException($"{level.DisplayName} repeated native clone auto-slot route unexpectedly wrote a source-count patch.");
+    List<MobySourcePatch> slotPatches = plan.Patches
+        .Where(patch => string.Equals(patch.Kind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(patch => patch.MobyLabel)
+        .ToList();
+    if (slotPatches.Count != 2 || slotPatches.Select(patch => patch.TrueIndex).Distinct().Count() != 2)
+        throw new InvalidOperationException($"{level.DisplayName} repeated native clone auto-slot route wrote {slotPatches.Count} unique slot clone patch(es), expected 2.");
+    VerifySlotClonePatchIdentity($"{level.DisplayName} repeated native clone auto-slot route A", slotPatches[0], donor, first.Position);
+    VerifySlotClonePatchIdentity($"{level.DisplayName} repeated native clone auto-slot route B", slotPatches[1], donor, second.Position);
 
-    Console.WriteLine($"{level.DisplayName} repeated native clone guard: skipped {plan.SkippedEdits.Count} unsafe same-level clone(s), source count stays {level.SourceRecordCount}");
+    Console.WriteLine($"{level.DisplayName} repeated native clone auto-slot route: wrote {slotPatches.Count} slot clone(s), source count stays {level.SourceRecordCount}");
+}
+
+async Task ReportPromotedNativeCloneTrueAppend(string levelKey, int sourceByte36, string familyName)
+{
+    if (!File.Exists(sourceImage))
+    {
+        Console.WriteLine($"{levelKey} promoted {familyName} append: source disc not found; skipping.");
+        return;
+    }
+
+    LevelDefinition? level = catalog.FindByKey(levelKey);
+    if (level == null || !level.HasSourceTable)
+    {
+        Console.WriteLine($"{levelKey} promoted {familyName} append: source table is not mapped; skipping.");
+        return;
+    }
+
+    string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
+    if (!File.Exists(mobyPath))
+    {
+        Console.WriteLine($"{levelKey} promoted {familyName} append: moby cache not found; skipping.");
+        return;
+    }
+
+    List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+    Moby? donor = sourceMobys.FirstOrDefault(moby => IsPromotedNativeCloneTrueAppendSmokeDonor(moby, level, sourceByte36));
+    if (donor == null)
+    {
+        Console.WriteLine($"{level.DisplayName} promoted {familyName} append: donor object not found; skipping.");
+        return;
+    }
+
+    int reusableSlotCount = sourceMobys.Count(moby => IsPromotedNativeCloneTrueAppendSmokeCandidate(moby, level, donor));
+    int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
+    int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 1;
+    List<Moby> addedMobys = new();
+    for (int i = 0; i <= reusableSlotCount; i++)
+    {
+        Moby added = CopyAsAddedMoby(donor, nextIndex + i, nextTrueIndex + i, $"Promoted {familyName} clone {i + 1}", 0);
+        added.PatchStatus = "native-clone";
+        added.PatchLead = $"Promoted true-append smoke from same-level {familyName} donor T{donor.TrueIndex}.";
+        added.Confidence = "same-level-native-clone";
+        added.Evidence = $"Copied from same-level {familyName} donor T{donor.TrueIndex}; live testing proved this family can true-add after reuse slots are consumed.";
+        added.SourceCloneLevelKey = level.Key;
+        added.SourceCloneLevelName = level.DisplayName;
+        added.SourceCloneTrueIndex = donor.TrueIndex;
+        addedMobys.Add(added);
+    }
+
+    string familySlug = familyName.ToLowerInvariant().Replace("/", "-").Replace(" ", "-");
+    string path = Path.Combine(workspace.RootPath, "_local", "smoke", $"{levelKey}-promoted-{familySlug}-append-native-edits.json");
+    await MobyEditStore.SaveAsync(path, addedMobys, $"{level.DisplayName} promoted {familyName} true-append");
+    MobySourcePatchResult exportResult = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        OutputPrefix: Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-promoted-{familySlug}-append"),
+        Level: level,
+        NativeEditsPath: path,
+        WriteImage: true));
+    MobySourcePatchPlan plan = exportResult.Plan;
+    if (!exportResult.WroteImage)
+        throw new InvalidOperationException($"{level.DisplayName} promoted {familyName} append did not write a BIN.");
+    VerifyPatchBytes(exportResult.OutputImagePath, plan);
+    if (plan.SkippedEdits.Count != 0)
+        throw new InvalidOperationException($"{level.DisplayName} promoted {familyName} append skipped edit(s): {string.Join("; ", plan.SkippedEdits)}");
+
+    List<MobySourcePatch> slotPatches = plan.Patches
+        .Where(patch => string.Equals(patch.Kind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    if (slotPatches.Count != reusableSlotCount)
+        throw new InvalidOperationException($"{level.DisplayName} promoted {familyName} append wrote {slotPatches.Count} slot clone patch(es), expected {reusableSlotCount} before true-append.");
+
+    List<MobySourcePatch> appendPatches = plan.Patches
+        .Where(patch => string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    if (appendPatches.Count != 1)
+        throw new InvalidOperationException($"{level.DisplayName} promoted {familyName} append wrote {appendPatches.Count} append patch(es), expected 1.");
+    if (!appendPatches[0].Description.Contains("Placement sector byte set", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException($"{level.DisplayName} promoted {familyName} append did not recalculate the placement sector byte.");
+
+    byte[] appendedRecord = ParseHexPreview(appendPatches[0].AfterHexPreview);
+    if (appendedRecord.Length <= 0x53 ||
+        appendedRecord[0x50] != donor.Type ||
+        appendedRecord[0x36] != donor.SourceByte36 ||
+        appendedRecord[0x37] != donor.SourceByte37 ||
+        appendedRecord[0x4F] != donor.SourceByte4F ||
+        appendedRecord[0x52] != donor.Flag4A ||
+        appendedRecord[0x53] != donor.Flag4B)
+    {
+        throw new InvalidOperationException($"{level.DisplayName} promoted {familyName} append did not preserve the donor identity bytes.");
+    }
+
+    MobySourcePatch? sourceCountPatch = plan.Patches.FirstOrDefault(patch =>
+        string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase));
+    if (sourceCountPatch == null || BitConverter.ToInt32(ParseHexPreview(sourceCountPatch.AfterHexPreview), 0) != level.SourceRecordCount + appendPatches.Count)
+        throw new InvalidOperationException($"{level.DisplayName} promoted {familyName} append did not bump the source count by the true-append count.");
+
+    Console.WriteLine($"{level.DisplayName} promoted {familyName} append: reused {slotPatches.Count} slot(s), then true-appended T{appendPatches[0].TrueIndex}");
+}
+
+async Task ReportGuardedNativeCloneTrueAppend(string levelKey, int sourceByte36, int sourceByte37, int flag4B, string familyName)
+{
+    if (!File.Exists(sourceImage))
+    {
+        Console.WriteLine($"{levelKey} guarded {familyName} append: source disc not found; skipping.");
+        return;
+    }
+
+    LevelDefinition? level = catalog.FindByKey(levelKey);
+    if (level == null || !level.HasSourceTable)
+    {
+        Console.WriteLine($"{levelKey} guarded {familyName} append: source table is not mapped; skipping.");
+        return;
+    }
+
+    string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
+    if (!File.Exists(mobyPath))
+    {
+        Console.WriteLine($"{levelKey} guarded {familyName} append: moby cache not found; skipping.");
+        return;
+    }
+
+    List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+    Moby? donor = sourceMobys.FirstOrDefault(moby =>
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex < level.SourceRecordCount &&
+        moby.Type == 0x20 &&
+        moby.SourceByte36 == sourceByte36 &&
+        moby.SourceByte37 == sourceByte37 &&
+        moby.SourceByte4F == 0x00 &&
+        moby.Flag4A == 0x10 &&
+        moby.Flag4B == flag4B);
+    if (donor == null)
+    {
+        Console.WriteLine($"{level.DisplayName} guarded {familyName} append: donor object not found; skipping.");
+        return;
+    }
+
+    int reusableSlotCount = sourceMobys.Count(moby => IsPromotedNativeCloneTrueAppendSmokeCandidate(moby, level, donor));
+    int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
+    int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 1;
+    List<Moby> addedMobys = new();
+    for (int i = 0; i <= reusableSlotCount; i++)
+    {
+        Moby added = CopyAsAddedMoby(donor, nextIndex + i, nextTrueIndex + i, $"Guarded {familyName} clone {i + 1}", 0);
+        added.PatchStatus = "native-clone";
+        added.PatchLead = $"Guarded true-append smoke from same-level {familyName} donor T{donor.TrueIndex}.";
+        added.Confidence = "same-level-native-clone";
+        added.Evidence = $"Copied from same-level {familyName} donor T{donor.TrueIndex}; live testing has not promoted true-add appends for this family.";
+        added.SourceCloneLevelKey = level.Key;
+        added.SourceCloneLevelName = level.DisplayName;
+        added.SourceCloneTrueIndex = donor.TrueIndex;
+        addedMobys.Add(added);
+    }
+
+    string familySlug = familyName.ToLowerInvariant().Replace("/", "-").Replace(" ", "-");
+    string path = Path.Combine(workspace.RootPath, "_local", "smoke", $"{levelKey}-guarded-{familySlug}-append-native-edits.json");
+    await MobyEditStore.SaveAsync(path, addedMobys, $"{level.DisplayName} guarded {familyName} true-append");
+    MobySourcePatchResult exportResult = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        OutputPrefix: Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-guarded-{familySlug}-append"),
+        Level: level,
+        NativeEditsPath: path,
+        WriteImage: true));
+    MobySourcePatchPlan plan = exportResult.Plan;
+    if (!exportResult.WroteImage)
+        throw new InvalidOperationException($"{level.DisplayName} guarded {familyName} append did not write a BIN for the reusable slot clones.");
+    VerifyPatchBytes(exportResult.OutputImagePath, plan);
+
+    List<MobySourcePatch> slotPatches = plan.Patches
+        .Where(patch => string.Equals(patch.Kind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    if (slotPatches.Count != reusableSlotCount)
+        throw new InvalidOperationException($"{level.DisplayName} guarded {familyName} append wrote {slotPatches.Count} slot clone patch(es), expected {reusableSlotCount} before guarding the true-add.");
+    if (plan.Patches.Any(patch =>
+        string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException($"{level.DisplayName} guarded {familyName} append unexpectedly wrote true-append/source-count patches.");
+    }
+    if (!plan.SkippedEdits.Any(skip => skip.Contains("no matching source slot", StringComparison.OrdinalIgnoreCase) ||
+        skip.Contains("true-adds are kept saved", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException($"{level.DisplayName} guarded {familyName} append did not report the exhausted-slot guard.");
+    }
+
+    Console.WriteLine($"{level.DisplayName} guarded {familyName} append: reused {slotPatches.Count} slot(s), true-add stayed guarded");
+}
+
+void ReportLifeChestFixupScan(string imagePath)
+{
+    const int ArtisansRuntimeChunkOffset = 0x1C9800;
+    LevelDefinition level = catalog.FindByKey("artisans")
+        ?? throw new InvalidOperationException("Artisans was not found in the level catalog.");
+    long tableWadOffset = ParseFlexibleLong(level.SourceTableWadOffset);
+    long tableRelativeOffset = ParseFlexibleLong(level.SourceTableRelativeOffset);
+    long entryWadOffset = tableWadOffset - tableRelativeOffset;
+    int scanLength = checked((int)(tableRelativeOffset + ((level.SourceRecordCount + 16L) * 0x58L) + 0x4000L));
+
+    SourceDiscLayout layout = DetectSourceDiscLayout(imagePath);
+    using FileStream stream = File.OpenRead(imagePath);
+    byte[] entryBytes = ReadSourceWadBytes(stream, layout, entryWadOffset, scanLength);
+
+    Console.WriteLine($"Life Chest relocation scan: {level.DisplayName}");
+    Console.WriteLine($"Entry WAD=0x{entryWadOffset:X}, table relative=0x{tableRelativeOffset:X}, rows={level.SourceRecordCount}");
+    IReadOnlyList<int> sourceCountMatches = FindUInt32Offsets(entryBytes, (uint)level.SourceRecordCount);
+    Console.WriteLine($"32-bit source-count matches: {FormatScanOffsets(sourceCountMatches)}");
+    foreach (int match in sourceCountMatches)
+    {
+        int contextOffset = Math.Max(0, match - 0x20);
+        int contextLength = Math.Min(0x44, entryBytes.Length - contextOffset);
+        Console.WriteLine($"  count@0x{match:X}: {Convert.ToHexString(entryBytes, contextOffset, contextLength)}");
+    }
+    foreach (int row in new[] { 0, 1, 93, 94, 95, 172, 173, 174, 175, 176 })
+    {
+        int recordOffset = checked((int)(tableRelativeOffset + (row * 0x58L)));
+        uint specialOffset = recordOffset + 4 <= entryBytes.Length
+            ? BinaryPrimitives.ReadUInt32LittleEndian(entryBytes.AsSpan(recordOffset, 4))
+            : 0;
+        IReadOnlyList<int> relativeFieldRefs = FindUInt32Offsets(entryBytes, checked((uint)recordOffset));
+        uint chunkFieldOffset = recordOffset >= ArtisansRuntimeChunkOffset
+            ? checked((uint)(recordOffset - ArtisansRuntimeChunkOffset))
+            : uint.MaxValue;
+        IReadOnlyList<int> chunkFieldRefs = chunkFieldOffset != uint.MaxValue
+            ? FindUInt32Offsets(entryBytes, chunkFieldOffset)
+            : [];
+        IReadOnlyList<int> chunkFieldRefs16 = chunkFieldOffset <= ushort.MaxValue
+            ? FindUInt16Offsets(entryBytes, checked((ushort)chunkFieldOffset))
+            : [];
+        IReadOnlyList<int> absoluteFieldRefs = FindUInt32Offsets(entryBytes, checked((uint)(entryWadOffset + recordOffset)));
+        IReadOnlyList<int> specialRefs = specialOffset > 0
+            ? FindUInt32Offsets(entryBytes, specialOffset)
+            : [];
+        Console.WriteLine(
+            $"T{row}: record+0=0x{recordOffset:X}, special=0x{specialOffset:X8}, " +
+            $"record-ref={FormatScanOffsets(relativeFieldRefs)}, chunk+0=0x{chunkFieldOffset:X}, " +
+            $"chunk-ref={FormatScanOffsets(chunkFieldRefs)}, chunk-ref16={FormatScanOffsets(chunkFieldRefs16)}, " +
+            $"wad-ref={FormatScanOffsets(absoluteFieldRefs)}, " +
+            $"special-ref={FormatScanOffsets(specialRefs)}");
+    }
+
+    Console.WriteLine("Bytes before source count/table:");
+    int headerOffset = checked((int)tableRelativeOffset - 0x40);
+    for (int offset = headerOffset; offset < headerOffset + 0x40; offset += 0x10)
+        Console.WriteLine($"  0x{offset:X}: {Convert.ToHexString(entryBytes, offset, 0x10)}");
+}
+
+IReadOnlyList<int> FindUInt32Offsets(byte[] bytes, uint value)
+{
+    List<int> matches = [];
+    for (int offset = 0; offset + 4 <= bytes.Length; offset += 4)
+    {
+        if (BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(offset, 4)) == value)
+            matches.Add(offset);
+    }
+    return matches;
+}
+
+IReadOnlyList<int> FindUInt16Offsets(byte[] bytes, ushort value)
+{
+    List<int> matches = [];
+    for (int offset = 0; offset + 2 <= bytes.Length; offset += 2)
+    {
+        if (BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(offset, 2)) == value)
+            matches.Add(offset);
+    }
+    return matches;
+}
+
+string FormatScanOffsets(IReadOnlyList<int> offsets)
+{
+    if (offsets.Count == 0)
+        return "-";
+    string shown = string.Join(",", offsets.Take(8).Select(offset => $"0x{offset:X}"));
+    return offsets.Count <= 8 ? shown : $"{shown},... ({offsets.Count})";
+}
+
+async Task ReportAllNativeLifeChestMultiReleasePlans()
+{
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("All-level Life Chest release regression needs the selected source BIN.", sourceImage);
+
+    HashSet<string> supportedLevelKeys = LifeChestRuntimeLayout.SupportedLevelKeys
+        .Select(LevelCatalog.NormalizeKey)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    List<LifeChestReleaseLevelProof> proofs = new();
+    SourceDiscLayout sourceLayout = DetectSourceDiscLayout(sourceImage);
+    using FileStream sourceStream = File.OpenRead(sourceImage);
+    string outDir = Path.Combine(workspace.RootPath, "_local", "smoke", "all-level-life-chest-release");
+    Directory.CreateDirectory(outDir);
+    ReportLifeChestRuntimeBaseDerivation(sourceStream, sourceLayout, supportedLevelKeys, outDir);
+
+    foreach (LevelDefinition level in catalog.Levels.Where(level => supportedLevelKeys.Contains(LevelCatalog.NormalizeKey(level.Key))).OrderBy(level => level.LevelId))
+    {
+        string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{level.Key}-mobys.json");
+        List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+        Moby donor = sourceMobys.FirstOrDefault(moby =>
+            moby.TrueIndex >= 0 &&
+            moby.TrueIndex < level.SourceRecordCount &&
+            moby.Type == 0x20 &&
+            moby.SourceByte36 == 0xA5 &&
+            moby.SourceByte37 == 0x01 &&
+            moby.SourceByte4F == 0x00 &&
+            moby.Flag4A == 0x10 &&
+            moby.Flag4B == 0x0E) ??
+            throw new InvalidOperationException($"{level.DisplayName} is promoted for Life Chest copies but has no native Life Chest donor.");
+
+        int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
+        List<Moby> copies = new();
+        for (int i = 0; i < 3; i++)
+        {
+            Moby copy = CopyAsAddedMoby(donor, nextIndex + i, level.SourceRecordCount + i, $"{level.DisplayName} Life Chest release copy {i + 1}", 0);
+            copy.Position = new Vector3f(donor.Position.X + ((i + 1) * 8f), donor.Position.Y, donor.Position.Z);
+            copy.PatchStatus = "native-clone";
+            copy.PatchLead = $"Pasted from same-level donor T{donor.TrueIndex}.";
+            copy.Confidence = "same-level-native-clone-private-runtime";
+            copy.Evidence = "All-level private Life Chest runtime allocation regression.";
+            copy.SourceCloneLevelKey = level.Key;
+            copy.SourceCloneLevelName = level.DisplayName;
+            copy.SourceCloneTrueIndex = donor.TrueIndex;
+            copies.Add(copy);
+        }
+
+        string editsPath = Path.Combine(outDir, $"{level.Key}-multi-life-chest-native-edits.json");
+        await MobyEditStore.SaveAsync(editsPath, copies, $"{level.DisplayName} normal-release multi-Life-Chest regression");
+        string outputPrefix = Path.Combine(outDir, $"{level.Key}-multi-life-chest");
+        MobySourcePatchResult result = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+            SourceImagePath: sourceImage,
+            SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+            OutputPrefix: outputPrefix,
+            Level: level,
+            NativeEditsPath: editsPath,
+            WriteImage: true));
+        VerifyAndDeleteLifeChestOutputImage(result, level);
+
+        int[] expectedAppendRows = Enumerable.Range(level.SourceRecordCount, 3).ToArray();
+        List<MobySourcePatch> appends = result.Plan.Patches
+            .Where(patch => string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(patch => patch.TrueIndex)
+            .ToList();
+        List<MobySourcePatch> specialClones = result.Plan.Patches
+            .Where(patch => string.Equals(patch.Kind, "moby-special-data-clone", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(patch => patch.TrueIndex)
+            .ToList();
+        int autoSlotCount = result.Plan.Patches.Count(patch =>
+            string.Equals(patch.Kind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase));
+        if (result.Plan.SkippedEdits.Count != 0 ||
+            autoSlotCount != 0 ||
+            result.Plan.Patches.Any(patch => patch.TrueIndex == donor.TrueIndex) ||
+            !appends.Select(patch => patch.TrueIndex).SequenceEqual(expectedAppendRows) ||
+            !specialClones.Select(patch => patch.TrueIndex).SequenceEqual(expectedAppendRows))
+        {
+            throw new InvalidOperationException(
+                $"{level.DisplayName} multi-Life-Chest release plan was unsafe: append={appends.Count}, special={specialClones.Count}, " +
+                $"auto-slot={autoSlotCount}, donor-patches={result.Plan.Patches.Count(patch => patch.TrueIndex == donor.TrueIndex)}, " +
+                $"skipped={result.Plan.SkippedEdits.Count}.");
+        }
+
+        if (!LifeChestRuntimeLayout.TryGetRuntimeBase(level.Key, out uint runtimeBase))
+            throw new InvalidOperationException($"{level.DisplayName} lost its promoted Life Chest runtime base.");
+        LifeChestSceneSourceProof scene = ReadLifeChestSceneSourceProof(sourceStream, sourceLayout, level);
+        long tableWadOffset = ParseFlexibleLong(level.SourceTableWadOffset);
+        int catalogPrefixRows = ReadLifeChestCatalogPrefixRows(sourceStream, sourceLayout, level, tableWadOffset);
+        byte[] donorRecord = ReadSourceWadBytes(
+            sourceStream,
+            sourceLayout,
+            tableWadOffset + ((long)donor.TrueIndex * MobyLoader.RuntimeRecordStride),
+            MobyLoader.RuntimeRecordStride);
+        uint donorSourceOffset = BinaryPrimitives.ReadUInt32LittleEndian(donorRecord.AsSpan(0, 4));
+
+        List<uint> sourceOffsets = new();
+        List<uint> pointers = new();
+        for (int i = 0; i < appends.Count; i++)
+        {
+            MobySourcePatch append = appends[i];
+            MobySourcePatch special = specialClones[i];
+            long specialWadOffset = ParseFlexibleLong(special.WadRelativeOffset);
+            long sourceOffsetLong = specialWadOffset - scene.WadBaseOffset;
+            if (sourceOffsetLong <= 0 || sourceOffsetLong + special.ByteLength > scene.ByteLength)
+                throw new InvalidOperationException($"{level.DisplayName} T{append.TrueIndex} private Life Chest block is outside the level-scene data.");
+
+            uint sourceOffset = checked((uint)sourceOffsetLong);
+            uint pointer = BinaryPrimitives.ReadUInt32LittleEndian(ParseHexPreview(append.AfterHexPreview).AsSpan(0, 4));
+            uint expectedPointer = checked(runtimeBase + sourceOffset);
+            if (pointer != expectedPointer)
+            {
+                throw new InvalidOperationException(
+                    $"{level.DisplayName} T{append.TrueIndex} pointer was 0x{pointer:X8}; expected 0x{expectedPointer:X8} from base 0x{runtimeBase:X8} + 0x{sourceOffset:X}.");
+            }
+
+            byte[] expectedSpecialBytes = ReadSourceWadBytes(
+                sourceStream,
+                sourceLayout,
+                scene.WadBaseOffset + donorSourceOffset,
+                special.ByteLength);
+            if (!ParseHexPreview(special.AfterHexPreview).SequenceEqual(expectedSpecialBytes))
+                throw new InvalidOperationException($"{level.DisplayName} T{append.TrueIndex} did not clone the donor's actual level-scene Life Chest data.");
+
+            sourceOffsets.Add(sourceOffset);
+            pointers.Add(pointer);
+        }
+
+        if (sourceOffsets.Distinct().Count() != 3 || pointers.Distinct().Count() != 3)
+            throw new InvalidOperationException($"{level.DisplayName} Life Chest copies did not receive three independent private blocks.");
+
+        MobySourcePatch countPatch = result.Plan.Patches.Single(patch =>
+            string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase));
+        int patchedCount = BinaryPrimitives.ReadInt32LittleEndian(ParseHexPreview(countPatch.AfterHexPreview).AsSpan(0, 4));
+        int expectedPatchedCount = level.SourceRecordCount + 3 - catalogPrefixRows;
+        if (patchedCount != expectedPatchedCount)
+            throw new InvalidOperationException($"{level.DisplayName} source count became {patchedCount}; expected {expectedPatchedCount}.");
+
+        proofs.Add(new LifeChestReleaseLevelProof(
+            level.Key,
+            level.DisplayName,
+            donor.TrueIndex,
+            level.SourceRecordCount,
+            catalogPrefixRows,
+            runtimeBase,
+            scene.WadBaseOffset,
+            scene.ByteLength,
+            expectedAppendRows,
+            sourceOffsets,
+            pointers));
+    }
+
+    HashSet<string> provenLevelKeys = proofs.Select(proof => LevelCatalog.NormalizeKey(proof.LevelKey)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    if (!provenLevelKeys.SetEquals(supportedLevelKeys))
+    {
+        string missing = string.Join(", ", supportedLevelKeys.Except(provenLevelKeys).Order(StringComparer.OrdinalIgnoreCase));
+        string extra = string.Join(", ", provenLevelKeys.Except(supportedLevelKeys).Order(StringComparer.OrdinalIgnoreCase));
+        throw new InvalidOperationException($"All-level Life Chest proof coverage mismatch; missing={missing}; extra={extra}.");
+    }
+
+    string reportPath = Path.Combine(outDir, "all-level-life-chest-release-proof.json");
+    File.WriteAllText(reportPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        nativeLifeChestLevelCount = proofs.Count,
+        copiesPerLevel = 3,
+        proofs
+    }, new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine(
+        $"All-level multi-Life-Chest release: {proofs.Count} native level(s), {proofs.Count * 3} independent append(s), " +
+        $"all original donors preserved, all output BIN bytes verified; report={reportPath}");
+}
+
+void VerifyAndDeleteLifeChestOutputImage(MobySourcePatchResult result, LevelDefinition level)
+{
+    try
+    {
+        if (!result.WroteImage || !File.Exists(result.OutputImagePath) || !File.Exists(result.OutputCuePath))
+            throw new InvalidOperationException($"{level.DisplayName} all-level Life Chest regression did not write its disposable BIN/CUE.");
+
+        SourceDiscLayout outputLayout = DetectSourceDiscLayout(result.OutputImagePath);
+        using FileStream outputStream = File.OpenRead(result.OutputImagePath);
+        foreach (MobySourcePatch patch in result.Plan.Patches)
+        {
+            if (!patch.WadRelativeOffset.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"{level.DisplayName} Life Chest patch {patch.Label} did not expose a WAD-relative output offset.");
+
+            long wadOffset = ParseFlexibleLong(patch.WadRelativeOffset);
+            byte[] expected = ParseHexPreview(patch.AfterHexPreview);
+            byte[] actual = ReadSourceWadBytes(outputStream, outputLayout, wadOffset, expected.Length);
+            if (!actual.SequenceEqual(expected))
+                throw new InvalidOperationException($"{level.DisplayName} output BIN bytes differ for Life Chest patch {patch.Label} at {patch.WadRelativeOffset}.");
+        }
+    }
+    finally
+    {
+        if (File.Exists(result.OutputImagePath))
+            File.Delete(result.OutputImagePath);
+        if (File.Exists(result.OutputCuePath))
+            File.Delete(result.OutputCuePath);
+    }
+}
+
+void ReportPortalSourceLayout(string imagePath, string levelKey)
+{
+    LevelDefinition level = catalog.FindByKey(levelKey)
+        ?? throw new InvalidOperationException($"Level {levelKey} is not present in the catalog.");
+    PortalSourceLevelData data = PortalSourceDataLocator.Locate(imagePath, level);
+    List<object> portalRows = data.Portals
+        .Select(portal => (object)new
+        {
+            portal.Index,
+            portal.DestinationLevelId,
+            portal.PathMobyIndex,
+            portal.SourcePathMobyTrueIndex,
+            portal.WorldSectorIndex,
+            portal.PointCount,
+            normal = new { x = portal.NormalX, y = portal.NormalY, z = portal.NormalZ },
+            center = new { x = portal.CenterX, y = portal.CenterY, z = portal.CenterZ },
+            wadOffset = $"0x{portal.WadOffset:X}",
+            path = new
+            {
+                propsWadOffset = $"0x{portal.Path.PropsWadOffset:X}",
+                pathWadOffset = $"0x{portal.Path.PathWadOffset:X}",
+                portal.Path.NodeCount,
+                portal.Path.CurrentNode,
+                portal.Path.Reversed,
+                nodes = portal.Path.Nodes.Select(node => new
+                {
+                    node.Index,
+                    node.X,
+                    node.Y,
+                    node.Z,
+                    wadOffset = $"0x{node.WadOffset:X}"
+                })
+            },
+            points = portal.Points.Select(point => new
+            {
+                point.X,
+                point.Y,
+                point.Z,
+                wadOffset = $"0x{point.WadOffset:X}"
+            })
+        })
+        .ToList();
+    List<object> surfaceRows = data.SpecialSurfaces
+        .Where(surface => surface.Type == 6)
+        .Select(surface => (object)new
+        {
+            surface.Index,
+            surface.Type,
+            surface.DestinationLevelId,
+            surface.PortalIndex,
+            wadOffset = $"0x{surface.WadOffset:X}"
+        })
+        .ToList();
+    List<object> triggerRows = data.TriggerTriangles
+        .Select(triangle => (object)new
+        {
+            triangle.TriangleIndex,
+            triangle.SurfaceIndex,
+            triangle.DestinationLevelId,
+            triangle.PortalIndex,
+            flagByte = $"0x{triangle.FlagByte:X2}",
+            wadOffset = $"0x{triangle.WadOffset:X}",
+            p1 = new { triangle.P1.X, triangle.P1.Y, triangle.P1.Z },
+            p2 = new { triangle.P2.X, triangle.P2.Y, triangle.P2.Z },
+            p3 = new { triangle.P3.X, triangle.P3.Y, triangle.P3.Z }
+        })
+        .ToList();
+
+    string reportDir = Path.Combine(workspace.RootPath, "_local", "research", "portal-source-layout");
+    Directory.CreateDirectory(reportDir);
+    string reportPath = Path.Combine(reportDir, $"{level.Key}-portal-source-layout.json");
+    File.WriteAllText(reportPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        sourceImage = imagePath,
+        data.LevelKey,
+        data.LevelName,
+        levelDataWadOffset = $"0x{data.LevelDataWadOffset:X}",
+        entryDataWadOffset = $"0x{data.EntryDataWadOffset:X}",
+        data.EntryDataByteLength,
+        specialSurfaceComponentWadOffset = $"0x{data.SpecialSurfaceComponentWadOffset:X}",
+        collisionComponentWadOffset = $"0x{data.CollisionComponentWadOffset:X}",
+        portalTableWadOffset = $"0x{data.PortalTableWadOffset:X}",
+        data.SourceMobyIndexBias,
+        collision = new
+        {
+            data.Collision.TriangleCount,
+            data.Collision.FlagCount,
+            blockTreeWadOffset = $"0x{data.Collision.BlockTreeWadOffset:X}",
+            data.Collision.BlockTreeByteCapacity,
+            blocksWadOffset = $"0x{data.Collision.BlocksWadOffset:X}",
+            data.Collision.BlocksByteCapacity,
+            triangleTableWadOffset = $"0x{data.Collision.TriangleTableWadOffset:X}",
+            flagsWadOffset = $"0x{data.Collision.FlagsWadOffset:X}"
+        },
+        portals = portalRows,
+        portalSurfaces = surfaceRows,
+        portalTriggerTriangles = triggerRows
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Portal source layout: {level.DisplayName} has {portalRows.Count} portal record(s), {surfaceRows.Count} portal surface(s), and {triggerRows.Count} flagged collision triangle(s).");
+    Console.WriteLine($"  collision: {data.Collision.TriangleCount} triangles, tree capacity=0x{data.Collision.BlockTreeByteCapacity:X}, block capacity=0x{data.Collision.BlocksByteCapacity:X}");
+    foreach (PortalSourceRecord portal in data.Portals)
+    {
+        Console.WriteLine(
+            $"  portal {portal.Index}: destination={portal.DestinationLevelId}, runtimePath={portal.PathMobyIndex}, sourcePath=T{portal.SourcePathMobyTrueIndex}, center=({portal.CenterX},{portal.CenterY},{portal.CenterZ}), points={portal.Points.Count}, transitionNodes={portal.Path.Nodes.Count}, WAD=0x{portal.WadOffset:X}");
+    }
+    string cachePath = Path.Combine(workspace.RootPath, "editor-cache", $"{level.Key}-mobys.json");
+    if (File.Exists(cachePath))
+    {
+        List<Moby> mobys = MobyLoader.LoadCached(cachePath).ToList();
+        MobyMetadataEnricher.Apply(workspace, level.Key, mobys);
+        foreach (PortalSourceRecord portal in data.Portals)
+        {
+            Moby? path = mobys.FirstOrDefault(moby => moby.TrueIndex == portal.SourcePathMobyTrueIndex);
+            Vector3f portalCenter = new(portal.CenterX / 16f, portal.CenterY / 16f, portal.CenterZ / 16f);
+            Moby? nearestLettering = mobys
+                .Where(moby => !moby.IsRemoved && moby.Type == 0x00 && moby.SourceByte36 == 0x01 && moby.Flag4A == 0x10 && moby.Flag4B == 0xFF)
+                .OrderBy(moby => DistanceSquared(moby.Position, portalCenter))
+                .FirstOrDefault();
+            Moby? nearestCompanion = mobys
+                .Where(moby => !moby.IsRemoved && moby.Type == 0x00 && moby.SourceByte36 == 0x1E && moby.Flag4A == 0x10 && moby.Flag4B == 0xFF)
+                .OrderBy(moby => DistanceSquared(moby.Position, portalCenter))
+                .FirstOrDefault();
+            MobyLink? editLink = path?.Links.FirstOrDefault(link =>
+                string.Equals(link.Kind, "portal controls", StringComparison.OrdinalIgnoreCase) && link.LinkedMove);
+            HomeworldPortalControlDefinition expected = HomeworldPortalControlCatalog.ForLevel(level.Key)
+                .Single(definition => definition.DestinationLevelId == portal.DestinationLevelId);
+            int[] expectedIndexes = expected.TrueIndexes.OrderBy(index => index).ToArray();
+            int[] linkedIndexes = editLink?.TrueIndexes.OrderBy(index => index).ToArray() ?? [];
+            if (portal.SourcePathMobyTrueIndex != expected.PathTrueIndex ||
+                nearestLettering?.TrueIndex != expected.LetteringTrueIndex ||
+                nearestCompanion?.TrueIndex != expected.CompanionTrueIndex ||
+                !linkedIndexes.SequenceEqual(expectedIndexes))
+            {
+                throw new InvalidOperationException(
+                    $"{level.DisplayName} destination {portal.DestinationLevelId} portal mapping differs from its native source layout.");
+            }
+            Console.WriteLine(
+                $"    editor destination {portal.DestinationLevelId}: path=T{portal.SourcePathMobyTrueIndex}, lettering=T{nearestLettering?.TrueIndex} ({Math.Sqrt(DistanceSquared(nearestLettering?.Position ?? portalCenter, portalCenter)):0.#}u), companion=T{nearestCompanion?.TrueIndex} ({Math.Sqrt(DistanceSquared(nearestCompanion?.Position ?? portalCenter, portalCenter)):0.#}u), link={(editLink == null ? "missing" : string.Join("/", editLink.TrueIndexes.Select(index => $"T{index}")))}");
+        }
+    }
+    foreach (IGrouping<int, PortalTriggerTriangle> group in data.TriggerTriangles.GroupBy(triangle => triangle.DestinationLevelId).OrderBy(group => group.Key))
+        Console.WriteLine($"  destination {group.Key}: {group.Count()} trigger triangle(s)");
+    Console.WriteLine($"Portal source report: {reportPath}");
+}
+
+async Task ExportSavedPortalMoveTest(string imagePath, string nativeEditsPath, string outputPrefix)
+{
+    LevelDefinition level = catalog.FindByKey("artisans")
+        ?? throw new InvalidOperationException("Artisans is missing from the level catalog.");
+    if (!File.Exists(nativeEditsPath))
+        throw new FileNotFoundException("Saved Artisans portal edits were not found.", nativeEditsPath);
+
+    Directory.CreateDirectory(Path.GetDirectoryName(outputPrefix) ?? workspace.RootPath);
+    MobySourcePatchResult result = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: imagePath,
+        SourceCuePath: DiscImageLocator.FindCueForImage(imagePath),
+        OutputPrefix: outputPrefix,
+        Level: level,
+        NativeEditsPath: nativeEditsPath,
+        WriteImage: true));
+    if (!result.WroteImage || !File.Exists(result.OutputImagePath) || !File.Exists(result.OutputCuePath))
+        throw new InvalidOperationException("Saved Artisans portal test did not produce a BIN/CUE.");
+
+    int movedPortalCount = result.Plan.Patches
+        .Where(patch => patch.Kind.StartsWith("portal-transition-path-node-", StringComparison.OrdinalIgnoreCase))
+        .Select(patch => patch.TrueIndex)
+        .Distinct()
+        .Count();
+    int pathPatchCount = result.Plan.Patches.Count(patch =>
+        patch.Kind.StartsWith("portal-transition-path-node-", StringComparison.OrdinalIgnoreCase));
+    int planePatchCount = result.Plan.Patches.Count(patch =>
+        patch.Kind.StartsWith("portal-plane-", StringComparison.OrdinalIgnoreCase));
+    int triggerPatchCount = result.Plan.Patches.Count(patch =>
+        string.Equals(patch.Kind, "portal-entry-collision-triangle", StringComparison.OrdinalIgnoreCase));
+    if (movedPortalCount <= 0 || pathPatchCount != movedPortalCount * 6 || planePatchCount != movedPortalCount * 15 || triggerPatchCount != movedPortalCount * 6)
+    {
+        throw new InvalidOperationException(
+            $"Saved Artisans portal export produced {pathPatchCount} path, {planePatchCount} plane, and {triggerPatchCount} trigger patches for {movedPortalCount} moved portals.");
+    }
+
+    SourceDiscLayout outputLayout = DetectSourceDiscLayout(result.OutputImagePath);
+    using FileStream outputStream = File.OpenRead(result.OutputImagePath);
+    foreach (MobySourcePatch patch in result.Plan.Patches)
+    {
+        if (!patch.WadRelativeOffset.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Portal test patch {patch.Label} does not expose a WAD-relative output offset.");
+
+        long wadOffset = ParseFlexibleLong(patch.WadRelativeOffset);
+        byte[] expected = ParseHexPreview(patch.AfterHexPreview);
+        byte[] actual = ReadSourceWadBytes(outputStream, outputLayout, wadOffset, expected.Length);
+        if (!actual.SequenceEqual(expected))
+            throw new InvalidOperationException($"Portal test output differs from {patch.Label} at {patch.WadRelativeOffset}.");
+    }
+
+    Console.WriteLine(
+        $"Saved portal test exported and byte-verified: {movedPortalCount} portal(s), {pathPatchCount} transition-path axes, " +
+        $"{planePatchCount} plane axes, {triggerPatchCount} trigger triangles, {result.Plan.PatchCount} total patches.");
+    Console.WriteLine($"Portal test CUE: {result.OutputCuePath}");
+    Console.WriteLine($"Portal test plan: {result.OutputPlanPath}");
+}
+
+async Task ReportAllPortalSourceMovePlans(string imagePath)
+{
+    string smokeRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "all-homeworld-portal-moves");
+    Directory.CreateDirectory(smokeRoot);
+    foreach (IGrouping<string, HomeworldPortalControlDefinition> group in HomeworldPortalControlCatalog.All.GroupBy(definition => definition.HomeworldKey))
+    {
+        LevelDefinition level = catalog.FindByKey(group.Key)
+            ?? throw new InvalidOperationException($"Homeworld {group.Key} is missing from the level catalog.");
+        string cachePath = Path.Combine(smokeRoot, $"{level.Key}-source-mobys.json");
+        await SourceMobyCacheBuilder.BuildAsync(imagePath, level, cachePath);
+        List<Moby> mobys = MobyLoader.LoadCached(cachePath).ToList();
+        MobyMetadataEnricher.Apply(workspace, level.Key, mobys);
+
+        HashSet<int> moveTrueIndexes = group.SelectMany(definition => definition.TrueIndexes).ToHashSet();
+        List<Moby> moved = mobys.Where(moby => moveTrueIndexes.Contains(moby.TrueIndex)).ToList();
+        int expectedMovedRows = group.Count() * 3;
+        if (moved.Count != expectedMovedRows)
+            throw new InvalidOperationException($"{level.DisplayName} portal move smoke found {moved.Count}/{expectedMovedRows} linked source rows.");
+
+        foreach (Moby moby in moved)
+        {
+            moby.Position = new Vector3f(
+                moby.OriginalPosition.X + 16,
+                moby.OriginalPosition.Y + 8,
+                moby.OriginalPosition.Z + 4);
+        }
+
+        string editsPath = Path.Combine(smokeRoot, $"{level.Key}-all-portals-native-edits.json");
+        await MobyEditStore.SaveAsync(editsPath, moved, $"{level.DisplayName} all native portal move smoke");
+        MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(
+            imagePath,
+            DiscImageLocator.FindCueForImage(imagePath),
+            Path.Combine(smokeRoot, $"{level.Key}-all-portals.bin"),
+            Path.Combine(smokeRoot, $"{level.Key}-all-portals.cue"),
+            level,
+            editsPath);
+        PortalSourceLevelData source = PortalSourceDataLocator.Locate(imagePath, level);
+        int expectedPlanePatches = source.Portals.Sum(portal => 3 + (portal.Points.Count * 3));
+        int expectedPathPatches = source.Portals.Sum(portal => portal.Path.Nodes.Count * 3);
+        int planePatches = plan.Patches.Count(patch => patch.Kind.StartsWith("portal-plane-", StringComparison.OrdinalIgnoreCase));
+        int pathPatches = plan.Patches.Count(patch => patch.Kind.StartsWith("portal-transition-path-node-", StringComparison.OrdinalIgnoreCase));
+        int triggerPatches = plan.Patches.Count(patch => string.Equals(patch.Kind, "portal-entry-collision-triangle", StringComparison.OrdinalIgnoreCase));
+        if (source.Portals.Count != group.Count() ||
+            planePatches != expectedPlanePatches ||
+            pathPatches != expectedPathPatches ||
+            triggerPatches != source.TriggerTriangles.Count)
+        {
+            throw new InvalidOperationException(
+                $"{level.DisplayName} complete portal move planned {planePatches}/{expectedPlanePatches} plane fields, {pathPatches}/{expectedPathPatches} transition-path fields, and {triggerPatches}/{source.TriggerTriangles.Count} trigger triangles.");
+        }
+        if (!plan.Patches.Any(patch => string.Equals(patch.Kind, "portal-entry-collision-index-tree", StringComparison.OrdinalIgnoreCase)) ||
+            !plan.Patches.Any(patch => string.Equals(patch.Kind, "portal-entry-collision-index-blocks", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"{level.DisplayName} complete portal move did not rebuild both collision lookup tables.");
+        }
+
+        Console.WriteLine(
+            $"Portal move plan: {level.DisplayName} {source.Portals.Count} portal(s), {planePatches} plane field(s), {pathPatches} transition-path field(s), {triggerPatches} entry triangle(s), collision lookup rebuilt.");
+    }
+}
+
+LifeChestSceneSourceProof ReadLifeChestSceneSourceProof(FileStream sourceStream, SourceDiscLayout sourceLayout, LevelDefinition level)
+{
+    byte[] entryHeader = ReadSourceWadBytes(sourceStream, sourceLayout, level.SourceWadEntry * 8L, 8);
+    long entryWadOffset = BinaryPrimitives.ReadUInt32LittleEndian(entryHeader.AsSpan(0, 4));
+    byte[] levelHeader = ReadSourceWadBytes(sourceStream, sourceLayout, entryWadOffset, 0x20);
+    uint sceneRelativeOffset = BinaryPrimitives.ReadUInt32LittleEndian(levelHeader.AsSpan(0x18, 4));
+    uint sceneByteLength = BinaryPrimitives.ReadUInt32LittleEndian(levelHeader.AsSpan(0x1C, 4));
+    return new LifeChestSceneSourceProof(entryWadOffset + sceneRelativeOffset, sceneByteLength);
+}
+
+int ReadLifeChestCatalogPrefixRows(
+    FileStream sourceStream,
+    SourceDiscLayout sourceLayout,
+    LevelDefinition level,
+    long tableWadOffset)
+{
+    int directCount = BinaryPrimitives.ReadInt32LittleEndian(
+        ReadSourceWadBytes(sourceStream, sourceLayout, tableWadOffset - 4, 4));
+    if (directCount == level.SourceRecordCount)
+        return 0;
+
+    int oneRowLaterCount = BinaryPrimitives.ReadInt32LittleEndian(
+        ReadSourceWadBytes(sourceStream, sourceLayout, tableWadOffset + MobyLoader.RuntimeRecordStride - 4, 4));
+    if (oneRowLaterCount == level.SourceRecordCount - 1)
+        return 1;
+
+    throw new InvalidOperationException(
+        $"{level.DisplayName}'s Life Chest source-count prefix is unresolved ({directCount}, {oneRowLaterCount}).");
+}
+
+void ReportLifeChestRuntimeBaseDerivation(
+    FileStream sourceStream,
+    SourceDiscLayout sourceLayout,
+    IReadOnlySet<string> supportedLevelKeys,
+    string outDir)
+{
+    IReadOnlyDictionary<int, uint> overlayCopyBufferAddresses = new Dictionary<int, uint>
+    {
+        [10] = 0x80088620,
+        [11] = 0x8008A3B8,
+        [12] = 0x80085594,
+        [13] = 0x80089ECC,
+        [20] = 0x8008CFA4,
+        [21] = 0x8008D600,
+        [22] = 0x8008BAF8,
+        [23] = 0x80086260,
+        [30] = 0x8008E608,
+        [33] = 0x8008A8A0,
+        [40] = 0x8008AB70,
+        [41] = 0x80087944,
+        [42] = 0x80087130,
+        [43] = 0x80089848,
+        [44] = 0x8008A69C,
+        [50] = 0x8008BB38,
+        [51] = 0x800880D4,
+        [52] = 0x8008771C,
+        [53] = 0x80089820,
+        [54] = 0x80086348,
+        [61] = 0x80088668,
+        [62] = 0x80086004
+    };
+
+    List<LifeChestRuntimeBaseDerivationProof> proofs = new();
+    foreach (LevelDefinition level in catalog.Levels.Where(level => supportedLevelKeys.Contains(LevelCatalog.NormalizeKey(level.Key))).OrderBy(level => level.LevelId))
+    {
+        if (!overlayCopyBufferAddresses.TryGetValue(level.LevelId, out uint copyBufferAddress))
+            throw new InvalidOperationException($"{level.DisplayName} has no overlay copy-buffer address for Life Chest runtime derivation.");
+
+        byte[] entryHeader = ReadSourceWadBytes(sourceStream, sourceLayout, level.SourceWadEntry * 8L, 8);
+        long entryWadOffset = BinaryPrimitives.ReadUInt32LittleEndian(entryHeader.AsSpan(0, 4));
+        byte[] levelHeader = ReadSourceWadBytes(sourceStream, sourceLayout, entryWadOffset, 0x20);
+        uint dataRelativeOffset = BinaryPrimitives.ReadUInt32LittleEndian(levelHeader.AsSpan(0x08, 4));
+        int dataByteLength = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(levelHeader.AsSpan(0x0C, 4)));
+        uint modelDataByteLength = BinaryPrimitives.ReadUInt32LittleEndian(levelHeader.AsSpan(0x14, 4));
+        uint sceneRelativeOffset = BinaryPrimitives.ReadUInt32LittleEndian(levelHeader.AsSpan(0x18, 4));
+        byte[] levelData = ReadSourceWadBytes(sourceStream, sourceLayout, entryWadOffset + dataRelativeOffset, dataByteLength);
+        int consumedLevelDataBytes = ParseLifeChestLoaderConsumedBytes(levelData, level.DisplayName);
+        uint derivedRuntimeBase = checked(copyBufferAddress + (uint)consumedLevelDataBytes + modelDataByteLength);
+        if (!LifeChestRuntimeLayout.TryGetRuntimeBase(level.Key, out uint mappedRuntimeBase) || mappedRuntimeBase != derivedRuntimeBase)
+        {
+            throw new InvalidOperationException(
+                $"{level.DisplayName} Life Chest runtime base maps to 0x{mappedRuntimeBase:X8}; loader layout derives 0x{derivedRuntimeBase:X8}.");
+        }
+
+        proofs.Add(new LifeChestRuntimeBaseDerivationProof(
+            level.Key,
+            level.DisplayName,
+            level.LevelId,
+            copyBufferAddress,
+            consumedLevelDataBytes,
+            modelDataByteLength,
+            entryWadOffset + sceneRelativeOffset,
+            derivedRuntimeBase));
+    }
+
+    string reportPath = Path.Combine(outDir, "runtime-base-derivation-proof.json");
+    File.WriteAllText(reportPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        method = "overlay copy buffer + LoadLevelData consumed bytes + model data size",
+        proofCount = proofs.Count,
+        proofs
+    }, new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine($"Life Chest runtime-base derivation: {proofs.Count} level(s) matched loader layout; report={reportPath}");
+}
+
+int ParseLifeChestLoaderConsumedBytes(byte[] levelData, string levelName)
+{
+    int offset = 0;
+    for (int component = 0; component < 6; component++)
+        offset = AdvanceLifeChestLoaderComponent(levelData, offset, levelName);
+
+    if (offset + 4 > levelData.Length)
+        throw new InvalidOperationException($"{levelName}'s level data ends before its portal count.");
+    int portalCount = BinaryPrimitives.ReadInt32LittleEndian(levelData.AsSpan(offset, 4));
+    offset += 4;
+    if (portalCount is < 0 or > 6)
+        throw new InvalidOperationException($"{levelName}'s level data has invalid portal count {portalCount}.");
+
+    for (int portal = 0; portal < portalCount; portal++)
+    {
+        int portalStart = offset;
+        if (portalStart + 8 > levelData.Length)
+            throw new InvalidOperationException($"{levelName}'s portal {portal} header is truncated.");
+        int pointCount = BinaryPrimitives.ReadInt32LittleEndian(levelData.AsSpan(portalStart + 4, 4));
+        if (pointCount is < 1 or > 64)
+            throw new InvalidOperationException($"{levelName}'s portal {portal} has invalid point count {pointCount}.");
+
+        offset = checked(portalStart + 0x2C + ((pointCount - 1) * 12) + 20);
+        offset = AdvanceLifeChestLoaderComponent(levelData, offset, levelName);
+    }
+
+    offset = AdvanceLifeChestLoaderComponent(levelData, offset, levelName);
+    offset = AdvanceLifeChestLoaderComponent(levelData, offset, levelName);
+    return offset;
+}
+
+int AdvanceLifeChestLoaderComponent(byte[] levelData, int offset, string levelName)
+{
+    if (offset < 0 || offset + 4 > levelData.Length)
+        throw new InvalidOperationException($"{levelName}'s level-data component header at 0x{offset:X} is outside the source block.");
+    int byteLength = BinaryPrimitives.ReadInt32LittleEndian(levelData.AsSpan(offset, 4));
+    if (byteLength < 4 || (long)offset + byteLength > levelData.Length)
+        throw new InvalidOperationException($"{levelName}'s level-data component at 0x{offset:X} has invalid length 0x{byteLength:X}.");
+    return offset + byteLength;
+}
+
+async Task ReportLifeChestAppendResearch()
+{
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("Life Chest append research needs the selected source BIN.", sourceImage);
+
+    List<NativeAppendResearchFamily> representatives =
+    [
+        new("artisans", "Life Chest", 0xA5, 0x01, 0x00, 0x10, 0x0E, "working: private runtime blocks", "Live-proven with original T94 plus three appended copies."),
+        new("stonehill", "Life Chest", 0xA5, 0x01, 0x00, 0x10, 0x0E, "working: private runtime blocks", "Single-donor destination-level case."),
+        new("drycanyon", "Life Chest", 0xA5, 0x01, 0x00, 0x10, 0x0E, "working: private runtime blocks", "Two-donor shared-special-data case."),
+        new("icecavern", "Life Chest", 0xA5, 0x01, 0x00, 0x10, 0x0E, "working: private runtime blocks", "Three-donor case with nearby helper-looking rows."),
+        new("loftycastle", "Life Chest", 0xA5, 0x01, 0x00, 0x10, 0x0E, "working: private runtime blocks", "Two-donor late-game case."),
+        new("metalhead", "Life Chest", 0xA5, 0x01, 0x00, 0x10, 0x0E, "working: private runtime blocks", "Two-donor boss-level case.")
+    ];
+
+    SourceDiscLayout sourceLayout = DetectSourceDiscLayout(sourceImage);
+    using FileStream sourceStream = File.OpenRead(sourceImage);
+    List<NativeAppendResearchRow> appendRows = new();
+    foreach (NativeAppendResearchFamily representative in representatives)
+        appendRows.Add(await BuildNativeAppendResearchRow(sourceStream, sourceLayout, representative));
+
+    List<LifeChestSourceRow> sourceRows = new();
+    foreach (LevelDefinition level in catalog.Levels.Where(level => level.HasSourceTable).OrderBy(level => level.LevelId))
+    {
+        long tableWadOffset = ParseFlexibleLong(level.SourceTableWadOffset);
+        LifeChestSceneSourceProof scene = ReadLifeChestSceneSourceProof(sourceStream, sourceLayout, level);
+        Dictionary<int, byte[]> records = new();
+        for (int trueIndex = 0; trueIndex < level.SourceRecordCount; trueIndex++)
+        {
+            records[trueIndex] = ReadSourceWadBytes(
+                sourceStream,
+                sourceLayout,
+                tableWadOffset + ((long)trueIndex * MobyLoader.RuntimeRecordStride),
+                MobyLoader.RuntimeRecordStride);
+        }
+
+        Dictionary<uint, int> specialLengths = BuildSourceSpecialLengths(records.Values, scene.ByteLength);
+        foreach ((int trueIndex, byte[] record) in records.Where(pair => IsNativeLifeChestSourceRecord(pair.Value)))
+        {
+            int rawX = BitConverter.ToInt32(record, 0x0C);
+            int rawY = BitConverter.ToInt32(record, 0x10);
+            int rawZ = BitConverter.ToInt32(record, 0x14);
+            string colocated = string.Join(", ", records
+                .Where(pair => pair.Key != trueIndex &&
+                    BitConverter.ToInt32(pair.Value, 0x0C) == rawX &&
+                    BitConverter.ToInt32(pair.Value, 0x10) == rawY &&
+                    BitConverter.ToInt32(pair.Value, 0x14) == rawZ)
+                .OrderBy(pair => pair.Key)
+                .Select(pair => $"T{pair.Key} type=0x{pair.Value[0x50]:X2} b36=0x{pair.Value[0x36]:X2} b37=0x{pair.Value[0x37]:X2} f4A/f4B=0x{pair.Value[0x52]:X2}/0x{pair.Value[0x53]:X2}")
+                .Take(8));
+            if (string.IsNullOrWhiteSpace(colocated))
+                colocated = "none";
+
+            sourceRows.Add(new LifeChestSourceRow(
+                LevelKey: level.Key,
+                LevelName: level.DisplayName,
+                TrueIndex: trueIndex,
+                State: record[0x51],
+                RawX: rawX,
+                RawY: rawY,
+                RawZ: rawZ,
+                SpecialData: BuildLifeChestSpecialSummary(
+                    sourceStream,
+                    sourceLayout,
+                    scene,
+                    record,
+                    specialLengths),
+                ColocatedRows: colocated));
+        }
+    }
+
+    int lifeChestLevels = sourceRows.Select(row => row.LevelKey).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+    if (sourceRows.Count < 35 || lifeChestLevels < 18)
+        throw new InvalidOperationException($"Life Chest source audit found only {sourceRows.Count} row(s) across {lifeChestLevels} level(s).");
+    NativeAppendResearchRow artisansAppend = appendRows.Single(row => row.LevelKey.Equals("artisans", StringComparison.OrdinalIgnoreCase));
+    if (artisansAppend.AppendSummary.StartsWith("none", StringComparison.OrdinalIgnoreCase) ||
+        !artisansAppend.SpecialCloneSummary.Contains("len=24", StringComparison.OrdinalIgnoreCase) ||
+        !artisansAppend.AppendedRecordSummary.Contains("special=0x80175018", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Artisans Life Chest append did not produce the live-proven private runtime block at 0x80175018.");
+    }
+    if (appendRows.Any(row =>
+        row.AppendSummary.StartsWith("none", StringComparison.OrdinalIgnoreCase) ||
+        !row.SpecialCloneSummary.Contains("len=24", StringComparison.OrdinalIgnoreCase) ||
+        !row.AppendedRecordSummary.Contains("special=0x80", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("One or more promoted Life Chest representative levels did not produce a private-runtime true append.");
+    }
+
+    string outDir = Path.Combine(workspace.RootPath, "_local", "smoke", "life-chest-append-research");
+    Directory.CreateDirectory(outDir);
+    string markdownPath = Path.Combine(outDir, "life-chest-append-research.md");
+    string jsonPath = Path.Combine(outDir, "life-chest-append-research.json");
+    StringBuilder markdown = new();
+    markdown.AppendLine("# Life Chest Append Research");
+    markdown.AppendLine();
+    markdown.AppendLine($"Native family: `type=0x20 b36=0xA5 b37=0x01 b4F=0x00 f4A=0x10 f4B=0x0E`. Found {sourceRows.Count} source row(s) across {lifeChestLevels} level(s).");
+    markdown.AppendLine();
+    markdown.AppendLine("Artisans live-RAM validation proved that the native donor must remain untouched and each appended Life Chest needs its own pre-relocated private runtime block. The level-loader layout deterministically maps the same scene-relative allocation for every level, and all 22 native-Life-Chest levels now use independent private blocks.");
+    markdown.AppendLine();
+    markdown.AppendLine("## Representative Same-Level Append Plans");
+    markdown.AppendLine();
+    markdown.AppendLine("| Level | Donor | Reusable slots | Release true append | Runtime allocation | Nearby/runtime-only clue |");
+    markdown.AppendLine("|---|---|---:|---|---|---|");
+    foreach (NativeAppendResearchRow row in appendRows)
+        markdown.AppendLine($"| {EscapeMarkdown(row.LevelName)} | {EscapeMarkdown(row.Donor)} | {row.ReusableSlotCount} | {EscapeMarkdown(row.AppendSummary)} | {EscapeMarkdown(row.SpecialCloneSummary)} | {EscapeMarkdown(row.NearbyRuntimeOnlyControls)} |");
+    markdown.AppendLine();
+    markdown.AppendLine("## Native Source Rows");
+    markdown.AppendLine();
+    markdown.AppendLine("| Level | Row | State | Raw XYZ | Special data | Exact colocated rows |");
+    markdown.AppendLine("|---|---:|---:|---|---|---|");
+    foreach (LifeChestSourceRow row in sourceRows)
+        markdown.AppendLine($"| {EscapeMarkdown(row.LevelName)} | T{row.TrueIndex} | `0x{row.State:X2}` | `{row.RawX}, {row.RawY}, {row.RawZ}` | {EscapeMarkdown(row.SpecialData)} | {EscapeMarkdown(row.ColocatedRows)} |");
+    File.WriteAllText(markdownPath, markdown.ToString());
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        sourceRowCount = sourceRows.Count,
+        levelCount = lifeChestLevels,
+        appendRows,
+        sourceRows
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Life Chest append research: {sourceRows.Count} source row(s), {lifeChestLevels} level(s), all native levels private-runtime promoted; report={markdownPath}");
+}
+
+bool IsNativeLifeChestSourceRecord(byte[] record)
+{
+    return record.Length > 0x53 &&
+        record[0x50] == 0x20 &&
+        record[0x36] == 0xA5 &&
+        record[0x37] == 0x01 &&
+        record[0x4F] == 0x00 &&
+        record[0x52] == 0x10 &&
+        record[0x53] == 0x0E;
+}
+
+async Task ExportLifeChestAppendCandidate(
+    string levelKey = "artisans",
+    Vector3f? preferredPosition = null,
+    string? outputLabel = null,
+    bool aliasSameLevelSpecialData = false)
+{
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("Life Chest candidate export needs the selected source BIN.", sourceImage);
+
+    LevelDefinition level = catalog.FindByKey(levelKey) ??
+        throw new InvalidOperationException($"{levelKey} is missing from the level catalog.");
+    string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{level.Key}-mobys.json");
+    List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+    Moby donor = sourceMobys.First(moby =>
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex < level.SourceRecordCount &&
+        moby.Type == 0x20 &&
+        moby.SourceByte36 == 0xA5 &&
+        moby.SourceByte37 == 0x01 &&
+        moby.SourceByte4F == 0x00 &&
+        moby.Flag4A == 0x10 &&
+        moby.Flag4B == 0x0E);
+
+    Vector3f candidatePosition = preferredPosition ?? default;
+    if (!preferredPosition.HasValue)
+    {
+        try
+        {
+            FlyInLandingData homeworldEntry = FlyInLandingLocator.Locate(sourceImage, level);
+            candidatePosition = new Vector3f(
+                (homeworldEntry.RawX / 16f) + 320,
+                homeworldEntry.RawY / 16f,
+                homeworldEntry.RawZ / 16f);
+        }
+        catch (InvalidOperationException)
+        {
+            candidatePosition = new Vector3f(donor.Position.X + 320, donor.Position.Y, donor.Position.Z);
+        }
+    }
+
+    string geometryPath = Path.Combine(workspace.RootPath, "editor-cache", $"{level.Key}-runtime-scene-editor-overlay.json");
+    if (File.Exists(geometryPath) && !preferredPosition.HasValue)
+    {
+        GeometryCandidate geometry = GeometryOverlayLoader.LoadFirstCandidate(geometryPath);
+        float groundOffset = 0;
+        if (TerrainSnapper.TryFindZAt(
+                geometry.Polygons,
+                donor.Position.X,
+                donor.Position.Y,
+                donor.Position.Z,
+                out float donorGround,
+                preferTopSurface: true))
+        {
+            groundOffset = donor.Position.Z - donorGround;
+        }
+
+        if (TerrainSnapper.TryFindZAt(
+                geometry.Polygons,
+                candidatePosition.X,
+                candidatePosition.Y,
+                candidatePosition.Z,
+                out float candidateGround,
+                preferTopSurface: !preferredPosition.HasValue))
+        {
+            candidatePosition = new Vector3f(candidatePosition.X, candidatePosition.Y, candidateGround + groundOffset);
+        }
+    }
+
+    int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
+    int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 1;
+    Moby candidate = CopyAsAddedMoby(donor, nextIndex, nextTrueIndex, "Life Chest append test", 0);
+    candidate.Position = candidatePosition;
+    candidate.PatchStatus = "native-clone";
+    candidate.PatchLead = $"Guarded same-level Life Chest append candidate from {level.DisplayName} donor T{donor.TrueIndex}.";
+    candidate.Confidence = "same-level-native-clone-research";
+    candidate.Evidence = "Disposable candidate used to prove source-row, private special-data, visibility, and interaction behavior before release promotion.";
+    candidate.SourceCloneLevelKey = level.Key;
+    candidate.SourceCloneLevelName = level.DisplayName;
+    candidate.SourceCloneTrueIndex = donor.TrueIndex;
+
+    string candidateRoot = Path.Combine(workspace.RootPath, "_local", "objects", $"life-chest-append-test-{level.Key}");
+    Directory.CreateDirectory(candidateRoot);
+    string editsPath = Path.Combine(candidateRoot, $"{level.Key}-life-chest-append-test-native-edits.json");
+    await MobyEditStore.SaveAsync(editsPath, [candidate], $"{level.DisplayName} Life Chest append test");
+    if (aliasSameLevelSpecialData)
+    {
+        JsonObject manifest = JsonNode.Parse(await File.ReadAllTextAsync(editsPath))?.AsObject() ??
+            throw new InvalidDataException("Life Chest candidate edit manifest is not valid JSON.");
+        JsonArray edits = manifest["edits"]?.AsArray() ??
+            throw new InvalidDataException("Life Chest candidate edit manifest has no edits array.");
+        JsonObject edit = edits.Single()?.AsObject() ??
+            throw new InvalidDataException("Life Chest candidate edit manifest did not contain one edit.");
+        edit["aliasSameLevelSpecialData"] = true;
+        await File.WriteAllTextAsync(editsPath, manifest.ToJsonString());
+    }
+    string outputPrefix = Path.Combine(
+        candidateRoot,
+        $"Spyro-Life-Chest-Append-Test-{outputLabel ?? level.DisplayName.Replace(" ", "", StringComparison.Ordinal)}");
+    MobySourcePatchResult result = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        OutputPrefix: outputPrefix,
+        Level: level,
+        NativeEditsPath: editsPath,
+        WriteImage: true,
+        AllowGuardedNativeCloneAppend: true));
+    if (!result.WroteImage)
+        throw new InvalidOperationException($"{level.DisplayName} Life Chest candidate did not write a disposable BIN/CUE.");
+    VerifyPatchBytes(result.OutputImagePath, result.Plan);
+
+    List<MobySourcePatch> appendPatches = result.Plan.Patches
+        .Where(patch => string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    List<MobySourcePatch> specialPatches = result.Plan.Patches
+        .Where(patch => string.Equals(patch.Kind, "moby-special-data-clone", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    MobySourcePatch? sourceCountPatch = result.Plan.Patches.FirstOrDefault(patch =>
+        string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase));
+    int expectedSpecialPatchCount = aliasSameLevelSpecialData ? 0 : 1;
+    if (appendPatches.Count != 1 ||
+        specialPatches.Count != expectedSpecialPatchCount ||
+        !aliasSameLevelSpecialData && specialPatches[0].ByteLength != 24 ||
+        sourceCountPatch == null ||
+        result.Plan.SkippedEdits.Count != 0)
+    {
+        throw new InvalidOperationException(
+            $"{level.DisplayName} Life Chest candidate wrote append={appendPatches.Count}, special={specialPatches.Count}, count={(sourceCountPatch == null ? 0 : 1)}, skipped={result.Plan.SkippedEdits.Count}.");
+    }
+
+    byte[] appendedRecord = ParseHexPreview(appendPatches.Single().AfterHexPreview);
+    if (!IsNativeLifeChestSourceRecord(appendedRecord))
+        throw new InvalidOperationException($"{level.DisplayName} Life Chest candidate append lost the native Life Chest identity bytes.");
+
+    Console.WriteLine(
+        $"{level.DisplayName} Life Chest candidate: donor T{donor.TrueIndex}, append T{appendPatches.Single().TrueIndex}, " +
+        $"XYZ {candidatePosition.X:0.###}/{candidatePosition.Y:0.###}/{candidatePosition.Z:0.###}, " +
+        $"special={(aliasSameLevelSpecialData ? "same-level donor alias" : "private 24-byte clone")}; cue={result.OutputCuePath}");
+}
+
+async Task ExportArtisansLifeChestMultiCandidate()
+{
+    const uint ArtisansRuntimeSpecialBase = 0x8016313C;
+    LevelDefinition level = catalog.FindByKey("artisans") ??
+        throw new InvalidOperationException("Artisans is missing from the level catalog.");
+    string testedManifestPath = Path.Combine(
+        workspace.RootPath,
+        "dist",
+        "release",
+        "SpyroEditor-release-osx-arm64",
+        "artisans-native-edits.json");
+    if (!File.Exists(testedManifestPath))
+        throw new FileNotFoundException("The exact Artisans Life Chest test manifest was not found.", testedManifestPath);
+
+    JsonObject manifest = JsonNode.Parse(await File.ReadAllTextAsync(testedManifestPath))?.AsObject() ??
+        throw new InvalidDataException("The Artisans Life Chest test manifest is not valid JSON.");
+    JsonArray edits = manifest["edits"]?.AsArray() ??
+        throw new InvalidDataException("The Artisans Life Chest test manifest has no edits array.");
+    List<JsonObject> lifeChestEdits = edits
+        .Select(node => node?.AsObject())
+        .Where(edit => edit != null &&
+            string.Equals(edit["editKind"]?.GetValue<string>(), "add", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(edit["typeHex"]?.GetValue<string>(), "0x20", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(edit["sourceByte36Hex"]?.GetValue<string>(), "0xA5", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(edit["sourceByte37Hex"]?.GetValue<string>(), "0x01", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(edit["flag4AHex"]?.GetValue<string>(), "0x10", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(edit["flag4BHex"]?.GetValue<string>(), "0x0E", StringComparison.OrdinalIgnoreCase))
+        .Cast<JsonObject>()
+        .ToList();
+    if (lifeChestEdits.Count != 3 || edits.Count != 3)
+        throw new InvalidOperationException($"Expected the tested manifest to contain exactly three Life Chest adds; found {lifeChestEdits.Count} of {edits.Count} edit(s).");
+
+    foreach (JsonObject edit in lifeChestEdits)
+    {
+        edit["disableAutoSlotReuse"] = true;
+        edit["lifeChestPrivateRuntimeBase"] = $"0x{ArtisansRuntimeSpecialBase:X8}";
+    }
+    manifest["note"] = "Disposable Artisans multi-Life-Chest private runtime-pointer candidate.";
+
+    string candidateRoot = Path.Combine(workspace.RootPath, "_local", "objects", "artisans-life-chest-multi-private-runtime");
+    Directory.CreateDirectory(candidateRoot);
+    string editsPath = Path.Combine(candidateRoot, "artisans-life-chest-multi-private-runtime-native-edits.json");
+    await File.WriteAllTextAsync(editsPath, manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+    string outputPrefix = Path.Combine(candidateRoot, "Spyro-Artisans-Life-Chest-Multi-Private-Runtime");
+    MobySourcePatchResult result = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        OutputPrefix: outputPrefix,
+        Level: level,
+        NativeEditsPath: editsPath,
+        WriteImage: true));
+    if (!result.WroteImage)
+        throw new InvalidOperationException("Artisans multi-Life-Chest candidate did not write a disposable BIN/CUE.");
+    VerifyPatchBytes(result.OutputImagePath, result.Plan);
+
+    List<MobySourcePatch> appendPatches = result.Plan.Patches
+        .Where(patch => string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(patch => patch.TrueIndex)
+        .ToList();
+    List<MobySourcePatch> specialPatches = result.Plan.Patches
+        .Where(patch => string.Equals(patch.Kind, "moby-special-data-clone", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(patch => patch.TrueIndex)
+        .ToList();
+    if (appendPatches.Count != 3 || specialPatches.Count != 3 ||
+        result.Plan.Patches.Any(patch => string.Equals(patch.Kind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase)) ||
+        result.Plan.SkippedEdits.Count != 0)
+    {
+        throw new InvalidOperationException(
+            $"Artisans multi-Life-Chest candidate wrote append={appendPatches.Count}, special={specialPatches.Count}, " +
+            $"auto-slot={result.Plan.Patches.Count(patch => string.Equals(patch.Kind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase))}, " +
+            $"skipped={result.Plan.SkippedEdits.Count}.");
+    }
+
+    uint[] runtimePointers = appendPatches
+        .Select(patch => BinaryPrimitives.ReadUInt32LittleEndian(ParseHexPreview(patch.AfterHexPreview).AsSpan(0, 4)))
+        .ToArray();
+    if (runtimePointers.Distinct().Count() != 3 || runtimePointers.Any(pointer => pointer < 0x80000000u))
+        throw new InvalidOperationException("Artisans multi-Life-Chest candidate did not assign three unique pre-relocated runtime pointers.");
+
+    Console.WriteLine(
+        $"Artisans multi-Life-Chest candidate: preserved original T94; appended {string.Join(", ", appendPatches.Select(patch => $"T{patch.TrueIndex}"))}; " +
+        $"private pointers {string.Join(", ", runtimePointers.Select(pointer => $"0x{pointer:X8}"))}; cue={result.OutputCuePath}");
+}
+
+async Task ReportNativeActorChestAppendAllocationResearch()
+{
+    string outDir = Path.Combine(workspace.RootPath, "_local", "smoke");
+    Directory.CreateDirectory(outDir);
+    string markdownPath = Path.Combine(outDir, "native-actor-chest-append-allocation-research.md");
+    string jsonPath = Path.Combine(outDir, "native-actor-chest-append-allocation-research.json");
+
+    List<NativeAppendResearchFamily> families =
+    [
+        new("townsquare", "Bull", 0x17, 0x00, 0x00, 0x10, 0x54, "working baseline", "Live testing promoted this family after safe slots were consumed."),
+        new("townsquare", "Torro Gnorc", 0x8B, 0x01, 0x00, 0x10, 0x54, "failed: inert", "User-confirmed over-limit Torros spawn but do not move or react."),
+        new("townsquare", "Flame/Charge Chest", 0xC2, 0x00, 0x00, 0x10, 0x54, "failed: chest behavior/render risk", "Kept guarded until over-limit chests render and break reliably."),
+        new("townsquare", "Charge Chest", 0xC3, 0x00, 0x00, 0x10, 0x54, "failed: invisible/red/broken", "User-confirmed over-limit charge chests can be invisible or render as broken red geometry."),
+        new("townsquare", "3x Flame Chest", 0x86, 0x01, 0x00, 0x10, 0x56, "failed: destroys on level entry", "User-confirmed over-limit 3x Flame chests can destroy themselves as the level loads.")
+    ];
+
+    List<NativeAppendResearchRow> rows = new();
+    if (!File.Exists(sourceImage))
+    {
+        File.WriteAllText(markdownPath, "# Native Actor/Chest Append Allocation Research\n\nSource disc was not found; no rows were generated.\n");
+        File.WriteAllText(jsonPath, JsonSerializer.Serialize(new { generatedAt = DateTimeOffset.Now, rows }, new JsonSerializerOptions { WriteIndented = true }));
+        Console.WriteLine("Native actor/chest append allocation research: source disc not found; wrote empty report.");
+        return;
+    }
+
+    SourceDiscLayout sourceLayout = DetectSourceDiscLayout(sourceImage);
+    using FileStream sourceStream = File.OpenRead(sourceImage);
+    foreach (NativeAppendResearchFamily family in families)
+    {
+        NativeAppendResearchRow row = await BuildNativeAppendResearchRow(sourceStream, sourceLayout, family);
+        rows.Add(row);
+    }
+
+    StringBuilder markdown = new();
+    markdown.AppendLine("# Native Actor/Chest Append Allocation Research");
+    markdown.AppendLine();
+    markdown.AppendLine("This report compares same-level true-append candidates after the normal safe-slot reuse pool is exhausted. It intentionally treats the normal release path as guarded; these rows are reverse-engineering evidence, not release approval.");
+    markdown.AppendLine();
+    markdown.AppendLine("## Current Read");
+    markdown.AppendLine();
+    markdown.AppendLine("- A source-row append plus cloned special data is enough for the Town Square Bull baseline.");
+    markdown.AppendLine("- The failed Town Square families still get source rows and special-data clones, so the missing piece is likely behavior allocation beyond the shell row: hidden companion rows, runtime actor startup state, or a family-specific shared controller.");
+    markdown.AppendLine("- The 3x Flame Chest has the strongest companion clue: a nearby/runtime-only fan or control row sits on the native chest but is outside the mapped source table count.");
+    markdown.AppendLine();
+    markdown.AppendLine("## Matrix");
+    markdown.AppendLine();
+    markdown.AppendLine("| Family | Donor | Donor source bytes | Safe slots | Research append | Special clone | Runtime-only / nearby controls | Live result | Current hypothesis |");
+    markdown.AppendLine("|---|---|---|---:|---|---|---|---|---|");
+    foreach (NativeAppendResearchRow row in rows)
+    {
+        markdown.AppendLine($"| {EscapeMarkdown(row.FamilyName)} | {EscapeMarkdown(row.Donor)} | `{row.Identity}` | {row.ReusableSlotCount} | {EscapeMarkdown(row.AppendSummary)} | {EscapeMarkdown(row.SpecialCloneSummary)} | {EscapeMarkdown(row.NearbyRuntimeOnlyControls)} | {EscapeMarkdown(row.LiveStatus)} | {EscapeMarkdown(row.Hypothesis)} |");
+    }
+
+    markdown.AppendLine();
+    markdown.AppendLine("## Family Details");
+    foreach (NativeAppendResearchRow row in rows)
+    {
+        markdown.AppendLine();
+        markdown.AppendLine($"### {row.LevelName} - {row.FamilyName}");
+        markdown.AppendLine();
+        markdown.AppendLine($"- Live status: {row.LiveStatus}. {row.LiveNotes}");
+        markdown.AppendLine($"- Generated native edits: `{row.NativeEditsPath}`");
+        markdown.AppendLine($"- Plan-only research patch plan: `{row.PlanPath}`");
+        markdown.AppendLine($"- Donor source record: `{row.DonorRecordSummary}`");
+        markdown.AppendLine($"- Appended source record: `{row.AppendedRecordSummary}`");
+        markdown.AppendLine($"- Same-special native rows: {EscapeMarkdown(row.SameSpecialRows)}");
+        markdown.AppendLine($"- Nearby runtime-only/control rows: {EscapeMarkdown(row.NearbyRuntimeOnlyControls)}");
+        markdown.AppendLine($"- Next probe: {EscapeMarkdown(row.NextProbe)}");
+    }
+
+    File.WriteAllText(markdownPath, markdown.ToString());
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        note = "Plan-only research for same-level actor/chest true appends. These are not release-promoted unless live testing passes.",
+        rows
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Native actor/chest append allocation research: rows={rows.Count}, report={markdownPath}");
+}
+
+async Task<NativeAppendResearchRow> BuildNativeAppendResearchRow(FileStream sourceStream, SourceDiscLayout sourceLayout, NativeAppendResearchFamily family)
+{
+    LevelDefinition? level = catalog.FindByKey(family.LevelKey);
+    if (level == null || !level.HasSourceTable)
+    {
+        return NativeAppendResearchRow.Missing(family, "level source table is not mapped");
+    }
+
+    string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{family.LevelKey}-mobys.json");
+    if (!File.Exists(mobyPath))
+    {
+        return NativeAppendResearchRow.Missing(family, "moby cache is missing");
+    }
+
+    List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+    Moby? donor = sourceMobys.FirstOrDefault(moby =>
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex < level.SourceRecordCount &&
+        moby.Type == 0x20 &&
+        moby.SourceByte36 == family.SourceByte36 &&
+        moby.SourceByte37 == family.SourceByte37 &&
+        moby.SourceByte4F == family.SourceByte4F &&
+        moby.Flag4A == family.Flag4A &&
+        moby.Flag4B == family.Flag4B);
+    if (donor == null)
+    {
+        return NativeAppendResearchRow.Missing(family, "donor object not found in source cache");
+    }
+
+    int reusableSlotCount = sourceMobys.Count(moby => IsPromotedNativeCloneTrueAppendSmokeCandidate(moby, level, donor));
+    int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
+    int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 1;
+    List<Moby> addedMobys = new();
+    for (int i = 0; i <= reusableSlotCount; i++)
+    {
+        Moby added = CopyAsAddedMoby(donor, nextIndex + i, nextTrueIndex + i, $"Research {family.FamilyName} clone {i + 1}", 0);
+        added.PatchStatus = "native-clone";
+        added.PatchLead = $"Plan-only allocation research from same-level {family.FamilyName} donor T{donor.TrueIndex}.";
+        added.Confidence = "same-level-native-clone-research";
+        added.Evidence = "Plan-only research candidate; normal Create BIN remains guarded unless this family is separately live-promoted.";
+        added.SourceCloneLevelKey = level.Key;
+        added.SourceCloneLevelName = level.DisplayName;
+        added.SourceCloneTrueIndex = donor.TrueIndex;
+        addedMobys.Add(added);
+    }
+
+    string familySlug = NativeAppendResearchSlug(family.FamilyName);
+    string nativeEditsPath = Path.Combine(workspace.RootPath, "_local", "smoke", $"{family.LevelKey}-research-{familySlug}-append-native-edits.json");
+    await MobyEditStore.SaveAsync(nativeEditsPath, addedMobys, $"{level.DisplayName} research {family.FamilyName} allocation append");
+
+    string outputPrefix = Path.Combine(workspace.RootPath, "_local", "objects", $"{family.LevelKey}-research-{familySlug}-append");
+    MobySourcePatchResult result = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        OutputPrefix: outputPrefix,
+        Level: level,
+        NativeEditsPath: nativeEditsPath,
+        WriteImage: false,
+        AllowGuardedNativeCloneAppend: !family.FamilyName.Equals("Life Chest", StringComparison.OrdinalIgnoreCase)));
+
+    MobySourcePatch? appendPatch = result.Plan.Patches.FirstOrDefault(patch => string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase));
+    MobySourcePatch? specialClone = appendPatch == null
+        ? null
+        : result.Plan.Patches.FirstOrDefault(patch =>
+            string.Equals(patch.Kind, "moby-special-data-clone", StringComparison.OrdinalIgnoreCase) &&
+            patch.TrueIndex == appendPatch.TrueIndex);
+
+    long tableWadOffset = ParseFlexibleLong(level.SourceTableWadOffset);
+    long tableRelativeOffset = ParseFlexibleLong(level.SourceTableRelativeOffset);
+    Dictionary<int, byte[]> sourceRecords = new();
+    for (int trueIndex = 0; trueIndex < level.SourceRecordCount; trueIndex++)
+        sourceRecords[trueIndex] = ReadSourceWadBytes(sourceStream, sourceLayout, tableWadOffset + ((long)trueIndex * MobyLoader.RuntimeRecordStride), MobyLoader.RuntimeRecordStride);
+    Dictionary<uint, int> specialLengths = BuildSourceSpecialLengths(sourceRecords.Values, tableRelativeOffset);
+    byte[] donorRecord = sourceRecords[donor.TrueIndex];
+    byte[] appendedRecord = appendPatch == null ? [] : ParseHexPreview(appendPatch.AfterHexPreview);
+    bool aliasesSameLevelDonorSpecialData = appendPatch?.Description.Contains(
+        "Reused same-level donor",
+        StringComparison.OrdinalIgnoreCase) == true;
+    if (aliasesSameLevelDonorSpecialData &&
+        appendedRecord.Length >= 4 &&
+        BitConverter.ToUInt32(appendedRecord, 0) != BitConverter.ToUInt32(donorRecord, 0))
+    {
+        throw new InvalidOperationException($"{level.DisplayName} Life Chest append did not preserve donor T{donor.TrueIndex}'s loader-relocatable special-data offset.");
+    }
+    string donorSpecialSummary;
+    if (family.FamilyName.Equals("Life Chest", StringComparison.OrdinalIgnoreCase))
+    {
+        LifeChestSceneSourceProof scene = ReadLifeChestSceneSourceProof(sourceStream, sourceLayout, level);
+        Dictionary<uint, int> sceneSpecialLengths = BuildSourceSpecialLengths(sourceRecords.Values, scene.ByteLength);
+        donorSpecialSummary = BuildLifeChestSpecialSummary(sourceStream, sourceLayout, scene, donorRecord, sceneSpecialLengths);
+    }
+    else
+    {
+        donorSpecialSummary = BuildNativeAppendSpecialSummary(sourceStream, sourceLayout, tableWadOffset, tableRelativeOffset, donorRecord, specialLengths);
+    }
+    string appendedRecordSummary = appendedRecord.Length == 0 ? "no append patch" : FormatNativeAppendRecordSummary(appendedRecord);
+    string specialCloneSummary = aliasesSameLevelDonorSpecialData
+        ? $"donor alias offset=0x{BitConverter.ToUInt32(donorRecord, 0):X}; no private source block"
+        : specialClone == null
+        ? "none"
+        : $"T{specialClone.TrueIndex} len={specialClone.ByteLength}, target={specialClone.WadRelativeOffset}";
+    string appendSummary = appendPatch == null
+        ? $"none; skipped={string.Join("; ", result.Plan.SkippedEdits)}"
+        : $"T{appendPatch.TrueIndex}, countPatch={result.Plan.Patches.Any(patch => string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase))}";
+
+    string sameSpecialRows = BuildSameSpecialRows(sourceMobys, level, donor);
+    string nearbyRuntimeOnlyControls = BuildNearbyRuntimeOnlyControlRows(sourceMobys, level, donor);
+    string hypothesis = BuildNativeAppendHypothesis(family, specialClone, nearbyRuntimeOnlyControls);
+    string nextProbe = BuildNativeAppendNextProbe(family, nearbyRuntimeOnlyControls);
+
+    return new NativeAppendResearchRow(
+        LevelKey: level.Key,
+        LevelName: level.DisplayName,
+        FamilyName: family.FamilyName,
+        LiveStatus: family.LiveStatus,
+        LiveNotes: family.LiveNotes,
+        Donor: $"T{donor.TrueIndex} {donor.DisplayLabel}",
+        Identity: $"type=0x{donorRecord[0x50]:X2} b36=0x{donorRecord[0x36]:X2} b37=0x{donorRecord[0x37]:X2} b4F=0x{donorRecord[0x4F]:X2} f4A=0x{donorRecord[0x52]:X2} f4B=0x{donorRecord[0x53]:X2}",
+        ReusableSlotCount: reusableSlotCount,
+        NativeEditsPath: nativeEditsPath,
+        PlanPath: result.OutputPlanPath,
+        AppendSummary: appendSummary,
+        SpecialCloneSummary: $"{specialCloneSummary}; donor {donorSpecialSummary}",
+        DonorRecordSummary: FormatNativeAppendRecordSummary(donorRecord),
+        AppendedRecordSummary: appendedRecordSummary,
+        SameSpecialRows: sameSpecialRows,
+        NearbyRuntimeOnlyControls: nearbyRuntimeOnlyControls,
+        Hypothesis: hypothesis,
+        NextProbe: nextProbe);
+}
+
+string BuildNativeAppendSpecialSummary(FileStream sourceStream, SourceDiscLayout sourceLayout, long tableWadOffset, long tableRelativeOffset, byte[] recordBytes, IReadOnlyDictionary<uint, int> specialLengths)
+{
+    uint sourceOffset = BitConverter.ToUInt32(recordBytes, 0);
+    if (!IsSourceSpecialDataOffset(tableRelativeOffset, sourceOffset))
+        return $"offset=0x{sourceOffset:X8} non-source/no clone";
+
+    int length = specialLengths.TryGetValue(sourceOffset, out int foundLength)
+        ? foundLength
+        : DefaultSourceSpecialLength(recordBytes[0x50]);
+    byte[] specialBytes = ReadSourceWadBytes(sourceStream, sourceLayout, tableWadOffset - tableRelativeOffset + sourceOffset, length);
+    string hash = Convert.ToHexString(SHA256.HashData(specialBytes).AsSpan(0, 6)).ToLowerInvariant();
+    return $"offset=0x{sourceOffset:X}, len={length}, sha={hash}, prefix={FormatHex(specialBytes.AsSpan(0, Math.Min(12, specialBytes.Length)))}";
+}
+
+string BuildLifeChestSpecialSummary(
+    FileStream sourceStream,
+    SourceDiscLayout sourceLayout,
+    LifeChestSceneSourceProof scene,
+    byte[] recordBytes,
+    IReadOnlyDictionary<uint, int> specialLengths)
+{
+    uint sourceOffset = BitConverter.ToUInt32(recordBytes, 0);
+    if (sourceOffset == 0 || sourceOffset >= scene.ByteLength)
+        return $"offset=0x{sourceOffset:X8} non-scene/no clone";
+
+    int length = specialLengths.TryGetValue(sourceOffset, out int foundLength)
+        ? foundLength
+        : DefaultSourceSpecialLength(recordBytes[0x50]);
+    byte[] specialBytes = ReadSourceWadBytes(
+        sourceStream,
+        sourceLayout,
+        scene.WadBaseOffset + sourceOffset,
+        length);
+    string hash = Convert.ToHexString(SHA256.HashData(specialBytes).AsSpan(0, 6)).ToLowerInvariant();
+    return $"offset=0x{sourceOffset:X}, len={length}, sha={hash}, prefix={FormatHex(specialBytes.AsSpan(0, Math.Min(12, specialBytes.Length)))}";
+}
+
+string FormatNativeAppendRecordSummary(byte[] record)
+{
+    if (record.Length <= 0x53)
+        return "short record";
+
+    return FormattableString.Invariant(
+        $"special=0x{BitConverter.ToUInt32(record, 0):X}, raw=({BitConverter.ToInt32(record, 0x0C)},{BitConverter.ToInt32(record, 0x10)},{BitConverter.ToInt32(record, 0x14)}), behavior38=0x{record[0x39]:X2}{record[0x38]:X2}, sector4A=0x{record[0x4A]:X2}, type=0x{record[0x50]:X2}, state=0x{record[0x51]:X2}, b36/b37=0x{record[0x36]:X2}/0x{record[0x37]:X2}, b4F=0x{record[0x4F]:X2}, f4A/f4B=0x{record[0x52]:X2}/0x{record[0x53]:X2}");
+}
+
+string BuildSameSpecialRows(IReadOnlyList<Moby> sourceMobys, LevelDefinition level, Moby donor)
+{
+    List<string> rows = sourceMobys
+        .Where(moby =>
+            moby.TrueIndex >= 0 &&
+            moby.TrueIndex < level.SourceRecordCount &&
+            moby.SpecialDataPointer == donor.SpecialDataPointer)
+        .OrderBy(moby => moby.TrueIndex)
+        .Select(moby => $"T{moby.TrueIndex}(state=0x{moby.State:X2},f4B=0x{moby.Flag4B:X2})")
+        .ToList();
+    return rows.Count == 0 ? "none" : string.Join(", ", rows);
+}
+
+string BuildNearbyRuntimeOnlyControlRows(IReadOnlyList<Moby> sourceMobys, LevelDefinition level, Moby donor)
+{
+    List<string> rows = sourceMobys
+        .Where(moby =>
+            moby.TrueIndex >= level.SourceRecordCount &&
+            Distance2D(moby.Position, donor.Position) <= 384)
+        .OrderBy(moby => Distance2D(moby.Position, donor.Position))
+        .ThenBy(moby => moby.TrueIndex)
+        .Take(8)
+        .Select(moby => $"T{moby.TrueIndex} {moby.DisplayLabel} type=0x{moby.Type:X2} b36=0x{moby.SourceByte36:X2} dist={Distance2D(moby.Position, donor.Position):0}")
+        .ToList();
+    return rows.Count == 0 ? "none within 384u" : string.Join("; ", rows);
+}
+
+double Distance2D(Vector3f a, Vector3f b)
+{
+    double dx = a.X - b.X;
+    double dy = a.Y - b.Y;
+    return Math.Sqrt((dx * dx) + (dy * dy));
+}
+
+string BuildNativeAppendHypothesis(NativeAppendResearchFamily family, MobySourcePatch? specialClone, string nearbyRuntimeOnlyControls)
+{
+    if (family.FamilyName.Equals("Life Chest", StringComparison.OrdinalIgnoreCase))
+        return "Pre-relocated, scene-relative private runtime blocks preserve the native Life Chest and independently initialize every appended copy.";
+    if (family.LiveStatus.Contains("working", StringComparison.OrdinalIgnoreCase))
+        return "Source row plus special-data clone appears sufficient for this simpler actor baseline.";
+    if (family.SourceByte36 == 0x86 && nearbyRuntimeOnlyControls.Contains("T108", StringComparison.OrdinalIgnoreCase))
+        return "Shell append is missing the colocated 3x chest fan/control row; solve companion allocation before promoting.";
+    if (nearbyRuntimeOnlyControls.StartsWith("T", StringComparison.OrdinalIgnoreCase))
+        return "Likely missing a runtime-only companion/control row in addition to the shell special-data clone.";
+    if (specialClone != null)
+        return "Special data is cloned, so the failure likely sits in actor startup/root allocation or family-specific runtime state.";
+    return "No special-data clone was produced; first solve source special-data allocation.";
+}
+
+string BuildNativeAppendNextProbe(NativeAppendResearchFamily family, string nearbyRuntimeOnlyControls)
+{
+    if (family.FamilyName.Equals("Life Chest", StringComparison.OrdinalIgnoreCase))
+        return "Keep cross-level Life Chest imports guarded; same-level copy/add is promoted in every level with a native Life Chest.";
+    if (family.LiveStatus.Contains("working", StringComparison.OrdinalIgnoreCase))
+        return "Keep as baseline; compare appended record and special-data shape against failed families.";
+    if (family.SourceByte36 == 0x86)
+        return "Create a disposable paired-shell-plus-fan candidate for T69/T108, then live-test load, visibility, hit response, and reward count.";
+    if (family.SourceByte36 == 0x8B)
+        return "Compare Torro runtime rows before/after level load against the appended row; look for actor root/startup state that native source-count append does not allocate.";
+    return "Create a one-family candidate that also moves/copies nearest container control rows, then verify visibility from all camera angles and hit/reward behavior.";
+}
+
+string NativeAppendResearchSlug(string value)
+{
+    StringBuilder builder = new();
+    foreach (char ch in value.ToLowerInvariant())
+    {
+        if (char.IsLetterOrDigit(ch))
+            builder.Append(ch);
+        else if (builder.Length == 0 || builder[^1] != '-')
+            builder.Append('-');
+    }
+
+    return builder.ToString().Trim('-');
+}
+
+async Task ReportBehaviorLinkedNativeCloneAppendState(string levelKey)
+{
+    if (!File.Exists(sourceImage))
+    {
+        Console.WriteLine($"{levelKey} behavior-linked native clone append state: source disc not found; skipping.");
+        return;
+    }
+
+    LevelDefinition? level = catalog.FindByKey(levelKey);
+    if (level == null || !level.HasSourceTable)
+    {
+        Console.WriteLine($"{levelKey} behavior-linked native clone append state: source table is not mapped; skipping.");
+        return;
+    }
+
+    string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
+    if (!File.Exists(mobyPath))
+    {
+        Console.WriteLine($"{levelKey} behavior-linked native clone append state: moby cache not found; skipping.");
+        return;
+    }
+
+    List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+    Moby? donor = sourceMobys.FirstOrDefault(moby => moby.TrueIndex == 37)
+        ?? sourceMobys.FirstOrDefault(moby =>
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex < level.SourceRecordCount &&
+        moby.Type == 0x20 &&
+        moby.SourceByte36 == 0xA5 &&
+        moby.SourceByte37 == 0x00 &&
+        moby.SourceByte4F != 0x00 &&
+        moby.Flag4A == 0x10);
+    if (donor == null)
+    {
+        Console.WriteLine($"{level.DisplayName} behavior-linked native clone append state: Small Gnorc donor object not found; skipping.");
+        return;
+    }
+
+    int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
+    int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 1;
+    Moby added = CopyAsAddedMoby(donor, nextIndex, nextTrueIndex, $"Behavior-linked Small Gnorc append {donor.TrueIndex}", 8);
+    added.PatchStatus = "native-clone";
+    added.PatchLead = $"Experimental Small Gnorc true-append smoke from same-level donor T{donor.TrueIndex}.";
+    added.Confidence = "same-level-native-clone";
+    added.Evidence = $"Copied from behavior-linked same-level Small Gnorc donor T{donor.TrueIndex}; source startup state must come from the disc row, not the live editor cache.";
+    added.SourceCloneLevelKey = level.Key;
+    added.SourceCloneLevelName = level.DisplayName;
+    added.SourceCloneTrueIndex = donor.TrueIndex;
+
+    string path = Path.Combine(workspace.RootPath, "_local", "smoke", $"{levelKey}-behavior-linked-small-gnorc-append-native-edits.json");
+    await MobyEditStore.SaveAsync(path, [added], $"{level.DisplayName} behavior-linked Small Gnorc append");
+    MobySourcePatchResult exportResult = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        OutputPrefix: Path.Combine(workspace.RootPath, "_local", "objects", $"{levelKey}-behavior-linked-small-gnorc-append"),
+        Level: level,
+        NativeEditsPath: path,
+        WriteImage: true,
+        AllowGuardedNativeCloneAppend: true));
+    MobySourcePatchPlan plan = exportResult.Plan;
+    if (!exportResult.WroteImage)
+        throw new InvalidOperationException($"{level.DisplayName} behavior-linked Small Gnorc append did not write a BIN.");
+    VerifyPatchBytes(exportResult.OutputImagePath, plan);
+    if (plan.SkippedEdits.Count != 0)
+        throw new InvalidOperationException($"{level.DisplayName} behavior-linked Small Gnorc append skipped edit(s): {string.Join("; ", plan.SkippedEdits)}");
+
+    MobySourcePatch appendPatch = plan.Patches.SingleOrDefault(patch => string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase))
+        ?? throw new InvalidOperationException($"{level.DisplayName} behavior-linked Small Gnorc append did not write an append patch.");
+    byte[] appendedRecord = ParseHexPreview(appendPatch.AfterHexPreview);
+    long tableWadOffset = ParseFlexibleLong(level.SourceTableWadOffset);
+    SourceDiscLayout sourceLayout = DetectSourceDiscLayout(sourceImage);
+    using FileStream sourceStream = File.OpenRead(sourceImage);
+    byte[] donorSourceRecord = ReadSourceWadBytes(sourceStream, sourceLayout, tableWadOffset + ((long)donor.TrueIndex * MobyLoader.RuntimeRecordStride), MobyLoader.RuntimeRecordStride);
+    if (appendedRecord.Length <= 0x53 ||
+        donorSourceRecord.Length <= 0x53 ||
+        appendedRecord[0x50] != donorSourceRecord[0x50] ||
+        appendedRecord[0x36] != donorSourceRecord[0x36] ||
+        appendedRecord[0x37] != donorSourceRecord[0x37] ||
+        appendedRecord[0x38] != donorSourceRecord[0x38] ||
+        appendedRecord[0x39] != donorSourceRecord[0x39] ||
+        appendedRecord[0x4F] != donorSourceRecord[0x4F] ||
+        appendedRecord[0x51] != donorSourceRecord[0x51] ||
+        appendedRecord[0x52] != donorSourceRecord[0x52] ||
+        appendedRecord[0x53] != donorSourceRecord[0x53])
+    {
+        throw new InvalidOperationException($"{level.DisplayName} behavior-linked Small Gnorc append did not preserve the donor source identity/startup bytes.");
+    }
+
+    if (!appendPatch.Description.Contains("Source startup state preserved", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException($"{level.DisplayName} behavior-linked Small Gnorc append did not describe source startup-state preservation.");
+
+    MobySourcePatch? specialClone = plan.Patches.FirstOrDefault(patch =>
+        string.Equals(patch.Kind, "moby-special-data-clone", StringComparison.OrdinalIgnoreCase) &&
+        patch.TrueIndex == appendPatch.TrueIndex);
+    if (specialClone == null)
+        throw new InvalidOperationException($"{level.DisplayName} behavior-linked Small Gnorc append did not clone donor special data.");
+    if (!appendPatch.Description.Contains("Behavior donor upgraded", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException($"{level.DisplayName} behavior-linked Small Gnorc append did not upgrade the blank copied donor: {appendPatch.Description}");
+    if (ParseHexPreview(specialClone.AfterHexPreview).All(value => value == 0))
+        throw new InvalidOperationException($"{level.DisplayName} behavior-linked Small Gnorc append cloned blank special data for the over-limit copy.");
+
+    Console.WriteLine($"{level.DisplayName} behavior-linked Small Gnorc append: true-appended T{appendPatch.TrueIndex} with donor source state 0x{appendedRecord[0x51]:X2} and behavior marker 0x{appendedRecord[0x39]:X2}{appendedRecord[0x38]:X2}");
+}
+
+bool IsPromotedNativeCloneTrueAppendSmokeDonor(Moby moby, LevelDefinition level, int sourceByte36)
+{
+    return moby.TrueIndex >= 0 &&
+        moby.TrueIndex < level.SourceRecordCount &&
+        moby.Type == 0x20 &&
+        moby.SourceByte36 == sourceByte36 &&
+        moby.SourceByte37 == 0x00 &&
+        moby.SourceByte4F == 0x00 &&
+        moby.Flag4A == 0x10 &&
+        moby.Flag4B == 0x54;
+}
+
+bool IsPromotedNativeCloneTrueAppendSmokeCandidate(Moby candidate, LevelDefinition level, Moby donor)
+{
+    if (candidate.TrueIndex < 0 ||
+        candidate.TrueIndex >= level.SourceRecordCount ||
+        candidate.Type != donor.Type)
+    {
+        return false;
+    }
+
+    bool exactFamily =
+        candidate.SourceByte36 == donor.SourceByte36 &&
+        candidate.SourceByte37 == donor.SourceByte37 &&
+        candidate.SourceByte4F == donor.SourceByte4F &&
+        candidate.Flag4A == donor.Flag4A &&
+        candidate.Flag4B == donor.Flag4B;
+    if (exactFamily)
+        return true;
+
+    return candidate.SourceByte36 == donor.SourceByte36 &&
+        candidate.SourceByte37 == donor.SourceByte37 &&
+        candidate.Flag4A == donor.Flag4A;
 }
 
 async Task ReportPastedNativeCloneAppendPatch(string levelKey)
@@ -10730,24 +21204,60 @@ async Task ReportPastedNativeCloneAppendPatch(string levelKey)
         NativeEditsPath: path,
         WriteImage: true));
     MobySourcePatchPlan plan = exportResult.Plan;
-    if (exportResult.WroteImage)
-        throw new InvalidOperationException($"{level.DisplayName} pasted native clone guard wrote a BIN for an unsafe pasted clone.");
+    if (!exportResult.WroteImage)
+        throw new InvalidOperationException($"{level.DisplayName} pasted native clone auto-slot route did not write a BIN.");
+    VerifyPatchBytes(exportResult.OutputImagePath, plan);
     if (plan.Patches.Any(patch =>
         string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)))
     {
-        throw new InvalidOperationException($"{level.DisplayName} pasted native clone guard wrote append/count patch(es).");
+        throw new InvalidOperationException($"{level.DisplayName} pasted native clone auto-slot route wrote append/count patch(es).");
     }
-    if (plan.SkippedEdits.Count != 1 ||
-        !plan.SkippedEdits[0].Contains("same-level enemy/chest true-adds", StringComparison.OrdinalIgnoreCase))
-    {
-        throw new InvalidOperationException($"{level.DisplayName} pasted native clone guard skipped unexpected edit(s): {string.Join("; ", plan.SkippedEdits)}");
-    }
+    if (plan.SkippedEdits.Count != 0)
+        throw new InvalidOperationException($"{level.DisplayName} pasted native clone auto-slot route skipped edit(s): {string.Join("; ", plan.SkippedEdits)}");
+    MobySourcePatch slotPatch = plan.Patches.Single(patch => string.Equals(patch.Kind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase));
+    VerifySlotClonePatchIdentity($"{level.DisplayName} pasted native clone auto-slot route", slotPatch, donor, pasted.Position);
 
-    Console.WriteLine($"{level.DisplayName} pasted native clone guard: preserved donor T{donor.TrueIndex} metadata but skipped unsafe pasted true-add");
+    Console.WriteLine($"{level.DisplayName} pasted native clone auto-slot route: preserved donor T{donor.TrueIndex} metadata and reused slot T{slotPatch.TrueIndex}");
 }
 
 int ToSmokeRawCoordinate(float value) => (int)Math.Round(value * 16f);
+
+void VerifySlotClonePatchIdentity(string context, MobySourcePatch patch, Moby donor, Vector3f placedPosition)
+{
+    byte[] after = ParseHexPreview(patch.AfterHexPreview);
+    const int xOffset = 0x0C;
+    const int yOffset = 0x10;
+    const int zOffset = 0x14;
+    const int typeOffset = 0x50;
+    if (after.Length < 0x58 ||
+        after[typeOffset] != donor.Type ||
+        after[0x36] != donor.SourceByte36 ||
+        after[0x37] != donor.SourceByte37 ||
+        after[0x4F] != donor.SourceByte4F ||
+        after[0x52] != donor.Flag4A ||
+        after[0x53] != donor.Flag4B ||
+        donor.YawByte >= 0 && after[0x46] != donor.YawByte ||
+        BitConverter.ToInt32(after, xOffset) != ToSmokeRawCoordinate(placedPosition.X) ||
+        BitConverter.ToInt32(after, yOffset) != ToSmokeRawCoordinate(placedPosition.Y) ||
+        BitConverter.ToInt32(after, zOffset) != ToSmokeRawCoordinate(placedPosition.Z))
+    {
+        throw new InvalidOperationException($"{context} did not clone donor identity while preserving the placed position.");
+    }
+    if (donor.YawByte >= 0)
+        VerifyYawMatrixBytes(context, after.AsSpan(0x20, 18).ToArray(), donor.YawByte);
+}
+
+void VerifyYawMatrixBytes(string context, byte[] matrixBytes, int yawByte)
+{
+    byte[] expected = Moby.YawByteToMatrixBytes(yawByte);
+    if (matrixBytes.Length != expected.Length || !matrixBytes.SequenceEqual(expected))
+    {
+        string actualHex = string.Join(" ", matrixBytes.Select(value => $"{value:X2}"));
+        string expectedHex = string.Join(" ", expected.Select(value => $"{value:X2}"));
+        throw new InvalidOperationException($"{context} wrote yaw matrix {actualHex}, expected {expectedHex} for 0x{yawByte:X2} ({Moby.YawByteToDegrees(yawByte):0.#} deg).");
+    }
+}
 
 Moby CopyAsAddedMoby(Moby donor, int index, int trueIndex, string label, int offsetStep)
 {
@@ -10763,6 +21273,8 @@ Moby CopyAsAddedMoby(Moby donor, int index, int trueIndex, string label, int off
         OriginalType = donor.Type,
         State = donor.State,
         OriginalState = donor.State,
+        YawByte = donor.YawByte,
+        OriginalYawByte = donor.YawByte,
         SourceByte36 = donor.SourceByte36,
         OriginalSourceByte36 = donor.SourceByte36,
         SourceByte37 = donor.SourceByte37,
@@ -10780,6 +21292,121 @@ Moby CopyAsAddedMoby(Moby donor, int index, int trueIndex, string label, int off
         PatchLead = $"Pasted from copied {donor.DisplayLabel}.",
         IsAdded = true
     };
+}
+
+async Task ReportAllLevelNativeCloneAutoSlotReuse()
+{
+    if (!File.Exists(sourceImage))
+    {
+        Console.WriteLine("All-level native clone auto-slot reuse: source disc not found; skipping.");
+        return;
+    }
+
+    int tested = 0;
+    int skipped = 0;
+    int sectorVerified = 0;
+    int sectorFallbackVerified = 0;
+    SourceDiscLayout sourceLayout = DetectSourceDiscLayout(sourceImage);
+    using FileStream sourceStream = File.OpenRead(sourceImage);
+    foreach (LevelDefinition level in catalog.Levels.Where(level => level.HasSourceTable))
+    {
+        string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", $"{level.Key}-mobys.json");
+        if (!File.Exists(mobyPath))
+        {
+            skipped++;
+            continue;
+        }
+
+        List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+        MobyMetadataEnricher.Apply(workspace, level.Key, sourceMobys);
+        IGrouping<string, Moby>? duplicateGroup = sourceMobys
+            .Where(moby =>
+                moby.TrueIndex >= 0 &&
+                moby.TrueIndex < level.SourceRecordCount &&
+                moby.Type is 0x18 or 0x20 &&
+                !moby.IsGemLike &&
+                !moby.IsKey &&
+                moby.VisualKind is MobyVisualKind.Actor or MobyVisualKind.Chest)
+            .GroupBy(moby => $"{moby.Type:X2}:{moby.State:X2}:{moby.SourceByte36:X2}:{moby.SourceByte37:X2}:{moby.SourceByte4F:X2}:{moby.Flag4A:X2}:{moby.Flag4B:X2}", StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .OrderByDescending(group => group.Count())
+            .ThenBy(group => group.Key)
+            .FirstOrDefault();
+        if (duplicateGroup == null)
+        {
+            skipped++;
+            continue;
+        }
+
+        Moby donor = duplicateGroup.OrderBy(moby => moby.TrueIndex).Last();
+        int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
+        int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 1;
+        Moby added = CopyAsAddedMoby(donor, nextIndex, nextTrueIndex, $"All-level copy of {donor.DisplayLabel}", 3);
+        added.PatchStatus = "native-clone";
+        added.PatchLead = $"All-level auto-slot smoke from same-level donor T{donor.TrueIndex}.";
+        added.Confidence = "same-level-native-clone";
+        added.Evidence = $"Copied from same-level donor T{donor.TrueIndex}.";
+        added.SourceCloneLevelKey = level.Key;
+        added.SourceCloneLevelName = level.DisplayName;
+        added.SourceCloneTrueIndex = donor.TrueIndex;
+
+        string path = Path.Combine(workspace.RootPath, "_local", "smoke", "all-level-native-auto-slot", $"{level.Key}-native-edits.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path) ?? workspace.RootPath);
+        await MobyEditStore.SaveAsync(path, [added], $"{level.DisplayName} all-level native auto-slot");
+        string outputPrefix = Path.Combine(workspace.RootPath, "_local", "smoke", "all-level-native-auto-slot", $"{level.Key}-native-auto-slot");
+        MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(
+            sourceImage,
+            DiscImageLocator.FindCueForImage(sourceImage),
+            $"{outputPrefix}.bin",
+            $"{outputPrefix}.cue",
+            level,
+            path);
+        if (plan.SkippedEdits.Count != 0)
+            throw new InvalidOperationException($"{level.DisplayName} all-level native auto-slot skipped edit(s): {string.Join("; ", plan.SkippedEdits)}");
+        if (plan.Patches.Any(patch =>
+            string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"{level.DisplayName} all-level native auto-slot wrote append/count patch(es).");
+        }
+
+        MobySourcePatch slotPatch = plan.Patches.SingleOrDefault(patch =>
+            string.Equals(patch.Kind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException($"{level.DisplayName} all-level native auto-slot did not write an auto slot clone patch.");
+        if (slotPatch.TrueIndex == donor.TrueIndex && duplicateGroup.Count() > 1)
+            throw new InvalidOperationException($"{level.DisplayName} all-level native auto-slot reused donor T{donor.TrueIndex} even though another same-family slot was available.");
+        VerifySlotClonePatchIdentity($"{level.DisplayName} all-level native auto-slot", slotPatch, donor, added.Position);
+
+        byte[] after = ParseHexPreview(slotPatch.AfterHexPreview);
+        if (after.Length <= 0x4A)
+            throw new InvalidOperationException($"{level.DisplayName} all-level native auto-slot patch is too short to verify the placement sector byte.");
+
+        string geometryPath = Path.Combine(workspace.RootPath, "editor-cache", $"{level.Key}-runtime-scene-editor-overlay.json");
+        if (File.Exists(geometryPath))
+        {
+            GeometryCandidate geometry = GeometryOverlayLoader.LoadFirstCandidate(geometryPath);
+            if (TryFindPlacementSector(geometry, added.Position, out int expectedSector))
+            {
+                if (after[0x4A] != expectedSector)
+                    throw new InvalidOperationException($"{level.DisplayName} all-level native auto-slot wrote sector byte 0x{after[0x4A]:X2}, expected 0x{expectedSector:X2} for the placed enemy/chest.");
+                if (!slotPatch.Description.Contains($"Placement sector byte set to 0x{expectedSector:X2}", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException($"{level.DisplayName} all-level native auto-slot did not report sector 0x{expectedSector:X2}: {slotPatch.Description}");
+                sectorVerified++;
+            }
+        }
+        else
+        {
+            long tableWadOffset = ParseFlexibleLong(level.SourceTableWadOffset);
+            byte[] targetRecord = ReadSourceWadBytes(sourceStream, sourceLayout, tableWadOffset + ((long)slotPatch.TrueIndex * MobyLoader.RuntimeRecordStride), MobyLoader.RuntimeRecordStride);
+            if (targetRecord.Length <= 0x4A || after[0x4A] != targetRecord[0x4A])
+                throw new InvalidOperationException($"{level.DisplayName} all-level native auto-slot did not preserve reused slot sector byte when geometry was unavailable.");
+            sectorFallbackVerified++;
+        }
+
+        tested++;
+    }
+
+    Console.WriteLine($"All-level native clone auto-slot reuse: {tested} level(s) verified, {sectorVerified} placement sector(s), {sectorFallbackVerified} fallback sector(s), {skipped} skipped without duplicate actor/chest source families");
 }
 
 async Task ReportAllLevelLooseGemPlacementSectors()
@@ -12282,6 +22909,19 @@ async Task ReportImportedTerrainPaletteRoundTrip()
     }
 
     Console.WriteLine($"Imported PNG terrain palette: {imagePalette.DisplayName}, colors={imagePalette.ColorCount}, {imagePalette.LowHex}->{imagePalette.HighHex}");
+
+    string indexedImagePath = Path.Combine(tempRoot, "smoke-indexed-terrain-image.png");
+    await WriteIndexedSmokePngAsync(indexedImagePath);
+    Rgba32[] indexedPixels = PngRgbaImage.ReadRgba(indexedImagePath, out int indexedWidth, out int indexedHeight);
+    if (indexedWidth != 4 || indexedHeight != 1 || indexedPixels.Select(pixel => (pixel.R, pixel.G, pixel.B)).Distinct().Count() != 4 || indexedPixels[3].A != 128)
+        throw new InvalidOperationException("Indexed PNG terrain image decode failed.");
+    TerrainPaletteImport indexedPalette = await TerrainPaletteImporter.ImportFileAsync(indexedImagePath);
+    if (indexedPalette.ColorCount < 4)
+        throw new InvalidOperationException("Indexed PNG terrain palette import did not preserve its four colors.");
+    CustomTerrainTextureImport indexedPreviewImport = new(35, indexedImagePath, Path.GetFileName(indexedImagePath), "both", 64, "imported-image");
+    if (!CustomTerrainTexturePreview.TryGetPreviewColor(indexedPreviewImport, out _))
+        throw new InvalidOperationException("Indexed PNG custom-art preview color was not decoded from image pixels.");
+    Console.WriteLine($"Indexed PNG terrain import: {indexedWidth}x{indexedHeight}, colors={indexedPalette.ColorCount}, alpha={indexedPixels[3].A}, image preview ready.");
 }
 
 void AssertPngContainsApproxColor(string path, ColorRgba expected, string label)
@@ -12299,6 +22939,17 @@ void AssertPngContainsApproxColor(string path, ColorRgba expected, string label)
 string NormalizeSmokeHex(ColorRgba color)
 {
     return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+}
+
+(byte R, byte G, byte B) QuantizeSmokePsxColor(Rgba32 color)
+{
+    static byte Quantize(byte value)
+    {
+        int fiveBit = Math.Clamp((int)Math.Round(value * 31.0 / 255.0), 0, 31);
+        return (byte)((fiveBit << 3) | (fiveBit >> 2));
+    }
+
+    return (Quantize(color.R), Quantize(color.G), Quantize(color.B));
 }
 
 async Task ReportCrossLevelTerrainTexturePatchPlan()
@@ -12529,6 +23180,442 @@ void WriteCrossLevelTerrainTextureReport(string reportRoot, IReadOnlyList<CrossL
         GeneratedAtUtc = DateTimeOffset.UtcNow,
         Rows = rows
     }, new JsonSerializerOptions { WriteIndented = true }));
+}
+
+async Task ReportCrossLevelNativeTerrainArtSwapPlan()
+{
+    string reportRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "cross-level-native-terrain-art");
+    string workRoot = Path.Combine(reportRoot, "_work");
+    if (Directory.Exists(workRoot))
+        Directory.Delete(workRoot, true);
+    Directory.CreateDirectory(workRoot);
+    List<CrossLevelNativeTerrainArtRow> rows = [];
+    try
+    {
+        if (!File.Exists(sourceImage))
+        {
+            rows.Add(new CrossLevelNativeTerrainArtRow("all", "All levels", "", "", -1, -1, "skipped", "", 0, 0, 0, "Import a source BIN/CUE before running native texture-art smoke."));
+            return;
+        }
+
+        List<(LevelDefinition Level, IReadOnlyList<TerrainTextureSlot> Slots)> levelSlots = [];
+        foreach (LevelDefinition level in catalog.Levels)
+        {
+            IReadOnlyList<TerrainTextureSlot> slots = TerrainPatchExporter.InspectTextureSlots(sourceImage, level)
+                .Where(slot => slot.HasNormalDescriptors || slot.HasCloseDescriptors)
+                .OrderByDescending(slot => slot.HasNormalDescriptors && slot.HasCloseDescriptors)
+                .ThenByDescending(slot => slot.NormalDescriptorCount + slot.CloseDescriptorCount)
+                .ThenBy(slot => slot.TextureId)
+                .ToArray();
+            levelSlots.Add((level, slots));
+        }
+
+        for (int targetIndex = 0; targetIndex < levelSlots.Count; targetIndex++)
+        {
+            (LevelDefinition targetLevel, IReadOnlyList<TerrainTextureSlot> targetSlots) = levelSlots[targetIndex];
+            TerrainTextureSlot? targetSlot = targetSlots.FirstOrDefault(slot => !IsKnownBadCustomTerrainTextureCandidate(targetLevel.Key, slot.TextureId));
+            List<(LevelDefinition Level, IReadOnlyList<TerrainTextureSlot> Slots)> donorCandidates = levelSlots
+                .Skip(targetIndex + 1)
+                .Concat(levelSlots.Take(targetIndex + 1))
+                .Where(candidate => candidate.Level.Key != targetLevel.Key && candidate.Slots.Count > 0)
+                .ToList();
+            if (targetSlot == null)
+            {
+                rows.Add(new CrossLevelNativeTerrainArtRow(
+                    targetLevel.Key,
+                    targetLevel.DisplayName,
+                    "",
+                    "",
+                    targetSlot?.TextureId ?? -1,
+                    -1,
+                    "skipped",
+                    "",
+                    0,
+                    0,
+                    0,
+                    "No readable donor or writable target texture descriptor was available."));
+                continue;
+            }
+
+            string targetRoot = Path.Combine(workRoot, targetLevel.Key);
+            Directory.CreateDirectory(targetRoot);
+            LevelDefinition? donorLevel = null;
+            TerrainTextureSlot? donorSlot = null;
+            TerrainTextureImageExport? exported = null;
+            string donorPng = "";
+            int donorWidth = 0;
+            int donorHeight = 0;
+            int donorColors = 0;
+            foreach ((LevelDefinition candidateLevel, IReadOnlyList<TerrainTextureSlot> candidateSlots) in donorCandidates)
+            {
+                foreach (TerrainTextureSlot candidateSlot in candidateSlots)
+                {
+                    string candidatePng = Path.Combine(targetRoot, $"{candidateLevel.Key}-texture-{candidateSlot.TextureId:000}.png");
+                    TerrainTextureImageExport? candidateExport = await TerrainPatchExporter.TryExportTerrainTextureImageAsync(
+                        sourceImage,
+                        candidateLevel,
+                        candidateSlot.TextureId,
+                        candidatePng);
+                    if (candidateExport == null || !File.Exists(candidatePng))
+                        continue;
+                    Rgba32[] candidatePixels = PngRgbaImage.ReadRgba(candidatePng, out int candidateWidth, out int candidateHeight);
+                    int candidateColors = candidatePixels.Select(pixel => (pixel.R, pixel.G, pixel.B, pixel.A)).Distinct().Count();
+                    if (candidateColors <= 1)
+                    {
+                        File.Delete(candidatePng);
+                        continue;
+                    }
+
+                    donorLevel = candidateLevel;
+                    donorSlot = candidateSlot;
+                    exported = candidateExport;
+                    donorPng = candidatePng;
+                    donorWidth = candidateWidth;
+                    donorHeight = candidateHeight;
+                    donorColors = candidateColors;
+                    break;
+                }
+                if (exported != null)
+                    break;
+            }
+
+            if (donorLevel == null || donorSlot == null || exported == null)
+            {
+                rows.Add(new CrossLevelNativeTerrainArtRow(
+                    targetLevel.Key,
+                    targetLevel.DisplayName,
+                    "",
+                    "",
+                    targetSlot.TextureId,
+                    -1,
+                    "skipped",
+                    "",
+                    0,
+                    0,
+                    0,
+                    "No non-blank donor texture could be reconstructed as PNG."));
+                continue;
+            }
+
+            string targetTier = targetSlot.HasNormalDescriptors && targetSlot.HasCloseDescriptors
+                ? "both"
+                : targetSlot.HasNormalDescriptors ? "hqData" : "hqDataClose";
+            IReadOnlyList<CustomTerrainTextureImport> imports = await CustomTerrainTextureStore.AddOrReplaceAsync(
+                targetRoot,
+                targetLevel.Key,
+                targetLevel.DisplayName,
+                targetSlot.TextureId,
+                donorPng,
+                Path.GetFileName(donorPng),
+                targetTier,
+                exported.Width,
+                "borrowed-cross-level-texture-art",
+                $"{donorLevel.DisplayName} native texture {donorSlot.TextureId}",
+                "",
+                "");
+            CustomTerrainTextureImport import = imports.Single(candidate => candidate.TextureId == targetSlot.TextureId);
+            bool previewReady = CustomTerrainTexturePreview.TryGetPreviewColor(import, out _);
+            string emptyEditsPath = Path.Combine(targetRoot, "empty-terrain-edits.json");
+            await File.WriteAllTextAsync(emptyEditsPath, "{\"edits\":[]}");
+            TerrainPatchPlan plan = TerrainPatchExporter.BuildPlan(
+                sourceImage,
+                DiscImageLocator.FindCueForImage(sourceImage),
+                Path.Combine(targetRoot, "native-art-swap.bin"),
+                Path.Combine(targetRoot, "native-art-swap.cue"),
+                targetLevel,
+                "",
+                "",
+                emptyEditsPath,
+                CustomTerrainTextureStore.ManifestPath(targetRoot, targetLevel.Key));
+            CustomTerrainTexturePatchSummary[] summaries = plan.CustomTextureImports
+                .Where(summary => summary.TextureId == targetSlot.TextureId)
+                .ToArray();
+            bool casePassed = previewReady &&
+                donorColors > 1 &&
+                donorWidth == exported.Width &&
+                donorHeight == exported.Height &&
+                plan.TextureAssetWadIndex == TerrainPatchExporter.TextureAssetWadIndexForLevel(targetLevel) &&
+                plan.CustomTextureBytePatchCount > 0 &&
+                summaries.Length > 0 &&
+                summaries.All(summary => summary.TexelBytesPerPixel == 1 && summary.PaletteColorCount == 256);
+            rows.Add(new CrossLevelNativeTerrainArtRow(
+                targetLevel.Key,
+                targetLevel.DisplayName,
+                donorLevel.Key,
+                donorLevel.DisplayName,
+                targetSlot.TextureId,
+                donorSlot.TextureId,
+                casePassed ? "smoke-passed" : "failed",
+                string.Join("+", summaries.Select(summary => summary.DescriptorTier).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)),
+                exported.PixelCount,
+                donorColors,
+                plan.CustomTextureBytePatchCount,
+                casePassed
+                    ? $"Extracted {exported.Width}x{exported.Height} {exported.DescriptorTier} art and mapped it into target WAD asset {plan.TextureAssetWadIndex}."
+                    : $"Native art staging failed a preview or 8-bit indexed texture-page gate. {FirstTerrainPlanSkip(plan)}"));
+        }
+    }
+    finally
+    {
+        Directory.CreateDirectory(reportRoot);
+        string markdownPath = Path.Combine(reportRoot, "native-terrain-art-readiness.md");
+        string jsonPath = Path.Combine(reportRoot, "native-terrain-art-readiness.json");
+        StringBuilder builder = new();
+        builder.AppendLine("# Cross-Level Native Terrain Art Readiness");
+        builder.AppendLine();
+        builder.AppendLine("This report reconstructs real texture art from one level and plans it into a different level's native texture pages without retaining the extracted PNGs.");
+        builder.AppendLine();
+        builder.AppendLine("| Target | Donor | Texture swap | Status | Tiers | Donor pixels | Colors | Native patches | Notes |");
+        builder.AppendLine("|---|---|---|---|---|---:|---:|---:|---|");
+        foreach (CrossLevelNativeTerrainArtRow row in rows)
+        {
+            builder.AppendLine($"| {EscapeMarkdownCell(row.TargetLevelName)} | {EscapeMarkdownCell(row.DonorLevelName)} | {row.DonorTextureId}->{row.TargetTextureId} | {EscapeMarkdownCell(row.Status)} | {EscapeMarkdownCell(row.DescriptorTiers)} | {row.DonorPixelCount} | {row.DonorColorCount} | {row.NativePatchCount} | {EscapeMarkdownCell(row.Notes)} |");
+        }
+        File.WriteAllText(markdownPath, builder.ToString());
+        File.WriteAllText(jsonPath, JsonSerializer.Serialize(new { GeneratedAtUtc = DateTimeOffset.UtcNow, Rows = rows }, new JsonSerializerOptions { WriteIndented = true }));
+        if (Directory.Exists(workRoot))
+            Directory.Delete(workRoot, true);
+    }
+
+    int passedCount = rows.Count(row => string.Equals(row.Status, "smoke-passed", StringComparison.OrdinalIgnoreCase));
+    int failed = rows.Count(row => string.Equals(row.Status, "failed", StringComparison.OrdinalIgnoreCase));
+    int skipped = rows.Count(row => string.Equals(row.Status, "skipped", StringComparison.OrdinalIgnoreCase));
+    Console.WriteLine($"Cross-level native terrain art: {passedCount} passed, {failed} failed, {skipped} skipped; extracted PNG work files removed.");
+    if (File.Exists(sourceImage) && passedCount != catalog.Levels.Count)
+        throw new InvalidOperationException($"Cross-level native terrain art coverage is incomplete: {passedCount}/{catalog.Levels.Count} levels passed. See {Path.Combine(reportRoot, "native-terrain-art-readiness.md")}.");
+}
+
+async Task ReportCustomTerrainPngWriteReadback()
+{
+    string reportRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "custom-terrain-png-write");
+    string workRoot = Path.Combine(reportRoot, "_work");
+    if (Directory.Exists(workRoot))
+        Directory.Delete(workRoot, true);
+    Directory.CreateDirectory(workRoot);
+    string[] targetKeys = ["artisans", "drycanyon", "wizardpeak", "mistybog", "darkpassage", "gnorccove"];
+    List<CustomTerrainPngWriteRow> rows = [];
+    try
+    {
+        if (!File.Exists(sourceImage))
+        {
+            rows.Add(new CustomTerrainPngWriteRow("all", "Representative levels", -1, "skipped", 0, 0, "Import a source BIN/CUE before running PNG write/readback smoke."));
+            return;
+        }
+
+        foreach (string levelKey in targetKeys)
+        {
+            LevelDefinition level = catalog.FindByKey(levelKey) ?? throw new InvalidOperationException($"Missing level {levelKey}.");
+            TerrainTextureSlot slot = TerrainPatchExporter.InspectTextureSlots(sourceImage, level)
+                .Where(candidate => candidate.HasNormalDescriptors || candidate.HasCloseDescriptors)
+                .OrderByDescending(candidate => candidate.HasNormalDescriptors && candidate.HasCloseDescriptors)
+                .ThenByDescending(candidate => candidate.NormalDescriptorCount + candidate.CloseDescriptorCount)
+                .First();
+            string levelRoot = Path.Combine(workRoot, level.Key);
+            Directory.CreateDirectory(levelRoot);
+            string importedPng = Path.Combine(levelRoot, "user-import.png");
+            await WriteSmokePngAsync(importedPng, 64, 64);
+            string tier = slot.HasNormalDescriptors && slot.HasCloseDescriptors
+                ? "both"
+                : slot.HasNormalDescriptors ? "hqData" : "hqDataClose";
+            await CustomTerrainTextureStore.AddOrReplaceAsync(
+                levelRoot,
+                level.Key,
+                level.DisplayName,
+                slot.TextureId,
+                importedPng,
+                "user-import.png",
+                tier,
+                64,
+                "imported-image");
+            CustomTerrainTextureImport savedImport = CustomTerrainTextureStore.Load(levelRoot, level.Key).Single(import => import.TextureId == slot.TextureId);
+            if (!CustomTerrainTexturePreview.TryGetPreviewColor(savedImport, out _))
+                throw new InvalidOperationException($"{level.DisplayName} custom PNG did not produce an editor preview color.");
+
+            string emptyEditsPath = Path.Combine(levelRoot, "empty-terrain-edits.json");
+            await File.WriteAllTextAsync(emptyEditsPath, "{\"edits\":[]}");
+            string beforePng = Path.Combine(levelRoot, "before.png");
+            TerrainTextureImageExport? beforeExport = await TerrainPatchExporter.TryExportTerrainTextureImageAsync(sourceImage, level, slot.TextureId, beforePng);
+            if (beforeExport == null)
+                throw new InvalidOperationException($"{level.DisplayName} texture {slot.TextureId} could not be extracted before the write test.");
+
+            string outputPrefix = Path.Combine(levelRoot, "custom-png-write");
+            TerrainPatchResult result = await TerrainPatchExporter.ExportAsync(new TerrainPatchRequest(
+                SourceImagePath: sourceImage,
+                SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+                OutputPrefix: outputPrefix,
+                Level: level,
+                RamPath: "",
+                SourceSearchPath: "",
+                TerrainEditsPath: emptyEditsPath,
+                CustomTexturesPath: CustomTerrainTextureStore.ManifestPath(levelRoot, level.Key),
+                WriteImage: true));
+            string afterPng = Path.Combine(levelRoot, "after.png");
+            try
+            {
+                if (!result.WroteImage || !File.Exists(result.OutputImagePath) || !File.Exists(result.OutputCuePath))
+                    throw new InvalidOperationException($"{level.DisplayName} custom PNG write did not create its disposable BIN/CUE.");
+                TerrainTextureImageExport? afterExport = await TerrainPatchExporter.TryExportTerrainTextureImageAsync(result.OutputImagePath, level, slot.TextureId, afterPng);
+                if (afterExport == null)
+                    throw new InvalidOperationException($"{level.DisplayName} texture {slot.TextureId} could not be read back from the patched BIN.");
+                Rgba32[] afterPixels = PngRgbaImage.ReadRgba(afterPng, out _, out _);
+                Rgba32[] visibleAfterPixels = afterPixels.Where(pixel => pixel.A >= 200).ToArray();
+                int afterColors = visibleAfterPixels.Select(pixel => (pixel.R, pixel.G, pixel.B)).Distinct().Count();
+                Rgba32[] importedPixels = PngRgbaImage.ReadRgba(importedPng, out _, out _);
+                HashSet<(byte R, byte G, byte B)> expectedQuantizedColors = importedPixels
+                    .Where(pixel => pixel.A >= 32)
+                    .Select(QuantizeSmokePsxColor)
+                    .ToHashSet();
+                int matchedReadbackColors = visibleAfterPixels.Count(pixel => expectedQuantizedColors.Contains((pixel.R, pixel.G, pixel.B)));
+                double readbackColorMatch = visibleAfterPixels.Length == 0 ? 0 : matchedReadbackColors / (double)visibleAfterPixels.Length;
+                byte[] beforePngBytes = await File.ReadAllBytesAsync(beforePng);
+                byte[] afterPngBytes = await File.ReadAllBytesAsync(afterPng);
+                byte[] beforeHash = SHA256.HashData(beforePngBytes);
+                byte[] afterHash = SHA256.HashData(afterPngBytes);
+                bool changed = !beforeHash.SequenceEqual(afterHash);
+                bool passed = changed &&
+                    afterColors >= 16 &&
+                    readbackColorMatch >= 0.95 &&
+                    result.Plan.CustomTextureImportCount > 0 &&
+                    result.Plan.CustomTextureBytePatchCount > 0 &&
+                    result.Plan.CustomTextureImports.All(summary => summary.TexelBytesPerPixel == 1 && summary.PaletteColorCount == 256);
+                rows.Add(new CustomTerrainPngWriteRow(
+                    level.Key,
+                    level.DisplayName,
+                    slot.TextureId,
+                    passed ? "smoke-passed" : "failed",
+                    result.Plan.CustomTextureBytePatchCount,
+                    afterColors,
+                    passed
+                        ? $"Preview, manifest, disposable BIN write, and native texture readback passed for {tier}; quantized color match {readbackColorMatch:P1}."
+                        : $"The readback texture did not pass all expected color or indexed-page gates; quantized color match {readbackColorMatch:P1}."));
+            }
+            finally
+            {
+                if (File.Exists(result.OutputImagePath))
+                    File.Delete(result.OutputImagePath);
+                if (File.Exists(result.OutputCuePath))
+                    File.Delete(result.OutputCuePath);
+            }
+        }
+    }
+    finally
+    {
+        Directory.CreateDirectory(reportRoot);
+        string markdownPath = Path.Combine(reportRoot, "custom-terrain-png-write-readiness.md");
+        string jsonPath = Path.Combine(reportRoot, "custom-terrain-png-write-readiness.json");
+        StringBuilder builder = new();
+        builder.AppendLine("# Custom Terrain PNG Write Readiness");
+        builder.AppendLine();
+        builder.AppendLine("Representative levels verify PNG preview, manifest persistence, disposable BIN creation, and native texture extraction from the patched result.");
+        builder.AppendLine();
+        builder.AppendLine("| Level | Texture | Status | Native patches | Readback colors | Notes |");
+        builder.AppendLine("|---|---:|---|---:|---:|---|");
+        foreach (CustomTerrainPngWriteRow row in rows)
+            builder.AppendLine($"| {EscapeMarkdownCell(row.LevelName)} | {row.TextureId} | {EscapeMarkdownCell(row.Status)} | {row.NativePatchCount} | {row.ReadbackColorCount} | {EscapeMarkdownCell(row.Notes)} |");
+        File.WriteAllText(markdownPath, builder.ToString());
+        File.WriteAllText(jsonPath, JsonSerializer.Serialize(new { GeneratedAtUtc = DateTimeOffset.UtcNow, Rows = rows }, new JsonSerializerOptions { WriteIndented = true }));
+        if (Directory.Exists(workRoot))
+            Directory.Delete(workRoot, true);
+    }
+
+    int passedCount = rows.Count(row => string.Equals(row.Status, "smoke-passed", StringComparison.OrdinalIgnoreCase));
+    Console.WriteLine($"Custom terrain PNG write/readback: {passedCount}/{targetKeys.Length} representative levels passed; disposable BIN/CUE and PNG work files removed.");
+    if (File.Exists(sourceImage) && passedCount != targetKeys.Length)
+        throw new InvalidOperationException($"Custom terrain PNG write/readback coverage is incomplete: {passedCount}/{targetKeys.Length}. See {Path.Combine(reportRoot, "custom-terrain-png-write-readiness.md")}.");
+}
+
+void ReportNativeEnvironmentGradePlan()
+{
+    if (!File.Exists(sourceImage))
+    {
+        Console.WriteLine("Native environment grade: source disc not found; skipping.");
+        return;
+    }
+
+    string analysisPath = WadAnalysisLocator.Find(workspace);
+    if (!File.Exists(analysisPath))
+    {
+        Console.WriteLine("Native environment grade: WAD analysis not found; skipping.");
+        return;
+    }
+
+    LevelDefinition target = catalog.FindByKey("stonehill") ?? throw new InvalidOperationException("Stone Hill is missing.");
+    LevelDefinition donor = catalog.FindByKey("darkhollow") ?? throw new InvalidOperationException("Dark Hollow is missing.");
+    NativeEnvironmentGradePlan grade = NativeEnvironmentGradePlan.MatchSkySource(donor.Key);
+    NativeEnvironmentGradePatchPlan plan = NativeEnvironmentGradeExporter.BuildPlan(new NativeEnvironmentGradeBatchPatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        WadAnalysisPath: analysisPath,
+        OutputPrefix: Path.Combine(workspace.RootPath, "_local", "smoke", "stonehill-match-darkhollow"),
+        Catalog: catalog,
+        Edits: [new NativeEnvironmentGradeBatchEdit(target, grade)],
+        WriteImage: false));
+    if (plan.EditedLevelCount != 1 || plan.SceneColorPatchCount == 0 || plan.TexturePalettePatchCount == 0 || plan.TotalChangedBytes == 0)
+        throw new InvalidOperationException("Stone Hill environment-grade plan did not cover both native scene colors and landscape palettes.");
+    NativeEnvironmentGradeMatch match = plan.Matches.Single();
+    if (match.TargetSectorCount < 8 || match.DonorSectorCount < 8 || match.TargetSceneColors.SampleCount == 0 || match.DonorSceneColors.SampleCount == 0)
+        throw new InvalidOperationException("Stone Hill/Dark Hollow environment-grade analysis did not recover enough native scene data.");
+
+    Console.WriteLine($"Native environment grade: {target.DisplayName} matches {donor.DisplayName}; scene {match.TargetSceneColors.MedianLuminance:F3}->{match.DonorSceneColors.MedianLuminance:F3}, {plan.SceneColorPatchCount} scene table(s), {plan.TexturePalettePatchCount} landscape palette(s)");
+
+    NativeEnvironmentGradeBatchEdit[] allLevelEdits = catalog.Levels
+        .Where(level => !string.Equals(LevelCatalog.NormalizeKey(level.Key), LevelCatalog.NormalizeKey(donor.Key), StringComparison.OrdinalIgnoreCase))
+        .Select(level => new NativeEnvironmentGradeBatchEdit(level, NativeEnvironmentGradePlan.MatchSkySource(donor.Key)))
+        .ToArray();
+    NativeEnvironmentGradePatchPlan allLevelPlan = NativeEnvironmentGradeExporter.BuildPlan(new NativeEnvironmentGradeBatchPatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        WadAnalysisPath: analysisPath,
+        OutputPrefix: Path.Combine(workspace.RootPath, "_local", "smoke", "all-level-environment-grade"),
+        Catalog: catalog,
+        Edits: allLevelEdits,
+        WriteImage: false));
+    if (allLevelPlan.EditedLevelCount != catalog.Levels.Count - 1 ||
+        allLevelPlan.Matches.Any(item =>
+            item.TargetSceneColorTableCount == 0 ||
+            item.TargetTexturePaletteCount == 0 ||
+            item.SceneTransform != item.LowDetailSceneTransform ||
+            item.SceneTransform != item.HighDetailSceneTransform))
+    {
+        throw new InvalidOperationException($"All-level environment-grade coverage is incomplete: {allLevelPlan.EditedLevelCount}/{catalog.Levels.Count - 1}.");
+    }
+    Console.WriteLine($"All-level environment grade: {allLevelPlan.EditedLevelCount} targets, {allLevelPlan.SceneColorPatchCount} near/far scene table(s), {allLevelPlan.TexturePalettePatchCount} landscape palette(s)");
+
+    NativeEnvironmentGradePlan allMobyScopes = NativeEnvironmentGradePlan.MatchSkySource(donor.Key) with
+    {
+        GradeActors = true,
+        GradeChests = true,
+        GradeScenery = true,
+        GradeDragons = true
+    };
+    NativeEnvironmentGradeBatchEdit[] allLevelMobyEdits = catalog.Levels
+        .Where(level => !string.Equals(LevelCatalog.NormalizeKey(level.Key), LevelCatalog.NormalizeKey(donor.Key), StringComparison.OrdinalIgnoreCase))
+        .Select(level => new NativeEnvironmentGradeBatchEdit(level, allMobyScopes))
+        .ToArray();
+    NativeEnvironmentGradePatchPlan allLevelMobyPlan = NativeEnvironmentGradeExporter.BuildPlan(new NativeEnvironmentGradeBatchPatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        WadAnalysisPath: analysisPath,
+        OutputPrefix: Path.Combine(workspace.RootPath, "_local", "smoke", "all-level-moby-environment-grade"),
+        Catalog: catalog,
+        Edits: allLevelMobyEdits,
+        WriteImage: false));
+    int classifiedAllMobyRows = allLevelMobyPlan.Matches.Sum(item =>
+        item.TargetActorMobyCount + item.TargetChestMobyCount + item.TargetSceneryMobyCount + item.TargetDragonMobyCount);
+    if (allLevelMobyPlan.EditedLevelCount != catalog.Levels.Count - 1 ||
+        classifiedAllMobyRows <= 0 ||
+        allLevelMobyPlan.MobyMaterialRowPatchCount != 0 ||
+        allLevelMobyPlan.MobyRuntimePatchCount != 2 ||
+        allLevelMobyPlan.Patches.Count(item => item.Kind == "environment-moby-runtime-hook") != 1 ||
+        allLevelMobyPlan.Patches.Count(item => item.Kind == "environment-moby-runtime-payload") != 1 ||
+        allLevelMobyPlan.Patches.Any(item => item.Kind == "environment-moby-material-route") ||
+        !allMobyScopes.Normalize(donor.Key).GradeAnyMobys)
+    {
+        throw new InvalidOperationException(
+            $"All-level native object-lighting plan failed: {allLevelMobyPlan.MobyMaterialRowPatchCount} row(s), {allLevelMobyPlan.MobyRuntimePatchCount} runtime patch(es)."
+        );
+    }
+    Console.WriteLine($"All-level native object lighting: {classifiedAllMobyRows} material-0 row(s), zero row reroutes, one guarded hook/payload");
 }
 
 bool IsKnownBadCustomTerrainTextureCandidate(string levelKey, int textureId)
@@ -13533,13 +24620,30 @@ async Task WritePaletteSwatchPngAsync(string path, params ColorRgba[] colors)
     await File.WriteAllBytesAsync(path, png.ToArray());
 }
 
-byte[] BuildPngHeader(int width, int height)
+async Task WriteIndexedSmokePngAsync(string path)
+{
+    byte[] raw = [0, 0x1B];
+    using MemoryStream compressed = new();
+    await using (ZLibStream zlib = new(compressed, CompressionLevel.SmallestSize, leaveOpen: true))
+        await zlib.WriteAsync(raw);
+
+    using MemoryStream png = new();
+    png.Write([137, 80, 78, 71, 13, 10, 26, 10]);
+    WritePngChunk(png, "IHDR", BuildPngHeader(4, 1, bitDepth: 2, colorType: 3));
+    WritePngChunk(png, "PLTE", [16, 32, 64, 64, 96, 144, 128, 176, 208, 240, 224, 160]);
+    WritePngChunk(png, "tRNS", [255, 255, 255, 128]);
+    WritePngChunk(png, "IDAT", compressed.ToArray());
+    WritePngChunk(png, "IEND", []);
+    await File.WriteAllBytesAsync(path, png.ToArray());
+}
+
+byte[] BuildPngHeader(int width, int height, int bitDepth = 8, int colorType = 6)
 {
     byte[] header = new byte[13];
     WriteBigEndian(header, 0, width);
     WriteBigEndian(header, 4, height);
-    header[8] = 8;
-    header[9] = 6;
+    header[8] = (byte)bitDepth;
+    header[9] = (byte)colorType;
     return header;
 }
 
@@ -15606,7 +26710,87 @@ void ReportTerrainTopSurfaceSnapSmoke()
         throw new InvalidOperationException("Terrain top-surface snap should choose the highest overlapping face even when the preferred face is lower.");
     }
 
-    Console.WriteLine($"Terrain top-surface snap: lower preferred Z {preferredZ:0.#}, top requested Z {topZ:0.#}");
+    if (!TerrainSnapper.TryFindAdjacentZAt(stacked, 50, 50, 96, -1, out float lowerLayerZ) ||
+        Math.Abs(lowerLayerZ) > 0.001f)
+    {
+        throw new InvalidOperationException("Terrain layer-down snap should choose the next overlapping surface below the current object.");
+    }
+
+    if (!TerrainSnapper.TryFindAdjacentZAt(stacked, 50, 50, 0, 1, out float upperLayerZ) ||
+        Math.Abs(upperLayerZ - 96) > 0.001f)
+    {
+        throw new InvalidOperationException("Terrain layer-up snap should choose the next overlapping surface above the current object.");
+    }
+
+    Console.WriteLine($"Terrain stacked-surface snap: preferred {preferredZ:0.#}, top {topZ:0.#}, down {lowerLayerZ:0.#}, up {upperLayerZ:0.#}");
+}
+
+void ReportTerrainRaycastPlacementSmoke()
+{
+    TerrainPolygon sloped = new(
+        [
+            new Vector2f(0, 0),
+            new Vector2f(100, 0),
+            new Vector2f(0, 100)
+        ],
+        [0, 100, 0],
+        1,
+        0,
+        0,
+        "hp",
+        ColorRgba.FromRgb(64, 128, 64));
+    Vector3f expected = new(25, 25, 25);
+    Vector3f origin = new(-75, 25, 125);
+    Vector3f direction = new(1, 0, -1);
+    if (!TerrainRaycaster.TryIntersect(sloped, origin, direction, out Vector3f hit, out _) ||
+        Math.Abs(hit.X - expected.X) > 0.001f ||
+        Math.Abs(hit.Y - expected.Y) > 0.001f ||
+        Math.Abs(hit.Z - expected.Z) > 0.001f)
+    {
+        throw new InvalidOperationException(
+            $"Perspective terrain placement ray should land at ({expected.X},{expected.Y},{expected.Z}), not ({hit.X},{hit.Y},{hit.Z}).");
+    }
+
+    TerrainPolygon lower = new(
+        [
+            new Vector2f(0, 0),
+            new Vector2f(100, 0),
+            new Vector2f(100, 100),
+            new Vector2f(0, 100)
+        ],
+        [0, 0, 0, 0],
+        1,
+        0,
+        1,
+        "hp",
+        ColorRgba.FromRgb(64, 128, 64));
+    TerrainPolygon upper = new(
+        [
+            new Vector2f(0, 0),
+            new Vector2f(100, 0),
+            new Vector2f(100, 100),
+            new Vector2f(0, 100)
+        ],
+        [96, 96, 96, 96],
+        1,
+        0,
+        2,
+        "hp",
+        ColorRgba.FromRgb(96, 160, 96));
+    if (!TerrainRaycaster.TryFindClosestHit(
+            [lower, upper],
+            new Vector3f(50, 50, 200),
+            new Vector3f(0, 0, -1),
+            out int terrainIndex,
+            out Vector3f closest,
+            out _) ||
+        terrainIndex != 1 ||
+        Math.Abs(closest.Z - 96) > 0.001f)
+    {
+        throw new InvalidOperationException("Perspective terrain placement should choose the first physical surface reached by the camera ray.");
+    }
+
+    Console.WriteLine($"Terrain perspective placement ray: sloped hit ({hit.X:0.#},{hit.Y:0.#},{hit.Z:0.#}), stacked front hit Z {closest.Z:0.#}");
 }
 
 string? ReadFirstTerrainSourceKey(string sourceSearchPath)
@@ -16008,6 +27192,247 @@ sealed record UnknownMobyTriageRow(
     string BatchPath,
     int Priority);
 
+sealed record ControlCompanionCandidateRow(
+    string LevelKey,
+    string LevelName,
+    int TrueIndex,
+    string CurrentRead,
+    string Fingerprint,
+    bool StrictTriggerCue,
+    string Status,
+    string Action,
+    string DirectLinks,
+    string NearestAnchors,
+    int CompanionCount,
+    string CloneRootSummary,
+    int Priority);
+
+sealed record ControlCompanionGroupRow(
+    string LevelKey,
+    string LevelName,
+    string LinkKey,
+    string LinkName,
+    string LinkKind,
+    string GroupFamily,
+    string Roots,
+    string Companions,
+    string Members,
+    string Confidence,
+    string Evidence,
+    bool HasControlCompanion,
+    int RootCount,
+    int CompanionCount,
+    int Priority);
+
+sealed record ControlRoleInvestigationRow(
+    string LevelKey,
+    string LevelName,
+    int TrueIndex,
+    string CurrentRead,
+    string Fingerprint,
+    string SourceByte36Hex,
+    bool StrictTriggerCue,
+    string Status,
+    string LikelyRole,
+    string Action,
+    string DirectLinks,
+    string NearestAnchors,
+    string TerrainEvidence,
+    string Facing,
+    string Position,
+    string Evidence,
+    string ProofStep,
+    bool AutoCloneSafe,
+    int Priority);
+
+sealed record ControlRoleDossierRow(
+    string LevelKey,
+    string LevelName,
+    int TrueIndex,
+    string CurrentRead,
+    string Fingerprint,
+    string Status,
+    string LikelyRole,
+    string EvidenceSummary,
+    string DirectLinks,
+    string NearbyAnchors,
+    string TerrainEvidence,
+    string SuggestedLinkedTrueIndexes,
+    string MarkerManifest,
+    string ClusterManifest,
+    string MarkerCue,
+    string ClusterCue,
+    string EditorAction,
+    string ProofStep,
+    bool AutoCloneSafe,
+    bool NeedsLiveProof,
+    int Priority);
+
+sealed record SceneRouteMarkerFamilyRow(
+    string LevelKey,
+    string LevelName,
+    int TrueIndex,
+    string CurrentRead,
+    string Fingerprint,
+    string SourceByte36Hex,
+    string FamilyBucket,
+    string LinkState,
+    string LinkedObjects,
+    string RouteNeighbors,
+    string VisibleAnchors,
+    string TerrainEvidence,
+    string StrongestEvidence,
+    string MarkerCue,
+    string ClusterCue,
+    string EditorBehavior,
+    string ProofStep,
+    bool AutoCloneSafe,
+    bool NeedsLiveProof,
+    int Priority);
+
+sealed record ControlRoleFieldGuideFamilyRow(
+    string Family,
+    string Meaning,
+    int Rows,
+    int Proven,
+    int NeedsProof,
+    IReadOnlyList<string> ExampleRows);
+
+sealed record ControlRoleFingerprintFamilyRow(
+    string Fingerprint,
+    string WorkingRole,
+    string Levels,
+    int Rows,
+    int Proven,
+    int NeedsProof,
+    string CommonReads,
+    string LikelyRoles,
+    string StatusSummary,
+    string StrongestEvidence,
+    string EditorBehavior,
+    string NextProof,
+    IReadOnlyList<string> ExampleRows,
+    int Priority);
+
+sealed record PortalReturnHomeControlRow(
+    string LevelKey,
+    string LevelName,
+    string RowKind,
+    string Primary,
+    int PrimaryTrueIndex,
+    string TriggerControls,
+    string VisibleObject,
+    string Evidence,
+    string EditorBehavior,
+    bool AutoCloneSafe,
+    bool NeedsLiveProof,
+    int Priority);
+
+sealed record PortalControlEditLinkSmokeRow(
+    string LevelKey,
+    string LevelName,
+    string LinkKey,
+    int EntryTriggerTrueIndex,
+    int LetteringTrueIndex,
+    int LocationTrueIndex,
+    IReadOnlyList<int> TrueIndexes,
+    bool CloneApproved);
+
+sealed record ControlRoleProofBatchRow(
+    string LevelKey,
+    string LevelName,
+    int TrueIndex,
+    string CurrentRead,
+    string Status,
+    string LikelyRole,
+    string TerrainEvidence,
+    string NearestAnchors,
+    IReadOnlyList<string> AnchorSummary,
+    int SuggestedVisibleOwnerTrueIndex,
+    string SuggestedVisibleOwner,
+    string SuggestedLinkedTrueIndexes,
+    string MarkerOnlyManifest,
+    string ClusterManifest,
+    string ProofStep,
+    int Priority);
+
+sealed record ControlRoleProofBinExportRow(
+    string LevelKey,
+    string LevelName,
+    int TrueIndex,
+    string Mode,
+    string CurrentRead,
+    string LikelyRole,
+    string NativeEditsPath,
+    string OutputCuePath,
+    string OutputImagePath,
+    string OutputPlanPath,
+    int PatchCount,
+    IReadOnlyList<string> PatchKinds);
+
+sealed record ControlRoleProofReviewRow(
+    int Priority,
+    string LevelKey,
+    string LevelName,
+    int TrueIndex,
+    string CurrentRead,
+    string Status,
+    string LikelyRole,
+    string MarkerOnlyManifest,
+    string ClusterManifest,
+    string MarkerOnlyCue,
+    string ClusterCue,
+    IReadOnlyList<string> AnchorSummary,
+    int SuggestedVisibleOwnerTrueIndex,
+    string SuggestedVisibleOwner,
+    string SuggestedLinkedTrueIndexes,
+    string ProofStep,
+    string ScreenshotFolder);
+
+sealed record ControlRoleProofPromotion(
+    string LevelKey,
+    string LevelName,
+    int TrueIndex,
+    string LinkName,
+    IReadOnlyList<int> TrueIndexes,
+    string ResultStatus,
+    string MarkerOnlyOutcome,
+    string ClusterOutcome,
+    string EvidenceNotes,
+    string ScreenshotFolder);
+
+sealed record ControlRoleProofPromotionReadResult(
+    IReadOnlyList<ControlRoleProofPromotion> Promotions,
+    IReadOnlyList<ControlRoleProofPromotionRejection> Rejections);
+
+sealed record ControlRoleProofPromotionRejection(
+    string LevelKey,
+    string LevelName,
+    int TrueIndex,
+    string Reason,
+    string Cleanup);
+
+sealed record StrictTriggerCueLinkageRow(
+    string LevelKey,
+    string LevelName,
+    int TrueIndex,
+    string CurrentRead,
+    string Fingerprint,
+    string Position,
+    string RoleGuess,
+    string StrongestStaticClue,
+    string LikelyLinkedCluster,
+    string SuggestedLinkedTrueIndexes,
+    string RecordNeighbors,
+    string SameFingerprintSiblings,
+    string DirectLinks,
+    string TerrainEvidence,
+    string MarkerOnlyCue,
+    string ClusterCue,
+    string PromotionState,
+    string RecommendedLiveTest,
+    int Priority);
+
 sealed record UnknownMobyClusterRow(
     string LevelKey,
     string LevelName,
@@ -16117,6 +27542,69 @@ sealed record SourceSignatureExactEvidence(
     IReadOnlyList<string> Samples)
 {
     public static SourceSignatureExactEvidence Empty { get; } = new([], []);
+}
+
+sealed record NativeAppendResearchFamily(
+    string LevelKey,
+    string FamilyName,
+    int SourceByte36,
+    int SourceByte37,
+    int SourceByte4F,
+    int Flag4A,
+    int Flag4B,
+    string LiveStatus,
+    string LiveNotes);
+
+sealed record LifeChestSourceRow(
+    string LevelKey,
+    string LevelName,
+    int TrueIndex,
+    int State,
+    int RawX,
+    int RawY,
+    int RawZ,
+    string SpecialData,
+    string ColocatedRows);
+
+sealed record NativeAppendResearchRow(
+    string LevelKey,
+    string LevelName,
+    string FamilyName,
+    string LiveStatus,
+    string LiveNotes,
+    string Donor,
+    string Identity,
+    int ReusableSlotCount,
+    string NativeEditsPath,
+    string PlanPath,
+    string AppendSummary,
+    string SpecialCloneSummary,
+    string DonorRecordSummary,
+    string AppendedRecordSummary,
+    string SameSpecialRows,
+    string NearbyRuntimeOnlyControls,
+    string Hypothesis,
+    string NextProbe)
+{
+    public static NativeAppendResearchRow Missing(NativeAppendResearchFamily family, string reason) => new(
+        LevelKey: family.LevelKey,
+        LevelName: family.LevelKey,
+        FamilyName: family.FamilyName,
+        LiveStatus: family.LiveStatus,
+        LiveNotes: family.LiveNotes,
+        Donor: reason,
+        Identity: $"type=0x20 b36=0x{family.SourceByte36:X2} b37=0x{family.SourceByte37:X2} b4F=0x{family.SourceByte4F:X2} f4A=0x{family.Flag4A:X2} f4B=0x{family.Flag4B:X2}",
+        ReusableSlotCount: 0,
+        NativeEditsPath: "",
+        PlanPath: "",
+        AppendSummary: "not generated",
+        SpecialCloneSummary: "not generated",
+        DonorRecordSummary: reason,
+        AppendedRecordSummary: reason,
+        SameSpecialRows: "not generated",
+        NearbyRuntimeOnlyControls: "not generated",
+        Hypothesis: "Missing local data; regenerate the cache/source files before allocation research.",
+        NextProbe: "Regenerate editor cache and rerun object smoke.");
 }
 
 sealed record SourceDiscLayout(int SectorSize, int UserOffset, int RootExtent, int RootLength);
@@ -16419,6 +27907,29 @@ sealed record CrossLevelTerrainTextureRow(
     string DescriptorTiers,
     string Notes);
 
+sealed record CrossLevelNativeTerrainArtRow(
+    string TargetLevelKey,
+    string TargetLevelName,
+    string DonorLevelKey,
+    string DonorLevelName,
+    int TargetTextureId,
+    int DonorTextureId,
+    string Status,
+    string DescriptorTiers,
+    int DonorPixelCount,
+    int DonorColorCount,
+    int NativePatchCount,
+    string Notes);
+
+sealed record CustomTerrainPngWriteRow(
+    string LevelKey,
+    string LevelName,
+    int TextureId,
+    string Status,
+    int NativePatchCount,
+    int ReadbackColorCount,
+    string Notes);
+
 sealed record SmokeTerrainGeometry(
     GeometryCandidate Geometry,
     string OverlayPath,
@@ -16524,6 +28035,33 @@ sealed record CollisionMaterialExample(
     string Word3,
     string Word4,
     string ZRange);
+
+sealed record LifeChestSceneSourceProof(
+    long WadBaseOffset,
+    uint ByteLength);
+
+sealed record LifeChestRuntimeBaseDerivationProof(
+    string LevelKey,
+    string LevelName,
+    int LevelId,
+    uint OverlayCopyBufferAddress,
+    int LoadLevelDataConsumedBytes,
+    uint ModelDataByteLength,
+    long SceneWadBaseOffset,
+    uint DerivedRuntimeBase);
+
+sealed record LifeChestReleaseLevelProof(
+    string LevelKey,
+    string LevelName,
+    int DonorTrueIndex,
+    int NativeSourceCount,
+    int CatalogPrefixRows,
+    uint RuntimeBase,
+    long SceneWadBaseOffset,
+    uint SceneByteLength,
+    IReadOnlyList<int> AppendedTrueIndexes,
+    IReadOnlyList<uint> PrivateSourceOffsets,
+    IReadOnlyList<uint> PrivateRuntimePointers);
 
 sealed record UniversalNativeChestCloneExportReport(
     DateTimeOffset GeneratedAt,

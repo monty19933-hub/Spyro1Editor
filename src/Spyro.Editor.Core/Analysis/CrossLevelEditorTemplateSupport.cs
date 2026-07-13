@@ -20,6 +20,9 @@ public static class CrossLevelEditorTemplateSupport
         if (currentLevel == null)
             return new CrossLevelTemplateLevelStatus("preview", "Preview only until a level is loaded.", "", false, false);
 
+        if (string.Equals(supportStatus, "experimental-source-record-candidate", StringComparison.OrdinalIgnoreCase))
+            return new CrossLevelTemplateLevelStatus("candidate here", $"{currentLevel.DisplayName} can place this as a source-record-only candidate. Normal Create BIN keeps it guarded; Create Candidate BIN writes a disposable test so you can see whether this level already has the needed actor behavior loaded.", "", false, true);
+
         CrossLevelActorPackageRecipe? recipe = CrossLevelActorPackageRecipeCatalog.FindPreferred(currentLevel.Key, sourceLevelKey, family, workspaceRoot);
         if (recipe == null && !string.IsNullOrWhiteSpace(workspaceRoot))
         {
@@ -62,7 +65,7 @@ public static class CrossLevelEditorTemplateSupport
         return family switch
         {
             "enemyTransform" => visualKind == MobyVisualKind.Actor,
-            "lockedChest" or "springChest" => visualKind == MobyVisualKind.Chest,
+            "lockedChest" or "springChest" or "fireworkChest" or "multiGemChest" => visualKind == MobyVisualKind.Chest,
             "key" => visualKind == MobyVisualKind.Key,
             _ => false
         };
@@ -78,6 +81,7 @@ public static class CrossLevelEditorTemplateSupport
             "in-game-blocked-bad-level-state" => "blocked because the level loads into an invalid empty/ocean state",
             "experimental-actor-package-swap" => "needs an actor package swap",
             "experimental-actor-package-import" => "needs an actor package import",
+            "experimental-source-record-candidate" => "guarded source-record-only candidate",
             "supported-lightweight-object" => "ready lightweight source-record add",
             _ when string.IsNullOrWhiteSpace(status) => "unknown",
             _ => status.Replace('-', ' ')
