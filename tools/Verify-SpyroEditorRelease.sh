@@ -4,11 +4,16 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="${DIST_DIR:-$ROOT_DIR/dist/release}"
 ALLOW_HOST_PROVENANCE="${SPYRO_EDITOR_ALLOW_HOST_PROVENANCE:-0}"
+ALLOW_UNNOTARIZED="${SPYRO_EDITOR_ALLOW_UNNOTARIZED:-0}"
+EXPECTED_MAC_TEAM_ID="694865MF93"
 [[ "$ALLOW_HOST_PROVENANCE" == "0" || "$ALLOW_HOST_PROVENANCE" == "1" ]] || {
     echo "SPYRO_EDITOR_ALLOW_HOST_PROVENANCE must be 0 or 1." >&2
     exit 2
 }
-
+[[ "$ALLOW_UNNOTARIZED" == "0" || "$ALLOW_UNNOTARIZED" == "1" ]] || {
+    echo "SPYRO_EDITOR_ALLOW_UNNOTARIZED must be 0 or 1." >&2
+    exit 2
+}
 usage() {
     echo "Usage: tools/Verify-SpyroEditorRelease.sh <release-name>" >&2
 }
@@ -38,9 +43,14 @@ fi
 RELEASE_NAME="$1"
 [[ "$RELEASE_NAME" =~ ^[A-Za-z0-9._-]+$ ]] || fail "Release name contains an unsafe path character: $RELEASE_NAME"
 
-for command_name in awk cmp diff dotnet file find python3 rg sed shasum strings unzip xattr; do
+[[ "$(uname -s)" == "Darwin" ]] || fail "Release verification requires macOS for Developer ID and notarization checks."
+for command_name in awk cmp codesign diff dotnet file find plutil python3 rg sed shasum spctl strings unzip xattr xcrun; do
     require_command "$command_name"
 done
+if [[ "$ALLOW_UNNOTARIZED" == "0" ]]; then
+    require_command syspolicy_check
+fi
+xcrun --find stapler >/dev/null 2>&1 || fail "Apple's stapler tool was not found through xcrun."
 
 PROJECT_FILE="$ROOT_DIR/src/Spyro.Editor.App/Spyro.Editor.App.csproj"
 RELEASE_IDENTITY_TOOL="$ROOT_DIR/src/Spyro.Editor.ReleaseIdentityTool/Spyro.Editor.ReleaseIdentityTool.csproj"
@@ -67,6 +77,7 @@ WIN_ZIP="$WIN_DIR.zip"
 MAC_APP="$MAC_DIR/Spyro Editor.app"
 MAC_EXE="$MAC_APP/Contents/MacOS/Spyro.Editor.App"
 MAC_APP_DIR="$MAC_APP/Contents/MacOS"
+MAC_OPEN_INSTRUCTIONS="$MAC_DIR/MACOS-OPEN-INSTRUCTIONS.txt"
 WIN_APP_DIR="$WIN_DIR/support/app"
 WIN_EXE="$WIN_APP_DIR/Spyro.Editor.App.exe"
 
@@ -77,6 +88,18 @@ require_file "$WIN_ZIP"
 require_file "$MAC_EXE"
 require_file "$WIN_EXE"
 [[ -x "$MAC_EXE" ]] || fail "macOS app executable is not executable: $MAC_EXE"
+if [[ "$ALLOW_UNNOTARIZED" == "1" ]]; then
+    require_file "$MAC_OPEN_INSTRUCTIONS"
+    rg -F 'System Settings > Privacy & Security' "$MAC_OPEN_INSTRUCTIONS" >/dev/null || \
+        fail "Emergency macOS opening instructions do not identify Privacy & Security."
+    rg -F 'Open Anyway' "$MAC_OPEN_INSTRUCTIONS" >/dev/null || \
+        fail "Emergency macOS opening instructions do not identify Open Anyway."
+    rg -F 'missing-notarization warning' "$MAC_OPEN_INSTRUCTIONS" >/dev/null || \
+        fail "Emergency macOS opening instructions do not explain the missing-notarization risk."
+else
+    [[ ! -e "$MAC_OPEN_INSTRUCTIONS" ]] || \
+        fail "A normal notarized release must not contain emergency Open Anyway instructions."
+fi
 
 archive_findings() {
     local archive="$1"
@@ -198,6 +221,130 @@ if unexpected:
 PY
 }
 
+validate_mac_nested_payloads() {
+    local app_path="$1"
+    local phase="$2"
+    local macos_path="$app_path/Contents/MacOS"
+    local candidate
+    local payload_info
+    local payload_format
+
+    while IFS= read -r -d '' candidate; do
+        if ! payload_info="$(codesign --display --verbose=4 "$candidate" 2>&1)"; then
+            printf '%s\n' "$payload_info" >&2
+            fail "$phase macOS payload is not signed: $candidate"
+        fi
+        printf '%s\n' "$payload_info" | rg '^Authority=Developer ID Application:' >/dev/null || \
+            fail "$phase macOS payload is not signed by a Developer ID Application authority: $candidate"
+        printf '%s\n' "$payload_info" | rg -F "TeamIdentifier=$EXPECTED_MAC_TEAM_ID" >/dev/null || \
+            fail "$phase macOS payload signature is not issued to team $EXPECTED_MAC_TEAM_ID: $candidate"
+        printf '%s\n' "$payload_info" | rg '^Timestamp=.+$' | rg -v '^Timestamp=(none)?$' >/dev/null || \
+            fail "$phase macOS payload signature does not contain a secure timestamp: $candidate"
+
+        payload_format="$(file -b "$candidate")"
+        if [[ "$payload_format" == *Mach-O* ]]; then
+            printf '%s\n' "$payload_info" | rg '^CodeDirectory .*flags=.*\(.*runtime.*\)' >/dev/null || \
+                fail "$phase macOS Mach-O payload does not enable the hardened runtime: $candidate"
+        fi
+    done < <(find "$macos_path" -type f -print0)
+
+    # Future native helpers can live outside Contents/MacOS (for example in a
+    # framework bundle). Audit those Mach-O files too without mistaking normal
+    # Resources such as the application icon for independently signed code.
+    while IFS= read -r -d '' candidate; do
+        [[ "$candidate" == "$macos_path/"* ]] && continue
+        [[ "$(file -b "$candidate")" == *Mach-O* ]] || continue
+        if ! payload_info="$(codesign --display --verbose=4 "$candidate" 2>&1)"; then
+            printf '%s\n' "$payload_info" >&2
+            fail "$phase macOS Mach-O payload is not signed: $candidate"
+        fi
+        printf '%s\n' "$payload_info" | rg '^Authority=Developer ID Application:' >/dev/null || \
+            fail "$phase macOS Mach-O payload is not signed by a Developer ID Application authority: $candidate"
+        printf '%s\n' "$payload_info" | rg -F "TeamIdentifier=$EXPECTED_MAC_TEAM_ID" >/dev/null || \
+            fail "$phase macOS Mach-O payload signature is not issued to team $EXPECTED_MAC_TEAM_ID: $candidate"
+        printf '%s\n' "$payload_info" | rg '^Timestamp=.+$' | rg -v '^Timestamp=(none)?$' >/dev/null || \
+            fail "$phase macOS Mach-O payload signature does not contain a secure timestamp: $candidate"
+        printf '%s\n' "$payload_info" | rg '^CodeDirectory .*flags=.*\(.*runtime.*\)' >/dev/null || \
+            fail "$phase macOS Mach-O payload does not enable the hardened runtime: $candidate"
+    done < <(find "$app_path" -type f -print0)
+}
+
+validate_mac_distribution() {
+    local app_path="$1"
+    local phase="$2"
+    local signature_info
+    local entitlements_file
+    local gatekeeper_output
+    local stapler_output
+    local verification_output
+
+    if ! verification_output="$(codesign --verify --deep --strict --verbose=2 "$app_path" 2>&1)"; then
+        printf '%s\n' "$verification_output" >&2
+        fail "$phase macOS app does not have a valid strict code signature."
+    fi
+
+    signature_info="$(codesign --display --verbose=4 "$app_path" 2>&1)" || \
+        fail "$phase macOS app signature details could not be read."
+    printf '%s\n' "$signature_info" | rg '^Authority=Developer ID Application:' >/dev/null || \
+        fail "$phase macOS app is not signed by a Developer ID Application authority."
+    printf '%s\n' "$signature_info" | rg -F "($EXPECTED_MAC_TEAM_ID)" >/dev/null || \
+        fail "$phase macOS Developer ID authority is not issued to team $EXPECTED_MAC_TEAM_ID."
+    printf '%s\n' "$signature_info" | rg -F "TeamIdentifier=$EXPECTED_MAC_TEAM_ID" >/dev/null || \
+        fail "$phase macOS signature team is not $EXPECTED_MAC_TEAM_ID."
+    printf '%s\n' "$signature_info" | rg '^Timestamp=.+$' | rg -v '^Timestamp=(none)?$' >/dev/null || \
+        fail "$phase macOS signature does not contain a secure timestamp."
+    printf '%s\n' "$signature_info" | rg '^CodeDirectory .*flags=.*\(.*runtime.*\)' >/dev/null || \
+        fail "$phase macOS signature does not enable the hardened runtime."
+
+    entitlements_file="$(mktemp "${TMPDIR:-/tmp}/spyro-editor-entitlements.XXXXXX")"
+    if ! codesign --display --entitlements :- "$app_path" >"$entitlements_file" 2>/dev/null; then
+        rm -f "$entitlements_file"
+        fail "$phase macOS app entitlements could not be read."
+    fi
+    if ! python3 - "$entitlements_file" <<'PY'
+import plistlib
+import sys
+
+with open(sys.argv[1], "rb") as stream:
+    entitlements = plistlib.load(stream)
+
+if entitlements.get("com.apple.security.cs.allow-jit") is not True:
+    raise SystemExit("com.apple.security.cs.allow-jit must be true")
+if entitlements.get("com.apple.security.get-task-allow") not in (None, False):
+    raise SystemExit("com.apple.security.get-task-allow must be absent or false")
+PY
+    then
+        rm -f "$entitlements_file"
+        fail "$phase macOS app does not have the required release-safe .NET JIT entitlements."
+    fi
+    rm -f "$entitlements_file"
+
+    validate_mac_nested_payloads "$app_path" "$phase"
+    if [[ "$ALLOW_UNNOTARIZED" == "1" ]]; then
+        if stapler_output="$(xcrun stapler validate "$app_path" 2>&1)"; then
+            fail "$phase emergency signed-only macOS app unexpectedly contains a valid stapled notarization ticket."
+        fi
+        printf '%s\n' "$stapler_output" | rg -F 'does not have a ticket stapled to it.' >/dev/null || {
+            printf '%s\n' "$stapler_output" >&2
+            fail "$phase macOS stapler check failed for a reason other than a missing ticket."
+        }
+        if gatekeeper_output="$(spctl --assess --type execute --verbose=4 "$app_path" 2>&1)"; then
+            fail "$phase emergency signed-only macOS app was unexpectedly accepted by Gatekeeper."
+        fi
+        printf '%s\n' "$gatekeeper_output" | rg -F 'source=Unnotarized Developer ID' >/dev/null || {
+            printf '%s\n' "$gatekeeper_output" >&2
+            fail "$phase macOS Gatekeeper rejection was not the expected missing-notarization result."
+        }
+    else
+        xcrun stapler validate "$app_path" >/dev/null || \
+            fail "$phase macOS app does not contain a valid stapled notarization ticket."
+        spctl --assess --type execute --verbose=4 "$app_path" || \
+            fail "$phase macOS app was rejected by Gatekeeper assessment."
+        syspolicy_check distribution "$app_path" >/dev/null || \
+            fail "$phase macOS app was rejected by macOS distribution policy."
+    fi
+}
+
 validate_archive "$MAC_ZIP" "$RELEASE_NAME-osx-arm64" 1
 validate_archive "$WIN_ZIP" "$RELEASE_NAME-win-x64"
 validate_package_tree "$MAC_DIR"
@@ -221,20 +368,15 @@ if command -v plutil >/dev/null 2>&1; then
     [[ "$(plutil -extract CFBundleIdentifier raw "$PLIST")" == "local.spyro.editor" ]] || \
         fail "macOS CFBundleIdentifier is not local.spyro.editor."
 fi
-if command -v codesign >/dev/null 2>&1; then
-    codesign --verify --deep --strict "$MAC_APP" || fail "Built macOS app does not have a valid deep code signature."
-fi
+validate_mac_distribution "$MAC_APP" "Built"
 
-MAC_LAUNCHER="$MAC_DIR/Launch Spyro Editor.command"
 WIN_LAUNCHER="$WIN_DIR/Launch Spyro Editor.bat"
-require_file "$MAC_LAUNCHER"
 require_file "$WIN_LAUNCHER"
-[[ -x "$MAC_LAUNCHER" ]] || fail "macOS launcher is not executable: $MAC_LAUNCHER"
-rg -F 'SPYRO_EDITOR_RELEASE=1' "$MAC_LAUNCHER" >/dev/null || fail "macOS launcher is not in release mode."
+[[ ! -e "$MAC_DIR/Launch Spyro Editor.command" ]] || \
+    fail "macOS package must launch the notarized Spyro Editor.app directly, not through a .command launcher."
 rg -F 'SPYRO_EDITOR_RELEASE=1' "$WIN_LAUNCHER" >/dev/null || fail "Windows launcher is not in release mode."
-rg -F 'SPYRO_EDITOR_INSTALL_ROOT="$PWD"' "$MAC_LAUNCHER" >/dev/null || fail "macOS launcher does not identify its replaceable install root."
 rg -F 'SPYRO_EDITOR_INSTALL_ROOT=%CD%' "$WIN_LAUNCHER" >/dev/null || fail "Windows launcher does not identify its replaceable install root."
-if rg -F 'SPYRO_EDITOR_WORKSPACE="$PWD"' "$MAC_LAUNCHER" >/dev/null || rg -F 'SPYRO_EDITOR_WORKSPACE=%CD%' "$WIN_LAUNCHER" >/dev/null; then
+if rg -F 'SPYRO_EDITOR_WORKSPACE=%CD%' "$WIN_LAUNCHER" >/dev/null; then
     fail "Release launcher still stores project data inside the replaceable application folder."
 fi
 [[ "$(head -n 1 "$MAC_DIR/README.txt")" == "$PUBLIC_RELEASE_NAME" ]] || fail "macOS README public release name is stale."
@@ -370,13 +512,9 @@ validate_package_tree "$WIN_ROUNDTRIP_DIR"
 validate_mac_xattrs "$MAC_ROUNDTRIP_DIR" || fail "macOS archive roundtrip contains non-signature extended attributes."
 diff -qr "$MAC_DIR" "$MAC_ROUNDTRIP_DIR" >/dev/null || fail "macOS archive roundtrip differs from its built package directory."
 diff -qr "$WIN_DIR" "$WIN_ROUNDTRIP_DIR" >/dev/null || fail "Windows archive roundtrip differs from its built package directory."
-[[ -x "$MAC_ROUNDTRIP_DIR/Launch Spyro Editor.command" ]] || fail "macOS archive lost the launcher executable bit."
 [[ -x "$MAC_ROUNDTRIP_DIR/Spyro Editor.app/Contents/MacOS/Spyro.Editor.App" ]] || \
     fail "macOS archive lost the app executable bit."
-if command -v codesign >/dev/null 2>&1; then
-    codesign --verify --deep --strict "$MAC_ROUNDTRIP_DIR/Spyro Editor.app" || \
-        fail "macOS archive roundtrip lost or invalidated the app code signature."
-fi
+validate_mac_distribution "$MAC_ROUNDTRIP_DIR/Spyro Editor.app" "Archive-roundtrip"
 
 echo "Package verification passed for $RELEASE_NAME."
 shasum -a 256 "$MAC_ZIP" "$WIN_ZIP"

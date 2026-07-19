@@ -29,14 +29,47 @@ From the repository root on macOS:
 
 ```sh
 tools/Run-SpyroEditorOfflineQa.sh
-tools/Build-SpyroEditorRelease.sh
+SPYRO_EDITOR_NOTARY_KEYCHAIN_PROFILE=<profile-name> \
+  tools/Build-SpyroEditorRelease.sh
 ```
+
+Create the named Keychain profile once with `xcrun notarytool
+store-credentials <profile-name>` and answer its prompts without writing the
+Apple credential into this repository. A public release defaults to
+`SPYRO_EDITOR_MAC_BUILD_MODE=production`, auto-selects the only installed
+Developer ID Application identity, and rejects builds when the profile or
+identity is unavailable. If more than one Developer ID identity is installed,
+set `SPYRO_EDITOR_MAC_SIGN_IDENTITY` to the complete intended identity name.
+`SPYRO_EDITOR_MAC_BUILD_MODE=local` is only for non-public research builds.
+
+If Apple's notarization service is unavailable and an immediate tester build is
+explicitly required, use the emergency fallback only:
+
+```sh
+SPYRO_EDITOR_MAC_BUILD_MODE=signed-only \
+  tools/Build-SpyroEditorRelease.sh
+```
+
+This keeps the Developer ID signature, exact team, hardened runtime, secure
+timestamps, and release-safe JIT entitlement, but deliberately skips submission
+and stapling. The build automatically verifies with
+`SPYRO_EDITOR_ALLOW_UNNOTARIZED=1` and includes
+`MACOS-OPEN-INSTRUCTIONS.txt`. Testers should first try a normal open, then use
+System Settings > Privacy & Security > Open Anyway only for the ZIP from the
+official release. This is an emergency fallback, not the normal public-release
+path; return to `production` and replace it with a notarized asset as soon as
+Apple's service is available.
 
 The release build runs `tools/Verify-SpyroEditorRelease.sh` automatically. Do
 not publish unless it passes. The verifier checks the public beta identity,
 internal version, archive root, release manifest, packaged changelog, embedded
-app identity, Mac/Windows runtime parity, executable formats, launchers,
-signature round-trip, and forbidden content.
+app identity, Mac/Windows runtime parity, executable formats, the Windows
+launcher, forbidden content, and the Mac app's exact Developer ID team,
+hardened runtime, secure timestamp, release-safe .NET JIT entitlements, stapled
+notarization ticket, Gatekeeper acceptance, and macOS distribution-policy
+acceptance before and after the ZIP round-trip. Emergency signed-only verification
+still enforces every signature property before and after the ZIP, requires the
+opening instructions, and fails unless the app has no stapled ticket.
 
 Also confirm the focused project/update checks remain green:
 
@@ -53,8 +86,9 @@ by the verifier with the release notes.
 
 Before publishing, confirm all of the following:
 
-- Release launchers set `SPYRO_EDITOR_INSTALL_ROOT`, not
-  `SPYRO_EDITOR_WORKSPACE`, to the extracted application folder.
+- The macOS package opens `Spyro Editor.app` directly and contains no external
+  `.command` launcher. The Windows launcher sets `SPYRO_EDITOR_INSTALL_ROOT`,
+  not `SPYRO_EDITOR_WORKSPACE`, to the extracted application folder.
 - Projects and generated output default to `Documents/Spyro Editor/Projects`.
 - Settings, backups, and downloaded updates remain in the operating system's
   application-data folder.
@@ -83,7 +117,12 @@ immediate check with `More` > `Check for Updates`.
 
 ## Manual packaged-app check
 
-- Launch the extracted macOS package normally and the Windows package on Windows.
+- On a clean Mac user account, unzip the downloaded macOS asset and open
+  `Spyro Editor.app` directly. For a normal production build, confirm there is
+  no malware/unidentified-developer warning. For an explicitly approved
+  signed-only fallback, confirm the warning is the expected unnotarized-app
+  warning and that Privacy & Security > Open Anyway launches the signed app.
+  Launch the Windows package on Windows through `Launch Spyro Editor.bat`.
 - Confirm the window title uses `Spyro Editor Beta VN`.
 - Open `More` > `Project Data` and confirm the active project is outside the
   extracted application folder.

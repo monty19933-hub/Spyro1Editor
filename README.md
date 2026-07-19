@@ -32,11 +32,20 @@ endpoint.
 Use `docs/beta-release-checklist.md` for the exact build, verification, draft
 release, asset, changelog, and project-persistence gates for each numbered beta.
 
-Unzip the package, launch Spyro Editor, choose your own BIN/CUE, then use
+Unzip the package, open `Spyro Editor.app` directly on macOS (there is no
+separate `.command` launcher), or open `Launch Spyro Editor.bat` on Windows.
+Choose your own BIN/CUE, then use
 `Create BIN` to write local patched test output. Release builds keep the active
 project under the user's Documents folder instead of inside the replaceable app
 folder. Generated output stays on the user's machine and should not be uploaded
 to GitHub.
+
+Normal public macOS builds are notarized and stapled. An explicit
+`SPYRO_EDITOR_MAC_BUILD_MODE=signed-only` build is reserved for a notarization
+service outage: it remains Developer ID signed, hardened, and securely
+timestamped, but includes `MACOS-OPEN-INSTRUCTIONS.txt` because testers may need
+System Settings > Privacy & Security > Open Anyway. This emergency fallback must
+be replaced by the normal notarized asset as soon as possible.
 
 ## Current Editor
 
@@ -53,7 +62,9 @@ Current release features include:
   Updates` select only the next numbered Mac/Windows beta. The update window
   shows the GitHub changelog, preserves a copy beside the verified download,
   and creates a pre-update project snapshot. In-place replacement remains
-  disabled until production signing/notarization is configured.
+  disabled so installation is an explicit user action. Public macOS packages
+  are Developer ID signed, hardened, notarized by Apple, and stapled before
+  upload.
 
 - **Edit Map** and **Game Camera** level inspection.
 - Level terrain and object maps rebuilt from the user's selected BIN/CUE.
@@ -321,6 +332,12 @@ Requirements:
 
 - .NET 10 SDK.
 - macOS is currently used for the two-platform release script.
+- An Apple Developer ID Application identity for team `694865MF93` and the
+  release JIT entitlements are required for every public Mac package. Normal
+  production builds also require configured Apple notarization credentials and
+  reject unstapled or Gatekeeper-rejected output. The explicit emergency
+  `signed-only` mode instead requires Gatekeeper's exact `Unnotarized Developer
+  ID` result and the included Open Anyway instructions.
 
 Build release zips:
 

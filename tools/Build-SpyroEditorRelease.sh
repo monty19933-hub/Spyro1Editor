@@ -5,6 +5,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIGURATION="${CONFIGURATION:-Release}"
 DIST_DIR="$ROOT_DIR/dist/release"
 APP_PROJECT="$ROOT_DIR/src/Spyro.Editor.App/Spyro.Editor.App.csproj"
+MAC_ENTITLEMENTS="$ROOT_DIR/tools/SpyroEditor.macOS.entitlements"
+MAC_BUILD_MODE="${SPYRO_EDITOR_MAC_BUILD_MODE:-}"
+MAC_SIGN_IDENTITY="${SPYRO_EDITOR_MAC_SIGN_IDENTITY:-}"
+NOTARY_KEYCHAIN_PROFILE="${SPYRO_EDITOR_NOTARY_KEYCHAIN_PROFILE:-}"
+NOTARIZATION_TEMP_DIR=""
 PROJECT_VERSION="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' "$APP_PROJECT" | head -n 1)"
 BETA_RELEASE_NUMBER="$(sed -n 's:.*<BetaReleaseNumber>\([^<]*\)</BetaReleaseNumber>.*:\1:p' "$APP_PROJECT" | head -n 1)"
 [[ "$PROJECT_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta\.([0-9]+)$ ]] || {
@@ -23,8 +28,318 @@ RELEASE_NAME="${1:-$PUBLIC_RELEASE_SLUG}"
 
 mkdir -p "$DIST_DIR"
 
+cleanup_notarization_temp() {
+    if [[ -n "$NOTARIZATION_TEMP_DIR" && -d "$NOTARIZATION_TEMP_DIR" ]]; then
+        rm -rf "$NOTARIZATION_TEMP_DIR"
+    fi
+}
+trap cleanup_notarization_temp EXIT
+
 is_research_build() {
     [[ "$RELEASE_NAME" == *research* ]]
+}
+
+resolve_mac_build_mode() {
+    if [[ -n "$MAC_BUILD_MODE" ]]; then
+        case "$MAC_BUILD_MODE" in
+            production|signed-only|local)
+                printf '%s\n' "$MAC_BUILD_MODE"
+                ;;
+            *)
+                echo "SPYRO_EDITOR_MAC_BUILD_MODE must be 'production', 'signed-only', or 'local'." >&2
+                return 1
+                ;;
+        esac
+    elif is_research_build; then
+        printf 'local\n'
+    else
+        # Public packages must be Developer ID signed and notarized. A local
+        # ad-hoc build is available only through an explicit opt-in.
+        printf 'production\n'
+    fi
+}
+
+resolve_developer_id_identity() {
+    local identities
+    local identity_count
+
+    command -v security >/dev/null 2>&1 || {
+        echo "macOS production signing requires the security command." >&2
+        return 1
+    }
+
+    if [[ -n "$MAC_SIGN_IDENTITY" ]]; then
+        security find-identity -v -p codesigning | grep -Fq "\"$MAC_SIGN_IDENTITY\"" || {
+            echo "Developer ID identity '$MAC_SIGN_IDENTITY' is not available in the current keychain." >&2
+            return 1
+        }
+        printf '%s\n' "$MAC_SIGN_IDENTITY"
+        return
+    fi
+
+    identities="$(security find-identity -v -p codesigning | sed -n 's/^[[:space:]]*[0-9][0-9]*)[[:space:]][0-9A-F]*[[:space:]]"\(Developer ID Application:.*\)"$/\1/p')"
+    identity_count="$(printf '%s\n' "$identities" | sed '/^$/d' | wc -l | tr -d ' ')"
+    if [[ "$identity_count" != "1" ]]; then
+        echo "Expected exactly one Developer ID Application identity, found $identity_count." >&2
+        echo "Set SPYRO_EDITOR_MAC_SIGN_IDENTITY to the intended full identity name." >&2
+        return 1
+    fi
+
+    printf '%s\n' "$identities"
+}
+
+for_each_macho_deepest_first() {
+    local app_bundle="$1"
+    local callback="$2"
+    local candidate
+
+    while IFS= read -r -d '' candidate; do
+        if file -b "$candidate" | grep -q 'Mach-O'; then
+            "$callback" "$candidate"
+        fi
+    done < <(python3 - "$app_bundle" <<'PY'
+import os
+import sys
+
+root = os.path.abspath(sys.argv[1])
+files = []
+for directory, _, names in os.walk(root):
+    for name in names:
+        path = os.path.join(directory, name)
+        files.append(path)
+files.sort(key=lambda path: (path.count(os.sep), path), reverse=True)
+for path in files:
+    sys.stdout.buffer.write(os.fsencode(path) + b"\0")
+PY
+    )
+}
+
+for_each_macos_payload_file_deepest_first() {
+    local app_bundle="$1"
+    local callback="$2"
+    local candidate
+
+    while IFS= read -r -d '' candidate; do
+        "$callback" "$candidate"
+    done < <(python3 - "$app_bundle/Contents/MacOS" <<'PY'
+import os
+import sys
+
+root = os.path.abspath(sys.argv[1])
+files = []
+for directory, _, names in os.walk(root):
+    for name in names:
+        path = os.path.join(directory, name)
+        files.append(path)
+files.sort(key=lambda path: (path.count(os.sep), path), reverse=True)
+for path in files:
+    sys.stdout.buffer.write(os.fsencode(path) + b"\0")
+PY
+    )
+}
+
+for_each_nested_code_bundle_deepest_first() {
+    local app_bundle="$1"
+    local callback="$2"
+    local candidate
+
+    while IFS= read -r -d '' candidate; do
+        "$callback" "$candidate"
+    done < <(python3 - "$app_bundle" <<'PY'
+import os
+import sys
+
+root = os.path.abspath(sys.argv[1])
+suffixes = (".app", ".appex", ".framework", ".xpc")
+bundles = []
+for directory, names, _ in os.walk(root):
+    for name in names:
+        path = os.path.join(directory, name)
+        if path != root and name.endswith(suffixes):
+            bundles.append(path)
+bundles.sort(key=lambda path: (path.count(os.sep), path), reverse=True)
+for path in bundles:
+    sys.stdout.buffer.write(os.fsencode(path) + b"\0")
+PY
+    )
+}
+
+sign_macos_bundle_local() {
+    local app_bundle="$1"
+    local main_executable="$app_bundle/Contents/MacOS/Spyro.Editor.App"
+
+    command -v codesign >/dev/null 2>&1 || {
+        echo "Local macOS packaging requires codesign." >&2
+        return 1
+    }
+
+    local sign_local_leaf
+    sign_local_leaf() {
+        [[ "$1" == "$main_executable" ]] && return
+        codesign --force --sign - "$1"
+    }
+    # A self-contained .NET application keeps assemblies, runtime data, and
+    # catalogs beside the executable under Contents/MacOS. codesign classifies
+    # that entire subtree as nested payload, so seal every leaf bottom-up.
+    for_each_macos_payload_file_deepest_first "$app_bundle" sign_local_leaf
+    for_each_nested_code_bundle_deepest_first "$app_bundle" sign_local_leaf
+    codesign --force --sign - "$app_bundle"
+    codesign --verify --deep --strict --verbose=2 "$app_bundle"
+}
+
+sign_macos_bundle_developer_id() {
+    local app_bundle="$1"
+    local main_executable="$app_bundle/Contents/MacOS/Spyro.Editor.App"
+    local identity
+
+    [[ -f "$MAC_ENTITLEMENTS" ]] || {
+        echo "Missing macOS entitlements: $MAC_ENTITLEMENTS" >&2
+        return 1
+    }
+    command -v codesign >/dev/null 2>&1 || {
+        echo "Developer ID macOS signing requires codesign." >&2
+        return 1
+    }
+
+    identity="$(resolve_developer_id_identity)"
+    echo "Signing macOS application with $identity"
+
+    local sign_production_leaf
+    sign_production_leaf() {
+        [[ "$1" == "$main_executable" ]] && return
+        if file -b "$1" | grep -q 'Mach-O'; then
+            codesign \
+                --force \
+                --options runtime \
+                --timestamp \
+                --sign "$identity" \
+                "$1"
+        else
+            # These generic seals make strict bundle validation treat the .NET
+            # assemblies and data beside the executable as prepared payload.
+            # The notary service checks each nested signature independently, so
+            # these seals need a secure timestamp even though they are not Mach-O.
+            codesign \
+                --force \
+                --timestamp \
+                --sign "$identity" \
+                "$1"
+        fi
+    }
+    local sign_production_bundle
+    sign_production_bundle() {
+        codesign \
+            --force \
+            --options runtime \
+            --timestamp \
+            --sign "$identity" \
+            "$1"
+    }
+
+    # Sign every nested payload leaf (including every Mach-O) before its
+    # containing code bundle, then sign the outer application last. Do not use
+    # --deep for signing: it can conceal an incorrectly signed component.
+    for_each_macos_payload_file_deepest_first "$app_bundle" sign_production_leaf
+    for_each_nested_code_bundle_deepest_first "$app_bundle" sign_production_bundle
+    codesign \
+        --force \
+        --options runtime \
+        --timestamp \
+        --entitlements "$MAC_ENTITLEMENTS" \
+        --sign "$identity" \
+        "$app_bundle"
+    codesign --verify --deep --strict --verbose=2 "$app_bundle"
+}
+
+notarize_macos_bundle() {
+    local app_bundle="$1"
+    local notary_zip
+    local notary_result
+    local notary_status
+
+    [[ -n "$NOTARY_KEYCHAIN_PROFILE" ]] || {
+        echo "Public macOS production releases require SPYRO_EDITOR_NOTARY_KEYCHAIN_PROFILE." >&2
+        echo "Create one with: xcrun notarytool store-credentials <profile-name>" >&2
+        return 1
+    }
+    command -v xcrun >/dev/null 2>&1 || {
+        echo "macOS production notarization requires Xcode command-line tools." >&2
+        return 1
+    }
+    command -v ditto >/dev/null 2>&1 || {
+        echo "macOS production notarization requires ditto." >&2
+        return 1
+    }
+
+    NOTARIZATION_TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/spyro-editor-notarization.XXXXXX")"
+    notary_zip="$NOTARIZATION_TEMP_DIR/Spyro-Editor-notarization.zip"
+    notary_result="$NOTARIZATION_TEMP_DIR/notary-result.json"
+    ditto -c -k --keepParent "$app_bundle" "$notary_zip"
+
+    echo "Submitting macOS application for notarization (profile: $NOTARY_KEYCHAIN_PROFILE)"
+    if ! xcrun notarytool submit "$notary_zip" \
+        --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" \
+        --wait \
+        --output-format json > "$notary_result"; then
+        cat "$notary_result" >&2 || true
+        echo "Apple notarization submission failed." >&2
+        return 1
+    fi
+    cat "$notary_result"
+    notary_status="$(python3 - "$notary_result" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as stream:
+    print(json.load(stream).get("status", ""))
+PY
+    )"
+    [[ "$notary_status" == "Accepted" ]] || {
+        echo "Apple notarization did not return Accepted (status: ${notary_status:-missing})." >&2
+        return 1
+    }
+
+    xcrun stapler staple "$app_bundle"
+    xcrun stapler validate "$app_bundle"
+    codesign --verify --deep --strict --verbose=2 "$app_bundle"
+    spctl --assess --type execute --verbose=2 "$app_bundle"
+
+    rm -rf "$NOTARIZATION_TEMP_DIR"
+    NOTARIZATION_TEMP_DIR=""
+}
+
+preflight_release_build() {
+    local mac_build_mode
+    mac_build_mode="$(resolve_mac_build_mode)"
+    if [[ "$mac_build_mode" == "local" ]]; then
+        return
+    fi
+
+    [[ -f "$MAC_ENTITLEMENTS" ]] || {
+        echo "Missing macOS entitlements: $MAC_ENTITLEMENTS" >&2
+        return 1
+    }
+    command -v codesign >/dev/null 2>&1 || {
+        echo "Developer ID macOS signing requires codesign." >&2
+        return 1
+    }
+    resolve_developer_id_identity >/dev/null
+
+    if [[ "$mac_build_mode" == "production" ]]; then
+        [[ -n "$NOTARY_KEYCHAIN_PROFILE" ]] || {
+            echo "Public macOS production releases require SPYRO_EDITOR_NOTARY_KEYCHAIN_PROFILE." >&2
+            echo "Create one with: xcrun notarytool store-credentials <profile-name>" >&2
+            return 1
+        }
+        command -v xcrun >/dev/null 2>&1 || {
+            echo "macOS production notarization requires Xcode command-line tools." >&2
+            return 1
+        }
+        command -v ditto >/dev/null 2>&1 || {
+            echo "macOS production notarization requires ditto." >&2
+            return 1
+        }
+    fi
 }
 
 copy_release_files() {
@@ -72,7 +387,8 @@ README
 $PUBLIC_RELEASE_NAME
 Internal build: $PROJECT_VERSION
 
-Start with Launch Spyro Editor.
+On macOS, open Spyro Editor.app directly. On Windows, start with
+Launch Spyro Editor.bat.
 
 Use Open BIN/CUE inside the editor and choose your own Spyro the Dragon disc
 image. The editor rebuilds terrain maps and object placement from that selected
@@ -143,17 +459,26 @@ export SPYRO_EDITOR_RELEASE=0
 "./Spyro Editor.app/Contents/MacOS/Spyro.Editor.App"
 LAUNCHER
         chmod +x "$package_dir/Launch Spyro Editor Research.command"
-    else
-        cat > "$package_dir/Launch Spyro Editor.command" <<'LAUNCHER'
-#!/bin/zsh
-set -e
-cd "$(dirname "$0")"
-export SPYRO_EDITOR_INSTALL_ROOT="$PWD"
-export SPYRO_EDITOR_RELEASE=1
-"./Spyro Editor.app/Contents/MacOS/Spyro.Editor.App"
-LAUNCHER
-        chmod +x "$package_dir/Launch Spyro Editor.command"
     fi
+}
+
+write_macos_open_instructions() {
+    local package_dir="$1"
+    cat > "$package_dir/MACOS-OPEN-INSTRUCTIONS.txt" <<'INSTRUCTIONS'
+Spyro Editor macOS emergency opening instructions
+
+This build is Developer ID signed and hardened, but it has not completed Apple's
+notarization service. First, try opening Spyro Editor.app normally.
+
+If macOS blocks it:
+1. Open System Settings > Privacy & Security.
+2. Find the message about Spyro Editor in the Security section.
+3. Click Open Anyway, authenticate if asked, then confirm Open.
+
+Open Anyway bypasses Apple's missing-notarization warning for this app. Use it
+only if this ZIP came from the official Spyro Editor GitHub release; do not use
+it for a copy from another source. The normal release path remains notarized.
+INSTRUCTIONS
 }
 
 write_mac_app_bundle() {
@@ -209,6 +534,18 @@ PLIST
         cp -R "$package_dir/support/." "$macos_dir/support/"
         rm -rf "$macos_dir/support/app"
     fi
+
+    # dotnet publish can mark managed assemblies and JSON payloads executable.
+    # Inside Contents/MacOS that makes codesign misclassify data as unsigned
+    # nested code. Normalize everything to data, then restore the executable
+    # bit only for actual Mach-O components.
+    find "$macos_dir" -type f -exec chmod a-x {} +
+    local make_macho_executable
+    make_macho_executable() {
+        chmod +x "$1"
+    }
+    for_each_macho_deepest_first "$app_bundle" make_macho_executable
+    chmod +x "$macos_dir/Spyro.Editor.App"
 }
 
 write_windows_launcher() {
@@ -256,16 +593,32 @@ publish_release_package() {
     copy_release_files "$package_dir"
     write_release_manifest "$package_dir" "$rid"
     if [[ "$rid" == osx-* ]]; then
+        local mac_build_mode
         write_mac_app_bundle "$package_dir"
         write_mac_launcher "$package_dir"
+        mac_build_mode="$(resolve_mac_build_mode)"
+        if [[ "$mac_build_mode" == "signed-only" ]]; then
+            write_macos_open_instructions "$package_dir"
+        fi
         if command -v xattr >/dev/null 2>&1; then
             # Strip provenance, quarantine, Finder, and other machine-local metadata
             # before codesign adds only the signature attributes it needs.
             xattr -cr "$package_dir"
         fi
-        if command -v codesign >/dev/null 2>&1; then
-            codesign --force --deep --sign - "$package_dir/Spyro Editor.app"
-        fi
+        case "$mac_build_mode" in
+            production)
+                sign_macos_bundle_developer_id "$package_dir/Spyro Editor.app"
+                notarize_macos_bundle "$package_dir/Spyro Editor.app"
+                ;;
+            signed-only)
+                echo "Building emergency Developer ID-signed macOS package without notarization."
+                sign_macos_bundle_developer_id "$package_dir/Spyro Editor.app"
+                ;;
+            local)
+                echo "Building explicitly local, non-notarized macOS package."
+                sign_macos_bundle_local "$package_dir/Spyro Editor.app"
+                ;;
+        esac
     elif [[ "$rid" == win-* ]]; then
         write_windows_launcher "$package_dir"
     fi
@@ -278,7 +631,8 @@ publish_release_package() {
     fi
 
     if [[ "$rid" == osx-* ]] && command -v ditto >/dev/null 2>&1; then
-        # Preserve the ad-hoc signature's extended attributes through ZIP roundtrip.
+        # Preserve code signature metadata and, for production, the stapled ticket
+        # through the ZIP roundtrip.
         (cd "$DIST_DIR" && ditto -c -k --sequesterRsrc --keepParent "$RELEASE_NAME-$rid" "$RELEASE_NAME-$rid.zip")
     else
         (cd "$DIST_DIR" && zip -qr "$RELEASE_NAME-$rid.zip" "$RELEASE_NAME-$rid")
@@ -286,6 +640,8 @@ publish_release_package() {
     echo "Wrote $package_dir"
     echo "Wrote $zip_path"
 }
+
+preflight_release_build
 
 dotnet clean "$APP_PROJECT" --configuration "$CONFIGURATION"
 dotnet build "$APP_PROJECT" --configuration "$CONFIGURATION"
@@ -295,7 +651,12 @@ publish_release_package "win-x64"
 
 if ! is_research_build && [[ -x "$ROOT_DIR/tools/Verify-SpyroEditorRelease.sh" ]]; then
     echo
-    "$ROOT_DIR/tools/Verify-SpyroEditorRelease.sh" "$RELEASE_NAME"
+    if [[ "$(resolve_mac_build_mode)" == "signed-only" ]]; then
+        SPYRO_EDITOR_ALLOW_UNNOTARIZED=1 \
+            "$ROOT_DIR/tools/Verify-SpyroEditorRelease.sh" "$RELEASE_NAME"
+    else
+        "$ROOT_DIR/tools/Verify-SpyroEditorRelease.sh" "$RELEASE_NAME"
+    fi
 fi
 
 echo

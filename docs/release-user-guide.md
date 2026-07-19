@@ -10,7 +10,8 @@ gold Key + Locked Chest V2 pair is the guarded exception described below.
 
 ## Start
 
-1. Open `Launch Spyro Editor`.
+1. On macOS, unzip the download and open `Spyro Editor.app` directly. On
+   Windows, open `Launch Spyro Editor.bat`.
 2. Click `Open BIN/CUE`.
 3. Choose your own Spyro the Dragon disc image.
 4. Wait until the status bar says the editor rebuilt level maps and object caches.
@@ -22,6 +23,13 @@ active protected project's `output` folder under `Documents/Spyro Editor/Project
 not into the replaceable application folder. If saved edits are not export-ready,
 the editor removes older matching test BIN/CUE output instead of leaving a stale
 disc to load.
+
+The normal Mac release is notarized by Apple. If an emergency tester ZIP includes
+`MACOS-OPEN-INSTRUCTIONS.txt`, first try opening the app normally. If macOS blocks
+it, use System Settings > Privacy & Security > Open Anyway only after confirming
+the ZIP came from the official Spyro Editor GitHub release. That control bypasses
+Apple's missing-notarization warning for this app; the signed-only package is a
+temporary fallback, not the normal release path.
 
 ## Projects and Updates
 
@@ -49,8 +57,9 @@ Downloads are accepted only when the public beta tag/title, package manifest,
 packaged changelog, platform, and SHA-256 digest agree. Before downloading, the
 editor writes a verified snapshot of saved edits and imported assets under the
 external application-data `Backups` folder. Automatic in-place replacement is
-intentionally disabled until both platform packages have production signing;
-the verified ZIP can be installed normally without touching the external project.
+intentionally disabled so installation stays an explicit user action. The Mac
+app is Developer ID signed, hardened, notarized by Apple, and stapled; install
+the verified ZIP normally without touching the external project.
 
 ## Build Safety
 
