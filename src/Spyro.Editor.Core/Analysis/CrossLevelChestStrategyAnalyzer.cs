@@ -72,8 +72,26 @@ public static class CrossLevelChestStrategyAnalyzer
             ["peacekeepers", "townsquare"],
             recordsByActor,
             rootsByActor);
+        ChestObjectStrategy fireworkChest = BuildObjectStrategy(
+            workspace,
+            level,
+            "fireworkChest",
+            "Firework Chest",
+            0x0138,
+            ["gnastysloot"],
+            recordsByActor,
+            rootsByActor);
+        ChestObjectStrategy multiGemChest = BuildObjectStrategy(
+            workspace,
+            level,
+            "multiGemChest",
+            "3x Flame Chest",
+            0x0186,
+            ["gnastysloot"],
+            recordsByActor,
+            rootsByActor);
 
-        return new CrossLevelChestLevelStrategy(level.Key, level.DisplayName, level.SourceRecordCount, key, keyChest, springChest);
+        return new CrossLevelChestLevelStrategy(level.Key, level.DisplayName, level.SourceRecordCount, key, keyChest, springChest, fireworkChest, multiGemChest);
     }
 
     private static ChestObjectStrategy BuildObjectStrategy(
@@ -108,6 +126,12 @@ public static class CrossLevelChestStrategyAnalyzer
         {
             strategy = "native-root-needs-signature";
             nextAction = $"Actor package is already loaded; identify a safe local {displayName} source signature or clone from a level-specific donor.";
+        }
+        else if (recipe?.Status.StartsWith("in-game-blocked", StringComparison.OrdinalIgnoreCase) == true ||
+                 recipe?.Status.StartsWith("blocked", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            strategy = "blocked-package-recipe";
+            nextAction = $"Do not reuse failed recipe {recipe.Id}; map a new actor/model-subfile-safe package route before another candidate test.";
         }
         else if (recipe != null)
         {
@@ -234,29 +258,40 @@ public static class CrossLevelChestStrategyAnalyzer
         StringBuilder builder = new();
         builder.AppendLine("# Universal Chest Strategy");
         builder.AppendLine();
-        builder.AppendLine("This report separates safe local cloning from risky cross-level actor-package imports. Keys are universal lightweight adds; Key Chests and Spring Chests should use native level donors when the level already has the actor record/root.");
+        builder.AppendLine("This report separates safe local cloning from risky cross-level actor-package imports. Keys are universal lightweight adds; Key Chests, Spring Chests, Firework Chests, and 3x Flame Chests should use native level donors when the level already has the actor record/root.");
         builder.AppendLine();
         builder.AppendLine("| Object | Native clone | Native root only | Package recipe | Needs recipe |");
         builder.AppendLine("|---|---:|---:|---:|---:|");
-        foreach (string family in new[] { "lockedChest", "springChest" })
+        foreach (string family in new[] { "lockedChest", "springChest", "fireworkChest", "multiGemChest" })
         {
             List<ChestObjectStrategy> strategies = report.Levels
-                .Select(level => family == "lockedChest" ? level.KeyChest : level.SpringChest)
+                .Select(level => family switch
+                {
+                    "lockedChest" => level.KeyChest,
+                    "springChest" => level.SpringChest,
+                    "fireworkChest" => level.FireworkChest,
+                    "multiGemChest" => level.MultiGemChest,
+                    _ => throw new InvalidOperationException($"Unsupported chest family '{family}'.")
+                })
                 .ToList();
             builder.AppendLine($"| {strategies[0].DisplayName} | {Count(strategies, "native-clone")} | {Count(strategies, "native-root-needs-signature")} | {Count(strategies, "mapped-package-candidate")} | {Count(strategies, "needs-package-recipe")} |");
         }
 
         builder.AppendLine();
-        builder.AppendLine("| Level | Key | Key Chest | Spring Chest | Next Best Action |");
-        builder.AppendLine("|---|---|---|---|---|");
+        builder.AppendLine("| Level | Key | Key Chest | Spring Chest | Firework Chest | 3x Flame Chest | Next Best Action |");
+        builder.AppendLine("|---|---|---|---|---|---|---|");
         foreach (CrossLevelChestLevelStrategy level in report.Levels.OrderBy(level => level.LevelName, StringComparer.OrdinalIgnoreCase))
         {
             string nextAction = level.KeyChest.Strategy != "native-clone"
                 ? level.KeyChest.NextAction
                 : level.SpringChest.Strategy != "native-clone"
                     ? level.SpringChest.NextAction
-                    : "Use local clone path for both chest types; verify reward/link behavior in a disposable test.";
-            builder.AppendLine($"| {Escape(level.LevelName)} | {Format(level.Key)} | {Format(level.KeyChest)} | {Format(level.SpringChest)} | {Escape(nextAction)} |");
+                    : level.FireworkChest.Strategy != "native-clone"
+                        ? level.FireworkChest.NextAction
+                        : level.MultiGemChest.Strategy != "native-clone"
+                            ? level.MultiGemChest.NextAction
+                            : "Use local clone paths for all four chest types; verify reward/link behavior in a disposable test.";
+            builder.AppendLine($"| {Escape(level.LevelName)} | {Format(level.Key)} | {Format(level.KeyChest)} | {Format(level.SpringChest)} | {Format(level.FireworkChest)} | {Format(level.MultiGemChest)} | {Escape(nextAction)} |");
         }
 
         return builder.ToString();
@@ -306,7 +341,9 @@ public sealed record CrossLevelChestLevelStrategy(
     int SourceRecordCount,
     ChestObjectStrategy Key,
     ChestObjectStrategy KeyChest,
-    ChestObjectStrategy SpringChest);
+    ChestObjectStrategy SpringChest,
+    ChestObjectStrategy FireworkChest,
+    ChestObjectStrategy MultiGemChest);
 
 public sealed record ChestObjectStrategy(
     string Family,

@@ -1,5 +1,7 @@
 using System.Text;
 using System.Text.Json;
+using Spyro.Editor.Core.Analysis;
+using Spyro.Editor.Core.Levels;
 
 namespace Spyro.Editor.Core.Exporting;
 
@@ -29,7 +31,11 @@ public static class MobyCandidateValidationReportWriter
         List<MobyActorPackageImportPreview> unwritablePreviews = plan.PackageImportPreviews
             .Where(preview => !preview.CanWriteImage && !string.IsNullOrWhiteSpace(preview.TemplateId))
             .ToList();
-        string resultPath = await EnsureCandidateResultTemplateAsync(result, writablePreviews, cancellationToken);
+        List<MobySourcePatch> existingSlotSwapPatches = plan.Patches
+            .Where(patch => string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        MobySourcePatch? fastEntryPatch = plan.Patches.SingleOrDefault(TestLevelWarpPatch.IsPatch);
+        string resultPath = await EnsureCandidateResultTemplateAsync(result, writablePreviews, existingSlotSwapPatches, cancellationToken);
         CandidateResultEvidence evidence = ReadCandidateResultEvidence(resultPath);
 
         StringBuilder builder = new();
@@ -45,6 +51,21 @@ public static class MobyCandidateValidationReportWriter
         builder.AppendLine($"- Patched bytes: {plan.TotalPatchedBytes}");
         builder.AppendLine($"- Result file: `{resultPath}`");
         builder.AppendLine();
+
+        if (fastEntryPatch != null && TestLevelWarpPatch.TryGetTargetLevelId(fastEntryPatch, out int targetLevelId))
+        {
+            builder.AppendLine("## Fast Level Entry");
+            builder.AppendLine();
+            builder.AppendLine("This disposable Swap Test includes a guarded shortcut to the target level; normal `Create BIN` does not include it.");
+            builder.AppendLine();
+            builder.AppendLine("1. Boot this candidate CUE and reach any playable level.");
+            builder.AppendLine("2. Press **Select** to open Inventory and wait until it accepts input.");
+            builder.AppendLine($"3. Enter **{TestLevelWarpPatch.ActivationSequence}**.");
+            builder.AppendLine($"4. Press **{TestLevelWarpPatch.TargetSelectionText(targetLevelId)}** to load **{plan.LevelName}** from the mounted candidate.");
+            builder.AppendLine();
+            builder.AppendLine("The shortcut can be entered again after another level loads, so no per-level save state is required.");
+            builder.AppendLine();
+        }
 
         builder.AppendLine("## In-Game Evidence");
         builder.AppendLine();
@@ -114,6 +135,22 @@ public static class MobyCandidateValidationReportWriter
             }
         }
 
+        if (existingSlotSwapPatches.Count > 0)
+        {
+            builder.AppendLine("## Existing-Slot Swap Candidates");
+            builder.AppendLine();
+            builder.AppendLine("These candidates replace existing rows and do not increase the level source-object count.");
+            builder.AppendLine();
+            builder.AppendLine("| Object | Target slot | Bytes | Candidate detail |");
+            builder.AppendLine("|---|---:|---:|---|");
+            foreach (MobySourcePatch patch in existingSlotSwapPatches)
+            {
+                builder.AppendLine(
+                    $"| {EscapeMarkdownCell(patch.MobyLabel)} | T{patch.TrueIndex} | {patch.ByteLength} | {EscapeMarkdownCell(patch.Description)} |");
+            }
+            builder.AppendLine();
+        }
+
         if (unwritablePreviews.Count > 0)
         {
             builder.AppendLine("## Guarded Or Unmapped Imports");
@@ -152,6 +189,8 @@ public static class MobyCandidateValidationReportWriter
         builder.AppendLine("## In-Game Checklist");
         builder.AppendLine();
         builder.AppendLine("- [ ] Boot the level from this CUE and confirm it does not hang on the loading/flying screen.");
+        foreach (MobySourcePatch patch in existingSlotSwapPatches)
+            AppendExistingSlotSwapChecklist(builder, patch);
         foreach (MobyActorPackageImportPreview preview in DistinctChecklistPreviews(writablePreviews))
             AppendFamilyChecklist(builder, preview);
         builder.AppendLine("- [ ] If anything hangs, disappears, or corrupts nearby actors, keep the recipe guarded and test a new candidate instead of using normal Create BIN.");
@@ -163,6 +202,7 @@ public static class MobyCandidateValidationReportWriter
     private static async Task<string> EnsureCandidateResultTemplateAsync(
         MobySourcePatchResult result,
         IReadOnlyList<MobyActorPackageImportPreview> writablePreviews,
+        IReadOnlyList<MobySourcePatch> existingSlotSwapPatches,
         CancellationToken cancellationToken)
     {
         string resultPath = Path.ChangeExtension(result.OutputCuePath, ".candidate-result.json");
@@ -173,10 +213,15 @@ public static class MobyCandidateValidationReportWriter
         {
             "Boot the level from this CUE and confirm it does not hang on the loading/flying screen."
         };
+        foreach (MobySourcePatch patch in existingSlotSwapPatches)
+            AddExistingSlotSwapChecklist(checklist, patch);
         foreach (MobyActorPackageImportPreview preview in DistinctChecklistPreviews(writablePreviews))
             AddFamilyChecklist(checklist, preview);
         checklist.Add("If anything hangs, disappears, or corrupts nearby actors, keep the recipe guarded and test a new candidate instead of using normal Create BIN.");
-        CandidateBehaviorCheck[] behaviorChecks = BuildBehaviorChecks(writablePreviews).ToArray();
+        CandidateBehaviorCheck[] behaviorChecks = BuildBehaviorChecks(writablePreviews)
+            .Concat(BuildExistingSlotSwapBehaviorChecks(existingSlotSwapPatches))
+            .DistinctBy(check => check.Id, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
         var template = new
         {
@@ -197,6 +242,14 @@ public static class MobyCandidateValidationReportWriter
                     recipeId = preview.RecipeId,
                     recipeStatus = preview.RecipeStatus,
                     recipeFingerprint = CrossLevelCandidateRecipeFingerprint.Create(preview)
+                }).ToArray(),
+                existingSlotSwaps = existingSlotSwapPatches.Select(patch => new
+                {
+                    label = patch.MobyLabel,
+                    targetTrueIndex = patch.TrueIndex,
+                    patchKind = patch.Kind,
+                    sourceCountUnchanged = patch.Description.Contains("Source object count remains", StringComparison.OrdinalIgnoreCase),
+                    description = patch.Description
                 }).ToArray()
             },
             result = new
@@ -304,6 +357,111 @@ public static class MobyCandidateValidationReportWriter
     {
         checklist.AddRange(BuildFamilyChecklist(preview));
     }
+
+    private static void AppendExistingSlotSwapChecklist(StringBuilder builder, MobySourcePatch patch)
+    {
+        foreach (string item in BuildExistingSlotSwapChecklist(patch))
+            builder.AppendLine($"- [ ] {item}");
+    }
+
+    private static void AddExistingSlotSwapChecklist(List<string> checklist, MobySourcePatch patch)
+    {
+        checklist.AddRange(BuildExistingSlotSwapChecklist(patch));
+    }
+
+    private static IEnumerable<string> BuildExistingSlotSwapChecklist(MobySourcePatch patch)
+    {
+        string label = string.IsNullOrWhiteSpace(patch.MobyLabel) ? $"T{patch.TrueIndex}" : patch.MobyLabel;
+        if (TryGetResidentWizardChecklistContext(patch, out ResidentWizardChecklistContext resident))
+        {
+            yield return $"Confirm {label} appears as a correctly textured Green Wizard at existing slot T{patch.TrueIndex}.";
+            yield return $"Approach from several angles; confirm the Wizard follows its {resident.ChecklistRouteDescription} without snapping to {resident.DonorLevelName} T{resident.DonorTrueIndex}'s original location.";
+            yield return "Observe at least three complete casts; every cast must spawn a moving, textured lightning bolt and trail instead of looping only the cast animation.";
+            yield return "Let at least two separate lightning bolts hit Spyro; confirm each applies normal damage and Spyro does not stretch, blur, freeze, or become corrupted.";
+            yield return $"Flame or charge {label}; confirm exactly one death animation, one death sound, and the selected slot's original gem reward.";
+            yield return "Wait at least 10 seconds after collecting the gem; confirm the Wizard stays retired and neither its death animation nor sound repeats.";
+            yield return LevelCatalog.NormalizeKey(patch.LevelKey) is "magiccrafters" or "wizardpeak"
+                ? "Run around the replacement area after the fight; confirm terrain collision remains stable with the in-place properties/fixup edit."
+                : "Run around the replacement area after the fight; confirm terrain collision remains stable after the scene component shift.";
+            yield return $"Confirm the other native {resident.TargetLevelName} Wizards, nearby enemies, particles, portals, and collision still behave normally.";
+            yield break;
+        }
+
+        yield return $"Confirm {label} appears at existing slot T{patch.TrueIndex} and remains visible from several camera angles.";
+        yield return $"Interact with or defeat {label}; confirm it reacts at normal speed and does not hang the game.";
+        yield return $"Confirm {label}'s reward, gem, or chest contents are sensible for the reused slot.";
+        yield return "Confirm nearby enemies, chests, dragons, portals, and collision still behave normally.";
+    }
+
+    private static IEnumerable<CandidateBehaviorCheck> BuildExistingSlotSwapBehaviorChecks(IEnumerable<MobySourcePatch> patches)
+    {
+        foreach (MobySourcePatch patch in patches)
+        {
+            string id = $"existing-slot-t{Math.Max(0, patch.TrueIndex)}";
+            string label = string.IsNullOrWhiteSpace(patch.MobyLabel) ? $"T{patch.TrueIndex}" : patch.MobyLabel;
+            if (TryGetResidentWizardChecklistContext(patch, out ResidentWizardChecklistContext resident))
+            {
+                yield return new CandidateBehaviorCheck($"{id}-wizard-visible", $"{label} appears as a correctly textured Green Wizard at T{patch.TrueIndex}.", null);
+                yield return new CandidateBehaviorCheck($"{id}-wizard-route", $"{label} uses the private {resident.RoutePointLabel} route anchored at the selected slot instead of snapping to the native {resident.DonorLevelName} T{resident.DonorTrueIndex} donor route.", null);
+                yield return new CandidateBehaviorCheck($"{id}-wizard-cast", "At least three consecutive casts each spawn a moving, correctly textured lightning bolt and trail.", null);
+                yield return new CandidateBehaviorCheck($"{id}-wizard-hit", "At least two separate lightning bolts damage Spyro normally without stretching, blurring, freezing, or corruption.", null);
+                yield return new CandidateBehaviorCheck($"{id}-wizard-death", $"{label} produces exactly one death animation/sound, drops the reused slot's original gem, and remains retired for at least 10 seconds.", null);
+                yield return new CandidateBehaviorCheck($"{id}-wizard-collision", "Terrain and object collision remain stable around the replacement after the fight.", null);
+                yield return new CandidateBehaviorCheck($"{id}-wizard-nearby", $"Other native {resident.TargetLevelName} Wizards, nearby enemies, particles, portals, and collision still behave normally.", null);
+                continue;
+            }
+
+            yield return new CandidateBehaviorCheck($"{id}-visible", $"{label} appears at T{patch.TrueIndex} and stays visible from several camera angles.", null);
+            yield return new CandidateBehaviorCheck($"{id}-behavior", $"{label} can be interacted with or defeated and behaves at normal speed.", null);
+            yield return new CandidateBehaviorCheck($"{id}-reward", $"{label}'s reward, gem, or chest contents are sensible for the reused slot.", null);
+            yield return new CandidateBehaviorCheck($"{id}-nearby", "Nearby enemies, chests, dragons, portals, and collision still behave normally.", null);
+        }
+    }
+
+    private static bool TryGetResidentWizardChecklistContext(
+        MobySourcePatch patch,
+        out ResidentWizardChecklistContext context)
+    {
+        context = null!;
+        if (!GreenWizardResidentSwapComposer.IsResidentWizardPatch(patch))
+            return false;
+
+        LevelRuntimeBundleProfile? profile = GreenWizardRuntimeBundleCatalog.FindProfile(patch.LevelKey);
+        if (profile == null)
+            return false;
+
+        string routePointLabel = profile.InstanceLayout.RoutePointCount switch
+        {
+            1 => "one-point",
+            2 => "two-point",
+            int count => $"{count}-point"
+        };
+        context = new ResidentWizardChecklistContext(
+            FormatLevelName(patch.LevelKey),
+            FormatLevelName(profile.InstanceLayout.PropertiesDonorLevelKey),
+            profile.InstanceLayout.PropertiesDonorTrueIndex,
+            routePointLabel,
+            LevelCatalog.NormalizeKey(patch.LevelKey) == "magiccrafters"
+                ? $"private translated route ({routePointLabel})"
+                : $"private {routePointLabel} route");
+        return true;
+    }
+
+    private static string FormatLevelName(string levelKey) =>
+        LevelCatalog.NormalizeKey(levelKey) switch
+        {
+            "blowhard" => "Blowhard",
+            "magiccrafters" => "Magic Crafters",
+            "wizardpeak" => "Wizard Peak",
+            string normalized => string.IsNullOrWhiteSpace(normalized) ? "the level" : normalized
+        };
+
+    private sealed record ResidentWizardChecklistContext(
+        string TargetLevelName,
+        string DonorLevelName,
+        int DonorTrueIndex,
+        string RoutePointLabel,
+        string ChecklistRouteDescription);
 
     private static IEnumerable<MobyActorPackageImportPreview> DistinctChecklistPreviews(IEnumerable<MobyActorPackageImportPreview> previews)
     {
@@ -494,6 +652,16 @@ public static class MobyCandidateValidationReportWriter
                 yield break;
             }
 
+            if (preview.RecipeMode.Contains("SafeNativeSpringEffectOnlyStackHelper", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return "Confirm the target level boots past the flying/loading screen and the Spring Chest appears at the placed location.";
+                yield return "Flame and charge the chest; each hit path should trigger one Spring Chest pop with one blue-gem visual following the short rise, hang, and drop arc.";
+                yield return "Let the gem miss Spyro once; it should return to the chest and the chest should become usable again without Sparx targeting a parked reward.";
+                yield return "On the next pop, touch the blue gem; the treasure count should increase by exactly +5, then the chest and visual should retire once with no repeated sound, reward, or animation.";
+                yield return "Break one normal chest nearby afterward and confirm native chest behavior, portals, dragons, and surrounding actors remain normal.";
+                yield break;
+            }
+
             if (preview.RecipeMode.Contains("NoControllerNoExeHelper", StringComparison.OrdinalIgnoreCase) ||
                 preview.RecipeMode.Contains("Native0149T70", StringComparison.OrdinalIgnoreCase) ||
                 preview.RecipeMode.Contains("Native0149T91T131", StringComparison.OrdinalIgnoreCase))
@@ -524,10 +692,27 @@ public static class MobyCandidateValidationReportWriter
             yield return "Collect the matching key, open the Key Chest, and confirm its reward behaves normally.";
             yield return "Confirm nearby portals, dragons, and existing chests still behave normally.";
         }
+        else if (family.Contains("fireworkchest", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "Confirm the Firework Chest appears with its fuse/projectile controller and linked reward rows present.";
+            yield return "Trigger it with flame and charge as appropriate; the firework should launch and explode once using the native timing, effects, and sound.";
+            yield return "Confirm every linked gem is awarded exactly once and the chest remains retired without repeating explosions or rewards.";
+            yield return "Confirm nearby chests, enemies, portals, dragons, and effects still behave normally.";
+        }
+        else if (family.Contains("multigemchest", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "Confirm the 3x Flame Chest appears with its hidden fan/controller and all linked reward rows present.";
+            yield return "Trigger the chest and confirm the full native multi-explosion sequence plays once with the expected effects and sound.";
+            yield return "Confirm all rewards appear and count exactly once, then the chest and controller retire without replaying the sequence.";
+            yield return "Confirm nearby chests, enemies, portals, dragons, and effects still behave normally.";
+        }
         else if (family.Contains("enemytransform", StringComparison.OrdinalIgnoreCase))
         {
             yield return $"Confirm {preview.Label} appears as the imported enemy and can be defeated without breaking nearby actors.";
-            yield return "Confirm the defeated enemy's reward or collection behavior is sane.";
+            if (preview.RecipeMode.Contains("ReplaceUnused00EARoot", StringComparison.OrdinalIgnoreCase))
+                yield return "Confirm Toasty's treasure maximum remains 100 and the imported enemy drops the target slot's original red gem.";
+            else
+                yield return "Confirm the defeated enemy's reward or collection behavior is sane.";
             yield return "Confirm other enemies in the level still behave normally.";
         }
         else
@@ -703,6 +888,17 @@ public static class MobyCandidateValidationReportWriter
                 yield break;
             }
 
+            if (preview.RecipeMode.Contains("SafeNativeSpringEffectOnlyStackHelper", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return new CandidateBehaviorCheck("springchest-v159-boots", "The target level boots past the flying/loading screen with the complete controller, shell, helper, and blank reward-row bundle.", null);
+                yield return new CandidateBehaviorCheck("springchest-v159-appears", "The Spring Chest appears at the placed location.", null);
+                yield return new CandidateBehaviorCheck("springchest-v159-pop-arc", "Flame and charge each produce one blue-gem visual using the short rise, hang, and drop arc.", null);
+                yield return new CandidateBehaviorCheck("springchest-v159-miss-return", "An uncollected gem returns to the chest and rearms it without becoming a parked Sparx target.", null);
+                yield return new CandidateBehaviorCheck("springchest-v159-collect-once", "Touching the next blue gem awards exactly +5 and retires the chest/visual once without repeated animation, sound, or reward.", null);
+                yield return new CandidateBehaviorCheck("springchest-v159-nearby-regression", "A nearby native chest and surrounding actors still behave normally afterward.", null);
+                yield break;
+            }
+
             if (preview.RecipeMode.Contains("NoControllerNoExeHelper", StringComparison.OrdinalIgnoreCase) ||
                 preview.RecipeMode.Contains("Native0149T70", StringComparison.OrdinalIgnoreCase))
             {
@@ -732,11 +928,28 @@ public static class MobyCandidateValidationReportWriter
             yield return new CandidateBehaviorCheck("keychest-opens-after-key", "After collecting the key, the Key Chest opens and rewards normally.", null);
             yield return new CandidateBehaviorCheck("keychest-nearby-regression", "Nearby portals, dragons, and existing chests still behave normally.", null);
         }
+        else if (family.Contains("fireworkchest", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return new CandidateBehaviorCheck("fireworkchest-bundle-present", "The Firework Chest, fuse/projectile controller, and linked reward rows all appear in the target level.", null);
+            yield return new CandidateBehaviorCheck("fireworkchest-native-sequence", "Triggering the chest launches and explodes the firework once with native timing, effects, and sound.", null);
+            yield return new CandidateBehaviorCheck("fireworkchest-reward-once", "Every linked gem is awarded exactly once and the chest remains retired without repeated explosions or rewards.", null);
+            yield return new CandidateBehaviorCheck("fireworkchest-nearby-regression", "Nearby chests, enemies, portals, dragons, and effects still behave normally.", null);
+        }
+        else if (family.Contains("multigemchest", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return new CandidateBehaviorCheck("multigemchest-bundle-present", "The 3x Flame Chest, hidden fan/controller, and all linked reward rows appear in the target level.", null);
+            yield return new CandidateBehaviorCheck("multigemchest-native-sequence", "Triggering the chest plays the complete native multi-explosion sequence once with the expected effects and sound.", null);
+            yield return new CandidateBehaviorCheck("multigemchest-reward-once", "All rewards count exactly once and the chest/controller retire without replaying the sequence.", null);
+            yield return new CandidateBehaviorCheck("multigemchest-nearby-regression", "Nearby chests, enemies, portals, dragons, and effects still behave normally.", null);
+        }
         else if (family.Contains("enemytransform", StringComparison.OrdinalIgnoreCase))
         {
             yield return new CandidateBehaviorCheck("enemy-appears-as-import", $"{preview.Label} appears as the imported enemy.", null);
             yield return new CandidateBehaviorCheck("enemy-defeatable", "The imported enemy can be defeated.", null);
-            yield return new CandidateBehaviorCheck("enemy-reward-sane", "The defeated enemy's reward or collection behavior is sane.", null);
+            if (preview.RecipeMode.Contains("ReplaceUnused00EARoot", StringComparison.OrdinalIgnoreCase))
+                yield return new CandidateBehaviorCheck("enemy-toasty-native-reward", "Toasty's treasure maximum remains 100 and the imported enemy drops the target slot's original red gem.", null);
+            else
+                yield return new CandidateBehaviorCheck("enemy-reward-sane", "The defeated enemy's reward or collection behavior is sane.", null);
             yield return new CandidateBehaviorCheck("enemy-nearby-regression", "Other enemies in the level still behave normally.", null);
         }
         else

@@ -61,9 +61,20 @@ if (catalog.Levels.Count == 0)
 
 PortableEditorCacheResult result = await PortableEditorCacheBuilder.BuildAsync(workspace, catalog, overwrite: force, fastReuseExistingCache: !force);
 Console.WriteLine(result.ReusedExistingCache
-    ? $"Cache reused: {result.MobyCacheCount}/{result.LevelCount} object maps, {result.OverlayCacheCount}/{result.LevelCount} terrain maps."
-    : $"Cache built: {result.MobyCacheCount}/{result.LevelCount} object maps, {result.OverlayCacheCount}/{result.LevelCount} terrain maps.");
+    ? $"Cache reused: {result.MobyCacheCount}/{result.LevelCount} object maps, {result.OverlayCacheCount}/{result.LevelCount} terrain maps, {result.TexturePreviewCount} native terrain textures, {result.EntryPoseCount}/{result.LevelCount} retail entry poses."
+    : $"Cache built: {result.MobyCacheCount}/{result.LevelCount} object maps, {result.OverlayCacheCount}/{result.LevelCount} terrain maps, {result.TexturePreviewCount} native terrain textures, {result.EntryPoseCount}/{result.LevelCount} retail entry poses.");
 Console.WriteLine($"Cache folder: {result.CachePath}");
+
+bool entryPosesLoaded = PortableLevelEntryPoseCache.TryLoadComplete(
+    workspace.RootPath,
+    catalog,
+    out _,
+    out string entryPoseError);
+if (result.EntryPoseCount != result.LevelCount || !entryPosesLoaded)
+{
+    Console.Error.WriteLine($"The portable retail entry-pose cache is incomplete: {entryPoseError}");
+    return 4;
+}
 
 int loadedMobyFiles = 0;
 int loadedMobys = 0;

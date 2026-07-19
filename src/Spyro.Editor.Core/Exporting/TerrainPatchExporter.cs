@@ -1,8 +1,10 @@
 using System.Buffers.Binary;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Spyro.Editor.Core;
+using Spyro.Editor.Core.Analysis;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Primitives;
@@ -15,6 +17,11 @@ public static class TerrainPatchExporter
     private const int WadLba = 37;
     private const int TexturePagesSubfileIndex = 0;
     private const int ModelSubfileIndex = 1;
+    private const int PackedTexturePageRowBytes = 1024;
+    private const int FullVramTextureByteX = 1024;
+    private const int TexturePageMaxRows = 512;
+    private const int HqPaletteByteLength = 256 * 2;
+    private const string AtomicTerrainSwapBlockPrefix = "[atomic terrain swap blocked] ";
     private const int MaxSourceDerivedAppendedCollisionTrianglesPerSpan = 64;
     private static readonly int[][] TextureDescriptorMatrices =
     [
@@ -60,16 +67,135 @@ public static class TerrainPatchExporter
         return textureIndex.Records
             .Select(record =>
             {
-                int normalCount = record.HqData.Count(descriptor => CanPatchTextureDescriptor(descriptor, texturePagesInfo.SubfileSize));
-                int closeCount = record.HqDataClose.Count(descriptor => CanPatchTextureDescriptor(descriptor, texturePagesInfo.SubfileSize));
+                int normalCount = record.HqData.Count(descriptor => CanPatchTextureDescriptor(descriptor, texturePagesInfo.SubfileSize, closeTier: false));
+                int closeCount = record.HqDataClose.Count(descriptor => CanPatchTextureDescriptor(descriptor, texturePagesInfo.SubfileSize, closeTier: true));
+                bool hasNormal = normalCount > 0 && normalCount == record.HqData.Count;
+                bool hasClose = closeCount > 0 && closeCount == record.HqDataClose.Count;
                 return new TerrainTextureSlot(
                     TextureId: record.TextureId,
-                    HasNormalDescriptors: normalCount > 0,
-                    HasCloseDescriptors: closeCount > 0,
+                    HasNormalDescriptors: hasNormal,
+                    HasCloseDescriptors: hasClose,
                     NormalDescriptorCount: normalCount,
-                    CloseDescriptorCount: closeCount);
+                    CloseDescriptorCount: closeCount,
+                    NormalTopologySignature: hasNormal
+                        ? BuildDescriptorTopologySignature(record.HqData, closeTier: false, texturePagesInfo.SubfileSize)
+                        : "",
+                    CloseTopologySignature: hasClose
+                        ? BuildDescriptorTopologySignature(record.HqDataClose, closeTier: true, texturePagesInfo.SubfileSize)
+                        : "",
+                    CombinedTopologySignature: hasNormal && hasClose
+                        ? BuildCombinedDescriptorTopologySignature(record, ["hqData", "hqDataClose"], texturePagesInfo.SubfileSize, out _)
+                        : "");
             })
             .ToArray();
+    }
+
+    public static TerrainTextureStorageIsolation InspectTextureStorageIsolation(
+        string sourceImagePath,
+        LevelDefinition level,
+        int targetTextureId,
+        string descriptorTier,
+        IEnumerable<int> residentTextureIds)
+    {
+        if (!File.Exists(sourceImagePath))
+            throw new FileNotFoundException("Missing source disc image.", sourceImagePath);
+
+        DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
+        int textureAssetWadIndex = TextureAssetWadIndexForLevel(level);
+        using FileStream imageStream = File.OpenRead(sourceImagePath);
+        AssetSubfileInfo texturePagesInfo = GetAssetSubfileInfo(imageStream, layout, textureAssetWadIndex, TexturePagesSubfileIndex);
+        AssetSubfileInfo modelInfo = GetAssetSubfileInfo(imageStream, layout, textureAssetWadIndex, ModelSubfileIndex);
+        byte[] modelBytes = ReadWadBytes(imageStream, layout, modelInfo.AbsoluteWadOffset, checked((int)modelInfo.SubfileSize));
+        TextureRecordIndex textureIndex = DecodeTextureRecords(modelBytes);
+        if (targetTextureId < 0 || targetTextureId >= textureIndex.TextureCount)
+            throw new ArgumentOutOfRangeException(nameof(targetTextureId), $"Texture {targetTextureId} is outside {level.DisplayName}'s decoded {textureIndex.TextureCount}-texture table.");
+
+        IReadOnlyList<string> targetTiers = ExpandDescriptorTiers(descriptorTier);
+        if (!TryBuildTexturePhysicalNibbleLayout(
+                textureIndex.Records[targetTextureId],
+                targetTiers,
+                texturePagesInfo.SubfileSize,
+                out TexturePhysicalNibbleReference[] targetReferences,
+                out _,
+                out string targetFailure))
+        {
+            throw new InvalidOperationException($"Texture {targetTextureId} storage could not be inspected: {targetFailure}");
+        }
+
+        Dictionary<(long RelativeOffset, int Nibble), int> targetKinds = BuildPhysicalNibbleKindMap(targetReferences);
+        List<TerrainTextureStorageOverlap> overlaps = [];
+        List<int> unreadableResidentTextureIds = [];
+        HashSet<(long RelativeOffset, int Nibble)> allOverlappingNibbles = [];
+        int[] residents = residentTextureIds
+            .Where(textureId => textureId >= 0 && textureId < textureIndex.TextureCount && textureId != targetTextureId)
+            .Distinct()
+            .Order()
+            .ToArray();
+        foreach (int residentTextureId in residents)
+        {
+            TextureRecord residentRecord = textureIndex.Records[residentTextureId];
+            List<TexturePhysicalNibbleReference> residentReferences = [];
+            bool readableTier = false;
+            if (residentRecord.HqData.Count > 0 && residentRecord.HqData.All(descriptor =>
+                    CanPatchTextureDescriptor(descriptor, texturePagesInfo.SubfileSize, closeTier: false)) &&
+                TryBuildTexturePhysicalNibbleLayout(
+                    residentRecord,
+                    ["hqData"],
+                    texturePagesInfo.SubfileSize,
+                    out TexturePhysicalNibbleReference[] normalReferences,
+                    out _,
+                    out _))
+            {
+                residentReferences.AddRange(normalReferences);
+                readableTier = true;
+            }
+
+            if (residentRecord.HqDataClose.Count > 0 && residentRecord.HqDataClose.All(descriptor =>
+                    CanPatchTextureDescriptor(descriptor, texturePagesInfo.SubfileSize, closeTier: true)) &&
+                TryBuildTexturePhysicalNibbleLayout(
+                    residentRecord,
+                    ["hqDataClose"],
+                    texturePagesInfo.SubfileSize,
+                    out TexturePhysicalNibbleReference[] closeReferences,
+                    out _,
+                    out _))
+            {
+                residentReferences.AddRange(closeReferences);
+                readableTier = true;
+            }
+
+            if (!readableTier)
+            {
+                unreadableResidentTextureIds.Add(residentTextureId);
+                continue;
+            }
+
+            Dictionary<(long RelativeOffset, int Nibble), int> residentKinds = BuildPhysicalNibbleKindMap(residentReferences);
+            (long RelativeOffset, int Nibble)[] overlappingNibbles = targetKinds.Keys
+                .Where(residentKinds.ContainsKey)
+                .ToArray();
+            if (overlappingNibbles.Length == 0)
+                continue;
+
+            allOverlappingNibbles.UnionWith(overlappingNibbles);
+            overlaps.Add(new TerrainTextureStorageOverlap(
+                ResidentTextureId: residentTextureId,
+                PhysicalNibbleCount: overlappingNibbles.Length,
+                TargetPaletteNibbleCount: overlappingNibbles.Count(key => (targetKinds[key] & 1) != 0),
+                TargetPixelNibbleCount: overlappingNibbles.Count(key => (targetKinds[key] & 2) != 0),
+                ResidentPaletteNibbleCount: overlappingNibbles.Count(key => (residentKinds[key] & 1) != 0),
+                ResidentPixelNibbleCount: overlappingNibbles.Count(key => (residentKinds[key] & 2) != 0)));
+        }
+
+        return new TerrainTextureStorageIsolation(
+            TargetTextureId: targetTextureId,
+            DescriptorTier: string.Join("+", targetTiers),
+            TargetPhysicalNibbleCount: targetKinds.Count,
+            ResidentTextureCount: residents.Length,
+            OverlappingResidentTextureCount: overlaps.Count,
+            OverlappingPhysicalNibbleCount: allOverlappingNibbles.Count,
+            Overlaps: overlaps.OrderByDescending(overlap => overlap.PhysicalNibbleCount).ThenBy(overlap => overlap.ResidentTextureId).ToArray(),
+            UnreadableResidentTextureIds: unreadableResidentTextureIds);
     }
 
     public static async Task<TerrainTextureImageExport?> TryExportTerrainTextureImageAsync(
@@ -78,6 +204,378 @@ public static class TerrainPatchExporter
         int textureId,
         string outputPath,
         CancellationToken cancellationToken = default)
+    {
+        return await TryExportTerrainTextureImageCoreAsync(
+            sourceImagePath,
+            level,
+            textureId,
+            outputPath,
+            preferredDescriptorTier: "",
+            cancellationToken);
+    }
+
+    public static async Task<TerrainTextureImageExport?> TryExportTerrainTextureImageTierAsync(
+        string sourceImagePath,
+        LevelDefinition level,
+        int textureId,
+        string outputPath,
+        string preferredDescriptorTier,
+        CancellationToken cancellationToken = default)
+    {
+        return await TryExportTerrainTextureImageCoreAsync(
+            sourceImagePath,
+            level,
+            textureId,
+            outputPath,
+            preferredDescriptorTier,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Decodes a set of resident terrain textures while reading the level's
+    /// texture pages and descriptor table only once. This is intentionally a
+    /// preview/cache operation: it never changes the source image.
+    /// </summary>
+    public static async Task<IReadOnlyList<TerrainTextureImageExport>> ExportTerrainTextureImagesAsync(
+        string sourceImagePath,
+        LevelDefinition level,
+        IEnumerable<int> textureIds,
+        string outputDirectory,
+        bool overwrite = false,
+        string preferredDescriptorTier = "hqData",
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceImagePath);
+        ArgumentNullException.ThrowIfNull(level);
+        ArgumentNullException.ThrowIfNull(textureIds);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+
+        if (!File.Exists(sourceImagePath))
+            throw new FileNotFoundException("Missing source disc image.", sourceImagePath);
+
+        HashSet<int> requested = textureIds
+            .Where(textureId => textureId >= 0)
+            .ToHashSet();
+        if (requested.Count == 0)
+            return Array.Empty<TerrainTextureImageExport>();
+
+        Directory.CreateDirectory(outputDirectory);
+        DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
+        int textureAssetWadIndex = TextureAssetWadIndexForLevel(level);
+        using FileStream imageStream = File.OpenRead(sourceImagePath);
+        AssetSubfileInfo texturePagesInfo = GetAssetSubfileInfo(imageStream, layout, textureAssetWadIndex, TexturePagesSubfileIndex);
+        AssetSubfileInfo modelInfo = GetAssetSubfileInfo(imageStream, layout, textureAssetWadIndex, ModelSubfileIndex);
+        byte[] texturePages = ReadWadBytes(imageStream, layout, texturePagesInfo.AbsoluteWadOffset, checked((int)texturePagesInfo.SubfileSize));
+        byte[] modelBytes = ReadWadBytes(imageStream, layout, modelInfo.AbsoluteWadOffset, checked((int)modelInfo.SubfileSize));
+        TextureRecordIndex textureIndex = DecodeTextureRecords(modelBytes);
+
+        List<TerrainTextureImageExport> exports = [];
+        foreach (TextureRecord record in textureIndex.Records.Where(record => requested.Contains(record.TextureId)).OrderBy(record => record.TextureId))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            (string Tier, int TileSide, int TileGridColumns, int ImageSize, IReadOnlyList<TextureDescriptor> Descriptors)? tier =
+                ChooseReadableTextureDescriptorTier(record, texturePagesInfo.SubfileSize, preferredDescriptorTier);
+            if (tier == null)
+                continue;
+
+            string outputPath = Path.Combine(outputDirectory, $"{level.Key}-texture-{record.TextureId:000}.png");
+            if (!overwrite && File.Exists(outputPath))
+            {
+                exports.Add(new TerrainTextureImageExport(
+                    record.TextureId,
+                    tier.Value.Tier,
+                    tier.Value.ImageSize,
+                    tier.Value.ImageSize,
+                    tier.Value.Descriptors.Count,
+                    tier.Value.ImageSize * tier.Value.ImageSize));
+                continue;
+            }
+
+            if (!TryDecodeTerrainTextureImage(texturePages, record.TextureId, tier.Value, out Rgba32[] pixels, out TerrainTextureImageExport export))
+                continue;
+
+            await TerrainTexturePngWriter.WriteRgbaAsync(
+                outputPath,
+                export.Width,
+                export.Height,
+                pixels,
+                cancellationToken);
+            exports.Add(export);
+        }
+
+        return exports;
+    }
+
+    /// <summary>
+    /// Decodes both native high-detail terrain texture descriptor banks while
+    /// reading the level assets only once. Unlike the single-tier preview API,
+    /// this method never substitutes one tier for the other: an unreadable
+    /// normal or close bank is omitted so the viewport can make an explicit,
+    /// truthful fallback choice.
+    /// </summary>
+    public static async Task<IReadOnlyList<TerrainTextureImageExport>> ExportTerrainTextureImageTiersAsync(
+        string sourceImagePath,
+        LevelDefinition level,
+        IEnumerable<int> textureIds,
+        string outputDirectory,
+        bool overwrite = false,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceImagePath);
+        ArgumentNullException.ThrowIfNull(level);
+        ArgumentNullException.ThrowIfNull(textureIds);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+
+        if (!File.Exists(sourceImagePath))
+            throw new FileNotFoundException("Missing source disc image.", sourceImagePath);
+
+        HashSet<int> requested = textureIds
+            .Where(textureId => textureId >= 0)
+            .ToHashSet();
+        if (requested.Count == 0)
+            return Array.Empty<TerrainTextureImageExport>();
+
+        Directory.CreateDirectory(outputDirectory);
+        DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
+        int textureAssetWadIndex = TextureAssetWadIndexForLevel(level);
+        using FileStream imageStream = File.OpenRead(sourceImagePath);
+        AssetSubfileInfo texturePagesInfo = GetAssetSubfileInfo(imageStream, layout, textureAssetWadIndex, TexturePagesSubfileIndex);
+        AssetSubfileInfo modelInfo = GetAssetSubfileInfo(imageStream, layout, textureAssetWadIndex, ModelSubfileIndex);
+        byte[] texturePages = ReadWadBytes(imageStream, layout, texturePagesInfo.AbsoluteWadOffset, checked((int)texturePagesInfo.SubfileSize));
+        byte[] modelBytes = ReadWadBytes(imageStream, layout, modelInfo.AbsoluteWadOffset, checked((int)modelInfo.SubfileSize));
+        TextureRecordIndex textureIndex = DecodeTextureRecords(modelBytes);
+
+        List<TerrainTextureImageExport> exports = [];
+        foreach (TextureRecord record in textureIndex.Records.Where(record => requested.Contains(record.TextureId)).OrderBy(record => record.TextureId))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            List<(string Tier, int TileSide, int TileGridColumns, int ImageSize, IReadOnlyList<TextureDescriptor> Descriptors)> tiers = [];
+            var normal = TryBuildReadableTextureImageTier("hqData", record.HqData, 2, texturePagesInfo.SubfileSize);
+            var close = TryBuildReadableTextureImageTier("hqDataClose", record.HqDataClose, 4, texturePagesInfo.SubfileSize);
+            if (normal.HasValue)
+                tiers.Add(normal.Value);
+            if (close.HasValue)
+                tiers.Add(close.Value);
+
+            foreach (var tier in tiers)
+            {
+                NativeTerrainTexturePreviewTier previewTier = NativeTerrainTexturePreviewLod.FromDescriptorTier(tier.Tier);
+                string suffix = NativeTerrainTexturePreviewLod.FileSuffix(previewTier);
+                string outputPath = Path.Combine(outputDirectory, $"{level.Key}-texture-{record.TextureId:000}-{suffix}.png");
+                if (!overwrite && File.Exists(outputPath))
+                {
+                    exports.Add(new TerrainTextureImageExport(
+                        record.TextureId,
+                        tier.Tier,
+                        tier.ImageSize,
+                        tier.ImageSize,
+                        tier.Descriptors.Count,
+                        tier.ImageSize * tier.ImageSize));
+                    continue;
+                }
+
+                if (!TryDecodeTerrainTextureImage(texturePages, record.TextureId, tier, out Rgba32[] pixels, out TerrainTextureImageExport export))
+                    continue;
+
+                await TerrainTexturePngWriter.WriteRgbaAsync(
+                    outputPath,
+                    export.Width,
+                    export.Height,
+                    pixels,
+                    cancellationToken);
+                exports.Add(export);
+            }
+        }
+
+        return exports;
+    }
+
+    /// <summary>
+    /// Reads the native texture component and applies the exact load-time
+    /// animation/scroll initialization without writing files or changing the
+    /// source disc. This represents func_8002B4AC state, not live gameplay.
+    /// </summary>
+    public static NativeTerrainTextureInitialStateResult InspectTerrainTextureInitialState(
+        string sourceImagePath,
+        LevelDefinition level,
+        NativeTerrainTextureRuntimeControlAudit runtimeControlAudit)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceImagePath);
+        ArgumentNullException.ThrowIfNull(level);
+        ArgumentNullException.ThrowIfNull(runtimeControlAudit);
+        if (!File.Exists(sourceImagePath))
+            throw new FileNotFoundException("Missing source disc image.", sourceImagePath);
+        if (runtimeControlAudit.TargetWadEntry != level.SourceWadEntry)
+        {
+            throw new InvalidDataException(
+                $"Runtime-control audit WAD entry {runtimeControlAudit.TargetWadEntry} does not match {level.DisplayName} WAD entry {level.SourceWadEntry}.");
+        }
+
+        DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
+        int textureAssetWadIndex = TextureAssetWadIndexForLevel(level);
+        using FileStream imageStream = File.OpenRead(sourceImagePath);
+        AssetSubfileInfo modelInfo = GetAssetSubfileInfo(imageStream, layout, textureAssetWadIndex, ModelSubfileIndex);
+        byte[] modelBytes = ReadWadBytes(
+            imageStream,
+            layout,
+            modelInfo.AbsoluteWadOffset,
+            checked((int)modelInfo.SubfileSize));
+        return NativeTerrainTextureRuntimeControlScanner.InitializeTextureRecords(runtimeControlAudit, modelBytes);
+    }
+
+    /// <summary>
+    /// Exports both HQ descriptor tiers from the exact native load-initialized
+    /// texture table. Controlled destinations are therefore truthful at t=0;
+    /// this method intentionally does not emulate later playback or script calls.
+    /// </summary>
+    public static async Task<NativeTerrainTextureInitialStateImageExport> ExportTerrainTextureInitialStateImageTiersAsync(
+        string sourceImagePath,
+        LevelDefinition level,
+        NativeTerrainTextureRuntimeControlAudit runtimeControlAudit,
+        IEnumerable<int> textureIds,
+        string outputDirectory,
+        bool overwrite = false,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceImagePath);
+        ArgumentNullException.ThrowIfNull(level);
+        ArgumentNullException.ThrowIfNull(runtimeControlAudit);
+        ArgumentNullException.ThrowIfNull(textureIds);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+        if (!runtimeControlAudit.Complete)
+        {
+            throw new InvalidDataException(
+                runtimeControlAudit.SafetyBlockers.FirstOrDefault() ??
+                "Runtime texture-control audit is incomplete; initial-state preview export is blocked.");
+        }
+        if (runtimeControlAudit.TargetWadEntry != level.SourceWadEntry)
+        {
+            throw new InvalidDataException(
+                $"Runtime-control audit WAD entry {runtimeControlAudit.TargetWadEntry} does not match {level.DisplayName} WAD entry {level.SourceWadEntry}.");
+        }
+        if (!File.Exists(sourceImagePath))
+            throw new FileNotFoundException("Missing source disc image.", sourceImagePath);
+
+        HashSet<int> requested = textureIds
+            .Where(textureId => textureId >= 0)
+            .ToHashSet();
+        if (requested.Count == 0)
+        {
+            NativeTerrainTextureInitialStateResult emptyState = InspectTerrainTextureInitialState(
+                sourceImagePath,
+                level,
+                runtimeControlAudit);
+            return new NativeTerrainTextureInitialStateImageExport(emptyState, Array.Empty<TerrainTextureImageExport>());
+        }
+
+        Directory.CreateDirectory(outputDirectory);
+        DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
+        int textureAssetWadIndex = TextureAssetWadIndexForLevel(level);
+        using FileStream imageStream = File.OpenRead(sourceImagePath);
+        AssetSubfileInfo texturePagesInfo = GetAssetSubfileInfo(imageStream, layout, textureAssetWadIndex, TexturePagesSubfileIndex);
+        AssetSubfileInfo modelInfo = GetAssetSubfileInfo(imageStream, layout, textureAssetWadIndex, ModelSubfileIndex);
+        byte[] texturePages = ReadWadBytes(
+            imageStream,
+            layout,
+            texturePagesInfo.AbsoluteWadOffset,
+            checked((int)texturePagesInfo.SubfileSize));
+        byte[] modelBytes = ReadWadBytes(
+            imageStream,
+            layout,
+            modelInfo.AbsoluteWadOffset,
+            checked((int)modelInfo.SubfileSize));
+        NativeTerrainTextureInitialStateResult initialState =
+            NativeTerrainTextureRuntimeControlScanner.InitializeTextureRecords(runtimeControlAudit, modelBytes);
+        if (!initialState.Complete)
+        {
+            throw new InvalidDataException(
+                initialState.SafetyBlockers.FirstOrDefault() ??
+                "Native terrain texture load-state initialization was incomplete.");
+        }
+
+        NativeTerrainLqTextureDecodeResult lowDetail =
+            NativeTerrainLqTextureCacheCodec.DecodeNativeLoadState(
+                initialState,
+                texturePages,
+                requested);
+        if (!lowDetail.Complete || lowDetail.TextureSet == null)
+        {
+            throw new InvalidDataException(
+                lowDetail.SafetyBlockers.FirstOrDefault() ??
+                "Native terrain TexLq load-state decoding was incomplete.");
+        }
+
+        NativeTerrainHqMaterialDecodeResult highDetailMaterials =
+            NativeTerrainHqMaterialCacheCodec.DecodeNativeLoadState(
+                initialState,
+                texturePages,
+                requested);
+        if (!highDetailMaterials.Complete || highDetailMaterials.MaterialSet == null)
+        {
+            throw new InvalidDataException(
+                highDetailMaterials.SafetyBlockers.FirstOrDefault() ??
+                "Native terrain HQ PSX555/STP material decoding was incomplete.");
+        }
+
+        TextureRecordIndex textureIndex = DecodeTextureRecords(initialState.InitializedTextureData);
+        List<TerrainTextureImageExport> exports = [];
+        foreach (TextureRecord record in textureIndex.Records
+                     .Where(record => requested.Contains(record.TextureId))
+                     .OrderBy(record => record.TextureId))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            List<(string Tier, int TileSide, int TileGridColumns, int ImageSize, IReadOnlyList<TextureDescriptor> Descriptors)> tiers = [];
+            var normal = TryBuildReadableTextureImageTier("hqData", record.HqData, 2, texturePagesInfo.SubfileSize);
+            var close = TryBuildReadableTextureImageTier("hqDataClose", record.HqDataClose, 4, texturePagesInfo.SubfileSize);
+            if (normal.HasValue)
+                tiers.Add(normal.Value);
+            if (close.HasValue)
+                tiers.Add(close.Value);
+
+            foreach (var tier in tiers)
+            {
+                NativeTerrainTexturePreviewTier previewTier = NativeTerrainTexturePreviewLod.FromDescriptorTier(tier.Tier);
+                string suffix = NativeTerrainTexturePreviewLod.FileSuffix(previewTier);
+                string outputPath = Path.Combine(outputDirectory, $"{level.Key}-texture-{record.TextureId:000}-{suffix}.png");
+                if (!overwrite && File.Exists(outputPath))
+                {
+                    exports.Add(new TerrainTextureImageExport(
+                        record.TextureId,
+                        tier.Tier,
+                        tier.ImageSize,
+                        tier.ImageSize,
+                        tier.Descriptors.Count,
+                        tier.ImageSize * tier.ImageSize));
+                    continue;
+                }
+
+                if (!TryDecodeTerrainTextureImage(texturePages, record.TextureId, tier, out Rgba32[] pixels, out TerrainTextureImageExport export))
+                    continue;
+
+                await TerrainTexturePngWriter.WriteRgbaAsync(
+                    outputPath,
+                    export.Width,
+                    export.Height,
+                    pixels,
+                    cancellationToken);
+                exports.Add(export);
+            }
+        }
+
+        return new NativeTerrainTextureInitialStateImageExport(
+            initialState,
+            exports,
+            lowDetail.TextureSet,
+            highDetailMaterials.MaterialSet);
+    }
+
+    private static async Task<TerrainTextureImageExport?> TryExportTerrainTextureImageCoreAsync(
+        string sourceImagePath,
+        LevelDefinition level,
+        int textureId,
+        string outputPath,
+        string preferredDescriptorTier,
+        CancellationToken cancellationToken)
     {
         if (!File.Exists(sourceImagePath) || textureId < 0)
             return null;
@@ -94,94 +592,93 @@ public static class TerrainPatchExporter
         if (record == null)
             return null;
 
-        (string Tier, int TileSize, int TileGridColumns, IReadOnlyList<TextureDescriptor> Descriptors)? tier = ChooseReadableTextureDescriptorTier(record, texturePagesInfo.SubfileSize);
+        (string Tier, int TileSide, int TileGridColumns, int ImageSize, IReadOnlyList<TextureDescriptor> Descriptors)? tier = ChooseReadableTextureDescriptorTier(
+            record,
+            texturePagesInfo.SubfileSize,
+            preferredDescriptorTier);
         if (tier == null)
             return null;
 
-        string descriptorTier = tier.Value.Tier;
-        int tileSize = tier.Value.TileSize;
-        int tileGridColumns = tier.Value.TileGridColumns;
-        IReadOnlyList<TextureDescriptor> descriptors = tier.Value.Descriptors;
-        Rgba32[] pixels = new Rgba32[tileSize * tileSize];
-        bool[] written = new bool[pixels.Length];
+        if (!TryDecodeTerrainTextureImage(texturePages, textureId, tier.Value, out Rgba32[] pixels, out TerrainTextureImageExport export))
+            return null;
+
+        await TerrainTexturePngWriter.WriteRgbaAsync(outputPath, export.Width, export.Height, pixels, cancellationToken);
+        return export;
+    }
+
+    private static bool TryDecodeTerrainTextureImage(
+        byte[] texturePages,
+        int textureId,
+        (string Tier, int TileSide, int TileGridColumns, int ImageSize, IReadOnlyList<TextureDescriptor> Descriptors) tier,
+        out Rgba32[] pixels,
+        out TerrainTextureImageExport export)
+    {
+        pixels = new Rgba32[tier.ImageSize * tier.ImageSize];
+        export = null!;
         int copiedPixels = 0;
-        int descriptorCount = 0;
-        foreach (TextureDescriptor descriptor in descriptors)
+        foreach (TextureDescriptor descriptor in tier.Descriptors)
         {
-            if (!CanPatchTextureDescriptor(descriptor, texturePagesInfo.SubfileSize))
-                continue;
-
-            int paletteByteStart = descriptor.PaletteByteStart;
-            if (paletteByteStart < 0 || paletteByteStart + 512 > texturePages.Length)
-                continue;
-
-            int tile = descriptor.Index;
-            int destTileX = (tile % tileGridColumns) * 32;
-            int destTileY = (int)Math.Floor(tile / (double)tileGridColumns) * 32;
-            if (destTileX < 0 || destTileY < 0 || destTileX + 32 > tileSize || destTileY + 32 > tileSize)
-                continue;
-
-            int[] matrix = TextureDescriptorMatrices[Math.Clamp(descriptor.Orientation, 0, TextureDescriptorMatrices.Length - 1)];
-            int xx = matrix[0];
-            int xy = matrix[1];
-            int yx = matrix[2];
-            int yy = matrix[3];
-            int srcXStart = descriptor.VramXMin;
-            int srcYStart = descriptor.VramYMin;
-            if (xx < 0 || xy < 0)
-                srcXStart += 31;
-            if (yx < 0 || yy < 0)
-                srcYStart += 31;
-
-            descriptorCount++;
-            for (int y = 0; y < 32; y++)
+            int destTileX = (descriptor.Index % tier.TileGridColumns) * tier.TileSide;
+            int destTileY = (descriptor.Index / tier.TileGridColumns) * tier.TileSide;
+            for (int y = 0; y < tier.TileSide; y++)
             {
-                for (int x = 0; x < 32; x++)
+                for (int x = 0; x < tier.TileSide; x++)
                 {
-                    int sx = srcXStart + (x * xx) + (y * xy);
-                    int sy = srcYStart + (x * yx) + (y * yy);
-                    long relative = (sy * 2048L) + sx;
-                    if (sx < 0 || sx >= 2048 || sy < 0 || sy >= 512 || relative < 0 || relative >= texturePages.Length)
-                        continue;
-
-                    int paletteIndex = texturePages[relative];
-                    int paletteOffset = paletteByteStart + (paletteIndex * 2);
-                    if (paletteOffset < 0 || paletteOffset + 2 > texturePages.Length)
-                        continue;
-
-                    int destIndex = ((destTileY + y) * tileSize) + destTileX + x;
-                    pixels[destIndex] = ConvertPsx555ToRgba32(ReadUInt16(texturePages, paletteOffset));
-                    if (!written[destIndex])
+                    if (!TryGetHqTextureImageSampleAddress(
+                            descriptor,
+                            x,
+                            y,
+                            tier.TileSide,
+                            texturePages.Length,
+                            out long relativeOffset))
                     {
-                        written[destIndex] = true;
-                        copiedPixels++;
+                        return false;
                     }
+
+                    int paletteIndex = texturePages[checked((int)relativeOffset)];
+                    int paletteOffset = descriptor.PaletteByteStart + (paletteIndex * 2);
+                    if (paletteOffset < 0 || paletteOffset + 2 > texturePages.Length)
+                        return false;
+
+                    int destIndex = ((destTileY + y) * tier.ImageSize) + destTileX + x;
+                    pixels[destIndex] = ConvertPsx555ToRgba32(ReadUInt16(texturePages, paletteOffset));
+                    copiedPixels++;
                 }
             }
         }
 
-        if (copiedPixels == 0)
-            return null;
+        if (copiedPixels != pixels.Length)
+            return false;
 
-        await TerrainTexturePngWriter.WriteRgbaAsync(outputPath, tileSize, tileSize, pixels, cancellationToken);
-        return new TerrainTextureImageExport(
+        export = new TerrainTextureImageExport(
             TextureId: textureId,
-            DescriptorTier: descriptorTier,
-            Width: tileSize,
-            Height: tileSize,
-            DescriptorCount: descriptorCount,
+            DescriptorTier: tier.Tier,
+            Width: tier.ImageSize,
+            Height: tier.ImageSize,
+            DescriptorCount: tier.Descriptors.Count,
             PixelCount: copiedPixels);
+        return true;
     }
 
     public static TerrainTextureSlot? FindUnusedTextureSlot(
         string sourceImagePath,
         LevelDefinition level,
         IEnumerable<int> usedTextureIds,
-        bool preferBothDescriptorTiers = true)
+        bool preferBothDescriptorTiers = true,
+        string requiredNormalTopologySignature = "",
+        string requiredCloseTopologySignature = "",
+        string requiredCombinedTopologySignature = "")
     {
         HashSet<int> used = usedTextureIds.Where(textureId => textureId >= 0).ToHashSet();
         IReadOnlyList<TerrainTextureSlot> slots = InspectTextureSlots(sourceImagePath, level);
-        IEnumerable<TerrainTextureSlot> unused = slots.Where(slot => !used.Contains(slot.TextureId));
+        IEnumerable<TerrainTextureSlot> unused = slots
+            .Where(slot => !used.Contains(slot.TextureId))
+            .Where(slot => string.IsNullOrWhiteSpace(requiredNormalTopologySignature) ||
+                string.Equals(slot.NormalTopologySignature, requiredNormalTopologySignature, StringComparison.Ordinal))
+            .Where(slot => string.IsNullOrWhiteSpace(requiredCloseTopologySignature) ||
+                string.Equals(slot.CloseTopologySignature, requiredCloseTopologySignature, StringComparison.Ordinal))
+            .Where(slot => string.IsNullOrWhiteSpace(requiredCombinedTopologySignature) ||
+                string.Equals(slot.CombinedTopologySignature, requiredCombinedTopologySignature, StringComparison.Ordinal));
 
         if (preferBothDescriptorTiers)
         {
@@ -206,7 +703,9 @@ public static class TerrainPatchExporter
             throw new FileNotFoundException("Missing source disc image.", request.SourceImagePath);
         bool hasTerrainEdits = File.Exists(request.TerrainEditsPath);
         bool hasCustomTextures = !string.IsNullOrWhiteSpace(request.CustomTexturesPath) && File.Exists(request.CustomTexturesPath);
-        if (!hasTerrainEdits && !hasCustomTextures)
+        bool hasNativeTextureRelocations = !string.IsNullOrWhiteSpace(request.NativeTextureRelocationsPath) &&
+            File.Exists(request.NativeTextureRelocationsPath);
+        if (!hasTerrainEdits && !hasCustomTextures && !hasNativeTextureRelocations)
             throw new FileNotFoundException("Missing terrain edit file.", request.TerrainEditsPath);
 
         string outputPrefix = string.IsNullOrWhiteSpace(request.OutputPrefix)
@@ -215,6 +714,13 @@ public static class TerrainPatchExporter
         string outputImagePath = $"{outputPrefix}.bin";
         string outputCuePath = $"{outputPrefix}.cue";
         string outputPlanPath = $"{outputPrefix}.terrain-patch-plan.json";
+
+        if (request.WriteImage)
+        {
+            DeleteStaleOutput(outputImagePath);
+            DeleteStaleOutput(outputCuePath);
+            DeleteStaleOutput(outputPlanPath);
+        }
 
         TerrainPatchPlan plan = BuildPlan(
             request.SourceImagePath,
@@ -225,10 +731,28 @@ public static class TerrainPatchExporter
             request.RamPath,
             request.SourceSearchPath,
             request.TerrainEditsPath,
-            request.CustomTexturesPath);
+            request.CustomTexturesPath,
+            request.NativeTextureRelocationsPath);
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPlanPath) ?? ".");
         await File.WriteAllTextAsync(outputPlanPath, JsonSerializer.Serialize(plan, new JsonSerializerOptions { WriteIndented = true }), cancellationToken);
+
+        string[] atomicTerrainSwapBlocks = plan.SkippedEdits
+            .Where(IsAtomicTerrainSwapBlock)
+            .ToArray();
+        if (request.WriteImage && atomicTerrainSwapBlocks.Length > 0)
+        {
+            DeleteStaleOutput(outputImagePath);
+            DeleteStaleOutput(outputCuePath);
+            string examples = string.Join(" | ", atomicTerrainSwapBlocks
+                .Take(2)
+                .Select(RemoveAtomicTerrainSwapBlockPrefix));
+            string more = atomicTerrainSwapBlocks.Length > 2
+                ? $" (+{atomicTerrainSwapBlocks.Length - 2} more; see the terrain patch plan)"
+                : "";
+            throw new InvalidOperationException(
+                $"Terrain texture/property swap export was stopped before writing a BIN because one requested part could not be applied atomically: {examples}{more}");
+        }
 
         if (request.WriteImage && plan.PatchCount == 0)
         {
@@ -237,17 +761,63 @@ public static class TerrainPatchExporter
         }
         else if (request.WriteImage)
         {
-            File.Copy(request.SourceImagePath, outputImagePath, true);
-            DiscLayout layout = DiscImage.DetectLayout(outputImagePath);
-            await using FileStream stream = File.Open(outputImagePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
-            foreach (TerrainPatch patch in plan.Patches)
+            DeleteStaleOutput(outputImagePath);
+            DeleteStaleOutput(outputCuePath);
+            string temporaryOutputImagePath = $"{outputImagePath}.{Guid.NewGuid():N}.tmp";
+            string temporaryOutputCuePath = $"{outputCuePath}.{Guid.NewGuid():N}.tmp";
+            try
             {
-                long wadOffset = ParseRequiredLong(patch.WadRelativeOffset, "patch.wadRelativeOffset");
-                DiscImage.WriteFileBytes(stream, layout, WadLba, wadOffset, HexToBytes(patch.AfterHexPreview));
-            }
+                File.Copy(request.SourceImagePath, temporaryOutputImagePath, true);
+                DiscLayout layout = DiscImage.DetectLayout(temporaryOutputImagePath);
+                await using (FileStream stream = File.Open(
+                                 temporaryOutputImagePath,
+                                 FileMode.Open,
+                                 FileAccess.ReadWrite,
+                                 FileShare.Read))
+                {
+                    foreach (TerrainPatch patch in plan.Patches)
+                    {
+                        long wadOffset = ParseRequiredLong(patch.WadRelativeOffset, "patch.wadRelativeOffset");
+                        byte[] before = HexToBytes(patch.BeforeHexPreview);
+                        byte[] after = HexToBytes(patch.AfterHexPreview);
+                        byte[] actualBefore = DiscImage.ReadFileBytes(stream, layout, WadLba, wadOffset, before.Length);
+                        if (!actualBefore.SequenceEqual(before))
+                        {
+                            throw new InvalidDataException(
+                                $"The temporary output copy no longer matches source-bound before bytes for {patch.Kind} at WAD offset 0x{wadOffset:X}.");
+                        }
+                        DiscImage.WriteFileBytes(stream, layout, WadLba, wadOffset, after);
+                    }
+                    await stream.FlushAsync(cancellationToken);
+                    foreach (TerrainPatch patch in plan.Patches)
+                    {
+                        long wadOffset = ParseRequiredLong(patch.WadRelativeOffset, "patch.wadRelativeOffset");
+                        byte[] expectedAfter = HexToBytes(patch.AfterHexPreview);
+                        byte[] actualAfter = DiscImage.ReadFileBytes(stream, layout, WadLba, wadOffset, expectedAfter.Length);
+                        if (!actualAfter.SequenceEqual(expectedAfter))
+                        {
+                            throw new InvalidDataException(
+                                $"Final temporary-BIN readback failed for {patch.Kind} at WAD offset 0x{wadOffset:X}.");
+                        }
+                    }
+                }
 
-            string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath));
-            await File.WriteAllTextAsync(outputCuePath, cueText, Encoding.ASCII, cancellationToken);
+                string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath));
+                await File.WriteAllTextAsync(temporaryOutputCuePath, cueText, Encoding.ASCII, cancellationToken);
+                File.Move(temporaryOutputImagePath, outputImagePath, overwrite: true);
+                File.Move(temporaryOutputCuePath, outputCuePath, overwrite: true);
+            }
+            catch
+            {
+                DeleteStaleOutput(outputImagePath);
+                DeleteStaleOutput(outputCuePath);
+                throw;
+            }
+            finally
+            {
+                DeleteStaleOutput(temporaryOutputImagePath);
+                DeleteStaleOutput(temporaryOutputCuePath);
+            }
         }
 
         return new TerrainPatchResult(outputImagePath, outputCuePath, outputPlanPath, plan, request.WriteImage && plan.PatchCount > 0);
@@ -265,6 +835,82 @@ public static class TerrainPatchExporter
         }
     }
 
+    private static bool IsAtomicTerrainSwapBlock(string reason) =>
+        !string.IsNullOrWhiteSpace(reason) &&
+        reason.StartsWith(AtomicTerrainSwapBlockPrefix, StringComparison.Ordinal);
+
+    private static string RemoveAtomicTerrainSwapBlockPrefix(string reason) =>
+        IsAtomicTerrainSwapBlock(reason)
+            ? reason[AtomicTerrainSwapBlockPrefix.Length..]
+            : reason;
+
+    private static void AddAtomicTerrainSwapBlock(List<string> skippedEdits, string reason)
+    {
+        skippedEdits.Add($"{AtomicTerrainSwapBlockPrefix}{reason}");
+    }
+
+    private static bool IsAtomicTerrainFaceSwapEdit(JsonElement edit)
+    {
+        if (JsonValue.GetBoolean(edit, "nativeSurfaceBehaviorEdit") ||
+            JsonValue.GetBoolean(edit, "nativeTextureVisualEdit"))
+            return true;
+
+        int editedTextureId = JsonValue.GetInt32(edit, "textureIdEdited", -1);
+        int originalTextureId = JsonValue.GetInt32(edit, "textureIdOriginal", -1);
+        return editedTextureId >= 0 && editedTextureId != originalTextureId;
+    }
+
+    private static void AddNativeTextureRelocationFaceEditConflicts(
+        JsonElement editsElement,
+        IReadOnlyDictionary<int, NativeTerrainTextureRelocationEdit> relocationsByTarget,
+        List<string> skippedEdits)
+    {
+        if (relocationsByTarget.Count == 0)
+            return;
+
+        foreach (JsonElement edit in editsElement.EnumerateArray())
+        {
+            string runtimeKey = JsonValue.GetString(edit, "runtimeKey", "unknown face");
+            int originalTextureId = JsonValue.GetInt32(
+                edit,
+                "textureIdOriginal",
+                JsonValue.GetInt32(edit, "textureId", -1));
+            int editedTextureId = JsonValue.GetInt32(edit, "textureIdEdited", originalTextureId);
+            bool textureChanged = originalTextureId >= 0 && editedTextureId >= 0 && editedTextureId != originalTextureId;
+            bool hasNativeVisual = JsonValue.GetBoolean(edit, "nativeTextureVisualEdit");
+            bool hasNativeBehavior = JsonValue.GetBoolean(edit, "nativeSurfaceBehaviorEdit");
+            if (!textureChanged && !hasNativeVisual && !hasNativeBehavior)
+                continue;
+
+            int[] touchedTextureIds = new[] { originalTextureId, editedTextureId }
+                .Where(textureId => textureId >= 0 && relocationsByTarget.ContainsKey(textureId))
+                .Distinct()
+                .ToArray();
+            foreach (int targetTextureId in touchedTextureIds)
+            {
+                NativeTerrainTextureRelocationEdit relocation = relocationsByTarget[targetTextureId];
+                string behaviorSourceLevelKey = JsonValue.GetString(edit, "nativeSurfaceSourceLevelKey");
+                bool isRelocationBehaviorAssignment =
+                    !relocation.PreservesTargetNativeSurface &&
+                    !textureChanged &&
+                    !hasNativeVisual &&
+                    hasNativeBehavior &&
+                    originalTextureId == targetTextureId &&
+                    editedTextureId == targetTextureId &&
+                    string.Equals(
+                        LevelCatalog.NormalizeKey(behaviorSourceLevelKey),
+                        LevelCatalog.NormalizeKey(relocation.DonorLevelKey),
+                        StringComparison.OrdinalIgnoreCase);
+                if (isRelocationBehaviorAssignment)
+                    continue;
+
+                AddAtomicTerrainSwapBlock(
+                    skippedEdits,
+                    $"{runtimeKey}: face-local texture/tint/property state overlaps shared relocated texture {targetTextureId} from {relocation.DonorLevelName}; Undo one edit before building.");
+            }
+        }
+    }
+
     public static TerrainPatchPlan BuildPlan(
         string sourceImagePath,
         string sourceCuePath,
@@ -274,7 +920,8 @@ public static class TerrainPatchExporter
         string ramPath,
         string sourceSearchPath,
         string terrainEditsPath,
-        string customTexturesPath = "")
+        string customTexturesPath = "",
+        string nativeTextureRelocationsPath = "")
     {
         DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
         bool hasRamCapture = File.Exists(ramPath);
@@ -295,6 +942,15 @@ public static class TerrainPatchExporter
             ? TryBuildCollisionPatchContext(imageStream, layout, ram, skippedEdits)
             : null;
         Dictionary<long, TerrainPatch> patchesByWadOffset = new();
+        Dictionary<(int SectorOffset, int ColorIndex), TerrainTextureVisualCorner> nativeVisualColorReservations = new();
+        IReadOnlyList<NativeTerrainTextureRelocationEdit> nativeTextureRelocations =
+            string.IsNullOrWhiteSpace(nativeTextureRelocationsPath)
+                ? Array.Empty<NativeTerrainTextureRelocationEdit>()
+                : NativeTerrainTextureRelocationEditStore.LoadManifest(nativeTextureRelocationsPath, level.Key);
+        IReadOnlyDictionary<int, NativeTerrainTextureRelocationEdit> nativeTextureRelocationsByTarget =
+            nativeTextureRelocations.ToDictionary(edit => edit.TargetTextureId);
+        Dictionary<int, NativeTerrainSurfaceSourceData> donorSurfaceSourcesByWadEntry = [];
+        List<NativeTerrainSurfaceBehaviorAssignment> nativeSurfaceBehaviorAssignments = [];
         List<TerrainSideWallCandidate> sideWallCandidates = new();
         List<TerrainSideWallPatchSummary> sideWallSummaries = new();
         List<long> editedSceneSectorWadOffsets = new();
@@ -306,6 +962,11 @@ public static class TerrainPatchExporter
             if (!editDocument.RootElement.TryGetProperty("edits", out JsonElement editsElement) || editsElement.ValueKind != JsonValueKind.Array)
                 throw new InvalidOperationException("The terrain edit file does not contain an edits array.");
 
+            AddNativeTextureRelocationFaceEditConflicts(
+                editsElement,
+                nativeTextureRelocationsByTarget,
+                skippedEdits);
+
             if (collisionContext == null && canPatchSceneSectors && usesSourceDerivedSceneBytes)
             {
                 collisionContext = TryBuildSourceDerivedCollisionPatchContext(
@@ -313,6 +974,25 @@ public static class TerrainPatchExporter
                     sourceSectorHits,
                     editsElement,
                     skippedEdits);
+            }
+
+            NativeTerrainSurfaceSourceData? nativeSurfaceSource = null;
+            IReadOnlyDictionary<string, NativeCollisionSurfaceTriangle[]>? nativeSurfaceTrianglesByKey = null;
+            if (editsElement.EnumerateArray().Any(edit => JsonValue.GetBoolean(edit, "nativeSurfaceBehaviorEdit")))
+            {
+                try
+                {
+                    nativeSurfaceSource = PortalSourceDataLocator.LocateTerrainSurfaces(imageStream, layout, level);
+                    nativeSurfaceTrianglesByKey = nativeSurfaceSource.CollisionSurfaceTriangles
+                        .GroupBy(NativeTerrainSurfaceCatalogBuilder.TriangleKey, StringComparer.Ordinal)
+                        .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+                }
+                catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or IOException)
+                {
+                    AddAtomicTerrainSwapBlock(
+                        skippedEdits,
+                        $"native terrain behavior source collision/surface tables could not be decoded: {ex.Message}");
+                }
             }
 
             foreach (JsonElement edit in editsElement.EnumerateArray())
@@ -323,12 +1003,20 @@ public static class TerrainPatchExporter
                 string structureEditMode = JsonValue.GetString(edit, "structureEditMode");
                 if (!canPatchSceneSectors)
                 {
-                    skippedEdits.Add($"{runtimeKey}: terrain face edits need this level's RAM capture/source-search map or a source-derived terrain map; custom texture art can still be patched.");
+                    string reason = $"{runtimeKey}: terrain face edits need this level's RAM capture/source-search map or a source-derived terrain map; custom texture art can still be patched.";
+                    if (IsAtomicTerrainFaceSwapEdit(edit))
+                        AddAtomicTerrainSwapBlock(skippedEdits, reason);
+                    else
+                        skippedEdits.Add(reason);
                     continue;
                 }
                 if (!sourceSectorHits.TryGetValue(runtimeKey, out SourceSectorLocation? sourceSectorLocation))
                 {
-                    skippedEdits.Add($"{runtimeKey}: no source-sector match found.");
+                    string reason = $"{runtimeKey}: no source-sector match found.";
+                    if (IsAtomicTerrainFaceSwapEdit(edit))
+                        AddAtomicTerrainSwapBlock(skippedEdits, reason);
+                    else
+                        skippedEdits.Add(reason);
                     continue;
                 }
                 long sourceSectorWadOffset = sourceSectorLocation.WadOffset;
@@ -338,7 +1026,11 @@ public static class TerrainPatchExporter
                 int sectorOffset = JsonValue.GetInt32(edit, "sectorOffset", -1);
                 if (sectorOffset < 0)
                 {
-                    skippedEdits.Add($"{runtimeKey}: edit is missing sector offset; re-save this terrain edit in the native editor.");
+                    string reason = $"{runtimeKey}: edit is missing sector offset; re-save this terrain edit in the native editor.";
+                    if (IsAtomicTerrainFaceSwapEdit(edit))
+                        AddAtomicTerrainSwapBlock(skippedEdits, reason);
+                    else
+                        skippedEdits.Add(reason);
                     continue;
                 }
 
@@ -357,14 +1049,54 @@ public static class TerrainPatchExporter
                         continue;
                     }
                 }
-                AddTexturePatch(imageStream, layout, ram, sector, sourceSectorWadOffset, sectorOffset, edit, patchesByWadOffset, skippedEdits);
+                AddTexturePatch(
+                    imageStream,
+                    layout,
+                    ram,
+                    level,
+                    sector,
+                    sourceSectorWadOffset,
+                    sectorOffset,
+                    edit,
+                    nativeVisualColorReservations,
+                    patchesByWadOffset,
+                    skippedEdits);
+                AddNativeSurfaceBehaviorPatches(
+                    imageStream,
+                    layout,
+                    level,
+                    nativeSurfaceSource,
+                    nativeSurfaceTrianglesByKey,
+                    nativeTextureRelocationsByTarget,
+                    donorSurfaceSourcesByWadEntry,
+                    edit,
+                    nativeSurfaceBehaviorAssignments,
+                    skippedEdits);
                 AddVertexPatches(imageStream, layout, ram, sector, sourceSectorWadOffset, sectorOffset, detail, edit, patchesByWadOffset, skippedEdits);
                 AddCollisionPatches(imageStream, layout, ram, collisionContext, sector, detail, edit, patchesByWadOffset, skippedEdits);
                 CollectTerrainSideWallCandidates(ram, collisionContext, sector, sourceSectorWadOffset, sectorOffset, detail, edit, sideWallCandidates, skippedEdits);
             }
 
             AddTerrainSideWallPatches(imageStream, layout, ram, collisionContext, sourceSectorHits, modelSubfileInfo, editedSceneSectorWadOffsets, sideWallCandidates, patchesByWadOffset, skippedEdits, sideWallSummaries);
+            AddNativeSurfaceLayoutPatch(
+                imageStream,
+                layout,
+                nativeSurfaceSource,
+                nativeSurfaceBehaviorAssignments,
+                patchesByWadOffset,
+                skippedEdits);
         }
+
+        IReadOnlyList<NativeTerrainTextureRelocationPatchSummary> nativeTextureRelocationSummaries =
+            AddNativeTerrainTextureRelocationPatches(
+                sourceImagePath,
+                sourceCuePath,
+                level,
+                nativeTextureRelocations,
+                imageStream,
+                layout,
+                patchesByWadOffset,
+                skippedEdits);
 
         List<CustomTerrainTexturePatchSummary> customTextureSummaries = new();
         if (!string.IsNullOrWhiteSpace(customTexturesPath) && File.Exists(customTexturesPath))
@@ -384,12 +1116,16 @@ public static class TerrainPatchExporter
             SourceSearchPath: sourceSearchPath,
             TerrainEditsPath: terrainEditsPath,
             CustomTexturesPath: customTexturesPath,
+            NativeTextureRelocationsPath: nativeTextureRelocationsPath,
             TextureAssetWadIndex: textureAssetWadIndex,
             PatchCount: patches.Count,
             TotalPatchedBytes: patches.Sum(patch => patch.ByteLength),
             CustomTextureImportCount: customTextureSummaries.Count,
             CustomTextureBytePatchCount: patches.Count(patch => patch.Kind.StartsWith("custom-texture-", StringComparison.OrdinalIgnoreCase)),
             CustomTextureImports: customTextureSummaries,
+            NativeTextureRelocationCount: nativeTextureRelocations.Count,
+            NativeTextureRelocationBytePatchCount: patches.Count(patch => patch.Kind.StartsWith("native-terrain-texture-", StringComparison.OrdinalIgnoreCase)),
+            NativeTextureRelocations: nativeTextureRelocationSummaries,
             TerrainSideWalls: sideWallSummaries,
             Patches: patches,
             SkippedEdits: skippedEdits,
@@ -2564,10 +3300,12 @@ public static class TerrainPatchExporter
         FileStream imageStream,
         DiscLayout layout,
         byte[] ram,
+        LevelDefinition level,
         SceneSectorHeader sector,
         long sourceSectorWadOffset,
         int sectorOffset,
         JsonElement edit,
+        Dictionary<(int SectorOffset, int ColorIndex), TerrainTextureVisualCorner> nativeVisualColorReservations,
         Dictionary<long, TerrainPatch> patchesByWadOffset,
         List<string> skippedEdits)
     {
@@ -2576,19 +3314,897 @@ public static class TerrainPatchExporter
             return;
 
         string runtimeKey = JsonValue.GetString(edit, "runtimeKey");
+        bool hasNativeVisualEdit = JsonValue.GetBoolean(edit, "nativeTextureVisualEdit");
         int faceOffset = JsonValue.GetInt32(edit, "faceOffset", -1);
-        if (faceOffset < sectorOffset || faceOffset + 12 > sectorOffset + sector.SizeBytes)
+        int requiredFaceBytes = hasNativeVisualEdit ? 16 : 12;
+        if (faceOffset < sectorOffset || faceOffset + requiredFaceBytes > sectorOffset + sector.SizeBytes)
         {
-            skippedEdits.Add($"{runtimeKey}: texture edit is missing a valid face offset; re-save this edit.");
+            AddAtomicTerrainSwapBlock(
+                skippedEdits,
+                $"{runtimeKey}: texture edit is missing a valid face offset; re-save this edit.");
             return;
         }
 
         int word3Offset = faceOffset + 8;
         long wadOffset = sourceSectorWadOffset + (word3Offset - sectorOffset);
         uint oldWord = ReadUInt32(ram, word3Offset);
-        uint newWord = (oldWord & 0xFFFFFF80u) | (uint)(textureIdEdited & 0x7F);
-        AddPatch(imageStream, layout, patchesByWadOffset, wadOffset, BitConverter.GetBytes(oldWord), BitConverter.GetBytes(newWord), "texture-id-word3", runtimeKey, $"Set terrain texture id to {textureIdEdited}.");
+        if (!hasNativeVisualEdit)
+        {
+            string textureEditMode = JsonValue.GetString(edit, "textureEditMode");
+            if (string.Equals(textureEditMode, "native-resident-face-swap", StringComparison.OrdinalIgnoreCase))
+            {
+                AddAtomicTerrainSwapBlock(
+                    skippedEdits,
+                    $"{runtimeKey}: the resident native texture swap is missing its source-verified four-corner near/fade tint recipe; reopen the catalog and reselect the look.");
+                return;
+            }
+            uint newWord = (oldWord & 0xFFFFFF80u) | (uint)(textureIdEdited & 0x7F);
+            AddPatch(imageStream, layout, patchesByWadOffset, wadOffset, BitConverter.GetBytes(oldWord), BitConverter.GetBytes(newWord), "texture-id-word3", runtimeKey, $"Set terrain texture id to {textureIdEdited}.");
+            return;
+        }
+
+        string detail = JsonValue.GetString(edit, "detail", "hp");
+        if (!string.Equals(detail, "hp", StringComparison.OrdinalIgnoreCase))
+        {
+            AddAtomicTerrainSwapBlock(
+                skippedEdits,
+                $"{runtimeKey}: native texture visuals need one high-detail face.");
+            return;
+        }
+
+        if (!TryReadNativeTextureVisualEdit(edit, textureIdEdited, out TerrainTextureVisualEdit visualEdit, out string visualEditError))
+        {
+            AddAtomicTerrainSwapBlock(
+                skippedEdits,
+                $"{runtimeKey}: {visualEditError}");
+            return;
+        }
+        if (!string.Equals(
+                LevelCatalog.NormalizeKey(visualEdit.SourceLevelKey),
+                LevelCatalog.NormalizeKey(level.Key),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            AddAtomicTerrainSwapBlock(
+                skippedEdits,
+                $"{runtimeKey}: resident native texture visuals must come from the same level; saved donor level '{visualEdit.SourceLevelKey}' does not match {level.Key}.");
+            return;
+        }
+        if (visualEdit.SourceTextureId != textureIdEdited)
+        {
+            AddAtomicTerrainSwapBlock(
+                skippedEdits,
+                $"{runtimeKey}: saved visual donor texture {visualEdit.SourceTextureId} does not match edited texture {textureIdEdited}.");
+            return;
+        }
+        if (!NativeTerrainTextureVisualInspector.TryInspectLogicalWad(
+                ram,
+                visualEdit.SourceLevelKey,
+                visualEdit.SourceRuntimeKey,
+                visualEdit.SourceSectorOffset,
+                visualEdit.SourceFaceOffset,
+                out TerrainTextureVisualEdit sourceVisual,
+                out string sourceVisualError))
+        {
+            AddAtomicTerrainSwapBlock(
+                skippedEdits,
+                $"{runtimeKey}: saved visual donor could not be re-read from the selected source BIN: {sourceVisualError}");
+            return;
+        }
+        if (sourceVisual.SourceTextureId != visualEdit.SourceTextureId ||
+            !sourceVisual.Corners.SequenceEqual(visualEdit.Corners))
+        {
+            AddAtomicTerrainSwapBlock(
+                skippedEdits,
+                $"{runtimeKey}: saved donor texture/tints no longer match source face {visualEdit.SourceRuntimeKey}; reopen the catalog and reselect the look.");
+            return;
+        }
+
+        TerrainTextureVisualCorner[] uniqueCornerPairs = visualEdit.Corners
+            .Distinct()
+            .ToArray();
+        if (!NativeTerrainTextureVisualInspector.TryFindWritableColorSlotsInLogicalWad(
+                ram,
+                sectorOffset,
+                faceOffset,
+                requiredCount: 0,
+                out int[] candidateColorIndexes,
+                out string privateColorError))
+        {
+            AddAtomicTerrainSwapBlock(
+                skippedEdits,
+                $"{runtimeKey}: {privateColorError} Nearby terrain was not recolored.");
+            return;
+        }
+
+        int hpColorStart = GetHpColorDataStartOffset(sector);
+        Dictionary<TerrainTextureVisualCorner, int> colorSlotByPair = new();
+        HashSet<int> locallyAllocatedColorIndexes = new();
+        foreach (TerrainTextureVisualCorner pair in uniqueCornerPairs)
+        {
+            int privateColorIndex = -1;
+            foreach (int candidate in candidateColorIndexes)
+            {
+                if (locallyAllocatedColorIndexes.Contains(candidate))
+                    continue;
+                if (nativeVisualColorReservations.TryGetValue((sectorOffset, candidate), out TerrainTextureVisualCorner? reservedPair) &&
+                    reservedPair == pair)
+                {
+                    privateColorIndex = candidate;
+                    break;
+                }
+            }
+            if (privateColorIndex < 0)
+            {
+                foreach (int candidate in candidateColorIndexes)
+                {
+                    if (!locallyAllocatedColorIndexes.Contains(candidate) &&
+                        !nativeVisualColorReservations.ContainsKey((sectorOffset, candidate)))
+                    {
+                        privateColorIndex = candidate;
+                        break;
+                    }
+                }
+            }
+            if (privateColorIndex < 0)
+            {
+                AddAtomicTerrainSwapBlock(
+                    skippedEdits,
+                    $"{runtimeKey}: the target sector has no remaining private native tint slot for {uniqueCornerPairs.Length} requested pair(s) after earlier face swaps reserved {nativeVisualColorReservations.Count(reservation => reservation.Key.SectorOffset == sectorOffset)} slot(s). Nearby terrain was not recolored.");
+                return;
+            }
+
+            NativeTerrainHpColorOffsets colorOffsets =
+                NativeTerrainHpColorLayout.GetColorOffsets(
+                    hpColorStart,
+                    sector.NumHpColours,
+                    privateColorIndex);
+            if (colorOffsets.Table1Offset < sectorOffset ||
+                colorOffsets.Table2Offset + NativeTerrainHpColorLayout.ColorBytes > sectorOffset + sector.SizeBytes)
+            {
+                AddAtomicTerrainSwapBlock(
+                    skippedEdits,
+                    $"{runtimeKey}: private high-detail color slot {privateColorIndex} is outside the validated scene sector.");
+                return;
+            }
+            colorSlotByPair[pair] = privateColorIndex;
+            locallyAllocatedColorIndexes.Add(privateColorIndex);
+        }
+        foreach ((TerrainTextureVisualCorner pair, int privateColorIndex) in colorSlotByPair)
+        {
+            (int SectorOffset, int ColorIndex) reservationKey = (sectorOffset, privateColorIndex);
+            if (nativeVisualColorReservations.TryGetValue(reservationKey, out TerrainTextureVisualCorner? reservedPair) &&
+                reservedPair != pair)
+            {
+                AddAtomicTerrainSwapBlock(
+                    skippedEdits,
+                    $"{runtimeKey}: native tint slot {privateColorIndex} was already reserved for a different near/fade pair. No overlapping tint patch was staged.");
+                return;
+            }
+            nativeVisualColorReservations[reservationKey] = pair;
+        }
+
+        uint newVisualWord = (oldWord & 0xFFFFFF80u) | (uint)(textureIdEdited & 0x7F);
+        AddPatch(
+            imageStream,
+            layout,
+            patchesByWadOffset,
+            wadOffset,
+            BitConverter.GetBytes(oldWord),
+            BitConverter.GetBytes(newVisualWord),
+            "texture-id-word3",
+            runtimeKey,
+            $"Set terrain texture id to {textureIdEdited} while preserving the target face's native mapping/control bits.");
+
+        byte[] oldColorIndexes = ram.AsSpan(faceOffset + 4, 4).ToArray();
+        byte[] newColorIndexes = visualEdit.Corners
+            .Select(corner => checked((byte)colorSlotByPair[corner]))
+            .ToArray();
+        AddPatch(
+            imageStream,
+            layout,
+            patchesByWadOffset,
+            sourceSectorWadOffset + ((faceOffset + 4) - sectorOffset),
+            oldColorIndexes,
+            newColorIndexes,
+            "texture-visual-color-indices",
+            runtimeKey,
+            $"Bind the four face corners to {uniqueCornerPairs.Length} private high-detail native tint slot(s): {string.Join(", ", colorSlotByPair.Values)}.");
+
+        foreach ((TerrainTextureVisualCorner pair, int privateColorIndex) in colorSlotByPair)
+        {
+            NativeTerrainHpColorOffsets colorOffsets =
+                NativeTerrainHpColorLayout.GetColorOffsets(
+                    hpColorStart,
+                    sector.NumHpColours,
+                    privateColorIndex);
+            AddNativeTextureVisualColorPatch(
+                imageStream,
+                layout,
+                ram,
+                sourceSectorWadOffset,
+                sectorOffset,
+                colorOffsets.Table2Offset,
+                pair.NearColor,
+                "texture-visual-near-color",
+                runtimeKey,
+                $"Set private near tint slot {privateColorIndex} to #{pair.NearColor.R:X2}{pair.NearColor.G:X2}{pair.NearColor.B:X2}.",
+                patchesByWadOffset);
+            AddNativeTextureVisualColorPatch(
+                imageStream,
+                layout,
+                ram,
+                sourceSectorWadOffset,
+                sectorOffset,
+                colorOffsets.Table1Offset,
+                pair.FarColor,
+                "texture-visual-far-color",
+                runtimeKey,
+                $"Set private fade tint slot {privateColorIndex} to #{pair.FarColor.R:X2}{pair.FarColor.G:X2}{pair.FarColor.B:X2}.",
+                patchesByWadOffset);
+        }
     }
+
+    private static bool TryReadNativeTextureVisualEdit(
+        JsonElement edit,
+        int fallbackTextureId,
+        out TerrainTextureVisualEdit visual,
+        out string error)
+    {
+        visual = null!;
+        string sourceLevelKey = JsonValue.GetString(edit, "nativeTextureVisualSourceLevelKey");
+        string sourceRuntimeKey = JsonValue.GetString(edit, "nativeTextureVisualSourceRuntimeKey");
+        int sourceTextureId = JsonValue.GetInt32(edit, "nativeTextureVisualSourceTextureId", fallbackTextureId);
+        int sourceSectorOffset = JsonValue.GetInt32(edit, "nativeTextureVisualSourceSectorOffset", -1);
+        int sourceFaceOffset = JsonValue.GetInt32(edit, "nativeTextureVisualSourceFaceOffset", -1);
+        if (string.IsNullOrWhiteSpace(sourceLevelKey) || string.IsNullOrWhiteSpace(sourceRuntimeKey) ||
+            sourceTextureId < 0 || sourceSectorOffset < 0 || sourceFaceOffset < 0)
+        {
+            error = "native texture visuals are missing source-bound level, face, texture, or offset provenance; reopen the catalog and reselect the look.";
+            return false;
+        }
+
+        if (!TryReadTextureVisualColors(
+                edit,
+                "nativeTextureVisualNearColors",
+                "nativeTextureVisualNearColor",
+                out ColorRgba[] nearColors) ||
+            !TryReadTextureVisualColors(
+                edit,
+                "nativeTextureVisualFarColors",
+                "nativeTextureVisualFarColor",
+                out ColorRgba[] farColors))
+        {
+            error = "native texture visuals are missing four valid source-bound near/fade tint colors.";
+            return false;
+        }
+
+        TerrainTextureVisualCorner[] corners = Enumerable.Range(0, 4)
+            .Select(index => new TerrainTextureVisualCorner(nearColors[index], farColors[index]))
+            .ToArray();
+        visual = new TerrainTextureVisualEdit(
+            sourceTextureId,
+            sourceLevelKey,
+            sourceRuntimeKey,
+            sourceSectorOffset,
+            sourceFaceOffset,
+            corners[0],
+            corners[1],
+            corners[2],
+            corners[3],
+            JsonValue.GetString(edit, "nativeTextureVisualLabel", "native terrain texture visual"));
+        error = "";
+        return true;
+    }
+
+    private static bool TryReadTextureVisualColors(
+        JsonElement edit,
+        string arrayName,
+        string legacyUniformName,
+        out ColorRgba[] colors)
+    {
+        colors = [];
+        if (edit.TryGetProperty(arrayName, out JsonElement values) && values.ValueKind == JsonValueKind.Array)
+        {
+            List<ColorRgba> parsed = new();
+            foreach (JsonElement value in values.EnumerateArray())
+            {
+                if (value.ValueKind != JsonValueKind.String || !ColorRgba.TryParseHex(value.GetString(), out ColorRgba color))
+                    return false;
+                parsed.Add(color);
+            }
+
+            if (parsed.Count != 4)
+                return false;
+            colors = parsed.ToArray();
+            return true;
+        }
+
+        if (!ColorRgba.TryParseHex(JsonValue.GetString(edit, legacyUniformName), out ColorRgba uniform))
+            return false;
+        colors = [uniform, uniform, uniform, uniform];
+        return true;
+    }
+
+    private static int GetHpColorDataStartOffset(SceneSectorHeader sector)
+    {
+        int dataStart = sector.Offset + 28;
+        int hpVertexStartWords = sector.NumLpVertices + sector.NumLpColours + (sector.NumLpFaces * 2);
+        return dataStart + ((hpVertexStartWords + sector.NumHpVertices) * 4);
+    }
+
+    private static void AddNativeTextureVisualColorPatch(
+        FileStream imageStream,
+        DiscLayout layout,
+        byte[] ram,
+        long sourceSectorWadOffset,
+        int sectorOffset,
+        int colorOffset,
+        ColorRgba color,
+        string kind,
+        string runtimeKey,
+        string description,
+        Dictionary<long, TerrainPatch> patchesByWadOffset)
+    {
+        byte[] before = ram.AsSpan(colorOffset, 4).ToArray();
+        byte[] after = before.ToArray();
+        after[0] = color.R;
+        after[1] = color.G;
+        after[2] = color.B;
+        AddPatch(
+            imageStream,
+            layout,
+            patchesByWadOffset,
+            sourceSectorWadOffset + (colorOffset - sectorOffset),
+            before,
+            after,
+            kind,
+            runtimeKey,
+            description);
+    }
+
+    private static void AddNativeSurfaceBehaviorPatches(
+        FileStream imageStream,
+        DiscLayout layout,
+        LevelDefinition level,
+        NativeTerrainSurfaceSourceData? source,
+        IReadOnlyDictionary<string, NativeCollisionSurfaceTriangle[]>? nativeTrianglesByKey,
+        IReadOnlyDictionary<int, NativeTerrainTextureRelocationEdit> nativeTextureRelocationsByTarget,
+        Dictionary<int, NativeTerrainSurfaceSourceData> donorSurfaceSourcesByWadEntry,
+        JsonElement edit,
+        List<NativeTerrainSurfaceBehaviorAssignment> assignments,
+        List<string> skippedEdits)
+    {
+        if (!JsonValue.GetBoolean(edit, "nativeSurfaceBehaviorEdit"))
+            return;
+
+        string runtimeKey = JsonValue.GetString(edit, "runtimeKey");
+        if (source == null || nativeTrianglesByKey == null)
+        {
+            AddAtomicTerrainSwapBlock(
+                skippedEdits,
+                $"{runtimeKey}: native terrain behavior was requested, but this level's source surface table is unavailable.");
+            return;
+        }
+
+        int surfaceType = JsonValue.GetInt32(edit, "nativeSurfaceType", int.MinValue);
+        if (surfaceType == int.MinValue)
+        {
+            AddAtomicTerrainSwapBlock(
+                skippedEdits,
+                $"{runtimeKey}: native terrain behavior edit is missing its surface type; reapply the texture swap.");
+            return;
+        }
+
+        NativeTerrainSurfaceSignature signature = new(
+            surfaceType,
+            JsonValue.GetInt32(edit, "nativeSurfaceParam1"),
+            JsonValue.GetInt32(edit, "nativeSurfaceParam2"));
+        string sourceLevelKey = JsonValue.GetString(edit, "nativeSurfaceSourceLevelKey");
+        bool crossLevel = !string.IsNullOrWhiteSpace(sourceLevelKey) &&
+            !string.Equals(LevelCatalog.NormalizeKey(sourceLevelKey), LevelCatalog.NormalizeKey(level.Key), StringComparison.OrdinalIgnoreCase);
+        if (signature.SurfaceType is 2 or 3 or 6 || (crossLevel && !signature.IsCrossLevelPortable))
+        {
+            AddAtomicTerrainSwapBlock(
+                skippedEdits,
+                $"{runtimeKey}: {signature.Label} is level-linked and cannot be transplanted safely.");
+            return;
+        }
+
+        NativeTerrainSurfaceDescriptorImport? donorImport = null;
+        if (!signature.IsOrdinary)
+        {
+            PortalSpecialSurfaceRecord? descriptor = source.SpecialSurfaces.FirstOrDefault(surface =>
+                surface.Type == signature.SurfaceType &&
+                surface.Param1 == signature.Param1 &&
+                surface.Param2 == signature.Param2);
+            if (descriptor == null)
+            {
+                int targetTextureId = JsonValue.GetInt32(
+                    edit,
+                    "textureIdOriginal",
+                    JsonValue.GetInt32(edit, "textureId", -1));
+                if (!crossLevel ||
+                    targetTextureId < 0 ||
+                    !nativeTextureRelocationsByTarget.TryGetValue(targetTextureId, out NativeTerrainTextureRelocationEdit? relocation) ||
+                    !string.Equals(
+                        LevelCatalog.NormalizeKey(relocation.DonorLevelKey),
+                        LevelCatalog.NormalizeKey(sourceLevelKey),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    AddAtomicTerrainSwapBlock(
+                        skippedEdits,
+                        $"{runtimeKey}: {level.DisplayName} has no native {signature.Label} descriptor, and the shared texture relocation does not identify its exact donor level; no behavior bytes were changed.");
+                    return;
+                }
+
+                try
+                {
+                    if (!donorSurfaceSourcesByWadEntry.TryGetValue(
+                            relocation.DonorWadEntry,
+                            out NativeTerrainSurfaceSourceData? donorSource))
+                    {
+                        donorSource = PortalSourceDataLocator.LocateTerrainSurfaces(
+                            imageStream,
+                            layout,
+                            new LevelDefinition
+                            {
+                                Key = relocation.DonorLevelKey,
+                                DisplayName = relocation.DonorLevelName,
+                                SourceWadEntry = relocation.DonorWadEntry
+                            });
+                        donorSurfaceSourcesByWadEntry[relocation.DonorWadEntry] = donorSource;
+                    }
+
+                    PortalSpecialSurfaceRecord? donorDescriptor = donorSource.SpecialSurfaces.FirstOrDefault(surface =>
+                        surface.Type == signature.SurfaceType &&
+                        surface.Param1 == signature.Param1 &&
+                        surface.Param2 == signature.Param2);
+                    if (donorDescriptor == null)
+                    {
+                        AddAtomicTerrainSwapBlock(
+                            skippedEdits,
+                            $"{runtimeKey}: {relocation.DonorLevelName} no longer contains the staged {signature.Label} descriptor; no behavior bytes were changed.");
+                        return;
+                    }
+
+                    byte[] rawRecord = donorDescriptor.RawBytes.ToArray();
+                    donorImport = new NativeTerrainSurfaceDescriptorImport(
+                        signature,
+                        rawRecord,
+                        donorSource.LevelKey,
+                        donorDescriptor.Index,
+                        Convert.ToHexString(SHA256.HashData(rawRecord)));
+                }
+                catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or IOException or OverflowException)
+                {
+                    AddAtomicTerrainSwapBlock(
+                        skippedEdits,
+                        $"{runtimeKey}: the donor {signature.Label} descriptor could not be read atomically: {ex.Message}");
+                    return;
+                }
+            }
+        }
+
+        IReadOnlyList<Vector2f> originalPoints = ReadVector2Array(edit, "originalPoints");
+        IReadOnlyList<float> originalZ = ReadFloatArray(edit, "originalZ");
+        int pointCount = Math.Min(originalPoints.Count, originalZ.Count);
+        if (pointCount < 3)
+        {
+            AddAtomicTerrainSwapBlock(
+                skippedEdits,
+                $"{runtimeKey}: native terrain behavior edit is missing the selected face's original points.");
+            return;
+        }
+
+        List<NativeCollisionSurfaceTriangle> targetTriangles = [];
+        for (int i = 1; i < pointCount - 1; i++)
+        {
+            string triangleKey = string.Join("|", new[]
+            {
+                NativeTerrainSurfaceCatalogBuilder.PointKey(originalPoints[0].X, originalPoints[0].Y, originalZ[0]),
+                NativeTerrainSurfaceCatalogBuilder.PointKey(originalPoints[i].X, originalPoints[i].Y, originalZ[i]),
+                NativeTerrainSurfaceCatalogBuilder.PointKey(originalPoints[i + 1].X, originalPoints[i + 1].Y, originalZ[i + 1])
+            }.OrderBy(value => value, StringComparer.Ordinal));
+            if (!nativeTrianglesByKey.TryGetValue(triangleKey, out NativeCollisionSurfaceTriangle[]? matches) || matches.Length != 1)
+            {
+                AddAtomicTerrainSwapBlock(
+                    skippedEdits,
+                    $"{runtimeKey}: native behavior transfer blocked because visible triangle {i}/{pointCount - 2} does not have exactly one collision match.");
+                return;
+            }
+
+            targetTriangles.Add(matches[0]);
+        }
+
+        if (targetTriangles.Select(triangle => triangle.TriangleIndex).Distinct().Count() != targetTriangles.Count)
+        {
+            AddAtomicTerrainSwapBlock(
+                skippedEdits,
+                $"{runtimeKey}: native behavior transfer blocked because collision matches are not one-to-one.");
+            return;
+        }
+
+        foreach (NativeCollisionSurfaceTriangle triangle in targetTriangles)
+        {
+            if (signature.IsOrdinary && triangle.FlagWadOffset < 0)
+                continue; // Beyond-count triangles already have exact implicit ordinary flag 0xFF.
+
+            assignments.Add(new NativeTerrainSurfaceBehaviorAssignment(
+                triangle.TriangleIndex,
+                signature,
+                donorImport,
+                runtimeKey,
+                signature.Label));
+        }
+    }
+
+    private static void AddNativeSurfaceLayoutPatch(
+        FileStream imageStream,
+        DiscLayout layout,
+        NativeTerrainSurfaceSourceData? source,
+        IReadOnlyList<NativeTerrainSurfaceBehaviorAssignment> assignments,
+        Dictionary<long, TerrainPatch> patchesByWadOffset,
+        List<string> skippedEdits)
+    {
+        if (source == null || assignments.Count == 0)
+            return;
+
+        byte[] levelData = ReadWadBytes(
+            imageStream,
+            layout,
+            source.LevelDataWadOffset,
+            source.LevelDataByteLength);
+        NativeTerrainSurfaceExistingPatch[] existingPatches = patchesByWadOffset.Values
+            .Select(patch => new NativeTerrainSurfaceExistingPatch(
+                ParseRequiredLong(patch.WadRelativeOffset, "patch.wadRelativeOffset"),
+                HexToBytes(patch.BeforeHexPreview),
+                HexToBytes(patch.AfterHexPreview),
+                patch.Kind))
+            .ToArray();
+        if (!NativeTerrainSurfaceLayoutComposer.TryBuild(
+                levelData,
+                source,
+                assignments,
+                existingPatches,
+                out NativeTerrainSurfaceLayoutPlan? surfacePlan,
+                out string reason) ||
+            surfacePlan == null)
+        {
+            foreach (string runtimeKey in assignments
+                         .Select(assignment => assignment.RuntimeKey)
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                AddAtomicTerrainSwapBlock(
+                    skippedEdits,
+                    $"{runtimeKey}: native terrain behavior was not applied atomically: {reason}");
+            }
+            return;
+        }
+
+        if (!surfacePlan.HasChanges)
+            return;
+
+        foreach (long consumedOffset in surfacePlan.ConsumedPatchWadOffsets)
+            patchesByWadOffset.Remove(consumedOffset);
+
+        string runtimeSummary = string.Join(",", assignments
+            .Select(assignment => assignment.RuntimeKey)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .Take(4));
+        if (assignments.Select(assignment => assignment.RuntimeKey).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 4)
+            runtimeSummary += ",more";
+        AddPatch(
+            imageStream,
+            layout,
+            patchesByWadOffset,
+            surfacePlan.WadOffset,
+            surfacePlan.Before,
+            surfacePlan.After,
+            surfacePlan.DescriptorGrowthBytes > 0
+                ? "native-surface-layout-import"
+                : surfacePlan.FlagGrowthBytes > 0 || surfacePlan.TriangleRemaps.Count > 0
+                    ? "collision-surface-flag-promotion"
+                : "collision-surface-flag",
+            string.IsNullOrWhiteSpace(runtimeSummary) ? "native-surface-batch" : runtimeSummary,
+            surfacePlan.DescriptorGrowthBytes > 0
+                ? $"Atomically import {surfacePlan.NewSurfaceCount - surfacePlan.OldSurfaceCount} portable native surface descriptor(s), assign {surfacePlan.AssignedTriangleIndexes.Count} collision surface flag(s), move collision data by {surfacePlan.DescriptorGrowthBytes} byte(s), grow flags by {surfacePlan.FlagGrowthBytes} byte(s), and preserve {surfacePlan.ZeroTailBytesAfter} verified zero-tail byte(s)."
+                : surfacePlan.FlagGrowthBytes > 0 || surfacePlan.TriangleRemaps.Count > 0
+                    ? $"Atomically assign {surfacePlan.AssignedTriangleIndexes.Count} native collision surface flag(s), promote flag count {surfacePlan.OldFlagCount}->{surfacePlan.NewFlagCount}, remap {surfacePlan.TriangleRemaps.Count} beyond-count triangle(s), and shift the parsed level suffix by {surfacePlan.FlagGrowthBytes} byte(s) into verified zero padding ({surfacePlan.ZeroTailBytesAfter} byte(s) remain)."
+                    : $"Atomically assign {surfacePlan.AssignedTriangleIndexes.Count} native collision surface flag(s) inside the existing flag table.");
+    }
+
+    private static IReadOnlyList<NativeTerrainTextureRelocationPatchSummary> AddNativeTerrainTextureRelocationPatches(
+        string sourceImagePath,
+        string sourceCuePath,
+        LevelDefinition targetLevel,
+        IReadOnlyList<NativeTerrainTextureRelocationEdit> edits,
+        FileStream imageStream,
+        DiscLayout layout,
+        Dictionary<long, TerrainPatch> patchesByWadOffset,
+        List<string> skippedEdits)
+    {
+        if (edits.Count == 0)
+            return Array.Empty<NativeTerrainTextureRelocationPatchSummary>();
+
+        IReadOnlyList<NativeTerrainTextureRelocationPatchSummary> FailAll(string reason)
+        {
+            foreach (NativeTerrainTextureRelocationEdit edit in edits)
+            {
+                AddAtomicTerrainSwapBlock(
+                    skippedEdits,
+                    $"shared target texture {edit.TargetTextureId} <- {edit.DonorLevelName} texture {edit.DonorTextureId}: {reason}; no native texture-art patch was applied.");
+            }
+            return Array.Empty<NativeTerrainTextureRelocationPatchSummary>();
+        }
+
+        NativeTerrainTextureRuntimeControlAudit runtimeAudit;
+        try
+        {
+            runtimeAudit = NativeTerrainTextureRuntimeControlScanner.Inspect(sourceImagePath, targetLevel);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or IOException or OverflowException)
+        {
+            return FailAll($"the source-bound runtime texture-control audit failed ({ex.Message})");
+        }
+        if (!runtimeAudit.Complete)
+        {
+            return FailAll(
+                $"the runtime texture-control audit is incomplete ({string.Join(" ", runtimeAudit.SafetyBlockers)})");
+        }
+        int[] controlledTargets = edits
+            .Select(edit => edit.TargetTextureId)
+            .Where(textureId => !runtimeAudit.IsRuntimePersistentTarget(textureId))
+            .Distinct()
+            .Order()
+            .ToArray();
+        if (controlledTargets.Length > 0)
+        {
+            return FailAll(
+                $"target texture record(s) {string.Join(", ", controlledTargets)} are rewritten by native animation or scrolling controls");
+        }
+
+        List<PendingNativeTerrainTexturePatch> pending = [];
+        List<NativeTerrainTextureRelocationPatchSummary> summaries = [];
+        List<NativeTerrainTextureRelocationEdit> relocationFallbacks = [];
+        List<string> inPlaceFallbackNotes = [];
+        foreach (NativeTerrainTextureRelocationEdit edit in edits.OrderBy(edit => edit.TargetTextureId))
+        {
+            NativeTerrainTextureInPlaceTransplantRequest request = new(
+                edit.TargetTextureId,
+                edit.DonorWadEntry,
+                edit.DonorTextureId);
+            try
+            {
+                NativeTerrainTextureInPlaceTransplantSourceProof proof =
+                    NativeTerrainTextureInPlaceTransplantBuilder.InspectSourceProof(
+                        sourceImagePath,
+                        targetLevel,
+                        request);
+                if (NativeTerrainTextureInPlaceTransplantBuilder.TryBuild(
+                        sourceImagePath,
+                        targetLevel,
+                        request,
+                        proof,
+                        out NativeTerrainTextureInPlaceTransplantPlan? plan,
+                        out string inPlaceFailure) &&
+                    plan != null &&
+                    plan.SourceBindingVerified &&
+                    plan.RuntimeControlClearanceVerified &&
+                    plan.CompleteOwnershipClosureVerified &&
+                    plan.DecodedAndExternalExclusivityVerified &&
+                    plan.ExactDonorIndexedPixelsVerified &&
+                    plan.ExactDonorPalettesVerified &&
+                    plan.LowDetailAliasPreserved &&
+                    plan.TargetDescriptorTableUnchanged &&
+                    plan.TargetTextureIdPreserved &&
+                    plan.LogicalReadbackVerified &&
+                    plan.PhysicalAliasConflictCount == 0 &&
+                    plan.OutOfOwnershipWriteCount == 0)
+                {
+                    foreach (NativeTerrainTextureInPlaceTransplantPatch patch in plan.Patches)
+                    {
+                        pending.Add(new PendingNativeTerrainTexturePatch(
+                            patch.WadOffset,
+                            patch.Before,
+                            patch.After,
+                            "native-terrain-texture-in-place",
+                            $"texture-{edit.TargetTextureId}",
+                            patch.Description));
+                    }
+                    summaries.Add(new NativeTerrainTextureRelocationPatchSummary(
+                        Strategy: "target-owned-in-place",
+                        TargetTextureIds: [edit.TargetTextureId],
+                        DonorTextures: [$"{edit.DonorLevelName} / texture {edit.DonorTextureId} / WAD {edit.DonorWadEntry}"],
+                        CompleteDescriptorCount: plan.CompleteDescriptorCount,
+                        TargetOwnedByteCount: plan.TargetOwnedByteCount,
+                        PatchCount: plan.Patches.Count,
+                        PatchedByteCount: plan.Patches.Sum(patch => patch.ByteLength),
+                        RuntimeControlVerified: plan.RuntimeControlClearanceVerified,
+                        OwnershipVerified: plan.CompleteOwnershipClosureVerified && plan.DecodedAndExternalExclusivityVerified,
+                        ExactIndexedPixelsVerified: plan.ExactDonorIndexedPixelsVerified,
+                        ExactPalettesVerified: plan.ExactDonorPalettesVerified,
+                        LogicalReadbackVerified: plan.LogicalReadbackVerified,
+                        TargetDescriptorMaterialPolicyVerified: true,
+                        Notes: plan.Notes.Prepend(RelocationApplyModeNote(edit)).ToArray()));
+                    continue;
+                }
+
+                relocationFallbacks.Add(edit);
+                inPlaceFallbackNotes.Add(
+                    $"texture {edit.TargetTextureId}: {(string.IsNullOrWhiteSpace(inPlaceFailure) ? "in-place proof did not satisfy every required invariant" : inPlaceFailure)}");
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException or IOException or OverflowException)
+            {
+                relocationFallbacks.Add(edit);
+                inPlaceFallbackNotes.Add($"texture {edit.TargetTextureId}: {ex.Message}");
+            }
+        }
+
+        if (relocationFallbacks.Count > 0)
+        {
+            int[] fallbackTargetIds = relocationFallbacks
+                .Select(edit => edit.TargetTextureId)
+                .ToArray();
+            if (!NativeTexturePageOwnershipScanner.TryBuildRelocationOwnershipProof(
+                    sourceImagePath,
+                    targetLevel,
+                    fallbackTargetIds,
+                    out NativeTexturePageRelocationOwnershipProofResult? proofResult,
+                    out string ownershipFailure) ||
+                proofResult == null)
+            {
+                return FailAll(
+                    $"target-owned in-place storage was unavailable and relocation ownership proof failed ({ownershipFailure})");
+            }
+
+            NativeTerrainTextureRelocationImport[] imports = relocationFallbacks
+                .Select(edit => new NativeTerrainTextureRelocationImport(
+                    edit.TargetTextureId,
+                    edit.DonorWadEntry,
+                    edit.DonorTextureId,
+                    edit.DescriptorTier,
+                    edit.PreservesTargetNativeSurface))
+                .ToArray();
+            NativeTerrainTextureRelocationExportPlan relocationExportPlan;
+            try
+            {
+                relocationExportPlan = NativeTerrainTextureRelocationComposer.BuildPlan(
+                    new NativeTerrainTextureRelocationExportRequest(
+                        SourceImagePath: sourceImagePath,
+                        SourceCuePath: sourceCuePath,
+                        OutputPrefix: Path.Combine(
+                            Path.GetDirectoryName(sourceImagePath) ?? "",
+                            $".spyro-editor-{targetLevel.Key}-native-texture-proof"),
+                        TargetLevel: targetLevel,
+                        Imports: imports,
+                        OwnershipProof: proofResult.Proof,
+                        WriteImage: false));
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException or IOException or OverflowException)
+            {
+                string inPlace = string.Join(" | ", inPlaceFallbackNotes.Take(3));
+                return FailAll(
+                    $"target-owned in-place storage was unavailable ({inPlace}), and byte-private relocation failed ({ex.Message})");
+            }
+
+            NativeTerrainTextureRelocationPlan relocation = relocationExportPlan.Relocation;
+            foreach (NativeTerrainTextureRelocationPatch patch in relocation.Patches)
+            {
+                pending.Add(new PendingNativeTerrainTexturePatch(
+                    patch.WadOffset,
+                    patch.Before,
+                    patch.After,
+                    $"native-terrain-texture-{patch.Kind}",
+                    $"texture-batch-{string.Join("-", fallbackTargetIds)}",
+                    patch.Description));
+            }
+            summaries.Add(new NativeTerrainTextureRelocationPatchSummary(
+                Strategy: "byte-private-relocation",
+                TargetTextureIds: fallbackTargetIds,
+                DonorTextures: relocationFallbacks
+                    .Select(edit => $"{edit.DonorLevelName} / texture {edit.DonorTextureId} / WAD {edit.DonorWadEntry}")
+                    .ToArray(),
+                CompleteDescriptorCount: relocation.RewrittenDescriptorCount,
+                TargetOwnedByteCount: proofResult.TargetIsolations.Sum(isolation => isolation.TargetOwnedByteCount),
+                PatchCount: relocation.Patches.Count,
+                PatchedByteCount: relocation.Patches.Sum(patch => patch.ByteLength),
+                RuntimeControlVerified: relocationExportPlan.RuntimeTargetsPersistent,
+                OwnershipVerified: relocation.ProtectedStorageVerified,
+                ExactIndexedPixelsVerified: relocation.ExactDonorIndexedPixelsVerified,
+                ExactPalettesVerified: relocation.ExactDonorPalettesVerified,
+                LogicalReadbackVerified: relocation.LogicalReadbackVerified,
+                TargetDescriptorMaterialPolicyVerified: relocation.TargetDescriptorMaterialPolicyVerified,
+                Notes: relocation.Notes
+                    .Concat(relocationFallbacks.Select(RelocationApplyModeNote))
+                    .Concat(inPlaceFallbackNotes)
+                    .ToArray()));
+        }
+
+        List<PendingNativeTerrainTexturePatch> accepted = [];
+        foreach (PendingNativeTerrainTexturePatch candidate in pending
+                     .OrderBy(patch => patch.WadOffset)
+                     .ThenBy(patch => patch.Before.Length))
+        {
+            if (candidate.Before.Length == 0 ||
+                candidate.Before.Length != candidate.After.Length ||
+                candidate.WadOffset < 0)
+            {
+                return FailAll("a proof builder emitted an invalid empty, unequal-length, or negative-offset patch");
+            }
+
+            PendingNativeTerrainTexturePatch? exactDuplicate = accepted.FirstOrDefault(existing =>
+                existing.WadOffset == candidate.WadOffset &&
+                existing.Before.AsSpan().SequenceEqual(candidate.Before) &&
+                existing.After.AsSpan().SequenceEqual(candidate.After));
+            if (exactDuplicate != null)
+                continue;
+
+            PendingNativeTerrainTexturePatch? overlap = accepted.FirstOrDefault(existing =>
+                NativeTexturePatchRangesOverlap(
+                    existing.WadOffset,
+                    existing.Before.Length,
+                    candidate.WadOffset,
+                    candidate.Before.Length));
+            if (overlap != null)
+            {
+                return FailAll(
+                    $"proof builders emitted overlapping {overlap.Kind} and {candidate.Kind} ranges at WAD 0x{candidate.WadOffset:X}");
+            }
+
+            TerrainPatch? existingTerrainPatch = patchesByWadOffset.Values.FirstOrDefault(existing =>
+                NativeTexturePatchRangesOverlap(
+                    ParseRequiredLong(existing.WadRelativeOffset, "patch.wadRelativeOffset"),
+                    existing.ByteLength,
+                    candidate.WadOffset,
+                    candidate.Before.Length));
+            if (existingTerrainPatch != null)
+            {
+                return FailAll(
+                    $"native texture art overlaps existing {existingTerrainPatch.Kind} patch {existingTerrainPatch.Label}");
+            }
+
+            byte[] sourceBefore = ReadWadBytes(
+                imageStream,
+                layout,
+                candidate.WadOffset,
+                candidate.Before.Length);
+            if (!sourceBefore.SequenceEqual(candidate.Before))
+            {
+                return FailAll(
+                    $"source-bound before bytes changed for {candidate.Kind} at WAD 0x{candidate.WadOffset:X}");
+            }
+            accepted.Add(candidate);
+        }
+
+        foreach (PendingNativeTerrainTexturePatch patch in accepted)
+        {
+            AddPatch(
+                imageStream,
+                layout,
+                patchesByWadOffset,
+                patch.WadOffset,
+                patch.Before,
+                patch.After,
+                patch.Kind,
+                patch.RuntimeKey,
+                patch.Description);
+        }
+        return summaries;
+    }
+
+    private static string RelocationApplyModeNote(NativeTerrainTextureRelocationEdit edit) =>
+        edit.PreservesTargetNativeSurface
+            ? $"Texture {edit.TargetTextureId} uses art-only preserve-target mode: face texture IDs, HP material/semitransparency bits, descriptor ABR/alpha controls, tint, editor material labels, and collision/surface bytes are intentionally unchanged."
+            : $"Texture {edit.TargetTextureId} uses native art plus source-proven surface-property transfer mode.";
+
+    private static bool NativeTexturePatchRangesOverlap(
+        long firstOffset,
+        int firstLength,
+        long secondOffset,
+        int secondLength) =>
+        firstOffset < checked(secondOffset + secondLength) &&
+        secondOffset < checked(firstOffset + firstLength);
 
     private static void AddVertexPatches(
         FileStream imageStream,
@@ -4616,35 +6232,85 @@ public static class TerrainPatchExporter
         List<CustomTerrainTexturePatchSummary> summaries = new();
         foreach (CustomTerrainTextureImport import in imports)
         {
+            if (UsesBlockedLegacyTerrainTexturePath(import, out string legacyBlockReason))
+            {
+                AddAtomicTerrainSwapBlock(
+                    skippedEdits,
+                    $"texture {import.TextureId}: {legacyBlockReason}; no texture patches were applied.");
+                continue;
+            }
+
             if (import.TextureId < 0 || import.TextureId >= textureIndex.TextureCount)
             {
-                skippedEdits.Add($"texture {import.TextureId}: outside decoded {levelKey} texture table.");
+                AddAtomicTerrainSwapBlock(
+                    skippedEdits,
+                    $"texture {import.TextureId}: custom texture import blocked because it is outside the decoded {levelKey} texture table; no texture patches were applied.");
                 continue;
             }
 
             string sourcePath = ResolveManifestRelativePath(customTexturesPath, import.SourceImagePath);
-            if (!File.Exists(sourcePath))
+            bool useNativeRawTransplant = string.Equals(
+                import.SourceKind,
+                "borrowed-cross-level-texture-art",
+                StringComparison.OrdinalIgnoreCase);
+            if (!File.Exists(sourcePath) && !useNativeRawTransplant)
             {
-                skippedEdits.Add($"texture {import.TextureId}: missing custom texture image {sourcePath}.");
+                AddAtomicTerrainSwapBlock(
+                    skippedEdits,
+                    $"texture {import.TextureId}: custom texture import blocked because the source image is missing at {sourcePath}; no texture patches were applied.");
                 continue;
             }
 
+            Dictionary<long, TerrainPatch> importPatchesByWadOffset = new();
+            List<CustomTerrainTexturePatchSummary> importSummaries = new();
+            List<string> importBlockReasons = new();
             TextureRecord record = textureIndex.Records[import.TextureId];
-            foreach (string descriptorTier in ExpandDescriptorTiers(import.DescriptorTier))
+            if (useNativeRawTransplant)
             {
-                int tileSize = descriptorTier == "hqDataClose" ? 128 : 64;
-                int tileGridColumns = descriptorTier == "hqDataClose" ? 4 : 2;
-                IReadOnlyList<TextureDescriptor> descriptors = descriptorTier == "hqDataClose" ? record.HqDataClose : record.HqData;
-                if (descriptors.Count == 0)
+                if (!TryBuildNativeCrossLevelTexturePatches(
+                        imageStream,
+                        layout,
+                        import,
+                        sourcePath,
+                        texturePagesInfo,
+                        record,
+                        importPatchesByWadOffset,
+                        importSummaries,
+                        out string rawTransplantFailure))
                 {
-                    skippedEdits.Add($"texture {import.TextureId}: no {descriptorTier} descriptors found.");
-                    continue;
+                    importBlockReasons.Add(rawTransplantFailure);
                 }
+            }
+            else
+            {
+                foreach (string descriptorTier in ExpandDescriptorTiers(import.DescriptorTier))
+                {
+                    int tileSize = descriptorTier == "hqDataClose" ? 128 : 64;
+                    int tileGridColumns = descriptorTier == "hqDataClose" ? 4 : 2;
+                    IReadOnlyList<TextureDescriptor> descriptors = descriptorTier == "hqDataClose" ? record.HqDataClose : record.HqData;
+                    if (descriptors.Count == 0)
+                    {
+                        importBlockReasons.Add($"requested tier {descriptorTier} has no descriptors");
+                        continue;
+                    }
 
-                Rgba32[] pixels = PngRgbaImage.ReadResizedRgba(sourcePath, tileSize, tileSize);
-                PaletteInfo palette = BuildPalette(pixels);
-                byte[] paletteBytes = new byte[512];
-                for (int i = 0; i < 256; i++)
+                    bool closeTier = descriptorTier == "hqDataClose";
+                    int paletteColorCount = closeTier ? 16 : 256;
+                    int paletteByteLength = paletteColorCount * 2;
+                    Rgba32[] pixels;
+                    try
+                    {
+                        pixels = PngRgbaImage.ReadResizedRgba(sourcePath, tileSize, tileSize);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+                    {
+                        importBlockReasons.Add($"requested tier {descriptorTier} could not read the source image ({ex.Message})");
+                        continue;
+                    }
+
+                PaletteInfo palette = BuildPalette(pixels, paletteColorCount);
+                byte[] paletteBytes = new byte[paletteByteLength];
+                for (int i = 0; i < paletteColorCount; i++)
                     WriteUInt16(paletteBytes, i * 2, palette.Words[i]);
 
                 HashSet<int> paletteStarts = new();
@@ -4652,82 +6318,152 @@ public static class TerrainPatchExporter
                 HashSet<ushort> sourcePaletteWords = new();
                 int sourceTexelMax = 0;
                 int sourcePaletteNonZeroWords = 0;
-                int pixelPatchCount = 0;
+                Dictionary<long, byte> sourceBytesByRelativeOffset = new();
+                Dictionary<long, byte> afterBytesByRelativeOffset = new();
+                Dictionary<(long RelativeOffset, int Nibble), byte> assignedPaletteIndexes = new();
+                bool hasConflictingTexelAssignments = false;
+                bool hasInvalidDescriptor = false;
+                string conflictDescription = "";
                 foreach (TextureDescriptor descriptor in descriptors)
                 {
                     int paletteByteStart = descriptor.PaletteByteStart;
-                    if (paletteByteStart < 0 || paletteByteStart + 512 > texturePagesInfo.SubfileSize)
+                    if (!CanPatchTextureDescriptor(descriptor, texturePagesInfo.SubfileSize, closeTier) ||
+                        paletteByteStart < 0 || paletteByteStart + paletteByteLength > texturePagesInfo.SubfileSize)
                     {
-                        skippedEdits.Add($"texture {import.TextureId}: {descriptorTier} palette at 0x{paletteByteStart:X} is outside texture-pages subfile {TexturePagesSubfileIndex}.");
-                        continue;
+                        importBlockReasons.Add($"requested tier {descriptorTier} descriptor {descriptor.Index} maps outside texture-pages subfile {TexturePagesSubfileIndex}");
+                        hasInvalidDescriptor = true;
+                        break;
                     }
 
                     int tile = descriptor.Index;
                     int destTileX = (tile % tileGridColumns) * 32;
                     int destTileY = (int)Math.Floor(tile / (double)tileGridColumns) * 32;
-                    int[] matrix = TextureDescriptorMatrices[Math.Clamp(descriptor.Orientation, 0, TextureDescriptorMatrices.Length - 1)];
-                    int xx = matrix[0];
-                    int xy = matrix[1];
-                    int yx = matrix[2];
-                    int yy = matrix[3];
-                    int srcXStart = descriptor.VramXMin;
-                    int srcYStart = descriptor.VramYMin;
-                    if (xx < 0 || xy < 0)
-                        srcXStart += 31;
-                if (yx < 0 || yy < 0)
-                    srcYStart += 31;
-
-                    if (!DescriptorMapsInsideTexturePages(srcXStart, srcYStart, xx, xy, yx, yy, texturePagesInfo.SubfileSize))
-                    {
-                        skippedEdits.Add($"texture {import.TextureId}: {descriptorTier} descriptor {tile} maps outside the texture-page image.");
-                        continue;
-                    }
-
                     if (paletteStarts.Add(paletteByteStart))
                     {
                         long paletteWadOffset = texturePagesInfo.AbsoluteWadOffset + paletteByteStart;
-                        byte[] oldPaletteBytes = ReadWadBytes(imageStream, layout, paletteWadOffset, 512);
-                        for (int i = 0; i < 256; i++)
+                        byte[] oldPaletteBytes = ReadWadBytes(imageStream, layout, paletteWadOffset, paletteByteLength);
+                        for (int i = 0; i < paletteColorCount; i++)
                         {
                             ushort word = ReadUInt16(oldPaletteBytes, i * 2);
                             sourcePaletteWords.Add(word);
                             if ((word & 0x7FFF) != 0)
                                 sourcePaletteNonZeroWords++;
                         }
-
-                        AddPatch(imageStream, layout, patchesByWadOffset, paletteWadOffset, oldPaletteBytes, paletteBytes, "custom-texture-palette", $"texture-{import.TextureId}-{descriptorTier}", $"Replace texture {import.TextureId} palette for {descriptorTier}.");
                     }
 
                     for (int y = 0; y < 32; y++)
                     {
                         for (int x = 0; x < 32; x++)
                         {
-                            int sx = srcXStart + (x * xx) + (y * xy);
-                            int sy = srcYStart + (x * yx) + (y * yy);
-                            if (sx < 0 || sx >= 2048 || sy < 0 || sy >= 512)
-                                throw new InvalidOperationException($"Texture {import.TextureId} descriptor {tile} maps outside the 2048x512 texture-page VRAM.");
-
-                            long relative = (sy * 2048L) + sx;
-                            if (relative < 0 || relative + 1 > texturePagesInfo.SubfileSize)
-                                throw new InvalidOperationException($"Texture {import.TextureId} pixel at texture-pages offset 0x{relative:X} is outside subfile {TexturePagesSubfileIndex}.");
+                            if (!TryGetTextureSampleAddress(descriptor, x, y, closeTier, texturePagesInfo.SubfileSize, out long relative, out int nibble))
+                            {
+                                importBlockReasons.Add($"requested tier {descriptorTier} descriptor {tile} maps outside the texture-page image");
+                                hasInvalidDescriptor = true;
+                                break;
+                            }
 
                             Rgba32 color = pixels[(destTileY + y) * tileSize + destTileX + x];
                             ushort pixelWord = ConvertColorToPsx555(color);
                             byte paletteIndex = (byte)GetNearestPaletteIndex(pixelWord, palette);
-                            long pixelWadOffset = texturePagesInfo.AbsoluteWadOffset + relative;
-                            byte[] oldPixelBytes = ReadWadBytes(imageStream, layout, pixelWadOffset, 1);
-                            int sourceTexel = oldPixelBytes[0];
-                            sourceTexels.Add(sourceTexel);
-                            sourceTexelMax = Math.Max(sourceTexelMax, sourceTexel);
-                            AddPatch(imageStream, layout, patchesByWadOffset, pixelWadOffset, oldPixelBytes, [paletteIndex], "custom-texture-pixel", $"texture-{import.TextureId}-{descriptorTier}", $"Replace texture {import.TextureId} pixel byte for {descriptorTier}.");
-                            pixelPatchCount++;
+                            int assignmentNibble = closeTier ? nibble : 0;
+                            var assignmentKey = (relative, assignmentNibble);
+                            if (assignedPaletteIndexes.TryGetValue(assignmentKey, out byte assigned) && assigned != paletteIndex)
+                            {
+                                hasConflictingTexelAssignments = true;
+                                conflictDescription = $"descriptor {tile} maps a different atlas color to shared texel 0x{relative:X} nibble {assignmentNibble}";
+                                break;
+                            }
+
+                            assignedPaletteIndexes[assignmentKey] = paletteIndex;
+                            if (!sourceBytesByRelativeOffset.TryGetValue(relative, out byte sourceByte))
+                            {
+                                sourceByte = ReadWadBytes(imageStream, layout, texturePagesInfo.AbsoluteWadOffset + relative, 1)[0];
+                                sourceBytesByRelativeOffset[relative] = sourceByte;
+                                afterBytesByRelativeOffset[relative] = sourceByte;
+                                sourceTexels.Add(sourceByte);
+                                sourceTexelMax = Math.Max(sourceTexelMax, sourceByte);
+                            }
+
+                            afterBytesByRelativeOffset[relative] = closeTier
+                                ? assignmentNibble == 0
+                                    ? (byte)((afterBytesByRelativeOffset[relative] & 0xF0) | (paletteIndex & 0x0F))
+                                    : (byte)((afterBytesByRelativeOffset[relative] & 0x0F) | ((paletteIndex & 0x0F) << 4))
+                                : paletteIndex;
                         }
+
+                        if (hasConflictingTexelAssignments || hasInvalidDescriptor)
+                            break;
+                    }
+
+                    if (hasConflictingTexelAssignments || hasInvalidDescriptor)
+                        break;
+                }
+
+                if (hasConflictingTexelAssignments)
+                {
+                    importBlockReasons.Add(closeTier
+                        ? $"requested tier {descriptorTier} has a shared-nibble conflict because {conflictDescription}"
+                        : $"requested tier {descriptorTier} has a shared-texel conflict because {conflictDescription}");
+                    continue;
+                }
+
+                if (hasInvalidDescriptor)
+                    continue;
+
+                bool hasTierPatchConflict = false;
+                foreach (int paletteByteStart in paletteStarts)
+                {
+                    long paletteWadOffset = texturePagesInfo.AbsoluteWadOffset + paletteByteStart;
+                    byte[] oldPaletteBytes = ReadWadBytes(imageStream, layout, paletteWadOffset, paletteByteLength);
+                    if (!TryAddTemporaryCustomTexturePatch(
+                            imageStream,
+                            layout,
+                            importPatchesByWadOffset,
+                            paletteWadOffset,
+                            oldPaletteBytes,
+                            paletteBytes,
+                            "custom-texture-palette",
+                            $"texture-{import.TextureId}-{descriptorTier}",
+                            $"Replace texture {import.TextureId} {paletteColorCount}-color palette for {descriptorTier}.",
+                            out string patchConflict))
+                    {
+                        importBlockReasons.Add($"requested tier {descriptorTier} {patchConflict}");
+                        hasTierPatchConflict = true;
+                        break;
                     }
                 }
 
-                if (pixelPatchCount > 0 || paletteStarts.Count > 0)
+                if (hasTierPatchConflict)
+                    continue;
+
+                foreach ((long relative, byte afterByte) in afterBytesByRelativeOffset.OrderBy(pair => pair.Key))
                 {
-                    summaries.Add(new CustomTerrainTexturePatchSummary(
+                    byte beforeByte = sourceBytesByRelativeOffset[relative];
+                    if (!TryAddTemporaryCustomTexturePatch(
+                        imageStream,
+                        layout,
+                        importPatchesByWadOffset,
+                        texturePagesInfo.AbsoluteWadOffset + relative,
+                        [beforeByte],
+                        [afterByte],
+                        "custom-texture-pixel",
+                        $"texture-{import.TextureId}-{descriptorTier}",
+                        $"Replace texture {import.TextureId} packed {(closeTier ? "4bpp" : "8bpp")} texel byte for {descriptorTier}.",
+                        out string patchConflict))
+                    {
+                        importBlockReasons.Add($"requested tier {descriptorTier} {patchConflict}");
+                        hasTierPatchConflict = true;
+                        break;
+                    }
+                }
+
+                if (hasTierPatchConflict)
+                    continue;
+
+                    int pixelPatchCount = afterBytesByRelativeOffset.Count;
+                    if (pixelPatchCount > 0 || paletteStarts.Count > 0)
+                    {
+                        importSummaries.Add(new CustomTerrainTexturePatchSummary(
                         TextureId: import.TextureId,
                         SourceImagePath: sourcePath,
                         SourceImageName: import.SourceImageName,
@@ -4737,44 +6473,681 @@ public static class TerrainPatchExporter
                         PixelPatchCount: pixelPatchCount,
                         PalettePatchCount: paletteStarts.Count,
                         TexelBytesPerPixel: 1,
-                        PaletteColorCount: 256,
+                        BitsPerPixel: closeTier ? 4 : 8,
+                        PaletteColorCount: paletteColorCount,
                         SourceTexelUniqueCount: sourceTexels.Count,
                         SourceTexelMax: sourceTexelMax,
                         SourcePaletteUniqueColorCount: sourcePaletteWords.Count,
                         SourcePaletteNonZeroColorCount: sourcePaletteNonZeroWords,
-                        PaletteByteStarts: paletteStarts.OrderBy(value => value).Select(value => $"0x{value:X}").ToArray()));
+                            PaletteByteStarts: paletteStarts.OrderBy(value => value).Select(value => $"0x{value:X}").ToArray()));
+                    }
                 }
             }
+
+            foreach ((long wadOffset, TerrainPatch patch) in importPatchesByWadOffset)
+            {
+                if (patchesByWadOffset.TryGetValue(wadOffset, out TerrainPatch? existing) &&
+                    !string.Equals(existing.AfterHexPreview, patch.AfterHexPreview, StringComparison.OrdinalIgnoreCase))
+                {
+                    importBlockReasons.Add($"a staged patch conflicts with {existing.Kind} at WAD offset 0x{wadOffset:X}");
+                    break;
+                }
+            }
+
+            if (importBlockReasons.Count > 0)
+            {
+                string reasons = string.Join("; ", importBlockReasons.Distinct(StringComparer.OrdinalIgnoreCase));
+                AddAtomicTerrainSwapBlock(
+                    skippedEdits,
+                    $"texture {import.TextureId}: custom texture import blocked because {reasons}; no texture patches were applied.");
+                continue;
+            }
+
+            foreach ((long wadOffset, TerrainPatch patch) in importPatchesByWadOffset)
+                patchesByWadOffset.TryAdd(wadOffset, patch);
+            summaries.AddRange(importSummaries);
         }
 
         return summaries;
     }
 
-    private static bool CanPatchTextureDescriptor(TextureDescriptor descriptor, long texturePagesSubfileSize)
+    private static bool UsesBlockedLegacyTerrainTexturePath(
+        CustomTerrainTextureImport import,
+        out string reason)
     {
-        if (descriptor.PaletteByteStart < 0 || descriptor.PaletteByteStart + 512 > texturePagesSubfileSize)
-            return false;
+        bool nativeCrossLevel = string.Equals(
+            import.SourceKind,
+            "borrowed-cross-level-texture-art",
+            StringComparison.OrdinalIgnoreCase);
+        if (nativeCrossLevel)
+        {
+            bool partialTier = !string.Equals(import.DescriptorTier, "both", StringComparison.OrdinalIgnoreCase);
+            string partialNote = partialTier
+                ? $" The requested partial tier '{import.DescriptorTier}' is runtime-incomplete."
+                : "";
+            reason =
+                "cross-level native terrain art is blocked until a source-hash-bound runtime ownership closure, " +
+                "verified relocation plan, protected-storage proof, and logical readback all pass." + partialNote;
+            return true;
+        }
 
-        int[] matrix = TextureDescriptorMatrices[Math.Clamp(descriptor.Orientation, 0, TextureDescriptorMatrices.Length - 1)];
-        int srcXStart = descriptor.VramXMin;
-        int srcYStart = descriptor.VramYMin;
-        if (matrix[0] < 0 || matrix[1] < 0)
-            srcXStart += 31;
-        if (matrix[2] < 0 || matrix[3] < 0)
-            srcYStart += 31;
-
-        return DescriptorMapsInsideTexturePages(srcXStart, srcYStart, matrix[0], matrix[1], matrix[2], matrix[3], texturePagesSubfileSize);
+        reason =
+            "custom PNG terrain art is blocked because this manifest would use the obsolete 0x800-row and fixed 4-bpp close-detail writer instead of the verified packed layout";
+        return true;
     }
 
-    private static (string Tier, int TileSize, int TileGridColumns, IReadOnlyList<TextureDescriptor> Descriptors)? ChooseReadableTextureDescriptorTier(TextureRecord record, long texturePagesSubfileSize)
+    private static bool TryBuildNativeCrossLevelTexturePatches(
+        FileStream imageStream,
+        DiscLayout layout,
+        CustomTerrainTextureImport import,
+        string previewSourcePath,
+        AssetSubfileInfo targetTexturePagesInfo,
+        TextureRecord targetRecord,
+        Dictionary<long, TerrainPatch> importPatchesByWadOffset,
+        List<CustomTerrainTexturePatchSummary> importSummaries,
+        out string failureReason)
     {
-        if (record.HqData.Any(descriptor => CanPatchTextureDescriptor(descriptor, texturePagesSubfileSize)))
-            return ("hqData", 64, 2, record.HqData);
+        if (import.SourceWadEntry < 0 || import.SourceTextureId < 0)
+        {
+            failureReason = "native cross-level art is missing its source WAD entry or source texture id; the PNG preview was not substituted for the native data";
+            return false;
+        }
 
-        if (record.HqDataClose.Any(descriptor => CanPatchTextureDescriptor(descriptor, texturePagesSubfileSize)))
-            return ("hqDataClose", 128, 4, record.HqDataClose);
+        IReadOnlyList<string> descriptorTiers = ExpandDescriptorTiers(import.DescriptorTier);
+        try
+        {
+            AssetSubfileInfo donorTexturePagesInfo = GetAssetSubfileInfo(
+                imageStream,
+                layout,
+                import.SourceWadEntry,
+                TexturePagesSubfileIndex);
+            AssetSubfileInfo donorModelInfo = GetAssetSubfileInfo(
+                imageStream,
+                layout,
+                import.SourceWadEntry,
+                ModelSubfileIndex);
+            byte[] donorModelBytes = ReadWadBytes(
+                imageStream,
+                layout,
+                donorModelInfo.AbsoluteWadOffset,
+                checked((int)donorModelInfo.SubfileSize));
+            TextureRecordIndex donorTextureIndex = DecodeTextureRecords(donorModelBytes);
+            if (import.SourceTextureId >= donorTextureIndex.TextureCount)
+            {
+                failureReason = $"native donor texture {import.SourceTextureId} is outside source WAD entry {import.SourceWadEntry}'s decoded {donorTextureIndex.TextureCount}-texture table";
+                return false;
+            }
 
-        return null;
+            TextureRecord donorRecord = donorTextureIndex.Records[import.SourceTextureId];
+            string donorTopology = BuildCombinedDescriptorTopologySignature(
+                donorRecord,
+                descriptorTiers,
+                donorTexturePagesInfo.SubfileSize,
+                out string donorTopologyFailure);
+            if (string.IsNullOrWhiteSpace(donorTopology))
+            {
+                failureReason = $"native donor descriptor layout is not readable: {donorTopologyFailure}";
+                return false;
+            }
+
+            string targetTopology = BuildCombinedDescriptorTopologySignature(
+                targetRecord,
+                descriptorTiers,
+                targetTexturePagesInfo.SubfileSize,
+                out string targetTopologyFailure);
+            if (string.IsNullOrWhiteSpace(targetTopology))
+            {
+                failureReason = $"target descriptor layout is not writable: {targetTopologyFailure}";
+                return false;
+            }
+
+            if (!string.Equals(donorTopology, targetTopology, StringComparison.Ordinal))
+            {
+                failureReason =
+                    $"native raw transplant topology mismatch for {string.Join("+", descriptorTiers)} " +
+                    $"(donor {donorTopology}; target {targetTopology}); palette bytes, pixel bytes, and close-tier nibbles do not share the same physical alias layout";
+                return false;
+            }
+
+            if (!TryBuildTexturePhysicalNibbleLayout(
+                    donorRecord,
+                    descriptorTiers,
+                    donorTexturePagesInfo.SubfileSize,
+                    out TexturePhysicalNibbleReference[] donorReferences,
+                    out _,
+                    out string donorLayoutFailure))
+            {
+                failureReason = $"native donor descriptor layout could not be enumerated: {donorLayoutFailure}";
+                return false;
+            }
+
+            if (!TryBuildTexturePhysicalNibbleLayout(
+                    targetRecord,
+                    descriptorTiers,
+                    targetTexturePagesInfo.SubfileSize,
+                    out TexturePhysicalNibbleReference[] targetReferences,
+                    out _,
+                    out string targetLayoutFailure))
+            {
+                failureReason = $"target descriptor layout could not be enumerated: {targetLayoutFailure}";
+                return false;
+            }
+
+            if (donorReferences.Length != targetReferences.Length)
+            {
+                failureReason = $"native raw transplant layout length mismatch ({donorReferences.Length} donor nibble(s), {targetReferences.Length} target nibble(s))";
+                return false;
+            }
+
+            byte[] donorTexturePages = ReadWadBytes(
+                imageStream,
+                layout,
+                donorTexturePagesInfo.AbsoluteWadOffset,
+                checked((int)donorTexturePagesInfo.SubfileSize));
+            byte[] targetTexturePages = ReadWadBytes(
+                imageStream,
+                layout,
+                targetTexturePagesInfo.AbsoluteWadOffset,
+                checked((int)targetTexturePagesInfo.SubfileSize));
+            Dictionary<(long RelativeOffset, int Nibble), byte> assignedTargetNibbles = new();
+            Dictionary<long, byte> afterBytesByRelativeOffset = new();
+            Dictionary<long, int> targetByteKinds = new();
+            for (int i = 0; i < donorReferences.Length; i++)
+            {
+                TexturePhysicalNibbleReference donorReference = donorReferences[i];
+                TexturePhysicalNibbleReference targetReference = targetReferences[i];
+                byte donorByte = donorTexturePages[checked((int)donorReference.RelativeOffset)];
+                byte donorNibble = (byte)((donorByte >> (donorReference.Nibble * 4)) & 0x0F);
+                var targetNibbleKey = (targetReference.RelativeOffset, targetReference.Nibble);
+                if (assignedTargetNibbles.TryGetValue(targetNibbleKey, out byte existingNibble) && existingNibble != donorNibble)
+                {
+                    failureReason =
+                        $"native raw transplant alias conflict at target byte 0x{targetReference.RelativeOffset:X} nibble {targetReference.Nibble}: " +
+                        $"donor semantics request both 0x{existingNibble:X1} and 0x{donorNibble:X1}";
+                    return false;
+                }
+
+                assignedTargetNibbles[targetNibbleKey] = donorNibble;
+                if (!afterBytesByRelativeOffset.TryGetValue(targetReference.RelativeOffset, out byte afterByte))
+                    afterByte = targetTexturePages[checked((int)targetReference.RelativeOffset)];
+                afterByte = targetReference.Nibble == 0
+                    ? (byte)((afterByte & 0xF0) | donorNibble)
+                    : (byte)((afterByte & 0x0F) | (donorNibble << 4));
+                afterBytesByRelativeOffset[targetReference.RelativeOffset] = afterByte;
+                int kindFlag = string.Equals(targetReference.Kind, "palette", StringComparison.Ordinal) ? 1 : 2;
+                targetByteKinds[targetReference.RelativeOffset] = targetByteKinds.TryGetValue(targetReference.RelativeOffset, out int existingKinds)
+                    ? existingKinds | kindFlag
+                    : kindFlag;
+            }
+
+            string donorLabel = string.IsNullOrWhiteSpace(import.SourceLevelKey)
+                ? $"WAD entry {import.SourceWadEntry} texture {import.SourceTextureId}"
+                : $"{import.SourceLevelKey} texture {import.SourceTextureId}";
+            foreach ((long relativeOffset, byte afterByte) in afterBytesByRelativeOffset.OrderBy(pair => pair.Key))
+            {
+                byte beforeByte = targetTexturePages[checked((int)relativeOffset)];
+                int kindFlags = targetByteKinds[relativeOffset];
+                string dataKind = kindFlags == 1 ? "palette" : kindFlags == 2 ? "pixel" : "shared";
+                if (!TryAddTemporaryCustomTexturePatch(
+                        imageStream,
+                        layout,
+                        importPatchesByWadOffset,
+                        targetTexturePagesInfo.AbsoluteWadOffset + relativeOffset,
+                        [beforeByte],
+                        [afterByte],
+                        $"custom-texture-native-raw-{dataKind}",
+                        $"texture-{import.TextureId}-native-raw",
+                        $"Copy exact native indexed {dataKind} data from {donorLabel} into target texture {import.TextureId}.",
+                        out string patchConflict))
+                {
+                    failureReason = $"native raw transplant {patchConflict}";
+                    return false;
+                }
+            }
+
+            foreach (string descriptorTier in descriptorTiers)
+            {
+                importSummaries.Add(BuildNativeRawTierSummary(
+                    import,
+                    previewSourcePath,
+                    descriptorTier,
+                    donorRecord,
+                    targetRecord,
+                    donorTexturePages,
+                    donorTexturePagesInfo.SubfileSize,
+                    targetTexturePagesInfo.SubfileSize));
+            }
+
+            failureReason = "";
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or IOException or OverflowException or ArgumentOutOfRangeException)
+        {
+            failureReason = $"native raw transplant could not decode source WAD entry {import.SourceWadEntry}: {ex.Message}";
+            return false;
+        }
+    }
+
+    private static CustomTerrainTexturePatchSummary BuildNativeRawTierSummary(
+        CustomTerrainTextureImport import,
+        string previewSourcePath,
+        string descriptorTier,
+        TextureRecord donorRecord,
+        TextureRecord targetRecord,
+        byte[] donorTexturePages,
+        long donorTexturePagesSize,
+        long targetTexturePagesSize)
+    {
+        bool closeTier = string.Equals(descriptorTier, "hqDataClose", StringComparison.OrdinalIgnoreCase);
+        IReadOnlyList<TextureDescriptor> donorDescriptors = closeTier ? donorRecord.HqDataClose : donorRecord.HqData;
+        IReadOnlyList<TextureDescriptor> targetDescriptors = closeTier ? targetRecord.HqDataClose : targetRecord.HqData;
+        int paletteColorCount = closeTier ? 16 : 256;
+        int paletteByteLength = paletteColorCount * 2;
+        HashSet<long> targetPixelByteOffsets = new();
+        HashSet<int> targetPaletteStarts = targetDescriptors.Select(descriptor => descriptor.PaletteByteStart).ToHashSet();
+        HashSet<int> donorTexels = new();
+        HashSet<ushort> donorPaletteWords = new();
+        int donorTexelMax = 0;
+        int donorPaletteNonZeroWords = 0;
+
+        foreach ((TextureDescriptor donorDescriptor, TextureDescriptor targetDescriptor) in donorDescriptors
+                     .OrderBy(descriptor => descriptor.Index)
+                     .Zip(targetDescriptors.OrderBy(descriptor => descriptor.Index)))
+        {
+            if (!CanPatchTextureDescriptor(donorDescriptor, donorTexturePagesSize, closeTier) ||
+                !CanPatchTextureDescriptor(targetDescriptor, targetTexturePagesSize, closeTier))
+            {
+                continue;
+            }
+
+            for (int paletteByte = 0; paletteByte < paletteByteLength; paletteByte += 2)
+            {
+                ushort word = ReadUInt16(donorTexturePages, donorDescriptor.PaletteByteStart + paletteByte);
+                donorPaletteWords.Add(word);
+                if ((word & 0x7FFF) != 0)
+                    donorPaletteNonZeroWords++;
+            }
+
+            for (int y = 0; y < 32; y++)
+            {
+                for (int x = 0; x < 32; x++)
+                {
+                    TryGetTextureSampleAddress(
+                        donorDescriptor,
+                        x,
+                        y,
+                        closeTier,
+                        donorTexturePagesSize,
+                        out long donorRelative,
+                        out int donorNibble);
+                    TryGetTextureSampleAddress(
+                        targetDescriptor,
+                        x,
+                        y,
+                        closeTier,
+                        targetTexturePagesSize,
+                        out long targetRelative,
+                        out _);
+                    int texel = closeTier
+                        ? (donorTexturePages[checked((int)donorRelative)] >> (donorNibble * 4)) & 0x0F
+                        : donorTexturePages[checked((int)donorRelative)];
+                    donorTexels.Add(texel);
+                    donorTexelMax = Math.Max(donorTexelMax, texel);
+                    targetPixelByteOffsets.Add(targetRelative);
+                }
+            }
+        }
+
+        return new CustomTerrainTexturePatchSummary(
+            TextureId: import.TextureId,
+            SourceImagePath: previewSourcePath,
+            SourceImageName: import.SourceImageName,
+            DescriptorTier: descriptorTier,
+            TileSize: closeTier ? 128 : 64,
+            DescriptorCount: targetDescriptors.Count,
+            PixelPatchCount: targetPixelByteOffsets.Count,
+            PalettePatchCount: targetPaletteStarts.Count,
+            TexelBytesPerPixel: 1,
+            BitsPerPixel: closeTier ? 4 : 8,
+            PaletteColorCount: paletteColorCount,
+            SourceTexelUniqueCount: donorTexels.Count,
+            SourceTexelMax: donorTexelMax,
+            SourcePaletteUniqueColorCount: donorPaletteWords.Count,
+            SourcePaletteNonZeroColorCount: donorPaletteNonZeroWords,
+            PaletteByteStarts: targetPaletteStarts.OrderBy(value => value).Select(value => $"0x{value:X}").ToArray());
+    }
+
+    private static bool TryAddTemporaryCustomTexturePatch(
+        FileStream imageStream,
+        DiscLayout layout,
+        Dictionary<long, TerrainPatch> importPatchesByWadOffset,
+        long wadOffset,
+        byte[] expectedBefore,
+        byte[] after,
+        string kind,
+        string runtimeKey,
+        string description,
+        out string conflictDescription)
+    {
+        if (importPatchesByWadOffset.TryGetValue(wadOffset, out TerrainPatch? existing))
+        {
+            string afterHex = ToHex(after);
+            if (!string.Equals(existing.AfterHexPreview, afterHex, StringComparison.OrdinalIgnoreCase))
+            {
+                conflictDescription = $"conflicts with another requested descriptor tier at WAD offset 0x{wadOffset:X}";
+                return false;
+            }
+
+            conflictDescription = "";
+            return true;
+        }
+
+        AddPatch(
+            imageStream,
+            layout,
+            importPatchesByWadOffset,
+            wadOffset,
+            expectedBefore,
+            after,
+            kind,
+            runtimeKey,
+            description);
+        conflictDescription = "";
+        return true;
+    }
+
+    private static bool CanPatchTextureDescriptor(TextureDescriptor descriptor, long texturePagesSubfileSize, bool closeTier)
+    {
+        int paletteByteLength = closeTier ? 32 : 512;
+        if (descriptor.PaletteByteStart < 0 || descriptor.PaletteByteStart + paletteByteLength > texturePagesSubfileSize)
+            return false;
+
+        return TryGetTextureSampleAddress(descriptor, 0, 0, closeTier, texturePagesSubfileSize, out _, out _) &&
+            TryGetTextureSampleAddress(descriptor, 31, 0, closeTier, texturePagesSubfileSize, out _, out _) &&
+            TryGetTextureSampleAddress(descriptor, 0, 31, closeTier, texturePagesSubfileSize, out _, out _) &&
+            TryGetTextureSampleAddress(descriptor, 31, 31, closeTier, texturePagesSubfileSize, out _, out _);
+    }
+
+    private static (string Tier, int TileSide, int TileGridColumns, int ImageSize, IReadOnlyList<TextureDescriptor> Descriptors)? ChooseReadableTextureDescriptorTier(
+        TextureRecord record,
+        long texturePagesSubfileSize,
+        string preferredDescriptorTier = "")
+    {
+        (string Tier, int TileSide, int TileGridColumns, int ImageSize, IReadOnlyList<TextureDescriptor> Descriptors)? normal =
+            TryBuildReadableTextureImageTier("hqData", record.HqData, 2, texturePagesSubfileSize);
+        (string Tier, int TileSide, int TileGridColumns, int ImageSize, IReadOnlyList<TextureDescriptor> Descriptors)? close =
+            TryBuildReadableTextureImageTier("hqDataClose", record.HqDataClose, 4, texturePagesSubfileSize);
+
+        if (string.Equals(preferredDescriptorTier, "hqDataClose", StringComparison.OrdinalIgnoreCase))
+            return close ?? normal;
+        if (string.Equals(preferredDescriptorTier, "hqData", StringComparison.OrdinalIgnoreCase))
+            return normal ?? close;
+        return normal ?? close;
+    }
+
+    private static (string Tier, int TileSide, int TileGridColumns, int ImageSize, IReadOnlyList<TextureDescriptor> Descriptors)? TryBuildReadableTextureImageTier(
+        string tier,
+        IReadOnlyList<TextureDescriptor> descriptors,
+        int tileGridColumns,
+        long texturePagesSubfileSize)
+    {
+        if (descriptors.Count != tileGridColumns * tileGridColumns)
+            return null;
+
+        int[] tileSides = descriptors
+            .Select(DeriveHqTextureTileSide)
+            .Distinct()
+            .ToArray();
+        if (tileSides.Length != 1 || tileSides[0] is not (16 or 32))
+            return null;
+
+        int tileSide = tileSides[0];
+        if (descriptors.Any(descriptor => !CanDecodeHqTextureImageDescriptor(descriptor, tileSide, texturePagesSubfileSize)))
+            return null;
+
+        return (tier, tileSide, tileGridColumns, checked(tileSide * tileGridColumns), descriptors);
+    }
+
+    private static int DeriveHqTextureTileSide(TextureDescriptor descriptor) =>
+        Math.Max(
+            Math.Abs(descriptor.VramXMax - descriptor.VramXMin),
+            Math.Abs(descriptor.VramYMax - descriptor.VramYMin)) + 1;
+
+    private static bool CanDecodeHqTextureImageDescriptor(
+        TextureDescriptor descriptor,
+        int tileSide,
+        long texturePagesSubfileSize)
+    {
+        if (descriptor.PaletteByteStart < 0 ||
+            descriptor.PaletteByteStart + HqPaletteByteLength > texturePagesSubfileSize)
+        {
+            return false;
+        }
+
+        int edge = tileSide - 1;
+        return TryGetHqTextureImageSampleAddress(descriptor, 0, 0, tileSide, texturePagesSubfileSize, out _) &&
+            TryGetHqTextureImageSampleAddress(descriptor, edge, 0, tileSide, texturePagesSubfileSize, out _) &&
+            TryGetHqTextureImageSampleAddress(descriptor, 0, edge, tileSide, texturePagesSubfileSize, out _) &&
+            TryGetHqTextureImageSampleAddress(descriptor, edge, edge, tileSide, texturePagesSubfileSize, out _);
+    }
+
+    private static bool TryGetHqTextureImageSampleAddress(
+        TextureDescriptor descriptor,
+        int x,
+        int y,
+        int tileSide,
+        long texturePagesSubfileSize,
+        out long relativeOffset)
+    {
+        if (tileSide <= 0 || x < 0 || x >= tileSide || y < 0 || y >= tileSide)
+        {
+            relativeOffset = -1;
+            return false;
+        }
+
+        int[] matrix = TextureDescriptorMatrices[Math.Clamp(descriptor.Orientation, 0, TextureDescriptorMatrices.Length - 1)];
+        int xx = matrix[0];
+        int xy = matrix[1];
+        int yx = matrix[2];
+        int yy = matrix[3];
+        int edge = tileSide - 1;
+        int startY = descriptor.VramYMin + ((yx < 0 || yy < 0) ? edge : 0);
+        int sampleY = startY + (x * yx) + (y * yy);
+        int startFullX = descriptor.VramXMin + ((xx < 0 || xy < 0) ? edge : 0);
+        int samplePackedX = startFullX + (x * xx) + (y * xy) - FullVramTextureByteX;
+        relativeOffset = (sampleY * (long)PackedTexturePageRowBytes) + samplePackedX;
+        return samplePackedX >= 0 && samplePackedX < PackedTexturePageRowBytes &&
+            sampleY >= 0 && sampleY < TexturePageMaxRows &&
+            relativeOffset >= 0 && relativeOffset < texturePagesSubfileSize;
+    }
+
+    private static string BuildDescriptorTopologySignature(
+        IReadOnlyList<TextureDescriptor> descriptors,
+        bool closeTier,
+        long texturePagesSubfileSize)
+    {
+        if (descriptors.Count == 0 ||
+            descriptors.Any(descriptor => !CanPatchTextureDescriptor(descriptor, texturePagesSubfileSize, closeTier)))
+        {
+            return "";
+        }
+
+        byte[] canonical = new byte[checked(descriptors.Count * 32 * 32 * sizeof(int))];
+        Dictionary<(long RelativeOffset, int Nibble), int> classes = new();
+        int nextClass = 0;
+        int outputOffset = 0;
+        foreach (TextureDescriptor descriptor in descriptors.OrderBy(descriptor => descriptor.Index))
+        {
+            for (int y = 0; y < 32; y++)
+            {
+                for (int x = 0; x < 32; x++)
+                {
+                    if (!TryGetTextureSampleAddress(
+                            descriptor,
+                            x,
+                            y,
+                            closeTier,
+                            texturePagesSubfileSize,
+                            out long relative,
+                            out int nibble))
+                    {
+                        return "";
+                    }
+
+                    var key = (relative, closeTier ? nibble : 0);
+                    if (!classes.TryGetValue(key, out int classId))
+                    {
+                        classId = nextClass++;
+                        classes[key] = classId;
+                    }
+
+                    BinaryPrimitives.WriteInt32LittleEndian(canonical.AsSpan(outputOffset, sizeof(int)), classId);
+                    outputOffset += sizeof(int);
+                }
+            }
+        }
+
+        byte[] hash = SHA256.HashData(canonical);
+        return $"{(closeTier ? "4" : "8")}bpp-{descriptors.Count}-{Convert.ToHexString(hash.AsSpan(0, 12))}";
+    }
+
+    private static string BuildCombinedDescriptorTopologySignature(
+        TextureRecord record,
+        IReadOnlyList<string> descriptorTiers,
+        long texturePagesSubfileSize,
+        out string failureReason)
+    {
+        if (!TryBuildTexturePhysicalNibbleLayout(
+                record,
+                descriptorTiers,
+                texturePagesSubfileSize,
+                out TexturePhysicalNibbleReference[] references,
+                out string tierSummary,
+                out failureReason))
+        {
+            return "";
+        }
+
+        byte[] canonical = new byte[checked(references.Length * sizeof(int))];
+        Dictionary<(long RelativeOffset, int Nibble), int> classes = new();
+        int nextClass = 0;
+        int outputOffset = 0;
+        foreach (TexturePhysicalNibbleReference reference in references)
+        {
+            var key = (reference.RelativeOffset, reference.Nibble);
+            if (!classes.TryGetValue(key, out int classId))
+            {
+                classId = nextClass++;
+                classes[key] = classId;
+            }
+
+            BinaryPrimitives.WriteInt32LittleEndian(canonical.AsSpan(outputOffset, sizeof(int)), classId);
+            outputOffset += sizeof(int);
+        }
+
+        byte[] hash = SHA256.HashData(canonical);
+        failureReason = "";
+        return $"raw-nibble-{tierSummary}-{references.Length}-{classes.Count}-{Convert.ToHexString(hash.AsSpan(0, 12))}";
+    }
+
+    private static Dictionary<(long RelativeOffset, int Nibble), int> BuildPhysicalNibbleKindMap(
+        IEnumerable<TexturePhysicalNibbleReference> references)
+    {
+        Dictionary<(long RelativeOffset, int Nibble), int> result = new();
+        foreach (TexturePhysicalNibbleReference reference in references)
+        {
+            var key = (reference.RelativeOffset, reference.Nibble);
+            int kind = string.Equals(reference.Kind, "palette", StringComparison.Ordinal) ? 1 : 2;
+            result[key] = result.TryGetValue(key, out int existing) ? existing | kind : kind;
+        }
+
+        return result;
+    }
+
+    private static bool TryBuildTexturePhysicalNibbleLayout(
+        TextureRecord record,
+        IReadOnlyList<string> descriptorTiers,
+        long texturePagesSubfileSize,
+        out TexturePhysicalNibbleReference[] references,
+        out string tierSummary,
+        out string failureReason)
+    {
+        bool includeNormal = descriptorTiers.Any(tier =>
+            string.Equals(tier, "both", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(tier, "hqData", StringComparison.OrdinalIgnoreCase));
+        bool includeClose = descriptorTiers.Any(tier =>
+            string.Equals(tier, "both", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(tier, "hqDataClose", StringComparison.OrdinalIgnoreCase));
+        List<(string Tier, bool CloseTier, IReadOnlyList<TextureDescriptor> Descriptors)> tiers = [];
+        if (includeNormal)
+            tiers.Add(("hqData", false, record.HqData));
+        if (includeClose)
+            tiers.Add(("hqDataClose", true, record.HqDataClose));
+
+        tierSummary = string.Join("+", tiers.Select(tier => $"{tier.Tier}:{tier.Descriptors.Count}"));
+        if (tiers.Count == 0)
+        {
+            references = Array.Empty<TexturePhysicalNibbleReference>();
+            failureReason = "no descriptor tier was requested";
+            return false;
+        }
+
+        List<TexturePhysicalNibbleReference> result = [];
+        foreach ((string tier, bool closeTier, IReadOnlyList<TextureDescriptor> descriptors) in tiers)
+        {
+            if (descriptors.Count == 0)
+            {
+                references = Array.Empty<TexturePhysicalNibbleReference>();
+                failureReason = $"requested tier {tier} has no descriptors";
+                return false;
+            }
+
+            int paletteByteLength = closeTier ? 32 : 512;
+            foreach (TextureDescriptor descriptor in descriptors.OrderBy(candidate => candidate.Index))
+            {
+                if (!CanPatchTextureDescriptor(descriptor, texturePagesSubfileSize, closeTier))
+                {
+                    references = Array.Empty<TexturePhysicalNibbleReference>();
+                    failureReason = $"requested tier {tier} descriptor {descriptor.Index} maps outside the texture-pages subfile";
+                    return false;
+                }
+
+                for (int paletteByte = 0; paletteByte < paletteByteLength; paletteByte++)
+                {
+                    long relativeOffset = descriptor.PaletteByteStart + paletteByte;
+                    result.Add(new TexturePhysicalNibbleReference(tier, "palette", descriptor.Index, relativeOffset, 0));
+                    result.Add(new TexturePhysicalNibbleReference(tier, "palette", descriptor.Index, relativeOffset, 1));
+                }
+
+                for (int y = 0; y < 32; y++)
+                {
+                    for (int x = 0; x < 32; x++)
+                    {
+                        if (!TryGetTextureSampleAddress(
+                                descriptor,
+                                x,
+                                y,
+                                closeTier,
+                                texturePagesSubfileSize,
+                                out long relativeOffset,
+                                out int nibble))
+                        {
+                            references = Array.Empty<TexturePhysicalNibbleReference>();
+                            failureReason = $"requested tier {tier} descriptor {descriptor.Index} has an out-of-range pixel at ({x},{y})";
+                            return false;
+                        }
+
+                        result.Add(new TexturePhysicalNibbleReference(tier, "pixel", descriptor.Index, relativeOffset, nibble));
+                        if (!closeTier)
+                            result.Add(new TexturePhysicalNibbleReference(tier, "pixel", descriptor.Index, relativeOffset, 1));
+                    }
+                }
+            }
+        }
+
+        references = result.ToArray();
+        failureReason = "";
+        return true;
     }
 
     private static Rgba32 ConvertPsx555ToRgba32(ushort word)
@@ -4782,7 +7155,10 @@ public static class TerrainPatchExporter
         byte r = ExpandPsx5ToByte(word & 0x1F);
         byte g = ExpandPsx5ToByte((word >> 5) & 0x1F);
         byte b = ExpandPsx5ToByte((word >> 10) & 0x1F);
-        return new Rgba32(r, g, b, 255);
+        // On the PSX, only an all-zero texture/CLUT word is intrinsically transparent.
+        // Bit 15 (STP) requests semi-transparency only when the drawing primitive also
+        // enables it; 0x8000 is therefore opaque black, not transparent or half-alpha.
+        return new Rgba32(r, g, b, word == 0 ? (byte)0 : (byte)255);
     }
 
     private static byte ExpandPsx5ToByte(int value)
@@ -4791,21 +7167,40 @@ public static class TerrainPatchExporter
         return (byte)((value << 3) | (value >> 2));
     }
 
-    private static bool DescriptorMapsInsideTexturePages(int srcXStart, int srcYStart, int xx, int xy, int yx, int yy, long texturePagesSubfileSize)
+    private static bool TryGetTextureSampleAddress(
+        TextureDescriptor descriptor,
+        int x,
+        int y,
+        bool closeTier,
+        long texturePagesSubfileSize,
+        out long relativeOffset,
+        out int nibble)
     {
-        foreach ((int x, int y) in new[] { (0, 0), (31, 0), (0, 31), (31, 31) })
+        int[] matrix = TextureDescriptorMatrices[Math.Clamp(descriptor.Orientation, 0, TextureDescriptorMatrices.Length - 1)];
+        int xx = matrix[0];
+        int xy = matrix[1];
+        int yx = matrix[2];
+        int yy = matrix[3];
+        int startY = descriptor.VramYMin + ((yx < 0 || yy < 0) ? 31 : 0);
+        int sy = startY + (x * yx) + (y * yy);
+        int sxByte;
+        if (closeTier)
         {
-            int sx = srcXStart + (x * xx) + (y * xy);
-            int sy = srcYStart + (x * yx) + (y * yy);
-            if (sx < 0 || sx >= 2048 || sy < 0 || sy >= 512)
-                return false;
-
-            long relative = (sy * 2048L) + sx;
-            if (relative < 0 || relative + 1 > texturePagesSubfileSize)
-                return false;
+            int startX2 = (descriptor.VramXMin * 2) + ((xx < 0 || xy < 0) ? 31 : 0);
+            int sx2 = startX2 + (x * xx) + (y * xy);
+            sxByte = sx2 >> 1;
+            nibble = sx2 & 1;
+        }
+        else
+        {
+            int startX = descriptor.VramXMin + ((xx < 0 || xy < 0) ? 31 : 0);
+            sxByte = startX + (x * xx) + (y * xy);
+            nibble = 0;
         }
 
-        return true;
+        relativeOffset = (sy * 2048L) + sxByte;
+        return sxByte >= 0 && sxByte < 2048 && sy >= 0 && sy < 512 &&
+            relativeOffset >= 0 && relativeOffset + 1 <= texturePagesSubfileSize;
     }
 
     private static IReadOnlyList<string> ExpandDescriptorTiers(string descriptorTier)
@@ -4863,26 +7258,39 @@ public static class TerrainPatchExporter
 
     private static TextureRecordIndex DecodeTextureRecords(byte[] modelBytes)
     {
+        const int lowDetailRecordBytes = 16;
+        const int highDetailRecordBytes = 168;
         int textureListSize = (int)ReadUInt32(modelBytes, 0);
         int textureCount = (int)ReadUInt32(modelBytes, 4);
         if (textureListSize <= 8 || textureCount <= 0)
             throw new InvalidOperationException("No plausible texture list found in model subfile.");
 
         int recordBytes = (textureListSize - 8) / textureCount;
-        if (((textureListSize - 8) % textureCount) != 0)
-            throw new InvalidOperationException("Texture list is not an even fixed-record table.");
+        int expectedTextureListSize = checked(8 + (textureCount * (lowDetailRecordBytes + highDetailRecordBytes)));
+        if (recordBytes != lowDetailRecordBytes + highDetailRecordBytes ||
+            textureListSize < expectedTextureListSize ||
+            expectedTextureListSize > modelBytes.Length)
+        {
+            throw new InvalidOperationException(
+                $"Texture list does not contain the native {lowDetailRecordBytes}-byte LQ table followed by the {highDetailRecordBytes}-byte HQ table ({textureCount} records, 0x{textureListSize:X} bytes).");
+        }
+
+        // The retail loader does not interleave LQ and HQ records.  It first
+        // reads textureCount 16-byte LQ rows, then indexes a separate array of
+        // 168-byte HQ rows as textureId * 0xA8.
+        int highDetailTableOffset = checked(8 + (textureCount * lowDetailRecordBytes));
 
         List<TextureRecord> records = new(textureCount);
         for (int texture = 0; texture < textureCount; texture++)
         {
-            int offset = 8 + (texture * recordBytes);
+            int offset = checked(highDetailTableOffset + (texture * highDetailRecordBytes));
             List<TextureDescriptor> hq = new();
             for (int i = 0; i < 4; i++)
-                hq.Add(DecodeTextureDescriptor(modelBytes, offset + 24 + (i * 8), i));
+                hq.Add(DecodeTextureDescriptor(modelBytes, offset + 8 + (i * 8), i));
 
             List<TextureDescriptor> hqClose = new();
             for (int i = 0; i < 16; i++)
-                hqClose.Add(DecodeTextureDescriptor(modelBytes, offset + 56 + (i * 8), i));
+                hqClose.Add(DecodeTextureDescriptor(modelBytes, offset + 40 + (i * 8), i));
 
             records.Add(new TextureRecord(texture, hq, hqClose));
         }
@@ -4901,7 +7309,7 @@ public static class TerrainPatchExporter
         int unknown = bytes[offset + 7];
         return new TextureDescriptor(
             Index: index,
-            PaletteByteStart: palette * 32,
+            PaletteByteStart: DecodePackedClutByteStart(palette),
             Orientation: (unknown >> 4) & 7,
             VramXMin: GetTextureXMin(region, xmin),
             VramYMin: GetTextureYMin(region, ymin),
@@ -4913,8 +7321,19 @@ public static class TerrainPatchExporter
 
     private static int GetTextureYMin(int region, int ymin) => ((int)Math.Floor((region & 0x1F) / 16.0) * 256) + ymin;
 
-    private static PaletteInfo BuildPalette(IReadOnlyList<Rgba32> pixels)
+    private static int DecodePackedClutByteStart(int clutCode)
     {
+        int clutX = (clutCode & 0x3F) * 16;
+        int clutY = (clutCode >> 6) & 0x1FF;
+        if (clutX < 512)
+            return -1;
+
+        return checked((clutY * 1024) + ((clutX - 512) * 2));
+    }
+
+    private static PaletteInfo BuildPalette(IReadOnlyList<Rgba32> pixels, int colorCount = 256)
+    {
+        colorCount = Math.Clamp(colorCount, 2, 256);
         Dictionary<ushort, int> counts = new();
         foreach (Rgba32 pixel in pixels)
         {
@@ -4926,9 +7345,9 @@ public static class TerrainPatchExporter
             .OrderByDescending(pair => pair.Value)
             .ThenBy(pair => pair.Key)
             .Select(pair => pair.Key)
-            .Take(256)
+            .Take(colorCount)
             .ToArray();
-        Array.Resize(ref words, 256);
+        Array.Resize(ref words, colorCount);
         Dictionary<ushort, int> exact = new();
         for (int i = 0; i < words.Length; i++)
             exact.TryAdd(words[i], i);
@@ -5662,6 +8081,14 @@ public static class TerrainPatchExporter
         string RuntimeKey,
         string Description);
 
+    private sealed record PendingNativeTerrainTexturePatch(
+        long WadOffset,
+        byte[] Before,
+        byte[] After,
+        string Kind,
+        string RuntimeKey,
+        string Description);
+
     private readonly record struct CollisionPatchVertex(Vector3f Original, Vector3f Target);
 
     private sealed record ArchiveEntry(int Index, long Offset, long Size);
@@ -5673,6 +8100,13 @@ public static class TerrainPatchExporter
     private sealed record TextureRecord(int TextureId, IReadOnlyList<TextureDescriptor> HqData, IReadOnlyList<TextureDescriptor> HqDataClose);
 
     private sealed record TextureDescriptor(int Index, int PaletteByteStart, int Orientation, int VramXMin, int VramYMin, int VramXMax, int VramYMax);
+
+    private sealed record TexturePhysicalNibbleReference(
+        string Tier,
+        string Kind,
+        int DescriptorIndex,
+        long RelativeOffset,
+        int Nibble);
 
     private sealed record PaletteInfo(ushort[] Words, Dictionary<ushort, int> ExactMap, Dictionary<ushort, int> NearestCache);
 
@@ -5687,14 +8121,39 @@ public sealed record TerrainPatchRequest(
     string SourceSearchPath,
     string TerrainEditsPath,
     string CustomTexturesPath,
-    bool WriteImage);
+    bool WriteImage,
+    string NativeTextureRelocationsPath = "");
 
 public sealed record TerrainTextureSlot(
     int TextureId,
     bool HasNormalDescriptors,
     bool HasCloseDescriptors,
     int NormalDescriptorCount,
-    int CloseDescriptorCount);
+    int CloseDescriptorCount,
+    string NormalTopologySignature,
+    string CloseTopologySignature,
+    string CombinedTopologySignature);
+
+public sealed record TerrainTextureStorageIsolation(
+    int TargetTextureId,
+    string DescriptorTier,
+    int TargetPhysicalNibbleCount,
+    int ResidentTextureCount,
+    int OverlappingResidentTextureCount,
+    int OverlappingPhysicalNibbleCount,
+    IReadOnlyList<TerrainTextureStorageOverlap> Overlaps,
+    IReadOnlyList<int> UnreadableResidentTextureIds)
+{
+    public bool IsIsolated => OverlappingResidentTextureCount == 0 && UnreadableResidentTextureIds.Count == 0;
+}
+
+public sealed record TerrainTextureStorageOverlap(
+    int ResidentTextureId,
+    int PhysicalNibbleCount,
+    int TargetPaletteNibbleCount,
+    int TargetPixelNibbleCount,
+    int ResidentPaletteNibbleCount,
+    int ResidentPixelNibbleCount);
 
 public sealed record TerrainTextureImageExport(
     int TextureId,
@@ -5703,6 +8162,12 @@ public sealed record TerrainTextureImageExport(
     int Height,
     int DescriptorCount,
     int PixelCount);
+
+public sealed record NativeTerrainTextureInitialStateImageExport(
+    NativeTerrainTextureInitialStateResult InitialState,
+    IReadOnlyList<TerrainTextureImageExport> Exports,
+    NativeTerrainLqTextureSet? LowDetailTextures = null,
+    NativeTerrainHqMaterialSet? HighDetailMaterials = null);
 
 public sealed record TerrainPatchResult(
     string OutputImagePath,
@@ -5722,15 +8187,35 @@ public sealed record TerrainPatchPlan(
     string SourceSearchPath,
     string TerrainEditsPath,
     string CustomTexturesPath,
+    string NativeTextureRelocationsPath,
     int TextureAssetWadIndex,
     int PatchCount,
     int TotalPatchedBytes,
     int CustomTextureImportCount,
     int CustomTextureBytePatchCount,
     IReadOnlyList<CustomTerrainTexturePatchSummary> CustomTextureImports,
+    int NativeTextureRelocationCount,
+    int NativeTextureRelocationBytePatchCount,
+    IReadOnlyList<NativeTerrainTextureRelocationPatchSummary> NativeTextureRelocations,
     IReadOnlyList<TerrainSideWallPatchSummary> TerrainSideWalls,
     IReadOnlyList<TerrainPatch> Patches,
     IReadOnlyList<string> SkippedEdits,
+    IReadOnlyList<string> Notes);
+
+public sealed record NativeTerrainTextureRelocationPatchSummary(
+    string Strategy,
+    IReadOnlyList<int> TargetTextureIds,
+    IReadOnlyList<string> DonorTextures,
+    int CompleteDescriptorCount,
+    int TargetOwnedByteCount,
+    int PatchCount,
+    int PatchedByteCount,
+    bool RuntimeControlVerified,
+    bool OwnershipVerified,
+    bool ExactIndexedPixelsVerified,
+    bool ExactPalettesVerified,
+    bool LogicalReadbackVerified,
+    bool TargetDescriptorMaterialPolicyVerified,
     IReadOnlyList<string> Notes);
 
 public sealed record TerrainSideWallPatchSummary(
@@ -5755,6 +8240,7 @@ public sealed record CustomTerrainTexturePatchSummary(
     int PixelPatchCount,
     int PalettePatchCount,
     int TexelBytesPerPixel,
+    int BitsPerPixel,
     int PaletteColorCount,
     int SourceTexelUniqueCount,
     int SourceTexelMax,

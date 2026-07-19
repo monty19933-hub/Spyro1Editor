@@ -1,4 +1,6 @@
+using System.Globalization;
 using Spyro.Editor.Core.Primitives;
+using Spyro.Editor.Core.Rendering;
 
 namespace Spyro.Editor.Core.Scene;
 
@@ -10,6 +12,115 @@ public sealed class GeometryCandidate
     public float MaxZ { get; init; }
     public List<TerrainPolygon> Polygons { get; } = new();
     public List<TerrainEdge> Edges { get; } = new();
+    public List<LowDetailTerrainPolygon> LowDetailPolygons { get; } = new();
+    public List<SceneSectorRenderMetadata> SourceSectors { get; } = new();
+    public bool HasStaticLowDetailPreview { get; set; }
+    public string TerrainLodPreviewContract { get; set; } = "";
+    public bool HasExactHighPolyMaterialState { get; set; }
+    public string HighPolyMaterialContract { get; set; } = "";
+    public bool HasExactHighPolyCoordinateState { get; set; }
+    public string HighPolyCoordinateContract { get; set; } = "";
+    public NativeTerrainOcclusionData? NativeTerrainOcclusion { get; set; }
+}
+
+public sealed record SceneSectorRenderMetadata(
+    int SectorIndex,
+    int SectorOffset,
+    Vector3f Center,
+    int Radius,
+    bool DisableLowDetail,
+    bool DisableHighDetail,
+    bool ForceLowDetail,
+    int LowDetailVertexCount,
+    int LowDetailColorCount,
+    int LowDetailFaceCount,
+    int HighDetailVertexCount,
+    int HighDetailColorCount,
+    int HighDetailFaceCount,
+    NativeTerrainHpSectorCoordinatePayload? HighPolyCoordinates = null);
+
+public sealed class LowDetailTerrainPolygon
+{
+    public LowDetailTerrainPolygon(
+        IReadOnlyList<Vector2f> points,
+        IReadOnlyList<float> zValues,
+        int sectorIndex,
+        int faceIndex,
+        int sectorOffset,
+        int faceOffset,
+        IReadOnlyList<int> vertexIndexes,
+        IReadOnlyList<int> cornerPointIndexes,
+        IReadOnlyList<int> colorIndexes,
+        IReadOnlyList<ColorRgba> cornerColors,
+        uint rawWord0,
+        uint rawWord1,
+        int transitionBias,
+        bool doubleSided,
+        bool semiTransparent,
+        int blendMode,
+        int orderingTableBias)
+    {
+        Points = points.ToArray();
+        ZValues = zValues.ToArray();
+        SectorIndex = sectorIndex;
+        FaceIndex = faceIndex;
+        SectorOffset = sectorOffset;
+        FaceOffset = faceOffset;
+        VertexIndexes = vertexIndexes.ToArray();
+        CornerPointIndexes = cornerPointIndexes.ToArray();
+        ColorIndexes = colorIndexes.ToArray();
+        CornerColors = cornerColors.ToArray();
+        RawWord0 = rawWord0;
+        RawWord1 = rawWord1;
+        TransitionBias = transitionBias & 0x1F;
+        DoubleSided = doubleSided;
+        SemiTransparent = semiTransparent;
+        BlendMode = blendMode & 0x03;
+        OrderingTableBias = orderingTableBias & 0x1F;
+        Bounds = CalculateBounds(Points);
+        AvgZ = ZValues.Count == 0 ? 0 : ZValues.Average();
+    }
+
+    public IReadOnlyList<Vector2f> Points { get; }
+    public IReadOnlyList<float> ZValues { get; }
+    public int SectorIndex { get; }
+    public int FaceIndex { get; }
+    public int SectorOffset { get; }
+    public int FaceOffset { get; }
+    public IReadOnlyList<int> VertexIndexes { get; }
+    public IReadOnlyList<int> CornerPointIndexes { get; }
+    public IReadOnlyList<int> ColorIndexes { get; }
+    public IReadOnlyList<ColorRgba> CornerColors { get; }
+    public uint RawWord0 { get; }
+    public uint RawWord1 { get; }
+    public int TransitionBias { get; }
+    public bool DoubleSided { get; }
+    public bool SemiTransparent { get; }
+    public int BlendMode { get; }
+    public int OrderingTableBias { get; }
+    public Rect2f Bounds { get; }
+    public float AvgZ { get; }
+    public string RuntimeKey => $"{SectorIndex}:{FaceIndex}:lp";
+
+    public bool HasCompleteNativePayload =>
+        Points.Count is >= 3 and <= SourceSceneOverlayContract.CornerSlotCount &&
+        ZValues.Count == Points.Count &&
+        VertexIndexes.Count == SourceSceneOverlayContract.CornerSlotCount &&
+        CornerPointIndexes.Count == SourceSceneOverlayContract.CornerSlotCount &&
+        ColorIndexes.Count == SourceSceneOverlayContract.CornerSlotCount &&
+        CornerColors.Count == SourceSceneOverlayContract.CornerSlotCount &&
+        CornerPointIndexes.All(index => index >= 0 && index < Points.Count);
+
+    private static Rect2f CalculateBounds(IReadOnlyList<Vector2f> points)
+    {
+        if (points.Count == 0)
+            return Rect2f.Empty;
+        return Rect2f.FromBounds(
+            points.Min(point => point.X),
+            points.Min(point => point.Y),
+            points.Max(point => point.X),
+            points.Max(point => point.Y));
+    }
 }
 
 public enum TerrainStructureEditKind
@@ -17,6 +128,50 @@ public enum TerrainStructureEditKind
     None,
     RemoveFace,
     AddCloneFace
+}
+
+public sealed record TerrainSurfaceBehaviorEdit(
+    int SurfaceType,
+    int Param1,
+    int Param2,
+    string SourceLevelKey,
+    string SourceRuntimeKey,
+    string Label);
+
+public sealed record TerrainTextureVisualCorner(
+    ColorRgba NearColor,
+    ColorRgba FarColor);
+
+public sealed record TerrainTextureVisualEdit(
+    int SourceTextureId,
+    string SourceLevelKey,
+    string SourceRuntimeKey,
+    int SourceSectorOffset,
+    int SourceFaceOffset,
+    TerrainTextureVisualCorner Corner0,
+    TerrainTextureVisualCorner Corner1,
+    TerrainTextureVisualCorner Corner2,
+    TerrainTextureVisualCorner Corner3,
+    string Label)
+{
+    public IReadOnlyList<TerrainTextureVisualCorner> Corners =>
+        [Corner0, Corner1, Corner2, Corner3];
+
+    public int UniqueCornerPairCount => Corners.Distinct().Count();
+    public ColorRgba AverageNearColor => Average(Corners.Select(corner => corner.NearColor));
+    public ColorRgba AverageFarColor => Average(Corners.Select(corner => corner.FarColor));
+
+    private static ColorRgba Average(IEnumerable<ColorRgba> colors)
+    {
+        ColorRgba[] values = colors.ToArray();
+        if (values.Length == 0)
+            return ColorRgba.FromRgb(96, 128, 96);
+
+        return ColorRgba.FromRgb(
+            values.Sum(color => color.R) / values.Length,
+            values.Sum(color => color.G) / values.Length,
+            values.Sum(color => color.B) / values.Length);
+    }
 }
 
 public sealed class TerrainPolygon
@@ -36,7 +191,18 @@ public sealed class TerrainPolygon
         string word4 = "",
         bool faceFlip = false,
         int faceDepth = -1,
-        IReadOnlyList<int>? colourIndexes = null)
+        IReadOnlyList<int>? colourIndexes = null,
+        IReadOnlyList<ColorRgba>? nearColors = null,
+        IReadOnlyList<ColorRgba>? farColors = null,
+        IReadOnlyList<int>? cornerPointIndexes = null,
+        uint? nativeFaceWord2 = null,
+        int nativeMaterialByte = -1,
+        bool? nativeUntexturedSentinel = null,
+        bool? nativePrimitiveSemiTransparent = null,
+        int nativeTextureId = -1,
+        uint? nativeFaceWord0 = null,
+        uint? nativeFaceWord1 = null,
+        uint? nativeFaceWord3 = null)
     {
         _points = points.ToArray();
         OriginalPoints = points.ToArray();
@@ -50,11 +216,59 @@ public sealed class TerrainPolygon
         SectorOffset = sectorOffset;
         FaceOffset = faceOffset;
         VertexIndexes = vertexIndexes?.ToArray() ?? Array.Empty<int>();
+        ColourIndexes = colourIndexes?.ToArray() ?? Array.Empty<int>();
         Word3 = word3;
         Word4 = word4;
+        bool hasCompleteNativeFaceWordPayload =
+            nativeFaceWord0.HasValue &&
+            nativeFaceWord1.HasValue &&
+            nativeFaceWord2.HasValue &&
+            nativeFaceWord3.HasValue;
+        bool hasNewNativeFaceWordPayload =
+            nativeFaceWord0.HasValue || nativeFaceWord1.HasValue || nativeFaceWord3.HasValue;
+        if (hasNewNativeFaceWordPayload && !hasCompleteNativeFaceWordPayload)
+            throw new InvalidDataException("HP face has an incomplete typed raw-word 0-3 payload.");
+
+        NativeFaceWord0 = nativeFaceWord0 ?? PackNativeByteSlotsOrZero(VertexIndexes);
+        NativeFaceWord1 = nativeFaceWord1 ?? PackNativeByteSlotsOrZero(ColourIndexes);
+        NativeFaceWord2 = nativeFaceWord2 ?? ParseNativeWord(word3);
+        NativeFaceWord3 = nativeFaceWord3 ?? ParseNativeWord(word4);
+        HasCompleteNativeHighPolyFacePayload = hasCompleteNativeFaceWordPayload;
+        if (HasCompleteNativeHighPolyFacePayload)
+        {
+            if (!TryParseNativeWord(word3, out uint legacyWord2) || legacyWord2 != NativeFaceWord2 ||
+                !TryParseNativeWord(word4, out uint legacyWord3) || legacyWord3 != NativeFaceWord3 ||
+                !TryPackNativeByteSlots(VertexIndexes, out uint packedWord0) || packedWord0 != NativeFaceWord0 ||
+                !TryPackNativeByteSlots(ColourIndexes, out uint packedWord1) || packedWord1 != NativeFaceWord1 ||
+                faceFlip != ((NativeFaceWord3 & 0x02) != 0) ||
+                faceDepth != (int)((NativeFaceWord3 >> 3) & 0x1F))
+            {
+                throw new InvalidDataException("HP face raw-word 0-3 payload does not match its serialized slots, legacy words, flip, or depth fields.");
+            }
+        }
+
+        PsxTerrainPrimitiveClassification nativeMaterial =
+            PsxTerrainBlendKernel.ClassifyHighPolyMaterialByte((byte)(NativeFaceWord2 & 0xFF));
+        NativeMaterialByte = nativeMaterial.RawMaterialByte;
+        IsNativeUntexturedSentinel = nativeMaterial.IsOpaqueUntexturedSentinel;
+        NativePrimitiveSemiTransparent = nativeMaterial.PrimitiveSemiTransparent;
+        NativeTextureId = nativeMaterial.TextureId;
+        HasNativeHighPolyMaterialPayload = nativeFaceWord2.HasValue;
+        if (HasNativeHighPolyMaterialPayload &&
+            (nativeMaterialByte != NativeMaterialByte ||
+             nativeUntexturedSentinel != IsNativeUntexturedSentinel ||
+             nativePrimitiveSemiTransparent != NativePrimitiveSemiTransparent ||
+             nativeTextureId != NativeTextureId ||
+             textureId != NativeTextureId))
+        {
+            throw new InvalidDataException(
+                $"HP face material payload does not match native word +0x08 0x{NativeFaceWord2:X8}.");
+        }
         FaceFlip = faceFlip;
         FaceDepth = faceDepth;
-        ColourIndexes = colourIndexes?.ToArray() ?? Array.Empty<int>();
+        NearColors = nearColors?.ToArray() ?? Array.Empty<ColorRgba>();
+        FarColors = farColors?.ToArray() ?? Array.Empty<ColorRgba>();
+        CornerPointIndexes = cornerPointIndexes?.ToArray() ?? BuildCornerPointIndexes(VertexIndexes);
         FaceColor = faceColor;
         SurfaceColor = faceColor;
         Bounds = CalculateBounds(Points);
@@ -78,9 +292,41 @@ public sealed class TerrainPolygon
     public IReadOnlyList<int> VertexIndexes { get; }
     public string Word3 { get; }
     public string Word4 { get; }
+    /// <summary>The zero-based first native HP face word at +0x00 (four little-endian vertex slots).</summary>
+    public uint NativeFaceWord0 { get; }
+    /// <summary>The zero-based second native HP face word at +0x04 (four little-endian color slots).</summary>
+    public uint NativeFaceWord1 { get; }
+    /// <summary>The zero-based third native HP face word at +0x08 (legacy serialized name: Word3).</summary>
+    public uint NativeFaceWord2 { get; }
+    /// <summary>The native face material byte at +0x08.</summary>
+    public byte NativeMaterialByte { get; }
+    public bool IsNativeUntexturedSentinel { get; }
+    public bool NativePrimitiveSemiTransparent { get; }
+    public int NativeTextureId { get; }
+    public bool HasNativeHighPolyMaterialPayload { get; }
+    public bool HasCompleteNativeHighPolyFacePayload { get; }
+    /// <summary>The zero-based fourth native HP face word at +0x0C (legacy serialized name: Word4).</summary>
+    public uint NativeFaceWord3 { get; }
+    public bool LqFadeBypass => (NativeFaceWord3 & 0x01) != 0;
+    public bool HqOverlayBypass => (NativeFaceWord3 & 0xC0) != 0;
     public bool FaceFlip { get; }
     public int FaceDepth { get; }
     public IReadOnlyList<int> ColourIndexes { get; }
+    /// <summary>
+    /// Maps each raw face slot (0..3) to the corresponding entry in <see cref="Points"/>.
+    /// A native triangle repeats slots 0 and 1, so both map to the same point.
+    /// </summary>
+    public IReadOnlyList<int> CornerPointIndexes { get; }
+    /// <summary>
+    /// Legacy serialized NearColors field: physical HP color table 2, used by
+    /// the retail DPCS path as the runtime-far endpoint, in raw slot order.
+    /// </summary>
+    public IReadOnlyList<ColorRgba> NearColors { get; }
+    /// <summary>
+    /// Legacy serialized FarColors field: physical HP color table 1, used by
+    /// the retail DPCS path as the runtime-near endpoint, in raw slot order.
+    /// </summary>
+    public IReadOnlyList<ColorRgba> FarColors { get; }
     public ColorRgba FaceColor { get; }
     public string Surface { get; private set; } = "unknown";
     public string SurfaceSource { get; private set; } = "unclassified";
@@ -95,16 +341,105 @@ public sealed class TerrainPolygon
     public float MinZ { get; private set; }
     public float MaxZ { get; private set; }
     public float TerrainEditDeltaZ { get; private set; }
+    public TerrainSurfaceBehaviorEdit? SurfaceBehaviorEdit { get; private set; }
+    public TerrainTextureVisualEdit? TextureVisualEdit { get; private set; }
 
     public bool HasTextureEdit => OriginalTextureId >= 0 && TextureId != OriginalTextureId;
+    public bool HasNativeCornerPayload =>
+        VertexIndexes.Count == SourceSceneOverlayContract.CornerSlotCount &&
+        CornerPointIndexes.Count == SourceSceneOverlayContract.CornerSlotCount &&
+        ColourIndexes.Count == SourceSceneOverlayContract.CornerSlotCount &&
+        NearColors.Count == SourceSceneOverlayContract.CornerSlotCount &&
+        FarColors.Count == SourceSceneOverlayContract.CornerSlotCount &&
+        HasConsistentCornerTopology();
+    public bool HasTextureVisualEdit => TextureVisualEdit != null;
     public bool HasHeightEdit => HasEditedZValues();
     public bool HasPositionEdit => HasEditedPoints();
     public TerrainStructureEditKind StructureEdit { get; private set; } = TerrainStructureEditKind.None;
     public bool HasStructureEdit => StructureEdit != TerrainStructureEditKind.None;
     public bool IsTerrainRemoved => StructureEdit == TerrainStructureEditKind.RemoveFace;
     public bool IsTerrainAddClone => StructureEdit == TerrainStructureEditKind.AddCloneFace;
-    public bool IsTerrainEdited => HasHeightEdit || HasPositionEdit || HasTextureEdit || HasStructureEdit;
+    public bool HasSurfaceBehaviorEdit => SurfaceBehaviorEdit != null;
+    public bool IsTerrainEdited => HasHeightEdit || HasPositionEdit || HasTextureEdit || HasTextureVisualEdit || HasStructureEdit || HasSurfaceBehaviorEdit;
     public string RuntimeKey => $"{SectorIndex}:{FaceIndex}:{Detail}";
+
+    private static uint ParseNativeWord(string text) =>
+        TryParseNativeWord(text, out uint word) ? word : 0;
+
+    private static bool TryParseNativeWord(string? text, out uint word)
+    {
+        string value = (text ?? "").Trim();
+        if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            value = value[2..];
+        return uint.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out word);
+    }
+
+    private static uint PackNativeByteSlotsOrZero(IReadOnlyList<int> slots) =>
+        TryPackNativeByteSlots(slots, out uint word) ? word : 0;
+
+    private static bool TryPackNativeByteSlots(IReadOnlyList<int> slots, out uint word)
+    {
+        word = 0;
+        if (slots.Count != SourceSceneOverlayContract.CornerSlotCount ||
+            slots.Any(slot => slot is < byte.MinValue or > byte.MaxValue))
+        {
+            return false;
+        }
+
+        word = (uint)slots[0] |
+            ((uint)slots[1] << 8) |
+            ((uint)slots[2] << 16) |
+            ((uint)slots[3] << 24);
+        return true;
+    }
+
+    private static IReadOnlyList<int> BuildCornerPointIndexes(IReadOnlyList<int> vertexIndexes)
+    {
+        if (vertexIndexes.Count != SourceSceneOverlayContract.CornerSlotCount)
+            return Array.Empty<int>();
+
+        Dictionary<int, int> pointIndexByVertex = new();
+        int[] result = new int[SourceSceneOverlayContract.CornerSlotCount];
+        for (int slot = 0; slot < result.Length; slot++)
+        {
+            int vertexIndex = vertexIndexes[slot];
+            if (!pointIndexByVertex.TryGetValue(vertexIndex, out int pointIndex))
+            {
+                pointIndex = pointIndexByVertex.Count;
+                pointIndexByVertex.Add(vertexIndex, pointIndex);
+            }
+
+            result[slot] = pointIndex;
+        }
+
+        return result;
+    }
+
+    private bool HasConsistentCornerTopology()
+    {
+        if (Points.Count is < 3 or > SourceSceneOverlayContract.CornerSlotCount)
+            return false;
+
+        Dictionary<int, int> expectedPointIndexByVertex = new();
+        for (int slot = 0; slot < SourceSceneOverlayContract.CornerSlotCount; slot++)
+        {
+            int pointIndex = CornerPointIndexes[slot];
+            if (pointIndex < 0 || pointIndex >= Points.Count)
+                return false;
+
+            int vertexIndex = VertexIndexes[slot];
+            if (!expectedPointIndexByVertex.TryGetValue(vertexIndex, out int expectedPointIndex))
+            {
+                expectedPointIndex = expectedPointIndexByVertex.Count;
+                expectedPointIndexByVertex.Add(vertexIndex, expectedPointIndex);
+            }
+
+            if (pointIndex != expectedPointIndex)
+                return false;
+        }
+
+        return expectedPointIndexByVertex.Count == Points.Count;
+    }
 
     public void ApplyTerrainDeltaZ(float deltaZ)
     {
@@ -180,8 +515,26 @@ public sealed class TerrainPolygon
 
     public void ApplyTextureOverride(int textureId)
     {
-        if (textureId >= 0)
-            TextureId = textureId;
+        if (textureId < 0)
+            return;
+
+        if (textureId != TextureId)
+        {
+            TextureVisualEdit = null;
+            SurfaceBehaviorEdit = null;
+        }
+        TextureId = textureId;
+    }
+
+    public void ApplyTextureVisualEdit(TerrainTextureVisualEdit edit)
+    {
+        ArgumentNullException.ThrowIfNull(edit);
+        TextureVisualEdit = edit;
+    }
+
+    public void ClearTextureVisualEdit()
+    {
+        TextureVisualEdit = null;
     }
 
     public void ResetTerrainEdit()
@@ -189,7 +542,9 @@ public sealed class TerrainPolygon
         ResetTerrainHeightEdit();
         ResetTerrainPositionEdit();
         TextureId = OriginalTextureId;
+        TextureVisualEdit = null;
         StructureEdit = TerrainStructureEditKind.None;
+        SurfaceBehaviorEdit = null;
     }
 
     public void ResetTerrainHeightEdit()
@@ -232,6 +587,17 @@ public sealed class TerrainPolygon
         BehaviorSource = string.IsNullOrWhiteSpace(source) ? "unclassified" : source;
         BehaviorConfidence = string.IsNullOrWhiteSpace(confidence) ? "unknown" : confidence;
         BehaviorNote = note ?? "";
+    }
+
+    public void ApplySurfaceBehaviorEdit(TerrainSurfaceBehaviorEdit edit)
+    {
+        ArgumentNullException.ThrowIfNull(edit);
+        SurfaceBehaviorEdit = edit;
+    }
+
+    public void ClearSurfaceBehaviorEdit()
+    {
+        SurfaceBehaviorEdit = null;
     }
 
     public bool TryGetZ(float x, float y, out float z)

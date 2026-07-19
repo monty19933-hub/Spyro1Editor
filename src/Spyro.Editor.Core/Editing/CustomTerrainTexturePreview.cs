@@ -58,6 +58,33 @@ public static class CustomTerrainTexturePreview
         return true;
     }
 
+    public static int ApplyNativeRelocations(
+        GeometryCandidate? geometry,
+        IReadOnlyList<NativeTerrainTextureRelocationEdit> relocations)
+    {
+        if (geometry == null || relocations.Count == 0)
+            return 0;
+
+        Dictionary<int, ColorRgba> previewColors = relocations
+            .Where(relocation => TryGetImagePreviewColor(relocation.PreviewImagePath, out _))
+            .GroupBy(relocation => relocation.TargetTextureId)
+            .ToDictionary(group => group.Key, group =>
+            {
+                TryGetImagePreviewColor(group.First().PreviewImagePath, out ColorRgba color);
+                return color;
+            });
+        int applied = 0;
+        foreach (TerrainPolygon polygon in geometry.Polygons)
+        {
+            if (!previewColors.TryGetValue(polygon.TextureId, out ColorRgba color))
+                continue;
+
+            polygon.SetSurfacePreviewColor(color, "native cross-level texture preview");
+            applied++;
+        }
+        return applied;
+    }
+
     private static bool TryGetImagePreviewColor(string path, out ColorRgba color)
     {
         color = default;

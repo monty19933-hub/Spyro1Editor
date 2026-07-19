@@ -8,17 +8,21 @@ using System.Text.Json.Nodes;
 using Spyro.Editor.Core;
 using Spyro.Editor.Core.Analysis;
 using Spyro.Editor.Core.Cache;
+using Spyro.Editor.Core.Diagnostics;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Music;
 using Spyro.Editor.Core.Primitives;
+using Spyro.Editor.Core.Rendering;
 using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Skyboxes;
 using Spyro.Editor.Core.Text;
 using Spyro.Editor.Core.Workspace;
+using Spyro.Editor.Smoke;
 
 bool buildCache = args.Contains("--build-cache", StringComparer.OrdinalIgnoreCase);
+bool rebuildCacheOnly = args.Contains("--rebuild-cache-only", StringComparer.OrdinalIgnoreCase);
 bool exportTextTest = args.Contains("--export-text-test", StringComparer.OrdinalIgnoreCase);
 bool exportSkyboxTest = args.Contains("--export-skybox-test", StringComparer.OrdinalIgnoreCase);
 bool skyboxLayoutSmokeOnly = args.Contains("--skybox-layout-smoke-only", StringComparer.OrdinalIgnoreCase);
@@ -27,7 +31,9 @@ bool skyboxSceneColorSmokeOnly = args.Contains("--skybox-scene-color-smoke-only"
 bool skyboxBlockSmokeOnly = args.Contains("--skybox-block-smoke-only", StringComparer.OrdinalIgnoreCase);
 bool nativeSkyExportSmokeOnly = args.Contains("--native-sky-export-smoke-only", StringComparer.OrdinalIgnoreCase);
 bool nativeSkyWriteSmokeOnly = args.Contains("--native-sky-write-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool linkedPortalSkySafetySmokeOnly = args.Contains("--linked-portal-sky-safety-smoke-only", StringComparer.OrdinalIgnoreCase);
 bool environmentGradeSmokeOnly = args.Contains("--environment-grade-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool environmentGradeMatrixSmokeOnly = args.Contains("--environment-grade-matrix-smoke-only", StringComparer.OrdinalIgnoreCase);
 bool keepEnvironmentGradeSmoke = args.Contains("--keep-environment-grade-smoke", StringComparer.OrdinalIgnoreCase);
 string? environmentGradeInspectImage = args
     .FirstOrDefault(arg => arg.StartsWith("--environment-grade-inspect-image=", StringComparison.OrdinalIgnoreCase))?
@@ -35,10 +41,35 @@ string? environmentGradeInspectImage = args
 bool expandedSkySmokeOnly = args.Contains("--expanded-sky-smoke-only", StringComparer.OrdinalIgnoreCase);
 bool exportExpandedSkyTest = args.Contains("--export-expanded-sky-test", StringComparer.OrdinalIgnoreCase);
 bool terrainTextureSmokeOnly = args.Contains("--terrain-texture-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool terrainSurfaceSourceSmokeOnly = args.Contains("--terrain-surface-source-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool sourceSceneChainSmokeOnly = args.Contains("--source-scene-chain-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool terrainColorFidelityOnly = args.Contains("--terrain-color-fidelity-only", StringComparer.OrdinalIgnoreCase);
 bool exportCrossLevelObjectTest = args.Contains("--export-cross-level-object-test", StringComparer.OrdinalIgnoreCase);
 bool exportCurrentSpringCandidate = args.Contains("--export-current-spring-candidate", StringComparer.OrdinalIgnoreCase);
+bool exportArtisansSpringCandidate = args.Contains("--export-artisans-spring-candidate", StringComparer.OrdinalIgnoreCase);
+bool exportArtisansKeyChestCandidate = args.Contains("--export-artisans-key-chest-candidate", StringComparer.OrdinalIgnoreCase);
+bool exportArtisansExpandedSpringCandidate = args.Contains("--export-artisans-expanded-spring-candidate", StringComparer.OrdinalIgnoreCase);
+bool exportArtisansKeyGatedChestCandidate = args.Contains("--export-artisans-key-gated-chest-candidate", StringComparer.OrdinalIgnoreCase);
+bool exportArtisansNativeLockedChestCandidate = args.Contains("--export-artisans-native-locked-chest-candidate", StringComparer.OrdinalIgnoreCase);
+bool exportArtisansNativeLockedChestVisualCandidate = args.Contains("--export-artisans-native-locked-chest-visual-candidate", StringComparer.OrdinalIgnoreCase);
+bool portableChestStrategySmokeOnly = args.Contains("--portable-chest-strategy-only", StringComparer.OrdinalIgnoreCase);
+bool crossLevelRecipePersistenceOnly = args.Contains("--cross-level-recipe-persistence-only", StringComparer.OrdinalIgnoreCase);
 bool springChestDiagnosticOnly = args.Contains("--spring-chest-diagnostic-only", StringComparer.OrdinalIgnoreCase);
 bool objectSmokeOnly = args.Contains("--object-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool gemValueSmokeOnly = args.Contains("--gem-value-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool linkedGemPersistenceSmokeOnly = args.Contains("--linked-gem-persistence-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool genericIdentitySignatureSmokeOnly = args.Contains("--generic-identity-signature-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool identityDeepAuditSmokeOnly = args.Contains("--identity-deep-audit-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool mobyBuildSafetySmokeOnly = args.Contains("--moby-build-safety-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool crossLevelSwapCatalogSmokeOnly = args.Contains("--cross-level-swap-catalog-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool blowhardGreenWizardCandidateOnly = args.Contains("--blowhard-green-wizard-candidate-only", StringComparer.OrdinalIgnoreCase);
+bool magicCraftersGreenWizardCandidateOnly = args.Contains("--magiccrafters-green-wizard-candidate-only", StringComparer.OrdinalIgnoreCase);
+bool wizardPeakGreenWizardCandidateOnly = args.Contains("--wizardpeak-green-wizard-candidate-only", StringComparer.OrdinalIgnoreCase);
+bool swapTestLevelWarpOnly = args.Contains("--swap-test-level-warp-only", StringComparer.OrdinalIgnoreCase);
+bool toastyWizardCandidateOnly = args.Contains("--toasty-wizard-candidate-only", StringComparer.OrdinalIgnoreCase);
+bool toastyWizardOverlayExperimentOnly = args.Contains("--toasty-wizard-overlay-experiment-only", StringComparer.OrdinalIgnoreCase);
+bool darkHollowCrashGuardSmokeOnly = args.Contains("--darkhollow-crash-guard-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool cleanObjectSmokeBins = args.Contains("--clean-object-smoke-bins", StringComparer.OrdinalIgnoreCase);
 bool visualCategorySmokeOnly = args.Contains("--visual-category-smoke-only", StringComparer.OrdinalIgnoreCase);
 bool dragonCameraSmokeOnly = args.Contains("--dragon-camera-smoke-only", StringComparer.OrdinalIgnoreCase);
 bool flyInLandingSmokeOnly = args.Contains("--fly-in-landing-smoke-only", StringComparer.OrdinalIgnoreCase);
@@ -64,8 +95,19 @@ bool exportLifeChestCandidate = args.Contains("--export-life-chest-candidate", S
 bool exportLifeChestDemoCandidate = args.Contains("--export-life-chest-demo-candidate", StringComparer.OrdinalIgnoreCase);
 bool exportArtisansLifeChestMultiCandidate = args.Contains("--export-artisans-life-chest-multi-candidate", StringComparer.OrdinalIgnoreCase);
 bool exportStrictTriggerProofBins = args.Contains("--export-strict-trigger-proof-bins", StringComparer.OrdinalIgnoreCase);
+bool exportControlRoleProofBins =
+    args.Contains("--export-control-role-proof-bins", StringComparer.OrdinalIgnoreCase) ||
+    exportStrictTriggerProofBins;
 bool repairGnastyLootCache = args.Contains("--repair-gnastysloot-cache", StringComparer.OrdinalIgnoreCase);
+bool diagnosticsSmokeOnly = args.Contains("--diagnostics-smoke-only", StringComparer.OrdinalIgnoreCase);
 string? workspaceArg = args.FirstOrDefault(arg => !arg.StartsWith("--", StringComparison.Ordinal));
+
+if (diagnosticsSmokeOnly)
+{
+    ReportEditorDiagnosticsSmoke();
+    return 0;
+}
+
 EditorWorkspace workspace = EditorWorkspace.Find(workspaceArg);
 LevelCatalog catalog = LevelCatalog.Load(workspace.RootPath);
 SkyboxCatalog skyboxes = SkyboxCatalog.Load(workspace);
@@ -75,6 +117,17 @@ const int IdentityMicroscopeLimit = 80;
 const string CurrentStoneHillSpringRecipeId = "stonehill.peacekeepers.springChest.package.native0149T70LocalControllerOver000ERuntime01A6BluePreHitSafeNativeSpringEffectOnlyNoPickupBlueGemNativeSpringEffectVisualBlueGemNativeSpringEffectOrdinalManualSpyroDelayedJumpTouchCollectBlankVisualAwardPlainTreasureWordsManualRewardPopArcNativeEffectVisualNativeStateZeroShellStackHelper.v136";
 const string CurrentStoneHillSpringTemplateId = "common.spring_chest.peacekeepers.t70";
 const string CurrentStoneHillSpringCandidateSlug = "stonehill-springchest-v159-peacekeepers-t70-blueprehit-native-effect-bluegem-delayed-jumptouch-blankvisual-plain-treasure-poparc-stable-restored";
+const string ArtisansSpringRecipeId = "artisans.peacekeepers.springChest.package.native0149T70LocalControllerOver000EV159Helper.v2";
+const string ArtisansSpringCandidateSlug = "artisans-springchest-v161-v159-inplace-root-portability-test";
+const string ArtisansFailedSpringGapCandidateSlug = "artisans-springchest-v160-v159-runtime-portability-test";
+const string ArtisansExpandedSpringCandidateSlug = "artisans-springchest-v162-v159-expanded-actor-subfile-portability-test";
+const string ArtisansKeyGatedChestCandidateSlug = "artisans-key-gated-native-t50-v4-green-gem-key-proxy-runtime-test";
+const string ArtisansNativeLockedChestCandidateSlug = "artisans-native-locked-chest-t175-v1-runtime-test";
+const string ArtisansNativeLockedChestVisualCandidateSlug = "artisans-native-locked-chest-t175-v2-native-key-textures-runtime-test";
+const string ArtisansKeyChestRecipeId = "artisans.peacekeepers.lockedChest.package.safeGapActorId.v4";
+const string ArtisansKeyChestCandidateSlug = "artisans-key-and-locked-chest-v1-runtime-bundle-test";
+const string CurrentToastyWizardRecipeId = "toasty.wizardpeak.greenWizard.package.replaceUnused00EA.v3";
+const string CurrentToastyWizardCandidateSlug = "toasty-wizard-root-replace-v3-smoke";
 const string GnastyLootSpringTemplateId = "common.spring_chest.gnastysloot.t19";
 const string GnastyLootFireworkTemplateId = "common.firework_chest.gnastysloot.t92";
 const string GnastyLootMultiGemChestTemplateId = "common.multi_gem_chest.gnastysloot.t24";
@@ -93,7 +146,235 @@ Console.WriteLine($"Workspace: {workspace.RootPath}");
 Console.WriteLine($"Levels: {catalog.Levels.Count}");
 ReportEditorUiDefaults();
 ReportCrossLevelObjectTemplateCatalog();
+
+if (linkedGemPersistenceSmokeOnly)
+{
+    await ReportTransformedLinkedGemRootPersistenceSmoke();
+    return 0;
+}
+
 string sourceImage = DiscImageLocator.FindImage(workspace);
+
+if (crossLevelRecipePersistenceOnly)
+{
+    await ReportCrossLevelRecipePersistenceSmoke();
+    return 0;
+}
+
+if (portableChestStrategySmokeOnly)
+{
+    await ReportCrossLevelObjectImportAnalysis();
+    await ReportUniversalChestStrategy();
+    await ReportUniversalChestPackageRecipePlanner();
+    ReportCrossLevelEditorTemplateReadiness();
+    await ReportArtisansKeyChestPackagePreview();
+    await ExportArtisansSpringCandidateOnly();
+    await ExportArtisansKeyChestCandidateOnly();
+    return 0;
+}
+
+if (sourceSceneChainSmokeOnly)
+{
+    await ReportSourceSceneChainSelectionSmoke(sourceImage, workspace, catalog);
+    return 0;
+}
+
+if (terrainColorFidelityOnly)
+{
+    ReportTerrainColorFidelity();
+    return 0;
+}
+
+if (rebuildCacheOnly)
+{
+    PortableEditorCacheResult result = await PortableEditorCacheBuilder.BuildAsync(workspace, catalog);
+    Console.WriteLine($"Cache rebuild: {result.MobyCacheCount}/{result.LevelCount} moby files, {result.OverlayCacheCount}/{result.LevelCount} overlays");
+    return 0;
+}
+
+if (terrainSurfaceSourceSmokeOnly)
+{
+    ReportNativeTerrainSurfaceSourceCatalog(sourceImage);
+    return 0;
+}
+
+if (linkedPortalSkySafetySmokeOnly)
+{
+    string analysisPath = WadAnalysisLocator.Find(workspace);
+    Spyro1SkyBlockReport report = Spyro1SkyBlockAnalyzer.Analyze(sourceImage, analysisPath, catalog);
+    Spyro1LevelSkyBlockLayout cliffTownLayout = report.Levels.Single(level => level.Key == "clifftown");
+    Spyro1LevelSkyBlockLayout twilightHarborLayout = report.Levels.Single(level => level.Key == "twilightharbor");
+    Spyro1LevelSkyBlockLayout iceCavernLayout = report.Levels.Single(level => level.Key == "icecavern");
+    Spyro1SkyBlockReference peaceKeepersCopy = cliffTownLayout.LinkedPrimarySkyCopies.Single(reference =>
+        string.Equals(reference.LevelKey, "peacekeepers", StringComparison.OrdinalIgnoreCase));
+    int twilightHarborBytes = twilightHarborLayout.SkyBlocks[0].ByteLength;
+    int nativePortalCapacity = peaceKeepersCopy.ByteLength;
+    int expectedGrowth = twilightHarborBytes - nativePortalCapacity;
+    if (expectedGrowth <= 0)
+        throw new InvalidOperationException("The Cliff Town <- Twilight Harbor regression fixture no longer expands the Peace Keepers portal copy.");
+
+    NativeSkyLinkedPortalExpansionRisk risk = NativeSkyLinkedPortalSafety.FindUnprovenExpansions(
+            cliffTownLayout,
+            twilightHarborBytes,
+            twilightHarborLayout.DisplayName)
+        .Single(candidate => string.Equals(candidate.StorageLevelKey, "peacekeepers", StringComparison.OrdinalIgnoreCase));
+    if (risk.StorageBlockIndex != peaceKeepersCopy.BlockIndex ||
+        risk.NativeCapacityBytes != nativePortalCapacity ||
+        risk.GrowthBytes != expectedGrowth)
+    {
+        throw new InvalidOperationException("Linked portal sky safety did not identify the exact Peace Keepers storage block and growth amount.");
+    }
+
+    using SmokeTemporaryDirectory smoke = SmokeTemporaryDirectory.Create("spyro-linked-portal-sky-safety");
+    string unsafePrefix = Path.Combine(smoke.Path, "clifftown-from-twilightharbor-blocked");
+    NativeSkyEditPlan unsafeEdit = new(
+        Version: 2,
+        SavedAt: DateTimeOffset.UtcNow,
+        LevelKey: "clifftown",
+        LevelName: "Cliff Town",
+        Mode: NativeSkyEditPlan.SwapMode,
+        PalettePreset: "",
+        CustomPaletteHex: "",
+        DonorLevelKey: "twilightharbor",
+        ImportedSkyPath: "",
+        ImportedSkySha256: "");
+    try
+    {
+        await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+            SourceImagePath: sourceImage,
+            SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+            WadAnalysisPath: analysisPath,
+            WorkspacePath: workspace.RootPath,
+            OutputPrefix: unsafePrefix,
+            Catalog: catalog,
+            Edits: [new NativeSkyBatchEdit(catalog.FindByKey("clifftown")!, unsafeEdit)],
+            WriteImage: true));
+        throw new InvalidOperationException("Cliff Town <- Twilight Harbor unexpectedly bypassed the linked portal capacity guard.");
+    }
+    catch (NativeSkyLinkedPortalCapacityException ex)
+    {
+        if (ex.Risk.StorageLevelKey != "peacekeepers" ||
+            ex.Risk.StorageBlockIndex != peaceKeepersCopy.BlockIndex ||
+            ex.Risk.GrowthBytes != expectedGrowth ||
+            !ex.Message.Contains("No sky BIN/CUE or sky patch plan was written", StringComparison.Ordinal) ||
+            !ex.Message.Contains("Peace Keepers", StringComparison.Ordinal) ||
+            !ex.Message.Contains("Twilight Harbor", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Linked portal capacity guard did not return actionable Cliff Town/Peace Keepers details.");
+        }
+    }
+
+    string[] forbiddenOutputs =
+    [
+        $"{unsafePrefix}.bin",
+        $"{unsafePrefix}.cue",
+        $"{unsafePrefix}.native-sky-patch-plan.json"
+    ];
+    if (forbiddenOutputs.Any(File.Exists))
+        throw new InvalidOperationException("The linked portal capacity guard left a partial BIN, CUE, or patch plan behind.");
+
+    NativeSkyEditPlan safeEdit = unsafeEdit with { DonorLevelKey = "icecavern" };
+    NativeSkyPatchPlan safePlan = NativeSkyPatchExporter.BuildPlan(new NativeSkyBatchPatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        WadAnalysisPath: analysisPath,
+        WorkspacePath: workspace.RootPath,
+        OutputPrefix: Path.Combine(smoke.Path, "clifftown-from-icecavern-plan"),
+        Catalog: catalog,
+        Edits: [new NativeSkyBatchEdit(catalog.FindByKey("clifftown")!, safeEdit)],
+        WriteImage: false));
+    if (iceCavernLayout.SkyBlocks[0].ByteLength > nativePortalCapacity ||
+        safePlan.PatchCount != 2 ||
+        safePlan.Patches.Count(patch => patch.PortalCopy) != 1 ||
+        safePlan.RelocatedWad)
+    {
+        throw new InvalidOperationException("A capacity-fitting Cliff Town sky swap should still plan its loaded and Peace Keepers portal copies in place.");
+    }
+
+    Console.WriteLine(
+        $"Linked portal sky safety: blocked Cliff Town <- Twilight Harbor ({twilightHarborBytes:N0} > {nativePortalCapacity:N0}, +{expectedGrowth:N0}) before output; " +
+        $"allowed Cliff Town <- Ice Cavern ({iceCavernLayout.SkyBlocks[0].ByteLength:N0} bytes) in place.");
+    return 0;
+}
+
+if (gemValueSmokeOnly)
+{
+    await ReportGemValueEditSmoke();
+    return 0;
+}
+
+if (genericIdentitySignatureSmokeOnly)
+{
+    ReportIdentityFingerprintV2Guards();
+    ReportIdentityObservationCompatibilityGuards();
+    ReportAllAmbientSoundEmitterIdentities();
+    ReportDecompActorIdentityFamilies();
+    ReportBeastMakersRegionTorchIdentities();
+    ReportBeastMakersRegionalSceneryIdentities();
+    ReportMagicRegionAlpineTreeIdentities();
+    ReportArtisansNativeSceneryIdentities();
+    ReportDecodedNativeActorAndComponentIdentities();
+    ReportGnorcCoveAndHauntedTowersNativeIdentities();
+    ReportSharedLanternAndKeyChestIdentities();
+    ReportMetalheadNativeClassIdentities();
+    ReportFinalGnastyIdentityFamilies();
+    ReportGenericIdentitySourceSignatureAudit();
+    return 0;
+}
+
+if (identityDeepAuditSmokeOnly)
+{
+    await ReportDeepIdentityAudit();
+    return 0;
+}
+
+if (mobyBuildSafetySmokeOnly)
+{
+    await ReportMobyBuildSafetySmoke();
+    return 0;
+}
+
+if (crossLevelSwapCatalogSmokeOnly)
+{
+    await ReportCrossLevelSwapCatalogSmoke();
+    return 0;
+}
+
+if (blowhardGreenWizardCandidateOnly)
+{
+    await ReportBlowhardGreenWizardResidentCandidate();
+    return 0;
+}
+
+if (magicCraftersGreenWizardCandidateOnly)
+{
+    await ReportMagicCraftersGreenWizardResidentCandidate();
+    return 0;
+}
+
+if (wizardPeakGreenWizardCandidateOnly)
+{
+    await ReportWizardPeakGreenWizardNativeCandidate();
+    return 0;
+}
+
+if (swapTestLevelWarpOnly)
+{
+    await ReportSwapTestLevelWarpSmoke();
+    return 0;
+}
+
+if (toastyWizardCandidateOnly)
+{
+    await ReportToastyWizardPackageWritePlan();
+    return 0;
+}
+
+if (toastyWizardOverlayExperimentOnly)
+{
+    ReportToastyWizardOverlayExperiment();
+    return 0;
+}
 
 if (!string.IsNullOrWhiteSpace(environmentGradeInspectImage))
 {
@@ -239,6 +520,12 @@ if (skyboxBlockSmokeOnly)
     return 0;
 }
 
+if (environmentGradeMatrixSmokeOnly)
+{
+    await ReportAllLevelEnvironmentGradeMatrix();
+    return 0;
+}
+
 if (environmentGradeSmokeOnly)
 {
     string analysisPath = WadAnalysisLocator.Find(workspace);
@@ -281,6 +568,145 @@ if (environmentGradeSmokeOnly)
     }
     string smokeDirectory = Path.Combine(workspace.RootPath, "_local", "skybox-research", "environment-grade-smoke");
     Directory.CreateDirectory(smokeDirectory);
+    AssertNoEnvironmentGradeTemporaryArtifacts(smokeDirectory, "Environment-grade smoke setup");
+    AssertEnvironmentGradeScopeRejected(
+        analysisPath,
+        darkHollowLevel,
+        doctorShempLevel,
+        NativeEnvironmentGradePlan.MatchSkySource(doctorShempLevel.Key) with
+        {
+            GradeSceneColors = true,
+            GradeTexturePalettes = false
+        });
+    AssertEnvironmentGradeScopeRejected(
+        analysisPath,
+        darkHollowLevel,
+        doctorShempLevel,
+        NativeEnvironmentGradePlan.MatchSkySource(doctorShempLevel.Key) with
+        {
+            GradeSceneColors = false,
+            GradeTexturePalettes = true
+        });
+    string missingSceneryAnalysisPath = Path.Combine(smokeDirectory, "darkhollow-missing-scenery-analysis.json");
+    WriteWadAnalysisSubfileMutation(
+        analysisPath,
+        missingSceneryAnalysisPath,
+        darkHollowLevel.SourceWadEntry,
+        2,
+        remove: true);
+    AssertEnvironmentGradeAnalysisRejected(
+        missingSceneryAnalysisPath,
+        "requires scenery subfile 2",
+        darkHollowLevel,
+        doctorShempLevel,
+        NativeEnvironmentGradePlan.MatchSkySource(doctorShempLevel.Key));
+    string staleSceneryAnalysisPath = Path.Combine(smokeDirectory, "darkhollow-stale-scenery-analysis.json");
+    WriteWadAnalysisSubfileMutation(
+        analysisPath,
+        staleSceneryAnalysisPath,
+        darkHollowLevel.SourceWadEntry,
+        2,
+        remove: false,
+        offsetDelta: 8);
+    AssertEnvironmentGradeAnalysisRejected(
+        staleSceneryAnalysisPath,
+        "subfile 2 is stale",
+        darkHollowLevel,
+        doctorShempLevel,
+        NativeEnvironmentGradePlan.MatchSkySource(doctorShempLevel.Key));
+    AssertNoEnvironmentGradeTemporaryArtifacts(smokeDirectory, "Rejected environment-grade analyses");
+    string canceledOutputPrefix = Path.Combine(
+        smokeDirectory,
+        $"canceled-environment-grade-{Guid.NewGuid():N}");
+    string[] canceledFinalPaths =
+    [
+        $"{canceledOutputPrefix}.bin",
+        $"{canceledOutputPrefix}.cue",
+        $"{canceledOutputPrefix}.environment-grade-patch-plan.json"
+    ];
+    bool cancellationObserved = false;
+    string[] canceledFinalsThatAppeared;
+    try
+    {
+        using CancellationTokenSource canceled = new();
+        canceled.Cancel();
+        await NativeEnvironmentGradeExporter.ExportBatchAsync(new NativeEnvironmentGradeBatchPatchRequest(
+            SourceImagePath: sourceImage,
+            SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+            WadAnalysisPath: analysisPath,
+            OutputPrefix: canceledOutputPrefix,
+            Catalog: catalog,
+            Edits: [new NativeEnvironmentGradeBatchEdit(stoneHillLevel, grade)],
+            WriteImage: true), canceled.Token);
+    }
+    catch (OperationCanceledException)
+    {
+        cancellationObserved = true;
+    }
+    finally
+    {
+        canceledFinalsThatAppeared = canceledFinalPaths.Where(File.Exists).ToArray();
+        foreach (string canceledFinalPath in canceledFinalsThatAppeared)
+            File.Delete(canceledFinalPath);
+    }
+    if (!cancellationObserved)
+        throw new InvalidOperationException("A pre-canceled environment-grade export was not canceled.");
+    if (canceledFinalsThatAppeared.Length > 0)
+    {
+        throw new InvalidOperationException(
+            $"A canceled environment-grade export published final artifacts, including '{canceledFinalsThatAppeared[0]}'.");
+    }
+    AssertNoEnvironmentGradeTemporaryArtifacts(smokeDirectory, "Canceled environment-grade export");
+    string collisionSourcePath = Path.Combine(smokeDirectory, "source-output-collision.bin");
+    string collisionOutputPrefix = Path.Combine(smokeDirectory, "source-output-collision");
+    string collisionCuePath = $"{collisionOutputPrefix}.cue";
+    string collisionPlanPath = $"{collisionOutputPrefix}.environment-grade-patch-plan.json";
+    foreach (string staleCollisionPath in new[] { collisionSourcePath, collisionCuePath, collisionPlanPath })
+    {
+        if (File.Exists(staleCollisionPath))
+            File.Delete(staleCollisionPath);
+    }
+    bool collisionLinkCreated = false;
+    try
+    {
+        File.CreateSymbolicLink(collisionSourcePath, sourceImage);
+        collisionLinkCreated = true;
+    }
+    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+    {
+        Console.WriteLine($"Source/output collision smoke: symbolic-link setup unavailable ({exception.GetType().Name}); static guard remains compiled.");
+    }
+    if (collisionLinkCreated)
+    {
+        bool collisionRejected = false;
+        try
+        {
+            await NativeEnvironmentGradeExporter.ExportBatchAsync(new NativeEnvironmentGradeBatchPatchRequest(
+                SourceImagePath: collisionSourcePath,
+                SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+                WadAnalysisPath: analysisPath,
+                OutputPrefix: collisionOutputPrefix,
+                Catalog: catalog,
+                Edits: [new NativeEnvironmentGradeBatchEdit(stoneHillLevel, grade)],
+                WriteImage: true));
+        }
+        catch (InvalidOperationException exception) when (
+            exception.Message.Contains("cannot replace the selected source BIN", StringComparison.OrdinalIgnoreCase))
+        {
+            collisionRejected = true;
+        }
+        finally
+        {
+            foreach (string collisionPath in new[] { collisionSourcePath, collisionCuePath, collisionPlanPath })
+            {
+                if (File.Exists(collisionPath))
+                    File.Delete(collisionPath);
+            }
+        }
+        if (!collisionRejected)
+            throw new InvalidOperationException("Environment grading accepted an output BIN path that replaced its source BIN path.");
+    }
+    AssertNoEnvironmentGradeTemporaryArtifacts(smokeDirectory, "Source/output collision rejection");
     string outputPrefix = Path.Combine(smokeDirectory, "stonehill-match-darkhollow");
     NativeEnvironmentGradePatchResult result = await NativeEnvironmentGradeExporter.ExportBatchAsync(new NativeEnvironmentGradeBatchPatchRequest(
         SourceImagePath: sourceImage,
@@ -290,6 +716,8 @@ if (environmentGradeSmokeOnly)
         Catalog: catalog,
         Edits: [new NativeEnvironmentGradeBatchEdit(stoneHillLevel, grade)],
         WriteImage: true));
+    AssertNoEnvironmentGradeTemporaryArtifacts(smokeDirectory, "Stone Hill environment-grade export");
+    AssertNoEnvironmentPatchOverlaps(result.Plan, "Stone Hill environment-grade plan");
     NativeSkyPatchResult? relocatedSkyResult = null;
     string relocatedAnalysisPath = Path.Combine(smokeDirectory, "stonehill-darkhollow-relocated-wad-analysis.json");
     try
@@ -425,7 +853,8 @@ if (environmentGradeSmokeOnly)
             OutputPrefix: Path.Combine(smokeDirectory, "stonehill-darkhollow-grade-and-sky"),
             Catalog: catalog,
             Edits: [new NativeSkyBatchEdit(stoneHillLevel, skyEdit)],
-            WriteImage: true));
+            WriteImage: true,
+            AllowUnprovenLinkedPortalExpansion: true));
         if (!relocatedSkyResult.WroteImage || !relocatedSkyResult.Plan.RelocatedWad || relocatedSkyResult.Plan.WadGrowthBytes <= 0)
             throw new InvalidOperationException("Stone Hill/Dark Hollow combined grade and sky smoke did not use the expected guarded WAD expansion.");
         await WadAnalysisBuilder.BuildAsync(relocatedSkyResult.OutputImagePath, relocatedAnalysisPath);
@@ -484,6 +913,8 @@ if (environmentGradeSmokeOnly)
             Catalog: catalog,
             Edits: [new NativeEnvironmentGradeBatchEdit(artisansLevel, artisansGrade)],
             WriteImage: true));
+        AssertNoEnvironmentGradeTemporaryArtifacts(smokeDirectory, "Artisans environment-grade export");
+        AssertNoEnvironmentPatchOverlaps(artisansResult.Plan, "Artisans environment-grade plan");
         try
         {
             NativeEnvironmentGradeMatch artisansReadback = NativeEnvironmentGradeExporter.AnalyzeMatch(
@@ -579,6 +1010,7 @@ if (environmentGradeSmokeOnly)
             Catalog: catalog,
             Edits: [new NativeEnvironmentGradeBatchEdit(darkHollowLevel, desertGrade)],
             WriteImage: true));
+        AssertNoEnvironmentGradeTemporaryArtifacts(smokeDirectory, "Dark Hollow environment-grade export");
         NativeEnvironmentGradePatchResult? dualGradeResult = null;
         NativeSkyPatchResult? desertSkyResult = null;
         string desertRelocatedAnalysisPath = Path.Combine(smokeDirectory, "stonehill-darkhollow-dual-relocated-wad-analysis.json");
@@ -586,6 +1018,7 @@ if (environmentGradeSmokeOnly)
         {
             if (desertResult.Plan.SceneColorPatchCount != desertMatch.TargetSceneColorTableCount ||
                 desertResult.Plan.TexturePalettePatchCount != desertMatch.TargetTexturePaletteCount ||
+                desertResult.Plan.Patches.Count(patch => patch.Kind == "environment-scenery-lod-colors") != 3 ||
                 !desertResult.Plan.Patches.Any(patch =>
                     patch.Kind == "environment-terrain-texture-palette" &&
                     patch.Label.EndsWith("palette-0x2C00", StringComparison.OrdinalIgnoreCase) &&
@@ -614,7 +1047,15 @@ if (environmentGradeSmokeOnly)
                 (0x7ECA0, 32),
                 (0x7F0A0, 32),
                 (0x7E540, 32),
-                (0x7F500, 32)
+                (0x7F500, 32),
+                (0x7C460, 32),
+                (0x7CC60, 32),
+                (0x7D060, 32),
+                (0x7D460, 32),
+                (0x7E440, 32),
+                (0x7EC40, 32),
+                (0x7F040, 32),
+                (0x7F440, 32)
             })
             {
                 string suffix = $"palette-0x{offset:X}";
@@ -627,29 +1068,24 @@ if (environmentGradeSmokeOnly)
                         $"Dark Hollow's runtime terrain source palette {suffix} was not patched as a {byteLength}-byte row.");
                 }
             }
-            var desertPaletteIntervals = desertResult.Plan.Patches
-                .Where(patch => patch.Kind == "environment-terrain-texture-palette")
-                .Select(patch => (Start: ParseFlexibleLong(patch.WadOffset), End: ParseFlexibleLong(patch.WadOffset) + patch.ByteLength))
-                .OrderBy(interval => interval.Start)
-                .ToArray();
-            if (desertPaletteIntervals.Zip(desertPaletteIntervals.Skip(1), (previous, next) => next.Start < previous.End).Any(overlaps => overlaps))
-            {
-                throw new InvalidOperationException("Dark Hollow's GPU-proven texture palette patches overlap.");
-            }
-            foreach (int protectedOffset in new[]
-            {
-                0x6B7A0, 0x78FE0, 0x793E0, 0x7A3E0, 0x7AFE0,
-                0x7C460, 0x7D060, 0x7E440, 0x7EC40, 0x7F040
-            })
-            {
-                string suffix = $"palette-0x{protectedOffset:X}";
-                if (desertResult.Plan.Patches.Any(patch =>
-                    patch.Kind == "environment-terrain-texture-palette" &&
-                    patch.Label.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)))
-                {
-                    throw new InvalidOperationException($"Dark Hollow's protected player/tree palette {suffix} was graded.");
-                }
-            }
+            AssertDarkHollowTreeGradePlan(
+                desertResult.Plan,
+                analysisPath,
+                sourceImage,
+                desertResult.OutputImagePath,
+                darkHollowLevel,
+                "Dark Hollow focused environment-grade export");
+            AssertEnvironmentGradePlanRejected(
+                new NativeEnvironmentGradeBatchPatchRequest(
+                    SourceImagePath: desertResult.OutputImagePath,
+                    SourceCuePath: desertResult.OutputCuePath,
+                    WadAnalysisPath: analysisPath,
+                    OutputPrefix: Path.Combine(smokeDirectory, "darkhollow-already-graded-rejection"),
+                    Catalog: catalog,
+                    Edits: [new NativeEnvironmentGradeBatchEdit(darkHollowLevel, desertGrade)],
+                    WriteImage: false),
+                "does not match the validated USA source bytes");
+            AssertNoEnvironmentGradeTemporaryArtifacts(smokeDirectory, "Dark Hollow environment-grade invariants");
 
             NativeEnvironmentGradeMatch desertReadback = NativeEnvironmentGradeExporter.AnalyzeMatch(
                 desertResult.OutputImagePath,
@@ -701,6 +1137,14 @@ if (environmentGradeSmokeOnly)
                     new NativeEnvironmentGradeBatchEdit(darkHollowLevel, desertGrade)
                 ],
                 WriteImage: true));
+            AssertNoEnvironmentGradeTemporaryArtifacts(smokeDirectory, "Dual-level environment-grade export");
+            AssertDarkHollowTreeGradePlan(
+                dualGradeResult.Plan,
+                analysisPath,
+                sourceImage,
+                dualGradeResult.OutputImagePath,
+                darkHollowLevel,
+                "Dual-level environment-grade plan");
             desertSkyResult = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
                 SourceImagePath: dualGradeResult.OutputImagePath,
                 SourceCuePath: dualGradeResult.OutputCuePath,
@@ -713,7 +1157,8 @@ if (environmentGradeSmokeOnly)
                     new NativeSkyBatchEdit(stoneHillLevel, skyEdit),
                     new NativeSkyBatchEdit(darkHollowLevel, desertSkyEdit)
                 ],
-                WriteImage: true));
+                WriteImage: true,
+                AllowUnprovenLinkedPortalExpansion: true));
             if (!desertSkyResult.WroteImage ||
                 desertSkyResult.Plan.WadGrowthBytes != 24_576 ||
                 desertSkyResult.Plan.ExecutableLbaDelta != 12)
@@ -722,6 +1167,64 @@ if (environmentGradeSmokeOnly)
                     $"The dual-level harmonized runtime test did not reproduce the saved-edit layout: +{desertSkyResult.Plan.WadGrowthBytes} WAD bytes, EXE delta {desertSkyResult.Plan.ExecutableLbaDelta}.");
             }
             await WadAnalysisBuilder.BuildAsync(desertSkyResult.OutputImagePath, desertRelocatedAnalysisPath);
+            using (JsonDocument sourceWadAnalysis = JsonDocument.Parse(File.ReadAllText(analysisPath)))
+            using (JsonDocument relocatedWadAnalysis = JsonDocument.Parse(File.ReadAllText(desertRelocatedAnalysisPath)))
+            using (FileStream relocatedImage = File.OpenRead(desertSkyResult.OutputImagePath))
+            {
+                SourceDiscLayout desertRelocatedDiscLayout = DetectSourceDiscLayout(desertSkyResult.OutputImagePath);
+                NativeEnvironmentGradePatch[] relocatedFarTreePatches = dualGradeResult.Plan.Patches
+                    .Where(patch =>
+                        patch.LevelKey == darkHollowLevel.Key &&
+                        patch.Kind == "environment-scenery-lod-colors")
+                    .ToArray();
+                if (relocatedFarTreePatches.Length != 3)
+                    throw new InvalidOperationException($"Expected three Dark Hollow far-tree relocation patches, got {relocatedFarTreePatches.Length}.");
+                List<NativeEnvironmentGradePatch> relocationPatches = new[] { "0x2800", "0xC800", "0x7C080", "0x7C460" }
+                    .Select(paletteSuffix => dualGradeResult.Plan.Patches.Single(patch =>
+                        patch.LevelKey == darkHollowLevel.Key &&
+                        patch.Kind == "environment-terrain-texture-palette" &&
+                        patch.Label.EndsWith($"palette-{paletteSuffix}", StringComparison.OrdinalIgnoreCase)))
+                    .Concat(relocatedFarTreePatches)
+                    .ToList();
+                foreach (NativeEnvironmentGradePatch relocatedPatch in relocationPatches)
+                {
+                    long sourceWadOffset = ParseFlexibleLong(relocatedPatch.WadOffset);
+                    JsonElement sourceEntry = sourceWadAnalysis.RootElement.GetProperty("entries").EnumerateArray().Single(entry =>
+                    {
+                        long entryOffset = entry.GetProperty("offset").GetInt64();
+                        long entrySize = entry.GetProperty("size").GetInt64();
+                        return sourceWadOffset >= entryOffset && sourceWadOffset + relocatedPatch.ByteLength <= entryOffset + entrySize;
+                    });
+                    int entryIndex = sourceEntry.GetProperty("index").GetInt32();
+                    long sourceEntryOffset = sourceEntry.GetProperty("offset").GetInt64();
+                    long sourceEntryRelativeOffset = sourceWadOffset - sourceEntryOffset;
+                    JsonElement sourceSubfile = sourceEntry.GetProperty("level").GetProperty("subfiles").EnumerateArray().Single(subfile =>
+                    {
+                        int subfileIndex = subfile.GetProperty("index").GetInt32();
+                        long subfileOffset = subfile.GetProperty("offset").GetInt64();
+                        long subfileSize = subfile.GetProperty("size").GetInt64();
+                        return subfileIndex is >= 0 and <= 6 &&
+                            sourceEntryRelativeOffset >= subfileOffset &&
+                            sourceEntryRelativeOffset + relocatedPatch.ByteLength <= subfileOffset + subfileSize;
+                    });
+                    int sourceSubfileIndex = sourceSubfile.GetProperty("index").GetInt32();
+                    long sourceSubfileOffset = sourceSubfile.GetProperty("offset").GetInt64();
+                    JsonElement relocatedEntry = relocatedWadAnalysis.RootElement.GetProperty("entries").EnumerateArray().Single(entry =>
+                        entry.GetProperty("index").GetInt32() == entryIndex);
+                    JsonElement relocatedSubfile = relocatedEntry.GetProperty("level").GetProperty("subfiles").EnumerateArray().Single(subfile =>
+                        subfile.GetProperty("index").GetInt32() == sourceSubfileIndex);
+                    long relocatedWadOffset = relocatedEntry.GetProperty("offset").GetInt64() +
+                        relocatedSubfile.GetProperty("offset").GetInt64() +
+                        (sourceEntryRelativeOffset - sourceSubfileOffset);
+                    byte[] relocatedBytes = ReadSourceWadBytes(relocatedImage, desertRelocatedDiscLayout, relocatedWadOffset, relocatedPatch.ByteLength);
+                    string relocatedHash = Convert.ToHexString(SHA256.HashData(relocatedBytes));
+                    if (!string.Equals(relocatedHash, relocatedPatch.AfterSha256, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new InvalidOperationException(
+                            $"Dark Hollow's {relocatedPatch.Label} environment data was not preserved through sky relocation: expected {relocatedPatch.AfterSha256}, got {relocatedHash}.");
+                    }
+                }
+            }
             NativeEnvironmentGradeMatch desertRelocatedReadback = NativeEnvironmentGradeExporter.AnalyzeMatch(
                 desertSkyResult.OutputImagePath,
                 desertRelocatedAnalysisPath,
@@ -856,9 +1359,12 @@ if (nativeSkyExportSmokeOnly || nativeSkyWriteSmokeOnly || expandedSkySmokeOnly 
     {
         throw new InvalidOperationException("The original sky preset catalog should contain three unique presets.");
     }
+    Spyro1SkyBlockReport originalPresetReport = Spyro1SkyBlockAnalyzer.Analyze(sourceImage, analysisPath, catalog);
+    Spyro1LevelSkyBlockLayout originalPresetTarget = originalPresetReport.Levels.Single(level => level.Key == stoneHillLevel.Key);
     foreach (OriginalSkyboxPreset originalPreset in SkyboxPresetCatalog.OriginalPresets)
     {
         LevelDefinition donor = originalPreset.ResolveDonor(catalog, stoneHillLevel.Key);
+        Spyro1LevelSkyBlockLayout donorLayout = originalPresetReport.Levels.Single(level => level.Key == donor.Key);
         NativeSkyEditPlan originalPresetEdit = swapEdit with
         {
             Mode = NativeSkyEditPlan.OriginalPresetMode,
@@ -866,7 +1372,7 @@ if (nativeSkyExportSmokeOnly || nativeSkyWriteSmokeOnly || expandedSkySmokeOnly 
             CustomPaletteHex = originalPreset.PaletteHex,
             DonorLevelKey = donor.Key
         };
-        NativeSkyPatchResult originalPresetResult = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+        NativeSkyBatchPatchRequest originalPresetRequest = new(
             SourceImagePath: sourceImage,
             SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
             WadAnalysisPath: analysisPath,
@@ -874,7 +1380,30 @@ if (nativeSkyExportSmokeOnly || nativeSkyWriteSmokeOnly || expandedSkySmokeOnly 
             OutputPrefix: Path.Combine(smokeDirectory, $"stonehill-original-{originalPreset.Id}-plan"),
             Catalog: catalog,
             Edits: [new NativeSkyBatchEdit(stoneHillLevel, originalPresetEdit)],
-            WriteImage: false));
+            WriteImage: false);
+        IReadOnlyList<NativeSkyLinkedPortalExpansionRisk> originalPresetRisks = NativeSkyLinkedPortalSafety.FindUnprovenExpansions(
+            originalPresetTarget,
+            donorLayout.SkyBlocks[0].ByteLength,
+            $"{originalPreset.DisplayName} ({donor.DisplayName} geometry)");
+        if (originalPresetRisks.Count > 0)
+        {
+            try
+            {
+                await NativeSkyPatchExporter.ExportBatchAsync(originalPresetRequest);
+                throw new InvalidOperationException($"{originalPreset.DisplayName} unexpectedly bypassed the Stone Hill linked-portal capacity guard.");
+            }
+            catch (NativeSkyLinkedPortalCapacityException ex)
+            {
+                if (ex.Risk.GrowthBytes != originalPresetRisks[0].GrowthBytes ||
+                    !string.Equals(ex.Risk.StorageLevelKey, originalPresetRisks[0].StorageLevelKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException($"{originalPreset.DisplayName} reported the wrong linked-portal capacity risk.");
+                }
+            }
+            continue;
+        }
+
+        NativeSkyPatchResult originalPresetResult = await NativeSkyPatchExporter.ExportBatchAsync(originalPresetRequest);
         if (originalPresetResult.Plan.PatchCount != 2 ||
             originalPresetResult.Plan.Patches.Any(patch => patch.Kind != "native-sky-original-preset") ||
             originalPresetResult.Plan.TotalChangedBytes <= 0 ||
@@ -1075,44 +1604,41 @@ if (nativeSkyExportSmokeOnly || nativeSkyWriteSmokeOnly || expandedSkySmokeOnly 
             CustomPaletteHex = stormySpring.PaletteHex,
             DonorLevelKey = stormDonor.Key
         };
-        NativeSkyPatchResult stormWriteResult = await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
+        string stormOutputPrefix = Path.Combine(smokeDirectory, "stonehill-stormy-spring-write-readback");
+        string[] stormOutputArtifacts =
+        [
+            $"{stormOutputPrefix}.bin",
+            $"{stormOutputPrefix}.cue",
+            $"{stormOutputPrefix}.native-sky-patch-plan.json"
+        ];
+        foreach (string path in stormOutputArtifacts.Where(File.Exists))
+            File.Delete(path);
+        try
+        {
+            await NativeSkyPatchExporter.ExportBatchAsync(new NativeSkyBatchPatchRequest(
             SourceImagePath: sourceImage,
             SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
             WadAnalysisPath: analysisPath,
             WorkspacePath: workspace.RootPath,
-            OutputPrefix: Path.Combine(smokeDirectory, "stonehill-stormy-spring-write-readback"),
+            OutputPrefix: stormOutputPrefix,
             Catalog: catalog,
             Edits: [new NativeSkyBatchEdit(stoneHillLevel, stormWriteEdit)],
             WriteImage: true));
-        string stormAnalysisPath = Path.Combine(smokeDirectory, "stonehill-stormy-spring-write-readback-wad.json");
-        try
+            throw new InvalidOperationException("Stormy Spring unexpectedly wrote an expanded Stone Hill/Artisans portal sky.");
+        }
+        catch (NativeSkyLinkedPortalCapacityException ex)
         {
-            await WadAnalysisBuilder.BuildAsync(stormWriteResult.OutputImagePath, stormAnalysisPath);
-            Spyro1SkyBlockReport sourceSkyReport = Spyro1SkyBlockAnalyzer.Analyze(sourceImage, analysisPath, catalog);
-            Spyro1SkyBlockReport stormOutputReport = Spyro1SkyBlockAnalyzer.Analyze(stormWriteResult.OutputImagePath, stormAnalysisPath, catalog);
-            Spyro1SkyBlockLayout donorSky = sourceSkyReport.Levels.Single(level => level.Key == stormDonor.Key).SkyBlocks[0];
-            Spyro1LevelSkyBlockLayout stormStoneHill = stormOutputReport.Levels.Single(level => level.Key == "stonehill");
-            if (!stormWriteResult.WroteImage ||
-                !stormWriteResult.Plan.RelocatedWad ||
-                !stormWriteResult.Plan.SkyOcclusionBypassApplied ||
-                stormStoneHill.SkyBlocks[0].GeometrySha256 != donorSky.GeometrySha256 ||
-                stormStoneHill.SkyBlocks[0].Sha256 == donorSky.Sha256 ||
-                stormStoneHill.LinkedPrimarySkyCopies.Count != 2 ||
-                AssertSkyOcclusionRendererInstruction(stormWriteResult.OutputImagePath, 0x2404FFFF) != stormWriteResult.Plan.SkyOcclusionPatchExecutableLba)
+            if (!string.Equals(ex.Risk.StorageLevelKey, "artisans", StringComparison.OrdinalIgnoreCase) ||
+                ex.Risk.GrowthBytes <= 0)
             {
-                throw new InvalidOperationException("Stormy Spring write/readback did not preserve donor geometry, apply its original palette, and keep both Stone Hill copies linked.");
+                throw new InvalidOperationException("Stormy Spring did not report its Artisans linked-portal capacity risk.");
             }
-            Console.WriteLine("Disposable Stormy Spring write/readback: original palette, expanded sky geometry, and linked portal copy remained valid.");
         }
-        finally
+        if (stormOutputArtifacts.Any(File.Exists))
         {
-            if (File.Exists(stormWriteResult.OutputImagePath))
-                File.Delete(stormWriteResult.OutputImagePath);
-            if (File.Exists(stormWriteResult.OutputCuePath))
-                File.Delete(stormWriteResult.OutputCuePath);
-            if (File.Exists(stormAnalysisPath))
-                File.Delete(stormAnalysisPath);
+            throw new InvalidOperationException("Blocked Stormy Spring write left a partial output artifact.");
         }
+        Console.WriteLine("Stormy Spring write guard: oversized Stone Hill/Artisans linked portal sky was blocked before output.");
     }
 
     if (expandedSkySmokeOnly || exportExpandedSkyTest)
@@ -1146,7 +1672,8 @@ if (nativeSkyExportSmokeOnly || nativeSkyWriteSmokeOnly || expandedSkySmokeOnly 
             OutputPrefix: worstPrefix,
             Catalog: catalog,
             Edits: worstCaseEdits,
-            WriteImage: true));
+            WriteImage: true,
+            AllowUnprovenLinkedPortalExpansion: expandedSkySmokeOnly));
         string worstAnalysisPath = Path.Combine(expandedDirectory, "all-level-worst-case-wad-analysis.json");
         try
         {
@@ -1231,7 +1758,8 @@ if (nativeSkyExportSmokeOnly || nativeSkyWriteSmokeOnly || expandedSkySmokeOnly 
             OutputPrefix: expandedPrefix,
             Catalog: catalog,
             Edits: [new NativeSkyBatchEdit(stoneHillLevel, expandedSwap)],
-            WriteImage: true));
+            WriteImage: true,
+            AllowUnprovenLinkedPortalExpansion: expandedSkySmokeOnly));
         string expandedAnalysisPath = Path.Combine(expandedDirectory, "expanded-wad-analysis.json");
         try
         {
@@ -1382,7 +1910,14 @@ if (visualCategorySmokeOnly)
     ReportGnastyLootAircraftVisuals();
     ReportGnastyLootChestVisuals();
     ReportIcyFlightCopterIdentities();
-    ReportMetalheadBirdSupportIdentities();
+    ReportBeastMakersRegionTorchIdentities();
+    ReportBeastMakersRegionalSceneryIdentities();
+    ReportMagicRegionAlpineTreeIdentities();
+    ReportArtisansNativeSceneryIdentities();
+    ReportDecodedNativeActorAndComponentIdentities();
+    ReportGnorcCoveAndHauntedTowersNativeIdentities();
+    ReportSharedLanternAndKeyChestIdentities();
+    ReportMetalheadNativeClassIdentities();
     return 0;
 }
 
@@ -1458,7 +1993,8 @@ if (stoneHillClass1ESmokeOnly)
     string stoneHillCachePath = Path.Combine(workspace.RootPath, "editor-cache", "stonehill-mobys.json");
     List<Moby> stoneHillMobys = MobyLoader.LoadCached(stoneHillCachePath).ToList();
     MobyMetadataEnricher.Apply(workspace, "stonehill", stoneHillMobys);
-    ReportStoneHillClass1EIdentity(stoneHillMobys);
+    ReportStoneHillAmbientSoundIdentities(stoneHillMobys);
+    ReportStoneHillT149AmbientSoundIdentity(stoneHillMobys);
     return 0;
 }
 
@@ -1498,6 +2034,12 @@ if (exportArtisansLifeChestMultiCandidate)
     return 0;
 }
 
+if (darkHollowCrashGuardSmokeOnly)
+{
+    await ReportDarkHollowCrashGuardSmoke();
+    return 0;
+}
+
 LevelDefinition? stoneHill = catalog.FindByKey("stonehill");
 if (stoneHill == null)
 {
@@ -1518,56 +2060,72 @@ if (terrainTextureSmokeOnly)
 }
 if (objectSmokeOnly)
 {
-    if (HasAnyMobyCache())
+    ObjectSmokeDiscIsolation? discIsolation = cleanObjectSmokeBins
+        ? BeginObjectSmokeDiscIsolation()
+        : null;
+    try
     {
-        string stoneHillMobyPath = Path.Combine(workspace.RootPath, "editor-cache", "stonehill-mobys.json");
-        List<Moby>? stoneHillMobys = null;
-        if (File.Exists(stoneHillMobyPath))
+        if (HasAnyMobyCache())
         {
-            stoneHillMobys = MobyLoader.LoadCached(stoneHillMobyPath).ToList();
-            await ReportMobyYawPatchPlan(stoneHill, stoneHillMobys);
-            ReportCrossLevelEditorTemplateReadiness();
-            await ReportToastyWizardPackageWritePlan();
-            await ReportCrossLevelSourceRecordCandidateAppend(stoneHill, stoneHillMobys);
+            string stoneHillMobyPath = Path.Combine(workspace.RootPath, "editor-cache", "stonehill-mobys.json");
+            List<Moby>? stoneHillMobys = null;
+            if (File.Exists(stoneHillMobyPath))
+            {
+                stoneHillMobys = MobyLoader.LoadCached(stoneHillMobyPath).ToList();
+                await ReportMobyYawPatchPlan(stoneHill, stoneHillMobys);
+                ReportCrossLevelEditorTemplateReadiness();
+                await ReportToastyWizardPackageWritePlan();
+                await ReportCrossLevelSourceRecordCandidateAppend(stoneHill, stoneHillMobys);
+            }
+            ReportChestContents("darkhollow");
+            ReportArtisansTreasureThiefRewardLinks();
+            await ReportChestContentSourcePatch("darkhollow");
+            await ReportLockedChestShellRewardGuard("darkhollow");
+            await ReportMovedExistingDragonPlacementSectorPatch("darkhollow");
+            await ReportPastedLooseGemPatch("darkhollow");
+            await ReportMixedCopiedObjectAppendGuard("darkhollow");
+            await ReportNativeSlotReusePatch("darkhollow");
+            await ReportBehaviorLinkedNativeCloneSlotReuseData("darkhollow");
+            await ReportNativeCloneAppendPatch("darkhollow");
+            await ReportPastedNativeCloneAppendPatch("darkhollow");
+            await ReportRepeatedNativeCloneAppendGuard("darkhollow");
+            await ReportPromotedNativeCloneTrueAppend("darkhollow", 0x73, "Large Gnorc");
+            await ReportPromotedNativeCloneTrueAppend("darkhollow", 0xC2, "Flame/Charge Chest");
+            await ReportPromotedNativeCloneTrueAppend("townsquare", 0x17, "Bull");
+            await ReportGuardedNativeCloneTrueAppend("townsquare", 0x8B, 0x01, 0x54, "Torro Gnorc");
+            await ReportGuardedNativeCloneTrueAppend("townsquare", 0xC2, 0x00, 0x54, "Flame/Charge Chest");
+            await ReportGuardedNativeCloneTrueAppend("townsquare", 0xC3, 0x00, 0x54, "Charge Chest");
+            await ReportNativeActorChestAppendAllocationResearch();
+            await ReportAllNativeLifeChestMultiReleasePlans();
+            await ReportBehaviorLinkedNativeCloneAppendState("darkhollow");
+            await ReportAllLevelNativeCloneAutoSlotReuse();
+            await ReportAllLevelLooseGemPlacementSectors();
+            await ReportLinkedCompanionCloneRoundTrip();
+            await ReportReturnHomeCompanionCloneRoundTrip();
+            await ReportPortalTripletCompanionCloneRoundTrip();
+            ReportPortalControlEditLinks();
+            ReportCheckedInControlRoleCompanionLinks();
+            ReportControlRoleProofPromotionCloneRoundTrip();
+            await ReportControlRoleProofPromotionEditStoreRoundTrip();
+            await ReportAllFlyInLandingLinks(sourceImage);
+            ReportAllDragonRescueCameraLinks(sourceImage);
+            ReportControlCompanionCandidateSummary();
+            await ReportTerrainBehaviorEvidence();
+            await ReportControlRoleInvestigationSummary();
         }
-        ReportChestContents("darkhollow");
-        ReportArtisansTreasureThiefRewardLinks();
-        await ReportChestContentSourcePatch("darkhollow");
-        await ReportLockedChestShellRewardGuard("darkhollow");
-        await ReportMovedExistingDragonPlacementSectorPatch("darkhollow");
-        await ReportPastedLooseGemPatch("darkhollow");
-        await ReportMixedCopiedObjectAppendGuard("darkhollow");
-        await ReportNativeSlotReusePatch("darkhollow");
-        await ReportBehaviorLinkedNativeCloneSlotReuseData("darkhollow");
-        await ReportNativeCloneAppendPatch("darkhollow");
-        await ReportPastedNativeCloneAppendPatch("darkhollow");
-        await ReportRepeatedNativeCloneAppendGuard("darkhollow");
-        await ReportPromotedNativeCloneTrueAppend("darkhollow", 0x73, "Large Gnorc");
-        await ReportPromotedNativeCloneTrueAppend("darkhollow", 0xC2, "Flame/Charge Chest");
-        await ReportPromotedNativeCloneTrueAppend("townsquare", 0x17, "Bull");
-        await ReportGuardedNativeCloneTrueAppend("townsquare", 0x8B, 0x01, 0x54, "Torro Gnorc");
-        await ReportGuardedNativeCloneTrueAppend("townsquare", 0xC2, 0x00, 0x54, "Flame/Charge Chest");
-        await ReportGuardedNativeCloneTrueAppend("townsquare", 0xC3, 0x00, 0x54, "Charge Chest");
-        await ReportNativeActorChestAppendAllocationResearch();
-        await ReportAllNativeLifeChestMultiReleasePlans();
-        await ReportBehaviorLinkedNativeCloneAppendState("darkhollow");
-        await ReportAllLevelNativeCloneAutoSlotReuse();
-        await ReportAllLevelLooseGemPlacementSectors();
-        await ReportLinkedCompanionCloneRoundTrip();
-        await ReportReturnHomeCompanionCloneRoundTrip();
-        await ReportPortalTripletCompanionCloneRoundTrip();
-        ReportPortalControlEditLinks();
-        ReportCheckedInControlRoleCompanionLinks();
-        ReportControlRoleProofPromotionCloneRoundTrip();
-        await ReportControlRoleProofPromotionEditStoreRoundTrip();
-        await ReportAllFlyInLandingLinks(sourceImage);
-        ReportAllDragonRescueCameraLinks(sourceImage);
-        ReportControlCompanionCandidateSummary();
-        await ReportControlRoleInvestigationSummary();
+        else
+        {
+            Console.WriteLine("Object smoke: editor-cache moby files not found; skipping object export checks.");
+        }
     }
-    else
+    finally
     {
-        Console.WriteLine("Object smoke: editor-cache moby files not found; skipping object export checks.");
+        if (discIsolation != null)
+        {
+            int cleanedCount = RestoreObjectSmokeDiscIsolation(discIsolation);
+            Console.WriteLine(
+                $"Object smoke disc cleanup: removed {cleanedCount} generated BIN/CUE artifact(s) and restored {discIsolation.ExistingArtifactCount} pre-existing artifact(s).");
+        }
     }
 
     return 0;
@@ -1582,6 +2140,42 @@ if (springChestDiagnosticOnly)
 if (exportCurrentSpringCandidate)
 {
     await ExportCurrentStoneHillSpringCandidateOnly(stoneHill);
+    return 0;
+}
+
+if (exportArtisansSpringCandidate)
+{
+    await ExportArtisansSpringCandidateOnly();
+    return 0;
+}
+
+if (exportArtisansKeyChestCandidate)
+{
+    await ExportArtisansKeyChestCandidateOnly();
+    return 0;
+}
+
+if (exportArtisansExpandedSpringCandidate)
+{
+    await ExportArtisansExpandedSpringCandidateOnly();
+    return 0;
+}
+
+if (exportArtisansKeyGatedChestCandidate)
+{
+    await ExportArtisansKeyGatedChestCandidateOnly();
+    return 0;
+}
+
+if (exportArtisansNativeLockedChestCandidate)
+{
+    await ExportArtisansNativeLockedChestCandidateOnly();
+    return 0;
+}
+
+if (exportArtisansNativeLockedChestVisualCandidate)
+{
+    await ExportArtisansNativeLockedChestVisualCandidateOnly();
     return 0;
 }
 
@@ -1708,16 +2302,17 @@ if (File.Exists(cachePath))
     Console.WriteLine($"Stone Hill moby metadata: {metadata.LabeledMobys} labels, {metadata.BehaviorLinkGroups + metadata.InferredLinkGroups} link groups");
     ReportIdentityCoverage("Stone Hill", mobys);
     ReportStoneHillWhirlwindIdentity(mobys);
+    ReportStoneHillT149AmbientSoundIdentity(mobys);
     ReportStoneHillLifeChestIdentity(mobys);
     ReportStoneHillKeyIdentity(mobys);
     ReportStoneHillKeyChestIdentity(mobys);
-    ReportStoneHillClass1EIdentity(mobys);
+    ReportStoneHillAmbientSoundIdentities(mobys);
     ReportLinkedMoveTraversal("Stone Hill", mobys);
-        await ReportMobySourcePatchPlan(stoneHill, mobys);
-        await ReportMultiLevelSavedObjectExportPatch(stoneHill, mobys);
-        await ReportMobyIdentityBytePatchPlan(stoneHill, mobys);
-        await ReportMobyYawPatchPlan(stoneHill, mobys);
-        await ReportAddedMobyRoundTrip(mobys);
+    await ReportMobySourcePatchPlan(stoneHill, mobys);
+    await ReportMultiLevelSavedObjectExportPatch(stoneHill, mobys);
+    await ReportMobyIdentityBytePatchPlan(stoneHill, mobys);
+    await ReportMobyYawPatchPlan(stoneHill, mobys);
+    await ReportAddedMobyRoundTrip(mobys);
     await ReportCrossLevelMobyTemplateRoundTripAndPatch(stoneHill, mobys);
     await ReportArtisansKeyChestPackagePreview();
     await ReportToastyWizardPackageWritePlan();
@@ -1725,7 +2320,7 @@ if (File.Exists(cachePath))
     await ReportCrossLevelCandidateValidationChecklist();
     ReportCrossLevelCandidateLaunchers();
     await ReportExistingGemValueRoundTrip();
-await ReportRewardGemValueRoundTrip();
+    await ReportRewardGemValueRoundTrip();
 }
 else
 {
@@ -1776,7 +2371,14 @@ if (HasAnyMobyCache())
     ReportGnastyLootAircraftVisuals();
     ReportGnastyLootChestVisuals();
     ReportIcyFlightCopterIdentities();
-    ReportMetalheadBirdSupportIdentities();
+    ReportBeastMakersRegionTorchIdentities();
+    ReportBeastMakersRegionalSceneryIdentities();
+    ReportMagicRegionAlpineTreeIdentities();
+    ReportArtisansNativeSceneryIdentities();
+    ReportDecodedNativeActorAndComponentIdentities();
+    ReportGnorcCoveAndHauntedTowersNativeIdentities();
+    ReportSharedLanternAndKeyChestIdentities();
+    ReportMetalheadNativeClassIdentities();
     ReportAllLevelIdentityCoverage();
     ReportCleanReusableIdentityPromotions();
     await ReportDeepIdentityAudit();
@@ -1921,7 +2523,12 @@ async Task ReportAllLevelNameEdits(string selectedSourceImage, bool keepOutput)
         new(textTargets.Find("toasty")!, "TOASTY MOUNTAIN"),
         new(textTargets.Find("jacques")!, "JACQUES CASTLE")
     ];
-    string batchPrefix = Path.Combine(smokeRoot, "level-name-batch-proof");
+    using SmokeTemporaryDirectory? transientOutput = keepOutput
+        ? null
+        : SmokeTemporaryDirectory.Create("spyro-level-name-smoke");
+    string batchPrefix = keepOutput
+        ? Path.Combine(smokeRoot, "level-name-batch-proof")
+        : Path.Combine(transientOutput!.Path, "level-name-batch-proof");
     foreach (string stale in new[] { $"{batchPrefix}.bin", $"{batchPrefix}.cue" })
     {
         if (File.Exists(stale))
@@ -2028,6 +2635,10 @@ async Task ReportAllLevelNameEdits(string selectedSourceImage, bool keepOutput)
 
     if (!keepOutput)
     {
+        File.Copy(
+            $"{batchPrefix}.level-text-batch-plan.json",
+            Path.Combine(smokeRoot, "level-name-batch-proof.level-text-batch-plan.json"),
+            overwrite: true);
         File.Delete(batchResult.OutputImagePath);
         File.Delete(batchResult.OutputCuePath);
     }
@@ -2077,7 +2688,12 @@ async Task ReportLevelMusicEdits(string selectedSourceImage, bool keepOutput)
         new(catalog.FindByKey("darkhollow")!, 0),
         new(catalog.FindByKey("townsquare")!, 31)
     ];
-    string outputPrefix = Path.Combine(smokeRoot, "level-music-batch-proof");
+    using SmokeTemporaryDirectory? transientOutput = keepOutput
+        ? null
+        : SmokeTemporaryDirectory.Create("spyro-level-music-smoke");
+    string outputPrefix = keepOutput
+        ? Path.Combine(smokeRoot, "level-music-batch-proof")
+        : Path.Combine(transientOutput!.Path, "level-music-batch-proof");
     foreach (string stale in new[] { $"{outputPrefix}.bin", $"{outputPrefix}.cue", $"{outputPrefix}.level-music-batch-plan.json" })
     {
         if (File.Exists(stale))
@@ -2144,6 +2760,10 @@ async Task ReportLevelMusicEdits(string selectedSourceImage, bool keepOutput)
 
     if (!keepOutput)
     {
+        File.Copy(
+            $"{outputPrefix}.level-music-batch-plan.json",
+            Path.Combine(smokeRoot, "level-music-batch-proof.level-music-batch-plan.json"),
+            overwrite: true);
         File.Delete(result.OutputImagePath);
         File.Delete(result.OutputCuePath);
     }
@@ -2357,6 +2977,26 @@ void ReportStoneHillWhirlwindIdentity(IReadOnlyList<Moby> mobys)
     Console.WriteLine($"Stone Hill whirlwind identity: T{whirlwind.TrueIndex} {whirlwind.DisplayLabel}, {whirlwind.Confidence}");
 }
 
+void ReportStoneHillT149AmbientSoundIdentity(IReadOnlyList<Moby> mobys)
+{
+    Moby emitter = mobys.First(moby => moby.TrueIndex == 149);
+    bool isAmbientSoundEmitter = emitter.Type == 0x00
+        && emitter.SourceByte36 == 0x1E
+        && emitter.SourceByte37 == 0x01
+        && emitter.Flag4A == 0x10
+        && emitter.Flag4B == 0xFF
+        && emitter.DisplayLabel.Equals("Ambient sound emitter", StringComparison.Ordinal)
+        && emitter.CandidateKind.Contains("sound", StringComparison.OrdinalIgnoreCase)
+        && emitter.VisualKind == MobyVisualKind.Control;
+    if (!isAmbientSoundEmitter)
+    {
+        throw new InvalidOperationException(
+            $"Stone Hill T149 should be a native ambient sound emitter, got {emitter.DisplayLabel} / {emitter.CandidateKind} / {emitter.VisualKind}.");
+    }
+
+    Console.WriteLine($"Stone Hill positional-audio identity: T{emitter.TrueIndex} {emitter.DisplayLabel}, {emitter.Confidence}");
+}
+
 void ReportStoneHillLifeChestIdentity(IReadOnlyList<Moby> mobys)
 {
     Moby lifeChest = mobys.First(moby => moby.TrueIndex == 174);
@@ -2413,22 +3053,23 @@ void ReportStoneHillKeyIdentity(IReadOnlyList<Moby> mobys)
     Console.WriteLine($"Stone Hill key identity: T{key.TrueIndex} {key.DisplayLabel}, {key.Confidence}, visual={key.VisualKind}");
 }
 
-void ReportStoneHillClass1EIdentity(IReadOnlyList<Moby> mobys)
+void ReportStoneHillAmbientSoundIdentities(IReadOnlyList<Moby> mobys)
 {
     int[] screenshotTrueIndexes = [160, 161, 162, 163, 164];
-    List<Moby> controls = screenshotTrueIndexes
+    List<Moby> emitters = screenshotTrueIndexes
         .Select(trueIndex => mobys.SingleOrDefault(moby => moby.TrueIndex == trueIndex))
         .Where(moby => moby != null)
         .Cast<Moby>()
         .ToList();
 
-    if (controls.Count != screenshotTrueIndexes.Length)
-        throw new InvalidOperationException("Stone Hill class 0x1E identity check could not find T160-T164.");
+    if (emitters.Count != screenshotTrueIndexes.Length)
+        throw new InvalidOperationException("Stone Hill ambient sound identity check could not find T160-T164.");
 
-    List<Moby> incorrect = controls
+    List<Moby> incorrect = emitters
         .Where(moby =>
             moby.SourceByte36 != 0x1E ||
-            !moby.DisplayLabel.Equals("Class 0x1E passive control", StringComparison.Ordinal) ||
+            moby.SourceByte37 != 0x01 ||
+            !moby.DisplayLabel.Equals("Ambient sound emitter", StringComparison.Ordinal) ||
             moby.VisualKind != MobyVisualKind.Control ||
             moby.SupportsTerrainSnap)
         .ToList();
@@ -2436,10 +3077,486 @@ void ReportStoneHillClass1EIdentity(IReadOnlyList<Moby> mobys)
     {
         string summary = string.Join(", ", incorrect.Select(moby =>
             $"T{moby.TrueIndex} {moby.DisplayLabel} / class 0x{moby.SourceByte36:X2} / {moby.VisualKind} / snap={moby.SupportsTerrainSnap}"));
-        throw new InvalidOperationException($"Stone Hill passive class 0x1E controls were misclassified: {summary}");
+        throw new InvalidOperationException($"Stone Hill native ambient sound emitters were misclassified: {summary}");
     }
 
-    Console.WriteLine($"Stone Hill class 0x1E identity: {string.Join(", ", controls.Select(moby => $"T{moby.TrueIndex}"))} remain unresolved passive controls without terrain snap.");
+    Console.WriteLine($"Stone Hill ambient sound identities: {string.Join(", ", emitters.Select(moby => $"T{moby.TrueIndex}"))} are non-rendered positional-audio emitters without terrain snap.");
+}
+
+void ReportAllAmbientSoundEmitterIdentities()
+{
+    List<(LevelDefinition Level, Moby Moby)> allMobys = LoadAllCachedMobysWithMetadata();
+    List<(LevelDefinition Level, Moby Moby)> emitters = allMobys
+        .Where(item => item.Moby.Type == 0x00 &&
+            item.Moby.SourceByte36 == 0x1E &&
+            item.Moby.SourceByte37 == 0x01 &&
+            item.Moby.Flag4A == 0x10 &&
+            item.Moby.Flag4B == 0xFF)
+        .ToList();
+
+    if (emitters.Count != 73)
+        throw new InvalidOperationException($"Native class 0x011E positional-audio audit expected 73 cached rows, found {emitters.Count}.");
+
+    List<(LevelDefinition Level, Moby Moby)> incorrect = emitters
+        .Where(item =>
+            !item.Moby.DisplayLabel.Equals("Ambient sound emitter", StringComparison.Ordinal) ||
+            !item.Moby.CandidateKind.Contains("sound", StringComparison.OrdinalIgnoreCase) ||
+            !item.Moby.Confidence.Contains("observed", StringComparison.OrdinalIgnoreCase) ||
+            item.Moby.VisualKind != MobyVisualKind.Control)
+        .Take(8)
+        .ToList();
+    if (incorrect.Count > 0)
+    {
+        string summary = string.Join("; ", incorrect.Select(item =>
+            $"{item.Level.DisplayName}:T{item.Moby.TrueIndex} {item.Moby.DisplayLabel}/{item.Moby.CandidateKind}/{item.Moby.Confidence}/{item.Moby.VisualKind}"));
+        throw new InvalidOperationException($"Native class 0x011E positional-audio identities were not promoted consistently: {summary}");
+    }
+
+    Console.WriteLine($"All-level ambient sound identities: {emitters.Count} native class 0x011E positional emitter/path record(s) across {emitters.Select(item => item.Level.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count()} level(s).");
+}
+
+void ReportDecompActorIdentityFamilies()
+{
+    List<(LevelDefinition Level, Moby Moby)> allMobys = LoadAllCachedMobysWithMetadata();
+    AssertDecompActorIdentityFamily(allMobys, "darkpassage", 0x0032, 30, "Puppy / Devil Dog", "native-handler");
+    AssertDecompActorIdentityFamily(allMobys, "mistybog", 0x001C, 26, "Shielded Greenie", "native-handler");
+    AssertDecompActorIdentityFamily(allMobys, "hauntedtowers", 0x00CB, 25, "Tin Soldier", "native-class-observed");
+    AssertDecompActorIdentityFamily(allMobys, "icecavern", 0x00D5, 16, "Bat", "native-class-observed");
+    AssertDecompActorIdentityFamily(allMobys, "loftycastle", 0x0058, 15, "Caged Fairy", "native-class-observed");
+    Console.WriteLine("Decomp actor identities: 112 source actors across five full-class families passed native-handler label/category guards.");
+}
+
+void ReportIdentityFingerprintV2Guards()
+{
+    Moby lowClass = new()
+    {
+        Type = 0x20,
+        SourceByte36 = 0x2E,
+        SourceByte37 = 0x00,
+        Flag4A = 0x10,
+        Flag4B = 0x54,
+        SourceByte4F = 0x00
+    };
+    Moby highClass = new()
+    {
+        Type = 0x20,
+        SourceByte36 = 0x2E,
+        SourceByte37 = 0x01,
+        Flag4A = 0x10,
+        Flag4B = 0x54,
+        SourceByte4F = 0x00
+    };
+    string lowV2 = MobyIdentityFingerprint.BuildV2(lowClass);
+    string highV2 = MobyIdentityFingerprint.BuildV2(highClass);
+    string legacy = MobyIdentityFingerprint.BuildLegacyV1(lowClass);
+    if (lowV2 == highV2 ||
+        !MobyIdentityFingerprint.Matches(lowV2, lowClass, allowLegacyLowByte: false) ||
+        MobyIdentityFingerprint.Matches(lowV2, highClass, allowLegacyLowByte: false) ||
+        !MobyIdentityFingerprint.Matches(legacy, lowClass, allowLegacyLowByte: true) ||
+        !MobyIdentityFingerprint.Matches(legacy, highClass, allowLegacyLowByte: true) ||
+        !MobyIdentityFingerprint.IsLegacyV1(legacy))
+    {
+        throw new InvalidOperationException("Moby identity fingerprint v2 did not separate equal low-byte classes while preserving explicit legacy parsing.");
+    }
+
+    Moby differentRadius = new()
+    {
+        Type = 0x1C,
+        SourceByte36 = lowClass.SourceByte36,
+        SourceByte37 = lowClass.SourceByte37,
+        Flag4A = lowClass.Flag4A,
+        Flag4B = lowClass.Flag4B,
+        SourceByte4F = lowClass.SourceByte4F
+    };
+    if (MobyIdentityFingerprint.BuildV2(lowClass) == MobyIdentityFingerprint.BuildV2(differentRadius) ||
+        ((lowClass.SourceByte37 << 8) | lowClass.SourceByte36) != ((differentRadius.SourceByte37 << 8) | differentRadius.SourceByte36))
+    {
+        throw new InvalidOperationException("Moby identity fingerprint v2 no longer keeps render-radius variants exact within one native-class family.");
+    }
+
+    const string consistentAliases = "class=0x012E b36=0x2E b37=0x01 radius50=0x20 type=0x20 update52=0x10 f4A=0x10 drop53=0x54 f4B=0x54 spec4F=0x00 b4F=0x00";
+    if (!MobyIdentityFingerprint.TryParse(consistentAliases, out MobyIdentityFingerprintParts consistentParts) ||
+        !consistentParts.HasFullNativeClass || consistentParts.NativeClass != 0x012E)
+    {
+        throw new InvalidOperationException("Moby identity fingerprint parser rejected consistent canonical/legacy aliases.");
+    }
+
+    string[] invalidFingerprints =
+    [
+        "class=0x1002E radius50=0x20 update52=0x10 drop53=0x54 spec4F=0x00",
+        "class=-1 radius50=0x20 update52=0x10 drop53=0x54 spec4F=0x00",
+        "class=0x002E b36=0xD3 radius50=0x20 update52=0x10 drop53=0x54 spec4F=0x00",
+        "class=0x002E b37=0x01 radius50=0x20 update52=0x10 drop53=0x54 spec4F=0x00",
+        "class=0x002E radius50=0x120 update52=0x10 drop53=0x54 spec4F=0x00",
+        "class=0x002E radius50=0x20 type=0x1C update52=0x10 drop53=0x54 spec4F=0x00",
+        "class=0x002E radius50=0x20 update52=0x10 f4A=0x11 drop53=0x54 spec4F=0x00",
+        "class=0x002E radius50=0x20 update52=0x10 drop53=0x54 f4B=0x55 spec4F=0x00",
+        "class=0x002E radius50=0x20 update52=0x10 drop53=0x54 spec4F=0x00 b4F=0x01",
+        "type=0x20 b36=0x12E f4A=0x10 f4B=0x54 b4F=0x00",
+        "type=0x20 b36=0x2E b37=0x100 f4A=0x10 f4B=0x54 b4F=0x00",
+        "class=0x002E class=0x012E radius50=0x20 update52=0x10 drop53=0x54 spec4F=0x00"
+    ];
+    string? acceptedInvalid = invalidFingerprints.FirstOrDefault(fingerprint =>
+        MobyIdentityFingerprint.TryParse(fingerprint, out _));
+    if (acceptedInvalid != null)
+        throw new InvalidOperationException($"Moby identity fingerprint parser accepted an overflowing or contradictory identity: {acceptedInvalid}");
+
+    List<Moby> allMobys = LoadAllCachedMobysWithMetadata().Select(item => item.Moby).ToList();
+    List<IGrouping<string, Moby>> invalidV2 = allMobys
+        .GroupBy(MobyIdentityFingerprint.BuildV2, StringComparer.OrdinalIgnoreCase)
+        .Where(group => group.Select(moby => (moby.SourceByte37 << 8) | moby.SourceByte36).Distinct().Skip(1).Any())
+        .ToList();
+    if (invalidV2.Count > 0)
+        throw new InvalidOperationException($"Moby fingerprint v2 merged {invalidV2.Count} full-native-class family/families.");
+
+    Dictionary<string, (int Count, int[] Classes)> expectedLegacyCollisions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["type=0x20 b36=0x2E f4A=0x10 f4B=0x54 b4F=0x00"] = (5, [0x002E, 0x012E]),
+        ["type=0x20 b36=0x50 f4A=0x10 f4B=0xFF b4F=0x00"] = (16, [0x0050, 0x0150]),
+        ["type=0x20 b36=0xD3 f4A=0x10 f4B=0x54 b4F=0x00"] = (9, [0x00D3, 0x01D3]),
+        ["type=0x20 b36=0xF3 f4A=0x10 f4B=0xFF b4F=0x00"] = (29, [0x00F3, 0x01F3])
+    };
+    Dictionary<string, List<Moby>> byLegacy = allMobys
+        .GroupBy(MobyIdentityFingerprint.BuildLegacyV1, StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+    foreach ((string key, (int expectedCount, int[] expectedClasses)) in expectedLegacyCollisions)
+    {
+        if (!byLegacy.TryGetValue(key, out List<Moby>? rows))
+            throw new InvalidOperationException($"Expected legacy identity collision '{key}' is missing from the all-cache census.");
+        int[] actualClasses = rows
+            .Select(moby => (moby.SourceByte37 << 8) | moby.SourceByte36)
+            .Distinct()
+            .Order()
+            .ToArray();
+        if (rows.Count != expectedCount || !actualClasses.SequenceEqual(expectedClasses))
+            throw new InvalidOperationException($"Legacy identity collision '{key}' changed: rows={rows.Count}, classes={string.Join(",", actualClasses.Select(value => $"0x{value:X4}"))}.");
+    }
+
+    Console.WriteLine("Moby identity fingerprints: v2 full-class separation, bounded fields, alias consistency, and four guarded v1 collisions covering 59 rows passed.");
+}
+
+void ReportIdentityObservationCompatibilityGuards()
+{
+    string smokeRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "identity-fingerprint-v2-compatibility");
+    string tempRoot = Path.Combine(smokeRoot, "workspace");
+    if (Directory.Exists(tempRoot))
+        Directory.Delete(tempRoot, recursive: true);
+    Directory.CreateDirectory(tempRoot);
+    EditorWorkspace tempWorkspace = new(tempRoot);
+    string observationPath = Path.Combine(tempRoot, "moby-identity-observations.json");
+    const string legacy = "type=0x20 b36=0x2E f4A=0x10 f4B=0x54 b4F=0x00";
+
+    (Moby Low, Moby High) ApplyPair(object observation)
+    {
+        File.WriteAllText(observationPath, JsonSerializer.Serialize(new { observations = new[] { observation } }, new JsonSerializerOptions { WriteIndented = true }));
+        Moby low = BuildFingerprintGuardMoby(0x002E, trueIndex: 43, specialDataPointer: 0);
+        Moby high = BuildFingerprintGuardMoby(0x012E, trueIndex: 43, specialDataPointer: 0);
+        MobyMetadataEnricher.Apply(tempWorkspace, "low", [low]);
+        MobyMetadataEnricher.Apply(tempWorkspace, "high", [high]);
+        return (low, high);
+    }
+
+    (Moby low, Moby high) = ApplyPair(new
+    {
+        fingerprint = legacy,
+        matchTrueIndex = 43,
+        specialDataPointerHex = "0x00000000",
+        label = "Unsafe global legacy label",
+        candidateKind = "specific test identity"
+    });
+    AssertGuardLabels(low, high, expectedLow: null, expectedHigh: null, scenario: "global v1 with level-local T43/pointer-zero scope");
+
+    (low, high) = ApplyPair(new
+    {
+        fingerprint = legacy,
+        levelKey = "low",
+        matchTrueIndex = 43,
+        label = "Scoped low-class label",
+        candidateKind = "specific test identity"
+    });
+    AssertGuardLabels(low, high, expectedLow: "Scoped low-class label", expectedHigh: null, scenario: "single-level v1");
+
+    (low, high) = ApplyPair(new
+    {
+        fingerprint = legacy,
+        sourceByte37Hex = "0x01",
+        nativeClassHex = "0x012E",
+        label = "Explicit high-class label",
+        candidateKind = "specific test identity"
+    });
+    AssertGuardLabels(low, high, expectedLow: null, expectedHigh: "Explicit high-class label", scenario: "v1 plus explicit full class");
+
+    (low, high) = ApplyPair(new
+    {
+        typeHex = "0x20",
+        sourceByte36Hex = "0x2E",
+        flag4AHex = "0x10",
+        flag4BHex = "0x54",
+        sourceByte4FHex = "0x00",
+        matchTrueIndex = 43,
+        label = "Unsafe field-only legacy label",
+        candidateKind = "specific test identity"
+    });
+    AssertGuardLabels(low, high, expectedLow: null, expectedHigh: null, scenario: "global field-only low-byte identity");
+
+    (low, high) = ApplyPair(new
+    {
+        fingerprint = "class=0x002E radius50=0x20 update52=0x10 drop53=0x54 spec4F=0x00",
+        sourceByte37Hex = "0x01",
+        label = "Contradictory class label",
+        candidateKind = "specific test identity"
+    });
+    AssertGuardLabels(low, high, expectedLow: null, expectedHigh: null, scenario: "contradictory v2 and byte-37 fields");
+
+    (low, high) = ApplyPair(new
+    {
+        fingerprint = legacy,
+        levels = new[] { "low", "high" },
+        matchTrueIndex = 43,
+        label = "Unsafe multi-level legacy label",
+        candidateKind = "specific test identity"
+    });
+    AssertGuardLabels(low, high, expectedLow: null, expectedHigh: null, scenario: "multi-level v1 identity");
+
+    (low, high) = ApplyPair(new
+    {
+        fingerprint = "type=0x20 b36=0x2E b37=0x01 f4A=0x10 f4B=0x54 b4F=0x00",
+        label = "Intermediate full-class label",
+        candidateKind = "specific test identity"
+    });
+    AssertGuardLabels(low, high, expectedLow: null, expectedHigh: "Intermediate full-class label", scenario: "intermediate b36/b37 full-class syntax");
+
+    Moby broadMember = BuildFingerprintGuardMoby(0x002E, trueIndex: 43, specialDataPointer: 0);
+    Moby exactMember = BuildFingerprintGuardMoby(0x002E, trueIndex: 44, specialDataPointer: 0);
+    const string lowCanonical = "class=0x002E radius50=0x20 update52=0x10 drop53=0x54 spec4F=0x00";
+    File.WriteAllText(observationPath, JsonSerializer.Serialize(new
+    {
+        observations = new object[]
+        {
+            new
+            {
+                fingerprint = lowCanonical,
+                levelKey = "low",
+                matchTrueIndex = 44,
+                label = "Exact member label",
+                candidateKind = "specific test identity"
+            },
+            new
+            {
+                fingerprint = lowCanonical,
+                levelKey = "low",
+                label = "Broad family label",
+                candidateKind = "specific test identity"
+            }
+        }
+    }, new JsonSerializerOptions { WriteIndented = true }));
+    MobyMetadataEnricher.Apply(tempWorkspace, "low", [broadMember, exactMember]);
+    if (!broadMember.DisplayLabel.Equals("Broad family label", StringComparison.Ordinal) ||
+        !exactMember.DisplayLabel.Equals("Exact member label", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            $"Identity-observation precedence did not preserve broad scope while applying the exact T scope: T43='{broadMember.DisplayLabel}', T44='{exactMember.DisplayLabel}'.");
+    }
+
+    File.Delete(observationPath);
+    string cacheRoot = Path.Combine(tempRoot, "editor-cache");
+    Directory.CreateDirectory(cacheRoot);
+    Moby source = BuildFingerprintGuardMoby(0x002E, trueIndex: 7, specialDataPointer: 0x1234);
+    WriteFingerprintGuardCache(Path.Combine(cacheRoot, "source-mobys.json"), source);
+    string overridePath = Path.Combine(tempRoot, "source-moby-user-overrides.json");
+
+    void WriteOverride(string lowByte, string? highByte, string type, string pointer)
+    {
+        Dictionary<string, object?> item = new()
+        {
+            ["trueIndex"] = 7,
+            ["typeHex"] = type,
+            ["specialDataPointer"] = pointer,
+            ["sourceByte36Hex"] = lowByte,
+            ["flag4AHex"] = "0x10",
+            ["label"] = "Verified locked chest",
+            ["displayTargetLabel"] = "Verified locked chest",
+            ["candidateKind"] = "locked chest",
+            ["confidence"] = "user override"
+        };
+        if (!string.IsNullOrWhiteSpace(highByte))
+            item["sourceByte37Hex"] = highByte;
+        File.WriteAllText(overridePath, JsonSerializer.Serialize(new { levelKey = "source", mobys = new[] { item } }, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    bool PropagatesOverride()
+    {
+        Moby target = BuildFingerprintGuardMoby(0x002E, trueIndex: 9, specialDataPointer: 0x1234);
+        MobyMetadataEnricher.Apply(tempWorkspace, "target", [target]);
+        return target.DisplayLabel.Equals("Verified locked chest", StringComparison.Ordinal);
+    }
+
+    WriteOverride("0x2E", highByte: null, "0x20", "0x00001234");
+    if (!PropagatesOverride())
+        throw new InvalidOperationException("Indexed override missing byte 37 did not hydrate from its verified source cache row.");
+    WriteOverride("0xD3", highByte: null, "0x20", "0x00001234");
+    if (PropagatesOverride())
+        throw new InvalidOperationException("Indexed override with a conflicting low class byte was not rejected.");
+    WriteOverride("0x2E", "0x01", "0x20", "0x00001234");
+    if (PropagatesOverride())
+        throw new InvalidOperationException("Indexed override with a conflicting high class byte was not rejected.");
+    WriteOverride("0x2E", highByte: null, "0x1C", "0x00001234");
+    if (PropagatesOverride())
+        throw new InvalidOperationException("Indexed override with a conflicting render radius was not rejected.");
+    WriteOverride("0x2E", highByte: null, "0x20", "0x00009999");
+    if (PropagatesOverride())
+        throw new InvalidOperationException("Indexed override with a conflicting special-data pointer was not rejected.");
+
+    JsonElement priorFullClassObservation = JsonSerializer.SerializeToElement(new
+    {
+        fingerprint = "type=0x20 b36=0xD3 b37=0x01 f4A=0x10 f4B=0x54 b4F=0x00",
+        label = "Preserved user label"
+    });
+    const string expectedCanonical = "class=0x01D3 radius50=0x20 update52=0x10 drop53=0x54 spec4F=0x00";
+    if (!TryCanonicalObservationFingerprint(priorFullClassObservation, out string priorCanonical) ||
+        !priorCanonical.Equals(expectedCanonical, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Prior b36/b37 full-class observation did not canonicalize to fingerprint v2 for deduplication.");
+    }
+    JsonElement rewritten = CanonicalizeObservationFingerprint(priorFullClassObservation, priorCanonical);
+    if (ReadJsonInt32(rewritten, "fingerprintVersion", -1) != MobyIdentityFingerprint.CurrentVersion ||
+        !ReadJsonString(rewritten, "fingerprint").Equals(expectedCanonical, StringComparison.Ordinal) ||
+        !ReadJsonString(rewritten, "label").Equals("Preserved user label", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Canonical observation rewrite did not preserve user content while upgrading the fingerprint.");
+    }
+    JsonElement ambiguousLegacyObservation = JsonSerializer.SerializeToElement(new
+    {
+        fingerprint = legacy,
+        label = "Preserved ambiguous legacy label"
+    });
+    if (TryCanonicalObservationFingerprint(ambiguousLegacyObservation, out _))
+        throw new InvalidOperationException("Unscoped low-byte v1 observation incorrectly suppressed a canonical v2 review row.");
+
+    Directory.CreateDirectory(smokeRoot);
+    File.WriteAllText(Path.Combine(smokeRoot, "identity-fingerprint-v2-compatibility.md"), string.Join(Environment.NewLine, [
+        "# Moby identity fingerprint v2 compatibility",
+        "",
+        "Offline smoke coverage for canonical full-class fingerprints, scoped legacy reads, contradictory-field rejection, and indexed override hydration.",
+        "",
+        "- Global and multi-level low-byte v1 rows: rejected",
+        "- Single-level uniquely resolved v1 row: accepted",
+        "- Explicit full-class and intermediate b36/b37 rows: accepted only for that class",
+        "- Field-only low-byte row: same scope guard as v1",
+        "- Contradictory v2/byte-37 row: rejected",
+        "- Broad and exact rows: preserved together; exact T scope wins independent of JSON order",
+        "- Indexed override missing byte 37: hydrated from cache",
+        "- Indexed override conflicts in low byte, high byte, render radius, or pointer: rejected"
+    ]));
+    Console.WriteLine("Moby identity compatibility: scoped v1 reads, full-class upgrades, exact-over-broad precedence, field guards, and indexed override hydration passed.");
+}
+
+Moby BuildFingerprintGuardMoby(int nativeClass, int trueIndex, uint specialDataPointer)
+{
+    return new Moby
+    {
+        Index = trueIndex,
+        TrueIndex = trueIndex,
+        LegacyIndex = -1,
+        Position = new Vector3f(0, 0, 0),
+        OriginalPosition = new Vector3f(0, 0, 0),
+        Type = 0x20,
+        OriginalType = 0x20,
+        State = 0,
+        OriginalState = 0,
+        YawByte = 0,
+        OriginalYawByte = 0,
+        SpecialDataPointer = specialDataPointer,
+        SourceByte36 = nativeClass & 0xFF,
+        OriginalSourceByte36 = nativeClass & 0xFF,
+        SourceByte37 = (nativeClass >> 8) & 0xFF,
+        OriginalSourceByte37 = (nativeClass >> 8) & 0xFF,
+        SourceByte4F = 0,
+        OriginalSourceByte4F = 0,
+        Flag4A = 0x10,
+        OriginalFlag4A = 0x10,
+        Flag4B = 0x54,
+        OriginalFlag4B = 0x54,
+        Color = Moby.ColorForType(0x20),
+        Label = "Actor/container object?",
+        OriginalLabel = "Actor/container object?",
+        CandidateKind = "actor, container, or interactive object candidate",
+        Confidence = "pattern-inferred",
+        Evidence = "Synthetic weak identity for fingerprint compatibility smoke."
+    };
+}
+
+void AssertGuardLabels(Moby low, Moby high, string? expectedLow, string? expectedHigh, string scenario)
+{
+    bool lowMatches = expectedLow == null
+        ? !low.DisplayLabel.Contains("label", StringComparison.OrdinalIgnoreCase)
+        : low.DisplayLabel.Equals(expectedLow, StringComparison.Ordinal);
+    bool highMatches = expectedHigh == null
+        ? !high.DisplayLabel.Contains("label", StringComparison.OrdinalIgnoreCase)
+        : high.DisplayLabel.Equals(expectedHigh, StringComparison.Ordinal);
+    if (!lowMatches || !highMatches)
+        throw new InvalidOperationException($"Fingerprint compatibility guard failed for {scenario}: low='{low.DisplayLabel}', high='{high.DisplayLabel}'.");
+}
+
+void WriteFingerprintGuardCache(string path, Moby moby)
+{
+    File.WriteAllText(path, JsonSerializer.Serialize(new
+    {
+        mobys = new[]
+        {
+            new
+            {
+                index = moby.Index,
+                trueIndex = moby.TrueIndex,
+                legacyIndex = moby.LegacyIndex,
+                x = 0,
+                y = 0,
+                z = 0,
+                typeHex = $"0x{moby.Type:X2}",
+                stateHex = "0x00",
+                yawByteHex = "0x00",
+                runtimeAddress = "0x00000000",
+                specialDataPointer = $"0x{moby.SpecialDataPointer:X8}",
+                sourceByte36Hex = $"0x{moby.SourceByte36:X2}",
+                sourceByte37Hex = $"0x{moby.SourceByte37:X2}",
+                sourceByte4FHex = $"0x{moby.SourceByte4F:X2}",
+                flag4AHex = $"0x{moby.Flag4A:X2}",
+                flag4BHex = $"0x{moby.Flag4B:X2}"
+            }
+        }
+    }, new JsonSerializerOptions { WriteIndented = true }));
+}
+
+void AssertDecompActorIdentityFamily(
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys,
+    string levelKey,
+    int nativeClass,
+    int expectedCount,
+    string expectedLabel,
+    string confidenceNeedle)
+{
+    List<Moby> family = allMobys
+        .Where(item => item.Level.Key.Equals(levelKey, StringComparison.OrdinalIgnoreCase) &&
+            ((item.Moby.SourceByte37 << 8) | item.Moby.SourceByte36) == nativeClass)
+        .Select(item => item.Moby)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToList();
+    if (family.Count != expectedCount)
+        throw new InvalidOperationException($"{levelKey} native class 0x{nativeClass:X4} expected {expectedCount} source rows, found {family.Count}.");
+
+    List<Moby> incorrect = family
+        .Where(moby =>
+            !moby.DisplayLabel.StartsWith(expectedLabel, StringComparison.OrdinalIgnoreCase) ||
+            !moby.Confidence.Contains(confidenceNeedle, StringComparison.OrdinalIgnoreCase) ||
+            moby.VisualKind != MobyVisualKind.Actor)
+        .Take(8)
+        .ToList();
+    if (incorrect.Count > 0)
+    {
+        string summary = string.Join("; ", incorrect.Select(moby =>
+            $"T{moby.TrueIndex} {moby.DisplayLabel}/{moby.CandidateKind}/{moby.Confidence}/{moby.VisualKind}"));
+        throw new InvalidOperationException($"{levelKey} native class 0x{nativeClass:X4} identity regression: {summary}");
+    }
 }
 
 async Task ReportKeyAndPortalTerrainSnap(string selectedSourceImage)
@@ -2744,7 +3861,10 @@ void ReportHomeWorldBalloonistIdentities()
     [
         ("artisans", 0xBB, "Balloonist", null),
         ("peacekeepers", 0xBC, "Balloonist", null),
-        ("magiccrafters", 0xBD, "Balloonist", 39)
+        ("magiccrafters", 0xBD, "Balloonist", 39),
+        ("beastmakers", 0xBE, "Balloonist", 188),
+        ("dreamweavers", 0xBF, "Balloonist", 51),
+        ("gnastysworld", 0xC0, "Balloonist", 2)
     ];
 
     List<string> promoted = new();
@@ -2948,7 +4068,7 @@ void ReportGnastyLootChestVisuals()
     Console.WriteLine($"Gnasty's Loot 3x flame chest visuals: {chests.Count} chest record(s), T{string.Join(",T", chests.Select(moby => moby.TrueIndex))}");
 }
 
-void ReportMetalheadBirdSupportIdentities()
+void ReportMetalheadNativeClassIdentities()
 {
     string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", "metalhead-mobys.json");
     if (!File.Exists(mobyPath))
@@ -2956,23 +4076,1039 @@ void ReportMetalheadBirdSupportIdentities()
 
     List<Moby> mobys = MobyLoader.LoadCached(mobyPath).ToList();
     MobyMetadataEnricher.Apply(workspace, "metalhead", mobys);
-    List<Moby> birdSupport = mobys
-        .Where(moby => moby.Type == 0x2A &&
-            moby.SourceByte36 == 0xAA &&
-            moby.Flag4A == 0x50 &&
-            moby.Flag4B is 0x54 or 0x55)
-        .OrderBy(moby => moby.TrueIndex)
-        .ToList();
-    if (birdSupport.Count != 5)
-        throw new InvalidOperationException($"Metalhead bird support identity check expected 5 source byte 0xAA support records, found {birdSupport.Count}.");
 
-    if (birdSupport.Any(moby => !moby.DisplayLabel.Contains("Bird support", StringComparison.OrdinalIgnoreCase) || moby.VisualKind != MobyVisualKind.Actor))
+    AssertMetalheadNativeClassFamily(mobys, 0x0030, 1, "Metalhead boss", MobyVisualKind.Actor, expectedRewardValue: 5);
+    AssertMetalheadNativeClassFamily(mobys, 0x0041, 17, "Power pole", MobyVisualKind.Scenery, expectedRewardValue: 0);
+    AssertMetalheadNativeClassFamily(mobys, 0x0066, 21, "Armored Banana Boy", MobyVisualKind.Actor, expectedRewardValue: 124);
+    AssertMetalheadNativeClassFamily(mobys, 0x00AA, 11, "Strongarm", MobyVisualKind.Actor, expectedRewardValue: 45);
+    AssertMetalheadNativeClassFamily(mobys, 0x01E6, 31, "Torch", MobyVisualKind.Scenery, expectedRewardValue: 0);
+
+    int treasureValue = mobys.Sum(moby => moby.TreasureValue);
+    if (treasureValue != 500)
+        throw new InvalidOperationException($"Metalhead native-class identity check expected 500 total treasure, found {treasureValue}.");
+
+    Console.WriteLine("Metalhead native-class identities: boss=1, power poles=17, Armored Banana Boys=21, Strongarms=11, torches=31; treasure=500.");
+}
+
+void ReportBeastMakersRegionTorchIdentities()
+{
+    Dictionary<string, int> expectedCounts = new(StringComparer.OrdinalIgnoreCase)
     {
-        string summary = string.Join("; ", birdSupport.Select(moby => $"T{moby.TrueIndex} {moby.DisplayLabel}/{moby.VisualKind}"));
-        throw new InvalidOperationException($"Metalhead bird support identity was not promoted cleanly: {summary}");
+        ["beastmakers"] = 33,
+        ["mistybog"] = 2,
+        ["terracevillage"] = 10,
+        ["treetops"] = 48,
+        ["metalhead"] = 31
+    };
+    List<(LevelDefinition Level, Moby Moby)> torches = LoadAllCachedMobysWithMetadata()
+        .Where(item => expectedCounts.ContainsKey(item.Level.Key) &&
+            ((item.Moby.SourceByte37 << 8) | item.Moby.SourceByte36) == 0x01E6)
+        .ToList();
+
+    foreach ((string levelKey, int expectedCount) in expectedCounts)
+    {
+        int actualCount = torches.Count(item => item.Level.Key.Equals(levelKey, StringComparison.OrdinalIgnoreCase));
+        if (actualCount != expectedCount)
+            throw new InvalidOperationException($"{levelKey} native class 0x01E6 expected {expectedCount} Torch rows, found {actualCount}.");
     }
 
-    Console.WriteLine($"Metalhead bird support identities: {birdSupport.Count} support record(s), T{string.Join(",T", birdSupport.Select(moby => moby.TrueIndex))}");
+    List<(LevelDefinition Level, Moby Moby)> incorrect = torches
+        .Where(item =>
+            !item.Moby.DisplayLabel.Equals("Torch", StringComparison.OrdinalIgnoreCase) ||
+            !item.Moby.Confidence.Contains("native-class-observed", StringComparison.OrdinalIgnoreCase) ||
+            item.Moby.VisualKind != MobyVisualKind.Scenery)
+        .Take(8)
+        .ToList();
+    if (incorrect.Count > 0)
+    {
+        string summary = string.Join("; ", incorrect.Select(item =>
+            $"{item.Level.DisplayName}:T{item.Moby.TrueIndex} {item.Moby.DisplayLabel}/{item.Moby.CandidateKind}/{item.Moby.Confidence}/{item.Moby.VisualKind}"));
+        throw new InvalidOperationException($"Beast Makers-region native class 0x01E6 Torch identity regression: {summary}");
+    }
+
+    if (torches.Count != 124)
+        throw new InvalidOperationException($"Beast Makers-region native class 0x01E6 expected 124 Torch rows, found {torches.Count}.");
+
+    Console.WriteLine("Beast Makers-region torch identities: 124 native class 0x01E6 scenery rows across five levels.");
+}
+
+void ReportBeastMakersRegionalSceneryIdentities()
+{
+    List<(LevelDefinition Level, Moby Moby)> allMobys = LoadAllCachedMobysWithMetadata();
+    AssertNativeSceneryIdentityFamily(allMobys, "beastmakers", 0x0005, [49, 50, 51, 52, 53, 54, 55, 58, 59, 60, 61, 62, 63, 64], "Swamp grass clump");
+    AssertNativeSceneryIdentityFamily(allMobys, "mistybog", 0x0005, Enumerable.Range(54, 13).Concat(Enumerable.Range(69, 16)).ToArray(), "Swamp grass clump");
+    AssertNativeSceneryIdentityFamily(allMobys, "terracevillage", 0x0005, [35], "Swamp grass clump");
+    AssertNativeSceneryIdentityFamily(allMobys, "beastmakers", 0x0006, [56, 57], "Beast Makers banner");
+    AssertNativeSceneryIdentityFamily(allMobys, "mistybog", 0x0006, [67, 68], "Beast Makers banner");
+
+    int grassCount = allMobys.Count(item => NativeClass(item.Moby) == 0x0005);
+    int bannerCount = allMobys.Count(item => NativeClass(item.Moby) == 0x0006);
+    if (grassCount != 44 || bannerCount != 4)
+        throw new InvalidOperationException($"Beast Makers regional scenery census changed: grass={grassCount}/44, banners={bannerCount}/4.");
+
+    Console.WriteLine("Beast Makers regional scenery: 44 Swamp grass clumps and 4 Beast Makers banners passed full-class/index/category guards.");
+}
+
+void ReportMagicRegionAlpineTreeIdentities()
+{
+    List<(LevelDefinition Level, Moby Moby)> allMobys = LoadAllCachedMobysWithMetadata();
+    AssertNativeSceneryIdentityFamily(allMobys, "alpineridge", 0x01F3, [141, 142, 143, 144, 145, 146, 147, 153], "Broad alpine tree");
+    AssertNativeSceneryIdentityFamily(allMobys, "alpineridge", 0x01F4, [148, 149, 150, 151, 152], "Small swaying alpine tree");
+    AssertNativeSceneryIdentityFamily(allMobys, "blowhard", 0x01F4, [12, 13, 14], "Small swaying alpine tree");
+    AssertNativeSceneryIdentityFamily(allMobys, "blowhard", 0x01F7, [15, 16, 18, 19, 20, 21, 22, 23], "Large alpine tree");
+    AssertNativeSceneryIdentityFamily(allMobys, "magiccrafters", 0x01F7, [90, 94, 95, 104], "Large alpine tree");
+    AssertNativeSceneryIdentityFamily(allMobys, "blowhard", 0x01F8, [17, 24], "Slender alpine tree");
+    AssertNativeSceneryIdentityFamily(allMobys, "magiccrafters", 0x01F8, [91, 92, 93], "Slender alpine tree");
+
+    Dictionary<int, int> expectedTotals = new()
+    {
+        [0x01F3] = 8,
+        [0x01F4] = 8,
+        [0x01F7] = 12,
+        [0x01F8] = 5
+    };
+    foreach ((int nativeClass, int expectedCount) in expectedTotals)
+    {
+        int actualCount = allMobys.Count(item => NativeClass(item.Moby) == nativeClass);
+        if (actualCount != expectedCount)
+            throw new InvalidOperationException($"Native alpine-tree class 0x{nativeClass:X4} expected {expectedCount} global rows, found {actualCount}.");
+    }
+
+    Moby magicSourceTree = allMobys.Single(item => item.Level.Key == "magiccrafters" && item.Moby.TrueIndex == 91).Moby;
+    if (magicSourceTree.State != 0x00 || NativeClass(magicSourceTree) != 0x01F8)
+        throw new InvalidOperationException("Magic Crafters source T91 should retain was-drawn byte 0x00 inside the Slender alpine tree family.");
+
+    Console.WriteLine("Magic-region alpine trees: 8 broad, 8 small swaying, 12 large, and 5 slender trees passed full-class/index/category guards.");
+}
+
+void ReportArtisansNativeSceneryIdentities()
+{
+    List<(LevelDefinition Level, Moby Moby)> allMobys = LoadAllCachedMobysWithMetadata();
+
+    List<Moby> steppingStones = allMobys
+        .Where(item => item.Level.Key == "artisans" && NativeClass(item.Moby) == 0x0012)
+        .Select(item => item.Moby)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToList();
+    int[] expectedStoneIndexes = [133, 134, 135, 136, 137];
+    if (!steppingStones.Select(moby => moby.TrueIndex).SequenceEqual(expectedStoneIndexes))
+        throw new InvalidOperationException($"Artisans native class 0x0012 rows changed: expected {string.Join(',', expectedStoneIndexes)}, found {string.Join(',', steppingStones.Select(moby => moby.TrueIndex))}.");
+    byte[] expectedStoneYaws = [0x06, 0x01, 0xEB, 0xF4, 0xFC];
+    for (int index = 0; index < steppingStones.Count; index++)
+    {
+        Moby stone = steppingStones[index];
+        if (stone.DisplayLabel != "Sunny Flight stepping stone" ||
+            !stone.CandidateKind.Contains("stepping-stone", StringComparison.OrdinalIgnoreCase) ||
+            !stone.Confidence.Contains("native-class-observed", StringComparison.OrdinalIgnoreCase) ||
+            stone.VisualKind != MobyVisualKind.Scenery ||
+            stone.Type != 0x20 ||
+            stone.SourceByte4F != 0x00 ||
+            stone.Flag4A != 0x10 ||
+            stone.Flag4B != 0xFF ||
+            stone.YawByte != expectedStoneYaws[index] ||
+            stone.TreasureValue != 0 ||
+            stone.IsEditorControl ||
+            stone.DisplayLabel.Contains("?", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Artisans T{stone.TrueIndex} Sunny Flight stepping-stone identity regression: {stone.DisplayLabel}/{stone.CandidateKind}/{stone.Confidence}/{stone.VisualKind}/{stone.TechnicalSummary}");
+        }
+    }
+
+    AssertTowerFlagFamily(allMobys, "artisans", [0, 1, 2, 3, 4, 95, 96]);
+    AssertTowerFlagFamily(allMobys, "stonehill", [38, 39, 40, 41, 42, 43, 44, 68, 146, 147]);
+    int globalTowerFlags = allMobys.Count(item => NativeClass(item.Moby) == 0x00AC);
+    if (globalTowerFlags != 17)
+        throw new InvalidOperationException($"Native class 0x00AC expected 17 global Tower flag rows, found {globalTowerFlags}.");
+
+    AssertDecodedNativeIdentityFamily(allMobys, "artisans", 0x015E, [138], "Sunny Flight stepping-stone unlock controller", "stepping-stone", MobyVisualKind.Control);
+    AssertDecodedNativeIdentityFamily(allMobys, "artisans", 0x0031, [160], "Toasty portal gate controller", "dragon-mouth", MobyVisualKind.Control);
+    AssertDecodedNativeIdentityFamily(allMobys, "artisans", 0x0187, [43, 44], "Toasty portal particle emitter", "side-particle", MobyVisualKind.Control);
+    Moby[] artisansUnlockControls = allMobys
+        .Where(item => item.Level.Key == "artisans" && NativeClass(item.Moby) is 0x015E or 0x0031 or 0x0187)
+        .Select(item => item.Moby)
+        .ToArray();
+    if (artisansUnlockControls.Length != 4 ||
+        artisansUnlockControls.Any(moby =>
+            moby.Type != 0x00 ||
+            moby.SourceByte4F != 0x00 ||
+            moby.Flag4B != 0xFF ||
+            moby.TreasureValue != 0 ||
+            moby.IsEditorControl))
+    {
+        throw new InvalidOperationException("Artisans Sunny Flight/Toasty native control field family changed.");
+    }
+
+    Console.WriteLine("Artisans native scenery/controls: 5 Sunny Flight stepping stones, their unlock controller, the Toasty portal gate and paired particle emitters, and 17 Artisans/Stone Hill Tower flags passed full-class/index/category guards.");
+}
+
+void AssertTowerFlagFamily(
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys,
+    string levelKey,
+    IReadOnlyList<int> expectedTrueIndexes)
+{
+    List<Moby> flags = allMobys
+        .Where(item => item.Level.Key == levelKey && NativeClass(item.Moby) == 0x00AC)
+        .Select(item => item.Moby)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToList();
+    int[] expected = expectedTrueIndexes.Order().ToArray();
+    int[] actual = flags.Select(moby => moby.TrueIndex).ToArray();
+    if (!actual.SequenceEqual(expected))
+        throw new InvalidOperationException($"{levelKey} native class 0x00AC rows changed: expected {string.Join(',', expected)}, found {string.Join(',', actual)}.");
+
+    List<Moby> incorrect = flags
+        .Where(moby =>
+            moby.DisplayLabel != "Tower flag" ||
+            !moby.CandidateKind.Contains("flag", StringComparison.OrdinalIgnoreCase) ||
+            !moby.CandidateKind.Contains("scenery", StringComparison.OrdinalIgnoreCase) ||
+            !moby.Confidence.Contains("native-class-observed", StringComparison.OrdinalIgnoreCase) ||
+            moby.VisualKind != MobyVisualKind.Scenery ||
+            moby.Type != 0x20 ||
+            moby.SourceByte4F != 0x00 ||
+            moby.Flag4A != 0x10 ||
+            moby.Flag4B != 0xFF ||
+            moby.YawByte != 0 ||
+            moby.TreasureValue != 0 ||
+            moby.IsEditorControl ||
+            moby.DisplayLabel.Contains("Whir", StringComparison.OrdinalIgnoreCase) ||
+            moby.DisplayLabel.Contains("?", StringComparison.Ordinal))
+        .Take(8)
+        .ToList();
+    if (incorrect.Count > 0)
+    {
+        string summary = string.Join("; ", incorrect.Select(moby =>
+            $"T{moby.TrueIndex} {moby.DisplayLabel}/{moby.CandidateKind}/{moby.Confidence}/{moby.VisualKind}/{moby.TechnicalSummary}"));
+        throw new InvalidOperationException($"{levelKey} native class 0x00AC Tower flag identity regression: {summary}");
+    }
+}
+
+void ReportDecodedNativeActorAndComponentIdentities()
+{
+    List<(LevelDefinition Level, Moby Moby)> allMobys = LoadAllCachedMobysWithMetadata();
+
+    AssertDecodedNativeIdentityFamily(allMobys, "dreamweavers", 0x007E, [31, 32, 33], "Clock Fool", "Clock Fool", MobyVisualKind.Actor);
+    AssertDecodedNativeIdentityFamily(allMobys, "jacques", 0x007E, [21, 22, 23, 24, 25, 26, 27, 28, 35, 36, 37, 38], "Clock Fool", "Clock Fool", MobyVisualKind.Actor);
+    AssertDecodedNativeIdentityFamily(allMobys, "jacques", 0x0096, [33], "Jacques (boss)", "boss", MobyVisualKind.Actor);
+    AssertDecodedNativeIdentityFamily(allMobys, "loftycastle", 0x0128, [18, 21, 53, 54, 65, 66, 75, 78, 79], "Balloognorc balloon", "balloon", MobyVisualKind.Actor);
+    AssertDecodedNativeIdentityFamily(allMobys, "beastmakers", 0x00BE, [188], "Balloonist", "balloonist", MobyVisualKind.Actor);
+    AssertDecodedNativeIdentityFamily(allMobys, "beastmakers", 0x01DB, [69, 70, 71, 72], "Crocodile", "crocodile enemy actor", MobyVisualKind.Actor);
+    AssertDecodedNativeIdentityFamily(allMobys, "dreamweavers", 0x00BF, [51], "Balloonist", "balloonist", MobyVisualKind.Actor);
+    AssertDecodedNativeIdentityFamily(allMobys, "dreamweavers", 0x0040, [149, 150], "Wall lantern", "wall-lantern scenery", MobyVisualKind.Scenery);
+    AssertDecodedNativeIdentityFamily(allMobys, "gnastysworld", 0x00C0, [2], "Balloonist", "balloonist", MobyVisualKind.Actor);
+    AssertDecodedNativeIdentityFamily(allMobys, "toasty", 0x000D, [54, 55], "Toasty sheep-form contained Blue gem (5)", "contained boss reward", MobyVisualKind.Gem);
+    AssertDecodedNativeIdentityFamily(allMobys, "peacekeepers", 0x01A1, [45, 102], "Cannon-breakable target rock", "cannon auto-target", MobyVisualKind.Control);
+    AssertDecodedNativeIdentityFamily(allMobys, "mistybog", 0x01E7, [87, 88], "Chicken cage", "chicken cage scenery", MobyVisualKind.Scenery);
+    AssertDecodedNativeIdentityFamily(allMobys, "mistybog", 0x01E4, [211], "Arrow-sign Fairy", "sign-bearing Fairy", MobyVisualKind.Actor);
+    AssertDecodedNativeIdentityFamily(allMobys, "twilightharbor", 0x00AB, [21, 22], "Drawbridge lever", "drawbridge lever prop", MobyVisualKind.Scenery);
+    AssertDecodedNativeIdentityFamily(allMobys, "icecavern", 0x00CD, [80, 81, 83, 84, 89, 90, 91, 92, 93, 94], "Chargeable lamppost", "lamppost", MobyVisualKind.Scenery);
+    AssertDecodedNativeIdentityFamily(allMobys, "icecavern", 0x00F0, [78, 79, 82], "Ice stalactite", "stalactite", MobyVisualKind.Scenery);
+    AssertDecodedNativeIdentityFamily(allMobys, "gnorccove", 0x00CF, [34, 35, 47, 50, 54, 55, 56, 81, 83, 85, 87], "Steel barrel shell", "steel-barrel", MobyVisualKind.Scenery);
+    AssertDecodedNativeIdentityFamily(allMobys, "highcaves", 0x006D, [9, 10, 11], "Rescue Fairy", "Fairy Trio", MobyVisualKind.Actor);
+    AssertDecodedNativeIdentityFamily(allMobys, "highcaves", 0x00E3, [24], "Temporary Superflame Fairy", "Superflame Fairy", MobyVisualKind.Actor);
+    AssertDecodedNativeIdentityFamily(allMobys, "doctorshemp", 0x000D, [72, 73, 74, 75], "Gem spawner (Blue reward)", "gem spawner", MobyVisualKind.Control);
+    AssertDecodedNativeIdentityFamily(allMobys, "toasty", 0x015F, [53], "Toasty phase-reward Blue gem marker", "phase-reward gem spawn", MobyVisualKind.Control);
+    AssertDecodedNativeIdentityFamily(allMobys, "blowhard", 0x015F, [73, 74], "Blowhard phase-reward Yellow gem marker", "phase-reward gem spawn", MobyVisualKind.Control);
+    AssertDecodedNativeIdentityFamily(allMobys, "nightflight", 0x0166, [13], "Flight challenge controller", "challenge manager", MobyVisualKind.Control);
+    AssertDecodedNativeIdentityFamily(allMobys, "crystalflight", 0x0166, [25], "Flight challenge controller", "challenge manager", MobyVisualKind.Control);
+    AssertDecodedNativeIdentityFamily(allMobys, "wildflight", 0x0166, [22], "Flight challenge controller", "challenge manager", MobyVisualKind.Control);
+    AssertDecodedNativeIdentityFamily(allMobys, "icyflight", 0x0166, [20], "Flight challenge controller", "challenge manager", MobyVisualKind.Control);
+    AssertDecodedNativeIdentityFamily(allMobys, "crystalflight", 0x01E5, [33, 34], "Flight direction arrow sign", "arrow sign", MobyVisualKind.Scenery);
+    AssertDecodedNativeIdentityFamily(allMobys, "nightflight", 0x01E5, [32, 33, 35], "Flight direction arrow sign", "arrow sign", MobyVisualKind.Scenery);
+    AssertDecodedNativeIdentityFamily(allMobys, "artisans", 0x000B, [149, 150, 151, 152, 153, 154], "Water bubble emitter", "water-surface bubble", MobyVisualKind.Control);
+    AssertDecodedNativeIdentityFamily(allMobys, "magiccrafters", 0x000B, [113, 114, 115, 116, 117, 118], "Water bubble emitter", "water-surface bubble", MobyVisualKind.Control);
+    AssertDecodedNativeIdentityFamily(allMobys, "alpineridge", 0x000B, [159, 160, 161, 162, 163, 164, 165, 166, 167, 168], "Water bubble emitter", "water-surface bubble", MobyVisualKind.Control);
+
+    Moby[] toastyBossForms = allMobys
+        .Where(item => item.Level.Key == "toasty" && NativeClass(item.Moby) == 0x013A)
+        .Select(item => item.Moby)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToArray();
+    Dictionary<int, string> expectedToastyBossLabels = new()
+    {
+        [11] = "Toasty disguise boss actor",
+        [51] = "Toasty sheep-on-stilts phase actor"
+    };
+    if (!toastyBossForms.Select(moby => moby.TrueIndex).SequenceEqual([11, 51]) ||
+        toastyBossForms.Any(moby =>
+            moby.DisplayLabel != expectedToastyBossLabels[moby.TrueIndex] ||
+            !moby.CandidateKind.Contains("boss", StringComparison.OrdinalIgnoreCase) ||
+            !moby.Confidence.Contains("native-class-observed", StringComparison.OrdinalIgnoreCase) ||
+            moby.VisualKind != MobyVisualKind.Actor ||
+            moby.SourceByte4F != 0x00 ||
+            moby.Flag4B != 0x55 ||
+            moby.YawByte != 0x79 ||
+            moby.DisplayLabel.Contains("route", StringComparison.OrdinalIgnoreCase) ||
+            moby.DisplayLabel.Contains("scene control", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("Toasty's linked disguise/sheep-on-stilts boss-form identity family changed.");
+    }
+
+    Moby[] toastyContainedRewards = allMobys
+        .Where(item => item.Level.Key == "toasty" && NativeClass(item.Moby) == 0x000D)
+        .Select(item => item.Moby)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToArray();
+    if (toastyContainedRewards.Any(moby =>
+        moby.Type != 0x00 || moby.State != 0x00 || moby.SourceByte4F != 0x00 ||
+        moby.Flag4A != 0xFF || moby.Flag4B != GemValue.Blue.IdByte ||
+        moby.Gem != GemValue.Blue || moby.TreasureValue != GemValue.Blue.Value))
+    {
+        throw new InvalidOperationException("Toasty's sheep-form contained Blue reward encodings changed.");
+    }
+    Moby editedToastyReward = CloneMoby(toastyContainedRewards[0]);
+    editedToastyReward.ApplyGem(GemValue.Purple);
+    if (editedToastyReward.Flag4B != GemValue.Purple.IdByte ||
+        editedToastyReward.Gem != GemValue.Purple ||
+        editedToastyReward.TreasureValue != GemValue.Purple.Value ||
+        editedToastyReward.DisplayLabel != "Toasty sheep-form contained Purple gem (25)" ||
+        editedToastyReward.VisualKind != MobyVisualKind.Gem)
+    {
+        throw new InvalidOperationException("Editing Toasty's contained reward did not preserve its precise sheep-form identity and paired gem value.");
+    }
+
+    Moby[] laterBalloonists = allMobys
+        .Where(item =>
+            (item.Level.Key == "beastmakers" && NativeClass(item.Moby) == 0x00BE) ||
+            (item.Level.Key == "dreamweavers" && NativeClass(item.Moby) == 0x00BF) ||
+            (item.Level.Key == "gnastysworld" && NativeClass(item.Moby) == 0x00C0))
+        .Select(item => item.Moby)
+        .ToArray();
+    if (laterBalloonists.Length != 3 || laterBalloonists.Any(moby => moby.Type != 0x20 || moby.Flag4A != 0x10 || moby.Flag4B != 0xFF))
+        throw new InvalidOperationException("Later home-world Balloonist native field family changed.");
+
+    Moby[] stalactites = allMobys
+        .Where(item => item.Level.Key == "icecavern" && NativeClass(item.Moby) == 0x00F0)
+        .Select(item => item.Moby)
+        .ToArray();
+    if (stalactites.Any(moby => moby.Type != 0x20 || moby.Flag4A != 0x10 || moby.Flag4B != 0xFF || moby.TreasureValue != 0))
+        throw new InvalidOperationException("Ice Cavern stalactite native field/no-reward family changed.");
+
+    Moby[] extraLifeChestButterflies = allMobys
+        .Where(item => item.Level.Key == "icecavern" && NativeClass(item.Moby) == 0x01A6)
+        .Select(item => item.Moby)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToArray();
+    Moby[] extraLifeChests = allMobys
+        .Where(item => item.Level.Key == "icecavern" && NativeClass(item.Moby) == 0x01A5 && item.Moby.Type == 0x18)
+        .Select(item => item.Moby)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToArray();
+    // Source caches stop at T227. The native chest handler creates butterfly children T229/T230 only after load,
+    // so validate their pairing when a live-RAM cache supplies them without requiring them from portable source data.
+    if (extraLifeChests.Length != 2 ||
+        (extraLifeChestButterflies.Length != 0 &&
+            (extraLifeChestButterflies.Length != 2 ||
+             extraLifeChestButterflies.Any(moby =>
+                 moby.Type != 0x10 || moby.SourceByte4F != 0x00 || moby.Flag4A != 0xFF ||
+                 moby.Flag4B != 0xFF || moby.TreasureValue != 0 || moby.IsEditorControl) ||
+             !extraLifeChestButterflies.Select(moby => moby.Position).SequenceEqual(extraLifeChests.Select(moby => moby.Position)))))
+    {
+        throw new InvalidOperationException("Ice Cavern source Extra Life Chest rows or optional loader-created butterfly child pairing changed.");
+    }
+
+    Moby[] beastCrocodiles = allMobys
+        .Where(item => item.Level.Key == "beastmakers" && NativeClass(item.Moby) == 0x01DB)
+        .Select(item => item.Moby)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToArray();
+    if (beastCrocodiles.Length != 4 || beastCrocodiles.Any(moby =>
+        moby.Type != 0x20 || moby.SourceByte4F != 0x00 || moby.Flag4A != 0x08 ||
+        moby.Flag4B != 0xFF || moby.TreasureValue != 0 || moby.IsEditorControl))
+    {
+        throw new InvalidOperationException("Beast Makers stationary Crocodile native field family changed.");
+    }
+
+    Moby[] dreamWallLanterns = allMobys
+        .Where(item => item.Level.Key == "dreamweavers" && NativeClass(item.Moby) == 0x0040)
+        .Select(item => item.Moby)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToArray();
+    if (dreamWallLanterns.Length != 2 || dreamWallLanterns.Any(moby =>
+        moby.Type != 0x20 || moby.State != 0x00 || moby.SourceByte4F != 0x00 ||
+        moby.Flag4A != 0x10 || moby.Flag4B != 0xFF || moby.YawByte != 0x00 ||
+        moby.TreasureValue != 0 || moby.IsEditorControl) ||
+        dreamWallLanterns[0].Position.Z != dreamWallLanterns[1].Position.Z)
+    {
+        throw new InvalidOperationException("Dream Weavers paired Wall lantern native field/height family changed.");
+    }
+
+    Moby[] rescueFairies = allMobys
+        .Where(item => item.Level.Key == "highcaves" && NativeClass(item.Moby) == 0x006D)
+        .Select(item => item.Moby)
+        .ToArray();
+    if (rescueFairies.Any(moby =>
+        moby.Type != 0x20 || moby.SourceByte4F != 0x00 || moby.Flag4A != 0x7F ||
+        moby.Flag4B != 0xFF || moby.YawByte != 0 || moby.TreasureValue != 0))
+    {
+        throw new InvalidOperationException("High Caves Rescue Fairy native field/no-reward family changed.");
+    }
+
+    Moby temporaryHighCavesFairy = allMobys.Single(item => item.Level.Key == "highcaves" && NativeClass(item.Moby) == 0x00E3).Moby;
+    if (temporaryHighCavesFairy.Type != 0x20 || temporaryHighCavesFairy.SourceByte4F != 0x00 ||
+        temporaryHighCavesFairy.Flag4A != 0x10 || temporaryHighCavesFairy.Flag4B != 0xFF ||
+        temporaryHighCavesFairy.YawByte != 0xC0 || temporaryHighCavesFairy.TreasureValue != 0)
+    {
+        throw new InvalidOperationException("High Caves Temporary Superflame Fairy native field/no-reward row changed.");
+    }
+
+    Moby[] doctorShempGemSpawners = allMobys
+        .Where(item => item.Level.Key == "doctorshemp" && NativeClass(item.Moby) == 0x000D)
+        .Select(item => item.Moby)
+        .ToArray();
+    if (doctorShempGemSpawners.Any(moby =>
+        moby.Type != 0x00 || moby.SourceByte4F != 0x00 || moby.Flag4A is not (0x20 or 0xFF) ||
+        moby.Flag4B != 0x55 || moby.YawByte != 0 || moby.TreasureValue != 5 ||
+        moby.DisplayLabel.Contains("contained", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("Doctor Shemp Blue gem spawner native field/path family changed.");
+    }
+
+    Dictionary<(string LevelKey, int TrueIndex), int> bossPhaseRewardClasses = new()
+    {
+        [("toasty", 53)] = 0x55,
+        [("doctorshemp", 70)] = 0x56,
+        [("doctorshemp", 71)] = 0x55,
+        [("blowhard", 73)] = 0x56,
+        [("blowhard", 74)] = 0x56
+    };
+    Dictionary<(string LevelKey, int TrueIndex), string> bossPhaseRewardLabels = new()
+    {
+        [("toasty", 53)] = "Toasty phase-reward Blue gem marker",
+        [("doctorshemp", 70)] = "Doctor Shemp phase-reward Yellow gem marker",
+        [("doctorshemp", 71)] = "Doctor Shemp phase-reward Blue gem marker",
+        [("blowhard", 73)] = "Blowhard phase-reward Yellow gem marker",
+        [("blowhard", 74)] = "Blowhard phase-reward Yellow gem marker"
+    };
+    (LevelDefinition Level, Moby Moby)[] bossPhaseRewardMarkers = allMobys
+        .Where(item => bossPhaseRewardClasses.ContainsKey((item.Level.Key, item.Moby.TrueIndex)))
+        .ToArray();
+    if (bossPhaseRewardMarkers.Length != 5 || bossPhaseRewardMarkers.Any(item =>
+        NativeClass(item.Moby) != 0x015F || item.Moby.Type != 0x00 || item.Moby.State != 0x00 ||
+        item.Moby.SourceByte4F != 0x00 || item.Moby.Flag4A != 0x10 ||
+        item.Moby.Flag4B != bossPhaseRewardClasses[(item.Level.Key, item.Moby.TrueIndex)] ||
+        item.Moby.DisplayLabel != bossPhaseRewardLabels[(item.Level.Key, item.Moby.TrueIndex)] ||
+        !item.Moby.CandidateKind.Contains("phase-reward gem spawn", StringComparison.OrdinalIgnoreCase) ||
+        !item.Moby.Confidence.Contains("native-class-observed", StringComparison.OrdinalIgnoreCase) ||
+        item.Moby.VisualKind != MobyVisualKind.Control || item.Moby.IsEditorControl ||
+        item.Moby.DisplayLabel.Contains("Wall", StringComparison.OrdinalIgnoreCase) ||
+        item.Moby.CandidateKind.Contains("scenery", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("Boss phase-reward marker native identity/field family changed.");
+    }
+    if (allMobys.Count(item => NativeClass(item.Moby) == 0x015F) != 13)
+        throw new InvalidOperationException("Global class-0x015F reward-marker census changed; expected eight Artisans thief markers plus five boss markers.");
+
+    (LevelDefinition Level, Moby Moby)[] flightControllers = allMobys
+        .Where(item => item.Level.Key is "sunnyflight" or "nightflight" or "crystalflight" or "wildflight" or "icyflight" && NativeClass(item.Moby) == 0x0166)
+        .ToArray();
+    string[] sourceBackedFlightControllerLevels = ["nightflight", "crystalflight", "wildflight", "icyflight"];
+    if (sourceBackedFlightControllerLevels.Any(levelKey =>
+            flightControllers.Count(item => item.Level.Key == levelKey && item.Moby.TrueIndex == (levelKey switch
+            {
+                "nightflight" => 13,
+                "crystalflight" => 25,
+                "wildflight" => 22,
+                _ => 20
+            })) != 1) ||
+        flightControllers.Length is < 4 or > 5 || flightControllers.Any(item =>
+        item.Moby.Type != 0x00 || item.Moby.SourceByte4F != 0x00 || item.Moby.Flag4B != 0xFF ||
+        item.Moby.TreasureValue != 0 || item.Moby.DisplayLabel.Contains("route", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("Source-backed Flight challenge controller family or optional Sunny Flight loader-created controller changed.");
+    }
+
+    Moby[] sunnyTimerDigits = allMobys
+        .Where(item => item.Level.Key == "sunnyflight" && NativeClass(item.Moby) == 0x0105)
+        .Select(item => item.Moby)
+        .ToArray();
+    Moby[] sunnyBarrelIcons = allMobys
+        .Where(item => item.Level.Key == "sunnyflight" && NativeClass(item.Moby) == 0x01EA)
+        .Select(item => item.Moby)
+        .ToArray();
+    // Sunny Flight's controller and HUD rows are loader-created and are absent from portable source caches.
+    // When a live-RAM cache supplies them, keep checking their exact staging geometry and identity.
+    if (sunnyTimerDigits.Length is > 1 || sunnyBarrelIcons.Length is not 0 and not 8 ||
+        (sunnyTimerDigits.Length == 0) != (sunnyBarrelIcons.Length == 0) ||
+        sunnyTimerDigits.Any(moby =>
+            moby.Position.X != 25f || moby.Position.Y != 1.875f || moby.Position.Z != 256f ||
+            moby.DisplayLabel != "Flight HUD timer digit" || moby.VisualKind != MobyVisualKind.Control) ||
+        sunnyBarrelIcons.Any(moby =>
+            moby.Position.X != -6.25f || moby.Position.Y != 1.875f || moby.Position.Z != 256f ||
+            moby.DisplayLabel != "Flight barrel HUD icon" || moby.VisualKind != MobyVisualKind.Control ||
+            moby.DisplayLabel.Contains("route", StringComparison.OrdinalIgnoreCase) ||
+            moby.CandidateKind.Contains("world debris", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("Optional Sunny Flight loader-created timer/barrel HUD staging rows changed.");
+    }
+
+    Moby[] flightArrowSigns = allMobys
+        .Where(item => item.Level.Key is "crystalflight" or "nightflight" && NativeClass(item.Moby) == 0x01E5)
+        .Select(item => item.Moby)
+        .ToArray();
+    if (flightArrowSigns.Length != 5 || flightArrowSigns.Any(moby =>
+        moby.Type != 0x20 || moby.SourceByte4F != 0x00 || moby.Flag4A != 0x10 || moby.Flag4B != 0xFF))
+    {
+        throw new InvalidOperationException("Crystal/Night Flight direction-arrow sign field family changed.");
+    }
+    Moby mistySignBearer = allMobys.Single(item => item.Level.Key == "mistybog" && NativeClass(item.Moby) == 0x01E4).Moby;
+    if (mistySignBearer.DisplayLabel == "Flight direction arrow sign")
+        throw new InvalidOperationException("Misty Bog class 0x01E4 must not be grouped with the flight-only class-0x01E5 arrow signs.");
+
+    Moby[] waterBubbleEmitters = allMobys
+        .Where(item => NativeClass(item.Moby) == 0x000B)
+        .Select(item => item.Moby)
+        .ToArray();
+    if (waterBubbleEmitters.Length != 22 || waterBubbleEmitters.Any(moby =>
+        moby.Type != 0x00 || moby.State != 0x00 || moby.SourceByte4F != 0x00 ||
+        moby.Flag4B != 0xFF || moby.TreasureValue != 0 || moby.IsEditorControl) ||
+        waterBubbleEmitters.Any(moby => moby.Flag4A != (moby.TrueIndex is >= 149 and <= 154 ? 0x10 : 0x20)))
+    {
+        throw new InvalidOperationException("Three-level Water bubble emitter native field/census family changed.");
+    }
+
+    int[] iceGnorcIndexes = [1, 2, 3, 4, 5, 20, 21, 22, 23, 130];
+    Dictionary<int, int> iceGnorcRewardClasses = new()
+    {
+        [1] = 0x55,
+        [2] = 0x55,
+        [3] = 0x56,
+        [4] = 0x56,
+        [5] = 0x56,
+        [20] = 0x54,
+        [21] = 0x54,
+        [22] = 0x55,
+        [23] = 0x55,
+        [130] = 0x55
+    };
+    Moby[] iceGnorcs = allMobys
+        .Where(item => item.Level.Key == "wizardpeak" && NativeClass(item.Moby) == 0x0042)
+        .Select(item => item.Moby)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToArray();
+    if (!iceGnorcs.Select(moby => moby.TrueIndex).SequenceEqual(iceGnorcIndexes) || iceGnorcs.Any(moby =>
+        !moby.DisplayLabel.StartsWith("Ice Gnorc (", StringComparison.Ordinal) ||
+        !moby.CandidateKind.Contains("enemy actor", StringComparison.OrdinalIgnoreCase) ||
+        !moby.Confidence.Contains("native-class-observed", StringComparison.OrdinalIgnoreCase) ||
+        moby.VisualKind != MobyVisualKind.Actor || moby.IsEditorControl ||
+        moby.Type != (moby.TrueIndex == 4 ? 0x20 : 0x00) ||
+        moby.Flag4A != 0x10 || moby.Flag4B != iceGnorcRewardClasses[moby.TrueIndex] ||
+        moby.SourceByte4F != (moby.TrueIndex == 1 ? 0x03 : 0x00) ||
+        moby.DisplayLabel.Contains("control", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("Wizard Peak ten-member Ice Gnorc actor/summon family changed.");
+    }
+    if (iceGnorcs.Sum(moby => moby.TreasureValue) != 59)
+        throw new InvalidOperationException($"Wizard Peak Ice Gnorc treasure changed: {iceGnorcs.Sum(moby => moby.TreasureValue)}/59.");
+
+    Moby[] returnHomeLetters = allMobys
+        .Where(item => item.Level.Key == "drycanyon" && item.Moby.TrueIndex is >= 183 and <= 192)
+        .Select(item => item.Moby)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToArray();
+    Dictionary<int, int> expectedReturnHomeLetterClasses = new()
+    {
+        [183] = 0x01BB,
+        [184] = 0x01AE,
+        [185] = 0x01BD,
+        [186] = 0x01BE,
+        [187] = 0x01BB,
+        [188] = 0x01B7,
+        [189] = 0x01B1,
+        [190] = 0x01B8,
+        [191] = 0x01B6,
+        [192] = 0x01AE
+    };
+    string returnHomeText = string.Concat(returnHomeLetters.Select(moby => moby.DisplayLabel[^1]));
+    // Dry Canyon source data ends at T176; T183-T192 are loader-created portal text in live RAM.
+    if (returnHomeLetters.Length != 0 &&
+        (returnHomeLetters.Length != 10 || returnHomeText != "RETURNHOME" ||
+         returnHomeLetters.Any(moby =>
+             NativeClass(moby) != expectedReturnHomeLetterClasses[moby.TrueIndex] ||
+             moby.Type != 0x20 || moby.SourceByte4F != 0x02 || moby.Flag4A != 0xFF || moby.Flag4B != 0xFF ||
+             !moby.CandidateKind.Contains("portal-text", StringComparison.OrdinalIgnoreCase) ||
+             !moby.Confidence.Contains("native-class-observed", StringComparison.OrdinalIgnoreCase) ||
+             moby.VisualKind != MobyVisualKind.Portal)))
+    {
+        throw new InvalidOperationException($"Optional Dry Canyon loader-created Return Home portal-letter family changed: count={returnHomeLetters.Length}, text={returnHomeText}.");
+    }
+
+    Dictionary<string, int[]> greenDruidTargetIndexes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["magiccrafters"] = [34, 35, 36, 37, 38, 41],
+        ["alpineridge"] = [48, 49, 50, 51, 52, 53, 135, 136, 137],
+        ["highcaves"] = [20, 21, 22, 23],
+        ["blowhard"] = [68, 69, 70, 71]
+    };
+    foreach ((string levelKey, int[] expectedIndexes) in greenDruidTargetIndexes)
+    {
+        Moby[] targets = allMobys
+            .Where(item => item.Level.Key == levelKey && NativeClass(item.Moby) == 0x0148)
+            .Select(item => item.Moby)
+            .OrderBy(moby => moby.TrueIndex)
+            .ToArray();
+        if (!targets.Select(moby => moby.TrueIndex).SequenceEqual(expectedIndexes))
+            throw new InvalidOperationException($"{levelKey} Green Druid spell-target rows changed: {string.Join(',', targets.Select(moby => moby.TrueIndex))}.");
+
+        List<Moby> incorrectTargets = targets.Where(moby =>
+            moby.DisplayLabel != (levelKey == "alpineridge" && moby.TrueIndex is 135 or 136
+                ? "Dormant Green Druid spell target"
+                : "Green Druid spell target") ||
+            !moby.CandidateKind.Contains("collision-triangle", StringComparison.OrdinalIgnoreCase) ||
+            !moby.Confidence.Contains("native-class-observed", StringComparison.OrdinalIgnoreCase) ||
+            moby.VisualKind != MobyVisualKind.Control ||
+            moby.Type != 0x00 ||
+            moby.SourceByte4F != 0x00 ||
+            moby.Flag4B != 0xFF ||
+            moby.TreasureValue != 0 ||
+            moby.IsEditorControl).ToList();
+        if (incorrectTargets.Count > 0)
+            throw new InvalidOperationException($"{levelKey} Green Druid spell-target identity regression: {string.Join("; ", incorrectTargets.Select(moby => $"T{moby.TrueIndex} {moby.DisplayLabel}/{moby.VisualKind}/{moby.TechnicalSummary}"))}.");
+    }
+
+    Dictionary<(string LevelKey, int NativeClass), int[]> greenDruidActorIndexes = new()
+    {
+        [("magiccrafters", 0x010E)] = [7, 10, 20, 23, 28, 31],
+        [("alpineridge", 0x010E)] = [5, 6, 11, 15, 16, 17, 18, 20, 42],
+        [("highcaves", 0x012E)] = [15, 16, 18, 19],
+        [("blowhard", 0x01F1)] = [7, 8, 9, 10]
+    };
+    foreach (((string levelKey, int nativeClass), int[] expectedIndexes) in greenDruidActorIndexes)
+    {
+        Moby[] actors = allMobys
+            .Where(item => item.Level.Key == levelKey && NativeClass(item.Moby) == nativeClass)
+            .Select(item => item.Moby)
+            .OrderBy(moby => moby.TrueIndex)
+            .ToArray();
+        if (!actors.Select(moby => moby.TrueIndex).SequenceEqual(expectedIndexes) || actors.Any(moby =>
+            !moby.DisplayLabel.StartsWith("Green Druid", StringComparison.Ordinal) ||
+            !moby.CandidateKind.Contains("terrain-spell", StringComparison.OrdinalIgnoreCase) ||
+            !moby.Confidence.Contains("native-class-observed", StringComparison.OrdinalIgnoreCase) ||
+            moby.VisualKind != MobyVisualKind.Actor ||
+            moby.IsEditorControl))
+        {
+            throw new InvalidOperationException($"{levelKey} native Green Druid actor family changed.");
+        }
+    }
+
+    Dictionary<string, int> activeDragonEggIndexes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["stonehill"] = 196,
+        ["townsquare"] = 109,
+        ["drycanyon"] = 178,
+        ["magiccrafters"] = 136
+    };
+    (LevelDefinition Level, Moby Moby)[] activeDragonEggs = allMobys
+        .Where(item => NativeClass(item.Moby) == 0x0022)
+        .ToArray();
+    // These carried eggs are created after the source table loads; portable source caches contain none.
+    if (activeDragonEggs.Length != 0 &&
+        (activeDragonEggs.Length != 4 || activeDragonEggs.Any(item =>
+            !activeDragonEggIndexes.TryGetValue(item.Level.Key, out int expectedTrueIndex) ||
+            item.Moby.TrueIndex != expectedTrueIndex ||
+            item.Moby.DisplayLabel != "Dragon Egg" ||
+            !item.Moby.CandidateKind.Contains("dragon egg", StringComparison.OrdinalIgnoreCase) ||
+            !item.Moby.Confidence.Contains("native-class-observed", StringComparison.OrdinalIgnoreCase) ||
+            item.Moby.VisualKind != MobyVisualKind.Actor)))
+    {
+        throw new InvalidOperationException("Optional four-level loader-created Dragon Egg census changed.");
+    }
+
+    Moby jacquesUpdateException = allMobys.Single(item => item.Level.Key == "jacques" && item.Moby.TrueIndex == 23).Moby;
+    if (jacquesUpdateException.Flag4A != 0x40 ||
+        allMobys.Where(item => item.Level.Key == "jacques" && NativeClass(item.Moby) == 0x007E && item.Moby.TrueIndex != 23).Any(item => item.Moby.Flag4A != 0x10))
+    {
+        throw new InvalidOperationException("Jacques Clock Fool update-distance exception changed: T23 should be 0x40 and all other class-0x007E rows should be 0x10.");
+    }
+
+    Moby[] balloons = allMobys
+        .Where(item => item.Level.Key == "loftycastle" && NativeClass(item.Moby) == 0x0128)
+        .Select(item => item.Moby)
+        .ToArray();
+    if (balloons.Single(moby => moby.TrueIndex == 21).Type != 0x28 || balloons.Where(moby => moby.TrueIndex != 21).Any(moby => moby.Type != 0x20))
+        throw new InvalidOperationException("Lofty Castle Balloognorc balloon radius exception changed: T21 should be 0x28 and the other eight rows should be 0x20.");
+
+    Dictionary<int, int> balloonBodyPairs = new()
+    {
+        [18] = 81,
+        [21] = 82,
+        [53] = 83,
+        [54] = 84,
+        [65] = 85,
+        [66] = 86,
+        [75] = 87,
+        [78] = 88,
+        [79] = 80
+    };
+    List<Moby> loftyMobys = allMobys.Where(item => item.Level.Key == "loftycastle").Select(item => item.Moby).ToList();
+    foreach ((int balloonIndex, int bodyIndex) in balloonBodyPairs)
+    {
+        Moby balloon = loftyMobys.Single(moby => moby.TrueIndex == balloonIndex);
+        Moby body = loftyMobys.Single(moby => moby.TrueIndex == bodyIndex);
+        if (NativeClass(body) != 0x012A || !body.DisplayLabel.StartsWith("Balloognorc", StringComparison.Ordinal) || balloon.Position != body.Position)
+            throw new InvalidOperationException($"Lofty Castle linked Balloognorc pair T{balloonIndex}<->T{bodyIndex} changed: {balloon.DisplayLabel}/{body.DisplayLabel}, {balloon.Position}/{body.Position}.");
+    }
+
+    Console.WriteLine("Decoded native identities: existing actor/prop families plus Water bubble emitters, High Caves fairies, gem spawners and boss phase-reward markers, Wizard Peak Ice Gnorcs, flight controller/HUD/signs, Ice Cavern chest butterflies, Beast Makers Crocodiles, and Dream Weavers Wall lanterns passed full-class/index/category guards.");
+}
+
+void ReportGnorcCoveAndHauntedTowersNativeIdentities()
+{
+    List<(LevelDefinition Level, Moby Moby)> allMobys = LoadAllCachedMobysWithMetadata();
+
+    int[] hatchIndexes = [0, 1, 2, 3, 5, 8, 9, 10, 11, 12, 13, 36, 43, 44, 48, 51, 77, 78, 79, 80, 147, 220];
+    AssertDecodedNativeIdentityFamily(allMobys, "gnorccove", 0x009A, hatchIndexes, "Barrel supply hatch", "barrel-supply", MobyVisualKind.Scenery);
+    List<Moby> hatches = allMobys
+        .Where(item => item.Level.Key == "gnorccove" && NativeClass(item.Moby) == 0x009A)
+        .Select(item => item.Moby)
+        .ToList();
+    if (hatches.Single(moby => moby.TrueIndex == 220).Flag4A != 0x10 || hatches.Where(moby => moby.TrueIndex != 220).Any(moby => moby.Flag4A != 0x20))
+        throw new InvalidOperationException("Gnorc Cove Barrel supply hatch update-distance exception changed: T220 should be 0x10 and the other 21 rows should be 0x20.");
+
+    AssertDecodedNativeIdentityFamily(allMobys, "hauntedtowers", 0x0088, [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 51, 60], "Metal door", "metal door", MobyVisualKind.Scenery);
+    AssertDecodedNativeIdentityFamily(allMobys, "hauntedtowers", 0x008E, [46, 47, 48, 82], "Temporary Superflame Fairy", "power-up actor", MobyVisualKind.Actor);
+    AssertDecodedNativeIdentityFamily(allMobys, "hauntedtowers", 0x00F1, [50], "Permanent Superflame Fairy", "power-up actor", MobyVisualKind.Actor);
+
+    List<Moby> metalDoors = allMobys
+        .Where(item => item.Level.Key == "hauntedtowers" && NativeClass(item.Moby) == 0x0088)
+        .Select(item => item.Moby)
+        .ToList();
+    if (metalDoors.Any(moby => moby.Type != 0x28 || moby.Flag4A != 0x10 || moby.Flag4B != 0xFF))
+        throw new InvalidOperationException("Haunted Towers Metal door native field family changed.");
+
+    List<Moby> temporaryFairies = allMobys
+        .Where(item => item.Level.Key == "hauntedtowers" && NativeClass(item.Moby) == 0x008E)
+        .Select(item => item.Moby)
+        .ToList();
+    if (temporaryFairies.Single(moby => moby.TrueIndex == 82).Flag4A != 0x10 || temporaryFairies.Where(moby => moby.TrueIndex != 82).Any(moby => moby.Flag4A != 0xFF))
+        throw new InvalidOperationException("Haunted Towers Temporary Superflame Fairy update-distance exception changed: T82 should be 0x10 and T46-T48 should be 0xFF.");
+
+    Console.WriteLine("Gnorc Cove/Haunted Towers native identities: 22 Barrel supply hatches, 12 Metal doors, 4 temporary Superflame Fairies, and 1 permanent Superflame Fairy passed guards.");
+}
+
+void ReportSharedLanternAndKeyChestIdentities()
+{
+    List<(LevelDefinition Level, Moby Moby)> allMobys = LoadAllCachedMobysWithMetadata();
+
+    AssertDecodedNativeIdentityFamily(allMobys, "clifftown", 0x0192, [148], "Lantern post", "lantern-post", MobyVisualKind.Scenery);
+    AssertDecodedNativeIdentityFamily(allMobys, "terracevillage", 0x0192, [118, 125, 129], "Lantern post", "lantern-post", MobyVisualKind.Scenery);
+    AssertDecodedNativeIdentityFamily(allMobys, "darkpassage", 0x0192, [199], "Lantern post", "lantern-post", MobyVisualKind.Scenery);
+    AssertDecodedNativeIdentityFamily(allMobys, "gnastysloot", 0x0192, [88, 89, 90, 91], "Lantern post", "lantern-post", MobyVisualKind.Scenery);
+
+    Dictionary<string, int> keyChestIndexes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["beastmakers"] = 31,
+        ["darkhollow"] = 58,
+        ["doctorshemp"] = 59,
+        ["drycanyon"] = 106,
+        ["gnorccove"] = 173,
+        ["icecavern"] = 40,
+        ["jacques"] = 49,
+        ["loftycastle"] = 110,
+        ["magiccrafters"] = 21,
+        ["metalhead"] = 133,
+        ["peacekeepers"] = 79,
+        ["stonehill"] = 75,
+        ["treetops"] = 165
+    };
+    foreach ((string levelKey, int trueIndex) in keyChestIndexes)
+        AssertDecodedNativeIdentityFamily(allMobys, levelKey, 0x00AE, [trueIndex], "Key Chest", "key-required", MobyVisualKind.Chest);
+
+    int globalLanterns = allMobys.Count(item => NativeClass(item.Moby) == 0x0192);
+    int globalKeyChests = allMobys.Count(item => NativeClass(item.Moby) == 0x00AE);
+    if (globalLanterns != 9 || globalKeyChests != 13)
+        throw new InvalidOperationException($"Shared native prop census changed: Lantern posts={globalLanterns}/9, Key Chests={globalKeyChests}/13.");
+
+    Console.WriteLine("Shared native props: 9 Lantern posts across four levels and 13 Key Chests across thirteen levels passed full-class guards.");
+}
+
+void ReportFinalGnastyIdentityFamilies()
+{
+    List<(LevelDefinition Level, Moby Moby)> allMobys = LoadAllCachedMobysWithMetadata();
+
+    AssertFinalGnastyIdentityFamily(
+        allMobys,
+        "gnastygnorc",
+        0x009F,
+        new Dictionary<int, string> { [1] = "Key thief", [2] = "Key thief" },
+        "key-carrying final-boss chase thief",
+        MobyVisualKind.Actor,
+        moby =>
+            moby.Type is 0x00 or 0x20 &&
+            moby.Flag4A == 0x50 &&
+            moby.Flag4B == 0xFF &&
+            moby.SourceByte4F == 0x00);
+    AssertFinalGnastyIdentityFamily(
+        allMobys,
+        "gnastygnorc",
+        0x00B5,
+        new Dictionary<int, string> { [100] = "Key-thief key", [101] = "Key-thief key" },
+        "key collectible",
+        MobyVisualKind.Key,
+        moby =>
+            moby.Type is 0x00 or 0x20 &&
+            moby.Flag4A == 0x10 &&
+            moby.Flag4B == 0xFF &&
+            moby.SourceByte4F == 0x02);
+    AssertFinalGnastyIdentityFamily(
+        allMobys,
+        "gnastygnorc",
+        0x00B9,
+        new Dictionary<int, string>
+        {
+            [102] = "First keyhole insertion target",
+            [103] = "Second keyhole insertion target"
+        },
+        "key-lock insertion",
+        MobyVisualKind.Control,
+        moby =>
+            moby.Type == 0x00 &&
+            moby.Flag4A == 0x10 &&
+            moby.Flag4B == 0xFF &&
+            moby.SourceByte4F == 0x00);
+    AssertFinalGnastyIdentityFamily(
+        allMobys,
+        "gnastysloot",
+        0x00B5,
+        new Dictionary<int, string>
+        {
+            [1] = "Thief key",
+            [2] = "Thief key",
+            [3] = "Thief key",
+            [9] = "Thief key"
+        },
+        "key collectible",
+        MobyVisualKind.Key,
+        moby =>
+            moby.Type == 0x20 &&
+            moby.Flag4A == 0x10 &&
+            moby.Flag4B == 0xFF &&
+            moby.SourceByte4F == 0x02);
+    AssertFinalGnastyIdentityFamily(
+        allMobys,
+        "gnastysloot",
+        0x00B9,
+        new Dictionary<int, string>
+        {
+            [7] = "Key-gate unlock pose marker",
+            [8] = "Key-gate unlock pose marker",
+            [10] = "Key-gate unlock pose marker",
+            [11] = "Key-gate unlock pose marker"
+        },
+        "key-gate unlock position",
+        MobyVisualKind.Control,
+        moby =>
+            moby.Type == 0x00 &&
+            moby.Flag4A == 0x10 &&
+            moby.Flag4B == 0xFF &&
+            moby.SourceByte4F == 0x00);
+    AssertFinalGnastyIdentityFamily(
+        allMobys,
+        "gnastysloot",
+        0x00D9,
+        new Dictionary<int, string> { [128] = "Gnasty's Loot 100% ending controller" },
+        "14,000-gem ending",
+        MobyVisualKind.Control,
+        moby =>
+            moby.Type == 0x00 &&
+            moby.Flag4A == 0xFF &&
+            moby.Flag4B == 0xFF &&
+            moby.SourceByte4F == 0x00);
+    AssertFinalGnastyIdentityFamily(
+        allMobys,
+        "gnastysworld",
+        0x00D0,
+        new Dictionary<int, string> { [1] = "Gnorc Gnexus progression-gate controller" },
+        "portal-gate environment-animation",
+        MobyVisualKind.Control,
+        moby =>
+            moby.Type == 0x00 &&
+            moby.Flag4A == 0xFF &&
+            moby.Flag4B == 0xFF &&
+            moby.SourceByte4F == 0x00);
+
+    (string LevelKey, Moby Moby, string ForbiddenLabel)[] nearMisses =
+    [
+        ("gnastygnorc", new Moby { Type = 0x20, SourceByte36 = 0x9F, SourceByte37 = 0x01, Flag4A = 0x50, Flag4B = 0xFF, SourceByte4F = 0x00 }, "Key thief"),
+        ("gnastygnorc", new Moby { Type = 0x20, SourceByte36 = 0x9F, SourceByte37 = 0x00, Flag4A = 0x10, Flag4B = 0xFF, SourceByte4F = 0x00 }, "Key thief"),
+        ("gnastygnorc", new Moby { Type = 0x20, SourceByte36 = 0xB5, SourceByte37 = 0x00, Flag4A = 0x10, Flag4B = 0xFF, SourceByte4F = 0x00 }, "Key-thief key"),
+        ("gnastygnorc", new Moby { Type = 0x20, SourceByte36 = 0xB9, SourceByte37 = 0x00, Flag4A = 0x10, Flag4B = 0xFF, SourceByte4F = 0x00 }, "Keyhole insertion target"),
+        ("gnastysloot", new Moby { Type = 0x00, SourceByte36 = 0xB9, SourceByte37 = 0x01, Flag4A = 0x10, Flag4B = 0xFF, SourceByte4F = 0x00 }, "Key-gate unlock pose marker"),
+        ("gnastysloot", new Moby { Type = 0x00, SourceByte36 = 0xD9, SourceByte37 = 0x00, Flag4A = 0x10, Flag4B = 0xFF, SourceByte4F = 0x00 }, "Gnasty's Loot 100% ending controller"),
+        ("gnastysworld", new Moby { Type = 0x00, SourceByte36 = 0xD0, SourceByte37 = 0x01, Flag4A = 0xFF, Flag4B = 0xFF, SourceByte4F = 0x00 }, "Gnorc Gnexus progression-gate controller")
+    ];
+    foreach ((string levelKey, Moby nearMiss, string forbiddenLabel) in nearMisses)
+    {
+        if (MobyIdentityClassifier.TryClassify(levelKey, nearMiss, out MobyIdentity identity) &&
+            identity.Label.Equals(forbiddenLabel, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Final Gnasty identity '{forbiddenLabel}' escaped its exact native fingerprint guard: {levelKey} {nearMiss.TechnicalSummary}.");
+        }
+    }
+
+    Console.WriteLine("Final Gnasty identities: 16 source rows across the 0x009F/0x00B5/0x00B9 key chain and the 0x00D0/0x00D9 controllers passed full-family, visual-kind, evidence, and near-miss guards.");
+}
+
+void AssertFinalGnastyIdentityFamily(
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys,
+    string levelKey,
+    int nativeClass,
+    IReadOnlyDictionary<int, string> expectedLabels,
+    string expectedKindFragment,
+    MobyVisualKind expectedVisualKind,
+    Func<Moby, bool> hasExpectedNativeFields)
+{
+    List<Moby> family = allMobys
+        .Where(item => item.Level.Key == levelKey && NativeClass(item.Moby) == nativeClass)
+        .Select(item => item.Moby)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToList();
+    int[] actualIndexes = family.Select(moby => moby.TrueIndex).ToArray();
+    int[] expectedIndexes = expectedLabels.Keys.Order().ToArray();
+    if (!actualIndexes.SequenceEqual(expectedIndexes))
+    {
+        throw new InvalidOperationException(
+            $"{levelKey} final native class 0x{nativeClass:X4} rows changed: expected T{string.Join(",T", expectedIndexes)}, found T{string.Join(",T", actualIndexes)}.");
+    }
+
+    List<Moby> incorrect = family
+        .Where(moby =>
+            !expectedLabels.TryGetValue(moby.TrueIndex, out string? expectedLabel) ||
+            !moby.DisplayLabel.Equals(expectedLabel, StringComparison.Ordinal) ||
+            !moby.CandidateKind.Contains(expectedKindFragment, StringComparison.OrdinalIgnoreCase) ||
+            !moby.Confidence.Contains("native-class-observed", StringComparison.OrdinalIgnoreCase) ||
+            moby.VisualKind != expectedVisualKind ||
+            !hasExpectedNativeFields(moby) ||
+            moby.DisplayLabel.Contains("route", StringComparison.OrdinalIgnoreCase) ||
+            moby.DisplayLabel.Contains("scene control", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    if (incorrect.Count > 0)
+    {
+        throw new InvalidOperationException(
+            $"{levelKey} final native class 0x{nativeClass:X4} identity regression: " +
+            string.Join("; ", incorrect.Select(moby =>
+                $"T{moby.TrueIndex} {moby.DisplayLabel}/{moby.CandidateKind}/{moby.Confidence}/{moby.VisualKind}/{moby.TechnicalSummary}")));
+    }
+}
+
+void AssertDecodedNativeIdentityFamily(
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys,
+    string levelKey,
+    int nativeClass,
+    IReadOnlyList<int> expectedTrueIndexes,
+    string expectedLabel,
+    string expectedKindFragment,
+    MobyVisualKind expectedVisualKind)
+{
+    List<Moby> family = allMobys
+        .Where(item => item.Level.Key == levelKey && NativeClass(item.Moby) == nativeClass)
+        .Select(item => item.Moby)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToList();
+    int[] expected = expectedTrueIndexes.Order().ToArray();
+    int[] actual = family.Select(moby => moby.TrueIndex).ToArray();
+    if (!actual.SequenceEqual(expected))
+        throw new InvalidOperationException($"{levelKey} native class 0x{nativeClass:X4} rows changed: expected {string.Join(',', expected)}, found {string.Join(',', actual)}.");
+
+    List<Moby> incorrect = family
+        .Where(moby =>
+            moby.DisplayLabel != expectedLabel ||
+            !moby.CandidateKind.Contains(expectedKindFragment, StringComparison.OrdinalIgnoreCase) ||
+            !moby.Confidence.Contains("native-class-observed", StringComparison.OrdinalIgnoreCase) ||
+            moby.VisualKind != expectedVisualKind ||
+            moby.IsEditorControl ||
+            moby.DisplayLabel.Contains("?", StringComparison.Ordinal) ||
+            moby.DisplayLabel.Contains("scenery prop", StringComparison.OrdinalIgnoreCase) ||
+            moby.DisplayLabel.Contains("route scenery", StringComparison.OrdinalIgnoreCase) ||
+            moby.DisplayLabel.Contains("chest link", StringComparison.OrdinalIgnoreCase))
+        .Take(8)
+        .ToList();
+    if (incorrect.Count > 0)
+    {
+        string summary = string.Join("; ", incorrect.Select(moby =>
+            $"T{moby.TrueIndex} {moby.DisplayLabel}/{moby.CandidateKind}/{moby.Confidence}/{moby.VisualKind}/{moby.TechnicalSummary}"));
+        throw new InvalidOperationException($"{levelKey} native class 0x{nativeClass:X4} decoded identity regression: {summary}");
+    }
+}
+
+void AssertNativeSceneryIdentityFamily(
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys,
+    string levelKey,
+    int nativeClass,
+    IReadOnlyList<int> expectedTrueIndexes,
+    string expectedLabel)
+{
+    List<Moby> family = allMobys
+        .Where(item => item.Level.Key.Equals(levelKey, StringComparison.OrdinalIgnoreCase) && NativeClass(item.Moby) == nativeClass)
+        .Select(item => item.Moby)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToList();
+    int[] expected = expectedTrueIndexes.Order().ToArray();
+    int[] actual = family.Select(moby => moby.TrueIndex).ToArray();
+    if (!actual.SequenceEqual(expected))
+        throw new InvalidOperationException($"{levelKey} native class 0x{nativeClass:X4} rows changed: expected {string.Join(',', expected)}, found {string.Join(',', actual)}.");
+
+    List<Moby> incorrect = family
+        .Where(moby =>
+            !moby.DisplayLabel.Equals(expectedLabel, StringComparison.Ordinal) ||
+            !moby.CandidateKind.Contains("scenery", StringComparison.OrdinalIgnoreCase) ||
+            !moby.Confidence.Contains("native-class-observed", StringComparison.OrdinalIgnoreCase) ||
+            moby.VisualKind != MobyVisualKind.Scenery ||
+            moby.Type != 0x20 ||
+            moby.SourceByte4F != 0x00 ||
+            moby.Flag4A != 0x10 ||
+            moby.Flag4B != 0xFF ||
+            moby.YawByte != 0 ||
+            moby.TreasureValue != 0 ||
+            moby.IsEditorControl ||
+            moby.Links.Count != 0 ||
+            moby.DisplayLabel.Contains("?", StringComparison.Ordinal) ||
+            moby.DisplayLabel.Contains("route", StringComparison.OrdinalIgnoreCase) ||
+            moby.DisplayLabel.Contains("flag", StringComparison.OrdinalIgnoreCase))
+        .Take(8)
+        .ToList();
+    if (incorrect.Count > 0)
+    {
+        string summary = string.Join("; ", incorrect.Select(moby =>
+            $"T{moby.TrueIndex} {moby.DisplayLabel}/{moby.CandidateKind}/{moby.Confidence}/{moby.VisualKind}/{moby.TechnicalSummary}"));
+        throw new InvalidOperationException($"{levelKey} native class 0x{nativeClass:X4} scenery identity regression: {summary}");
+    }
+}
+
+int NativeClass(Moby moby) => (moby.SourceByte37 << 8) | moby.SourceByte36;
+
+void AssertMetalheadNativeClassFamily(
+    IReadOnlyList<Moby> mobys,
+    int nativeClass,
+    int expectedCount,
+    string expectedLabel,
+    MobyVisualKind expectedVisualKind,
+    int expectedRewardValue)
+{
+    List<Moby> family = mobys
+        .Where(moby => ((moby.SourceByte37 << 8) | moby.SourceByte36) == nativeClass)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToList();
+    if (family.Count != expectedCount)
+        throw new InvalidOperationException($"Metalhead native class 0x{nativeClass:X4} expected {expectedCount} source rows, found {family.Count}.");
+
+    List<Moby> incorrect = family
+        .Where(moby =>
+            !moby.DisplayLabel.StartsWith(expectedLabel, StringComparison.OrdinalIgnoreCase) ||
+            !moby.Confidence.Contains("native-class-observed", StringComparison.OrdinalIgnoreCase) ||
+            moby.VisualKind != expectedVisualKind)
+        .Take(8)
+        .ToList();
+    if (incorrect.Count > 0)
+    {
+        string summary = string.Join("; ", incorrect.Select(moby =>
+            $"T{moby.TrueIndex} {moby.DisplayLabel}/{moby.CandidateKind}/{moby.Confidence}/{moby.VisualKind}"));
+        throw new InvalidOperationException($"Metalhead native class 0x{nativeClass:X4} identity regression: {summary}");
+    }
+
+    int rewardValue = family.Sum(moby => moby.RewardGem.Value);
+    if (rewardValue != expectedRewardValue)
+        throw new InvalidOperationException($"Metalhead native class 0x{nativeClass:X4} expected reward value {expectedRewardValue}, found {rewardValue}.");
 }
 
 Moby LoadMoby(string levelKey, int trueIndex)
@@ -3095,7 +5231,7 @@ void ReportAllLevelIdentityCoverage()
         int levelWeak = mobys.Count(IsWeakIdentityLabel);
         foreach (Moby weakMoby in mobys.Where(IsWeakIdentityLabel))
         {
-            string key = $"type=0x{weakMoby.Type:X2} b36=0x{weakMoby.SourceByte36:X2} f4A=0x{weakMoby.Flag4A:X2} f4B=0x{weakMoby.Flag4B:X2} b4F=0x{weakMoby.SourceByte4F:X2}";
+            string key = IdentityFingerprint(weakMoby);
             if (!weakGroups.TryGetValue(key, out WeakIdentityGroup? group))
             {
                 group = new WeakIdentityGroup(key);
@@ -3124,6 +5260,144 @@ void ReportAllLevelIdentityCoverage()
         foreach (WeakIdentityGroup group in weakGroups.Values.OrderByDescending(group => group.Count).Take(8))
             Console.WriteLine($"  {group.Count}x {group.Key} in {string.Join(", ", group.Levels.Distinct())} samples {string.Join(", ", group.Samples)}");
     }
+}
+
+void ReportGenericIdentitySourceSignatureAudit()
+{
+    List<(LevelDefinition Level, Moby Moby)> allMobys = LoadAllCachedMobysWithMetadata();
+    Dictionary<string, SourceSpecialDataSignature> sourceSignatures = BuildSourceSpecialDataSignatures(allMobys);
+    Dictionary<string, SourceSignatureExactEvidence> broadExactEvidence = BuildExactEvidenceBySourceSignature(allMobys, sourceSignatures);
+    Dictionary<string, SourceSignatureExactEvidence> strictExactEvidence = BuildStrictExactEvidenceBySourceSignature(allMobys, sourceSignatures);
+
+    var rows = allMobys
+        .Where(item => IsGenericIdentityForResearch(item.Moby))
+        .Select(item =>
+        {
+            SourceSpecialDataSignature? signature = sourceSignatures.TryGetValue(
+                SourceSignatureKey(item.Level.Key, item.Moby.TrueIndex),
+                out SourceSpecialDataSignature? foundSignature)
+                ? foundSignature
+                : null;
+            SourceSignatureExactEvidence matchingEvidence = signature != null &&
+                strictExactEvidence.TryGetValue(StrictSourceSignatureEvidenceKey(item.Level.Key, item.Moby, signature), out SourceSignatureExactEvidence? foundEvidence)
+                    ? foundEvidence
+                    : SourceSignatureExactEvidence.Empty;
+            SourceSignatureExactEvidence broadMatchingEvidence = signature != null &&
+                broadExactEvidence.TryGetValue(SourceSignatureEvidenceKey(item.Level.Key, signature), out SourceSignatureExactEvidence? foundBroadEvidence)
+                    ? foundBroadEvidence
+                    : SourceSignatureExactEvidence.Empty;
+            return new
+            {
+                item.Level,
+                item.Moby,
+                Signature = signature,
+                ExactEvidence = matchingEvidence,
+                BroadExactEvidence = broadMatchingEvidence,
+                Fingerprint = IdentityFingerprint(item.Moby)
+            };
+        })
+        .ToList();
+
+    var groups = rows
+        .GroupBy(row => new
+        {
+            row.Level.Key,
+            row.Level.DisplayName,
+            row.Moby.DisplayLabel,
+            row.Fingerprint,
+            SignatureHash = row.Signature?.Hash ?? "",
+            SignatureLength = row.Signature?.ByteLength ?? 0
+        })
+        .Select(group => new
+        {
+            LevelKey = group.Key.Key,
+            LevelName = group.Key.DisplayName,
+            Label = group.Key.DisplayLabel,
+            group.Key.Fingerprint,
+            group.Key.SignatureHash,
+            group.Key.SignatureLength,
+            SignatureOffset = group.First().Signature?.OffsetHex ?? "",
+            SignaturePrefix = group.First().Signature?.PrefixHex ?? "",
+            Count = group.Count(),
+            Samples = group.OrderBy(row => row.Moby.TrueIndex).Take(12).Select(row => $"T{row.Moby.TrueIndex}").ToList(),
+            ExactLabels = group.SelectMany(row => row.ExactEvidence.Labels).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            ExactSamples = group.SelectMany(row => row.ExactEvidence.Samples).Distinct(StringComparer.OrdinalIgnoreCase).Take(12).ToList(),
+            BroadExactLabels = group.SelectMany(row => row.BroadExactEvidence.Labels).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+        })
+        .OrderByDescending(group => group.ExactLabels.Count > 0)
+        .ThenByDescending(group => group.Count)
+        .ThenBy(group => group.LevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(group => group.Fingerprint, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+    string outDir = Path.Combine(workspace.RootPath, "_local", "smoke");
+    Directory.CreateDirectory(outDir);
+    string markdownPath = Path.Combine(outDir, "moby-generic-source-signature-audit.md");
+    string jsonPath = Path.Combine(outDir, "moby-generic-source-signature-audit.json");
+    int readableRows = rows.Count(row => row.Signature != null);
+    int directlyMatchedRows = rows.Count(row => row.ExactEvidence.Labels.Count > 0);
+    int packageRelatedRows = rows.Count(row => row.BroadExactEvidence.Labels.Count > 0);
+    int candidateGroups = groups.Count(group => group.ExactLabels.Count > 0);
+
+    StringBuilder markdown = new();
+    markdown.AppendLine("# Generic Moby Source-Signature Audit");
+    markdown.AppendLine();
+    markdown.AppendLine("This report targets identities that are safe but still broad. A promotion candidate appears only when its full native class, render-radius byte, and source-disc special-data bytes all match an already exact/observed identity in the same level. Signature-only package relationships are shown separately and are not sufficient for renaming.");
+    markdown.AppendLine();
+    markdown.AppendLine($"- Generic rows audited: {rows.Count}");
+    markdown.AppendLine($"- Generic rows with readable source special-data: {readableRows}");
+    markdown.AppendLine($"- Strict class/radius/signature matches to an exact identity: {directlyMatchedRows}");
+    markdown.AppendLine($"- Broader same-package signature relationships: {packageRelatedRows}");
+    markdown.AppendLine($"- Candidate fingerprint/signature groups: {candidateGroups}");
+    markdown.AppendLine();
+    markdown.AppendLine("| Rows | Level | Current label | Full fingerprint | Source signature | Strict exact labels | Same-package labels only | Exact samples | Generic samples |");
+    markdown.AppendLine("|---:|---|---|---|---|---|---|---|---|");
+    foreach (var group in groups)
+    {
+        string signature = string.IsNullOrWhiteSpace(group.SignatureHash)
+            ? "none"
+            : $"{group.SignatureHash}/{group.SignatureLength} @{group.SignatureOffset}";
+        markdown.AppendLine($"| {group.Count} | {EscapeMarkdown(group.LevelName)} | {EscapeMarkdown(group.Label)} | `{group.Fingerprint}` | `{signature}` | {EscapeMarkdown(group.ExactLabels.Count == 0 ? "" : string.Join("; ", group.ExactLabels))} | {EscapeMarkdown(group.BroadExactLabels.Count == 0 ? "" : string.Join("; ", group.BroadExactLabels))} | {EscapeMarkdown(group.ExactSamples.Count == 0 ? "" : string.Join("; ", group.ExactSamples))} | {EscapeMarkdown(string.Join(", ", group.Samples))} |");
+    }
+    File.WriteAllText(markdownPath, markdown.ToString());
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        generatedAt = DateTimeOffset.Now,
+        genericRows = rows.Count,
+        readableSourceSignatureRows = readableRows,
+        directlyMatchedRows,
+        packageRelatedRows,
+        candidateGroups,
+        groups
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Generic Moby source-signature audit: rows={rows.Count}, readable={readableRows}, exact-signature matches={directlyMatchedRows}, candidate groups={candidateGroups}");
+    Console.WriteLine($"Markdown: {markdownPath}");
+    Console.WriteLine($"JSON: {jsonPath}");
+}
+
+bool IsGenericIdentityForResearch(Moby moby)
+{
+    string text = moby.DisplayLabel.Trim().ToLowerInvariant();
+    return text.Contains("system/helper") ||
+        text.StartsWith("class 0x", StringComparison.Ordinal) ||
+        text.Contains("passive control") ||
+        text.Contains("actor/container") ||
+        text.Contains("flag/scenery") ||
+        text.Contains("scenery/prop") ||
+        text.Contains("special object") ||
+        text.Contains("scene/route") ||
+        text.Contains("course marker") ||
+        text.Contains("control marker") ||
+        text.Contains("special control") ||
+        text.Contains("route marker") ||
+        text.Contains("route scenery") ||
+        text.Contains("structural scenery") ||
+        text.Contains("regional scenery") ||
+        text.EndsWith("scenery prop", StringComparison.Ordinal) ||
+        text.EndsWith("scenery", StringComparison.Ordinal) ||
+        text.EndsWith("prop/control marker", StringComparison.Ordinal) ||
+        text.EndsWith("chest link", StringComparison.Ordinal);
 }
 
 async Task ReportDeepIdentityAudit()
@@ -3804,7 +6078,7 @@ string WriteIdentityObservationWorkingFileIfMissing(
         .ToDictionary(batch => batch.Fingerprint, StringComparer.OrdinalIgnoreCase);
 
     List<JsonElement> observations = new();
-    HashSet<string> existingFingerprints = new(StringComparer.OrdinalIgnoreCase);
+    HashSet<string> existingCanonicalFingerprints = new(StringComparer.OrdinalIgnoreCase);
     if (File.Exists(path))
     {
         try
@@ -3821,27 +6095,35 @@ string WriteIdentityObservationWorkingFileIfMissing(
             {
                 foreach (JsonElement observation in existingArray.EnumerateArray())
                 {
-                    string fingerprint = ReadJsonString(observation, "fingerprint");
                     bool userContent = HasUserObservationContent(observation);
                     if (!userContent)
                         continue;
 
-                    observations.Add(observation.Clone());
-                    if (!string.IsNullOrWhiteSpace(fingerprint))
-                        existingFingerprints.Add(fingerprint);
+                    if (TryCanonicalObservationFingerprint(observation, out string canonicalFingerprint))
+                    {
+                        observations.Add(CanonicalizeObservationFingerprint(observation, canonicalFingerprint));
+                        existingCanonicalFingerprints.Add(canonicalFingerprint);
+                    }
+                    else
+                    {
+                        observations.Add(observation.Clone());
+                    }
                 }
             }
         }
         catch
         {
             observations.Clear();
-            existingFingerprints.Clear();
+            existingCanonicalFingerprints.Clear();
         }
     }
 
     foreach (PrecisionIdentityGroup group in rankedQuestionableGroups)
     {
-        if (!existingFingerprints.Add(group.Key))
+        string canonicalGroup = MobyIdentityFingerprint.TryParse(group.Key, out MobyIdentityFingerprintParts parts) && parts.HasFullNativeClass
+            ? CanonicalIdentityFingerprint(parts.NativeClass, parts.RenderRadius, parts.UpdateDistance, parts.DropClass, parts.SpecularMetalType)
+            : group.Key;
+        if (!existingCanonicalFingerprints.Add(canonicalGroup))
             continue;
 
         observations.Add(JsonSerializer.SerializeToElement(
@@ -3855,6 +6137,122 @@ string WriteIdentityObservationWorkingFileIfMissing(
         observations
     }, new JsonSerializerOptions { WriteIndented = true }));
     return path;
+}
+
+bool TryCanonicalObservationFingerprint(JsonElement observation, out string canonical)
+{
+    canonical = "";
+    string fingerprint = ReadJsonString(observation, "fingerprint");
+    if (!MobyIdentityFingerprint.TryParse(fingerprint, out MobyIdentityFingerprintParts parts))
+        return false;
+
+    if (parts.HasFullNativeClass)
+    {
+        canonical = CanonicalIdentityFingerprint(parts.NativeClass, parts.RenderRadius, parts.UpdateDistance, parts.DropClass, parts.SpecularMetalType);
+        return true;
+    }
+
+    int explicitNativeClass = ReadJsonInt32(observation, "nativeClassHex", -1);
+    int explicitHighByte = ReadJsonInt32(observation, "sourceByte37Hex", -1);
+    int explicitLowByte = ReadJsonInt32(observation, "sourceByte36Hex", -1);
+    if (explicitNativeClass >= 0 || explicitHighByte >= 0)
+    {
+        int nativeClass = explicitNativeClass >= 0
+            ? explicitNativeClass & 0xFFFF
+            : ((explicitHighByte & 0xFF) << 8) | (parts.NativeClass & 0xFF);
+        if ((nativeClass & 0xFF) != (parts.NativeClass & 0xFF) ||
+            explicitLowByte >= 0 && explicitLowByte != (parts.NativeClass & 0xFF) ||
+            explicitHighByte >= 0 && explicitHighByte != ((nativeClass >> 8) & 0xFF))
+        {
+            return false;
+        }
+
+        canonical = CanonicalIdentityFingerprint(nativeClass, parts.RenderRadius, parts.UpdateDistance, parts.DropClass, parts.SpecularMetalType);
+        return true;
+    }
+
+    List<Moby> scopedCandidates = new();
+    AddObservationScopeCandidates(
+        ReadJsonString(observation, "levelKey", ReadJsonString(observation, "sampleLevelKey")),
+        ReadJsonInt32(observation, "matchTrueIndex", ReadJsonInt32(observation, "sampleTrueIndex", -1)),
+        ReadJsonInt64(observation, "specialDataPointerHex", ReadJsonInt64(observation, "specialDataPointer", -1)),
+        scopedCandidates);
+
+    if (observation.TryGetProperty("samples", out JsonElement samples) && samples.ValueKind == JsonValueKind.Array)
+    {
+        foreach (JsonElement sample in samples.EnumerateArray())
+        {
+            AddObservationScopeCandidates(
+                ReadJsonString(sample, "levelKey", ReadJsonString(sample, "LevelKey")),
+                ReadJsonInt32(sample, "trueIndex", ReadJsonInt32(sample, "TrueIndex", -1)),
+                ReadJsonInt64(sample, "specialDataPointerHex", ReadJsonInt64(sample, "SpecialDataPointer", -1)),
+                scopedCandidates);
+        }
+    }
+
+    if (scopedCandidates.Count == 0 &&
+        observation.TryGetProperty("levels", out JsonElement levels) &&
+        levels.ValueKind == JsonValueKind.Array &&
+        levels.GetArrayLength() == 1)
+    {
+        JsonElement onlyLevel = levels.EnumerateArray().Single();
+        string levelKey = onlyLevel.ValueKind == JsonValueKind.String ? onlyLevel.GetString() ?? "" : onlyLevel.ToString();
+        AddObservationScopeCandidates(levelKey, -1, -1, scopedCandidates);
+    }
+
+    string[] resolved = scopedCandidates
+        .Where(candidate => MobyIdentityFingerprint.Matches(fingerprint, candidate, allowLegacyLowByte: true))
+        .Select(MobyIdentityFingerprint.BuildV2)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Take(2)
+        .ToArray();
+    if (resolved.Length != 1)
+        return false;
+
+    canonical = resolved[0];
+    return true;
+}
+
+void AddObservationScopeCandidates(string levelKey, int trueIndex, long specialDataPointer, ICollection<Moby> candidates)
+{
+    if (string.IsNullOrWhiteSpace(levelKey))
+        return;
+
+    string cachePath = Path.Combine(workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
+    if (!File.Exists(cachePath))
+        return;
+
+    IEnumerable<Moby> scoped = MobyLoader.LoadCached(cachePath);
+    if (trueIndex >= 0)
+        scoped = scoped.Where(moby => moby.TrueIndex == trueIndex);
+    if (specialDataPointer > 0)
+        scoped = scoped.Where(moby => moby.SpecialDataPointer == (uint)specialDataPointer);
+    foreach (Moby moby in scoped)
+        candidates.Add(moby);
+}
+
+string CanonicalIdentityFingerprint(int nativeClass, int renderRadius, int updateDistance, int dropClass, int specularMetalType)
+{
+    return $"class=0x{nativeClass & 0xFFFF:X4} radius50=0x{renderRadius & 0xFF:X2} " +
+        $"update52=0x{updateDistance & 0xFF:X2} drop53=0x{dropClass & 0xFF:X2} spec4F=0x{specularMetalType & 0xFF:X2}";
+}
+
+JsonElement CanonicalizeObservationFingerprint(JsonElement observation, string canonicalFingerprint)
+{
+    if (!MobyIdentityFingerprint.TryParse(canonicalFingerprint, out MobyIdentityFingerprintParts parts) || !parts.HasFullNativeClass)
+        return observation.Clone();
+
+    JsonObject node = JsonNode.Parse(observation.GetRawText()) as JsonObject ?? new JsonObject();
+    node["fingerprintVersion"] = MobyIdentityFingerprint.CurrentVersion;
+    node["fingerprint"] = canonicalFingerprint;
+    node["nativeClassHex"] = $"0x{parts.NativeClass:X4}";
+    node["typeHex"] = $"0x{parts.RenderRadius:X2}";
+    node["sourceByte36Hex"] = $"0x{parts.NativeClass & 0xFF:X2}";
+    node["sourceByte37Hex"] = $"0x{parts.NativeClass >> 8:X2}";
+    node["flag4AHex"] = $"0x{parts.UpdateDistance:X2}";
+    node["flag4BHex"] = $"0x{parts.DropClass:X2}";
+    node["sourceByte4FHex"] = $"0x{parts.SpecularMetalType:X2}";
+    return JsonSerializer.SerializeToElement(node);
 }
 
 bool HasUserObservationContent(JsonElement observation)
@@ -3883,9 +6281,12 @@ object BuildIdentityObservationRecord(
     string lane = batch?.Lane ?? IdentityTestLane(group);
     return new
     {
+        fingerprintVersion = MobyIdentityFingerprint.CurrentVersion,
         fingerprint = group.Key,
+        nativeClassHex = parts.NativeClassHex,
         typeHex = parts.TypeHex,
         sourceByte36Hex = parts.SourceByte36Hex,
+        sourceByte37Hex = parts.SourceByte37Hex,
         flag4AHex = parts.Flag4AHex,
         flag4BHex = parts.Flag4BHex,
         sourceByte4FHex = parts.SourceByte4FHex,
@@ -4604,11 +7005,14 @@ string WriteIdentityFamilyObservationTemplate(
                 Samples = identityGroup.Samples.ToList(),
                 Observation = new
                 {
+                    fingerprintVersion = MobyIdentityFingerprint.CurrentVersion,
                     levelKey = first.Level.Key,
                     levelName = first.Level.DisplayName,
                     fingerprint,
+                    nativeClassHex = parts.NativeClassHex,
                     typeHex = parts.TypeHex,
                     sourceByte36Hex = parts.SourceByte36Hex,
+                    sourceByte37Hex = parts.SourceByte37Hex,
                     flag4AHex = parts.Flag4AHex,
                     flag4BHex = parts.Flag4BHex,
                     sourceByte4FHex = parts.SourceByte4FHex,
@@ -5173,6 +7577,7 @@ List<ControlCompanionCandidateRow> BuildControlCompanionCandidateRows(
         })
         .Where(item => item.Row.StrictTriggerCue ||
             item.Row.CompanionCount > 0 ||
+            !string.IsNullOrWhiteSpace(item.Row.CloneRootSummary) ||
             IsControlCompanionReviewRow(item.Moby))
         .Select(item => item.Row)
         .OrderBy(row => row.Priority)
@@ -5203,6 +7608,11 @@ List<ControlCompanionGroupRow> BuildControlCompanionGroupRows(
                 .Where(moby => moby != null && !moby!.IsRemoved)
                 .Select(moby => moby!)
                 .ToList();
+            // A source cache can legitimately omit loader-created companions such as Town Square T108.
+            // Do not advertise a partial link as cloneable until every checked-in member has a donor row.
+            if (members.Count != link.TrueIndexes.Distinct().Count())
+                continue;
+
             List<Moby> rootCandidates = members
                 .Where(moby => MobyCompanionClonePlanner.GetCompanionDonors(moby, levelMobys).Count > 0)
                 .OrderBy(moby => !IsLikelyUserFacingCloneRoot(moby))
@@ -5492,11 +7902,7 @@ void ValidateControlCompanionCandidateRows(IReadOnlyList<ControlCompanionCandida
         throw new InvalidOperationException("Source-form 0xAD key rows must not remain in the trigger/control companion report.");
 
     List<ControlCompanionCandidateRow> dragonRescueCameras = rows.Where(row =>
-        row.Fingerprint.Contains("type=0x00", StringComparison.OrdinalIgnoreCase) &&
-        row.Fingerprint.Contains("b36=0x6E", StringComparison.OrdinalIgnoreCase) &&
-        row.Fingerprint.Contains("f4A=0x10", StringComparison.OrdinalIgnoreCase) &&
-        row.Fingerprint.Contains("f4B=0xFF", StringComparison.OrdinalIgnoreCase) &&
-        row.Fingerprint.Contains("b4F=0x00", StringComparison.OrdinalIgnoreCase)).ToList();
+        FingerprintMatchesParts(row.Fingerprint, nativeClass: 0x006E, renderRadius: 0x00, updateDistance: 0x10, dropClass: 0xFF, specularMetalType: 0x00)).ToList();
     if (dragonRescueCameras.Count != 79 || dragonRescueCameras.Any(row =>
             row.Status.StartsWith("report-only", StringComparison.OrdinalIgnoreCase) ||
             row.CompanionCount == 0 ||
@@ -5514,7 +7920,10 @@ void ValidateControlCompanionCandidateRows(IReadOnlyList<ControlCompanionCandida
             !row.Status.Equals("promoted-companion", StringComparison.OrdinalIgnoreCase) ||
             string.IsNullOrWhiteSpace(row.CloneRootSummary))
         {
-            throw new InvalidOperationException($"{levelKey} Return Home helper T{helperTrueIndex} should be reported as a proven companion cloned by its linked visible Return Home root.");
+            string actual = row == null
+                ? "row absent"
+                : $"status={row.Status}, companions={row.CompanionCount}, roots={row.CloneRootSummary}, read={row.CurrentRead}, fingerprint={row.Fingerprint}";
+            throw new InvalidOperationException($"{levelKey} Return Home helper T{helperTrueIndex} should be reported as a proven companion cloned by its linked visible Return Home root; actual: {actual}.");
         }
     }
 
@@ -5580,7 +7989,11 @@ async Task ReportControlRoleInvestigationSummary()
     Directory.CreateDirectory(outDir);
     List<(LevelDefinition Level, Moby Moby)> allMobys = LoadAllCachedMobysWithMetadata();
     List<ControlRoleInvestigationRow> rows = BuildControlRoleInvestigationRows(allMobys);
-    string proofPath = await WriteControlRoleProofBatchArtifacts(outDir, allMobys, rows, writeBinExports: true);
+    string proofPath = await WriteControlRoleProofBatchArtifacts(
+        outDir,
+        allMobys,
+        rows,
+        writeBinExports: exportControlRoleProofBins);
     string reportPath = WriteControlRoleInvestigationReport(outDir, allMobys);
     string fieldGuidePath = WriteControlRoleFieldGuide(outDir, rows);
     Console.WriteLine($"Control role investigation: report={reportPath}, proofBatches={proofPath}, fieldGuide={fieldGuidePath}");
@@ -5636,9 +8049,9 @@ string WriteControlRoleInvestigationReport(
     if (screenshotFamily.Count > 0)
     {
         markdown.AppendLine();
-        markdown.AppendLine("## Class 0x1E Passive Control Family");
+        markdown.AppendLine("## Class 0x011E Ambient Sound Family");
         markdown.AppendLine();
-        markdown.AppendLine("These are the yellow control rows like the screenshot. They are not visible scenery, and class 0x1E alone does not prove a scene or route role; each row needs a direct link or live test before receiving a more specific name.");
+        markdown.AppendLine("These yellow control rows are non-rendered positional sound emitters. The native handler can keep a source stationary or move it through embedded 16-byte path points before playing a 3D sound; behavior links still decide whether an emitter should move with a portal or other visible root.");
         markdown.AppendLine();
         markdown.AppendLine("| Level | Moby | Facing | Position | Terrain evidence | Nearby anchors | Proof step |");
         markdown.AppendLine("|---|---:|---|---|---|---|---|");
@@ -5741,7 +8154,7 @@ string WriteControlRoleFieldGuide(string outDir, IReadOnlyList<ControlRoleInvest
     markdown.AppendLine("- If a row is in checked-in behavior-link metadata, copy/paste/add should bring it with the linked visible/root object.");
     markdown.AppendLine("- If a row is report-only, it stays inspectable and protected; do not add it as a standalone release object or hidden companion yet.");
     markdown.AppendLine("- Portal pad/control triplets have static cluster proof and disposable test discs, but remain proof-only until live behavior confirms the portal still works after moving the cluster.");
-    markdown.AppendLine("- The yellow control icon is a visual category, not one object type. Proven Return Home, portal, dragon/camera, hazard, and reward controls keep their specific links; unresolved class 0x1E rows remain neutral.");
+    markdown.AppendLine("- The yellow control icon is a visual category, not one object type. Native class 0x011E rows are ambient sound emitters; proven portal and Return Home links decide which visible root carries a linked emitter during edits.");
     markdown.AppendLine();
     markdown.AppendLine("## Next Live Proof Targets");
     markdown.AppendLine();
@@ -5808,7 +8221,7 @@ string ControlRoleFieldGuideFamily(ControlRoleInvestigationRow row)
     if (row.SourceByte36Hex.Equals("0x01", StringComparison.OrdinalIgnoreCase))
         return "0x01 portal destination/name";
     if (row.SourceByte36Hex.Equals("0x1E", StringComparison.OrdinalIgnoreCase))
-        return "0x1E passive control point";
+        return "0x011E ambient sound emitter";
     if (row.SourceByte36Hex.Equals("0x0B", StringComparison.OrdinalIgnoreCase))
         return "0x0B route-control cluster";
     if (text.Contains("chest", StringComparison.Ordinal) || text.Contains("reward", StringComparison.Ordinal) || text.Contains("container", StringComparison.Ordinal))
@@ -5823,7 +8236,7 @@ int ControlRoleFieldGuideFamilyRank(string family) =>
     {
         "0x8E portal pad trigger" => 0,
         "0x01 portal destination/name" => 1,
-        "0x1E passive control point" => 2,
+        "0x011E ambient sound emitter" => 2,
         "0x0B route-control cluster" => 3,
         "0xAD strict trigger/cue" => 4,
         "dragon/camera control" => 5,
@@ -5836,7 +8249,7 @@ string ControlRoleFieldGuideMeaning(string family) =>
     {
         "0x8E portal pad trigger" => "Looks like the portal pad/entry trigger member. Mapped triplets are still proof-only until live portal behavior confirms the link.",
         "0x01 portal destination/name" => "Usually sits beside portal pad triggers and route controls; current evidence says destination/name/portal-routing support, not a standalone visible object.",
-        "0x1E passive control point" => "Passive native control points with no standalone actor update. A more specific role requires a direct behavior link or live proof.",
+        "0x011E ambient sound emitter" => "Native positional-audio source. Its handler sets sound range, can follow embedded path points, and plays a 3D sound; behavior links identify which visible object should carry it during edits.",
         "0x0B route-control cluster" => "Route-control cluster candidate. Often appears in groups and needs marker-only vs cluster live proof.",
         "0xAD strict trigger/cue" => "Strict cue/trigger marker. Keep report-only until exact camera, cutscene, spawn, or rescue behavior is observed.",
         "dragon/camera control" => "Likely dragon rescue, camera, or cutscene control. Promote only when moving the visible rescue cluster proves behavior follows.",
@@ -5993,19 +8406,19 @@ string BuildControlRoleFingerprintWorkingRole(string fingerprint, IReadOnlyList<
     IdentityFingerprintParts parts = ParseIdentityFingerprint(fingerprint);
     string text = string.Join(" ", samples.Select(row => $"{row.CurrentRead} {row.LikelyRole} {row.Status}")).ToLowerInvariant();
 
-    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0x8E", StringComparison.OrdinalIgnoreCase))
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.NativeClassHex.Equals("0x018E", StringComparison.OrdinalIgnoreCase))
         return "portal pad trigger/control marker";
-    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0x01", StringComparison.OrdinalIgnoreCase))
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.NativeClassHex.Equals("0x0001", StringComparison.OrdinalIgnoreCase))
         return "portal destination or level-name support marker";
-    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0x1E", StringComparison.OrdinalIgnoreCase))
-        return "scene/route control marker";
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.NativeClassHex.Equals("0x011E", StringComparison.OrdinalIgnoreCase))
+        return "ambient sound emitter";
     if (IsArtisansScreenshotControlFingerprint(fingerprint))
         return parts.SourceByte36Hex.Equals("0x0B", StringComparison.OrdinalIgnoreCase)
             ? "Artisans screenshot scene/route control marker"
             : "Artisans local treasure/scenery control scaffold";
-    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0xAD", StringComparison.OrdinalIgnoreCase))
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.NativeClassHex.Equals("0x00AD", StringComparison.OrdinalIgnoreCase))
         return "strict trigger/cue marker";
-    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0x6E", StringComparison.OrdinalIgnoreCase))
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.NativeClassHex.Equals("0x006E", StringComparison.OrdinalIgnoreCase))
         return "dragon rescue control marker";
     if (text.Contains("sparx/player anchor", StringComparison.Ordinal) || text.Contains("sparx behavior", StringComparison.Ordinal))
         return "Sparx/player anchor or behavior control";
@@ -6024,8 +8437,8 @@ string BuildControlRoleFingerprintWorkingRole(string fingerprint, IReadOnlyList<
 
 bool IsArtisansScreenshotControlFingerprint(string fingerprint)
 {
-    return fingerprint.Equals("type=0x00 b36=0x0B f4A=0x10 f4B=0xFF b4F=0x00", StringComparison.OrdinalIgnoreCase) ||
-        fingerprint.Equals("type=0x00 b36=0x5F f4A=0x10 f4B=0x53 b4F=0x00", StringComparison.OrdinalIgnoreCase);
+    return FingerprintMatchesParts(fingerprint, nativeClass: 0x000B, renderRadius: 0x00, updateDistance: 0x10, dropClass: 0xFF, specularMetalType: 0x00) ||
+        FingerprintMatchesParts(fingerprint, nativeClass: 0x015F, renderRadius: 0x00, updateDistance: 0x10, dropClass: 0x53, specularMetalType: 0x00);
 }
 
 string BuildControlRoleFingerprintStrongestEvidence(IReadOnlyList<ControlRoleInvestigationRow> samples)
@@ -6062,8 +8475,8 @@ string BuildControlRoleFingerprintEditorBehavior(
 
     IdentityFingerprintParts parts = ParseIdentityFingerprint(fingerprint);
     if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) &&
-        (parts.SourceByte36Hex.Equals("0x8E", StringComparison.OrdinalIgnoreCase) ||
-            parts.SourceByte36Hex.Equals("0xAD", StringComparison.OrdinalIgnoreCase)))
+        (parts.NativeClassHex.Equals("0x018E", StringComparison.OrdinalIgnoreCase) ||
+            parts.NativeClassHex.Equals("0x00AD", StringComparison.OrdinalIgnoreCase)))
     {
         return "Report-only until a live marker-only vs cluster proof confirms the linked behavior.";
     }
@@ -6087,9 +8500,8 @@ string BuildControlRoleFingerprintNextProof(string fingerprint, IReadOnlyList<Co
         return "In Artisans, compare T17-T20 and T34-T37 marker-only and cluster CUEs. Check nearby treasure gnorcs, trees/scenery, chests, rewards, and camera behavior before promoting any link.";
     }
     if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) &&
-        (parts.SourceByte36Hex.Equals("0x8E", StringComparison.OrdinalIgnoreCase) ||
-            parts.SourceByte36Hex.Equals("0x01", StringComparison.OrdinalIgnoreCase) ||
-            parts.SourceByte36Hex.Equals("0x1E", StringComparison.OrdinalIgnoreCase)) &&
+        (parts.NativeClassHex.Equals("0x018E", StringComparison.OrdinalIgnoreCase) ||
+            parts.NativeClassHex.Equals("0x0001", StringComparison.OrdinalIgnoreCase)) &&
         text.Contains("portal", StringComparison.Ordinal))
     {
         return "Move the pad, destination/name, and route-control cluster together in a disposable BIN; compare portal entry, level-name text, return-home, and camera/position behavior.";
@@ -6101,7 +8513,7 @@ string BuildControlRoleFingerprintNextProof(string fingerprint, IReadOnlyList<Co
         return "Move marker-only first, then marker with the nearest shell/reward rows; compare hit response, spawned rewards, treasure total, and collection behavior.";
     if (text.Contains("terrain", StringComparison.Ordinal) || text.Contains("hazard", StringComparison.Ordinal) || text.Contains("water", StringComparison.Ordinal) || text.Contains("lava", StringComparison.Ordinal))
         return "Move marker-only first and repeat the same hazard/terrain touch; compare damage, reset, collision, and camera behavior.";
-    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0xAD", StringComparison.OrdinalIgnoreCase))
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.NativeClassHex.Equals("0x00AD", StringComparison.OrdinalIgnoreCase))
         return "Use marker-only before cluster. Record exactly what appears, disappears, starts, stops, or breaks, then promote only the confirmed linked true indexes.";
     if (text.Contains("sparx", StringComparison.Ordinal))
         return "Move with its nearest Sparx/player behavior partner and visible cluster; check collection, rescue, or camera side effects before naming it.";
@@ -6117,13 +8529,13 @@ int BuildControlRoleFingerprintPriority(
     IdentityFingerprintParts parts = ParseIdentityFingerprint(fingerprint);
     if (IsArtisansScreenshotControlFingerprint(fingerprint))
         return parts.SourceByte36Hex.Equals("0x0B", StringComparison.OrdinalIgnoreCase) ? 1 : 2;
-    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0x8E", StringComparison.OrdinalIgnoreCase))
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.NativeClassHex.Equals("0x018E", StringComparison.OrdinalIgnoreCase))
         return 3;
-    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0x01", StringComparison.OrdinalIgnoreCase))
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.NativeClassHex.Equals("0x0001", StringComparison.OrdinalIgnoreCase))
         return 4;
-    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0x1E", StringComparison.OrdinalIgnoreCase))
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.NativeClassHex.Equals("0x011E", StringComparison.OrdinalIgnoreCase))
         return 5;
-    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.SourceByte36Hex.Equals("0xAD", StringComparison.OrdinalIgnoreCase))
+    if (parts.TypeHex.Equals("0x00", StringComparison.OrdinalIgnoreCase) && parts.NativeClassHex.Equals("0x00AD", StringComparison.OrdinalIgnoreCase))
         return 6;
     if (needsProof > 0 && samples.Any(row => row.Status.Contains("terrain", StringComparison.OrdinalIgnoreCase)))
         return 8;
@@ -6163,21 +8575,21 @@ string BuildControlRoleValueCountSummary(IEnumerable<string> values, int maxItem
 void ValidateControlRoleFingerprintFamilyGuide(IReadOnlyList<ControlRoleFingerprintFamilyRow> familyRows)
 {
     ControlRoleFingerprintFamilyRow? artisansSceneControl = familyRows.FirstOrDefault(row =>
-        row.Fingerprint.Equals("type=0x00 b36=0x0B f4A=0x10 f4B=0xFF b4F=0x00", StringComparison.OrdinalIgnoreCase));
+        FingerprintMatchesParts(row.Fingerprint, nativeClass: 0x000B, renderRadius: 0x00, updateDistance: 0x10, dropClass: 0xFF, specularMetalType: 0x00));
     if (artisansSceneControl == null)
         throw new InvalidOperationException("Exact byte-family guide must include the Artisans screenshot-style 0x0B control family.");
     if (artisansSceneControl.Proven != 0 || !artisansSceneControl.EditorBehavior.Contains("Report-only", StringComparison.OrdinalIgnoreCase))
         throw new InvalidOperationException("Artisans screenshot-style 0x0B control family must remain report-only.");
 
     ControlRoleFingerprintFamilyRow? portalPadFamily = familyRows.FirstOrDefault(row =>
-        row.Fingerprint.Equals("type=0x00 b36=0x8E f4A=0x10 f4B=0xFF b4F=0x00", StringComparison.OrdinalIgnoreCase));
+        FingerprintMatchesParts(row.Fingerprint, nativeClass: 0x018E, renderRadius: 0x00, updateDistance: 0x10, dropClass: 0xFF, specularMetalType: 0x00));
     if (portalPadFamily == null || portalPadFamily.Proven != 0 || portalPadFamily.NeedsProof == 0)
         throw new InvalidOperationException("Portal pad trigger family must remain proof-only until live portal behavior is confirmed.");
 
-    ControlRoleFingerprintFamilyRow? sceneRouteFamily = familyRows.FirstOrDefault(row =>
-        row.Fingerprint.Equals("type=0x00 b36=0x1E f4A=0x10 f4B=0xFF b4F=0x00", StringComparison.OrdinalIgnoreCase));
-    if (sceneRouteFamily == null || sceneRouteFamily.Proven == 0 || sceneRouteFamily.NeedsProof == 0)
-        throw new InvalidOperationException("Scene/route 0x1E family should stay mixed: some proven companions, some proof-only rows.");
+    ControlRoleFingerprintFamilyRow? ambientSoundFamily = familyRows.FirstOrDefault(row =>
+        FingerprintMatchesParts(row.Fingerprint, nativeClass: 0x011E, renderRadius: 0x00, updateDistance: 0x10, dropClass: 0xFF, specularMetalType: 0x00));
+    if (ambientSoundFamily == null || ambientSoundFamily.Proven == 0 || ambientSoundFamily.NeedsProof == 0)
+        throw new InvalidOperationException("Native class 0x011E ambient-sound family should stay mixed: some proven companions, some proof-only rows.");
 
     List<ControlRoleFingerprintFamilyRow> unsafeRows = familyRows
         .Where(row => row.NeedsProof > 0 && row.EditorBehavior.Contains("Auto-clone is allowed for this family", StringComparison.OrdinalIgnoreCase))
@@ -6392,7 +8804,7 @@ string BuildControlRoleDossierEditorAction(ControlRoleInvestigationRow row, stri
         return "Keep report-only. Test terrain/water/hazard behavior first; do not auto-add as a chest/gem companion yet.";
     if (row.Status.Contains("scenery", StringComparison.OrdinalIgnoreCase))
         return "Keep report-only. Move marker and visible prop separately, then together, before allowing companion cloning.";
-    return "Keep inspectable but not placeable as a standalone release object until live behavior proof exists.";
+    return "Keep report-only and inspectable, but not placeable as a standalone release object until live behavior proof exists.";
 }
 
 string BuildControlRoleDossierArtifactCell(ControlRoleDossierRow row)
@@ -6472,9 +8884,9 @@ string WriteSceneRouteMarkerFamilyReport(
         .ToList();
 
     StringBuilder markdown = new();
-    markdown.AppendLine("# Passive Control Marker Family");
+    markdown.AppendLine("# Ambient Sound And Control Marker Family");
     markdown.AppendLine();
-    markdown.AppendLine("Focused analysis for the yellow control family, including unresolved class `0x1E` points, portal pad/destination rows, and proven portal/dragon companion rows. This report keeps icon similarity separate from behavior proof.");
+    markdown.AppendLine("Focused analysis for the yellow control family, including native class `0x011E` positional sound emitters, portal pad/destination rows, and proven portal/dragon companion rows. A sound emitter's class identity is proven; whether it should move with a particular visible root still comes from behavior-link evidence.");
     markdown.AppendLine();
     markdown.AppendLine($"- Rows: {rows.Count}");
     markdown.AppendLine($"- Proven auto-clone rows: {provenRows.Count}");
@@ -6515,7 +8927,7 @@ string WriteSceneRouteMarkerFamilyReport(
     File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
     {
         generatedAt = DateTimeOffset.Now,
-        note = "Passive control family analysis. Unproven class 0x1E controls stay report-only; proven portal/dragon links can auto-clone through behavior-link metadata.",
+        note = "Ambient-sound and control family analysis. Native class 0x011E identifies positional sound emitters; proven portal/dragon links determine auto-clone behavior.",
         rows,
         stoneHillRows,
         needsProofRows,
@@ -6523,7 +8935,7 @@ string WriteSceneRouteMarkerFamilyReport(
     }, new JsonSerializerOptions { WriteIndented = true }));
 
     ValidateSceneRouteMarkerFamilyRows(rows);
-    Console.WriteLine($"Passive control marker family: rows={rows.Count}, proofNeeded={needsProofRows.Count}, report={markdownPath}");
+    Console.WriteLine($"Ambient sound/control marker family: rows={rows.Count}, proofNeeded={needsProofRows.Count}, report={markdownPath}");
     return markdownPath;
 }
 
@@ -7087,7 +9499,7 @@ string WriteStrictTriggerCueLinkageReport(
     StringBuilder markdown = new();
     markdown.AppendLine("# Strict 0xAD Trigger Cue Linkage");
     markdown.AppendLine();
-    markdown.AppendLine("This narrows the remaining strict `type=0x00 b36=0xAD f4A=0x00 f4B=0xFF b4F=0x02` cue family. These rows are still report-only unless a live proof confirms the linked true indexes.");
+    markdown.AppendLine("This narrows the remaining strict `class=0x00AD radius50=0x00 update52=0x00 drop53=0xFF spec4F=0x02` cue family. These rows are still report-only unless a live proof confirms the linked true indexes.");
     markdown.AppendLine();
     markdown.AppendLine($"- Strict cue rows: {rows.Count}");
     markdown.AppendLine($"- Already promoted through proven companion links: {rows.Count(row => row.PromotionState.StartsWith("already", StringComparison.OrdinalIgnoreCase))}");
@@ -7530,8 +9942,8 @@ string BuildControlRoleLikelyRole(
         return "dragon rescue scene control";
     if (text.Contains("portal", StringComparison.Ordinal) || text.Contains("return-home", StringComparison.Ordinal) || text.Contains("destination", StringComparison.Ordinal) || text.Contains("pad", StringComparison.Ordinal))
         return "portal route or destination control";
-    if (moby.SourceByte36 == 0x1E && moby.Flag4A == 0x10 && moby.Flag4B == 0xFF)
-        return "unresolved passive native class 0x1E control point";
+    if (moby.SourceByte36 == 0x1E && moby.SourceByte37 == 0x01 && moby.Flag4A == 0x10 && moby.Flag4B == 0xFF)
+        return "positional ambient sound emitter or moving sound path";
     if (text.Contains("chest", StringComparison.Ordinal) || text.Contains("container", StringComparison.Ordinal) || text.Contains("contained", StringComparison.Ordinal) || text.Contains("reward", StringComparison.Ordinal))
         return "container or reward control";
     if (IsStrict0xAdTriggerCue(moby))
@@ -7729,8 +10141,11 @@ void ValidateControlRoleInvestigationRows(
         ControlRoleInvestigationRow? row = rows.FirstOrDefault(row =>
             row.LevelKey.Equals("stonehill", StringComparison.OrdinalIgnoreCase) &&
             row.TrueIndex == 150);
-        if (row == null || !row.CurrentRead.Equals("Class 0x1E passive control", StringComparison.Ordinal))
-            throw new InvalidOperationException("Stone Hill T150 should remain in the control role report as an unresolved class 0x1E passive control.");
+        if (row == null || !row.CurrentRead.Equals("Ambient sound emitter", StringComparison.Ordinal) ||
+            !row.LikelyRole.Contains("sound", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Stone Hill T150 should remain in the control role report as a native positional ambient sound emitter.");
+        }
     }
 
     int strictCueSourceCount = allMobys.Count(item => IsStrict0xAdTriggerCue(item.Moby));
@@ -8462,6 +10877,8 @@ int ControlRoleProofQueuePriority(ControlRoleInvestigationRow row)
 {
     string text = $"{row.CurrentRead} {row.LikelyRole} {row.NearestAnchors} {row.ProofStep}".ToLowerInvariant();
     int priority = row.Priority;
+    if (IsKnownFocusedSceneRouteProofInvestigationRow(row))
+        priority = Math.Min(priority, 1);
     if (IsKnownPortalTripletProofInvestigationRow(row))
         priority = Math.Min(priority, 2);
     if (IsKnownReturnHomeHelperProofInvestigationRow(row))
@@ -8690,11 +11107,15 @@ void ValidateControlRoleProofBatches(
         bool sourceHasRow = investigationRows.Any(row =>
             row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) &&
             row.TrueIndex == trueIndex);
+        bool sourceAutoCloneSafe = investigationRows.Any(row =>
+            row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) &&
+            row.TrueIndex == trueIndex &&
+            row.AutoCloneSafe);
         bool proofHasRow = proofRows.Any(row =>
             row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) &&
             row.TrueIndex == trueIndex &&
             !string.IsNullOrWhiteSpace(row.MarkerOnlyManifest));
-        if (sourceHasRow && !proofHasRow)
+        if (sourceHasRow && !sourceAutoCloneSafe && !proofHasRow)
             throw new InvalidOperationException($"Control role proof batches should include focused scene/route row {levelKey} T{trueIndex}.");
     }
 
@@ -8728,11 +11149,15 @@ void ValidateControlRoleProofBatches(
         bool sourceHasRow = investigationRows.Any(row =>
             row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) &&
             row.TrueIndex == trueIndex);
+        bool sourceAutoCloneSafe = investigationRows.Any(row =>
+            row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) &&
+            row.TrueIndex == trueIndex &&
+            row.AutoCloneSafe);
         bool proofHasRow = proofRows.Any(row =>
             row.LevelKey.Equals(levelKey, StringComparison.OrdinalIgnoreCase) &&
             row.TrueIndex == trueIndex &&
             !string.IsNullOrWhiteSpace(row.MarkerOnlyManifest));
-        if (sourceHasRow && !proofHasRow)
+        if (sourceHasRow && !sourceAutoCloneSafe && !proofHasRow)
             throw new InvalidOperationException($"Control role proof batches should include mapped portal triplet {levelKey} T{trueIndex}.");
     }
 
@@ -9715,7 +12140,7 @@ string WriteIdentityModelFamilyReport(
             .Select(group => $"{group.Key} ({group.Count()})")
             .ToList();
         List<string> variants = row.All
-            .GroupBy(item => $"f4A=0x{item.Moby.Flag4A:X2} f4B=0x{item.Moby.Flag4B:X2} b4F=0x{item.Moby.SourceByte4F:X2} state=0x{item.Moby.State:X2}", StringComparer.OrdinalIgnoreCase)
+            .GroupBy(item => $"update52=0x{item.Moby.Flag4A:X2} drop53=0x{item.Moby.Flag4B:X2} spec4F=0x{item.Moby.SourceByte4F:X2} drawn51=0x{item.Moby.State:X2}", StringComparer.OrdinalIgnoreCase)
             .OrderByDescending(group => group.Count())
             .ThenBy(group => group.Key)
             .Select(group => $"{group.Key} ({group.Count()})")
@@ -9751,11 +12176,14 @@ string WriteIdentityModelFamilyReport(
 
         jsonRows.Add(new
         {
+            fingerprintVersion = MobyIdentityFingerprint.CurrentVersion,
             familyKey,
             levelKey = row.Level.Key,
             levelName = row.Level.DisplayName,
+            nativeClassHex = $"0x{row.Representative.SourceByte37:X2}{row.Representative.SourceByte36:X2}",
             typeHex = $"0x{row.Representative.Type:X2}",
             sourceByte36Hex = $"0x{row.Representative.SourceByte36:X2}",
+            sourceByte37Hex = $"0x{row.Representative.SourceByte37:X2}",
             specialDataPointer = $"0x{row.Representative.SpecialDataPointer:X8}",
             questionable = row.Questionable.Count,
             total = row.All.Count,
@@ -9788,14 +12216,19 @@ string WriteIdentityModelFamilyReport(
 
 string IdentityModelFamilyKey(LevelDefinition level, Moby moby)
 {
-    string special = moby.SpecialDataPointer == 0 ? $"runtime:{moby.RuntimeAddress:X8}:t{moby.TrueIndex}" : $"special:{moby.SpecialDataPointer:X8}";
-    return $"{level.Key}|type={moby.Type:X2}|b36={moby.SourceByte36:X2}|{special}";
+    string nativeClass = $"{moby.SourceByte37:X2}{moby.SourceByte36:X2}";
+    string special = moby.SpecialDataPointer == 0
+        ? $"native-class:{nativeClass}:update:{moby.Flag4A:X2}"
+        : $"special:{moby.SpecialDataPointer:X8}";
+    return $"{level.Key}|class={nativeClass}|{special}";
 }
 
 string IdentityModelFamilyDisplay(LevelDefinition level, Moby moby)
 {
-    string special = moby.SpecialDataPointer == 0 ? $"runtime 0x{moby.RuntimeAddress:X8}/T{moby.TrueIndex}" : $"special 0x{moby.SpecialDataPointer:X8}";
-    return $"{level.Key} type=0x{moby.Type:X2} b36=0x{moby.SourceByte36:X2} {special}";
+    string special = moby.SpecialDataPointer == 0
+        ? $"native-class/update family 0x{moby.Flag4A:X2}"
+        : $"special 0x{moby.SpecialDataPointer:X8}";
+    return $"{level.Key} class=0x{moby.SourceByte37:X2}{moby.SourceByte36:X2} {special}";
 }
 
 string NormalizeIdentityLabel(string label)
@@ -10304,9 +12737,58 @@ Dictionary<string, SourceSignatureExactEvidence> BuildExactEvidenceBySourceSigna
             StringComparer.OrdinalIgnoreCase);
 }
 
+Dictionary<string, SourceSignatureExactEvidence> BuildStrictExactEvidenceBySourceSignature(
+    IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys,
+    IReadOnlyDictionary<string, SourceSpecialDataSignature> sourceSignatures)
+{
+    return allMobys
+        .Where(item => IsExactIdentity(item.Moby))
+        .Where(item => !IsGenericIdentityForResearch(item.Moby))
+        .Where(item => !item.Moby.Confidence.Contains("user", StringComparison.OrdinalIgnoreCase))
+        .Select(item =>
+        {
+            SourceSpecialDataSignature? signature = sourceSignatures.TryGetValue(SourceSignatureKey(item.Level.Key, item.Moby.TrueIndex), out SourceSpecialDataSignature? found)
+                ? found
+                : null;
+            return new
+            {
+                item.Level,
+                item.Moby,
+                Signature = signature,
+                Label = NormalizeIdentityLabel(item.Moby.DisplayLabel)
+            };
+        })
+        .Where(item => item.Signature != null && !string.IsNullOrWhiteSpace(item.Label))
+        .GroupBy(item => StrictSourceSignatureEvidenceKey(item.Level.Key, item.Moby, item.Signature!), StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(
+            group => group.Key,
+            group =>
+            {
+                List<string> labels = group
+                    .GroupBy(item => item.Label, StringComparer.OrdinalIgnoreCase)
+                    .OrderByDescending(labelGroup => labelGroup.Count())
+                    .ThenBy(labelGroup => labelGroup.Key)
+                    .Take(8)
+                    .Select(labelGroup => $"{labelGroup.Key} ({labelGroup.Count()})")
+                    .ToList();
+                List<string> samples = group
+                    .OrderBy(item => item.Moby.TrueIndex)
+                    .Take(12)
+                    .Select(item => $"{item.Level.DisplayName}:T{item.Moby.TrueIndex} {item.Moby.DisplayLabel}")
+                    .ToList();
+                return new SourceSignatureExactEvidence(labels, samples);
+            },
+            StringComparer.OrdinalIgnoreCase);
+}
+
 string SourceSignatureEvidenceKey(string levelKey, SourceSpecialDataSignature signature)
 {
     return $"{levelKey}|{signature.Hash}|{signature.ByteLength}";
+}
+
+string StrictSourceSignatureEvidenceKey(string levelKey, Moby moby, SourceSpecialDataSignature signature)
+{
+    return $"{levelKey}|radius50={moby.Type:X2}|class={moby.SourceByte37:X2}{moby.SourceByte36:X2}|{signature.Hash}|{signature.ByteLength}";
 }
 
 Dictionary<uint, int> BuildSourceSpecialLengths(IEnumerable<byte[]> sourceRecords, long tableRelativeOffset)
@@ -10424,6 +12906,45 @@ byte[] ReadSourceWadBytes(FileStream stream, SourceDiscLayout layout, long wadOf
     return result;
 }
 
+SourceDiscFileRecord FindSourceRootFile(FileStream stream, SourceDiscLayout layout, Predicate<string> matchesName)
+{
+    byte[] data = new byte[layout.RootLength];
+    int remaining = data.Length;
+    int written = 0;
+    int sector = layout.RootExtent;
+    while (remaining > 0)
+    {
+        stream.Position = ((long)sector * layout.SectorSize) + layout.UserOffset;
+        int toRead = Math.Min(2048, remaining);
+        int read = stream.Read(data, written, toRead);
+        if (read != toRead)
+            throw new EndOfStreamException("Could not read source disc root directory.");
+        written += toRead;
+        remaining -= toRead;
+        sector++;
+    }
+
+    for (int offset = 0; offset < data.Length;)
+    {
+        int recordLength = data[offset];
+        if (recordLength == 0)
+        {
+            offset = ((offset / 2048) + 1) * 2048;
+            continue;
+        }
+        if (offset + recordLength > data.Length || recordLength < 34)
+            break;
+
+        int nameLength = data[offset + 32];
+        string name = Encoding.ASCII.GetString(data, offset + 33, nameLength).Replace(";1", "", StringComparison.OrdinalIgnoreCase);
+        if (matchesName(name))
+            return new SourceDiscFileRecord(name, GetUInt32(data, offset + 2), GetUInt32(data, offset + 10));
+        offset += recordLength;
+    }
+
+    throw new InvalidOperationException("Could not find the requested source disc root file.");
+}
+
 SourceDiscFileRecord FindSourceExecutable(FileStream stream, SourceDiscLayout layout)
 {
     byte[] data = new byte[layout.RootLength];
@@ -10529,6 +13050,383 @@ long ParseFlexibleLong(string text)
     return trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
         ? long.Parse(trimmed[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture)
         : long.Parse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture);
+}
+
+ObjectSmokeDiscIsolation BeginObjectSmokeDiscIsolation()
+{
+    string objectRoot = Path.Combine(workspace.RootPath, "_local", "objects");
+    string backupRoot = Path.Combine(
+        workspace.RootPath,
+        "_local",
+        "smoke",
+        $"object-disc-backup-{Guid.NewGuid():N}");
+    string[] existingArtifacts = Directory.Exists(objectRoot)
+        ? Directory.EnumerateFiles(objectRoot, "*", SearchOption.AllDirectories)
+            .Where(IsBinOrCueArtifact)
+            .ToArray()
+        : [];
+    List<ObjectSmokeDiscArtifactBackup> backups = existingArtifacts
+        .Select(path => new ObjectSmokeDiscArtifactBackup(
+            OriginalPath: path,
+            BackupPath: Path.Combine(backupRoot, Path.GetRelativePath(objectRoot, path))))
+        .ToList();
+    int movedCount = 0;
+    try
+    {
+        foreach (ObjectSmokeDiscArtifactBackup backup in backups)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(backup.BackupPath) ?? backupRoot);
+            File.Move(backup.OriginalPath, backup.BackupPath);
+            movedCount++;
+        }
+    }
+    catch (Exception isolationException)
+    {
+        List<Exception> restoreExceptions = [];
+        for (int index = movedCount - 1; index >= 0; index--)
+        {
+            ObjectSmokeDiscArtifactBackup backup = backups[index];
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(backup.OriginalPath) ?? objectRoot);
+                File.Move(backup.BackupPath, backup.OriginalPath, true);
+            }
+            catch (Exception restoreException)
+            {
+                restoreExceptions.Add(restoreException);
+            }
+        }
+        if (restoreExceptions.Count > 0)
+        {
+            throw new AggregateException(
+                "Object-smoke disc isolation failed and one or more existing BIN/CUE artifacts could not be restored.",
+                [isolationException, .. restoreExceptions]);
+        }
+        if (Directory.Exists(backupRoot))
+            Directory.Delete(backupRoot, true);
+        throw;
+    }
+
+    return new ObjectSmokeDiscIsolation(objectRoot, backupRoot, backups);
+}
+
+int RestoreObjectSmokeDiscIsolation(ObjectSmokeDiscIsolation isolation)
+{
+    List<Exception> cleanupExceptions = [];
+    string[] generatedArtifacts = Directory.Exists(isolation.ObjectRoot)
+        ? Directory.EnumerateFiles(isolation.ObjectRoot, "*", SearchOption.AllDirectories)
+            .Where(IsBinOrCueArtifact)
+            .ToArray()
+        : [];
+    int cleanedCount = 0;
+    foreach (string generatedArtifact in generatedArtifacts)
+    {
+        try
+        {
+            File.Delete(generatedArtifact);
+            cleanedCount++;
+        }
+        catch (Exception cleanupException)
+        {
+            cleanupExceptions.Add(cleanupException);
+        }
+    }
+    foreach (ObjectSmokeDiscArtifactBackup backup in isolation.Backups)
+    {
+        try
+        {
+            if (!File.Exists(backup.BackupPath))
+                throw new FileNotFoundException("The isolated object-smoke artifact backup is missing.", backup.BackupPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(backup.OriginalPath) ?? isolation.ObjectRoot);
+            File.Move(backup.BackupPath, backup.OriginalPath, true);
+        }
+        catch (Exception cleanupException)
+        {
+            cleanupExceptions.Add(cleanupException);
+        }
+    }
+    if (cleanupExceptions.Count > 0)
+    {
+        throw new AggregateException(
+            $"Object-smoke cleanup failed. Recovery copies, when available, remain under '{isolation.BackupRoot}'.",
+            cleanupExceptions);
+    }
+    if (Directory.Exists(isolation.BackupRoot))
+        Directory.Delete(isolation.BackupRoot, true);
+    return cleanedCount;
+}
+
+bool IsBinOrCueArtifact(string path)
+{
+    string extension = Path.GetExtension(path);
+    return extension.Equals(".bin", StringComparison.OrdinalIgnoreCase) ||
+        extension.Equals(".cue", StringComparison.OrdinalIgnoreCase);
+}
+
+void AssertNoEnvironmentPatchOverlaps(NativeEnvironmentGradePatchPlan plan, string label)
+{
+    var intervals = plan.Patches
+        .Select(patch =>
+        {
+            if (patch.ByteLength <= 0)
+                throw new InvalidOperationException($"{label} has a non-positive patch length for '{patch.Label}'.");
+            bool executable = patch.WadOffset.StartsWith("exe:", StringComparison.OrdinalIgnoreCase);
+            long start = executable
+                ? ParseFlexibleLong(patch.WadOffset[4..])
+                : ParseFlexibleLong(patch.WadOffset);
+            return new
+            {
+                AddressSpace = executable ? "exe" : "wad",
+                Start = start,
+                End = checked(start + patch.ByteLength),
+                patch.Label
+            };
+        })
+        .GroupBy(interval => interval.AddressSpace, StringComparer.OrdinalIgnoreCase);
+
+    foreach (var addressSpace in intervals)
+    {
+        var ordered = addressSpace.OrderBy(interval => interval.Start).ThenBy(interval => interval.End).ToArray();
+        for (int index = 1; index < ordered.Length; index++)
+        {
+            if (ordered[index].Start < ordered[index - 1].End)
+            {
+                throw new InvalidOperationException(
+                    $"{label} has overlapping {addressSpace.Key} patches: '{ordered[index - 1].Label}' and '{ordered[index].Label}'.");
+            }
+        }
+    }
+}
+
+void AssertDarkHollowTreeGradePlan(
+    NativeEnvironmentGradePatchPlan plan,
+    string wadAnalysisPath,
+    string sourceImagePath,
+    string? outputImagePath,
+    LevelDefinition darkHollow,
+    string label)
+{
+    AssertNoEnvironmentPatchOverlaps(plan, label);
+    SmokeAssetSubfileInfo textureSubfile = TryGetSmokeAssetSubfileInfo(wadAnalysisPath, darkHollow, 0)
+        ?? throw new InvalidOperationException("Dark Hollow texture subfile 0 is missing from the smoke analysis.");
+    SmokeAssetSubfileInfo scenerySubfile = TryGetSmokeAssetSubfileInfo(wadAnalysisPath, darkHollow, 2)
+        ?? throw new InvalidOperationException("Dark Hollow scenery subfile 2 is missing from the smoke analysis.");
+
+    (int Offset, string BeforeSha256)[] closeTreeSpecs =
+    [
+        (0x7C460, "3EF169D671DD5F3D84BFEAF2F5FD1388D0E17EF4048D986FE84979AE5F3494A7"),
+        (0x7CC60, "D9E70917444CAA9F244E54807A02F8A1A8269077813908CA6EE8E0F95120B291"),
+        (0x7D060, "C5CDABB0610F79ABCA0AA864833CA68C9582365DE727168A4AD820E8EEF5A360"),
+        (0x7D460, "E18CEAC716D0D8B868DCE9D952B6F6942E9CCCF4038649E133E519B5F8BADA33"),
+        (0x7E440, "5AE1DEFB401F8307BE30FF58EE84A76450A3CD0C3C883B8203436C8147E86B99"),
+        (0x7EC40, "97178BB30CD90B42916A9DD8849BB207DC55CB37E0994BABD5CDB1695FF8F1FF"),
+        (0x7F040, "5FB93A92D570CCC907B76C1829995586A63BA4A28C97A7D0EB8936F0E75AABDB"),
+        (0x7F440, "144F2F14015E653DE9024F1A4AF2E5BB255427D65A2B352BAE0D8A3721F1EE69")
+    ];
+    foreach ((int offset, string beforeSha256) in closeTreeSpecs)
+    {
+        string suffix = $"palette-0x{offset:X}";
+        NativeEnvironmentGradePatch patch = plan.Patches.Single(candidate =>
+            candidate.LevelKey == darkHollow.Key &&
+            candidate.Kind == "environment-terrain-texture-palette" &&
+            candidate.Label.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+        long expectedWadOffset = checked(textureSubfile.AssetWadOffset + textureSubfile.SubfileOffset + offset);
+        if (ParseFlexibleLong(patch.WadOffset) != expectedWadOffset ||
+            patch.ByteLength != 32 ||
+            patch.ColorCount != 15 ||
+            patch.ChangedByteCount <= 0 ||
+            !string.Equals(patch.BeforeSha256, beforeSha256, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(patch.BeforeSha256, patch.AfterSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"{label} did not preserve the exact source-bound 32-byte close-tree grade at 0x{offset:X}.");
+        }
+    }
+
+    (int Offset, string Suffix, int ByteLength, int ColorCount, string BeforeSha256)[] farTreeSpecs =
+    [
+        (0x129FC, "tree-variant-1", 44 * 4, 44, "3D2CE20BF4A01D78B944D9DB5EC43C092049E2FC209CF91004C500B6FC94F431"),
+        (0x16624, "tree-variant-2", 52 * 4, 52, "F817FBC3BDB7F3B61A87247AFCE3D799F20878815C154466B5FDCA6C85C400BF"),
+        (0x16D9C, "tree-variant-3", 41 * 4, 41, "FAC5789C3CD68EB7DC6552468392113709B75BD073C6C1B17B722C129880FB78")
+    ];
+    NativeEnvironmentGradePatch[] farTreePatches = plan.Patches
+        .Where(candidate =>
+            candidate.LevelKey == darkHollow.Key &&
+            candidate.Kind == "environment-scenery-lod-colors")
+        .ToArray();
+    if (farTreePatches.Length != farTreeSpecs.Length)
+        throw new InvalidOperationException($"{label} produced {farTreePatches.Length} far-tree patches instead of three.");
+    foreach ((int offset, string suffix, int byteLength, int colorCount, string beforeSha256) in farTreeSpecs)
+    {
+        NativeEnvironmentGradePatch patch = farTreePatches.Single(candidate =>
+            candidate.Label.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+        long expectedWadOffset = checked(scenerySubfile.AssetWadOffset + scenerySubfile.SubfileOffset + offset);
+        if (ParseFlexibleLong(patch.WadOffset) != expectedWadOffset ||
+            patch.ByteLength != byteLength ||
+            patch.ColorCount != colorCount ||
+            patch.ChangedByteCount <= 0 ||
+            !string.Equals(patch.BeforeSha256, beforeSha256, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(patch.BeforeSha256, patch.AfterSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"{label} did not preserve the exact source-bound {byteLength}-byte far-tree grade at 0x{offset:X}.");
+        }
+    }
+
+    int[] protectedPaletteOffsets =
+    [
+        0x687A0, 0x6B7A0, 0x6BBA0, 0x6BFA0,
+        0x787E0, 0x78BE0, 0x78FE0, 0x793E0, 0x797E0, 0x79BE0, 0x79FE0,
+        0x7A3E0, 0x7A7E0, 0x7ABE0, 0x7AFE0, 0x7B3E0, 0x7B7E0
+    ];
+    foreach (int protectedOffset in protectedPaletteOffsets)
+    {
+        long protectedStart = checked(textureSubfile.AssetWadOffset + textureSubfile.SubfileOffset + protectedOffset);
+        long protectedEnd = checked(protectedStart + 32);
+        NativeEnvironmentGradePatch? intersectingPatch = plan.Patches.FirstOrDefault(patch =>
+        {
+            if (patch.WadOffset.StartsWith("exe:", StringComparison.OrdinalIgnoreCase))
+                return false;
+            long patchStart = ParseFlexibleLong(patch.WadOffset);
+            long patchEnd = checked(patchStart + patch.ByteLength);
+            return patchStart < protectedEnd && protectedStart < patchEnd;
+        });
+        if (intersectingPatch != null)
+        {
+            throw new InvalidOperationException(
+                $"{label} intersects Dark Hollow's protected player palette at 0x{protectedOffset:X} with '{intersectingPatch.Label}'.");
+        }
+    }
+
+    if (string.IsNullOrWhiteSpace(outputImagePath))
+        return;
+    SourceDiscLayout sourceLayout = DetectSourceDiscLayout(sourceImagePath);
+    SourceDiscLayout outputLayout = DetectSourceDiscLayout(outputImagePath);
+    using FileStream source = File.OpenRead(sourceImagePath);
+    using FileStream output = File.OpenRead(outputImagePath);
+    foreach (int protectedOffset in protectedPaletteOffsets)
+    {
+        long wadOffset = checked(textureSubfile.AssetWadOffset + textureSubfile.SubfileOffset + protectedOffset);
+        byte[] sourceBytes = ReadSourceWadBytes(source, sourceLayout, wadOffset, 32);
+        byte[] outputBytes = ReadSourceWadBytes(output, outputLayout, wadOffset, 32);
+        if (!sourceBytes.AsSpan().SequenceEqual(outputBytes))
+        {
+            throw new InvalidOperationException(
+                $"{label} changed Dark Hollow's protected player palette bytes at 0x{protectedOffset:X}.");
+        }
+    }
+}
+
+void AssertEnvironmentGradeScopeRejected(
+    string wadAnalysisPath,
+    LevelDefinition target,
+    LevelDefinition donor,
+    NativeEnvironmentGradePlan grade)
+{
+    try
+    {
+        NativeEnvironmentGradeExporter.AnalyzeMatch(sourceImage, wadAnalysisPath, target, donor, grade);
+    }
+    catch (InvalidOperationException exception) when (
+        exception.Message.Contains("must be enabled together", StringComparison.OrdinalIgnoreCase))
+    {
+        return;
+    }
+    throw new InvalidOperationException(
+        $"Environment grading accepted a split close/far Dark Hollow LOD scope: scene={grade.GradeSceneColors}, palettes={grade.GradeTexturePalettes}.");
+}
+
+void AssertEnvironmentGradePlanRejected(
+    NativeEnvironmentGradeBatchPatchRequest request,
+    string expectedMessageFragment)
+{
+    try
+    {
+        NativeEnvironmentGradeExporter.BuildPlan(request);
+    }
+    catch (InvalidOperationException exception) when (
+        exception.Message.Contains(expectedMessageFragment, StringComparison.OrdinalIgnoreCase))
+    {
+        return;
+    }
+    throw new InvalidOperationException(
+        $"Environment grading accepted an invalid plan source; expected rejection containing '{expectedMessageFragment}'.");
+}
+
+void AssertNoEnvironmentGradeTemporaryArtifacts(string directory, string label)
+{
+    if (!Directory.Exists(directory))
+        return;
+    string[] temporaryArtifacts = Directory.EnumerateFiles(directory, "*.tmp*", SearchOption.AllDirectories).ToArray();
+    if (temporaryArtifacts.Length > 0)
+    {
+        throw new InvalidOperationException(
+            $"{label} left {temporaryArtifacts.Length} temporary environment-grade artifact(s), including '{temporaryArtifacts[0]}'.");
+    }
+}
+
+void WriteWadAnalysisSubfileMutation(
+    string sourcePath,
+    string destinationPath,
+    int entryIndex,
+    int subfileIndex,
+    bool remove,
+    long offsetDelta = 0)
+{
+    JsonObject root = JsonNode.Parse(File.ReadAllText(sourcePath))?.AsObject()
+        ?? throw new InvalidOperationException("Could not parse the WAD analysis for a fail-closed smoke mutation.");
+    JsonArray entries = root["entries"]?.AsArray()
+        ?? throw new InvalidOperationException("The WAD analysis has no entries array.");
+    JsonObject entry = entries
+        .Select(node => node?.AsObject())
+        .Single(candidate => candidate?["index"]?.GetValue<int>() == entryIndex)
+        ?? throw new InvalidOperationException($"The WAD analysis has no entry {entryIndex}.");
+    JsonArray subfiles = entry["level"]?["subfiles"]?.AsArray()
+        ?? throw new InvalidOperationException($"The WAD analysis entry {entryIndex} has no subfiles.");
+    JsonObject subfile = subfiles
+        .Select(node => node?.AsObject())
+        .Single(candidate => candidate?["index"]?.GetValue<int>() == subfileIndex)
+        ?? throw new InvalidOperationException($"The WAD analysis entry {entryIndex} has no subfile {subfileIndex}.");
+    if (remove)
+    {
+        subfiles.Remove(subfile);
+    }
+    else
+    {
+        long currentOffset = subfile["offset"]?.GetValue<long>()
+            ?? throw new InvalidOperationException("The WAD analysis subfile has no offset.");
+        subfile["offset"] = checked(currentOffset + offsetDelta);
+    }
+    File.WriteAllText(destinationPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+}
+
+void AssertEnvironmentGradeAnalysisRejected(
+    string mutatedAnalysisPath,
+    string expectedMessageFragment,
+    LevelDefinition target,
+    LevelDefinition donor,
+    NativeEnvironmentGradePlan grade)
+{
+    try
+    {
+        NativeEnvironmentGradeExporter.AnalyzeMatch(
+            sourceImage,
+            mutatedAnalysisPath,
+            target,
+            donor,
+            grade);
+        throw new InvalidOperationException(
+            $"Environment grading accepted invalid analysis '{Path.GetFileName(mutatedAnalysisPath)}'.");
+    }
+    catch (InvalidOperationException exception) when (
+        exception.Message.Contains(expectedMessageFragment, StringComparison.OrdinalIgnoreCase))
+    {
+    }
+    finally
+    {
+        if (File.Exists(mutatedAnalysisPath))
+            File.Delete(mutatedAnalysisPath);
+    }
 }
 
 double EnvironmentStatisticsBalanceDistance(
@@ -10820,12 +13718,11 @@ string MobyIdentityLaneFromMoby(Moby moby)
         MobyVisualKind.Control => "control/helper",
         MobyVisualKind.Actor or MobyVisualKind.Chest or MobyVisualKind.Gem or MobyVisualKind.Key or MobyVisualKind.Dragon or MobyVisualKind.Portal => "actor or interactive object",
         MobyVisualKind.Scenery or MobyVisualKind.Whirlwind => "visual scenery/prop",
-        _ when text.Contains("special object 0x40") || text.Contains("special object 0x50") || text.Contains("special object 0x60") ||
-            text.Contains("type=0x40") || text.Contains("type=0x50") || text.Contains("type=0x60") => "flight/special object",
-        _ when text.Contains("nonvisual") || text.Contains("control") || text.Contains("helper") || text.Contains("type=0x00") => "control/helper",
-        _ when text.Contains("actor") || text.Contains("enemy") || text.Contains("container") || text.Contains("f4b=0x10") ||
-            text.Contains("f4b=0x54") || text.Contains("f4b=0x55") || text.Contains("f4b=0x56") => "actor or interactive object",
-        _ when text.Contains("scenery") || text.Contains("prop") || text.Contains("f4b=0xff") => "visual scenery/prop",
+        _ when text.Contains("flight target") || text.Contains("flight object") => "flight/special object",
+        _ when text.Contains("nonvisual") || text.Contains("control") || text.Contains("helper") => "control/helper",
+        _ when text.Contains("actor") || text.Contains("enemy") || text.Contains("container") || text.Contains("drop53=0x10") ||
+            text.Contains("drop53=0x54") || text.Contains("drop53=0x55") || text.Contains("drop53=0x56") => "actor or interactive object",
+        _ when text.Contains("scenery") || text.Contains("prop") || text.Contains("drop53=0xff") => "visual scenery/prop",
         _ => "unknown visual candidate"
     };
 }
@@ -10850,13 +13747,13 @@ List<string> BuildActorByteAliasSummary(
     IReadOnlyList<(LevelDefinition Level, Moby Moby)> allMobys)
 {
     IdentityFingerprintParts parts = ParseIdentityFingerprint(group.Key);
-    if (string.IsNullOrWhiteSpace(parts.TypeHex) || string.IsNullOrWhiteSpace(parts.SourceByte36Hex))
+    if (string.IsNullOrWhiteSpace(parts.TypeHex) || string.IsNullOrWhiteSpace(parts.NativeClassHex))
         return new List<string>();
 
     return allMobys
         .Where(item => IsExactIdentity(item.Moby))
         .Where(item => $"0x{item.Moby.Type:X2}".Equals(parts.TypeHex, StringComparison.OrdinalIgnoreCase))
-        .Where(item => $"0x{item.Moby.SourceByte36:X2}".Equals(parts.SourceByte36Hex, StringComparison.OrdinalIgnoreCase))
+        .Where(item => $"0x{item.Moby.SourceByte37:X2}{item.Moby.SourceByte36:X2}".Equals(parts.NativeClassHex, StringComparison.OrdinalIgnoreCase))
         .GroupBy(item => item.Moby.DisplayLabel, StringComparer.OrdinalIgnoreCase)
         .OrderByDescending(labelGroup => labelGroup.Count())
         .ThenBy(labelGroup => labelGroup.Key)
@@ -11184,8 +14081,44 @@ void ReportCrossLevelObjectTemplateCatalog()
         throw new InvalidOperationException("Cross-level object template catalog is missing the diagnostic Spring Chest template metadata.");
     if (addTemplates.Any(template => string.Equals(ReadJsonString(template, "id"), CurrentStoneHillSpringTemplateId, StringComparison.OrdinalIgnoreCase)))
         throw new InvalidOperationException("Cross-level Spring Chest should stay hidden from the normal Add Object list until it passes in-game.");
-    if (releaseTemplates.Length != 0)
-        throw new InvalidOperationException($"Release Add Object candidates should be empty until cross-level objects are proven, found: {string.Join(", ", releaseTemplates.Select(template => ReadJsonString(template, "id", "?")))}.");
+    string[] expectedReleaseIds =
+    [
+        ArtisansNativeLockedChestRuntimeBundleCompatibility.KeyTemplateId,
+        ArtisansNativeLockedChestRuntimeBundleCompatibility.LockedChestTemplateId
+    ];
+    string[] unexpectedReleaseIds = releaseTemplates
+        .Select(template => ReadJsonString(template, "id", "?"))
+        .Where(id => !expectedReleaseIds.Contains(id, StringComparer.OrdinalIgnoreCase))
+        .ToArray();
+    string[] missingReleaseIds = expectedReleaseIds
+        .Where(id => !releaseTemplates.Any(template => string.Equals(ReadJsonString(template, "id"), id, StringComparison.OrdinalIgnoreCase)))
+        .ToArray();
+    if (unexpectedReleaseIds.Length > 0 || missingReleaseIds.Length > 0)
+    {
+        throw new InvalidOperationException(
+            $"Release Add Object catalog should contain only the proven Artisans Key/Locked Chest inputs. Missing: {string.Join(", ", missingReleaseIds)}; unexpected: {string.Join(", ", unexpectedReleaseIds)}.");
+    }
+
+    JsonElement releaseKey = releaseTemplates.Single(template =>
+        string.Equals(
+            ReadJsonString(template, "id"),
+            ArtisansNativeLockedChestRuntimeBundleCompatibility.KeyTemplateId,
+            StringComparison.OrdinalIgnoreCase));
+    JsonElement releaseLockedChest = releaseTemplates.Single(template =>
+        string.Equals(
+            ReadJsonString(template, "id"),
+            ArtisansNativeLockedChestRuntimeBundleCompatibility.LockedChestTemplateId,
+            StringComparison.OrdinalIgnoreCase));
+    if (!string.Equals(ReadJsonString(releaseKey, "addSupportStatus"), "supported-lightweight-object", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(ReadJsonString(releaseKey, "requiredExporterFeature"), "DirectSourceRecordAppend", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("The release Key must remain on its universal lightweight source-record append route.");
+    }
+    if (!string.Equals(ReadJsonString(releaseLockedChest, "addSupportStatus"), "supported-target-runtime-bundle", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(ReadJsonString(releaseLockedChest, "requiredExporterFeature"), ArtisansNativeLockedChestRuntimeBundleCompatibility.RequiredExporterFeature, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("The release Locked Chest must declare the dedicated Artisans V2 runtime-bundle exporter feature.");
+    }
 
     foreach (JsonElement template in addTemplates)
     {
@@ -11267,15 +14200,16 @@ async Task ReportCrossLevelObjectImportAnalysis()
     {
         throw new InvalidOperationException("Toasty dog-to-wizard analysis did not stay on the actor-package import path.");
     }
-    if (!string.Equals(toastyWizard.RecipeId, "toasty.wizardpeak.greenWizard.package.overwriteUnused00EA.v2", StringComparison.OrdinalIgnoreCase) ||
-        !string.Equals(toastyWizard.RecipeStatus, "experimental-image-write", StringComparison.OrdinalIgnoreCase) ||
+    if (!string.Equals(toastyWizard.RecipeId, CurrentToastyWizardRecipeId, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(toastyWizard.RecipeStatus, "in-game-blocked-missing-target-overlay-behavior", StringComparison.OrdinalIgnoreCase) ||
         toastyWizard.RecipeCopySegmentCount != 1 ||
-        toastyWizard.RecipeRootEntryCount != 1)
+        toastyWizard.RecipeRootEntryCount != 0 ||
+        toastyWizard.RecipeReplaceRootEntryCount != 1)
     {
-        throw new InvalidOperationException("Toasty dog-to-wizard should report the mapped experimental Green Wizard package recipe.");
+        throw new InvalidOperationException("Toasty dog-to-wizard should retain the blocked v3 package/root evidence.");
     }
-    if (CrossLevelActorPackageRecipeCatalog.FindPreferred("toasty", "wizardpeak", "enemyTransform")?.Status.Equals("experimental-image-write", StringComparison.OrdinalIgnoreCase) != true)
-        throw new InvalidOperationException("Toasty Green Wizard should be current-level ready through the recipe catalog.");
+    if (CrossLevelActorPackageRecipeCatalog.FindPreferred("toasty", "wizardpeak", "enemyTransform")?.Status.Equals("in-game-blocked-missing-target-overlay-behavior", StringComparison.OrdinalIgnoreCase) != true)
+        throw new InvalidOperationException("Toasty Green Wizard should resolve to the newest blocked behavior result.");
 
     CrossLevelObjectImportRow? stoneHillSpring = analysis.Rows.FirstOrDefault(row =>
         string.Equals(row.TemplateId, CurrentStoneHillSpringTemplateId, StringComparison.OrdinalIgnoreCase) &&
@@ -11300,13 +14234,28 @@ async Task ReportCrossLevelObjectImportAnalysis()
         string.Equals(row.TargetLevelKey, "artisans", StringComparison.OrdinalIgnoreCase));
     if (artisansKeyChest == null ||
         !string.Equals(artisansKeyChest.RecipeId, "artisans.peacekeepers.lockedChest.package.safeGapActorId.v4", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(artisansKeyChest.RecipeStatus, "in-game-blocked-invalid-actor-package-subfile", StringComparison.OrdinalIgnoreCase) ||
         artisansKeyChest.RecipeCopySegmentCount != 1 ||
         artisansKeyChest.RecipeRootEntryCount != 1)
     {
-        throw new InvalidOperationException("Artisans key chest analysis should point at the native safe-gap recipe candidate.");
+        throw new InvalidOperationException("Artisans key chest analysis should retain the failed safe-gap recipe as blocked structural evidence.");
     }
-    if (CrossLevelActorPackageRecipeCatalog.FindPreferred("artisans", "peacekeepers", "lockedChest")?.Status.Equals("experimental-image-write", StringComparison.OrdinalIgnoreCase) != true)
-        throw new InvalidOperationException("Artisans Key Chest should be current-level ready through the recipe catalog.");
+    if (CrossLevelActorPackageRecipeCatalog.FindPreferred("artisans", "peacekeepers", "lockedChest")?.Status.Equals("in-game-blocked-invalid-actor-package-subfile", StringComparison.OrdinalIgnoreCase) != true)
+        throw new InvalidOperationException("Artisans Key Chest should remain blocked by its invalid actor-package subfile result.");
+
+    CrossLevelActorPackageRecipe? artisansSpringChest = CrossLevelActorPackageRecipeCatalog.FindPreferred(
+        "artisans",
+        "peacekeepers",
+        "springChest",
+        workspace.RootPath);
+    if (artisansSpringChest == null ||
+        !string.Equals(artisansSpringChest.Id, ArtisansSpringRecipeId, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(artisansSpringChest.Status, "in-game-blocked-dynamic-life-statue-dependency", StringComparison.OrdinalIgnoreCase) ||
+        artisansSpringChest.CopySegmentCount != 1 ||
+        artisansSpringChest.ReplaceRootEntryCount != 1)
+    {
+        throw new InvalidOperationException("Artisans Spring Chest analysis should retain the rejected Life Statue root replacement as blocked evidence.");
+    }
 
     int supported = analysis.Rows.Count(row => string.Equals(row.SupportStatus, "supported-lightweight-object", StringComparison.OrdinalIgnoreCase));
     int packageBlocked = analysis.Rows.Count(row => row.SupportStatus.Contains("actor-package", StringComparison.OrdinalIgnoreCase));
@@ -11404,7 +14353,19 @@ async Task ReportUniversalChestStrategy()
 
     int nativeKeyChests = report.Levels.Count(level => level.KeyChest.Strategy == "native-clone");
     int nativeSpringChests = report.Levels.Count(level => level.SpringChest.Strategy == "native-clone");
-    int packageWork = report.Levels.Count(level => level.KeyChest.Strategy.Contains("package", StringComparison.OrdinalIgnoreCase) || level.SpringChest.Strategy.Contains("package", StringComparison.OrdinalIgnoreCase));
+    int nativeFireworkChests = report.Levels.Count(level => level.FireworkChest.Strategy == "native-clone");
+    int nativeMultiGemChests = report.Levels.Count(level => level.MultiGemChest.Strategy == "native-clone");
+    int packageWork = report.Levels.Count(level =>
+        level.KeyChest.Strategy.Contains("package", StringComparison.OrdinalIgnoreCase) ||
+        level.SpringChest.Strategy.Contains("package", StringComparison.OrdinalIgnoreCase) ||
+        level.FireworkChest.Strategy.Contains("package", StringComparison.OrdinalIgnoreCase) ||
+        level.MultiGemChest.Strategy.Contains("package", StringComparison.OrdinalIgnoreCase));
+    if (report.Levels.Any(level =>
+        !string.Equals(level.FireworkChest.ActorIdHex, "0x0138", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(level.MultiGemChest.ActorIdHex, "0x0186", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("Universal chest strategy did not retain the Firework Chest and 3x Flame Chest actor identities.");
+    }
     if (!cloneReport.Rows.Any(row =>
         string.Equals(row.LevelKey, "stonehill", StringComparison.OrdinalIgnoreCase) &&
         string.Equals(row.ActorIdHex, "0x00AE", StringComparison.OrdinalIgnoreCase) &&
@@ -11414,7 +14375,7 @@ async Task ReportUniversalChestStrategy()
     }
 
     int blockedCloneProofs = cloneReport.Rows.Count(row => !string.Equals(row.Status, "proved", StringComparison.OrdinalIgnoreCase));
-    Console.WriteLine($"Universal chest strategy: native key-chest clone levels={nativeKeyChests}, native spring-chest clone levels={nativeSpringChests}, package-work levels={packageWork}, blocked clone proofs={blockedCloneProofs}, report={markdownPath}");
+    Console.WriteLine($"Universal chest strategy: native key-chest clone levels={nativeKeyChests}, native spring-chest clone levels={nativeSpringChests}, native firework-chest clone levels={nativeFireworkChests}, native 3x-flame-chest clone levels={nativeMultiGemChests}, package-work levels={packageWork}, blocked clone proofs={blockedCloneProofs}, report={markdownPath}");
 }
 
 async Task ReportUniversalChestPackageRecipePlanner()
@@ -11438,12 +14399,29 @@ async Task ReportUniversalChestPackageRecipePlanner()
     int neededSpringChests = report.Rows.Count(row => string.Equals(row.CurrentStrategy, "needs-package-recipe", StringComparison.OrdinalIgnoreCase) && string.Equals(row.Family, "springChest", StringComparison.OrdinalIgnoreCase));
     int plannedNeededKeyChests = report.Rows.Count(row => row.CanPlan && string.Equals(row.CurrentStrategy, "needs-package-recipe", StringComparison.OrdinalIgnoreCase) && string.Equals(row.Family, "lockedChest", StringComparison.OrdinalIgnoreCase));
     int plannedNeededSpringChests = report.Rows.Count(row => row.CanPlan && string.Equals(row.CurrentStrategy, "needs-package-recipe", StringComparison.OrdinalIgnoreCase) && string.Equals(row.Family, "springChest", StringComparison.OrdinalIgnoreCase));
-    if (neededKeyChests == 0 || plannedKeyChests == 0)
-        throw new InvalidOperationException("Universal Key Chest package planner should find candidate slots for missing Key Chest recipe levels.");
-    if (neededSpringChests == 0 || plannedSpringChests == 0)
-        throw new InvalidOperationException("Universal Spring Chest package planner should find candidate slots for missing Spring Chest recipe levels.");
+    if (neededKeyChests == 0 || neededSpringChests == 0)
+        throw new InvalidOperationException("Universal chest package planner did not retain the levels that still need native package work.");
+    if (plannedSpringChests == 0)
+        throw new InvalidOperationException("Universal Spring Chest package planner should retain at least one structurally safe actor-subfile-local candidate.");
     if (plannedNeededKeyChests > neededKeyChests || plannedNeededSpringChests > neededSpringChests)
         throw new InvalidOperationException("Universal chest package planner should not plan more recipes than levels that need package recipes.");
+    if (report.Rows.Any(row => row.CanPlan &&
+        (string.IsNullOrWhiteSpace(row.TargetPackageStartHex) ||
+         string.IsNullOrWhiteSpace(row.RootSlotHex) ||
+         !row.Notes.Any(note => note.Contains("zero-run search was limited to this range", StringComparison.OrdinalIgnoreCase)))))
+    {
+        throw new InvalidOperationException("Universal chest package planner emitted a candidate without actor/model-subfile and ordered-root safety evidence.");
+    }
+
+    CrossLevelChestPackageRecipePlanRow[] artisansRows = report.Rows
+        .Where(row => string.Equals(LevelCatalog.NormalizeKey(row.LevelKey), "artisans", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    if (artisansRows.Length != 2 ||
+        artisansRows.Any(row => row.CanPlan) ||
+        artisansRows.Any(row => !row.Notes.Any(note => note.Contains("No actor/model-subfile-local zero run", StringComparison.OrdinalIgnoreCase))))
+    {
+        throw new InvalidOperationException("Artisans must remain unplannable until a package route fits inside its actor/model subfile without breaking root order.");
+    }
 
     Console.WriteLine($"Universal chest package planner: key-chest plans={plannedKeyChests} ({plannedNeededKeyChests}/{neededKeyChests} missing), spring-chest plans={plannedSpringChests} ({plannedNeededSpringChests}/{neededSpringChests} missing), report={markdownPath}");
 }
@@ -11611,6 +14589,7 @@ Moby CreateUniversalKeyMoby(LevelDefinition level, int index, int trueIndex, str
         CrossLevelSourceLevelName = "Peace Keepers",
         CrossLevelSourceTrueIndex = 78,
         CrossLevelRequiredExporterFeature = "DirectSourceRecordAppend",
+        CrossLevelRecipeId = "smoke.recipe.pin.v1",
         IsAdded = true
     };
 }
@@ -11793,6 +14772,9 @@ void ReportCrossLevelEditorTemplateReadiness()
 
     LevelDefinition artisans = catalog.FindByKey("artisans") ?? throw new InvalidOperationException("Artisans level missing.");
     LevelDefinition toasty = catalog.FindByKey("toasty") ?? throw new InvalidOperationException("Toasty level missing.");
+    LevelDefinition blowhard = catalog.FindByKey("blowhard") ?? throw new InvalidOperationException("Blowhard level missing.");
+    LevelDefinition magicCrafters = catalog.FindByKey("magiccrafters") ?? throw new InvalidOperationException("Magic Crafters level missing.");
+    LevelDefinition wizardPeak = catalog.FindByKey("wizardpeak") ?? throw new InvalidOperationException("Wizard Peak level missing.");
     LevelDefinition? stoneHillLevel = catalog.FindByKey("stonehill") ?? throw new InvalidOperationException("Stone Hill level missing.");
 
     CrossLevelTemplateLevelStatus artisansKey = ResolveTemplateStatus(artisans, key);
@@ -11800,6 +14782,9 @@ void ReportCrossLevelEditorTemplateReadiness()
     CrossLevelTemplateLevelStatus stoneHillSpring = ResolveTemplateStatus(stoneHillLevel, springChest);
     CrossLevelTemplateLevelStatus artisansSpring = ResolveTemplateStatus(artisans, springChest);
     CrossLevelTemplateLevelStatus toastyWizard = ResolveTemplateStatus(toasty, greenWizard);
+    CrossLevelTemplateLevelStatus blowhardWizard = ResolveTemplateStatus(blowhard, greenWizard);
+    CrossLevelTemplateLevelStatus magicCraftersWizard = ResolveTemplateStatus(magicCrafters, greenWizard);
+    CrossLevelTemplateLevelStatus wizardPeakWizard = ResolveTemplateStatus(wizardPeak, greenWizard);
     CrossLevelTemplateLevelStatus stoneHillWizard = ResolveTemplateStatus(stoneHillLevel, greenWizard);
     CrossLevelTemplateLevelStatus stoneHillGnastySpring = ResolveTemplateStatus(stoneHillLevel, gnastySpringChest);
     CrossLevelTemplateLevelStatus stoneHillFirework = ResolveTemplateStatus(stoneHillLevel, fireworkChest);
@@ -11808,18 +14793,79 @@ void ReportCrossLevelEditorTemplateReadiness()
 
     if (!artisansKey.Ready || !artisansKey.Placeable || !string.Equals(artisansKey.ShortLabel, "ready", StringComparison.OrdinalIgnoreCase))
         throw new InvalidOperationException("Editor readiness should expose cross-level keys as lightweight ready objects.");
+    if (!ArtisansNativeLockedChestRuntimeBundleComposer.IsAvailable ||
+        !artisansKeyChest.Ready ||
+        !artisansKeyChest.Placeable ||
+        !artisansKeyChest.TrueAddPlaceable ||
+        !string.Equals(artisansKeyChest.ShortLabel, "ready here", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(artisansKeyChest.RecipeId, ArtisansNativeLockedChestRuntimeBundleCompatibility.RecipeId, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Editor readiness should expose the runtime-proven one-pair Artisans native Key + Locked Chest V2 bundle to normal Create BIN.");
+    }
+    if (catalog.Levels.Count != 35)
+        throw new InvalidOperationException($"Cross-level Key/Locked Chest readiness smoke expected all 35 catalog levels, found {catalog.Levels.Count}.");
+    foreach (LevelDefinition level in catalog.Levels)
+    {
+        CrossLevelTemplateLevelStatus keyStatus = ResolveTemplateStatus(level, key);
+        if (!keyStatus.Ready || !keyStatus.Placeable || !keyStatus.TrueAddPlaceable ||
+            !string.Equals(keyStatus.ShortLabel, "ready", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"The standalone lightweight Key should remain ready/placeable in every catalog level; failed in {level.DisplayName}.");
+        }
+
+        CrossLevelTemplateLevelStatus chestStatus = ResolveTemplateStatus(level, keyChest);
+        bool isArtisans = string.Equals(
+            LevelCatalog.NormalizeKey(level.Key),
+            ArtisansNativeLockedChestRuntimeBundleCompatibility.TargetLevelKey,
+            StringComparison.OrdinalIgnoreCase);
+        if (isArtisans)
+        {
+            if (!chestStatus.Ready || !chestStatus.Placeable || !chestStatus.TrueAddPlaceable ||
+                !string.Equals(chestStatus.ShortLabel, "ready here", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(chestStatus.RecipeId, ArtisansNativeLockedChestRuntimeBundleCompatibility.RecipeId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("The runtime-proven Artisans native Key + Locked Chest V2 bundle lost its normal Create BIN readiness.");
+            }
+        }
+        else if (chestStatus.Ready || chestStatus.Placeable || chestStatus.TrueAddPlaceable ||
+                 !string.Equals(chestStatus.ShortLabel, "preview here", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"The Artisans V2 Locked Chest bundle must remain unavailable in unsupported target {level.DisplayName}.");
+        }
+    }
+
+    (int Keys, int Chests, bool Pair, bool StandaloneKey, bool ChestForExistingKey)[] addPolicyCases =
+    [
+        (0, 0, true, true, false),
+        (1, 0, false, false, true),
+        (0, 1, false, true, false),
+        (1, 1, false, false, false),
+        (2, 0, false, false, false),
+        (0, 2, false, true, false),
+        (2, 1, false, false, false)
+    ];
+    foreach ((int keys, int chests, bool pair, bool standaloneKey, bool chestForExistingKey) in addPolicyCases)
+    {
+        ArtisansNativeLockedChestAddPolicy policy = ArtisansNativeLockedChestAddPolicy.Resolve(keys, chests);
+        if (policy.OfferPair != pair ||
+            policy.OfferStandaloneKey != standaloneKey ||
+            policy.OfferLockedChestForExistingKey != chestForExistingKey ||
+            policy.AllowLockedChestTemplate != (pair || chestForExistingKey))
+        {
+            throw new InvalidOperationException(
+                $"Artisans release Add Object policy changed for {keys} Key(s)/{chests} Locked Chest(s): {policy}.");
+        }
+    }
+
+    CrossLevelActorPackageRecipe historicalFailedArtisansRecipe = CrossLevelActorPackageRecipeCatalog.All.Single(recipe =>
+        string.Equals(recipe.Id, "artisans.peacekeepers.lockedChest.package.safeGapActorId.v4", StringComparison.OrdinalIgnoreCase));
+    if (!historicalFailedArtisansRecipe.Status.StartsWith("in-game-blocked", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException("The failed Artisans actor-root slot-swap v4 recipe must remain blocked historical evidence after V2 promotion.");
+
     if (hasSourceDiscForCandidateChecks)
     {
-        if (artisansKeyChest.Ready ||
-            !artisansKeyChest.Placeable ||
-            !string.Equals(artisansKeyChest.ShortLabel, "candidate here", StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(artisansKeyChest.RecipeId, "artisans.peacekeepers.lockedChest.package.safeGapActorId.v4", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException("Editor readiness should expose the Artisans Key Chest as a guarded candidate until in-game evidence passes.");
-        }
-        bool artisansKeyChestBundleCandidate = artisansKey.Ready && artisansKeyChest.Placeable && !artisansKeyChest.Ready;
-        if (!artisansKeyChestBundleCandidate)
-            throw new InvalidOperationException("Editor readiness should allow the Artisans Key + Key Chest bundle as a candidate pair without marking the chest proven.");
+        if (!artisansKey.Ready)
+            throw new InvalidOperationException("The lightweight Key should remain ready on its universal source-record append route.");
         if (stoneHillSpring.Ready ||
             !stoneHillSpring.Placeable ||
             !string.Equals(stoneHillSpring.ShortLabel, "candidate here", StringComparison.OrdinalIgnoreCase) ||
@@ -11828,17 +14874,42 @@ void ReportCrossLevelEditorTemplateReadiness()
             throw new InvalidOperationException("Editor readiness should keep the Peace Keepers Spring Chest as a guarded Stone Hill candidate after the latest in-game failure.");
         }
         if (artisansSpring.Ready ||
-            !artisansSpring.Placeable ||
-            !string.Equals(artisansSpring.ShortLabel, "candidate here", StringComparison.OrdinalIgnoreCase))
+            artisansSpring.Placeable ||
+            !string.Equals(artisansSpring.ShortLabel, "blocked here", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(artisansSpring.RecipeId, ArtisansSpringRecipeId, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Editor readiness should keep the Artisans Spring Chest candidate placeable but not normal-export ready.");
+            throw new InvalidOperationException("Editor readiness should block the Artisans Spring Chest root replacement that would corrupt the Life Statue actor.");
         }
         if (toastyWizard.Ready ||
-            !toastyWizard.Placeable ||
-            !string.Equals(toastyWizard.ShortLabel, "candidate here", StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(toastyWizard.RecipeId, "toasty.wizardpeak.greenWizard.package.overwriteUnused00EA.v2", StringComparison.OrdinalIgnoreCase))
+            toastyWizard.Placeable ||
+            !string.Equals(toastyWizard.ShortLabel, "blocked here", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(toastyWizard.RecipeId, GreenWizardRuntimeBundleCompatibility.ToastyV11RecipeId, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Editor readiness should expose the Toasty Green Wizard transform as a guarded candidate until in-game evidence passes.");
+            throw new InvalidOperationException("Editor readiness should keep the runtime-proven Toasty v11 Wizard blocked until its standalone exporter is composed into the editor.");
+        }
+        if (!blowhardWizard.Ready ||
+            !blowhardWizard.Placeable ||
+            blowhardWizard.TrueAddPlaceable ||
+            !string.Equals(blowhardWizard.ShortLabel, "ready here", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(blowhardWizard.RecipeId, BlowhardGreenWizardResidentSwapExporter.RecipeId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Editor readiness should expose runtime-proven Blowhard Green Wizard Replace to normal Create BIN while keeping true Add unavailable.");
+        }
+        if (!magicCraftersWizard.Ready ||
+            !magicCraftersWizard.Placeable ||
+            magicCraftersWizard.TrueAddPlaceable ||
+            !string.Equals(magicCraftersWizard.ShortLabel, "ready here", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(magicCraftersWizard.RecipeId, MagicCraftersGreenWizardResidentSwapExporter.RecipeId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Editor readiness should expose the exact runtime-proven Magic Crafters T107-to-T27 Green Wizard Replace route to normal Create BIN while keeping true Add unavailable.");
+        }
+        if (!wizardPeakWizard.Ready ||
+            !wizardPeakWizard.Placeable ||
+            wizardPeakWizard.TrueAddPlaceable ||
+            !string.Equals(wizardPeakWizard.ShortLabel, "ready here", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(wizardPeakWizard.RecipeId, WizardPeakGreenWizardNativeSwapExporter.RecipeId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Editor readiness should expose the exact runtime-proven Wizard Peak native T6-to-T24 route to normal Create BIN while keeping true Add unavailable.");
         }
         if (stoneHillWizard.Ready ||
             stoneHillWizard.Placeable ||
@@ -11889,7 +14960,7 @@ void ReportCrossLevelEditorTemplateReadiness()
         }
     }
 
-    Console.WriteLine("Cross-level editor readiness: Peace Keepers Spring Chest stays diagnostic; Artisans Key Chest, Toasty Green Wizard, and Gnasty's Loot Spring/Firework/3x chests remain guarded candidate tests.");
+    Console.WriteLine("Cross-level editor readiness: Blowhard, exact Magic Crafters T107-to-T27, and exact Wizard Peak T6-to-T24 v3 Green Wizard routes are runtime-proven; T10 v1/v2 remain blocked, Toasty v11 waits for editor composition, and true Wizard Add/unmapped levels stay blocked.");
 
     JsonElement FindTemplate(IEnumerable<JsonElement> templates, string id)
     {
@@ -12024,18 +15095,34 @@ IEnumerable<string> EnumerateObservationFiles()
 
 IdentityFingerprintParts ParseIdentityFingerprint(string fingerprint)
 {
-    Dictionary<string, string> values = fingerprint
-        .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-        .Select(part => part.Split('=', 2))
-        .Where(parts => parts.Length == 2)
-        .ToDictionary(parts => parts[0], parts => parts[1], StringComparer.OrdinalIgnoreCase);
+    if (!MobyIdentityFingerprint.TryParse(fingerprint, out MobyIdentityFingerprintParts parts))
+        return new IdentityFingerprintParts("", "", "", "", "", "", "");
 
     return new IdentityFingerprintParts(
-        values.TryGetValue("type", out string? type) ? type : "",
-        values.TryGetValue("b36", out string? b36) ? b36 : "",
-        values.TryGetValue("f4A", out string? f4A) ? f4A : "",
-        values.TryGetValue("f4B", out string? f4B) ? f4B : "",
-        values.TryGetValue("b4F", out string? b4F) ? b4F : "");
+        $"0x{parts.RenderRadius:X2}",
+        $"0x{parts.NativeClass & 0xFF:X2}",
+        parts.HasFullNativeClass ? $"0x{parts.NativeClass >> 8:X2}" : "",
+        parts.HasFullNativeClass ? $"0x{parts.NativeClass:X4}" : "",
+        $"0x{parts.UpdateDistance:X2}",
+        $"0x{parts.DropClass:X2}",
+        $"0x{parts.SpecularMetalType:X2}");
+}
+
+bool FingerprintMatchesParts(
+    string fingerprint,
+    int nativeClass,
+    int renderRadius,
+    int updateDistance,
+    int dropClass,
+    int specularMetalType)
+{
+    return MobyIdentityFingerprint.TryParse(fingerprint, out MobyIdentityFingerprintParts parts) &&
+        parts.HasFullNativeClass &&
+        parts.NativeClass == (nativeClass & 0xFFFF) &&
+        parts.RenderRadius == (renderRadius & 0xFF) &&
+        parts.UpdateDistance == (updateDistance & 0xFF) &&
+        parts.DropClass == (dropClass & 0xFF) &&
+        parts.SpecularMetalType == (specularMetalType & 0xFF);
 }
 
 List<(LevelDefinition Level, Moby Moby)> SelectBatchSamples(
@@ -12138,20 +15225,19 @@ Vector3f OffsetPosition(Vector3f position, Vector3f delta)
 
 string IdentityFingerprint(Moby moby)
 {
-    return $"type=0x{moby.Type:X2} b36=0x{moby.SourceByte36:X2} f4A=0x{moby.Flag4A:X2} f4B=0x{moby.Flag4B:X2} b4F=0x{moby.SourceByte4F:X2}";
+    return MobyIdentityFingerprint.BuildV2(moby);
 }
 
 string IdentityTestLane(PrecisionIdentityGroup group)
 {
     string text = $"{group.Label} {group.Kind} {group.Key}".ToLowerInvariant();
-    if (text.Contains("special object 0x40") || text.Contains("special object 0x50") || text.Contains("special object 0x60") ||
-        text.Contains("type=0x40") || text.Contains("type=0x50") || text.Contains("type=0x60"))
+    if (text.Contains("flight target") || text.Contains("flight object"))
         return "flight/special object";
-    if (text.Contains("nonvisual") || text.Contains("control") || text.Contains("helper") || text.Contains("type=0x00"))
+    if (text.Contains("nonvisual") || text.Contains("control") || text.Contains("helper"))
         return "control/helper";
-    if (text.Contains("actor") || text.Contains("enemy") || text.Contains("container") || text.Contains("f4b=0x10") || text.Contains("f4b=0x54") || text.Contains("f4b=0x55") || text.Contains("f4b=0x56"))
+    if (text.Contains("actor") || text.Contains("enemy") || text.Contains("container") || text.Contains("drop53=0x10") || text.Contains("drop53=0x54") || text.Contains("drop53=0x55") || text.Contains("drop53=0x56"))
         return "actor or interactive object";
-    if (text.Contains("scenery") || text.Contains("prop") || text.Contains("f4b=0xff"))
+    if (text.Contains("scenery") || text.Contains("prop") || text.Contains("drop53=0xff"))
         return "visual scenery/prop";
     return "unknown visual candidate";
 }
@@ -12724,7 +15810,7 @@ async Task ReportPortalTripletCompanionCloneRoundTrip()
         List<Moby> probeMobys = MobyLoader.LoadCached(mobyPath).ToList();
         MobyMetadataEnricher.Apply(workspace, levelKey, probeMobys);
         Moby target = probeMobys.First(moby => moby.TrueIndex == targetTrueIndex);
-        List<Moby> anchors = SelectPortalReturnHomeProofAnchors(target, probeMobys);
+        List<Moby> anchors = SelectPortalTripletCloneAnchors(levelKey, target, probeMobys);
         if (anchors.Count == 0)
             throw new InvalidOperationException($"{level.DisplayName} portal triplet T{targetTrueIndex} did not find any proof anchors.");
 
@@ -13152,6 +16238,32 @@ Moby SelectPortalTripletCloneRoot(Moby target, IReadOnlyList<Moby> anchors)
     return anchors.FirstOrDefault(IsPortalVisibleAnchorMoby) ??
         anchors.FirstOrDefault(IsReturnHomeVisibleMoby) ??
         target;
+}
+
+List<Moby> SelectPortalTripletCloneAnchors(string levelKey, Moby target, IReadOnlyList<Moby> levelMobys)
+{
+    HomeworldPortalControlDefinition? mappedPortal = HomeworldPortalControlCatalog
+        .ForLevel(levelKey)
+        .SingleOrDefault(definition => definition.TrueIndexes.Contains(target.TrueIndex));
+    if (mappedPortal == null)
+        return SelectPortalReturnHomeProofAnchors(target, levelMobys);
+
+    Dictionary<int, Moby> byTrueIndex = levelMobys
+        .Where(moby => !moby.IsRemoved && moby.TrueIndex >= 0)
+        .ToDictionary(moby => moby.TrueIndex);
+    List<Moby> anchors = mappedPortal.TrueIndexes
+        .Where(trueIndex => trueIndex != target.TrueIndex)
+        .Select(trueIndex => byTrueIndex.TryGetValue(trueIndex, out Moby? moby) ? moby : null)
+        .Where(moby => moby != null)
+        .Select(moby => moby!)
+        .ToList();
+    if (anchors.Count != mappedPortal.TrueIndexes.Count - 1)
+    {
+        throw new InvalidOperationException(
+            $"{levelKey} mapped portal {mappedPortal.DestinationName} is missing one or more exact clone anchors for T{target.TrueIndex}.");
+    }
+
+    return anchors;
 }
 
 void ReportControlRoleProofPromotionCloneRoundTrip()
@@ -15320,7 +18432,8 @@ async Task ReportCrossLevelMobyTemplateRoundTripAndPatch(LevelDefinition level, 
     if (!keyEdit.TryGetProperty("crossLevelTemplate", out JsonElement keyTemplate) ||
         ReadJsonString(keyTemplate, "id") != key.CrossLevelTemplateId ||
         ReadJsonString(keyTemplate, "family") != key.CrossLevelFamily ||
-        ReadJsonInt32(keyTemplate, "sourceTrueIndex", -1) != key.CrossLevelSourceTrueIndex)
+        ReadJsonInt32(keyTemplate, "sourceTrueIndex", -1) != key.CrossLevelSourceTrueIndex ||
+        ReadJsonString(keyTemplate, "recipeId") != key.CrossLevelRecipeId)
         throw new InvalidOperationException("Cross-level key template metadata was not saved.");
 
     if (!keyEdit.TryGetProperty("sourceByteEdits", out JsonElement sourceByteEdits) ||
@@ -15333,7 +18446,8 @@ async Task ReportCrossLevelMobyTemplateRoundTripAndPatch(LevelDefinition level, 
     if (loadedKey == null ||
         loadedKey.CrossLevelFamily != key.CrossLevelFamily ||
         loadedKey.CrossLevelSourceLevelKey != key.CrossLevelSourceLevelKey ||
-        loadedKey.CrossLevelRequiredExporterFeature != key.CrossLevelRequiredExporterFeature)
+        loadedKey.CrossLevelRequiredExporterFeature != key.CrossLevelRequiredExporterFeature ||
+        loadedKey.CrossLevelRecipeId != key.CrossLevelRecipeId)
         throw new InvalidOperationException("Cross-level key template metadata did not survive load.");
 
     if (File.Exists(sourceImage))
@@ -15399,10 +18513,10 @@ async Task ReportCrossLevelMobyTemplateRoundTripAndPatch(LevelDefinition level, 
                 ? [stoneHillSpringController, peaceKeepersSpringChest]
                 : [peaceKeepersSpringChest, peaceKeepersSpringChestPairMate];
         await MobyEditStore.SaveAsync(springCandidatePath, springCandidateMobys, "Stone Hill Spring Chest Peace Keepers stack-safe helper candidate");
-    if (CurrentStoneHillSpringRecipeId.Contains("StaticNativePreHitSource", StringComparison.OrdinalIgnoreCase) ||
-        CurrentStoneHillSpringRecipeId.Contains("NativePreHitShellLifecycle", StringComparison.OrdinalIgnoreCase) ||
-        CurrentStoneHillSpringRecipeId.Contains("ForcedNativePreHitLifecycle", StringComparison.OrdinalIgnoreCase))
-        AddSpringChestNativePreHitShellLifecycleSourceByteEdits(springCandidatePath);
+        if (CurrentStoneHillSpringRecipeId.Contains("StaticNativePreHitSource", StringComparison.OrdinalIgnoreCase) ||
+            CurrentStoneHillSpringRecipeId.Contains("NativePreHitShellLifecycle", StringComparison.OrdinalIgnoreCase) ||
+            CurrentStoneHillSpringRecipeId.Contains("ForcedNativePreHitLifecycle", StringComparison.OrdinalIgnoreCase))
+            AddSpringChestNativePreHitShellLifecycleSourceByteEdits(springCandidatePath);
         else if (CurrentStoneHillSpringRecipeId.Contains("BluePreHit", StringComparison.OrdinalIgnoreCase))
             AddSpringChestBluePreHitSourceByteEdits(springCandidatePath);
         else if (!CurrentStoneHillSpringRecipeId.Contains("SourceNative", StringComparison.OrdinalIgnoreCase) &&
@@ -16021,14 +19135,37 @@ async Task ReportArtisansKeyChestPackagePreview()
         Path.Combine(workspace.RootPath, "_local", "objects", "artisans-key-chest-preview-smoke.cue"),
         artisans,
         path);
-    MobyActorPackageImportPreview? guardedPreview = guardedPlan.PackageImportPreviews.FirstOrDefault(item =>
-        string.Equals(item.TemplateId, "common.locked_chest.peacekeepers.t79", StringComparison.OrdinalIgnoreCase));
-    if (guardedPreview == null ||
-        guardedPreview.CanWriteImage ||
-        !guardedPreview.GuardReason.Contains("must pass a disposable candidate test", StringComparison.OrdinalIgnoreCase) ||
-        guardedPlan.Patches.Any(patch => string.Equals(patch.Kind, "actor-package-copy", StringComparison.OrdinalIgnoreCase)))
+    ArtisansNativeLockedChestRuntimeBundleIntent? promotedBundle = guardedPlan.ArtisansNativeLockedChestRuntimeBundle;
+    if (promotedBundle == null ||
+        !string.Equals(promotedBundle.RecipeId, ArtisansNativeLockedChestRuntimeBundleComposer.RecipeId, StringComparison.Ordinal) ||
+        promotedBundle.KeyEditorTrueIndex != key.TrueIndex ||
+        promotedBundle.LockedChestEditorTrueIndex != keyChest.TrueIndex ||
+        promotedBundle.KeyOutputTrueIndex != 174 ||
+        promotedBundle.LockedChestOutputTrueIndex != 175 ||
+        !promotedBundle.RewardMarkerOutputTrueIndices.SequenceEqual([176, 177, 178, 179, 180]) ||
+        promotedBundle.SourceRuntimeCountAfter != 181 ||
+        promotedBundle.TreasureTargetAfter != 110 ||
+        guardedPlan.PatchCount != 0 ||
+        guardedPlan.PackageImportPreviews.Count != 0 ||
+        guardedPlan.SkippedEdits.Count != 0 ||
+        guardedPlan.EditOutcomes?.Count != 2 ||
+        guardedPlan.EditOutcomes.Any(outcome =>
+            !outcome.PatchKinds.Contains("artisans-native-key-locked-chest-runtime-bundle-v2", StringComparer.OrdinalIgnoreCase)))
     {
-        throw new InvalidOperationException("Artisans key chest should stay guarded in normal Create BIN until in-game evidence passes.");
+        throw new InvalidOperationException("Normal Create BIN did not suppress the exact Artisans Key/Locked Chest pair into the promoted atomic V2 runtime-bundle intent.");
+    }
+
+    MobyBuildSafetyLevelReport promotedSafety = MobyBuildSafetyInspector.InspectLevel(sourceImage, artisans, guardedPlan);
+    if (promotedSafety.Status != MobyBuildSafetyStatus.Review ||
+        promotedSafety.TrueAppendCount != 7 ||
+        promotedSafety.SourceDynamicCapacity != 91 ||
+        promotedSafety.ProjectedDynamicCapacity != 85 ||
+        promotedSafety.ComponentRepacked ||
+        !promotedSafety.Issues.Any(issue =>
+            string.Equals(issue.Code, "artisans-native-locked-chest-runtime-bundle-v2", StringComparison.Ordinal) &&
+            issue.EditorTrueIndex == keyChest.TrueIndex))
+    {
+        throw new InvalidOperationException("The promoted Artisans Key/Locked Chest build-safety report lost its truthful 7-row, 91->85 chest-centered Review contract.");
     }
 
     MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(
@@ -16043,86 +19180,1469 @@ async Task ReportArtisansKeyChestPackagePreview()
         string.Equals(item.TemplateId, "common.locked_chest.peacekeepers.t79", StringComparison.OrdinalIgnoreCase));
     if (preview == null ||
         !string.Equals(preview.RecipeId, "artisans.peacekeepers.lockedChest.package.safeGapActorId.v4", StringComparison.OrdinalIgnoreCase) ||
-        !preview.CanWriteImage ||
-        !preview.GuardReason.Contains("disposable candidate mode", StringComparison.OrdinalIgnoreCase) ||
-        preview.CopySegments.Count != 1 ||
-        preview.RootEntries.Count != 1 ||
-        preview.CopySegments.Any(segment => !segment.TargetBeforeIsZero) ||
-        preview.RootEntries.Any(entry => !entry.RootSlotSafe || !entry.ActorIdSlotSafe))
+        preview.CanWriteImage ||
+        !preview.GuardReason.Contains("actor-package layout safety", StringComparison.OrdinalIgnoreCase) ||
+        !preview.GuardReason.Contains("subfile 2", StringComparison.OrdinalIgnoreCase) ||
+        preview.CopySegments.Count != 0 ||
+        preview.RootEntries.Count != 0)
     {
-        throw new InvalidOperationException("Artisans key chest did not emit the expected writable actor-package preview.");
+        throw new InvalidOperationException("Disposable candidate mode bypassed the Artisans Key Chest package-layout guard.");
+    }
+    if (plan.Patches.Any(patch => patch.Kind.Contains("actor-package", StringComparison.OrdinalIgnoreCase)) ||
+        plan.Patches.Any(patch => string.Equals(patch.MobyLabel, "Key Chest", StringComparison.OrdinalIgnoreCase)) ||
+        !plan.SkippedEdits.Any(skipped => skipped.StartsWith("Key Chest:", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("The structurally blocked Artisans Key Chest still leaked into disposable candidate patches.");
     }
 
-    bool hasKeyChestAppend = plan.Patches.Any(patch =>
-        string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(patch.MobyLabel, "Key Chest", StringComparison.OrdinalIgnoreCase));
-    bool hasKeyAppend = plan.Patches.Any(patch =>
-        string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(patch.MobyLabel, "Key", StringComparison.OrdinalIgnoreCase));
-    bool hasKeyChestPackageCopy = plan.Patches.Any(patch =>
-        string.Equals(patch.Kind, "actor-package-copy", StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(patch.MobyLabel, "Key Chest", StringComparison.OrdinalIgnoreCase));
-    bool hasKeyChestSpecialData = plan.Patches.Any(patch =>
-        string.Equals(patch.Kind, "cross-level-moby-special-data-import", StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(patch.MobyLabel, "Key Chest", StringComparison.OrdinalIgnoreCase));
-    if (!hasKeyChestAppend || !hasKeyAppend || !hasKeyChestPackageCopy || !hasKeyChestSpecialData)
-        throw new InvalidOperationException("Artisans key/chest writable plan is missing key, package, special-data, or source-record patches.");
-    if (plan.SkippedEdits.Count != 0)
-        throw new InvalidOperationException($"Artisans key/chest writable plan skipped {plan.SkippedEdits.Count} edit(s): {string.Join("; ", plan.SkippedEdits)}");
+    Console.WriteLine($"Artisans Key Chest package safety: blocked in normal and candidate modes, recipe={preview.RecipeId}");
+}
 
-    MobySourcePatch? sourceCountPatch = plan.Patches.FirstOrDefault(patch =>
-        string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase));
-    if (sourceCountPatch == null || BitConverter.ToInt32(ParseHexPreview(sourceCountPatch.AfterHexPreview), 0) != artisans.SourceRecordCount + 2)
-        throw new InvalidOperationException("Artisans key/chest writable plan did not bump the source moby count for both appended objects.");
+async Task ReportWizardPeakGreenWizardNativeCandidate()
+{
+    const int DonorTrueIndex = 6;
+    const int TargetTrueIndex = 24;
+    const int GuardTargetTrueIndex = 10;
+    const int RecordStride = 0x58;
+    const string ExpectedRuntimeProofOutputSha256 = "918b2a21d5bee8f653ce52678c3be490321981a8721135aa30c0aa9923714f26";
+    const string ExpectedCandidateOutputImageSha256 = "058005762dab8268d0d3161bcddd2ae6f5aeb48c9b8533fd9420a95ec9199628";
+    const string ExpectedProfileFingerprint = "31f535e3e95b52bea36f45852c3736f164ccc0b6cdc75085eb94a46f3523f3b9";
 
-    string syntheticEvidencePath = Path.Combine(workspace.RootPath, "_local", "objects", "artisans-key-chest-smoke-pass.candidate-result.json");
-    try
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("The Wizard Peak Green Wizard candidate smoke needs the selected original BIN.", sourceImage);
+
+    LevelDefinition wizardPeak = catalog.FindByKey("wizardpeak") ??
+        throw new InvalidOperationException("Wizard Peak is missing from the level catalog.");
+    if (wizardPeak.SourceWadEntry != 40 || wizardPeak.SourceRecordCount != 165)
+        throw new InvalidOperationException("The checked Wizard Peak source-table mapping changed.");
+
+    string cachePath = Path.Combine(workspace.RootPath, "editor-cache", "wizardpeak-mobys.json");
+    if (!File.Exists(cachePath))
+        throw new FileNotFoundException("The Wizard Peak Green Wizard candidate smoke needs its moby cache.", cachePath);
+    List<Moby> mobys = MobyLoader.LoadCached(cachePath).ToList();
+    MobyMetadataEnricher.Apply(workspace, wizardPeak.Key, mobys);
+    Moby donor = mobys.Single(moby => moby.TrueIndex == DonorTrueIndex);
+    Moby target = mobys.Single(moby => moby.TrueIndex == TargetTrueIndex);
+    Moby guardTarget = mobys.Single(moby => moby.TrueIndex == GuardTargetTrueIndex);
+    int donorActorId = donor.SourceByte36 | (donor.SourceByte37 << 8);
+    int targetActorId = target.SourceByte36 | (target.SourceByte37 << 8);
+    if (donorActorId != GreenWizardRuntimeBundleCompatibility.ActorId ||
+        targetActorId != 0x011D ||
+        !GreenWizardRuntimeBundleCompatibility.IsFocusedWizardPeakCandidateTarget(wizardPeak.Key, target))
     {
-        await WriteSyntheticCandidateEvidenceAsync(
-            syntheticEvidencePath,
-            artisans,
-            "artisans.peacekeepers.lockedChest.package.safeGapActorId.v4",
-            "Artisans Key Chest evidence-gated smoke",
-            templateId: "common.locked_chest.peacekeepers.t79",
-            family: "lockedChest",
-            recipeStatus: "experimental-image-write",
-            recipeFingerprint: CrossLevelCandidateRecipeFingerprint.Create(preview),
-            behaviorChecks:
-            [
-                new CandidateBehaviorSmokeCheck("key-visible-collectible", "Key is visible and collectible."),
-                new CandidateBehaviorSmokeCheck("keychest-locked-before-key", "Key Chest stays locked before collecting the key."),
-                new CandidateBehaviorSmokeCheck("keychest-opens-after-key", "Key Chest opens after collecting the key."),
-                new CandidateBehaviorSmokeCheck("keychest-nearby-regression", "Nearby portals, dragons, and existing chests still behave normally.")
-            ]);
-        MobySourcePatchPlan promotedByEvidencePlan = MobySourcePatchExporter.BuildPlan(
-            sourceImage,
-            DiscImageLocator.FindCueForImage(sourceImage),
-            Path.Combine(workspace.RootPath, "_local", "objects", "artisans-key-chest-evidence-gated-smoke.bin"),
-            Path.Combine(workspace.RootPath, "_local", "objects", "artisans-key-chest-evidence-gated-smoke.cue"),
-            artisans,
-            path);
-        MobyActorPackageImportPreview? evidencePreview = promotedByEvidencePlan.PackageImportPreviews.FirstOrDefault(item =>
-            string.Equals(item.TemplateId, "common.locked_chest.peacekeepers.t79", StringComparison.OrdinalIgnoreCase));
-        if (evidencePreview == null ||
-            !evidencePreview.CanWriteImage ||
-            !evidencePreview.GuardReason.Contains("passed in-game evidence", StringComparison.OrdinalIgnoreCase) ||
-            promotedByEvidencePlan.SkippedEdits.Count != 0 ||
-            promotedByEvidencePlan.Patches.Count(patch => string.Equals(patch.Kind, "actor-package-copy", StringComparison.OrdinalIgnoreCase)) != 1 ||
-            promotedByEvidencePlan.Patches.Count(patch => string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase)) != 2 ||
-            promotedByEvidencePlan.Patches.Count(patch => string.Equals(patch.Kind, "cross-level-moby-special-data-import", StringComparison.OrdinalIgnoreCase)) != 1)
+        throw new InvalidOperationException("The checked Wizard Peak T6 Green Wizard donor or T24 Elder Wizard target identity changed.");
+    }
+
+    GreenWizardRuntimeBundleLevelSupport support = GreenWizardRuntimeBundleCompatibility.Resolve(wizardPeak, workspace.RootPath);
+    if (support.Status != GreenWizardRuntimeBundleStatus.Verified ||
+        !support.SwapPlaceable ||
+        !support.CandidateWritable ||
+        !support.NormalCreateBinReady ||
+        !support.PerInstancePropertiesAndRoute ||
+        support.TrueAddPlaceable ||
+        !string.Equals(support.RecipeId, WizardPeakGreenWizardNativeSwapExporter.RecipeId, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Wizard Peak must expose only the runtime-proven exact T6-to-T24 Green Wizard route to normal Create BIN.");
+    }
+
+    CrossLevelSwapCatalog swapCatalog = CrossLevelSwapCatalogBuilder.Build(workspace, catalog, wizardPeak.Key);
+    CrossLevelSwapCatalogEntry[] placeableWizards = swapCatalog.Entries
+        .Where(entry => entry.ActorId == GreenWizardRuntimeBundleCompatibility.ActorId && entry.Placeable)
+        .ToArray();
+    if (placeableWizards.Length != 1 ||
+        placeableWizards[0].SourceTrueIndex != DonorTrueIndex ||
+        !placeableWizards[0].SameLevel ||
+        !placeableWizards[0].NormalCreateBinReady ||
+        !string.Equals(placeableWizards[0].CompatibilityTier, CrossLevelSwapCatalogBuilder.GreenWizardVerifiedCompatibility, StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Wizard Peak's swap catalogue must expose only T6 as the verified native Green Wizard donor.");
+    }
+
+    string reportRoot = Path.Combine(workspace.RootPath, "_local", "objects", "wizardpeak-green-wizard-native-candidate");
+    Directory.CreateDirectory(reportRoot);
+    string nativeEditsPath = Path.Combine(reportRoot, "wizardpeak-t24-green-wizard-native-edits.json");
+    string guardEditsPath = Path.Combine(reportRoot, "wizardpeak-t10-green-wizard-retired-guard-native-edits.json");
+    string normalPrefix = Path.Combine(reportRoot, "wizardpeak-t24-green-wizard-normal-create-bin-v3");
+    string normalStructuralPlanPath = normalPrefix + ".green-wizard-resident-plan.json";
+    string guardPrefix = Path.Combine(reportRoot, "wizardpeak-t10-green-wizard-retired-candidate-guard");
+    string candidatePrefix = Path.Combine(reportRoot, "wizardpeak-t24-green-wizard-pod-matched-v3");
+    string structuralPlanPath = candidatePrefix + ".green-wizard-resident-plan.json";
+    string focusedReportPath = candidatePrefix + ".focused-smoke-report.json";
+
+    Moby edited = CloneMoby(target);
+    edited.SetType(donor.Type);
+    edited.State = donor.State;
+    edited.SourceByte36 = donor.SourceByte36;
+    edited.SourceByte37 = donor.SourceByte37;
+    edited.SourceByte4F = donor.SourceByte4F;
+    edited.Flag4A = donor.Flag4A;
+    edited.Flag4B = target.Flag4B;
+    edited.Label = "Green Wizard (Wizard Peak native T6 donor)";
+    edited.PatchStatus = "verified-green-wizard-runtime-bundle";
+    edited.PatchLead = "Runtime-proven Wizard Peak native Green Wizard T6-to-T24 pod-matched v3 replacement.";
+    edited.CrossLevelTemplateId = GreenWizardRuntimeBundleCompatibility.TemplateId;
+    edited.CrossLevelFamily = "enemyTransform";
+    edited.CrossLevelSourceLevelKey = wizardPeak.Key;
+    edited.CrossLevelSourceLevelName = wizardPeak.DisplayName;
+    edited.CrossLevelSourceTrueIndex = DonorTrueIndex;
+    edited.CrossLevelRequiredExporterFeature = CrossLevelSwapCatalogBuilder.CandidateExporterFeature;
+    edited.CandidateKind = "Enemy";
+    edited.Confidence = "wizardpeak-native-green-wizard-runtime-proven";
+    edited.Evidence = "Wizard Peak owns the native actor 0x011B Wizard and actor 0x0026 lightning closure; T24 has a checked 0x74-byte private extent and already uses the detached native pod/group 0xFF.";
+    edited.BehaviorNote = "Runtime-proven v3 installs T6 properties in place at pod-matched T24, preserves group 0xFF and the trailing bytes, and replaces one stale fixup without scene growth. The user accepted visible lightning, the translated route, and one gem; live RAM confirmed actor/model initialization, attack state, movement, death, and retirement. Both T10 candidates remain retired after they never attacked in DuckStation.";
+    edited.HasLoadedNativeEdit = true;
+    edited.LoadedNativeEditSummary = "Replace Wizard Peak Elder Wizard T24 with native Green Wizard T6";
+    if (await MobyEditStore.SaveAsync(nativeEditsPath, [edited], "Wizard Peak T24 Green Wizard focused candidate smoke") != 1)
+        throw new InvalidOperationException("The Wizard Peak Green Wizard smoke did not save exactly one edit.");
+
+    string sourceCuePath = DiscImageLocator.FindCueForImage(sourceImage);
+    MobySourcePatchPlan normalPlan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        sourceCuePath,
+        normalPrefix + ".bin",
+        normalPrefix + ".cue",
+        wizardPeak,
+        nativeEditsPath);
+    MobySourcePatch[] normalRowPatches = normalPlan.Patches
+        .Where(patch => string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    if (normalRowPatches.Length != 1 ||
+        normalRowPatches[0].TrueIndex != TargetTrueIndex ||
+        normalRowPatches[0].ByteLength != RecordStride ||
+        normalPlan.Patches.Any(TestLevelWarpPatch.IsPatch) ||
+        normalPlan.Patches.Any(patch => string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)) ||
+        normalPlan.SkippedEdits.Count != 0)
+    {
+        throw new InvalidOperationException("Normal Create BIN did not stage exactly one source-count-neutral Wizard Peak T6-to-T24 replacement.");
+    }
+
+    MobySourcePatchResult normalResult = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: sourceCuePath,
+        OutputPrefix: normalPrefix,
+        Level: wizardPeak,
+        NativeEditsPath: nativeEditsPath,
+        WriteImage: true,
+        AllowPlanOnlyActorPackageImports: false));
+    if (!normalResult.WroteImage ||
+        !File.Exists(normalResult.OutputImagePath) ||
+        !File.Exists(normalResult.OutputCuePath) ||
+        !File.Exists(normalResult.OutputPlanPath) ||
+        !File.Exists(normalStructuralPlanPath))
+    {
+        throw new InvalidOperationException("Normal Create BIN did not compose the verified Wizard Peak BIN, CUE, source-row plan, and structural plan.");
+    }
+
+    Moby guarded = CloneMoby(guardTarget);
+    guarded.SetType(edited.Type);
+    guarded.State = edited.State;
+    guarded.SourceByte36 = edited.SourceByte36;
+    guarded.SourceByte37 = edited.SourceByte37;
+    guarded.SourceByte4F = edited.SourceByte4F;
+    guarded.Flag4A = edited.Flag4A;
+    guarded.Flag4B = guardTarget.Flag4B;
+    guarded.Label = edited.Label;
+    guarded.PatchStatus = edited.PatchStatus;
+    guarded.PatchLead = edited.PatchLead;
+    guarded.CrossLevelTemplateId = edited.CrossLevelTemplateId;
+    guarded.CrossLevelFamily = edited.CrossLevelFamily;
+    guarded.CrossLevelSourceLevelKey = edited.CrossLevelSourceLevelKey;
+    guarded.CrossLevelSourceLevelName = edited.CrossLevelSourceLevelName;
+    guarded.CrossLevelSourceTrueIndex = edited.CrossLevelSourceTrueIndex;
+    guarded.CrossLevelRequiredExporterFeature = edited.CrossLevelRequiredExporterFeature;
+    guarded.CandidateKind = edited.CandidateKind;
+    guarded.Confidence = edited.Confidence;
+    guarded.Evidence = edited.Evidence;
+    guarded.BehaviorNote = edited.BehaviorNote;
+    guarded.HasLoadedNativeEdit = true;
+    guarded.LoadedNativeEditSummary = "Guard retired Wizard Peak T10 Green Wizard replacement";
+    if (await MobyEditStore.SaveAsync(guardEditsPath, [guarded], "Wizard Peak non-T24 Green Wizard guard smoke") != 1)
+        throw new InvalidOperationException("The retired Wizard Peak T10 guard smoke did not save exactly one edit.");
+
+    MobySourcePatchPlan guardPlan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        sourceCuePath,
+        guardPrefix + ".bin",
+        guardPrefix + ".cue",
+        wizardPeak,
+        guardEditsPath,
+        allowPlanOnlyActorPackageImports: true);
+    if (guardPlan.Patches.Any(patch => string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase)) ||
+        !guardPlan.SkippedEdits.Any(skip => skip.Contains("frozen to Elder Wizard T24", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("Candidate mode did not reject the retired Wizard Peak T10 Green Wizard target.");
+    }
+    MobySourcePatchPlan normalGuardPlan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        sourceCuePath,
+        guardPrefix + "-normal.bin",
+        guardPrefix + "-normal.cue",
+        wizardPeak,
+        guardEditsPath);
+    if (normalGuardPlan.Patches.Any(patch => string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase)) ||
+        !normalGuardPlan.SkippedEdits.Any(skip => skip.Contains("frozen to Elder Wizard T24", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("Normal Create BIN did not reject the retired Wizard Peak T10 Green Wizard target.");
+    }
+
+    MobySourcePatchPlan candidatePlan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        sourceCuePath,
+        candidatePrefix + ".bin",
+        candidatePrefix + ".cue",
+        wizardPeak,
+        nativeEditsPath,
+        allowPlanOnlyActorPackageImports: true);
+    MobySourcePatch[] rowPatches = candidatePlan.Patches
+        .Where(patch => string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    if (rowPatches.Length != 1 ||
+        rowPatches[0].TrueIndex != TargetTrueIndex ||
+        rowPatches[0].ByteLength != RecordStride ||
+        candidatePlan.Patches.Count(TestLevelWarpPatch.IsPatch) != 1 ||
+        candidatePlan.Patches.Any(patch => string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)) ||
+        candidatePlan.SkippedEdits.Count != 0)
+    {
+        throw new InvalidOperationException("The Wizard Peak candidate plan is not one source-count-neutral T6-to-T24 replacement.");
+    }
+
+    MobySourcePatchResult result = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: sourceCuePath,
+        OutputPrefix: candidatePrefix,
+        Level: wizardPeak,
+        NativeEditsPath: nativeEditsPath,
+        WriteImage: true,
+        AllowPlanOnlyActorPackageImports: true));
+    if (!result.WroteImage ||
+        !File.Exists(result.OutputImagePath) ||
+        !File.Exists(result.OutputCuePath) ||
+        !File.Exists(result.OutputPlanPath) ||
+        !File.Exists(structuralPlanPath))
+    {
+        throw new InvalidOperationException("Candidate mode did not write the Wizard Peak BIN, CUE, source-row plan, and structural plan.");
+    }
+
+    string validationPath = await MobyCandidateValidationReportWriter.WriteAsync(result);
+    string resultPath = candidatePrefix + ".candidate-result.json";
+    if (!File.Exists(validationPath) || !File.Exists(resultPath))
+        throw new InvalidOperationException("The Wizard Peak candidate validation report or result template is missing.");
+
+    WizardPeakGreenWizardNativeSwapPlan structuralPlan = JsonSerializer.Deserialize<WizardPeakGreenWizardNativeSwapPlan>(
+        await File.ReadAllTextAsync(structuralPlanPath)) ??
+        throw new InvalidDataException("The Wizard Peak structural plan could not be read.");
+    if (!string.Equals(structuralPlan.RecipeId, WizardPeakGreenWizardNativeSwapExporter.RecipeId, StringComparison.Ordinal) ||
+        !string.Equals(structuralPlan.RetiredRecipeId, WizardPeakGreenWizardNativeSwapExporter.RetiredV2RecipeId, StringComparison.Ordinal) ||
+        !string.Equals(structuralPlan.RetiredRecipeReason, WizardPeakGreenWizardNativeSwapExporter.RetiredV2Reason, StringComparison.Ordinal) ||
+        structuralPlan.DonorTrueIndex != DonorTrueIndex ||
+        structuralPlan.TargetTrueIndex != TargetTrueIndex ||
+        structuralPlan.ReplacedActorId != 0x011D ||
+        structuralPlan.ReplacedPodOrGroup != 0xFF ||
+        structuralPlan.InstalledPodOrGroup != 0xFF ||
+        structuralPlan.PreservedYaw != 0x2B ||
+        structuralPlan.PreservedReward != 0x56 ||
+        structuralPlan.PropertiesSceneOffset != 0xCAC0 ||
+        structuralPlan.PropertiesExtentBytes != 0x74 ||
+        structuralPlan.PointerFixupCount != 0xBF ||
+        structuralPlan.ReplacedFixupSceneOffset != 0xCACC ||
+        structuralPlan.InstalledFixupSceneOffset != 0xCAC0 ||
+        structuralPlan.ReplacedFixupIndex != 37 ||
+        structuralPlan.RoutePoints.Count != 2 ||
+        structuralPlan.RoutePoints[0] != new WizardPeakGreenWizardRoutePoint(39670, 64655, 27935) ||
+        structuralPlan.RoutePoints[1] != new WizardPeakGreenWizardRoutePoint(33147, 61511, 27935) ||
+        structuralPlan.RetiredCandidates.Count != 2 ||
+        !structuralPlan.RetiredCandidates.Any(item => string.Equals(item.RecipeId, WizardPeakGreenWizardNativeSwapExporter.RetiredV1RecipeId, StringComparison.Ordinal)) ||
+        !structuralPlan.RetiredCandidates.Any(item => string.Equals(item.RecipeId, WizardPeakGreenWizardNativeSwapExporter.RetiredV2RecipeId, StringComparison.Ordinal)) ||
+        !string.Equals(structuralPlan.ProfileFingerprint, ExpectedProfileFingerprint, StringComparison.Ordinal) ||
+        !string.Equals(structuralPlan.OutputImageSha256, ExpectedCandidateOutputImageSha256, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("The Wizard Peak structural plan no longer matches the focused T6-to-T24 pod-matched contract.");
+    }
+
+    string normalOutputImageSha256;
+    await using (FileStream hashStream = File.OpenRead(normalResult.OutputImagePath))
+        normalOutputImageSha256 = Convert.ToHexString(SHA256.HashData(hashStream)).ToLowerInvariant();
+    if (!string.Equals(normalOutputImageSha256, ExpectedRuntimeProofOutputSha256, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            $"Normal Create BIN did not reproduce the runtime-proven Wizard Peak v3 image: expected {ExpectedRuntimeProofOutputSha256}, found {normalOutputImageSha256}.");
+    }
+    AssertOnlyTestLevelWarpDelta(normalResult.OutputImagePath, result.OutputImagePath, candidatePlan);
+
+    WizardPeakGreenWizardNativeSwapPlan normalStructuralPlan = JsonSerializer.Deserialize<WizardPeakGreenWizardNativeSwapPlan>(
+        await File.ReadAllTextAsync(normalStructuralPlanPath)) ??
+        throw new InvalidDataException("The normal Wizard Peak structural plan could not be read.");
+    if (!string.Equals(normalStructuralPlan.RecipeId, WizardPeakGreenWizardNativeSwapExporter.RecipeId, StringComparison.Ordinal) ||
+        !string.Equals(normalStructuralPlan.ProfileFingerprint, ExpectedProfileFingerprint, StringComparison.Ordinal) ||
+        !string.Equals(normalStructuralPlan.OutputImageSha256, ExpectedRuntimeProofOutputSha256, StringComparison.Ordinal) ||
+        normalStructuralPlan.TargetTrueIndex != TargetTrueIndex)
+    {
+        throw new InvalidOperationException("The normal Wizard Peak structural plan is not tied to the promoted profile and runtime-proof image.");
+    }
+
+    using (JsonDocument candidateResult = JsonDocument.Parse(await File.ReadAllTextAsync(resultPath)))
+    {
+        JsonElement runtimeEvidence = candidateResult.RootElement.GetProperty("result");
+        Dictionary<string, JsonElement> behaviorEvidence = candidateResult.RootElement
+            .GetProperty("behaviorChecks")
+            .EnumerateArray()
+            .ToDictionary(check => check.GetProperty("id").GetString() ?? "", StringComparer.OrdinalIgnoreCase);
+        if (!string.Equals(runtimeEvidence.GetProperty("status").GetString(), "passed", StringComparison.OrdinalIgnoreCase) ||
+            runtimeEvidence.GetProperty("bootedLevel").GetBoolean() != true ||
+            runtimeEvidence.GetProperty("objectAppeared").GetBoolean() != true ||
+            runtimeEvidence.GetProperty("mobyRecordsPresent").GetBoolean() != true ||
+            runtimeEvidence.GetProperty("actorRootsPresent").GetBoolean() != true ||
+            runtimeEvidence.GetProperty("behaviorCorrect").GetBoolean() != true ||
+            !runtimeEvidence.GetProperty("notes").GetString()!.Contains("Lightning Yes, Gem Yes", StringComparison.OrdinalIgnoreCase) ||
+            !runtimeEvidence.GetProperty("notes").GetString()!.Contains("not separately enumerated", StringComparison.OrdinalIgnoreCase) ||
+            !behaviorEvidence.TryGetValue("existing-slot-t24-wizard-visible", out JsonElement visibleCheck) ||
+            visibleCheck.GetProperty("passed").GetBoolean() != true ||
+            !behaviorEvidence.TryGetValue("existing-slot-t24-wizard-route", out JsonElement routeCheck) ||
+            routeCheck.GetProperty("passed").GetBoolean() != true)
         {
-            throw new InvalidOperationException("Artisans Key Chest did not become writable after a passed in-game candidate result.");
+            throw new InvalidOperationException("The Wizard Peak v3 result no longer records the accepted user evidence and its explicit unclaimed-check boundary.");
         }
     }
-    finally
+
+    await File.WriteAllTextAsync(focusedReportPath, JsonSerializer.Serialize(new
     {
-        File.Delete(syntheticEvidencePath);
+        GeneratedAtUtc = DateTimeOffset.UtcNow,
+        Status = "passed-runtime-proven",
+        Level = wizardPeak.DisplayName,
+        Donor = $"T{DonorTrueIndex} actor 0x{donorActorId:X4}",
+        Target = $"T{TargetTrueIndex} actor 0x{targetActorId:X4}",
+        structuralPlan.RecipeId,
+        structuralPlan.ProfileFingerprint,
+        structuralPlan.OutputImageSha256,
+        RuntimeProofOutputSha256 = normalOutputImageSha256,
+        RetiredCandidates = structuralPlan.RetiredCandidates,
+        PodOrGroup = "T24 Elder group 0xFF -> T6 detached Green Wizard group 0xFF",
+        PropertiesExtent = "0xCAC0-0xCB33",
+        PointerFixup = "0xCACC -> 0xCAC0 at index 37; count remains 0xBF",
+        structuralPlan.RoutePoints,
+        CandidateCue = result.OutputCuePath,
+        CandidateValidation = validationPath,
+        CandidateResult = resultPath,
+        Checks = new
+        {
+            NormalCreateBinComposed = true,
+            NormalCreateBinMatchesRuntimeProof = true,
+            SwapTestDiffersOnlyByGuardedWarp = true,
+            ExactT24RouteRuntimeProven = true,
+            RetiredT10TargetsRemainBlocked = true,
+            UnclaimedChecklistItemsRemainExplicit = true
+        },
+        NormalCreateBin = normalResult.OutputImagePath,
+        NormalCreateCue = normalResult.OutputCuePath,
+        NormalStructuralPlan = normalStructuralPlanPath
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Wizard Peak Green Wizard T6-to-T24 v3 promotion: PASS (normal Create BIN reproduces runtime-proven SHA-256 {ExpectedRuntimeProofOutputSha256}; Swap Test differs only by the guarded 8-byte level-warp patch).");
+    Console.WriteLine($"Normal Create BIN: {normalResult.OutputImagePath}");
+    Console.WriteLine($"Normal Create CUE: {normalResult.OutputCuePath}");
+    Console.WriteLine($"Swap Test CUE: {result.OutputCuePath}");
+    Console.WriteLine($"Candidate validation: {validationPath}");
+    Console.WriteLine($"Focused smoke report: {focusedReportPath}");
+}
+
+async Task ReportMagicCraftersGreenWizardResidentCandidate()
+{
+    const int DonorTrueIndex = 107;
+    const int TargetTrueIndex = 27;
+    const int StaleTargetTrueIndex = 1;
+    const int RecordStride = 0x58;
+    const long TableWadOffset = 0x29100EC;
+    const int SceneBase = 0x1CC800;
+    const int SceneBytes = 0x12000;
+    const int PropertiesSceneOffset = 0xE9BC;
+    const int PropertiesExtentBytes = 0x74;
+    const int PropertiesBytes = 0x50;
+    const int PropertiesHeaderOffset = 0xDF54;
+    const int PropertiesComponentBytes = 0x18B4;
+    const byte PreservedYaw = 0x24;
+    const int NativePodsOffset = 0xF808;
+    const int NativeCollisionOffset = 0xF82C;
+    const int FixupsOffset = 0x11830;
+    const int FixupsFootprintBytes = 0x2FC;
+    const int ActiveFixupsBytes = 0x2F8;
+    const int RemovedFixup = 0xE9F8;
+    const int FinalUsedEnd = 0x11B28;
+    const string ExpectedDonorPropertiesSha256 = "9f5aea230eb998c43ea354fa74fb189ea0950759decc75c565b6e44e255ce5a5";
+    const string ExpectedInstalledPropertiesSha256 = "8635248bbe827d63066e8881c1c0d7d1bb4c1c86a00dbe2efe9db8e6526317be";
+    const string ExpectedInstalledPropertiesExtentSha256 = "cb8c1ff47d35f3620f44ac32fbc68d7576f08aaffd21d28f03c06709db378ab0";
+    const string ExpectedFinalRowSha256 = "284d7bede83feef75ab4ea53dd3938e35dcdd63e2b0a2574d5a34aab3453de2a";
+    const string ExpectedPropertiesComponentSha256 = "32e32229d2e4c4ddeaa2073ef80fef7eb73b432f4d7a7801a5b69c96ca1b411b";
+    const string ExpectedNativePodsSha256 = "1c95086075b3348996304448eda22f71e5ef1117e7d28eb6ccb7a9b158529af9";
+    const string ExpectedNativeCollisionSha256 = "e5b0e80369ae6416ae4a4e144b3b3627142b3a273296da54e595377627901944";
+    const string ExpectedActiveFixupsSha256 = "2fac0d970350db7a3f8436c4531fa4adadcf63a8e36d226441049d83ea9c8b6c";
+    const string ExpectedFixupsFootprintSha256 = "48893f21d2748a3d2b77143240538936958d446a74605b119f0dca4041f42ba3";
+    const string ExpectedFinalZeroTailSha256 = "be35dae855452c2ddbc5fb9264fd7325e2d0fa3392fdf5ef30ac94b9439e7532";
+    const string ExpectedOutputImageSha256 = "a94679cffe20075aae54c2a9c6f2f29580857204e43606a033227c3d4705901b";
+    const string ExpectedCandidateOutputImageSha256 = "1abd4157f04cfc2832ea0fc96d6c9c44ce941a6af6f1c09812ef8161cf3ac3db";
+    const string ExpectedProfileFingerprint = "f47031c456277cf057df654e16cda4ab32c757c36583705503f8157ea97e27e6";
+
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("The Magic Crafters Green Wizard candidate smoke needs the selected original BIN.", sourceImage);
+
+    LevelDefinition magicCrafters = catalog.FindByKey("magiccrafters") ??
+        throw new InvalidOperationException("Magic Crafters is missing from the level catalog.");
+    if (magicCrafters.SourceWadEntry != 34 || magicCrafters.SourceRecordCount != 135)
+        throw new InvalidOperationException("The checked Magic Crafters source-table mapping changed.");
+
+    string cachePath = Path.Combine(workspace.RootPath, "editor-cache", "magiccrafters-mobys.json");
+    if (!File.Exists(cachePath))
+        throw new FileNotFoundException("The Magic Crafters Green Wizard candidate smoke needs its moby cache.", cachePath);
+
+    List<Moby> mobys = MobyLoader.LoadCached(cachePath).ToList();
+    MobyMetadataEnricher.Apply(workspace, magicCrafters.Key, mobys);
+    Moby donor = mobys.Single(moby => moby.TrueIndex == DonorTrueIndex);
+    Moby target = mobys.Single(moby => moby.TrueIndex == TargetTrueIndex);
+    Moby staleTarget = mobys.Single(moby => moby.TrueIndex == StaleTargetTrueIndex);
+    int donorActorId = donor.SourceByte36 | (donor.SourceByte37 << 8);
+    int targetActorId = target.SourceByte36 | (target.SourceByte37 << 8);
+    int staleTargetActorId = staleTarget.SourceByte36 | (staleTarget.SourceByte37 << 8);
+    if (donorActorId != GreenWizardRuntimeBundleCompatibility.ActorId || targetActorId != 0x010F ||
+        staleTargetActorId != targetActorId ||
+        !GreenWizardRuntimeBundleCompatibility.IsFocusedResidentCandidateTarget(magicCrafters.Key, target))
+    {
+        throw new InvalidOperationException("The checked Magic Crafters T107 donor or T27 Armored Druid target identity changed.");
     }
 
-    if (exportCrossLevelObjectTest)
-        await ExportAndVerifyMobyPatchImage(artisans, path, Path.Combine(workspace.RootPath, "_local", "objects", "artisans-key-chest-write-smoke"), "Artisans key chest", allowPlanOnlyActorPackageImports: true);
+    RuntimeBundleCompatibilityResult compatibility = GreenWizardRuntimeBundleCatalog.Evaluate(magicCrafters.Key);
+    LevelRuntimeBundleProfile profile = GreenWizardRuntimeBundleCatalog.FindProfile(magicCrafters.Key) ??
+        throw new InvalidOperationException("Magic Crafters has no Green Wizard resident profile.");
+    if (compatibility.Status != RuntimeBundleCompatibilityStatus.Ready ||
+        compatibility.Deployment != RuntimeBundleDeploymentKind.ResidentActor ||
+        !compatibility.CanStageInstance ||
+        !compatibility.NormalCreateBinReady ||
+        compatibility.RequiresRuntimeSmoke ||
+        compatibility.RequiredWork.Count != 0 ||
+        profile.Evidence != RuntimeBundleEvidenceKind.RuntimeProven ||
+        !string.Equals(profile.Fingerprint, ExpectedProfileFingerprint, StringComparison.Ordinal) ||
+        !string.Equals(profile.RuntimeProofRecipeId, MagicCraftersGreenWizardResidentSwapExporter.RecipeId, StringComparison.Ordinal) ||
+        !string.Equals(profile.RuntimeProofOutputSha256, ExpectedOutputImageSha256, StringComparison.Ordinal) ||
+        profile.InstanceLayout.PropertiesDonorTrueIndex != DonorTrueIndex ||
+        profile.InstanceLayout.PropertiesBytes != PropertiesBytes ||
+        profile.InstanceLayout.RoutePointCount != 2 ||
+        profile.InstanceLayout.SwapPointerFixupDelta != -1)
+    {
+        throw new InvalidOperationException("Magic Crafters must expose the exact runtime-proven T107-to-T27 resident Wizard profile to normal Create BIN.");
+    }
 
-    Console.WriteLine($"Artisans key + key chest package write plan: {preview.RecipeId}, {preview.CopySegments[0].ByteLength} byte copy, root {preview.RootEntries[0].TargetRootSlot}");
+    CrossLevelSwapCatalog swapCatalog = CrossLevelSwapCatalogBuilder.Build(workspace, catalog, magicCrafters.Key);
+    CrossLevelSwapCatalogEntry[] wizardEntries = swapCatalog.Entries
+        .Where(entry => entry.ActorId == GreenWizardRuntimeBundleCompatibility.ActorId)
+        .ToArray();
+    CrossLevelSwapCatalogEntry[] writableWizardEntries = wizardEntries.Where(entry => entry.Placeable).ToArray();
+    if (writableWizardEntries.Length != 1 ||
+        writableWizardEntries[0].SourceTrueIndex != DonorTrueIndex ||
+        !string.Equals(LevelCatalog.NormalizeKey(writableWizardEntries[0].SourceLevelKey), "magiccrafters", StringComparison.OrdinalIgnoreCase) ||
+        !writableWizardEntries[0].NormalCreateBinReady ||
+        writableWizardEntries[0].CompatibilityTier != CrossLevelSwapCatalogBuilder.GreenWizardVerifiedCompatibility)
+    {
+        throw new InvalidOperationException("The Magic Crafters swap catalogue must expose only native T107 as the verified Green Wizard donor.");
+    }
+
+    string reportRoot = Path.Combine(workspace.RootPath, "_local", "objects", "magiccrafters-green-wizard-resident-candidate");
+    Directory.CreateDirectory(reportRoot);
+    string nativeEditsPath = Path.Combine(reportRoot, "magiccrafters-t27-green-wizard-native-edits.json");
+    string staleNativeEditsPath = Path.Combine(reportRoot, "magiccrafters-stale-t1-green-wizard-native-edits.json");
+    string normalPrefix = Path.Combine(reportRoot, "magiccrafters-t27-green-wizard-normal-create-bin-v2");
+    string normalResidentPlanPath = normalPrefix + ".green-wizard-resident-plan.json";
+    string staleCandidatePrefix = Path.Combine(reportRoot, "magiccrafters-stale-t1-green-wizard-guard");
+    string candidatePrefix = Path.Combine(reportRoot, "magiccrafters-t27-green-wizard-in-place-properties-v2");
+    string residentPlanPath = candidatePrefix + ".green-wizard-resident-plan.json";
+    string focusedReportPath = candidatePrefix + ".focused-smoke-report.json";
+
+    Moby edited = CloneMoby(target);
+    edited.SetType(donor.Type);
+    edited.State = 0;
+    edited.SourceByte36 = donor.SourceByte36;
+    edited.SourceByte37 = donor.SourceByte37;
+    edited.SourceByte4F = donor.SourceByte4F;
+    edited.Flag4A = donor.Flag4A;
+    edited.Flag4B = target.Flag4B;
+    edited.Label = "Green Wizard (Magic Crafters native T107 donor)";
+    edited.PatchStatus = "verified-green-wizard-runtime-bundle";
+    edited.PatchLead = "Runtime-proven Magic Crafters resident Green Wizard replacement reusing T27's private properties extent without scene growth.";
+    edited.CrossLevelTemplateId = "enemy.green_wizard.magiccrafters.t107";
+    edited.CrossLevelFamily = "enemyTransform";
+    edited.CrossLevelSourceLevelKey = magicCrafters.Key;
+    edited.CrossLevelSourceLevelName = magicCrafters.DisplayName;
+    edited.CrossLevelSourceTrueIndex = DonorTrueIndex;
+    edited.CrossLevelRequiredExporterFeature = CrossLevelSwapCatalogBuilder.CandidateExporterFeature;
+    edited.CandidateKind = "Enemy";
+    edited.Confidence = "magiccrafters-native-green-wizard-resident-runtime-proven";
+    edited.Evidence = "Magic Crafters owns checked actor 0x011B and lightning actor 0x0026 roots plus native handlers.";
+    edited.BehaviorNote = "Runtime-proven v2 installs the private Wizard block inside T27's existing 0x74-byte extent, removes stale fixup 0xE9F8, performs no scene growth, and passed the focused DuckStation hit and behavior checks.";
+    edited.HasLoadedNativeEdit = true;
+    edited.LoadedNativeEditSummary = "Replace Magic Crafters T27 from native Green Wizard T107 donor";
+
+    int savedEditCount = await MobyEditStore.SaveAsync(nativeEditsPath, [edited], "Magic Crafters T27 Green Wizard resident candidate smoke");
+    if (savedEditCount != 1)
+        throw new InvalidOperationException("The Magic Crafters Green Wizard smoke did not save exactly one edit.");
+
+    string sourceCuePath = DiscImageLocator.FindCueForImage(sourceImage);
+    MobySourcePatchPlan normalPlan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        sourceCuePath,
+        normalPrefix + ".bin",
+        normalPrefix + ".cue",
+        magicCrafters,
+        nativeEditsPath);
+    MobySourcePatch[] normalRowPatches = normalPlan.Patches
+        .Where(patch => string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    if (normalRowPatches.Length != 1 ||
+        normalRowPatches[0].TrueIndex != TargetTrueIndex ||
+        normalRowPatches[0].ByteLength != RecordStride ||
+        normalPlan.Patches.Any(TestLevelWarpPatch.IsPatch) ||
+        normalPlan.Patches.Any(patch => string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)) ||
+        normalPlan.SkippedEdits.Count != 0)
+    {
+        throw new InvalidOperationException("Normal Create BIN did not stage exactly one source-count-neutral Magic Crafters T107-to-T27 replacement.");
+    }
+
+    MobySourcePatchResult normalResult = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: sourceCuePath,
+        OutputPrefix: normalPrefix,
+        Level: magicCrafters,
+        NativeEditsPath: nativeEditsPath,
+        WriteImage: true,
+        AllowPlanOnlyActorPackageImports: false));
+    if (!normalResult.WroteImage ||
+        !File.Exists(normalResult.OutputImagePath) ||
+        !File.Exists(normalResult.OutputCuePath) ||
+        !File.Exists(normalResult.OutputPlanPath) ||
+        !File.Exists(normalResidentPlanPath))
+    {
+        throw new InvalidOperationException("Normal Create BIN did not compose the verified Magic Crafters BIN, CUE, source-row plan, and resident-runtime plan.");
+    }
+
+    Moby staleEdited = CloneMoby(staleTarget);
+    staleEdited.SetType(edited.Type);
+    staleEdited.State = edited.State;
+    staleEdited.SourceByte36 = edited.SourceByte36;
+    staleEdited.SourceByte37 = edited.SourceByte37;
+    staleEdited.SourceByte4F = edited.SourceByte4F;
+    staleEdited.Flag4A = edited.Flag4A;
+    staleEdited.Flag4B = staleTarget.Flag4B;
+    staleEdited.Label = edited.Label;
+    staleEdited.PatchStatus = edited.PatchStatus;
+    staleEdited.PatchLead = edited.PatchLead;
+    staleEdited.CrossLevelTemplateId = edited.CrossLevelTemplateId;
+    staleEdited.CrossLevelFamily = edited.CrossLevelFamily;
+    staleEdited.CrossLevelSourceLevelKey = edited.CrossLevelSourceLevelKey;
+    staleEdited.CrossLevelSourceLevelName = edited.CrossLevelSourceLevelName;
+    staleEdited.CrossLevelSourceTrueIndex = edited.CrossLevelSourceTrueIndex;
+    staleEdited.CrossLevelRequiredExporterFeature = edited.CrossLevelRequiredExporterFeature;
+    staleEdited.CandidateKind = edited.CandidateKind;
+    staleEdited.Confidence = edited.Confidence;
+    staleEdited.Evidence = edited.Evidence;
+    staleEdited.BehaviorNote = edited.BehaviorNote;
+    staleEdited.HasLoadedNativeEdit = true;
+    staleEdited.LoadedNativeEditSummary = "Stale Magic Crafters Green Wizard replacement targeting unsupported T1";
+
+    int staleSavedEditCount = await MobyEditStore.SaveAsync(
+        staleNativeEditsPath,
+        [staleEdited],
+        "Stale Magic Crafters T1 Green Wizard candidate guard smoke");
+    if (staleSavedEditCount != 1)
+        throw new InvalidOperationException("The stale Magic Crafters Wizard guard smoke did not save exactly one edit.");
+
+    MobySourcePatchPlan staleCandidatePlan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        sourceCuePath,
+        staleCandidatePrefix + ".bin",
+        staleCandidatePrefix + ".cue",
+        magicCrafters,
+        staleNativeEditsPath,
+        allowPlanOnlyActorPackageImports: true);
+    if (staleCandidatePlan.Patches.Any(patch =>
+            string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase)) ||
+        !staleCandidatePlan.SkippedEdits.Any(skip =>
+            skip.Contains($"frozen to T{TargetTrueIndex}", StringComparison.OrdinalIgnoreCase) &&
+            skip.Contains($"T{StaleTargetTrueIndex}", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException(
+            "Candidate BuildPlan did not reject the stale Magic Crafters Wizard replacement outside focused T27.");
+    }
+
+    MobySourcePatchPlan candidatePlan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        sourceCuePath,
+        candidatePrefix + ".bin",
+        candidatePrefix + ".cue",
+        magicCrafters,
+        nativeEditsPath,
+        allowPlanOnlyActorPackageImports: true);
+    MobySourcePatch[] rowPatches = candidatePlan.Patches
+        .Where(patch => string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    if (rowPatches.Length != 1 || rowPatches[0].TrueIndex != TargetTrueIndex || rowPatches[0].ByteLength != RecordStride ||
+        candidatePlan.Patches.Count(TestLevelWarpPatch.IsPatch) != 1 ||
+        candidatePlan.Patches.Any(patch => string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)) ||
+        candidatePlan.SkippedEdits.Count != 0)
+    {
+        throw new InvalidOperationException("The Magic Crafters candidate plan is not one source-count-neutral T107-to-T27 replacement.");
+    }
+
+    byte[] beforeRecord = ParseHexPreview(rowPatches[0].BeforeHexPreview);
+    byte[] stagedRecord = ParseHexPreview(rowPatches[0].AfterHexPreview);
+    if ((stagedRecord[0x36] | (stagedRecord[0x37] << 8)) != GreenWizardRuntimeBundleCompatibility.ActorId ||
+        stagedRecord[0x51] != 0 ||
+        stagedRecord[0x4B] != 0x09 ||
+        stagedRecord[0x53] != beforeRecord[0x53])
+    {
+        throw new InvalidOperationException("The staged Magic Crafters Wizard row lost the clean T107 state/renderer or T27 reward.");
+    }
+
+    MobySourcePatchResult result = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: sourceCuePath,
+        OutputPrefix: candidatePrefix,
+        Level: magicCrafters,
+        NativeEditsPath: nativeEditsPath,
+        WriteImage: true,
+        AllowPlanOnlyActorPackageImports: true));
+    if (!result.WroteImage || !File.Exists(result.OutputImagePath) || !File.Exists(result.OutputCuePath) ||
+        !File.Exists(result.OutputPlanPath) || !File.Exists(residentPlanPath))
+    {
+        throw new InvalidOperationException("Candidate mode did not write the Magic Crafters BIN, CUE, source-row plan, and resident-runtime plan.");
+    }
+
+    SourceDiscLayout finalLayout = DetectSourceDiscLayout(result.OutputImagePath);
+    byte[] finalRow;
+    byte[] installedProperties;
+    byte[] installedPropertiesExtent;
+    byte[] propertiesComponent;
+    byte[] nativePods;
+    byte[] nativeCollision;
+    byte[] fixupsFootprint;
+    byte[] finalZeroTail;
+    using (FileStream finalStream = File.OpenRead(result.OutputImagePath))
+    {
+        byte[] dataHeader = ReadSourceWadBytes(finalStream, finalLayout, magicCrafters.SourceWadEntry * 8L, 8);
+        long dataWadOffset = BinaryPrimitives.ReadUInt32LittleEndian(dataHeader.AsSpan(0, 4));
+        int dataBytes = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(dataHeader.AsSpan(4, 4)));
+        if (dataBytes != 0x2BE800)
+            throw new InvalidOperationException("The Magic Crafters data entry size changed.");
+        long sceneWadOffset = dataWadOffset + SceneBase;
+        finalRow = ReadSourceWadBytes(finalStream, finalLayout, TableWadOffset + (TargetTrueIndex * RecordStride), RecordStride);
+        installedProperties = ReadSourceWadBytes(finalStream, finalLayout, sceneWadOffset + PropertiesSceneOffset, PropertiesBytes);
+        installedPropertiesExtent = ReadSourceWadBytes(finalStream, finalLayout, sceneWadOffset + PropertiesSceneOffset, PropertiesExtentBytes);
+        propertiesComponent = ReadSourceWadBytes(finalStream, finalLayout, sceneWadOffset + PropertiesHeaderOffset, PropertiesComponentBytes);
+        nativePods = ReadSourceWadBytes(finalStream, finalLayout, sceneWadOffset + NativePodsOffset, 0x24);
+        nativeCollision = ReadSourceWadBytes(finalStream, finalLayout, sceneWadOffset + NativeCollisionOffset, 0x2004);
+        fixupsFootprint = ReadSourceWadBytes(finalStream, finalLayout, sceneWadOffset + FixupsOffset, FixupsFootprintBytes);
+        finalZeroTail = ReadSourceWadBytes(finalStream, finalLayout, sceneWadOffset + FinalUsedEnd, SceneBytes - FinalUsedEnd);
+    }
+
+    foreach (int offset in new[] { 0x0C, 0x10, 0x14 })
+    {
+        if (BinaryPrimitives.ReadInt32LittleEndian(finalRow.AsSpan(offset, 4)) !=
+            BinaryPrimitives.ReadInt32LittleEndian(beforeRecord.AsSpan(offset, 4)))
+        {
+            throw new InvalidOperationException($"The final Magic Crafters Wizard changed T27 placement at +0x{offset:X2}.");
+        }
+    }
+    if ((finalRow[0x36] | (finalRow[0x37] << 8)) != GreenWizardRuntimeBundleCompatibility.ActorId ||
+        BinaryPrimitives.ReadUInt32LittleEndian(finalRow.AsSpan(0, 4)) != PropertiesSceneOffset ||
+        !finalRow.AsSpan(0x20, 0x12).SequenceEqual(beforeRecord.AsSpan(0x20, 0x12)) ||
+        finalRow[0x43] != beforeRecord[0x43] ||
+        beforeRecord[0x46] != PreservedYaw ||
+        finalRow[0x46] != PreservedYaw ||
+        finalRow[0x4A] != beforeRecord[0x4A] ||
+        finalRow[0x4B] != 0x09 ||
+        finalRow[0x51] != 0 ||
+        finalRow[0x52] != 0x10 ||
+        finalRow[0x53] != beforeRecord[0x53])
+    {
+        throw new InvalidOperationException("The final Magic Crafters T27 Wizard did not preserve its guarded row contract.");
+    }
+
+    int rawX = BinaryPrimitives.ReadInt32LittleEndian(beforeRecord.AsSpan(0x0C, 4));
+    int rawY = BinaryPrimitives.ReadInt32LittleEndian(beforeRecord.AsSpan(0x10, 4));
+    int rawZ = BinaryPrimitives.ReadInt32LittleEndian(beforeRecord.AsSpan(0x14, 4));
+    (int X, int Y, int Z)[] expectedRoute =
+    [
+        (rawX, rawY, checked(rawZ + 302)),
+        (checked(rawX - 2949), checked(rawY - 3768), checked(rawZ + 261))
+    ];
+    string installedPropertiesSha256 = Convert.ToHexString(SHA256.HashData(installedProperties)).ToLowerInvariant();
+    uint[] activeFixups = new uint[0xBD];
+    for (int i = 0; i < activeFixups.Length; i++)
+        activeFixups[i] = BinaryPrimitives.ReadUInt32LittleEndian(fixupsFootprint.AsSpan(4 + (i * 4), 4));
+    if (!string.Equals(Convert.ToHexString(SHA256.HashData(finalRow)).ToLowerInvariant(), ExpectedFinalRowSha256, StringComparison.Ordinal) ||
+        !string.Equals(installedPropertiesSha256, ExpectedInstalledPropertiesSha256, StringComparison.Ordinal) ||
+        !string.Equals(Convert.ToHexString(SHA256.HashData(installedPropertiesExtent)).ToLowerInvariant(), ExpectedInstalledPropertiesExtentSha256, StringComparison.Ordinal) ||
+        !string.Equals(Convert.ToHexString(SHA256.HashData(propertiesComponent)).ToLowerInvariant(), ExpectedPropertiesComponentSha256, StringComparison.Ordinal) ||
+        BinaryPrimitives.ReadUInt32LittleEndian(propertiesComponent) != PropertiesComponentBytes ||
+        BinaryPrimitives.ReadUInt32LittleEndian(installedProperties.AsSpan(0, 4)) != PropertiesSceneOffset + 0x28 ||
+        BinaryPrimitives.ReadUInt32LittleEndian(installedProperties.AsSpan(0x28, 4)) != 2 ||
+        !string.Equals(Convert.ToHexString(SHA256.HashData(nativePods)).ToLowerInvariant(), ExpectedNativePodsSha256, StringComparison.Ordinal) ||
+        !string.Equals(Convert.ToHexString(SHA256.HashData(nativeCollision)).ToLowerInvariant(), ExpectedNativeCollisionSha256, StringComparison.Ordinal) ||
+        !string.Equals(Convert.ToHexString(SHA256.HashData(fixupsFootprint.AsSpan(0, ActiveFixupsBytes))).ToLowerInvariant(), ExpectedActiveFixupsSha256, StringComparison.Ordinal) ||
+        !string.Equals(Convert.ToHexString(SHA256.HashData(fixupsFootprint)).ToLowerInvariant(), ExpectedFixupsFootprintSha256, StringComparison.Ordinal) ||
+        !string.Equals(Convert.ToHexString(SHA256.HashData(finalZeroTail)).ToLowerInvariant(), ExpectedFinalZeroTailSha256, StringComparison.Ordinal) ||
+        BinaryPrimitives.ReadUInt32LittleEndian(fixupsFootprint) != 0xBD ||
+        activeFixups.Contains(checked((uint)RemovedFixup)) ||
+        activeFixups.Count(value => value == checked((uint)PropertiesSceneOffset)) != 1 ||
+        BinaryPrimitives.ReadUInt32LittleEndian(fixupsFootprint.AsSpan(ActiveFixupsBytes, 4)) != 0)
+    {
+        throw new InvalidOperationException("The Magic Crafters in-place properties, untouched scene components, or stale-fixup removal failed independent readback.");
+    }
+    for (int point = 0; point < expectedRoute.Length; point++)
+    {
+        int pointOffset = 0x30 + (point * 0x10);
+        if (BinaryPrimitives.ReadInt32LittleEndian(installedProperties.AsSpan(pointOffset, 4)) != expectedRoute[point].X ||
+            BinaryPrimitives.ReadInt32LittleEndian(installedProperties.AsSpan(pointOffset + 4, 4)) != expectedRoute[point].Y ||
+            BinaryPrimitives.ReadInt32LittleEndian(installedProperties.AsSpan(pointOffset + 8, 4)) != expectedRoute[point].Z ||
+            BinaryPrimitives.ReadUInt32LittleEndian(installedProperties.AsSpan(pointOffset + 12, 4)) != 0)
+        {
+            throw new InvalidOperationException($"The translated Magic Crafters Wizard route point {point + 1} failed readback.");
+        }
+    }
+
+    string validationReportPath = await MobyCandidateValidationReportWriter.WriteAsync(result);
+    string validationReport = await File.ReadAllTextAsync(validationReportPath);
+    string[] requiredChecklist =
+    [
+        "correctly textured Green Wizard",
+        "private translated route",
+        "at least three complete casts",
+        "at least two separate lightning bolts",
+        "exactly one death animation",
+        "at least 10 seconds",
+        "terrain collision remains stable",
+        "other native"
+    ];
+    if (requiredChecklist.Any(item => !validationReport.Contains(item, StringComparison.OrdinalIgnoreCase)))
+        throw new InvalidOperationException("The Magic Crafters candidate report is missing its focused Wizard runtime checklist.");
+
+    string candidateResultPath = candidatePrefix + ".candidate-result.json";
+    using (JsonDocument candidateResult = JsonDocument.Parse(await File.ReadAllTextAsync(candidateResultPath)))
+    {
+        JsonElement runtimeEvidence = candidateResult.RootElement.GetProperty("result");
+        JsonElement.ArrayEnumerator checks = candidateResult.RootElement.GetProperty("behaviorChecks").EnumerateArray();
+        if (!string.Equals(runtimeEvidence.GetProperty("status").GetString(), "passed", StringComparison.OrdinalIgnoreCase) ||
+            runtimeEvidence.GetProperty("bootedLevel").GetBoolean() != true ||
+            runtimeEvidence.GetProperty("objectAppeared").GetBoolean() != true ||
+            runtimeEvidence.GetProperty("mobyRecordsPresent").GetBoolean() != true ||
+            runtimeEvidence.GetProperty("actorRootsPresent").GetBoolean() != true ||
+            runtimeEvidence.GetProperty("behaviorCorrect").GetBoolean() != true ||
+            runtimeEvidence.GetProperty("noNearbyRegression").GetBoolean() != true ||
+            checks.Any(check => check.GetProperty("passed").GetBoolean() != true))
+        {
+            throw new InvalidOperationException("The Magic Crafters v2 result no longer records the complete passed DuckStation behavior proof.");
+        }
+    }
+
+    string outputImageSha256;
+    using (FileStream hashStream = File.OpenRead(result.OutputImagePath))
+        outputImageSha256 = Convert.ToHexString(SHA256.HashData(hashStream)).ToLowerInvariant();
+    if (!string.Equals(outputImageSha256, ExpectedCandidateOutputImageSha256, StringComparison.Ordinal))
+        throw new InvalidOperationException($"The Magic Crafters v2 Swap Test BIN hash changed: expected {ExpectedCandidateOutputImageSha256}, found {outputImageSha256}.");
+    string normalOutputImageSha256;
+    using (FileStream hashStream = File.OpenRead(normalResult.OutputImagePath))
+        normalOutputImageSha256 = Convert.ToHexString(SHA256.HashData(hashStream)).ToLowerInvariant();
+    if (!string.Equals(normalOutputImageSha256, ExpectedOutputImageSha256, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            $"Normal Create BIN did not reproduce the runtime-proven Magic Crafters v2 image: expected {ExpectedOutputImageSha256}, found {normalOutputImageSha256}.");
+    }
+    AssertOnlyTestLevelWarpDelta(normalResult.OutputImagePath, result.OutputImagePath, candidatePlan);
+    using (JsonDocument residentPlan = JsonDocument.Parse(await File.ReadAllTextAsync(residentPlanPath)))
+    {
+        JsonElement root = residentPlan.RootElement;
+        if (!string.Equals(root.GetProperty("RecipeId").GetString(), MagicCraftersGreenWizardResidentSwapExporter.RecipeId, StringComparison.Ordinal) ||
+            root.GetProperty("TargetTrueIndex").GetInt32() != TargetTrueIndex ||
+            root.GetProperty("PreservedYaw").GetByte() != PreservedYaw ||
+            root.GetProperty("PointerFixupCountBefore").GetInt32() != 0xBE ||
+            root.GetProperty("PointerFixupCountAfter").GetInt32() != 0xBD ||
+            root.GetProperty("RemovedFixupSceneOffset").GetInt32() != RemovedFixup ||
+            !string.Equals(root.GetProperty("PropertiesExtentInstalledSha256").GetString(), ExpectedInstalledPropertiesExtentSha256, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(root.GetProperty("OutputImageSha256").GetString(), outputImageSha256, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(root.GetProperty("InstalledPropertiesSha256").GetString(), installedPropertiesSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("The persisted Magic Crafters resident plan does not match the final candidate BIN.");
+        }
+    }
+    using (JsonDocument normalResidentPlan = JsonDocument.Parse(await File.ReadAllTextAsync(normalResidentPlanPath)))
+    {
+        JsonElement root = normalResidentPlan.RootElement;
+        if (!string.Equals(root.GetProperty("RecipeId").GetString(), MagicCraftersGreenWizardResidentSwapExporter.RecipeId, StringComparison.Ordinal) ||
+            !string.Equals(root.GetProperty("ProfileFingerprint").GetString(), ExpectedProfileFingerprint, StringComparison.Ordinal) ||
+            !string.Equals(root.GetProperty("OutputImageSha256").GetString(), ExpectedOutputImageSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("The normal Create BIN Magic Crafters resident plan is not tied to the promoted profile and runtime-proof image.");
+        }
+    }
+
+    await File.WriteAllTextAsync(focusedReportPath, JsonSerializer.Serialize(new
+    {
+        GeneratedAtUtc = DateTimeOffset.UtcNow,
+        Status = "passed",
+        Level = magicCrafters.DisplayName,
+        Donor = $"T{DonorTrueIndex} actor 0x{donorActorId:X4}",
+        Target = $"T{TargetTrueIndex} actor 0x{targetActorId:X4}",
+        RecipeId = MagicCraftersGreenWizardResidentSwapExporter.RecipeId,
+        ProfileFingerprint = profile.Fingerprint,
+        OutputImageSha256 = outputImageSha256,
+        InstalledPropertiesSha256 = installedPropertiesSha256,
+        ExpectedDonorPropertiesSha256,
+        PreservedYaw = $"0x{PreservedYaw:X2}",
+        PropertiesExtent = $"0x{PropertiesSceneOffset:X}-0x{PropertiesSceneOffset + PropertiesExtentBytes - 1:X}",
+        RemovedFixup = $"0x{RemovedFixup:X}",
+        SceneComponentGrowthBytes = 0,
+        Checks = new
+        {
+            NormalCreateBinComposed = true,
+            NormalCreateBinMatchesRuntimeProof = true,
+            CandidateModeStillWritable = true,
+            FocusedDuckStationEvidencePassed = true,
+            OtherTargetSlotsRemainGuarded = true
+        },
+        Artifacts = new
+        {
+            NormalCreateBin = normalResult.OutputImagePath,
+            NormalCreateCue = normalResult.OutputCuePath,
+            NormalCreateSourcePatchPlan = normalResult.OutputPlanPath,
+            NormalCreateResidentRuntimePlan = normalResidentPlanPath,
+            CandidateBin = result.OutputImagePath,
+            CandidateCue = result.OutputCuePath,
+            CandidateSourcePatchPlan = result.OutputPlanPath,
+            CandidateResidentRuntimePlan = residentPlanPath,
+            CandidateValidation = validationReportPath,
+            CandidateResult = candidateResultPath
+        }
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Magic Crafters Green Wizard v2 promotion: PASS (normal Create BIN reproduces runtime-proven SHA-256 {ExpectedOutputImageSha256}; Swap Test differs only by the guarded 8-byte level-warp patch).");
+    Console.WriteLine($"Normal Create BIN: {normalResult.OutputImagePath}");
+    Console.WriteLine($"Normal Create CUE: {normalResult.OutputCuePath}");
+    Console.WriteLine($"Candidate CUE: {result.OutputCuePath}");
+    Console.WriteLine($"Focused smoke report: {focusedReportPath}");
+}
+
+async Task ReportBlowhardGreenWizardResidentCandidate()
+{
+    const int DonorTrueIndex = 0;
+    const int TargetTrueIndex = 7;
+    const int RecordStride = 0x58;
+    const string ExpectedManifestFingerprint = "37a223c61d1b6c10904de0d9175266c878d3092b8c5fee62296a8b791bf61703";
+    const string ExpectedBlowhardProfileFingerprint = "82dcc68f3f76af7e6217e50c7d486a2cb6be685f2e1ada5e8fd45dc090f323a7";
+    const string ExpectedRuntimeProofOutputSha256 = "89defda4af21c1e623f62b40537178e12daa0ecfd84cf4ef0ee00041c91bc008";
+    const string ExpectedCandidateOutputSha256 = "6591027eae246024f34caf6a31991db269d1b0a633858be09f83b87ee9184a63";
+    const string ExpectedToastyProfileFingerprint = "ce4fae6cdcd430c4cc81745fa646602cd547037af9d4b2481c59a522412bc7f2";
+    const string ExpectedToastyRuntimeProofOutputSha256 = "e2ec0b112c9f7782ec85e66118cf157550938e9c49146339df6d1000ffbff5e7";
+    const string ExpectedInstalledPropertiesSha256 = "6577d5dcfa7c725ab44c22a1385b2802da008050c3fcefe30e541802f7cb9bf9";
+    const string ExpectedExpandedPropertiesComponentSha256 = "1064e9381b5f3ce84a3de5231a1d78e793093362b6dee758064d9fc53a477a97";
+    const string ExpectedShiftedPodsSha256 = "2dacf76cdbc92e25244d63e3142553fe6982d9034ec0e14f5a61e6c0809d87f4";
+    const string ExpectedShiftedCollisionSha256 = "e5b0e80369ae6416ae4a4e144b3b3627142b3a273296da54e595377627901944";
+    const string ExpectedShiftedFixupsSha256 = "89fb6d325bc753b493b4125fc62423698bd909d70958f9385b7e41d7fbdbdf87";
+    const string ExpectedTransformedRangeSha256 = "51b37a17bed38f004a179249bca2fc975b1aab66f2e3f10b993f4c2ac696e231";
+    const string ExpectedFinalRowSha256 = "7133bc96a8a3ad7679d495925538f6e812fc2340f8b6b749931a4f991ca67e38";
+
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("The Blowhard Green Wizard candidate smoke needs the selected original BIN.", sourceImage);
+
+    LevelDefinition blowhard = catalog.FindByKey("blowhard") ??
+        throw new InvalidOperationException("Blowhard is missing from the level catalog.");
+    if (blowhard.SourceWadEntry != 42 || blowhard.SourceRecordCount <= TargetTrueIndex)
+        throw new InvalidOperationException("The checked Blowhard source-table mapping changed.");
+
+    string cachePath = Path.Combine(workspace.RootPath, "editor-cache", "blowhard-mobys.json");
+    if (!File.Exists(cachePath))
+        throw new FileNotFoundException("The Blowhard Green Wizard candidate smoke needs the Blowhard moby cache.", cachePath);
+
+    List<Moby> mobys = MobyLoader.LoadCached(cachePath).ToList();
+    MobyMetadataEnricher.Apply(workspace, blowhard.Key, mobys);
+    Moby donor = mobys.Single(moby => moby.TrueIndex == DonorTrueIndex);
+    Moby target = mobys.Single(moby => moby.TrueIndex == TargetTrueIndex);
+    int donorActorId = donor.SourceByte36 | (donor.SourceByte37 << 8);
+    int replacedActorId = target.SourceByte36 | (target.SourceByte37 << 8);
+    if (donorActorId != GreenWizardRuntimeBundleCompatibility.ActorId || replacedActorId == donorActorId)
+    {
+        throw new InvalidOperationException(
+            $"Blowhard donor/target identities changed: T{DonorTrueIndex}=0x{donorActorId:X4}, T{TargetTrueIndex}=0x{replacedActorId:X4}.");
+    }
+
+    string reportRoot = Path.Combine(workspace.RootPath, "_local", "objects", "blowhard-green-wizard-resident-candidate");
+    Directory.CreateDirectory(reportRoot);
+    string nativeEditsPath = Path.Combine(reportRoot, "blowhard-t7-green-wizard-native-edits.json");
+    string normalPrefix = Path.Combine(reportRoot, "normal-create-bin-promoted-v2");
+    string normalPlanPath = normalPrefix + ".moby-source-patch-plan.json";
+    string normalOutputImagePath = normalPrefix + ".bin";
+    string normalOutputCuePath = normalPrefix + ".cue";
+    string normalResidentPlanPath = normalPrefix + ".green-wizard-resident-plan.json";
+    string candidatePrefix = Path.Combine(reportRoot, "blowhard-t7-green-wizard-resident-candidate-v2");
+    string residentPlanPath = candidatePrefix + ".green-wizard-resident-plan.json";
+    string focusedReportPath = candidatePrefix + ".focused-smoke-report.json";
+
+    Moby edited = CloneMoby(target);
+    edited.SetType(donor.Type);
+    edited.State = donor.State;
+    edited.SourceByte36 = donor.SourceByte36;
+    edited.SourceByte37 = donor.SourceByte37;
+    edited.SourceByte4F = donor.SourceByte4F;
+    edited.Flag4A = donor.Flag4A;
+    edited.Flag4B = target.Flag4B;
+    edited.Label = "Green Wizard (Blowhard native T0 donor)";
+    edited.PatchStatus = CrossLevelSwapCatalogBuilder.CandidateSupportStatus;
+    edited.PatchLead = "Focused Blowhard resident Green Wizard existing-slot candidate with private properties and route.";
+    edited.CrossLevelTemplateId = GreenWizardRuntimeBundleCompatibility.TemplateId;
+    edited.CrossLevelFamily = "enemyTransform";
+    edited.CrossLevelSourceLevelKey = blowhard.Key;
+    edited.CrossLevelSourceLevelName = blowhard.DisplayName;
+    edited.CrossLevelSourceTrueIndex = DonorTrueIndex;
+    edited.CrossLevelRequiredExporterFeature = CrossLevelSwapCatalogBuilder.CandidateExporterFeature;
+    edited.CandidateKind = "Enemy";
+    edited.Confidence = "blowhard-native-green-wizard-resident-candidate";
+    edited.Evidence = "Blowhard already owns checked actor 0x011B and lightning actor 0x0026 roots and dispatch cases.";
+    edited.BehaviorNote = "Candidate-only until casting, hit, death, reward, route, texture, and nearby-regression checks pass in DuckStation.";
+    edited.HasLoadedNativeEdit = true;
+    edited.LoadedNativeEditSummary = "Replace Blowhard T7 from hidden native Green Wizard T0 donor";
+
+    int savedEditCount = await MobyEditStore.SaveAsync(
+        nativeEditsPath,
+        [edited],
+        "Blowhard T7 Green Wizard resident candidate smoke");
+    if (savedEditCount != 1)
+        throw new InvalidOperationException($"The Blowhard Green Wizard smoke saved {savedEditCount} edits instead of exactly one.");
+
+    string sourceCuePath = DiscImageLocator.FindCueForImage(sourceImage);
+    MobySourcePatchPlan normalPlan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        sourceCuePath,
+        normalOutputImagePath,
+        normalOutputCuePath,
+        blowhard,
+        nativeEditsPath);
+    MobySourcePatch[] normalRowPatches = normalPlan.Patches
+        .Where(patch => string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    if (normalRowPatches.Length != 1 ||
+        normalRowPatches[0].TrueIndex != TargetTrueIndex ||
+        normalRowPatches[0].ByteLength != RecordStride ||
+        !normalRowPatches[0].Description.Contains("Blowhard donor T0", StringComparison.OrdinalIgnoreCase) ||
+        !normalRowPatches[0].Description.Contains("Blowhard resident-bundle", StringComparison.OrdinalIgnoreCase) ||
+        normalPlan.SkippedEdits.Any(skip =>
+            skip.Contains("Create Swap Test", StringComparison.OrdinalIgnoreCase) ||
+            skip.Contains("Blowhard T0", StringComparison.OrdinalIgnoreCase)) ||
+        normalPlan.Patches.Any(TestLevelWarpPatch.IsPatch) ||
+        normalPlan.Patches.Any(patch =>
+            string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("Normal Create BIN did not expose exactly one source-count-neutral runtime-proven Blowhard v2 row patch.");
+    }
+
+    MobySourcePatchResult normalResult = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: sourceCuePath,
+        OutputPrefix: normalPrefix,
+        Level: blowhard,
+        NativeEditsPath: nativeEditsPath,
+        WriteImage: true));
+    if (!normalResult.WroteImage ||
+        !File.Exists(normalResult.OutputImagePath) ||
+        !File.Exists(normalResult.OutputCuePath) ||
+        !File.Exists(normalResult.OutputPlanPath) ||
+        !File.Exists(normalResidentPlanPath) ||
+        !string.Equals(normalResult.OutputPlanPath, normalPlanPath, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Normal Create BIN did not write its Blowhard v2 BIN, CUE, source-row plan, and composed resident-runtime plan.");
+    }
+    MobySourcePatch[] writtenNormalRowPatches = normalResult.Plan.Patches
+        .Where(patch => string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    if (writtenNormalRowPatches.Length != 1 ||
+        normalResult.Plan.SkippedEdits.Any(skip => skip.Contains("Create Swap Test", StringComparison.OrdinalIgnoreCase)) ||
+        normalResult.Plan.Patches.Any(patch => string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("Normal Create BIN did not preserve the single existing-slot/source-count-neutral Blowhard v2 plan during image export.");
+    }
+
+    string normalOutputImageSha256;
+    using (FileStream hashStream = File.OpenRead(normalResult.OutputImagePath))
+        normalOutputImageSha256 = Convert.ToHexString(SHA256.HashData(hashStream)).ToLowerInvariant();
+    if (!string.Equals(normalOutputImageSha256, ExpectedRuntimeProofOutputSha256, StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException(
+            $"Normal Create BIN produced Blowhard v2 SHA-256 {normalOutputImageSha256}, expected runtime-proven {ExpectedRuntimeProofOutputSha256}.");
+    }
+    using (JsonDocument normalResidentDocument = JsonDocument.Parse(await File.ReadAllTextAsync(normalResidentPlanPath)))
+    {
+        JsonElement normalResidentRoot = normalResidentDocument.RootElement;
+        if (!string.Equals(normalResidentRoot.GetProperty("RecipeId").GetString(), BlowhardGreenWizardResidentSwapExporter.RecipeId, StringComparison.Ordinal) ||
+            !string.Equals(normalResidentRoot.GetProperty("ProfileFingerprint").GetString(), ExpectedBlowhardProfileFingerprint, StringComparison.Ordinal) ||
+            !string.Equals(normalResidentRoot.GetProperty("OutputImageSha256").GetString(), ExpectedRuntimeProofOutputSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Normal Create BIN's resident-runtime plan does not identify the frozen runtime-proven Blowhard v2 image.");
+        }
+    }
+    string normalCueText = await File.ReadAllTextAsync(normalResult.OutputCuePath);
+    if (!normalCueText.Contains(Path.GetFileName(normalResult.OutputImagePath), StringComparison.Ordinal) ||
+        !normalCueText.Contains("TRACK 01 MODE2/2352", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Normal Create BIN's Blowhard v2 CUE does not reference its composed BIN in MODE2/2352 format.");
+    }
+
+    MobySourcePatchResult result = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: sourceCuePath,
+        OutputPrefix: candidatePrefix,
+        Level: blowhard,
+        NativeEditsPath: nativeEditsPath,
+        WriteImage: true,
+        AllowPlanOnlyActorPackageImports: true));
+    if (!result.WroteImage ||
+        !File.Exists(result.OutputImagePath) ||
+        !File.Exists(result.OutputCuePath) ||
+        !File.Exists(result.OutputPlanPath))
+    {
+        throw new InvalidOperationException("Candidate mode did not write the Blowhard Green Wizard BIN, CUE, and source-row plan.");
+    }
+
+    MobySourcePatch[] rowPatches = result.Plan.Patches
+        .Where(patch => string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    if (rowPatches.Length != 1 ||
+        result.Plan.Patches.Count(TestLevelWarpPatch.IsPatch) != 1 ||
+        result.Plan.Patches.Any(patch => string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("Candidate mode did not remain a single source-count-neutral existing-slot replacement.");
+    }
+
+    MobySourcePatch rowPatch = rowPatches[0];
+    if (rowPatch.TrueIndex != TargetTrueIndex ||
+        rowPatch.ByteLength != RecordStride ||
+        !rowPatch.Description.Contains("Blowhard donor T0", StringComparison.OrdinalIgnoreCase) ||
+        !rowPatch.Description.Contains("Blowhard resident-bundle", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("The candidate source-row plan did not use Blowhard T0 to replace exactly T7 with the resident-bundle completion contract.");
+    }
+
+    byte[] beforeRecord = ParseHexPreview(rowPatch.BeforeHexPreview);
+    byte[] candidateRecord = ParseHexPreview(rowPatch.AfterHexPreview);
+    if (beforeRecord.Length != RecordStride || candidateRecord.Length != RecordStride)
+        throw new InvalidOperationException("The Blowhard candidate row preview is not one complete 0x58-byte source record.");
+
+    long tableWadOffset = ParseFlexibleLong(blowhard.SourceTableWadOffset);
+    byte[] sourceDonorRecord;
+    byte[] sourceTargetRecord;
+    SourceDiscLayout sourceLayout = DetectSourceDiscLayout(sourceImage);
+    using (FileStream sourceStream = File.OpenRead(sourceImage))
+    {
+        sourceDonorRecord = ReadSourceWadBytes(sourceStream, sourceLayout, tableWadOffset + (DonorTrueIndex * RecordStride), RecordStride);
+        sourceTargetRecord = ReadSourceWadBytes(sourceStream, sourceLayout, tableWadOffset + (TargetTrueIndex * RecordStride), RecordStride);
+    }
+
+    if (!beforeRecord.SequenceEqual(sourceTargetRecord))
+        throw new InvalidOperationException("The candidate T7 preimage does not match the selected original Blowhard BIN.");
+    foreach (int offset in new[] { 0x0C, 0x10, 0x14 })
+    {
+        if (BinaryPrimitives.ReadInt32LittleEndian(beforeRecord.AsSpan(offset, 4)) !=
+            BinaryPrimitives.ReadInt32LittleEndian(candidateRecord.AsSpan(offset, 4)))
+        {
+            throw new InvalidOperationException($"The Blowhard Green Wizard candidate changed T7 placement at row offset 0x{offset:X2}.");
+        }
+    }
+    if (!beforeRecord.AsSpan(0x20, 0x12).SequenceEqual(candidateRecord.AsSpan(0x20, 0x12)) ||
+        beforeRecord[0x46] != candidateRecord[0x46])
+    {
+        throw new InvalidOperationException("The Blowhard Green Wizard candidate changed T7 yaw or its native yaw matrix.");
+    }
+    if (beforeRecord[0x53] != candidateRecord[0x53])
+        throw new InvalidOperationException("The Blowhard Green Wizard candidate changed T7's reward byte.");
+
+    int candidateActorId = candidateRecord[0x36] | (candidateRecord[0x37] << 8);
+    if (candidateActorId != GreenWizardRuntimeBundleCompatibility.ActorId)
+        throw new InvalidOperationException($"The Blowhard candidate row resolved to actor 0x{candidateActorId:X4}, not Green Wizard 0x011B.");
+    foreach (int offset in new[] { 0x36, 0x37, 0x4F, 0x50, 0x51, 0x52 })
+    {
+        if (candidateRecord[offset] != sourceDonorRecord[offset])
+            throw new InvalidOperationException($"The Blowhard candidate row did not inherit native T0 identity byte +0x{offset:X2}.");
+    }
+
+    if (!File.Exists(residentPlanPath))
+        throw new InvalidOperationException("Candidate mode did not write the centrally composed Blowhard resident-runtime plan.");
+    BlowhardGreenWizardResidentSwapPlan residentPlan =
+        JsonSerializer.Deserialize<BlowhardGreenWizardResidentSwapPlan>(await File.ReadAllTextAsync(residentPlanPath)) ??
+        throw new InvalidOperationException("The centrally composed Blowhard resident-runtime plan could not be read back.");
+
+    LevelRuntimeBundleProfile profile = GreenWizardRuntimeBundleCatalog.FindProfile(blowhard.Key) ??
+        throw new InvalidOperationException("The Green Wizard runtime-bundle catalog has no Blowhard profile.");
+    RuntimeBundleCompatibilityResult compatibility = GreenWizardRuntimeBundleCatalog.Evaluate(blowhard.Key);
+    LevelRuntimeBundleProfile toastyProfile = GreenWizardRuntimeBundleCatalog.FindProfile("toasty") ??
+        throw new InvalidOperationException("The Green Wizard runtime-bundle catalog has no Toasty regression profile.");
+    RuntimeBundleCompatibilityResult toastyCompatibility = GreenWizardRuntimeBundleCatalog.Evaluate("toasty");
+    if (!string.Equals(GreenWizardRuntimeBundleCatalog.Manifest.Fingerprint, ExpectedManifestFingerprint, StringComparison.Ordinal) ||
+        !string.Equals(GreenWizardRuntimeBundleCatalog.ManifestFingerprint, ExpectedManifestFingerprint, StringComparison.Ordinal) ||
+        !string.Equals(profile.Fingerprint, ExpectedBlowhardProfileFingerprint, StringComparison.Ordinal) ||
+        !string.Equals(GreenWizardRuntimeBundleCatalog.BlowhardProfileFingerprint, ExpectedBlowhardProfileFingerprint, StringComparison.Ordinal) ||
+        !string.Equals(residentPlan.BundleId, GreenWizardRuntimeBundleCatalog.BundleId, StringComparison.Ordinal) ||
+        !string.Equals(residentPlan.BundleFingerprint, ExpectedManifestFingerprint, StringComparison.Ordinal) ||
+        !string.Equals(residentPlan.ProfileFingerprint, ExpectedBlowhardProfileFingerprint, StringComparison.Ordinal) ||
+        profile.Evidence != RuntimeBundleEvidenceKind.RuntimeProven ||
+        !string.Equals(profile.RuntimeProofRecipeId, BlowhardGreenWizardResidentSwapExporter.RecipeId, StringComparison.Ordinal) ||
+        !string.Equals(profile.RuntimeProofOutputSha256, ExpectedRuntimeProofOutputSha256, StringComparison.OrdinalIgnoreCase) ||
+        compatibility.Status != RuntimeBundleCompatibilityStatus.Ready ||
+        compatibility.Deployment != RuntimeBundleDeploymentKind.ResidentActor ||
+        !compatibility.CanStageInstance ||
+        !compatibility.NormalCreateBinReady ||
+        compatibility.NeedsLevelBundleInstall ||
+        compatibility.RequiresRuntimeSmoke ||
+        compatibility.RequiredWork.Count != 0)
+    {
+        throw new InvalidOperationException("The frozen Blowhard Green Wizard bundle/profile fingerprints or runtime-proven normal-build compatibility boundary changed.");
+    }
+    if (!string.Equals(toastyProfile.Fingerprint, ExpectedToastyProfileFingerprint, StringComparison.Ordinal) ||
+        !string.Equals(GreenWizardRuntimeBundleCatalog.ToastyProfileFingerprint, ExpectedToastyProfileFingerprint, StringComparison.Ordinal) ||
+        toastyProfile.Evidence != RuntimeBundleEvidenceKind.RuntimeProven ||
+        !string.Equals(toastyProfile.RuntimeProofRecipeId, GreenWizardRuntimeBundleCompatibility.ToastyV11RecipeId, StringComparison.Ordinal) ||
+        !string.Equals(toastyProfile.RuntimeProofOutputSha256, ExpectedToastyRuntimeProofOutputSha256, StringComparison.OrdinalIgnoreCase) ||
+        toastyCompatibility.Status != RuntimeBundleCompatibilityStatus.Ready ||
+        toastyCompatibility.Deployment != RuntimeBundleDeploymentKind.Transplanted ||
+        !toastyCompatibility.NormalCreateBinReady ||
+        toastyCompatibility.RequiresRuntimeSmoke)
+    {
+        throw new InvalidOperationException("The Blowhard promotion changed the frozen Toasty v11 runtime-bundle profile or proof boundary.");
+    }
+
+    if (residentPlan.RecipeId != BlowhardGreenWizardResidentSwapExporter.RecipeId ||
+        residentPlan.TargetTrueIndex != TargetTrueIndex ||
+        residentPlan.ReplacedActorId != replacedActorId ||
+        residentPlan.PreservedReward != beforeRecord[0x53] ||
+        residentPlan.SourceTableWadOffset != tableWadOffset ||
+        residentPlan.SceneBaseOffset != 0x16B000 ||
+        residentPlan.SceneBytes != 0x27800 ||
+        residentPlan.PropertiesComponentHeaderSceneOffset != 0x243A4 ||
+        residentPlan.PropertiesComponentBytesBefore != 0x0AC4 ||
+        residentPlan.PropertiesComponentBytesAfter != 0x0B04 ||
+        residentPlan.PropertiesSceneOffset != 0x24E68 ||
+        residentPlan.PropertiesBytes != 0x40 ||
+        residentPlan.SceneShiftSourceOffset != 0x24E68 ||
+        residentPlan.SceneShiftBytes != 0x21C4 ||
+        residentPlan.PreservedPodOrGroup != beforeRecord[0x43] ||
+        residentPlan.NativeRouteDelta != new BlowhardGreenWizardRoutePoint(0, 51, 409) ||
+        residentPlan.RoutePoint != new BlowhardGreenWizardRoutePoint(49019, 89221, 14756) ||
+        residentPlan.PointerFixupListSceneOffsetBefore != 0x26E94 ||
+        residentPlan.PointerFixupListSceneOffsetAfter != 0x26ED4 ||
+        residentPlan.PointerFixupCountBefore != 0x65 ||
+        residentPlan.PointerFixupCountAfter != 0x66 ||
+        residentPlan.PointerFixupAppendSceneOffset != 0x2706C ||
+        residentPlan.GreenWizardRoot != 0x133AAC ||
+        residentPlan.LightningRoot != 0x1658B4 ||
+        residentPlan.FocusedChecks.Count < 5)
+    {
+        throw new InvalidOperationException("The Blowhard resident-wizard row/properties/component-shift/fixup plan changed from the checked v2 contract.");
+    }
+
+    SourceDiscLayout finalLayout = DetectSourceDiscLayout(result.OutputImagePath);
+    byte[] finalRow;
+    byte[] installedProperties;
+    byte[] expandedPropertiesComponent;
+    byte[] shiftedPods;
+    byte[] shiftedCollisionChain;
+    byte[] shiftedFixups;
+    byte[] transformedRange;
+    byte[] finalZeroTail;
+    byte[] fixupCountBytes;
+    byte[] appendedFixupBytes;
+    long dataWadOffset;
+    using (FileStream finalStream = File.OpenRead(result.OutputImagePath))
+    {
+        byte[] dataEntryHeader = ReadSourceWadBytes(finalStream, finalLayout, blowhard.SourceWadEntry * 8L, 8);
+        dataWadOffset = BinaryPrimitives.ReadUInt32LittleEndian(dataEntryHeader.AsSpan(0, 4));
+        int dataBytes = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(dataEntryHeader.AsSpan(4, 4)));
+        if (dataBytes != 0x1DD800)
+            throw new InvalidOperationException($"The final Blowhard data entry is 0x{dataBytes:X} bytes, expected 0x1DD800.");
+
+        long sceneWadOffset = dataWadOffset + residentPlan.SceneBaseOffset;
+        finalRow = ReadSourceWadBytes(
+            finalStream,
+            finalLayout,
+            residentPlan.SourceTableWadOffset + ((long)TargetTrueIndex * RecordStride),
+            RecordStride);
+        installedProperties = ReadSourceWadBytes(
+            finalStream,
+            finalLayout,
+            sceneWadOffset + residentPlan.PropertiesSceneOffset,
+            residentPlan.PropertiesBytes);
+        expandedPropertiesComponent = ReadSourceWadBytes(
+            finalStream,
+            finalLayout,
+            sceneWadOffset + residentPlan.PropertiesComponentHeaderSceneOffset,
+            residentPlan.PropertiesComponentBytesAfter);
+        shiftedPods = ReadSourceWadBytes(finalStream, finalLayout, sceneWadOffset + 0x24EA8, 0x28);
+        shiftedCollisionChain = ReadSourceWadBytes(finalStream, finalLayout, sceneWadOffset + 0x24ED0, 0x2004);
+        shiftedFixups = ReadSourceWadBytes(finalStream, finalLayout, sceneWadOffset + residentPlan.PointerFixupListSceneOffsetAfter, 0x19C);
+        transformedRange = ReadSourceWadBytes(finalStream, finalLayout, sceneWadOffset + 0x24E68, 0x2208);
+        finalZeroTail = ReadSourceWadBytes(finalStream, finalLayout, sceneWadOffset + 0x27070, 0x790);
+        fixupCountBytes = ReadSourceWadBytes(
+            finalStream,
+            finalLayout,
+            sceneWadOffset + residentPlan.PointerFixupListSceneOffsetAfter,
+            sizeof(uint));
+        appendedFixupBytes = ReadSourceWadBytes(
+            finalStream,
+            finalLayout,
+            sceneWadOffset + residentPlan.PointerFixupAppendSceneOffset,
+            sizeof(uint));
+    }
+
+    int finalActorId = finalRow[0x36] | (finalRow[0x37] << 8);
+    uint finalPropertiesPointer = BinaryPrimitives.ReadUInt32LittleEndian(finalRow.AsSpan(0, 4));
+    if (finalActorId != GreenWizardRuntimeBundleCompatibility.ActorId ||
+        finalPropertiesPointer != residentPlan.PropertiesSceneOffset ||
+        finalRow[0x43] != beforeRecord[0x43] ||
+        finalRow[0x4B] != 0x09 ||
+        finalRow[0x52] != 0xFF ||
+        finalRow[0x53] != beforeRecord[0x53])
+    {
+        throw new InvalidOperationException("The final Blowhard T7 Green Wizard source row failed independent readback.");
+    }
+    foreach (int offset in new[] { 0x0C, 0x10, 0x14 })
+    {
+        if (BinaryPrimitives.ReadInt32LittleEndian(finalRow.AsSpan(offset, 4)) !=
+            BinaryPrimitives.ReadInt32LittleEndian(beforeRecord.AsSpan(offset, 4)))
+        {
+            throw new InvalidOperationException($"The final Blowhard T7 Green Wizard changed placement at row offset 0x{offset:X2}.");
+        }
+    }
+    if (!finalRow.AsSpan(0x20, 0x12).SequenceEqual(beforeRecord.AsSpan(0x20, 0x12)) ||
+        finalRow[0x46] != beforeRecord[0x46])
+    {
+        throw new InvalidOperationException("The final Blowhard T7 Green Wizard did not preserve T7 yaw.");
+    }
+
+    string installedPropertiesSha256 = Convert.ToHexString(SHA256.HashData(installedProperties)).ToLowerInvariant();
+    string expandedPropertiesComponentSha256 = Convert.ToHexString(SHA256.HashData(expandedPropertiesComponent)).ToLowerInvariant();
+    string shiftedPodsSha256 = Convert.ToHexString(SHA256.HashData(shiftedPods)).ToLowerInvariant();
+    string shiftedCollisionSha256 = Convert.ToHexString(SHA256.HashData(shiftedCollisionChain)).ToLowerInvariant();
+    string shiftedFixupsSha256 = Convert.ToHexString(SHA256.HashData(shiftedFixups)).ToLowerInvariant();
+    string transformedRangeSha256 = Convert.ToHexString(SHA256.HashData(transformedRange)).ToLowerInvariant();
+    string finalZeroTailSha256 = Convert.ToHexString(SHA256.HashData(finalZeroTail)).ToLowerInvariant();
+    string finalRowSha256 = Convert.ToHexString(SHA256.HashData(finalRow)).ToLowerInvariant();
+    int rawX = BinaryPrimitives.ReadInt32LittleEndian(beforeRecord.AsSpan(0x0C, 4));
+    int rawY = BinaryPrimitives.ReadInt32LittleEndian(beforeRecord.AsSpan(0x10, 4));
+    int rawZ = BinaryPrimitives.ReadInt32LittleEndian(beforeRecord.AsSpan(0x14, 4));
+    BlowhardGreenWizardRoutePoint expectedRoute = new(rawX, checked(rawY + 51), checked(rawZ + 409));
+    if (!string.Equals(installedPropertiesSha256, residentPlan.InstalledPropertiesSha256, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(installedPropertiesSha256, ExpectedInstalledPropertiesSha256, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(expandedPropertiesComponentSha256, ExpectedExpandedPropertiesComponentSha256, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(shiftedPodsSha256, ExpectedShiftedPodsSha256, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(shiftedCollisionSha256, ExpectedShiftedCollisionSha256, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(shiftedFixupsSha256, ExpectedShiftedFixupsSha256, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(transformedRangeSha256, ExpectedTransformedRangeSha256, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(finalRowSha256, ExpectedFinalRowSha256, StringComparison.OrdinalIgnoreCase) ||
+        finalZeroTailSha256 != "3fcb1e1041f63f752bdebe8f875700003bd95e3fc507c2143555443c145c9769" ||
+        BinaryPrimitives.ReadUInt32LittleEndian(expandedPropertiesComponent) != residentPlan.PropertiesComponentBytesAfter ||
+        BinaryPrimitives.ReadUInt32LittleEndian(installedProperties.AsSpan(0, 4)) != residentPlan.PropertiesSceneOffset + 0x28 ||
+        BinaryPrimitives.ReadUInt32LittleEndian(installedProperties.AsSpan(0x28, 4)) != 1 ||
+        BinaryPrimitives.ReadUInt32LittleEndian(installedProperties.AsSpan(0x2C, 4)) != 0x00010000 ||
+        BinaryPrimitives.ReadInt32LittleEndian(installedProperties.AsSpan(0x30, 4)) != expectedRoute.X ||
+        BinaryPrimitives.ReadInt32LittleEndian(installedProperties.AsSpan(0x34, 4)) != expectedRoute.Y ||
+        BinaryPrimitives.ReadInt32LittleEndian(installedProperties.AsSpan(0x38, 4)) != expectedRoute.Z ||
+        BinaryPrimitives.ReadUInt32LittleEndian(installedProperties.AsSpan(0x3C, 4)) != 0 ||
+        residentPlan.NativeRouteDelta != new BlowhardGreenWizardRoutePoint(0, 51, 409) ||
+        residentPlan.RoutePoint != expectedRoute)
+    {
+        throw new InvalidOperationException("The final Blowhard Green Wizard expanded properties component, shifted collision/fixup components, target row, or translated route failed independent readback.");
+    }
+    if (BinaryPrimitives.ReadUInt32LittleEndian(fixupCountBytes) != residentPlan.PointerFixupCountAfter ||
+        BinaryPrimitives.ReadUInt32LittleEndian(appendedFixupBytes) != residentPlan.PropertiesSceneOffset)
+    {
+        throw new InvalidOperationException("The final Blowhard Green Wizard 0x65-to-0x66 pointer-fixup append failed independent readback.");
+    }
+
+    int expectedPointerFieldSceneOffset = checked((int)(
+        residentPlan.SourceTableWadOffset -
+        (dataWadOffset + residentPlan.SceneBaseOffset) +
+        ((long)TargetTrueIndex * RecordStride)));
+    if (residentPlan.PropertiesPointerFieldSceneOffset != expectedPointerFieldSceneOffset)
+        throw new InvalidOperationException("The resident plan recorded the wrong T7 properties-pointer fixup field.");
+
+    string outputImageSha256;
+    using (FileStream hashStream = File.OpenRead(result.OutputImagePath))
+        outputImageSha256 = Convert.ToHexString(SHA256.HashData(hashStream)).ToLowerInvariant();
+    if (!string.Equals(outputImageSha256, residentPlan.OutputImageSha256, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(outputImageSha256, ExpectedCandidateOutputSha256, StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("The Blowhard Swap Test BIN or resident-runtime plan changed outside the frozen candidate hash.");
+    }
+    AssertOnlyTestLevelWarpDelta(normalResult.OutputImagePath, result.OutputImagePath, result.Plan);
+
+    string cueText = await File.ReadAllTextAsync(result.OutputCuePath);
+    if (!cueText.Contains(Path.GetFileName(result.OutputImagePath), StringComparison.Ordinal) ||
+        !cueText.Contains("TRACK 01 MODE2/2352", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("The Blowhard Green Wizard CUE does not point at the candidate BIN with the expected disc track mode.");
+    }
+
+    string validationReportPath = await MobyCandidateValidationReportWriter.WriteAsync(result);
+    string candidateResultPath = Path.ChangeExtension(result.OutputCuePath, ".candidate-result.json");
+    if (!File.Exists(validationReportPath) || !File.Exists(candidateResultPath) || !File.Exists(residentPlanPath))
+        throw new InvalidOperationException("The Blowhard Green Wizard candidate report, result template, or resident-runtime plan is missing.");
+
+    string validationReport = await File.ReadAllTextAsync(validationReportPath);
+    string[] reportProof =
+    [
+        "Existing-Slot Swap Candidates",
+        "correctly textured Green Wizard",
+        "private one-point route",
+        "at least three complete casts",
+        "at least two separate lightning bolts",
+        "exactly one death animation",
+        "at least 10 seconds",
+        "terrain collision remains stable",
+        "other native Blowhard Wizards"
+    ];
+    if (reportProof.Any(proof => !validationReport.Contains(proof, StringComparison.OrdinalIgnoreCase)))
+        throw new InvalidOperationException("The Blowhard Green Wizard candidate report is missing its focused texture, route, cast, hit, death, reward, or regression proof.");
+
+    using (JsonDocument candidateResultDocument = JsonDocument.Parse(await File.ReadAllTextAsync(candidateResultPath)))
+    {
+        JsonElement candidateResultRoot = candidateResultDocument.RootElement;
+        JsonElement candidateEvidence = candidateResultRoot.GetProperty("candidate");
+        JsonElement runtimeEvidence = candidateResultRoot.GetProperty("result");
+        JsonElement[] behaviorEvidence = candidateResultRoot.GetProperty("behaviorChecks").EnumerateArray().ToArray();
+        string[] requiredBehaviorIds =
+        [
+            "existing-slot-t7-wizard-visible",
+            "existing-slot-t7-wizard-route",
+            "existing-slot-t7-wizard-cast",
+            "existing-slot-t7-wizard-hit",
+            "existing-slot-t7-wizard-death",
+            "existing-slot-t7-wizard-collision",
+            "existing-slot-t7-wizard-nearby"
+        ];
+        if (!string.Equals(candidateEvidence.GetProperty("levelKey").GetString(), "blowhard", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(runtimeEvidence.GetProperty("status").GetString(), "passed", StringComparison.OrdinalIgnoreCase) ||
+            runtimeEvidence.GetProperty("bootedLevel").GetBoolean() != true ||
+            runtimeEvidence.GetProperty("objectAppeared").GetBoolean() != true ||
+            runtimeEvidence.GetProperty("actorRootsPresent").GetBoolean() != true ||
+            runtimeEvidence.GetProperty("mobyRecordsPresent").GetBoolean() != true ||
+            runtimeEvidence.GetProperty("behaviorCorrect").GetBoolean() != true ||
+            runtimeEvidence.GetProperty("noNearbyRegression").GetBoolean() != true ||
+            !runtimeEvidence.GetProperty("notes").GetString()!.Contains("two separate bolts", StringComparison.OrdinalIgnoreCase) ||
+            !runtimeEvidence.GetProperty("notes").GetString()!.Contains("remained gone", StringComparison.OrdinalIgnoreCase) ||
+            requiredBehaviorIds.Any(requiredId => !behaviorEvidence.Any(check =>
+                string.Equals(check.GetProperty("id").GetString(), requiredId, StringComparison.OrdinalIgnoreCase) &&
+                check.GetProperty("passed").GetBoolean())) ||
+            behaviorEvidence.Any(check => !check.GetProperty("passed").GetBoolean()))
+        {
+            throw new InvalidOperationException("The Blowhard v2 candidate result no longer records the complete passed DuckStation cast, hit, death, retirement, collision, and nearby-regression proof.");
+        }
+    }
+
+    string residentPlanJson = await File.ReadAllTextAsync(residentPlanPath);
+    if (!residentPlanJson.Contains(ExpectedManifestFingerprint, StringComparison.Ordinal) ||
+        !residentPlanJson.Contains(outputImageSha256, StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("The persisted Blowhard resident-runtime plan is missing its bundle or final-BIN fingerprint.");
+    }
+
+    await File.WriteAllTextAsync(focusedReportPath, JsonSerializer.Serialize(new
+    {
+        GeneratedAtUtc = DateTimeOffset.UtcNow,
+        Status = "passed",
+        Level = blowhard.DisplayName,
+        Donor = $"T{DonorTrueIndex} actor 0x{donorActorId:X4}",
+        Target = $"T{TargetTrueIndex} actor 0x{replacedActorId:X4}",
+        Replacement = $"T{TargetTrueIndex} actor 0x{finalActorId:X4}",
+        Preserved = new
+        {
+            Position = new { X = rawX, Y = rawY, Z = rawZ },
+            YawByte = $"0x{finalRow[0x46]:X2}",
+            PodOrGroup = $"0x{finalRow[0x43]:X2}",
+            Reward = $"0x{finalRow[0x53]:X2}"
+        },
+        Bundle = new
+        {
+            residentPlan.BundleId,
+            ManifestFingerprint = ExpectedManifestFingerprint,
+            residentPlan.ProfileFingerprint,
+            residentPlan.RecipeId,
+            residentPlan.OutputImageSha256
+        },
+        Properties = new
+        {
+            SceneOffset = $"0x{residentPlan.PropertiesSceneOffset:X}",
+            residentPlan.PropertiesBytes,
+            residentPlan.InstalledPropertiesSha256,
+            residentPlan.NativeRouteDelta,
+            residentPlan.RoutePoint
+        },
+        SceneStructure = new
+        {
+            PropertiesComponentHeader = $"0x{residentPlan.PropertiesComponentHeaderSceneOffset:X}",
+            PropertiesComponentBytes = $"0x{residentPlan.PropertiesComponentBytesBefore:X}->0x{residentPlan.PropertiesComponentBytesAfter:X}",
+            ShiftSource = $"0x{residentPlan.SceneShiftSourceOffset:X}",
+            ShiftBytes = $"0x{residentPlan.SceneShiftBytes:X}",
+            ExpandedPropertiesComponentSha256 = expandedPropertiesComponentSha256,
+            ShiftedPodsSha256 = shiftedPodsSha256,
+            ShiftedCollisionSha256 = shiftedCollisionSha256,
+            TransformedRangeSha256 = transformedRangeSha256,
+            FinalZeroTailSha256 = finalZeroTailSha256
+        },
+        PointerFixup = new
+        {
+            ListOffset = $"0x{residentPlan.PointerFixupListSceneOffsetBefore:X}->0x{residentPlan.PointerFixupListSceneOffsetAfter:X}",
+            Count = $"0x{residentPlan.PointerFixupCountBefore:X}->0x{residentPlan.PointerFixupCountAfter:X}",
+            AppendOffset = $"0x{residentPlan.PointerFixupAppendSceneOffset:X}",
+            AppendedValue = $"0x{residentPlan.PropertiesSceneOffset:X}",
+            ShiftedFixupsSha256 = shiftedFixupsSha256
+        },
+        Checks = new
+        {
+            NormalCreateBinComposed = true,
+            NormalCreateBinMatchesRuntimeProof = true,
+            CandidateModeStillWritable = true,
+            CandidateRowWritten = true,
+            ResidentCompletionApplied = true,
+            FinalRowVerified = true,
+            PropertiesVerified = true,
+            SceneComponentsShiftedWithoutPayloadChanges = true,
+            CollisionChainPreserved = true,
+            TargetPodPreserved = true,
+            DonorRouteDeltaTranslated = true,
+            PointerFixupVerified = true,
+            BundleFingerprintsVerified = true,
+            CueVerified = true,
+            CandidateReportVerified = true
+        },
+        Artifacts = new
+        {
+            NativeEdits = nativeEditsPath,
+            NormalCreateBin = normalResult.OutputImagePath,
+            NormalCreateCue = normalResult.OutputCuePath,
+            NormalCreateSourcePatchPlan = normalPlanPath,
+            NormalCreateResidentRuntimePlan = normalResidentPlanPath,
+            CandidateBin = result.OutputImagePath,
+            CandidateCue = result.OutputCuePath,
+            CandidateSourcePatchPlan = result.OutputPlanPath,
+            ResidentRuntimePlan = residentPlanPath,
+            CandidateValidationReport = validationReportPath,
+            CandidateResult = candidateResultPath
+        }
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    Console.WriteLine($"Blowhard Green Wizard resident v2 promotion: PASS (normal Create BIN composes runtime-proven SHA-256 {ExpectedRuntimeProofOutputSha256}; Swap Test differs only by the guarded 8-byte level-warp patch).");
+    Console.WriteLine($"Native edits: {nativeEditsPath}");
+    Console.WriteLine($"Normal Create BIN: {normalResult.OutputImagePath}");
+    Console.WriteLine($"Normal Create CUE: {normalResult.OutputCuePath}");
+    Console.WriteLine($"Normal source patch plan: {normalPlanPath}");
+    Console.WriteLine($"Normal resident runtime plan: {normalResidentPlanPath}");
+    Console.WriteLine($"Candidate BIN: {result.OutputImagePath}");
+    Console.WriteLine($"Candidate CUE: {result.OutputCuePath}");
+    Console.WriteLine($"Candidate source patch plan: {result.OutputPlanPath}");
+    Console.WriteLine($"Resident runtime plan: {residentPlanPath}");
+    Console.WriteLine($"Candidate validation report: {validationReportPath}");
+    Console.WriteLine($"Candidate result template: {candidateResultPath}");
+    Console.WriteLine($"Focused smoke report: {focusedReportPath}");
 }
 
 async Task ReportToastyWizardPackageWritePlan()
@@ -16130,9 +20650,18 @@ async Task ReportToastyWizardPackageWritePlan()
     if (!File.Exists(sourceImage))
         return;
 
-    LevelDefinition? toasty = catalog.FindByKey("toasty");
-    if (toasty == null)
-        return;
+    LevelDefinition toasty = catalog.FindByKey("toasty") ??
+        throw new InvalidOperationException("Toasty level missing.");
+    CrossLevelActorPackageRecipe recipe = CrossLevelActorPackageRecipeCatalog.FindPreferred(
+        "toasty",
+        "wizardpeak",
+        "enemyTransform",
+        workspace.RootPath) ?? throw new InvalidOperationException("Toasty Green Wizard recipe missing.");
+    if (!string.Equals(recipe.Id, CurrentToastyWizardRecipeId, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(recipe.Status, "in-game-blocked-missing-target-overlay-behavior", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Toasty Green Wizard should resolve to the blocked v3 runtime result.");
+    }
 
     Directory.CreateDirectory(Path.Combine(workspace.RootPath, "_local", "smoke"));
     string path = Path.Combine(workspace.RootPath, "_local", "smoke", "moby-toasty-wizard-transform-native-edits.json");
@@ -16145,7 +20674,7 @@ async Task ReportToastyWizardPackageWritePlan()
         OriginalPosition = new Vector3f(0, 0, 0),
         Type = 0x20,
         OriginalType = 0x20,
-        State = 0x01,
+        State = 0x00,
         OriginalState = 0x00,
         SourceByte36 = 0x1B,
         OriginalSourceByte36 = 0x4F,
@@ -16155,13 +20684,13 @@ async Task ReportToastyWizardPackageWritePlan()
         OriginalSourceByte4F = 0x00,
         Flag4A = 0x10,
         OriginalFlag4A = 0x10,
-        Flag4B = 0x56,
+        Flag4B = 0x53,
         OriginalFlag4B = 0x53,
         Color = Moby.ColorForType(0x20),
         Label = "Green Wizard",
         OriginalLabel = "Dog",
-        PatchStatus = "experimental-image-write",
-        PatchLead = "cross-level Toasty dog-to-wizard package write smoke",
+        PatchStatus = recipe.Status,
+        PatchLead = "blocked cross-level Toasty dog-to-wizard behavior evidence",
         CrossLevelTemplateId = "enemy.green_wizard.wizardpeak.t6",
         CrossLevelFamily = "enemyTransform",
         CrossLevelSourceLevelKey = "WizardPeak",
@@ -16170,239 +20699,435 @@ async Task ReportToastyWizardPackageWritePlan()
         CrossLevelRequiredExporterFeature = "ActorPackageImportAndPointerRebase"
     };
 
-    await MobyEditStore.SaveAsync(path, [wizardDog], "Toasty wizard transform package write smoke");
-    MobySourcePatchPlan guardedPlan = MobySourcePatchExporter.BuildPlan(
-        sourceImage,
-        DiscImageLocator.FindCueForImage(sourceImage),
-        Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-write-smoke.bin"),
-        Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-write-smoke.cue"),
-        toasty,
-        path);
-    MobyActorPackageImportPreview? guardedPreview = guardedPlan.PackageImportPreviews.FirstOrDefault(item =>
-        string.Equals(item.TemplateId, "enemy.green_wizard.wizardpeak.t6", StringComparison.OrdinalIgnoreCase));
-    if (guardedPreview == null ||
-        guardedPreview.CanWriteImage ||
-        !guardedPreview.GuardReason.Contains("must pass a disposable candidate test", StringComparison.OrdinalIgnoreCase) ||
-        guardedPlan.Patches.Any(patch => string.Equals(patch.Kind, "actor-package-copy", StringComparison.OrdinalIgnoreCase)))
+    await MobyEditStore.SaveAsync(path, [wizardDog], "Blocked Toasty wizard transform smoke");
+    foreach (bool candidateMode in new[] { false, true })
     {
-        throw new InvalidOperationException("Toasty wizard transform should stay guarded in normal Create BIN until in-game evidence passes.");
-    }
-
-    MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(
-        sourceImage,
-        DiscImageLocator.FindCueForImage(sourceImage),
-        Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-write-smoke.bin"),
-        Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-write-smoke.cue"),
-        toasty,
-        path,
-        allowPlanOnlyActorPackageImports: true);
-
-    MobyActorPackageImportPreview? preview = plan.PackageImportPreviews.FirstOrDefault(item =>
-        string.Equals(item.TemplateId, "enemy.green_wizard.wizardpeak.t6", StringComparison.OrdinalIgnoreCase));
-    if (preview == null ||
-        !string.Equals(preview.RecipeId, "toasty.wizardpeak.greenWizard.package.overwriteUnused00EA.v2", StringComparison.OrdinalIgnoreCase) ||
-        !string.Equals(preview.RecipeStatus, "experimental-image-write", StringComparison.OrdinalIgnoreCase) ||
-        !preview.CanWriteImage ||
-        !preview.GuardReason.Contains("disposable candidate mode", StringComparison.OrdinalIgnoreCase) ||
-        preview.CopySegments.Count != 1 ||
-        preview.RootEntries.Count != 1 ||
-        preview.CopySegments.Any(segment => segment.TargetBeforeIsZero) ||
-        preview.CopySegments.Any(segment => !string.Equals(segment.TargetSafety, "overwrite-unused-actor-package", StringComparison.OrdinalIgnoreCase)) ||
-        preview.RootEntries.Any(entry => !entry.RootSlotSafe || !entry.ActorIdSlotSafe))
-    {
-        throw new InvalidOperationException("Toasty wizard transform did not emit the expected writable package plan.");
-    }
-
-    bool hasIdentityPatch = plan.Patches.Any(patch =>
-        patch.TrueIndex == 0 &&
-        (string.Equals(patch.RecordOffset, "0x36", StringComparison.OrdinalIgnoreCase) ||
-         string.Equals(patch.RecordOffset, "0x37", StringComparison.OrdinalIgnoreCase)));
-    bool hasPackageCopy = plan.Patches.Any(patch =>
-        string.Equals(patch.Kind, "actor-package-copy", StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(patch.MobyLabel, "Green Wizard", StringComparison.OrdinalIgnoreCase));
-    bool hasRootRegister = plan.Patches.Any(patch =>
-        string.Equals(patch.Kind, "actor-package-root-register", StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(patch.MobyLabel, "Green Wizard", StringComparison.OrdinalIgnoreCase));
-    bool hasSpecialImport = plan.Patches.Any(patch =>
-        string.Equals(patch.Kind, "cross-level-existing-moby-special-data-import", StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(patch.MobyLabel, "Green Wizard", StringComparison.OrdinalIgnoreCase));
-    bool hasSpecialPointer = plan.Patches.Any(patch =>
-        string.Equals(patch.Kind, "cross-level-existing-moby-special-pointer", StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(patch.MobyLabel, "Green Wizard", StringComparison.OrdinalIgnoreCase));
-    bool skippedPackage = plan.SkippedEdits.Any(skip =>
-        skip.Contains("enemy.green_wizard.wizardpeak.t6", StringComparison.OrdinalIgnoreCase) &&
-        skip.Contains("ActorPackageImportAndPointerRebase", StringComparison.OrdinalIgnoreCase));
-    if (!hasIdentityPatch || !hasPackageCopy || !hasRootRegister || !hasSpecialImport || !hasSpecialPointer || skippedPackage)
-        throw new InvalidOperationException("Toasty wizard transform writable plan is missing package, identity, or special-data patches.");
-    if (plan.SkippedEdits.Count != 0)
-        throw new InvalidOperationException($"Toasty wizard transform writable plan skipped {plan.SkippedEdits.Count} edit(s): {string.Join("; ", plan.SkippedEdits)}");
-    if (plan.Patches.Any(patch => string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)))
-        throw new InvalidOperationException("Toasty wizard transform should patch the existing dog record, not append a new source moby.");
-
-    string mismatchedEvidencePath = Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-mismatched-fingerprint-pass.candidate-result.json");
-    try
-    {
-        await WriteSyntheticCandidateEvidenceAsync(
-            mismatchedEvidencePath,
-            toasty,
-            "toasty.wizardpeak.greenWizard.package.overwriteUnused00EA.v2",
-            "Synthetic Toasty Wizard pass with the wrong package fingerprint; normal export must not trust it.",
-            templateId: "enemy.green_wizard.wizardpeak.t6",
-            family: "enemyTransform",
-            recipeStatus: "experimental-image-write",
-            recipeFingerprint: "mismatched-fingerprint",
-            behaviorChecks:
-            [
-                new CandidateBehaviorSmokeCheck("enemy-appears-as-wizard", "Transformed enemy appears as a Green Wizard.")
-            ]);
-        MobySourcePatchPlan mismatchedEvidencePlan = MobySourcePatchExporter.BuildPlan(
+        string suffix = candidateMode ? "candidate" : "normal";
+        MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(
             sourceImage,
             DiscImageLocator.FindCueForImage(sourceImage),
-            Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-mismatched-fingerprint-gated-smoke.bin"),
-            Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-mismatched-fingerprint-gated-smoke.cue"),
+            Path.Combine(workspace.RootPath, "_local", "objects", $"toasty-wizard-blocked-{suffix}-smoke.bin"),
+            Path.Combine(workspace.RootPath, "_local", "objects", $"toasty-wizard-blocked-{suffix}-smoke.cue"),
             toasty,
-            path);
-        MobyActorPackageImportPreview? mismatchedEvidencePreview = mismatchedEvidencePlan.PackageImportPreviews.FirstOrDefault(item =>
+            path,
+            allowPlanOnlyActorPackageImports: candidateMode);
+        MobyActorPackageImportPreview preview = plan.PackageImportPreviews.Single(item =>
             string.Equals(item.TemplateId, "enemy.green_wizard.wizardpeak.t6", StringComparison.OrdinalIgnoreCase));
-        if (mismatchedEvidencePreview == null ||
-            mismatchedEvidencePreview.CanWriteImage ||
-            !mismatchedEvidencePreview.GuardReason.Contains("fingerprint changed", StringComparison.OrdinalIgnoreCase))
+        if (preview.CanWriteImage ||
+            !string.Equals(preview.RecipeId, CurrentToastyWizardRecipeId, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(preview.RecipeStatus, recipe.Status, StringComparison.OrdinalIgnoreCase) ||
+            !preview.GuardReason.Contains("Blocked after in-game validation", StringComparison.OrdinalIgnoreCase) ||
+            !preview.GuardReason.Contains("0x011B", StringComparison.OrdinalIgnoreCase) ||
+            plan.Patches.Any(patch => string.Equals(patch.MobyLabel, "Green Wizard", StringComparison.OrdinalIgnoreCase)) ||
+            !plan.SkippedEdits.Any(skip => skip.Contains("guarded preview-only", StringComparison.OrdinalIgnoreCase)))
         {
-            throw new InvalidOperationException("A Toasty Wizard pass with a mismatched package fingerprint should not promote normal Create BIN.");
-        }
-    }
-    finally
-    {
-        File.Delete(mismatchedEvidencePath);
-    }
-
-    string evidenceOldPassPath = Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-evidence-order-old-pass.candidate-result.json");
-    string evidenceNewFailPath = Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-evidence-order-new-fail.candidate-result.json");
-    try
-    {
-        await WriteSyntheticCandidateEvidenceAsync(
-            evidenceOldPassPath,
-            toasty,
-            "toasty.wizardpeak.greenWizard.package.overwriteUnused00EA.v2",
-            "Older Toasty Wizard pass used only to prove newer failures re-guard the recipe.",
-            templateId: "enemy.green_wizard.wizardpeak.t6",
-            family: "enemyTransform",
-            recipeStatus: "experimental-image-write",
-            recipeFingerprint: CrossLevelCandidateRecipeFingerprint.Create(preview),
-            behaviorChecks:
-            [
-                new CandidateBehaviorSmokeCheck("enemy-appears-as-wizard", "Transformed enemy appears as a Green Wizard.")
-            ]);
-        await WriteSyntheticCandidateEvidenceAsync(
-            evidenceNewFailPath,
-            toasty,
-            "toasty.wizardpeak.greenWizard.package.overwriteUnused00EA.v2",
-            "Newer Toasty Wizard failure used only to prove the evidence gate is time-aware.",
-            templateId: "enemy.green_wizard.wizardpeak.t6",
-            family: "enemyTransform",
-            recipeStatus: "experimental-image-write",
-            recipeFingerprint: CrossLevelCandidateRecipeFingerprint.Create(preview),
-            behaviorChecks:
-            [
-                new CandidateBehaviorSmokeCheck("enemy-appears-as-wizard", "Transformed enemy appears as a Green Wizard.")
-            ],
-            passed: false);
-        DateTime oldStamp = DateTime.UtcNow.AddMinutes(-10);
-        DateTime newStamp = DateTime.UtcNow;
-        File.SetLastWriteTimeUtc(evidenceOldPassPath, oldStamp);
-        File.SetLastWriteTimeUtc(evidenceNewFailPath, newStamp);
-
-        MobySourcePatchPlan newerFailPlan = MobySourcePatchExporter.BuildPlan(
-            sourceImage,
-            DiscImageLocator.FindCueForImage(sourceImage),
-            Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-newer-fail-gated-smoke.bin"),
-            Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-newer-fail-gated-smoke.cue"),
-            toasty,
-            path);
-        MobyActorPackageImportPreview? newerFailPreview = newerFailPlan.PackageImportPreviews.FirstOrDefault(item =>
-            string.Equals(item.TemplateId, "enemy.green_wizard.wizardpeak.t6", StringComparison.OrdinalIgnoreCase));
-        if (newerFailPreview == null ||
-            newerFailPreview.CanWriteImage ||
-            !newerFailPreview.GuardReason.Contains("must pass a disposable candidate test", StringComparison.OrdinalIgnoreCase) ||
-            newerFailPlan.Patches.Any(patch => string.Equals(patch.Kind, "actor-package-copy", StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException("Newer failed Toasty Wizard evidence should re-guard the recipe even if an older pass exists.");
+            throw new InvalidOperationException($"Toasty Green Wizard {suffix} plan escaped the known behavior-failure guard.");
         }
 
-        File.SetLastWriteTimeUtc(evidenceOldPassPath, DateTime.UtcNow);
-        File.SetLastWriteTimeUtc(evidenceNewFailPath, DateTime.UtcNow.AddMinutes(-10));
-        MobySourcePatchPlan newerPassPlan = MobySourcePatchExporter.BuildPlan(
-            sourceImage,
-            DiscImageLocator.FindCueForImage(sourceImage),
-            Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-newer-pass-gated-smoke.bin"),
-            Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-newer-pass-gated-smoke.cue"),
-            toasty,
-            path);
-        MobyActorPackageImportPreview? newerPassPreview = newerPassPlan.PackageImportPreviews.FirstOrDefault(item =>
-            string.Equals(item.TemplateId, "enemy.green_wizard.wizardpeak.t6", StringComparison.OrdinalIgnoreCase));
-        if (newerPassPreview == null ||
-            !newerPassPreview.CanWriteImage ||
-            !newerPassPreview.GuardReason.Contains("passed in-game evidence", StringComparison.OrdinalIgnoreCase))
+        MobyBuildSafetyLevelReport safety = MobyBuildSafetyInspector.InspectLevel(sourceImage, toasty, plan);
+        if (safety.Status != MobyBuildSafetyStatus.Blocked ||
+            !safety.Findings.Any(finding => finding.Contains(CurrentToastyWizardRecipeId, StringComparison.OrdinalIgnoreCase)))
         {
-            throw new InvalidOperationException("Newest passed Toasty Wizard evidence should promote the recipe after an older failure.");
+            throw new InvalidOperationException("Safe Build Inspector did not block the failed Toasty Green Wizard recipe.");
         }
     }
-    finally
-    {
-        File.Delete(evidenceOldPassPath);
-        File.Delete(evidenceNewFailPath);
-    }
 
-    string syntheticEvidencePath = Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-smoke-pass.candidate-result.json");
-    try
-    {
-        await WriteSyntheticCandidateEvidenceAsync(
-            syntheticEvidencePath,
-            toasty,
-            "toasty.wizardpeak.greenWizard.package.overwriteUnused00EA.v2",
-            "Toasty Wizard evidence-gated smoke",
-            templateId: "enemy.green_wizard.wizardpeak.t6",
-            family: "enemyTransform",
-            recipeStatus: "experimental-image-write",
-            recipeFingerprint: CrossLevelCandidateRecipeFingerprint.Create(preview),
-            behaviorChecks:
-            [
-                new CandidateBehaviorSmokeCheck("enemy-appears-as-wizard", "Transformed enemy appears as a Green Wizard."),
-                new CandidateBehaviorSmokeCheck("enemy-defeatable", "Green Wizard can be defeated."),
-                new CandidateBehaviorSmokeCheck("enemy-reward-sane", "Reward or collection behavior is sane."),
-                new CandidateBehaviorSmokeCheck("enemy-nearby-regression", "Other Toasty enemies still behave normally.")
-            ]);
-        MobySourcePatchPlan promotedByEvidencePlan = MobySourcePatchExporter.BuildPlan(
-            sourceImage,
-            DiscImageLocator.FindCueForImage(sourceImage),
-            Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-evidence-gated-smoke.bin"),
-            Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-evidence-gated-smoke.cue"),
-            toasty,
-            path);
-        MobyActorPackageImportPreview? evidencePreview = promotedByEvidencePlan.PackageImportPreviews.FirstOrDefault(item =>
-            string.Equals(item.TemplateId, "enemy.green_wizard.wizardpeak.t6", StringComparison.OrdinalIgnoreCase));
-        if (evidencePreview == null ||
-            !evidencePreview.CanWriteImage ||
-            !evidencePreview.GuardReason.Contains("passed in-game evidence", StringComparison.OrdinalIgnoreCase) ||
-            promotedByEvidencePlan.SkippedEdits.Count != 0 ||
-            promotedByEvidencePlan.Patches.Count(patch => string.Equals(patch.Kind, "actor-package-copy", StringComparison.OrdinalIgnoreCase)) != 1 ||
-            promotedByEvidencePlan.Patches.Count(patch => string.Equals(patch.Kind, "actor-package-root-register", StringComparison.OrdinalIgnoreCase)) != 1 ||
-            promotedByEvidencePlan.Patches.Count(patch => string.Equals(patch.Kind, "cross-level-existing-moby-special-data-import", StringComparison.OrdinalIgnoreCase)) != 1 ||
-            promotedByEvidencePlan.Patches.Count(patch => string.Equals(patch.Kind, "cross-level-existing-moby-special-pointer", StringComparison.OrdinalIgnoreCase)) != 1 ||
-            promotedByEvidencePlan.Patches.Any(patch => string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)))
+    Console.WriteLine("Toasty Green Wizard v3: model/root load proven; normal and candidate writes blocked until target overlay behavior is transplanted.");
+}
+
+void ReportToastyWizardOverlayExperiment()
+{
+    string objectsDirectory = Path.Combine(workspace.RootPath, "_local", "objects");
+    string provenV3Image = Path.Combine(objectsDirectory, $"{CurrentToastyWizardCandidateSlug}.bin");
+    string provenV3Cue = Path.Combine(objectsDirectory, $"{CurrentToastyWizardCandidateSlug}.cue");
+    string outputBase = Path.Combine(objectsDirectory, "toasty-wizard-lightning-particle-texture-v11-smoke");
+    ToastyWizardOverlayExperimentPlan plan = ToastyWizardOverlayExperimentExporter.BuildAndWrite(
+        provenV3Image,
+        provenV3Cue,
+        WadAnalysisLocator.Find(workspace),
+        outputBase + ".bin",
+        outputBase + ".cue",
+        outputBase + ".overlay-transplant-plan.json");
+    AssertToastyWizardV11FinalImage(outputBase + ".bin");
+
+    if (plan.RecipeId != ToastyWizardOverlayExperimentExporter.RecipeId ||
+        plan.RetiredRecipeId != ToastyWizardOverlayExperimentExporter.RetiredV8RecipeId ||
+        !plan.RetiredRecipeReason.Contains("exact v8 BIN", StringComparison.OrdinalIgnoreCase) ||
+        !plan.RetiredRecipeReason.Contains("filter alpha was zero", StringComparison.OrdinalIgnoreCase) ||
+        !plan.RetiredRecipeReason.Contains("animation-8 slot at 0x801C5C10 was null", StringComparison.OrdinalIgnoreCase) ||
+        !plan.RetiredRecipeReason.Contains("Reserved Instruction", StringComparison.OrdinalIgnoreCase) ||
+        plan.ToastySceneBaseOffset != 0x1B7000 ||
+        plan.WizardPeakSceneBaseOffset != 0x1CE800 ||
+        plan.ToastyT0PropertiesPointerOffset != 0x629C ||
+        plan.ImportedToastyT0PropertiesPointer != 0x10860 ||
+        plan.RestoredToastyT0PropertiesPointer != 0x9EE8 ||
+        plan.WizardPeakPropertiesOffset != 0xC350 ||
+        plan.ToastyPropertiesOffset != 0x9EE8 ||
+        plan.PropertiesBytes != 0x50 ||
+        plan.RebasedPropertiesInternalPointer != 0x9F10 ||
+        plan.TranslatedRoutePoints.Count != 2 ||
+        plan.TranslatedRoutePoints[0] != new ToastyWizardRoutePoint(119081, 109773, 16163) ||
+        plan.TranslatedRoutePoints[1] != new ToastyWizardRoutePoint(112558, 106629, 16163) ||
+        plan.ToastyPointerFixupListOffset != 0xD314 ||
+        plan.PointerFixupCountBefore != 0x62 ||
+        plan.PointerFixupCountAfter != 0x61 ||
+        plan.RemovedPointerFixup != 0x9F28 ||
+        plan.TextureDependencyBytes != 2216 ||
+        plan.TexturePixelBytes != 2056 ||
+        plan.TextureClutBytes != 160 ||
+        !plan.TextureDependencyDonorSha256.Equals("9448477af6f60a253f43c49e0642f8ce406027ff811dd37b41a4b1d1f4efbfc7", StringComparison.OrdinalIgnoreCase) ||
+        !plan.TextureDependencyTargetPreimageSha256.Equals("43d5062f7ec0fa5aba2a423a12e9f8296a02b878f833eaf90a72571af00b65e1", StringComparison.OrdinalIgnoreCase) ||
+        plan.TextureDependencyRegions.Count != 5 ||
+        plan.TextureDependencyRegions[0] is not { Label: "Wizard accent", PixelOffset: 0x50900, PixelRows: 32, PixelRowBytes: 0x10, PixelRowStrideBytes: 0x400, ClutOffset: 0x7A8E0, ClutBytes: 0x20 } ||
+        plan.TextureDependencyRegions[1] is not { Label: "Wizard special", PixelOffset: 0x58910, PixelRows: 32, PixelRowBytes: 0x10, PixelRowStrideBytes: 0x400, ClutOffset: 0x708A0, ClutBytes: 0x20 } ||
+        plan.TextureDependencyRegions[2] is not { Label: "Wizard main", PixelOffset: 0x58960, PixelRows: 32, PixelRowBytes: 0x10, PixelRowStrideBytes: 0x400, ClutOffset: 0x72980, ClutBytes: 0x20 } ||
+        plan.TextureDependencyRegions[3] is not { Label: "Lightning", PixelOffset: 0x70850, PixelRows: 4, PixelRowBytes: 0x02, PixelRowStrideBytes: 0x400, ClutOffset: 0x78840, ClutBytes: 0x20 } ||
+        plan.TextureDependencyRegions[4] is not
         {
-            throw new InvalidOperationException("Toasty Green Wizard transform did not become writable after a passed in-game candidate result.");
-        }
-    }
-    finally
+            Label: "Lightning trail particle 0x07",
+            PixelOffset: 0x78AB0,
+            PixelRows: 32,
+            PixelRowBytes: 0x10,
+            PixelRowStrideBytes: 0x400,
+            ClutOffset: 0x34C60,
+            ClutBytes: 0x20,
+            DonorPixelOffset: 0x78810,
+            DonorClutOffset: 0x759A0
+        })
     {
-        File.Delete(syntheticEvidencePath);
+        throw new InvalidOperationException("Focused check 1 failed: the v11 texture/CLUT closure, T0 properties transplant, route translation, fixup-list repair, or v8 retirement metadata is incomplete.");
+    }
+    if (
+        plan.GreenWizardHandlerAddress != 0x8008C818 ||
+        plan.LightningHandlerAddress != 0x80088AD0 ||
+        plan.LightningDamagePatchAddress != 0x80088B90 ||
+        plan.LightningDamageOriginalWord != 0x34C60020 ||
+        plan.LightningDamagePatchedWord != 0x34060001 ||
+        plan.OriginalLightningDamageFlags != 0x00020020 ||
+        plan.PatchedLightningDamageFlags != 0x00000001 ||
+        plan.PatchedSpyroHurtState != 0x0000000E ||
+        plan.PatchedSpyroAnimation != 0x0000000F ||
+        plan.LightningImpactBurstPatchAddress != 0x80088B9C ||
+        plan.LightningImpactBurstOriginalWord != 0x0C0189CB ||
+        plan.LightningImpactBurstPatchedWord != 0x08024294 ||
+        plan.LightningImpactSafeExitAddress != 0x80090A50 ||
+        plan.SuppressedLightningImpactChildCount != 4 ||
+        plan.WizardPeakCopiedBytes != 0xD108 ||
+        plan.RelocatedJumpCount != 357 ||
+        plan.PreservedBranchCount != 1029 ||
+        plan.RelocatedPointerCount != 675 ||
+        plan.ExcludedTailPointerCount != 178 ||
+        plan.RelocatedHiLoPairCount != 9)
+    {
+        throw new InvalidOperationException("Focused check 2 failed: the compact 0x011B/0x0026 handler closure, generic-hurt damage quarantine, impact-burst quarantine, or split-address fixups are incomplete.");
+    }
+    if (plan.WizardSpawnInitializerAddress != 0x80090DD8 ||
+        plan.LightningPackageBytes != 0x564 ||
+        plan.LightningRootSlotOffset != 0xB0 ||
+        plan.ParticleBundleBytes != 0x380 ||
+        plan.ParticleSpawnType7Address != 0x80091B40 ||
+        plan.ParticleSpawnType41Address != 0x80091C68 ||
+        plan.ParticleUpdateType7Address != 0x80091D2C ||
+        plan.ParticleUpdateType41Address != 0x80091DC4)
+    {
+        throw new InvalidOperationException("Focused check 2 failed: lightning model, spawn initializer, or particle closure was incomplete.");
+    }
+    if (plan.LightningTrailParticleTextureSlotAddress != 0x80076294 ||
+        plan.LightningTrailParticleDescriptorAddress != 0x80091F54 ||
+        plan.LightningTrailParticleSourceDescriptorOffset != 0x173518 ||
+        plan.LightningTrailParticleDescriptorBytes != 0x0C ||
+        !plan.LightningTrailParticleSourceDescriptorSha256.Equals("4baed93eb98ac71d27f59e3ddf8b5382dda7e74319de188749dce3831397f7b3", StringComparison.OrdinalIgnoreCase) ||
+        !plan.LightningTrailParticleInstalledDescriptorSha256.Equals("82f2f94882c9e383d7fdbf278cd615c1a78a015751a4d617a108d399081c38f5", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Focused check 2 failed: the type-0x07 particle descriptor or Toasty runtime texture-slot initialization is incomplete.");
+    }
+    if (plan.ExpandedToastyOverlayBytes != 0x17800 ||
+        plan.ShimBytes != 0xA0 ||
+        plan.PaddingBytes != 0x2D8 ||
+        plan.WadGrowthBytes != 0xD800 ||
+        plan.RelocatedCopyBufferAddress != 0x80092238 ||
+        plan.PolygonBufferMarginBytes != 0x758 ||
+        plan.ExecutableCopyBufferHiOffset != 0x4B130 ||
+        plan.ExecutableCopyBufferLoOffset != 0x4B134 ||
+        plan.RelocatedExecutableLba <= plan.OriginalExecutableLba ||
+        !File.Exists(plan.OutputCuePath) ||
+        !File.ReadAllText(plan.OutputCuePath).Contains(Path.GetFileName(plan.OutputImagePath), StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Focused check 3 failed: runtime RAM layout or final-image verification was incomplete.");
     }
 
-    if (exportCrossLevelObjectTest)
-        await ExportAndVerifyMobyPatchImage(toasty, path, Path.Combine(workspace.RootPath, "_local", "objects", "toasty-wizard-transform-write-smoke"), "Toasty wizard transform", allowPlanOnlyActorPackageImports: true);
+    Console.WriteLine($"Toasty Green Wizard v11 lightning-particle texture: {plan.OutputCuePath}");
+    Console.WriteLine("Focused check 1 passed: 2,216 guarded Wizard/lightning/particle texture bytes, native T6 properties, Toasty-space route points, and 0x61-entry fixup list.");
+    Console.WriteLine("Focused check 2 passed: runtime-proven Wizard/lightning behavior remains frozen while type-0x07 receives a rebased descriptor, pixel tile, and CLUT.");
+    Console.WriteLine("Focused check 3 passed: relocated copy buffer, native SCUS filter code, graphics margin, shared return shim, and final-image readback.");
+}
 
-    Console.WriteLine($"Toasty wizard transform package write plan: {preview.RecipeId}, overwrite {preview.CopySegments[0].TargetStart}+0x{preview.CopySegments[0].ByteLength:X}, root {preview.RootEntries[0].TargetRootSlot}");
+void AssertToastyWizardV11FinalImage(string imagePath)
+{
+    SourceDiscLayout layout = DetectSourceDiscLayout(imagePath);
+    using FileStream stream = File.Open(imagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+    SourceDiscFileRecord wadFile = FindSourceRootFile(
+        stream,
+        layout,
+        name => name.Equals("WAD.WAD", StringComparison.OrdinalIgnoreCase) || name.Equals("WAD", StringComparison.OrdinalIgnoreCase));
+    SourceDiscFileRecord executable = FindSourceExecutable(stream, layout);
+    if (wadFile.Lba != 37 || wadFile.Size != 0x6934800 ||
+        executable.Name != "SCUS_942.28" || executable.Lba != 53902 || executable.Size != 0x66000)
+    {
+        throw new InvalidOperationException(
+            $"Focused final-BIN check failed: ISO root records were WAD {wadFile.Lba}/0x{wadFile.Size:X}, " +
+            $"{executable.Name} {executable.Lba}/0x{executable.Size:X}.");
+    }
+
+    byte[] wadHeader = ReadSourceWadBytes(stream, layout, 0, 0x98);
+    int overlayOffset = GetUInt32(wadHeader, 17 * 8);
+    int overlayBytes = GetUInt32(wadHeader, (17 * 8) + 4);
+    int dataOffset = GetUInt32(wadHeader, 18 * 8);
+    int dataBytes = GetUInt32(wadHeader, (18 * 8) + 4);
+    if (overlayOffset != 0x1480000 || overlayBytes != 0x17800 ||
+        dataOffset != 0x1497800 || dataOffset != overlayOffset + overlayBytes || dataBytes != 0x21E000)
+    {
+        throw new InvalidOperationException(
+            $"Focused final-BIN check failed: Toasty WAD entries were 0x{overlayOffset:X}/0x{overlayBytes:X} and 0x{dataOffset:X}/0x{dataBytes:X}.");
+    }
+
+    byte[] overlay = ReadSourceWadBytes(stream, layout, overlayOffset, overlayBytes);
+    (int Offset, uint Expected, string Label)[] expectedOverlayWords =
+    [
+        (0x2AC, 0x80091D2C, "particle update type 0x07"),
+        (0x394, 0x80091DC4, "particle update type 0x41"),
+        (0x3F0, 0x80091B40, "particle spawn type 0x07"),
+        (0x4D8, 0x80091C68, "particle spawn type 0x41"),
+        (0x640, 0x080247B0, "dispatch hook"),
+        (0x644, 0x00000000, "dispatch delay slot"),
+        (0xE150, 0x3C060002, "preserved lightning damage-flags high word"),
+        (0xE154, 0x0C0138BA, "lightning hit/damage collision call"),
+        (0xE158, 0x34060001, "lightning generic-hurt damage delay slot"),
+        (0xE15C, 0x10400019, "lightning no-hit branch"),
+        (0xE160, 0x02202021, "lightning no-hit branch delay slot"),
+        (0xE164, 0x08024294, "lightning impact-burst quarantine"),
+        (0xE168, 0x00008821, "lightning impact-burst delay slot"),
+        (0xE1C4, 0x0C00DFE4, "lightning no-hit native test"),
+        (0xE1C8, 0x24050004, "lightning no-hit native-test delay slot"),
+        (0xE1CC, 0x14401F92, "lightning no-hit cleanup branch"),
+        (0xE1D0, 0x02602021, "lightning no-hit cleanup delay slot"),
+        (0xE3D8, 0x3C018008, "lightning jump-table LUI"),
+        (0xE3E0, 0x8C2252A4, "lightning jump-table load"),
+        (0x127A0, 0x3C018008, "Green Wizard primary jump-table LUI"),
+        (0x127A8, 0x8C225304, "Green Wizard primary jump-table load"),
+        (0x12E28, 0x3C018008, "Green Wizard secondary jump-table LUI"),
+        (0x12E30, 0x8C225324, "Green Wizard secondary jump-table load"),
+        (0x16018, 0x0C01495A, "lightning shared projectile delete"),
+        (0x1601C, 0x02602021, "lightning shared projectile-delete delay slot"),
+        (0x16020, 0x08024363, "lightning shared main-exit jump"),
+        (0x16024, 0x00000000, "lightning shared main-exit delay slot"),
+        (0x16354, 0x080247D0, "shared Wizard exit"),
+        (0x17488, 0x2408011B, "Green Wizard dispatch compare"),
+        (0x17494, 0x24080026, "lightning dispatch compare"),
+        (0x174C8, 0x3C088009, "Green Wizard particle-descriptor pointer LUI"),
+        (0x174CC, 0x25081F54, "Green Wizard particle-descriptor pointer low word"),
+        (0x174D0, 0x3C098007, "Green Wizard particle-table-slot LUI"),
+        (0x174D4, 0xAD286294, "Green Wizard particle-table-slot store"),
+        (0x174D8, 0x08023206, "Green Wizard dispatch jump"),
+        (0x174EC, 0x3C088009, "lightning particle-descriptor pointer LUI"),
+        (0x174F0, 0x25081F54, "lightning particle-descriptor pointer low word"),
+        (0x174F4, 0x3C098007, "lightning particle-table-slot LUI"),
+        (0x174F8, 0xAD286294, "lightning particle-table-slot store"),
+        (0x174FC, 0x080222B4, "lightning dispatch jump"),
+        (0x17514, 0x08020757, "Toasty next-moby return")
+    ];
+    foreach ((int offset, uint expected, string label) in expectedOverlayWords)
+    {
+        uint actual = BinaryPrimitives.ReadUInt32LittleEndian(overlay.AsSpan(offset, 4));
+        if (actual != expected)
+            throw new InvalidOperationException($"Focused final-BIN check failed: {label} at 0x{offset:X} expected 0x{expected:X8}, found 0x{actual:X8}.");
+    }
+
+    string particleHash = Convert.ToHexString(SHA256.HashData(overlay.AsSpan(0x17108, 0x380)));
+    if (particleHash != "EAAB7ADF4F1D5657C9D1ED66A5E944B007A560B5CEBB3516705EE6CDA62B38FC")
+        throw new InvalidOperationException($"Focused final-BIN check failed: particle bundle hash was {particleHash}.");
+
+    byte[] lightningTrailDescriptor = overlay.AsSpan(0x1751C, 0x0C).ToArray();
+    string lightningTrailDescriptorHash = Convert.ToHexString(SHA256.HashData(lightningTrailDescriptor));
+    if (!lightningTrailDescriptor.AsSpan().SequenceEqual(Convert.FromHexString("0700080060E063347FFF3D00")) ||
+        lightningTrailDescriptorHash != "82F2F94882C9E383D7FDBF278CD615C1A78A015751A4D617A108D399081C38F5")
+    {
+        throw new InvalidOperationException(
+            $"Focused final-BIN check failed: rebased type-0x07 descriptor was {Convert.ToHexString(lightningTrailDescriptor)}/{lightningTrailDescriptorHash}.");
+    }
+
+    string impactBranchHash = Convert.ToHexString(SHA256.HashData(overlay.AsSpan(0xE154, 0x18)));
+    string genericHurtWindowHash = Convert.ToHexString(SHA256.HashData(overlay.AsSpan(0xE14C, 0x20)));
+    string impactSafeExitHash = Convert.ToHexString(SHA256.HashData(overlay.AsSpan(0x16018, 0x10)));
+    if (impactBranchHash != "014E8EA5D4582654AC6726728E76DA0F6C81B51B0D45F42325264FBC4028F3D8" ||
+        genericHurtWindowHash != "24605022EC77D0AC7EE88288ADEC4DF8F5B88460191090DFA2D093D465B15080" ||
+        impactSafeExitHash != "026E82B5D53244514709459EA784F4AC6C221FA3890AC6E792888ACBF116FA6C")
+    {
+        throw new InvalidOperationException(
+            $"Focused final-BIN check failed: lightning hit-branch/generic-hurt/shared-exit hashes were {impactBranchHash}/{genericHurtWindowHash}/{impactSafeExitHash}.");
+    }
+
+    byte[] dataHeader = ReadSourceWadBytes(stream, layout, dataOffset, 0x184);
+    uint lightningRoot = BinaryPrimitives.ReadUInt32LittleEndian(dataHeader.AsSpan(0xB0, 4));
+    ushort lightningActor = BinaryPrimitives.ReadUInt16LittleEndian(dataHeader.AsSpan(0x180, 2));
+    byte[] lightningPackage = ReadSourceWadBytes(stream, layout, dataOffset + 0x156818, 0x564);
+    string lightningHash = Convert.ToHexString(SHA256.HashData(lightningPackage));
+    if (lightningRoot != 0x156818 || lightningActor != 0x0026 ||
+        lightningHash != "9EA5C72BA675E9C6A81433F7408695399E19BC188B4B2A923069D71DE601789A")
+    {
+        throw new InvalidOperationException(
+            $"Focused final-BIN check failed: lightning root/actor/hash were 0x{lightningRoot:X}/0x{lightningActor:X4}/{lightningHash}.");
+    }
+
+    byte[] wizardPackage = ReadSourceWadBytes(stream, layout, dataOffset + 0x15326C, 0x35AC);
+    string wizardPackageHash = Convert.ToHexString(SHA256.HashData(wizardPackage));
+    if (wizardPackageHash != "24DF9AE279F32BA10A8E3BD25880D6989991B9225ACF45755E6AAF985D66F529" ||
+        GetUInt32(wizardPackage, 0x00) != 3 ||
+        GetUInt32(wizardPackage, 0x34) != 0x238 ||
+        GetUInt32(wizardPackage, 0x38) != 0x44 ||
+        GetUInt32(wizardPackage, 0x3C) != 0x100 ||
+        GetUInt32(wizardPackage, 0x40) != 0x19C ||
+        wizardPackage[0x44] != 19 || wizardPackage[0x100] != 15 || wizardPackage[0x19C] != 15 ||
+        0x15326C + wizardPackage.Length != 0x156818)
+    {
+        throw new InvalidOperationException(
+            $"Focused final-BIN check failed: Green Wizard model hash/animation structure was {wizardPackageHash}; " +
+            $"animations {GetUInt32(wizardPackage, 0x00)}, frames {wizardPackage[0x44]}/{wizardPackage[0x100]}/{wizardPackage[0x19C]}.");
+    }
+    if (GetUInt32(lightningPackage, 0x00) != 4 ||
+        GetUInt32(lightningPackage, 0x34) != 0x1A8 ||
+        GetUInt32(lightningPackage, 0x38) != 0x48 ||
+        GetUInt32(lightningPackage, 0x3C) != 0x8C ||
+        GetUInt32(lightningPackage, 0x40) != 0xD0 ||
+        GetUInt32(lightningPackage, 0x44) != 0x164 ||
+        lightningPackage[0x48] != 4 || lightningPackage[0x8C] != 4 ||
+        lightningPackage[0xD0] != 14 || lightningPackage[0x164] != 4)
+    {
+        throw new InvalidOperationException(
+            $"Focused final-BIN check failed: lightning animation structure was " +
+            $"{GetUInt32(lightningPackage, 0x00)} animations with frames " +
+            $"{lightningPackage[0x48]}/{lightningPackage[0x8C]}/{lightningPackage[0xD0]}/{lightningPackage[0x164]}.");
+    }
+
+    (string Label, int PixelOffset, int Rows, int RowBytes, int Stride, int ClutOffset, string PixelHash, string ClutHash)[] textureRegions =
+    [
+        ("Wizard accent", 0x50900, 32, 0x10, 0x400, 0x7A8E0, "8FF165F1D889594F9221913FDFA69F471EB33C57EA0780BE4B1DDF8F22317C12", "60A0EB6D64D068D96E76DE01DB8BF4B942D0771FEFBEF6BAED7D2964940522AF"),
+        ("Wizard special", 0x58910, 32, 0x10, 0x400, 0x708A0, "2229D62DDADD04752FCC5790B019B55D166B774007AB646E46F1D7A440069DEA", "5CB82309AAE7685152D17F22DF8E9E8A55D5202B449ADF08F580A254038798A1"),
+        ("Wizard main", 0x58960, 32, 0x10, 0x400, 0x72980, "6832E7F686F47F7224B1E7B1BB136885D2326650BDE4EAF99CFFCE3C74DBA445", "98C5EA6B2EAEEB703C65F10E6BA11E9F2D5B4272A4BBC261D00EF178CFD397BA"),
+        ("Lightning", 0x70850, 4, 0x02, 0x400, 0x78840, "E6F48A0036F29213687545AD901EB55949D15E150213F2DB8B32F248D55EC411", "AB654734BE1754FD47A82B2974389DAC5B3BCCA0E0015604E6724B56D1492D00"),
+        ("Lightning trail particle 0x07", 0x78AB0, 32, 0x10, 0x400, 0x34C60, "31F14B4CD1994F468E2BD1D9D1937CA4E7BCCD276CD32EFA37ECFBA4ECB92249", "C8C516666D7B96B4039B451CFFCF69E8C610A93A112532859932BEFBD2EA9384")
+    ];
+    byte[] textureAggregate = new byte[2216];
+    int textureAggregateOffset = 0;
+    foreach (var region in textureRegions)
+    {
+        byte[] pixels = new byte[region.Rows * region.RowBytes];
+        for (int row = 0; row < region.Rows; row++)
+        {
+            byte[] rowBytes = ReadSourceWadBytes(
+                stream,
+                layout,
+                dataOffset + region.PixelOffset + (row * region.Stride),
+                region.RowBytes);
+            rowBytes.CopyTo(pixels, row * region.RowBytes);
+        }
+        byte[] clut = ReadSourceWadBytes(stream, layout, dataOffset + region.ClutOffset, 0x20);
+        string pixelHash = Convert.ToHexString(SHA256.HashData(pixels));
+        string clutHash = Convert.ToHexString(SHA256.HashData(clut));
+        if (pixelHash != region.PixelHash || clutHash != region.ClutHash)
+        {
+            throw new InvalidOperationException(
+                $"Focused final-BIN check failed: {region.Label} pixel/CLUT hashes were {pixelHash}/{clutHash}.");
+        }
+        pixels.CopyTo(textureAggregate, textureAggregateOffset);
+        textureAggregateOffset += pixels.Length;
+        clut.CopyTo(textureAggregate, textureAggregateOffset);
+        textureAggregateOffset += clut.Length;
+    }
+    string textureAggregateHash = Convert.ToHexString(SHA256.HashData(textureAggregate));
+    if (textureAggregateOffset != 2216 ||
+        textureAggregateHash != "9448477AF6F60A253F43C49E0642F8CE406027FF811DD37B41A4B1D1F4EFBFC7")
+    {
+        throw new InvalidOperationException(
+            $"Focused final-BIN check failed: Wizard/lightning texture aggregate was {textureAggregateOffset} bytes/{textureAggregateHash}.");
+    }
+
+    int toastySceneBase = GetUInt32(dataHeader, 0x18);
+    int toastySceneBytes = GetUInt32(dataHeader, 0x1C);
+    if (toastySceneBase != 0x1B7000 || toastySceneBytes != 0xD800 ||
+        0x10860 < toastySceneBytes || 0x9EE8 + 0x50 > toastySceneBytes ||
+        0x9F10 != 0x9EE8 + 0x28)
+    {
+        throw new InvalidOperationException(
+            $"Focused final-BIN check failed: Toasty scene base/size or properties bounds were " +
+            $"0x{toastySceneBase:X}/0x{toastySceneBytes:X}; v5=0x10860, v6=0x9EE8+0x50, nested=0x9F10.");
+    }
+    byte[] t0PropertiesPointerBytes = ReadSourceWadBytes(stream, layout, dataOffset + toastySceneBase + 0x629C, sizeof(uint));
+    uint t0PropertiesPointer = BinaryPrimitives.ReadUInt32LittleEndian(t0PropertiesPointerBytes);
+    byte[] properties = ReadSourceWadBytes(stream, layout, dataOffset + toastySceneBase + 0x9EE8, 0x50);
+    string propertiesHash = Convert.ToHexString(SHA256.HashData(properties));
+    uint internalPointer = BinaryPrimitives.ReadUInt32LittleEndian(properties.AsSpan(0, sizeof(uint)));
+    (int X, int Y, int Z) firstRoutePoint = (
+        BinaryPrimitives.ReadInt32LittleEndian(properties.AsSpan(0x30, sizeof(int))),
+        BinaryPrimitives.ReadInt32LittleEndian(properties.AsSpan(0x34, sizeof(int))),
+        BinaryPrimitives.ReadInt32LittleEndian(properties.AsSpan(0x38, sizeof(int))));
+    (int X, int Y, int Z) secondRoutePoint = (
+        BinaryPrimitives.ReadInt32LittleEndian(properties.AsSpan(0x40, sizeof(int))),
+        BinaryPrimitives.ReadInt32LittleEndian(properties.AsSpan(0x44, sizeof(int))),
+        BinaryPrimitives.ReadInt32LittleEndian(properties.AsSpan(0x48, sizeof(int))));
+    if (t0PropertiesPointer != 0x9EE8 || internalPointer != 0x9F10 ||
+        firstRoutePoint != (119081, 109773, 16163) ||
+        secondRoutePoint != (112558, 106629, 16163) ||
+        propertiesHash != "7355013684269348D96A79107C7E6AD18BA991CEB00C02A0ED3BF986D54E15C7")
+    {
+        throw new InvalidOperationException(
+            $"Focused final-BIN check failed: T0 properties pointer/internal/hash were " +
+            $"0x{t0PropertiesPointer:X}/0x{internalPointer:X}/{propertiesHash}; routes were {firstRoutePoint}/{secondRoutePoint}.");
+    }
+
+    byte[] pointerFixups = ReadSourceWadBytes(stream, layout, dataOffset + toastySceneBase + 0xD314, 4 + (0x62 * 4));
+    string pointerFixupHash = Convert.ToHexString(SHA256.HashData(pointerFixups));
+    uint pointerFixupCount = BinaryPrimitives.ReadUInt32LittleEndian(pointerFixups.AsSpan(0, sizeof(uint)));
+    uint[] pointerFixupValues = Enumerable.Range(0, 0x62)
+        .Select(index => BinaryPrimitives.ReadUInt32LittleEndian(pointerFixups.AsSpan(sizeof(uint) + (index * sizeof(uint)), sizeof(uint))))
+        .ToArray();
+    if (pointerFixupCount != 0x61 || pointerFixupValues[0] != 0x629C || pointerFixupValues[1] != 0x9EE8 ||
+        pointerFixupValues.Take((int)pointerFixupCount).Contains(0x9F28u) || pointerFixupValues[^1] != 0 ||
+        pointerFixupHash != "2A4B43E97EB7FA8D995FB00169FA42C8BED785E37F7790D38AA20EFA9176F037")
+    {
+        throw new InvalidOperationException(
+            $"Focused final-BIN check failed: Toasty pointer-fixup count/first entries/tail/hash were " +
+            $"0x{pointerFixupCount:X}/0x{pointerFixupValues[0]:X}/0x{pointerFixupValues[1]:X}/0x{pointerFixupValues[^1]:X}/{pointerFixupHash}.");
+    }
+
+    byte[] executableWords = ReadSourceFileBytes(stream, layout, executable.Lba, 0x4B130, 8);
+    uint copyBufferHi = BinaryPrimitives.ReadUInt32LittleEndian(executableWords.AsSpan(0, 4));
+    uint copyBufferLo = BinaryPrimitives.ReadUInt32LittleEndian(executableWords.AsSpan(4, 4));
+    if (copyBufferHi != 0x3C028009 || copyBufferLo != 0x24422238)
+    {
+        throw new InvalidOperationException(
+            $"Focused final-BIN check failed: SCUS copy-buffer words were 0x{copyBufferHi:X8}/0x{copyBufferLo:X8}.");
+    }
+
+    byte[] zappedFilterWindow = ReadSourceFileBytes(stream, layout, executable.Lba, 0x38688, 0x0C);
+    uint zappedFilterWord = BinaryPrimitives.ReadUInt32LittleEndian(zappedFilterWindow.AsSpan(4, 4));
+    string zappedFilterHash = Convert.ToHexString(SHA256.HashData(zappedFilterWindow));
+    if (zappedFilterWord != 0xA0238A83 ||
+        zappedFilterHash != "61FED67707A296DA7022C9928B0A71FDD1B1A55CF6FEF8146CAFEF27AD897C75")
+    {
+        throw new InvalidOperationException(
+            $"Focused final-BIN check failed: Spyro zapped-filter word/hash were 0x{zappedFilterWord:X8}/{zappedFilterHash}.");
+    }
+
+    uint copyBufferAddress = 0x8007AA38u + (uint)overlayBytes;
+    uint sceneEndAddress = copyBufferAddress + 0xF5220u;
+    int polygonMargin = checked((int)(0x80187BB0u - sceneEndAddress));
+    if (copyBufferAddress != 0x80092238 || copyBufferAddress > 0x800926D4 ||
+        sceneEndAddress != 0x80187458 || polygonMargin != 0x758 || polygonMargin < 0x2BC)
+    {
+        throw new InvalidOperationException(
+            $"Focused final-BIN check failed: copy buffer/scene end/polygon margin were 0x{copyBufferAddress:X8}/0x{sceneEndAddress:X8}/0x{polygonMargin:X}.");
+    }
 }
 
 async Task ReportCrossLevelSourceRecordCandidateAppend(LevelDefinition level, List<Moby> sourceMobys)
@@ -16606,6 +21331,1038 @@ async Task ExportCurrentStoneHillSpringCandidateOnly(LevelDefinition level)
             ? "Stone Hill Peace Keepers T80-T83 native no-contained-helper Spring Chest candidate"
             : "Stone Hill Peace Keepers T80-T83 native contained-helper Spring Chest candidate",
         allowPlanOnlyActorPackageImports: true);
+}
+
+async Task ReportCrossLevelRecipePersistenceSmoke()
+{
+    string outDir = Path.Combine(workspace.RootPath, "_local", "smoke");
+    Directory.CreateDirectory(outDir);
+    string path = Path.Combine(outDir, "cross-level-recipe-persistence-smoke-native-edits.json");
+    Vector3f position = new(100, 200, 300);
+    Moby saved = new()
+    {
+        Index = 0,
+        TrueIndex = 0,
+        LegacyIndex = MobyLoader.GetLegacyAliasIndex(0),
+        Position = position,
+        OriginalPosition = position,
+        Type = 0x20,
+        OriginalType = 0x20,
+        State = 0,
+        OriginalState = 0,
+        SourceByte36 = 0x49,
+        OriginalSourceByte36 = 0x49,
+        SourceByte37 = 0x01,
+        OriginalSourceByte37 = 0x01,
+        SourceByte4F = 0,
+        OriginalSourceByte4F = 0,
+        Flag4A = 0x10,
+        OriginalFlag4A = 0x10,
+        Flag4B = 0x55,
+        OriginalFlag4B = 0x55,
+        Color = Moby.ColorForType(0x20),
+        Label = "Recipe persistence Spring Chest",
+        OriginalLabel = "Recipe persistence Spring Chest",
+        PatchStatus = "experimental-actor-package-swap",
+        CrossLevelTemplateId = CurrentStoneHillSpringTemplateId,
+        CrossLevelFamily = "springChest",
+        CrossLevelSourceLevelKey = "PeaceKeepers",
+        CrossLevelSourceLevelName = "Peace Keepers",
+        CrossLevelSourceTrueIndex = 70,
+        CrossLevelRequiredExporterFeature = "ActorPackageSwapIntoUnusedRoot",
+        CrossLevelRecipeId = ArtisansSpringRecipeId,
+        IsAdded = true
+    };
+
+    await MobyEditStore.SaveAsync(path, [saved], "Cross-level recipe persistence smoke");
+    List<Moby> loaded = [];
+    int applied = MobyEditStore.Load(path, loaded);
+    Moby roundTrip = loaded.Single();
+    if (applied != 1 ||
+        !string.Equals(roundTrip.CrossLevelTemplateId, saved.CrossLevelTemplateId, StringComparison.Ordinal) ||
+        !string.Equals(roundTrip.CrossLevelRecipeId, saved.CrossLevelRecipeId, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Pinned cross-level recipe metadata did not survive the save/load roundtrip.");
+    }
+
+    using FileStream stream = File.OpenRead(path);
+    using JsonDocument document = JsonDocument.Parse(stream);
+    JsonElement template = document.RootElement.GetProperty("edits")[0].GetProperty("crossLevelTemplate");
+    if (!string.Equals(ReadJsonString(template, "recipeId"), ArtisansSpringRecipeId, StringComparison.Ordinal))
+        throw new InvalidOperationException("Pinned cross-level recipe metadata was not written into crossLevelTemplate.recipeId.");
+
+    Console.WriteLine($"Cross-level recipe persistence: saved and reloaded {ArtisansSpringRecipeId}, artifact={path}");
+}
+
+async Task ExportArtisansSpringCandidateOnly()
+{
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("Could not find the source Spyro BIN image for the Artisans Spring Chest candidate export.", sourceImage);
+
+    LevelDefinition level = catalog.FindByKey("artisans")
+        ?? throw new InvalidOperationException("Artisans is missing from the level catalog.");
+    string cachePath = Path.Combine(workspace.RootPath, "editor-cache", "artisans-mobys.json");
+    if (!File.Exists(cachePath))
+        throw new FileNotFoundException("Could not find the Artisans moby cache needed to place the Spring Chest candidate.", cachePath);
+
+    List<Moby> sourceMobys = MobyLoader.LoadCached(cachePath).ToList();
+    Moby anchor = sourceMobys.FirstOrDefault(moby =>
+        moby.TrueIndex == 50 &&
+        moby.SourceByte36 == 0xC2 &&
+        moby.SourceByte37 == 0x00)
+        ?? sourceMobys.First(moby => moby.SourceByte36 == 0xC2 && moby.SourceByte37 == 0x00);
+    int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
+    int controllerTrueIndex = level.SourceRecordCount;
+    int shellTrueIndex = controllerTrueIndex + 1;
+    Vector3f position = new(anchor.Position.X, anchor.Position.Y + 160f, anchor.Position.Z);
+
+    Moby controller = new()
+    {
+        Index = nextIndex,
+        TrueIndex = controllerTrueIndex,
+        LegacyIndex = MobyLoader.GetLegacyAliasIndex(controllerTrueIndex),
+        Position = position,
+        OriginalPosition = position,
+        Type = 0x20,
+        OriginalType = 0x20,
+        State = 0,
+        OriginalState = 0,
+        SourceByte36 = 0xC2,
+        OriginalSourceByte36 = 0xC2,
+        SourceByte37 = 0x00,
+        OriginalSourceByte37 = 0x00,
+        SourceByte4F = 0,
+        OriginalSourceByte4F = 0,
+        Flag4A = 0x10,
+        OriginalFlag4A = 0x10,
+        Flag4B = 0x55,
+        OriginalFlag4B = 0x55,
+        Color = Moby.ColorForType(0x20),
+        Label = "Spring Chest local controller",
+        OriginalLabel = "Spring Chest local controller",
+        CandidateKind = "Control",
+        BehaviorNote = "Hidden Artisans-local 0x00C2 controller owned by the visible imported Spring Chest shell.",
+        PatchStatus = "supported-lightweight-object",
+        PatchLead = "Artisans-local controller row for the v159 Spring Chest portability test.",
+        CrossLevelTemplateId = "common.spring_chest_controller.artisans.local00c2",
+        CrossLevelFamily = "springChest",
+        CrossLevelSourceLevelKey = "Artisans",
+        CrossLevelSourceLevelName = "Artisans",
+        CrossLevelSourceTrueIndex = anchor.TrueIndex,
+        CrossLevelRequiredExporterFeature = "DirectSourceRecordAppend",
+        SourceCloneLevelKey = level.Key,
+        SourceCloneLevelName = level.DisplayName,
+        SourceCloneTrueIndex = anchor.TrueIndex,
+        IsAdded = true
+    };
+    Moby shell = new()
+    {
+        Index = nextIndex + 1,
+        TrueIndex = shellTrueIndex,
+        LegacyIndex = MobyLoader.GetLegacyAliasIndex(shellTrueIndex),
+        Position = position,
+        OriginalPosition = position,
+        Type = 0x20,
+        OriginalType = 0x20,
+        State = 0,
+        OriginalState = 0,
+        SourceByte36 = 0x49,
+        OriginalSourceByte36 = 0x49,
+        SourceByte37 = 0x01,
+        OriginalSourceByte37 = 0x01,
+        SourceByte4F = 0,
+        OriginalSourceByte4F = 0,
+        Flag4A = 0x10,
+        OriginalFlag4A = 0xFF,
+        Flag4B = 0x55,
+        OriginalFlag4B = 0x55,
+        Color = Moby.ColorForType(0x20),
+        Label = "Spring Chest",
+        OriginalLabel = "Spring Chest",
+        PatchStatus = "experimental-actor-package-swap",
+        PatchLead = "Peace Keepers T70 shell using the proven v159 helper lifecycle in Artisans.",
+        CrossLevelTemplateId = CurrentStoneHillSpringTemplateId,
+        CrossLevelFamily = "springChest",
+        CrossLevelSourceLevelKey = "PeaceKeepers",
+        CrossLevelSourceLevelName = "Peace Keepers",
+        CrossLevelSourceTrueIndex = 70,
+        CrossLevelRequiredExporterFeature = "ActorPackageSwapIntoUnusedRoot",
+        CrossLevelRecipeId = ArtisansSpringRecipeId,
+        IsAdded = true
+    };
+
+    string objectsDir = Path.Combine(workspace.RootPath, "_local", "objects");
+    Directory.CreateDirectory(objectsDir);
+    string nativeEditsPath = Path.Combine(objectsDir, $"{ArtisansSpringCandidateSlug}-native-edits.json");
+    await MobyEditStore.SaveAsync(nativeEditsPath, [controller, shell], "Artisans Spring Chest v159 portability test");
+    AddSpringChestBluePreHitSourceByteEdits(nativeEditsPath);
+
+    string outputPrefix = Path.Combine(objectsDir, ArtisansSpringCandidateSlug);
+    MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        DiscImageLocator.FindCueForImage(sourceImage),
+        $"{outputPrefix}.bin",
+        $"{outputPrefix}.cue",
+        level,
+        nativeEditsPath,
+        allowPlanOnlyActorPackageImports: true);
+    MobyActorPackageImportPreview preview = plan.PackageImportPreviews.Single(item =>
+        string.Equals(item.TemplateId, CurrentStoneHillSpringTemplateId, StringComparison.OrdinalIgnoreCase));
+    if (!string.Equals(preview.RecipeId, ArtisansSpringRecipeId, StringComparison.OrdinalIgnoreCase) ||
+        preview.CanWriteImage ||
+        !preview.RecipeStatus.StartsWith("in-game-blocked", StringComparison.OrdinalIgnoreCase) ||
+        !preview.GuardReason.Contains("Life Statue", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("The unsafe Artisans Spring Chest resident-root replacement was not blocked for its dynamic Life Statue dependency.");
+    }
+    if (preview.CopySegments.Count != 1 ||
+        preview.CopySegments[0].ByteLength != 0x0528 ||
+        !string.Equals(preview.CopySegments[0].TargetStart, "0x1B0140", StringComparison.OrdinalIgnoreCase) ||
+        preview.RootEntries.Count != 1 ||
+        !string.Equals(preview.RootEntries[0].Operation, "replace", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(preview.RootEntries[0].TargetRootSlot, "0x84", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(preview.RootEntries[0].TargetRoot, "0x1B0140", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(preview.RootEntries[0].TargetActorId, "0x0149", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(preview.RootEntries[0].ExistingActorId, "0x000E", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("The blocked Artisans Spring Chest evidence bundle changed unexpectedly.");
+    }
+    if (plan.Patches.Any(patch => patch.Kind.Contains("actor-package", StringComparison.OrdinalIgnoreCase)) ||
+        plan.Patches.Any(patch => patch.Kind.Contains("spring-chest-helper", StringComparison.OrdinalIgnoreCase)) ||
+        plan.Patches.Any(patch => patch.TrueIndex == shellTrueIndex))
+    {
+        throw new InvalidOperationException("The blocked Artisans Spring Chest recipe still emitted package, helper, or visible shell patches.");
+    }
+    Console.WriteLine($"Artisans Spring Chest failed resident-root recipe blocked: {preview.GuardReason}");
+}
+
+async Task ExportArtisansKeyChestCandidateOnly()
+{
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("Could not find the source Spyro BIN image for the Artisans Key Chest candidate export.", sourceImage);
+
+    LevelDefinition level = catalog.FindByKey("artisans")
+        ?? throw new InvalidOperationException("Artisans is missing from the level catalog.");
+    string cachePath = Path.Combine(workspace.RootPath, "editor-cache", "artisans-mobys.json");
+    if (!File.Exists(cachePath))
+        throw new FileNotFoundException("Could not find the Artisans moby cache needed to place the Key Chest candidate.", cachePath);
+
+    List<Moby> sourceMobys = MobyLoader.LoadCached(cachePath).ToList();
+    Moby anchor = sourceMobys.FirstOrDefault(moby => moby.TrueIndex == 50)
+        ?? sourceMobys.First(moby => moby.TrueIndex >= 0 && moby.TrueIndex < level.SourceRecordCount);
+    int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
+    int keyChestTrueIndex = level.SourceRecordCount;
+    int keyTrueIndex = keyChestTrueIndex + 1;
+    Vector3f chestPosition = new(anchor.Position.X, anchor.Position.Y + 160f, anchor.Position.Z);
+    Vector3f keyPosition = new(anchor.Position.X - 160f, anchor.Position.Y + 160f, anchor.Position.Z);
+
+    Moby keyChest = new()
+    {
+        Index = nextIndex,
+        TrueIndex = keyChestTrueIndex,
+        LegacyIndex = MobyLoader.GetLegacyAliasIndex(keyChestTrueIndex),
+        Position = chestPosition,
+        OriginalPosition = chestPosition,
+        Type = 0x20,
+        OriginalType = 0x20,
+        State = 0,
+        OriginalState = 0,
+        SourceByte36 = 0xAE,
+        OriginalSourceByte36 = 0xAE,
+        SourceByte37 = 0,
+        OriginalSourceByte37 = 0,
+        SourceByte4F = 0,
+        OriginalSourceByte4F = 0,
+        Flag4A = 0x10,
+        OriginalFlag4A = 0x10,
+        Flag4B = 0x54,
+        OriginalFlag4B = 0x54,
+        Color = Moby.ColorForType(0x20),
+        Label = "Key Chest",
+        OriginalLabel = "Key Chest",
+        PatchStatus = "experimental-actor-package-swap",
+        PatchLead = "Peace Keepers T79 Key Chest paired with an owned Key in Artisans.",
+        CrossLevelTemplateId = "common.locked_chest.peacekeepers.t79",
+        CrossLevelFamily = "lockedChest",
+        CrossLevelSourceLevelKey = "PeaceKeepers",
+        CrossLevelSourceLevelName = "Peace Keepers",
+        CrossLevelSourceTrueIndex = 79,
+        CrossLevelRequiredExporterFeature = "ActorPackageSwapIntoUnusedRoot",
+        CrossLevelRecipeId = ArtisansKeyChestRecipeId,
+        IsAdded = true
+    };
+    Moby key = new()
+    {
+        Index = nextIndex + 1,
+        TrueIndex = keyTrueIndex,
+        LegacyIndex = MobyLoader.GetLegacyAliasIndex(keyTrueIndex),
+        Position = keyPosition,
+        OriginalPosition = keyPosition,
+        Type = 0x18,
+        OriginalType = 0x18,
+        State = 0,
+        OriginalState = 0,
+        SourceByte36 = 0xAD,
+        OriginalSourceByte36 = 0xAD,
+        SourceByte37 = 0,
+        OriginalSourceByte37 = 0,
+        SourceByte4F = 0x02,
+        OriginalSourceByte4F = 0x02,
+        Flag4A = 0x40,
+        OriginalFlag4A = 0x40,
+        Flag4B = 0xFF,
+        OriginalFlag4B = 0xFF,
+        Color = GemValue.Yellow.Color,
+        Label = "Key",
+        OriginalLabel = "Key",
+        PatchStatus = "supported-lightweight-object",
+        PatchLead = "Owned matching key for the Artisans Key Chest portability candidate.",
+        CrossLevelTemplateId = "common.key.peacekeepers.t78",
+        CrossLevelFamily = "key",
+        CrossLevelSourceLevelKey = "PeaceKeepers",
+        CrossLevelSourceLevelName = "Peace Keepers",
+        CrossLevelSourceTrueIndex = 78,
+        CrossLevelRequiredExporterFeature = "DirectSourceRecordAppend",
+        IsAdded = true
+    };
+
+    string objectsDir = Path.Combine(workspace.RootPath, "_local", "objects");
+    Directory.CreateDirectory(objectsDir);
+    string nativeEditsPath = Path.Combine(objectsDir, $"{ArtisansKeyChestCandidateSlug}-native-edits.json");
+    await MobyEditStore.SaveAsync(nativeEditsPath, [keyChest, key], "Artisans Key + Locked Chest runtime bundle test");
+
+    string outputPrefix = Path.Combine(objectsDir, ArtisansKeyChestCandidateSlug);
+    MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        DiscImageLocator.FindCueForImage(sourceImage),
+        $"{outputPrefix}.bin",
+        $"{outputPrefix}.cue",
+        level,
+        nativeEditsPath,
+        allowPlanOnlyActorPackageImports: true);
+    MobyActorPackageImportPreview preview = plan.PackageImportPreviews.Single(item =>
+        string.Equals(item.TemplateId, "common.locked_chest.peacekeepers.t79", StringComparison.OrdinalIgnoreCase));
+    if (!string.Equals(preview.RecipeId, ArtisansKeyChestRecipeId, StringComparison.OrdinalIgnoreCase) ||
+        preview.CanWriteImage ||
+        !preview.GuardReason.Contains("actor-package layout safety", StringComparison.OrdinalIgnoreCase) ||
+        !preview.GuardReason.Contains("outside native actor/model", StringComparison.OrdinalIgnoreCase) ||
+        preview.CopySegments.Count != 0 ||
+        preview.RootEntries.Count != 0)
+    {
+        throw new InvalidOperationException("The failed Artisans Key Chest package was not rejected before unsafe package/root preview composition.");
+    }
+    if (plan.Patches.Any(patch => patch.Kind.Contains("actor-package", StringComparison.OrdinalIgnoreCase)) ||
+        plan.Patches.Any(patch => string.Equals(patch.MobyLabel, "Key Chest", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException($"The blocked Artisans Key Chest recipe still emitted package or Key Chest source-row patches: {string.Join(", ", plan.Patches.Select(patch => $"{patch.Kind}:{patch.MobyLabel}:T{patch.TrueIndex}"))}. Skipped: {string.Join(" | ", plan.SkippedEdits)}");
+    }
+    Console.WriteLine($"Artisans Key Chest failed package recipe blocked: {preview.GuardReason}");
+}
+
+async Task ExportArtisansExpandedSpringCandidateOnly()
+{
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("Could not find the retail Spyro BIN image for the expanded Artisans Spring Chest candidate.", sourceImage);
+    if (!File.Exists(wadAnalysis))
+        throw new FileNotFoundException("Could not find the complete WAD analysis for the expanded Artisans Spring Chest candidate.", wadAnalysis);
+
+    string objectsDir = Path.Combine(workspace.RootPath, "_local", "objects");
+    Directory.CreateDirectory(objectsDir);
+    string baseCandidateImage = Path.Combine(objectsDir, $"{ArtisansFailedSpringGapCandidateSlug}.bin");
+    if (!File.Exists(baseCandidateImage))
+    {
+        throw new FileNotFoundException(
+            "The failed v160 evidence image is required as a staging image because it contains the proven v159 source/helper bundle.",
+            baseCandidateImage);
+    }
+
+    string outputPrefix = Path.Combine(objectsDir, ArtisansExpandedSpringCandidateSlug);
+    CrossLevelActorPackageExpansionCandidatePlan plan = CrossLevelActorPackageExpansionCandidateExporter.Export(
+        new CrossLevelActorPackageExpansionCandidateRequest(
+            RetailImagePath: sourceImage,
+            RetailCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+            BaseCandidateImagePath: baseCandidateImage,
+            WadAnalysisPath: wadAnalysis,
+            OutputPrefix: outputPrefix,
+            Label: "Artisans Spring Chest v159 bundle with expanded actor/model subfile",
+            TargetWadEntry: 10,
+            DonorPackageWadOffset: 0x1A43C50,
+            PackageLength: 0x0528,
+            ActorId: 0x0149,
+            UnsafeTargetEntryOffset: 0x30800,
+            RuntimePayloadAddress: 0x8007314C,
+            RuntimePayloadLength: 0x400,
+            RuntimePointerRelocations:
+            [
+                new("Artisans source-table base", 0x8016D3E8, 0x8016DBE8, 1),
+                new("Spring controller T174", 0x80170FB8, 0x801717B8, 2),
+                new("Spring shell T175", 0x80171010, 0x80171810, 1),
+                new("Spring reward scratch T176", 0x80171068, 0x80171868, 3)
+            ],
+            ScenePointerFixupAppend: new CrossLevelScenePointerFixupAppend(
+                Label: "Appended Spring controller/shell special-data pointers",
+                SceneSubfileIndex: 3,
+                CountOffset: 0x13ED8,
+                ListAppendOffset: 0x14200,
+                ExpectedCount: 0xC9,
+                ExpectedPreviousFieldOffset: 0xDE24,
+                NewFieldOffsets: [0xDE7C, 0xDED4],
+                ExpectedFieldValues: [0x00011EDC, 0x00011EE4])));
+
+    const string expectedPackageHash = "0b7994a49d43d55cf2a36417ab78bb3337bfde17b36923d9424809aa2bc8d354";
+    CrossLevelScenePointerFixupAppendResult fixups = plan.ScenePointerFixupAppend
+        ?? throw new InvalidOperationException("Expanded Spring candidate did not report its required scene pointer fixups.");
+    if (plan.TargetWadEntry != 10 ||
+        plan.OriginalTargetEntrySize != 0x383000 ||
+        plan.ExpandedTargetEntrySize != 0x383800 ||
+        plan.ActorSubfileIndex != 2 ||
+        !string.Equals(plan.OriginalActorSubfileStart, "0x17C000", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(plan.OriginalActorSubfileEnd, "0x1C9800", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(plan.ExpandedActorSubfileEnd, "0x1CA000", StringComparison.OrdinalIgnoreCase) ||
+        plan.PackageLength != 0x0528 ||
+        !string.Equals(plan.PackageSha256, expectedPackageHash, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(plan.NewPackageRoot, "0x1C9800", StringComparison.OrdinalIgnoreCase) ||
+        plan.RootIndex != 35 ||
+        !string.Equals(plan.RootSlot, "0xDC", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(plan.ActorIdSlot, "0x196", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(plan.ActorId, "0x0149", StringComparison.OrdinalIgnoreCase) ||
+        plan.WadGrowthBytes != 0x800 ||
+        plan.RelocatedExecutableLba != plan.OriginalExecutableLba + 1 ||
+        !plan.UnsafeGapRestored ||
+        !plan.ShiftedEntrySuffixPreserved ||
+        !plan.FinalActorLayoutValid ||
+        plan.RuntimePointerRelocations.Sum(item => item.MatchCount) != 7 ||
+        fixups.OriginalCount != 0xC9 ||
+        fixups.FinalCount != 0xCB ||
+        !string.Equals(fixups.SceneSubfileStart, "0x1CA000", StringComparison.OrdinalIgnoreCase) ||
+        !fixups.AppendedFieldOffsets.SequenceEqual(["0xDE7C", "0xDED4"], StringComparer.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException(
+            $"Expanded Artisans Spring candidate failed its exact structural contract: {JsonSerializer.Serialize(plan)}");
+    }
+
+    string validationPath = $"{outputPrefix}.candidate-validation.md";
+    string resultPath = $"{outputPrefix}.candidate-result.json";
+    string validation = $"""
+        # Artisans Expanded-Actor Spring Chest Candidate
+
+        > **STRUCTURALLY VERIFIED; IN-GAME UNTESTED.** This replaces the two black-screened gap/root candidates. Do not promote it into normal Create BIN until every runtime check below passes.
+
+        - CUE: `{plan.OutputCuePath}`
+        - BIN: `{plan.OutputImagePath}`
+        - Expansion plan: `{plan.PlanPath}`
+        - Result file: `{resultPath}`
+        - Staging evidence image: `{baseCandidateImage}`
+
+        ## What changed from the failed v160 CUE
+
+        - Restored the invalid package copy at Artisans entry offset `0x30800` to retail zero bytes.
+        - Appended the byte-identical Peace Keepers `0x0149` package at the former end of Artisans actor/model subfile 2: `0x1C9800`.
+        - Grew that subfile and the WAD by exactly `0x800`, then moved the executable by one sector with ISO-directory readback.
+        - Registered root 35 in ascending order at `0xDC`, with actor ID `0x0149` at `0x196`.
+        - Shifted the Artisans scene to `0x1CA000` while preserving all later nested subfiles byte-for-byte except the two requested source-pointer fixups.
+        - Added fixups for appended T174/T175 (`0xDE7C`, `0xDED4`) and changed the fixup count from `0xC9` to `0xCB`.
+        - Relocated seven v159 helper address loads by `+0x800`; the old source-table/controller/shell/reward addresses are absent from the helper readback.
+
+        ## Required DuckStation proof
+
+        1. Boot this CUE and enter Artisans. Confirm the level remains visible when approaching the Spring Chest.
+        2. Confirm the Spring Chest appears normally.
+        3. Flame it once and charge it once. Each path should produce one blue-gem pop arc.
+        4. Let one gem miss Spyro; it should return and rearm without becoming a parked Sparx target.
+        5. Collect the next gem; treasure should increase by exactly 5 and the chest/visual should retire once.
+        6. Open Artisans' native Life Chest and confirm its extra-life statue still appears and works.
+        7. Confirm Sparx, a nearby native chest, dragons, portals, and surrounding actors remain normal.
+
+        If any black screen, freeze, missing Life Statue, missing Sparx, repeated reward, or nearby corruption occurs, mark `{resultPath}` failed and do not use the candidate again.
+        """;
+    await File.WriteAllTextAsync(validationPath, validation);
+
+    if (!File.Exists(resultPath))
+    {
+        string recipeId = "artisans.peacekeepers.springChest.package.expandedActorSubfileV159Helper.v3";
+        var result = new
+        {
+            generatedBy = "Spyro.Editor.Smoke",
+            purpose = "Record the actual DuckStation result for the structurally repaired Artisans Spring Chest candidate. This file is not overwritten by later exports.",
+            candidate = new
+            {
+                levelKey = "artisans",
+                levelName = "Artisans",
+                cuePath = plan.OutputCuePath,
+                binPath = plan.OutputImagePath,
+                expansionPlanPath = plan.PlanPath,
+                baseFailedCandidatePath = baseCandidateImage,
+                recipeId,
+                recipeStatus = "in-game-untested-expanded-actor-subfile"
+            },
+            result = new
+            {
+                status = "untested",
+                testedAt = (string?)null,
+                tester = (string?)null,
+                emulator = "DuckStation",
+                bootedLevel = (bool?)null,
+                objectAppeared = (bool?)null,
+                behaviorCorrect = (bool?)null,
+                nativeLifeChestStillWorks = (bool?)null,
+                sparxStillWorks = (bool?)null,
+                noNearbyRegression = (bool?)null,
+                notes = ""
+            },
+            behaviorChecks = new[]
+            {
+                new { id = "expanded-spring-approach-stable", label = "Approaching the Spring Chest does not black-screen or freeze DuckStation.", passed = (bool?)null },
+                new { id = "expanded-spring-appears", label = "The Spring Chest appears normally.", passed = (bool?)null },
+                new { id = "expanded-spring-flame-charge", label = "Flame and charge each produce one blue-gem pop arc.", passed = (bool?)null },
+                new { id = "expanded-spring-miss-return", label = "An uncollected gem returns and rearms without becoming a parked Sparx target.", passed = (bool?)null },
+                new { id = "expanded-spring-collect-once", label = "Collecting the next gem awards exactly 5 and retires the chest/visual once.", passed = (bool?)null },
+                new { id = "expanded-spring-life-statue", label = "Artisans' native Life Chest still releases a working extra-life statue.", passed = (bool?)null },
+                new { id = "expanded-spring-sparx", label = "Sparx remains visible and functional.", passed = (bool?)null },
+                new { id = "expanded-spring-nearby", label = "Native chests, dragons, portals, and surrounding actors remain normal.", passed = (bool?)null }
+            }
+        };
+        await File.WriteAllTextAsync(resultPath, JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    Console.WriteLine($"Artisans expanded-actor Spring Chest candidate: {plan.OutputCuePath}");
+    Console.WriteLine($"Structural verification: {plan.Verification}");
+    Console.WriteLine($"Runtime evidence form: {resultPath}");
+}
+
+async Task ExportArtisansKeyGatedChestCandidateOnly()
+{
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("Could not find the clean retail Spyro BIN image for the Artisans Key-gated chest candidate.", sourceImage);
+
+    LevelDefinition stoneHill = catalog.FindByKey("stonehill") ??
+        throw new InvalidOperationException("Stone Hill is missing from the level catalog.");
+    try
+    {
+        _ = SpringChestInGamePatchBuilder.BuildSmallCaveEntryHookOnlyPatches(sourceImage, stoneHill);
+        throw new InvalidOperationException("The known-unsafe 0x80073924 Spring entry-hook route was not blocked.");
+    }
+    catch (InvalidDataException ex) when (
+        ex.Message.Contains("PsyQ interrupt-system state", StringComparison.OrdinalIgnoreCase))
+    {
+        // Expected: this is live startup state, even though its retail EXE bytes
+        // begin with a long zero run. Keep this proof coupled to every Key export.
+    }
+
+    string objectsDir = Path.Combine(workspace.RootPath, "_local", "objects");
+    Directory.CreateDirectory(objectsDir);
+    string outputPrefix = Path.Combine(objectsDir, ArtisansKeyGatedChestCandidateSlug);
+    string outputImagePath = $"{outputPrefix}.bin";
+    string outputCuePath = $"{outputPrefix}.cue";
+    string planPath = $"{outputPrefix}.key-gated-plan.json";
+    string validationPath = $"{outputPrefix}.candidate-validation.md";
+    string resultPath = $"{outputPrefix}.candidate-result.json";
+
+    ArtisansKeyGatedWoodenChestCandidateResult exported =
+        ArtisansKeyGatedWoodenChestCandidateExporter.Export(
+            new ArtisansKeyGatedWoodenChestCandidateRequest(
+                SourceImagePath: sourceImage,
+                OutputImagePath: outputImagePath));
+    ArtisansKeyGatedWoodenChestCandidatePlan plan = exported.Plan;
+    string[] expectedAddresses =
+    [
+        "wad:0x9DBEDC",
+        "wad:0x9D7E7C",
+        "wad:0x9DE200",
+        "wad:0x9DDED8",
+        "exe:0x8007314C",
+        "wad:0x7F5960",
+        "wad:0x7F7620",
+        "wad:0x9D42A8"
+    ];
+    bool exactContract = exported.Verified &&
+        string.Equals(plan.RecipeId, ArtisansKeyGatedWoodenChestCandidateExporter.RecipeId, StringComparison.Ordinal) &&
+        string.Equals(plan.KeyDonorLevel, "Peace Keepers", StringComparison.Ordinal) &&
+        plan.KeyDonorTrueIndex == 78 &&
+        string.Equals(plan.KeyVisualDonorLevel, "Artisans", StringComparison.Ordinal) &&
+        plan.KeyVisualDonorTrueIndex == 67 &&
+        string.Equals(plan.KeyVisualClass, "0x0054 (resident green gem)", StringComparison.Ordinal) &&
+        plan.AppendedKeyTrueIndex == 174 &&
+        plan.GatedChestTrueIndex == 50 &&
+        plan.OriginalSourceCount == 174 &&
+        plan.FinalSourceCount == 175 &&
+        plan.ScenePointerFixupAppended &&
+        plan.OriginalScenePointerFixupCount == 0xC9 &&
+        plan.FinalScenePointerFixupCount == 0xCA &&
+        string.Equals(plan.AppendedScenePointerFieldOffset, "0xDE7C", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.DispatchHookAddress, "0x8007DB98", StringComparison.OrdinalIgnoreCase) &&
+        plan.DispatchDelaySlotWord.StartsWith("0x286200C3", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.GemHandlerHookAddress, "0x8007F858", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.GemHandlerResumeAddress, "0x8007F860", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.PayloadAddress, "0x8007314C", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.KeyProxyPayloadAddress, "0x800731A4", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.KeyFlagAddress, "0x80075830", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.NativeKeyHandlerAddress, "0x80082574", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.NativeWoodenChestHandlerAddress, "0x800829FC", StringComparison.OrdinalIgnoreCase) &&
+        plan.Patches.Select(patch => patch.Address).SequenceEqual(expectedAddresses, StringComparer.OrdinalIgnoreCase) &&
+        exported.OutputLength == new FileInfo(sourceImage).Length;
+    if (!exactContract)
+    {
+        try
+        {
+            if (File.Exists(outputImagePath))
+                File.Delete(outputImagePath);
+        }
+        catch (IOException)
+        {
+        }
+        throw new InvalidOperationException($"Artisans Key-gated chest candidate failed its exact structural contract: {JsonSerializer.Serialize(exported)}");
+    }
+
+    string sourceCue = DiscImageLocator.FindCueForImage(sourceImage);
+    await File.WriteAllTextAsync(
+        outputCuePath,
+        BuildSmokeCandidateCueText(sourceCue, Path.GetFileName(outputImagePath)),
+        Encoding.ASCII);
+    await File.WriteAllTextAsync(planPath, JsonSerializer.Serialize(exported, new JsonSerializerOptions { WriteIndented = true }));
+
+    string validation = $"""
+        # Artisans Key-Gated Native Chest Candidate
+
+        > **STRUCTURALLY VERIFIED; IN-GAME UNTESTED.** This is the v4 correction for the v3 result where T50 gating worked but the appended native-source-form Key was invisible. It imports no actor/model package, writes no actor root, uses the runtime-proven `0x8007314C` helper region, and leaves the PsyQ interrupt-system state at the known pre-logo failure address `0x80073924` untouched.
+
+        - CUE: `{outputCuePath}`
+        - BIN: `{outputImagePath}`
+        - Checked plan: `{planPath}`
+        - Result file: `{resultPath}`
+        - Recipe: `{plan.RecipeId}`
+
+        ## Why v3 was invisible
+
+        - Peace Keepers T78 is a native source-form Key envelope (`class 0x00AD`, `type 0x00`, update byte `0x00`). Artisans has no native Key object or Key visual initialization path to turn that source envelope into a visible resident object.
+        - The native Key handler itself is present in Artisans at `0x80082574`, so behavior code was not the missing dependency.
+        - V3 also interpreted T78's `0xEA94` pointer against the Peace Keepers data-entry base and copied 24 unrelated bytes. Moby props pointers are scene-relative: the exact native target is Peace Keepers scene `0x1A53000 + 0xEA94 = 0x1A61A94`, and the native Key owns exactly four zero-initialized props bytes there.
+        - T174's corrected Artisans target is scene `0x9CA000 + 0x11EDC = 0x9DBEDC`. V4 guards that exact four-byte blank slot and registers T174's first word in the scene fixup list (`0xC9` to `0xCA`).
+
+        ## What v4 changes
+
+        - Appends a deliberate hybrid at Artisans T174: native Artisans green gem T67 supplies resident visual class `0x0054` and visible type/update bytes `0x18/0x40`; native Peace Keepers Key T78 supplies its `0x7F` no-drop/checkpoint byte and four-byte props contract.
+        - Hooks the shared Artisans gem-handler prologue at `0x8007F858`. Runtime T174 alone jumps to the native Key handler at `0x80082574`; every other gem replays the two displaced retail instructions and resumes at `0x8007F860`.
+        - Places the visible green-gem Key proxy beside native wooden chest T50.
+        - Routes only actor `0x00C2` through an 88-byte checked shim; every C2 object except T50 immediately resumes the original handler.
+        - Installs the T50 gate and 40-byte T174 handler route in the separately runtime-proven v159 helper region beginning at `0x8007314C`; the PsyQ interrupt-system state overwritten by v2 at `0x80073924` is verified byte-identical to retail.
+        - Before the Key is collected, only T50's flame/charge damage bits are filtered.
+        - After the Key is collected, one real hit consumes the Key flag and resumes T50's unchanged native one-shot chest/reward path.
+        - Artisans' complete actor/model subfile, native T50 source record, C2 dispatch delay slot, and unused cave tail passed byte-for-byte readback.
+
+        ## Intentional limitation
+
+        T174 intentionally looks like a green gem, not a Key, and T50 still looks and sounds like an Artisans wooden chest. This experiment proves the resident-visual/native-handler route without importing the missing cross-level visual packages; it does **not** claim that Artisans has a native Key or `0x00AE` Locked Chest model package.
+
+        ## Required DuckStation proof
+
+        1. Boot the v4 CUE directly with **no carried savestate**, then use a fresh/new game where T50 is intact. T174 occupies persistent-mask word 5 bit 14, so a savestate or save touched by an earlier appended-T174 candidate can incorrectly retire this row before the test begins.
+        2. Confirm the new **green-gem Key proxy** is visible near T50 and DuckStation stays stable while approaching both objects.
+        3. Before collecting the Key, flame and charge T50; it must remain intact and award nothing.
+        4. Collect the Key, then flame or charge T50 once; it should break normally, consume the Key, and award its one native green gem exactly once.
+        5. Break another Artisans wooden chest and confirm it still works normally without needing a Key.
+        6. Confirm portals, dragons, Sparx, the Life Chest/statue, and surrounding actors remain normal.
+
+        Any invisible proxy, pre-Key break, black screen, freeze, stuck proxy, repeated reward, changed native gem behavior, or unrelated chest regression is a failure. Do not promote this route into normal Create BIN until every check passes.
+        """;
+    await File.WriteAllTextAsync(validationPath, validation);
+
+    if (!File.Exists(resultPath))
+    {
+        var evidence = new
+        {
+            generatedBy = "Spyro.Editor.Smoke",
+            purpose = "Record the actual DuckStation result for v4's resident green-gem visual / native Key handler proxy. This file is not overwritten by later exports.",
+            candidate = new
+            {
+                levelKey = "artisans",
+                levelName = "Artisans",
+                cuePath = outputCuePath,
+                binPath = outputImagePath,
+                planPath,
+                recipeId = plan.RecipeId,
+                recipeStatus = "in-game-untested-v4-resident-green-gem-visual-native-key-handler-proxy",
+                intentionalVisual = "Green gem at T174 behaves as the Key; T50 remains a native Artisans wooden chest"
+            },
+            result = new
+            {
+                status = "untested",
+                testedAt = (string?)null,
+                tester = (string?)null,
+                emulator = "DuckStation",
+                freshGameNoCarriedSavestate = (bool?)null,
+                bootedLevel = (bool?)null,
+                greenGemKeyProxyVisible = (bool?)null,
+                approachStable = (bool?)null,
+                blockedBeforeKey = (bool?)null,
+                openedAfterKey = (bool?)null,
+                keyConsumed = (bool?)null,
+                nativeRewardExactlyOnce = (bool?)null,
+                otherWoodenChestsNormal = (bool?)null,
+                noNearbyRegression = (bool?)null,
+                notes = ""
+            },
+            behaviorChecks = new[]
+            {
+                new { id = "key-proxy-clean-session", label = "Test used a direct CUE boot, no carried savestate, and a fresh/new game with intact T50.", passed = (bool?)null },
+                new { id = "key-proxy-approach-stable", label = "Approaching the green-gem Key proxy and T50 does not black-screen or freeze DuckStation.", passed = (bool?)null },
+                new { id = "key-proxy-key-visible", label = "The appended green-gem Key proxy is visible near T50.", passed = (bool?)null },
+                new { id = "key-proxy-blocks-before-key", label = "Flame and charge cannot break T50 before collecting the Key.", passed = (bool?)null },
+                new { id = "key-proxy-opens-after-key", label = "One flame or charge hit breaks T50 after collecting the Key.", passed = (bool?)null },
+                new { id = "key-proxy-consumes-key", label = "Opening T50 consumes the Key flag once.", passed = (bool?)null },
+                new { id = "key-proxy-native-reward", label = "T50 awards its one native green gem exactly once.", passed = (bool?)null },
+                new { id = "key-proxy-other-c2", label = "Another Artisans wooden chest still breaks without a Key.", passed = (bool?)null },
+                new { id = "key-proxy-native-gems", label = "Existing Artisans red and green gems still spin, sparkle, and collect normally.", passed = (bool?)null },
+                new { id = "key-proxy-nearby", label = "Portals, dragons, Sparx, Life Chest/statue, and surrounding actors remain normal.", passed = (bool?)null }
+            }
+        };
+        await File.WriteAllTextAsync(resultPath, JsonSerializer.Serialize(evidence, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    Console.WriteLine($"Artisans package-free Key-gated chest candidate: {outputCuePath}");
+    Console.WriteLine($"Structural verification: {exported.Verification}");
+    Console.WriteLine($"Runtime evidence form: {resultPath}");
+}
+
+async Task ExportArtisansNativeLockedChestCandidateOnly()
+{
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("Could not find the clean retail Spyro BIN image for the native Artisans Locked Chest candidate.", sourceImage);
+    if (!File.Exists(wadAnalysis))
+        throw new FileNotFoundException("Could not find the retail WAD analysis for the native Artisans Locked Chest candidate.", wadAnalysis);
+
+    string objectsDir = Path.Combine(workspace.RootPath, "_local", "objects");
+    Directory.CreateDirectory(objectsDir);
+    string outputPrefix = Path.Combine(objectsDir, ArtisansNativeLockedChestCandidateSlug);
+    string outputImagePath = $"{outputPrefix}.bin";
+    string outputCuePath = $"{outputPrefix}.cue";
+    string planPath = $"{outputPrefix}.native-locked-chest-plan.json";
+    string validationPath = $"{outputPrefix}.candidate-validation.md";
+    string resultPath = $"{outputPrefix}.candidate-result.json";
+
+    ArtisansNativeLockedChestCandidateResult exported =
+        ArtisansNativeLockedChestCandidateExporter.Export(
+            new ArtisansNativeLockedChestCandidateRequest(
+                SourceImagePath: sourceImage,
+                OutputImagePath: outputImagePath,
+                WadAnalysisPath: wadAnalysis));
+    ArtisansNativeLockedChestCandidatePlan plan = exported.Plan;
+    bool exactContract = exported.Verified &&
+        string.Equals(plan.RecipeId, ArtisansNativeLockedChestCandidateExporter.RecipeId, StringComparison.Ordinal) &&
+        plan.WadLba == 37 &&
+        plan.OriginalWadSize == 0x6927000 &&
+        plan.ExpandedWadSize == 0x6929000 &&
+        plan.WadGrowthBytes == 0x2000 &&
+        plan.OriginalExecutableLba == 53875 &&
+        plan.RelocatedExecutableLba == 53879 &&
+        plan.OriginalOverlaySize == 0xE000 &&
+        plan.ExpandedOverlaySize == 0xE800 &&
+        string.Equals(plan.OriginalCopyBufferAddress, "0x80088620", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.RelocatedCopyBufferAddress, "0x80089238", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.HandlerPayloadAddress, "0x80088620", StringComparison.OrdinalIgnoreCase) &&
+        plan.HandlerPayloadLength == 0xBA0 &&
+        string.Equals(plan.HandlerPayloadSha256, "2ddbdb449132ead02cabd8032089539ad28a2a33fdf4d030838c988c20726325", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.FinalOverlaySha256, "c93581c05a4c70c1803ece5268ebfada34034ce76e663dcaf19da8fe0faa0459", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.KeyProxyPayloadAddress, "0x8007314C", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.AppendedKeyRuntimeAddress, "0x801733D0", StringComparison.OrdinalIgnoreCase) &&
+        plan.KeyTrueIndex == 174 &&
+        plan.LockedChestTrueIndex == 175 &&
+        plan.RewardMarkerTrueIndices.SequenceEqual([176, 177, 178, 179, 180]) &&
+        plan.RetailSourceCount == 174 &&
+        plan.KeyProxyBaselineSourceCount == 175 &&
+        plan.FinalSourceCount == 181 &&
+        plan.RetailScenePointerFixupCount == 0xC9 &&
+        plan.KeyProxyBaselineScenePointerFixupCount == 0xCA &&
+        plan.FinalScenePointerFixupCount == 0xD0 &&
+        plan.ImportedActorIds.SequenceEqual(["0x00AE", "0x0135", "0x0136", "0x0137"], StringComparer.OrdinalIgnoreCase) &&
+        string.Equals(plan.ActorPackageBundleSha256, "0ad9ff0039d980e49c8da2a4797daf24564f983182f36e573ccc615159345438", StringComparison.OrdinalIgnoreCase) &&
+        plan.ActorSubfileGrowthBytes == 0x1800 &&
+        plan.OriginalTreasureTarget == 100 &&
+        plan.FinalTreasureTarget == 110 &&
+        exported.OutputLength == new FileInfo(sourceImage).Length;
+    if (!exactContract)
+    {
+        try
+        {
+            if (File.Exists(outputImagePath))
+                File.Delete(outputImagePath);
+        }
+        catch (IOException)
+        {
+        }
+        throw new InvalidOperationException($"Artisans native Locked Chest candidate failed its exact structural contract: {JsonSerializer.Serialize(exported)}");
+    }
+
+    string sourceCue = DiscImageLocator.FindCueForImage(sourceImage);
+    await File.WriteAllTextAsync(
+        outputCuePath,
+        BuildSmokeCandidateCueText(sourceCue, Path.GetFileName(outputImagePath)),
+        Encoding.ASCII);
+    await File.WriteAllTextAsync(planPath, JsonSerializer.Serialize(exported, new JsonSerializerOptions { WriteIndented = true }));
+
+    string validation = $"""
+        # Artisans Native Locked Chest T175 Candidate
+
+        > **STRUCTURALLY VERIFIED; IN-GAME UNTESTED.** This is the first true native Locked Chest behavior test in Artisans. It keeps the runtime-proven green-gem Key proxy at T174, adds the actual Peace Keepers `0x00AE` chest at T175, and adds its five native delayed reward markers at T176-T180. It is a disposable research CUE and is not part of normal Create BIN yet.
+
+        - CUE: `{outputCuePath}`
+        - BIN: `{outputImagePath}`
+        - Checked plan: `{planPath}`
+        - Result file: `{resultPath}`
+        - Recipe: `{plan.RecipeId}`
+
+        ## Native behavior expected
+
+        - The green gem beside the chest is intentionally the Key proxy for this test.
+        - Before taking that Key, the padlocked chest stays closed. Flaming or charging is not the normal opening mechanic.
+        - After taking the Key, approach the front of the chest without attacking. The native locked-chest camera/key/open sequence should begin automatically.
+        - The chest should release exactly six gem objects worth 10 total: its direct green `+2` plus five delayed marker rewards totaling `+8`.
+        - The opening animation, sound, removal, killed state, and reward sequence should occur once. Re-entering Artisans and save/reload must not duplicate the chest or gems.
+
+        ## Deliberate first-test compromise
+
+        The real Locked Chest and all three native metal-debris model packages are installed, but the transplanted handler temporarily spawns Artisans' resident wooden fragment actors. Artisans does not yet have the metal-fragment initializer/update closure, so authentic metal debris is deferred until the behavior proof is stable.
+
+        ## Required DuckStation proof
+
+        1. Boot this CUE directly with a fresh/new game and no carried savestate from an older candidate.
+        2. Confirm both the green-gem Key proxy T174 and the padlocked Locked Chest T175 are visible and stable.
+        3. Approach the chest before collecting the Key; it must remain closed and award nothing.
+        4. Collect the green proxy, face the front of the chest, and approach without flame or charge.
+        5. Confirm one automatic native opening/camera/sound sequence and exactly six gem objects worth 10 total.
+        6. Confirm the chest remains gone after leaving/re-entering Artisans and after save/reload, with no repeated sound, animation, or rewards.
+        7. Confirm unrelated wooden chests, loose gems, Sparx, Life Chest/statue, dragons, portals, and surrounding actors still behave normally.
+
+        Any black screen, freeze, invisible Key/chest, required attack, stuck camera, missing or repeated gems, repeated opening/death, treasure total other than 110, or unrelated actor regression is a failure.
+        """;
+    await File.WriteAllTextAsync(validationPath, validation);
+
+    if (!File.Exists(resultPath))
+    {
+        var evidence = new
+        {
+            generatedBy = "Spyro.Editor.Smoke",
+            purpose = "Record the first DuckStation result for a true native Locked Chest handler/model/reward-marker bundle in Artisans. This file is not overwritten by later exports.",
+            candidate = new
+            {
+                levelKey = "artisans",
+                levelName = "Artisans",
+                cuePath = outputCuePath,
+                binPath = outputImagePath,
+                planPath,
+                recipeId = plan.RecipeId,
+                recipeStatus = "in-game-untested-native-locked-chest-handler-model-reward-bundle",
+                key = "T174 green-gem visual proxy using Artisans' resident native Key handler",
+                chest = "T175 imported Peace Keepers 0x00AE Locked Chest",
+                rewards = "T176-T180 native 0x000D delayed reward markers; six gem objects worth 10 total",
+                deliberateCompromise = "resident wooden debris actors stand in for metal debris during the first behavior proof"
+            },
+            result = new
+            {
+                status = "untested",
+                testedAt = (string?)null,
+                tester = (string?)null,
+                emulator = "DuckStation",
+                freshGameNoCarriedSavestate = (bool?)null,
+                bootedArtisans = (bool?)null,
+                keyVisible = (bool?)null,
+                lockedChestVisible = (bool?)null,
+                approachStable = (bool?)null,
+                staysClosedBeforeKey = (bool?)null,
+                opensAutomaticallyAfterKey = (bool?)null,
+                nativeCameraAndSound = (bool?)null,
+                sixGemObjects = (bool?)null,
+                tenTreasureAwarded = (bool?)null,
+                opensAndRetiresOnce = (bool?)null,
+                persistsAcrossReentry = (bool?)null,
+                persistsAcrossSaveReload = (bool?)null,
+                noNearbyRegression = (bool?)null,
+                notes = ""
+            },
+            behaviorChecks = new[]
+            {
+                new { id = "native-lock-clean-session", label = "Test used a direct CUE boot, fresh/new game, and no carried candidate savestate.", passed = (bool?)null },
+                new { id = "native-lock-visible", label = "The T174 green Key proxy and T175 padlocked chest are both visible.", passed = (bool?)null },
+                new { id = "native-lock-approach-stable", label = "Approaching either object does not black-screen, freeze, or corrupt nearby actors.", passed = (bool?)null },
+                new { id = "native-lock-before-key", label = "The chest remains closed before the Key and awards nothing.", passed = (bool?)null },
+                new { id = "native-lock-auto-open", label = "After collecting the Key, approaching from the front without attacking starts the automatic native opening sequence.", passed = (bool?)null },
+                new { id = "native-lock-camera-sound", label = "The native camera, key use, opening animation, and sound complete once.", passed = (bool?)null },
+                new { id = "native-lock-six-gems", label = "Exactly six gem objects appear and award exactly 10 treasure total.", passed = (bool?)null },
+                new { id = "native-lock-one-shot", label = "The chest retires once with no repeated animation, sound, or rewards.", passed = (bool?)null },
+                new { id = "native-lock-persistence", label = "Re-entry and save/reload do not restore or duplicate the chest/rewards.", passed = (bool?)null },
+                new { id = "native-lock-nearby", label = "Other chests, gems, Sparx, Life Chest/statue, dragons, portals, and surrounding actors remain normal.", passed = (bool?)null }
+            }
+        };
+        await File.WriteAllTextAsync(resultPath, JsonSerializer.Serialize(evidence, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    Console.WriteLine($"Artisans native Locked Chest candidate: {outputCuePath}");
+    Console.WriteLine($"Structural verification: {exported.Verification}");
+    Console.WriteLine($"Runtime evidence form: {resultPath}");
+}
+
+async Task ExportArtisansNativeLockedChestVisualCandidateOnly()
+{
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("Could not find the clean retail Spyro BIN image for the native-Key/Locked-Chest visual candidate.", sourceImage);
+    if (!File.Exists(wadAnalysis))
+        throw new FileNotFoundException("Could not find the retail WAD analysis for the native-Key/Locked-Chest visual candidate.", wadAnalysis);
+
+    string objectsDir = Path.Combine(workspace.RootPath, "_local", "objects");
+    Directory.CreateDirectory(objectsDir);
+    string outputPrefix = Path.Combine(objectsDir, ArtisansNativeLockedChestVisualCandidateSlug);
+    string outputImagePath = $"{outputPrefix}.bin";
+    string outputCuePath = $"{outputPrefix}.cue";
+    string planPath = $"{outputPrefix}.native-key-textures-plan.json";
+    string validationPath = $"{outputPrefix}.candidate-validation.md";
+    string resultPath = $"{outputPrefix}.candidate-result.json";
+
+    ArtisansNativeLockedChestVisualCandidateResult exported =
+        ArtisansNativeLockedChestVisualCandidateExporter.Export(
+            new ArtisansNativeLockedChestVisualCandidateRequest(
+                SourceImagePath: sourceImage,
+                OutputImagePath: outputImagePath,
+                WadAnalysisPath: wadAnalysis));
+    ArtisansNativeLockedChestVisualCandidatePlan plan = exported.Plan;
+    bool exactContract = exported.Verified &&
+        string.Equals(plan.RecipeId, ArtisansNativeLockedChestVisualCandidateExporter.RecipeId, StringComparison.Ordinal) &&
+        string.Equals(plan.BehaviorBaselineRecipeId, ArtisansNativeLockedChestCandidateExporter.RecipeId, StringComparison.Ordinal) &&
+        plan.KeyTrueIndex == 174 &&
+        string.Equals(plan.KeyClassAfter, "0x00AD native Key", StringComparison.Ordinal) &&
+        plan.KeyModelIsUntextured &&
+        plan.LockedChestTrueIndex == 175 &&
+        plan.RebasedTexturedFaceCount == 146 &&
+        plan.TextureTileCount == 4 &&
+        plan.PaletteCount == 4 &&
+        plan.TexturePayloadBytes == 2176 &&
+        plan.TextureRegions.Count == 4 &&
+        plan.TextureRegions.Select(region => region.TargetTpage).SequenceEqual(["0x0008", "0x0008", "0x001F", "0x001C"], StringComparer.OrdinalIgnoreCase) &&
+        plan.TextureRegions.Select(region => region.TargetClut).SequenceEqual(["0x1024", "0x1025", "0x1026", "0x1027"], StringComparer.OrdinalIgnoreCase) &&
+        string.Equals(plan.FinalTexturePagesSha256, "374d658026a23bd3ab1b929a832c1f61f6cd0fbca2e5117395f6594235a5fde7", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.FinalLockedChestPackageSha256, "1915dffaf52f7c7d5cf005971eb9f680e1b2d5d4c280a7752868a67db2a99103", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.FinalDataEntrySha256, "255bc5318b54ffd24385c4653360e599815d8e0f1cf0d6905aa9890d23bf37f4", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.FinalOverlaySha256, "c93581c05a4c70c1803ece5268ebfada34034ce76e663dcaf19da8fe0faa0459", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(plan.FinalExecutableSha256, "63a4bb3ff992362fb852af6efd34621f57f5606df89c8da4ffc746f07f7be129", StringComparison.OrdinalIgnoreCase) &&
+        exported.OutputLength == new FileInfo(sourceImage).Length;
+    if (!exactContract)
+    {
+        try
+        {
+            if (File.Exists(outputImagePath))
+                File.Delete(outputImagePath);
+        }
+        catch (IOException)
+        {
+        }
+        throw new InvalidOperationException($"Artisans native-Key/Locked-Chest visual candidate failed its exact contract: {JsonSerializer.Serialize(exported)}");
+    }
+
+    string sourceCue = DiscImageLocator.FindCueForImage(sourceImage);
+    await File.WriteAllTextAsync(
+        outputCuePath,
+        BuildSmokeCandidateCueText(sourceCue, Path.GetFileName(outputImagePath)),
+        Encoding.ASCII);
+    await File.WriteAllTextAsync(planPath, JsonSerializer.Serialize(exported, new JsonSerializerOptions { WriteIndented = true }));
+
+    string validation = $"""
+        # Artisans Native Key + Locked Chest Texture Candidate V2
+
+        > **STRUCTURALLY VERIFIED; IN-GAME VISUAL TEST REQUIRED.** The prior V1 behavior bundle is preserved byte-for-byte. This V2 changes only T174's visual class and T175's indexed texture storage/descriptors.
+
+        - CUE: `{outputCuePath}`
+        - BIN: `{outputImagePath}`
+        - Checked plan: `{planPath}`
+        - Result file: `{resultPath}`
+        - Recipe: `{plan.RecipeId}`
+
+        ## What changed
+
+        - T174 is now the real shared PETE.WAD `0x00AD` Key model instead of the green-gem `0x0054` visual proxy. The Key is a 48-face untextured SimpleModel already resident in every level, so no new Key package or texture copy was added.
+        - T175's 146 textured faces now point to four private Artisans 32x32 4-bpp slots and four private CLUTs containing the exact Peace Keepers Locked Chest pixels.
+        - The destinations total 2,176 bytes, were all zero in the guarded retail texture-page image, and have zero overlap with the complete Artisans consumer-ownership protection map.
+        - The proven native handler, automatic opening, camera/sound, six reward objects/10 treasure, one-shot cleanup, persistence, actor roots, overlay, executable, and wooden-debris alias remain unchanged from V1.
+
+        ## Required DuckStation proof
+
+        1. Boot this V2 CUE directly from a fresh/new game without carrying a V1 savestate.
+        2. Confirm T174 now looks like the normal gold Key rather than a green gem, then collect it and confirm the normal Key sound/HUD state.
+        3. Confirm T175 is a clean red-and-gold padlocked chest with no green or scrambled faces.
+        4. Approach T175 from the front without attacking and confirm the same single automatic native camera/opening/sound sequence.
+        5. Confirm exactly six gem objects worth 10 treasure, one retirement, and persistence after re-entry/save reload.
+        6. Check nearby terrain, portals, gems, chests, dragons, Sparx, and the Life Chest/statue for texture or behavior changes.
+
+        Any invisible/wrong Key, green or scrambled chest face, changed nearby texture, black screen, freeze, missing/repeated reward, or behavior regression is a failure.
+        """;
+    await File.WriteAllTextAsync(validationPath, validation);
+
+    if (!File.Exists(resultPath))
+    {
+        var evidence = new
+        {
+            generatedBy = "Spyro.Editor.Smoke",
+            purpose = "Record the DuckStation visual/runtime result for the native Key plus privately rebased Locked Chest textures while retaining the user-proven V1 behavior bundle.",
+            candidate = new
+            {
+                levelKey = "artisans",
+                levelName = "Artisans",
+                cuePath = outputCuePath,
+                binPath = outputImagePath,
+                planPath,
+                recipeId = plan.RecipeId,
+                recipeStatus = "in-game-untested-v2-native-key-private-locked-chest-textures",
+                behaviorBaseline = "V1 user-confirmed native automatic opening, six gem objects/10 treasure, one-shot cleanup, and persistence",
+                visualChanges = "T174 class 0x00AD shared Key; T175 four privately rebased 32x32 4-bpp tiles plus four CLUTs"
+            },
+            result = new
+            {
+                status = "untested",
+                testedAt = (string?)null,
+                tester = (string?)null,
+                emulator = "DuckStation",
+                freshGameNoCarriedSavestate = (bool?)null,
+                bootedArtisans = (bool?)null,
+                nativeGoldKeyVisible = (bool?)null,
+                nativeKeyPickupAndHud = (bool?)null,
+                lockedChestTexturesCorrect = (bool?)null,
+                automaticOpenStillWorks = (bool?)null,
+                nativeCameraAndSound = (bool?)null,
+                sixGemObjectsTenTreasure = (bool?)null,
+                oneShotAndPersistent = (bool?)null,
+                noTextureOrBehaviorRegression = (bool?)null,
+                notes = ""
+            }
+        };
+        await File.WriteAllTextAsync(resultPath, JsonSerializer.Serialize(evidence, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    Console.WriteLine($"Artisans native Key + Locked Chest texture candidate: {outputCuePath}");
+    Console.WriteLine($"Structural verification: {exported.Verification}");
+    Console.WriteLine($"Runtime evidence form: {resultPath}");
+}
+
+string BuildSmokeCandidateCueText(string sourceCuePath, string outputBinName)
+{
+    if (!File.Exists(sourceCuePath))
+        return $"FILE \"{outputBinName}\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n";
+
+    string[] lines = File.ReadAllLines(sourceCuePath, Encoding.ASCII);
+    bool replaced = false;
+    for (int i = 0; i < lines.Length; i++)
+    {
+        string trimmed = lines[i].Trim();
+        if (!replaced &&
+            trimmed.StartsWith("FILE ", StringComparison.OrdinalIgnoreCase) &&
+            trimmed.EndsWith(" BINARY", StringComparison.OrdinalIgnoreCase))
+        {
+            lines[i] = $"FILE \"{outputBinName}\" BINARY";
+            replaced = true;
+        }
+    }
+
+    IEnumerable<string> outputLines = replaced
+        ? lines
+        : new[] { $"FILE \"{outputBinName}\" BINARY" }.Concat(lines);
+    return string.Join('\n', outputLines) + "\n";
 }
 
 void RewriteCurrentSpringCandidateAsDryCanyonT107(string nativeEditsPath)
@@ -17024,9 +22781,18 @@ async Task ExportAndVerifyMobyPatchImage(LevelDefinition level, string nativeEdi
         if (result.Plan.Notes.Any(note => note.Contains("Stone Hill Spring Chest candidate exports", StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException($"{label} plan should not include the Stone Hill Spring Chest helper note.");
     }
+    if (label.Contains("Artisans Spring Chest", StringComparison.OrdinalIgnoreCase))
+    {
+        if (!validationText.Contains("The target level boots past the flying/loading screen with the complete controller, shell, helper, and blank reward-row bundle.", StringComparison.Ordinal) ||
+            !validationText.Contains("An uncollected gem returns to the chest and rearms it without becoming a parked Sparx target.", StringComparison.Ordinal) ||
+            !validationText.Contains("Touching the next blue gem awards exactly +5 and retires the chest/visual once", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"{label} validation report did not include the complete v159 portability behavior checklist.");
+        }
+    }
     if (label.Contains("Toasty wizard transform", StringComparison.OrdinalIgnoreCase))
     {
-        if (!validationText.Contains("Confirm the defeated enemy's reward or collection behavior is sane.", StringComparison.Ordinal) ||
+        if (!validationText.Contains("Confirm Toasty's treasure maximum remains 100 and the imported enemy drops the target slot's original red gem.", StringComparison.Ordinal) ||
             !validationText.Contains("Confirm other enemies in the level still behave normally.", StringComparison.Ordinal))
         {
             throw new InvalidOperationException($"{label} validation report did not include the enemy-transform in-game checklist.");
@@ -17484,7 +23250,7 @@ async Task ReportCrossLevelCandidateValidationChecklist()
             requireNoActor01Fe: false),
         ReadCandidateValidationSummary(
             "Toasty Dog to Green Wizard",
-            Path.Combine(objectsDir, "toasty-wizard-transform-write-smoke.moby-source-patch-plan.json"),
+            Path.Combine(objectsDir, $"{CurrentToastyWizardCandidateSlug}.moby-source-patch-plan.json"),
             [
                 "Boot Toasty and go to the transformed enemy.",
                 "Confirm the transformed dog now appears/behaves as a Green Wizard.",
@@ -18079,6 +23845,1496 @@ bool TryParseExePatchOffset(string text, out long fileOffset)
     return true;
 }
 
+async Task ReportGemValueEditSmoke()
+{
+    (GemValue Gem, int Value, int IdByte, int ValueByte)[] expectedEncodings =
+    [
+        (GemValue.Red, 1, 0x53, 0x01),
+        (GemValue.Green, 2, 0x54, 0x02),
+        (GemValue.Blue, 5, 0x55, 0x03),
+        (GemValue.Yellow, 10, 0x56, 0x04),
+        (GemValue.Purple, 25, 0x57, 0x05)
+    ];
+    foreach ((GemValue gem, int value, int idByte, int valueByte) in expectedEncodings)
+    {
+        if (gem.Value != value || gem.IdByte != idByte || gem.ValueByte != valueByte ||
+            !GemValue.TryFromEncoding(idByte, valueByte, out GemValue decoded) || decoded != gem)
+        {
+            throw new InvalidOperationException($"The {gem.Name} encoding is not {value}/0x{idByte:X2}/0x{valueByte:X2}.");
+        }
+    }
+    if (GemValue.TryFromEncoding(GemValue.Red.IdByte, GemValue.Green.ValueByte, out _))
+        throw new InvalidOperationException("A mismatched gem ID/value pair was accepted as a loose gem.");
+
+    ReportGemLabelSuggestionSmoke();
+    await ReportTransformedLinkedGemRootPersistenceSmoke();
+
+    Dictionary<GemValue, int> sourceEncodingCounts = GemValue.Known.ToDictionary(gem => gem, _ => 0);
+    Dictionary<string, int> cachedTreasureTotals = new(StringComparer.OrdinalIgnoreCase);
+    int ordinalOnlyType18Records = 0;
+    int ordinalOnlyRewardRecords = 0;
+    foreach (string cachePath in Directory.EnumerateFiles(
+        Path.Combine(workspace.RootPath, "editor-cache"),
+        "*-mobys.json",
+        SearchOption.TopDirectoryOnly))
+    {
+        List<Moby> cachedMobys = MobyLoader.LoadCached(cachePath).ToList();
+        string cacheName = Path.GetFileNameWithoutExtension(cachePath);
+        string levelKey = cacheName.EndsWith("-mobys", StringComparison.OrdinalIgnoreCase)
+            ? cacheName[..^"-mobys".Length]
+            : cacheName;
+        cachedTreasureTotals[levelKey] = cachedMobys.Sum(moby => moby.TreasureValue);
+
+        foreach (Moby moby in cachedMobys)
+        {
+            if (moby.Type != 0x18)
+                continue;
+
+            bool hasId = GemValue.TryFromIdByte(moby.SourceByte36, out _);
+            bool hasOrdinal = GemValue.TryFromValueByte(moby.SourceByte4F, out _);
+            if (hasId)
+            {
+                if (!GemValue.TryFromEncoding(moby.SourceByte36, moby.SourceByte4F, out GemValue encoded))
+                {
+                    throw new InvalidOperationException(
+                        $"{Path.GetFileName(cachePath)} T{moby.TrueIndex} has mismatched gem bytes 0x{moby.SourceByte36:X2}/0x{moby.SourceByte4F:X2}.");
+                }
+                sourceEncodingCounts[encoded]++;
+                continue;
+            }
+
+            if (!hasOrdinal)
+                continue;
+
+            ordinalOnlyType18Records++;
+            if (moby.IsVisibleGem || moby.Gem != GemValue.Unknown)
+            {
+                throw new InvalidOperationException(
+                    $"{Path.GetFileName(cachePath)} T{moby.TrueIndex} was misclassified as a loose gem from ordinal byte 0x{moby.SourceByte4F:X2} alone.");
+            }
+
+            if (moby.RewardGem != GemValue.Unknown)
+            {
+                ordinalOnlyRewardRecords++;
+                if (moby.TreasureValue != moby.RewardGem.Value)
+                {
+                    throw new InvalidOperationException(
+                        $"{Path.GetFileName(cachePath)} T{moby.TrueIndex} did not route its reward through flag 0x{moby.Flag4B:X2}.");
+                }
+            }
+        }
+    }
+    if (sourceEncodingCounts.Any(pair => pair.Value == 0) || ordinalOnlyType18Records == 0 || ordinalOnlyRewardRecords == 0)
+        throw new InvalidOperationException("The checked-in caches did not cover all gem encodings and the ordinal-only safety regression.");
+
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("Gem-value copied-BIN readback requires the configured original Spyro image.", sourceImage);
+
+    const long treasureTotalTableImageOffset = 0x7945FB0;
+    Dictionary<string, int> nativeTreasureTargets = new(StringComparer.OrdinalIgnoreCase);
+    int nonFlightTreasureMatches = 0;
+    using (FileStream sourceStream = File.OpenRead(sourceImage))
+    {
+        byte[] targetBytes = new byte[2];
+        for (int levelIndex = 0; levelIndex < catalog.Levels.Count; levelIndex++)
+        {
+            LevelDefinition catalogLevel = catalog.Levels[levelIndex];
+            if (catalogLevel.Key.EndsWith("flight", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (!cachedTreasureTotals.TryGetValue(catalogLevel.Key, out int cachedTotal))
+                throw new InvalidOperationException($"The checked-in moby cache is missing for {catalogLevel.DisplayName}.");
+
+            sourceStream.Position = treasureTotalTableImageOffset + (levelIndex * sizeof(ushort));
+            sourceStream.ReadExactly(targetBytes);
+            int nativeTarget = BinaryPrimitives.ReadUInt16LittleEndian(targetBytes);
+            nativeTreasureTargets[catalogLevel.Key] = nativeTarget;
+            if (cachedTotal != nativeTarget)
+            {
+                throw new InvalidOperationException(
+                    $"{catalogLevel.DisplayName} cached source records total {cachedTotal} treasure, but the native BIN target is {nativeTarget}.");
+            }
+
+            nonFlightTreasureMatches++;
+        }
+    }
+    if (nonFlightTreasureMatches != 30)
+        throw new InvalidOperationException($"Gem treasure audit matched {nonFlightTreasureMatches} non-flight levels, expected 30.");
+
+    LevelDefinition level = catalog.FindByKey("stonehill")
+        ?? throw new InvalidOperationException("Stone Hill is missing from the level catalog.");
+    string stoneHillCachePath = Path.Combine(workspace.RootPath, "editor-cache", "stonehill-mobys.json");
+    List<Moby> sourceMobys = MobyLoader.LoadCached(stoneHillCachePath).ToList();
+    Moby original = sourceMobys.FirstOrDefault(moby => moby.IsVisibleGem && moby.Gem == GemValue.Red)
+        ?? throw new InvalidOperationException("Stone Hill has no source-encoded red loose gem for the edit smoke.");
+    Moby edited = CloneMoby(original);
+    edited.ApplyGem(GemValue.Purple);
+
+    using SmokeTemporaryDirectory temporary = SmokeTemporaryDirectory.Create("spyro-gem-value-smoke");
+    File.Copy(
+        Path.Combine(workspace.RootPath, "spyro-level-catalog.json"),
+        Path.Combine(temporary.Path, "spyro-level-catalog.json"));
+
+    LevelDefinition artisansLevel = catalog.FindByKey("artisans")
+        ?? throw new InvalidOperationException("Artisans is missing from the level catalog.");
+    SourceMobyCacheResult rebuiltArtisansCache = await SourceMobyCacheBuilder.BuildAsync(
+        sourceImage,
+        artisansLevel,
+        Path.Combine(temporary.Path, "artisans-source-cache.json"));
+    if (!nativeTreasureTargets.TryGetValue(artisansLevel.Key, out int artisansNativeTreasure) ||
+        rebuiltArtisansCache.TreasureValue != artisansNativeTreasure ||
+        artisansNativeTreasure != 100)
+    {
+        throw new InvalidOperationException(
+            $"Artisans direct source rebuild totals {rebuiltArtisansCache.TreasureValue} treasure; expected native target 100.");
+    }
+
+    string editsPath = Path.Combine(temporary.Path, "stonehill-native-edits.json");
+    await MobyEditStore.SaveAsync(editsPath, [edited], "Stone Hill gem value smoke");
+
+    using (JsonDocument editsDocument = JsonDocument.Parse(File.ReadAllText(editsPath)))
+    {
+        JsonElement saved = editsDocument.RootElement.GetProperty("edits")[0];
+        JsonElement gem = saved.GetProperty("gem");
+        if (gem.GetProperty("value").GetInt32() != GemValue.Purple.Value ||
+            gem.GetProperty("idByteHex").GetString() != "0x57" ||
+            gem.GetProperty("valueByteHex").GetString() != "0x05")
+        {
+            throw new InvalidOperationException("The persistent edit manifest did not retain the explicit purple gem encoding.");
+        }
+        int[] byteOffsets = saved.GetProperty("sourceByteEdits")
+            .EnumerateArray()
+            .Select(item => item.GetProperty("offset").GetInt32())
+            .OrderBy(offset => offset)
+            .ToArray();
+        if (!byteOffsets.SequenceEqual([0x36, 0x4F]))
+            throw new InvalidOperationException($"The gem edit manifest wrote unexpected source byte offsets: {string.Join(", ", byteOffsets.Select(offset => $"0x{offset:X2}"))}.");
+    }
+
+    List<Moby> reloadedMobys = MobyLoader.LoadCached(stoneHillCachePath).ToList();
+    int loadedEdits = MobyEditStore.Load(editsPath, reloadedMobys);
+    Moby reloaded = reloadedMobys.Single(moby => moby.TrueIndex == original.TrueIndex);
+    if (loadedEdits != 1 || reloaded.Gem != GemValue.Purple ||
+        reloaded.SourceByte36 != GemValue.Purple.IdByte ||
+        reloaded.SourceByte4F != GemValue.Purple.ValueByte)
+    {
+        throw new InvalidOperationException("The persistent edit store did not reload the purple gem ID/value pair.");
+    }
+
+    FileInfo sourceBefore = new(sourceImage);
+    long sourceLength = sourceBefore.Length;
+    DateTime sourceWriteTime = sourceBefore.LastWriteTimeUtc;
+    string outputPrefix = Path.Combine(temporary.Path, "stonehill-red-to-purple-readback");
+    MobySourcePatchResult result = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        OutputPrefix: outputPrefix,
+        Level: level,
+        NativeEditsPath: editsPath,
+        WriteImage: true));
+    if (!result.WroteImage || result.Plan.SkippedEdits.Count != 0)
+        throw new InvalidOperationException($"Gem-value export did not write a clean copied image: {string.Join("; ", result.Plan.SkippedEdits)}");
+
+    string patchKinds = string.Join(", ", result.Plan.Patches.Select(patch => patch.Kind));
+    MobySourcePatch idPatch = result.Plan.Patches.SingleOrDefault(patch => patch.Kind == "moby-gem-id-byte")
+        ?? throw new InvalidOperationException($"Gem ID patch missing; emitted: {patchKinds}");
+    MobySourcePatch valuePatch = result.Plan.Patches.SingleOrDefault(patch => patch.Kind == "moby-gem-value-byte")
+        ?? throw new InvalidOperationException($"Gem value patch missing; emitted: {patchKinds}");
+    MobySourcePatch treasurePatch = result.Plan.Patches.SingleOrDefault(patch => patch.Kind == "level-treasure-total")
+        ?? throw new InvalidOperationException($"Treasure target patch missing; emitted: {patchKinds}");
+    if (idPatch.RecordOffset != "0x36" || idPatch.BeforeHexPreview != "53" || idPatch.AfterHexPreview != "57" ||
+        valuePatch.RecordOffset != "0x4F" || valuePatch.BeforeHexPreview != "01" || valuePatch.AfterHexPreview != "05")
+    {
+        throw new InvalidOperationException("The native patch plan did not encode red -> purple as +0x36 53->57 and +0x4F 01->05.");
+    }
+    int treasureBefore = BitConverter.ToUInt16(ParseHexPreview(treasurePatch.BeforeHexPreview), 0);
+    int treasureAfter = BitConverter.ToUInt16(ParseHexPreview(treasurePatch.AfterHexPreview), 0);
+    int expectedDelta = GemValue.Purple.Value - GemValue.Red.Value;
+    if (treasureAfter - treasureBefore != expectedDelta)
+        throw new InvalidOperationException($"The treasure target changed by {treasureAfter - treasureBefore}, expected {expectedDelta}.");
+    SourceMobyCacheResult rebuiltCache = await SourceMobyCacheBuilder.BuildAsync(
+        sourceImage,
+        level,
+        Path.Combine(temporary.Path, "stonehill-source-cache.json"));
+    if (rebuiltCache.TreasureValue != treasureBefore)
+    {
+        throw new InvalidOperationException(
+            $"Stone Hill source metadata totals {rebuiltCache.TreasureValue} treasure, but the native level target is {treasureBefore}.");
+    }
+
+    VerifyPatchBytes(result.OutputImagePath, result.Plan);
+
+    string artisansCachePath = Path.Combine(workspace.RootPath, "editor-cache", "artisans-mobys.json");
+    List<Moby> artisansMobys = MobyLoader.LoadCached(artisansCachePath).ToList();
+    Moby rewardOriginal = artisansMobys.FirstOrDefault(moby =>
+        moby.Type == 0x00 &&
+        moby.SourceByte36 == 0x5F &&
+        moby.Flag4B == GemValue.Red.IdByte)
+        ?? throw new InvalidOperationException("Artisans has no generic red reward carrier for the exporter smoke.");
+    Moby rewardEdited = CloneMoby(rewardOriginal);
+    rewardEdited.Flag4B = GemValue.Purple.IdByte;
+    string rewardEditsPath = Path.Combine(temporary.Path, "artisans-reward-native-edits.json");
+    await MobyEditStore.SaveAsync(rewardEditsPath, [rewardEdited], "Artisans generic reward gem smoke");
+
+    List<Moby> reloadedArtisansMobys = MobyLoader.LoadCached(artisansCachePath).ToList();
+    int loadedRewardEdits = MobyEditStore.Load(rewardEditsPath, reloadedArtisansMobys);
+    Moby reloadedReward = reloadedArtisansMobys.Single(moby => moby.TrueIndex == rewardOriginal.TrueIndex);
+    if (loadedRewardEdits != 1 || reloadedReward.Flag4B != GemValue.Purple.IdByte || reloadedReward.TreasureValue != GemValue.Purple.Value)
+        throw new InvalidOperationException("The generic reward-carrier edit did not persist as a purple 25-value reward.");
+
+    MobySourcePatchResult rewardResult = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        OutputPrefix: Path.Combine(temporary.Path, "artisans-reward-red-to-purple-readback"),
+        Level: artisansLevel,
+        NativeEditsPath: rewardEditsPath,
+        WriteImage: true));
+    if (!rewardResult.WroteImage || rewardResult.Plan.SkippedEdits.Count != 0)
+        throw new InvalidOperationException($"Generic reward-carrier export did not write a clean copied image: {string.Join("; ", rewardResult.Plan.SkippedEdits)}");
+
+    MobySourcePatch rewardBytePatch = rewardResult.Plan.Patches.SingleOrDefault(patch =>
+        patch.TrueIndex == rewardOriginal.TrueIndex &&
+        string.Equals(patch.RecordOffset, "0x53", StringComparison.OrdinalIgnoreCase))
+        ?? throw new InvalidOperationException("The generic reward-carrier +0x53 byte patch was not emitted.");
+    MobySourcePatch rewardTreasurePatch = rewardResult.Plan.Patches.SingleOrDefault(patch => patch.Kind == "level-treasure-total")
+        ?? throw new InvalidOperationException("The generic reward-carrier treasure target patch was not emitted.");
+    int rewardTreasureBefore = BitConverter.ToUInt16(ParseHexPreview(rewardTreasurePatch.BeforeHexPreview), 0);
+    int rewardTreasureAfter = BitConverter.ToUInt16(ParseHexPreview(rewardTreasurePatch.AfterHexPreview), 0);
+    if (rewardBytePatch.BeforeHexPreview != "53" || rewardBytePatch.AfterHexPreview != "57" ||
+        rewardTreasureBefore != 100 || rewardTreasureAfter != 124)
+    {
+        throw new InvalidOperationException(
+            $"Generic reward-carrier export wrote +0x53 {rewardBytePatch.BeforeHexPreview}->{rewardBytePatch.AfterHexPreview}, " +
+            $"treasure {rewardTreasureBefore}->{rewardTreasureAfter}; expected 53->57 and 100->124.");
+    }
+    VerifyPatchBytes(rewardResult.OutputImagePath, rewardResult.Plan);
+
+    int malformedTrueIndex = level.SourceRecordCount;
+    Moby malformedLooseGem = new()
+    {
+        Index = sourceMobys.Max(moby => moby.Index) + 1,
+        TrueIndex = malformedTrueIndex,
+        LegacyIndex = MobyLoader.GetLegacyAliasIndex(malformedTrueIndex),
+        Position = original.Position,
+        OriginalPosition = original.OriginalPosition,
+        Type = original.Type,
+        OriginalType = original.OriginalType,
+        State = original.State,
+        OriginalState = original.OriginalState,
+        YawByte = original.YawByte,
+        OriginalYawByte = original.OriginalYawByte,
+        RuntimeAddress = original.RuntimeAddress,
+        SpecialDataPointer = original.SpecialDataPointer,
+        SourceByte36 = GemValue.Red.IdByte,
+        OriginalSourceByte36 = GemValue.Red.IdByte,
+        SourceByte37 = original.SourceByte37,
+        OriginalSourceByte37 = original.OriginalSourceByte37,
+        SourceByte4F = GemValue.Purple.ValueByte,
+        OriginalSourceByte4F = GemValue.Purple.ValueByte,
+        Flag4A = original.Flag4A,
+        OriginalFlag4A = original.OriginalFlag4A,
+        Flag4B = original.Flag4B,
+        OriginalFlag4B = original.OriginalFlag4B,
+        Color = GemValue.Red.Color,
+        Label = "Malformed red-ID purple-ordinal loose gem",
+        OriginalLabel = "Malformed red-ID purple-ordinal loose gem",
+        PatchStatus = "smoke",
+        PatchLead = "mismatched loose-gem safety",
+        IsAdded = true
+    };
+    string malformedEditsPath = Path.Combine(temporary.Path, "stonehill-malformed-loose-gem-native-edits.json");
+    await MobyEditStore.SaveAsync(malformedEditsPath, [malformedLooseGem], "Mismatched loose gem safety smoke");
+    MobySourcePatchPlan malformedPlan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        DiscImageLocator.FindCueForImage(sourceImage),
+        Path.Combine(temporary.Path, "stonehill-malformed-loose-gem.bin"),
+        Path.Combine(temporary.Path, "stonehill-malformed-loose-gem.cue"),
+        level,
+        malformedEditsPath);
+    if (malformedPlan.Patches.Any(patch => string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase)) ||
+        malformedPlan.SkippedEdits.Count == 0)
+    {
+        throw new InvalidOperationException("A mismatched loose-gem ID/value pair was accepted for native true-add export.");
+    }
+
+    sourceBefore.Refresh();
+    if (!sourceBefore.Exists || sourceBefore.Length != sourceLength || sourceBefore.LastWriteTimeUtc != sourceWriteTime)
+        throw new InvalidOperationException("The configured source image changed during copied-BIN gem readback.");
+
+    string encodingSummary = string.Join(", ", expectedEncodings.Select(item =>
+        $"{item.Gem.Name.Replace(" gem", "", StringComparison.Ordinal)}={item.Value}/0x{item.IdByte:X2}/0x{item.ValueByte:X2}"));
+    Console.WriteLine($"Gem encodings: {encodingSummary}");
+    Console.WriteLine(
+        $"Gem cache audit: {sourceEncodingCounts.Sum(pair => pair.Value)} paired loose-gem row(s); " +
+        $"{ordinalOnlyType18Records} type-18 ordinal-only non-gem row(s) rejected; {ordinalOnlyRewardRecords} routed through reward bytes; " +
+        $"all {nonFlightTreasureMatches} non-flight native treasure targets matched.");
+    Console.WriteLine(
+        $"Gem value copied-BIN readback: Stone Hill T{original.TrueIndex} red -> purple; " +
+        $"+0x36 53->57, +0x4F 01->05, treasure {treasureBefore}->{treasureAfter}; all {result.Plan.PatchCount} final bytes verified.");
+    Console.WriteLine(
+        $"Reward gem copied-BIN readback: Artisans T{rewardOriginal.TrueIndex} red -> purple; " +
+        $"+0x53 53->57, treasure {rewardTreasureBefore}->{rewardTreasureAfter}; all {rewardResult.Plan.PatchCount} final bytes verified.");
+    Console.WriteLine($"Malformed loose-gem true-add rejected: {string.Join("; ", malformedPlan.SkippedEdits)}");
+}
+
+async Task ReportTransformedLinkedGemRootPersistenceSmoke()
+{
+    using SmokeTemporaryDirectory temporary = SmokeTemporaryDirectory.Create("spyro-linked-gem-transform-persistence-smoke");
+
+    string stoneHillCachePath = Path.Combine(workspace.RootPath, "editor-cache", "stonehill-mobys.json");
+    List<Moby> stoneHillMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("stonehill", stoneHillCachePath);
+    Moby chestRoot = stoneHillMobys.SingleOrDefault(moby => moby.TrueIndex == 75)
+        ?? throw new InvalidOperationException("Stone Hill linked chest root T75 is missing from the persistence smoke.");
+    MobyLink chestLink = chestRoot.Links.SingleOrDefault(link =>
+        string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase))
+        ?? throw new InvalidOperationException("Stone Hill T75 has no chest-content link before the persistence smoke.");
+    int[] expectedChestContents = chestLink.TrueIndexes
+        .Where(trueIndex => trueIndex != chestRoot.TrueIndex)
+        .OrderBy(trueIndex => trueIndex)
+        .ToArray();
+    if (expectedChestContents.Length == 0)
+        throw new InvalidOperationException("Stone Hill T75's chest-content link has no contained gem rows.");
+
+    Moby incompatibleChestDonor = stoneHillMobys.First(moby =>
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex != chestRoot.TrueIndex &&
+        !moby.IsChestContent &&
+        !MobyRelationshipRepair.SupportsChestRelationships("stonehill", moby, stoneHillMobys));
+    ApplySameLevelTransformForRelationshipPersistenceSmoke(
+        chestRoot,
+        incompatibleChestDonor,
+        "stonehill",
+        "Stone Hill");
+    string incompatibleChestEditsPath = Path.Combine(temporary.Path, "stonehill-incompatible-chest-transform.json");
+    int savedIncompatibleChestEdits = await MobyEditStore.SaveAsync(
+        incompatibleChestEditsPath,
+        [chestRoot],
+        "Stone Hill incompatible linked chest transform persistence smoke");
+    if (savedIncompatibleChestEdits != 1)
+        throw new InvalidOperationException($"Incompatible chest transform saved {savedIncompatibleChestEdits} edit(s), expected 1.");
+
+    List<Moby> reloadedIncompatibleChestMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("stonehill", stoneHillCachePath);
+    Moby untouchedColorTarget = reloadedIncompatibleChestMobys.First(moby =>
+        moby.TrueIndex != chestRoot.TrueIndex &&
+        moby.IsVisibleGem &&
+        moby.OriginalColor.HasValue);
+    ColorRgba untouchedColorBeforeLoad = untouchedColorTarget.Color;
+    int loadedIncompatibleChestEdits = MobyEditStore.Load(incompatibleChestEditsPath, reloadedIncompatibleChestMobys);
+    Moby reloadedIncompatibleChest = reloadedIncompatibleChestMobys.Single(moby => moby.TrueIndex == chestRoot.TrueIndex);
+    if (untouchedColorTarget.Color != untouchedColorBeforeLoad)
+        throw new InvalidOperationException("Loading one unrelated transform stripped an untouched enriched gem color.");
+    if (!HasRelationshipLinkReferencingRoot(
+            reloadedIncompatibleChestMobys,
+            reloadedIncompatibleChest.TrueIndex,
+            link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("Stone Hill's metadata fixture did not retain the stale T75 chest link through edit-store load.");
+    }
+    MobyRelationshipRepair.RepairChestContentLinks("stonehill", reloadedIncompatibleChestMobys);
+    if (loadedIncompatibleChestEdits != 1 ||
+        reloadedIncompatibleChest.SourceCloneTrueIndex != incompatibleChestDonor.TrueIndex ||
+        MobyRelationshipRepair.SupportsChestRelationships("stonehill", reloadedIncompatibleChest, reloadedIncompatibleChestMobys) ||
+        HasRelationshipLinkReferencingRoot(
+            reloadedIncompatibleChestMobys,
+            reloadedIncompatibleChest.TrueIndex,
+            link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException(
+            $"Incompatible Stone Hill T{chestRoot.TrueIndex}->T{incompatibleChestDonor.TrueIndex} transform did not stay detached after save/reload/repair.");
+    }
+    AssertDormantRelationshipTopology(
+        reloadedIncompatibleChestMobys,
+        chestRoot.TrueIndex,
+        expectedChestContents,
+        link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase),
+        "incompatible transformed chest root");
+
+    Moby nearbyDecoyChest = reloadedIncompatibleChestMobys.First(moby =>
+        moby.TrueIndex != reloadedIncompatibleChest.TrueIndex &&
+        MobyRelationshipRepair.SupportsChestRelationships("stonehill", moby, reloadedIncompatibleChestMobys));
+    Moby dormantContent = reloadedIncompatibleChestMobys.Single(moby => moby.TrueIndex == expectedChestContents[0]);
+    dormantContent.Position = nearbyDecoyChest.Position;
+    MobyRelationshipRepair.RepairChestContentLinks("stonehill", reloadedIncompatibleChestMobys);
+    if (dormantContent.Links.Any(link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase)))
+        throw new InvalidOperationException("A dormant contained-gem member was proximity-relinked to an unrelated chest.");
+
+    AssertGemRelationshipReconcileIdempotent("stonehill", reloadedIncompatibleChestMobys);
+    reloadedIncompatibleChest.UndoEdits();
+    MobyRelationshipRepair.RepairChestContentLinks("stonehill", reloadedIncompatibleChestMobys);
+    AssertActiveRelationshipTopology(
+        reloadedIncompatibleChestMobys,
+        chestRoot.TrueIndex,
+        expectedChestContents,
+        link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase),
+        "Undo of incompatible transformed chest root");
+
+    List<Moby> compatibleStoneHillMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("stonehill", stoneHillCachePath);
+    Moby compatibleChestRoot = compatibleStoneHillMobys.Single(moby => moby.TrueIndex == chestRoot.TrueIndex);
+    Moby compatibleChestDonor = compatibleStoneHillMobys.First(moby =>
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex != compatibleChestRoot.TrueIndex &&
+        !moby.IsChestContent &&
+        MobyRelationshipRepair.SupportsChestRelationships("stonehill", moby, compatibleStoneHillMobys));
+    ApplySameLevelTransformForRelationshipPersistenceSmoke(
+        compatibleChestRoot,
+        compatibleChestDonor,
+        "stonehill",
+        "Stone Hill");
+    string compatibleChestEditsPath = Path.Combine(temporary.Path, "stonehill-compatible-chest-transform.json");
+    int savedCompatibleChestEdits = await MobyEditStore.SaveAsync(
+        compatibleChestEditsPath,
+        [compatibleChestRoot],
+        "Stone Hill compatible linked chest transform persistence smoke");
+    if (savedCompatibleChestEdits != 1)
+        throw new InvalidOperationException($"Compatible chest transform saved {savedCompatibleChestEdits} edit(s), expected 1.");
+
+    List<Moby> reloadedCompatibleChestMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("stonehill", stoneHillCachePath);
+    int loadedCompatibleChestEdits = MobyEditStore.Load(compatibleChestEditsPath, reloadedCompatibleChestMobys);
+    Moby reloadedCompatibleChest = reloadedCompatibleChestMobys.Single(moby => moby.TrueIndex == compatibleChestRoot.TrueIndex);
+    MobyRelationshipRepair.RepairChestContentLinks("stonehill", reloadedCompatibleChestMobys);
+    MobyLink? reloadedCompatibleChestLink = reloadedCompatibleChest.Links.SingleOrDefault(link =>
+        string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase));
+    int[] reloadedCompatibleContents = reloadedCompatibleChestLink?.TrueIndexes
+        .Where(trueIndex => trueIndex != reloadedCompatibleChest.TrueIndex)
+        .OrderBy(trueIndex => trueIndex)
+        .ToArray() ?? [];
+    if (loadedCompatibleChestEdits != 1 ||
+        reloadedCompatibleChest.SourceCloneTrueIndex != compatibleChestDonor.TrueIndex ||
+        !MobyRelationshipRepair.SupportsChestRelationships("stonehill", reloadedCompatibleChest, reloadedCompatibleChestMobys) ||
+        !reloadedCompatibleContents.SequenceEqual(expectedChestContents))
+    {
+        throw new InvalidOperationException(
+            $"Compatible Stone Hill T{compatibleChestRoot.TrueIndex}->T{compatibleChestDonor.TrueIndex} chest transform did not retain its contained rows after save/reload/repair.");
+    }
+    AssertGemRelationshipReconcileIdempotent("stonehill", reloadedCompatibleChestMobys);
+
+    List<Moby> transformedChildMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("stonehill", stoneHillCachePath);
+    Moby transformedChild = transformedChildMobys.Single(moby => moby.TrueIndex == expectedChestContents[0]);
+    Moby incompatibleChildDonor = transformedChildMobys.Single(moby => moby.TrueIndex == incompatibleChestDonor.TrueIndex);
+    ApplySameLevelTransformForRelationshipPersistenceSmoke(
+        transformedChild,
+        incompatibleChildDonor,
+        "stonehill",
+        "Stone Hill");
+    transformedChild.Label = "Locked chest content: Purple gem (25)";
+    string transformedChildEditsPath = Path.Combine(temporary.Path, "stonehill-incompatible-contained-child-transform.json");
+    if (await MobyEditStore.SaveAsync(
+            transformedChildEditsPath,
+            [transformedChild],
+            "Stone Hill incompatible contained child transform persistence smoke") != 1)
+    {
+        throw new InvalidOperationException("Incompatible contained-child transform did not persist exactly one edit.");
+    }
+
+    List<Moby> reloadedTransformedChildMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("stonehill", stoneHillCachePath);
+    if (MobyEditStore.Load(transformedChildEditsPath, reloadedTransformedChildMobys) != 1)
+        throw new InvalidOperationException("Incompatible contained-child transform did not reload exactly one edit.");
+    Moby reloadedTransformedChild = reloadedTransformedChildMobys.Single(moby => moby.TrueIndex == transformedChild.TrueIndex);
+    MobyRelationshipRepair.RepairChestContentLinks("stonehill", reloadedTransformedChildMobys);
+    int[] expectedWithoutTransformedChild = expectedChestContents
+        .Where(trueIndex => trueIndex != transformedChild.TrueIndex)
+        .ToArray();
+    AssertActiveRelationshipTopology(
+        reloadedTransformedChildMobys,
+        chestRoot.TrueIndex,
+        expectedWithoutTransformedChild,
+        link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase),
+        "incompatible transformed contained child");
+    AssertDormantRelationshipTopology(
+        reloadedTransformedChildMobys,
+        chestRoot.TrueIndex,
+        expectedChestContents,
+        link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase),
+        "incompatible transformed contained child");
+    if (reloadedTransformedChild.Links.Any(link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase)))
+        throw new InvalidOperationException("A transformed non-content child remained active solely because its custom label said chest content.");
+    reloadedTransformedChild.UndoEdits();
+    MobyRelationshipRepair.RepairChestContentLinks("stonehill", reloadedTransformedChildMobys);
+    AssertActiveRelationshipTopology(
+        reloadedTransformedChildMobys,
+        chestRoot.TrueIndex,
+        expectedChestContents,
+        link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase),
+        "Undo of incompatible transformed contained child");
+
+    foreach (bool removeRoot in new[] { true, false })
+    {
+        List<Moby> removalMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("stonehill", stoneHillCachePath);
+        Moby removalTarget = removalMobys.Single(moby => moby.TrueIndex ==
+            (removeRoot ? chestRoot.TrueIndex : expectedChestContents[0]));
+        removalTarget.IsRemoved = true;
+        string removalPath = Path.Combine(
+            temporary.Path,
+            removeRoot ? "stonehill-removed-chest-root.json" : "stonehill-removed-contained-child.json");
+        if (await MobyEditStore.SaveAsync(removalPath, [removalTarget], "Stone Hill removed relationship member smoke") != 1)
+            throw new InvalidOperationException("Removed chest relationship member did not persist exactly one edit.");
+
+        List<Moby> reloadedRemovalMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("stonehill", stoneHillCachePath);
+        if (MobyEditStore.Load(removalPath, reloadedRemovalMobys) != 1)
+            throw new InvalidOperationException("Removed chest relationship member did not reload exactly one edit.");
+        Moby reloadedRemovalTarget = reloadedRemovalMobys.Single(moby => moby.TrueIndex == removalTarget.TrueIndex);
+        MobyRelationshipRepair.RepairChestContentLinks("stonehill", reloadedRemovalMobys);
+        AssertDormantRelationshipTopology(
+            reloadedRemovalMobys,
+            chestRoot.TrueIndex,
+            expectedChestContents,
+            link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase),
+            removeRoot ? "removed chest root" : "removed contained child");
+        if (removeRoot)
+        {
+            if (HasRelationshipLinkReferencingRoot(
+                    reloadedRemovalMobys,
+                    chestRoot.TrueIndex,
+                    link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException("A removed chest root retained an active chest-content link.");
+            }
+        }
+        else
+        {
+            AssertActiveRelationshipTopology(
+                reloadedRemovalMobys,
+                chestRoot.TrueIndex,
+                expectedChestContents.Where(trueIndex => trueIndex != removalTarget.TrueIndex).ToArray(),
+                link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase),
+                "removed contained child");
+            if (reloadedRemovalTarget.Links.Any(link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException("A removed contained child retained an active chest-content link.");
+        }
+
+        reloadedRemovalTarget.UndoEdits();
+        MobyRelationshipRepair.RepairChestContentLinks("stonehill", reloadedRemovalMobys);
+        AssertActiveRelationshipTopology(
+            reloadedRemovalMobys,
+            chestRoot.TrueIndex,
+            expectedChestContents,
+            link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase),
+            removeRoot ? "Undo of removed chest root" : "Undo of removed contained child");
+    }
+
+    List<Moby> foreignCollisionMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("stonehill", stoneHillCachePath);
+    Moby foreignCollisionRoot = foreignCollisionMobys.Single(moby => moby.TrueIndex == chestRoot.TrueIndex);
+    Moby foreignCollisionBytesDonor = foreignCollisionMobys.Single(moby => moby.TrueIndex == incompatibleChestDonor.TrueIndex);
+    Moby collidingLocalChestDonor = foreignCollisionMobys.Single(moby => moby.TrueIndex == compatibleChestDonor.TrueIndex);
+    ApplySameLevelTransformForRelationshipPersistenceSmoke(
+        foreignCollisionRoot,
+        foreignCollisionBytesDonor,
+        "darkhollow",
+        "Dark Hollow");
+    foreignCollisionRoot.SourceCloneTrueIndex = collidingLocalChestDonor.TrueIndex;
+    foreignCollisionRoot.Label = "Custom Locked Chest decoy";
+    string foreignCollisionPath = Path.Combine(temporary.Path, "stonehill-foreign-donor-index-collision.json");
+    if (await MobyEditStore.SaveAsync(foreignCollisionPath, [foreignCollisionRoot], "Foreign-level donor index collision smoke") != 1)
+        throw new InvalidOperationException("Foreign-level donor collision did not persist exactly one edit.");
+    List<Moby> reloadedForeignCollisionMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("stonehill", stoneHillCachePath);
+    MobyEditStore.Load(foreignCollisionPath, reloadedForeignCollisionMobys);
+    Moby reloadedForeignCollisionRoot = reloadedForeignCollisionMobys.Single(moby => moby.TrueIndex == chestRoot.TrueIndex);
+    MobyRelationshipRepair.RepairChestContentLinks("stonehill", reloadedForeignCollisionMobys);
+    if (MobyRelationshipRepair.SupportsChestRelationships("stonehill", reloadedForeignCollisionRoot, reloadedForeignCollisionMobys) ||
+        HasRelationshipLinkReferencingRoot(
+            reloadedForeignCollisionMobys,
+            chestRoot.TrueIndex,
+            link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("A foreign-level source index collision resolved against a same-index local chest donor.");
+    }
+
+    AssertChestControllerAndContentTemplateRelationshipGuards();
+    AssertDesignatedGemRelationshipRoleGuards();
+
+    string artisansCachePath = Path.Combine(workspace.RootPath, "editor-cache", "artisans-mobys.json");
+    List<Moby> artisansMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("artisans", artisansCachePath);
+    Moby rewardRoot = artisansMobys.Single(moby => moby.TrueIndex == 7);
+    MobyLink rewardLink = rewardRoot.Links.SingleOrDefault(IsTreasureThiefRewardSmokeLink)
+        ?? throw new InvalidOperationException("Artisans T7 has no Treasure Gnorc reward-trigger link before the persistence smoke.");
+    int[] rewardTriggerTrueIndexes = rewardLink.TrueIndexes
+        .Where(trueIndex => trueIndex != rewardRoot.TrueIndex)
+        .OrderBy(trueIndex => trueIndex)
+        .ToArray();
+    Moby incompatibleRewardDonor = artisansMobys.First(moby =>
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex != rewardRoot.TrueIndex &&
+        !moby.IsChestContent &&
+        !MobyRelationshipRepair.SupportsRewardTriggerRelationships("artisans", moby, artisansMobys));
+    string staleRewardCandidateKind = rewardRoot.CandidateKind;
+    ApplySameLevelTransformForRelationshipPersistenceSmoke(
+        rewardRoot,
+        incompatibleRewardDonor,
+        "artisans",
+        "Artisans");
+    string incompatibleRewardEditsPath = Path.Combine(temporary.Path, "artisans-incompatible-reward-root-transform.json");
+    int savedIncompatibleRewardEdits = await MobyEditStore.SaveAsync(
+        incompatibleRewardEditsPath,
+        [rewardRoot],
+        "Artisans incompatible Treasure Gnorc transform persistence smoke");
+    if (savedIncompatibleRewardEdits != 1)
+        throw new InvalidOperationException($"Incompatible reward-root transform saved {savedIncompatibleRewardEdits} edit(s), expected 1.");
+
+    List<Moby> reloadedRewardMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("artisans", artisansCachePath);
+    int loadedIncompatibleRewardEdits = MobyEditStore.Load(incompatibleRewardEditsPath, reloadedRewardMobys);
+    Moby reloadedRewardRoot = reloadedRewardMobys.Single(moby => moby.TrueIndex == rewardRoot.TrueIndex);
+    if (!HasRelationshipLinkReferencingRoot(reloadedRewardMobys, reloadedRewardRoot.TrueIndex, IsTreasureThiefRewardSmokeLink))
+        throw new InvalidOperationException("Artisans' metadata fixture did not retain the stale T7 reward-trigger link through edit-store load.");
+    MobyRelationshipRepair.RepairChestContentLinks("artisans", reloadedRewardMobys);
+    if (loadedIncompatibleRewardEdits != 1 ||
+        reloadedRewardRoot.SourceCloneTrueIndex != incompatibleRewardDonor.TrueIndex ||
+        !string.Equals(reloadedRewardRoot.CandidateKind, staleRewardCandidateKind, StringComparison.Ordinal) ||
+        MobyRelationshipRepair.SupportsRewardTriggerRelationships("artisans", reloadedRewardRoot, reloadedRewardMobys) ||
+        HasRelationshipLinkReferencingRoot(reloadedRewardMobys, reloadedRewardRoot.TrueIndex, IsTreasureThiefRewardSmokeLink) ||
+        rewardTriggerTrueIndexes.Any(triggerTrueIndex =>
+            reloadedRewardMobys.Single(moby => moby.TrueIndex == triggerTrueIndex).Links.Any(IsTreasureThiefRewardSmokeLink)))
+    {
+        throw new InvalidOperationException(
+            $"Incompatible Artisans T{rewardRoot.TrueIndex}->T{incompatibleRewardDonor.TrueIndex} Treasure Gnorc transform did not stay detached after save/reload/repair.");
+    }
+    AssertDormantRelationshipTopology(
+        reloadedRewardMobys,
+        rewardRoot.TrueIndex,
+        rewardTriggerTrueIndexes,
+        IsTreasureThiefRewardSmokeLink,
+        "incompatible transformed Treasure Gnorc root");
+    AssertGemRelationshipReconcileIdempotent("artisans", reloadedRewardMobys);
+    reloadedRewardRoot.UndoEdits();
+    MobyRelationshipRepair.RepairChestContentLinks("artisans", reloadedRewardMobys);
+    AssertActiveRelationshipTopology(
+        reloadedRewardMobys,
+        rewardRoot.TrueIndex,
+        rewardTriggerTrueIndexes,
+        IsTreasureThiefRewardSmokeLink,
+        "Undo of incompatible transformed Treasure Gnorc root");
+
+    List<Moby> transformedRewardChildMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("artisans", artisansCachePath);
+    Moby transformedRewardChild = transformedRewardChildMobys.Single(moby => moby.TrueIndex == rewardTriggerTrueIndexes[0]);
+    Moby incompatibleRewardChildDonor = transformedRewardChildMobys.Single(moby => moby.TrueIndex == incompatibleRewardDonor.TrueIndex);
+    ApplySameLevelTransformForRelationshipPersistenceSmoke(
+        transformedRewardChild,
+        incompatibleRewardChildDonor,
+        "artisans",
+        "Artisans");
+    transformedRewardChild.Label = "Treasure Thief Red Gem 1";
+    string transformedRewardChildPath = Path.Combine(temporary.Path, "artisans-incompatible-reward-child-transform.json");
+    if (await MobyEditStore.SaveAsync(
+            transformedRewardChildPath,
+            [transformedRewardChild],
+            "Artisans incompatible reward-trigger child transform persistence smoke") != 1)
+    {
+        throw new InvalidOperationException("Incompatible reward-trigger child transform did not persist exactly one edit.");
+    }
+
+    List<Moby> reloadedTransformedRewardChildMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("artisans", artisansCachePath);
+    if (MobyEditStore.Load(transformedRewardChildPath, reloadedTransformedRewardChildMobys) != 1)
+        throw new InvalidOperationException("Incompatible reward-trigger child transform did not reload exactly one edit.");
+    Moby reloadedTransformedRewardChild = reloadedTransformedRewardChildMobys.Single(moby => moby.TrueIndex == transformedRewardChild.TrueIndex);
+    MobyRelationshipRepair.RepairChestContentLinks("artisans", reloadedTransformedRewardChildMobys);
+    AssertActiveRelationshipTopology(
+        reloadedTransformedRewardChildMobys,
+        rewardRoot.TrueIndex,
+        rewardTriggerTrueIndexes.Where(trueIndex => trueIndex != transformedRewardChild.TrueIndex).ToArray(),
+        IsTreasureThiefRewardSmokeLink,
+        "incompatible transformed reward-trigger child");
+    AssertDormantRelationshipTopology(
+        reloadedTransformedRewardChildMobys,
+        rewardRoot.TrueIndex,
+        rewardTriggerTrueIndexes,
+        IsTreasureThiefRewardSmokeLink,
+        "incompatible transformed reward-trigger child");
+    if (reloadedTransformedRewardChild.Links.Any(IsTreasureThiefRewardSmokeLink))
+        throw new InvalidOperationException("A transformed non-trigger child remained active solely because its custom label said Treasure Thief gem.");
+    reloadedTransformedRewardChild.UndoEdits();
+    MobyRelationshipRepair.RepairChestContentLinks("artisans", reloadedTransformedRewardChildMobys);
+    AssertActiveRelationshipTopology(
+        reloadedTransformedRewardChildMobys,
+        rewardRoot.TrueIndex,
+        rewardTriggerTrueIndexes,
+        IsTreasureThiefRewardSmokeLink,
+        "Undo of incompatible transformed reward-trigger child");
+
+    await ReportCrossLevelTransformDisplayMetadataRoundTripSmoke(temporary.Path, stoneHillCachePath);
+    ReportRewardCarrierUndoDisplayMetadataSmoke(artisansCachePath);
+
+    (int baselineGroups, int baselineMembers) = AssertAllLevelGemRelationshipBaselineCoverage();
+
+    Console.WriteLine(
+        $"Linked gem relationship persistence: incompatible chest T{chestRoot.TrueIndex}->T{incompatibleChestDonor.TrueIndex} detached; " +
+        $"compatible chest T{compatibleChestRoot.TrueIndex}->T{compatibleChestDonor.TrueIndex} retained {reloadedCompatibleContents.Length} content row(s); " +
+        $"root/child transform and remove Undo restored dormant topology; foreign index/label/controller decoys rejected; " +
+        $"incompatible reward root T{rewardRoot.TrueIndex}->T{incompatibleRewardDonor.TrueIndex} detached {rewardTriggerTrueIndexes.Length} trigger row(s) despite stale identity text; " +
+        $"all-level baseline={baselineGroups} group(s)/{baselineMembers} member(s).");
+}
+
+List<Moby> LoadEnrichedMobysForRelationshipPersistenceSmoke(string levelKey, string cachePath)
+{
+    List<Moby> mobys = MobyLoader.LoadCached(cachePath).ToList();
+    MobyMetadataEnricher.Apply(workspace, levelKey, mobys);
+    MobyRelationshipRepair.RepairChestContentLinks(levelKey, mobys);
+    return mobys;
+}
+
+void ApplySameLevelTransformForRelationshipPersistenceSmoke(
+    Moby target,
+    Moby donor,
+    string levelKey,
+    string levelName)
+{
+    target.SetType(donor.Type);
+    target.State = donor.State;
+    target.YawByte = donor.YawByte;
+    target.SourceByte36 = donor.SourceByte36;
+    target.SourceByte37 = donor.SourceByte37;
+    target.SourceByte4F = donor.SourceByte4F;
+    target.Flag4A = donor.Flag4A;
+    target.Flag4B = donor.Flag4B;
+    target.Label = donor.DisplayLabel;
+    target.SourceCloneLevelKey = levelKey;
+    target.SourceCloneLevelName = levelName;
+    target.SourceCloneTrueIndex = donor.TrueIndex;
+}
+
+async Task ReportCrossLevelTransformDisplayMetadataRoundTripSmoke(
+    string temporaryPath,
+    string stoneHillCachePath)
+{
+    List<Moby> targetMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("stonehill", stoneHillCachePath);
+    Moby target = targetMobys.First(moby =>
+        moby.TrueIndex >= 0 &&
+        !moby.IsEditorControl &&
+        !moby.IsGemLike &&
+        moby.OriginalColor.HasValue &&
+        !string.IsNullOrWhiteSpace(moby.OriginalCandidateKind) &&
+        !string.IsNullOrWhiteSpace(moby.OriginalConfidence) &&
+        !string.IsNullOrWhiteSpace(moby.OriginalEvidence) &&
+        !string.IsNullOrWhiteSpace(moby.OriginalZoneLabel));
+    MobyImmutableDisplaySmokeSnapshot immutableOriginal = new(
+        target.OriginalLabel,
+        target.OriginalColor ?? target.Color,
+        target.OriginalPatchStatus,
+        target.OriginalPatchLead,
+        target.OriginalCandidateKind,
+        target.OriginalConfidence,
+        target.OriginalEvidence,
+        target.OriginalBehaviorNote,
+        target.OriginalZoneLabel);
+    if (CaptureMobyImmutableDisplaySmokeSnapshot(target) != immutableOriginal)
+        throw new InvalidOperationException("The enriched transform target did not begin at its immutable display baseline.");
+
+    string darkHollowCachePath = Path.Combine(workspace.RootPath, "editor-cache", "darkhollow-mobys.json");
+    List<Moby> donorMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("darkhollow", darkHollowCachePath);
+    Moby donor = donorMobys.First(moby =>
+        moby.TrueIndex >= 0 &&
+        !moby.IsEditorControl &&
+        !moby.IsGemLike &&
+        moby.Color != target.Color &&
+        !string.Equals(moby.DisplayLabel, target.DisplayLabel, StringComparison.Ordinal) &&
+        (moby.Type != target.Type ||
+            moby.SourceByte36 != target.SourceByte36 ||
+            moby.SourceByte37 != target.SourceByte37 ||
+            moby.Flag4B != target.Flag4B));
+
+    target.SetType(donor.Type);
+    target.State = donor.State;
+    target.YawByte = donor.YawByte;
+    target.SourceByte36 = donor.SourceByte36;
+    target.SourceByte37 = donor.SourceByte37;
+    target.SourceByte4F = donor.SourceByte4F;
+    target.Flag4A = donor.Flag4A;
+    target.Flag4B = donor.Flag4B;
+    target.Label = donor.DisplayLabel;
+    target.Color = donor.Color;
+    target.PatchStatus = $"cross-level donor smoke: {DonorDisplayMetadataValue(donor.PatchStatus)}";
+    target.PatchLead = $"Dark Hollow T{donor.TrueIndex}: {DonorDisplayMetadataValue(donor.PatchLead)}";
+    target.CandidateKind = $"donor kind: {DonorDisplayMetadataValue(donor.CandidateKind)}";
+    target.Confidence = $"donor confidence: {DonorDisplayMetadataValue(donor.Confidence)}";
+    target.Evidence = $"donor evidence: {DonorDisplayMetadataValue(donor.Evidence)}";
+    target.BehaviorNote = $"donor behavior: {DonorDisplayMetadataValue(donor.BehaviorNote)}";
+    target.ZoneLabel = $"donor zone: {DonorDisplayMetadataValue(donor.ZoneLabel)}";
+    target.CrossLevelTemplateId = $"smoke.darkhollow.t{donor.TrueIndex}.display-metadata-roundtrip";
+    target.CrossLevelFamily = "smoke-cross-level-donor";
+    target.CrossLevelSourceLevelKey = "darkhollow";
+    target.CrossLevelSourceLevelName = "Dark Hollow";
+    target.CrossLevelSourceTrueIndex = donor.TrueIndex;
+    target.CrossLevelRequiredExporterFeature = "native-moby-source-record-clone";
+    target.SourceCloneLevelKey = "darkhollow";
+    target.SourceCloneLevelName = "Dark Hollow";
+    target.SourceCloneTrueIndex = donor.TrueIndex;
+
+    if (CaptureMobyImmutableDisplaySmokeSnapshot(target) == immutableOriginal)
+        throw new InvalidOperationException("The cross-level transform fixture did not change the target's display metadata.");
+    MobyPersistenceSmokeSnapshot transformedSnapshot = CaptureMobyPersistenceSmokeSnapshot(target);
+
+    const string levelName = "Stone Hill cross-level donor metadata roundtrip smoke";
+    string firstPath = Path.Combine(temporaryPath, "stonehill-cross-level-display-metadata-first.json");
+    string secondPath = Path.Combine(temporaryPath, "stonehill-cross-level-display-metadata-second.json");
+    if (await MobyEditStore.SaveAsync(firstPath, [target], levelName) != 1)
+        throw new InvalidOperationException("The cross-level display-metadata transform did not save exactly one edit.");
+
+    List<Moby> reloadedMobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("stonehill", stoneHillCachePath);
+    if (MobyEditStore.Load(firstPath, reloadedMobys) != 1)
+        throw new InvalidOperationException("The cross-level display-metadata transform did not reload exactly one edit.");
+    Moby reloaded = reloadedMobys.Single(moby => moby.TrueIndex == target.TrueIndex);
+    MobyPersistenceSmokeSnapshot reloadedSnapshot = CaptureMobyPersistenceSmokeSnapshot(reloaded);
+    if (reloadedSnapshot != transformedSnapshot)
+    {
+        throw new InvalidOperationException(
+            $"Cross-level display metadata changed across save/reload. Expected {transformedSnapshot}; found {reloadedSnapshot}.");
+    }
+
+    if (await MobyEditStore.SaveAsync(secondPath, [reloaded], levelName) != 1)
+        throw new InvalidOperationException("The reloaded cross-level display-metadata transform did not resave exactly one edit.");
+    JsonNode firstPayload = LoadNormalizedMobyEditPayload(firstPath);
+    JsonNode secondPayload = LoadNormalizedMobyEditPayload(secondPath);
+    if (!JsonNode.DeepEquals(firstPayload, secondPayload))
+    {
+        throw new InvalidOperationException(
+            "The normalized cross-level display-metadata edit payload changed after reload/resave. " +
+            $"First={firstPayload.ToJsonString()}; second={secondPayload.ToJsonString()}.");
+    }
+
+    reloaded.UndoEdits();
+    if (CaptureMobyImmutableDisplaySmokeSnapshot(reloaded) != immutableOriginal ||
+        reloaded.Type != reloaded.OriginalType ||
+        reloaded.State != reloaded.OriginalState ||
+        reloaded.YawByte != reloaded.OriginalYawByte ||
+        reloaded.SourceByte36 != reloaded.OriginalSourceByte36 ||
+        reloaded.SourceByte37 != reloaded.OriginalSourceByte37 ||
+        reloaded.SourceByte4F != reloaded.OriginalSourceByte4F ||
+        reloaded.Flag4A != reloaded.OriginalFlag4A ||
+        reloaded.Flag4B != reloaded.OriginalFlag4B ||
+        !string.IsNullOrEmpty(reloaded.CrossLevelTemplateId) ||
+        !string.IsNullOrEmpty(reloaded.CrossLevelFamily) ||
+        !string.IsNullOrEmpty(reloaded.CrossLevelSourceLevelKey) ||
+        !string.IsNullOrEmpty(reloaded.CrossLevelSourceLevelName) ||
+        reloaded.CrossLevelSourceTrueIndex != -1 ||
+        !string.IsNullOrEmpty(reloaded.CrossLevelRequiredExporterFeature) ||
+        !string.IsNullOrEmpty(reloaded.SourceCloneLevelKey) ||
+        !string.IsNullOrEmpty(reloaded.SourceCloneLevelName) ||
+        reloaded.SourceCloneTrueIndex != -1 ||
+        reloaded.HasLoadedNativeEdit ||
+        !string.IsNullOrEmpty(reloaded.LoadedNativeEditSummary))
+    {
+        throw new InvalidOperationException(
+            "Undo did not restore every immutable native/display field or clear all cross-level transform identity.");
+    }
+
+    Console.WriteLine(
+        $"Cross-level metadata roundtrip: Stone Hill T{target.TrueIndex} used Dark Hollow T{donor.TrueIndex}; " +
+        "native/display/color/status/lead/template fields were stable across save/reload/resave, and Undo restored the immutable baseline.");
+}
+
+void ReportRewardCarrierUndoDisplayMetadataSmoke(string artisansCachePath)
+{
+    List<Moby> mobys = LoadEnrichedMobysForRelationshipPersistenceSmoke("artisans", artisansCachePath);
+    Moby rewardCarrier = mobys.Single(moby => moby.TrueIndex == 7);
+    GemValue originalReward = rewardCarrier.RewardGem;
+    ColorRgba originalColor = rewardCarrier.OriginalColor ?? rewardCarrier.Color;
+    int originalFlag4B = rewardCarrier.OriginalFlag4B;
+    string originalLabel = rewardCarrier.OriginalLabel;
+    if (originalReward == GemValue.Unknown ||
+        originalFlag4B != originalReward.IdByte ||
+        originalColor == originalReward.Color)
+    {
+        throw new InvalidOperationException(
+            "The Artisans T7 reward-carrier fixture does not have a distinct enriched non-gem color and valid reward byte.");
+    }
+
+    GemValue replacement = GemValue.Known.First(gem =>
+        gem != originalReward &&
+        gem.Color != originalColor);
+    rewardCarrier.Flag4B = replacement.IdByte;
+    rewardCarrier.Label = rewardCarrier.SuggestedRewardGemLabel(replacement);
+    rewardCarrier.Color = replacement.Color;
+    rewardCarrier.HasLoadedNativeEdit = true;
+    rewardCarrier.LoadedNativeEditSummary = $"{replacement.DisplayName} reward byte";
+    if (rewardCarrier.RewardGem != replacement || rewardCarrier.Color != replacement.Color)
+        throw new InvalidOperationException("The direct reward-carrier edit fixture did not apply its replacement byte/color.");
+
+    rewardCarrier.UndoEdits();
+    if (rewardCarrier.Flag4B != originalFlag4B ||
+        rewardCarrier.RewardGem != originalReward ||
+        rewardCarrier.Color != originalColor ||
+        !string.Equals(rewardCarrier.Label, originalLabel, StringComparison.Ordinal) ||
+        rewardCarrier.HasLoadedNativeEdit ||
+        !string.IsNullOrEmpty(rewardCarrier.LoadedNativeEditSummary))
+    {
+        throw new InvalidOperationException(
+            "Undo of a direct reward-carrier edit did not restore the original reward byte, label, and enriched non-gem color.");
+    }
+
+    Console.WriteLine(
+        $"Reward-carrier Undo: Artisans T{rewardCarrier.TrueIndex} restored {originalReward.DisplayName} and non-gem color " +
+        $"#{originalColor.R:X2}{originalColor.G:X2}{originalColor.B:X2}.");
+}
+
+MobyImmutableDisplaySmokeSnapshot CaptureMobyImmutableDisplaySmokeSnapshot(Moby moby) => new(
+    moby.Label,
+    moby.Color,
+    moby.PatchStatus,
+    moby.PatchLead,
+    moby.CandidateKind,
+    moby.Confidence,
+    moby.Evidence,
+    moby.BehaviorNote,
+    moby.ZoneLabel);
+
+MobyPersistenceSmokeSnapshot CaptureMobyPersistenceSmokeSnapshot(Moby moby) => new(
+    moby.Type,
+    moby.State,
+    moby.YawByte,
+    moby.SourceByte36,
+    moby.SourceByte37,
+    moby.SourceByte4F,
+    moby.Flag4A,
+    moby.Flag4B,
+    CaptureMobyImmutableDisplaySmokeSnapshot(moby),
+    moby.CrossLevelTemplateId,
+    moby.CrossLevelFamily,
+    moby.CrossLevelSourceLevelKey,
+    moby.CrossLevelSourceLevelName,
+    moby.CrossLevelSourceTrueIndex,
+    moby.CrossLevelRequiredExporterFeature,
+    moby.SourceCloneLevelKey,
+    moby.SourceCloneLevelName,
+    moby.SourceCloneTrueIndex);
+
+JsonNode LoadNormalizedMobyEditPayload(string path)
+{
+    JsonNode payload = JsonNode.Parse(File.ReadAllText(path))
+        ?? throw new InvalidOperationException($"Could not parse saved Moby edit payload {path}.");
+    if (payload is not JsonObject root)
+        throw new InvalidOperationException($"Saved Moby edit payload {path} was not a JSON object.");
+    root.Remove("generatedAt");
+    return root;
+}
+
+string DonorDisplayMetadataValue(string? value) =>
+    string.IsNullOrWhiteSpace(value) ? "not supplied by donor" : value.Trim();
+
+bool HasRelationshipLinkReferencingRoot(
+    IEnumerable<Moby> mobys,
+    int rootTrueIndex,
+    Func<MobyLink, bool> predicate) =>
+    mobys.SelectMany(moby => moby.Links)
+        .Any(link => predicate(link) && link.TrueIndexes.Contains(rootTrueIndex));
+
+void AssertActiveRelationshipTopology(
+    IReadOnlyList<Moby> mobys,
+    int rootTrueIndex,
+    IReadOnlyList<int> expectedChildTrueIndexes,
+    Func<MobyLink, bool> predicate,
+    string scenario)
+{
+    Moby root = mobys.Single(moby => moby.TrueIndex == rootTrueIndex);
+    List<MobyLink> links = root.Links
+        .Where(link => predicate(link) &&
+            link.TrueIndexes.Count > 0 &&
+            link.TrueIndexes[0] == rootTrueIndex)
+        .ToList();
+    if (links.Count != 1)
+        throw new InvalidOperationException($"{scenario}: expected one root-first active relationship, found {links.Count}.");
+
+    int[] actualChildren = links[0].TrueIndexes.Skip(1).Order().ToArray();
+    int[] expectedChildren = expectedChildTrueIndexes.Order().ToArray();
+    if (!actualChildren.SequenceEqual(expectedChildren))
+    {
+        throw new InvalidOperationException(
+            $"{scenario}: active children [{string.Join(',', actualChildren)}], expected [{string.Join(',', expectedChildren)}].");
+    }
+
+    foreach (int trueIndex in links[0].TrueIndexes)
+    {
+        Moby member = mobys.Single(moby => moby.TrueIndex == trueIndex);
+        if (!member.Links.Any(link => predicate(link) && link.TrueIndexes.SequenceEqual(links[0].TrueIndexes)))
+            throw new InvalidOperationException($"{scenario}: T{trueIndex} does not carry the projected root-first link.");
+    }
+}
+
+void AssertDormantRelationshipTopology(
+    IReadOnlyList<Moby> mobys,
+    int rootTrueIndex,
+    IReadOnlyList<int> expectedChildTrueIndexes,
+    Func<MobyLink, bool> predicate,
+    string scenario)
+{
+    int[] expectedTopology = new[] { rootTrueIndex }
+        .Concat(expectedChildTrueIndexes)
+        .ToArray();
+    List<MobyLink> baselines = mobys
+        .SelectMany(moby => moby.DormantGemRelationshipLinks)
+        .Where(link => predicate(link) &&
+            link.TrueIndexes.Count > 0 &&
+            link.TrueIndexes[0] == rootTrueIndex)
+        .GroupBy(link => string.Join(',', link.TrueIndexes), StringComparer.Ordinal)
+        .Select(group => group.First())
+        .ToList();
+    if (baselines.Count != 1 || !baselines[0].TrueIndexes.SequenceEqual(expectedTopology))
+    {
+        throw new InvalidOperationException(
+            $"{scenario}: dormant topology was not preserved as [{string.Join(',', expectedTopology)}].");
+    }
+
+    foreach (int trueIndex in expectedTopology)
+    {
+        Moby member = mobys.Single(moby => moby.TrueIndex == trueIndex);
+        if (!member.DormantGemRelationshipLinks.Any(link =>
+                predicate(link) && link.TrueIndexes.SequenceEqual(expectedTopology)))
+        {
+            throw new InvalidOperationException($"{scenario}: dormant topology is missing from member T{trueIndex}.");
+        }
+    }
+}
+
+void AssertGemRelationshipReconcileIdempotent(string levelKey, IList<Moby> mobys)
+{
+    MobyRelationshipRepair.RepairChestContentLinks(levelKey, mobys);
+    string first = GemRelationshipTopologySnapshot(mobys);
+    MobyRelationshipRepair.RepairChestContentLinks(levelKey, mobys);
+    string second = GemRelationshipTopologySnapshot(mobys);
+    if (!string.Equals(first, second, StringComparison.Ordinal))
+        throw new InvalidOperationException($"{levelKey} gem relationship reconciliation was not idempotent.");
+}
+
+string GemRelationshipTopologySnapshot(IEnumerable<Moby> mobys)
+{
+    bool IsGemRelationship(MobyLink link) =>
+        string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase) ||
+        IsTreasureThiefRewardSmokeLink(link);
+    static string LinkText(MobyLink link) =>
+        $"{link.Key}|{link.Kind}|{string.Join(',', link.TrueIndexes)}";
+
+    return string.Join(
+        ";",
+        mobys.OrderBy(moby => moby.TrueIndex).Select(moby =>
+            $"T{moby.TrueIndex}:A[{string.Join('/', moby.Links.Where(IsGemRelationship).Select(LinkText).Order())}]" +
+            $":D[{string.Join('/', moby.DormantGemRelationshipLinks.Where(IsGemRelationship).Select(LinkText).Order())}]")
+    );
+}
+
+void AssertChestControllerAndContentTemplateRelationshipGuards()
+{
+    Moby nativeController = new()
+    {
+        Index = 900,
+        TrueIndex = 900,
+        Type = 0x20,
+        OriginalType = 0x20,
+        SourceByte36 = 0x49,
+        OriginalSourceByte36 = 0x49,
+        SourceByte37 = 0x01,
+        OriginalSourceByte37 = 0x01,
+        SourceByte4F = 0x00,
+        OriginalSourceByte4F = 0x00,
+        Flag4A = 0x10,
+        OriginalFlag4A = 0x10,
+        Flag4B = GemValue.Blue.IdByte,
+        OriginalFlag4B = GemValue.Blue.IdByte,
+        Label = "Spring Chest controller",
+        OriginalLabel = "Spring Chest controller"
+    };
+    if (MobyRelationshipRepair.SupportsChestRelationships("stonehill", nativeController, [nativeController]))
+        throw new InvalidOperationException("A native Spring Chest controller was classified as a chest-content root.");
+
+    nativeController.CrossLevelTemplateId = "common.spring_chest.controller.peacekeepers.t71";
+    nativeController.CrossLevelFamily = "springChestController";
+    if (MobyRelationshipRepair.SupportsChestRelationships("stonehill", nativeController, [nativeController]))
+        throw new InvalidOperationException("A cross-level Spring Chest controller was classified as a chest-content root.");
+
+    nativeController.CrossLevelTemplateId = "common.locked_chest_content.darkhollow.t120";
+    nativeController.CrossLevelFamily = "chestContent";
+    nativeController.Label = "Custom Locked Chest decoy";
+    if (MobyRelationshipRepair.SupportsChestRelationships("stonehill", nativeController, [nativeController]))
+        throw new InvalidOperationException("A cross-level chestContent template was classified as a chest root because of native bytes or a custom label.");
+
+    Moby rewardTriggerTemplate = new()
+    {
+        Index = 901,
+        TrueIndex = 901,
+        Type = 0x20,
+        OriginalType = 0x20,
+        SourceByte36 = 0x53,
+        OriginalSourceByte36 = 0x53,
+        SourceByte37 = 0x01,
+        OriginalSourceByte37 = 0x01,
+        Flag4A = 0x10,
+        OriginalFlag4A = 0x10,
+        Flag4B = GemValue.Red.IdByte,
+        OriginalFlag4B = GemValue.Red.IdByte,
+        Label = "Treasure Thief reward trigger decoy",
+        OriginalLabel = "Treasure Thief reward trigger decoy",
+        CrossLevelTemplateId = "common.treasure-thief-reward-trigger.artisans.t17",
+        CrossLevelFamily = "treasureThiefRewardTrigger"
+    };
+    Moby rewardRootTemplate = new()
+    {
+        Index = 902,
+        TrueIndex = 902,
+        Type = 0x00,
+        OriginalType = 0x00,
+        SourceByte36 = 0x5F,
+        OriginalSourceByte36 = 0x5F,
+        SourceByte37 = 0x01,
+        OriginalSourceByte37 = 0x01,
+        Flag4A = 0x10,
+        OriginalFlag4A = 0x10,
+        Flag4B = GemValue.Red.IdByte,
+        OriginalFlag4B = GemValue.Red.IdByte,
+        Label = "Treasure Thief",
+        OriginalLabel = "Treasure Thief",
+        CrossLevelTemplateId = "enemy.treasure-thief.artisans.t7",
+        CrossLevelFamily = "treasureThief"
+    };
+    if (MobyRelationshipRepair.SupportsRewardTriggerRelationships(
+            "stonehill",
+            rewardTriggerTemplate,
+            [rewardTriggerTemplate]) ||
+        !MobyRelationshipRepair.SupportsRewardTriggerRelationships(
+            "stonehill",
+            rewardRootTemplate,
+            [rewardRootTemplate]))
+    {
+        throw new InvalidOperationException(
+            "Cross-level Treasure Thief reward-trigger/root template roles were not kept distinct.");
+    }
+}
+
+void AssertDesignatedGemRelationshipRoleGuards()
+{
+    Moby root = new()
+    {
+        Index = 910,
+        TrueIndex = 910,
+        Position = new Vector3f(0, 0, 0),
+        OriginalPosition = new Vector3f(0, 0, 0),
+        Type = 0x20,
+        OriginalType = 0x20,
+        SourceByte36 = 0xAE,
+        OriginalSourceByte36 = 0xAE,
+        SourceByte37 = 0x00,
+        OriginalSourceByte37 = 0x00,
+        SourceByte4F = 0x00,
+        OriginalSourceByte4F = 0x00,
+        Flag4A = 0x10,
+        OriginalFlag4A = 0x10,
+        Flag4B = GemValue.Green.IdByte,
+        OriginalFlag4B = GemValue.Green.IdByte,
+        Label = "Locked Chest",
+        OriginalLabel = "Locked Chest"
+    };
+    Moby content = new()
+    {
+        Index = 911,
+        TrueIndex = 911,
+        Position = new Vector3f(1000, 0, 0),
+        OriginalPosition = new Vector3f(1000, 0, 0),
+        Type = 0x00,
+        OriginalType = 0x00,
+        SourceByte36 = 0x0D,
+        OriginalSourceByte36 = 0x0D,
+        SourceByte37 = 0x00,
+        OriginalSourceByte37 = 0x00,
+        SourceByte4F = 0x00,
+        OriginalSourceByte4F = 0x00,
+        Flag4A = 0xFF,
+        OriginalFlag4A = 0xFF,
+        Flag4B = GemValue.Green.IdByte,
+        OriginalFlag4B = GemValue.Green.IdByte,
+        Label = "Locked chest content: Green gem (2)",
+        OriginalLabel = "Locked chest content: Green gem (2)"
+    };
+    MobyLink reversed = new()
+    {
+        Key = "smoke:reversed-chest-topology",
+        Name = "Reversed chest topology",
+        Kind = "chest contents",
+        LinkedMove = true,
+        TrueIndexes = [content.TrueIndex, root.TrueIndex]
+    };
+    root.Links.Add(reversed);
+    content.Links.Add(reversed);
+    List<Moby> reversedMobys = [root, content];
+    MobyRelationshipRepair.RepairChestContentLinks("smoke", reversedMobys);
+    if (reversedMobys.Any(moby => moby.Links.Any(link => string.Equals(link.Key, reversed.Key, StringComparison.OrdinalIgnoreCase))) ||
+        reversedMobys.Any(moby => moby.DormantGemRelationshipLinks.Any(link => string.Equals(link.Key, reversed.Key, StringComparison.OrdinalIgnoreCase))))
+    {
+        throw new InvalidOperationException("A chest-content member in TrueIndexes[0] was accepted as the designated relationship root.");
+    }
+
+    Moby decoyChild = new()
+    {
+        Index = 912,
+        TrueIndex = 912,
+        Position = root.Position,
+        OriginalPosition = root.OriginalPosition,
+        Type = 0x20,
+        OriginalType = 0x20,
+        SourceByte36 = 0x01,
+        OriginalSourceByte36 = 0x01,
+        SourceByte37 = 0x01,
+        OriginalSourceByte37 = 0x01,
+        SourceByte4F = 0x00,
+        OriginalSourceByte4F = 0x00,
+        Flag4A = 0x10,
+        OriginalFlag4A = 0x10,
+        Flag4B = GemValue.Red.IdByte,
+        OriginalFlag4B = GemValue.Red.IdByte,
+        Label = "Locked chest content: Red gem (1)",
+        OriginalLabel = "Locked chest content: Red gem (1)"
+    };
+    MobyLink invalidChild = new()
+    {
+        Key = "smoke:invalid-chest-child",
+        Name = "Invalid chest child",
+        Kind = "chest contents",
+        LinkedMove = true,
+        TrueIndexes = [root.TrueIndex, decoyChild.TrueIndex]
+    };
+    root.Links.Add(invalidChild);
+    decoyChild.Links.Add(invalidChild);
+    List<Moby> invalidChildMobys = [root, decoyChild];
+    MobyRelationshipRepair.RepairChestContentLinks("smoke", invalidChildMobys);
+    if (invalidChildMobys.Any(moby => moby.Links.Any(link => string.Equals(link.Key, invalidChild.Key, StringComparison.OrdinalIgnoreCase))) ||
+        invalidChildMobys.Any(moby => moby.DormantGemRelationshipLinks.Any(link => string.Equals(link.Key, invalidChild.Key, StringComparison.OrdinalIgnoreCase))))
+    {
+        throw new InvalidOperationException("A custom chest-content label allowed an incompatible child role into authoritative topology.");
+    }
+}
+
+(int Groups, int Members) AssertAllLevelGemRelationshipBaselineCoverage()
+{
+    int groups = 0;
+    int members = 0;
+    foreach (LevelDefinition level in catalog.Levels)
+    {
+        string cachePath = Path.Combine(workspace.RootPath, "editor-cache", $"{level.Key}-mobys.json");
+        if (!File.Exists(cachePath))
+            continue;
+
+        List<Moby> mobys = MobyLoader.LoadCached(cachePath).ToList();
+        MobyMetadataEnricher.Apply(workspace, level.Key, mobys);
+        MobyRelationshipRepair.RepairChestContentLinks(level.Key, mobys);
+        List<MobyLink> baselines = mobys
+            .SelectMany(moby => moby.DormantGemRelationshipLinks)
+            .Where(link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase) ||
+                IsTreasureThiefRewardSmokeLink(link))
+            .GroupBy(link => $"{link.Key}|{link.Kind}|{string.Join(',', link.TrueIndexes)}", StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
+
+        foreach (MobyLink baseline in baselines)
+        {
+            if (baseline.TrueIndexes.Count < 2)
+                throw new InvalidOperationException($"{level.DisplayName} retained a one-member dormant gem relationship.");
+            Moby root = mobys.Single(moby => moby.TrueIndex == baseline.TrueIndexes[0]);
+            if (!root.Links.Any(link =>
+                    string.Equals(link.Key, baseline.Key, StringComparison.OrdinalIgnoreCase) &&
+                    link.TrueIndexes.SequenceEqual(baseline.TrueIndexes)))
+            {
+                throw new InvalidOperationException(
+                    $"{level.DisplayName} T{root.TrueIndex} did not project its unedited dormant gem relationship.");
+            }
+            foreach (int trueIndex in baseline.TrueIndexes)
+            {
+                Moby member = mobys.Single(moby => moby.TrueIndex == trueIndex);
+                if (!member.DormantGemRelationshipLinks.Any(link =>
+                        string.Equals(link.Key, baseline.Key, StringComparison.OrdinalIgnoreCase) &&
+                        link.TrueIndexes.SequenceEqual(baseline.TrueIndexes)))
+                {
+                    throw new InvalidOperationException(
+                        $"{level.DisplayName} T{trueIndex} is missing its full dormant gem topology.");
+                }
+            }
+
+            groups++;
+            members += baseline.TrueIndexes.Count;
+        }
+
+        AssertGemRelationshipReconcileIdempotent(level.Key, mobys);
+    }
+
+    if (groups == 0 || members == 0)
+        throw new InvalidOperationException("All-level gem relationship baseline coverage found no authoritative groups.");
+    return (groups, members);
+}
+
+void ReportGemLabelSuggestionSmoke()
+{
+    Moby toastyReward = new()
+    {
+        Type = 0x00,
+        Flag4A = 0xFF,
+        Flag4B = GemValue.Blue.IdByte,
+        Label = "Toasty sheep-form contained Blue gem (5)"
+    };
+    string toastyGreen = toastyReward.SuggestedGemLabel(GemValue.Green, toastyReward.Label);
+    string toastyPurple = toastyReward.SuggestedGemLabel(GemValue.Purple, toastyGreen);
+    if (toastyGreen != "Toasty sheep-form contained Green gem (2)" ||
+        toastyPurple != "Toasty sheep-form contained Purple gem (25)" ||
+        !Moby.IsGeneratedGemLabel(toastyPurple, rewardCarrier: false))
+    {
+        throw new InvalidOperationException("Repeated pre-Apply Toasty contained-reward selections did not preserve the precise role label.");
+    }
+
+    toastyReward.ApplyGem(GemValue.Purple);
+    if (toastyReward.Flag4B != GemValue.Purple.IdByte ||
+        toastyReward.Label != "Toasty sheep-form contained Purple gem (25)")
+    {
+        throw new InvalidOperationException("Applying Toasty's contained-reward gem did not preserve the precise role label.");
+    }
+
+    Moby lockedContent = new()
+    {
+        Type = 0x00,
+        Flag4A = 0xFF,
+        Flag4B = GemValue.Red.IdByte,
+        Label = "Locked chest content: Red gem (1)"
+    };
+    string lockedBlue = lockedContent.SuggestedGemLabel(GemValue.Blue, lockedContent.Label);
+    string lockedYellow = lockedContent.SuggestedGemLabel(GemValue.Yellow, lockedBlue);
+    if (lockedBlue != "Locked chest content: Blue gem (5)" ||
+        lockedYellow != "Locked chest content: Yellow gem (10)" ||
+        lockedContent.SuggestedGemLabel(GemValue.Green, "") != "Locked chest content: Green gem (2)")
+    {
+        throw new InvalidOperationException("Generated locked-chest content labels did not follow repeated gem selections.");
+    }
+
+    Moby looseGem = new()
+    {
+        Type = 0x18,
+        SourceByte36 = GemValue.Red.IdByte,
+        SourceByte4F = GemValue.Red.ValueByte,
+        Label = GemValue.Red.DisplayName
+    };
+    string looseBlue = looseGem.SuggestedGemLabel(GemValue.Blue, looseGem.Label);
+    string looseYellow = looseGem.SuggestedGemLabel(GemValue.Yellow, looseBlue);
+    string containedGreen = looseGem.SuggestedGemLabel(GemValue.Green, "Contained Red gem (1)");
+    string containedPurple = looseGem.SuggestedGemLabel(GemValue.Purple, containedGreen);
+    string liveTestedGreen = looseGem.SuggestedGemLabel(GemValue.Green, "Red gem (1) (live-tested)");
+    string liveTestedPurple = looseGem.SuggestedGemLabel(GemValue.Purple, liveTestedGreen);
+    string copiedGreen = looseGem.SuggestedGemLabel(GemValue.Green, "Copy of Red gem (1)");
+    string copiedPurple = looseGem.SuggestedGemLabel(GemValue.Purple, copiedGreen);
+    if (looseBlue != GemValue.Blue.DisplayName ||
+        looseYellow != GemValue.Yellow.DisplayName ||
+        containedGreen != "Contained Green gem (2)" ||
+        containedPurple != "Contained Purple gem (25)" ||
+        liveTestedGreen != "Green gem (2) (live-tested)" ||
+        liveTestedPurple != "Purple gem (25) (live-tested)" ||
+        copiedGreen != "Copy of Green gem (2)" ||
+        copiedPurple != "Copy of Purple gem (25)" ||
+        looseGem.SuggestedGemLabel(GemValue.Green, "New Red gem") != "New Green gem" ||
+        looseGem.SuggestedGemLabel(GemValue.Purple, "") != GemValue.Purple.DisplayName)
+    {
+        throw new InvalidOperationException("Generated loose-gem labels did not follow repeated gem selections.");
+    }
+
+    Moby rewardCarrier = new()
+    {
+        Type = 0x20,
+        Flag4B = GemValue.Blue.IdByte,
+        Label = "Ice Gnorc (Blue reward)"
+    };
+    string rewardGreen = rewardCarrier.SuggestedRewardGemLabel(GemValue.Green, rewardCarrier.Label);
+    string rewardPurple = rewardCarrier.SuggestedRewardGemLabel(GemValue.Purple, rewardGreen);
+    string phaseYellow = rewardCarrier.SuggestedRewardGemLabel(
+        GemValue.Yellow,
+        "Toasty phase-reward Blue gem marker");
+    string[] treasureThiefRedLabels =
+    [
+        "Treasure Thief Red Gem 1",
+        "Treasure Thief Red Gem 2",
+        "Treasure Thief Red Gems 3-4",
+        "Treasure Thief Red Gem 5"
+    ];
+    string[] treasureThiefPurpleLabels = treasureThiefRedLabels
+        .Select(label => rewardCarrier.SuggestedRewardGemLabel(GemValue.Purple, label))
+        .ToArray();
+    string[] expectedTreasureThiefPurpleLabels =
+    [
+        "Treasure Thief Purple Gem 1",
+        "Treasure Thief Purple Gem 2",
+        "Treasure Thief Purple Gems 3-4",
+        "Treasure Thief Purple Gem 5"
+    ];
+    if (rewardGreen != "Ice Gnorc (Green reward)" ||
+        rewardPurple != "Ice Gnorc (Purple reward)" ||
+        phaseYellow != "Toasty phase-reward Yellow gem marker" ||
+        !treasureThiefPurpleLabels.SequenceEqual(expectedTreasureThiefPurpleLabels) ||
+        treasureThiefPurpleLabels.Any(label => !Moby.IsGeneratedGemLabel(label, rewardCarrier: true)) ||
+        rewardCarrier.SuggestedRewardGemLabel(GemValue.Purple, "") != "Purple reward" ||
+        !Moby.IsGeneratedGemLabel(rewardPurple, rewardCarrier: true) ||
+        !Moby.IsGeneratedGemLabel(phaseYellow, rewardCarrier: true))
+    {
+        throw new InvalidOperationException("Generated reward-carrier labels did not follow repeated gem selections.");
+    }
+
+    const string customLooseLabel = "My Blue gem beside the upper bridge";
+    looseGem.Label = customLooseLabel;
+    looseGem.ApplyGem(GemValue.Purple);
+    const string customContainedLabel = "Boss-room secret treasure";
+    lockedContent.Label = customContainedLabel;
+    lockedContent.ApplyGem(GemValue.Purple);
+    const string customRewardLabel = "Upper bridge treasure carrier";
+    if (looseGem.Label != customLooseLabel ||
+        looseGem.SourceByte36 != GemValue.Purple.IdByte ||
+        looseGem.SourceByte4F != GemValue.Purple.ValueByte ||
+        lockedContent.Label != customContainedLabel ||
+        lockedContent.Flag4B != GemValue.Purple.IdByte ||
+        rewardCarrier.SuggestedRewardGemLabel(GemValue.Purple, customRewardLabel) != customRewardLabel ||
+        looseGem.SuggestedGemLabel(GemValue.Purple, "Copy of my bridge marker") != "Copy of my bridge marker" ||
+        Moby.IsGeneratedGemLabel(customLooseLabel, rewardCarrier: false) ||
+        Moby.IsGeneratedGemLabel(customRewardLabel, rewardCarrier: true))
+    {
+        throw new InvalidOperationException("A free-form gem or reward label was treated as editor-generated text.");
+    }
+
+    Moby undoLooseGem = new()
+    {
+        Type = 0x18,
+        OriginalType = 0x18,
+        SourceByte36 = GemValue.Red.IdByte,
+        OriginalSourceByte36 = GemValue.Red.IdByte,
+        SourceByte4F = GemValue.Red.ValueByte,
+        OriginalSourceByte4F = GemValue.Red.ValueByte,
+        Flag4A = 0x40,
+        OriginalFlag4A = 0x40,
+        Flag4B = 0xFF,
+        OriginalFlag4B = 0xFF,
+        Label = GemValue.Red.DisplayName,
+        OriginalLabel = GemValue.Red.DisplayName,
+        Color = GemValue.Red.Color
+    };
+    undoLooseGem.ApplyGem(GemValue.Purple);
+    undoLooseGem.UndoEdits();
+    if (undoLooseGem.Gem != GemValue.Red ||
+        undoLooseGem.SourceByte36 != GemValue.Red.IdByte ||
+        undoLooseGem.SourceByte4F != GemValue.Red.ValueByte ||
+        undoLooseGem.Label != GemValue.Red.DisplayName ||
+        undoLooseGem.Color != GemValue.Red.Color)
+    {
+        throw new InvalidOperationException("Undo restored loose-gem bytes and label without restoring the original gem display color.");
+    }
+
+    Moby undoContainedGem = new()
+    {
+        Type = 0x00,
+        OriginalType = 0x00,
+        Flag4A = 0xFF,
+        OriginalFlag4A = 0xFF,
+        Flag4B = GemValue.Green.IdByte,
+        OriginalFlag4B = GemValue.Green.IdByte,
+        Label = "Contained Green gem (2)",
+        OriginalLabel = "Contained Green gem (2)",
+        Color = GemValue.Green.Color
+    };
+    undoContainedGem.ApplyGem(GemValue.Yellow);
+    undoContainedGem.UndoEdits();
+    if (undoContainedGem.Gem != GemValue.Green ||
+        undoContainedGem.Flag4B != GemValue.Green.IdByte ||
+        undoContainedGem.Label != "Contained Green gem (2)" ||
+        undoContainedGem.Color != GemValue.Green.Color)
+    {
+        throw new InvalidOperationException("Undo restored contained-gem bytes and label without restoring the original gem display color.");
+    }
+
+    Console.WriteLine("Gem label suggestions: role-preserving direct/reward rewrites passed; custom labels and undo colors preserved");
+}
+
 async Task ReportExistingGemValueRoundTrip()
 {
     Directory.CreateDirectory(Path.Combine(workspace.RootPath, "_local", "smoke"));
@@ -18098,9 +25354,10 @@ async Task ReportExistingGemValueRoundTrip()
         OriginalSourceByte36 = GemValue.Red.IdByte,
         SourceByte4F = GemValue.Red.ValueByte,
         OriginalSourceByte4F = GemValue.Red.ValueByte,
-        Flag4A = 0,
-        Flag4B = GemValue.Red.IdByte,
-        OriginalFlag4B = GemValue.Red.IdByte,
+        Flag4A = 0x40,
+        OriginalFlag4A = 0x40,
+        Flag4B = 0xFF,
+        OriginalFlag4B = 0xFF,
         Color = GemValue.Red.Color,
         Label = GemValue.Red.DisplayName,
         OriginalLabel = GemValue.Red.DisplayName,
@@ -18394,7 +25651,7 @@ async Task ReportStoneHillMultiGemAddPatch(LevelDefinition level, List<Moby> sou
         moby.SourceByte37 == 0x00 &&
         moby.Flag4A == 0x40 &&
         moby.Flag4B == 0xFF &&
-        GemValue.TryFromIdByte(moby.SourceByte36, out _));
+        GemValue.TryFromEncoding(moby.SourceByte36, moby.SourceByte4F, out _));
     if (donor == null)
     {
         Console.WriteLine("Stone Hill multi-gem add source patch: loose gem donor missing; skipping.");
@@ -18673,8 +25930,8 @@ async Task ReportPastedLooseGemPatch(string levelKey)
         moby.SourceByte37 == 0x00 &&
         moby.Flag4A == 0x40 &&
         moby.Flag4B == 0xFF &&
-        GemValue.TryFromIdByte(moby.SourceByte36, out _));
-    if (donor == null || !GemValue.TryFromIdByte(donor.SourceByte36, out GemValue copiedGem))
+        GemValue.TryFromEncoding(moby.SourceByte36, moby.SourceByte4F, out _));
+    if (donor == null || !GemValue.TryFromEncoding(donor.SourceByte36, donor.SourceByte4F, out GemValue copiedGem))
     {
         Console.WriteLine($"{level.DisplayName} pasted gem source patch: loose gem donor missing; skipping.");
         return;
@@ -18888,7 +26145,7 @@ async Task ReportMixedCopiedObjectAppendGuard(string levelKey)
         moby.SourceByte37 == 0x00 &&
         moby.Flag4A == 0x40 &&
         moby.Flag4B == 0xFF &&
-        GemValue.TryFromIdByte(moby.SourceByte36, out _));
+        GemValue.TryFromEncoding(moby.SourceByte36, moby.SourceByte4F, out _));
     Moby? gnorcDonor = sourceMobys.FirstOrDefault(moby =>
         moby.TrueIndex >= 0 &&
         moby.TrueIndex < level.SourceRecordCount &&
@@ -19439,7 +26696,7 @@ async Task ReportPromotedNativeCloneTrueAppend(string levelKey, int sourceByte36
     int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
     int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 1;
     List<Moby> addedMobys = new();
-    for (int i = 0; i <= reusableSlotCount; i++)
+    for (int i = 0; i <= reusableSlotCount + 1; i++)
     {
         Moby added = CopyAsAddedMoby(donor, nextIndex + i, nextTrueIndex + i, $"Promoted {familyName} clone {i + 1}", 0);
         added.PatchStatus = "native-clone";
@@ -19466,8 +26723,13 @@ async Task ReportPromotedNativeCloneTrueAppend(string levelKey, int sourceByte36
     if (!exportResult.WroteImage)
         throw new InvalidOperationException($"{level.DisplayName} promoted {familyName} append did not write a BIN.");
     VerifyPatchBytes(exportResult.OutputImagePath, plan);
-    if (plan.SkippedEdits.Count != 0)
-        throw new InvalidOperationException($"{level.DisplayName} promoted {familyName} append skipped edit(s): {string.Join("; ", plan.SkippedEdits)}");
+    if (plan.SkippedEdits.Count != 1 ||
+        !plan.SkippedEdits[0].Contains("safety budget", StringComparison.OrdinalIgnoreCase) ||
+        !plan.SkippedEdits[0].Contains("multiple active enemy/chest appends can crash", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException(
+            $"{level.DisplayName} promoted {familyName} append did not guard exactly one over-budget edit: {string.Join("; ", plan.SkippedEdits)}");
+    }
 
     List<MobySourcePatch> slotPatches = plan.Patches
         .Where(patch => string.Equals(patch.Kind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase))
@@ -19500,7 +26762,767 @@ async Task ReportPromotedNativeCloneTrueAppend(string levelKey, int sourceByte36
     if (sourceCountPatch == null || BitConverter.ToInt32(ParseHexPreview(sourceCountPatch.AfterHexPreview), 0) != level.SourceRecordCount + appendPatches.Count)
         throw new InvalidOperationException($"{level.DisplayName} promoted {familyName} append did not bump the source count by the true-append count.");
 
-    Console.WriteLine($"{level.DisplayName} promoted {familyName} append: reused {slotPatches.Count} slot(s), then true-appended T{appendPatches[0].TrueIndex}");
+    Console.WriteLine($"{level.DisplayName} promoted {familyName} append: reused {slotPatches.Count} slot(s), true-appended T{appendPatches[0].TrueIndex}, then guarded one crash-risk excess row");
+}
+
+bool IsResidentRowCandidate(CrossLevelSwapCatalogEntry entry) =>
+    !entry.SameLevel &&
+    entry.Placeable &&
+    string.Equals(entry.CompatibilityTier, CrossLevelSwapCatalogBuilder.ResidentActorCompatibility, StringComparison.OrdinalIgnoreCase) &&
+    string.Equals(entry.RequiredExporterFeature, CrossLevelSwapCatalogBuilder.CandidateExporterFeature, StringComparison.OrdinalIgnoreCase);
+
+async Task ReportCrossLevelSwapCatalogSmoke()
+{
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("The cross-level swap catalogue smoke needs the selected source BIN.", sourceImage);
+
+    LevelDefinition[] sourceBackedLevels = catalog.Levels
+        .Where(level => level.HasSourceTable)
+        .OrderBy(level => level.DisplayName, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+    List<CrossLevelSwapCatalog> catalogs = sourceBackedLevels
+        .Select(level => CrossLevelSwapCatalogBuilder.Build(workspace, catalog, level.Key))
+        .ToList();
+    if (catalogs.Count == 0 || catalogs.Any(item => item.EntryCount == 0))
+        throw new InvalidOperationException("The cross-level swap catalogue is empty for one or more source-backed levels.");
+    if (catalogs.Any(item => !item.Entries.Any(entry => entry.Category == CrossLevelSwapCategory.Chest)))
+        throw new InvalidOperationException("The cross-level swap catalogue is missing chest entries.");
+    if (catalogs.Any(item => !item.Entries.Any(entry => entry.Category == CrossLevelSwapCategory.Enemy)))
+        throw new InvalidOperationException("The cross-level swap catalogue is missing enemy entries.");
+    if (catalogs.Sum(item => item.CandidateCount) == 0)
+        throw new InvalidOperationException("The cross-level swap catalogue did not expose any guarded existing-slot candidates.");
+    if (catalogs.Sum(item => item.ReadyCount) == 0)
+        throw new InvalidOperationException("The cross-level swap catalogue did not expose any same-level native slot-reuse entries.");
+    if (catalogs.Sum(item => item.UnmappedCount) == 0)
+        throw new InvalidOperationException("The cross-level swap catalogue did not identify any missing target actor-package mappings.");
+
+    CrossLevelSwapCatalog blowhardCatalog = catalogs.Single(item =>
+        string.Equals(LevelCatalog.NormalizeKey(item.TargetLevelKey), "blowhard", StringComparison.OrdinalIgnoreCase));
+    CrossLevelSwapCatalogEntry? blowhardWizard = blowhardCatalog.Entries.FirstOrDefault(entry =>
+        string.Equals(entry.Id, "enemy.green_wizard.blowhard.t0", StringComparison.OrdinalIgnoreCase));
+    if (blowhardWizard == null ||
+        !blowhardWizard.SameLevel ||
+        !blowhardWizard.Placeable ||
+        !blowhardWizard.NormalCreateBinReady ||
+        !string.Equals(blowhardWizard.CompatibilityTier, CrossLevelSwapCatalogBuilder.GreenWizardVerifiedCompatibility, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(blowhardWizard.SupportStatus, "verified-green-wizard-runtime-bundle", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(blowhardWizard.RequiredExporterFeature, CrossLevelSwapCatalogBuilder.CandidateExporterFeature, StringComparison.OrdinalIgnoreCase) ||
+        !blowhardWizard.SupportNote.Contains("Verified in Blowhard", StringComparison.OrdinalIgnoreCase) ||
+        !blowhardWizard.SupportNote.Contains("Normal Create BIN and Create Swap Test", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("The Blowhard T0 Green Wizard catalogue entry should be runtime-proven for normal Create BIN while retaining its dependency-aware existing-slot writer.");
+    }
+
+    CrossLevelSwapCatalog magicCraftersCatalog = catalogs.Single(item =>
+        string.Equals(LevelCatalog.NormalizeKey(item.TargetLevelKey), "magiccrafters", StringComparison.OrdinalIgnoreCase));
+    CrossLevelSwapCatalogEntry[] magicCraftersWizards = magicCraftersCatalog.Entries
+        .Where(entry => entry.ActorId == GreenWizardRuntimeBundleCompatibility.ActorId && entry.Placeable)
+        .ToArray();
+    if (magicCraftersWizards.Length != 1 ||
+        !string.Equals(magicCraftersWizards[0].Id, GreenWizardRuntimeBundleCompatibility.MagicCraftersTemplateId, StringComparison.OrdinalIgnoreCase) ||
+        magicCraftersWizards[0].SourceTrueIndex != GreenWizardRuntimeBundleCompatibility.MagicCraftersSourceTrueIndex ||
+        !magicCraftersWizards[0].SameLevel ||
+        !magicCraftersWizards[0].NormalCreateBinReady ||
+        !string.Equals(magicCraftersWizards[0].CompatibilityTier, CrossLevelSwapCatalogBuilder.GreenWizardVerifiedCompatibility, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(magicCraftersWizards[0].SupportStatus, "verified-green-wizard-runtime-bundle", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(magicCraftersWizards[0].PackageRecipeId, MagicCraftersGreenWizardResidentSwapExporter.RecipeId, StringComparison.OrdinalIgnoreCase) ||
+        !magicCraftersWizards[0].SupportNote.Contains("Verified in Magic Crafters", StringComparison.OrdinalIgnoreCase) ||
+        !magicCraftersWizards[0].SupportNote.Contains("Normal Create BIN and Create Swap Test", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("The Magic Crafters T107 Green Wizard catalogue entry should expose only the runtime-proven T27 replacement route to normal Create BIN.");
+    }
+
+    CrossLevelSwapCatalog wizardPeakCatalog = catalogs.Single(item =>
+        string.Equals(LevelCatalog.NormalizeKey(item.TargetLevelKey), "wizardpeak", StringComparison.OrdinalIgnoreCase));
+    CrossLevelSwapCatalogEntry[] wizardPeakWizards = wizardPeakCatalog.Entries
+        .Where(entry => entry.ActorId == GreenWizardRuntimeBundleCompatibility.ActorId && entry.Placeable)
+        .ToArray();
+    if (wizardPeakWizards.Length != 1 ||
+        wizardPeakWizards[0].SourceTrueIndex != GreenWizardRuntimeBundleCompatibility.SourceTrueIndex ||
+        !wizardPeakWizards[0].SameLevel ||
+        !wizardPeakWizards[0].NormalCreateBinReady ||
+        !string.Equals(wizardPeakWizards[0].CompatibilityTier, CrossLevelSwapCatalogBuilder.GreenWizardVerifiedCompatibility, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(wizardPeakWizards[0].SupportStatus, "verified-green-wizard-runtime-bundle", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(wizardPeakWizards[0].PackageRecipeId, WizardPeakGreenWizardNativeSwapExporter.RecipeId, StringComparison.OrdinalIgnoreCase) ||
+        !wizardPeakWizards[0].SupportNote.Contains("T6-to-Elder-Wizard-T24", StringComparison.OrdinalIgnoreCase) ||
+        !wizardPeakWizards[0].SupportNote.Contains("Normal Create BIN and Create Swap Test", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Wizard Peak's catalogue should expose only native T6 as the runtime-proven exact Elder Wizard T24 Green Wizard replacement.");
+    }
+
+    CrossLevelSwapCatalog toastyCatalog = catalogs.Single(item =>
+        string.Equals(LevelCatalog.NormalizeKey(item.TargetLevelKey), "toasty", StringComparison.OrdinalIgnoreCase));
+    CrossLevelSwapCatalogEntry? toastyWizardPackage = toastyCatalog.Entries.FirstOrDefault(entry =>
+        string.Equals(entry.Id, "enemy.green_wizard.wizardpeak.t6", StringComparison.OrdinalIgnoreCase));
+    if (toastyWizardPackage == null ||
+        toastyWizardPackage.Placeable ||
+        toastyWizardPackage.NormalCreateBinReady ||
+        !string.Equals(toastyWizardPackage.CompatibilityTier, CrossLevelSwapCatalogBuilder.GreenWizardUnsupportedCompatibility, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(toastyWizardPackage.SupportStatus, "unsupported-green-wizard-runtime-bundle", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(toastyWizardPackage.PackageRecipeId, GreenWizardRuntimeBundleCompatibility.ToastyV11RecipeId, StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(toastyWizardPackage.RequiredExporterFeature, "GreenWizardRuntimeBundleProfile", StringComparison.OrdinalIgnoreCase) ||
+        !toastyWizardPackage.SupportNote.Contains("runtime-verified", StringComparison.OrdinalIgnoreCase) ||
+        !toastyWizardPackage.SupportNote.Contains("do not yet compose", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("The Toasty Green Wizard should remain visible as runtime-proven but non-placeable until the editor composes the v11 exporter route.");
+    }
+
+    CrossLevelSwapCatalogEntry? unsafeEnemy = catalogs
+        .SelectMany(item => item.Entries)
+        .FirstOrDefault(entry =>
+            entry.Category == CrossLevelSwapCategory.Enemy &&
+            entry.Eligible &&
+            (!string.Equals(entry.CandidateKind, "enemy", StringComparison.OrdinalIgnoreCase) &&
+             !entry.CandidateKind.EndsWith(" enemy", StringComparison.OrdinalIgnoreCase) ||
+             entry.CandidateKind.Contains("control enemy", StringComparison.OrdinalIgnoreCase) ||
+             entry.CandidateKind.Contains("linked record", StringComparison.OrdinalIgnoreCase) ||
+             entry.CandidateKind.Contains("scenery", StringComparison.OrdinalIgnoreCase) ||
+             entry.CandidateKind.Contains("prop", StringComparison.OrdinalIgnoreCase) ||
+             entry.Confidence.Contains("inferred", StringComparison.OrdinalIgnoreCase) ||
+             entry.Confidence.Contains("review-family", StringComparison.OrdinalIgnoreCase)));
+    if (unsafeEnemy != null)
+        throw new InvalidOperationException($"Non-self-contained enemy entry remained eligible: {unsafeEnemy.DisplayName} ({unsafeEnemy.CandidateKind}, {unsafeEnemy.Confidence}).");
+
+    string[] deferredChestTerms = ["spring chest", "firework chest", "3x flame", "super flame", "life chest", "key chest", "locked chest", "multi-gem", "multi gem", "chest link", "chest-linked"];
+    CrossLevelSwapCatalogEntry? unsafeChest = catalogs
+        .SelectMany(item => item.Entries)
+        .FirstOrDefault(entry =>
+            entry.Category == CrossLevelSwapCategory.Chest &&
+            entry.Eligible &&
+            deferredChestTerms.Any(term =>
+                entry.DisplayName.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                entry.CandidateKind.Contains(term, StringComparison.OrdinalIgnoreCase)));
+    if (unsafeChest != null)
+        throw new InvalidOperationException($"Special or linked chest entry remained eligible: {unsafeChest.DisplayName} ({unsafeChest.CandidateKind}).");
+
+    CrossLevelSwapCatalog referenceCatalog = catalogs.FirstOrDefault(item =>
+        item.Entries.Any(IsResidentRowCandidate) &&
+        item.Entries.Any(entry => entry.SameLevel && entry.Eligible))
+        ?? catalogs.First(item => item.Entries.Any(IsResidentRowCandidate));
+    bool hasDeferredSpecialChest = referenceCatalog.Entries.Any(entry =>
+        entry.Category == CrossLevelSwapCategory.Chest &&
+        !entry.Eligible &&
+        (entry.DisplayName.Contains("spring", StringComparison.OrdinalIgnoreCase) ||
+         entry.DisplayName.Contains("firework", StringComparison.OrdinalIgnoreCase) ||
+         entry.DisplayName.Contains("life chest", StringComparison.OrdinalIgnoreCase) ||
+         entry.DisplayName.Contains("locked chest", StringComparison.OrdinalIgnoreCase) ||
+         entry.DependencyRisk.Contains("Special chest family", StringComparison.OrdinalIgnoreCase)));
+    if (!hasDeferredSpecialChest)
+        throw new InvalidOperationException("Special linked chest families were not retained as visible deferred catalogue entries.");
+
+    LevelDefinition targetLevel = catalog.FindByKey(referenceCatalog.TargetLevelKey)
+        ?? throw new InvalidOperationException($"Catalogue smoke target {referenceCatalog.TargetLevelKey} is missing.");
+    string targetCachePath = Path.Combine(workspace.RootPath, "editor-cache", $"{targetLevel.Key}-mobys.json");
+    if (!File.Exists(targetCachePath))
+        throw new FileNotFoundException("The cross-level swap smoke target cache is missing.", targetCachePath);
+    List<Moby> targetMobys = MobyLoader.LoadCached(targetCachePath).ToList();
+    MobyMetadataEnricher.Apply(workspace, targetLevel.Key, targetMobys);
+
+    Moby? target = null;
+    CrossLevelSwapCategory targetCategory = default;
+    foreach (Moby candidate in targetMobys
+        .Where(moby => !moby.IsRemoved && !moby.IsAdded)
+        .Where(moby => moby.TrueIndex >= 0 && moby.TrueIndex < targetLevel.SourceRecordCount)
+        .OrderBy(moby => moby.VisualKind == MobyVisualKind.Chest ? 0 : 1)
+        .ThenBy(moby => moby.TrueIndex))
+    {
+        if (!CrossLevelSwapCatalogBuilder.TryGetEligibleTargetCategory(candidate, out CrossLevelSwapCategory category, out _))
+            continue;
+        if (!referenceCatalog.Entries.Any(entry => entry.Category == category && IsResidentRowCandidate(entry)))
+            continue;
+        target = candidate;
+        targetCategory = category;
+        break;
+    }
+    if (target == null)
+        throw new InvalidOperationException($"{targetLevel.DisplayName} has no eligible existing chest/enemy slot for the catalogue smoke.");
+
+    CrossLevelSwapCatalogEntry donor = referenceCatalog.Entries
+        .Where(entry => entry.Category == targetCategory && IsResidentRowCandidate(entry))
+        .OrderBy(entry => entry.SourceLevelName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(entry => entry.SourceTrueIndex)
+        .First();
+    Moby edited = CloneMoby(target);
+    edited.SetType(donor.Type);
+    edited.State = donor.State;
+    edited.SourceByte36 = donor.SourceByte36;
+    edited.SourceByte37 = donor.SourceByte37;
+    edited.SourceByte4F = donor.SourceByte4F;
+    edited.Flag4A = donor.Flag4A;
+    edited.Flag4B = donor.Flag4B;
+    edited.Label = $"Swap smoke {donor.DisplayName}";
+    edited.PatchStatus = donor.SupportStatus;
+    edited.PatchLead = "Guarded cross-level existing-slot catalogue smoke.";
+    edited.CrossLevelTemplateId = donor.Id;
+    edited.CrossLevelFamily = donor.Family;
+    edited.CrossLevelSourceLevelKey = donor.SourceLevelKey;
+    edited.CrossLevelSourceLevelName = donor.SourceLevelName;
+    edited.CrossLevelSourceTrueIndex = donor.SourceTrueIndex;
+    edited.CrossLevelRequiredExporterFeature = donor.RequiredExporterFeature;
+    edited.CandidateKind = donor.CandidateKind;
+    edited.Confidence = "cross-level-swap-smoke";
+    edited.HasLoadedNativeEdit = true;
+    edited.LoadedNativeEditSummary = "Guarded existing-slot swap smoke";
+
+    string reportRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "cross-level-swap-catalog");
+    Directory.CreateDirectory(reportRoot);
+    (string EnemyTargetLevel, int EnemyTargetTrueIndex, string EnemyDonorLevel, int EnemyDonorTrueIndex, string EnemyPlanPath) =
+        await VerifyCrossLevelEnemyExistingSlotCandidate(catalogs, reportRoot);
+    string nativeEditsPath = Path.Combine(reportRoot, $"{targetLevel.Key}-swap-catalog-smoke-native-edits.json");
+    string normalPlanPath = Path.Combine(reportRoot, "normal-create-bin-guard-plan.json");
+    string candidatePlanPath = Path.Combine(reportRoot, "candidate-existing-slot-plan.json");
+    string catalogJsonPath = Path.Combine(reportRoot, $"{targetLevel.Key}-swap-catalog.json");
+    string catalogMarkdownPath = Path.Combine(reportRoot, $"{targetLevel.Key}-swap-catalog.md");
+    string summaryJsonPath = Path.Combine(reportRoot, "cross-level-swap-catalog-smoke-report.json");
+    string summaryMarkdownPath = Path.Combine(reportRoot, "cross-level-swap-catalog-smoke-report.md");
+    try
+    {
+        await MobyEditStore.SaveAsync(nativeEditsPath, [edited], $"{targetLevel.DisplayName} guarded swap catalogue smoke");
+        MobySourcePatchPlan normalPlan = MobySourcePatchExporter.BuildPlan(
+            sourceImage,
+            DiscImageLocator.FindCueForImage(sourceImage),
+            Path.Combine(reportRoot, "normal-create-bin-guard.bin"),
+            Path.Combine(reportRoot, "normal-create-bin-guard.cue"),
+            targetLevel,
+            nativeEditsPath);
+        if (normalPlan.Patches.Any(patch => string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("Normal Create BIN emitted a guarded cross-level existing-slot candidate patch.");
+        if (!normalPlan.SkippedEdits.Any(skip => skip.Contains("Create Swap Test", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("Normal Create BIN did not explain that the guarded swap requires Create Swap Test.");
+        if (normalPlan.Patches.Any(patch => string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("Normal Create BIN changed the source count for a guarded slot swap.");
+
+        MobySourcePatchPlan candidatePlan = MobySourcePatchExporter.BuildPlan(
+            sourceImage,
+            DiscImageLocator.FindCueForImage(sourceImage),
+            Path.Combine(reportRoot, "candidate-existing-slot.bin"),
+            Path.Combine(reportRoot, "candidate-existing-slot.cue"),
+            targetLevel,
+            nativeEditsPath,
+            allowPlanOnlyActorPackageImports: true);
+        List<MobySourcePatch> rowPatches = candidatePlan.Patches
+            .Where(patch => string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (rowPatches.Count != 1)
+            throw new InvalidOperationException($"Candidate mode wrote {rowPatches.Count} existing-slot row patch(es), expected exactly 1.");
+        if (candidatePlan.Patches.Any(patch => string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("Candidate mode changed the source count for an existing-slot swap.");
+
+        MobySourcePatch rowPatch = rowPatches[0];
+        if (rowPatch.TrueIndex != target.TrueIndex || rowPatch.ByteLength != 0x58)
+            throw new InvalidOperationException("The candidate patch did not replace exactly the selected existing 0x58-byte row.");
+        if (!rowPatch.Description.Contains($"Source object count remains {targetLevel.SourceRecordCount}", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The candidate patch does not document its unchanged source count.");
+        byte[] before = ParseHexPreview(rowPatch.BeforeHexPreview);
+        byte[] after = ParseHexPreview(rowPatch.AfterHexPreview);
+        foreach (int offset in new[] { 0x0C, 0x10, 0x14 })
+        {
+            if (BitConverter.ToInt32(before, offset) != BitConverter.ToInt32(after, offset))
+                throw new InvalidOperationException($"Candidate slot swap changed placement coordinate at record offset 0x{offset:X2}.");
+        }
+        if (after[0x50] != donor.Type ||
+            after[0x51] != donor.State ||
+            after[0x36] != donor.SourceByte36 ||
+            after[0x37] != donor.SourceByte37 ||
+            after[0x4F] != donor.SourceByte4F ||
+            after[0x52] != donor.Flag4A ||
+            after[0x53] != donor.Flag4B)
+        {
+            throw new InvalidOperationException("Candidate slot swap did not write the selected donor identity bytes.");
+        }
+        if (targetCategory == CrossLevelSwapCategory.Chest &&
+            (!before.AsSpan(0x00, 0x04).SequenceEqual(after.AsSpan(0x00, 0x04)) ||
+             !before.AsSpan(0x38, 0x0E).SequenceEqual(after.AsSpan(0x38, 0x0E))))
+        {
+            throw new InvalidOperationException("Cross-level chest candidate did not preserve the target slot behavior/reward bytes.");
+        }
+
+        await File.WriteAllTextAsync(normalPlanPath, JsonSerializer.Serialize(normalPlan, new JsonSerializerOptions { WriteIndented = true }));
+        await File.WriteAllTextAsync(candidatePlanPath, JsonSerializer.Serialize(candidatePlan, new JsonSerializerOptions { WriteIndented = true }));
+        string candidateValidationPath = await MobyCandidateValidationReportWriter.WriteAsync(new MobySourcePatchResult(
+            candidatePlan.OutputImagePath,
+            candidatePlan.OutputCuePath,
+            candidatePlanPath,
+            candidatePlan,
+            WroteImage: false));
+        string candidateValidationText = await File.ReadAllTextAsync(candidateValidationPath);
+        if (!candidateValidationText.Contains("Existing-Slot Swap Candidates", StringComparison.Ordinal) ||
+            !candidateValidationText.Contains("remains visible from several camera angles", StringComparison.OrdinalIgnoreCase) ||
+            !candidateValidationText.Contains("nearby enemies, chests, dragons, portals, and collision", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Candidate validation report is missing the existing-slot visibility, behavior, or nearby-regression checklist.");
+        }
+        await CrossLevelSwapCatalogBuilder.WriteAsync(referenceCatalog, catalogJsonPath, catalogMarkdownPath);
+        await File.WriteAllTextAsync(summaryJsonPath, JsonSerializer.Serialize(new
+        {
+            GeneratedAtUtc = DateTimeOffset.UtcNow,
+            SourceBackedLevelCount = sourceBackedLevels.Length,
+            CatalogueEntryRange = new
+            {
+                Minimum = catalogs.Min(item => item.EntryCount),
+                Maximum = catalogs.Max(item => item.EntryCount)
+            },
+            SameLevelReadyTotal = catalogs.Sum(item => item.ReadyCount),
+            CrossLevelCandidateTotal = catalogs.Sum(item => item.CandidateCount),
+            ResidentActorRootCandidateTotal = catalogs.Sum(item => item.ResidentCandidateCount),
+            PackageBackedCandidateTotal = catalogs.Sum(item => item.PackageCandidateCount),
+            MissingActorPackageMappingTotal = catalogs.Sum(item => item.UnmappedCount),
+            DeferredTotal = catalogs.Sum(item => item.DeferredCount),
+            TargetLevel = targetLevel.DisplayName,
+            TargetTrueIndex = target.TrueIndex,
+            TargetCategory = targetCategory.ToString(),
+            Donor = new { donor.DisplayName, donor.SourceLevelName, donor.SourceTrueIndex },
+            EnemyCandidate = new
+            {
+                TargetLevel = EnemyTargetLevel,
+                TargetTrueIndex = EnemyTargetTrueIndex,
+                DonorLevel = EnemyDonorLevel,
+                DonorTrueIndex = EnemyDonorTrueIndex,
+                PlanPath = EnemyPlanPath
+            },
+            NormalCreateBinCandidatePatchCount = 0,
+            CandidateExistingSlotPatchCount = rowPatches.Count,
+            SourceCountBefore = targetLevel.SourceRecordCount,
+            SourceCountAfter = targetLevel.SourceRecordCount,
+            PlacementPreserved = true,
+            ChestBehaviorPreserved = true,
+            BinCueWritten = false,
+            RuntimeBoundary = "The candidate row is structurally guarded and byte-verified. Cross-level visuals, collision, behavior, defeat, and reward still require DuckStation testing."
+        }, new JsonSerializerOptions { WriteIndented = true }));
+        await File.WriteAllTextAsync(summaryMarkdownPath, $"""
+            # Cross-Level Chest And Enemy Swap Catalogue Smoke
+
+            - Source-backed target levels checked: {sourceBackedLevels.Length}
+            - Catalogue entries per level: {catalogs.Min(item => item.EntryCount)} to {catalogs.Max(item => item.EntryCount)}
+            - Same-level ready entries across targets: {catalogs.Sum(item => item.ReadyCount)}
+            - Guarded cross-level candidates across targets: {catalogs.Sum(item => item.CandidateCount)}
+            - Resident actor-root candidates across targets: {catalogs.Sum(item => item.ResidentCandidateCount)}
+            - Package-backed candidates across targets: {catalogs.Sum(item => item.PackageCandidateCount)}
+            - Missing actor-package mappings across targets: {catalogs.Sum(item => item.UnmappedCount)}
+            - Deferred linked or uncertain entries across targets: {catalogs.Sum(item => item.DeferredCount)}
+            - Byte-plan test: {targetLevel.DisplayName} T{target.TrueIndex} -> {donor.DisplayName} from {donor.SourceLevelName} T{donor.SourceTrueIndex}
+            - Normal Create BIN candidate rows: 0
+            - Create Swap Test candidate rows: 1
+            - Source object count: {targetLevel.SourceRecordCount} -> {targetLevel.SourceRecordCount}
+            - Existing XYZ placement: preserved
+            - Enemy-row proof: {EnemyTargetLevel} T{EnemyTargetTrueIndex} -> {EnemyDonorLevel} T{EnemyDonorTrueIndex}
+            - BIN/CUE written by this smoke: no
+
+            Structural guard and row bytes passed. The cross-level candidate remains experimental until its appearance, interaction, reward, and nearby actors are tested in DuckStation.
+            """);
+
+        Console.WriteLine($"Cross-level swap catalogue: {sourceBackedLevels.Length} target levels, {referenceCatalog.EntryCount} entries for {targetLevel.DisplayName}, {referenceCatalog.CandidateCount} guarded candidates, {referenceCatalog.DeferredCount} deferred.");
+        Console.WriteLine($"Existing-slot guard: normal Create BIN wrote 0 candidate rows; candidate mode wrote T{target.TrueIndex} from {donor.SourceLevelName} T{donor.SourceTrueIndex}; source count stayed {targetLevel.SourceRecordCount}.");
+        Console.WriteLine($"Enemy candidate guard: {EnemyTargetLevel} T{EnemyTargetTrueIndex} <- {EnemyDonorLevel} T{EnemyDonorTrueIndex}; source count unchanged.");
+        Console.WriteLine($"JSON: {summaryJsonPath}");
+        Console.WriteLine($"Markdown: {summaryMarkdownPath}");
+        Console.WriteLine($"Catalogue: {catalogMarkdownPath}");
+        Console.WriteLine($"Candidate checklist: {candidateValidationPath}");
+    }
+    finally
+    {
+        if (File.Exists(nativeEditsPath))
+            File.Delete(nativeEditsPath);
+    }
+}
+
+async Task<(string TargetLevel, int TargetTrueIndex, string DonorLevel, int DonorTrueIndex, string PlanPath)> VerifyCrossLevelEnemyExistingSlotCandidate(
+    IReadOnlyList<CrossLevelSwapCatalog> catalogs,
+    string reportRoot)
+{
+    foreach (CrossLevelSwapCatalog targetCatalog in catalogs)
+    {
+        LevelDefinition? level = catalog.FindByKey(targetCatalog.TargetLevelKey);
+        if (level == null)
+            continue;
+        string cachePath = Path.Combine(workspace.RootPath, "editor-cache", $"{level.Key}-mobys.json");
+        if (!File.Exists(cachePath))
+            continue;
+
+        List<Moby> mobys = MobyLoader.LoadCached(cachePath).ToList();
+        MobyMetadataEnricher.Apply(workspace, level.Key, mobys);
+        Moby? target = mobys.FirstOrDefault(moby =>
+            !moby.IsAdded &&
+            !moby.IsRemoved &&
+            moby.TrueIndex >= 0 &&
+            moby.TrueIndex < level.SourceRecordCount &&
+            CrossLevelSwapCatalogBuilder.TryGetEligibleTargetCategory(moby, out CrossLevelSwapCategory category, out _) &&
+            category == CrossLevelSwapCategory.Enemy);
+        CrossLevelSwapCatalogEntry? donor = targetCatalog.Entries
+            .Where(entry => entry.Category == CrossLevelSwapCategory.Enemy && IsResidentRowCandidate(entry))
+            .OrderBy(entry => entry.SourceLevelName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(entry => entry.SourceTrueIndex)
+            .FirstOrDefault();
+        if (target == null || donor == null)
+            continue;
+
+        Moby edited = CloneMoby(target);
+        edited.SetType(donor.Type);
+        edited.State = donor.State;
+        edited.SourceByte36 = donor.SourceByte36;
+        edited.SourceByte37 = donor.SourceByte37;
+        edited.SourceByte4F = donor.SourceByte4F;
+        edited.Flag4A = donor.Flag4A;
+        edited.Flag4B = donor.Flag4B;
+        edited.Label = $"Enemy swap smoke {donor.DisplayName}";
+        edited.PatchStatus = donor.SupportStatus;
+        edited.PatchLead = "Guarded self-contained enemy existing-slot smoke.";
+        edited.CrossLevelTemplateId = donor.Id;
+        edited.CrossLevelFamily = donor.Family;
+        edited.CrossLevelSourceLevelKey = donor.SourceLevelKey;
+        edited.CrossLevelSourceLevelName = donor.SourceLevelName;
+        edited.CrossLevelSourceTrueIndex = donor.SourceTrueIndex;
+        edited.CrossLevelRequiredExporterFeature = donor.RequiredExporterFeature;
+        edited.CandidateKind = donor.CandidateKind;
+        edited.Confidence = "cross-level-enemy-swap-smoke";
+        edited.HasLoadedNativeEdit = true;
+        edited.LoadedNativeEditSummary = "Guarded enemy existing-slot swap smoke";
+
+        string nativeEditsPath = Path.Combine(reportRoot, $"{level.Key}-enemy-swap-smoke-native-edits.json");
+        string planPath = Path.Combine(reportRoot, "candidate-enemy-existing-slot-plan.json");
+        try
+        {
+            await MobyEditStore.SaveAsync(nativeEditsPath, [edited], $"{level.DisplayName} enemy swap catalogue smoke");
+            MobySourcePatchPlan normalPlan = MobySourcePatchExporter.BuildPlan(
+                sourceImage,
+                DiscImageLocator.FindCueForImage(sourceImage),
+                Path.Combine(reportRoot, "normal-enemy-guard.bin"),
+                Path.Combine(reportRoot, "normal-enemy-guard.cue"),
+                level,
+                nativeEditsPath);
+            if (normalPlan.Patches.Any(patch => string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase)) ||
+                !normalPlan.SkippedEdits.Any(skip => skip.Contains("Create Swap Test", StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException("Normal Create BIN did not guard the self-contained enemy slot candidate.");
+            }
+
+            MobySourcePatchPlan candidatePlan = MobySourcePatchExporter.BuildPlan(
+                sourceImage,
+                DiscImageLocator.FindCueForImage(sourceImage),
+                Path.Combine(reportRoot, "candidate-enemy-existing-slot.bin"),
+                Path.Combine(reportRoot, "candidate-enemy-existing-slot.cue"),
+                level,
+                nativeEditsPath,
+                allowPlanOnlyActorPackageImports: true);
+            MobySourcePatch rowPatch = candidatePlan.Patches.Single(patch =>
+                string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase));
+            if (candidatePlan.Patches.Any(patch => string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)) ||
+                rowPatch.TrueIndex != target.TrueIndex ||
+                rowPatch.ByteLength != 0x58)
+            {
+                throw new InvalidOperationException("Self-contained enemy candidate did not remain a one-row, source-count-neutral replacement.");
+            }
+
+            byte[] before = ParseHexPreview(rowPatch.BeforeHexPreview);
+            byte[] after = ParseHexPreview(rowPatch.AfterHexPreview);
+            foreach (int offset in new[] { 0x0C, 0x10, 0x14 })
+            {
+                if (BitConverter.ToInt32(before, offset) != BitConverter.ToInt32(after, offset))
+                    throw new InvalidOperationException($"Enemy slot candidate changed placement coordinate at offset 0x{offset:X2}.");
+            }
+            if (after[0x50] != donor.Type ||
+                after[0x51] != donor.State ||
+                after[0x36] != donor.SourceByte36 ||
+                after[0x37] != donor.SourceByte37 ||
+                after[0x4F] != donor.SourceByte4F ||
+                after[0x52] != donor.Flag4A ||
+                after[0x53] != donor.Flag4B)
+            {
+                throw new InvalidOperationException("Self-contained enemy candidate did not preserve the donor identity bytes.");
+            }
+
+            await File.WriteAllTextAsync(planPath, JsonSerializer.Serialize(candidatePlan, new JsonSerializerOptions { WriteIndented = true }));
+            return (level.DisplayName, target.TrueIndex, donor.SourceLevelName, donor.SourceTrueIndex, planPath);
+        }
+        finally
+        {
+            if (File.Exists(nativeEditsPath))
+                File.Delete(nativeEditsPath);
+        }
+    }
+
+    throw new InvalidOperationException("No source-backed level exposed both an eligible enemy target slot and a cross-level self-contained enemy donor.");
+}
+
+async Task ReportDarkHollowCrashGuardSmoke()
+{
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("The Dark Hollow crash-guard smoke needs the selected source BIN.", sourceImage);
+
+    LevelDefinition level = catalog.FindByKey("darkhollow")
+        ?? throw new InvalidOperationException("Dark Hollow is missing from the level catalog.");
+    LevelDefinition donorLevel = catalog.FindByKey("doctorshemp")
+        ?? throw new InvalidOperationException("Doctor Shemp is missing from the level catalog.");
+    string mobyPath = Path.Combine(workspace.RootPath, "editor-cache", "darkhollow-mobys.json");
+    if (!File.Exists(mobyPath))
+        throw new FileNotFoundException("The Dark Hollow crash-guard smoke needs the moby cache.", mobyPath);
+
+    List<Moby> sourceMobys = MobyLoader.LoadCached(mobyPath).ToList();
+    MobyMetadataEnricher.Apply(workspace, level.Key, sourceMobys);
+    Moby dragon = sourceMobys.FirstOrDefault(moby =>
+        IsNativeDragonActorRecord(moby) &&
+        moby.TrueIndex >= 0 &&
+        moby.TrueIndex < level.SourceRecordCount)
+        ?? throw new InvalidOperationException("Dark Hollow has no mapped native dragon actor for the crash-guard smoke.");
+    List<Moby> dragonScene = MobyLinkTraversal.GetLinkedMoveMobys(dragon, sourceMobys)
+        .DistinctBy(moby => moby.TrueIndex)
+        .OrderBy(moby => moby.TrueIndex)
+        .ToList();
+    if (dragonScene.Count != 3 ||
+        dragonScene.Count(IsNativeDragonActorRecord) != 1 ||
+        dragonScene.Count(IsNativeDragonPedestalRecord) != 1 ||
+        dragonScene.Count(IsNativeDragonRescueCameraRecord) != 1)
+    {
+        throw new InvalidOperationException("Dark Hollow crash-guard smoke did not resolve the dragon actor, pedestal, and rescue-camera control triplet.");
+    }
+
+    Vector3f dragonDelta = new(96, 64, 16);
+    List<Moby> edits = dragonScene.Select(member =>
+    {
+        Moby moved = CloneMoby(member);
+        moved.Position = new Vector3f(
+            member.Position.X + dragonDelta.X,
+            member.Position.Y + dragonDelta.Y,
+            member.Position.Z + dragonDelta.Z);
+        moved.PatchStatus = "smoke";
+        moved.PatchLead = "Dark Hollow combined dragon/object/environment crash-guard smoke.";
+        return moved;
+    }).ToList();
+
+    int nextIndex = sourceMobys.Max(moby => moby.Index) + 1;
+    int nextTrueIndex = sourceMobys.Max(moby => moby.TrueIndex) + 1;
+    (int SourceByte36, string FamilyName)[] families =
+    [
+        (0x73, "Large Gnorc"),
+        (0xC2, "Flame/Charge Chest")
+    ];
+    Dictionary<string, int> reusableSlots = new(StringComparer.OrdinalIgnoreCase);
+    foreach ((int sourceByte36, string familyName) in families)
+    {
+        Moby donor = sourceMobys.FirstOrDefault(moby => IsPromotedNativeCloneTrueAppendSmokeDonor(moby, level, sourceByte36))
+            ?? throw new InvalidOperationException($"Dark Hollow crash-guard smoke could not find a {familyName} donor.");
+        int reusableSlotCount = sourceMobys.Count(moby => IsPromotedNativeCloneTrueAppendSmokeCandidate(moby, level, donor));
+        reusableSlots[familyName] = reusableSlotCount;
+        for (int copyIndex = 0; copyIndex < reusableSlotCount + 3; copyIndex++)
+        {
+            Moby copy = CopyAsAddedMoby(
+                donor,
+                nextIndex++,
+                nextTrueIndex++,
+                $"Crash guard {familyName} copy {copyIndex + 1}",
+                copyIndex + 1);
+            copy.PatchStatus = "native-clone";
+            copy.PatchLead = $"Dark Hollow crash-guard copy from same-level {familyName} donor T{donor.TrueIndex}.";
+            copy.Confidence = "same-level-native-clone";
+            copy.SourceCloneLevelKey = level.Key;
+            copy.SourceCloneLevelName = level.DisplayName;
+            copy.SourceCloneTrueIndex = donor.TrueIndex;
+            edits.Add(copy);
+        }
+    }
+
+    string reportRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "darkhollow-crash-guard");
+    Directory.CreateDirectory(reportRoot);
+    string nativeEditsPath = Path.Combine(reportRoot, "darkhollow-dragon-extra-objects-native-edits.json");
+    await MobyEditStore.SaveAsync(nativeEditsPath, edits, "Dark Hollow dragon plus extra actor/chest crash-guard smoke");
+
+    MobySourcePatchResult? objectResult = null;
+    NativeEnvironmentGradePatchResult? gradeResult = null;
+    try
+    {
+        objectResult = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+            SourceImagePath: sourceImage,
+            SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+            OutputPrefix: Path.Combine(reportRoot, "darkhollow-object-guard-stage"),
+            Level: level,
+            NativeEditsPath: nativeEditsPath,
+            WriteImage: true));
+        if (!objectResult.WroteImage)
+            throw new InvalidOperationException("Dark Hollow crash-guard object stage did not write a BIN.");
+        VerifyPatchBytes(objectResult.OutputImagePath, objectResult.Plan);
+
+        List<MobySourcePatch> autoSlotPatches = objectResult.Plan.Patches
+            .Where(patch => string.Equals(patch.Kind, "moby-record-auto-slot-clone", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        List<MobySourcePatch> appendPatches = objectResult.Plan.Patches
+            .Where(patch => string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        int expectedAutoSlots = reusableSlots.Values.Sum();
+        if (autoSlotPatches.Count != expectedAutoSlots || appendPatches.Count != families.Length)
+        {
+            throw new InvalidOperationException(
+                $"Dark Hollow crash guard wrote {autoSlotPatches.Count}/{expectedAutoSlots} reuse rows and {appendPatches.Count}/{families.Length} true-appends.");
+        }
+        if (objectResult.Plan.SkippedEdits.Count != families.Length * 2 ||
+            objectResult.Plan.SkippedEdits.Any(skip => !skip.Contains("safety budget", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"Dark Hollow crash guard did not skip exactly two excess rows per family: {string.Join("; ", objectResult.Plan.SkippedEdits)}");
+        }
+        MobySourcePatch sourceCountPatch = objectResult.Plan.Patches.Single(patch =>
+            string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase));
+        int exportedSourceCount = BitConverter.ToInt32(ParseHexPreview(sourceCountPatch.AfterHexPreview), 0);
+        if (exportedSourceCount != level.SourceRecordCount + families.Length)
+        {
+            throw new InvalidOperationException(
+                $"Dark Hollow crash guard exported source count {exportedSourceCount}, expected {level.SourceRecordCount + families.Length}.");
+        }
+        bool movedApproachCamera = objectResult.Plan.Patches.Any(patch =>
+            patch.TrueIndex == dragon.TrueIndex &&
+            patch.Kind.StartsWith("dragon-rescue-camera-position-", StringComparison.OrdinalIgnoreCase));
+        bool movedCinematicCamera = objectResult.Plan.Patches.Any(patch =>
+            patch.TrueIndex == dragon.TrueIndex &&
+            string.Equals(patch.Kind, "dragon-rescue-cutscene-camera-track", StringComparison.OrdinalIgnoreCase));
+        if (!movedApproachCamera || !movedCinematicCamera)
+            throw new InvalidOperationException("Dark Hollow crash guard did not retain both dragon approach and cinematic camera movement patches.");
+
+        string analysisPath = WadAnalysisLocator.Find(workspace);
+        NativeEnvironmentGradePlan grade = NativeEnvironmentGradePlan.MatchSkySource(donorLevel.Key) with
+        {
+            GradeActors = true,
+            GradeChests = true,
+            GradeScenery = true,
+            GradeDragons = true
+        };
+        gradeResult = await NativeEnvironmentGradeExporter.ExportBatchAsync(new NativeEnvironmentGradeBatchPatchRequest(
+            SourceImagePath: objectResult.OutputImagePath,
+            SourceCuePath: objectResult.OutputCuePath,
+            WadAnalysisPath: analysisPath,
+            OutputPrefix: Path.Combine(reportRoot, "darkhollow-object-and-environment-guard-stage"),
+            Catalog: catalog,
+            Edits: [new NativeEnvironmentGradeBatchEdit(level, grade)],
+            WriteImage: true));
+        if (!gradeResult.WroteImage)
+            throw new InvalidOperationException("Dark Hollow crash-guard environment stage did not write a BIN.");
+        AssertNoEnvironmentPatchOverlaps(gradeResult.Plan, "Dark Hollow combined crash-guard environment stage");
+        AssertObjectAndEnvironmentPatchesDoNotOverlap(objectResult.Plan, gradeResult.Plan);
+        VerifyPatchBytes(gradeResult.OutputImagePath, objectResult.Plan);
+        VerifyEnvironmentGradePatchHashes(gradeResult.OutputImagePath, gradeResult.Plan);
+        AssertDarkHollowTreeGradePlan(
+            gradeResult.Plan,
+            analysisPath,
+            objectResult.OutputImagePath,
+            gradeResult.OutputImagePath,
+            level,
+            "Dark Hollow combined crash-guard environment stage");
+
+        string jsonPath = Path.Combine(reportRoot, "darkhollow-crash-guard-report.json");
+        string markdownPath = Path.Combine(reportRoot, "darkhollow-crash-guard-report.md");
+        await File.WriteAllTextAsync(jsonPath, JsonSerializer.Serialize(new
+        {
+            GeneratedAtUtc = DateTimeOffset.UtcNow,
+            Level = level.DisplayName,
+            DragonTrueIndex = dragon.TrueIndex,
+            DragonDelta = new { dragonDelta.X, dragonDelta.Y, dragonDelta.Z },
+            ReusableSlots = reusableSlots,
+            TrueAppendCount = appendPatches.Count,
+            SkippedCrashRiskRows = objectResult.Plan.SkippedEdits.Count,
+            ExportedSourceCount = exportedSourceCount,
+            ObjectPatchCount = objectResult.Plan.PatchCount,
+            EnvironmentPatchCount = gradeResult.Plan.PatchCount,
+            MovedApproachCamera = movedApproachCamera,
+            MovedCinematicCamera = movedCinematicCamera,
+            CrossStageOverlapCount = 0,
+            FinalObjectBytesVerified = true,
+            FinalEnvironmentHashesVerified = true,
+            DisposableBinRetained = false,
+            RuntimeBoundary = "This rules out object/dragon/environment write collisions and limits normal actor/chest appends. A Windows diagnostic ZIP from a future runtime crash is still needed to identify emulator-time behavior outside the patched disc bytes."
+        }, new JsonSerializerOptions { WriteIndented = true }));
+        await File.WriteAllTextAsync(markdownPath, $"""
+            # Dark Hollow Crash Guard
+
+            - Moved dragon: T{dragon.TrueIndex}; approach and cinematic camera data both preserved
+            - Reused actor/chest slots: {autoSlotPatches.Count}
+            - Release-limited true-appends: {appendPatches.Count} total, one per tested family
+            - Crash-risk excess rows skipped: {objectResult.Plan.SkippedEdits.Count}
+            - Final source count: {level.SourceRecordCount} -> {exportedSourceCount}
+            - Object/dragon patches: {objectResult.Plan.PatchCount}
+            - Environment/object-lighting patches: {gradeResult.Plan.PatchCount}
+            - Cross-stage overlaps: 0
+            - Final BIN readback: all object, dragon-camera, terrain, scenery, and environment hashes verified
+            - Disposable BIN/CUE: removed after verification
+
+            This regression rules out static patch collisions and export-order corruption for the combined workflow. It cannot reproduce emulator-time actor behavior without the Windows output and diagnostic bundle from the crashing session.
+            """);
+
+        Console.WriteLine(
+            $"Dark Hollow combined crash guard: {autoSlotPatches.Count} reused rows, {appendPatches.Count} release-limited append(s), {objectResult.Plan.SkippedEdits.Count} crash-risk rows skipped; dragon cameras and {gradeResult.Plan.PatchCount} environment patches survived final readback.");
+        Console.WriteLine($"JSON: {jsonPath}");
+        Console.WriteLine($"Markdown: {markdownPath}");
+    }
+    finally
+    {
+        if (gradeResult != null)
+        {
+            if (File.Exists(gradeResult.OutputImagePath))
+                File.Delete(gradeResult.OutputImagePath);
+            if (File.Exists(gradeResult.OutputCuePath))
+                File.Delete(gradeResult.OutputCuePath);
+            if (File.Exists(gradeResult.OutputPlanPath))
+                File.Delete(gradeResult.OutputPlanPath);
+        }
+        if (objectResult != null)
+        {
+            if (File.Exists(objectResult.OutputImagePath))
+                File.Delete(objectResult.OutputImagePath);
+            if (File.Exists(objectResult.OutputCuePath))
+                File.Delete(objectResult.OutputCuePath);
+            if (File.Exists(objectResult.OutputPlanPath))
+                File.Delete(objectResult.OutputPlanPath);
+        }
+    }
+}
+
+void AssertObjectAndEnvironmentPatchesDoNotOverlap(
+    MobySourcePatchPlan objectPlan,
+    NativeEnvironmentGradePatchPlan environmentPlan)
+{
+    var objectIntervals = objectPlan.Patches
+        .Select(patch =>
+        {
+            byte[] bytes = ParseHexPreview(patch.AfterHexPreview);
+            bool executable = TryParseExePatchOffset(patch.WadRelativeOffset, out long executableOffset);
+            bool wad = TryParseWadPatchOffset(patch.WadRelativeOffset, out long wadOffset);
+            return new
+            {
+                Valid = executable || wad,
+                AddressSpace = executable ? "exe" : "wad",
+                Start = executable ? executableOffset : wadOffset,
+                End = checked((executable ? executableOffset : wadOffset) + bytes.Length),
+                Label = $"{patch.MobyLabel}/{patch.Kind}"
+            };
+        })
+        .Where(interval => interval.Valid)
+        .ToArray();
+    var environmentIntervals = environmentPlan.Patches
+        .Select(patch =>
+        {
+            bool executable = patch.WadOffset.StartsWith("exe:", StringComparison.OrdinalIgnoreCase);
+            long start = executable
+                ? ParseFlexibleLong(patch.WadOffset[4..])
+                : ParseFlexibleLong(patch.WadOffset);
+            return new
+            {
+                AddressSpace = executable ? "exe" : "wad",
+                Start = start,
+                End = checked(start + patch.ByteLength),
+                patch.Label
+            };
+        })
+        .ToArray();
+
+    foreach (var objectInterval in objectIntervals)
+    {
+        var overlap = environmentIntervals.FirstOrDefault(environmentInterval =>
+            string.Equals(environmentInterval.AddressSpace, objectInterval.AddressSpace, StringComparison.OrdinalIgnoreCase) &&
+            objectInterval.Start < environmentInterval.End &&
+            environmentInterval.Start < objectInterval.End);
+        if (overlap != null)
+        {
+            throw new InvalidOperationException(
+                $"Dark Hollow combined crash guard found an {objectInterval.AddressSpace} overlap between object patch '{objectInterval.Label}' and environment patch '{overlap.Label}'.");
+        }
+    }
 }
 
 async Task ReportGuardedNativeCloneTrueAppend(string levelKey, int sourceByte36, int sourceByte37, int flag4B, string familyName)
@@ -20028,6 +28050,178 @@ void ReportPortalSourceLayout(string imagePath, string levelKey)
     Console.WriteLine($"Portal source report: {reportPath}");
 }
 
+void ReportNativeTerrainSurfaceSourceCatalog(string imagePath)
+{
+    if (!File.Exists(imagePath))
+        throw new FileNotFoundException("The native terrain-surface catalog needs the selected Spyro BIN.", imagePath);
+
+    string reportRoot = Path.Combine(workspace.RootPath, "_local", "research", "native-terrain-surfaces");
+    Directory.CreateDirectory(reportRoot);
+    List<NativeTerrainSurfaceLevelRow> levelRows = [];
+    foreach (LevelDefinition level in catalog.Levels)
+    {
+        NativeTerrainSurfaceSourceData source = PortalSourceDataLocator.LocateTerrainSurfaces(imagePath, level);
+        string overlayPath = Path.Combine(workspace.RootPath, "editor-cache", $"{level.Key}-runtime-scene-editor-overlay.json");
+        GeometryCandidate? geometry = File.Exists(overlayPath)
+            ? GeometryOverlayLoader.LoadFirstCandidate(overlayPath)
+            : null;
+        if (geometry != null)
+            TerrainMaterialClassifier.Apply(level.Key, workspace.RootPath, geometry);
+
+        Dictionary<string, List<TerrainPolygon>> visualFacesByTriangle = new(StringComparer.Ordinal);
+        if (geometry != null)
+        {
+            foreach (TerrainPolygon face in geometry.Polygons.Where(face =>
+                !face.IsTerrainRemoved &&
+                face.TextureId >= 0 &&
+                face.Points.Count >= 3 &&
+                face.ZValues.Length >= face.Points.Count))
+            {
+                for (int i = 1; i < face.Points.Count - 1; i++)
+                {
+                    string key = VisualTriangleKey(face, 0, i, i + 1);
+                    if (!visualFacesByTriangle.TryGetValue(key, out List<TerrainPolygon>? faceMatches))
+                    {
+                        faceMatches = [];
+                        visualFacesByTriangle[key] = faceMatches;
+                    }
+                    faceMatches.Add(face);
+                }
+            }
+        }
+
+        List<(NativeCollisionSurfaceTriangle Triangle, TerrainPolygon Face)> matches = [];
+        foreach (NativeCollisionSurfaceTriangle triangle in source.CollisionSurfaceTriangles)
+        {
+            string key = string.Join("|", new[]
+                {
+                    CollisionPointKey(triangle.P1.X, triangle.P1.Y, triangle.P1.Z),
+                    CollisionPointKey(triangle.P2.X, triangle.P2.Y, triangle.P2.Z),
+                    CollisionPointKey(triangle.P3.X, triangle.P3.Y, triangle.P3.Z)
+                }
+                .OrderBy(value => value, StringComparer.Ordinal));
+            if (!visualFacesByTriangle.TryGetValue(key, out List<TerrainPolygon>? faces))
+                continue;
+            foreach (TerrainPolygon face in faces)
+                matches.Add((triangle, face));
+        }
+
+        NativeSpecialSurfaceUsageRow[] specialRows = source.SpecialSurfaces
+            .Select(surface => new NativeSpecialSurfaceUsageRow(
+                surface.Index,
+                surface.Type,
+                surface.Param1,
+                surface.Param2,
+                source.CollisionSurfaceTriangles.Count(triangle => triangle.SurfaceIndex == surface.Index),
+                matches.Count(match => match.Triangle.SurfaceIndex == surface.Index),
+                NativeSurfaceTypeLabel(surface.Type, surface.Param1, surface.Param2)))
+            .ToArray();
+
+        NativeTextureSurfaceRow[] textureRows = matches
+            .GroupBy(match => new
+            {
+                match.Face.TextureId,
+                HighFlags = match.Triangle.FlagByte & 0xC0,
+                match.Triangle.SurfaceType,
+                match.Triangle.Param1,
+                match.Triangle.Param2
+            })
+            .Select(group =>
+            {
+                TerrainPolygon representative = group
+                    .Select(match => match.Face)
+                    .OrderByDescending(face => face.Points.Count)
+                    .ThenBy(face => face.RuntimeKey, StringComparer.OrdinalIgnoreCase)
+                    .First();
+                int surfaceType = group.Key.SurfaceType;
+                return new NativeTextureSurfaceRow(
+                    group.Key.TextureId,
+                    surfaceType,
+                    group.Key.Param1,
+                    group.Key.Param2,
+                    group.Key.HighFlags,
+                    group.Select(match => match.Triangle.TriangleIndex).Distinct().Count(),
+                    group.Select(match => match.Face.RuntimeKey).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                    representative.RuntimeKey,
+                    TerrainMaterialClassifier.NormalizeSurfaceName(representative.Surface),
+                    NativeSurfaceTypeLabel(surfaceType, group.Key.Param1, group.Key.Param2));
+            })
+            .OrderBy(row => row.TextureId)
+            .ThenBy(row => row.SurfaceType)
+            .ThenBy(row => row.Param1)
+            .ThenBy(row => row.Param2)
+            .ToArray();
+
+        levelRows.Add(new NativeTerrainSurfaceLevelRow(
+            level.Key,
+            level.DisplayName,
+            source.Collision.TriangleCount,
+            source.Collision.FlagCount,
+            source.SpecialSurfaces.Count,
+            source.CollisionSurfaceTriangles.Count(triangle => triangle.HasSpecialSurface),
+            matches.Select(match => match.Triangle.TriangleIndex).Distinct().Count(),
+            geometry?.Polygons.Count ?? 0,
+            textureRows.Select(row => row.TextureId).Distinct().Count(),
+            specialRows,
+            textureRows));
+    }
+
+    string jsonPath = Path.Combine(reportRoot, "native-terrain-surface-catalog.json");
+    string markdownPath = Path.Combine(reportRoot, "native-terrain-surface-catalog.md");
+    File.WriteAllText(jsonPath, JsonSerializer.Serialize(new
+    {
+        GeneratedAtUtc = DateTimeOffset.UtcNow,
+        SourceImage = imagePath,
+        Levels = levelRows
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    StringBuilder builder = new();
+    builder.AppendLine("# Native Terrain Surface Catalog");
+    builder.AppendLine();
+    builder.AppendLine("Collision flag bytes are native gameplay data. The low six bits select a level-local special-surface record; the upper two bits are retained separately. Texture rows are exact coordinate matches between visual terrain faces and collision triangles.");
+    builder.AppendLine();
+    builder.AppendLine("| Level | Collision flags | Special records | Special triangles | Visual matches | Texture/property variants |");
+    builder.AppendLine("|---|---:|---:|---:|---:|---:|");
+    foreach (NativeTerrainSurfaceLevelRow row in levelRows)
+    {
+        builder.AppendLine($"| {EscapeMarkdownCell(row.LevelName)} | {row.FlagCount}/{row.TriangleCount} | {row.SpecialSurfaceCount} | {row.SpecialTriangleCount} | {row.MatchedTriangleCount} | {row.TextureRows.Count} |");
+    }
+    builder.AppendLine();
+    builder.AppendLine("## Special-surface signatures");
+    builder.AppendLine();
+    builder.AppendLine("| Level | Index | Type | Parameters | Native behavior | Collision triangles | Visual matches |");
+    builder.AppendLine("|---|---:|---:|---|---|---:|---:|");
+    foreach (NativeTerrainSurfaceLevelRow level in levelRows)
+    {
+        foreach (NativeSpecialSurfaceUsageRow surface in level.SpecialSurfaces)
+        {
+            builder.AppendLine($"| {EscapeMarkdownCell(level.LevelName)} | {surface.Index} | {surface.Type} | {surface.Param1}, {surface.Param2} | {EscapeMarkdownCell(surface.Label)} | {surface.CollisionTriangleCount} | {surface.MatchedVisualTriangleCount} |");
+        }
+    }
+    File.WriteAllText(markdownPath, builder.ToString());
+
+    int textureVariants = levelRows.Sum(row => row.TextureRows.Count);
+    int matchedTriangles = levelRows.Sum(row => row.MatchedTriangleCount);
+    Console.WriteLine($"Native terrain surfaces: {levelRows.Count} levels, {levelRows.Sum(row => row.SpecialSurfaceCount)} special record(s), {matchedTriangles} collision triangle(s) matched to visible terrain, {textureVariants} texture/property variant(s).");
+    Console.WriteLine($"Native terrain surface report: {markdownPath}");
+}
+
+string NativeSurfaceTypeLabel(int type, int param1, int param2)
+{
+    return type switch
+    {
+        -1 => "ordinary collision surface",
+        0 => param1 == 0 ? $"damaging floor, effect {param2}" : $"lethal damaging floor, effect {param2}",
+        1 => $"damaging surface ({param1}, {param2})",
+        2 => $"level-linked trigger ({param1}, {param2})",
+        4 => "supercharge surface",
+        5 => "invisible wall",
+        6 => $"portal to level {param1}, portal {param2}",
+        7 => $"conditional electric floor {param1}",
+        _ => $"native special surface type {type} ({param1}, {param2})"
+    };
+}
+
 async Task ExportSavedPortalMoveTest(string imagePath, string nativeEditsPath, string outputPrefix)
 {
     LevelDefinition level = catalog.FindByKey("artisans")
@@ -20340,7 +28534,7 @@ async Task ReportLifeChestAppendResearch()
                     BitConverter.ToInt32(pair.Value, 0x10) == rawY &&
                     BitConverter.ToInt32(pair.Value, 0x14) == rawZ)
                 .OrderBy(pair => pair.Key)
-                .Select(pair => $"T{pair.Key} type=0x{pair.Value[0x50]:X2} b36=0x{pair.Value[0x36]:X2} b37=0x{pair.Value[0x37]:X2} f4A/f4B=0x{pair.Value[0x52]:X2}/0x{pair.Value[0x53]:X2}")
+                .Select(pair => $"T{pair.Key} radius50=0x{pair.Value[0x50]:X2} class=0x{pair.Value[0x37]:X2}{pair.Value[0x36]:X2} update52/drop53=0x{pair.Value[0x52]:X2}/0x{pair.Value[0x53]:X2}")
                 .Take(8));
             if (string.IsNullOrWhiteSpace(colocated))
                 colocated = "none";
@@ -20388,7 +28582,7 @@ async Task ReportLifeChestAppendResearch()
     StringBuilder markdown = new();
     markdown.AppendLine("# Life Chest Append Research");
     markdown.AppendLine();
-    markdown.AppendLine($"Native family: `type=0x20 b36=0xA5 b37=0x01 b4F=0x00 f4A=0x10 f4B=0x0E`. Found {sourceRows.Count} source row(s) across {lifeChestLevels} level(s).");
+    markdown.AppendLine($"Native family: `class=0x01A5 radius50=0x20 update52=0x10 drop53=0x0E spec4F=0x00`. Found {sourceRows.Count} source row(s) across {lifeChestLevels} level(s).");
     markdown.AppendLine();
     markdown.AppendLine("Artisans live-RAM validation proved that the native donor must remain untouched and each appended Life Chest needs its own pre-relocated private runtime block. The level-loader layout deterministically maps the same scene-relative allocation for every level, and all 22 native-Life-Chest levels now use independent private blocks.");
     markdown.AppendLine();
@@ -20662,7 +28856,9 @@ async Task ReportNativeActorChestAppendAllocationResearch()
 
     List<NativeAppendResearchFamily> families =
     [
-        new("townsquare", "Bull", 0x17, 0x00, 0x00, 0x10, 0x54, "working baseline", "Live testing promoted this family after safe slots were consumed."),
+        new("darkhollow", "Large Gnorc", 0x73, 0x00, 0x00, 0x10, 0x54, "provisional: one true-add only", "One append works, but later/random Dark Hollow crashes were reported with multiple extra actors and chests. Normal Create BIN now caps this family at one true-add after slot reuse."),
+        new("darkhollow", "Flame/Charge Chest", 0xC2, 0x00, 0x00, 0x10, 0x54, "provisional: one true-add only", "One append works, but later/random Dark Hollow crashes were reported with multiple extra actors and chests. Normal Create BIN now caps this family at one true-add after slot reuse."),
+        new("townsquare", "Bull", 0x17, 0x00, 0x00, 0x10, 0x54, "provisional: one true-add only", "Live testing proved one true-add after safe slots were consumed; normal Create BIN now keeps later same-family appends guarded until multi-actor allocation is proven."),
         new("townsquare", "Torro Gnorc", 0x8B, 0x01, 0x00, 0x10, 0x54, "failed: inert", "User-confirmed over-limit Torros spawn but do not move or react."),
         new("townsquare", "Flame/Charge Chest", 0xC2, 0x00, 0x00, 0x10, 0x54, "failed: chest behavior/render risk", "Kept guarded until over-limit chests render and break reliably."),
         new("townsquare", "Charge Chest", 0xC3, 0x00, 0x00, 0x10, 0x54, "failed: invisible/red/broken", "User-confirmed over-limit charge chests can be invisible or render as broken red geometry."),
@@ -20693,7 +28889,8 @@ async Task ReportNativeActorChestAppendAllocationResearch()
     markdown.AppendLine();
     markdown.AppendLine("## Current Read");
     markdown.AppendLine();
-    markdown.AppendLine("- A source-row append plus cloned special data is enough for the Town Square Bull baseline.");
+    markdown.AppendLine("- A source-row append plus cloned special data is enough for one Dark Hollow Large Gnorc, one Dark Hollow Flame/Charge Chest, and the Town Square Bull baseline.");
+    markdown.AppendLine("- Multiple active actor/chest appends still have unresolved runtime allocation pressure: Dark Hollow has produced delayed/random crashes, including near a dragon rescue. Normal Create BIN now allows one provisional true-add per promoted family and skips later rows.");
     markdown.AppendLine("- The failed Town Square families still get source rows and special-data clones, so the missing piece is likely behavior allocation beyond the shell row: hidden companion rows, runtime actor startup state, or a family-specific shared controller.");
     markdown.AppendLine("- The 3x Flame Chest has the strongest companion clue: a nearby/runtime-only fan or control row sits on the native chest but is outside the mapped source table count.");
     markdown.AppendLine();
@@ -20851,7 +29048,7 @@ async Task<NativeAppendResearchRow> BuildNativeAppendResearchRow(FileStream sour
         LiveStatus: family.LiveStatus,
         LiveNotes: family.LiveNotes,
         Donor: $"T{donor.TrueIndex} {donor.DisplayLabel}",
-        Identity: $"type=0x{donorRecord[0x50]:X2} b36=0x{donorRecord[0x36]:X2} b37=0x{donorRecord[0x37]:X2} b4F=0x{donorRecord[0x4F]:X2} f4A=0x{donorRecord[0x52]:X2} f4B=0x{donorRecord[0x53]:X2}",
+        Identity: $"class=0x{donorRecord[0x37]:X2}{donorRecord[0x36]:X2} radius50=0x{donorRecord[0x50]:X2} update52=0x{donorRecord[0x52]:X2} drop53=0x{donorRecord[0x53]:X2} spec4F=0x{donorRecord[0x4F]:X2}",
         ReusableSlotCount: reusableSlotCount,
         NativeEditsPath: nativeEditsPath,
         PlanPath: result.OutputPlanPath,
@@ -20908,7 +29105,7 @@ string FormatNativeAppendRecordSummary(byte[] record)
         return "short record";
 
     return FormattableString.Invariant(
-        $"special=0x{BitConverter.ToUInt32(record, 0):X}, raw=({BitConverter.ToInt32(record, 0x0C)},{BitConverter.ToInt32(record, 0x10)},{BitConverter.ToInt32(record, 0x14)}), behavior38=0x{record[0x39]:X2}{record[0x38]:X2}, sector4A=0x{record[0x4A]:X2}, type=0x{record[0x50]:X2}, state=0x{record[0x51]:X2}, b36/b37=0x{record[0x36]:X2}/0x{record[0x37]:X2}, b4F=0x{record[0x4F]:X2}, f4A/f4B=0x{record[0x52]:X2}/0x{record[0x53]:X2}");
+        $"special=0x{BitConverter.ToUInt32(record, 0):X}, raw=({BitConverter.ToInt32(record, 0x0C)},{BitConverter.ToInt32(record, 0x10)},{BitConverter.ToInt32(record, 0x14)}), behavior38=0x{record[0x39]:X2}{record[0x38]:X2}, sector4A=0x{record[0x4A]:X2}, radius50=0x{record[0x50]:X2}, wasDrawn51=0x{record[0x51]:X2}, class=0x{record[0x37]:X2}{record[0x36]:X2}, spec4F=0x{record[0x4F]:X2}, update52/drop53=0x{record[0x52]:X2}/0x{record[0x53]:X2}");
 }
 
 string BuildSameSpecialRows(IReadOnlyList<Moby> sourceMobys, LevelDefinition level, Moby donor)
@@ -20919,7 +29116,7 @@ string BuildSameSpecialRows(IReadOnlyList<Moby> sourceMobys, LevelDefinition lev
             moby.TrueIndex < level.SourceRecordCount &&
             moby.SpecialDataPointer == donor.SpecialDataPointer)
         .OrderBy(moby => moby.TrueIndex)
-        .Select(moby => $"T{moby.TrueIndex}(state=0x{moby.State:X2},f4B=0x{moby.Flag4B:X2})")
+        .Select(moby => $"T{moby.TrueIndex}(wasDrawn51=0x{moby.State:X2},drop53=0x{moby.Flag4B:X2})")
         .ToList();
     return rows.Count == 0 ? "none" : string.Join(", ", rows);
 }
@@ -20933,7 +29130,7 @@ string BuildNearbyRuntimeOnlyControlRows(IReadOnlyList<Moby> sourceMobys, LevelD
         .OrderBy(moby => Distance2D(moby.Position, donor.Position))
         .ThenBy(moby => moby.TrueIndex)
         .Take(8)
-        .Select(moby => $"T{moby.TrueIndex} {moby.DisplayLabel} type=0x{moby.Type:X2} b36=0x{moby.SourceByte36:X2} dist={Distance2D(moby.Position, donor.Position):0}")
+        .Select(moby => $"T{moby.TrueIndex} {moby.DisplayLabel} radius50=0x{moby.Type:X2} class=0x{moby.SourceByte37:X2}{moby.SourceByte36:X2} dist={Distance2D(moby.Position, donor.Position):0}")
         .ToList();
     return rows.Count == 0 ? "none within 384u" : string.Join("; ", rows);
 }
@@ -21437,8 +29634,8 @@ async Task ReportAllLevelLooseGemPlacementSectors()
             moby.SourceByte37 == 0x00 &&
             moby.Flag4A == 0x40 &&
             moby.Flag4B == 0xFF &&
-            GemValue.TryFromIdByte(moby.SourceByte36, out _));
-        if (donor == null || !GemValue.TryFromIdByte(donor.SourceByte36, out GemValue copiedGem))
+            GemValue.TryFromEncoding(moby.SourceByte36, moby.SourceByte4F, out _));
+        if (donor == null || !GemValue.TryFromEncoding(donor.SourceByte36, donor.SourceByte4F, out GemValue copiedGem))
         {
             skipped++;
             continue;
@@ -21553,22 +29750,26 @@ void ReportTerrainColorFidelity()
 {
     string cacheDir = Path.Combine(workspace.RootPath, "editor-cache");
     if (!Directory.Exists(cacheDir))
-    {
-        Console.WriteLine("Terrain color fidelity: editor cache not present; skipping.");
-        return;
-    }
+        throw new DirectoryNotFoundException($"Terrain color fidelity requires the complete editor cache: {cacheDir}");
 
     int checkedLevels = 0;
     int checkedFaces = 0;
     int lowestUniqueColorCount = int.MaxValue;
     string lowestUniqueColorLevel = "";
-    foreach (string path in Directory.EnumerateFiles(cacheDir, "*-runtime-scene-editor-overlay.json").OrderBy(item => item, StringComparer.OrdinalIgnoreCase))
+    double lowestSpreadRetention = double.MaxValue;
+    double lowestBucketRetention = double.MaxValue;
+    string lowestSpreadLevel = "";
+    string lowestBucketLevel = "";
+    foreach (LevelDefinition level in catalog.Levels)
     {
-        string fileName = Path.GetFileName(path);
-        string levelKey = fileName.Replace("-runtime-scene-editor-overlay.json", "", StringComparison.OrdinalIgnoreCase);
+        string levelKey = level.Key;
+        string path = Path.Combine(cacheDir, $"{levelKey}-runtime-scene-editor-overlay.json");
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"Terrain color fidelity is missing the {level.DisplayName} overlay.", path);
+
         GeometryCacheHealthIssue? healthIssue = GeometryCacheHealth.InspectOverlay(levelKey, path);
         if (healthIssue?.BlocksLoading == true)
-            continue;
+            throw new InvalidOperationException($"{level.DisplayName} terrain overlay failed cache health: {healthIssue.Message}");
 
         GeometryCandidate geometry = GeometryOverlayLoader.LoadFirstCandidate(path);
         TerrainMaterialClassifier.Apply(levelKey, workspace.RootPath, geometry);
@@ -21580,6 +29781,25 @@ void ReportTerrainColorFidelity()
         if (geometry.Polygons.Count >= 1000 && uniqueColors < 256)
             throw new InvalidOperationException($"{levelKey} terrain preview only has {uniqueColors} unique colors for {geometry.Polygons.Count} faces; this looks like a generic material fallback.");
 
+        ColorRgba[] capturedColors = geometry.Polygons
+            .Select(face => face.SurfaceColor)
+            .ToArray();
+        ColorRgba[] previewColors = geometry.Polygons
+            .Select(face => TerrainPreviewColor.ApplyHeightTint(
+                face.SurfaceColor,
+                Math.Clamp((face.AvgZ - geometry.MinZ) / Math.Max(1, geometry.MaxZ - geometry.MinZ), 0, 1)))
+            .ToArray();
+        double capturedSpread = TerrainColorRmsSpread(capturedColors);
+        double previewSpread = TerrainColorRmsSpread(previewColors);
+        double spreadRetention = capturedSpread <= 0.001 ? 1 : previewSpread / capturedSpread;
+        int capturedBuckets = TerrainRgb16BucketCount(capturedColors);
+        int previewBuckets = TerrainRgb16BucketCount(previewColors);
+        double bucketRetention = capturedBuckets == 0 ? 1 : (double)previewBuckets / capturedBuckets;
+        if (geometry.Polygons.Count >= 1000 && spreadRetention < 0.90)
+            throw new InvalidOperationException($"{levelKey} display preview retains only {spreadRetention:P1} of captured RGB spread; expected at least 90%.");
+        if (geometry.Polygons.Count >= 1000 && bucketRetention < 0.85)
+            throw new InvalidOperationException($"{levelKey} display preview retains only {bucketRetention:P1} of captured RGB16 buckets; expected at least 85%.");
+
         checkedLevels++;
         checkedFaces += geometry.Polygons.Count;
         if (uniqueColors < lowestUniqueColorCount)
@@ -21587,9 +29807,45 @@ void ReportTerrainColorFidelity()
             lowestUniqueColorCount = uniqueColors;
             lowestUniqueColorLevel = levelKey;
         }
+        if (spreadRetention < lowestSpreadRetention)
+        {
+            lowestSpreadRetention = spreadRetention;
+            lowestSpreadLevel = levelKey;
+        }
+        if (bucketRetention < lowestBucketRetention)
+        {
+            lowestBucketRetention = bucketRetention;
+            lowestBucketLevel = levelKey;
+        }
     }
 
-    Console.WriteLine($"Terrain color fidelity: captured face colors preserved for {checkedLevels} level(s), {checkedFaces} face(s); lowest variety {lowestUniqueColorLevel}={lowestUniqueColorCount} color(s)");
+    if (checkedLevels != catalog.Levels.Count || checkedLevels != 35)
+        throw new InvalidOperationException($"Terrain color fidelity checked {checkedLevels}/{catalog.Levels.Count} levels; expected the complete 35-level catalog.");
+
+    Console.WriteLine($"Terrain color fidelity: captured face colors preserved for {checkedLevels} level(s), {checkedFaces} face(s); lowest variety {lowestUniqueColorLevel}={lowestUniqueColorCount} color(s); preview spread {lowestSpreadLevel}={lowestSpreadRetention:P1}; RGB16 buckets {lowestBucketLevel}={lowestBucketRetention:P1}");
+}
+
+double TerrainColorRmsSpread(IReadOnlyList<ColorRgba> colors)
+{
+    if (colors.Count == 0)
+        return 0;
+
+    double meanR = colors.Average(color => color.R);
+    double meanG = colors.Average(color => color.G);
+    double meanB = colors.Average(color => color.B);
+    double variance = colors.Average(color =>
+        Math.Pow(color.R - meanR, 2) +
+        Math.Pow(color.G - meanG, 2) +
+        Math.Pow(color.B - meanB, 2));
+    return Math.Sqrt(variance);
+}
+
+int TerrainRgb16BucketCount(IEnumerable<ColorRgba> colors)
+{
+    return colors
+        .Select(color => (color.R >> 4, color.G >> 4, color.B >> 4))
+        .Distinct()
+        .Count();
 }
 
 async Task ReportTerrainMaterialBehaviorAudit()
@@ -22631,13 +30887,22 @@ async Task ReportCustomTerrainTextureManifestRoundTrip()
     {
         throw new InvalidOperationException("Custom terrain texture patch planning did not produce both normal and close-detail texture-page patches.");
     }
-    if (plan.CustomTextureImports.Any(import => import.TexelBytesPerPixel != 1 || import.PaletteColorCount != 256 || import.SourcePaletteUniqueColorCount <= 1))
-        throw new InvalidOperationException("Custom terrain texture patch planning did not prove the expected 8-bit indexed terrain texture-page format.");
-    int sourceTexelMax = plan.CustomTextureImports.Max(import => import.SourceTexelMax);
+    if (plan.CustomTextureImports.Any(import =>
+            import.TexelBytesPerPixel != 1 ||
+            import.SourcePaletteUniqueColorCount <= 1 ||
+            (import.DescriptorTier == "hqData"
+                ? import.BitsPerPixel != 8 || import.PaletteColorCount != 256
+                : import.BitsPerPixel != 4 || import.PaletteColorCount != 16)))
+    {
+        throw new InvalidOperationException("Custom terrain texture patch planning did not prove the native 8-bit normal / 4-bit close indexed formats.");
+    }
+    int sourceTexelMax = plan.CustomTextureImports
+        .Where(import => import.DescriptorTier == "hqData")
+        .Max(import => import.SourceTexelMax);
     if (sourceTexelMax <= 15)
         throw new InvalidOperationException("Custom terrain texture source texels did not exceed 4-bit range; 8-bit terrain texture-page proof is too weak.");
 
-    Console.WriteLine($"Custom terrain texture patch plan: {plan.CustomTextureImportCount} tier import(s), {plan.CustomTextureBytePatchCount} byte patch(es), close-detail={plan.CustomTextureImports.Any(import => import.DescriptorTier == "hqDataClose")}, format=8bpp-indexed, source-texel-max={sourceTexelMax}");
+    Console.WriteLine($"Custom terrain texture patch plan: {plan.CustomTextureImportCount} tier import(s), {plan.CustomTextureBytePatchCount} byte patch(es), close-detail={plan.CustomTextureImports.Any(import => import.DescriptorTier == "hqDataClose")}, formats=8bpp-normal+4bpp-close, source-normal-texel-max={sourceTexelMax}");
 
     TerrainPatchPlan customOnlyPlan = TerrainPatchExporter.BuildPlan(
         sourceImage,
@@ -23213,32 +31478,14 @@ async Task ReportCrossLevelNativeTerrainArtSwapPlan()
         for (int targetIndex = 0; targetIndex < levelSlots.Count; targetIndex++)
         {
             (LevelDefinition targetLevel, IReadOnlyList<TerrainTextureSlot> targetSlots) = levelSlots[targetIndex];
-            TerrainTextureSlot? targetSlot = targetSlots.FirstOrDefault(slot => !IsKnownBadCustomTerrainTextureCandidate(targetLevel.Key, slot.TextureId));
             List<(LevelDefinition Level, IReadOnlyList<TerrainTextureSlot> Slots)> donorCandidates = levelSlots
                 .Skip(targetIndex + 1)
                 .Concat(levelSlots.Take(targetIndex + 1))
                 .Where(candidate => candidate.Level.Key != targetLevel.Key && candidate.Slots.Count > 0)
                 .ToList();
-            if (targetSlot == null)
-            {
-                rows.Add(new CrossLevelNativeTerrainArtRow(
-                    targetLevel.Key,
-                    targetLevel.DisplayName,
-                    "",
-                    "",
-                    targetSlot?.TextureId ?? -1,
-                    -1,
-                    "skipped",
-                    "",
-                    0,
-                    0,
-                    0,
-                    "No readable donor or writable target texture descriptor was available."));
-                continue;
-            }
-
             string targetRoot = Path.Combine(workRoot, targetLevel.Key);
             Directory.CreateDirectory(targetRoot);
+            TerrainTextureSlot? targetSlot = null;
             LevelDefinition? donorLevel = null;
             TerrainTextureSlot? donorSlot = null;
             TerrainTextureImageExport? exported = null;
@@ -23250,12 +31497,27 @@ async Task ReportCrossLevelNativeTerrainArtSwapPlan()
             {
                 foreach (TerrainTextureSlot candidateSlot in candidateSlots)
                 {
+                    TerrainTextureSlot? compatibleTarget = targetSlots
+                        .Where(slot => !IsKnownBadCustomTerrainTextureCandidate(targetLevel.Key, slot.TextureId))
+                        .Where(slot => !candidateSlot.HasNormalDescriptors ||
+                            string.Equals(slot.NormalTopologySignature, candidateSlot.NormalTopologySignature, StringComparison.Ordinal))
+                        .Where(slot => !candidateSlot.HasCloseDescriptors ||
+                            string.Equals(slot.CloseTopologySignature, candidateSlot.CloseTopologySignature, StringComparison.Ordinal))
+                        .Where(slot => string.IsNullOrWhiteSpace(candidateSlot.CombinedTopologySignature) ||
+                            string.Equals(slot.CombinedTopologySignature, candidateSlot.CombinedTopologySignature, StringComparison.Ordinal))
+                        .OrderByDescending(slot => slot.HasNormalDescriptors && slot.HasCloseDescriptors)
+                        .ThenBy(slot => slot.TextureId)
+                        .FirstOrDefault();
+                    if (compatibleTarget == null)
+                        continue;
+
                     string candidatePng = Path.Combine(targetRoot, $"{candidateLevel.Key}-texture-{candidateSlot.TextureId:000}.png");
-                    TerrainTextureImageExport? candidateExport = await TerrainPatchExporter.TryExportTerrainTextureImageAsync(
+                    TerrainTextureImageExport? candidateExport = await TerrainPatchExporter.TryExportTerrainTextureImageTierAsync(
                         sourceImage,
                         candidateLevel,
                         candidateSlot.TextureId,
-                        candidatePng);
+                        candidatePng,
+                        candidateSlot.HasCloseDescriptors ? "hqDataClose" : "hqData");
                     if (candidateExport == null || !File.Exists(candidatePng))
                         continue;
                     Rgba32[] candidatePixels = PngRgbaImage.ReadRgba(candidatePng, out int candidateWidth, out int candidateHeight);
@@ -23268,6 +31530,7 @@ async Task ReportCrossLevelNativeTerrainArtSwapPlan()
 
                     donorLevel = candidateLevel;
                     donorSlot = candidateSlot;
+                    targetSlot = compatibleTarget;
                     exported = candidateExport;
                     donorPng = candidatePng;
                     donorWidth = candidateWidth;
@@ -23279,27 +31542,27 @@ async Task ReportCrossLevelNativeTerrainArtSwapPlan()
                     break;
             }
 
-            if (donorLevel == null || donorSlot == null || exported == null)
+            if (targetSlot == null || donorLevel == null || donorSlot == null || exported == null)
             {
                 rows.Add(new CrossLevelNativeTerrainArtRow(
                     targetLevel.Key,
                     targetLevel.DisplayName,
                     "",
                     "",
-                    targetSlot.TextureId,
+                    -1,
                     -1,
                     "skipped",
                     "",
                     0,
                     0,
                     0,
-                    "No non-blank donor texture could be reconstructed as PNG."));
+                    "No non-blank donor texture had a topology-compatible writable target slot."));
                 continue;
             }
 
-            string targetTier = targetSlot.HasNormalDescriptors && targetSlot.HasCloseDescriptors
+            string targetTier = donorSlot.HasNormalDescriptors && donorSlot.HasCloseDescriptors
                 ? "both"
-                : targetSlot.HasNormalDescriptors ? "hqData" : "hqDataClose";
+                : donorSlot.HasNormalDescriptors ? "hqData" : "hqDataClose";
             IReadOnlyList<CustomTerrainTextureImport> imports = await CustomTerrainTextureStore.AddOrReplaceAsync(
                 targetRoot,
                 targetLevel.Key,
@@ -23312,7 +31575,10 @@ async Task ReportCrossLevelNativeTerrainArtSwapPlan()
                 "borrowed-cross-level-texture-art",
                 $"{donorLevel.DisplayName} native texture {donorSlot.TextureId}",
                 "",
-                "");
+                "",
+                sourceLevelKey: donorLevel.Key,
+                sourceTextureId: donorSlot.TextureId,
+                sourceWadEntry: donorLevel.SourceWadEntry);
             CustomTerrainTextureImport import = imports.Single(candidate => candidate.TextureId == targetSlot.TextureId);
             bool previewReady = CustomTerrainTexturePreview.TryGetPreviewColor(import, out _);
             string emptyEditsPath = Path.Combine(targetRoot, "empty-terrain-edits.json");
@@ -23330,14 +31596,23 @@ async Task ReportCrossLevelNativeTerrainArtSwapPlan()
             CustomTerrainTexturePatchSummary[] summaries = plan.CustomTextureImports
                 .Where(summary => summary.TextureId == targetSlot.TextureId)
                 .ToArray();
+            TerrainPatch[] nativeRawPatches = plan.Patches
+                .Where(patch => patch.Kind.StartsWith("custom-texture-", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
             bool casePassed = previewReady &&
                 donorColors > 1 &&
                 donorWidth == exported.Width &&
                 donorHeight == exported.Height &&
                 plan.TextureAssetWadIndex == TerrainPatchExporter.TextureAssetWadIndexForLevel(targetLevel) &&
                 plan.CustomTextureBytePatchCount > 0 &&
+                nativeRawPatches.Length == plan.CustomTextureBytePatchCount &&
+                nativeRawPatches.All(patch => patch.Kind.StartsWith("custom-texture-native-raw-", StringComparison.OrdinalIgnoreCase)) &&
                 summaries.Length > 0 &&
-                summaries.All(summary => summary.TexelBytesPerPixel == 1 && summary.PaletteColorCount == 256);
+                summaries.All(summary =>
+                    summary.TexelBytesPerPixel == 1 &&
+                    (summary.DescriptorTier == "hqData"
+                        ? summary.BitsPerPixel == 8 && summary.PaletteColorCount == 256
+                        : summary.BitsPerPixel == 4 && summary.PaletteColorCount == 16));
             rows.Add(new CrossLevelNativeTerrainArtRow(
                 targetLevel.Key,
                 targetLevel.DisplayName,
@@ -23351,8 +31626,8 @@ async Task ReportCrossLevelNativeTerrainArtSwapPlan()
                 donorColors,
                 plan.CustomTextureBytePatchCount,
                 casePassed
-                    ? $"Extracted {exported.Width}x{exported.Height} {exported.DescriptorTier} art and mapped it into target WAD asset {plan.TextureAssetWadIndex}."
-                    : $"Native art staging failed a preview or 8-bit indexed texture-page gate. {FirstTerrainPlanSkip(plan)}"));
+                    ? $"Extracted {exported.Width}x{exported.Height} {exported.DescriptorTier} preview art and planned exact native palette/pixel nibble copies into target WAD asset {plan.TextureAssetWadIndex}."
+                    : $"Native art staging failed a preview or native indexed texture-page gate. {FirstTerrainPlanSkip(plan)}"));
         }
     }
     finally
@@ -23406,17 +31681,14 @@ async Task ReportCustomTerrainPngWriteReadback()
         {
             LevelDefinition level = catalog.FindByKey(levelKey) ?? throw new InvalidOperationException($"Missing level {levelKey}.");
             TerrainTextureSlot slot = TerrainPatchExporter.InspectTextureSlots(sourceImage, level)
-                .Where(candidate => candidate.HasNormalDescriptors || candidate.HasCloseDescriptors)
-                .OrderByDescending(candidate => candidate.HasNormalDescriptors && candidate.HasCloseDescriptors)
-                .ThenByDescending(candidate => candidate.NormalDescriptorCount + candidate.CloseDescriptorCount)
+                .Where(candidate => candidate.HasNormalDescriptors)
+                .OrderByDescending(candidate => candidate.NormalDescriptorCount + candidate.CloseDescriptorCount)
                 .First();
             string levelRoot = Path.Combine(workRoot, level.Key);
             Directory.CreateDirectory(levelRoot);
             string importedPng = Path.Combine(levelRoot, "user-import.png");
             await WriteSmokePngAsync(importedPng, 64, 64);
-            string tier = slot.HasNormalDescriptors && slot.HasCloseDescriptors
-                ? "both"
-                : slot.HasNormalDescriptors ? "hqData" : "hqDataClose";
+            string tier = "hqData";
             await CustomTerrainTextureStore.AddOrReplaceAsync(
                 levelRoot,
                 level.Key,
@@ -23477,7 +31749,10 @@ async Task ReportCustomTerrainPngWriteReadback()
                     readbackColorMatch >= 0.95 &&
                     result.Plan.CustomTextureImportCount > 0 &&
                     result.Plan.CustomTextureBytePatchCount > 0 &&
-                    result.Plan.CustomTextureImports.All(summary => summary.TexelBytesPerPixel == 1 && summary.PaletteColorCount == 256);
+                    result.Plan.CustomTextureImports.All(summary =>
+                        summary.TexelBytesPerPixel == 1 &&
+                        summary.BitsPerPixel == 8 &&
+                        summary.PaletteColorCount == 256);
                 rows.Add(new CustomTerrainPngWriteRow(
                     level.Key,
                     level.DisplayName,
@@ -23552,11 +31827,34 @@ void ReportNativeEnvironmentGradePlan()
         WriteImage: false));
     if (plan.EditedLevelCount != 1 || plan.SceneColorPatchCount == 0 || plan.TexturePalettePatchCount == 0 || plan.TotalChangedBytes == 0)
         throw new InvalidOperationException("Stone Hill environment-grade plan did not cover both native scene colors and landscape palettes.");
+    AssertNoEnvironmentPatchOverlaps(plan, "Default Stone Hill environment-grade plan");
     NativeEnvironmentGradeMatch match = plan.Matches.Single();
     if (match.TargetSectorCount < 8 || match.DonorSectorCount < 8 || match.TargetSceneColors.SampleCount == 0 || match.DonorSceneColors.SampleCount == 0)
         throw new InvalidOperationException("Stone Hill/Dark Hollow environment-grade analysis did not recover enough native scene data.");
 
     Console.WriteLine($"Native environment grade: {target.DisplayName} matches {donor.DisplayName}; scene {match.TargetSceneColors.MedianLuminance:F3}->{match.DonorSceneColors.MedianLuminance:F3}, {plan.SceneColorPatchCount} scene table(s), {plan.TexturePalettePatchCount} landscape palette(s)");
+
+    LevelDefinition darkHollowTarget = donor;
+    LevelDefinition doctorShempDonor = catalog.FindByKey("doctorshemp")
+        ?? throw new InvalidOperationException("Doctor Shemp is missing.");
+    NativeEnvironmentGradePlan darkHollowGrade = NativeEnvironmentGradePlan.MatchSkySource(doctorShempDonor.Key);
+    NativeEnvironmentGradePatchPlan darkHollowPlan = NativeEnvironmentGradeExporter.BuildPlan(new NativeEnvironmentGradeBatchPatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+        WadAnalysisPath: analysisPath,
+        OutputPrefix: Path.Combine(workspace.RootPath, "_local", "smoke", "darkhollow-match-doctorshemp"),
+        Catalog: catalog,
+        Edits: [new NativeEnvironmentGradeBatchEdit(darkHollowTarget, darkHollowGrade)],
+        WriteImage: false));
+    AssertDarkHollowTreeGradePlan(
+        darkHollowPlan,
+        analysisPath,
+        sourceImage,
+        outputImagePath: null,
+        darkHollowTarget,
+        "Default Dark Hollow environment-grade plan");
+    Console.WriteLine(
+        $"Dark Hollow LOD grade: 8 source-bound close-tree palettes, 3 source-bound far-tree tables, 17 protected player palettes, no overlapping writes");
 
     NativeEnvironmentGradeBatchEdit[] allLevelEdits = catalog.Levels
         .Where(level => !string.Equals(LevelCatalog.NormalizeKey(level.Key), LevelCatalog.NormalizeKey(donor.Key), StringComparison.OrdinalIgnoreCase))
@@ -23579,6 +31877,7 @@ void ReportNativeEnvironmentGradePlan()
     {
         throw new InvalidOperationException($"All-level environment-grade coverage is incomplete: {allLevelPlan.EditedLevelCount}/{catalog.Levels.Count - 1}.");
     }
+    AssertNoEnvironmentPatchOverlaps(allLevelPlan, "All-level environment-grade plan");
     Console.WriteLine($"All-level environment grade: {allLevelPlan.EditedLevelCount} targets, {allLevelPlan.SceneColorPatchCount} near/far scene table(s), {allLevelPlan.TexturePalettePatchCount} landscape palette(s)");
 
     NativeEnvironmentGradePlan allMobyScopes = NativeEnvironmentGradePlan.MatchSkySource(donor.Key) with
@@ -23615,7 +31914,223 @@ void ReportNativeEnvironmentGradePlan()
             $"All-level native object-lighting plan failed: {allLevelMobyPlan.MobyMaterialRowPatchCount} row(s), {allLevelMobyPlan.MobyRuntimePatchCount} runtime patch(es)."
         );
     }
+    AssertNoEnvironmentPatchOverlaps(allLevelMobyPlan, "All-level native object-lighting environment-grade plan");
     Console.WriteLine($"All-level native object lighting: {classifiedAllMobyRows} material-0 row(s), zero row reroutes, one guarded hook/payload");
+}
+
+async Task ReportAllLevelEnvironmentGradeMatrix()
+{
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("The all-level environment-grade matrix needs the selected source BIN.", sourceImage);
+
+    string analysisPath = WadAnalysisLocator.Find(workspace);
+    if (!File.Exists(analysisPath))
+        throw new FileNotFoundException("The all-level environment-grade matrix needs the WAD analysis.", analysisPath);
+
+    LevelDefinition[] levels = catalog.Levels
+        .Where(level => level.SourceWadEntry >= 0)
+        .OrderBy(level => level.SourceWadEntry)
+        .ToArray();
+    if (levels.Length != catalog.Levels.Count)
+        throw new InvalidOperationException($"Environment-grade matrix has source coverage for {levels.Length}/{catalog.Levels.Count} levels.");
+
+    string reportRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "environment-grade-matrix");
+    Directory.CreateDirectory(reportRoot);
+    List<EnvironmentGradeMatrixPair> pairs = new(levels.Length * (levels.Length - 1));
+    LevelDefinition darkHollow = levels.Single(level =>
+        string.Equals(LevelCatalog.NormalizeKey(level.Key), "darkhollow", StringComparison.OrdinalIgnoreCase));
+
+    foreach (LevelDefinition donor in levels)
+    {
+        NativeEnvironmentGradeBatchEdit[] edits = levels
+            .Where(target => !string.Equals(target.Key, donor.Key, StringComparison.OrdinalIgnoreCase))
+            .Select(target => new NativeEnvironmentGradeBatchEdit(target, NativeEnvironmentGradePlan.MatchSkySource(donor.Key)))
+            .ToArray();
+        NativeEnvironmentGradePatchPlan plan = NativeEnvironmentGradeExporter.BuildPlan(new NativeEnvironmentGradeBatchPatchRequest(
+            SourceImagePath: sourceImage,
+            SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+            WadAnalysisPath: analysisPath,
+            OutputPrefix: Path.Combine(reportRoot, $"plan-{donor.Key}"),
+            Catalog: catalog,
+            Edits: edits,
+            WriteImage: false));
+        if (plan.EditedLevelCount != levels.Length - 1 || plan.Matches.Count != levels.Length - 1)
+        {
+            throw new InvalidOperationException(
+                $"{donor.DisplayName} donor audit covered {plan.EditedLevelCount}/{levels.Length - 1} targets.");
+        }
+        AssertNoEnvironmentPatchOverlaps(plan, $"All-level environment-grade matrix donor {donor.DisplayName}");
+
+        foreach (NativeEnvironmentGradeMatch match in plan.Matches)
+        {
+            bool coherentLods = match.SceneTransform == match.LowDetailSceneTransform &&
+                match.SceneTransform == match.HighDetailSceneTransform;
+            if (match.TargetSceneColorTableCount <= 0 ||
+                match.TargetTexturePaletteCount <= 0 ||
+                match.TargetSceneColors.SampleCount <= 0 ||
+                match.DonorSceneColors.SampleCount <= 0 ||
+                !coherentLods)
+            {
+                throw new InvalidOperationException(
+                    $"Environment-grade matrix failed for {match.TargetLevelName} <- {match.DonorLevelName}: " +
+                    $"scene tables {match.TargetSceneColorTableCount}, palettes {match.TargetTexturePaletteCount}, coherent LODs {coherentLods}.");
+            }
+
+            int patchCount = plan.Patches.Count(patch =>
+                string.Equals(patch.LevelKey, match.TargetLevelKey, StringComparison.OrdinalIgnoreCase));
+            int changedBytes = plan.Patches
+                .Where(patch => string.Equals(patch.LevelKey, match.TargetLevelKey, StringComparison.OrdinalIgnoreCase))
+                .Sum(patch => patch.ChangedByteCount);
+            pairs.Add(new EnvironmentGradeMatrixPair(
+                match.TargetLevelKey,
+                match.TargetLevelName,
+                match.DonorLevelKey,
+                match.DonorLevelName,
+                match.TargetSceneColorTableCount,
+                match.TargetTexturePaletteCount,
+                match.TargetTextureRuntimeVariantCount,
+                patchCount,
+                changedBytes,
+                coherentLods));
+        }
+
+        if (!string.Equals(donor.Key, darkHollow.Key, StringComparison.OrdinalIgnoreCase))
+        {
+            AssertDarkHollowTreeGradePlan(
+                plan,
+                analysisPath,
+                sourceImage,
+                outputImagePath: null,
+                darkHollow,
+                $"Dark Hollow matrix target with {donor.DisplayName} donor");
+        }
+        Console.WriteLine($"Environment matrix donor {donor.DisplayName}: {plan.EditedLevelCount} targets, {plan.PatchCount} non-overlapping patch(es)");
+    }
+
+    int expectedPairCount = levels.Length * (levels.Length - 1);
+    if (pairs.Count != expectedPairCount)
+        throw new InvalidOperationException($"Environment-grade matrix produced {pairs.Count}/{expectedPairCount} target/donor pairs.");
+
+    string writePrefix = Path.Combine(reportRoot, "all-level-rotating-donor-write-readback");
+    NativeEnvironmentGradePatchResult? writeResult = null;
+    int verifiedWritePatchCount = 0;
+    try
+    {
+        NativeEnvironmentGradeBatchEdit[] rotatingEdits = levels
+            .Select((target, index) => new NativeEnvironmentGradeBatchEdit(
+                target,
+                NativeEnvironmentGradePlan.MatchSkySource(levels[(index + 1) % levels.Length].Key)))
+            .ToArray();
+        writeResult = await NativeEnvironmentGradeExporter.ExportBatchAsync(new NativeEnvironmentGradeBatchPatchRequest(
+            SourceImagePath: sourceImage,
+            SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+            WadAnalysisPath: analysisPath,
+            OutputPrefix: writePrefix,
+            Catalog: catalog,
+            Edits: rotatingEdits,
+            WriteImage: true));
+        if (!writeResult.WroteImage || writeResult.Plan.EditedLevelCount != levels.Length)
+        {
+            throw new InvalidOperationException(
+                $"All-level environment write/readback covered {writeResult.Plan.EditedLevelCount}/{levels.Length} levels.");
+        }
+        AssertNoEnvironmentPatchOverlaps(writeResult.Plan, "All-level rotating-donor environment write/readback");
+        VerifyEnvironmentGradePatchHashes(writeResult.OutputImagePath, writeResult.Plan);
+        AssertDarkHollowTreeGradePlan(
+            writeResult.Plan,
+            analysisPath,
+            sourceImage,
+            writeResult.OutputImagePath,
+            darkHollow,
+            "Dark Hollow rotating-donor environment write/readback");
+        verifiedWritePatchCount = writeResult.Plan.PatchCount;
+    }
+    finally
+    {
+        if (writeResult != null)
+        {
+            if (File.Exists(writeResult.OutputImagePath))
+                File.Delete(writeResult.OutputImagePath);
+            if (File.Exists(writeResult.OutputCuePath))
+                File.Delete(writeResult.OutputCuePath);
+            if (File.Exists(writeResult.OutputPlanPath))
+                File.Delete(writeResult.OutputPlanPath);
+        }
+    }
+
+    string jsonPath = Path.Combine(reportRoot, "all-level-environment-grade-matrix.json");
+    string markdownPath = Path.Combine(reportRoot, "all-level-environment-grade-matrix.md");
+    await File.WriteAllTextAsync(jsonPath, JsonSerializer.Serialize(new
+    {
+        GeneratedAtUtc = DateTimeOffset.UtcNow,
+        LevelCount = levels.Length,
+        PairCount = pairs.Count,
+        ExpectedPairCount = expectedPairCount,
+        VerifiedWriteLevelCount = levels.Length,
+        VerifiedWritePatchCount = verifiedWritePatchCount,
+        DisposableBinRetained = false,
+        Scope = "Every source-backed level against every other level as a terrain/scene palette donor, plus one all-level native BIN write/readback.",
+        RuntimeBoundary = "This verifies source parsing, fixed-size planning, non-overlap, native writes, and byte hashes. It is not 1,190 manual emulator playthroughs.",
+        Pairs = pairs
+    }, new JsonSerializerOptions { WriteIndented = true }));
+
+    StringBuilder markdown = new();
+    markdown.AppendLine("# All-Level Environment Grade Matrix");
+    markdown.AppendLine();
+    markdown.AppendLine($"- Levels: {levels.Length}");
+    markdown.AppendLine($"- Target/donor pairs: {pairs.Count}/{expectedPairCount}");
+    markdown.AppendLine($"- Native write/readback: {levels.Length} levels, {verifiedWritePatchCount} verified patches; disposable BIN/CUE removed");
+    markdown.AppendLine("- Boundary: this proves source parsing, fixed-size plans, patch non-overlap, native writes, and byte hashes. Runtime visual review remains a separate emulator check.");
+    markdown.AppendLine();
+    markdown.AppendLine("| Target | Donor | Scene tables | Palettes | Runtime variants | Patches | Changed bytes | Coherent LODs |");
+    markdown.AppendLine("|---|---|---:|---:|---:|---:|---:|---|");
+    foreach (EnvironmentGradeMatrixPair pair in pairs)
+    {
+        markdown.AppendLine(
+            $"| {EscapeMarkdownCell(pair.TargetLevelName)} | {EscapeMarkdownCell(pair.DonorLevelName)} | {pair.SceneTableCount} | {pair.TexturePaletteCount} | {pair.TextureRuntimeVariantCount} | {pair.PatchCount} | {pair.ChangedByteCount} | {(pair.CoherentLods ? "yes" : "no")} |");
+    }
+    await File.WriteAllTextAsync(markdownPath, markdown.ToString());
+
+    Console.WriteLine($"All-level environment matrix: {pairs.Count}/{expectedPairCount} target/donor pairs passed; {verifiedWritePatchCount} native patches read back across all {levels.Length} levels.");
+    Console.WriteLine($"JSON: {jsonPath}");
+    Console.WriteLine($"Markdown: {markdownPath}");
+}
+
+void VerifyEnvironmentGradePatchHashes(string outputImagePath, NativeEnvironmentGradePatchPlan plan)
+{
+    SourceDiscLayout layout = DetectSourceDiscLayout(outputImagePath);
+    using FileStream stream = File.OpenRead(outputImagePath);
+    SourceDiscFileRecord? executable = null;
+    uint? executableLoadAddress = null;
+    foreach (NativeEnvironmentGradePatch patch in plan.Patches)
+    {
+        byte[] actual;
+        if (patch.WadOffset.StartsWith("exe:", StringComparison.OrdinalIgnoreCase))
+        {
+            executable ??= FindSourceExecutable(stream, layout);
+            if (executableLoadAddress == null)
+            {
+                byte[] executableHeader = ReadSourceFileBytes(stream, layout, executable.Lba, 0, 0x800);
+                executableLoadAddress = BitConverter.ToUInt32(executableHeader, 0x18);
+            }
+            long runtimeAddress = ParseFlexibleLong(patch.WadOffset[4..]);
+            if (runtimeAddress < executableLoadAddress.Value)
+                throw new InvalidOperationException($"Environment executable patch '{patch.Label}' is below the executable load address.");
+            long executableOffset = checked(0x800L + runtimeAddress - executableLoadAddress.Value);
+            actual = ReadSourceFileBytes(stream, layout, executable.Lba, executableOffset, patch.ByteLength);
+        }
+        else
+        {
+            long wadOffset = ParseFlexibleLong(patch.WadOffset);
+            actual = ReadSourceWadBytes(stream, layout, wadOffset, patch.ByteLength);
+        }
+        string actualHash = Convert.ToHexString(SHA256.HashData(actual));
+        if (!string.Equals(actualHash, patch.AfterSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Environment write/readback hash mismatch for '{patch.Label}' at {patch.WadOffset}: expected {patch.AfterSha256}, got {actualHash}.");
+        }
+    }
 }
 
 bool IsKnownBadCustomTerrainTextureCandidate(string levelKey, int textureId)
@@ -23905,7 +32420,7 @@ async Task ReportCrossLevelTerrainSideWallPatchPlan()
     List<CrossLevelTerrainSideWallRow> rows = new();
     if (!File.Exists(sourceImage))
     {
-            rows.Add(new CrossLevelTerrainSideWallRow("all", "All captured levels", "skipped", "source image not found", -1, -1, -1, 0, 0, 0, 0, -1, 0, -1, -1, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, "Import a source BIN/CUE before running terrain side-wall smoke."));
+        rows.Add(new CrossLevelTerrainSideWallRow("all", "All captured levels", "skipped", "source image not found", -1, -1, -1, 0, 0, 0, 0, -1, 0, -1, -1, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, "Import a source BIN/CUE before running terrain side-wall smoke."));
         WriteCrossLevelTerrainSideWallReport(reportRoot, rows);
         Console.WriteLine("Cross-level terrain side-wall patch plans: source image not found; skipping.");
         return;
@@ -25981,7 +34496,7 @@ async Task ReportTerrainPatchPlan(LevelDefinition level, GeometryCandidate geome
     bool hasExactCollisionPatch = exactPlacementPlan.Patches.Any(patch => string.Equals(patch.Kind, "collision-triangle", StringComparison.OrdinalIgnoreCase));
     if (!hasExactVisualPatch || !hasExactCollisionPatch)
         throw new InvalidOperationException($"Exact terrain placement did not produce required patches: visual={hasExactVisualPatch}, collision={hasExactCollisionPatch}.");
-            int sideWallExposedEdges = exactPlacementPlan.TerrainSideWalls.Sum(summary => summary.ExposedEdgeCount);
+    int sideWallExposedEdges = exactPlacementPlan.TerrainSideWalls.Sum(summary => summary.ExposedEdgeCount);
     int sideWallSolidEdges = exactPlacementPlan.TerrainSideWalls.Sum(summary => summary.EmittedFaceCount);
     int sideWallCollisionPatches = exactPlacementPlan.TerrainSideWalls.Sum(summary => summary.CollisionTriangleCount);
     string sideWallSkip = string.Join(" | ", exactPlacementPlan.SkippedEdits
@@ -27017,6 +35532,1576 @@ IReadOnlyList<int> NormalizeSmokeVertexIndexes(IReadOnlyList<int> indexes, int z
     return result.Count == zValueCount ? result : indexes.Take(zValueCount).ToArray();
 }
 
+void ReportEditorDiagnosticsSmoke()
+{
+    string tempRoot = Path.Combine(Path.GetTempPath(), $"spyro-editor-diagnostics-smoke-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(tempRoot);
+    try
+    {
+        string editPath = Path.Combine(tempRoot, "darkhollow-native-edits.json");
+        string planPath = Path.Combine(tempRoot, "darkhollow-moby-source-patch-plan.json");
+        string outputCue = Path.Combine(tempRoot, "Spyro Editor - All Saved Edits.cue");
+        string outputBin = Path.Combine(tempRoot, "Spyro Editor - All Saved Edits.bin");
+        File.WriteAllText(editPath, "{\"editCount\":1,\"edits\":[{\"trueIndex\":201}]}\n");
+        File.WriteAllText(planPath, "{\"patchCount\":3,\"levelName\":\"Dark Hollow\"}\n");
+        File.WriteAllText(outputCue, "FILE \"Spyro Editor - All Saved Edits.bin\" BINARY\n");
+        File.WriteAllBytes(outputBin, [0x00, 0x01, 0x02, 0x03]);
+
+        EditorDiagnosticLog interrupted = new(tempRoot, "diagnostics-smoke");
+        interrupted.RecordAction("Object pasted", "Dark Hollow T201 Copy of Large Gnorc");
+        if (!File.Exists(interrupted.ActiveSessionMarkerPath))
+            throw new InvalidOperationException("Diagnostics smoke did not create an active-session marker.");
+
+        EditorDiagnosticLog log = new(tempRoot, "diagnostics-smoke");
+        if (!File.Exists(log.LatestCrashPath) ||
+            !File.ReadAllText(log.LatestCrashPath).Contains("previous editor session", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Diagnostics smoke did not report the interrupted previous session.");
+        }
+
+        log.UpdateContext(new Dictionary<string, string?>
+        {
+            ["Workspace"] = tempRoot,
+            ["Current level"] = "Dark Hollow (darkhollow)",
+            ["Current selection"] = "T201 Copy of Large Gnorc"
+        });
+        log.RecordAction("Object pasted", "Dark Hollow T201 Copy of Large Gnorc; source 0x26/0x00/0x01");
+        log.RecordException("diagnostics smoke action", new InvalidOperationException("diagnostics smoke exception"));
+        EditorExportDiagnosticResult export = log.RecordExport(new EditorExportDiagnostic(
+            OutputCuePath: outputCue,
+            OutputImagePath: outputBin,
+            SourceImagePath: Path.Combine(tempRoot, "original.bin"),
+            Summary: "1 level; 3 object patches; 0 skipped edits",
+            Details: new Dictionary<string, string>
+            {
+                ["Patched levels"] = "Dark Hollow",
+                ["Edited level detail"] = "Dark Hollow [objects=True]"
+            },
+            ArtifactPaths: [editPath, planPath, outputCue, outputBin]));
+
+        if (!File.Exists(export.ReportPath) || !File.Exists(export.BundlePath))
+            throw new InvalidOperationException("Diagnostics smoke did not create the export report and support ZIP.");
+
+        string reportText = File.ReadAllText(export.ReportPath);
+        string[] requiredReportText =
+        [
+            "Dark Hollow (darkhollow)",
+            "Object pasted",
+            "diagnostics smoke exception",
+            outputCue,
+            "does not contain BIN/CUE/ISO/ROM/BIOS data"
+        ];
+        foreach (string required in requiredReportText)
+        {
+            if (!reportText.Contains(required, StringComparison.Ordinal))
+                throw new InvalidOperationException($"Diagnostics smoke report is missing: {required}");
+        }
+
+        using (ZipArchive archive = ZipFile.OpenRead(export.BundlePath))
+        {
+            string[] entries = archive.Entries.Select(entry => entry.FullName).ToArray();
+            if (!entries.Any(entry => entry.EndsWith("darkhollow-native-edits.json", StringComparison.OrdinalIgnoreCase)) ||
+                !entries.Any(entry => entry.EndsWith("darkhollow-moby-source-patch-plan.json", StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException("Diagnostics support ZIP is missing edit or patch-plan JSON metadata.");
+            }
+
+            if (entries.Any(entry => entry.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) ||
+                                     entry.EndsWith(".cue", StringComparison.OrdinalIgnoreCase) ||
+                                     entry.EndsWith(".iso", StringComparison.OrdinalIgnoreCase) ||
+                                     entry.EndsWith(".rom", StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException("Diagnostics support ZIP included a forbidden game/disc file type.");
+            }
+        }
+
+        log.MarkCleanShutdown();
+        if (File.Exists(log.ActiveSessionMarkerPath))
+            throw new InvalidOperationException("Diagnostics smoke did not clear the active-session marker on clean shutdown.");
+
+        Console.WriteLine($"Diagnostics smoke: report, exception capture, interrupted-session detection, and metadata-only ZIP passed. Report: {export.ReportPath}");
+    }
+    finally
+    {
+        try
+        {
+            Directory.Delete(tempRoot, true);
+        }
+        catch
+        {
+        }
+    }
+}
+
+async Task ReportMobyBuildSafetySmoke()
+{
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("Moby build safety smoke requires the configured original Spyro BIN.", sourceImage);
+
+    string reportDirectory = Path.Combine(workspace.RootPath, "_local", "smoke", "moby-build-safety");
+    LevelDefinition[] mappedLevels = catalog.Levels
+        .Where(level => level.HasSourceTable)
+        .ToArray();
+    MobyBuildSafetyInput[] baselineInputs = mappedLevels
+        .Select(level => new MobyBuildSafetyInput(level, CreatePlan(level, [])))
+        .ToArray();
+    MobyBuildSafetyReport baseline = MobyBuildSafetyInspector.Inspect(sourceImage, baselineInputs);
+    if (baseline.Levels.Count != mappedLevels.Length)
+        throw new InvalidOperationException("Moby build safety smoke did not inspect every mapped level.");
+
+    foreach (MobyBuildSafetyLevelReport level in baseline.Levels)
+    {
+        if (level.SourceCatalogRecordCount != level.CatalogSourceRecordCount)
+        {
+            throw new InvalidOperationException(
+                $"{level.LevelName} native/catalog count mismatch: {level.SourceCatalogRecordCount} != {level.CatalogSourceRecordCount}.");
+        }
+        if (level.SourceDynamicArenaBytes <= 0 || level.SourceDynamicCapacity <= 0)
+            throw new InvalidOperationException($"{level.LevelName} has no resolved native runtime Moby arena.");
+    }
+
+    LevelDefinition testLevel = mappedLevels.First(level => level.Key == "stonehill");
+    MobyBuildSafetyLevelReport native = baseline.Levels.Single(level => level.LevelKey == testLevel.Key);
+    int appendedRuntimeCount = native.SourceRuntimeRecordCount + 2;
+    int firstOutputTrueIndex = native.SourceCatalogRecordCount;
+    int secondOutputTrueIndex = native.SourceCatalogRecordCount + 1;
+    int secondEditorTrueIndex = native.SourceCatalogRecordCount + 1000;
+    const string firstEditorLabel = "Synthetic Sheep Edit";
+    const string secondEditorLabel = "Synthetic Green Wizard Edit";
+    List<MobySourcePatch> appendPatches =
+    [
+        BuildCountPatch(testLevel, appendedRuntimeCount),
+        BuildAppendPatch(testLevel, firstOutputTrueIndex),
+        BuildAppendPatch(testLevel, secondOutputTrueIndex)
+    ];
+    MobySourceEditOutcome[] appendOutcomes =
+    [
+        BuildEditOutcome(firstOutputTrueIndex, firstEditorLabel, "moby-record-append"),
+        BuildEditOutcome(secondEditorTrueIndex, secondEditorLabel, "moby-record-append")
+    ];
+    MobyBuildSafetyLevelReport appended = MobyBuildSafetyInspector.InspectLevel(
+        sourceImage,
+        testLevel,
+        CreatePlan(testLevel, appendPatches, appendOutcomes));
+    if (appended.Status != MobyBuildSafetyStatus.Review || appended.TrueAppendCount != 2)
+        throw new InvalidOperationException("Two true appends were not classified for review.");
+    if (appended.SourceDynamicArenaBytes - appended.ProjectedDynamicArenaBytes != 2 * MobyBuildSafetyInspector.MobyRecordStride)
+        throw new InvalidOperationException("True append arena consumption did not equal two 0x58-byte static rows.");
+    int expectedProjectedCapacity = appended.ProjectedDynamicArenaBytes / MobyBuildSafetyInspector.DynamicAllocationBytes;
+    if (appended.ProjectedDynamicCapacity != expectedProjectedCapacity)
+        throw new InvalidOperationException("Projected runtime Moby/props capacity does not match allocator rounding.");
+
+    MobyBuildSafetyIssue[] appendIssues = appended.Issues
+        .Where(issue => string.Equals(issue.Code, "source-row-append", StringComparison.Ordinal))
+        .ToArray();
+    if (appendIssues.Length != 2 || appendIssues.Any(issue => !issue.CanNavigate))
+        throw new InvalidOperationException("Synthetic append findings did not produce two actionable per-Moby issues.");
+    MobyBuildSafetyIssue firstAppendIssue = appendIssues.Single(issue => issue.MobyLabel == firstEditorLabel);
+    if (firstAppendIssue.EditorTrueIndex != firstOutputTrueIndex ||
+        firstAppendIssue.LevelKey != testLevel.Key ||
+        firstAppendIssue.Status != MobyBuildSafetyStatus.Review)
+    {
+        throw new InvalidOperationException("The first append issue did not preserve its exact editor T-index, label, level, and status.");
+    }
+    MobyBuildSafetyIssue redirectedAppendIssue = appendIssues.Single(issue => issue.MobyLabel == secondEditorLabel);
+    if (redirectedAppendIssue.EditorTrueIndex != secondEditorTrueIndex ||
+        redirectedAppendIssue.EditorTrueIndex == secondOutputTrueIndex ||
+        redirectedAppendIssue.LevelKey != testLevel.Key ||
+        redirectedAppendIssue.Status != MobyBuildSafetyStatus.Review)
+    {
+        throw new InvalidOperationException("The second append issue used its output row instead of the original editor Moby identity.");
+    }
+
+    MobyBuildSafetyLevelReport blocked = MobyBuildSafetyInspector.InspectLevel(
+        sourceImage,
+        testLevel,
+        CreatePlan(testLevel, [BuildCountPatch(testLevel, MobyBuildSafetyInspector.PersistentStaticMobyCapacity + 1)]));
+    if (blocked.Status != MobyBuildSafetyStatus.Blocked || blocked.PersistentIndexHeadroom >= 0)
+        throw new InvalidOperationException("The 257th persistent static Moby row was not blocked.");
+
+    LevelDefinition sunnyFlight = mappedLevels.First(level => level.Key == "sunnyflight");
+    MobyBuildSafetyLevelReport sunnyFlightNative = baseline.Levels.Single(level => level.LevelKey == sunnyFlight.Key);
+    if (sunnyFlightNative.RuntimeRowAlignmentDeltaBytes != 0 ||
+        sunnyFlightNative.CatalogPrefixRows != 0 ||
+        sunnyFlightNative.SourceCatalogRecordCount != sunnyFlight.SourceRecordCount)
+    {
+        throw new InvalidOperationException("Sunny Flight's corrected 45-row source table is no longer aligned with its native runtime rows.");
+    }
+
+    // Keep the nonzero-alignment safety guard covered with an explicit synthetic fixture.
+    // These are Sunny Flight's superseded candidate boundary/count values, which resolve
+    // the same native component with one catalog prefix row and a -4-byte alignment delta.
+    LevelDefinition shiftedLevel = sunnyFlight with
+    {
+        Key = "sunnyflight-shifted-layout-fixture",
+        DisplayName = "Sunny Flight shifted-layout fixture",
+        SourceTableWadOffset = "0x1871074",
+        SourceTableRelativeOffset = "0x1BE874",
+        SourceRecordCount = 46,
+        Confidence = "Synthetic build-safety regression fixture"
+    };
+    MobyBuildSafetyLevelReport shiftedNative = MobyBuildSafetyInspector.InspectLevel(
+        sourceImage,
+        shiftedLevel,
+        CreatePlan(shiftedLevel, []));
+    if (shiftedNative.RuntimeRowAlignmentDeltaBytes != -4 || shiftedNative.CatalogPrefixRows != 1)
+        throw new InvalidOperationException("The synthetic shifted-layout build-safety fixture no longer resolves its expected -4-byte alignment delta.");
+    int shiftedOutputTrueIndex = shiftedNative.SourceCatalogRecordCount;
+    int shiftedEditorTrueIndex = shiftedOutputTrueIndex + 1000;
+    const string shiftedEditorLabel = "Synthetic Shifted-Layout Append";
+    MobyBuildSafetyLevelReport shiftedAppend = MobyBuildSafetyInspector.InspectLevel(
+        sourceImage,
+        shiftedLevel,
+        CreatePlan(
+            shiftedLevel,
+            [
+                BuildCountPatch(shiftedLevel, shiftedNative.SourceRuntimeRecordCount + 1),
+                BuildAppendPatch(shiftedLevel, shiftedOutputTrueIndex)
+            ],
+            [BuildEditOutcome(shiftedEditorTrueIndex, shiftedEditorLabel, "moby-record-append")]));
+    if (shiftedAppend.RuntimeRowAlignmentDeltaBytes != -4 || shiftedAppend.Status != MobyBuildSafetyStatus.Blocked)
+        throw new InvalidOperationException("The synthetic shifted runtime-row append was not blocked.");
+    MobyBuildSafetyIssue shiftedIssue = shiftedAppend.Issues.Single(issue =>
+        string.Equals(issue.Code, "source-row-append-blocked", StringComparison.Ordinal) &&
+        issue.MobyLabel == shiftedEditorLabel);
+    if (!shiftedIssue.CanNavigate ||
+        shiftedIssue.EditorTrueIndex != shiftedEditorTrueIndex ||
+        shiftedIssue.EditorTrueIndex == shiftedOutputTrueIndex ||
+        shiftedIssue.LevelKey != shiftedLevel.Key ||
+        shiftedIssue.Status != MobyBuildSafetyStatus.Blocked)
+    {
+        throw new InvalidOperationException("The synthetic shifted-layout blocked append did not remain actionable against the original editor Moby.");
+    }
+
+    MobyBuildSafetyWriteResult written = await MobyBuildSafetyReportWriter.WriteAsync(
+        baseline,
+        Path.Combine(reportDirectory, "moby-build-safety-baseline.json"),
+        Path.Combine(reportDirectory, "moby-build-safety-baseline.md"));
+    if (!File.ReadAllText(written.MarkdownPath).Contains("Native source references", StringComparison.Ordinal))
+        throw new InvalidOperationException("Moby build safety Markdown omitted the native source references.");
+
+    List<MobyBuildSafetyInput> savedInputs = [];
+    foreach (LevelDefinition level in mappedLevels)
+    {
+        string editsPath = Path.Combine(workspace.RootPath, $"{level.Key}-native-edits.json");
+        if (!File.Exists(editsPath))
+            continue;
+
+        try
+        {
+            MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(
+                sourceImage,
+                DiscImageLocator.FindCueForImage(sourceImage),
+                Path.Combine(reportDirectory, $"current-{level.Key}.bin"),
+                Path.Combine(reportDirectory, $"current-{level.Key}.cue"),
+                level,
+                editsPath);
+            savedInputs.Add(new MobyBuildSafetyInput(level, plan));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or OverflowException)
+        {
+            savedInputs.Add(new MobyBuildSafetyInput(level, CreatePlan(level, []), ex.Message));
+        }
+    }
+
+    MobyBuildSafetyReport savedReport = MobyBuildSafetyInspector.Inspect(sourceImage, savedInputs);
+    MobyBuildSafetyWriteResult savedWritten = await MobyBuildSafetyReportWriter.WriteAsync(
+        savedReport,
+        Path.Combine(reportDirectory, "moby-build-safety-current-edits.json"),
+        Path.Combine(reportDirectory, "moby-build-safety-current-edits.md"));
+
+    int prefixLevels = baseline.Levels.Count(level => level.CatalogPrefixRows > 0);
+    Console.WriteLine($"Moby build safety: {baseline.Levels.Count} mapped levels resolved; {prefixLevels} prefix-row level(s).");
+    Console.WriteLine($"Stone Hill two-append projection: {appended.SourceDynamicCapacity}->{appended.ProjectedDynamicCapacity} runtime slots; {appended.SourceDynamicArenaBytes:N0}->{appended.ProjectedDynamicArenaBytes:N0} arena bytes.");
+    Console.WriteLine($"Persistent boundary: {blocked.PlannedRuntimeRecordCount} rows correctly classified Blocked.");
+    Console.WriteLine($"Corrected layout: {sunnyFlight.DisplayName} source/runtime rows are aligned at {sunnyFlightNative.SourceCatalogRecordCount} records.");
+    Console.WriteLine($"Shifted-layout guard: {shiftedLevel.DisplayName} {shiftedAppend.RuntimeRowAlignmentDeltaBytes:+#;-#;0}-byte synthetic alignment correctly blocked for true append.");
+    Console.WriteLine($"Current saved edits: {savedReport.Levels.Count} level(s), {savedReport.StatusLabel}; {savedReport.TrueAppendCount} true append(s), {savedReport.SkippedEditCount} skipped edit(s). Report: {savedWritten.MarkdownPath}");
+    Console.WriteLine($"JSON: {written.JsonPath}");
+    Console.WriteLine($"Markdown: {written.MarkdownPath}");
+
+    MobySourcePatchPlan CreatePlan(
+        LevelDefinition level,
+        IReadOnlyList<MobySourcePatch> patches,
+        IReadOnlyList<MobySourceEditOutcome>? editOutcomes = null)
+    {
+        return new MobySourcePatchPlan(
+            GeneratedAt: DateTimeOffset.Now,
+            SourceImagePath: sourceImage,
+            OutputImagePath: Path.Combine(reportDirectory, $"{level.Key}.bin"),
+            OutputCuePath: Path.Combine(reportDirectory, $"{level.Key}.cue"),
+            NativeEditsPath: Path.Combine(workspace.RootPath, $"{level.Key}-native-edits.json"),
+            LevelKey: level.Key,
+            LevelName: level.DisplayName,
+            SourceTableWadOffset: level.SourceTableWadOffset,
+            SourceRecordCount: level.SourceRecordCount,
+            RecordStride: MobyBuildSafetyInspector.MobyRecordStride,
+            PatchCount: patches.Count,
+            TotalPatchedBytes: patches.Sum(patch => patch.ByteLength),
+            Patches: patches,
+            PackageImportPreviews: [],
+            SkippedEdits: [],
+            Notes: [],
+            EditOutcomes: editOutcomes);
+    }
+
+    MobySourceEditOutcome BuildEditOutcome(int editorTrueIndex, string label, params string[] patchKinds)
+    {
+        return new MobySourceEditOutcome(
+            EditorTrueIndex: editorTrueIndex,
+            MobyLabel: label,
+            EditKind: "added",
+            PatchKinds: patchKinds,
+            SkippedReasons: [],
+            PackageOutcomes: []);
+    }
+
+    MobySourcePatch BuildCountPatch(LevelDefinition level, int runtimeCount)
+    {
+        byte[] bytes = new byte[4];
+        BinaryPrimitives.WriteInt32LittleEndian(bytes, runtimeCount);
+        return new MobySourcePatch(
+            Label: "source count",
+            Kind: "moby-source-count",
+            LevelKey: level.Key,
+            MobyLabel: "source count",
+            TrueIndex: -1,
+            RecordOffset: "0x-4",
+            WadRelativeOffset: "0x0",
+            ImageOffset: "0x0",
+            ByteLength: 4,
+            BeforeHexPreview: "00 00 00 00",
+            AfterHexPreview: FormatHex(bytes),
+            Description: "Synthetic safety smoke count patch.");
+    }
+
+    MobySourcePatch BuildAppendPatch(LevelDefinition level, int trueIndex)
+    {
+        return new MobySourcePatch(
+            Label: $"append T{trueIndex}",
+            Kind: "moby-source-record-append",
+            LevelKey: level.Key,
+            MobyLabel: $"T{trueIndex}",
+            TrueIndex: trueIndex,
+            RecordOffset: "0x0",
+            WadRelativeOffset: "0x0",
+            ImageOffset: "0x0",
+            ByteLength: MobyBuildSafetyInspector.MobyRecordStride,
+            BeforeHexPreview: "",
+            AfterHexPreview: "",
+            Description: "Synthetic safety smoke append patch.");
+    }
+}
+
+void AssertOnlyTestLevelWarpDelta(
+    string normalImagePath,
+    string candidateImagePath,
+    MobySourcePatchPlan candidatePlan)
+{
+    MobySourcePatch warpPatch = candidatePlan.Patches.SingleOrDefault(TestLevelWarpPatch.IsPatch) ??
+        throw new InvalidOperationException("The candidate plan does not contain exactly one test level-warp patch.");
+    byte[] expectedNormal = ParseHexPreview(warpPatch.BeforeHexPreview);
+    byte[] expectedCandidate = ParseHexPreview(warpPatch.AfterHexPreview);
+    if (expectedNormal.Length != warpPatch.ByteLength || expectedCandidate.Length != warpPatch.ByteLength)
+        throw new InvalidOperationException("The test level-warp patch preview length changed.");
+
+    string offsetText = warpPatch.ImageOffset.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+        ? warpPatch.ImageOffset[2..]
+        : warpPatch.ImageOffset;
+    long warpOffset = long.Parse(offsetText, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+    using FileStream normal = File.OpenRead(normalImagePath);
+    using FileStream candidate = File.OpenRead(candidateImagePath);
+    if (normal.Length != candidate.Length || warpOffset < 0 || warpOffset + warpPatch.ByteLength > normal.Length)
+        throw new InvalidOperationException("Normal and Swap Test images no longer share the same guarded disc layout.");
+
+    const int BufferBytes = 1024 * 1024;
+    byte[] normalBuffer = new byte[BufferBytes];
+    byte[] candidateBuffer = new byte[BufferBytes];
+    for (long position = 0; position < normal.Length;)
+    {
+        int count = checked((int)Math.Min(BufferBytes, normal.Length - position));
+        normal.ReadExactly(normalBuffer.AsSpan(0, count));
+        candidate.ReadExactly(candidateBuffer.AsSpan(0, count));
+        for (int index = 0; index < count; index++)
+        {
+            long imageOffset = position + index;
+            if (imageOffset >= warpOffset && imageOffset < warpOffset + warpPatch.ByteLength)
+            {
+                int patchIndex = checked((int)(imageOffset - warpOffset));
+                if (normalBuffer[index] != expectedNormal[patchIndex] ||
+                    candidateBuffer[index] != expectedCandidate[patchIndex])
+                {
+                    throw new InvalidOperationException(
+                        $"The Swap Test executable delta changed at image offset 0x{imageOffset:X}.");
+                }
+            }
+            else if (normalBuffer[index] != candidateBuffer[index])
+            {
+                throw new InvalidOperationException(
+                    $"The Swap Test image differs from normal Create BIN outside the guarded level-warp patch at image offset 0x{imageOffset:X}.");
+            }
+        }
+        position += count;
+    }
+}
+
+async Task ReportSwapTestLevelWarpSmoke()
+{
+    if (!File.Exists(sourceImage))
+        throw new FileNotFoundException("Swap Test level-warp smoke requires the selected original Spyro USA BIN.", sourceImage);
+
+    LevelDefinition wizardPeak = catalog.FindByKey("wizardpeak") ??
+        throw new InvalidOperationException("Wizard Peak is missing from the level catalog.");
+    if (wizardPeak.LevelId != 33 ||
+        !string.Equals(TestLevelWarpPatch.TargetSelectionText(wizardPeak.LevelId), "Triangle, then Triangle", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Wizard Peak's retail level-warp selection is no longer Triangle, then Triangle.");
+    }
+
+    string cachePath = Path.Combine(workspace.RootPath, "editor-cache", "wizardpeak-mobys.json");
+    if (!File.Exists(cachePath))
+        throw new FileNotFoundException("Swap Test level-warp smoke requires the Wizard Peak moby cache.", cachePath);
+
+    Moby original = MobyLoader.LoadCached(cachePath)
+        .First(moby => moby.TrueIndex >= 0 && moby.TrueIndex < wizardPeak.SourceRecordCount && !moby.IsEditorControl);
+    Moby edited = CloneMoby(original);
+    edited.Position = new Vector3f(original.OriginalPosition.X, original.OriginalPosition.Y, original.OriginalPosition.Z + 0.0625f);
+    edited.Label = "Swap Test fast-entry smoke edit";
+    edited.PatchStatus = "smoke";
+    edited.PatchLead = "Verify test-only level-warp gating and readback.";
+
+    using SmokeTemporaryDirectory temporary = SmokeTemporaryDirectory.Create("spyro-swap-test-level-warp-smoke");
+    File.Copy(
+        Path.Combine(workspace.RootPath, "spyro-level-catalog.json"),
+        Path.Combine(temporary.Path, "spyro-level-catalog.json"));
+    string editsPath = Path.Combine(temporary.Path, "wizardpeak-fast-entry-native-edits.json");
+    if (await MobyEditStore.SaveAsync(editsPath, [edited], "Swap Test fast-entry focused smoke") != 1)
+        throw new InvalidOperationException("Swap Test level-warp smoke did not save exactly one ordinary Wizard Peak edit.");
+
+    string sourceCue = DiscImageLocator.FindCueForImage(sourceImage);
+    string normalPrefix = Path.Combine(temporary.Path, "normal-create-bin-control");
+    MobySourcePatchPlan normalPlan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        sourceCue,
+        normalPrefix + ".bin",
+        normalPrefix + ".cue",
+        wizardPeak,
+        editsPath,
+        allowPlanOnlyActorPackageImports: false);
+    if (normalPlan.PatchCount == 0 || normalPlan.Patches.Any(TestLevelWarpPatch.IsPatch))
+        throw new InvalidOperationException("Normal Create BIN did not remain free of the disposable level-warp patch.");
+
+    string candidatePrefix = Path.Combine(temporary.Path, "swap-test-fast-entry");
+    MobySourcePatchPlan candidatePlan = MobySourcePatchExporter.BuildPlan(
+        sourceImage,
+        sourceCue,
+        candidatePrefix + ".bin",
+        candidatePrefix + ".cue",
+        wizardPeak,
+        editsPath,
+        allowPlanOnlyActorPackageImports: true);
+    MobySourcePatch warpPatch = candidatePlan.Patches.SingleOrDefault(TestLevelWarpPatch.IsPatch) ??
+        throw new InvalidOperationException("Create Swap Test did not plan exactly one guarded level-warp activation patch.");
+    if (warpPatch.WadRelativeOffset != "exe:0x8002D834" ||
+        warpPatch.BeforeHexPreview != "37 B6 00 08 00 00 00 00" ||
+        warpPatch.AfterHexPreview != "1C 06 84 AF 88 06 80 AF" ||
+        warpPatch.ByteLength != 8 ||
+        !TestLevelWarpPatch.TryGetTargetLevelId(warpPatch, out int targetLevelId) ||
+        targetLevelId != wizardPeak.LevelId)
+    {
+        throw new InvalidOperationException("Create Swap Test's level-warp patch no longer matches the exact retail preimage, two-store replacement, or Wizard Peak target.");
+    }
+
+    MobySourcePatchResult result = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+        SourceImagePath: sourceImage,
+        SourceCuePath: sourceCue,
+        OutputPrefix: candidatePrefix,
+        Level: wizardPeak,
+        NativeEditsPath: editsPath,
+        WriteImage: true,
+        AllowPlanOnlyActorPackageImports: true));
+    if (!result.WroteImage || result.Plan.Patches.Count(TestLevelWarpPatch.IsPatch) != 1)
+        throw new InvalidOperationException("Create Swap Test did not write the guarded level-warp candidate.");
+
+    long imageOffset = long.Parse(warpPatch.ImageOffset[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+    byte[] written = new byte[warpPatch.ByteLength];
+    using (FileStream output = File.OpenRead(result.OutputImagePath))
+    {
+        output.Position = imageOffset;
+        output.ReadExactly(written);
+    }
+    if (!written.SequenceEqual(ParseHexPreview(warpPatch.AfterHexPreview)))
+        throw new InvalidOperationException("Swap Test level-warp output readback did not match the exact planned 8 bytes.");
+
+    string validationPath = await MobyCandidateValidationReportWriter.WriteAsync(result);
+    string validation = await File.ReadAllTextAsync(validationPath);
+    string[] requiredReportText =
+    [
+        "## Fast Level Entry",
+        TestLevelWarpPatch.ActivationSequence,
+        "Triangle, then Triangle",
+        "normal `Create BIN` does not include it",
+        "no per-level save state is required"
+    ];
+    foreach (string required in requiredReportText)
+    {
+        if (!validation.Contains(required, StringComparison.Ordinal))
+            throw new InvalidOperationException($"Swap Test candidate validation report is missing: {required}");
+    }
+
+    Console.WriteLine($"Swap Test fast level entry: PASS exact USA SHA/preimage guard, normal-build exclusion, 8-byte output readback, reusable selector reset, and fresh candidate report ({wizardPeak.DisplayName}: {TestLevelWarpPatch.TargetSelectionText(wizardPeak.LevelId)}).");
+}
+
+async Task ReportSourceSceneChainSelectionSmoke(
+    string selectedSourceImage,
+    EditorWorkspace selectedWorkspace,
+    LevelCatalog selectedCatalog)
+{
+    if (!File.Exists(selectedSourceImage))
+        throw new FileNotFoundException("Source-scene chain smoke requires the selected original Spyro USA BIN.", selectedSourceImage);
+
+    string analysisPath = WadAnalysisLocator.Find(selectedWorkspace);
+    if (!File.Exists(analysisPath))
+        throw new FileNotFoundException("Source-scene chain smoke requires the WAD analysis.", analysisPath);
+
+    Dictionary<string, (string Address, int Sectors, int Terminators, int Polygons, int Trimmed)> focused =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["darkpassage"] = ("source-wad:0x476A7D0", 192, 192, 7167, 0),
+            ["dreamweavers"] = ("source-wad:0x44CE4A4", 133, 133, 5842, 0),
+            ["beastmakers"] = ("source-wad:0x367AD44", 64, 64, 1977, 0),
+            ["gnastysworld"] = ("source-wad:0x52AC0DC", 115, 115, 3435, 2)
+        };
+
+    static void RequireCurrentSourceOverlayRejected(string levelKey, string path, string description)
+    {
+        if (GeometryCacheHealth.InspectOverlay(levelKey, path)?.BlocksLoading != true)
+            throw new InvalidOperationException($"Source overlay with {description} was not rejected by cache health.");
+
+        try
+        {
+            _ = GeometryOverlayLoader.LoadFirstCandidate(path);
+        }
+        catch (InvalidDataException)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException($"Source overlay loader accepted {description}.");
+    }
+
+    using SmokeTemporaryDirectory temporary = SmokeTemporaryDirectory.Create("spyro-source-scene-chain-smoke");
+    List<string> incompleteLevels = [];
+    int exportedLevels = 0;
+    int totalSectors = 0;
+    int totalLowDetailFaces = 0;
+    int lowDetailOnlySectors = 0;
+    int lowDetailOnlyFaces = 0;
+    int forcedLowDetailSectors = 0;
+    int forcedLowDetailFaces = 0;
+    int lowDetailTriangles = 0;
+    int lowDetailQuads = 0;
+    int lowDetailSemiTransparent = 0;
+    int lowDetailDoubleSided = 0;
+    int lowDetailBias31 = 0;
+    int totalHighDetailFaces = 0;
+    int completeHighDetailFaceWordPayloads = 0;
+    int certifiedHighDetailCoordinateFaces = 0;
+    int highDetailBearingSectors = 0;
+    int highDetailSemiTransparent = 0;
+    int highDetailUntexturedSentinels = 0;
+    int[] allSectorXResidues = new int[4];
+    int[] allSectorZResidues = new int[4];
+    int[] highDetailSectorXResidues = new int[4];
+    int[] highDetailSectorZResidues = new int[4];
+    using IncrementalHash highDetailFaceWordHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+    using IncrementalHash highDetailSectorCoordinateHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+    using IncrementalHash certifiedHighDetailWorldPointHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+    byte[] highDetailFaceWordBytes = new byte[sizeof(uint) * 4];
+    byte[] highDetailSectorCoordinateBytes = new byte[sizeof(uint) * 4];
+    byte[] certifiedHighDetailWorldPointBytes = new byte[sizeof(int) * 3];
+    bool sentinelFailClosedTested = false;
+    foreach (LevelDefinition level in selectedCatalog.Levels)
+    {
+        string outputPath = Path.Combine(temporary.Path, $"{level.Key}-runtime-scene-editor-overlay.json");
+        SourceSceneOverlayResult result = SourceSceneOverlayExporter.Export(
+            selectedSourceImage,
+            analysisPath,
+            level,
+            outputPath);
+
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(outputPath));
+        if (document.RootElement.GetProperty("sourceOverlayFormatVersion").GetInt32() != SourceSceneOverlayContract.CurrentFormatVersion ||
+            !string.Equals(
+                document.RootElement.GetProperty("hpColorLayout").GetString(),
+                SourceSceneOverlayContract.HpColorLayout,
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(
+                document.RootElement.GetProperty("hpCornerPayload").GetString(),
+                SourceSceneOverlayContract.HpCornerPayload,
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(
+                document.RootElement.GetProperty("hpFaceMaterialPayload").GetString(),
+                SourceSceneOverlayContract.HpFaceMaterialPayload,
+                StringComparison.Ordinal) ||
+            !string.Equals(
+                document.RootElement.GetProperty("hpCoordinatePayload").GetString(),
+                SourceSceneOverlayContract.HpCoordinatePayload,
+                StringComparison.Ordinal) ||
+            !string.Equals(
+                document.RootElement.GetProperty("lpColorLayout").GetString(),
+                SourceSceneOverlayContract.LpColorLayout,
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(
+                document.RootElement.GetProperty("lpFacePayload").GetString(),
+                SourceSceneOverlayContract.LpFacePayload,
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(
+                document.RootElement.GetProperty("terrainLodPreview").GetString(),
+                SourceSceneOverlayContract.TerrainLodPreview,
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(
+                document.RootElement.GetProperty("sceneChainPolicy").GetString(),
+                SourceSceneOverlayContract.SceneChainPolicy,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"{level.DisplayName} source overlay is missing the current HP raw-word/material/color/coordinate, topology, or static far-transition contract marker.");
+        }
+        JsonElement sceneCandidate = document.RootElement
+            .GetProperty("sceneCandidates")
+            .EnumerateArray()
+            .Single();
+        JsonElement geometryCandidate = document.RootElement
+            .GetProperty("candidates")
+            .EnumerateArray()
+            .Single();
+        JsonElement lowDetailCandidate = document.RootElement.GetProperty("lowDetail");
+        JsonElement sectorRenderMetadata = document.RootElement.GetProperty("sectorRenderMetadata");
+        JsonElement firstDiagnosticChain = document.RootElement
+            .GetProperty("candidateChains")
+            .EnumerateArray()
+            .First();
+
+        string address = sceneCandidate.GetProperty("runtimeAddress").GetString() ?? "";
+        int sectors = sceneCandidate.GetProperty("numSectors").GetInt32();
+        int terminators = sceneCandidate.GetProperty("terminatorSectors").GetInt32();
+        int trimmed = sceneCandidate.GetProperty("trimmedTrailingSectors").GetInt32();
+        int polygons = geometryCandidate.GetProperty("validPolygons").GetInt32();
+        int lowDetailFaces = sceneCandidate.GetProperty("lpFaces").GetInt32();
+        int serializedLowDetailFaces = lowDetailCandidate.GetProperty("validPolygons").GetInt32();
+        string firstDiagnosticAddress = "source-wad:" +
+            (firstDiagnosticChain.GetProperty("startWadOffset").GetString() ?? "");
+        int firstDiagnosticSectors = firstDiagnosticChain.GetProperty("sectorCount").GetInt32();
+        int firstDiagnosticTerminators = firstDiagnosticChain.GetProperty("terminatorSectors").GetInt32();
+        int firstDiagnosticTrimmed = firstDiagnosticChain.GetProperty("trimmedTrailingSectors").GetInt32();
+
+        if (!string.Equals(address, firstDiagnosticAddress, StringComparison.OrdinalIgnoreCase) ||
+            result.SectorCount != sectors ||
+            result.LpFaces != lowDetailFaces ||
+            result.PolygonCount != polygons ||
+            sectorRenderMetadata.GetArrayLength() != sectors ||
+            serializedLowDetailFaces != lowDetailFaces ||
+            lowDetailCandidate.GetProperty("polygons").GetArrayLength() != lowDetailFaces ||
+            firstDiagnosticSectors != sectors ||
+            firstDiagnosticTerminators != terminators ||
+            firstDiagnosticTrimmed != trimmed)
+        {
+            throw new InvalidOperationException(
+                $"{level.DisplayName} did not serialize the selected source-scene chain consistently across its result, scene candidate, geometry candidate, and diagnostic ordering.");
+        }
+
+        if (terminators != sectors)
+            incompleteLevels.Add(level.Key);
+
+        if (focused.TryGetValue(level.Key, out (string Address, int Sectors, int Terminators, int Polygons, int Trimmed) expected))
+        {
+            if (!string.Equals(address, expected.Address, StringComparison.OrdinalIgnoreCase) ||
+                sectors != expected.Sectors ||
+                terminators != expected.Terminators ||
+                polygons != expected.Polygons ||
+                trimmed != expected.Trimmed)
+            {
+                throw new InvalidOperationException(
+                    $"{level.DisplayName} source-scene selection changed: got {address}, {sectors}/{terminators} sectors/terminators, {polygons} polygons, {trimmed} trimmed; " +
+                    $"expected {expected.Address}, {expected.Sectors}/{expected.Terminators}, {expected.Polygons}, {expected.Trimmed} trimmed.");
+            }
+
+            if (level.Key.Equals("darkpassage", StringComparison.OrdinalIgnoreCase) &&
+                (result.Bounds.Right > 7205 || result.Bounds.Bottom > 6862 || result.Bounds.Left < 143 || result.Bounds.Top < 391))
+            {
+                throw new InvalidOperationException(
+                    $"Dark Passage source-scene bounds still include a detached prefix: {result.Bounds}.");
+            }
+
+            if (level.Key.Equals("dreamweavers", StringComparison.OrdinalIgnoreCase) && result.Bounds.Bottom > 5120)
+                throw new InvalidOperationException($"Dream Weavers source-scene bounds still include the remote Y=30,704 prefix: {result.Bounds}.");
+
+            if (level.Key.Equals("gnastysworld", StringComparison.OrdinalIgnoreCase) &&
+                geometryCandidate.GetProperty("polygons").EnumerateArray().Any(face => face.GetProperty("sectorIndex").GetInt32() >= expected.Sectors))
+            {
+                throw new InvalidOperationException("Gnasty's World source overlay still includes faces from the two trailing non-terminated pseudo-sectors.");
+            }
+
+            Console.WriteLine(
+                $"Source-scene focus {level.DisplayName}: {address}, {sectors}/{terminators} sectors/terminators, {polygons:N0} polygons, {trimmed} trailing pseudo-sector(s) trimmed, bounds {result.Bounds}.");
+        }
+
+        GeometryCandidate generatedGeometry = GeometryOverlayLoader.LoadFirstCandidate(outputPath);
+        GeometryCacheHealthIssue? generatedHealth = GeometryCacheHealth.InspectOverlay(level.Key, outputPath);
+        if (generatedHealth?.BlocksLoading == true)
+        {
+            TerrainPolygon? invalidFace = generatedGeometry.Polygons.FirstOrDefault(face =>
+                !face.HasNativeCornerPayload ||
+                face.Points.Count is < 3 or > SourceSceneOverlayContract.CornerSlotCount ||
+                face.CornerPointIndexes.Any(index => index < 0 || index >= face.Points.Count));
+            string diagnostic = invalidFace == null
+                ? ""
+                : $" First invalid face: {invalidFace.RuntimeKey}, vertices [{string.Join(",", invalidFace.VertexIndexes)}], points [{string.Join(",", invalidFace.CornerPointIndexes)}].";
+            throw new InvalidOperationException($"{level.DisplayName} newly generated overlay failed cache health: {generatedHealth.Message}{diagnostic}");
+        }
+
+        if (generatedGeometry.Polygons.Count != polygons)
+            throw new InvalidOperationException($"{level.DisplayName} loader preserved {generatedGeometry.Polygons.Count:N0}/{polygons:N0} source faces.");
+        if (!generatedGeometry.HasExactHighPolyMaterialState ||
+            !string.Equals(
+                generatedGeometry.HighPolyMaterialContract,
+                SourceSceneOverlayContract.HpFaceMaterialPayload,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"{level.DisplayName} loader did not preserve the exact HP raw-word/material state under contract '{generatedGeometry.HighPolyMaterialContract}'.");
+        }
+        if (!generatedGeometry.HasExactHighPolyCoordinateState ||
+            !string.Equals(
+                generatedGeometry.HighPolyCoordinateContract,
+                SourceSceneOverlayContract.HpCoordinatePayload,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"{level.DisplayName} loader did not preserve the exact HP scene-sector coordinate state under contract '{generatedGeometry.HighPolyCoordinateContract}'.");
+        }
+        if (!generatedGeometry.HasStaticLowDetailPreview ||
+            generatedGeometry.SourceSectors.Count != sectors ||
+            generatedGeometry.LowDetailPolygons.Count != lowDetailFaces)
+        {
+            throw new InvalidOperationException(
+                $"{level.DisplayName} loader preserved {generatedGeometry.SourceSectors.Count:N0}/{sectors:N0} sector records and " +
+                $"{generatedGeometry.LowDetailPolygons.Count:N0}/{lowDetailFaces:N0} static LP faces under contract '{generatedGeometry.TerrainLodPreviewContract}'.");
+        }
+
+        foreach (LowDetailTerrainPolygon face in generatedGeometry.LowDetailPolygons)
+        {
+            if (!face.HasCompleteNativePayload)
+                throw new InvalidOperationException($"{level.DisplayName} {face.RuntimeKey} lost its packed four-slot LP payload during overlay load.");
+        }
+
+        totalSectors += generatedGeometry.SourceSectors.Count;
+        totalLowDetailFaces += generatedGeometry.LowDetailPolygons.Count;
+        lowDetailOnlySectors += generatedGeometry.SourceSectors.Count(sector => sector.DisableHighDetail);
+        lowDetailOnlyFaces += generatedGeometry.SourceSectors.Where(sector => sector.DisableHighDetail).Sum(sector => sector.LowDetailFaceCount);
+        forcedLowDetailSectors += generatedGeometry.SourceSectors.Count(sector => sector.ForceLowDetail);
+        forcedLowDetailFaces += generatedGeometry.SourceSectors.Where(sector => sector.ForceLowDetail).Sum(sector => sector.LowDetailFaceCount);
+        lowDetailTriangles += generatedGeometry.LowDetailPolygons.Count(face => face.Points.Count == 3);
+        lowDetailQuads += generatedGeometry.LowDetailPolygons.Count(face => face.Points.Count == 4);
+        lowDetailSemiTransparent += generatedGeometry.LowDetailPolygons.Count(face => face.SemiTransparent);
+        lowDetailDoubleSided += generatedGeometry.LowDetailPolygons.Count(face => face.DoubleSided);
+        lowDetailBias31 += generatedGeometry.LowDetailPolygons.Count(face => face.TransitionBias == 31);
+        totalHighDetailFaces += generatedGeometry.Polygons.Count;
+        highDetailSemiTransparent += generatedGeometry.Polygons.Count(face => face.NativePrimitiveSemiTransparent);
+        highDetailUntexturedSentinels += generatedGeometry.Polygons.Count(face => face.IsNativeUntexturedSentinel);
+
+        Dictionary<int, SceneSectorRenderMetadata> coordinateSectors = generatedGeometry.SourceSectors
+            .ToDictionary(sector => sector.SectorIndex);
+        foreach (SceneSectorRenderMetadata sector in generatedGeometry.SourceSectors)
+        {
+            NativeTerrainHpSectorCoordinatePayload coordinates = sector.HighPolyCoordinates
+                ?? throw new InvalidOperationException($"{level.DisplayName} sector {sector.SectorIndex} lost its raw HP coordinate payload.");
+            if (coordinates.UsesSpecialZScale ||
+                coordinates.CenterX != sector.Center.X ||
+                coordinates.CenterY != sector.Center.Y ||
+                coordinates.CenterZ != sector.Center.Z ||
+                coordinates.Radius != sector.Radius ||
+                coordinates.DisableLowDetail != sector.DisableLowDetail ||
+                coordinates.DisableHighDetail != sector.DisableHighDetail ||
+                coordinates.ForceLowDetail != sector.ForceLowDetail)
+            {
+                throw new InvalidOperationException(
+                    $"{level.DisplayName} sector {sector.SectorIndex} raw header words do not certify its derived center/radius/flags.");
+            }
+
+            allSectorXResidues[coordinates.XOriginQuarterResidue]++;
+            allSectorZResidues[coordinates.ZOriginQuarterResidue]++;
+            if (sector.HighDetailFaceCount > 0)
+            {
+                highDetailBearingSectors++;
+                highDetailSectorXResidues[coordinates.XOriginQuarterResidue]++;
+                highDetailSectorZResidues[coordinates.ZOriginQuarterResidue]++;
+            }
+
+            BinaryPrimitives.WriteUInt32LittleEndian(highDetailSectorCoordinateBytes.AsSpan(0, sizeof(uint)), coordinates.NativeCenterXyWord);
+            BinaryPrimitives.WriteUInt32LittleEndian(highDetailSectorCoordinateBytes.AsSpan(sizeof(uint), sizeof(uint)), coordinates.NativeCenterZRadiusFlagsWord);
+            BinaryPrimitives.WriteUInt32LittleEndian(highDetailSectorCoordinateBytes.AsSpan(sizeof(uint) * 2, sizeof(uint)), coordinates.NativeXyPositionWord);
+            BinaryPrimitives.WriteUInt32LittleEndian(highDetailSectorCoordinateBytes.AsSpan(sizeof(uint) * 3, sizeof(uint)), coordinates.NativeZPositionWord);
+            highDetailSectorCoordinateHash.AppendData(highDetailSectorCoordinateBytes);
+        }
+
+        if ((level.Key.Equals("beastmakers", StringComparison.OrdinalIgnoreCase) ||
+             level.Key.Equals("mistybog", StringComparison.OrdinalIgnoreCase)) && lowDetailFaces != 0)
+        {
+            throw new InvalidOperationException($"{level.DisplayName} unexpectedly gained {lowDetailFaces:N0} LP faces; retail stores none for this level.");
+        }
+
+        int expectedBias31 = level.Key.Equals("stonehill", StringComparison.OrdinalIgnoreCase) ? 128 :
+            level.Key.Equals("alpineridge", StringComparison.OrdinalIgnoreCase) ? 15 : 0;
+        int levelBias31 = generatedGeometry.LowDetailPolygons.Count(face => face.TransitionBias == 31);
+        if (levelBias31 != expectedBias31)
+            throw new InvalidOperationException($"{level.DisplayName} decoded {levelBias31:N0} bias-31 LP faces; expected {expectedBias31:N0}.");
+
+        foreach (TerrainPolygon face in generatedGeometry.Polygons)
+        {
+            if (!face.HasNativeHighPolyMaterialPayload || !face.HasCompleteNativeHighPolyFacePayload)
+                throw new InvalidOperationException($"{level.DisplayName} {face.RuntimeKey} lost its exact raw HP face-word 0-3 payload during overlay load.");
+
+            if (!coordinateSectors.TryGetValue(face.SectorIndex, out SceneSectorRenderMetadata? coordinateSector) ||
+                !coordinateSector.HighPolyCoordinates.HasValue)
+            {
+                throw new InvalidOperationException($"{level.DisplayName} {face.RuntimeKey} has no certified HP coordinate sector.");
+            }
+            foreach ((Vector2f point, float z) in face.Points.Zip(face.ZValues))
+            {
+                SpyroRetailHighPolyWorldPoint4 worldPoint = NativeTerrainHighPolyCoordinates.ReconstructCertifiedWorldPointX4(
+                    coordinateSector.HighPolyCoordinates.Value,
+                    checked((int)point.X),
+                    checked((int)point.Y),
+                    checked((int)z));
+                BinaryPrimitives.WriteInt32LittleEndian(certifiedHighDetailWorldPointBytes.AsSpan(0, sizeof(int)), worldPoint.X4);
+                BinaryPrimitives.WriteInt32LittleEndian(certifiedHighDetailWorldPointBytes.AsSpan(sizeof(int), sizeof(int)), worldPoint.Y4);
+                BinaryPrimitives.WriteInt32LittleEndian(certifiedHighDetailWorldPointBytes.AsSpan(sizeof(int) * 2, sizeof(int)), worldPoint.Z4);
+                certifiedHighDetailWorldPointHash.AppendData(certifiedHighDetailWorldPointBytes);
+            }
+            certifiedHighDetailCoordinateFaces++;
+
+            uint packedWord0 = (uint)face.VertexIndexes[0] |
+                ((uint)face.VertexIndexes[1] << 8) |
+                ((uint)face.VertexIndexes[2] << 16) |
+                ((uint)face.VertexIndexes[3] << 24);
+            uint packedWord1 = (uint)face.ColourIndexes[0] |
+                ((uint)face.ColourIndexes[1] << 8) |
+                ((uint)face.ColourIndexes[2] << 16) |
+                ((uint)face.ColourIndexes[3] << 24);
+            if (face.NativeFaceWord0 != packedWord0 ||
+                face.NativeFaceWord1 != packedWord1 ||
+                face.FaceFlip != ((face.NativeFaceWord3 & 0x02) != 0) ||
+                face.FaceDepth != (int)((face.NativeFaceWord3 >> 3) & 0x1F))
+            {
+                throw new InvalidOperationException(
+                    $"{level.DisplayName} {face.RuntimeKey} typed raw words do not match its four vertex/color slots, flip, or depth fields.");
+            }
+
+            BinaryPrimitives.WriteUInt32LittleEndian(highDetailFaceWordBytes.AsSpan(0, sizeof(uint)), face.NativeFaceWord0);
+            BinaryPrimitives.WriteUInt32LittleEndian(highDetailFaceWordBytes.AsSpan(sizeof(uint), sizeof(uint)), face.NativeFaceWord1);
+            BinaryPrimitives.WriteUInt32LittleEndian(highDetailFaceWordBytes.AsSpan(sizeof(uint) * 2, sizeof(uint)), face.NativeFaceWord2);
+            BinaryPrimitives.WriteUInt32LittleEndian(highDetailFaceWordBytes.AsSpan(sizeof(uint) * 3, sizeof(uint)), face.NativeFaceWord3);
+            highDetailFaceWordHash.AppendData(highDetailFaceWordBytes);
+            completeHighDetailFaceWordPayloads++;
+
+            PsxTerrainPrimitiveClassification expectedMaterial =
+                PsxTerrainBlendKernel.ClassifyHighPolyMaterialByte((byte)(face.NativeFaceWord2 & 0xFF));
+            if (face.NativeMaterialByte != expectedMaterial.RawMaterialByte ||
+                face.IsNativeUntexturedSentinel != expectedMaterial.IsOpaqueUntexturedSentinel ||
+                face.NativePrimitiveSemiTransparent != expectedMaterial.PrimitiveSemiTransparent ||
+                face.NativeTextureId != expectedMaterial.TextureId ||
+                face.TextureId != expectedMaterial.TextureId)
+            {
+                throw new InvalidOperationException(
+                    $"{level.DisplayName} {face.RuntimeKey} explicit HP material state does not match native +0x08 word 0x{face.NativeFaceWord2:X8}.");
+            }
+
+            if (!uint.TryParse(
+                    face.Word3.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? face.Word3[2..] : face.Word3,
+                    NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture,
+                    out uint legacyWord2) ||
+                legacyWord2 != face.NativeFaceWord2)
+            {
+                throw new InvalidOperationException(
+                    $"{level.DisplayName} {face.RuntimeKey} legacy word3 does not match its typed native +0x08 word.");
+            }
+
+            if (!uint.TryParse(
+                    face.Word4.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? face.Word4[2..] : face.Word4,
+                    NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture,
+                    out uint legacyWord3) ||
+                legacyWord3 != face.NativeFaceWord3)
+            {
+                throw new InvalidOperationException(
+                    $"{level.DisplayName} {face.RuntimeKey} legacy word4 does not match its typed native +0x0C word.");
+            }
+
+            if (face.IsNativeUntexturedSentinel &&
+                (face.NativeMaterialByte != PsxTerrainBlendKernel.OpaqueUntexturedMaterialSentinel ||
+                 face.NativeTextureId != -1 || face.TextureId != -1 || face.NativePrimitiveSemiTransparent))
+            {
+                throw new InvalidOperationException(
+                    $"{level.DisplayName} {face.RuntimeKey} misclassified native 0xFF as a semitransparent texture.");
+            }
+
+            if (!face.HasNativeCornerPayload)
+                throw new InvalidOperationException($"{level.DisplayName} {face.RuntimeKey} lost its exact four-corner source payload during overlay load.");
+            if (face.Points.Count is < 3 or > SourceSceneOverlayContract.CornerSlotCount ||
+                face.CornerPointIndexes.Any(index => index < 0 || index >= face.Points.Count))
+            {
+                throw new InvalidOperationException($"{level.DisplayName} {face.RuntimeKey} has an invalid raw-slot-to-point mapping.");
+            }
+
+            Dictionary<int, int> expectedPointIndexByVertex = new();
+            for (int slot = 0; slot < SourceSceneOverlayContract.CornerSlotCount; slot++)
+            {
+                int vertexIndex = face.VertexIndexes[slot];
+                if (!expectedPointIndexByVertex.TryGetValue(vertexIndex, out int expectedPointIndex))
+                {
+                    expectedPointIndex = expectedPointIndexByVertex.Count;
+                    expectedPointIndexByVertex.Add(vertexIndex, expectedPointIndex);
+                }
+
+                if (face.CornerPointIndexes[slot] != expectedPointIndex)
+                {
+                    throw new InvalidOperationException(
+                        $"{level.DisplayName} {face.RuntimeKey} raw slot {slot} maps to point {face.CornerPointIndexes[slot]}, expected {expectedPointIndex}.");
+                }
+            }
+
+            if (expectedPointIndexByVertex.Count != face.Points.Count)
+                throw new InvalidOperationException($"{level.DisplayName} {face.RuntimeKey} raw topology does not cover its {face.Points.Count} rendered points.");
+
+            ColorRgba averageNear = ColorRgba.FromRgb(
+                face.NearColors.Sum(color => color.R) / SourceSceneOverlayContract.CornerSlotCount,
+                face.NearColors.Sum(color => color.G) / SourceSceneOverlayContract.CornerSlotCount,
+                face.NearColors.Sum(color => color.B) / SourceSceneOverlayContract.CornerSlotCount);
+            if (face.FaceColor != averageNear)
+                throw new InvalidOperationException($"{level.DisplayName} {face.RuntimeKey} compatibility face color is not the exact average of its four near colors.");
+        }
+
+        if (!sentinelFailClosedTested && generatedGeometry.Polygons.Any(face => face.IsNativeUntexturedSentinel))
+        {
+            JsonObject sentinelRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException($"Could not clone the {level.DisplayName} source overlay for 0xFF sentinel health smoke.");
+            JsonObject? sentinelFace = sentinelRoot["candidates"]!.AsArray()
+                .SelectMany(candidate => candidate!["polygons"]!.AsArray())
+                .Select(face => face!.AsObject())
+                .FirstOrDefault(face => face["nativeUntexturedSentinel"]?.GetValue<bool>() == true);
+            if (sentinelFace == null)
+                throw new InvalidOperationException($"{level.DisplayName} typed and serialized 0xFF sentinel state disagree.");
+            sentinelFace["textureId"] = 127;
+            string sentinelPath = Path.Combine(temporary.Path, $"{level.Key}-misclassified-ff-sentinel-overlay.json");
+            File.WriteAllText(sentinelPath, sentinelRoot.ToJsonString());
+            RequireCurrentSourceOverlayRejected(
+                level.Key,
+                sentinelPath,
+                $"{level.DisplayName} native 0xFF sentinel misclassified as texture 127");
+            sentinelFailClosedTested = true;
+        }
+
+        if (level.Key.Equals("stonehill", StringComparison.OrdinalIgnoreCase))
+        {
+            GeometryCandidate stoneHillGeometry = generatedGeometry;
+            TerrainPolygon anchor = stoneHillGeometry.Polygons.Single(face => face.RuntimeKey.Equals("1:0:hp", StringComparison.OrdinalIgnoreCase));
+            ColorRgba expectedAnchorColor = ColorRgba.FromRgb(127, 127, 127);
+            if (anchor.FaceColor != expectedAnchorColor)
+            {
+                throw new InvalidOperationException(
+                    $"Stone Hill split-bank source color layout regressed: 1:0:hp is #{anchor.FaceColor.R:X2}{anchor.FaceColor.G:X2}{anchor.FaceColor.B:X2}, expected #7F7F7F.");
+            }
+            if (!anchor.VertexIndexes.SequenceEqual(new[] { 2, 2, 1, 0 }) ||
+                !anchor.CornerPointIndexes.SequenceEqual(new[] { 0, 0, 1, 2 }) ||
+                anchor.NearColors.Any(color => color != ColorRgba.FromRgb(127, 127, 127)) ||
+                anchor.FarColors.Any(color => color != ColorRgba.FromRgb(173, 159, 126)))
+            {
+                throw new InvalidOperationException("Stone Hill 1:0:hp no longer preserves the exact repeated triangle slots or its four near/fade source colors.");
+            }
+
+            TerrainPolygon shadedQuad = stoneHillGeometry.Polygons.Single(face => face.RuntimeKey.Equals("1:1:hp", StringComparison.OrdinalIgnoreCase));
+            ColorRgba[] expectedQuadNear =
+            [
+                ColorRgba.FromRgb(103, 77, 58),
+                ColorRgba.FromRgb(103, 77, 58),
+                ColorRgba.FromRgb(114, 96, 70),
+                ColorRgba.FromRgb(78, 67, 60)
+            ];
+            ColorRgba[] expectedQuadFar =
+            [
+                ColorRgba.FromRgb(117, 111, 81),
+                ColorRgba.FromRgb(117, 111, 81),
+                ColorRgba.FromRgb(218, 196, 161),
+                ColorRgba.FromRgb(61, 58, 42)
+            ];
+            if (!shadedQuad.VertexIndexes.SequenceEqual(new[] { 4, 5, 6, 3 }) ||
+                !shadedQuad.CornerPointIndexes.SequenceEqual(new[] { 0, 1, 2, 3 }) ||
+                !shadedQuad.NearColors.SequenceEqual(expectedQuadNear) ||
+                !shadedQuad.FarColors.SequenceEqual(expectedQuadFar))
+            {
+                throw new InvalidOperationException("Stone Hill 1:1:hp no longer preserves the exact non-uniform quad corner order or near/fade source colors.");
+            }
+
+            int greenDominantFaces = stoneHillGeometry.Polygons.Count(face =>
+                face.FaceColor.G > face.FaceColor.R && face.FaceColor.G > face.FaceColor.B);
+            if (greenDominantFaces < 1500)
+                throw new InvalidOperationException($"Stone Hill recovered only {greenDominantFaces:N0} green-dominant faces; the contiguous physical table-2 bank was not decoded.");
+
+            JsonObject staleRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for stale-cache health smoke.");
+            staleRoot.Remove("sourceOverlayFormatVersion");
+            staleRoot.Remove("hpColorLayout");
+            staleRoot.Remove("hpCornerPayload");
+            staleRoot.Remove("hpFaceMaterialPayload");
+            staleRoot.Remove("hpCoordinatePayload");
+            staleRoot.Remove("lpColorLayout");
+            staleRoot.Remove("lpFacePayload");
+            staleRoot.Remove("terrainLodPreview");
+            staleRoot.Remove("sceneChainPolicy");
+            string stalePath = Path.Combine(temporary.Path, "stonehill-stale-source-overlay.json");
+            File.WriteAllText(stalePath, staleRoot.ToJsonString());
+            GeometryCacheHealthIssue? staleHealth = GeometryCacheHealth.InspectOverlay(level.Key, stalePath);
+            if (staleHealth?.BlocksLoading != true ||
+                !staleHealth.Severity.Equals("stale-source-color-layout", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Stone Hill obsolete source overlay was not routed through automatic cache recovery.");
+            }
+
+            JsonObject previousVersionRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for previous-format cache health smoke.");
+            previousVersionRoot["sourceOverlayFormatVersion"] = SourceSceneOverlayContract.CurrentFormatVersion - 1;
+            previousVersionRoot.Remove("hpFaceMaterialPayload");
+            foreach (JsonNode? candidateNode in previousVersionRoot["candidates"]!.AsArray())
+            {
+                foreach (JsonNode? faceNode in candidateNode!["polygons"]!.AsArray())
+                {
+                    JsonObject face = faceNode!.AsObject();
+                    face.Remove("nativeFaceWord2");
+                    face.Remove("nativeMaterialByte");
+                    face.Remove("nativeUntexturedSentinel");
+                    face.Remove("nativePrimitiveSemiTransparent");
+                    face.Remove("nativeTextureId");
+                }
+            }
+            string previousVersionPath = Path.Combine(temporary.Path, "stonehill-previous-format-source-overlay.json");
+            File.WriteAllText(previousVersionPath, previousVersionRoot.ToJsonString());
+            RequireCurrentSourceOverlayRejected(
+                level.Key,
+                previousVersionPath,
+                "explicit source provenance under the previous overlay format");
+
+            JsonObject missingCoordinateContractRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for missing-coordinate-contract health smoke.");
+            missingCoordinateContractRoot.Remove("hpCoordinatePayload");
+            string missingCoordinateContractPath = Path.Combine(temporary.Path, "stonehill-missing-hp-coordinate-contract-overlay.json");
+            File.WriteAllText(missingCoordinateContractPath, missingCoordinateContractRoot.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, missingCoordinateContractPath, "a missing HP scene-sector coordinate contract");
+
+            JsonObject missingCoordinateWordRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for missing-coordinate-word health smoke.");
+            missingCoordinateWordRoot["sectorRenderMetadata"]![0]!.AsObject().Remove("nativeXyPositionWord");
+            string missingCoordinateWordPath = Path.Combine(temporary.Path, "stonehill-missing-hp-coordinate-word-overlay.json");
+            File.WriteAllText(missingCoordinateWordPath, missingCoordinateWordRoot.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, missingCoordinateWordPath, "a missing raw HP sector xyPos word");
+
+            JsonObject malformedCoordinateWordRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for malformed-coordinate-word health smoke.");
+            malformedCoordinateWordRoot["sectorRenderMetadata"]![0]!["nativeZPositionWord"] = "not-a-native-word";
+            string malformedCoordinateWordPath = Path.Combine(temporary.Path, "stonehill-malformed-hp-coordinate-word-overlay.json");
+            File.WriteAllText(malformedCoordinateWordPath, malformedCoordinateWordRoot.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, malformedCoordinateWordPath, "a malformed raw HP sector zPos word");
+
+            JsonObject mismatchedCoordinateOriginRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for mismatched-coordinate-origin health smoke.");
+            JsonObject mismatchedCoordinateOrigin = mismatchedCoordinateOriginRoot["sectorRenderMetadata"]![0]!["decodedOrigin"]!.AsObject();
+            mismatchedCoordinateOrigin["x"] = mismatchedCoordinateOrigin["x"]!.GetValue<int>() + 1;
+            string mismatchedCoordinateOriginPath = Path.Combine(temporary.Path, "stonehill-mismatched-hp-coordinate-origin-overlay.json");
+            File.WriteAllText(mismatchedCoordinateOriginPath, mismatchedCoordinateOriginRoot.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, mismatchedCoordinateOriginPath, "a raw/derived HP sector origin mismatch");
+
+            JsonObject mismatchedCoordinateCenterRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for mismatched-coordinate-center health smoke.");
+            JsonObject mismatchedCoordinateCenter = mismatchedCoordinateCenterRoot["sectorRenderMetadata"]![0]!["center"]!.AsObject();
+            mismatchedCoordinateCenter["z"] = mismatchedCoordinateCenter["z"]!.GetValue<int>() + 1;
+            string mismatchedCoordinateCenterPath = Path.Combine(temporary.Path, "stonehill-mismatched-hp-coordinate-center-overlay.json");
+            File.WriteAllText(mismatchedCoordinateCenterPath, mismatchedCoordinateCenterRoot.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, mismatchedCoordinateCenterPath, "a raw/derived HP sector center mismatch");
+
+            JsonObject mismatchedCoordinateResidueRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for mismatched-coordinate-residue health smoke.");
+            JsonObject mismatchedCoordinateResidueSector = mismatchedCoordinateResidueRoot["sectorRenderMetadata"]![0]!.AsObject();
+            mismatchedCoordinateResidueSector["xOriginQuarterResidue"] =
+                (mismatchedCoordinateResidueSector["xOriginQuarterResidue"]!.GetValue<int>() + 1) & 3;
+            string mismatchedCoordinateResiduePath = Path.Combine(temporary.Path, "stonehill-mismatched-hp-coordinate-residue-overlay.json");
+            File.WriteAllText(mismatchedCoordinateResiduePath, mismatchedCoordinateResidueRoot.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, mismatchedCoordinateResiduePath, "a raw/derived HP sector quarter-residue mismatch");
+
+            JsonObject unsupportedSpecialZRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for special-Z health smoke.");
+            JsonObject unsupportedSpecialZSector = unsupportedSpecialZRoot["sectorRenderMetadata"]![0]!.AsObject();
+            uint specialZHeader = unsupportedSpecialZSector["nativeCenterZRadiusFlagsWord"]!.GetValue<uint>() | 0x1000u;
+            unsupportedSpecialZSector["nativeCenterZRadiusFlagsWord"] = specialZHeader;
+            unsupportedSpecialZSector["radius"] = (int)(specialZHeader & 0x1FFF);
+            unsupportedSpecialZSector["specialZScale"] = true;
+            string unsupportedSpecialZPath = Path.Combine(temporary.Path, "stonehill-unsupported-special-z-overlay.json");
+            File.WriteAllText(unsupportedSpecialZPath, unsupportedSpecialZRoot.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, unsupportedSpecialZPath, "unsupported scene-sector header bit 12 special Z scaling");
+
+            JsonObject outOfLatticePointRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for out-of-lattice HP point health smoke.");
+            JsonObject outOfLatticePoint = outOfLatticePointRoot["candidates"]![0]!["polygons"]![0]!["points"]![0]!.AsObject();
+            outOfLatticePoint["x"] = outOfLatticePoint["x"]!.GetValue<int>() + 4096;
+            string outOfLatticePointPath = Path.Combine(temporary.Path, "stonehill-out-of-lattice-hp-point-overlay.json");
+            File.WriteAllText(outOfLatticePointPath, outOfLatticePointRoot.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, outOfLatticePointPath, "an HP face point outside its certified sector lattice");
+
+            JsonObject missingMaterialRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for missing-material health smoke.");
+            missingMaterialRoot["candidates"]![0]!["polygons"]![0]!.AsObject().Remove("nativeMaterialByte");
+            string missingMaterialPath = Path.Combine(temporary.Path, "stonehill-missing-hp-material-byte-overlay.json");
+            File.WriteAllText(missingMaterialPath, missingMaterialRoot.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, missingMaterialPath, "a missing explicit HP material byte");
+
+            JsonObject mismatchedWordRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for mismatched-material-word health smoke.");
+            JsonObject mismatchedWordFace = mismatchedWordRoot["candidates"]![0]!["polygons"]![0]!.AsObject();
+            uint originalNativeWord2 = mismatchedWordFace["nativeFaceWord2"]!.GetValue<uint>();
+            mismatchedWordFace["nativeFaceWord2"] = originalNativeWord2 ^ 1u;
+            string mismatchedWordPath = Path.Combine(temporary.Path, "stonehill-mismatched-hp-material-word-overlay.json");
+            File.WriteAllText(mismatchedWordPath, mismatchedWordRoot.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, mismatchedWordPath, "a raw/explicit HP material word mismatch");
+
+            JsonObject missingWord4Root = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for missing-word4 health smoke.");
+            missingWord4Root["candidates"]![0]!["polygons"]![0]!.AsObject().Remove("word4");
+            string missingWord4Path = Path.Combine(temporary.Path, "stonehill-missing-hp-word4-overlay.json");
+            File.WriteAllText(missingWord4Path, missingWord4Root.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, missingWord4Path, "a missing legacy HP word4/+0x0C value");
+
+            JsonObject malformedWord4Root = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for malformed-word4 health smoke.");
+            malformedWord4Root["candidates"]![0]!["polygons"]![0]!["word4"] = "not-a-native-word";
+            string malformedWord4Path = Path.Combine(temporary.Path, "stonehill-malformed-hp-word4-overlay.json");
+            File.WriteAllText(malformedWord4Path, malformedWord4Root.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, malformedWord4Path, "a malformed legacy HP word4/+0x0C value");
+
+            JsonObject mismatchedWord3Root = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for mismatched-word3 health smoke.");
+            JsonObject mismatchedWord3Face = mismatchedWord3Root["candidates"]![0]!["polygons"]![0]!.AsObject();
+            uint originalNativeWord3 = mismatchedWord3Face["nativeFaceWord3"]!.GetValue<uint>();
+            mismatchedWord3Face["nativeFaceWord3"] = originalNativeWord3 ^ 1u;
+            string mismatchedWord3Path = Path.Combine(temporary.Path, "stonehill-mismatched-hp-word3-overlay.json");
+            File.WriteAllText(mismatchedWord3Path, mismatchedWord3Root.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, mismatchedWord3Path, "a legacy/explicit HP word4/+0x0C mismatch");
+
+            JsonObject mismatchedWord0Root = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for mismatched-word0 health smoke.");
+            JsonObject mismatchedWord0Face = mismatchedWord0Root["candidates"]![0]!["polygons"]![0]!.AsObject();
+            uint originalNativeWord0 = mismatchedWord0Face["rawWord0"]!.GetValue<uint>();
+            mismatchedWord0Face["rawWord0"] = originalNativeWord0 ^ 1u;
+            string mismatchedWord0Path = Path.Combine(temporary.Path, "stonehill-mismatched-hp-word0-overlay.json");
+            File.WriteAllText(mismatchedWord0Path, mismatchedWord0Root.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, mismatchedWord0Path, "a raw HP word0/vertex-slot mismatch");
+
+            JsonObject missingWord1Root = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for missing-word1 health smoke.");
+            missingWord1Root["candidates"]![0]!["polygons"]![0]!.AsObject().Remove("rawWord1");
+            string missingWord1Path = Path.Combine(temporary.Path, "stonehill-missing-hp-word1-overlay.json");
+            File.WriteAllText(missingWord1Path, missingWord1Root.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, missingWord1Path, "a missing raw HP word1/color-slot value");
+
+            JsonObject missingHpFaceRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for missing-HP-face health smoke.");
+            missingHpFaceRoot["candidates"]![0]!["polygons"]!.AsArray().RemoveAt(0);
+            string missingHpFacePath = Path.Combine(temporary.Path, "stonehill-missing-hp-face-overlay.json");
+            File.WriteAllText(missingHpFacePath, missingHpFaceRoot.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, missingHpFacePath, "a truncated HP face array");
+
+            JsonObject malformedHpPointsRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for malformed-HP-points health smoke.");
+            JsonArray malformedHpPoints = malformedHpPointsRoot["candidates"]![0]!["polygons"]![0]!["points"]!.AsArray();
+            while (malformedHpPoints.Count > 2)
+                malformedHpPoints.RemoveAt(malformedHpPoints.Count - 1);
+            string malformedHpPointsPath = Path.Combine(temporary.Path, "stonehill-malformed-hp-points-overlay.json");
+            File.WriteAllText(malformedHpPointsPath, malformedHpPointsRoot.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, malformedHpPointsPath, "an HP face with fewer than three points");
+
+            JsonObject duplicateHpIdentityRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for duplicate-HP-identity health smoke.");
+            JsonArray duplicateHpFaces = duplicateHpIdentityRoot["candidates"]![0]!["polygons"]!.AsArray();
+            JsonObject firstHpFace = duplicateHpFaces[0]!.AsObject();
+            JsonObject secondHpFace = duplicateHpFaces[1]!.AsObject();
+            firstHpFace["sectorIndex"] = secondHpFace["sectorIndex"]!.GetValue<int>();
+            firstHpFace["faceIndex"] = secondHpFace["faceIndex"]!.GetValue<int>();
+            string duplicateHpIdentityPath = Path.Combine(temporary.Path, "stonehill-duplicate-hp-identity-overlay.json");
+            File.WriteAllText(duplicateHpIdentityPath, duplicateHpIdentityRoot.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, duplicateHpIdentityPath, "a duplicate HP sector/face identity");
+
+            JsonObject missingZeroHpSectorRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for missing-zero-HP-sector health smoke.");
+            JsonArray sectorMetadata = missingZeroHpSectorRoot["sectorRenderMetadata"]!.AsArray();
+            int zeroHpSectorIndex = sectorMetadata
+                .Select((node, index) => (Node: node, Index: index))
+                .First(pair => pair.Node!["hpFaces"]!.GetValue<int>() == 0)
+                .Index;
+            sectorMetadata.RemoveAt(zeroHpSectorIndex);
+            string missingZeroHpSectorPath = Path.Combine(temporary.Path, "stonehill-missing-zero-hp-sector-overlay.json");
+            File.WriteAllText(missingZeroHpSectorPath, missingZeroHpSectorRoot.ToJsonString());
+            RequireCurrentSourceOverlayRejected(level.Key, missingZeroHpSectorPath, "missing metadata for a zero-HP sector");
+
+            string malformedJsonPath = Path.Combine(temporary.Path, "stonehill-malformed-source-overlay.json");
+            File.WriteAllText(malformedJsonPath, "{");
+            if (GeometryCacheHealth.InspectOverlay(level.Key, malformedJsonPath)?.BlocksLoading != true)
+                throw new InvalidOperationException("Malformed source overlay JSON was incorrectly treated as a healthy cache.");
+            try
+            {
+                _ = GeometryOverlayLoader.LoadFirstCandidate(malformedJsonPath);
+                throw new InvalidOperationException("Source overlay loader accepted malformed JSON.");
+            }
+            catch (JsonException)
+            {
+                // Expected: cache health and the loader both fail closed.
+            }
+
+            JsonObject provenanceFreeLegacyRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for provenance-free compatibility smoke.");
+            provenanceFreeLegacyRoot.Remove("sourcePackage");
+            provenanceFreeLegacyRoot.Remove("sourceImage");
+            provenanceFreeLegacyRoot.Remove("sourceWadAnalysis");
+            provenanceFreeLegacyRoot["sourceOverlayFormatVersion"] = 5;
+            provenanceFreeLegacyRoot["hpFaceMaterialPayload"] = "raw-word2-explicit-byte-sentinel-semi-v1";
+            provenanceFreeLegacyRoot.Remove("hpCoordinatePayload");
+            foreach (JsonNode? candidateNode in provenanceFreeLegacyRoot["candidates"]!.AsArray())
+                candidateNode!["source"] = "legacy-ram-capture";
+            JsonObject provenanceFreeLegacyFace = provenanceFreeLegacyRoot["candidates"]![0]!["polygons"]![0]!.AsObject();
+            provenanceFreeLegacyFace["word4"] = "not-a-native-word";
+            provenanceFreeLegacyFace.Remove("nativeFaceWord3");
+            string provenanceFreeLegacyPath = Path.Combine(temporary.Path, "stonehill-provenance-free-legacy-overlay.json");
+            File.WriteAllText(provenanceFreeLegacyPath, provenanceFreeLegacyRoot.ToJsonString());
+            if (GeometryCacheHealth.InspectOverlay(level.Key, provenanceFreeLegacyPath) != null)
+                throw new InvalidOperationException("Provenance-free legacy overlay was incorrectly treated as a source-scene cache-health failure.");
+            GeometryCandidate provenanceFreeLegacyGeometry = GeometryOverlayLoader.LoadFirstCandidate(provenanceFreeLegacyPath);
+            TerrainPolygon provenanceFreeLegacyLoadedFace = provenanceFreeLegacyGeometry.Polygons[0];
+            if (provenanceFreeLegacyGeometry.HasExactHighPolyMaterialState ||
+                provenanceFreeLegacyGeometry.HasExactHighPolyCoordinateState ||
+                provenanceFreeLegacyLoadedFace.HasCompleteNativeHighPolyFacePayload ||
+                provenanceFreeLegacyLoadedFace.NativeFaceWord3 != 0)
+            {
+                throw new InvalidOperationException("Provenance-free legacy format-v5 overlay did not remain on the explicit compatibility path.");
+            }
+
+            JsonObject incompleteColorRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for incomplete-corner health smoke.");
+            JsonObject incompleteColorFace = incompleteColorRoot["candidates"]![0]!["polygons"]![0]!.AsObject();
+            incompleteColorFace["farColors"]!.AsArray().RemoveAt(SourceSceneOverlayContract.CornerSlotCount - 1);
+            string incompleteColorPath = Path.Combine(temporary.Path, "stonehill-incomplete-corner-color-overlay.json");
+            File.WriteAllText(incompleteColorPath, incompleteColorRoot.ToJsonString());
+            if (GeometryCacheHealth.InspectOverlay(level.Key, incompleteColorPath)?.BlocksLoading != true)
+                throw new InvalidOperationException("Stone Hill source overlay with only three far colors was not rejected by cache health.");
+
+            JsonObject incompleteTopologyRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for incomplete-topology health smoke.");
+            JsonObject incompleteTopologyFace = incompleteTopologyRoot["candidates"]![0]!["polygons"]![0]!.AsObject();
+            incompleteTopologyFace.Remove("cornerPointIndexes");
+            string incompleteTopologyPath = Path.Combine(temporary.Path, "stonehill-incomplete-corner-topology-overlay.json");
+            File.WriteAllText(incompleteTopologyPath, incompleteTopologyRoot.ToJsonString());
+            if (GeometryCacheHealth.InspectOverlay(level.Key, incompleteTopologyPath)?.BlocksLoading != true)
+                throw new InvalidOperationException("Stone Hill source overlay without raw four-slot topology was not rejected by cache health.");
+
+            JsonObject incompleteLowDetailRoot = JsonNode.Parse(File.ReadAllText(outputPath))?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the Stone Hill source overlay for incomplete LP payload health smoke.");
+            JsonObject incompleteLowDetailFace = incompleteLowDetailRoot["lowDetail"]!["polygons"]![0]!.AsObject();
+            incompleteLowDetailFace["rawWord0"] = 0u;
+            string incompleteLowDetailPath = Path.Combine(temporary.Path, "stonehill-incomplete-low-detail-overlay.json");
+            File.WriteAllText(incompleteLowDetailPath, incompleteLowDetailRoot.ToJsonString());
+            if (GeometryCacheHealth.InspectOverlay(level.Key, incompleteLowDetailPath)?.BlocksLoading != true)
+                throw new InvalidOperationException("Stone Hill source overlay with mismatched packed LP slots was not rejected by cache health.");
+
+            string cacheRecoveryRoot = Path.Combine(temporary.Path, "portable-cache-stale-overlay-recovery");
+            string cacheRecoveryDir = Path.Combine(cacheRecoveryRoot, "editor-cache");
+            Directory.CreateDirectory(cacheRecoveryDir);
+            EditorWorkspace cacheRecoveryWorkspace = new(cacheRecoveryRoot);
+            DiscImageLocator.ConfigureImage(cacheRecoveryWorkspace, selectedSourceImage);
+            File.Copy(analysisPath, Path.Combine(cacheRecoveryRoot, "spyro-wad-analysis.json"), overwrite: true);
+            File.WriteAllText(Path.Combine(cacheRecoveryDir, "stonehill-mobys.json"), "[]");
+            string cacheRecoveryOverlay = Path.Combine(cacheRecoveryDir, "stonehill-runtime-scene-editor-overlay.json");
+            File.Copy(stalePath, cacheRecoveryOverlay, overwrite: true);
+
+            PortableEditorCacheResult fastReuseResult = await PortableEditorCacheBuilder.BuildAsync(
+                cacheRecoveryWorkspace,
+                selectedCatalog,
+                overwrite: false,
+                fastReuseExistingCache: true);
+            if (fastReuseResult.ReusedExistingCache ||
+                fastReuseResult.OverlayCacheCount != selectedCatalog.Levels.Count ||
+                GeometryCacheHealth.InspectOverlay(level.Key, cacheRecoveryOverlay)?.BlocksLoading == true)
+            {
+                throw new InvalidOperationException("Portable cache fast reuse accepted or failed to rebuild a stale non-Gnasty source overlay.");
+            }
+
+            string legacyOverlay = Path.Combine(cacheRecoveryRoot, "stonehill-runtime-scene-editor-overlay.json");
+            File.Copy(stalePath, legacyOverlay, overwrite: true);
+            File.Delete(cacheRecoveryOverlay);
+            PortableEditorCacheResult legacyCopyResult = await PortableEditorCacheBuilder.BuildAsync(
+                cacheRecoveryWorkspace,
+                selectedCatalog,
+                overwrite: false,
+                fastReuseExistingCache: false);
+            if (legacyCopyResult.ReusedExistingCache ||
+                legacyCopyResult.OverlayCacheCount != selectedCatalog.Levels.Count ||
+                GeometryCacheHealth.InspectOverlay(level.Key, cacheRecoveryOverlay)?.BlocksLoading == true)
+            {
+                throw new InvalidOperationException("Portable cache copied a stale legacy Stone Hill overlay instead of rebuilding it from the selected disc.");
+            }
+
+            using JsonDocument rebuiltCacheDocument = JsonDocument.Parse(File.ReadAllText(cacheRecoveryOverlay));
+            if (rebuiltCacheDocument.RootElement.GetProperty("sourceOverlayFormatVersion").GetInt32() != SourceSceneOverlayContract.CurrentFormatVersion ||
+                !string.Equals(
+                    rebuiltCacheDocument.RootElement.GetProperty("hpColorLayout").GetString(),
+                    SourceSceneOverlayContract.HpColorLayout,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(
+                    rebuiltCacheDocument.RootElement.GetProperty("hpCornerPayload").GetString(),
+                    SourceSceneOverlayContract.HpCornerPayload,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(
+                    rebuiltCacheDocument.RootElement.GetProperty("hpFaceMaterialPayload").GetString(),
+                    SourceSceneOverlayContract.HpFaceMaterialPayload,
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    rebuiltCacheDocument.RootElement.GetProperty("hpCoordinatePayload").GetString(),
+                    SourceSceneOverlayContract.HpCoordinatePayload,
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    rebuiltCacheDocument.RootElement.GetProperty("lpColorLayout").GetString(),
+                    SourceSceneOverlayContract.LpColorLayout,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(
+                    rebuiltCacheDocument.RootElement.GetProperty("lpFacePayload").GetString(),
+                    SourceSceneOverlayContract.LpFacePayload,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(
+                    rebuiltCacheDocument.RootElement.GetProperty("terrainLodPreview").GetString(),
+                    SourceSceneOverlayContract.TerrainLodPreview,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(
+                    rebuiltCacheDocument.RootElement.GetProperty("sceneChainPolicy").GetString(),
+                    SourceSceneOverlayContract.SceneChainPolicy,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Portable cache recovery did not persist the current HP/LP source-overlay contract.");
+            }
+
+            Console.WriteLine("Portable cache stale-overlay recovery: PASS previous-format, incomplete/mismatched HP raw-word/material/color/coordinate/topology, and incomplete LP payloads rebuild to the current HP/LP contract.");
+        }
+
+        exportedLevels++;
+    }
+
+    if (exportedLevels != selectedCatalog.Levels.Count || exportedLevels != 35)
+        throw new InvalidOperationException($"Source-scene chain smoke exported {exportedLevels} levels; expected the complete 35-level catalog.");
+
+    if (incompleteLevels.Count != 0)
+    {
+        throw new InvalidOperationException(
+            $"Every selected source-scene chain must now be fully terminated; incomplete: {string.Join(", ", incompleteLevels)}.");
+    }
+
+    for (int xResidue = 0; xResidue < 4; xResidue++)
+    {
+        for (int zResidue = 0; zResidue < 4; zResidue++)
+        {
+            uint centerXyWord = (123u << 16) | 456u;
+            uint centerZRadiusFlagsWord = (789u << 16) | 0xA234u;
+            uint xyPositionWord = (1000u << 16) | ((uint)xResidue << 14) | 0x0123u;
+            uint zPositionWord = (2000u << 16) | ((uint)zResidue << 14) | 0x0456u;
+            NativeTerrainHpSectorCoordinatePayload boundarySector = new(
+                centerXyWord,
+                centerZRadiusFlagsWord,
+                xyPositionWord,
+                zPositionWord,
+                SpyroRetailTerrainCoordinateCertification.RetailPackedSceneWords);
+            SpyroRetailHighPolyWorldPoint4 minimum = NativeTerrainHighPolyCoordinates.ReconstructCertifiedWorldPointX4(
+                boundarySector,
+                boundarySector.DecodedOriginX,
+                boundarySector.DecodedOriginY,
+                boundarySector.DecodedOriginZ);
+            SpyroRetailHighPolyWorldPoint4 maximum = NativeTerrainHighPolyCoordinates.ReconstructCertifiedWorldPointX4(
+                boundarySector,
+                boundarySector.DecodedOriginX + NativeTerrainHighPolyCoordinates.MaximumLocalX,
+                boundarySector.DecodedOriginY + NativeTerrainHighPolyCoordinates.MaximumLocalY,
+                boundarySector.DecodedOriginZ + NativeTerrainHighPolyCoordinates.MaximumLocalZ);
+            if (minimum.X4 != (int)(xyPositionWord >> 14) ||
+                minimum.Y4 != (int)((xyPositionWord & 0xFFFF) << 2) ||
+                minimum.Z4 != (int)(zPositionWord >> 14) ||
+                (minimum.X4 & 3) != xResidue ||
+                (minimum.Z4 & 3) != zResidue ||
+                maximum.X4 != (int)(xyPositionWord >> 14) + (0x1FFC) ||
+                maximum.Y4 != (int)((xyPositionWord & 0xFFFF) << 2) + (0x1FFC) ||
+                maximum.Z4 != (int)(zPositionWord >> 14) + (0x0FFC) ||
+                (maximum.X4 & 3) != xResidue ||
+                (maximum.Z4 & 3) != zResidue ||
+                minimum.Certification != SpyroRetailTerrainCoordinateCertification.IndependentlyVerifiedNativeCoordinates ||
+                maximum.Certification != SpyroRetailTerrainCoordinateCertification.IndependentlyVerifiedNativeCoordinates)
+            {
+                throw new InvalidOperationException(
+                    $"Native HP coordinate boundary fixture failed for X/Z residues {xResidue}/{zResidue}.");
+            }
+        }
+    }
+
+    static void RequireCoordinateFixtureRejected(
+        NativeTerrainHpSectorCoordinatePayload sector,
+        int x,
+        int y,
+        int z,
+        string description)
+    {
+        try
+        {
+            _ = NativeTerrainHighPolyCoordinates.ReconstructCertifiedWorldPointX4(sector, x, y, z);
+        }
+        catch (InvalidDataException)
+        {
+            return;
+        }
+        throw new InvalidOperationException($"Native HP coordinate helper accepted {description}.");
+    }
+
+    NativeTerrainHpSectorCoordinatePayload corruptionFixture = new(
+        (10u << 16) | 20u,
+        (30u << 16) | 0x0200u,
+        (100u << 16) | 200u,
+        (300u << 16) | 400u,
+        SpyroRetailTerrainCoordinateCertification.RetailPackedSceneWords);
+    RequireCoordinateFixtureRejected(
+        corruptionFixture,
+        corruptionFixture.DecodedOriginX - 1,
+        corruptionFixture.DecodedOriginY,
+        corruptionFixture.DecodedOriginZ,
+        "a point below the X-local lattice");
+    RequireCoordinateFixtureRejected(
+        corruptionFixture,
+        corruptionFixture.DecodedOriginX,
+        corruptionFixture.DecodedOriginY + NativeTerrainHighPolyCoordinates.MaximumLocalY + 1,
+        corruptionFixture.DecodedOriginZ,
+        "a point above the Y-local lattice");
+    NativeTerrainHpSectorCoordinatePayload specialZFixture = corruptionFixture with
+    {
+        NativeCenterZRadiusFlagsWord = corruptionFixture.NativeCenterZRadiusFlagsWord | 0x1000u
+    };
+    RequireCoordinateFixtureRejected(
+        specialZFixture,
+        specialZFixture.DecodedOriginX,
+        specialZFixture.DecodedOriginY,
+        specialZFixture.DecodedOriginZ,
+        "unsupported scene-sector header bit 12 special Z scaling");
+    NativeTerrainHpSectorCoordinatePayload uncertifiedFixture = corruptionFixture with
+    {
+        Certification = SpyroRetailTerrainCoordinateCertification.None
+    };
+    RequireCoordinateFixtureRejected(
+        uncertifiedFixture,
+        uncertifiedFixture.DecodedOriginX,
+        uncertifiedFixture.DecodedOriginY,
+        uncertifiedFixture.DecodedOriginZ,
+        "an uncertified sector header payload");
+
+    if (!sentinelFailClosedTested)
+        throw new InvalidOperationException("The all-level source overlay smoke found no native 0xFF HP material sentinel to audit fail-closed behavior.");
+
+    if (totalSectors != 6226 || totalLowDetailFaces != 83401 ||
+        lowDetailOnlySectors != 179 || lowDetailOnlyFaces != 1283 ||
+        forcedLowDetailSectors != 26 || forcedLowDetailFaces != 378 ||
+        lowDetailTriangles != 20458 || lowDetailQuads != 62943 ||
+        lowDetailSemiTransparent != 1592 || lowDetailDoubleSided != 75 ||
+        lowDetailBias31 != 143)
+    {
+        throw new InvalidOperationException(
+            "All-level native LP aggregate changed: " +
+            $"sectors {totalSectors:N0}, faces {totalLowDetailFaces:N0}, " +
+            $"LP-only {lowDetailOnlySectors:N0}/{lowDetailOnlyFaces:N0}, forced {forcedLowDetailSectors:N0}/{forcedLowDetailFaces:N0}, " +
+            $"triangles/quads {lowDetailTriangles:N0}/{lowDetailQuads:N0}, semitrans/two-sided {lowDetailSemiTransparent:N0}/{lowDetailDoubleSided:N0}, bias31 {lowDetailBias31:N0}.");
+    }
+
+    string highDetailFaceWordSha256 = Convert.ToHexString(highDetailFaceWordHash.GetHashAndReset());
+    string highDetailSectorCoordinateSha256 = Convert.ToHexString(highDetailSectorCoordinateHash.GetHashAndReset());
+    string certifiedHighDetailWorldPointSha256 = Convert.ToHexString(certifiedHighDetailWorldPointHash.GetHashAndReset());
+    const string ExpectedHighDetailFaceWordSha256 = "3D55BB4D51BA31F55B4CFF3A468FB9D93E90CE3976EA6939638E99F3A9A16673";
+    const string ExpectedHighDetailSectorCoordinateSha256 = "254839222C9494316643667286565D854B8E4ED8404A5C8DAD03CB72E9BED271";
+    const string ExpectedCertifiedHighDetailWorldPointSha256 = "DA713CBFF1D0E291491E4B1FA409DCB1F681F9F244440D5E3E5CA570FE138237";
+    if (totalHighDetailFaces != 190640 ||
+        completeHighDetailFaceWordPayloads != totalHighDetailFaces ||
+        highDetailSemiTransparent != 2327 ||
+        highDetailUntexturedSentinels != 1344)
+    {
+        throw new InvalidOperationException(
+            "All-level native HP material aggregate changed: " +
+            $"faces/complete words {totalHighDetailFaces:N0}/{completeHighDetailFaceWordPayloads:N0}, true primitive semitransparency {highDetailSemiTransparent:N0}, opaque-untextured 0xFF sentinels {highDetailUntexturedSentinels:N0}.");
+    }
+    if (!highDetailFaceWordSha256.Equals(ExpectedHighDetailFaceWordSha256, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            $"All-level native HP raw-word stream changed: {highDetailFaceWordSha256}, expected {ExpectedHighDetailFaceWordSha256}.");
+    }
+
+    if (certifiedHighDetailCoordinateFaces != totalHighDetailFaces ||
+        highDetailBearingSectors != 6047 ||
+        !allSectorXResidues.SequenceEqual(new[] { 6226, 0, 0, 0 }) ||
+        !allSectorZResidues.SequenceEqual(new[] { 6047, 0, 0, 179 }) ||
+        !highDetailSectorXResidues.SequenceEqual(new[] { 6047, 0, 0, 0 }) ||
+        !highDetailSectorZResidues.SequenceEqual(new[] { 6047, 0, 0, 0 }) ||
+        !highDetailSectorCoordinateSha256.Equals(ExpectedHighDetailSectorCoordinateSha256, StringComparison.Ordinal) ||
+        !certifiedHighDetailWorldPointSha256.Equals(ExpectedCertifiedHighDetailWorldPointSha256, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "All-level native HP coordinate provenance changed: " +
+            $"faces {certifiedHighDetailCoordinateFaces:N0}/{totalHighDetailFaces:N0}, HP-bearing sectors {highDetailBearingSectors:N0}, " +
+            $"all X/Z residues [{string.Join(",", allSectorXResidues)}]/[{string.Join(",", allSectorZResidues)}], " +
+            $"HP X/Z residues [{string.Join(",", highDetailSectorXResidues)}]/[{string.Join(",", highDetailSectorZResidues)}], " +
+            $"raw/point hashes {highDetailSectorCoordinateSha256}/{certifiedHighDetailWorldPointSha256}.");
+    }
+
+    Console.WriteLine($"All-level native HP raw words 0-3: {completeHighDetailFaceWordPayloads:N0} face(s), SHA-256 {highDetailFaceWordSha256}.");
+    Console.WriteLine(
+        $"All-level native HP coordinate provenance: {totalSectors:N0} raw sector headers, {highDetailBearingSectors:N0} HP-bearing, " +
+        $"all-sector X residues [{string.Join(",", allSectorXResidues)}], Z residues [{string.Join(",", allSectorZResidues)}], " +
+        $"raw SHA-256 {highDetailSectorCoordinateSha256}, certified point SHA-256 {certifiedHighDetailWorldPointSha256}.");
+    Console.WriteLine("Native HP coordinate boundaries/corruption: PASS all 16 X/Z residue pairs, local maxima, out-of-lattice rejection, uncertified-input rejection, and unsupported special-Z rejection.");
+
+    static double[] PlanarDepth(double depth) => [depth, depth, depth, depth];
+    NativeTerrainLqPreviewSelection hq511 = NativeTerrainFarLod.SelectHighDetailTexturePath(PlanarDepth(511), false, false);
+    NativeTerrainLqPreviewSelection hq512 = NativeTerrainFarLod.SelectHighDetailTexturePath(PlanarDepth(512), false, false);
+    NativeTerrainLqPreviewSelection descriptor1031 = NativeTerrainFarLod.SelectHighDetailTexturePath(PlanarDepth(1031), false, false);
+    NativeTerrainLqPreviewSelection descriptor1032 = NativeTerrainFarLod.SelectHighDetailTexturePath(PlanarDepth(1032), false, false);
+    NativeTerrainLqPreviewSelection palette1087 = NativeTerrainFarLod.SelectHighDetailTexturePath(PlanarDepth(1087), false, false);
+    NativeTerrainLqPreviewSelection palette1088 = NativeTerrainFarLod.SelectHighDetailTexturePath(PlanarDepth(1088), false, false);
+    NativeTerrainLqPreviewSelection palette1983 = NativeTerrainFarLod.SelectHighDetailTexturePath(PlanarDepth(1983), false, false);
+    NativeTerrainLqPreviewSelection palette1984 = NativeTerrainFarLod.SelectHighDetailTexturePath(PlanarDepth(1984), false, false);
+    NativeTerrainLqPreviewSelection hp2047 = NativeTerrainFarLod.SelectHighDetailTexturePath(PlanarDepth(2047), false, false);
+    NativeTerrainLqPreviewSelection hp2048 = NativeTerrainFarLod.SelectHighDetailTexturePath(PlanarDepth(2048), false, false);
+    if (!hq511.HqOverlayEligible || hq512.HqOverlayEligible ||
+        descriptor1031.DescriptorIndex != 1 || descriptor1032.DescriptorIndex != 0 ||
+        palette1087.PaletteRow != 0 || palette1088.PaletteRow != 1 ||
+        palette1983.PaletteRow != 14 || palette1984.PaletteRow != 15 ||
+        !hp2047.HighPolyVisible || hp2048.HighPolyVisible ||
+        NativeTerrainFarLod.ShouldRenderLowDetailFace(PlanarDepth(1791), 0) ||
+        !NativeTerrainFarLod.ShouldRenderLowDetailFace(PlanarDepth(1792), 0) ||
+        !NativeTerrainFarLod.ShouldRenderLowDetailFace([1792, 1600, 1600, 1600], 0) ||
+        !NativeTerrainFarLod.ShouldQueueHighDetailSector(2047, 0, false) ||
+        NativeTerrainFarLod.ShouldQueueHighDetailSector(2048, 0, false) ||
+        NativeTerrainFarLod.ShouldQueueLowDetailSector(1792, 0, false, false) ||
+        !NativeTerrainFarLod.ShouldQueueLowDetailSector(1793, 0, false, false))
+    {
+        throw new InvalidOperationException("Static native terrain LOD boundary locks changed at an audited retail transition.");
+    }
+
+    Console.WriteLine(
+        $"Source-scene chain selection: PASSED all {exportedLevels} levels with fully terminated chains, {totalSectors:N0} sector metadata records, {totalHighDetailFaces:N0} typed HP faces ({highDetailSemiTransparent:N0} true semitransparent, {highDetailUntexturedSentinels:N0} opaque-untextured 0xFF), and {totalLowDetailFaces:N0} exact packed LP faces; audited retail distance boundaries and Gnasty's World trimming remain locked.");
+}
+
 sealed class WeakIdentityGroup
 {
     public WeakIdentityGroup(string key)
@@ -27520,6 +37605,8 @@ sealed record IdentityPromotionCandidate(
 sealed record IdentityFingerprintParts(
     string TypeHex,
     string SourceByte36Hex,
+    string SourceByte37Hex,
+    string NativeClassHex,
     string Flag4AHex,
     string Flag4BHex,
     string SourceByte4FHex);
@@ -27554,6 +37641,18 @@ sealed record NativeAppendResearchFamily(
     int Flag4B,
     string LiveStatus,
     string LiveNotes);
+
+sealed record EnvironmentGradeMatrixPair(
+    string TargetLevelKey,
+    string TargetLevelName,
+    string DonorLevelKey,
+    string DonorLevelName,
+    int SceneTableCount,
+    int TexturePaletteCount,
+    int TextureRuntimeVariantCount,
+    int PatchCount,
+    int ChangedByteCount,
+    bool CoherentLods);
 
 sealed record LifeChestSourceRow(
     string LevelKey,
@@ -27593,7 +37692,7 @@ sealed record NativeAppendResearchRow(
         LiveStatus: family.LiveStatus,
         LiveNotes: family.LiveNotes,
         Donor: reason,
-        Identity: $"type=0x20 b36=0x{family.SourceByte36:X2} b37=0x{family.SourceByte37:X2} b4F=0x{family.SourceByte4F:X2} f4A=0x{family.Flag4A:X2} f4B=0x{family.Flag4B:X2}",
+        Identity: $"class=0x{family.SourceByte37:X2}{family.SourceByte36:X2} radius50=0x20 update52=0x{family.Flag4A:X2} drop53=0x{family.Flag4B:X2} spec4F=0x{family.SourceByte4F:X2}",
         ReusableSlotCount: 0,
         NativeEditsPath: "",
         PlanPath: "",
@@ -27783,6 +37882,40 @@ sealed record TerrainEditorReadinessRow(
     string Status,
     string Evidence,
     string RemainingRisk);
+
+sealed record NativeTerrainSurfaceLevelRow(
+    string LevelKey,
+    string LevelName,
+    int TriangleCount,
+    int FlagCount,
+    int SpecialSurfaceCount,
+    int SpecialTriangleCount,
+    int MatchedTriangleCount,
+    int VisualFaceCount,
+    int MatchedTextureCount,
+    IReadOnlyList<NativeSpecialSurfaceUsageRow> SpecialSurfaces,
+    IReadOnlyList<NativeTextureSurfaceRow> TextureRows);
+
+sealed record NativeSpecialSurfaceUsageRow(
+    int Index,
+    int Type,
+    int Param1,
+    int Param2,
+    int CollisionTriangleCount,
+    int MatchedVisualTriangleCount,
+    string Label);
+
+sealed record NativeTextureSurfaceRow(
+    int TextureId,
+    int SurfaceType,
+    int Param1,
+    int Param2,
+    int HighFlags,
+    int CollisionTriangleCount,
+    int VisualFaceCount,
+    string RepresentativeRuntimeKey,
+    string EditorSurface,
+    string Label);
 
 sealed record TerrainSmokeSourceSearch(
     TerrainSourceSearchResult Result,
@@ -28111,3 +38244,46 @@ sealed record CandidateInGameEvidence(
 sealed record CandidateBehaviorSmokeCheck(
     string Id,
     string Label);
+
+sealed record MobyImmutableDisplaySmokeSnapshot(
+    string Label,
+    ColorRgba Color,
+    string PatchStatus,
+    string PatchLead,
+    string CandidateKind,
+    string Confidence,
+    string Evidence,
+    string BehaviorNote,
+    string ZoneLabel);
+
+sealed record MobyPersistenceSmokeSnapshot(
+    int Type,
+    int State,
+    int YawByte,
+    int SourceByte36,
+    int SourceByte37,
+    int SourceByte4F,
+    int Flag4A,
+    int Flag4B,
+    MobyImmutableDisplaySmokeSnapshot Display,
+    string CrossLevelTemplateId,
+    string CrossLevelFamily,
+    string CrossLevelSourceLevelKey,
+    string CrossLevelSourceLevelName,
+    int CrossLevelSourceTrueIndex,
+    string CrossLevelRequiredExporterFeature,
+    string SourceCloneLevelKey,
+    string SourceCloneLevelName,
+    int SourceCloneTrueIndex);
+
+sealed record ObjectSmokeDiscArtifactBackup(
+    string OriginalPath,
+    string BackupPath);
+
+sealed record ObjectSmokeDiscIsolation(
+    string ObjectRoot,
+    string BackupRoot,
+    IReadOnlyList<ObjectSmokeDiscArtifactBackup> Backups)
+{
+    public int ExistingArtifactCount => Backups.Count;
+}

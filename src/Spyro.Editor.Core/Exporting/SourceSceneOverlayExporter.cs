@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Primitives;
+using Spyro.Editor.Core.Rendering;
+using Spyro.Editor.Core.Scene;
 
 namespace Spyro.Editor.Core.Exporting;
 
@@ -18,6 +20,7 @@ public sealed record SourceSceneOverlayResult(
 public static class SourceSceneOverlayExporter
 {
     private const int DefaultModelSubfileIndex = 1;
+    private const int CleanChainSectorSlack = 3;
 
     public static async Task<SourceSceneOverlayResult> ExportAsync(
         string sourceImagePath,
@@ -75,18 +78,46 @@ public static class SourceSceneOverlayExporter
             throw new InvalidOperationException($"Could not find a source scene-sector chain in WAD entry {level.SourceWadEntry} subfile {modelSubfileIndex}.");
 
         SceneSectorChain chain = chains[0];
+        SourceSceneSector? unsupportedSpecialZSector = chain.Sectors.FirstOrDefault(sector =>
+            (sector.CentreRadiusAndFlags & 0x1000) != 0);
+        if (unsupportedSpecialZSector != null)
+        {
+            throw new InvalidDataException(
+                $"Source scene-sector {unsupportedSpecialZSector.SectorIndex} at +0x{unsupportedSpecialZSector.Offset:X} uses unsupported header bit 12 (special Z scaling); refusing to guess HP coordinates.");
+        }
         long sceneWadOffset = subfile.AbsoluteWadOffset + chain.StartOffset;
         SourceGeometry hpGeometry = BuildGeometry(bytes, chain, subfile.AbsoluteWadOffset, "hp");
         if (hpGeometry.Points.Count < 16 || hpGeometry.Polygons.Count < 8)
             throw new InvalidOperationException($"Source scene-sector chain for {level.DisplayName} did not produce enough high-detail geometry.");
+        if (hpGeometry.Polygons.Count != chain.HpFaces)
+        {
+            throw new InvalidDataException(
+                $"Source scene-sector chain for {level.DisplayName} decoded {hpGeometry.Polygons.Count:N0}/{chain.HpFaces:N0} high-detail faces; refusing to stamp a partial exact HP raw-word contract.");
+        }
+        SourceGeometry lpGeometry = BuildGeometry(bytes, chain, subfile.AbsoluteWadOffset, "lp");
+        SourceNativeTerrainOcclusion terrainOcclusion = BuildNativeTerrainOcclusion(
+            bytes,
+            chain.Sectors.Count,
+            subfile.AbsoluteWadOffset);
 
         SourceOverlayCandidate candidate = BuildCandidate(chain, hpGeometry, sceneWadOffset, "hp", "xy");
+        SourceOverlayCandidate lowDetailCandidate = BuildCandidate(chain, lpGeometry, sceneWadOffset, "lp", "xy");
         object root = new
         {
             sourceImage = sourceImagePath,
             sourceWadAnalysis = wadAnalysisPath,
             generatedAt = DateTime.Now.ToString("s"),
-            note = "Source-derived scene geometry decoded directly from Spyro WAD scene-sector bytes. This is used when a live RAM scene capture is missing or known-bad.",
+            sourceOverlayFormatVersion = SourceSceneOverlayContract.CurrentFormatVersion,
+            hpColorLayout = SourceSceneOverlayContract.HpColorLayout,
+            hpCornerPayload = SourceSceneOverlayContract.HpCornerPayload,
+            hpFaceMaterialPayload = SourceSceneOverlayContract.HpFaceMaterialPayload,
+            hpCoordinatePayload = SourceSceneOverlayContract.HpCoordinatePayload,
+            lpColorLayout = SourceSceneOverlayContract.LpColorLayout,
+            lpFacePayload = SourceSceneOverlayContract.LpFacePayload,
+            terrainLodPreview = SourceSceneOverlayContract.TerrainLodPreview,
+            sceneChainPolicy = SourceSceneOverlayContract.SceneChainPolicy,
+            terrainOcclusionContract = SourceSceneOverlayContract.TerrainOcclusion,
+            note = "Source-derived HP editor geometry with exact raw face words 0-3, +0x08 material-byte state, raw scene-sector header words 0-3 for certified integer-world X4/Y4/Z4 reconstruction, native environment occlusion-group sector lists, and collision-triangle occlusion assignments, plus a read-only static LP preview decoded directly from Spyro WAD scene-sector bytes. Static preview does not claim full ordering-table, clipping, or animation equivalence.",
             sourcePackage = new
             {
                 levelKey = level.Key,
@@ -108,6 +139,7 @@ public static class SourceSceneOverlayExporter
                     numSectors = chain.Sectors.Count,
                     validSectors = chain.Sectors.Count,
                     terminatorSectors = chain.TerminatorSectors,
+                    trimmedTrailingSectors = chain.TrimmedTrailingSectors,
                     hpVertices = chain.HpVertices,
                     hpFaces = chain.HpFaces,
                     lpVertices = chain.LpVertices,
@@ -121,8 +153,20 @@ public static class SourceSceneOverlayExporter
                 sectorCount = candidateChain.Sectors.Count,
                 hpFaces = candidateChain.HpFaces,
                 lpFaces = candidateChain.LpFaces,
-                terminatorSectors = candidateChain.TerminatorSectors
+                terminatorSectors = candidateChain.TerminatorSectors,
+                trimmedTrailingSectors = candidateChain.TrimmedTrailingSectors
             }).ToArray(),
+            terrainOcclusion = new
+            {
+                environmentGroupCount = terrainOcclusion.EnvironmentGroups.Count,
+                environmentGroups = terrainOcclusion.EnvironmentGroups,
+                collisionTriangleCount = terrainOcclusion.CollisionTriangleWords.Count,
+                collisionTriangleWords = terrainOcclusion.CollisionTriangleWords,
+                sourceOcclusionComponentWadOffset = ToHex(terrainOcclusion.OcclusionComponentWadOffset),
+                sourceCollisionComponentWadOffset = ToHex(terrainOcclusion.CollisionComponentWadOffset)
+            },
+            sectorRenderMetadata = chain.Sectors.Select(sector => SerializeSectorRenderMetadata(sector, subfile.AbsoluteWadOffset)).ToArray(),
+            lowDetail = lowDetailCandidate.ToSerializable(),
             candidates = new[]
             {
                 candidate.ToSerializable()
@@ -130,6 +174,116 @@ public static class SourceSceneOverlayExporter
         };
 
         return new SourceOverlay(root, chain, sceneWadOffset, [candidate]);
+    }
+
+    private static SourceNativeTerrainOcclusion BuildNativeTerrainOcclusion(
+        byte[] bytes,
+        int sceneSectorCount,
+        long subfileWadOffset)
+    {
+        int textureEnd = AdvanceNativeComponent(bytes, 0, "texture");
+        int environmentEnd = AdvanceNativeComponent(bytes, textureEnd, "environment");
+        int occlusionStart = environmentEnd;
+        int occlusionEnd = AdvanceNativeComponent(bytes, occlusionStart, "occlusion");
+
+        int occlusionLength = ReadInt32(bytes, occlusionStart);
+        List<int[]> groups = new();
+        if (occlusionLength > 4)
+        {
+            int environmentPortionLength = ReadInt32(bytes, occlusionStart + 4);
+            int environmentPortionEnd = checked(occlusionStart + 4 + environmentPortionLength);
+            int groupCount = ReadInt32(bytes, occlusionStart + 8);
+            int pointerTableStart = occlusionStart + 12;
+            if (environmentPortionLength < 8 ||
+                environmentPortionEnd > occlusionEnd ||
+                groupCount < 0 ||
+                groupCount > 256 ||
+                pointerTableStart + ((long)groupCount * 4) > environmentPortionEnd)
+            {
+                throw new InvalidDataException("Native terrain occlusion environment header is outside its component.");
+            }
+
+            for (int groupIndex = 0; groupIndex < groupCount; groupIndex++)
+            {
+                int relative = ReadInt32(bytes, pointerTableStart + (groupIndex * 4));
+                int groupStart = checked(occlusionStart + 4 + relative);
+                if (groupStart < pointerTableStart + (groupCount * 4) || groupStart >= environmentPortionEnd)
+                {
+                    throw new InvalidDataException($"Native terrain occlusion group {groupIndex} points outside the environment portion.");
+                }
+
+                List<int> sectors = new();
+                bool terminated = false;
+                for (int offset = groupStart; offset < environmentPortionEnd; offset++)
+                {
+                    int sectorIndex = bytes[offset];
+                    if (sectorIndex == 0xFF)
+                    {
+                        terminated = true;
+                        break;
+                    }
+                    if (sectorIndex >= sceneSectorCount)
+                    {
+                        throw new InvalidDataException(
+                            $"Native terrain occlusion group {groupIndex} references sector {sectorIndex}, but the source scene has {sceneSectorCount} sectors.");
+                    }
+                    sectors.Add(sectorIndex);
+                }
+
+                if (!terminated)
+                    throw new InvalidDataException($"Native terrain occlusion group {groupIndex} has no 0xFF terminator.");
+                groups.Add(sectors.ToArray());
+            }
+        }
+
+        int specialSurfaceEnd = AdvanceNativeComponent(bytes, occlusionEnd, "special surface");
+        int collisionStart = specialSurfaceEnd;
+        int collisionEnd = AdvanceNativeComponent(bytes, collisionStart, "collision");
+        int body = collisionStart + 4;
+        if (body + 0x1C > collisionEnd)
+            throw new InvalidDataException("Native terrain collision header is truncated.");
+
+        int triangleCount = ReadInt32(bytes, body);
+        int trianglesStart = checked(body + ReadInt32(bytes, body + 0x10));
+        int assignmentsStart = checked(body + ReadInt32(bytes, body + 0x14));
+        if (triangleCount < 0 ||
+            triangleCount > 100_000 ||
+            trianglesStart < body + 0x1C ||
+            trianglesStart + ((long)triangleCount * 12) != assignmentsStart ||
+            assignmentsStart + (long)triangleCount > collisionEnd)
+        {
+            throw new InvalidDataException("Native terrain collision triangles/occlusion assignments are outside their component.");
+        }
+
+        uint[][] collisionTriangleWords = new uint[triangleCount][];
+        for (int index = 0; index < triangleCount; index++)
+        {
+            int triangleOffset = trianglesStart + (index * 12);
+            collisionTriangleWords[index] =
+            [
+                ReadUInt32(bytes, triangleOffset),
+                ReadUInt32(bytes, triangleOffset + 4),
+                ReadUInt32(bytes, triangleOffset + 8),
+                bytes[assignmentsStart + index]
+            ];
+        }
+
+        return new SourceNativeTerrainOcclusion(
+            groups,
+            collisionTriangleWords,
+            subfileWadOffset + occlusionStart,
+            subfileWadOffset + collisionStart);
+    }
+
+    private static int AdvanceNativeComponent(byte[] bytes, int start, string label)
+    {
+        if (start < 0 || start + 4 > bytes.Length)
+            throw new InvalidDataException($"Native {label} component header is truncated.");
+        int length = ReadInt32(bytes, start);
+        long end = (long)start + length;
+        if (length < 4 || end > bytes.Length)
+            throw new InvalidDataException($"Native {label} component has invalid length 0x{length:X}.");
+        return (int)end;
     }
 
     private static WadSubfileInfo LoadSubfileInfo(string wadAnalysisPath, int wadEntry, int subfileIndex)
@@ -181,13 +335,63 @@ public static class SourceSceneOverlayExporter
             }
 
             if (sectors.Count >= minSectorCount)
-                chains.Add(new SceneSectorChain(start, offset, sectors));
+                chains.Add(NormalizeSceneSectorChain(start, offset, sectors, minSectorCount));
         }
 
-        return chains
+        if (chains.Count == 0)
+            return chains;
+
+        List<SceneSectorChain> sizeRanked = chains
             .OrderByDescending(chain => chain.Sectors.Count)
             .ThenByDescending(chain => chain.HpFaces)
             .ToList();
+
+        int maximumSectorCount = sizeRanked[0].Sectors.Count;
+        SceneSectorChain? cleanNearMaximum = sizeRanked
+            .Where(chain =>
+                chain.Sectors.Count >= maximumSectorCount - CleanChainSectorSlack &&
+                chain.TerminatorSectors == chain.Sectors.Count)
+            .OrderByDescending(chain => chain.Sectors.Count)
+            .ThenByDescending(chain => chain.HpFaces)
+            .FirstOrDefault();
+
+        if (cleanNearMaximum == null)
+            return sizeRanked;
+
+        // Arbitrary WAD bytes can look like one or two extra scene sectors and
+        // prepend remote geometry to the real chain. Prefer a fully terminated
+        // chain when it is effectively the same length. Short unterminated
+        // suffixes have already been removed by NormalizeSceneSectorChain.
+        return sizeRanked
+            .OrderByDescending(chain => chain.StartOffset == cleanNearMaximum.StartOffset)
+            .ThenByDescending(chain => chain.Sectors.Count)
+            .ThenByDescending(chain => chain.HpFaces)
+            .ToList();
+    }
+
+    private static SceneSectorChain NormalizeSceneSectorChain(
+        int start,
+        int rawEndOffset,
+        IReadOnlyList<SourceSceneSector> sectors,
+        int minSectorCount)
+    {
+        int terminatedPrefixLength = 0;
+        while (terminatedPrefixLength < sectors.Count &&
+               sectors[terminatedPrefixLength].ZTerminator == 0xFFFFFFFFu)
+        {
+            terminatedPrefixLength++;
+        }
+
+        int trailingCount = sectors.Count - terminatedPrefixLength;
+        bool shortUnterminatedSuffix = terminatedPrefixLength >= minSectorCount &&
+            trailingCount is > 0 and <= CleanChainSectorSlack &&
+            sectors.Skip(terminatedPrefixLength).All(sector => sector.ZTerminator != 0xFFFFFFFFu);
+        if (!shortUnterminatedSuffix)
+            return new SceneSectorChain(start, rawEndOffset, sectors, 0);
+
+        SourceSceneSector[] retained = sectors.Take(terminatedPrefixLength).ToArray();
+        SourceSceneSector last = retained[^1];
+        return new SceneSectorChain(start, last.Offset + last.SizeBytes, retained, trailingCount);
     }
 
     private static SourceSceneSector? TryReadSceneSector(byte[] bytes, int offset)
@@ -212,6 +416,8 @@ public static class SourceSceneOverlayExporter
 
         SourceSceneSector sector = new(
             offset,
+            ReadUInt32(bytes, offset),
+            ReadUInt32(bytes, offset + 4),
             ReadUInt16(bytes, offset + 4),
             ReadUInt32(bytes, offset + 8),
             ReadUInt32(bytes, offset + 12),
@@ -229,6 +435,51 @@ public static class SourceSceneOverlayExporter
             return null;
 
         return sector;
+    }
+
+    private static object SerializeSectorRenderMetadata(SourceSceneSector sector, long subfileWadOffset)
+    {
+        int radiusAndFlags = sector.CentreRadiusAndFlags;
+        NativeTerrainHpSectorCoordinatePayload coordinates = new(
+            sector.CenterXy,
+            sector.CenterZRadiusAndFlags,
+            sector.XyPos,
+            sector.ZPos,
+            SpyroRetailTerrainCoordinateCertification.RetailPackedSceneWords);
+        return new
+        {
+            sectorIndex = sector.SectorIndex,
+            sectorOffset = ToHex(subfileWadOffset + sector.Offset),
+            center = new
+            {
+                x = (int)((sector.CenterXy >> 16) & 0xFFFF),
+                y = (int)(sector.CenterXy & 0xFFFF),
+                z = (int)((sector.CenterZRadiusAndFlags >> 16) & 0xFFFF)
+            },
+            radius = radiusAndFlags & 0x1FFF,
+            disableLowDetail = (radiusAndFlags & 0x2000) != 0,
+            disableHighDetail = (radiusAndFlags & 0x4000) != 0,
+            forceLowDetail = (radiusAndFlags & 0x8000) != 0,
+            nativeCenterXyWord = coordinates.NativeCenterXyWord,
+            nativeCenterZRadiusFlagsWord = coordinates.NativeCenterZRadiusFlagsWord,
+            nativeXyPositionWord = coordinates.NativeXyPositionWord,
+            nativeZPositionWord = coordinates.NativeZPositionWord,
+            decodedOrigin = new
+            {
+                x = coordinates.DecodedOriginX,
+                y = coordinates.DecodedOriginY,
+                z = coordinates.DecodedOriginZ
+            },
+            xOriginQuarterResidue = coordinates.XOriginQuarterResidue,
+            zOriginQuarterResidue = coordinates.ZOriginQuarterResidue,
+            specialZScale = coordinates.UsesSpecialZScale,
+            lpVertices = sector.NumLpVertices,
+            lpColors = sector.NumLpColours,
+            lpFaces = sector.NumLpFaces,
+            hpVertices = sector.NumHpVertices,
+            hpColors = sector.NumHpColours,
+            hpFaces = sector.NumHpFaces
+        };
     }
 
     private static SourceGeometry BuildGeometry(byte[] bytes, SceneSectorChain chain, long subfileWadOffset, string detail)
@@ -256,7 +507,7 @@ public static class SourceSceneOverlayExporter
             int hpVertexStartWords = sector.NumLpVertices + sector.NumLpColours + (sector.NumLpFaces * 2);
             int hpColourStartWords = hpVertexStartWords + sector.NumHpVertices;
             int hpFaceStartWords = hpColourStartWords + (sector.NumHpColours * 2);
-            sets.Add(new FaceSet(hpVertexStartWords, sector.NumHpVertices, hpColourStartWords, 8, hpFaceStartWords, sector.NumHpFaces, 4, "hp"));
+            sets.Add(new FaceSet(hpVertexStartWords, sector.NumHpVertices, hpColourStartWords, NativeTerrainHpColorLayout.ColorBytes, hpFaceStartWords, sector.NumHpFaces, 4, "hp"));
         }
 
         foreach (FaceSet set in sets)
@@ -275,47 +526,101 @@ public static class SourceSceneOverlayExporter
             for (int face = 0; face < set.FaceCount; face++)
             {
                 int faceOffset = dataStart + ((set.FaceStartWords + (face * set.FaceWords)) * 4);
-                if (faceOffset + 4 > bytes.Length)
+                int faceBytes = set.FaceWords * sizeof(uint);
+                if (faceOffset < 0 || faceOffset + faceBytes > bytes.Length)
                     continue;
 
-                int[] indexes = [bytes[faceOffset], bytes[faceOffset + 1], bytes[faceOffset + 2], bytes[faceOffset + 3]];
+                uint rawWord0 = ReadUInt32(bytes, faceOffset);
+                uint rawWord1 = ReadUInt32(bytes, faceOffset + 4);
+                int[] indexes = set.Detail == "lp"
+                    ? ReadPackedSixBitSlots(rawWord0)
+                    : [bytes[faceOffset], bytes[faceOffset + 1], bytes[faceOffset + 2], bytes[faceOffset + 3]];
+                if (indexes.Any(index => index < 0 || index >= vertices.Count))
+                    continue;
+
                 List<Vector3f?> faceVertices = indexes
-                    .Select(index => index >= 0 && index < vertices.Count ? (Vector3f?)vertices[index] : null)
+                    .Select(index => (Vector3f?)vertices[index])
                     .ToList();
                 List<Vector3f> ordered = new();
                 HashSet<int> seen = new();
                 foreach (int index in indexes)
                 {
-                    if (index < 0 || index >= vertices.Count)
-                        continue;
                     if (seen.Add(index))
                         ordered.Add(vertices[index]);
                 }
                 if (ordered.Count < 3)
                     continue;
 
+                int[] cornerPointIndexes = BuildCornerPointIndexes(indexes, vertices.Count);
+
                 int textureId = -1;
                 bool flip = false;
                 int depth = -1;
                 string word3 = "";
                 string word4 = "";
+                uint nativeFaceWord2 = 0;
+                uint nativeFaceWord3 = 0;
+                int nativeMaterialByte = -1;
+                bool nativeUntexturedSentinel = false;
+                bool nativePrimitiveSemiTransparent = false;
+                int nativeTextureId = -1;
                 int[] colourIndexes = [];
+                List<ColorRgba> nearColors = [];
+                List<ColorRgba> farColors = [];
+                List<ColorRgba> cornerColors = [];
+                int transitionBias = 0;
+                bool doubleSided = false;
+                bool semiTransparent = false;
+                int blendMode = 0;
+                int orderingTableBias = 0;
                 ColorRgba faceColor = ColorRgba.FromRgb(96, 128, 96);
                 if (set.Detail == "hp" && faceOffset + 16 <= bytes.Length)
                 {
                     uint rawWord3 = ReadUInt32(bytes, faceOffset + 8);
                     uint rawWord4 = ReadUInt32(bytes, faceOffset + 12);
-                    textureId = (int)(rawWord3 & 0x7F);
+                    PsxTerrainPrimitiveClassification material =
+                        PsxTerrainBlendKernel.ClassifyHighPolyMaterialByte((byte)(rawWord3 & 0xFF));
+                    nativeFaceWord2 = rawWord3;
+                    nativeFaceWord3 = rawWord4;
+                    nativeMaterialByte = material.RawMaterialByte;
+                    nativeUntexturedSentinel = material.IsOpaqueUntexturedSentinel;
+                    nativePrimitiveSemiTransparent = material.PrimitiveSemiTransparent;
+                    nativeTextureId = material.TextureId;
+                    textureId = nativeTextureId;
                     flip = ((rawWord4 >> 1) & 1) != 0;
                     depth = (int)((rawWord4 >> 3) & 0x1F);
                     word3 = ToHex(rawWord3, 8);
                     word4 = ToHex(rawWord4, 8);
                     colourIndexes = [bytes[faceOffset + 4], bytes[faceOffset + 5], bytes[faceOffset + 6], bytes[faceOffset + 7]];
-                    List<ColorRgba> colors = new();
                     int colourStart = dataStart + (set.ColourStartWords * 4);
                     foreach (int colourIndex in colourIndexes)
-                        colors.Add(ReadRawRgbColor(bytes, colourStart + (colourIndex * set.ColourEntryBytes) + 4));
-                    faceColor = AverageColor(colors);
+                    {
+                        NativeTerrainHpColorOffsets colorOffsets =
+                            NativeTerrainHpColorLayout.GetColorOffsets(
+                                colourStart,
+                                sector.NumHpColours,
+                                colourIndex);
+                        farColors.Add(ReadRawRgbColor(bytes, colorOffsets.Table1Offset));
+                        nearColors.Add(ReadRawRgbColor(bytes, colorOffsets.Table2Offset));
+                    }
+                    faceColor = AverageColor(nearColors);
+                }
+                else if (set.Detail == "lp")
+                {
+                    colourIndexes = ReadPackedSixBitSlots(rawWord1);
+                    int colourStart = dataStart + (set.ColourStartWords * 4);
+                    foreach (int colourIndex in colourIndexes)
+                    {
+                        int colorOffset = colourStart + (colourIndex * set.ColourEntryBytes);
+                        cornerColors.Add(ReadRawRgbColor(bytes, colorOffset));
+                    }
+
+                    faceColor = AverageColor(cornerColors);
+                    transitionBias = (int)(rawWord0 & 0x1F);
+                    doubleSided = (rawWord0 & 0x80) != 0;
+                    semiTransparent = (rawWord1 & 0x04) != 0;
+                    blendMode = (int)(rawWord1 & 0x03);
+                    orderingTableBias = (int)((rawWord1 >> 3) & 0x1F);
                 }
 
                 AddEdges(vertices, indexes, edges, edgeKeys);
@@ -335,16 +640,36 @@ public static class SourceSceneOverlayExporter
                     faceOffset,
                     sourceWadOffset + (faceOffset - sector.Offset),
                     indexes,
+                    cornerPointIndexes,
                     textureId,
                     flip,
                     depth,
                     word3,
                     word4,
+                    nativeFaceWord2,
+                    nativeFaceWord3,
+                    nativeMaterialByte,
+                    nativeUntexturedSentinel,
+                    nativePrimitiveSemiTransparent,
+                    nativeTextureId,
                     colourIndexes,
-                    faceColor));
+                    nearColors,
+                    farColors,
+                    faceColor,
+                    cornerColors,
+                    rawWord0,
+                    rawWord1,
+                    transitionBias,
+                    doubleSided,
+                    semiTransparent,
+                    blendMode,
+                    orderingTableBias));
             }
         }
     }
+
+    private static int[] ReadPackedSixBitSlots(uint word) =>
+        [(int)((word >> 26) & 0x3F), (int)((word >> 20) & 0x3F), (int)((word >> 14) & 0x3F), (int)((word >> 8) & 0x3F)];
 
     private static void AddEdges(List<Vector3f> vertices, int[] indexes, List<SourceEdge> edges, HashSet<string> edgeKeys)
     {
@@ -370,6 +695,31 @@ public static class SourceSceneOverlayExporter
         }
     }
 
+    private static int[] BuildCornerPointIndexes(IReadOnlyList<int> vertexIndexes, int vertexCount)
+    {
+        Dictionary<int, int> pointIndexByVertex = new();
+        int[] result = new int[vertexIndexes.Count];
+        for (int slot = 0; slot < vertexIndexes.Count; slot++)
+        {
+            int vertexIndex = vertexIndexes[slot];
+            if (vertexIndex < 0 || vertexIndex >= vertexCount)
+            {
+                result[slot] = -1;
+                continue;
+            }
+
+            if (!pointIndexByVertex.TryGetValue(vertexIndex, out int pointIndex))
+            {
+                pointIndex = pointIndexByVertex.Count;
+                pointIndexByVertex.Add(vertexIndex, pointIndex);
+            }
+
+            result[slot] = pointIndex;
+        }
+
+        return result;
+    }
+
     private static SourceOverlayCandidate BuildCandidate(SceneSectorChain chain, SourceGeometry geometry, long sceneWadOffset, string detail, string projection)
     {
         List<ProjectedPoint> points = geometry.Points.Select(point => ProjectPoint(point, projection)).ToList();
@@ -381,8 +731,8 @@ public static class SourceSceneOverlayExporter
         }).Cast<object>().ToList();
         List<object> polygons = geometry.Polygons.Select(polygon => ProjectPolygon(polygon, projection)).Cast<object>().ToList();
         Rect2f bounds = ComputeBounds(points);
-        float minZ = geometry.Points.Min(point => point.Z);
-        float maxZ = geometry.Points.Max(point => point.Z);
+        float minZ = geometry.Points.Count == 0 ? 0 : geometry.Points.Min(point => point.Z);
+        float maxZ = geometry.Points.Count == 0 ? 0 : geometry.Points.Max(point => point.Z);
         return new SourceOverlayCandidate(
             $"source-wad {ToHex(sceneWadOffset)} {detail} {projection}",
             $"source-wad:{ToHex(sceneWadOffset)}",
@@ -417,14 +767,34 @@ public static class SourceSceneOverlayExporter
             ["faceOffset"] = ToHex(polygon.FaceOffset),
             ["sourceWadOffset"] = ToHex(polygon.SourceWadOffset),
             ["vertexIndexes"] = polygon.VertexIndexes,
+            ["cornerPointIndexes"] = polygon.CornerPointIndexes,
             ["textureId"] = polygon.TextureId,
             ["flip"] = polygon.Flip,
             ["depth"] = polygon.Depth,
             ["word3"] = polygon.Word3,
             ["word4"] = polygon.Word4,
             ["colourIndexes"] = polygon.ColourIndexes,
+            ["nearColors"] = polygon.NearColors.Select(ToSerializableColor).ToArray(),
+            ["farColors"] = polygon.FarColors.Select(ToSerializableColor).ToArray(),
+            ["cornerColors"] = polygon.CornerColors.Select(ToSerializableColor).ToArray(),
+            ["rawWord0"] = polygon.RawWord0,
+            ["rawWord1"] = polygon.RawWord1,
+            ["transitionBias"] = polygon.TransitionBias,
+            ["doubleSided"] = polygon.DoubleSided,
+            ["semiTransparent"] = polygon.SemiTransparent,
+            ["blendMode"] = polygon.BlendMode,
+            ["orderingTableBias"] = polygon.OrderingTableBias,
             ["faceColor"] = new { r = polygon.FaceColor.R, g = polygon.FaceColor.G, b = polygon.FaceColor.B, a = polygon.FaceColor.A }
         };
+        if (polygon.Detail.Equals("hp", StringComparison.OrdinalIgnoreCase))
+        {
+            result["nativeFaceWord2"] = polygon.NativeFaceWord2;
+            result["nativeFaceWord3"] = polygon.NativeFaceWord3;
+            result["nativeMaterialByte"] = polygon.NativeMaterialByte;
+            result["nativeUntexturedSentinel"] = polygon.NativeUntexturedSentinel;
+            result["nativePrimitiveSemiTransparent"] = polygon.NativePrimitiveSemiTransparent;
+            result["nativeTextureId"] = polygon.NativeTextureId;
+        }
         if (polygon.FaceVertices.Count >= 4 && polygon.FaceVertices.Take(4).All(point => point.HasValue))
         {
             result["textureCorners"] = new
@@ -438,6 +808,9 @@ public static class SourceSceneOverlayExporter
 
         return result;
     }
+
+    private static object ToSerializableColor(ColorRgba color) =>
+        new { r = color.R, g = color.G, b = color.B, a = color.A };
 
     private static ProjectedPoint ProjectPoint(Vector3f point, string projection)
     {
@@ -508,6 +881,8 @@ public static class SourceSceneOverlayExporter
 
     private static uint ReadUInt32(byte[] bytes, int offset) => BitConverter.ToUInt32(bytes, offset);
 
+    private static int ReadInt32(byte[] bytes, int offset) => BitConverter.ToInt32(bytes, offset);
+
     private static string ToHex(long value) => $"0x{value:X}";
 
     private static string ToHex(uint value, int width) => $"0x{value.ToString($"X{width}")}";
@@ -517,8 +892,16 @@ public static class SourceSceneOverlayExporter
         public long AbsoluteWadOffset => EntryOffset + SubfileOffset;
     }
 
+    private sealed record SourceNativeTerrainOcclusion(
+        IReadOnlyList<int[]> EnvironmentGroups,
+        IReadOnlyList<uint[]> CollisionTriangleWords,
+        long OcclusionComponentWadOffset,
+        long CollisionComponentWadOffset);
+
     private sealed record SourceSceneSector(
         int Offset,
+        uint CenterXy,
+        uint CenterZRadiusAndFlags,
         int CentreRadiusAndFlags,
         uint XyPos,
         uint ZPos,
@@ -532,7 +915,11 @@ public static class SourceSceneOverlayExporter
         int NumHpFaces,
         int SectorIndex);
 
-    private sealed record SceneSectorChain(int StartOffset, int EndOffset, IReadOnlyList<SourceSceneSector> Sectors)
+    private sealed record SceneSectorChain(
+        int StartOffset,
+        int EndOffset,
+        IReadOnlyList<SourceSceneSector> Sectors,
+        int TrimmedTrailingSectors)
     {
         public int HpFaces => Sectors.Sum(sector => sector.NumHpFaces);
         public int LpFaces => Sectors.Sum(sector => sector.NumLpFaces);
@@ -560,13 +947,30 @@ public static class SourceSceneOverlayExporter
         int FaceOffset,
         long SourceWadOffset,
         IReadOnlyList<int> VertexIndexes,
+        IReadOnlyList<int> CornerPointIndexes,
         int TextureId,
         bool Flip,
         int Depth,
         string Word3,
         string Word4,
+        uint NativeFaceWord2,
+        uint NativeFaceWord3,
+        int NativeMaterialByte,
+        bool NativeUntexturedSentinel,
+        bool NativePrimitiveSemiTransparent,
+        int NativeTextureId,
         IReadOnlyList<int> ColourIndexes,
-        ColorRgba FaceColor);
+        IReadOnlyList<ColorRgba> NearColors,
+        IReadOnlyList<ColorRgba> FarColors,
+        ColorRgba FaceColor,
+        IReadOnlyList<ColorRgba> CornerColors,
+        uint RawWord0,
+        uint RawWord1,
+        int TransitionBias,
+        bool DoubleSided,
+        bool SemiTransparent,
+        int BlendMode,
+        int OrderingTableBias);
 
     private readonly record struct ProjectedPoint(float x, float y, float z);
 

@@ -111,6 +111,7 @@ public static class NativeEnvironmentGradeExporter
 {
     private const int TexturePagesSubfileIndex = 0;
     private const int ModelSubfileIndex = 1;
+    private const int SceneryModelSubfileIndex = 2;
     private const int MobyRecordStride = 0x58;
     private const int MobyMaterialOffset = 0x4F;
     private const int TexturePaletteByteLength = 512;
@@ -206,11 +207,25 @@ public static class NativeEnvironmentGradeExporter
         0x7A3E0, 0x7A7E0, 0x7ABE0, 0x7AFE0, 0x7B3E0, 0x7B7E0
     ];
 
-    // These close-tree texture rows stay native until the untextured/far tree LOD can receive the same grade.
-    private static readonly HashSet<int> DarkHollowProtectedTreePaletteOffsets =
+    private static readonly IReadOnlyDictionary<int, string> DarkHollowCloseTreePaletteSha256 =
+        new Dictionary<int, string>
+        {
+            [0x7C460] = "3EF169D671DD5F3D84BFEAF2F5FD1388D0E17EF4048D986FE84979AE5F3494A7",
+            [0x7CC60] = "D9E70917444CAA9F244E54807A02F8A1A8269077813908CA6EE8E0F95120B291",
+            [0x7D060] = "C5CDABB0610F79ABCA0AA864833CA68C9582365DE727168A4AD820E8EEF5A360",
+            [0x7D460] = "E18CEAC716D0D8B868DCE9D952B6F6942E9CCCF4038649E133E519B5F8BADA33",
+            [0x7E440] = "5AE1DEFB401F8307BE30FF58EE84A76450A3CD0C3C883B8203436C8147E86B99",
+            [0x7EC40] = "97178BB30CD90B42916A9DD8849BB207DC55CB37E0994BABD5CDB1695FF8F1FF",
+            [0x7F040] = "5FB93A92D570CCC907B76C1829995586A63BA4A28C97A7D0EB8936F0E75AABDB",
+            [0x7F440] = "144F2F14015E653DE9024F1A4AF2E5BB255427D65A2B352BAE0D8A3721F1EE69"
+        };
+
+    // GPU captures tie these untextured color tables to Dark Hollow's three far-tree model variants.
+    private static readonly DarkHollowSceneryColorTableSpec[] DarkHollowFarTreeColorTableSpecs =
     [
-        0x7C460, 0x7CC60, 0x7D060, 0x7D460,
-        0x7E440, 0x7EC40, 0x7F040, 0x7F440
+        new(0x129FC, 44, "tree-variant-1", "3D2CE20BF4A01D78B944D9DB5EC43C092049E2FC209CF91004C500B6FC94F431"),
+        new(0x16624, 52, "tree-variant-2", "F817FBC3BDB7F3B61A87247AFCE3D799F20878815C154466B5FDCA6C85C400BF"),
+        new(0x16D9C, 41, "tree-variant-3", "FAC5789C3CD68EB7DC6552468392113709B75BD073C6C1B17B722C129880FB78")
     ];
 
     public static async Task<NativeEnvironmentGradePatchResult> ExportBatchAsync(
@@ -219,26 +234,69 @@ public static class NativeEnvironmentGradeExporter
     {
         (NativeEnvironmentGradePatchPlan plan, IReadOnlyList<GradePayload> payloads) = BuildPlanAndPayloads(request);
         string outputPlanPath = $"{request.OutputPrefix}.environment-grade-patch-plan.json";
+        ValidateOutputPaths(request, plan, outputPlanPath);
         Directory.CreateDirectory(Path.GetDirectoryName(outputPlanPath) ?? ".");
-        await using (FileStream output = File.Create(outputPlanPath))
-        {
-            await JsonSerializer.SerializeAsync(output, plan, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            }, cancellationToken);
-        }
-
+        string temporarySuffix = $".{Guid.NewGuid():N}.tmp";
+        string temporaryPlanPath = outputPlanPath + temporarySuffix;
+        string temporaryImagePath = plan.OutputImagePath + temporarySuffix;
+        string temporaryCuePath = plan.OutputCuePath + temporarySuffix;
         bool wroteImage = request.WriteImage && payloads.Count > 0;
-        if (wroteImage)
+        try
         {
-            File.Copy(request.SourceImagePath, plan.OutputImagePath, true);
-            DiscLayout layout = DiscImage.DetectLayout(plan.OutputImagePath);
-            await using FileStream image = File.Open(plan.OutputImagePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
-            foreach (GradePayload payload in payloads)
-                DiscImage.WriteFileBytes(image, layout, payload.WadLba, payload.WadOffset, payload.Bytes);
-            string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(plan.OutputImagePath));
-            await File.WriteAllTextAsync(plan.OutputCuePath, cueText, Encoding.ASCII, cancellationToken);
+            await using (FileStream output = File.Create(temporaryPlanPath))
+            {
+                await JsonSerializer.SerializeAsync(output, plan, new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                }, cancellationToken);
+                await output.FlushAsync(cancellationToken);
+            }
+
+            if (wroteImage)
+            {
+                File.Copy(request.SourceImagePath, temporaryImagePath, true);
+                DiscLayout layout = DiscImage.DetectLayout(temporaryImagePath);
+                await using (FileStream image = File.Open(temporaryImagePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
+                {
+                    NativeAssetCatalog copiedAssets = LoadAssetCatalog(request.WadAnalysisPath);
+                    ValidateAssetCatalogAgainstSource(image, layout, copiedAssets);
+                    foreach (GradePayload payload in payloads)
+                    {
+                        byte[] actualBefore = DiscImage.ReadFileBytes(
+                            image,
+                            layout,
+                            payload.FileLba,
+                            payload.FileOffset,
+                            payload.Before.Length);
+                        if (!actualBefore.AsSpan().SequenceEqual(payload.Before))
+                        {
+                            throw new InvalidOperationException(
+                                $"Environment-grade source bytes changed before '{payload.Label}' could be written. Rebuild the plan from the selected clean source image.");
+                        }
+                        DiscImage.WriteFileBytes(image, layout, payload.FileLba, payload.FileOffset, payload.After);
+                    }
+                    await image.FlushAsync(cancellationToken);
+                }
+                string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(plan.OutputImagePath));
+                await File.WriteAllTextAsync(temporaryCuePath, cueText, Encoding.ASCII, cancellationToken);
+            }
+            List<(string TemporaryPath, string FinalPath)> stagedOutputs =
+            [
+                (temporaryPlanPath, outputPlanPath)
+            ];
+            if (wroteImage)
+            {
+                stagedOutputs.Insert(0, (temporaryCuePath, plan.OutputCuePath));
+                stagedOutputs.Insert(0, (temporaryImagePath, plan.OutputImagePath));
+            }
+            PublishStagedOutputs(stagedOutputs, temporarySuffix);
+        }
+        finally
+        {
+            DeleteTemporaryOutput(temporaryPlanPath);
+            DeleteTemporaryOutput(temporaryImagePath);
+            DeleteTemporaryOutput(temporaryCuePath);
         }
 
         return new NativeEnvironmentGradePatchResult(
@@ -247,6 +305,122 @@ public static class NativeEnvironmentGradeExporter
             outputPlanPath,
             plan,
             wroteImage);
+    }
+
+    private static void DeleteTemporaryOutput(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private static void PublishStagedOutputs(
+        IReadOnlyList<(string TemporaryPath, string FinalPath)> outputs,
+        string temporarySuffix)
+    {
+        List<(string FinalPath, string BackupPath)> backups = [];
+        List<string> published = [];
+        try
+        {
+            foreach ((_, string finalPath) in outputs)
+            {
+                if (!File.Exists(finalPath))
+                    continue;
+                string backupPath = finalPath + temporarySuffix + ".bak";
+                File.Move(finalPath, backupPath);
+                backups.Add((finalPath, backupPath));
+            }
+            foreach ((string temporaryPath, string finalPath) in outputs)
+            {
+                File.Move(temporaryPath, finalPath);
+                published.Add(finalPath);
+            }
+        }
+        catch (Exception publishException)
+        {
+            List<Exception> rollbackExceptions = [];
+            foreach (string finalPath in published.AsEnumerable().Reverse())
+            {
+                try
+                {
+                    if (File.Exists(finalPath))
+                        File.Delete(finalPath);
+                }
+                catch (Exception rollbackException)
+                {
+                    rollbackExceptions.Add(rollbackException);
+                }
+            }
+            foreach ((string finalPath, string backupPath) in backups.AsEnumerable().Reverse())
+            {
+                try
+                {
+                    if (File.Exists(backupPath))
+                        File.Move(backupPath, finalPath, true);
+                }
+                catch (Exception rollbackException)
+                {
+                    rollbackExceptions.Add(rollbackException);
+                }
+            }
+            if (rollbackExceptions.Count > 0)
+            {
+                throw new AggregateException(
+                    "Environment-grade output publication failed and one or more previous artifacts could not be restored. Retained .bak files are recovery copies.",
+                    [publishException, .. rollbackExceptions]);
+            }
+            throw;
+        }
+
+        foreach ((_, string backupPath) in backups)
+            DeleteTemporaryOutput(backupPath);
+    }
+
+    private static void ValidateOutputPaths(
+        NativeEnvironmentGradeBatchPatchRequest request,
+        NativeEnvironmentGradePatchPlan plan,
+        string outputPlanPath)
+    {
+        (string Label, string Path)[] inputs =
+        [
+            ("source BIN", request.SourceImagePath),
+            ("source CUE", request.SourceCuePath),
+            ("WAD analysis", request.WadAnalysisPath)
+        ];
+        (string Label, string Path)[] outputs =
+        [
+            ("output BIN", plan.OutputImagePath),
+            ("output CUE", plan.OutputCuePath),
+            ("output plan", outputPlanPath)
+        ];
+        foreach ((string inputLabel, string inputPath) in inputs)
+        {
+            if (string.IsNullOrWhiteSpace(inputPath))
+                continue;
+            foreach ((string outputLabel, string outputPath) in outputs)
+            {
+                if (!PathsEqual(inputPath, outputPath))
+                    continue;
+                throw new InvalidOperationException(
+                    $"The environment-grade {outputLabel} cannot replace the selected {inputLabel}. Choose a different output prefix.");
+            }
+        }
+    }
+
+    private static bool PathsEqual(string first, string second)
+    {
+        StringComparison comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        return string.Equals(Path.GetFullPath(first), Path.GetFullPath(second), comparison);
     }
 
     public static NativeEnvironmentGradePatchPlan BuildPlan(NativeEnvironmentGradeBatchPatchRequest request) =>
@@ -261,9 +435,11 @@ public static class NativeEnvironmentGradeExporter
     {
         if (!File.Exists(sourceImagePath))
             throw new FileNotFoundException("Missing source disc image.", sourceImagePath);
+        ValidateGradeScope(target, grade);
         NativeAssetCatalog assets = LoadAssetCatalog(wadAnalysisPath);
         DiscLayout discLayout = DiscImage.DetectLayout(sourceImagePath);
         using FileStream image = File.Open(sourceImagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        ValidateAssetCatalogAgainstSource(image, discLayout, assets);
         LevelColorData targetData = ReadLevelColorData(image, discLayout, assets, target);
         LevelColorData donorData = ReadLevelColorData(image, discLayout, assets, donor);
         return BuildMatch(target, donor, targetData, donorData, grade.Normalize(donor.Key));
@@ -287,10 +463,11 @@ public static class NativeEnvironmentGradeExporter
         NativeAssetCatalog assets = LoadAssetCatalog(request.WadAnalysisPath);
         DiscLayout discLayout = DiscImage.DetectLayout(request.SourceImagePath);
         using FileStream image = File.Open(request.SourceImagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        ValidateAssetCatalogAgainstSource(image, discLayout, assets);
         List<NativeEnvironmentGradeMatch> matches = [];
         List<NativeEnvironmentGradePatch> patches = [];
         List<GradePayload> payloads = [];
-        HashSet<string> writtenRanges = new(StringComparer.Ordinal);
+        GradeWriteRangeTracker writtenRanges = new();
         Dictionary<int, LevelColorData> colorDataByWadEntry = new();
         Dictionary<int, uint> mobyMaterialByLevelId = new();
 
@@ -307,6 +484,7 @@ public static class NativeEnvironmentGradeExporter
         foreach (NativeEnvironmentGradeBatchEdit edit in enabledEdits)
         {
             NativeEnvironmentGradePlan grade = edit.Grade.Normalize();
+            ValidateGradeScope(edit.Level, grade);
             LevelDefinition donor = request.Catalog.FindByKey(grade.DonorLevelKey)
                 ?? throw new InvalidOperationException($"{edit.Level.DisplayName} does not have a valid environment-grade donor.");
             if (string.Equals(LevelCatalog.NormalizeKey(donor.Key), LevelCatalog.NormalizeKey(edit.Level.Key), StringComparison.OrdinalIgnoreCase))
@@ -314,6 +492,8 @@ public static class NativeEnvironmentGradeExporter
 
             LevelColorData targetData = GetColorData(edit.Level);
             LevelColorData donorData = GetColorData(donor);
+            if (grade.GradeTexturePalettes)
+                ValidateDarkHollowCloseTreePaletteSources(edit.Level, targetData.TexturePalettes);
             NativeEnvironmentGradeMatch match = BuildMatch(edit.Level, donor, targetData, donorData, grade);
             matches.Add(match);
 
@@ -342,22 +522,26 @@ public static class NativeEnvironmentGradeExporter
                         patches,
                         payloads);
                 }
-            }
 
-            if (grade.GradeTexturePalettes)
-            {
-                foreach (TexturePaletteTable palette in targetData.TexturePalettes)
+                foreach (SceneryColorTable table in targetData.SceneryColorTables)
                 {
-                    byte[] before = palette.Bytes;
-                    byte[] after = TransformTexturePalette(before, match.TextureTransform, smoothTerrain: true);
+                    byte[] before = table.Bytes;
+                    string beforeHash = Hash(before);
+                    if (!string.Equals(beforeHash, table.ExpectedBeforeSha256, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new InvalidOperationException(
+                            $"Dark Hollow's {table.Label} scenery color table does not match the validated USA source bytes. " +
+                            $"Expected {table.ExpectedBeforeSha256}, got {beforeHash}.");
+                    }
+                    byte[] after = TransformSceneryColorTable(before, table, match.SceneTransform);
                     AddPatch(
                         edit.Level,
                         donor,
                         assets.WadLba,
-                        targetData.TexturePagesSubfile.WadOffset + palette.Offset,
-                        "environment-terrain-texture-palette",
-                        $"palette-0x{palette.Offset:X}",
-                        palette.NonZeroColorCount,
+                        targetData.SceneryModelSubfile!.WadOffset + table.Offset,
+                        "environment-scenery-lod-colors",
+                        table.Label,
+                        table.ColorCount,
                         before,
                         after,
                         discLayout,
@@ -365,6 +549,20 @@ public static class NativeEnvironmentGradeExporter
                         patches,
                         payloads);
                 }
+            }
+
+            if (grade.GradeTexturePalettes)
+            {
+                AddTexturePalettePatches(
+                    edit.Level,
+                    donor,
+                    assets.WadLba,
+                    targetData,
+                    match.TextureTransform,
+                    discLayout,
+                    writtenRanges,
+                    patches,
+                    payloads);
             }
 
             if (grade.GradeAnyMobys)
@@ -414,14 +612,14 @@ public static class NativeEnvironmentGradeExporter
                 "Large donor hue or saturation shifts use one luminance-preserving affine harmonization across every low-detail and high-detail sector, reducing source-sector color breaks without flattening native shading.",
                 "Drastic shifts fully normalize both scene and texture chroma because PS1 texture and vertex colors multiply at render time; the target level's native luminance, shading, and texture detail remain intact.",
                 "Advanced tint strength is divided across scene and texture layers so their multiplicative runtime result matches the requested tint instead of applying it twice; native object lighting keeps its independently selected material grade.",
-                "Both rendered RGB lanes in every validated eight-byte high-detail color entry are transformed; their command bytes remain unchanged.",
+                "Both contiguous four-byte high-detail color banks are transformed; their command bytes remain unchanged.",
                 "Landscape palettes use the same shadow-protected tonal curve to avoid exposing large terrain triangles after aggressive dark grades.",
                 "Both low-detail and high-detail scene color tables are patched only when every native color-command byte validates as 0x00 or 0x30.",
                 "Texture grading covers only packed PS1 CLUT sources referenced by the decoded scene and exact Dark Hollow LOD rows proven by GPU captures; the legacy palette-code-times-32 address is never written because it can point into texture pixels.",
                 "Four-bit landscape CLUTs write exactly 32 bytes and eight-bit CLUTs write exactly 512 bytes, preventing palette transforms from spilling into neighboring texture data.",
                 "Dark Hollow inferred 512-byte rows are reduced to 32 bytes when another decoded palette starts inside the range; only GPU-proven 8-bit rows retain 512-byte writes.",
                 "GPU-captured Spyro player palettes are explicitly excluded from Dark Hollow environment grading.",
-                "Dark Hollow close-tree texture palettes stay native until their separate far/untextured LOD can be graded identically, preventing a color change as the camera approaches.",
+                "Dark Hollow's GPU-proven close-tree palettes and three far/untextured tree color tables receive the same grade, preventing green/gray color changes across scenery LOD distance swaps.",
                 "Object lighting changes the game's existing neutral material-0 entry per level; no object row is rerouted and the invalid reserved-material path is never used.",
                 "Native material-1 and material-2 objects keep their original special lighting, preserving gems and other emissive or reflective objects.",
                 "Every ungraded level id explicitly restores neutral material 0x00808080 so an environment grade cannot leak across a portal transition.",
@@ -429,6 +627,21 @@ public static class NativeEnvironmentGradeExporter
                 "Every patch is fixed-size, so WAD layout and executable locations remain unchanged before any separate oversized-sky relocation step."
             ]);
         return (plan, payloads);
+    }
+
+    private static void ValidateGradeScope(LevelDefinition target, NativeEnvironmentGradePlan grade)
+    {
+        NativeEnvironmentGradePlan normalized = grade.Normalize();
+        if (!normalized.Enabled ||
+            !string.Equals(LevelCatalog.NormalizeKey(target.Key), "darkhollow", StringComparison.OrdinalIgnoreCase) ||
+            normalized.GradeSceneColors == normalized.GradeTexturePalettes)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            "Dark Hollow's Landscape lighting and Landscape texture palettes must be enabled together. " +
+            "Its close-tree palettes and far/untextured RGB0 tables are one atomic LOD grade.");
     }
 
     private static NativeEnvironmentGradeMatch BuildMatch(
@@ -533,8 +746,17 @@ public static class NativeEnvironmentGradeExporter
     {
         if (!assets.Levels.TryGetValue(level.SourceWadEntry, out LevelAssetLayout? asset))
             throw new InvalidOperationException($"{level.DisplayName} is missing native texture/model subfiles.");
+        if (string.Equals(LevelCatalog.NormalizeKey(level.Key), "darkhollow", StringComparison.OrdinalIgnoreCase) &&
+            asset.SceneryModels == null)
+        {
+            throw new InvalidOperationException(
+                "Dark Hollow environment grading requires scenery subfile 2 from an analysis built for the selected source image. Rebuild the WAD analysis before saving or exporting this grade.");
+        }
         byte[] modelBytes = DiscImage.ReadFileBytes(image, discLayout, assets.WadLba, asset.Model.WadOffset, asset.Model.Size);
         byte[] textureBytes = DiscImage.ReadFileBytes(image, discLayout, assets.WadLba, asset.TexturePages.WadOffset, asset.TexturePages.Size);
+        byte[]? sceneryModelBytes = asset.SceneryModels == null
+            ? null
+            : DiscImage.ReadFileBytes(image, discLayout, assets.WadLba, asset.SceneryModels.WadOffset, asset.SceneryModels.Size);
         IReadOnlyList<SceneSector> sectors = FindBestSceneChain(modelBytes);
         if (sectors.Count == 0)
             throw new InvalidOperationException($"Could not decode {level.DisplayName}'s landscape scene sectors.");
@@ -550,6 +772,9 @@ public static class NativeEnvironmentGradeExporter
             throw new InvalidOperationException($"Could not decode {level.DisplayName}'s landscape color tables.");
 
         IReadOnlyList<TexturePaletteTable> texturePalettes = ReadSceneTexturePalettes(modelBytes, textureBytes, textureIds, level.Key);
+        IReadOnlyList<SceneryColorTable> sceneryColorTables = sceneryModelBytes == null
+            ? Array.Empty<SceneryColorTable>()
+            : ReadDarkHollowFarTreeColorTables(sceneryModelBytes, level.Key);
         NativeEnvironmentTextureUsageStatistics textureUsage = ReadSceneTextureUsage(modelBytes, textureBytes, textureIds);
         IReadOnlyList<MobyMaterialRow> mobyMaterialRows = ReadMobyMaterialRows(image, discLayout, assets.WadLba, level);
         ColorRgba[] sceneColors = colorTables
@@ -561,8 +786,10 @@ public static class NativeEnvironmentGradeExporter
         return new LevelColorData(
             asset.Model,
             asset.TexturePages,
+            asset.SceneryModels,
             sectors,
             colorTables,
+            sceneryColorTables,
             textureIds,
             texturePalettes,
             mobyMaterialRows,
@@ -715,7 +942,15 @@ public static class NativeEnvironmentGradeExporter
 
         int hpVertexStartWords = sector.NumLpVertices + sector.NumLpColours + (sector.NumLpFaces * 2);
         int hpColorStart = dataStart + ((hpVertexStartWords + sector.NumHpVertices) * 4);
-        TryAddColorTable(modelBytes, sector.SectorIndex, "hp", hpColorStart, sector.NumHpColours, 8, [0, 4], result);
+        TryAddColorTable(
+            modelBytes,
+            sector.SectorIndex,
+            "hp",
+            hpColorStart,
+            sector.NumHpColours * NativeTerrainHpColorLayout.TableCount,
+            NativeTerrainHpColorLayout.ColorBytes,
+            [0],
+            result);
     }
 
     private static bool HasValidatedColorTable(byte[] modelBytes, SceneSector sector)
@@ -726,7 +961,12 @@ public static class NativeEnvironmentGradeExporter
             return true;
         int hpVertexStartWords = sector.NumLpVertices + sector.NumLpColours + (sector.NumLpFaces * 2);
         int hpColorStart = dataStart + ((hpVertexStartWords + sector.NumHpVertices) * 4);
-        return IsValidatedColorTable(modelBytes, hpColorStart, sector.NumHpColours, 8, [0, 4]);
+        return IsValidatedColorTable(
+            modelBytes,
+            hpColorStart,
+            sector.NumHpColours * NativeTerrainHpColorLayout.TableCount,
+            NativeTerrainHpColorLayout.ColorBytes,
+            [0]);
     }
 
     private static void TryAddColorTable(
@@ -1015,8 +1255,81 @@ public static class NativeEnvironmentGradeExporter
         if (!string.Equals(LevelCatalog.NormalizeKey(levelKey), "darkhollow", StringComparison.OrdinalIgnoreCase))
             return;
 
-        foreach (int offset in DarkHollowProtectedPlayerPaletteOffsets.Concat(DarkHollowProtectedTreePaletteOffsets))
+        foreach (int offset in DarkHollowProtectedPlayerPaletteOffsets)
             candidates.Remove(offset);
+    }
+
+    private static void ValidateDarkHollowCloseTreePaletteSource(
+        LevelDefinition level,
+        TexturePaletteTable palette)
+    {
+        if (!string.Equals(LevelCatalog.NormalizeKey(level.Key), "darkhollow", StringComparison.OrdinalIgnoreCase) ||
+            !DarkHollowCloseTreePaletteSha256.TryGetValue(palette.Offset, out string? expectedHash))
+        {
+            return;
+        }
+
+        string actualHash = Hash(palette.Bytes);
+        if (!string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Dark Hollow's close-tree palette at 0x{palette.Offset:X} does not match the validated USA source bytes. " +
+                $"Expected {expectedHash}, got {actualHash}.");
+        }
+    }
+
+    private static void ValidateDarkHollowCloseTreePaletteSources(
+        LevelDefinition level,
+        IReadOnlyList<TexturePaletteTable> palettes)
+    {
+        if (!string.Equals(LevelCatalog.NormalizeKey(level.Key), "darkhollow", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        foreach ((int offset, string expectedHash) in DarkHollowCloseTreePaletteSha256)
+        {
+            TexturePaletteTable? palette = palettes.SingleOrDefault(candidate => candidate.Offset == offset);
+            if (palette == null)
+            {
+                throw new InvalidOperationException(
+                    $"Dark Hollow's close-tree palette at 0x{offset:X} is missing from the validated USA source layout. " +
+                    "Rebuild the WAD analysis from a clean USA source image.");
+            }
+            string actualHash = Hash(palette.Bytes);
+            if (!string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Dark Hollow's close-tree palette at 0x{offset:X} does not match the validated USA source bytes. " +
+                    $"Expected {expectedHash}, got {actualHash}.");
+            }
+        }
+    }
+
+    private static IReadOnlyList<SceneryColorTable> ReadDarkHollowFarTreeColorTables(
+        byte[] sceneryModelBytes,
+        string levelKey)
+    {
+        if (!string.Equals(LevelCatalog.NormalizeKey(levelKey), "darkhollow", StringComparison.OrdinalIgnoreCase))
+            return Array.Empty<SceneryColorTable>();
+
+        List<SceneryColorTable> result = [];
+        foreach (DarkHollowSceneryColorTableSpec spec in DarkHollowFarTreeColorTableSpecs)
+        {
+            int byteLength = checked(spec.ColorCount * 4);
+            if (spec.Offset < 0 || spec.Offset + byteLength > sceneryModelBytes.Length)
+                throw new InvalidOperationException($"Dark Hollow's {spec.Label} scenery color table is outside subfile 2.");
+
+            byte[] bytes = sceneryModelBytes.AsSpan(spec.Offset, byteLength).ToArray();
+            if (Enumerable.Range(0, spec.ColorCount).Any(index => bytes[(index * 4) + 3] != 0x00))
+                throw new InvalidOperationException($"Dark Hollow's {spec.Label} scenery color table no longer has the validated RGB0 layout.");
+
+            result.Add(new SceneryColorTable(
+                spec.Offset,
+                spec.ColorCount,
+                spec.Label,
+                spec.ExpectedBeforeSha256,
+                bytes));
+        }
+        return result;
     }
 
     private static bool CanUseTextureDescriptor(TextureDescriptor descriptor, int texturePagesSize)
@@ -1107,6 +1420,24 @@ public static class NativeEnvironmentGradeExporter
         return after;
     }
 
+    private static byte[] TransformSceneryColorTable(
+        byte[] before,
+        SceneryColorTable table,
+        NativeEnvironmentColorTransform transform)
+    {
+        byte[] after = before.ToArray();
+        for (int index = 0; index < table.ColorCount; index++)
+        {
+            int offset = index * 4;
+            ColorRgba source = ColorRgba.FromRgb(after[offset], after[offset + 1], after[offset + 2]);
+            ColorRgba graded = transform.ApplyTerrainSmoothing(source);
+            after[offset] = graded.R;
+            after[offset + 1] = graded.G;
+            after[offset + 2] = graded.B;
+        }
+        return after;
+    }
+
     private static ColorRgba DecodePsx555(ushort word)
     {
         static byte Expand(int value) => (byte)((value << 3) | (value >> 2));
@@ -1125,7 +1456,7 @@ public static class NativeEnvironmentGradeExporter
         FileStream image,
         DiscLayout discLayout,
         IReadOnlyDictionary<int, uint> materialByLevelId,
-        HashSet<string> writtenRanges,
+        GradeWriteRangeTracker writtenRanges,
         List<NativeEnvironmentGradePatch> patches,
         List<GradePayload> payloads)
     {
@@ -1241,16 +1572,15 @@ public static class NativeEnvironmentGradeExporter
         byte[] before,
         byte[] after,
         DiscLayout discLayout,
-        HashSet<string> writtenRanges,
+        GradeWriteRangeTracker writtenRanges,
         List<NativeEnvironmentGradePatch> patches,
         List<GradePayload> payloads,
         string description)
     {
+        ValidateFixedSizePatch(before, after, label);
         if (before.AsSpan().SequenceEqual(after))
             return;
-        string range = $"{fileLba}:{fileOffset}:{after.Length}";
-        if (!writtenRanges.Add(range))
-            throw new InvalidOperationException($"More than one environment grade patch targets file LBA {fileLba}, offset 0x{fileOffset:X}, length 0x{after.Length:X}.");
+        writtenRanges.Reserve(fileLba, fileOffset, after.Length, label);
 
         patches.Add(new NativeEnvironmentGradePatch(
             Label: $"{label}: {description}",
@@ -1268,7 +1598,103 @@ public static class NativeEnvironmentGradeExporter
             AfterSha256: Hash(after),
             BeforeHexPreview: HexPreview(before),
             AfterHexPreview: HexPreview(after)));
-        payloads.Add(new GradePayload(fileLba, fileOffset, after));
+        payloads.Add(new GradePayload(fileLba, fileOffset, before, after, label));
+    }
+
+    private static void AddTexturePalettePatches(
+        LevelDefinition level,
+        LevelDefinition donor,
+        int wadLba,
+        LevelColorData targetData,
+        NativeEnvironmentColorTransform transform,
+        DiscLayout discLayout,
+        GradeWriteRangeTracker writtenRanges,
+        List<NativeEnvironmentGradePatch> patches,
+        List<GradePayload> payloads)
+    {
+        List<PaletteTransformRange> claimed = [];
+        foreach (TexturePaletteTable palette in targetData.TexturePalettes.OrderBy(item => item.Offset))
+        {
+            ValidateDarkHollowCloseTreePaletteSource(level, palette);
+            byte[] before = palette.Bytes;
+            byte[] after = TransformTexturePalette(before, transform, smoothTerrain: true);
+            int start = palette.Offset;
+            int end = checked(start + before.Length);
+            string sourceLabel = $"palette-0x{palette.Offset:X}";
+
+            foreach (PaletteTransformRange existing in claimed)
+            {
+                int overlapStart = Math.Max(start, existing.Start);
+                int overlapEnd = Math.Min(end, existing.End);
+                if (overlapStart >= overlapEnd)
+                    continue;
+
+                int overlapLength = overlapEnd - overlapStart;
+                ReadOnlySpan<byte> currentBefore = before.AsSpan(overlapStart - start, overlapLength);
+                ReadOnlySpan<byte> currentAfter = after.AsSpan(overlapStart - start, overlapLength);
+                ReadOnlySpan<byte> existingBefore = existing.Before.AsSpan(overlapStart - existing.Start, overlapLength);
+                ReadOnlySpan<byte> existingAfter = existing.After.AsSpan(overlapStart - existing.Start, overlapLength);
+                if (!currentBefore.SequenceEqual(existingBefore) || !currentAfter.SequenceEqual(existingAfter))
+                {
+                    throw new InvalidOperationException(
+                        $"Overlapping environment palette candidates '{sourceLabel}' and '{existing.Label}' do not produce identical source/graded bytes.");
+                }
+            }
+
+            List<PaletteInterval> uncovered = [new(start, end)];
+            foreach (PaletteTransformRange existing in claimed)
+                uncovered = SubtractPaletteInterval(uncovered, existing.Start, existing.End);
+
+            foreach (PaletteInterval interval in uncovered)
+            {
+                int relativeOffset = interval.Start - start;
+                int byteLength = interval.End - interval.Start;
+                byte[] segmentBefore = before.AsSpan(relativeOffset, byteLength).ToArray();
+                byte[] segmentAfter = after.AsSpan(relativeOffset, byteLength).ToArray();
+                string suffix = interval.Start == start && interval.End == end
+                    ? sourceLabel
+                    : $"{sourceLabel}-range-0x{interval.Start:X}";
+                int nonZeroColorCount = Enumerable.Range(0, segmentBefore.Length / 2)
+                    .Count(index => (ReadUInt16(segmentBefore, index * 2) & 0x7FFF) != 0);
+                AddPatch(
+                    level,
+                    donor,
+                    wadLba,
+                    targetData.TexturePagesSubfile.WadOffset + interval.Start,
+                    "environment-terrain-texture-palette",
+                    suffix,
+                    nonZeroColorCount,
+                    segmentBefore,
+                    segmentAfter,
+                    discLayout,
+                    writtenRanges,
+                    patches,
+                    payloads);
+            }
+
+            claimed.Add(new PaletteTransformRange(start, end, before, after, sourceLabel));
+        }
+    }
+
+    private static List<PaletteInterval> SubtractPaletteInterval(
+        IReadOnlyList<PaletteInterval> source,
+        int removeStart,
+        int removeEnd)
+    {
+        List<PaletteInterval> result = [];
+        foreach (PaletteInterval interval in source)
+        {
+            if (removeEnd <= interval.Start || removeStart >= interval.End)
+            {
+                result.Add(interval);
+                continue;
+            }
+            if (removeStart > interval.Start)
+                result.Add(new PaletteInterval(interval.Start, Math.Min(removeStart, interval.End)));
+            if (removeEnd < interval.End)
+                result.Add(new PaletteInterval(Math.Max(removeEnd, interval.Start), interval.End));
+        }
+        return result;
     }
 
     private static void AddPatch(
@@ -1282,18 +1708,18 @@ public static class NativeEnvironmentGradeExporter
         byte[] before,
         byte[] after,
         DiscLayout discLayout,
-        HashSet<string> writtenRanges,
+        GradeWriteRangeTracker writtenRanges,
         List<NativeEnvironmentGradePatch> patches,
         List<GradePayload> payloads)
     {
+        string label = $"{level.Key}-{kind}-{suffix}";
+        ValidateFixedSizePatch(before, after, label);
         if (before.AsSpan().SequenceEqual(after))
             return;
-        string range = $"{wadLba}:{wadOffset}:{after.Length}";
-        if (!writtenRanges.Add(range))
-            throw new InvalidOperationException($"Environment-grade patches overlap at WAD offset 0x{wadOffset:X}.");
+        writtenRanges.Reserve(wadLba, wadOffset, after.Length, label);
         int changedBytes = CountChangedBytes(before, after);
         patches.Add(new NativeEnvironmentGradePatch(
-            Label: $"{level.Key}-{kind}-{suffix}",
+            Label: label,
             Kind: kind,
             LevelKey: level.Key,
             LevelName: level.DisplayName,
@@ -1308,7 +1734,16 @@ public static class NativeEnvironmentGradeExporter
             AfterSha256: Hash(after),
             BeforeHexPreview: HexPreview(before),
             AfterHexPreview: HexPreview(after)));
-        payloads.Add(new GradePayload(wadLba, wadOffset, after));
+        payloads.Add(new GradePayload(wadLba, wadOffset, before, after, label));
+    }
+
+    private static void ValidateFixedSizePatch(byte[] before, byte[] after, string label)
+    {
+        if (before.Length <= 0 || before.Length != after.Length)
+        {
+            throw new InvalidOperationException(
+                $"Environment-grade patch '{label}' must preserve one non-empty fixed-size source range ({before.Length} before byte(s), {after.Length} after byte(s)).");
+        }
     }
 
     private static NativeAssetCatalog LoadAssetCatalog(string wadAnalysisPath)
@@ -1318,19 +1753,25 @@ public static class NativeEnvironmentGradeExporter
         using FileStream stream = File.OpenRead(wadAnalysisPath);
         using JsonDocument document = JsonDocument.Parse(stream);
         JsonElement root = document.RootElement;
-        int wadLba = JsonValue.GetInt32(root.GetProperty("wad"), "lba", 37);
+        JsonElement wad = root.GetProperty("wad");
+        int wadLba = JsonValue.GetInt32(wad, "lba", 37);
+        int wadSize = JsonValue.GetInt32(wad, "size", -1);
+        if (wadSize <= 0)
+            throw new InvalidOperationException("The WAD analysis does not contain a valid WAD.WAD size.");
         Dictionary<int, LevelAssetLayout> levels = new();
         foreach (JsonElement entry in root.GetProperty("entries").EnumerateArray())
         {
             int entryIndex = JsonValue.GetInt32(entry, "index", -1);
             long entryOffset = JsonValue.GetInt64(entry, "offset", -1);
-            if (entryIndex < 0 || entryOffset < 0 || !entry.TryGetProperty("level", out JsonElement level) ||
+            int entrySize = JsonValue.GetInt32(entry, "size", -1);
+            if (entryIndex < 0 || entryOffset < 0 || entrySize <= 0 || !entry.TryGetProperty("level", out JsonElement level) ||
                 level.ValueKind != JsonValueKind.Object ||
                 !level.TryGetProperty("subfiles", out JsonElement subfiles) ||
                 subfiles.ValueKind != JsonValueKind.Array)
                 continue;
             NativeSubfile? textures = null;
             NativeSubfile? model = null;
+            NativeSubfile? sceneryModels = null;
             foreach (JsonElement subfile in subfiles.EnumerateArray())
             {
                 int index = JsonValue.GetInt32(subfile, "index", -1);
@@ -1338,16 +1779,132 @@ public static class NativeEnvironmentGradeExporter
                 int size = JsonValue.GetInt32(subfile, "size", -1);
                 if (relativeOffset < 0 || size <= 0)
                     continue;
-                NativeSubfile value = new(index, entryOffset + relativeOffset, size);
+                NativeSubfile value = new(index, relativeOffset, entryOffset + relativeOffset, size);
                 if (index == TexturePagesSubfileIndex)
                     textures = value;
                 else if (index == ModelSubfileIndex)
                     model = value;
+                else if (index == SceneryModelSubfileIndex)
+                    sceneryModels = value;
             }
             if (textures != null && model != null)
-                levels[entryIndex] = new LevelAssetLayout(textures, model);
+            {
+                levels[entryIndex] = new LevelAssetLayout(
+                    entryIndex,
+                    entryOffset,
+                    entrySize,
+                    textures,
+                    model,
+                    sceneryModels);
+            }
         }
-        return new NativeAssetCatalog(wadLba, levels);
+        return new NativeAssetCatalog(wadLba, wadSize, levels);
+    }
+
+    private static void ValidateAssetCatalogAgainstSource(
+        FileStream image,
+        DiscLayout discLayout,
+        NativeAssetCatalog assets)
+    {
+        DiscFileRecord wad = DiscImage.FindRootFileRecord(image, discLayout, IsWadName);
+        if (wad.Lba != assets.WadLba || wad.Size != assets.WadSize)
+        {
+            throw new InvalidOperationException(
+                $"The WAD analysis belongs to a different disc layout: selected WAD.WAD is LBA {wad.Lba}, {wad.Size} bytes; " +
+                $"analysis expects LBA {assets.WadLba}, {assets.WadSize} bytes. Rebuild the analysis from the selected source image.");
+        }
+
+        foreach (LevelAssetLayout level in assets.Levels.Values)
+        {
+            long entryHeaderOffset = checked(level.EntryIndex * 8L);
+            ValidateContainedRange(
+                entryHeaderOffset,
+                8,
+                assets.WadSize,
+                $"WAD entry {level.EntryIndex} header");
+            byte[] entryHeader = DiscImage.ReadFileBytes(
+                image,
+                discLayout,
+                assets.WadLba,
+                entryHeaderOffset,
+                8);
+            long actualEntryOffset = BinaryPrimitives.ReadUInt32LittleEndian(entryHeader.AsSpan(0, 4));
+            int actualEntrySize = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(entryHeader.AsSpan(4, 4)));
+            if (actualEntryOffset != level.EntryOffset || actualEntrySize != level.EntrySize)
+            {
+                throw new InvalidOperationException(
+                    $"The WAD analysis entry {level.EntryIndex} is stale for the selected source image: " +
+                    $"disc has offset 0x{actualEntryOffset:X}, size 0x{actualEntrySize:X}; " +
+                    $"analysis expects offset 0x{level.EntryOffset:X}, size 0x{level.EntrySize:X}.");
+            }
+            ValidateContainedRange(
+                level.EntryOffset,
+                level.EntrySize,
+                assets.WadSize,
+                $"WAD entry {level.EntryIndex}");
+
+            foreach (NativeSubfile subfile in EnumerateAssetSubfiles(level))
+            {
+                long relativeHeaderOffset = checked(subfile.Index * 8L);
+                ValidateContainedRange(
+                    relativeHeaderOffset,
+                    8,
+                    level.EntrySize,
+                    $"WAD entry {level.EntryIndex} subfile {subfile.Index} header");
+                ValidateContainedRange(
+                    subfile.RelativeOffset,
+                    subfile.Size,
+                    level.EntrySize,
+                    $"WAD entry {level.EntryIndex} subfile {subfile.Index}");
+                byte[] subfileHeader = DiscImage.ReadFileBytes(
+                    image,
+                    discLayout,
+                    assets.WadLba,
+                    checked(level.EntryOffset + relativeHeaderOffset),
+                    8);
+                long actualRelativeOffset = BinaryPrimitives.ReadUInt32LittleEndian(subfileHeader.AsSpan(0, 4));
+                int actualSize = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(subfileHeader.AsSpan(4, 4)));
+                if (actualRelativeOffset != subfile.RelativeOffset || actualSize != subfile.Size)
+                {
+                    throw new InvalidOperationException(
+                        $"The WAD analysis entry {level.EntryIndex} subfile {subfile.Index} is stale for the selected source image: " +
+                        $"disc has relative offset 0x{actualRelativeOffset:X}, size 0x{actualSize:X}; " +
+                        $"analysis expects relative offset 0x{subfile.RelativeOffset:X}, size 0x{subfile.Size:X}.");
+                }
+            }
+        }
+    }
+
+    private static void ValidateContainedRange(
+        long start,
+        long length,
+        long containerLength,
+        string label)
+    {
+        if (start < 0 || length <= 0 || containerLength <= 0)
+            throw new InvalidOperationException($"{label} has an invalid source-bound range.");
+        long end;
+        try
+        {
+            end = checked(start + length);
+        }
+        catch (OverflowException exception)
+        {
+            throw new InvalidOperationException($"{label} overflows its source-bound range.", exception);
+        }
+        if (end > containerLength)
+        {
+            throw new InvalidOperationException(
+                $"{label} extends past its validated container: [0x{start:X},0x{end:X}) of 0x{containerLength:X} bytes.");
+        }
+    }
+
+    private static IEnumerable<NativeSubfile> EnumerateAssetSubfiles(LevelAssetLayout level)
+    {
+        yield return level.TexturePages;
+        yield return level.Model;
+        if (level.SceneryModels != null)
+            yield return level.SceneryModels;
     }
 
     private static Vector3f ConvertSceneVertex(uint word, SceneSector sector)
@@ -1393,6 +1950,10 @@ public static class NativeEnvironmentGradeExporter
             upper.StartsWith("SLPS", StringComparison.Ordinal);
     }
 
+    private static bool IsWadName(string name) =>
+        string.Equals(name, "WAD.WAD", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(name, "WAD", StringComparison.OrdinalIgnoreCase);
+
     private static bool TryParseLong(string text, out long value)
     {
         string trimmed = (text ?? "").Trim();
@@ -1401,10 +1962,24 @@ public static class NativeEnvironmentGradeExporter
         return long.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
     }
 
-    private sealed record GradePayload(int WadLba, long WadOffset, byte[] Bytes);
-    private sealed record NativeSubfile(int Index, long WadOffset, int Size);
-    private sealed record LevelAssetLayout(NativeSubfile TexturePages, NativeSubfile Model);
-    private sealed record NativeAssetCatalog(int WadLba, IReadOnlyDictionary<int, LevelAssetLayout> Levels);
+    private sealed record GradePayload(
+        int FileLba,
+        long FileOffset,
+        byte[] Before,
+        byte[] After,
+        string Label);
+    private sealed record NativeSubfile(int Index, long RelativeOffset, long WadOffset, int Size);
+    private sealed record LevelAssetLayout(
+        int EntryIndex,
+        long EntryOffset,
+        int EntrySize,
+        NativeSubfile TexturePages,
+        NativeSubfile Model,
+        NativeSubfile? SceneryModels);
+    private sealed record NativeAssetCatalog(
+        int WadLba,
+        int WadSize,
+        IReadOnlyDictionary<int, LevelAssetLayout> Levels);
     private sealed record SceneSector(
         int Offset,
         int CentreRadiusAndFlags,
@@ -1429,6 +2004,19 @@ public static class NativeEnvironmentGradeExporter
     private sealed record TexturePaletteCandidate(int ByteLength, bool IsRuntimeVariant);
     private sealed record TexturePaletteCandidateRange(int Offset, int ByteLength);
     private sealed record TexturePaletteTable(int Offset, int NonZeroColorCount, bool IsRuntimeVariant, byte[] Bytes);
+    private sealed record PaletteInterval(int Start, int End);
+    private sealed record PaletteTransformRange(int Start, int End, byte[] Before, byte[] After, string Label);
+    private sealed record DarkHollowSceneryColorTableSpec(
+        int Offset,
+        int ColorCount,
+        string Label,
+        string ExpectedBeforeSha256);
+    private sealed record SceneryColorTable(
+        int Offset,
+        int ColorCount,
+        string Label,
+        string ExpectedBeforeSha256,
+        byte[] Bytes);
     private sealed record MobyMaterialRow(int TrueIndex, long WadOffset, MobyVisualKind Kind, string Label, byte MaterialId);
     private sealed record TextureDescriptor(
         int PaletteCode,
@@ -1442,14 +2030,41 @@ public static class NativeEnvironmentGradeExporter
     private sealed record LevelColorData(
         NativeSubfile ModelSubfile,
         NativeSubfile TexturePagesSubfile,
+        NativeSubfile? SceneryModelSubfile,
         IReadOnlyList<SceneSector> Sectors,
         IReadOnlyList<SceneColorTable> SceneColorTables,
+        IReadOnlyList<SceneryColorTable> SceneryColorTables,
         IReadOnlySet<int> TextureIds,
         IReadOnlyList<TexturePaletteTable> TexturePalettes,
         IReadOnlyList<MobyMaterialRow> MobyMaterialRows,
         IReadOnlyList<ColorRgba> SceneColors,
         IReadOnlyList<ColorRgba> TextureColors,
         NativeEnvironmentTextureUsageStatistics TextureUsage);
+
+    private sealed class GradeWriteRangeTracker
+    {
+        private readonly List<GradeWriteRange> ranges = [];
+
+        public void Reserve(int fileLba, long start, int length, string label)
+        {
+            if (start < 0 || length <= 0)
+                throw new InvalidOperationException($"Environment-grade patch '{label}' has an invalid target range.");
+            long end = checked(start + length);
+            GradeWriteRange? overlap = ranges.FirstOrDefault(existing =>
+                existing.FileLba == fileLba &&
+                start < existing.End &&
+                existing.Start < end);
+            if (overlap != null)
+            {
+                throw new InvalidOperationException(
+                    $"Environment-grade patch '{label}' [0x{start:X}, 0x{end:X}) overlaps " +
+                    $"'{overlap.Label}' [0x{overlap.Start:X}, 0x{overlap.End:X}) in file LBA {fileLba}.");
+            }
+            ranges.Add(new GradeWriteRange(fileLba, start, end, label));
+        }
+
+        private sealed record GradeWriteRange(int FileLba, long Start, long End, string Label);
+    }
 
     private sealed class MobyGradeMipsEmitter
     {

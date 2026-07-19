@@ -33,11 +33,11 @@ public static class HomeworldPortalControlCatalog
         new("magiccrafters", 34, "Blowhard", 87, 99, 121),
         new("magiccrafters", 35, "Crystal Flight", 86, 98, 122),
 
-        new("beastmakers", 41, "Terrace Village", 75, 74, 76),
-        new("beastmakers", 42, "Misty Bog", 78, 77, 79),
-        new("beastmakers", 43, "Tree Tops", 178, 179, 180),
-        new("beastmakers", 44, "Metalhead", 182, 181, 183),
-        new("beastmakers", 45, "Wild Flight", 184, 185, 186),
+        new("beastmakers", 41, "Terrace Village", 74, 73, 75),
+        new("beastmakers", 42, "Misty Bog", 77, 76, 78),
+        new("beastmakers", 43, "Tree Tops", 177, 178, 179),
+        new("beastmakers", 44, "Metalhead", 181, 180, 182),
+        new("beastmakers", 45, "Wild Flight", 183, 184, 185),
 
         new("dreamweavers", 51, "Dark Passage", 34, 35, 36),
         new("dreamweavers", 52, "Lofty Castle", 37, 38, 42),

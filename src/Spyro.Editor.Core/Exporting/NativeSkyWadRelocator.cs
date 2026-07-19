@@ -11,7 +11,9 @@ internal sealed record NativeSkyRelocationPayload(
     int StorageWadEntry,
     int ModelBlockOffset,
     int OriginalLength,
-    byte[] Bytes);
+    byte[] Bytes,
+    int SubfileIndex = 1,
+    bool RequireLengthPrefix = true);
 
 internal sealed record NativeSkyRelocatedPatch(
     int PatchIndex,
@@ -37,8 +39,6 @@ internal sealed record NativeSkyWadRelocationPlan(
 internal static class NativeSkyWadRelocator
 {
     private const int SectorBytes = 2048;
-    private const int ModelSubfileIndex = 1;
-
     public static NativeSkyWadRelocationPlan BuildPlan(
         string imagePath,
         string wadAnalysisPath,
@@ -76,8 +76,12 @@ internal static class NativeSkyWadRelocator
                 : throw new InvalidDataException($"WAD entry {group.Key} is missing from the analysis.");
             byte[] header = DiscImage.ReadFileBytes(image, discLayout, wad.WadLba, entry.Offset, SectorBytes);
             IReadOnlyList<NestedSubfile> subfiles = ParseNestedSubfiles(header, entry.Size);
-            NestedSubfile model = subfiles.SingleOrDefault(subfile => subfile.Index == ModelSubfileIndex)
-                ?? throw new InvalidDataException($"WAD entry {group.Key} has no model subfile.");
+            int[] requestedSubfiles = group.Select(payload => payload.SubfileIndex).Distinct().ToArray();
+            if (requestedSubfiles.Length != 1)
+                throw new InvalidOperationException($"WAD entry {group.Key} relocation payloads must target one nested subfile at a time.");
+            int requestedSubfile = requestedSubfiles[0];
+            NestedSubfile model = subfiles.SingleOrDefault(subfile => subfile.Index == requestedSubfile)
+                ?? throw new InvalidDataException($"WAD entry {group.Key} has no nested subfile {requestedSubfile}.");
             modelOffsets[group.Key] = model.Offset;
 
             int modelDelta = 0;
@@ -87,7 +91,7 @@ internal static class NativeSkyWadRelocator
                 if (payload.Bytes.Length < payload.OriginalLength)
                     throw new InvalidOperationException("Relocation payloads must preserve or increase each sky block length.");
                 if (payload.ModelBlockOffset < 0 || payload.ModelBlockOffset + (long)payload.OriginalLength > model.Size)
-                    throw new InvalidDataException($"Sky patch {payload.PatchIndex} is outside WAD entry {group.Key}'s model subfile.");
+                    throw new InvalidDataException($"Relocation patch {payload.PatchIndex} is outside WAD entry {group.Key} subfile {requestedSubfile}.");
                 if (payload.ModelBlockOffset < previousEnd)
                     throw new InvalidOperationException($"Sky patches overlap in WAD entry {group.Key}.");
                 previousEnd = payload.ModelBlockOffset + payload.OriginalLength;
@@ -214,13 +218,16 @@ internal static class NativeSkyWadRelocator
             throw new InvalidDataException("The relocated executable does not match its original bytes.");
     }
 
-    private static byte[] ExpandNestedLevelEntry(
+    internal static byte[] ExpandNestedLevelEntry(
         byte[] entry,
         IReadOnlyList<NativeSkyRelocationPayload> payloads,
         int entryGrowth)
     {
         IReadOnlyList<NestedSubfile> subfiles = ParseNestedSubfiles(entry.AsSpan(0, Math.Min(entry.Length, SectorBytes)).ToArray(), entry.Length);
-        NestedSubfile model = subfiles.Single(subfile => subfile.Index == ModelSubfileIndex);
+        int[] requestedSubfiles = payloads.Select(payload => payload.SubfileIndex).Distinct().ToArray();
+        if (requestedSubfiles.Length != 1)
+            throw new InvalidOperationException("A nested-entry relocation batch must target exactly one subfile.");
+        NestedSubfile model = subfiles.Single(subfile => subfile.Index == requestedSubfiles[0]);
         byte[] modelBytes = entry.AsSpan(model.Offset, model.Size).ToArray();
         int exactDelta = payloads.Sum(payload => payload.Bytes.Length - payload.OriginalLength);
         if (entryGrowth != AlignSector(exactDelta))
@@ -235,8 +242,14 @@ internal static class NativeSkyWadRelocator
             modelBytes.AsSpan(sourceCursor, unchanged).CopyTo(expandedContent.AsSpan(outputCursor));
             sourceCursor += unchanged;
             outputCursor += unchanged;
-            if (BinaryPrimitives.ReadInt32LittleEndian(modelBytes.AsSpan(sourceCursor, 4)) != payload.OriginalLength)
-                throw new InvalidDataException($"Sky patch {payload.PatchIndex} no longer matches its source block length.");
+            if (payload.RequireLengthPrefix)
+            {
+                if (sourceCursor + 4 > modelBytes.Length ||
+                    BinaryPrimitives.ReadInt32LittleEndian(modelBytes.AsSpan(sourceCursor, 4)) != payload.OriginalLength)
+                {
+                    throw new InvalidDataException($"Relocation patch {payload.PatchIndex} no longer matches its source block length.");
+                }
+            }
             payload.Bytes.CopyTo(expandedContent, outputCursor);
             sourceCursor += payload.OriginalLength;
             outputCursor += payload.Bytes.Length;
@@ -251,9 +264,9 @@ internal static class NativeSkyWadRelocator
 
         foreach (NestedSubfile subfile in subfiles)
         {
-            if (subfile.Index == ModelSubfileIndex)
+            if (subfile.Index == model.Index)
                 WriteUInt32(expandedEntry, (subfile.Index * 8) + 4, checked((uint)(subfile.Size + entryGrowth)));
-            else if (subfile.Index > ModelSubfileIndex)
+            else if (subfile.Index > model.Index)
                 WriteUInt32(expandedEntry, subfile.Index * 8, checked((uint)(subfile.Offset + entryGrowth)));
         }
 
@@ -311,8 +324,8 @@ internal static class NativeSkyWadRelocator
                 throw new InvalidDataException($"Nested subfile {index} is not packed directly after subfile {index - 1}.");
             subfiles.Add(new NestedSubfile(index, offset, size));
         }
-        if (subfiles.Count <= ModelSubfileIndex)
-            throw new InvalidDataException("Nested level archive does not contain a model subfile.");
+        if (subfiles.Count == 0)
+            throw new InvalidDataException("Nested level archive contains no packed subfiles.");
         return subfiles;
     }
 

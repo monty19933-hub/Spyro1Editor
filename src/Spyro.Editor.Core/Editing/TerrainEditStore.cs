@@ -47,11 +47,51 @@ public static class TerrainEditStore
                 ["editedZ"] = polygon.ZValues
             };
 
-            if (polygon.HasTextureEdit)
+            if (polygon.SurfaceBehaviorEdit is TerrainSurfaceBehaviorEdit surfaceBehavior)
             {
-                edit["textureEditMode"] = "texture-id-preview";
+                edit["nativeSurfaceBehaviorEdit"] = true;
+                edit["nativeSurfaceType"] = surfaceBehavior.SurfaceType;
+                edit["nativeSurfaceParam1"] = surfaceBehavior.Param1;
+                edit["nativeSurfaceParam2"] = surfaceBehavior.Param2;
+                edit["nativeSurfaceSourceLevelKey"] = surfaceBehavior.SourceLevelKey;
+                edit["nativeSurfaceSourceRuntimeKey"] = surfaceBehavior.SourceRuntimeKey;
+                edit["nativeSurfaceLabel"] = surfaceBehavior.Label;
+            }
+
+            if (polygon.HasTextureEdit || polygon.HasTextureVisualEdit)
+            {
+                edit["textureEditMode"] = polygon.HasTextureVisualEdit
+                    ? "native-resident-face-swap"
+                    : "texture-id-preview";
                 edit["textureIdOriginal"] = polygon.OriginalTextureId;
                 edit["textureIdEdited"] = polygon.TextureId;
+            }
+
+            if (polygon.TextureVisualEdit is TerrainTextureVisualEdit textureVisual)
+            {
+                edit["nativeTextureVisualEdit"] = true;
+                edit["nativeTextureVisualSourceLevelKey"] = textureVisual.SourceLevelKey;
+                edit["nativeTextureVisualSourceTextureId"] = textureVisual.SourceTextureId;
+                edit["nativeTextureVisualSourceRuntimeKey"] = textureVisual.SourceRuntimeKey;
+                edit["nativeTextureVisualSourceSectorOffset"] = textureVisual.SourceSectorOffset >= 0
+                    ? $"0x{textureVisual.SourceSectorOffset:X}"
+                    : null;
+                edit["nativeTextureVisualSourceFaceOffset"] = textureVisual.SourceFaceOffset >= 0
+                    ? $"0x{textureVisual.SourceFaceOffset:X}"
+                    : null;
+                edit["nativeTextureVisualNearColors"] = textureVisual.Corners
+                    .Select(corner => ToHex(corner.NearColor))
+                    .ToArray();
+                edit["nativeTextureVisualFarColors"] = textureVisual.Corners
+                    .Select(corner => ToHex(corner.FarColor))
+                    .ToArray();
+                edit["nativeTextureVisualLabel"] = textureVisual.Label;
+
+                if (textureVisual.UniqueCornerPairCount == 1)
+                {
+                    edit["nativeTextureVisualNearColor"] = ToHex(textureVisual.Corner0.NearColor);
+                    edit["nativeTextureVisualFarColor"] = ToHex(textureVisual.Corner0.FarColor);
+                }
             }
 
             edits.Add(edit);
@@ -111,7 +151,9 @@ public static class TerrainEditStore
             int textureIdEdited = JsonValue.GetInt32(edit, "textureIdEdited", -1);
             if (textureIdEdited >= 0)
                 polygon.ApplyTextureOverride(textureIdEdited);
+            ApplyNativeTextureVisual(polygon, edit);
             ApplyMaterialMetadata(polygon, edit);
+            ApplyNativeSurfaceBehavior(polygon, edit);
             ApplyStructureEdit(polygon, JsonValue.GetString(edit, "structureEditMode"));
 
             applied++;
@@ -143,6 +185,59 @@ public static class TerrainEditStore
                 JsonValue.GetString(edit, "behaviorConfidence", polygon.BehaviorConfidence),
                 JsonValue.GetString(edit, "behaviorNote", polygon.BehaviorNote));
         }
+    }
+
+    private static void ApplyNativeSurfaceBehavior(TerrainPolygon polygon, JsonElement edit)
+    {
+        if (!JsonValue.GetBoolean(edit, "nativeSurfaceBehaviorEdit"))
+            return;
+
+        int surfaceType = JsonValue.GetInt32(edit, "nativeSurfaceType", int.MinValue);
+        if (surfaceType == int.MinValue)
+            return;
+
+        polygon.ApplySurfaceBehaviorEdit(new TerrainSurfaceBehaviorEdit(
+            surfaceType,
+            JsonValue.GetInt32(edit, "nativeSurfaceParam1"),
+            JsonValue.GetInt32(edit, "nativeSurfaceParam2"),
+            JsonValue.GetString(edit, "nativeSurfaceSourceLevelKey"),
+            JsonValue.GetString(edit, "nativeSurfaceSourceRuntimeKey"),
+            JsonValue.GetString(edit, "nativeSurfaceLabel", "native terrain behavior")));
+    }
+
+    private static void ApplyNativeTextureVisual(TerrainPolygon polygon, JsonElement edit)
+    {
+        if (!JsonValue.GetBoolean(edit, "nativeTextureVisualEdit"))
+            return;
+
+        IReadOnlyList<ColorRgba> nearColors = ReadColorArray(edit, "nativeTextureVisualNearColors");
+        IReadOnlyList<ColorRgba> farColors = ReadColorArray(edit, "nativeTextureVisualFarColors");
+        if (nearColors.Count != 4 || farColors.Count != 4)
+        {
+            if (!ColorRgba.TryParseHex(JsonValue.GetString(edit, "nativeTextureVisualNearColor"), out ColorRgba nearColor) ||
+                !ColorRgba.TryParseHex(JsonValue.GetString(edit, "nativeTextureVisualFarColor"), out ColorRgba farColor))
+            {
+                return;
+            }
+
+            nearColors = [nearColor, nearColor, nearColor, nearColor];
+            farColors = [farColor, farColor, farColor, farColor];
+        }
+
+        TerrainTextureVisualCorner[] corners = Enumerable.Range(0, 4)
+            .Select(index => new TerrainTextureVisualCorner(nearColors[index], farColors[index]))
+            .ToArray();
+        polygon.ApplyTextureVisualEdit(new TerrainTextureVisualEdit(
+            JsonValue.GetInt32(edit, "nativeTextureVisualSourceTextureId", polygon.TextureId),
+            JsonValue.GetString(edit, "nativeTextureVisualSourceLevelKey"),
+            JsonValue.GetString(edit, "nativeTextureVisualSourceRuntimeKey"),
+            JsonValue.GetInt32(edit, "nativeTextureVisualSourceSectorOffset", -1),
+            JsonValue.GetInt32(edit, "nativeTextureVisualSourceFaceOffset", -1),
+            corners[0],
+            corners[1],
+            corners[2],
+            corners[3],
+            JsonValue.GetString(edit, "nativeTextureVisualLabel", "native terrain texture visual")));
     }
 
     private static string StructureEditModeFor(TerrainStructureEditKind kind)
@@ -225,6 +320,23 @@ public static class TerrainEditStore
         return ColorRgba.TryParseHex(JsonValue.GetString(element, name), out ColorRgba color)
             ? color
             : fallback;
+    }
+
+    private static IReadOnlyList<ColorRgba> ReadColorArray(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out JsonElement colors) || colors.ValueKind != JsonValueKind.Array)
+            return Array.Empty<ColorRgba>();
+
+        List<ColorRgba> result = new();
+        foreach (JsonElement value in colors.EnumerateArray())
+        {
+            if (value.ValueKind != JsonValueKind.String ||
+                !ColorRgba.TryParseHex(value.GetString(), out ColorRgba color))
+                return Array.Empty<ColorRgba>();
+            result.Add(color);
+        }
+
+        return result;
     }
 
     private static string ToHex(ColorRgba color)

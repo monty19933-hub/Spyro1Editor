@@ -13,12 +13,30 @@ GitHub Releases are the intended place for public Mac and Windows builds.
 
 The release packages are self-contained:
 
-- `SpyroEditor-0.1.0-beta.15-osx-arm64.zip`
-- `SpyroEditor-0.1.0-beta.15-win-x64.zip`
+- `SpyroEditor-Beta-V2-osx-arm64.zip`
+- `SpyroEditor-Beta-V2-win-x64.zip`
+
+The public release name is independent of internal build iterations. Publish
+only intentional bundled releases: tag `beta-v2`, use the exact GitHub title
+`Spyro Editor Beta V2`, mark it as a prerelease, attach the two exact package
+names above, and paste `CHANGELOG.md` unchanged into the GitHub release body.
+Ordinary commits and fixes do not create update prompts. The next public update
+will be `beta-v3` / `Spyro Editor Beta V3` with matching `Beta-V3` assets.
+
+The updater rejects a mismatched tag, title, public beta, platform, archive
+manifest, packaged changelog, embedded app identity/internal build, asset name,
+or GitHub SHA-256 digest. Google Drive is not an update authority; supporting it
+safely would require a separate signed manifest and stable direct-download
+endpoint.
+
+Use `docs/beta-release-checklist.md` for the exact build, verification, draft
+release, asset, changelog, and project-persistence gates for each numbered beta.
 
 Unzip the package, launch Spyro Editor, choose your own BIN/CUE, then use
-`Create BIN` to write local patched test output. Generated output stays on the
-user's machine and should not be uploaded to GitHub.
+`Create BIN` to write local patched test output. Release builds keep the active
+project under the user's Documents folder instead of inside the replaceable app
+folder. Generated output stays on the user's machine and should not be uploaded
+to GitHub.
 
 ## Current Editor
 
@@ -26,10 +44,62 @@ The active app lives in `src/Spyro.Editor.App`.
 
 Current release features include:
 
-- Map View and Fly 3D level inspection.
+- Protected external project storage keeps saved object, terrain, sky, music,
+  text, and custom-art plans plus generated output outside the installed app.
+  `More` > `Project Data` opens the project or copy-imports an older portable
+  beta without moving/deleting it or overwriting conflicts. Rebuildable caches
+  and stale WAD analysis are regenerated.
+- A prominent, once-per-release in-app notification and `More` > `Check for
+  Updates` select only the next numbered Mac/Windows beta. The update window
+  shows the GitHub changelog, preserves a copy beside the verified download,
+  and creates a pre-update project snapshot. In-place replacement remains
+  disabled until production signing/notarization is configured.
+
+- **Edit Map** and **Game Camera** level inspection.
 - Level terrain and object maps rebuilt from the user's selected BIN/CUE.
+- The shipping editor retains every captured editable source-terrain face; no
+  normal view removes geometry from the project. **Edit Map** is the exhaustive
+  top-down locator. It keeps every captured face visible, material-rendered, and
+  selectable, including source groups the game normally submits from different
+  camera contexts.
+  **Game Camera** is the default after loading a level. When the source payload
+  resolves, the camera's collision triangle retains the native environment group
+  as provenance and coarse painter-order context while every source sector remains
+  eligible for decoded HP/LP distance and frustum rules. Visible HP faces keep
+  their native materials and source depth cue; distant LP faces keep source
+  Gouraud colors. A validated portable cache stores the source retail entry XYZ/yaw
+  for all 35 levels. Game Camera derives its initial third-person position from
+  that pose and the retail spherical camera preset; a native collision-group
+  discontinuity may shorten the behind-distance. After the cache passes complete
+  readback validation, viewport browsing no longer needs the original BIN/CUE to
+  be present. The source image is still required to build or rebuild that cache
+  and for disc patch/export workflows. These presentation rules never remove
+  terrain from the project or `Create BIN`. Exact fixed-point GTE projection and
+  clipping, HQ subdivision,
+  full PlayStation ordering-table traversal, runtime texture animation, and the
+  native sky/background are still research gaps, so neither view is a pixel-exact
+  gameplay-frame claim.
 - Moving, cloning, removing, and editing supported gems, chests, enemies, keys,
   scenery, and other decoded mobys.
+- Red, green, blue, yellow, and purple loose gems use one consistent red-gem
+  icon silhouette in Edit Map and Game Camera; the four alternate colors are exact
+  color-only variants of the unchanged red artwork.
+- Built-in diagnostics record editor actions, selected source/level state, edit
+  counts, export plans, and unhandled exceptions. The Diagnostics window can
+  copy the current report or last crash and create a metadata-only support ZIP;
+  every successful `Create BIN` also writes a report and support ZIP beside the
+  generated CUE/BIN without including copyrighted game data.
+- A native Moby `Build Safety` inspector shows static rows, projected dynamic
+  Moby/props capacity, persistent-index headroom, true appends, slot reuse, and
+  skipped edits for every saved object level. `Create BIN` runs it automatically,
+  requires confirmation for review builds, and blocks component overruns,
+  unresolved layouts, shifted-row appends, and more than 256 persistent rows.
+  Object-specific issues name the affected Moby and editor T-index; double-clicking
+  an issue loads its level, reveals and selects the Moby, and centers it in Edit
+  Map or Game Camera so the edit can be corrected immediately.
+  Its JSON/Markdown reports contain metadata and source links only.
+- Selected Mobys have a live Z-axis slider and an optional per-object terrain-Z
+  snap toggle; linked scene companions move by the same vertical delta.
 - Moving any of the 79 native dragons carries its pedestal and matched `0x6E`
   scene-link control by the same exact XYZ change. `Create BIN` also moves both
   hidden camera layers: the approach-camera coordinates and every XYZ keyframe
@@ -54,24 +124,66 @@ Current release features include:
   yaw byte.
 - Same-level slot replacement for enemies and object classes that are not safe
   to add as brand-new source records yet.
+- A searchable `Replace` catalogue for existing ordinary chest and self-contained
+  enemy slots. It is built from the source-backed object caches for all 35
+  levels. Same-level donors use the proven native slot-reuse path. Cross-level
+  entries are separated into resident-class tests, mapped package-backed tests,
+  and entries that still need a model/behavior map. Normal `Create BIN` saves
+  but atomically skips every unverified cross-level replacement, including its
+  identity bytes. `Create Swap Test` writes one disposable BIN/CUE without
+  increasing the level's source-object count. Blowhard Green Wizard v2 and the
+  exact Magic Crafters T107-to-T27 v2 route are runtime-verified exceptions:
+  normal `Create BIN` composes each target's checked properties/route/fixup
+  recipe for one existing-slot replacement.
+- Green Wizard rollout remains target-profile-gated. The Blowhard v2 editor
+  route, Magic Crafters T107-to-T27 v2 editor route, and Toasty v11 standalone
+  bundle are runtime-proven. In Magic Crafters, select the original T27 Armored
+  Druid, open `Replace` / Swap Catalog, and choose native T107 Green Wizard.
+  Normal `Create BIN` and `Create Swap Test` both use the proven in-place v2
+  recipe. Other Magic Crafters targets and true Add remain unavailable until
+  they receive their own properties-extent and fixup proof.
+- Wizard Peak's exact T6-to-T24 route is runtime-proven: select Elder Wizard
+  T24, choose native Green Wizard T6 in `Replace` / Swap Catalog, and use
+  normal `Create BIN` or `Create Swap Test`. Both T10 candidates remain retired
+  because they never attacked, including v2 after importing T6's detached group
+  `0xFF`. Runtime-proven v3 uses T24's already-matching group `0xFF`, installs
+  T6's private two-point route in T24's existing `0x74`-byte extent, and
+  replaces stale fixup `0xCACC` with `0xCAC0` without moving scene components.
+  The user accepted visible lightning, the translated route, and one gem; live
+  RAM separately confirmed actor/model initialization, attack, movement, death,
+  and retirement. See
+  `docs/green-wizard-all-level-support.md` for the 35-level matrix.
+- A resident-class test reuses an actor class already loaded by the target level.
+  A package-backed test imports a checked model/special-data recipe as well as
+  the replacement row. Both remain DuckStation tests until visuals, behavior,
+  rewards, and nearby-object stability have been confirmed. Entries marked
+  `Needs model/behavior map` cannot be staged yet.
+- Deferred linked families remain visible in the catalogue with an explanation
+  but cannot be selected. This includes Spring, Firework, multi-gem, Life, and
+  locked chest families plus enemies with route, helper, special-data, boss,
+  thief, dragon, or scripted dependencies.
 - Same-level donor metadata is preserved for enemy/chest add and paste workflows,
   and `Create BIN` routes those copies through matching same-level source slots
-  first, then allows the proven ordinary Flame/Charge Chest, native Life Chest,
-  and Large Gnorc families to continue as true-adds when reuse slots run out.
-  In all 22 levels containing native Life Chests, the original donor is
-  preserved and every appended copy receives an independent private runtime
+  first. Large Gnorcs, ordinary Flame/Charge Chests, and Town Square Bulls have
+  a conservative one-true-add-per-family release budget after those slots run
+  out; later copies stay saved but are skipped because multiple active actor or
+  chest appends can still crash in-game. Native Life Chests use a separate
+  proven allocation path: in all 22 levels containing them, the original donor
+  is preserved and every appended copy receives an independent private runtime
   block.
 - The Add Object list and copy/paste status text show how many safe extra export
-  slots remain for same-level enemy/chest copies, and identify proven families
-  that can true-add after those slots are consumed.
+  slots remain for same-level enemy/chest copies, distinguish unlimited proven
+  paths from the one-true-add provisional families, and explain when later rows
+  will remain editor-only.
 - When a placement consumes the last known-safe slot for an unproven object
   family, the editor warns that later objects of that kind may not work as
   intended in-game and that broader support is planned for a later update.
 - Older copied object edits without donor metadata can still be matched by their
   same-level source identity bytes when a matching reusable slot is available.
-- The release Add Object list only offers simple safe records and donors that
-  already exist in the selected level; cross-level object imports are held for
-  post-release research.
+- The release Add Object list still offers only simple safe records and donors
+  that already exist in the selected level. Cross-level catalogue objects are
+  swap-only tests for an existing source slot; they cannot be added as extra
+  rows and never enter a normal `Create BIN` until separately proven.
 - Trigger, camera, reward-link, route, and helper-looking mobys are shown as
   system/control records instead of normal placeable object templates.
 - Terrain snapping for placed objects, including indoor/enclosed placement and
@@ -125,11 +237,25 @@ Current release features include:
   through later portal transitions.
   `Reset to Normal Level Palette and Skybox` removes the saved sky and terrain
   palette match together.
-- Terrain and building texture editing through the shared native texture-page
-  path. A selected face can borrow actual art from another level into a local
-  texture slot, while shared texture tools can import user PNG art. The editor
-  previews image imports from their pixels and `Create BIN` writes both normal
-  and close-detail descriptors when available.
+- `Terrain` > `Browse All Game Textures` presents the disc's decoded native
+  terrain/building texture records by realm and level. A same-level choice is a
+  selected-face swap that carries the donor's source-verified near/fade corner
+  tints into private or unused color slots without recoloring neighboring
+  faces. Save/reload and Undo preserve or remove that complete recipe rather
+  than retaining only a texture number. A cross-level choice
+  replaces the selected target texture record for every face that shares that
+  texture ID. Apply is enabled only after the target's runtime-persistence,
+  complete-record ownership, in-place-or-private-relocation storage, donor
+  pixels/palettes, and collision-property batch all pass source-bound checks.
+  The donor's exact native surface signature is copied to every matched target
+  collision triangle; when the destination lacks that signature, the exporter
+  appends the complete native descriptor and relocates the collision suffix
+  only when the layout proof succeeds. `Create BIN` repeats these proofs, writes
+  the swap and property edits atomically, and verifies the final BIN readback.
+  Records without an exact property binding and animation/scroll-controlled
+  targets stay visible with a blocker instead of producing a partial swap.
+  Arbitrary custom PNG texture writeback remains disabled because the obsolete
+  fixed-layout writer does not describe the game's packed native records.
 - Multi-level `Create BIN` output that includes all saved editor changes,
   including sky-linked environment grades.
 - Object edits auto-save when changing levels so multi-level test builds do not
@@ -140,21 +266,36 @@ Current release features include:
 - Focused smoke checks for all 35 indexed level-name slots, multi-gem placement,
   chest/object copy-paste, all 79 dragon/pedestal/rescue-camera scenes,
   all-level sky blocks, sky-linked near/far environment grades, landscape
-  palettes, guarded native object lighting with zero object-row reroutes, cross-level terrain texture
-  art, custom PNG writeback,
-  all-level placement-sector coverage, and release packaging safety.
+  palettes, guarded native object lighting with zero object-row reroutes, the
+  all-level native terrain-texture catalog, ownership/runtime/surface-layout
+  proofs, exact final-BIN readback, and the guard that keeps unproven native rows
+  and custom PNG writeback blocked, the all-level chest/enemy swap catalogue and
+  its normal-export guard, all-level placement-sector coverage, and release
+  packaging safety.
+- Focused native Moby safety smoke resolves all 35 mapped component layouts,
+  checks allocator-rounded capacity loss, and enforces the 256-row boundary.
 
 Some object classes are still experimental. `Create BIN` tries same-level slot
-reuse first for enemy/chest add, copy, and paste workflows. Ordinary
-Flame/Charge Chests, same-level Life Chests in all 22 levels containing native
-donors, and Large Gnorcs can true-add after those slots run out. Cross-level
-Life Chest imports remain guarded because levels without that native family may
-not contain its model and behavior package.
+reuse first for enemy/chest add, copy, and paste workflows. Large Gnorcs,
+ordinary Flame/Charge Chests, and Town Square Bulls can export one validated
+true-add per family after those slots run out; excess copies stay saved but are
+skipped from a normal BIN. Same-level Life Chests in all 22 levels containing
+native donors can continue through their independent private-runtime path.
+Cross-level Life Chest imports remain guarded because levels without that native
+family may not contain its model and behavior package.
 Small/Regular Gnorc-style families remain guarded beyond reusable slots because
-live testing showed they can spawn inactive. Use `Edit Object` > `Change To`
+  live testing showed they can spawn inactive. Use `Edit` > `Replace object`
 when you want to choose the exact source slot that gets consumed. If something
 appears, disappears, clips, soft-locks, or changes behavior in-game, please file
-an issue with steps to reproduce.
+an issue with steps to reproduce. `Replace` can stage cross-level ordinary
+chest and self-contained-enemy replacements for that testing, but those builds
+must be made with `Create Swap Test` and are not yet release-safe object imports,
+except for the runtime-verified Blowhard v2 and exact Magic Crafters
+T107-to-T27 v2 Green Wizard routes.
+The Toasty v11 standalone Green Wizard bundle is also runtime-proven, but its
+editor route remains profile-gated. Magic Crafters T107 -> T27 is supported
+through `Replace` / Swap Catalog by both normal `Create BIN` and `Create Swap
+Test`; other destination slots and true Add remain guarded.
 
 ## Reporting Issues
 

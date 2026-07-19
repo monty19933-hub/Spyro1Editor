@@ -105,6 +105,8 @@ spyro-*.md
 !src/Spyro.Editor.App/Assets/Brand/spyro-editor-title.png
 !src/Spyro.Editor.App/Assets/SkyPresets/
 !src/Spyro.Editor.App/Assets/SkyPresets/*.png
+!src/Spyro.Editor.App/Assets/MobyIcons/
+!src/Spyro.Editor.App/Assets/MobyIcons/*.png
 src/Spyro.Editor.App/Assets/Markers/
 
 # Build outputs
@@ -149,6 +151,11 @@ unsafe-tests/
 .vscode/
 .dotnet-home/
 
+# Generated research reports can embed source-machine paths and describe
+# non-shipping experiments. Keep the reproducible scripts/docs, not snapshots.
+/docs/research/playable-terrain-view-audit.json
+/docs/dark-hollow-green-wizard-target-audit.json
+
 # Legacy local research/diagnostic files kept off the public release branch.
 /*.bat
 /*.command
@@ -159,13 +166,15 @@ unsafe-tests/
 /sample-artisans.splevel.json
 /native/
 /src/Spyro.Editor.LiveRam/
-/docs/beta-release-checklist.md
+!/docs/beta-release-checklist.md
 /docs/beta-tester-guide.md
 /docs/native-3d-editor-roadmap.md
 /docs/spring-chest-cross-level-status.md
 /docs/terrain-side-collision-plan.md
 /tools/*
 !/tools/Build-SpyroEditorRelease.sh
+!/tools/Run-SpyroEditorOfflineQa.sh
+!/tools/Verify-SpyroEditorRelease.sh
 
 # Local research probes that are useful while reversing but should be promoted
 # intentionally before release.
@@ -178,3 +187,8 @@ tools/New-Spyro*.ps1
 tools/Export-SpyroPlayerColorPatchTest.ps1
 tools/Capture-DuckStationWindow.ps1
 tools/Move-DuckStationWindow.ps1
+
+# Tracked retirement shims prevent the old public-beta packagers from creating
+# install-local project layouts that bypass the numbered release verifier.
+!/tools/Build-SpyroEditorBeta.sh
+!/tools/New-SpyroEditorBeta.ps1

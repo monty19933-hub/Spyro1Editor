@@ -43,7 +43,47 @@ public sealed record PortalSpecialSurfaceRecord(
     int Type,
     int DestinationLevelId,
     int PortalIndex,
-    long WadOffset);
+    long WadOffset,
+    int RelativeOffset,
+    byte[] RawBytes)
+{
+    // The native record is shared by every special-surface kind.  These two
+    // fields are portal destinations only when Type == 6; for damaging floors,
+    // supercharge, electric floors, and the remaining native kinds they are
+    // generic behavior parameters.
+    public int Param1 => DestinationLevelId;
+    public int Param2 => PortalIndex;
+    public int ByteLength => RawBytes.Length;
+    public string RawHex => Convert.ToHexString(RawBytes);
+}
+
+public sealed record NativeCollisionSurfaceTriangle(
+    int TriangleIndex,
+    int FlagByte,
+    int SurfaceIndex,
+    int SurfaceType,
+    int Param1,
+    int Param2,
+    long TriangleWadOffset,
+    long FlagWadOffset,
+    PortalSourcePoint P1,
+    PortalSourcePoint P2,
+    PortalSourcePoint P3)
+{
+    public bool HasSpecialSurface => SurfaceIndex is >= 0 and < 63 && SurfaceType >= 0;
+}
+
+public sealed record NativeTerrainSurfaceSourceData(
+    string LevelKey,
+    string LevelName,
+    long LevelDataWadOffset,
+    int LevelDataByteLength,
+    long SpecialSurfaceComponentWadOffset,
+    long CollisionComponentWadOffset,
+    PortalCollisionSourceLayout Collision,
+    NativeTerrainSurfaceFlagCapacity FlagPromotionCapacity,
+    IReadOnlyList<PortalSpecialSurfaceRecord> SpecialSurfaces,
+    IReadOnlyList<NativeCollisionSurfaceTriangle> CollisionSurfaceTriangles);
 
 public sealed record PortalTriggerTriangle(
     int TriangleIndex,
@@ -79,7 +119,8 @@ public sealed record PortalSourceLevelData(
     PortalCollisionSourceLayout Collision,
     IReadOnlyList<PortalSourceRecord> Portals,
     IReadOnlyList<PortalSpecialSurfaceRecord> SpecialSurfaces,
-    IReadOnlyList<PortalTriggerTriangle> TriggerTriangles);
+    IReadOnlyList<PortalTriggerTriangle> TriggerTriangles,
+    IReadOnlyList<NativeCollisionSurfaceTriangle> CollisionSurfaceTriangles);
 
 public static class PortalSourceDataLocator
 {
@@ -94,6 +135,127 @@ public static class PortalSourceDataLocator
         DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
         using FileStream stream = File.OpenRead(sourceImagePath);
         return Locate(stream, layout, level);
+    }
+
+    /// <summary>
+    /// Reads only the native special-surface and collision components. Unlike
+    /// the portal locator, this path does not require a resolved source/runtime
+    /// moby-table bias, so it is valid for every playable level and flight.
+    /// </summary>
+    public static NativeTerrainSurfaceSourceData LocateTerrainSurfaces(string sourceImagePath, LevelDefinition level)
+    {
+        if (!File.Exists(sourceImagePath))
+            throw new FileNotFoundException("Missing source disc image.", sourceImagePath);
+
+        DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
+        using FileStream stream = File.OpenRead(sourceImagePath);
+        return LocateTerrainSurfaces(stream, layout, level);
+    }
+
+    internal static NativeTerrainSurfaceSourceData LocateTerrainSurfaces(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level)
+    {
+        if (level.SourceWadEntry < 0)
+            throw new InvalidOperationException($"{level.DisplayName} does not have a mapped source WAD entry.");
+
+        byte[] entryHeader = DiscImage.ReadFileBytes(stream, layout, WadLba, level.SourceWadEntry * 8L, 8);
+        long entryWadOffset = ReadUInt32(entryHeader, 0);
+        int entryByteLength = checked((int)ReadUInt32(entryHeader, 4));
+        if (entryWadOffset <= 0 || entryByteLength < LevelEntryHeaderLength)
+            throw new InvalidOperationException($"{level.DisplayName} has an invalid source WAD entry header.");
+
+        byte[] levelHeader = DiscImage.ReadFileBytes(
+            stream,
+            layout,
+            WadLba,
+            entryWadOffset,
+            LevelEntryHeaderLength);
+        int levelDataRelativeOffset = checked((int)ReadUInt32(levelHeader, 0x08));
+        int levelDataByteLength = checked((int)ReadUInt32(levelHeader, 0x0C));
+        if (levelDataRelativeOffset < LevelEntryHeaderLength ||
+            levelDataByteLength <= 0 ||
+            (long)levelDataRelativeOffset + levelDataByteLength > entryByteLength)
+        {
+            throw new InvalidOperationException($"{level.DisplayName} does not contain one valid native level-data block.");
+        }
+
+        long levelDataWadOffset = entryWadOffset + levelDataRelativeOffset;
+        byte[] levelData = DiscImage.ReadFileBytes(
+            stream,
+            layout,
+            WadLba,
+            levelDataWadOffset,
+            levelDataByteLength);
+
+        return ParseTerrainSurfaces(
+            levelData,
+            levelDataWadOffset,
+            level.Key,
+            level.DisplayName);
+    }
+
+    /// <summary>
+    /// Parses one already-extracted native level-data block. This is the same
+    /// structural path used by the disc-backed locator and allows atomic layout
+    /// builders to verify their in-memory result before any BIN is written.
+    /// </summary>
+    public static NativeTerrainSurfaceSourceData ParseTerrainSurfaces(
+        byte[] levelData,
+        long levelDataWadOffset,
+        string levelKey,
+        string levelName)
+    {
+        ArgumentNullException.ThrowIfNull(levelData);
+        levelKey ??= "";
+        levelName = string.IsNullOrWhiteSpace(levelName) ? levelKey : levelName;
+
+        int offset = 0;
+        offset = AdvanceComponent(levelData, offset, levelName, "texture");
+        offset = AdvanceComponent(levelData, offset, levelName, "environment");
+        offset = AdvanceComponent(levelData, offset, levelName, "occlusion");
+
+        int specialSurfaceComponentOffset = offset;
+        int collisionComponentOffset = AdvanceComponent(levelData, offset, levelName, "special surface");
+        IReadOnlyList<PortalSpecialSurfaceRecord> specialSurfaces = ReadSpecialSurfaces(
+            levelData,
+            specialSurfaceComponentOffset,
+            levelDataWadOffset,
+            levelName);
+        (
+            PortalCollisionSourceLayout collision,
+            _,
+            IReadOnlyList<NativeCollisionSurfaceTriangle> collisionSurfaceTriangles
+        ) = ReadTriggerTriangles(
+            levelData,
+            collisionComponentOffset,
+            levelDataWadOffset,
+            levelName,
+            specialSurfaces);
+        if (!NativeTerrainSurfaceFlagPromoter.TryInspectCapacity(
+                levelData,
+                levelDataWadOffset,
+                levelDataWadOffset + collisionComponentOffset,
+                out NativeTerrainSurfaceFlagCapacity? flagPromotionCapacity,
+                out string capacityReason) ||
+            flagPromotionCapacity == null)
+        {
+            throw new InvalidOperationException(
+                $"{levelName}'s bounded native surface-flag capacity could not be verified: {capacityReason}");
+        }
+
+        return new NativeTerrainSurfaceSourceData(
+            levelKey,
+            levelName,
+            levelDataWadOffset,
+            levelData.Length,
+            levelDataWadOffset + specialSurfaceComponentOffset,
+            levelDataWadOffset + collisionComponentOffset,
+            collision,
+            flagPromotionCapacity,
+            specialSurfaces,
+            collisionSurfaceTriangles);
     }
 
     internal static PortalSourceLevelData Locate(FileStream stream, DiscLayout layout, LevelDefinition level)
@@ -169,7 +331,11 @@ public static class PortalSourceDataLocator
             level,
             entryDataWadOffset,
             entryDataByteLength);
-        (PortalCollisionSourceLayout collision, IReadOnlyList<PortalTriggerTriangle> triggerTriangles) = ReadTriggerTriangles(
+        (
+            PortalCollisionSourceLayout collision,
+            IReadOnlyList<PortalTriggerTriangle> triggerTriangles,
+            IReadOnlyList<NativeCollisionSurfaceTriangle> collisionSurfaceTriangles
+        ) = ReadTriggerTriangles(
             levelData,
             collisionComponentOffset,
             levelDataWadOffset,
@@ -189,7 +355,8 @@ public static class PortalSourceDataLocator
             collision,
             portals,
             specialSurfaces,
-            triggerTriangles);
+            triggerTriangles,
+            collisionSurfaceTriangles);
     }
 
     private static IReadOnlyList<PortalSpecialSurfaceRecord> ReadSpecialSurfaces(
@@ -204,24 +371,48 @@ public static class PortalSourceDataLocator
         if (count is < 0 or > 63 || 8L + (count * 4L) > componentLength)
             throw new InvalidOperationException($"{levelName} has an invalid special-surface count {count}.");
 
-        List<PortalSpecialSurfaceRecord> records = new(count);
+        int[] relativeOffsets = new int[count];
         for (int index = 0; index < count; index++)
         {
-            int relativeOffset = ReadInt32(
+            relativeOffsets[index] = ReadInt32(
                 levelData,
                 componentBodyOffset + 4 + (index * 4),
                 levelName,
                 $"special surface {index} pointer");
+        }
+
+        List<PortalSpecialSurfaceRecord> records = new(count);
+        for (int index = 0; index < count; index++)
+        {
+            int relativeOffset = relativeOffsets[index];
             int recordOffset = checked(componentBodyOffset + relativeOffset);
-            if (recordOffset < componentBodyOffset || recordOffset + 12 > componentOffset + componentLength)
-                throw new InvalidOperationException($"{levelName} special surface {index} points outside its component.");
+            int recordLimit = relativeOffsets
+                .Where(candidate => candidate > relativeOffset)
+                .Select(candidate => checked(componentBodyOffset + candidate))
+                .DefaultIfEmpty(componentOffset + componentLength)
+                .Min();
+            if (recordOffset < componentBodyOffset || recordOffset + 4 > componentOffset + componentLength || recordLimit <= recordOffset)
+                throw new InvalidOperationException(
+                    $"{levelName} special surface {index} pointer 0x{relativeOffset:X} resolves to 0x{recordOffset:X}, outside component 0x{componentOffset:X}-0x{componentOffset + componentLength:X}.");
+
+            int param1 = recordOffset + 8 <= recordLimit
+                ? ReadInt32(levelData, recordOffset + 4, levelName, $"special surface {index} parameter 1")
+                : 0;
+            int param2 = recordOffset + 12 <= recordLimit
+                ? ReadInt32(levelData, recordOffset + 8, levelName, $"special surface {index} parameter 2")
+                : 0;
+            byte[] rawBytes = levelData
+                .AsSpan(recordOffset, recordLimit - recordOffset)
+                .ToArray();
 
             records.Add(new PortalSpecialSurfaceRecord(
                 index,
                 levelData[recordOffset],
-                ReadInt32(levelData, recordOffset + 4, levelName, $"special surface {index} parameter 1"),
-                ReadInt32(levelData, recordOffset + 8, levelName, $"special surface {index} parameter 2"),
-                levelDataWadOffset + recordOffset));
+                param1,
+                param2,
+                levelDataWadOffset + recordOffset,
+                relativeOffset,
+                rawBytes));
         }
 
         return records;
@@ -434,7 +625,11 @@ public static class PortalSourceDataLocator
             $"{level.DisplayName}'s source/runtime moby index bias is unresolved ({directCount}, {oneRowLaterCount}).");
     }
 
-    private static (PortalCollisionSourceLayout Layout, IReadOnlyList<PortalTriggerTriangle> Triangles) ReadTriggerTriangles(
+    private static (
+        PortalCollisionSourceLayout Layout,
+        IReadOnlyList<PortalTriggerTriangle> PortalTriangles,
+        IReadOnlyList<NativeCollisionSurfaceTriangle> SurfaceTriangles
+    ) ReadTriggerTriangles(
         byte[] levelData,
         int collisionComponentOffset,
         long levelDataWadOffset,
@@ -466,14 +661,14 @@ public static class PortalSourceDataLocator
         Dictionary<int, PortalSpecialSurfaceRecord> portalSurfaces = specialSurfaces
             .Where(surface => surface.Type == 6)
             .ToDictionary(surface => surface.Index);
+        Dictionary<int, PortalSpecialSurfaceRecord> surfacesByIndex = specialSurfaces
+            .ToDictionary(surface => surface.Index);
         List<PortalTriggerTriangle> triangles = new();
-        for (int index = 0; index < flagCount; index++)
+        List<NativeCollisionSurfaceTriangle> surfaceTriangles = new(triangleCount);
+        for (int index = 0; index < triangleCount; index++)
         {
-            int flagByte = levelData[flagsOffset + index];
+            int flagByte = index < flagCount ? levelData[flagsOffset + index] : 0xFF;
             int surfaceIndex = flagByte & 0x3F;
-            if (!portalSurfaces.TryGetValue(surfaceIndex, out PortalSpecialSurfaceRecord? surface))
-                continue;
-
             int recordOffset = triangleOffset + (index * 12);
             uint xWord = ReadUInt32(levelData, recordOffset, levelName, $"collision triangle {index} X");
             uint yWord = ReadUInt32(levelData, recordOffset + 4, levelName, $"collision triangle {index} Y");
@@ -492,6 +687,24 @@ public static class PortalSourceDataLocator
                 p1Y + SignedBits((int)((yWord >> 23) & 0x1FF), 9),
                 p1Z + (int)((zWord >> 24) & 0xFF),
                 levelDataWadOffset + recordOffset);
+
+            surfacesByIndex.TryGetValue(surfaceIndex, out PortalSpecialSurfaceRecord? nativeSurface);
+            surfaceTriangles.Add(new NativeCollisionSurfaceTriangle(
+                index,
+                flagByte,
+                surfaceIndex,
+                nativeSurface?.Type ?? -1,
+                nativeSurface?.Param1 ?? 0,
+                nativeSurface?.Param2 ?? 0,
+                levelDataWadOffset + recordOffset,
+                index < flagCount ? levelDataWadOffset + flagsOffset + index : -1,
+                p1,
+                p2,
+                p3));
+
+            if (!portalSurfaces.TryGetValue(surfaceIndex, out PortalSpecialSurfaceRecord? surface))
+                continue;
+
             triangles.Add(new PortalTriggerTriangle(
                 index,
                 surfaceIndex,
@@ -513,7 +726,7 @@ public static class PortalSourceDataLocator
             triangleOffset - blocksOffset,
             levelDataWadOffset + triangleOffset,
             levelDataWadOffset + flagsOffset);
-        return (layout, triangles);
+        return (layout, triangles, surfaceTriangles);
     }
 
     private static PortalSourcePoint ReadPoint(

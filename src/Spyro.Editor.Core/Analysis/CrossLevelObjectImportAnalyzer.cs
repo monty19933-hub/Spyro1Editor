@@ -254,7 +254,7 @@ public static class CrossLevelObjectImportAnalyzer
 
     private static string FindWorkspaceSiblingFile(EditorWorkspace workspace, string fileName)
     {
-        foreach (string root in CandidateRoots(workspace))
+        foreach (string root in WorkspaceArtifactSearchPolicy.EnumerateCandidateRoots(workspace))
         {
             string path = Path.Combine(root, fileName);
             if (File.Exists(path))
@@ -262,37 +262,6 @@ public static class CrossLevelObjectImportAnalyzer
         }
 
         return Path.Combine(workspace.RootPath, fileName);
-    }
-
-    private static IEnumerable<string> CandidateRoots(EditorWorkspace workspace)
-    {
-        yield return workspace.RootPath;
-        DirectoryInfo? parent = Directory.GetParent(workspace.RootPath);
-        if (parent == null)
-            yield break;
-
-        foreach (DirectoryInfo sibling in SafeEnumerateDirectories(parent))
-        {
-            yield return sibling.FullName;
-            foreach (DirectoryInfo nested in SafeEnumerateDirectories(sibling))
-                yield return nested.FullName;
-        }
-    }
-
-    private static IEnumerable<DirectoryInfo> SafeEnumerateDirectories(DirectoryInfo directory)
-    {
-        try
-        {
-            return directory.EnumerateDirectories().ToArray();
-        }
-        catch (IOException)
-        {
-            return Array.Empty<DirectoryInfo>();
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return Array.Empty<DirectoryInfo>();
-        }
     }
 
     private static string ClassifySupport(CrossLevelObjectTemplateSummary template, TargetMobySignatureSummary target, TargetRamActorSlot actorSlot)
@@ -319,8 +288,11 @@ public static class CrossLevelObjectImportAnalyzer
         string supportStatus,
         CrossLevelActorPackageRecipe? recipe)
     {
-        if (recipe != null && string.Equals(recipe.Status, "in-game-blocked-load-freeze", StringComparison.OrdinalIgnoreCase))
-            return $"Recipe {recipe.Id} wrote cleanly at the byte level but froze during in-game level load. Keep it guarded and map the missing runtime dependency before another promoted write.";
+        if (recipe?.Status.StartsWith("in-game-blocked", StringComparison.OrdinalIgnoreCase) == true ||
+            recipe?.Status.StartsWith("blocked", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return $"Recipe {recipe.Id} is retained as failed/blocked evidence. Do not export it again; map a new actor/model-subfile-safe route and re-audit dynamic actor dependencies first.";
+        }
 
         if (recipe != null && supportStatus.Contains("actor-package", StringComparison.OrdinalIgnoreCase))
             return $"Native recipe candidate {recipe.Id} is available. Next step: emit a guarded plan-only package import patch, then verify in a disposable BIN/CUE.";

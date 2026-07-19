@@ -14,7 +14,7 @@ public sealed record FlyInLandingData(
 
 public static class FlyInLandingLocator
 {
-    private const int WadLba = 37;
+    public const int SourceWadLba = 37;
     private const int LevelEntryHeaderLength = 0x20;
     private const int LandingRecordLength = 0x10;
 
@@ -33,7 +33,7 @@ public static class FlyInLandingLocator
         if (level.SourceWadEntry < 0)
             throw new InvalidOperationException($"{level.DisplayName} does not have a mapped source WAD entry.");
 
-        byte[] entryHeader = DiscImage.ReadFileBytes(stream, layout, WadLba, level.SourceWadEntry * 8L, 8);
+        byte[] entryHeader = DiscImage.ReadFileBytes(stream, layout, SourceWadLba, level.SourceWadEntry * 8L, 8);
         long entryWadOffset = ReadUInt32(entryHeader, 0);
         int entryByteLength = checked((int)ReadUInt32(entryHeader, 4));
         if (entryWadOffset <= 0 || entryByteLength < LevelEntryHeaderLength)
@@ -42,7 +42,7 @@ public static class FlyInLandingLocator
         byte[] levelHeader = DiscImage.ReadFileBytes(
             stream,
             layout,
-            WadLba,
+            SourceWadLba,
             entryWadOffset,
             LevelEntryHeaderLength);
         int entryDataRelativeOffset = checked((int)ReadUInt32(levelHeader, 0x18));
@@ -59,7 +59,7 @@ public static class FlyInLandingLocator
         byte[] landing = DiscImage.ReadFileBytes(
             stream,
             layout,
-            WadLba,
+            SourceWadLba,
             landingWadOffset,
             LandingRecordLength);
         int rawX = BinaryPrimitives.ReadInt32LittleEndian(landing.AsSpan(0, 4));

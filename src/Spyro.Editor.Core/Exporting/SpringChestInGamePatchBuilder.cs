@@ -122,7 +122,7 @@ public static class SpringChestInGamePatchBuilder
                 ByteLength: hookBytes.Length,
                 BeforeHexPreview: ToHex(existingHookBytes),
                 AfterHexPreview: ToHex(hookBytes),
-                Description: $"Patch the main loop hook at 0x{HookAddress:X8} so Stone Hill can run the Spring Chest pop/collect helper."),
+                Description: $"Patch the main loop hook at 0x{HookAddress:X8} so {level.DisplayName} can run the Spring Chest pop/collect helper."),
             new MobySourcePatch(
                 Label: $"{level.Key}-spring-chest-helper-payload",
                 Kind: "spring-chest-helper-payload",
@@ -340,6 +340,11 @@ public static class SpringChestInGamePatchBuilder
     {
         if (!TryGetLevelPointer(level.Key, out _))
             return [];
+
+        ExecutablePatchSafety.GuardPatchRange(
+            EntryHookPayloadAddress,
+            PayloadReserveBytes,
+            "Historical Spring Chest entry-hook payload");
 
         DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
         using FileStream stream = File.OpenRead(sourceImagePath);

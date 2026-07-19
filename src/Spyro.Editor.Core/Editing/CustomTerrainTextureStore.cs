@@ -45,7 +45,11 @@ public static class CustomTerrainTextureStore
                     PaletteLowHex: JsonValue.GetString(texture, "paletteLowHex"),
                     PaletteHighHex: JsonValue.GetString(texture, "paletteHighHex"),
                     PaletteHexColors: ReadPaletteHexColors(texture),
-                    CreatedAt: JsonValue.GetString(texture, "createdAt")));
+                    CreatedAt: JsonValue.GetString(texture, "createdAt"),
+                    SourceLevelKey: JsonValue.GetString(texture, "sourceLevelKey"),
+                    SourceTextureId: JsonValue.GetInt32(texture, "sourceTextureId", -1),
+                    SourceRuntimeKey: JsonValue.GetString(texture, "sourceRuntimeKey"),
+                    SourceWadEntry: JsonValue.GetInt32(texture, "sourceWadEntry", -1)));
             }
 
             return result
@@ -72,6 +76,10 @@ public static class CustomTerrainTextureStore
         string paletteLowHex = "",
         string paletteHighHex = "",
         IReadOnlyList<string>? paletteHexColors = null,
+        string sourceLevelKey = "",
+        int sourceTextureId = -1,
+        string sourceRuntimeKey = "",
+        int sourceWadEntry = -1,
         CancellationToken cancellationToken = default)
     {
         if (textureId < 0)
@@ -100,7 +108,11 @@ public static class CustomTerrainTextureStore
             PaletteLowHex: paletteLowHex ?? "",
             PaletteHighHex: paletteHighHex ?? "",
             PaletteHexColors: NormalizePaletteHexColors(paletteHexColors, paletteLowHex ?? "", paletteHighHex ?? ""),
-            CreatedAt: DateTime.UtcNow.ToString("o"));
+            CreatedAt: DateTime.UtcNow.ToString("o"),
+            SourceLevelKey: sourceLevelKey ?? "",
+            SourceTextureId: sourceTextureId,
+            SourceRuntimeKey: sourceRuntimeKey ?? "",
+            SourceWadEntry: sourceWadEntry);
 
         IReadOnlyList<CustomTerrainTextureImport> ordered = imports.Values
             .OrderBy(texture => texture.TextureId)
@@ -140,6 +152,10 @@ public static class CustomTerrainTextureStore
                 paletteLowHex = texture.PaletteLowHex,
                 paletteHighHex = texture.PaletteHighHex,
                 paletteHexColors = texture.PaletteHexColors,
+                sourceLevelKey = texture.SourceLevelKey,
+                sourceTextureId = texture.SourceTextureId,
+                sourceRuntimeKey = texture.SourceRuntimeKey,
+                sourceWadEntry = texture.SourceWadEntry,
                 createdAt = texture.CreatedAt
             }).ToArray()
         };
@@ -236,4 +252,8 @@ public sealed record CustomTerrainTextureImport(
     string PaletteLowHex = "",
     string PaletteHighHex = "",
     IReadOnlyList<string>? PaletteHexColors = null,
-    string CreatedAt = "");
+    string CreatedAt = "",
+    string SourceLevelKey = "",
+    int SourceTextureId = -1,
+    string SourceRuntimeKey = "",
+    int SourceWadEntry = -1);

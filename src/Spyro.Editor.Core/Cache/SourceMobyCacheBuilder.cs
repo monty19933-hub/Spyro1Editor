@@ -48,7 +48,7 @@ public static class SourceMobyCacheBuilder
             int sourceByte4F = record[0x4F];
             int flag4A = record[0x52];
             int flag4B = record[0x53];
-            treasureValue += TreasureValue(type, sourceByte36, flag4A, flag4B);
+            treasureValue += TreasureValue(type, sourceByte36, sourceByte4F, flag4A, flag4B);
 
             mobys.Add(new
             {
@@ -114,13 +114,11 @@ public static class SourceMobyCacheBuilder
             string.Equals(name, "WAD", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static int TreasureValue(int type, int sourceByte36, int flag4A, int flag4B)
+    private static int TreasureValue(int type, int sourceByte36, int sourceByte4F, int flag4A, int flag4B)
     {
-        if (type == 0x18 && GemValue.TryFromIdByte(sourceByte36, out GemValue visibleGem))
+        if (type == 0x18 && GemValue.TryFromEncoding(sourceByte36, sourceByte4F, out GemValue visibleGem))
             return visibleGem.Value;
-        if (type == 0x00 && flag4A == 0xFF && GemValue.TryFromIdByte(flag4B, out GemValue containedGem))
-            return containedGem.Value;
-        if (type == 0x20 && GemValue.TryFromIdByte(flag4B, out GemValue rewardGem))
+        if (GemValue.TryFromIdByte(flag4B, out GemValue rewardGem))
             return rewardGem.Value;
 
         return 0;

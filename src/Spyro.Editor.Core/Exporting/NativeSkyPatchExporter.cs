@@ -63,7 +63,8 @@ public sealed record NativeSkyBatchPatchRequest(
     string OutputPrefix,
     LevelCatalog Catalog,
     IReadOnlyList<NativeSkyBatchEdit> Edits,
-    bool WriteImage);
+    bool WriteImage,
+    bool AllowUnprovenLinkedPortalExpansion = false);
 
 public sealed record NativeSkyPatchResult(
     string OutputImagePath,
@@ -149,6 +150,13 @@ public static class NativeSkyPatchExporter
                 throw new InvalidOperationException($"{batchEdit.Level.DisplayName} does not have a parsed native sky block.");
             Spyro1SkyBlockLayout targetPrimary = targetLayout.SkyBlocks[0];
             NativeSkySource source = BuildEditSource(request, batchEdit, layouts, targetPrimary, image, discLayout, layoutReport.WadLba);
+            if (!batchEdit.Edit.IsPalette && !request.AllowUnprovenLinkedPortalExpansion)
+            {
+                NativeSkyLinkedPortalSafety.ThrowIfUnprovenExpansion(
+                    targetLayout,
+                    source.BlockBytes.Length,
+                    source.DisplayName);
+            }
             IReadOnlyList<Spyro1SkyBlockReference> references = targetLayout.LinkedPrimarySkyCopies.Count > 0
                 ? targetLayout.LinkedPrimarySkyCopies
                 : [new Spyro1SkyBlockReference(targetLayout.Key, targetLayout.DisplayName, targetLayout.WadEntry, 0, targetPrimary.BlockOffset, targetPrimary.ByteLength, true)];
@@ -266,6 +274,9 @@ public static class NativeSkyPatchExporter
             SafetyNotes:
             [
                 "Loaded sky blocks and byte-identical homeworld portal copies are patched together.",
+                request.AllowUnprovenLinkedPortalExpansion
+                    ? "RESEARCH ONLY: the linked homeworld portal capacity guard was explicitly bypassed for structural smoke coverage; this plan is not approved for a user Create BIN."
+                    : "A child-level replacement may not grow its linked homeworld portal copy; unproven growth is blocked before any BIN, CUE, or patch plan is written.",
                 "Same-disc and custom imports stay in place when they fit; oversized blocks use the guarded expanded-WAD path.",
                 "Original presets combine source-disc sky geometry with editor-authored color palettes; no donor sky bytes are bundled with the editor.",
                 "Smaller donors keep the target block length and zero-fill unused trailing bytes so later sky blocks do not move.",
@@ -290,7 +301,7 @@ public static class NativeSkyPatchExporter
         int wadLba)
     {
         if (batchEdit.Edit.IsPalette)
-            return new NativeSkySource(NormalizePaletteLabel(batchEdit.Edit), Array.Empty<byte>());
+            return new NativeSkySource(NormalizePaletteLabel(batchEdit.Edit), "palette-only edit", Array.Empty<byte>());
 
         if (batchEdit.Edit.IsSwap || batchEdit.Edit.IsOriginalPreset)
         {
@@ -310,9 +321,12 @@ public static class NativeSkyPatchExporter
             {
                 donorBytes = ApplyPalette(donorBytes, donorBlock, batchEdit.Edit);
                 OriginalSkyboxPreset preset = SkyboxPresetCatalog.FindOriginal(batchEdit.Edit.PalettePreset);
-                return new NativeSkySource($"original-preset:{preset.Id}:geometry:{donorLayout.Key}", donorBytes);
+                return new NativeSkySource(
+                    $"original-preset:{preset.Id}:geometry:{donorLayout.Key}",
+                    $"{preset.DisplayName} ({donorLayout.DisplayName} geometry)",
+                    donorBytes);
             }
-            return new NativeSkySource($"same-disc:{donorLayout.Key}", donorBytes);
+            return new NativeSkySource($"same-disc:{donorLayout.Key}", donorLayout.DisplayName, donorBytes);
         }
 
         if (!batchEdit.Edit.IsImport)
@@ -331,7 +345,8 @@ public static class NativeSkyPatchExporter
             throw new InvalidDataException("The saved custom .sky file changed after it was selected. Re-import it before creating a BIN.");
         }
         byte[] normalized = Spyro1SkyBlockAnalyzer.NormalizeStandaloneSkyFile(raw);
-        return new NativeSkySource($"custom:{Path.GetFileName(importPath)}", normalized);
+        string importName = Path.GetFileName(importPath);
+        return new NativeSkySource($"custom:{importName}", importName, normalized);
     }
 
     private static byte[] ApplyPalette(byte[] before, Spyro1SkyBlockLayout block, NativeSkyEditPlan edit)
@@ -450,5 +465,5 @@ public static class NativeSkyPatchExporter
     private static string HexPreview(byte[] bytes) => string.Join(' ', bytes.Take(16).Select(value => value.ToString("X2", CultureInfo.InvariantCulture)));
 
     private readonly record struct Rgb(byte R, byte G, byte B);
-    private sealed record NativeSkySource(string Label, byte[] BlockBytes);
+    private sealed record NativeSkySource(string Label, string DisplayName, byte[] BlockBytes);
 }

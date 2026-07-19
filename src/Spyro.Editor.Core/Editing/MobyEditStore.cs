@@ -32,12 +32,24 @@ public static class MobyEditStore
             if (moby.OriginalFlag4B >= 0)
                 moby.Flag4B = moby.OriginalFlag4B;
             moby.Label = moby.OriginalLabel;
+            if (moby.OriginalColor is ColorRgba originalColor)
+                moby.Color = originalColor;
+            else
+                ApplyGemColor(moby);
+            moby.PatchStatus = moby.OriginalPatchStatus;
+            moby.PatchLead = moby.OriginalPatchLead;
+            moby.CandidateKind = moby.OriginalCandidateKind;
+            moby.Confidence = moby.OriginalConfidence;
+            moby.Evidence = moby.OriginalEvidence;
+            moby.BehaviorNote = moby.OriginalBehaviorNote;
+            moby.ZoneLabel = moby.OriginalZoneLabel;
             moby.CrossLevelTemplateId = "";
             moby.CrossLevelFamily = "";
             moby.CrossLevelSourceLevelKey = "";
             moby.CrossLevelSourceLevelName = "";
             moby.CrossLevelSourceTrueIndex = -1;
             moby.CrossLevelRequiredExporterFeature = "";
+            moby.CrossLevelRecipeId = "";
             moby.SourceCloneLevelKey = "";
             moby.SourceCloneLevelName = "";
             moby.SourceCloneTrueIndex = -1;
@@ -158,6 +170,12 @@ public static class MobyEditStore
                 ["flag4BEditedHex"] = $"0x{moby.Flag4B:X2}",
                 ["patchStatus"] = moby.PatchStatus,
                 ["patchLead"] = moby.PatchLead,
+                ["displayColor"] = $"#{moby.Color.R:X2}{moby.Color.G:X2}{moby.Color.B:X2}",
+                ["candidateKind"] = moby.CandidateKind,
+                ["confidence"] = moby.Confidence,
+                ["evidence"] = moby.Evidence,
+                ["behaviorNote"] = moby.BehaviorNote,
+                ["zoneLabel"] = moby.ZoneLabel,
                 ["editorControlKind"] = moby.IsEditorControl ? moby.EditorControlKind : null,
                 ["crossLevelTemplate"] = NewCrossLevelTemplate(moby),
                 ["recordMutation"] = NewRecordMutation(moby),
@@ -276,15 +294,23 @@ public static class MobyEditStore
             OriginalLabel = label,
             PatchStatus = JsonValue.GetString(edit, "patchStatus", "new-native-editor-object"),
             PatchLead = JsonValue.GetString(edit, "patchLead", "Added in the native editor."),
+            CandidateKind = JsonValue.GetString(edit, "candidateKind"),
+            Confidence = JsonValue.GetString(edit, "confidence"),
+            Evidence = JsonValue.GetString(edit, "evidence"),
+            BehaviorNote = JsonValue.GetString(edit, "behaviorNote"),
+            ZoneLabel = JsonValue.GetString(edit, "zoneLabel"),
             CrossLevelTemplateId = crossLevelTemplate is JsonElement crossLevel ? JsonValue.GetString(crossLevel, "id") : "",
             CrossLevelFamily = crossLevelTemplate is JsonElement crossLevelFamily ? JsonValue.GetString(crossLevelFamily, "family") : "",
             CrossLevelSourceLevelKey = crossLevelTemplate is JsonElement crossLevelKey ? JsonValue.GetString(crossLevelKey, "sourceLevelKey") : "",
             CrossLevelSourceLevelName = crossLevelTemplate is JsonElement crossLevelName ? JsonValue.GetString(crossLevelName, "sourceLevelName") : "",
             CrossLevelSourceTrueIndex = crossLevelTemplate is JsonElement crossLevelIndex ? JsonValue.GetInt32(crossLevelIndex, "sourceTrueIndex", -1) : -1,
             CrossLevelRequiredExporterFeature = crossLevelTemplate is JsonElement crossLevelFeature ? JsonValue.GetString(crossLevelFeature, "requiredExporterFeature") : "",
+            CrossLevelRecipeId = crossLevelTemplate is JsonElement crossLevelRecipe ? JsonValue.GetString(crossLevelRecipe, "recipeId", JsonValue.GetString(crossLevelRecipe, "preferredRecipeId")) : "",
             IsAdded = true
         };
         ApplyGemColor(added);
+        if (ColorRgba.TryParseHex(JsonValue.GetString(edit, "displayColor"), out ColorRgba addedColor))
+            added.Color = addedColor;
         return added;
     }
 
@@ -360,7 +386,9 @@ public static class MobyEditStore
         int type = JsonValue.GetInt32(edit, "typeEditedHex", JsonValue.GetInt32(edit, "typeHex", -1));
         if (type >= 0)
         {
-            moby.SetType(type);
+            int clampedType = Math.Clamp(type, 0, 255);
+            if (moby.Type != clampedType)
+                moby.SetType(clampedType);
             changed = true;
         }
 
@@ -423,7 +451,24 @@ public static class MobyEditStore
             changed = true;
         }
 
+        if (edit.TryGetProperty("patchStatus", out _))
+            moby.PatchStatus = JsonValue.GetString(edit, "patchStatus");
+        if (edit.TryGetProperty("patchLead", out _))
+            moby.PatchLead = JsonValue.GetString(edit, "patchLead");
+
         ApplyGemColor(moby);
+        if (ColorRgba.TryParseHex(JsonValue.GetString(edit, "displayColor"), out ColorRgba displayColor))
+            moby.Color = displayColor;
+        if (edit.TryGetProperty("candidateKind", out _))
+            moby.CandidateKind = JsonValue.GetString(edit, "candidateKind");
+        if (edit.TryGetProperty("confidence", out _))
+            moby.Confidence = JsonValue.GetString(edit, "confidence");
+        if (edit.TryGetProperty("evidence", out _))
+            moby.Evidence = JsonValue.GetString(edit, "evidence");
+        if (edit.TryGetProperty("behaviorNote", out _))
+            moby.BehaviorNote = JsonValue.GetString(edit, "behaviorNote");
+        if (edit.TryGetProperty("zoneLabel", out _))
+            moby.ZoneLabel = JsonValue.GetString(edit, "zoneLabel");
         ApplyRecordMutation(edit, moby);
         if (ApplyCrossLevelTemplate(edit, moby))
             changed = true;
@@ -460,6 +505,9 @@ public static class MobyEditStore
         moby.CrossLevelSourceLevelName = JsonValue.GetString(crossLevel, "sourceLevelName");
         moby.CrossLevelSourceTrueIndex = JsonValue.GetInt32(crossLevel, "sourceTrueIndex", -1);
         moby.CrossLevelRequiredExporterFeature = JsonValue.GetString(crossLevel, "requiredExporterFeature");
+        moby.CrossLevelRecipeId = JsonValue.GetString(crossLevel, "recipeId", JsonValue.GetString(crossLevel, "preferredRecipeId"));
+        if (string.IsNullOrWhiteSpace(moby.PatchStatus))
+            moby.PatchStatus = JsonValue.GetString(crossLevel, "addSupportStatus");
         return true;
     }
 
@@ -567,7 +615,8 @@ public static class MobyEditStore
             sourceLevelName = moby.CrossLevelSourceLevelName,
             sourceTrueIndex = moby.CrossLevelSourceTrueIndex >= 0 ? moby.CrossLevelSourceTrueIndex : null as int?,
             addSupportStatus = moby.PatchStatus,
-            requiredExporterFeature = moby.CrossLevelRequiredExporterFeature
+            requiredExporterFeature = moby.CrossLevelRequiredExporterFeature,
+            recipeId = string.IsNullOrWhiteSpace(moby.CrossLevelRecipeId) ? null : moby.CrossLevelRecipeId
         };
     }
 

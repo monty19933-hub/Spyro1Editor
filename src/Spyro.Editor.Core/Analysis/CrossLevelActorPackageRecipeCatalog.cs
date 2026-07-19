@@ -13,9 +13,9 @@ public static class CrossLevelActorPackageRecipeCatalog
             SourceLevelKey: "peacekeepers",
             Family: "lockedChest",
             Mode: "RegisterCompanionRoot",
-            Status: "experimental-image-write",
-            Risk: "Copies a missing chest actor package into an Artisans zero gap and registers one actor root. This now writes only to disposable test BIN/CUE output and still needs in-game key/open validation before becoming normal release behavior.",
-            Description: "Peace Keepers key chest actor package copied into the proven Artisans 0x30800 zero gap with a single actor-id root registration.",
+            Status: "in-game-blocked-invalid-actor-package-subfile",
+            Risk: "Failed in DuckStation when Spyro approached the Key Chest. Target 0x30800 belongs to Artisans subfile 0 rather than the actor/model subfile, and appending it at root slot 0xDC made the otherwise ascending root list descend from 0x1C95F0 to 0x00030800.",
+            Description: "Historical failed Key Chest candidate retained as evidence that a zero-filled range outside the actor/model subfile is not valid actor-package storage.",
             CopySegments:
             [
                 new CrossLevelActorPackageCopySegment("0x1B3978", "0x30800", "0x2830")
@@ -28,14 +28,54 @@ public static class CrossLevelActorPackageRecipeCatalog
             InternalDependencyRebases: []),
 
         new CrossLevelActorPackageRecipe(
+            Id: "artisans.peacekeepers.springChest.package.native0149T70LocalControllerGap30800V159Helper.v1",
+            TargetLevelKey: "artisans",
+            SourceLevelKey: "peacekeepers",
+            Family: "springChest",
+            Mode: "RegisterNative0149T70LocalControllerRuntime01A6BluePreHitSafeNativeSpringEffectOnlyStackHelper",
+            Status: "in-game-blocked-invalid-actor-package-subfile",
+            Risk: "Failed in DuckStation when Spyro approached the Spring Chest. Target 0x30800 belongs to Artisans subfile 0 rather than the actor/model subfile, and appending it at root slot 0xDC made the otherwise ascending root list descend from 0x1C95F0 to 0x00030800.",
+            Description: "Historical failed Spring Chest candidate retained as evidence that package/root readback alone cannot validate actor-package placement.",
+            CopySegments:
+            [
+                new CrossLevelActorPackageCopySegment("0x1B3450", "0x30800", "0x0528")
+            ],
+            RootEntries:
+            [
+                new CrossLevelActorPackageRootEntry("0xDC", "0x30800", "0x0149", "", "Invalid historical tail-root registration retained for failure evidence only.")
+            ],
+            ReplaceRootEntries: [],
+            InternalDependencyRebases: []),
+
+        new CrossLevelActorPackageRecipe(
+            Id: "artisans.peacekeepers.springChest.package.native0149T70LocalControllerOver000EV159Helper.v2",
+            TargetLevelKey: "artisans",
+            SourceLevelKey: "peacekeepers",
+            Family: "springChest",
+            Mode: "ReplaceUnused000ENative0149T70LocalControllerRuntime01A6BluePreHitSafeNativeSpringEffectOnlyStackHelperBlueGemNativeSpringEffectVisualBlueGemNativeSpringEffectOrdinalManualSpyroTouchCollectNativeEffectVisualManualSpyroDelayedJumpTouchCollectBlankVisualAwardFixedTreasureWordsManualRewardPopArcNativeEffectVisualNativeStateZeroShell",
+            Status: "in-game-blocked-dynamic-life-statue-dependency",
+            Risk: "Do not test or promote this candidate. Artisans actor 0x000E is MOBYCLASS_LIFE_STATUE, and native Artisans source row T94 is a class 0x01A5 Life Chest whose m_DropMoby/flag4B is 0x0E. The level_10 overlay also has a live class-14/15 collectable update path at 0x8007F858. Replacing 0x000E would therefore corrupt a dynamically spawned extra-life statue even though no source row has class 0x000E.",
+            Description: "Historical blocked follow-up retained as evidence that zero direct source-row references do not make an actor root disposable; Artisans dynamically requires 0x000E for its Life Chest reward.",
+            CopySegments:
+            [
+                new CrossLevelActorPackageCopySegment("0x1B3450", "0x1B0140", "0x0528", "overwrite-unused-actor-package", "0x84", "0x000E")
+            ],
+            RootEntries: [],
+            ReplaceRootEntries:
+            [
+                new CrossLevelActorPackageRootEntry("0x84", "0x1B0140", "0x0149", "0x000E", "Unsafe historical replacement: slot 0x84 is the dynamically required Life Statue root used by Artisans Life Chest T94.")
+            ],
+            InternalDependencyRebases: []),
+
+        new CrossLevelActorPackageRecipe(
             Id: "artisans.townsquare.springChest.package.minimal00C2SafeGap30800.v1",
             TargetLevelKey: "artisans",
             SourceLevelKey: "townsquare",
             Family: "springChest",
             Mode: "RegisterCompanionRoot",
-            Status: "experimental-plan-only",
-            Risk: "Imports the Town Square spring chest controller/helper/shell route into Artisans. It replaces the existing 0x00C2 route, so it must stay opt-in until disposable-disc testing proves no vanilla chest behavior is broken.",
-            Description: "Town Square spring controller plus minimal helper/shell roots copied into the proven Artisans 0x30800 zero gap.",
+            Status: "blocked-invalid-actor-package-subfile",
+            Risk: "Blocked by the Artisans package-layout audit. Targets 0x30800-0x319CC belong to subfile 0 rather than the actor/model subfile, so this package/root layout cannot be activated safely.",
+            Description: "Historical untested Town Square Spring route retained as structurally blocked evidence.",
             CopySegments:
             [
                 new CrossLevelActorPackageCopySegment("0x1BF470", "0x30800", "0x03E8"),
@@ -2477,8 +2517,8 @@ public static class CrossLevelActorPackageRecipeCatalog
             SourceLevelKey: "peacekeepers",
             Family: "springChest",
             Mode: "RegisterSingleNative0149RootLocalControllerEntryHookOnlyAltCave",
-            Status: "experimental-plan-only",
-            Risk: "Isolation follow-up after the stack-save pass-through call-site helper loaded and survived approach, but crashed when Spyro flamed the object. This keeps the same Peace Keepers 0x0149 package/root and local Stone Hill 0x00C2 controller record, but hooks the original routine entry instead of calling it from a wrapper, and moves the payload to a later blank executable cave.",
+            Status: "in-game-blocked-psyq-interrupt-state-overwrite",
+            Risk: "Permanently blocked after a pre-logo 0-FPS failure. The supposed alternate cave at 0x80073924 is live PsyQ interrupt-system state used during startup, not padding. Writing an entry trampoline there corrupts interrupt initialization before the game logos.",
             Description: "Peace Keepers Spring Chest actor package copied into Stone Hill as a single 0x0149 root, paired with a local Stone Hill 0x00C2 controller record and a pass-through entry trampoline in an alternate code cave.",
             CopySegments:
             [
@@ -3038,9 +3078,9 @@ public static class CrossLevelActorPackageRecipeCatalog
             SourceLevelKey: "wizardpeak",
             Family: "enemyTransform",
             Mode: "RegisterCompanionRoot",
-            Status: "experimental-image-write",
-            Risk: "Overwrites Toasty's actor package at 0x15326C, whose actor id is 0x00EA and which is not referenced by Toasty's source moby records. This writes only to disposable test BIN/CUE output until in-game validation proves no hidden Toasty behavior depends on that package.",
-            Description: "Green Wizard actor package copied over Toasty's apparently unused 0x00EA package, then registered in an empty Toasty actor-root slot as actor 0x011B. This avoids the too-small zero gaps while preserving the active dog/shepherd/chest roots.",
+            Status: "in-game-blocked-root-after-terminator",
+            Risk: "Failed in DuckStation: Toasty loaded and its treasure target changed, but no Green Wizard appeared. The recipe registered 0x011B at root slot 0xD0 even though Toasty's model-root loader stops at the first zero slot, 0xB0.",
+            Description: "Historical failed candidate retained as evidence. Its copied package was never registered because the new root was placed after Toasty's root-list terminator.",
             CopySegments:
             [
                 new CrossLevelActorPackageCopySegment("0x19B518", "0x15326C", "0x35AC", "overwrite-unused-actor-package", "0x54", "0x00EA")
@@ -3050,6 +3090,26 @@ public static class CrossLevelActorPackageRecipeCatalog
                 new CrossLevelActorPackageRootEntry("0xD0", "0x15326C", "0x011B", "", "Registers Green Wizard as a new Toasty actor root using the imported package.")
             ],
             ReplaceRootEntries: [],
+            InternalDependencyRebases: []),
+
+        new CrossLevelActorPackageRecipe(
+            Id: "toasty.wizardpeak.greenWizard.package.replaceUnused00EA.v3",
+            TargetLevelKey: "toasty",
+            SourceLevelKey: "wizardpeak",
+            Family: "enemyTransform",
+            Mode: "ReplaceUnused00EARoot",
+            Status: "in-game-blocked-missing-target-overlay-behavior",
+            Risk: "DuckStation proved that the package and in-place root replacement load, but Toasty's overlay has no update handler for Green Wizard actor 0x011B or its spawned lightning actor 0x0026. The imported model was distorted, the retained Dog pod byte 0x04 caused proxy/group effects, contact hurt Spyro, and the actor could not be flamed or charged. Source-row parity alone cannot supply the missing executable behavior.",
+            Description: "Historical partial-success candidate retained as evidence. It made the Green Wizard model visible by replacing Toasty's unused-looking 0x00EA package/root, but it is blocked until the Wizard Peak behavior state machine, lightning dependency, and native row initialization can be transplanted safely.",
+            CopySegments:
+            [
+                new CrossLevelActorPackageCopySegment("0x19B518", "0x15326C", "0x35AC", "overwrite-unused-actor-package", "0x54", "0x00EA")
+            ],
+            RootEntries: [],
+            ReplaceRootEntries:
+            [
+                new CrossLevelActorPackageRootEntry("0x54", "0x15326C", "0x011B", "0x00EA", "Replace Toasty's unused-looking 0x00EA model entry in place so 0x011B remains before the first zero root terminator and the package is patched only once.")
+            ],
             InternalDependencyRebases: [])
     ];
 
@@ -3061,7 +3121,7 @@ public static class CrossLevelActorPackageRecipeCatalog
         if (candidates.Count == 0)
             return null;
         if (string.IsNullOrWhiteSpace(workspaceRoot))
-            return candidates.FirstOrDefault(recipe => !IsBlockedStatus(recipe.Status)) ?? candidates[0];
+            return candidates.FirstOrDefault(recipe => !IsBlockedStatus(recipe.Status)) ?? candidates[^1];
 
         CrossLevelActorPackageRecipe? unfailed = null;
         foreach (CrossLevelActorPackageRecipe recipe in candidates)
@@ -3083,10 +3143,9 @@ public static class CrossLevelActorPackageRecipeCatalog
         if (stoneHillTownSquareSpringChest)
             return null;
 
-        if (unfailed == null && string.Equals(NormalizeFamily(family), "springChest", StringComparison.OrdinalIgnoreCase))
-            return null;
-
-        return unfailed ?? candidates[0];
+        // Keep the newest blocked recipe visible for diagnostics instead of
+        // falling back to an older failed experiment.
+        return unfailed ?? candidates[^1];
     }
 
     public static IEnumerable<CrossLevelActorPackageRecipe> FindAll(string targetLevelKey, string sourceLevelKey, string family)

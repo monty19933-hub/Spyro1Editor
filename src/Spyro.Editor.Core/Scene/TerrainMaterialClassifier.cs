@@ -77,9 +77,11 @@ public static class TerrainMaterialClassifier
         },
         ["clifftown"] = new Dictionary<int, string>
         {
-            [35] = "lava",
-            [36] = "lava",
-            [38] = "lava"
+            [31] = "lava",
+            [33] = "lava",
+            [35] = "cliff",
+            [36] = "cliff",
+            [38] = "cliff"
         },
         ["jacques"] = new Dictionary<int, string>
         {

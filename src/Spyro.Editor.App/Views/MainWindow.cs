@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
+using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -17,9 +18,11 @@ using Spyro.Editor.Core;
 using Spyro.Editor.Core.Analysis;
 using Spyro.Editor.Core.Cache;
 using Spyro.Editor.Core.Editing;
+using Spyro.Editor.Core.Diagnostics;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Music;
+using Spyro.Editor.Core.Persistence;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Skyboxes;
@@ -28,7 +31,7 @@ using Spyro.Editor.Core.Workspace;
 
 namespace Spyro.Editor.App.Views;
 
-public sealed class MainWindow : Window
+public sealed partial class MainWindow : Window
 {
     private const int MaxTerrainBrushUndoStrokes = 20;
     private const double DefaultTerrainBrushRadius = 512;
@@ -192,6 +195,8 @@ public sealed class MainWindow : Window
     private Button? _objectAddButton;
     private Button? _objectRemoveButton;
     private Button? _objectEditButton;
+    private Button? _objectSwapCatalogButton;
+    private Button? _objectSwapTestButton;
     private Button? _objectCopyButton;
     private Button? _objectPasteButton;
     private Button? _objectLayerDownButton;
@@ -242,6 +247,7 @@ public sealed class MainWindow : Window
     private LevelDefinition? _currentLevel;
     private GeometryCandidate? _currentGeometry;
     private List<Moby> _currentMobys = new();
+    private readonly Dictionary<Moby, List<MobyLink>> _detachedGemLinksForUndo = new();
     private int _loadedMobyEdits;
     private int _loadedTerrainEdits;
     private string _terrainCacheHealthMessage = "";
@@ -256,6 +262,8 @@ public sealed class MainWindow : Window
     private string _savedTerrainEditSignature = "";
     private string _savedMobyEditSignature = "";
     private IReadOnlyList<CustomTerrainTextureImport> _customTerrainTextures = Array.Empty<CustomTerrainTextureImport>();
+    private IReadOnlyList<NativeTerrainTextureRelocationEdit> _nativeTerrainTextureRelocations =
+        Array.Empty<NativeTerrainTextureRelocationEdit>();
     private MobyMetadataResult _mobyMetadata;
     private bool _syncingLevelSelection;
     private bool _handlingLevelSelection;
@@ -308,9 +316,14 @@ public sealed class MainWindow : Window
         _viewport.ObjectPlacementCanceled += (_, _) => CancelPendingMobyPlacement();
         _viewport.ObjectCopyRequested += (_, _) => CopySelectedMoby();
         _viewport.ObjectPasteRequested += async (_, e) => await PasteMobyClipboardAtViewportAsync(e.ScreenPoint);
-        _viewport.ViewModeChanged += (_, mode) => _statusText.Text = mode == ViewportViewMode.Fly3D
-            ? "Fly 3D mode: use W/A/S/D, Q/E, arrow keys, right-drag, and scroll to fly around. Use Ctrl/Command+C and Ctrl/Command+V to copy and paste objects."
-            : $"Map mode: {MapOrientationStatus()} Drag objects to move them. Use Ctrl/Command+C and Ctrl/Command+V to copy and paste objects.";
+        _viewport.ViewModeChanged += (_, mode) =>
+        {
+            RefreshModernViewModeButtons(mode);
+            RefreshContextualViewportAction();
+            _statusText.Text = mode == ViewportViewMode.Fly3D
+                ? "Game Camera active; corrected retail color banks and native HP/LP are applied without removing editable terrain."
+                : "Edit Map active; every captured editable source face remains visible, material-rendered, and selectable.";
+        };
         _terrainBrushRadiusSlider.PropertyChanged += (_, e) =>
         {
             if (e.Property == RangeBase.ValueProperty)
@@ -350,7 +363,7 @@ public sealed class MainWindow : Window
         RefreshTerrainBrushMode();
         RefreshSourceDiscStatus();
 
-        Title = _releaseMode ? "Spyro Editor 0.1.0-beta.15" : "Spyro Editor";
+        Title = _releaseMode ? AppReleaseIdentity.DisplayName : "Spyro Editor";
         Icon = LoadAppIcon();
         Width = 1320;
         Height = 860;
@@ -358,14 +371,18 @@ public sealed class MainWindow : Window
         MinHeight = 640;
         Background = new SolidColorBrush(Color.FromRgb(238, 241, 244));
 
-        Content = BuildLayout();
+        Content = BuildModernLayout();
         SetMapOrientation(EditorUiDefaults.UseGameViewMapOrientation, announce: false);
+        RefreshDiagnosticContext();
+        EditorDiagnostics.RecordAction("Main editor window initialized", $"Workspace: {_workspace.RootPath}; release mode: {_releaseMode}");
         LoadLevels();
     }
 
     protected override async void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
+        BeginPreviousBetaProjectReminder();
+        BeginQuietUpdateCheck();
 
         if (_currentLevel == null || _currentGeometry != null || _currentMobys.Count > 0)
             return;
@@ -377,6 +394,7 @@ public sealed class MainWindow : Window
         catch (Exception ex)
         {
             Debug.WriteLine(ex);
+            EditorDiagnostics.RecordException("loading the initial level", ex);
             _statusText.Text = $"Could not load {_currentLevel.DisplayName}: {ex.Message}";
         }
     }
@@ -451,14 +469,15 @@ public sealed class MainWindow : Window
 
         WrapPanel tools = new() { Orientation = Orientation.Horizontal };
         tools.Children.Add(BuildToolbarLevelSelector());
-        tools.Children.Add(NewButton("Fit View", () => _viewport.ResetView()));
-        tools.Children.Add(NewButton("Map View", () => _viewport.SetViewMode(ViewportViewMode.Map)));
-        tools.Children.Add(NewButton("Fly 3D", () => _viewport.SetViewMode(ViewportViewMode.Fly3D)));
+        tools.Children.Add(NewButton("Fit All", () => _viewport.ResetView()));
+        tools.Children.Add(NewButton("Edit Map", () => _viewport.SetViewMode(ViewportViewMode.Map)));
+        tools.Children.Add(NewButton("Game Camera", () => _viewport.SetViewMode(ViewportViewMode.Fly3D)));
         tools.Children.Add(NewMapOrientationButton());
         tools.Children.Add(NewAsyncButton("Open BIN/CUE", async () => await ChooseSourceDiscImageAsync()));
         _toolbarCreateBinButton = NewAsyncButton("Create BIN", async () => await CreateObjectTestBinAsync());
         StyleCreateBinButton(_toolbarCreateBinButton);
         tools.Children.Add(_toolbarCreateBinButton);
+        tools.Children.Add(NewAsyncButton("Diagnostics", ShowDiagnosticsAsync));
         tools.Children.Add(NewAsyncButton("Help", async () => await ShowHelpAsync()));
 
         _sourceDiscStatusText.FontSize = 12;
@@ -648,15 +667,15 @@ public sealed class MainWindow : Window
         RefreshMapOrientationButtons();
         if (announce)
             _statusText.Text = gameView
-                ? "Game view is on: the map orientation now matches the in-game direction."
-                : "Raw capture view is on: the map orientation now matches the source cache direction.";
+                ? "Retail Y orientation is on for research views; normal Edit Map and Game Camera terrain rules are unchanged."
+                : "Source-record Y orientation is on for research views; normal Edit Map and Game Camera terrain rules are unchanged.";
     }
 
     private string MapOrientationStatus()
     {
         return _viewport.IsMapYFlipped
-            ? "game-view orientation is on."
-            : "raw capture orientation is on.";
+            ? "retail Y orientation is on."
+            : "source-record Y orientation is on.";
     }
 
     private Button NewMapOrientationButton()
@@ -672,7 +691,7 @@ public sealed class MainWindow : Window
         bool gameView = _viewport.IsMapYFlipped;
         foreach (Button button in _mapOrientationButtons)
         {
-            button.Content = gameView ? "Game View: On" : "Raw Capture View";
+            button.Content = gameView ? "Y Orientation: Retail" : "Y Orientation: Source";
             button.Background = new SolidColorBrush(gameView
                 ? Color.FromRgb(220, 238, 255)
                 : Color.FromRgb(237, 241, 245));
@@ -891,9 +910,9 @@ public sealed class MainWindow : Window
         AddGridButton(grid, NewMapOrientationButton(), 1, 0);
         AddGridButton(grid, NewAsyncButton("Import Editor Cache", async () => await ImportEditorCacheAsync()), 0, 1);
         AddGridButton(grid, NewButton("Open Cache Folder", OpenEditorCacheFolder), 1, 1);
-        AddGridButton(grid, NewButton("Fit View", () => _viewport.ResetView()), 0, 2);
-        AddGridButton(grid, NewButton("Map View", () => _viewport.SetViewMode(ViewportViewMode.Map)), 1, 2);
-        Button fly = NewButton("Fly 3D", () => _viewport.SetViewMode(ViewportViewMode.Fly3D));
+        AddGridButton(grid, NewButton("Fit All", () => _viewport.ResetView()), 0, 2);
+        AddGridButton(grid, NewButton("Edit Map", () => _viewport.SetViewMode(ViewportViewMode.Map)), 1, 2);
+        Button fly = NewButton("Game Camera", () => _viewport.SetViewMode(ViewportViewMode.Fly3D));
         Grid.SetColumnSpan(fly, 2);
         AddGridButton(grid, fly, 0, 3);
         Button cache = NewAsyncButton("Build Local Cache", async () => await BuildPortableCacheAsync());
@@ -1137,7 +1156,8 @@ public sealed class MainWindow : Window
 
     private void SelectMobyCategory(string category)
     {
-        int index = Array.IndexOf(MobyCategoryOptions, category);
+        string[] visibleOptions = (_mobyCategoryBox.ItemsSource as IEnumerable<string>)?.ToArray() ?? MobyCategoryOptions;
+        int index = Array.IndexOf(visibleOptions, category);
         if (index < 0)
             return;
 
@@ -1319,8 +1339,9 @@ public sealed class MainWindow : Window
         _skyboxImportPanel.Children.Add(NewAsyncButton("Choose .sky", async () => await ChooseCustomSkyAsync()));
 
         WrapPanel buttons = new() { Orientation = Orientation.Horizontal };
-        buttons.Children.Add(NewAsyncButton("Save Skybox", async () => { await SaveSkyboxPlanAsync(); }));
-        buttons.Children.Add(NewAsyncButton("Create Sky Test", async () => await CreateSkyboxCueAsync()));
+        buttons.Children.Add(NewAsyncButton(_releaseMode ? "Save Changes" : "Save Skybox", async () => { await SaveSkyboxPlanAsync(); }));
+        if (!_releaseMode)
+            buttons.Children.Add(NewAsyncButton("Create Sky Test", async () => await CreateSkyboxCueAsync()));
         Button resetButton = NewButton("Reset to Normal Level Palette and Skybox", ResetSkyboxPlan);
         resetButton.HorizontalAlignment = HorizontalAlignment.Stretch;
         resetButton.HorizontalContentAlignment = HorizontalAlignment.Center;
@@ -1700,6 +1721,7 @@ public sealed class MainWindow : Window
         catch (Exception ex)
         {
             Debug.WriteLine(ex);
+            EditorDiagnostics.RecordException("changing levels", ex);
             SyncLevelPickers(_currentLevel);
             _statusText.Text = $"Could not open that level: {ex.Message}";
         }
@@ -1762,6 +1784,7 @@ public sealed class MainWindow : Window
         catch (Exception ex)
         {
             Debug.WriteLine(ex);
+            EditorDiagnostics.RecordException("opening the adjacent level", ex);
             SyncLevelPickers(_currentLevel);
             _statusText.Text = $"Could not open that level: {ex.Message}";
         }
@@ -1988,6 +2011,11 @@ public sealed class MainWindow : Window
             if (!await ConfirmLeaveWorkspaceWithUnsavedTerrainAsync(folderPath))
                 return;
 
+            if (_releaseMode && ReleaseProjectBootstrap.Current != null)
+            {
+                EditorProjectLayout project = await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(folderPath);
+                folderPath = project.RootPath;
+            }
             _workspace = new EditorWorkspace(folderPath);
             _catalog = LevelCatalog.Load(_workspace.RootPath);
             _nativeSkyReport = null;
@@ -1999,10 +2027,13 @@ public sealed class MainWindow : Window
             LoadSavedExeStringPlan();
             LoadLevels();
             _statusText.Text = $"Opened workspace: {_workspace.RootPath}";
+            RefreshDiagnosticContext(includeSavedEdits: true);
+            EditorDiagnostics.RecordAction("Workspace opened", _workspace.RootPath);
         }
         catch (Exception ex)
         {
             Debug.WriteLine(ex);
+            EditorDiagnostics.RecordException("opening an editor workspace", ex);
             _statusText.Text = $"Could not open workspace: {ex.Message}";
         }
     }
@@ -2053,11 +2084,14 @@ public sealed class MainWindow : Window
                 ? $" Matching CUE: {Path.GetFileName(selection.CuePath)}."
                 : " No matching CUE was found, so patched output will use a simple generated CUE.";
             _statusText.Text = $"Using {Path.GetFileName(selection.ImagePath)} for Create BIN.{cueNote} Rebuilding level maps and objects from that disc now...";
+            RefreshDiagnosticContext();
+            EditorDiagnostics.RecordAction("Source BIN/CUE selected", $"Image: {selection.ImagePath}; CUE: {selection.CuePath}");
             await BuildPortableCacheAsync(overwrite: true, triggeredByDiscSelection: true);
         }
         catch (Exception ex)
         {
             Debug.WriteLine(ex);
+            EditorDiagnostics.RecordException("opening or indexing a source BIN/CUE", ex);
             _statusText.Text = $"Could not open/use that BIN/CUE: {ex.Message}";
         }
     }
@@ -2165,6 +2199,7 @@ public sealed class MainWindow : Window
         _terrainCollisionMatchedFaces = loaded.TerrainCollisionMatchedFaces;
         _savedTerrainEditSignature = BuildTerrainEditSignature(_currentGeometry);
         _currentMobys = loaded.Mobys;
+        _detachedGemLinksForUndo.Clear();
         _loadedMobyEdits = loaded.LoadedMobyEdits;
         _savedMobyEditSignature = BuildMobyEditSignature(_currentMobys);
         _mobyMetadata = loaded.MobyMetadata;
@@ -2173,9 +2208,16 @@ public sealed class MainWindow : Window
         _activeIdentityBatchRestore = new IdentityBatchRestoreSet(new Dictionary<int, IdentityBatchRestoreState>());
         _activeIdentityBatchName = "";
         _customTerrainTextures = loaded.CustomTerrainTextures;
+        _nativeTerrainTextureRelocations = loaded.NativeTerrainTextureRelocations;
         _lastRemovedMoby = null;
+        RefreshTerrainTextureImageFiles();
         _viewport.Geometry = _currentGeometry;
+        ConfigureCompleteTerrainEditing();
         _viewport.Mobys = _currentMobys;
+        _viewport.SetLevelEntryPose(loaded.LevelEntryPose);
+        _viewport.SetViewMode(ViewportViewMode.Fly3D);
+        _viewport.RefreshFlyCameraForLoadedLevel();
+        RefreshContextualViewportAction();
         RefreshMobyList();
         RefreshIdentityBatchList();
         RefreshIdentityPriorityHint();
@@ -2187,11 +2229,518 @@ public sealed class MainWindow : Window
         RefreshTerrainProofQueueHint();
         UpdateLevelToolPanels(level);
         _statusText.Text = $"{level.DisplayName}: {_viewport.Geometry?.Polygons.Count ?? 0} terrain faces, {_viewport.Mobys.Count} mobys";
+        RefreshDiagnosticContext();
+        EditorDiagnostics.RecordAction("Level loaded", $"{level.DisplayName} ({level.Key}); {_viewport.Mobys.Count} mobys; {_viewport.Geometry?.Polygons.Count ?? 0} terrain faces");
+    }
+
+    private void ConfigureCompleteTerrainEditing()
+    {
+        // Scene contents are not a presentation preference. The shipping editor
+        // always keeps every captured face available; Game Camera obtains its
+        // game-like view through local camera/sector culling, not by removing
+        // source terrain from the editable scene.
+        _viewport.PlayableTerrainViewPredicate = null;
+        _viewport.MapTerrainBackdropOutlinePredicate = null;
+        _viewport.SetTerrainSceneViewMode(TerrainSceneViewMode.CompleteScene);
     }
 
     private int ApplyCustomTerrainTexturePreviews()
     {
-        return CustomTerrainTexturePreview.Apply(_currentGeometry, _customTerrainTextures);
+        int applied = CustomTerrainTexturePreview.Apply(_currentGeometry, _customTerrainTextures) +
+            CustomTerrainTexturePreview.ApplyNativeRelocations(
+                _currentGeometry,
+                _nativeTerrainTextureRelocations);
+        RefreshTerrainTextureImageFiles();
+        return applied;
+    }
+
+    private void RefreshTerrainTextureImageFiles()
+    {
+        if (_currentLevel == null)
+        {
+            _viewport.SetTerrainTextureImageFiles(null);
+            _viewport.SetNativeTerrainHqMaterialSet(
+                null,
+                compatible: false,
+                incompatibilityReason: "No level is loaded, so no validated native HQ material sidecar is available.");
+            return;
+        }
+
+        Dictionary<int, string> normalFiles = new();
+        Dictionary<int, string> closeFiles = new();
+        Dictionary<int, NativeTerrainLqTextureRecordPayload> lowDetailTextures = new();
+        NativeTerrainHqMaterialSet? nativeHighDetailMaterials = null;
+        string levelKey = LevelCatalog.NormalizeKey(_currentLevel.Key);
+        string nativeDirectory = Path.Combine(
+            _workspace.RootPath,
+            "editor-cache",
+            "terrain-textures",
+            levelKey);
+        string nativeManifest = Path.Combine(nativeDirectory, "manifest.json");
+        if (Directory.Exists(nativeDirectory) &&
+            PortableEditorCacheBuilder.IsCurrentTerrainTexturePreviewCache(_workspace.RootPath, levelKey) &&
+            TryReadNativeTerrainTexturePreviewFiles(
+                nativeManifest,
+                nativeDirectory,
+                out IReadOnlyDictionary<int, string> nativeNormalFiles,
+                out IReadOnlyDictionary<int, string> nativeCloseFiles) &&
+            PortableEditorCacheBuilder.TryLoadNativeTerrainLqTextureCache(
+                _workspace.RootPath,
+                levelKey,
+                out NativeTerrainLqTextureSet? nativeLowDetailTextures) &&
+            nativeLowDetailTextures != null &&
+            PortableEditorCacheBuilder.TryLoadNativeTerrainHqMaterialCache(
+                _workspace.RootPath,
+                levelKey,
+                out nativeHighDetailMaterials) &&
+            nativeHighDetailMaterials != null)
+        {
+            foreach ((int textureId, string path) in nativeNormalFiles)
+                normalFiles[textureId] = path;
+            foreach ((int textureId, string path) in nativeCloseFiles)
+                closeFiles[textureId] = path;
+            foreach (NativeTerrainLqTextureRecordPayload texture in nativeLowDetailTextures.Textures)
+                lowDetailTextures[texture.TextureId] = texture;
+        }
+
+        foreach (CustomTerrainTextureImport import in _customTerrainTextures)
+        {
+            string path = ResolveTerrainTexturePreviewPath(import.SourceImagePath);
+            if (!File.Exists(path))
+                continue;
+
+            if (string.Equals(import.DescriptorTier, "both", StringComparison.OrdinalIgnoreCase))
+            {
+                normalFiles[import.TextureId] = path;
+                closeFiles[import.TextureId] = path;
+            }
+            else if (string.Equals(import.DescriptorTier, "hqDataClose", StringComparison.OrdinalIgnoreCase))
+            {
+                closeFiles[import.TextureId] = path;
+            }
+            else
+            {
+                normalFiles[import.TextureId] = path;
+            }
+        }
+        foreach (NativeTerrainTextureRelocationEdit relocation in _nativeTerrainTextureRelocations)
+        {
+            string donorLevelKey = LevelCatalog.NormalizeKey(relocation.DonorLevelKey);
+            string donorDirectory = Path.Combine(
+                _workspace.RootPath,
+                "editor-cache",
+                "terrain-textures",
+                donorLevelKey);
+            string donorManifest = Path.Combine(donorDirectory, "manifest.json");
+            string? donorNormal = null;
+            string? donorClose = null;
+            NativeTerrainLqTextureRecordPayload? donorTexture = null;
+            bool donorHqReady =
+                PortableEditorCacheBuilder.IsCurrentTerrainTexturePreviewCache(_workspace.RootPath, donorLevelKey) &&
+                TryReadNativeTerrainTexturePreviewFiles(
+                    donorManifest,
+                    donorDirectory,
+                    out IReadOnlyDictionary<int, string> donorNormalFiles,
+                    out IReadOnlyDictionary<int, string> donorCloseFiles) &&
+                donorNormalFiles.TryGetValue(relocation.DonorTextureId, out donorNormal) &&
+                donorCloseFiles.TryGetValue(relocation.DonorTextureId, out donorClose);
+            bool donorLqReady = PortableEditorCacheBuilder.TryLoadNativeTerrainLqTextureCache(
+                    _workspace.RootPath,
+                    donorLevelKey,
+                    out NativeTerrainLqTextureSet? donorLowDetailTextures) &&
+                donorLowDetailTextures != null &&
+                donorLowDetailTextures.TryGetTexture(
+                    relocation.DonorTextureId,
+                    out donorTexture);
+
+            if (donorHqReady && donorLqReady &&
+                donorNormal != null && donorClose != null && donorTexture != null)
+            {
+                normalFiles[relocation.TargetTextureId] = donorNormal;
+                closeFiles[relocation.TargetTextureId] = donorClose;
+                lowDetailTextures[relocation.TargetTextureId] = donorTexture;
+            }
+            else
+            {
+                // A complete native relocation replaces LQ, normal HQ, and
+                // close HQ atomically. If any donor proof is unavailable,
+                // remove every target tier rather than mix donor LQ with target
+                // HQ (or display one close-tier staging PNG at both distances).
+                normalFiles.Remove(relocation.TargetTextureId);
+                closeFiles.Remove(relocation.TargetTextureId);
+                lowDetailTextures.Remove(relocation.TargetTextureId);
+            }
+        }
+
+        _viewport.SetTerrainTextureImageFiles(normalFiles, closeFiles, lowDetailTextures);
+        if (_customTerrainTextures.Count > 0)
+        {
+            _viewport.SetNativeTerrainHqMaterialSet(
+                null,
+                compatible: false,
+                incompatibilityReason: "Custom terrain texture imports use the whole-frame legacy preview because their final raw PSX555/STP descriptor payload is not represented by the native sidecar.");
+        }
+        else if (_nativeTerrainTextureRelocations.Count > 0)
+        {
+            _viewport.SetNativeTerrainHqMaterialSet(
+                null,
+                compatible: false,
+                incompatibilityReason: "Native terrain texture relocations use the whole-frame legacy preview because the exporter preserves target descriptor controls while transplanting donor art.");
+        }
+        else if (nativeHighDetailMaterials != null && lowDetailTextures.Count > 0)
+        {
+            _viewport.SetNativeTerrainHqMaterialSet(nativeHighDetailMaterials);
+        }
+        else
+        {
+            _viewport.SetNativeTerrainHqMaterialSet(
+                null,
+                compatible: false,
+                incompatibilityReason: "The level does not have a complete validated native LQ plus raw-HQ material cache; the whole frame remains on the legacy preview.");
+        }
+    }
+
+    private static bool TryReadNativeTerrainTexturePreviewFiles(
+        string manifestPath,
+        string nativeDirectory,
+        out IReadOnlyDictionary<int, string> normalFiles,
+        out IReadOnlyDictionary<int, string> closeFiles)
+    {
+        Dictionary<int, string> normal = [];
+        Dictionary<int, string> close = [];
+        normalFiles = normal;
+        closeFiles = close;
+        if (!File.Exists(manifestPath))
+            return false;
+
+        try
+        {
+            string expectedManifestPath = Path.GetFullPath(Path.Combine(nativeDirectory, "manifest.json"));
+            if (!string.Equals(Path.GetFullPath(manifestPath), expectedManifestPath, StringComparison.OrdinalIgnoreCase) ||
+                !PortableEditorCacheBuilder.TryLoadNativeTerrainLqTextureCacheFromDirectory(
+                    nativeDirectory,
+                    out NativeTerrainLqTextureSet? independentlyValidatedLowDetailTextures) ||
+                independentlyValidatedLowDetailTextures == null)
+            {
+                return false;
+            }
+            HashSet<int> independentlyValidatedLowDetailTextureIds = independentlyValidatedLowDetailTextures.Textures
+                .Select(texture => texture.TextureId)
+                .ToHashSet();
+
+            using FileStream stream = File.OpenRead(manifestPath);
+            using JsonDocument document = JsonDocument.Parse(stream);
+            JsonElement root = document.RootElement;
+            string levelKey = LevelCatalog.NormalizeKey(ReadJsonString(root, "levelKey"));
+            if (ReadJsonInt32(root, "cacheFormatVersion", -1) != PortableEditorCacheBuilder.TerrainTexturePreviewCacheFormatVersion ||
+                !string.Equals(ReadJsonString(root, "decoder"), PortableEditorCacheBuilder.TerrainTexturePreviewDecoder, StringComparison.Ordinal) ||
+                !string.Equals(levelKey, Path.GetFileName(Path.TrimEndingDirectorySeparator(nativeDirectory)), StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(ReadJsonString(root, "stateSemantics"), PortableEditorCacheBuilder.TerrainTexturePreviewStateSemantics, StringComparison.Ordinal) ||
+                !IsJsonTrue(root, "runtimeControlComplete") ||
+                !IsJsonTrue(root, "runtimeControlInitialStateComplete") ||
+                !IsJsonFalse(root, "runtimePlaybackIncluded") ||
+                !IsJsonFalse(root, "currentGameplayState"))
+            {
+                return false;
+            }
+
+            if (!TryReadUniqueNonNegativeIntSet(root, "runtimeControlledTextureIds", out HashSet<int> runtimeControlledTextureIds) ||
+                !TryReadUniqueNonNegativeIntSet(root, "runtimeInitializedTextureIds", out HashSet<int> runtimeInitializedTextureIds) ||
+                !runtimeControlledTextureIds.SetEquals(runtimeInitializedTextureIds) ||
+                !TryReadUniqueNonNegativeIntSet(root, "animationSourceTextureIds", out HashSet<int> animationSourceTextureIds) ||
+                !root.TryGetProperty("runtimeControls", out JsonElement runtimeControls) ||
+                runtimeControls.ValueKind is not JsonValueKind.Array ||
+                ReadJsonInt32(root, "runtimeControlTargetWadEntry", -1) < 0 ||
+                ReadJsonInt32(root, "runtimeControlSceneByteLength", -1) <= 0 ||
+                !IsSha256Hex(ReadJsonString(root, "runtimeControlSceneSha256")) ||
+                ReadJsonInt32(root, "runtimeControlProgramCount", -1) != runtimeControls.GetArrayLength())
+            {
+                return false;
+            }
+
+            Dictionary<int, (string Kind, int ControlId, int PointerIndex, int? InitialSource, int? InitialPhase)> controlProofs = [];
+            foreach (JsonElement control in runtimeControls.EnumerateArray())
+            {
+                string runtimeKind = ReadJsonString(control, "runtimeKind");
+                if (runtimeKind is not ("fullRecordAnimation" or "scrollingDescriptor") ||
+                    !string.Equals(ReadJsonString(control, "stateSemantics"), PortableEditorCacheBuilder.TerrainTexturePreviewStateSemantics, StringComparison.Ordinal) ||
+                    !TryReadRequiredNonNegativeInt(control, "controlId", out int controlId) ||
+                    !TryReadRequiredNonNegativeInt(control, "pointerIndex", out int pointerIndex) ||
+                    !TryReadRequiredNonNegativeInt(control, "sceneRelativeStructureOffset", out _) ||
+                    !TryReadRequiredNonNegativeInt(control, "destinationTextureId", out int destinationTextureId) ||
+                    string.IsNullOrWhiteSpace(ReadJsonString(control, "rawBytesHex")) ||
+                    controlProofs.ContainsKey(destinationTextureId) ||
+                    !control.TryGetProperty("frames", out JsonElement frames) ||
+                    frames.ValueKind is not JsonValueKind.Array || frames.GetArrayLength() == 0)
+                {
+                    return false;
+                }
+
+                int? initialSource = null;
+                int? initialPhase = null;
+                if (runtimeKind == "fullRecordAnimation")
+                {
+                    if (!TryReadRequiredNonNegativeInt(control, "initialSourceTextureId", out int sourceTextureId))
+                        return false;
+                    initialSource = sourceTextureId;
+                }
+                else
+                {
+                    if (!TryReadRequiredNonNegativeInt(control, "initialPhase", out int phase) || phase > 0x7F)
+                        return false;
+                    initialPhase = phase;
+                }
+
+                controlProofs[destinationTextureId] = (runtimeKind, controlId, pointerIndex, initialSource, initialPhase);
+            }
+            if (!runtimeControlledTextureIds.SetEquals(controlProofs.Keys))
+                return false;
+
+            if (!root.TryGetProperty("initializationMutations", out JsonElement initializationMutations) ||
+                initializationMutations.ValueKind is not JsonValueKind.Array ||
+                initializationMutations.GetArrayLength() != runtimeControls.GetArrayLength())
+            {
+                return false;
+            }
+
+            HashSet<int> mutationDestinations = [];
+            foreach (JsonElement mutation in initializationMutations.EnumerateArray())
+            {
+                string runtimeKind = ReadJsonString(mutation, "runtimeKind");
+                if (runtimeKind is not ("fullRecordAnimation" or "scrollingDescriptor") ||
+                    !TryReadRequiredNonNegativeInt(mutation, "ControlId", out int controlId) ||
+                    !TryReadRequiredNonNegativeInt(mutation, "PointerIndex", out int pointerIndex) ||
+                    !TryReadRequiredNonNegativeInt(mutation, "DestinationTextureId", out int destinationTextureId) ||
+                    !TryReadRequiredNonNegativeInt(mutation, "LqChangedByteCount", out int lqChangedByteCount) ||
+                    lqChangedByteCount > 16 ||
+                    !TryReadRequiredNonNegativeInt(mutation, "HqChangedByteCount", out int hqChangedByteCount) ||
+                    hqChangedByteCount > 168 ||
+                    !IsSha256Hex(ReadJsonString(mutation, "OriginalLqSha256")) ||
+                    !IsSha256Hex(ReadJsonString(mutation, "InitializedLqSha256")) ||
+                    !IsSha256Hex(ReadJsonString(mutation, "OriginalHqSha256")) ||
+                    !IsSha256Hex(ReadJsonString(mutation, "InitializedHqSha256")) ||
+                    !TryReadNullableNonNegativeInt(mutation, "InitialSourceTextureId", out int? initialSource) ||
+                    !TryReadNullableNonNegativeInt(mutation, "InitialPhase", out int? initialPhase) ||
+                    !mutationDestinations.Add(destinationTextureId) ||
+                    !controlProofs.TryGetValue(destinationTextureId, out var controlProof) ||
+                    !string.Equals(runtimeKind, controlProof.Kind, StringComparison.Ordinal) ||
+                    controlId != controlProof.ControlId || pointerIndex != controlProof.PointerIndex ||
+                    initialSource != controlProof.InitialSource || initialPhase != controlProof.InitialPhase)
+                {
+                    return false;
+                }
+            }
+            if (!runtimeInitializedTextureIds.SetEquals(mutationDestinations))
+                return false;
+
+            if (!root.TryGetProperty("textures", out JsonElement textures) || textures.ValueKind is not JsonValueKind.Array)
+                return false;
+
+            int requestedTextureCount = ReadJsonInt32(root, "requestedTextureCount", -1);
+            int decodedTextureCount = ReadJsonInt32(root, "decodedTextureCount", -1);
+            int completeDualTierTextureCount = ReadJsonInt32(root, "completeDualTierTextureCount", -1);
+            int decodedFrameCount = ReadJsonInt32(root, "decodedFrameCount", -1);
+            if (requestedTextureCount <= 0 || decodedTextureCount != requestedTextureCount ||
+                completeDualTierTextureCount != requestedTextureCount || decodedFrameCount != requestedTextureCount * 2 ||
+                textures.GetArrayLength() != decodedFrameCount ||
+                independentlyValidatedLowDetailTextureIds.Count != requestedTextureCount)
+            {
+                return false;
+            }
+
+            List<(int TextureId, string DescriptorTier, string Path)> entries = [];
+            string directoryPrefix = Path.GetFullPath(nativeDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            foreach (JsonElement texture in textures.EnumerateArray())
+            {
+                if (!TryReadRequiredNonNegativeInt(texture, "textureId", out int textureId))
+                    return false;
+                string file = texture.TryGetProperty("file", out JsonElement fileElement) && fileElement.ValueKind is JsonValueKind.String
+                    ? fileElement.GetString() ?? ""
+                    : "";
+                string descriptorTier = texture.TryGetProperty("descriptorTier", out JsonElement tierElement) && tierElement.ValueKind is JsonValueKind.String
+                    ? tierElement.GetString() ?? ""
+                    : "";
+                string previewTier = ReadJsonString(texture, "previewTier");
+                int width = ReadJsonInt32(texture, "width", -1);
+                int height = ReadJsonInt32(texture, "height", -1);
+                int descriptorCount = ReadJsonInt32(texture, "descriptorCount", -1);
+                int pixelCount = ReadJsonInt32(texture, "pixelCount", -1);
+                long fileByteLength = ReadJsonInt64(texture, "fileByteLength", -1);
+                string fileSha256 = ReadJsonString(texture, "fileSha256");
+                bool controlled = runtimeControlledTextureIds.Contains(textureId);
+                if (!TryReadRequiredBoolean(texture, "runtimeControlled", out bool entryControlled) ||
+                    !TryReadRequiredBoolean(texture, "runtimeInitializationApplied", out bool initializationApplied) ||
+                    !TryReadRequiredBoolean(texture, "animationSourceDiagnostic", out bool animationSourceDiagnostic))
+                {
+                    return false;
+                }
+                string runtimeKind = ReadJsonString(texture, "runtimeKind");
+                string previewState = ReadJsonString(texture, "previewState");
+                string suffix = descriptorTier switch
+                {
+                    "hqData" => "normal",
+                    "hqDataClose" => "close",
+                    _ => ""
+                };
+                string expectedFile = $"{levelKey}-texture-{textureId:000}-{suffix}.png";
+                if (entryControlled != controlled || initializationApplied != controlled ||
+                    animationSourceDiagnostic != animationSourceTextureIds.Contains(textureId) ||
+                    string.IsNullOrEmpty(suffix) || !string.Equals(previewTier, suffix, StringComparison.Ordinal) ||
+                    width <= 0 || height <= 0 || pixelCount != checked(width * height) ||
+                    descriptorCount != (descriptorTier == "hqData" ? 4 : 16) ||
+                    !string.Equals(file, expectedFile, StringComparison.Ordinal) || Path.GetFileName(file) != file)
+                {
+                    return false;
+                }
+
+                if (controlled)
+                {
+                    var proof = controlProofs[textureId];
+                    if (!string.Equals(runtimeKind, proof.Kind, StringComparison.Ordinal) ||
+                        !string.Equals(previewState, PortableEditorCacheBuilder.TerrainTexturePreviewStateSemantics, StringComparison.Ordinal) ||
+                        !TryReadRequiredNonNegativeInt(texture, "runtimeDestinationTextureId", out int destinationTextureId) || destinationTextureId != textureId ||
+                        !TryReadUniqueNonNegativeIntSet(texture, "runtimeControlIds", out HashSet<int> controlIds) || !controlIds.SetEquals([proof.ControlId]) ||
+                        !TryReadUniqueNonNegativeIntSet(texture, "runtimePointerIndexes", out HashSet<int> pointerIndexes) || !pointerIndexes.SetEquals([proof.PointerIndex]) ||
+                        !TryReadUniqueNonNegativeIntSet(texture, "initialSourceTextureIds", out HashSet<int> initialSources) ||
+                        !initialSources.SetEquals(proof.InitialSource.HasValue ? [proof.InitialSource.Value] : []) ||
+                        !TryReadUniqueNonNegativeIntSet(texture, "initialPhases", out HashSet<int> initialPhases) ||
+                        !initialPhases.SetEquals(proof.InitialPhase.HasValue ? [proof.InitialPhase.Value] : []))
+                    {
+                        return false;
+                    }
+                }
+                else if (!string.Equals(runtimeKind, "none", StringComparison.Ordinal) ||
+                         previewState is not ("staticRecord" or "animationSourceDiagnostic"))
+                {
+                    return false;
+                }
+
+                string path = Path.GetFullPath(Path.Combine(nativeDirectory, file));
+                if (!path.StartsWith(directoryPrefix, StringComparison.Ordinal) ||
+                    !PortableEditorCacheBuilder.IsNativeTerrainTexturePreviewFrameValid(
+                        path,
+                        width,
+                        height,
+                        fileByteLength,
+                        fileSha256))
+                {
+                    return false;
+                }
+                entries.Add((textureId, descriptorTier, path));
+            }
+
+            foreach (IGrouping<int, (int TextureId, string DescriptorTier, string Path)> group in entries.GroupBy(entry => entry.TextureId))
+            {
+                if (group.Count() != 2 || group.Count(entry => entry.DescriptorTier == "hqData") != 1 ||
+                    group.Count(entry => entry.DescriptorTier == "hqDataClose") != 1)
+                {
+                    return false;
+                }
+                normal[group.Key] = group.Single(entry => entry.DescriptorTier == "hqData").Path;
+                close[group.Key] = group.Single(entry => entry.DescriptorTier == "hqDataClose").Path;
+            }
+
+            if (normal.Count != requestedTextureCount || close.Count != requestedTextureCount ||
+                !independentlyValidatedLowDetailTextureIds.SetEquals(normal.Keys) ||
+                !independentlyValidatedLowDetailTextureIds.SetEquals(close.Keys))
+            {
+                normal.Clear();
+                close.Clear();
+                return false;
+            }
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException or ArgumentException or InvalidDataException or NotSupportedException or OverflowException)
+        {
+            normal.Clear();
+            close.Clear();
+            return false;
+        }
+    }
+
+    private static bool IsJsonTrue(JsonElement parent, string propertyName) =>
+        parent.TryGetProperty(propertyName, out JsonElement value) && value.ValueKind is JsonValueKind.True;
+
+    private static bool IsJsonFalse(JsonElement parent, string propertyName) =>
+        parent.TryGetProperty(propertyName, out JsonElement value) && value.ValueKind is JsonValueKind.False;
+
+    private static bool TryReadRequiredBoolean(JsonElement parent, string propertyName, out bool value)
+    {
+        value = false;
+        if (!parent.TryGetProperty(propertyName, out JsonElement element) ||
+            element.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+        {
+            return false;
+        }
+
+        value = element.GetBoolean();
+        return true;
+    }
+
+    private static string ReadJsonString(JsonElement parent, string propertyName) =>
+        parent.TryGetProperty(propertyName, out JsonElement element) && element.ValueKind is JsonValueKind.String
+            ? element.GetString() ?? ""
+            : "";
+
+    private static int ReadJsonInt32(JsonElement parent, string propertyName, int fallback) =>
+        parent.TryGetProperty(propertyName, out JsonElement element) && element.ValueKind is JsonValueKind.Number &&
+        element.TryGetInt32(out int value)
+            ? value
+            : fallback;
+
+    private static long ReadJsonInt64(JsonElement parent, string propertyName, long fallback) =>
+        parent.TryGetProperty(propertyName, out JsonElement element) && element.ValueKind is JsonValueKind.Number &&
+        element.TryGetInt64(out long value)
+            ? value
+            : fallback;
+
+    private static bool IsSha256Hex(string value) =>
+        value.Length == 64 && value.All(character =>
+            character is >= '0' and <= '9' or >= 'A' and <= 'F' or >= 'a' and <= 'f');
+
+    private static bool TryReadRequiredNonNegativeInt(JsonElement parent, string propertyName, out int value)
+    {
+        value = -1;
+        return parent.TryGetProperty(propertyName, out JsonElement element) &&
+            element.ValueKind is JsonValueKind.Number && element.TryGetInt32(out value) && value >= 0;
+    }
+
+    private static bool TryReadNullableNonNegativeInt(JsonElement parent, string propertyName, out int? value)
+    {
+        value = null;
+        if (!parent.TryGetProperty(propertyName, out JsonElement element))
+            return false;
+        if (element.ValueKind is JsonValueKind.Null)
+            return true;
+        if (element.ValueKind is not JsonValueKind.Number || !element.TryGetInt32(out int parsed) || parsed < 0)
+            return false;
+        value = parsed;
+        return true;
+    }
+
+    private static bool TryReadUniqueNonNegativeIntSet(JsonElement parent, string propertyName, out HashSet<int> values)
+    {
+        values = [];
+        if (!parent.TryGetProperty(propertyName, out JsonElement array) || array.ValueKind is not JsonValueKind.Array)
+            return false;
+
+        foreach (JsonElement element in array.EnumerateArray())
+        {
+            if (element.ValueKind is not JsonValueKind.Number || !element.TryGetInt32(out int value) ||
+                value < 0 || !values.Add(value))
+            {
+                values.Clear();
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private string ResolveTerrainTexturePreviewPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || Path.IsPathRooted(path))
+            return path ?? "";
+        return Path.Combine(_workspace.RootPath, path);
     }
 
     private async Task BuildPortableCacheAsync(bool overwrite = true, bool triggeredByDiscSelection = false)
@@ -2222,9 +2771,9 @@ public sealed class MainWindow : Window
                 : "";
             _statusText.Text = triggeredByDiscSelection
                 ? result.ReusedExistingCache
-                    ? $"Selected disc and reused existing level maps: {result.OverlayCacheCount}/{result.LevelCount} terrain map(s), {result.MobyCacheCount}/{result.LevelCount} object cache(s).{objectNote}"
-                    : $"Selected disc and rebuilt level maps from that BIN/CUE: {result.OverlayCacheCount}/{result.LevelCount} terrain map(s), {result.MobyCacheCount}/{result.LevelCount} object cache(s).{objectNote}"
-                : $"Built cache: {result.MobyCacheCount}/{result.LevelCount} object cache(s), {result.OverlayCacheCount}/{result.LevelCount} terrain map(s).{objectNote}";
+                    ? $"Selected disc and reused existing level maps: {result.OverlayCacheCount}/{result.LevelCount} terrain map(s), {result.MobyCacheCount}/{result.LevelCount} object cache(s), {result.TexturePreviewCount} native terrain texture(s).{objectNote}"
+                    : $"Selected disc and rebuilt level maps from that BIN/CUE: {result.OverlayCacheCount}/{result.LevelCount} terrain map(s), {result.MobyCacheCount}/{result.LevelCount} object cache(s), {result.TexturePreviewCount} native terrain texture(s).{objectNote}"
+                : $"Built cache: {result.MobyCacheCount}/{result.LevelCount} object cache(s), {result.OverlayCacheCount}/{result.LevelCount} terrain map(s), {result.TexturePreviewCount} native terrain texture(s).{objectNote}";
         }
         catch (Exception ex)
         {
@@ -2260,7 +2809,12 @@ public sealed class MainWindow : Window
         string customArt = _customTerrainTextures.Count > 0
             ? $"; custom terrain art {_customTerrainTextures.Count}"
             : "";
-        _statusText.Text = $"Saved {mobyCount} object edit(s). Terrain: {BuildTerrainEditSummary()}{customArt}.";
+        string nativeTextureSwaps = _nativeTerrainTextureRelocations.Count > 0
+            ? $"; native cross-level texture swap(s) {_nativeTerrainTextureRelocations.Count}"
+            : "";
+        _statusText.Text = $"Saved {mobyCount} object edit(s). Terrain: {BuildTerrainEditSummary()}{customArt}{nativeTextureSwaps}.";
+        RefreshDiagnosticContext(includeSavedEdits: true);
+        EditorDiagnostics.RecordAction("Saved level edits", $"{_currentLevel.DisplayName}: {mobyCount} object edit(s); {BuildTerrainEditSummary()}{customArt}{nativeTextureSwaps}");
     }
 
     private async Task<int> PersistCurrentMobyEditsAsync()
@@ -2332,12 +2886,19 @@ public sealed class MainWindow : Window
 
         LevelDefinition level = _currentLevel;
         string levelKey = level.Key;
+        string[] nativeTexturePreviewPaths = NativeTerrainTextureRelocationEditStore
+            .Load(_workspace.RootPath, levelKey)
+            .Select(edit => edit.PreviewImagePath)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
         string[] paths =
         [
             Path.Combine(_workspace.RootPath, $"{levelKey}-native-edits.json"),
             Path.Combine(_workspace.RootPath, $"{levelKey}-terrain-edits.json"),
             Path.Combine(_workspace.RootPath, $"{levelKey}-terrain-material-overrides.json"),
-            CustomTerrainTextureStore.ManifestPath(_workspace.RootPath, levelKey)
+            CustomTerrainTextureStore.ManifestPath(_workspace.RootPath, levelKey),
+            NativeTerrainTextureRelocationEditStore.ManifestPath(_workspace.RootPath, levelKey)
         ];
 
         int deleted = 0;
@@ -2349,12 +2910,15 @@ public sealed class MainWindow : Window
             File.Delete(path);
             deleted++;
         }
+        foreach (string previewPath in nativeTexturePreviewPaths)
+            DeleteManagedNativeTerrainTexturePreview(previewPath);
 
         _selectedMoby = null;
         _selectedTerrain = null;
         _selectedTerrainIndex = -1;
         _activeTerrainProofTarget = null;
         _lastRemovedMoby = null;
+        InvalidateBuildSafetySummary();
         _loadingLevel = true;
         RefreshLevelSelectionAvailability();
         _statusText.Text = $"Restoring {level.DisplayName}...";
@@ -2404,11 +2968,18 @@ public sealed class MainWindow : Window
 
         LevelDefinition level = _currentLevel;
         string levelKey = level.Key;
+        string[] nativeTexturePreviewPaths = NativeTerrainTextureRelocationEditStore
+            .Load(_workspace.RootPath, levelKey)
+            .Select(edit => edit.PreviewImagePath)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
         string[] paths =
         [
             Path.Combine(_workspace.RootPath, $"{levelKey}-terrain-edits.json"),
             Path.Combine(_workspace.RootPath, $"{levelKey}-terrain-material-overrides.json"),
-            CustomTerrainTextureStore.ManifestPath(_workspace.RootPath, levelKey)
+            CustomTerrainTextureStore.ManifestPath(_workspace.RootPath, levelKey),
+            NativeTerrainTextureRelocationEditStore.ManifestPath(_workspace.RootPath, levelKey)
         ];
 
         int deleted = 0;
@@ -2420,6 +2991,8 @@ public sealed class MainWindow : Window
             File.Delete(path);
             deleted++;
         }
+        foreach (string previewPath in nativeTexturePreviewPaths)
+            DeleteManagedNativeTerrainTexturePreview(previewPath);
 
         Moby? selectedMoby = _selectedMoby != null && !_selectedMoby.IsRemoved ? _selectedMoby : null;
         _selectedTerrain = null;
@@ -2436,9 +3009,12 @@ public sealed class MainWindow : Window
             {
                 TerrainGeometryLoadData geometry = LoadGeometryData(levelKey);
                 IReadOnlyList<CustomTerrainTextureImport> customTextures = CustomTerrainTextureStore.Load(_workspace.RootPath, levelKey);
+                IReadOnlyList<NativeTerrainTextureRelocationEdit> nativeRelocations =
+                    NativeTerrainTextureRelocationEditStore.Load(_workspace.RootPath, levelKey);
                 CustomTerrainTexturePreview.Apply(geometry.Geometry, customTextures);
+                CustomTerrainTexturePreview.ApplyNativeRelocations(geometry.Geometry, nativeRelocations);
                 TerrainCollisionLoadData collision = LoadTerrainCollisionData(levelKey, geometry.Geometry);
-                return new RestoredTerrainLoadData(geometry, collision, customTextures);
+                return new RestoredTerrainLoadData(geometry, collision, customTextures, nativeRelocations);
             });
 
             _currentGeometry = loaded.Geometry.Geometry;
@@ -2446,11 +3022,14 @@ public sealed class MainWindow : Window
             _loadedTerrainEdits = loaded.Geometry.LoadedTerrainEdits;
             _savedTerrainEditSignature = BuildTerrainEditSignature(_currentGeometry);
             _customTerrainTextures = loaded.CustomTerrainTextures;
+            _nativeTerrainTextureRelocations = loaded.NativeTerrainTextureRelocations;
+            RefreshTerrainTextureImageFiles();
             _terrainCollisionTriangleKeys = loaded.Collision.TriangleKeys;
             _terrainCollisionMatchedFaces = loaded.Collision.MatchedFaces;
             _terrainCollisionReadinessMessage = loaded.Collision.ReadinessMessage;
             RefreshTerrainBrushSafetyState(updateStatus: false, defaultToSafe: true);
             _viewport.Geometry = _currentGeometry;
+            ConfigureCompleteTerrainEditing();
             if (selectedMoby != null)
                 _viewport.SelectMoby(selectedMoby, false);
             else
@@ -2487,7 +3066,7 @@ public sealed class MainWindow : Window
         });
         panel.Children.Add(new TextBlock
         {
-            Text = "This clears saved object edits, terrain edits, material overrides, and custom terrain texture imports for this level, then reloads the original cached level.",
+            Text = "This clears saved object edits, terrain edits, material overrides, custom terrain texture imports, and native cross-level texture swaps for this level, then reloads the original cached level.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92)),
             LineHeight = 20
@@ -2525,7 +3104,7 @@ public sealed class MainWindow : Window
         });
         panel.Children.Add(new TextBlock
         {
-            Text = "This clears terrain geometry edits, material overrides, and custom terrain texture imports for this level only. Object edits stay untouched.",
+            Text = "This clears terrain geometry edits, material overrides, custom terrain texture imports, and native cross-level texture swaps for this level only. Object edits stay untouched.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92)),
             LineHeight = 20
@@ -2548,6 +3127,9 @@ public sealed class MainWindow : Window
 
     private async Task ImportCustomTerrainTextureAsync()
     {
+        if (BlockLegacyCustomTerrainTextureAction())
+            return;
+
         if (_currentLevel == null)
         {
             _statusText.Text = "Choose a level before importing terrain texture art.";
@@ -2617,7 +3199,7 @@ public sealed class MainWindow : Window
 
         int previewFaces = ApplyCustomTerrainTexturePreviews();
         RefreshCurrentLevelDetails();
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         string exportScope = "Create Test BIN will include normal and close-detail texture patches for this level.";
         _statusText.Text = $"Imported custom art for texture ID {_selectedTerrain.TextureId} and previewed it on {previewFaces} face(s). {exportScope}";
@@ -3794,7 +4376,7 @@ public sealed class MainWindow : Window
         RefreshCurrentLevelDetails();
         RefreshTerrainSurfaceQuickState();
         RefreshTerrainReadinessHint();
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         _statusText.Text = $"Cleared {unusedImports.Length} unused custom terrain art import(s) from {distinctUnused} texture ID(s) ({freedTextureIds}). {activeImports.Length} active import(s) remain for current terrain faces.";
     }
 
@@ -4711,6 +5293,9 @@ public sealed class MainWindow : Window
 
     private async Task RecolorSelectedTerrainTextureAsync()
     {
+        if (BlockLegacyCustomTerrainTextureAction())
+            return;
+
         if (_currentLevel == null)
         {
             _statusText.Text = "Choose a level before recoloring terrain texture art.";
@@ -4775,7 +5360,7 @@ public sealed class MainWindow : Window
         int previewFaces = ApplyCustomTerrainTexturePreviews();
 
         RefreshCurrentLevelDetails();
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         _statusText.Text = $"Generated recolored terrain art for texture ID {_selectedTerrain.TextureId} and previewed it on {previewFaces} face(s). Create Test BIN will include normal and close-detail texture patches.";
     }
@@ -4876,6 +5461,9 @@ public sealed class MainWindow : Window
 
     private async Task StageSelectedTerrainTexturePaletteAsync(TerrainPaletteImport palette, string sourceImageName, string sourceKind, string fileSlug, string statusVerb)
     {
+        if (BlockLegacyCustomTerrainTextureAction())
+            return;
+
         if (_currentLevel == null || _selectedTerrain == null || _selectedTerrain.TextureId < 0)
         {
             _statusText.Text = "Select a terrain face first so the editor knows which texture ID to recolor.";
@@ -4905,7 +5493,7 @@ public sealed class MainWindow : Window
         int previewFaces = ApplyCustomTerrainTexturePreviews();
 
         RefreshCurrentLevelDetails();
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         _statusText.Text = $"{statusVerb} {palette.DisplayName} ({palette.ColorCount} color(s), {palette.LowHex}->{palette.HighHex}) for texture ID {_selectedTerrain.TextureId} and previewed {previewFaces} face(s). Create Test BIN will include the texture patches.";
     }
@@ -5040,6 +5628,9 @@ public sealed class MainWindow : Window
 
     private async Task StageSelectedTerrainFaceGradientAsync(ColorRgba low, ColorRgba high, string sourceKind, string paletteName, string fileSlug, string statusVerb)
     {
+        if (BlockLegacyCustomTerrainTextureAction())
+            return;
+
         TerrainFaceLocalTextureResult? local = await EnsureSelectedTerrainFaceLocalTextureAsync($"{statusVerb.ToLowerInvariant()} this terrain face");
         if (local == null || _selectedTerrain == null || _currentLevel == null)
             return;
@@ -5067,7 +5658,7 @@ public sealed class MainWindow : Window
         int savedEdits = await PersistCurrentTerrainEditsAsync();
 
         RefreshCurrentLevelDetails();
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         _statusText.Text = $"{statusVerb} one terrain face using local texture {local.TextureId} ({local.SourceSummary}); previewed {previewFaces} face(s) and saved {savedEdits} terrain edit(s). Create Test BIN will patch this face plus its custom texture art.";
     }
@@ -5162,6 +5753,9 @@ public sealed class MainWindow : Window
 
     private async Task StageSelectedTerrainFacePaletteAsync(TerrainPaletteImport palette, string sourceImageName, string sourceKind, string fileSlug, string statusVerb)
     {
+        if (BlockLegacyCustomTerrainTextureAction())
+            return;
+
         TerrainFaceLocalTextureResult? local = await EnsureSelectedTerrainFaceLocalTextureAsync($"{statusVerb.ToLowerInvariant()} a palette for this terrain face");
         if (local == null || _selectedTerrain == null || _currentLevel == null)
             return;
@@ -5190,7 +5784,7 @@ public sealed class MainWindow : Window
         int savedEdits = await PersistCurrentTerrainEditsAsync();
 
         RefreshCurrentLevelDetails();
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         _statusText.Text = $"{statusVerb} {palette.DisplayName} for one terrain face using local texture {local.TextureId} ({local.SourceSummary}); previewed {previewFaces} face(s) and saved {savedEdits} terrain edit(s). Create Test BIN will include this face-local palette.";
     }
@@ -5309,7 +5903,10 @@ public sealed class MainWindow : Window
         return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
     }
 
-    private async Task<TerrainFaceLocalTextureResult?> EnsureSelectedTerrainFaceLocalTextureAsync(string action)
+    private async Task<TerrainFaceLocalTextureResult?> EnsureSelectedTerrainFaceLocalTextureAsync(
+        string action,
+        string requiredNormalTopologySignature = "",
+        string requiredCloseTopologySignature = "")
     {
         if (_currentLevel == null || _currentGeometry == null || _selectedTerrain == null)
         {
@@ -5343,7 +5940,16 @@ public sealed class MainWindow : Window
         bool CurrentSlotIsUsable()
         {
             TerrainTextureSlot? current = slots.FirstOrDefault(slot => slot.TextureId == _selectedTerrain.TextureId);
-            return current != null && current.HasNormalDescriptors && current.HasCloseDescriptors;
+            if (current == null)
+                return false;
+            bool needsNormal = !string.IsNullOrWhiteSpace(requiredNormalTopologySignature);
+            bool needsClose = !string.IsNullOrWhiteSpace(requiredCloseTopologySignature);
+            if (!needsNormal && !needsClose)
+                return current.HasNormalDescriptors && current.HasCloseDescriptors;
+            return (!needsNormal ||
+                    (current.HasNormalDescriptors && string.Equals(current.NormalTopologySignature, requiredNormalTopologySignature, StringComparison.Ordinal))) &&
+                (!needsClose ||
+                    (current.HasCloseDescriptors && string.Equals(current.CloseTopologySignature, requiredCloseTopologySignature, StringComparison.Ordinal)));
         }
 
         textureUseCounts.TryGetValue(_selectedTerrain.TextureId, out int currentUseCount);
@@ -5360,7 +5966,13 @@ public sealed class MainWindow : Window
         foreach (CustomTerrainTextureImport import in _customTerrainTextures)
             usedTextureIds.Add(import.TextureId);
 
-        TerrainTextureSlot? slot = TerrainPatchExporter.FindUnusedTextureSlot(sourceImage, _currentLevel, usedTextureIds, preferBothDescriptorTiers: true);
+        TerrainTextureSlot? slot = TerrainPatchExporter.FindUnusedTextureSlot(
+            sourceImage,
+            _currentLevel,
+            usedTextureIds,
+            preferBothDescriptorTiers: true,
+            requiredNormalTopologySignature,
+            requiredCloseTopologySignature);
         if (slot == null)
         {
             if (currentUseCount <= 1 && CurrentSlotIsUsable())
@@ -5376,7 +5988,10 @@ public sealed class MainWindow : Window
             string cleanupHint = usage.UnusedImports > 0
                 ? $" Clear Unused Art can free {usage.UnusedImports} unused custom import(s) first."
                 : "";
-            _statusText.Text = $"Could not find an unused texture slot to {action}. Try a different level or use the shared texture color tools for now.{cleanupHint}";
+            string topologyHint = string.IsNullOrWhiteSpace(requiredNormalTopologySignature) && string.IsNullOrWhiteSpace(requiredCloseTopologySignature)
+                ? " Try a different level or use the shared texture color tools for now."
+                : " No unused slot has the donor texture's exact normal/close atlas topology, so the editor refused a distorted or partial import.";
+            _statusText.Text = $"Could not find an unused texture slot to {action}.{topologyHint}{cleanupHint}";
             return null;
         }
 
@@ -5437,6 +6052,9 @@ public sealed class MainWindow : Window
 
     private async Task ApplySurfaceTerrainPaletteAsync()
     {
+        if (BlockLegacyCustomTerrainTextureAction())
+            return;
+
         if (_currentLevel == null || _currentGeometry == null)
         {
             _statusText.Text = "Choose a level before applying a terrain palette.";
@@ -5568,7 +6186,7 @@ public sealed class MainWindow : Window
         _loadedTerrainEdits = await TerrainEditStore.SaveAsync(terrainEditsPath, _currentGeometry.Polygons, _currentLevel.DisplayName);
         _savedTerrainEditSignature = BuildTerrainEditSignature(_currentGeometry);
         RefreshCurrentLevelDetails();
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         string swapText = switchedTextureIds
             ? $" Switched {targetFaces.Count} face(s) from {TerrainMaterialClassifier.FormatSurface(surface)} texture(s) to {TerrainMaterialClassifier.FormatSurface(targetSurface)} texture {targetTextureId.GetValueOrDefault()}."
@@ -5682,8 +6300,11 @@ public sealed class MainWindow : Window
             details.Text =
                 $"Selected face {_selectedTerrain.RuntimeKey}: texture {_selectedTerrain.TextureId} -> {choice.TextureId}\n" +
                 $"Borrowed look: {TerrainMaterialClassifier.FormatSurface(choice.Surface)}, {choice.FaceCount} face(s), proof {choice.ProofSummary}\n" +
+                $"Art: {(choice.CanUseArt ? "Ready" : "Blocked")} — {choice.ArtReadinessNote}\n" +
+                $"Native tint: {(choice.CanTransferVisual ? "Ready" : "Blocked")} — {choice.VisualTransferNote}\n" +
+                $"Surface property: {(choice.CanTransferBehavior ? "Ready" : "Blocked")} — {choice.BehaviorTransferNote}\n" +
                 $"Behavior: {choice.BehaviorSummary}\n" +
-                $"{custom} Representative face: {choice.RuntimeKey} at {choice.X:0.##}, {choice.Y:0.##}, {choice.Z:0.##}";
+                $"{custom} Visual source: {choice.VisualRuntimeKey}; behavior source: {choice.RuntimeKey}; location {choice.X:0.##}, {choice.Y:0.##}, {choice.Z:0.##}";
         }
 
         void RefreshChoices()
@@ -5735,125 +6356,409 @@ public sealed class MainWindow : Window
     {
         if (_selectedTerrain == null || _currentGeometry == null || _currentLevel == null)
             return;
+        if (!selected.CanApplyAtomically)
+        {
+            _statusText.Text = $"Cannot apply texture {selected.TextureId} atomically: {selected.AtomicBlockReason} No face or saved edit was changed.";
+            return;
+        }
+        NativeTerrainTextureRelocationEdit? selectedFaceRelocation = _nativeTerrainTextureRelocations
+            .FirstOrDefault(edit => edit.TargetTextureId == _selectedTerrain.TextureId);
+        if (selectedFaceRelocation != null)
+        {
+            _statusText.Text = $"The selected face currently uses shared relocated texture {_selectedTerrain.TextureId}. Undo that shared replacement before applying a face-local resident look; no face or saved edit was changed.";
+            return;
+        }
+        NativeTerrainTextureRelocationEdit? donorRelocation = _nativeTerrainTextureRelocations
+            .FirstOrDefault(edit => edit.TargetTextureId == selected.TextureId);
+        if (donorRelocation != null)
+        {
+            _statusText.Text = $"Texture {selected.TextureId} currently contains the shared replacement from {donorRelocation.DonorLevelName}. Undo that shared replacement before using it as a resident face look; no face or saved edit was changed.";
+            return;
+        }
+        NativeTerrainSurfaceSignature nativeBehavior = selected.NativeBehavior!;
+        TerrainTextureVisualEdit nativeVisual = selected.NativeVisual!;
 
         int originalTextureId = _selectedTerrain.TextureId;
         _selectedTerrain.ApplyTextureOverride(selected.TextureId);
+        _selectedTerrain.ApplyTextureVisualEdit(nativeVisual);
+        if (selected.BehaviorTargetTriangleCount > 0)
+        {
+            ApplyNativeTerrainBehaviorToFace(
+                _selectedTerrain,
+                nativeBehavior,
+                _currentLevel.Key,
+                selected.RuntimeKey);
+        }
+        else
+        {
+            ApplyVisualOnlyNativeTerrainBehaviorToFace(
+                _selectedTerrain,
+                nativeBehavior,
+                _currentLevel.Key,
+                selected.RuntimeKey);
+        }
         TerrainMaterialClassifier.Apply(_currentLevel.Key, _workspace.RootPath, _currentGeometry);
+        _selectedTerrain.SetSurfacePreviewColor(
+            nativeVisual.AverageNearColor,
+            $"native texture tint from {_currentLevel.Key}:{nativeVisual.SourceRuntimeKey}");
         int savedEdits = await PersistCurrentTerrainEditsAsync();
         RefreshCurrentLevelDetails();
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
-        _statusText.Text = $"Applied {TerrainMaterialClassifier.FormatSurface(selected.Surface)} in-game palette/texture {selected.TextureId} to one face (was texture {originalTextureId}) and saved {savedEdits} terrain edit(s). Create Test BIN will patch this face's texture id.";
+        string behaviorResult = selected.BehaviorTargetTriangleCount > 0
+            ? $"carried {nativeBehavior.Label} on {selected.BehaviorTargetTriangleCount} matched collision triangle(s)"
+            : "kept this visual-only face free of a gameplay-property patch";
+        _statusText.Text = $"Applied {TerrainMaterialClassifier.FormatSurface(selected.Surface)} texture {selected.TextureId} to one face (was texture {originalTextureId}); copied {nativeVisual.UniqueCornerPairCount} source-bound near/fade tint pair(s) from {nativeVisual.SourceRuntimeKey}; {behaviorResult}; saved {savedEdits} terrain edit(s).";
     }
 
     private async Task ApplySelectedTerrainCrossLevelLookAsync(TerrainCrossLevelLookChoice selected)
     {
-        TerrainFaceLocalTextureResult? local = await EnsureSelectedTerrainFaceLocalTextureAsync($"borrow {selected.LevelName} terrain art for this face");
-        if (local == null || _selectedTerrain == null || _currentLevel == null || _currentGeometry == null)
+        if (_selectedTerrain == null || _currentLevel == null || _currentGeometry == null)
             return;
+        if (selected.TargetTextureId != _selectedTerrain.TextureId)
+        {
+            _statusText.Text = $"The selected face now uses texture {_selectedTerrain.TextureId}, but this catalog decision was audited for shared target texture {selected.TargetTextureId}. Reopen the catalog; no face or saved edit was changed.";
+            return;
+        }
+        if (!selected.CanApplyAtomically)
+        {
+            _statusText.Text = $"Cannot replace shared texture {selected.TargetTextureId} with {selected.LevelName} texture {selected.TextureId} atomically: {selected.AtomicBlockReason} No face or saved edit was changed.";
+            return;
+        }
+        if (!IsVerifiedCrossLevelTerrainRelocationIntegrated())
+        {
+            _statusText.Text = CrossLevelTerrainTextureOwnershipBlock;
+            return;
+        }
+        TerrainPolygon[] targetFaces = _currentGeometry.Polygons
+            .Where(face => !face.IsTerrainRemoved && face.TextureId == selected.TargetTextureId)
+            .ToArray();
+        if (targetFaces.Length == 0 || targetFaces.Length != selected.AffectedFaceCount)
+        {
+            _statusText.Text = $"Shared texture {selected.TargetTextureId} now affects {targetFaces.Length} face(s), but the catalog audited {selected.AffectedFaceCount}. Reopen the catalog; no edit was changed.";
+            return;
+        }
+        if (_nativeTerrainTextureRelocations.Any(edit => edit.TargetTextureId == selected.TargetTextureId))
+        {
+            _statusText.Text = $"Shared texture {selected.TargetTextureId} already has a cross-level replacement. Undo that shared replacement before choosing another; no face or saved edit was changed.";
+            return;
+        }
+        if (_customTerrainTextures.Any(import => import.TextureId == selected.TargetTextureId))
+        {
+            _statusText.Text = $"Shared texture {selected.TargetTextureId} already has staged custom art. Undo that texture edit before applying a cross-level native replacement; no face or saved edit was changed.";
+            return;
+        }
+        TerrainPolygon? faceLocalConflict = targetFaces.FirstOrDefault(face =>
+            face.HasTextureEdit || face.HasTextureVisualEdit || face.HasSurfaceBehaviorEdit);
+        if (faceLocalConflict != null)
+        {
+            _statusText.Text = $"Face {faceLocalConflict.RuntimeKey} already has a face-local texture, tint, or gameplay-property edit on shared texture {selected.TargetTextureId}. Undo that face edit before applying a cross-level replacement; no face or saved edit was changed.";
+            return;
+        }
+        bool preserveTargetNativeSurface = selected.PreservesTargetNativeSurface;
+        NativeTerrainSurfaceSignature? nativeBehavior = selected.NativeBehavior;
+        if (!preserveTargetNativeSurface && nativeBehavior == null)
+        {
+            _statusText.Text = "The selected face-backed donor no longer has a native surface-property proof. Reopen the catalog; no edit was changed.";
+            return;
+        }
+
+        string sourceImage = FirstExistingDiscImagePath(
+            _discImagePathBox.Text,
+            _skyboxDiscImagePathBox.Text,
+            DiscImageLocator.FindImage(_workspace));
+        LevelDefinition? sourceLevel = _catalog.FindByKey(selected.LevelKey);
+        if (sourceLevel == null || string.IsNullOrWhiteSpace(sourceImage) || !File.Exists(sourceImage))
+        {
+            _statusText.Text = $"Could not inspect {selected.LevelName} texture {selected.TextureId}; choose the retail Spyro BIN/CUE first.";
+            return;
+        }
+
+        TerrainTextureSlot? donorSlot;
+        try
+        {
+            donorSlot = TerrainPatchExporter.InspectTextureSlots(sourceImage, sourceLevel)
+                .FirstOrDefault(slot => slot.TextureId == selected.TextureId);
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = $"Could not inspect {selected.LevelName} texture {selected.TextureId}: {ex.Message}";
+            return;
+        }
+
+        if (donorSlot == null ||
+            (!preserveTargetNativeSurface &&
+             (!donorSlot.HasNormalDescriptors ||
+              !donorSlot.HasCloseDescriptors ||
+              string.IsNullOrWhiteSpace(donorSlot.NormalTopologySignature) ||
+              string.IsNullOrWhiteSpace(donorSlot.CloseTopologySignature))))
+        {
+            _statusText.Text = preserveTargetNativeSurface
+                ? $"{selected.LevelName} texture record {selected.TextureId} is no longer present in the selected source image; no texture was staged."
+                : $"{selected.LevelName} texture {selected.TextureId} does not have complete native normal and close-detail tiers; no partial texture was staged.";
+            return;
+        }
+
+        if (preserveTargetNativeSurface)
+        {
+            GeometryCandidate? donorGeometry = TryLoadNativeTerrainDonorGeometry(sourceLevel, out string donorGeometryError);
+            TerrainTextureCatalogEntry? donorEntry = donorGeometry == null
+                ? null
+                : BuildNativeTerrainTextureCatalog(sourceLevel, donorGeometry, out _)
+                    .Entries.FirstOrDefault(entry => entry.TextureId == selected.TextureId);
+            string canonicalProvenance = NativeTerrainTextureRelocationEditStore.BuildTextureRecordProvenanceKey(
+                sourceLevel.Key,
+                selected.TextureId);
+            if (donorEntry?.Readiness.RecordRole != TerrainTextureRecordRole.NativeUnreferencedStatic ||
+                !string.Equals(selected.RuntimeKey, canonicalProvenance, StringComparison.Ordinal))
+            {
+                string detail = donorEntry == null
+                    ? donorGeometryError
+                    : $"the fresh source role is {donorEntry.Readiness.RecordRole}";
+                _statusText.Text = $"Could not revalidate {selected.LevelName} texture {selected.TextureId} as genuinely native-unreferenced static art ({detail}). No edit was changed.";
+                return;
+            }
+        }
+
+        NativeTerrainSurfaceLevelCatalog? targetNativeCatalog = null;
+        if (!preserveTargetNativeSurface)
+        {
+            targetNativeCatalog = TryBuildNativeTerrainSurfaceCatalog(
+                _currentLevel,
+                _currentGeometry,
+                out string surfaceCatalogError);
+            if (targetNativeCatalog == null)
+            {
+                _statusText.Text = $"Could not revalidate the shared gameplay-property mapping: {surfaceCatalogError} No edit was changed.";
+                return;
+            }
+        }
+
+        _statusText.Text = $"Proving complete native texture {selected.TargetTextureId} <- {selected.LevelName} texture {selected.TextureId}...";
+        await Task.Yield();
+        (bool artReady, string strategy, string artFailure) = await Task.Run(() =>
+        {
+            bool ready = TryProveCrossLevelTerrainTextureArt(
+                sourceImage,
+                _currentLevel,
+                sourceLevel,
+                selected.TargetTextureId,
+                selected.TextureId,
+                preserveTargetNativeSurface,
+                out string provenStrategy,
+                out string failure);
+            return (ready, provenStrategy, failure);
+        });
+        if (!artReady)
+        {
+            _statusText.Text = $"Could not stage shared texture {selected.TargetTextureId} <- {selected.LevelName} texture {selected.TextureId}: {artFailure} No face or saved edit was changed.";
+            return;
+        }
 
         string customDir = Path.Combine(_workspace.RootPath, "_local", "custom-textures", "generated");
         Directory.CreateDirectory(customDir);
         string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
-        string sourceSlug = $"{selected.LevelKey}-{selected.Surface}-tex-{selected.TextureId}";
-        string stagedPath;
-        string sourceImageName;
-        string sourceKind;
-        string paletteName = $"{selected.LevelName} {TerrainMaterialClassifier.FormatSurface(selected.Surface)} look";
-        string lowHex = "";
-        string highHex = "";
-        IReadOnlyList<string> paletteHexColors = Array.Empty<string>();
-        string sourceDetail;
-
-        if (!string.IsNullOrWhiteSpace(selected.CustomSourceImagePath) && File.Exists(selected.CustomSourceImagePath))
+        string previewName =
+            $"{SafeFilePart(_currentLevel.Key)}-texture-{selected.TargetTextureId:000}-from-" +
+            $"{SafeFilePart(selected.LevelKey)}-{selected.TextureId:000}-{stamp}.png";
+        string stagedPath = Path.Combine(customDir, previewName);
+        TerrainTextureImageExport? exportedTexture;
+        string previewFailure = "";
+        try
         {
-            string extension = Path.GetExtension(selected.CustomSourceImagePath);
-            if (string.IsNullOrWhiteSpace(extension))
-                extension = ".png";
-
-            string fileName = $"{SafeFilePart(_currentLevel.Key)}-face-{SafeFilePart(_selectedTerrain.RuntimeKey)}-texture-{local.TextureId:000}-borrow-{SafeFilePart(sourceSlug)}-{stamp}{extension.ToLowerInvariant()}";
-            stagedPath = Path.Combine(customDir, fileName);
-            File.Copy(selected.CustomSourceImagePath, stagedPath, true);
-            sourceImageName = string.IsNullOrWhiteSpace(selected.CustomSourceImageName)
-                ? Path.GetFileName(selected.CustomSourceImagePath)
-                : selected.CustomSourceImageName;
-            sourceKind = "borrowed-cross-level-custom-art";
-            paletteName = string.IsNullOrWhiteSpace(selected.CustomPaletteName)
-                ? paletteName
-                : $"{paletteName}: {selected.CustomPaletteName}";
-            lowHex = selected.CustomPaletteLowHex;
-            highHex = selected.CustomPaletteHighHex;
-            paletteHexColors = selected.CustomPaletteHexColors;
-            sourceDetail = "copied from source custom art";
+            exportedTexture = await TerrainPatchExporter.TryExportTerrainTextureImageTierAsync(
+                sourceImage,
+                sourceLevel,
+                selected.TextureId,
+                stagedPath,
+                "hqDataClose");
         }
-        else
+        catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
-            ColorRgba low = ScaleColor(selected.Color, 0.58);
-            ColorRgba high = ScaleColor(selected.Color, 1.28);
-            string fileName = $"{SafeFilePart(_currentLevel.Key)}-face-{SafeFilePart(_selectedTerrain.RuntimeKey)}-texture-{local.TextureId:000}-borrow-{SafeFilePart(sourceSlug)}-{stamp}.png";
-            stagedPath = Path.Combine(customDir, fileName);
-            sourceImageName = fileName;
-            lowHex = NormalizeHex(low);
-            highHex = NormalizeHex(high);
-            paletteHexColors = [lowHex, highHex];
-
-            TerrainTextureImageExport? exportedTexture = null;
-            LevelDefinition? sourceLevel = _catalog.FindByKey(selected.LevelKey);
-            string sourceImage = FirstExistingDiscImagePath(_discImagePathBox.Text, _skyboxDiscImagePathBox.Text, DiscImageLocator.FindImage(_workspace));
-            if (sourceLevel != null && File.Exists(sourceImage))
-            {
-                try
-                {
-                    exportedTexture = await TerrainPatchExporter.TryExportTerrainTextureImageAsync(
-                        sourceImage,
-                        sourceLevel,
-                        selected.TextureId,
-                        stagedPath);
-                }
-                catch
-                {
-                    exportedTexture = null;
-                }
-            }
-
-            if (exportedTexture != null)
-            {
-                sourceKind = "borrowed-cross-level-texture-art";
-                paletteName = $"{paletteName}: {exportedTexture.Width}x{exportedTexture.Height} {exportedTexture.DescriptorTier}";
-                sourceDetail = $"extracted actual {selected.LevelName} texture art ({exportedTexture.PixelCount} pixel(s))";
-            }
-            else
-            {
-                await TerrainTexturePngWriter.WriteGradientAsync(stagedPath, 64, 64, low, high);
-                sourceKind = "generated-cross-level-look";
-                sourceDetail = "generated from the source face color";
-            }
+            exportedTexture = null;
+            previewFailure = ex.Message;
+        }
+        if (exportedTexture == null)
+        {
+            if (File.Exists(stagedPath))
+                File.Delete(stagedPath);
+            _statusText.Text = string.IsNullOrWhiteSpace(previewFailure)
+                ? $"Could not decode actual {selected.LevelName} texture {selected.TextureId} art for a truthful preview. No edit was changed."
+                : $"The complete native swap proof passed, but its truthful preview could not be decoded: {previewFailure} No edit was changed.";
+            return;
         }
 
-        _customTerrainTextures = await CustomTerrainTextureStore.AddOrReplaceAsync(
+        string relocationPath = NativeTerrainTextureRelocationEditStore.ManifestPath(
             _workspace.RootPath,
-            _currentLevel.Key,
-            _currentLevel.DisplayName,
-            local.TextureId,
-            stagedPath,
-            sourceImageName,
-            "both",
-            64,
-            sourceKind,
-            paletteName,
-            lowHex,
-            highHex,
-            paletteHexColors: paletteHexColors);
+            _currentLevel.Key);
+        string terrainEditsPath = Path.Combine(_workspace.RootPath, $"{_currentLevel.Key}-terrain-edits.json");
+        string materialOverridesPath = Path.Combine(
+            _workspace.RootPath,
+            $"{_currentLevel.Key}-terrain-material-overrides.json");
+        string customTexturesPath = CustomTerrainTextureStore.ManifestPath(
+            _workspace.RootPath,
+            _currentLevel.Key);
+        Dictionary<string, byte[]?> filesBefore = new(StringComparer.OrdinalIgnoreCase)
+        {
+            [relocationPath] = File.Exists(relocationPath) ? File.ReadAllBytes(relocationPath) : null,
+            [terrainEditsPath] = File.Exists(terrainEditsPath) ? File.ReadAllBytes(terrainEditsPath) : null,
+            [materialOverridesPath] = File.Exists(materialOverridesPath) ? File.ReadAllBytes(materialOverridesPath) : null,
+            [customTexturesPath] = File.Exists(customTexturesPath) ? File.ReadAllBytes(customTexturesPath) : null
+        };
+        NativeTerrainFaceStageSnapshot[] faceSnapshots = targetFaces
+            .Select(face => new NativeTerrainFaceStageSnapshot(
+                face,
+                face.SurfaceBehaviorEdit,
+                face.TextureVisualEdit,
+                face.Surface,
+                face.SurfaceColor,
+                face.SurfaceSource,
+                face.Behavior,
+                face.BehaviorSource,
+                face.BehaviorConfidence,
+                face.BehaviorNote))
+            .ToArray();
+        IReadOnlyList<CustomTerrainTextureImport> customTexturesBefore = _customTerrainTextures;
+        IReadOnlyList<NativeTerrainTextureRelocationEdit> relocationsBefore = _nativeTerrainTextureRelocations;
+        int loadedTerrainEditsBefore = _loadedTerrainEdits;
+        string savedTerrainSignatureBefore = _savedTerrainEditSignature;
+        int previewFaces;
+        int savedEdits;
+        try
+        {
+            CustomTerrainTextureImport[] filteredCustomTextures = _customTerrainTextures
+                .Where(import => import.TextureId != selected.TargetTextureId)
+                .ToArray();
+            if (filteredCustomTextures.Length != _customTerrainTextures.Count)
+            {
+                await CustomTerrainTextureStore.SaveManifestAsync(
+                    customTexturesPath,
+                    _currentLevel.Key,
+                    _currentLevel.DisplayName,
+                    filteredCustomTextures);
+                _customTerrainTextures = filteredCustomTextures;
+            }
 
-        await TerrainMaterialClassifier.SaveOverrideAsync(_currentLevel.Key, _workspace.RootPath, local.TextureId, selected.Surface);
-        TerrainMaterialClassifier.Apply(_currentLevel.Key, _workspace.RootPath, _currentGeometry);
-        int previewFaces = ApplyCustomTerrainTexturePreviews();
-        int savedEdits = await PersistCurrentTerrainEditsAsync();
+            _nativeTerrainTextureRelocations = preserveTargetNativeSurface
+                ? await NativeTerrainTextureRelocationEditStore.AddOrReplaceArtOnlyAsync(
+                    _workspace.RootPath,
+                    _currentLevel.Key,
+                    _currentLevel.DisplayName,
+                    selected.TargetTextureId,
+                    selected.LevelKey,
+                    selected.LevelName,
+                    sourceLevel.SourceWadEntry,
+                    selected.TextureId,
+                    stagedPath,
+                    previewName)
+                : await NativeTerrainTextureRelocationEditStore.AddOrReplaceAsync(
+                    _workspace.RootPath,
+                    _currentLevel.Key,
+                    _currentLevel.DisplayName,
+                    selected.TargetTextureId,
+                    selected.LevelKey,
+                    selected.LevelName,
+                    sourceLevel.SourceWadEntry,
+                    selected.TextureId,
+                    selected.RuntimeKey,
+                    stagedPath,
+                    previewName);
+
+            if (!preserveTargetNativeSurface)
+            {
+                await TerrainMaterialClassifier.SaveOverrideAsync(
+                    _currentLevel.Key,
+                    _workspace.RootPath,
+                    selected.TargetTextureId,
+                    selected.Surface);
+
+                foreach (TerrainPolygon targetFace in targetFaces)
+                {
+                    targetFace.ClearTextureVisualEdit();
+                    NativeTerrainFaceSurfaceBinding? binding = targetNativeCatalog!.FindFace(targetFace.RuntimeKey);
+                    if (binding is { HasExactTriangleMapping: true, NativeTriangleCount: > 0 })
+                    {
+                        ApplyNativeTerrainBehaviorToFace(
+                            targetFace,
+                            nativeBehavior!,
+                            selected.LevelKey,
+                            selected.RuntimeKey);
+                    }
+                    else if (binding is { MatchedVisualTriangleCount: 0, HasAnyCollisionCandidate: false })
+                    {
+                        ApplyVisualOnlyNativeTerrainBehaviorToFace(
+                            targetFace,
+                            nativeBehavior!,
+                            selected.LevelKey,
+                            selected.RuntimeKey);
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException(
+                            $"Face {targetFace.RuntimeKey} no longer has the complete gameplay-property mapping proven by the catalog.");
+                    }
+                }
+
+                TerrainMaterialClassifier.Apply(_currentLevel.Key, _workspace.RootPath, _currentGeometry);
+            }
+
+            previewFaces = ApplyCustomTerrainTexturePreviews();
+            savedEdits = preserveTargetNativeSurface
+                ? _loadedTerrainEdits
+                : await PersistCurrentTerrainEditsAsync();
+        }
+        catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            foreach ((string path, byte[]? content) in filesBefore)
+            {
+                if (content == null)
+                {
+                    if (File.Exists(path))
+                        File.Delete(path);
+                }
+                else
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(path) ?? _workspace.RootPath);
+                    File.WriteAllBytes(path, content);
+                }
+            }
+            _customTerrainTextures = customTexturesBefore;
+            _nativeTerrainTextureRelocations = relocationsBefore;
+            _loadedTerrainEdits = loadedTerrainEditsBefore;
+            _savedTerrainEditSignature = savedTerrainSignatureBefore;
+            TerrainMaterialClassifier.Apply(_currentLevel.Key, _workspace.RootPath, _currentGeometry);
+            ApplyCustomTerrainTexturePreviews();
+            foreach (NativeTerrainFaceStageSnapshot snapshot in faceSnapshots)
+                snapshot.Restore();
+            if (File.Exists(stagedPath))
+                File.Delete(stagedPath);
+            _viewport.NotifyTerrainPresentationDataChanged();
+            _statusText.Text = $"Shared texture replacement was rolled back before completion: {ex.Message} No face or saved edit was changed.";
+            return;
+        }
 
         RefreshCurrentLevelDetails();
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
-        _statusText.Text = $"Borrowed {TerrainMaterialClassifier.FormatSurface(selected.Surface)} from {selected.LevelName} texture {selected.TextureId} onto one local face texture {local.TextureId} ({sourceDetail}); previewed {previewFaces} face(s) and saved {savedEdits} terrain edit(s). Create Test BIN will patch this face and its texture art.";
+        string behaviorResult = preserveTargetNativeSurface
+            ? "preserved every target face texture ID, HP material/semitransparency bit, descriptor ABR/alpha controls, native tint, material label, and collision behavior without creating a terrain-property edit"
+            : selected.BehaviorTargetTriangleCount > 0
+                ? $"carried {nativeBehavior!.Label} on {selected.BehaviorTargetTriangleCount} matched collision triangle(s)"
+                : "required no gameplay bytes for visual-only ordinary faces";
+        _statusText.Text =
+            $"Staged {(preserveTargetNativeSurface ? "art-only " : "")}shared texture {selected.TargetTextureId} <- {selected.LevelName} texture {selected.TextureId} using {strategy}; " +
+            $"all {targetFaces.Length} face(s) remain on texture ID {selected.TargetTextureId}; {behaviorResult}; " +
+            $"previewed {previewFaces} face(s), {savedEdits} existing terrain edit(s). Create BIN will re-run every proof and final readback.";
+
+        NativeTerrainTextureRelocationEdit? replacedRelocation = relocationsBefore.FirstOrDefault(edit =>
+            edit.TargetTextureId == selected.TargetTextureId &&
+            !string.Equals(edit.PreviewImagePath, stagedPath, StringComparison.OrdinalIgnoreCase));
+        if (replacedRelocation != null &&
+            !_nativeTerrainTextureRelocations.Any(edit =>
+                string.Equals(edit.PreviewImagePath, replacedRelocation.PreviewImagePath, StringComparison.OrdinalIgnoreCase)))
+        {
+            DeleteManagedNativeTerrainTexturePreview(replacedRelocation.PreviewImagePath);
+        }
     }
 
     private IReadOnlyList<TerrainTextureSwapChoice> BuildTerrainTextureSwapChoices()
@@ -5861,45 +6766,125 @@ public sealed class MainWindow : Window
         if (_currentLevel == null || _currentGeometry == null)
             return Array.Empty<TerrainTextureSwapChoice>();
 
-        TerrainBehaviorProofFile proofFile = TerrainBehaviorProofStore.Load(_workspace.RootPath, _currentLevel.Key);
-        HashSet<int> customTextureIds = _customTerrainTextures.Select(texture => texture.TextureId).ToHashSet();
-        List<TerrainTextureSwapChoice> choices = new();
-        foreach (IGrouping<int, TerrainPolygon> group in _currentGeometry.Polygons
-            .Where(polygon => !polygon.IsTerrainRemoved && polygon.TextureId >= 0)
-            .GroupBy(polygon => polygon.TextureId))
-        {
-            List<TerrainPolygon> faces = group.ToList();
-            TerrainPolygon representative = faces
-                .OrderByDescending(face => face.Points.Count)
-                .ThenBy(face => face.RuntimeKey, StringComparer.OrdinalIgnoreCase)
-                .First();
-            string surface = faces
-                .GroupBy(face => TerrainMaterialClassifier.NormalizeSurfaceName(face.Surface))
-                .OrderByDescending(surfaceGroup => surfaceGroup.Count())
-                .ThenBy(surfaceGroup => surfaceGroup.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(surfaceGroup => surfaceGroup.Key)
-                .FirstOrDefault("unknown");
-            List<TerrainBehaviorRule> rules = proofFile.Rules
-                .Where(rule => rule.TextureId == group.Key || string.Equals(rule.Surface, surface, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(rule => RuleConfidenceRank(rule.Confidence))
-                .ThenBy(rule => rule.TextureId)
-                .ToList();
+        GeometryCandidate? donorGeometry = TryLoadNativeTerrainDonorGeometry(_currentLevel, out _);
+        if (donorGeometry == null)
+            return Array.Empty<TerrainTextureSwapChoice>();
 
-            choices.Add(new TerrainTextureSwapChoice
+        NativeTerrainSurfaceLevelCatalog? targetNativeCatalog = TryBuildNativeTerrainSurfaceCatalog(_currentLevel, _currentGeometry, out _);
+        NativeTerrainSurfaceLevelCatalog? donorNativeCatalog = TryBuildNativeTerrainSurfaceCatalog(_currentLevel, donorGeometry, out _);
+        TerrainTextureCatalog textureCatalog = BuildNativeTerrainTextureCatalog(_currentLevel, donorGeometry, out _);
+        string sourceImage = FirstExistingDiscImagePath(
+            _discImagePathBox.Text,
+            _skyboxDiscImagePathBox.Text,
+            DiscImageLocator.FindImage(_workspace));
+        int targetTintSlotCapacity = 0;
+        string targetTintCapacityNote = "Select one high-detail target face first.";
+        bool targetTintCapacityReady = _selectedTerrain != null &&
+            NativeTerrainTextureVisualInspector.TryGetWritableColorSlotCapacity(
+                sourceImage,
+                _selectedTerrain,
+                out targetTintSlotCapacity,
+                out targetTintCapacityNote);
+        NativeTerrainTextureRelocationEdit? selectedFaceRelocation = _selectedTerrain == null
+            ? null
+            : _nativeTerrainTextureRelocations.FirstOrDefault(edit => edit.TargetTextureId == _selectedTerrain.TextureId);
+        Dictionary<int, TerrainPolygon[]> originalFacesByTextureId = donorGeometry.Polygons
+            .Where(polygon => polygon.OriginalTextureId >= 0)
+            .GroupBy(polygon => polygon.OriginalTextureId)
+            .ToDictionary(group => group.Key, group => group.ToArray());
+        List<TerrainTextureSwapChoice> choices = new();
+        foreach (TerrainTextureCatalogEntry entry in textureCatalog.Entries)
+        {
+            NativeTerrainTextureRelocationEdit? donorRelocation = _nativeTerrainTextureRelocations
+                .FirstOrDefault(edit => edit.TargetTextureId == entry.TextureId);
+            bool residentArtStateReady = selectedFaceRelocation == null && donorRelocation == null;
+            string residentArtReadinessNote = selectedFaceRelocation != null
+                ? $"The selected face uses shared relocated texture {selectedFaceRelocation.TargetTextureId}; Undo that replacement before applying a face-local look."
+                : donorRelocation != null
+                    ? $"Texture {entry.TextureId} contains a shared replacement from {donorRelocation.DonorLevelName}; Undo it before using this resident record."
+                    : entry.Readiness.ResidentArt.Note;
+            TerrainPolygon[] originalFaces = originalFacesByTextureId.GetValueOrDefault(entry.TextureId) ?? [];
+            bool visualDonorReady = TrySelectNativeTerrainVisualDonor(
+                sourceImage,
+                _currentLevel,
+                entry.TextureId,
+                originalFaces,
+                out TerrainPolygon visualRepresentative,
+                out TerrainTextureVisualEdit nativeVisual,
+                out string visualDonorNote);
+            int requiredTintSlots = visualDonorReady ? nativeVisual.UniqueCornerPairCount : 0;
+            bool topologyReady = visualDonorReady && _selectedTerrain != null &&
+                _selectedTerrain.Points.Count == visualRepresentative.Points.Count;
+            bool visualReady = visualDonorReady && topologyReady && targetTintCapacityReady && targetTintSlotCapacity >= requiredTintSlots;
+            string visualReadinessNote = !visualDonorReady
+                ? visualDonorNote
+                : !topologyReady
+                    ? $"The visual donor uses {visualRepresentative.Points.Count} terrain corner(s), but the selected target uses {_selectedTerrain?.Points.Count ?? 0}; choose a matching face topology."
+                : !targetTintCapacityReady
+                    ? targetTintCapacityNote
+                    : targetTintSlotCapacity < requiredTintSlots
+                        ? $"The donor needs {requiredTintSlots} private tint slot(s), but the selected target sector has {targetTintSlotCapacity}."
+                        : $"{visualDonorNote} The selected target has {targetTintSlotCapacity} private/unused tint slot(s).";
+            if (originalFaces.Length == 0)
             {
-                Surface = surface,
-                TextureId = group.Key,
-                FaceCount = faces.Count,
-                BehaviorSummary = BuildBehaviorSummary(faces),
-                ProofSummary = BuildProofRuleSummary(rules),
-                ProofStatusRank = rules.Count == 0 ? 0 : rules.Max(rule => RuleConfidenceRank(rule.Confidence)),
-                HasCustomTexture = customTextureIds.Contains(group.Key),
-                RuntimeKey = representative.RuntimeKey,
-                X = representative.Center.X,
-                Y = representative.Center.Y,
-                Z = representative.AvgZ,
-                Color = representative.SurfaceColor
-            });
+                choices.Add(new TerrainTextureSwapChoice
+                {
+                    Surface = entry.Surface,
+                    TextureId = entry.TextureId,
+                    FaceCount = 0,
+                    BehaviorSummary = "unreferenced native texture record",
+                    ProofSummary = "art unproven",
+                    ProofStatusRank = 0,
+                    Color = entry.PreviewColor,
+                    CanUseArt = entry.Readiness.ResidentArt.CanApply && residentArtStateReady,
+                    ArtReadinessNote = residentArtReadinessNote,
+                    CanTransferVisual = false,
+                    VisualTransferNote = visualReadinessNote,
+                    CanTransferBehavior = false,
+                    BehaviorTransferNote = "No original face binds this texture record to a native surface property.",
+                    AffectedFaceCount = 1,
+                    BehaviorReadyFaceCount = 0
+                });
+                continue;
+            }
+
+            foreach (NativeTerrainDonorVariant variant in BuildNativeTerrainDonorVariants(entry.TextureId, originalFaces, donorNativeCatalog))
+            {
+                TerrainPolygon behaviorRepresentative = variant.Faces.FirstOrDefault(face => string.Equals(face.RuntimeKey, variant.RepresentativeRuntimeKey, StringComparison.OrdinalIgnoreCase))
+                    ?? variant.Faces.OrderByDescending(face => face.Points.Count).ThenBy(face => face.RuntimeKey, StringComparer.OrdinalIgnoreCase).First();
+                string surface = InferNativeTerrainDonorSurface(variant.Faces, variant.Signature);
+                NativeTerrainSurfaceTransferReadiness readiness = variant.Signature == null
+                    ? new NativeTerrainSurfaceTransferReadiness(false, -1, 0, 0, variant.ReadinessNote)
+                    : EvaluateNativeTerrainBehaviorTransfer(targetNativeCatalog, variant.Signature, _currentLevel.Key);
+
+                choices.Add(new TerrainTextureSwapChoice
+                {
+                    Surface = surface,
+                    TextureId = entry.TextureId,
+                    FaceCount = variant.Faces.Count,
+                    BehaviorSummary = variant.BehaviorSummary,
+                    ProofSummary = variant.Signature == null ? "native unresolved" : "native exact",
+                    ProofStatusRank = variant.Signature == null ? 0 : 4,
+                    HasCustomTexture = false,
+                    RuntimeKey = behaviorRepresentative.RuntimeKey,
+                    VisualRuntimeKey = visualDonorReady ? visualRepresentative.RuntimeKey : "",
+                    X = visualDonorReady ? visualRepresentative.Center.X : behaviorRepresentative.Center.X,
+                    Y = visualDonorReady ? visualRepresentative.Center.Y : behaviorRepresentative.Center.Y,
+                    Z = visualDonorReady ? visualRepresentative.AvgZ : behaviorRepresentative.AvgZ,
+                    Color = visualDonorReady ? nativeVisual.AverageNearColor : behaviorRepresentative.SurfaceColor,
+                    NativeBehavior = variant.Signature,
+                    NativeVisual = visualDonorReady ? nativeVisual : null,
+                    CanUseArt = entry.Readiness.ResidentArt.CanApply && residentArtStateReady,
+                    ArtReadinessNote = residentArtReadinessNote,
+                    CanTransferVisual = visualReady,
+                    VisualTransferNote = visualReadinessNote,
+                    CanTransferBehavior = readiness.CanApply,
+                    BehaviorTransferNote = readiness.Note,
+                    AffectedFaceCount = 1,
+                    BehaviorReadyFaceCount = readiness.CanApply ? 1 : 0,
+                    BehaviorTargetTriangleCount = readiness.TargetTriangleCount
+                });
+            }
         }
 
         return choices;
@@ -5907,12 +6892,37 @@ public sealed class MainWindow : Window
 
     private IReadOnlyList<TerrainCrossLevelLookChoice> BuildCrossLevelTerrainLookChoices(string preferredSurface)
     {
-        if (_currentLevel == null || _catalog.Levels.Count == 0)
+        if (_currentLevel == null || _currentGeometry == null || _selectedTerrain == null || _catalog.Levels.Count == 0)
             return Array.Empty<TerrainCrossLevelLookChoice>();
 
         string preferred = TerrainMaterialClassifier.NormalizeSurfaceName(preferredSurface);
+        int targetTextureId = _selectedTerrain.TextureId;
+        TerrainPolygon[] targetFaces = _currentGeometry.Polygons
+            .Where(face => !face.IsTerrainRemoved && face.TextureId == targetTextureId)
+            .ToArray();
+        NativeTerrainTextureRelocationEdit? existingRelocation = _nativeTerrainTextureRelocations
+            .FirstOrDefault(edit => edit.TargetTextureId == targetTextureId);
+        bool hasCustomTargetArt = _customTerrainTextures.Any(import => import.TextureId == targetTextureId);
+        TerrainPolygon? existingFaceLocalEdit = targetFaces.FirstOrDefault(face =>
+            face.HasTextureEdit || face.HasTextureVisualEdit || face.HasSurfaceBehaviorEdit);
+        bool targetEditStateReady = existingRelocation == null && !hasCustomTargetArt && existingFaceLocalEdit == null;
+        string targetEditStateNote = existingRelocation != null
+            ? $"Texture {targetTextureId} already has a shared replacement; Undo it before choosing another."
+            : hasCustomTargetArt
+                ? $"Texture {targetTextureId} already has staged custom art; Undo it before applying a cross-level native replacement."
+                : existingFaceLocalEdit != null
+                    ? $"Face {existingFaceLocalEdit.RuntimeKey} already has a face-local texture, tint, or gameplay-property edit on shared texture {targetTextureId}; Undo it first."
+                    : "";
+        NativeTerrainSurfaceLevelCatalog? targetNativeCatalog = TryBuildNativeTerrainSurfaceCatalog(_currentLevel, _currentGeometry, out _);
+        TerrainTextureCatalog targetTextureCatalog = BuildNativeTerrainTextureCatalog(_currentLevel, _currentGeometry, out _);
+        TerrainTextureTargetRuntimeReadiness targetRuntime = targetTextureCatalog.Entries
+            .FirstOrDefault(entry => entry.TextureId == targetTextureId)?
+            .Readiness.TargetRuntime
+            ?? new TerrainTextureTargetRuntimeReadiness(
+                false,
+                $"Texture {targetTextureId} is not present in the source-bound target texture catalog.");
         List<TerrainCrossLevelLookChoice> choices = new();
-        foreach (LevelDefinition level in _catalog.Levels)
+        foreach (LevelDefinition level in LevelRealmCatalog.OrderLevels(_catalog.Levels))
         {
             if (string.Equals(LevelCatalog.NormalizeKey(level.Key), LevelCatalog.NormalizeKey(_currentLevel.Key), StringComparison.OrdinalIgnoreCase))
                 continue;
@@ -5928,71 +6938,143 @@ public sealed class MainWindow : Window
             GeometryCandidate geometry;
             try
             {
-                geometry = GeometryOverlayLoader.LoadFirstCandidate(overlayPath);
+                geometry = TryLoadNativeTerrainDonorGeometry(level, out _)
+                    ?? throw new InvalidDataException($"No untouched cached terrain overlay is available for {level.DisplayName}.");
             }
             catch
             {
                 continue;
             }
 
-            string editsPath = Path.Combine(_workspace.RootPath, $"{level.Key}-terrain-edits.json");
-            TerrainEditStore.Load(editsPath, geometry.Polygons);
-            TerrainMaterialClassifier.Apply(level.Key, _workspace.RootPath, geometry);
-            IReadOnlyList<CustomTerrainTextureImport> customImports = CustomTerrainTextureStore.Load(_workspace.RootPath, level.Key);
-            TerrainBehaviorProofFile proofFile = TerrainBehaviorProofStore.Load(_workspace.RootPath, level.Key);
-            foreach (IGrouping<int, TerrainPolygon> group in geometry.Polygons
-                .Where(polygon => !polygon.IsTerrainRemoved && polygon.TextureId >= 0)
-                .GroupBy(polygon => polygon.TextureId))
+            NativeTerrainSurfaceLevelCatalog? sourceNativeCatalog = TryBuildNativeTerrainSurfaceCatalog(level, geometry, out _);
+            TerrainTextureCatalog textureCatalog = BuildNativeTerrainTextureCatalog(level, geometry, out _);
+            Dictionary<int, TerrainPolygon[]> originalFacesByTextureId = geometry.Polygons
+                .Where(polygon => polygon.OriginalTextureId >= 0)
+                .GroupBy(polygon => polygon.OriginalTextureId)
+                .ToDictionary(group => group.Key, group => group.ToArray());
+            LevelRealmPosition? realmPosition = LevelRealmCatalog.TryGetPosition(level, out LevelRealmPosition position)
+                ? position
+                : null;
+            foreach (TerrainTextureCatalogEntry entry in textureCatalog.Entries)
             {
-                List<TerrainPolygon> faces = group.ToList();
-                TerrainPolygon representative = faces
-                    .OrderByDescending(face => face.Points.Count)
-                    .ThenBy(face => face.RuntimeKey, StringComparer.OrdinalIgnoreCase)
-                    .First();
-                string surface = faces
-                    .GroupBy(face => TerrainMaterialClassifier.NormalizeSurfaceName(face.Surface))
-                    .OrderByDescending(surfaceGroup => surfaceGroup.Count())
-                    .ThenBy(surfaceGroup => surfaceGroup.Key, StringComparer.OrdinalIgnoreCase)
-                    .Select(surfaceGroup => surfaceGroup.Key)
-                    .FirstOrDefault("unknown");
-                List<TerrainBehaviorRule> rules = proofFile.Rules
-                    .Where(rule => rule.TextureId == group.Key || string.Equals(rule.Surface, surface, StringComparison.OrdinalIgnoreCase))
-                    .OrderByDescending(rule => RuleConfidenceRank(rule.Confidence))
-                    .ThenBy(rule => rule.TextureId)
-                    .ToList();
-                CustomTerrainTextureImport? customImport = customImports
-                    .Where(import => import.TextureId == group.Key)
-                    .FirstOrDefault(import => File.Exists(import.SourceImagePath));
-
-                choices.Add(new TerrainCrossLevelLookChoice
+                TerrainPolygon[] originalFaces = originalFacesByTextureId.GetValueOrDefault(entry.TextureId) ?? [];
+                if (originalFaces.Length == 0)
                 {
-                    LevelKey = level.Key,
-                    LevelName = level.DisplayName,
-                    Surface = surface,
-                    TextureId = group.Key,
-                    FaceCount = faces.Count,
-                    BehaviorSummary = BuildBehaviorSummary(faces),
-                    ProofSummary = BuildProofRuleSummary(rules),
-                    ProofStatusRank = rules.Count == 0 ? 0 : rules.Max(rule => RuleConfidenceRank(rule.Confidence)),
-                    HasCustomTexture = customImport != null,
-                    RuntimeKey = representative.RuntimeKey,
-                    X = representative.Center.X,
-                    Y = representative.Center.Y,
-                    Z = representative.AvgZ,
-                    Color = representative.SurfaceColor,
-                    PreferredSurfaceRank = string.Equals(surface, preferred, StringComparison.OrdinalIgnoreCase) ? 0 : 1,
-                    CustomSourceImagePath = customImport?.SourceImagePath ?? "",
-                    CustomSourceImageName = customImport?.SourceImageName ?? "",
-                    CustomPaletteName = customImport?.PaletteName ?? "",
-                    CustomPaletteLowHex = customImport?.PaletteLowHex ?? "",
-                    CustomPaletteHighHex = customImport?.PaletteHighHex ?? "",
-                    CustomPaletteHexColors = customImport?.PaletteHexColors ?? Array.Empty<string>()
-                });
+                    int affectedFaceCount = targetFaces.Length;
+                    bool nativeUnreferencedStatic = entry.Readiness.IsNativeUnreferencedStatic;
+                    string provenance = nativeUnreferencedStatic
+                        ? NativeTerrainTextureRelocationEditStore.BuildTextureRecordProvenanceKey(level.Key, entry.TextureId)
+                        : "";
+                    string propertyNote = nativeUnreferencedStatic
+                        ? "Art-only record: the donor has no native face/property binding. The target texture ID, HP material/semitransparency bits, descriptor ABR/alpha controls, tint, material label, and collision behavior will remain unchanged."
+                        : entry.Readiness.RecordRole switch
+                        {
+                            TerrainTextureRecordRole.AnimationSourceDiagnostic =>
+                                "This face-less record is an animation-source diagnostic, not a genuinely unused static art donor.",
+                            TerrainTextureRecordRole.ControlledDestinationWithoutFace =>
+                                "This face-less record is rewritten by a native animation/scroll controller, so it is not a static art-only donor.",
+                            _ => "No original face binds this donor record to one native surface property."
+                        };
+                    choices.Add(new TerrainCrossLevelLookChoice
+                    {
+                        LevelKey = level.Key,
+                        LevelName = level.DisplayName,
+                        Surface = entry.Surface,
+                        TextureId = entry.TextureId,
+                        FaceCount = 0,
+                        BehaviorSummary = nativeUnreferencedStatic
+                            ? "native-unreferenced static art; preserve target property"
+                            : "face-less native texture record",
+                        ProofSummary = nativeUnreferencedStatic ? "static art exact" : "art-only blocked",
+                        ProofStatusRank = nativeUnreferencedStatic ? 3 : 0,
+                        RuntimeKey = provenance,
+                        Color = entry.PreviewColor,
+                        PreferredSurfaceRank = 1,
+                        RealmKey = realmPosition?.Realm.Key ?? "unknown",
+                        RealmName = realmPosition?.Realm.DisplayName ?? "Unknown",
+                        RealmOrder = realmPosition?.Realm.Order ?? int.MaxValue,
+                        LevelOrder = realmPosition?.GlobalOrder ?? int.MaxValue,
+                        CanUseArt = nativeUnreferencedStatic
+                            ? entry.Readiness.HasNativeTextureRecord
+                            : entry.Readiness.CrossLevelArt.CanApply,
+                        ArtReadinessNote = nativeUnreferencedStatic
+                            ? "The complete native record is source-bound by level/WAD/texture identity. Apply and Create BIN must still pass the current 23-descriptor ownership, LQ/HQ, runtime-control, and exact-readback proof."
+                            : entry.Readiness.CrossLevelArt.Note,
+                        CanTransferBehavior = false,
+                        BehaviorTransferNote = propertyNote,
+                        TargetTextureId = targetTextureId,
+                        AffectedFaceCount = affectedFaceCount,
+                        BehaviorReadyFaceCount = 0,
+                        CanPersistAtRuntime = targetRuntime.CanPersist && targetEditStateReady,
+                        RuntimePersistenceNote = targetEditStateReady ? targetRuntime.Note : targetEditStateNote,
+                        DonorRecordRole = entry.Readiness.RecordRole,
+                        SurfacePropertyMode = nativeUnreferencedStatic
+                            ? TerrainTextureSurfacePropertyMode.PreserveTargetNativeSurface
+                            : TerrainTextureSurfacePropertyMode.TransferDonorNativeSurface
+                    });
+                    continue;
+                }
+
+                foreach (NativeTerrainDonorVariant variant in BuildNativeTerrainDonorVariants(entry.TextureId, originalFaces, sourceNativeCatalog))
+                {
+                    TerrainPolygon representative = variant.Faces.FirstOrDefault(face => string.Equals(face.RuntimeKey, variant.RepresentativeRuntimeKey, StringComparison.OrdinalIgnoreCase))
+                        ?? variant.Faces.OrderByDescending(face => face.Points.Count).ThenBy(face => face.RuntimeKey, StringComparer.OrdinalIgnoreCase).First();
+                    string surface = InferNativeTerrainDonorSurface(variant.Faces, variant.Signature);
+                    NativeTerrainSurfaceBatchTransferReadiness readiness = variant.Signature == null
+                        ? new NativeTerrainSurfaceBatchTransferReadiness(
+                            false,
+                            -1,
+                            targetFaces.Length,
+                            0,
+                            0,
+                            0,
+                            0,
+                            [],
+                            [],
+                            variant.ReadinessNote)
+                        : EvaluateNativeTerrainBehaviorBatchTransfer(targetNativeCatalog, variant.Signature, level.Key, targetTextureId);
+
+                    choices.Add(new TerrainCrossLevelLookChoice
+                    {
+                        LevelKey = level.Key,
+                        LevelName = level.DisplayName,
+                        Surface = surface,
+                        TextureId = entry.TextureId,
+                        FaceCount = variant.Faces.Count,
+                        BehaviorSummary = variant.BehaviorSummary,
+                        ProofSummary = variant.Signature == null ? "native unresolved" : "native exact",
+                        ProofStatusRank = variant.Signature == null ? 0 : 4,
+                        HasCustomTexture = false,
+                        RuntimeKey = representative.RuntimeKey,
+                        X = representative.Center.X,
+                        Y = representative.Center.Y,
+                        Z = representative.AvgZ,
+                        Color = representative.SurfaceColor,
+                        PreferredSurfaceRank = string.Equals(surface, preferred, StringComparison.OrdinalIgnoreCase) ? 0 : 1,
+                        RealmKey = realmPosition?.Realm.Key ?? "unknown",
+                        RealmName = realmPosition?.Realm.DisplayName ?? "Unknown",
+                        RealmOrder = realmPosition?.Realm.Order ?? int.MaxValue,
+                        LevelOrder = realmPosition?.GlobalOrder ?? int.MaxValue,
+                        NativeBehavior = variant.Signature,
+                        CanUseArt = entry.Readiness.CrossLevelArt.CanApply,
+                        ArtReadinessNote = entry.Readiness.CrossLevelArt.Note,
+                        CanTransferBehavior = readiness.CanApply,
+                        BehaviorTransferNote = readiness.Note,
+                        TargetTextureId = targetTextureId,
+                        AffectedFaceCount = readiness.TargetFaceCount,
+                        BehaviorReadyFaceCount = readiness.ReadyFaceCount,
+                        BehaviorTargetTriangleCount = readiness.TargetTriangleCount,
+                        CanPersistAtRuntime = targetRuntime.CanPersist && targetEditStateReady,
+                        RuntimePersistenceNote = targetEditStateReady ? targetRuntime.Note : targetEditStateNote
+                    });
+                }
             }
         }
 
         return choices
-            .OrderBy(choice => choice.PreferredSurfaceRank)
+            .OrderBy(choice => choice.RealmOrder)
+            .ThenBy(choice => choice.LevelOrder)
+            .ThenBy(choice => choice.PreferredSurfaceRank)
             .ThenBy(choice => TerrainSummarySurfaceRank(choice.Surface))
             .ThenByDescending(choice => choice.ProofStatusRank)
             .ThenByDescending(choice => choice.FaceCount)
@@ -6066,7 +7148,16 @@ public sealed class MainWindow : Window
         apply.Click += (_, _) =>
         {
             if (list.SelectedItem is TerrainTextureSwapChoice choice)
+            {
+                if (!choice.CanApplyAtomically)
+                {
+                    details.Foreground = new SolidColorBrush(Color.FromRgb(160, 48, 48));
+                    details.Text = $"Blocked before changing the selected face: {choice.AtomicBlockReason}";
+                    return;
+                }
+
                 dialog.Close(choice);
+            }
         };
         buttons.Children.Add(cancel);
         buttons.Children.Add(apply);
@@ -6086,7 +7177,7 @@ public sealed class MainWindow : Window
         ComboBox modeBox = new()
         {
             ItemsSource = TerrainPaintModeOption.All,
-            SelectedIndex = 0,
+            SelectedIndex = 2,
             MinWidth = 240,
             MinHeight = 34
         };
@@ -6148,14 +7239,44 @@ public sealed class MainWindow : Window
                 ? "This target look already has custom art staged."
                 : "This target look uses original in-game art.";
             lookDetails.Text =
-                $"Texture {selectedTerrain.TextureId} -> {choice.TextureId}; {TerrainMaterialClassifier.FormatSurface(choice.Surface)}, {choice.FaceCount} face(s), proof {choice.ProofSummary}. {custom}";
+                $"Texture {selectedTerrain.TextureId} -> {choice.TextureId}; {TerrainMaterialClassifier.FormatSurface(choice.Surface)}, {choice.FaceCount} face(s), proof {choice.ProofSummary}. {custom}\n" +
+                $"Art: {(choice.CanUseArt ? "Ready" : "Blocked")} — {choice.ArtReadinessNote}\n" +
+                $"Native tint: {(choice.CanTransferVisual ? "Ready" : "Blocked")} — {choice.VisualTransferNote}\n" +
+                $"Surface property: {(choice.CanTransferBehavior ? "Ready" : "Blocked")} — {choice.BehaviorTransferNote}";
         }
         lookList.SelectionChanged += (_, _) => RefreshLookDetails();
         RefreshLookDetails();
 
+        TerrainCatalogFilterOption allRealms = new("", "All realms", int.MinValue);
+        List<TerrainCatalogFilterOption> realmOptions =
+        [
+            allRealms,
+            .. crossLevelChoices
+                .GroupBy(choice => new { choice.RealmKey, choice.RealmName, choice.RealmOrder })
+                .OrderBy(group => group.Key.RealmOrder)
+                .ThenBy(group => group.Key.RealmName, StringComparer.OrdinalIgnoreCase)
+                .Select(group => new TerrainCatalogFilterOption(group.Key.RealmKey, group.Key.RealmName, group.Key.RealmOrder))
+        ];
+        ComboBox realmFilter = new()
+        {
+            ItemsSource = realmOptions,
+            SelectedIndex = 0,
+            MinWidth = 170,
+            MinHeight = 34
+        };
+        ComboBox levelFilter = new()
+        {
+            MinWidth = 190,
+            MinHeight = 34
+        };
+        TextBox crossLevelSearch = new()
+        {
+            PlaceholderText = "Search level, texture, surface, or property",
+            MinWidth = 260,
+            MinHeight = 34
+        };
         ListBox crossLevelList = new()
         {
-            ItemsSource = crossLevelChoices,
             MinHeight = 230,
             ItemTemplate = new FuncDataTemplate<TerrainCrossLevelLookChoice>((item, _) =>
             {
@@ -6192,9 +7313,6 @@ public sealed class MainWindow : Window
                 return row;
             })
         };
-        if (crossLevelChoices.Count > 0)
-            crossLevelList.SelectedIndex = 0;
-
         TextBlock crossLevelDetails = NewSmallNote("");
         void RefreshCrossLevelDetails()
         {
@@ -6206,15 +7324,78 @@ public sealed class MainWindow : Window
                 return;
             }
 
-            string custom = choice.HasCustomTexture
-                ? "The source level has custom art staged, so the editor will copy that art."
-                : "The editor will generate a local 64x64 palette from the source face color.";
             crossLevelDetails.Text =
-                $"Selected face texture {selectedTerrain.TextureId} -> local borrowed texture from {choice.LevelName} texture {choice.TextureId}.\n" +
-                $"{TerrainMaterialClassifier.FormatSurface(choice.Surface)}, {choice.FaceCount} face(s), proof {choice.ProofSummary}. {custom}";
+                $"{choice.RealmName} / {choice.LevelName} / texture {choice.TextureId}\n" +
+                $"Shared target texture {choice.TargetTextureId}: all {choice.AffectedFaceCount} affected face(s) must change together.\n" +
+                $"Art: {(choice.CanUseArt ? "Ready" : "Blocked")} — {choice.ArtReadinessNote}\n" +
+                $"Surface property: {(choice.PreservesTargetNativeSurface ? "Preserved" : choice.CanTransferBehavior && choice.BehaviorReadyFaceCount == choice.AffectedFaceCount ? "Ready" : "Blocked")} — {choice.BehaviorTransferNote}\n" +
+                $"Runtime persistence: {(choice.CanPersistAtRuntime ? "Ready" : "Blocked")} — {choice.RuntimePersistenceNote}\n" +
+                $"Native property: {choice.BehaviorSummary}. Apply requires exact art and target runtime persistence; face-backed donors also require batch property proof, while genuinely unused static records explicitly preserve the target property.";
         }
+
+        void RefreshLevelFilter()
+        {
+            string selectedLevelKey = (levelFilter.SelectedItem as TerrainCatalogFilterOption)?.Key ?? "";
+            string realmKey = (realmFilter.SelectedItem as TerrainCatalogFilterOption)?.Key ?? "";
+            List<TerrainCatalogFilterOption> levelOptions =
+            [
+                new TerrainCatalogFilterOption("", "All levels", int.MinValue),
+                .. crossLevelChoices
+                    .Where(choice => string.IsNullOrWhiteSpace(realmKey) ||
+                        string.Equals(choice.RealmKey, realmKey, StringComparison.OrdinalIgnoreCase))
+                    .GroupBy(choice => new { choice.LevelKey, choice.LevelName, choice.LevelOrder })
+                    .OrderBy(group => group.Key.LevelOrder)
+                    .ThenBy(group => group.Key.LevelName, StringComparer.OrdinalIgnoreCase)
+                    .Select(group => new TerrainCatalogFilterOption(group.Key.LevelKey, group.Key.LevelName, group.Key.LevelOrder))
+            ];
+            levelFilter.ItemsSource = levelOptions;
+            int selectedIndex = levelOptions.FindIndex(option =>
+                string.Equals(option.Key, selectedLevelKey, StringComparison.OrdinalIgnoreCase));
+            levelFilter.SelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
+        }
+
+        void RefreshCrossLevelChoices()
+        {
+            TerrainCrossLevelLookChoice? previous = crossLevelList.SelectedItem as TerrainCrossLevelLookChoice;
+            string realmKey = (realmFilter.SelectedItem as TerrainCatalogFilterOption)?.Key ?? "";
+            string levelKey = (levelFilter.SelectedItem as TerrainCatalogFilterOption)?.Key ?? "";
+            string search = (crossLevelSearch.Text ?? "").Trim();
+            List<TerrainCrossLevelLookChoice> visible = crossLevelChoices
+                .Where(choice => string.IsNullOrWhiteSpace(realmKey) ||
+                    string.Equals(choice.RealmKey, realmKey, StringComparison.OrdinalIgnoreCase))
+                .Where(choice => string.IsNullOrWhiteSpace(levelKey) ||
+                    string.Equals(choice.LevelKey, levelKey, StringComparison.OrdinalIgnoreCase))
+                .Where(choice => string.IsNullOrWhiteSpace(search) ||
+                    choice.RealmName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    choice.LevelName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    choice.Surface.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    choice.TextureId.ToString(CultureInfo.InvariantCulture).Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    choice.BehaviorSummary.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    choice.ArtReadinessNote.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    choice.RuntimePersistenceNote.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    choice.BehaviorTransferNote.Contains(search, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            crossLevelList.ItemsSource = visible;
+            int index = previous == null
+                ? -1
+                : visible.FindIndex(choice =>
+                    string.Equals(choice.LevelKey, previous.LevelKey, StringComparison.OrdinalIgnoreCase) &&
+                    choice.TextureId == previous.TextureId &&
+                    Equals(choice.NativeBehavior, previous.NativeBehavior));
+            crossLevelList.SelectedIndex = index >= 0 ? index : visible.Count > 0 ? 0 : -1;
+            RefreshCrossLevelDetails();
+        }
+
+        realmFilter.SelectionChanged += (_, _) =>
+        {
+            RefreshLevelFilter();
+            RefreshCrossLevelChoices();
+        };
+        levelFilter.SelectionChanged += (_, _) => RefreshCrossLevelChoices();
+        crossLevelSearch.TextChanged += (_, _) => RefreshCrossLevelChoices();
         crossLevelList.SelectionChanged += (_, _) => RefreshCrossLevelDetails();
-        RefreshCrossLevelDetails();
+        RefreshLevelFilter();
+        RefreshCrossLevelChoices();
 
         TextBox paletteNameBox = new()
         {
@@ -6231,8 +7412,26 @@ public sealed class MainWindow : Window
 
         Border customPanel = BuildTerrainPaintPanel(BuildTerrainPaintColorFields(lowPicker, highPicker));
         Border inGamePanel = BuildTerrainPaintPanel(BuildTerrainPaintInGamePanel(lookList, lookDetails));
-        Border crossLevelPanel = BuildTerrainPaintPanel(BuildTerrainPaintInGamePanel(crossLevelList, crossLevelDetails));
-        Border importPanel = BuildTerrainPaintPanel(NewSmallNote("Choose this to import a palette/image file after pressing Paint Face. Supported files include TXT, HEX, PAL, GPL, JSON, and PNG palette images."));
+        Grid crossLevelFilters = new()
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(GridLength.Auto),
+                new ColumnDefinition(GridLength.Auto),
+                new ColumnDefinition(GridLength.Star)
+            },
+            ColumnSpacing = 8
+        };
+        AddGridControl(crossLevelFilters, realmFilter, 0, 0);
+        AddGridControl(crossLevelFilters, levelFilter, 1, 0);
+        AddGridControl(crossLevelFilters, crossLevelSearch, 2, 0);
+        StackPanel crossLevelContent = new() { Spacing = 8 };
+        crossLevelContent.Children.Add(crossLevelFilters);
+        crossLevelContent.Children.Add(NewSmallNote($"{crossLevelChoices.Count:N0} native texture/property variants are organized by realm and level. This is a shared texture-record replacement. Face-backed donors transfer a proven property across every affected face; genuinely unused static records are art-only and preserve all target material, tint, and collision state. Blocked rows stay visible."));
+        crossLevelContent.Children.Add(crossLevelList);
+        crossLevelContent.Children.Add(crossLevelDetails);
+        Border crossLevelPanel = BuildTerrainPaintPanel(crossLevelContent);
+        Border importPanel = BuildTerrainPaintPanel(NewSmallNote(LegacyCustomTerrainTextureBlock));
         Border palettePanel = BuildTerrainPaintPanel(BuildTerrainPaintPaletteFields(paletteNameBox, paletteTextBox));
 
         void SetMessage(string text, bool error = false)
@@ -6277,7 +7476,7 @@ public sealed class MainWindow : Window
             Foreground = new SolidColorBrush(Color.FromRgb(32, 38, 45)),
             TextWrapping = TextWrapping.Wrap
         });
-        panel.Children.Add(NewSmallNote("This paints only the selected terrain face. If needed, the editor first gives that face its own local texture slot so nearby terrain keeps its original look."));
+        panel.Children.Add(NewSmallNote("Same-level resident looks change only the selected face. Cross-level choices represent a shared texture-record replacement and must cover every face using the selected target texture; no private slot is claimed while relocation proof is blocked."));
         panel.Children.Add(modeGrid);
         panel.Children.Add(customPanel);
         panel.Children.Add(inGamePanel);
@@ -6293,7 +7492,7 @@ public sealed class MainWindow : Window
             Spacing = 8
         };
         Button cancel = NewButton("Cancel");
-        Button apply = NewButton("Paint Face");
+        Button apply = NewButton("Apply Atomic Change");
         cancel.Click += (_, _) => dialog.Close(null);
         apply.Click += (_, _) =>
         {
@@ -6301,22 +7500,17 @@ public sealed class MainWindow : Window
             switch (mode.Kind)
             {
                 case TerrainPaintModeKind.CustomColors:
-                    if (!lowPicker.TryApplyTypedHex(out string lowError))
-                    {
-                        SetMessage($"Low color: {lowError}", error: true);
-                        return;
-                    }
-                    if (!highPicker.TryApplyTypedHex(out string highError))
-                    {
-                        SetMessage($"High color: {highError}", error: true);
-                        return;
-                    }
-                    dialog.Close(TerrainPaintDialogResult.ForCustomColors(lowPicker.SelectedColor, highPicker.SelectedColor));
+                    SetMessage(LegacyCustomTerrainTextureBlock, error: true);
                     return;
                 case TerrainPaintModeKind.InGameLook:
                     if (lookList.SelectedItem is not TerrainTextureSwapChoice choice)
                     {
                         SetMessage("Choose an in-game terrain look first.", error: true);
+                        return;
+                    }
+                    if (!choice.CanApplyAtomically)
+                    {
+                        SetMessage($"This look is blocked before any face can change: {choice.AtomicBlockReason}", error: true);
                         return;
                     }
                     dialog.Close(TerrainPaintDialogResult.ForInGameLook(choice));
@@ -6327,23 +7521,16 @@ public sealed class MainWindow : Window
                         SetMessage("Choose a terrain look from another cached level first.", error: true);
                         return;
                     }
+                    if (!crossLevelChoice.CanApplyAtomically)
+                    {
+                        SetMessage($"Shared texture replacement blocked before any face can change: {crossLevelChoice.AtomicBlockReason}", error: true);
+                        return;
+                    }
                     dialog.Close(TerrainPaintDialogResult.ForCrossLevelLook(crossLevelChoice));
                     return;
                 case TerrainPaintModeKind.ImportedPalette:
-                    dialog.Close(TerrainPaintDialogResult.ForImportedPalette());
-                    return;
                 case TerrainPaintModeKind.PastedPalette:
-                    try
-                    {
-                        TerrainPaletteImport palette = TerrainPaletteImporter.ImportText(
-                            paletteTextBox.Text ?? "",
-                            string.IsNullOrWhiteSpace(paletteNameBox.Text) ? "Custom face palette" : paletteNameBox.Text.Trim());
-                        dialog.Close(TerrainPaintDialogResult.ForPalette(palette));
-                    }
-                    catch (Exception ex)
-                    {
-                        SetMessage($"Could not parse palette: {ex.Message}", error: true);
-                    }
+                    SetMessage(LegacyCustomTerrainTextureBlock, error: true);
                     return;
             }
         };
@@ -6669,6 +7856,98 @@ public sealed class MainWindow : Window
         return path;
     }
 
+    private void RefreshDiagnosticContext(bool includeSavedEdits = false)
+    {
+        try
+        {
+            string sourceImage = FirstExistingDiscImagePath(
+                _discImagePathBox.Text,
+                _skyboxDiscImagePathBox.Text,
+                DiscImageLocator.FindImage(_workspace));
+            string selected = _selectedMoby != null
+                ? $"T{_selectedMoby.TrueIndex} {_selectedMoby.DisplayLabel}; native class 0x{_selectedMoby.SourceByte37:X2}{_selectedMoby.SourceByte36:X2}; render radius/drawn 0x{_selectedMoby.Type:X2}/0x{_selectedMoby.State:X2}; specular 0x{_selectedMoby.SourceByte4F:X2}; update/drop 0x{_selectedMoby.Flag4A:X2}/0x{_selectedMoby.Flag4B:X2}; XYZ {_selectedMoby.Position.X:0.###}, {_selectedMoby.Position.Y:0.###}, {_selectedMoby.Position.Z:0.###}; yaw 0x{_selectedMoby.YawByte:X2}; added {_selectedMoby.IsAdded}; removed {_selectedMoby.IsRemoved}"
+                : _selectedTerrain != null
+                ? $"Terrain face {_selectedTerrainIndex}; runtime key {_selectedTerrain.RuntimeKey}; texture {_selectedTerrain.TextureId}; surface {_selectedTerrain.Surface}; average Z {_selectedTerrain.AvgZ:0.###}"
+                : "Nothing selected";
+            int activeObjects = _currentMobys.Count(moby => !moby.IsRemoved && !moby.IsEditorControl);
+            int addedObjects = _currentMobys.Count(moby => !moby.IsRemoved && moby.IsAdded && !moby.IsEditorControl);
+            int editedObjects = _currentMobys.Count(moby => !moby.IsRemoved && moby.HasAnyEdit && !moby.IsEditorControl);
+            Dictionary<string, string?> context = new()
+            {
+                ["Workspace"] = _workspace.RootPath,
+                ["Release mode"] = _releaseMode.ToString(),
+                ["Source image"] = sourceImage,
+                ["Source CUE"] = DiscImageLocator.FindCueForImage(sourceImage),
+                ["Current level"] = _currentLevel == null ? "No level loaded" : $"{_currentLevel.DisplayName} ({_currentLevel.Key})",
+                ["Current object state"] = $"{activeObjects} active; {addedObjects} added; {editedObjects} edited; {_loadedMobyEdits} loaded saved edit(s)",
+                ["Current terrain state"] = _currentGeometry == null ? "No terrain loaded" : $"{_currentGeometry.Polygons.Count} faces; {BuildTerrainEditSummary()}",
+                ["Current selection"] = selected,
+                ["Editor status"] = _statusText.Text
+            };
+            if (includeSavedEdits)
+            {
+                IReadOnlyList<EditedLevelExportTarget> targets = FindEditedLevelExportTargets();
+                context["Levels with saved edits"] = targets.Count == 0
+                    ? "None"
+                    : string.Join(", ", targets.Select(target => target.Level.DisplayName));
+            }
+
+            EditorDiagnostics.UpdateContext(context);
+        }
+        catch (Exception exception)
+        {
+            EditorDiagnostics.RecordWarning("Could not refresh editor diagnostic context", exception.Message);
+        }
+    }
+
+    private IReadOnlyList<string> CollectCombinedExportDiagnosticArtifacts(
+        string outputDirectory,
+        IReadOnlyList<EditedLevelExportTarget> targets,
+        CombinedTestBinResult result)
+    {
+        List<string> paths = [];
+        string finalPrefix = Path.Combine(outputDirectory, "Spyro Editor - All Saved Edits");
+        AddIfFile(paths, $"{finalPrefix}.combined-export-summary.json");
+        AddIfFile(paths, $"{finalPrefix}.skipped-edits.txt");
+        AddIfFile(paths, $"{finalPrefix}.build-safety.json");
+        AddIfFile(paths, $"{finalPrefix}.build-safety.md");
+
+        string buildDirectory = Path.Combine(outputDirectory, "_combined-build");
+        if (Directory.Exists(buildDirectory))
+        {
+            paths.AddRange(Directory.EnumerateFiles(buildDirectory, "*.json", SearchOption.TopDirectoryOnly)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase));
+            paths.AddRange(Directory.EnumerateFiles(buildDirectory, "*.txt", SearchOption.TopDirectoryOnly)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase));
+        }
+
+        foreach (EditedLevelExportTarget target in targets)
+        {
+            paths.AddRange(Directory.EnumerateFiles(_workspace.RootPath, $"{target.Level.Key}-*.json", SearchOption.TopDirectoryOnly)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase));
+        }
+
+        AddIfFile(paths, result.OutputCuePath);
+        return paths
+            .Where(path => !string.Equals(Path.GetExtension(path), ".bin", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static void AddIfFile(List<string> paths, string path)
+    {
+        if (File.Exists(path))
+            paths.Add(Path.GetFullPath(path));
+    }
+
+    private static string BuildMobyDiagnosticSummary(Moby moby)
+    {
+        return $"T{moby.TrueIndex} {moby.DisplayLabel}; native class 0x{moby.SourceByte37:X2}{moby.SourceByte36:X2}; " +
+            $"render radius/drawn 0x{moby.Type:X2}/0x{moby.State:X2}; specular 0x{moby.SourceByte4F:X2}; " +
+            $"update/drop 0x{moby.Flag4A:X2}/0x{moby.Flag4B:X2}; XYZ {moby.Position.X:0.###}, {moby.Position.Y:0.###}, {moby.Position.Z:0.###}; " +
+            $"yaw 0x{moby.YawByte:X2}; patch {moby.PatchStatus}; clone source T{moby.SourceCloneTrueIndex}";
+    }
+
     private static string FriendlyFilePart(string text)
     {
         char[] invalid = Path.GetInvalidFileNameChars();
@@ -6721,9 +8000,17 @@ public sealed class MainWindow : Window
     {
         bool hasLevel = _currentLevel != null;
         bool hasObject = _selectedMoby != null && !_selectedMoby.IsRemoved;
-        bool objectHasEdits = hasObject && (_selectedMoby!.HasAnyEdit || _selectedMoby.IsAdded);
+        bool objectHasEdits = hasObject && HasUndoableMobyEdits(_selectedMoby!);
         bool selectedProtectedControl = hasObject && IsReleaseProtectedControlMoby(_selectedMoby!);
         bool selectedEditorControl = hasObject && _selectedMoby!.IsEditorControl;
+        bool canUseSwapCatalog = hasObject &&
+            !_selectedMoby!.IsAdded &&
+            _selectedMoby.TrueIndex >= 0 &&
+            !selectedEditorControl &&
+            !(_releaseMode && selectedProtectedControl) &&
+            (CrossLevelSwapCatalogBuilder.TryGetEligibleTargetCategory(_selectedMoby, out _, out _) ||
+             IsFocusedResidentGreenWizardCandidateTarget(_selectedMoby));
+        bool hasCrossLevelSwapCandidate = _currentMobys.Any(IsCrossLevelExistingSlotSwapEdit);
         bool clipboardProtectedControl = _mobyClipboard != null && IsReleaseProtectedControlClipboard(_mobyClipboard);
         bool hasTerrain = _selectedTerrain != null && _selectedTerrainIndex >= 0;
         bool terrainHasEdits = hasTerrain && _selectedTerrain!.IsTerrainEdited;
@@ -6737,12 +8024,18 @@ public sealed class MainWindow : Window
         SetButtonEnabled(_objectAddButton, hasLevel);
         SetButtonEnabled(_objectRemoveButton, hasObject && !selectedEditorControl && !(_releaseMode && selectedProtectedControl));
         SetButtonEnabled(_objectEditButton, hasObject);
+        SetButtonEnabled(_objectSwapCatalogButton, canUseSwapCatalog);
+        SetButtonEnabled(_objectSwapTestButton, hasLevel && hasCrossLevelSwapCandidate);
+        if (_objectSwapTestButton != null)
+            _objectSwapTestButton.IsVisible = hasCrossLevelSwapCandidate;
         SetButtonEnabled(_objectCopyButton, hasObject && !selectedEditorControl && !(_releaseMode && selectedProtectedControl));
         SetButtonEnabled(_objectPasteButton, hasLevel && _mobyClipboard != null && !(_releaseMode && clipboardProtectedControl));
         SetButtonEnabled(_objectLayerDownButton, hasObject && CanMoveMobyToAdjacentTerrainLayer(_selectedMoby!, -1));
         SetButtonEnabled(_objectLayerUpButton, hasObject && CanMoveMobyToAdjacentTerrainLayer(_selectedMoby!, 1));
         SetButtonEnabled(_objectUndoButton, objectHasEdits);
         SetButtonEnabled(_objectUndoRemoveButton, _lastRemovedMoby != null);
+        if (_objectUndoRemoveButton != null)
+            _objectUndoRemoveButton.IsVisible = _lastRemovedMoby != null;
         SetButtonEnabled(_toolbarCreateBinButton, hasLevel);
         SetButtonEnabled(_objectRestoreLevelButton, hasLevel);
         SetButtonEnabled(_objectSelectedIdTestButton, hasObject && IsQuestionableMoby(_selectedMoby!));
@@ -6849,32 +8142,73 @@ public sealed class MainWindow : Window
     private string BuildObjectActionHint(bool hasLevel, bool hasObject, bool objectHasEdits)
     {
         if (!hasLevel)
-            return "Open a level before adding or editing objects.";
+            return "No level loaded.";
         if (_pendingMobyAdd != null)
-            return $"Click the map or Fly 3D view to place {_pendingMobyAdd.Label}. Press Escape to cancel placement.";
+            return $"Placing {_pendingMobyAdd.Label}.";
         if (!hasObject)
             return _lastRemovedMoby == null
-                ? "Select an object to edit, remove, copy, or undo it. Add Object lets you choose a kind, then click the view to place it."
-                : $"Select an object to edit, or restore the recently removed {_lastRemovedMoby.DisplayLabel}.";
+                ? "No object selected."
+                : $"No object selected. Last removed: {_lastRemovedMoby.DisplayLabel}.";
         if (_selectedMoby!.IsFlyInLandingControl)
         {
-            string undoHint = objectHasEdits ? " Undo is available for the staged landing change." : "";
-            return $"Selected {_selectedMoby.DisplayLabel}; drag it or use Edit Object to set the exact homeworld-to-level landing position.{undoHint}";
+            string editState = objectHasEdits ? " Staged landing change." : "";
+            return $"Fly-in landing selected; linked approach data moves with it.{editState}";
         }
         if (_releaseMode && IsMappedPortalControlMoby(_selectedMoby!))
         {
-            string undoHint = objectHasEdits ? " Undo is available for the staged portal move." : "";
-            return $"Selected {_selectedMoby!.DisplayLabel}; drag it or use Edit Object to move its linked lettering, travel path, portal plane, and walk-in surface together.{undoHint}";
+            string editState = objectHasEdits ? " Staged portal change." : "";
+            return $"Portal selected; lettering, travel path, plane, and walk-in surface move together.{editState}";
         }
         if (_releaseMode && IsReleaseProtectedControlMoby(_selectedMoby!))
         {
-            string undoHint = objectHasEdits ? " Undo is still available for staged changes." : "";
-            return $"Selected {_selectedMoby!.DisplayLabel}; this looks like trigger, camera, reward, route, or helper data rather than a standalone visible object. Copy and remove are disabled in release until that behavior is proven.{undoHint}";
+            string editState = objectHasEdits ? " Staged changes are present." : "";
+            return $"System/control record selected. Copy and remove stay protected until its behavior is proven.{editState}";
+        }
+        if (IsCrossLevelExistingSlotSwapEdit(_selectedMoby!))
+        {
+            if (IsGreenWizardExistingSlotSwapEdit(_selectedMoby) &&
+                _currentLevel != null &&
+                GreenWizardRuntimeBundleCompatibility.Resolve(_currentLevel, _workspace.RootPath).NormalCreateBinReady)
+            {
+                return $"{_selectedMoby.DisplayLabel}: verified {_currentLevel.DisplayName} resident Wizard swap staged. Normal Create BIN includes it; Create Swap Test remains available as an isolated regression build.";
+            }
+
+            return $"{_selectedMoby.DisplayLabel}: cross-level test staged. Normal Create BIN will skip it.";
         }
         if (objectHasEdits)
-            return $"Selected {_selectedMoby!.DisplayLabel}; undo is available for this object's staged changes.";
-        return $"Selected {_selectedMoby!.DisplayLabel}; use Edit Object for details, Copy Object to duplicate it, or Remove Object to stage removal.";
+            return $"{_selectedMoby!.DisplayLabel}: staged changes present.";
+        if (!_selectedMoby!.IsAdded &&
+            _selectedMoby.TrueIndex >= 0 &&
+            (CrossLevelSwapCatalogBuilder.TryGetEligibleTargetCategory(_selectedMoby, out _, out _) ||
+             IsFocusedResidentGreenWizardCandidateTarget(_selectedMoby)))
+        {
+            return IsFocusedResidentGreenWizardCandidateTarget(_selectedMoby)
+                ? $"{_selectedMoby.DisplayLabel}: checked slot is available for the guarded Green Wizard candidate."
+                : $"{_selectedMoby.DisplayLabel}: existing slot is available for Replace.";
+        }
+        return $"{_selectedMoby!.DisplayLabel} selected.";
     }
+
+    private static bool IsCrossLevelExistingSlotSwapEdit(Moby moby)
+    {
+        return !moby.IsRemoved &&
+            !moby.IsAdded &&
+            moby.TrueIndex >= 0 &&
+            string.Equals(
+                moby.CrossLevelRequiredExporterFeature,
+                CrossLevelSwapCatalogBuilder.CandidateExporterFeature,
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsGreenWizardExistingSlotSwapEdit(Moby moby) =>
+        IsCrossLevelExistingSlotSwapEdit(moby) &&
+        string.Equals(moby.CrossLevelFamily, "enemyTransform", StringComparison.OrdinalIgnoreCase) &&
+        (moby.SourceByte36 | (moby.SourceByte37 << 8)) == GreenWizardRuntimeBundleCompatibility.ActorId;
+
+    private bool IsFocusedResidentGreenWizardCandidateTarget(Moby moby) =>
+        _currentLevel != null &&
+        (GreenWizardRuntimeBundleCompatibility.IsFocusedResidentCandidateTarget(_currentLevel.Key, moby) ||
+         GreenWizardRuntimeBundleCompatibility.IsFocusedWizardPeakCandidateTarget(_currentLevel.Key, moby));
 
     private static bool IsReleaseProtectedControlMoby(Moby moby)
     {
@@ -7248,6 +8582,8 @@ public sealed class MainWindow : Window
                 : $"the original texture was shared by {originalTextureUseCount} face(s)";
             return $"Selected face texture ID changed {terrain.OriginalTextureId}->{terrain.TextureId}; {textureScope}; {customScope}; {sourceScope}.";
         }
+        if (terrain.HasTextureVisualEdit)
+            return $"Selected face keeps texture ID {terrain.TextureId} but has private native tint bindings; {textureScope}; {customScope}.";
 
         return $"Selected face still uses texture {terrain.TextureId}; {textureScope}; {customScope}.";
     }
@@ -7276,6 +8612,8 @@ public sealed class MainWindow : Window
 
         if (terrain.HasTextureEdit)
             parts.Add($"texture ID {terrain.OriginalTextureId} -> {terrain.TextureId}");
+        if (terrain.TextureVisualEdit is TerrainTextureVisualEdit visual)
+            parts.Add($"{visual.UniqueCornerPairCount} source-bound native near/fade tint pair(s) from {visual.SourceLevelKey}:{visual.SourceRuntimeKey}");
 
         int textureImports = _customTerrainTextures.Count(texture => texture.TextureId == terrain.TextureId);
         if (textureImports > 0)
@@ -7361,7 +8699,7 @@ public sealed class MainWindow : Window
             .ToList();
         int height = edited.Count(polygon => polygon.HasHeightEdit);
         int position = edited.Count(polygon => polygon.HasPositionEdit);
-        int texture = edited.Count(polygon => polygon.HasTextureEdit);
+        int texture = edited.Count(polygon => polygon.HasTextureEdit || polygon.HasTextureVisualEdit);
         int structural = edited.Count(polygon => polygon.HasStructureEdit);
         int playableHeight = 0;
         int partialHeight = 0;
@@ -7400,7 +8738,40 @@ public sealed class MainWindow : Window
                 .Append(polygon.TextureId)
                 .Append('|')
                 .Append(polygon.StructureEdit)
+                .Append('|')
+                .Append(polygon.SurfaceBehaviorEdit?.SurfaceType.ToString(CultureInfo.InvariantCulture) ?? "")
+                .Append(':')
+                .Append(polygon.SurfaceBehaviorEdit?.Param1.ToString(CultureInfo.InvariantCulture) ?? "")
+                .Append(':')
+                .Append(polygon.SurfaceBehaviorEdit?.Param2.ToString(CultureInfo.InvariantCulture) ?? "")
+                .Append(':')
+                .Append(polygon.SurfaceBehaviorEdit?.SourceLevelKey ?? "")
+                .Append(':')
+                .Append(polygon.SurfaceBehaviorEdit?.SourceRuntimeKey ?? "")
                 .Append('|');
+            if (polygon.TextureVisualEdit is TerrainTextureVisualEdit visual)
+            {
+                builder.Append(visual.SourceTextureId)
+                    .Append(':')
+                    .Append(visual.SourceLevelKey)
+                    .Append(':')
+                    .Append(visual.SourceRuntimeKey)
+                    .Append(':')
+                    .Append(visual.SourceSectorOffset)
+                    .Append(':')
+                    .Append(visual.SourceFaceOffset)
+                    .Append(':');
+                foreach (TerrainTextureVisualCorner corner in visual.Corners)
+                {
+                    builder.Append(corner.NearColor.R).Append(',')
+                        .Append(corner.NearColor.G).Append(',')
+                        .Append(corner.NearColor.B).Append('/')
+                        .Append(corner.FarColor.R).Append(',')
+                        .Append(corner.FarColor.G).Append(',')
+                        .Append(corner.FarColor.B).Append(';');
+                }
+            }
+            builder.Append('|');
             foreach (float delta in polygon.TerrainVertexDeltas())
                 builder.Append(MathF.Round(delta, 3).ToString("0.###", CultureInfo.InvariantCulture)).Append(',');
             builder.Append('|');
@@ -7799,17 +9170,26 @@ public sealed class MainWindow : Window
         string nativeStatus;
         if (layout?.SkyBlocks.FirstOrDefault() is Spyro1SkyBlockLayout primary)
         {
-            int linkedPortalCopies = Math.Max(0, layout.LinkedPrimarySkyCopies.Count - 1);
-            int sameDiscDonors = Math.Max(0, (_nativeSkyReport?.Levels.Count ?? _catalog.Levels.Count) - 1);
-            int expandedDonors = Math.Max(0, sameDiscDonors - layout.CapacityCompatiblePrimaryDonorKeys.Count);
-            nativeStatus =
-                $"Native sky: {primary.ByteLength:N0} bytes, {primary.PartCount} parts, {primary.PaletteWordCount} colors.\n" +
-                $"Same-disc skies: {sameDiscDonors}; {layout.CapacityCompatiblePrimaryDonorKeys.Count} fit in place and {expandedDonors} use guarded WAD expansion. Linked portal copies: {linkedPortalCopies}.\n" +
-                "Geometry swaps automatically bypass the target level's sky-occlusion list so every donor part reaches the normal renderer culling pass.";
+            if (_releaseMode)
+            {
+                nativeStatus = "Original sky loaded. Recolor it, choose another level's sky, or use an original preset.";
+            }
+            else
+            {
+                int linkedPortalCopies = Math.Max(0, layout.LinkedPrimarySkyCopies.Count - 1);
+                int sameDiscDonors = Math.Max(0, (_nativeSkyReport?.Levels.Count ?? _catalog.Levels.Count) - 1);
+                int expandedDonors = Math.Max(0, sameDiscDonors - layout.CapacityCompatiblePrimaryDonorKeys.Count);
+                nativeStatus =
+                    $"Native sky: {primary.ByteLength:N0} bytes, {primary.PartCount} parts, {primary.PaletteWordCount} colors.\n" +
+                    $"Same-disc skies: {sameDiscDonors}; {layout.CapacityCompatiblePrimaryDonorKeys.Count} fit in place and {expandedDonors} use guarded WAD expansion. Linked portal copies: {linkedPortalCopies}.\n" +
+                    "Geometry swaps automatically bypass the target level's sky-occlusion list so every donor part reaches the normal renderer culling pass.";
+            }
         }
         else
         {
-            nativeStatus = "Native sky layout: ready to verify from the selected original BIN.";
+            nativeStatus = _releaseMode
+                ? "Original sky selected."
+                : "Native sky layout: ready to verify from the selected original BIN.";
         }
 
         _skyboxDetails.Text = saved == null
@@ -8231,6 +9611,7 @@ public sealed class MainWindow : Window
             string importPath = "";
             string importHash = "";
             int replacementByteLength = targetSky.ByteLength;
+            string replacementName = "native sky";
             bool usesExpandedWad = false;
             NativeEnvironmentGradePlan environmentGrade = NativeEnvironmentGradePlan.Disabled;
             NativeEnvironmentGradeMatch? environmentMatch = null;
@@ -8244,6 +9625,7 @@ public sealed class MainWindow : Window
                 Spyro1SkyBlockLayout donorSky = donorLayout.SkyBlocks.FirstOrDefault()
                     ?? throw new InvalidDataException($"No native sky block was found for {donor.DisplayName}.");
                 replacementByteLength = donorSky.ByteLength;
+                replacementName = donor.DisplayName;
                 usesExpandedWad = donorSky.ByteLength > targetSky.ByteLength;
                 donorKey = donor.Key;
                 environmentGrade = ReadEnvironmentGradeControls(donor.Key);
@@ -8271,6 +9653,7 @@ public sealed class MainWindow : Window
                 Spyro1SkyBlockLayout donorSky = donorLayout.SkyBlocks.FirstOrDefault()
                     ?? throw new InvalidDataException($"No native sky geometry was found for {donor.DisplayName}.");
                 replacementByteLength = donorSky.ByteLength;
+                replacementName = $"{originalPreset.DisplayName} ({donor.DisplayName} geometry)";
                 usesExpandedWad = donorSky.ByteLength > targetSky.ByteLength;
                 donorKey = donor.Key;
                 palettePresetId = originalPreset.Id;
@@ -8287,12 +9670,21 @@ public sealed class MainWindow : Window
                     throw new InvalidDataException("The custom .sky file must be between 1 byte and 1 MB.");
                 byte[] normalized = Spyro1SkyBlockAnalyzer.NormalizeStandaloneSkyFile(raw);
                 replacementByteLength = normalized.Length;
+                replacementName = Path.GetFileName(resolvedPath);
                 usesExpandedWad = normalized.Length > targetSky.ByteLength;
                 importHash = Convert.ToHexString(SHA256.HashData(raw));
             }
             else if (!string.Equals(mode, NativeSkyEditPlan.PaletteMode, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException($"Unknown skybox edit mode '{mode}'.");
+            }
+
+            if (!string.Equals(mode, NativeSkyEditPlan.PaletteMode, StringComparison.OrdinalIgnoreCase))
+            {
+                NativeSkyLinkedPortalSafety.ThrowIfUnprovenExpansion(
+                    targetLayout,
+                    replacementByteLength,
+                    replacementName);
             }
 
             NativeSkyEditPlan plan = new(
@@ -8623,12 +10015,38 @@ public sealed class MainWindow : Window
             return;
         }
 
+        RefreshDiagnosticContext(includeSavedEdits: true);
+        EditorDiagnostics.RecordAction("Create BIN requested", $"Current level: {_currentLevel.DisplayName}; source: {sourceImage}");
         await SaveCurrentEditsAsync();
         IReadOnlyList<EditedLevelExportTarget> targets = FindEditedLevelExportTargets();
         if (targets.Count == 0)
         {
             _statusText.Text = "No saved edits were found. Change a level name, music track, skybox, object, or terrain first.";
             return;
+        }
+
+        if (targets.Any(target => target.HasObjectEdits))
+        {
+            MobyBuildSafetyInspectionResult buildSafety;
+            try
+            {
+                buildSafety = await InspectSavedObjectBuildSafetyAsync(sourceImage, targets);
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or UnauthorizedAccessException)
+            {
+                EditorDiagnostics.RecordException("inspecting object build safety", ex);
+                _statusText.Text = $"Could not inspect object build safety: {ex.Message}";
+                return;
+            }
+
+            BuildSafetyDecision buildSafetyDecision = await ConfirmBuildSafetyAsync(buildSafety);
+            if (buildSafetyDecision != BuildSafetyDecision.Create)
+            {
+                _statusText.Text = buildSafety.Report.Status == MobyBuildSafetyStatus.Blocked
+                    ? $"Object build blocked by the native Moby safety check. Report: {buildSafety.Written.MarkdownPath}"
+                    : $"Canceled BIN creation after the object build safety review. Report: {buildSafety.Written.MarkdownPath}";
+                return;
+            }
         }
 
         TerrainPatchRiskDecision terrainRiskDecision = await ConfirmTerrainPatchRisksAsync();
@@ -8645,6 +10063,9 @@ public sealed class MainWindow : Window
         }
 
         string outputDir = EnsureUserOutputDirectory();
+        string targetSummary = string.Join("; ", targets.Select(target =>
+            $"{target.Level.DisplayName} [objects={target.HasObjectEdits}, terrain={target.HasTerrainEdits || target.HasCustomTerrainTextures || target.HasNativeTerrainTextureRelocations}, nativeTextureSwaps={target.HasNativeTerrainTextureRelocations}, sky={target.HasSkyboxEdit}, name={target.HasLevelTextEdit}, music={target.HasLevelMusicEdit}]"));
+        EditorDiagnostics.RecordAction("Create BIN started", $"Output: {outputDir}; targets: {targetSummary}");
         _statusText.Text = targets.Count == 1
             ? $"Creating test for {targets[0].Level.DisplayName}..."
             : $"Creating one test for saved edits across {targets.Count} levels...";
@@ -8660,6 +10081,7 @@ public sealed class MainWindow : Window
                 string skipped = result.SkippedEdits > 0
                     ? $" Skipped {result.SkippedEdits} edit(s) that are not export-ready yet."
                     : " Change a level name, music track, skybox, object, or terrain first.";
+                EditorDiagnostics.RecordWarning("Create BIN produced no output image", $"Targets: {targetSummary}; skipped edits: {result.SkippedEdits}");
                 _statusText.Text = $"No source patches were ready across the saved edits.{skipped} Older All Saved Edits BIN/CUE output was removed so DuckStation cannot load a stale test.";
                 return;
             }
@@ -8669,12 +10091,36 @@ public sealed class MainWindow : Window
                 : $" for {FormatShortList(result.PatchedLevelNames, 4)}";
             string treasureSummary = BuildExportedTreasureStatus(result.ExportedTreasureTargets);
             string skippedSummary = BuildSkippedExportStatus(result.SkippedEdits, result.SkippedEditDetails);
+            string exportSummary = $"{result.PatchedLevelNames.Count} level(s); {result.ObjectPatches} object, {result.TerrainPatches} terrain, {result.EnvironmentGradePatches} environment, {result.SkyboxPatches} skybox, {result.LevelNamePatches} level-name, {result.MusicLevelPatches} music patch(es); {result.SkippedEdits} skipped edit(s)";
+            IReadOnlyList<string> diagnosticArtifacts = CollectCombinedExportDiagnosticArtifacts(outputDir, targets, result);
+            EditorExportDiagnosticResult diagnostics = EditorDiagnostics.RecordExport(new EditorExportDiagnostic(
+                OutputCuePath: result.OutputCuePath,
+                OutputImagePath: result.OutputImagePath,
+                SourceImagePath: sourceImage,
+                Summary: exportSummary,
+                Details: new Dictionary<string, string>
+                {
+                    ["Edited level detail"] = targetSummary,
+                    ["Patched levels"] = string.Join(", ", result.PatchedLevelNames),
+                    ["Skipped edit detail"] = result.SkippedEditDetails.Count == 0 ? "None" : string.Join("; ", result.SkippedEditDetails),
+                    ["Exported treasure totals"] = result.ExportedTreasureTargets.Count == 0
+                        ? "None"
+                        : string.Join("; ", result.ExportedTreasureTargets.Select(target => $"{target.LevelName}: {target.Before}->{target.After}"))
+                },
+                ArtifactPaths: diagnosticArtifacts));
             string folderStatus = OpenContainingFolderStatus(result.OutputCuePath);
-            _statusText.Text = $"Created all-edits test {Path.GetFileName(result.OutputCuePath)}{levelSummary}: {result.ObjectPatches} object patch(es), {result.TerrainPatches} terrain patch(es), {result.EnvironmentGradePatches} environment patch(es), {result.SkyboxPatches} sky block patch(es), {result.LevelNamePatches} level name(s), {result.MusicLevelPatches} music level(s).{treasureSummary}{skippedSummary}{folderStatus}";
+            string diagnosticStatus = string.IsNullOrWhiteSpace(diagnostics.BundlePath)
+                ? ""
+                : $" Support ZIP: {Path.GetFileName(diagnostics.BundlePath)}.";
+            _statusText.Text = $"Created all-edits test {Path.GetFileName(result.OutputCuePath)}{levelSummary}: {result.ObjectPatches} object patch(es), {result.TerrainPatches} terrain patch(es), {result.EnvironmentGradePatches} environment patch(es), {result.SkyboxPatches} sky block patch(es), {result.LevelNamePatches} level name(s), {result.MusicLevelPatches} music level(s).{treasureSummary}{skippedSummary}{diagnosticStatus}{folderStatus}";
         }
         catch (Exception ex)
         {
+            EditorDiagnostics.RecordException("creating the all-saved-edits BIN", ex);
+            string reportPath = EditorDiagnostics.WriteReport("Create BIN failed before a test image was completed.");
             _statusText.Text = $"Could not create test: {ex.Message}";
+            if (!string.IsNullOrWhiteSpace(reportPath))
+                _statusText.Text += $" Diagnostic report: {reportPath}";
         }
     }
 
@@ -8686,12 +10132,25 @@ public sealed class MainWindow : Window
             bool hasObjectEdits = level.HasSourceTable && NativeEditFileHasEdits(Path.Combine(_workspace.RootPath, $"{level.Key}-native-edits.json"));
             bool hasTerrainEdits = TerrainEditFileHasEdits(Path.Combine(_workspace.RootPath, $"{level.Key}-terrain-edits.json"));
             bool hasCustomTerrainTextures = CustomTerrainTextureFileHasTextures(CustomTerrainTextureStore.ManifestPath(_workspace.RootPath, level.Key));
+            bool hasNativeTerrainTextureRelocations = NativeTerrainTextureRelocationEditStore
+                .Load(_workspace.RootPath, level.Key)
+                .Count > 0;
             TextTargetEntry? textTarget = _textTargets.FindForLevel(level);
             bool hasLevelTextEdit = textTarget != null && LevelTextEditStore.Load(_workspace.RootPath, textTarget) != null;
             bool hasLevelMusicEdit = LevelMusicEditStore.Load(_workspace.RootPath, level) != null;
             bool hasSkyboxEdit = NativeSkyEditStore.Load(_workspace.RootPath, level) != null;
-            if (hasObjectEdits || hasTerrainEdits || hasCustomTerrainTextures || hasLevelTextEdit || hasLevelMusicEdit || hasSkyboxEdit)
-                targets.Add(new EditedLevelExportTarget(level, hasObjectEdits, hasTerrainEdits, hasCustomTerrainTextures, hasLevelTextEdit, hasLevelMusicEdit, hasSkyboxEdit));
+            if (hasObjectEdits || hasTerrainEdits || hasCustomTerrainTextures || hasNativeTerrainTextureRelocations || hasLevelTextEdit || hasLevelMusicEdit || hasSkyboxEdit)
+            {
+                targets.Add(new EditedLevelExportTarget(
+                    level,
+                    hasObjectEdits,
+                    hasTerrainEdits,
+                    hasCustomTerrainTextures,
+                    hasNativeTerrainTextureRelocations,
+                    hasLevelTextEdit,
+                    hasLevelMusicEdit,
+                    hasSkyboxEdit));
+            }
         }
 
         return targets;
@@ -8709,9 +10168,11 @@ public sealed class MainWindow : Window
         string finalImage = $"{finalPrefix}.bin";
         string finalCue = $"{finalPrefix}.cue";
         string finalSummary = $"{finalPrefix}.combined-export-summary.json";
-        foreach (string staleImage in Directory.EnumerateFiles(tempDir, "*.bin")
-            .Concat(Directory.EnumerateFiles(tempDir, "*.cue"))
-            .Concat(new[] { finalImage, finalCue, finalSummary }))
+        string finalSkipped = $"{finalPrefix}.skipped-edits.txt";
+        string finalDiagnostics = $"{finalPrefix}.diagnostics.txt";
+        string finalSupportBundle = $"{finalPrefix}.diagnostics.zip";
+        foreach (string staleImage in Directory.EnumerateFiles(tempDir, "*", SearchOption.AllDirectories)
+            .Concat(new[] { finalImage, finalCue, finalSummary, finalSkipped, finalDiagnostics, finalSupportBundle }))
         {
             try
             {
@@ -8741,6 +10202,9 @@ public sealed class MainWindow : Window
         List<NativeSkyBatchEdit> skyboxEdits = [];
         List<NativeEnvironmentGradeBatchEdit> environmentGradeEdits = [];
         List<object> stepSummaries = [];
+        ArtisansNativeLockedChestRuntimeBundleIntent? artisansLockedChestBundleIntent = null;
+        string artisansLockedChestBundleLevelName = "Artisans";
+        bool incompatibleStructuralWadRelocationApplied = false;
 
         foreach (EditedLevelExportTarget target in targets)
         {
@@ -8760,6 +10224,32 @@ public sealed class MainWindow : Window
                 objectPatches += objectResult.Plan.PatchCount;
                 skippedEdits += objectResult.Plan.SkippedEdits.Count;
                 skippedEditDetails.AddRange(objectResult.Plan.SkippedEdits.Select(skipped => $"{target.Level.DisplayName}: {skipped}"));
+                if (objectResult.Plan.ArtisansNativeLockedChestRuntimeBundle is ArtisansNativeLockedChestRuntimeBundleIntent bundleIntent)
+                {
+                    if (artisansLockedChestBundleIntent != null)
+                    {
+                        throw new InvalidOperationException(
+                            "The normal Create BIN pipeline found more than one Artisans Key + Locked Chest runtime bundle. Keep exactly one paired Key and Locked Chest in Artisans.");
+                    }
+
+                    List<string> incompatibleArtisansEdits = [];
+                    if (target.HasTerrainEdits)
+                        incompatibleArtisansEdits.Add("terrain geometry/color edits");
+                    if (target.HasCustomTerrainTextures)
+                        incompatibleArtisansEdits.Add("custom terrain textures");
+                    if (target.HasNativeTerrainTextureRelocations)
+                        incompatibleArtisansEdits.Add("native terrain texture swaps");
+                    if (target.HasSkyboxEdit)
+                        incompatibleArtisansEdits.Add("skybox/environment edits");
+                    if (incompatibleArtisansEdits.Count > 0)
+                    {
+                        throw new InvalidOperationException(
+                            $"The runtime-proven Artisans Key + Locked Chest bundle cannot yet share one Create BIN with Artisans {string.Join(", ", incompatibleArtisansEdits)}. Remove or temporarily disable those Artisans edits, then build the chest pair again. Other levels' ordinary in-place edits and Artisans level-name/music edits remain compatible.");
+                    }
+
+                    artisansLockedChestBundleIntent = bundleIntent;
+                    artisansLockedChestBundleLevelName = target.Level.DisplayName;
+                }
                 ExportedTreasureTarget? treasureTarget = ExtractExportedTreasureTarget(objectResult.Plan);
                 if (treasureTarget != null)
                     exportedTreasureTargets.Add(treasureTarget);
@@ -8780,7 +10270,7 @@ public sealed class MainWindow : Window
                 }
             }
 
-            if (target.HasTerrainEdits || target.HasCustomTerrainTextures)
+            if (target.HasTerrainEdits || target.HasCustomTerrainTextures || target.HasNativeTerrainTextureRelocations)
             {
                 string outputName = $"{++step:00}-{SafeOutputPart(target.Level.DisplayName)}-terrain";
                 TerrainPatchResult? terrainResult = await TryCreateTerrainTestAsync(target.Level, currentImage, currentCue, tempDir, outputName);
@@ -8900,6 +10390,7 @@ public sealed class MainWindow : Window
                 levels = skyboxResult.Plan.EditedLevelNames,
                 plan = skyboxResult.OutputPlanPath
             });
+            incompatibleStructuralWadRelocationApplied |= skyboxResult.WroteImage && skyboxResult.Plan.RelocatedWad;
             if (skyboxResult.WroteImage)
             {
                 currentImage = skyboxResult.OutputImagePath;
@@ -8910,6 +10401,66 @@ public sealed class MainWindow : Window
                         patchedLevelNames.Add(levelName);
                 }
             }
+        }
+
+        if (artisansLockedChestBundleIntent != null)
+        {
+            if (incompatibleStructuralWadRelocationApplied)
+            {
+                throw new InvalidOperationException(
+                    "The runtime-proven Artisans Key + Locked Chest bundle cannot yet be combined with a sky import that grows or relocates the disc WAD. Use an in-place sky edit, or create the chest-pair BIN without that structural sky edit.");
+            }
+
+            string wadAnalysis = await EnsureSkyboxWadAnalysisAsync(sourceImage);
+            string outputPrefix = Path.Combine(tempDir, $"{++step:00}-artisans-native-key-locked-chest");
+            ArtisansNativeLockedChestRuntimeBundleResult bundleResult = await Task.Run(() =>
+                ArtisansNativeLockedChestRuntimeBundleComposer.ApplyAndVerify(
+                    new ArtisansNativeLockedChestRuntimeBundleRequest(
+                        SourceImagePath: currentImage,
+                        SourceCuePath: currentCue,
+                        OutputPrefix: outputPrefix,
+                        WadAnalysisPath: wadAnalysis,
+                        Intent: artisansLockedChestBundleIntent,
+                        WriteImage: true)));
+            if (!bundleResult.WroteImage || !bundleResult.Verified)
+            {
+                throw new InvalidDataException(
+                    "The Artisans Key + Locked Chest runtime bundle did not produce a verified BIN, so Create BIN stopped without publishing an unsafe image.");
+            }
+
+            int reservedRuntimeRows = Math.Max(
+                0,
+                bundleResult.Plan.SourceRuntimeCountAfter - bundleResult.Plan.SourceRuntimeCountBefore);
+            objectPatches += reservedRuntimeRows;
+            exportedTreasureTargets.RemoveAll(target =>
+                string.Equals(target.LevelName, artisansLockedChestBundleLevelName, StringComparison.OrdinalIgnoreCase));
+            exportedTreasureTargets.Add(new ExportedTreasureTarget(
+                artisansLockedChestBundleLevelName,
+                bundleResult.Plan.TreasureTargetBefore,
+                bundleResult.Plan.TreasureTargetAfter));
+            if (!patchedLevelNames.Contains(artisansLockedChestBundleLevelName, StringComparer.OrdinalIgnoreCase))
+                patchedLevelNames.Add(artisansLockedChestBundleLevelName);
+            stepSummaries.Add(new
+            {
+                level = artisansLockedChestBundleLevelName,
+                kind = "objects-runtime-bundle",
+                bundleResult.Plan.RecipeId,
+                bundleResult.Plan.RequiredExporterFeature,
+                bundleResult.Plan.InstalledFresh,
+                bundleResult.Plan.ReusedInstalledBundle,
+                reservedRuntimeRows,
+                bundleResult.Plan.KeyOutputTrueIndex,
+                bundleResult.Plan.LockedChestOutputTrueIndex,
+                bundleResult.Plan.RewardMarkerOutputTrueIndices,
+                sourceRuntimeCountBefore = bundleResult.Plan.SourceRuntimeCountBefore,
+                sourceRuntimeCountAfter = bundleResult.Plan.SourceRuntimeCountAfter,
+                treasureTargetBefore = bundleResult.Plan.TreasureTargetBefore,
+                treasureTargetAfter = bundleResult.Plan.TreasureTargetAfter,
+                bundleResult.Plan.Verification,
+                plan = bundleResult.OutputPlanPath
+            });
+            currentImage = bundleResult.OutputImagePath;
+            currentCue = bundleResult.OutputCuePath;
         }
 
         if (levelTextEdits.Count > 0)
@@ -9219,6 +10770,409 @@ public sealed class MainWindow : Window
         return $"{string.Join(", ", values.Take(limit))}, and {values.Count - limit} more";
     }
 
+    private async Task ShowCrossLevelSwapCatalogAsync()
+    {
+        Moby? target = _selectedMoby;
+        if (_currentLevel == null || target == null || target.IsRemoved)
+        {
+            _statusText.Text = "Select an ordinary chest or self-contained enemy before opening the swap catalogue.";
+            return;
+        }
+
+        if (target.IsAdded || target.TrueIndex < 0)
+        {
+            _statusText.Text = "Replace uses an existing source slot. Select an original chest or enemy instead of a newly added object.";
+            return;
+        }
+
+        bool focusedResidentWizardTarget = IsFocusedResidentGreenWizardCandidateTarget(target);
+        bool ordinarySwapTarget = CrossLevelSwapCatalogBuilder.TryGetEligibleTargetCategory(
+            target,
+            out CrossLevelSwapCategory category,
+            out string targetReason);
+        if (!ordinarySwapTarget && !focusedResidentWizardTarget)
+        {
+            _statusText.Text = $"{target.DisplayLabel} is not a self-contained swap target. {targetReason}";
+            return;
+        }
+        if (focusedResidentWizardTarget)
+            category = CrossLevelSwapCategory.Enemy;
+
+        CrossLevelSwapCatalog catalog = CrossLevelSwapCatalogBuilder.Build(_workspace, _catalog, _currentLevel.Key);
+        bool magicCraftersTargetLevel = string.Equals(
+            LevelCatalog.NormalizeKey(_currentLevel.Key),
+            GreenWizardRuntimeBundleCompatibility.MagicCraftersSourceLevelKey,
+            StringComparison.OrdinalIgnoreCase);
+        bool wizardPeakTargetLevel = string.Equals(
+            LevelCatalog.NormalizeKey(_currentLevel.Key),
+            GreenWizardRuntimeBundleCompatibility.SourceLevelKey,
+            StringComparison.OrdinalIgnoreCase);
+        List<CrossLevelSwapCatalogEntry> entries = catalog.Entries
+            .Where(entry => entry.Category == category)
+            .Where(entry => !entry.SameLevel || entry.SourceTrueIndex != target.TrueIndex)
+            .Where(entry => focusedResidentWizardTarget ||
+                !magicCraftersTargetLevel ||
+                entry.ActorId != GreenWizardRuntimeBundleCompatibility.ActorId)
+            .Where(entry => focusedResidentWizardTarget ||
+                !wizardPeakTargetLevel ||
+                entry.ActorId != GreenWizardRuntimeBundleCompatibility.ActorId)
+            .Where(entry => !focusedResidentWizardTarget ||
+                entry.ActorId == GreenWizardRuntimeBundleCompatibility.ActorId &&
+                entry.Placeable &&
+                (entry.CompatibilityTier is
+                    CrossLevelSwapCatalogBuilder.GreenWizardCandidateCompatibility or
+                    CrossLevelSwapCatalogBuilder.GreenWizardVerifiedCompatibility))
+            .ToList();
+        if (entries.Count == 0)
+        {
+            _statusText.Text = $"No {category.ToString().ToLowerInvariant()} catalogue entries were found in the local editor cache.";
+            return;
+        }
+
+        TextBox searchBox = new()
+        {
+            PlaceholderText = "Search object, source level, status, or donor T#",
+            MinWidth = 330
+        };
+        ComboBox statusFilter = new()
+        {
+            ItemsSource = new[]
+            {
+                "Ready and testable",
+                "All options",
+                "From this level",
+                "Resident-class tests",
+                "Package-backed tests",
+                "Needs model/behavior map",
+                "Needs linked research"
+            },
+            SelectedIndex = 0,
+            MinWidth = 180
+        };
+        ListBox list = new()
+        {
+            MinHeight = 390,
+            ItemTemplate = new FuncDataTemplate<CrossLevelSwapCatalogEntry>((entry, _) =>
+            {
+                if (entry == null)
+                    return new TextBlock();
+
+                StackPanel row = new() { Spacing = 2, Margin = new Thickness(8, 6) };
+                row.Children.Add(new TextBlock
+                {
+                    Text = entry.DisplayName,
+                    FontWeight = FontWeight.SemiBold,
+                    Foreground = new SolidColorBrush(Color.FromRgb(31, 38, 45)),
+                    TextWrapping = TextWrapping.Wrap
+                });
+                row.Children.Add(new TextBlock
+                {
+                    Text = $"{entry.SourceLevelName} T{entry.SourceTrueIndex}  |  {entry.ShortStatus}",
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(entry.Placeable
+                        ? Color.FromRgb(42, 112, 75)
+                        : Color.FromRgb(133, 91, 45)),
+                    TextWrapping = TextWrapping.Wrap
+                });
+                return row;
+            })
+        };
+        TextBlock details = new()
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(55, 64, 74)),
+            FontSize = 12,
+            MinHeight = 180,
+            LineHeight = 18
+        };
+        Button apply = NewButton("Stage Swap");
+
+        void RefreshDetails()
+        {
+            if (list.SelectedItem is not CrossLevelSwapCatalogEntry entry)
+            {
+                details.Text = "Choose a catalogue entry to review its donor row and safety status.";
+                apply.IsEnabled = false;
+                return;
+            }
+
+            string mode = entry.CompatibilityTier == CrossLevelSwapCatalogBuilder.GreenWizardVerifiedCompatibility
+                ? "Verified Green Wizard recipe: normal Create BIN composes the target profile's checked properties, route, allocation, and pointer-fixup work; Create Swap Test remains available as an isolated regression build."
+                : entry.SameLevel && entry.NormalCreateBinReady
+                ? "Ready: normal Create BIN can export this same-level replacement."
+                : entry.NormalCreateBinReady
+                ? "Verified package route: normal Create BIN can export this replacement."
+                : entry.CompatibilityTier == CrossLevelSwapCatalogBuilder.PackageBackedCompatibility
+                ? "Package test: Create Swap Test imports the mapped actor package into a separate DuckStation build."
+                : entry.CompatibilityTier == CrossLevelSwapCatalogBuilder.ResidentActorCompatibility
+                ? "Resident-class test: the target level already loads this actor model; Create Swap Test writes the separate DuckStation build."
+                : entry.CompatibilityTier == CrossLevelSwapCatalogBuilder.GreenWizardCandidateCompatibility
+                ? "Green Wizard Candidate: the target's checked resident runtime bundle is present; Create Swap Test adds the private properties/route/fixup data and keeps normal Create BIN guarded."
+                : entry.Eligible
+                ? "Not stageable yet: the target level does not load this actor model and has no safe package recipe."
+                : "Not stageable yet: this object has linked or uncertain behavior data.";
+            string assetRoute = entry.TargetActorRootPresent
+                ? $"Target model root: {entry.TargetActorRoot}"
+                : !string.IsNullOrWhiteSpace(entry.PackageRecipeId)
+                ? $"Package recipe: {entry.PackageRecipeId}"
+                : "Target model root: not present";
+            details.Text =
+                $"{entry.DisplayName}\n" +
+                $"Source: {entry.SourceLevelName} T{entry.SourceTrueIndex}\n" +
+                $"Actor class: 0x{entry.ActorId:X4}\n" +
+                $"Compatibility: {entry.CompatibilityTier}\n" +
+                $"{assetRoute}\n" +
+                $"Status: {mode}\n\n" +
+                entry.SupportNote;
+            apply.Content = entry.CompatibilityTier == CrossLevelSwapCatalogBuilder.GreenWizardVerifiedCompatibility
+                ? "Use Verified Wizard"
+                : entry.SameLevel && entry.NormalCreateBinReady
+                ? "Use Same-Level Donor"
+                : entry.CompatibilityTier == CrossLevelSwapCatalogBuilder.PackageBackedCompatibility
+                ? "Stage Package Test"
+                : "Stage Swap Test";
+            apply.IsEnabled = entry.Placeable;
+        }
+
+        void RefreshEntries()
+        {
+            string query = searchBox.Text?.Trim() ?? "";
+            int filter = statusFilter.SelectedIndex;
+            List<CrossLevelSwapCatalogEntry> filtered = entries
+                .Where(entry => string.IsNullOrWhiteSpace(query) || entry.SearchText.Contains(query, StringComparison.OrdinalIgnoreCase))
+                .Where(entry => filter switch
+                {
+                    0 => entry.Placeable,
+                    2 => entry.SameLevel && entry.Placeable,
+                    3 => entry.Placeable &&
+                        entry.CompatibilityTier is
+                            CrossLevelSwapCatalogBuilder.ResidentActorCompatibility or
+                            CrossLevelSwapCatalogBuilder.GreenWizardCandidateCompatibility or
+                            CrossLevelSwapCatalogBuilder.GreenWizardVerifiedCompatibility,
+                    4 => entry.CompatibilityTier == CrossLevelSwapCatalogBuilder.PackageBackedCompatibility && entry.Placeable,
+                    5 => entry.Eligible && !entry.Placeable,
+                    6 => !entry.Eligible,
+                    _ => true
+                })
+                .OrderByDescending(entry => entry.SameLevel && entry.Placeable)
+                .ThenByDescending(entry => entry.Placeable)
+                .ThenBy(entry => entry.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(entry => entry.SourceLevelName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            string? selectedId = (list.SelectedItem as CrossLevelSwapCatalogEntry)?.Id;
+            list.ItemsSource = filtered;
+            int selectedIndex = string.IsNullOrWhiteSpace(selectedId)
+                ? -1
+                : filtered.FindIndex(entry => string.Equals(entry.Id, selectedId, StringComparison.OrdinalIgnoreCase));
+            list.SelectedIndex = selectedIndex >= 0 ? selectedIndex : filtered.Count > 0 ? 0 : -1;
+            RefreshDetails();
+        }
+
+        searchBox.TextChanged += (_, _) => RefreshEntries();
+        statusFilter.SelectionChanged += (_, _) => RefreshEntries();
+        list.SelectionChanged += (_, _) => RefreshDetails();
+
+        Window dialog = new()
+        {
+            Title = $"Replace {target.DisplayLabel}",
+            Width = 940,
+            Height = 680,
+            MinWidth = 760,
+            MinHeight = 560,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = true
+        };
+        Grid content = new()
+        {
+            Margin = new Thickness(16),
+            RowDefinitions =
+            {
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Star),
+                new RowDefinition(GridLength.Auto)
+            },
+            RowSpacing = 10
+        };
+        StackPanel dialogHeader = new() { Spacing = 3 };
+        dialogHeader.Children.Add(new TextBlock
+        {
+            Text = $"Replace {target.DisplayLabel}",
+            FontSize = 18,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(31, 38, 45)),
+            TextWrapping = TextWrapping.Wrap
+        });
+        dialogHeader.Children.Add(new TextBlock
+        {
+            Text = $"Choose a {category.ToString().ToLowerInvariant()} for this existing object. Cross-level choices stay out of normal Create BIN until tested.",
+            FontSize = 12,
+            Foreground = new SolidColorBrush(Color.FromRgb(82, 92, 104)),
+            TextWrapping = TextWrapping.Wrap
+        });
+        content.Children.Add(dialogHeader);
+        Grid filters = new()
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(GridLength.Star),
+                new ColumnDefinition(GridLength.Auto)
+            },
+            ColumnSpacing = 8
+        };
+        filters.Children.Add(searchBox);
+        Grid.SetColumn(statusFilter, 1);
+        filters.Children.Add(statusFilter);
+        Grid.SetRow(filters, 1);
+        content.Children.Add(filters);
+
+        Grid review = new()
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(new GridLength(1.15, GridUnitType.Star)),
+                new ColumnDefinition(new GridLength(0.85, GridUnitType.Star))
+            },
+            ColumnSpacing = 12
+        };
+        review.Children.Add(new Border
+        {
+            BorderBrush = new SolidColorBrush(Color.FromRgb(208, 215, 223)),
+            BorderThickness = new Thickness(1),
+            Child = list
+        });
+        Border detailsFrame = new()
+        {
+            Background = new SolidColorBrush(Color.FromRgb(246, 249, 252)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(208, 215, 223)),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(14),
+            Child = new ScrollViewer
+            {
+                Content = details,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+            }
+        };
+        Grid.SetColumn(detailsFrame, 1);
+        review.Children.Add(detailsFrame);
+        Grid.SetRow(review, 2);
+        content.Children.Add(review);
+
+        StackPanel buttons = new()
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 8
+        };
+        Button cancel = NewButton("Cancel");
+        cancel.Click += (_, _) => dialog.Close(null);
+        apply.Click += (_, _) =>
+        {
+            if (list.SelectedItem is CrossLevelSwapCatalogEntry entry && entry.Placeable)
+                dialog.Close(entry);
+        };
+        buttons.Children.Add(cancel);
+        buttons.Children.Add(apply);
+        Grid.SetRow(buttons, 3);
+        content.Children.Add(buttons);
+        dialog.Content = content;
+        RefreshEntries();
+
+        CrossLevelSwapCatalogEntry? selected = await dialog.ShowDialog<CrossLevelSwapCatalogEntry?>(this);
+        if (selected == null || _currentLevel == null || _selectedMoby != target)
+            return;
+
+        AddMobyTemplate template = BuildSwapCatalogTemplate(selected);
+        bool hasChestRelationship = target.Links.Any(link =>
+            string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase) &&
+            link.TrueIndexes.Contains(target.TrueIndex));
+        bool hasRewardRelationship = target.Links.Any(link =>
+            IsTreasureThiefRewardTriggerLink(link) && link.TrueIndexes.Contains(target.TrueIndex));
+        if (hasChestRelationship && !TransformTemplateRetainsChestContents(template))
+        {
+            DetachLinkedMobyRows(
+                target,
+                link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase) &&
+                    link.TrueIndexes.Contains(target.TrueIndex));
+        }
+        if (hasRewardRelationship && !TransformTemplateRetainsRewardTriggers(template))
+        {
+            DetachLinkedMobyRows(
+                target,
+                link => IsTreasureThiefRewardTriggerLink(link) && link.TrueIndexes.Contains(target.TrueIndex));
+        }
+        if (template.FromLevelTemplate)
+            ApplyLevelTemplateToExistingMoby(target, template);
+        else
+            ApplyCrossLevelTemplateToExistingMoby(target, template);
+        target.YawByte = Math.Clamp(template.YawByte, 0, 255);
+        MobyRelationshipRepair.RepairChestContentLinks(_currentLevel.Key, _currentMobys);
+        target.HasLoadedNativeEdit = true;
+        target.LoadedNativeEditSummary = selected.CompatibilityTier == CrossLevelSwapCatalogBuilder.GreenWizardVerifiedCompatibility
+            ? $"Verified {_currentLevel.DisplayName} Green Wizard resident donor T{selected.SourceTrueIndex}"
+            : selected.CompatibilityTier == CrossLevelSwapCatalogBuilder.GreenWizardCandidateCompatibility
+            ? $"Guarded {_currentLevel.DisplayName} Green Wizard resident candidate T{selected.SourceTrueIndex}"
+            : selected.SameLevel
+            ? $"Same-level donor T{selected.SourceTrueIndex}"
+            : $"Guarded swap from {selected.SourceLevelName} T{selected.SourceTrueIndex}";
+
+        InvalidateBuildSafetySummary();
+        int saved = await PersistCurrentMobyEditsAsync();
+        _viewport.InvalidateVisual();
+        RefreshMobyList(target);
+        RefreshCurrentLevelDetails();
+        ShowSelection(ViewportSelectionChangedEventArgs.ForMoby(target));
+        _statusText.Text = selected.CompatibilityTier == CrossLevelSwapCatalogBuilder.GreenWizardVerifiedCompatibility
+            ? $"Swapped T{target.TrueIndex} to the runtime-proven {_currentLevel.DisplayName} Green Wizard route using native donor T{selected.SourceTrueIndex}; saved {saved} object edit(s). Normal Create BIN composes the private properties/route/fixup recipe, and Create Swap Test remains available for an isolated build."
+            : selected.CompatibilityTier == CrossLevelSwapCatalogBuilder.GreenWizardCandidateCompatibility
+            ? $"Staged the guarded {_currentLevel.DisplayName} Green Wizard candidate in T{target.TrueIndex} using native donor T{selected.SourceTrueIndex}; saved {saved} object edit(s). Normal Create BIN skips it. Use Create Swap Test for the focused DuckStation build."
+            : selected.SameLevel && selected.NormalCreateBinReady
+            ? $"Swapped T{target.TrueIndex} to {selected.DisplayName} using same-level donor T{selected.SourceTrueIndex}; saved {saved} object edit(s). Normal Create BIN can export this slot replacement."
+            : selected.NormalCreateBinReady
+            ? $"Swapped T{target.TrueIndex} to verified {selected.DisplayName} from {selected.SourceLevelName} T{selected.SourceTrueIndex}; saved {saved} object edit(s). Normal Create BIN can export its mapped package route."
+            : $"Staged {selected.DisplayName} from {selected.SourceLevelName} T{selected.SourceTrueIndex} in existing slot T{target.TrueIndex}; saved {saved} object edit(s). Normal Create BIN skips it. Use Create Swap Test for the disposable BIN/CUE.";
+        EditorDiagnostics.RecordAction(
+            "Object swap catalogue",
+            $"{_currentLevel.DisplayName} T{target.TrueIndex} -> {selected.SourceLevelName} T{selected.SourceTrueIndex}; {selected.ShortStatus}");
+        RefreshDiagnosticContext(includeSavedEdits: true);
+    }
+
+    private static AddMobyTemplate BuildSwapCatalogTemplate(CrossLevelSwapCatalogEntry entry)
+    {
+        bool dependencyAwareSameLevelBundle = entry.SameLevel &&
+            entry.CompatibilityTier is
+                CrossLevelSwapCatalogBuilder.GreenWizardCandidateCompatibility or
+                CrossLevelSwapCatalogBuilder.GreenWizardVerifiedCompatibility;
+        return new AddMobyTemplate(
+            Name: entry.ListText,
+            Type: entry.Type,
+            State: entry.State,
+            SourceByte36: entry.SourceByte36,
+            SourceByte37: entry.SourceByte37,
+            SourceByte4F: entry.SourceByte4F,
+            Flag4A: entry.Flag4A,
+            Flag4B: entry.Flag4B,
+            UsesGem: false,
+            DefaultLabel: entry.DisplayName,
+            FromLevelTemplate: entry.SameLevel && !dependencyAwareSameLevelBundle,
+            FromCrossLevelTemplate: !entry.SameLevel || dependencyAwareSameLevelBundle,
+            TemplateId: entry.Id,
+            Family: entry.Family,
+            SourceLevelKey: entry.SourceLevelKey,
+            SourceLevelName: entry.SourceLevelName,
+            SourceTrueIndex: entry.SourceTrueIndex,
+            AddSupportStatus: entry.SupportStatus,
+            RequiredExporterFeature: entry.RequiredExporterFeature,
+            DependencyRisk: entry.DependencyRisk,
+            TemplateNote: entry.SupportNote,
+            CandidateKind: entry.CandidateKind,
+            CurrentLevelSupportLabel: entry.ShortStatus,
+            CurrentLevelRecipeId: entry.PackageRecipeId,
+            CurrentLevelReady: entry.NormalCreateBinReady,
+            CurrentLevelPlaceable: entry.Placeable,
+            YawByte: entry.YawByte);
+    }
+
     private async Task CreateObjectCandidateBinAsync()
     {
         if (_currentLevel == null)
@@ -9273,12 +11227,35 @@ public sealed class MainWindow : Window
             List<MobySourcePatch> sourceRecordCandidatePatches = candidatePlan.Patches
                 .Where(IsCrossLevelSourceRecordCandidatePatch)
                 .ToList();
+            RuntimeBundleCompatibilityResult wizardCompatibility =
+                GreenWizardRuntimeBundleCatalog.Evaluate(_currentLevel.Key);
+            bool residentWizardLevel =
+                wizardCompatibility.Deployment == RuntimeBundleDeploymentKind.ResidentActor &&
+                wizardCompatibility.CanStageInstance;
+            int residentGreenWizardPatchCount = residentWizardLevel
+                ? sourceRecordCandidatePatches.Count(IsResidentGreenWizardSwapPatch)
+                : 0;
+            if (residentGreenWizardPatchCount > 1)
+            {
+                DeleteFileIfExists(outputCue);
+                DeleteFileIfExists(outputBin);
+                DeleteFileIfExists($"{outputPrefix}.green-wizard-resident-plan.json");
+                _statusText.Text =
+                    $"{_currentLevel.DisplayName}'s guarded Green Wizard recipe supports exactly one replacement per candidate; " +
+                    $"{residentGreenWizardPatchCount} are staged. Revert the extra Wizard replacements before creating the swap test.";
+                return;
+            }
+            bool composeResidentGreenWizard = residentGreenWizardPatchCount == 1;
             if (candidatePreviews.Count == 0 && sourceRecordCandidatePatches.Count == 0)
             {
                 string skipped = candidatePlan.SkippedEdits.Count > 0 ? $" {candidatePlan.SkippedEdits[0]}" : "";
                 _statusText.Text = $"No guarded cross-level candidate is ready for {_currentLevel.DisplayName}.{skipped}";
                 return;
             }
+
+            string expectedResidentPlanPath = $"{outputPrefix}.green-wizard-resident-plan.json";
+            if (composeResidentGreenWizard)
+                DeleteFileIfExists(expectedResidentPlanPath);
 
             MobySourcePatchResult result = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
                 SourceImagePath: sourceImage,
@@ -9289,13 +11266,30 @@ public sealed class MainWindow : Window
                 WriteImage: true,
                 AllowPlanOnlyActorPackageImports: true));
 
+            string residentPlanPath = result.WroteImage && composeResidentGreenWizard
+                ? expectedResidentPlanPath
+                : "";
+            if (!string.IsNullOrWhiteSpace(residentPlanPath) && !File.Exists(residentPlanPath))
+            {
+                DeleteFileIfExists(result.OutputCuePath);
+                DeleteFileIfExists(result.OutputImagePath);
+                throw new InvalidOperationException("The resident Green Wizard composer did not produce its guarded plan; the candidate cannot be trusted.");
+            }
+
             string labels = string.Join(", ", candidatePreviews
                 .Select(preview => string.IsNullOrWhiteSpace(preview.Label) ? preview.TemplateId : preview.Label)
                 .Concat(sourceRecordCandidatePatches.Select(patch => string.IsNullOrWhiteSpace(patch.MobyLabel) ? patch.Label : patch.MobyLabel))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Take(3));
+            string residentPlanNote = string.IsNullOrWhiteSpace(residentPlanPath)
+                ? ""
+                : $" Resident bundle plan: {Path.GetFileName(residentPlanPath)}.";
+            bool verifiedResidentRegression = composeResidentGreenWizard &&
+                GreenWizardRuntimeBundleCompatibility.Resolve(_currentLevel, _workspace.RootPath).NormalCreateBinReady;
             _statusText.Text = result.WroteImage
-                ? $"Created disposable candidate {Path.GetFileName(result.OutputCuePath)} for {labels}. Use Open Candidate Tests to test it in DuckStation before trusting this recipe. Checklist: {Path.GetFileName(await MobyCandidateValidationReportWriter.WriteAsync(result))}{OpenContainingFolderStatus(result.OutputCuePath)}"
+                ? verifiedResidentRegression
+                    ? $"Created isolated verified resident-Wizard swap test {Path.GetFileName(result.OutputCuePath)} for {labels}.{residentPlanNote} Normal Create BIN also supports this replacement. Checklist: {Path.GetFileName(await MobyCandidateValidationReportWriter.WriteAsync(result))}{OpenContainingFolderStatus(result.OutputCuePath)}"
+                    : $"Created disposable candidate {Path.GetFileName(result.OutputCuePath)} for {labels}.{residentPlanNote} Use Open Candidate Tests to test it in DuckStation before trusting this recipe. Checklist: {Path.GetFileName(await MobyCandidateValidationReportWriter.WriteAsync(result))}{OpenContainingFolderStatus(result.OutputCuePath)}"
                 : $"No candidate patches were written for {_currentLevel.DisplayName}.";
         }
         catch (Exception ex)
@@ -9383,8 +11377,28 @@ public sealed class MainWindow : Window
 
     private static bool IsCrossLevelSourceRecordCandidatePatch(MobySourcePatch patch)
     {
-        return string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) &&
+        return string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) &&
             patch.Description.Contains("cross-level source-record candidate", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsResidentGreenWizardSwapPatch(MobySourcePatch patch)
+    {
+        if (!string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        try
+        {
+            string hex = new((patch.AfterHexPreview ?? "").Where(Uri.IsHexDigit).ToArray());
+            if (hex.Length != 0x58 * 2)
+                return false;
+            byte[] record = Convert.FromHexString(hex);
+            return (record[0x36] | (record[0x37] << 8)) == GreenWizardRuntimeBundleCompatibility.ActorId;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     private static bool IsSameLevelNativeCloneAppendResearchPatch(MobySourcePatch patch)
@@ -10332,6 +12346,49 @@ public sealed class MainWindow : Window
     {
         List<TerrainPatchPlanReviewItem> items = new();
         items.AddRange(BuildTerrainPreflightOutcomeItems(plan));
+        foreach (NativeTerrainTextureRelocationPatchSummary summary in plan.NativeTextureRelocations)
+        {
+            bool allProofsPassed = summary.RuntimeControlVerified &&
+                summary.OwnershipVerified &&
+                summary.ExactIndexedPixelsVerified &&
+                summary.ExactPalettesVerified &&
+                summary.LogicalReadbackVerified;
+            string targets = string.Join(", ", summary.TargetTextureIds.Select(id => id.ToString(CultureInfo.InvariantCulture)));
+            string donors = summary.DonorTextures.Count == 0
+                ? "No donor provenance was recorded."
+                : string.Join(Environment.NewLine, summary.DonorTextures.Select(donor => $"- {donor}"));
+            string notes = summary.Notes.Count == 0
+                ? "No additional proof notes."
+                : string.Join(Environment.NewLine, summary.Notes.Select(note => $"- {note}"));
+            items.Add(new TerrainPatchPlanReviewItem
+            {
+                SortRank = allProofsPassed ? -2 : 2,
+                Category = "Native texture",
+                RuntimeKey = summary.TargetTextureIds.Count == 1
+                    ? $"texture-{summary.TargetTextureIds[0]}"
+                    : $"textures-{summary.TargetTextureIds.Count}",
+                Summary =
+                    $"targets {targets} <- {summary.DonorTextures.Count} donor(s); {summary.Strategy}; " +
+                    $"{summary.PatchCount} patch(es), {summary.PatchedByteCount:N0} byte(s); " +
+                    $"proofs {(allProofsPassed ? "passed" : "INCOMPLETE")}",
+                Details =
+                    "Native cross-level terrain texture replacement\n" +
+                    $"Target texture ID(s): {targets}\n" +
+                    $"Strategy: {summary.Strategy}\n" +
+                    $"Donor texture(s):\n{donors}\n\n" +
+                    $"Complete descriptors rewritten: {summary.CompleteDescriptorCount}\n" +
+                    $"Target-owned source bytes: {summary.TargetOwnedByteCount:N0}\n" +
+                    $"Byte patches: {summary.PatchCount}\n" +
+                    $"Changed bytes: {summary.PatchedByteCount:N0}\n\n" +
+                    $"Runtime animation/scroll control clear: {summary.RuntimeControlVerified}\n" +
+                    $"Ownership/protected-storage proof: {summary.OwnershipVerified}\n" +
+                    $"Exact indexed pixels: {summary.ExactIndexedPixelsVerified}\n" +
+                    $"Exact palettes: {summary.ExactPalettesVerified}\n" +
+                    $"Logical final readback: {summary.LogicalReadbackVerified}\n\n" +
+                    $"Proof notes:\n{notes}"
+            });
+        }
+
         foreach (TerrainSideWallPatchSummary summary in plan.TerrainSideWalls)
         {
             string coverage = $"{summary.EmittedFaceCount}/{summary.ExposedEdgeCount} solid side-wall edge(s)";
@@ -10758,6 +12815,8 @@ public sealed class MainWindow : Window
 
     private static string TerrainPatchCategoryLabel(string kind)
     {
+        if (kind.StartsWith("native-terrain-texture-", StringComparison.OrdinalIgnoreCase))
+            return "Native texture art";
         if (kind.StartsWith("collision-", StringComparison.OrdinalIgnoreCase))
             return "Collision";
         if (kind.StartsWith("visual-", StringComparison.OrdinalIgnoreCase))
@@ -10916,7 +12975,12 @@ public sealed class MainWindow : Window
     {
         string terrainEditsPath = Path.Combine(_workspace.RootPath, $"{level.Key}-terrain-edits.json");
         string customTexturesPath = CustomTerrainTextureStore.ManifestPath(_workspace.RootPath, level.Key);
-        if (!File.Exists(terrainEditsPath) && !File.Exists(customTexturesPath))
+        string nativeTextureRelocationsPath = NativeTerrainTextureRelocationEditStore.ManifestPath(
+            _workspace.RootPath,
+            level.Key);
+        if (!File.Exists(terrainEditsPath) &&
+            !File.Exists(customTexturesPath) &&
+            !File.Exists(nativeTextureRelocationsPath))
             return null;
 
         TerrainGeometryLoadData geometryData = level == _currentLevel && _currentGeometry != null
@@ -10924,7 +12988,9 @@ public sealed class MainWindow : Window
             : LoadGeometryData(level.Key);
         GeometryCandidate? geometry = geometryData.Geometry;
         string activeCustomTexturesPath = await CreateActiveCustomTerrainTextureManifestAsync(level, geometry, customTexturesPath);
-        if (!File.Exists(terrainEditsPath) && string.IsNullOrWhiteSpace(activeCustomTexturesPath))
+        if (!File.Exists(terrainEditsPath) &&
+            string.IsNullOrWhiteSpace(activeCustomTexturesPath) &&
+            !File.Exists(nativeTextureRelocationsPath))
             return null;
 
         string ramPath = TerrainPatchDataLocator.FindRamDump(_workspace, level.Key);
@@ -10967,7 +13033,8 @@ public sealed class MainWindow : Window
             SourceSearchPath: sourceSearchPath,
             TerrainEditsPath: terrainEditsPath,
             CustomTexturesPath: activeCustomTexturesPath,
-            WriteImage: writeImage));
+            WriteImage: writeImage,
+            NativeTextureRelocationsPath: nativeTextureRelocationsPath));
     }
 
     private static bool IsSourceDerivedGeometry(GeometryCandidate geometry)
@@ -11057,20 +13124,23 @@ public sealed class MainWindow : Window
                 : $"True index: {moby.TrueIndex}\n" +
                   $"Category: {MobyListBadge(moby)}\n" +
                   $"Identity: {BuildMobyIdentityStatus(moby)}\n" +
-                  $"Type/state: 0x{moby.Type:X2} / 0x{moby.State:X2}\n" +
+                  $"Render radius / was drawn: 0x{moby.Type:X2} / 0x{moby.State:X2}\n" +
                   $"XYZ: {moby.Position.X:0.0}, {moby.Position.Y:0.0}, {moby.Position.Z:0.0}\n" +
                   BuildMobyMetadataDetails(moby) +
                   $"Technical: {moby.TechnicalSummary}\n" +
                   $"Edited: {(moby.HasAnyEdit ? "yes" : "no")}\n" +
                   $"Patch: {moby.PatchStatus}" +
                   (moby.HasLoadedNativeEdit ? $"\nLoaded edit: {moby.LoadedNativeEditSummary}" : "");
-            _identityObservationHint.Text = $"{BuildIdentityFamilySummary(moby)}\nFingerprint: {IdentityFingerprint(moby)}";
+            _identityObservationHint.Text = $"{BuildIdentityFamilySummary(moby)}\nFingerprint: {IdentityFingerprintDisplay(moby)}";
             RefreshIdentityObservationSuggestions(moby);
+            RefreshSelectedMobyZControls(moby);
             RefreshObjectReadinessHint();
             RefreshActionAvailability();
+            RefreshContextualViewportAction();
             _statusText.Text = moby.IsEditorControl
                 ? $"Selected {moby.DisplayLabel}."
                 : $"Selected moby {moby.DisplayLabel} at true index {moby.TrueIndex}.";
+            RefreshDiagnosticContext();
             return;
         }
 
@@ -11090,8 +13160,11 @@ public sealed class MainWindow : Window
             RefreshLinkedMobyList(null);
             RefreshTerrainSurfaceQuickState();
             RefreshIdentityObservationSuggestions(null);
+            RefreshSelectedMobyZControls(null);
             _selectionTitle.Text = $"Terrain face {selection.TerrainIndex}";
             CustomTerrainTextureImport? customTexture = _customTerrainTextures.FirstOrDefault(texture => texture.TextureId == terrain.TextureId);
+            NativeTerrainTextureRelocationEdit? nativeTextureRelocation = _nativeTerrainTextureRelocations
+                .FirstOrDefault(edit => edit.TargetTextureId == terrain.TextureId);
             _selectionDetails.Text =
                 $"Runtime key: {terrain.RuntimeKey}\n" +
                 $"Texture ID: {terrain.TextureId}\n" +
@@ -11113,13 +13186,18 @@ public sealed class MainWindow : Window
                     : $"\nActive proof target: {activeProofTarget.Target.CaptureKind} ({SelectedProofTargetRole(activeProofTarget)})") +
                 (customTexture == null
                     ? ""
-                    : $"\nCustom import: {BuildCustomTerrainTextureSummary(customTexture)}");
+                    : $"\nCustom import: {BuildCustomTerrainTextureSummary(customTexture)}") +
+                (nativeTextureRelocation == null
+                    ? ""
+                    : $"\nNative shared swap: texture {terrain.TextureId} <- {nativeTextureRelocation.DonorLevelName} texture {nativeTextureRelocation.DonorTextureId}");
             _identityObservationHint.Text = "";
             RefreshObjectReadinessHint();
             RefreshActionAvailability();
+            RefreshContextualViewportAction();
             _statusText.Text = activeProofTarget == null
                 ? $"Selected terrain face {selection.TerrainIndex}."
                 : $"Selected terrain face {selection.TerrainIndex} for {activeProofTarget.Target.CaptureKind} {SelectedProofTargetRole(activeProofTarget)} capture.";
+            RefreshDiagnosticContext();
             return;
         }
 
@@ -11132,17 +13210,41 @@ public sealed class MainWindow : Window
         RefreshLinkedMobyList(null);
         RefreshTerrainSurfaceQuickState();
         RefreshIdentityObservationSuggestions(null);
+        RefreshSelectedMobyZControls(null);
         _selectionTitle.Text = "Nothing selected";
-        _selectionDetails.Text = "Click a terrain face or object in the viewport. Use Map View for editing, or Fly 3D to look around the level.";
+        _selectionDetails.Text = "No terrain face or object selected.";
         _identityObservationHint.Text = "";
         RefreshObjectReadinessHint();
         RefreshActionAvailability();
+        RefreshContextualViewportAction();
+        RefreshDiagnosticContext();
     }
 
     private Control BuildEditControls()
     {
         if (_releaseMode)
-            return BuildPrimaryObjectControls();
+        {
+            TabControl releaseTabs = new()
+            {
+                MinHeight = 320,
+                Items =
+                {
+                    new TabItem
+                    {
+                        Header = EditorTabHeader("Objects"),
+                        Content = BuildPrimaryObjectControls()
+                    },
+                    new TabItem
+                    {
+                        Header = EditorTabHeader("Terrain"),
+                        Content = BuildReleaseTerrainTextureWorkspace()
+                    }
+                }
+            };
+            releaseTabs.SelectionChanged += (_, _) => _viewport.TerrainFocusMode = releaseTabs.SelectedIndex == 1;
+            _viewport.TerrainFocusMode = false;
+            return releaseTabs;
+        }
 
         TabControl tabs = new()
         {
@@ -11189,6 +13291,8 @@ public sealed class MainWindow : Window
             if (_selectedMoby != null)
                 await EditMobyAsync(_selectedMoby);
         });
+        _objectSwapCatalogButton = NewAsyncButton("Swap Catalog", ShowCrossLevelSwapCatalogAsync);
+        _objectSwapTestButton = NewAsyncButton("Create Swap Test", CreateObjectCandidateBinAsync);
         _objectCopyButton = NewButton("Copy Object", CopySelectedMoby);
         _objectPasteButton = NewAsyncButton("Paste Object", PasteMobyClipboardAtLastPointerAsync);
         _objectLayerDownButton = NewButton("Lower Layer", () => MoveSelectedMobyToAdjacentTerrainLayer(-1));
@@ -11203,6 +13307,8 @@ public sealed class MainWindow : Window
         StyleObjectEditButton(_objectAddButton);
         StyleObjectEditButton(_objectRemoveButton);
         StyleObjectEditButton(_objectEditButton);
+        StyleObjectEditButton(_objectSwapCatalogButton);
+        StyleCreateBinButton(_objectSwapTestButton);
         StyleObjectEditButton(_objectCopyButton);
         StyleObjectEditButton(_objectPasteButton);
         StyleObjectEditButton(_objectLayerDownButton);
@@ -11214,6 +13320,8 @@ public sealed class MainWindow : Window
         objectActions.Children.Add(_objectAddButton);
         objectActions.Children.Add(_objectRemoveButton);
         objectActions.Children.Add(_objectEditButton);
+        objectActions.Children.Add(_objectSwapCatalogButton);
+        objectActions.Children.Add(_objectSwapTestButton);
         objectActions.Children.Add(_objectCopyButton);
         objectActions.Children.Add(_objectPasteButton);
         objectActions.Children.Add(_objectLayerDownButton);
@@ -11224,6 +13332,8 @@ public sealed class MainWindow : Window
 
         ToolTip.SetTip(_objectLayerDownButton, "Snap the selected object to the next terrain surface below at the same X/Y.");
         ToolTip.SetTip(_objectLayerUpButton, "Snap the selected object to the next terrain surface above at the same X/Y.");
+        ToolTip.SetTip(_objectSwapCatalogButton, "Search the cache-derived chest and self-contained enemy catalogue. Same-level entries are ready; cross-level entries require a disposable test BIN.");
+        ToolTip.SetTip(_objectSwapTestButton, "Create a separate BIN/CUE for the staged swap. Guarded swaps remain test-only; verified Blowhard, Magic Crafters T107-to-T27, and Wizard Peak T6-to-T24 Green Wizard routes are also included by normal Create BIN.");
 
         _objectActionHint.TextWrapping = TextWrapping.Wrap;
         _objectActionHint.Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92));
@@ -11250,6 +13360,62 @@ public sealed class MainWindow : Window
         outer.Children.Add(BuildAdvancedTerrainControls());
         RefreshActionAvailability();
         return outer;
+    }
+
+    private Control BuildReleaseTerrainTextureWorkspace()
+    {
+        StackPanel panel = new()
+        {
+            Spacing = 10,
+            Margin = new Thickness(0, 10, 0, 0)
+        };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Terrain Texture Swap",
+            FontSize = 14,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(42, 61, 79))
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Select a terrain face in the map, then browse original textures from every realm and level. A cross-level choice replaces the selected shared texture record everywhere it is used and carries its proven gameplay property, including damaging water, lava, and goo.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92)),
+            FontSize = 12,
+            LineHeight = 18
+        });
+
+        Grid actions = new()
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(GridLength.Star),
+                new ColumnDefinition(GridLength.Star)
+            },
+            RowDefinitions =
+            {
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto)
+            }
+        };
+        Button browse = NewAsyncButton("Browse All Game Textures", PaintSelectedTerrainFaceAsync);
+        Grid.SetColumnSpan(browse, 2);
+        AddGridButton(actions, browse, 0, 0);
+        AddGridButton(actions, NewAsyncButton("Undo Selected Swap", UndoSelectedTerrainAsync), 0, 1);
+        AddGridButton(actions, NewAsyncButton("Save Terrain", SaveCurrentTerrainEditsAsync), 1, 1);
+        AddGridButton(actions, NewAsyncButton("Preflight BIN", PreflightTerrainPatchAsync), 0, 2);
+        AddGridButton(actions, NewAsyncButton("Restore Terrain", RestoreCurrentTerrainAsync), 1, 2);
+        panel.Children.Add(actions);
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Same-level face swaps also preserve the donor's source-verified near/fade corner tints in private target slots. Cross-level swaps require the complete 23-part texture record, target runtime controls, shared storage ownership, every affected face, collision properties, and exact readback. Create BIN repeats every check against the selected source disc.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(34, 71, 106)),
+            FontSize = 12,
+            LineHeight = 18
+        });
+        return panel;
     }
 
     private Control BuildTerrainReadinessPanel()
@@ -11329,7 +13495,7 @@ public sealed class MainWindow : Window
         _terrainTaskPaintFaceButton = NewAsyncButton("Paint Face", PaintSelectedTerrainFaceAsync);
         _terrainTaskAddCopyButton = NewAsyncButton("Add Terrain", StageAddCloneSelectedTerrainAsync);
         _terrainTaskRemoveFaceButton = NewAsyncButton("Remove Terrain", StageRemoveSelectedTerrainAsync);
-        _terrainUndoButton = NewButton("Undo Terrain", UndoSelectedTerrain);
+        _terrainUndoButton = NewAsyncButton("Undo Terrain", UndoSelectedTerrainAsync);
         _terrainTaskSaveButton = NewAsyncButton("Save Terrain", SaveCurrentTerrainEditsAsync);
 
         taskGrid.Children.Add(_terrainTaskMoveFaceButton);
@@ -11715,8 +13881,10 @@ public sealed class MainWindow : Window
                 ? "will move edited vertices in X/Y/Z where source face records are mapped"
                 : "will move edited vertex heights where source face records are mapped";
 
-        if (terrain.HasTextureEdit)
-            return "shape is unchanged; only the face texture ID changes";
+        if (terrain.HasTextureEdit || terrain.HasTextureVisualEdit)
+            return terrain.HasTextureEdit
+                ? "shape is unchanged; the face texture ID and private native tint bindings change"
+                : "shape and texture ID are unchanged; only private native tint bindings change";
 
         return "no selected-face geometry edit is staged yet";
     }
@@ -11763,8 +13931,12 @@ public sealed class MainWindow : Window
             return $"{imports.Count} custom normal/close texture-page import(s) staged for texture {terrain.TextureId}: {label}. {BuildSelectedTerrainTextureScopeSummary(terrain)}";
         }
 
+        if (terrain.TextureVisualEdit is TerrainTextureVisualEdit visual)
+        {
+            return $"will borrow in-game texture {terrain.TextureId} instead of {terrain.OriginalTextureId}, preserve {visual.UniqueCornerPairCount} source-verified near/fade tint pair(s) from {visual.SourceLevelKey}:{visual.SourceRuntimeKey}, and allocate only face-private/unused color slots. {BuildSelectedTerrainTextureScopeSummary(terrain)}";
+        }
         if (terrain.HasTextureEdit)
-            return $"will borrow in-game texture/palette {terrain.TextureId} instead of {terrain.OriginalTextureId}. {BuildSelectedTerrainTextureScopeSummary(terrain)}";
+            return $"will borrow in-game texture/palette {terrain.TextureId} instead of {terrain.OriginalTextureId}; no native tint recipe is staged. {BuildSelectedTerrainTextureScopeSummary(terrain)}";
 
         return $"uses the current in-game texture; material labels alone do not patch texture pages. {BuildSelectedTerrainTextureScopeSummary(terrain)}";
     }
@@ -12097,7 +14269,7 @@ public sealed class MainWindow : Window
         }
 
         await ApplyTerrainSurfaceOverrideAsync(_selectedTerrain.TextureId, targetSurface);
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         RefreshCurrentLevelDetails();
         RefreshTerrainSurfaceQuickState();
@@ -12107,6 +14279,9 @@ public sealed class MainWindow : Window
 
     private async Task ApplySelectedTerrainMaterialAndPaletteAsync()
     {
+        if (BlockLegacyCustomTerrainTextureAction())
+            return;
+
         if (_currentLevel == null || _currentGeometry == null)
         {
             _statusText.Text = "Choose a level before matching terrain material in game.";
@@ -12158,7 +14333,7 @@ public sealed class MainWindow : Window
 
         int previewFaces = ApplyCustomTerrainTexturePreviews();
         RefreshCurrentLevelDetails();
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         RefreshTerrainSurfaceQuickState();
         RefreshTerrainReadinessHint();
@@ -12848,7 +15023,7 @@ public sealed class MainWindow : Window
         _viewport.TerrainBrushAction = selected.Action;
         RefreshTerrainBrushHistoryText();
         if (selected.Action != TerrainBrushAction.Off)
-            _statusText.Text = $"{selected.Label}: left-drag terrain in Map View or Fly 3D to paint with the smooth brush.";
+            _statusText.Text = $"{selected.Label}: left-drag terrain in Edit Map or Game Camera to paint with the smooth brush.";
     }
 
     private void RunTerrainBrushCommandOrMode(TerrainBrushAction action, Action selectedAction)
@@ -12871,7 +15046,7 @@ public sealed class MainWindow : Window
         _terrainBrushModeBox.SelectedItem = option;
         RefreshTerrainBrushMode();
         if (announce)
-            _statusText.Text = $"{option.Label}: left-drag terrain in Map View or Fly 3D to paint with the smooth brush.";
+            _statusText.Text = $"{option.Label}: left-drag terrain in Edit Map or Game Camera to paint with the smooth brush.";
     }
 
     private void ResetTerrainBrush()
@@ -13206,7 +15381,7 @@ public sealed class MainWindow : Window
                     OriginalTextureId = item.polygon.OriginalTextureId,
                     HasHeightEdit = item.polygon.HasHeightEdit,
                     HasPositionEdit = item.polygon.HasPositionEdit,
-                    HasTextureEdit = item.polygon.HasTextureEdit,
+                    HasTextureEdit = item.polygon.HasTextureEdit || item.polygon.HasTextureVisualEdit,
                     HasStructureEdit = item.polygon.HasStructureEdit,
                     HasCustomTextureArt = customTextureImports > 0,
                     CustomTextureImportCount = customTextureImports,
@@ -13291,6 +15466,8 @@ public sealed class MainWindow : Window
 
         if (terrain.HasTextureEdit)
             parts.Add($"swap texture {terrain.OriginalTextureId} to {terrain.TextureId}");
+        if (terrain.TextureVisualEdit is TerrainTextureVisualEdit visual)
+            parts.Add($"native tint from {visual.SourceLevelKey}:{visual.SourceRuntimeKey} ({visual.UniqueCornerPairCount} pair(s))");
 
         int textureImports = _customTerrainTextures.Count(texture => texture.TextureId == terrain.TextureId);
         if (textureImports > 0)
@@ -13303,8 +15480,10 @@ public sealed class MainWindow : Window
 
     private static string BuildTerrainTextureReviewLine(TerrainPolygon terrain)
     {
-        return terrain.HasTextureEdit
-            ? $"{terrain.OriginalTextureId} -> {terrain.TextureId}"
+        return terrain.HasTextureEdit || terrain.HasTextureVisualEdit
+            ? terrain.TextureVisualEdit is TerrainTextureVisualEdit visual
+                ? $"{terrain.OriginalTextureId} -> {terrain.TextureId}; native tint {visual.SourceRuntimeKey}"
+                : $"{terrain.OriginalTextureId} -> {terrain.TextureId}; tint missing"
             : $"{terrain.TextureId} unchanged";
     }
 
@@ -13643,6 +15822,7 @@ public sealed class MainWindow : Window
             : Moby.YawByteToDegrees(e.YawByte);
         string editLabel = e.Moby.IsFlyInLandingControl ? "Fly-in heading" : "Yaw";
         e.Moby.LoadedNativeEditSummary = $"{editLabel} {degrees:0.#} deg";
+        InvalidateBuildSafetySummary();
 
         _viewport.InvalidateVisual();
         ShowSelection(ViewportSelectionChangedEventArgs.ForMoby(e.Moby));
@@ -13820,7 +16000,7 @@ public sealed class MainWindow : Window
         bool clearedUndoHistory = false;
         foreach (TerrainPolygon polygon in _currentGeometry.Polygons)
         {
-            if (polygon.IsTerrainRemoved)
+            if (polygon.IsTerrainRemoved || !_viewport.IsTerrainPresentedForEditing(polygon))
                 continue;
             if (!polygon.HasHeightEdit || !TouchesTerrainBrush(polygon, _selectedTerrain.Center, safeRadius))
                 continue;
@@ -13834,7 +16014,7 @@ public sealed class MainWindow : Window
             affectedFaces++;
         }
 
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         RefreshCurrentLevelDetails();
         _lastTerrainBrushSummary = affectedFaces == 0
@@ -13863,7 +16043,7 @@ public sealed class MainWindow : Window
 
         _terrainBrushRedoHistory.Add(stroke);
         _activeTerrainBrushUndo = null;
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         if (_selectedTerrain != null)
             ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         RefreshCurrentLevelDetails();
@@ -13893,7 +16073,7 @@ public sealed class MainWindow : Window
 
         PushTerrainBrushUndoStroke(stroke);
         _activeTerrainBrushUndo = null;
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         if (_selectedTerrain != null)
             ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         RefreshCurrentLevelDetails();
@@ -13920,7 +16100,7 @@ public sealed class MainWindow : Window
 
         ClearTerrainBrushUndoHistory();
         _selectedTerrain.ApplyTerrainDeltaZ(_selectedTerrain.TerrainEditDeltaZ + dz);
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         RefreshCurrentLevelDetails();
         RefreshTerrainReadinessHint();
@@ -13964,7 +16144,7 @@ public sealed class MainWindow : Window
             deltas[i] = new Vector2f(deltas[i].X + dx, deltas[i].Y + dy);
 
         _selectedTerrain.ApplyTerrainVertexXYDeltas(deltas);
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         RefreshCurrentLevelDetails();
         RefreshTerrainReadinessHint();
@@ -14066,12 +16246,70 @@ public sealed class MainWindow : Window
         IReadOnlyList<CustomTerrainTextureImport> customTextures = _customTerrainTextures
             .Where(texture => texture.TextureId == terrain.TextureId)
             .ToArray();
+        TerrainTextureVisualEdit? nativeVisual = terrain.TextureVisualEdit;
+        NativeTerrainSurfaceSignature? nativeBehavior = terrain.SurfaceBehaviorEdit is TerrainSurfaceBehaviorEdit stagedBehavior
+            ? new NativeTerrainSurfaceSignature(stagedBehavior.SurfaceType, stagedBehavior.Param1, stagedBehavior.Param2)
+            : null;
+        string behaviorRuntimeKey = terrain.SurfaceBehaviorEdit?.SourceRuntimeKey ?? terrain.RuntimeKey;
+        if (customTextures.Count == 0)
+        {
+            if (_currentLevel == null)
+            {
+                _statusText.Text = "Open a level before copying a native terrain look.";
+                return;
+            }
+            if (_nativeTerrainTextureRelocations.Any(edit => edit.TargetTextureId == terrain.TextureId))
+            {
+                _statusText.Text = "This face uses a shared cross-level texture replacement. Use Browse All Game Textures to apply that source look elsewhere with its full relocation proof.";
+                return;
+            }
+
+            GeometryCandidate? nativeGeometry = TryLoadNativeTerrainDonorGeometry(_currentLevel, out string nativeGeometryError);
+            TerrainPolygon? sourceFace = nativeGeometry?.Polygons.FirstOrDefault(face =>
+                string.Equals(face.RuntimeKey, terrain.RuntimeKey, StringComparison.OrdinalIgnoreCase));
+            string sourceImage = FirstExistingDiscImagePath(
+                _discImagePathBox.Text,
+                _skyboxDiscImagePathBox.Text,
+                DiscImageLocator.FindImage(_workspace));
+            if (nativeVisual == null &&
+                (sourceFace == null ||
+                 !NativeTerrainTextureVisualInspector.TryInspectSourceImage(
+                     sourceImage,
+                     _currentLevel.Key,
+                     sourceFace,
+                     out nativeVisual,
+                     out nativeGeometryError) ||
+                 nativeVisual.SourceTextureId != terrain.TextureId))
+            {
+                _statusText.Text = $"Could not copy this look with source-verified native tints: {nativeGeometryError}";
+                return;
+            }
+
+            if (nativeBehavior == null && nativeGeometry != null)
+            {
+                NativeTerrainSurfaceLevelCatalog? nativeCatalog = TryBuildNativeTerrainSurfaceCatalog(
+                    _currentLevel,
+                    nativeGeometry,
+                    out string nativeSurfaceError);
+                NativeTerrainFaceSurfaceBinding? binding = nativeCatalog?.FindFace(terrain.RuntimeKey);
+                nativeBehavior = binding?.Signature;
+                if (nativeBehavior == null)
+                {
+                    _statusText.Text = $"Could not copy this look with one exact native gameplay property: {nativeSurfaceError} {binding?.ReadinessNote}".Trim();
+                    return;
+                }
+            }
+        }
         _terrainLookClipboard = new TerrainLookClipboard(
             terrain.TextureId,
             surface,
             terrain.SurfaceColor,
             terrain.RuntimeKey,
             source,
+            _currentLevel?.Key ?? "",
+            nativeVisual,
+            nativeBehavior,
+            behaviorRuntimeKey,
             customTextures);
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(terrainIndex, terrain));
         string customNote = customTextures.Count > 0
@@ -14106,16 +16344,139 @@ public sealed class MainWindow : Window
         ClearTerrainBrushUndoHistory();
         if (look.CustomTextures.Count == 0)
         {
+            if (_currentLevel == null ||
+                !string.Equals(LevelCatalog.NormalizeKey(look.SourceLevelKey), LevelCatalog.NormalizeKey(_currentLevel.Key), StringComparison.OrdinalIgnoreCase))
+            {
+                _statusText.Text = "A copied resident terrain look can only be pasted within its source level. Use Browse All Game Textures for a source-proven cross-level replacement.";
+                return;
+            }
+            if (look.NativeVisual == null || look.NativeBehavior == null || look.NativeVisual.SourceTextureId != look.TextureId)
+            {
+                _statusText.Text = "That copied look predates source-verified native tint/property data. Copy it again, then paste; no face was changed.";
+                return;
+            }
+            if (_nativeTerrainTextureRelocations.Any(edit => edit.TargetTextureId == terrain.TextureId))
+            {
+                _statusText.Text = "The selected target uses a shared cross-level texture replacement. Undo that shared replacement before pasting a face-local native look.";
+                return;
+            }
+            NativeTerrainTextureRelocationEdit? pastedDonorRelocation = _nativeTerrainTextureRelocations
+                .FirstOrDefault(edit => edit.TargetTextureId == look.TextureId);
+            if (pastedDonorRelocation != null)
+            {
+                _statusText.Text = $"The copied texture {look.TextureId} currently contains the shared replacement from {pastedDonorRelocation.DonorLevelName}. Undo that shared replacement before pasting this resident look; no face was changed.";
+                return;
+            }
+
+            GeometryCandidate? nativeGeometry = TryLoadNativeTerrainDonorGeometry(_currentLevel, out string nativeGeometryError);
+            TerrainPolygon? visualSource = nativeGeometry?.Polygons.FirstOrDefault(face =>
+                string.Equals(face.RuntimeKey, look.NativeVisual.SourceRuntimeKey, StringComparison.OrdinalIgnoreCase));
+            if (visualSource == null || visualSource.Points.Count != terrain.Points.Count)
+            {
+                _statusText.Text = visualSource == null
+                    ? $"The copied visual source is no longer available: {nativeGeometryError}"
+                    : $"The copied visual uses {visualSource.Points.Count} terrain corner(s), but the selected target uses {terrain.Points.Count}; no face was changed.";
+                return;
+            }
+
+            string sourceImage = FirstExistingDiscImagePath(
+                _discImagePathBox.Text,
+                _skyboxDiscImagePathBox.Text,
+                DiscImageLocator.FindImage(_workspace));
+            if (!NativeTerrainTextureVisualInspector.TryInspectSourceImage(
+                    sourceImage,
+                    _currentLevel.Key,
+                    visualSource,
+                    out TerrainTextureVisualEdit verifiedVisual,
+                    out string visualError) ||
+                verifiedVisual.SourceTextureId != look.NativeVisual.SourceTextureId ||
+                !string.Equals(
+                    LevelCatalog.NormalizeKey(verifiedVisual.SourceLevelKey),
+                    LevelCatalog.NormalizeKey(look.NativeVisual.SourceLevelKey),
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(verifiedVisual.SourceRuntimeKey, look.NativeVisual.SourceRuntimeKey, StringComparison.OrdinalIgnoreCase) ||
+                verifiedVisual.SourceSectorOffset != look.NativeVisual.SourceSectorOffset ||
+                verifiedVisual.SourceFaceOffset != look.NativeVisual.SourceFaceOffset ||
+                !verifiedVisual.Corners.SequenceEqual(look.NativeVisual.Corners))
+            {
+                _statusText.Text = $"The copied native visual no longer matches the selected source BIN: {visualError} No face was changed.";
+                return;
+            }
+            TerrainTextureVisualEdit pasteVisual = verifiedVisual with { Label = look.NativeVisual.Label };
+            if (!NativeTerrainTextureVisualInspector.TryGetWritableColorSlotCapacity(
+                    sourceImage,
+                    terrain,
+                    out int tintCapacity,
+                    out string tintError) ||
+                tintCapacity < pasteVisual.UniqueCornerPairCount)
+            {
+                _statusText.Text = $"The selected face cannot isolate {pasteVisual.UniqueCornerPairCount} native tint pair(s): {tintError} No face was changed.";
+                return;
+            }
+
+            string sourceSurfaceError = nativeGeometryError;
+            NativeTerrainSurfaceLevelCatalog? sourceCatalog = nativeGeometry == null
+                ? null
+                : TryBuildNativeTerrainSurfaceCatalog(_currentLevel, nativeGeometry, out sourceSurfaceError);
+            NativeTerrainFaceSurfaceBinding? sourceBinding = sourceCatalog?.FindFace(look.BehaviorRuntimeKey);
+            if (sourceBinding?.Signature == null ||
+                sourceBinding.TextureId != look.TextureId ||
+                sourceBinding.Signature != look.NativeBehavior)
+            {
+                _statusText.Text = $"The copied native gameplay property no longer matches source face {look.BehaviorRuntimeKey}: {sourceSurfaceError} No face was changed.";
+                return;
+            }
+            NativeTerrainSurfaceSignature verifiedBehavior = sourceBinding.Signature;
+
+            NativeTerrainSurfaceLevelCatalog? targetCatalog = TryBuildNativeTerrainSurfaceCatalog(
+                _currentLevel,
+                _currentGeometry,
+                out string targetSurfaceError);
+            NativeTerrainSurfaceTransferReadiness? propertyReadiness = targetCatalog?.EvaluateTransfer(
+                terrain.RuntimeKey,
+                verifiedBehavior,
+                crossLevel: false);
+            if (propertyReadiness is not { CanApply: true })
+            {
+                _statusText.Text = $"The selected face cannot carry the copied native gameplay property: {targetSurfaceError} {propertyReadiness?.Note} No face was changed.".Trim();
+                return;
+            }
+
             terrain.ApplyTextureOverride(look.TextureId);
+            terrain.ApplyTextureVisualEdit(pasteVisual);
+            if (propertyReadiness.TargetTriangleCount > 0)
+            {
+                ApplyNativeTerrainBehaviorToFace(
+                    terrain,
+                    verifiedBehavior,
+                    look.SourceLevelKey,
+                    look.BehaviorRuntimeKey);
+            }
+            else
+            {
+                ApplyVisualOnlyNativeTerrainBehaviorToFace(
+                    terrain,
+                    verifiedBehavior,
+                    look.SourceLevelKey,
+                    look.BehaviorRuntimeKey);
+            }
+            TerrainMaterialClassifier.Apply(_currentLevel.Key, _workspace.RootPath, _currentGeometry);
             terrain.SetSurface(look.Surface, look.SurfaceColor, $"copied look from {look.SourceLabel}");
-            _viewport.InvalidateVisual();
+            terrain.SetSurfacePreviewColor(
+                pasteVisual.AverageNearColor,
+                $"native texture tint from {look.SourceLevelKey}:{pasteVisual.SourceRuntimeKey}");
+            int nativeSavedEdits = await PersistCurrentTerrainEditsAsync();
+            _viewport.NotifyTerrainPresentationDataChanged();
             ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(terrainIndex, terrain));
             RefreshCurrentLevelDetails();
             RefreshTerrainReadinessHint();
             RefreshTerrainSurfaceQuickState();
-            _statusText.Text = $"Pasted {TerrainMaterialClassifier.FormatSurface(look.Surface)} look from {look.SourceLabel} onto face {terrainIndex}. Save Terrain and Create BIN will include the texture swap.";
+            _statusText.Text = $"Pasted {TerrainMaterialClassifier.FormatSurface(look.Surface)} look from {look.SourceLabel} onto face {terrainIndex} with {pasteVisual.UniqueCornerPairCount} source-bound tint pair(s) and {verifiedBehavior.Label}; saved {nativeSavedEdits} terrain edit(s). Create BIN will include the atomic texture/property swap.";
             return;
         }
+
+        if (BlockLegacyCustomTerrainTextureAction())
+            return;
 
         TerrainFaceLocalTextureResult? local = await EnsureSelectedTerrainFaceLocalTextureAsync($"paste the custom look from {look.SourceLabel}");
         if (local == null)
@@ -14142,7 +16503,7 @@ public sealed class MainWindow : Window
         terrain.SetSurface(look.Surface, look.SurfaceColor, $"copied custom look from {look.SourceLabel}");
         int previewFaces = ApplyCustomTerrainTexturePreviews();
         int savedEdits = await PersistCurrentTerrainEditsAsync();
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(terrainIndex, terrain));
         RefreshCurrentLevelDetails();
         RefreshTerrainReadinessHint();
@@ -14439,7 +16800,7 @@ public sealed class MainWindow : Window
         List<(TerrainPolygon Polygon, int PointIndex)> targets = new();
         foreach (TerrainPolygon polygon in _currentGeometry.Polygons)
         {
-            if (polygon.IsTerrainRemoved)
+            if (polygon.IsTerrainRemoved || !_viewport.IsTerrainPresentedForEditing(polygon))
                 continue;
             if (!ReferenceEquals(polygon, selected) && !IsTerrainSeamJoiningEnabled())
                 continue;
@@ -14518,7 +16879,7 @@ public sealed class MainWindow : Window
             FinishTerrainBrushUndo();
 
         _selectedTerrainPointIndex = pointIndex;
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         RefreshCurrentLevelDetails();
         RefreshTerrainReadinessHint();
@@ -14725,7 +17086,7 @@ public sealed class MainWindow : Window
 
         ClearTerrainBrushUndoHistory();
         terrain.StageTerrainRemoval();
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(terrainIndex, terrain));
         RefreshCurrentLevelDetails();
         RefreshTerrainReadinessHint();
@@ -14939,7 +17300,7 @@ public sealed class MainWindow : Window
             await ApplyTerrainSurfaceOverrideAsync(terrain.TextureId, surfaceChoice.Surface);
 
         terrain.StageTerrainAddClone();
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(terrainIndex, terrain));
         RefreshCurrentLevelDetails();
         RefreshTerrainReadinessHint();
@@ -15088,7 +17449,7 @@ public sealed class MainWindow : Window
         Dictionary<TerrainPolygon, HashSet<int>> touchedVertexIndexes = new();
         foreach (TerrainPolygon polygon in _currentGeometry.Polygons)
         {
-            if (polygon.IsTerrainRemoved)
+            if (polygon.IsTerrainRemoved || !_viewport.IsTerrainPresentedForEditing(polygon))
                 continue;
 
             TerrainCollisionCoverage coverage = playableOnly
@@ -15203,7 +17564,9 @@ public sealed class MainWindow : Window
         int followedVertices = 0;
         foreach (TerrainPolygon polygon in _currentGeometry.Polygons)
         {
-            if (polygon.IsTerrainRemoved || pendingDeltas.ContainsKey(polygon))
+            if (polygon.IsTerrainRemoved ||
+                pendingDeltas.ContainsKey(polygon) ||
+                !_viewport.IsTerrainPresentedForEditing(polygon))
                 continue;
 
             TerrainCollisionCoverage coverage = GetTerrainCollisionCoverage(polygon);
@@ -15345,7 +17708,7 @@ public sealed class MainWindow : Window
         double total = 0;
         foreach (TerrainPolygon polygon in _currentGeometry.Polygons)
         {
-            if (polygon.IsTerrainRemoved)
+            if (polygon.IsTerrainRemoved || !_viewport.IsTerrainPresentedForEditing(polygon))
                 continue;
 
             bool playableOnly = IsPlayableTerrainOnlyEnabled();
@@ -15399,7 +17762,9 @@ public sealed class MainWindow : Window
         List<TerrainBrushVertexSample> samples = new();
         foreach (TerrainPolygon polygon in _currentGeometry.Polygons)
         {
-            if (polygon.IsTerrainRemoved || !faceIndexByPolygon.TryGetValue(polygon, out int faceIndex))
+            if (polygon.IsTerrainRemoved ||
+                !_viewport.IsTerrainPresentedForEditing(polygon) ||
+                !faceIndexByPolygon.TryGetValue(polygon, out int faceIndex))
                 continue;
 
             TerrainCollisionCoverage coverage = playableOnly
@@ -15426,7 +17791,7 @@ public sealed class MainWindow : Window
 
     private void RefreshAfterTerrainBrush(TerrainBrushResult result, string verb)
     {
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         if (_selectedTerrain != null)
             ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         RefreshCurrentLevelDetails();
@@ -15507,21 +17872,67 @@ public sealed class MainWindow : Window
         return count == 1 ? singular : plural;
     }
 
-    private void UndoSelectedTerrain()
+    private async Task UndoSelectedTerrainAsync()
     {
-        if (_selectedTerrain == null)
+        if (_selectedTerrain == null || _currentLevel == null || _currentGeometry == null)
         {
             _statusText.Text = "Select a terrain face before undoing face edits.";
             return;
         }
 
         ClearTerrainBrushUndoHistory();
+        int textureId = _selectedTerrain.TextureId;
+        NativeTerrainTextureRelocationEdit? relocation = _nativeTerrainTextureRelocations
+            .FirstOrDefault(edit => edit.TargetTextureId == textureId);
+        if (relocation != null)
+        {
+            _nativeTerrainTextureRelocations = await NativeTerrainTextureRelocationEditStore.RemoveAsync(
+                _workspace.RootPath,
+                _currentLevel.Key,
+                _currentLevel.DisplayName,
+                textureId);
+            if (!relocation.PreservesTargetNativeSurface)
+            {
+                foreach (TerrainPolygon face in _currentGeometry.Polygons.Where(face =>
+                             !face.IsTerrainRemoved && face.TextureId == textureId))
+                {
+                    face.ClearSurfaceBehaviorEdit();
+                    face.ClearTextureVisualEdit();
+                }
+                await TerrainMaterialClassifier.SaveOverrideAsync(
+                    _currentLevel.Key,
+                    _workspace.RootPath,
+                    textureId,
+                    "unknown");
+            }
+            TerrainMaterialClassifier.Apply(_currentLevel.Key, _workspace.RootPath, _currentGeometry);
+            ApplyCustomTerrainTexturePreviews();
+            if (!relocation.PreservesTargetNativeSurface)
+                await PersistCurrentTerrainEditsAsync();
+            if (!_nativeTerrainTextureRelocations.Any(edit =>
+                    string.Equals(edit.PreviewImagePath, relocation.PreviewImagePath, StringComparison.OrdinalIgnoreCase)))
+            {
+                DeleteManagedNativeTerrainTexturePreview(relocation.PreviewImagePath);
+            }
+            _viewport.NotifyTerrainPresentationDataChanged();
+            ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
+            RefreshCurrentLevelDetails();
+            RefreshTerrainReadinessHint();
+            _statusText.Text = relocation.PreservesTargetNativeSurface
+                ? $"Removed the art-only shared native texture replacement for texture {textureId}; its target material, tint, and collision behavior were left untouched."
+                : $"Removed the shared native texture replacement for texture {textureId} and cleared its staged gameplay-property transfer.";
+            return;
+        }
+
         _selectedTerrain.ResetTerrainEdit();
-        _viewport.InvalidateVisual();
+        TerrainMaterialClassifier.Apply(_currentLevel.Key, _workspace.RootPath, _currentGeometry);
+        ApplyCustomTerrainTexturePreviews();
+        int savedEdits = await PersistCurrentTerrainEditsAsync();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
         RefreshCurrentLevelDetails();
         RefreshTerrainReadinessHint();
-        _statusText.Text = $"Undid terrain face {_selectedTerrainIndex}.";
+        _statusText.Text = $"Undid terrain face {_selectedTerrainIndex} and saved the removal ({savedEdits} terrain edit(s) remain).";
     }
 
     private async Task MoveSelectedTerrainFaceAsync()
@@ -15663,7 +18074,7 @@ public sealed class MainWindow : Window
 
         _selectedTerrain = terrain;
         _selectedTerrainIndex = terrainIndex;
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(terrainIndex, terrain));
         RefreshCurrentLevelDetails();
         RefreshTerrainReadinessHint();
@@ -15820,7 +18231,7 @@ public sealed class MainWindow : Window
 
         _selectedTerrain = terrain;
         _selectedTerrainIndex = terrainIndex;
-        _viewport.InvalidateVisual();
+        _viewport.NotifyTerrainPresentationDataChanged();
         ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(terrainIndex, terrain));
         RefreshCurrentLevelDetails();
         RefreshTerrainPointControls();
@@ -15985,7 +18396,7 @@ public sealed class MainWindow : Window
         float y = moby.Position.Y + dy;
         float z = moby.Position.Z + dz;
         bool snapped = false;
-        if (snapToTerrain && ShouldSnapMobyToTerrain(moby) && TryFindTerrainZAt(x, y, z, out float terrainZ))
+        if (snapToTerrain && ShouldAutoSnapMobyToTerrain(moby) && TryFindTerrainZAt(x, y, z, out float terrainZ))
         {
             z = ApplyTerrainPlacementLift(new Vector3f(x, y, terrainZ), moby).Z;
             snapped = true;
@@ -15999,6 +18410,7 @@ public sealed class MainWindow : Window
         moby.LoadedNativeEditSummary = snapped
             ? $"XYZ {moby.Position.X:0.0}, {moby.Position.Y:0.0}, {moby.Position.Z:0.0}; snapped to terrain"
             : $"XYZ {moby.Position.X:0.0}, {moby.Position.Y:0.0}, {moby.Position.Z:0.0}";
+        InvalidateBuildSafetySummary();
         return snapped;
     }
 
@@ -16038,7 +18450,8 @@ public sealed class MainWindow : Window
             referenceZ,
             out z,
             preferredTerrainIndex,
-            preferTopSurface);
+            preferTopSurface,
+            _viewport.IsTerrainPresentedForEditing);
     }
 
     private bool CanMoveMobyToAdjacentTerrainLayer(Moby moby, int direction)
@@ -16059,7 +18472,8 @@ public sealed class MainWindow : Window
                 moby.Position.Y,
                 currentGroundZ,
                 direction,
-                out float targetGroundZ))
+                out float targetGroundZ,
+                _viewport.IsTerrainPresentedForEditing))
         {
             return false;
         }
@@ -16247,6 +18661,55 @@ public sealed class MainWindow : Window
         }
     }
 
+    private int DetachLinkedMobyRows(
+        Moby root,
+        Func<MobyLink, bool> matchesLink)
+    {
+        List<MobyLink> detachedLinks = _currentMobys
+            .SelectMany(moby => moby.Links)
+            .Where(matchesLink)
+            .GroupBy(link => link.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
+        int detachedRows = _currentMobys.Count(moby =>
+            !ReferenceEquals(moby, root) && moby.Links.Any(matchesLink));
+        if (detachedLinks.Count > 0)
+        {
+            if (!_detachedGemLinksForUndo.TryGetValue(root, out List<MobyLink>? remembered))
+            {
+                remembered = new List<MobyLink>();
+                _detachedGemLinksForUndo[root] = remembered;
+            }
+            foreach (MobyLink link in detachedLinks)
+            {
+                if (!remembered.Any(existing => string.Equals(existing.Key, link.Key, StringComparison.OrdinalIgnoreCase)))
+                    remembered.Add(link);
+            }
+        }
+        foreach (Moby member in _currentMobys)
+            member.Links.RemoveAll(link => matchesLink(link));
+        return detachedRows;
+    }
+
+    private int RestoreDetachedGemLinks(Moby root)
+    {
+        if (!_detachedGemLinksForUndo.Remove(root, out List<MobyLink>? links))
+            return 0;
+
+        HashSet<int> restoredRows = new();
+        foreach (MobyLink link in links)
+        {
+            foreach (Moby member in _currentMobys.Where(moby => link.TrueIndexes.Contains(moby.TrueIndex)))
+            {
+                if (!member.Links.Any(existing => string.Equals(existing.Key, link.Key, StringComparison.OrdinalIgnoreCase)))
+                    member.Links.Add(link);
+                if (!ReferenceEquals(member, root))
+                    restoredRows.Add(member.TrueIndex);
+            }
+        }
+        return restoredRows.Count;
+    }
+
     private static bool IsTreasureThiefRewardRoot(Moby moby)
     {
         string text = $"{moby.DisplayLabel} {moby.CandidateKind} {moby.BehaviorNote}";
@@ -16348,13 +18811,14 @@ public sealed class MainWindow : Window
         Window dialog = new()
         {
             Title = "Add Object",
-            Width = 560,
-            Height = 680,
+            Width = 680,
+            Height = 650,
+            MinWidth = 600,
             MinHeight = 560,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = true
         };
-        dialog.Content = ScrollableDialogContent(BuildAddMobyDialogContent(dialog, placementBox, placementHint, kindBox, gemBox, nameBox, typeBox, stateBox, xBox, yBox, zBox, yawBox, note));
+        dialog.Content = BuildModernAddMobyDialogContent(dialog, placementBox, placementHint, kindBox, gemBox, nameBox, typeBox, stateBox, xBox, yBox, zBox, yawBox, note);
 
         bool accepted = await dialog.ShowDialog<bool>(this);
         if (!accepted)
@@ -16422,7 +18886,7 @@ public sealed class MainWindow : Window
         _pendingMobyAdd = pending with { FallbackPosition = fallbackPosition };
         _viewport.ObjectPlacementMode = true;
         RefreshActionAvailability();
-        _statusText.Text = $"Click the map or Fly 3D view to place {pending.Label}. Press Escape to cancel.";
+        _statusText.Text = $"Click Edit Map or Game Camera to place {pending.Label}. Press Escape to cancel.";
     }
 
     private async Task PlacePendingMobyAtViewportAsync(Point screenPoint)
@@ -16467,7 +18931,7 @@ public sealed class MainWindow : Window
             : -1;
         bool trueAppendSupported = selectedTemplate.FromLevelTemplate &&
             (IsReleaseSafeTrueAddTemplate(selectedTemplate) ||
-             IsPromotedNativeCloneAppendIdentity(
+             IsUnlimitedPromotedNativeCloneAppendIdentity(
                  _currentLevel?.Key ?? selectedTemplate.SourceLevelKey,
                  selectedTemplate.Type,
                  selectedTemplate.SourceByte36,
@@ -16555,6 +19019,7 @@ public sealed class MainWindow : Window
         }
 
         _currentMobys.AddRange(addedMobys);
+        InvalidateBuildSafetySummary();
         _viewport.Mobys = _currentMobys;
         RefreshMobyList(moby);
         RefreshCurrentLevelDetails();
@@ -16566,6 +19031,10 @@ public sealed class MainWindow : Window
         _statusText.Text = addedMobys.Count > 1
             ? $"Added {moby.DisplayLabel} and {addedMobys.Count - 1} companion object(s).{candidateNote}{exportSlotNote}"
             : $"Added {moby.DisplayLabel}.{candidateNote}{exportSlotNote}";
+        EditorDiagnostics.RecordAction(
+            "Object added",
+            $"{_currentLevel?.DisplayName}: {BuildMobyDiagnosticSummary(moby)}; companion rows {addedMobys.Count - 1}; safe slots before {safeSlotsBefore}");
+        RefreshDiagnosticContext();
 
         int safeSlotsAfter = selectedTemplate.FromLevelTemplate
             ? CountSafeNativeCloneExtraExportSlots(selectedTemplate, _currentMobys)
@@ -16588,6 +19057,12 @@ public sealed class MainWindow : Window
             return;
         }
 
+        if (IsGreenWizardMoby(_selectedMoby))
+        {
+            _statusText.Text = "Green Wizard copies stay guarded because each added instance needs a private properties block, patrol route, and pointer fixup. Select an existing enemy and use Replace instead.";
+            return;
+        }
+
         if (_releaseMode && IsReleaseProtectedControlMoby(_selectedMoby))
         {
             _statusText.Text = $"{_selectedMoby.DisplayLabel} looks like system/trigger data. It can be inspected, but release builds do not copy it as a normal placeable object yet.";
@@ -16607,6 +19082,7 @@ public sealed class MainWindow : Window
                 : "";
         string exportSlotNote = BuildClipboardExportSlotStatus(_selectedMoby);
         _statusText.Text = $"Copied {_selectedMoby.DisplayLabel}.{companionNote}{exportSlotNote} Paste with Ctrl+V on Windows or Command+V on Mac.";
+        EditorDiagnostics.RecordAction("Object copied", $"{_currentLevel?.DisplayName}: {BuildMobyDiagnosticSummary(_selectedMoby)}");
     }
 
     private async Task PasteMobyClipboardAtLastPointerAsync()
@@ -16653,7 +19129,7 @@ public sealed class MainWindow : Window
                     resolvedDonor.SourceByte4F,
                     resolvedDonor.Flag4A,
                     resolvedDonor.Flag4B) ||
-                IsPromotedNativeCloneAppendIdentity(
+                IsUnlimitedPromotedNativeCloneAppendIdentity(
                     _currentLevel?.Key ?? "",
                     resolvedDonor.Type,
                     resolvedDonor.SourceByte36,
@@ -16669,6 +19145,7 @@ public sealed class MainWindow : Window
             AddLinkedCompanionClones(sourceRoot, pasted, pastedMobys, ref nextIndex, ref nextTrueIndex);
 
         _currentMobys.AddRange(pastedMobys);
+        InvalidateBuildSafetySummary();
         _viewport.Mobys = _currentMobys;
         RefreshMobyList(pasted);
         RefreshCurrentLevelDetails();
@@ -16677,6 +19154,10 @@ public sealed class MainWindow : Window
         _statusText.Text = pastedMobys.Count > 1
             ? $"Pasted {pasted.DisplayLabel} and {pastedMobys.Count - 1} linked companion object(s) at the cursor.{exportSlotNote}"
             : $"Pasted {pasted.DisplayLabel} at the cursor.{exportSlotNote}";
+        EditorDiagnostics.RecordAction(
+            "Object pasted",
+            $"{_currentLevel?.DisplayName}: {BuildMobyDiagnosticSummary(pasted)}; linked rows {pastedMobys.Count - 1}; safe slots before {safeSlotsBefore}");
+        RefreshDiagnosticContext();
 
         int safeSlotsAfter = safeSlotDonor == null
             ? -1
@@ -16754,6 +19235,7 @@ public sealed class MainWindow : Window
             CrossLevelSourceLevelName = pasteGemAsLooseGem ? "" : clipboard.CrossLevelSourceLevelName,
             CrossLevelSourceTrueIndex = pasteGemAsLooseGem ? -1 : clipboard.CrossLevelSourceTrueIndex,
             CrossLevelRequiredExporterFeature = pasteGemAsLooseGem ? "" : clipboard.CrossLevelRequiredExporterFeature,
+            CrossLevelRecipeId = pasteGemAsLooseGem ? "" : clipboard.CrossLevelRecipeId,
             CandidateKind = pasteGemAsLooseGem ? "loose gem collectible" : clipboard.CandidateKind,
             Confidence = clipboard.Confidence,
             Evidence = $"Copied from {clipboard.Label} in the native editor.",
@@ -16877,6 +19359,7 @@ public sealed class MainWindow : Window
             CrossLevelSourceLevelName = template.FromCrossLevelTemplate ? template.SourceLevelName : "",
             CrossLevelSourceTrueIndex = template.FromCrossLevelTemplate ? template.SourceTrueIndex : -1,
             CrossLevelRequiredExporterFeature = template.FromCrossLevelTemplate ? template.RequiredExporterFeature : "",
+            CrossLevelRecipeId = template.FromCrossLevelTemplate ? template.CurrentLevelRecipeId : "",
             SourceCloneLevelKey = template.FromLevelTemplate ? _currentLevel?.Key ?? "" : "",
             SourceCloneLevelName = template.FromLevelTemplate ? _currentLevel?.DisplayName ?? "" : "",
             SourceCloneTrueIndex = template.FromLevelTemplate ? template.SourceTrueIndex : -1,
@@ -17095,7 +19578,7 @@ public sealed class MainWindow : Window
     private IReadOnlyList<AddMobyTemplate> BuildAddMobyTemplates(Moby? selected, IEnumerable<Moby> currentMobys)
     {
         List<AddMobyTemplate> templates = new();
-        if (selected != null && !selected.IsRemoved && (!_releaseMode || IsReleaseSafeTrueAddIdentity(
+        if (selected != null && !selected.IsRemoved && !IsGreenWizardMoby(selected) && (!_releaseMode || IsReleaseSafeTrueAddIdentity(
             selected.Type,
             selected.SourceByte36,
             selected.SourceByte37,
@@ -17129,7 +19612,58 @@ public sealed class MainWindow : Window
             : AddMobyTemplate.Known);
         List<AddMobyTemplate> levelObjectTemplates = BuildLevelObjectTemplates(currentMobys).ToList();
         templates.AddRange(levelObjectTemplates);
-        if (!_releaseMode)
+        if (_releaseMode)
+        {
+            List<AddMobyTemplate> releaseCrossLevelTemplates = SortCrossLevelTemplatesForCurrentLevel(
+                LoadCrossLevelObjectTemplates(releaseOnly: true)
+                    .Where(template => template.CurrentLevelReady && template.CurrentLevelPlaceable))
+                .ToList();
+
+            bool artisansRuntimeBundleLevel = string.Equals(
+                LevelCatalog.NormalizeKey(_currentLevel?.Key ?? ""),
+                ArtisansNativeLockedChestRuntimeBundleCompatibility.TargetLevelKey,
+                StringComparison.OrdinalIgnoreCase);
+            int addedArtisansKeys = artisansRuntimeBundleLevel
+                ? currentMobys.Count(moby =>
+                    moby.IsAdded &&
+                    !moby.IsRemoved &&
+                    ArtisansNativeLockedChestRuntimeBundleCompatibility.IsKeyTemplateId(moby.CrossLevelTemplateId))
+                : 0;
+            int addedArtisansLockedChests = artisansRuntimeBundleLevel
+                ? currentMobys.Count(moby =>
+                    moby.IsAdded &&
+                    !moby.IsRemoved &&
+                    ArtisansNativeLockedChestRuntimeBundleCompatibility.IsLockedChestTemplateId(moby.CrossLevelTemplateId))
+                : 0;
+            ArtisansNativeLockedChestAddPolicy? artisansAddPolicy = artisansRuntimeBundleLevel
+                ? ArtisansNativeLockedChestAddPolicy.Resolve(addedArtisansKeys, addedArtisansLockedChests)
+                : null;
+
+            if (artisansAddPolicy is { AllowLockedChestTemplate: false })
+            {
+                releaseCrossLevelTemplates.RemoveAll(template =>
+                    ArtisansNativeLockedChestRuntimeBundleCompatibility.IsLockedChestTemplateId(template.TemplateId));
+            }
+
+            IEnumerable<AddMobyTemplate> bundles = BuildCrossLevelTemplateBundles(releaseCrossLevelTemplates);
+            if (artisansAddPolicy is { OfferLockedChestForExistingKey: true })
+            {
+                bundles = bundles.Select(bundle => bundle with
+                {
+                    Name = $"From {bundle.SourceLevelName}: Add Key Chest for existing Key (ready here)",
+                    TemplateNote = "Adds the one runtime-proven Artisans Key Chest for the Key already in this level edit. Normal Create BIN permits one Key and one Key Chest in this bundle.",
+                    CompanionTemplateId = ""
+                });
+            }
+
+            templates.AddRange(bundles);
+            templates.AddRange(releaseCrossLevelTemplates.Where(template =>
+                !ArtisansNativeLockedChestRuntimeBundleCompatibility.IsLockedChestTemplateId(template.TemplateId) &&
+                !(artisansRuntimeBundleLevel &&
+                  artisansAddPolicy is { OfferStandaloneKey: false } &&
+                  ArtisansNativeLockedChestRuntimeBundleCompatibility.IsKeyTemplateId(template.TemplateId))));
+        }
+        else
         {
             List<AddMobyTemplate> crossLevelTemplates = SortCrossLevelTemplatesForCurrentLevel(LoadCrossLevelObjectTemplates()
                 .Where(template => !ShouldHideCrossLevelTemplateInNormalAddList(template, levelObjectTemplates))).ToList();
@@ -17171,7 +19705,7 @@ public sealed class MainWindow : Window
             sourceByte37 == 0x00 &&
             flag4A == 0x40 &&
             flag4B == 0xFF &&
-            GemValue.TryFromIdByte(sourceByte36, out _);
+            GemValue.TryFromEncoding(sourceByte36, sourceByte4F, out _);
         bool isNativeKey = sourceByte36 == 0xAD &&
             sourceByte37 == 0x00 &&
             sourceByte4F == 0x02 &&
@@ -17228,6 +19762,42 @@ public sealed class MainWindow : Window
         return darkHollowOrArtisans && (sourceByte36 == 0x73 || sourceByte36 == 0xC2);
     }
 
+    private static bool IsNativeLifeChestIdentity(
+        int type,
+        int sourceByte36,
+        int sourceByte37,
+        int sourceByte4F,
+        int flag4A,
+        int flag4B) =>
+        type == 0x20 &&
+        sourceByte36 == 0xA5 &&
+        sourceByte37 == 0x01 &&
+        sourceByte4F == 0x00 &&
+        flag4A == 0x10 &&
+        flag4B == 0x0E;
+
+    private static bool IsUnlimitedPromotedNativeCloneAppendIdentity(
+        string levelKey,
+        int type,
+        int sourceByte36,
+        int sourceByte37,
+        int sourceByte4F,
+        int flag4A,
+        int flag4B) =>
+        IsNativeLifeChestIdentity(type, sourceByte36, sourceByte37, sourceByte4F, flag4A, flag4B) &&
+        IsPromotedNativeCloneAppendIdentity(levelKey, type, sourceByte36, sourceByte37, sourceByte4F, flag4A, flag4B);
+
+    private static bool IsReleaseLimitedNativeCloneAppendIdentity(
+        string levelKey,
+        int type,
+        int sourceByte36,
+        int sourceByte37,
+        int sourceByte4F,
+        int flag4A,
+        int flag4B) =>
+        !IsNativeLifeChestIdentity(type, sourceByte36, sourceByte37, sourceByte4F, flag4A, flag4B) &&
+        IsPromotedNativeCloneAppendIdentity(levelKey, type, sourceByte36, sourceByte37, sourceByte4F, flag4A, flag4B);
+
     private static IEnumerable<AddMobyTemplate> BuildCrossLevelTemplateBundles(IReadOnlyList<AddMobyTemplate> templates)
     {
         AddMobyTemplate? key = templates.FirstOrDefault(template =>
@@ -17274,7 +19844,7 @@ public sealed class MainWindow : Window
         };
     }
 
-    private IReadOnlyList<AddMobyTemplate> LoadCrossLevelObjectTemplates(bool includeReleaseCandidates = false)
+    private IReadOnlyList<AddMobyTemplate> LoadCrossLevelObjectTemplates(bool releaseOnly = false)
     {
         string path = _workspace.ResolveFile("spyro-object-templates.json");
         if (!File.Exists(path))
@@ -17293,7 +19863,7 @@ public sealed class MainWindow : Window
             {
                 bool showInAddList = GetJsonBoolean(template, "showInAddList");
                 bool showInReleaseAddList = GetJsonBoolean(template, "showInReleaseAddList");
-                if (!showInAddList && !(includeReleaseCandidates && showInReleaseAddList))
+                if (releaseOnly ? !showInReleaseAddList : !showInAddList)
                     continue;
 
                 string displayName = FormatCrossLevelObjectTemplateName(template);
@@ -17337,8 +19907,8 @@ public sealed class MainWindow : Window
                     CandidateKind: candidateKind,
                     CurrentLevelSupportLabel: levelStatus.FullLabel,
                     CurrentLevelRecipeId: levelStatus.RecipeId,
-                    CurrentLevelReady: levelStatus.Ready,
-                    CurrentLevelPlaceable: levelStatus.Placeable,
+                    CurrentLevelReady: levelStatus.Ready && levelStatus.TrueAddPlaceable,
+                    CurrentLevelPlaceable: levelStatus.TrueAddPlaceable,
                     YawByte: GetJsonInt32(template, "yawByteHex", 0)));
             }
 
@@ -17369,14 +19939,21 @@ public sealed class MainWindow : Window
                 return template.TemplateNote;
 
             return template.FromLevelTemplate
-                ? "This clones a same-level source record. Create BIN exports enemy/chest adds by reusing a matching same-level source slot when one is available; use Change To when you want to choose the exact slot yourself."
-                : "Objects with simple 0x18/0x20 source records export to the test BIN now. Bigger actors may need actor-package support before they are playable.";
+                ? "Uses a matching object already present in this level. Create BIN reuses a compatible source slot when one is available."
+                : "Ready for normal Create BIN.";
         }
 
         List<string> lines =
         [
             $"{template.DefaultLabel} comes from {template.SourceLevelName}. Status: {FormatTemplateSupportStatus(template.AddSupportStatus)}."
         ];
+        if (string.Equals(template.Family, "enemyTransform", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(template.TemplateId, GreenWizardRuntimeBundleCompatibility.TemplateId, StringComparison.OrdinalIgnoreCase))
+        {
+            lines.Add(template.CurrentLevelPlaceable
+                ? "Guarded Add is available because this target profile supplies Green Wizard per-instance properties and a patrol route."
+                : "Add is unavailable here. Use Replace on an existing enemy slot; true Add stays guarded until this level has a proven Wizard properties/route allocator.");
+        }
         if (!string.IsNullOrWhiteSpace(template.CurrentLevelSupportLabel))
             lines.Add(template.CurrentLevelSupportLabel);
         if (!string.IsNullOrWhiteSpace(template.CurrentLevelRecipeId))
@@ -17430,7 +20007,9 @@ public sealed class MainWindow : Window
         IReadOnlyList<Moby> mobyList = currentMobys as IReadOnlyList<Moby> ?? currentMobys.ToList();
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
         foreach (Moby moby in mobyList
-            .Where(moby => !moby.IsRemoved && !moby.IsAdded && (moby.Type is 0x18 or 0x20 || moby.HasNativeKeyFingerprint))
+            .Where(moby => !moby.IsRemoved && !moby.IsAdded && moby.VisualKind is
+                MobyVisualKind.Gem or MobyVisualKind.Chest or MobyVisualKind.Scenery or MobyVisualKind.Actor or MobyVisualKind.Key)
+            .Where(moby => !IsGreenWizardMoby(moby))
             .Where(moby => !_releaseMode || !IsReleaseProtectedControlMoby(moby))
             .OrderBy(moby => NativeTemplateRank(moby))
             .ThenBy(moby => moby.Type)
@@ -17438,7 +20017,7 @@ public sealed class MainWindow : Window
             .ThenBy(moby => moby.TrueIndex))
         {
             string label = string.IsNullOrWhiteSpace(moby.DisplayLabel) ? Moby.FallbackLabel(moby.Type) : moby.DisplayLabel;
-            string key = $"{moby.Type:X2}:{moby.State:X2}:{moby.SourceByte36:X2}:{moby.SourceByte4F:X2}:{moby.Flag4B:X2}:{label}";
+            string key = $"{moby.SourceByte37:X2}{moby.SourceByte36:X2}:{moby.Type:X2}:{moby.State:X2}:{moby.SourceByte4F:X2}:{moby.Flag4A:X2}:{moby.Flag4B:X2}:{label}";
             if (!seen.Add(key))
                 continue;
 
@@ -17475,6 +20054,11 @@ public sealed class MainWindow : Window
                 yield break;
         }
     }
+
+    private static bool IsGreenWizardMoby(Moby moby) =>
+        moby.Type == 0x20 &&
+        moby.SourceByte36 == 0x1B &&
+        moby.SourceByte37 == 0x01;
 
     private static int NativeTemplateRank(Moby moby)
     {
@@ -17532,7 +20116,7 @@ public sealed class MainWindow : Window
         string slotNote = safeExportSlots < 0
             ? ""
             : safeExportSlots == 0
-            ? " Safe extra export slots right now: 0. Use Edit Object / Change To when you want to choose the exact slot yourself."
+            ? " Safe extra export slots right now: 0. Select an existing slot and open Edit > Replace object to choose it directly."
             : $" Safe extra export slots right now: {safeExportSlots}.";
         if (rank == 0)
             return $"Best option for adding a Spring Chest in this level: clone the level's own Spring Chest record and special data instead of importing a cross-level actor package.{donor}{slotNote}";
@@ -17697,14 +20281,12 @@ public sealed class MainWindow : Window
             return "";
 
         int slots = CountSafeNativeCloneExtraExportSlots(donor, _currentMobys);
-        return BuildSafeExportSlotStatus(slots, "copy", IsPromotedNativeCloneAppendIdentity(
-            _currentLevel?.Key ?? "",
-            donor.Type,
-            donor.SourceByte36,
-            donor.SourceByte37,
-            donor.SourceByte4F,
-            donor.Flag4A,
-            donor.Flag4B));
+        string levelKey = _currentLevel?.Key ?? "";
+        return BuildSafeExportSlotStatus(
+            slots,
+            "copy",
+            IsUnlimitedPromotedNativeCloneAppendIdentity(levelKey, donor.Type, donor.SourceByte36, donor.SourceByte37, donor.SourceByte4F, donor.Flag4A, donor.Flag4B),
+            IsReleaseLimitedNativeCloneAppendIdentity(levelKey, donor.Type, donor.SourceByte36, donor.SourceByte37, donor.SourceByte4F, donor.Flag4A, donor.Flag4B));
     }
 
     private string BuildPastedExportSlotStatus(Moby pasted)
@@ -17713,14 +20295,12 @@ public sealed class MainWindow : Window
             return "";
 
         int slots = CountSafeNativeCloneExtraExportSlots(donor, _currentMobys);
-        return BuildSafeExportSlotStatus(slots, "paste", IsPromotedNativeCloneAppendIdentity(
-            _currentLevel?.Key ?? "",
-            donor.Type,
-            donor.SourceByte36,
-            donor.SourceByte37,
-            donor.SourceByte4F,
-            donor.Flag4A,
-            donor.Flag4B));
+        string levelKey = _currentLevel?.Key ?? "";
+        return BuildSafeExportSlotStatus(
+            slots,
+            "paste",
+            IsUnlimitedPromotedNativeCloneAppendIdentity(levelKey, donor.Type, donor.SourceByte36, donor.SourceByte37, donor.SourceByte4F, donor.Flag4A, donor.Flag4B),
+            IsReleaseLimitedNativeCloneAppendIdentity(levelKey, donor.Type, donor.SourceByte36, donor.SourceByte37, donor.SourceByte4F, donor.Flag4A, donor.Flag4B));
     }
 
     private string BuildTemplateExportSlotStatus(AddMobyTemplate template)
@@ -17732,29 +20312,33 @@ public sealed class MainWindow : Window
         }
 
         int slots = CountSafeNativeCloneExtraExportSlots(template, _currentMobys);
-        return BuildSafeExportSlotStatus(slots, "add", IsPromotedNativeCloneAppendIdentity(
-            _currentLevel?.Key ?? template.SourceLevelKey,
-            template.Type,
-            template.SourceByte36,
-            template.SourceByte37,
-            template.SourceByte4F,
-            template.Flag4A,
-            template.Flag4B));
+        string levelKey = _currentLevel?.Key ?? template.SourceLevelKey;
+        return BuildSafeExportSlotStatus(
+            slots,
+            "add",
+            IsUnlimitedPromotedNativeCloneAppendIdentity(levelKey, template.Type, template.SourceByte36, template.SourceByte37, template.SourceByte4F, template.Flag4A, template.Flag4B),
+            IsReleaseLimitedNativeCloneAppendIdentity(levelKey, template.Type, template.SourceByte36, template.SourceByte37, template.SourceByte4F, template.Flag4A, template.Flag4B));
     }
 
-    private static string BuildSafeExportSlotStatus(int slots, string action, bool trueAppendSupported)
+    private static string BuildSafeExportSlotStatus(int slots, string action, bool unlimitedTrueAppend, bool releaseLimitedTrueAppend)
     {
         if (slots < 0)
             return "";
-        if (trueAppendSupported)
+        if (unlimitedTrueAppend)
         {
             return slots == 0
                 ? $" No reusable export slots left for this {action}; this proven family can continue as a true-add in Create BIN."
                 : $" Safe extra export slots left for this {action}: {slots}; after those, this proven family can true-add in Create BIN.";
         }
+        if (releaseLimitedTrueAppend)
+        {
+            return slots == 0
+                ? $" No reusable export slots left for this {action}; normal Create BIN allows one validated true-add for this family, then keeps later copies saved but skips them to avoid in-game crashes."
+                : $" Safe extra export slots left for this {action}: {slots}; after those, normal Create BIN allows one validated true-add for this family and skips later copies.";
+        }
 
         return slots == 0
-            ? $" No safe extra export slots left for this {action}; it stays saved, but normal Create BIN may skip more copies/adds until you use Change To on a slot."
+            ? $" No safe extra export slots left for this {action}; it stays saved, but normal Create BIN may skip more copies/adds until you replace an existing slot instead."
             : $" Safe extra export slots left for this {action}: {slots}.";
     }
 
@@ -17870,8 +20454,8 @@ public sealed class MainWindow : Window
         AddLabeledField(fields, "Kind", kindBox, 1);
         AddLabeledField(fields, "Gem", gemBox, 2);
         AddLabeledField(fields, "Name", nameBox, 3);
-        AddLabeledFieldWithHelp(fields, "Type", typeBox, 4, async () => await ShowMobyTypeStateHelpAsync("Type", typeBox, stateBox));
-        AddLabeledFieldWithHelp(fields, "State", stateBox, 5, async () => await ShowMobyTypeStateHelpAsync("State", typeBox, stateBox));
+        AddLabeledFieldWithHelp(fields, "Radius +50", typeBox, 4, async () => await ShowMobyTypeStateHelpAsync("Render radius", typeBox, stateBox));
+        AddLabeledFieldWithHelp(fields, "Drawn +51", stateBox, 5, async () => await ShowMobyTypeStateHelpAsync("Was drawn", typeBox, stateBox));
         AddLabeledField(fields, "Position", BuildMobyPositionFields(xBox, yBox, zBox), 6);
         AddLabeledField(fields, "Yaw", BuildMobyRotationFields(yawBox), 7);
 
@@ -17923,11 +20507,24 @@ public sealed class MainWindow : Window
             return;
         }
 
-        _lastRemovedMoby = _selectedMoby;
+        Moby removed = _selectedMoby;
+        _lastRemovedMoby = removed;
+        if (_currentLevel != null)
+            MobyRelationshipRepair.RepairChestContentLinks(_currentLevel.Key, _currentMobys);
         if (_selectedMoby.IsAdded)
+        {
             _currentMobys.Remove(_selectedMoby);
+            foreach (Moby member in _currentMobys)
+            {
+                member.DormantGemRelationshipLinks.RemoveAll(link =>
+                    link.TrueIndexes.Contains(removed.TrueIndex));
+            }
+        }
         else
             _selectedMoby.IsRemoved = true;
+        if (_currentLevel != null)
+            MobyRelationshipRepair.RepairChestContentLinks(_currentLevel.Key, _currentMobys);
+        InvalidateBuildSafetySummary();
 
         Moby? next = _currentMobys.FirstOrDefault(moby => !moby.IsRemoved);
         _selectedMoby = null;
@@ -17940,6 +20537,8 @@ public sealed class MainWindow : Window
             _viewport.ResetSelection();
 
         _statusText.Text = "Removed object from this level edit.";
+        EditorDiagnostics.RecordAction("Object removed", $"{_currentLevel?.DisplayName}: {BuildMobyDiagnosticSummary(removed)}");
+        RefreshDiagnosticContext();
     }
 
     private void UndoLastRemovedMoby()
@@ -17956,6 +20555,9 @@ public sealed class MainWindow : Window
 
         moby.IsRemoved = false;
         _lastRemovedMoby = null;
+        if (_currentLevel != null)
+            MobyRelationshipRepair.RepairChestContentLinks(_currentLevel.Key, _currentMobys);
+        InvalidateBuildSafetySummary();
         _viewport.Mobys = _currentMobys;
         RefreshMobyList(moby);
         RefreshCurrentLevelDetails();
@@ -17967,25 +20569,123 @@ public sealed class MainWindow : Window
     {
         if (moby.IsAdded)
         {
-            _currentMobys.Remove(moby);
+            List<Moby> rowsToRemove = GetAddedRowsOwnedByRootForUndo(moby);
+            HashSet<int> removedTrueIndexes = rowsToRemove
+                .Select(row => row.TrueIndex)
+                .Where(trueIndex => trueIndex >= 0)
+                .ToHashSet();
+            foreach (Moby row in rowsToRemove)
+            {
+                _detachedGemLinksForUndo.Remove(row);
+                _currentMobys.Remove(row);
+            }
+            foreach (Moby remaining in _currentMobys)
+            {
+                remaining.Links.RemoveAll(link => link.TrueIndexes.Any(removedTrueIndexes.Contains));
+                remaining.DormantGemRelationshipLinks.RemoveAll(link =>
+                    link.TrueIndexes.Any(removedTrueIndexes.Contains));
+            }
+            if (_lastRemovedMoby != null && rowsToRemove.Any(row => ReferenceEquals(row, _lastRemovedMoby)))
+                _lastRemovedMoby = null;
+            if (_currentLevel != null)
+                MobyRelationshipRepair.RepairChestContentLinks(_currentLevel.Key, _currentMobys);
+            InvalidateBuildSafetySummary();
             _selectedMoby = null;
             _viewport.Mobys = _currentMobys;
             RefreshMobyList();
             RefreshCurrentLevelDetails();
             _viewport.ResetSelection();
-            _statusText.Text = "Undid newly added object.";
+            _statusText.Text = rowsToRemove.Count > 1
+                ? $"Undid newly added object and {rowsToRemove.Count - 1} linked companion(s)."
+                : "Undid newly added object.";
             return;
         }
 
-        int linkedPositionUndos = UndoLinkedPositionEdits(moby);
-        moby.UndoEdits();
+        List<Moby> linkedGemRows = GetLinkedGemRowsForUndo(moby)
+            .Where(linked => linked.HasAnyEdit || linked.IsAdded)
+            .ToList();
+        bool rootHadOwnEdits = moby.HasAnyEdit;
+        int linkedPositionUndos = rootHadOwnEdits ? UndoLinkedPositionEdits(moby) : 0;
+        if (rootHadOwnEdits)
+        {
+            moby.UndoEdits();
+        }
+        int linkedMetadataUndos = 0;
+        foreach (Moby linked in linkedGemRows)
+        {
+            if (linked.IsAdded)
+            {
+                _detachedGemLinksForUndo.Remove(linked);
+                _currentMobys.Remove(linked);
+            }
+            else
+            {
+                linked.UndoEdits();
+            }
+            linkedMetadataUndos++;
+        }
+        if (_lastRemovedMoby != null && linkedGemRows.Any(linked => ReferenceEquals(linked, _lastRemovedMoby)))
+            _lastRemovedMoby = null;
+        int restoredLinkRows = RestoreDetachedGemLinks(moby);
+        if (_currentLevel != null)
+            MobyRelationshipRepair.RepairChestContentLinks(_currentLevel.Key, _currentMobys);
+        InvalidateBuildSafetySummary();
+        _viewport.Mobys = _currentMobys;
         _viewport.InvalidateVisual();
         RefreshMobyList(moby);
         RefreshCurrentLevelDetails();
         _viewport.SelectMoby(moby, true);
-        _statusText.Text = linkedPositionUndos > 0
+        _statusText.Text = linkedMetadataUndos > 0 || restoredLinkRows > 0
+            ? $"Undid edits for {moby.DisplayLabel} and restored {Math.Max(linkedMetadataUndos, restoredLinkRows)} linked gem row(s)."
+            : linkedPositionUndos > 0
             ? $"Undid edits for {moby.DisplayLabel} and restored {linkedPositionUndos} linked position(s)."
             : $"Undid edits for {moby.DisplayLabel}.";
+    }
+
+    private bool HasUndoableMobyEdits(Moby moby)
+    {
+        return moby.HasAnyEdit || moby.IsAdded ||
+            GetLinkedGemRowsForUndo(moby).Any(linked => linked.HasAnyEdit || linked.IsAdded) ||
+            _detachedGemLinksForUndo.ContainsKey(moby);
+    }
+
+    private List<Moby> GetAddedRowsOwnedByRootForUndo(Moby root)
+    {
+        List<MobyLink> links = root.Links.ToList();
+        if (_detachedGemLinksForUndo.TryGetValue(root, out List<MobyLink>? detached))
+            links.AddRange(detached);
+
+        HashSet<int> ownedTrueIndexes = links
+            .Where(link => link.TrueIndexes.Count > 0 && link.TrueIndexes[0] == root.TrueIndex)
+            .Where(link => IsGemRelationshipLink(link) || MobyCompanionClonePlanner.IsCompanionCloneLink(link))
+            .SelectMany(link => link.TrueIndexes.Skip(1))
+            .ToHashSet();
+        List<Moby> rows = _currentMobys
+            .Where(candidate => ReferenceEquals(candidate, root) ||
+                candidate.IsAdded && ownedTrueIndexes.Contains(candidate.TrueIndex))
+            .ToList();
+        if (!rows.Any(candidate => ReferenceEquals(candidate, root)))
+            rows.Insert(0, root);
+        return rows;
+    }
+
+    private IEnumerable<Moby> GetLinkedGemRowsForUndo(Moby root)
+    {
+        IEnumerable<MobyLink> links = root.Links.Where(IsGemRelationshipLink);
+        if (_detachedGemLinksForUndo.TryGetValue(root, out List<MobyLink>? detached))
+            links = links.Concat(detached);
+
+        HashSet<int> trueIndexes = links
+            .SelectMany(link => link.TrueIndexes)
+            .Where(trueIndex => trueIndex != root.TrueIndex)
+            .ToHashSet();
+        return _currentMobys.Where(moby => trueIndexes.Contains(moby.TrueIndex));
+    }
+
+    private static bool IsGemRelationshipLink(MobyLink link)
+    {
+        return string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase) ||
+            IsTreasureThiefRewardTriggerLink(link);
     }
 
     private int UndoLinkedPositionEdits(Moby moby)
@@ -18024,15 +20724,33 @@ public sealed class MainWindow : Window
             return;
         }
 
-        TextBox nameBox = new() { Text = moby.Label, MinWidth = 240 };
-        TextBox typeBox = new() { Text = $"0x{moby.Type:X2}", MinWidth = 120 };
+        TextBox nameBox = new() { Name = "MobyNameBox", Text = moby.Label, MinWidth = 240 };
+        TextBox typeBox = new() { Name = "MobyRenderRadiusBox", Text = $"0x{moby.Type:X2}", MinWidth = 120 };
         TextBox stateBox = new() { Text = $"0x{moby.State:X2}", MinWidth = 120 };
         TextBox xBox = NewPositionBox(moby.Position.X);
         TextBox yBox = NewPositionBox(moby.Position.Y);
         TextBox zBox = NewPositionBox(moby.Position.Z);
         TextBox yawBox = NewYawBox(moby.YawByte);
+        xBox.Name = "MobyPositionXBox";
+        yBox.Name = "MobyPositionYBox";
+        zBox.Name = "MobyPositionZBox";
+        yawBox.Name = "MobyYawBox";
+        string originalNameText = nameBox.Text ?? "";
+        string originalTypeText = typeBox.Text ?? "";
+        string originalStateText = stateBox.Text ?? "";
+        string originalYawText = yawBox.Text ?? "";
+        string lastAutomaticName = originalNameText;
+        string keepCurrentName = originalNameText;
+        bool transformSelectionActive = false;
         bool editsRewardGem = IsRewardGemCarrier(moby);
-        ComboBox? gemBox = HasEditableGemValue(moby) ? BuildMobyGemEditBox(moby, nameBox, editsRewardGem) : null;
+        ComboBox? gemBox = HasEditableGemValue(moby)
+            ? BuildMobyGemEditBox(moby, nameBox, editsRewardGem, label =>
+            {
+                lastAutomaticName = label;
+                if (!transformSelectionActive)
+                    keepCurrentName = label;
+            })
+            : null;
         List<ChestContentEditorRow> chestRows = GetChestContentMobys(moby)
             .Select(BuildChestContentEditorRow)
             .ToList();
@@ -18046,6 +20764,7 @@ public sealed class MainWindow : Window
         {
             transformBox = new ComboBox
             {
+                Name = "MobyTransformBox",
                 ItemsSource = transformTemplates,
                 SelectedIndex = 0,
                 MinWidth = 260
@@ -18054,41 +20773,112 @@ public sealed class MainWindow : Window
             transformBox.SelectionChanged += (_, _) =>
             {
                 AddMobyTemplate selected = transformBox.SelectedItem as AddMobyTemplate ?? transformTemplates[0];
-                transformNote.Text = selected.FromCrossLevelTemplate || selected.FromLevelTemplate
+                bool selectsTransform = selected.FromCrossLevelTemplate || selected.FromLevelTemplate;
+                transformNote.Text = selectsTransform
                     ? BuildAddMobyTemplateNote(selected)
                     : "Keeps this object's current identity bytes.";
-                if (selected.FromCrossLevelTemplate || selected.FromLevelTemplate)
+                string currentName = nameBox.Text ?? "";
+                bool wasTransformSelectionActive = transformSelectionActive;
+                bool canReplaceAutomaticName = string.IsNullOrWhiteSpace(currentName) ||
+                    string.Equals(currentName, lastAutomaticName, StringComparison.Ordinal) ||
+                    string.Equals(currentName, moby.DisplayLabel, StringComparison.Ordinal) ||
+                    Moby.IsGeneratedGemLabel(currentName, editsRewardGem);
+                if (selectsTransform)
                 {
+                    if (!wasTransformSelectionActive)
+                        keepCurrentName = currentName;
+                    transformSelectionActive = true;
                     typeBox.Text = $"0x{selected.Type:X2}";
                     stateBox.Text = $"0x{selected.State:X2}";
                     yawBox.Text = FormatYaw(Moby.YawByteToDegrees(selected.YawByte));
-                    if (string.IsNullOrWhiteSpace(nameBox.Text) || string.Equals(nameBox.Text, moby.DisplayLabel, StringComparison.Ordinal))
+                    if (canReplaceAutomaticName)
+                    {
                         nameBox.Text = selected.DefaultLabel;
+                        lastAutomaticName = selected.DefaultLabel;
+                    }
+                    if (chestRows.Count > 0 || rewardRows.Count > 0)
+                    {
+                        transformNote.Text += " Linked gem rows stay unchanged and are detached if the replacement no longer supports their original relationship.";
+                    }
+                }
+                else
+                {
+                    transformSelectionActive = false;
+                    typeBox.Text = originalTypeText;
+                    stateBox.Text = originalStateText;
+                    yawBox.Text = originalYawText;
+                    if (canReplaceAutomaticName)
+                    {
+                        string restoredName = keepCurrentName;
+                        if (gemBox?.SelectedItem is GemValue selectedGem &&
+                            Moby.IsGeneratedGemLabel(restoredName, editsRewardGem))
+                        {
+                            restoredName = editsRewardGem
+                                ? moby.SuggestedRewardGemLabel(selectedGem, restoredName)
+                                : moby.SuggestedGemLabel(selectedGem, restoredName);
+                        }
+                        nameBox.Text = restoredName;
+                        lastAutomaticName = restoredName;
+                    }
                 }
             };
         }
 
         Window dialog = new()
         {
-            Title = "Edit Object",
-            Width = chestRows.Count > 0 || rewardRows.Count > 0 ? 720 : 620,
-            Height = chestRows.Count > 0 || rewardRows.Count > 0 ? 760 : 680,
-            MinHeight = 560,
+            Title = $"Edit {moby.DisplayLabel}",
+            Width = chestRows.Count > 0 || rewardRows.Count > 0 ? 780 : 720,
+            Height = chestRows.Count > 0 || rewardRows.Count > 0 ? 700 : 560,
+            MinWidth = 640,
+            MinHeight = chestRows.Count > 0 || rewardRows.Count > 0 ? 600 : 500,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = true
         };
-        dialog.Content = ScrollableDialogContent(BuildMobyEditDialogContent(dialog, nameBox, typeBox, stateBox, xBox, yBox, zBox, yawBox, gemBox, editsRewardGem, rewardRows, chestRows, transformBox, transformNote));
+        dialog.Content = BuildModernMobyEditDialogContent(dialog, moby, nameBox, typeBox, stateBox, xBox, yBox, zBox, yawBox, gemBox, editsRewardGem, rewardRows, chestRows, transformBox, transformNote);
 
         bool accepted = await dialog.ShowDialog<bool>(this);
         if (!accepted)
             return;
 
+        // Keep this guard adjacent to the first mutation as a defense in depth. The modern
+        // dialog normally prevents an invalid edit from closing, but no caller should be able
+        // to partially apply position/type changes before the native gem encoding is checked.
+        if (!TryValidateDirectGemEdit(moby, typeBox.Text, gemBox, editsRewardGem, transformBox, out _))
+            return;
+
+        AddMobyTemplate? transformTemplate = transformBox?.SelectedItem as AddMobyTemplate;
+        bool appliesObjectTransform = transformTemplate?.FromLevelTemplate == true ||
+            transformTemplate?.FromCrossLevelTemplate == true;
+        bool keepsChestGemRows = !appliesObjectTransform ||
+            transformTemplate != null && TransformTemplateRetainsChestContents(transformTemplate);
+        bool keepsRewardTriggerRows = !appliesObjectTransform ||
+            transformTemplate != null && TransformTemplateRetainsRewardTriggers(transformTemplate);
+        bool hasChestRelationship = moby.Links.Any(link =>
+            string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase) &&
+            link.TrueIndexes.Contains(moby.TrueIndex));
+        bool hasRewardRelationship = moby.Links.Any(link =>
+            IsTreasureThiefRewardTriggerLink(link) && link.TrueIndexes.Contains(moby.TrueIndex));
+        int detachedChestContents = 0;
+        if (!keepsChestGemRows && hasChestRelationship)
+        {
+            detachedChestContents = DetachLinkedMobyRows(
+                moby,
+                link => string.Equals(link.Kind, "chest contents", StringComparison.OrdinalIgnoreCase) &&
+                    link.TrueIndexes.Contains(moby.TrueIndex));
+        }
+        int detachedRewardTriggers = 0;
+        if (!keepsRewardTriggerRows && hasRewardRelationship)
+        {
+            detachedRewardTriggers = DetachLinkedMobyRows(
+                moby,
+                link => IsTreasureThiefRewardTriggerLink(link) && link.TrueIndexes.Contains(moby.TrueIndex));
+        }
+
         int linkedMoveCount = ApplyExactMobyPositionEdit(moby, xBox, yBox, zBox);
-        if (TryParseByte(typeBox.Text, out int type))
+        if (TryParseByte(typeBox.Text, out int type) && moby.Type != type)
             moby.SetType(type);
         if (TryParseByte(stateBox.Text, out int state))
             moby.State = state;
-        AddMobyTemplate? transformTemplate = transformBox?.SelectedItem as AddMobyTemplate;
         if (transformTemplate?.FromLevelTemplate == true)
             ApplyLevelTemplateToExistingMoby(moby, transformTemplate);
         else if (transformTemplate?.FromCrossLevelTemplate == true)
@@ -18106,29 +20896,37 @@ public sealed class MainWindow : Window
                 : moby.SourceByte36 != selectedGem.IdByte || moby.SourceByte4F != selectedGem.ValueByte;
             if (editsRewardGem)
             {
-                moby.Flag4B = selectedGem.IdByte;
+                if (changedGemBytes)
+                    moby.Flag4B = selectedGem.IdByte;
             }
-            else
+            else if (changedGemBytes)
             {
                 moby.ApplyGem(selectedGem);
             }
         }
         moby.Label = string.IsNullOrWhiteSpace(nameBox.Text) ? Moby.FallbackLabel(moby.Type) : nameBox.Text.Trim();
         int removedChestContents = 0;
-        foreach (ChestContentEditorRow row in chestRows)
+        if (keepsChestGemRows)
         {
-            if (ApplyChestContentRow(row))
-                removedChestContents++;
+            foreach (ChestContentEditorRow row in chestRows)
+            {
+                if (ApplyChestContentRow(row))
+                    removedChestContents++;
+            }
+            if (removedChestContents > 0)
+                RefreshChestContentLink(moby);
         }
-        if (chestRows.Count > 0)
-            RefreshChestContentLink(moby);
         int editedRewardTriggers = 0;
-        foreach (RewardTriggerEditorRow row in rewardRows)
+        if (keepsRewardTriggerRows)
         {
-            if (ApplyRewardTriggerRow(row))
-                editedRewardTriggers++;
+            foreach (RewardTriggerEditorRow row in rewardRows)
+            {
+                if (ApplyRewardTriggerRow(row))
+                    editedRewardTriggers++;
+            }
         }
-
+        if (appliesObjectTransform && _currentLevel != null)
+            MobyRelationshipRepair.RepairChestContentLinks(_currentLevel.Key, _currentMobys);
         if (changedGemBytes && editedGem != GemValue.Unknown)
         {
             moby.HasLoadedNativeEdit = true;
@@ -18136,17 +20934,26 @@ public sealed class MainWindow : Window
                 ? $"{editedGem.DisplayName} reward byte"
                 : $"{editedGem.DisplayName} source bytes";
         }
+        InvalidateBuildSafetySummary();
         _viewport.InvalidateVisual();
         RefreshMobyList(moby);
         RefreshCurrentLevelDetails();
         ShowSelection(ViewportSelectionChangedEventArgs.ForMoby(moby));
         _statusText.Text = removedChestContents > 0
             ? $"Updated {moby.DisplayLabel} and removed {removedChestContents} chest content marker(s)."
+            : detachedChestContents > 0 || detachedRewardTriggers > 0
+            ? $"Updated {moby.DisplayLabel}; kept {detachedChestContents + detachedRewardTriggers} incompatible linked gem row(s) unchanged and detached."
             : editedRewardTriggers > 0
             ? $"Updated {moby.DisplayLabel} and {editedRewardTriggers} reward trigger gem(s)."
             : linkedMoveCount > 1
             ? $"Updated {moby.DisplayLabel} and moved {linkedMoveCount - 1} linked object(s)."
             : $"Updated {moby.DisplayLabel}.";
+        EditorDiagnostics.RecordAction(
+            "Object edited",
+            $"{_currentLevel?.DisplayName}: {BuildMobyDiagnosticSummary(moby)}; linked moves {Math.Max(0, linkedMoveCount - 1)}; " +
+            $"removed chest contents {removedChestContents}; edited reward triggers {editedRewardTriggers}; " +
+            $"detached unchanged gem rows {detachedChestContents + detachedRewardTriggers}");
+        RefreshDiagnosticContext();
     }
 
     private async Task EditPortalControlAsync(Moby moby)
@@ -18200,6 +21007,7 @@ public sealed class MainWindow : Window
             return;
 
         int linkedMoveCount = ApplyExactMobyPositionEdit(moby, xBox, yBox, zBox);
+        InvalidateBuildSafetySummary();
         _viewport.InvalidateVisual();
         RefreshMobyList(moby);
         RefreshCurrentLevelDetails();
@@ -18263,6 +21071,7 @@ public sealed class MainWindow : Window
 
         ApplyExactMobyPositionEdit(moby, xBox, yBox, zBox);
         ApplyFlyInHeadingEdit(moby, headingBox);
+        InvalidateBuildSafetySummary();
         _viewport.InvalidateVisual();
         RefreshMobyList(moby);
         RefreshCurrentLevelDetails();
@@ -18311,28 +21120,77 @@ public sealed class MainWindow : Window
         }
     }
 
+    private bool TransformTemplateRetainsChestContents(AddMobyTemplate template)
+    {
+        if (template.FromLevelTemplate && template.SourceTrueIndex >= 0)
+        {
+            Moby? donor = _currentMobys.FirstOrDefault(moby =>
+                !moby.IsRemoved && moby.TrueIndex == template.SourceTrueIndex);
+            if (donor != null)
+                return donor.IsChest && donor.VisualKind == MobyVisualKind.Chest;
+        }
+
+        string text = $"{template.DefaultLabel} {template.CandidateKind} {template.Family} {template.TemplateId}";
+        return text.Contains("chest", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains("chest content", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains("chestcontent", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains("controller", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains("control marker", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains("trigger", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains("helper", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool TransformTemplateRetainsRewardTriggers(AddMobyTemplate template)
+    {
+        if (template.FromLevelTemplate && template.SourceTrueIndex >= 0)
+        {
+            Moby? donor = _currentMobys.FirstOrDefault(moby =>
+                !moby.IsRemoved && moby.TrueIndex == template.SourceTrueIndex);
+            if (donor != null)
+                return IsTreasureThiefRewardRoot(donor);
+        }
+
+        string text = $"{template.DefaultLabel} {template.CandidateKind} {template.Family} {template.TemplateId}";
+        return text.Contains("treasure", StringComparison.OrdinalIgnoreCase) &&
+            (text.Contains("thief", StringComparison.OrdinalIgnoreCase) ||
+             text.Contains("gnorc", StringComparison.OrdinalIgnoreCase)) &&
+            !text.Contains("chest content", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains("chestcontent", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains("controller", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains("control marker", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains("trigger", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains("helper", StringComparison.OrdinalIgnoreCase);
+    }
+
     private void ApplyLevelTemplateToExistingMoby(Moby moby, AddMobyTemplate template)
     {
+        int targetRewardFlag = moby.Flag4B;
+        bool preserveTargetReward = template.Family is "catalogEnemy" or "enemyTransform";
         moby.SetType(template.Type);
         moby.State = template.State;
         moby.SourceByte36 = template.SourceByte36;
         moby.SourceByte37 = template.SourceByte37;
         moby.SourceByte4F = template.SourceByte4F;
         moby.Flag4A = template.Flag4A;
-        moby.Flag4B = template.Flag4B;
+        moby.Flag4B = preserveTargetReward ? targetRewardFlag : template.Flag4B;
         moby.Label = template.DefaultLabel;
         moby.Color = template.DefaultColor ?? Moby.ColorForType(template.Type);
         moby.CandidateKind = template.CandidateKind;
         moby.Confidence = "native-slot-reuse";
-        moby.Evidence = $"Changed to same-level donor T{template.SourceTrueIndex}.";
+        moby.Evidence = preserveTargetReward
+            ? $"Changed to same-level donor T{template.SourceTrueIndex}; preserved this slot's native reward."
+            : $"Changed to same-level donor T{template.SourceTrueIndex}.";
         moby.PatchStatus = "native-slot-reuse";
-        moby.PatchLead = $"Clone same-level donor T{template.SourceTrueIndex} into existing slot T{moby.TrueIndex}, preserving this slot's placed position.";
+        moby.PatchLead = preserveTargetReward
+            ? $"Clone same-level donor T{template.SourceTrueIndex} into existing slot T{moby.TrueIndex}, preserving this slot's placed position and native reward."
+            : $"Clone same-level donor T{template.SourceTrueIndex} into existing slot T{moby.TrueIndex}, preserving this slot's placed position.";
         moby.CrossLevelTemplateId = "";
         moby.CrossLevelFamily = "";
         moby.CrossLevelSourceLevelKey = "";
         moby.CrossLevelSourceLevelName = "";
         moby.CrossLevelSourceTrueIndex = -1;
         moby.CrossLevelRequiredExporterFeature = "";
+        moby.CrossLevelRecipeId = "";
         moby.SourceCloneLevelKey = _currentLevel?.Key ?? "";
         moby.SourceCloneLevelName = _currentLevel?.DisplayName ?? "";
         moby.SourceCloneTrueIndex = template.SourceTrueIndex;
@@ -18340,18 +21198,22 @@ public sealed class MainWindow : Window
 
     private static void ApplyCrossLevelTemplateToExistingMoby(Moby moby, AddMobyTemplate template)
     {
+        int targetRewardFlag = moby.Flag4B;
+        bool preserveTargetReward = template.Family is "catalogChest" or "catalogEnemy" or "enemyTransform";
         moby.SetType(template.Type);
         moby.State = template.State;
         moby.SourceByte36 = template.SourceByte36;
         moby.SourceByte37 = template.SourceByte37;
         moby.SourceByte4F = template.SourceByte4F;
         moby.Flag4A = template.Flag4A;
-        moby.Flag4B = template.Flag4B;
+        moby.Flag4B = preserveTargetReward ? targetRewardFlag : template.Flag4B;
         moby.Label = template.DefaultLabel;
         moby.Color = template.DefaultColor ?? Moby.ColorForType(template.Type);
         moby.CandidateKind = template.CandidateKind;
         moby.Confidence = "cross-level-template";
-        moby.Evidence = $"Changed to {template.SourceLevelName} template {template.TemplateId}.";
+        moby.Evidence = preserveTargetReward
+            ? $"Changed to {template.SourceLevelName} template {template.TemplateId}; preserved this slot's native reward."
+            : $"Changed to {template.SourceLevelName} template {template.TemplateId}.";
         moby.PatchStatus = template.AddSupportStatus;
         moby.PatchLead = BuildCrossLevelPatchLead(template);
         moby.CrossLevelTemplateId = template.TemplateId;
@@ -18360,6 +21222,7 @@ public sealed class MainWindow : Window
         moby.CrossLevelSourceLevelName = template.SourceLevelName;
         moby.CrossLevelSourceTrueIndex = template.SourceTrueIndex;
         moby.CrossLevelRequiredExporterFeature = template.RequiredExporterFeature;
+        moby.CrossLevelRecipeId = template.CurrentLevelRecipeId;
         moby.SourceCloneLevelKey = "";
         moby.SourceCloneLevelName = "";
         moby.SourceCloneTrueIndex = -1;
@@ -18478,9 +21341,9 @@ public sealed class MainWindow : Window
             panel.Children.Add(transformBox);
             panel.Children.Add(transformNote);
         }
-        panel.Children.Add(SectionLabelWithHelp("Type", async () => await ShowMobyTypeStateHelpAsync("Type", typeBox, stateBox)));
+        panel.Children.Add(SectionLabelWithHelp("Render radius (+0x50)", async () => await ShowMobyTypeStateHelpAsync("Render radius", typeBox, stateBox)));
         panel.Children.Add(typeBox);
-        panel.Children.Add(SectionLabelWithHelp("State", async () => await ShowMobyTypeStateHelpAsync("State", typeBox, stateBox)));
+        panel.Children.Add(SectionLabelWithHelp("Was drawn (+0x51)", async () => await ShowMobyTypeStateHelpAsync("Was drawn", typeBox, stateBox)));
         panel.Children.Add(stateBox);
         panel.Children.Add(SectionLabel("Position"));
         panel.Children.Add(BuildMobyPositionFields(xBox, yBox, zBox));
@@ -18525,6 +21388,147 @@ public sealed class MainWindow : Window
         return panel;
     }
 
+    private async Task ShowDiagnosticsAsync()
+    {
+        RefreshDiagnosticContext(includeSavedEdits: true);
+        string initialReportPath = EditorDiagnostics.WriteReport("Diagnostics window opened.");
+        TextBox noteBox = new()
+        {
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 86,
+            PlaceholderText = "Example: DuckStation froze when I entered Dark Hollow after copying three chests."
+        };
+        TextBlock pathText = new()
+        {
+            Text = BuildDiagnosticsPathText(initialReportPath),
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+            Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92))
+        };
+
+        Window dialog = new()
+        {
+            Title = "Crash Diagnostics",
+            Width = 720,
+            Height = 520,
+            MinWidth = 600,
+            MinHeight = 440,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = true
+        };
+
+        StackPanel panel = new()
+        {
+            Spacing = 14,
+            Margin = new Thickness(18)
+        };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Crash Diagnostics",
+            FontSize = 20,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(31, 38, 45))
+        });
+        panel.Children.Add(NewSmallNote("The support ZIP contains logs and editor-generated JSON/TXT metadata only. Game BIN/CUE data, textures, and audio are excluded."));
+        panel.Children.Add(SectionLabel("What happened?"));
+        panel.Children.Add(noteBox);
+        panel.Children.Add(pathText);
+
+        WrapPanel actions = new() { Orientation = Orientation.Horizontal };
+        actions.Children.Add(NewAsyncButton("Copy Current Report", async () =>
+        {
+            RefreshDiagnosticContext(includeSavedEdits: true);
+            string reportPath = EditorDiagnostics.WriteReport("Manual crash or runtime-test report.", noteBox.Text);
+            if (string.IsNullOrWhiteSpace(reportPath) || !File.Exists(reportPath))
+            {
+                _statusText.Text = "Could not create the diagnostic report.";
+                return;
+            }
+
+            IClipboard? clipboard = Clipboard;
+            if (clipboard == null)
+            {
+                _statusText.Text = $"Diagnostic report created, but the clipboard is unavailable. File: {reportPath}";
+                return;
+            }
+            await clipboard.SetTextAsync(await File.ReadAllTextAsync(reportPath));
+            pathText.Text = BuildDiagnosticsPathText(reportPath);
+            _statusText.Text = $"Copied the diagnostic report. File: {reportPath}";
+        }));
+
+        Button copyCrash = NewAsyncButton("Copy Last Crash", async () =>
+        {
+            string crashPath = EditorDiagnostics.Current.LatestCrashPath;
+            if (!File.Exists(crashPath))
+            {
+                _statusText.Text = "No editor crash has been recorded yet.";
+                return;
+            }
+
+            IClipboard? clipboard = Clipboard;
+            if (clipboard == null)
+            {
+                _statusText.Text = $"The clipboard is unavailable. Crash report: {crashPath}";
+                return;
+            }
+            await clipboard.SetTextAsync(await File.ReadAllTextAsync(crashPath));
+            _statusText.Text = $"Copied the last editor crash report. File: {crashPath}";
+        });
+        copyCrash.IsEnabled = File.Exists(EditorDiagnostics.Current.LatestCrashPath);
+        actions.Children.Add(copyCrash);
+
+        actions.Children.Add(NewButton("Create Support ZIP", () =>
+        {
+            RefreshDiagnosticContext(includeSavedEdits: true);
+            string reportPath = EditorDiagnostics.WriteReport("Manual support bundle requested.", noteBox.Text);
+            string bundlePath = EditorDiagnostics.Current.CreateSupportBundle(reportPath: reportPath);
+            if (string.IsNullOrWhiteSpace(bundlePath))
+            {
+                _statusText.Text = "Could not create the support ZIP.";
+                return;
+            }
+
+            pathText.Text = BuildDiagnosticsPathText(reportPath, bundlePath);
+            _statusText.Text = $"Created support ZIP: {bundlePath}";
+        }));
+        actions.Children.Add(NewButton("Open Diagnostics Folder", () => OpenPath(EditorDiagnostics.Current.LogDirectory)));
+        actions.Children.Add(NewButton("Open Latest Report", () =>
+        {
+            string path = EditorDiagnostics.Current.LastReportPath;
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                path = EditorDiagnostics.Current.LatestDiagnosticsPath;
+            OpenPath(path);
+        }));
+        panel.Children.Add(actions);
+
+        StackPanel closeRow = new()
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        Button close = NewButton("Close");
+        close.Click += (_, _) => dialog.Close();
+        closeRow.Children.Add(close);
+        panel.Children.Add(closeRow);
+        dialog.Content = ScrollableDialogContent(panel);
+        await dialog.ShowDialog(this);
+    }
+
+    private static string BuildDiagnosticsPathText(string reportPath, string? bundlePath = null)
+    {
+        List<string> lines =
+        [
+            $"Session log: {EditorDiagnostics.Current.SessionLogPath}",
+            $"Latest report: {reportPath}"
+        ];
+        if (!string.IsNullOrWhiteSpace(bundlePath))
+            lines.Add($"Support ZIP: {bundlePath}");
+        if (File.Exists(EditorDiagnostics.Current.LatestCrashPath))
+            lines.Add($"Last crash: {EditorDiagnostics.Current.LatestCrashPath}");
+        return string.Join(Environment.NewLine, lines);
+    }
+
     private async Task ShowHelpAsync()
     {
         Window dialog = new()
@@ -18560,7 +21564,9 @@ public sealed class MainWindow : Window
         AddHelpSection(panel, "Start", [
             "Open BIN/CUE: choose the Spyro disc image you want this editor session to use.",
             "Level list: choose the level to load objects and map data from that disc.",
-            "Create BIN: build one patched test disc from all saved level-name, object, and terrain edits."
+            "Objects, Level, and Environment keep the main editing tools in separate workspaces.",
+            "Create BIN: build one patched test disc from all saved level-name, object, and terrain edits.",
+            "More > Diagnostics: copy the current editor/runtime-test report, reopen the last editor crash, or create a metadata-only support ZIP."
         ]);
 
         AddHelpSection(panel, "Level Names", [
@@ -18570,35 +21576,39 @@ public sealed class MainWindow : Window
         ]);
 
         AddHelpSection(panel, "View", [
-            "Fit View: re-center and zoom the current level.",
-            "Map View: flat editor map with selectable objects.",
-            "Fly 3D: move through the level in a 3D editor view.",
-            "Game View: flips the map orientation to match the in-game view."
+            "Edit Map: the exhaustive top-down editor. Every captured editable source face remains visible, material-rendered, and selectable.",
+            "Fit All: re-center Edit Map on the complete captured terrain scene.",
+            "Game Camera: move through the level from its entry. When the source payload resolves, the camera's collision triangle chooses the native environment group and decoded HP/LP distance rules choose nearby and distant terrain; unresolved contexts fail open to source sectors.",
+            "Frame Selection: when an object is selected, move Game Camera to it without changing scene contents.",
+            "Return to Entry: when nothing is selected, reset Game Camera to the level entry.",
+            "The top-down Edit Map presents every source group together, including geometry the game normally submits only from particular camera contexts. Game Camera is closer to runtime presentation, but exact GTE projection, clipping, HQ subdivision, ordering-table traversal, animation playback, and native sky/background rendering remain research gaps.",
+            "Alternate source-record orientation and experimental terrain renderers remain research-only and are not normal editing modes."
         ]);
 
         AddHelpSection(panel, "Mouse", [
             "Left click: select an object.",
             "Left drag: move the selected object.",
             "Double click: edit the object under the cursor.",
-            "Right drag or middle drag: pan the map or look around in Fly 3D.",
-            "Mouse wheel: zoom the map or move forward/back in Fly 3D."
+            "Right drag or middle drag: pan Edit Map or look around with Game Camera.",
+            "Mouse wheel: zoom Edit Map or move Game Camera forward/back."
         ]);
 
-        AddHelpSection(panel, "Fly 3D", [
+        AddHelpSection(panel, "Game Camera", [
             "Windows and Mac: W/A/S/D move forward, left, back, and right.",
             "Windows and Mac: Q/E move up and down.",
             "Windows and Mac: arrow keys turn and tilt the camera."
         ]);
 
         AddHelpSection(panel, "Objects", [
-            "Add Object: choose the object kind, press Add, then click the map or Fly 3D view where it should go.",
-            "Copy Object: copies the currently selected object's editable data.",
-            "Paste Object: creates a new object from the copied data at the cursor.",
-            "Edit Object: change name, type, state, gem values, or position.",
+            "Add: choose an object kind and placement, then place it in Edit Map or Game Camera.",
+            "Copy and Paste: duplicate the selected object's editable data at the cursor.",
+            "Edit: change name, gem or reward value, position, and facing. Replacement and native properties stay collapsed until opened.",
+            "Replace: use another ordinary chest or self-contained enemy donor in the selected existing slot.",
+            "Unverified cross-level replacements stay out of normal Create BIN; Create Swap Test produces their separate DuckStation build. Blowhard, exact Magic Crafters T107-to-T27, and exact Wizard Peak T6-to-T24 Green Wizard routes are runtime-verified, and normal Create BIN composes their checked structural recipes.",
             "Fly-in Landing: destination levels show one ENTRY marker for where Spyro finishes the flight from a homeworld. Moving it does not change return-home travel.",
             "Dragons: moving an existing dragon keeps its pedestal and scene link aligned, and Create BIN moves both the approach camera and later rescue cinematic by the same amount.",
-            "Remove Object: stages the selected object for removal.",
-            "Undo Object: clears staged changes on the selected object."
+            "Remove: stages the selected object for removal.",
+            "Undo: clears staged changes on the selected object."
         ]);
 
         AddHelpSection(panel, "Keyboard", [
@@ -18716,7 +21726,7 @@ public sealed class MainWindow : Window
         builder.AppendLine($"{focus} reference");
         builder.AppendLine();
         builder.AppendLine(type >= 0 && state >= 0
-            ? $"Selected values: type 0x{type:X2}, state 0x{state:X2}"
+            ? $"Selected values: render radius (+0x50) 0x{type:X2}, was drawn (+0x51) 0x{state:X2}"
             : "Selected values: could not read one of the fields.");
         builder.AppendLine();
 
@@ -18726,7 +21736,7 @@ public sealed class MainWindow : Window
             .ThenBy(entity => entity.Label, StringComparer.OrdinalIgnoreCase)
             .Take(120)
             .ToList();
-        builder.AppendLine("Known entities with this exact type/state:");
+        builder.AppendLine("Known cached rows with this exact radius/draw-state pair:");
         if (exact.Count == 0)
         {
             builder.AppendLine("  No cached examples found.");
@@ -18734,15 +21744,15 @@ public sealed class MainWindow : Window
         else
         {
             foreach (KnownMobyEntity entity in exact)
-                builder.AppendLine($"  {entity.LevelName,-18} T{entity.TrueIndex,3}  {entity.Label}  b36=0x{entity.SourceByte36:X2} f4A=0x{entity.Flag4A:X2} f4B=0x{entity.Flag4B:X2}");
+                builder.AppendLine($"  {entity.LevelName,-18} T{entity.TrueIndex,3}  {entity.Label}  class=0x{entity.SourceByte37:X2}{entity.SourceByte36:X2} update=0x{entity.Flag4A:X2} drop=0x{entity.Flag4B:X2}");
             if (entities.Count(entity => entity.Type == type && entity.State == state) > exact.Count)
                 builder.AppendLine("  ...more cached examples exist.");
         }
 
         builder.AppendLine();
         builder.AppendLine(type >= 0
-            ? $"Known states for type 0x{type:X2}:"
-            : "Known type/state combinations:");
+            ? $"Known draw-state values for render radius 0x{type:X2}:"
+            : "Known render-radius/draw-state combinations:");
         IEnumerable<IGrouping<string, KnownMobyEntity>> stateGroups = entities
             .Where(entity => type < 0 || entity.Type == type)
             .GroupBy(entity => $"{entity.Type:X2}:{entity.State:X2}")
@@ -18755,11 +21765,11 @@ public sealed class MainWindow : Window
                 .Select(entity => entity.Label)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Take(4));
-            builder.AppendLine($"  type 0x{sample.Type:X2} state 0x{sample.State:X2}  {group.Count(),4} seen  {labels}");
+            builder.AppendLine($"  radius 0x{sample.Type:X2} drawn 0x{sample.State:X2}  {group.Count(),4} seen  {labels}");
         }
 
         builder.AppendLine();
-        builder.AppendLine("Note: type/state alone does not fully identify an object. Source bytes such as b36, f4A, and f4B often decide the actual model or behavior.");
+        builder.AppendLine("Note: these are rendering/runtime fields, not object identity. Native class at +0x36/+0x37 is the primary class/model key; +0x52 is update distance, +0x53 is the dropped Moby/class, and +0x4F is specular/metal type (also used by gem encoding).");
         return builder.ToString();
     }
 
@@ -18803,6 +21813,7 @@ public sealed class MainWindow : Window
                     Type: moby.Type,
                     State: moby.State,
                     SourceByte36: moby.SourceByte36,
+                    SourceByte37: moby.SourceByte37,
                     Flag4A: moby.Flag4A,
                     Flag4B: moby.Flag4B));
             }
@@ -18821,6 +21832,51 @@ public sealed class MainWindow : Window
         return !moby.IsGemLike && moby.RewardGem != GemValue.Unknown;
     }
 
+    private static bool TryValidateDirectGemEdit(
+        Moby moby,
+        string? proposedTypeText,
+        ComboBox? gemBox,
+        bool editsRewardGem,
+        ComboBox? transformBox,
+        out string validationMessage)
+    {
+        validationMessage = "";
+
+        if (gemBox?.SelectedItem is not GemValue || editsRewardGem)
+            return true;
+
+        AddMobyTemplate? transform = transformBox?.SelectedItem as AddMobyTemplate;
+        if (transform?.FromLevelTemplate == true || transform?.FromCrossLevelTemplate == true)
+            return true;
+
+        int requiredType;
+        // Match ApplyGem's precedence: a contained-reward row stays a contained
+        // reward even if a stale edit also happens to resemble a loose gem.
+        if (moby.IsChestContent)
+        {
+            requiredType = 0x00;
+            validationMessage = "Chest-content gem value requires render radius 0x00. Restore +0x50 to 0x00 before applying this gem edit.";
+        }
+        else if (moby.IsVisibleGem)
+        {
+            requiredType = 0x18;
+            validationMessage = "Gem value requires render radius 0x18. Restore +0x50 to 0x18 before applying this gem edit.";
+        }
+        else
+        {
+            validationMessage = "This object no longer has a native gem encoding that can be edited safely.";
+            return false;
+        }
+
+        if (!TryParseByte(proposedTypeText, out int proposedType))
+        {
+            validationMessage = $"Enter render radius 0x{requiredType:X2} to apply this gem edit.";
+            return false;
+        }
+
+        return proposedType == requiredType;
+    }
+
     private static GemValue EditableGemValue(Moby moby)
     {
         if (moby.IsGemLike && moby.Gem != GemValue.Unknown)
@@ -18829,12 +21885,16 @@ public sealed class MainWindow : Window
         return moby.RewardGem != GemValue.Unknown ? moby.RewardGem : GemValue.Red;
     }
 
-    private static ComboBox BuildMobyGemEditBox(Moby moby, TextBox nameBox, bool editsRewardGem)
+    private static ComboBox BuildMobyGemEditBox(
+        Moby moby,
+        TextBox nameBox,
+        bool editsRewardGem,
+        Action<string>? automaticNameChanged = null)
     {
         GemValue currentGem = EditableGemValue(moby);
-        string originalName = nameBox.Text ?? "";
         ComboBox gemBox = new()
         {
+            Name = "MobyGemValueBox",
             ItemsSource = GemValue.Known,
             SelectedItem = GemValue.Known.FirstOrDefault(gem => gem.IdByte == currentGem.IdByte),
             MinWidth = 170
@@ -18847,23 +21907,25 @@ public sealed class MainWindow : Window
             if (gemBox.SelectedItem is not GemValue gem)
                 return;
 
-            string currentName = nameBox.Text ?? "";
-            bool shouldUpdateName = !editsRewardGem && (string.IsNullOrWhiteSpace(currentName) ||
-                string.Equals(currentName, originalName, StringComparison.Ordinal) ||
-                GemValue.Known.Any(known =>
-                    string.Equals(currentName, known.DisplayName, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(currentName, known.Name, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(currentName, $"New {known.Name}", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(currentName, $"Locked chest content: {known.DisplayName}", StringComparison.OrdinalIgnoreCase)));
-            if (!shouldUpdateName)
-                return;
-
-            nameBox.Text = moby.IsChestContent
-                ? $"Locked chest content: {gem.DisplayName}"
-                : gem.DisplayName;
+            string? suggestedName = ApplySuggestedGemLabel(moby, nameBox, gem, editsRewardGem);
+            if (suggestedName != null)
+                automaticNameChanged?.Invoke(suggestedName);
         };
 
         return gemBox;
+    }
+
+    private static string? ApplySuggestedGemLabel(Moby moby, TextBox labelBox, GemValue gem, bool rewardCarrier)
+    {
+        string currentLabel = labelBox.Text ?? "";
+        string suggestedLabel = rewardCarrier
+            ? moby.SuggestedRewardGemLabel(gem, currentLabel)
+            : moby.SuggestedGemLabel(gem, currentLabel);
+        if (string.Equals(currentLabel, suggestedLabel, StringComparison.Ordinal))
+            return null;
+
+        labelBox.Text = suggestedLabel;
+        return suggestedLabel;
     }
 
     private static Control BuildMobyPositionFields(TextBox xBox, TextBox yBox, TextBox zBox)
@@ -19010,6 +22072,7 @@ public sealed class MainWindow : Window
     {
         ComboBox gemBox = new()
         {
+            Name = $"MobyChestContentGemT{moby.TrueIndex}",
             ItemsSource = GemValue.Known,
             SelectedItem = GemValue.Known.FirstOrDefault(gem => gem.IdByte == moby.Gem.IdByte),
             MinWidth = 150
@@ -19019,12 +22082,18 @@ public sealed class MainWindow : Window
 
         TextBox labelBox = new()
         {
+            Name = $"MobyChestContentLabelT{moby.TrueIndex}",
             Text = moby.Label,
             MinWidth = 220
         };
         CheckBox removeBox = new()
         {
             VerticalAlignment = VerticalAlignment.Center
+        };
+        gemBox.SelectionChanged += (_, _) =>
+        {
+            if (gemBox.SelectedItem is GemValue gem)
+                ApplySuggestedGemLabel(moby, labelBox, gem, rewardCarrier: false);
         };
         return new ChestContentEditorRow(moby, labelBox, gemBox, removeBox);
     }
@@ -19034,6 +22103,7 @@ public sealed class MainWindow : Window
         GemValue current = moby.RewardGem != GemValue.Unknown ? moby.RewardGem : GemValue.Red;
         ComboBox gemBox = new()
         {
+            Name = $"MobyRewardTriggerGemT{moby.TrueIndex}",
             ItemsSource = GemValue.Known,
             SelectedItem = GemValue.Known.FirstOrDefault(gem => gem.IdByte == current.IdByte),
             MinWidth = 150
@@ -19043,8 +22113,14 @@ public sealed class MainWindow : Window
 
         TextBox labelBox = new()
         {
+            Name = $"MobyRewardTriggerLabelT{moby.TrueIndex}",
             Text = moby.Label,
             MinWidth = 260
+        };
+        gemBox.SelectionChanged += (_, _) =>
+        {
+            if (gemBox.SelectedItem is GemValue gem)
+                ApplySuggestedGemLabel(moby, labelBox, gem, rewardCarrier: true);
         };
         return new RewardTriggerEditorRow(moby, labelBox, gemBox);
     }
@@ -19126,11 +22202,19 @@ public sealed class MainWindow : Window
             return true;
         }
 
-        if (row.GemBox.SelectedItem is GemValue gem)
+        int oldFlag4B = row.Moby.Flag4B;
+        string oldLabel = row.Moby.Label;
+        if (row.GemBox.SelectedItem is GemValue gem && row.Moby.Gem != gem)
             row.Moby.ApplyGem(gem);
 
         if (!string.IsNullOrWhiteSpace(row.LabelBox.Text))
             row.Moby.Label = row.LabelBox.Text.Trim();
+
+        bool changed = row.Moby.Flag4B != oldFlag4B ||
+            !string.Equals(row.Moby.Label, oldLabel, StringComparison.Ordinal);
+        if (!changed)
+            return false;
+
         row.Moby.HasLoadedNativeEdit = true;
         row.Moby.LoadedNativeEditSummary = $"Chest content {row.Moby.Gem.DisplayName}";
         return false;
@@ -19141,7 +22225,7 @@ public sealed class MainWindow : Window
         int oldFlag4B = row.Moby.Flag4B;
         string oldLabel = row.Moby.Label;
 
-        if (row.GemBox.SelectedItem is GemValue gem)
+        if (row.GemBox.SelectedItem is GemValue gem && row.Moby.RewardGem != gem)
             row.Moby.Flag4B = gem.IdByte;
 
         if (!string.IsNullOrWhiteSpace(row.LabelBox.Text))
@@ -19175,7 +22259,7 @@ public sealed class MainWindow : Window
         options.Add(new MobyPlacementOption(
             "Click in view after Add",
             clickFallback,
-            "After pressing Add, click the map or Fly 3D view where this object should go.",
+            "After pressing Add, click Edit Map or Game Camera where this object should go.",
             PlaceAfterDialog: true));
 
         if (_selectedTerrain != null)
@@ -19225,10 +22309,21 @@ public sealed class MainWindow : Window
         if (_currentGeometry == null || _currentGeometry.Polygons.Count == 0)
             return new Vector3f(0, 0, 0);
 
-        Rect2f bounds = _currentGeometry.Bounds;
-        float x = bounds.IsEmpty ? _currentGeometry.Polygons.Average(polygon => polygon.Center.X) : (bounds.Left + bounds.Right) * 0.5f;
-        float y = bounds.IsEmpty ? _currentGeometry.Polygons.Average(polygon => polygon.Center.Y) : (bounds.Top + bounds.Bottom) * 0.5f;
-        float z = (_currentGeometry.MinZ + _currentGeometry.MaxZ) * 0.5f;
+        TerrainPolygon[] presented = _currentGeometry.Polygons
+            .Where(polygon => !polygon.IsTerrainRemoved && _viewport.IsTerrainPresentedForEditing(polygon))
+            .ToArray();
+        IReadOnlyList<TerrainPolygon> placementFaces = presented.Length > 0
+            ? presented
+            : _currentGeometry.Polygons;
+        float minX = placementFaces.Min(polygon => polygon.Bounds.Left);
+        float maxX = placementFaces.Max(polygon => polygon.Bounds.Right);
+        float minY = placementFaces.Min(polygon => polygon.Bounds.Top);
+        float maxY = placementFaces.Max(polygon => polygon.Bounds.Bottom);
+        float minZ = placementFaces.Min(polygon => polygon.MinZ);
+        float maxZ = placementFaces.Max(polygon => polygon.MaxZ);
+        float x = (minX + maxX) * 0.5f;
+        float y = (minY + maxY) * 0.5f;
+        float z = (minZ + maxZ) * 0.5f;
         return SnapOrNearestTerrain(new Vector3f(x, y, z));
     }
 
@@ -19261,6 +22356,8 @@ public sealed class MainWindow : Window
         double bestDistance = double.MaxValue;
         foreach (TerrainPolygon polygon in _currentGeometry.Polygons)
         {
+            if (polygon.IsTerrainRemoved || !_viewport.IsTerrainPresentedForEditing(polygon))
+                continue;
             double distance = DistanceSquared2(preferred.X, preferred.Y, polygon.Center.X, polygon.Center.Y);
             if (distance >= bestDistance)
                 continue;
@@ -19800,7 +22897,6 @@ public sealed class MainWindow : Window
         if (!File.Exists(path))
             return null;
 
-        string fingerprint = IdentityFingerprint(moby);
         string pointerHex = $"0x{moby.SpecialDataPointer:X8}";
         try
         {
@@ -19816,7 +22912,7 @@ public sealed class MainWindow : Window
             foreach (JsonElement observation in observations.EnumerateArray())
             {
                 if (!string.Equals(GetJsonString(observation, "levelKey"), _currentLevel.Key, StringComparison.OrdinalIgnoreCase) ||
-                    !string.Equals(GetJsonString(observation, "fingerprint"), fingerprint, StringComparison.OrdinalIgnoreCase))
+                    !FingerprintMatchesMoby(GetJsonString(observation, "fingerprint"), moby, _currentMobys))
                 {
                     continue;
                 }
@@ -19861,7 +22957,7 @@ public sealed class MainWindow : Window
             foreach (JsonElement observation in observations.EnumerateArray())
             {
                 if (!string.Equals(GetJsonString(observation, "levelKey"), group.LevelKey, StringComparison.OrdinalIgnoreCase) ||
-                    !string.Equals(GetJsonString(observation, "fingerprint"), group.Fingerprint, StringComparison.OrdinalIgnoreCase))
+                    !ObservationFingerprintMatchesCanonical(observation, group.Fingerprint))
                 {
                     continue;
                 }
@@ -19940,7 +23036,7 @@ public sealed class MainWindow : Window
         string suffix = count > 1
             ? $"{count} matching objects"
             : "single object";
-        return $"Largest Needs ID family: {suffix}, {MobyListBadge(sample)} T{sample.TrueIndex} ({IdentityFingerprint(sample)}).";
+        return $"Largest Needs ID family: {suffix}, {MobyListBadge(sample)} T{sample.TrueIndex} ({IdentityFingerprintDisplay(sample)}).";
     }
 
     private static string FormatObjectCategorySummary(IReadOnlyList<Moby> all)
@@ -20389,11 +23485,10 @@ public sealed class MainWindow : Window
 
     private MobyIdentityWorkbenchGroup? FindIdentityWorkbenchGroupForMoby(string levelKey, Moby moby)
     {
-        string fingerprint = IdentityFingerprint(moby);
         return LoadMobyIdentityWorkbenchGroups()
             .Where(group =>
                 string.Equals(group.LevelKey, levelKey, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(group.Fingerprint, fingerprint, StringComparison.OrdinalIgnoreCase))
+                FingerprintMatchesMoby(group.Fingerprint, moby, _currentMobys))
             .OrderByDescending(group => group.Samples.Any(sample => sample.TrueIndex == moby.TrueIndex))
             .ThenByDescending(group => group.Count)
             .FirstOrDefault();
@@ -20471,8 +23566,8 @@ public sealed class MainWindow : Window
         return LoadMobyIdentityModelFamilies()
             .Where(family =>
                 string.Equals(family.LevelKey, levelKey, StringComparison.OrdinalIgnoreCase) &&
-                family.Type == moby.Type &&
                 family.SourceByte36 == moby.SourceByte36 &&
+                (family.SourceByte37 < 0 || family.SourceByte37 == moby.SourceByte37) &&
                 SameModelFamilyRecordScope(family, moby))
             .OrderByDescending(family => family.Samples.Any(sample => sample.TrueIndex == moby.TrueIndex))
             .ThenByDescending(family => family.Questionable)
@@ -20520,6 +23615,7 @@ public sealed class MainWindow : Window
                 GetJsonString(family, "levelName"),
                 GetJsonInt32(family, "typeHex", 0),
                 GetJsonInt32(family, "sourceByte36Hex", 0),
+                GetJsonInt32(family, "sourceByte37Hex", -1),
                 (uint)Math.Max(0, FirstJsonInt64(family, 0, "specialDataPointer", "specialDataPointerHex")),
                 GetJsonInt32(family, "questionable", 0),
                 GetJsonInt32(family, "total", 0),
@@ -21100,7 +24196,7 @@ public sealed class MainWindow : Window
         string fingerprint = IdentityFingerprint(target);
         int familyCount = familyCounts.GetValueOrDefault(fingerprint, 1);
         string filterNote = string.IsNullOrWhiteSpace(filter) ? "" : $" Matching filter \"{filter}\".";
-        _statusText.Text = $"Selected Needs ID target T{target.TrueIndex}: {target.DisplayLabel}. Repeated family: {familyCount} object(s), {fingerprint}.{filterNote}";
+        _statusText.Text = $"Selected Needs ID target T{target.TrueIndex}: {target.DisplayLabel}. Repeated family: {familyCount} object(s), {IdentityFingerprintDisplay(target)}.{filterNote}";
     }
 
     private void ShowSelectedMobyIdentityFamily()
@@ -21135,7 +24231,7 @@ public sealed class MainWindow : Window
         string scope = _selectedMoby.SpecialDataPointer == 0
             ? $"single no-pointer model row T{_selectedMoby.TrueIndex}"
             : $"special pointer 0x{_selectedMoby.SpecialDataPointer:X8}";
-        _statusText.Text = $"Showing model family for T{_selectedMoby.TrueIndex}: {count} object(s), type 0x{_selectedMoby.Type:X2}/source 0x{_selectedMoby.SourceByte36:X2}, {scope}.";
+        _statusText.Text = $"Showing model family for T{_selectedMoby.TrueIndex}: {count} object(s), native class 0x{_selectedMoby.SourceByte37:X2}{_selectedMoby.SourceByte36:X2}, render radius 0x{_selectedMoby.Type:X2}, {scope}.";
     }
 
     private IEnumerable<IdentityBatchCandidate> LoadPriorityIdentityBatchCandidates()
@@ -21256,7 +24352,7 @@ public sealed class MainWindow : Window
                 {
                     foreach (JsonElement observation in existing.EnumerateArray())
                     {
-                        if (!SameIdentityObservationScope(observation, fingerprint, selected, _currentLevel.Key))
+                        if (!SameIdentityObservationScope(observation, selected, _currentLevel.Key))
                             observations.Add(observation.Clone());
                     }
                 }
@@ -21274,10 +24370,13 @@ public sealed class MainWindow : Window
         string evidence = $"Live observation recorded from {_currentLevel.DisplayName} T{selected.TrueIndex}: {label}. Applies to {_currentLevel.DisplayName} model family {fingerprint}, {pointerScope}.";
         observations.Add(JsonSerializer.SerializeToElement(new
         {
+            fingerprintVersion = MobyIdentityFingerprint.CurrentVersion,
             fingerprint,
             levelKey = _currentLevel.Key,
+            nativeClassHex = $"0x{selected.SourceByte37:X2}{selected.SourceByte36:X2}",
             typeHex = $"0x{selected.Type:X2}",
             sourceByte36Hex = $"0x{selected.SourceByte36:X2}",
+            sourceByte37Hex = $"0x{selected.SourceByte37:X2}",
             flag4AHex = $"0x{selected.Flag4A:X2}",
             flag4BHex = $"0x{selected.Flag4B:X2}",
             sourceByte4FHex = $"0x{selected.SourceByte4F:X2}",
@@ -21694,17 +24793,16 @@ public sealed class MainWindow : Window
 
     private IdentityReviewResultRow? FindIdentityReviewResultRow(IReadOnlyList<IdentityReviewResultRow> rows, Moby selected, string levelKey)
     {
-        string fingerprint = IdentityFingerprint(selected);
         string trueIndex = $"T{selected.TrueIndex}";
         return rows.FirstOrDefault(row =>
-                string.Equals(row.Fingerprint, fingerprint, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(row.LevelKey, levelKey, StringComparison.OrdinalIgnoreCase) &&
                 row.TrueIndexes.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Any(index => string.Equals(index, trueIndex, StringComparison.OrdinalIgnoreCase))) ??
+                    .Any(index => string.Equals(index, trueIndex, StringComparison.OrdinalIgnoreCase)) &&
+                FingerprintMatchesMoby(row.Fingerprint, selected, _currentMobys, allowExactScope: true)) ??
             rows.FirstOrDefault(row =>
-                string.Equals(row.Fingerprint, fingerprint, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(row.LevelKey, levelKey, StringComparison.OrdinalIgnoreCase)) ??
-            rows.FirstOrDefault(row => string.Equals(row.Fingerprint, fingerprint, StringComparison.OrdinalIgnoreCase));
+                string.Equals(row.LevelKey, levelKey, StringComparison.OrdinalIgnoreCase) &&
+                FingerprintMatchesMoby(row.Fingerprint, selected, _currentMobys)) ??
+            rows.FirstOrDefault(row => FingerprintMatchesMoby(row.Fingerprint, selected));
     }
 
     private static List<ClusterReviewResultRow> LoadClusterReviewResultRows(string path)
@@ -21842,7 +24940,7 @@ public sealed class MainWindow : Window
 
     private static bool SameModelFamilyScope(Moby moby, Moby selected)
     {
-        if (moby.Type != selected.Type || moby.SourceByte36 != selected.SourceByte36)
+        if (moby.SourceByte36 != selected.SourceByte36 || moby.SourceByte37 != selected.SourceByte37)
             return false;
 
         return selected.SpecialDataPointer == 0
@@ -21850,23 +24948,22 @@ public sealed class MainWindow : Window
             : moby.SpecialDataPointer == selected.SpecialDataPointer;
     }
 
-    private static bool SameIdentityObservationScope(JsonElement observation, string fingerprint, Moby selected, string levelKey)
+    private static bool SameIdentityObservationScope(JsonElement observation, Moby selected, string levelKey)
     {
-        string existingFingerprint = GetJsonString(observation, "fingerprint");
-        if (!string.Equals(existingFingerprint, fingerprint, StringComparison.OrdinalIgnoreCase))
-            return false;
-
         if (!ObservationScopeMentionsLevel(observation, levelKey))
             return false;
 
-        if (selected.SpecialDataPointer == 0)
-        {
-            int matchTrueIndex = GetJsonInt32(observation, "matchTrueIndex", -1);
-            return matchTrueIndex < 0 || matchTrueIndex == selected.TrueIndex;
-        }
+        string canonicalFingerprint = IdentityFingerprint(selected);
+        if (!ObservationFingerprintMatchesCanonical(observation, canonicalFingerprint))
+            return false;
 
+        int matchTrueIndex = GetJsonInt32(observation, "matchTrueIndex", -1);
         long pointer = FirstJsonInt64(observation, -1, "specialDataPointerHex", "specialDataPointer");
-        return pointer < 0 || (uint)pointer == selected.SpecialDataPointer;
+
+        if (selected.SpecialDataPointer == 0)
+            return matchTrueIndex == selected.TrueIndex && pointer <= 0;
+
+        return matchTrueIndex < 0 && pointer > 0 && (uint)pointer == selected.SpecialDataPointer;
     }
 
     private static bool ObservationScopeMentionsLevel(JsonElement observation, string levelKey)
@@ -21875,8 +24972,12 @@ public sealed class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(directLevel))
             return string.Equals(directLevel, levelKey, StringComparison.OrdinalIgnoreCase);
 
-        if (!observation.TryGetProperty("levels", out JsonElement levels) || levels.ValueKind != JsonValueKind.Array)
-            return true;
+        if (!observation.TryGetProperty("levels", out JsonElement levels) ||
+            levels.ValueKind != JsonValueKind.Array ||
+            levels.GetArrayLength() != 1)
+        {
+            return false;
+        }
 
         return levels.EnumerateArray()
             .Select(item => item.ValueKind == JsonValueKind.String ? item.GetString() ?? "" : item.ToString())
@@ -22046,7 +25147,116 @@ public sealed class MainWindow : Window
 
     private static string IdentityFingerprint(Moby moby)
     {
-        return $"type=0x{moby.Type:X2} b36=0x{moby.SourceByte36:X2} f4A=0x{moby.Flag4A:X2} f4B=0x{moby.Flag4B:X2} b4F=0x{moby.SourceByte4F:X2}";
+        return MobyIdentityFingerprint.BuildV2(moby);
+    }
+
+    private static string IdentityFingerprintDisplay(Moby moby)
+    {
+        return $"{MobyIdentityFingerprint.BuildV2(moby)} drawn51=0x{moby.State:X2}";
+    }
+
+    private static bool FingerprintMatchesMoby(
+        string? fingerprint,
+        Moby moby,
+        IEnumerable<Moby>? levelMobys = null,
+        bool allowExactScope = false)
+    {
+        if (!MobyIdentityFingerprint.TryParse(fingerprint, out MobyIdentityFingerprintParts parts))
+            return false;
+
+        if (parts.HasFullNativeClass)
+            return MobyIdentityFingerprint.Matches(fingerprint, moby, allowLegacyLowByte: false);
+
+        if (!allowExactScope && levelMobys == null)
+            return false;
+        if (!MobyIdentityFingerprint.Matches(fingerprint, moby, allowLegacyLowByte: true))
+            return false;
+        if (allowExactScope)
+            return true;
+
+        int distinctClasses = levelMobys!
+            .Where(candidate => MobyIdentityFingerprint.Matches(fingerprint, candidate, allowLegacyLowByte: true))
+            .Select(candidate => (candidate.SourceByte37 << 8) | candidate.SourceByte36)
+            .Distinct()
+            .Take(2)
+            .Count();
+        return distinctClasses == 1;
+    }
+
+    private static bool ObservationFingerprintMatchesCanonical(JsonElement observation, string canonicalFingerprint)
+    {
+        if (!MobyIdentityFingerprint.TryParse(canonicalFingerprint, out MobyIdentityFingerprintParts expected) ||
+            !expected.HasFullNativeClass ||
+            !MobyIdentityFingerprint.TryParse(GetJsonString(observation, "fingerprint"), out MobyIdentityFingerprintParts observed))
+        {
+            return false;
+        }
+
+        int observedNativeClass = observed.NativeClass;
+        if (!observed.HasFullNativeClass)
+        {
+            if (!TryGetOptionalJsonInteger(observation, "nativeClassHex", out bool nativeClassPresent, out int explicitNativeClass) ||
+                !TryGetOptionalJsonInteger(observation, "sourceByte37Hex", out bool highBytePresent, out int explicitHighByte) ||
+                !TryGetOptionalJsonInteger(observation, "sourceByte36Hex", out bool lowBytePresent, out int explicitLowByte))
+            {
+                return false;
+            }
+
+            if (nativeClassPresent && explicitNativeClass is >= 0 and <= 0xFFFF)
+                observedNativeClass = explicitNativeClass;
+            else if (highBytePresent && explicitHighByte is >= 0 and <= 0xFF)
+                observedNativeClass = (explicitHighByte << 8) | observed.NativeClass;
+            else
+                return false;
+
+            if ((observedNativeClass & 0xFF) != (observed.NativeClass & 0xFF) ||
+                lowBytePresent && (explicitLowByte is < 0 or > 0xFF || explicitLowByte != (observed.NativeClass & 0xFF)) ||
+                highBytePresent && (explicitHighByte is < 0 or > 0xFF || explicitHighByte != ((observedNativeClass >> 8) & 0xFF)))
+            {
+                return false;
+            }
+        }
+
+        return observedNativeClass == expected.NativeClass &&
+            observed.RenderRadius == expected.RenderRadius &&
+            observed.UpdateDistance == expected.UpdateDistance &&
+            observed.DropClass == expected.DropClass &&
+            observed.SpecularMetalType == expected.SpecularMetalType &&
+            JsonIntegerFieldMatches(observation, "nativeClassHex", observedNativeClass, 0xFFFF) &&
+            JsonIntegerFieldMatches(observation, "sourceByte36Hex", observedNativeClass & 0xFF, 0xFF) &&
+            JsonIntegerFieldMatches(observation, "sourceByte37Hex", (observedNativeClass >> 8) & 0xFF, 0xFF) &&
+            JsonIntegerFieldMatches(observation, "typeHex", observed.RenderRadius, 0xFF) &&
+            JsonIntegerFieldMatches(observation, "flag4AHex", observed.UpdateDistance, 0xFF) &&
+            JsonIntegerFieldMatches(observation, "flag4BHex", observed.DropClass, 0xFF) &&
+            JsonIntegerFieldMatches(observation, "sourceByte4FHex", observed.SpecularMetalType, 0xFF);
+    }
+
+    private static bool JsonIntegerFieldMatches(JsonElement element, string name, int expected, int maximum)
+    {
+        return TryGetOptionalJsonInteger(element, name, out bool present, out int value) &&
+            (!present || value >= 0 && value <= maximum && value == expected);
+    }
+
+    private static bool TryGetOptionalJsonInteger(JsonElement element, string name, out bool present, out int value)
+    {
+        present = false;
+        value = 0;
+        if (!element.TryGetProperty(name, out JsonElement property) ||
+            property.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return true;
+        }
+
+        present = true;
+        if (property.ValueKind == JsonValueKind.Number)
+            return property.TryGetInt32(out value);
+        if (property.ValueKind != JsonValueKind.String)
+            return false;
+
+        string text = (property.GetString() ?? "").Trim();
+        if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            return int.TryParse(text[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value);
+        return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
     }
 
     private static string IdentityObservationKind(Moby moby, string label)
@@ -22098,7 +25308,10 @@ public sealed class MainWindow : Window
         _syncingMobyList = true;
         List<Moby> all = _currentMobys.Where(moby => !moby.IsRemoved).ToList();
         string filter = _mobySearchBox.Text?.Trim() ?? "";
-        int categoryIndex = _mobyCategoryBox.SelectedIndex;
+        string category = _mobyCategoryBox.SelectedItem as string ?? MobyCategoryOptions[0];
+        int categoryIndex = Array.IndexOf(MobyCategoryOptions, category);
+        if (categoryIndex < 0)
+            categoryIndex = 0;
         List<Moby> visible = all
             .Where(moby => MatchesMobyCategory(moby, categoryIndex))
             .Where(moby => string.IsNullOrWhiteSpace(filter) || MatchesMobyFilter(moby, filter))
@@ -22325,7 +25538,7 @@ public sealed class MainWindow : Window
     private static string FormatMobyListItem(Moby moby)
     {
         string badge = MobyListBadge(moby);
-        return $"{moby.DisplayIndex,5}  [{badge}] {moby.DisplayLabel}{(moby.IsEditorControl ? "" : $"  0x{moby.Type:X2}")}{(moby.HasAnyEdit ? " *" : "")}";
+        return $"{moby.DisplayIndex,5}  [{badge}] {moby.DisplayLabel}{(moby.IsEditorControl ? "" : $"  radius 0x{moby.Type:X2}")}{(moby.HasAnyEdit ? " *" : "")}";
     }
 
     private Control BuildMobyListItemControl(Moby? moby)
@@ -22393,7 +25606,7 @@ public sealed class MainWindow : Window
                 parts.Add($"{familyCount} same ID family");
             if (modelCount > 1 && modelCount != familyCount)
                 parts.Add($"{modelCount} same model");
-            parts.Add($"type 0x{moby.Type:X2}, state 0x{moby.State:X2}");
+            parts.Add($"radius 0x{moby.Type:X2}, drawn 0x{moby.State:X2}");
             parts.Add($"bytes {MobySourceByteSummary(moby)}");
         }
 
@@ -22462,7 +25675,7 @@ public sealed class MainWindow : Window
 
     private static string MobySourceByteSummary(Moby moby)
     {
-        return $"36/4A/4B/4F 0x{moby.SourceByte36:X2}/0x{moby.Flag4A:X2}/0x{moby.Flag4B:X2}/0x{moby.SourceByte4F:X2}";
+        return $"class +36/+37 0x{moby.SourceByte37:X2}{moby.SourceByte36:X2}; update +52 0x{moby.Flag4A:X2}; drop +53 0x{moby.Flag4B:X2}; specular +4F 0x{moby.SourceByte4F:X2}";
     }
 
     private static string MobyListBadge(Moby moby)
@@ -22769,7 +25982,7 @@ public sealed class MainWindow : Window
 
     private static string IdentityFilterKey(Moby moby)
     {
-        return NormalizeIdentityFilterKey($"{moby.Type:X2}-{moby.SourceByte36:X2}-{moby.Flag4A:X2}-{moby.Flag4B:X2}-{moby.SourceByte4F:X2}");
+        return NormalizeIdentityFilterKey($"{moby.SourceByte37:X2}{moby.SourceByte36:X2}-{moby.Type:X2}-{moby.Flag4A:X2}-{moby.Flag4B:X2}-{moby.SourceByte4F:X2}");
     }
 
     private string ModelFamilyFilterKey(Moby moby)
@@ -22778,7 +25991,7 @@ public sealed class MainWindow : Window
         string modelScope = moby.SpecialDataPointer == 0
             ? $"T{moby.TrueIndex:X4}"
             : $"{moby.SpecialDataPointer:X8}";
-        return NormalizeIdentityFilterKey($"{levelKey}-{moby.Type:X2}-{moby.SourceByte36:X2}-{modelScope}");
+        return NormalizeIdentityFilterKey($"{levelKey}-{moby.SourceByte37:X2}{moby.SourceByte36:X2}-{modelScope}");
     }
 
     private static string NormalizeIdentityFilterKey(string key)
@@ -22820,6 +26033,13 @@ public sealed class MainWindow : Window
             : BuildLinkedMobyItems(selected).ToList();
         _linkedMobyList.ItemsSource = linked;
         _linkedMobyList.SelectedItem = null;
+        if (_modernLinkedObjectsExpander != null)
+        {
+            _modernLinkedObjectsExpander.IsVisible = linked.Count > 0;
+            _modernLinkedObjectsExpander.Header = linked.Count == 1
+                ? "1 linked object"
+                : $"{linked.Count} linked objects";
+        }
         _linkedMobyHint.Text = selected == null
             ? "Select an object to see its related mobys."
             : linked.Count == 0
@@ -22922,7 +26142,11 @@ public sealed class MainWindow : Window
         MobyLoadData mobys = LoadMobyData(levelKey);
         TerrainCollisionLoadData collision = LoadTerrainCollisionData(levelKey, geometry.Geometry);
         IReadOnlyList<CustomTerrainTextureImport> customTextures = CustomTerrainTextureStore.Load(_workspace.RootPath, levelKey);
+        IReadOnlyList<NativeTerrainTextureRelocationEdit> nativeRelocations =
+            NativeTerrainTextureRelocationEditStore.Load(_workspace.RootPath, levelKey);
+        PortableLevelEntryPose? levelEntryPose = TryLoadLevelEntryPose(levelKey);
         CustomTerrainTexturePreview.Apply(geometry.Geometry, customTextures);
+        CustomTerrainTexturePreview.ApplyNativeRelocations(geometry.Geometry, nativeRelocations);
 
         return new LevelLoadData(
             geometry.Geometry,
@@ -22934,7 +26158,48 @@ public sealed class MainWindow : Window
             mobys.Mobys,
             mobys.LoadedMobyEdits,
             mobys.Metadata,
-            customTextures);
+            customTextures,
+            nativeRelocations,
+            levelEntryPose);
+    }
+
+    private PortableLevelEntryPose? TryLoadLevelEntryPose(string levelKey)
+    {
+        if (PortableLevelEntryPoseCache.TryLoadPose(
+                _workspace.RootPath,
+                _catalog,
+                levelKey,
+                out PortableLevelEntryPose cached,
+                out _))
+        {
+            return cached;
+        }
+
+        LevelDefinition? level = _catalog.FindByKey(levelKey);
+        string sourceImage = FirstExistingDiscImagePath(DiscImageLocator.FindImage(_workspace));
+        if (level == null || !File.Exists(sourceImage))
+            return null;
+
+        try
+        {
+            FlyInLandingData landing = FlyInLandingLocator.Locate(sourceImage, level);
+            return new PortableLevelEntryPose(
+                level.Key,
+                level.DisplayName,
+                level.LevelId,
+                level.SourceWadEntry,
+                landing.WadOffset,
+                landing.RawX,
+                landing.RawY,
+                landing.RawZ,
+                landing.YawByte,
+                landing.EntryDataByteLength);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or EndOfStreamException)
+        {
+            Debug.WriteLine(ex);
+            return null;
+        }
     }
 
     private TerrainGeometryLoadData LoadGeometryData(string levelKey)
@@ -22945,12 +26210,16 @@ public sealed class MainWindow : Window
         string sourceDerivedPath = SourceDerivedTerrainOverlayPath(levelKey);
         string path = File.Exists(cachePath)
             ? cachePath
-            : _workspace.ResolveFile($"{levelKey}-runtime-scene-editor-overlay.json", "generated-research");
+            : File.Exists(sourceDerivedPath)
+                ? sourceDerivedPath
+                : _workspace.ResolveFile($"{levelKey}-runtime-scene-editor-overlay.json", "generated-research");
         if (!File.Exists(path))
         {
-            if (TryRecoverGeometryCacheFromSourceQuiet(levelKey, sourceDerivedPath, out terrainCacheHealthMessage))
+            if (TryPrepareSourceDerivedGeometryOverlay(levelKey, sourceDerivedPath, out terrainCacheHealthMessage))
             {
-                path = sourceDerivedPath;
+                path = TryPersistRecoveredGeometryOverlay(sourceDerivedPath, cachePath)
+                    ? cachePath
+                    : sourceDerivedPath;
             }
             else
             {
@@ -22970,9 +26239,11 @@ public sealed class MainWindow : Window
             GeometryCacheHealthIssue? healthIssue = GeometryCacheHealth.InspectOverlay(levelKey, path);
             if (healthIssue?.BlocksLoading == true)
             {
-                if (TryRecoverGeometryCacheFromSourceQuiet(levelKey, sourceDerivedPath, out terrainCacheHealthMessage))
+                if (TryPrepareSourceDerivedGeometryOverlay(levelKey, sourceDerivedPath, out terrainCacheHealthMessage))
                 {
-                    path = sourceDerivedPath;
+                    path = TryPersistRecoveredGeometryOverlay(sourceDerivedPath, cachePath)
+                        ? cachePath
+                        : sourceDerivedPath;
                 }
                 else
                 {
@@ -22985,8 +26256,15 @@ public sealed class MainWindow : Window
 
             GeometryCandidate geometry = GeometryOverlayLoader.LoadFirstCandidate(path);
             string ramPath = TerrainPatchDataLocator.FindRamDump(_workspace, levelKey);
-            if (!File.Exists(ramPath) && !IsSourceDerivedGeometry(geometry) && TryRecoverGeometryCacheFromSourceQuiet(levelKey, sourceDerivedPath, out terrainCacheHealthMessage))
-                geometry = GeometryOverlayLoader.LoadFirstCandidate(sourceDerivedPath);
+            if (!File.Exists(ramPath) &&
+                !IsSourceDerivedGeometry(geometry) &&
+                TryPrepareSourceDerivedGeometryOverlay(levelKey, sourceDerivedPath, out terrainCacheHealthMessage))
+            {
+                string recoveredPath = TryPersistRecoveredGeometryOverlay(sourceDerivedPath, cachePath)
+                    ? cachePath
+                    : sourceDerivedPath;
+                geometry = GeometryOverlayLoader.LoadFirstCandidate(recoveredPath);
+            }
 
             if (!File.Exists(ramPath) && IsSourceDerivedGeometry(geometry))
                 terrainCacheHealthMessage = "Using a BIN/CUE-recovered terrain map for this level so terrain edits can use source WAD offsets without a RAM capture.";
@@ -23004,6 +26282,61 @@ public sealed class MainWindow : Window
     private string SourceDerivedTerrainOverlayPath(string levelKey)
     {
         return Path.Combine(_workspace.RootPath, "_local", "terrain", "source-derived-overlays", $"{levelKey}-runtime-scene-editor-overlay.json");
+    }
+
+    private bool TryPrepareSourceDerivedGeometryOverlay(string levelKey, string outputPath, out string message)
+    {
+        message = "";
+        if (File.Exists(outputPath))
+        {
+            try
+            {
+                GeometryCacheHealthIssue? healthIssue = GeometryCacheHealth.InspectOverlay(levelKey, outputPath);
+                if (healthIssue?.BlocksLoading != true)
+                {
+                    _ = GeometryOverlayLoader.LoadFirstCandidate(outputPath);
+                    return true;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or JsonException or EndOfStreamException)
+            {
+                Debug.WriteLine(ex);
+            }
+        }
+
+        return TryRecoverGeometryCacheFromSourceQuiet(levelKey, outputPath, out message);
+    }
+
+    private static bool TryPersistRecoveredGeometryOverlay(string sourcePath, string cachePath)
+    {
+        if (!File.Exists(sourcePath))
+            return false;
+
+        string temporaryPath = cachePath + $".repair-{Guid.NewGuid():N}.tmp";
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(cachePath) ?? ".");
+            File.Copy(sourcePath, temporaryPath, overwrite: true);
+            File.Move(temporaryPath, cachePath, overwrite: true);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Debug.WriteLine(ex);
+            return false;
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(temporaryPath))
+                    File.Delete(temporaryPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Debug.WriteLine(ex);
+            }
+        }
     }
 
     private bool TryRecoverGeometryCacheFromSource(string levelKey, string outputPath)
@@ -23213,7 +26546,7 @@ public sealed class MainWindow : Window
         if (IsQuestionableMoby(moby))
         {
             lines.Add(BuildIdentityFamilySummary(moby));
-            lines.Add($"ID fingerprint: {IdentityFingerprint(moby)}");
+            lines.Add($"ID fingerprint: {IdentityFingerprintDisplay(moby)}");
             lines.Add("ID note: use a test batch or Save Observed ID after checking the object in game.");
         }
         if (!string.IsNullOrWhiteSpace(moby.CandidateKind))
@@ -23283,11 +26616,13 @@ public sealed class MainWindow : Window
             {
                 try
                 {
+                    EditorDiagnostics.RecordAction($"Button: {text}");
                     onClick();
                 }
                 catch (Exception ex)
                 {
                     Debug.WriteLine(ex);
+                    EditorDiagnostics.RecordException($"running the '{text}' command", ex);
                 }
             };
         }
@@ -23306,11 +26641,13 @@ public sealed class MainWindow : Window
             button.IsEnabled = false;
             try
             {
+                EditorDiagnostics.RecordAction($"Button: {text}");
                 await onClick();
             }
             catch (Exception ex)
             {
                 Debug.WriteLine(ex);
+                EditorDiagnostics.RecordException($"running the '{text}' command", ex);
             }
             finally
             {
@@ -23405,6 +26742,10 @@ public sealed class MainWindow : Window
         ColorRgba SurfaceColor,
         string RuntimeKey,
         string SourceLabel,
+        string SourceLevelKey,
+        TerrainTextureVisualEdit? NativeVisual,
+        NativeTerrainSurfaceSignature? NativeBehavior,
+        string BehaviorRuntimeKey,
         IReadOnlyList<CustomTerrainTextureImport> CustomTextures);
 
     private sealed record SkyboxEditModeOption(string Id, string Label)
@@ -23422,7 +26763,9 @@ public sealed class MainWindow : Window
         List<Moby> Mobys,
         int LoadedMobyEdits,
         MobyMetadataResult MobyMetadata,
-        IReadOnlyList<CustomTerrainTextureImport> CustomTerrainTextures);
+        IReadOnlyList<CustomTerrainTextureImport> CustomTerrainTextures,
+        IReadOnlyList<NativeTerrainTextureRelocationEdit> NativeTerrainTextureRelocations,
+        PortableLevelEntryPose? LevelEntryPose);
 
     private sealed record TerrainGeometryLoadData(
         GeometryCandidate? Geometry,
@@ -23434,6 +26777,7 @@ public sealed class MainWindow : Window
         bool HasObjectEdits,
         bool HasTerrainEdits,
         bool HasCustomTerrainTextures,
+        bool HasNativeTerrainTextureRelocations,
         bool HasLevelTextEdit,
         bool HasLevelMusicEdit,
         bool HasSkyboxEdit);
@@ -23458,7 +26802,8 @@ public sealed class MainWindow : Window
     private sealed record RestoredTerrainLoadData(
         TerrainGeometryLoadData Geometry,
         TerrainCollisionLoadData Collision,
-        IReadOnlyList<CustomTerrainTextureImport> CustomTerrainTextures);
+        IReadOnlyList<CustomTerrainTextureImport> CustomTerrainTextures,
+        IReadOnlyList<NativeTerrainTextureRelocationEdit> NativeTerrainTextureRelocations);
 
     private sealed record MobyLoadData(
         List<Moby> Mobys,
@@ -23738,6 +27083,7 @@ public sealed class MainWindow : Window
         string CrossLevelSourceLevelName,
         int CrossLevelSourceTrueIndex,
         string CrossLevelRequiredExporterFeature,
+        string CrossLevelRecipeId,
         string CandidateKind,
         string Confidence,
         string Evidence,
@@ -23787,6 +27133,7 @@ public sealed class MainWindow : Window
                 moby.CrossLevelSourceLevelName,
                 moby.CrossLevelSourceTrueIndex,
                 moby.CrossLevelRequiredExporterFeature,
+                moby.CrossLevelRecipeId,
                 moby.CandidateKind,
                 moby.Confidence,
                 moby.Evidence,
@@ -23867,11 +27214,17 @@ public sealed class MainWindow : Window
                 !string.Equals(AddSupportStatus, "native-slot-reuse", StringComparison.OrdinalIgnoreCase))
             {
                 if (MainWindow.IsReleaseSafeTrueAddIdentity(Type, SourceByte36, SourceByte37, SourceByte4F, Flag4A, Flag4B) ||
-                    MainWindow.IsPromotedNativeCloneAppendIdentity(SourceLevelKey, Type, SourceByte36, SourceByte37, SourceByte4F, Flag4A, Flag4B))
+                    MainWindow.IsUnlimitedPromotedNativeCloneAppendIdentity(SourceLevelKey, Type, SourceByte36, SourceByte37, SourceByte4F, Flag4A, Flag4B))
                 {
                     return SafeExportSlots == 0
                         ? $"{Name} (true-add supported)"
                         : $"{Name} ({SafeExportSlots} reuse slots + true-add)";
+                }
+                if (MainWindow.IsReleaseLimitedNativeCloneAppendIdentity(SourceLevelKey, Type, SourceByte36, SourceByte37, SourceByte4F, Flag4A, Flag4B))
+                {
+                    return SafeExportSlots == 0
+                        ? $"{Name} (1 validated true-add max)"
+                        : $"{Name} ({SafeExportSlots} reuse slots + 1 validated true-add)";
                 }
 
                 string suffix = SafeExportSlots == 1 ? "slot" : "slots";
@@ -24070,17 +27423,49 @@ public sealed class MainWindow : Window
         public int ProofStatusRank { get; init; }
         public bool HasCustomTexture { get; init; }
         public string RuntimeKey { get; init; } = "";
+        public string VisualRuntimeKey { get; init; } = "";
         public double X { get; init; }
         public double Y { get; init; }
         public double Z { get; init; }
         public ColorRgba Color { get; init; } = ColorRgba.FromRgb(120, 130, 120);
+        public NativeTerrainSurfaceSignature? NativeBehavior { get; init; }
+        public TerrainTextureVisualEdit? NativeVisual { get; init; }
+        public bool CanUseArt { get; init; }
+        public string ArtReadinessNote { get; init; } = "";
+        public bool CanTransferVisual { get; init; }
+        public string VisualTransferNote { get; init; } = "";
+        public bool CanTransferBehavior { get; init; }
+        public string BehaviorTransferNote { get; init; } = "";
+        public int AffectedFaceCount { get; init; } = 1;
+        public int BehaviorReadyFaceCount { get; init; }
+        public int BehaviorTargetTriangleCount { get; init; }
+        public bool CanApplyAtomically =>
+            CanUseArt &&
+            CanTransferVisual &&
+            NativeVisual != null &&
+            CanTransferBehavior &&
+            NativeBehavior != null &&
+            AffectedFaceCount > 0 &&
+            BehaviorReadyFaceCount == AffectedFaceCount;
+        public string AtomicBlockReason => !CanUseArt
+            ? ArtReadinessNote
+            : !CanTransferVisual || NativeVisual == null
+                ? VisualTransferNote
+            : !CanTransferBehavior || NativeBehavior == null || BehaviorReadyFaceCount != AffectedFaceCount
+                ? BehaviorTransferNote
+                : "";
 
         public string ListText
         {
             get
             {
                 string custom = HasCustomTexture ? " custom" : "";
-                return $"{Surface,-7} tex {TextureId,3}  faces {FaceCount,5}  proof {ProofSummary,-18}{custom}  {BehaviorSummary}";
+                string art = CanUseArt ? "art ready" : "art blocked";
+                string visual = CanTransferVisual && NativeVisual != null ? "tint ready" : "tint blocked";
+                string property = CanTransferBehavior && BehaviorReadyFaceCount == AffectedFaceCount
+                    ? "property ready"
+                    : "property blocked";
+                return $"{Surface,-12} tex {TextureId,3}  faces {FaceCount,5}  {art,-11} {visual,-12} {property,-16}{custom}  {BehaviorSummary}";
             }
         }
 
@@ -24113,13 +27498,57 @@ public sealed class MainWindow : Window
         public string CustomPaletteLowHex { get; init; } = "";
         public string CustomPaletteHighHex { get; init; } = "";
         public IReadOnlyList<string> CustomPaletteHexColors { get; init; } = Array.Empty<string>();
+        public string CustomDescriptorTier { get; init; } = "";
+        public string RealmKey { get; init; } = "unknown";
+        public string RealmName { get; init; } = "Unknown";
+        public int RealmOrder { get; init; } = int.MaxValue;
+        public int LevelOrder { get; init; } = int.MaxValue;
+        public NativeTerrainSurfaceSignature? NativeBehavior { get; init; }
+        public bool CanUseArt { get; init; }
+        public string ArtReadinessNote { get; init; } = "";
+        public bool CanTransferBehavior { get; init; }
+        public string BehaviorTransferNote { get; init; } = "";
+        public int TargetTextureId { get; init; } = -1;
+        public int AffectedFaceCount { get; init; }
+        public int BehaviorReadyFaceCount { get; init; }
+        public int BehaviorTargetTriangleCount { get; init; }
+        public bool CanPersistAtRuntime { get; init; }
+        public string RuntimePersistenceNote { get; init; } = "";
+        public TerrainTextureRecordRole DonorRecordRole { get; init; } = TerrainTextureRecordRole.Unknown;
+        public TerrainTextureSurfacePropertyMode SurfacePropertyMode { get; init; } = TerrainTextureSurfacePropertyMode.TransferDonorNativeSurface;
+        public bool PreservesTargetNativeSurface =>
+            SurfacePropertyMode == TerrainTextureSurfacePropertyMode.PreserveTargetNativeSurface;
+        public bool SurfacePropertyHandlingReady => PreservesTargetNativeSurface
+            ? DonorRecordRole == TerrainTextureRecordRole.NativeUnreferencedStatic
+            : CanTransferBehavior &&
+              NativeBehavior != null &&
+              BehaviorReadyFaceCount == AffectedFaceCount;
+        public bool CanApplyAtomically =>
+            CanUseArt &&
+            CanPersistAtRuntime &&
+            AffectedFaceCount > 0 &&
+            SurfacePropertyHandlingReady;
+        public string AtomicBlockReason => !CanUseArt
+            ? ArtReadinessNote
+            : !CanPersistAtRuntime
+                ? RuntimePersistenceNote
+            : !SurfacePropertyHandlingReady
+                ? BehaviorTransferNote
+                : "";
 
         public string ListText
         {
             get
             {
                 string custom = HasCustomTexture ? " custom" : "";
-                return $"{LevelName,-15} {Surface,-7} tex {TextureId,3}  faces {FaceCount,5}  proof {ProofSummary,-18}{custom}  {BehaviorSummary}";
+                string art = CanUseArt ? "art ready" : "art blocked";
+                string property = PreservesTargetNativeSurface
+                    ? "property preserved"
+                    : CanTransferBehavior && BehaviorReadyFaceCount == AffectedFaceCount
+                        ? "property ready"
+                        : "property blocked";
+                string runtime = CanPersistAtRuntime ? "target stable" : "target blocked";
+                return $"{RealmName,-15} / {LevelName,-15}  {Surface,-12} tex {TextureId,3}  faces {FaceCount,4}  {art,-11} {property,-16} {runtime,-14}{custom}  {BehaviorSummary}";
             }
         }
 
@@ -24130,6 +27559,14 @@ public sealed class MainWindow : Window
     }
 
     private sealed record TerrainTextureSurfaceFilter(string Surface, string Label)
+    {
+        public override string ToString()
+        {
+            return Label;
+        }
+    }
+
+    private sealed record TerrainCatalogFilterOption(string Key, string Label, int Order)
     {
         public override string ToString()
         {
@@ -24160,24 +27597,24 @@ public sealed class MainWindow : Window
         [
             new(
                 TerrainPaintModeKind.CustomColors,
-                "Custom colors",
-                "Pick any low/high colors. The selected face gets its own local texture slot before the palette is staged."),
+                "Custom colors (blocked)",
+                LegacyCustomTerrainTextureBlock),
             new(
                 TerrainPaintModeKind.InGameLook,
                 "Borrow in-game look",
                 "Use an existing terrain texture/palette from this level on the selected face."),
             new(
                 TerrainPaintModeKind.CrossLevelLook,
-                "Borrow from another level",
-                "Use a cached terrain look from another level. The editor creates a local texture for this selected face instead of writing another level's texture ID directly."),
+                "Replace shared texture from another level",
+                "Browse every native texture record by realm and level. All faces using the selected target texture and their unique collision triangles must pass as one batch; Apply proves ownership, complete-record storage, runtime persistence, and exact readback before saving."),
             new(
                 TerrainPaintModeKind.ImportedPalette,
-                "Import palette file",
-                "Import a palette text file or PNG palette image and apply it only to this selected face."),
+                "Import palette file (blocked)",
+                LegacyCustomTerrainTextureBlock),
             new(
                 TerrainPaintModeKind.PastedPalette,
-                "Paste custom palette",
-                "Paste #RRGGBB colors or RGB rows from another palette. At least two colors are required.")
+                "Paste custom palette (blocked)",
+                LegacyCustomTerrainTextureBlock)
         ];
 
         public override string ToString()
@@ -24381,6 +27818,7 @@ public sealed class MainWindow : Window
         int Type,
         int State,
         int SourceByte36,
+        int SourceByte37,
         int Flag4A,
         int Flag4B);
 
@@ -24422,6 +27860,7 @@ public sealed class MainWindow : Window
         string LevelName,
         int Type,
         int SourceByte36,
+        int SourceByte37,
         uint SpecialDataPointer,
         int Questionable,
         int Total,

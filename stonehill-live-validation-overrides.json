@@ -1274,12 +1274,12 @@
                       "trueIndex":  149,
                       "typeHex":  "0x00",
                       "stateHex":  "0x00",
-                      "zoneLabel":  "controls identity batch 1",
-                      "candidateKind":  "already-active whirlwind",
-                      "confidence":  "safe-ground-observed",
-                      "color":  "#5DADE2",
-                      "displayTargetLabel":  "Already-active whirlwind (safe-ground observed)",
-                      "evidence":  "User observation on 2026-05-11 identity-batch-35-controls: row order was T69, T71, T149 at the known-open safe ground field. User reported slot 3 was an already activated whirlwind."
+                      "zoneLabel":  "class 0x1E passive controls",
+                      "candidateKind":  "unresolved passive native control point",
+                      "confidence":  "user-corrected-unresolved",
+                      "color":  "#95A5A6",
+                      "displayTargetLabel":  "Class 0x1E passive control",
+                      "evidence":  "User correction on 2026-07-13 confirms Stone Hill T149 is not a whirlwind. The earlier three-slot safe-ground observation attributed the wrong result to this row, so T149 remains an unresolved passive class 0x1E control until its behavior is proven."
                   },
                   {
                       "index":  150,

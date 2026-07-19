@@ -13,6 +13,7 @@ public static class MobyIdentityClassifier
                 continue;
 
             bool replaceLabel = IsUserOverride(identity) ||
+                IsDecompNativeClassIdentity(identity) ||
                 HasWeakLabel(moby) ||
                 HasReviewFamilyLabel(moby, identity) ||
                 ShouldReplaceWithPassiveClassIdentity(moby, identity) ||
@@ -21,7 +22,7 @@ public static class MobyIdentityClassifier
             {
                 moby.Label = identity.Label;
                 moby.OriginalLabel = identity.Label;
-                if (IsStrongIdentity(identity) || IsPassiveClassIdentity(identity))
+                if (IsStrongIdentity(identity) || IsPassiveClassIdentity(identity) || IsDecompNativeClassIdentity(identity))
                 {
                     moby.CandidateKind = identity.Kind;
                     moby.Confidence = identity.Confidence;
@@ -54,10 +55,27 @@ public static class MobyIdentityClassifier
         if (TryClassifyGem(moby, out identity))
             return true;
 
+        if (TryClassifyNativeBossContainedGem(levelKey, moby, out identity))
+            return true;
+
+        if (string.Equals(levelKey, "doctorshemp", StringComparison.OrdinalIgnoreCase) &&
+            moby.TrueIndex is >= 72 and <= 75 &&
+            ((moby.SourceByte37 << 8) | moby.SourceByte36) == 0x000D &&
+            TryClassifyDecompNativeClass(levelKey, moby, out identity))
+        {
+            return true;
+        }
+
         if (TryClassifyContainedGem(moby, out identity))
             return true;
 
+        if (TryClassifyNativeArmoredChestLink(moby, out identity))
+            return true;
+
         if (TryClassifyNativeDragonScene(moby, out identity))
+            return true;
+
+        if (TryClassifyDecompNativeClass(levelKey, moby, out identity))
             return true;
 
         if (TryClassifyFlightTarget(levelKey, moby, out identity))
@@ -99,6 +117,601 @@ public static class MobyIdentityClassifier
 
         identity = default;
         return false;
+    }
+
+    private static bool TryClassifyDecompNativeClass(string levelKey, Moby moby, out MobyIdentity identity)
+    {
+        int nativeClass = (moby.SourceByte37 << 8) | moby.SourceByte36;
+        string key = levelKey.ToLowerInvariant();
+
+        if (nativeClass == 0x011E && moby.Flag4A == 0x10 && moby.Flag4B == 0xFF)
+        {
+            identity = NativeClassObserved(
+                "Ambient sound emitter",
+                "positional ambient sound emitter / moving sound path",
+                "The native 0x011E handler copied across all 35 level overlays sets the Moby's 3D sound distance, optionally advances its position along 16-byte path points, selects a sound-table entry, and calls PlaySound with this non-rendered Moby as the positional source.",
+                ColorRgba.FromRgb(116, 185, 255));
+            return true;
+        }
+
+        if (nativeClass == 0x0022 && moby.Type == 0x20 && moby.Flag4A == 0xFF && moby.Flag4B == 0xFF)
+        {
+            identity = NativeClassObserved(
+                "Dragon Egg",
+                "visible Egg Thief-carried dragon egg collectible actor",
+                "Native class 0x0022 is the engine's Dragon Egg model. These loader-created rows sit immediately after their levels' source tables and beside active class-0x0021 Egg Thieves, whose drop/child class byte is also 0x22; they are the visible carried eggs, not flags, scenery, or a second thief.",
+                ColorRgba.FromRgb(91, 184, 226));
+            return true;
+        }
+
+        if (nativeClass == 0x0148 && key is "magiccrafters" or "alpineridge" or "highcaves" or "blowhard")
+        {
+            bool dormant = key == "alpineridge" && moby.TrueIndex is 135 or 136;
+            identity = NativeClassObserved(
+                dormant ? "Dormant Green Druid spell target" : "Green Druid spell target",
+                dormant
+                    ? "orphaned nonvisual green druid collision-triangle target control marker"
+                    : "nonvisual green druid collision-triangle target control marker",
+                dormant
+                    ? "Native class 0x0148 acquires a floor collision triangle and snaps this marker to its centroid for Green Druid terrain spells. Alpine Ridge T135 and T136 have the same four-byte props and handler but no retail owner reference, making them dormant orphan targets."
+                    : "Native class 0x0148 acquires a floor collision triangle and snaps this marker to its centroid. Green Druid props reference the row by true index as the destination for their terrain-moving spell; the class has no model and is nonvisual.",
+                ColorRgba.FromRgb(116, 185, 255));
+            return true;
+        }
+
+        if (nativeClass == 0x015F &&
+            key is "toasty" or "doctorshemp" or "blowhard" &&
+            GemValue.TryFromIdByte(moby.Flag4B, out GemValue phaseReward))
+        {
+            string owner = key switch
+            {
+                "toasty" => "Toasty",
+                "doctorshemp" => "Doctor Shemp",
+                _ => "Blowhard"
+            };
+            string chainEvidence = key switch
+            {
+                "toasty" => "Toasty's owner links the single Blue marker T53.",
+                "doctorshemp" => "Doctor Shemp's owner links T71 (Blue) to T70 (Yellow) and then terminates the chain.",
+                _ => "Blowhard's owner links the two Yellow markers T73 to T74 and then terminates the chain."
+            };
+            identity = NativeClassObserved(
+                $"{owner} phase-reward {phaseReward.Name} marker",
+                "nonvisual boss phase-reward gem spawn marker",
+                $"Native class 0x015F is a linked phase-reward marker, not scenery or a visible gem. Its 16-byte payload stores the next true index and original XYZ; the boss handler advances that chain, copies the owner's current position into the marker, spawns the gem class selected by drop byte 0x{moby.Flag4B:X2} ({phaseReward.Name}, value {phaseReward.Value}), and removes the marker. {chainEvidence}",
+                ColorRgba.FromRgb(143, 166, 184));
+            return true;
+        }
+
+        string? returnHomeLetter = nativeClass switch
+        {
+            0x01AE => "E",
+            0x01B1 => "H",
+            0x01B6 => "M",
+            0x01B7 => "N",
+            0x01B8 => "O",
+            0x01BB => "R",
+            0x01BD => "T",
+            0x01BE => "U",
+            _ => null
+        };
+        if (key == "drycanyon" && returnHomeLetter is not null)
+        {
+            identity = NativeClassObserved(
+                $"Return Home letter {returnHomeLetter}",
+                "visible 3D Return Home portal-text glyph",
+                $"Dry Canyon native class 0x{nativeClass:X4} is the shared 3D letter-{returnHomeLetter} model. The ten runtime-spawned rows spell RETURN HOME above their common portal parent: native letter classes are contiguous from 0x01AA=A, their props preserve the source string indices while skipping its space, and all use the visible metal-shaded glyph family.",
+                ColorRgba.FromRgb(186, 196, 207));
+            return true;
+        }
+
+        switch (key, nativeClass)
+        {
+            case ("toasty", 0x013A) when moby.TrueIndex == 11:
+                identity = NativeClassObserved(
+                    "Toasty disguise boss actor",
+                    "visible Toasty scarecrow-disguise boss actor",
+                    "Toasty native class 0x013A T11 is the active scarecrow-disguise boss root. Its source payload owns the encounter path, links T51 at payload +0x20, and links the Blue phase-reward marker T53 at +0x28. When the disguise sequence reaches native phase 16, the handler copies T11's live position and palette to T51, activates T51 in animation 7, marks T11 defeated, and removes this first form.",
+                    ColorRgba.FromRgb(145, 57, 45));
+                return true;
+            case ("toasty", 0x013A) when moby.TrueIndex == 51:
+                identity = NativeClassObserved(
+                    "Toasty sheep-on-stilts phase actor",
+                    "dormant revealed sheep-on-stilts boss phase actor",
+                    "Toasty native class 0x013A T51 is the dormant second boss form linked reciprocally to active root T11. T11's phase-16 branch moves T51 to the live boss position, enables its render/update state, and starts animation 7; the decoded animation-7 model is Toasty's revealed sheep standing on wooden stilts. T51 also owns the two contained Blue reward rows T54/T55.",
+                    ColorRgba.FromRgb(191, 194, 194));
+                return true;
+            case ("peacekeepers", 0x01A1):
+                identity = NativeClassObserved(
+                    "Cannon-breakable target rock",
+                    "nonvisual cannon auto-target and breakable-rock environment controller",
+                    "Peace Keepers native class 0x01A1 is special-cased by the class-0x00E1 Cannon handler as an auto-aim target even though it has no Moby model. Its own handler waits for a cannon hit, switches environment animation 0, plays the destruction sound, marks the source row killed, and emits four sets of three rock-debris classes 0x01C6-0x01C8. The two source rows are the target-rock control points, not general scene markers.",
+                    ColorRgba.FromRgb(143, 166, 184));
+                return true;
+            case ("mistybog", 0x01E7):
+                identity = NativeClassObserved(
+                    "Chicken cage",
+                    "breakable wooden chicken cage scenery prop",
+                    "Misty Bog native class 0x01E7 is the exact two-cage family T87/T88. Each row is placed beside one Shielded Greenie and one spotted chicken, matching the two chicken-trapping encounters. The five-animation 108-vertex wooden-bar cage model progresses from intact to flattened boards, while its dedicated damage handler drives animations 1/2/4 through the break sequence and removes the cage.",
+                    ColorRgba.FromRgb(145, 111, 68));
+                return true;
+            case ("mistybog", 0x01E4):
+                identity = NativeClassObserved(
+                    "Arrow-sign Fairy",
+                    "static Misty Bog route-arrow sign-bearing Fairy actor",
+                    "Misty Bog native class 0x01E4 is the sole T211 sign-bearing Fairy. Its decoded five-frame model is a winged Fairy holding the large yellow route arrow, and the overlay gives the class no independent update handler. It is the visible tree-stump route cue, not a flight-course class-0x01E5 sign or a nonvisual route marker.",
+                    ColorRgba.FromRgb(242, 156, 208));
+                return true;
+            case ("twilightharbor", 0x00AB):
+                identity = NativeClassObserved(
+                    "Drawbridge lever",
+                    "flame-operated Twilight Harbor drawbridge lever prop",
+                    "Twilight Harbor native class 0x00AB is the two-lever family T21/T22, one handle on each side of the drawbridge. Its two-animation lever model changes state when the native handler receives flame damage; that handler starts environment animation 0 and a timed transition, raising the drawbridge into the Supercharge ramp. These are interactive levers, not generic machinery or scenery anchors.",
+                    ColorRgba.FromRgb(154, 164, 174));
+                return true;
+            case ("artisans", 0x000B):
+            case ("magiccrafters", 0x000B):
+            case ("alpineridge", 0x000B):
+                identity = NativeClassObserved(
+                    "Water bubble emitter",
+                    "nonvisual ambient water-surface bubble particle emitter",
+                    "Native class 0x000B is a non-rendered four-byte timer Moby. Its Artisans, Magic Crafters, and Alpine Ridge handlers tick that timer and, when it expires, spawn particle 0x16 at the marker before resetting the timer. Particle 0x16 jitters horizontally, rises at +8 Z, rotates, shrinks, fades, and uses the same semitransparent 32x32 four-bit bubble sprite in all three levels; all 22 rows form water-surface clusters and have no Moby model.",
+                    ColorRgba.FromRgb(143, 166, 184));
+                return true;
+            case ("artisans", 0x0012):
+                identity = NativeClassObserved(
+                    "Sunny Flight stepping stone",
+                    "Sunny Flight pond stepping-stone platform scenery prop",
+                    "Artisans native class 0x0012 is the five-piece pond set that unlocks Sunny Flight. The five source rows occupy the known stepping-stone arc at one shared height, and the WAD model is a matching low 25-vertex, 40-triangle stone platform with two lit/unlit palette animations.",
+                    ColorRgba.FromRgb(224, 190, 77));
+                return true;
+            case ("artisans", 0x015E):
+                identity = NativeClassObserved(
+                    "Sunny Flight stepping-stone unlock controller",
+                    "nonvisual Sunny Flight stepping-stone environmental-animation controller",
+                    "Artisans native class 0x015E is the sole controller linked by all five class-0x0012 stepping stones. Each stone owns one bit in T138's shared activation byte; the 0x015E handler watches that state, drives environment animation 0 and its opening sound, and restores the open frame immediately when Sunny Flight's visited flag is set.",
+                    ColorRgba.FromRgb(116, 185, 255));
+                return true;
+            case ("artisans", 0x0031):
+                identity = NativeClassObserved(
+                    "Toasty portal gate controller",
+                    "nonvisual Toasty dragon-mouth portal gate environmental-animation controller",
+                    "Artisans native class 0x0031 occurs only at T160 beside the Toasty portal. Its props select environment animation 2 and link the neighboring dragon scene; the native handler checks Toasty's visited flag, the Artisans level-completion flags, and the linked dragon state before opening the gate and playing its sound.",
+                    ColorRgba.FromRgb(116, 185, 255));
+                return true;
+            case ("artisans", 0x0187):
+                identity = NativeClassObserved(
+                    "Toasty portal particle emitter",
+                    "paired nonvisual Toasty portal side-particle emitter",
+                    "Artisans native class 0x0187 is the exact T43/T44 pair flanking the Toasty portal. Its handler projects each marker to a nearby collision triangle, derives a mirrored direction from its yaw, and repeatedly spawns particle type 0x0E from the two portal sides; the class has no model and is not scenery.",
+                    ColorRgba.FromRgb(116, 185, 255));
+                return true;
+            case ("highcaves", 0x006D):
+                identity = NativeClassObserved(
+                    "Rescue Fairy",
+                    "rescue fairy actor / High Caves Fairy Trio member",
+                    "High Caves native class 0x006D is the three-member Fairy Trio that rescues Spyro after a fall. T9-T11 use the same three-animation winged Fairy model, select trio slots 2/0/1 in their props, and each own five embedded flight routes; the dedicated handler steers them relative to Spyro and enters the carrying/rescue state.",
+                    ColorRgba.FromRgb(118, 214, 206));
+                return true;
+            case ("highcaves", 0x00E3):
+                identity = NativeClassObserved(
+                    "Temporary Superflame Fairy",
+                    "temporary Superflame Fairy power-up actor",
+                    "High Caves native class 0x00E3 is the standalone Fairy actor at T24. Its model topology and palette match Haunted Towers' temporary Superflame Fairy, and the shared Fairy-kiss handler grants the finite Superflame timer; the alternate permanent branch explicitly checks class 0x00F1 instead.",
+                    ColorRgba.FromRgb(242, 156, 208));
+                return true;
+            case ("doctorshemp", 0x000D):
+                identity = NativeClassObserved(
+                    RewardLabel("Gem spawner", moby),
+                    "nonvisual route-driven gem spawner control",
+                    $"The native engine enum names class 0x000D MOBYCLASS_GEM_SPAWNER. Doctor Shemp T72-T75 each carry a 40-byte path payload and blue-gem class byte 0x55; the dedicated handler initializes the linked spawned Moby, moves it along the configured path, coordinates sibling spawners, and preserves the configured gem/reward class{RewardEvidence(moby)}.",
+                    ColorRgba.FromRgb(82, 155, 225));
+                return true;
+            case ("wizardpeak", 0x0042):
+                identity = NativeClassObserved(
+                    RewardLabel("Ice Gnorc", moby),
+                    "Ice Gnorc enemy actor / Elder Wizard-conjured Ice Gnorc",
+                    $"Wizard Peak native class 0x0042 dispatches to a full ten-state enemy handler and uses a ten-animation, 139-vertex blue club-carrying Gnorc model. The ten source rows exactly form the Ice Gnorc family: T4 starts active, while the other nine are dormant actors linked through props to Elder Wizards and have their render radius raised to 0x20 when summoned{RewardEvidence(moby)}.",
+                    ColorRgba.FromRgb(92, 156, 220));
+                return true;
+            case ("sunnyflight", 0x0166):
+            case ("nightflight", 0x0166):
+            case ("crystalflight", 0x0166):
+            case ("wildflight", 0x0166):
+            case ("icyflight", 0x0166):
+                identity = NativeClassObserved(
+                    "Flight challenge controller",
+                    "nonvisual flight challenge manager/controller",
+                    "All five flight overlays dispatch native class 0x0166 to the challenge manager. Its handler initializes and tracks the four objective counters and timer, creates the HUD digits, punctuation, and target icons, and handles completion, results, and records; the class has no WAD model and is not a route marker.",
+                    ColorRgba.FromRgb(116, 185, 255));
+                return true;
+            case ("sunnyflight", 0x0105):
+                identity = NativeClassObserved(
+                    "Flight HUD timer digit",
+                    "flight HUD timer digit display control marker",
+                    "Sunny Flight native class 0x0105 is T52 in the hidden timer-display row beside class 0x0106, 0x0147, and 0x0109, which together form the changing flight timer. The engine's native Moby roster assigns sequential classes 0x0104-0x010D to NUMBER_0 through NUMBER_9, making this stable role a HUD timer digit rather than a course marker.",
+                    ColorRgba.FromRgb(236, 240, 241));
+                return true;
+            case ("sunnyflight", 0x01EA):
+                identity = NativeClassObserved(
+                    "Flight barrel HUD icon",
+                    "off-world flight barrel HUD icon display control marker",
+                    "Sunny Flight native class 0x01EA is the eight-row hidden HUD icon pool at the canonical off-world display coordinate. Its decoded 440-byte simple model is a five-band barrel icon, the native spawn table groups it with the other flight-objective icons, and the eight rows match the eight train-barrel targets one-for-one.",
+                    ColorRgba.FromRgb(214, 148, 82));
+                return true;
+            case ("crystalflight", 0x01E5):
+            case ("nightflight", 0x01E5):
+                identity = NativeClassObserved(
+                    "Flight direction arrow sign",
+                    "static flight-course directional arrow sign scenery",
+                    "Crystal Flight and Night Flight native class 0x01E5 use the same two-animation sign-bearer model holding a large yellow directional arrow. The rows receive no actor update beyond the overlay default, so they are static course-direction scenery rather than route controls or HUD records.",
+                    ColorRgba.FromRgb(245, 203, 66));
+                return true;
+            case ("artisans", 0x00AC):
+            case ("stonehill", 0x00AC):
+                identity = NativeClassObserved(
+                    "Tower flag",
+                    "animated tower-flag scenery prop",
+                    "Native class 0x00AC is the same 15-frame, 13-vertex instance-colored flag model in Artisans and Stone Hill. Its decoded geometry is byte-for-byte identical after normalization across both WADs, and seven Artisans plus ten Stone Hill source rows account for the complete 17-flag family, including the previously live-observed tower flags.",
+                    ColorRgba.FromRgb(235, 196, 76));
+                return true;
+            case ("dreamweavers", 0x007E):
+            case ("jacques", 0x007E):
+                identity = NativeClassObserved(
+                    "Clock Fool",
+                    "timed-platform Clock Fool enemy actor",
+                    "Dream Weavers and Jacques native class 0x007E use the same canonical 13-animation actor model and near-identical 13-state route handlers. Each record owns route-point props and drives linked timed platforms, identifying all fifteen rows as visible Clock Fools rather than scenery.",
+                    ColorRgba.FromRgb(230, 91, 67));
+                return true;
+            case ("dreamweavers", 0x0040):
+                identity = NativeClassObserved(
+                    "Wall lantern",
+                    "animated hanging wall-lantern scenery prop",
+                    "Dream Weavers native class 0x0040 is a passive 15-frame hanging light fixture: a textured gold/gray upper wall mount and cage, colored lower lantern body and finial, and a separate red/orange/yellow flame mesh. Its model is shared with Dark Passage, neither level gives the class a dedicated actor handler, and T149/T150 form a same-height pair on the portal facade; it is distinct from the freestanding class-0x0081 Lamp post.",
+                    ColorRgba.FromRgb(217, 166, 79));
+                return true;
+            case ("magiccrafters", 0x010E):
+            case ("alpineridge", 0x010E):
+            case ("highcaves", 0x012E):
+            case ("blowhard", 0x01F1):
+                identity = NativeClassObserved(
+                    RewardLabel("Green Druid", moby),
+                    "green druid terrain-spell enemy actor",
+                    "These four native Green Druid actor classes own the true-index links to class-0x0148 terrain-spell targets. Their level handlers drive the linked collision-triangle anchor during the moving-platform spell; Alpine Ridge's larger-radius and alternate update-distance rows are actor variants of the same family, not control markers.",
+                    ColorRgba.FromRgb(230, 91, 67));
+                return true;
+            case ("jacques", 0x0096):
+                identity = NativeClassObserved(
+                    "Jacques (boss)",
+                    "Jacques boss enemy actor",
+                    "Jacques native class 0x0096 has one source row and a unique seven-animation, 224-vertex actor model. Its dedicated overlay handler implements the three-hit boss state machine, Spyro/camera locking, sounds, and related-object spawning.",
+                    ColorRgba.FromRgb(230, 91, 67));
+                return true;
+            case ("loftycastle", 0x0128):
+                identity = NativeClassObserved(
+                    "Balloognorc balloon",
+                    "linked Balloognorc enemy balloon component",
+                    "Lofty Castle native class 0x0128 is a small two-animation red/yellow balloon model. Its nine rows pair one-for-one at identical coordinates with nine class-0x012A Balloognorc bodies; the balloon handler follows and bobs above its indexed owner and coordinates hit/animation state with that body.",
+                    ColorRgba.FromRgb(230, 91, 67));
+                return true;
+            case ("beastmakers", 0x00BE):
+            case ("dreamweavers", 0x00BF):
+            case ("gnastysworld", 0x00C0):
+                identity = NativeClassObserved(
+                    "Balloonist",
+                    "home-world balloonist actor",
+                    "Native classes 0x00BE, 0x00BF, and 0x00C0 are the successive Beast Makers, Dream Weavers, and Gnasty's World Balloonist actors. Each home world has one source row with the matching 181-vertex, 294-triangle Balloonist model family; the Beast Makers row is also placed beside its transport balloon.",
+                    ColorRgba.FromRgb(248, 196, 113));
+                return true;
+            case ("gnastygnorc", 0x009F) when
+                (moby.Type is 0x00 or 0x20) &&
+                moby.Flag4A == 0x50 &&
+                moby.Flag4B == 0xFF &&
+                moby.SourceByte4F == 0x00:
+                identity = NativeClassObserved(
+                    "Key thief",
+                    "visible key-carrying final-boss chase thief actor",
+                    "Gnasty Gnorc native class 0x009F is the two-actor key-thief family at T1/T2. Its dedicated chase/path handler reacts to Spyro, drives movement and animation, and follows each thief's private link to a class-0x00B5 carried key. The decoded three-animation actor model and reciprocal key-owner links identify both render-radius variants as visible thieves, not route or boss-control markers.",
+                    ColorRgba.FromRgb(230, 91, 67));
+                return true;
+            case ("gnastygnorc", 0x00B5) when
+                (moby.Type is 0x00 or 0x20) &&
+                moby.Flag4A == 0x10 &&
+                moby.Flag4B == 0xFF &&
+                moby.SourceByte4F == 0x02:
+                identity = NativeClassObserved(
+                    "Key-thief key",
+                    "visible key collectible carried by a final-boss key thief",
+                    "Gnasty Gnorc native class 0x00B5 is the reflective carried-key model at T100/T101. Each key's props link back to its class-0x009F thief owner and forward to a reciprocal class-0x00B9 keyhole insertion target; the native handler exposes and collects the key, sets the global key flag, uses the target's position and yaw for insertion, and starts the selected gate animation.",
+                    ColorRgba.FromRgb(248, 196, 113));
+                return true;
+            case ("gnastygnorc", 0x00B9) when
+                moby.Type == 0x00 &&
+                moby.Flag4A == 0x10 &&
+                moby.Flag4B == 0xFF &&
+                moby.SourceByte4F == 0x00:
+                identity = NativeClassObserved(
+                    moby.TrueIndex switch
+                    {
+                        102 => "First keyhole insertion target",
+                        103 => "Second keyhole insertion target",
+                        _ => "Keyhole insertion target"
+                    },
+                    "nonvisual key-lock insertion and camera orientation anchor",
+                    "Gnasty Gnorc native class 0x00B9 has no visible model or dedicated actor handler. T102 and T103 each store one class-0x00B5 key index, while those keys point reciprocally back to their target. The key handler reads the target's XYZ and yaw to face the lock, position the key, and drive the insertion camera before opening the linked environment animation; these rows are keyhole anchors, not thief route waypoints or door-opening controllers.",
+                    ColorRgba.FromRgb(143, 166, 184));
+                return true;
+            case ("gnastysloot", 0x00B5) when
+                moby.Type == 0x20 &&
+                moby.Flag4A == 0x10 &&
+                moby.Flag4B == 0xFF &&
+                moby.SourceByte4F == 0x02:
+                identity = NativeClassObserved(
+                    "Thief key",
+                    "visible carried key collectible and key-gate unlock actor",
+                    "Gnasty's Loot native class 0x00B5 is the complete four-key family at T1/T2/T3/T9. The native handler reads each key's carrying ground-thief or aircraft owner, exposes and collects the key when that holder is gone, sets the global key flag, uses the reciprocal class-0x00B9 unlock-pose marker, starts the selected environment gate animation, and clears the key flag.",
+                    ColorRgba.FromRgb(248, 196, 113));
+                return true;
+            case ("gnastysloot", 0x00B9) when
+                moby.Type == 0x00 &&
+                moby.Flag4A == 0x10 &&
+                moby.Flag4B == 0xFF &&
+                moby.SourceByte4F == 0x00:
+                identity = NativeClassObserved(
+                    "Key-gate unlock pose marker",
+                    "nonvisual key-gate unlock position and yaw target",
+                    "Gnasty's Loot native class 0x00B9 is the four-marker family at T7/T8/T10/T11. Each one-word payload points to a class-0x00B5 key, and each key points reciprocally back to its marker. The key handler uses that marker's position and yaw to require Spyro's facing and animate the unlock sequence before starting the selected environment animation; B9 has no model or handler and is not a thief or aircraft route waypoint.",
+                    ColorRgba.FromRgb(143, 166, 184));
+                return true;
+            case ("gnastysloot", 0x00D9) when
+                moby.Type == 0x00 &&
+                moby.Flag4A == 0xFF &&
+                moby.Flag4B == 0xFF &&
+                moby.SourceByte4F == 0x00:
+                identity = NativeClassObserved(
+                    "Gnasty's Loot 100% ending controller",
+                    "nonvisual 14,000-gem ending and cutscene controller",
+                    "Gnasty's Loot native class 0x00D9 is the sole T128 ending controller. Its native handler requires the 14,000-gem total and Spyro's completion state, fades the environment, marks the level exit, selects cutscene 3, and switches to the ending game state; it is not a return-home or thief-route marker.",
+                    ColorRgba.FromRgb(116, 185, 255));
+                return true;
+            case ("gnastysworld", 0x00D0) when
+                moby.Type == 0x00 &&
+                moby.Flag4A == 0xFF &&
+                moby.Flag4B == 0xFF &&
+                moby.SourceByte4F == 0x00:
+                identity = NativeClassObserved(
+                    "Gnorc Gnexus progression-gate controller",
+                    "nonvisual final-homeworld portal-gate environment-animation controller",
+                    "Gnasty's World native class 0x00D0 is the sole T1 progression controller. Its native handler checks the visited flags for the three final levels and advances their gate environment animations, then checks 12,000 gems, 80 dragons, and 12 eggs to drive the bonus-level gate animation; it is not a visible portal, travel marker, or level-name sign.",
+                    ColorRgba.FromRgb(116, 185, 255));
+                return true;
+            case ("icecavern", 0x00CD):
+                identity = NativeClassObserved(
+                    "Chargeable lamppost",
+                    "chargeable gem lamppost interactive scenery prop",
+                    "Ice Cavern native class 0x00CD dispatches to the dedicated charge/damage-aware lamppost handler. Charging switches its animation/state and raises or releases its linked gem; six of the ten source rows link directly to red, green, or yellow gems while the other four are unlinked posts.",
+                    ColorRgba.FromRgb(121, 178, 226));
+                return true;
+            case ("icecavern", 0x00F0):
+                identity = NativeClassObserved(
+                    "Ice stalactite",
+                    "static hanging stalactite scenery prop",
+                    "Ice Cavern native class 0x00F0 is a three-piece static stalactite family. Its one-frame, 52-vertex non-colliding model has a broad ceiling attachment tapering 1,738 model units to a point; all three rows hang above gameplay clusters and use the overlay's default no-op dispatch with no reward or behavioral link.",
+                    ColorRgba.FromRgb(154, 190, 211));
+                return true;
+            case ("icecavern", 0x01A6):
+                identity = NativeClassObserved(
+                    "Extra Life Chest butterfly",
+                    "visible butterfly actor presented by an Extra Life Chest",
+                    "Ice Cavern T229/T230 are loader-created class-0x01A6 children at the exact coordinates of the two class-0x01A5 Extra Life Chests T186/T187. The native Extra Life Chest handler spawns class 0x01A6 as its linked child during the opening cycle, and the decoded one-animation model is a 29-frame pair of flapping wings; these are visible chest butterflies, not level-control markers.",
+                    ColorRgba.FromRgb(244, 205, 69));
+                return true;
+            case ("gnorccove", 0x00CF):
+                identity = NativeClassObserved(
+                    "Steel barrel shell",
+                    "linked visible steel-barrel component prop",
+                    "Gnorc Cove native class 0x00CF decodes as a complete capped steel barrel mesh with four eight-point rings and two cap centers. All eleven rows pair with class-0x00C7 Engineer or class-0x00C9 TNT Wrangler hosts; sibling class 0x00CA has the same geometry with a red TNT-barrel palette, distinguishing these eleven as steel shells rather than generic chest links.",
+                    ColorRgba.FromRgb(177, 126, 70));
+                return true;
+            case ("gnorccove", 0x009A):
+                identity = NativeClassObserved(
+                    "Barrel supply hatch",
+                    "interactive barrel-supply hatch prop",
+                    "Gnorc Cove native class 0x009A is a six-animation, 58-vertex barrel dispenser. Its rest pose is a thin circular floor hatch; each 14-frame cycle raises the barrel mechanism roughly 2,800 model units and fires three frame sounds. Nine rows sit directly in front of the nine Dockworkers and thirteen are standalone lane dispensers.",
+                    ColorRgba.FromRgb(116, 145, 157));
+                return true;
+            case ("hauntedtowers", 0x0088):
+                identity = NativeClassObserved(
+                    "Metal door",
+                    "Superflame-destructible metal door scenery prop",
+                    "Haunted Towers native class 0x0088 is a large, thin doorway-sized metal slab with separate intact/destroyed model states. All twelve source rows occupy castle doorways in the level whose metal doors require Superflame, so these are visible doors rather than nonvisual special controls.",
+                    ColorRgba.FromRgb(113, 119, 132));
+                return true;
+            case ("hauntedtowers", 0x008E):
+                identity = NativeClassObserved(
+                    "Temporary Superflame Fairy",
+                    "temporary Superflame Fairy power-up actor",
+                    "Haunted Towers native class 0x008E uses the 247-vertex winged Fairy model and the shared Fairy-kiss handler. Its normal branch grants the timed Superflame duration; four source rows use this class.",
+                    ColorRgba.FromRgb(242, 156, 208));
+                return true;
+            case ("hauntedtowers", 0x00F1):
+                identity = NativeClassObserved(
+                    "Permanent Superflame Fairy",
+                    "permanent Superflame Fairy power-up actor",
+                    "Haunted Towers native class 0x00F1 is the unique alternate Fairy model checked explicitly by the Fairy-kiss handler. That branch sets the persistent level-long Superflame state, matching the one hidden permanent-power Fairy source row.",
+                    ColorRgba.FromRgb(244, 179, 78));
+                return true;
+            case ("clifftown", 0x0192):
+            case ("terracevillage", 0x0192):
+            case ("darkpassage", 0x0192):
+            case ("gnastysloot", 0x0192):
+                identity = NativeClassObserved(
+                    "Lantern post",
+                    "decorative caged lantern-post scenery prop",
+                    "Native class 0x0192 uses the same normalized 43-vertex, 76-triangle caged lantern-on-a-pole model in Cliff Town, Terrace Village, Dark Passage, and Gnasty's Loot. All nine rows are visible lantern posts with level-local palette data, not generic route scenery.",
+                    ColorRgba.FromRgb(217, 166, 79));
+                return true;
+            case ("beastmakers", 0x00AE):
+            case ("darkhollow", 0x00AE):
+            case ("doctorshemp", 0x00AE):
+            case ("drycanyon", 0x00AE):
+            case ("gnorccove", 0x00AE):
+            case ("icecavern", 0x00AE):
+            case ("jacques", 0x00AE):
+            case ("loftycastle", 0x00AE):
+            case ("magiccrafters", 0x00AE):
+            case ("metalhead", 0x00AE):
+            case ("peacekeepers", 0x00AE):
+            case ("stonehill", 0x00AE):
+            case ("treetops", 0x00AE):
+                identity = NativeClassObserved(
+                    "Key Chest",
+                    "key-required locked chest shell",
+                    "Native class 0x00AE has the same 103-vertex, 146-triangle chest-and-padlock model across all thirteen source levels. The reward/drop byte carries the contained gem class; later-level update-distance 0xFF rows are still the same locked Key Chest family and are not trees or passive scenery.",
+                    ColorRgba.FromRgb(230, 126, 34));
+                return true;
+            case ("loftycastle", 0x0058):
+                identity = NativeClassObserved(
+                    "Caged Fairy",
+                    "Lofty Castle caged fairy rescue actor",
+                    "Lofty Castle native class 0x0058 dispatches to a dedicated five-state moving rescue-actor handler. Its fifteen rows pair one-for-one at identical X/Y with fifteen separate class 0x003D cage props, whose damage handler activates a linked Moby.",
+                    ColorRgba.FromRgb(118, 214, 206));
+                return true;
+            case ("darkpassage", 0x0032):
+            case ("darkpassage", 0x0033):
+                identity = NativeClassRoster(
+                    RewardLabel("Puppy / Devil Dog", moby),
+                    "transforming puppy / devil dog enemy",
+                    $"Dark Passage has thirty class 0x0032 source actors. The level-51 combat handler changes the same Moby between native model classes 0x0032 and 0x0033, while no 0x0033 source roots exist; these are transforming enemies, not control links{RewardEvidence(moby)}.",
+                    ColorRgba.FromRgb(230, 91, 67));
+                return true;
+            case ("darkpassage", 0x0035):
+            case ("darkpassage", 0x0036):
+                identity = NativeClassRoster(
+                    RewardLabel("Turtle / Mutant Turtle", moby),
+                    "transforming turtle / mutant turtle enemy",
+                    $"Dark Passage uses native classes 0x0035 and 0x0036 as the runtime light/dark model forms of the same Turtle/Mutant Turtle enemy family; the alternate class is not a standalone control record{RewardEvidence(moby)}.",
+                    ColorRgba.FromRgb(230, 91, 67));
+                return true;
+            case ("hauntedtowers", 0x00CB):
+                identity = NativeClassObserved(
+                    RewardLabel("Tin Soldier", moby),
+                    "tin soldier enemy",
+                    $"Haunted Towers native class 0x00CB dispatches to a dedicated armored actor handler that applies flame heat and spawns six class-0x00D7 model fragments on its 0x00080000 damage path. All twenty-five source rows use this class; class 0x00CC has a separate lightning-spawning Summoning Wizard handler{RewardEvidence(moby)}.",
+                    ColorRgba.FromRgb(230, 91, 67));
+                return true;
+            case ("icecavern", 0x00D5):
+                identity = NativeClassObserved(
+                    "Bat",
+                    "bat fodder",
+                    "Ice Cavern native class 0x00D5 dispatches to a dedicated damage-aware five-state flying actor handler. It activates within 0x800, moves toward a target, and uses Sin/Cos motion to circle Spyro; exactly sixteen source rows T96-T111 use this class.",
+                    ColorRgba.FromRgb(230, 91, 67));
+                return true;
+            case ("mistybog", 0x001C):
+                identity = NativeClassRoster(
+                    RewardLabel("Shielded Greenie", moby),
+                    "shielded greenie enemy",
+                    $"Misty Bog has twenty-six native class 0x001C source actors dispatched to one complete flame, damage, attack, movement, animation, sound, and death handler with no class transition. Shared or zero-filled formation payloads do not change their actor identity{RewardEvidence(moby)}.",
+                    ColorRgba.FromRgb(230, 91, 67));
+                return true;
+            case ("metalhead", 0x0030):
+                identity = NativeClassObserved(
+                    RewardLabel("Metalhead boss", moby),
+                    "Metalhead boss enemy actor",
+                    $"Metalhead native class 0x0030 is the visible boss actor. Its sole source row carries a blue-gem drop; byte 0x50 is its render radius and does not make the row a reward-control marker{RewardEvidence(moby)}.",
+                    ColorRgba.FromRgb(230, 91, 67));
+                return true;
+            case ("metalhead", 0x0041):
+                identity = NativeClassObserved(
+                    "Power pole",
+                    "destructible Metalhead power pylon",
+                    "Metalhead's seventeen native class 0x0041 rows dispatch to the boss-room power-pole handler, which applies flame damage, spawns destruction effects, decrements the boss counter, and frees linked children. They form the two visible destructible waves, not nonvisual controls.",
+                    ColorRgba.FromRgb(93, 173, 226));
+                return true;
+            case ("metalhead", 0x0066):
+                identity = NativeClassObserved(
+                    RewardLabel("Armored Banana Boy", moby),
+                    "armored banana boy enemy",
+                    $"Metalhead native class 0x0066 dispatches to a handler with the same 87-call sequence as Tree Tops class 0x0064 Banana Boys, while the Metalhead roster distinguishes the armored variant. All twenty-one source rows are reward-dropping actors; byte 0x50 only varies render radius and does not make radius-zero rows into controls{RewardEvidence(moby)}.",
+                    ColorRgba.FromRgb(230, 91, 67));
+                return true;
+            case ("metalhead", 0x00AA):
+                identity = NativeClassObserved(
+                    RewardLabel("Strongarm", moby),
+                    "strongarm enemy",
+                    $"Metalhead native class 0x00AA uses the same handler sequence as Tree Tops class 0x0065 Strongarms. All eleven source rows are reward-dropping actors; byte 0x50 is their render radius, not an object type or helper marker{RewardEvidence(moby)}.",
+                    ColorRgba.FromRgb(230, 91, 67));
+                return true;
+            case ("beastmakers", 0x0005):
+            case ("mistybog", 0x0005):
+            case ("terracevillage", 0x0005):
+                identity = NativeClassObserved(
+                    "Swamp grass clump",
+                    "tall swamp-grass/reed scenery clump",
+                    "Native class 0x0005 uses the same byte-identical static model in Beast Makers, Misty Bog, and Terrace Village: nine long independent triangular blades radiate from a tight base, with a dark swamp palette and no collision, sound, or update handler. All 44 rows are decorative grass/reed clumps.",
+                    ColorRgba.FromRgb(102, 137, 76));
+                return true;
+            case ("beastmakers", 0x0006):
+            case ("mistybog", 0x0006):
+                identity = NativeClassObserved(
+                    "Beast Makers banner",
+                    "decorative Beast Makers three-tail banner/pennant scenery prop",
+                    "Native class 0x0006 is a static planar cloth model: a textured green-and-brown panel with a gold center emblem and three stacked pointed tails. Beast Makers and Misty Bog share identical indexed art and palette; the four rows are decorative banners, not waterfalls.",
+                    ColorRgba.FromRgb(171, 139, 67));
+                return true;
+            case ("beastmakers", 0x01DB):
+                identity = NativeClassObserved(
+                    "Crocodile",
+                    "stationary flame/charge-reactive crocodile enemy actor",
+                    "Beast Makers native class 0x01DB uses a unique five-animation, 58-vertex green crocodilian model with a long snout, tail, four limbs, and collision. Its dedicated five-state handler selects animation 1 for charge damage, animation 2 for flame damage, and completion states through animations 3/4; all four rows are stationary reactive Crocodiles, distinct from class-0x0089 Giant Boars.",
+                    ColorRgba.FromRgb(95, 153, 83));
+                return true;
+            case ("alpineridge", 0x01F3):
+                identity = NativeClassObserved(
+                    "Broad alpine tree",
+                    "broad conical alpine-tree scenery prop",
+                    "Alpine Ridge native class 0x01F3 is a passive 41-vertex, 40-face conical tree model with the same six-ring tree topology as the large alpine-tree family. Its broader canopy geometry and 15-color warm-olive palette distinguish all eight rows from the slender class 0x01F8 variant; the class has no actor update dispatch and is not the unrelated class 0x00F3 Red flag.",
+                    ColorRgba.FromRgb(106, 124, 71));
+                return true;
+            case ("alpineridge", 0x01F4):
+            case ("blowhard", 0x01F4):
+                identity = NativeClassObserved(
+                    "Small swaying alpine tree",
+                    "small animated alpine-tree scenery prop",
+                    "Native class 0x01F4 is a 17-frame, 13-vertex tapered tree-sheet model shared by Alpine Ridge and Blowhard. Its animation visibly bends the tree while both level dispatchers leave the class without an actor update handler, identifying all eight rows as small swaying alpine-tree scenery.",
+                    ColorRgba.FromRgb(96, 151, 115));
+                return true;
+            case ("blowhard", 0x01F7):
+            case ("magiccrafters", 0x01F7):
+                identity = NativeClassObserved(
+                    "Large alpine tree",
+                    "large conical alpine-tree scenery prop",
+                    "Native class 0x01F7 uses the same canonical 41-vertex, 40-face conical tree geometry in Blowhard and Magic Crafters. Six connected canopy/root rings form the large tree, and neither level dispatches this class to an actor update handler.",
+                    ColorRgba.FromRgb(83, 137, 108));
+                return true;
+            case ("blowhard", 0x01F8):
+            case ("magiccrafters", 0x01F8):
+                identity = NativeClassObserved(
+                    "Slender alpine tree",
+                    "slender conical alpine-tree scenery prop",
+                    "Native class 0x01F8 is the narrower sibling of class 0x01F7: the shared 41-vertex, 40-face tall-tree topology is about five to six percent slimmer and uses a purple-gray final palette color. Neither level gives it an actor update handler.",
+                    ColorRgba.FromRgb(117, 119, 143));
+                return true;
+            case ("beastmakers", 0x01E6):
+            case ("mistybog", 0x01E6):
+            case ("terracevillage", 0x01E6):
+            case ("treetops", 0x01E6):
+            case ("metalhead", 0x01E6):
+                identity = NativeClassObserved(
+                    "Torch",
+                    "animated torch scenery prop",
+                    "Native class 0x01E6 has no actor update handler and uses a 15-frame, 45-vertex animated scenery model shared nearly byte-for-byte across all five Beast Makers-region levels. Its palette contains the red/orange/yellow flame ramp, identifying all 124 source rows as torches rather than class 0x00E6 Birds.",
+                    ColorRgba.FromRgb(230, 126, 34));
+                return true;
+            default:
+                identity = default;
+                return false;
+        }
     }
 
     private static bool TryClassifyNativeDragonScene(Moby moby, out MobyIdentity identity)
@@ -241,12 +854,13 @@ public static class MobyIdentityClassifier
         if (moby.Type == 0x18 &&
             moby.SourceByte36 == 0xC2 &&
             moby.Flag4A == 0x40 &&
-            moby.Flag4B is 0x55 or 0x56)
+            moby.Flag4B is >= 0x53 and <= 0x57)
         {
-            identity = Observed(
+            identity = new MobyIdentity(
                 RewardLabel("Flame/charge chest", moby),
                 "flame-or-charge breakable chest",
-                "Peace Keepers and Dry Canyon user overrides identify this exact type 0x18/source byte 0xC2/flag 0x40 fingerprint as flame/charge chest records, with the reward byte stored in flag4B.",
+                "native-class-byte-pattern",
+                "Native class 0x00C2 is the wooden chest family; the loader's type 0x18/flag 0x40 runtime form preserves that class while flag4B selects the reward color.",
                 ColorRgba.FromRgb(230, 126, 34));
             return true;
         }
@@ -264,13 +878,27 @@ public static class MobyIdentityClassifier
             return true;
         }
 
-        if (moby.Type == 0x18 && moby.SourceByte36 == 0xAE)
+        if (moby.Type == 0x18 &&
+            moby.SourceByte36 == 0xA5 &&
+            moby.SourceByte37 == 0x01 &&
+            moby.Flag4A == 0x40 &&
+            moby.Flag4B == 0x0E)
         {
             identity = new MobyIdentity(
+                "Life chest",
+                "life chest",
+                "native-class-byte-pattern",
+                "Native class 0x01A5/behavior byte 0x0E is the life-chest family; these type 0x18/flag 0x40 rows are its loader-created runtime form.",
+                ColorRgba.FromRgb(230, 126, 34));
+            return true;
+        }
+
+        if (moby.Type == 0x18 && moby.SourceByte36 == 0xAE)
+        {
+            identity = NativeClassObserved(
                 "Key Chest",
                 "key-required chest shell",
-                "byte-pattern",
-                "Dark Hollow T58 uses type 0x18/source byte 0xAE as the key-required chest shell; its contained gem records hold the reward colors.",
+                "Native class 0x00AE has the same 103-vertex, 146-triangle chest-and-padlock model across all thirteen source levels. Dark Hollow T58 is the loader-transformed type-0x18 form of that same Key Chest family; its contained gem records hold the reward colors.",
                 ColorRgba.FromRgb(230, 126, 34));
             return true;
         }
@@ -302,6 +930,29 @@ public static class MobyIdentityClassifier
         return false;
     }
 
+    private static bool TryClassifyNativeBossContainedGem(string levelKey, Moby moby, out MobyIdentity identity)
+    {
+        if (string.Equals(levelKey, "toasty", StringComparison.OrdinalIgnoreCase) &&
+            moby.TrueIndex is 54 or 55 &&
+            moby.Type == 0x00 &&
+            moby.SourceByte36 == 0x0D &&
+            moby.SourceByte37 == 0x00 &&
+            moby.SourceByte4F == 0x00 &&
+            moby.Flag4A == 0xFF &&
+            GemValue.TryFromIdByte(moby.Flag4B, out GemValue gem))
+        {
+            identity = NativeClassObserved(
+                $"Toasty sheep-form contained {gem.DisplayName}",
+                "nonvisual Toasty sheep-form contained boss reward",
+                $"Toasty class 0x000D T{moby.TrueIndex}'s native payload begins with owner true index 51, the dormant sheep-on-stilts phase actor. Both linked records preserve the contained-gem encoding, so the editor identifies the boss reward without treating it as locked-chest content.",
+                gem.Color);
+            return true;
+        }
+
+        identity = default;
+        return false;
+    }
+
     private static bool TryClassifyContainedGem(Moby moby, out MobyIdentity identity)
     {
         if (moby.Type == 0x00 && moby.Flag4A == 0xFF && GemValue.TryFromIdByte(moby.Flag4B, out GemValue gem))
@@ -312,6 +963,25 @@ public static class MobyIdentityClassifier
                 "byte-pattern",
                 $"Type 0x00 with flag4A 0xFF and contained gem byte 0x{moby.Flag4B:X2}.",
                 gem.Color);
+            return true;
+        }
+
+        identity = default;
+        return false;
+    }
+
+    private static bool TryClassifyNativeArmoredChestLink(Moby moby, out MobyIdentity identity)
+    {
+        bool isNativeArmoredChestClass = moby.SourceByte36 == 0x91 && moby.SourceByte37 == 0x01;
+        bool isLinkedVariant = moby.Type != 0x20 || moby.Flag4A != 0x10;
+        if (isNativeArmoredChestClass && isLinkedVariant)
+        {
+            identity = new MobyIdentity(
+                RewardLabel("Armored / super flame chest linked record", moby),
+                "native armored/super flame chest linked control record",
+                "native-class-linked",
+                $"The full native class 0x0191 is MOBYCLASS_ARMORED_CHEST in the decompilation and 21 same-class source rows use the validated Super flame chest family; this outlier is retained as a linked/control record rather than mislabeled from its low byte{RewardEvidence(moby)}.",
+                ColorRgba.FromRgb(230, 126, 34));
             return true;
         }
 
@@ -502,10 +1172,10 @@ public static class MobyIdentityClassifier
             case 0xAE:
                 identity = PositionInferred("Tree/scenery prop", "tree scenery prop", $"Tree/scenery source byte 0x{moby.SourceByte36:X2}; the remaining no-reward Dry Canyon records are a local repeated scenery cluster beside return-home and Gnorc route objects.", ColorRgba.FromRgb(63, 176, 117));
                 return true;
-            case 0xE6 when moby.Flag4A == 0x10 && moby.Flag4B is 0x54 or 0x55 or 0x56 or 0x57:
+            case 0xE6 when moby.SourceByte37 == 0x00 && moby.Flag4A == 0x10 && moby.Flag4B is 0x54 or 0x55 or 0x56 or 0x57:
                 identity = Observed("Bird", "bird enemy", $"Dry Canyon user overrides repeatedly identify source byte 0xE6 reward actor records as birds{RewardEvidence(moby)}.", ColorRgba.FromRgb(230, 91, 67));
                 return true;
-            case 0xE6 when moby.Flag4A is 0x10 or 0x26 && moby.Flag4B == 0xFF:
+            case 0xE6 when moby.SourceByte37 == 0x00 && moby.Flag4A is 0x10 or 0x26 && moby.Flag4B == 0xFF:
                 identity = Observed("Bird", "bird enemy", "Dry Canyon user overrides identify source byte 0xE6 reward variants as birds; the no-reward 0xFF variant repeats heavily in the Beast Makers family with the same actor byte.", ColorRgba.FromRgb(230, 91, 67));
                 return true;
             case 0xEF:
@@ -615,30 +1285,14 @@ public static class MobyIdentityClassifier
             case ("loftycastle", 0x28) when moby.Flag4B == 0xFF:
                 identity = PositionInferred("Lofty Castle route scenery", "Lofty Castle route scenery prop", "This no-reward Lofty Castle package repeats around route, chest, key, and whirlwind clusters, so the editor treats it as route scenery.", ColorRgba.FromRgb(93, 173, 226));
                 return true;
-            case ("loftycastle", 0x58):
-                identity = RosterInferred("Caged Fairy", "Lofty Castle fairy rescue actor", "Lofty Castle has fifteen source byte 0x58 no-reward records at the same positions as the fifteen fairy cage/support records; the walkthrough repeatedly gates whirlwinds behind freeing caged fairies.", ColorRgba.FromRgb(118, 214, 206));
-                return true;
             case ("loftycastle", 0x34):
                 identity = RosterInferred(RewardLabel("Devil Cupid", moby), "devil cupid enemy", $"Lofty Castle source byte 0x34 is a twelve-record reward actor family, matching the level guide's twelve Devil Cupids{RewardEvidence(moby)}.", ColorRgba.FromRgb(230, 91, 67));
                 return true;
             case ("loftycastle", 0x3E):
                 identity = RosterInferred(RewardLabel("Fat Bat", moby), "fat bat enemy", $"Lofty Castle source byte 0x3E is a twelve-record reward actor family, matching the level guide's twelve Fat Bats{RewardEvidence(moby)}.", ColorRgba.FromRgb(230, 91, 67));
                 return true;
-            case ("darkpassage", 0x32):
-                identity = RosterInferred(RewardLabel("Puppy / Devil Dog", moby), "puppy devil dog enemy", $"Dark Passage source byte 0x32 is the large transforming dog reward family, matching the Puppy/Devil Dog lane controlled by the Lamp Fools{RewardEvidence(moby)}.", ColorRgba.FromRgb(230, 91, 67));
-                return true;
             case ("darkpassage", 0x34):
                 identity = RosterInferred(RewardLabel("Devil Cupid", moby), "devil cupid enemy", $"Dark Passage source byte 0x34 is the reward-bearing archer family along the route, matching the level guide's Devil Cupid lane{RewardEvidence(moby)}.", ColorRgba.FromRgb(230, 91, 67));
-                return true;
-            case ("darkpassage", 0x35):
-                identity = RosterInferred(RewardLabel("Turtle / Mutant Turtle", moby), "turtle mutant-turtle enemy", $"Dark Passage source byte 0x35 is the light-state turtle enemy reward family paired with Lamp Fool changes, matching the Turtle/Mutant Turtle lane{RewardEvidence(moby)}.", ColorRgba.FromRgb(230, 91, 67));
-                return true;
-            case ("darkpassage", 0x33):
-            case ("darkpassage", 0x36):
-                identity = ReviewInferred(RewardLabel("Lamp Fool transform control link", moby), "Lamp Fool transform control link", $"Release review keeps this smaller source family grouped beside Lamp Fools and Dark Passage light/dark enemy transformation records{RewardEvidence(moby)}; no independent visible host is proven, so the editor treats it as linked control data.", ColorRgba.FromRgb(216, 137, 42));
-                return true;
-            case ("hauntedtowers", 0xCB):
-                identity = ReviewInferred(RewardLabel("Tin Soldier / Gnorc-Adier", moby), "Haunted Towers armored enemy family", $"Haunted Towers source byte 0xCB is the remaining large reward-bearing combat family after Summoning Wizards and chest families are separated; it aligns with the Tin Soldier/Gnorc-Adier roster lanes{RewardEvidence(moby)}.", ColorRgba.FromRgb(230, 91, 67));
                 return true;
             case ("hauntedtowers", 0x8E) when moby.Flag4B == 0xFF:
                 identity = PositionInferred("Haunted Towers scenery prop", "Haunted Towers scenery prop", "This no-reward Haunted Towers package repeats around chest, gem, and tower-route scenery clusters, so the editor treats it as scenery rather than an actor.", ColorRgba.FromRgb(93, 173, 226));
@@ -769,9 +1423,6 @@ public static class MobyIdentityClassifier
             case ("clifftown", 0xE5):
                 identity = RosterInferred("Fat Momma/Cauldron", "fat momma cauldron reward record", "Cliff Town has seven 0xE5 reward/package records sharing raw special-data signature 6da6f89aef7aebc7; they pair with the 0xDA support package and match the seven Fat Lady/cauldron encounters listed by the Enemy/Boss FAQ.", ColorRgba.FromRgb(230, 126, 34));
                 return true;
-            case ("icecavern", 0xD5) when moby.Flag4B == 0x10:
-                identity = RosterInferred("Bat", "bat fodder", "Ice Cavern's sixteen-record no-reward source byte 0xD5 family matches the level's bat fodder roster.", ColorRgba.FromRgb(230, 91, 67));
-                return true;
             case ("magiccrafters", 0x24) when moby.Flag4B == 0x10:
             case ("alpineridge", 0x24) when moby.Flag4B == 0x10:
             case ("highcaves", 0x24) when moby.Flag4B == 0x10:
@@ -815,7 +1466,7 @@ public static class MobyIdentityClassifier
                 identity = RosterInferred("Green Druid", "green druid enemy", "Blowhard has one four-record source byte 0xF1 actor family matching the enemy guide's four platform-moving green druids inside the cave.", ColorRgba.FromRgb(230, 91, 67));
                 return true;
             case ("blowhard", 0x1B):
-                identity = RosterInferred("Lightning Wizard", "lightning wizard enemy", "Blowhard has one seven-record source byte 0x1B actor family matching the level guide's seven Lightning Wizards.", ColorRgba.FromRgb(230, 91, 67));
+                identity = RosterInferred("Green Wizard", "green wizard enemy", "Blowhard has seven native actor 0x011B Green Wizard rows (T0-T6). This native family is the preferred same-level donor for replacement and per-instance properties/route work in Blowhard.", ColorRgba.FromRgb(230, 91, 67));
                 return true;
             case ("beastmakers", 0xD2) when moby.Flag4B == 0x10:
             case ("terracevillage", 0xD2) when moby.Flag4B == 0x10:
@@ -876,9 +1527,6 @@ public static class MobyIdentityClassifier
             case ("mistybog", 0xD2):
                 identity = RosterInferred("Chicken", "chicken fodder", "Misty Bog's only small no-reward type 0x20 actor family is the level's chicken fodder lane.", ColorRgba.FromRgb(230, 91, 67));
                 return true;
-            case ("mistybog", 0x1C):
-                identity = RosterInferred("Shielded Greenie", "shielded greenie enemy", "Misty Bog's remaining large reward-dropping source byte 0x1C actor family matches the level roster's Shielded Greenies, including the extra line-formation records noted by the enemy guide.", ColorRgba.FromRgb(230, 91, 67));
-                return true;
             case ("doctorshemp", 0x74):
                 identity = RosterInferred("Kamikaze tribesman", "blind runner / kamikaze tribesman enemy", "Doctor Shemp has one seven-record source byte 0x74 actor family matching the Enemy/Boss FAQ's seven Kamikaze warriors in this boss level.", ColorRgba.FromRgb(230, 91, 67));
                 return true;
@@ -905,9 +1553,6 @@ public static class MobyIdentityClassifier
                 return true;
             case ("treetops", 0x2A) when moby.Flag4B == 0xFF:
                 identity = SourceObserved("Bird", "bird enemy", "Tree Tops source byte 0x2A no-reward records share source-disc special signature 7f3c53122e06f2b2 with 48 exact Tree Tops Bird records.", ColorRgba.FromRgb(230, 91, 67));
-                return true;
-            case ("metalhead", 0x41):
-                identity = RosterInferred("Power pylon", "Metalhead power pylon prop", "Metalhead's seventeen no-reward prop records align with the two boss-room pylon waves in the level roster.", ColorRgba.FromRgb(93, 173, 226));
                 return true;
             case ("darkpassage", 0x7A) when moby.Flag4B == 0xFF:
                 identity = RosterInferred("Lamp Fool", "lamp fool control enemy", "Dark Passage has one nine-record no-reward source byte 0x7A family matching the level guide's nine Fools that control the light/dark enemy state.", ColorRgba.FromRgb(230, 91, 67));
@@ -1132,17 +1777,6 @@ public static class MobyIdentityClassifier
             return true;
         }
 
-        if (moby.SourceByte36 == 0x1E && moby.Flag4A == 0x10 && moby.Flag4B == 0xFF)
-        {
-            identity = new MobyIdentity(
-                "Class 0x1E passive control",
-                "unresolved passive native control point",
-                "native-passive-class",
-                "Native class 0x1E has no standalone Stone Hill actor update handler. These non-rendered points are consumed by other level systems, but each point's exact role is unresolved; do not assume every row is a scene or route marker.",
-                ColorRgba.FromRgb(143, 166, 184));
-            return true;
-        }
-
         if (moby.SourceByte36 == 0x43 && moby.Flag4A == 0xFF && moby.Flag4B == 0xFF)
         {
             identity = new MobyIdentity(
@@ -1231,16 +1865,6 @@ public static class MobyIdentityClassifier
             return true;
         }
 
-        if (string.Equals(levelKey, "metalhead", StringComparison.OrdinalIgnoreCase) && moby.SourceByte36 == 0x66)
-        {
-            identity = ReviewInferred(
-                "Metalhead pylon reward control",
-                "Metalhead pylon/boss reward control marker",
-                "Release review groups source byte 0x66 type 0x00 records with Metalhead pylon and boss reward clusters; source byte 0xAA is kept separate for the bird-linked control family until linked behavior is proven.",
-                ColorRgba.FromRgb(143, 166, 184));
-            return true;
-        }
-
         if (string.Equals(levelKey, "doctorshemp", StringComparison.OrdinalIgnoreCase) && moby.SourceByte36 == 0x5F)
         {
             identity = ReviewInferred(
@@ -1307,16 +1931,6 @@ public static class MobyIdentityClassifier
                 "Flight course control marker",
                 "flight level course control marker",
                 $"Release review groups source byte 0x{moby.SourceByte36:X2} type 0x00 records with the flight-level route/target setup; no visible model is expected.",
-                ColorRgba.FromRgb(143, 166, 184));
-            return true;
-        }
-
-        if (string.Equals(levelKey, "metalhead", StringComparison.OrdinalIgnoreCase) && moby.SourceByte36 == 0xAA)
-        {
-            identity = ReviewInferred(
-                "Metalhead bird reward control",
-                "Metalhead bird/reward control marker",
-                "Release review groups source byte 0xAA type 0x00 records with Metalhead bird and reward-control clusters; source byte 0x66 is kept separate as the pylon/boss reward-control family.",
                 ColorRgba.FromRgb(143, 166, 184));
             return true;
         }
@@ -1471,16 +2085,6 @@ public static class MobyIdentityClassifier
             return true;
         }
 
-        if (string.Equals(levelKey, "metalhead", StringComparison.OrdinalIgnoreCase) && moby.Type == 0x40 && moby.SourceByte36 == 0x30 && moby.Flag4B is >= 0x53 and <= 0x57)
-        {
-            identity = ReviewInferred(
-                RewardLabel("Metalhead boss reward control", moby),
-                "Metalhead boss reward control marker",
-                $"Release review groups this type 0x40/source 0x30 record with Metalhead boss reward clusters{RewardEvidence(moby)}.",
-                ColorRgba.FromRgb(230, 126, 34));
-            return true;
-        }
-
         if (string.Equals(levelKey, "terracevillage", StringComparison.OrdinalIgnoreCase) && moby.Type == 0x28 && moby.SourceByte36 == 0xD2)
         {
             identity = ReviewInferred(
@@ -1528,16 +2132,6 @@ public static class MobyIdentityClassifier
                 "Haunted Towers special control marker",
                 "Release review groups this type 0x10 source family as a Haunted Towers control cluster; no visible model is expected until linked behavior is proven.",
                 ColorRgba.FromRgb(143, 166, 184));
-            return true;
-        }
-
-        if (string.Equals(levelKey, "metalhead", StringComparison.OrdinalIgnoreCase) && moby.Type is 0x1A or 0x1C && moby.SourceByte36 == 0x66 && moby.Flag4B is >= 0x53 and <= 0x57)
-        {
-            identity = ReviewInferred(
-                RewardLabel("Metalhead pylon reward control", moby),
-                "Metalhead pylon/boss reward control marker",
-                $"Release review groups this Metalhead reward-bearing special family with nearby pylon and boss reward support records{RewardEvidence(moby)}.",
-                ColorRgba.FromRgb(230, 91, 67));
             return true;
         }
 
@@ -1748,9 +2342,6 @@ public static class MobyIdentityClassifier
             case ("loftycastle", 0x28, 0x2A):
                 identity = RosterInferred("Balloognorc linked record", "balloon gnorc linked record", "This Lofty Castle type 0x28 record shares the 0x2A Balloognorc pointer; eight visible actors plus this linked sibling match the guide's nine Balloognorcs.", ColorRgba.FromRgb(230, 91, 67));
                 return true;
-            case ("metalhead", 0x2A, 0xAA) when moby.Flag4B is 0x54 or 0x55:
-                identity = SourceObserved("Bird support", "bird enemy support", "Metalhead type 0x2A source byte 0xAA reward records share source-disc special signature f872cc6f8303f645 with 21 exact Metalhead Bird records; the green- and blue-reward variants share the same level-local model family.", ColorRgba.FromRgb(230, 91, 67));
-                return true;
             case ("alpineridge", 0x10, 0xA5) when moby.Flag4B == 0x0E:
                 identity = SourceObserved("Red flag", "red flag scenery prop", "Alpine Ridge type 0x10 source byte 0xA5 shares source-disc special signature f054ec7055d178d0 with eight exact Alpine Ridge Red flag records.", ColorRgba.FromRgb(220, 78, 65));
                 return true;
@@ -1909,6 +2500,10 @@ public static class MobyIdentityClassifier
 
         string text = $"{moby.Label} {moby.CandidateKind}".ToLowerInvariant();
         return HasPlaceholderControlLabel(moby) ||
+            text.Contains("class 0x1e passive control") ||
+            text.Contains("unresolved passive native control") ||
+            text.Contains("linked helper") ||
+            text.Contains("rescue control/helper") ||
             text.Contains("scene/route control") ||
             text.Contains("0x1e scene/route");
     }
@@ -1937,7 +2532,8 @@ public static class MobyIdentityClassifier
     {
         if (!identity.Confidence.Contains("position-cluster-inferred", StringComparison.OrdinalIgnoreCase) &&
             !identity.Confidence.Contains("guide-roster-count", StringComparison.OrdinalIgnoreCase) &&
-            !identity.Confidence.Contains("source-signature-observed", StringComparison.OrdinalIgnoreCase))
+            !identity.Confidence.Contains("source-signature-observed", StringComparison.OrdinalIgnoreCase) &&
+            !identity.Confidence.Contains("native-class-linked", StringComparison.OrdinalIgnoreCase))
             return false;
 
         string existing = $"{moby.Label} {moby.CandidateKind} {moby.Confidence} {moby.Evidence}".ToLowerInvariant();
@@ -1962,6 +2558,8 @@ public static class MobyIdentityClassifier
             return true;
         if (incoming.Contains("egg thief") && existing.Contains("egg theif"))
             return true;
+        if (incoming.Contains("ambient sound emitter") && existing.Contains("return home helper"))
+            return true;
 
         return false;
     }
@@ -1975,10 +2573,17 @@ public static class MobyIdentityClassifier
     {
         return identity.Confidence.Contains("byte-pattern", StringComparison.OrdinalIgnoreCase) ||
             identity.Confidence.Contains("native-scene", StringComparison.OrdinalIgnoreCase) ||
+            identity.Confidence.Contains("native-class", StringComparison.OrdinalIgnoreCase) ||
             identity.Confidence.Contains("user", StringComparison.OrdinalIgnoreCase) ||
             identity.Confidence.Contains("live", StringComparison.OrdinalIgnoreCase) ||
             identity.Confidence.Contains("observed", StringComparison.OrdinalIgnoreCase) ||
             identity.Confidence.Contains("validated", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsDecompNativeClassIdentity(MobyIdentity identity)
+    {
+        return identity.Confidence.Contains("native-class-observed", StringComparison.OrdinalIgnoreCase) ||
+            identity.Confidence.Contains("native-handler", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsUserOverride(MobyIdentity identity)
@@ -2028,6 +2633,16 @@ public static class MobyIdentityClassifier
     private static MobyIdentity SourceObserved(string label, string kind, string evidence, ColorRgba color)
     {
         return new MobyIdentity(label, kind, "source-signature-observed", evidence, color);
+    }
+
+    private static MobyIdentity NativeClassObserved(string label, string kind, string evidence, ColorRgba color)
+    {
+        return new MobyIdentity(label, kind, "native-class-observed", evidence, color);
+    }
+
+    private static MobyIdentity NativeClassRoster(string label, string kind, string evidence, ColorRgba color)
+    {
+        return new MobyIdentity(label, kind, "guide-roster-count-native-handler", evidence, color);
     }
 }
 

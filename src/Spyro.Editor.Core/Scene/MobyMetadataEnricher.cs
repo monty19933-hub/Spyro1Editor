@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Spyro.Editor.Core.Cache;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Workspace;
 
@@ -19,6 +20,17 @@ public static class MobyMetadataEnricher
         labeled += ApplyLevelModelFamilyLabels(mobys);
         int behaviorLinks = ApplyBehaviorLinks(workspace, levelKey, mobys);
         int inferredLinks = InferRelationshipLinks(levelKey, mobys);
+        foreach (Moby moby in mobys)
+        {
+            moby.OriginalColor = moby.Color;
+            moby.OriginalPatchStatus = moby.PatchStatus;
+            moby.OriginalPatchLead = moby.PatchLead;
+            moby.OriginalCandidateKind = moby.CandidateKind;
+            moby.OriginalConfidence = moby.Confidence;
+            moby.OriginalEvidence = moby.Evidence;
+            moby.OriginalBehaviorNote = moby.BehaviorNote;
+            moby.OriginalZoneLabel = moby.ZoneLabel;
+        }
         return new MobyMetadataResult(labeled, behaviorLinks, inferredLinks);
     }
 
@@ -63,6 +75,9 @@ public static class MobyMetadataEnricher
                 int sourceByte36 = JsonValue.GetInt32(item, "sourceByte36Hex", -1);
                 if (sourceByte36 >= 0)
                     moby.SourceByte36 = sourceByte36;
+                int sourceByte37 = JsonValue.GetInt32(item, "sourceByte37Hex", -1);
+                if (sourceByte37 >= 0)
+                    moby.SourceByte37 = sourceByte37;
                 int sourceByte4F = JsonValue.GetInt32(item, "sourceByte4FHex", -1);
                 if (sourceByte4F >= 0)
                     moby.SourceByte4F = sourceByte4F;
@@ -86,10 +101,13 @@ public static class MobyMetadataEnricher
     private static int ApplyIdentityObservationFiles(EditorWorkspace workspace, string levelKey, IList<Moby> mobys)
     {
         int applied = 0;
+        HashSet<Moby> observationApplied = new();
         foreach (string path in IdentityObservationPaths(workspace, levelKey))
         {
             if (!File.Exists(path))
                 continue;
+
+            bool implicitLevelScope = Path.GetFileName(path).StartsWith($"{levelKey}-", StringComparison.OrdinalIgnoreCase);
 
             try
             {
@@ -99,7 +117,8 @@ public static class MobyMetadataEnricher
                 if (!TryGetObservationArray(root, out JsonElement observations))
                     continue;
 
-                foreach (JsonElement observation in observations.EnumerateArray())
+                foreach (JsonElement observation in observations.EnumerateArray()
+                    .OrderBy(IdentityObservationScopeRank))
                 {
                     if (!ObservationAppliesToLevel(observation, levelKey))
                         continue;
@@ -110,8 +129,11 @@ public static class MobyMetadataEnricher
 
                     foreach (Moby moby in mobys)
                     {
-                        if (!ShouldApplyIdentityObservation(moby) || !ObservationMatchesMoby(observation, moby))
+                        if ((!observationApplied.Contains(moby) && !ShouldApplyIdentityObservation(moby)) ||
+                            !ObservationMatchesMoby(observation, moby, mobys, implicitLevelScope))
+                        {
                             continue;
+                        }
 
                         moby.Label = label;
                         moby.OriginalLabel = label;
@@ -120,6 +142,7 @@ public static class MobyMetadataEnricher
                         moby.Evidence = FirstNonEmpty(JsonValue.GetString(observation, "evidence"), moby.Evidence);
                         if (ColorRgba.TryParseHex(JsonValue.GetString(observation, "color"), out ColorRgba color))
                             moby.Color = color;
+                        observationApplied.Add(moby);
                         applied++;
                     }
                 }
@@ -131,6 +154,16 @@ public static class MobyMetadataEnricher
         }
 
         return applied;
+    }
+
+    private static int IdentityObservationScopeRank(JsonElement observation)
+    {
+        int rank = 0;
+        if (FirstJsonInt64(observation, -1, "specialDataPointerHex", "specialDataPointer") > 0)
+            rank++;
+        if (FirstJsonInt32(observation, -1, "matchTrueIndex", "trueIndex") >= 0)
+            rank += 2;
+        return rank;
     }
 
     private static IEnumerable<string> IdentityObservationPaths(EditorWorkspace workspace, string levelKey)
@@ -227,24 +260,70 @@ public static class MobyMetadataEnricher
             proof.Contains("until live-tested", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool ObservationMatchesMoby(JsonElement observation, Moby moby)
+    private static bool ObservationMatchesMoby(
+        JsonElement observation,
+        Moby moby,
+        IEnumerable<Moby> levelMobys,
+        bool implicitLevelScope)
     {
         string fingerprint = JsonValue.GetString(observation, "fingerprint");
         if (!string.IsNullOrWhiteSpace(fingerprint))
-            return string.Equals(fingerprint, IdentityFingerprint(moby), StringComparison.OrdinalIgnoreCase) &&
-                ObservationPointerMatchesMoby(observation, moby) &&
-                ObservationTrueIndexMatchesMoby(observation, moby);
+        {
+            bool pointerMatches = ObservationPointerMatchesMoby(observation, moby);
+            bool trueIndexMatches = ObservationTrueIndexMatchesMoby(observation, moby);
+            if (!pointerMatches || !trueIndexMatches)
+                return false;
+
+            int optionalSourceByte36 = FirstJsonInt32(observation, -1, "sourceByte36Hex", "sourceByte36", "b36Hex", "b36");
+            int optionalSourceByte37 = FirstJsonInt32(observation, -1, "sourceByte37Hex", "sourceByte37", "b37Hex", "b37");
+            int optionalNativeClass = FirstJsonInt32(observation, -1, "nativeClassHex", "nativeClass");
+            if ((optionalSourceByte36 >= 0 && optionalSourceByte36 != moby.SourceByte36) ||
+                (optionalSourceByte37 >= 0 && optionalSourceByte37 != moby.SourceByte37) ||
+                (optionalNativeClass >= 0 && optionalNativeClass != ((moby.SourceByte37 << 8) | moby.SourceByte36)))
+            {
+                return false;
+            }
+
+            bool legacy = MobyIdentityFingerprint.IsLegacyV1(fingerprint);
+            if (legacy && !LegacyFingerprintHasSafeScope(observation, fingerprint, levelMobys, implicitLevelScope))
+                return false;
+
+            return MobyIdentityFingerprint.Matches(fingerprint, moby, allowLegacyLowByte: legacy);
+        }
 
         int type = FirstJsonInt32(observation, -1, "typeHex", "type", "typeId");
         int sourceByte36 = FirstJsonInt32(observation, -1, "sourceByte36Hex", "sourceByte36", "b36Hex", "b36");
+        int sourceByte37 = FirstJsonInt32(observation, -1, "sourceByte37Hex", "sourceByte37", "b37Hex", "b37");
+        int nativeClass = FirstJsonInt32(observation, -1, "nativeClassHex", "nativeClass");
         int flag4A = FirstJsonInt32(observation, -1, "flag4AHex", "flag4A", "f4AHex", "f4A");
         int flag4B = FirstJsonInt32(observation, -1, "flag4BHex", "flag4B", "f4BHex", "f4B");
         int sourceByte4F = FirstJsonInt32(observation, -1, "sourceByte4FHex", "sourceByte4F", "b4FHex", "b4F");
+        if (nativeClass >= 0)
+        {
+            int nativeLow = nativeClass & 0xFF;
+            int nativeHigh = (nativeClass >> 8) & 0xFF;
+            if ((sourceByte36 >= 0 && sourceByte36 != nativeLow) ||
+                (sourceByte37 >= 0 && sourceByte37 != nativeHigh))
+            {
+                return false;
+            }
+
+            sourceByte36 = nativeLow;
+            sourceByte37 = nativeHigh;
+        }
         if (type < 0 || sourceByte36 < 0 || flag4A < 0 || flag4B < 0 || sourceByte4F < 0)
             return false;
 
+        if (sourceByte37 < 0)
+        {
+            string legacyFingerprint = $"type=0x{type:X2} b36=0x{sourceByte36:X2} f4A=0x{flag4A:X2} f4B=0x{flag4B:X2} b4F=0x{sourceByte4F:X2}";
+            if (!LegacyFingerprintHasSafeScope(observation, legacyFingerprint, levelMobys, implicitLevelScope))
+                return false;
+        }
+
         return type == moby.Type &&
             sourceByte36 == moby.SourceByte36 &&
+            (sourceByte37 < 0 || sourceByte37 == moby.SourceByte37) &&
             flag4A == moby.Flag4A &&
             flag4B == moby.Flag4B &&
             sourceByte4F == moby.SourceByte4F &&
@@ -288,9 +367,39 @@ public static class MobyMetadataEnricher
         return fallback;
     }
 
-    private static string IdentityFingerprint(Moby moby)
+    private static bool LegacyFingerprintHasSafeScope(
+        JsonElement observation,
+        string fingerprint,
+        IEnumerable<Moby> levelMobys,
+        bool implicitLevelScope)
     {
-        return $"type=0x{moby.Type:X2} b36=0x{moby.SourceByte36:X2} f4A=0x{moby.Flag4A:X2} f4B=0x{moby.Flag4B:X2} b4F=0x{moby.SourceByte4F:X2}";
+        int sourceByte37 = FirstJsonInt32(observation, -1, "sourceByte37Hex", "sourceByte37", "b37Hex", "b37");
+        int nativeClass = FirstJsonInt32(observation, -1, "nativeClassHex", "nativeClass");
+        if (sourceByte37 >= 0 || nativeClass >= 0)
+            return true;
+
+        string directLevel = JsonValue.GetString(observation, "levelKey");
+        bool hasSingleLevelScope = implicitLevelScope || !string.IsNullOrWhiteSpace(directLevel);
+        if (!hasSingleLevelScope &&
+            observation.TryGetProperty("levels", out JsonElement levels) &&
+            levels.ValueKind == JsonValueKind.Array)
+        {
+            hasSingleLevelScope = levels.GetArrayLength() == 1;
+        }
+        if (!hasSingleLevelScope)
+            return false;
+
+        int trueIndex = FirstJsonInt32(observation, -1, "matchTrueIndex", "trueIndex");
+        long specialDataPointer = FirstJsonInt64(observation, -1, "specialDataPointerHex", "specialDataPointer");
+        int distinctClasses = levelMobys
+            .Where(candidate => MobyIdentityFingerprint.Matches(fingerprint, candidate, allowLegacyLowByte: true))
+            .Where(candidate => trueIndex < 0 || candidate.TrueIndex == trueIndex)
+            .Where(candidate => specialDataPointer <= 0 || candidate.SpecialDataPointer == (uint)specialDataPointer)
+            .Select(candidate => (candidate.SourceByte37 << 8) | candidate.SourceByte36)
+            .Distinct()
+            .Take(2)
+            .Count();
+        return distinctClasses == 1;
     }
 
     private static bool HasConflictingMetadataIdentity(JsonElement item, Moby moby)
@@ -301,6 +410,10 @@ public static class MobyMetadataEnricher
 
         int sourceByte36 = JsonValue.GetInt32(item, "sourceByte36Hex", -1);
         if (sourceByte36 >= 0 && sourceByte36 != moby.SourceByte36)
+            return true;
+
+        int sourceByte37 = JsonValue.GetInt32(item, "sourceByte37Hex", -1);
+        if (sourceByte37 >= 0 && sourceByte37 != moby.SourceByte37)
             return true;
 
         int sourceByte4F = JsonValue.GetInt32(item, "sourceByte4FHex", -1);
@@ -486,7 +599,7 @@ public static class MobyMetadataEnricher
             moby.CandidateKind = metadata.Kind;
             moby.Confidence = $"global signature: {metadata.Confidence}";
             moby.Evidence = FirstNonEmpty(
-                $"Reused known identity from {metadata.SourceLevelName} T{metadata.SourceTrueIndex}, matching type/special-data/flag family.",
+                $"Reused known identity from {metadata.SourceLevelName} T{metadata.SourceTrueIndex}, matching full native class, render-radius, special-data, and update-distance family.",
                 metadata.Evidence);
             if (metadata.Color != default)
                 moby.Color = metadata.Color;
@@ -507,9 +620,9 @@ public static class MobyMetadataEnricher
         foreach (string searchRoot in new[] { root, Path.Combine(root, "support") }.Where(Directory.Exists))
         {
             foreach (string path in Directory.GetFiles(searchRoot, "*-moby-user-overrides.json"))
-                MergeGlobalSignatureFile(path, result, blocked);
+                MergeGlobalSignatureFile(workspace, path, result, blocked);
             foreach (string path in Directory.GetFiles(searchRoot, "*-live-validation-overrides.json"))
-                MergeGlobalSignatureFile(path, result, blocked);
+                MergeGlobalSignatureFile(workspace, path, result, blocked);
         }
 
         foreach (string key in blocked)
@@ -517,7 +630,7 @@ public static class MobyMetadataEnricher
         return result;
     }
 
-    private static void MergeGlobalSignatureFile(string path, Dictionary<string, GlobalIdentityMetadata> result, HashSet<string> blocked)
+    private static void MergeGlobalSignatureFile(EditorWorkspace workspace, string path, Dictionary<string, GlobalIdentityMetadata> result, HashSet<string> blocked)
     {
         try
         {
@@ -525,15 +638,20 @@ public static class MobyMetadataEnricher
             using JsonDocument document = JsonDocument.Parse(stream);
             JsonElement root = document.RootElement;
             string levelKey = JsonValue.GetString(root, "levelKey");
-            string levelName = string.IsNullOrWhiteSpace(levelKey)
-                ? Path.GetFileNameWithoutExtension(path).Replace("-moby-user-overrides", "", StringComparison.OrdinalIgnoreCase)
-                : levelKey;
+            if (string.IsNullOrWhiteSpace(levelKey))
+            {
+                levelKey = Path.GetFileNameWithoutExtension(path)
+                    .Replace("-moby-user-overrides", "", StringComparison.OrdinalIgnoreCase)
+                    .Replace("-live-validation-overrides", "", StringComparison.OrdinalIgnoreCase);
+            }
+            string levelName = levelKey;
+            Dictionary<int, Moby> sourceMobys = LoadSourceMobysByTrueIndex(workspace, levelKey);
             if (!root.TryGetProperty("mobys", out JsonElement items) || items.ValueKind != JsonValueKind.Array)
                 return;
 
             foreach (JsonElement item in items.EnumerateArray())
             {
-                string key = GlobalSignatureKey(item);
+                string key = GlobalSignatureKey(item, sourceMobys);
                 if (string.IsNullOrEmpty(key) || blocked.Contains(key))
                     continue;
 
@@ -602,21 +720,57 @@ public static class MobyMetadataEnricher
 
     private static string GlobalSignatureKey(Moby moby)
     {
-        if (moby.SpecialDataPointer == 0 || moby.Type is 0x00 or 0x18)
+        if (moby.SpecialDataPointer == 0 || moby.IsGemLike || moby.VisualKind == MobyVisualKind.Control)
             return "";
 
-        return $"{moby.Type:X2}|{moby.SpecialDataPointer:X8}|{moby.Flag4A:X2}";
+        return $"{moby.SourceByte37:X2}{moby.SourceByte36:X2}|{moby.Type:X2}|{moby.SpecialDataPointer:X8}|{moby.Flag4A:X2}";
     }
 
-    private static string GlobalSignatureKey(JsonElement item)
+    private static string GlobalSignatureKey(JsonElement item, IReadOnlyDictionary<int, Moby> sourceMobys)
     {
+        int trueIndex = JsonValue.GetInt32(item, "trueIndex", JsonValue.GetInt32(item, "index", -1));
         int type = JsonValue.GetInt32(item, "typeId", JsonValue.GetInt32(item, "typeHex", -1));
         long specialDataPointer = JsonValue.GetInt64(item, "specialDataPointer", -1);
         int flag4A = JsonValue.GetInt32(item, "flag4A", JsonValue.GetInt32(item, "flag4AHex", -1));
-        if (type < 0 || specialDataPointer <= 0 || flag4A < 0 || type is 0x00 or 0x18)
+        int sourceByte36 = JsonValue.GetInt32(item, "sourceByte36Hex", -1);
+        int sourceByte37 = JsonValue.GetInt32(item, "sourceByte37Hex", -1);
+        if (sourceMobys.TryGetValue(trueIndex, out Moby? source))
+        {
+            if ((type >= 0 && type != source.Type) ||
+                (specialDataPointer >= 0 && (uint)specialDataPointer != source.SpecialDataPointer) ||
+                (flag4A >= 0 && flag4A != source.Flag4A) ||
+                (sourceByte36 >= 0 && sourceByte36 != source.SourceByte36) ||
+                (sourceByte37 >= 0 && sourceByte37 != source.SourceByte37))
+            {
+                return "";
+            }
+
+            return GlobalSignatureKey(source);
+        }
+
+        if (type < 0 || specialDataPointer <= 0 || flag4A < 0 || sourceByte36 < 0 || sourceByte37 < 0)
             return "";
 
-        return $"{type:X2}|{(uint)specialDataPointer:X8}|{flag4A:X2}";
+        return $"{sourceByte37:X2}{sourceByte36:X2}|{type:X2}|{(uint)specialDataPointer:X8}|{flag4A:X2}";
+    }
+
+    private static Dictionary<int, Moby> LoadSourceMobysByTrueIndex(EditorWorkspace workspace, string levelKey)
+    {
+        string path = Path.Combine(workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
+        if (!File.Exists(path))
+            return new Dictionary<int, Moby>();
+
+        try
+        {
+            return MobyLoader.LoadCached(path)
+                .Where(moby => moby.TrueIndex >= 0)
+                .GroupBy(moby => moby.TrueIndex)
+                .ToDictionary(group => group.Key, group => group.First());
+        }
+        catch
+        {
+            return new Dictionary<int, Moby>();
+        }
     }
 
     private static int ApplyLevelSignatureLabels(IList<Moby> mobys)
@@ -660,7 +814,7 @@ public static class MobyMetadataEnricher
                 ? "level signature"
                 : $"level signature: {source.Confidence}";
             moby.Evidence = FirstNonEmpty(
-                $"Reused known identity from matching type/special-data signature T{source.TrueIndex} in this level.",
+                $"Reused known identity from matching full-class/render-radius/special-data signature T{source.TrueIndex} in this level.",
                 source.Evidence);
             moby.BehaviorNote = FirstNonEmpty(moby.BehaviorNote, source.BehaviorNote);
             moby.Color = source.Color;
@@ -711,8 +865,11 @@ public static class MobyMetadataEnricher
             moby.Confidence = string.IsNullOrWhiteSpace(source.Confidence)
                 ? "level model family"
                 : $"level model family: {source.Confidence}";
+            string familyEvidence = moby.SpecialDataPointer != 0
+                ? $"matching level-local model pointer 0x{moby.SpecialDataPointer:X8}"
+                : $"matching native class 0x{moby.SourceByte37:X2}{moby.SourceByte36:X2} and source-record family";
             moby.Evidence = FirstNonEmpty(
-                $"Reused known identity from matching level-local model family T{source.TrueIndex}; reward/state bytes may differ.",
+                $"Reused known identity from T{source.TrueIndex} with {familyEvidence}; reward/state bytes may differ.",
                 source.Evidence);
             moby.BehaviorNote = FirstNonEmpty(moby.BehaviorNote, source.BehaviorNote);
             moby.Color = source.Color;
@@ -724,18 +881,26 @@ public static class MobyMetadataEnricher
 
     private static string LevelSignatureKey(Moby moby)
     {
-        if (moby.SpecialDataPointer == 0 || moby.Type is 0x00 or 0x18)
+        if (moby.SpecialDataPointer == 0 || moby.IsGemLike || moby.VisualKind == MobyVisualKind.Control)
             return "";
 
-        return $"{moby.Type:X2}|{moby.SpecialDataPointer:X8}|{moby.Flag4A:X2}|{moby.Flag4B:X2}";
+        return $"{moby.SourceByte37:X2}{moby.SourceByte36:X2}|{moby.Type:X2}|{moby.SpecialDataPointer:X8}|{moby.Flag4A:X2}|{moby.Flag4B:X2}";
     }
 
     private static string LevelModelFamilyKey(Moby moby)
     {
-        if (moby.SpecialDataPointer == 0 || moby.Type is 0x00 or 0x18)
+        if (moby.IsGemLike || moby.VisualKind == MobyVisualKind.Control)
             return "";
 
-        return $"{moby.Type:X2}|{moby.SourceByte36:X2}|{moby.SpecialDataPointer:X8}";
+        if (moby.SpecialDataPointer != 0)
+            return $"pointer|{moby.SourceByte37:X2}{moby.SourceByte36:X2}|{moby.SpecialDataPointer:X8}";
+
+        if (moby.SourceByte36 == 0 && moby.SourceByte37 == 0)
+            return "";
+
+        // Portable source caches intentionally have no runtime model pointer. Within one level,
+        // Full native class plus update-distance family is the stable equivalent of the pointer family.
+        return $"native-class|{moby.SourceByte37:X2}{moby.SourceByte36:X2}|{moby.Flag4A:X2}";
     }
 
     private static bool IsShareableStrongIdentity(Moby moby)
@@ -1119,7 +1284,7 @@ public static class MobyMetadataEnricher
                 Kind = "portal controls",
                 LinkedMove = true,
                 Confidence = "source-proven",
-                Reason = $"The native homeworld portal table maps destination {definition.DestinationLevelId} to path T{definition.PathTrueIndex}; its unique nearby class 0x01 lettering and class 0x1E companion rows are T{definition.LetteringTrueIndex}/T{definition.CompanionTrueIndex}. Create BIN also moves the dedicated portal plane and type-6 entry collision surface. Decorative arch terrain remains separate.",
+                Reason = $"The native homeworld portal table maps destination {definition.DestinationLevelId} to path T{definition.PathTrueIndex}; its unique nearby class 0x01 lettering and class 0x011E ambient-sound companion rows are T{definition.LetteringTrueIndex}/T{definition.CompanionTrueIndex}. Create BIN also moves the dedicated portal plane and type-6 entry collision surface. Decorative arch terrain remains separate.",
                 TrueIndexes = indexes
             };
 

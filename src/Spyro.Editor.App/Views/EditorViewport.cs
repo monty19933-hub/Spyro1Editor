@@ -1,18 +1,54 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
+using Avalonia.Threading;
+using System.Runtime.InteropServices;
 using Spyro.Editor.Core;
+using Spyro.Editor.Core.Cache;
 using Spyro.Editor.Core.Editing;
+using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Skyboxes;
 
 namespace Spyro.Editor.App.Views;
 
-public sealed class EditorViewport : Control
+public sealed partial class EditorViewport : Control
 {
+    // Spyro's HP environment renderer works four GTE depth units per editor
+    // world unit.  With the retail 0x8000 LOD distance, DPCS holds the near
+    // endpoint through 0x1000 GTE units and reaches the far endpoint at 0x2000.
+    internal const double NativeTerrainDepthCueNearEnd = 0x1000 / 4.0;
+    internal const double NativeTerrainDepthCueFarEnd = 0x2000 / 4.0;
+    internal const string NativeTerrainMapMaterialContract =
+        "native-load-normal-hq-plus-physical-table2-complete-scene-map-v5";
+    internal const int InteractiveFlyMinimumFullMaterialFaceBudget = 768;
+    internal const int InteractiveFlyMaximumFullMaterialFaceBudget = 2048;
+    internal const double FlyPlanarMoveStep = 260;
+    internal const double FlyVerticalMoveStep = 64;
+    internal const int NativeEntryCameraElevationRaw = 0xA0;
+    internal const int NativeEntryCameraRadiusRaw = 0xA00;
+    internal const double NativeEntryCameraCoordinateScale = 16.0;
+    internal const double FlyGameViewFogNearDistance = NativeTerrainFarLod.LodDistanceEditorUnits;
+    internal const double FlyGameViewFogFarDistance =
+        NativeTerrainFarLod.ConservativeAllSectorCullingDistanceFixed16 / 32.0;
+    // Native LP faces are emitted by r_environment as one PS1 POLY_G4 packet
+    // in their four raw slots. The two retail NCLIP/raster faces are [0,1,2]
+    // and [3,1,2] (the latter is the same cyclic winding as [1,2,3]). The
+    // [0,1,3]/[2,1,3] order belongs to the separate HP base path. A perimeter
+    // fan or that HP slot order overlaps part of each LP quad and leaves holes.
+    private static readonly (int A, int B, int C)[] NativeLowDetailTriangleSlots =
+    [
+        (0, 1, 2),
+        (3, 1, 2)
+    ];
+    private const double InteractiveFlyMaterialBudgetPixelsPerFace = 720.0;
+    private static readonly TimeSpan InteractiveFlySettleDelay = TimeSpan.FromMilliseconds(160);
+
     private static readonly Dictionary<string, string> MobyMarkerImageFiles = new(StringComparer.Ordinal)
     {
         ["Ban"] = "banana-boy.png",
@@ -27,6 +63,17 @@ public sealed class EditorViewport : Control
     };
 
     private static readonly Dictionary<string, Bitmap?> MobyMarkerImageCache = new(StringComparer.Ordinal);
+    private static readonly Dictionary<MobyRasterIconCacheKey, MobyRasterIconImage?> MobyRasterIconCache = new();
+    private static readonly object MobyRasterIconDiagnosticsGate = new();
+    private static readonly Dictionary<MobyRasterIconAtlasCellId, int> MobyRasterIconAtlasDrawCounts = new();
+    private readonly Dictionary<int, string> _normalTerrainTextureImageFiles = new();
+    private readonly Dictionary<int, string> _closeTerrainTextureImageFiles = new();
+    private readonly Dictionary<(int TextureId, NativeTerrainTexturePreviewTier Tier), Bitmap?> _terrainTextureImageCache = new();
+    private readonly Dictionary<int, Color?> _normalTerrainTextureAverageColorCache = new();
+    private readonly Dictionary<int, NativeTerrainLqTextureRecordPayload> _nativeTerrainLqTextureRecords = new();
+    private readonly Dictionary<NativeTerrainLqFrameCacheKey, Bitmap?> _nativeTerrainLqFrameCache = new();
+    private readonly DispatcherTimer _flyNavigationSettleTimer;
+    private readonly HashSet<Key> _activeFlyNavigationKeys = new();
 
     public static readonly StyledProperty<GeometryCandidate?> GeometryProperty =
         AvaloniaProperty.Register<EditorViewport, GeometryCandidate?>(nameof(Geometry));
@@ -37,6 +84,9 @@ public sealed class EditorViewport : Control
     private readonly List<ScreenTerrainFace> _screenTerrainFaces = new();
     private readonly List<ScreenMoby> _screenMobys = new();
     private readonly List<ScreenTerrainSurfaceLabel> _screenTerrainSurfaceLabels = new();
+    private readonly Dictionary<int, NativeTerrainFaceRenderKind> _flyHighDetailRenderKinds = new();
+    private readonly HashSet<int> _flyCameraInactiveBackdropFaceIndexes = [];
+    private readonly Dictionary<string, int> _flyVisibleLowDetailCornerColorCounts = new(StringComparer.Ordinal);
     private ScreenFacingGuide? _screenFacingGuide;
     private Point _lastPointerPosition;
     private bool _isPanning;
@@ -56,6 +106,8 @@ public sealed class EditorViewport : Control
     private bool _flipMapY = EditorUiDefaults.UseGameViewMapOrientation;
     private ViewportViewMode _viewMode = ViewportViewMode.Map;
     private FlyCamera _flyCamera;
+    private GeometryCandidate? _sceneFitGeometry;
+    private SceneFitFocus? _sceneFitFocus;
     private int _selectedTerrainIndex = -1;
     private int _selectedTerrainPointIndex = -1;
     private int _selectedMobyIndex = -1;
@@ -73,9 +125,34 @@ public sealed class EditorViewport : Control
     private int _terrainBrushPreviewTerrainIndex = -1;
     private string _emptyMessage = "Open a workspace or build the portable cache to load captured level data.";
     private Func<Moby, bool>? _mobyFilter;
+    private Func<GeometryCandidate, TerrainPolygon, bool>? _playableTerrainViewPredicate;
+    private Func<GeometryCandidate, TerrainPolygon, bool>? _mapTerrainBackdropOutlinePredicate;
+    private TerrainSceneViewMode _terrainSceneViewMode = TerrainSceneViewMode.CompleteScene;
     private Func<TerrainPolygon, TerrainPatchSafetyKind>? _terrainPatchSafetyClassifier;
     private Func<TerrainPolygon, int, TerrainBrushPreviewVertexKind>? _terrainBrushVertexClassifier;
     private NativeEnvironmentColorTransform? _environmentGradePreview;
+    private bool _useNativeTerrainDepthCue = true;
+    private bool _flyGameViewCameraLocal;
+    private bool _flyCameraIsOverview = true;
+    private NativeTerrainLodPreviewMode _nativeTerrainLodPreviewMode =
+        NativeTerrainLodPreviewMode.EditorOverviewHighDetail;
+    private bool _flyNavigationInteractiveMaterialLod;
+    private bool _holdFlyNavigationMaterialLodForTesting;
+    private FlyTerrainInteractiveLodSnapshot _flyTerrainInteractiveLodSnapshot =
+        FlyTerrainInteractiveLodSnapshot.Empty;
+    private NativeTerrainMapMaterialSnapshot _nativeTerrainMapMaterialSnapshot =
+        NativeTerrainMapMaterialSnapshot.Empty;
+    private FlyTerrainVisibilitySnapshot _flyTerrainVisibilitySnapshot =
+        FlyTerrainVisibilitySnapshot.Empty;
+    private NativeTerrainOcclusionSnapshot _nativeTerrainOcclusionSnapshot =
+        NativeTerrainOcclusionSnapshot.Empty;
+    private GeometryCandidate? _lastFlyOcclusionGeometry;
+    private int _lastFlyOcclusionGroupIndex = -1;
+    private int _lastFlyOcclusionTriangleIndex = -1;
+    private double _lastFlyOcclusionFloorZ = double.NegativeInfinity;
+    private PortableLevelEntryPose? _levelEntryPose;
+    private GameCameraEntrySnapshot _gameCameraEntrySnapshot =
+        GameCameraEntrySnapshot.Empty;
 
     public event EventHandler<ViewportSelectionChangedEventArgs>? SelectionChanged;
     public event EventHandler<Moby>? MobyEditRequested;
@@ -125,12 +202,21 @@ public sealed class EditorViewport : Control
 
     public bool IsMapYFlipped => _flipMapY;
 
+    public TerrainSceneViewMode TerrainSceneViewMode => _terrainSceneViewMode;
+
     public Point LastPointerPosition => _lastPointerPosition;
 
     public void SetEnvironmentGradePreview(NativeEnvironmentColorTransform? transform)
     {
         _environmentGradePreview = transform;
+        InvalidateNativeTerrainBoundedFrame(incrementEnvironmentGeneration: true);
         InvalidateVisual();
+    }
+
+    public void SetLevelEntryPose(PortableLevelEntryPose? pose)
+    {
+        _levelEntryPose = pose;
+        _gameCameraEntrySnapshot = GameCameraEntrySnapshot.Empty;
     }
 
     public bool ObjectPlacementMode
@@ -200,8 +286,8 @@ public sealed class EditorViewport : Control
             _isPaintingTerrain = false;
             _lastTerrainBrushWorldPoint = null;
             _terrainBrushPreviewWorldPoint = null;
-            _terrainBrushPreviewTerrainIndex = -1;
-            _hoverTerrainIndex = -1;
+            SetTerrainPresentationPin(ref _terrainBrushPreviewTerrainIndex, -1);
+            SetTerrainPresentationPin(ref _hoverTerrainIndex, -1);
             SetViewportCursor(null);
             InvalidateVisual();
         }
@@ -240,6 +326,42 @@ public sealed class EditorViewport : Control
         set
         {
             _mobyFilter = value;
+            if (_terrainSceneViewMode == TerrainSceneViewMode.Playable)
+                RefreshTerrainScenePresentation();
+            else
+                InvalidateVisual();
+        }
+    }
+
+    public Func<GeometryCandidate, TerrainPolygon, bool>? PlayableTerrainViewPredicate
+    {
+        get => _playableTerrainViewPredicate;
+        set
+        {
+            if (ReferenceEquals(_playableTerrainViewPredicate, value))
+                return;
+
+            _playableTerrainViewPredicate = value;
+            RefreshTerrainScenePresentation();
+        }
+    }
+
+    /// <summary>
+    /// Presentation-only role for source-proven overview/backdrop sheets. It
+    /// never removes a polygon from Fit, hit testing, snapping, persistence, or
+    /// export; Edit Map keeps the exact HP mesh as a selectable outline and
+    /// materializes an individual face while it is hovered, selected, or
+    /// edited. Game Camera continues to render the native camera/LOD material.
+    /// </summary>
+    public Func<GeometryCandidate, TerrainPolygon, bool>? MapTerrainBackdropOutlinePredicate
+    {
+        get => _mapTerrainBackdropOutlinePredicate;
+        set
+        {
+            if (ReferenceEquals(_mapTerrainBackdropOutlinePredicate, value))
+                return;
+
+            _mapTerrainBackdropOutlinePredicate = value;
             InvalidateVisual();
         }
     }
@@ -267,45 +389,359 @@ public sealed class EditorViewport : Control
     static EditorViewport()
     {
         GeometryProperty.Changed.AddClassHandler<EditorViewport>((viewport, _) => viewport.ResetView());
-        MobysProperty.Changed.AddClassHandler<EditorViewport>((viewport, _) => viewport.ResetSelection());
+        MobysProperty.Changed.AddClassHandler<EditorViewport>((viewport, _) =>
+        {
+            viewport._sceneFitGeometry = null;
+            viewport._sceneFitFocus = null;
+            viewport.ResetSelection();
+        });
     }
 
     public EditorViewport()
     {
         ClipToBounds = true;
         Focusable = true;
+        RenderOptions.SetBitmapInterpolationMode(this, BitmapInterpolationMode.None);
+        _flyNavigationSettleTimer = new DispatcherTimer
+        {
+            Interval = InteractiveFlySettleDelay
+        };
+        _flyNavigationSettleTimer.Tick += (_, _) => SettleFlyNavigationMaterialLod(force: false);
+        LostFocus += OnViewportLostFocus;
+    }
+
+    internal static void ResetMobyRasterIconRenderDiagnosticsForTesting()
+    {
+        lock (MobyRasterIconDiagnosticsGate)
+            MobyRasterIconAtlasDrawCounts.Clear();
+    }
+
+    internal static IReadOnlyDictionary<MobyRasterIconAtlasCellId, int> CaptureMobyRasterIconRenderDiagnosticsForTesting()
+    {
+        lock (MobyRasterIconDiagnosticsGate)
+            return new Dictionary<MobyRasterIconAtlasCellId, int>(MobyRasterIconAtlasDrawCounts);
+    }
+
+    internal static IReadOnlyList<(int A, int B, int C)> CaptureNativeLowDetailTriangleSlotsForTesting() =>
+        NativeLowDetailTriangleSlots;
+
+    internal void SetFlyGameCameraForTesting(
+        double worldX,
+        double worldY,
+        double worldZ,
+        double yaw,
+        double pitch)
+    {
+        _viewMode = ViewportViewMode.Fly3D;
+        _flyCamera = new FlyCamera(ToFlyViewX(worldX), ToFlyViewY(worldY), worldZ, yaw, pitch);
+        _flyCameraIsOverview = false;
+        _flyGameViewCameraLocal = _flipMapY;
+        _nativeTerrainLodPreviewMode = NativeTerrainLodPreviewMode.EditorOverviewHighDetail;
+        InvalidateVisual();
+    }
+
+    internal string? ResolveTerrainTextureImagePathForTesting(int textureId, double minimumCameraDepth)
+    {
+        NativeTerrainTexturePreviewTier tier =
+            NativeTerrainTexturePreviewLod.SelectForMinimumCameraDepth(minimumCameraDepth);
+        return ResolveTerrainTextureImagePath(textureId, tier);
+    }
+
+    internal NativeTerrainLqFrameSnapshot CaptureNativeTerrainLqFrameForTesting(
+        int textureId,
+        double planarEditorDepth,
+        bool lqFadeBypass = false,
+        bool hqOverlayBypass = false)
+    {
+        double[] rawDepths = [planarEditorDepth, planarEditorDepth, planarEditorDepth, planarEditorDepth];
+        NativeTerrainLqPreviewSelection selection = NativeTerrainFarLod.SelectHighDetailTexturePath(
+            rawDepths,
+            lqFadeBypass,
+            hqOverlayBypass);
+        NativeTerrainTexturePreviewTier? hqTier = selection.HqOverlayEligible
+            ? NativeTerrainTexturePreviewLod.SelectForMinimumCameraDepth(planarEditorDepth)
+            : null;
+
+        NativeTerrainLqTextureDescriptorPayload? descriptor = null;
+        bool hasPayload = _nativeTerrainLqTextureRecords.TryGetValue(
+                textureId,
+                out NativeTerrainLqTextureRecordPayload? texture) &&
+            selection.DescriptorIndex is >= 0 and < NativeTerrainLqTextureCacheCodec.DescriptorCount;
+        if (hasPayload)
+            descriptor = texture!.GetDescriptor(selection.DescriptorIndex);
+
+        bool retainedWithoutLowDetail = !selection.HighPolyVisible &&
+            Geometry?.LowDetailPolygons.Count == 0;
+        Bitmap? bitmap = selection.HighPolyVisible || retainedWithoutLowDetail
+            ? GetNativeTerrainLqFrame(
+                textureId,
+                selection.DescriptorIndex,
+                selection.PaletteRow,
+                hqTier)
+            : null;
+        string bitmapSha256 = bitmap != null && TryReadBitmapRgba(bitmap, out byte[] bitmapPixels)
+            ? Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bitmapPixels))
+            : "";
+        return new NativeTerrainLqFrameSnapshot(
+            textureId,
+            planarEditorDepth,
+            selection.HighPolyVisible,
+            retainedWithoutLowDetail,
+            selection.HqOverlayEligible,
+            selection.DescriptorIndex,
+            selection.PaletteRow,
+            hqTier,
+            descriptor != null,
+            bitmap != null,
+            bitmap?.PixelSize.Width ?? 0,
+            bitmap?.PixelSize.Height ?? 0,
+            bitmapSha256,
+            descriptor?.Abr ?? -1,
+            descriptor?.RawDescriptorSha256 ?? "",
+            descriptor?.PackedIndicesSha256 ?? "",
+            descriptor?.PaletteWordsSha256 ?? "");
+    }
+
+    public void SetTerrainTextureImageFiles(
+        IReadOnlyDictionary<int, string>? normalFiles,
+        IReadOnlyDictionary<int, string>? closeFiles = null,
+        IReadOnlyDictionary<int, NativeTerrainLqTextureRecordPayload>? lowDetailTextures = null)
+    {
+        foreach (Bitmap? bitmap in _terrainTextureImageCache.Values)
+            bitmap?.Dispose();
+        foreach (Bitmap? bitmap in _nativeTerrainLqFrameCache.Values)
+            bitmap?.Dispose();
+        _terrainTextureImageCache.Clear();
+        _normalTerrainTextureAverageColorCache.Clear();
+        _nativeTerrainLqFrameCache.Clear();
+        _normalTerrainTextureImageFiles.Clear();
+        _closeTerrainTextureImageFiles.Clear();
+        _nativeTerrainLqTextureRecords.Clear();
+
+        if (normalFiles != null)
+        {
+            foreach ((int textureId, string path) in normalFiles)
+            {
+                if (textureId >= 0 && !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                    _normalTerrainTextureImageFiles[textureId] = path;
+            }
+        }
+        if (closeFiles != null)
+        {
+            foreach ((int textureId, string path) in closeFiles)
+            {
+                if (textureId >= 0 && !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                    _closeTerrainTextureImageFiles[textureId] = path;
+            }
+        }
+        if (lowDetailTextures != null)
+        {
+            foreach ((int textureId, NativeTerrainLqTextureRecordPayload texture) in lowDetailTextures)
+            {
+                if (textureId >= 0 && texture != null)
+                    _nativeTerrainLqTextureRecords[textureId] = texture;
+            }
+        }
+
+        OnNativeTerrainLqRecordsChanged();
+        InvalidateVisual();
     }
 
     public void ResetView()
     {
         _zoom = 1;
         _pan = default;
-        ResetFlyCamera();
+        // Clear pinned terrain before calculating Fit. Otherwise a selected
+        // off-camera source sheet can remain in the first exhaustive Fit even
+        // though Reset immediately clears that selection.
         ResetSelection();
+        _sceneFitGeometry = null;
+        _sceneFitFocus = null;
+        ResetFlyCamera(preferGameViewStart: false);
     }
 
     public void SetViewMode(ViewportViewMode mode)
     {
         if (_viewMode == mode)
+        {
+            if (mode == ViewportViewMode.Fly3D && _flipMapY && _flyCameraIsOverview)
+            {
+                ResetFlyCamera(preferGameViewStart: true);
+                InvalidateVisual();
+            }
             return;
+        }
 
         _viewMode = mode;
-        ResetFlyCamera();
+        ResetFlyCamera(preferGameViewStart: mode == ViewportViewMode.Fly3D && _flipMapY);
         ViewModeChanged?.Invoke(this, _viewMode);
+        InvalidateVisual();
+    }
+
+    public void SetTerrainSceneViewMode(TerrainSceneViewMode mode)
+    {
+        if (_terrainSceneViewMode == mode)
+            return;
+
+        _terrainSceneViewMode = mode;
+        RefreshTerrainScenePresentation();
+    }
+
+    private void RefreshTerrainScenePresentation()
+    {
+        _sceneFitGeometry = null;
+        _sceneFitFocus = null;
+        _screenTerrainFaces.Clear();
+        _screenTerrainSurfaceLabels.Clear();
+
+        if (_viewMode == ViewportViewMode.Fly3D &&
+            _flyCameraIsOverview &&
+            Geometry is { Polygons.Count: > 0 } geometry)
+        {
+            FitFlyCameraToScene(GetSceneFitFocus(geometry), EffectiveFlyFitBounds());
+        }
+
+        InvalidateVisual();
+    }
+
+    internal void NotifyTerrainPresentationDataChanged()
+    {
+        // Edited/removed/add-clone state and vertex positions participate in
+        // both Playable visibility and Fit bounds. Mutation callers use this
+        // instead of a draw-only invalidation so cached Map/Fly Fit data never
+        // describes the previous edit state.
+        _sceneFitGeometry = null;
+        _sceneFitFocus = null;
+        _screenTerrainFaces.Clear();
+        _screenTerrainSurfaceLabels.Clear();
+        InvalidateVisual();
+    }
+
+    private bool ShouldPresentTerrain(GeometryCandidate geometry, TerrainPolygon polygon)
+    {
+        if (_terrainSceneViewMode == TerrainSceneViewMode.CompleteScene ||
+            _playableTerrainViewPredicate == null)
+        {
+            return true;
+        }
+
+        // Never make the active target or a staged edit disappear. Complete
+        // Scene remains available for intentionally editing native support or
+        // background faces; active and edited faces survive the return trip.
+        return IsPinnedTerrainPresentationFace(geometry, polygon) ||
+            polygon.IsTerrainEdited ||
+            polygon.IsTerrainRemoved ||
+            polygon.IsTerrainAddClone ||
+            _playableTerrainViewPredicate(geometry, polygon);
+    }
+
+    private bool IsAuditedBroadOverviewUnderlay(GeometryCandidate geometry, TerrainPolygon polygon) =>
+        _playableTerrainViewPredicate != null &&
+        !_playableTerrainViewPredicate(geometry, polygon);
+
+    private bool IsPinnedTerrainPresentationFace(GeometryCandidate geometry, TerrainPolygon polygon)
+    {
+        return IsPinned(_selectedTerrainIndex) ||
+            IsPinned(_hoverTerrainIndex) ||
+            IsPinned(_terrainBrushPreviewTerrainIndex);
+
+        bool IsPinned(int index) =>
+            index >= 0 &&
+            index < geometry.Polygons.Count &&
+            ReferenceEquals(geometry.Polygons[index], polygon);
+    }
+
+    private void SetTerrainPresentationPin(ref int field, int nextIndex)
+    {
+        if (field == nextIndex)
+            return;
+
+        if (IsBaseHiddenTerrainIndex(field) || IsBaseHiddenTerrainIndex(nextIndex))
+        {
+            _sceneFitGeometry = null;
+            _sceneFitFocus = null;
+        }
+        field = nextIndex;
+    }
+
+    private bool IsBaseHiddenTerrainIndex(int index)
+    {
+        GeometryCandidate? geometry = Geometry;
+        if (_terrainSceneViewMode != TerrainSceneViewMode.Playable ||
+            _playableTerrainViewPredicate == null ||
+            geometry == null ||
+            index < 0 ||
+            index >= geometry.Polygons.Count)
+        {
+            return false;
+        }
+
+        TerrainPolygon polygon = geometry.Polygons[index];
+        return !polygon.IsTerrainEdited &&
+            !polygon.IsTerrainRemoved &&
+            !polygon.IsTerrainAddClone &&
+            !_playableTerrainViewPredicate(geometry, polygon);
+    }
+
+    internal TerrainSceneViewSnapshot CaptureTerrainSceneViewSnapshot()
+    {
+        GeometryCandidate? geometry = Geometry;
+        if (geometry == null)
+            return new TerrainSceneViewSnapshot(_terrainSceneViewMode, 0, 0, 0, false);
+
+        int presented = geometry.Polygons.Count(polygon => ShouldPresentTerrain(geometry, polygon));
+        return new TerrainSceneViewSnapshot(
+            _terrainSceneViewMode,
+            geometry.Polygons.Count,
+            presented,
+            Math.Max(0, geometry.Polygons.Count - presented),
+            _playableTerrainViewPredicate != null);
+    }
+
+    internal bool IsTerrainPresentedForEditing(TerrainPolygon polygon)
+    {
+        ArgumentNullException.ThrowIfNull(polygon);
+        GeometryCandidate? geometry = Geometry;
+        if (geometry == null)
+            return false;
+
+        // Game Camera draws and edits the camera-visible native HP/LP terrain.
+        // Edit Map keeps the complete source scene available for selection.
+        return _viewMode == ViewportViewMode.Fly3D && UsesFlyGameViewHighDetailVisibility(geometry) ||
+            ShouldPresentTerrain(geometry, polygon);
+    }
+
+    public void RefreshFlyCameraForLoadedLevel()
+    {
+        if (_viewMode != ViewportViewMode.Fly3D)
+            return;
+
+        ResetFlyCamera(preferGameViewStart: _flipMapY);
         InvalidateVisual();
     }
 
     public void ResetSelection()
     {
+        bool hadPinnedTerrain =
+            _selectedTerrainIndex >= 0 ||
+            _hoverTerrainIndex >= 0 ||
+            _terrainBrushPreviewTerrainIndex >= 0;
         _isDraggingMobyFacing = false;
         _draggingMobyFacingIndex = -1;
         _screenFacingGuide = null;
-        _selectedTerrainIndex = -1;
+        SetTerrainPresentationPin(ref _selectedTerrainIndex, -1);
         _selectedTerrainPointIndex = -1;
         _selectedMobyIndex = -1;
         _hoverTerrainIndex = -1;
         _terrainBrushPreviewWorldPoint = null;
         _terrainBrushPreviewTerrainIndex = -1;
+        if (hadPinnedTerrain)
+        {
+            // Active editing pins can force an off-camera face into context.
+            // Once cleared, discard Fit data that may still include it.
+            _sceneFitGeometry = null;
+            _sceneFitFocus = null;
+        }
         SetViewportCursor(null);
         SelectionChanged?.Invoke(this, ViewportSelectionChangedEventArgs.None);
         InvalidateVisual();
@@ -323,10 +759,392 @@ public sealed class EditorViewport : Control
 
         _flipMapY = flipped;
         if (_viewMode == ViewportViewMode.Fly3D)
-            ResetFlyCamera();
+            ResetFlyCamera(preferGameViewStart: flipped);
+        else
+            _flyGameViewCameraLocal = false;
         _screenTerrainFaces.Clear();
         _screenMobys.Clear();
         InvalidateVisual();
+    }
+
+    internal ViewportFitSnapshot CaptureFitSnapshotForTesting()
+    {
+        GeometryCandidate geometry = Geometry
+            ?? throw new InvalidOperationException("A geometry candidate is required to inspect viewport fitting.");
+        Rect viewportBounds = EffectiveFlyFitBounds();
+        SceneFitFocus focus = GetSceneFitFocus(geometry);
+        List<Point> flyPoints = new(focus.Points.Count);
+        foreach (Vector3f source in focus.Points)
+        {
+            if (TryProjectFly(viewportBounds, source.X, source.Y, source.Z, out ProjectedPoint projected))
+                flyPoints.Add(projected.Screen);
+        }
+
+        SceneTransform mapTransform = CreateGeometryTransform(viewportBounds, geometry);
+        List<Point> mapPoints = focus.Points
+            .Select(source => mapTransform.Project(source.X, source.Y, source.Z))
+            .ToList();
+        return new ViewportFitSnapshot(
+            viewportBounds,
+            new Rect(
+                geometry.Bounds.Left,
+                geometry.Bounds.Top,
+                geometry.Bounds.Width,
+                geometry.Bounds.Height),
+            new Rect(
+                focus.Bounds.Left,
+                focus.Bounds.Top,
+                focus.Bounds.Width,
+                focus.Bounds.Height),
+            ScreenBounds(flyPoints),
+            ScreenBounds(mapPoints),
+            _flyCamera.Yaw,
+            _flyCamera.Pitch,
+            focus.Points.Count,
+            flyPoints.Count,
+            focus.SourcePolygonCount,
+            focus.FocusPolygonCount);
+    }
+
+    internal void SetNativeTerrainDepthCueForTesting(bool enabled)
+    {
+        _useNativeTerrainDepthCue = enabled;
+        InvalidateVisual();
+    }
+
+    internal NativeTerrainMapMaterialSnapshot CaptureNativeTerrainMapMaterialSnapshotForTesting() =>
+        _nativeTerrainMapMaterialSnapshot;
+
+    internal FlyTerrainInteractiveLodSnapshot CaptureFlyTerrainInteractiveLodSnapshotForTesting() =>
+        _flyTerrainInteractiveLodSnapshot;
+
+    internal FlyTerrainVisibilitySnapshot CaptureFlyTerrainVisibilitySnapshotForTesting() =>
+        _flyTerrainVisibilitySnapshot;
+
+    internal NativeTerrainOcclusionSnapshot CaptureNativeTerrainOcclusionSnapshotForTesting() =>
+        _nativeTerrainOcclusionSnapshot;
+
+    internal IReadOnlyList<int> CaptureVisibleHighDetailTerrainFaceIndexesForTesting() =>
+        _screenTerrainFaces.Select(face => face.Index).Distinct().ToArray();
+
+    internal bool WasHighDetailTerrainFaceNativeTexturedForTesting(int terrainIndex) =>
+        _flyHighDetailRenderKinds.TryGetValue(terrainIndex, out NativeTerrainFaceRenderKind kind) &&
+        kind == NativeTerrainFaceRenderKind.NativeTexture;
+
+    internal IReadOnlyList<int> CaptureFlyCameraInactiveBackdropFaceIndexesForTesting() =>
+        _flyCameraInactiveBackdropFaceIndexes.OrderBy(index => index).ToArray();
+
+    internal IReadOnlyList<string> CaptureVisibleLowDetailTerrainFaceRuntimeKeysForTesting() =>
+        _flyVisibleLowDetailCornerColorCounts.Keys.OrderBy(key => key, StringComparer.Ordinal).ToArray();
+
+    internal int CaptureVisibleLowDetailTerrainCornerColorCountForTesting(string runtimeKey) =>
+        _flyVisibleLowDetailCornerColorCounts.TryGetValue(runtimeKey, out int count) ? count : 0;
+
+    internal GameCameraEntrySnapshot CaptureGameCameraEntrySnapshotForTesting() =>
+        _gameCameraEntrySnapshot;
+
+    internal void SetNativeTerrainLodPreviewModeForTesting(NativeTerrainLodPreviewMode mode)
+    {
+        _nativeTerrainLodPreviewMode = mode;
+        InvalidateVisual();
+    }
+
+    internal void SimulateFlyNavigationForTesting()
+    {
+        if (_viewMode != ViewportViewMode.Fly3D ||
+            _nativeTerrainLodPreviewMode != NativeTerrainLodPreviewMode.EditorOverviewHighDetail)
+        {
+            throw new InvalidOperationException(
+                $"Interactive Fly navigation requires the high-detail Fly overview; current state is {_viewMode}/{_nativeTerrainLodPreviewMode}.");
+        }
+
+        _holdFlyNavigationMaterialLodForTesting = true;
+        if (_flipMapY && !_flyCameraIsOverview)
+            _flyGameViewCameraLocal = true;
+        _flyNavigationSettleTimer.Stop();
+        _flyNavigationInteractiveMaterialLod = true;
+        InvalidateVisual();
+    }
+
+    internal void SettleFlyNavigationForTesting()
+    {
+        _holdFlyNavigationMaterialLodForTesting = false;
+        SettleFlyNavigationMaterialLod(force: true);
+    }
+
+    internal void SimulateMissedFlyNavigationReleaseForTesting()
+    {
+        if (_viewMode != ViewportViewMode.Fly3D)
+            throw new InvalidOperationException("Missed-release simulation requires Fly 3D.");
+
+        _holdFlyNavigationMaterialLodForTesting = false;
+        _activeFlyNavigationKeys.Add(Key.W);
+        _flyNavigationInteractiveMaterialLod = true;
+        SettleFlyNavigationMaterialLod(force: false);
+        _activeFlyNavigationKeys.Clear();
+    }
+
+    internal void EnableNativeTerrainDistanceForTesting()
+    {
+        SettleFlyNavigationMaterialLod(force: true);
+        if (_nativeTerrainLodPreviewMode == NativeTerrainLodPreviewMode.NativeDistance)
+            return;
+
+        _nativeTerrainLodPreviewMode = NativeTerrainLodPreviewMode.NativeDistance;
+        InvalidateVisual();
+    }
+
+    internal void AimFlyCameraAtTerrainForTesting(int terrainIndex, double distance = 1400)
+    {
+        GeometryCandidate geometry = Geometry
+            ?? throw new InvalidOperationException("A geometry candidate is required to aim the Fly 3D camera.");
+        if (terrainIndex < 0 || terrainIndex >= geometry.Polygons.Count)
+            throw new ArgumentOutOfRangeException(nameof(terrainIndex));
+
+        TerrainPolygon polygon = geometry.Polygons[terrainIndex];
+        const double yaw = -Math.PI * 0.5;
+        const double pitch = -0.34;
+        _viewMode = ViewportViewMode.Fly3D;
+        _flyCamera = CreateOverviewCamera(
+            ToFlyViewX(polygon.Center.X),
+            ToFlyViewY(polygon.Center.Y),
+            polygon.AvgZ,
+            yaw,
+            pitch,
+            Math.Max(256, distance));
+        _flyCameraIsOverview = false;
+        _flyGameViewCameraLocal =
+            _flipMapY && _nativeTerrainLodPreviewMode == NativeTerrainLodPreviewMode.EditorOverviewHighDetail;
+        SetTerrainPresentationPin(ref _selectedTerrainIndex, -1);
+        _selectedTerrainPointIndex = -1;
+        _selectedMobyIndex = -1;
+        InvalidateVisual();
+    }
+
+    internal NativeTerrainDepthCueSnapshot CaptureNativeTerrainDepthCueSnapshotForTesting()
+    {
+        GeometryCandidate geometry = Geometry
+            ?? throw new InvalidOperationException("A geometry candidate is required to inspect native terrain depth cueing.");
+        Rect bounds = new(Bounds.Size);
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+            bounds = EffectiveFlyFitBounds();
+        Rect visibleBounds = bounds.Inflate(220);
+
+        int faceCount = 0;
+        int cornerCount = 0;
+        int distinctEndpointCorners = 0;
+        int nearEndpointCorners = 0;
+        int blendedCorners = 0;
+        int farEndpointCorners = 0;
+        int changedFromLegacyCorners = 0;
+        long ir0Total = 0;
+        long channelDeltaTotal = 0;
+        double minCameraDepth = double.PositiveInfinity;
+        double maxCameraDepth = double.NegativeInfinity;
+
+        foreach (TerrainPolygon polygon in geometry.Polygons)
+        {
+            if (polygon.NearColors.Count < 4 || polygon.FarColors.Count < 4)
+                continue;
+
+            List<ProjectedPoint> projected = new();
+            int pointCount = Math.Min(polygon.Points.Count, polygon.ZValues.Length);
+            for (int index = 0; index < pointCount; index++)
+            {
+                if (TryProjectFly(bounds, polygon.Points[index].X, polygon.Points[index].Y, polygon.ZValues[index], out ProjectedPoint point))
+                    projected.Add(point);
+            }
+
+            if (projected.Count != pointCount || projected.Count < 3 ||
+                !IntersectsBounds(projected.Select(point => point.Screen).ToArray(), visibleBounds) ||
+                !TryBuildRawFaceSlotDepths(polygon, projected.Select(point => point.Depth).ToArray(), out double[] rawDepths))
+            {
+                continue;
+            }
+
+            faceCount++;
+            for (int slot = 0; slot < 4; slot++)
+            {
+                Spyro.Editor.Core.Primitives.ColorRgba legacyNear = polygon.TextureVisualEdit?.Corners[slot].NearColor ?? polygon.NearColors[slot];
+                Spyro.Editor.Core.Primitives.ColorRgba legacyFar = polygon.TextureVisualEdit?.Corners[slot].FarColor ?? polygon.FarColors[slot];
+                int ir0 = NativeTerrainDepthCueIr0(rawDepths[slot]);
+                Spyro.Editor.Core.Primitives.ColorRgba actual = NativeTerrainDepthCueColor(legacyNear, legacyFar, rawDepths[slot]);
+                cornerCount++;
+                ir0Total += ir0;
+                minCameraDepth = Math.Min(minCameraDepth, rawDepths[slot]);
+                maxCameraDepth = Math.Max(maxCameraDepth, rawDepths[slot]);
+                if (legacyNear != legacyFar)
+                    distinctEndpointCorners++;
+                if (ir0 == 0x1000)
+                    nearEndpointCorners++;
+                else if (ir0 == 0)
+                    farEndpointCorners++;
+                else
+                    blendedCorners++;
+                if (actual != legacyNear)
+                    changedFromLegacyCorners++;
+                channelDeltaTotal +=
+                    Math.Abs(actual.R - legacyNear.R) +
+                    Math.Abs(actual.G - legacyNear.G) +
+                    Math.Abs(actual.B - legacyNear.B);
+            }
+        }
+
+        return new NativeTerrainDepthCueSnapshot(
+            faceCount,
+            cornerCount,
+            distinctEndpointCorners,
+            nearEndpointCorners,
+            blendedCorners,
+            farEndpointCorners,
+            changedFromLegacyCorners,
+            cornerCount == 0 ? 0 : ir0Total / (cornerCount * 4096.0),
+            cornerCount == 0 ? 0 : channelDeltaTotal / (cornerCount * 3.0),
+            cornerCount == 0 ? 0 : minCameraDepth,
+            cornerCount == 0 ? 0 : maxCameraDepth);
+    }
+
+    internal NativeTerrainFarLodSnapshot CaptureNativeTerrainFarLodSnapshotForTesting()
+    {
+        GeometryCandidate geometry = Geometry
+            ?? throw new InvalidOperationException("A geometry candidate is required to inspect native terrain far LOD.");
+        Rect bounds = new(Bounds.Size);
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+            bounds = EffectiveFlyFitBounds();
+        Rect visibleBounds = bounds.Inflate(220);
+        Dictionary<int, SceneSectorRenderMetadata> sectors = geometry.SourceSectors
+            .GroupBy(sector => sector.SectorIndex)
+            .ToDictionary(group => group.Key, group => group.First());
+        bool useNativeDistanceLod = UsesNativeTerrainDistanceLod(geometry);
+
+        int queuedHighDetailSectors = useNativeDistanceLod
+            ? sectors.Values.Count(sector =>
+                NativeTerrainFarLod.ShouldQueueHighDetailSector(
+                    FlyCameraDepth(sector.Center.X, sector.Center.Y, sector.Center.Z),
+                    sector.Radius,
+                    sector.DisableHighDetail))
+            : sectors.Count;
+        int queuedLowDetailSectors = useNativeDistanceLod
+            ? sectors.Values.Count(sector =>
+                NativeTerrainFarLod.ShouldQueueLowDetailSector(
+                    FlyCameraDepth(sector.Center.X, sector.Center.Y, sector.Center.Z),
+                    sector.Radius,
+                    sector.DisableLowDetail,
+                    sector.ForceLowDetail))
+            : 0;
+
+        int visibleHighDetailFaces = 0;
+        int suppressedHighDetailFaces = 0;
+        int visibleHighDetailAtOrBeyondCutoff = 0;
+        int hqOverlayEligibleFaces = 0;
+        int descriptorZeroFaces = 0;
+        int descriptorOneFaces = 0;
+        int minimumPaletteRow = int.MaxValue;
+        int maximumPaletteRow = int.MinValue;
+        foreach (TerrainPolygon polygon in geometry.Polygons)
+        {
+            if (useNativeDistanceLod &&
+                sectors.TryGetValue(polygon.SectorIndex, out SceneSectorRenderMetadata? sector) &&
+                !NativeTerrainFarLod.ShouldQueueHighDetailSector(
+                    FlyCameraDepth(sector.Center.X, sector.Center.Y, sector.Center.Z),
+                    sector.Radius,
+                    sector.DisableHighDetail))
+            {
+                suppressedHighDetailFaces++;
+                continue;
+            }
+
+            List<ProjectedPoint> projected = [];
+            int pointCount = Math.Min(polygon.Points.Count, polygon.ZValues.Length);
+            for (int index = 0; index < pointCount; index++)
+            {
+                if (TryProjectFly(bounds, polygon.Points[index].X, polygon.Points[index].Y, polygon.ZValues[index], out ProjectedPoint point))
+                    projected.Add(point);
+            }
+            if (projected.Count != pointCount || pointCount < 3 ||
+                !TryBuildRawFaceSlotDepths(polygon, projected.Select(point => point.Depth).ToArray(), out double[] rawDepths))
+            {
+                continue;
+            }
+
+            NativeTerrainLqPreviewSelection selection = NativeTerrainFarLod.SelectHighDetailTexturePath(
+                rawDepths,
+                polygon.LqFadeBypass,
+                polygon.HqOverlayBypass);
+            if (useNativeDistanceLod && !selection.HighPolyVisible)
+            {
+                suppressedHighDetailFaces++;
+                continue;
+            }
+            if (!IntersectsBounds(projected.Select(point => point.Screen).ToArray(), visibleBounds))
+                continue;
+
+            visibleHighDetailFaces++;
+            if (!NativeTerrainFarLod.ShouldRenderHighDetailFace(rawDepths))
+                visibleHighDetailAtOrBeyondCutoff++;
+            if (useNativeDistanceLod && selection.HqOverlayEligible)
+                hqOverlayEligibleFaces++;
+            if (useNativeDistanceLod)
+            {
+                if (selection.DescriptorIndex == 0)
+                    descriptorZeroFaces++;
+                else
+                    descriptorOneFaces++;
+                minimumPaletteRow = Math.Min(minimumPaletteRow, selection.PaletteRow);
+                maximumPaletteRow = Math.Max(maximumPaletteRow, selection.PaletteRow);
+            }
+        }
+
+        IReadOnlyList<ProjectedLowDetailTerrainFace> lowDetailFaces = useNativeDistanceLod
+            ? BuildProjectedLowDetailTerrainFaces(
+                geometry,
+                sectors,
+                bounds,
+                visibleBounds,
+                forcedHighDetailSectors: new HashSet<int>(),
+                cullingDistanceFixed16: NativeTerrainFarLod.ConservativeAllSectorCullingDistanceFixed16)
+            : Array.Empty<ProjectedLowDetailTerrainFace>();
+        int visibleLowDetailOnlyFaces = lowDetailFaces.Count(face =>
+            sectors.TryGetValue(face.Polygon.SectorIndex, out SceneSectorRenderMetadata? sector) && sector.DisableHighDetail);
+        int visibleForcedLowDetailFaces = lowDetailFaces.Count(face =>
+            sectors.TryGetValue(face.Polygon.SectorIndex, out SceneSectorRenderMetadata? sector) && sector.ForceLowDetail);
+        int distinctLowDetailCornerColors = lowDetailFaces
+            .SelectMany(face => face.Polygon.CornerColors)
+            .Distinct()
+            .Count();
+
+        return new NativeTerrainFarLodSnapshot(
+            _nativeTerrainLodPreviewMode,
+            geometry.HasStaticLowDetailPreview,
+            geometry.TerrainLodPreviewContract,
+            sectors.Count,
+            geometry.Polygons.Count,
+            geometry.LowDetailPolygons.Count,
+            queuedHighDetailSectors,
+            queuedLowDetailSectors,
+            visibleHighDetailFaces,
+            lowDetailFaces.Count,
+            suppressedHighDetailFaces,
+            visibleHighDetailAtOrBeyondCutoff,
+            visibleLowDetailOnlyFaces,
+            visibleForcedLowDetailFaces,
+            distinctLowDetailCornerColors,
+            hqOverlayEligibleFaces,
+            descriptorZeroFaces,
+            descriptorOneFaces,
+            minimumPaletteRow == int.MaxValue ? -1 : minimumPaletteRow,
+            maximumPaletteRow == int.MinValue ? -1 : maximumPaletteRow);
+    }
+
+    private static Rect ScreenBounds(IReadOnlyList<Point> points)
+    {
+        if (points.Count == 0)
+            return default;
+        double minX = points.Min(point => point.X);
+        double minY = points.Min(point => point.Y);
+        double maxX = points.Max(point => point.X);
+        double maxY = points.Max(point => point.Y);
+        return new Rect(minX, minY, Math.Max(0, maxX - minX), Math.Max(0, maxY - minY));
     }
 
     public void FocusMobys(IReadOnlyList<Moby> mobys)
@@ -347,6 +1165,11 @@ public sealed class EditorViewport : Control
         if (bounds.Width <= 0 || bounds.Height <= 0)
             return;
 
+        // A terrain face revealed only because it was selected must stop
+        // influencing Playable Fit before the Moby-group transform is built.
+        SetTerrainPresentationPin(ref _selectedTerrainIndex, -1);
+        _selectedTerrainPointIndex = -1;
+
         double minX = visible.Min(moby => moby.Position.X);
         double maxX = visible.Max(moby => moby.Position.X);
         double minY = visible.Min(moby => moby.Position.Y);
@@ -357,8 +1180,9 @@ public sealed class EditorViewport : Control
         GeometryCandidate? geometry = Geometry;
         if (geometry != null && geometry.Polygons.Count > 0)
         {
-            double baseScaleX = bounds.Width / Math.Max(1, geometry.Bounds.Width);
-            double baseScaleY = bounds.Height / Math.Max(1, geometry.Bounds.Height);
+            SceneFitFocus focus = GetSceneFitFocus(geometry);
+            double baseScaleX = bounds.Width / Math.Max(1, focus.Bounds.Width);
+            double baseScaleY = bounds.Height / Math.Max(1, focus.Bounds.Height);
             double baseScale = Math.Min(baseScaleX, baseScaleY) * 0.82;
             double desiredScale = Math.Min(bounds.Width / groupWidth, bounds.Height / groupHeight) * 0.42;
             _zoom = Math.Clamp(desiredScale / Math.Max(0.0001, baseScale), 1, 6);
@@ -400,14 +1224,16 @@ public sealed class EditorViewport : Control
             return;
 
         _viewMode = ViewportViewMode.Map;
+        _selectedMobyIndex = -1;
+        _selectedTerrainPointIndex = -1;
+        // Pin first: a base-hidden face changes the Playable Fit bounds, and
+        // the centering transform must be calculated from that same view.
+        SetTerrainPresentationPin(ref _selectedTerrainIndex, terrainIndex);
         _zoom = Math.Clamp(_zoom, 1.4, 5.5);
         _pan = default;
         SceneTransform transform = CreateGeometryTransform(bounds, geometry);
         Point point = transform.Project(polygon.Center.X, polygon.Center.Y, polygon.AvgZ);
         _pan += bounds.Center - point;
-        _selectedTerrainIndex = terrainIndex;
-        _selectedTerrainPointIndex = -1;
-        _selectedMobyIndex = -1;
         SelectionChanged?.Invoke(this, ViewportSelectionChangedEventArgs.ForTerrain(terrainIndex, polygon));
         InvalidateVisual();
     }
@@ -433,6 +1259,9 @@ public sealed class EditorViewport : Control
         _screenTerrainFaces.Clear();
         _screenMobys.Clear();
         _screenTerrainSurfaceLabels.Clear();
+        _flyHighDetailRenderKinds.Clear();
+        _flyCameraInactiveBackdropFaceIndexes.Clear();
+        _flyVisibleLowDetailCornerColorCounts.Clear();
         _screenFacingGuide = null;
 
         context.FillRectangle(new SolidColorBrush(Color.FromRgb(19, 24, 30)), bounds);
@@ -543,7 +1372,7 @@ public sealed class EditorViewport : Control
                     _isPaintingTerrain = true;
                     _lastTerrainBrushWorldPoint = brushCenter;
                     _terrainBrushPreviewWorldPoint = brushCenter;
-                    _terrainBrushPreviewTerrainIndex = terrain.Index;
+                    SetTerrainPresentationPin(ref _terrainBrushPreviewTerrainIndex, terrain.Index);
                     TerrainBrushRequested?.Invoke(this, new ViewportTerrainBrushRequestedEventArgs(terrain.Index, Geometry.Polygons[terrain.Index], brushCenter, _terrainBrushAction, true, 1.0));
                     e.Pointer.Capture(this);
                     e.Handled = true;
@@ -593,6 +1422,8 @@ public sealed class EditorViewport : Control
             if (_viewMode == ViewportViewMode.Fly3D)
             {
                 Vector delta = position - _lastPointerPosition;
+                if (Math.Abs(delta.X) > double.Epsilon || Math.Abs(delta.Y) > double.Epsilon)
+                    ResumeNativeTerrainLodAfterFlyNavigation();
                 _flyCamera.Yaw += delta.X * 0.0065;
                 _flyCamera.Pitch = Math.Clamp(_flyCamera.Pitch - (delta.Y * 0.0048), -1.15, 0.45);
             }
@@ -623,7 +1454,7 @@ public sealed class EditorViewport : Control
             if (terrain != null && TryGetBrushWorldPoint(position, terrain.Index, out Vector2f brushCenter))
             {
                 _terrainBrushPreviewWorldPoint = brushCenter;
-                _terrainBrushPreviewTerrainIndex = terrain.Index;
+                SetTerrainPresentationPin(ref _terrainBrushPreviewTerrainIndex, terrain.Index);
                 if (TryBuildTerrainBrushPath(brushCenter, out IReadOnlyList<TerrainBrushPathSample> brushSamples))
                 {
                     SelectTerrain(terrain);
@@ -752,6 +1583,7 @@ public sealed class EditorViewport : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        bool completedFlyLook = _viewMode == ViewportViewMode.Fly3D && _isPanning;
         if (_isPanning)
         {
             _isPanning = false;
@@ -803,6 +1635,9 @@ public sealed class EditorViewport : Control
             e.Handled = true;
         }
 
+        if (completedFlyLook)
+            ScheduleFlyNavigationMaterialSettle();
+
         UpdateViewportCursor(e.GetPosition(this));
     }
 
@@ -814,6 +1649,7 @@ public sealed class EditorViewport : Control
 
         if (_viewMode == ViewportViewMode.Fly3D)
         {
+            ResumeNativeTerrainLodAfterFlyNavigation();
             MoveFlyCamera(e.Delta.Y > 0 ? 420 : -420, 0, 0);
             InvalidateVisual();
             e.Handled = true;
@@ -876,28 +1712,27 @@ public sealed class EditorViewport : Control
         if (_viewMode != ViewportViewMode.Fly3D)
             return;
 
-        const double moveStep = 260;
         const double turnStep = 0.08;
         bool handled = true;
         switch (e.Key)
         {
             case Key.W:
-                MoveFlyCamera(moveStep, 0, 0);
+                MoveFlyCamera(FlyPlanarMoveStep, 0, 0);
                 break;
             case Key.S:
-                MoveFlyCamera(-moveStep, 0, 0);
+                MoveFlyCamera(-FlyPlanarMoveStep, 0, 0);
                 break;
             case Key.A:
-                MoveFlyCamera(0, -moveStep, 0);
+                MoveFlyCamera(0, -FlyPlanarMoveStep, 0);
                 break;
             case Key.D:
-                MoveFlyCamera(0, moveStep, 0);
+                MoveFlyCamera(0, FlyPlanarMoveStep, 0);
                 break;
             case Key.Q:
-                MoveFlyCamera(0, 0, moveStep);
+                MoveFlyCamera(0, 0, FlyVerticalMoveStep);
                 break;
             case Key.E:
-                MoveFlyCamera(0, 0, -moveStep);
+                MoveFlyCamera(0, 0, -FlyVerticalMoveStep);
                 break;
             case Key.Left:
                 _flyCamera.Yaw -= turnStep;
@@ -919,8 +1754,30 @@ public sealed class EditorViewport : Control
         if (!handled)
             return;
 
+        _activeFlyNavigationKeys.Add(e.Key);
+        ResumeNativeTerrainLodAfterFlyNavigation();
         InvalidateVisual();
         e.Handled = true;
+    }
+
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        base.OnKeyUp(e);
+        if (!_activeFlyNavigationKeys.Remove(e.Key))
+            return;
+
+        if (_activeFlyNavigationKeys.Count == 0)
+            ScheduleFlyNavigationMaterialSettle();
+        e.Handled = true;
+    }
+
+    private void OnViewportLostFocus(object? sender, RoutedEventArgs e)
+    {
+        bool interruptedFlyNavigation = _activeFlyNavigationKeys.Count > 0 || _isPanning;
+        _activeFlyNavigationKeys.Clear();
+        _isPanning = false;
+        if (interruptedFlyNavigation)
+            ScheduleFlyNavigationMaterialSettle();
     }
 
     private bool TryRequestObjectCopyPaste(KeyEventArgs e)
@@ -1025,7 +1882,7 @@ public sealed class EditorViewport : Control
             return;
 
         _selectedMobyIndex = index;
-        _selectedTerrainIndex = -1;
+        SetTerrainPresentationPin(ref _selectedTerrainIndex, -1);
         _selectedTerrainPointIndex = -1;
         SelectionChanged?.Invoke(this, ViewportSelectionChangedEventArgs.ForMoby(Mobys[index]));
         if (focus)
@@ -1129,7 +1986,7 @@ public sealed class EditorViewport : Control
 
     private void SelectTerrain(ScreenTerrainFace face)
     {
-        _selectedTerrainIndex = face.Index;
+        SetTerrainPresentationPin(ref _selectedTerrainIndex, face.Index);
         _selectedTerrainPointIndex = -1;
         _selectedMobyIndex = -1;
         TerrainPolygon polygon = Geometry!.Polygons[face.Index];
@@ -1147,7 +2004,7 @@ public sealed class EditorViewport : Control
         if (pointIndex < 0)
             return;
 
-        _selectedTerrainIndex = point.TerrainIndex;
+        SetTerrainPresentationPin(ref _selectedTerrainIndex, point.TerrainIndex);
         _selectedTerrainPointIndex = pointIndex;
         _selectedMobyIndex = -1;
         SelectionChanged?.Invoke(this, ViewportSelectionChangedEventArgs.ForTerrain(point.TerrainIndex, polygon, pointIndex));
@@ -1159,7 +2016,7 @@ public sealed class EditorViewport : Control
         return _screenMobys
             .OrderBy(item => DistanceSquared(item.Center, point))
             .ThenByDescending(item => ScreenMobyHitPriority(item))
-            .FirstOrDefault(item => DistanceSquared(item.Center, point) <= 144);
+            .FirstOrDefault(item => DistanceSquared(item.Center, point) <= item.HitRadius * item.HitRadius);
     }
 
     private ScreenFacingGuide? FindScreenFacingGuide(Point point)
@@ -1352,15 +2209,59 @@ public sealed class EditorViewport : Control
         GeometryCandidate? geometry = Geometry;
         if (geometry == null || geometry.Polygons.Count == 0)
         {
+            _flyTerrainInteractiveLodSnapshot = FlyTerrainInteractiveLodSnapshot.Empty;
+            _flyTerrainVisibilitySnapshot = FlyTerrainVisibilitySnapshot.Empty;
             DrawEmptyScene(context, bounds, _emptyMessage);
             return;
         }
 
         List<ProjectedTerrainFace> terrainFaces = new();
-        Rect visibleBounds = bounds.Inflate(220);
+        bool useStaticNativeLod = UsesNativeTerrainDistanceLod(geometry);
+        bool useFlyGameViewVisibility = UsesFlyGameViewHighDetailVisibility(geometry);
+        bool useNativeDistanceLod = useStaticNativeLod || useFlyGameViewVisibility;
+        Rect visibleBounds = bounds.Inflate(useNativeDistanceLod ? 220 : 48);
+        Dictionary<int, SceneSectorRenderMetadata>? sectorByIndex = useNativeDistanceLod
+            ? geometry.SourceSectors
+                .GroupBy(sector => sector.SectorIndex)
+                .ToDictionary(group => group.Key, group => group.First())
+            : null;
+        HashSet<int> forcedGameViewSectors = useFlyGameViewVisibility
+            ? BuildFlyGameViewForcedSectorIndexes(geometry)
+            : [];
+        NativeTerrainOcclusionSelection flyOcclusion = useFlyGameViewVisibility
+            ? ResolveFlyTerrainOcclusion(geometry)
+            : NativeTerrainOcclusionSelection.Unavailable;
+        // The retail group remains source provenance and painter-order context.
+        // Every unique sector follows its native HP/LP distance queues, and any
+        // high-detail face that survives the normal camera/frustum path keeps
+        // its source material regardless of group membership.
+        IReadOnlySet<int>? nativeGroupSectors = flyOcclusion.VisibleSectors;
+        FlyHighDetailGroupSelection highDetailGroup = useFlyGameViewVisibility
+            ? ResolveFlyHighDetailGroup(geometry, flyOcclusion, sectorByIndex!)
+            : FlyHighDetailGroupSelection.AllSectors;
+        int queuedHighDetailSectors = sectorByIndex == null
+            ? geometry.SourceSectors.Select(sector => sector.SectorIndex).Distinct().Count()
+            : sectorByIndex.Values.Count(sector =>
+                forcedGameViewSectors.Contains(sector.SectorIndex) ||
+                NativeTerrainFarLod.ShouldQueueHighDetailSector(
+                    FlyCameraDepth(sector.Center.X, sector.Center.Y, sector.Center.Z),
+                    sector.Radius,
+                    sector.DisableHighDetail));
+        int suppressedHighDetailByGroupCount = 0;
+        int suppressedHighDetailBySectorCount = 0;
+        int suppressedHighDetailByFaceDistanceCount = 0;
+        int foggedHighDetailFaceCount = 0;
+        int fullyFoggedHighDetailFaceCount = 0;
         for (int index = 0; index < geometry.Polygons.Count; index++)
         {
             TerrainPolygon polygon = geometry.Polygons[index];
+            // Game Camera applies native HP/LP queues across every source
+            // sector. Keep its local terrain complete, including genuine
+            // source water and support geometry.
+            if (!useFlyGameViewVisibility && !ShouldPresentTerrain(geometry, polygon))
+                continue;
+
+            bool forceGameViewSector = forcedGameViewSectors.Contains(polygon.SectorIndex);
             if (ShouldDrawAddCopySourcePreview(polygon))
             {
                 List<ProjectedPoint> sourceProjected = ProjectFlyTerrainPoints(bounds, polygon.OriginalPoints, polygon.OriginalZValues);
@@ -1368,8 +2269,26 @@ public sealed class EditorViewport : Control
                 {
                     Point[] sourcePoints = sourceProjected.Select(point => point.Screen).ToArray();
                     if (IntersectsBounds(sourcePoints, visibleBounds))
-                        terrainFaces.Add(new ProjectedTerrainFace(index, polygon, sourcePoints, sourceProjected.Average(point => point.Depth), true));
+                        terrainFaces.Add(new ProjectedTerrainFace(
+                            index,
+                            polygon,
+                            sourcePoints,
+                            sourceProjected.Average(point => point.Depth),
+                            true,
+                            sourceProjected.Select(point => point.Depth).ToArray()));
                 }
+            }
+
+            if (useNativeDistanceLod &&
+                !forceGameViewSector &&
+                sectorByIndex!.TryGetValue(polygon.SectorIndex, out SceneSectorRenderMetadata? sector) &&
+                !NativeTerrainFarLod.ShouldQueueHighDetailSector(
+                    FlyCameraDepth(sector.Center.X, sector.Center.Y, sector.Center.Z),
+                    sector.Radius,
+                    sector.DisableHighDetail))
+            {
+                suppressedHighDetailBySectorCount++;
+                continue;
             }
 
             List<ProjectedPoint> projected = new();
@@ -1380,28 +2299,150 @@ public sealed class EditorViewport : Control
                     projected.Add(point);
             }
 
-            if (projected.Count < 3)
+            if (projected.Count != count || projected.Count < 3)
                 continue;
 
             Point[] points = projected.Select(point => point.Screen).ToArray();
             if (!IntersectsBounds(points, visibleBounds))
                 continue;
 
+            double[] cameraDepths = projected.Select(point => point.Depth).ToArray();
+            if (useNativeDistanceLod &&
+                !forceGameViewSector &&
+                (!TryBuildRawFaceSlotDepths(polygon, cameraDepths, out double[] rawDepths) ||
+                 !NativeTerrainFarLod.ShouldRenderHighDetailFace(rawDepths)))
+            {
+                suppressedHighDetailByFaceDistanceCount++;
+                continue;
+            }
+
+            if (useFlyGameViewVisibility && !forceGameViewSector)
+            {
+                double averageCameraDepth = cameraDepths.Average();
+                if (averageCameraDepth > FlyGameViewFogNearDistance)
+                    foggedHighDetailFaceCount++;
+                if (averageCameraDepth >= FlyGameViewFogFarDistance)
+                    fullyFoggedHighDetailFaceCount++;
+            }
+
             double depth = projected.Average(point => point.Depth);
-            terrainFaces.Add(new ProjectedTerrainFace(index, polygon, points, depth));
+            terrainFaces.Add(new ProjectedTerrainFace(
+                index,
+                polygon,
+                points,
+                depth,
+                CameraDepths: cameraDepths));
         }
 
-        Dictionary<string, Color> terrainToneCache = BuildTerrainToneCache(geometry);
-        List<ProjectedTerrainSideWall> terrainSideWalls = BuildFlyTerrainSideWallPreviews(geometry, bounds, terrainToneCache, visibleBounds);
+        int nativeLowDetailCullingDistance =
+            NativeTerrainFarLod.ConservativeAllSectorCullingDistanceFixed16;
+        IReadOnlyList<ProjectedLowDetailTerrainFace> lowDetailFaces = useNativeDistanceLod
+            ? BuildProjectedLowDetailTerrainFaces(
+                geometry,
+                sectorByIndex!,
+                bounds,
+                visibleBounds,
+                forcedGameViewSectors,
+                nativeLowDetailCullingDistance)
+            : Array.Empty<ProjectedLowDetailTerrainFace>();
+
+        // A terrain face may be outside the camera's native occlusion group,
+        // but that must never turn its material into outline-only editor
+        // context. Distance/sector visibility still follows the retail path;
+        // every face that reaches this draw list keeps its native material.
+        suppressedHighDetailByGroupCount = 0;
+        foreach (ProjectedLowDetailTerrainFace face in lowDetailFaces)
+        {
+            _flyVisibleLowDetailCornerColorCounts[face.Polygon.RuntimeKey] =
+                face.Polygon.CornerColors.Distinct().Count();
+        }
+
+        HashSet<int>? interactiveFullMaterialFaces = _flyNavigationInteractiveMaterialLod
+            ? SelectInteractiveFlyFullMaterialFaces(terrainFaces, bounds)
+            : null;
+        int visibleTerrainFaceCount = terrainFaces.Count(face => !face.IsAddCopySourcePreview);
+        int forcedFullMaterialFaceCount = terrainFaces.Count(face =>
+            !face.IsAddCopySourcePreview &&
+            (face.Index == _selectedTerrainIndex ||
+             face.Polygon.IsTerrainEdited ||
+             face.Polygon.IsTerrainRemoved));
+        int fullMaterialFaceCount = interactiveFullMaterialFaces == null
+            ? visibleTerrainFaceCount
+            : terrainFaces.Count(face =>
+                !face.IsAddCopySourcePreview &&
+                (interactiveFullMaterialFaces.Contains(face.Index) ||
+                 face.Index == _selectedTerrainIndex ||
+                 face.Polygon.IsTerrainEdited ||
+                 face.Polygon.IsTerrainRemoved));
+        int partiallyFullMaterialSectorCount = interactiveFullMaterialFaces == null
+            ? 0
+            : terrainFaces
+                .Where(face =>
+                    !face.IsAddCopySourcePreview &&
+                    face.Polygon.HasNativeHighPolyMaterialPayload &&
+                    !RequiresGuardedNativeTerrainBlendFallback(face.Polygon))
+                .GroupBy(face => face.Polygon.SectorIndex)
+                .Count(group =>
+                {
+                    int selectedCount = group.Count(face => interactiveFullMaterialFaces.Contains(face.Index));
+                    return selectedCount > 0 && selectedCount < group.Count();
+                });
+        _flyTerrainInteractiveLodSnapshot = new FlyTerrainInteractiveLodSnapshot(
+            _flyNavigationInteractiveMaterialLod,
+            InteractiveFlyMaterialFaceBudget(bounds),
+            visibleTerrainFaceCount,
+            fullMaterialFaceCount,
+            Math.Max(0, visibleTerrainFaceCount - fullMaterialFaceCount),
+            forcedFullMaterialFaceCount,
+            partiallyFullMaterialSectorCount);
+        bool usedNativeBoundedCompositor = TryDrawNativeTerrainBoundedFrame(
+            context,
+            bounds,
+            geometry,
+            terrainFaces,
+            lowDetailFaces,
+            useFlyGameViewVisibility ? highDetailGroup.Sectors : null,
+            useFlyGameViewVisibility ? highDetailGroup.GroupIndex : -1);
+        if (!usedNativeBoundedCompositor)
+        {
+            foreach (ProjectedLowDetailTerrainFace face in lowDetailFaces
+                .OrderByDescending(face => face.SortDepth)
+                .ThenBy(face => face.Polygon.SectorIndex)
+                .ThenBy(face => face.Polygon.FaceIndex))
+            {
+                DrawLowDetailTerrainFace(context, face);
+            }
+        }
+
+        List<ProjectedTerrainSideWall> terrainSideWalls = useFlyGameViewVisibility
+            ? []
+            : BuildFlyTerrainSideWallPreviews(
+                geometry,
+                bounds,
+                visibleBounds,
+                applyTerrainSceneFilter: true);
         foreach (ProjectedTerrainSideWall wall in OrderFlyTerrainSideWallsForDrawing(terrainSideWalls))
             DrawTerrainSideWallPreview(context, wall);
 
         IReadOnlyList<ProjectedTerrainFace> orderedTerrainFaces = OrderFlyTerrainFacesForDrawing(terrainFaces);
+        if (!usedNativeBoundedCompositor &&
+            useFlyGameViewVisibility &&
+            highDetailGroup.Sectors is { } foregroundSectors)
+        {
+            // The fallback painter has no depth buffer. Preserve ordinary
+            // depth ordering inside each layer, but let the collision-selected
+            // retail context cover inactive whole-scene geometry where their
+            // arbitrary editor-camera projections cross.
+            orderedTerrainFaces = orderedTerrainFaces
+                .Where(face => !foregroundSectors.Contains(face.Polygon.SectorIndex))
+                .Concat(orderedTerrainFaces.Where(face => foregroundSectors.Contains(face.Polygon.SectorIndex)))
+                .ToArray();
+        }
         foreach (ProjectedTerrainFace face in orderedTerrainFaces)
         {
             if (!face.IsAddCopySourcePreview)
                 _screenTerrainFaces.Add(new ScreenTerrainFace(face.Index, face.Points, face.Depth, face.Polygon.AvgZ));
-            Color color = TerrainDisplayColor(face.Polygon, geometry, terrainToneCache);
+            Color color = TerrainDisplayColor(face.Polygon, geometry);
             if (face.IsAddCopySourcePreview)
             {
                 DrawAddCopySourcePreview(context, face.Points, color, flyView: true);
@@ -1410,6 +2451,18 @@ public sealed class EditorViewport : Control
 
             bool selected = face.Index == _selectedTerrainIndex;
             bool edited = face.Polygon.IsTerrainEdited;
+            bool simplifyInteractiveMaterial = interactiveFullMaterialFaces != null &&
+                !interactiveFullMaterialFaces.Contains(face.Index) &&
+                !selected &&
+                !edited &&
+                !face.Polygon.IsTerrainRemoved;
+            bool subduedBroadUnderlay =
+                !useFlyGameViewVisibility &&
+                _flyCameraIsOverview &&
+                IsAuditedBroadOverviewUnderlay(geometry, face.Polygon) &&
+                !selected &&
+                !edited &&
+                face.Index != _hoverTerrainIndex;
             TerrainPatchSafetyKind safety = TerrainPatchSafetyFor(face.Polygon);
             Color fillColor = selected
                 ? Color.FromArgb(224, 216, 189, 82)
@@ -1420,55 +2473,308 @@ public sealed class EditorViewport : Control
                 ? new Pen(new SolidColorBrush(Color.FromRgb(255, 236, 127)), 2.2)
                 : edited
                     ? new Pen(new SolidColorBrush(TerrainPatchSafetyPenColor(safety)), 1.9)
-                    : IsMapUnderlaySurface(face.Polygon.Surface)
+                    : !simplifyInteractiveMaterial && RequiresGuardedNativeTerrainBlendFallback(face.Polygon)
                         ? CreateTerrainFlyUnderlayPen(face.Polygon.Surface)
-                        : CreateTerrainFaceDetailPen(flyView: true);
-            DrawTerrainFace(
-                context,
-                face.Points,
-                face.Polygon,
-                fillColor,
-                pen,
-                flyView: true);
+                        : null;
+            if (usedNativeBoundedCompositor)
+            {
+                if (selected || edited || face.Polygon.IsTerrainRemoved)
+                {
+                    byte overlayAlpha = selected ? (byte)122 : (byte)56;
+                    Color overlay = Color.FromArgb(overlayAlpha, fillColor.R, fillColor.G, fillColor.B);
+                    DrawPolygon(context, face.Points, new SolidColorBrush(overlay), pen);
+                }
+            }
+            else
+            {
+                if (subduedBroadUnderlay)
+                {
+                    using (context.PushOpacity(0.42))
+                    {
+                        _flyHighDetailRenderKinds[face.Index] = DrawTerrainFace(
+                            context,
+                            face.Points,
+                            face.Polygon,
+                            fillColor,
+                            pen,
+                            flyView: true,
+                            emphasis: 0,
+                            cameraDepths: face.CameraDepths,
+                            simplifyInteractiveMaterial: true,
+                            suppressGameViewFog: true);
+                    }
+                }
+                else
+                {
+                    _flyHighDetailRenderKinds[face.Index] = DrawTerrainFace(
+                        context,
+                        face.Points,
+                        face.Polygon,
+                        fillColor,
+                        pen,
+                        flyView: true,
+                        emphasis: selected ? 0.48 : edited ? 0.22 : 0,
+                        cameraDepths: face.CameraDepths,
+                        simplifyInteractiveMaterial: simplifyInteractiveMaterial,
+                        suppressGameViewFog: !useFlyGameViewVisibility ||
+                            forcedGameViewSectors.Contains(face.Polygon.SectorIndex));
+                }
+            }
         }
 
-        DrawFlyForegroundTerrainEdges(context, orderedTerrainFaces);
+        // Game Camera is the source-faithful material view. Repainting every
+        // terrain edge after the opaque fills lets outlines from occluded far
+        // faces show through nearby floors and walls because this Avalonia
+        // overlay has no depth buffer. Edit Map/Fly overview keeps the global
+        // mesh, while hover, selection, edited-face, and point-handle overlays
+        // below remain available here for direct editing.
+        if (!useFlyGameViewVisibility)
+        {
+            DrawFlyForegroundTerrainEdges(
+                context,
+                orderedTerrainFaces,
+                interactiveFullMaterialFaces,
+                useFlyGameViewVisibility,
+                forcedGameViewSectors);
+        }
         DrawTerrainHoverTarget(context, orderedTerrainFaces, flyView: true);
         DrawTerrainSelectionChip(context, orderedTerrainFaces, bounds, flyView: true);
         DrawTerrainPriorityOutlines(context, orderedTerrainFaces, flyView: true);
         DrawSelectedTerrainPointHandles(context, orderedTerrainFaces, flyView: true);
         DrawFlyTerrainBrushFootprint(context, bounds, geometry);
-        DrawFlyMobys(context, bounds);
+        FlyMobyVisibilityCounts mobyVisibility = DrawFlyMobys(context, bounds, useFlyGameViewVisibility);
+        _nativeTerrainOcclusionSnapshot = new NativeTerrainOcclusionSnapshot(
+            "Game Camera",
+            flyOcclusion.Available,
+            flyOcclusion.CollisionTriangleResolved,
+            flyOcclusion.GroupIndex,
+            flyOcclusion.TriangleIndex,
+            flyOcclusion.FloorZ,
+            geometry.SourceSectors.Count,
+            nativeGroupSectors?.Count ?? geometry.SourceSectors.Count,
+            geometry.SourceSectors.Count,
+            forcedGameViewSectors.Count,
+            flyOcclusion.Available
+                ? SourceSceneOverlayContract.TerrainOcclusion
+                : "Native terrain occlusion payload unavailable; failed open to source sectors.");
+        _flyTerrainVisibilitySnapshot = new FlyTerrainVisibilitySnapshot(
+            useStaticNativeLod
+                ? FlyTerrainVisibilityMode.NativeDistanceResearch
+                : useFlyGameViewVisibility
+                    ? FlyTerrainVisibilityMode.GameViewCameraLocalHighDetail
+                    : FlyTerrainVisibilityMode.EditorOverviewHighDetail,
+            _flipMapY,
+            _flyCameraIsOverview,
+            geometry.SourceSectors.Select(sector => sector.SectorIndex).Distinct().Count(),
+            queuedHighDetailSectors,
+            geometry.Polygons.Count,
+            visibleTerrainFaceCount,
+            suppressedHighDetailByGroupCount,
+            suppressedHighDetailBySectorCount,
+            suppressedHighDetailByFaceDistanceCount,
+            foggedHighDetailFaceCount,
+            fullyFoggedHighDetailFaceCount,
+            geometry.LowDetailPolygons.Count,
+            lowDetailFaces.Count,
+            forcedGameViewSectors.Count,
+            highDetailGroup.GroupIndex,
+            highDetailGroup.Sectors?.Count ?? geometry.SourceSectors.Count,
+            mobyVisibility.VisibleCount,
+            mobyVisibility.SuppressedFarCount,
+            flyOcclusion.Available
+                ? "Game Camera keeps every unique source sector on its native HP/LP distance path. Every visible close HP face keeps its source material, including off-group terrain; the resolved retail group remains provenance and painter-order context. Scene data is unchanged."
+                : "Game Camera keeps every source sector on native HP/LP distance queues; near HP stays textured, distant source LP remains Gouraud-colored, and source geometry is unchanged.");
     }
 
     private static void DrawFlyBackground(DrawingContext context, Rect bounds)
     {
         const int bandCount = 18;
-        Color top = Color.FromRgb(39, 58, 82);
-        Color horizon = Color.FromRgb(48, 61, 68);
-        Color bottom = Color.FromRgb(34, 45, 50);
 
         for (int i = 0; i < bandCount; i++)
         {
             double t0 = i / (double)bandCount;
             double t1 = (i + 1) / (double)bandCount;
             double t = (t0 + t1) * 0.5;
-            Color color = t < 0.52
-                ? BlendColor(top, horizon, t / 0.52)
-                : BlendColor(horizon, bottom, (t - 0.52) / 0.48);
+            Color color = FlyBackgroundColor(t);
             context.FillRectangle(
                 new SolidColorBrush(color),
                 new Rect(bounds.Left, bounds.Top + (bounds.Height * t0), bounds.Width, bounds.Height * (t1 - t0) + 1));
         }
     }
 
-    private void DrawFlyMobys(DrawingContext context, Rect bounds)
+    private static Color FlyBackgroundColor(double normalizedY)
+    {
+        Color top = Color.FromRgb(39, 58, 82);
+        Color horizon = Color.FromRgb(48, 61, 68);
+        Color bottom = Color.FromRgb(34, 45, 50);
+        double t = Math.Clamp(normalizedY, 0, 1);
+        return t < 0.52
+            ? BlendColor(top, horizon, t / 0.52)
+            : BlendColor(horizon, bottom, (t - 0.52) / 0.48);
+    }
+
+    private IReadOnlyList<ProjectedLowDetailTerrainFace> BuildProjectedLowDetailTerrainFaces(
+        GeometryCandidate geometry,
+        IReadOnlyDictionary<int, SceneSectorRenderMetadata> sectorByIndex,
+        Rect bounds,
+        Rect visibleBounds,
+        IReadOnlySet<int> forcedHighDetailSectors,
+        int cullingDistanceFixed16)
+    {
+        List<ProjectedLowDetailTerrainFace> result = [];
+        foreach (LowDetailTerrainPolygon polygon in geometry.LowDetailPolygons)
+        {
+            if (!polygon.HasCompleteNativePayload ||
+                forcedHighDetailSectors.Contains(polygon.SectorIndex) ||
+                !sectorByIndex.TryGetValue(polygon.SectorIndex, out SceneSectorRenderMetadata? sector) ||
+                sector.DisableLowDetail ||
+                !NativeTerrainFarLod.ShouldQueueLowDetailSector(
+                    FlyCameraDepth(sector.Center.X, sector.Center.Y, sector.Center.Z),
+                    sector.Radius,
+                    disableLowDetail: false,
+                    sector.ForceLowDetail))
+            {
+                continue;
+            }
+
+            List<ProjectedPoint> projected = [];
+            int count = Math.Min(polygon.Points.Count, polygon.ZValues.Count);
+            for (int pointIndex = 0; pointIndex < count; pointIndex++)
+            {
+                if (TryProjectFly(
+                    bounds,
+                    polygon.Points[pointIndex].X,
+                    polygon.Points[pointIndex].Y,
+                    polygon.ZValues[pointIndex],
+                    out ProjectedPoint point))
+                {
+                    projected.Add(point);
+                }
+            }
+
+            // The bounded preview intentionally omits near-plane polygon
+            // clipping. Requiring all unique vertices prevents a clipped face
+            // from being re-indexed into a different native corner topology.
+            if (projected.Count != count || projected.Count < 3 ||
+                !TryBuildLowDetailRawFaceSlots(
+                    polygon,
+                    projected.Select(point => point.Screen).ToArray(),
+                    projected.Select(point => point.Depth).ToArray(),
+                    out Point[] rawPoints,
+                    out double[] rawDepths) ||
+                !NativeTerrainFarLod.ShouldRenderLowDetailFace(
+                    rawDepths,
+                    polygon.TransitionBias,
+                    cullingDistanceFixed16))
+            {
+                continue;
+            }
+
+            Point[] uniquePoints = projected.Select(point => point.Screen).ToArray();
+            if (!IntersectsBounds(uniquePoints, visibleBounds))
+                continue;
+
+            double averageDepth = rawDepths.Average();
+            result.Add(new ProjectedLowDetailTerrainFace(
+                polygon,
+                rawPoints,
+                rawDepths,
+                averageDepth,
+                averageDepth + (polygon.OrderingTableBias * 8.0)));
+        }
+
+        return result;
+    }
+
+    private void DrawLowDetailTerrainFace(DrawingContext context, ProjectedLowDetailTerrainFace face)
+    {
+        LowDetailTerrainPolygon polygon = face.Polygon;
+        Color[] colors = Enumerable.Range(0, SourceSceneOverlayContract.CornerSlotCount)
+            .Select(slot => NativeLowDetailCornerColor(polygon.CornerColors[slot], polygon))
+            .ToArray();
+        foreach ((int a, int b, int c) in NativeLowDetailTriangleSlots)
+        {
+            Point[] trianglePoints = [face.RawPoints[a], face.RawPoints[b], face.RawPoints[c]];
+            double area = Math.Abs(PolygonArea(trianglePoints));
+            if (area < 0.01)
+                continue;
+
+            int subdivisions = area >= 7200 ? 3 : 2;
+            DrawGouraudTriangle(
+                context,
+                face.RawPoints[a], colors[a],
+                face.RawPoints[b], colors[b],
+                face.RawPoints[c], colors[c],
+                subdivisions);
+        }
+    }
+
+    private Color NativeLowDetailCornerColor(
+        Spyro.Editor.Core.Primitives.ColorRgba source,
+        LowDetailTerrainPolygon polygon)
+    {
+        Spyro.Editor.Core.Primitives.ColorRgba graded = PreviewEnvironmentColor(source);
+        Color color = Color.FromRgb(graded.R, graded.G, graded.B);
+        if (!polygon.SemiTransparent)
+            return color;
+
+        // Avalonia uses source-over compositing rather than the PSX GPU's four
+        // blend equations. Preserve the native mode and use a bounded visual
+        // approximation; this preview does not claim exact PSX blending.
+        byte alpha = polygon.BlendMode switch
+        {
+            1 => 120,
+            2 => 112,
+            3 => 72,
+            _ => 144
+        };
+        color = polygon.BlendMode switch
+        {
+            1 => BlendColor(color, Colors.White, 0.12),
+            2 => BlendColor(color, Colors.Black, 0.36),
+            _ => color
+        };
+        return Color.FromArgb(alpha, color.R, color.G, color.B);
+    }
+
+    private static bool TryBuildLowDetailRawFaceSlots(
+        LowDetailTerrainPolygon polygon,
+        IReadOnlyList<Point> projectedPoints,
+        IReadOnlyList<double> projectedDepths,
+        out Point[] rawPoints,
+        out double[] rawDepths)
+    {
+        rawPoints = new Point[SourceSceneOverlayContract.CornerSlotCount];
+        rawDepths = new double[SourceSceneOverlayContract.CornerSlotCount];
+        if (polygon.CornerPointIndexes.Count != SourceSceneOverlayContract.CornerSlotCount ||
+            projectedPoints.Count != projectedDepths.Count)
+        {
+            return false;
+        }
+
+        for (int slot = 0; slot < SourceSceneOverlayContract.CornerSlotCount; slot++)
+        {
+            int pointIndex = polygon.CornerPointIndexes[slot];
+            if (pointIndex < 0 || pointIndex >= projectedPoints.Count)
+                return false;
+            rawPoints[slot] = projectedPoints[pointIndex];
+            rawDepths[slot] = projectedDepths[pointIndex];
+        }
+
+        return true;
+    }
+
+    private FlyMobyVisibilityCounts DrawFlyMobys(
+        DrawingContext context,
+        Rect bounds,
+        bool useFlyGameViewVisibility)
     {
         IReadOnlyList<Moby> mobys = Mobys;
         if (mobys.Count == 0)
-            return;
+            return default;
 
         List<VisibleMoby> visible = new();
+        int suppressedFarCount = 0;
         for (int i = 0; i < mobys.Count; i++)
         {
             Moby moby = mobys[i];
@@ -1480,13 +2786,22 @@ public sealed class EditorViewport : Control
             if (!TryProjectFly(bounds, moby.Position.X, moby.Position.Y, moby.Position.Z, out ProjectedPoint point))
                 continue;
 
+            if (useFlyGameViewVisibility &&
+                i != _selectedMobyIndex &&
+                point.Depth >= FlyGameViewFogFarDistance)
+            {
+                suppressedFarCount++;
+                continue;
+            }
+
             if (!bounds.Inflate(80).Contains(point.Screen))
                 continue;
 
             double size = FlyMobyMarkerSize(moby, point.Depth);
-            Point markerPoint = AdjustMobyMarkerPoint(moby, point.Screen, size);
-            _screenMobys.Add(new ScreenMoby(i, markerPoint));
-            visible.Add(new VisibleMoby(i, moby, markerPoint, size, point.Depth));
+            Point anchorPoint = point.Screen;
+            Point markerPoint = AdjustMobyMarkerPoint(moby, anchorPoint, size);
+            _screenMobys.Add(new ScreenMoby(i, markerPoint, MobyHitRadius(moby, size)));
+            visible.Add(new VisibleMoby(i, moby, markerPoint, anchorPoint, size, point.Depth));
         }
 
         HashSet<int> linkedTrueIndexes = BuildLinkedTrueIndexSet(mobys);
@@ -1509,10 +2824,15 @@ public sealed class EditorViewport : Control
             DrawMobyWithOpacity(context, item.Point, item.Moby, false, true, item.Size, linkedOpacity);
 
         foreach (VisibleMoby item in visible.Where(item => item.Index == _selectedMobyIndex))
-            DrawMobyWithOpacity(context, item.Point, item.Moby, true, false, item.Size + 2.5, selectedOpacity);
+        {
+            double selectedSize = IsPinnedTransportMarker(item.Moby) ? item.Size : item.Size + 2.5;
+            DrawMobyWithOpacity(context, item.Point, item.Moby, true, false, selectedSize, selectedOpacity);
+        }
 
+        DrawPinnedTransportAnchors(context, visible);
         DrawSelectedMobyFacingGuide(context, bounds, visible, flyView: true);
         DrawMobyLabels(context, bounds, visible, linkedTrueIndexes);
+        return new FlyMobyVisibilityCounts(visible.Count, suppressedFarCount);
     }
 
     private static double FlyMobyMarkerSize(Moby moby, double depth)
@@ -1572,6 +2892,12 @@ public sealed class EditorViewport : Control
     private static Vector MobyMarkerDisplayOffset(Moby moby, double size)
     {
         string text = GetMobyMarkerText(moby).ToLowerInvariant();
+        if (moby.IsFlyInLandingControl)
+            return new Vector(0, -(size * 1.35));
+
+        if (IsReturnHomeText(text))
+            return new Vector(0, -(size * 0.66));
+
         if (text.Contains("balloonist") || text.Contains("baloonist"))
             return new Vector(size * 0.58, -size * 0.62);
 
@@ -1585,12 +2911,15 @@ public sealed class EditorViewport : Control
     {
         SceneTransform transform = CreateGeometryTransform(bounds, geometry);
         Rect visibleBounds = bounds.Inflate(32);
-        Dictionary<string, Color> terrainToneCache = BuildTerrainToneCache(geometry);
         List<ProjectedTerrainFace> visibleFaces = new();
+        NativeTerrainOcclusionSelection mapOcclusion = ResolveMapTerrainOcclusion(geometry);
 
         for (int index = 0; index < geometry.Polygons.Count; index++)
         {
             TerrainPolygon polygon = geometry.Polygons[index];
+            if (!ShouldPresentTerrain(geometry, polygon))
+                continue;
+
             if (ShouldDrawAddCopySourcePreview(polygon))
             {
                 Point[] sourcePoints = ProjectMapTerrainPoints(
@@ -1611,10 +2940,20 @@ public sealed class EditorViewport : Control
         }
 
         IReadOnlyList<ProjectedTerrainFace> orderedFaces = OrderMapTerrainFacesForDrawing(visibleFaces);
+        int nativeMaterialCandidateFaceCount = 0;
+        int nativeTextureFaceCount = 0;
+        int nativeUntexturedGouraudFaceCount = 0;
+        int guardedUnderlayFallbackFaceCount = 0;
+        int opaqueGuardedUnderlayFallbackFaceCount = 0;
+        int projectionDegenerateFaceCount = 0;
+        int unresolvedFallbackFaceCount = 0;
+        int auditedBroadUnderlayFaceCount = 0;
+        int subduedBroadUnderlayFaceCount = 0;
+        int offCameraSourceOutlineFaceCount = 0;
         foreach (ProjectedTerrainFace face in orderedFaces)
         {
             TerrainPolygon polygon = face.Polygon;
-            Color surfaceColor = TerrainDisplayColor(polygon, geometry, terrainToneCache);
+            Color surfaceColor = TerrainDisplayColor(polygon, geometry);
             if (face.IsAddCopySourcePreview)
             {
                 DrawAddCopySourcePreview(context, face.Points, surfaceColor, flyView: false);
@@ -1633,13 +2972,77 @@ public sealed class EditorViewport : Control
                 ? new Pen(new SolidColorBrush(Color.FromRgb(255, 236, 127)), 2.4)
                 : edited
                     ? new Pen(new SolidColorBrush(TerrainPatchSafetyPenColor(safety)), 1.9)
-                    : IsMapUnderlaySurface(polygon.Surface)
+                    : RequiresGuardedNativeTerrainBlendFallback(polygon)
                         ? CreateTerrainUnderlayPen(polygon.Surface)
                         : CreateTerrainFaceDetailPen(flyView: false);
-            DrawTerrainFace(context, face.Points, polygon, fillColor, pen, flyView: false);
+            NativeTerrainFaceRenderKind nativeRenderKind = DrawTerrainFace(
+                context,
+                face.Points,
+                polygon,
+                fillColor,
+                pen,
+                flyView: false,
+                emphasis: selected ? 0.48 : edited ? 0.22 : 0,
+                cameraDepths: null,
+                simplifyInteractiveMaterial: false);
+            if (polygon.HasNativeHighPolyMaterialPayload)
+            {
+                nativeMaterialCandidateFaceCount++;
+                switch (nativeRenderKind)
+                {
+                    case NativeTerrainFaceRenderKind.NativeTexture:
+                        nativeTextureFaceCount++;
+                        break;
+                    case NativeTerrainFaceRenderKind.NativeUntexturedGouraud:
+                        nativeUntexturedGouraudFaceCount++;
+                        break;
+                    case NativeTerrainFaceRenderKind.GuardedUnderlayFallback:
+                        guardedUnderlayFallbackFaceCount++;
+                        if (!polygon.NativePrimitiveSemiTransparent)
+                            opaqueGuardedUnderlayFallbackFaceCount++;
+                        break;
+                    case NativeTerrainFaceRenderKind.ProjectionDegenerate:
+                        projectionDegenerateFaceCount++;
+                        break;
+                    default:
+                        unresolvedFallbackFaceCount++;
+                        break;
+                }
+            }
             if (!face.IsAddCopySourcePreview)
                 _screenTerrainFaces.Add(new ScreenTerrainFace(face.Index, face.Points, face.Depth, face.Polygon.AvgZ));
         }
+
+        _nativeTerrainMapMaterialSnapshot = new NativeTerrainMapMaterialSnapshot(
+            NativeTerrainMapMaterialContract,
+            orderedFaces.Count(face => !face.IsAddCopySourcePreview),
+            auditedBroadUnderlayFaceCount,
+            subduedBroadUnderlayFaceCount,
+            nativeMaterialCandidateFaceCount,
+            nativeTextureFaceCount,
+            nativeUntexturedGouraudFaceCount,
+            guardedUnderlayFallbackFaceCount,
+            opaqueGuardedUnderlayFallbackFaceCount,
+            projectionDegenerateFaceCount,
+            unresolvedFallbackFaceCount,
+            _normalTerrainTextureImageFiles.Count,
+            offCameraSourceOutlineFaceCount,
+            "Edit Map material-renders every captured face with native normal-HQ texture data and the proven physical HP table-2 overview endpoint. Game Camera supplies the camera-dependent two-table depth cue and distance LOD.");
+
+        _nativeTerrainOcclusionSnapshot = new NativeTerrainOcclusionSnapshot(
+            "Edit Map",
+            mapOcclusion.Available,
+            mapOcclusion.CollisionTriangleResolved,
+            mapOcclusion.GroupIndex,
+            mapOcclusion.TriangleIndex,
+            mapOcclusion.FloorZ,
+            geometry.SourceSectors.Count,
+            mapOcclusion.VisibleSectors?.Count ?? geometry.SourceSectors.Count,
+            geometry.SourceSectors.Count,
+            _selectedTerrainIndex >= 0 ? 1 : 0,
+            mapOcclusion.Available
+                ? SourceSceneOverlayContract.TerrainOcclusion
+                : "Native terrain occlusion payload unavailable; failed open to all source sectors.");
 
         DrawMapForegroundTerrainEdges(context, orderedFaces);
         DrawTerrainHoverTarget(context, orderedFaces, flyView: false);
@@ -1687,17 +3090,12 @@ public sealed class EditorViewport : Control
         if (face.Polygon.IsTerrainRemoved)
             return 58;
 
-        string surface = TerrainMaterialClassifier.NormalizeSurfaceName(face.Polygon.Surface);
-        return surface switch
-        {
-            "water" or "lava" or "ooze" => 10,
-            "unknown" => 24,
-            "ice" => 30,
-            "sand" or "wood" => 34,
-            "grass" or "ground" => 38,
-            "stone" or "brick" or "cliff" or "metal" => 42,
-            _ => 32
-        };
+        // The previous editor styling painted material families in a fixed
+        // order, so stone/cliff faces always covered grass/ground where their
+        // top-down projections overlapped. That created a systematic tan bias
+        // unrelated to the source geometry. Unedited native faces now share a
+        // layer and are ordered by their actual average height below.
+        return 30;
     }
 
     private IReadOnlyList<ProjectedTerrainFace> OrderFlyTerrainFacesForDrawing(IReadOnlyList<ProjectedTerrainFace> faces)
@@ -1709,13 +3107,63 @@ public sealed class EditorViewport : Control
             .ToArray();
     }
 
+    private static int InteractiveFlyMaterialFaceBudget(Rect bounds)
+    {
+        int viewportScaledBudget = (int)Math.Round(
+            Math.Max(1, bounds.Width) * Math.Max(1, bounds.Height) /
+            InteractiveFlyMaterialBudgetPixelsPerFace);
+        return Math.Clamp(
+            viewportScaledBudget,
+            InteractiveFlyMinimumFullMaterialFaceBudget,
+            InteractiveFlyMaximumFullMaterialFaceBudget);
+    }
+
+    private static HashSet<int> SelectInteractiveFlyFullMaterialFaces(
+        IReadOnlyList<ProjectedTerrainFace> faces,
+        Rect bounds)
+    {
+        int budget = InteractiveFlyMaterialFaceBudget(bounds);
+        ProjectedTerrainFace[][] sectors = faces
+            .Where(face =>
+                !face.IsAddCopySourcePreview &&
+                face.Polygon.HasNativeHighPolyMaterialPayload &&
+                !RequiresGuardedNativeTerrainBlendFallback(face.Polygon))
+            .GroupBy(face => face.Polygon.SectorIndex)
+            .Select(group => group
+                .OrderBy(face => face.Index)
+                .ToArray())
+            .OrderBy(group => group.Min(face => face.Depth))
+            .ThenByDescending(group => group.Sum(face => Math.Abs(PolygonArea(face.Points))))
+            .ThenBy(group => group[0].Polygon.SectorIndex)
+            .ToArray();
+
+        HashSet<int> selected = [];
+        foreach (ProjectedTerrainFace[] sector in sectors)
+        {
+            // Whole sectors switch material quality together. The previous
+            // per-face budget left alternating textured and flat triangles on
+            // one cliff wall, which looked like missing geometry while moving.
+            if (selected.Count > 0 && selected.Count + sector.Length > budget)
+                continue;
+
+            foreach (ProjectedTerrainFace face in sector)
+                selected.Add(face.Index);
+            if (selected.Count >= budget)
+                break;
+        }
+
+        return selected;
+    }
+
     private List<ProjectedTerrainSideWall> BuildFlyTerrainSideWallPreviews(
         GeometryCandidate geometry,
         Rect bounds,
-        IReadOnlyDictionary<string, Color> toneCache,
-        Rect visibleBounds)
+        Rect visibleBounds,
+        bool applyTerrainSceneFilter)
     {
         List<TerrainSideWallPreviewCandidate> candidates = BuildTerrainSideWallPreviewCandidates(geometry);
+        if (applyTerrainSceneFilter)
+            candidates.RemoveAll(candidate => !ShouldPresentTerrain(geometry, candidate.Polygon));
         if (candidates.Count == 0)
             return new List<ProjectedTerrainSideWall>();
 
@@ -1743,7 +3191,7 @@ public sealed class EditorViewport : Control
             if (!IntersectsBounds(points, visibleBounds))
                 continue;
 
-            Color baseColor = TerrainDisplayColor(candidate.Polygon, geometry, toneCache);
+            Color baseColor = TerrainDisplayColor(candidate.Polygon, geometry);
             Color fill = TerrainSideWallFillColor(baseColor, candidate.Polygon, candidate.PolygonIndex == _selectedTerrainIndex);
             Color line = TerrainSideWallLineColor(fill, candidate.PolygonIndex == _selectedTerrainIndex);
             previews.Add(new ProjectedTerrainSideWall(
@@ -1903,12 +3351,16 @@ public sealed class EditorViewport : Control
             return 44;
         if (face.Polygon.IsTerrainRemoved)
             return 42;
-        return IsMapUnderlaySurface(face.Polygon.Surface) ? 10 : 28;
+        // Fly is a perspective view. Source depth, not an editor surface
+        // label, decides which unedited native face is in front. A broad
+        // semantic underlay layer caused opaque cliff walls whose texture was
+        // labeled "lava" to be painted behind unrelated geometry.
+        return 28;
     }
 
     private static Color TerrainMapFillColor(Color color, TerrainPolygon polygon)
     {
-        if (!IsMapUnderlaySurface(polygon.Surface))
+        if (!RequiresGuardedNativeTerrainBlendFallback(polygon))
             return color;
 
         Color softened = TryGetTerrainFamilyColor(polygon.Surface, out Color familyColor)
@@ -1925,8 +3377,8 @@ public sealed class EditorViewport : Control
 
     private Color TerrainFlyFillColor(Color color, TerrainPolygon polygon)
     {
-        if (!IsMapUnderlaySurface(polygon.Surface))
-            return Color.FromArgb(245, color.R, color.G, color.B);
+        if (!RequiresGuardedNativeTerrainBlendFallback(polygon))
+            return Color.FromArgb(255, color.R, color.G, color.B);
 
         Color softened = TryGetTerrainFamilyColor(polygon.Surface, out Color familyColor)
             ? BlendColor(color, familyColor, IsTerrainVisualFocusActive() ? 0.34 : 0.42)
@@ -1976,6 +3428,17 @@ public sealed class EditorViewport : Control
     private static bool IsMapUnderlaySurface(string surface)
     {
         return TerrainMaterialClassifier.NormalizeSurfaceName(surface) is "water" or "lava" or "ooze";
+    }
+
+    private static bool RequiresGuardedNativeTerrainBlendFallback(TerrainPolygon polygon)
+    {
+        // A material/surface label is not native blend proof. Many levels reuse
+        // visually similar texture IDs on opaque walls and on hazards. Only a
+        // raw semitransparent primitive needs the conservative source-over
+        // fallback; opaque native textures must always keep their decoded art.
+        return polygon.HasNativeHighPolyMaterialPayload &&
+            polygon.NativePrimitiveSemiTransparent &&
+            !polygon.IsNativeUntexturedSentinel;
     }
 
     private void BuildTerrainSurfaceLabels(IReadOnlyList<ProjectedTerrainFace> faces, Rect bounds)
@@ -2093,6 +3556,7 @@ public sealed class EditorViewport : Control
             _terrainBrushRadius,
             _terrainBrushFeather,
             (polygon, index) => transform.Project(polygon.Points[index].X, polygon.Points[index].Y, polygon.ZValues[index]),
+            applyTerrainSceneFilter: true,
             out bool clipped);
         DrawTerrainBrushAffectedVertices(context, preview, color);
         DrawTerrainBrushPreviewChip(context, bounds, center, color, TerrainBrushPreviewAnalyzer.Summarize(preview.Select(item => item.Kind), clipped), flyView: false);
@@ -2146,6 +3610,7 @@ public sealed class EditorViewport : Control
                     ? projected.Screen
                     : null;
             },
+            applyTerrainSceneFilter: !UsesFlyGameViewHighDetailVisibility(geometry),
             out bool clipped);
         DrawTerrainBrushAffectedVertices(context, preview, color);
         DrawTerrainBrushPreviewChip(context, bounds, center.Screen, color, TerrainBrushPreviewAnalyzer.Summarize(preview.Select(item => item.Kind), clipped), flyView: true);
@@ -2244,13 +3709,15 @@ public sealed class EditorViewport : Control
         double brushRadius,
         double brushFeather,
         Func<TerrainPolygon, int, Point?> project,
+        bool applyTerrainSceneFilter,
         out bool clipped)
     {
         double safeRadius = Math.Max(1, brushRadius);
         List<(Point Point, double Distance, double Falloff, TerrainBrushPreviewVertexKind Kind)> points = new();
         foreach (TerrainPolygon polygon in geometry.Polygons)
         {
-            if (polygon.IsTerrainRemoved)
+            if (polygon.IsTerrainRemoved ||
+                applyTerrainSceneFilter && !ShouldPresentTerrain(geometry, polygon))
                 continue;
 
             int count = Math.Min(polygon.Points.Count, polygon.ZValues.Length);
@@ -2297,9 +3764,10 @@ public sealed class EditorViewport : Control
 
             Point point = transform.Project(moby.Position.X, moby.Position.Y, moby.Position.Z);
             double size = MapMobyMarkerSize(moby);
-            Point markerPoint = AdjustMobyMarkerPoint(moby, point, size);
-            _screenMobys.Add(new ScreenMoby(i, markerPoint));
-            visible.Add(new VisibleMoby(i, moby, markerPoint, size, 0));
+            Point anchorPoint = point;
+            Point markerPoint = AdjustMobyMarkerPoint(moby, anchorPoint, size);
+            _screenMobys.Add(new ScreenMoby(i, markerPoint, MobyHitRadius(moby, size)));
+            visible.Add(new VisibleMoby(i, moby, markerPoint, anchorPoint, size, 0));
         }
 
         HashSet<int> linkedTrueIndexes = BuildLinkedTrueIndexSet(mobys);
@@ -2320,8 +3788,12 @@ public sealed class EditorViewport : Control
             DrawMobyWithOpacity(context, item.Point, item.Moby, false, true, item.Size, linkedOpacity);
 
         foreach (VisibleMoby item in visible.Where(item => item.Index == _selectedMobyIndex))
-            DrawMobyWithOpacity(context, item.Point, item.Moby, true, false, item.Size + 2.4, selectedOpacity);
+        {
+            double selectedSize = IsPinnedTransportMarker(item.Moby) ? item.Size : item.Size + 2.4;
+            DrawMobyWithOpacity(context, item.Point, item.Moby, true, false, selectedSize, selectedOpacity);
+        }
 
+        DrawPinnedTransportAnchors(context, visible);
         DrawSelectedMobyFacingGuide(context, bounds, visible, flyView: false);
         DrawMobyLabels(context, bounds, visible, linkedTrueIndexes);
     }
@@ -2389,15 +3861,39 @@ public sealed class EditorViewport : Control
         int labelsDrawn = 0;
         foreach (VisibleMoby target in visible.Where(item => linkedTrueIndexes.Contains(item.Moby.TrueIndex)))
         {
-            context.DrawLine(linePen, selected.Point, target.Point);
+            Point selectedAnchor = MobyRelationshipAnchor(selected);
+            Point targetAnchor = MobyRelationshipAnchor(target);
+            context.DrawLine(linePen, selectedAnchor, targetAnchor);
             if (terrainFocus || labelsDrawn >= 6 || !relationshipByTrueIndex.TryGetValue(target.Moby.TrueIndex, out string? relationship))
                 continue;
 
-            Point labelPoint = new((selected.Point.X + target.Point.X) * 0.5, (selected.Point.Y + target.Point.Y) * 0.5);
+            Point labelPoint = new((selectedAnchor.X + targetAnchor.X) * 0.5, (selectedAnchor.Y + targetAnchor.Y) * 0.5);
             DrawRelationshipLabel(context, labelPoint, relationship);
             labelsDrawn++;
         }
     }
+
+    private void DrawPinnedTransportAnchors(DrawingContext context, IReadOnlyList<VisibleMoby> visible)
+    {
+        foreach (VisibleMoby item in visible.Where(item => IsPinnedTransportMarker(item.Moby)))
+        {
+            bool selected = item.Index == _selectedMobyIndex;
+            Color color = item.Moby.IsFlyInLandingControl
+                ? Color.FromRgb(82, 225, 246)
+                : Color.FromRgb(255, 219, 66);
+            byte alpha = selected ? (byte)255 : (byte)225;
+            Pen stem = new(new SolidColorBrush(Color.FromArgb(alpha, color.R, color.G, color.B)), selected ? 2.2 : 1.5);
+            Pen rim = new(new SolidColorBrush(Color.FromArgb(220, 15, 24, 30)), 1.2);
+            context.DrawLine(stem, item.Point, item.AnchorPoint);
+            context.DrawEllipse(new SolidColorBrush(color), rim, item.AnchorPoint, selected ? 4.2 : 3.4, selected ? 4.2 : 3.4);
+        }
+    }
+
+    private static bool IsPinnedTransportMarker(Moby moby) =>
+        moby.IsFlyInLandingControl || IsReturnHomeText(GetMobyMarkerText(moby).ToLowerInvariant());
+
+    private static Point MobyRelationshipAnchor(VisibleMoby item) =>
+        IsPinnedTransportMarker(item.Moby) ? item.AnchorPoint : item.Point;
 
     private void DrawSelectedMobyFacingGuide(DrawingContext context, Rect bounds, IReadOnlyList<VisibleMoby> visible, bool flyView)
     {
@@ -2411,7 +3907,8 @@ public sealed class EditorViewport : Control
         if (!TryGetMobyFacingScreenVector(bounds, selected.Moby, flyView, out Vector screenVector))
             return;
 
-        if (!TryCreateFacingGuideGeometry(selected.Point, selected.Size, screenVector, flyView, out FacingGuideGeometry guide))
+        Point guideAnchor = IsPinnedTransportMarker(selected.Moby) ? selected.AnchorPoint : selected.Point;
+        if (!TryCreateFacingGuideGeometry(guideAnchor, selected.Size, screenVector, flyView, out FacingGuideGeometry guide))
             return;
 
         _screenFacingGuide = new ScreenFacingGuide(selected.Index, guide.Start, guide.End);
@@ -2644,7 +4141,16 @@ public sealed class EditorViewport : Control
         {
             rim = new Pen(new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)), 1.5);
         }
-        context.DrawEllipse(new SolidColorBrush(Color.FromArgb(90, 0, 0, 0)), null, point + new Vector(0, size + 3), size + 2, Math.Max(3, size * 0.45));
+
+        if (TryDrawMobyRasterIcon(context, point, size, rim, moby))
+        {
+            if (IsQuestionableMobyMarker(moby))
+                DrawNeedsIdBadge(context, point, size);
+            return;
+        }
+
+        if (!IsPinnedTransportMarker(moby))
+            context.DrawEllipse(new SolidColorBrush(Color.FromArgb(90, 0, 0, 0)), null, point + new Vector(0, size + 3), size + 2, Math.Max(3, size * 0.45));
 
         if (IsReturnHomeText(markerTextLower))
         {
@@ -2751,8 +4257,18 @@ public sealed class EditorViewport : Control
 
     private static void DrawGemMarker(DrawingContext context, Point point, double size, Color color, Pen rim, GemValue gem)
     {
+        if (MobyGemIconCatalog.TryDraw(context, point, size, rim, gem))
+            return;
+
         color = GemMarkerColor(color, gem);
         DrawSpyroDiamondGem(context, point, size * 0.72, color, rim);
+    }
+
+    private static double MobyHitRadius(Moby moby, double markerSize)
+    {
+        return moby.VisualKind == MobyVisualKind.Gem
+            ? MobyGemIconCatalog.HitRadius(markerSize, moby.Gem)
+            : 12;
     }
 
     private static Color GemMarkerColor(Color fallback, GemValue gem)
@@ -4822,8 +6338,43 @@ public sealed class EditorViewport : Control
         if (bitmap == null)
             return false;
 
-        double sourceWidth = Math.Max(1, bitmap.PixelSize.Width);
-        double sourceHeight = Math.Max(1, bitmap.PixelSize.Height);
+        DrawMarkerBitmap(context, point, size, rim, bitmap);
+        return true;
+    }
+
+    private static bool TryDrawMobyRasterIcon(DrawingContext context, Point point, double size, Pen rim, Moby moby)
+    {
+        if (!MobyRasterIconCatalog.TryMatch(moby, out MobyRasterIconDefinition definition))
+            return false;
+
+        MobyRasterIconImage? icon = GetMobyRasterIcon(definition);
+        if (icon == null)
+            return false;
+
+        if (icon.AtlasCellId is MobyRasterIconAtlasCellId atlasCellId)
+        {
+            lock (MobyRasterIconDiagnosticsGate)
+            {
+                MobyRasterIconAtlasDrawCounts[atlasCellId] =
+                    MobyRasterIconAtlasDrawCounts.GetValueOrDefault(atlasCellId) + 1;
+            }
+        }
+
+        DrawMarkerBitmap(context, point, size, rim, icon.Bitmap, icon.SourceRect);
+        return true;
+    }
+
+    private static void DrawMarkerBitmap(
+        DrawingContext context,
+        Point point,
+        double size,
+        Pen rim,
+        Bitmap bitmap,
+        Rect? sourceRect = null)
+    {
+        Rect source = sourceRect ?? new Rect(0, 0, bitmap.PixelSize.Width, bitmap.PixelSize.Height);
+        double sourceWidth = Math.Max(1, source.Width);
+        double sourceHeight = Math.Max(1, source.Height);
         double aspect = sourceWidth / sourceHeight;
         double maxWidth = size * 2.7;
         double maxHeight = size * 2.65;
@@ -4839,12 +6390,55 @@ public sealed class EditorViewport : Control
         context.DrawEllipse(shadow, null, new Point(point.X, point.Y + (size * 0.96)), width * 0.38, size * 0.2);
 
         Rect destination = new(point.X - (width / 2), point.Y - (height * 0.56), width, height);
-        context.DrawImage(bitmap, destination);
+        context.DrawImage(bitmap, source, destination);
 
         if (rim.Thickness > 1.8)
             context.DrawEllipse(null, rim, point, Math.Max(size * 1.05, width * 0.42), Math.Max(size * 1.05, height * 0.42));
+    }
 
-        return true;
+    private static MobyRasterIconImage? GetMobyRasterIcon(MobyRasterIconDefinition definition)
+    {
+        MobyRasterIconCacheKey cacheKey = new(definition.FileName, definition.AtlasCellId);
+        if (MobyRasterIconCache.TryGetValue(cacheKey, out MobyRasterIconImage? cached))
+            return cached;
+
+        string path = MobyRasterIconCatalog.GetAssetPath(AppContext.BaseDirectory, definition);
+        try
+        {
+            if (File.Exists(path))
+            {
+                Bitmap bitmap = new(path);
+                MobyRasterIconImage individual = new(bitmap, null, null);
+                MobyRasterIconCache[cacheKey] = individual;
+                return individual;
+            }
+
+            Bitmap? atlas = GetMobyRasterIconAtlas(definition.Atlas);
+            if (atlas != null && definition.Atlas.ContainsUsedCell(definition.AtlasCell))
+            {
+                MobyRasterIconImage fromAtlas = new(
+                    atlas,
+                    MobyIconAtlasLoader.GetCellSourceRect(atlas.PixelSize, definition.Atlas, definition.AtlasCell),
+                    definition.AtlasCellId);
+                MobyRasterIconCache[cacheKey] = fromAtlas;
+                return fromAtlas;
+            }
+
+            MobyRasterIconCache[cacheKey] = null;
+            return null;
+        }
+        catch
+        {
+            // An optional icon can never make a level unloadable; retain the old marker.
+            MobyRasterIconCache[cacheKey] = null;
+            return null;
+        }
+    }
+
+    private static Bitmap? GetMobyRasterIconAtlas(MobyRasterIconAtlasContract atlas)
+    {
+        string path = MobyRasterIconCatalog.GetAtlasAssetPath(AppContext.BaseDirectory, atlas);
+        return MobyIconAtlasLoader.Load(path, atlas).Bitmap;
     }
 
     private static Bitmap? GetReferenceMarkerImage(string stamp)
@@ -5496,6 +7090,56 @@ public sealed class EditorViewport : Control
             && !markerTextLower.Contains("dragon");
     }
 
+    /// <summary>
+    /// Reports only the four broad renderer fallthroughs. This intentionally ignores
+    /// optional raster overrides so release QA can measure both the original baseline
+    /// and how much of it the raster catalog covers.
+    /// </summary>
+    public static MobyGenericMarkerFallbackKind ClassifyGenericMarkerFallback(Moby moby)
+    {
+        string markerText = GetMobyMarkerText(moby);
+        string markerTextLower = markerText.ToLowerInvariant();
+        string stamp = GetMobyStamp(moby);
+
+        if (moby.VisualKind == MobyVisualKind.FlightTarget)
+        {
+            return markerTextLower.Contains("airplane") ||
+                markerTextLower.Contains("plane") ||
+                markerTextLower.Contains("copter") ||
+                markerTextLower.Contains("arch") ||
+                markerTextLower.Contains("ring") ||
+                markerTextLower.Contains("timer") ||
+                markerTextLower.Contains("boat")
+                    ? MobyGenericMarkerFallbackKind.None
+                    : MobyGenericMarkerFallbackKind.FlightBullseye;
+        }
+
+        if (moby.VisualKind == MobyVisualKind.Scenery)
+        {
+            return stamp is "Bal" or "Cn" or "Te" or "Ca" or "Tr" or "Pl" or "Fl" or "G" or "To" or "L" or "F"
+                ? MobyGenericMarkerFallbackKind.None
+                : MobyGenericMarkerFallbackKind.GenericTree;
+        }
+
+        if (moby.VisualKind != MobyVisualKind.Actor)
+            return MobyGenericMarkerFallbackKind.None;
+
+        if (stamp is "FLC" or "Bst" or "Cn" or "ADr" or "GDr" or "GWz" or "EWz" or "TWz" or "MSp" or
+            "SCk" or "Bor" or "DEP" or "Frg" or "Ban" or "Str" or "WFo" or "AFo" or "Msh" or "DDg" or
+            "DCp" or "Tur" or "LFo" or "Bo" ||
+            stamp == "Gn" && !markerTextLower.Contains("armored gnorc"))
+        {
+            return MobyGenericMarkerFallbackKind.None;
+        }
+
+        if (ShouldDrawEnemyMarker(stamp, markerTextLower))
+            return MobyGenericMarkerFallbackKind.GenericGnorc;
+
+        return stamp is "Dg" or "Bd" or "Ck" or "Egg" or "Air" or "Cp" or "Fd"
+            ? MobyGenericMarkerFallbackKind.None
+            : MobyGenericMarkerFallbackKind.ActorTriangle;
+    }
+
     private static void DrawGnorcEnemyMarker(DrawingContext context, Point point, double size, Pen rim, string stamp)
     {
         Color green = Color.FromRgb(93, 196, 45);
@@ -6138,21 +7782,26 @@ public sealed class EditorViewport : Control
     private string BuildViewportHelpText(string brushSafety)
     {
         bool flyView = _viewMode == ViewportViewMode.Fly3D;
-        string mode = flyView ? "Fly 3D" : "Map";
+        string mode = flyView ? "Game Camera" : "Edit Map";
+        string gameTerrainStatus = flyView && _flipMapY
+            ? _flyGameViewCameraLocal && !_flyCameraIsOverview
+                ? "    terrain: retail materials + complete editable mesh"
+                : "    terrain: complete edit overview"
+            : "";
         if (_terrainBrushAction != TerrainBrushAction.Off)
-            return $"{mode} brush: {TerrainBrushActionLabel(_terrainBrushAction)} size {_terrainBrushRadius:0} strength {_terrainBrushStrength:0} feather {_terrainBrushFeather:0}%{brushSafety}    1-5 switch    0 off    Shift/Option/Ctrl-scroll";
+            return $"{mode} brush: {TerrainBrushActionLabel(_terrainBrushAction)} size {_terrainBrushRadius:0} strength {_terrainBrushStrength:0} feather {_terrainBrushFeather:0}%{brushSafety}    1-5 switch    0 off    Shift/Option/Ctrl-scroll{gameTerrainStatus}";
 
         if (IsTerrainVisualFocusActive())
         {
             string navigation = flyView
-                ? "W/A/S/D move    right-drag look"
+                ? "W/A/S/D move    Q up / E down (fine)    right-drag look"
                 : "scroll zoom    right/middle drag pan";
-            return $"{mode} terrain: {navigation}    click face    drag move    Shift height    Alt/Option copy    Del remove    C/V copy look";
+            return $"{mode} terrain: {navigation}    click face    drag move    Shift height    Alt/Option copy    Del remove    C/V copy look{gameTerrainStatus}";
         }
 
         return flyView
-            ? "Fly 3D: W/A/S/D move    right-drag look    drag objects to move"
-            : "Map: scroll zoom    right/middle drag pan    click object select";
+            ? $"Game Camera: W/A/S/D move    Q up / E down (fine)    right-drag look    drag objects to move{gameTerrainStatus}"
+            : "Edit Map: scroll zoom    right/middle drag pan    click object select";
     }
 
     private void DrawTerrainTargetReadout(DrawingContext context, Rect bounds)
@@ -6414,42 +8063,340 @@ public sealed class EditorViewport : Control
         }
     }
 
-    private void ResetFlyCamera()
+    private void ResetFlyCamera(bool preferGameViewStart)
     {
+        if (!_holdFlyNavigationMaterialLodForTesting)
+        {
+            _flyNavigationSettleTimer.Stop();
+            _flyNavigationInteractiveMaterialLod = false;
+            _activeFlyNavigationKeys.Clear();
+        }
+        _flyGameViewCameraLocal = false;
+        _flyCameraIsOverview = true;
+        // Fit/Reset is an exhaustive editor overview, not a camera pose the
+        // retail game can reach. Keep all HP source geometry visible until the
+        // user returns to the local native-group Game Camera.
+        _nativeTerrainLodPreviewMode = NativeTerrainLodPreviewMode.EditorOverviewHighDetail;
+        if (preferGameViewStart && TrySetFlyGameViewStartCamera())
+        {
+            _flyGameViewCameraLocal = true;
+            _flyCameraIsOverview = false;
+            return;
+        }
+
         if (Geometry != null && Geometry.Polygons.Count > 0)
         {
-            GeometryCandidate geometry = Geometry;
-            double centerX = ToFlyViewX((geometry.Bounds.Left + geometry.Bounds.Right) * 0.5);
-            double centerY = ToFlyViewY((geometry.Bounds.Top + geometry.Bounds.Bottom) * 0.5);
-            double width = Math.Max(1, geometry.Bounds.Width);
-            double height = Math.Max(1, geometry.Bounds.Height);
-            double distance = Math.Max(width, height) * 0.72;
-            double cameraX = centerX;
-            double viewTop = ToFlyViewY(geometry.Bounds.Top);
-            double viewBottom = ToFlyViewY(geometry.Bounds.Bottom);
-            double cameraY = Math.Max(viewTop, viewBottom) + distance;
-            double cameraZ = geometry.MaxZ + Math.Max(900, distance * 0.18);
-            SetFlyCameraLookingAt(cameraX, cameraY, cameraZ, centerX, centerY, (geometry.MinZ + geometry.MaxZ) * 0.5);
+            FitFlyCameraToScene(GetSceneFitFocus(Geometry), EffectiveFlyFitBounds());
             return;
         }
 
         IReadOnlyList<Moby> mobys = Mobys.Where(moby => !moby.IsRemoved).ToList();
         if (mobys.Count == 0)
         {
-            _flyCamera = new FlyCamera(0, -2400, 1200, Math.PI * 0.5, -0.22);
+            _flyCamera = new FlyCamera(0, 2400, 1800, -Math.PI * 0.5, -0.64);
             return;
         }
 
-        double minX = mobys.Min(moby => ToFlyViewX(moby.Position.X));
-        double maxX = mobys.Max(moby => ToFlyViewX(moby.Position.X));
-        double minY = mobys.Min(moby => ToFlyViewY(moby.Position.Y));
-        double maxY = mobys.Max(moby => ToFlyViewY(moby.Position.Y));
-        double minZ = mobys.Min(moby => moby.Position.Z);
-        double maxZ = mobys.Max(moby => moby.Position.Z);
-        double centerMobyX = (minX + maxX) * 0.5;
-        double centerMobyY = (minY + maxY) * 0.5;
-        double distanceMoby = Math.Max(maxX - minX, maxY - minY) * 0.72;
-        SetFlyCameraLookingAt(centerMobyX, maxY + distanceMoby, maxZ + 900, centerMobyX, centerMobyY, (minZ + maxZ) * 0.5);
+        FitFlyCameraToScene(BuildMobyFitFocus(mobys), EffectiveFlyFitBounds());
+    }
+
+    private bool TrySetFlyGameViewStartCamera()
+    {
+        if (_levelEntryPose != null)
+        {
+            SetFlyGameCameraFromEntryPose(
+                _levelEntryPose.X,
+                _levelEntryPose.Y,
+                _levelEntryPose.Z,
+                _levelEntryPose.YawByte,
+                "portable retail entry cache");
+            return true;
+        }
+
+        Moby? entry = Mobys.FirstOrDefault(moby => !moby.IsRemoved && moby.IsFlyInLandingControl);
+        if (entry != null)
+        {
+            SetFlyGameCameraFromEntryPose(
+                entry.Position.X,
+                entry.Position.Y,
+                entry.Position.Z,
+                entry.YawByte,
+                "source-disc fly-in marker fallback");
+            return true;
+        }
+
+        List<Moby> focusMobys = Mobys
+            .Where(moby =>
+                !moby.IsRemoved &&
+                moby.VisualKind is not MobyVisualKind.Control and not MobyVisualKind.Scenery)
+            .ToList();
+        if (focusMobys.Count == 0)
+        {
+            focusMobys = Mobys
+                .Where(moby => !moby.IsRemoved && moby.VisualKind != MobyVisualKind.Control)
+                .ToList();
+        }
+        if (focusMobys.Count == 0)
+            return false;
+
+        double targetX = Median(focusMobys.Select(moby => (double)moby.Position.X));
+        double targetY = Median(focusMobys.Select(moby => (double)moby.Position.Y));
+        double targetZ = Median(focusMobys.Select(moby => (double)moby.Position.Z)) + 100;
+        _flyCamera = CreateOverviewCamera(
+            ToFlyViewX(targetX),
+            ToFlyViewY(targetY),
+            targetZ,
+            -Math.PI * 0.5,
+            -0.28,
+            1400);
+        _gameCameraEntrySnapshot = GameCameraEntrySnapshot.Fallback(
+            "No portable retail entry pose was available; used the median object fallback.",
+            _flyCamera.X,
+            _flyCamera.Y,
+            _flyCamera.Z);
+        return true;
+    }
+
+    private void SetFlyGameCameraFromEntryPose(
+        double focusX,
+        double focusY,
+        double focusZ,
+        int yawByte,
+        string source)
+    {
+        Vector2f direction = FlyInLandingEditorControl.HeadingByteToWorldDirection(yawByte);
+        double elevation = NativeEntryCameraElevationRaw * Math.Tau / 4096.0;
+        double radius = NativeEntryCameraRadiusRaw / NativeEntryCameraCoordinateScale;
+        double desiredBehind = radius * Math.Cos(elevation);
+        double desiredRise = radius * Math.Sin(elevation);
+        double appliedBehind = CollisionSafeEntryCameraBehindDistance(
+            focusX,
+            focusY,
+            focusZ,
+            direction,
+            desiredBehind,
+            desiredRise,
+            out int collisionGroup);
+        double appliedScale = desiredBehind <= 0 ? 0 : appliedBehind / desiredBehind;
+        double appliedRise = desiredRise * appliedScale;
+        double cameraWorldX = focusX - (direction.X * appliedBehind);
+        double cameraWorldY = focusY - (direction.Y * appliedBehind);
+        double cameraWorldZ = focusZ + appliedRise;
+
+        SetFlyCameraLookingAt(
+            ToFlyViewX(cameraWorldX),
+            ToFlyViewY(cameraWorldY),
+            cameraWorldZ,
+            ToFlyViewX(focusX),
+            ToFlyViewY(focusY),
+            focusZ);
+        _gameCameraEntrySnapshot = new GameCameraEntrySnapshot(
+            PoseAvailable: true,
+            Source: source,
+            FocusX: focusX,
+            FocusY: focusY,
+            FocusZ: focusZ,
+            YawByte: yawByte & 0xFF,
+            DesiredBehind: desiredBehind,
+            AppliedBehind: appliedBehind,
+            AppliedRise: appliedRise,
+            CameraX: cameraWorldX,
+            CameraY: cameraWorldY,
+            CameraZ: cameraWorldZ,
+            CollisionGroup: collisionGroup,
+            CollisionConstrained: appliedBehind + 0.001 < desiredBehind,
+            Note: "Camera offset uses retail spherical preset D_8006C934 (radius 0xA00, elevation 0xA0); a native collision-group discontinuity can only step it inward.");
+    }
+
+    private double CollisionSafeEntryCameraBehindDistance(
+        double focusX,
+        double focusY,
+        double focusZ,
+        Vector2f direction,
+        double desiredBehind,
+        double desiredRise,
+        out int collisionGroup)
+    {
+        collisionGroup = -1;
+        NativeTerrainOcclusionData? occlusion = Geometry?.NativeTerrainOcclusion;
+        if (occlusion == null || occlusion.EnvironmentGroups.Count == 0 || desiredBehind <= 0)
+            return Math.Max(0, desiredBehind);
+
+        const double maximumStep = 16.0;
+        int steps = Math.Max(1, (int)Math.Ceiling(desiredBehind / maximumStep));
+        int continuousGroup = -1;
+        double accepted = 0;
+        for (int step = 0; step <= steps; step++)
+        {
+            double behind = desiredBehind * step / steps;
+            double scale = behind / desiredBehind;
+            double x = focusX - (direction.X * behind);
+            double y = focusY - (direction.Y * behind);
+            double z = focusZ + (desiredRise * scale);
+            if (!occlusion.TryResolveGroup(x, y, z, out int group, out _, out _) || group < 0)
+                break;
+            if (continuousGroup < 0)
+                continuousGroup = group;
+            else if (group != continuousGroup)
+                break;
+
+            accepted = behind;
+            collisionGroup = group;
+        }
+
+        return accepted;
+    }
+
+    private static double Median(IEnumerable<double> values)
+    {
+        double[] ordered = values.OrderBy(value => value).ToArray();
+        if (ordered.Length == 0)
+            return 0;
+        int middle = ordered.Length / 2;
+        return ordered.Length % 2 == 0
+            ? (ordered[middle - 1] + ordered[middle]) * 0.5
+            : ordered[middle];
+    }
+
+    private Rect EffectiveFlyFitBounds()
+    {
+        Rect bounds = new(Bounds.Size);
+        return bounds.Width >= 320 && bounds.Height >= 240
+            ? bounds
+            : new Rect(0, 0, 1280, 720);
+    }
+
+    private SceneFitFocus GetSceneFitFocus(GeometryCandidate geometry)
+    {
+        if (ReferenceEquals(_sceneFitGeometry, geometry) && _sceneFitFocus != null)
+            return _sceneFitFocus;
+
+        _sceneFitGeometry = geometry;
+        _sceneFitFocus = BuildSceneFitFocus(geometry);
+        return _sceneFitFocus;
+    }
+
+    private SceneFitFocus BuildSceneFitFocus(GeometryCandidate geometry)
+    {
+        List<TerrainPolygon> drawable = geometry.Polygons
+            .Where(polygon =>
+                !polygon.IsTerrainRemoved &&
+                polygon.Points.Count >= 3 &&
+                polygon.ZValues.Length >= 3 &&
+                ShouldPresentTerrain(geometry, polygon))
+            .ToList();
+        List<TerrainPolygon> solids = drawable
+            .Where(polygon => !RequiresGuardedNativeTerrainBlendFallback(polygon))
+            .ToList();
+        List<TerrainPolygon> focused = solids.Count > 0 ? solids : drawable;
+
+        List<Vector3f> points = new(focused.Sum(polygon => Math.Min(polygon.Points.Count, polygon.ZValues.Length)));
+        foreach (TerrainPolygon polygon in focused)
+        {
+            int count = Math.Min(polygon.Points.Count, polygon.ZValues.Length);
+            for (int index = 0; index < count; index++)
+                points.Add(new Vector3f(polygon.Points[index].X, polygon.Points[index].Y, polygon.ZValues[index]));
+        }
+
+        // The retained internal filtered-view fixture can omit wide native
+        // support plates. Keep every visible object inside its Fit bounds,
+        // particularly flight targets that sit beyond nearby terrain.
+        if (_terrainSceneViewMode == TerrainSceneViewMode.Playable)
+        {
+            foreach (Moby moby in Mobys.Where(moby =>
+                !moby.IsRemoved && (_mobyFilter == null || _mobyFilter(moby))))
+            {
+                points.Add(moby.Position);
+            }
+        }
+
+        if (points.Count == 0)
+        {
+            points.Add(new Vector3f(geometry.Bounds.Left, geometry.Bounds.Top, geometry.MinZ));
+            points.Add(new Vector3f(geometry.Bounds.Right, geometry.Bounds.Bottom, geometry.MaxZ));
+        }
+
+        return SceneFitFocus.FromPoints(points, drawable.Count, focused.Count);
+    }
+
+    private static SceneFitFocus BuildMobyFitFocus(IReadOnlyList<Moby> mobys)
+    {
+        List<Vector3f> points = mobys
+            .Select(moby => moby.Position)
+            .ToList();
+        if (points.Count == 1)
+        {
+            Vector3f point = points[0];
+            points =
+            [
+                new Vector3f(point.X - 512, point.Y - 512, point.Z - 128),
+                new Vector3f(point.X + 512, point.Y + 512, point.Z + 384)
+            ];
+        }
+        return SceneFitFocus.FromPoints(points, 0, 0);
+    }
+
+    private void FitFlyCameraToScene(SceneFitFocus focus, Rect bounds)
+    {
+        const double yaw = -Math.PI * 0.5;
+        const double pitch = -0.66;
+        double targetX = ToFlyViewX((focus.Bounds.Left + focus.Bounds.Right) * 0.5);
+        double targetY = ToFlyViewY((focus.Bounds.Top + focus.Bounds.Bottom) * 0.5);
+        double targetZ = (focus.MinZ + focus.MaxZ) * 0.5;
+        double span = Math.Max(Math.Max(focus.Bounds.Width, focus.Bounds.Height), focus.MaxZ - focus.MinZ);
+        double low = Math.Max(256, span * 0.12);
+        double high = Math.Max(2048, span * 1.5);
+        FlyCamera candidate = CreateOverviewCamera(targetX, targetY, targetZ, yaw, pitch, high);
+        for (int attempt = 0; attempt < 18 && !FlyCameraFits(bounds, focus.Points, candidate); attempt++)
+        {
+            high *= 1.5;
+            candidate = CreateOverviewCamera(targetX, targetY, targetZ, yaw, pitch, high);
+        }
+
+        for (int attempt = 0; attempt < 36; attempt++)
+        {
+            double distance = (low + high) * 0.5;
+            candidate = CreateOverviewCamera(targetX, targetY, targetZ, yaw, pitch, distance);
+            if (FlyCameraFits(bounds, focus.Points, candidate))
+                high = distance;
+            else
+                low = distance;
+        }
+
+        _flyCamera = CreateOverviewCamera(targetX, targetY, targetZ, yaw, pitch, high);
+    }
+
+    private static FlyCamera CreateOverviewCamera(
+        double targetX,
+        double targetY,
+        double targetZ,
+        double yaw,
+        double pitch,
+        double distance)
+    {
+        double horizontalDistance = distance * Math.Cos(pitch);
+        return new FlyCamera(
+            targetX - (Math.Cos(yaw) * horizontalDistance),
+            targetY - (Math.Sin(yaw) * horizontalDistance),
+            targetZ - (Math.Sin(pitch) * distance),
+            yaw,
+            pitch);
+    }
+
+    private bool FlyCameraFits(Rect bounds, IReadOnlyList<Vector3f> points, FlyCamera camera)
+    {
+        double horizontalMargin = bounds.Width * 0.06;
+        double verticalMargin = bounds.Height * 0.10;
+        Rect safeBounds = bounds.Deflate(new Thickness(horizontalMargin, verticalMargin));
+        foreach (Vector3f source in points)
+        {
+            if (!TryProjectFly(bounds, camera, ToFlyViewX(source.X), ToFlyViewY(source.Y), source.Z, out ProjectedPoint projected) ||
+                !safeBounds.Contains(projected.Screen))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void SetFlyCameraLookingAt(double cameraX, double cameraY, double cameraZ, double targetX, double targetY, double targetZ)
@@ -6475,17 +8422,392 @@ public sealed class EditorViewport : Control
         _flyCamera.Z += up;
     }
 
+    private bool UsesNativeTerrainDistanceLod(GeometryCandidate geometry) =>
+        _nativeTerrainLodPreviewMode == NativeTerrainLodPreviewMode.NativeDistance &&
+        geometry.HasStaticLowDetailPreview &&
+        geometry.LowDetailPolygons.Count > 0 &&
+        geometry.SourceSectors.Count > 0;
+
+    private bool UsesFlyGameViewHighDetailVisibility(GeometryCandidate geometry) =>
+        _flipMapY &&
+        _flyGameViewCameraLocal &&
+        !_flyCameraIsOverview &&
+        _nativeTerrainLodPreviewMode == NativeTerrainLodPreviewMode.EditorOverviewHighDetail &&
+        geometry.SourceSectors.Count > 0;
+
+    private NativeTerrainOcclusionSelection ResolveFlyTerrainOcclusion(GeometryCandidate geometry)
+    {
+        NativeTerrainOcclusionData? data = geometry.NativeTerrainOcclusion;
+        if (data == null)
+            return NativeTerrainOcclusionSelection.Unavailable;
+
+        if (!ReferenceEquals(_lastFlyOcclusionGeometry, geometry))
+        {
+            _lastFlyOcclusionGeometry = geometry;
+            _lastFlyOcclusionGroupIndex = -1;
+            _lastFlyOcclusionTriangleIndex = -1;
+            _lastFlyOcclusionFloorZ = double.NegativeInfinity;
+        }
+
+        bool hit = data.TryResolveGroup(
+            FromFlyViewX(_flyCamera.X),
+            FromFlyViewY(_flyCamera.Y),
+            _flyCamera.Z,
+            out int groupIndex,
+            out int triangleIndex,
+            out double floorZ);
+        hit = hit && groupIndex >= 0;
+        if (hit)
+        {
+            _lastFlyOcclusionGroupIndex = groupIndex;
+            _lastFlyOcclusionTriangleIndex = triangleIndex;
+            _lastFlyOcclusionFloorZ = floorZ;
+        }
+        else if (_lastFlyOcclusionGroupIndex >= 0)
+        {
+            // A free editor camera can leave every collision triangle even
+            // though it is still looking at the same retail environment. Do
+            // not turn that momentary miss into an all-sector fail-open frame;
+            // preserve the last collision-proven group until another triangle
+            // selects a new one or a different geometry instance is loaded.
+            groupIndex = _lastFlyOcclusionGroupIndex;
+            triangleIndex = _lastFlyOcclusionTriangleIndex;
+            floorZ = _lastFlyOcclusionFloorZ;
+        }
+        return new NativeTerrainOcclusionSelection(
+            Available: true,
+            CollisionTriangleResolved: hit,
+            GroupIndex: groupIndex,
+            TriangleIndex: triangleIndex,
+            FloorZ: floorZ,
+            VisibleSectors: data.VisibleSectorsForGroup(groupIndex));
+    }
+
+    private FlyHighDetailGroupSelection ResolveFlyHighDetailGroup(
+        GeometryCandidate geometry,
+        NativeTerrainOcclusionSelection nativeSelection,
+        IReadOnlyDictionary<int, SceneSectorRenderMetadata> sectors)
+    {
+        NativeTerrainOcclusionData? data = geometry.NativeTerrainOcclusion;
+        if (data == null || data.EnvironmentGroups.Count == 0)
+            return FlyHighDetailGroupSelection.AllSectors;
+
+        if (nativeSelection.CollisionTriangleResolved && nativeSelection.VisibleSectors != null)
+        {
+            return new FlyHighDetailGroupSelection(
+                nativeSelection.GroupIndex,
+                nativeSelection.VisibleSectors,
+                UsedProximityFallback: false);
+        }
+
+        // A free editor camera can be above or beyond the collision mesh. In
+        // that case, choose the nearest forward source group as the foreground
+        // camera context. Every unique sector still follows its own normal
+        // HP/LP distance path; the context only wins projected overlap in the
+        // editor's whole-scene compositor.
+        Dictionary<int, int> preferredGroupBySector = new();
+        for (int groupIndex = 0; groupIndex < data.EnvironmentGroups.Count; groupIndex++)
+        {
+            foreach (int sectorIndex in data.EnvironmentGroups[groupIndex])
+            {
+                if (!preferredGroupBySector.TryGetValue(sectorIndex, out int existing) ||
+                    data.EnvironmentGroups[groupIndex].Count < data.EnvironmentGroups[existing].Count ||
+                    (data.EnvironmentGroups[groupIndex].Count == data.EnvironmentGroups[existing].Count && groupIndex < existing))
+                {
+                    preferredGroupBySector[sectorIndex] = groupIndex;
+                }
+            }
+        }
+
+        int aimedGroupIndex = -1;
+        double bestAimOffset = double.PositiveInfinity;
+        double bestAimDepth = double.PositiveInfinity;
+        foreach (TerrainPolygon polygon in geometry.Polygons)
+        {
+            if (!preferredGroupBySector.TryGetValue(polygon.SectorIndex, out int groupIndex) ||
+                !TryFlyCameraAimOffset(polygon.Center.X, polygon.Center.Y, polygon.AvgZ, out double aimOffset, out double depth))
+            {
+                continue;
+            }
+
+            if (aimOffset < bestAimOffset - 0.00000000000001 ||
+                (Math.Abs(aimOffset - bestAimOffset) <= 0.00000000000001 && depth < bestAimDepth))
+            {
+                bestAimOffset = aimOffset;
+                bestAimDepth = depth;
+                aimedGroupIndex = groupIndex;
+            }
+        }
+        if (aimedGroupIndex >= 0)
+        {
+            return new FlyHighDetailGroupSelection(
+                aimedGroupIndex,
+                data.VisibleSectorsForGroup(aimedGroupIndex),
+                UsedProximityFallback: true);
+        }
+
+        foreach (SceneSectorRenderMetadata sector in sectors.Values
+            .Where(sector =>
+                FlyCameraDepth(sector.Center.X, sector.Center.Y, sector.Center.Z) +
+                    Math.Max(0, sector.Radius) > 48)
+            .OrderBy(SectorCameraSurfaceDistance)
+            .ThenBy(sector => sector.SectorIndex))
+        {
+            int groupIndex = Enumerable.Range(0, data.EnvironmentGroups.Count)
+                .Where(index => data.EnvironmentGroups[index].Contains(sector.SectorIndex))
+                .OrderBy(index => data.EnvironmentGroups[index].Count)
+                .ThenBy(index => index)
+                .FirstOrDefault(-1);
+            if (groupIndex >= 0)
+            {
+                return new FlyHighDetailGroupSelection(
+                    groupIndex,
+                    data.VisibleSectorsForGroup(groupIndex),
+                    UsedProximityFallback: true);
+            }
+        }
+
+        return nativeSelection.VisibleSectors != null
+            ? new FlyHighDetailGroupSelection(
+                nativeSelection.GroupIndex,
+                nativeSelection.VisibleSectors,
+                UsedProximityFallback: false)
+            : FlyHighDetailGroupSelection.AllSectors;
+
+        double SectorCameraSurfaceDistance(SceneSectorRenderMetadata sector)
+        {
+            double dx = ToFlyViewX(sector.Center.X) - _flyCamera.X;
+            double dy = ToFlyViewY(sector.Center.Y) - _flyCamera.Y;
+            double dz = sector.Center.Z - _flyCamera.Z;
+            return Math.Max(0, Math.Sqrt((dx * dx) + (dy * dy) + (dz * dz)) - Math.Max(0, sector.Radius));
+        }
+
+        bool TryFlyCameraAimOffset(
+            double worldX,
+            double worldY,
+            double worldZ,
+            out double aimOffset,
+            out double depth)
+        {
+            double dx = ToFlyViewX(worldX) - _flyCamera.X;
+            double dy = ToFlyViewY(worldY) - _flyCamera.Y;
+            double dz = worldZ - _flyCamera.Z;
+            double sinYaw = Math.Sin(_flyCamera.Yaw);
+            double cosYaw = Math.Cos(_flyCamera.Yaw);
+            double forwardHorizontal = (cosYaw * dx) + (sinYaw * dy);
+            double right = (-sinYaw * dx) + (cosYaw * dy);
+            double sinPitch = Math.Sin(_flyCamera.Pitch);
+            double cosPitch = Math.Cos(_flyCamera.Pitch);
+            depth = (forwardHorizontal * cosPitch) + (dz * sinPitch);
+            double vertical = (dz * cosPitch) - (forwardHorizontal * sinPitch);
+            if (depth <= 48)
+            {
+                aimOffset = double.PositiveInfinity;
+                return false;
+            }
+
+            aimOffset = ((right * right) + (vertical * vertical)) / (depth * depth);
+            return double.IsFinite(aimOffset);
+        }
+    }
+
+    private NativeTerrainOcclusionSelection ResolveMapTerrainOcclusion(GeometryCandidate geometry)
+    {
+        NativeTerrainOcclusionData? data = geometry.NativeTerrainOcclusion;
+        if (data == null)
+            return NativeTerrainOcclusionSelection.Unavailable;
+
+        bool hit = false;
+        int groupIndex = -1;
+        int triangleIndex = -1;
+        double floorZ = double.NegativeInfinity;
+        if (_levelEntryPose != null)
+        {
+            // Homeworlds do not necessarily expose a destination fly-in Moby,
+            // but the portable cache carries the same retail entry XYZ used by
+            // Game Camera. Seed Edit Map from it so opening Map first never
+            // materializes every mutually-exclusive environment group.
+            hit = data.TryResolveGroup(
+                _levelEntryPose.X,
+                _levelEntryPose.Y,
+                _levelEntryPose.Z + 220,
+                out groupIndex,
+                out triangleIndex,
+                out floorZ);
+            hit = hit && groupIndex >= 0;
+        }
+        if (!hit || groupIndex < 0)
+        {
+            // A portable entry record and a source Moby are independent proofs.
+            // If the pose sits just outside this level's collision tessellation,
+            // still try the native fly-in control before failing open.
+            Moby? entry = Mobys.FirstOrDefault(moby => !moby.IsRemoved && moby.IsFlyInLandingControl);
+            if (entry != null)
+            {
+                hit = data.TryResolveGroup(
+                    entry.Position.X,
+                    entry.Position.Y,
+                    entry.Position.Z + 220,
+                    out groupIndex,
+                    out triangleIndex,
+                    out floorZ);
+                hit = hit && groupIndex >= 0;
+            }
+        }
+        if (!hit && groupIndex < 0 &&
+            ReferenceEquals(_lastFlyOcclusionGeometry, geometry) &&
+            _nativeTerrainOcclusionSnapshot.PayloadAvailable &&
+            string.Equals(_nativeTerrainOcclusionSnapshot.View, "Game Camera", StringComparison.Ordinal) &&
+            _nativeTerrainOcclusionSnapshot.GroupIndex >= 0 &&
+            _nativeTerrainOcclusionSnapshot.GroupIndex < data.EnvironmentGroups.Count)
+        {
+            // Edit Map follows the most recent explicit camera context when a
+            // source fly-in control is unavailable (for example, a portable
+            // read-only cache without its configured disc beside it).
+            hit = _nativeTerrainOcclusionSnapshot.CollisionTriangleResolved;
+            groupIndex = _nativeTerrainOcclusionSnapshot.GroupIndex;
+            triangleIndex = _nativeTerrainOcclusionSnapshot.TriangleIndex;
+            floorZ = _nativeTerrainOcclusionSnapshot.FloorZ;
+        }
+
+        int selectedSector = Geometry != null &&
+            _selectedTerrainIndex >= 0 &&
+            _selectedTerrainIndex < Geometry.Polygons.Count
+                ? Geometry.Polygons[_selectedTerrainIndex].SectorIndex
+                : -1;
+        IReadOnlySet<int>? visibleSectors = data.VisibleSectorsForGroup(groupIndex);
+        if (selectedSector >= 0 && (visibleSectors == null || !visibleSectors.Contains(selectedSector)))
+        {
+            int selectedGroup = Enumerable.Range(0, data.EnvironmentGroups.Count)
+                .Where(index => data.EnvironmentGroups[index].Contains(selectedSector))
+                .OrderBy(index => data.EnvironmentGroups[index].Count)
+                .ThenBy(index => index)
+                .FirstOrDefault(-1);
+            if (selectedGroup >= 0)
+            {
+                groupIndex = selectedGroup;
+                visibleSectors = data.VisibleSectorsForGroup(groupIndex);
+            }
+        }
+
+        return new NativeTerrainOcclusionSelection(
+            Available: true,
+            CollisionTriangleResolved: hit,
+            GroupIndex: groupIndex,
+            TriangleIndex: triangleIndex,
+            FloorZ: floorZ,
+            VisibleSectors: visibleSectors);
+    }
+
+    private HashSet<int> BuildFlyGameViewForcedSectorIndexes(GeometryCandidate geometry)
+    {
+        HashSet<int> result = [];
+        for (int index = 0; index < geometry.Polygons.Count; index++)
+        {
+            TerrainPolygon polygon = geometry.Polygons[index];
+            if (index == _selectedTerrainIndex ||
+                index == _hoverTerrainIndex ||
+                index == _terrainBrushPreviewTerrainIndex ||
+                polygon.IsTerrainEdited ||
+                polygon.IsTerrainRemoved ||
+                polygon.IsTerrainAddClone)
+            {
+                result.Add(polygon.SectorIndex);
+            }
+        }
+        return result;
+    }
+
+    private void ResumeNativeTerrainLodAfterFlyNavigation()
+    {
+        // Game Camera uses the local collision group plus native HP/LP distance
+        // queues. Never enable that path from the impossible whole-level Fit
+        // camera; the exhaustive overview remains an editing projection.
+        if (_flipMapY && !_flyCameraIsOverview)
+            _flyGameViewCameraLocal = true;
+        BeginFlyNavigationMaterialLod(scheduleSettle: true);
+    }
+
+    private void BeginFlyNavigationMaterialLod(bool scheduleSettle)
+    {
+        if (_viewMode != ViewportViewMode.Fly3D ||
+            _nativeTerrainLodPreviewMode != NativeTerrainLodPreviewMode.EditorOverviewHighDetail)
+        {
+            return;
+        }
+
+        _flyNavigationInteractiveMaterialLod = true;
+        _flyNavigationSettleTimer.Stop();
+        if (scheduleSettle)
+            ScheduleFlyNavigationMaterialSettle();
+    }
+
+    private void ScheduleFlyNavigationMaterialSettle()
+    {
+        if (!_flyNavigationInteractiveMaterialLod)
+            return;
+
+        // Restart on every navigation event. This doubles as an inactivity
+        // watchdog: if Avalonia/macOS misses KeyUp or pointer release, the
+        // viewport still restores full source material after input goes quiet.
+        _flyNavigationSettleTimer.Stop();
+        _flyNavigationSettleTimer.Start();
+    }
+
+    private void SettleFlyNavigationMaterialLod(bool force)
+    {
+        _flyNavigationSettleTimer.Stop();
+        if (!force && _holdFlyNavigationMaterialLodForTesting)
+            return;
+        if (force)
+            _holdFlyNavigationMaterialLodForTesting = false;
+        if (!_flyNavigationInteractiveMaterialLod)
+            return;
+
+        _flyNavigationInteractiveMaterialLod = false;
+        InvalidateVisual();
+    }
+
     private bool TryProjectFly(Rect bounds, double x, double y, double z, out ProjectedPoint point)
     {
-        double dx = ToFlyViewX(x) - _flyCamera.X;
-        double dy = ToFlyViewY(y) - _flyCamera.Y;
-        double dz = z - _flyCamera.Z;
-        double sinYaw = Math.Sin(_flyCamera.Yaw);
-        double cosYaw = Math.Cos(_flyCamera.Yaw);
+        if (_nativeGteProjectionExperimentEnabled)
+            return TryProjectNativeGteExperimentPoint(bounds, x, y, z, out point);
+        return TryProjectFly(bounds, _flyCamera, ToFlyViewX(x), ToFlyViewY(y), z, out point);
+    }
+
+    private double FlyCameraDepth(double x, double y, double z)
+    {
+        if (_nativeGteProjectionExperimentEnabled && TryNativeGteExperimentDepth(x, y, z, out double nativeDepth))
+            return nativeDepth;
+        return FlyCameraDepth(_flyCamera, ToFlyViewX(x), ToFlyViewY(y), z);
+    }
+
+    private static double FlyCameraDepth(FlyCamera camera, double viewX, double viewY, double z)
+    {
+        double dx = viewX - camera.X;
+        double dy = viewY - camera.Y;
+        double dz = z - camera.Z;
+        double forwardHorizontal = (Math.Cos(camera.Yaw) * dx) + (Math.Sin(camera.Yaw) * dy);
+        return (forwardHorizontal * Math.Cos(camera.Pitch)) + (dz * Math.Sin(camera.Pitch));
+    }
+
+    private static bool TryProjectFly(
+        Rect bounds,
+        FlyCamera camera,
+        double viewX,
+        double viewY,
+        double z,
+        out ProjectedPoint point)
+    {
+        double dx = viewX - camera.X;
+        double dy = viewY - camera.Y;
+        double dz = z - camera.Z;
+        double sinYaw = Math.Sin(camera.Yaw);
+        double cosYaw = Math.Cos(camera.Yaw);
         double forwardHorizontal = (cosYaw * dx) + (sinYaw * dy);
         double right = (-sinYaw * dx) + (cosYaw * dy);
-        double sinPitch = Math.Sin(_flyCamera.Pitch);
-        double cosPitch = Math.Cos(_flyCamera.Pitch);
+        double sinPitch = Math.Sin(camera.Pitch);
+        double cosPitch = Math.Cos(camera.Pitch);
         double depth = (forwardHorizontal * cosPitch) + (dz * sinPitch);
         double vertical = (dz * cosPitch) - (forwardHorizontal * sinPitch);
         if (depth <= 48)
@@ -6564,11 +8886,12 @@ public sealed class EditorViewport : Control
 
     private SceneTransform CreateGeometryTransform(Rect bounds, GeometryCandidate geometry)
     {
-        double scaleX = bounds.Width / Math.Max(1, geometry.Bounds.Width);
-        double scaleY = bounds.Height / Math.Max(1, geometry.Bounds.Height);
+        SceneFitFocus focus = GetSceneFitFocus(geometry);
+        double scaleX = bounds.Width / Math.Max(1, focus.Bounds.Width);
+        double scaleY = bounds.Height / Math.Max(1, focus.Bounds.Height);
         double scale = Math.Min(scaleX, scaleY) * 0.82 * _zoom;
-        double centerX = (geometry.Bounds.Left + geometry.Bounds.Right) * 0.5;
-        double centerY = (geometry.Bounds.Top + geometry.Bounds.Bottom) * 0.5;
+        double centerX = (focus.Bounds.Left + focus.Bounds.Right) * 0.5;
+        double centerY = (focus.Bounds.Top + focus.Bounds.Bottom) * 0.5;
         return new SceneTransform(bounds.Center + _pan, centerX, centerY, scale, 0.035 * _zoom, _flipMapY);
     }
 
@@ -6741,13 +9064,34 @@ public sealed class EditorViewport : Control
         if (geometry == null || !TryGetFlyRay(bounds, screenPoint, out Vector3f origin, out Vector3f direction))
             return false;
 
-        return TerrainRaycaster.TryFindClosestHit(
-            geometry.Polygons,
-            origin,
-            direction,
-            out terrainIndex,
-            out hit,
-            out _);
+        float closestDistance = float.MaxValue;
+        bool useLocalGameViewTerrain = UsesFlyGameViewHighDetailVisibility(geometry);
+        for (int index = 0; index < geometry.Polygons.Count; index++)
+        {
+            TerrainPolygon polygon = geometry.Polygons[index];
+            // The local gameplay camera intentionally retains real nearby
+            // source terrain. Whole-level Fly uses the same Playable/Complete
+            // layer choice as Map, so invisible support sheets cannot catch an
+            // object-placement or terrain-edit ray.
+            if (!useLocalGameViewTerrain && !ShouldPresentTerrain(geometry, polygon))
+                continue;
+            if (!TerrainRaycaster.TryIntersect(
+                    polygon,
+                    origin,
+                    direction,
+                    out Vector3f candidate,
+                    out float candidateDistance) ||
+                candidateDistance >= closestDistance)
+            {
+                continue;
+            }
+
+            terrainIndex = index;
+            hit = candidate;
+            closestDistance = candidateDistance;
+        }
+
+        return terrainIndex >= 0;
     }
 
     private bool TryGetFlyRay(Rect bounds, Point screenPoint, out Vector3f origin, out Vector3f direction)
@@ -6910,7 +9254,7 @@ public sealed class EditorViewport : Control
         }
 
         _terrainBrushPreviewWorldPoint = brushCenter;
-        _terrainBrushPreviewTerrainIndex = terrain.Index;
+        SetTerrainPresentationPin(ref _terrainBrushPreviewTerrainIndex, terrain.Index);
         InvalidateVisual();
     }
 
@@ -6931,7 +9275,7 @@ public sealed class EditorViewport : Control
         if (_hoverTerrainIndex == terrainIndex)
             return;
 
-        _hoverTerrainIndex = terrainIndex;
+        SetTerrainPresentationPin(ref _hoverTerrainIndex, terrainIndex);
         InvalidateVisual();
     }
 
@@ -7006,7 +9350,7 @@ public sealed class EditorViewport : Control
             return;
 
         _terrainBrushPreviewWorldPoint = null;
-        _terrainBrushPreviewTerrainIndex = -1;
+        SetTerrainPresentationPin(ref _terrainBrushPreviewTerrainIndex, -1);
         InvalidateVisual();
     }
 
@@ -7020,6 +9364,27 @@ public sealed class EditorViewport : Control
         Rect bounds = new(Bounds.Size);
         if (bounds.Width <= 0 || bounds.Height <= 0)
             return;
+
+        if (_viewMode == ViewportViewMode.Fly3D)
+        {
+            double targetX = ToFlyViewX(moby.Position.X);
+            double targetY = ToFlyViewY(moby.Position.Y);
+            double targetZ = moby.Position.Z + 96;
+            const double horizontalDistance = 950;
+            const double verticalDistance = 420;
+            double yaw = _flyCamera.Yaw;
+            SetFlyCameraLookingAt(
+                targetX - (Math.Cos(yaw) * horizontalDistance),
+                targetY - (Math.Sin(yaw) * horizontalDistance),
+                targetZ + verticalDistance,
+                targetX,
+                targetY,
+                targetZ);
+            _flyCameraIsOverview = false;
+            _flyGameViewCameraLocal = _flipMapY;
+            ResumeNativeTerrainLodAfterFlyNavigation();
+            return;
+        }
 
         SceneTransform transform = CreateMobyTransform(bounds, Mobys);
         Point point = transform.Project(moby.Position.X, moby.Position.Y, moby.Position.Z);
@@ -7295,23 +9660,39 @@ public sealed class EditorViewport : Control
                 continue;
             if (face.Index == _selectedTerrainIndex || face.Polygon.IsTerrainEdited || face.Polygon.IsTerrainRemoved)
                 continue;
-            if (IsMapUnderlaySurface(face.Polygon.Surface))
+            if (RequiresGuardedNativeTerrainBlendFallback(face.Polygon))
                 continue;
 
             DrawPolygon(context, face.Points, null, pen);
         }
     }
 
-    private void DrawFlyForegroundTerrainEdges(DrawingContext context, IReadOnlyList<ProjectedTerrainFace> faces)
+    private void DrawFlyForegroundTerrainEdges(
+        DrawingContext context,
+        IReadOnlyList<ProjectedTerrainFace> faces,
+        IReadOnlySet<int>? interactiveFullMaterialFaces,
+        bool useFlyGameViewVisibility,
+        IReadOnlySet<int> forcedGameViewSectors)
     {
         Pen pen = CreateFlyForegroundTerrainEdgePen();
         foreach (ProjectedTerrainFace face in faces)
         {
             if (face.IsAddCopySourcePreview)
                 continue;
+            if (interactiveFullMaterialFaces != null &&
+                !interactiveFullMaterialFaces.Contains(face.Index))
+            {
+                continue;
+            }
             if (face.Index == _selectedTerrainIndex || face.Polygon.IsTerrainEdited || face.Polygon.IsTerrainRemoved)
                 continue;
-            if (IsMapUnderlaySurface(face.Polygon.Surface))
+            if (useFlyGameViewVisibility &&
+                !forcedGameViewSectors.Contains(face.Polygon.SectorIndex) &&
+                face.Depth >= FlyGameViewFogNearDistance)
+            {
+                continue;
+            }
+            if (RequiresGuardedNativeTerrainBlendFallback(face.Polygon))
                 continue;
 
             DrawPolygon(context, face.Points, null, pen);
@@ -7447,19 +9828,58 @@ public sealed class EditorViewport : Control
         DrawPolygon(context, points, new SolidColorBrush(fill), pen);
     }
 
-    private void DrawTerrainFace(DrawingContext context, IReadOnlyList<Point> points, TerrainPolygon polygon, Color fillColor, Pen? detailPen, bool flyView)
+    private NativeTerrainFaceRenderKind DrawTerrainFace(
+        DrawingContext context,
+        IReadOnlyList<Point> points,
+        TerrainPolygon polygon,
+        Color fillColor,
+        Pen? detailPen,
+        bool flyView,
+        double emphasis,
+        IReadOnlyList<double>? cameraDepths,
+        bool simplifyInteractiveMaterial,
+        bool suppressGameViewFog = false)
     {
         byte alphaCap = flyView
-            ? IsMapUnderlaySurface(polygon.Surface)
+            ? RequiresGuardedNativeTerrainBlendFallback(polygon)
                 ? (byte)224
-                : (byte)246
-            : IsMapUnderlaySurface(polygon.Surface)
+                : (byte)255
+            : RequiresGuardedNativeTerrainBlendFallback(polygon)
                 ? (byte)170
                 : (byte)255;
         byte alpha = fillColor.A < alphaCap ? fillColor.A : alphaCap;
         Color faceColor = Color.FromArgb(alpha, fillColor.R, fillColor.G, fillColor.B);
-        Pen? borderPen = detailPen ?? CreateTerrainFaceDetailPen(flyView);
-        DrawPolygon(context, points, new SolidColorBrush(faceColor), borderPen);
+        NativeTerrainFaceRenderKind nativeRenderKind = TryDrawNativeTerrainFace(
+            context,
+            points,
+            polygon,
+            faceColor,
+            flyView,
+            cameraDepths,
+            simplifyInteractiveMaterial);
+        bool renderedNative = nativeRenderKind is
+            NativeTerrainFaceRenderKind.NativeTexture or
+            NativeTerrainFaceRenderKind.NativeUntexturedGouraud;
+        if (!renderedNative)
+        {
+            Pen? borderPen = detailPen ?? CreateTerrainFaceDetailPen(flyView);
+            DrawPolygon(context, points, new SolidColorBrush(faceColor), borderPen);
+        }
+        else
+        {
+            if (emphasis > 0)
+            {
+                byte overlayAlpha = (byte)Math.Clamp(Math.Round(255 * emphasis), 0, 255);
+                Color overlay = Color.FromArgb(overlayAlpha, faceColor.R, faceColor.G, faceColor.B);
+                DrawPolygon(context, points, new SolidColorBrush(overlay), null);
+            }
+            if (emphasis > 0 || polygon.IsTerrainRemoved)
+            {
+                Pen? borderPen = detailPen ?? CreateTerrainFaceDetailPen(flyView);
+                DrawPolygon(context, points, null, borderPen);
+            }
+        }
+        DrawFlyGameViewFog(context, points, cameraDepths, suppressGameViewFog);
         if (polygon.IsTerrainRemoved)
         {
             Rect bounds = BoundsFor(points);
@@ -7467,7 +9887,905 @@ public sealed class EditorViewport : Control
             context.DrawLine(removePen, bounds.TopLeft, bounds.BottomRight);
             context.DrawLine(removePen, bounds.TopRight, bounds.BottomLeft);
         }
+        return nativeRenderKind;
     }
+
+    private void DrawFlyGameViewFog(
+        DrawingContext context,
+        IReadOnlyList<Point> points,
+        IReadOnlyList<double>? cameraDepths,
+        bool suppressed)
+    {
+        if (suppressed ||
+            !_flyGameViewCameraLocal ||
+            !_flipMapY ||
+            _flyCameraIsOverview ||
+            _nativeTerrainLodPreviewMode != NativeTerrainLodPreviewMode.EditorOverviewHighDetail ||
+            points.Count < 3 ||
+            cameraDepths == null ||
+            cameraDepths.Count == 0)
+        {
+            return;
+        }
+
+        double averageDepth = cameraDepths.Average();
+        double linear = Math.Clamp(
+            (averageDepth - FlyGameViewFogNearDistance) /
+            (FlyGameViewFogFarDistance - FlyGameViewFogNearDistance),
+            0,
+            1);
+        if (linear <= 0)
+            return;
+
+        double smooth = linear * linear * (3 - (2 * linear));
+        byte alpha = (byte)Math.Clamp(Math.Round(255 * smooth), 0, 255);
+        double averageY = points.Average(point => point.Y);
+        double normalizedY = Bounds.Height <= 0 ? 0.52 : averageY / Bounds.Height;
+        Color fog = FlyBackgroundColor(normalizedY);
+        DrawPolygon(
+            context,
+            points,
+            new SolidColorBrush(Color.FromArgb(alpha, fog.R, fog.G, fog.B)),
+            null);
+    }
+
+    private NativeTerrainFaceRenderKind TryDrawNativeTerrainFace(
+        DrawingContext context,
+        IReadOnlyList<Point> points,
+        TerrainPolygon polygon,
+        Color fallbackColor,
+        bool flyView,
+        IReadOnlyList<double>? cameraDepths,
+        bool reduceMaterialDetail)
+    {
+        // Opaque-untextured native primitives still carry exact four-corner
+        // Gouraud color, even when the editor classifies their region as a
+        // fluid underlay. Render that color with fallbackColor's alpha cap;
+        // only genuinely textured fluids stay on the guarded translucent
+        // editor fallback until their PS1 blend path is reproduced here.
+        if (RequiresGuardedNativeTerrainBlendFallback(polygon))
+            return NativeTerrainFaceRenderKind.GuardedUnderlayFallback;
+        if (points.Count < 3 || polygon.VertexIndexes.Count < 4)
+            return NativeTerrainFaceRenderKind.UnresolvedFallback;
+
+        if (!TryBuildRawFaceSlotPoints(polygon, points, out Point[] rawPoints))
+            return NativeTerrainFaceRenderKind.UnresolvedFallback;
+
+        double[]? rawDepths = null;
+        if (flyView &&
+            (cameraDepths == null || !TryBuildRawFaceSlotDepths(polygon, cameraDepths, out rawDepths)))
+        {
+            return NativeTerrainFaceRenderKind.UnresolvedFallback;
+        }
+
+        int uniqueVertexCount = polygon.VertexIndexes.Take(4).Distinct().Count();
+        int[] winding = polygon.FaceFlip
+            ? uniqueVertexCount == 3 ? [1, 2, 3] : [0, 1, 2, 3]
+            : uniqueVertexCount == 3 ? [3, 2, 1] : [3, 2, 1, 0];
+        if (winding.Select(slot => rawPoints[slot]).Distinct().Count() < 3)
+            return NativeTerrainFaceRenderKind.ProjectionDegenerate;
+
+        double area = Math.Abs(PolygonArea(winding.Select(slot => rawPoints[slot]).ToArray()));
+        // The bounded navigation/overview lane may reduce the Gouraud fan to
+        // one subdivision, but it still draws the same native texture and the
+        // same four native corner colors.  This preserves the source material
+        // instead of reverting to the old flat averaged-color substitute while
+        // keeping camera movement responsive on whole-level scenes.
+        int subdivisions = reduceMaterialDetail || (flyView && _flyNavigationInteractiveMaterialLod)
+            ? 1
+            : area >= 7200 ? 3 : 2;
+        if (polygon.IsNativeUntexturedSentinel)
+        {
+            Color[] untexturedColors = Enumerable.Range(0, 4)
+                .Select(slot => flyView
+                    ? NativeTerrainCornerColor(
+                        polygon,
+                        slot,
+                        rawDepths![slot],
+                        fallbackColor,
+                        forTextureModulation: false)
+                    : NativeTerrainMapCornerColor(
+                        polygon,
+                        slot,
+                        fallbackColor,
+                        forTextureModulation: false))
+                .ToArray();
+            DrawNativeTerrainGouraudFan(
+                context,
+                rawPoints,
+                winding,
+                untexturedColors,
+                subdivisions);
+            return NativeTerrainFaceRenderKind.NativeUntexturedGouraud;
+        }
+
+        Bitmap? texture;
+        if (!flyView || _nativeTerrainLodPreviewMode == NativeTerrainLodPreviewMode.EditorOverviewHighDetail)
+        {
+            // The whole-level Fit camera is an editor-only inspection pose.
+            // Draw the normal HP composite regardless of retail distance so
+            // its texture detail remains useful instead of falling back to a
+            // flat material color.
+            texture = GetTerrainTextureImage(
+                polygon.TextureId,
+                NativeTerrainTexturePreviewTier.Normal);
+        }
+        else
+        {
+            NativeTerrainLqPreviewSelection nativeSelection = NativeTerrainFarLod.SelectHighDetailTexturePath(
+                rawDepths!,
+                polygon.LqFadeBypass,
+                polygon.HqOverlayBypass);
+            // Beast Makers and Misty Bog contain no retail LP payload. Their
+            // HP geometry remains the terrain path and must keep its far LQ
+            // base rather than disappearing or becoming a solid fallback at
+            // the ordinary HP-to-LP cutoff.
+            bool hasLowPolyReplacement = Geometry?.LowDetailPolygons.Count > 0;
+            if (!nativeSelection.HighPolyVisible && hasLowPolyReplacement)
+                return NativeTerrainFaceRenderKind.UnresolvedFallback;
+
+            NativeTerrainTexturePreviewTier? hqTier = nativeSelection.HqOverlayEligible
+                ? NativeTerrainTexturePreviewLod.SelectForMinimumCameraDepth(rawDepths!.Min())
+                : null;
+            texture = GetNativeTerrainLqFrame(
+                polygon.TextureId,
+                nativeSelection.DescriptorIndex,
+                nativeSelection.PaletteRow,
+                hqTier);
+        }
+        if (texture == null)
+            return NativeTerrainFaceRenderKind.UnresolvedFallback;
+
+        Point[] uv =
+        [
+            new Point(0, texture.PixelSize.Height),
+            new Point(texture.PixelSize.Width, texture.PixelSize.Height),
+            new Point(texture.PixelSize.Width, 0),
+            new Point(0, 0)
+        ];
+
+        Color[] tint = Enumerable.Range(0, 4)
+            .Select(slot => flyView
+                ? NativeTerrainCornerColor(polygon, slot, rawDepths![slot], fallbackColor)
+                : NativeTerrainMapCornerColor(polygon, slot, fallbackColor))
+            .ToArray();
+        DrawNativeTerrainGouraudFan(context, rawPoints, winding, tint, subdivisions);
+
+        RenderOptions textureOptions = new()
+        {
+            BitmapInterpolationMode = BitmapInterpolationMode.None,
+            BitmapBlendingMode = BitmapBlendingMode.Multiply
+        };
+        using (context.PushRenderOptions(textureOptions))
+        {
+            for (int i = 1; i < winding.Length - 1; i++)
+            {
+                int a = winding[0];
+                int b = winding[i];
+                int c = winding[i + 1];
+                DrawAffineTextureTriangle(
+                    context,
+                    texture,
+                    uv[a], uv[b], uv[c],
+                    rawPoints[a], rawPoints[b], rawPoints[c]);
+            }
+        }
+
+        return NativeTerrainFaceRenderKind.NativeTexture;
+    }
+
+    private static void DrawNativeTerrainGouraudFan(
+        DrawingContext context,
+        IReadOnlyList<Point> rawPoints,
+        IReadOnlyList<int> winding,
+        IReadOnlyList<Color> colors,
+        int subdivisions)
+    {
+        for (int i = 1; i < winding.Count - 1; i++)
+        {
+            int a = winding[0];
+            int b = winding[i];
+            int c = winding[i + 1];
+            DrawGouraudTriangle(
+                context,
+                rawPoints[a], colors[a],
+                rawPoints[b], colors[b],
+                rawPoints[c], colors[c],
+                subdivisions);
+        }
+    }
+
+    private Color NativeTerrainMapCornerColor(
+        TerrainPolygon polygon,
+        int slot,
+        Color fallback,
+        bool forTextureModulation = true)
+    {
+        if (!TryGetNativeTerrainOverviewSourceColor(polygon, slot, out Spyro.Editor.Core.Primitives.ColorRgba source))
+        {
+            source = Spyro.Editor.Core.Primitives.ColorRgba.FromArgb(
+                fallback.A,
+                fallback.R,
+                fallback.G,
+                fallback.B);
+        }
+
+        Spyro.Editor.Core.Primitives.ColorRgba graded = PreviewEnvironmentColor(source);
+        // Avalonia's Multiply blend treats 255 as neutral; PS1 texture
+        // modulation treats 128 as neutral. Doubling converts the native shade
+        // to the equivalent multiplier for this editor-only top-down preview.
+        return Color.FromArgb(
+            (byte)Math.Min(graded.A, fallback.A),
+            forTextureModulation ? (byte)Math.Min(255, graded.R * 2) : graded.R,
+            forTextureModulation ? (byte)Math.Min(255, graded.G * 2) : graded.G,
+            forTextureModulation ? (byte)Math.Min(255, graded.B * 2) : graded.B);
+    }
+
+    internal static bool TryGetNativeTerrainOverviewSourceColor(
+        TerrainPolygon polygon,
+        int slot,
+        out Spyro.Editor.Core.Primitives.ColorRgba source)
+    {
+        // The legacy NearColor/NearColors field is physical HP table 2. This
+        // is the source lane used by the previously verified all-level Map
+        // renderer. A camera-less overview has no single retail SZ value, so
+        // use that stable source endpoint while Game Camera performs DPCS.
+        if (polygon.TextureVisualEdit is TerrainTextureVisualEdit visual &&
+            slot >= 0 &&
+            slot < visual.Corners.Count)
+        {
+            source = visual.Corners[slot].NearColor;
+            return true;
+        }
+
+        if (slot >= 0 && slot < polygon.NearColors.Count)
+        {
+            source = polygon.NearColors[slot];
+            return true;
+        }
+
+        source = default;
+        return false;
+    }
+
+    private Bitmap? GetTerrainTextureImage(int textureId, NativeTerrainTexturePreviewTier tier)
+    {
+        if (textureId < 0)
+            return null;
+        var key = (textureId, tier);
+        if (_terrainTextureImageCache.TryGetValue(key, out Bitmap? cached))
+            return cached;
+
+        string? path = ResolveTerrainTextureImagePath(textureId, tier);
+        if (path == null)
+        {
+            _terrainTextureImageCache[key] = null;
+            return null;
+        }
+
+        try
+        {
+            Bitmap bitmap = new(path);
+            _terrainTextureImageCache[key] = bitmap;
+            if (tier == NativeTerrainTexturePreviewTier.Normal &&
+                !_normalTerrainTextureAverageColorCache.ContainsKey(textureId))
+            {
+                _normalTerrainTextureAverageColorCache[textureId] = CalculateTextureAverageColor(bitmap);
+            }
+            return bitmap;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            _terrainTextureImageCache[key] = null;
+            return null;
+        }
+    }
+
+    private Bitmap? GetNativeTerrainLqFrame(
+        int textureId,
+        int descriptorIndex,
+        int paletteRow,
+        NativeTerrainTexturePreviewTier? hqTier)
+    {
+        if (textureId < 0 ||
+            descriptorIndex is < 0 or >= NativeTerrainLqTextureCacheCodec.DescriptorCount ||
+            paletteRow is < 0 or >= NativeTerrainLqTextureCacheCodec.PaletteRowCount)
+        {
+            return null;
+        }
+
+        int hqTierKey = hqTier switch
+        {
+            NativeTerrainTexturePreviewTier.Normal => 0,
+            NativeTerrainTexturePreviewTier.Close => 1,
+            _ => -1
+        };
+        NativeTerrainLqFrameCacheKey key = new(textureId, descriptorIndex, paletteRow, hqTierKey);
+        if (_nativeTerrainLqFrameCache.TryGetValue(key, out Bitmap? cached))
+            return cached;
+
+        if (!_nativeTerrainLqTextureRecords.TryGetValue(textureId, out NativeTerrainLqTextureRecordPayload? record))
+        {
+            _nativeTerrainLqFrameCache[key] = null;
+            return null;
+        }
+
+        try
+        {
+            NativeTerrainLqTextureDescriptorPayload descriptor = record.GetDescriptor(descriptorIndex);
+            Rgba32[] lowDetail = descriptor.MaterializeRgba(paletteRow);
+            Bitmap? highDetail = hqTier.HasValue
+                ? GetTerrainTextureImageExact(textureId, hqTier.Value)
+                : null;
+            if (hqTier.HasValue && highDetail == null)
+            {
+                _nativeTerrainLqFrameCache[key] = null;
+                return null;
+            }
+            int width = highDetail?.PixelSize.Width ?? NativeTerrainLqTextureCacheCodec.TextureSide;
+            int height = highDetail?.PixelSize.Height ?? NativeTerrainLqTextureCacheCodec.TextureSide;
+            byte[]? highDetailPixels = null;
+            if (highDetail != null &&
+                (!TryReadBitmapRgba(highDetail, out highDetailPixels) ||
+                 highDetailPixels.Length != checked(width * height * 4)))
+            {
+                _nativeTerrainLqFrameCache[key] = null;
+                return null;
+            }
+
+            byte[] composed = new byte[checked(width * height * 4)];
+            for (int y = 0; y < height; y++)
+            {
+                int sourceY = y * NativeTerrainLqTextureCacheCodec.TextureSide / height;
+                for (int x = 0; x < width; x++)
+                {
+                    int sourceX = x * NativeTerrainLqTextureCacheCodec.TextureSide / width;
+                    Rgba32 lq = lowDetail[(sourceY * NativeTerrainLqTextureCacheCodec.TextureSide) + sourceX];
+                    int offset = ((y * width) + x) * 4;
+                    if (highDetailPixels == null)
+                    {
+                        composed[offset] = lq.R;
+                        composed[offset + 1] = lq.G;
+                        composed[offset + 2] = lq.B;
+                        composed[offset + 3] = lq.A;
+                        continue;
+                    }
+
+                    CompositeRgbaOver(
+                        highDetailPixels[offset],
+                        highDetailPixels[offset + 1],
+                        highDetailPixels[offset + 2],
+                        highDetailPixels[offset + 3],
+                        lq.R,
+                        lq.G,
+                        lq.B,
+                        lq.A,
+                        composed.AsSpan(offset, 4));
+                }
+            }
+
+            Bitmap bitmap = CreateBitmapFromTightRgba(width, height, composed);
+            _nativeTerrainLqFrameCache[key] = bitmap;
+            return bitmap;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException or OverflowException)
+        {
+            _nativeTerrainLqFrameCache[key] = null;
+            return null;
+        }
+    }
+
+    private static bool TryReadBitmapRgba(Bitmap source, out byte[] pixels)
+    {
+        pixels = [];
+        WriteableBitmap? copy = null;
+        try
+        {
+            copy = new WriteableBitmap(
+                source.PixelSize,
+                source.Dpi,
+                PixelFormat.Rgba8888,
+                AlphaFormat.Unpremul);
+            using ILockedFramebuffer framebuffer = copy.Lock();
+            source.CopyPixels(framebuffer);
+            if (framebuffer.Format != PixelFormat.Rgba8888)
+                return false;
+
+            int tightRowBytes = checked(source.PixelSize.Width * 4);
+            byte[] stored = new byte[checked(framebuffer.RowBytes * source.PixelSize.Height)];
+            Marshal.Copy(framebuffer.Address, stored, 0, stored.Length);
+            pixels = new byte[checked(tightRowBytes * source.PixelSize.Height)];
+            for (int y = 0; y < source.PixelSize.Height; y++)
+            {
+                stored.AsSpan(y * framebuffer.RowBytes, tightRowBytes)
+                    .CopyTo(pixels.AsSpan(y * tightRowBytes, tightRowBytes));
+            }
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or ArgumentException or OverflowException)
+        {
+            pixels = [];
+            return false;
+        }
+        finally
+        {
+            copy?.Dispose();
+        }
+    }
+
+    private static Bitmap CreateBitmapFromTightRgba(int width, int height, byte[] pixels)
+    {
+        if (width <= 0 || height <= 0 || pixels.Length != checked(width * height * 4))
+            throw new ArgumentException("RGBA pixels do not match the requested bitmap dimensions.", nameof(pixels));
+
+        WriteableBitmap bitmap = new(
+            new PixelSize(width, height),
+            new Vector(96, 96),
+            PixelFormat.Rgba8888,
+            AlphaFormat.Unpremul);
+        try
+        {
+            using ILockedFramebuffer framebuffer = bitmap.Lock();
+            if (framebuffer.Format != PixelFormat.Rgba8888)
+                throw new NotSupportedException($"Expected RGBA8888 terrain pixels, received {framebuffer.Format}.");
+
+            int tightRowBytes = checked(width * 4);
+            for (int y = 0; y < height; y++)
+            {
+                Marshal.Copy(
+                    pixels,
+                    y * tightRowBytes,
+                    IntPtr.Add(framebuffer.Address, y * framebuffer.RowBytes),
+                    tightRowBytes);
+            }
+            return bitmap;
+        }
+        catch
+        {
+            bitmap.Dispose();
+            throw;
+        }
+    }
+
+    private static void CompositeRgbaOver(
+        byte foregroundRed,
+        byte foregroundGreen,
+        byte foregroundBlue,
+        byte foregroundAlpha,
+        byte backgroundRed,
+        byte backgroundGreen,
+        byte backgroundBlue,
+        byte backgroundAlpha,
+        Span<byte> destination)
+    {
+        int inverseAlpha = 255 - foregroundAlpha;
+        int outputAlpha = foregroundAlpha + ((backgroundAlpha * inverseAlpha + 127) / 255);
+        if (outputAlpha <= 0)
+        {
+            destination.Clear();
+            return;
+        }
+
+        destination[0] = CompositeChannel(foregroundRed, foregroundAlpha, backgroundRed, backgroundAlpha, inverseAlpha, outputAlpha);
+        destination[1] = CompositeChannel(foregroundGreen, foregroundAlpha, backgroundGreen, backgroundAlpha, inverseAlpha, outputAlpha);
+        destination[2] = CompositeChannel(foregroundBlue, foregroundAlpha, backgroundBlue, backgroundAlpha, inverseAlpha, outputAlpha);
+        destination[3] = (byte)outputAlpha;
+    }
+
+    private static byte CompositeChannel(
+        int foreground,
+        int foregroundAlpha,
+        int background,
+        int backgroundAlpha,
+        int inverseAlpha,
+        int outputAlpha)
+    {
+        int backgroundPremultiplied = (background * backgroundAlpha * inverseAlpha + 127) / 255;
+        int outputPremultiplied = (foreground * foregroundAlpha) + backgroundPremultiplied;
+        return (byte)Math.Clamp((outputPremultiplied + (outputAlpha / 2)) / outputAlpha, 0, 255);
+    }
+
+    private string? ResolveTerrainTextureImagePath(int textureId, NativeTerrainTexturePreviewTier tier)
+    {
+        if (textureId < 0)
+            return null;
+
+        Dictionary<int, string> preferredFiles = tier == NativeTerrainTexturePreviewTier.Close
+            ? _closeTerrainTextureImageFiles
+            : _normalTerrainTextureImageFiles;
+        Dictionary<int, string> fallbackFiles = tier == NativeTerrainTexturePreviewTier.Close
+            ? _normalTerrainTextureImageFiles
+            : _closeTerrainTextureImageFiles;
+        if ((!preferredFiles.TryGetValue(textureId, out string? path) || !File.Exists(path)) &&
+            (!fallbackFiles.TryGetValue(textureId, out path) || !File.Exists(path)))
+            return null;
+
+        return path;
+    }
+
+    private Bitmap? GetTerrainTextureImageExact(int textureId, NativeTerrainTexturePreviewTier tier)
+    {
+        Dictionary<int, string> exactFiles = tier == NativeTerrainTexturePreviewTier.Close
+            ? _closeTerrainTextureImageFiles
+            : _normalTerrainTextureImageFiles;
+        if (!exactFiles.TryGetValue(textureId, out string? path) || !File.Exists(path))
+            return null;
+
+        return GetTerrainTextureImage(textureId, tier);
+    }
+
+    private static bool TryBuildRawFaceSlotPoints(
+        TerrainPolygon polygon,
+        IReadOnlyList<Point> projectedPoints,
+        out Point[] rawPoints)
+    {
+        rawPoints = new Point[4];
+        if (!TryBuildRawFaceSlotIndexes(polygon, projectedPoints.Count, out int[] projectedIndexes))
+            return false;
+
+        for (int slot = 0; slot < rawPoints.Length; slot++)
+            rawPoints[slot] = projectedPoints[projectedIndexes[slot]];
+        return true;
+    }
+
+    private static bool TryBuildRawFaceSlotDepths(
+        TerrainPolygon polygon,
+        IReadOnlyList<double> projectedDepths,
+        out double[] rawDepths)
+    {
+        rawDepths = new double[4];
+        if (!TryBuildRawFaceSlotIndexes(polygon, projectedDepths.Count, out int[] projectedIndexes))
+            return false;
+
+        for (int slot = 0; slot < rawDepths.Length; slot++)
+            rawDepths[slot] = projectedDepths[projectedIndexes[slot]];
+        return true;
+    }
+
+    private static bool TryBuildRawFaceSlotIndexes(
+        TerrainPolygon polygon,
+        int projectedPointCount,
+        out int[] projectedIndexes)
+    {
+        projectedIndexes = new int[4];
+        if (polygon.VertexIndexes.Count < 4)
+            return false;
+
+        if (polygon.CornerPointIndexes.Count == 4)
+        {
+            for (int slot = 0; slot < projectedIndexes.Length; slot++)
+            {
+                int projectedIndex = polygon.CornerPointIndexes[slot];
+                if (projectedIndex < 0 || projectedIndex >= projectedPointCount)
+                    return false;
+                projectedIndexes[slot] = projectedIndex;
+            }
+
+            return true;
+        }
+
+        Dictionary<int, int> projectedIndexByVertex = new();
+        int nextProjectedIndex = 0;
+        for (int slot = 0; slot < 4; slot++)
+        {
+            int vertexIndex = polygon.VertexIndexes[slot];
+            if (!projectedIndexByVertex.TryGetValue(vertexIndex, out int projectedIndex))
+            {
+                projectedIndex = nextProjectedIndex++;
+                projectedIndexByVertex[vertexIndex] = projectedIndex;
+            }
+
+            if (projectedIndex < 0 || projectedIndex >= projectedPointCount)
+                return false;
+            projectedIndexes[slot] = projectedIndex;
+        }
+
+        return true;
+    }
+
+    private Color NativeTerrainCornerColor(
+        TerrainPolygon polygon,
+        int slot,
+        double cameraDepth,
+        Color fallback,
+        bool forTextureModulation = true)
+    {
+        Spyro.Editor.Core.Primitives.ColorRgba legacyNearField;
+        Spyro.Editor.Core.Primitives.ColorRgba legacyFarField;
+        if (polygon.TextureVisualEdit is TerrainTextureVisualEdit visual && slot >= 0 && slot < visual.Corners.Count)
+        {
+            legacyNearField = visual.Corners[slot].NearColor;
+            legacyFarField = visual.Corners[slot].FarColor;
+        }
+        else if (slot >= 0 && slot < polygon.NearColors.Count && slot < polygon.FarColors.Count)
+        {
+            legacyNearField = polygon.NearColors[slot];
+            legacyFarField = polygon.FarColors[slot];
+        }
+        else
+        {
+            legacyNearField = Spyro.Editor.Core.Primitives.ColorRgba.FromArgb(fallback.A, fallback.R, fallback.G, fallback.B);
+            legacyFarField = legacyNearField;
+        }
+
+        // The v3 overlay preserves the historical exporter names: NearColors is
+        // the second physical HP color table and FarColors is the first.  The
+        // retail renderer proves the first table is the near DPCS endpoint and
+        // the second is the far endpoint.  Keep serialization stable here while
+        // consuming those two raw slots in their engine-semantic direction.
+        Spyro.Editor.Core.Primitives.ColorRgba gradedLegacyNear = PreviewEnvironmentColor(legacyNearField);
+        Spyro.Editor.Core.Primitives.ColorRgba gradedLegacyFar = PreviewEnvironmentColor(legacyFarField);
+        Spyro.Editor.Core.Primitives.ColorRgba graded = _flyCameraIsOverview
+            ? gradedLegacyNear
+            : _useNativeTerrainDepthCue
+                ? NativeTerrainDepthCueColor(gradedLegacyNear, gradedLegacyFar, cameraDepth)
+                : gradedLegacyNear;
+        return Color.FromArgb(
+            (byte)Math.Min(graded.A, fallback.A),
+            forTextureModulation ? (byte)Math.Min(255, graded.R * 2) : graded.R,
+            forTextureModulation ? (byte)Math.Min(255, graded.G * 2) : graded.G,
+            forTextureModulation ? (byte)Math.Min(255, graded.B * 2) : graded.B);
+    }
+
+    private Color InteractiveFlyTerrainFlatColor(
+        TerrainPolygon polygon,
+        IReadOnlyList<double>? cameraDepths,
+        Color fallbackColor)
+    {
+        if (!polygon.HasNativeHighPolyMaterialPayload ||
+            RequiresGuardedNativeTerrainBlendFallback(polygon) ||
+            cameraDepths == null ||
+            !TryBuildRawFaceSlotDepths(polygon, cameraDepths, out double[] rawDepths))
+        {
+            return fallbackColor;
+        }
+
+        bool forTextureModulation = !polygon.IsNativeUntexturedSentinel;
+        Color[] cornerColors = Enumerable.Range(0, 4)
+            .Select(slot => NativeTerrainCornerColor(
+                polygon,
+                slot,
+                rawDepths[slot],
+                fallbackColor,
+                forTextureModulation))
+            .ToArray();
+        Color averageCorner = AverageColor(cornerColors);
+        if (polygon.IsNativeUntexturedSentinel)
+        {
+            return Color.FromArgb(
+                fallbackColor.A,
+                averageCorner.R,
+                averageCorner.G,
+                averageCorner.B);
+        }
+
+        Color? averageTexture = GetNormalTerrainTextureAverageColor(polygon.TextureId);
+        if (averageTexture == null)
+            return fallbackColor;
+
+        Color modulated = Color.FromArgb(
+            fallbackColor.A,
+            MultiplyColorChannel(averageTexture.Value.R, averageCorner.R),
+            MultiplyColorChannel(averageTexture.Value.G, averageCorner.G),
+            MultiplyColorChannel(averageTexture.Value.B, averageCorner.B));
+        return BlendColor(modulated, fallbackColor, 0.08);
+    }
+
+    private Color? GetNormalTerrainTextureAverageColor(int textureId)
+    {
+        if (_normalTerrainTextureAverageColorCache.TryGetValue(textureId, out Color? cached))
+            return cached;
+
+        Bitmap? texture = GetTerrainTextureImage(textureId, NativeTerrainTexturePreviewTier.Normal);
+        if (_normalTerrainTextureAverageColorCache.TryGetValue(textureId, out cached))
+            return cached;
+
+        Color? average = texture == null ? null : CalculateTextureAverageColor(texture);
+        _normalTerrainTextureAverageColorCache[textureId] = average;
+        return average;
+    }
+
+    private static Color? CalculateTextureAverageColor(Bitmap texture)
+    {
+        if (!TryReadBitmapRgba(texture, out byte[] pixels) || pixels.Length < 4)
+            return null;
+
+        long red = 0;
+        long green = 0;
+        long blue = 0;
+        long alphaWeight = 0;
+        for (int offset = 0; offset <= pixels.Length - 4; offset += 4)
+        {
+            int alpha = pixels[offset + 3];
+            red += pixels[offset] * alpha;
+            green += pixels[offset + 1] * alpha;
+            blue += pixels[offset + 2] * alpha;
+            alphaWeight += alpha;
+        }
+
+        if (alphaWeight <= 0)
+            return null;
+
+        return Color.FromRgb(
+            (byte)Math.Clamp((red + (alphaWeight / 2)) / alphaWeight, 0, 255),
+            (byte)Math.Clamp((green + (alphaWeight / 2)) / alphaWeight, 0, 255),
+            (byte)Math.Clamp((blue + (alphaWeight / 2)) / alphaWeight, 0, 255));
+    }
+
+    private static byte MultiplyColorChannel(byte source, byte modulation) =>
+        (byte)(((source * modulation) + 127) / 255);
+
+    internal static Spyro.Editor.Core.Primitives.ColorRgba NativeTerrainDepthCueColor(
+        Spyro.Editor.Core.Primitives.ColorRgba legacyNearField,
+        Spyro.Editor.Core.Primitives.ColorRgba legacyFarField,
+        double editorCameraDepth)
+    {
+        int ir0 = NativeTerrainDepthCueIr0(editorCameraDepth);
+        // Runtime table 1 is exposed by the legacy FarColors field and is the
+        // near endpoint. Runtime table 2 is exposed by NearColors and is far.
+        Spyro.Editor.Core.Primitives.ColorRgba runtimeNear = legacyFarField;
+        Spyro.Editor.Core.Primitives.ColorRgba runtimeFar = legacyNearField;
+        return Spyro.Editor.Core.Primitives.ColorRgba.FromArgb(
+            DpcsChannel(runtimeFar.A, runtimeNear.A, ir0),
+            DpcsChannel(runtimeFar.R, runtimeNear.R, ir0),
+            DpcsChannel(runtimeFar.G, runtimeNear.G, ir0),
+            DpcsChannel(runtimeFar.B, runtimeNear.B, ir0));
+    }
+
+    internal static int NativeTerrainDepthCueIr0(double editorCameraDepth)
+    {
+        if (!double.IsFinite(editorCameraDepth))
+            return 0x1000;
+
+        // RTPS exposes an integer SZ. HP scene/camera coordinates are four
+        // times the editor units, so quantize that value before subtracting it
+        // from the renderer's 0x2000 cue origin.
+        double gteDepth = Math.Floor(editorCameraDepth * 4.0);
+        return (int)Math.Clamp(0x2000 - gteDepth, 0, 0x1000);
+    }
+
+    private static int DpcsChannel(int far, int near, int ir0)
+    {
+        // GTE DPCS uses a signed MAC and arithmetic >> 12, so retaining the
+        // integer shift also preserves the retail truncation for descending
+        // color ramps.
+        return Math.Clamp(((far << 12) + ((near - far) * ir0)) >> 12, 0, 255);
+    }
+
+    private static void DrawGouraudTriangle(
+        DrawingContext context,
+        Point a,
+        Color colorA,
+        Point b,
+        Color colorB,
+        Point c,
+        Color colorC,
+        int subdivisions)
+    {
+        int steps = Math.Clamp(subdivisions, 1, 4);
+        for (int i = 0; i < steps; i++)
+        {
+            for (int j = 0; j < steps - i; j++)
+            {
+                GouraudSample p00 = SampleGouraudTriangle(a, colorA, b, colorB, c, colorC, i / (double)steps, j / (double)steps);
+                GouraudSample p10 = SampleGouraudTriangle(a, colorA, b, colorB, c, colorC, (i + 1) / (double)steps, j / (double)steps);
+                GouraudSample p01 = SampleGouraudTriangle(a, colorA, b, colorB, c, colorC, i / (double)steps, (j + 1) / (double)steps);
+                DrawPolygon(
+                    context,
+                    [p00.Point, p10.Point, p01.Point],
+                    new SolidColorBrush(AverageColor(p00.Color, p10.Color, p01.Color)),
+                    null);
+
+                if (i + j >= steps - 1)
+                    continue;
+
+                GouraudSample p11 = SampleGouraudTriangle(a, colorA, b, colorB, c, colorC, (i + 1) / (double)steps, (j + 1) / (double)steps);
+                DrawPolygon(
+                    context,
+                    [p10.Point, p11.Point, p01.Point],
+                    new SolidColorBrush(AverageColor(p10.Color, p11.Color, p01.Color)),
+                    null);
+            }
+        }
+    }
+
+    private static GouraudSample SampleGouraudTriangle(
+        Point a,
+        Color colorA,
+        Point b,
+        Color colorB,
+        Point c,
+        Color colorC,
+        double u,
+        double v)
+    {
+        double w = 1 - u - v;
+        return new GouraudSample(
+            new Point(
+                (a.X * w) + (b.X * u) + (c.X * v),
+                (a.Y * w) + (b.Y * u) + (c.Y * v)),
+            Color.FromArgb(
+                WeightedByte(colorA.A, colorB.A, colorC.A, w, u, v),
+                WeightedByte(colorA.R, colorB.R, colorC.R, w, u, v),
+                WeightedByte(colorA.G, colorB.G, colorC.G, w, u, v),
+                WeightedByte(colorA.B, colorB.B, colorC.B, w, u, v)));
+    }
+
+    private static byte WeightedByte(byte a, byte b, byte c, double wa, double wb, double wc) =>
+        (byte)Math.Clamp(Math.Round((a * wa) + (b * wb) + (c * wc)), 0, 255);
+
+    private static Color AverageColor(Color a, Color b, Color c) =>
+        Color.FromArgb(
+            (byte)((a.A + b.A + c.A) / 3),
+            (byte)((a.R + b.R + c.R) / 3),
+            (byte)((a.G + b.G + c.G) / 3),
+            (byte)((a.B + b.B + c.B) / 3));
+
+    private static Color AverageColor(IReadOnlyList<Color> colors)
+    {
+        if (colors.Count == 0)
+            return Colors.Transparent;
+
+        int alpha = 0;
+        int red = 0;
+        int green = 0;
+        int blue = 0;
+        foreach (Color color in colors)
+        {
+            alpha += color.A;
+            red += color.R;
+            green += color.G;
+            blue += color.B;
+        }
+
+        return Color.FromArgb(
+            (byte)(alpha / colors.Count),
+            (byte)(red / colors.Count),
+            (byte)(green / colors.Count),
+            (byte)(blue / colors.Count));
+    }
+
+    private static void DrawAffineTextureTriangle(
+        DrawingContext context,
+        Bitmap texture,
+        Point sourceA,
+        Point sourceB,
+        Point sourceC,
+        Point destinationA,
+        Point destinationB,
+        Point destinationC)
+    {
+        double determinant =
+            (sourceA.X * (sourceB.Y - sourceC.Y)) +
+            (sourceB.X * (sourceC.Y - sourceA.Y)) +
+            (sourceC.X * (sourceA.Y - sourceB.Y));
+        if (Math.Abs(determinant) < 0.000001)
+            return;
+
+        double m11 = ((destinationA.X * (sourceB.Y - sourceC.Y)) + (destinationB.X * (sourceC.Y - sourceA.Y)) + (destinationC.X * (sourceA.Y - sourceB.Y))) / determinant;
+        double m21 = ((destinationA.X * (sourceC.X - sourceB.X)) + (destinationB.X * (sourceA.X - sourceC.X)) + (destinationC.X * (sourceB.X - sourceA.X))) / determinant;
+        double m31 = ((destinationA.X * ((sourceB.X * sourceC.Y) - (sourceC.X * sourceB.Y))) + (destinationB.X * ((sourceC.X * sourceA.Y) - (sourceA.X * sourceC.Y))) + (destinationC.X * ((sourceA.X * sourceB.Y) - (sourceB.X * sourceA.Y)))) / determinant;
+        double m12 = ((destinationA.Y * (sourceB.Y - sourceC.Y)) + (destinationB.Y * (sourceC.Y - sourceA.Y)) + (destinationC.Y * (sourceA.Y - sourceB.Y))) / determinant;
+        double m22 = ((destinationA.Y * (sourceC.X - sourceB.X)) + (destinationB.Y * (sourceA.X - sourceC.X)) + (destinationC.Y * (sourceB.X - sourceA.X))) / determinant;
+        double m32 = ((destinationA.Y * ((sourceB.X * sourceC.Y) - (sourceC.X * sourceB.Y))) + (destinationB.Y * ((sourceC.X * sourceA.Y) - (sourceA.X * sourceC.Y))) + (destinationC.Y * ((sourceA.X * sourceB.Y) - (sourceB.X * sourceA.Y)))) / determinant;
+
+        StreamGeometry clip = new();
+        using (StreamGeometryContext stream = clip.Open())
+        {
+            stream.BeginFigure(destinationA, true);
+            stream.LineTo(destinationB);
+            stream.LineTo(destinationC);
+            stream.EndFigure(true);
+        }
+
+        using (context.PushGeometryClip(clip))
+        using (context.PushTransform(new Matrix(m11, m12, m21, m22, m31, m32)))
+        {
+            context.DrawImage(texture, new Rect(0, 0, texture.PixelSize.Width, texture.PixelSize.Height));
+        }
+    }
+
+    private readonly record struct GouraudSample(Point Point, Color Color);
 
     private double TerrainFaceDetailAmount(bool flyView)
     {
@@ -7769,20 +11087,14 @@ public sealed class EditorViewport : Control
         return new Pen(new SolidColorBrush(Color.FromArgb(48, 18, 25, 32)), 0.54);
     }
 
-    private static Color TintSurfaceColor(Spyro.Editor.Core.Primitives.ColorRgba color, double height)
-    {
-        Color tinted = Color.FromArgb(255, color.R, color.G, color.B);
-        double shade = Math.Clamp((height - 0.5) * 0.12, -0.06, 0.06);
-        return shade >= 0
-            ? BlendColor(tinted, Colors.White, shade)
-            : BlendColor(tinted, Colors.Black, -shade);
-    }
-
     private Dictionary<string, Color> BuildTerrainToneCache(GeometryCandidate geometry)
     {
         Dictionary<string, (long R, long G, long B, int Count)> sums = new(StringComparer.OrdinalIgnoreCase);
         foreach (TerrainPolygon polygon in geometry.Polygons)
         {
+            if (!ShouldPresentTerrain(geometry, polygon))
+                continue;
+
             string key = TerrainToneKey(polygon);
             Spyro.Editor.Core.Primitives.ColorRgba color = PreviewEnvironmentColor(polygon.SurfaceColor);
             if (!sums.TryGetValue(key, out (long R, long G, long B, int Count) sum))
@@ -7815,24 +11127,13 @@ public sealed class EditorViewport : Control
         return "unknown";
     }
 
-    private Color TerrainDisplayColor(TerrainPolygon polygon, GeometryCandidate geometry, IReadOnlyDictionary<string, Color> toneCache)
+    private Color TerrainDisplayColor(TerrainPolygon polygon, GeometryCandidate geometry)
     {
         double height = Math.Clamp((polygon.AvgZ - geometry.MinZ) / Math.Max(1, geometry.MaxZ - geometry.MinZ), 0, 1);
-        Color color = TintSurfaceColor(PreviewEnvironmentColor(polygon.SurfaceColor), height);
-        if (toneCache.TryGetValue(TerrainToneKey(polygon), out Color sharedTone))
-            color = BlendColor(color, sharedTone, TerrainSharedToneBlendAmount(polygon.Surface));
-
-        if (TryGetTerrainFamilyColor(polygon.Surface, out Color familyColor))
-        {
-            double amount = TerrainFamilyBlendAmount(polygon.Surface);
-            color = BlendColor(color, PreviewEnvironmentColor(familyColor), amount);
-        }
-
-        double localRelief = Math.Clamp((polygon.MaxZ - polygon.MinZ) / 900.0, 0, 1);
-        if (localRelief > 0.02)
-            color = BlendColor(color, Colors.White, localRelief * 0.022);
-
-        return color;
+        Spyro.Editor.Core.Primitives.ColorRgba preview = TerrainPreviewColor.ApplyHeightTint(
+            PreviewEnvironmentColor(polygon.SurfaceColor),
+            height);
+        return Color.FromArgb(preview.A, preview.R, preview.G, preview.B);
     }
 
     private Spyro.Editor.Core.Primitives.ColorRgba PreviewEnvironmentColor(Spyro.Editor.Core.Primitives.ColorRgba color) =>
@@ -7843,19 +11144,6 @@ public sealed class EditorViewport : Control
         Spyro.Editor.Core.Primitives.ColorRgba graded = PreviewEnvironmentColor(
             Spyro.Editor.Core.Primitives.ColorRgba.FromArgb(color.A, color.R, color.G, color.B));
         return Color.FromArgb(graded.A, graded.R, graded.G, graded.B);
-    }
-
-    private static double TerrainSharedToneBlendAmount(string surface)
-    {
-        return TerrainMaterialClassifier.NormalizeSurfaceName(surface) switch
-        {
-            "grass" or "ground" => 0.52,
-            "stone" or "brick" or "cliff" => 0.48,
-            "sand" or "wood" => 0.46,
-            "water" or "ice" => 0.5,
-            "lava" or "ooze" => 0.42,
-            _ => 0.38
-        };
     }
 
     private static bool TryGetTerrainFamilyColor(string surface, out Color color)
@@ -8137,11 +11425,64 @@ public sealed class EditorViewport : Control
     private sealed record ScreenTerrainFace(int Index, IReadOnlyList<Point> Points, double Depth, double AvgZ);
     private sealed record ScreenTerrainPoint(int TerrainIndex, int PointIndex, Point Point);
     private sealed record ScreenTerrainSurfaceLabel(string Text, Point Point, Color Color, double Score);
-    private sealed record ScreenMoby(int Index, Point Center);
+    private sealed record ScreenMoby(int Index, Point Center, double HitRadius);
+    private readonly record struct NativeTerrainLqFrameCacheKey(
+        int TextureId,
+        int DescriptorIndex,
+        int PaletteRow,
+        int HqTier);
+    private readonly record struct MobyRasterIconCacheKey(
+        string IndividualFileName,
+        MobyRasterIconAtlasCellId AtlasCellId);
+    private sealed record MobyRasterIconImage(
+        Bitmap Bitmap,
+        Rect? SourceRect,
+        MobyRasterIconAtlasCellId? AtlasCellId);
     private sealed record ScreenFacingGuide(int Index, Point Start, Point End);
-    private sealed record VisibleMoby(int Index, Moby Moby, Point Point, double Size, double Depth);
+    private sealed record VisibleMoby(int Index, Moby Moby, Point Point, Point AnchorPoint, double Size, double Depth);
+    private readonly record struct FlyMobyVisibilityCounts(int VisibleCount, int SuppressedFarCount);
     private readonly record struct FacingGuideGeometry(Point Start, Point End, Vector Direction);
-    private sealed record ProjectedTerrainFace(int Index, TerrainPolygon Polygon, IReadOnlyList<Point> Points, double Depth, bool IsAddCopySourcePreview = false);
+    private sealed record SceneFitFocus(
+        Rect2f Bounds,
+        float MinZ,
+        float MaxZ,
+        IReadOnlyList<Vector3f> Points,
+        int SourcePolygonCount,
+        int FocusPolygonCount)
+    {
+        public static SceneFitFocus FromPoints(
+            IReadOnlyList<Vector3f> points,
+            int sourcePolygonCount,
+            int focusPolygonCount)
+        {
+            float minX = points.Min(point => point.X);
+            float minY = points.Min(point => point.Y);
+            float minZ = points.Min(point => point.Z);
+            float maxX = points.Max(point => point.X);
+            float maxY = points.Max(point => point.Y);
+            float maxZ = points.Max(point => point.Z);
+            return new SceneFitFocus(
+                Rect2f.FromBounds(minX, minY, maxX, maxY),
+                minZ,
+                maxZ,
+                points,
+                sourcePolygonCount,
+                focusPolygonCount);
+        }
+    }
+    private sealed record ProjectedTerrainFace(
+        int Index,
+        TerrainPolygon Polygon,
+        IReadOnlyList<Point> Points,
+        double Depth,
+        bool IsAddCopySourcePreview = false,
+        IReadOnlyList<double>? CameraDepths = null);
+    private sealed record ProjectedLowDetailTerrainFace(
+        LowDetailTerrainPolygon Polygon,
+        IReadOnlyList<Point> RawPoints,
+        IReadOnlyList<double> RawDepths,
+        double Depth,
+        double SortDepth);
     private sealed record ProjectedTerrainSideWall(int PolygonIndex, int EdgeIndex, TerrainPolygon Polygon, IReadOnlyList<Point> Points, double Depth, Color FillColor, Color LineColor);
     private sealed record TerrainSideWallPreviewCandidate(
         int CandidateId,
@@ -8154,9 +11495,46 @@ public sealed class EditorViewport : Control
         Vector3f EditedB,
         string OriginalEdgeKey,
         string EditedEdgeKey);
+    private enum NativeTerrainFaceRenderKind
+    {
+        UnresolvedFallback,
+        GuardedUnderlayFallback,
+        ProjectionDegenerate,
+        InteractiveMaterialSimplified,
+        NativeUntexturedGouraud,
+        NativeTexture
+    }
+
     private readonly record struct TerrainBrushPreviewPoint(Point Point, double Falloff, TerrainBrushPreviewVertexKind Kind);
     private readonly record struct ProjectedPoint(Point Screen, double Depth);
     private record struct FlyCamera(double X, double Y, double Z, double Yaw, double Pitch);
+    private sealed record NativeTerrainOcclusionSelection(
+        bool Available,
+        bool CollisionTriangleResolved,
+        int GroupIndex,
+        int TriangleIndex,
+        double FloorZ,
+        IReadOnlySet<int>? VisibleSectors)
+    {
+        public static NativeTerrainOcclusionSelection Unavailable { get; } = new(
+            false,
+            false,
+            -1,
+            -1,
+            double.NegativeInfinity,
+            null);
+    }
+
+    private sealed record FlyHighDetailGroupSelection(
+        int GroupIndex,
+        IReadOnlySet<int>? Sectors,
+        bool UsedProximityFallback)
+    {
+        public static FlyHighDetailGroupSelection AllSectors { get; } = new(
+            -1,
+            null,
+            UsedProximityFallback: false);
+    }
 
     private sealed class TerrainSurfaceLabelAccumulator
     {
@@ -8208,6 +11586,267 @@ public sealed class EditorViewport : Control
                 ((point.Y - Center.Y + (z * HeightScale)) / (Scale * ySign)) + WorldCenterY);
         }
     }
+}
+
+public enum MobyGenericMarkerFallbackKind
+{
+    None,
+    GenericGnorc,
+    GenericTree,
+    ActorTriangle,
+    FlightBullseye
+}
+
+internal sealed record ViewportFitSnapshot(
+    Rect ViewportBounds,
+    Rect FullGeometryBounds,
+    Rect FocusGeometryBounds,
+    Rect FlyProjectedBounds,
+    Rect MapProjectedBounds,
+    double Yaw,
+    double Pitch,
+    int FocusPointCount,
+    int FlyProjectedPointCount,
+    int SourcePolygonCount,
+    int FocusPolygonCount);
+
+internal sealed record TerrainSceneViewSnapshot(
+    TerrainSceneViewMode Mode,
+    int StoredFaceCount,
+    int PresentedFaceCount,
+    int HiddenFaceCount,
+    bool HasPlayablePredicate);
+
+internal sealed record NativeTerrainDepthCueSnapshot(
+    int VisibleFaceCount,
+    int VisibleCornerCount,
+    int DistinctEndpointCornerCount,
+    int NearEndpointCornerCount,
+    int BlendedCornerCount,
+    int FarEndpointCornerCount,
+    int ChangedFromLegacyCornerCount,
+    double AverageNearWeight,
+    double MeanChannelDeltaFromLegacy,
+    double MinCameraDepth,
+    double MaxCameraDepth);
+
+internal sealed record NativeTerrainMapMaterialSnapshot(
+    string Contract,
+    int VisibleFaceCount,
+    int AuditedBroadUnderlayFaceCount,
+    int SubduedBroadUnderlayFaceCount,
+    int NativeMaterialCandidateFaceCount,
+    int NativeTextureFaceCount,
+    int NativeUntexturedGouraudFaceCount,
+    int GuardedUnderlayFallbackFaceCount,
+    int OpaqueGuardedUnderlayFallbackFaceCount,
+    int ProjectionDegenerateFaceCount,
+    int UnresolvedFallbackFaceCount,
+    int AvailableNormalTextureCount,
+    int OffCameraSourceOutlineFaceCount,
+    string ScopeNote)
+{
+    public static NativeTerrainMapMaterialSnapshot Empty { get; } = new(
+        EditorViewport.NativeTerrainMapMaterialContract,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        "Map terrain has not rendered yet.");
+}
+
+internal sealed record FlyTerrainInteractiveLodSnapshot(
+    bool Active,
+    int FullMaterialFaceBudget,
+    int VisibleTerrainFaceCount,
+    int FullMaterialFaceCount,
+    int SimplifiedMaterialFaceCount,
+    int ForcedFullMaterialFaceCount,
+    int PartiallyFullMaterialSectorCount)
+{
+    public static FlyTerrainInteractiveLodSnapshot Empty { get; } = new(
+        false,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0);
+}
+
+internal sealed record FlyTerrainVisibilitySnapshot(
+    FlyTerrainVisibilityMode Mode,
+    bool GameViewEnabled,
+    bool CameraIsOverview,
+    int SectorCount,
+    int QueuedHighDetailSectorCount,
+    int StoredHighDetailFaceCount,
+    int VisibleHighDetailFaceCount,
+    int SuppressedHighDetailByGroupCount,
+    int SuppressedHighDetailBySectorCount,
+    int SuppressedHighDetailByFaceDistanceCount,
+    int FoggedHighDetailFaceCount,
+    int FullyFoggedHighDetailFaceCount,
+    int StoredLowDetailFaceCount,
+    int VisibleLowDetailFaceCount,
+    int ForcedVisibleSectorCount,
+    int LocalHighDetailGroupIndex,
+    int LocalHighDetailGroupSectorCount,
+    int VisibleMobyCount,
+    int SuppressedFarMobyCount,
+    string ScopeNote)
+{
+    public static FlyTerrainVisibilitySnapshot Empty { get; } = new(
+        Mode: FlyTerrainVisibilityMode.EditorOverviewHighDetail,
+        GameViewEnabled: true,
+        CameraIsOverview: true,
+        SectorCount: 0,
+        QueuedHighDetailSectorCount: 0,
+        StoredHighDetailFaceCount: 0,
+        VisibleHighDetailFaceCount: 0,
+        SuppressedHighDetailByGroupCount: 0,
+        SuppressedHighDetailBySectorCount: 0,
+        SuppressedHighDetailByFaceDistanceCount: 0,
+        FoggedHighDetailFaceCount: 0,
+        FullyFoggedHighDetailFaceCount: 0,
+        StoredLowDetailFaceCount: 0,
+        VisibleLowDetailFaceCount: 0,
+        ForcedVisibleSectorCount: 0,
+        LocalHighDetailGroupIndex: -1,
+        LocalHighDetailGroupSectorCount: 0,
+        VisibleMobyCount: 0,
+        SuppressedFarMobyCount: 0,
+        ScopeNote: "Fly terrain has not rendered yet.");
+}
+
+internal sealed record NativeTerrainOcclusionSnapshot(
+    string View,
+    bool PayloadAvailable,
+    bool CollisionTriangleResolved,
+    int GroupIndex,
+    int TriangleIndex,
+    double FloorZ,
+    int StoredSectorCount,
+    int NativeGroupSectorCount,
+    int VisibleSectorCount,
+    int ForcedSectorCount,
+    string Contract)
+{
+    public static NativeTerrainOcclusionSnapshot Empty { get; } = new(
+        "none",
+        false,
+        false,
+        -1,
+        -1,
+        double.NegativeInfinity,
+        0,
+        0,
+        0,
+        0,
+        "Terrain occlusion has not rendered yet.");
+}
+
+internal sealed record GameCameraEntrySnapshot(
+    bool PoseAvailable,
+    string Source,
+    double FocusX,
+    double FocusY,
+    double FocusZ,
+    int YawByte,
+    double DesiredBehind,
+    double AppliedBehind,
+    double AppliedRise,
+    double CameraX,
+    double CameraY,
+    double CameraZ,
+    int CollisionGroup,
+    bool CollisionConstrained,
+    string Note)
+{
+    public static GameCameraEntrySnapshot Empty { get; } = Fallback(
+        "The Game Camera has not resolved a level entry pose.",
+        0,
+        0,
+        0);
+
+    public static GameCameraEntrySnapshot Fallback(string note, double cameraX, double cameraY, double cameraZ) => new(
+        false,
+        "fallback",
+        0,
+        0,
+        0,
+        -1,
+        0,
+        0,
+        0,
+        cameraX,
+        cameraY,
+        cameraZ,
+        -1,
+        false,
+        note);
+}
+
+internal enum FlyTerrainVisibilityMode
+{
+    EditorOverviewHighDetail,
+    GameViewCameraLocalHighDetail,
+    NativeDistanceResearch
+}
+
+internal sealed record NativeTerrainLqFrameSnapshot(
+    int TextureId,
+    double PlanarEditorDepth,
+    bool HighPolyVisible,
+    bool RetainedWithoutLowDetail,
+    bool HqOverlayEligible,
+    int DescriptorIndex,
+    int PaletteRow,
+    NativeTerrainTexturePreviewTier? HqTier,
+    bool HasIndexedPayload,
+    bool BitmapResolved,
+    int BitmapWidth,
+    int BitmapHeight,
+    string BitmapSha256,
+    int Abr,
+    string RawDescriptorSha256,
+    string PackedIndicesSha256,
+    string PaletteWordsSha256);
+
+internal sealed record NativeTerrainFarLodSnapshot(
+    NativeTerrainLodPreviewMode PreviewMode,
+    bool HasStaticLowDetailPreview,
+    string Contract,
+    int SectorCount,
+    int StoredHighDetailFaces,
+    int StoredLowDetailFaces,
+    int QueuedHighDetailSectors,
+    int QueuedLowDetailSectors,
+    int VisibleHighDetailFaces,
+    int VisibleLowDetailFaces,
+    int SuppressedHighDetailFaces,
+    int VisibleHighDetailFacesAtOrBeyondCutoff,
+    int VisibleLowDetailOnlyFaces,
+    int VisibleForcedLowDetailFaces,
+    int DistinctVisibleLowDetailCornerColors,
+    int HqOverlayEligibleFaces,
+    int LqDescriptorZeroFaces,
+    int LqDescriptorOneFaces,
+    int MinimumLqPaletteRow,
+    int MaximumLqPaletteRow);
+
+internal enum NativeTerrainLodPreviewMode
+{
+    EditorOverviewHighDetail,
+    NativeDistance
 }
 
 public sealed class MobyMoveRequestedEventArgs : EventArgs
@@ -8422,6 +12061,12 @@ public enum ViewportViewMode
 {
     Map,
     Fly3D
+}
+
+public enum TerrainSceneViewMode
+{
+    Playable,
+    CompleteScene
 }
 
 public enum TerrainBrushAction

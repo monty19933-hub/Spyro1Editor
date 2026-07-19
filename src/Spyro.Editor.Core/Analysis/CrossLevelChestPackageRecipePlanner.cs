@@ -108,12 +108,35 @@ public static class CrossLevelChestPackageRecipePlanner
         long entryBase = tableWadOffset - tableRelativeOffset;
         int packageLength = checked((int)ParseNumber(source.SourcePackageLengthHex));
 
-        ZeroRun? zeroRun = FindBestZeroRun(stream, layout, entryBase, tableRelativeOffset, packageLength);
-        EmptyRootSlot? rootSlot = FindFirstEmptyRootSlot(stream, layout, entryBase);
+        bool hasActorLayout = CrossLevelActorPackageLayoutSafety.TryReadLayout(
+            stream,
+            layout,
+            WadLba,
+            entryBase,
+            out CrossLevelActorPackageSubfileLayout? actorLayout,
+            out string actorLayoutReason);
+        ZeroRun? zeroRun = hasActorLayout && actorLayout != null
+            ? FindBestZeroRun(stream, layout, entryBase, actorLayout, packageLength)
+            : null;
+        EmptyRootSlot? rootSlot = actorLayout == null ? null : FindFirstEmptyRootSlot(actorLayout);
         CrossLevelActorPackageRecipe? exactRecipe = CrossLevelActorPackageRecipeCatalog.FindPreferred(level.Key, source.SourceLevelKey, source.Family, workspaceRoot);
-        bool canPlan = zeroRun != null && rootSlot != null && exactRecipe == null &&
+        CrossLevelActorPackageRecipeSafety? exactRecipeSafety = exactRecipe == null
+            ? null
+            : CrossLevelActorPackageLayoutSafety.ValidateRecipe(stream, layout, WadLba, entryBase, exactRecipe);
+        bool exactRecipeSuppressesPlanning = exactRecipe != null &&
+            !IsBlockedStatus(exactRecipe.Status) &&
+            exactRecipeSafety?.Safe == true;
+        string rootProposalReason = "";
+        bool rootProposalSafe = actorLayout != null && zeroRun != null && rootSlot != null &&
+            CrossLevelActorPackageLayoutSafety.ProposedRootTableIsSafe(
+                actorLayout,
+                [new CrossLevelActorPackageRootEntry(HexOffset(rootSlot.Slot), HexOffset(zeroRun.Start), source.ActorIdHex, "", "")],
+                [],
+                out rootProposalReason);
+        bool canPlan = zeroRun != null && rootSlot != null && rootProposalSafe && !exactRecipeSuppressesPlanning &&
             (string.Equals(strategy.Strategy, "needs-package-recipe", StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(strategy.Strategy, "mapped-package-candidate", StringComparison.OrdinalIgnoreCase));
+             string.Equals(strategy.Strategy, "mapped-package-candidate", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(strategy.Strategy, "blocked-package-recipe", StringComparison.OrdinalIgnoreCase));
         string targetStartHex = zeroRun == null ? "" : HexOffset(zeroRun.Start);
         string rootSlotHex = rootSlot == null ? "" : HexOffset(rootSlot.Slot);
         string plannedRecipeId = canPlan
@@ -123,12 +146,22 @@ public static class CrossLevelChestPackageRecipePlanner
         List<string> notes = [];
         if (!string.IsNullOrWhiteSpace(strategy.RecipeId))
             notes.Add($"Existing recipe mapped: {strategy.RecipeId}.");
+        if (!hasActorLayout)
+            notes.Add($"Actor/model subfile could not be inferred safely: {actorLayoutReason}");
+        else if (actorLayout != null)
+            notes.Add($"Native actor/model subfile {actorLayout.SubfileIndex} spans 0x{actorLayout.Start:X}-0x{actorLayout.EndExclusive:X}; zero-run search was limited to this range.");
+        if (exactRecipe != null && IsBlockedStatus(exactRecipe.Status))
+            notes.Add($"Blocked historical recipe {exactRecipe.Id} does not suppress planning a fresh safe route.");
+        else if (exactRecipe != null && exactRecipeSafety?.Safe == false)
+            notes.Add($"Mapped recipe {exactRecipe.Id} fails current layout safety and does not suppress replanning: {exactRecipeSafety.Reason}");
         if (zeroRun == null)
-            notes.Add($"No zero run large enough for {source.SourcePackageLengthHex} before the source table.");
+            notes.Add($"No actor/model-subfile-local zero run large enough for {source.SourcePackageLengthHex} can produce an ascending appended root.");
         if (rootSlot == null)
-            notes.Add("No empty actor-root slot was found.");
+            notes.Add("No contiguous empty actor-root terminator slot was found.");
+        if (zeroRun != null && rootSlot != null && !rootProposalSafe)
+            notes.Add($"The proposed root table is unsafe: {rootProposalReason}");
         if (canPlan)
-            notes.Add($"Candidate recipe can copy {source.SourcePackageLengthHex} bytes to {targetStartHex} and register actor {source.ActorIdHex} at root slot {rootSlotHex}.");
+            notes.Add($"Candidate recipe can copy {source.SourcePackageLengthHex} bytes inside the native actor/model subfile at {targetStartHex} and register actor {source.ActorIdHex} at root slot {rootSlotHex} without breaking root order.");
         notes.Add(source.Note);
 
         return new CrossLevelChestPackageRecipePlanRow(
@@ -165,30 +198,39 @@ public static class CrossLevelChestPackageRecipePlanner
             Family: row.Family,
             Mode: "AutoRegisterCompanionRoot",
             Status: "experimental-plan-only",
-            Risk: $"Auto-planned {familyLabel} package import for {row.LevelName}. The target range and actor-root slot are empty in the source disc, but this is still a disposable candidate until in-game loading, behavior, reward, and nearby-object checks pass.",
-            Description: $"{familyLabel} actor package copied from {row.SourceLevelKey} into {row.LevelName} clean zero space and registered as actor {row.ActorIdHex}.",
+            Risk: $"Auto-planned {familyLabel} package import for {row.LevelName}. The target range is inside the inferred native actor/model subfile and the proposed root table remains contiguous and ascending, but this is still a disposable candidate until in-game loading, behavior, reward, and nearby-object checks pass.",
+            Description: $"{familyLabel} actor package copied from {row.SourceLevelKey} into {row.LevelName} actor/model-subfile-local zero space and registered as actor {row.ActorIdHex}.",
             CopySegments:
             [
                 new CrossLevelActorPackageCopySegment(row.SourcePackageStartHex, row.TargetPackageStartHex, row.SourcePackageLengthHex)
             ],
             RootEntries:
             [
-                new CrossLevelActorPackageRootEntry(row.RootSlotHex, row.TargetPackageStartHex, row.ActorIdHex, "", $"Auto-planned root registration for {familyLabel}; keep guarded until this exact candidate passes in-game.")
+                new CrossLevelActorPackageRootEntry(row.RootSlotHex, row.TargetPackageStartHex, row.ActorIdHex, "", $"Auto-planned contiguous ascending root registration for {familyLabel}; keep guarded until this exact candidate passes in-game.")
             ],
             ReplaceRootEntries: [],
             InternalDependencyRebases: []);
     }
 
-    private static ZeroRun? FindBestZeroRun(FileStream stream, DiscLayout layout, long entryBase, long tableRelativeOffset, int packageLength)
+    private static ZeroRun? FindBestZeroRun(
+        FileStream stream,
+        DiscLayout layout,
+        long entryBase,
+        CrossLevelActorPackageSubfileLayout actorLayout,
+        int packageLength)
     {
-        if (tableRelativeOffset <= packageLength)
+        if (actorLayout.Length < packageLength || actorLayout.Length > int.MaxValue)
             return null;
 
-        const int minStart = 0x200;
-        byte[] bytes = DiscImage.ReadFileBytes(stream, layout, WadLba, entryBase, checked((int)tableRelativeOffset));
+        byte[] bytes = DiscImage.ReadFileBytes(
+            stream,
+            layout,
+            WadLba,
+            entryBase + actorLayout.Start,
+            checked((int)actorLayout.Length));
         ZeroRun? best = null;
         int runStart = -1;
-        for (int i = minStart; i < bytes.Length; i++)
+        for (int i = 0; i < bytes.Length; i++)
         {
             if (bytes[i] == 0)
             {
@@ -209,32 +251,24 @@ public static class CrossLevelChestPackageRecipePlanner
             if (start < 0 || length < packageLength)
                 return;
 
-            int alignedStart = AlignUp(start, 4);
+            int firstRootOrderSafeByte = checked((int)(actorLayout.LastNativeRoot - actorLayout.Start + 1));
+            int alignedStart = AlignUp(Math.Max(start, firstRootOrderSafeByte), 4);
             int alignedLength = length - (alignedStart - start);
             if (alignedLength < packageLength)
                 return;
 
             if (best == null || alignedLength > best.Length)
-                best = new ZeroRun(alignedStart, alignedLength);
+                best = new ZeroRun(checked((int)actorLayout.Start + alignedStart), alignedLength);
         }
     }
 
-    private static EmptyRootSlot? FindFirstEmptyRootSlot(FileStream stream, DiscLayout layout, long entryBase)
+    private static EmptyRootSlot? FindFirstEmptyRootSlot(CrossLevelActorPackageSubfileLayout actorLayout)
     {
-        int highestUsedIndex = -1;
-        List<EmptyRootSlot> empty = [];
-        for (int index = 0; index < 64; index++)
-        {
-            int slot = 0x50 + (index * 4);
-            uint root = BitConverter.ToUInt32(DiscImage.ReadFileBytes(stream, layout, WadLba, entryBase + slot, 4), 0);
-            ushort actor = BitConverter.ToUInt16(DiscImage.ReadFileBytes(stream, layout, WadLba, entryBase + 0x150 + (index * 2), 2), 0);
-            if (root == 0 && actor == 0)
-                empty.Add(new EmptyRootSlot(index, slot));
-            else
-                highestUsedIndex = index;
-        }
-
-        return empty.FirstOrDefault(slot => slot.Index > highestUsedIndex) ?? empty.FirstOrDefault();
+        int index = actorLayout.NativeRootCount;
+        if (index < 0 || index >= actorLayout.NativeRoots.Count ||
+            actorLayout.NativeRoots[index] != 0 || actorLayout.NativeActorIds[index] != 0)
+            return null;
+        return new EmptyRootSlot(index, 0x50 + (index * 4));
     }
 
     private static string BuildMarkdown(CrossLevelChestPackageRecipePlanReport report)
@@ -242,7 +276,7 @@ public static class CrossLevelChestPackageRecipePlanner
         StringBuilder builder = new();
         builder.AppendLine("# Universal Chest Package Recipe Planner");
         builder.AppendLine();
-        builder.AppendLine("This report scans each target level for a zero-filled package range and an empty actor-root slot. Planned rows are still guarded candidates until they pass disposable in-game testing.");
+        builder.AppendLine("This report scans only the native actor/model subfile for a zero-filled package range, then requires the proposed actor-root table to stay contiguous and strictly ascending. Planned rows are still guarded candidates until they pass disposable in-game testing.");
         builder.AppendLine();
         foreach (IGrouping<string, CrossLevelChestPackageRecipePlanRow> group in report.Rows.GroupBy(row => row.DisplayName).OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase))
         {
@@ -276,6 +310,9 @@ public static class CrossLevelChestPackageRecipePlanner
     private static string HexOffset(long value) => $"0x{value:X}";
     private static string Escape(string value) => (value ?? "").Replace("|", "\\|", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
     private static string NormalizeFamily(string value) => string.Equals(value, "keyChest", StringComparison.OrdinalIgnoreCase) ? "lockedChest" : value;
+    private static bool IsBlockedStatus(string status) =>
+        status.StartsWith("in-game-blocked", StringComparison.OrdinalIgnoreCase) ||
+        status.StartsWith("blocked", StringComparison.OrdinalIgnoreCase);
 
     private sealed record ChestPackageSource(
         string Family,

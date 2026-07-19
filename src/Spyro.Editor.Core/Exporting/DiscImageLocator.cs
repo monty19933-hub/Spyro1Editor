@@ -19,7 +19,7 @@ public static class DiscImageLocator
         if (!string.IsNullOrWhiteSpace(configured))
             return configured;
 
-        foreach (string path in CandidateRoots(workspace).SelectMany(root => ImageNames.Select(name => Path.Combine(root, name))))
+        foreach (string path in WorkspaceArtifactSearchPolicy.EnumerateCandidateRoots(workspace).SelectMany(root => ImageNames.Select(name => Path.Combine(root, name))))
         {
             if (File.Exists(path))
                 return path;
@@ -189,22 +189,6 @@ public static class DiscImageLocator
             : StringComparison.Ordinal);
     }
 
-    private static IEnumerable<string> CandidateRoots(EditorWorkspace workspace)
-    {
-        yield return workspace.RootPath;
-
-        DirectoryInfo? parent = Directory.GetParent(workspace.RootPath);
-        if (parent == null)
-            yield break;
-
-        foreach (DirectoryInfo sibling in SafeEnumerateDirectories(parent))
-        {
-            yield return sibling.FullName;
-            foreach (DirectoryInfo nested in SafeEnumerateDirectories(sibling))
-                yield return nested.FullName;
-        }
-    }
-
     private static IEnumerable<string> SafeEnumerateFiles(string directory, string searchPattern)
     {
         try
@@ -221,19 +205,4 @@ public static class DiscImageLocator
         }
     }
 
-    private static IEnumerable<DirectoryInfo> SafeEnumerateDirectories(DirectoryInfo directory)
-    {
-        try
-        {
-            return directory.EnumerateDirectories().ToArray();
-        }
-        catch (IOException)
-        {
-            return Array.Empty<DirectoryInfo>();
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return Array.Empty<DirectoryInfo>();
-        }
-    }
 }

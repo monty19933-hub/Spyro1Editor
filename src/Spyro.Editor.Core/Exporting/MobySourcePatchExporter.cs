@@ -40,6 +40,7 @@ public static class MobySourcePatchExporter
         string outputImagePath = $"{outputPrefix}.bin";
         string outputCuePath = $"{outputPrefix}.cue";
         string outputPlanPath = $"{outputPrefix}.moby-source-patch-plan.json";
+        string greenWizardResidentPlanPath = $"{outputPrefix}.green-wizard-resident-plan.json";
 
         MobySourcePatchPlan plan = BuildPlan(
             request.SourceImagePath,
@@ -56,6 +57,8 @@ public static class MobySourcePatchExporter
 
         if (request.WriteImage)
         {
+            DeleteStaleOutput(greenWizardResidentPlanPath);
+
             if (plan.PatchCount == 0)
             {
                 DeleteStaleOutput(outputImagePath);
@@ -81,6 +84,8 @@ public static class MobySourcePatchExporter
                     {
                         executable ??= FindExecutable(stream, layout);
                         long fileOffset = ExeFileOffset(exeAddress, patch.WadRelativeOffset);
+                        if (TestLevelWarpPatch.IsPatch(patch))
+                            TestLevelWarpPatch.VerifyBeforeWrite(stream, layout);
                         DiscImage.WriteFileBytes(stream, layout, executable.Lba, fileOffset, bytes);
                         continue;
                     }
@@ -88,10 +93,41 @@ public static class MobySourcePatchExporter
                     stream.Position = ParseRequiredLong(patch.ImageOffset, "patch.imageOffset");
                     stream.Write(bytes);
                 }
+
+                if (plan.Patches.Any(TestLevelWarpPatch.IsPatch))
+                {
+                    stream.Flush();
+                    TestLevelWarpPatch.VerifyWritten(stream, layout);
+                }
             }
 
             string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath));
             await File.WriteAllTextAsync(outputCuePath, cueText, Encoding.ASCII, cancellationToken);
+
+            if (GreenWizardResidentSwapComposer.CountResidentWizardPatches(plan) > 0)
+            {
+                try
+                {
+                    GreenWizardResidentSwapBuildMode buildMode = request.AllowPlanOnlyActorPackageImports
+                        ? GreenWizardResidentSwapBuildMode.Candidate
+                        : GreenWizardResidentSwapBuildMode.Normal;
+                    GreenWizardResidentSwapComposer.ApplyAndVerify(
+                        outputImagePath,
+                        request.Level,
+                        plan,
+                        greenWizardResidentPlanPath,
+                        buildMode);
+                }
+                catch (Exception ex)
+                {
+                    DeleteStaleOutput(outputCuePath);
+                    DeleteStaleOutput(outputImagePath);
+                    DeleteStaleOutput(greenWizardResidentPlanPath);
+                    throw new InvalidOperationException(
+                        $"The {request.Level.DisplayName} Green Wizard resident bundle could not be completed, so its unsafe BIN/CUE were removed: {ex.Message}",
+                        ex);
+                }
+            }
         }
 
         return new MobySourcePatchResult(outputImagePath, outputCuePath, outputPlanPath, plan, request.WriteImage && plan.PatchCount > 0);
@@ -138,13 +174,24 @@ public static class MobySourcePatchExporter
         if (!editDocument.RootElement.TryGetProperty("edits", out JsonElement editsElement) || editsElement.ValueKind != JsonValueKind.Array)
             throw new InvalidOperationException("The native moby edit file does not contain an edits array.");
 
+        ArtisansNativeLockedChestRuntimeBundleIntent? artisansLockedChestBundle = null;
+        if (!allowPlanOnlyActorPackageImports)
+        {
+            ArtisansNativeLockedChestRuntimeBundleComposer.TryDetectIntent(
+                level,
+                editsElement,
+                out artisansLockedChestBundle);
+        }
+
         List<MobySourcePatch> patches = new();
         List<MobyActorPackageImportPreview> packageImportPreviews = new();
         List<string> skippedEdits = new();
+        List<MobySourceEditOutcome> editOutcomes = new();
         List<string> sourceCountNotes = new();
         HashSet<long> writtenWadOffsets = new();
         HashSet<string> writtenActorPackageRecipes = new(StringComparer.OrdinalIgnoreCase);
         Dictionary<string, CrossLevelSharedSpecialCluster> sharedCrossLevelSpecialClusters = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> releaseLimitedNativeCloneAppendFamilies = new(StringComparer.OrdinalIgnoreCase);
         int appendNextTrueIndex = level.SourceRecordCount;
         bool hasAppend = false;
         int exportedTreasureDelta = 0;
@@ -171,73 +218,174 @@ public static class MobySourcePatchExporter
         {
             int trueIndex = JsonValue.GetInt32(edit, "trueIndex", -1);
             string label = JsonValue.GetString(edit, "label", JsonValue.GetString(edit, "labelEdited", trueIndex >= 0 ? $"T{trueIndex}" : "moby"));
-            if (IsFlyInLandingEdit(edit))
+            string editKind = JsonValue.GetString(edit, "editKind", JsonValue.GetBoolean(edit, "added") ? "add" : JsonValue.GetBoolean(edit, "removed") ? "remove" : "update");
+            bool isArtisansLockedChestBundleEdit = artisansLockedChestBundle != null &&
+                ArtisansNativeLockedChestRuntimeBundleComposer.IsBundleTemplateEdit(edit);
+            int patchStart = patches.Count;
+            int packagePreviewStart = packageImportPreviews.Count;
+            int skippedEditStart = skippedEdits.Count;
+            try
             {
-                AddFlyInLandingPatches(imageStream, layout, level, label, edit, flyInLanding, patches, writtenWadOffsets);
-                continue;
-            }
+                if (isArtisansLockedChestBundleEdit)
+                    continue;
 
-            if (JsonValue.GetBoolean(edit, "added") || string.Equals(JsonValue.GetString(edit, "editKind"), "add", StringComparison.OrdinalIgnoreCase))
-            {
-                if (!allowGuardedNativeCloneAppend &&
-                    TryPatchAddedNativeCloneIntoAutoSlot(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, label, edit, protectedSourceSlots, autoReuseTargetSlots, patches, writtenWadOffsets, skippedEdits, out int autoSlotTreasureDelta))
+                if (IsFlyInLandingEdit(edit))
                 {
-                    exportedTreasureDelta += autoSlotTreasureDelta;
+                    AddFlyInLandingPatches(imageStream, layout, level, label, edit, flyInLanding, patches, writtenWadOffsets);
                     continue;
                 }
 
-                int assignedAppendTrueIndex = appendNextTrueIndex;
-                if (TryAddAppendPatch(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, tableRelativeOffset, appendNextTrueIndex, label, edit, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, suppressActorPackageImports, allowGuardedNativeCloneAppend, patches, packageImportPreviews, writtenWadOffsets, writtenActorPackageRecipes, sharedCrossLevelSpecialClusters, skippedEdits))
+                if (JsonValue.GetBoolean(edit, "added") || string.Equals(JsonValue.GetString(edit, "editKind"), "add", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!allowGuardedNativeCloneAppend &&
+                        TryPatchAddedNativeCloneIntoAutoSlot(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, label, edit, protectedSourceSlots, autoReuseTargetSlots, patches, writtenWadOffsets, skippedEdits, out int autoSlotTreasureDelta))
+                    {
+                        exportedTreasureDelta += autoSlotTreasureDelta;
+                        continue;
+                    }
+
+                    string releaseLimitedFamilyKey = "";
+                    string releaseLimitedFamilyName = "this enemy/chest family";
+                    bool releaseLimitedNativeCloneAppend = !allowGuardedNativeCloneAppend &&
+                        TryGetReleaseLimitedNativeCloneAppendFamily(edit, level, out releaseLimitedFamilyKey, out releaseLimitedFamilyName);
+                    if (releaseLimitedNativeCloneAppend && releaseLimitedNativeCloneAppendFamilies.Contains(releaseLimitedFamilyKey))
+                    {
+                        skippedEdits.Add(
+                            $"{label}: the normal Create BIN safety budget for {releaseLimitedFamilyName} is exhausted. " +
+                            "One same-family true-add is currently validated after reusable slots; later copies stay saved in the editor but are skipped because multiple active enemy/chest appends can crash in-game. " +
+                            "Use Change To / slot replacement, or create a disposable research BIN for further allocation testing.");
+                        continue;
+                    }
+
+                    int assignedAppendTrueIndex = appendNextTrueIndex;
+                    if (TryAddAppendPatch(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, tableRelativeOffset, appendNextTrueIndex, label, edit, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, suppressActorPackageImports, allowGuardedNativeCloneAppend, patches, packageImportPreviews, writtenWadOffsets, writtenActorPackageRecipes, sharedCrossLevelSpecialClusters, skippedEdits))
+                    {
+                        exportedTreasureDelta += ComputeTreasureDelta(edit);
+                        TrackSpringChestPairAppend(edit, assignedAppendTrueIndex, packageImportPreviews, ref springChestControllerAppendTrueIndex, ref springChestShellAppendTrueIndex, ref springChestControllerActorId);
+                        TrackPeaceKeepersSpringChestAppend(edit, assignedAppendTrueIndex, peaceKeepersSpringChestAnchors);
+                        appendNextTrueIndex++;
+                        hasAppend = true;
+                        if (releaseLimitedNativeCloneAppend)
+                            releaseLimitedNativeCloneAppendFamilies.Add(releaseLimitedFamilyKey);
+                    }
+
+                    continue;
+                }
+
+                if (trueIndex < 0 || trueIndex >= level.SourceRecordCount)
+                {
+                    skippedEdits.Add($"{label}: source index is outside {level.DisplayName}'s source table.");
+                    continue;
+                }
+
+                if (JsonValue.GetBoolean(edit, "removed") || string.Equals(JsonValue.GetString(edit, "editKind"), "remove", StringComparison.OrdinalIgnoreCase))
+                {
+                    AddRemoveHidePatches(imageStream, layout, level, tableWadOffset, trueIndex, label, patches, writtenWadOffsets);
+                    exportedTreasureDelta += ComputeTreasureDelta(edit);
+                    continue;
+                }
+
+                if (TryGetCrossLevelTemplate(edit, out JsonElement slotCandidateTemplate) &&
+                    IsCrossLevelExistingSlotCandidateTemplate(slotCandidateTemplate))
+                {
+                    GreenWizardResidentSwapBuildMode residentBuildMode = allowPlanOnlyActorPackageImports
+                        ? GreenWizardResidentSwapBuildMode.Candidate
+                        : GreenWizardResidentSwapBuildMode.Normal;
+                    string slotFamily = JsonValue.GetString(slotCandidateTemplate, "family");
+                    string slotSourceLevelKey = JsonValue.GetString(slotCandidateTemplate, "sourceLevelKey");
+                    int slotSourceTrueIndex = JsonValue.GetInt32(slotCandidateTemplate, "sourceTrueIndex", -1);
+                    bool normalResidentWizard =
+                        GreenWizardResidentSwapComposer.IsTemplateEligible(
+                            level,
+                            slotFamily,
+                            slotSourceLevelKey,
+                            slotSourceTrueIndex,
+                            GreenWizardResidentSwapBuildMode.Normal,
+                            out _,
+                            out _);
+                    if (!allowPlanOnlyActorPackageImports && !normalResidentWizard)
+                    {
+                        string sourceLevelName = JsonValue.GetString(slotCandidateTemplate, "sourceLevelName", "another level");
+                        string source = slotSourceTrueIndex >= 0 ? $"{sourceLevelName} T{slotSourceTrueIndex}" : sourceLevelName;
+                        skippedEdits.Add(
+                            $"{label}: guarded cross-level existing-slot swap from {source} stays saved but is skipped by normal Create BIN. " +
+                            "Use Create Swap Test to write a disposable DuckStation candidate.");
+                        continue;
+                    }
+
+                    if (TryPatchCrossLevelSourceRecordIntoExistingSlotCandidate(
+                        imageStream,
+                        layout,
+                        catalog,
+                        level,
+                        levelGeometry,
+                        tableWadOffset,
+                        tableRelativeOffset,
+                        trueIndex,
+                        label,
+                        edit,
+                        slotCandidateTemplate,
+                        residentBuildMode,
+                        patches,
+                        writtenWadOffsets,
+                        sharedCrossLevelSpecialClusters,
+                        skippedEdits))
+                    {
+                        exportedTreasureDelta += ComputeTreasureDelta(edit);
+                    }
+                    continue;
+                }
+
+                if (TryPatchSourceRecordCloneIntoSlot(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets, skippedEdits))
                 {
                     exportedTreasureDelta += ComputeTreasureDelta(edit);
-                    TrackSpringChestPairAppend(edit, assignedAppendTrueIndex, packageImportPreviews, ref springChestControllerAppendTrueIndex, ref springChestShellAppendTrueIndex, ref springChestControllerActorId);
-                    TrackPeaceKeepersSpringChestAppend(edit, assignedAppendTrueIndex, peaceKeepersSpringChestAnchors);
-                    appendNextTrueIndex++;
-                    hasAppend = true;
+                    continue;
                 }
 
-                continue;
-            }
+                if (TryGetCrossLevelTemplate(edit, out JsonElement crossLevelTemplate) && !IsSimpleCrossLevelTemplate(crossLevelTemplate))
+                {
+                    MobyActorPackageImportPreview preview = AddActorPackageImportPreview(imageStream, layout, catalog, level, tableWadOffset, tableRelativeOffset, label, crossLevelTemplate, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, packageImportPreviews, patches, writtenWadOffsets, writtenActorPackageRecipes);
+                    string templateId = JsonValue.GetString(crossLevelTemplate, "id", "cross-level template");
+                    string requiredFeature = JsonValue.GetString(crossLevelTemplate, "requiredExporterFeature");
+                    if (!preview.CanWriteImage)
+                    {
+                        skippedEdits.Add($"{label}: {templateId} identity bytes can be patched, but the required actor package step ({requiredFeature}) is still guarded preview-only.");
+                        continue;
+                    }
+                    else if (!TryPatchExistingCrossLevelSpecialData(imageStream, layout, catalog, level, tableWadOffset, tableRelativeOffset, trueIndex, label, crossLevelTemplate, patches, writtenWadOffsets, skippedEdits))
+                        continue;
+                }
 
-            if (trueIndex < 0 || trueIndex >= level.SourceRecordCount)
-            {
-                skippedEdits.Add($"{label}: source index is outside {level.DisplayName}'s source table.");
-                continue;
-            }
-
-            if (JsonValue.GetBoolean(edit, "removed") || string.Equals(JsonValue.GetString(edit, "editKind"), "remove", StringComparison.OrdinalIgnoreCase))
-            {
-                AddRemoveHidePatches(imageStream, layout, level, tableWadOffset, trueIndex, label, patches, writtenWadOffsets);
+                AddCoordinatePatches(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
+                TrackMovedPortalSourceData(level, trueIndex, label, edit, portalSourceData, portalMovements);
+                AddMovedDragonRescueCameraPatches(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, dragonRescueCameras, patches, writtenWadOffsets);
+                AddMovedExistingPlacementSectorPatch(imageStream, layout, level, levelGeometry, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
+                AddChangedBytePatch(imageStream, layout, level, tableWadOffset, trueIndex, label, "type", TypeOffset, edit, "typeOriginalHex", "typeEditedHex", patches, writtenWadOffsets);
+                AddChangedBytePatch(imageStream, layout, level, tableWadOffset, trueIndex, label, "state", StateOffset, edit, "stateOriginalHex", "stateEditedHex", patches, writtenWadOffsets);
+                AddYawPatches(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
+                AddSourceByteEdits(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
                 exportedTreasureDelta += ComputeTreasureDelta(edit);
-                continue;
             }
-
-            if (TryPatchSourceRecordCloneIntoSlot(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets, skippedEdits))
+            finally
             {
-                exportedTreasureDelta += ComputeTreasureDelta(edit);
-                continue;
+                editOutcomes.Add(new MobySourceEditOutcome(
+                    EditorTrueIndex: trueIndex,
+                    MobyLabel: label,
+                    EditKind: editKind,
+                    PatchKinds: patches.Skip(patchStart).Select(patch => patch.Kind)
+                        .Concat(isArtisansLockedChestBundleEdit ? ["moby-record-append", "artisans-native-key-locked-chest-runtime-bundle-v2"] : [])
+                        .ToArray(),
+                    SkippedReasons: skippedEdits.Skip(skippedEditStart).ToArray(),
+                    PackageOutcomes: packageImportPreviews
+                        .Skip(packagePreviewStart)
+                        .Select(preview => new MobySourceEditPackageOutcome(
+                            preview.TemplateId,
+                            preview.RecipeId,
+                            preview.RecipeStatus,
+                            preview.CanWriteImage,
+                            preview.GuardReason))
+                        .ToArray()));
             }
-
-            if (TryGetCrossLevelTemplate(edit, out JsonElement crossLevelTemplate) && !IsSimpleCrossLevelTemplate(crossLevelTemplate))
-            {
-                MobyActorPackageImportPreview preview = AddActorPackageImportPreview(imageStream, layout, catalog, level, tableWadOffset, tableRelativeOffset, label, crossLevelTemplate, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, packageImportPreviews, patches, writtenWadOffsets, writtenActorPackageRecipes);
-                string templateId = JsonValue.GetString(crossLevelTemplate, "id", "cross-level template");
-                string requiredFeature = JsonValue.GetString(crossLevelTemplate, "requiredExporterFeature");
-                if (!preview.CanWriteImage)
-                    skippedEdits.Add($"{label}: {templateId} identity bytes can be patched, but the required actor package step ({requiredFeature}) is still guarded preview-only.");
-                else if (!TryPatchExistingCrossLevelSpecialData(imageStream, layout, catalog, level, tableWadOffset, tableRelativeOffset, trueIndex, label, crossLevelTemplate, patches, writtenWadOffsets, skippedEdits))
-                    continue;
-            }
-
-            AddCoordinatePatches(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
-            TrackMovedPortalSourceData(level, trueIndex, label, edit, portalSourceData, portalMovements);
-            AddMovedDragonRescueCameraPatches(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, dragonRescueCameras, patches, writtenWadOffsets);
-            AddMovedExistingPlacementSectorPatch(imageStream, layout, level, levelGeometry, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
-            AddChangedBytePatch(imageStream, layout, level, tableWadOffset, trueIndex, label, "type", TypeOffset, edit, "typeOriginalHex", "typeEditedHex", patches, writtenWadOffsets);
-            AddChangedBytePatch(imageStream, layout, level, tableWadOffset, trueIndex, label, "state", StateOffset, edit, "stateOriginalHex", "stateEditedHex", patches, writtenWadOffsets);
-            AddYawPatches(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
-            AddSourceByteEdits(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
-            exportedTreasureDelta += ComputeTreasureDelta(edit);
         }
 
         AddMovedPortalSourcePatches(
@@ -1132,7 +1280,7 @@ public static class MobySourcePatchExporter
             "Fly-in landing edits use the separate destination entry record: XYZ at +0x00/+0x04/+0x08 and the direct flight heading byte at +0x0E.",
             "Remove edits are exported as a soft remove by moving the source record to -30000, -30000, -30000 world units.",
             "Type, state, and chest/gem source-byte edits write one-byte source table fields.",
-            "Loose gems and proven lightweight same-level true adds clone a matching source record into the next empty slot and bump the source count; unsafe enemy/chest true-adds are skipped until their behavior data is solved.",
+            "Loose gems and proven lightweight same-level true adds clone a matching source record into the next empty slot and bump the source count; release-limited actor/chest families export at most one validated true-add per family after slot reuse, and unsafe excess rows stay saved but are skipped.",
             "Treasure edits update the level's in-game pause/inventory treasure target so added gems count toward completion.",
             "Existing contained-gem chest content recolors export as +0x53 source-byte patches; brand-new contained-gem markers still need the special-data chest-link append path."
         ];
@@ -1141,6 +1289,12 @@ public static class MobySourcePatchExporter
             notes.Add("Homeworld portal location edits move the linked source mobys, dedicated portal center/points, and type-6 walk-in collision triangles, then rebuild and rebalance the native collision lookup. Decorative stone arches remain terrain scenery.");
         }
         notes.AddRange(sourceCountNotes);
+        if (artisansLockedChestBundle != null)
+        {
+            notes.Add(
+                $"The runtime-proven Artisans Key + Locked Chest V2 bundle is reserved atomically: editor objects T{artisansLockedChestBundle.KeyEditorTrueIndex}/T{artisansLockedChestBundle.LockedChestEditorTrueIndex} compose as output T174/T175, hidden native reward markers occupy T176-T180, and the fixed treasure target changes 100->110.");
+            notes.Add("The bundle is intentionally deferred to the final structural-WAD composition stage; its two visible edits are suppressed from generic source-row append and actor-package preview paths.");
+        }
         if (allowGuardedNativeCloneAppend)
         {
             notes.Add("Disposable native-clone append research mode is enabled: guarded same-level enemy/chest true-add rows may write for emulator testing. Normal Create BIN keeps these guarded unless this research flag is explicitly enabled.");
@@ -1151,9 +1305,9 @@ public static class MobySourcePatchExporter
         {
             notes.Add(addStoneHillSpringChestSafeNativeSpringEffectOnlyHelper
                 ? useStoneHillSpringChestBlueGemNativeSpringEffectVisual
-                    ? "Stone Hill Spring Chest native-effect diagnostic exports the paired controller/shell records, a blank scratch row, and a small helper that writes a blue-gem visual native-effect shape without adding a Sparx-targetable pickup gem."
-                    : "Stone Hill Spring Chest native-effect diagnostic exports the paired controller/shell records, a blank scratch row, and a small helper that writes the native 0x0022/0x20 after-hit effect shape without adding a Sparx-targetable pickup gem."
-                : "Stone Hill Spring Chest candidate exports add the paired controller/shell records, a hidden reward-gem row, and the small in-game helper needed for pop/collect behavior.");
+                    ? $"{level.DisplayName} Spring Chest native-effect diagnostic exports the paired controller/shell records, a blank scratch row, and a small helper that writes a blue-gem visual native-effect shape without adding a Sparx-targetable pickup gem."
+                    : $"{level.DisplayName} Spring Chest native-effect diagnostic exports the paired controller/shell records, a blank scratch row, and a small helper that writes the native 0x0022/0x20 after-hit effect shape without adding a Sparx-targetable pickup gem."
+                : $"{level.DisplayName} Spring Chest candidate exports add the paired controller/shell records, a hidden reward-gem row, and the small in-game helper needed for pop/collect behavior.");
         }
         else if (patches.Any(patch =>
             string.Equals(patch.Kind, "spring-chest-arm-only-helper-hook", StringComparison.OrdinalIgnoreCase) ||
@@ -1197,6 +1351,13 @@ public static class MobySourcePatchExporter
                 ? "Stone Hill Spring Chest copy-only candidate exports the paired controller/shell records and actor package bytes but intentionally skips actor roots and the custom EXE helper/reward row to isolate loading freezes."
                 : "Stone Hill Spring Chest no-helper candidate exports only the paired controller/shell records and actor packages; it intentionally skips the custom EXE helper/reward row to isolate loading freezes.");
         }
+        if (allowPlanOnlyActorPackageImports && patches.Count > 0)
+        {
+            MobySourcePatch fastEntryPatch = TestLevelWarpPatch.CreateGuarded(imageStream, layout, level);
+            patches.Add(fastEntryPatch);
+            notes.Add($"Disposable Swap Test fast entry is enabled for {level.DisplayName}: open Inventory, enter {TestLevelWarpPatch.ActivationSequence}, then {TestLevelWarpPatch.TargetSelectionText(level.LevelId)}. The patch is absent from normal Create BIN.");
+        }
+
         notes.Add(allowPlanOnlyActorPackageImports
             ? "Disposable candidate mode is enabled: plan-only actor-package recipes can write for explicit emulator testing."
             : "Promoted or in-game-verified cross-level actor-package recipes write only to disposable test BIN/CUE output; unmapped or unpromoted recipes remain guarded previews.");
@@ -1217,7 +1378,9 @@ public static class MobySourcePatchExporter
             Patches: patches,
             PackageImportPreviews: packageImportPreviews,
             SkippedEdits: skippedEdits,
-            Notes: notes);
+            Notes: notes,
+            EditOutcomes: editOutcomes,
+            ArtisansNativeLockedChestRuntimeBundle: artisansLockedChestBundle);
     }
 
     private static void TrackSpringChestPairAppend(
@@ -1449,11 +1612,12 @@ public static class MobySourcePatchExporter
         bool visualScratchRewardRow = false,
         bool clearVisualScratchRuntimeWord = false)
     {
-        if (!string.Equals(LevelCatalog.NormalizeKey(level.Key), "stonehill", StringComparison.OrdinalIgnoreCase))
+        bool isStoneHill = string.Equals(LevelCatalog.NormalizeKey(level.Key), "stonehill", StringComparison.OrdinalIgnoreCase);
+        if (!blankRewardRow && !isStoneHill)
             return false;
 
         const int stoneHillLocalGemDonorTrueIndex = 79;
-        if (stoneHillLocalGemDonorTrueIndex >= level.SourceRecordCount)
+        if (!blankRewardRow && stoneHillLocalGemDonorTrueIndex >= level.SourceRecordCount)
             throw new InvalidOperationException("Stone Hill Spring Chest helper needs local gem donor T79, but the source table is shorter than expected.");
 
         long appendWadOffset = tableWadOffset + ((long)spawnGemAppendTrueIndex * RecordStride);
@@ -1525,7 +1689,7 @@ public static class MobySourcePatchExporter
             spawnGemAppendTrueIndex,
             "0x0",
             blankRewardRow
-                ? $"Append blank scratch reward row T{spawnGemAppendTrueIndex}; the in-game helper rebuilds it only while the Spring Chest gem is popping, then blanks it again so Sparx cannot target a parked reward."
+                ? $"Append blank scratch reward row T{spawnGemAppendTrueIndex} in {level.DisplayName}; the in-game helper rebuilds it only while the Spring Chest gem is popping, then blanks it again so Sparx cannot target a parked reward."
                 : visualScratchRewardRow
                 ? clearVisualScratchRuntimeWord
                     ? $"Append dormant donor-scaffold scratch reward row T{spawnGemAppendTrueIndex} cloned from Stone Hill local gem donor T{stoneHillLocalGemDonorTrueIndex}; model scaffold bytes are preserved, but runtime and parked collectible identity bytes are blanked so Sparx cannot target it while parked."
@@ -1990,7 +2154,7 @@ public static class MobySourcePatchExporter
             return false;
         if (IsContainedGemAppend(edit, targetType))
             return false;
-        if (IsLooseVisibleGemIdentity(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B))
+        if (LooksLikeLooseVisibleGemIdentity(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A))
             return false;
         if (IsKnownSameLevelLightweightAppend(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B))
             return false;
@@ -2104,6 +2268,283 @@ public static class MobySourcePatchExporter
             patches,
             writtenWadOffsets);
         return true;
+    }
+
+    private static bool TryPatchCrossLevelSourceRecordIntoExistingSlotCandidate(
+        FileStream stream,
+        DiscLayout layout,
+        LevelCatalog catalog,
+        LevelDefinition targetLevel,
+        GeometryCandidate? levelGeometry,
+        long targetTableWadOffset,
+        long targetTableRelativeOffset,
+        int targetTrueIndex,
+        string label,
+        JsonElement edit,
+        JsonElement crossLevelTemplate,
+        GreenWizardResidentSwapBuildMode residentBuildMode,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets,
+        Dictionary<string, CrossLevelSharedSpecialCluster> sharedCrossLevelSpecialClusters,
+        List<string> skippedEdits)
+    {
+        string templateId = JsonValue.GetString(crossLevelTemplate, "id", "cross-level swap");
+        string sourceLevelKey = JsonValue.GetString(crossLevelTemplate, "sourceLevelKey");
+        string family = JsonValue.GetString(crossLevelTemplate, "family");
+        int sourceTrueIndex = JsonValue.GetInt32(crossLevelTemplate, "sourceTrueIndex", -1);
+        LevelDefinition? sourceLevel = catalog.FindByKey(sourceLevelKey);
+        if (sourceLevel == null || !sourceLevel.HasSourceTable || sourceTrueIndex < 0 || sourceTrueIndex >= sourceLevel.SourceRecordCount)
+        {
+            skippedEdits.Add($"{label}: {templateId} does not have a mapped source donor row.");
+            return false;
+        }
+
+        if (string.Equals(
+                LevelCatalog.NormalizeKey(sourceLevel.Key),
+                LevelCatalog.NormalizeKey(targetLevel.Key),
+                StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(family, "enemyTransform", StringComparison.OrdinalIgnoreCase))
+        {
+            skippedEdits.Add($"{label}: {templateId} is from this level and should use native same-level slot reuse instead of candidate mode.");
+            return false;
+        }
+
+        long sourceTableWadOffset = ParseRequiredLong(sourceLevel.SourceTableWadOffset, "sourceLevel.sourceTableWadOffset");
+        long sourceTableRelativeOffset = string.IsNullOrWhiteSpace(sourceLevel.SourceTableRelativeOffset)
+            ? 0
+            : ParseRequiredLong(sourceLevel.SourceTableRelativeOffset, "sourceLevel.sourceTableRelativeOffset");
+        byte[] targetRecord = ReadWadBytes(
+            stream,
+            layout,
+            targetTableWadOffset + ((long)targetTrueIndex * RecordStride),
+            RecordStride);
+        byte[] donorRecord = ReadWadBytes(
+            stream,
+            layout,
+            sourceTableWadOffset + ((long)sourceTrueIndex * RecordStride),
+            RecordStride);
+
+        bool chestSwap = string.Equals(family, "catalogChest", StringComparison.OrdinalIgnoreCase);
+        bool enemySwap = string.Equals(family, "catalogEnemy", StringComparison.OrdinalIgnoreCase);
+        bool enemyTransform = string.Equals(family, "enemyTransform", StringComparison.OrdinalIgnoreCase);
+        if (!chestSwap && !enemySwap && !enemyTransform)
+        {
+            skippedEdits.Add($"{label}: {templateId} is not in the guarded chest or self-contained enemy catalogue.");
+            return false;
+        }
+
+        if (targetRecord[TypeOffset] is not (0x18 or 0x20) || donorRecord[TypeOffset] is not (0x18 or 0x20))
+        {
+            skippedEdits.Add($"{label}: {templateId} does not fit the existing chest/enemy slot candidate writer.");
+            return false;
+        }
+
+        int donorActorId = donorRecord[0x36] | (donorRecord[0x37] << 8);
+        uint targetActorRoot = 0;
+        bool targetActorRootPresent = targetTableRelativeOffset > 0 &&
+            TryFindTargetActorRoot(
+                stream,
+                layout,
+                targetTableWadOffset - targetTableRelativeOffset,
+                donorActorId,
+                out targetActorRoot);
+        if (!targetActorRootPresent)
+        {
+            skippedEdits.Add(
+                $"{label}: {targetLevel.DisplayName} does not load actor 0x{donorActorId:X4}; " +
+                "the row-only swap was refused because it needs a mapped actor/model package and target behavior route.");
+            return false;
+        }
+
+        bool greenWizardResidentCandidate = false;
+        GreenWizardResidentSwapRoute? greenWizardResidentRoute = null;
+        if (enemyTransform)
+        {
+            if (donorActorId == GreenWizardRuntimeBundleCompatibility.ActorId &&
+                string.Equals(
+                    LevelCatalog.NormalizeKey(targetLevel.Key),
+                    GreenWizardRuntimeBundleCompatibility.SourceLevelKey,
+                    StringComparison.OrdinalIgnoreCase) &&
+                targetTrueIndex != GreenWizardRuntimeBundleCompatibility.WizardPeakFocusedTargetTrueIndex)
+            {
+                skippedEdits.Add(
+                    $"{label}: the first Wizard Peak Green Wizard in-place recipe is frozen to Elder Wizard " +
+                    $"T{GreenWizardRuntimeBundleCompatibility.WizardPeakFocusedTargetTrueIndex}; T{targetTrueIndex} remains unavailable until it receives its own properties-extent and pointer-fixup proof.");
+                return false;
+            }
+
+            if (donorActorId == GreenWizardRuntimeBundleCompatibility.ActorId &&
+                string.Equals(
+                    LevelCatalog.NormalizeKey(targetLevel.Key),
+                    GreenWizardRuntimeBundleCompatibility.MagicCraftersSourceLevelKey,
+                    StringComparison.OrdinalIgnoreCase) &&
+                targetTrueIndex != GreenWizardRuntimeBundleCompatibility.MagicCraftersFocusedTargetTrueIndex)
+            {
+                skippedEdits.Add(
+                    $"{label}: the runtime-proven Magic Crafters Green Wizard in-place properties recipe is frozen to " +
+                    $"T{GreenWizardRuntimeBundleCompatibility.MagicCraftersFocusedTargetTrueIndex}; T{targetTrueIndex} remains unavailable until it receives its own properties-extent and pointer-fixup proof.");
+                return false;
+            }
+
+            bool sourceRecordHasPerInstanceData = BinaryPrimitives.ReadUInt32LittleEndian(donorRecord) != 0;
+            if (!GreenWizardResidentSwapComposer.IsTemplateEligible(
+                    targetLevel,
+                    family,
+                    sourceLevel.Key,
+                    sourceTrueIndex,
+                    donorActorId,
+                    sourceRecordHasPerInstanceData,
+                    targetActorRootPresent,
+                    residentBuildMode,
+                    out GreenWizardResidentSwapRoute residentRoute,
+                    out string residentReason))
+            {
+                skippedEdits.Add(
+                    $"{label}: {residentReason} " +
+                    "An actor-root match alone does not prove the Wizard handler, lightning dependency, particles, or route data are safe in this level.");
+                return false;
+            }
+            greenWizardResidentCandidate = true;
+            greenWizardResidentRoute = residentRoute;
+        }
+
+        if (chestSwap)
+            PreserveTargetBehaviorData(targetRecord, donorRecord);
+
+        WriteInt32(donorRecord, XOffset, ReadRawAxis(edit, "x", targetRecord, XOffset));
+        WriteInt32(donorRecord, YOffset, ReadRawAxis(edit, "y", targetRecord, YOffset));
+        WriteInt32(donorRecord, ZOffset, ReadRawAxis(edit, "z", targetRecord, ZOffset));
+        if (greenWizardResidentCandidate)
+        {
+            Array.Copy(targetRecord, YawMatrixOffset, donorRecord, YawMatrixOffset, 18);
+            donorRecord[YawByteOffset] = targetRecord[YawByteOffset];
+        }
+        if (!greenWizardResidentCandidate)
+            WriteYawFromEdit(donorRecord, edit);
+        if (!greenWizardResidentCandidate)
+        {
+            WriteByteFromEdit(donorRecord, TypeOffset, edit, "typeEditedHex", "typeHex");
+            WriteByteFromEdit(donorRecord, StateOffset, edit, "stateEditedHex", "stateHex");
+            WriteByteFromEdit(donorRecord, 0x36, edit, "sourceByte36EditedHex", "sourceByte36Hex");
+            WriteByteFromEdit(donorRecord, 0x37, edit, "sourceByte37EditedHex", "sourceByte37Hex");
+            WriteByteFromEdit(donorRecord, 0x4F, edit, "sourceByte4FEditedHex", "sourceByte4FHex");
+            WriteByteFromEdit(donorRecord, 0x52, edit, "flag4AEditedHex", "flag4AHex");
+            WriteByteFromEdit(donorRecord, 0x53, edit, "flag4BEditedHex", "flag4BHex");
+            ApplySourceByteEdits(donorRecord, edit);
+        }
+        if (greenWizardResidentCandidate)
+            donorRecord[0x53] = targetRecord[0x53];
+
+        string specialDataDescription = "";
+        if (enemySwap && BitConverter.ToUInt32(donorRecord, 0) != 0)
+        {
+            CrossLevelAppendDonor donor = new(
+                sourceLevel,
+                sourceTableWadOffset,
+                sourceTableRelativeOffset,
+                sourceTrueIndex,
+                "ExistingSlotCandidate");
+            if (!TryAppendCrossLevelSpecialData(
+                stream,
+                layout,
+                targetLevel,
+                targetTableWadOffset,
+                targetTableRelativeOffset,
+                donor,
+                targetTrueIndex,
+                label,
+                donorRecord,
+                patches,
+                writtenWadOffsets,
+                sharedCrossLevelSpecialClusters,
+                skippedEdits,
+                out specialDataDescription))
+            {
+                return false;
+            }
+        }
+
+        string placementSectorDescription = "";
+        if (greenWizardResidentCandidate)
+        {
+            donorRecord[0x4A] = targetRecord[0x4A];
+            placementSectorDescription = $" Placement sector byte preserved from target T{targetTrueIndex} as 0x{donorRecord[0x4A]:X2}.";
+        }
+        else if (!HasSourceByteEdit(edit, 0x4A))
+        {
+            donorRecord[0x4A] = targetRecord[0x4A];
+            placementSectorDescription = $" Placement sector byte preserved from target T{targetTrueIndex} as 0x{donorRecord[0x4A]:X2}.";
+        }
+        if (!greenWizardResidentCandidate &&
+            TryApplySourceRecordPlacementSector(levelGeometry, edit, donorRecord, allowPlacementSector: true, out int placementSectorIndex))
+            placementSectorDescription = $" Placement sector byte set from the selected placement to 0x{placementSectorIndex:X2}.";
+
+        string routePointDescription = greenWizardResidentRoute?.RoutePointCount switch
+        {
+            1 => "one-point",
+            2 => "two-point",
+            int count => $"{count}-point",
+            _ => "profile-defined"
+        };
+        bool magicCraftersWizardInPlaceControl = greenWizardResidentCandidate &&
+            string.Equals(LevelCatalog.NormalizeKey(targetLevel.Key), "magiccrafters", StringComparison.OrdinalIgnoreCase);
+        bool wizardPeakInPlaceControl = greenWizardResidentCandidate &&
+            string.Equals(LevelCatalog.NormalizeKey(targetLevel.Key), "wizardpeak", StringComparison.OrdinalIgnoreCase);
+        string behaviorDescription = chestSwap
+            ? " Target chest behavior/reward bytes were preserved while borrowing the donor chest shell."
+            : greenWizardResidentCandidate
+            ? magicCraftersWizardInPlaceControl
+                ? $" The selected enemy's XYZ, yaw, culling sector, pod/group, and reward stay in this slot. The v2 control installs donor T{greenWizardResidentRoute!.DonorTrueIndex}'s private 0x{greenWizardResidentRoute.PropertiesBytes:X} {routePointDescription} properties in T{targetTrueIndex}'s existing extent, removes its stale route-padding fixup, and does not resize or shift scene components."
+                : wizardPeakInPlaceControl
+                ? $" The selected Elder Wizard's XYZ, yaw, culling sector, native pod/group 0xFF, and reward stay in this slot. Runtime-proven v3 installs donor T{greenWizardResidentRoute!.DonorTrueIndex}'s private 0x{greenWizardResidentRoute.PropertiesBytes:X} {routePointDescription} properties in pod-matched T{targetTrueIndex}'s existing extent, replaces the stale private-pointer fixup in place, and does not resize or shift scene components."
+                : $" The selected enemy's XYZ, yaw, culling sector, pod/group, and reward stay in this slot after the composed {targetLevel.DisplayName} resident-bundle step expands the native properties component for a private 0x{greenWizardResidentRoute!.PropertiesBytes:X} Wizard block, translates donor T{greenWizardResidentRoute.DonorTrueIndex}'s {routePointDescription} route, shifts the pod/collision/fixup components intact, and appends the internal-pointer fixup."
+            : " Donor enemy behavior bytes were retained; this self-contained classification still requires DuckStation validation.";
+        string swapDescription = greenWizardResidentCandidate
+            ? $"{(greenWizardResidentRoute!.NormalCreateBinReady ? "Verified" : "Guarded")} {targetLevel.DisplayName} resident-bundle replacement: replace {targetLevel.DisplayName} T{targetTrueIndex} with {sourceLevel.DisplayName} donor T{sourceTrueIndex}. Target-resident actor 0x{donorActorId:X4} uses root 0x{targetActorRoot:X}. Source object count remains {targetLevel.SourceRecordCount}; no row is appended. Registered structural recipe {greenWizardResidentRoute.RecipeId} completes this source-row patch during {(residentBuildMode == GreenWizardResidentSwapBuildMode.Normal ? "normal Create BIN" : "Create Swap Test")}.{placementSectorDescription}{behaviorDescription}{specialDataDescription}"
+            : $"Disposable cross-level existing-slot candidate: replace {targetLevel.DisplayName} T{targetTrueIndex} with {sourceLevel.DisplayName} donor T{sourceTrueIndex}. Target-resident actor 0x{donorActorId:X4} uses root 0x{targetActorRoot:X}. Source object count remains {targetLevel.SourceRecordCount}; no row is appended.{placementSectorDescription}{behaviorDescription}{specialDataDescription}";
+        AddRawPatch(
+            stream,
+            layout,
+            targetLevel,
+            targetTableWadOffset + ((long)targetTrueIndex * RecordStride),
+            donorRecord,
+            "cross-level-existing-slot-candidate",
+            label,
+            targetTrueIndex,
+            "0x0",
+            swapDescription,
+            patches,
+            writtenWadOffsets);
+        return true;
+    }
+
+    private static bool TryFindTargetActorRoot(
+        FileStream stream,
+        DiscLayout layout,
+        long targetEntryBase,
+        int actorId,
+        out uint root)
+    {
+        root = 0;
+        for (int index = 0; index < 64; index++)
+        {
+            ushort candidateActor = BitConverter.ToUInt16(
+                ReadWadBytes(stream, layout, targetEntryBase + 0x150 + (index * 2L), 2),
+                0);
+            if (candidateActor != actorId)
+                continue;
+
+            uint candidateRoot = BitConverter.ToUInt32(
+                ReadWadBytes(stream, layout, targetEntryBase + 0x50 + (index * 4L), 4),
+                0);
+            if (candidateRoot == 0)
+                continue;
+
+            root = candidateRoot;
+            return true;
+        }
+
+        return false;
     }
 
     private static bool ShouldPreserveTargetBehaviorDataForSlotReuse(string patchKind, byte[] targetRecord, byte[] donorRecord)
@@ -2327,8 +2768,9 @@ public static class MobySourcePatchExporter
         int targetFlag4A = JsonValue.GetInt32(edit, "flag4AEditedHex", JsonValue.GetInt32(edit, "flag4AHex", -1));
         int targetFlag4B = JsonValue.GetInt32(edit, "flag4BEditedHex", JsonValue.GetInt32(edit, "flag4BHex", -1));
         bool isContainedGemAppend = IsContainedGemAppend(edit, targetType);
-        bool isLooseVisibleGemAppend = IsLooseVisibleGemIdentity(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B);
+        bool isLooseVisibleGemAppend = IsLooseVisibleGemIdentity(targetType, targetSourceByte36, targetSourceByte37, targetSourceByte4F, targetFlag4A, targetFlag4B);
         bool isKnownSameLevelLightweightAppend = IsKnownSameLevelLightweightAppend(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B);
+        bool isPortableSpringChestControllerAppend = IsPortableSpringChestControllerAppend(edit, targetType, targetSourceByte36, targetSourceByte37);
         bool isPromotedSameLevelNativeCloneAppend = crossLevelDonor == null && IsPromotedSameLevelNativeCloneAppendIdentity(
             level.Key,
             targetType,
@@ -2343,6 +2785,7 @@ public static class MobySourcePatchExporter
             targetType,
             targetSourceByte36,
             targetSourceByte37,
+            targetSourceByte4F,
             targetFlag4A,
             targetFlag4B);
 
@@ -2350,6 +2793,7 @@ public static class MobySourcePatchExporter
             !isContainedGemAppend &&
             !isLooseVisibleGemAppend &&
             !isKnownSameLevelLightweightAppend &&
+            !isPortableSpringChestControllerAppend &&
             !isPromotedSameLevelNativeCloneAppend &&
             !isProvenNativeCloneAppend)
         {
@@ -2732,7 +3176,7 @@ public static class MobySourcePatchExporter
             {
                 return GeometryOverlayLoader.LoadFirstCandidate(path);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or InvalidDataException)
             {
                 return null;
             }
@@ -2876,26 +3320,33 @@ public static class MobySourcePatchExporter
     private static bool IsLooseVisibleGemRecord(byte[] recordBytes)
     {
         return recordBytes.Length > 0x53 &&
-            IsLooseVisibleGemIdentity(recordBytes[TypeOffset], recordBytes[0x36], recordBytes[0x37], recordBytes[0x52], recordBytes[0x53]);
+            IsLooseVisibleGemIdentity(recordBytes[TypeOffset], recordBytes[0x36], recordBytes[0x37], recordBytes[0x4F], recordBytes[0x52], recordBytes[0x53]);
     }
 
-    private static bool IsLooseVisibleGemIdentity(int type, int sourceByte36, int sourceByte37, int flag4A, int flag4B)
+    private static bool IsLooseVisibleGemIdentity(int type, int sourceByte36, int sourceByte37, int sourceByte4F, int flag4A, int flag4B)
+    {
+        return LooksLikeLooseVisibleGemIdentity(type, sourceByte36, sourceByte37, flag4A) &&
+            GemValue.TryFromEncoding(sourceByte36, sourceByte4F, out _) &&
+            (flag4B == 0xFF || GemIdByteValue(flag4B) > 0);
+    }
+
+    private static bool LooksLikeLooseVisibleGemIdentity(int type, int sourceByte36, int sourceByte37, int flag4A)
     {
         return type == 0x18 &&
             sourceByte37 == 0x00 &&
             flag4A == 0x40 &&
-            GemIdByteValue(sourceByte36) > 0 &&
-            (flag4B == 0xFF || GemIdByteValue(flag4B) > 0);
+            GemIdByteValue(sourceByte36) > 0;
     }
 
     private static void NormalizeLooseVisibleGemRecord(byte[] recordBytes)
     {
         if (recordBytes.Length <= 0x53 || recordBytes[TypeOffset] != 0x18)
             return;
-        if (GemIdByteValue(recordBytes[0x36]) <= 0)
+        if (!GemValue.TryFromIdByte(recordBytes[0x36], out GemValue gem))
             return;
 
         recordBytes[0x37] = 0x00;
+        recordBytes[0x4F] = (byte)gem.ValueByte;
         recordBytes[0x52] = 0x40;
         recordBytes[0x53] = 0xFF;
     }
@@ -2915,6 +3366,22 @@ public static class MobySourcePatchExporter
             GemIdByteValue(flag4B) > 0;
 
         return isNativeKey || isNativeKeyChest;
+    }
+
+    private static bool IsPortableSpringChestControllerAppend(JsonElement edit, int type, int sourceByte36, int sourceByte37)
+    {
+        if (type != 0x20 || sourceByte36 != 0xC2 || sourceByte37 != 0x00 ||
+            !TryGetCrossLevelTemplate(edit, out JsonElement template))
+        {
+            return false;
+        }
+
+        string family = JsonValue.GetString(template, "family", InferCrossLevelFamily(JsonValue.GetString(template, "id")));
+        string templateId = JsonValue.GetString(template, "id");
+        string requiredFeature = JsonValue.GetString(template, "requiredExporterFeature");
+        return string.Equals(family, "springChest", StringComparison.OrdinalIgnoreCase) &&
+            templateId.Contains("spring_chest_controller", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(requiredFeature, "DirectSourceRecordAppend", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsNativeLifeChestIdentity(
@@ -3004,6 +3471,41 @@ public static class MobySourcePatchExporter
         return darkHollowOrArtisans && (sourceByte36 == 0x73 || sourceByte36 == 0xC2);
     }
 
+    private static bool TryGetReleaseLimitedNativeCloneAppendFamily(
+        JsonElement edit,
+        LevelDefinition level,
+        out string familyKey,
+        out string familyName)
+    {
+        familyKey = "";
+        familyName = "this enemy/chest family";
+        if (TryGetCrossLevelTemplate(edit, out _))
+            return false;
+
+        int type = JsonValue.GetInt32(edit, "typeEditedHex", JsonValue.GetInt32(edit, "typeHex", -1));
+        int sourceByte36 = JsonValue.GetInt32(edit, "sourceByte36EditedHex", JsonValue.GetInt32(edit, "sourceByte36Hex", -1));
+        int sourceByte37 = JsonValue.GetInt32(edit, "sourceByte37EditedHex", JsonValue.GetInt32(edit, "sourceByte37Hex", -1));
+        int sourceByte4F = JsonValue.GetInt32(edit, "sourceByte4FEditedHex", JsonValue.GetInt32(edit, "sourceByte4FHex", -1));
+        int flag4A = JsonValue.GetInt32(edit, "flag4AEditedHex", JsonValue.GetInt32(edit, "flag4AHex", -1));
+        int flag4B = JsonValue.GetInt32(edit, "flag4BEditedHex", JsonValue.GetInt32(edit, "flag4BHex", -1));
+        if (IsNativeLifeChestIdentity(type, sourceByte36, sourceByte37, sourceByte4F, flag4A, flag4B) ||
+            !IsPromotedSameLevelNativeCloneAppendIdentity(level.Key, type, sourceByte36, sourceByte37, sourceByte4F, flag4A, flag4B))
+        {
+            return false;
+        }
+
+        string normalizedLevelKey = LevelCatalog.NormalizeKey(level.Key);
+        familyKey = $"{normalizedLevelKey}:{type:X2}:{sourceByte36:X2}:{sourceByte37:X2}:{sourceByte4F:X2}:{flag4A:X2}:{flag4B:X2}";
+        familyName = sourceByte36 switch
+        {
+            0x17 => "Bull",
+            0x73 => "Large Gnorc",
+            0xC2 => "Flame/Charge Chest",
+            _ => $"type 0x{type:X2} / family 0x{sourceByte36:X2}"
+        };
+        return true;
+    }
+
     private static bool IsProvenNativeCloneAppend(JsonElement edit)
     {
         return string.Equals(JsonValue.GetString(edit, "patchStatus"), "native-clone", StringComparison.OrdinalIgnoreCase);
@@ -3037,9 +3539,10 @@ public static class MobySourcePatchExporter
         int targetType = JsonValue.GetInt32(edit, "typeEditedHex", JsonValue.GetInt32(edit, "typeHex", -1));
         int targetSourceByte36 = JsonValue.GetInt32(edit, "sourceByte36EditedHex", JsonValue.GetInt32(edit, "sourceByte36Hex", -1));
         int targetSourceByte37 = JsonValue.GetInt32(edit, "sourceByte37EditedHex", JsonValue.GetInt32(edit, "sourceByte37Hex", -1));
+        int targetSourceByte4F = JsonValue.GetInt32(edit, "sourceByte4FEditedHex", JsonValue.GetInt32(edit, "sourceByte4FHex", -1));
         int targetFlag4A = JsonValue.GetInt32(edit, "flag4AEditedHex", JsonValue.GetInt32(edit, "flag4AHex", -1));
         int targetFlag4B = JsonValue.GetInt32(edit, "flag4BEditedHex", JsonValue.GetInt32(edit, "flag4BHex", -1));
-        return IsGuardedNativeCloneAppend(edit, targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B);
+        return IsGuardedNativeCloneAppend(edit, targetType, targetSourceByte36, targetSourceByte37, targetSourceByte4F, targetFlag4A, targetFlag4B);
     }
 
     private static bool IsGuardedNativeCloneAppend(
@@ -3047,6 +3550,7 @@ public static class MobySourcePatchExporter
         int targetType,
         int targetSourceByte36,
         int targetSourceByte37,
+        int targetSourceByte4F,
         int targetFlag4A,
         int targetFlag4B)
     {
@@ -3058,7 +3562,7 @@ public static class MobySourcePatchExporter
             return false;
         if (IsContainedGemAppend(edit, targetType))
             return false;
-        if (IsLooseVisibleGemIdentity(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B))
+        if (IsLooseVisibleGemIdentity(targetType, targetSourceByte36, targetSourceByte37, targetSourceByte4F, targetFlag4A, targetFlag4B))
             return false;
         if (IsKnownSameLevelLightweightAppend(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B))
             return false;
@@ -3499,6 +4003,14 @@ public static class MobySourcePatchExporter
             string.Equals(supportStatus, "experimental-source-record-candidate", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsCrossLevelExistingSlotCandidateTemplate(JsonElement crossLevelTemplate)
+    {
+        string requiredFeature = JsonValue.GetString(crossLevelTemplate, "requiredExporterFeature");
+        string supportStatus = JsonValue.GetString(crossLevelTemplate, "addSupportStatus");
+        return string.Equals(requiredFeature, CrossLevelSwapCatalogBuilder.CandidateExporterFeature, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(supportStatus, CrossLevelSwapCatalogBuilder.CandidateSupportStatus, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static MobyActorPackageImportPreview AddActorPackageImportPreview(
         FileStream stream,
         DiscLayout layout,
@@ -3577,6 +4089,31 @@ public static class MobySourcePatchExporter
         long sourceEntryBase = ParseRequiredLong(sourceLevel.SourceTableWadOffset, "sourceLevel.sourceTableWadOffset") -
             ParseRequiredLong(sourceLevel.SourceTableRelativeOffset, "sourceLevel.sourceTableRelativeOffset");
 
+        CrossLevelActorPackageRecipeSafety packageLayoutSafety = CrossLevelActorPackageLayoutSafety.ValidateRecipe(
+            stream,
+            layout,
+            WadLba,
+            targetEntryBase,
+            recipe);
+        if (!packageLayoutSafety.Safe)
+        {
+            MobyActorPackageImportPreview preview = new(
+                Label: label,
+                TemplateId: templateId,
+                TargetLevelKey: targetLevel.Key,
+                SourceLevelKey: sourceLevel.Key,
+                Family: family,
+                RecipeId: recipe.Id,
+                RecipeMode: recipe.Mode,
+                RecipeStatus: recipe.Status,
+                CanWriteImage: false,
+                GuardReason: $"Blocked by actor-package layout safety: {packageLayoutSafety.Reason}",
+                CopySegments: [],
+                RootEntries: []);
+            previews.Add(preview);
+            return preview;
+        }
+
         List<MobyActorPackageCopyPreview> copyPreviews = new();
         foreach (CrossLevelActorPackageCopySegment segment in recipe.CopySegments)
         {
@@ -3613,6 +4150,8 @@ public static class MobySourcePatchExporter
         bool recipeAllowsNormalWrite = string.Equals(recipe.Status, "verified-image-write", StringComparison.OrdinalIgnoreCase);
         bool isExperimentalWriteRecipe = string.Equals(recipe.Status, "experimental-image-write", StringComparison.OrdinalIgnoreCase);
         bool isPlanOnlyRecipe = string.Equals(recipe.Status, "experimental-plan-only", StringComparison.OrdinalIgnoreCase);
+        bool isBlockedRecipe = recipe.Status.StartsWith("in-game-blocked", StringComparison.OrdinalIgnoreCase) ||
+            recipe.Status.StartsWith("blocked", StringComparison.OrdinalIgnoreCase);
         bool isCandidateGatedRecipe = isExperimentalWriteRecipe || isPlanOnlyRecipe;
         string expectedRecipeFingerprint = CrossLevelCandidateRecipeFingerprint.Create(recipe.Id, recipe.Status, copyPreviews, rootPreviews);
         CrossLevelCandidateEvidence latestRecipeEvidence = isCandidateGatedRecipe
@@ -3626,7 +4165,9 @@ public static class MobySourcePatchExporter
         bool canWriteImage = recipeAllowsNormalWrite && allCopiesSafe && allRootsSafe;
         if (!canWriteImage && candidateWriteAllowed && allCopiesSafe && allRootsSafe)
             canWriteImage = true;
-        string guardReason = canWriteImage
+        string guardReason = isBlockedRecipe
+            ? $"Blocked after in-game validation: {recipe.Risk}"
+            : canWriteImage
             ? candidateWriteAllowed && !recipeAllowsNormalWrite && allowPlanOnlyActorPackageImports
                 ? "Writable only because disposable candidate mode is enabled: recipe target ranges are safe, but the recipe still needs in-game validation before normal Create BIN can use it."
                 : candidateWriteAllowed && !recipeAllowsNormalWrite && passedEvidence.Passed
@@ -4585,6 +5126,9 @@ public static class MobySourcePatchExporter
 
     private static int ComputeTreasureDelta(JsonElement edit)
     {
+        if (IsSpringChestControllerOrCompanionEdit(edit))
+            return 0;
+
         bool added = JsonValue.GetBoolean(edit, "added") || string.Equals(JsonValue.GetString(edit, "editKind"), "add", StringComparison.OrdinalIgnoreCase);
         bool removed = JsonValue.GetBoolean(edit, "removed") || string.Equals(JsonValue.GetString(edit, "editKind"), "remove", StringComparison.OrdinalIgnoreCase);
 
@@ -4604,18 +5148,24 @@ public static class MobySourcePatchExporter
         return removed ? -originalValue : added ? editedValue : editedValue - originalValue;
     }
 
+    private static bool IsSpringChestControllerOrCompanionEdit(JsonElement edit)
+    {
+        if (!TryGetCrossLevelTemplate(edit, out JsonElement template))
+            return false;
+
+        string family = JsonValue.GetString(template, "family", InferCrossLevelFamily(JsonValue.GetString(template, "id")));
+        string templateId = JsonValue.GetString(template, "id");
+        return string.Equals(family, "springChest", StringComparison.OrdinalIgnoreCase) &&
+            (templateId.Contains("spring_chest_controller", StringComparison.OrdinalIgnoreCase) ||
+             templateId.Contains("spring_chest_companion", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static int TreasureValueFromSourceBytes(int type, int sourceByte36, int sourceByte4F, int flag4A, int flag4B)
     {
-        if (type == 0x18 && GemValue.TryFromIdByte(sourceByte36, out GemValue visibleGem))
+        if (type == 0x18 && GemValue.TryFromEncoding(sourceByte36, sourceByte4F, out GemValue visibleGem))
             return visibleGem.Value;
 
-        if (type == 0x18 && GemValue.TryFromValueByte(sourceByte4F, out GemValue visibleValueGem))
-            return visibleValueGem.Value;
-
-        if (type == 0x00 && flag4A == 0xFF && GemValue.TryFromIdByte(flag4B, out GemValue containedGem))
-            return containedGem.Value;
-
-        if (type == 0x20 && GemValue.TryFromIdByte(flag4B, out GemValue rewardGem))
+        if (GemValue.TryFromIdByte(flag4B, out GemValue rewardGem))
             return rewardGem.Value;
 
         return 0;
@@ -5927,7 +6477,24 @@ public sealed record MobySourcePatchPlan(
     IReadOnlyList<MobySourcePatch> Patches,
     IReadOnlyList<MobyActorPackageImportPreview> PackageImportPreviews,
     IReadOnlyList<string> SkippedEdits,
-    IReadOnlyList<string> Notes);
+    IReadOnlyList<string> Notes,
+    IReadOnlyList<MobySourceEditOutcome>? EditOutcomes = null,
+    ArtisansNativeLockedChestRuntimeBundleIntent? ArtisansNativeLockedChestRuntimeBundle = null);
+
+public sealed record MobySourceEditOutcome(
+    int EditorTrueIndex,
+    string MobyLabel,
+    string EditKind,
+    IReadOnlyList<string> PatchKinds,
+    IReadOnlyList<string> SkippedReasons,
+    IReadOnlyList<MobySourceEditPackageOutcome> PackageOutcomes);
+
+public sealed record MobySourceEditPackageOutcome(
+    string TemplateId,
+    string RecipeId,
+    string RecipeStatus,
+    bool CanWriteImage,
+    string GuardReason);
 
 public sealed record MobySourcePatch(
     string Label,

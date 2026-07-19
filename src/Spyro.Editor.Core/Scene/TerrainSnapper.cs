@@ -11,7 +11,8 @@ public static class TerrainSnapper
         float referenceZ,
         out float z,
         int preferredTerrainIndex = -1,
-        bool preferTopSurface = false)
+        bool preferTopSurface = false,
+        Func<TerrainPolygon, bool>? includePolygon = null)
     {
         z = 0;
         if (polygons.Count == 0)
@@ -20,6 +21,7 @@ public static class TerrainSnapper
         TerrainSnapCandidate? best = null;
         if (preferredTerrainIndex >= 0 &&
             preferredTerrainIndex < polygons.Count &&
+            (includePolygon == null || includePolygon(polygons[preferredTerrainIndex])) &&
             TryGetTerrainZOnPolygon(polygons[preferredTerrainIndex], x, y, out float preferredZ))
         {
             if (!preferTopSurface)
@@ -34,6 +36,8 @@ public static class TerrainSnapper
         for (int i = 0; i < polygons.Count; i++)
         {
             if (i == preferredTerrainIndex)
+                continue;
+            if (includePolygon != null && !includePolygon(polygons[i]))
                 continue;
             if (!TryGetTerrainZOnPolygon(polygons[i], x, y, out float terrainZ))
                 continue;
@@ -57,7 +61,8 @@ public static class TerrainSnapper
         float y,
         float currentZ,
         int direction,
-        out float z)
+        out float z,
+        Func<TerrainPolygon, bool>? includePolygon = null)
     {
         z = 0;
         if (direction == 0)
@@ -68,6 +73,8 @@ public static class TerrainSnapper
         bool found = false;
         for (int i = 0; i < polygons.Count; i++)
         {
+            if (includePolygon != null && !includePolygon(polygons[i]))
+                continue;
             if (!TryGetTerrainZOnPolygon(polygons[i], x, y, out float candidateZ))
                 continue;
 

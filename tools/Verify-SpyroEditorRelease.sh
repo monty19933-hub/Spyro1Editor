@@ -1,0 +1,387 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DIST_DIR="${DIST_DIR:-$ROOT_DIR/dist/release}"
+ALLOW_HOST_PROVENANCE="${SPYRO_EDITOR_ALLOW_HOST_PROVENANCE:-0}"
+[[ "$ALLOW_HOST_PROVENANCE" == "0" || "$ALLOW_HOST_PROVENANCE" == "1" ]] || {
+    echo "SPYRO_EDITOR_ALLOW_HOST_PROVENANCE must be 0 or 1." >&2
+    exit 2
+}
+
+usage() {
+    echo "Usage: tools/Verify-SpyroEditorRelease.sh <release-name>" >&2
+}
+
+fail() {
+    echo "Spyro Editor package verification failed: $*" >&2
+    exit 1
+}
+
+require_command() {
+    command -v "$1" >/dev/null 2>&1 || fail "Required command '$1' was not found."
+}
+
+require_file() {
+    [[ -f "$1" ]] || fail "Required package file is missing: $1"
+}
+
+require_directory() {
+    [[ -d "$1" ]] || fail "Required package directory is missing: $1"
+}
+
+if [[ "$#" -ne 1 ]]; then
+    usage
+    exit 2
+fi
+
+RELEASE_NAME="$1"
+[[ "$RELEASE_NAME" =~ ^[A-Za-z0-9._-]+$ ]] || fail "Release name contains an unsafe path character: $RELEASE_NAME"
+
+for command_name in awk cmp diff dotnet file find python3 rg sed shasum strings unzip xattr; do
+    require_command "$command_name"
+done
+
+PROJECT_FILE="$ROOT_DIR/src/Spyro.Editor.App/Spyro.Editor.App.csproj"
+RELEASE_IDENTITY_TOOL="$ROOT_DIR/src/Spyro.Editor.ReleaseIdentityTool/Spyro.Editor.ReleaseIdentityTool.csproj"
+require_file "$PROJECT_FILE"
+require_file "$RELEASE_IDENTITY_TOOL"
+PROJECT_VERSION="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' "$PROJECT_FILE" | head -n 1)"
+BETA_RELEASE_NUMBER="$(sed -n 's:.*<BetaReleaseNumber>\([^<]*\)</BetaReleaseNumber>.*:\1:p' "$PROJECT_FILE" | head -n 1)"
+[[ -n "$PROJECT_VERSION" ]] || fail "Could not read the app version from $PROJECT_FILE"
+[[ "$PROJECT_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta\.([0-9]+)$ ]] || \
+    fail "Unsupported app version format '$PROJECT_VERSION'; expected X.Y.Z-beta.N."
+BASE_VERSION="${BASH_REMATCH[1]}"
+BUILD_NUMBER="${BASH_REMATCH[2]}"
+[[ "$BETA_RELEASE_NUMBER" =~ ^[1-9][0-9]*$ ]] || \
+    fail "Unsupported public beta release '$BETA_RELEASE_NUMBER'; expected a positive integer."
+PUBLIC_RELEASE_NAME="Spyro Editor Beta V$BETA_RELEASE_NUMBER"
+EXPECTED_RELEASE_NAME="SpyroEditor-Beta-V$BETA_RELEASE_NUMBER"
+[[ "$RELEASE_NAME" == "$EXPECTED_RELEASE_NAME" ]] || \
+    fail "Release name '$RELEASE_NAME' must be '$EXPECTED_RELEASE_NAME'."
+
+MAC_DIR="$DIST_DIR/$RELEASE_NAME-osx-arm64"
+WIN_DIR="$DIST_DIR/$RELEASE_NAME-win-x64"
+MAC_ZIP="$MAC_DIR.zip"
+WIN_ZIP="$WIN_DIR.zip"
+MAC_APP="$MAC_DIR/Spyro Editor.app"
+MAC_EXE="$MAC_APP/Contents/MacOS/Spyro.Editor.App"
+MAC_APP_DIR="$MAC_APP/Contents/MacOS"
+WIN_APP_DIR="$WIN_DIR/support/app"
+WIN_EXE="$WIN_APP_DIR/Spyro.Editor.App.exe"
+
+require_directory "$MAC_DIR"
+require_directory "$WIN_DIR"
+require_file "$MAC_ZIP"
+require_file "$WIN_ZIP"
+require_file "$MAC_EXE"
+require_file "$WIN_EXE"
+[[ -x "$MAC_EXE" ]] || fail "macOS app executable is not executable: $MAC_EXE"
+
+archive_findings() {
+    local archive="$1"
+    local allow_mac_metadata="${2:-0}"
+    unzip -Z1 "$archive" | awk -v allow_mac_metadata="$allow_mac_metadata" '
+        BEGIN { IGNORECASE=1 }
+        {
+            path=$0
+            if (path ~ /^\// || path ~ /^[A-Z]:/ || path ~ /(^|\/)\.\.(\/|$)/ || path ~ /\\/) {
+                print "unsafe archive path: " path
+            }
+            if (path ~ /(^|\/)(\.git|_local|editor-cache|bin|obj)(\/|$)/ ||
+                (!allow_mac_metadata && path ~ /(^|\/)__MACOSX(\/|$)/)) {
+                print "forbidden generated directory: " path
+            }
+            if (path ~ /(^|\/)(WAD\.WAD|SCUS_[^\/]*|SLUS_[^\/]*|SCES_[^\/]*|SLES_[^\/]*|SCPH[^\/]*)(\/|$)/) {
+                print "forbidden game or BIOS file: " path
+            }
+            if (path ~ /\.(bin|cue|iso|img|chd|ecm|m3u|ccd|sub|toc|bios|rom|mcr|srm|sav|state|ram|dmp|dump|pdb|dbg)(\/)?$/ ||
+                path ~ /(^|\/)[^\/]+\.dSYM(\/|$)/) {
+                print "forbidden game, save, or debug artifact: " path
+            }
+            if (path ~ /(^|\/)(\.DS_Store|core)(\/|$)/ ||
+                path ~ /(before-clean|mainram|vram|live-capture|runtime-scene|runtime-moby|custom-terrain-textures)/) {
+                print "forbidden local or captured artifact: " path
+            }
+        }
+    '
+}
+
+validate_archive() {
+    local archive="$1"
+    local expected_root="$2"
+    local allow_mac_metadata="${3:-0}"
+    local entries
+    local wrong_root
+    local findings
+
+    unzip -tq "$archive" >/dev/null
+    entries="$(unzip -Z1 "$archive")"
+    [[ -n "$entries" ]] || fail "Archive is empty: $archive"
+    wrong_root="$(printf '%s\n' "$entries" | awk -v root="$expected_root/" -v allow_mac_metadata="$allow_mac_metadata" '
+        index($0, root) == 1 { next }
+        allow_mac_metadata && index($0, "__MACOSX/") == 1 { next }
+        { print; exit }
+    ')"
+    [[ -z "$wrong_root" ]] || fail "Archive entry is outside expected root '$expected_root/': $wrong_root"
+    findings="$(archive_findings "$archive" "$allow_mac_metadata")"
+    [[ -z "$findings" ]] || fail "Archive contains forbidden content: $archive
+$findings"
+}
+
+tree_findings() {
+    local package_dir="$1"
+    find "$package_dir" -type f \( \
+        -iname 'WAD.WAD' -o -iname 'SCUS_*' -o -iname 'SLUS_*' -o -iname 'SCES_*' -o -iname 'SLES_*' -o -iname 'SCPH*' -o \
+        -iname '*.bin' -o -iname '*.cue' -o -iname '*.iso' -o -iname '*.img' -o -iname '*.chd' -o -iname '*.ecm' -o \
+        -iname '*.m3u' -o -iname '*.ccd' -o -iname '*.sub' -o -iname '*.toc' -o -iname '*.bios' -o -iname '*.rom' -o \
+        -iname '*.mcr' -o -iname '*.srm' -o -iname '*.sav' -o -iname '*.state' -o -iname '*.ram' -o -iname '*.dmp' -o \
+        -iname '*.dump' -o -iname '*.pdb' -o -iname '*.dbg' -o -iname '.DS_Store' -o -iname 'core' \
+    \) -print
+    find "$package_dir" -type d \( \
+        -iname '.git' -o -iname '_local' -o -iname 'editor-cache' -o -iname 'bin' -o -iname 'obj' -o -iname '*.dSYM' \
+    \) -print
+}
+
+validate_package_tree() {
+    local package_dir="$1"
+    local findings
+    local oversized
+    local symlink
+
+    findings="$(tree_findings "$package_dir")"
+    [[ -z "$findings" ]] || fail "Extracted package contains forbidden content: $package_dir
+$findings"
+    oversized="$(find "$package_dir" -type f -size +250M -print -quit)"
+    [[ -z "$oversized" ]] || fail "Extracted package contains an unexpected file larger than 250 MB: $oversized"
+    symlink="$(find "$package_dir" -type l -print -quit)"
+    [[ -z "$symlink" ]] || fail "Extracted package contains an unexpected symbolic link: $symlink"
+    if rg -I -n '/Users/|/Volumes/|[A-Za-z]:\\Users\\' "$package_dir" >/dev/null; then
+        fail "Extracted package contains a machine-local user path: $package_dir"
+    fi
+}
+
+validate_mac_xattrs() {
+    local package_dir="$1"
+    python3 - "$package_dir" "$ALLOW_HOST_PROVENANCE" <<'PY'
+import os
+import subprocess
+import sys
+
+root = os.path.abspath(sys.argv[1])
+allow_host_provenance = sys.argv[2] == "1"
+unexpected = []
+for directory, directories, files in os.walk(root):
+    paths = [directory]
+    paths.extend(os.path.join(directory, name) for name in directories)
+    paths.extend(os.path.join(directory, name) for name in files)
+    for path in paths:
+        result = subprocess.run(["xattr", path], capture_output=True, text=True)
+        if result.returncode != 0:
+            raise SystemExit(f"Could not inspect extended attributes for {path}: {result.stderr.strip()}")
+        attributes = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        for attribute in attributes:
+            # Codex Desktop on current macOS attaches this generic three-byte
+            # attribute to every child-process-created file and immediately
+            # recreates it after xattr -c. Normal release verification remains
+            # strict; the explicit opt-in ignores only that host-added key.
+            if allow_host_provenance and attribute == "com.apple.provenance":
+                continue
+            if not attribute.startswith("com.apple.cs."):
+                unexpected.append(f"{os.path.relpath(path, root)}: {attribute}")
+
+if unexpected:
+    print("Unexpected machine-local extended attributes:", file=sys.stderr)
+    for finding in unexpected[:100]:
+        print(f"  {finding}", file=sys.stderr)
+    raise SystemExit(1)
+PY
+}
+
+validate_archive "$MAC_ZIP" "$RELEASE_NAME-osx-arm64" 1
+validate_archive "$WIN_ZIP" "$RELEASE_NAME-win-x64"
+validate_package_tree "$MAC_DIR"
+validate_package_tree "$WIN_DIR"
+validate_mac_xattrs "$MAC_DIR" || fail "Built macOS package contains non-signature extended attributes."
+
+file "$MAC_EXE" | rg 'Mach-O 64-bit executable arm64' >/dev/null || \
+    fail "macOS executable is not Mach-O arm64: $MAC_EXE"
+file "$WIN_EXE" | rg 'PE32\+ executable .*x86-64' >/dev/null || \
+    fail "Windows executable is not PE32+ x86-64: $WIN_EXE"
+
+PLIST="$MAC_APP/Contents/Info.plist"
+require_file "$PLIST"
+if command -v plutil >/dev/null 2>&1; then
+    [[ "$(plutil -extract CFBundleVersion raw "$PLIST")" == "$BUILD_NUMBER" ]] || \
+        fail "macOS CFBundleVersion does not equal $BUILD_NUMBER."
+    [[ "$(plutil -extract CFBundleShortVersionString raw "$PLIST")" == "$BETA_RELEASE_NUMBER.0" ]] || \
+        fail "macOS CFBundleShortVersionString does not equal $BETA_RELEASE_NUMBER.0."
+    [[ "$(plutil -extract CFBundleDisplayName raw "$PLIST")" == "$PUBLIC_RELEASE_NAME" ]] || \
+        fail "macOS CFBundleDisplayName does not equal '$PUBLIC_RELEASE_NAME'."
+    [[ "$(plutil -extract CFBundleIdentifier raw "$PLIST")" == "local.spyro.editor" ]] || \
+        fail "macOS CFBundleIdentifier is not local.spyro.editor."
+fi
+if command -v codesign >/dev/null 2>&1; then
+    codesign --verify --deep --strict "$MAC_APP" || fail "Built macOS app does not have a valid deep code signature."
+fi
+
+MAC_LAUNCHER="$MAC_DIR/Launch Spyro Editor.command"
+WIN_LAUNCHER="$WIN_DIR/Launch Spyro Editor.bat"
+require_file "$MAC_LAUNCHER"
+require_file "$WIN_LAUNCHER"
+[[ -x "$MAC_LAUNCHER" ]] || fail "macOS launcher is not executable: $MAC_LAUNCHER"
+rg -F 'SPYRO_EDITOR_RELEASE=1' "$MAC_LAUNCHER" >/dev/null || fail "macOS launcher is not in release mode."
+rg -F 'SPYRO_EDITOR_RELEASE=1' "$WIN_LAUNCHER" >/dev/null || fail "Windows launcher is not in release mode."
+rg -F 'SPYRO_EDITOR_INSTALL_ROOT="$PWD"' "$MAC_LAUNCHER" >/dev/null || fail "macOS launcher does not identify its replaceable install root."
+rg -F 'SPYRO_EDITOR_INSTALL_ROOT=%CD%' "$WIN_LAUNCHER" >/dev/null || fail "Windows launcher does not identify its replaceable install root."
+if rg -F 'SPYRO_EDITOR_WORKSPACE="$PWD"' "$MAC_LAUNCHER" >/dev/null || rg -F 'SPYRO_EDITOR_WORKSPACE=%CD%' "$WIN_LAUNCHER" >/dev/null; then
+    fail "Release launcher still stores project data inside the replaceable application folder."
+fi
+[[ "$(head -n 1 "$MAC_DIR/README.txt")" == "$PUBLIC_RELEASE_NAME" ]] || fail "macOS README public release name is stale."
+[[ "$(head -n 1 "$WIN_DIR/README.txt")" == "$PUBLIC_RELEASE_NAME" ]] || fail "Windows README public release name is stale."
+[[ "$(sed -n '2p' "$MAC_DIR/README.txt")" == "Internal build: $PROJECT_VERSION" ]] || fail "macOS README internal build is stale."
+[[ "$(sed -n '2p' "$WIN_DIR/README.txt")" == "Internal build: $PROJECT_VERSION" ]] || fail "Windows README internal build is stale."
+
+for versioned_document in "$ROOT_DIR/README.md" "$ROOT_DIR/docs/release-user-guide.md" "$ROOT_DIR/docs/known-limitations.md" "$ROOT_DIR/CHANGELOG.md"; do
+    rg -F "$PUBLIC_RELEASE_NAME" "$versioned_document" >/dev/null || \
+        fail "Versioned source document does not identify $PUBLIC_RELEASE_NAME: $versioned_document"
+done
+rg -F "$PROJECT_VERSION" "$ROOT_DIR/docs/release-user-guide.md" >/dev/null || \
+    fail "Release guide does not identify internal build $PROJECT_VERSION."
+strings "$MAC_APP_DIR/Spyro.Editor.App.dll" | rg -F "$PROJECT_VERSION" >/dev/null || fail "macOS app DLL version is stale."
+strings "$WIN_APP_DIR/Spyro.Editor.App.dll" | rg -F "$PROJECT_VERSION" >/dev/null || fail "Windows app DLL version is stale."
+dotnet run --project "$RELEASE_IDENTITY_TOOL" --configuration Release -- \
+    "$MAC_APP_DIR/Spyro.Editor.App.dll" "$BETA_RELEASE_NUMBER" "$PROJECT_VERSION" || \
+    fail "macOS app DLL assembly metadata does not match the numbered release."
+dotnet run --project "$RELEASE_IDENTITY_TOOL" --configuration Release -- \
+    "$WIN_APP_DIR/Spyro.Editor.App.dll" "$BETA_RELEASE_NUMBER" "$PROJECT_VERSION" || \
+    fail "Windows app DLL assembly metadata does not match the numbered release."
+cmp "$MAC_APP_DIR/Spyro.Editor.Core.dll" "$WIN_APP_DIR/Spyro.Editor.Core.dll" >/dev/null || \
+    fail "Mac and Windows packages contain different Spyro.Editor.Core.dll bytes."
+
+compare_packaged_file() {
+    local source_path="$1"
+    local package_relative_path="$2"
+    require_file "$source_path"
+    require_file "$MAC_DIR/$package_relative_path"
+    require_file "$WIN_DIR/$package_relative_path"
+    cmp "$source_path" "$MAC_DIR/$package_relative_path" >/dev/null || \
+        fail "macOS package has stale support file: $package_relative_path"
+    cmp "$source_path" "$WIN_DIR/$package_relative_path" >/dev/null || \
+        fail "Windows package has stale support file: $package_relative_path"
+}
+
+compare_packaged_file "$ROOT_DIR/docs/release-user-guide.md" "support/docs/release-user-guide.md"
+compare_packaged_file "$ROOT_DIR/docs/known-limitations.md" "support/docs/known-limitations.md"
+compare_packaged_file "$ROOT_DIR/spyro-level-catalog.json" "support/spyro-level-catalog.json"
+compare_packaged_file "$ROOT_DIR/spyro-object-templates.json" "support/spyro-object-templates.json"
+compare_packaged_file "$ROOT_DIR/CHANGELOG.md" "CHANGELOG.md"
+
+validate_release_manifest() {
+    local manifest_path="$1"
+    local expected_platform="$2"
+    require_file "$manifest_path"
+    python3 - "$manifest_path" "$BETA_RELEASE_NUMBER" "$PUBLIC_RELEASE_NAME" "$PROJECT_VERSION" "$expected_platform" <<'PY'
+import json
+import sys
+
+path, beta, display_name, internal_version, platform = sys.argv[1:]
+with open(path, "r", encoding="utf-8") as stream:
+    manifest = json.load(stream)
+expected = {
+    "schemaVersion": 1,
+    "channel": "beta",
+    "publicBeta": int(beta),
+    "displayName": display_name,
+    "internalVersion": internal_version,
+    "platform": platform,
+}
+if manifest != expected:
+    raise SystemExit(f"Release manifest mismatch in {path}: {manifest!r} != {expected!r}")
+PY
+}
+
+validate_release_manifest "$MAC_DIR/release-manifest.json" "osx-arm64"
+validate_release_manifest "$WIN_DIR/release-manifest.json" "win-x64"
+
+compare_internal_mac_support_file() {
+    local source_path="$1"
+    local package_relative_path="$2"
+    require_file "$MAC_APP_DIR/support/$package_relative_path"
+    cmp "$source_path" "$MAC_APP_DIR/support/$package_relative_path" >/dev/null || \
+        fail "macOS app-internal support file is stale: $package_relative_path"
+}
+
+compare_internal_mac_support_file "$ROOT_DIR/docs/release-user-guide.md" "docs/release-user-guide.md"
+compare_internal_mac_support_file "$ROOT_DIR/docs/known-limitations.md" "docs/known-limitations.md"
+compare_internal_mac_support_file "$ROOT_DIR/spyro-level-catalog.json" "spyro-level-catalog.json"
+compare_internal_mac_support_file "$ROOT_DIR/spyro-object-templates.json" "spyro-object-templates.json"
+[[ ! -d "$MAC_APP_DIR/support/app" ]] || fail "macOS app-internal support copy unexpectedly contains application binaries."
+
+cmp "$ROOT_DIR/spyro-level-catalog.json" "$MAC_APP_DIR/spyro-level-catalog.json" >/dev/null || fail "macOS runtime level catalog is stale."
+cmp "$ROOT_DIR/spyro-level-catalog.json" "$WIN_APP_DIR/spyro-level-catalog.json" >/dev/null || fail "Windows runtime level catalog is stale."
+cmp "$ROOT_DIR/spyro-object-templates.json" "$MAC_APP_DIR/spyro-object-templates.json" >/dev/null || fail "macOS runtime object templates are stale."
+cmp "$ROOT_DIR/spyro-object-templates.json" "$WIN_APP_DIR/spyro-object-templates.json" >/dev/null || fail "Windows runtime object templates are stale."
+
+for source_metadata in \
+    "$ROOT_DIR"/*-moby-user-overrides.json \
+    "$ROOT_DIR"/*-live-validation-overrides.json \
+    "$ROOT_DIR"/*-behavior-links.json; do
+    [[ -f "$source_metadata" ]] || continue
+    metadata_name="$(basename "$source_metadata")"
+    compare_packaged_file "$source_metadata" "support/$metadata_name"
+    cmp "$source_metadata" "$MAC_APP_DIR/$metadata_name" >/dev/null || fail "macOS runtime metadata is stale: $metadata_name"
+    cmp "$source_metadata" "$WIN_APP_DIR/$metadata_name" >/dev/null || fail "Windows runtime metadata is stale: $metadata_name"
+done
+
+cmp "$ROOT_DIR/src/Spyro.Editor.App/Assets/Brand/app-icon.icns" "$MAC_APP/Contents/Resources/AppIcon.icns" >/dev/null || \
+    fail "macOS bundle icon differs from the source icon."
+cmp "$ROOT_DIR/src/Spyro.Editor.App/Assets/Brand/app-icon.icns" "$MAC_APP_DIR/Assets/Brand/app-icon.icns" >/dev/null || \
+    fail "macOS runtime ICNS differs from the source icon."
+cmp "$ROOT_DIR/src/Spyro.Editor.App/Assets/Brand/app-icon.ico" "$WIN_APP_DIR/Assets/Brand/app-icon.ico" >/dev/null || \
+    fail "Windows runtime ICO differs from the source icon."
+for gem_icon in gem-red.png gem-green.png gem-blue.png gem-yellow.png gem-purple.png; do
+    SOURCE_GEM_ICON="$ROOT_DIR/src/Spyro.Editor.App/Assets/MobyIcons/$gem_icon"
+    require_file "$SOURCE_GEM_ICON"
+    require_file "$MAC_APP_DIR/Assets/MobyIcons/$gem_icon"
+    require_file "$WIN_APP_DIR/Assets/MobyIcons/$gem_icon"
+    cmp "$SOURCE_GEM_ICON" "$MAC_APP_DIR/Assets/MobyIcons/$gem_icon" >/dev/null || \
+        fail "macOS runtime gem icon differs from the Spyro 2-derived source asset: $gem_icon"
+    cmp "$SOURCE_GEM_ICON" "$WIN_APP_DIR/Assets/MobyIcons/$gem_icon" >/dev/null || \
+        fail "Windows runtime gem icon differs from the Spyro 2-derived source asset: $gem_icon"
+done
+
+TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/spyro-editor-package-verify.XXXXXX")"
+trap 'rm -rf "$TEMP_DIR"' EXIT
+mkdir -p "$TEMP_DIR/mac" "$TEMP_DIR/win"
+if command -v ditto >/dev/null 2>&1; then
+    ditto -x -k "$MAC_ZIP" "$TEMP_DIR/mac"
+else
+    unzip -q "$MAC_ZIP" -d "$TEMP_DIR/mac"
+fi
+unzip -q "$WIN_ZIP" -d "$TEMP_DIR/win"
+
+MAC_ROUNDTRIP_DIR="$TEMP_DIR/mac/$RELEASE_NAME-osx-arm64"
+WIN_ROUNDTRIP_DIR="$TEMP_DIR/win/$RELEASE_NAME-win-x64"
+require_directory "$MAC_ROUNDTRIP_DIR"
+require_directory "$WIN_ROUNDTRIP_DIR"
+validate_package_tree "$MAC_ROUNDTRIP_DIR"
+validate_package_tree "$WIN_ROUNDTRIP_DIR"
+validate_mac_xattrs "$MAC_ROUNDTRIP_DIR" || fail "macOS archive roundtrip contains non-signature extended attributes."
+diff -qr "$MAC_DIR" "$MAC_ROUNDTRIP_DIR" >/dev/null || fail "macOS archive roundtrip differs from its built package directory."
+diff -qr "$WIN_DIR" "$WIN_ROUNDTRIP_DIR" >/dev/null || fail "Windows archive roundtrip differs from its built package directory."
+[[ -x "$MAC_ROUNDTRIP_DIR/Launch Spyro Editor.command" ]] || fail "macOS archive lost the launcher executable bit."
+[[ -x "$MAC_ROUNDTRIP_DIR/Spyro Editor.app/Contents/MacOS/Spyro.Editor.App" ]] || \
+    fail "macOS archive lost the app executable bit."
+if command -v codesign >/dev/null 2>&1; then
+    codesign --verify --deep --strict "$MAC_ROUNDTRIP_DIR/Spyro Editor.app" || \
+        fail "macOS archive roundtrip lost or invalidated the app code signature."
+fi
+
+echo "Package verification passed for $RELEASE_NAME."
+shasum -a 256 "$MAC_ZIP" "$WIN_ZIP"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    stat -f '%N|%z' "$MAC_ZIP" "$WIN_ZIP"
+else
+    stat -c '%n|%s' "$MAC_ZIP" "$WIN_ZIP"
+fi
