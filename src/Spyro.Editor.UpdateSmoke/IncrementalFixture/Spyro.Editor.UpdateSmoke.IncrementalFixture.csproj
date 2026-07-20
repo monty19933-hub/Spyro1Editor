@@ -5,16 +5,16 @@
     <Nullable>enable</Nullable>
     <AssemblyName>Spyro.Editor.App</AssemblyName>
     <RootNamespace>Spyro.Editor.UpdateSmoke.IncrementalFixture</RootNamespace>
-    <Version>0.1.0-beta.31</Version>
+    <Version>0.1.0-beta.32</Version>
     <AssemblyVersion>0.1.0.0</AssemblyVersion>
     <FileVersion>0.1.0.0</FileVersion>
-    <InformationalVersion>0.1.0-beta.31</InformationalVersion>
+    <InformationalVersion>0.1.0-beta.32</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <AssemblyMetadata Include="SpyroEditorBetaRelease" Value="3" />
-    <AssemblyMetadata Include="SpyroEditorPublicReleaseVersion" Value="3.1" />
+    <AssemblyMetadata Include="SpyroEditorBetaRelease" Value="4" />
+    <AssemblyMetadata Include="SpyroEditorPublicReleaseVersion" Value="4.1" />
     <AssemblyMetadata Include="SpyroEditorReleaseManifestSchema" Value="2" />
   </ItemGroup>
 </Project>

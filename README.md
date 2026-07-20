@@ -13,19 +13,19 @@ GitHub Releases are the intended place for public Mac and Windows builds.
 
 The release packages are self-contained:
 
-- `SpyroEditor-Beta-V3-osx-arm64.zip`
-- `SpyroEditor-Beta-V3-win-x64.zip`
+- `SpyroEditor-Beta-V4-osx-arm64.zip`
+- `SpyroEditor-Beta-V4-win-x64.zip`
 
 The public release name is independent of internal build iterations. Publish
-only intentional bundled releases: tag `beta-v3`, use the exact GitHub title
-`Spyro Editor Beta V3`, mark it as a prerelease, attach the two exact package
+only intentional bundled releases: tag `beta-v4`, use the exact GitHub title
+`Spyro Editor Beta V4`, mark it as a prerelease, attach the two exact package
 names above, and paste `CHANGELOG.md` unchanged into the GitHub release body.
 Ordinary commits and fixes do not create update prompts.
 
-V3 is an intentional compatibility bridge for installed V2 clients. Its tag,
-title, asset names, schema-1 manifest, `publicBeta: 3`, and legacy integer
-assembly identity retain the exact numbered-beta contract that V2 understands.
-Do not publish this build as V2.1: V2's updater cannot parse a dotted release.
+V4 is the current whole-number compatibility bridge. Its tag, title, asset
+names, schema-1 manifest, `publicBeta: 4`, and legacy integer assembly identity
+retain the exact numbered-beta contract understood by older installed clients.
+The published V3 bridge remains immutable and must not be retagged or replaced.
 
 After that bridge, incremental public updates use canonical dotted identities:
 `beta-v3.1`, `Spyro Editor Beta V3.1`, and matching `Beta-V3.1` assets. Those
@@ -64,8 +64,10 @@ be replaced by the normal notarized asset as soon as possible.
 When the release owner explicitly approves an accept-the-risk package because
 no Developer ID identity is installed, `SPYRO_EDITOR_MAC_BUILD_MODE=community`
 produces a hardened ad-hoc-signed ZIP with the same opening instructions and
-published SHA-256 digests. Beta V3 uses the `signed-only` path: it is Developer
-ID signed, hardened, and securely timestamped, but not notarized.
+published SHA-256 digests. The local Beta V4 test package uses the `signed-only`
+path: it is Developer ID signed, hardened, and securely timestamped, but not
+notarized. A public V4 package should use the normal notarized path when Apple
+notarization credentials are available.
 
 ## Current Editor
 
@@ -113,6 +115,10 @@ Current release features include:
   gameplay-frame claim.
 - Moving, cloning, removing, and editing supported gems, chests, enemies, keys,
   scenery, and other decoded mobys.
+- All 12 verified native Egg Thieves expose their fixed ordered run paths as
+  numbered handles and a polyline in Edit Map and Game Camera. Nodes support
+  drag/exact XYZ, terrain snap, reset, persistence, and undo; moving the thief
+  carries its path by default.
 - Red, green, blue, yellow, and purple loose gems use one consistent red-gem
   icon silhouette in Edit Map and Game Camera; the four alternate colors are exact
   color-only variants of the unchanged red artwork.
@@ -130,6 +136,11 @@ Current release features include:
   an issue loads its level, reveals and selects the Moby, and centers it in Edit
   Map or Game Camera so the edit can be corrected immediately.
   Its JSON/Markdown reports contain metadata and source links only.
+- `Special Chest Support` reports checked per-level status for six special-chest
+  families. Atomic bundle metadata keeps visible roots, hidden companions, and
+  rewards together through move/remove/undo/save/load. Only runtime-proven
+  destination profiles appear in normal Add/Create BIN; unproven profiles and
+  all flight-stage destinations remain test-only or blocked.
 - Selected Mobys have a live Z-axis slider and an optional per-object terrain-Z
   snap toggle; linked scene companions move by the same vertical delta.
 - Moving any of the 79 native dragons carries its pedestal and matched `0x6E`
@@ -139,6 +150,10 @@ Current release features include:
   unchanged. Same-level dragon copy/paste preserves the two visible editor
   companions and their native offsets; brand-new dragon rescue scenes remain
   beta research.
+- Each of those 79 native rescues also exposes a separate `Spyro runs here`
+  endpoint. X/Y are editable while terrain-derived Z stays read-only; export
+  rewrites only the native approach angle and radius and preserves the cameras
+  and cinematic choreography.
 - Every non-homeworld destination exposes one exact `Fly-in Landing` marker
   decoded from its native level-entry block. Moving that marker changes where
   Spyro finishes the homeworld-to-level fly-in. Its selected direction arrow

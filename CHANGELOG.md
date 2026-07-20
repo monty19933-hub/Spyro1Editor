@@ -1,13 +1,14 @@
-# Spyro Editor Beta V3
+# Spyro Editor Beta V4
 
-## Changes since Spyro Editor Beta V2
+## Changes since Spyro Editor Beta V3
 
-- `Choose Texture & Start Painting` now opens only the current level's texture catalog. Textures from another level are loaded only after that level is selected and `Load Level Textures` is pressed, avoiding the previous whole-game startup delay.
-- The texture chooser now uses a compact six-column gallery with larger native previews, concise tile names, and double-click-to-paint behavior.
-- Unsafe animated, runtime-controlled, incomplete, or otherwise unsupported texture records remain visible but are grayed out and marked `BLOCKED`, with the specific reason available in the chooser.
-- Same-level painting now changes only the terrain face that was clicked. It no longer silently repaints every face that shares the source texture record.
-- Cross-level painting proceeds only when the selected destination face owns a safe unique texture record. Shared destinations are refused without changing the level; the existing explicit shared cross-level replacement and custom color/import/paste workflow remains available through the separate `Advanced / Shared Replacement` terrain-panel button.
-- Texture relocation now revalidates the selected level, face set, load request, and edit state immediately before mutation. Changing levels or editing the target while a donor is loading cancels the stale operation instead of applying it to the wrong scene.
-- V3 retains the exact numbered release identity understood by installed Beta V2 clients, so publishing the official `beta-v3` prerelease creates their in-app update notification. Projects, generated output, settings, backups, and imported assets remain outside the replaceable application folder and are not overwritten by installation.
-- V3's updater supports future canonical incremental releases such as V3.1 and V3.2. Every published release carries a changelog containing only the exact delta from the immediately previous public version.
-- The Beta V3 macOS ZIP is Developer ID signed, hardened, and securely timestamped. It is not notarized, so it includes SHA-256 verification and System Settings > Privacy & Security > Open Anyway instructions; the Windows ZIP is unaffected.
+- All 12 native Egg Thieves now expose `Edit Run Path` in Edit Map and Game Camera. Their fixed ordered routes use numbered handles and a polyline, support drag or exact XYZ entry, optional terrain snapping, node and whole-route reset, and full undo.
+- Moving an Egg Thief carries its route by default. The editor warns before allowing a thief to move without its path, which would make it snap back in-game.
+- Egg Thief route export patches only the selected nodes' three native XYZ words. Headers, node order/count, pointers, traversal data, and each node's unknown fourth word remain untouched; stale source bytes are blocked in Build Safety.
+- All 79 native dragon rescues now expose a draggable `Spyro runs here` destination. X/Y can be edited while Z is derived from terrain and is never written. Moving a dragon carries the destination; moving the destination does not disturb the dragon, pedestal, cameras, or cinematic timing.
+- Dragon destination export rewrites only the native run angle and planar radius relative to the dragon's final position. Copied/new dragons, invalid or unsafe radii, stale source data, unusually long approaches, and missing terrain hits receive targeted Build Safety findings.
+- Added a checked Special Chest Support registry for Key + Locked, Life, Armored/Strong, Firework, 3x Flame/Multi-hit, and Spring Chest families across all 30 non-flight levels. The five flight stages remain explicitly unsupported.
+- Special chests are represented as atomic editor bundles: moving, removing, restoring, undoing, saving, and loading a visible chest carries its required hidden rows and reward controls. Build Safety targets the visible chest when a bundle is partial, orphaned, over capacity, stale, incompatible, or tied to the wrong disc/profile.
+- Normal Add and Create BIN continue to expose only runtime-proven chest profiles. The proven Artisans gold Key + Locked Chest pair remains enabled; unproven destination profiles stay test-only or blocked until their full DuckStation matrix passes. Beta V4 does not claim universal chest runtime support yet.
+- Beta V1 through V3 projects load with native behavior when the new route, dragon-destination, or chest-bundle fields are absent. Project data, generated output, settings, backups, and imported assets remain outside the replaceable application folder.
+- This macOS test package is Developer ID signed, hardened, and securely timestamped but not notarized. It includes SHA-256 verification and System Settings > Privacy & Security > Open Anyway instructions; the Windows ZIP is unaffected.

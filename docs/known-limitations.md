@@ -1,4 +1,4 @@
-# Spyro Editor Beta V3 Known Limitations
+# Spyro Editor Beta V4 Known Limitations
 
 This beta is useful, but it is not a finished Spyro modding tool yet. Treat it as a testing build for editor workflow, object placement, terrain inspection, and moby identity mapping.
 
@@ -52,6 +52,32 @@ length limit, and verify playback in DuckStation. No game music or custom audio
 is bundled with the editor.
 
 ## Object Editing
+
+### Native Movement Controls
+
+`Edit Run Path` is limited to the 12 verified native Egg Thieves on the checked
+USA retail disc. Their existing fixed nodes can move, but nodes cannot be added,
+deleted, or reordered. A route whose owner identity, native properties pointer,
+node count, or original bytes no longer matches is rejected rather than
+reinterpreted. Runtime validation is still required for unusually aggressive
+route edits even when the byte-level export is safe.
+
+`Spyro runs here` is limited to the 79 native dragon rescue scenes. It changes
+only the native planar angle and radius; Z remains terrain-derived. Copied or
+brand-new dragons do not gain rescue choreography. Zero/overflowing radii,
+stale source bytes, and invalid numbers are blocked, while unusually long
+destinations or endpoints without a terrain hit require Build Safety review.
+
+### Special Chest Profiles
+
+Beta V4 includes the checked profile registry, atomic editor grouping, and
+Build Safety needed to develop special chests level by level. It does not mean
+every chest family is now runtime-proven in every level. Normal Add/Create BIN
+continues to expose only the proven Artisans gold Key + Locked Chest import.
+Other destination profiles remain disposable-test-only or blocked until their
+complete handler, companion/controller, texture/CLUT, reward, persistence, and
+cleanup matrix passes DuckStation. Native presence is not proof that an extra
+copy is safe. The five flight stages remain explicitly unsupported.
 
 ### Gem Values And Editor Icons
 

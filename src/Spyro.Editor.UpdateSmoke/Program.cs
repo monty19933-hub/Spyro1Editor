@@ -55,7 +55,7 @@ using (MemoryStream identityInput = new(validAppDll, writable: false))
     Assert(identity.HasExplicitPublicVersion, "The release app fixture is missing full public-version metadata.");
     Assert(identity.HasExplicitReleaseManifestSchema, "The release app fixture is missing release-manifest schema metadata.");
     Assert(identity.ReleaseManifestSchema == 1 && !identity.PublicVersion.IsIncremental,
-        "The V3 bridge fixture must retain whole-number schema-1 identity for Beta V2 compatibility.");
+        "The V4 bridge fixture must retain whole-number schema-1 identity for legacy-client compatibility.");
     Assert(EditorSemanticVersion.TryParse(identity.InternalVersion, out _), "Fixture app DLL informational version is not a semantic version.");
     candidateBeta = identity.PublicBetaVersion;
     candidateVersion = identity.PublicVersion;
@@ -75,7 +75,7 @@ using (MemoryStream identityInput = new(validIncrementalAppDll, writable: false)
         identity.HasExplicitPublicVersion &&
         identity.ReleaseManifestSchema == 2 &&
         identity.HasExplicitReleaseManifestSchema,
-        "Incremental fixture app DLL does not carry canonical V3.1/schema-2 identity.");
+        "Incremental fixture app DLL does not carry canonical V4.1/schema-2 identity.");
     Assert(EditorSemanticVersion.TryParse(identity.InternalVersion, out _),
         "Incremental fixture app DLL informational version is not semantic.");
     incrementalInternalVersion = identity.InternalVersion;
@@ -154,13 +154,13 @@ using (HttpClient incrementalHttp = new(incrementalHandler))
 {
     GitHubReleaseUpdateClient incrementalClient = new(incrementalHttp);
     EditorUpdateInfo fromWhole = await incrementalClient.CheckAsync(candidateVersion)
-        ?? throw new InvalidOperationException("Beta V3 did not discover a same-major incremental update.");
+        ?? throw new InvalidOperationException("The current whole-number beta did not discover a same-major incremental update.");
     Assert(fromWhole.PublicVersion == incrementalTwo.CanonicalVersion,
-        "Beta V3 did not choose the newest available V3.x release.");
+        "The current whole-number beta did not choose the newest available same-major incremental release.");
     EditorUpdateInfo fromFirstIncrement = await incrementalClient.CheckAsync(incrementalOne)
-        ?? throw new InvalidOperationException("Beta V3.1 did not discover Beta V3.2.");
+        ?? throw new InvalidOperationException("The first current-major increment did not discover the second increment.");
     Assert(fromFirstIncrement.PublicVersion == incrementalTwo.CanonicalVersion,
-        "Beta V3.1 did not select Beta V3.2.");
+        "The first current-major increment did not select the second increment.");
     Assert(await incrementalClient.CheckAsync(incrementalTwo) == null,
         "The current incremental public beta was offered as an update.");
 }
@@ -455,7 +455,7 @@ finally
         Directory.Delete(temporaryRoot, recursive: true);
 }
 
-Console.WriteLine("PASS: whole-number and incremental prerelease discovery, legacy V3-to-V3.1 notification compatibility, one-time notification policy, exact repository/tag/title/asset identity, visible changelog preservation, protected-project isolation, trusted URLs, bounded streaming, SHA-256 verification, bounded non-link archive validation, schema-aware package manifest/changelog/app-assembly validation, macOS metadata handling, reuse, and malformed-package rejection.");
+Console.WriteLine("PASS: whole-number and incremental prerelease discovery, current bridge-to-incremental notification compatibility, historical V2/V3 notification coverage, one-time notification policy, exact repository/tag/title/asset identity, visible changelog preservation, protected-project isolation, trusted URLs, bounded streaming, SHA-256 verification, bounded non-link archive validation, schema-aware package manifest/changelog/app-assembly validation, macOS metadata handling, reuse, and malformed-package rejection.");
 
 static void Assert(bool condition, string message)
 {

@@ -1,6 +1,6 @@
-# Spyro Editor Beta V3 Guide
+# Spyro Editor Beta V4 Guide
 
-Internal diagnostic build: `0.1.0-beta.30`.
+Internal diagnostic build: `0.1.0-beta.31`.
 
 This beta build uses three everyday workspaces around the unchanged level view:
 `Objects`, `Level`, and `Environment`. Internal research probes stay hidden.
@@ -30,8 +30,9 @@ the ZIP came from the official Spyro Editor GitHub release. The file states
 whether the package is Developer ID signed but not notarized, or uses the more
 limited disclosed ad-hoc community signature. If macOS blocks it, use System
 Settings > Privacy & Security > Open Anyway only if you accept that exact risk.
-Beta V3 is Developer ID signed, hardened, and securely timestamped, but it is
-not notarized; compare the published SHA-256 digest before opening it.
+This Beta V4 test package is Developer ID signed, hardened, and securely
+timestamped, but it is not notarized; compare its SHA-256 digest before opening
+it.
 
 ## Projects and Updates
 
@@ -49,7 +50,7 @@ destination files win, and differing incoming files are preserved under
 gigabytes. `editor-cache` and `spyro-wad-analysis.json` are deliberately rebuilt
 against the selected disc instead of being trusted across installations.
 
-Beta V3 checks GitHub Releases at most once per day. When a deliberate next
+Beta V4 checks GitHub Releases at most once per day. When a deliberate next
 canonical release exists, a visible in-app notification offers `What's New &
 Download`; `More` > `Check for Updates` performs an immediate check. The update
 window shows the full release changelog in a scrollable panel. A copy of that
@@ -286,14 +287,38 @@ contain copied disc data.
   promoted.
 - Previewing RGB, RGBA, grayscale, or indexed PNG terrain art within the
   editor's image-size limits. Custom PNG texture manifests are staging/research
-  data only in Beta V3; `Create BIN` rejects them rather than using the obsolete
+  data only in Beta V4; `Create BIN` rejects them rather than using the obsolete
   fixed-layout normal/close-detail writer.
+- `Objects` > `Special Chest Support` shows the exact checked status of Key +
+  Locked, Life, Armored/Strong, Firework, 3x Flame/Multi-hit, and Spring Chest
+  families for the loaded level. Normal Add/Create BIN exposes only a
+  runtime-proven destination profile. The Artisans gold Key + Locked Chest pair
+  is the currently proven imported bundle; candidate profiles stay disposable
+  test-only and incomplete closures stay blocked. All five flight levels are
+  explicitly unsupported.
+- Imported special-chest rows are one atomic editor group. Moving, removing,
+  restoring, undoing, saving, or loading the visible chest carries its required
+  key, controller, reward, and hidden companion rows. Build Safety reports and
+  targets the visible chest when the group is partial, orphaned, over capacity,
+  stale, incompatible, or tied to the wrong disc/profile.
 - Moving, removing, cloning, and editing supported objects.
+- Selecting any of the 12 verified native Egg Thieves exposes `Edit Run Path`.
+  Edit Map and Game Camera show the fixed ordered route as numbered handles and
+  a polyline. Drag a handle or enter exact XYZ values, optionally snap it to
+  terrain, reset one node or the entire route, and undo the complete route.
+  `Move thief and path together` defaults on; disabling it warns that the thief
+  will snap back to its unchanged native route in-game. Node insertion,
+  deletion, and reordering are intentionally unavailable.
 - Moving an existing dragon together with its pedestal and native `0x6E` scene-
   link control. Dragging, XYZ edits, nudges, and undo keep the three-row scene
   aligned, including when terrain snapping changes the final height. `Create
   BIN` also shifts the hidden approach-camera XYZ and every XYZ keyframe in the
   later rescue cinematic while preserving the original shot angles and timing.
+- Selecting any of the 79 native dragon rescues also exposes the dashed
+  `Spyro runs here` endpoint. X/Y are editable; Z is derived from source terrain
+  and is never exported. Moving the dragon carries the endpoint, while moving
+  only the endpoint leaves the dragon, pedestal, cameras, and cinematic timing
+  unchanged. Copied/new dragons do not receive this control.
 - Copying and pasting a same-level dragon together with its linked pedestal and
   scene-link row while preserving their native XYZ offsets. Additional rescue-
   scene data for brand-new dragons remains a beta research path.
