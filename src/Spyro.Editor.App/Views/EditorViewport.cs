@@ -115,6 +115,9 @@ public sealed partial class EditorViewport : Control
     private StandardCursorType? _currentCursorType;
     private bool _objectPlacementMode;
     private bool _terrainFocusMode;
+    private bool _terrainTexturePaintMode;
+    private bool _terrainTexturePaintBusy;
+    private string _terrainTexturePaintHint = "";
     private double _terrainBrushRadius = 512;
     private double _terrainBrushStrength = 64;
     private double _terrainBrushFeather = 50;
@@ -168,6 +171,8 @@ public sealed partial class EditorViewport : Control
     public event EventHandler<ViewportTerrainBrushAdjustmentRequestedEventArgs>? TerrainBrushAdjustmentRequested;
     public event EventHandler<ViewportTerrainBrushModeRequestedEventArgs>? TerrainBrushModeRequested;
     public event EventHandler? TerrainBrushStrokeFinished;
+    public event EventHandler<ViewportTerrainTexturePaintRequestedEventArgs>? TerrainTexturePaintRequested;
+    public event EventHandler? TerrainTexturePaintCanceled;
     public event EventHandler<MobyMoveRequestedEventArgs>? MobyMoveRequested;
     public event EventHandler<MobyRotateRequestedEventArgs>? MobyRotateRequested;
     public event EventHandler<ViewportObjectPlacementRequestedEventArgs>? ObjectPlacementRequested;
@@ -302,6 +307,49 @@ public sealed partial class EditorViewport : Control
                 return;
 
             _terrainFocusMode = value;
+            InvalidateVisual();
+        }
+    }
+
+    public bool TerrainTexturePaintMode
+    {
+        get => _terrainTexturePaintMode;
+        set
+        {
+            if (_terrainTexturePaintMode == value)
+                return;
+
+            _terrainTexturePaintMode = value;
+            _terrainTexturePaintBusy = false;
+            UpdateViewportCursor(_lastPointerPosition);
+            InvalidateVisual();
+        }
+    }
+
+    public bool TerrainTexturePaintBusy
+    {
+        get => _terrainTexturePaintBusy;
+        set
+        {
+            if (_terrainTexturePaintBusy == value)
+                return;
+
+            _terrainTexturePaintBusy = value;
+            UpdateViewportCursor(_lastPointerPosition);
+            InvalidateVisual();
+        }
+    }
+
+    public string TerrainTexturePaintHint
+    {
+        get => _terrainTexturePaintHint;
+        set
+        {
+            string hint = value?.Trim() ?? "";
+            if (string.Equals(_terrainTexturePaintHint, hint, StringComparison.Ordinal))
+                return;
+
+            _terrainTexturePaintHint = hint;
             InvalidateVisual();
         }
     }
@@ -614,6 +662,7 @@ public sealed partial class EditorViewport : Control
         _sceneFitFocus = null;
         _screenTerrainFaces.Clear();
         _screenTerrainSurfaceLabels.Clear();
+        InvalidateNativeTerrainBoundedFrame();
         InvalidateVisual();
     }
 
@@ -1317,6 +1366,26 @@ public sealed partial class EditorViewport : Control
                 return;
             }
 
+            if (_terrainTexturePaintMode)
+            {
+                if (!_terrainTexturePaintBusy)
+                {
+                    ScreenTerrainFace? terrain = FindScreenTerrain(_lastPointerPosition);
+                    if (terrain != null && Geometry != null)
+                    {
+                        SelectTerrain(terrain);
+                        TerrainTexturePaintRequested?.Invoke(
+                            this,
+                            new ViewportTerrainTexturePaintRequestedEventArgs(
+                                terrain.Index,
+                                Geometry.Polygons[terrain.Index]));
+                    }
+                }
+
+                e.Handled = true;
+                return;
+            }
+
             bool terrainFirst = ShouldPrioritizeTerrainInteraction();
             ScreenFacingGuide? facingGuide = terrainFirst ? null : FindScreenFacingGuide(_lastPointerPosition);
             if (facingGuide != null)
@@ -1700,6 +1769,13 @@ public sealed partial class EditorViewport : Control
             return;
         }
 
+        if (_terrainTexturePaintMode && e.Key == Key.Escape)
+        {
+            TerrainTexturePaintCanceled?.Invoke(this, EventArgs.Empty);
+            e.Handled = true;
+            return;
+        }
+
         if (TryRequestTerrainBrushMode(e))
             return;
         if (TryRequestTerrainRemoval(e))
@@ -1981,7 +2057,9 @@ public sealed partial class EditorViewport : Control
 
     private bool ShouldPrioritizeTerrainInteraction()
     {
-        return _terrainFocusMode || _terrainBrushAction != TerrainBrushAction.Off;
+        return _terrainFocusMode ||
+            _terrainTexturePaintMode ||
+            _terrainBrushAction != TerrainBrushAction.Off;
     }
 
     private void SelectTerrain(ScreenTerrainFace face)
@@ -3812,6 +3890,7 @@ public sealed partial class EditorViewport : Control
     private bool IsTerrainVisualFocusActive()
     {
         return _terrainFocusMode
+            || _terrainTexturePaintMode
             || _terrainBrushAction != TerrainBrushAction.Off
             || _isPaintingTerrain
             || _isDraggingTerrainFace
@@ -7788,6 +7867,15 @@ public sealed partial class EditorViewport : Control
                 ? "    terrain: retail materials + complete editable mesh"
                 : "    terrain: complete edit overview"
             : "";
+        if (_terrainTexturePaintMode)
+        {
+            string paintState = _terrainTexturePaintBusy ? "applying..." : "click a terrain face to paint";
+            string source = string.IsNullOrWhiteSpace(_terrainTexturePaintHint)
+                ? "selected texture"
+                : _terrainTexturePaintHint;
+            return $"{mode} texture paint: {source}    {paintState}    Esc stop{gameTerrainStatus}";
+        }
+
         if (_terrainBrushAction != TerrainBrushAction.Off)
             return $"{mode} brush: {TerrainBrushActionLabel(_terrainBrushAction)} size {_terrainBrushRadius:0} strength {_terrainBrushStrength:0} feather {_terrainBrushFeather:0}%{brushSafety}    1-5 switch    0 off    Shift/Option/Ctrl-scroll{gameTerrainStatus}";
 
@@ -9296,6 +9384,15 @@ public sealed partial class EditorViewport : Control
         if (_objectPlacementMode)
         {
             SetViewportCursor(StandardCursorType.Cross);
+            return;
+        }
+
+        if (_terrainTexturePaintMode)
+        {
+            SetViewportCursor(
+                !_terrainTexturePaintBusy && FindScreenTerrain(screenPoint) != null
+                    ? StandardCursorType.Cross
+                    : null);
             return;
         }
 
@@ -12027,6 +12124,18 @@ public sealed class ViewportTerrainBrushModeRequestedEventArgs : EventArgs
     }
 
     public TerrainBrushAction Action { get; }
+}
+
+public sealed class ViewportTerrainTexturePaintRequestedEventArgs : EventArgs
+{
+    public ViewportTerrainTexturePaintRequestedEventArgs(int terrainIndex, TerrainPolygon terrain)
+    {
+        TerrainIndex = terrainIndex;
+        Terrain = terrain;
+    }
+
+    public int TerrainIndex { get; }
+    public TerrainPolygon Terrain { get; }
 }
 
 public sealed class ViewportSelectionChangedEventArgs : EventArgs

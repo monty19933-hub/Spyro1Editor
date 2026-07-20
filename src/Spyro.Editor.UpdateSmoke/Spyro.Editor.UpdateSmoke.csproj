@@ -9,7 +9,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="IncrementalFixture/**/*.cs" />
     <ProjectReference Include="../Spyro.Editor.App/Spyro.Editor.App.csproj" />
     <ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj" />
+    <ProjectReference Include="IncrementalFixture/Spyro.Editor.UpdateSmoke.IncrementalFixture.csproj"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <Target Name="CopyIncrementalUpdateFixture" AfterTargets="Build">
+    <Copy
+      SourceFiles="$(MSBuildThisFileDirectory)IncrementalFixture/bin/$(Configuration)/net10.0/Spyro.Editor.App.dll"
+      DestinationFiles="$(TargetDir)Spyro.Editor.App.IncrementalFixture.dll" />
+  </Target>
 </Project>

@@ -7,12 +7,18 @@ namespace Spyro.Editor.Core.Updates;
 public sealed record EditorAssemblyReleaseIdentity(
     string AssemblyName,
     int PublicBetaVersion,
+    EditorBetaReleaseVersion PublicVersion,
+    bool HasExplicitPublicVersion,
+    int ReleaseManifestSchema,
+    bool HasExplicitReleaseManifestSchema,
     string InternalVersion);
 
 public static class EditorAssemblyReleaseIdentityReader
 {
     public const string ExpectedAssemblyName = "Spyro.Editor.App";
     public const string BetaReleaseMetadataKey = "SpyroEditorBetaRelease";
+    public const string PublicReleaseMetadataKey = "SpyroEditorPublicReleaseVersion";
+    public const string ReleaseManifestSchemaMetadataKey = "SpyroEditorReleaseManifestSchema";
 
     private const string AssemblyMetadataAttributeName = "System.Reflection.AssemblyMetadataAttribute";
     private const string AssemblyInformationalVersionAttributeName = "System.Reflection.AssemblyInformationalVersionAttribute";
@@ -37,6 +43,8 @@ public static class EditorAssemblyReleaseIdentityReader
             AssemblyDefinition assembly = metadata.GetAssemblyDefinition();
             string assemblyName = metadata.GetString(assembly.Name);
             List<string> betaValues = [];
+            List<string> publicVersionValues = [];
+            List<string> releaseManifestSchemaValues = [];
             List<string> informationalVersions = [];
             foreach (CustomAttributeHandle handle in assembly.GetCustomAttributes())
             {
@@ -47,6 +55,10 @@ public static class EditorAssemblyReleaseIdentityReader
                     string[] values = ReadFixedStringArguments(metadata, attribute, expectedCount: 2, source);
                     if (string.Equals(values[0], BetaReleaseMetadataKey, StringComparison.Ordinal))
                         betaValues.Add(values[1]);
+                    else if (string.Equals(values[0], PublicReleaseMetadataKey, StringComparison.Ordinal))
+                        publicVersionValues.Add(values[1]);
+                    else if (string.Equals(values[0], ReleaseManifestSchemaMetadataKey, StringComparison.Ordinal))
+                        releaseManifestSchemaValues.Add(values[1]);
                 }
                 else if (string.Equals(attributeName, AssemblyInformationalVersionAttributeName, StringComparison.Ordinal))
                 {
@@ -68,6 +80,47 @@ public static class EditorAssemblyReleaseIdentityReader
                 throw new InvalidDataException($"The {source} contains an invalid public beta assembly metadata value: '{betaText}'.");
             }
 
+            if (publicVersionValues.Count > 1)
+            {
+                throw new InvalidDataException(
+                    $"The {source} must contain at most one '{PublicReleaseMetadataKey}' assembly metadata value; found {publicVersionValues.Count}.");
+            }
+
+            bool hasExplicitPublicVersion = publicVersionValues.Count == 1;
+            EditorBetaReleaseVersion publicVersion;
+            if (hasExplicitPublicVersion)
+            {
+                if (!EditorBetaReleaseVersion.TryParse(publicVersionValues[0], out publicVersion) ||
+                    !string.Equals(publicVersionValues[0], publicVersion.CanonicalVersion, StringComparison.Ordinal) ||
+                    publicVersion.Major != betaVersion)
+                {
+                    throw new InvalidDataException(
+                        $"The {source} contains an invalid or legacy-major-mismatched public release metadata value: '{publicVersionValues[0]}'.");
+                }
+            }
+            else
+            {
+                publicVersion = new EditorBetaReleaseVersion(betaVersion);
+            }
+
+            if (releaseManifestSchemaValues.Count > 1)
+            {
+                throw new InvalidDataException(
+                    $"The {source} must contain at most one '{ReleaseManifestSchemaMetadataKey}' assembly metadata value; found {releaseManifestSchemaValues.Count}.");
+            }
+
+            bool hasExplicitReleaseManifestSchema = releaseManifestSchemaValues.Count == 1;
+            int expectedManifestSchema = publicVersion.IsIncremental ? 2 : 1;
+            int releaseManifestSchema = expectedManifestSchema;
+            if (hasExplicitReleaseManifestSchema &&
+                (!int.TryParse(releaseManifestSchemaValues[0], NumberStyles.None, CultureInfo.InvariantCulture, out releaseManifestSchema) ||
+                 releaseManifestSchema != expectedManifestSchema ||
+                 !string.Equals(releaseManifestSchemaValues[0], releaseManifestSchema.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)))
+            {
+                throw new InvalidDataException(
+                    $"The {source} contains release-manifest schema metadata '{releaseManifestSchemaValues[0]}' that does not match public version {publicVersion.CanonicalVersion}.");
+            }
+
             if (informationalVersions.Count != 1 || string.IsNullOrWhiteSpace(informationalVersions[0]))
             {
                 throw new InvalidDataException(
@@ -77,6 +130,10 @@ public static class EditorAssemblyReleaseIdentityReader
             return new EditorAssemblyReleaseIdentity(
                 assemblyName,
                 betaVersion,
+                publicVersion,
+                hasExplicitPublicVersion,
+                releaseManifestSchema,
+                hasExplicitReleaseManifestSchema,
                 informationalVersions[0]);
         }
         catch (InvalidDataException)

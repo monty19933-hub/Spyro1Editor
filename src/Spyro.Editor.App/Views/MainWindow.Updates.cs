@@ -1,5 +1,6 @@
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -114,36 +115,43 @@ public sealed partial class MainWindow
         try
         {
             UpdateCheckState? saved = ReadUpdateCheckState(statePath);
-            bool recent = saved?.SchemaVersion == 2 &&
+            EditorBetaReleaseVersion? savedAvailable = StateVersion(
+                saved?.AvailablePublicVersion,
+                saved?.AvailableBetaVersion ?? 0);
+            EditorBetaReleaseVersion? savedLastNotified = StateVersion(
+                saved?.LastAutoNotificationPublicVersion,
+                saved?.LastAutoNotificationBetaVersion ?? 0);
+            bool recent = saved?.SchemaVersion == 3 &&
                 EditorUpdateNotificationPolicy.IsRecentCheck(
                     DateTimeOffset.UtcNow,
-                    saved.LastCheckedUtc,
+                    saved!.LastCheckedUtc,
                     TimeSpan.FromHours(24));
             if (recent)
             {
-                if (saved!.AvailableBetaVersion > AppReleaseIdentity.BetaVersion.Number)
-                    _statusText.Text = $"{saved.AvailableDisplayName} is available. Use More > Check for Updates.";
+                if (savedAvailable?.CompareTo(AppReleaseIdentity.BetaVersion) > 0)
+                    _statusText.Text = $"{saved!.AvailableDisplayName} is available. Use More > Check for Updates.";
                 if (!EditorUpdateNotificationPolicy.ShouldShow(
-                    AppReleaseIdentity.BetaVersion.Number,
-                    saved.AvailableBetaVersion,
-                    saved.LastAutoNotificationBetaVersion))
+                    AppReleaseIdentity.BetaVersion,
+                    savedAvailable,
+                    savedLastNotified))
                 {
                     return;
                 }
             }
 
             GitHubReleaseUpdateClient client = new(UpdateHttpClient);
-            EditorUpdateInfo? update = await client.CheckAsync(AppReleaseIdentity.BetaVersion.Number);
+            EditorUpdateInfo? update = await client.CheckAsync(AppReleaseIdentity.BetaVersion);
             UpdateCheckState next = BuildUpdateState(saved, update, DateTimeOffset.UtcNow);
             await WriteUpdateCheckStateAsync(statePath, next);
             if (update == null)
                 return;
 
             _statusText.Text = $"{update.DisplayName} is available. Your project will remain untouched.";
+            EditorBetaReleaseVersion updateVersion = GitHubReleaseUpdateClient.RequireUpdateVersion(update);
             if (EditorUpdateNotificationPolicy.ShouldShow(
-                AppReleaseIdentity.BetaVersion.Number,
-                update.BetaVersion,
-                next.LastAutoNotificationBetaVersion))
+                AppReleaseIdentity.BetaVersion,
+                updateVersion,
+                StateVersion(next.LastAutoNotificationPublicVersion, next.LastAutoNotificationBetaVersion)))
                 await ShowUpdateNotificationWhenReadyAsync(update, statePath, next);
         }
         catch (Exception exception)
@@ -166,7 +174,12 @@ public sealed partial class MainWindow
         await Task.Yield();
         await WriteUpdateCheckStateAsync(
             statePath,
-            state with { LastAutoNotificationBetaVersion = update.BetaVersion });
+            state with
+            {
+                LastAutoNotificationPublicVersion = GitHubReleaseUpdateClient
+                    .RequireUpdateVersion(update)
+                    .CanonicalVersion
+            });
     }
 
     private async Task ShowUpdatesAsync()
@@ -178,17 +191,24 @@ public sealed partial class MainWindow
             return;
         }
 
-        _statusText.Text = "Checking GitHub Releases for the next numbered Spyro Editor beta...";
+        _statusText.Text = "Checking GitHub Releases for the next Spyro Editor beta...";
         EditorUpdateInfo? update;
         try
         {
             GitHubReleaseUpdateClient client = new(UpdateHttpClient);
-            update = await client.CheckAsync(AppReleaseIdentity.BetaVersion.Number);
+            update = await client.CheckAsync(AppReleaseIdentity.BetaVersion);
             string statePath = UpdateStatePath(context);
             UpdateCheckState? saved = ReadUpdateCheckState(statePath);
             UpdateCheckState next = BuildUpdateState(saved, update, DateTimeOffset.UtcNow);
             if (update != null)
-                next = next with { LastAutoNotificationBetaVersion = update.BetaVersion };
+            {
+                next = next with
+                {
+                    LastAutoNotificationPublicVersion = GitHubReleaseUpdateClient
+                        .RequireUpdateVersion(update)
+                        .CanonicalVersion
+                };
+            }
             await WriteUpdateCheckStateAsync(statePath, next);
         }
         catch (Exception exception)
@@ -201,7 +221,7 @@ public sealed partial class MainWindow
         if (update == null)
         {
             _statusText.Text = $"{AppReleaseIdentity.DisplayName} is up to date.";
-            await ShowUpdateResultDialogAsync(null, $"You already have the newest numbered beta release: {AppReleaseIdentity.DisplayName}.");
+            await ShowUpdateResultDialogAsync(null, $"You already have the newest beta release: {AppReleaseIdentity.DisplayName}.");
             return;
         }
         if (_updateNotificationBanner != null)
@@ -348,7 +368,7 @@ public sealed partial class MainWindow
                 ProjectSnapshotResult snapshot = await ProjectSnapshotService.CreateAsync(
                     context.Project,
                     context.UserData.BackupsPath,
-                    $"pre-update-beta-v{update.BetaVersion}");
+                    $"pre-update-beta-v{GitHubReleaseUpdateClient.RequireUpdateVersion(update).CanonicalVersion}");
                 result.Text = $"Snapshot verified ({snapshot.FileCount} project file(s)). Downloading update...";
                 Progress<double> report = new(value => progress.Value = value * 100);
                 GitHubReleaseUpdateClient client = new(UpdateHttpClient);
@@ -385,16 +405,25 @@ public sealed partial class MainWindow
     private static UpdateCheckState BuildUpdateState(
         UpdateCheckState? saved,
         EditorUpdateInfo? update,
-        DateTimeOffset checkedAtUtc) =>
-        new(
-            SchemaVersion: 2,
+        DateTimeOffset checkedAtUtc)
+    {
+        EditorBetaReleaseVersion? available = update == null
+            ? null
+            : GitHubReleaseUpdateClient.RequireUpdateVersion(update);
+        return new(
+            SchemaVersion: 3,
             LastCheckedUtc: checkedAtUtc,
-            AvailableBetaVersion: update?.BetaVersion ?? 0,
+            AvailablePublicVersion: available?.CanonicalVersion ?? "",
             AvailableDisplayName: update?.DisplayName ?? "",
             ReleaseUrl: update?.ReleasePage.ToString() ?? "",
-            LastAutoNotificationBetaVersion: saved?.LastAutoNotificationBetaVersion ?? 0,
-            LastDownloadedBetaVersion: saved?.LastDownloadedBetaVersion ?? 0,
+            LastAutoNotificationPublicVersion: CanonicalStateVersion(
+                saved?.LastAutoNotificationPublicVersion,
+                saved?.LastAutoNotificationBetaVersion ?? 0),
+            LastDownloadedPublicVersion: CanonicalStateVersion(
+                saved?.LastDownloadedPublicVersion,
+                saved?.LastDownloadedBetaVersion ?? 0),
             LastDownloadedAtUtc: saved?.LastDownloadedAtUtc);
+    }
 
     private static async Task RememberDownloadedUpdateAsync(
         ReleaseProjectContext context,
@@ -402,13 +431,28 @@ public sealed partial class MainWindow
     {
         string statePath = UpdateStatePath(context);
         UpdateCheckState? saved = ReadUpdateCheckState(statePath);
+        EditorBetaReleaseVersion updateVersion = GitHubReleaseUpdateClient.RequireUpdateVersion(update);
         UpdateCheckState next = BuildUpdateState(saved, update, saved?.LastCheckedUtc ?? DateTimeOffset.UtcNow) with
         {
-            LastAutoNotificationBetaVersion = Math.Max(saved?.LastAutoNotificationBetaVersion ?? 0, update.BetaVersion),
-            LastDownloadedBetaVersion = update.BetaVersion,
+            LastAutoNotificationPublicVersion = MaxVersionText(
+                CanonicalStateVersion(
+                    saved?.LastAutoNotificationPublicVersion,
+                    saved?.LastAutoNotificationBetaVersion ?? 0),
+                updateVersion.CanonicalVersion),
+            LastDownloadedPublicVersion = updateVersion.CanonicalVersion,
             LastDownloadedAtUtc = DateTimeOffset.UtcNow
         };
         await WriteUpdateCheckStateAsync(statePath, next);
+    }
+
+    internal static string MigrateUpdateStateJsonForTesting(string json)
+    {
+        UpdateCheckState state = JsonSerializer.Deserialize<UpdateCheckState>(json, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        }) ?? throw new JsonException("Update state is empty.");
+        UpdateCheckState migrated = UpgradePersistedState(state);
+        return JsonSerializer.Serialize(migrated, StateJsonOptions());
     }
 
     private static UpdateCheckState? ReadUpdateCheckState(string path)
@@ -431,11 +475,7 @@ public sealed partial class MainWindow
         string temporary = $"{path}.{Guid.NewGuid():N}.tmp";
         try
         {
-            await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(state, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            }));
+            await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(state, StateJsonOptions()));
             File.Move(temporary, path, overwrite: true);
         }
         finally
@@ -445,13 +485,62 @@ public sealed partial class MainWindow
         }
     }
 
+    private static UpdateCheckState UpgradePersistedState(UpdateCheckState state) =>
+        new(
+            SchemaVersion: 3,
+            LastCheckedUtc: state.LastCheckedUtc,
+            AvailablePublicVersion: CanonicalStateVersion(
+                state.AvailablePublicVersion,
+                state.AvailableBetaVersion),
+            AvailableDisplayName: state.AvailableDisplayName,
+            ReleaseUrl: state.ReleaseUrl,
+            LastAutoNotificationPublicVersion: CanonicalStateVersion(
+                state.LastAutoNotificationPublicVersion,
+                state.LastAutoNotificationBetaVersion),
+            LastDownloadedPublicVersion: CanonicalStateVersion(
+                state.LastDownloadedPublicVersion,
+                state.LastDownloadedBetaVersion),
+            LastDownloadedAtUtc: state.LastDownloadedAtUtc);
+
+    private static EditorBetaReleaseVersion? StateVersion(string? canonical, int legacyMajor)
+    {
+        if (!string.IsNullOrWhiteSpace(canonical))
+            return EditorBetaReleaseVersion.TryParse(canonical, out EditorBetaReleaseVersion version) ? version : null;
+        return legacyMajor > 0 ? new EditorBetaReleaseVersion(legacyMajor) : null;
+    }
+
+    private static string CanonicalStateVersion(string? canonical, int legacyMajor) =>
+        StateVersion(canonical, legacyMajor)?.CanonicalVersion ?? "";
+
+    private static string MaxVersionText(string left, string right)
+    {
+        EditorBetaReleaseVersion? leftVersion = StateVersion(left, 0);
+        EditorBetaReleaseVersion? rightVersion = StateVersion(right, 0);
+        if (leftVersion == null)
+            return rightVersion?.CanonicalVersion ?? "";
+        if (rightVersion == null)
+            return leftVersion.CanonicalVersion;
+        return leftVersion.CompareTo(rightVersion) >= 0
+            ? leftVersion.CanonicalVersion
+            : rightVersion.CanonicalVersion;
+    }
+
+    private static JsonSerializerOptions StateJsonOptions() => new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
     private sealed record UpdateCheckState(
         int SchemaVersion,
         DateTimeOffset LastCheckedUtc,
-        int AvailableBetaVersion,
-        string AvailableDisplayName,
-        string ReleaseUrl,
-        int LastAutoNotificationBetaVersion,
-        int LastDownloadedBetaVersion,
-        DateTimeOffset? LastDownloadedAtUtc);
+        string AvailablePublicVersion = "",
+        string AvailableDisplayName = "",
+        string ReleaseUrl = "",
+        string LastAutoNotificationPublicVersion = "",
+        string LastDownloadedPublicVersion = "",
+        DateTimeOffset? LastDownloadedAtUtc = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int AvailableBetaVersion = 0,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int LastAutoNotificationBetaVersion = 0,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int LastDownloadedBetaVersion = 0);
 }

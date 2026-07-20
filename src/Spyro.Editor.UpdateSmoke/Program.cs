@@ -7,15 +7,29 @@ using Spyro.Editor.Core.Updates;
 
 Assert(EditorBetaReleaseVersion.TryParseDisplayName("Spyro Editor Beta V2", out EditorBetaReleaseVersion beta2), "Could not parse public Beta V2 name.");
 Assert(EditorBetaReleaseVersion.TryParseReleaseTag("beta-v3", out EditorBetaReleaseVersion beta3), "Could not parse public beta-v3 tag.");
+Assert(EditorBetaReleaseVersion.TryParseDisplayName("Spyro Editor Beta V3.1", out EditorBetaReleaseVersion beta31), "Could not parse public Beta V3.1 name.");
+Assert(EditorBetaReleaseVersion.TryParseReleaseTag("beta-v3.2", out EditorBetaReleaseVersion beta32), "Could not parse public beta-v3.2 tag.");
+Assert(EditorBetaReleaseVersion.TryParse("4.1", out EditorBetaReleaseVersion beta41), "Could not parse canonical public version 4.1.");
 Assert(beta3.CompareTo(beta2) > 0, "Beta V3 did not compare above Beta V2.");
+Assert(beta31.CompareTo(beta3) > 0 && beta32.CompareTo(beta31) > 0 && beta41.CompareTo(beta32) > 0,
+    "Incremental public beta versions did not compare canonically.");
 Assert(EditorBetaReleaseVersion.TryParseDisplayName("Spyro Editor Beta V10", out EditorBetaReleaseVersion beta10) && beta10.Number == 10, "Two-digit beta version did not parse numerically.");
 Assert(!EditorBetaReleaseVersion.TryParseDisplayName("Spyro Editor Beta V02", out _), "Leading-zero public beta was accepted.");
+Assert(!EditorBetaReleaseVersion.TryParse("3.0", out _), "Non-canonical .0 public beta was accepted.");
+Assert(!EditorBetaReleaseVersion.TryParse("3.01", out _), "Leading-zero incremental public beta was accepted.");
+Assert(!EditorBetaReleaseVersion.TryParse("3.1.0", out _), "Three-component public beta was accepted.");
+Assert(!EditorBetaReleaseVersion.TryParse("03.1", out _), "Leading-zero public beta major was accepted.");
+Assert(!EditorBetaReleaseVersion.TryParseDisplayName(" Spyro Editor Beta V3.1", out _), "A non-exact public display name was accepted.");
+Assert(!EditorBetaReleaseVersion.TryParseReleaseTag("beta-v3.1 ", out _), "A non-exact public release tag was accepted.");
 Assert(!EditorBetaReleaseVersion.TryParseReleaseTag("v3", out _), "Non-beta release tag was accepted.");
 Assert(EditorSemanticVersion.TryParse("1.2.3-beta.45", out _), "Internal semantic-version parser fixture is malformed.");
 Assert(EditorUpdateNotificationPolicy.ShouldShow(2, 3, 0), "Beta V3 did not trigger the first V2 notification.");
 Assert(!EditorUpdateNotificationPolicy.ShouldShow(2, 3, 3), "Beta V3 notification repeated after it was presented.");
 Assert(EditorUpdateNotificationPolicy.ShouldShow(2, 4, 3), "Beta V4 did not trigger after Beta V3 was presented.");
 Assert(!EditorUpdateNotificationPolicy.ShouldShow(3, 2, 0), "An older beta triggered an update notification.");
+Assert(EditorUpdateNotificationPolicy.ShouldShow(beta3, beta31, beta3), "Beta V3.1 did not trigger after Beta V3.");
+Assert(!EditorUpdateNotificationPolicy.ShouldShow(beta3, beta31, beta31), "Beta V3.1 notification repeated after it was presented.");
+Assert(EditorUpdateNotificationPolicy.ShouldShow(beta31, beta32, beta31), "Beta V3.2 did not trigger after Beta V3.1.");
 DateTimeOffset updateCheckNow = new(2026, 7, 15, 12, 0, 0, TimeSpan.Zero);
 Assert(
     EditorUpdateNotificationPolicy.IsRecentCheck(updateCheckNow, updateCheckNow - TimeSpan.FromHours(1), TimeSpan.FromHours(24)),
@@ -29,19 +43,44 @@ Assert(
 
 (string platform, string appDllRelativePath) = CurrentPlatform();
 byte[] validAppDll = ReadFixtureAppDll();
+byte[] validIncrementalAppDll = ReadIncrementalFixtureAppDll();
 string candidateInternalVersion;
 int candidateBeta;
+EditorBetaReleaseVersion candidateVersion;
 using (MemoryStream identityInput = new(validAppDll, writable: false))
 {
     EditorAssemblyReleaseIdentity identity = EditorAssemblyReleaseIdentityReader.Read(identityInput, "update smoke application fixture");
     Assert(identity.AssemblyName == EditorAssemblyReleaseIdentityReader.ExpectedAssemblyName, "Fixture app DLL has the wrong assembly name.");
     Assert(identity.PublicBetaVersion >= 2, "The numbered updater smoke requires Beta V2 or newer app metadata.");
+    Assert(identity.HasExplicitPublicVersion, "The release app fixture is missing full public-version metadata.");
+    Assert(identity.HasExplicitReleaseManifestSchema, "The release app fixture is missing release-manifest schema metadata.");
+    Assert(identity.ReleaseManifestSchema == 1 && !identity.PublicVersion.IsIncremental,
+        "The V3 bridge fixture must retain whole-number schema-1 identity for Beta V2 compatibility.");
     Assert(EditorSemanticVersion.TryParse(identity.InternalVersion, out _), "Fixture app DLL informational version is not a semantic version.");
     candidateBeta = identity.PublicBetaVersion;
+    candidateVersion = identity.PublicVersion;
     candidateInternalVersion = identity.InternalVersion;
 }
+string incrementalInternalVersion;
+using (MemoryStream identityInput = new(validIncrementalAppDll, writable: false))
+{
+    EditorAssemblyReleaseIdentity identity = EditorAssemblyReleaseIdentityReader.Read(
+        identityInput,
+        "incremental update smoke application fixture");
+    Assert(identity.AssemblyName == EditorAssemblyReleaseIdentityReader.ExpectedAssemblyName,
+        "Incremental fixture app DLL has the wrong assembly name.");
+    Assert(identity.PublicBetaVersion == candidateBeta,
+        "Incremental fixture app DLL does not retain the current legacy beta major.");
+    Assert(identity.PublicVersion == new EditorBetaReleaseVersion(candidateBeta, 1) &&
+        identity.HasExplicitPublicVersion &&
+        identity.ReleaseManifestSchema == 2 &&
+        identity.HasExplicitReleaseManifestSchema,
+        "Incremental fixture app DLL does not carry canonical V3.1/schema-2 identity.");
+    Assert(EditorSemanticVersion.TryParse(identity.InternalVersion, out _),
+        "Incremental fixture app DLL informational version is not semantic.");
+    incrementalInternalVersion = identity.InternalVersion;
+}
 int currentBeta = candidateBeta - 1;
-EditorBetaReleaseVersion candidateVersion = new(candidateBeta);
 string candidateNotes = $"# {candidateVersion.DisplayName}\n\n- Keeps external projects untouched.\n- Adds the next bundled editor improvements.";
 string candidateAssetName = AssetName(candidateBeta, platform);
 byte[] validPayload = CreatePackage(candidateBeta, platform, appDllRelativePath, candidateNotes, candidateInternalVersion, validAppDll, includeMacMetadata: true);
@@ -87,6 +126,7 @@ GitHubReleaseUpdateClient client = new(http);
 EditorUpdateInfo update = await client.CheckAsync(currentBeta)
     ?? throw new InvalidOperationException("Expected numbered beta update was not found.");
 Assert(update.BetaVersion == candidateBeta, $"Unexpected public beta selected: {update.BetaVersion}");
+Assert(update.PublicVersion == candidateVersion.CanonicalVersion, $"Unexpected canonical public version selected: {update.PublicVersion}");
 Assert(update.ReleaseTag == candidateVersion.ReleaseTag, "Updater did not retain the exact public release tag.");
 Assert(update.DisplayName == candidateVersion.DisplayName, "Updater did not retain the friendly release name.");
 Assert(update.ReleaseNotes == candidateNotes, "Updater did not retain the GitHub changelog.");
@@ -94,6 +134,36 @@ Assert(update.Asset.Name == candidateAssetName, "Updater did not select the exac
 Assert(update.Asset.Sha256 == validHash, "GitHub asset SHA-256 was not normalized.");
 Assert(update.Asset.Size == validPayload.LongLength, "GitHub asset size was not retained.");
 Assert(await client.CheckAsync(candidateBeta) == null, "Current public beta was offered as an update.");
+
+EditorBetaReleaseVersion incrementalOne = new(candidateBeta, 1);
+EditorBetaReleaseVersion incrementalTwo = new(candidateBeta, 2);
+string incrementalJson = JsonSerializer.Serialize(new object[]
+{
+    IncrementalRelease(incrementalOne, new[]
+    {
+        Asset(AssetNameForVersion(incrementalOne, platform), validPayload.LongLength, validHash)
+    }),
+    IncrementalRelease(incrementalTwo, new[]
+    {
+        Asset(AssetNameForVersion(incrementalTwo, platform), validPayload.LongLength, validHash)
+    }),
+    IncrementalRelease(candidateVersion, Array.Empty<object>())
+});
+using (FixtureHandler incrementalHandler = new(incrementalJson, validPayload))
+using (HttpClient incrementalHttp = new(incrementalHandler))
+{
+    GitHubReleaseUpdateClient incrementalClient = new(incrementalHttp);
+    EditorUpdateInfo fromWhole = await incrementalClient.CheckAsync(candidateVersion)
+        ?? throw new InvalidOperationException("Beta V3 did not discover a same-major incremental update.");
+    Assert(fromWhole.PublicVersion == incrementalTwo.CanonicalVersion,
+        "Beta V3 did not choose the newest available V3.x release.");
+    EditorUpdateInfo fromFirstIncrement = await incrementalClient.CheckAsync(incrementalOne)
+        ?? throw new InvalidOperationException("Beta V3.1 did not discover Beta V3.2.");
+    Assert(fromFirstIncrement.PublicVersion == incrementalTwo.CanonicalVersion,
+        "Beta V3.1 did not select Beta V3.2.");
+    Assert(await incrementalClient.CheckAsync(incrementalTwo) == null,
+        "The current incremental public beta was offered as an update.");
+}
 
 string temporaryRoot = Path.Combine(Path.GetTempPath(), $"spyro-editor-update-{Guid.NewGuid():N}");
 try
@@ -220,6 +290,23 @@ try
         Path.Combine(temporaryRoot, "wrong-assembly-public-beta"),
         "An update ZIP whose app assembly public beta differs from its manifest was accepted.");
 
+    byte[] wrongManifestSchemaDll = ReplaceAssemblyAttributeBlob(
+        validAppDll,
+        [EditorAssemblyReleaseIdentityReader.ReleaseManifestSchemaMetadataKey, "1"],
+        [EditorAssemblyReleaseIdentityReader.ReleaseManifestSchemaMetadataKey, "2"]);
+    byte[] wrongManifestSchemaPackage = CreatePackage(
+        candidateBeta,
+        platform,
+        appDllRelativePath,
+        candidateNotes,
+        candidateInternalVersion,
+        wrongManifestSchemaDll);
+    await AssertRejectedPayloadAsync(
+        UpdateForPayload(update, wrongManifestSchemaPackage),
+        wrongManifestSchemaPackage,
+        Path.Combine(temporaryRoot, "wrong-assembly-manifest-schema"),
+        "An update ZIP whose app assembly manifest schema differs from its public version was accepted.");
+
     string wrongInternalVersion = DifferentSameLengthValue(candidateInternalVersion);
     byte[] wrongInternalVersionDll = ReplaceAssemblyAttributeBlob(
         validAppDll,
@@ -250,6 +337,96 @@ try
     byte[] wrongManifestPlatform = CreatePackage(candidateBeta, platform, appDllRelativePath, candidateNotes, candidateInternalVersion, validAppDll, manifestPlatformOverride: "wrong-platform");
     await AssertRejectedPayloadAsync(UpdateForPayload(update, wrongManifestPlatform), wrongManifestPlatform, Path.Combine(temporaryRoot, "wrong-manifest-platform"), "An update ZIP with a mismatched manifest platform was accepted.");
 
+    string incrementalNotes = $"# {incrementalOne.DisplayName}\n\n- Exercises canonical incremental update validation.";
+    EditorUpdateInfo incrementalTemplate = new(
+        incrementalOne.Major,
+        incrementalOne.ReleaseTag,
+        incrementalOne.DisplayName,
+        incrementalNotes,
+        new Uri($"https://github.com/monty19933-hub/Spyro1Editor/releases/tag/{incrementalOne.ReleaseTag}"),
+        true,
+        new EditorUpdateAsset(
+            AssetNameForVersion(incrementalOne, platform),
+            new Uri($"https://github.com/monty19933-hub/Spyro1Editor/releases/download/{incrementalOne.ReleaseTag}/{AssetNameForVersion(incrementalOne, platform)}"),
+            1,
+            new string('0', 64)),
+        incrementalOne.CanonicalVersion);
+    byte[] validIncrementalPackage = CreateIncrementalPackage(
+        incrementalOne,
+        platform,
+        appDllRelativePath,
+        incrementalNotes,
+        incrementalInternalVersion,
+        validIncrementalAppDll);
+    EditorUpdateInfo validIncrementalUpdate = UpdateForPayload(
+        incrementalTemplate,
+        validIncrementalPackage);
+    using (FixtureHandler incrementalDownloadHandler = new("[]", validIncrementalPackage))
+    using (HttpClient incrementalDownloadHttp = new(incrementalDownloadHandler))
+    {
+        GitHubReleaseUpdateClient incrementalDownloadClient = new(incrementalDownloadHttp);
+        string incrementalDownload = await incrementalDownloadClient.DownloadVerifiedAsync(
+            validIncrementalUpdate,
+            Path.Combine(temporaryRoot, "valid-incremental"));
+        Assert(File.ReadAllBytes(incrementalDownload).AsSpan().SequenceEqual(validIncrementalPackage),
+            "Verified incremental update differs from its fixture payload.");
+        Assert(incrementalDownloadHandler.DownloadRequests == 1,
+            "Valid incremental update was not downloaded exactly once.");
+    }
+
+    byte[] dottedSchemaOne = CreateIncrementalPackage(
+        incrementalOne,
+        platform,
+        appDllRelativePath,
+        incrementalNotes,
+        candidateInternalVersion,
+        validAppDll,
+        manifestSchema: 1);
+    await AssertRejectedPayloadAsync(
+        UpdateForPayload(incrementalTemplate, dottedSchemaOne),
+        dottedSchemaOne,
+        Path.Combine(temporaryRoot, "dotted-schema-one"),
+        "A dotted public release using legacy manifest schema 1 was accepted.");
+
+    byte[] dottedSchemaTwoWithWholeAssembly = CreateIncrementalPackage(
+        incrementalOne,
+        platform,
+        appDllRelativePath,
+        incrementalNotes,
+        candidateInternalVersion,
+        validAppDll);
+    await AssertRejectedPayloadAsync(
+        UpdateForPayload(incrementalTemplate, dottedSchemaTwoWithWholeAssembly),
+        dottedSchemaTwoWithWholeAssembly,
+        Path.Combine(temporaryRoot, "dotted-whole-assembly"),
+        "A schema-2 dotted package whose app assembly retained whole-number identity was accepted.");
+
+    byte[] wrongDottedManifestVersion = CreateIncrementalPackage(
+        incrementalOne,
+        platform,
+        appDllRelativePath,
+        incrementalNotes,
+        candidateInternalVersion,
+        validAppDll,
+        manifestPublicVersionOverride: incrementalTwo.CanonicalVersion);
+    await AssertRejectedPayloadAsync(
+        UpdateForPayload(incrementalTemplate, wrongDottedManifestVersion),
+        wrongDottedManifestVersion,
+        Path.Combine(temporaryRoot, "wrong-dotted-manifest-version"),
+        "A schema-2 package with a mismatched canonical public version was accepted.");
+
+    await ExpectInvalidDataAsync(
+        () => client.DownloadVerifiedAsync(
+            incrementalTemplate with { BetaVersion = incrementalOne.Major + 1 },
+            Path.Combine(temporaryRoot, "dotted-legacy-major-mismatch")),
+        "A dotted update whose legacy beta major did not match its public version was accepted.");
+
+    await ExpectInvalidDataAsync(
+        () => client.DownloadVerifiedAsync(
+            incrementalTemplate with { PublicVersion = $" {incrementalOne.CanonicalVersion}" },
+            Path.Combine(temporaryRoot, "noncanonical-dotted-version")),
+        "A dotted update with non-canonical public-version text was accepted.");
+
     byte[] missingChangelog = CreatePackage(candidateBeta, platform, appDllRelativePath, candidateNotes, candidateInternalVersion, validAppDll, includeChangelog: false);
     await AssertRejectedPayloadAsync(UpdateForPayload(update, missingChangelog), missingChangelog, Path.Combine(temporaryRoot, "missing-changelog"), "An update ZIP without its changelog was accepted.");
 
@@ -278,7 +455,7 @@ finally
         Directory.Delete(temporaryRoot, recursive: true);
 }
 
-Console.WriteLine("PASS: numbered prerelease Beta V discovery, one-time notification policy, exact repository/tag/title/asset identity, visible changelog preservation, protected-project isolation, trusted URLs, bounded streaming, SHA-256 verification, bounded non-link archive validation, package manifest/changelog/app-assembly identity validation, macOS metadata handling, reuse, and malformed-package rejection.");
+Console.WriteLine("PASS: whole-number and incremental prerelease discovery, legacy V3-to-V3.1 notification compatibility, one-time notification policy, exact repository/tag/title/asset identity, visible changelog preservation, protected-project isolation, trusted URLs, bounded streaming, SHA-256 verification, bounded non-link archive validation, schema-aware package manifest/changelog/app-assembly validation, macOS metadata handling, reuse, and malformed-package rejection.");
 
 static void Assert(bool condition, string message)
 {
@@ -323,6 +500,7 @@ static (string Platform, string AppDllRelativePath) CurrentPlatform()
 }
 
 static string AssetName(int beta, string platform) => $"SpyroEditor-Beta-V{beta}-{platform}.zip";
+static string AssetNameForVersion(EditorBetaReleaseVersion version, string platform) => $"{version.PackageStem}-{platform}.zip";
 
 static object Asset(string name, long size, string hash, string? downloadUrl = null) => new
 {
@@ -350,11 +528,34 @@ static object Release(
     assets
 };
 
+static object IncrementalRelease(
+    EditorBetaReleaseVersion version,
+    object[] assets,
+    string? body = "Safe project storage and update checks.",
+    bool prerelease = true) => new
+{
+    tag_name = version.ReleaseTag,
+    name = version.DisplayName,
+    body,
+    draft = false,
+    prerelease,
+    html_url = $"https://github.com/monty19933-hub/Spyro1Editor/releases/tag/{version.ReleaseTag}",
+    assets
+};
+
 static byte[] ReadFixtureAppDll()
 {
     string path = typeof(Spyro.Editor.App.App).Assembly.Location;
     if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         throw new FileNotFoundException("The update smoke could not locate its built Spyro.Editor.App fixture assembly.", path);
+    return File.ReadAllBytes(path);
+}
+
+static byte[] ReadIncrementalFixtureAppDll()
+{
+    string path = Path.Combine(AppContext.BaseDirectory, "Spyro.Editor.App.IncrementalFixture.dll");
+    if (!File.Exists(path))
+        throw new FileNotFoundException("The update smoke could not locate its built incremental app fixture assembly.", path);
     return File.ReadAllBytes(path);
 }
 
@@ -476,6 +677,40 @@ static byte[] CreatePackage(
             archive.CreateEntry($"__MACOSX/{metadataRoot}/");
             WriteEntry(archive, $"__MACOSX/{metadataRoot}/._README.txt", new byte[] { 0, 5, 22, 7 });
         }
+    }
+    return output.ToArray();
+}
+
+static byte[] CreateIncrementalPackage(
+    EditorBetaReleaseVersion version,
+    string platform,
+    string appDllRelativePath,
+    string changelog,
+    string internalVersion,
+    byte[] appDllPayload,
+    int manifestSchema = 2,
+    string? manifestPublicVersionOverride = null)
+{
+    string root = $"{version.PackageStem}-{platform}";
+    using MemoryStream output = new();
+    using (ZipArchive archive = new(output, ZipArchiveMode.Create, leaveOpen: true))
+    {
+        archive.CreateEntry(root + "/");
+        WriteEntry(archive, root + "/README.txt", Encoding.UTF8.GetBytes(version.DisplayName + "\nFixture package.\n"));
+        string manifest = JsonSerializer.Serialize(new
+        {
+            schemaVersion = manifestSchema,
+            channel = "beta",
+            publicBeta = version.Major,
+            publicVersion = manifestPublicVersionOverride ?? version.CanonicalVersion,
+            displayName = version.DisplayName,
+            internalVersion,
+            platform
+        });
+        WriteEntry(archive, root + "/release-manifest.json", Encoding.UTF8.GetBytes(manifest));
+        WriteEntry(archive, root + "/CHANGELOG.md", Encoding.UTF8.GetBytes(changelog + "\n"));
+        WriteEntry(archive, root + "/" + appDllRelativePath, appDllPayload);
+        WriteEntry(archive, root + "/support/fixture.txt", Encoding.UTF8.GetBytes("support"));
     }
     return output.ToArray();
 }

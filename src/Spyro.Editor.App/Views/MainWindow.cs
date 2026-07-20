@@ -310,6 +310,9 @@ public sealed partial class MainWindow : Window
         _viewport.TerrainBrushAdjustmentRequested += (_, e) => AdjustTerrainBrushFromViewport(e);
         _viewport.TerrainBrushModeRequested += (_, e) => SelectTerrainBrushMode(e.Action);
         _viewport.TerrainBrushStrokeFinished += (_, _) => FinishTerrainBrushUndo();
+        _viewport.TerrainTexturePaintRequested += async (_, e) =>
+            await ApplyTerrainTexturePaintBrushAsync(e.TerrainIndex, e.Terrain);
+        _viewport.TerrainTexturePaintCanceled += (_, _) => StopTerrainTexturePaintMode(announce: true);
         _viewport.MobyMoveRequested += (_, e) => MoveMobyFromViewport(e);
         _viewport.MobyRotateRequested += (_, e) => RotateMobyFromViewport(e);
         _viewport.ObjectPlacementRequested += async (_, e) => await PlacePendingMobyAtViewportAsync(e.ScreenPoint);
@@ -401,6 +404,19 @@ public sealed partial class MainWindow : Window
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
+        if (_terrainTexturePaintBusy || _terrainTextureRelocationBusy)
+        {
+            e.Cancel = true;
+            base.OnClosing(e);
+            if (_terrainTexturePaintBusy)
+            {
+                _terrainTexturePaintStopRequested = true;
+                _terrainTexturePaintStopRequestedAnnounce = true;
+            }
+            _statusText.Text = "Finishing the current native texture operation before the editor can close.";
+            return;
+        }
+
         if (_allowCloseWithUnsavedTerrain || !HasUnsavedTerrainEdits() && !HasUnsavedMobyEdits())
         {
             base.OnClosing(e);
@@ -414,6 +430,12 @@ public sealed partial class MainWindow : Window
 
         _showingCloseUnsavedTerrainDialog = true;
         _ = ConfirmCloseWithUnsavedTerrainAsync();
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        ClearTerrainTextureCatalogPreviewCache(rebindActivePreview: false);
+        base.OnClosed(e);
     }
 
     private Control BuildLayout()
@@ -1942,7 +1964,10 @@ public sealed partial class MainWindow : Window
 
     private void RefreshLevelSelectionAvailability()
     {
-        bool enabled = !_buildingPortableCache && !_loadingLevel;
+        bool enabled = !_buildingPortableCache &&
+            !_loadingLevel &&
+            !_terrainTexturePaintBusy &&
+            !_terrainTextureRelocationBusy;
         _levelJumpBox.IsEnabled = enabled;
         _levelList.IsEnabled = enabled;
     }
@@ -2177,6 +2202,12 @@ public sealed partial class MainWindow : Window
 
     private async Task SelectLevelAsync(LevelDefinition level)
     {
+        if (_terrainTexturePaintBusy || _terrainTextureRelocationBusy)
+        {
+            _statusText.Text = "Wait for the current native texture operation to finish before changing levels.";
+            return;
+        }
+
         int requestId = ++_levelLoadRequestId;
         LevelLoadData loaded = await Task.Run(() => LoadLevelData(level.Key));
         if (requestId != _levelLoadRequestId)
@@ -2187,6 +2218,17 @@ public sealed partial class MainWindow : Window
 
     private void ApplyLoadedLevel(LevelDefinition level, LevelLoadData loaded)
     {
+        if (_terrainTexturePaintBusy || _terrainTextureRelocationBusy)
+        {
+            _levelLoadRequestId++;
+            SyncLevelPickers(_currentLevel);
+            _statusText.Text =
+                $"Discarded the completed {level.DisplayName} load because a native texture operation is still using the current level. Choose the level again after it finishes.";
+            return;
+        }
+
+        StopTerrainTexturePaintMode(announce: false);
+        ClearTerrainTextureCatalogPreviewCache(rebindActivePreview: false);
         _currentLevel = level;
         _levelTitle.Text = level.DisplayName;
         ClearTerrainBrushUndoHistory();
@@ -6368,6 +6410,15 @@ public sealed partial class MainWindow : Window
             _statusText.Text = $"The selected face currently uses shared relocated texture {_selectedTerrain.TextureId}. Undo that shared replacement before applying a face-local resident look; no face or saved edit was changed.";
             return;
         }
+        if (_selectedTerrain.HasTextureEdit ||
+            _selectedTerrain.HasTextureVisualEdit ||
+            _selectedTerrain.HasSurfaceBehaviorEdit)
+        {
+            _statusText.Text =
+                $"Face {_selectedTerrain.RuntimeKey} already has a face-local texture, tint, or gameplay-property edit. " +
+                "Undo that texture paint before applying another resident look so the existing edit cannot be overwritten; no face or saved edit was changed.";
+            return;
+        }
         NativeTerrainTextureRelocationEdit? donorRelocation = _nativeTerrainTextureRelocations
             .FirstOrDefault(edit => edit.TargetTextureId == selected.TextureId);
         if (donorRelocation != null)
@@ -6378,43 +6429,120 @@ public sealed partial class MainWindow : Window
         NativeTerrainSurfaceSignature nativeBehavior = selected.NativeBehavior!;
         TerrainTextureVisualEdit nativeVisual = selected.NativeVisual!;
 
-        int originalTextureId = _selectedTerrain.TextureId;
-        _selectedTerrain.ApplyTextureOverride(selected.TextureId);
-        _selectedTerrain.ApplyTextureVisualEdit(nativeVisual);
-        if (selected.BehaviorTargetTriangleCount > 0)
+        TerrainPolygon target = _selectedTerrain;
+        TerrainTexturePaintStageSnapshot snapshot = TerrainTexturePaintStageSnapshot.Capture(target);
+        string terrainEditsPath = Path.Combine(
+            _workspace.RootPath,
+            $"{_currentLevel.Key}-terrain-edits.json");
+        byte[]? terrainEditsBefore = File.Exists(terrainEditsPath)
+            ? File.ReadAllBytes(terrainEditsPath)
+            : null;
+        int loadedTerrainEditsBefore = _loadedTerrainEdits;
+        string savedTerrainSignatureBefore = _savedTerrainEditSignature;
+        int originalTextureId = target.TextureId;
+        try
         {
-            ApplyNativeTerrainBehaviorToFace(
-                _selectedTerrain,
-                nativeBehavior,
-                _currentLevel.Key,
-                selected.RuntimeKey);
+            target.ApplyTextureOverride(selected.TextureId);
+            target.ApplyTextureVisualEdit(nativeVisual);
+            if (selected.BehaviorTargetTriangleCount > 0)
+            {
+                ApplyNativeTerrainBehaviorToFace(
+                    target,
+                    nativeBehavior,
+                    _currentLevel.Key,
+                    selected.RuntimeKey);
+            }
+            else
+            {
+                ApplyVisualOnlyNativeTerrainBehaviorToFace(
+                    target,
+                    nativeBehavior,
+                    _currentLevel.Key,
+                    selected.RuntimeKey);
+            }
+            TerrainMaterialClassifier.Apply(_currentLevel.Key, _workspace.RootPath, _currentGeometry);
+            target.SetSurfacePreviewColor(
+                nativeVisual.AverageNearColor,
+                $"native texture tint from {_currentLevel.Key}:{nativeVisual.SourceRuntimeKey}");
+
+            TerrainTexturePaintPersistenceFaultForTesting?.Invoke(terrainEditsPath);
+            int savedEdits = await PersistCurrentTerrainEditsAsync();
+            RefreshCurrentLevelDetails();
+            // Texture paint must become visible on the same frame it is committed.
+            // Refreshing the source map also clears cached bitmaps and disables the
+            // unedited whole-frame compositor for this edited scene.
+            RefreshTerrainTextureImageFiles();
+            _viewport.NotifyTerrainPresentationDataChanged();
+            ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, target));
+            string behaviorResult = selected.BehaviorTargetTriangleCount > 0
+                ? $"carried {nativeBehavior.Label} on {selected.BehaviorTargetTriangleCount} matched collision triangle(s)"
+                : "kept this visual-only face free of a gameplay-property patch";
+            _statusText.Text = $"Applied {TerrainMaterialClassifier.FormatSurface(selected.Surface)} texture {selected.TextureId} to one face (was texture {originalTextureId}); copied {nativeVisual.UniqueCornerPairCount} source-bound near/fade tint pair(s) from {nativeVisual.SourceRuntimeKey}; {behaviorResult}; saved {savedEdits} terrain edit(s).";
         }
-        else
+        catch (Exception ex)
         {
-            ApplyVisualOnlyNativeTerrainBehaviorToFace(
-                _selectedTerrain,
-                nativeBehavior,
-                _currentLevel.Key,
-                selected.RuntimeKey);
+            snapshot.Restore();
+            _loadedTerrainEdits = loadedTerrainEditsBefore;
+            _savedTerrainEditSignature = savedTerrainSignatureBefore;
+            if (terrainEditsBefore == null)
+            {
+                if (File.Exists(terrainEditsPath))
+                    File.Delete(terrainEditsPath);
+            }
+            else
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(terrainEditsPath) ?? _workspace.RootPath);
+                File.WriteAllBytes(terrainEditsPath, terrainEditsBefore);
+            }
+
+            TerrainMaterialClassifier.Apply(_currentLevel.Key, _workspace.RootPath, _currentGeometry);
+            snapshot.Restore();
+            ApplyCustomTerrainTexturePreviews();
+            _viewport.NotifyTerrainPresentationDataChanged();
+            ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, target));
+            RefreshCurrentLevelDetails();
+            RefreshTerrainReadinessHint();
+            EditorDiagnostics.RecordException("rolling back a face-local native texture paint", ex);
+            _statusText.Text =
+                $"Could not save texture {selected.TextureId} on face {target.RuntimeKey}: {ex.Message} " +
+                "The in-memory face and prior terrain edit file were restored; no terrain changed.";
         }
-        TerrainMaterialClassifier.Apply(_currentLevel.Key, _workspace.RootPath, _currentGeometry);
-        _selectedTerrain.SetSurfacePreviewColor(
-            nativeVisual.AverageNearColor,
-            $"native texture tint from {_currentLevel.Key}:{nativeVisual.SourceRuntimeKey}");
-        int savedEdits = await PersistCurrentTerrainEditsAsync();
-        RefreshCurrentLevelDetails();
-        _viewport.NotifyTerrainPresentationDataChanged();
-        ShowSelection(ViewportSelectionChangedEventArgs.ForTerrain(_selectedTerrainIndex, _selectedTerrain));
-        string behaviorResult = selected.BehaviorTargetTriangleCount > 0
-            ? $"carried {nativeBehavior.Label} on {selected.BehaviorTargetTriangleCount} matched collision triangle(s)"
-            : "kept this visual-only face free of a gameplay-property patch";
-        _statusText.Text = $"Applied {TerrainMaterialClassifier.FormatSurface(selected.Surface)} texture {selected.TextureId} to one face (was texture {originalTextureId}); copied {nativeVisual.UniqueCornerPairCount} source-bound near/fade tint pair(s) from {nativeVisual.SourceRuntimeKey}; {behaviorResult}; saved {savedEdits} terrain edit(s).";
     }
 
     private async Task ApplySelectedTerrainCrossLevelLookAsync(TerrainCrossLevelLookChoice selected)
     {
+        if (_terrainTextureRelocationBusy)
+        {
+            _statusText.Text = "Another native texture relocation is already finishing.";
+            return;
+        }
+
+        bool editorWasEnabled = IsEnabled;
+        _terrainTextureRelocationBusy = true;
+        _levelLoadRequestId++;
+        SyncLevelPickers(_currentLevel);
+        RefreshLevelSelectionAvailability();
+        IsEnabled = false;
+        try
+        {
+            await ApplySelectedTerrainCrossLevelLookCoreAsync(selected);
+        }
+        finally
+        {
+            _terrainTextureRelocationBusy = false;
+            IsEnabled = editorWasEnabled;
+            RefreshLevelSelectionAvailability();
+        }
+    }
+
+    private async Task ApplySelectedTerrainCrossLevelLookCoreAsync(TerrainCrossLevelLookChoice selected)
+    {
         if (_selectedTerrain == null || _currentLevel == null || _currentGeometry == null)
             return;
+        LevelDefinition auditedTargetLevel = _currentLevel;
+        GeometryCandidate auditedTargetGeometry = _currentGeometry;
+        TerrainPolygon auditedSelectedTerrain = _selectedTerrain;
+        int auditedLevelLoadRequestId = _levelLoadRequestId;
         if (selected.TargetTextureId != _selectedTerrain.TextureId)
         {
             _statusText.Text = $"The selected face now uses texture {_selectedTerrain.TextureId}, but this catalog decision was audited for shared target texture {selected.TargetTextureId}. Reopen the catalog; no face or saved edit was changed.";
@@ -6540,7 +6668,7 @@ public sealed partial class MainWindow : Window
         {
             bool ready = TryProveCrossLevelTerrainTextureArt(
                 sourceImage,
-                _currentLevel,
+                auditedTargetLevel,
                 sourceLevel,
                 selected.TargetTextureId,
                 selected.TextureId,
@@ -6588,16 +6716,41 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        TerrainPolygon[] revalidatedTargetFaces = auditedTargetGeometry.Polygons
+            .Where(face => !face.IsTerrainRemoved && face.TextureId == selected.TargetTextureId)
+            .ToArray();
+        bool targetContextChanged =
+            _levelLoadRequestId != auditedLevelLoadRequestId ||
+            !ReferenceEquals(_currentLevel, auditedTargetLevel) ||
+            !ReferenceEquals(_currentGeometry, auditedTargetGeometry) ||
+            !ReferenceEquals(_selectedTerrain, auditedSelectedTerrain) ||
+            auditedSelectedTerrain.TextureId != selected.TargetTextureId ||
+            revalidatedTargetFaces.Length != targetFaces.Length ||
+            revalidatedTargetFaces.Any(face => !targetFaces.Contains(face)) ||
+            _nativeTerrainTextureRelocations.Any(edit => edit.TargetTextureId == selected.TargetTextureId) ||
+            _customTerrainTextures.Any(import => import.TextureId == selected.TargetTextureId) ||
+            revalidatedTargetFaces.Any(face =>
+                face.HasTextureEdit || face.HasTextureVisualEdit || face.HasSurfaceBehaviorEdit);
+        if (targetContextChanged)
+        {
+            if (File.Exists(stagedPath))
+                File.Delete(stagedPath);
+            _statusText.Text =
+                $"The target level or texture {selected.TargetTextureId} changed while its native proof was running. The stale result was discarded; no face or saved edit was changed.";
+            return;
+        }
+        targetFaces = revalidatedTargetFaces;
+
         string relocationPath = NativeTerrainTextureRelocationEditStore.ManifestPath(
             _workspace.RootPath,
-            _currentLevel.Key);
-        string terrainEditsPath = Path.Combine(_workspace.RootPath, $"{_currentLevel.Key}-terrain-edits.json");
+            auditedTargetLevel.Key);
+        string terrainEditsPath = Path.Combine(_workspace.RootPath, $"{auditedTargetLevel.Key}-terrain-edits.json");
         string materialOverridesPath = Path.Combine(
             _workspace.RootPath,
-            $"{_currentLevel.Key}-terrain-material-overrides.json");
+            $"{auditedTargetLevel.Key}-terrain-material-overrides.json");
         string customTexturesPath = CustomTerrainTextureStore.ManifestPath(
             _workspace.RootPath,
-            _currentLevel.Key);
+            auditedTargetLevel.Key);
         Dictionary<string, byte[]?> filesBefore = new(StringComparer.OrdinalIgnoreCase)
         {
             [relocationPath] = File.Exists(relocationPath) ? File.ReadAllBytes(relocationPath) : null,
@@ -6797,12 +6950,19 @@ public sealed partial class MainWindow : Window
         {
             NativeTerrainTextureRelocationEdit? donorRelocation = _nativeTerrainTextureRelocations
                 .FirstOrDefault(edit => edit.TargetTextureId == entry.TextureId);
-            bool residentArtStateReady = selectedFaceRelocation == null && donorRelocation == null;
+            CustomTerrainTextureImport? donorCustomTexture = _customTerrainTextures
+                .FirstOrDefault(import => import.TextureId == entry.TextureId);
+            bool residentArtStateReady =
+                selectedFaceRelocation == null &&
+                donorRelocation == null &&
+                donorCustomTexture == null;
             string residentArtReadinessNote = selectedFaceRelocation != null
                 ? $"The selected face uses shared relocated texture {selectedFaceRelocation.TargetTextureId}; Undo that replacement before applying a face-local look."
                 : donorRelocation != null
                     ? $"Texture {entry.TextureId} contains a shared replacement from {donorRelocation.DonorLevelName}; Undo it before using this resident record."
-                    : entry.Readiness.ResidentArt.Note;
+                    : donorCustomTexture != null
+                        ? $"Texture {entry.TextureId} currently has staged custom art ({donorCustomTexture.SourceImageName}); remove that shared custom texture before choosing the original game tile."
+                        : entry.Readiness.ResidentArt.Note;
             TerrainPolygon[] originalFaces = originalFacesByTextureId.GetValueOrDefault(entry.TextureId) ?? [];
             bool visualDonorReady = TrySelectNativeTerrainVisualDonor(
                 sourceImage,
@@ -6835,6 +6995,7 @@ public sealed partial class MainWindow : Window
                     BehaviorSummary = "unreferenced native texture record",
                     ProofSummary = "art unproven",
                     ProofStatusRank = 0,
+                    HasCustomTexture = donorCustomTexture != null,
                     Color = entry.PreviewColor,
                     CanUseArt = entry.Readiness.ResidentArt.CanApply && residentArtStateReady,
                     ArtReadinessNote = residentArtReadinessNote,
@@ -6865,7 +7026,7 @@ public sealed partial class MainWindow : Window
                     BehaviorSummary = variant.BehaviorSummary,
                     ProofSummary = variant.Signature == null ? "native unresolved" : "native exact",
                     ProofStatusRank = variant.Signature == null ? 0 : 4,
-                    HasCustomTexture = false,
+                    HasCustomTexture = donorCustomTexture != null,
                     RuntimeKey = behaviorRepresentative.RuntimeKey,
                     VisualRuntimeKey = visualDonorReady ? visualRepresentative.RuntimeKey : "",
                     X = visualDonorReady ? visualRepresentative.Center.X : behaviorRepresentative.Center.X,
@@ -6890,7 +7051,10 @@ public sealed partial class MainWindow : Window
         return choices;
     }
 
-    private IReadOnlyList<TerrainCrossLevelLookChoice> BuildCrossLevelTerrainLookChoices(string preferredSurface)
+    private IReadOnlyList<TerrainCrossLevelLookChoice> BuildCrossLevelTerrainLookChoices(
+        string preferredSurface,
+        TerrainTexturePaintBrush? paintSource = null,
+        string? requestedSourceLevelKey = null)
     {
         if (_currentLevel == null || _currentGeometry == null || _selectedTerrain == null || _catalog.Levels.Count == 0)
             return Array.Empty<TerrainCrossLevelLookChoice>();
@@ -6926,6 +7090,20 @@ public sealed partial class MainWindow : Window
         {
             if (string.Equals(LevelCatalog.NormalizeKey(level.Key), LevelCatalog.NormalizeKey(_currentLevel.Key), StringComparison.OrdinalIgnoreCase))
                 continue;
+            if (paintSource is { Kind: TerrainTexturePaintSourceKind.CrossLevel } &&
+                !string.Equals(level.Key, paintSource.SourceLevelKey, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            if (paintSource == null &&
+                !string.IsNullOrWhiteSpace(requestedSourceLevelKey) &&
+                !string.Equals(
+                    LevelCatalog.NormalizeKey(level.Key),
+                    LevelCatalog.NormalizeKey(requestedSourceLevelKey),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
 
             string? overlayPath = FindCachedTerrainOverlayPath(level.Key);
             if (string.IsNullOrWhiteSpace(overlayPath))
@@ -6938,6 +7116,7 @@ public sealed partial class MainWindow : Window
             GeometryCandidate geometry;
             try
             {
+                TerrainTextureDonorLoadObserverForTesting?.Invoke(LevelCatalog.NormalizeKey(level.Key));
                 geometry = TryLoadNativeTerrainDonorGeometry(level, out _)
                     ?? throw new InvalidDataException($"No untouched cached terrain overlay is available for {level.DisplayName}.");
             }
@@ -6957,6 +7136,12 @@ public sealed partial class MainWindow : Window
                 : null;
             foreach (TerrainTextureCatalogEntry entry in textureCatalog.Entries)
             {
+                if (paintSource is { Kind: TerrainTexturePaintSourceKind.CrossLevel } &&
+                    entry.TextureId != paintSource.TextureId)
+                {
+                    continue;
+                }
+
                 TerrainPolygon[] originalFaces = originalFacesByTextureId.GetValueOrDefault(entry.TextureId) ?? [];
                 if (originalFaces.Length == 0)
                 {
@@ -6965,6 +7150,11 @@ public sealed partial class MainWindow : Window
                     string provenance = nativeUnreferencedStatic
                         ? NativeTerrainTextureRelocationEditStore.BuildTextureRecordProvenanceKey(level.Key, entry.TextureId)
                         : "";
+                    if (paintSource is { Kind: TerrainTexturePaintSourceKind.CrossLevel } &&
+                        !string.Equals(provenance, paintSource.RuntimeKey, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
                     string propertyNote = nativeUnreferencedStatic
                         ? "Art-only record: the donor has no native face/property binding. The target texture ID, HP material/semitransparency bits, descriptor ABR/alpha controls, tint, material label, and collision behavior will remain unchanged."
                         : entry.Readiness.RecordRole switch
@@ -7017,6 +7207,12 @@ public sealed partial class MainWindow : Window
 
                 foreach (NativeTerrainDonorVariant variant in BuildNativeTerrainDonorVariants(entry.TextureId, originalFaces, sourceNativeCatalog))
                 {
+                    if (paintSource is { Kind: TerrainTexturePaintSourceKind.CrossLevel } &&
+                        !string.Equals(variant.RepresentativeRuntimeKey, paintSource.RuntimeKey, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
                     TerrainPolygon representative = variant.Faces.FirstOrDefault(face => string.Equals(face.RuntimeKey, variant.RepresentativeRuntimeKey, StringComparison.OrdinalIgnoreCase))
                         ?? variant.Faces.OrderByDescending(face => face.Points.Count).ThenBy(face => face.RuntimeKey, StringComparer.OrdinalIgnoreCase).First();
                     string surface = InferNativeTerrainDonorSurface(variant.Faces, variant.Signature);
@@ -7165,19 +7361,29 @@ public sealed partial class MainWindow : Window
         return panel;
     }
 
-    private static Control BuildTerrainPaintDialogContent(
+    private Control BuildTerrainPaintDialogContent(
         Window dialog,
         TerrainPolygon selectedTerrain,
         ColorPalettePicker lowPicker,
         ColorPalettePicker highPicker,
         IReadOnlyList<TerrainTextureSwapChoice> inGameChoices,
         IReadOnlyList<TerrainCrossLevelLookChoice> crossLevelChoices,
-        TextBlock message)
+        TextBlock message,
+        bool chooseForPaintMode = false)
     {
+        if (chooseForPaintMode)
+        {
+            return BuildTerrainTexturePaintChooserDialogContent(
+                dialog,
+                selectedTerrain,
+                inGameChoices,
+                message);
+        }
+
         ComboBox modeBox = new()
         {
             ItemsSource = TerrainPaintModeOption.All,
-            SelectedIndex = 2,
+            SelectedIndex = chooseForPaintMode ? 1 : 2,
             MinWidth = 240,
             MinHeight = 34
         };
@@ -7185,7 +7391,8 @@ public sealed partial class MainWindow : Window
         ListBox lookList = new()
         {
             ItemsSource = inGameChoices,
-            MinHeight = 210,
+            Height = 310,
+            MaxHeight = 310,
             ItemTemplate = new FuncDataTemplate<TerrainTextureSwapChoice>((item, _) =>
             {
                 if (item == null)
@@ -7195,21 +7402,17 @@ public sealed partial class MainWindow : Window
                 {
                     ColumnDefinitions =
                     {
-                        new ColumnDefinition(new GridLength(30)),
+                        new ColumnDefinition(new GridLength(116)),
                         new ColumnDefinition(GridLength.Star)
                     },
                     ColumnSpacing = 8,
-                    Margin = new Thickness(4, 3)
+                    Margin = new Thickness(4, 6),
+                    MinHeight = 108
                 };
-                row.Children.Add(new Border
-                {
-                    Width = 24,
-                    Height = 18,
-                    CornerRadius = new CornerRadius(3),
-                    BorderBrush = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)),
-                    BorderThickness = new Thickness(1),
-                    Background = new SolidColorBrush(ToAvaloniaColor(item.Color))
-                });
+                row.Children.Add(BuildTerrainTextureCatalogPreview(
+                    _currentLevel?.Key ?? "",
+                    item.TextureId,
+                    item.Color));
                 AddGridControl(row, new TextBlock
                 {
                     Text = item.ListText,
@@ -7222,7 +7425,17 @@ public sealed partial class MainWindow : Window
             })
         };
         if (inGameChoices.Count > 0)
-            lookList.SelectedIndex = 0;
+        {
+            int usableIndex = inGameChoices
+                .Select((choice, index) => (choice, index))
+                .Where(item => chooseForPaintMode
+                    ? item.choice.CanChooseAsPaintBrushSource
+                    : item.choice.CanApplyAtomically)
+                .Select(item => item.index)
+                .DefaultIfEmpty(0)
+                .First();
+            lookList.SelectedIndex = usableIndex;
+        }
 
         TextBlock lookDetails = NewSmallNote("");
         void RefreshLookDetails()
@@ -7239,10 +7452,11 @@ public sealed partial class MainWindow : Window
                 ? "This target look already has custom art staged."
                 : "This target look uses original in-game art.";
             lookDetails.Text =
-                $"Texture {selectedTerrain.TextureId} -> {choice.TextureId}; {TerrainMaterialClassifier.FormatSurface(choice.Surface)}, {choice.FaceCount} face(s), proof {choice.ProofSummary}. {custom}\n" +
+                $"Texture {choice.TextureId}; {TerrainMaterialClassifier.FormatSurface(choice.Surface)}, {choice.FaceCount} face(s), proof {choice.ProofSummary}. {custom}\n" +
                 $"Art: {(choice.CanUseArt ? "Ready" : "Blocked")} — {choice.ArtReadinessNote}\n" +
                 $"Native tint: {(choice.CanTransferVisual ? "Ready" : "Blocked")} — {choice.VisualTransferNote}\n" +
-                $"Surface property: {(choice.CanTransferBehavior ? "Ready" : "Blocked")} — {choice.BehaviorTransferNote}";
+                $"Surface property: {(choice.CanTransferBehavior ? "Ready" : "Blocked")} — {choice.BehaviorTransferNote}" +
+                (chooseForPaintMode ? "\nThe clicked face will be rechecked for topology, tint capacity, collision property, and runtime safety before this texture is applied." : $"\nSelected target: texture {selectedTerrain.TextureId}.");
         }
         lookList.SelectionChanged += (_, _) => RefreshLookDetails();
         RefreshLookDetails();
@@ -7277,7 +7491,8 @@ public sealed partial class MainWindow : Window
         };
         ListBox crossLevelList = new()
         {
-            MinHeight = 230,
+            Height = 330,
+            MaxHeight = 330,
             ItemTemplate = new FuncDataTemplate<TerrainCrossLevelLookChoice>((item, _) =>
             {
                 if (item == null)
@@ -7287,21 +7502,17 @@ public sealed partial class MainWindow : Window
                 {
                     ColumnDefinitions =
                     {
-                        new ColumnDefinition(new GridLength(30)),
+                        new ColumnDefinition(new GridLength(116)),
                         new ColumnDefinition(GridLength.Star)
                     },
                     ColumnSpacing = 8,
-                    Margin = new Thickness(4, 3)
+                    Margin = new Thickness(4, 6),
+                    MinHeight = 108
                 };
-                row.Children.Add(new Border
-                {
-                    Width = 24,
-                    Height = 18,
-                    CornerRadius = new CornerRadius(3),
-                    BorderBrush = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)),
-                    BorderThickness = new Thickness(1),
-                    Background = new SolidColorBrush(ToAvaloniaColor(item.Color))
-                });
+                row.Children.Add(BuildTerrainTextureCatalogPreview(
+                    item.LevelKey,
+                    item.TextureId,
+                    item.Color));
                 AddGridControl(row, new TextBlock
                 {
                     Text = item.ListText,
@@ -7326,7 +7537,9 @@ public sealed partial class MainWindow : Window
 
             crossLevelDetails.Text =
                 $"{choice.RealmName} / {choice.LevelName} / texture {choice.TextureId}\n" +
-                $"Shared target texture {choice.TargetTextureId}: all {choice.AffectedFaceCount} affected face(s) must change together.\n" +
+                (chooseForPaintMode
+                    ? "Each clicked target texture is re-audited as one complete shared replacement.\n"
+                    : $"Shared target texture {choice.TargetTextureId}: all {choice.AffectedFaceCount} affected face(s) must change together.\n") +
                 $"Art: {(choice.CanUseArt ? "Ready" : "Blocked")} — {choice.ArtReadinessNote}\n" +
                 $"Surface property: {(choice.PreservesTargetNativeSurface ? "Preserved" : choice.CanTransferBehavior && choice.BehaviorReadyFaceCount == choice.AffectedFaceCount ? "Ready" : "Blocked")} — {choice.BehaviorTransferNote}\n" +
                 $"Runtime persistence: {(choice.CanPersistAtRuntime ? "Ready" : "Blocked")} — {choice.RuntimePersistenceNote}\n" +
@@ -7382,7 +7595,15 @@ public sealed partial class MainWindow : Window
                     string.Equals(choice.LevelKey, previous.LevelKey, StringComparison.OrdinalIgnoreCase) &&
                     choice.TextureId == previous.TextureId &&
                     Equals(choice.NativeBehavior, previous.NativeBehavior));
-            crossLevelList.SelectedIndex = index >= 0 ? index : visible.Count > 0 ? 0 : -1;
+            if (index < 0 && visible.Count > 0)
+            {
+                index = visible.FindIndex(choice => chooseForPaintMode
+                    ? choice.CanChooseAsPaintBrushSource
+                    : choice.CanApplyAtomically);
+                if (index < 0)
+                    index = 0;
+            }
+            crossLevelList.SelectedIndex = index;
             RefreshCrossLevelDetails();
         }
 
@@ -7471,12 +7692,16 @@ public sealed partial class MainWindow : Window
         };
         panel.Children.Add(new TextBlock
         {
-            Text = $"Selected face {selectedTerrain.RuntimeKey}, texture {selectedTerrain.TextureId}",
+            Text = chooseForPaintMode
+                ? "Choose the texture you want to paint with"
+                : $"Selected face {selectedTerrain.RuntimeKey}, texture {selectedTerrain.TextureId}",
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(32, 38, 45)),
             TextWrapping = TextWrapping.Wrap
         });
-        panel.Children.Add(NewSmallNote("Same-level resident looks change only the selected face. Cross-level choices represent a shared texture-record replacement and must cover every face using the selected target texture; no private slot is claimed while relocation proof is blocked."));
+        panel.Children.Add(NewSmallNote(chooseForPaintMode
+            ? "After choosing a source, the editor enters Texture Paint mode. Click terrain faces to apply it; Esc or Stop Painting exits. Same-level looks change one clicked face. Cross-level looks replace the clicked face's shared texture record, so every face using that target texture changes together. Every click reruns the atomic safety proof."
+            : "Same-level resident looks change only the selected face. Cross-level choices represent a shared texture-record replacement and must cover every face using the selected target texture; no private slot is claimed while relocation proof is blocked."));
         panel.Children.Add(modeGrid);
         panel.Children.Add(customPanel);
         panel.Children.Add(inGamePanel);
@@ -7492,7 +7717,7 @@ public sealed partial class MainWindow : Window
             Spacing = 8
         };
         Button cancel = NewButton("Cancel");
-        Button apply = NewButton("Apply Atomic Change");
+        Button apply = NewButton(chooseForPaintMode ? "Start Painting" : "Apply Atomic Change");
         cancel.Click += (_, _) => dialog.Close(null);
         apply.Click += (_, _) =>
         {
@@ -7508,9 +7733,10 @@ public sealed partial class MainWindow : Window
                         SetMessage("Choose an in-game terrain look first.", error: true);
                         return;
                     }
-                    if (!choice.CanApplyAtomically)
+                    if (!(chooseForPaintMode ? choice.CanChooseAsPaintBrushSource : choice.CanApplyAtomically))
                     {
-                        SetMessage($"This look is blocked before any face can change: {choice.AtomicBlockReason}", error: true);
+                        string reason = chooseForPaintMode ? choice.PaintBrushSourceBlockReason : choice.AtomicBlockReason;
+                        SetMessage($"This look cannot be used as a paint source: {reason}", error: true);
                         return;
                     }
                     dialog.Close(TerrainPaintDialogResult.ForInGameLook(choice));
@@ -7521,9 +7747,10 @@ public sealed partial class MainWindow : Window
                         SetMessage("Choose a terrain look from another cached level first.", error: true);
                         return;
                     }
-                    if (!crossLevelChoice.CanApplyAtomically)
+                    if (!(chooseForPaintMode ? crossLevelChoice.CanChooseAsPaintBrushSource : crossLevelChoice.CanApplyAtomically))
                     {
-                        SetMessage($"Shared texture replacement blocked before any face can change: {crossLevelChoice.AtomicBlockReason}", error: true);
+                        string reason = chooseForPaintMode ? crossLevelChoice.PaintBrushSourceBlockReason : crossLevelChoice.AtomicBlockReason;
+                        SetMessage($"This cross-level look cannot be used as a paint source: {reason}", error: true);
                         return;
                     }
                     dialog.Close(TerrainPaintDialogResult.ForCrossLevelLook(crossLevelChoice));
@@ -8046,7 +8273,10 @@ public sealed partial class MainWindow : Window
         SetButtonEnabled(_terrainFindAddSourceButton, canUseTerrainAddCopyInLevel && HasAnyTerrainAddCopySource());
         SetButtonEnabled(_terrainTaskMoveFaceButton, hasTerrain && !_selectedTerrain!.IsTerrainRemoved);
         SetButtonEnabled(_terrainTaskSinglePointButton, hasTerrainPoint);
-        SetButtonEnabled(_terrainTaskPaintFaceButton, hasTerrain && !_selectedTerrain!.IsTerrainRemoved);
+        SetButtonEnabled(
+            _terrainTaskPaintFaceButton,
+            _currentLevel != null &&
+            _currentGeometry?.Polygons.Any(face => !face.IsTerrainRemoved && face.TextureId >= 0) == true);
         SetButtonEnabled(_terrainTaskAddCopyButton, canStageAnyAddCopy);
         SetButtonEnabled(_terrainTaskRemoveFaceButton, canRemoveSelectedTerrain);
         SetButtonEnabled(_terrainTaskSaveButton, hasUnsavedTerrainEdits);
@@ -8253,7 +8483,7 @@ public sealed partial class MainWindow : Window
         if (!hasLevel)
             return "Open a level before editing terrain.";
         if (!hasTerrain)
-            return "Select a terrain face to edit its material, texture, or height. Brushes can still be configured before selection.";
+            return "Use Paint Face to choose a native texture first, then click terrain to apply it. Select a face for material, height, add, or remove tools.";
         if (_selectedTerrain?.IsTerrainRemoved == true)
             return "Selected terrain is staged for removal. Undo Terrain restores this face in the editor.";
         if (_selectedTerrain?.IsTerrainAddClone == true)
@@ -8293,7 +8523,7 @@ public sealed partial class MainWindow : Window
             string review = hasAnyTerrainReviewItem
                 ? " Review Edits shows current saved/staged terrain and texture-art changes."
                 : "";
-            return $"Select a terrain face to enable terrain editing. Create BIN can still build saved terrain/custom texture edits for this level.{review}";
+            return $"Paint Face is ready without a selection: choose a native texture, then click terrain to apply it. Select a face to enable move, point, add, and remove tasks.{review}";
         }
 
         if (_selectedTerrain == null)
@@ -8317,7 +8547,7 @@ public sealed partial class MainWindow : Window
         choices.Add(hasTerrainPoint ? "Edit Point changes one vertex" : "Edit Point needs a face with editable points");
         choices.Add(canRemoveSelectedTerrain ? "Remove Terrain can delete the visible face and matched gameplay collision" : "Remove Terrain is disabled until this face has visible and collision proof");
         choices.Add(canStageAnyAddCopy ? "Add Terrain can stage a proven copied face" : canUseTerrainAddCopyInLevel ? "Add Terrain needs a proven source face for this level" : "Add Terrain needs current-level add-copy proof");
-        choices.Add("Paint Face can use custom colors, in-game looks, or pasted palettes");
+        choices.Add("Paint Face chooses a native texture first, then stays active while you click terrain targets");
         return string.Join(". ", choices) + ".";
     }
 
@@ -13241,7 +13471,13 @@ public sealed partial class MainWindow : Window
                     }
                 }
             };
-            releaseTabs.SelectionChanged += (_, _) => _viewport.TerrainFocusMode = releaseTabs.SelectedIndex == 1;
+            releaseTabs.SelectionChanged += (_, _) =>
+            {
+                bool terrainTab = releaseTabs.SelectedIndex == 1;
+                _viewport.TerrainFocusMode = terrainTab;
+                if (!terrainTab)
+                    StopTerrainTexturePaintMode(announce: false);
+            };
             _viewport.TerrainFocusMode = false;
             return releaseTabs;
         }
@@ -13263,7 +13499,13 @@ public sealed partial class MainWindow : Window
                 }
             }
         };
-        tabs.SelectionChanged += (_, _) => _viewport.TerrainFocusMode = tabs.SelectedIndex == 1;
+        tabs.SelectionChanged += (_, _) =>
+        {
+            bool terrainTab = tabs.SelectedIndex == 1;
+            _viewport.TerrainFocusMode = terrainTab;
+            if (!terrainTab)
+                StopTerrainTexturePaintMode(announce: false);
+        };
         _viewport.TerrainFocusMode = tabs.SelectedIndex == 1;
         return tabs;
     }
@@ -13378,7 +13620,7 @@ public sealed partial class MainWindow : Window
         });
         panel.Children.Add(new TextBlock
         {
-            Text = "Select a terrain face in the map, then browse original textures from every realm and level. A cross-level choice replaces the selected shared texture record everywhere it is used and carries its proven gameplay property, including damaging water, lava, and goo.",
+            Text = "Choose an original texture, then paint by clicking terrain faces in the map. Same-level Texture Paint changes only the clicked face. Cross-level Texture Paint is one-section-only and applies only when that face owns a unique native texture record; shared targets stop safely without changing terrain. Use Advanced / Shared Replacement for an intentional shared-record change or for custom color, import, and paste tools.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92)),
             FontSize = 12,
@@ -13396,20 +13638,25 @@ public sealed partial class MainWindow : Window
             {
                 new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Auto),
+                new RowDefinition(GridLength.Auto),
                 new RowDefinition(GridLength.Auto)
             }
         };
-        Button browse = NewAsyncButton("Browse All Game Textures", PaintSelectedTerrainFaceAsync);
+        Button browse = NewAsyncButton("Choose Texture & Start Painting", ChooseTerrainTexturePaintBrushAsync);
         Grid.SetColumnSpan(browse, 2);
         AddGridButton(actions, browse, 0, 0);
-        AddGridButton(actions, NewAsyncButton("Undo Selected Swap", UndoSelectedTerrainAsync), 0, 1);
-        AddGridButton(actions, NewAsyncButton("Save Terrain", SaveCurrentTerrainEditsAsync), 1, 1);
-        AddGridButton(actions, NewAsyncButton("Preflight BIN", PreflightTerrainPatchAsync), 0, 2);
-        AddGridButton(actions, NewAsyncButton("Restore Terrain", RestoreCurrentTerrainAsync), 1, 2);
+        Button sharedReplacement = NewAsyncButton("Advanced / Shared Replacement", PaintSelectedTerrainFaceAsync);
+        Grid.SetColumnSpan(sharedReplacement, 2);
+        AddGridButton(actions, sharedReplacement, 0, 1);
+        AddGridButton(actions, NewAsyncButton("Undo Selected Texture Paint", UndoSelectedTerrainTexturePaintAsync), 0, 2);
+        AddGridButton(actions, NewAsyncButton("Save Terrain", SaveCurrentTerrainEditsAsync), 1, 2);
+        AddGridButton(actions, NewAsyncButton("Preflight BIN", PreflightTerrainPatchAsync), 0, 3);
+        AddGridButton(actions, NewAsyncButton("Restore Terrain", RestoreCurrentTerrainAsync), 1, 3);
         panel.Children.Add(actions);
+        panel.Children.Add(BuildTerrainTexturePaintModePanel());
         panel.Children.Add(new TextBlock
         {
-            Text = "Same-level face swaps also preserve the donor's source-verified near/fade corner tints in private target slots. Cross-level swaps require the complete 23-part texture record, target runtime controls, shared storage ownership, every affected face, collision properties, and exact readback. Create BIN repeats every check against the selected source disc.",
+            Text = "Same-level Texture Paint preserves the donor's source-verified near/fade corner tints while changing one face. Cross-level Texture Paint accepts only unique target records. Advanced / Shared Replacement can intentionally change every face using a shared target record and therefore requires the complete 23-part texture record, target runtime controls, shared storage ownership, collision properties, and exact readback. Create BIN repeats every check against the selected source disc.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(34, 71, 106)),
             FontSize = 12,
@@ -13492,7 +13739,7 @@ public sealed partial class MainWindow : Window
         };
         _terrainTaskMoveFaceButton = NewAsyncButton("Move Face", MoveSelectedTerrainFaceAsync);
         _terrainTaskSinglePointButton = NewAsyncButton("Edit Point", EditSelectedTerrainPointAsync);
-        _terrainTaskPaintFaceButton = NewAsyncButton("Paint Face", PaintSelectedTerrainFaceAsync);
+        _terrainTaskPaintFaceButton = NewAsyncButton("Paint Face", ChooseTerrainTexturePaintBrushAsync);
         _terrainTaskAddCopyButton = NewAsyncButton("Add Terrain", StageAddCloneSelectedTerrainAsync);
         _terrainTaskRemoveFaceButton = NewAsyncButton("Remove Terrain", StageRemoveSelectedTerrainAsync);
         _terrainUndoButton = NewAsyncButton("Undo Terrain", UndoSelectedTerrainAsync);
@@ -15020,6 +15267,8 @@ public sealed partial class MainWindow : Window
         TerrainBrushModeOption selected = _terrainBrushModeBox.SelectedItem as TerrainBrushModeOption
             ?? TerrainBrushModeOption.All[0];
         _activeFlattenTerrainZ = null;
+        if (selected.Action != TerrainBrushAction.Off)
+            StopTerrainTexturePaintMode(announce: false);
         _viewport.TerrainBrushAction = selected.Action;
         RefreshTerrainBrushHistoryText();
         if (selected.Action != TerrainBrushAction.Off)
@@ -18883,6 +19132,7 @@ public sealed partial class MainWindow : Window
 
     private void BeginPendingMobyPlacement(PendingMobyAdd pending, Vector3f fallbackPosition)
     {
+        StopTerrainTexturePaintMode(announce: false);
         _pendingMobyAdd = pending with { FallbackPosition = fallbackPosition };
         _viewport.ObjectPlacementMode = true;
         RefreshActionAvailability();
@@ -27447,12 +27697,23 @@ public sealed partial class MainWindow : Window
             NativeBehavior != null &&
             AffectedFaceCount > 0 &&
             BehaviorReadyFaceCount == AffectedFaceCount;
+        public bool CanChooseAsPaintBrushSource =>
+            CanUseArt &&
+            NativeVisual != null &&
+            NativeBehavior != null;
         public string AtomicBlockReason => !CanUseArt
             ? ArtReadinessNote
             : !CanTransferVisual || NativeVisual == null
                 ? VisualTransferNote
             : !CanTransferBehavior || NativeBehavior == null || BehaviorReadyFaceCount != AffectedFaceCount
                 ? BehaviorTransferNote
+                : "";
+        public string PaintBrushSourceBlockReason => !CanUseArt
+            ? ArtReadinessNote
+            : NativeVisual == null
+                ? "This texture has no source-verified native visual donor."
+            : NativeBehavior == null
+                ? "This texture has no exact native surface-property donor."
                 : "";
 
         public string ListText
@@ -27528,12 +27789,24 @@ public sealed partial class MainWindow : Window
             CanPersistAtRuntime &&
             AffectedFaceCount > 0 &&
             SurfacePropertyHandlingReady;
+        public bool CanChooseAsPaintBrushSource =>
+            CanUseArt &&
+            (PreservesTargetNativeSurface
+                ? DonorRecordRole == TerrainTextureRecordRole.NativeUnreferencedStatic
+                : NativeBehavior != null);
         public string AtomicBlockReason => !CanUseArt
             ? ArtReadinessNote
             : !CanPersistAtRuntime
                 ? RuntimePersistenceNote
             : !SurfacePropertyHandlingReady
                 ? BehaviorTransferNote
+                : "";
+        public string PaintBrushSourceBlockReason => !CanUseArt
+            ? ArtReadinessNote
+            : PreservesTargetNativeSurface && DonorRecordRole != TerrainTextureRecordRole.NativeUnreferencedStatic
+                ? "This art-only source is not a verified native-unreferenced static texture record."
+            : !PreservesTargetNativeSurface && NativeBehavior == null
+                ? "This source has no exact native surface-property donor."
                 : "";
 
         public string ListText

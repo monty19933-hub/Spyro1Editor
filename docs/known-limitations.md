@@ -1,4 +1,4 @@
-# Spyro Editor Beta V2 Known Limitations
+# Spyro Editor Beta V3 Known Limitations
 
 This beta is useful, but it is not a finished Spyro modding tool yet. Treat it as a testing build for editor workflow, object placement, terrain inspection, and moby identity mapping.
 
@@ -513,10 +513,19 @@ Before promoting terrain behavior, testers need before/after in-game evidence su
 - Solid-ground control capture.
 - Repeated proof on another face of the same surface type.
 
-Terrain/building art uses indexed PlayStation texture pages. `Browse All Game
-Textures` shows the decoded native records by realm and level, including rows
-that cannot safely be applied. A supported cross-level Apply changes the shared
-target texture record for every face using that texture ID—not just the clicked
+Terrain/building art uses indexed PlayStation texture pages. `Choose Texture &
+Start Painting` initially loads only the active level into a six-column gallery;
+another level is decoded only after the user explicitly loads it. Unsupported
+records remain visible as gray `BLOCKED` cards with their exact reason. The
+fast paint path is face-local. Same-level painting changes only the clicked
+face; cross-level painting does so only when that destination owns a unique safe
+texture record. A shared destination is refused without mutation.
+
+The existing shared cross-level replacement and custom color/import/paste path
+remains available through the separate `Advanced / Shared Replacement`
+terrain-panel button. It is
+intentionally explicit because a supported Apply changes the shared target
+texture record for every face using that texture ID—not just the clicked
 triangle—and uses either complete target-owned in-place storage or protected
 byte-private relocation. `Create BIN` repeats the ownership, runtime-control,
 indexed-pixel, palette, low-detail-alias, property-layout, and exact-readback

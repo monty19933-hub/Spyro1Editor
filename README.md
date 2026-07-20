@@ -13,15 +13,30 @@ GitHub Releases are the intended place for public Mac and Windows builds.
 
 The release packages are self-contained:
 
-- `SpyroEditor-Beta-V2-osx-arm64.zip`
-- `SpyroEditor-Beta-V2-win-x64.zip`
+- `SpyroEditor-Beta-V3-osx-arm64.zip`
+- `SpyroEditor-Beta-V3-win-x64.zip`
 
 The public release name is independent of internal build iterations. Publish
-only intentional bundled releases: tag `beta-v2`, use the exact GitHub title
-`Spyro Editor Beta V2`, mark it as a prerelease, attach the two exact package
+only intentional bundled releases: tag `beta-v3`, use the exact GitHub title
+`Spyro Editor Beta V3`, mark it as a prerelease, attach the two exact package
 names above, and paste `CHANGELOG.md` unchanged into the GitHub release body.
-Ordinary commits and fixes do not create update prompts. The next public update
-will be `beta-v3` / `Spyro Editor Beta V3` with matching `Beta-V3` assets.
+Ordinary commits and fixes do not create update prompts.
+
+V3 is an intentional compatibility bridge for installed V2 clients. Its tag,
+title, asset names, schema-1 manifest, `publicBeta: 3`, and legacy integer
+assembly identity retain the exact numbered-beta contract that V2 understands.
+Do not publish this build as V2.1: V2's updater cannot parse a dotted release.
+
+After that bridge, incremental public updates use canonical dotted identities:
+`beta-v3.1`, `Spyro Editor Beta V3.1`, and matching `Beta-V3.1` assets. Those
+packages use manifest schema 2, carry `publicVersion: "3.1"`, and retain legacy
+integer beta metadata only for compatibility. Each `CHANGELOG.md` is solely the
+delta from the immediately previous public release, not accumulated history.
+
+The frozen V2 updater scans only the newest 30 prereleases and ignores dotted
+identities. The release checklist therefore keeps a whole-number schema-1 bridge
+inside that window, publishing a later bridge such as V4 before the previous one
+ages out. Dotted increments between those bridges continue to use schema 2.
 
 The updater rejects a mismatched tag, title, public beta, platform, archive
 manifest, packaged changelog, embedded app identity/internal build, asset name,
@@ -30,7 +45,7 @@ safely would require a separate signed manifest and stable direct-download
 endpoint.
 
 Use `docs/beta-release-checklist.md` for the exact build, verification, draft
-release, asset, changelog, and project-persistence gates for each numbered beta.
+release, asset, changelog, compatibility, and project-persistence gates.
 
 Unzip the package, open `Spyro Editor.app` directly on macOS (there is no
 separate `.command` launcher), or open `Launch Spyro Editor.bat` on Windows.
@@ -46,6 +61,11 @@ service outage: it remains Developer ID signed, hardened, and securely
 timestamped, but includes `MACOS-OPEN-INSTRUCTIONS.txt` because testers may need
 System Settings > Privacy & Security > Open Anyway. This emergency fallback must
 be replaced by the normal notarized asset as soon as possible.
+When the release owner explicitly approves an accept-the-risk package because
+no Developer ID identity is installed, `SPYRO_EDITOR_MAC_BUILD_MODE=community`
+produces a hardened ad-hoc-signed ZIP with the same opening instructions and
+published SHA-256 digests. Beta V3 uses the `signed-only` path: it is Developer
+ID signed, hardened, and securely timestamped, but not notarized.
 
 ## Current Editor
 
@@ -59,12 +79,13 @@ Current release features include:
   beta without moving/deleting it or overwriting conflicts. Rebuildable caches
   and stale WAD analysis are regenerated.
 - A prominent, once-per-release in-app notification and `More` > `Check for
-  Updates` select only the next numbered Mac/Windows beta. The update window
-  shows the GitHub changelog, preserves a copy beside the verified download,
-  and creates a pre-update project snapshot. In-place replacement remains
-  disabled so installation is an explicit user action. Public macOS packages
-  are Developer ID signed, hardened, notarized by Apple, and stapled before
-  upload.
+  Updates` select only the next canonical Mac/Windows beta release. The update
+  window shows the GitHub changelog, preserves a copy beside the verified
+  download, and creates a pre-update project snapshot. In-place replacement
+  remains disabled so installation is an explicit user action. Normal production
+  macOS packages are Developer ID signed, hardened, notarized by Apple, and
+  stapled before upload; an explicitly approved community fallback is always
+  labeled as ad-hoc signed and includes Open Anyway instructions.
 
 - **Edit Map** and **Game Camera** level inspection.
 - Level terrain and object maps rebuilt from the user's selected BIN/CUE.
@@ -248,14 +269,22 @@ Current release features include:
   through later portal transitions.
   `Reset to Normal Level Palette and Skybox` removes the saved sky and terrain
   palette match together.
-- `Terrain` > `Browse All Game Textures` presents the disc's decoded native
-  terrain/building texture records by realm and level. A same-level choice is a
-  selected-face swap that carries the donor's source-verified near/fade corner
-  tints into private or unused color slots without recoloring neighboring
-  faces. Save/reload and Undo preserve or remove that complete recipe rather
-  than retaining only a texture number. A cross-level choice
-  replaces the selected target texture record for every face that shares that
-  texture ID. Apply is enabled only after the target's runtime-persistence,
+- `Terrain` > `Choose Texture & Start Painting` presents the disc's decoded
+  native terrain/building texture records in a six-column gallery. It loads the
+  active level only; another level is read only after the user selects it and
+  presses `Load Level Textures`. Double-clicking an available tile enters paint
+  mode, while unsupported records stay visible as gray `BLOCKED` cards with an
+  exact reason. A same-level choice is a selected-face swap that carries the
+  donor's source-verified near/fade corner tints into private or unused color
+  slots without recoloring neighboring faces. Save/reload and Undo preserve or
+  remove that complete recipe rather than retaining only a texture number. Fast
+  cross-level paint is also face-local, but only when the selected destination
+  owns a unique safe texture record; shared targets are refused without
+  mutation. The existing explicit whole-record workflow remains on the separate
+  `Advanced / Shared Replacement` terrain-panel button, along with its custom
+  color/import/paste controls. That action replaces the selected target texture
+  record for every face that shares its texture ID. Apply is enabled only after
+  the target's runtime-persistence,
   complete-record ownership, in-place-or-private-relocation storage, donor
   pixels/palettes, and collision-property batch all pass source-bound checks.
   The donor's exact native surface signature is copied to every matched target
@@ -333,11 +362,13 @@ Requirements:
 - .NET 10 SDK.
 - macOS is currently used for the two-platform release script.
 - An Apple Developer ID Application identity for team `694865MF93` and the
-  release JIT entitlements are required for every public Mac package. Normal
-  production builds also require configured Apple notarization credentials and
-  reject unstapled or Gatekeeper-rejected output. The explicit emergency
-  `signed-only` mode instead requires Gatekeeper's exact `Unnotarized Developer
-  ID` result and the included Open Anyway instructions.
+  release JIT entitlements are required for normal production Mac packages.
+  Production also requires configured Apple notarization credentials and rejects
+  unstapled or Gatekeeper-rejected output. The explicit emergency `signed-only`
+  mode requires Gatekeeper's exact `Unnotarized Developer ID` result. The
+  separately approved `community` mode is available when no Developer ID
+  identity exists; it verifies a hardened ad-hoc signature and includes Open
+  Anyway instructions rather than claiming Apple identity or notarization.
 
 Build release zips:
 

@@ -16,11 +16,20 @@ public static class EditorUpdateNotificationPolicy
     public static bool ShouldShow(
         int currentBetaVersion,
         int availableBetaVersion,
-        int lastNotifiedBetaVersion)
+        int lastNotifiedBetaVersion) =>
+        ShouldShow(
+            new EditorBetaReleaseVersion(currentBetaVersion),
+            availableBetaVersion > 0 ? new EditorBetaReleaseVersion(availableBetaVersion) : null,
+            lastNotifiedBetaVersion > 0 ? new EditorBetaReleaseVersion(lastNotifiedBetaVersion) : null);
+
+    public static bool ShouldShow(
+        EditorBetaReleaseVersion currentVersion,
+        EditorBetaReleaseVersion? availableVersion,
+        EditorBetaReleaseVersion? lastNotifiedVersion)
     {
-        if (currentBetaVersion <= 0)
-            throw new ArgumentOutOfRangeException(nameof(currentBetaVersion));
-        return availableBetaVersion > currentBetaVersion &&
-            lastNotifiedBetaVersion < availableBetaVersion;
+        ArgumentNullException.ThrowIfNull(currentVersion);
+        return availableVersion != null &&
+            availableVersion.CompareTo(currentVersion) > 0 &&
+            (lastNotifiedVersion == null || lastNotifiedVersion.CompareTo(availableVersion) < 0);
     }
 }

@@ -67,6 +67,16 @@ try
         RunTerrainSameLevelRoundTripOnly();
         return 0;
     }
+    if (args.Contains("--terrain-texture-paint-mode-only", StringComparer.OrdinalIgnoreCase))
+    {
+        RunTerrainTexturePaintModeOnly();
+        return 0;
+    }
+    if (args.Contains("--terrain-texture-paint-gallery-only", StringComparer.OrdinalIgnoreCase))
+    {
+        RunTerrainTexturePaintGalleryOnly();
+        return 0;
+    }
     if (args.Contains("--update-only", StringComparer.OrdinalIgnoreCase))
     {
         RunUpdateOnly();
@@ -1492,6 +1502,210 @@ void RunTerrainSameLevelRoundTripOnly()
     }
 }
 
+void RunTerrainTexturePaintModeOnly()
+{
+    MainWindow window = new()
+    {
+        Width = 1200,
+        Height = 760,
+        WindowStartupLocation = WindowStartupLocation.Manual,
+        Position = new PixelPoint(0, 0)
+    };
+    window.Show();
+    try
+    {
+        WaitForLevelData(window);
+        FindButton(window, "Choose Texture & Start Painting");
+        Task<string> task = window.AssertTerrainTexturePaintModeForTestingAsync();
+        for (int attempt = 0; attempt < 12000 && !task.IsCompleted; attempt++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(5);
+        }
+        if (!task.IsCompleted)
+            throw new TimeoutException("The focused texture chooser/paint/apply/Undo UI smoke exceeded 60 seconds.");
+        string result = task.GetAwaiter().GetResult();
+        Console.WriteLine($"Terrain texture paint-mode UI: {result}.");
+    }
+    finally
+    {
+        window.Close();
+        FlushUi();
+    }
+}
+
+void RunTerrainTexturePaintGalleryOnly()
+{
+    MainWindow window = new()
+    {
+        Width = 1400,
+        Height = 900,
+        WindowStartupLocation = WindowStartupLocation.Manual,
+        Position = new PixelPoint(0, 0)
+    };
+    List<string> donorLoads = [];
+    window.TerrainTextureDonorLoadObserverForTesting = levelKey => donorLoads.Add(levelKey);
+    window.Show();
+    try
+    {
+        WaitForLevelData(window);
+        Window dialog = OpenAsyncDialog(
+            window,
+            FindButton(window, "Choose Texture & Start Painting"),
+            "Choose Terrain Texture",
+            "terrain texture paint gallery");
+        FlushUi();
+
+        if (donorLoads.Count != 0)
+        {
+            throw new InvalidOperationException(
+                $"Opening the texture gallery eagerly loaded donor level(s): {string.Join(", ", donorLoads)}.");
+        }
+
+        ListBox gallery = FindNamed<ListBox>(dialog, "TerrainTextureGallery");
+        ComboBox sourceLevelPicker = FindNamed<ComboBox>(dialog, "TerrainTextureSourceLevelPicker");
+        Button loadLevelButton = FindNamed<Button>(dialog, "TerrainTextureLoadLevelButton");
+        if (sourceLevelPicker.SelectedItem is not object currentOption ||
+            !TemplateValue<bool>(currentOption, "IsCurrent"))
+        {
+            throw new InvalidOperationException("The texture gallery did not initially select the current level.");
+        }
+
+        LevelDefinition currentLevel = TemplateValue<LevelDefinition>(currentOption, "Level");
+        object[] initialItems = ReadItemsSource(gallery, "initial current-level texture gallery");
+        if (initialItems.Length == 0)
+            throw new InvalidOperationException("The current-level texture gallery opened empty.");
+        string normalizedCurrentLevel = LevelCatalog.NormalizeKey(currentLevel.Key);
+        object? wrongInitialLevel = initialItems.FirstOrDefault(item =>
+            !string.Equals(
+                LevelCatalog.NormalizeKey(TemplateValue<string>(item, "LevelKey")),
+                normalizedCurrentLevel,
+                StringComparison.OrdinalIgnoreCase));
+        if (wrongInitialLevel != null)
+        {
+            throw new InvalidOperationException(
+                $"The initial gallery included {TemplateValue<string>(wrongInitialLevel, "LevelKey")} while {currentLevel.DisplayName} was loaded.");
+        }
+
+        dialog.InvalidateMeasure();
+        dialog.InvalidateArrange();
+        dialog.InvalidateVisual();
+        FlushUi();
+        if (gallery.ItemsPanelRoot is not UniformGrid grid || grid.Columns != 6)
+        {
+            throw new InvalidOperationException(
+                $"The texture gallery did not render through a six-column UniformGrid (found {gallery.ItemsPanelRoot?.GetType().Name ?? "no panel"}).");
+        }
+        SaveFrame(dialog, "spyro-editor-terrain-texture-gallery.png");
+
+        object blockedItem = initialItems.FirstOrDefault(item => TemplateValue<bool>(item, "IsBlocked"))
+            ?? throw new InvalidOperationException("The current-level gallery exposed no blocked tile for its blocked-state UI check.");
+        Border blockedTile = dialog.GetLogicalDescendants()
+            .OfType<Border>()
+            .FirstOrDefault(tile =>
+                tile.Classes.Contains("terrain-texture-card") &&
+                ReferenceEquals(tile.DataContext, blockedItem))
+            ?? throw new InvalidOperationException("The blocked texture gallery item did not render a card.");
+        if (!blockedTile.Classes.Contains("blocked") ||
+            blockedTile.Background is not Avalonia.Media.SolidColorBrush blockedBackground ||
+            !IsNearlyGray(blockedBackground.Color) ||
+            !blockedTile.GetLogicalDescendants().OfType<Border>().Any(overlay =>
+                overlay.Classes.Contains("terrain-texture-blocked-overlay")) ||
+            !blockedTile.GetLogicalDescendants().OfType<TextBlock>().Any(text =>
+                string.Equals(text.Text, "BLOCKED", StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException("A blocked texture tile was not gray with its visible BLOCKED overlay.");
+        }
+
+        if (sourceLevelPicker.ItemsSource is not System.Collections.IEnumerable sourceOptions)
+            throw new InvalidOperationException("The source-level picker did not expose its level options.");
+        object donorOption = sourceOptions.Cast<object>()
+            .FirstOrDefault(option => !TemplateValue<bool>(option, "IsCurrent"))
+            ?? throw new InvalidOperationException("The source-level picker exposed no other level.");
+        LevelDefinition donorLevel = TemplateValue<LevelDefinition>(donorOption, "Level");
+        sourceLevelPicker.SelectedItem = donorOption;
+        FlushUi();
+        if (donorLoads.Count != 0)
+        {
+            throw new InvalidOperationException(
+                $"Selecting {donorLevel.DisplayName} loaded donor data before the explicit button click: {string.Join(", ", donorLoads)}.");
+        }
+        if (ReadItemsSource(gallery, "unloaded donor texture gallery").Length != 0)
+            throw new InvalidOperationException("Selecting another source level retained or eagerly populated texture tiles before Load Level Textures.");
+
+        loadLevelButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, loadLevelButton));
+        for (int attempt = 0; attempt < 12000; attempt++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            if (loadLevelButton.IsEnabled && donorLoads.Count > 0)
+                break;
+            Thread.Sleep(5);
+        }
+        FlushUi();
+
+        string normalizedDonorLevel = LevelCatalog.NormalizeKey(donorLevel.Key);
+        if (donorLoads.Count != 1 ||
+            !string.Equals(donorLoads[0], normalizedDonorLevel, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Loading {donorLevel.DisplayName} touched {donorLoads.Count} donor level(s): {string.Join(", ", donorLoads)}.");
+        }
+        object[] donorItems = ReadItemsSource(gallery, $"{donorLevel.DisplayName} texture gallery");
+        if (donorItems.Length == 0 || donorItems.Any(item =>
+                !string.Equals(
+                    LevelCatalog.NormalizeKey(TemplateValue<string>(item, "LevelKey")),
+                    normalizedDonorLevel,
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"The explicit {donorLevel.DisplayName} load did not produce a non-empty gallery containing only that level.");
+        }
+
+        object usableItem = donorItems.FirstOrDefault(item => !TemplateValue<bool>(item, "IsBlocked"))
+            ?? throw new InvalidOperationException($"{donorLevel.DisplayName} exposed no usable tile for double-click activation.");
+        gallery.SelectedItem = usableItem;
+        FlushUi();
+        Border usableTile = dialog.GetLogicalDescendants()
+            .OfType<Border>()
+            .FirstOrDefault(tile =>
+                tile.Classes.Contains("terrain-texture-card") &&
+                ReferenceEquals(tile.DataContext, usableItem))
+            ?? throw new InvalidOperationException("The selected usable texture tile was not realized for double-click activation.");
+        Point? translatedCenter = usableTile.TranslatePoint(
+            new Point(usableTile.Bounds.Width / 2, usableTile.Bounds.Height / 2),
+            dialog);
+        if (translatedCenter is not Point activationPoint)
+            throw new InvalidOperationException("The usable texture tile could not be located in the chooser dialog.");
+
+        dialog.MouseDown(activationPoint, MouseButton.Left, RawInputModifiers.None);
+        dialog.MouseUp(activationPoint, MouseButton.Left, RawInputModifiers.None);
+        dialog.MouseDown(activationPoint, MouseButton.Left, RawInputModifiers.None);
+        if (window.OwnedWindows.Contains(dialog))
+            dialog.MouseUp(activationPoint, MouseButton.Left, RawInputModifiers.None);
+        for (int attempt = 0; attempt < 1000 && window.OwnedWindows.Contains(dialog); attempt++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(5);
+        }
+        FlushUi();
+        EditorViewport viewport = window.GetLogicalDescendants().OfType<EditorViewport>().Single();
+        if (window.OwnedWindows.Contains(dialog) || !viewport.TerrainTexturePaintMode)
+            throw new InvalidOperationException("Double-clicking a usable texture tile did not close the chooser and enter Texture Paint mode.");
+
+        Console.WriteLine(
+            $"Terrain texture gallery UI: {currentLevel.DisplayName}-only initial open; six columns; gray BLOCKED tile; " +
+            $"{donorLevel.DisplayName} remained unloaded until requested, then loaded alone; double-click entered paint mode.");
+    }
+    finally
+    {
+        window.TerrainTextureDonorLoadObserverForTesting = null;
+        foreach (Window owned in window.OwnedWindows.ToArray())
+            owned.Close();
+        window.Close();
+        FlushUi();
+    }
+}
+
 void RunUpdateOnly()
 {
     string userDataRoot = Path.Combine(
@@ -1525,17 +1739,39 @@ void RunUpdateOnly()
         explicitInstallRoot: installRoot,
         forceReleaseMode: true)).GetAwaiter().GetResult()
         ?? throw new InvalidOperationException("The focused update UI smoke did not initialize release project storage.");
+    string legacyState = JsonSerializer.Serialize(new
+    {
+        schemaVersion = 2,
+        lastCheckedUtc = DateTimeOffset.UtcNow,
+        availableBetaVersion = 3,
+        availableDisplayName = "Spyro Editor Beta V3",
+        releaseUrl = "https://github.com/monty19933-hub/Spyro1Editor/releases/tag/beta-v3",
+        lastAutoNotificationBetaVersion = 2,
+        lastDownloadedBetaVersion = 2,
+        lastDownloadedAtUtc = (DateTimeOffset?)null
+    });
+    JsonNode migratedState = JsonNode.Parse(MainWindow.MigrateUpdateStateJsonForTesting(legacyState))
+        ?? throw new InvalidOperationException("The update-state migration returned empty JSON.");
+    if (migratedState["schemaVersion"]?.GetValue<int>() != 3 ||
+        migratedState["availablePublicVersion"]?.GetValue<string>() != "3" ||
+        migratedState["lastAutoNotificationPublicVersion"]?.GetValue<string>() != "2" ||
+        migratedState["lastDownloadedPublicVersion"]?.GetValue<string>() != "2" ||
+        migratedState["availableBetaVersion"] != null)
+    {
+        throw new InvalidOperationException("Schema-2 integer update state did not migrate to canonical schema-3 strings.");
+    }
+
     File.WriteAllText(
         Path.Combine(context.UserData.SettingsPath, "update-check.json"),
         JsonSerializer.Serialize(new
         {
-            schemaVersion = 2,
+            schemaVersion = 3,
             lastCheckedUtc = DateTimeOffset.UtcNow,
-            availableBetaVersion = 0,
+            availablePublicVersion = "",
             availableDisplayName = "",
             releaseUrl = "",
-            lastAutoNotificationBetaVersion = 0,
-            lastDownloadedBetaVersion = 0,
+            lastAutoNotificationPublicVersion = "",
+            lastDownloadedPublicVersion = "",
             lastDownloadedAtUtc = (DateTimeOffset?)null
         }));
 
@@ -3567,39 +3803,40 @@ void RenderPreviousBetaProjectReminder(MainWindow owner)
 
 void RenderUpdateNotification(MainWindow owner)
 {
-    const string notes = "# Spyro Editor Beta V3\n\n- Keeps project edits untouched.\n- Bundles the next tested editor improvements.";
+    const string notes = "# Spyro Editor Beta V3.1\n\n- Keeps project edits untouched.\n- Bundles the next tested editor improvements.";
     EditorUpdateInfo update = new(
         BetaVersion: 3,
-        ReleaseTag: "beta-v3",
-        DisplayName: "Spyro Editor Beta V3",
+        ReleaseTag: "beta-v3.1",
+        DisplayName: "Spyro Editor Beta V3.1",
         ReleaseNotes: notes,
-        ReleasePage: new Uri("https://github.com/monty19933-hub/Spyro1Editor/releases/tag/beta-v3"),
+        ReleasePage: new Uri("https://github.com/monty19933-hub/Spyro1Editor/releases/tag/beta-v3.1"),
         Prerelease: true,
         Asset: new EditorUpdateAsset(
-            "SpyroEditor-Beta-V3-osx-arm64.zip",
-            new Uri("https://github.com/monty19933-hub/Spyro1Editor/releases/download/beta-v3/SpyroEditor-Beta-V3-osx-arm64.zip"),
+            "SpyroEditor-Beta-V3.1-osx-arm64.zip",
+            new Uri("https://github.com/monty19933-hub/Spyro1Editor/releases/download/beta-v3.1/SpyroEditor-Beta-V3.1-osx-arm64.zip"),
             54_000_000,
-            new string('a', 64)));
+            new string('a', 64)),
+        PublicVersion: "3.1");
     owner.ShowUpdateNotificationForTesting(update);
     FlushUi();
-    AssertTextContains(owner, "Spyro Editor Beta V3 is available");
+    AssertTextContains(owner, "Spyro Editor Beta V3.1 is available");
     Button details = FindButton(owner, "What's New & Download");
     SaveFrame(owner, "spyro-editor-update-notification.png");
 
     Window dialog = OpenAsyncDialog(
         owner,
         details,
-        "Update Available - Spyro Editor Beta V3",
-        "numbered beta update changelog");
-    AssertText(dialog, "Spyro Editor Beta V3");
-    AssertText(dialog, "What's new in Spyro Editor Beta V3");
+        "Update Available - Spyro Editor Beta V3.1",
+        "incremental beta update changelog");
+    AssertText(dialog, "Spyro Editor Beta V3.1");
+    AssertText(dialog, "What's new in Spyro Editor Beta V3.1");
     AssertTextContains(dialog, "Keeps project edits untouched");
     FindButton(dialog, "View Full Release Notes");
     FindButton(dialog, "Download Update");
     SaveFrame(dialog, "spyro-editor-update-changelog.png");
     FindButton(dialog, "Later").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-    WaitForDialogToClose(owner, dialog, "numbered beta update changelog");
-    Console.WriteLine("Update notification UI: visible Beta V3 banner, scrollable changelog, project-safety message, and download action rendered.");
+    WaitForDialogToClose(owner, dialog, "incremental beta update changelog");
+    Console.WriteLine("Update notification UI: schema-2 state migration plus visible Beta V3.1 banner, scrollable changelog, project-safety message, and download action rendered.");
 }
 
 static void WaitForLevelData(MainWindow window)
@@ -4918,6 +5155,20 @@ static T FindNamed<T>(Control root, string name) where T : Control
     return root.GetLogicalDescendants()
         .OfType<T>()
         .Single(control => string.Equals(control.Name, name, StringComparison.Ordinal));
+}
+
+static object[] ReadItemsSource(ItemsControl control, string description)
+{
+    if (control.ItemsSource is not System.Collections.IEnumerable items)
+        throw new InvalidOperationException($"The {description} did not expose an ItemsSource.");
+    return items.Cast<object>().ToArray();
+}
+
+static bool IsNearlyGray(Avalonia.Media.Color color)
+{
+    byte minimum = Math.Min(color.R, Math.Min(color.G, color.B));
+    byte maximum = Math.Max(color.R, Math.Max(color.G, color.B));
+    return maximum - minimum <= 10;
 }
 
 static MobyRegressionSnapshot CaptureMoby(Moby moby)

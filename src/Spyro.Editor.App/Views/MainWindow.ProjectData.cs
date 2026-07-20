@@ -73,7 +73,12 @@ public sealed partial class MainWindow
 
     private void BeginPreviousBetaProjectReminder()
     {
-        if (!_releaseMode || AppReleaseIdentity.BetaVersion.Number != 2 || ReleaseProjectBootstrap.Current == null)
+        // Keep the V2 reminder marker and behavior for every later release so
+        // a Beta V1 user who skips directly to V3 (or an incremental release)
+        // can still copy their old project into protected storage. Users who
+        // already handled the reminder in V2 retain the same marker and will
+        // not see it again.
+        if (!_releaseMode || AppReleaseIdentity.BetaVersion.Major < 2 || ReleaseProjectBootstrap.Current == null)
             return;
         _ = ShowPreviousBetaProjectReminderOnceAsync();
     }

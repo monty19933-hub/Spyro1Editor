@@ -19,7 +19,8 @@ public sealed record EditorUpdateInfo(
     string ReleaseNotes,
     Uri ReleasePage,
     bool Prerelease,
-    EditorUpdateAsset Asset);
+    EditorUpdateAsset Asset,
+    string PublicVersion = "");
 
 public sealed class GitHubReleaseUpdateClient
 {
@@ -43,18 +44,21 @@ public sealed class GitHubReleaseUpdateClient
         _repository = RequireSlug(repository, nameof(repository));
     }
 
-    public async Task<EditorUpdateInfo?> CheckAsync(
+    public Task<EditorUpdateInfo?> CheckAsync(
         int currentBetaVersion,
+        CancellationToken cancellationToken = default) =>
+        CheckAsync(new EditorBetaReleaseVersion(currentBetaVersion), cancellationToken);
+
+    public async Task<EditorUpdateInfo?> CheckAsync(
+        EditorBetaReleaseVersion currentVersion,
         CancellationToken cancellationToken = default)
     {
-        if (currentBetaVersion <= 0)
-            throw new ArgumentOutOfRangeException(nameof(currentBetaVersion), "The current public beta version must be positive.");
-
+        ArgumentNullException.ThrowIfNull(currentVersion);
         using HttpRequestMessage request = new(
             HttpMethod.Get,
             $"https://api.github.com/repos/{_owner}/{_repository}/releases?per_page=30");
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        request.Headers.UserAgent.ParseAdd($"SpyroEditor/Beta-V{currentBetaVersion}");
+        request.Headers.UserAgent.ParseAdd($"SpyroEditor/Beta-V{currentVersion.CanonicalVersion}");
         request.Headers.TryAddWithoutValidation("X-GitHub-Api-Version", "2022-11-28");
         using HttpResponseMessage response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
@@ -74,11 +78,11 @@ public sealed class GitHubReleaseUpdateClient
                 continue;
             string displayName = ReadString(release, "name");
             if (!EditorBetaReleaseVersion.TryParseDisplayName(displayName, out EditorBetaReleaseVersion publicVersion) ||
-                publicVersion.Number <= currentBetaVersion)
+                publicVersion.CompareTo(currentVersion) <= 0)
                 continue;
             string tag = ReadString(release, "tag_name");
             if (!EditorBetaReleaseVersion.TryParseReleaseTag(tag, out EditorBetaReleaseVersion tagVersion) ||
-                tagVersion.Number != publicVersion.Number)
+                tagVersion != publicVersion)
                 continue;
             string releaseNotes = ReadString(release, "body").Trim();
             if (string.IsNullOrWhiteSpace(releaseNotes) || releaseNotes.Length > 256 * 1024)
@@ -111,13 +115,14 @@ public sealed class GitHubReleaseUpdateClient
                 assetSize,
                 sha256);
             EditorUpdateInfo update = new(
-                publicVersion.Number,
+                publicVersion.Major,
                 publicVersion.ReleaseTag,
                 publicVersion.DisplayName,
                 releaseNotes,
                 releasePage,
                 prerelease,
-                asset);
+                asset,
+                publicVersion.CanonicalVersion);
             candidates.Add((publicVersion, update));
         }
 
@@ -134,17 +139,9 @@ public sealed class GitHubReleaseUpdateClient
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(update);
-        EditorBetaReleaseVersion publicVersion;
-        try
-        {
-            publicVersion = new EditorBetaReleaseVersion(update.BetaVersion);
-        }
-        catch (ArgumentOutOfRangeException exception)
-        {
-            throw new InvalidDataException("Update does not have a valid public beta version.", exception);
-        }
+        EditorBetaReleaseVersion publicVersion = RequireUpdateVersion(update);
         if (!EditorBetaReleaseVersion.TryParseReleaseTag(update.ReleaseTag, out EditorBetaReleaseVersion tagVersion) ||
-            tagVersion.Number != publicVersion.Number)
+            tagVersion != publicVersion)
         {
             throw new InvalidDataException($"Update tag must be exactly '{publicVersion.ReleaseTag}'.");
         }
@@ -178,7 +175,7 @@ public sealed class GitHubReleaseUpdateClient
         try
         {
             using HttpRequestMessage request = new(HttpMethod.Get, update.Asset.DownloadUri);
-            request.Headers.UserAgent.ParseAdd($"SpyroEditor/Beta-V{update.BetaVersion}");
+            request.Headers.UserAgent.ParseAdd($"SpyroEditor/Beta-V{publicVersion.CanonicalVersion}");
             using HttpResponseMessage response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
             if (response.Content.Headers.ContentLength is long contentLength &&
@@ -231,19 +228,11 @@ public sealed class GitHubReleaseUpdateClient
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(update);
-        EditorBetaReleaseVersion version;
-        try
-        {
-            version = new EditorBetaReleaseVersion(update.BetaVersion);
-        }
-        catch (ArgumentOutOfRangeException exception)
-        {
-            throw new InvalidDataException("Update does not have a valid public beta version.", exception);
-        }
+        EditorBetaReleaseVersion version = RequireUpdateVersion(update);
         if (!string.Equals(update.DisplayName, version.DisplayName, StringComparison.Ordinal))
             throw new InvalidDataException($"Update display name must be exactly '{version.DisplayName}'.");
         if (!EditorBetaReleaseVersion.TryParseReleaseTag(update.ReleaseTag, out EditorBetaReleaseVersion tagVersion) ||
-            tagVersion.Number != version.Number)
+            tagVersion != version)
         {
             throw new InvalidDataException($"Update tag must be exactly '{version.ReleaseTag}'.");
         }
@@ -283,6 +272,37 @@ public sealed class GitHubReleaseUpdateClient
         }
         sha256 = "";
         return false;
+    }
+
+    public static EditorBetaReleaseVersion RequireUpdateVersion(EditorUpdateInfo update)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+        EditorBetaReleaseVersion version;
+        if (string.IsNullOrEmpty(update.PublicVersion))
+        {
+            try
+            {
+                version = new EditorBetaReleaseVersion(update.BetaVersion);
+            }
+            catch (ArgumentOutOfRangeException exception)
+            {
+                throw new InvalidDataException("Update does not have a valid public beta version.", exception);
+            }
+        }
+        else if (!EditorBetaReleaseVersion.TryParse(update.PublicVersion, out version))
+        {
+            throw new InvalidDataException($"Update public version '{update.PublicVersion}' is not canonical.");
+        }
+
+        if (!string.IsNullOrEmpty(update.PublicVersion) &&
+            !string.Equals(update.PublicVersion, version.CanonicalVersion, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException($"Update public version '{update.PublicVersion}' is not canonical.");
+        }
+
+        if (update.BetaVersion != version.Major)
+            throw new InvalidDataException("Update public version does not match its legacy public beta major version.");
+        return version;
     }
 
     private static PlatformPackage CurrentPlatformPackage()
@@ -402,14 +422,21 @@ public sealed class GitHubReleaseUpdateClient
             {
                 throw new InvalidDataException("Update release-manifest.json is malformed.", exception);
             }
-            if (manifest.SchemaVersion != 1 ||
+            bool validManifestIdentity = manifest.SchemaVersion switch
+            {
+                1 => !version.IsIncremental && string.IsNullOrWhiteSpace(manifest.PublicVersion),
+                2 => version.IsIncremental &&
+                    string.Equals(manifest.PublicVersion, version.CanonicalVersion, StringComparison.Ordinal),
+                _ => false
+            };
+            if (!validManifestIdentity ||
                 !string.Equals(manifest.Channel, "beta", StringComparison.Ordinal) ||
-                manifest.PublicBeta != version.Number ||
+                manifest.PublicBeta != version.Major ||
                 !string.Equals(manifest.DisplayName, version.DisplayName, StringComparison.Ordinal) ||
                 !string.Equals(manifest.Platform, platform.RuntimeIdentifier, StringComparison.Ordinal) ||
                 !EditorSemanticVersion.TryParse(manifest.InternalVersion, out _))
             {
-                throw new InvalidDataException("Update release manifest does not match its public beta, platform, or internal build identity.");
+                throw new InvalidDataException("Update release manifest does not match its public version, platform, or internal build identity.");
             }
 
             if (!entries.TryGetValue(changelogPath, out ZipArchiveEntry? changelogEntry))
@@ -447,10 +474,14 @@ public sealed class GitHubReleaseUpdateClient
                 $"update application file '{appDllPath}'");
             if (!string.Equals(assemblyIdentity.AssemblyName, EditorAssemblyReleaseIdentityReader.ExpectedAssemblyName, StringComparison.Ordinal) ||
                 assemblyIdentity.PublicBetaVersion != manifest.PublicBeta ||
+                assemblyIdentity.PublicVersion != version ||
+                !assemblyIdentity.HasExplicitPublicVersion ||
+                !assemblyIdentity.HasExplicitReleaseManifestSchema ||
+                assemblyIdentity.ReleaseManifestSchema != manifest.SchemaVersion ||
                 !string.Equals(assemblyIdentity.InternalVersion, manifest.InternalVersion, StringComparison.Ordinal))
             {
                 throw new InvalidDataException(
-                    "Update application assembly metadata does not match the release manifest's public beta and internal build identity.");
+                    "Update application assembly metadata does not match the release manifest's public version and internal build identity.");
             }
         }
         catch (InvalidDataException)
@@ -494,7 +525,8 @@ public sealed class GitHubReleaseUpdateClient
         int PublicBeta,
         string DisplayName,
         string InternalVersion,
-        string Platform);
+        string Platform,
+        string? PublicVersion = null);
 
     private static string RequireSlug(string value, string parameter)
     {

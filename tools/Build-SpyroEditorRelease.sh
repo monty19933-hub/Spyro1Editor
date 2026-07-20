@@ -12,6 +12,9 @@ NOTARY_KEYCHAIN_PROFILE="${SPYRO_EDITOR_NOTARY_KEYCHAIN_PROFILE:-}"
 NOTARIZATION_TEMP_DIR=""
 PROJECT_VERSION="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' "$APP_PROJECT" | head -n 1)"
 BETA_RELEASE_NUMBER="$(sed -n 's:.*<BetaReleaseNumber>\([^<]*\)</BetaReleaseNumber>.*:\1:p' "$APP_PROJECT" | head -n 1)"
+PUBLIC_RELEASE_VERSION="$(sed -n 's:.*<PublicReleaseVersion>\([^<]*\)</PublicReleaseVersion>.*:\1:p' "$APP_PROJECT" | head -n 1)"
+RELEASE_MANIFEST_SCHEMA_VERSION="$(sed -n 's:.*<ReleaseManifestSchemaVersion>\([^<]*\)</ReleaseManifestSchemaVersion>.*:\1:p' "$APP_PROJECT" | head -n 1)"
+PREVIOUS_PUBLIC_RELEASE_VERSION="$(sed -n 's:.*<PreviousPublicReleaseVersion>\([^<]*\)</PreviousPublicReleaseVersion>.*:\1:p' "$APP_PROJECT" | head -n 1)"
 [[ "$PROJECT_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta\.([0-9]+)$ ]] || {
     echo "Unsupported app version '$PROJECT_VERSION'; expected X.Y.Z-beta.N." >&2
     exit 1
@@ -19,11 +22,59 @@ BETA_RELEASE_NUMBER="$(sed -n 's:.*<BetaReleaseNumber>\([^<]*\)</BetaReleaseNumb
 BASE_VERSION="${BASH_REMATCH[1]}"
 BUILD_NUMBER="${BASH_REMATCH[2]}"
 [[ "$BETA_RELEASE_NUMBER" =~ ^[1-9][0-9]*$ ]] || {
-    echo "Unsupported public beta release '$BETA_RELEASE_NUMBER'; expected a positive integer." >&2
+    echo "Unsupported legacy public beta release '$BETA_RELEASE_NUMBER'; expected a positive integer." >&2
     exit 1
 }
-PUBLIC_RELEASE_NAME="Spyro Editor Beta V$BETA_RELEASE_NUMBER"
-PUBLIC_RELEASE_SLUG="SpyroEditor-Beta-V$BETA_RELEASE_NUMBER"
+[[ "$PUBLIC_RELEASE_VERSION" =~ ^[1-9][0-9]*(\.[1-9][0-9]*)?$ ]] || {
+    echo "Unsupported public release version '$PUBLIC_RELEASE_VERSION'; expected a canonical value such as 3 or 3.1." >&2
+    exit 1
+}
+[[ "$PREVIOUS_PUBLIC_RELEASE_VERSION" =~ ^[1-9][0-9]*(\.[1-9][0-9]*)?$ ]] || {
+    echo "Unsupported previous public release version '$PREVIOUS_PUBLIC_RELEASE_VERSION'." >&2
+    exit 1
+}
+python3 - "$PREVIOUS_PUBLIC_RELEASE_VERSION" "$PUBLIC_RELEASE_VERSION" <<'PY' || {
+import sys
+
+def release_tuple(value):
+    major, separator, minor = value.partition(".")
+    return int(major), int(minor) if separator else 0
+
+previous = release_tuple(sys.argv[1])
+current = release_tuple(sys.argv[2])
+raise SystemExit(0 if previous < current else 1)
+PY
+    echo "Previous public release '$PREVIOUS_PUBLIC_RELEASE_VERSION' must be older than '$PUBLIC_RELEASE_VERSION'." >&2
+    exit 1
+}
+[[ "$RELEASE_MANIFEST_SCHEMA_VERSION" == "1" || "$RELEASE_MANIFEST_SCHEMA_VERSION" == "2" ]] || {
+    echo "Unsupported release manifest schema '$RELEASE_MANIFEST_SCHEMA_VERSION'; expected 1 or 2." >&2
+    exit 1
+}
+PUBLIC_RELEASE_MAJOR="${PUBLIC_RELEASE_VERSION%%.*}"
+[[ "$PUBLIC_RELEASE_MAJOR" == "$BETA_RELEASE_NUMBER" ]] || {
+    echo "Public release '$PUBLIC_RELEASE_VERSION' must retain legacy beta integer '$BETA_RELEASE_NUMBER' as its major component." >&2
+    exit 1
+}
+if [[ "$RELEASE_MANIFEST_SCHEMA_VERSION" == "1" ]]; then
+    [[ "$PUBLIC_RELEASE_VERSION" == "$BETA_RELEASE_NUMBER" ]] || {
+        echo "Schema 1 is reserved for whole-number compatibility bridges and requires PublicReleaseVersion=$BETA_RELEASE_NUMBER." >&2
+        exit 1
+    }
+else
+    [[ "$PUBLIC_RELEASE_VERSION" == *.* ]] || {
+        echo "Schema 2 is reserved for canonical dotted releases such as V3.1." >&2
+        exit 1
+    }
+fi
+PUBLIC_RELEASE_NAME="Spyro Editor Beta V$PUBLIC_RELEASE_VERSION"
+PUBLIC_RELEASE_SLUG="SpyroEditor-Beta-V$PUBLIC_RELEASE_VERSION"
+PREVIOUS_PUBLIC_RELEASE_NAME="Spyro Editor Beta V$PREVIOUS_PUBLIC_RELEASE_VERSION"
+if [[ "$PUBLIC_RELEASE_VERSION" == *.* ]]; then
+    MAC_BUNDLE_SHORT_VERSION="$PUBLIC_RELEASE_VERSION"
+else
+    MAC_BUNDLE_SHORT_VERSION="$PUBLIC_RELEASE_VERSION.0"
+fi
 RELEASE_NAME="${1:-$PUBLIC_RELEASE_SLUG}"
 
 mkdir -p "$DIST_DIR"
@@ -42,11 +93,11 @@ is_research_build() {
 resolve_mac_build_mode() {
     if [[ -n "$MAC_BUILD_MODE" ]]; then
         case "$MAC_BUILD_MODE" in
-            production|signed-only|local)
+            production|signed-only|community|local)
                 printf '%s\n' "$MAC_BUILD_MODE"
                 ;;
             *)
-                echo "SPYRO_EDITOR_MAC_BUILD_MODE must be 'production', 'signed-only', or 'local'." >&2
+                echo "SPYRO_EDITOR_MAC_BUILD_MODE must be 'production', 'signed-only', 'community', or 'local'." >&2
                 return 1
                 ;;
         esac
@@ -187,6 +238,44 @@ sign_macos_bundle_local() {
     codesign --verify --deep --strict --verbose=2 "$app_bundle"
 }
 
+sign_macos_bundle_community() {
+    local app_bundle="$1"
+    local main_executable="$app_bundle/Contents/MacOS/Spyro.Editor.App"
+
+    [[ -f "$MAC_ENTITLEMENTS" ]] || {
+        echo "Missing macOS entitlements: $MAC_ENTITLEMENTS" >&2
+        return 1
+    }
+    command -v codesign >/dev/null 2>&1 || {
+        echo "Community macOS packaging requires codesign." >&2
+        return 1
+    }
+
+    local sign_community_leaf
+    sign_community_leaf() {
+        [[ "$1" == "$main_executable" ]] && return
+        if file -b "$1" | grep -q 'Mach-O'; then
+            codesign --force --options runtime --sign - "$1"
+        else
+            codesign --force --sign - "$1"
+        fi
+    }
+    local sign_community_bundle
+    sign_community_bundle() {
+        codesign --force --options runtime --sign - "$1"
+    }
+
+    for_each_macos_payload_file_deepest_first "$app_bundle" sign_community_leaf
+    for_each_nested_code_bundle_deepest_first "$app_bundle" sign_community_bundle
+    codesign \
+        --force \
+        --options runtime \
+        --entitlements "$MAC_ENTITLEMENTS" \
+        --sign - \
+        "$app_bundle"
+    codesign --verify --deep --strict --verbose=2 "$app_bundle"
+}
+
 sign_macos_bundle_developer_id() {
     local app_bundle="$1"
     local main_executable="$app_bundle/Contents/MacOS/Spyro.Editor.App"
@@ -308,8 +397,50 @@ PY
     NOTARIZATION_TEMP_DIR=""
 }
 
+validate_public_changelog_contract() {
+    local changelog="$ROOT_DIR/CHANGELOG.md"
+    local expected_delta_heading="## Changes since $PREVIOUS_PUBLIC_RELEASE_NAME"
+    local release_heading_count
+
+    [[ -f "$changelog" ]] || {
+        echo "Missing public release changelog: $changelog" >&2
+        return 1
+    }
+    [[ "$(sed -n '1p' "$changelog")" == "# $PUBLIC_RELEASE_NAME" ]] || {
+        echo "CHANGELOG.md must begin with '# $PUBLIC_RELEASE_NAME'." >&2
+        return 1
+    }
+    [[ -z "$(sed -n '2p' "$changelog")" ]] || {
+        echo "CHANGELOG.md must contain a blank line after its release heading." >&2
+        return 1
+    }
+    [[ "$(sed -n '3p' "$changelog")" == "$expected_delta_heading" ]] || {
+        echo "CHANGELOG.md line 3 must be '$expected_delta_heading'." >&2
+        return 1
+    }
+    release_heading_count="$(grep -Ec '^# Spyro Editor Beta V' "$changelog" || true)"
+    [[ "$release_heading_count" == "1" ]] || {
+        echo "CHANGELOG.md must contain exactly one public release heading; it is the delta from the immediately previous release, not accumulated history." >&2
+        return 1
+    }
+    awk 'NR > 3 && NF { found = 1 } END { exit(found ? 0 : 1) }' "$changelog" || {
+        echo "CHANGELOG.md must describe at least one change after its previous-release heading." >&2
+        return 1
+    }
+}
+
 preflight_release_build() {
     local mac_build_mode
+
+    if is_research_build; then
+        return
+    fi
+    [[ "$RELEASE_NAME" == "$PUBLIC_RELEASE_SLUG" ]] || {
+        echo "Public release name '$RELEASE_NAME' must be '$PUBLIC_RELEASE_SLUG'." >&2
+        return 1
+    }
+    validate_public_changelog_contract
+
     mac_build_mode="$(resolve_mac_build_mode)"
     if [[ "$mac_build_mode" == "local" ]]; then
         return
@@ -323,6 +454,9 @@ preflight_release_build() {
         echo "Developer ID macOS signing requires codesign." >&2
         return 1
     }
+    if [[ "$mac_build_mode" == "community" ]]; then
+        return
+    fi
     resolve_developer_id_identity >/dev/null
 
     if [[ "$mac_build_mode" == "production" ]]; then
@@ -360,7 +494,8 @@ copy_release_files() {
         cat > "$package_dir/README.txt" <<'README'
 Spyro Editor research build
 
-Start with Launch Spyro Editor Research.
+Start with Launch Spyro Editor Beta Preview to test the normal customer UI.
+Use Launch Spyro Editor Research only when you need the advanced research tabs.
 
 Use Open BIN/CUE inside the editor and choose your own Spyro the Dragon disc
 image. The editor rebuilds terrain maps and object placement from that selected
@@ -434,7 +569,11 @@ write_release_manifest() {
     if is_research_build; then
         return
     fi
-    cat > "$package_dir/release-manifest.json" <<JSON
+    if [[ "$RELEASE_MANIFEST_SCHEMA_VERSION" == "1" ]]; then
+        # Whole-number compatibility bridges intentionally keep the exact
+        # schema-1 shape consumed by already installed V2 clients. Do not add
+        # even optional fields to this branch.
+        cat > "$package_dir/release-manifest.json" <<JSON
 {
   "schemaVersion": 1,
   "channel": "beta",
@@ -444,6 +583,19 @@ write_release_manifest() {
   "platform": "$rid"
 }
 JSON
+    else
+        cat > "$package_dir/release-manifest.json" <<JSON
+{
+  "schemaVersion": 2,
+  "channel": "beta",
+  "publicBeta": $BETA_RELEASE_NUMBER,
+  "publicVersion": "$PUBLIC_RELEASE_VERSION",
+  "displayName": "$PUBLIC_RELEASE_NAME",
+  "internalVersion": "$PROJECT_VERSION",
+  "platform": "$rid"
+}
+JSON
+    fi
 }
 
 write_mac_launcher() {
@@ -459,6 +611,15 @@ export SPYRO_EDITOR_RELEASE=0
 "./Spyro Editor.app/Contents/MacOS/Spyro.Editor.App"
 LAUNCHER
         chmod +x "$package_dir/Launch Spyro Editor Research.command"
+        cat > "$package_dir/Launch Spyro Editor Beta Preview.command" <<'LAUNCHER'
+#!/bin/zsh
+set -e
+cd "$(dirname "$0")"
+export SPYRO_EDITOR_INSTALL_ROOT="$PWD"
+export SPYRO_EDITOR_RELEASE=1
+"./Spyro Editor.app/Contents/MacOS/Spyro.Editor.App"
+LAUNCHER
+        chmod +x "$package_dir/Launch Spyro Editor Beta Preview.command"
     fi
 }
 
@@ -478,6 +639,30 @@ If macOS blocks it:
 Open Anyway bypasses Apple's missing-notarization warning for this app. Use it
 only if this ZIP came from the official Spyro Editor GitHub release; do not use
 it for a copy from another source. The normal release path remains notarized.
+INSTRUCTIONS
+}
+
+write_macos_community_open_instructions() {
+    local package_dir="$1"
+    cat > "$package_dir/MACOS-OPEN-INSTRUCTIONS.txt" <<'INSTRUCTIONS'
+Spyro Editor macOS community opening instructions
+
+This emergency package is ad-hoc signed and hardened, but it is not Apple-signed
+or notarized because the Developer ID certificate was unavailable for this
+release. macOS is expected to block the first launch.
+
+Only continue if this ZIP came from the official Spyro Editor GitHub release.
+The release page publishes the ZIP's SHA-256 digest so the download can be
+checked before opening it.
+
+If macOS blocks it:
+1. Try opening Spyro Editor.app once so macOS records the block.
+2. Open System Settings > Privacy & Security.
+3. Find the message about Spyro Editor in the Security section.
+4. Click Open Anyway, authenticate if asked, then confirm Open.
+
+Open Anyway accepts the risk for this exact app copy. Do not use it for a copy
+from another source. Project files remain outside the replaceable app folder.
 INSTRUCTIONS
 }
 
@@ -513,7 +698,7 @@ write_mac_app_bundle() {
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>$BETA_RELEASE_NUMBER.0</string>
+    <string>$MAC_BUNDLE_SHORT_VERSION</string>
     <key>CFBundleVersion</key>
     <string>$BUILD_NUMBER</string>
     <key>LSMinimumSystemVersion</key>
@@ -560,6 +745,14 @@ set "SPYRO_EDITOR_WORKSPACE=%CD%"
 set "SPYRO_EDITOR_RELEASE=0"
 "%~dp0support\app\Spyro.Editor.App.exe"
 LAUNCHER
+        cat > "$package_dir/Launch Spyro Editor Beta Preview.bat" <<'LAUNCHER'
+@echo off
+setlocal
+cd /d "%~dp0"
+set "SPYRO_EDITOR_INSTALL_ROOT=%CD%"
+set "SPYRO_EDITOR_RELEASE=1"
+"%~dp0support\app\Spyro.Editor.App.exe"
+LAUNCHER
     else
         cat > "$package_dir/Launch Spyro Editor.bat" <<'LAUNCHER'
 @echo off
@@ -597,9 +790,14 @@ publish_release_package() {
         write_mac_app_bundle "$package_dir"
         write_mac_launcher "$package_dir"
         mac_build_mode="$(resolve_mac_build_mode)"
-        if [[ "$mac_build_mode" == "signed-only" ]]; then
-            write_macos_open_instructions "$package_dir"
-        fi
+        case "$mac_build_mode" in
+            signed-only)
+                write_macos_open_instructions "$package_dir"
+                ;;
+            community)
+                write_macos_community_open_instructions "$package_dir"
+                ;;
+        esac
         if command -v xattr >/dev/null 2>&1; then
             # Strip provenance, quarantine, Finder, and other machine-local metadata
             # before codesign adds only the signature attributes it needs.
@@ -613,6 +811,10 @@ publish_release_package() {
             signed-only)
                 echo "Building emergency Developer ID-signed macOS package without notarization."
                 sign_macos_bundle_developer_id "$package_dir/Spyro Editor.app"
+                ;;
+            community)
+                echo "Building explicitly approved ad-hoc-signed macOS community package."
+                sign_macos_bundle_community "$package_dir/Spyro Editor.app"
                 ;;
             local)
                 echo "Building explicitly local, non-notarized macOS package."
@@ -651,12 +853,19 @@ publish_release_package "win-x64"
 
 if ! is_research_build && [[ -x "$ROOT_DIR/tools/Verify-SpyroEditorRelease.sh" ]]; then
     echo
-    if [[ "$(resolve_mac_build_mode)" == "signed-only" ]]; then
-        SPYRO_EDITOR_ALLOW_UNNOTARIZED=1 \
+    case "$(resolve_mac_build_mode)" in
+        signed-only)
+            SPYRO_EDITOR_ALLOW_UNNOTARIZED=1 \
+                "$ROOT_DIR/tools/Verify-SpyroEditorRelease.sh" "$RELEASE_NAME"
+            ;;
+        community)
+            SPYRO_EDITOR_ALLOW_ADHOC=1 \
+                "$ROOT_DIR/tools/Verify-SpyroEditorRelease.sh" "$RELEASE_NAME"
+            ;;
+        *)
             "$ROOT_DIR/tools/Verify-SpyroEditorRelease.sh" "$RELEASE_NAME"
-    else
-        "$ROOT_DIR/tools/Verify-SpyroEditorRelease.sh" "$RELEASE_NAME"
-    fi
+            ;;
+    esac
 fi
 
 echo

@@ -495,6 +495,26 @@ dotnet run \
     --terrain-native-roundtrip-only
 
 echo
+echo "Running focused terrain texture gallery UI smoke..."
+dotnet run \
+    --project "$UI_SMOKE_PROJECT" \
+    --configuration "$CONFIGURATION" \
+    --no-build \
+    -- \
+    "$ROOT_DIR" \
+    --terrain-texture-paint-gallery-only
+
+echo
+echo "Running focused terrain texture paint/apply/Undo UI smoke..."
+dotnet run \
+    --project "$UI_SMOKE_PROJECT" \
+    --configuration "$CONFIGURATION" \
+    --no-build \
+    -- \
+    "$ROOT_DIR" \
+    --terrain-texture-paint-mode-only
+
+echo
 echo "Running focused native-unreferenced art-only Apply/reload/Undo UI smoke..."
 dotnet run \
     --project "$UI_SMOKE_PROJECT" \

@@ -1,6 +1,6 @@
-# Spyro Editor Beta V2 Guide
+# Spyro Editor Beta V3 Guide
 
-Internal diagnostic build: `0.1.0-beta.29`.
+Internal diagnostic build: `0.1.0-beta.30`.
 
 This beta build uses three everyday workspaces around the unchanged level view:
 `Objects`, `Level`, and `Environment`. Internal research probes stay hidden.
@@ -24,12 +24,14 @@ not into the replaceable application folder. If saved edits are not export-ready
 the editor removes older matching test BIN/CUE output instead of leaving a stale
 disc to load.
 
-The normal Mac release is notarized by Apple. If an emergency tester ZIP includes
-`MACOS-OPEN-INSTRUCTIONS.txt`, first try opening the app normally. If macOS blocks
-it, use System Settings > Privacy & Security > Open Anyway only after confirming
-the ZIP came from the official Spyro Editor GitHub release. That control bypasses
-Apple's missing-notarization warning for this app; the signed-only package is a
-temporary fallback, not the normal release path.
+The normal Mac release is notarized by Apple. If a ZIP includes
+`MACOS-OPEN-INSTRUCTIONS.txt`, read that file before opening the app and confirm
+the ZIP came from the official Spyro Editor GitHub release. The file states
+whether the package is Developer ID signed but not notarized, or uses the more
+limited disclosed ad-hoc community signature. If macOS blocks it, use System
+Settings > Privacy & Security > Open Anyway only if you accept that exact risk.
+Beta V3 is Developer ID signed, hardened, and securely timestamped, but it is
+not notarized; compare the published SHA-256 digest before opening it.
 
 ## Projects and Updates
 
@@ -47,19 +49,40 @@ destination files win, and differing incoming files are preserved under
 gigabytes. `editor-cache` and `spyro-wad-analysis.json` are deliberately rebuilt
 against the selected disc instead of being trusted across installations.
 
-Beta V2 checks GitHub Releases at most once per day. When a deliberate next
-numbered release exists, a visible in-app notification offers `What's New &
+Beta V3 checks GitHub Releases at most once per day. When a deliberate next
+canonical release exists, a visible in-app notification offers `What's New &
 Download`; `More` > `Check for Updates` performs an immediate check. The update
 window shows the full release changelog in a scrollable panel. A copy of that
 changelog is also saved beside the downloaded package.
 
-Downloads are accepted only when the public beta tag/title, package manifest,
+V3 is the compatibility bridge from the updater already installed in Beta V2.
+It is therefore published with the exact legacy identity `beta-v3`, title
+`Spyro Editor Beta V3`, matching `Beta-V3` assets, manifest schema 1,
+`publicBeta: 3`, and legacy assembly beta integer `3`. It must not be renamed
+V2.1 because the V2 updater accepts positive integer release identities only.
+
+After installing V3, later incremental releases use dotted canonical identities
+such as `beta-v3.1`, `Spyro Editor Beta V3.1`, matching `Beta-V3.1` assets, and
+manifest schema 2 with `publicVersion: "3.1"`. Their changelog contains only
+changes since the immediately previous public release. Users still on V2 first
+take the V3 bridge and can then receive the dotted update.
+
+Because the frozen V2 updater scans only the newest 30 GitHub prereleases, the
+release channel periodically publishes another whole-number schema-1 bridge
+before the previous bridge leaves that window. Dotted increments remain schema
+2; a later bridge such as V4 advances the legacy integer as well as the
+canonical public version.
+
+Downloads are accepted only when the canonical public tag/title, package manifest,
 packaged changelog, platform, and SHA-256 digest agree. Before downloading, the
 editor writes a verified snapshot of saved edits and imported assets under the
 external application-data `Backups` folder. Automatic in-place replacement is
-intentionally disabled so installation stays an explicit user action. The Mac
-app is Developer ID signed, hardened, notarized by Apple, and stapled; install
-the verified ZIP normally without touching the external project.
+intentionally disabled so installation stays an explicit user action. Normal
+production Mac apps are Developer ID signed, hardened, notarized by Apple, and
+stapled. A release using the explicitly approved community fallback is instead
+ad-hoc signed, clearly disclosed in its changelog, and accompanied by Open Anyway
+instructions and SHA-256 digests. Neither installation path touches the external
+project.
 
 ## Build Safety
 
@@ -223,18 +246,26 @@ contain copied disc data.
   runtime tracing. Spyro's player palettes are excluded.
   `Reset to Normal Level Palette and Skybox` removes both parts of the saved
   environment edit.
-- Browsing decoded native terrain/building textures from all 35 levels through
-  `Terrain` > `Browse All Game Textures`, organized by realm and level. A
-  same-level choice changes only the selected face and copies the donor's exact
-  four-corner near/fade tint pairs into face-private or otherwise unused native
-  color slots, so nearby terrain keeps its original lighting. The editor
-  re-reads that donor provenance from the selected BIN during `Create BIN` and
-  blocks stale, topology-mismatched, or capacity-limited choices before saving.
-  A
-  cross-level choice replaces the selected shared target texture ID on every
-  face that uses it; the dialog shows the complete affected-face count before
-  Apply. The editor copies the donor variant's exact native collision-property
-  signature to the target batch, including damaging water/lava/ooze behavior.
+- Browsing decoded native terrain/building textures through `Terrain` >
+  `Choose Texture & Start Painting`. The six-column gallery initially loads
+  only the active level; another level is read only after it is selected and
+  `Load Level Textures` is pressed. Double-clicking an available tile enters
+  paint mode. Blocked records remain visible as gray `BLOCKED` cards with their
+  exact reason. A same-level choice changes only the selected face and copies
+  the donor's exact four-corner near/fade tint pairs into face-private or
+  otherwise unused native color slots, so nearby terrain keeps its original
+  lighting. The editor re-reads that donor provenance from the selected BIN
+  during `Create BIN` and blocks stale, topology-mismatched, or capacity-limited
+  choices before saving.
+  Fast cross-level paint changes one face only when that destination owns a
+  unique safe texture record; a shared target is refused without changing the
+  level. The existing whole-record path remains on the separate `Advanced /
+  Shared Replacement` terrain-panel button, including the custom
+  color/import/paste controls. That explicit action replaces the selected shared
+  target texture ID on every face that uses it and shows the complete count of
+  affected faces before Apply. The editor copies the donor variant's exact native
+  collision-property signature to the target batch, including damaging
+  water/lava/ooze behavior.
   If the destination lacks that signature, `Create BIN` may append the donor's
   complete native surface descriptor and relocate the following collision data,
   but only after capacity, pointer, and reparse proofs pass. Native texture art
@@ -255,7 +286,7 @@ contain copied disc data.
   promoted.
 - Previewing RGB, RGBA, grayscale, or indexed PNG terrain art within the
   editor's image-size limits. Custom PNG texture manifests are staging/research
-  data only in Beta V2; `Create BIN` rejects them rather than using the obsolete
+  data only in Beta V3; `Create BIN` rejects them rather than using the obsolete
   fixed-layout normal/close-detail writer.
 - Moving, removing, cloning, and editing supported objects.
 - Moving an existing dragon together with its pedestal and native `0x6E` scene-

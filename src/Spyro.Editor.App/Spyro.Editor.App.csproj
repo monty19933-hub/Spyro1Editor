@@ -7,18 +7,34 @@
     <ApplicationIcon>Assets/Brand/app-icon.ico</ApplicationIcon>
     <AssemblyName>Spyro.Editor.App</AssemblyName>
     <RootNamespace>Spyro.Editor.App</RootNamespace>
-    <BetaReleaseNumber>2</BetaReleaseNumber>
-    <Version>0.1.0-beta.29</Version>
+    <!--
+      BetaReleaseNumber is the legacy integer identity consumed by Beta V2's
+      updater. Keep it for whole-number compatibility bridges and for the
+      legacy SpyroEditorBetaRelease assembly metadata below.
+
+      PublicReleaseVersion is the canonical release identity. V3 intentionally
+      uses schema 1 and the integer value "3" so installed V2 clients can find
+      it. Incremental releases use schema 2 and dotted values such as "3.1".
+      A later whole-number bridge such as V4 returns to schema 1 and advances
+      both integer identities so very old clients can still discover it.
+    -->
+    <BetaReleaseNumber>3</BetaReleaseNumber>
+    <PublicReleaseVersion>3</PublicReleaseVersion>
+    <ReleaseManifestSchemaVersion>1</ReleaseManifestSchemaVersion>
+    <PreviousPublicReleaseVersion>2</PreviousPublicReleaseVersion>
+    <Version>0.1.0-beta.30</Version>
     <AssemblyVersion>0.1.0.0</AssemblyVersion>
     <FileVersion>0.1.0.0</FileVersion>
-    <InformationalVersion>0.1.0-beta.29</InformationalVersion>
+    <InformationalVersion>0.1.0-beta.30</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-    <Product>Spyro Editor Beta V$(BetaReleaseNumber)</Product>
-    <Description>Spyro Editor Beta V$(BetaReleaseNumber)</Description>
+    <Product>Spyro Editor Beta V$(PublicReleaseVersion)</Product>
+    <Description>Spyro Editor Beta V$(PublicReleaseVersion)</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <AssemblyMetadata Include="SpyroEditorBetaRelease" Value="$(BetaReleaseNumber)" />
+    <AssemblyMetadata Include="SpyroEditorPublicReleaseVersion" Value="$(PublicReleaseVersion)" />
+    <AssemblyMetadata Include="SpyroEditorReleaseManifestSchema" Value="$(ReleaseManifestSchemaVersion)" />
     <InternalsVisibleTo Include="Spyro.Editor.UiSmoke" />
     <PackageReference Include="Avalonia" Version="12.0.3" />
     <PackageReference Include="Avalonia.Desktop" Version="12.0.3" />

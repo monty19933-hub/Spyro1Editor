@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="${DIST_DIR:-$ROOT_DIR/dist/release}"
 ALLOW_HOST_PROVENANCE="${SPYRO_EDITOR_ALLOW_HOST_PROVENANCE:-0}"
 ALLOW_UNNOTARIZED="${SPYRO_EDITOR_ALLOW_UNNOTARIZED:-0}"
+ALLOW_ADHOC="${SPYRO_EDITOR_ALLOW_ADHOC:-0}"
 EXPECTED_MAC_TEAM_ID="694865MF93"
 [[ "$ALLOW_HOST_PROVENANCE" == "0" || "$ALLOW_HOST_PROVENANCE" == "1" ]] || {
     echo "SPYRO_EDITOR_ALLOW_HOST_PROVENANCE must be 0 or 1." >&2
@@ -12,6 +13,14 @@ EXPECTED_MAC_TEAM_ID="694865MF93"
 }
 [[ "$ALLOW_UNNOTARIZED" == "0" || "$ALLOW_UNNOTARIZED" == "1" ]] || {
     echo "SPYRO_EDITOR_ALLOW_UNNOTARIZED must be 0 or 1." >&2
+    exit 2
+}
+[[ "$ALLOW_ADHOC" == "0" || "$ALLOW_ADHOC" == "1" ]] || {
+    echo "SPYRO_EDITOR_ALLOW_ADHOC must be 0 or 1." >&2
+    exit 2
+}
+[[ "$ALLOW_UNNOTARIZED" == "0" || "$ALLOW_ADHOC" == "0" ]] || {
+    echo "SPYRO_EDITOR_ALLOW_UNNOTARIZED and SPYRO_EDITOR_ALLOW_ADHOC are mutually exclusive." >&2
     exit 2
 }
 usage() {
@@ -47,7 +56,7 @@ RELEASE_NAME="$1"
 for command_name in awk cmp codesign diff dotnet file find plutil python3 rg sed shasum spctl strings unzip xattr xcrun; do
     require_command "$command_name"
 done
-if [[ "$ALLOW_UNNOTARIZED" == "0" ]]; then
+if [[ "$ALLOW_UNNOTARIZED" == "0" && "$ALLOW_ADHOC" == "0" ]]; then
     require_command syspolicy_check
 fi
 xcrun --find stapler >/dev/null 2>&1 || fail "Apple's stapler tool was not found through xcrun."
@@ -58,17 +67,65 @@ require_file "$PROJECT_FILE"
 require_file "$RELEASE_IDENTITY_TOOL"
 PROJECT_VERSION="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' "$PROJECT_FILE" | head -n 1)"
 BETA_RELEASE_NUMBER="$(sed -n 's:.*<BetaReleaseNumber>\([^<]*\)</BetaReleaseNumber>.*:\1:p' "$PROJECT_FILE" | head -n 1)"
+PUBLIC_RELEASE_VERSION="$(sed -n 's:.*<PublicReleaseVersion>\([^<]*\)</PublicReleaseVersion>.*:\1:p' "$PROJECT_FILE" | head -n 1)"
+RELEASE_MANIFEST_SCHEMA_VERSION="$(sed -n 's:.*<ReleaseManifestSchemaVersion>\([^<]*\)</ReleaseManifestSchemaVersion>.*:\1:p' "$PROJECT_FILE" | head -n 1)"
+PREVIOUS_PUBLIC_RELEASE_VERSION="$(sed -n 's:.*<PreviousPublicReleaseVersion>\([^<]*\)</PreviousPublicReleaseVersion>.*:\1:p' "$PROJECT_FILE" | head -n 1)"
 [[ -n "$PROJECT_VERSION" ]] || fail "Could not read the app version from $PROJECT_FILE"
 [[ "$PROJECT_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta\.([0-9]+)$ ]] || \
     fail "Unsupported app version format '$PROJECT_VERSION'; expected X.Y.Z-beta.N."
 BASE_VERSION="${BASH_REMATCH[1]}"
 BUILD_NUMBER="${BASH_REMATCH[2]}"
 [[ "$BETA_RELEASE_NUMBER" =~ ^[1-9][0-9]*$ ]] || \
-    fail "Unsupported public beta release '$BETA_RELEASE_NUMBER'; expected a positive integer."
-PUBLIC_RELEASE_NAME="Spyro Editor Beta V$BETA_RELEASE_NUMBER"
-EXPECTED_RELEASE_NAME="SpyroEditor-Beta-V$BETA_RELEASE_NUMBER"
+    fail "Unsupported legacy public beta release '$BETA_RELEASE_NUMBER'; expected a positive integer."
+[[ "$PUBLIC_RELEASE_VERSION" =~ ^[1-9][0-9]*(\.[1-9][0-9]*)?$ ]] || \
+    fail "Unsupported public release version '$PUBLIC_RELEASE_VERSION'; expected a canonical value such as 3 or 3.1."
+[[ "$PREVIOUS_PUBLIC_RELEASE_VERSION" =~ ^[1-9][0-9]*(\.[1-9][0-9]*)?$ ]] || \
+    fail "Unsupported previous public release version '$PREVIOUS_PUBLIC_RELEASE_VERSION'."
+python3 - "$PREVIOUS_PUBLIC_RELEASE_VERSION" "$PUBLIC_RELEASE_VERSION" <<'PY' || \
+    fail "Previous public release '$PREVIOUS_PUBLIC_RELEASE_VERSION' must be older than '$PUBLIC_RELEASE_VERSION'."
+import sys
+
+def release_tuple(value):
+    major, separator, minor = value.partition(".")
+    return int(major), int(minor) if separator else 0
+
+previous = release_tuple(sys.argv[1])
+current = release_tuple(sys.argv[2])
+raise SystemExit(0 if previous < current else 1)
+PY
+[[ "$RELEASE_MANIFEST_SCHEMA_VERSION" == "1" || "$RELEASE_MANIFEST_SCHEMA_VERSION" == "2" ]] || \
+    fail "Unsupported release manifest schema '$RELEASE_MANIFEST_SCHEMA_VERSION'; expected 1 or 2."
+PUBLIC_RELEASE_MAJOR="${PUBLIC_RELEASE_VERSION%%.*}"
+[[ "$PUBLIC_RELEASE_MAJOR" == "$BETA_RELEASE_NUMBER" ]] || \
+    fail "Public release '$PUBLIC_RELEASE_VERSION' must retain legacy beta integer '$BETA_RELEASE_NUMBER' as its major component."
+if [[ "$RELEASE_MANIFEST_SCHEMA_VERSION" == "1" ]]; then
+    [[ "$PUBLIC_RELEASE_VERSION" == "$BETA_RELEASE_NUMBER" ]] || \
+        fail "Schema 1 requires PublicReleaseVersion=$BETA_RELEASE_NUMBER for a whole-number compatibility bridge."
+else
+    [[ "$PUBLIC_RELEASE_VERSION" == *.* ]] || \
+        fail "Schema 2 is reserved for canonical dotted releases such as V3.1."
+fi
+PUBLIC_RELEASE_NAME="Spyro Editor Beta V$PUBLIC_RELEASE_VERSION"
+PREVIOUS_PUBLIC_RELEASE_NAME="Spyro Editor Beta V$PREVIOUS_PUBLIC_RELEASE_VERSION"
+EXPECTED_RELEASE_NAME="SpyroEditor-Beta-V$PUBLIC_RELEASE_VERSION"
+if [[ "$PUBLIC_RELEASE_VERSION" == *.* ]]; then
+    MAC_BUNDLE_SHORT_VERSION="$PUBLIC_RELEASE_VERSION"
+else
+    MAC_BUNDLE_SHORT_VERSION="$PUBLIC_RELEASE_VERSION.0"
+fi
 [[ "$RELEASE_NAME" == "$EXPECTED_RELEASE_NAME" ]] || \
     fail "Release name '$RELEASE_NAME' must be '$EXPECTED_RELEASE_NAME'."
+
+[[ "$(sed -n '1p' "$ROOT_DIR/CHANGELOG.md")" == "# $PUBLIC_RELEASE_NAME" ]] || \
+    fail "CHANGELOG.md must begin with '# $PUBLIC_RELEASE_NAME'."
+[[ -z "$(sed -n '2p' "$ROOT_DIR/CHANGELOG.md")" ]] || \
+    fail "CHANGELOG.md must contain a blank line after its release heading."
+[[ "$(sed -n '3p' "$ROOT_DIR/CHANGELOG.md")" == "## Changes since $PREVIOUS_PUBLIC_RELEASE_NAME" ]] || \
+    fail "CHANGELOG.md must be the exact delta headed 'Changes since $PREVIOUS_PUBLIC_RELEASE_NAME'."
+[[ "$(grep -Ec '^# Spyro Editor Beta V' "$ROOT_DIR/CHANGELOG.md" || true)" == "1" ]] || \
+    fail "CHANGELOG.md must contain exactly one public release heading."
+awk 'NR > 3 && NF { found = 1 } END { exit(found ? 0 : 1) }' "$ROOT_DIR/CHANGELOG.md" || \
+    fail "CHANGELOG.md must describe at least one change after its previous-release heading."
 
 MAC_DIR="$DIST_DIR/$RELEASE_NAME-osx-arm64"
 WIN_DIR="$DIST_DIR/$RELEASE_NAME-win-x64"
@@ -88,14 +145,21 @@ require_file "$WIN_ZIP"
 require_file "$MAC_EXE"
 require_file "$WIN_EXE"
 [[ -x "$MAC_EXE" ]] || fail "macOS app executable is not executable: $MAC_EXE"
-if [[ "$ALLOW_UNNOTARIZED" == "1" ]]; then
+if [[ "$ALLOW_UNNOTARIZED" == "1" || "$ALLOW_ADHOC" == "1" ]]; then
     require_file "$MAC_OPEN_INSTRUCTIONS"
     rg -F 'System Settings > Privacy & Security' "$MAC_OPEN_INSTRUCTIONS" >/dev/null || \
         fail "Emergency macOS opening instructions do not identify Privacy & Security."
     rg -F 'Open Anyway' "$MAC_OPEN_INSTRUCTIONS" >/dev/null || \
         fail "Emergency macOS opening instructions do not identify Open Anyway."
-    rg -F 'missing-notarization warning' "$MAC_OPEN_INSTRUCTIONS" >/dev/null || \
-        fail "Emergency macOS opening instructions do not explain the missing-notarization risk."
+    if [[ "$ALLOW_ADHOC" == "1" ]]; then
+        rg -F 'ad-hoc signed' "$MAC_OPEN_INSTRUCTIONS" >/dev/null || \
+            fail "Community macOS opening instructions do not disclose the ad-hoc signature."
+        rg -F 'not Apple-signed' "$MAC_OPEN_INSTRUCTIONS" >/dev/null || \
+            fail "Community macOS opening instructions do not disclose the missing Apple signature."
+    else
+        rg -F 'missing-notarization warning' "$MAC_OPEN_INSTRUCTIONS" >/dev/null || \
+            fail "Emergency macOS opening instructions do not explain the missing-notarization risk."
+    fi
 else
     [[ ! -e "$MAC_OPEN_INSTRUCTIONS" ]] || \
         fail "A normal notarized release must not contain emergency Open Anyway instructions."
@@ -234,12 +298,20 @@ validate_mac_nested_payloads() {
             printf '%s\n' "$payload_info" >&2
             fail "$phase macOS payload is not signed: $candidate"
         fi
-        printf '%s\n' "$payload_info" | rg '^Authority=Developer ID Application:' >/dev/null || \
-            fail "$phase macOS payload is not signed by a Developer ID Application authority: $candidate"
-        printf '%s\n' "$payload_info" | rg -F "TeamIdentifier=$EXPECTED_MAC_TEAM_ID" >/dev/null || \
-            fail "$phase macOS payload signature is not issued to team $EXPECTED_MAC_TEAM_ID: $candidate"
-        printf '%s\n' "$payload_info" | rg '^Timestamp=.+$' | rg -v '^Timestamp=(none)?$' >/dev/null || \
-            fail "$phase macOS payload signature does not contain a secure timestamp: $candidate"
+        if [[ "$ALLOW_ADHOC" == "1" ]]; then
+            printf '%s\n' "$payload_info" | rg '^Signature=adhoc$' >/dev/null || \
+                fail "$phase macOS payload does not have the expected ad-hoc signature: $candidate"
+            if printf '%s\n' "$payload_info" | rg '^Authority=' >/dev/null; then
+                fail "$phase ad-hoc macOS payload unexpectedly has a certificate authority: $candidate"
+            fi
+        else
+            printf '%s\n' "$payload_info" | rg '^Authority=Developer ID Application:' >/dev/null || \
+                fail "$phase macOS payload is not signed by a Developer ID Application authority: $candidate"
+            printf '%s\n' "$payload_info" | rg -F "TeamIdentifier=$EXPECTED_MAC_TEAM_ID" >/dev/null || \
+                fail "$phase macOS payload signature is not issued to team $EXPECTED_MAC_TEAM_ID: $candidate"
+            printf '%s\n' "$payload_info" | rg '^Timestamp=.+$' | rg -v '^Timestamp=(none)?$' >/dev/null || \
+                fail "$phase macOS payload signature does not contain a secure timestamp: $candidate"
+        fi
 
         payload_format="$(file -b "$candidate")"
         if [[ "$payload_format" == *Mach-O* ]]; then
@@ -258,12 +330,20 @@ validate_mac_nested_payloads() {
             printf '%s\n' "$payload_info" >&2
             fail "$phase macOS Mach-O payload is not signed: $candidate"
         fi
-        printf '%s\n' "$payload_info" | rg '^Authority=Developer ID Application:' >/dev/null || \
-            fail "$phase macOS Mach-O payload is not signed by a Developer ID Application authority: $candidate"
-        printf '%s\n' "$payload_info" | rg -F "TeamIdentifier=$EXPECTED_MAC_TEAM_ID" >/dev/null || \
-            fail "$phase macOS Mach-O payload signature is not issued to team $EXPECTED_MAC_TEAM_ID: $candidate"
-        printf '%s\n' "$payload_info" | rg '^Timestamp=.+$' | rg -v '^Timestamp=(none)?$' >/dev/null || \
-            fail "$phase macOS Mach-O payload signature does not contain a secure timestamp: $candidate"
+        if [[ "$ALLOW_ADHOC" == "1" ]]; then
+            printf '%s\n' "$payload_info" | rg '^Signature=adhoc$' >/dev/null || \
+                fail "$phase macOS Mach-O payload does not have the expected ad-hoc signature: $candidate"
+            if printf '%s\n' "$payload_info" | rg '^Authority=' >/dev/null; then
+                fail "$phase ad-hoc macOS Mach-O payload unexpectedly has a certificate authority: $candidate"
+            fi
+        else
+            printf '%s\n' "$payload_info" | rg '^Authority=Developer ID Application:' >/dev/null || \
+                fail "$phase macOS Mach-O payload is not signed by a Developer ID Application authority: $candidate"
+            printf '%s\n' "$payload_info" | rg -F "TeamIdentifier=$EXPECTED_MAC_TEAM_ID" >/dev/null || \
+                fail "$phase macOS Mach-O payload signature is not issued to team $EXPECTED_MAC_TEAM_ID: $candidate"
+            printf '%s\n' "$payload_info" | rg '^Timestamp=.+$' | rg -v '^Timestamp=(none)?$' >/dev/null || \
+                fail "$phase macOS Mach-O payload signature does not contain a secure timestamp: $candidate"
+        fi
         printf '%s\n' "$payload_info" | rg '^CodeDirectory .*flags=.*\(.*runtime.*\)' >/dev/null || \
             fail "$phase macOS Mach-O payload does not enable the hardened runtime: $candidate"
     done < <(find "$app_path" -type f -print0)
@@ -285,14 +365,24 @@ validate_mac_distribution() {
 
     signature_info="$(codesign --display --verbose=4 "$app_path" 2>&1)" || \
         fail "$phase macOS app signature details could not be read."
-    printf '%s\n' "$signature_info" | rg '^Authority=Developer ID Application:' >/dev/null || \
-        fail "$phase macOS app is not signed by a Developer ID Application authority."
-    printf '%s\n' "$signature_info" | rg -F "($EXPECTED_MAC_TEAM_ID)" >/dev/null || \
-        fail "$phase macOS Developer ID authority is not issued to team $EXPECTED_MAC_TEAM_ID."
-    printf '%s\n' "$signature_info" | rg -F "TeamIdentifier=$EXPECTED_MAC_TEAM_ID" >/dev/null || \
-        fail "$phase macOS signature team is not $EXPECTED_MAC_TEAM_ID."
-    printf '%s\n' "$signature_info" | rg '^Timestamp=.+$' | rg -v '^Timestamp=(none)?$' >/dev/null || \
-        fail "$phase macOS signature does not contain a secure timestamp."
+    if [[ "$ALLOW_ADHOC" == "1" ]]; then
+        printf '%s\n' "$signature_info" | rg '^Signature=adhoc$' >/dev/null || \
+            fail "$phase macOS app does not have the expected ad-hoc signature."
+        if printf '%s\n' "$signature_info" | rg '^Authority=' >/dev/null; then
+            fail "$phase ad-hoc macOS app unexpectedly has a certificate authority."
+        fi
+        printf '%s\n' "$signature_info" | rg '^TeamIdentifier=not set$' >/dev/null || \
+            fail "$phase ad-hoc macOS app unexpectedly has a signing team."
+    else
+        printf '%s\n' "$signature_info" | rg '^Authority=Developer ID Application:' >/dev/null || \
+            fail "$phase macOS app is not signed by a Developer ID Application authority."
+        printf '%s\n' "$signature_info" | rg -F "($EXPECTED_MAC_TEAM_ID)" >/dev/null || \
+            fail "$phase macOS Developer ID authority is not issued to team $EXPECTED_MAC_TEAM_ID."
+        printf '%s\n' "$signature_info" | rg -F "TeamIdentifier=$EXPECTED_MAC_TEAM_ID" >/dev/null || \
+            fail "$phase macOS signature team is not $EXPECTED_MAC_TEAM_ID."
+        printf '%s\n' "$signature_info" | rg '^Timestamp=.+$' | rg -v '^Timestamp=(none)?$' >/dev/null || \
+            fail "$phase macOS signature does not contain a secure timestamp."
+    fi
     printf '%s\n' "$signature_info" | rg '^CodeDirectory .*flags=.*\(.*runtime.*\)' >/dev/null || \
         fail "$phase macOS signature does not enable the hardened runtime."
 
@@ -320,7 +410,7 @@ PY
     rm -f "$entitlements_file"
 
     validate_mac_nested_payloads "$app_path" "$phase"
-    if [[ "$ALLOW_UNNOTARIZED" == "1" ]]; then
+    if [[ "$ALLOW_UNNOTARIZED" == "1" || "$ALLOW_ADHOC" == "1" ]]; then
         if stapler_output="$(xcrun stapler validate "$app_path" 2>&1)"; then
             fail "$phase emergency signed-only macOS app unexpectedly contains a valid stapled notarization ticket."
         fi
@@ -329,12 +419,14 @@ PY
             fail "$phase macOS stapler check failed for a reason other than a missing ticket."
         }
         if gatekeeper_output="$(spctl --assess --type execute --verbose=4 "$app_path" 2>&1)"; then
-            fail "$phase emergency signed-only macOS app was unexpectedly accepted by Gatekeeper."
+            fail "$phase non-notarized macOS app was unexpectedly accepted by Gatekeeper."
         fi
-        printf '%s\n' "$gatekeeper_output" | rg -F 'source=Unnotarized Developer ID' >/dev/null || {
-            printf '%s\n' "$gatekeeper_output" >&2
-            fail "$phase macOS Gatekeeper rejection was not the expected missing-notarization result."
-        }
+        if [[ "$ALLOW_UNNOTARIZED" == "1" ]]; then
+            printf '%s\n' "$gatekeeper_output" | rg -F 'source=Unnotarized Developer ID' >/dev/null || {
+                printf '%s\n' "$gatekeeper_output" >&2
+                fail "$phase macOS Gatekeeper rejection was not the expected missing-notarization result."
+            }
+        fi
     else
         xcrun stapler validate "$app_path" >/dev/null || \
             fail "$phase macOS app does not contain a valid stapled notarization ticket."
@@ -361,8 +453,8 @@ require_file "$PLIST"
 if command -v plutil >/dev/null 2>&1; then
     [[ "$(plutil -extract CFBundleVersion raw "$PLIST")" == "$BUILD_NUMBER" ]] || \
         fail "macOS CFBundleVersion does not equal $BUILD_NUMBER."
-    [[ "$(plutil -extract CFBundleShortVersionString raw "$PLIST")" == "$BETA_RELEASE_NUMBER.0" ]] || \
-        fail "macOS CFBundleShortVersionString does not equal $BETA_RELEASE_NUMBER.0."
+    [[ "$(plutil -extract CFBundleShortVersionString raw "$PLIST")" == "$MAC_BUNDLE_SHORT_VERSION" ]] || \
+        fail "macOS CFBundleShortVersionString does not equal $MAC_BUNDLE_SHORT_VERSION."
     [[ "$(plutil -extract CFBundleDisplayName raw "$PLIST")" == "$PUBLIC_RELEASE_NAME" ]] || \
         fail "macOS CFBundleDisplayName does not equal '$PUBLIC_RELEASE_NAME'."
     [[ "$(plutil -extract CFBundleIdentifier raw "$PLIST")" == "local.spyro.editor" ]] || \
@@ -393,10 +485,10 @@ rg -F "$PROJECT_VERSION" "$ROOT_DIR/docs/release-user-guide.md" >/dev/null || \
 strings "$MAC_APP_DIR/Spyro.Editor.App.dll" | rg -F "$PROJECT_VERSION" >/dev/null || fail "macOS app DLL version is stale."
 strings "$WIN_APP_DIR/Spyro.Editor.App.dll" | rg -F "$PROJECT_VERSION" >/dev/null || fail "Windows app DLL version is stale."
 dotnet run --project "$RELEASE_IDENTITY_TOOL" --configuration Release -- \
-    "$MAC_APP_DIR/Spyro.Editor.App.dll" "$BETA_RELEASE_NUMBER" "$PROJECT_VERSION" || \
+    "$MAC_APP_DIR/Spyro.Editor.App.dll" "$PUBLIC_RELEASE_VERSION" "$PROJECT_VERSION" || \
     fail "macOS app DLL assembly metadata does not match the numbered release."
 dotnet run --project "$RELEASE_IDENTITY_TOOL" --configuration Release -- \
-    "$WIN_APP_DIR/Spyro.Editor.App.dll" "$BETA_RELEASE_NUMBER" "$PROJECT_VERSION" || \
+    "$WIN_APP_DIR/Spyro.Editor.App.dll" "$PUBLIC_RELEASE_VERSION" "$PROJECT_VERSION" || \
     fail "Windows app DLL assembly metadata does not match the numbered release."
 cmp "$MAC_APP_DIR/Spyro.Editor.Core.dll" "$WIN_APP_DIR/Spyro.Editor.Core.dll" >/dev/null || \
     fail "Mac and Windows packages contain different Spyro.Editor.Core.dll bytes."
@@ -423,21 +515,23 @@ validate_release_manifest() {
     local manifest_path="$1"
     local expected_platform="$2"
     require_file "$manifest_path"
-    python3 - "$manifest_path" "$BETA_RELEASE_NUMBER" "$PUBLIC_RELEASE_NAME" "$PROJECT_VERSION" "$expected_platform" <<'PY'
+    python3 - "$manifest_path" "$RELEASE_MANIFEST_SCHEMA_VERSION" "$BETA_RELEASE_NUMBER" "$PUBLIC_RELEASE_VERSION" "$PUBLIC_RELEASE_NAME" "$PROJECT_VERSION" "$expected_platform" <<'PY'
 import json
 import sys
 
-path, beta, display_name, internal_version, platform = sys.argv[1:]
+path, schema, beta, public_version, display_name, internal_version, platform = sys.argv[1:]
 with open(path, "r", encoding="utf-8") as stream:
     manifest = json.load(stream)
 expected = {
-    "schemaVersion": 1,
+    "schemaVersion": int(schema),
     "channel": "beta",
     "publicBeta": int(beta),
     "displayName": display_name,
     "internalVersion": internal_version,
     "platform": platform,
 }
+if schema == "2":
+    expected["publicVersion"] = public_version
 if manifest != expected:
     raise SystemExit(f"Release manifest mismatch in {path}: {manifest!r} != {expected!r}")
 PY
