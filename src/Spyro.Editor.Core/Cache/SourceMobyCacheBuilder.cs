@@ -65,6 +65,7 @@ public static class SourceMobyCacheBuilder
                 stateHex = $"0x{record[0x51]:X2}",
                 runtimeAddress = 0,
                 sourceRuntimeAddress = $"source-wad:0x{recordWadOffset:X}",
+                propertiesPointer = $"0x{BitConverter.ToUInt32(record, 0x00):X8}",
                 specialDataPointer = $"0x{BitConverter.ToUInt32(record, 0x08):X8}",
                 yawByteHex = $"0x{yawByte:X2}",
                 yawDegrees = Math.Round(Moby.YawByteToDegrees(yawByte), 4),

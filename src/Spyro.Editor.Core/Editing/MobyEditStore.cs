@@ -50,6 +50,12 @@ public static class MobyEditStore
             moby.CrossLevelSourceTrueIndex = -1;
             moby.CrossLevelRequiredExporterFeature = "";
             moby.CrossLevelRecipeId = "";
+            moby.SpecialChestBundleId = "";
+            moby.SpecialChestProfileId = "";
+            moby.SpecialChestVisibleRootTrueIndex = -1;
+            moby.SpecialChestHiddenCompanionTrueIndexes.Clear();
+            moby.SpecialChestCapacity = 0;
+            moby.SpecialChestEvidenceStatus = "";
             moby.SourceCloneLevelKey = "";
             moby.SourceCloneLevelName = "";
             moby.SourceCloneTrueIndex = -1;
@@ -152,6 +158,7 @@ public static class MobyEditStore
                 ["removed"] = moby.IsRemoved,
                 ["added"] = moby.IsAdded,
                 ["runtimeAddress"] = $"0x{moby.RuntimeAddress:X8}",
+                ["propertiesPointer"] = $"0x{moby.PropertiesPointer:X8}",
                 ["specialDataPointer"] = $"0x{moby.SpecialDataPointer:X8}",
                 ["sourceByte36Hex"] = $"0x{moby.SourceByte36:X2}",
                 ["sourceByte36OriginalHex"] = moby.OriginalSourceByte36 >= 0 ? $"0x{moby.OriginalSourceByte36:X2}" : null,
@@ -178,6 +185,16 @@ public static class MobyEditStore
                 ["zoneLabel"] = moby.ZoneLabel,
                 ["editorControlKind"] = moby.IsEditorControl ? moby.EditorControlKind : null,
                 ["crossLevelTemplate"] = NewCrossLevelTemplate(moby),
+                ["specialChestBundleId"] = NullIfEmpty(moby.SpecialChestBundleId),
+                ["profileId"] = NullIfEmpty(moby.SpecialChestProfileId),
+                ["specialChestVisibleRootTrueIndex"] = moby.SpecialChestVisibleRootTrueIndex >= 0
+                    ? moby.SpecialChestVisibleRootTrueIndex
+                    : null,
+                ["hiddenCompanionReferences"] = moby.SpecialChestHiddenCompanionTrueIndexes.Count > 0
+                    ? moby.SpecialChestHiddenCompanionTrueIndexes.Distinct().Order().ToArray()
+                    : null,
+                ["capacity"] = moby.SpecialChestCapacity > 0 ? moby.SpecialChestCapacity : null,
+                ["evidenceStatus"] = NullIfEmpty(moby.SpecialChestEvidenceStatus),
                 ["recordMutation"] = NewRecordMutation(moby),
                 ["gem"] = moby.IsGemLike ? NewGem(moby) : null,
                 ["sourceByteEdits"] = NewSourceByteEdits(moby),
@@ -278,6 +295,7 @@ public static class MobyEditStore
             YawByte = yawByte,
             OriginalYawByte = yawByte,
             RuntimeAddress = ReadUInt32(edit, "runtimeAddress"),
+            PropertiesPointer = ReadUInt32(edit, "propertiesPointer"),
             SpecialDataPointer = ReadUInt32(edit, "specialDataPointer"),
             SourceByte36 = sourceByte36,
             OriginalSourceByte36 = sourceByte36,
@@ -308,6 +326,7 @@ public static class MobyEditStore
             CrossLevelRecipeId = crossLevelTemplate is JsonElement crossLevelRecipe ? JsonValue.GetString(crossLevelRecipe, "recipeId", JsonValue.GetString(crossLevelRecipe, "preferredRecipeId")) : "",
             IsAdded = true
         };
+        ApplySpecialChestBundle(edit, added);
         ApplyGemColor(added);
         if (ColorRgba.TryParseHex(JsonValue.GetString(edit, "displayColor"), out ColorRgba addedColor))
             added.Color = addedColor;
@@ -472,6 +491,8 @@ public static class MobyEditStore
         ApplyRecordMutation(edit, moby);
         if (ApplyCrossLevelTemplate(edit, moby))
             changed = true;
+        if (ApplySpecialChestBundle(edit, moby))
+            changed = true;
         if (moby.SourceCloneTrueIndex >= 0)
             changed = true;
 
@@ -510,6 +531,38 @@ public static class MobyEditStore
             moby.PatchStatus = JsonValue.GetString(crossLevel, "addSupportStatus");
         return true;
     }
+
+    private static bool ApplySpecialChestBundle(JsonElement edit, Moby moby)
+    {
+        string bundleId = JsonValue.GetString(edit, "specialChestBundleId");
+        if (string.IsNullOrWhiteSpace(bundleId))
+            return false;
+
+        moby.SpecialChestBundleId = bundleId;
+        moby.SpecialChestProfileId = JsonValue.GetString(edit, "profileId");
+        moby.SpecialChestVisibleRootTrueIndex = JsonValue.GetInt32(edit, "specialChestVisibleRootTrueIndex", -1);
+        moby.SpecialChestHiddenCompanionTrueIndexes.Clear();
+        if (edit.TryGetProperty("hiddenCompanionReferences", out JsonElement references) &&
+            references.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement reference in references.EnumerateArray())
+            {
+                if (reference.ValueKind == JsonValueKind.Number &&
+                    reference.TryGetInt32(out int trueIndex) &&
+                    trueIndex >= 0 &&
+                    !moby.SpecialChestHiddenCompanionTrueIndexes.Contains(trueIndex))
+                {
+                    moby.SpecialChestHiddenCompanionTrueIndexes.Add(trueIndex);
+                }
+            }
+        }
+        moby.SpecialChestCapacity = Math.Max(0, JsonValue.GetInt32(edit, "capacity", 0));
+        moby.SpecialChestEvidenceStatus = JsonValue.GetString(edit, "evidenceStatus");
+        return true;
+    }
+
+    private static string? NullIfEmpty(string value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
 
     private static void ApplyGemColor(Moby moby)
     {

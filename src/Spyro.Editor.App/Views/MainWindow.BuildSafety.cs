@@ -44,6 +44,7 @@ public sealed partial class MainWindow
         StyleModernPrimaryButton(_inspectBuildSafetyButton, ModernTeal);
         ToolTip.SetTip(_inspectBuildSafetyButton, "Inspect saved object edits against the native static and dynamic Moby limits.");
         panel.Children.Add(_inspectBuildSafetyButton);
+        panel.Children.Add(BuildSpecialChestAvailabilityControl());
         return panel;
     }
 
@@ -84,7 +85,8 @@ public sealed partial class MainWindow
                     $"{planPrefix}.bin",
                     $"{planPrefix}.cue",
                     target.Level,
-                    editsPath));
+                    editsPath,
+                    nativeMobyPathEditsPath: NativeMobyPathEditPath(target.Level.Key)));
                 inputs.Add(new MobyBuildSafetyInput(target.Level, plan));
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or OverflowException)
@@ -97,6 +99,7 @@ public sealed partial class MainWindow
         }
 
         MobyBuildSafetyReport report = await Task.Run(() => MobyBuildSafetyInspector.Inspect(sourceImage, inputs));
+        report = await AddSpecialChestBuildSafetyAsync(report, targets, sourceImage);
         string reportPrefix = Path.Combine(outputDirectory, "Spyro Editor - All Saved Edits.build-safety");
         MobyBuildSafetyWriteResult written = await MobyBuildSafetyReportWriter.WriteAsync(
             report,

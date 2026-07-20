@@ -19,6 +19,16 @@ public sealed class Moby
     public int YawByte { get; set; } = -1;
     public int OriginalYawByte { get; init; } = -1;
     public uint RuntimeAddress { get; init; }
+    /// <summary>
+    /// Native Moby <c>m_Props</c> pointer stored at record offset +0x00.
+    /// Runtime captures contain a patched RAM address; source caches contain a
+    /// scene-relative offset.
+    /// </summary>
+    public uint PropertiesPointer { get; init; }
+    /// <summary>
+    /// Legacy editor field read from record offset +0x08. This is retained for
+    /// project/cache compatibility; it is not the native <c>m_Props</c> pointer.
+    /// </summary>
     public uint SpecialDataPointer { get; init; }
     public int SourceByte36 { get; set; }
     public int OriginalSourceByte36 { get; init; } = -1;
@@ -48,6 +58,17 @@ public sealed class Moby
     public int CrossLevelSourceTrueIndex { get; set; } = -1;
     public string CrossLevelRequiredExporterFeature { get; set; } = "";
     public string CrossLevelRecipeId { get; set; } = "";
+    /// <summary>
+    /// Stable identity for an imported special-chest root and every hidden
+    /// companion/reward row that must travel with it as one editor operation.
+    /// Empty on native retail objects and projects created before this field.
+    /// </summary>
+    public string SpecialChestBundleId { get; set; } = "";
+    public string SpecialChestProfileId { get; set; } = "";
+    public int SpecialChestVisibleRootTrueIndex { get; set; } = -1;
+    public List<int> SpecialChestHiddenCompanionTrueIndexes { get; } = [];
+    public int SpecialChestCapacity { get; set; }
+    public string SpecialChestEvidenceStatus { get; set; } = "";
     public string SourceCloneLevelKey { get; set; } = "";
     public string SourceCloneLevelName { get; set; } = "";
     public int SourceCloneTrueIndex { get; set; } = -1;
@@ -213,6 +234,7 @@ public sealed class Moby
         || OriginalFlag4B >= 0 && Flag4B != OriginalFlag4B
         || SourceCloneTrueIndex >= 0
         || !string.IsNullOrWhiteSpace(CrossLevelTemplateId)
+        || !string.IsNullOrWhiteSpace(SpecialChestBundleId)
         || !string.Equals(Label, OriginalLabel, StringComparison.Ordinal);
     public bool HasAnyEdit => IsAdded || IsRemoved || HasPositionEdit || HasMetadataEdit || HasLoadedNativeEdit;
 
@@ -257,6 +279,12 @@ public sealed class Moby
         CrossLevelSourceTrueIndex = -1;
         CrossLevelRequiredExporterFeature = "";
         CrossLevelRecipeId = "";
+        SpecialChestBundleId = "";
+        SpecialChestProfileId = "";
+        SpecialChestVisibleRootTrueIndex = -1;
+        SpecialChestHiddenCompanionTrueIndexes.Clear();
+        SpecialChestCapacity = 0;
+        SpecialChestEvidenceStatus = "";
         SourceCloneLevelKey = "";
         SourceCloneLevelName = "";
         SourceCloneTrueIndex = -1;

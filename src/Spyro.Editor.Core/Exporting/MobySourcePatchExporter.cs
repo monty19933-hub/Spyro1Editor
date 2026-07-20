@@ -4,7 +4,9 @@ using System.Text;
 using System.Text.Json;
 using Spyro.Editor.Core;
 using Spyro.Editor.Core.Analysis;
+using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Levels;
+using Spyro.Editor.Core.Rendering;
 using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Workspace;
 
@@ -50,7 +52,8 @@ public static class MobySourcePatchExporter
             request.Level,
             request.NativeEditsPath,
             request.AllowPlanOnlyActorPackageImports,
-            request.AllowGuardedNativeCloneAppend);
+            request.AllowGuardedNativeCloneAppend,
+            request.NativeMobyPathEditsPath);
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPlanPath) ?? ".");
         await File.WriteAllTextAsync(outputPlanPath, JsonSerializer.Serialize(plan, new JsonSerializerOptions { WriteIndented = true }), cancellationToken);
@@ -153,7 +156,8 @@ public static class MobySourcePatchExporter
         LevelDefinition level,
         string nativeEditsPath,
         bool allowPlanOnlyActorPackageImports = false,
-        bool allowGuardedNativeCloneAppend = false)
+        bool allowGuardedNativeCloneAppend = false,
+        string nativeMobyPathEditsPath = "")
     {
         if (!level.HasSourceTable)
             throw new InvalidOperationException($"{level.DisplayName} does not have a mapped source moby table yet.");
@@ -208,6 +212,8 @@ public static class MobySourcePatchExporter
         HashSet<int> autoReuseTargetSlots = new();
         Lazy<IReadOnlyDictionary<int, DragonRescueCameraData>> dragonRescueCameras = new(() =>
             DragonRescueCameraLocator.Locate(imageStream, layout, level));
+        IReadOnlyDictionary<int, (int RawX, int RawY)> finalDragonRawPositions =
+            BuildFinalDragonRawPositions(editsElement, tableWadOffset, imageStream, layout, level);
         Lazy<FlyInLandingData> flyInLanding = new(() =>
             FlyInLandingLocator.Locate(imageStream, layout, level));
         Lazy<PortalSourceLevelData> portalSourceData = new(() =>
@@ -216,7 +222,10 @@ public static class MobySourcePatchExporter
 
         foreach (JsonElement edit in editsElement.EnumerateArray())
         {
-            int trueIndex = JsonValue.GetInt32(edit, "trueIndex", -1);
+            bool isDragonRunToEdit = IsDragonRunToEdit(edit);
+            int trueIndex = isDragonRunToEdit
+                ? GetDragonRunToOwnerTrueIndex(edit)
+                : JsonValue.GetInt32(edit, "trueIndex", -1);
             string label = JsonValue.GetString(edit, "label", JsonValue.GetString(edit, "labelEdited", trueIndex >= 0 ? $"T{trueIndex}" : "moby"));
             string editKind = JsonValue.GetString(edit, "editKind", JsonValue.GetBoolean(edit, "added") ? "add" : JsonValue.GetBoolean(edit, "removed") ? "remove" : "update");
             bool isArtisansLockedChestBundleEdit = artisansLockedChestBundle != null &&
@@ -224,10 +233,29 @@ public static class MobySourcePatchExporter
             int patchStart = patches.Count;
             int packagePreviewStart = packageImportPreviews.Count;
             int skippedEditStart = skippedEdits.Count;
+            List<MobySourceEditSafetyFinding> editSafetyFindings = [];
             try
             {
                 if (isArtisansLockedChestBundleEdit)
                     continue;
+
+                if (isDragonRunToEdit)
+                {
+                    AddDragonRunToEndpointPatches(
+                        imageStream,
+                        layout,
+                        level,
+                        label,
+                        edit,
+                        dragonRescueCameras,
+                        finalDragonRawPositions,
+                        levelGeometry,
+                        patches,
+                        writtenWadOffsets,
+                        skippedEdits,
+                        editSafetyFindings);
+                    continue;
+                }
 
                 if (IsFlyInLandingEdit(edit))
                 {
@@ -384,7 +412,8 @@ public static class MobySourcePatchExporter
                             preview.RecipeStatus,
                             preview.CanWriteImage,
                             preview.GuardReason))
-                        .ToArray()));
+                        .ToArray(),
+                    SafetyFindings: editSafetyFindings.ToArray()));
             }
         }
 
@@ -1284,6 +1313,17 @@ public static class MobySourcePatchExporter
             "Treasure edits update the level's in-game pause/inventory treasure target so added gems count toward completion.",
             "Existing contained-gem chest content recolors export as +0x53 source-byte patches; brand-new contained-gem markers still need the special-data chest-link append path."
         ];
+        AddNativeMobyPathPatches(
+            sourceImagePath,
+            level,
+            nativeMobyPathEditsPath,
+            imageStream,
+            layout,
+            patches,
+            writtenWadOffsets,
+            editOutcomes,
+            skippedEdits,
+            notes);
         if (patches.Any(patch => patch.Kind.StartsWith("portal-", StringComparison.OrdinalIgnoreCase)))
         {
             notes.Add("Homeworld portal location edits move the linked source mobys, dedicated portal center/points, and type-6 walk-in collision triangles, then rebuild and rebalance the native collision lookup. Decorative stone arches remain terrain scenery.");
@@ -5819,6 +5859,292 @@ public static class MobySourcePatchExporter
         return checked((value + mask) & ~mask);
     }
 
+    private static bool IsDragonRunToEdit(JsonElement edit) =>
+        JsonValue.GetString(edit, "editorControlKind")
+            .StartsWith(DragonRunToEditStore.ControlPrefix, StringComparison.OrdinalIgnoreCase);
+
+    private static int GetDragonRunToOwnerTrueIndex(JsonElement edit)
+    {
+        if (TryGetRequiredInt32(edit, "ownerTrueIndex", out int ownerTrueIndex))
+            return ownerTrueIndex;
+
+        string controlKind = JsonValue.GetString(edit, "editorControlKind");
+        return controlKind.StartsWith(DragonRunToEditStore.ControlPrefix, StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(
+                controlKind.AsSpan(DragonRunToEditStore.ControlPrefix.Length),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out ownerTrueIndex)
+            ? ownerTrueIndex
+            : -1;
+    }
+
+    private static bool TryGetRequiredInt32(JsonElement element, string name, out int value)
+    {
+        value = 0;
+        return element.TryGetProperty(name, out JsonElement property) &&
+            property.ValueKind == JsonValueKind.Number &&
+            property.TryGetInt32(out value);
+    }
+
+    private static IReadOnlyDictionary<int, (int RawX, int RawY)> BuildFinalDragonRawPositions(
+        JsonElement edits,
+        long tableWadOffset,
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level)
+    {
+        Dictionary<int, (int RawX, int RawY)> result = new();
+        foreach (JsonElement edit in edits.EnumerateArray())
+        {
+            if (IsDragonRunToEdit(edit))
+                continue;
+            int trueIndex = JsonValue.GetInt32(edit, "trueIndex", -1);
+            if (trueIndex < 0 || trueIndex >= level.SourceRecordCount)
+                continue;
+            byte[] record = ReadWadBytes(stream, layout, tableWadOffset + ((long)trueIndex * RecordStride), RecordStride);
+            if (!IsNativeDragonActorRecord(record))
+                continue;
+            result[trueIndex] = (
+                ReadRawAxis(edit, "x", record, XOffset),
+                ReadRawAxis(edit, "y", record, YOffset));
+        }
+        return result;
+    }
+
+    private static void AddDragonRunToEndpointPatches(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        string label,
+        JsonElement edit,
+        Lazy<IReadOnlyDictionary<int, DragonRescueCameraData>> dragonRescueCameras,
+        IReadOnlyDictionary<int, (int RawX, int RawY)> finalDragonRawPositions,
+        GeometryCandidate? levelGeometry,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets,
+        List<string> skippedEdits,
+        List<MobySourceEditSafetyFinding> safetyFindings)
+    {
+        int trueIndex = GetDragonRunToOwnerTrueIndex(edit);
+        string controlKind = JsonValue.GetString(edit, "editorControlKind");
+        string expectedControlKind = $"{DragonRunToEditStore.ControlPrefix}{trueIndex}";
+        string editKind = JsonValue.GetString(edit, "editKind");
+        if (trueIndex < 0 ||
+            !string.Equals(controlKind, expectedControlKind, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(editKind, "synthetic-control", StringComparison.OrdinalIgnoreCase) ||
+            JsonValue.GetBoolean(edit, "added") ||
+            JsonValue.GetBoolean(edit, "removed") ||
+            edit.TryGetProperty("trueIndex", out _))
+        {
+            skippedEdits.Add(
+                $"{label}: invalid copied/new dragon run-to control; only the original synthetic control for one native dragon scene can be exported.");
+            return;
+        }
+        if (!dragonRescueCameras.Value.TryGetValue(trueIndex, out DragonRescueCameraData? scene))
+        {
+            skippedEdits.Add($"{label}: native dragon rescue scene T{trueIndex} is not present in the selected disc.");
+            return;
+        }
+        string savedLevelKey = LevelCatalog.NormalizeKey(JsonValue.GetString(edit, "levelKey"));
+        if (!string.Equals(savedLevelKey, LevelCatalog.NormalizeKey(level.Key), StringComparison.Ordinal))
+        {
+            skippedEdits.Add($"{label}: saved run-to level identity no longer matches the selected level.");
+            return;
+        }
+        if (!TryParseWadRelativeOffset(JsonValue.GetString(edit, "cameraDataWadOffset"), out long savedCameraDataWadOffset) ||
+            savedCameraDataWadOffset != scene.CameraDataWadOffset)
+        {
+            skippedEdits.Add($"{label}: saved run-to packed scene address no longer matches the selected disc.");
+            return;
+        }
+        if (!edit.TryGetProperty("rawOriginal", out JsonElement original) || original.ValueKind != JsonValueKind.Object ||
+            !edit.TryGetProperty("rawEdited", out JsonElement edited) || edited.ValueKind != JsonValueKind.Object)
+        {
+            skippedEdits.Add($"{label}: synthetic run-to control is missing original/edited raw XY coordinates.");
+            return;
+        }
+        if (JsonValue.GetInt32(original, "x", int.MinValue) != scene.RunToRawX ||
+            JsonValue.GetInt32(original, "y", int.MinValue) != scene.RunToRawY ||
+            JsonValue.GetInt32(edit, "originalAngle", int.MinValue) != scene.RunToAngle ||
+            JsonValue.GetInt32(edit, "originalRadius", int.MinValue) != scene.RunToRadius ||
+            JsonValue.GetInt32(edit, "preservedAuxiliary", int.MinValue) != scene.RunToAuxiliary)
+        {
+            skippedEdits.Add($"{label}: saved run-to source preimage no longer matches the selected disc.");
+            return;
+        }
+
+        (int RawX, int RawY) finalDragon = finalDragonRawPositions.TryGetValue(trueIndex, out (int RawX, int RawY) moved)
+            ? moved
+            : (scene.DragonRawX, scene.DragonRawY);
+        if (!TryGetRequiredInt32(edited, "x", out int endpointRawX) ||
+            !TryGetRequiredInt32(edited, "y", out int endpointRawY))
+        {
+            skippedEdits.Add($"{label}: invalid dragon run-to endpoint; edited raw X and Y must both be signed 32-bit integers.");
+            return;
+        }
+        byte[] packed = DiscImage.ReadFileBytes(
+            stream,
+            layout,
+            WadLba,
+            scene.CameraDataWadOffset,
+            DragonRescueRunTo.PackedPropertiesByteLength);
+        DragonRunToPatchPlan plan = DragonRescueRunTo.BuildPatchPlan(
+            scene,
+            finalDragon.RawX,
+            finalDragon.RawY,
+            endpointRawX,
+            endpointRawY,
+            packed);
+        if (!plan.CanPatch)
+        {
+            skippedEdits.Add($"{label}: [{plan.Result.Validation.Code}] {plan.Result.Validation.Message}");
+            return;
+        }
+
+        if (plan.Result.Validation.Status == MobyBuildSafetyStatus.Review)
+        {
+            safetyFindings.Add(new MobySourceEditSafetyFinding(
+                plan.Result.Validation.Code,
+                plan.Result.Validation.Status,
+                plan.Result.Validation.Message));
+        }
+
+        bool hasTerrainHit = levelGeometry is { Polygons.Count: > 0 } &&
+            TerrainSnapper.TryFindZAt(
+                levelGeometry.Polygons,
+                endpointRawX / (float)SpyroNativeTerrainCamera.CameraPositionScale,
+                endpointRawY / (float)SpyroNativeTerrainCamera.CameraPositionScale,
+                scene.DragonRawZ / (float)SpyroNativeTerrainCamera.CameraPositionScale,
+                out _,
+                preferTopSurface: true);
+        if (!hasTerrainHit)
+        {
+            safetyFindings.Add(new MobySourceEditSafetyFinding(
+                "dragon-run-to-no-terrain-hit",
+                MobyBuildSafetyStatus.Review,
+                "The edited run-to endpoint has no source-derived terrain hit; verify Spyro does not run into a void, wall, or non-walkable surface."));
+        }
+
+        foreach (MobySourcePatch patch in plan.ToMobySourcePatches(level, label))
+        {
+            long wadOffset = ParseRequiredLong(patch.WadRelativeOffset, "dragon run-to patch offset");
+            if (OverlapsWrittenOffsets(wadOffset, patch.ByteLength, writtenWadOffsets))
+                throw new InvalidOperationException($"Dragon run-to patch for T{trueIndex} overlaps another source patch at 0x{wadOffset:X}.");
+            for (long offset = wadOffset; offset < wadOffset + patch.ByteLength; offset++)
+                writtenWadOffsets.Add(offset);
+            patches.Add(patch with
+            {
+                ImageOffset = $"0x{ConvertWadOffsetToImageOffset(layout, wadOffset):X}"
+            });
+        }
+    }
+
+    private static void AddNativeMobyPathPatches(
+        string sourceImagePath,
+        LevelDefinition level,
+        string nativeMobyPathEditsPath,
+        FileStream stream,
+        DiscLayout layout,
+        List<MobySourcePatch> patches,
+        HashSet<long> writtenWadOffsets,
+        List<MobySourceEditOutcome> editOutcomes,
+        List<string> skippedEdits,
+        List<string> notes)
+    {
+        if (string.IsNullOrWhiteSpace(nativeMobyPathEditsPath) || !File.Exists(nativeMobyPathEditsPath))
+            return;
+
+        IReadOnlyList<NativeMobyPath> paths = EggThiefPathLocator.Locate(sourceImagePath, level);
+        NativeMobyPathEditLoadResult loaded = NativeMobyPathEditStore.Load(nativeMobyPathEditsPath, paths);
+        if (loaded.BlockedReasons.Count > 0)
+        {
+            IReadOnlyList<NativeMobyPathBlockedEdit> targeted = loaded.TargetedBlockedEdits;
+            if (targeted.Count > 0)
+            {
+                foreach (NativeMobyPathBlockedEdit blocked in targeted)
+                    AddBlockedNativePathOutcome(blocked.OwnerTrueIndex, blocked.Reason);
+            }
+            else
+            {
+                foreach (string reason in loaded.BlockedReasons)
+                    AddBlockedNativePathOutcome(TryParseMovementOwnerTrueIndex(reason), reason);
+            }
+
+            void AddBlockedNativePathOutcome(int ownerTrueIndex, string reason)
+            {
+                string label = ownerTrueIndex >= 0 ? $"Egg thief T{ownerTrueIndex}" : "Egg thief path";
+                string skipped = $"{label}: saved egg-thief path no longer matches the selected disc: {reason}";
+                skippedEdits.Add(skipped);
+                editOutcomes.Add(new MobySourceEditOutcome(
+                    ownerTrueIndex,
+                    label,
+                    "native-path",
+                    Array.Empty<string>(),
+                    [skipped],
+                    Array.Empty<MobySourceEditPackageOutcome>()));
+            }
+        }
+        NativeMobyPathPatchPlan plan = NativeMobyPathPatchExporter.BuildPlan(paths);
+        foreach (NativeMobyPathCoordinatePatch coordinate in plan.Patches)
+        {
+            if (coordinate.WadLba != WadLba)
+                throw new InvalidOperationException($"{coordinate.LevelName} T{coordinate.OwnerTrueIndex} path targets an unexpected WAD LBA.");
+            if (OverlapsWrittenOffsets(coordinate.WadOffset, coordinate.ByteLength, writtenWadOffsets))
+                throw new InvalidOperationException($"Native path node T{coordinate.OwnerTrueIndex}/#{coordinate.NodeIndex + 1} overlaps another source patch.");
+            byte[] actual = ReadWadBytes(stream, layout, coordinate.WadOffset, coordinate.ByteLength);
+            if (!actual.SequenceEqual(coordinate.Before))
+            {
+                throw new InvalidOperationException(
+                    $"{coordinate.LevelName} T{coordinate.OwnerTrueIndex} path node {coordinate.NodeIndex + 1} source XYZ bytes are stale.");
+            }
+            for (long offset = coordinate.WadOffset; offset < coordinate.WadOffset + coordinate.ByteLength; offset++)
+                writtenWadOffsets.Add(offset);
+            patches.Add(new MobySourcePatch(
+                Label: $"{coordinate.LevelKey}-T{coordinate.OwnerTrueIndex}-path-node-{coordinate.NodeIndex + 1}",
+                Kind: "native-moby-path-node-xyz",
+                LevelKey: coordinate.LevelKey,
+                MobyLabel: $"Egg thief T{coordinate.OwnerTrueIndex}",
+                TrueIndex: coordinate.OwnerTrueIndex,
+                RecordOffset: $"PathData node {coordinate.NodeIndex + 1} XYZ",
+                WadRelativeOffset: $"0x{coordinate.WadOffset:X}",
+                ImageOffset: $"0x{ConvertWadOffsetToImageOffset(layout, coordinate.WadOffset):X}",
+                ByteLength: coordinate.ByteLength,
+                BeforeHexPreview: ToHex(coordinate.Before),
+                AfterHexPreview: ToHex(coordinate.After),
+                Description: $"Move native egg-thief route node {coordinate.NodeIndex + 1}; preserve PathData header/order and unknown word."));
+        }
+
+        foreach (IGrouping<int, NativeMobyPathCoordinatePatch> owner in plan.Patches.GroupBy(patch => patch.OwnerTrueIndex))
+        {
+            editOutcomes.Add(new MobySourceEditOutcome(
+                owner.Key,
+                $"Egg thief T{owner.Key}",
+                "native-path",
+                owner.Select(_ => "native-moby-path-node-xyz").ToArray(),
+                Array.Empty<string>(),
+                Array.Empty<MobySourceEditPackageOutcome>()));
+        }
+        if (plan.Patches.Count > 0)
+        {
+            notes.Add($"Native egg-thief paths: {plan.EditedPathCount} route(s), {plan.EditedNodeCount} node(s); each write is exactly 12 XYZ bytes and preserves fixed headers/order/unknown words.");
+        }
+    }
+
+    private static int TryParseMovementOwnerTrueIndex(string text)
+    {
+        int marker = text.IndexOf(" T", StringComparison.Ordinal);
+        if (marker < 0)
+            return -1;
+        int start = marker + 2;
+        int end = start;
+        while (end < text.Length && char.IsAsciiDigit(text[end]))
+            end++;
+        return end > start && int.TryParse(text.AsSpan(start, end - start), out int value)
+            ? value
+            : -1;
+    }
+
     private static void AddMovedDragonRescueCameraPatches(
         FileStream stream,
         DiscLayout layout,
@@ -6423,7 +6749,8 @@ public sealed record MobySourcePatchRequest(
     string NativeEditsPath,
     bool WriteImage,
     bool AllowPlanOnlyActorPackageImports = false,
-    bool AllowGuardedNativeCloneAppend = false);
+    bool AllowGuardedNativeCloneAppend = false,
+    string NativeMobyPathEditsPath = "");
 
 internal sealed record CrossLevelAppendDonor(
     LevelDefinition SourceLevel,
@@ -6487,7 +6814,13 @@ public sealed record MobySourceEditOutcome(
     string EditKind,
     IReadOnlyList<string> PatchKinds,
     IReadOnlyList<string> SkippedReasons,
-    IReadOnlyList<MobySourceEditPackageOutcome> PackageOutcomes);
+    IReadOnlyList<MobySourceEditPackageOutcome> PackageOutcomes,
+    IReadOnlyList<MobySourceEditSafetyFinding>? SafetyFindings = null);
+
+public sealed record MobySourceEditSafetyFinding(
+    string Code,
+    MobyBuildSafetyStatus Status,
+    string Message);
 
 public sealed record MobySourceEditPackageOutcome(
     string TemplateId,

@@ -1312,6 +1312,7 @@ public sealed partial class EditorViewport : Control
         _flyCameraInactiveBackdropFaceIndexes.Clear();
         _flyVisibleLowDetailCornerColorCounts.Clear();
         _screenFacingGuide = null;
+        ClearNativeMovementScreenState();
 
         context.FillRectangle(new SolidColorBrush(Color.FromRgb(19, 24, 30)), bounds);
         if (_viewMode == ViewportViewMode.Fly3D)
@@ -1329,6 +1330,7 @@ public sealed partial class EditorViewport : Control
             DrawEmptyScene(context, bounds, _emptyMessage);
 
         DrawMobys(context, bounds);
+        DrawNativeMovementOverlays(context, bounds);
         DrawViewportChrome(context, bounds);
     }
 
@@ -1387,6 +1389,11 @@ public sealed partial class EditorViewport : Control
             }
 
             bool terrainFirst = ShouldPrioritizeTerrainInteraction();
+            if (!terrainFirst && TryBeginNativeMovementHandleDrag(_lastPointerPosition, e.Pointer))
+            {
+                e.Handled = true;
+                return;
+            }
             ScreenFacingGuide? facingGuide = terrainFirst ? null : FindScreenFacingGuide(_lastPointerPosition);
             if (facingGuide != null)
             {
@@ -1500,6 +1507,14 @@ public sealed partial class EditorViewport : Control
             {
                 _pan += position - _lastPointerPosition;
             }
+            _lastPointerPosition = position;
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
+        if (TryDragNativeMovementHandle(position))
+        {
             _lastPointerPosition = position;
             InvalidateVisual();
             e.Handled = true;
@@ -1667,6 +1682,9 @@ public sealed partial class EditorViewport : Control
             e.Pointer.Capture(null);
             e.Handled = true;
         }
+
+        if (EndNativeMovementHandleDrag(e.Pointer))
+            e.Handled = true;
 
         if (_isDraggingMobyFacing)
         {
@@ -2621,6 +2639,7 @@ public sealed partial class EditorViewport : Control
         DrawSelectedTerrainPointHandles(context, orderedTerrainFaces, flyView: true);
         DrawFlyTerrainBrushFootprint(context, bounds, geometry);
         FlyMobyVisibilityCounts mobyVisibility = DrawFlyMobys(context, bounds, useFlyGameViewVisibility);
+        DrawNativeMovementOverlays(context, bounds);
         _nativeTerrainOcclusionSnapshot = new NativeTerrainOcclusionSnapshot(
             "Game Camera",
             flyOcclusion.Available,

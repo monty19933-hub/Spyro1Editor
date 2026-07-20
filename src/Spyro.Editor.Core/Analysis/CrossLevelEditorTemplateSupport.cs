@@ -14,6 +14,9 @@ public static class CrossLevelEditorTemplateSupport
         string supportStatus,
         string workspaceRoot = "")
     {
+        if (SpecialChestEditorTemplateGate.TryResolve(currentLevel, family, out CrossLevelTemplateLevelStatus specialChestStatus))
+            return specialChestStatus;
+
         if (ArtisansNativeLockedChestRuntimeBundleCompatibility.IsTemplate(sourceLevelKey, family))
             return ArtisansNativeLockedChestRuntimeBundleCompatibility.Resolve(currentLevel);
 
@@ -124,6 +127,126 @@ public static class CrossLevelEditorTemplateSupport
             _ when string.IsNullOrWhiteSpace(status) => "unknown",
             _ => status.Replace('-', ' ')
         };
+    }
+}
+
+/// <summary>
+/// Keeps the Add Object catalogue on the same evidence boundary as the checked
+/// special-chest registry. Research builds may place candidates for disposable
+/// test CUEs, but release Add and normal Create BIN only see a runtime-proven
+/// destination profile. A Key is gated with its Locked Chest family because an
+/// orphaned imported Key is not a complete editor bundle.
+/// </summary>
+public static class SpecialChestEditorTemplateGate
+{
+    private static readonly HashSet<string> FlightLevelKeys =
+    [
+        "sunnyflight",
+        "nightflight",
+        "crystalflight",
+        "wildflight",
+        "icyflight"
+    ];
+
+    public static bool TryResolve(
+        LevelDefinition? currentLevel,
+        string templateFamily,
+        out CrossLevelTemplateLevelStatus status)
+    {
+        status = null!;
+        if (!TryMapFamily(templateFamily, out SpecialChestFamily family))
+            return false;
+
+        if (currentLevel == null)
+        {
+            status = new CrossLevelTemplateLevelStatus(
+                "preview",
+                "Load a destination level to check this special-chest bundle's exact evidence profile.",
+                "",
+                false,
+                false,
+                false);
+            return true;
+        }
+
+        string levelKey = LevelCatalog.NormalizeKey(currentLevel.Key);
+        if (FlightLevelKeys.Contains(levelKey))
+        {
+            status = new CrossLevelTemplateLevelStatus(
+                "blocked in flights",
+                $"{currentLevel.DisplayName} is one of the five explicitly excluded flight stages. Special-chest bundles cannot be added or exported here.",
+                "",
+                false,
+                false,
+                false);
+            return true;
+        }
+
+        SpecialChestBundleProfile? profile = SpecialChestBundleProfileRegistry.Find(
+            family,
+            levelKey,
+            SpecialChestBundleProfileRegistry.CleanUsaImageSha256);
+        if (profile == null)
+        {
+            status = new CrossLevelTemplateLevelStatus(
+                "blocked here",
+                $"No checked {SpecialChestBundleProfileRegistry.Definition(family).DisplayName} profile exists for {currentLevel.DisplayName}.",
+                "",
+                false,
+                false,
+                false);
+            return true;
+        }
+
+        status = profile.Availability switch
+        {
+            SpecialChestBundleAvailability.NormalCreateBinReady => new CrossLevelTemplateLevelStatus(
+                "ready here",
+                $"Runtime-proven in {currentLevel.DisplayName}: {profile.EvidenceNote}",
+                profile.RecipeId,
+                true,
+                true,
+                true),
+            SpecialChestBundleAvailability.CandidatePlanOnly => new CrossLevelTemplateLevelStatus(
+                "test CUE only",
+                $"{currentLevel.DisplayName} has a checked static candidate, but normal Add/Create BIN remains blocked until DuckStation evidence passes. {profile.EvidenceNote}",
+                profile.RecipeId,
+                false,
+                true,
+                true),
+            SpecialChestBundleAvailability.NativeClosurePresent => new CrossLevelTemplateLevelStatus(
+                "test CUE only",
+                $"{currentLevel.DisplayName} contains this family natively, but an extra copy has no runtime-proven independent properties/companion allocation yet. Disposable test CUE only.",
+                profile.RecipeId,
+                false,
+                true,
+                true),
+            _ => new CrossLevelTemplateLevelStatus(
+                "blocked here",
+                $"{currentLevel.DisplayName}: {profile.EvidenceNote} Required work: {string.Join(" ", profile.RequiredWork)}",
+                profile.RecipeId,
+                false,
+                false,
+                false)
+        };
+        return true;
+    }
+
+    public static bool TryMapFamily(string templateFamily, out SpecialChestFamily family)
+    {
+        string normalized = (templateFamily ?? "").Trim().ToLowerInvariant();
+        family = normalized switch
+        {
+            "key" or "lockedchest" => SpecialChestFamily.LockedChest,
+            "lifechest" => SpecialChestFamily.LifeChest,
+            "springchest" => SpecialChestFamily.SpringChest,
+            "fireworkchest" => SpecialChestFamily.FireworkChest,
+            "multigemchest" => SpecialChestFamily.MultiGemChest,
+            "armoredchest" or "strongchest" => SpecialChestFamily.ArmoredChest,
+            _ => default
+        };
+        return normalized is "key" or "lockedchest" or "lifechest" or "springchest" or
+            "fireworkchest" or "multigemchest" or "armoredchest" or "strongchest";
     }
 }
 

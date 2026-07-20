@@ -133,6 +133,11 @@ try
         RunTerrainOcclusionOnly();
         return 0;
     }
+    if (args.Contains("--native-path-only", StringComparer.OrdinalIgnoreCase))
+    {
+        RunNativePathOnly();
+        return 0;
+    }
     Render(1440, 900, "spyro-editor-ui-1440x900.png");
     Render(1024, 720, "spyro-editor-ui-1024x720.png");
 
@@ -161,6 +166,166 @@ void RunTerrainAtomicOnly()
     {
         WaitForLevelData(window);
         AssertTerrainCatalogAtomicGuards(window);
+    }
+    finally
+    {
+        window.Close();
+        FlushUi();
+    }
+}
+
+void RunNativePathOnly()
+{
+    MainWindow window = new()
+    {
+        Width = 1440,
+        Height = 900,
+        WindowStartupLocation = WindowStartupLocation.Manual,
+        Position = new PixelPoint(0, 0)
+    };
+    window.Show();
+    try
+    {
+        WaitForLevelData(window);
+        LevelCatalog catalog = LevelCatalog.Load(sourceWorkspace);
+        LevelDefinition stoneHill = catalog.FindByKey("stonehill")
+            ?? throw new InvalidOperationException("Native path UI smoke could not find Stone Hill.");
+        SelectLevelForViewportFit(window, stoneHill);
+
+        FieldInfo mobysField = typeof(MainWindow).GetField(
+            "_currentMobys",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Native path UI smoke could not inspect current Mobys.");
+        List<Moby> mobys = (List<Moby>)(mobysField.GetValue(window)
+            ?? throw new InvalidOperationException("Native path UI smoke found no current Moby list."));
+        Moby thief = mobys.Single(moby => moby.TrueIndex == 166);
+        EditorViewport viewport = window.GetLogicalDescendants().OfType<EditorViewport>().Single();
+        viewport.SetViewMode(ViewportViewMode.Map);
+        viewport.SelectMoby(thief, true);
+        FlushUi();
+
+        FieldInfo actionField = typeof(MainWindow).GetField(
+            "_objectNativeMovementButton",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Native path UI smoke could not inspect the path action.");
+        Button action = (Button)(actionField.GetValue(window)
+            ?? throw new InvalidOperationException("Native path UI smoke found no path action button."));
+        if (!action.IsVisible || !action.IsEnabled || !string.Equals(action.Content?.ToString(), "Edit Run Path", StringComparison.Ordinal))
+            throw new InvalidOperationException("Selecting verified Stone Hill egg thief T166 did not reveal the enabled Edit Run Path action.");
+
+        FieldInfo pathsField = typeof(MainWindow).GetField(
+            "_currentNativeMobyPaths",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Native path UI smoke could not inspect decoded routes.");
+        List<NativeMobyPath> paths = (List<NativeMobyPath>)(pathsField.GetValue(window)
+            ?? throw new InvalidOperationException("Native path UI smoke found no decoded routes."));
+        NativeMobyPath path = paths.Single(route => route.OwnerTrueIndex == thief.TrueIndex);
+        if (path.NodeCount != 13 || path.Nodes.Select(node => node.Index).SequenceEqual(Enumerable.Range(0, 13)) == false)
+            throw new InvalidOperationException("Stone Hill's verified native route did not expose its fixed ordered 13 nodes.");
+
+        SaveFrame(window, "spyro-editor-native-path-map.png");
+        NativePathOverlaySnapshot mapOverlay = viewport.CaptureNativePathOverlaySnapshotForTesting();
+        if (mapOverlay.ViewMode != ViewportViewMode.Map ||
+            mapOverlay.OwnerTrueIndex != thief.TrueIndex ||
+            mapOverlay.ProjectedNodeHandleCount != path.NodeCount ||
+            mapOverlay.PolylineSegmentCount != path.NodeCount - 1)
+        {
+            throw new InvalidOperationException($"Edit Map did not render every numbered route node and ordered polyline segment: {mapOverlay}.");
+        }
+
+        viewport.SetMapYFlipped(true);
+        viewport.SetViewMode(ViewportViewMode.Fly3D);
+        viewport.SelectMoby(thief, true);
+        FlushUi();
+        SaveFrame(window, "spyro-editor-native-path-game-camera.png");
+        NativePathOverlaySnapshot gameCameraOverlay = viewport.CaptureNativePathOverlaySnapshotForTesting();
+        if (gameCameraOverlay.ViewMode != ViewportViewMode.Fly3D ||
+            gameCameraOverlay.OwnerTrueIndex != thief.TrueIndex ||
+            gameCameraOverlay.ProjectedNodeHandleCount <= 0 ||
+            gameCameraOverlay.PolylineSegmentCount <= 0)
+        {
+            throw new InvalidOperationException($"Game Camera did not render draggable path handles and an ordered polyline: {gameCameraOverlay}.");
+        }
+
+        FieldInfo moveTogetherField = typeof(MainWindow).GetField(
+            "_moveSelectedThiefPathWithOwner",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Native path UI smoke could not inspect move-together state.");
+        if (moveTogetherField.GetValue(window) is not true)
+            throw new InvalidOperationException("Move thief and path together is not enabled by default.");
+
+        NativePathNode first = path.Nodes[0];
+        Vector3f ownerBefore = thief.Position;
+        Vector3f nodeBefore = first.Position;
+        MethodInfo moveGroup = typeof(MainWindow).GetMethod(
+            "MoveLinkedMobyGroup",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Native path UI smoke could not move the selected thief.");
+        moveGroup.Invoke(window, [thief, 1f, -2f, 0.5f, false]);
+        if (first.RawX != first.OriginalRawX + 16 ||
+            first.RawY != first.OriginalRawY - 32 ||
+            first.RawZ != first.OriginalRawZ + 8)
+        {
+            throw new InvalidOperationException("Moving the thief did not translate every native path coordinate by the same fixed-16 delta.");
+        }
+
+        MethodInfo hasUndo = typeof(MainWindow).GetMethod(
+            "HasUndoableMobyEdits",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Native path UI smoke could not inspect Undo availability.");
+        if (hasUndo.Invoke(window, [thief]) is not true)
+            throw new InvalidOperationException("A moved native path did not enable object Undo.");
+        MethodInfo undo = typeof(MainWindow).GetMethod(
+            "UndoMoby",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Native path UI smoke could not invoke Undo.");
+        undo.Invoke(window, [thief]);
+        if (thief.Position != ownerBefore || first.Position != nodeBefore || path.HasEdits)
+            throw new InvalidOperationException("Undo did not restore the thief and its complete native route together.");
+
+        first.SetRawPosition(
+            checked(first.OriginalRawX + 16),
+            checked(first.OriginalRawY - 32),
+            checked(first.OriginalRawZ + 48));
+        MethodInfo persist = typeof(MainWindow).GetMethod(
+            "PersistCurrentNativeMovementEditsAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Native path UI smoke could not save route edits.");
+        Task<int> saveTask = (Task<int>)(persist.Invoke(window, null)
+            ?? throw new InvalidOperationException("Saving native route edits returned no task."));
+        for (int attempt = 0; attempt < 1000 && !saveTask.IsCompleted; attempt++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(5);
+        }
+        if (!saveTask.IsCompleted)
+            throw new TimeoutException("Saving the native path document exceeded five seconds.");
+        saveTask.GetAwaiter().GetResult();
+        string editPath = Path.Combine(workspace, NativeMobyPathEditStore.DefaultFileName(stoneHill.Key));
+        using (JsonDocument document = JsonDocument.Parse(File.ReadAllText(editPath)))
+        {
+            JsonElement saved = document.RootElement.GetProperty("edits")[0];
+            JsonElement savedNode = saved.GetProperty("nodes")[0];
+            if (document.RootElement.GetProperty("version").GetInt32() != NativeMobyPathEditStore.CurrentVersion ||
+                saved.GetProperty("ownerTrueIndex").GetInt32() != thief.TrueIndex ||
+                saved.GetProperty("nodeCount").GetInt32() != path.NodeCount ||
+                savedNode.GetProperty("index").GetInt32() != first.Index ||
+                savedNode.GetProperty("editedRawX").GetInt32() != first.RawX ||
+                savedNode.GetProperty("preservedUnknownWord").GetInt32() != first.UnknownWord)
+            {
+                throw new InvalidOperationException("The versioned native path document did not preserve fixed identity, order, coordinates, and unknown-word preimage.");
+            }
+        }
+
+        first.Reset();
+        if (first.HasEdit || path.NodeCount != 13)
+            throw new InvalidOperationException("Reset Node changed route structure or failed to restore its source XYZ.");
+        path.Nodes[1].SetRawPosition(path.Nodes[1].OriginalRawX + 16, path.Nodes[1].OriginalRawY, path.Nodes[1].OriginalRawZ);
+        path.ResetEdits();
+        if (path.HasEdits || path.NodeCount != 13 || !path.Nodes.Select(node => node.Index).SequenceEqual(Enumerable.Range(0, 13)))
+            throw new InvalidOperationException("Reset Whole Path changed fixed node count/order or left edited coordinates behind.");
+
+        Console.WriteLine("Native path UI smoke passed: Edit Run Path visibility, Map/Game Camera handles and polyline, fixed ordering, move-together default, Undo, exact fixed-16 persistence, and node/whole-path reset.");
     }
     finally
     {

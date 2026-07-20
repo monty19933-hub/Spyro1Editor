@@ -195,6 +195,7 @@ public sealed partial class MainWindow : Window
     private Button? _objectAddButton;
     private Button? _objectRemoveButton;
     private Button? _objectEditButton;
+    private Button? _objectNativeMovementButton;
     private Button? _objectSwapCatalogButton;
     private Button? _objectSwapTestButton;
     private Button? _objectCopyButton;
@@ -315,6 +316,8 @@ public sealed partial class MainWindow : Window
         _viewport.TerrainTexturePaintCanceled += (_, _) => StopTerrainTexturePaintMode(announce: true);
         _viewport.MobyMoveRequested += (_, e) => MoveMobyFromViewport(e);
         _viewport.MobyRotateRequested += (_, e) => RotateMobyFromViewport(e);
+        _viewport.NativePathNodeMoveRequested += (_, e) => MoveNativePathNodeFromViewport(e);
+        _viewport.DragonRunToMoveRequested += (_, e) => MoveDragonRunToFromViewport(e);
         _viewport.ObjectPlacementRequested += async (_, e) => await PlacePendingMobyAtViewportAsync(e.ScreenPoint);
         _viewport.ObjectPlacementCanceled += (_, _) => CancelPendingMobyPlacement();
         _viewport.ObjectCopyRequested += (_, _) => CopySelectedMoby();
@@ -2252,10 +2255,12 @@ public sealed partial class MainWindow : Window
         _customTerrainTextures = loaded.CustomTerrainTextures;
         _nativeTerrainTextureRelocations = loaded.NativeTerrainTextureRelocations;
         _lastRemovedMoby = null;
+        _lastRemovedMobyBundle.Clear();
         RefreshTerrainTextureImageFiles();
         _viewport.Geometry = _currentGeometry;
         ConfigureCompleteTerrainEditing();
         _viewport.Mobys = _currentMobys;
+        ApplyNativeMovementLoadData(loaded.NativeMovement);
         _viewport.SetLevelEntryPose(loaded.LevelEntryPose);
         _viewport.SetViewMode(ViewportViewMode.Fly3D);
         _viewport.RefreshFlyCameraForLoadedLevel();
@@ -2839,6 +2844,8 @@ public sealed partial class MainWindow : Window
 
         string terrainEditsPath = Path.Combine(_workspace.RootPath, $"{_currentLevel.Key}-terrain-edits.json");
         int mobyCount = await PersistCurrentMobyEditsAsync();
+        int nativePathCount = await PersistCurrentNativeMovementEditsAsync();
+        int dragonRunToCount = await PersistCurrentDragonRunToEditsAsync();
         int terrainCount = _currentGeometry == null
             ? 0
             : await TerrainEditStore.SaveAsync(terrainEditsPath, _currentGeometry.Polygons, _currentLevel.DisplayName);
@@ -2854,9 +2861,12 @@ public sealed partial class MainWindow : Window
         string nativeTextureSwaps = _nativeTerrainTextureRelocations.Count > 0
             ? $"; native cross-level texture swap(s) {_nativeTerrainTextureRelocations.Count}"
             : "";
-        _statusText.Text = $"Saved {mobyCount} object edit(s). Terrain: {BuildTerrainEditSummary()}{customArt}{nativeTextureSwaps}.";
+        string nativeMovement = nativePathCount + dragonRunToCount > 0
+            ? $"; native movement {nativePathCount + dragonRunToCount}"
+            : "";
+        _statusText.Text = $"Saved {mobyCount} object edit(s){nativeMovement}. Terrain: {BuildTerrainEditSummary()}{customArt}{nativeTextureSwaps}.";
         RefreshDiagnosticContext(includeSavedEdits: true);
-        EditorDiagnostics.RecordAction("Saved level edits", $"{_currentLevel.DisplayName}: {mobyCount} object edit(s); {BuildTerrainEditSummary()}{customArt}{nativeTextureSwaps}");
+        EditorDiagnostics.RecordAction("Saved level edits", $"{_currentLevel.DisplayName}: {mobyCount} object edit(s){nativeMovement}; {BuildTerrainEditSummary()}{customArt}{nativeTextureSwaps}");
     }
 
     private async Task<int> PersistCurrentMobyEditsAsync()
@@ -2937,6 +2947,7 @@ public sealed partial class MainWindow : Window
         string[] paths =
         [
             Path.Combine(_workspace.RootPath, $"{levelKey}-native-edits.json"),
+            NativeMobyPathEditPath(levelKey),
             Path.Combine(_workspace.RootPath, $"{levelKey}-terrain-edits.json"),
             Path.Combine(_workspace.RootPath, $"{levelKey}-terrain-material-overrides.json"),
             CustomTerrainTextureStore.ManifestPath(_workspace.RootPath, levelKey),
@@ -2960,6 +2971,7 @@ public sealed partial class MainWindow : Window
         _selectedTerrainIndex = -1;
         _activeTerrainProofTarget = null;
         _lastRemovedMoby = null;
+        _lastRemovedMobyBundle.Clear();
         InvalidateBuildSafetySummary();
         _loadingLevel = true;
         RefreshLevelSelectionAvailability();
@@ -8251,6 +8263,7 @@ public sealed partial class MainWindow : Window
         SetButtonEnabled(_objectAddButton, hasLevel);
         SetButtonEnabled(_objectRemoveButton, hasObject && !selectedEditorControl && !(_releaseMode && selectedProtectedControl));
         SetButtonEnabled(_objectEditButton, hasObject);
+        RefreshNativeMovementActionButton();
         SetButtonEnabled(_objectSwapCatalogButton, canUseSwapCatalog);
         SetButtonEnabled(_objectSwapTestButton, hasLevel && hasCrossLevelSwapCandidate);
         if (_objectSwapTestButton != null)
@@ -8614,24 +8627,28 @@ public sealed partial class MainWindow : Window
 
     private bool HasUnsavedMobyEdits()
     {
-        return !string.Equals(BuildMobyEditSignature(_currentMobys), _savedMobyEditSignature, StringComparison.Ordinal);
+        return !string.Equals(BuildMobyEditSignature(_currentMobys), _savedMobyEditSignature, StringComparison.Ordinal) ||
+            HasUnsavedNativeMovementEdits() ||
+            HasUnsavedDragonRunToEdits();
     }
 
     private string BuildMobyEditSummary()
     {
         int live = _currentMobys.Count(moby => moby.HasAnyEdit);
-        if (live == 0)
+        int nativePaths = NativeMovementEditedPathCount();
+        if (live == 0 && nativePaths == 0)
             return HasUnsavedMobyEdits()
                 ? _loadedMobyEdits > 0 ? $"0 live, {_loadedMobyEdits} saved, unsaved" : "none, unsaved"
                 : _loadedMobyEdits > 0 ? $"0 live, {_loadedMobyEdits} saved" : "none";
 
-        List<string> parts = new()
-        {
-            $"{live} live",
-            HasUnsavedMobyEdits() ? "unsaved" : "saved"
-        };
+        List<string> parts = [];
+        if (live > 0)
+            parts.Add($"{live} live object{(live == 1 ? "" : "s")}");
+        if (nativePaths > 0)
+            parts.Add($"{nativePaths} run path{(nativePaths == 1 ? "" : "s")}");
+        parts.Add(HasUnsavedMobyEdits() ? "unsaved" : "saved");
         if (_loadedMobyEdits != live)
-            parts.Add($"{_loadedMobyEdits} saved");
+            parts.Add($"{_loadedMobyEdits} saved object{(_loadedMobyEdits == 1 ? "" : "s")}");
         return string.Join(", ", parts);
     }
 
@@ -10359,7 +10376,9 @@ public sealed partial class MainWindow : Window
         List<EditedLevelExportTarget> targets = [];
         foreach (LevelDefinition level in _catalog.Levels)
         {
-            bool hasObjectEdits = level.HasSourceTable && NativeEditFileHasEdits(Path.Combine(_workspace.RootPath, $"{level.Key}-native-edits.json"));
+            bool hasObjectEdits = level.HasSourceTable &&
+                (NativeEditFileHasEdits(Path.Combine(_workspace.RootPath, $"{level.Key}-native-edits.json")) ||
+                 NativeEditFileHasEdits(NativeMobyPathEditPath(level.Key)));
             bool hasTerrainEdits = TerrainEditFileHasEdits(Path.Combine(_workspace.RootPath, $"{level.Key}-terrain-edits.json"));
             bool hasCustomTerrainTextures = CustomTerrainTextureFileHasTextures(CustomTerrainTextureStore.ManifestPath(_workspace.RootPath, level.Key));
             bool hasNativeTerrainTextureRelocations = NativeTerrainTextureRelocationEditStore
@@ -10449,7 +10468,8 @@ public sealed partial class MainWindow : Window
                     OutputPrefix: outputPrefix,
                     Level: target.Level,
                     NativeEditsPath: editsPath,
-                    WriteImage: true));
+                    WriteImage: true,
+                    NativeMobyPathEditsPath: NativeMobyPathEditPath(target.Level.Key)));
 
                 objectPatches += objectResult.Plan.PatchCount;
                 skippedEdits += objectResult.Plan.SkippedEdits.Count;
@@ -10901,7 +10921,8 @@ public sealed partial class MainWindow : Window
                 continue;
 
             string editsPath = Path.Combine(_workspace.RootPath, $"{level.Key}-native-edits.json");
-            if (NativeEditFileHasEdits(editsPath))
+            if (NativeEditFileHasEdits(editsPath) ||
+                NativeEditFileHasEdits(NativeMobyPathEditPath(level.Key)))
                 names.Add(level.DisplayName);
         }
 
@@ -11446,7 +11467,8 @@ public sealed partial class MainWindow : Window
                 outputCue,
                 _currentLevel,
                 editsPath,
-                allowPlanOnlyActorPackageImports: true);
+                allowPlanOnlyActorPackageImports: true,
+                nativeMobyPathEditsPath: NativeMobyPathEditPath(_currentLevel.Key));
             List<MobyActorPackageImportPreview> candidatePreviews = candidatePlan.PackageImportPreviews
                 .Where(preview =>
                     preview.CanWriteImage &&
@@ -11494,7 +11516,8 @@ public sealed partial class MainWindow : Window
                 Level: _currentLevel,
                 NativeEditsPath: editsPath,
                 WriteImage: true,
-                AllowPlanOnlyActorPackageImports: true));
+                AllowPlanOnlyActorPackageImports: true,
+                NativeMobyPathEditsPath: NativeMobyPathEditPath(_currentLevel.Key)));
 
             string residentPlanPath = result.WroteImage && composeResidentGreenWizard
                 ? expectedResidentPlanPath
@@ -18680,6 +18703,8 @@ public sealed partial class MainWindow : Window
             anchor.Position.Y - originalAnchorPosition.Y,
             anchor.Position.Z - originalAnchorPosition.Z);
 
+        TranslateOwnedNativeMovement(anchor, appliedDelta);
+
         foreach (Moby companion in moved.Where(moby => !ReferenceEquals(moby, anchor)))
             MoveMoby(companion, appliedDelta.X, appliedDelta.Y, appliedDelta.Z);
 
@@ -18874,7 +18899,9 @@ public sealed partial class MainWindow : Window
 
     private IEnumerable<Moby> GetLinkedMoveMobys(Moby selected)
     {
-        return MobyLinkTraversal.GetLinkedMoveMobys(selected, _currentMobys);
+        return MobyLinkTraversal.GetLinkedMoveMobys(selected, _currentMobys)
+            .Concat(GetAtomicSpecialChestBundleMembers(selected))
+            .DistinctBy(moby => moby.TrueIndex);
     }
 
     private IEnumerable<Moby> GetChestContentMobys(Moby chest)
@@ -19268,6 +19295,7 @@ public sealed partial class MainWindow : Window
             AddLinkedCompanionClones(sourceRoot, moby, addedMobys, ref index, ref trueIndex);
         }
 
+        AttachSpecialChestBundleMetadata(selectedTemplate, addedMobys, moby);
         _currentMobys.AddRange(addedMobys);
         InvalidateBuildSafetySummary();
         _viewport.Mobys = _currentMobys;
@@ -19316,6 +19344,12 @@ public sealed partial class MainWindow : Window
         if (_releaseMode && IsReleaseProtectedControlMoby(_selectedMoby))
         {
             _statusText.Text = $"{_selectedMoby.DisplayLabel} looks like system/trigger data. It can be inspected, but release builds do not copy it as a normal placeable object yet.";
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_selectedMoby.SpecialChestBundleId))
+        {
+            _statusText.Text = "Imported special chests are atomic bundles and cannot be copied as a single row. Use Add Object so the checked profile supplies every required companion and reward row.";
             return;
         }
 
@@ -20758,20 +20792,29 @@ public sealed partial class MainWindow : Window
         }
 
         Moby removed = _selectedMoby;
+        List<Moby> removalGroup = GetAtomicSpecialChestBundleMembers(removed)
+            .DistinctBy(moby => moby.TrueIndex)
+            .ToList();
         _lastRemovedMoby = removed;
+        _lastRemovedMobyBundle = removalGroup;
         if (_currentLevel != null)
             MobyRelationshipRepair.RepairChestContentLinks(_currentLevel.Key, _currentMobys);
-        if (_selectedMoby.IsAdded)
+        HashSet<int> removedTrueIndexes = removalGroup
+            .Select(moby => moby.TrueIndex)
+            .Where(trueIndex => trueIndex >= 0)
+            .ToHashSet();
+        foreach (Moby member in removalGroup)
         {
-            _currentMobys.Remove(_selectedMoby);
-            foreach (Moby member in _currentMobys)
-            {
-                member.DormantGemRelationshipLinks.RemoveAll(link =>
-                    link.TrueIndexes.Contains(removed.TrueIndex));
-            }
+            if (member.IsAdded)
+                _currentMobys.Remove(member);
+            else
+                member.IsRemoved = true;
         }
-        else
-            _selectedMoby.IsRemoved = true;
+        foreach (Moby member in _currentMobys)
+        {
+            member.DormantGemRelationshipLinks.RemoveAll(link =>
+                link.TrueIndexes.Any(removedTrueIndexes.Contains));
+        }
         if (_currentLevel != null)
             MobyRelationshipRepair.RepairChestContentLinks(_currentLevel.Key, _currentMobys);
         InvalidateBuildSafetySummary();
@@ -20786,7 +20829,9 @@ public sealed partial class MainWindow : Window
         else
             _viewport.ResetSelection();
 
-        _statusText.Text = "Removed object from this level edit.";
+        _statusText.Text = removalGroup.Count > 1
+            ? $"Removed the complete special-chest bundle ({removalGroup.Count} linked rows) from this level edit."
+            : "Removed object from this level edit.";
         EditorDiagnostics.RecordAction("Object removed", $"{_currentLevel?.DisplayName}: {BuildMobyDiagnosticSummary(removed)}");
         RefreshDiagnosticContext();
     }
@@ -20800,11 +20845,18 @@ public sealed partial class MainWindow : Window
         }
 
         Moby moby = _lastRemovedMoby;
-        if (!_currentMobys.Any(item => ReferenceEquals(item, moby)))
-            _currentMobys.Add(moby);
-
-        moby.IsRemoved = false;
+        List<Moby> restoreGroup = _lastRemovedMobyBundle.Count > 0 &&
+            _lastRemovedMobyBundle.Any(member => ReferenceEquals(member, moby))
+            ? _lastRemovedMobyBundle.ToList()
+            : [moby];
+        foreach (Moby member in restoreGroup)
+        {
+            if (!_currentMobys.Any(item => ReferenceEquals(item, member)))
+                _currentMobys.Add(member);
+            member.IsRemoved = false;
+        }
         _lastRemovedMoby = null;
+        _lastRemovedMobyBundle.Clear();
         if (_currentLevel != null)
             MobyRelationshipRepair.RepairChestContentLinks(_currentLevel.Key, _currentMobys);
         InvalidateBuildSafetySummary();
@@ -20812,7 +20864,9 @@ public sealed partial class MainWindow : Window
         RefreshMobyList(moby);
         RefreshCurrentLevelDetails();
         _viewport.SelectMoby(moby, true);
-        _statusText.Text = $"Restored {moby.DisplayLabel}.";
+        _statusText.Text = restoreGroup.Count > 1
+            ? $"Restored {moby.DisplayLabel} and {restoreGroup.Count - 1} special-chest companion row(s)."
+            : $"Restored {moby.DisplayLabel}.";
     }
 
     private void UndoMoby(Moby moby)
@@ -20836,7 +20890,10 @@ public sealed partial class MainWindow : Window
                     link.TrueIndexes.Any(removedTrueIndexes.Contains));
             }
             if (_lastRemovedMoby != null && rowsToRemove.Any(row => ReferenceEquals(row, _lastRemovedMoby)))
+            {
                 _lastRemovedMoby = null;
+                _lastRemovedMobyBundle.Clear();
+            }
             if (_currentLevel != null)
                 MobyRelationshipRepair.RepairChestContentLinks(_currentLevel.Key, _currentMobys);
             InvalidateBuildSafetySummary();
@@ -20851,6 +20908,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        bool nativePathUndone = ResetOwnedNativePathEdits(moby);
         List<Moby> linkedGemRows = GetLinkedGemRowsForUndo(moby)
             .Where(linked => linked.HasAnyEdit || linked.IsAdded)
             .ToList();
@@ -20885,7 +20943,9 @@ public sealed partial class MainWindow : Window
         RefreshMobyList(moby);
         RefreshCurrentLevelDetails();
         _viewport.SelectMoby(moby, true);
-        _statusText.Text = linkedMetadataUndos > 0 || restoredLinkRows > 0
+        _statusText.Text = nativePathUndone
+            ? $"Undid edits for {moby.DisplayLabel} and reset its complete native run path."
+            : linkedMetadataUndos > 0 || restoredLinkRows > 0
             ? $"Undid edits for {moby.DisplayLabel} and restored {Math.Max(linkedMetadataUndos, restoredLinkRows)} linked gem row(s)."
             : linkedPositionUndos > 0
             ? $"Undid edits for {moby.DisplayLabel} and restored {linkedPositionUndos} linked position(s)."
@@ -20895,6 +20955,7 @@ public sealed partial class MainWindow : Window
     private bool HasUndoableMobyEdits(Moby moby)
     {
         return moby.HasAnyEdit || moby.IsAdded ||
+            HasUndoableNativePathEdits(moby) ||
             GetLinkedGemRowsForUndo(moby).Any(linked => linked.HasAnyEdit || linked.IsAdded) ||
             _detachedGemLinksForUndo.ContainsKey(moby);
     }
@@ -20910,6 +20971,14 @@ public sealed partial class MainWindow : Window
             .Where(link => IsGemRelationshipLink(link) || MobyCompanionClonePlanner.IsCompanionCloneLink(link))
             .SelectMany(link => link.TrueIndexes.Skip(1))
             .ToHashSet();
+        if (!string.IsNullOrWhiteSpace(root.SpecialChestBundleId))
+        {
+            ownedTrueIndexes.UnionWith(_currentMobys
+                .Where(candidate =>
+                    candidate.IsAdded &&
+                    string.Equals(candidate.SpecialChestBundleId, root.SpecialChestBundleId, StringComparison.Ordinal))
+                .Select(candidate => candidate.TrueIndex));
+        }
         List<Moby> rows = _currentMobys
             .Where(candidate => ReferenceEquals(candidate, root) ||
                 candidate.IsAdded && ownedTrueIndexes.Contains(candidate.TrueIndex))
@@ -22445,6 +22514,7 @@ public sealed partial class MainWindow : Window
         if (row.RemoveBox.IsChecked == true)
         {
             _lastRemovedMoby = row.Moby;
+            _lastRemovedMobyBundle = [row.Moby];
             if (row.Moby.IsAdded)
                 _currentMobys.Remove(row.Moby);
             else
@@ -26390,6 +26460,7 @@ public sealed partial class MainWindow : Window
     {
         TerrainGeometryLoadData geometry = LoadGeometryData(levelKey);
         MobyLoadData mobys = LoadMobyData(levelKey);
+        NativeMovementLoadData nativeMovement = LoadNativeMovementData(levelKey);
         TerrainCollisionLoadData collision = LoadTerrainCollisionData(levelKey, geometry.Geometry);
         IReadOnlyList<CustomTerrainTextureImport> customTextures = CustomTerrainTextureStore.Load(_workspace.RootPath, levelKey);
         IReadOnlyList<NativeTerrainTextureRelocationEdit> nativeRelocations =
@@ -26410,7 +26481,8 @@ public sealed partial class MainWindow : Window
             mobys.Metadata,
             customTextures,
             nativeRelocations,
-            levelEntryPose);
+            levelEntryPose,
+            nativeMovement);
     }
 
     private PortableLevelEntryPose? TryLoadLevelEntryPose(string levelKey)
@@ -27015,7 +27087,8 @@ public sealed partial class MainWindow : Window
         MobyMetadataResult MobyMetadata,
         IReadOnlyList<CustomTerrainTextureImport> CustomTerrainTextures,
         IReadOnlyList<NativeTerrainTextureRelocationEdit> NativeTerrainTextureRelocations,
-        PortableLevelEntryPose? LevelEntryPose);
+        PortableLevelEntryPose? LevelEntryPose,
+        NativeMovementLoadData NativeMovement);
 
     private sealed record TerrainGeometryLoadData(
         GeometryCandidate? Geometry,

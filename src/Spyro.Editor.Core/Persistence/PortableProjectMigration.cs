@@ -45,6 +45,7 @@ public static class PortableProjectMigration
     private static readonly string[] ProjectEditSuffixes =
     [
         "-native-edits.json",
+        "-native-moby-path-edits.json",
         "-terrain-edits.json",
         "-terrain-material-overrides.json",
         "-terrain-behavior-proofs.json",

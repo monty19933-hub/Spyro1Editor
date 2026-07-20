@@ -21,7 +21,18 @@ public sealed record DragonRescueCameraData(
     int CutsceneIndex,
     long CutsceneCameraTrackWadOffset,
     int CutsceneCameraTrackByteLength,
-    int CutsceneCameraFrameCount);
+    int CutsceneCameraFrameCount,
+    int DragonRawX,
+    int DragonRawY,
+    int DragonRawZ,
+    int RunToAngle,
+    int RunToRadius,
+    int RunToAuxiliary,
+    int RunToRawX,
+    int RunToRawY)
+{
+    public DragonRunToEndpoint RunToEndpoint => new(RunToRawX, RunToRawY);
+}
 
 public static class DragonRescueCameraLocator
 {
@@ -91,6 +102,15 @@ public static class DragonRescueCameraLocator
         {
             SceneLinkCandidate link = sceneLinkByDragon[dragonTrueIndex];
             CameraCandidate camera = cameraByDragon[dragonTrueIndex];
+            byte[] dragonRow = rows[dragonTrueIndex];
+            int dragonRawX = ReadInt32(dragonRow, 0x0C);
+            int dragonRawY = ReadInt32(dragonRow, 0x10);
+            int dragonRawZ = ReadInt32(dragonRow, 0x14);
+            DragonRunToEndpoint runToEndpoint = DragonRescueRunTo.DecodeEndpoint(
+                dragonRawX,
+                dragonRawY,
+                camera.RunToAngle,
+                camera.RunToRadius);
             CutsceneCameraTrack cutsceneTrack = LocateCutsceneCameraTrack(
                 stream,
                 layout,
@@ -115,7 +135,15 @@ public static class DragonRescueCameraLocator
                 CutsceneIndex: camera.CutsceneIndex,
                 CutsceneCameraTrackWadOffset: cutsceneTrack.WadOffset,
                 CutsceneCameraTrackByteLength: cutsceneTrack.ByteLength,
-                CutsceneCameraFrameCount: cutsceneTrack.FrameCount));
+                CutsceneCameraFrameCount: cutsceneTrack.FrameCount,
+                DragonRawX: dragonRawX,
+                DragonRawY: dragonRawY,
+                DragonRawZ: dragonRawZ,
+                RunToAngle: camera.RunToAngle,
+                RunToRadius: camera.RunToRadius,
+                RunToAuxiliary: camera.RunToAuxiliary,
+                RunToRawX: runToEndpoint.RawX,
+                RunToRawY: runToEndpoint.RawY));
         }
 
         return result;
@@ -202,8 +230,13 @@ public static class DragonRescueCameraLocator
             int angleY = ReadInt32(entry, offset + 0x10);
             int angleZ = ReadInt32(entry, offset + 0x14);
             int cutsceneIndex = ReadInt32(entry, offset + 0x18);
+            int runToAngle = ReadInt32(entry, offset + DragonRescueRunTo.AngleFieldOffset);
+            int runToRadius = ReadInt32(entry, offset + DragonRescueRunTo.RadiusFieldOffset);
+            int runToAuxiliary = ReadInt32(entry, offset + DragonRescueRunTo.AuxiliaryFieldOffset);
             int dragonNameIndex = ReadInt32(entry, offset + 0x38);
             if (!IsCameraAngle(angleX) || !IsCameraAngle(angleY) || !IsCameraAngle(angleZ) ||
+                !DragonRescueRunTo.IsNativeAngleValue(runToAngle) ||
+                runToRadius is <= 0 or > DragonRescueRunTo.MaximumSafeRadiusRaw ||
                 cutsceneIndex is < 0 or >= 32 ||
                 dragonNameIndex is < 0 or >= 80 ||
                 ReadInt32(entry, offset + 0x3C) != 0x5622)
@@ -235,7 +268,10 @@ public static class DragonRescueCameraLocator
                 angleY,
                 angleZ,
                 dragonNameIndex,
-                cutsceneIndex));
+                cutsceneIndex,
+                runToAngle,
+                runToRadius,
+                runToAuxiliary));
         }
 
         return candidates
@@ -405,7 +441,10 @@ public static class DragonRescueCameraLocator
         int AngleY,
         int AngleZ,
         int DragonNameIndex,
-        int CutsceneIndex);
+        int CutsceneIndex,
+        int RunToAngle,
+        int RunToRadius,
+        int RunToAuxiliary);
 
     private sealed record CutsceneCameraTrack(long WadOffset, int ByteLength, int FrameCount);
 }

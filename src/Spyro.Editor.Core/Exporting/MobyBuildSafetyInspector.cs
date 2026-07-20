@@ -174,7 +174,9 @@ public static class MobyBuildSafetyInspector
         }
         else if (persistentIndexHeadroom == 0)
         {
-            status = Max(status, MobyBuildSafetyStatus.Review);
+            status = plan.SkippedEdits.Any(IsBlockingNativeMovementRejection)
+                ? MobyBuildSafetyStatus.Blocked
+                : Max(status, MobyBuildSafetyStatus.Review);
             findings.Add("All 256 persistent static Moby indexes would be occupied; there is no bookkeeping headroom for another source row.");
         }
 
@@ -244,6 +246,8 @@ public static class MobyBuildSafetyInspector
             projectedDynamicCapacity,
             projectedArenaBytes,
             native.RuntimeRowAlignmentDeltaBytes);
+        if (issues.Count > 0)
+            status = (MobyBuildSafetyStatus)Math.Max((int)status, (int)issues.Max(issue => issue.Status));
 
         return new MobyBuildSafetyLevelReport(
             LevelKey: level.Key,
@@ -298,12 +302,26 @@ public static class MobyBuildSafetyInspector
         foreach (MobySourceEditOutcome outcome in outcomes)
         {
             bool packageBlocked = outcome.PackageOutcomes.Any(package => IsBlockedPackageStatus(package.RecipeStatus));
+            foreach (MobySourceEditSafetyFinding finding in outcome.SafetyFindings ?? [])
+            {
+                issues.Add(new MobyBuildSafetyIssue(
+                    Code: finding.Code,
+                    Status: finding.Status,
+                    Message: finding.Message,
+                    LevelKey: level.Key,
+                    LevelName: level.DisplayName,
+                    EditorTrueIndex: outcome.EditorTrueIndex >= 0 ? outcome.EditorTrueIndex : null,
+                    MobyLabel: outcome.MobyLabel));
+            }
             foreach (string skippedReason in outcome.SkippedReasons)
             {
                 representedSkippedReasons.Add(skippedReason);
+                bool nativeMovementBlocked = IsBlockingNativeMovementRejection(skippedReason);
                 issues.Add(new MobyBuildSafetyIssue(
                     Code: "skipped-edit",
-                    Status: packageBlocked ? MobyBuildSafetyStatus.Blocked : MobyBuildSafetyStatus.Review,
+                    Status: packageBlocked || nativeMovementBlocked
+                        ? MobyBuildSafetyStatus.Blocked
+                        : MobyBuildSafetyStatus.Review,
                     Message: TrimMobyLabelPrefix(skippedReason, outcome.MobyLabel),
                     LevelKey: level.Key,
                     LevelName: level.DisplayName,
@@ -384,9 +402,10 @@ public static class MobyBuildSafetyInspector
 
         foreach (string skippedReason in plan.SkippedEdits.Where(reason => !representedSkippedReasons.Contains(reason)))
         {
+            bool nativeMovementBlocked = IsBlockingNativeMovementRejection(skippedReason);
             issues.Add(new MobyBuildSafetyIssue(
                 Code: "skipped-edit-unresolved",
-                Status: MobyBuildSafetyStatus.Review,
+                Status: nativeMovementBlocked ? MobyBuildSafetyStatus.Blocked : MobyBuildSafetyStatus.Review,
                 Message: skippedReason,
                 LevelKey: level.Key,
                 LevelName: level.DisplayName,
@@ -446,6 +465,23 @@ public static class MobyBuildSafetyInspector
 
     private static bool IsMobyRecordAppendKind(string kind) =>
         string.Equals(kind, "moby-record-append", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsBlockingNativeMovementRejection(string reason)
+    {
+        bool movement = reason.Contains("run-to", StringComparison.OrdinalIgnoreCase) ||
+            reason.Contains("dragon rescue scene", StringComparison.OrdinalIgnoreCase) ||
+            reason.Contains("egg-thief path", StringComparison.OrdinalIgnoreCase) ||
+            reason.Contains("egg thief", StringComparison.OrdinalIgnoreCase);
+        if (!movement)
+            return false;
+        return reason.Contains("no longer matches", StringComparison.OrdinalIgnoreCase) ||
+            reason.Contains("not present", StringComparison.OrdinalIgnoreCase) ||
+            reason.Contains("missing", StringComparison.OrdinalIgnoreCase) ||
+            reason.Contains("invalid", StringComparison.OrdinalIgnoreCase) ||
+            reason.Contains("zero", StringComparison.OrdinalIgnoreCase) ||
+            reason.Contains("overflow", StringComparison.OrdinalIgnoreCase) ||
+            reason.Contains("outside", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static bool IsBlockedPackageStatus(string status) =>
         status.StartsWith("in-game-blocked", StringComparison.OrdinalIgnoreCase) ||

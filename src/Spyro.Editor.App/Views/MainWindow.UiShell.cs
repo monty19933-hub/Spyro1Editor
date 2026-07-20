@@ -582,6 +582,11 @@ public sealed partial class MainWindow
         AddModernGridButton(primary, _objectSwapCatalogButton, 2);
         panel.Children.Add(primary);
 
+        _objectNativeMovementButton = NewAsyncButton("Edit Native Movement", EditSelectedNativeMovementAsync);
+        StyleModernPrimaryButton(_objectNativeMovementButton, Color.FromRgb(111, 86, 174));
+        _objectNativeMovementButton.IsVisible = false;
+        panel.Children.Add(_objectNativeMovementButton);
+
         _objectCopyButton = NewButton("Copy", CopySelectedMoby);
         _objectPasteButton = NewAsyncButton("Paste", PasteMobyClipboardAtLastPointerAsync);
         _objectUndoButton = NewButton("Undo", () =>
