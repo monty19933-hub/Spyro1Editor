@@ -544,8 +544,17 @@ Start Painting` initially loads only the active level into a six-column gallery;
 another level is decoded only after the user explicitly loads it. Unsupported
 records remain visible as gray `BLOCKED` cards with their exact reason. The
 fast paint path is face-local. Same-level painting changes only the clicked
-face; cross-level painting does so only when that destination owns a unique safe
-texture record. A shared destination is refused without mutation.
+face. Cross-level painting reserves a source-proven, runtime-persistent,
+otherwise-unused destination texture record, relocates the chosen donor art into
+that private slot, and remaps only the clicked face. If no safe private slot can
+hold that donor, the editor names the target texture ID and exact affected-face
+count, then asks whether to cancel or intentionally replace the shared native
+record. Cancel changes nothing; confirmation uses the same fully proof-gated
+shared replacement described below. Artisans currently references all 68 of its
+decoded native texture records, so cross-level painting there takes this explicit
+shared-replacement route rather than pretending it can allocate a private slot.
+`Return to Texture Palette` reopens the already-loaded donor gallery without
+re-decoding or unloading its previews.
 
 The existing shared cross-level replacement and custom color/import/paste path
 remains available through the separate `Advanced / Shared Replacement`

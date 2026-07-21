@@ -2,6 +2,8 @@
 
 ## Changes since Spyro Editor Beta V3
 
+- Cross-level Texture Paint now uses a proven private destination slot and remaps only the clicked terrain face when that level has one available. Artisans uses all 68 of its native records, so its former silent no-op is replaced by an explicit confirmation naming the shared texture and exact affected face count before the existing proof-gated shared replacement runs.
+- Texture Paint Mode now includes `Return to Texture Palette`, which reopens the same loaded source-level gallery without discarding its decoded previews or forcing another donor-level load.
 - All 12 native Egg Thieves now expose `Edit Run Path` in Edit Map and Game Camera. Their fixed ordered routes use numbered handles and a polyline, support drag or exact XYZ entry, optional terrain snapping, node and whole-route reset, and full undo.
 - Moving an Egg Thief carries its route by default. The editor warns before allowing a thief to move without its path, which would make it snap back in-game.
 - Egg Thief route export patches only the selected nodes' three native XYZ words. Headers, node order/count, pointers, traversal data, and each node's unknown fourth word remain untouched; stale source bytes are blocked in Build Safety.

@@ -1,6 +1,6 @@
 # Spyro Editor Beta V4 Guide
 
-Internal diagnostic build: `0.1.0-beta.31`.
+Internal diagnostic build: `0.1.0-beta.32`.
 
 This beta build uses three everyday workspaces around the unchanged level view:
 `Objects`, `Level`, and `Environment`. Internal research probes stay hidden.

@@ -72,6 +72,11 @@ try
         RunTerrainTexturePaintModeOnly();
         return 0;
     }
+    if (args.Contains("--terrain-cross-level-paint-only", StringComparer.OrdinalIgnoreCase))
+    {
+        RunTerrainCrossLevelPaintOnly();
+        return 0;
+    }
     if (args.Contains("--terrain-texture-paint-gallery-only", StringComparer.OrdinalIgnoreCase))
     {
         RunTerrainTexturePaintGalleryOnly();
@@ -1699,6 +1704,37 @@ void RunTerrainTexturePaintModeOnly()
     }
 }
 
+void RunTerrainCrossLevelPaintOnly()
+{
+    MainWindow window = new()
+    {
+        Width = 1200,
+        Height = 760,
+        WindowStartupLocation = WindowStartupLocation.Manual,
+        Position = new PixelPoint(0, 0)
+    };
+    window.Show();
+    try
+    {
+        WaitForLevelData(window);
+        Task<string> task = window.AssertCrossLevelTerrainTexturePaintForTestingAsync();
+        for (int attempt = 0; attempt < 24000 && !task.IsCompleted; attempt++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(5);
+        }
+        if (!task.IsCompleted)
+            throw new TimeoutException("The focused Artisans <- Gnasty's World texture 17 paint smoke exceeded 120 seconds.");
+        string result = task.GetAwaiter().GetResult();
+        Console.WriteLine($"Cross-level terrain texture paint UI: {result}.");
+    }
+    finally
+    {
+        window.Close();
+        FlushUi();
+    }
+}
+
 void RunTerrainTexturePaintGalleryOnly()
 {
     MainWindow window = new()
@@ -1857,9 +1893,77 @@ void RunTerrainTexturePaintGalleryOnly()
         if (window.OwnedWindows.Contains(dialog) || !viewport.TerrainTexturePaintMode)
             throw new InvalidOperationException("Double-clicking a usable texture tile did not close the chooser and enter Texture Paint mode.");
 
+        Button returnToPalette = FindButton(window, "Return to Texture Palette");
+        if (!returnToPalette.IsEnabled)
+            throw new InvalidOperationException("The active Texture Paint panel did not enable Return to Texture Palette.");
+        int selectedTextureId = TemplateValue<int>(usableItem, "TextureId");
+        Window returnedDialog = OpenAsyncDialog(
+            window,
+            returnToPalette,
+            "Choose Terrain Texture",
+            "retained terrain texture palette");
+        FlushUi();
+
+        if (viewport.TerrainTexturePaintMode)
+            throw new InvalidOperationException("Returning to the texture palette left terrain-click interception active behind the dialog.");
+        if (donorLoads.Count != 1)
+        {
+            throw new InvalidOperationException(
+                $"Returning to {donorLevel.DisplayName} reloaded donor data {donorLoads.Count} time(s) instead of retaining the loaded catalog.");
+        }
+
+        ComboBox returnedSourcePicker = FindNamed<ComboBox>(returnedDialog, "TerrainTextureSourceLevelPicker");
+        if (returnedSourcePicker.SelectedItem is not object returnedSourceOption)
+            throw new InvalidOperationException("The returned texture palette did not retain a selected source level.");
+        LevelDefinition returnedSourceLevel = TemplateValue<LevelDefinition>(returnedSourceOption, "Level");
+        if (!string.Equals(
+                LevelCatalog.NormalizeKey(returnedSourceLevel.Key),
+                normalizedDonorLevel,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Return to Texture Palette opened {returnedSourceLevel.DisplayName} instead of retained source {donorLevel.DisplayName}.");
+        }
+
+        ListBox returnedGallery = FindNamed<ListBox>(returnedDialog, "TerrainTextureGallery");
+        object[] returnedItems = ReadItemsSource(returnedGallery, "returned donor texture gallery");
+        if (returnedItems.Length != donorItems.Length || returnedItems.Any(item =>
+                !string.Equals(
+                    LevelCatalog.NormalizeKey(TemplateValue<string>(item, "LevelKey")),
+                    normalizedDonorLevel,
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                "Return to Texture Palette did not restore the already-loaded donor-only gallery.");
+        }
+        if (returnedGallery.SelectedItem is not object returnedSelection ||
+            TemplateValue<int>(returnedSelection, "TextureId") != selectedTextureId)
+        {
+            throw new InvalidOperationException(
+                "Return to Texture Palette did not restore the active donor texture selection.");
+        }
+
+        Button cancelReturnedPalette = FindButton(returnedDialog, "Cancel");
+        cancelReturnedPalette.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, cancelReturnedPalette));
+        for (int attempt = 0; attempt < 1000 &&
+             (window.OwnedWindows.Contains(returnedDialog) || !viewport.TerrainTexturePaintMode); attempt++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(5);
+        }
+        FlushUi();
+        if (window.OwnedWindows.Contains(returnedDialog) ||
+            !viewport.TerrainTexturePaintMode ||
+            donorLoads.Count != 1)
+        {
+            throw new InvalidOperationException(
+                "Canceling the retained palette did not resume the previous brush without reloading its donor.");
+        }
+
         Console.WriteLine(
             $"Terrain texture gallery UI: {currentLevel.DisplayName}-only initial open; six columns; gray BLOCKED tile; " +
-            $"{donorLevel.DisplayName} remained unloaded until requested, then loaded alone; double-click entered paint mode.");
+            $"{donorLevel.DisplayName} remained unloaded until requested, then loaded alone; double-click entered paint mode; " +
+            "Return to Texture Palette restored the donor world, tile, and catalog without another donor load.");
     }
     finally
     {

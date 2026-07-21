@@ -901,7 +901,18 @@ public static class TerrainPatchExporter
                         LevelCatalog.NormalizeKey(behaviorSourceLevelKey),
                         LevelCatalog.NormalizeKey(relocation.DonorLevelKey),
                         StringComparison.OrdinalIgnoreCase);
-                if (isRelocationBehaviorAssignment)
+                bool isFaceLocalRelocationAssignment =
+                    textureChanged &&
+                    originalTextureId != targetTextureId &&
+                    editedTextureId == targetTextureId &&
+                    !hasNativeVisual &&
+                    (relocation.PreservesTargetNativeSurface
+                        ? !hasNativeBehavior
+                        : !hasNativeBehavior || string.Equals(
+                            LevelCatalog.NormalizeKey(behaviorSourceLevelKey),
+                            LevelCatalog.NormalizeKey(relocation.DonorLevelKey),
+                            StringComparison.OrdinalIgnoreCase));
+                if (isRelocationBehaviorAssignment || isFaceLocalRelocationAssignment)
                     continue;
 
                 AddAtomicTerrainSwapBlock(
@@ -3719,10 +3730,14 @@ public static class TerrainPatchExporter
                 surface.Param2 == signature.Param2);
             if (descriptor == null)
             {
-                int targetTextureId = JsonValue.GetInt32(
+                int originalTextureId = JsonValue.GetInt32(
                     edit,
                     "textureIdOriginal",
                     JsonValue.GetInt32(edit, "textureId", -1));
+                int editedTextureId = JsonValue.GetInt32(edit, "textureIdEdited", originalTextureId);
+                int targetTextureId = nativeTextureRelocationsByTarget.ContainsKey(editedTextureId)
+                    ? editedTextureId
+                    : originalTextureId;
                 if (!crossLevel ||
                     targetTextureId < 0 ||
                     !nativeTextureRelocationsByTarget.TryGetValue(targetTextureId, out NativeTerrainTextureRelocationEdit? relocation) ||
