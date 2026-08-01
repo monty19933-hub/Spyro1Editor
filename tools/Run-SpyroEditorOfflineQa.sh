@@ -16,6 +16,7 @@ NATIVE_TERRAIN_BASE_PROJECTION_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.NativeT
 HQ_MATERIAL_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.HqMaterialCacheSmoke/Spyro.Editor.HqMaterialCacheSmoke.csproj"
 PERSISTENCE_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.PersistenceSmoke/Spyro.Editor.PersistenceSmoke.csproj"
 UPDATE_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.UpdateSmoke/Spyro.Editor.UpdateSmoke.csproj"
+STONEHILL_LEVEL_REPLACEMENT_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.StoneHillLevelReplacementBaselineSmoke/Spyro.Editor.StoneHillLevelReplacementBaselineSmoke.csproj"
 TERRAIN_TEXTURE_PROOF_PROJECTS=(
     "$ROOT_DIR/src/Spyro.Editor.TerrainCatalogSmoke/Spyro.Editor.TerrainCatalogSmoke.csproj"
     "$ROOT_DIR/src/Spyro.Editor.TerrainRelocationStoreSmoke/Spyro.Editor.TerrainRelocationStoreSmoke.csproj"
@@ -34,6 +35,7 @@ PROOF_BIN_DIR="$ROOT_DIR/_local/objects/control-role-proof-bins"
 
 BUILD_ONLY=0
 WITH_GRADE_WRITE_READBACK=0
+STONEHILL_LEVEL_REPLACEMENT_BASELINE_SMOKE_ONLY=0
 
 usage() {
     cat <<'USAGE'
@@ -109,6 +111,11 @@ Options:
       clean their disposable BIN/CUE files, but temporarily need several
       source-image-sized files of free disk space.
 
+  --stonehill-level-replacement-baseline-smoke-only
+      Run only the V5 clean-USA Stone Hill retail-slot manifest and byte-identical
+      BIN/CUE baseline proof. Requires the configured clean retail source disc;
+      writes no editor-visible level replacement and launches no emulator.
+
   -h, --help
       Show this help.
 
@@ -136,6 +143,9 @@ for argument in "$@"; do
         --with-grade-write-readback)
             WITH_GRADE_WRITE_READBACK=1
             ;;
+        --stonehill-level-replacement-baseline-smoke-only)
+            STONEHILL_LEVEL_REPLACEMENT_BASELINE_SMOKE_ONLY=1
+            ;;
         -h|--help)
             usage
             exit 0
@@ -150,6 +160,10 @@ done
 if [[ "$BUILD_ONLY" -eq 1 && "$WITH_GRADE_WRITE_READBACK" -eq 1 ]]; then
     fail "--build-only cannot be combined with --with-grade-write-readback."
 fi
+if [[ "$STONEHILL_LEVEL_REPLACEMENT_BASELINE_SMOKE_ONLY" -eq 1 &&
+      ("$BUILD_ONLY" -eq 1 || "$WITH_GRADE_WRITE_READBACK" -eq 1) ]]; then
+    fail "--stonehill-level-replacement-baseline-smoke-only cannot be combined with another QA mode."
+fi
 
 require_command dotnet
 
@@ -158,6 +172,15 @@ echo "Workspace: $ROOT_DIR"
 echo "Configuration: $CONFIGURATION"
 echo "Safety: compile, command-line smoke, and in-memory UI render only; no visible app or emulator launch."
 echo
+
+if [[ "$STONEHILL_LEVEL_REPLACEMENT_BASELINE_SMOKE_ONLY" -eq 1 ]]; then
+    echo "Building focused V5 Stone Hill replacement baseline smoke..."
+    dotnet build "$STONEHILL_LEVEL_REPLACEMENT_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
+    echo
+    echo "Running focused V5 Stone Hill replacement baseline smoke..."
+    dotnet run --project "$STONEHILL_LEVEL_REPLACEMENT_SMOKE_PROJECT" --configuration "$CONFIGURATION" --no-build -- "$ROOT_DIR"
+    exit 0
+fi
 
 echo "[1/14] Building Avalonia app (compile only)..."
 dotnet build "$APP_PROJECT" --configuration "$CONFIGURATION" --nologo
