@@ -47,10 +47,14 @@ public sealed record NativeSkyPatchPlan(
     int AvailableWadGrowthBytes,
     int ExecutableLbaDelta,
     bool SkyOcclusionBypassApplied,
+    string SkyOcclusionScope,
+    IReadOnlyList<int> SkyOcclusionScopeLevelIds,
     int ExecutablePatchCount,
     string SkyOcclusionPatchRuntimeAddress,
     int SkyOcclusionPatchExecutableLba,
     string SkyOcclusionPatchImageOffset,
+    string SkyOcclusionPayloadRuntimeAddress,
+    string SkyOcclusionPayloadImageOffset,
     IReadOnlyList<string> EditedLevelNames,
     IReadOnlyList<NativeSkyPatch> Patches,
     IReadOnlyList<string> SafetyNotes);
@@ -64,7 +68,8 @@ public sealed record NativeSkyBatchPatchRequest(
     LevelCatalog Catalog,
     IReadOnlyList<NativeSkyBatchEdit> Edits,
     bool WriteImage,
-    bool AllowUnprovenLinkedPortalExpansion = false);
+    bool AllowUnprovenLinkedPortalExpansion = false,
+    bool ConsumeDisposableSourceImage = false);
 
 public sealed record NativeSkyPatchResult(
     string OutputImagePath,
@@ -81,7 +86,10 @@ public static class NativeSkyPatchExporter
         NativeSkyBatchPatchRequest request,
         CancellationToken cancellationToken = default)
     {
-        (NativeSkyPatchPlan plan, IReadOnlyList<NativeSkyRelocationPayload> payloads, NativeSkyWadRelocationPlan? relocation, NativeSkyOcclusionPatchPlan? occlusionPatch) = BuildPlanAndPayloads(request);
+        (NativeSkyPatchPlan plan, IReadOnlyList<NativeSkyRelocationPayload> payloads, NativeSkyWadRelocationPlan? relocation, NativeSkyOcclusionPatchPlan? occlusionPatch) =
+            await Task.Run(
+                () => BuildPlanAndPayloads(request),
+                cancellationToken);
         string outputPlanPath = $"{request.OutputPrefix}.native-sky-patch-plan.json";
         Directory.CreateDirectory(Path.GetDirectoryName(outputPlanPath) ?? ".");
         await using (FileStream output = File.Create(outputPlanPath))
@@ -98,16 +106,24 @@ public static class NativeSkyPatchExporter
         {
             if (relocation?.Required == true)
             {
-                NativeSkyWadRelocator.WriteExpandedImage(
-                    request.SourceImagePath,
-                    plan.OutputImagePath,
-                    request.WadAnalysisPath,
-                    relocation,
-                    payloads);
+                await Task.Run(
+                    () => NativeSkyWadRelocator.WriteExpandedImage(
+                        request.SourceImagePath,
+                        plan.OutputImagePath,
+                        request.WadAnalysisPath,
+                        relocation,
+                        payloads),
+                    cancellationToken);
+                if (request.ConsumeDisposableSourceImage)
+                    DeleteDisposablePredecessor(request.SourceImagePath);
             }
             else
             {
-                File.Copy(request.SourceImagePath, plan.OutputImagePath, true);
+                await DiscImageWorkingCopy.StageAsync(
+                    request.SourceImagePath,
+                    plan.OutputImagePath,
+                    request.ConsumeDisposableSourceImage,
+                    cancellationToken);
                 DiscLayout layout = DiscImage.DetectLayout(plan.OutputImagePath);
                 await using FileStream image = File.Open(plan.OutputImagePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
                 foreach (NativeSkyRelocationPayload payload in payloads)
@@ -121,6 +137,17 @@ public static class NativeSkyPatchExporter
         }
 
         return new NativeSkyPatchResult(plan.OutputImagePath, plan.OutputCuePath, outputPlanPath, plan, wroteImage);
+    }
+
+    private static void DeleteDisposablePredecessor(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     public static NativeSkyPatchPlan BuildPlan(NativeSkyBatchPatchRequest request) => BuildPlanAndPayloads(request).Plan;
@@ -142,6 +169,7 @@ public static class NativeSkyPatchExporter
         List<NativeSkyPatch> patches = new();
         List<NativeSkyRelocationPayload> payloads = new();
         HashSet<string> writtenRanges = new(StringComparer.Ordinal);
+        HashSet<int> skyVisibilityScopeLevelIds = [];
 
         foreach (NativeSkyBatchEdit batchEdit in request.Edits)
         {
@@ -160,6 +188,15 @@ public static class NativeSkyPatchExporter
             IReadOnlyList<Spyro1SkyBlockReference> references = targetLayout.LinkedPrimarySkyCopies.Count > 0
                 ? targetLayout.LinkedPrimarySkyCopies
                 : [new Spyro1SkyBlockReference(targetLayout.Key, targetLayout.DisplayName, targetLayout.WadEntry, 0, targetPrimary.BlockOffset, targetPrimary.ByteLength, true)];
+            if (!batchEdit.Edit.IsPalette)
+            {
+                skyVisibilityScopeLevelIds.Add(batchEdit.Level.LevelId);
+                foreach (Spyro1SkyBlockReference reference in references)
+                {
+                    Spyro1LevelSkyBlockLayout storageLevel = layouts[LevelCatalog.NormalizeKey(reference.LevelKey)];
+                    skyVisibilityScopeLevelIds.Add(storageLevel.LevelId);
+                }
+            }
 
             foreach (Spyro1SkyBlockReference reference in references)
             {
@@ -243,6 +280,7 @@ public static class NativeSkyPatchExporter
         NativeSkyOcclusionPatchPlan? occlusionPatch = needsOcclusionBypass
             ? NativeSkyOcclusionPatcher.BuildPlan(
                 request.SourceImagePath,
+                skyVisibilityScopeLevelIds,
                 relocation?.Required == true ? relocation.RelocatedExecutableLba : null)
             : null;
 
@@ -256,7 +294,7 @@ public static class NativeSkyPatchExporter
             WadAnalysisPath: request.WadAnalysisPath,
             EditedLevelCount: request.Edits.Select(edit => edit.Level.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
             PatchCount: patches.Count,
-            TotalWrittenBytes: patches.Sum(patch => patch.ByteLength) + (occlusionPatch == null ? 0 : 4),
+            TotalWrittenBytes: patches.Sum(patch => patch.ByteLength) + (occlusionPatch?.TotalWrittenBytes ?? 0),
             TotalChangedBytes: patches.Sum(patch => patch.ChangedByteCount) + (occlusionPatch?.ChangedByteCount ?? 0),
             RelocatedWad: relocation?.Required == true,
             WadGrowthBytes: relocation?.WadGrowthBytes ?? 0,
@@ -265,10 +303,14 @@ public static class NativeSkyPatchExporter
                 ? relocation.RelocatedExecutableLba - relocation.OriginalExecutableLba
                 : 0,
             SkyOcclusionBypassApplied: occlusionPatch != null,
-            ExecutablePatchCount: occlusionPatch == null ? 0 : 1,
+            SkyOcclusionScope: occlusionPatch == null ? "native" : "edited-destinations-and-linked-portal-contexts",
+            SkyOcclusionScopeLevelIds: occlusionPatch?.ScopedLevelIds ?? Array.Empty<int>(),
+            ExecutablePatchCount: occlusionPatch?.PatchCount ?? 0,
             SkyOcclusionPatchRuntimeAddress: occlusionPatch?.RuntimeAddress ?? "",
             SkyOcclusionPatchExecutableLba: occlusionPatch?.ExecutableLba ?? 0,
             SkyOcclusionPatchImageOffset: occlusionPatch == null ? "" : $"0x{occlusionPatch.ImageOffset:X}",
+            SkyOcclusionPayloadRuntimeAddress: occlusionPatch?.PayloadRuntimeAddress ?? "",
+            SkyOcclusionPayloadImageOffset: occlusionPatch == null ? "" : $"0x{occlusionPatch.PayloadImageOffset:X}",
             EditedLevelNames: request.Edits.Select(edit => edit.Level.DisplayName).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             Patches: patches,
             SafetyNotes:
@@ -282,8 +324,11 @@ public static class NativeSkyPatchExporter
                 "Smaller donors keep the target block length and zero-fill unused trailing bytes so later sky blocks do not move.",
                 "Custom imports must parse as a native Spyro 1 sky block or payload; raw image files are not accepted as skies.",
                 occlusionPatch != null
-                    ? "Geometry swaps and custom imports bypass the target level's stale sky-occlusion lists so every donor sector reaches the renderer; normal per-sector view culling remains active."
+                    ? $"Geometry swaps and custom imports bypass stale sky-occlusion lists only while one of the edited destination/linked portal contexts is loaded (level ids: {string.Join(", ", occlusionPatch.ScopedLevelIds)}). Unedited levels retain retail sky-group selection; normal per-sector view culling remains active."
                     : "Palette-only edits preserve the original sky-occlusion behavior and do not patch the executable.",
+                request.AllowUnprovenLinkedPortalExpansion
+                    ? "RESEARCH ONLY: flight-stage sky geometry may enter non-flight destinations only under the explicit structural-research bypass; it is not approved for a user Create BIN."
+                    : "Flight-stage sky geometry is blocked in non-flight destinations because its authored camera bounds can visibly pop; palette-only flight colors remain available.",
                 relocation?.Required == true
                     ? "Oversized skies expand sector-aligned nested level archives and WAD.WAD, relocate the executable into the verified ISO gap, and update ISO directory extents."
                     : "This batch fits the existing native sky capacities and does not relocate WAD.WAD."
@@ -310,6 +355,10 @@ public static class NativeSkyPatchExporter
                 throw new InvalidOperationException($"{batchEdit.Level.DisplayName} has no valid same-disc sky donor selected.");
             if (string.Equals(donorKey, LevelCatalog.NormalizeKey(batchEdit.Level.Key), StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Choose a different level as the sky donor.");
+            NativeSkyGeometrySafety.ThrowIfFlightDonorTargetsNonFlight(
+                batchEdit.Level,
+                donorLayout,
+                request.AllowUnprovenLinkedPortalExpansion);
             Spyro1SkyBlockLayout donorBlock = donorLayout.SkyBlocks[0];
             byte[] donorBytes = DiscImage.ReadFileBytes(
                 image,

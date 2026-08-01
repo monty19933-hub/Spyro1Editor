@@ -259,7 +259,7 @@ public static class ArtisansNativeLockedChestRuntimeBundleComposer
         if (string.IsNullOrWhiteSpace(request.OutputPrefix))
             throw new ArgumentException("An output prefix is required.", nameof(request));
 
-        string sourcePath = Path.GetFullPath(request.SourceImagePath);
+        string sourcePath = ResolveFilePath(request.SourceImagePath);
         string outputImagePath = Path.GetFullPath(request.OutputPrefix + ".bin");
         string outputCuePath = Path.GetFullPath(request.OutputPrefix + ".cue");
         string outputPlanPath = Path.GetFullPath(request.OutputPrefix + ".artisans-native-key-locked-chest-plan.json");
@@ -833,6 +833,13 @@ public static class ArtisansNativeLockedChestRuntimeBundleComposer
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
         }
+    }
+
+    private static string ResolveFilePath(string path)
+    {
+        FileInfo file = new(Path.GetFullPath(path));
+        FileSystemInfo? target = file.ResolveLinkTarget(returnFinalTarget: true);
+        return target?.FullName ?? file.FullName;
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };

@@ -201,7 +201,7 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
-    private static Control BuildSpecialChestProfileRow(
+    private Control BuildSpecialChestProfileRow(
         SpecialChestFamilyDefinition family,
         SpecialChestBundleProfile? profile,
         bool flight)
@@ -269,6 +269,35 @@ public sealed partial class MainWindow
             });
         }
 
+        bool disposableLockedChestCandidate =
+            !flight &&
+            profile is
+            {
+                Family: SpecialChestFamily.LockedChest,
+                Availability: SpecialChestBundleAvailability.CandidatePlanOnly
+            } &&
+            !string.Equals(profile.TargetLevelKey, "stonehill", StringComparison.Ordinal) &&
+            NativeLockedChestResearchArtifactWriter.CanWrite(profile.TargetLevelKey);
+        if (disposableLockedChestCandidate)
+        {
+            TextBlock candidateStatus = new()
+            {
+                Text = "Research-only: this creates an isolated BIN/CUE for DuckStation. It does not add the chest to your project or normal Create BIN.",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 10,
+                Foreground = new SolidColorBrush(Color.FromRgb(143, 80, 10))
+            };
+            Button createCandidate = NewAsyncButton(
+                "Create Disposable Key + Locked Chest Test",
+                () => CreateNativeLockedChestResearchCandidateAsync(profile!, candidateStatus));
+            createCandidate.HorizontalAlignment = HorizontalAlignment.Left;
+            ToolTip.SetTip(
+                createCandidate,
+                "Use the selected clean USA retail BIN/CUE to write a research-only DuckStation test in the normal output folder.");
+            content.Children.Add(candidateStatus);
+            content.Children.Add(createCandidate);
+        }
+
         return new Border
         {
             Background = Brushes.White,
@@ -278,6 +307,95 @@ public sealed partial class MainWindow
             Padding = new Thickness(10, 8),
             Child = content
         };
+    }
+
+    private async Task CreateNativeLockedChestResearchCandidateAsync(
+        SpecialChestBundleProfile profile,
+        TextBlock candidateStatus)
+    {
+        string currentLevelKey = LevelCatalog.NormalizeKey(_currentLevel?.Key ?? "");
+        if (_currentLevel == null ||
+            !string.Equals(currentLevelKey, profile.TargetLevelKey, StringComparison.Ordinal))
+        {
+            SetCandidateStatus("Reload this level, then reopen Special Chest Support before creating its test.", isError: true);
+            return;
+        }
+        if (currentLevelKey == "stonehill" || !NativeLockedChestResearchArtifactWriter.CanWrite(currentLevelKey))
+        {
+            SetCandidateStatus("This level does not have a guarded disposable Key + Locked Chest writer.", isError: true);
+            return;
+        }
+
+        DiscImageSelection selected = DiscImageLocator.ResolveSelection(_discImagePathBox.Text?.Trim() ?? "");
+        if (!selected.ImageExists || !selected.CueExists)
+        {
+            SetCandidateStatus("Choose the clean Spyro the Dragon USA BIN/CUE first; both files must be available.", isError: true);
+            return;
+        }
+
+        string wadAnalysisPath = _skyboxWadAnalysisPathBox.Text?.Trim() ?? "";
+        if (!File.Exists(wadAnalysisPath))
+            wadAnalysisPath = WadAnalysisLocator.Find(_workspace);
+        if (!File.Exists(wadAnalysisPath))
+        {
+            SetCandidateStatus("The selected disc has no WAD analysis yet. Reopen the clean BIN/CUE and let its cache build finish.", isError: true);
+            return;
+        }
+
+        string catalogRootPath = ResolveLockedChestCandidateCatalogRoot();
+        if (string.IsNullOrWhiteSpace(catalogRootPath))
+        {
+            SetCandidateStatus("The level catalog required by the guarded candidate writer was not found.", isError: true);
+            return;
+        }
+
+        string outputDirectory = EnsureUserOutputDirectory();
+        string outputPrefix = Path.Combine(
+            outputDirectory,
+            $"Spyro Editor - {_currentLevel.DisplayName} - Key Locked Chest - RESEARCH ONLY");
+        SetCandidateStatus($"Creating the isolated {_currentLevel.DisplayName} research CUE from the selected clean retail disc...", isError: false);
+
+        try
+        {
+            NativeLockedChestResearchArtifactResult result =
+                await NativeLockedChestResearchArtifactWriter.WriteAsync(
+                    new NativeLockedChestResearchArtifactRequest(
+                        DestinationLevelKey: currentLevelKey,
+                        SourceImagePath: selected.ImagePath,
+                        SourceCuePath: selected.CuePath,
+                        OutputPrefix: outputPrefix,
+                        WadAnalysisPath: wadAnalysisPath,
+                        LevelCatalogRootPath: catalogRootPath,
+                        EnableFastEntry: true));
+
+            string message =
+                $"Created research-only {Path.GetFileName(result.OutputCuePath)}. This is not normal Create BIN. " +
+                $"Follow {Path.GetFileName(result.OutputChecklistPath)} in DuckStation before reporting the result.";
+            SetCandidateStatus(message, isError: false);
+            _statusText.Text = message + OpenContainingFolderStatus(result.OutputCuePath);
+        }
+        catch (Exception ex)
+        {
+            SetCandidateStatus($"Could not create the research-only test: {ex.Message}", isError: true);
+        }
+
+        void SetCandidateStatus(string message, bool isError)
+        {
+            candidateStatus.Text = message;
+            candidateStatus.Foreground = new SolidColorBrush(isError ? ModernRed : Color.FromRgb(143, 80, 10));
+            _statusText.Text = message;
+        }
+    }
+
+    private string ResolveLockedChestCandidateCatalogRoot()
+    {
+        string[] candidates =
+        [
+            _workspace.RootPath,
+            Path.Combine(_workspace.RootPath, "support"),
+            AppContext.BaseDirectory
+        ];
+        return candidates.FirstOrDefault(path => File.Exists(Path.Combine(path, "spyro-level-catalog.json"))) ?? "";
     }
 
     private async Task<MobyBuildSafetyReport> AddSpecialChestBuildSafetyAsync(

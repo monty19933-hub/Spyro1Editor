@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Persistence;
 
@@ -207,8 +208,8 @@ try
     Assert(partialTierRejected, "The save API accepted a runtime-incomplete descriptor tier.");
 
     using JsonDocument savedDocument = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath));
-    Assert(savedDocument.RootElement.GetProperty("version").GetInt32() == 2,
-        "The relocation store did not write the version-2 apply-mode schema.");
+    Assert(savedDocument.RootElement.GetProperty("version").GetInt32() == 3,
+        "The relocation store did not write the version-3 target-record schema.");
     Assert(savedDocument.RootElement.GetProperty("relocationCount").GetInt32() == 1,
         "Manifest metadata did not match the deterministic relocation list.");
 
@@ -236,10 +237,156 @@ try
     using (JsonDocument artOnlyDocument = JsonDocument.Parse(await File.ReadAllTextAsync(artOnlyManifest)))
     {
         JsonElement savedArtOnly = artOnlyDocument.RootElement.GetProperty("relocations").EnumerateArray().Single();
-        Assert(artOnlyDocument.RootElement.GetProperty("version").GetInt32() == 2 &&
+        Assert(artOnlyDocument.RootElement.GetProperty("version").GetInt32() == 3 &&
                savedArtOnly.GetProperty("applyMode").GetString() == NativeTerrainTextureRelocationEditStore.ArtOnlyPreserveTargetMode,
-            "The art-only manifest omitted its required version-2 apply mode.");
+            "The art-only manifest omitted its required version-3 apply mode.");
     }
+
+    string appendedRoot = Path.Combine(temporaryRoot, "appended-private");
+    IReadOnlyList<NativeTerrainTextureRelocationEdit> appended =
+        await NativeTerrainTextureRelocationEditStore.AddOrReplaceAppendedPrivateArtOnlyAsync(
+            appendedRoot,
+            destinationLevelKey: "Artisans",
+            destinationLevelName: "Artisans",
+            targetTextureId: 68,
+            donorLevelKey: "Gnasty's World",
+            donorLevelName: "Gnasty's World",
+            donorWadEntry: 70,
+            donorTextureId: 17,
+            targetWadEntry: 10,
+            sourceImageSha256: new string('C', 64),
+            sourceTextureRecordCount: 68,
+            sourceTextureComponentSha256: new string('A', 64),
+            sourceLevelDataSha256: new string('B', 64),
+            materialTemplateTextureId: 55,
+            previewImagePath: Path.Combine(appendedRoot, "previews", "gnasty-eye.png"));
+    NativeTerrainTextureRelocationEdit appendedEdit = appended.Single();
+    Assert(appendedEdit.UsesAppendedPrivateRecord &&
+           appendedEdit.TargetRecordKind == NativeTerrainTextureTargetRecordKind.AppendedPrivate &&
+           appendedEdit.TargetWadEntry == 10 &&
+           appendedEdit.SourceImageSha256 == new string('c', 64) &&
+           appendedEdit.SourceTextureRecordCount == 68 &&
+           appendedEdit.SourceTextureComponentSha256 == new string('a', 64) &&
+           appendedEdit.SourceLevelDataSha256 == new string('b', 64) &&
+           appendedEdit.MaterialTemplateTextureId == 55 &&
+           appendedEdit.PrivateRecordEditId == "appended-private-terrain-texture:T068",
+        "The appended-private record did not retain its source preimage, material template, and stable identity.");
+    Assert(
+        NativeTerrainTextureRelocationEditStore.Load(appendedRoot, "artisans").SequenceEqual(appended),
+        "The appended-private target record did not round-trip exactly.");
+    string appendedManifest = NativeTerrainTextureRelocationEditStore.ManifestPath(appendedRoot, "artisans");
+    using (JsonDocument appendedDocument = JsonDocument.Parse(await File.ReadAllTextAsync(appendedManifest)))
+    {
+        JsonElement savedAppended = appendedDocument.RootElement.GetProperty("relocations").EnumerateArray().Single();
+        Assert(savedAppended.GetProperty("targetRecordKind").GetString() == NativeTerrainTextureRelocationEditStore.AppendedPrivateTargetRecordKind,
+            "The generated record was not explicitly marked appended-private in project data.");
+    }
+
+    string damagedAppendedPath = Path.Combine(temporaryRoot, "damaged-appended.json");
+    await File.WriteAllTextAsync(
+        damagedAppendedPath,
+        (await File.ReadAllTextAsync(appendedManifest)).Replace(new string('a', 64), "not-a-source-hash", StringComparison.Ordinal));
+    AssertInvalidData(
+        () => NativeTerrainTextureRelocationEditStore.LoadManifest(damagedAppendedPath, "artisans"),
+        "A malformed version-3 appended-private source-table preimage was silently skipped instead of failing the whole manifest.");
+
+    string duplicateAppendedPath = Path.Combine(temporaryRoot, "duplicate-appended.json");
+    JsonNode duplicateAppended = JsonNode.Parse(await File.ReadAllTextAsync(appendedManifest))
+        ?? throw new InvalidDataException("Could not parse the appended-private manifest fixture.");
+    JsonArray duplicateRows = duplicateAppended["relocations"]?.AsArray()
+        ?? throw new InvalidDataException("The appended-private fixture has no relocations array.");
+    duplicateRows.Add(duplicateRows[0]?.DeepClone());
+    await File.WriteAllTextAsync(
+        duplicateAppendedPath,
+        duplicateAppended.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+    AssertInvalidData(
+        () => NativeTerrainTextureRelocationEditStore.LoadManifest(duplicateAppendedPath, "artisans"),
+        "A duplicate version-3 appended-private target was silently collapsed instead of failing the whole manifest.");
+
+    await NativeTerrainTextureRelocationEditStore.AddOrReplaceAppendedPrivateArtOnlyAsync(
+        appendedRoot,
+        "artisans",
+        "Artisans",
+        69,
+        "darkhollow",
+        "Dark Hollow",
+        12,
+        8,
+        10,
+        new string('c', 64),
+        68,
+        new string('a', 64),
+        new string('b', 64),
+        55);
+    IReadOnlyList<NativeTerrainTextureRelocationEdit> withDuplicate =
+        await NativeTerrainTextureRelocationEditStore.AddOrReplaceAppendedPrivateArtOnlyAsync(
+            appendedRoot,
+            "artisans",
+            "Artisans",
+            70,
+            "gnastysworld",
+            "Gnasty's World",
+            70,
+            17,
+            10,
+            new string('c', 64),
+            68,
+            new string('a', 64),
+            new string('b', 64),
+            55);
+    NativeTerrainTextureAppendedPrivateCompaction compacted =
+        NativeTerrainTextureRelocationEditStore.CompactAppendedPrivateRecords(withDuplicate);
+    Assert(compacted.Changed &&
+           compacted.AppendedRecordCount == 2 &&
+           compacted.DuplicateContractCount == 1 &&
+           compacted.TextureIdRemap[68] == 68 &&
+           compacted.TextureIdRemap[69] == 69 &&
+           compacted.TextureIdRemap[70] == 68 &&
+           compacted.Edits.Select(edit => edit.TargetTextureId).SequenceEqual([68, 69]),
+        $"Appended-private compaction did not deduplicate the donor/material contract and preserve contiguous table ids. " +
+        $"changed={compacted.Changed}, appended={compacted.AppendedRecordCount}, duplicates={compacted.DuplicateContractCount}, " +
+        $"ids={string.Join(",", compacted.Edits.Select(edit => edit.TargetTextureId))}, " +
+        $"remap={string.Join(",", compacted.TextureIdRemap.Select(pair => $"{pair.Key}->{pair.Value}"))}.");
+    await NativeTerrainTextureRelocationEditStore.SaveManifestAsync(
+        appendedManifest,
+        "artisans",
+        "Artisans",
+        compacted.Edits);
+    NativeTerrainTextureAppendedPrivateAllocation reused =
+        await NativeTerrainTextureRelocationEditStore.AddOrReuseAppendedPrivateArtOnlyAsync(
+            appendedRoot,
+            "artisans",
+            "Artisans",
+            "gnastysworld",
+            "Gnasty's World",
+            70,
+            17,
+            10,
+            new string('c', 64),
+            68,
+            new string('a', 64),
+            new string('b', 64),
+            55);
+    Assert(reused.ReusedExistingRecord && !reused.AddedNewRecord && reused.AssignedTextureId == 68 && reused.Edits.Count == 2,
+        "An identical donor/material contract allocated a duplicate private record instead of reusing T68.");
+    NativeTerrainTextureAppendedPrivateAllocation allocated =
+        await NativeTerrainTextureRelocationEditStore.AddOrReuseAppendedPrivateArtOnlyAsync(
+            appendedRoot,
+            "artisans",
+            "Artisans",
+            "stonehill",
+            "Stone Hill",
+            11,
+            4,
+            10,
+            new string('c', 64),
+            68,
+            new string('a', 64),
+            new string('b', 64),
+            55);
+    Assert(!allocated.ReusedExistingRecord && allocated.AddedNewRecord && allocated.AssignedTextureId == 70 &&
+           allocated.Edits.Select(edit => edit.TargetTextureId).SequenceEqual([68, 69, 70]),
+        "A distinct donor-level contract was not allocated at the next contiguous native table id.");
 
     string legacyV1Path = Path.Combine(temporaryRoot, "legacy-v1.json");
     await File.WriteAllTextAsync(legacyV1Path, """
@@ -266,6 +413,49 @@ try
     Assert(legacyV1.ApplyMode == NativeTerrainTextureRelocationApplyMode.ArtAndNativeSurface,
         "A version-1 manifest without applyMode did not migrate to the existing full-transfer behavior.");
 
+    string legacyV2Path = Path.Combine(temporaryRoot, "legacy-v2.json");
+    await File.WriteAllTextAsync(legacyV2Path, $$"""
+        {
+          "version": 2,
+          "destinationLevelKey": "artisans",
+          "relocations": [{
+            "targetTextureId": 54,
+            "donorLevelKey": "gnastysworld",
+            "donorLevelName": "Gnasty's World",
+            "donorWadEntry": 70,
+            "donorTextureId": 17,
+            "donorRuntimeKey": "{{NativeTerrainTextureRelocationEditStore.BuildTextureRecordProvenanceKey("gnastysworld", 17)}}",
+            "applyMode": "{{NativeTerrainTextureRelocationEditStore.ArtOnlyPreserveTargetMode}}",
+            "descriptorTier": "both",
+            "previewImagePath": "",
+            "previewImageName": "",
+            "createdAt": "2026-07-15T12:00:00Z"
+          }]
+        }
+        """);
+    NativeTerrainTextureRelocationEdit legacyV2 = NativeTerrainTextureRelocationEditStore
+        .LoadManifest(legacyV2Path, "artisans")
+        .Single();
+    Assert(legacyV2.PreservesTargetNativeSurface &&
+           legacyV2.TargetRecordKind == NativeTerrainTextureTargetRecordKind.ExistingNative &&
+           !legacyV2.UsesAppendedPrivateRecord,
+        "A version-2 art-only manifest did not migrate to an existing-native target record.");
+
+    string legacyV2MixedPath = Path.Combine(temporaryRoot, "legacy-v2-valid-plus-malformed.json");
+    JsonNode legacyV2Mixed = JsonNode.Parse(await File.ReadAllTextAsync(legacyV2Path))
+        ?? throw new InvalidDataException("Could not parse the version-2 manifest fixture.");
+    JsonArray legacyV2Rows = legacyV2Mixed["relocations"]?.AsArray()
+        ?? throw new InvalidDataException("The version-2 fixture has no relocations array.");
+    JsonObject malformedLegacyRow = legacyV2Rows[0]?.DeepClone().AsObject()
+        ?? throw new InvalidDataException("The version-2 fixture row could not be cloned.");
+    malformedLegacyRow["targetTextureId"] = -1;
+    legacyV2Rows.Add(malformedLegacyRow);
+    await File.WriteAllTextAsync(
+        legacyV2MixedPath,
+        legacyV2Mixed.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+    Assert(NativeTerrainTextureRelocationEditStore.LoadManifest(legacyV2MixedPath, "artisans").Count == 1,
+        "Version-2 compatibility no longer preserves valid legacy rows while skipping a malformed legacy row.");
+
     string missingV2ModePath = Path.Combine(temporaryRoot, "missing-v2-mode.json");
     string artOnlyJson = await File.ReadAllTextAsync(artOnlyManifest);
     using (JsonDocument validArtOnly = JsonDocument.Parse(artOnlyJson))
@@ -276,33 +466,36 @@ try
             "",
             StringComparison.Ordinal);
         await File.WriteAllTextAsync(missingV2ModePath, missingMode);
-        Assert(NativeTerrainTextureRelocationEditStore.LoadManifest(missingV2ModePath, "artisans").Count == 0,
-            "A damaged version-2 art-only entry silently downgraded when applyMode was missing.");
+        AssertInvalidData(
+            () => NativeTerrainTextureRelocationEditStore.LoadManifest(missingV2ModePath, "artisans"),
+            "A damaged version-3 art-only entry silently downgraded when applyMode was missing.");
 
         string wrongProvenancePath = Path.Combine(temporaryRoot, "wrong-art-only-provenance.json");
         await File.WriteAllTextAsync(
             wrongProvenancePath,
             artOnlyJson.Replace("native-texture-record:beastmakers:10", "native-texture-record:beastmakers:11", StringComparison.Ordinal));
-        Assert(NativeTerrainTextureRelocationEditStore.LoadManifest(wrongProvenancePath, "artisans").Count == 0,
-            "Art-only provenance that disagrees with donor level/texture identity was activated.");
+        AssertInvalidData(
+            () => NativeTerrainTextureRelocationEditStore.LoadManifest(wrongProvenancePath, "artisans"),
+            "Art-only provenance that disagrees with donor level/texture identity was silently skipped.");
 
         string unknownModePath = Path.Combine(temporaryRoot, "unknown-mode.json");
         await File.WriteAllTextAsync(
             unknownModePath,
             artOnlyJson.Replace(NativeTerrainTextureRelocationEditStore.ArtOnlyPreserveTargetMode, "invented-mode", StringComparison.Ordinal));
-        Assert(NativeTerrainTextureRelocationEditStore.LoadManifest(unknownModePath, "artisans").Count == 0,
-            "An unknown version-2 relocation apply mode was activated.");
+        AssertInvalidData(
+            () => NativeTerrainTextureRelocationEditStore.LoadManifest(unknownModePath, "artisans"),
+            "An unknown version-3 relocation apply mode was silently skipped.");
 
         string unknownVersionPath = Path.Combine(temporaryRoot, "unknown-version.json");
         await File.WriteAllTextAsync(
             unknownVersionPath,
-            artOnlyJson.Replace("\"version\": 2", "\"version\": 99", StringComparison.Ordinal));
+            artOnlyJson.Replace("\"version\": 3", "\"version\": 99", StringComparison.Ordinal));
         Assert(NativeTerrainTextureRelocationEditStore.LoadManifest(unknownVersionPath, "artisans").Count == 0,
             "An unknown relocation manifest version was activated.");
     }
 
     Console.WriteLine("Native terrain texture relocation edit store smoke: PASSED");
-    Console.WriteLine("Verified v2 apply modes, canonical texture-record provenance, v1 migration, deterministic round-trip/order, removal, complete-tier enforcement, and malformed-manifest safety.");
+    Console.WriteLine("Verified v3 existing/appended target records, source preimages, donor-contract reuse, middle-row compaction/remap, canonical provenance, v1 migration, deterministic round-trip/order, removal, complete-tier enforcement, and malformed-manifest safety.");
 }
 finally
 {
@@ -314,4 +507,18 @@ static void Assert(bool condition, string message)
 {
     if (!condition)
         throw new InvalidOperationException(message);
+}
+
+static void AssertInvalidData(Action action, string message)
+{
+    bool rejected = false;
+    try
+    {
+        action();
+    }
+    catch (InvalidDataException)
+    {
+        rejected = true;
+    }
+    Assert(rejected, message);
 }

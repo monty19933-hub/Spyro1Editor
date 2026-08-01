@@ -52,6 +52,7 @@ bool exportArtisansExpandedSpringCandidate = args.Contains("--export-artisans-ex
 bool exportArtisansKeyGatedChestCandidate = args.Contains("--export-artisans-key-gated-chest-candidate", StringComparer.OrdinalIgnoreCase);
 bool exportArtisansNativeLockedChestCandidate = args.Contains("--export-artisans-native-locked-chest-candidate", StringComparer.OrdinalIgnoreCase);
 bool exportArtisansNativeLockedChestVisualCandidate = args.Contains("--export-artisans-native-locked-chest-visual-candidate", StringComparer.OrdinalIgnoreCase);
+bool exportStoneHillNativeLockedChestCandidate = args.Contains("--export-stonehill-native-locked-chest-candidate", StringComparer.OrdinalIgnoreCase);
 bool portableChestStrategySmokeOnly = args.Contains("--portable-chest-strategy-only", StringComparer.OrdinalIgnoreCase);
 bool crossLevelRecipePersistenceOnly = args.Contains("--cross-level-recipe-persistence-only", StringComparer.OrdinalIgnoreCase);
 bool springChestDiagnosticOnly = args.Contains("--spring-chest-diagnostic-only", StringComparer.OrdinalIgnoreCase);
@@ -569,7 +570,8 @@ if (environmentGradeSmokeOnly)
     string smokeDirectory = Path.Combine(workspace.RootPath, "_local", "skybox-research", "environment-grade-smoke");
     Directory.CreateDirectory(smokeDirectory);
     AssertNoEnvironmentGradeTemporaryArtifacts(smokeDirectory, "Environment-grade smoke setup");
-    AssertEnvironmentGradeScopeRejected(
+    NativeEnvironmentGradeMatch darkHollowSceneOnly = NativeEnvironmentGradeExporter.AnalyzeMatch(
+        sourceImage,
         analysisPath,
         darkHollowLevel,
         doctorShempLevel,
@@ -578,6 +580,8 @@ if (environmentGradeSmokeOnly)
             GradeSceneColors = true,
             GradeTexturePalettes = false
         });
+    if (darkHollowSceneOnly.TextureTransform.StrengthPercent != 0)
+        throw new InvalidOperationException("Scene-only environment matching must preserve packed texture pages.");
     AssertEnvironmentGradeScopeRejected(
         analysisPath,
         darkHollowLevel,
@@ -722,8 +726,14 @@ if (environmentGradeSmokeOnly)
     string relocatedAnalysisPath = Path.Combine(smokeDirectory, "stonehill-darkhollow-relocated-wad-analysis.json");
     try
     {
-        if (!result.WroteImage || result.Plan.SceneColorPatchCount == 0 || result.Plan.TexturePalettePatchCount == 0)
-            throw new InvalidOperationException("Stone Hill environment match did not patch both scene colors and landscape palettes.");
+        if (!result.WroteImage ||
+            result.Plan.SceneColorPatchCount == 0 ||
+            result.Plan.TexturePalettePatchCount != 0 ||
+            result.Plan.Patches.Any(item => item.Kind == "environment-terrain-texture-palette"))
+        {
+            throw new InvalidOperationException(
+                "Stone Hill environment matching must patch native scene colors while preserving every packed texture/CLUT byte.");
+        }
         int classifiedMobyRows = match.TargetActorMobyCount + match.TargetChestMobyCount + match.TargetSceneryMobyCount + match.TargetDragonMobyCount;
         if (classifiedMobyRows <= 0 ||
             result.Plan.MobyMaterialRowPatchCount != 0 ||
@@ -818,18 +828,11 @@ if (environmentGradeSmokeOnly)
             stoneHillLevel,
             darkHollowLevel,
             grade);
-        double beforeDistance = Math.Abs(match.TargetSceneColors.MedianLuminance - match.DonorSceneColors.MedianLuminance);
-        double afterDistance = Math.Abs(readback.TargetSceneColors.MedianLuminance - readback.DonorSceneColors.MedianLuminance);
+        double beforeDistance = Math.Abs(EnvironmentCompositeMeanLuminance(match, target: true) - EnvironmentCompositeMeanLuminance(match, target: false));
+        double afterDistance = Math.Abs(EnvironmentCompositeMeanLuminance(readback, target: true) - EnvironmentCompositeMeanLuminance(match, target: false));
         if (afterDistance >= beforeDistance)
-            throw new InvalidOperationException("Environment-grade readback did not move Stone Hill's scene luminance toward Dark Hollow.");
-        double highDetailBeforeDistance = Math.Abs(
-            match.TargetHighDetailSceneColors.MedianLuminance - match.DonorHighDetailSceneColors.MedianLuminance);
-        double highDetailAfterDistance = Math.Abs(
-            readback.TargetHighDetailSceneColors.MedianLuminance - readback.DonorHighDetailSceneColors.MedianLuminance);
-        if (highDetailAfterDistance >= highDetailBeforeDistance)
-            throw new InvalidOperationException("Environment-grade readback did not move Stone Hill's close-detail colors toward Dark Hollow.");
-        if (readback.TargetHighDetailSceneColors.LuminanceStandardDeviation >= match.TargetHighDetailSceneColors.LuminanceStandardDeviation)
-            throw new InvalidOperationException("Close-detail scene grading did not reduce the original high-detail lighting contrast.");
+            throw new InvalidOperationException("Environment-grade readback did not move Stone Hill's final texture x vertex composite toward Dark Hollow.");
+        AssertTextureUsageUnchanged(match.TargetTextureUsage, readback.TargetTextureUsage, "Stone Hill environment-grade readback");
 
         NativeSkyEditPlan skyEdit = new(
             Version: 3,
@@ -924,15 +927,13 @@ if (environmentGradeSmokeOnly)
                 darkHollowLevel,
                 artisansGrade);
             double artisansBeforeDistance = Math.Abs(
-                artisansMatch.TargetHighDetailSceneColors.MedianLuminance - artisansMatch.DonorHighDetailSceneColors.MedianLuminance);
+                EnvironmentCompositeMeanLuminance(artisansMatch, target: true) - EnvironmentCompositeMeanLuminance(artisansMatch, target: false));
             double artisansAfterDistance = Math.Abs(
-                artisansReadback.TargetHighDetailSceneColors.MedianLuminance - artisansReadback.DonorHighDetailSceneColors.MedianLuminance);
-            if (artisansAfterDistance >= artisansBeforeDistance ||
-                artisansReadback.TargetHighDetailSceneColors.LuminanceStandardDeviation >= artisansMatch.TargetHighDetailSceneColors.LuminanceStandardDeviation)
-            {
-                throw new InvalidOperationException("Artisans close-detail grade did not move toward Dark Hollow with reduced lighting contrast.");
-            }
-            Console.WriteLine($"Artisans close detail: {artisansMatch.TargetHighDetailSceneColors.MedianLuminance:F3} -> {artisansReadback.TargetHighDetailSceneColors.MedianLuminance:F3}; contrast {artisansMatch.TargetHighDetailSceneColors.LuminanceStandardDeviation:F3} -> {artisansReadback.TargetHighDetailSceneColors.LuminanceStandardDeviation:F3}");
+                EnvironmentCompositeMeanLuminance(artisansReadback, target: true) - EnvironmentCompositeMeanLuminance(artisansMatch, target: false));
+            if (artisansAfterDistance >= artisansBeforeDistance)
+                throw new InvalidOperationException("Artisans' final texture x vertex composite did not move toward Dark Hollow.");
+            AssertTextureUsageUnchanged(artisansMatch.TargetTextureUsage, artisansReadback.TargetTextureUsage, "Artisans environment-grade readback");
+            Console.WriteLine($"Artisans composite: {EnvironmentCompositeMeanLuminance(artisansMatch, target: true):F3} -> {EnvironmentCompositeMeanLuminance(artisansReadback, target: true):F3}; donor {EnvironmentCompositeMeanLuminance(artisansMatch, target: false):F3}");
         }
         finally
         {
@@ -957,16 +958,21 @@ if (environmentGradeSmokeOnly)
             darkHollowLevel,
             doctorShempLevel,
             desertGrade);
-        ColorRgba expectedDesertMobyMaterial = (desertMatch.SceneTransform with
-        {
-            TintStrengthPercent = desertGrade.TintStrengthPercent
-        }).Apply(ColorRgba.FromRgb(128, 128, 128));
+        ColorRgba expectedDesertMobyMaterial = NativeEnvironmentColorTransform.Build(
+            desertMatch.TargetSceneColors,
+            desertMatch.DonorSceneColors,
+            desertGrade with
+            {
+                GradeSceneColors = true,
+                GradeTexturePalettes = false
+            }).Apply(ColorRgba.FromRgb(128, 128, 128));
         string expectedDesertMobyMaterialHex = $"#{expectedDesertMobyMaterial.R:X2}{expectedDesertMobyMaterial.G:X2}{expectedDesertMobyMaterial.B:X2}";
         if (desertMatch.TargetSceneColorTableCount != desertMatch.TargetSectorCount * 2 ||
-            desertMatch.SceneTransform.HarmonizationPercent != 100 ||
-            desertMatch.TextureTransform.HarmonizationPercent != 100 ||
-            desertMatch.SceneTransform.TintStrengthPercent != 15 ||
-            desertMatch.TextureTransform.TintStrengthPercent != 15 ||
+            desertMatch.SceneTransform.HarmonizationPercent != 0 ||
+            desertMatch.TextureTransform.HarmonizationPercent != 0 ||
+            desertMatch.SceneTransform.TintStrengthPercent != desertGrade.TintStrengthPercent ||
+            desertMatch.TextureTransform.TintStrengthPercent != 0 ||
+            desertMatch.TextureTransform.StrengthPercent != 0 ||
             !string.Equals(desertMatch.MobyMaterialColorHex, expectedDesertMobyMaterialHex, StringComparison.OrdinalIgnoreCase) ||
             desertMatch.TargetTextureRuntimeVariantCount == 0 ||
             desertMatch.TargetTextureUsage.DescriptorCount == 0 ||
@@ -982,24 +988,14 @@ if (environmentGradeSmokeOnly)
             (coolGreen.R + warmGreen.R) / 2,
             (coolGreen.G + warmGreen.G) / 2,
             (coolGreen.B + warmGreen.B) / 2);
-        NativeEnvironmentColorTransform unharmonizedTransform = desertMatch.SceneTransform with { HarmonizationPercent = 0 };
-        double unharmonizedGreenDistance = EnvironmentColorBalanceDistance(
-            unharmonizedTransform.ApplyTerrainSmoothing(coolGreen),
-            unharmonizedTransform.ApplyTerrainSmoothing(warmGreen));
         ColorRgba harmonizedCool = desertMatch.SceneTransform.ApplyTerrainSmoothing(coolGreen);
         ColorRgba harmonizedWarm = desertMatch.SceneTransform.ApplyTerrainSmoothing(warmGreen);
         ColorRgba harmonizedMidpoint = desertMatch.SceneTransform.ApplyTerrainSmoothing(greenMidpoint);
-        double harmonizedGreenDistance = EnvironmentColorBalanceDistance(harmonizedCool, harmonizedWarm);
-        ColorRgba compoundTerrain = EnvironmentModulate(
-            desertMatch.SceneTransform.ApplyTerrainSmoothing(ColorRgba.FromRgb(36, 112, 52)),
-            desertMatch.TextureTransform.ApplyTerrainSmoothing(ColorRgba.FromRgb(48, 132, 56)));
-        if (harmonizedGreenDistance >= unharmonizedGreenDistance * 0.45 ||
-            compoundTerrain.G > compoundTerrain.R ||
-            Math.Abs(harmonizedMidpoint.R - ((harmonizedCool.R + harmonizedWarm.R) / 2)) > 1 ||
+        if (Math.Abs(harmonizedMidpoint.R - ((harmonizedCool.R + harmonizedWarm.R) / 2)) > 1 ||
             Math.Abs(harmonizedMidpoint.G - ((harmonizedCool.G + harmonizedWarm.G) / 2)) > 1 ||
             Math.Abs(harmonizedMidpoint.B - ((harmonizedCool.B + harmonizedWarm.B) / 2)) > 1)
         {
-            throw new InvalidOperationException("Drastic warm-shift harmonization did not reduce source-sector hue separation while preserving interpolation.");
+            throw new InvalidOperationException("Drastic warm-shift scene grading did not preserve native interpolation while applying the requested tint once.");
         }
 
         NativeEnvironmentGradePatchResult desertResult = await NativeEnvironmentGradeExporter.ExportBatchAsync(new NativeEnvironmentGradeBatchPatchRequest(
@@ -1017,56 +1013,13 @@ if (environmentGradeSmokeOnly)
         try
         {
             if (desertResult.Plan.SceneColorPatchCount != desertMatch.TargetSceneColorTableCount ||
-                desertResult.Plan.TexturePalettePatchCount != desertMatch.TargetTexturePaletteCount ||
+                desertResult.Plan.TexturePalettePatchCount != 0 ||
                 desertResult.Plan.Patches.Count(patch => patch.Kind == "environment-scenery-lod-colors") != 3 ||
-                !desertResult.Plan.Patches.Any(patch =>
-                    patch.Kind == "environment-terrain-texture-palette" &&
-                    patch.Label.EndsWith("palette-0x2C00", StringComparison.OrdinalIgnoreCase) &&
-                    patch.ByteLength == 512) ||
+                desertResult.Plan.Patches.Any(patch => patch.Kind == "environment-terrain-texture-palette") ||
                 desertResult.Plan.MobyMaterialRowPatchCount != 0 ||
                 desertResult.Plan.MobyRuntimePatchCount != 2)
             {
                 throw new InvalidOperationException("Dark Hollow's harmonized export did not cover every decoded terrain table and guarded object-lighting patch.");
-            }
-            foreach ((int offset, int byteLength) in new[]
-            {
-                (0x2800, 512),
-                (0x2C00, 512),
-                (0xC800, 512),
-                (0x6E560, 32),
-                (0x6C0C0, 32),
-                (0x6C140, 32),
-                (0x740A0, 32),
-                (0x74180, 32),
-                (0x74160, 32),
-                (0x75560, 32),
-                (0x7C440, 32),
-                (0x7C080, 32),
-                (0x72CE0, 32),
-                (0x7D4A0, 32),
-                (0x7ECA0, 32),
-                (0x7F0A0, 32),
-                (0x7E540, 32),
-                (0x7F500, 32),
-                (0x7C460, 32),
-                (0x7CC60, 32),
-                (0x7D060, 32),
-                (0x7D460, 32),
-                (0x7E440, 32),
-                (0x7EC40, 32),
-                (0x7F040, 32),
-                (0x7F440, 32)
-            })
-            {
-                string suffix = $"palette-0x{offset:X}";
-                if (!desertResult.Plan.Patches.Any(patch =>
-                    patch.Kind == "environment-terrain-texture-palette" &&
-                    patch.ByteLength == byteLength &&
-                    patch.Label.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)))
-                {
-                    throw new InvalidOperationException(
-                        $"Dark Hollow's runtime terrain source palette {suffix} was not patched as a {byteLength}-byte row.");
-                }
             }
             AssertDarkHollowTreeGradePlan(
                 desertResult.Plan,
@@ -1101,15 +1054,12 @@ if (environmentGradeSmokeOnly)
             double desertCloseBalanceAfter = EnvironmentStatisticsBalanceDistance(desertReadback.TargetHighDetailSceneColors, desertReadback.DonorHighDetailSceneColors);
             double desertTextureGreenBefore = desertMatch.TargetTextureUsage.GreenDominantPercent;
             double desertTextureGreenAfter = desertReadback.TargetTextureUsage.GreenDominantPercent;
-            if (desertBalanceAfter >= desertBalanceBefore ||
-                desertFarBalanceAfter >= desertFarBalanceBefore ||
-                desertCloseBalanceAfter >= desertCloseBalanceBefore ||
-                desertTextureGreenBefore < 5 ||
-                desertTextureGreenAfter > 0.25)
+            if (desertTextureGreenBefore < 5)
             {
                 throw new InvalidOperationException(
-                    $"Dark Hollow's near/far colors did not converge coherently toward Doctor Shemp: overall {desertBalanceBefore:F3}->{desertBalanceAfter:F3}, far {desertFarBalanceBefore:F3}->{desertFarBalanceAfter:F3}, close {desertCloseBalanceBefore:F3}->{desertCloseBalanceAfter:F3}, green terrain texels {desertTextureGreenBefore:F2}%->{desertTextureGreenAfter:F2}%.");
+                    $"Dark Hollow's source texture analysis did not observe the expected green terrain texels ({desertTextureGreenBefore:F2}%).");
             }
+            AssertTextureUsageUnchanged(desertMatch.TargetTextureUsage, desertReadback.TargetTextureUsage, "Dark Hollow warm-shift readback");
 
             NativeSkyEditPlan desertSkyEdit = new(
                 Version: 3,
@@ -1179,13 +1129,7 @@ if (environmentGradeSmokeOnly)
                     .ToArray();
                 if (relocatedFarTreePatches.Length != 3)
                     throw new InvalidOperationException($"Expected three Dark Hollow far-tree relocation patches, got {relocatedFarTreePatches.Length}.");
-                List<NativeEnvironmentGradePatch> relocationPatches = new[] { "0x2800", "0xC800", "0x7C080", "0x7C460" }
-                    .Select(paletteSuffix => dualGradeResult.Plan.Patches.Single(patch =>
-                        patch.LevelKey == darkHollowLevel.Key &&
-                        patch.Kind == "environment-terrain-texture-palette" &&
-                        patch.Label.EndsWith($"palette-{paletteSuffix}", StringComparison.OrdinalIgnoreCase)))
-                    .Concat(relocatedFarTreePatches)
-                    .ToList();
+                List<NativeEnvironmentGradePatch> relocationPatches = relocatedFarTreePatches.ToList();
                 foreach (NativeEnvironmentGradePatch relocatedPatch in relocationPatches)
                 {
                     long sourceWadOffset = ParseFlexibleLong(relocatedPatch.WadOffset);
@@ -1239,7 +1183,7 @@ if (environmentGradeSmokeOnly)
                 throw new InvalidOperationException("Dark Hollow's hue harmonization changed during Doctor Shemp sky relocation.");
             }
 
-            Console.WriteLine($"Drastic warm-shift grade: Dark Hollow -> Doctor Shemp, scene/texture harmonization {desertMatch.SceneTransform.HarmonizationPercent}%/{desertMatch.TextureTransform.HarmonizationPercent}%, green-sector balance {unharmonizedGreenDistance:F3}->{harmonizedGreenDistance:F3}");
+            Console.WriteLine($"Drastic warm-shift grade: Dark Hollow -> Doctor Shemp, scene tint {desertMatch.SceneTransform.TintStrengthPercent}%, packed texture transform disabled");
             Console.WriteLine($"Dark Hollow scene balance: {desertBalanceBefore:F3}->{desertBalanceAfter:F3}; far {desertFarBalanceBefore:F3}->{desertFarBalanceAfter:F3}; close {desertCloseBalanceBefore:F3}->{desertCloseBalanceAfter:F3}; {desertResult.Plan.SceneColorPatchCount} scene tables");
             Console.WriteLine($"Dark Hollow weighted terrain texels: {desertMatch.TargetTextureUsage.VisibleTexelCount:N0} visible samples across {desertMatch.TargetTextureRuntimeVariantCount} runtime palette variant(s), green-dominant {desertTextureGreenBefore:F2}%->{desertTextureGreenAfter:F2}%");
             if (keepEnvironmentGradeSmoke)
@@ -2049,6 +1993,17 @@ if (stoneHill == null)
 
 Console.WriteLine($"Stone Hill source records: {stoneHill.SourceRecordCount}");
 string wadAnalysis = WadAnalysisLocator.Find(workspace);
+if (exportStoneHillNativeLockedChestCandidate)
+{
+    string stoneHillMobyPath = Path.Combine(workspace.RootPath, "editor-cache", "stonehill-mobys.json");
+    if (!File.Exists(stoneHillMobyPath))
+        throw new FileNotFoundException("Stone Hill's native Moby cache is required for the private Key + Locked Chest append candidate.", stoneHillMobyPath);
+
+    List<Moby> stoneHillMobys = MobyLoader.LoadCached(stoneHillMobyPath).ToList();
+    MobyMetadataEnricher.Apply(workspace, stoneHill.Key, stoneHillMobys);
+    await ReportStoneHillNativeKeyChestPairPatch(stoneHill, stoneHillMobys, writeCandidate: true);
+    return 0;
+}
 if (terrainTextureSmokeOnly)
 {
     await ReportCustomTerrainTextureManifestRoundTrip();
@@ -13212,35 +13167,15 @@ void AssertDarkHollowTreeGradePlan(
     SmokeAssetSubfileInfo scenerySubfile = TryGetSmokeAssetSubfileInfo(wadAnalysisPath, darkHollow, 2)
         ?? throw new InvalidOperationException("Dark Hollow scenery subfile 2 is missing from the smoke analysis.");
 
-    (int Offset, string BeforeSha256)[] closeTreeSpecs =
-    [
-        (0x7C460, "3EF169D671DD5F3D84BFEAF2F5FD1388D0E17EF4048D986FE84979AE5F3494A7"),
-        (0x7CC60, "D9E70917444CAA9F244E54807A02F8A1A8269077813908CA6EE8E0F95120B291"),
-        (0x7D060, "C5CDABB0610F79ABCA0AA864833CA68C9582365DE727168A4AD820E8EEF5A360"),
-        (0x7D460, "E18CEAC716D0D8B868DCE9D952B6F6942E9CCCF4038649E133E519B5F8BADA33"),
-        (0x7E440, "5AE1DEFB401F8307BE30FF58EE84A76450A3CD0C3C883B8203436C8147E86B99"),
-        (0x7EC40, "97178BB30CD90B42916A9DD8849BB207DC55CB37E0994BABD5CDB1695FF8F1FF"),
-        (0x7F040, "5FB93A92D570CCC907B76C1829995586A63BA4A28C97A7D0EB8936F0E75AABDB"),
-        (0x7F440, "144F2F14015E653DE9024F1A4AF2E5BB255427D65A2B352BAE0D8A3721F1EE69")
-    ];
-    foreach ((int offset, string beforeSha256) in closeTreeSpecs)
-    {
-        string suffix = $"palette-0x{offset:X}";
-        NativeEnvironmentGradePatch patch = plan.Patches.Single(candidate =>
+    NativeEnvironmentGradePatch[] texturePagePatches = plan.Patches
+        .Where(candidate =>
             candidate.LevelKey == darkHollow.Key &&
-            candidate.Kind == "environment-terrain-texture-palette" &&
-            candidate.Label.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
-        long expectedWadOffset = checked(textureSubfile.AssetWadOffset + textureSubfile.SubfileOffset + offset);
-        if (ParseFlexibleLong(patch.WadOffset) != expectedWadOffset ||
-            patch.ByteLength != 32 ||
-            patch.ColorCount != 15 ||
-            patch.ChangedByteCount <= 0 ||
-            !string.Equals(patch.BeforeSha256, beforeSha256, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(patch.BeforeSha256, patch.AfterSha256, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                $"{label} did not preserve the exact source-bound 32-byte close-tree grade at 0x{offset:X}.");
-        }
+            candidate.Kind == "environment-terrain-texture-palette")
+        .ToArray();
+    if (plan.TexturePalettePatchCount != 0 || texturePagePatches.Length != 0)
+    {
+        throw new InvalidOperationException(
+            $"{label} attempted {texturePagePatches.Length} packed texture/CLUT patch(es); environment grading must preserve the texture page byte-for-byte.");
     }
 
     (int Offset, string Suffix, int ByteLength, int ColorCount, string BeforeSha256)[] farTreeSpecs =
@@ -13304,6 +13239,11 @@ void AssertDarkHollowTreeGradePlan(
     SourceDiscLayout outputLayout = DetectSourceDiscLayout(outputImagePath);
     using FileStream source = File.OpenRead(sourceImagePath);
     using FileStream output = File.OpenRead(outputImagePath);
+    long textureWadOffset = checked(textureSubfile.AssetWadOffset + textureSubfile.SubfileOffset);
+    byte[] sourceTexturePage = ReadSourceWadBytes(source, sourceLayout, textureWadOffset, checked((int)textureSubfile.SubfileSize));
+    byte[] outputTexturePage = ReadSourceWadBytes(output, outputLayout, textureWadOffset, checked((int)textureSubfile.SubfileSize));
+    if (!sourceTexturePage.AsSpan().SequenceEqual(outputTexturePage))
+        throw new InvalidOperationException($"{label} changed Dark Hollow's packed texture-page subfile.");
     foreach (int protectedOffset in protectedPaletteOffsets)
     {
         long wadOffset = checked(textureSubfile.AssetWadOffset + textureSubfile.SubfileOffset + protectedOffset);
@@ -13328,7 +13268,9 @@ void AssertEnvironmentGradeScopeRejected(
         NativeEnvironmentGradeExporter.AnalyzeMatch(sourceImage, wadAnalysisPath, target, donor, grade);
     }
     catch (InvalidOperationException exception) when (
-        exception.Message.Contains("must be enabled together", StringComparison.OrdinalIgnoreCase))
+        exception.Message.Contains("must be enabled together", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("texture-palette-only environment grade is blocked", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("packed CLUT ranges can alias visible texel storage", StringComparison.OrdinalIgnoreCase))
     {
         return;
     }
@@ -13441,21 +13383,30 @@ double EnvironmentStatisticsBalanceDistance(
         Math.Pow((first.MeanBlue / firstTotal) - (second.MeanBlue / secondTotal), 2));
 }
 
-double EnvironmentColorBalanceDistance(ColorRgba first, ColorRgba second)
+double EnvironmentCompositeMeanLuminance(NativeEnvironmentGradeMatch match, bool target)
 {
-    double firstTotal = Math.Max(1, first.R + first.G + first.B);
-    double secondTotal = Math.Max(1, second.R + second.G + second.B);
-    return Math.Sqrt(
-        Math.Pow((first.R / firstTotal) - (second.R / secondTotal), 2) +
-        Math.Pow((first.G / firstTotal) - (second.G / secondTotal), 2) +
-        Math.Pow((first.B / firstTotal) - (second.B / secondTotal), 2));
+    NativeEnvironmentColorStatistics scene = target ? match.TargetSceneColors : match.DonorSceneColors;
+    NativeEnvironmentTextureUsageStatistics texture = target ? match.TargetTextureUsage : match.DonorTextureUsage;
+    return (0.2126 * scene.MeanRed * texture.MeanRed) +
+        (0.7152 * scene.MeanGreen * texture.MeanGreen) +
+        (0.0722 * scene.MeanBlue * texture.MeanBlue);
 }
 
-ColorRgba EnvironmentModulate(ColorRgba first, ColorRgba second) =>
-    ColorRgba.FromRgb(
-        Math.Min(255, (first.R * second.R) / 128),
-        Math.Min(255, (first.G * second.G) / 128),
-        Math.Min(255, (first.B * second.B) / 128));
+void AssertTextureUsageUnchanged(
+    NativeEnvironmentTextureUsageStatistics before,
+    NativeEnvironmentTextureUsageStatistics after,
+    string label)
+{
+    if (before.DescriptorCount != after.DescriptorCount ||
+        before.VisibleTexelCount != after.VisibleTexelCount ||
+        Math.Abs(before.MeanRed - after.MeanRed) > 0.000001 ||
+        Math.Abs(before.MeanGreen - after.MeanGreen) > 0.000001 ||
+        Math.Abs(before.MeanBlue - after.MeanBlue) > 0.000001 ||
+        Math.Abs(before.GreenDominantPercent - after.GreenDominantPercent) > 0.000001)
+    {
+        throw new InvalidOperationException($"{label} changed packed texture-page statistics.");
+    }
+}
 
 RawSpecialDataSignature? TryBuildRawSpecialDataSignature(uint specialDataPointer, byte[] ram)
 {
@@ -14791,46 +14742,62 @@ void ReportCrossLevelEditorTemplateReadiness()
     CrossLevelTemplateLevelStatus stoneHillMultiGemChest = ResolveTemplateStatus(stoneHillLevel, multiGemChest);
     bool hasSourceDiscForCandidateChecks = File.Exists(sourceImage);
 
-    if (!artisansKey.Ready || !artisansKey.Placeable || !string.Equals(artisansKey.ShortLabel, "ready", StringComparison.OrdinalIgnoreCase))
-        throw new InvalidOperationException("Editor readiness should expose cross-level keys as lightweight ready objects.");
     if (!ArtisansNativeLockedChestRuntimeBundleComposer.IsAvailable ||
+        !artisansKey.Ready ||
+        !artisansKey.Placeable ||
+        !artisansKey.TrueAddPlaceable ||
+        !string.Equals(artisansKey.ShortLabel, "ready here", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(artisansKey.RecipeId, ArtisansNativeLockedChestRuntimeBundleCompatibility.RecipeId, StringComparison.Ordinal) ||
         !artisansKeyChest.Ready ||
         !artisansKeyChest.Placeable ||
         !artisansKeyChest.TrueAddPlaceable ||
         !string.Equals(artisansKeyChest.ShortLabel, "ready here", StringComparison.OrdinalIgnoreCase) ||
         !string.Equals(artisansKeyChest.RecipeId, ArtisansNativeLockedChestRuntimeBundleCompatibility.RecipeId, StringComparison.Ordinal))
     {
-        throw new InvalidOperationException("Editor readiness should expose the runtime-proven one-pair Artisans native Key + Locked Chest V2 bundle to normal Create BIN.");
+        throw new InvalidOperationException("Editor readiness should expose both halves of the runtime-proven one-pair Artisans native Key + Locked Chest V2 bundle to normal Create BIN.");
     }
     if (catalog.Levels.Count != 35)
         throw new InvalidOperationException($"Cross-level Key/Locked Chest readiness smoke expected all 35 catalog levels, found {catalog.Levels.Count}.");
     foreach (LevelDefinition level in catalog.Levels)
     {
         CrossLevelTemplateLevelStatus keyStatus = ResolveTemplateStatus(level, key);
-        if (!keyStatus.Ready || !keyStatus.Placeable || !keyStatus.TrueAddPlaceable ||
-            !string.Equals(keyStatus.ShortLabel, "ready", StringComparison.OrdinalIgnoreCase))
+        CrossLevelTemplateLevelStatus chestStatus = ResolveTemplateStatus(level, keyChest);
+        if (keyStatus != chestStatus)
+            throw new InvalidOperationException($"Key + Locked Chest must share one atomic readiness state in {level.DisplayName}.");
+
+        string normalizedLevelKey = LevelCatalog.NormalizeKey(level.Key);
+        bool isFlight = normalizedLevelKey is "sunnyflight" or "nightflight" or "crystalflight" or "wildflight" or "icyflight";
+        SpecialChestBundleProfile? profile = SpecialChestBundleProfileRegistry.Find(
+            SpecialChestFamily.LockedChest,
+            normalizedLevelKey,
+            SpecialChestBundleProfileRegistry.CleanUsaImageSha256);
+        if (isFlight)
         {
-            throw new InvalidOperationException($"The standalone lightweight Key should remain ready/placeable in every catalog level; failed in {level.DisplayName}.");
+            if (profile != null || keyStatus.Ready || keyStatus.Placeable || keyStatus.TrueAddPlaceable ||
+                !string.Equals(keyStatus.ShortLabel, "blocked in flights", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"Key + Locked Chest must remain blocked in flight stage {level.DisplayName}.");
+            }
+            continue;
         }
 
-        CrossLevelTemplateLevelStatus chestStatus = ResolveTemplateStatus(level, keyChest);
-        bool isArtisans = string.Equals(
-            LevelCatalog.NormalizeKey(level.Key),
-            ArtisansNativeLockedChestRuntimeBundleCompatibility.TargetLevelKey,
-            StringComparison.OrdinalIgnoreCase);
-        if (isArtisans)
+        if (profile == null)
+            throw new InvalidOperationException($"Missing checked Key + Locked Chest profile for {level.DisplayName}.");
+        (bool ready, bool placeable, bool trueAddPlaceable, string shortLabel) = profile.Availability switch
         {
-            if (!chestStatus.Ready || !chestStatus.Placeable || !chestStatus.TrueAddPlaceable ||
-                !string.Equals(chestStatus.ShortLabel, "ready here", StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(chestStatus.RecipeId, ArtisansNativeLockedChestRuntimeBundleCompatibility.RecipeId, StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException("The runtime-proven Artisans native Key + Locked Chest V2 bundle lost its normal Create BIN readiness.");
-            }
-        }
-        else if (chestStatus.Ready || chestStatus.Placeable || chestStatus.TrueAddPlaceable ||
-                 !string.Equals(chestStatus.ShortLabel, "preview here", StringComparison.OrdinalIgnoreCase))
+            SpecialChestBundleAvailability.NormalCreateBinReady => (true, true, true, "ready here"),
+            SpecialChestBundleAvailability.CandidatePlanOnly => (false, true, true, "test CUE only"),
+            SpecialChestBundleAvailability.NativeClosurePresent => (false, true, true, "test CUE only"),
+            _ => (false, false, false, "blocked here")
+        };
+        if (keyStatus.Ready != ready ||
+            keyStatus.Placeable != placeable ||
+            keyStatus.TrueAddPlaceable != trueAddPlaceable ||
+            !string.Equals(keyStatus.ShortLabel, shortLabel, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(keyStatus.RecipeId, profile.RecipeId, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException($"The Artisans V2 Locked Chest bundle must remain unavailable in unsupported target {level.DisplayName}.");
+            throw new InvalidOperationException(
+                $"Key + Locked Chest readiness does not match checked profile {profile.Id} in {level.DisplayName}.");
         }
     }
 
@@ -14846,14 +14813,14 @@ void ReportCrossLevelEditorTemplateReadiness()
     ];
     foreach ((int keys, int chests, bool pair, bool standaloneKey, bool chestForExistingKey) in addPolicyCases)
     {
-        ArtisansNativeLockedChestAddPolicy policy = ArtisansNativeLockedChestAddPolicy.Resolve(keys, chests);
+        LockedChestRuntimeBundleAddPolicy policy = LockedChestRuntimeBundleAddPolicy.Resolve(keys, chests);
         if (policy.OfferPair != pair ||
             policy.OfferStandaloneKey != standaloneKey ||
             policy.OfferLockedChestForExistingKey != chestForExistingKey ||
             policy.AllowLockedChestTemplate != (pair || chestForExistingKey))
         {
             throw new InvalidOperationException(
-                $"Artisans release Add Object policy changed for {keys} Key(s)/{chests} Locked Chest(s): {policy}.");
+                $"Key + Locked Chest release Add Object policy changed for {keys} Key(s)/{chests} Locked Chest(s): {policy}.");
         }
     }
 
@@ -14865,18 +14832,18 @@ void ReportCrossLevelEditorTemplateReadiness()
     if (hasSourceDiscForCandidateChecks)
     {
         if (!artisansKey.Ready)
-            throw new InvalidOperationException("The lightweight Key should remain ready on its universal source-record append route.");
+            throw new InvalidOperationException("The Artisans Key must remain ready as part of its runtime-proven atomic bundle.");
         if (stoneHillSpring.Ready ||
-            !stoneHillSpring.Placeable ||
-            !string.Equals(stoneHillSpring.ShortLabel, "candidate here", StringComparison.OrdinalIgnoreCase) ||
-            string.IsNullOrWhiteSpace(stoneHillSpring.RecipeId))
+            stoneHillSpring.Placeable ||
+            stoneHillSpring.TrueAddPlaceable ||
+            !string.Equals(stoneHillSpring.ShortLabel, "blocked here", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Editor readiness should keep the Peace Keepers Spring Chest as a guarded Stone Hill candidate after the latest in-game failure.");
+            throw new InvalidOperationException("Editor readiness should block Spring Chest in Stone Hill after the latest in-game failure.");
         }
         if (artisansSpring.Ready ||
             artisansSpring.Placeable ||
-            !string.Equals(artisansSpring.ShortLabel, "blocked here", StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(artisansSpring.RecipeId, ArtisansSpringRecipeId, StringComparison.OrdinalIgnoreCase))
+            artisansSpring.TrueAddPlaceable ||
+            !string.Equals(artisansSpring.ShortLabel, "blocked here", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("Editor readiness should block the Artisans Spring Chest root replacement that would corrupt the Life Statue actor.");
         }
@@ -14933,16 +14900,16 @@ void ReportCrossLevelEditorTemplateReadiness()
         throw new InvalidOperationException("Editor transform filtering should keep enemy transforms on actors and chest transforms on chests.");
     }
     if (stoneHillGnastySpring.Ready ||
-        !stoneHillGnastySpring.Placeable ||
-        !string.Equals(stoneHillGnastySpring.ShortLabel, "candidate here", StringComparison.OrdinalIgnoreCase) ||
+        stoneHillGnastySpring.Placeable ||
+        !string.Equals(stoneHillGnastySpring.ShortLabel, "blocked here", StringComparison.OrdinalIgnoreCase) ||
         stoneHillFirework.Ready ||
-        !stoneHillFirework.Placeable ||
-        !string.Equals(stoneHillFirework.ShortLabel, "candidate here", StringComparison.OrdinalIgnoreCase) ||
+        stoneHillFirework.Placeable ||
+        !string.Equals(stoneHillFirework.ShortLabel, "blocked here", StringComparison.OrdinalIgnoreCase) ||
         stoneHillMultiGemChest.Ready ||
-        !stoneHillMultiGemChest.Placeable ||
-        !string.Equals(stoneHillMultiGemChest.ShortLabel, "candidate here", StringComparison.OrdinalIgnoreCase))
+        stoneHillMultiGemChest.Placeable ||
+        !string.Equals(stoneHillMultiGemChest.ShortLabel, "blocked here", StringComparison.OrdinalIgnoreCase))
     {
-        throw new InvalidOperationException("Gnasty's Loot Spring, Firework, and 3x Flame chests should be placeable guarded source-record candidates.");
+        throw new InvalidOperationException("Spring, Firework, and 3x Flame chests must remain blocked in Stone Hill until their dependency bundles pass runtime proof.");
     }
 
     JsonElement[] gnastyChestCandidates = [gnastySpringChest, fireworkChest, multiGemChest];
@@ -14951,11 +14918,45 @@ void ReportCrossLevelEditorTemplateReadiness()
         foreach (JsonElement template in gnastyChestCandidates)
         {
             CrossLevelTemplateLevelStatus status = ResolveTemplateStatus(level, template);
-            if (status.Ready ||
-                !status.Placeable ||
-                !string.Equals(status.ShortLabel, "candidate here", StringComparison.OrdinalIgnoreCase))
+            if (!SpecialChestEditorTemplateGate.TryMapFamily(
+                    ReadJsonString(template, "family"),
+                    out SpecialChestFamily family))
             {
-                throw new InvalidOperationException($"Gnasty's Loot chest template {ReadJsonString(template, "id")} should be a guarded candidate in {level.DisplayName}.");
+                throw new InvalidOperationException($"Special-chest template {ReadJsonString(template, "id")} did not map to a registry family.");
+            }
+            string normalizedLevelKey = LevelCatalog.NormalizeKey(level.Key);
+            bool isFlight = normalizedLevelKey is "sunnyflight" or "nightflight" or "crystalflight" or "wildflight" or "icyflight";
+            SpecialChestBundleProfile? profile = SpecialChestBundleProfileRegistry.Find(
+                family,
+                normalizedLevelKey,
+                SpecialChestBundleProfileRegistry.CleanUsaImageSha256);
+            if (isFlight)
+            {
+                if (profile != null || status.Ready || status.Placeable || status.TrueAddPlaceable ||
+                    !string.Equals(status.ShortLabel, "blocked in flights", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException($"Special-chest template {ReadJsonString(template, "id")} is not blocked in flight stage {level.DisplayName}.");
+                }
+                continue;
+            }
+
+            if (profile == null)
+                throw new InvalidOperationException($"Missing checked {family} profile for {level.DisplayName}.");
+            (bool ready, bool placeable, bool trueAddPlaceable, string shortLabel) = profile.Availability switch
+            {
+                SpecialChestBundleAvailability.NormalCreateBinReady => (true, true, true, "ready here"),
+                SpecialChestBundleAvailability.CandidatePlanOnly => (false, true, true, "test CUE only"),
+                SpecialChestBundleAvailability.NativeClosurePresent => (false, true, true, "test CUE only"),
+                _ => (false, false, false, "blocked here")
+            };
+            if (status.Ready != ready ||
+                status.Placeable != placeable ||
+                status.TrueAddPlaceable != trueAddPlaceable ||
+                !string.Equals(status.ShortLabel, shortLabel, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(status.RecipeId, profile.RecipeId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Special-chest template {ReadJsonString(template, "id")} does not match checked profile {profile.Id} in {level.DisplayName}.");
             }
         }
     }
@@ -19135,7 +19136,7 @@ async Task ReportArtisansKeyChestPackagePreview()
         Path.Combine(workspace.RootPath, "_local", "objects", "artisans-key-chest-preview-smoke.cue"),
         artisans,
         path);
-    ArtisansNativeLockedChestRuntimeBundleIntent? promotedBundle = guardedPlan.ArtisansNativeLockedChestRuntimeBundle;
+    LockedChestRuntimeBundleIntent? promotedBundle = guardedPlan.LockedChestRuntimeBundle;
     if (promotedBundle == null ||
         !string.Equals(promotedBundle.RecipeId, ArtisansNativeLockedChestRuntimeBundleComposer.RecipeId, StringComparison.Ordinal) ||
         promotedBundle.KeyEditorTrueIndex != key.TrueIndex ||
@@ -19150,7 +19151,7 @@ async Task ReportArtisansKeyChestPackagePreview()
         guardedPlan.SkippedEdits.Count != 0 ||
         guardedPlan.EditOutcomes?.Count != 2 ||
         guardedPlan.EditOutcomes.Any(outcome =>
-            !outcome.PatchKinds.Contains("artisans-native-key-locked-chest-runtime-bundle-v2", StringComparer.OrdinalIgnoreCase)))
+            !outcome.PatchKinds.Contains("locked-chest-runtime-bundle", StringComparer.OrdinalIgnoreCase)))
     {
         throw new InvalidOperationException("Normal Create BIN did not suppress the exact Artisans Key/Locked Chest pair into the promoted atomic V2 runtime-bundle intent.");
     }
@@ -19162,7 +19163,7 @@ async Task ReportArtisansKeyChestPackagePreview()
         promotedSafety.ProjectedDynamicCapacity != 85 ||
         promotedSafety.ComponentRepacked ||
         !promotedSafety.Issues.Any(issue =>
-            string.Equals(issue.Code, "artisans-native-locked-chest-runtime-bundle-v2", StringComparison.Ordinal) &&
+            string.Equals(issue.Code, "locked-chest-runtime-bundle", StringComparison.Ordinal) &&
             issue.EditorTrueIndex == keyChest.TrueIndex))
     {
         throw new InvalidOperationException("The promoted Artisans Key/Locked Chest build-safety report lost its truthful 7-row, 91->85 chest-centered Review contract.");
@@ -25774,7 +25775,7 @@ async Task ReportStoneHillMultiGemAddPatch(LevelDefinition level, List<Moby> sou
     Console.WriteLine($"Stone Hill multi-gem add source patch: {appendPatches.Count} append(s), source count {level.SourceRecordCount}->{level.SourceRecordCount + gems.Length}, treasure +{expectedTreasureDelta}, BIN bytes verified");
 }
 
-async Task ReportStoneHillNativeKeyChestPairPatch(LevelDefinition level, List<Moby> sourceMobys)
+async Task ReportStoneHillNativeKeyChestPairPatch(LevelDefinition level, List<Moby> sourceMobys, bool writeCandidate = false)
 {
     Moby? nativeKey = sourceMobys.FirstOrDefault(moby =>
         moby.TrueIndex >= 0 &&
@@ -25787,9 +25788,21 @@ async Task ReportStoneHillNativeKeyChestPairPatch(LevelDefinition level, List<Mo
         moby.SourceByte36 == 0xAE &&
         moby.SourceByte37 == 0x00);
     Moby? positionDonor = nativeKeyChest ?? sourceMobys.FirstOrDefault(moby => moby.TrueIndex >= 0 && moby.TrueIndex < level.SourceRecordCount);
-    if (nativeKey == null || nativeKeyChest == null || positionDonor == null)
+    int[] expectedRewardMarkerTrueIndexes = [180, 181, 182, 183, 184];
+    Moby[] nativeRewardMarkers = expectedRewardMarkerTrueIndexes
+        .Select(trueIndex => sourceMobys.FirstOrDefault(moby =>
+            moby.TrueIndex == trueIndex &&
+            moby.Type == 0x00 &&
+            moby.SourceByte36 == 0x0D &&
+            moby.SourceByte37 == 0x00 &&
+            moby.Flag4A == 0xFF &&
+            GemValue.TryFromIdByte(moby.Flag4B, out _)))
+        .Where(moby => moby != null)
+        .Cast<Moby>()
+        .ToArray();
+    if (nativeKey == null || nativeKeyChest == null || positionDonor == null || nativeRewardMarkers.Length != expectedRewardMarkerTrueIndexes.Length)
     {
-        Console.WriteLine("Stone Hill native key chest pair: native key/key-chest donor missing; skipping.");
+        Console.WriteLine("Stone Hill native key chest pair: native key/key-chest/reward donor closure missing; skipping.");
         return;
     }
 
@@ -25810,9 +25823,11 @@ async Task ReportStoneHillNativeKeyChestPairPatch(LevelDefinition level, List<Mo
         SourceByte36 = 0xAD,
         OriginalSourceByte36 = 0xAD,
         SourceByte37 = 0x00,
+        OriginalSourceByte37 = 0x00,
         SourceByte4F = 0x02,
         OriginalSourceByte4F = 0x02,
         Flag4A = 0x40,
+        OriginalFlag4A = 0x40,
         Flag4B = 0xFF,
         OriginalFlag4B = 0xFF,
         Color = GemValue.Yellow.Color,
@@ -25820,6 +25835,9 @@ async Task ReportStoneHillNativeKeyChestPairPatch(LevelDefinition level, List<Mo
         OriginalLabel = "Stone Hill native Key",
         PatchStatus = "native-clone",
         PatchLead = $"Same-level clone from Stone Hill key donor T{nativeKey.TrueIndex}.",
+        SourceCloneLevelKey = level.Key,
+        SourceCloneLevelName = level.DisplayName,
+        SourceCloneTrueIndex = nativeKey.TrueIndex,
         IsAdded = true
     };
     Moby keyChest = new()
@@ -25836,9 +25854,11 @@ async Task ReportStoneHillNativeKeyChestPairPatch(LevelDefinition level, List<Mo
         SourceByte36 = 0xAE,
         OriginalSourceByte36 = 0xAE,
         SourceByte37 = 0x00,
+        OriginalSourceByte37 = 0x00,
         SourceByte4F = 0x00,
         OriginalSourceByte4F = 0x00,
         Flag4A = 0x10,
+        OriginalFlag4A = 0x10,
         Flag4B = 0x54,
         OriginalFlag4B = 0x54,
         Color = Moby.ColorForType(0x20),
@@ -25846,8 +25866,76 @@ async Task ReportStoneHillNativeKeyChestPairPatch(LevelDefinition level, List<Mo
         OriginalLabel = "Stone Hill native Key Chest",
         PatchStatus = "native-clone",
         PatchLead = $"Same-level clone from Stone Hill Key Chest donor T{nativeKeyChest.TrueIndex}.",
+        SourceCloneLevelKey = level.Key,
+        SourceCloneLevelName = level.DisplayName,
+        SourceCloneTrueIndex = nativeKeyChest.TrueIndex,
         IsAdded = true
     };
+    Vector3f chestTranslation = new(
+        keyChestPosition.X - nativeKeyChest.OriginalPosition.X,
+        keyChestPosition.Y - nativeKeyChest.OriginalPosition.Y,
+        keyChestPosition.Z - nativeKeyChest.OriginalPosition.Z);
+    List<Moby> rewardMarkers = new();
+    for (int i = 0; i < nativeRewardMarkers.Length; i++)
+    {
+        Moby donor = nativeRewardMarkers[i];
+        Vector3f position = new(
+            donor.OriginalPosition.X + chestTranslation.X,
+            donor.OriginalPosition.Y + chestTranslation.Y,
+            donor.OriginalPosition.Z + chestTranslation.Z);
+        int markerTrueIndex = nextTrueIndex + 2 + i;
+        rewardMarkers.Add(new Moby
+        {
+            Index = nextIndex + 2 + i,
+            TrueIndex = markerTrueIndex,
+            LegacyIndex = MobyLoader.GetLegacyAliasIndex(markerTrueIndex),
+            Position = position,
+            OriginalPosition = position,
+            Type = donor.Type,
+            OriginalType = donor.Type,
+            State = donor.State,
+            OriginalState = donor.State,
+            YawByte = donor.YawByte,
+            OriginalYawByte = donor.YawByte,
+            PropertiesPointer = donor.PropertiesPointer,
+            SpecialDataPointer = donor.SpecialDataPointer,
+            SourceByte36 = donor.SourceByte36,
+            OriginalSourceByte36 = donor.SourceByte36,
+            SourceByte37 = donor.SourceByte37,
+            OriginalSourceByte37 = donor.SourceByte37,
+            SourceByte4F = donor.SourceByte4F,
+            OriginalSourceByte4F = donor.SourceByte4F,
+            Flag4A = donor.Flag4A,
+            OriginalFlag4A = donor.Flag4A,
+            Flag4B = donor.Flag4B,
+            OriginalFlag4B = donor.Flag4B,
+            Color = donor.Color,
+            Label = $"Stone Hill private Locked Chest reward {i + 1}",
+            OriginalLabel = $"Stone Hill private Locked Chest reward {i + 1}",
+            PatchStatus = "native-locked-chest-reward-clone",
+            PatchLead = $"Private same-level reward marker cloned from Stone Hill T{donor.TrueIndex} and translated with the added Locked Chest.",
+            SourceCloneLevelKey = level.Key,
+            SourceCloneLevelName = level.DisplayName,
+            SourceCloneTrueIndex = donor.TrueIndex,
+            IsAdded = true
+        });
+    }
+    for (int i = 0; i < rewardMarkers.Count; i++)
+    {
+        Moby marker = rewardMarkers[i];
+        MobyLink link = new()
+        {
+            Key = $"stonehill-private-locked-chest:{keyChest.TrueIndex}:reward:{marker.TrueIndex}",
+            Name = $"Private Locked Chest reward {i + 1}",
+            Kind = "chest contents",
+            LinkedMove = true,
+            Confidence = "exact-native-clone",
+            Reason = $"Clone Stone Hill T{nativeRewardMarkers[i].TrueIndex}'s 40-byte reward properties and retarget its owning chest index to appended T{keyChest.TrueIndex}.",
+            TrueIndexes = [keyChest.TrueIndex, marker.TrueIndex]
+        };
+        keyChest.Links.Add(link);
+        marker.Links.Add(link);
+    }
     int? expectedKeyChestSector = null;
     string geometryPath = Path.Combine(workspace.RootPath, "editor-cache", $"{level.Key}-runtime-scene-editor-overlay.json");
     if (File.Exists(geometryPath))
@@ -25857,15 +25945,20 @@ async Task ReportStoneHillNativeKeyChestPairPatch(LevelDefinition level, List<Mo
             expectedKeyChestSector = placementSector;
     }
 
-    string path = Path.Combine(workspace.RootPath, "_local", "smoke", "stonehill-native-key-chest-pair-native-edits.json");
-    await MobyEditStore.SaveAsync(path, [key, keyChest], "Stone Hill native key chest pair");
+    string candidateSlug = "stonehill-native-key-locked-chest-private-append-v1-runtime-test";
+    string path = Path.Combine(workspace.RootPath, "_local", "smoke", $"{candidateSlug}-native-edits.json");
+    List<Moby> bundleEdits = [key, keyChest, .. rewardMarkers];
+    await MobyEditStore.SaveAsync(path, bundleEdits, "Stone Hill native key chest pair with private five-row reward closure");
+    string outputPrefix = Path.Combine(workspace.RootPath, "_local", "objects", candidateSlug);
     MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(
         sourceImage,
         DiscImageLocator.FindCueForImage(sourceImage),
-        Path.Combine(workspace.RootPath, "_local", "objects", "stonehill-native-key-chest-pair.bin"),
-        Path.Combine(workspace.RootPath, "_local", "objects", "stonehill-native-key-chest-pair.cue"),
+        $"{outputPrefix}.bin",
+        $"{outputPrefix}.cue",
         level,
-        path);
+        path,
+        allowPlanOnlyActorPackageImports: writeCandidate,
+        allowGuardedNativeCloneAppend: true);
 
     MobySourcePatch? keyPatch = plan.Patches.FirstOrDefault(patch =>
         string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) &&
@@ -25894,9 +25987,121 @@ async Task ReportStoneHillNativeKeyChestPairPatch(LevelDefinition level, List<Mo
     }
     if (plan.PackageImportPreviews.Any() || plan.Patches.Any(patch => patch.Kind.Contains("actor-package", StringComparison.OrdinalIgnoreCase)))
         throw new InvalidOperationException("Stone Hill native Key Chest pair should not need actor-package imports.");
+    if (plan.SkippedEdits.Count != 0)
+        throw new InvalidOperationException($"Stone Hill native Key Chest pair skipped edit(s): {string.Join("; ", plan.SkippedEdits)}");
+
+    MobySourcePatch sourceCountPatch = plan.Patches.SingleOrDefault(patch =>
+        string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)) ??
+        throw new InvalidOperationException("Stone Hill native Key Chest pair did not increase the native source-record count.");
+    int finalSourceCount = BitConverter.ToInt32(ParseHexPreview(sourceCountPatch.AfterHexPreview), 0);
+    int expectedFinalSourceCount = level.SourceRecordCount + bundleEdits.Count;
+    if (keyPatch?.TrueIndex != level.SourceRecordCount ||
+        keyChestPatch?.TrueIndex != level.SourceRecordCount + 1 ||
+        finalSourceCount != expectedFinalSourceCount)
+    {
+        throw new InvalidOperationException(
+            $"Stone Hill private pair expected appended T{level.SourceRecordCount}/T{level.SourceRecordCount + 1}, five private reward rows, and source count {expectedFinalSourceCount}; " +
+            $"found T{keyPatch?.TrueIndex}/T{keyChestPatch?.TrueIndex} and {finalSourceCount}.");
+    }
+    MobySourcePatch[] rewardPatches = plan.Patches
+        .Where(patch =>
+            string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase) &&
+            patch.MobyLabel.StartsWith("Stone Hill private Locked Chest reward", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(patch => patch.TrueIndex)
+        .ToArray();
+    if (rewardPatches.Length != 5 ||
+        !rewardPatches.Select(patch => patch.TrueIndex).SequenceEqual(Enumerable.Range(level.SourceRecordCount + 2, 5)))
+    {
+        throw new InvalidOperationException("Stone Hill private pair did not append all five reward rows contiguously after its visible Key and Locked Chest.");
+    }
+    MobySourcePatch[] rewardPropertiesPatches = plan.Patches
+        .Where(patch =>
+            string.Equals(patch.Kind, "moby-special-data-append", StringComparison.OrdinalIgnoreCase) &&
+            patch.MobyLabel.StartsWith("Stone Hill private Locked Chest reward", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(patch => patch.TrueIndex)
+        .ToArray();
+    if (rewardPropertiesPatches.Length != 5 || rewardPropertiesPatches.Any(patch =>
+            patch.ByteLength != 40 ||
+            BitConverter.ToInt32(ParseHexPreview(patch.AfterHexPreview), 0) != keyChestPatch!.TrueIndex))
+    {
+        throw new InvalidOperationException("Stone Hill private pair did not clone five 40-byte reward-property blocks retargeted to its appended Locked Chest.");
+    }
+
+    MobySourcePatch treasurePatch = plan.Patches.SingleOrDefault(patch =>
+        string.Equals(patch.Kind, "level-treasure-total", StringComparison.OrdinalIgnoreCase)) ??
+        throw new InvalidOperationException("Stone Hill native Key Chest pair did not add the chest's +10 reward to the level treasure target.");
+    int treasureBefore = BitConverter.ToUInt16(ParseHexPreview(treasurePatch.BeforeHexPreview), 0);
+    int treasureAfter = BitConverter.ToUInt16(ParseHexPreview(treasurePatch.AfterHexPreview), 0);
+    if (treasureBefore != 200 || treasureAfter != 210)
+        throw new InvalidOperationException($"Stone Hill private pair expected treasure 200->210, found {treasureBefore}->{treasureAfter}.");
+
+    if (writeCandidate)
+    {
+        MobySourcePatchResult result = await MobySourcePatchExporter.ExportAsync(new MobySourcePatchRequest(
+            SourceImagePath: sourceImage,
+            SourceCuePath: DiscImageLocator.FindCueForImage(sourceImage),
+            OutputPrefix: outputPrefix,
+            Level: level,
+            NativeEditsPath: path,
+            WriteImage: true,
+            AllowPlanOnlyActorPackageImports: true,
+            AllowGuardedNativeCloneAppend: true));
+        if (!result.WroteImage || !File.Exists(result.OutputImagePath) || !File.Exists(result.OutputCuePath))
+            throw new InvalidOperationException("Stone Hill private Key + Locked Chest candidate did not write its BIN/CUE.");
+        if (result.Plan.Patches.Count(TestLevelWarpPatch.IsPatch) != 1)
+            throw new InvalidOperationException("Stone Hill private Key + Locked Chest candidate did not include exactly one guarded fast-entry patch.");
+
+        VerifyPatchBytes(result.OutputImagePath, result.Plan);
+        long tableWadOffset = Convert.ToInt64(level.SourceTableWadOffset[2..], 16);
+        SourceDiscLayout sourceLayout = DetectSourceDiscLayout(sourceImage);
+        SourceDiscLayout outputLayout = DetectSourceDiscLayout(result.OutputImagePath);
+        using FileStream sourceStream = File.Open(sourceImage, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using FileStream outputStream = File.Open(result.OutputImagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        IEnumerable<(Moby Donor, string Label)> untouchedDonors =
+            new[] { (Donor: nativeKey, Label: "native Key donor"), (Donor: nativeKeyChest, Label: "native Locked Chest donor") }
+            .Concat(nativeRewardMarkers.Select((marker, index) => (Donor: marker, Label: $"native reward-marker donor {index + 1}")));
+        foreach ((Moby donor, string label) in untouchedDonors)
+        {
+            long donorOffset = tableWadOffset + (donor.TrueIndex * 0x58L);
+            byte[] before = ReadSourceWadBytes(sourceStream, sourceLayout, donorOffset, 0x58);
+            byte[] after = ReadSourceWadBytes(outputStream, outputLayout, donorOffset, 0x58);
+            if (!before.AsSpan().SequenceEqual(after))
+                throw new InvalidOperationException($"Stone Hill's original {label} T{donor.TrueIndex} changed in the private-append candidate.");
+        }
+
+        string genericValidationPath = await MobyCandidateValidationReportWriter.WriteAsync(result);
+        string lockedChestChecklistPath = $"{outputPrefix}.locked-chest-runtime-checklist.md";
+        string selection = TestLevelWarpPatch.TargetSelectionText(level.LevelId);
+        await File.WriteAllTextAsync(lockedChestChecklistPath, $"""
+            # Stone Hill Private Key + Locked Chest Runtime Test
+
+            > **DISPOSABLE / IN-GAME UNTESTED.** This candidate truly appends T{level.SourceRecordCount} Key, T{level.SourceRecordCount + 1} Locked Chest, and private reward rows T{level.SourceRecordCount + 2}-T{level.SourceRecordCount + 6}. It does not move or reuse Stone Hill's retail T{nativeKey.TrueIndex} Key, T{nativeKeyChest.TrueIndex} Locked Chest, or T180-T184 reward rows, and it is not enabled in normal Add/Create BIN.
+
+            - CUE: `{result.OutputCuePath}`
+            - Generic validation: `{genericValidationPath}`
+            - Added Key position: X {key.Position.X:0.###}, Y {key.Position.Y:0.###}, Z {key.Position.Z:0.###}
+            - Added Locked Chest position: X {keyChest.Position.X:0.###}, Y {keyChest.Position.Y:0.###}, Z {keyChest.Position.Z:0.###}
+            - Fast entry: open Inventory, enter **{TestLevelWarpPatch.ActivationSequence}**, then press **{selection}**.
+
+            ## Required proof
+
+            - [ ] Cold boot and fast entry both reach Stone Hill without a freeze.
+            - [ ] The added chest is visibly the correct red/gold padlocked chest.
+            - [ ] The added chest cannot open before the added gold Key is collected.
+            - [ ] Collecting the added Key once enables the added chest.
+            - [ ] The added chest opens with native animation and sound without flame/charge.
+            - [ ] It awards exactly +10 treasure once; the level target is 210.
+            - [ ] The added Key and chest remain retired after death/reload and leave/re-enter.
+            - [ ] Retail Key T{nativeKey.TrueIndex}, retail Locked Chest T{nativeKeyChest.TrueIndex}, and nearby actors still behave normally.
+
+            Passing this list promotes only Stone Hill's one-pair profile. It does not prove the 16 levels that lack native actor 0x00AE.
+            """);
+        Console.WriteLine($"Stone Hill private Key + Locked Chest candidate: {result.OutputCuePath}");
+        Console.WriteLine($"Runtime checklist: {lockedChestChecklistPath}");
+    }
 
     string sectorSummary = expectedKeyChestSector is int sector ? $", key chest sector=0x{sector:X2}" : "";
-    Console.WriteLine($"Stone Hill native key chest pair: {plan.PatchCount} patch(es), key donor T{nativeKey.TrueIndex}, key chest donor T{nativeKeyChest.TrueIndex}{sectorSummary}, package imports=0");
+    Console.WriteLine($"Stone Hill native key chest pair: {plan.PatchCount} patch(es), private append T{level.SourceRecordCount}-T{level.SourceRecordCount + 6}, key donor T{nativeKey.TrueIndex}, key chest donor T{nativeKeyChest.TrueIndex}, reward donors T180-T184{sectorSummary}, treasure 200->210, package imports=0");
 }
 
 async Task ReportPastedLooseGemPatch(string levelKey)
@@ -31825,14 +32030,21 @@ void ReportNativeEnvironmentGradePlan()
         Catalog: catalog,
         Edits: [new NativeEnvironmentGradeBatchEdit(target, grade)],
         WriteImage: false));
-    if (plan.EditedLevelCount != 1 || plan.SceneColorPatchCount == 0 || plan.TexturePalettePatchCount == 0 || plan.TotalChangedBytes == 0)
-        throw new InvalidOperationException("Stone Hill environment-grade plan did not cover both native scene colors and landscape palettes.");
+    if (plan.EditedLevelCount != 1 ||
+        plan.SceneColorPatchCount == 0 ||
+        plan.TexturePalettePatchCount != 0 ||
+        plan.Patches.Any(patch => patch.Kind == "environment-terrain-texture-palette") ||
+        plan.TotalChangedBytes == 0)
+    {
+        throw new InvalidOperationException(
+            "Stone Hill environment-grade plan did not cover native scene colors while preserving packed texture pages.");
+    }
     AssertNoEnvironmentPatchOverlaps(plan, "Default Stone Hill environment-grade plan");
     NativeEnvironmentGradeMatch match = plan.Matches.Single();
     if (match.TargetSectorCount < 8 || match.DonorSectorCount < 8 || match.TargetSceneColors.SampleCount == 0 || match.DonorSceneColors.SampleCount == 0)
         throw new InvalidOperationException("Stone Hill/Dark Hollow environment-grade analysis did not recover enough native scene data.");
 
-    Console.WriteLine($"Native environment grade: {target.DisplayName} matches {donor.DisplayName}; scene {match.TargetSceneColors.MedianLuminance:F3}->{match.DonorSceneColors.MedianLuminance:F3}, {plan.SceneColorPatchCount} scene table(s), {plan.TexturePalettePatchCount} landscape palette(s)");
+    Console.WriteLine($"Native environment grade: {target.DisplayName} matches {donor.DisplayName}; composite {EnvironmentCompositeMeanLuminance(match, target: true):F3}->{EnvironmentCompositeMeanLuminance(match, target: false):F3}, {plan.SceneColorPatchCount} scene table(s), packed texture pages preserved");
 
     LevelDefinition darkHollowTarget = donor;
     LevelDefinition doctorShempDonor = catalog.FindByKey("doctorshemp")
@@ -31854,7 +32066,7 @@ void ReportNativeEnvironmentGradePlan()
         darkHollowTarget,
         "Default Dark Hollow environment-grade plan");
     Console.WriteLine(
-        $"Dark Hollow LOD grade: 8 source-bound close-tree palettes, 3 source-bound far-tree tables, 17 protected player palettes, no overlapping writes");
+        $"Dark Hollow LOD grade: packed texture page preserved, 3 source-bound far-tree tables, 17 protected player palettes, no overlapping writes");
 
     NativeEnvironmentGradeBatchEdit[] allLevelEdits = catalog.Levels
         .Where(level => !string.Equals(LevelCatalog.NormalizeKey(level.Key), LevelCatalog.NormalizeKey(donor.Key), StringComparison.OrdinalIgnoreCase))
@@ -31869,6 +32081,8 @@ void ReportNativeEnvironmentGradePlan()
         Edits: allLevelEdits,
         WriteImage: false));
     if (allLevelPlan.EditedLevelCount != catalog.Levels.Count - 1 ||
+        allLevelPlan.TexturePalettePatchCount != 0 ||
+        allLevelPlan.Patches.Any(patch => patch.Kind == "environment-terrain-texture-palette") ||
         allLevelPlan.Matches.Any(item =>
             item.TargetSceneColorTableCount == 0 ||
             item.TargetTexturePaletteCount == 0 ||
@@ -31878,7 +32092,7 @@ void ReportNativeEnvironmentGradePlan()
         throw new InvalidOperationException($"All-level environment-grade coverage is incomplete: {allLevelPlan.EditedLevelCount}/{catalog.Levels.Count - 1}.");
     }
     AssertNoEnvironmentPatchOverlaps(allLevelPlan, "All-level environment-grade plan");
-    Console.WriteLine($"All-level environment grade: {allLevelPlan.EditedLevelCount} targets, {allLevelPlan.SceneColorPatchCount} near/far scene table(s), {allLevelPlan.TexturePalettePatchCount} landscape palette(s)");
+    Console.WriteLine($"All-level environment grade: {allLevelPlan.EditedLevelCount} targets, {allLevelPlan.SceneColorPatchCount} near/far scene table(s), zero packed texture writes");
 
     NativeEnvironmentGradePlan allMobyScopes = NativeEnvironmentGradePlan.MatchSkySource(donor.Key) with
     {

@@ -49,6 +49,45 @@ public static class TestLevelWarpPatch
         return int.TryParse(patch.RecordOffset[prefix.Length..], out levelId) && IsValidLevelId(levelId);
     }
 
+    /// <summary>
+    /// Applies the same exact-USA, preimage-guarded level selector used by
+    /// Create Swap Test to an already-generated disposable diagnostic image.
+    /// This method is intentionally opt-in and is never called by normal
+    /// Create BIN.
+    /// </summary>
+    public static MobySourcePatch ApplyToDisposableDiagnosticImage(
+        string imagePath,
+        LevelDefinition level)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);
+        ArgumentNullException.ThrowIfNull(level);
+        ValidateLevelId(level.LevelId);
+
+        string fullPath = Path.GetFullPath(imagePath);
+        if (!File.Exists(fullPath))
+            throw new FileNotFoundException("Disposable diagnostic image was not found.", fullPath);
+
+        using FileStream image = File.Open(
+            fullPath,
+            FileMode.Open,
+            FileAccess.ReadWrite,
+            FileShare.Read);
+        DiscLayout layout = DiscImage.DetectLayout(fullPath);
+        MobySourcePatch patch = CreateGuarded(image, layout, level);
+        VerifyBeforeWrite(image, layout);
+
+        DiscFileRecord executable = FindSupportedExecutable(image, layout);
+        DiscImage.WriteFileBytes(
+            image,
+            layout,
+            executable.Lba,
+            ExecutableFileOffset,
+            Replacement);
+        image.Flush(flushToDisk: true);
+        VerifyWritten(image, layout);
+        return patch;
+    }
+
     internal static MobySourcePatch CreateGuarded(
         FileStream sourceImage,
         DiscLayout layout,

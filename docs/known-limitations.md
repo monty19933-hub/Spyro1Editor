@@ -51,6 +51,100 @@ as PlayStation XA, preserve the interleaved stream sectors, enforce the slot's
 length limit, and verify playback in DuckStation. No game music or custom audio
 is bundled with the editor.
 
+## Terrain Texture Painting
+
+All 2,070 native texture records from all 35 levels can now be selected as donor
+art. Cross-level paint preserves the destination's gameplay material, tint, and
+collision behavior. A clicked face changes alone when its level has a genuinely
+unused static texture record available, or when the same donor art is already
+staged in a proven record that the clicked face can reuse. Otherwise the editor
+asks before replacing the shared texture ID and lists the exact number of
+affected faces. The staged-texture manager can remove individual target/donor
+pairs and undo the last texture action without rolling back later height, XY, or
+structure work.
+
+`Suggest Nearby Tiles` ranks only the source-level palette that is already
+loaded. This keeps the chooser responsive and avoids decoding the whole game for
+one suggestion request. Load another source world explicitly to ask for
+suggestions from that world's textures.
+
+The separate private-texture research launcher can append source-bound native
+texture rows in destinations admitted by the current exact one-row global-page
+packer. It supports more than one donor world in a destination and accepts a
+guarded request of up to 50 distinct appended rows. Fifty is a static-research
+ceiling, not guaranteed per-level capacity: the exact donor/material set can be
+rejected earlier by the native page allocator, while a compatible row already
+staged at the maximum can still be reused by additional faces. It can create one
+atomic multi-level BIN when the selected destinations mix fixed-tail and
+`+0x800`, `+0x1000`, or research-only `+0x2000`/`+0x2800` texture-table growth. A
+growing multi-level transaction is texture-only: object/path/chest, imported
+image, sky, name, music, or unrelated-level terrain writers are blocked until
+they can join the same offset-rebase map. Lofty Castle, Jacques, and Gnorc Cove
+remain selected-section blocked because their native page layouts still fail
+the exact alias-preserving packing proof. Shared-record replacement remains
+available there. This guarded path still needs DuckStation gameplay proof
+before it can be enabled broadly by the normal Beta V4 launcher. There are three
+exact-source exceptions. The clean-USA Artisans fixed-tail writer first proved
+one dragon-eye row, and the later T68-T71 build proved four active private rows
+in DuckStation without a crash. The clean-USA Gnasty's World sector writer then
+proved 50 assigned faces and 50 appended rows at `+0x2800` in DuckStation without
+a crash. The corrected clean-USA Wizard Peak candidate assigned four
+artifact-only animation-source diagnostic rows plus 46 appended rows to fifty
+visible faces at `+0x2000` and also worked in DuckStation. Normal V4 may
+therefore use up to four appended records in Artisans, up to 50 in Gnasty's
+World, or up to 46 appended records in Wizard Peak when the exact retail
+fingerprint, writer, and normal structural policy match. The normal editor
+continues excluding Wizard Peak's four diagnostic rows from unused-native
+allocation. A fifth Artisans row and all destinations other
+than Artisans, Gnasty's World, and Wizard Peak remain research-only.
+
+The 50-row capacity census is deliberately narrower than runtime support.
+Twenty-nine of 35 levels have safe distinct-50 seven-bit ID capacity and exact
+static table/WAD/ISO growth plans. The combined structure-plus-current-one-row
+page gate passes 28/35. Corrected Wizard Peak and Tree Tops candidates each
+passed exact 4-diagnostic + 46-appended structural final-BIN readback and
+assigned all fifty candidate targets to visible terrain faces at `+0x2000`.
+Wizard Peak worked in DuckStation and promotes its exact writer and 46 appended
+rows. Tree Tops' later focused count113 diagnostic loaded with 32 appended
+native-T12 clone rows after the normal polygon span was reduced to `0x1BF40`;
+movement, music, enemies, camera movement, and Inventory were reported working.
+The 33-row count114 artifact remains offline-proven only, and neither Tree Tops
+result proves arbitrary donor payloads, normal Create BIN integration,
+Save Fairy/flight paths, or a public destination profile. The four earlier
+diagnostic rows remain unavailable to the normal editor. High Caves, Wizard Peak, Tree Tops, Lofty
+Castle, Haunted Towers, and Gnorc Cove are hard distinct-50 ID blockers at 37,
+46, 47, 49, 39, and 33 safe appended records respectively. Jacques
+additionally fails the current one-row page pack. These are prerequisite bounds,
+not proof that 50 distinct art payloads fit simultaneously. The exact clean-USA
+Gnasty's World 50-row/50-face final BIN matched
+registered SHA-256
+`0b08545f51fe859e47c87c7c856d4c5f58bc15ae1813c6ccbcb65ca5d4668c6f` and was
+confirmed in DuckStation without a crash. That authorizes only its exact
+fingerprint and `RuntimeProvenExtended` writer, not the other levels or 50
+arbitrary donor-art payloads. Wizard Peak output SHA-256
+`27e92eeee3b1f83bb676beb3f4f8a54a35346a3d55e6e1624177d30d542880e3`
+separately authorizes its exact fingerprint, `RuntimeProvenPlus2000` writer, and
+at most 46 appended rows. Its four animation-source diagnostic rows remain
+excluded from normal allocation, and it does not authorize Tree Tops or other
+destinations.
+All 35 levels expose at least 50 editable textured
+faces when compatible rows are reused, but that alone does not prove live
+loading, VRAM behavior, LOD/culling, or simultaneous arbitrary payload fit.
+
+The packaged research launcher uses the protected project currently selected by
+the release editor when that registration validates. Saves made in either app
+therefore affect the same project; close one editor before opening the other.
+An invalid or unavailable registration leaves research mode in its package-local
+fallback and does not copy, repair, or rewrite the protected project.
+
+Seventy native destination records are rewritten by the game's animation or
+scrolling controllers. They remain visible but cannot be static paint targets in
+this build because the game would overwrite the replacement after loading the
+level. Controlled records are still valid donors: the editor and exporter use
+their exact native load-initialized appearance. Adding controller-aware animated
+or frozen-target editing requires separate runtime proof and is not silently
+approximated.
+
 ## Object Editing
 
 ### Native Movement Controls
@@ -59,8 +153,12 @@ is bundled with the editor.
 USA retail disc. Their existing fixed nodes can move, but nodes cannot be added,
 deleted, or reordered. A route whose owner identity, native properties pointer,
 node count, or original bytes no longer matches is rejected rather than
-reinterpreted. Runtime validation is still required for unusually aggressive
-route edits even when the byte-level export is safe.
+reinterpreted. Terrain snapping defaults on. Build Safety checks the complete
+forward/reverse closing seam, all sequential and owner-to-current vectors, PS1
+GTE numeric limits, and edited-node terrain clearance. Normal `Create BIN`
+currently blocks every edited route whose exact coordinate fingerprint lacks
+recorded DuckStation chase, full-loop, egg, death, and reload evidence; the
+research override cannot bypass a geometric blocker.
 
 `Spyro runs here` is limited to the 79 native dragon rescue scenes. It changes
 only the native planar angle and radius; Z remains terrain-derived. Copied or
@@ -542,19 +640,25 @@ Before promoting terrain behavior, testers need before/after in-game evidence su
 Terrain/building art uses indexed PlayStation texture pages. `Choose Texture &
 Start Painting` initially loads only the active level into a six-column gallery;
 another level is decoded only after the user explicitly loads it. Unsupported
-records remain visible as gray `BLOCKED` cards with their exact reason. The
-fast paint path is face-local. Same-level painting changes only the clicked
-face. Cross-level painting reserves a source-proven, runtime-persistent,
-otherwise-unused destination texture record, relocates the chosen donor art into
-that private slot, and remaps only the clicked face. If no safe private slot can
-hold that donor, the editor names the target texture ID and exact affected-face
-count, then asks whether to cancel or intentionally replace the shared native
-record. Cancel changes nothing; confirmation uses the same fully proof-gated
-shared replacement described below. Artisans currently references all 68 of its
-decoded native texture records, so cross-level painting there takes this explicit
-shared-replacement route rather than pretending it can allocate a private slot.
-`Return to Texture Palette` reopens the already-loaded donor gallery without
-re-decoding or unloading its previews.
+records remain visible as gray `BLOCKED` cards with their exact reason. Loaded
+donor worlds and decoded previews remain cached together for the current
+destination when either the normal chooser or `Return to Texture Palette`
+reopens the gallery. Single-click only selects a tile; double-click is required
+to enter paint mode.
+
+The fast paint path is face-local. Same-level painting changes only the clicked
+face. For cross-level painting, a scope dialog offers `Only Selected Section`
+when a source-proven, runtime-persistent, otherwise-unused destination texture
+record can hold the donor, or when that donor is already staged in another
+proven destination record. It offers `All N Linked Sections` for the shared
+native record and explicitly states that this does not mean every texture in the
+level. If no private record passes proof, selected-only is disabled with the
+exact reason. Cancel changes nothing. Artisans references all 68 decoded retail
+texture records, but its runtime-proven fixed-tail profile can append up to four
+source-bound private rows for selected-section painting in the normal editor.
+Those rows can be reused by compatible selected faces or replaced by other
+statically proven donors; allocating a fifth simultaneous private row remains
+blocked outside the research launcher.
 
 The existing shared cross-level replacement and custom color/import/paste path
 remains available through the separate `Advanced / Shared Replacement`
@@ -566,16 +670,21 @@ byte-private relocation. `Create BIN` repeats the ownership, runtime-control,
 indexed-pixel, palette, low-detail-alias, property-layout, and exact-readback
 proofs before promoting the output.
 
-There is one explicit exception to the face/property-donor requirement: the
-source audit finds 19 `nativeUnreferencedStatic` records (17 in Beast Makers,
-Icy Flight texture 11, and Peace Keepers texture 11). They can be selected as
-art-only record donors. This mode preserves the target face texture ID, raw HP
-material/semitransparency bits, descriptor ABR/alpha material controls, native
-near/fade tint, editor material label, and collision/surface behavior; it never
-fabricates a donor face runtime key or writes a terrain-property edit.
-Save/reload and Undo retain that distinction.
-The 22 face-less animation-source diagnostics and 4 controlled face-less
-destinations are not part of this exception and remain blocked.
+One destination manifest can contain textures from several donor levels. When a
+new record cannot fit alone, the exporter tries no promotion, each compatible
+single record, up to 512 deterministic two-record combinations, and finally the
+full staged set in the same atomic relocation batch. The reproduced crowded
+Artisans state succeeds through pair 48 and 54. It never treats externally owned
+or runtime-controlled bytes as free. If no proven batch fits the fixed PS1
+texture-page address space, the edit remains blocked and no partial texture
+patch is emitted.
+
+Cross-level painting accepts every complete native record as art, including
+face-backed records, face-less animation sources, and runtime-controlled records.
+It copies the donor's exact native load-initialized pixels and palettes while
+preserving the target texture ID, raw HP material/semitransparency bits,
+descriptor ABR/alpha controls, near/fade tint, editor material label, and
+collision/surface behavior. Save/reload and Undo retain that distinction.
 
 Same-level selected-face swaps use a different guarded path: the texture ID is
 changed while the target face's native mapping/control bits remain intact, and
@@ -586,12 +695,10 @@ target sector lacks enough private slots. The Artisans ground-to-damaging-water
 candidate is the retained live proof for this path; it uses the horizontal pool
 visual rather than the scrolling waterfall record.
 
-Some visible rows remain intentionally blocked: face-less records that are
-animation sources or runtime-controlled destinations, mixed or unresolved
-property variants, and target texture records controlled by native animation
-or scrolling tables. These rows are still useful for identifying all decoded
-disc textures, but the editor will not invent behavior or partially write them.
-Arbitrary custom PNG manifests are
+All complete native rows are selectable as donors. Seventy native records remain
+blocked only when used as static destinations because animation or scrolling
+controllers would overwrite the transplanted art after level load. Arbitrary
+custom PNG manifests are
 also blocked because the old fixed-layout normal/close-detail writer does not
 match the verified packed layout.
 
@@ -630,19 +737,26 @@ live runtime proof.
 
 Each level also has a separate sky-occlusion list. Reusing the target list with
 a donor sky can hide valid donor parts and produce large diagonal or rectangular
-gaps. Geometry swaps and custom imports therefore patch the supported USA
-executable to send every donor part through the renderer's normal frustum
-culling. This has a small potential performance cost compared with the original
-hand-authored lists. Recolor keeps the native occlusion path. Donor geometry and
-solid background colors are still authored around their original terrain.
-`Match Level Terrain Palette` offsets that mismatch by transforming the destination's
-own validated low-detail and high-detail scene colors, plus only texture
-palettes referenced by its landscape scene. It does not copy donor terrain or
-texture indexes. Large hue or saturation shifts automatically use one affine,
-luminance-preserving donor-color harmonization for every near/far sector and
-carry that balance into the referenced normal/distance landscape palettes.
-This reduces hard color boundaries without flattening native shading. Player,
-HUD, and gem palettes remain separate. The optional
+gaps. Geometry swaps and custom imports therefore install a scoped renderer
+helper in the supported USA executable. It sends all donor parts through normal
+frustum culling only while the edited destination or its linked homeworld portal
+copy is active; every other level replays its original occlusion-list behavior.
+Recolor keeps the native occlusion path. A flight-stage sky donor is blocked for
+a non-flight destination because its cyclorama geometry and culling were authored
+for the constrained flight camera and are not safe for a freely roaming ground
+camera. Donor geometry and solid background colors are still authored around
+their original terrain.
+
+`Match Level Terrain Palette` offsets that mismatch by comparing the
+destination's validated low-detail/high-detail scene colors and currently staged
+terrain texture colors with the donor. Texture colors are analysis input only:
+the combined match writes zero texture-page or CLUT bytes. The correction is
+applied through the destination's native scene/vertex lighting, including both
+RGB lanes in every validated high-detail entry, while preserving command bytes
+and native shading. Manual brightness, saturation, and tint are composed into
+that same vertex-lighting transform exactly once. It does not copy donor terrain
+or texture indexes. Player, HUD, gem, and staged terrain texture pixels remain
+unchanged. The optional
 `Match scenery, chests, and creatures` control changes the game's valid neutral
 material-0 lighting value per level. It does not rewrite any object-row material
 byte and never uses the reserved material slot that produced flashing or solid
@@ -655,10 +769,11 @@ scopes are not yet safe because those categories share the native material.
 The object-lighting helper also shares an executable hook/cave with the hidden
 Spring Chest research helper, so the exporter rejects that unsupported
 combination instead of overwriting either patch. The advanced strength,
-brightness, saturation, tint, and scene/palette scope controls are optional.
-High-detail terrain lighting stores two rendered RGB lanes per native entry;
-the automatic match transforms both lanes together and preserves each command
-byte so close-up Gouraud interpolation remains internally consistent.
+brightness, saturation, and tint controls are optional. Texture-palette-only
+grading is blocked: packed PS1 CLUT ranges can alias bytes that are visible
+texels in another native texture record, so a palette-only write can corrupt
+unrelated terrain art.
+
 The three original sky presets use palette art created for the editor, but they
 derive their polygon geometry from a compatible level in the user's selected
 disc at export time. Their preview images are mood references rather than exact
@@ -666,13 +781,14 @@ pixel-for-pixel renders of every target level.
 Imports are limited to 1 MB and sky edits update the playable level and its
 byte-linked homeworld portal copy together.
 
-Extreme environment matches remain beta. Dark Hollow matched to Doctor Shemp
-now preserves Spyro's own palettes and no longer corrupts nearby texture art,
-and its GPU-proven close-tree palettes and far/untextured tree color tables are
-graded together. This removes the green-at-distance and gray-up-close tree swap
-without touching Spyro's player palettes. Other drastic donor/target pairs can
-still expose an untraced level-specific scenery LOD; the exporter keeps every
-palette and scenery-color write fixed-size and non-overlapping.
+Extreme environment matches remain beta. Combined grading preserves every
+texture-page byte and applies its correction only to validated native scene and
+vertex-color records. A destination containing staged textures from several
+source levels may not converge globally to the donor's average color because one
+native lighting transform cannot independently normalize every imported palette;
+the editor warns when that limitation applies. Drastic donor/target pairs can
+also expose an untraced level-specific scenery LOD. The exporter keeps every
+scene-color write fixed-size and non-overlapping.
 
 ## Moby Names
 

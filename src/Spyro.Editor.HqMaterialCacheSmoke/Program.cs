@@ -25,6 +25,7 @@ int totalZeroWords = 0;
 int totalStpWords = 0;
 long totalPayloadBytes = 0;
 int[] totalAbrDescriptors = new int[4];
+int[] totalBitsPerPixelDescriptors = new int[2];
 Dictionary<int, int> normalSides = [];
 Dictionary<int, int> closeSides = [];
 
@@ -79,6 +80,8 @@ foreach (LevelDefinition level in levels)
         {
             Assert(descriptor.Abr == ((descriptor.RawDescriptor.Span[6] >> 5) & 3),
                 $"{level.DisplayName} texture {texture.TextureId}: descriptor-local ABR does not match the raw descriptor.");
+            Assert(descriptor.BitsPerPixel == ((descriptor.RawDescriptor.Span[6] & 0x80) != 0 ? 8 : 4),
+                $"{level.DisplayName} texture {texture.TextureId}: descriptor pixel depth does not match native TPAGE bit 7.");
             Assert(descriptor.RawWordsLittleEndian.Length == descriptor.Side * descriptor.Side * sizeof(ushort),
                 $"{level.DisplayName} texture {texture.TextureId}: raw word plane has the wrong length.");
             Assert(descriptor.ZeroWordCount == CountWords(descriptor.RawWordsLittleEndian.Span, static word => word == 0) &&
@@ -96,6 +99,17 @@ foreach (LevelDefinition level in levels)
     totalPayloadBytes += payloadBytes;
     for (int abr = 0; abr < totalAbrDescriptors.Length; abr++)
         totalAbrDescriptors[abr] += materialSet.AbrDescriptorCounts[abr];
+    for (int index = 0; index < totalBitsPerPixelDescriptors.Length; index++)
+        totalBitsPerPixelDescriptors[index] += materialSet.BitsPerPixelDescriptorCounts[index];
+    if (string.Equals(level.Key, "magiccrafters", StringComparison.Ordinal))
+    {
+        NativeTerrainHqMaterialRecordPayload correctedStone = materialSet.Textures.Single(texture => texture.TextureId == 42);
+        Assert(correctedStone.Descriptors.All(descriptor => descriptor.BitsPerPixel == 4),
+            "Magic Crafters texture 42 was not decoded as a complete native 4-bpp terrain record.");
+        Assert(correctedStone.Normal.CompositeRawWordsSha256 == "6B6E2CFD811167349FB562A61278EEF235B756725F6894588377A55A960BAFBF" &&
+               correctedStone.Close.CompositeRawWordsSha256 == correctedStone.Normal.CompositeRawWordsSha256,
+            "Magic Crafters texture 42 no longer resolves to the source-faithful stone-wall image at both native subdivision tiers.");
+    }
     rows.Add(new LevelInventory(
         level.Key,
         level.DisplayName,
@@ -106,6 +120,7 @@ foreach (LevelDefinition level in levels)
         materialSet.ZeroWordCount,
         materialSet.StpSetWordCount,
         materialSet.AbrDescriptorCounts.ToArray(),
+        materialSet.BitsPerPixelDescriptorCounts.ToArray(),
         payloadBytes,
         payloadSha256,
         materialSet.ContentSha256));
@@ -115,10 +130,12 @@ Assert(totalTextures == 2070, $"Expected 2,070 native HQ material textures, got 
 Assert(totalComposites == 4140, $"Expected 4,140 HQ composites, got {totalComposites}.");
 Assert(totalDescriptors == 41400, $"Expected 41,400 descriptor-local HQ material tiles, got {totalDescriptors}.");
 Assert(totalRawWords == 17_547_264, $"Expected 17,547,264 retained HQ PSX555/STP words, got {totalRawWords}.");
-Assert(totalZeroWords == 61_844, $"Expected 61,844 retained zero words, got {totalZeroWords}.");
-Assert(totalStpWords == 147_952, $"Expected 147,952 retained STP-set words, got {totalStpWords}.");
+Assert(totalZeroWords == 0, $"Expected no spurious transparent words after depth-aware HQ decoding, got {totalZeroWords}.");
+Assert(totalStpWords == 139_264, $"Expected 139,264 retained STP-set words, got {totalStpWords}.");
 Assert(totalAbrDescriptors.SequenceEqual([41_160, 240, 0, 0]),
     $"Expected descriptor ABR inventory 41160/240/0/0, got {string.Join('/', totalAbrDescriptors)}.");
+Assert(totalBitsPerPixelDescriptors.SequenceEqual([740, 40_660]),
+    $"Expected native 4/8-bpp HQ descriptor inventory 740/40660, got {string.Join('/', totalBitsPerPixelDescriptors)}.");
 Assert(normalSides.OrderBy(pair => pair.Key).SequenceEqual(new Dictionary<int, int> { [32] = 2070 }),
     $"Normal HQ tile-side inventory changed: {FormatCounts(normalSides)}.");
 Assert(closeSides.OrderBy(pair => pair.Key).SequenceEqual(new Dictionary<int, int> { [16] = 2022, [32] = 48 }),
@@ -128,12 +145,34 @@ string inventoryFingerprint = Convert.ToHexString(inventoryHash.GetHashAndReset(
 string payloadFingerprint = Convert.ToHexString(payloadHash.GetHashAndReset());
 string compositeFingerprint = Convert.ToHexString(compositeHash.GetHashAndReset());
 Assert(totalPayloadBytes == 35_948_048, $"Expected 35,948,048 HQ material sidecar bytes, got {totalPayloadBytes}.");
-Assert(inventoryFingerprint == "5FD88449ACAE6FB321B09EBC452787BD9F433EDD62C3D84EE245BC2D4DC0984C",
+Assert(inventoryFingerprint == "CB69331B213C45DE2B3D3D1121D046FAFDB9747C850374F40A501D01258F5484",
     $"HQ material inventory fingerprint changed: {inventoryFingerprint}.");
-Assert(payloadFingerprint == "8AFF507E352375213CFF62FEA4893EF31A7C6E8AD17287A58252812BCAD769FD",
+Assert(payloadFingerprint == "3D15828BA8CF4E09DBB83953AA2A6382FE8BFBFC8903A7B4355E648EC6D3729A",
     $"HQ material payload fingerprint changed: {payloadFingerprint}.");
-Assert(compositeFingerprint == "430BC86A238E4D5F6AB271F11A75794EE47E3730EEC32A58B625AF6AE8F5512C",
+Assert(compositeFingerprint == "B2F972245E4C7150777CD07D3420C5842B8151CDF1A9C92301AB90F24CBD6D81",
     $"HQ material composite fingerprint changed: {compositeFingerprint}.");
+
+string sourceDiscSettingsPath = Path.Combine(workspaceRoot, "_local", "settings", "source-disc.json");
+using JsonDocument sourceDiscSettings = JsonDocument.Parse(File.ReadAllBytes(sourceDiscSettingsPath));
+string sourceImagePath = sourceDiscSettings.RootElement.GetProperty("imagePath").GetString()
+    ?? throw new InvalidDataException("The source-disc settings did not retain an imagePath.");
+LevelDefinition magicCrafters = levels.Single(level =>
+    level.Key.Equals("magiccrafters", StringComparison.OrdinalIgnoreCase));
+TerrainTextureStorageIsolation correctedStoneIsolation = TerrainPatchExporter.InspectTextureStorageIsolation(
+    sourceImagePath,
+    magicCrafters,
+    targetTextureId: 42,
+    descriptorTier: "both",
+    residentTextureIds: Enumerable.Range(0, 67).Where(textureId => textureId != 42));
+Assert(correctedStoneIsolation.TargetPhysicalNibbleCount == 4160 &&
+       correctedStoneIsolation.OverlappingResidentTextureCount == 0 &&
+       correctedStoneIsolation.OverlappingPhysicalNibbleCount == 0 &&
+       correctedStoneIsolation.UnreadableResidentTextureIds.Count == 0,
+    "Magic Crafters texture 42 did not retain its isolated 4,160-nibble depth-aware physical layout.");
+Console.WriteLine(
+    $"Magic Crafters texture 42 storage: {correctedStoneIsolation.TargetPhysicalNibbleCount} target nibbles, " +
+    $"{correctedStoneIsolation.OverlappingResidentTextureCount} overlapping resident texture(s), " +
+    $"{correctedStoneIsolation.OverlappingPhysicalNibbleCount} overlapping nibble(s).");
 
 RunTamperFixtures(workspaceRoot);
 
@@ -154,12 +193,14 @@ File.WriteAllText(reportPath, JsonSerializer.Serialize(new
     zeroWordCount = totalZeroWords,
     stpSetWordCount = totalStpWords,
     abrDescriptorCounts = totalAbrDescriptors,
+    bitsPerPixelDescriptorCounts = totalBitsPerPixelDescriptors,
     normalTileSides = normalSides.OrderBy(pair => pair.Key).ToDictionary(pair => pair.Key, pair => pair.Value),
     closeTileSides = closeSides.OrderBy(pair => pair.Key).ToDictionary(pair => pair.Key, pair => pair.Value),
     payloadByteLength = totalPayloadBytes,
     inventoryFingerprint,
     payloadFingerprint,
     compositeFingerprint,
+    magicCraftersTexture42Storage = correctedStoneIsolation,
     tamperFixtures = new[]
     {
         "payload-byte-with-stale-hash",
@@ -170,6 +211,7 @@ File.WriteAllText(reportPath, JsonSerializer.Serialize(new
         "manifest-content-hash",
         "manifest-level-key",
         "manifest-preservation-flag",
+        "manifest-bits-per-pixel-counts",
         "manifest-tier-composite-hash",
         "missing-sidecar"
     },
@@ -180,6 +222,7 @@ Console.WriteLine("Native HQ PSX555/STP material cache smoke passed.");
 Console.WriteLine($"Levels/textures/composites/descriptors: {levels.Length}/{totalTextures}/{totalComposites}/{totalDescriptors}");
 Console.WriteLine($"Raw/zero/STP words: {totalRawWords}/{totalZeroWords}/{totalStpWords}");
 Console.WriteLine($"ABR descriptor counts: {string.Join('/', totalAbrDescriptors)}");
+Console.WriteLine($"4/8-bpp descriptor counts: {string.Join('/', totalBitsPerPixelDescriptors)}");
 Console.WriteLine($"Normal tile sides: {FormatCounts(normalSides)}; close tile sides: {FormatCounts(closeSides)}");
 Console.WriteLine($"Payload bytes: {totalPayloadBytes}");
 Console.WriteLine($"Inventory fingerprint: {inventoryFingerprint}");
@@ -299,6 +342,13 @@ static void RunTamperFixtures(string workspaceRoot)
     File.WriteAllText(manifestPath, manifest.ToJsonString());
     Assert(!PortableEditorCacheBuilder.TryLoadNativeTerrainHqMaterialCacheFromDirectory(fixtureRoot, out _),
         "A manifest that denied STP preservation was accepted.");
+
+    manifest = originalManifest.DeepClone();
+    manifest["nativeMaterialBitsPerPixelDescriptorCounts"]![0] =
+        manifest["nativeMaterialBitsPerPixelDescriptorCounts"]![0]!.GetValue<int>() + 1;
+    File.WriteAllText(manifestPath, manifest.ToJsonString());
+    Assert(!PortableEditorCacheBuilder.TryLoadNativeTerrainHqMaterialCacheFromDirectory(fixtureRoot, out _),
+        "A tampered 4/8-bpp descriptor inventory was accepted.");
 
     manifest = originalManifest.DeepClone();
     manifest["hqMaterials"]![0]!["normal"]!["compositeRawWordsSha256"] = new string('0', 64);
@@ -439,6 +489,7 @@ sealed record LevelInventory(
     int ZeroWordCount,
     int StpSetWordCount,
     IReadOnlyList<int> AbrDescriptorCounts,
+    IReadOnlyList<int> BitsPerPixelDescriptorCounts,
     long PayloadByteLength,
     string PayloadSha256,
     string ContentSha256);

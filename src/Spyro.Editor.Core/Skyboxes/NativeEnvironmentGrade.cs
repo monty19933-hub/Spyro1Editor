@@ -117,6 +117,65 @@ public sealed record NativeEnvironmentColorStatistics(
             MeanColorHex: $"#{r:X2}{g:X2}{b:X2}");
     }
 
+    public static NativeEnvironmentColorStatistics FromWeightedColors(
+        IEnumerable<(ColorRgba Color, long Weight)> colors)
+    {
+        (ColorRgba Color, long Weight)[] samples = colors
+            .Where(sample => sample.Weight > 0 &&
+                (sample.Color.R != 0 || sample.Color.G != 0 || sample.Color.B != 0))
+            .ToArray();
+        if (samples.Length == 0)
+            return new NativeEnvironmentColorStatistics(0, 0, 0, 0, 0, 0, 0, 0, 0, "#000000");
+
+        long totalWeight = samples.Sum(sample => sample.Weight);
+        double meanRed = samples.Sum(sample => (sample.Color.R / 255.0) * sample.Weight) / totalWeight;
+        double meanGreen = samples.Sum(sample => (sample.Color.G / 255.0) * sample.Weight) / totalWeight;
+        double meanBlue = samples.Sum(sample => (sample.Color.B / 255.0) * sample.Weight) / totalWeight;
+        double meanLuminance = samples.Sum(sample => Luminance(sample.Color) * sample.Weight) / totalWeight;
+        double meanSaturation = samples.Sum(sample => Saturation(sample.Color) * sample.Weight) / totalWeight;
+        double variance = samples.Sum(sample =>
+            Math.Pow(Luminance(sample.Color) - meanLuminance, 2) * sample.Weight) / totalWeight;
+        long deepShadowWeight = samples
+            .Where(sample => Luminance(sample.Color) < 0.12)
+            .Sum(sample => sample.Weight);
+
+        (double Luminance, long Weight)[] ordered = samples
+            .Select(sample => (Luminance(sample.Color), sample.Weight))
+            .OrderBy(sample => sample.Item1)
+            .ToArray();
+        double lowerMedian = WeightedValueAt(ordered, (totalWeight - 1) / 2);
+        double upperMedian = WeightedValueAt(ordered, totalWeight / 2);
+        double median = (lowerMedian + upperMedian) / 2.0;
+        int r = (int)Math.Round(meanRed * 255);
+        int g = (int)Math.Round(meanGreen * 255);
+        int b = (int)Math.Round(meanBlue * 255);
+        return new NativeEnvironmentColorStatistics(
+            SampleCount: totalWeight > int.MaxValue ? int.MaxValue : (int)totalWeight,
+            MeanRed: meanRed,
+            MeanGreen: meanGreen,
+            MeanBlue: meanBlue,
+            MeanLuminance: meanLuminance,
+            MedianLuminance: median,
+            MeanSaturation: meanSaturation,
+            LuminanceStandardDeviation: Math.Sqrt(variance),
+            DeepShadowPercent: deepShadowWeight * 100.0 / totalWeight,
+            MeanColorHex: $"#{r:X2}{g:X2}{b:X2}");
+    }
+
+    private static double WeightedValueAt(
+        IReadOnlyList<(double Luminance, long Weight)> ordered,
+        long zeroBasedIndex)
+    {
+        long cumulative = 0;
+        foreach ((double luminance, long weight) in ordered)
+        {
+            cumulative += weight;
+            if (zeroBasedIndex < cumulative)
+                return luminance;
+        }
+        return ordered[^1].Luminance;
+    }
+
     private static double Luminance(ColorRgba color) =>
         ((0.2126 * color.R) + (0.7152 * color.G) + (0.0722 * color.B)) / 255.0;
 
@@ -178,7 +237,11 @@ public sealed record NativeEnvironmentColorTransform(
         double projectionScale = projectedLuminance <= 0.001
             ? luminanceScale
             : luminanceScale * targetMeanLuminance / projectedLuminance;
-        double manualBrightness = normalized.BrightnessPercent / 100.0;
+        // Native textured terrain multiplies vertex RGB by its RGB555 CLUT color.
+        // Split a user-requested gain across the enabled layers so the final PS1
+        // modulation receives that gain once. Brightness 100% remains a neutral
+        // factor of 1.0; the donor/target matching scales below still apply.
+        double manualBrightness = PerLayerBrightness(normalized);
         double saturationScale = target.MeanSaturation <= 0.01
             ? 1.0
             : Math.Clamp(donor.MeanSaturation / target.MeanSaturation, 0.45, 1.65);
@@ -216,6 +279,25 @@ public sealed record NativeEnvironmentColorTransform(
             DonorMeanRed: donor.MeanRed,
             DonorMeanGreen: donor.MeanGreen,
             DonorMeanBlue: donor.MeanBlue);
+    }
+
+    private static double PerLayerBrightness(NativeEnvironmentGradePlan normalized)
+    {
+        double requestedBrightness = normalized.BrightnessPercent / 100.0;
+        int terrainColorLayerCount =
+            (normalized.GradeSceneColors ? 1 : 0) +
+            (normalized.GradeTexturePalettes ? 1 : 0);
+        int divisor = Math.Max(1, terrainColorLayerCount);
+        double factor = divisor > 1
+            ? Math.Pow(requestedBrightness, 1.0 / divisor)
+            : requestedBrightness;
+        double compounded = Math.Pow(factor, divisor);
+        if (Math.Abs(compounded - requestedBrightness) > 0.0000001 ||
+            normalized.BrightnessPercent == 100 && Math.Abs(factor - 1.0) > 0.0000001)
+        {
+            throw new InvalidOperationException("The coordinated terrain brightness factor is inconsistent with PS1 layer modulation.");
+        }
+        return factor;
     }
 
     public ColorRgba Apply(ColorRgba color)
@@ -284,7 +366,10 @@ public sealed record NativeEnvironmentColorTransform(
         int strengthPercent)
     {
         double darkening = TerrainDarkening(targetMedianLuminance, donorMedianLuminance);
-        return 0.38 * darkening * (strengthPercent / 100.0);
+        // Compression is applied to the native vertex-lighting lane only. Keep
+        // it gentle: the texture CLUT supplies the second half of the final PS1
+        // modulation contrast and is intentionally not compressed by export.
+        return 0.18 * darkening * (strengthPercent / 100.0);
     }
 
     private static double TerrainDarkening(double targetMedianLuminance, double donorMedianLuminance) =>

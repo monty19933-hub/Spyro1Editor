@@ -10,6 +10,8 @@ string dataRoot = Path.Combine(temporaryRoot, "user-data");
 string? previousWorkspace = Environment.GetEnvironmentVariable(ReleaseProjectBootstrap.WorkspaceEnvironmentVariable);
 string? previousInstall = Environment.GetEnvironmentVariable(ReleaseProjectBootstrap.InstallRootEnvironmentVariable);
 string? previousRelease = Environment.GetEnvironmentVariable(ReleaseProjectBootstrap.ReleaseEnvironmentVariable);
+string? previousResearchProjectBridge = Environment.GetEnvironmentVariable(
+    ResearchProjectWorkspaceBridge.UseCurrentReleaseProjectEnvironmentVariable);
 
 try
 {
@@ -44,6 +46,7 @@ try
     Write(Path.Combine(portableRoot, "unowned.bin"), "game image must not migrate");
 
     EditorUserDataLayout userData = new(dataRoot);
+    VerifyResearchWorkspaceBridge(temporaryRoot, portableRoot);
     Assert(userData.RootPath == Path.GetFullPath(dataRoot), "Explicit data root was not honored.");
     Assert(EditorUserDataLayout.NormalizeProjectId("default-project") == "default-project", "Safe project ID changed unexpectedly.");
     Assert(EditorUserDataLayout.NormalizeProjectId("My / Project") != EditorUserDataLayout.NormalizeProjectId("My Project"), "Lossy project IDs collided.");
@@ -540,6 +543,7 @@ try
     Console.WriteLine("PASS: support synchronization prunes retired app-owned files while preserving unowned project support files.");
     Console.WriteLine("PASS: pre-update snapshot preserves project-authored data while excluding game output, cache, and application files.");
     Console.WriteLine("PASS: release data locators remain project-local while research discovery can inspect sibling workspaces.");
+    Console.WriteLine("PASS: research mode safely opens the registered protected release project and falls back without mutation when registration is invalid.");
     Console.WriteLine($"Project: {project.RootPath}");
     Console.WriteLine($"Inventory: {first.Inventory.Count} files; migrated: {first.CopiedCount}; skipped: {first.SkippedCount}");
 }
@@ -548,6 +552,9 @@ finally
     Environment.SetEnvironmentVariable(ReleaseProjectBootstrap.WorkspaceEnvironmentVariable, previousWorkspace);
     Environment.SetEnvironmentVariable(ReleaseProjectBootstrap.InstallRootEnvironmentVariable, previousInstall);
     Environment.SetEnvironmentVariable(ReleaseProjectBootstrap.ReleaseEnvironmentVariable, previousRelease);
+    Environment.SetEnvironmentVariable(
+        ResearchProjectWorkspaceBridge.UseCurrentReleaseProjectEnvironmentVariable,
+        previousResearchProjectBridge);
     if (Directory.Exists(temporaryRoot))
         Directory.Delete(temporaryRoot, recursive: true);
 }
@@ -589,6 +596,214 @@ static async Task AssertInvalidDataAsync(Func<Task> action, string message)
         rejected = true;
     }
     Assert(rejected, message);
+}
+
+static void VerifyResearchWorkspaceBridge(string temporaryRoot, string installRoot)
+{
+    string? previousWorkspace = Environment.GetEnvironmentVariable(
+        ReleaseProjectBootstrap.WorkspaceEnvironmentVariable);
+    string? previousRelease = Environment.GetEnvironmentVariable(
+        ReleaseProjectBootstrap.ReleaseEnvironmentVariable);
+    string? previousBridge = Environment.GetEnvironmentVariable(
+        ResearchProjectWorkspaceBridge.UseCurrentReleaseProjectEnvironmentVariable);
+    string bridgeDataRoot = Path.Combine(temporaryRoot, "research-bridge-user-data");
+    EditorUserDataLayout bridgeUserData = new(
+        bridgeDataRoot,
+        Path.Combine(temporaryRoot, "research-bridge-projects"));
+    string projectRoot = Path.Combine(temporaryRoot, "Protected Research Project With Spaces");
+    string manifestPath = Path.Combine(projectRoot, "spyro-project.json");
+    string sentinelPath = Path.Combine(projectRoot, "artisans-native-edits.json");
+    string settingsPath = Path.Combine(bridgeUserData.SettingsPath, "current-project.json");
+
+    try
+    {
+        Write(
+            manifestPath,
+            System.Text.Json.JsonSerializer.Serialize(new EditorProjectManifest(
+                SchemaVersion: 1,
+                ProjectId: "protected-research-project",
+                DisplayName: "Protected Research Project",
+                CreatedAtUtc: DateTimeOffset.UtcNow,
+                LastOpenedAtUtc: DateTimeOffset.UtcNow,
+                LastEditorVersion: "Spyro Editor Beta V4",
+                MigratedFrom: "")));
+        Write(sentinelPath, "{\"savedReleaseEdit\":true}");
+        Write(Path.Combine(projectRoot, "support", "spyro-level-catalog.json"), "{}");
+        Write(Path.Combine(projectRoot, "support", "spyro-object-templates.json"), "{}");
+        Write(
+            settingsPath,
+            System.Text.Json.JsonSerializer.Serialize(new CurrentProjectSettings(
+                Version: 1,
+                ProjectId: "protected-research-project",
+                ProjectRoot: projectRoot,
+                SavedAtUtc: DateTimeOffset.UtcNow)));
+
+        Environment.SetEnvironmentVariable(
+            ResearchProjectWorkspaceBridge.UseCurrentReleaseProjectEnvironmentVariable,
+            "1");
+        Environment.SetEnvironmentVariable(
+            ReleaseProjectBootstrap.ReleaseEnvironmentVariable,
+            "0");
+        Environment.SetEnvironmentVariable(
+            ReleaseProjectBootstrap.WorkspaceEnvironmentVariable,
+            installRoot);
+        byte[] manifestBefore = File.ReadAllBytes(manifestPath);
+        byte[] sentinelBefore = File.ReadAllBytes(sentinelPath);
+        ResearchProjectWorkspaceBridgeResult accepted = ResearchProjectWorkspaceBridge.TryActivate(
+            appBaseDirectory: installRoot,
+            userData: bridgeUserData,
+            explicitInstallRoot: installRoot);
+        Assert(accepted.Enabled && accepted.Activated, $"A valid protected release project was not bridged: {accepted.Reason}");
+        Assert(
+            Environment.GetEnvironmentVariable(ReleaseProjectBootstrap.WorkspaceEnvironmentVariable) ==
+            Path.GetFullPath(projectRoot),
+            "Research mode did not select the protected release project.");
+        Assert(
+            Environment.GetEnvironmentVariable(ReleaseProjectBootstrap.ReleaseEnvironmentVariable) == "0",
+            "Selecting the protected project changed research mode into release mode.");
+        Assert(
+            manifestBefore.AsSpan().SequenceEqual(File.ReadAllBytes(manifestPath)) &&
+            sentinelBefore.AsSpan().SequenceEqual(File.ReadAllBytes(sentinelPath)),
+            "The read-only research bridge modified protected project data.");
+
+        static void ResetFallback(string installRoot) =>
+            Environment.SetEnvironmentVariable(
+                ReleaseProjectBootstrap.WorkspaceEnvironmentVariable,
+                installRoot);
+
+        static void AssertFallback(
+            ResearchProjectWorkspaceBridgeResult result,
+            string installRoot,
+            string message)
+        {
+            Assert(result.Enabled && !result.Activated, message);
+            Assert(
+                Environment.GetEnvironmentVariable(ReleaseProjectBootstrap.WorkspaceEnvironmentVariable) ==
+                installRoot,
+                "A rejected research project changed the package-workspace fallback.");
+        }
+
+        Write(settingsPath, "{not json");
+        ResetFallback(installRoot);
+        AssertFallback(
+            ResearchProjectWorkspaceBridge.TryActivate(installRoot, bridgeUserData, installRoot),
+            installRoot,
+            "Malformed current-project settings were accepted.");
+
+        Write(
+            settingsPath,
+            System.Text.Json.JsonSerializer.Serialize(new CurrentProjectSettings(
+                Version: 1,
+                ProjectId: "protected-research-project",
+                ProjectRoot: "relative-project",
+                SavedAtUtc: DateTimeOffset.UtcNow)));
+        ResetFallback(installRoot);
+        AssertFallback(
+            ResearchProjectWorkspaceBridge.TryActivate(installRoot, bridgeUserData, installRoot),
+            installRoot,
+            "A relative registered project path was accepted.");
+
+        Write(
+            settingsPath,
+            System.Text.Json.JsonSerializer.Serialize(new CurrentProjectSettings(
+                Version: 1,
+                ProjectId: "protected-research-project",
+                ProjectRoot: projectRoot,
+                SavedAtUtc: DateTimeOffset.UtcNow)));
+        Write(
+            manifestPath,
+            System.Text.Json.JsonSerializer.Serialize(new EditorProjectManifest(
+                SchemaVersion: EditorUserDataLayout.CurrentProjectSchemaVersion + 1,
+                ProjectId: "protected-research-project",
+                DisplayName: "Future Project",
+                CreatedAtUtc: DateTimeOffset.UtcNow,
+                LastOpenedAtUtc: DateTimeOffset.UtcNow,
+                LastEditorVersion: "future",
+                MigratedFrom: "")));
+        ResetFallback(installRoot);
+        AssertFallback(
+            ResearchProjectWorkspaceBridge.TryActivate(installRoot, bridgeUserData, installRoot),
+            installRoot,
+            "A future project schema was accepted by the research bridge.");
+
+        Write(
+            manifestPath,
+            System.Text.Json.JsonSerializer.Serialize(new EditorProjectManifest(
+                SchemaVersion: 1,
+                ProjectId: "different-project-id",
+                DisplayName: "Wrong Identity",
+                CreatedAtUtc: DateTimeOffset.UtcNow,
+                LastOpenedAtUtc: DateTimeOffset.UtcNow,
+                LastEditorVersion: "Spyro Editor Beta V4",
+                MigratedFrom: "")));
+        ResetFallback(installRoot);
+        AssertFallback(
+            ResearchProjectWorkspaceBridge.TryActivate(installRoot, bridgeUserData, installRoot),
+            installRoot,
+            "A mismatched project identity was accepted by the research bridge.");
+
+        File.Delete(Path.Combine(projectRoot, "support", "spyro-object-templates.json"));
+        File.WriteAllBytes(manifestPath, manifestBefore);
+        ResetFallback(installRoot);
+        AssertFallback(
+            ResearchProjectWorkspaceBridge.TryActivate(installRoot, bridgeUserData, installRoot),
+            installRoot,
+            "A project missing required support files was accepted.");
+
+        string overlappingProject = Path.Combine(installRoot, "unsafe-research-bridge-project");
+        Write(
+            Path.Combine(overlappingProject, "spyro-project.json"),
+            System.Text.Json.JsonSerializer.Serialize(new EditorProjectManifest(
+                SchemaVersion: 1,
+                ProjectId: "unsafe-research-bridge-project",
+                DisplayName: "Unsafe Project",
+                CreatedAtUtc: DateTimeOffset.UtcNow,
+                LastOpenedAtUtc: DateTimeOffset.UtcNow,
+                LastEditorVersion: "Spyro Editor Beta V4",
+                MigratedFrom: "")));
+        Write(Path.Combine(overlappingProject, "support", "spyro-level-catalog.json"), "{}");
+        Write(Path.Combine(overlappingProject, "support", "spyro-object-templates.json"), "{}");
+        Write(
+            settingsPath,
+            System.Text.Json.JsonSerializer.Serialize(new CurrentProjectSettings(
+                Version: 1,
+                ProjectId: "unsafe-research-bridge-project",
+                ProjectRoot: overlappingProject,
+                SavedAtUtc: DateTimeOffset.UtcNow)));
+        ResetFallback(installRoot);
+        AssertFallback(
+            ResearchProjectWorkspaceBridge.TryActivate(installRoot, bridgeUserData, installRoot),
+            installRoot,
+            "A project overlapping the replaceable research installation was accepted.");
+
+        File.Delete(settingsPath);
+        ResetFallback(installRoot);
+        AssertFallback(
+            ResearchProjectWorkspaceBridge.TryActivate(installRoot, bridgeUserData, installRoot),
+            installRoot,
+            "Missing current-project settings did not retain the package fallback.");
+
+        Environment.SetEnvironmentVariable(
+            ReleaseProjectBootstrap.ReleaseEnvironmentVariable,
+            "1");
+        ResetFallback(installRoot);
+        AssertFallback(
+            ResearchProjectWorkspaceBridge.TryActivate(installRoot, bridgeUserData, installRoot),
+            installRoot,
+            "The research bridge activated while the editor was in release mode.");
+    }
+    finally
+    {
+        Environment.SetEnvironmentVariable(
+            ReleaseProjectBootstrap.WorkspaceEnvironmentVariable,
+            previousWorkspace);
+        Environment.SetEnvironmentVariable(
+            ReleaseProjectBootstrap.ReleaseEnvironmentVariable,
+            previousRelease);
+        Environment.SetEnvironmentVariable(
+            ResearchProjectWorkspaceBridge.UseCurrentReleaseProjectEnvironmentVariable,
+            previousBridge);
+    }
 }
 
 static async Task VerifySymlinkEscapeProtectionAsync(

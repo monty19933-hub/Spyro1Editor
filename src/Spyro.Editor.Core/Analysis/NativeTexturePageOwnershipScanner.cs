@@ -63,6 +63,7 @@ public sealed record NativeTexturePageOwnershipReport(
     int UnknownNonZeroByteCount,
     int UnknownNonZeroRegionCount,
     string UnknownNonZeroRangesSha256,
+    IReadOnlyList<NativeTextureUnknownRangeSample> UnknownNonZeroRanges,
     IReadOnlyList<NativeTextureUnknownRangeSample> UnknownNonZeroRangeSamples,
     int UnknownUnprovenZeroByteCount,
     int ProtectedByteCount,
@@ -285,6 +286,7 @@ public static class NativeTexturePageOwnershipScanner
             UnknownNonZeroByteCount: unknown.NonZeroByteCount,
             UnknownNonZeroRegionCount: unknown.RegionCount,
             UnknownNonZeroRangesSha256: unknown.RangesSha256,
+            UnknownNonZeroRanges: unknown.Ranges,
             UnknownNonZeroRangeSamples: unknown.Samples,
             UnknownUnprovenZeroByteCount: AddressableTexturePageBytes - knownOwned - unknown.NonZeroByteCount,
             ProtectedByteCount: protectedByteCount,
@@ -541,10 +543,16 @@ public static class NativeTexturePageOwnershipScanner
             isolations.Add(isolation);
         }
 
-        NativeTexturePageOwnedRange[] releasable = isolations
-            .SelectMany(isolation => isolation.TargetExclusiveRanges)
-            .OrderBy(range => range.Offset)
-            .ToArray();
+        if (!TryBuildCollectiveTargetExclusiveRanges(
+                sourceImagePath,
+                level,
+                targets.ToHashSet(),
+                out IReadOnlyList<NativeTexturePageOwnedRange> releasable,
+                out string collectiveFailure))
+        {
+            failureReason = collectiveFailure;
+            return false;
+        }
         IReadOnlyList<NativeTexturePageOwnedRange> protectedRanges = SubtractRanges(
             ownership.ProtectedRanges,
             releasable,
@@ -568,6 +576,189 @@ public static class NativeTexturePageOwnershipScanner
                 "Only byte ranges proven exclusive to the requested target terrain records are released. Bytes shared with another decoded terrain or external consumer remain protected while the allocator independently omits only the requested target descriptors.",
                 "Source-zero space is available only because every runtime-consumer scope is closed and the proof is bound to the complete texture-page subfile hash."
             ]);
+        failureReason = "";
+        return true;
+    }
+
+    public static IReadOnlyList<int> FindTerrainTextureStorageOverlapClosure(
+        string sourceImagePath,
+        LevelDefinition level,
+        IReadOnlyList<int> targetTextureIds)
+    {
+        ArgumentNullException.ThrowIfNull(level);
+        if (!File.Exists(sourceImagePath))
+            throw new FileNotFoundException("Missing source disc image.", sourceImagePath);
+        if (targetTextureIds == null || targetTextureIds.Count == 0)
+            throw new ArgumentException("At least one target texture id is required.", nameof(targetTextureIds));
+
+        DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
+        using FileStream stream = File.OpenRead(sourceImagePath);
+        LevelAsset asset = LoadLevelAsset(stream, layout, level);
+        if (!TryReadTerrainHeader(asset.LevelData, out int textureCount, out int highTableOffset, out string failureReason))
+            throw new InvalidDataException(failureReason);
+        int[] requested = targetTextureIds.Distinct().Order().ToArray();
+        if (requested.Any(textureId => textureId < 0 || textureId >= textureCount))
+            throw new ArgumentOutOfRangeException(nameof(targetTextureIds), "A target texture id is outside the decoded terrain table.");
+
+        IReadOnlyList<NativeTexturePageOwnedRange>[] rangesByTexture =
+            new IReadOnlyList<NativeTexturePageOwnedRange>[textureCount];
+        for (int textureId = 0; textureId < textureCount; textureId++)
+        {
+            ushort[] ownership = new ushort[AddressableTexturePageBytes];
+            ScopeState lq = new("terrain-lq");
+            ScopeState leading = new("terrain-hq-leading");
+            ScopeState normal = new("terrain-hq-normal");
+            ScopeState close = new("terrain-hq-close");
+            SortedDictionary<int, int> closeSides = [];
+            int rotated = 0;
+            MarkTerrainTextureRecord(
+                asset.LevelData,
+                textureId,
+                highTableOffset,
+                ownership,
+                lq,
+                leading,
+                normal,
+                close,
+                closeSides,
+                ref rotated);
+            string? blocker = new[] { lq, leading, normal, close }
+                .SelectMany(scope => scope.Blockers.Select(value => $"{scope.Name}: {value}"))
+                .FirstOrDefault();
+            if (blocker != null)
+                throw new InvalidDataException($"Texture {textureId} ownership decode failed: {blocker}");
+            rangesByTexture[textureId] = BuildMaskRanges(
+                ownership,
+                value => value != 0,
+                $"terrain-texture-{textureId}");
+        }
+
+        HashSet<int> closure = requested.ToHashSet();
+        Queue<int> pending = new(requested);
+        while (pending.TryDequeue(out int current))
+        {
+            for (int candidate = 0; candidate < textureCount; candidate++)
+            {
+                if (closure.Contains(candidate) ||
+                    !RangesOverlap(rangesByTexture[current], rangesByTexture[candidate]))
+                {
+                    continue;
+                }
+                closure.Add(candidate);
+                pending.Enqueue(candidate);
+            }
+        }
+        return closure.Order().ToArray();
+    }
+
+    private static bool RangesOverlap(
+        IReadOnlyList<NativeTexturePageOwnedRange> first,
+        IReadOnlyList<NativeTexturePageOwnedRange> second)
+    {
+        int firstIndex = 0;
+        int secondIndex = 0;
+        while (firstIndex < first.Count && secondIndex < second.Count)
+        {
+            NativeTexturePageOwnedRange left = first[firstIndex];
+            NativeTexturePageOwnedRange right = second[secondIndex];
+            if (left.Offset < right.Offset + right.Length && right.Offset < left.Offset + left.Length)
+                return true;
+            if (left.Offset + left.Length <= right.Offset)
+                firstIndex++;
+            else
+                secondIndex++;
+        }
+        return false;
+    }
+
+    private static bool TryBuildCollectiveTargetExclusiveRanges(
+        string sourceImagePath,
+        LevelDefinition level,
+        IReadOnlySet<int> targetTextureIds,
+        out IReadOnlyList<NativeTexturePageOwnedRange> exclusiveRanges,
+        out string failureReason)
+    {
+        DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
+        using FileStream stream = File.OpenRead(sourceImagePath);
+        LevelAsset asset = LoadLevelAsset(stream, layout, level);
+        if (!TryReadTerrainHeader(asset.LevelData, out int textureCount, out int highTableOffset, out failureReason))
+        {
+            exclusiveRanges = Array.Empty<NativeTexturePageOwnedRange>();
+            return false;
+        }
+
+        ushort[] targetOwnership = new ushort[AddressableTexturePageBytes];
+        ScopeState targetLq = new("terrain-lq");
+        ScopeState targetLeading = new("terrain-hq-leading");
+        ScopeState targetNormal = new("terrain-hq-normal");
+        ScopeState targetClose = new("terrain-hq-close");
+        SortedDictionary<int, int> targetCloseSides = [];
+        int targetRotated = 0;
+        ushort[] otherOwnership = new ushort[AddressableTexturePageBytes];
+        ScopeState otherTerrainLq = new("terrain-lq");
+        ScopeState otherTerrainLeading = new("terrain-hq-leading");
+        ScopeState otherTerrainNormal = new("terrain-hq-normal");
+        ScopeState otherTerrainClose = new("terrain-hq-close");
+        SortedDictionary<int, int> otherCloseSides = [];
+        int otherRotated = 0;
+        for (int textureId = 0; textureId < textureCount; textureId++)
+        {
+            bool selected = targetTextureIds.Contains(textureId);
+            MarkTerrainTextureRecord(
+                asset.LevelData,
+                textureId,
+                highTableOffset,
+                selected ? targetOwnership : otherOwnership,
+                selected ? targetLq : otherTerrainLq,
+                selected ? targetLeading : otherTerrainLeading,
+                selected ? targetNormal : otherTerrainNormal,
+                selected ? targetClose : otherTerrainClose,
+                selected ? targetCloseSides : otherCloseSides,
+                ref (selected ? ref targetRotated : ref otherRotated));
+        }
+
+        ScopeState particles = new("particle-tables");
+        ScopeState residents = new("resident-actors-and-scenery");
+        ScopeState player = new("spyro-player");
+        ScopeState hudGlobal = new("hud-and-level-global");
+        ScopeState other = new("other-runtime-consumers");
+        DecodeParticles(asset.LevelData, otherOwnership, particles);
+        DecodeResidentModels(asset, otherOwnership, residents);
+        DecodeSharedPeteModels(asset, stream, layout, otherOwnership, player, hudGlobal);
+        DecodeSceneTiledefs(asset.Scene, otherOwnership, player, hudGlobal);
+        DecodeDragonCutsceneModels(asset, stream, layout, otherOwnership, other);
+        CloseOtherRuntimeConsumerScope(other);
+
+        ScopeState[] scopes =
+        [
+            targetLq,
+            targetLeading,
+            targetNormal,
+            targetClose,
+            otherTerrainLq,
+            otherTerrainLeading,
+            otherTerrainNormal,
+            otherTerrainClose,
+            particles,
+            residents,
+            player,
+            hudGlobal,
+            other
+        ];
+        string? blocker = scopes
+            .SelectMany(scope => scope.Blockers.Select(value => $"{scope.Name}: {value}"))
+            .FirstOrDefault();
+        if (blocker != null)
+        {
+            exclusiveRanges = Array.Empty<NativeTexturePageOwnedRange>();
+            failureReason = blocker;
+            return false;
+        }
+
+        exclusiveRanges = BuildExclusiveRanges(
+            targetOwnership,
+            otherOwnership,
+            $"terrain-textures-{string.Join("-", targetTextureIds.Order())}-decoded-exclusive");
         failureReason = "";
         return true;
     }
@@ -1896,6 +2087,7 @@ public static class NativeTexturePageOwnershipScanner
             nonZeroBytes,
             ranges.Count,
             Convert.ToHexString(SHA256.HashData(digestBytes)),
+            ranges.Select(range => new NativeTextureUnknownRangeSample(range.Offset, range.Length)).ToArray(),
             ranges.Take(32).Select(range => new NativeTextureUnknownRangeSample(range.Offset, range.Length)).ToArray());
     }
 
@@ -2065,6 +2257,7 @@ public static class NativeTexturePageOwnershipScanner
         int NonZeroByteCount,
         int RegionCount,
         string RangesSha256,
+        IReadOnlyList<NativeTextureUnknownRangeSample> Ranges,
         IReadOnlyList<NativeTextureUnknownRangeSample> Samples);
 
     private sealed record FaceRecord(int Offset, int? TextureDescriptorOffset);

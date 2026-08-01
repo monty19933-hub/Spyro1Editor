@@ -427,8 +427,8 @@ public sealed record SpecialChestBundleProfile(
 /// </summary>
 public static class SpecialChestBundleProfileRegistry
 {
-    public const string CleanUsaImageSha256 = "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37";
-    public const string ArtisansLockedChestProofOutputSha256 = "67b82ae66851d770b99d5e2d78400671268c31ad62b1815163e63324adc07d34";
+    public const string CleanUsaImageSha256 = LockedChestRuntimeBundleProfileCatalog.CleanUsaImageSha256;
+    public const string ArtisansLockedChestProofOutputSha256 = LockedChestRuntimeBundleProfileCatalog.ArtisansV2RuntimeProofOutputSha256;
 
     public static SpecialChestDiscFingerprint CleanUsaRetailDisc { get; } = new(
         Id: "spyro1-usa-retail-scus-94228",
@@ -724,25 +724,26 @@ public static class SpecialChestBundleProfileRegistry
     {
         if (family.Family == SpecialChestFamily.LockedChest && levelKey == "artisans")
         {
+            LockedChestRuntimeBundleDestinationProfile runtimeProfile = LockedChestRuntimeBundleProfileCatalog.ArtisansV2;
             return new SpecialChestBundleProfile(
-                Id: "spyro1.special-chest.locked.artisans.runtime-bundle.v2",
+                Id: runtimeProfile.Id,
                 Family: family.Family,
                 TargetLevelKey: levelKey,
                 Disc: CleanUsaRetailDisc,
                 Evidence: SpecialChestBundleEvidenceKind.RuntimeProven,
                 Availability: SpecialChestBundleAvailability.NormalCreateBinReady,
                 NativeFamilyPresent: false,
-                SourceLevelKey: "peacekeepers",
+                SourceLevelKey: runtimeProfile.SourceLevelKey,
                 ActorClosure: family.ActorClosure,
                 Dependencies: Dependencies[family.Family],
                 StructuralBudget: new(
-                    SourceRowsAdded: ArtisansNativeLockedChestRuntimeBundleComposer.SourceRuntimeCountAfter - ArtisansNativeLockedChestRuntimeBundleComposer.SourceRuntimeCountBefore,
-                    RuntimeSlotsConsumed: 6,
-                    TreasureDelta: ArtisansNativeLockedChestRuntimeBundleComposer.TreasureTargetAfter - ArtisansNativeLockedChestRuntimeBundleComposer.TreasureTargetBefore,
-                    WadGrowthBytes: 0x2000,
+                    SourceRowsAdded: runtimeProfile.AppendedSourceRowCount,
+                    RuntimeSlotsConsumed: runtimeProfile.RuntimeSlotsConsumed,
+                    TreasureDelta: runtimeProfile.TreasureDelta,
+                    WadGrowthBytes: runtimeProfile.WadGrowthBytes,
                     PointerFixupsAdded: null,
-                    RelocatesExecutable: true,
-                    MaxBundleInstances: 1,
+                    RelocatesExecutable: runtimeProfile.RelocatesExecutable,
+                    MaxBundleInstances: runtimeProfile.MaxBundleInstances,
                     Exact: true),
                 Constraints: new(
                     AtomicBundle: true,
@@ -751,15 +752,16 @@ public static class SpecialChestBundleProfileRegistry
                     RequiresCleanRetailFingerprint: true,
                     RequiresFreshRuntimeSmoke: false),
                 Declaration: BuildArtisansLockedChestDeclaration(),
-                RecipeId: ArtisansNativeLockedChestRuntimeBundleComposer.RecipeId,
-                RequiredExporterFeature: ArtisansNativeLockedChestRuntimeBundleComposer.RequiredExporterFeature,
+                RecipeId: runtimeProfile.RecipeId,
+                RequiredExporterFeature: runtimeProfile.RequiredExporterFeature,
                 EvidenceNote: "The exact Artisans V2 Key + Locked Chest bundle passed DuckStation: gold key, gated unlock, correct textures, six gems worth +10, one-shot death/retirement, and normal nearby behavior. The fixed T174-T180 allocation remains one atomic pair.",
                 RequiredWork: [],
-                RuntimeProofOutputSha256: ArtisansLockedChestProofOutputSha256);
+                RuntimeProofOutputSha256: runtimeProfile.RuntimeProofOutputSha256);
         }
 
         if (family.Family == SpecialChestFamily.LockedChest)
         {
+            bool checkedDisposableCandidate = NativeLockedChestResearchCandidateExporter.CanExport(levelKey);
             return new SpecialChestBundleProfile(
                 Id: $"spyro1.special-chest.locked.{levelKey}.candidate.v1",
                 Family: family.Family,
@@ -788,14 +790,26 @@ public static class SpecialChestBundleProfileRegistry
                     disallowOtherStructuralRelocations: true,
                     maxInstances: 1,
                     nativeFamilyPresent: false),
-                RecipeId: $"spyro1.special-chest.locked.{levelKey}.target-profile.pending",
-                RequiredExporterFeature: "",
-                EvidenceNote: $"{levelName} lacks native actor 0x00AE. The complete Artisans transplant closure is known, but its fixed addresses and T174-T180 allocation are not portable to this destination.",
-                RequiredWork:
-                [
-                    "Map destination-specific overlay, actor/model, scene/fixup, texture/CLUT, WAD-growth, executable, and source-row allocations.",
-                    "Stage a disposable exact-target candidate and pass key gate, six-gem +10 reward, one-shot cleanup, reload, and nearby-regression tests."
-                ]);
+                RecipeId: checkedDisposableCandidate
+                    ? $"spyro1.special-chest.locked.{levelKey}.disposable.checked.v1"
+                    : $"spyro1.special-chest.locked.{levelKey}.target-profile.pending",
+                RequiredExporterFeature: checkedDisposableCandidate
+                    ? nameof(NativeLockedChestResearchArtifactWriter)
+                    : "",
+                EvidenceNote: checkedDisposableCandidate
+                    ? $"{levelName} lacks the retail Key + Locked Chest pair, but now has an exact destination-specific disposable candidate with guarded overlay, actor/model, scene/fixup, private texture/CLUT, executable treasure, and final-image readback. It is still runtime-unproven and cannot enter normal Create BIN."
+                    : $"{levelName} lacks native actor 0x00AE. The complete Artisans transplant closure is known, but its fixed addresses and T174-T180 allocation are not portable to this destination.",
+                RequiredWork: checkedDisposableCandidate
+                    ?
+                    [
+                        "Pass the disposable DuckStation checklist: cold boot, gold key, locked-before-key gate, native model/texture/animation/sound, exact one-shot +10 reward, reload/re-entry persistence, and nearby-actor regression.",
+                        "After runtime proof, parameterize saved editor placement/yaw and record a final Create BIN output digest before changing this profile to normal-build-ready."
+                    ]
+                    :
+                    [
+                        "Map destination-specific overlay, actor/model, scene/fixup, texture/CLUT, WAD-growth, executable, and source-row allocations.",
+                        "Stage a disposable exact-target candidate and pass key gate, six-gem +10 reward, one-shot cleanup, reload, and nearby-regression tests."
+                    ]);
         }
 
         SpecialChestBundleEvidenceKind evidence = SpecialChestBundleEvidenceKind.DependencyClosureIncomplete;
@@ -1077,6 +1091,7 @@ public static class SpecialChestBundleProfileRegistry
 
     private static SpecialChestBundleDeclaration BuildArtisansLockedChestDeclaration()
     {
+        LockedChestRuntimeBundleDestinationProfile runtimeProfile = LockedChestRuntimeBundleProfileCatalog.ArtisansV2;
         List<SpecialChestRowDeclaration> rows =
         [
             new(
@@ -1084,7 +1099,7 @@ public static class SpecialChestBundleProfileRegistry
                 Role: "visible key root",
                 DonorLevelKey: "peacekeepers",
                 DonorTrueIndex: 78,
-                TargetTrueIndex: ArtisansNativeLockedChestRuntimeBundleComposer.KeyOutputTrueIndex,
+                TargetTrueIndex: runtimeProfile.KeyOutputTrueIndex,
                 ActorId: 0x00AD,
                 Hidden: false,
                 RowCount: 1,
@@ -1095,14 +1110,14 @@ public static class SpecialChestBundleProfileRegistry
                 Role: "visible locked-chest root",
                 DonorLevelKey: "peacekeepers",
                 DonorTrueIndex: 79,
-                TargetTrueIndex: ArtisansNativeLockedChestRuntimeBundleComposer.LockedChestOutputTrueIndex,
+                TargetTrueIndex: runtimeProfile.LockedChestOutputTrueIndex,
                 ActorId: 0x00AE,
                 Hidden: false,
                 RowCount: 1,
                 Evidence: SpecialChestComponentEvidence.RuntimeProven,
                 Note: "Saved editor Locked Chest position/yaw composes into the guarded T175 row.")
         ];
-        foreach (int targetTrueIndex in Enumerable.Range(176, 5))
+        foreach (int targetTrueIndex in runtimeProfile.RewardMarkerOutputTrueIndices)
         {
             rows.Add(new(
                 Id: $"hidden-reward-marker-t{targetTrueIndex}",

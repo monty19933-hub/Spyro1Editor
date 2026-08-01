@@ -22,6 +22,11 @@ try
         sourceCuePath,
         catalog.FindByKey("townsquare") ?? throw new InvalidOperationException("Missing Town Square catalog row."),
         tempDirectory);
+    VerifyUnsafeStoneHillPathIsBlocked(
+        sourceImagePath,
+        sourceCuePath,
+        catalog.FindByKey("stonehill") ?? throw new InvalidOperationException("Missing Stone Hill catalog row."),
+        tempDirectory);
     VerifyDragonRunToExport(
         sourceImagePath,
         sourceCuePath,
@@ -33,7 +38,9 @@ finally
     Directory.Delete(tempDirectory, recursive: true);
 }
 
-Console.WriteLine("PASS: MobySourcePatchExporter consumed saved egg-thief PathData edits as one exact 12-byte XYZ patch.");
+Console.WriteLine("PASS: normal Create BIN blocked an unproven egg-thief route with a targeted safety finding.");
+Console.WriteLine("PASS: the research override exported a geometrically safe +16/+16/+16 route edit as one exact 12-byte XYZ patch.");
+Console.WriteLine("PASS: the crash-reproducing Stone Hill T166 route was blocked on its cyclic closing-edge overflow and terrain-clearance mismatch with zero path writes.");
 Console.WriteLine("PASS: stale native path identity/preimage was rejected before a patch plan could be produced.");
 Console.WriteLine("PASS: synthetic dragon endpoint edits produced only packed +0x28/+0x2C writes and preserved +0x30.");
 Console.WriteLine("PASS: stale synthetic dragon preimages were skipped with an explicit rejection reason and no writes.");
@@ -55,13 +62,13 @@ static void VerifyNativePathExport(
     NativePathNode node = path.Nodes[0];
     node.SetRawPosition(
         checked(node.OriginalRawX + 16),
-        checked(node.OriginalRawY - 32),
-        checked(node.OriginalRawZ + 48));
+        checked(node.OriginalRawY + 16),
+        checked(node.OriginalRawZ + 16));
     Assert(
         NativeMobyPathEditStore.SaveAsync(pathManifestPath, level.DisplayName, paths).GetAwaiter().GetResult() == 1,
         "Native path store did not save exactly one route.");
 
-    MobySourcePatchPlan plan = BuildPlan(
+    MobySourcePatchPlan normalPlan = BuildPlan(
         sourceImagePath,
         sourceCuePath,
         level,
@@ -69,9 +76,35 @@ static void VerifyNativePathExport(
         pathManifestPath,
         tempDirectory,
         "townsquare-path");
-    Assert(plan.SkippedEdits.Count == 0, "Valid native path edit was skipped.");
-    Assert(plan.Patches.Count == 1, $"One native path node unexpectedly produced {plan.Patches.Count} source patches.");
-    MobySourcePatch patch = plan.Patches.Single();
+    Assert(
+        normalPlan.Patches.All(patch => patch.Kind != "native-moby-path-node-xyz"),
+        "Normal Create BIN exported an unproven native path.");
+    Assert(
+        normalPlan.SkippedEdits.Any(reason => reason.Contains("native-path-runtime-proof-required", StringComparison.OrdinalIgnoreCase)),
+        $"Normal Create BIN did not explain the native path runtime-proof gate: {string.Join(" | ", normalPlan.SkippedEdits)}");
+    MobyBuildSafetyLevelReport normalSafety =
+        MobyBuildSafetyInspector.InspectLevel(sourceImagePath, level, normalPlan);
+    AssertTargetedIssue(
+        normalSafety,
+        path.OwnerTrueIndex,
+        "native-path-runtime-proof-required",
+        MobyBuildSafetyStatus.Blocked);
+
+    MobySourcePatchPlan researchPlan = BuildPlan(
+        sourceImagePath,
+        sourceCuePath,
+        level,
+        nativeManifestPath,
+        pathManifestPath,
+        tempDirectory,
+        "townsquare-path-research",
+        allowUnprovenNativeMobyPathResearchPatches: true);
+    Assert(researchPlan.SkippedEdits.Count == 0, "Geometrically safe research path edit was skipped.");
+    MobySourcePatch[] pathPatches = researchPlan.Patches
+        .Where(candidate => candidate.Kind == "native-moby-path-node-xyz")
+        .ToArray();
+    Assert(pathPatches.Length == 1, $"One native path node unexpectedly produced {pathPatches.Length} path patches.");
+    MobySourcePatch patch = pathPatches.Single();
     Assert(patch.Kind == "native-moby-path-node-xyz", "Native path patch has the wrong kind.");
     Assert(patch.TrueIndex == path.OwnerTrueIndex, "Native path patch lost owner identity.");
     Assert(patch.ByteLength == 12, "Native path patch is not exactly three 32-bit coordinate words.");
@@ -82,6 +115,13 @@ static void VerifyNativePathExport(
     Assert(BinaryPrimitives.ReadInt32LittleEndian(after.AsSpan(0, 4)) == node.RawX, "Edited path X was not exported.");
     Assert(BinaryPrimitives.ReadInt32LittleEndian(after.AsSpan(4, 4)) == node.RawY, "Edited path Y was not exported.");
     Assert(BinaryPrimitives.ReadInt32LittleEndian(after.AsSpan(8, 4)) == node.RawZ, "Edited path Z was not exported.");
+    MobyBuildSafetyLevelReport researchSafety =
+        MobyBuildSafetyInspector.InspectLevel(sourceImagePath, level, researchPlan);
+    AssertTargetedIssue(
+        researchSafety,
+        path.OwnerTrueIndex,
+        "native-path-research-unproven",
+        MobyBuildSafetyStatus.Review);
 
     JsonObject staleRoot = JsonNode.Parse(File.ReadAllText(pathManifestPath))!.AsObject();
     JsonObject staleEdit = staleRoot["edits"]!.AsArray()[0]!.AsObject();
@@ -95,11 +135,66 @@ static void VerifyNativePathExport(
         nativeManifestPath,
         stalePathManifest,
         tempDirectory,
-        "townsquare-path-stale");
+        "townsquare-path-stale",
+        allowUnprovenNativeMobyPathResearchPatches: true);
     Assert(stalePlan.Patches.Count == 0, "A stale native path fingerprint produced source writes.");
     Assert(
         stalePlan.SkippedEdits.Any(reason => reason.Contains("original path fingerprint no longer matches", StringComparison.OrdinalIgnoreCase)),
         "A stale native path fingerprint did not produce an explicit guarded rejection.");
+}
+
+static void VerifyUnsafeStoneHillPathIsBlocked(
+    string sourceImagePath,
+    string sourceCuePath,
+    LevelDefinition level,
+    string tempDirectory)
+{
+    string nativeManifestPath = Path.Combine(tempDirectory, "stonehill-native-edits.json");
+    string pathManifestPath = Path.Combine(tempDirectory, NativeMobyPathEditStore.DefaultFileName(level.Key));
+    WriteEmptyMobyManifest(nativeManifestPath, level.DisplayName);
+
+    IReadOnlyList<NativeMobyPath> paths = EggThiefPathLocator.Locate(sourceImagePath, level);
+    NativeMobyPath path = paths.Single(nativePath => nativePath.OwnerTrueIndex == 166);
+    path.Nodes[0].SetRawPosition(177017, 117251, 23634);
+    path.Nodes[10].SetRawPosition(153751, 138235, 25027);
+    path.Nodes[11].SetRawPosition(155252, 125832, 25180);
+    path.Nodes[12].SetRawPosition(143983, 108385, 24146);
+    Assert(
+        NativeMobyPathEditStore.SaveAsync(pathManifestPath, level.DisplayName, paths).GetAwaiter().GetResult() == 1,
+        "Stone Hill unsafe-path fixture did not save exactly one route.");
+
+    MobySourcePatchPlan plan = BuildPlan(
+        sourceImagePath,
+        sourceCuePath,
+        level,
+        nativeManifestPath,
+        pathManifestPath,
+        tempDirectory,
+        "stonehill-path-unsafe",
+        allowUnprovenNativeMobyPathResearchPatches: true);
+    Assert(
+        plan.Patches.All(patch => patch.Kind != "native-moby-path-node-xyz"),
+        "Unsafe Stone Hill path produced native path writes under the research override.");
+
+    MobyBuildSafetyLevelReport safety = MobyBuildSafetyInspector.InspectLevel(sourceImagePath, level, plan);
+    AssertTargetedIssue(
+        safety,
+        path.OwnerTrueIndex,
+        "native-path-cyclic-component-overflow",
+        MobyBuildSafetyStatus.Blocked);
+    Assert(
+        safety.Issues.Any(issue =>
+            issue.Code == "native-path-node-clearance-mismatch" &&
+            issue.Status == MobyBuildSafetyStatus.Blocked &&
+            issue.EditorTrueIndex == path.OwnerTrueIndex),
+        "Stone Hill fixture did not retain its independent terrain-clearance blocker.");
+    MobyBuildSafetyIssue closingSegment = safety.Issues.First(issue =>
+        issue.Code == "native-path-cyclic-component-overflow" &&
+        issue.EditorTrueIndex == path.OwnerTrueIndex);
+    Assert(
+        closingSegment.Message.Contains("node 13 <-> node 1", StringComparison.OrdinalIgnoreCase) &&
+        closingSegment.Message.Contains("forward or in reverse", StringComparison.OrdinalIgnoreCase),
+        "Stone Hill fixture did not explain the handler's forward/reverse cyclic closing edge.");
 }
 
 static void VerifyDragonRunToExport(
@@ -384,11 +479,11 @@ static void AssertTargetedIssue(
     string code,
     MobyBuildSafetyStatus status)
 {
-    MobyBuildSafetyIssue issue = safety.Issues.Single(issue =>
+    MobyBuildSafetyIssue issue = safety.Issues.First(issue =>
         issue.Code == code &&
         issue.Status == status &&
         issue.EditorTrueIndex == ownerTrueIndex);
-    Assert(issue.CanNavigate, $"Build Safety issue '{code}' cannot navigate to dragon T{ownerTrueIndex}.");
+    Assert(issue.CanNavigate, $"Build Safety issue '{code}' cannot navigate to owner T{ownerTrueIndex}.");
 }
 
 static MobySourcePatchPlan BuildPlan(
@@ -398,7 +493,8 @@ static MobySourcePatchPlan BuildPlan(
     string nativeManifestPath,
     string pathManifestPath,
     string tempDirectory,
-    string outputName) =>
+    string outputName,
+    bool allowUnprovenNativeMobyPathResearchPatches = false) =>
     MobySourcePatchExporter.BuildPlan(
         sourceImagePath,
         sourceCuePath,
@@ -406,7 +502,8 @@ static MobySourcePatchPlan BuildPlan(
         Path.Combine(tempDirectory, $"{outputName}.cue"),
         level,
         nativeManifestPath,
-        nativeMobyPathEditsPath: pathManifestPath);
+        nativeMobyPathEditsPath: pathManifestPath,
+        allowUnprovenNativeMobyPathResearchPatches: allowUnprovenNativeMobyPathResearchPatches);
 
 static void WriteEmptyMobyManifest(string path, string levelName)
 {

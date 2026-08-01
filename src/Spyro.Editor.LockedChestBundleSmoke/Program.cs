@@ -15,8 +15,10 @@ string analysis = Path.GetFullPath(args[2]);
 string proven = Path.GetFullPath(args[3]);
 string outputDirectory = Path.GetFullPath(args[4]);
 Directory.CreateDirectory(outputDirectory);
+LockedChestRuntimeBundleDestinationProfile destinationProfile = LockedChestRuntimeBundleProfileCatalog.ArtisansV2;
+destinationProfile.Validate();
 
-ArtisansNativeLockedChestRuntimeBundleIntent baselineIntent = Intent(
+LockedChestRuntimeBundleIntent baselineIntent = Intent(
     keyX: 0x10AEC,
     keyY: 0x15185,
     keyZ: 0x1800,
@@ -25,9 +27,10 @@ ArtisansNativeLockedChestRuntimeBundleIntent baselineIntent = Intent(
     chestY: 0x15185,
     chestZ: 0x1800,
     chestYaw: 0xDC);
-ArtisansNativeLockedChestRuntimeBundleResult baseline =
-    ArtisansNativeLockedChestRuntimeBundleComposer.ApplyAndVerify(
-        new ArtisansNativeLockedChestRuntimeBundleRequest(
+LockedChestRuntimeBundleResult baseline =
+    LockedChestRuntimeBundleComposer.ApplyAndVerify(
+        new LockedChestRuntimeBundleRequest(
+            destinationProfile,
             retail,
             cue,
             Path.Combine(outputDirectory, "baseline"),
@@ -41,7 +44,7 @@ if (!string.Equals(baselineSha, provenSha, StringComparison.OrdinalIgnoreCase) |
     throw new InvalidOperationException($"Baseline equivalence failed: composer={baselineSha}; proven={provenSha}.");
 }
 
-ArtisansNativeLockedChestRuntimeBundleIntent shiftedIntent = Intent(
+LockedChestRuntimeBundleIntent shiftedIntent = Intent(
     keyX: 0x10AEC + 0x321,
     keyY: 0x15185 - 0x123,
     keyZ: 0x1800 + 0x80,
@@ -50,17 +53,19 @@ ArtisansNativeLockedChestRuntimeBundleIntent shiftedIntent = Intent(
     chestY: 0x15185 + 0x456,
     chestZ: 0x1800 + 0x100,
     chestYaw: 0xA7);
-ArtisansNativeLockedChestRuntimeBundleResult shifted =
-    ArtisansNativeLockedChestRuntimeBundleComposer.ApplyAndVerify(
-        new ArtisansNativeLockedChestRuntimeBundleRequest(
+LockedChestRuntimeBundleResult shifted =
+    LockedChestRuntimeBundleComposer.ApplyAndVerify(
+        new LockedChestRuntimeBundleRequest(
+            destinationProfile,
             retail,
             cue,
             Path.Combine(outputDirectory, "shifted"),
             analysis,
             shiftedIntent));
-ArtisansNativeLockedChestRuntimeBundleResult idempotent =
-    ArtisansNativeLockedChestRuntimeBundleComposer.ApplyAndVerify(
-        new ArtisansNativeLockedChestRuntimeBundleRequest(
+LockedChestRuntimeBundleResult idempotent =
+    LockedChestRuntimeBundleComposer.ApplyAndVerify(
+        new LockedChestRuntimeBundleRequest(
+            destinationProfile,
             shifted.OutputImagePath,
             shifted.OutputCuePath,
             Path.Combine(outputDirectory, "shifted-idempotent"),
@@ -69,7 +74,7 @@ ArtisansNativeLockedChestRuntimeBundleResult idempotent =
 string shiftedSha = Sha256File(shifted.OutputImagePath);
 string idempotentSha = Sha256File(idempotent.OutputImagePath);
 if (!string.Equals(shiftedSha, idempotentSha, StringComparison.OrdinalIgnoreCase) ||
-    !idempotent.Plan.ReusedInstalledBundle || idempotent.Plan.InstalledFresh)
+    !idempotent.ReusedInstalledBundle || idempotent.InstalledFresh)
 {
     throw new InvalidOperationException($"Installed-layout idempotence failed: first={shiftedSha}; second={idempotentSha}.");
 }
@@ -87,18 +92,33 @@ MobySourcePatchPlan sourcePlan = MobySourcePatchExporter.BuildPlan(
     Path.Combine(outputDirectory, "plan-only.cue"),
     artisans,
     editsPath);
-if (sourcePlan.ArtisansNativeLockedChestRuntimeBundle == null ||
+if (sourcePlan.LockedChestRuntimeBundle == null ||
+    sourcePlan.LockedChestRuntimeBundle.ProfileId != destinationProfile.Id ||
     sourcePlan.PatchCount != 0 ||
     sourcePlan.PackageImportPreviews.Count != 0 ||
     sourcePlan.SkippedEdits.Count != 0 ||
     sourcePlan.EditOutcomes?.Count != 2 ||
-    sourcePlan.EditOutcomes.Any(outcome => !outcome.PatchKinds.Contains("artisans-native-key-locked-chest-runtime-bundle-v2", StringComparer.OrdinalIgnoreCase)))
+    sourcePlan.EditOutcomes.Any(outcome => !outcome.PatchKinds.Contains("locked-chest-runtime-bundle", StringComparer.OrdinalIgnoreCase)))
 {
     throw new InvalidOperationException("MobySourcePatchExporter did not suppress the atomic pair into one deferred runtime-bundle intent.");
 }
+using (JsonDocument pairDocument = JsonDocument.Parse(BuildManifest(includeKey: true, includeChest: true, includeThirdEdit: false)))
+{
+    if (!LockedChestRuntimeBundleComposer.TryDetectIntent(
+            destinationProfile,
+            artisans,
+            pairDocument.RootElement.GetProperty("edits"),
+            out LockedChestRuntimeBundleIntent? detectedIntent) ||
+        detectedIntent == null ||
+        detectedIntent.ProfileId != destinationProfile.Id ||
+        detectedIntent.RewardMarkerOutputTrueIndices.SequenceEqual(destinationProfile.RewardMarkerOutputTrueIndices) == false)
+    {
+        throw new InvalidOperationException("The destination-neutral composer did not detect the checked Artisans pair/profile contract.");
+    }
+}
 
 MobyBuildSafetyLevelReport safety = MobyBuildSafetyInspector.InspectLevel(retail, artisans, sourcePlan);
-ArtisansNativeLockedChestRuntimeBundleIntent sourceIntent = sourcePlan.ArtisansNativeLockedChestRuntimeBundle;
+LockedChestRuntimeBundleIntent sourceIntent = sourcePlan.LockedChestRuntimeBundle;
 if (safety.Status != MobyBuildSafetyStatus.Review ||
     safety.PlannedRuntimeRecordCount != 181 ||
     safety.TrueAppendCount != 7 ||
@@ -107,7 +127,7 @@ if (safety.Status != MobyBuildSafetyStatus.Review ||
     safety.RuntimeSlotsConsumed != 6 ||
     safety.ComponentRepacked ||
     !safety.Issues.Any(issue =>
-        issue.Code == "artisans-native-locked-chest-runtime-bundle-v2" &&
+        issue.Code == "locked-chest-runtime-bundle" &&
         issue.EditorTrueIndex == sourceIntent.LockedChestEditorTrueIndex))
 {
     throw new InvalidOperationException($"Build safety did not report the exact proven 7-row allocation: {JsonSerializer.Serialize(safety)}");
@@ -116,10 +136,11 @@ if (safety.Status != MobyBuildSafetyStatus.Review ||
 string keyOnlyJson = BuildManifest(includeKey: true, includeChest: false, includeThirdEdit: false);
 using (JsonDocument keyOnlyDocument = JsonDocument.Parse(keyOnlyJson))
 {
-    if (ArtisansNativeLockedChestRuntimeBundleComposer.TryDetectIntent(
+    if (LockedChestRuntimeBundleComposer.TryDetectIntent(
+            destinationProfile,
             artisans,
             keyOnlyDocument.RootElement.GetProperty("edits"),
-            out ArtisansNativeLockedChestRuntimeBundleIntent? keyOnlyIntent) ||
+            out LockedChestRuntimeBundleIntent? keyOnlyIntent) ||
         keyOnlyIntent != null)
     {
         throw new InvalidOperationException("A standalone lightweight Key incorrectly activated the atomic Locked Chest bundle.");
@@ -134,7 +155,7 @@ MobySourcePatchPlan keyOnlyPlan = MobySourcePatchExporter.BuildPlan(
     Path.Combine(outputDirectory, "key-only-plan.cue"),
     artisans,
     keyOnlyEditsPath);
-if (keyOnlyPlan.ArtisansNativeLockedChestRuntimeBundle != null ||
+if (keyOnlyPlan.LockedChestRuntimeBundle != null ||
     !keyOnlyPlan.Patches.Any(patch => string.Equals(patch.Kind, "moby-record-append", StringComparison.OrdinalIgnoreCase)) ||
     !keyOnlyPlan.Patches.Any(patch => string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)) ||
     keyOnlyPlan.PackageImportPreviews.Count != 0 ||
@@ -157,9 +178,10 @@ using (FileStream other = File.Open(otherLevelEditSource, FileMode.Open, FileAcc
     editedOtherTreasureByte = (byte)(originalOtherTreasureByte ^ 0x01);
     WriteMode2FileByte(other, lba: 53875, fileOffset: 0x5FC3A, editedOtherTreasureByte);
 }
-ArtisansNativeLockedChestRuntimeBundleResult preservedOtherEdit =
-    ArtisansNativeLockedChestRuntimeBundleComposer.ApplyAndVerify(
-        new ArtisansNativeLockedChestRuntimeBundleRequest(
+LockedChestRuntimeBundleResult preservedOtherEdit =
+    LockedChestRuntimeBundleComposer.ApplyAndVerify(
+        new LockedChestRuntimeBundleRequest(
+            destinationProfile,
             otherLevelEditSource,
             cue,
             Path.Combine(outputDirectory, "other-level-in-place-preserved"),
@@ -182,8 +204,9 @@ using (FileStream incompatible = File.Open(relocatedHeaderSource, FileMode.Open,
 string incompatiblePrefix = Path.Combine(outputDirectory, "unsupported-structural-header-output");
 try
 {
-    ArtisansNativeLockedChestRuntimeBundleComposer.ApplyAndVerify(
-        new ArtisansNativeLockedChestRuntimeBundleRequest(
+    LockedChestRuntimeBundleComposer.ApplyAndVerify(
+        new LockedChestRuntimeBundleRequest(
+            destinationProfile,
             relocatedHeaderSource,
             cue,
             incompatiblePrefix,
@@ -206,7 +229,7 @@ Console.WriteLine("Structural WAD relocation conflict rejection: passed");
 Console.WriteLine("Locked Chest runtime-bundle smoke passed.");
 return 0;
 
-static ArtisansNativeLockedChestRuntimeBundleIntent Intent(
+static LockedChestRuntimeBundleIntent Intent(
     int keyX,
     int keyY,
     int keyZ,
@@ -216,6 +239,7 @@ static ArtisansNativeLockedChestRuntimeBundleIntent Intent(
     int chestZ,
     int chestYaw) =>
     new(
+        ProfileId: LockedChestRuntimeBundleProfileCatalog.ArtisansV2ProfileId,
         RecipeId: ArtisansNativeLockedChestRuntimeBundleComposer.RecipeId,
         RequiredExporterFeature: ArtisansNativeLockedChestRuntimeBundleComposer.RequiredExporterFeature,
         TargetLevelKey: ArtisansNativeLockedChestRuntimeBundleComposer.TargetLevelKey,

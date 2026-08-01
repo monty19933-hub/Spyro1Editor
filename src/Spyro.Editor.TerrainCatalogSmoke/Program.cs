@@ -141,6 +141,45 @@ if (failures.Count == 0)
     }
 }
 
+TerrainTextureSlot[] allTextureSlots = textureSlotsByLevel.Values
+    .SelectMany(slots => slots)
+    .ToArray();
+TerrainTextureSlot[] completeRawDualTierSlots = allTextureSlots
+    .Where(slot => slot.HasNormalDescriptors && slot.HasCloseDescriptors)
+    .ToArray();
+if (completeRawDualTierSlots.Length != 2_070)
+{
+    failures.Add(
+        $"The packed 8-bpp raw HQ slot validator found {completeRawDualTierSlots.Length}/2,070 complete dual-tier records; expected every decoded native record to be structurally complete.");
+}
+
+string[] actualRawIncompleteSlots = textureSlotsByLevel
+    .SelectMany(level => level.Value
+        .Where(slot => !slot.HasNormalDescriptors || !slot.HasCloseDescriptors)
+        .Select(slot => $"{LevelCatalog.NormalizeKey(level.Key)}:{slot.TextureId}"))
+    .Order(StringComparer.OrdinalIgnoreCase)
+    .ToArray();
+if (actualRawIncompleteSlots.Length > 0)
+{
+    failures.Add(
+        $"The packed 8-bpp raw HQ slot validator still rejects {actualRawIncompleteSlots.Length} record(s): {string.Join(", ", actualRawIncompleteSlots)}.");
+}
+
+TerrainTextureSlot[] malformedCompleteSlots = completeRawDualTierSlots
+    .Where(slot =>
+        slot.NormalDescriptorCount != 4 ||
+        slot.CloseDescriptorCount != 16 ||
+        string.IsNullOrWhiteSpace(slot.NormalTopologySignature) ||
+        string.IsNullOrWhiteSpace(slot.CloseTopologySignature) ||
+        string.IsNullOrWhiteSpace(slot.CombinedTopologySignature))
+    .ToArray();
+if (malformedCompleteSlots.Length > 0)
+{
+    failures.Add(
+        $"{malformedCompleteSlots.Length} complete raw HQ slot(s) lack the exact 4 normal + 16 close descriptors or a packed 8-bpp topology signature: " +
+        string.Join(", ", malformedCompleteSlots.Take(12).Select(slot => slot.TextureId)));
+}
+
 TerrainTextureCatalog? textureCatalog = null;
 if (textureInputs.Count > 0)
 {
@@ -360,6 +399,7 @@ markdown.AppendLine();
 markdown.AppendLine($"- Real source catalog: {levels.Count}/35 levels; {realmSummary}.");
 markdown.AppendLine($"- Original texture coverage: {originalPairCount} level/texture pairs across {originalFaceCount} faces; {donorVariantFaceCount} faces grouped into native donor variants and {residualFaceCount} faces retained with explicit readiness residuals.");
 markdown.AppendLine($"- Selectable ID coverage: {nativeTextureRecordCount} decoded native records plus {geometryOnlyTextureIdCount} geometry-only IDs; {unreferencedNativeTextureRecordCount} face-less records remain visible, with exactly {nativeUnreferencedStaticTextureRecordCount} genuinely native-unreferenced static art-only donors and 26 controlled/animation-source rows still blocked.");
+markdown.AppendLine($"- Raw HQ slot validation: {completeRawDualTierSlots.Length}/2,070 records have complete packed 8-bpp normal/close tiers; runtime animation/scrolling safety remains an independent gate.");
 markdown.AppendLine($"- Runtime target persistence: {runtimePersistentTextureCount} selectable IDs pass; {animationControlledTextureCount} full-record animation destinations and {scrollingControlledTextureCount} scrolling destinations are independently blocked from shared replacement.");
 markdown.AppendLine($"- Shared-target property batch: {(batchBehaviorGuard.Passed ? "passed" : "failed")} — {batchBehaviorGuard.Note}");
 markdown.AppendLine($"- Atomic readiness model: {(atomicReadinessModelPassed ? "passed" : "failed")} — art and runtime persistence remain required; face-backed donors require complete property coverage, while exact native-unreferenced static records use explicit preserve-target mode.");
@@ -388,6 +428,8 @@ await File.WriteAllTextAsync(jsonReportPath, JsonSerializer.Serialize(new
     RealmCounts = actualRealmCounts,
     OriginalLevelTexturePairCount = originalPairCount,
     NativeTextureRecordCount = nativeTextureRecordCount,
+    CompleteRawDualTierTextureRecordCount = completeRawDualTierSlots.Length,
+    RawIncompleteTextureRecords = actualRawIncompleteSlots,
     GeometryOnlyTextureIdCount = geometryOnlyTextureIdCount,
     RuntimePersistentTextureCount = runtimePersistentTextureCount,
     AnimationControlledTextureCount = animationControlledTextureCount,
@@ -409,6 +451,7 @@ await File.WriteAllTextAsync(jsonReportPath, JsonSerializer.Serialize(new
 Console.WriteLine($"Terrain catalog safety: {(failures.Count == 0 ? "PASSED" : "FAILED")}");
 Console.WriteLine($"Levels: {levels.Count}/35; original level/texture pairs: {originalPairCount}; faces: {originalFaceCount}.");
 Console.WriteLine($"Native texture records: {nativeTextureRecordCount}; unreferenced but selectable: {unreferencedNativeTextureRecordCount}.");
+Console.WriteLine($"Complete packed 8-bpp raw HQ records: {completeRawDualTierSlots.Length}/{nativeTextureRecordCount}.");
 Console.WriteLine($"Native variant faces: {donorVariantFaceCount}; explicit residual faces: {residualFaceCount}.");
 Console.WriteLine($"Report: {markdownReportPath}");
 if (failures.Count > 0)

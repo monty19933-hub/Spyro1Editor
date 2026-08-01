@@ -53,7 +53,7 @@ RELEASE_NAME="$1"
 [[ "$RELEASE_NAME" =~ ^[A-Za-z0-9._-]+$ ]] || fail "Release name contains an unsafe path character: $RELEASE_NAME"
 
 [[ "$(uname -s)" == "Darwin" ]] || fail "Release verification requires macOS for Developer ID and notarization checks."
-for command_name in awk cmp codesign diff dotnet file find plutil python3 rg sed shasum spctl strings unzip xattr xcrun; do
+for command_name in awk cmp codesign diff dotnet file find otool plutil python3 rg sed shasum spctl strings unzip vtool xattr xcrun; do
     require_command "$command_name"
 done
 if [[ "$ALLOW_UNNOTARIZED" == "0" && "$ALLOW_ADHOC" == "0" ]]; then
@@ -437,6 +437,71 @@ PY
     fi
 }
 
+validate_mac_dependency_closure() {
+    local app_path="$1"
+    local phase="$2"
+    local candidate
+    local install_id
+    local dependency
+    local deployment_target
+    local minimum_version
+
+    deployment_target="$(plutil -extract LSMinimumSystemVersion raw "$app_path/Contents/Info.plist")"
+
+    while IFS= read -r -d '' candidate; do
+        [[ "$(file -b "$candidate")" == *Mach-O* ]] || continue
+        install_id="$(otool -D "$candidate" 2>/dev/null | tail -n +2 | head -n 1 | sed 's/^[[:space:]]*//')"
+        while IFS= read -r dependency; do
+            dependency="$(printf '%s\n' "$dependency" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*(compatibility version.*$//')"
+            # Universal Mach-O output repeats the inspected file as an
+            # architecture header between dependency lists. It is metadata,
+            # not an absolute load command.
+            [[ "$dependency" == *" (architecture "*"):" ]] && continue
+            [[ -n "$dependency" && "$dependency" != "$install_id" ]] || continue
+            case "$dependency" in
+                /System/Library/*|/usr/lib/*|@loader_path/*|@executable_path/*|@rpath/*)
+                    ;;
+                /*)
+                    fail "$phase macOS payload retains an external host dependency: $candidate -> $dependency"
+                    ;;
+            esac
+        done < <(otool -L "$candidate" | tail -n +2)
+
+        while IFS= read -r minimum_version; do
+            [[ -n "$minimum_version" ]] || continue
+            python3 - "$minimum_version" "$deployment_target" <<'PY' || \
+                fail "$phase macOS payload requires macOS $minimum_version, newer than the advertised $deployment_target minimum: $candidate"
+import sys
+
+def version_tuple(value):
+    return tuple(int(part) for part in value.split("."))
+
+actual = version_tuple(sys.argv[1])
+advertised = version_tuple(sys.argv[2])
+width = max(len(actual), len(advertised))
+actual += (0,) * (width - len(actual))
+advertised += (0,) * (width - len(advertised))
+raise SystemExit(0 if actual <= advertised else 1)
+PY
+        done < <(vtool -show-build "$candidate" 2>/dev/null | awk '$1 == "minos" { print $2 }')
+    done < <(find "$app_path" -type f -print0)
+}
+
+run_package_compression_smoke() {
+    local executable="$1"
+    local phase="$2"
+    local output
+
+    if ! output="$("$executable" --package-native-compression-smoke 2>&1)"; then
+        printf '%s\n' "$output" >&2
+        fail "$phase packaged native compression smoke failed."
+    fi
+    printf '%s\n' "$output" | rg -Fx 'PASS: packaged native PNG compression round trip.' >/dev/null || {
+        printf '%s\n' "$output" >&2
+        fail "$phase packaged native compression smoke did not report its exact success marker."
+    }
+}
+
 validate_archive "$MAC_ZIP" "$RELEASE_NAME-osx-arm64" 1
 validate_archive "$WIN_ZIP" "$RELEASE_NAME-win-x64"
 validate_package_tree "$MAC_DIR"
@@ -461,6 +526,8 @@ if command -v plutil >/dev/null 2>&1; then
         fail "macOS CFBundleIdentifier is not local.spyro.editor."
 fi
 validate_mac_distribution "$MAC_APP" "Built"
+validate_mac_dependency_closure "$MAC_APP" "Built"
+run_package_compression_smoke "$MAC_EXE" "Built"
 
 WIN_LAUNCHER="$WIN_DIR/Launch Spyro Editor.bat"
 require_file "$WIN_LAUNCHER"
@@ -505,8 +572,8 @@ compare_packaged_file() {
         fail "Windows package has stale support file: $package_relative_path"
 }
 
-compare_packaged_file "$ROOT_DIR/docs/release-user-guide.md" "support/docs/release-user-guide.md"
-compare_packaged_file "$ROOT_DIR/docs/known-limitations.md" "support/docs/known-limitations.md"
+compare_packaged_file "$ROOT_DIR/docs/public-user-guide.md" "support/docs/release-user-guide.md"
+compare_packaged_file "$ROOT_DIR/docs/public-known-limitations.md" "support/docs/known-limitations.md"
 compare_packaged_file "$ROOT_DIR/spyro-level-catalog.json" "support/spyro-level-catalog.json"
 compare_packaged_file "$ROOT_DIR/spyro-object-templates.json" "support/spyro-object-templates.json"
 compare_packaged_file "$ROOT_DIR/CHANGELOG.md" "CHANGELOG.md"
@@ -548,8 +615,8 @@ compare_internal_mac_support_file() {
         fail "macOS app-internal support file is stale: $package_relative_path"
 }
 
-compare_internal_mac_support_file "$ROOT_DIR/docs/release-user-guide.md" "docs/release-user-guide.md"
-compare_internal_mac_support_file "$ROOT_DIR/docs/known-limitations.md" "docs/known-limitations.md"
+compare_internal_mac_support_file "$ROOT_DIR/docs/public-user-guide.md" "docs/release-user-guide.md"
+compare_internal_mac_support_file "$ROOT_DIR/docs/public-known-limitations.md" "docs/known-limitations.md"
 compare_internal_mac_support_file "$ROOT_DIR/spyro-level-catalog.json" "spyro-level-catalog.json"
 compare_internal_mac_support_file "$ROOT_DIR/spyro-object-templates.json" "spyro-object-templates.json"
 [[ ! -d "$MAC_APP_DIR/support/app" ]] || fail "macOS app-internal support copy unexpectedly contains application binaries."
@@ -586,6 +653,22 @@ for gem_icon in gem-red.png gem-green.png gem-blue.png gem-yellow.png gem-purple
     cmp "$SOURCE_GEM_ICON" "$WIN_APP_DIR/Assets/MobyIcons/$gem_icon" >/dev/null || \
         fail "Windows runtime gem icon differs from the Spyro 2-derived source asset: $gem_icon"
 done
+for object_gallery_icon in \
+    object-gallery-atlas-core.png \
+    object-gallery-atlas-enemies-a.png \
+    object-gallery-atlas-enemies-b.png \
+    object-gallery-atlas-enemies-c.png \
+    object-gallery-atlas-scenery-d.png \
+    object-gallery-atlas-scenery-e.png; do
+    SOURCE_OBJECT_GALLERY_ICON="$ROOT_DIR/src/Spyro.Editor.App/Assets/ObjectGalleryIcons/$object_gallery_icon"
+    require_file "$SOURCE_OBJECT_GALLERY_ICON"
+    require_file "$MAC_APP_DIR/Assets/ObjectGalleryIcons/$object_gallery_icon"
+    require_file "$WIN_APP_DIR/Assets/ObjectGalleryIcons/$object_gallery_icon"
+    cmp "$SOURCE_OBJECT_GALLERY_ICON" "$MAC_APP_DIR/Assets/ObjectGalleryIcons/$object_gallery_icon" >/dev/null || \
+        fail "macOS runtime object-gallery atlas differs from the source asset: $object_gallery_icon"
+    cmp "$SOURCE_OBJECT_GALLERY_ICON" "$WIN_APP_DIR/Assets/ObjectGalleryIcons/$object_gallery_icon" >/dev/null || \
+        fail "Windows runtime object-gallery atlas differs from the source asset: $object_gallery_icon"
+done
 
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/spyro-editor-package-verify.XXXXXX")"
 trap 'rm -rf "$TEMP_DIR"' EXIT
@@ -609,6 +692,10 @@ diff -qr "$WIN_DIR" "$WIN_ROUNDTRIP_DIR" >/dev/null || fail "Windows archive rou
 [[ -x "$MAC_ROUNDTRIP_DIR/Spyro Editor.app/Contents/MacOS/Spyro.Editor.App" ]] || \
     fail "macOS archive lost the app executable bit."
 validate_mac_distribution "$MAC_ROUNDTRIP_DIR/Spyro Editor.app" "Archive-roundtrip"
+validate_mac_dependency_closure "$MAC_ROUNDTRIP_DIR/Spyro Editor.app" "Archive-roundtrip"
+run_package_compression_smoke \
+    "$MAC_ROUNDTRIP_DIR/Spyro Editor.app/Contents/MacOS/Spyro.Editor.App" \
+    "Archive-roundtrip"
 
 echo "Package verification passed for $RELEASE_NAME."
 shasum -a 256 "$MAC_ZIP" "$WIN_ZIP"

@@ -98,7 +98,8 @@ public sealed record NativeEnvironmentGradeBatchPatchRequest(
     string OutputPrefix,
     LevelCatalog Catalog,
     IReadOnlyList<NativeEnvironmentGradeBatchEdit> Edits,
-    bool WriteImage);
+    bool WriteImage,
+    bool ConsumeDisposableSourceImage = false);
 
 public sealed record NativeEnvironmentGradePatchResult(
     string OutputImagePath,
@@ -232,7 +233,10 @@ public static class NativeEnvironmentGradeExporter
         NativeEnvironmentGradeBatchPatchRequest request,
         CancellationToken cancellationToken = default)
     {
-        (NativeEnvironmentGradePatchPlan plan, IReadOnlyList<GradePayload> payloads) = BuildPlanAndPayloads(request);
+        (NativeEnvironmentGradePatchPlan plan, IReadOnlyList<GradePayload> payloads) =
+            await Task.Run(
+                () => BuildPlanAndPayloads(request),
+                cancellationToken);
         string outputPlanPath = $"{request.OutputPrefix}.environment-grade-patch-plan.json";
         ValidateOutputPaths(request, plan, outputPlanPath);
         Directory.CreateDirectory(Path.GetDirectoryName(outputPlanPath) ?? ".");
@@ -255,7 +259,11 @@ public static class NativeEnvironmentGradeExporter
 
             if (wroteImage)
             {
-                File.Copy(request.SourceImagePath, temporaryImagePath, true);
+                await DiscImageWorkingCopy.StageAsync(
+                    request.SourceImagePath,
+                    temporaryImagePath,
+                    request.ConsumeDisposableSourceImage,
+                    cancellationToken);
                 DiscLayout layout = DiscImage.DetectLayout(temporaryImagePath);
                 await using (FileStream image = File.Open(temporaryImagePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
                 {
@@ -445,6 +453,35 @@ public static class NativeEnvironmentGradeExporter
         return BuildMatch(target, donor, targetData, donorData, grade.Normalize(donor.Key));
     }
 
+    public static NativeEnvironmentColorTransform BuildPreviewSceneTransform(
+        NativeEnvironmentGradeMatch match,
+        NativeEnvironmentGradePlan grade)
+    {
+        ArgumentNullException.ThrowIfNull(match);
+        NativeEnvironmentGradePlan normalized = grade.Normalize(match.DonorLevelKey);
+        if (!normalized.GradeSceneColors)
+        {
+            if (normalized.GradeTexturePalettes)
+            {
+                throw new InvalidOperationException(
+                    "Texture-palette-only environment preview is blocked because packed CLUT ownership is not proven.");
+            }
+            throw new InvalidOperationException("The environment preview does not have scene lighting enabled.");
+        }
+
+        return normalized.GradeTexturePalettes
+            ? ComposeTextureMatchIntoSceneTransform(
+                match.TargetSceneColors,
+                match.DonorSceneColors,
+                match.TargetTextureColors,
+                match.DonorTextureColors,
+                normalized)
+            : NativeEnvironmentColorTransform.Build(
+                match.TargetSceneColors,
+                match.DonorSceneColors,
+                normalized);
+    }
+
     private static (NativeEnvironmentGradePatchPlan Plan, IReadOnlyList<GradePayload> Payloads) BuildPlanAndPayloads(
         NativeEnvironmentGradeBatchPatchRequest request)
     {
@@ -492,8 +529,6 @@ public static class NativeEnvironmentGradeExporter
 
             LevelColorData targetData = GetColorData(edit.Level);
             LevelColorData donorData = GetColorData(donor);
-            if (grade.GradeTexturePalettes)
-                ValidateDarkHollowCloseTreePaletteSources(edit.Level, targetData.TexturePalettes);
             NativeEnvironmentGradeMatch match = BuildMatch(edit.Level, donor, targetData, donorData, grade);
             matches.Add(match);
 
@@ -551,20 +586,6 @@ public static class NativeEnvironmentGradeExporter
                 }
             }
 
-            if (grade.GradeTexturePalettes)
-            {
-                AddTexturePalettePatches(
-                    edit.Level,
-                    donor,
-                    assets.WadLba,
-                    targetData,
-                    match.TextureTransform,
-                    discLayout,
-                    writtenRanges,
-                    patches,
-                    payloads);
-            }
-
             if (grade.GradeAnyMobys)
             {
                 if (edit.Level.LevelId is < 0 or > MaxLevelId)
@@ -609,21 +630,20 @@ public static class NativeEnvironmentGradeExporter
             [
                 "The grade transforms the target level's own color tables; donor geometry, texture indexes, actor models, and behavior packages are not copied.",
                 "Low-detail and high-detail scene colors use one identical transform and smoothing curve so runtime terrain-sector LOD swaps cannot introduce a new hue or brightness seam.",
-                "Large donor hue or saturation shifts use one luminance-preserving affine harmonization across every low-detail and high-detail sector, reducing source-sector color breaks without flattening native shading.",
-                "Drastic shifts fully normalize both scene and texture chroma because PS1 texture and vertex colors multiply at render time; the target level's native luminance, shading, and texture detail remain intact.",
-                "Advanced tint strength is divided across scene and texture layers so their multiplicative runtime result matches the requested tint instead of applying it twice; native object lighting keeps its independently selected material grade.",
+                "Scene-only donor shifts use one luminance-preserving affine harmonization across every low-detail and high-detail sector, reducing source-sector color breaks without flattening native shading.",
+                "When landscape texture matching is requested with scene lighting, the donor's PS1 texture-times-vertex result is composed entirely into native scene/vertex RGB; packed texture pages are read-only.",
+                "Advanced brightness, saturation, and tint are applied once in that composed vertex transform; native object lighting keeps its independently selected material grade.",
                 "Both contiguous four-byte high-detail color banks are transformed; their command bytes remain unchanged.",
-                "Landscape palettes use the same shadow-protected tonal curve to avoid exposing large terrain triangles after aggressive dark grades.",
+                "Combined scene-and-texture matching disables tonal compression after applying the direct composite channel ratio, preserving transplanted texture detail and native vertex contrast.",
                 "Both low-detail and high-detail scene color tables are patched only when every native color-command byte validates as 0x00 or 0x30.",
-                "Texture grading covers only packed PS1 CLUT sources referenced by the decoded scene and exact Dark Hollow LOD rows proven by GPU captures; the legacy palette-code-times-32 address is never written because it can point into texture pixels.",
-                "Four-bit landscape CLUTs write exactly 32 bytes and eight-bit CLUTs write exactly 512 bytes, preventing palette transforms from spilling into neighboring texture data.",
-                "Dark Hollow inferred 512-byte rows are reduced to 32 bytes when another decoded palette starts inside the range; only GPU-proven 8-bit rows retain 512-byte writes.",
-                "GPU-captured Spyro player palettes are explicitly excluded from Dark Hollow environment grading.",
-                "Dark Hollow's GPU-proven close-tree palettes and three far/untextured tree color tables receive the same grade, preventing green/gray color changes across scenery LOD distance swaps.",
+                "Decoded CLUT ranges can alias visible packed texel storage after native relocation, so environment export emits zero texture-palette patches and preserves every texture-page byte exactly.",
+                "Palette-only grading is blocked until exclusive packed-range ownership can be proven; a combined request uses read-only visible-texel statistics to guide its scene transform.",
+                "Dark Hollow's three far/untextured RGB0 scenery tables follow the safe scene grade; packed close-tree and player texture pages remain byte-identical.",
                 "Object lighting changes the game's existing neutral material-0 entry per level; no object row is rerouted and the invalid reserved-material path is never used.",
                 "Native material-1 and material-2 objects keep their original special lighting, preserving gems and other emissive or reflective objects.",
                 "Every ungraded level id explicitly restores neutral material 0x00808080 so an environment grade cannot leak across a portal transition.",
-                "Transparent PS1 palette entries and semi-transparency bits are preserved.",
+                "Transparent PS1 texels, RGB555 values, and semi-transparency bits are preserved because environment grading never writes packed texture pages.",
+                "Texture statistics are weighted by visible texel use from the current staged image, including already-transplanted cross-level palettes, rather than assuming the destination's retail palette set.",
                 "Every patch is fixed-size, so WAD layout and executable locations remain unchanged before any separate oversized-sky relocation step."
             ]);
         return (plan, payloads);
@@ -632,16 +652,13 @@ public static class NativeEnvironmentGradeExporter
     private static void ValidateGradeScope(LevelDefinition target, NativeEnvironmentGradePlan grade)
     {
         NativeEnvironmentGradePlan normalized = grade.Normalize();
-        if (!normalized.Enabled ||
-            !string.Equals(LevelCatalog.NormalizeKey(target.Key), "darkhollow", StringComparison.OrdinalIgnoreCase) ||
-            normalized.GradeSceneColors == normalized.GradeTexturePalettes)
-        {
+        if (!normalized.Enabled || !normalized.GradeTexturePalettes || normalized.GradeSceneColors)
             return;
-        }
 
         throw new InvalidOperationException(
-            "Dark Hollow's Landscape lighting and Landscape texture palettes must be enabled together. " +
-            "Its close-tree palettes and far/untextured RGB0 tables are one atomic LOD grade.");
+            $"{target.DisplayName}'s texture-palette-only environment grade is blocked. " +
+            "Decoded packed CLUT ranges can alias visible texel storage, and exclusive ownership has not been proven. " +
+            "Enable Landscape lighting as well to compose the requested PS1 modulation match into safe native scene colors without changing any texture-page byte.");
     }
 
     private static NativeEnvironmentGradeMatch BuildMatch(
@@ -657,37 +674,47 @@ public static class NativeEnvironmentGradeExporter
         NativeEnvironmentColorStatistics donorLowDetailScene = SceneColorStatistics(donorData, "lp");
         NativeEnvironmentColorStatistics targetHighDetailScene = SceneColorStatistics(targetData, "hp");
         NativeEnvironmentColorStatistics donorHighDetailScene = SceneColorStatistics(donorData, "hp");
-        NativeEnvironmentColorStatistics targetTextures = NativeEnvironmentColorStatistics.FromColors(targetData.TextureColors);
-        NativeEnvironmentColorStatistics donorTextures = NativeEnvironmentColorStatistics.FromColors(donorData.TextureColors);
-        NativeEnvironmentColorTransform sceneTransform = NativeEnvironmentColorTransform.Build(targetScene, donorScene, grade);
-        NativeEnvironmentColorTransform textureTransform = targetTextures.SampleCount > 0 && donorTextures.SampleCount > 0
-            ? NativeEnvironmentColorTransform.Build(targetTextures, donorTextures, grade)
-            : sceneTransform;
-        if (grade.GradeSceneColors && grade.GradeTexturePalettes && sceneTransform.HarmonizationPercent >= 20)
+        // Use the colors actually referenced by the current stage image. This is
+        // intentionally evaluated after earlier terrain/texture steps, so a level
+        // containing several transplanted donor palettes is not analyzed as the
+        // untouched retail destination palette.
+        NativeEnvironmentColorStatistics targetTextures = targetData.VisibleTextureColors.SampleCount > 0
+            ? targetData.VisibleTextureColors
+            : NativeEnvironmentColorStatistics.FromColors(targetData.TextureColors);
+        NativeEnvironmentColorStatistics donorTextures = donorData.VisibleTextureColors.SampleCount > 0
+            ? donorData.VisibleTextureColors
+            : NativeEnvironmentColorStatistics.FromColors(donorData.TextureColors);
+        NativeEnvironmentColorTransform sceneTransform;
+        NativeEnvironmentColorTransform textureTransform = ImmutableTextureTransform(targetTextures);
+        if (grade.GradeSceneColors && grade.GradeTexturePalettes)
         {
-            int sharedHarmonizationFloor = sceneTransform.HarmonizationPercent >= 70
-                ? 100
-                : sceneTransform.HarmonizationPercent;
-            sceneTransform = sceneTransform with
+            if (targetData.VisibleTextureColors.SampleCount == 0 || donorData.VisibleTextureColors.SampleCount == 0)
             {
-                HarmonizationPercent = Math.Max(
-                    sceneTransform.HarmonizationPercent,
-                    sharedHarmonizationFloor)
-            };
-            textureTransform = textureTransform with
-            {
-                HarmonizationPercent = Math.Max(
-                    textureTransform.HarmonizationPercent,
-                    sharedHarmonizationFloor)
-            };
+                throw new InvalidOperationException(
+                    $"{target.DisplayName}'s combined environment match needs decoded visible texels for both " +
+                    $"{target.DisplayName} and {donor.DisplayName}. Texture-page writes are disabled, so the " +
+                    "missing modulation statistics cannot be replaced with an inferred CLUT range.");
+            }
+
+            sceneTransform = ComposeTextureMatchIntoSceneTransform(
+                targetScene,
+                donorScene,
+                targetTextures,
+                donorTextures,
+                grade);
         }
-        NativeEnvironmentColorTransform mobyTransform = sceneTransform;
-        if (grade.GradeSceneColors && grade.GradeTexturePalettes && grade.TintStrengthPercent > 0)
+        else
         {
-            int perLayerTint = CompoundLayerTintStrength(grade.TintStrengthPercent, 2);
-            sceneTransform = sceneTransform with { TintStrengthPercent = perLayerTint };
-            textureTransform = textureTransform with { TintStrengthPercent = perLayerTint };
+            sceneTransform = NativeEnvironmentColorTransform.Build(targetScene, donorScene, grade);
         }
+        NativeEnvironmentColorTransform mobyTransform = NativeEnvironmentColorTransform.Build(
+            targetScene,
+            donorScene,
+            grade with
+            {
+                GradeSceneColors = true,
+                GradeTexturePalettes = false
+            });
         ColorRgba mobyMaterial = mobyTransform.Apply(ColorRgba.FromRgb(128, 128, 128));
         return new NativeEnvironmentGradeMatch(
             TargetLevelKey: target.Key,
@@ -725,12 +752,113 @@ public static class NativeEnvironmentGradeExporter
             TextureTransform: textureTransform);
     }
 
-    private static int CompoundLayerTintStrength(int totalTintPercent, int layerCount)
+    private static NativeEnvironmentColorTransform ComposeTextureMatchIntoSceneTransform(
+        NativeEnvironmentColorStatistics targetScene,
+        NativeEnvironmentColorStatistics donorScene,
+        NativeEnvironmentColorStatistics targetTextures,
+        NativeEnvironmentColorStatistics donorTextures,
+        NativeEnvironmentGradePlan grade)
     {
-        double total = Math.Clamp(totalTintPercent, 0, 100) / 100.0;
-        int count = Math.Max(1, layerCount);
-        return (int)Math.Round((1.0 - Math.Pow(1.0 - total, 1.0 / count)) * 100.0);
+        NativeEnvironmentGradePlan normalized = grade.Normalize();
+        if (targetTextures.SampleCount == 0 || donorTextures.SampleCount == 0)
+            throw new InvalidOperationException("Safe composite environment matching needs decoded visible texture statistics.");
+
+        // The PS1 output channel is proportional to vertex * texture. Texture
+        // pages are immutable here, so fold the donor/target composite ratio
+        // directly into the target vertex channel. This maps the mean composite
+        // exactly without inventing or writing a CLUT range.
+        double brightness = normalized.BrightnessPercent / 100.0;
+        double redScale = CompositeChannelScale(
+            targetScene.MeanRed,
+            targetTextures.MeanRed,
+            donorScene.MeanRed,
+            donorTextures.MeanRed,
+            brightness);
+        double greenScale = CompositeChannelScale(
+            targetScene.MeanGreen,
+            targetTextures.MeanGreen,
+            donorScene.MeanGreen,
+            donorTextures.MeanGreen,
+            brightness);
+        double blueScale = CompositeChannelScale(
+            targetScene.MeanBlue,
+            targetTextures.MeanBlue,
+            donorScene.MeanBlue,
+            donorTextures.MeanBlue,
+            brightness);
+        double effectiveDonorRed = EffectiveDonorVertexMean(
+            donorScene.MeanRed,
+            donorTextures.MeanRed,
+            targetTextures.MeanRed);
+        double effectiveDonorGreen = EffectiveDonorVertexMean(
+            donorScene.MeanGreen,
+            donorTextures.MeanGreen,
+            targetTextures.MeanGreen);
+        double effectiveDonorBlue = EffectiveDonorVertexMean(
+            donorScene.MeanBlue,
+            donorTextures.MeanBlue,
+            targetTextures.MeanBlue);
+
+        return new NativeEnvironmentColorTransform(
+            RedScale: redScale,
+            GreenScale: greenScale,
+            BlueScale: blueScale,
+            // The channel ratios already encode the donor's automatic chroma.
+            // Only the user's explicit advanced saturation is applied on top.
+            SaturationScale: normalized.SaturationPercent / 100.0,
+            StrengthPercent: normalized.StrengthPercent,
+            TintHex: normalized.TintHex,
+            TintStrengthPercent: normalized.TintStrengthPercent,
+            HarmonizationPercent: 0,
+            // Equal medians intentionally disable TerrainCompression. Applying
+            // it after an exact composite ratio would over-darken and flatten
+            // the source shading that the untouched texture still supplies.
+            TargetMedianLuminance: targetScene.MedianLuminance,
+            DonorMedianLuminance: targetScene.MedianLuminance,
+            DonorMeanRed: effectiveDonorRed,
+            DonorMeanGreen: effectiveDonorGreen,
+            DonorMeanBlue: effectiveDonorBlue);
     }
+
+    private static double CompositeChannelScale(
+        double targetScene,
+        double targetTexture,
+        double donorScene,
+        double donorTexture,
+        double brightness)
+    {
+        double targetComposite = targetScene * targetTexture;
+        double donorComposite = donorScene * donorTexture;
+        if (targetComposite <= 0.000001)
+            return donorComposite <= 0.000001 ? 1.0 : 4.5;
+        return Math.Clamp((donorComposite / targetComposite) * brightness, 0.12, 4.5);
+    }
+
+    private static double EffectiveDonorVertexMean(
+        double donorScene,
+        double donorTexture,
+        double targetTexture)
+    {
+        if (targetTexture <= 0.000001)
+            return Math.Clamp(donorScene, 0, 1);
+        return Math.Clamp((donorScene * donorTexture) / targetTexture, 0, 1);
+    }
+
+    private static NativeEnvironmentColorTransform ImmutableTextureTransform(
+        NativeEnvironmentColorStatistics texture) => new(
+            RedScale: 1,
+            GreenScale: 1,
+            BlueScale: 1,
+            SaturationScale: 1,
+            StrengthPercent: 0,
+            TintHex: "",
+            TintStrengthPercent: 0,
+            HarmonizationPercent: 0,
+            TargetMedianLuminance: texture.MedianLuminance,
+            DonorMedianLuminance: texture.MedianLuminance,
+            DonorMeanRed: texture.MeanRed,
+            DonorMeanGreen: texture.MeanGreen,
+            DonorMeanBlue: texture.MeanBlue);
 
     private static NativeEnvironmentColorStatistics SceneColorStatistics(LevelColorData data, string detail) =>
         NativeEnvironmentColorStatistics.FromColors(
@@ -775,7 +903,7 @@ public static class NativeEnvironmentGradeExporter
         IReadOnlyList<SceneryColorTable> sceneryColorTables = sceneryModelBytes == null
             ? Array.Empty<SceneryColorTable>()
             : ReadDarkHollowFarTreeColorTables(sceneryModelBytes, level.Key);
-        NativeEnvironmentTextureUsageStatistics textureUsage = ReadSceneTextureUsage(modelBytes, textureBytes, textureIds);
+        TextureUsageReadResult textureUsage = ReadSceneTextureUsage(modelBytes, textureBytes, textureIds);
         IReadOnlyList<MobyMaterialRow> mobyMaterialRows = ReadMobyMaterialRows(image, discLayout, assets.WadLba, level);
         ColorRgba[] sceneColors = colorTables
             .SelectMany(table => ReadSceneColors(table.Bytes, table))
@@ -795,7 +923,8 @@ public static class NativeEnvironmentGradeExporter
             mobyMaterialRows,
             sceneColors,
             textureColors,
-            textureUsage);
+            textureUsage.Usage,
+            textureUsage.VisibleColorStatistics);
     }
 
     private static IReadOnlyList<MobyMaterialRow> ReadMobyMaterialRows(
@@ -1100,7 +1229,7 @@ public static class NativeEnvironmentGradeExporter
             .ToArray();
     }
 
-    private static NativeEnvironmentTextureUsageStatistics ReadSceneTextureUsage(
+    private static TextureUsageReadResult ReadSceneTextureUsage(
         byte[] modelBytes,
         byte[] textureBytes,
         IReadOnlySet<int> textureIds)
@@ -1108,10 +1237,10 @@ public static class NativeEnvironmentGradeExporter
         int textureListSize = checked((int)ReadUInt32(modelBytes, 0));
         int textureCount = checked((int)ReadUInt32(modelBytes, 4));
         if (textureListSize <= 8 || textureCount <= 0 || textureListSize > modelBytes.Length || (textureListSize - 8) % textureCount != 0)
-            return new NativeEnvironmentTextureUsageStatistics(0, 0, 0, 0, 0, 0);
+            return EmptyTextureUsageReadResult();
         int recordBytes = (textureListSize - 8) / textureCount;
         if (recordBytes < 184)
-            return new NativeEnvironmentTextureUsageStatistics(0, 0, 0, 0, 0, 0);
+            return EmptyTextureUsageReadResult();
 
         int descriptorCount = 0;
         int visibleTexelCount = 0;
@@ -1119,6 +1248,7 @@ public static class NativeEnvironmentGradeExporter
         long redTotal = 0;
         long greenTotal = 0;
         long blueTotal = 0;
+        Dictionary<ushort, long> visibleColorHistogram = [];
         foreach (int textureId in textureIds.Where(id => id >= 0 && id < textureCount))
         {
             int recordOffset = 8 + (textureId * recordBytes);
@@ -1152,6 +1282,9 @@ public static class NativeEnvironmentGradeExporter
                                 continue;
 
                             ColorRgba color = DecodePsx555(word);
+                            ushort opaqueColorWord = (ushort)(word & 0x7FFF);
+                            visibleColorHistogram.TryGetValue(opaqueColorWord, out long colorWeight);
+                            visibleColorHistogram[opaqueColorWord] = colorWeight + 1;
                             visibleTexelCount++;
                             redTotal += color.R;
                             greenTotal += color.G;
@@ -1165,15 +1298,28 @@ public static class NativeEnvironmentGradeExporter
         }
 
         if (visibleTexelCount == 0)
-            return new NativeEnvironmentTextureUsageStatistics(descriptorCount, 0, 0, 0, 0, 0);
-        return new NativeEnvironmentTextureUsageStatistics(
+        {
+            return new TextureUsageReadResult(
+                new NativeEnvironmentTextureUsageStatistics(descriptorCount, 0, 0, 0, 0, 0),
+                NativeEnvironmentColorStatistics.FromColors(Array.Empty<ColorRgba>()));
+        }
+
+        NativeEnvironmentTextureUsageStatistics usage = new(
             DescriptorCount: descriptorCount,
             VisibleTexelCount: visibleTexelCount,
             MeanRed: redTotal / (255.0 * visibleTexelCount),
             MeanGreen: greenTotal / (255.0 * visibleTexelCount),
             MeanBlue: blueTotal / (255.0 * visibleTexelCount),
             GreenDominantPercent: greenDominantCount * 100.0 / visibleTexelCount);
+        NativeEnvironmentColorStatistics visibleStatistics =
+            NativeEnvironmentColorStatistics.FromWeightedColors(
+                visibleColorHistogram.Select(pair => (DecodePsx555(pair.Key), pair.Value)));
+        return new TextureUsageReadResult(usage, visibleStatistics);
     }
+
+    private static TextureUsageReadResult EmptyTextureUsageReadResult() => new(
+        new NativeEnvironmentTextureUsageStatistics(0, 0, 0, 0, 0, 0),
+        NativeEnvironmentColorStatistics.FromColors(Array.Empty<ColorRgba>()));
 
     private static IEnumerable<TextureDescriptor> DecodeTextureDescriptors(byte[] bytes, int recordOffset)
     {
@@ -1617,7 +1763,10 @@ public static class NativeEnvironmentGradeExporter
         {
             ValidateDarkHollowCloseTreePaletteSource(level, palette);
             byte[] before = palette.Bytes;
-            byte[] after = TransformTexturePalette(before, transform, smoothTerrain: true);
+            // Scene RGB already receives the shadow-protecting compression. A
+            // second compression in the CLUT compounds after PS1 modulation and
+            // flattens both vertex shading and texture detail.
+            byte[] after = TransformTexturePalette(before, transform, smoothTerrain: false);
             int start = palette.Offset;
             int end = checked(start + before.Length);
             string sourceLabel = $"palette-0x{palette.Offset:X}";
@@ -2004,6 +2153,9 @@ public static class NativeEnvironmentGradeExporter
     private sealed record TexturePaletteCandidate(int ByteLength, bool IsRuntimeVariant);
     private sealed record TexturePaletteCandidateRange(int Offset, int ByteLength);
     private sealed record TexturePaletteTable(int Offset, int NonZeroColorCount, bool IsRuntimeVariant, byte[] Bytes);
+    private sealed record TextureUsageReadResult(
+        NativeEnvironmentTextureUsageStatistics Usage,
+        NativeEnvironmentColorStatistics VisibleColorStatistics);
     private sealed record PaletteInterval(int Start, int End);
     private sealed record PaletteTransformRange(int Start, int End, byte[] Before, byte[] After, string Label);
     private sealed record DarkHollowSceneryColorTableSpec(
@@ -2039,7 +2191,8 @@ public static class NativeEnvironmentGradeExporter
         IReadOnlyList<MobyMaterialRow> MobyMaterialRows,
         IReadOnlyList<ColorRgba> SceneColors,
         IReadOnlyList<ColorRgba> TextureColors,
-        NativeEnvironmentTextureUsageStatistics TextureUsage);
+        NativeEnvironmentTextureUsageStatistics TextureUsage,
+        NativeEnvironmentColorStatistics VisibleTextureColors);
 
     private sealed class GradeWriteRangeTracker
     {

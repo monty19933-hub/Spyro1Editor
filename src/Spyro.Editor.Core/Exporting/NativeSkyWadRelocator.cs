@@ -62,6 +62,7 @@ internal static class NativeSkyWadRelocator
 
         if (wadFile.Lba != wad.WadLba || wadFile.Size != wad.WadSize)
             throw new InvalidDataException("The live WAD extent does not match the selected WAD analysis.");
+        ValidateLiveWadEntryTable(image, discLayout, wad);
         if (wad.WadSize % SectorBytes != 0)
             throw new InvalidDataException("WAD.WAD is not sector aligned.");
         if (executable.Lba != wad.WadLba + (wad.WadSize / SectorBytes))
@@ -170,14 +171,17 @@ internal static class NativeSkyWadRelocator
 
         WadLayout wad = LoadWadLayout(wadAnalysisPath);
         DiscLayout discLayout = DiscImage.DetectLayout(sourceImagePath);
-        File.Copy(sourceImagePath, outputImagePath, true);
-        using FileStream source = File.Open(sourceImagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        using FileStream output = File.Open(outputImagePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+        using FileStream source = File.Open(sourceImagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
         IReadOnlyList<IsoRootRecord> rootFiles = ReadRootFiles(source, discLayout);
         IsoRootRecord wadFile = rootFiles.First(file =>
             string.Equals(file.Name, "WAD.WAD", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(file.Name, "WAD", StringComparison.OrdinalIgnoreCase));
         IsoRootRecord executable = rootFiles.First(file => IsExecutableName(file.Name));
+        if (wadFile.Lba != wad.WadLba || wadFile.Size != wad.WadSize)
+            throw new InvalidDataException("The live WAD extent no longer matches the selected WAD analysis.");
+        ValidateLiveWadEntryTable(source, discLayout, wad);
+        File.Copy(sourceImagePath, outputImagePath, true);
+        using FileStream output = File.Open(outputImagePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
         byte[] executableBytes = DiscImage.ReadFileBytes(source, discLayout, executable.Lba, 0, executable.Size);
         byte[] wadHeader = DiscImage.ReadFileBytes(source, discLayout, wad.WadLba, 0, SectorBytes);
         Dictionary<int, NativeSkyRelocationPayload[]> payloadsByEntry = payloads
@@ -347,6 +351,66 @@ internal static class NativeSkyWadRelocator
         if (entries.Length == 0 || entries[^1].Offset + entries[^1].Size != wadSize)
             throw new InvalidDataException("WAD analysis does not cover the complete archive.");
         return new WadLayout(wadLba, wadSize, entries, entries.ToDictionary(entry => entry.Index));
+    }
+
+    /// <summary>
+    /// Binds every analyzed WAD entry boundary to the selected source archive.
+    /// Matching only the outer ISO extent is insufficient: a stale analysis can
+    /// have the same total WAD size while repartitioning later entries, and the
+    /// whole-WAD relocation writer would otherwise copy those wrong slices.
+    /// </summary>
+    private static void ValidateLiveWadEntryTable(
+        FileStream image,
+        DiscLayout layout,
+        WadLayout analysis)
+    {
+        byte[] header = DiscImage.ReadFileBytes(
+            image,
+            layout,
+            analysis.WadLba,
+            0,
+            SectorBytes);
+        int firstDataOffset = checked((int)ReadUInt32(header, 0));
+        if (firstDataOffset <= 0 || firstDataOffset > header.Length || firstDataOffset % 8 != 0)
+        {
+            throw new InvalidDataException(
+                "The live WAD archive header has an invalid first-entry boundary.");
+        }
+
+        Dictionary<int, WadEntry> liveEntries = [];
+        for (int tableOffset = 0; tableOffset < firstDataOffset; tableOffset += 8)
+        {
+            int index = tableOffset / 8;
+            long offset = ReadUInt32(header, tableOffset);
+            int size = checked((int)ReadUInt32(header, tableOffset + 4));
+            if (offset == 0 && size == 0)
+                continue;
+            if (offset < SectorBytes || size <= 0 || offset + size > analysis.WadSize)
+            {
+                throw new InvalidDataException(
+                    $"The live WAD archive header contains an invalid entry {index} boundary 0x{offset:X}+0x{size:X}.");
+            }
+            liveEntries[index] = new WadEntry(index, offset, size);
+        }
+
+        if (liveEntries.Count != analysis.Entries.Count)
+        {
+            throw new InvalidDataException(
+                $"The selected WAD analysis has {analysis.Entries.Count} entries, but the live WAD archive header has {liveEntries.Count}.");
+        }
+        foreach (WadEntry expected in analysis.Entries)
+        {
+            if (!liveEntries.TryGetValue(expected.Index, out WadEntry? actual) ||
+                actual.Offset != expected.Offset ||
+                actual.Size != expected.Size)
+            {
+                string live = actual == null
+                    ? "missing"
+                    : $"0x{actual.Offset:X}+0x{actual.Size:X}";
+                throw new InvalidDataException(
+                    $"WAD analysis entry {expected.Index} boundary 0x{expected.Offset:X}+0x{expected.Size:X} does not match the live WAD archive header ({live}).");
+            }
+        }
     }
 
     private static IReadOnlyList<IsoRootRecord> ReadRootFiles(FileStream image, DiscLayout layout)

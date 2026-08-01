@@ -23,6 +23,9 @@ public sealed partial class EditorViewport
     private NativeTerrainBoundedFrameKey? _nativeTerrainBoundedFrameKey;
     private NativeTerrainBoundedCompositorSnapshot _nativeTerrainBoundedSnapshot =
         NativeTerrainBoundedCompositorSnapshot.Fallback("The bounded compositor has not rendered a frame.");
+    private NativeTerrainHqMaterialSet? _nativeTerrainHqMaterialInputSet;
+    private bool _nativeTerrainHqMaterialInputCompatible;
+    private string _nativeTerrainHqMaterialInputReason = "";
     private string _nativeTerrainHqMaterialFingerprint = "";
     private string _nativeTerrainBoundedCompatibilityBlocker = "Raw native HQ material data is not loaded.";
     private bool _nativeTerrainBoundedCompatibilityEnabled;
@@ -40,13 +43,29 @@ public sealed partial class EditorViewport
         bool compatible = true,
         string? incompatibilityReason = null)
     {
+        string normalizedReason = string.IsNullOrWhiteSpace(incompatibilityReason)
+            ? ""
+            : incompatibilityReason.Trim();
+        if (ReferenceEquals(_nativeTerrainHqMaterialInputSet, materialSet) &&
+            _nativeTerrainHqMaterialInputCompatible == compatible &&
+            string.Equals(
+                _nativeTerrainHqMaterialInputReason,
+                normalizedReason,
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _nativeTerrainHqMaterialInputSet = materialSet;
+        _nativeTerrainHqMaterialInputCompatible = compatible;
+        _nativeTerrainHqMaterialInputReason = normalizedReason;
         _nativeTerrainHqMaterialRecords.Clear();
         _nativeTerrainBoundedHqDescriptors.Clear();
         _nativeTerrainHqMaterialFingerprint = "";
         _nativeTerrainBoundedCompatibilityEnabled = false;
-        _nativeTerrainBoundedCompatibilityBlocker = string.IsNullOrWhiteSpace(incompatibilityReason)
+        _nativeTerrainBoundedCompatibilityBlocker = string.IsNullOrWhiteSpace(normalizedReason)
             ? "Raw native HQ material data is not loaded."
-            : incompatibilityReason.Trim();
+            : normalizedReason;
 
         string validationBlocker = "";
         if (materialSet != null && compatible && TryValidateNativeTerrainHqMaterialSet(materialSet, out validationBlocker))

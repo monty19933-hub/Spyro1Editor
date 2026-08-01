@@ -99,6 +99,13 @@ public sealed record NativeTerrainTextureRelocationPlan(
     IReadOnlyList<NativeTerrainTextureRelocationPatch> Patches,
     IReadOnlyList<string> Notes);
 
+public sealed record NativeTerrainTexturePromotionAttemptSet(
+    IReadOnlyList<int[]> Attempts,
+    int CandidateCount,
+    int TotalPairCount,
+    int PairAttemptCount,
+    bool PairAttemptsTruncated);
+
 /// <summary>
 /// Relocates native terrain texture descriptors to new byte-private storage.  This is
 /// deliberately proof-gated: a real-disc plan is not emitted until every non-terrain
@@ -106,6 +113,7 @@ public sealed record NativeTerrainTextureRelocationPlan(
 /// </summary>
 public static class NativeTerrainTextureRelocationAllocator
 {
+    public const int MaxPromotionPairAttempts = 512;
     private const int WadLba = 37;
     private const int TexturePagesSubfileIndex = 0;
     private const int ModelSubfileIndex = 1;
@@ -131,6 +139,46 @@ public static class NativeTerrainTextureRelocationAllocator
     private const int LqPaletteRowByteCount = 16 * 2;
     private const int LqPaletteRowCount = 16;
     private const int LqPaletteByteCount = LqPaletteRowByteCount * LqPaletteRowCount;
+
+    public static NativeTerrainTexturePromotionAttemptSet BuildBoundedPromotionAttempts(
+        IReadOnlyList<int> candidateTextureIds)
+    {
+        ArgumentNullException.ThrowIfNull(candidateTextureIds);
+        int[] candidates = candidateTextureIds
+            .Distinct()
+            .Order()
+            .ToArray();
+        int totalPairCount = checked((candidates.Length * (candidates.Length - 1)) / 2);
+        List<int[]> attempts = [[]];
+        attempts.AddRange(candidates.Select(textureId => new[] { textureId }));
+
+        int pairAttemptCount = 0;
+        for (int first = 0;
+             first < candidates.Length && pairAttemptCount < MaxPromotionPairAttempts;
+             first++)
+        {
+            for (int second = first + 1;
+                 second < candidates.Length && pairAttemptCount < MaxPromotionPairAttempts;
+                 second++)
+            {
+                attempts.Add([candidates[first], candidates[second]]);
+                pairAttemptCount++;
+            }
+        }
+
+        // The complete set remains a final deterministic escape hatch even
+        // when the quadratic pair search is capped. Two candidates already
+        // produce the same set as their sole pair, so do not duplicate it.
+        if (candidates.Length > 2)
+            attempts.Add(candidates);
+
+        return new NativeTerrainTexturePromotionAttemptSet(
+            attempts,
+            candidates.Length,
+            totalPairCount,
+            pairAttemptCount,
+            pairAttemptCount < totalPairCount);
+    }
 
     private static readonly int[][] TextureDescriptorMatrices =
     [
@@ -164,7 +212,7 @@ public static class NativeTerrainTextureRelocationAllocator
         DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
         using FileStream imageStream = File.OpenRead(sourceImagePath);
         TextureAsset target = LoadTextureAsset(imageStream, layout, targetWadEntry);
-        Dictionary<int, TextureAsset> donors = LoadDonors(imageStream, layout, imports);
+        Dictionary<int, TextureAsset> donors = LoadDonors(sourceImagePath, imageStream, layout, imports);
         Dictionary<int, TierSelection> targetSelections = BuildTargetSelections(target, imports);
         bool[] terrainOwned = BuildTerrainOwnership(target, targetSelections, out TerrainOccupancyStatistics statistics);
         int requiredBytes = CalculateRequiredAllocationBytes(donors, imports);
@@ -255,7 +303,7 @@ public static class NativeTerrainTextureRelocationAllocator
                 return false;
             }
 
-            Dictionary<int, TextureAsset> donors = LoadDonors(imageStream, layout, imports);
+            Dictionary<int, TextureAsset> donors = LoadDonors(sourceImagePath, imageStream, layout, imports);
             Dictionary<int, TierSelection> targetSelections = BuildTargetSelections(target, imports);
             bool[] terrainOwned = BuildTerrainOwnership(target, targetSelections, out TerrainOccupancyStatistics statistics);
             NativeTexturePageOwnedRange[] externalRanges = ownershipProof.OwnedRanges?.ToArray() ?? Array.Empty<NativeTexturePageOwnedRange>();
@@ -356,6 +404,9 @@ public static class NativeTerrainTextureRelocationAllocator
         IReadOnlyList<NativeTerrainTextureRelocationImport> imports)
     {
         int total = 0;
+        List<(int WadEntry, PixelBounds Bounds)> hqPixelAllocations = [];
+        HashSet<(int WadEntry, long PaletteByteStart)> hqPaletteAllocations = [];
+        HashSet<(int WadEntry, long PaletteByteStart, PixelBounds Bounds)> lqAllocations = [];
         foreach (NativeTerrainTextureRelocationImport import in imports)
         {
             _ = ParseTierSelection(import.DescriptorTier);
@@ -368,9 +419,25 @@ public static class NativeTerrainTextureRelocationAllocator
 
             TextureRecord record = donor.Index.Records[import.DonorTextureId];
             ValidateCompleteRecordShape(record, import.DonorWadEntry, import.DonorTextureId, "Donor");
-            total = checked(total + LqPixelByteCount + LqPaletteByteCount);
-            foreach (TextureDescriptor descriptor in record.NormalDescriptors.Concat(record.CloseDescriptors))
-                total = checked(total + descriptor.PixelStorageByteCount + HqPaletteByteCount);
+            TextureDescriptor lq = record.LowDetailDescriptors[0];
+            PixelBounds lqBounds = GetPhysicalPixelBounds(lq, donor.TexturePages.Length);
+            if (lqAllocations.Add((import.DonorWadEntry, lq.PaletteByteStart, lqBounds)))
+                total = checked(total + LqPixelByteCount + LqPaletteByteCount);
+
+            foreach (TextureDescriptor descriptor in record.NormalDescriptors
+                         .Concat(record.CloseDescriptors)
+                         .OrderByDescending(candidate => candidate.PixelStorageByteCount))
+            {
+                PixelBounds bounds = GetPhysicalPixelBounds(descriptor, donor.TexturePages.Length);
+                if (!hqPixelAllocations.Any(existing =>
+                        existing.WadEntry == import.DonorWadEntry && existing.Bounds.Contains(bounds)))
+                {
+                    hqPixelAllocations.Add((import.DonorWadEntry, bounds));
+                    total = checked(total + bounds.ByteCount);
+                }
+                if (hqPaletteAllocations.Add((import.DonorWadEntry, descriptor.PaletteByteStart)))
+                    total = checked(total + HqPaletteByteCount);
+            }
         }
 
         return total;
@@ -398,13 +465,30 @@ public static class NativeTerrainTextureRelocationAllocator
     }
 
     private static Dictionary<int, TextureAsset> LoadDonors(
+        string sourceImagePath,
         FileStream imageStream,
         DiscLayout layout,
         IReadOnlyList<NativeTerrainTextureRelocationImport> imports)
     {
         Dictionary<int, TextureAsset> result = new();
         foreach (int wadEntry in imports.Select(importItem => importItem.DonorWadEntry).Distinct())
-            result[wadEntry] = LoadTextureAsset(imageStream, layout, wadEntry);
+        {
+            TextureAsset raw = LoadTextureAsset(imageStream, layout, wadEntry);
+            NativeTerrainTextureRuntimeControlAudit runtimeAudit =
+                NativeTerrainTextureRuntimeControlScanner.Inspect(sourceImagePath, wadEntry);
+            NativeTerrainTextureInitialStateResult initialState =
+                NativeTerrainTextureRuntimeControlScanner.InitializeTextureRecords(runtimeAudit, raw.Model);
+            if (!runtimeAudit.Complete || !initialState.Complete)
+            {
+                throw new InvalidDataException(
+                    $"Donor WAD entry {wadEntry} could not be initialized to its native load-state texture table: " +
+                    (initialState.SafetyBlockers.FirstOrDefault() ??
+                     runtimeAudit.SafetyBlockers.FirstOrDefault() ??
+                     "runtime texture-control initialization is incomplete"));
+            }
+            TextureRecordIndex initializedIndex = DecodeTextureRecords(initialState.InitializedTextureData);
+            result[wadEntry] = raw with { Index = initializedIndex };
+        }
         return result;
     }
 
@@ -766,7 +850,11 @@ public static class NativeTerrainTextureRelocationAllocator
                     $"{TierLabel(item.Tier)} descriptor {item.DonorDescriptor.Index} is not fully readable.";
                 return false;
             }
+            item.DonorPixelBounds = GetPhysicalPixelBounds(
+                item.DonorDescriptor,
+                item.Donor.TexturePages.Length);
         }
+        AssignSharedStorageOwners(work);
         int rewrittenDescriptorCount = work.Sum(item => item.TargetDescriptors.Count);
         if (rewrittenDescriptorCount != checked(imports.Count * CompleteDescriptorCount))
         {
@@ -775,25 +863,16 @@ public static class NativeTerrainTextureRelocationAllocator
             return false;
         }
 
-        foreach (RelocationWork item in work.OrderByDescending(candidate => candidate.PaletteStorageByteCount))
+        // Pixel rectangles have two-dimensional alignment and page-boundary
+        // constraints, while HQ palettes only need one aligned span in a row.
+        // Reserve the geometrically constrained rectangles first so palette
+        // rows cannot fragment the only descriptor-encodable pixel holes.
+        foreach (RelocationWork item in work
+                     .Where(candidate => ReferenceEquals(candidate.PixelStorageOwner, candidate))
+                     .OrderByDescending(candidate => candidate.PixelStorageByteCount))
         {
-            bool allocated = item.Tier == RelocationTier.LowDetailAlias
-                ? TryAllocateLqPalette(reserved, out int paletteOffset)
-                : TryAllocateHqPalette(reserved, out paletteOffset);
-            if (!allocated)
-            {
-                failureReason = item.Tier == RelocationTier.LowDetailAlias
-                    ? $"No byte-private, TexLq-encodable sixteen-row 16-color distance palette remains in target WAD entry {target.WadEntry}."
-                    : $"No byte-private, CLUT-encodable {HqPaletteByteCount}-byte HQ palette slot remains in target WAD entry {target.WadEntry}.";
-                return false;
-            }
-            item.TargetPaletteOffset = paletteOffset;
-        }
-
-        foreach (RelocationWork item in work.OrderByDescending(candidate => candidate.PixelStorageByteCount))
-        {
-            int height = item.TileSize;
-            int width = item.Tier == RelocationTier.LowDetailAlias ? LqPixelRowByteCount : item.TileSize;
+            int height = item.DonorPixelBounds.Height;
+            int width = item.DonorPixelBounds.Width;
             int xAlignment = item.Tier == RelocationTier.LowDetailAlias ? 128 : item.TileSize;
             int yAlignment = item.Tier == RelocationTier.LowDetailAlias ? IndexedTileSize : item.TileSize;
             if (!TryAllocatePixelRectangle(
@@ -813,10 +892,50 @@ public static class NativeTerrainTextureRelocationAllocator
             item.TargetPixelY = pixelY;
         }
 
+        foreach (RelocationWork item in work.Where(candidate =>
+                     !ReferenceEquals(candidate.PixelStorageOwner, candidate)))
+        {
+            RelocationWork owner = item.PixelStorageOwner;
+            item.TargetPixelX = checked(owner.TargetPixelX + item.DonorPixelBounds.X - owner.DonorPixelBounds.X);
+            item.TargetPixelY = checked(owner.TargetPixelY + item.DonorPixelBounds.Y - owner.DonorPixelBounds.Y);
+        }
+
+        foreach (RelocationWork item in work
+                     .Where(candidate => ReferenceEquals(candidate.PaletteStorageOwner, candidate))
+                     .OrderByDescending(candidate => candidate.PaletteStorageByteCount))
+        {
+            bool allocated = item.Tier == RelocationTier.LowDetailAlias
+                ? TryAllocateLqPalette(reserved, out int paletteOffset)
+                : TryAllocateHqPalette(reserved, out paletteOffset);
+            if (!allocated)
+            {
+                failureReason = item.Tier == RelocationTier.LowDetailAlias
+                    ? $"No byte-private, TexLq-encodable sixteen-row 16-color distance palette remains in target WAD entry {target.WadEntry}."
+                    : $"No byte-private, CLUT-encodable {HqPaletteByteCount}-byte HQ palette slot remains in target WAD entry {target.WadEntry}.";
+                return false;
+            }
+            item.TargetPaletteOffset = paletteOffset;
+        }
+
+        foreach (RelocationWork item in work.Where(candidate =>
+                     !ReferenceEquals(candidate.PaletteStorageOwner, candidate)))
+        {
+            item.TargetPaletteOffset = item.PaletteStorageOwner.TargetPaletteOffset;
+        }
+
+        foreach (RelocationWork item in work.Where(candidate =>
+                     ReferenceEquals(candidate.PaletteStorageOwner, candidate)))
+        {
+            CopyPaletteData(item, afterPages);
+        }
+        foreach (RelocationWork item in work.Where(candidate =>
+                     ReferenceEquals(candidate.PixelStorageOwner, candidate)))
+        {
+            CopyPixelData(item, afterPages);
+        }
         foreach (RelocationWork item in work)
         {
-            CopyLogicalDescriptorData(item, afterPages);
-            byte[] relocatedDescriptor = BuildIdentityDescriptor(item);
+            byte[] relocatedDescriptor = BuildRelocatedDescriptor(item);
             foreach (TextureDescriptor targetDescriptor in item.TargetDescriptors)
                 relocatedDescriptor.CopyTo(afterModel, targetDescriptor.ModelOffset);
         }
@@ -840,8 +959,10 @@ public static class NativeTerrainTextureRelocationAllocator
         plan = new AssetRelocationPlan(
             afterPages,
             afterModel,
-            work.Sum(item => item.PixelStorageByteCount),
-            work.Sum(item => item.PaletteStorageByteCount),
+            work.Where(item => ReferenceEquals(item.PixelStorageOwner, item))
+                .Sum(item => item.PixelStorageByteCount),
+            work.Where(item => ReferenceEquals(item.PaletteStorageOwner, item))
+                .Sum(item => item.PaletteStorageByteCount),
             rewrittenDescriptorCount,
             RewrittenLowDetailDescriptorCount: work
                 .Where(item => item.Tier == RelocationTier.LowDetailAlias)
@@ -976,7 +1097,31 @@ public static class NativeTerrainTextureRelocationAllocator
             MarkRange(reserved, checked(((y + row) * PackedVramRowBytes) + x), width);
     }
 
-    private static void CopyLogicalDescriptorData(RelocationWork item, byte[] targetPages)
+    private static void AssignSharedStorageOwners(IReadOnlyList<RelocationWork> work)
+    {
+        List<RelocationWork> pixelOwners = [];
+        List<RelocationWork> paletteOwners = [];
+        foreach (RelocationWork item in work.OrderByDescending(candidate => candidate.PixelStorageByteCount))
+        {
+            RelocationWork? pixelOwner = pixelOwners.FirstOrDefault(owner =>
+                owner.Donor.WadEntry == item.Donor.WadEntry &&
+                owner.DonorPixelBounds.Contains(item.DonorPixelBounds) &&
+                owner.DonorDescriptor.Format == item.DonorDescriptor.Format);
+            item.PixelStorageOwner = pixelOwner ?? item;
+            if (pixelOwner == null)
+                pixelOwners.Add(item);
+
+            RelocationWork? paletteOwner = paletteOwners.FirstOrDefault(owner =>
+                owner.Donor.WadEntry == item.Donor.WadEntry &&
+                owner.DonorDescriptor.Format == item.DonorDescriptor.Format &&
+                owner.DonorDescriptor.PaletteByteStart == item.DonorDescriptor.PaletteByteStart);
+            item.PaletteStorageOwner = paletteOwner ?? item;
+            if (paletteOwner == null)
+                paletteOwners.Add(item);
+        }
+    }
+
+    private static void CopyPaletteData(RelocationWork item, byte[] targetPages)
     {
         if (item.Tier == RelocationTier.LowDetailAlias)
         {
@@ -999,6 +1144,27 @@ public static class NativeTerrainTextureRelocationAllocator
                 item.TargetPaletteOffset,
                 HqPaletteByteCount);
         }
+    }
+
+    private static void CopyPixelData(RelocationWork item, byte[] targetPages)
+    {
+        if (item.Tier != RelocationTier.LowDetailAlias)
+        {
+            for (int row = 0; row < item.DonorPixelBounds.Height; row++)
+            {
+                int donorOffset = checked(
+                    ((item.DonorPixelBounds.Y + row) * PackedVramRowBytes) + item.DonorPixelBounds.X);
+                int targetOffset = checked(
+                    ((item.TargetPixelY + row) * PackedVramRowBytes) + item.TargetPixelX);
+                Array.Copy(
+                    item.Donor.TexturePages,
+                    donorOffset,
+                    targetPages,
+                    targetOffset,
+                    item.DonorPixelBounds.Width);
+            }
+            return;
+        }
 
         for (int y = 0; y < item.TileSize; y++)
         {
@@ -1015,26 +1181,74 @@ public static class NativeTerrainTextureRelocationAllocator
                     throw new InvalidOperationException("A donor descriptor became unreadable after validation.");
                 }
 
-                int donorIndex = item.DonorDescriptor.Format == TextureDescriptorFormat.LowDetail4Bpp
-                    ? (item.Donor.TexturePages[checked((int)donorOffset)] >> (donorNibble * 4)) & 0x0F
-                    : item.Donor.TexturePages[checked((int)donorOffset)];
-                if (item.Tier == RelocationTier.LowDetailAlias)
-                {
-                    int targetOffset = checked(
-                        ((item.TargetPixelY + y) * PackedVramRowBytes) + item.TargetPixelX + (x / 2));
-                    int targetNibble = x & 1;
-                    targetPages[targetOffset] = targetNibble == 0
-                        ? (byte)((targetPages[targetOffset] & 0xF0) | donorIndex)
-                        : (byte)((targetPages[targetOffset] & 0x0F) | (donorIndex << 4));
-                }
-                else
-                {
-                    int targetOffset = checked(
-                        ((item.TargetPixelY + y) * PackedVramRowBytes) + item.TargetPixelX + x);
-                    targetPages[targetOffset] = checked((byte)donorIndex);
-                }
+                int donorIndex = (item.Donor.TexturePages[checked((int)donorOffset)] >> (donorNibble * 4)) & 0x0F;
+                int targetOffset = checked(
+                    ((item.TargetPixelY + y) * PackedVramRowBytes) + item.TargetPixelX + (x / 2));
+                int targetNibble = x & 1;
+                targetPages[targetOffset] = targetNibble == 0
+                    ? (byte)((targetPages[targetOffset] & 0xF0) | donorIndex)
+                    : (byte)((targetPages[targetOffset] & 0x0F) | (donorIndex << 4));
             }
         }
+    }
+
+    private static byte[] BuildRelocatedDescriptor(RelocationWork item)
+    {
+        if (item.Tier == RelocationTier.LowDetailAlias)
+            return BuildLowDetailIdentityDescriptor(item);
+
+        return BuildTranslatedHighDetailDescriptor(item);
+    }
+
+    private static byte[] BuildTranslatedHighDetailDescriptor(RelocationWork item)
+    {
+        int deltaX = item.TargetPixelX - item.DonorPixelBounds.X;
+        int deltaY = item.TargetPixelY - item.DonorPixelBounds.Y;
+        byte[] result = item.DonorDescriptor.Raw.ToArray();
+        int donorRegion = item.DonorDescriptor.Raw[6];
+        int targetFullX0 = checked(GetTextureX(donorRegion, item.DonorDescriptor.Raw[0]) + deltaX);
+        int targetFullX1 = checked(GetTextureX(donorRegion, item.DonorDescriptor.Raw[4]) + deltaX);
+        int targetFullY0 = checked(GetTextureY(donorRegion, item.DonorDescriptor.Raw[1]) + deltaY);
+        int targetFullY1 = checked(GetTextureY(donorRegion, item.DonorDescriptor.Raw[5]) + deltaY);
+        int targetPackedMinimumX = Math.Min(targetFullX0, targetFullX1) - FullVramTextureByteX;
+        int targetMinimumY = Math.Min(targetFullY0, targetFullY1);
+        int xPage = (FullVramTextureByteX + targetPackedMinimumX) / 128;
+        int yPage = targetMinimumY >= 256 ? 1 : 0;
+        int xBase = xPage * 128;
+        int yBase = yPage * 256;
+        int localX0 = targetFullX0 - xBase;
+        int localX1 = targetFullX1 - xBase;
+        int localY0 = targetFullY0 - yBase;
+        int localY1 = targetFullY1 - yBase;
+        if (xPage < 0 || xPage > 15 ||
+            localX0 < 0 || localX0 > byte.MaxValue || localX1 < 0 || localX1 > byte.MaxValue ||
+            localY0 < 0 || localY0 > byte.MaxValue || localY1 < 0 || localY1 > byte.MaxValue)
+        {
+            throw new InvalidOperationException("Allocated HQ pixel rectangle cannot preserve the donor descriptor transform in native coordinate fields.");
+        }
+
+        int paletteY = item.TargetPaletteOffset / PackedVramRowBytes;
+        int paletteXByte = item.TargetPaletteOffset % PackedVramRowBytes;
+        if ((paletteXByte & 31) != 0 || paletteY < 0 || paletteY > 511)
+            throw new InvalidOperationException("Allocated palette slot cannot be encoded in the native CLUT field.");
+        int clutX = 512 + (paletteXByte / 2);
+        int clutCode = (paletteY << 6) | ((clutX / 16) & 0x3F);
+
+        result[0] = checked((byte)localX0);
+        result[1] = checked((byte)localY0);
+        BinaryPrimitives.WriteUInt16LittleEndian(result.AsSpan(2, 2), checked((ushort)clutCode));
+        result[4] = checked((byte)localX1);
+        result[5] = checked((byte)localY1);
+        byte[] targetMaterialDescriptor = item.TargetDescriptors[0].Raw;
+        byte regionMaterial = item.Import.PreserveTargetDescriptorMaterial
+            ? (byte)(targetMaterialDescriptor[6] & 0xE0)
+            : (byte)(result[6] & 0xE0);
+        result[6] = (byte)(regionMaterial | xPage | (yPage << 4));
+        if (item.Import.PreserveTargetDescriptorMaterial)
+        {
+            result[7] = (byte)((targetMaterialDescriptor[7] & 0x8F) | (item.DonorDescriptor.Raw[7] & 0x70));
+        }
+        return result;
     }
 
     private static byte[] BuildIdentityDescriptor(RelocationWork item)
@@ -1414,6 +1628,54 @@ public static class NativeTerrainTextureRelocationAllocator
         return true;
     }
 
+    private static PixelBounds GetPhysicalPixelBounds(
+        TextureDescriptor descriptor,
+        int texturePagesLength)
+    {
+        int minimumX = int.MaxValue;
+        int minimumY = int.MaxValue;
+        int maximumX = int.MinValue;
+        int maximumY = int.MinValue;
+        for (int y = 0; y < descriptor.TileSize; y++)
+        {
+            for (int x = 0; x < descriptor.TileSize; x++)
+            {
+                if (!TryGetTextureSampleAddress(
+                        descriptor,
+                        x,
+                        y,
+                        texturePagesLength,
+                        out long offset,
+                        out _))
+                {
+                    throw new InvalidDataException(
+                        $"Descriptor {descriptor.Tier}[{descriptor.Index}] has a pixel outside the texture-pages subfile.");
+                }
+                int packedX = checked((int)(offset % PackedVramRowBytes));
+                int sampleY = checked((int)(offset / PackedVramRowBytes));
+                minimumX = Math.Min(minimumX, packedX);
+                maximumX = Math.Max(maximumX, packedX);
+                minimumY = Math.Min(minimumY, sampleY);
+                maximumY = Math.Max(maximumY, sampleY);
+            }
+        }
+
+        PixelBounds bounds = new(
+            minimumX,
+            minimumY,
+            checked(maximumX - minimumX + 1),
+            checked(maximumY - minimumY + 1));
+        int expectedBytes = descriptor.Format == TextureDescriptorFormat.LowDetail4Bpp
+            ? LqPixelByteCount
+            : descriptor.PixelStorageByteCount;
+        if (bounds.ByteCount != expectedBytes)
+        {
+            throw new InvalidDataException(
+                $"Descriptor {descriptor.Tier}[{descriptor.Index}] maps a {bounds.Width}x{bounds.Height} physical rectangle, not its expected {expectedBytes:N0}-byte storage footprint.");
+        }
+        return bounds;
+    }
+
     private static bool TryGetTextureSampleAddress(
         TextureDescriptor descriptor,
         int x,
@@ -1712,6 +1974,16 @@ public static class NativeTerrainTextureRelocationAllocator
         int Close32DescriptorCount,
         int RotatedHqDescriptorCount);
 
+    private sealed record PixelBounds(int X, int Y, int Width, int Height)
+    {
+        public int ByteCount => checked(Width * Height);
+
+        public bool Contains(PixelBounds other) =>
+            other.X >= X && other.Y >= Y &&
+            other.X + other.Width <= X + Width &&
+            other.Y + other.Height <= Y + Height;
+    }
+
     private sealed class RelocationWork
     {
         public RelocationWork(
@@ -1733,6 +2005,9 @@ public static class NativeTerrainTextureRelocationAllocator
         public TextureDescriptor DonorDescriptor { get; }
         public IReadOnlyList<TextureDescriptor> TargetDescriptors { get; }
         public RelocationTier Tier { get; }
+        public PixelBounds DonorPixelBounds { get; set; } = new(0, 0, 0, 0);
+        public RelocationWork PixelStorageOwner { get; set; } = null!;
+        public RelocationWork PaletteStorageOwner { get; set; } = null!;
         public int PaletteStorageByteCount => Tier == RelocationTier.LowDetailAlias
             ? LqPaletteByteCount
             : HqPaletteByteCount;

@@ -30,11 +30,13 @@ public static class LevelMusicPatchExporter
         string outputImagePath = $"{outputPrefix}.bin";
         string outputCuePath = $"{outputPrefix}.cue";
         string outputPlanPath = $"{outputPrefix}.level-music-batch-plan.json";
-        LevelMusicBatchPatchPlan plan = BuildBatchPlan(
-            request.SourceImagePath,
-            outputImagePath,
-            outputCuePath,
-            request.Edits);
+        LevelMusicBatchPatchPlan plan = await Task.Run(
+            () => BuildBatchPlan(
+                request.SourceImagePath,
+                outputImagePath,
+                outputCuePath,
+                request.Edits),
+            cancellationToken);
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPlanPath) ?? ".");
         await File.WriteAllTextAsync(
@@ -44,7 +46,14 @@ public static class LevelMusicPatchExporter
 
         bool wroteImage = request.WriteImage && plan.Patches.Count > 0;
         if (wroteImage)
-            await WriteImageAsync(request.SourceImagePath, request.SourceCuePath, outputImagePath, outputCuePath, plan, cancellationToken);
+            await WriteImageAsync(
+                request.SourceImagePath,
+                request.SourceCuePath,
+                outputImagePath,
+                outputCuePath,
+                plan,
+                request.ConsumeDisposableSourceImage,
+                cancellationToken);
 
         return new LevelMusicBatchPatchResult(outputImagePath, outputCuePath, outputPlanPath, plan, wroteImage);
     }
@@ -234,9 +243,14 @@ public static class LevelMusicPatchExporter
         string outputImagePath,
         string outputCuePath,
         LevelMusicBatchPatchPlan plan,
+        bool consumeDisposableSourceImage,
         CancellationToken cancellationToken)
     {
-        File.Copy(sourceImagePath, outputImagePath, true);
+        await DiscImageWorkingCopy.StageAsync(
+            sourceImagePath,
+            outputImagePath,
+            consumeDisposableSourceImage,
+            cancellationToken);
         await using (FileStream stream = File.Open(outputImagePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
         {
             DiscLayout layout = new(plan.SectorSize, plan.UserOffset, 0, 0);
@@ -282,7 +296,8 @@ public sealed record LevelMusicBatchPatchRequest(
     string SourceCuePath,
     string OutputPrefix,
     IReadOnlyList<LevelMusicReplacement> Edits,
-    bool WriteImage);
+    bool WriteImage,
+    bool ConsumeDisposableSourceImage = false);
 
 public sealed record LevelMusicBatchPatchResult(
     string OutputImagePath,

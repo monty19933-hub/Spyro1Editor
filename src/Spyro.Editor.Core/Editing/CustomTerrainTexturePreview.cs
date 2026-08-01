@@ -5,6 +5,11 @@ namespace Spyro.Editor.Core.Editing;
 
 public static class CustomTerrainTexturePreview
 {
+    private const int MaximumCachedPreviewColors = 512;
+    private static readonly object PreviewColorCacheGate = new();
+    private static readonly Dictionary<string, PreviewColorCacheEntry> PreviewColorCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public static int Apply(GeometryCandidate? geometry, IReadOnlyList<CustomTerrainTextureImport> imports)
     {
         if (geometry == null || imports.Count == 0)
@@ -93,11 +98,27 @@ public static class CustomTerrainTexturePreview
 
         try
         {
-            Rgba32[] pixels = PngRgbaImage.ReadRgba(path, out _, out _);
+            string fullPath = Path.GetFullPath(path);
+            FileInfo info = new(fullPath);
+            lock (PreviewColorCacheGate)
+            {
+                if (PreviewColorCache.TryGetValue(fullPath, out PreviewColorCacheEntry? cached) &&
+                    cached.Length == info.Length &&
+                    cached.LastWriteTimeUtcTicks == info.LastWriteTimeUtc.Ticks)
+                {
+                    color = cached.Color;
+                    return cached.Found;
+                }
+            }
+
+            Rgba32[] pixels = PngRgbaImage.ReadRgba(fullPath, out _, out _);
             Rgba32[] visible = pixels.Where(pixel => pixel.A >= 32).ToArray();
             IReadOnlyList<Rgba32> sample = visible.Length > 0 ? visible : pixels;
             if (sample.Count == 0)
+            {
+                CachePreviewColor(fullPath, info, found: false, default);
                 return false;
+            }
 
             long red = 0;
             long green = 0;
@@ -112,11 +133,35 @@ public static class CustomTerrainTexturePreview
                 (int)(red / sample.Count),
                 (int)(green / sample.Count),
                 (int)(blue / sample.Count));
+            CachePreviewColor(fullPath, info, found: true, color);
             return true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception ex) when (
+            ex is IOException or UnauthorizedAccessException or InvalidOperationException or
+                ArgumentException or NotSupportedException)
         {
             return false;
+        }
+    }
+
+    private static void CachePreviewColor(
+        string fullPath,
+        FileInfo info,
+        bool found,
+        ColorRgba color)
+    {
+        lock (PreviewColorCacheGate)
+        {
+            if (PreviewColorCache.Count >= MaximumCachedPreviewColors &&
+                !PreviewColorCache.ContainsKey(fullPath))
+            {
+                PreviewColorCache.Clear();
+            }
+            PreviewColorCache[fullPath] = new PreviewColorCacheEntry(
+                info.Length,
+                info.LastWriteTimeUtc.Ticks,
+                found,
+                color);
         }
     }
 
@@ -150,4 +195,10 @@ public static class CustomTerrainTexturePreview
             (a.B + b.B) / 2);
         return true;
     }
+
+    private sealed record PreviewColorCacheEntry(
+        long Length,
+        long LastWriteTimeUtcTicks,
+        bool Found,
+        ColorRgba Color);
 }

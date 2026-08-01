@@ -258,14 +258,18 @@ public sealed record CrossLevelTemplateLevelStatus(
     bool Placeable,
     bool TrueAddPlaceable);
 
-public sealed record ArtisansNativeLockedChestAddPolicy(
+/// <summary>
+/// Destination-neutral release Add policy for a checked Key + Locked Chest
+/// runtime profile. The current proven profiles declare one atomic pair.
+/// </summary>
+public sealed record LockedChestRuntimeBundleAddPolicy(
     bool OfferPair,
     bool OfferStandaloneKey,
     bool OfferLockedChestForExistingKey)
 {
     public bool AllowLockedChestTemplate => OfferPair || OfferLockedChestForExistingKey;
 
-    public static ArtisansNativeLockedChestAddPolicy Resolve(int addedKeyCount, int addedLockedChestCount)
+    public static LockedChestRuntimeBundleAddPolicy Resolve(int addedKeyCount, int addedLockedChestCount)
     {
         if (addedKeyCount < 0)
             throw new ArgumentOutOfRangeException(nameof(addedKeyCount));
@@ -275,7 +279,7 @@ public sealed record ArtisansNativeLockedChestAddPolicy(
         bool noKey = addedKeyCount == 0;
         bool exactlyOneKey = addedKeyCount == 1;
         bool noLockedChest = addedLockedChestCount == 0;
-        return new ArtisansNativeLockedChestAddPolicy(
+        return new LockedChestRuntimeBundleAddPolicy(
             OfferPair: noKey && noLockedChest,
             OfferStandaloneKey: noKey,
             OfferLockedChestForExistingKey: exactlyOneKey && noLockedChest);

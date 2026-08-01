@@ -68,6 +68,10 @@ public sealed partial class EditorViewport : Control
     private static readonly Dictionary<MobyRasterIconAtlasCellId, int> MobyRasterIconAtlasDrawCounts = new();
     private readonly Dictionary<int, string> _normalTerrainTextureImageFiles = new();
     private readonly Dictionary<int, string> _closeTerrainTextureImageFiles = new();
+    private readonly Dictionary<int, TerrainTextureImageFileStamp>
+        _normalTerrainTextureImageFileStamps = new();
+    private readonly Dictionary<int, TerrainTextureImageFileStamp>
+        _closeTerrainTextureImageFileStamps = new();
     private readonly Dictionary<(int TextureId, NativeTerrainTexturePreviewTier Tier), Bitmap?> _terrainTextureImageCache = new();
     private readonly Dictionary<int, Color?> _normalTerrainTextureAverageColorCache = new();
     private readonly Dictionary<int, NativeTerrainLqTextureRecordPayload> _nativeTerrainLqTextureRecords = new();
@@ -133,7 +137,7 @@ public sealed partial class EditorViewport : Control
     private TerrainSceneViewMode _terrainSceneViewMode = TerrainSceneViewMode.CompleteScene;
     private Func<TerrainPolygon, TerrainPatchSafetyKind>? _terrainPatchSafetyClassifier;
     private Func<TerrainPolygon, int, TerrainBrushPreviewVertexKind>? _terrainBrushVertexClassifier;
-    private NativeEnvironmentColorTransform? _environmentGradePreview;
+    private EnvironmentGradeViewportPreview? _environmentGradePreview;
     private bool _useNativeTerrainDepthCue = true;
     private bool _flyGameViewCameraLocal;
     private bool _flyCameraIsOverview = true;
@@ -211,9 +215,9 @@ public sealed partial class EditorViewport : Control
 
     public Point LastPointerPosition => _lastPointerPosition;
 
-    public void SetEnvironmentGradePreview(NativeEnvironmentColorTransform? transform)
+    internal void SetEnvironmentGradePreview(EnvironmentGradeViewportPreview? preview)
     {
-        _environmentGradePreview = transform;
+        _environmentGradePreview = preview;
         InvalidateNativeTerrainBoundedFrame(incrementEnvironmentGeneration: true);
         InvalidateVisual();
     }
@@ -495,6 +499,16 @@ public sealed partial class EditorViewport : Control
         return ResolveTerrainTextureImagePath(textureId, tier);
     }
 
+    internal bool LoadTerrainTextureImageForTesting(
+        int textureId,
+        double minimumCameraDepth)
+    {
+        NativeTerrainTexturePreviewTier tier =
+            NativeTerrainTexturePreviewLod.SelectForMinimumCameraDepth(
+                minimumCameraDepth);
+        return GetTerrainTextureImage(textureId, tier) != null;
+    }
+
     internal NativeTerrainLqFrameSnapshot CaptureNativeTerrainLqFrameForTesting(
         int textureId,
         double planarEditorDepth,
@@ -555,31 +569,37 @@ public sealed partial class EditorViewport : Control
         IReadOnlyDictionary<int, string>? closeFiles = null,
         IReadOnlyDictionary<int, NativeTerrainLqTextureRecordPayload>? lowDetailTextures = null)
     {
-        foreach (Bitmap? bitmap in _terrainTextureImageCache.Values)
-            bitmap?.Dispose();
-        foreach (Bitmap? bitmap in _nativeTerrainLqFrameCache.Values)
-            bitmap?.Dispose();
-        _terrainTextureImageCache.Clear();
-        _normalTerrainTextureAverageColorCache.Clear();
-        _nativeTerrainLqFrameCache.Clear();
-        _normalTerrainTextureImageFiles.Clear();
-        _closeTerrainTextureImageFiles.Clear();
-        _nativeTerrainLqTextureRecords.Clear();
-
+        Dictionary<int, string> nextNormal = new();
+        Dictionary<int, string> nextClose = new();
+        Dictionary<int, TerrainTextureImageFileStamp> nextNormalStamps = new();
+        Dictionary<int, TerrainTextureImageFileStamp> nextCloseStamps = new();
+        Dictionary<int, NativeTerrainLqTextureRecordPayload> nextLowDetail = new();
         if (normalFiles != null)
         {
             foreach ((int textureId, string path) in normalFiles)
             {
-                if (textureId >= 0 && !string.IsNullOrWhiteSpace(path) && File.Exists(path))
-                    _normalTerrainTextureImageFiles[textureId] = path;
+                if (textureId >= 0 &&
+                    TryCreateTerrainTextureImageFileStamp(
+                        path,
+                        out TerrainTextureImageFileStamp stamp))
+                {
+                    nextNormal[textureId] = path;
+                    nextNormalStamps[textureId] = stamp;
+                }
             }
         }
         if (closeFiles != null)
         {
             foreach ((int textureId, string path) in closeFiles)
             {
-                if (textureId >= 0 && !string.IsNullOrWhiteSpace(path) && File.Exists(path))
-                    _closeTerrainTextureImageFiles[textureId] = path;
+                if (textureId >= 0 &&
+                    TryCreateTerrainTextureImageFileStamp(
+                        path,
+                        out TerrainTextureImageFileStamp stamp))
+                {
+                    nextClose[textureId] = path;
+                    nextCloseStamps[textureId] = stamp;
+                }
             }
         }
         if (lowDetailTextures != null)
@@ -587,13 +607,140 @@ public sealed partial class EditorViewport : Control
             foreach ((int textureId, NativeTerrainLqTextureRecordPayload texture) in lowDetailTextures)
             {
                 if (textureId >= 0 && texture != null)
-                    _nativeTerrainLqTextureRecords[textureId] = texture;
+                    nextLowDetail[textureId] = texture;
             }
         }
 
-        OnNativeTerrainLqRecordsChanged();
+        HashSet<int> changedTextureIds = ChangedFileStampTextureIds(
+            _normalTerrainTextureImageFileStamps,
+            nextNormalStamps);
+        changedTextureIds.UnionWith(ChangedFileStampTextureIds(
+            _closeTerrainTextureImageFileStamps,
+            nextCloseStamps));
+        HashSet<int> changedLowDetailIds = ChangedPayloadTextureIds(
+            _nativeTerrainLqTextureRecords,
+            nextLowDetail);
+        changedTextureIds.UnionWith(changedLowDetailIds);
+
+        foreach (var key in _terrainTextureImageCache.Keys
+            .Where(key => changedTextureIds.Contains(key.TextureId))
+            .ToArray())
+        {
+            _terrainTextureImageCache[key]?.Dispose();
+            _terrainTextureImageCache.Remove(key);
+        }
+        foreach (NativeTerrainLqFrameCacheKey key in _nativeTerrainLqFrameCache.Keys
+            .Where(key => changedTextureIds.Contains(key.TextureId))
+            .ToArray())
+        {
+            _nativeTerrainLqFrameCache[key]?.Dispose();
+            _nativeTerrainLqFrameCache.Remove(key);
+        }
+        foreach (int textureId in changedTextureIds)
+            _normalTerrainTextureAverageColorCache.Remove(textureId);
+
+        ReplaceDictionary(_normalTerrainTextureImageFiles, nextNormal);
+        ReplaceDictionary(_closeTerrainTextureImageFiles, nextClose);
+        ReplaceDictionary(_normalTerrainTextureImageFileStamps, nextNormalStamps);
+        ReplaceDictionary(_closeTerrainTextureImageFileStamps, nextCloseStamps);
+        ReplaceDictionary(_nativeTerrainLqTextureRecords, nextLowDetail);
+
+        if (changedLowDetailIds.Count > 0)
+            OnNativeTerrainLqRecordsChanged();
         InvalidateVisual();
     }
+
+    internal IReadOnlyList<(int TextureId, NativeTerrainTexturePreviewTier Tier)>
+        GetLoadedTerrainTextureImageCacheKeysForTesting() =>
+        _terrainTextureImageCache
+            .Where(item => item.Value != null)
+            .Select(item => item.Key)
+            .OrderBy(item => item.TextureId)
+            .ThenBy(item => item.Tier)
+            .ToArray();
+
+    private static HashSet<int> ChangedFileStampTextureIds(
+        IReadOnlyDictionary<int, TerrainTextureImageFileStamp> current,
+        IReadOnlyDictionary<int, TerrainTextureImageFileStamp> next)
+    {
+        HashSet<int> changed = current.Keys
+            .Concat(next.Keys)
+            .Distinct()
+            .Where(textureId =>
+                !current.TryGetValue(
+                    textureId,
+                    out TerrainTextureImageFileStamp currentStamp) ||
+                !next.TryGetValue(
+                    textureId,
+                    out TerrainTextureImageFileStamp nextStamp) ||
+                !string.Equals(
+                    currentStamp.FullPath,
+                    nextStamp.FullPath,
+                    StringComparison.OrdinalIgnoreCase) ||
+                currentStamp.Length != nextStamp.Length ||
+                currentStamp.LastWriteTimeUtcTicks != nextStamp.LastWriteTimeUtcTicks)
+            .ToHashSet();
+        return changed;
+    }
+
+    private static bool TryCreateTerrainTextureImageFileStamp(
+        string? path,
+        out TerrainTextureImageFileStamp stamp)
+    {
+        stamp = default;
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+        try
+        {
+            FileInfo info = new(Path.GetFullPath(path));
+            if (!info.Exists)
+                return false;
+            stamp = new TerrainTextureImageFileStamp(
+                info.FullName,
+                info.Length,
+                info.LastWriteTimeUtc.Ticks);
+            return true;
+        }
+        catch (Exception ex) when (
+            ex is IOException or UnauthorizedAccessException or
+                ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    private static HashSet<int> ChangedPayloadTextureIds(
+        IReadOnlyDictionary<int, NativeTerrainLqTextureRecordPayload> current,
+        IReadOnlyDictionary<int, NativeTerrainLqTextureRecordPayload> next)
+    {
+        return current.Keys
+            .Concat(next.Keys)
+            .Distinct()
+            .Where(textureId =>
+                !current.TryGetValue(
+                    textureId,
+                    out NativeTerrainLqTextureRecordPayload? currentPayload) ||
+                !next.TryGetValue(
+                    textureId,
+                    out NativeTerrainLqTextureRecordPayload? nextPayload) ||
+                !ReferenceEquals(currentPayload, nextPayload))
+            .ToHashSet();
+    }
+
+    private static void ReplaceDictionary<TKey, TValue>(
+        Dictionary<TKey, TValue> destination,
+        IReadOnlyDictionary<TKey, TValue> source)
+        where TKey : notnull
+    {
+        destination.Clear();
+        foreach ((TKey key, TValue value) in source)
+            destination[key] = value;
+    }
+
+    private readonly record struct TerrainTextureImageFileStamp(
+        string FullPath,
+        long Length,
+        long LastWriteTimeUtcTicks);
 
     public void ResetView()
     {
@@ -2453,9 +2600,14 @@ public sealed partial class EditorViewport : Control
                 face.Polygon.CornerColors.Distinct().Count();
         }
 
-        HashSet<int>? interactiveFullMaterialFaces = _flyNavigationInteractiveMaterialLod
-            ? SelectInteractiveFlyFullMaterialFaces(terrainFaces, bounds)
-            : null;
+        // Keep the rendered material topology invariant while the camera is
+        // moving.  The former input-time budget re-ranked sectors on every
+        // frame, reduced their Gouraud subdivision, and restored full detail
+        // after a 160 ms pause.  That produced the visible moving/stopped
+        // flash without a measurable navigation-speed benefit.  Gesture state
+        // remains tracked for diagnostics, but every visible source face now
+        // keeps the same material path throughout the gesture.
+        HashSet<int>? interactiveFullMaterialFaces = null;
         int visibleTerrainFaceCount = terrainFaces.Count(face => !face.IsAddCopySourcePreview);
         int forcedFullMaterialFaceCount = terrainFaces.Count(face =>
             !face.IsAddCopySourcePreview &&
@@ -4307,6 +4459,13 @@ public sealed partial class EditorViewport : Control
         if (IsQuestionableMobyMarker(moby))
             DrawNeedsIdBadge(context, point, size);
     }
+
+    internal static void DrawMobyMarkerPreview(
+        DrawingContext context,
+        Point point,
+        Moby moby,
+        double size) =>
+        DrawMoby(context, point, moby, selected: false, linked: false, size);
 
     private static bool IsQuestionableMobyMarker(Moby moby)
     {
@@ -7883,8 +8042,8 @@ public sealed partial class EditorViewport : Control
         string mode = flyView ? "Game Camera" : "Edit Map";
         string gameTerrainStatus = flyView && _flipMapY
             ? _flyGameViewCameraLocal && !_flyCameraIsOverview
-                ? "    terrain: retail materials + complete editable mesh"
-                : "    terrain: complete edit overview"
+                ? "    all editable terrain visible"
+                : "    complete terrain overview"
             : "";
         if (_terrainTexturePaintMode)
         {
@@ -10082,12 +10241,12 @@ public sealed partial class EditorViewport : Control
             return NativeTerrainFaceRenderKind.ProjectionDegenerate;
 
         double area = Math.Abs(PolygonArea(winding.Select(slot => rawPoints[slot]).ToArray()));
-        // The bounded navigation/overview lane may reduce the Gouraud fan to
-        // one subdivision, but it still draws the same native texture and the
-        // same four native corner colors.  This preserves the source material
-        // instead of reverting to the old flat averaged-color substitute while
-        // keeping camera movement responsive on whole-level scenes.
-        int subdivisions = reduceMaterialDetail || (flyView && _flyNavigationInteractiveMaterialLod)
+        // A camera gesture must not change the face's tessellation: changing
+        // between one and two/three Gouraud subdivisions exposed different
+        // underlay samples along affine texture edges and looked like texture
+        // flicker.  Explicit broad-overview underlays may still request the
+        // reduced lane, but ordinary terrain keeps one stable topology.
+        int subdivisions = reduceMaterialDetail
             ? 1
             : area >= 7200 ? 3 : 2;
         if (polygon.IsNativeUntexturedSentinel)
@@ -11253,7 +11412,7 @@ public sealed partial class EditorViewport : Control
     }
 
     private Spyro.Editor.Core.Primitives.ColorRgba PreviewEnvironmentColor(Spyro.Editor.Core.Primitives.ColorRgba color) =>
-        _environmentGradePreview?.ApplyTerrainSmoothing(color) ?? color;
+        _environmentGradePreview?.TransformSceneColor(color) ?? color;
 
     private Color PreviewEnvironmentColor(Color color)
     {

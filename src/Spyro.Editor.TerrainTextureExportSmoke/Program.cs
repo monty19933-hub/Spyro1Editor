@@ -34,7 +34,17 @@ if (args.Contains("--preview-decoder-only", StringComparer.OrdinalIgnoreCase))
 }
 if (args.Contains("--art-only-preserve-target-only", StringComparer.OrdinalIgnoreCase))
 {
-    await RunNativeUnreferencedArtOnlyExportSmokeAsync(
+    await RunArtOnlyPreserveTargetExportSmokeAsync(
+        workspaceRoot,
+        sourceImagePath,
+        sourceCuePath,
+        catalog,
+        cleanOutputs);
+    return;
+}
+if (args.Contains("--multi-donor-only", StringComparer.OrdinalIgnoreCase))
+{
+    await RunMultiDonorArtOnlyExportSmokeAsync(
         workspaceRoot,
         sourceImagePath,
         sourceCuePath,
@@ -286,31 +296,31 @@ if (cleanOutputs)
     Console.WriteLine("Disposable terrain texture smoke BIN/CUE pairs were removed after exact write/readback verification.");
 }
 
-static async Task RunNativeUnreferencedArtOnlyExportSmokeAsync(
+static async Task RunArtOnlyPreserveTargetExportSmokeAsync(
     string workspaceRoot,
     string sourceImagePath,
     string sourceCuePath,
     LevelCatalog catalog,
     bool cleanOutputs)
 {
-    const int TargetTextureId = 54;
-    const int DonorTextureId = 10;
+    const int TargetTextureId = 55;
+    const int DonorTextureId = 17;
     LevelDefinition target = catalog.FindByKey("artisans")
         ?? throw new InvalidOperationException("Artisans is missing from the level catalog.");
-    LevelDefinition donor = catalog.FindByKey("beastmakers")
-        ?? throw new InvalidOperationException("Beast Makers is missing from the level catalog.");
-    Assert(target.SourceWadEntry == 10 && donor.SourceWadEntry == 46,
-        "The focused Artisans/Beast Makers WAD identities changed from 10/46.");
+    LevelDefinition donor = catalog.FindByKey("gnastysworld")
+        ?? throw new InvalidOperationException("Gnasty's World is missing from the level catalog.");
+    Assert(target.SourceWadEntry == 10 && donor.SourceWadEntry == 70,
+        "The focused Artisans/Gnasty's World WAD identities changed from 10/70.");
 
     string outputRoot = Path.Combine(workspaceRoot, "_local", "smoke", "native-terrain-texture-export");
     Directory.CreateDirectory(outputRoot);
-    string outputPrefix = Path.Combine(outputRoot, "SpyroEditor-Artisans-T54-From-BeastMakers-T10-ArtOnly");
+    string outputPrefix = Path.Combine(outputRoot, "SpyroEditor-Artisans-T55-From-GnastysWorld-T17-ArtOnly");
     string outputImagePath = $"{outputPrefix}.bin";
     string outputCuePath = $"{outputPrefix}.cue";
     string outputPlanPath = $"{outputPrefix}.terrain-patch-plan.json";
-    string manifestPath = Path.Combine(outputRoot, "artisans-native-unreferenced-art-only-relocation.json");
-    string reportPath = Path.Combine(outputRoot, "artisans-native-unreferenced-art-only-export-smoke.json");
-    string markdownPath = Path.Combine(outputRoot, "artisans-native-unreferenced-art-only-export-smoke.md");
+    string manifestPath = Path.Combine(outputRoot, "artisans-user-pair-art-only-relocation.json");
+    string reportPath = Path.Combine(outputRoot, "artisans-user-pair-art-only-export-smoke.json");
+    string markdownPath = Path.Combine(outputRoot, "artisans-user-pair-art-only-export-smoke.md");
     foreach (string path in new[] { outputImagePath, outputCuePath, outputPlanPath, manifestPath, reportPath, markdownPath })
     {
         if (File.Exists(path))
@@ -388,7 +398,7 @@ static async Task RunNativeUnreferencedArtOnlyExportSmokeAsync(
         .LoadManifest(manifestPath, target.Key)
         .Single();
     Assert(saved.PreservesTargetNativeSurface &&
-           saved.DonorProvenanceKey == "native-texture-record:beastmakers:10",
+           saved.DonorProvenanceKey == "native-texture-record:gnastysworld:17",
         "The focused export manifest lost art-only mode or canonical texture-record provenance.");
 
     string sourceShaBefore = Sha256File(sourceImagePath);
@@ -500,12 +510,12 @@ static async Task RunNativeUnreferencedArtOnlyExportSmokeAsync(
         ManifestPath = manifestPath
     }, new JsonSerializerOptions { WriteIndented = true }));
     await File.WriteAllTextAsync(markdownPath, $"""
-        # Native-Unreferenced Art-Only Terrain Export Smoke
+        # Art-Only Preserve-Target Terrain Export Smoke
 
         Status: **PASSED**
 
         - Exact source role set: **{allDonorProofs.Count}/19** complete-record plans passed against Artisans texture {TargetTextureId}.
-        - Focused output: Artisans WAD {target.SourceWadEntry} texture {TargetTextureId} <- Beast Makers WAD {donor.SourceWadEntry} texture {DonorTextureId}.
+        - Focused output: Artisans WAD {target.SourceWadEntry} texture {TargetTextureId} <- Gnasty's World WAD {donor.SourceWadEntry} texture {DonorTextureId}; this is the exact pair reproduced from the user's no-visible-change session.
         - Apply mode: `{NativeTerrainTextureRelocationEditStore.ArtOnlyPreserveTargetMode}`.
         - Canonical provenance: `{saved.DonorProvenanceKey}`.
         - Strategy: `{focusedSummary.Strategy}`; descriptors: {focusedSummary.CompleteDescriptorCount}; exact changed bytes: {exactDiff.ExpectedDifferenceCount:N0}.
@@ -519,9 +529,9 @@ static async Task RunNativeUnreferencedArtOnlyExportSmokeAsync(
         Retained patch plan: `{outputPlanPath}`
         """);
 
-    Console.WriteLine("Native-unreferenced art-only terrain export smoke passed.");
+    Console.WriteLine("Art-only preserve-target terrain export smoke passed.");
     Console.WriteLine($"All exact donors preflighted: {allDonorProofs.Count}/19 complete-record plans.");
-    Console.WriteLine($"Pair: Artisans texture {TargetTextureId} <- Beast Makers native-unreferenced record {DonorTextureId}.");
+    Console.WriteLine($"Pair: Artisans texture {TargetTextureId} <- Gnasty's World texture {DonorTextureId}.");
     Console.WriteLine($"Strategy: {result.Plan.NativeTextureRelocations.Single().Strategy}; exact changed bytes: {exactDiff.ExpectedDifferenceCount:N0}; no face/material/tint/collision patches.");
     Console.WriteLine($"BIN: {outputImagePath}");
     Console.WriteLine($"CUE: {outputCuePath}");
@@ -533,6 +543,310 @@ static async Task RunNativeUnreferencedArtOnlyExportSmokeAsync(
         DeleteOutput(outputImagePath);
         DeleteOutput(outputCuePath);
     }
+}
+
+static async Task RunMultiDonorArtOnlyExportSmokeAsync(
+    string workspaceRoot,
+    string sourceImagePath,
+    string sourceCuePath,
+    LevelCatalog catalog,
+    bool cleanOutputs)
+{
+    NativeTerrainTexturePromotionAttemptSet largePromotionSearch =
+        NativeTerrainTextureRelocationAllocator.BuildBoundedPromotionAttempts(
+            Enumerable.Range(0, 68).Reverse().Concat([12, 12]).ToArray());
+    int[][] largePairAttempts = largePromotionSearch.Attempts
+        .Where(attempt => attempt.Length == 2)
+        .ToArray();
+    Assert(largePromotionSearch.CandidateCount == 68 &&
+           largePromotionSearch.TotalPairCount == 2_278 &&
+           largePromotionSearch.PairAttemptCount == NativeTerrainTextureRelocationAllocator.MaxPromotionPairAttempts &&
+           largePromotionSearch.PairAttemptsTruncated &&
+           largePromotionSearch.Attempts.Count == 1 + 68 + NativeTerrainTextureRelocationAllocator.MaxPromotionPairAttempts + 1 &&
+           largePromotionSearch.Attempts[0].Length == 0 &&
+           largePromotionSearch.Attempts[1].SequenceEqual([0]) &&
+           largePairAttempts.Length == NativeTerrainTextureRelocationAllocator.MaxPromotionPairAttempts &&
+           largePairAttempts[0].SequenceEqual([0, 1]) &&
+           largePairAttempts.Select(pair => $"{pair[0]}:{pair[1]}").Distinct(StringComparer.Ordinal).Count() ==
+               NativeTerrainTextureRelocationAllocator.MaxPromotionPairAttempts &&
+           largePromotionSearch.Attempts[^1].SequenceEqual(Enumerable.Range(0, 68)),
+        "The shared promotion planner did not bound a 68-record candidate set to 512 unique lexicographic pairs followed by the complete set.");
+
+    NativeTerrainTexturePromotionAttemptSet exactPromotionSearch =
+        NativeTerrainTextureRelocationAllocator.BuildBoundedPromotionAttempts(
+            [10, 22, 48, 52, 54, 55, 56]);
+    Assert(!exactPromotionSearch.PairAttemptsTruncated &&
+           exactPromotionSearch.Attempts.Any(attempt => attempt.SequenceEqual([48, 54])),
+        "The shared bounded promotion planner omitted the exact Artisans 48,54 pair.");
+
+    LevelDefinition target = catalog.FindByKey("artisans")
+        ?? throw new InvalidOperationException("Artisans is missing from the level catalog.");
+    LevelDefinition gnastysWorld = catalog.FindByKey("gnastysworld")
+        ?? throw new InvalidOperationException("Gnasty's World is missing from the level catalog.");
+    LevelDefinition darkPassage = catalog.FindByKey("darkpassage")
+        ?? throw new InvalidOperationException("Dark Passage is missing from the level catalog.");
+    LevelDefinition magicCrafters = catalog.FindByKey("magiccrafters")
+        ?? throw new InvalidOperationException("Magic Crafters is missing from the level catalog.");
+
+    string outputRoot = Path.Combine(workspaceRoot, "_local", "smoke", "native-terrain-texture-export");
+    Directory.CreateDirectory(outputRoot);
+    string outputPrefix = Path.Combine(outputRoot, "SpyroEditor-Artisans-Eight-Mixed-Gnasty-DarkPassage-ArtOnly");
+    string outputImagePath = $"{outputPrefix}.bin";
+    string outputCuePath = $"{outputPrefix}.cue";
+    string outputPlanPath = $"{outputPrefix}.terrain-patch-plan.json";
+    string manifestPath = Path.Combine(outputRoot, "artisans-mixed-donor-art-only-relocations.json");
+    string storeManifestPath = NativeTerrainTextureRelocationEditStore.ManifestPath(outputRoot, target.Key);
+    foreach (string path in new[] { outputImagePath, outputCuePath, outputPlanPath, manifestPath, storeManifestPath })
+    {
+        if (File.Exists(path))
+            File.Delete(path);
+    }
+
+    (int TargetTextureId, LevelDefinition DonorLevel, int DonorTextureId)[] recipes =
+    [
+        (10, gnastysWorld, 9),
+        (22, gnastysWorld, 29),
+        (48, gnastysWorld, 23),
+        (52, gnastysWorld, 7),
+        (54, gnastysWorld, 23),
+        (55, gnastysWorld, 17),
+        (56, gnastysWorld, 16),
+        (5, darkPassage, 31)
+    ];
+    IReadOnlyList<NativeTerrainTextureRelocationEdit> staged =
+        Array.Empty<NativeTerrainTextureRelocationEdit>();
+    for (int index = 0; index < recipes.Length; index++)
+    {
+        (int targetTextureId, LevelDefinition donorLevel, int donorTextureId) = recipes[index];
+        staged = await NativeTerrainTextureRelocationEditStore.AddOrReplaceArtOnlyAsync(
+            outputRoot,
+            target.Key,
+            target.DisplayName,
+            targetTextureId,
+            donorLevel.Key,
+            donorLevel.DisplayName,
+            donorLevel.SourceWadEntry,
+            donorTextureId);
+        Assert(staged.Count == index + 1,
+            $"Adding mixed-donor recipe {index + 1} replaced a prior saved relocation instead of merging by destination texture ID.");
+    }
+    File.Move(storeManifestPath, manifestPath, overwrite: true);
+
+    NativeTerrainTextureRelocationEdit[] saved = NativeTerrainTextureRelocationEditStore
+        .LoadManifest(manifestPath, target.Key)
+        .OrderBy(edit => edit.TargetTextureId)
+        .ToArray();
+    Assert(saved.Length == recipes.Length &&
+           recipes.All(recipe => saved.Any(edit =>
+               edit.TargetTextureId == recipe.TargetTextureId &&
+               edit.DonorTextureId == recipe.DonorTextureId &&
+               edit.PreservesTargetNativeSurface &&
+               string.Equals(edit.DonorLevelKey, recipe.DonorLevel.Key, StringComparison.OrdinalIgnoreCase))) &&
+           saved.Select(edit => edit.DonorWadEntry).Distinct().Count() == 2,
+        "The mixed-donor manifest lost a donor identity, target identity, or art-only mode on reload.");
+
+    string sourceShaBefore = Sha256File(sourceImagePath);
+    long sourceLengthBefore = ReadFileLength(sourceImagePath);
+    TerrainPatchPlan planned = TerrainPatchExporter.BuildPlan(
+        sourceImagePath,
+        sourceCuePath,
+        outputImagePath,
+        outputCuePath,
+        target,
+        ramPath: "",
+        sourceSearchPath: "",
+        terrainEditsPath: "",
+        customTexturesPath: "",
+        nativeTextureRelocationsPath: manifestPath);
+    AssertMultiDonorPlan(planned, "BuildPlan");
+
+    TerrainPatchResult result = await TerrainPatchExporter.ExportAsync(new TerrainPatchRequest(
+        sourceImagePath,
+        sourceCuePath,
+        outputPrefix,
+        target,
+        RamPath: "",
+        SourceSearchPath: "",
+        TerrainEditsPath: "",
+        CustomTexturesPath: "",
+        WriteImage: true,
+        NativeTextureRelocationsPath: manifestPath));
+    Assert(result.WroteImage && File.Exists(outputImagePath) && File.Exists(outputCuePath) && File.Exists(outputPlanPath),
+        "Mixed-donor ExportAsync did not retain its BIN/CUE/plan.");
+    AssertMultiDonorPlan(result.Plan, "ExportAsync");
+
+    TerrainPatchPlan serialized = JsonSerializer.Deserialize<TerrainPatchPlan>(
+            await File.ReadAllTextAsync(outputPlanPath),
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+        ?? throw new InvalidDataException("The mixed-donor retained plan could not be deserialized.");
+    AssertMultiDonorPlan(serialized, "serialized plan");
+
+    DiscLayoutInfo disc = DetectDiscLayout(sourceImagePath);
+    foreach (TerrainPatch patch in result.Plan.Patches)
+    {
+        long wadOffset = ParseHexLong(patch.WadRelativeOffset);
+        byte[] before = ParsePatchBytes(patch.BeforeHexPreview);
+        byte[] after = ParsePatchBytes(patch.AfterHexPreview);
+        Assert(ReadLogicalWadBytes(sourceImagePath, disc, wadOffset, before.Length).SequenceEqual(before),
+            $"Mixed-donor retail before-byte readback failed for {patch.Label}.");
+        Assert(ReadLogicalWadBytes(outputImagePath, disc, wadOffset, after.Length).SequenceEqual(after),
+            $"Mixed-donor output after-byte readback failed for {patch.Label}.");
+    }
+    ExactDiffResult exactDiff = CompareExactPhysicalDiff(sourceImagePath, outputImagePath, disc, result.Plan.Patches);
+    Assert(exactDiff.UnexpectedDifferenceCount == 0 &&
+           exactDiff.ExpectedDifferenceCount > 0 &&
+           exactDiff.ObservedExpectedDifferenceCount == exactDiff.ExpectedDifferenceCount,
+        "The mixed-donor BIN contains an absent planned difference or a byte difference outside its retained native-texture plan.");
+    Assert(ReadFileLength(outputImagePath) == sourceLengthBefore &&
+           ReadFileLength(sourceImagePath) == sourceLengthBefore &&
+           string.Equals(Sha256File(sourceImagePath), sourceShaBefore, StringComparison.OrdinalIgnoreCase),
+        "The mixed-donor export changed the retail source or fixed output length.");
+
+    string blockedManifestPath = Path.Combine(
+        outputRoot,
+        "artisans-dark-passage-t5-capacity-block-relocations.json");
+    NativeTerrainTextureRelocationEdit blockedEdit = saved.Single(edit => edit.TargetTextureId == 5);
+    await NativeTerrainTextureRelocationEditStore.SaveManifestAsync(
+        blockedManifestPath,
+        target.Key,
+        target.DisplayName,
+        [blockedEdit]);
+    TerrainPatchPlan blockedPlan = TerrainPatchExporter.BuildPlan(
+        sourceImagePath,
+        sourceCuePath,
+        Path.Combine(outputRoot, "blocked-capacity.bin"),
+        Path.Combine(outputRoot, "blocked-capacity.cue"),
+        target,
+        ramPath: "",
+        sourceSearchPath: "",
+        terrainEditsPath: "",
+        customTexturesPath: "",
+        nativeTextureRelocationsPath: blockedManifestPath);
+    Assert(blockedPlan.NativeTextureRelocationCount == 1 &&
+           blockedPlan.NativeTextureRelocations.Count == 0 &&
+           blockedPlan.Patches.All(patch =>
+               !patch.Kind.StartsWith("native-terrain-texture-", StringComparison.OrdinalIgnoreCase)) &&
+           blockedPlan.SkippedEdits.Count == 1 &&
+           blockedPlan.SkippedEdits[0].Contains("no native texture-art patch was applied", StringComparison.OrdinalIgnoreCase),
+        $"The capacity-limited single Dark Passage T31 -> Artisans T5 edit did not remain atomic and non-partial. " +
+        $"relocations={blockedPlan.NativeTextureRelocationCount}; patches={string.Join(',', blockedPlan.Patches.Select(patch => patch.Kind))}; " +
+        $"skipped={string.Join(" | ", blockedPlan.SkippedEdits)}");
+
+    foreach (int donorTextureId in new[] { 22, 20 })
+    {
+        string liveStateRoot = Path.Combine(outputRoot, $"artisans-live-eight-plus-t6-from-gnasty-{donorTextureId}");
+        if (Directory.Exists(liveStateRoot))
+            Directory.Delete(liveStateRoot, recursive: true);
+        Directory.CreateDirectory(liveStateRoot);
+
+        (int TargetTextureId, LevelDefinition DonorLevel, int DonorTextureId)[] liveRecipes =
+        [
+            (5, magicCrafters, 55),
+            (10, gnastysWorld, 9),
+            (22, gnastysWorld, 29),
+            (48, gnastysWorld, 23),
+            (52, gnastysWorld, 7),
+            (54, gnastysWorld, 23),
+            (55, gnastysWorld, 17),
+            (56, gnastysWorld, 16),
+            (6, gnastysWorld, donorTextureId)
+        ];
+        IReadOnlyList<NativeTerrainTextureRelocationEdit> liveStaged =
+            Array.Empty<NativeTerrainTextureRelocationEdit>();
+        foreach ((int targetTextureId, LevelDefinition donorLevel, int sourceTextureId) in liveRecipes)
+        {
+            liveStaged = await NativeTerrainTextureRelocationEditStore.AddOrReplaceArtOnlyAsync(
+                liveStateRoot,
+                target.Key,
+                target.DisplayName,
+                targetTextureId,
+                donorLevel.Key,
+                donorLevel.DisplayName,
+                donorLevel.SourceWadEntry,
+                sourceTextureId);
+        }
+        Assert(liveStaged.Count == liveRecipes.Length,
+            $"The live Artisans eight-edit state plus target 6 donor {donorTextureId} did not retain all nine edits.");
+
+        string liveManifestPath = NativeTerrainTextureRelocationEditStore.ManifestPath(liveStateRoot, target.Key);
+        TerrainPatchPlan livePlan = TerrainPatchExporter.BuildPlan(
+            sourceImagePath,
+            sourceCuePath,
+            Path.Combine(liveStateRoot, "pair-promotion.bin"),
+            Path.Combine(liveStateRoot, "pair-promotion.cue"),
+            target,
+            ramPath: "",
+            sourceSearchPath: "",
+            terrainEditsPath: "",
+            customTexturesPath: "",
+            nativeTextureRelocationsPath: liveManifestPath);
+        NativeTerrainTextureRelocationPatchSummary promotedPair = livePlan.NativeTextureRelocations
+            .Single(summary =>
+                string.Equals(summary.Strategy, "byte-private-relocation", StringComparison.Ordinal) &&
+                summary.TargetTextureIds.Contains(6));
+        int[] expectedPairClosure = [5, 6, 7, 48, 54];
+        Assert(livePlan.NativeTextureRelocationCount == liveRecipes.Length &&
+               livePlan.SkippedEdits.Count == 0 &&
+               promotedPair.TargetTextureIds.SequenceEqual(expectedPairClosure) &&
+               promotedPair.CompleteDescriptorCount == ExpectedDescriptorCount * expectedPairClosure.Length &&
+               promotedPair.RuntimeControlVerified &&
+               promotedPair.OwnershipVerified &&
+               promotedPair.ExactIndexedPixelsVerified &&
+               promotedPair.ExactPalettesVerified &&
+               promotedPair.LogicalReadbackVerified &&
+               promotedPair.TargetDescriptorMaterialPolicyVerified &&
+               promotedPair.Notes.Any(note =>
+                   note.Contains("promoted explicit in-place texture edit(s) 48, 54", StringComparison.OrdinalIgnoreCase)),
+            $"The exact live Artisans state plus target 6 <- Gnasty's World texture {donorTextureId} did not select the minimal proven pair promotion closure 5,6,7,48,54. " +
+            $"summaries={string.Join(" | ", livePlan.NativeTextureRelocations.Select(summary => $"{summary.Strategy}[{string.Join(',', summary.TargetTextureIds)}]"))}; " +
+            $"skipped={string.Join(" | ", livePlan.SkippedEdits)}");
+    }
+
+    Console.WriteLine("Mixed-donor native terrain texture export smoke passed.");
+    Console.WriteLine("Destination: Artisans; seven staged Gnasty's World records plus Dark Passage texture 31 -> target 5.");
+    Console.WriteLine($"Manifest reload: {saved.Length} edits from {saved.Select(edit => edit.DonorWadEntry).Distinct().Count()} donor WADs; exact planned differences: {exactDiff.ExpectedDifferenceCount:N0}; unexpected differences: 0; unassisted T5 capacity block stayed atomic; exact live T5 Magic 55 plus seven Gnasty edits accepted T6 donors 22 and 20 through pair promotion 48,54.");
+    Console.WriteLine($"BIN: {outputImagePath}");
+    Console.WriteLine($"CUE: {outputCuePath}");
+    Console.WriteLine($"Plan: {outputPlanPath}");
+
+    if (cleanOutputs)
+    {
+        DeleteOutput(outputImagePath);
+        DeleteOutput(outputCuePath);
+    }
+}
+
+static void AssertMultiDonorPlan(TerrainPatchPlan plan, string stage)
+{
+    int[] targets = plan.NativeTextureRelocations
+        .SelectMany(summary => summary.TargetTextureIds)
+        .Distinct()
+        .Order()
+        .ToArray();
+    string[] donorDescriptions = plan.NativeTextureRelocations
+        .SelectMany(summary => summary.DonorTextures)
+        .ToArray();
+    int[] requestedTargets = [5, 10, 22, 48, 52, 54, 55, 56];
+    Assert(plan.NativeTextureRelocationCount == requestedTargets.Length &&
+           requestedTargets.All(targets.Contains) &&
+           donorDescriptions.Any(description => description.Contains("Gnasty's World", StringComparison.OrdinalIgnoreCase)) &&
+           donorDescriptions.Any(description => description.Contains("Dark Passage", StringComparison.OrdinalIgnoreCase)) &&
+           plan.PatchCount > 0 &&
+           plan.SkippedEdits.Count == 0,
+        $"{stage}: the eight requested targets across two donor levels were missing, empty, or partially skipped. " +
+        $"requestedCount={plan.NativeTextureRelocationCount}; summaryTargets={string.Join(',', targets)}; summaries={plan.NativeTextureRelocations.Count}; " +
+        $"patches={plan.PatchCount}; skipped={string.Join(" | ", plan.SkippedEdits)}");
+    Assert(plan.Patches.All(patch =>
+            patch.Kind.StartsWith("native-terrain-texture-", StringComparison.OrdinalIgnoreCase)),
+        $"{stage}: the art-only mixed-donor plan emitted a face, tint, scene, material, collision, or surface-property patch.");
+    Assert(plan.NativeTextureRelocations.All(summary =>
+            summary.RuntimeControlVerified &&
+            summary.OwnershipVerified &&
+            summary.ExactIndexedPixelsVerified &&
+            summary.ExactPalettesVerified &&
+            summary.LogicalReadbackVerified &&
+            summary.TargetDescriptorMaterialPolicyVerified),
+        $"{stage}: a mixed-donor relocation omitted runtime, ownership, exact-readback, or target-material evidence.");
 }
 
 static void AssertArtOnlyPlan(TerrainPatchPlan plan, string stage)

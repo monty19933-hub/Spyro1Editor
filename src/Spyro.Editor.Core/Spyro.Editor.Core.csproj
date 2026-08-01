@@ -6,4 +6,10 @@
     <AssemblyName>Spyro.Editor.Core</AssemblyName>
     <RootNamespace>Spyro.Editor.Core</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Spyro.Editor.DiscImageWorkingCopySmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.DeadUnreferencedTextureStorageSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.FarLodTextureCompanionSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.SourceAnalysisSessionCacheSmoke" />
+  </ItemGroup>
 </Project>

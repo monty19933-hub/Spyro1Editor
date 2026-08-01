@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIGURATION="${CONFIGURATION:-Release}"
-DIST_DIR="$ROOT_DIR/dist/release"
+DIST_DIR="${DIST_DIR:-$ROOT_DIR/dist/release}"
 APP_PROJECT="$ROOT_DIR/src/Spyro.Editor.App/Spyro.Editor.App.csproj"
 MAC_ENTITLEMENTS="$ROOT_DIR/tools/SpyroEditor.macOS.entitlements"
 MAC_BUILD_MODE="${SPYRO_EDITOR_MAC_BUILD_MODE:-}"
@@ -483,8 +483,13 @@ copy_release_files() {
 
     cp "$ROOT_DIR/spyro-level-catalog.json" "$support_dir/spyro-level-catalog.json"
     cp "$ROOT_DIR/spyro-object-templates.json" "$support_dir/spyro-object-templates.json"
-    cp "$ROOT_DIR/docs/release-user-guide.md" "$support_dir/docs/release-user-guide.md"
-    cp "$ROOT_DIR/docs/known-limitations.md" "$support_dir/docs/known-limitations.md"
+    if is_research_build; then
+        cp "$ROOT_DIR/docs/release-user-guide.md" "$support_dir/docs/release-user-guide.md"
+        cp "$ROOT_DIR/docs/known-limitations.md" "$support_dir/docs/known-limitations.md"
+    else
+        cp "$ROOT_DIR/docs/public-user-guide.md" "$support_dir/docs/release-user-guide.md"
+        cp "$ROOT_DIR/docs/public-known-limitations.md" "$support_dir/docs/known-limitations.md"
+    fi
 
     find "$ROOT_DIR" -maxdepth 1 \
         \( -name '*-moby-user-overrides.json' -o -name '*-live-validation-overrides.json' -o -name '*-behavior-links.json' \) \
@@ -494,8 +499,14 @@ copy_release_files() {
         cat > "$package_dir/README.txt" <<'README'
 Spyro Editor research build
 
-Start with Launch Spyro Editor Beta Preview to test the normal customer UI.
-Use Launch Spyro Editor Research only when you need the advanced research tabs.
+Start with Launch Spyro Editor Research. This launcher enables the guarded
+private terrain-texture allocator used by this test package.
+
+When a release build has already created protected project storage, the
+research launcher opens that same current project so its saved level edits,
+custom textures, skies, and settings remain available. Research mode stays
+enabled. If no valid release project is registered, the launcher safely falls
+back to this extracted package folder.
 
 Use Open BIN/CUE inside the editor and choose your own Spyro the Dragon disc
 image. The editor rebuilds terrain maps and object placement from that selected
@@ -511,6 +522,13 @@ support ZIP beside its output and never includes the BIN/CUE in that ZIP.
 This research build exposes Advanced tools for disposable candidate tests.
 Unsafe append research BINs bypass normal enemy/chest export guards and may
 create inert, invisible, or broken objects.
+
+Private terrain-texture research permits at most 50 distinct appended rows per
+destination, and the exact native ID, structural, and page allocators may reject
+a particular level or donor set before that maximum. Matching staged
+donor/material rows can be reused without consuming another row. The wider
+50-row policy is static-only and runtime-unverified; normal release
+authorization is unchanged.
 
 More detail:
   support/docs/release-user-guide.md
@@ -532,29 +550,14 @@ disc image, then writes patched test BIN/CUE output to the output folder.
 This package does not include game data, BIOS files, emulator files, RAM dumps,
 patched discs, or extracted assets.
 
-Use Diagnostics in the editor to copy a crash/runtime-test report or create a
-metadata-only support ZIP. Create BIN writes a matching diagnostics report and
-support ZIP beside its output and never includes the BIN/CUE in that ZIP.
+Use Build Safety before Create BIN. The editor reports any edit that needs
+attention and lets you double-click an affected object or terrain section to
+find it. Create BIN always writes a new BIN/CUE and leaves your original disc
+image untouched.
 
-The beta includes native all-level sky recoloring, guarded same-disc sky swaps,
-three original sky recipes, one-click level terrain palette matching, native
-.sky imports, guarded native object lighting with zero object-row reroutes,
-guarded native terrain texture swaps with selected-face source-verified
-near/fade tints and proven cross-level record relocation, while arbitrary custom
-PNG BIN writeback remains blocked, plus the guarded existing-slot chest/enemy Replace
-catalogue. Its cross-level chest/enemy choices
-remain guarded behind Create Swap Test unless a target recipe has passed live
-runtime proof. Blowhard Green Wizard v2 and the exact Magic Crafters T107 to T27
-v2 route are composed by normal Create BIN, and
-the Toasty v11 standalone bundle is runtime-proven but remains profile-gated in
-the editor. Magic Crafters v1's lightning missed Spyro; v2 reuses the target's
-existing properties extent without scene-component growth and passed the focused
-DuckStation hit/behavior proof. Other Magic Crafters targets and true Add remain
-guarded. Wizard Peak now exposes the exact runtime-proven native T6 to pod-matched
-Elder Wizard T24 v3 route through Replace; normal Create BIN and Create Swap Test
-compose it while both failed T10 candidates remain blocked. Unsafe append
-and actor-package probes, smoke tests, and Spring Chest import experiments are
-intentionally hidden.
+Your projects and saved edits live outside the application folder, so replacing
+the app with a newer beta does not erase them. See the included guide for
+object placement, terrain painting, skies, music, backups, and updates.
 
 More detail:
   support/docs/release-user-guide.md
@@ -608,18 +611,11 @@ cd "$(dirname "$0")"
 mkdir -p output
 export SPYRO_EDITOR_WORKSPACE="$PWD"
 export SPYRO_EDITOR_RELEASE=0
+export SPYRO_EDITOR_USE_CURRENT_RELEASE_PROJECT=1
+export SPYRO_EDITOR_ENABLE_APPENDED_PRIVATE_TEXTURES=1
 "./Spyro Editor.app/Contents/MacOS/Spyro.Editor.App"
 LAUNCHER
         chmod +x "$package_dir/Launch Spyro Editor Research.command"
-        cat > "$package_dir/Launch Spyro Editor Beta Preview.command" <<'LAUNCHER'
-#!/bin/zsh
-set -e
-cd "$(dirname "$0")"
-export SPYRO_EDITOR_INSTALL_ROOT="$PWD"
-export SPYRO_EDITOR_RELEASE=1
-"./Spyro Editor.app/Contents/MacOS/Spyro.Editor.App"
-LAUNCHER
-        chmod +x "$package_dir/Launch Spyro Editor Beta Preview.command"
     fi
 }
 
@@ -733,6 +729,102 @@ PLIST
     chmod +x "$macos_dir/Spyro.Editor.App"
 }
 
+install_portable_macos_compression_runtime() {
+    local app_bundle="$1"
+    local macos_dir="$app_bundle/Contents/MacOS"
+    local resources_dir="$app_bundle/Contents/Resources"
+    local compression_native="$macos_dir/libSystem.IO.Compression.Native.dylib"
+    local runtime_config="$macos_dir/Spyro.Editor.App.runtimeconfig.json"
+    local runtime_version="10.0.7"
+    local runtime_archive_name="dotnet-runtime-$runtime_version-osx-arm64.tar.gz"
+    local runtime_url="https://builds.dotnet.microsoft.com/dotnet/Runtime/$runtime_version/$runtime_archive_name"
+    local runtime_archive_sha256="eb07b63df812699ebdcba28c0a883659d41ab70a0aa1056ff2aaa3264778f63c"
+    local compression_sha256="d2f30a3b1623eef68d2ad8e6068a131906bc2628bb35f6c8a9995275d4ef9182"
+    local cache_dir="${SPYRO_EDITOR_RUNTIME_CACHE_DIR:-$HOME/.cache/spyro-editor/release-runtime}"
+    local runtime_archive="$cache_dir/$runtime_archive_name"
+
+    [[ -f "$compression_native" ]] || {
+        echo "Missing self-contained .NET compression runtime: $compression_native" >&2
+        return 1
+    }
+    [[ -f "$runtime_config" ]] || {
+        echo "Missing self-contained .NET runtime configuration: $runtime_config" >&2
+        return 1
+    }
+    python3 - "$runtime_config" "$runtime_version" <<'PY' || {
+import json
+import sys
+
+path, expected = sys.argv[1:]
+with open(path, "r", encoding="utf-8") as stream:
+    document = json.load(stream)
+frameworks = document.get("runtimeOptions", {}).get("includedFrameworks", [])
+actual = next((item.get("version") for item in frameworks if item.get("name") == "Microsoft.NETCore.App"), None)
+raise SystemExit(0 if actual == expected else 1)
+PY
+        echo "The packaged Microsoft.NETCore.App version is not the pinned portable runtime $runtime_version." >&2
+        return 1
+    }
+
+    for command_name in curl otool shasum tar; do
+        command -v "$command_name" >/dev/null 2>&1 || {
+            echo "macOS portable compression runtime installation requires $command_name." >&2
+            return 1
+        }
+    done
+
+    # Homebrew's .NET runtime links this one native component to ad-hoc Brotli
+    # bottles outside the app. Hardened Runtime correctly rejects those libraries,
+    # and older clients may not have Homebrew at all. Replace only that component
+    # with Microsoft's exact-version portable runtime binary instead of weakening
+    # library validation or shipping host-built, macOS-26-only bottles.
+    if otool -L "$compression_native" | tail -n +2 | rg -q '/opt/homebrew/|/usr/local/|/Users/'; then
+        mkdir -p "$cache_dir"
+        if [[ ! -f "$runtime_archive" ]] || \
+           [[ "$(shasum -a 256 "$runtime_archive" | awk '{print $1}')" != "$runtime_archive_sha256" ]]; then
+            rm -f "$runtime_archive" "$runtime_archive.partial"
+            echo "Downloading pinned Microsoft .NET $runtime_version portable runtime for macOS compression closure."
+            curl --fail --location --retry 3 --output "$runtime_archive.partial" "$runtime_url"
+            [[ "$(shasum -a 256 "$runtime_archive.partial" | awk '{print $1}')" == "$runtime_archive_sha256" ]] || {
+                rm -f "$runtime_archive.partial"
+                echo "Pinned Microsoft .NET runtime archive checksum mismatch." >&2
+                return 1
+            }
+            mv "$runtime_archive.partial" "$runtime_archive"
+        fi
+
+        (
+            set -e
+            local temp_dir
+            temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/spyro-editor-dotnet-runtime.XXXXXX")"
+            trap 'rm -rf "$temp_dir"' EXIT
+            tar -xzf "$runtime_archive" -C "$temp_dir" \
+                "./shared/Microsoft.NETCore.App/$runtime_version/libSystem.IO.Compression.Native.dylib" \
+                "./LICENSE.txt" \
+                "./ThirdPartyNotices.txt"
+            local portable_compression="$temp_dir/shared/Microsoft.NETCore.App/$runtime_version/libSystem.IO.Compression.Native.dylib"
+            [[ "$(shasum -a 256 "$portable_compression" | awk '{print $1}')" == "$compression_sha256" ]] || {
+                echo "Pinned Microsoft .NET compression runtime checksum mismatch." >&2
+                exit 1
+            }
+            cp "$portable_compression" "$compression_native"
+            mkdir -p "$resources_dir/ThirdPartyLicenses"
+            cp "$temp_dir/LICENSE.txt" "$resources_dir/ThirdPartyLicenses/Microsoft-DotNet-LICENSE.txt"
+            cp "$temp_dir/ThirdPartyNotices.txt" "$resources_dir/ThirdPartyLicenses/Microsoft-DotNet-ThirdPartyNotices.txt"
+        )
+    fi
+
+    [[ "$(shasum -a 256 "$compression_native" | awk '{print $1}')" == "$compression_sha256" ]] || {
+        echo "The packaged compression runtime is not Microsoft's pinned portable $runtime_version binary." >&2
+        return 1
+    }
+    if otool -L "$compression_native" | tail -n +2 | rg -q '/opt/homebrew/|/usr/local/|/Users/'; then
+        echo "The portable compression runtime still contains a host-only dependency." >&2
+        return 1
+    fi
+    chmod +x "$compression_native"
+}
+
 write_windows_launcher() {
     local package_dir="$1"
     if is_research_build; then
@@ -743,14 +835,8 @@ cd /d "%~dp0"
 if not exist "%~dp0output" mkdir "%~dp0output"
 set "SPYRO_EDITOR_WORKSPACE=%CD%"
 set "SPYRO_EDITOR_RELEASE=0"
-"%~dp0support\app\Spyro.Editor.App.exe"
-LAUNCHER
-        cat > "$package_dir/Launch Spyro Editor Beta Preview.bat" <<'LAUNCHER'
-@echo off
-setlocal
-cd /d "%~dp0"
-set "SPYRO_EDITOR_INSTALL_ROOT=%CD%"
-set "SPYRO_EDITOR_RELEASE=1"
+set "SPYRO_EDITOR_USE_CURRENT_RELEASE_PROJECT=1"
+set "SPYRO_EDITOR_ENABLE_APPENDED_PRIVATE_TEXTURES=1"
 "%~dp0support\app\Spyro.Editor.App.exe"
 LAUNCHER
     else
@@ -760,6 +846,7 @@ setlocal
 cd /d "%~dp0"
 set "SPYRO_EDITOR_INSTALL_ROOT=%CD%"
 set "SPYRO_EDITOR_RELEASE=1"
+set "SPYRO_EDITOR_ENABLE_APPENDED_PRIVATE_TEXTURES="
 "%~dp0support\app\Spyro.Editor.App.exe"
 LAUNCHER
     fi
@@ -788,6 +875,7 @@ publish_release_package() {
     if [[ "$rid" == osx-* ]]; then
         local mac_build_mode
         write_mac_app_bundle "$package_dir"
+        install_portable_macos_compression_runtime "$package_dir/Spyro Editor.app"
         write_mac_launcher "$package_dir"
         mac_build_mode="$(resolve_mac_build_mode)"
         case "$mac_build_mode" in

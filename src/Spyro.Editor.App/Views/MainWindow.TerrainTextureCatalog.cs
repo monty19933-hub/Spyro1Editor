@@ -26,6 +26,15 @@ public sealed partial class MainWindow
     private string _nativeTerrainRuntimeControlSourceImage = "";
     private long _nativeTerrainRuntimeControlSourceLength = -1;
     private DateTime _nativeTerrainRuntimeControlSourceWriteUtc = DateTime.MinValue;
+    private readonly Dictionary<string, NativeTerrainDonorGeometryCacheEntry> _nativeTerrainDonorGeometryCache =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, NativeTerrainTextureCatalogCacheEntry> _nativeTerrainTextureCatalogCache =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, NativeTerrainVisualDonorCacheEntry> _nativeTerrainVisualDonorCache =
+        new(StringComparer.OrdinalIgnoreCase);
+    private string _nativeTerrainVisualDonorSourceImage = "";
+    private long _nativeTerrainVisualDonorSourceLength = -1;
+    private DateTime _nativeTerrainVisualDonorSourceWriteUtc = DateTime.MinValue;
 
     private GeometryCandidate? TryLoadNativeTerrainDonorGeometry(
         LevelDefinition level,
@@ -49,9 +58,31 @@ public sealed partial class MainWindow
                 return null;
             }
 
+            FileInfo overlayInfo = new(overlayPath);
+            string levelKey = LevelCatalog.NormalizeKey(level.Key);
+            if (_nativeTerrainDonorGeometryCache.TryGetValue(
+                    levelKey,
+                    out NativeTerrainDonorGeometryCacheEntry? cached) &&
+                string.Equals(
+                    cached.OverlayPath,
+                    overlayPath,
+                    StringComparison.OrdinalIgnoreCase) &&
+                cached.OverlayLength == overlayInfo.Length &&
+                cached.OverlayWriteUtc == overlayInfo.LastWriteTimeUtc)
+            {
+                return cached.Geometry;
+            }
+
             // Deliberately load only the immutable overlay. Donor choices must not inherit the
             // current project's saved terrain edits, material overrides, or custom texture art.
-            return GeometryOverlayLoader.LoadFirstCandidate(overlayPath);
+            GeometryCandidate geometry = GeometryOverlayLoader.LoadFirstCandidate(overlayPath);
+            _nativeTerrainDonorGeometryCache[levelKey] =
+                new NativeTerrainDonorGeometryCacheEntry(
+                    overlayPath,
+                    overlayInfo.Length,
+                    overlayInfo.LastWriteTimeUtc,
+                    geometry);
+            return geometry;
         }
         catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or IOException or System.Text.Json.JsonException)
         {
@@ -177,7 +208,7 @@ public sealed partial class MainWindow
         return "ground";
     }
 
-    private static bool TrySelectNativeTerrainVisualDonor(
+    private bool TrySelectNativeTerrainVisualDonor(
         string sourceImagePath,
         LevelDefinition level,
         int textureId,
@@ -188,6 +219,42 @@ public sealed partial class MainWindow
     {
         representative = null!;
         visual = null!;
+        FileInfo sourceInfo = new(sourceImagePath);
+        if (!string.Equals(
+                _nativeTerrainVisualDonorSourceImage,
+                sourceImagePath,
+                StringComparison.OrdinalIgnoreCase) ||
+            _nativeTerrainVisualDonorSourceLength != sourceInfo.Length ||
+            _nativeTerrainVisualDonorSourceWriteUtc != sourceInfo.LastWriteTimeUtc)
+        {
+            _nativeTerrainVisualDonorCache.Clear();
+            _nativeTerrainVisualDonorSourceImage = sourceImagePath;
+            _nativeTerrainVisualDonorSourceLength = sourceInfo.Length;
+            _nativeTerrainVisualDonorSourceWriteUtc = sourceInfo.LastWriteTimeUtc;
+        }
+
+        string cacheKey =
+            $"{LevelCatalog.NormalizeKey(level.Key)}:{textureId.ToString(CultureInfo.InvariantCulture)}";
+        if (_nativeTerrainVisualDonorCache.TryGetValue(
+                cacheKey,
+                out NativeTerrainVisualDonorCacheEntry? cached))
+        {
+            TerrainPolygon? cachedRepresentative = sourceFaces.FirstOrDefault(face =>
+                string.Equals(
+                    face.RuntimeKey,
+                    cached.RepresentativeRuntimeKey,
+                    StringComparison.OrdinalIgnoreCase));
+            if (cachedRepresentative != null)
+            {
+                representative = cachedRepresentative;
+                visual = cached.Visual;
+                note = cached.Note;
+                return cached.Success;
+            }
+
+            _nativeTerrainVisualDonorCache.Remove(cacheKey);
+        }
+
         string lastError = "No high-detail source face was available.";
         TerrainPolygon[] ranked = sourceFaces
             .Where(face =>
@@ -222,10 +289,22 @@ public sealed partial class MainWindow
             note = visual.UniqueCornerPairCount == 1
                 ? $"Source face {face.RuntimeKey} supplies one uniform native near/fade tint pair."
                 : $"Source face {face.RuntimeKey} supplies {visual.UniqueCornerPairCount} native near/fade corner tint pairs.";
+            _nativeTerrainVisualDonorCache[cacheKey] =
+                new NativeTerrainVisualDonorCacheEntry(
+                    true,
+                    face.RuntimeKey,
+                    visual,
+                    note);
             return true;
         }
 
         note = $"No source-verifiable visual donor was found for texture {textureId}. {lastError}";
+        _nativeTerrainVisualDonorCache[cacheKey] =
+            new NativeTerrainVisualDonorCacheEntry(
+                false,
+                ranked.FirstOrDefault()?.RuntimeKey ?? "",
+                null!,
+                note);
         return false;
     }
 
@@ -365,7 +444,23 @@ public sealed partial class MainWindow
         {
             try
             {
-                slots = TerrainPatchExporter.InspectTextureSlots(sourceImage, level);
+                FileInfo sourceInfo = new(sourceImage);
+                string levelKey = LevelCatalog.NormalizeKey(level.Key);
+                if (_nativeTerrainTextureCatalogCache.TryGetValue(
+                        levelKey,
+                        out NativeTerrainTextureCatalogCacheEntry? cached) &&
+                    string.Equals(
+                        cached.SourceImagePath,
+                        sourceImage,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    cached.SourceImageLength == sourceInfo.Length &&
+                    cached.SourceImageWriteUtc == sourceInfo.LastWriteTimeUtc &&
+                    ReferenceEquals(cached.Geometry, geometry))
+                {
+                    error = cached.Error;
+                    return cached.Catalog;
+                }
+
                 runtimeControlAudit = InspectNativeTerrainRuntimeControls(sourceImage, level);
                 if (!runtimeControlAudit.Complete)
                 {
@@ -373,6 +468,36 @@ public sealed partial class MainWindow
                         ?? "The runtime texture-control audit is incomplete.";
                     error = string.IsNullOrWhiteSpace(error) ? blocker : $"{error} {blocker}";
                 }
+                else
+                {
+                    // Donor art must be judged after the retail loader has
+                    // initialized animation/scroll destinations. The exporter
+                    // uses the same initialized record and still repeats its
+                    // ownership, alias, and final-readback proofs.
+                    slots = TerrainPatchExporter.InspectInitializedTextureSlots(
+                        sourceImage,
+                        level,
+                        runtimeControlAudit);
+                }
+
+                TerrainTextureCatalog catalog = TerrainTextureCatalogBuilder.Build([
+                    new TerrainTextureCatalogLevelInput
+                    {
+                        Level = level,
+                        Geometry = geometry,
+                        TextureSlots = slots,
+                        RuntimeControlAudit = runtimeControlAudit
+                    }
+                ]);
+                _nativeTerrainTextureCatalogCache[levelKey] =
+                    new NativeTerrainTextureCatalogCacheEntry(
+                        sourceImage,
+                        sourceInfo.Length,
+                        sourceInfo.LastWriteTimeUtc,
+                        geometry,
+                        catalog,
+                        error);
+                return catalog;
             }
             catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or IOException)
             {
@@ -390,6 +515,26 @@ public sealed partial class MainWindow
             }
         ]);
     }
+
+    private sealed record NativeTerrainDonorGeometryCacheEntry(
+        string OverlayPath,
+        long OverlayLength,
+        DateTime OverlayWriteUtc,
+        GeometryCandidate Geometry);
+
+    private sealed record NativeTerrainTextureCatalogCacheEntry(
+        string SourceImagePath,
+        long SourceImageLength,
+        DateTime SourceImageWriteUtc,
+        GeometryCandidate Geometry,
+        TerrainTextureCatalog Catalog,
+        string Error);
+
+    private sealed record NativeTerrainVisualDonorCacheEntry(
+        bool Success,
+        string RepresentativeRuntimeKey,
+        TerrainTextureVisualEdit Visual,
+        string Note);
 
     private NativeTerrainTextureRuntimeControlAudit InspectNativeTerrainRuntimeControls(
         string sourceImage,
@@ -431,6 +576,7 @@ public sealed partial class MainWindow
         int targetTextureId,
         int donorTextureId,
         bool preserveTargetDescriptorMaterial,
+        IReadOnlyList<NativeTerrainTextureRelocationEdit> existingEdits,
         out string strategy,
         out string reason)
     {
@@ -478,22 +624,149 @@ public sealed partial class MainWindow
             inPlaceFailure = ex.Message;
         }
 
-        if (!NativeTexturePageOwnershipScanner.TryBuildRelocationOwnershipProof(
-                sourceImage,
-                targetLevel,
-                [targetTextureId],
-                out NativeTexturePageRelocationOwnershipProofResult? relocationProof,
-                out string ownershipFailure) ||
-            relocationProof == null)
+        ArgumentNullException.ThrowIfNull(existingEdits);
+        Dictionary<int, NativeTerrainTextureRelocationImport> explicitImports = existingEdits
+            .Where(edit => edit.TargetTextureId != targetTextureId)
+            .ToDictionary(
+                edit => edit.TargetTextureId,
+                edit => new NativeTerrainTextureRelocationImport(
+                    edit.TargetTextureId,
+                    edit.DonorWadEntry,
+                    edit.DonorTextureId,
+                    edit.DescriptorTier,
+                    edit.PreservesTargetNativeSurface));
+        explicitImports[targetTextureId] = new NativeTerrainTextureRelocationImport(
+            targetTextureId,
+            donorLevel.SourceWadEntry,
+            donorTextureId,
+            NativeTerrainTextureRelocationEditStore.CompleteDescriptorTier,
+            preserveTargetDescriptorMaterial);
+
+        HashSet<int> requiredFallbackTargets = [targetTextureId];
+        List<string> combinedInPlaceFailures =
+        [
+            $"texture {targetTextureId}: {(string.IsNullOrWhiteSpace(inPlaceFailure) ? "in-place proof did not satisfy every required invariant" : inPlaceFailure)}"
+        ];
+        foreach ((int existingTargetId, NativeTerrainTextureRelocationImport existingImport) in explicitImports
+                     .Where(pair => pair.Key != targetTextureId)
+                     .OrderBy(pair => pair.Key))
         {
-            reason = $"In-place proof: {inPlaceFailure} Relocation ownership proof: {ownershipFailure}".Trim();
+            string existingFailure = "";
+            try
+            {
+                NativeTerrainTextureInPlaceTransplantRequest request = new(
+                    existingImport.TargetTextureId,
+                    existingImport.DonorWadEntry,
+                    existingImport.DonorTextureId);
+                NativeTerrainTextureInPlaceTransplantSourceProof proof =
+                    NativeTerrainTextureInPlaceTransplantBuilder.InspectSourceProof(
+                        sourceImage,
+                        targetLevel,
+                        request);
+                if (NativeTerrainTextureInPlaceTransplantBuilder.TryBuild(
+                        sourceImage,
+                        targetLevel,
+                        request,
+                        proof,
+                        out NativeTerrainTextureInPlaceTransplantPlan? plan,
+                        out existingFailure) &&
+                    plan != null &&
+                    plan.SourceBindingVerified &&
+                    plan.RuntimeControlClearanceVerified &&
+                    plan.CompleteOwnershipClosureVerified &&
+                    plan.DecodedAndExternalExclusivityVerified &&
+                    plan.ExactDonorIndexedPixelsVerified &&
+                    plan.ExactDonorPalettesVerified &&
+                    plan.LowDetailAliasPreserved &&
+                    plan.TargetDescriptorTableUnchanged &&
+                    plan.TargetTextureIdPreserved &&
+                    plan.LogicalReadbackVerified &&
+                    plan.PhysicalAliasConflictCount == 0 &&
+                    plan.OutOfOwnershipWriteCount == 0)
+                {
+                    continue;
+                }
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException or IOException or OverflowException)
+            {
+                existingFailure = ex.Message;
+            }
+
+            requiredFallbackTargets.Add(existingTargetId);
+            combinedInPlaceFailures.Add(
+                $"texture {existingTargetId}: {(string.IsNullOrWhiteSpace(existingFailure) ? "in-place proof did not satisfy every required invariant" : existingFailure)}");
+        }
+
+        NativeTerrainTextureRuntimeControlAudit targetRuntime;
+        try
+        {
+            targetRuntime = NativeTerrainTextureRuntimeControlScanner.Inspect(sourceImage, targetLevel);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or IOException or OverflowException)
+        {
+            reason = $"In-place proof: {inPlaceFailure} Runtime texture-control proof: {ex.Message}".Trim();
             return false;
         }
 
-        try
+        bool TryBuildRelocationAttempt(
+            IReadOnlyList<int> promotedTargets,
+            out int[] attemptTargetIds,
+            out NativeTerrainTextureRelocationExportPlan? attemptPlan,
+            out string attemptFailure)
         {
-            NativeTerrainTextureRelocationExportPlan relocation =
-                NativeTerrainTextureRelocationComposer.BuildPlan(
+            attemptTargetIds = [];
+            attemptPlan = null;
+            attemptFailure = "";
+            try
+            {
+                attemptTargetIds = NativeTexturePageOwnershipScanner
+                    .FindTerrainTextureStorageOverlapClosure(
+                        sourceImage,
+                        targetLevel,
+                        requiredFallbackTargets.Concat(promotedTargets).Distinct().Order().ToArray())
+                    .ToArray();
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException or IOException or OverflowException)
+            {
+                attemptFailure = $"storage-overlap closure failed ({ex.Message})";
+                return false;
+            }
+
+            int[] controlledClosure = attemptTargetIds
+                .Where(textureId => !targetRuntime.IsRuntimePersistentTarget(textureId))
+                .ToArray();
+            if (controlledClosure.Length > 0)
+            {
+                attemptFailure =
+                    $"record(s) {string.Join(", ", controlledClosure)} are rewritten by native animation or scrolling controls";
+                return false;
+            }
+
+            if (!NativeTexturePageOwnershipScanner.TryBuildRelocationOwnershipProof(
+                    sourceImage,
+                    targetLevel,
+                    attemptTargetIds,
+                    out NativeTexturePageRelocationOwnershipProofResult? relocationProof,
+                    out string ownershipFailure) ||
+                relocationProof == null)
+            {
+                attemptFailure = $"relocation ownership proof failed ({ownershipFailure})";
+                return false;
+            }
+
+            NativeTerrainTextureRelocationImport[] imports = attemptTargetIds
+                .Select(textureId => explicitImports.TryGetValue(textureId, out NativeTerrainTextureRelocationImport? import)
+                    ? import
+                    : new NativeTerrainTextureRelocationImport(
+                        textureId,
+                        targetLevel.SourceWadEntry,
+                        textureId,
+                        NativeTerrainTextureRelocationEditStore.CompleteDescriptorTier,
+                        PreserveTargetDescriptorMaterial: true))
+                .ToArray();
+            try
+            {
+                attemptPlan = NativeTerrainTextureRelocationComposer.BuildPlan(
                     new NativeTerrainTextureRelocationExportRequest(
                         SourceImagePath: sourceImage,
                         SourceCuePath: Path.ChangeExtension(sourceImage, ".cue"),
@@ -501,19 +774,18 @@ public sealed partial class MainWindow
                             Path.GetTempPath(),
                             $"spyro-editor-{targetLevel.Key}-{targetTextureId}-texture-proof"),
                         TargetLevel: targetLevel,
-                        Imports:
-                        [
-                            new NativeTerrainTextureRelocationImport(
-                                targetTextureId,
-                                donorLevel.SourceWadEntry,
-                                donorTextureId,
-                                NativeTerrainTextureRelocationEditStore.CompleteDescriptorTier,
-                                preserveTargetDescriptorMaterial)
-                        ],
+                        Imports: imports,
                         OwnershipProof: relocationProof.Proof,
                         WriteImage: false));
-            NativeTerrainTextureRelocationPlan plan = relocation.Relocation;
-            if (!relocation.RuntimeTargetsPersistent ||
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException or IOException or OverflowException)
+            {
+                attemptFailure = $"byte-private relocation failed ({ex.Message})";
+                return false;
+            }
+
+            NativeTerrainTextureRelocationPlan plan = attemptPlan.Relocation;
+            if (!attemptPlan.RuntimeTargetsPersistent ||
                 !plan.ExactDonorIndexedPixelsVerified ||
                 !plan.ExactDonorPalettesVerified ||
                 !plan.LowDetailAliasPreserved ||
@@ -521,18 +793,65 @@ public sealed partial class MainWindow
                 !plan.ProtectedStorageVerified ||
                 !plan.TargetDescriptorMaterialPolicyVerified)
             {
-                reason = "The relocation plan omitted a required runtime, ownership, complete-record, or exact-readback proof.";
+                attemptFailure = "relocation omitted a required runtime, ownership, complete-record, or exact-readback proof";
+                attemptPlan = null;
                 return false;
             }
-
-            strategy = $"byte-private relocation ({plan.AllocatedPixelByteCount + plan.AllocatedPaletteByteCount:N0} allocated bytes)";
             return true;
         }
-        catch (Exception ex) when (ex is ArgumentException or InvalidDataException or InvalidOperationException or IOException or OverflowException)
+
+        int[] availableExistingTargets = existingEdits
+            .Select(edit => edit.TargetTextureId)
+            .Where(textureId => !requiredFallbackTargets.Contains(textureId))
+            .Distinct()
+            .Order()
+            .ToArray();
+        NativeTerrainTexturePromotionAttemptSet promotionSearch =
+            NativeTerrainTextureRelocationAllocator.BuildBoundedPromotionAttempts(
+                availableExistingTargets);
+
+        List<string> failures = [];
+        HashSet<string> attemptedClosures = new(StringComparer.Ordinal);
+        foreach (int[] promotionAttempt in promotionSearch.Attempts)
         {
-            reason = $"In-place proof: {inPlaceFailure} Relocation proof: {ex.Message}".Trim();
-            return false;
+            if (!TryBuildRelocationAttempt(
+                    promotionAttempt,
+                    out int[] overlapClosure,
+                    out NativeTerrainTextureRelocationExportPlan? relocation,
+                    out string relocationFailure) ||
+                relocation == null)
+            {
+                string closureKey = string.Join(",", overlapClosure);
+                if (attemptedClosures.Add(closureKey))
+                    failures.Add($"[{closureKey}] {relocationFailure}");
+                continue;
+            }
+
+            NativeTerrainTextureRelocationPlan plan = relocation.Relocation;
+            int[] promotedExplicit = overlapClosure
+                .Where(textureId => !requiredFallbackTargets.Contains(textureId) && explicitImports.ContainsKey(textureId))
+                .ToArray();
+            int[] preservedCompanions = overlapClosure
+                .Where(textureId => !explicitImports.ContainsKey(textureId))
+                .ToArray();
+            string promotionNote = promotedExplicit.Length == 0
+                ? ""
+                : $"; promoted staged record(s) {string.Join(", ", promotedExplicit)} into the same atomic batch";
+            string companionNote = preservedCompanions.Length == 0
+                ? ""
+                : $"; preserved overlapping record(s) {string.Join(", ", preservedCompanions)}";
+            strategy =
+                $"byte-private relocation ({plan.AllocatedPixelByteCount + plan.AllocatedPaletteByteCount:N0} allocated bytes{promotionNote}{companionNote})";
+            return true;
         }
+
+        string pairGuardNote = promotionSearch.PairAttemptsTruncated
+            ? $" Pair promotion search tried the first {promotionSearch.PairAttemptCount:N0} of {promotionSearch.TotalPairCount:N0} lexicographic pairs, then the complete staged set."
+            : "";
+        reason =
+            ($"In-place proof: {string.Join(" | ", combinedInPlaceFailures.Take(3))} Bounded relocation proof: {string.Join(" | ", failures.Take(3))}" +
+             pairGuardNote).Trim();
+        return false;
     }
 
     internal async Task<string> AssertTerrainCatalogAtomicGuardsForTestingAsync()
@@ -786,8 +1105,60 @@ public sealed partial class MainWindow
                 throw new InvalidOperationException("A blocked terrain catalog/custom-art UI action partially mutated a face, saved edit, relocation manifest, material override, or staged file.");
             }
 
+            string sourceImage = FirstExistingDiscImagePath(
+                _discImagePathBox.Text,
+                _skyboxDiscImagePathBox.Text,
+                DiscImageLocator.FindImage(_workspace));
+            LevelDefinition artisans = _catalog.FindByKey("artisans")
+                ?? throw new InvalidOperationException("Artisans is missing from the UI smoke level catalog.");
+            LevelDefinition gnastysWorld = _catalog.FindByKey("gnastysworld")
+                ?? throw new InvalidOperationException("Gnasty's World is missing from the UI smoke level catalog.");
+            LevelDefinition darkPassage = _catalog.FindByKey("darkpassage")
+                ?? throw new InvalidOperationException("Dark Passage is missing from the UI smoke level catalog.");
+            (int TargetTextureId, int DonorTextureId)[] existingRecipes =
+            [
+                (10, 9),
+                (22, 29),
+                (48, 23),
+                (52, 7),
+                (54, 23),
+                (55, 17),
+                (56, 16)
+            ];
+            NativeTerrainTextureRelocationEdit[] existingMixedDonorEdits = existingRecipes
+                .Select(recipe => new NativeTerrainTextureRelocationEdit(
+                    TargetTextureId: recipe.TargetTextureId,
+                    DonorLevelKey: gnastysWorld.Key,
+                    DonorLevelName: gnastysWorld.DisplayName,
+                    DonorWadEntry: gnastysWorld.SourceWadEntry,
+                    DonorTextureId: recipe.DonorTextureId,
+                    DonorRuntimeKey: NativeTerrainTextureRelocationEditStore.BuildTextureRecordProvenanceKey(
+                        gnastysWorld.Key,
+                        recipe.DonorTextureId),
+                    DescriptorTier: NativeTerrainTextureRelocationEditStore.CompleteDescriptorTier,
+                    PreviewImagePath: "",
+                    PreviewImageName: "",
+                    CreatedAt: "2026-07-21T00:00:00.0000000+00:00"))
+                .ToArray();
+            bool mixedDonorReady = TryProveCrossLevelTerrainTextureArt(
+                sourceImage,
+                artisans,
+                darkPassage,
+                targetTextureId: 5,
+                donorTextureId: 31,
+                preserveTargetDescriptorMaterial: true,
+                existingMixedDonorEdits,
+                out string mixedDonorStrategy,
+                out string mixedDonorFailure);
+            if (!mixedDonorReady ||
+                !mixedDonorStrategy.Contains("promoted staged record(s) 10", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"The exact multi-donor UI preflight did not promote Artisans texture 10 with target 5. {mixedDonorFailure}");
+            }
+
             string discovery = await AssertNativeTerrainTextureRelocationBuildDiscoveryForTestingAsync(textureBefore);
-            return $"stable target {textureBefore} passed runtime persistence; controlled target {controlledTextureBefore} was blocked; resident-relocation, Paste donor-relocation, face-local/cross-level stacking, same-level property, cross-level art, and legacy custom PNG guards stayed atomic and non-mutating; {discovery}";
+            return $"stable target {textureBefore} passed runtime persistence; controlled target {controlledTextureBefore} was blocked; exact Gnasty's World plus Dark Passage preflight promoted texture 10 atomically; resident-relocation, Paste donor-relocation, face-local/cross-level stacking, same-level property, cross-level art, and legacy custom PNG guards stayed atomic and non-mutating; {discovery}";
         }
         finally
         {

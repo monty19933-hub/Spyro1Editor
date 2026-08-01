@@ -27,6 +27,41 @@ foreach ((SpecialChestFamily family, int expected) in expectedNativeCounts)
     Expect(familyProfiles.Count(profile => profile.NativeFamilyPresent) == expected, $"{family} native coverage changed.");
 }
 
+string[] expectedMissingLockedChestDestinations =
+[
+    "artisans", "townsquare", "toasty", "clifftown", "alpineridge", "highcaves", "wizardpeak", "blowhard",
+    "terracevillage", "mistybog", "dreamweavers", "darkpassage", "hauntedtowers", "gnastysworld",
+    "twilightharbor", "gnastygnorc", "gnastysloot"
+];
+string[] actualMissingLockedChestDestinations = SpecialChestBundleProfileRegistry
+    .ForFamily(SpecialChestFamily.LockedChest)
+    .Where(profile => !profile.NativeFamilyPresent)
+    .Select(profile => profile.TargetLevelKey)
+    .Order(StringComparer.Ordinal)
+    .ToArray();
+Expect(
+    actualMissingLockedChestDestinations.SequenceEqual(expectedMissingLockedChestDestinations.Order(StringComparer.Ordinal)),
+    "The Key + Locked Chest transplant scope must remain the exact 17 retail-missing levels (Artisans plus 16 unpromoted destinations).");
+SpecialChestBundleProfile stoneHillLocked = RequireProfile(SpecialChestFamily.LockedChest, "Stone Hill");
+Expect(
+    stoneHillLocked.NativeFamilyPresent &&
+    stoneHillLocked.Availability == SpecialChestBundleAvailability.NativeClosurePresent &&
+    !stoneHillLocked.CandidatePlanOnly &&
+    !stoneHillLocked.NormalCreateBinReady,
+    "Stone Hill already has a native working Key + Locked Chest and must never enter the missing-destination transplant path.");
+Expect(!NativeLockedChestResearchCandidateExporter.CanExport("Stone Hill"), "Stone Hill must not have a disposable missing-level transplant exporter.");
+string[] expectedDisposableLockedChestDestinations = expectedMissingLockedChestDestinations
+    .Where(key => key != "artisans")
+    .Order(StringComparer.Ordinal)
+    .ToArray();
+string[] implementedDisposableLockedChestDestinations = NativeLockedChestResearchCandidateExporter
+    .ImplementedDestinationKeys
+    .Order(StringComparer.Ordinal)
+    .ToArray();
+Expect(
+    implementedDisposableLockedChestDestinations.SequenceEqual(expectedDisposableLockedChestDestinations),
+    "Disposable Key + Locked Chest coverage must be exact and complete for all 16 still-unpromoted retail-missing destinations.");
+
 Expect(profiles.Count(profile => profile.Availability == SpecialChestBundleAvailability.NativeClosurePresent) == 96, "The native-closure census changed.");
 Expect(profiles.Count(profile => profile.Availability == SpecialChestBundleAvailability.CandidatePlanOnly) == 16, "The target-profile candidate census changed.");
 Expect(profiles.Count(profile => profile.Availability == SpecialChestBundleAvailability.Blocked) == 67, "The blocked dependency-closure census changed.");
@@ -41,14 +76,24 @@ Expect(!profiles.Where(profile => !profile.NormalCreateBinReady).Any(profile =>
     "A destination profile must not claim runtime-proven components before promotion.");
 
 SpecialChestBundleProfile artisansLocked = RequireProfile(SpecialChestFamily.LockedChest, "Artisans");
+LockedChestRuntimeBundleDestinationProfile artisansRuntimeProfile = LockedChestRuntimeBundleProfileCatalog.ArtisansV2;
+artisansRuntimeProfile.Validate();
+Expect(LockedChestRuntimeBundleProfileCatalog.AllProfiles.Count == 1, "Artisans must remain the sole checked locked-chest writer profile.");
+Expect(ReferenceEquals(
+    LockedChestRuntimeBundleProfileCatalog.Find("Artisans", SpecialChestBundleProfileRegistry.CleanUsaImageSha256.ToUpperInvariant()),
+    artisansRuntimeProfile), "The destination-neutral locked-chest profile lookup did not normalize level/disc keys.");
+Expect(LockedChestRuntimeBundleComposer.IsAvailable(artisansRuntimeProfile), "The Artisans destination profile lost its checked writer.");
 Expect(artisansLocked.NormalCreateBinReady, "The proven Artisans locked-chest bundle must be normal-build ready.");
 Expect(artisansLocked.Evidence == SpecialChestBundleEvidenceKind.RuntimeProven, "The Artisans profile must carry runtime-proven evidence.");
-Expect(artisansLocked.RecipeId == ArtisansNativeLockedChestRuntimeBundleComposer.RecipeId, "The profile must point at the preserved hardcoded composer recipe.");
-Expect(artisansLocked.RequiredExporterFeature == ArtisansNativeLockedChestRuntimeBundleComposer.RequiredExporterFeature, "The profile must point at the preserved hardcoded composer feature.");
+Expect(artisansLocked.Id == artisansRuntimeProfile.Id, "The special-chest registry and destination writer profile ids diverged.");
+Expect(artisansLocked.RecipeId == artisansRuntimeProfile.RecipeId && artisansRuntimeProfile.RecipeId == ArtisansNativeLockedChestRuntimeBundleComposer.RecipeId, "The profile must point at the preserved hardcoded composer recipe.");
+Expect(artisansLocked.RequiredExporterFeature == artisansRuntimeProfile.RequiredExporterFeature && artisansRuntimeProfile.RequiredExporterFeature == ArtisansNativeLockedChestRuntimeBundleComposer.RequiredExporterFeature, "The profile must point at the preserved hardcoded composer feature.");
 Expect(artisansLocked.RuntimeProofOutputSha256 == SpecialChestBundleProfileRegistry.ArtisansLockedChestProofOutputSha256, "The Artisans proof digest changed.");
-Expect(artisansLocked.StructuralBudget.Exact && artisansLocked.StructuralBudget.SourceRowsAdded == 7, "The proven profile must reserve exactly seven source rows.");
-Expect(artisansLocked.StructuralBudget.RuntimeSlotsConsumed == 6 && artisansLocked.StructuralBudget.TreasureDelta == 10, "The proven profile must retain the six-slot/+10 reward budget.");
-Expect(artisansLocked.StructuralBudget.WadGrowthBytes == 0x2000 && artisansLocked.StructuralBudget.RelocatesExecutable, "The proven profile must retain its checked structural relocation.");
+Expect(artisansLocked.RuntimeProofOutputSha256 == artisansRuntimeProfile.RuntimeProofOutputSha256, "The special-chest registry and destination writer proof digests diverged.");
+Expect(artisansLocked.StructuralBudget.Exact && artisansLocked.StructuralBudget.SourceRowsAdded == artisansRuntimeProfile.AppendedSourceRowCount && artisansRuntimeProfile.AppendedSourceRowCount == 7, "The proven profile must reserve exactly seven source rows.");
+Expect(artisansLocked.StructuralBudget.RuntimeSlotsConsumed == artisansRuntimeProfile.RuntimeSlotsConsumed && artisansRuntimeProfile.RuntimeSlotsConsumed == 6 && artisansLocked.StructuralBudget.TreasureDelta == artisansRuntimeProfile.TreasureDelta && artisansRuntimeProfile.TreasureDelta == 10, "The proven profile must retain the six-slot/+10 reward budget.");
+Expect(artisansLocked.StructuralBudget.WadGrowthBytes == artisansRuntimeProfile.WadGrowthBytes && artisansRuntimeProfile.WadGrowthBytes == 0x2000 && artisansLocked.StructuralBudget.RelocatesExecutable == artisansRuntimeProfile.RelocatesExecutable && artisansRuntimeProfile.RelocatesExecutable, "The proven profile must retain its checked structural relocation.");
+Expect(artisansRuntimeProfile.KeyOutputTrueIndex == 174 && artisansRuntimeProfile.LockedChestOutputTrueIndex == 175 && artisansRuntimeProfile.RewardMarkerOutputTrueIndices.SequenceEqual([176, 177, 178, 179, 180]), "The destination profile must own the exact proven T174-T180 allocation.");
 Expect(artisansLocked.Declaration.ComponentEvidence().All(evidence => evidence == SpecialChestComponentEvidence.RuntimeProven), "Every component of the release-ready Artisans bundle must be runtime-proven.");
 Expect(artisansLocked.Declaration.Rows.Count == 7 && artisansLocked.Declaration.Rows.Count(row => row.Hidden) == 5, "The Artisans profile must declare two visible rows plus five hidden reward markers.");
 Expect(artisansLocked.Declaration.Rows.Select(row => row.TargetTrueIndex).SequenceEqual(Enumerable.Range(174, 7).Select(value => (int?)value)), "The Artisans row declaration must own exactly T174-T180.");
@@ -58,6 +103,12 @@ Expect(artisansLocked.Declaration.PrivateAllocations.Any(allocation => allocatio
 Expect(artisansLocked.Declaration.PrivateAllocations.Any(allocation => allocation.Kind == SpecialChestPrivateAllocationKind.ExecutableCode && allocation.SizeBytes == 0x400), "The proven profile must declare its checked executable cave.");
 Expect(artisansLocked.Declaration.Resources.Any(resource => resource.Kind == SpecialChestResourceKind.TexturePixels) && artisansLocked.Declaration.Resources.Any(resource => resource.Kind == SpecialChestResourceKind.PaletteClut), "The proven profile must declare texture and palette resources separately.");
 Expect(artisansLocked.Declaration.Reward.TreasureDelta == 10 && artisansLocked.Declaration.Reward.LifeDelta == 0 && artisansLocked.Declaration.Reward.OneShotRequired, "The proven profile must declare the exact one-shot +10 reward.");
+ExpectThrows<InvalidDataException>(
+    () => (artisansRuntimeProfile with { RewardMarkerOutputTrueIndices = [176, 176, 178, 179, 180] }).Validate(),
+    "Destination profile validation accepted duplicate hidden reward rows.");
+ExpectThrows<InvalidDataException>(
+    () => (artisansRuntimeProfile with { TargetLevelKey = "Town Square" }).Validate(),
+    "Destination profile validation accepted a non-normalized target level key.");
 
 SpecialChestBundleProfile normalizedLookup = SpecialChestBundleProfileRegistry.Find(
     SpecialChestFamily.LockedChest,
@@ -185,6 +236,20 @@ void Expect(bool condition, string message)
 {
     if (!condition)
         throw new InvalidOperationException(message);
+}
+
+void ExpectThrows<TException>(Action action, string message)
+    where TException : Exception
+{
+    try
+    {
+        action();
+    }
+    catch (TException)
+    {
+        return;
+    }
+    throw new InvalidOperationException(message);
 }
 
 async Task AssertBundleMetadataRoundTrip(SpecialChestBundleProfile profile)

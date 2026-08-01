@@ -129,7 +129,7 @@ public static class NativeTerrainTextureInPlaceTransplantBuilder
         DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
         using FileStream image = File.OpenRead(sourceImagePath);
         TextureAsset target = LoadTextureAsset(image, layout, targetLevel.SourceWadEntry);
-        TextureAsset donor = LoadTextureAsset(image, layout, request.DonorWadEntry);
+        TextureAsset donor = LoadDonorTextureAsset(sourceImagePath, image, layout, request.DonorWadEntry);
         ValidateTextureId(target, request.TargetTextureId, "Target");
         ValidateTextureId(donor, request.DonorTextureId, "Donor");
 
@@ -175,7 +175,7 @@ public static class NativeTerrainTextureInPlaceTransplantBuilder
             DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
             using FileStream image = File.OpenRead(sourceImagePath);
             TextureAsset target = LoadTextureAsset(image, layout, targetLevel.SourceWadEntry);
-            TextureAsset donor = LoadTextureAsset(image, layout, request.DonorWadEntry);
+            TextureAsset donor = LoadDonorTextureAsset(sourceImagePath, image, layout, request.DonorWadEntry);
             ValidateTextureId(target, request.TargetTextureId, "Target");
             ValidateTextureId(donor, request.DonorTextureId, "Donor");
 
@@ -909,6 +909,33 @@ public static class NativeTerrainTextureInPlaceTransplantBuilder
             DescriptorTableLength: descriptorTableLength,
             DescriptorTableSha256: Sha256(model.AsSpan(0, descriptorTableLength)),
             Index: index);
+    }
+
+    private static TextureAsset LoadDonorTextureAsset(
+        string sourceImagePath,
+        FileStream image,
+        DiscLayout layout,
+        int wadEntry)
+    {
+        TextureAsset raw = LoadTextureAsset(image, layout, wadEntry);
+        NativeTerrainTextureRuntimeControlAudit runtimeAudit =
+            NativeTerrainTextureRuntimeControlScanner.Inspect(sourceImagePath, wadEntry);
+        NativeTerrainTextureInitialStateResult initialState =
+            NativeTerrainTextureRuntimeControlScanner.InitializeTextureRecords(runtimeAudit, raw.Model);
+        if (!runtimeAudit.Complete || !initialState.Complete)
+        {
+            throw new InvalidDataException(
+                $"Donor WAD entry {wadEntry} could not be initialized to its native load-state texture table: " +
+                (initialState.SafetyBlockers.FirstOrDefault() ??
+                 runtimeAudit.SafetyBlockers.FirstOrDefault() ??
+                 "runtime texture-control initialization is incomplete"));
+        }
+        TextureRecordIndex initializedIndex = DecodeTextureRecords(
+            initialState.InitializedTextureData,
+            out int initializedDescriptorTableLength);
+        if (initializedDescriptorTableLength != raw.DescriptorTableLength)
+            throw new InvalidDataException("Donor load-state initialization changed the native descriptor-table length.");
+        return raw with { Index = initializedIndex };
     }
 
     private static AssetSubfileInfo GetAssetSubfileInfo(

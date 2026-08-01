@@ -44,16 +44,19 @@ public static class MobySourcePatchExporter
         string outputPlanPath = $"{outputPrefix}.moby-source-patch-plan.json";
         string greenWizardResidentPlanPath = $"{outputPrefix}.green-wizard-resident-plan.json";
 
-        MobySourcePatchPlan plan = BuildPlan(
-            request.SourceImagePath,
-            request.SourceCuePath,
-            outputImagePath,
-            outputCuePath,
-            request.Level,
-            request.NativeEditsPath,
-            request.AllowPlanOnlyActorPackageImports,
-            request.AllowGuardedNativeCloneAppend,
-            request.NativeMobyPathEditsPath);
+        MobySourcePatchPlan plan = await Task.Run(
+            () => BuildPlan(
+                request.SourceImagePath,
+                request.SourceCuePath,
+                outputImagePath,
+                outputCuePath,
+                request.Level,
+                request.NativeEditsPath,
+                request.AllowPlanOnlyActorPackageImports,
+                request.AllowGuardedNativeCloneAppend,
+                request.NativeMobyPathEditsPath,
+                request.AllowUnprovenNativeMobyPathResearchPatches),
+            cancellationToken);
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPlanPath) ?? ".");
         await File.WriteAllTextAsync(outputPlanPath, JsonSerializer.Serialize(plan, new JsonSerializerOptions { WriteIndented = true }), cancellationToken);
@@ -69,7 +72,11 @@ public static class MobySourcePatchExporter
                 return new MobySourcePatchResult(outputImagePath, outputCuePath, outputPlanPath, plan, false);
             }
 
-            File.Copy(request.SourceImagePath, outputImagePath, true);
+            await DiscImageWorkingCopy.StageAsync(
+                request.SourceImagePath,
+                outputImagePath,
+                request.ConsumeDisposableSourceImage,
+                cancellationToken);
             DiscLayout layout = DiscImage.DetectLayout(outputImagePath);
             await using (FileStream stream = File.Open(outputImagePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
             {
@@ -157,7 +164,8 @@ public static class MobySourcePatchExporter
         string nativeEditsPath,
         bool allowPlanOnlyActorPackageImports = false,
         bool allowGuardedNativeCloneAppend = false,
-        string nativeMobyPathEditsPath = "")
+        string nativeMobyPathEditsPath = "",
+        bool allowUnprovenNativeMobyPathResearchPatches = false)
     {
         if (!level.HasSourceTable)
             throw new InvalidOperationException($"{level.DisplayName} does not have a mapped source moby table yet.");
@@ -178,13 +186,19 @@ public static class MobySourcePatchExporter
         if (!editDocument.RootElement.TryGetProperty("edits", out JsonElement editsElement) || editsElement.ValueKind != JsonValueKind.Array)
             throw new InvalidOperationException("The native moby edit file does not contain an edits array.");
 
-        ArtisansNativeLockedChestRuntimeBundleIntent? artisansLockedChestBundle = null;
+        LockedChestRuntimeBundleDestinationProfile? lockedChestBundleProfile = null;
+        LockedChestRuntimeBundleIntent? lockedChestBundle = null;
         if (!allowPlanOnlyActorPackageImports)
         {
-            ArtisansNativeLockedChestRuntimeBundleComposer.TryDetectIntent(
-                level,
-                editsElement,
-                out artisansLockedChestBundle);
+            lockedChestBundleProfile = ResolveLockedChestRuntimeBundleProfile(level, editsElement);
+            if (lockedChestBundleProfile != null)
+            {
+                LockedChestRuntimeBundleComposer.TryDetectIntent(
+                    lockedChestBundleProfile,
+                    level,
+                    editsElement,
+                    out lockedChestBundle);
+            }
         }
 
         List<MobySourcePatch> patches = new();
@@ -228,15 +242,16 @@ public static class MobySourcePatchExporter
                 : JsonValue.GetInt32(edit, "trueIndex", -1);
             string label = JsonValue.GetString(edit, "label", JsonValue.GetString(edit, "labelEdited", trueIndex >= 0 ? $"T{trueIndex}" : "moby"));
             string editKind = JsonValue.GetString(edit, "editKind", JsonValue.GetBoolean(edit, "added") ? "add" : JsonValue.GetBoolean(edit, "removed") ? "remove" : "update");
-            bool isArtisansLockedChestBundleEdit = artisansLockedChestBundle != null &&
-                ArtisansNativeLockedChestRuntimeBundleComposer.IsBundleTemplateEdit(edit);
+            bool isLockedChestBundleEdit = lockedChestBundle != null &&
+                lockedChestBundleProfile != null &&
+                LockedChestRuntimeBundleComposer.IsBundleTemplateEdit(lockedChestBundleProfile, edit);
             int patchStart = patches.Count;
             int packagePreviewStart = packageImportPreviews.Count;
             int skippedEditStart = skippedEdits.Count;
             List<MobySourceEditSafetyFinding> editSafetyFindings = [];
             try
             {
-                if (isArtisansLockedChestBundleEdit)
+                if (isLockedChestBundleEdit)
                     continue;
 
                 if (isDragonRunToEdit)
@@ -401,7 +416,7 @@ public static class MobySourcePatchExporter
                     MobyLabel: label,
                     EditKind: editKind,
                     PatchKinds: patches.Skip(patchStart).Select(patch => patch.Kind)
-                        .Concat(isArtisansLockedChestBundleEdit ? ["moby-record-append", "artisans-native-key-locked-chest-runtime-bundle-v2"] : [])
+                        .Concat(isLockedChestBundleEdit ? ["moby-record-append", "locked-chest-runtime-bundle"] : [])
                         .ToArray(),
                     SkippedReasons: skippedEdits.Skip(skippedEditStart).ToArray(),
                     PackageOutcomes: packageImportPreviews
@@ -1317,6 +1332,9 @@ public static class MobySourcePatchExporter
             sourceImagePath,
             level,
             nativeMobyPathEditsPath,
+            editsElement,
+            levelGeometry,
+            allowUnprovenNativeMobyPathResearchPatches,
             imageStream,
             layout,
             patches,
@@ -1329,10 +1347,11 @@ public static class MobySourcePatchExporter
             notes.Add("Homeworld portal location edits move the linked source mobys, dedicated portal center/points, and type-6 walk-in collision triangles, then rebuild and rebalance the native collision lookup. Decorative stone arches remain terrain scenery.");
         }
         notes.AddRange(sourceCountNotes);
-        if (artisansLockedChestBundle != null)
+        if (lockedChestBundle != null && lockedChestBundleProfile != null)
         {
+            string rewardRows = string.Join(", ", lockedChestBundle.RewardMarkerOutputTrueIndices.Select(index => $"T{index}"));
             notes.Add(
-                $"The runtime-proven Artisans Key + Locked Chest V2 bundle is reserved atomically: editor objects T{artisansLockedChestBundle.KeyEditorTrueIndex}/T{artisansLockedChestBundle.LockedChestEditorTrueIndex} compose as output T174/T175, hidden native reward markers occupy T176-T180, and the fixed treasure target changes 100->110.");
+                $"The runtime-proven Key + Locked Chest profile '{lockedChestBundleProfile.Id}' is reserved atomically for {level.DisplayName}: editor objects T{lockedChestBundle.KeyEditorTrueIndex}/T{lockedChestBundle.LockedChestEditorTrueIndex} compose as output T{lockedChestBundle.KeyOutputTrueIndex}/T{lockedChestBundle.LockedChestOutputTrueIndex}, hidden native reward markers occupy {rewardRows}, and the treasure target changes {lockedChestBundle.TreasureTargetBefore}->{lockedChestBundle.TreasureTargetAfter}.");
             notes.Add("The bundle is intentionally deferred to the final structural-WAD composition stage; its two visible edits are suppressed from generic source-row append and actor-package preview paths.");
         }
         if (allowGuardedNativeCloneAppend)
@@ -1420,7 +1439,54 @@ public static class MobySourcePatchExporter
             SkippedEdits: skippedEdits,
             Notes: notes,
             EditOutcomes: editOutcomes,
-            ArtisansNativeLockedChestRuntimeBundle: artisansLockedChestBundle);
+            LockedChestRuntimeBundle: lockedChestBundle);
+    }
+
+    private static LockedChestRuntimeBundleDestinationProfile? ResolveLockedChestRuntimeBundleProfile(
+        LevelDefinition level,
+        JsonElement editsElement)
+    {
+        string targetLevelKey = LevelCatalog.NormalizeKey(level.Key);
+        HashSet<string> runtimeProfileIds = LockedChestRuntimeBundleProfileCatalog.AllProfiles
+            .Where(profile => string.Equals(profile.TargetLevelKey, targetLevelKey, StringComparison.OrdinalIgnoreCase))
+            .Select(profile => profile.Id)
+            .ToHashSet(StringComparer.Ordinal);
+        string[] savedProfileIds = editsElement
+            .EnumerateArray()
+            .Select(edit => JsonValue.GetString(edit, "profileId"))
+            .Where(profileId => runtimeProfileIds.Contains(profileId))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (savedProfileIds.Length > 1)
+        {
+            throw new InvalidOperationException(
+                $"{level.DisplayName} contains more than one special-chest profile identity. A Key + Locked Chest bundle must use one destination profile atomically.");
+        }
+
+        LockedChestRuntimeBundleDestinationProfile? runtimeProfile = savedProfileIds.Length == 1
+            ? LockedChestRuntimeBundleProfileCatalog.AllProfiles.SingleOrDefault(profile =>
+                string.Equals(profile.Id, savedProfileIds[0], StringComparison.Ordinal) &&
+                string.Equals(profile.TargetLevelKey, targetLevelKey, StringComparison.OrdinalIgnoreCase))
+            : LockedChestRuntimeBundleProfileCatalog.Find(
+                targetLevelKey,
+                LockedChestRuntimeBundleProfileCatalog.CleanUsaImageSha256);
+        if (runtimeProfile == null)
+            return null;
+
+        SpecialChestBundleProfile? editorProfile = SpecialChestBundleProfileRegistry.Find(
+            SpecialChestFamily.LockedChest,
+            targetLevelKey,
+            runtimeProfile.DiscImageSha256);
+        if (editorProfile is not { NormalCreateBinReady: true } ||
+            !string.Equals(editorProfile.Id, runtimeProfile.Id, StringComparison.Ordinal) ||
+            !string.Equals(editorProfile.RecipeId, runtimeProfile.RecipeId, StringComparison.Ordinal) ||
+            !string.Equals(editorProfile.RequiredExporterFeature, runtimeProfile.RequiredExporterFeature, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(
+                $"The checked runtime writer for '{runtimeProfile.Id}' does not match a runtime-proven editor profile. Normal Create BIN refused the bundle.");
+        }
+
+        return runtimeProfile;
     }
 
     private static void TrackSpringChestPairAppend(
@@ -2808,6 +2874,13 @@ public static class MobySourcePatchExporter
         int targetFlag4A = JsonValue.GetInt32(edit, "flag4AEditedHex", JsonValue.GetInt32(edit, "flag4AHex", -1));
         int targetFlag4B = JsonValue.GetInt32(edit, "flag4BEditedHex", JsonValue.GetInt32(edit, "flag4BHex", -1));
         bool isContainedGemAppend = IsContainedGemAppend(edit, targetType);
+        bool isNativeLockedChestRewardMarkerAppend = IsNativeLockedChestRewardMarkerAppend(
+            edit,
+            targetType,
+            targetSourceByte36,
+            targetSourceByte37,
+            targetFlag4A,
+            targetFlag4B);
         bool isLooseVisibleGemAppend = IsLooseVisibleGemIdentity(targetType, targetSourceByte36, targetSourceByte37, targetSourceByte4F, targetFlag4A, targetFlag4B);
         bool isKnownSameLevelLightweightAppend = IsKnownSameLevelLightweightAppend(targetType, targetSourceByte36, targetSourceByte37, targetFlag4A, targetFlag4B);
         bool isPortableSpringChestControllerAppend = IsPortableSpringChestControllerAppend(edit, targetType, targetSourceByte36, targetSourceByte37);
@@ -2831,6 +2904,7 @@ public static class MobySourcePatchExporter
 
         if (crossLevelDonor == null &&
             !isContainedGemAppend &&
+            !isNativeLockedChestRewardMarkerAppend &&
             !isLooseVisibleGemAppend &&
             !isKnownSameLevelLightweightAppend &&
             !isPortableSpringChestControllerAppend &&
@@ -2838,6 +2912,14 @@ public static class MobySourcePatchExporter
             !isProvenNativeCloneAppend)
         {
             skippedEdits.Add($"{label}: copied object export is guarded because this object class does not yet have a proven native append recipe; it remains saved in the editor.");
+            return false;
+        }
+
+        if (crossLevelDonor == null &&
+            isNativeLockedChestRewardMarkerAppend &&
+            !allowGuardedNativeCloneAppend)
+        {
+            skippedEdits.Add($"{label}: private native Locked Chest reward rows are research-only until the complete pair passes focused runtime proof in this level.");
             return false;
         }
 
@@ -2852,6 +2934,7 @@ public static class MobySourcePatchExporter
 
         if (targetType is not (0x18 or 0x20) &&
             !isContainedGemAppend &&
+            !isNativeLockedChestRewardMarkerAppend &&
             !isKnownSameLevelLightweightAppend)
         {
             skippedEdits.Add($"{label}: true-add export for type 0x{Math.Clamp(targetType, 0, 255):X2} needs actor-package handling first.");
@@ -2869,7 +2952,9 @@ public static class MobySourcePatchExporter
         int sameLevelAppendDonorTrueIndex = TryGetSameLevelAppendDonor(edit, level, out int explicitSameLevelDonorTrueIndex)
             ? explicitSameLevelDonorTrueIndex
             : -1;
-        int donorTrueIndex = crossLevelDonor?.SourceTrueIndex ?? (isContainedGemAppend
+        int donorTrueIndex = crossLevelDonor?.SourceTrueIndex ?? (sameLevelAppendDonorTrueIndex >= 0
+            ? sameLevelAppendDonorTrueIndex
+            : isContainedGemAppend
             ? FindContainedGemDonor(stream, layout, tableWadOffset, tableRelativeOffset, level.SourceRecordCount)
             : isLooseVisibleGemAppend && TryFindNearestLooseVisibleGemDonor(
                 stream,
@@ -2881,8 +2966,6 @@ public static class MobySourcePatchExporter
                 targetSourceByte36,
                 out int nearestLooseGemDonor)
             ? nearestLooseGemDonor
-            : sameLevelAppendDonorTrueIndex >= 0
-            ? sameLevelAppendDonorTrueIndex
             : FindSameLevelDonor(
                 stream,
                 layout,
@@ -4549,6 +4632,27 @@ public static class MobySourcePatchExporter
             link.ValueKind == JsonValueKind.Object;
     }
 
+    private static bool IsNativeLockedChestRewardMarkerAppend(
+        JsonElement edit,
+        int targetType,
+        int sourceByte36,
+        int sourceByte37,
+        int flag4A,
+        int flag4B)
+    {
+        if (targetType != 0x00 || sourceByte36 != 0x0D || sourceByte37 != 0x00 ||
+            flag4A != 0xFF || GemIdByteValue(flag4B) <= 0 ||
+            !string.Equals(JsonValue.GetString(edit, "patchStatus"), "native-locked-chest-reward-clone", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return edit.TryGetProperty("recordMutation", out JsonElement mutation) &&
+            mutation.ValueKind == JsonValueKind.Object &&
+            string.Equals(JsonValue.GetString(mutation, "mode"), "appendSourceRecordClone", StringComparison.OrdinalIgnoreCase) &&
+            JsonValue.GetInt32(mutation, "sourceTrueIndex", -1) >= 0;
+    }
+
     private static int FindContainedGemDonor(FileStream stream, DiscLayout layout, long tableWadOffset, long tableRelativeOffset, int sourceRecordCount)
     {
         for (int trueIndex = 0; trueIndex < sourceRecordCount; trueIndex++)
@@ -6044,6 +6148,9 @@ public static class MobySourcePatchExporter
         string sourceImagePath,
         LevelDefinition level,
         string nativeMobyPathEditsPath,
+        JsonElement nativeEdits,
+        GeometryCandidate? levelGeometry,
+        bool allowUnprovenNativeMobyPathResearchPatches,
         FileStream stream,
         DiscLayout layout,
         List<MobySourcePatch> patches,
@@ -6085,50 +6192,155 @@ public static class MobySourcePatchExporter
                     Array.Empty<MobySourceEditPackageOutcome>()));
             }
         }
-        NativeMobyPathPatchPlan plan = NativeMobyPathPatchExporter.BuildPlan(paths);
-        foreach (NativeMobyPathCoordinatePatch coordinate in plan.Patches)
+
+        int exportedPathCount = 0;
+        int exportedNodeCount = 0;
+        foreach (NativeMobyPath path in paths.Where(candidate => candidate.HasEdits))
         {
-            if (coordinate.WadLba != WadLba)
-                throw new InvalidOperationException($"{coordinate.LevelName} T{coordinate.OwnerTrueIndex} path targets an unexpected WAD LBA.");
-            if (OverlapsWrittenOffsets(coordinate.WadOffset, coordinate.ByteLength, writtenWadOffsets))
-                throw new InvalidOperationException($"Native path node T{coordinate.OwnerTrueIndex}/#{coordinate.NodeIndex + 1} overlaps another source patch.");
-            byte[] actual = ReadWadBytes(stream, layout, coordinate.WadOffset, coordinate.ByteLength);
-            if (!actual.SequenceEqual(coordinate.Before))
+            string label = $"Egg thief T{path.OwnerTrueIndex}";
+            NativeMobyPathRawPosition ownerPosition = ResolveNativePathOwnerPosition(
+                path,
+                nativeEdits,
+                stream,
+                layout);
+            NativeMobyPathRuntimeSafetyResult safety =
+                NativeMobyPathRuntimeSafety.Inspect(path, ownerPosition, levelGeometry);
+            List<MobySourceEditSafetyFinding> safetyFindings = safety.Findings
+                .Select(finding => new MobySourceEditSafetyFinding(
+                    finding.Code,
+                    finding.Status,
+                    finding.Message))
+                .ToList();
+
+            if (safety.IsGeometricallySafe && !safety.IsRuntimeProven)
             {
-                throw new InvalidOperationException(
-                    $"{coordinate.LevelName} T{coordinate.OwnerTrueIndex} path node {coordinate.NodeIndex + 1} source XYZ bytes are stale.");
+                safetyFindings.Add(allowUnprovenNativeMobyPathResearchPatches
+                    ? new MobySourceEditSafetyFinding(
+                        "native-path-research-unproven",
+                        MobyBuildSafetyStatus.Review,
+                        "This geometrically checked route is enabled only for a disposable research BIN; " +
+                        "its exact edited-coordinate fingerprint has no recorded DuckStation runtime proof.")
+                    : new MobySourceEditSafetyFinding(
+                        "native-path-runtime-proof-required",
+                        MobyBuildSafetyStatus.Blocked,
+                        "Normal Create BIN cannot export this edited route until its exact coordinate fingerprint " +
+                        "has recorded DuckStation chase, loop, egg, death, and reload evidence."));
             }
-            for (long offset = coordinate.WadOffset; offset < coordinate.WadOffset + coordinate.ByteLength; offset++)
-                writtenWadOffsets.Add(offset);
-            patches.Add(new MobySourcePatch(
-                Label: $"{coordinate.LevelKey}-T{coordinate.OwnerTrueIndex}-path-node-{coordinate.NodeIndex + 1}",
-                Kind: "native-moby-path-node-xyz",
-                LevelKey: coordinate.LevelKey,
-                MobyLabel: $"Egg thief T{coordinate.OwnerTrueIndex}",
-                TrueIndex: coordinate.OwnerTrueIndex,
-                RecordOffset: $"PathData node {coordinate.NodeIndex + 1} XYZ",
-                WadRelativeOffset: $"0x{coordinate.WadOffset:X}",
-                ImageOffset: $"0x{ConvertWadOffsetToImageOffset(layout, coordinate.WadOffset):X}",
-                ByteLength: coordinate.ByteLength,
-                BeforeHexPreview: ToHex(coordinate.Before),
-                AfterHexPreview: ToHex(coordinate.After),
-                Description: $"Move native egg-thief route node {coordinate.NodeIndex + 1}; preserve PathData header/order and unknown word."));
+
+            bool canExport = safety.IsGeometricallySafe &&
+                (safety.IsRuntimeProven || allowUnprovenNativeMobyPathResearchPatches);
+            if (!canExport)
+            {
+                MobySourceEditSafetyFinding blocker = safetyFindings
+                    .First(finding => finding.Status == MobyBuildSafetyStatus.Blocked);
+                string skipped =
+                    $"{label}: egg-thief path export blocked: [{blocker.Code}] {blocker.Message}";
+                skippedEdits.Add(skipped);
+                editOutcomes.Add(new MobySourceEditOutcome(
+                    path.OwnerTrueIndex,
+                    label,
+                    "native-path",
+                    Array.Empty<string>(),
+                    [skipped],
+                    Array.Empty<MobySourceEditPackageOutcome>(),
+                    safetyFindings));
+                continue;
+            }
+
+            NativeMobyPathPatchPlan plan = NativeMobyPathPatchExporter.BuildPlan([path]);
+            foreach (NativeMobyPathCoordinatePatch coordinate in plan.Patches)
+            {
+                if (coordinate.WadLba != WadLba)
+                    throw new InvalidOperationException($"{coordinate.LevelName} T{coordinate.OwnerTrueIndex} path targets an unexpected WAD LBA.");
+                if (OverlapsWrittenOffsets(coordinate.WadOffset, coordinate.ByteLength, writtenWadOffsets))
+                    throw new InvalidOperationException($"Native path node T{coordinate.OwnerTrueIndex}/#{coordinate.NodeIndex + 1} overlaps another source patch.");
+                byte[] actual = ReadWadBytes(stream, layout, coordinate.WadOffset, coordinate.ByteLength);
+                if (!actual.SequenceEqual(coordinate.Before))
+                {
+                    throw new InvalidOperationException(
+                        $"{coordinate.LevelName} T{coordinate.OwnerTrueIndex} path node {coordinate.NodeIndex + 1} source XYZ bytes are stale.");
+                }
+                for (long offset = coordinate.WadOffset; offset < coordinate.WadOffset + coordinate.ByteLength; offset++)
+                    writtenWadOffsets.Add(offset);
+                patches.Add(new MobySourcePatch(
+                    Label: $"{coordinate.LevelKey}-T{coordinate.OwnerTrueIndex}-path-node-{coordinate.NodeIndex + 1}",
+                    Kind: "native-moby-path-node-xyz",
+                    LevelKey: coordinate.LevelKey,
+                    MobyLabel: label,
+                    TrueIndex: coordinate.OwnerTrueIndex,
+                    RecordOffset: $"PathData node {coordinate.NodeIndex + 1} XYZ",
+                    WadRelativeOffset: $"0x{coordinate.WadOffset:X}",
+                    ImageOffset: $"0x{ConvertWadOffsetToImageOffset(layout, coordinate.WadOffset):X}",
+                    ByteLength: coordinate.ByteLength,
+                    BeforeHexPreview: ToHex(coordinate.Before),
+                    AfterHexPreview: ToHex(coordinate.After),
+                    Description: $"Move native egg-thief route node {coordinate.NodeIndex + 1}; preserve PathData header/order and unknown word."));
+            }
+
+            editOutcomes.Add(new MobySourceEditOutcome(
+                path.OwnerTrueIndex,
+                label,
+                "native-path",
+                plan.Patches.Select(_ => "native-moby-path-node-xyz").ToArray(),
+                Array.Empty<string>(),
+                Array.Empty<MobySourceEditPackageOutcome>(),
+                safetyFindings));
+            exportedPathCount++;
+            exportedNodeCount += plan.EditedNodeCount;
         }
 
-        foreach (IGrouping<int, NativeMobyPathCoordinatePatch> owner in plan.Patches.GroupBy(patch => patch.OwnerTrueIndex))
+        if (exportedNodeCount > 0)
         {
-            editOutcomes.Add(new MobySourceEditOutcome(
-                owner.Key,
-                $"Egg thief T{owner.Key}",
-                "native-path",
-                owner.Select(_ => "native-moby-path-node-xyz").ToArray(),
-                Array.Empty<string>(),
-                Array.Empty<MobySourceEditPackageOutcome>()));
+            notes.Add($"Native egg-thief paths: {exportedPathCount} route(s), {exportedNodeCount} node(s); each write is exactly 12 XYZ bytes and preserves fixed headers/order/unknown words.");
+            if (allowUnprovenNativeMobyPathResearchPatches)
+            {
+                notes.Add(
+                    "Unproven native egg-thief route writes were enabled for this disposable research plan; " +
+                    "normal Create BIN remains blocked until exact DuckStation runtime evidence is registered.");
+            }
         }
-        if (plan.Patches.Count > 0)
+    }
+
+    private static NativeMobyPathRawPosition ResolveNativePathOwnerPosition(
+        NativeMobyPath path,
+        JsonElement nativeEdits,
+        FileStream stream,
+        DiscLayout layout)
+    {
+        byte[] sourceRecord = ReadWadBytes(
+            stream,
+            layout,
+            path.OwnerRecordWadOffset,
+            RecordStride);
+        NativeMobyPathRawPosition source = new(
+            BinaryPrimitives.ReadInt32LittleEndian(sourceRecord.AsSpan(XOffset, sizeof(int))),
+            BinaryPrimitives.ReadInt32LittleEndian(sourceRecord.AsSpan(YOffset, sizeof(int))),
+            BinaryPrimitives.ReadInt32LittleEndian(sourceRecord.AsSpan(ZOffset, sizeof(int))));
+
+        foreach (JsonElement edit in nativeEdits.EnumerateArray())
         {
-            notes.Add($"Native egg-thief paths: {plan.EditedPathCount} route(s), {plan.EditedNodeCount} node(s); each write is exactly 12 XYZ bytes and preserves fixed headers/order/unknown words.");
+            if (JsonValue.GetInt32(edit, "trueIndex", -1) != path.OwnerTrueIndex ||
+                JsonValue.GetBoolean(edit, "added"))
+            {
+                continue;
+            }
+
+            if (JsonValue.GetBoolean(edit, "removed") ||
+                string.Equals(JsonValue.GetString(edit, "editKind"), "remove", StringComparison.OrdinalIgnoreCase))
+            {
+                return new NativeMobyPathRawPosition(
+                    HiddenRawCoordinate,
+                    HiddenRawCoordinate,
+                    HiddenRawCoordinate);
+            }
+
+            return new NativeMobyPathRawPosition(
+                ReadRawAxis(edit, "x", sourceRecord, XOffset),
+                ReadRawAxis(edit, "y", sourceRecord, YOffset),
+                ReadRawAxis(edit, "z", sourceRecord, ZOffset));
         }
+
+        return source;
     }
 
     private static int TryParseMovementOwnerTrueIndex(string text)
@@ -6750,7 +6962,9 @@ public sealed record MobySourcePatchRequest(
     bool WriteImage,
     bool AllowPlanOnlyActorPackageImports = false,
     bool AllowGuardedNativeCloneAppend = false,
-    string NativeMobyPathEditsPath = "");
+    string NativeMobyPathEditsPath = "",
+    bool ConsumeDisposableSourceImage = false,
+    bool AllowUnprovenNativeMobyPathResearchPatches = false);
 
 internal sealed record CrossLevelAppendDonor(
     LevelDefinition SourceLevel,
@@ -6806,7 +7020,7 @@ public sealed record MobySourcePatchPlan(
     IReadOnlyList<string> SkippedEdits,
     IReadOnlyList<string> Notes,
     IReadOnlyList<MobySourceEditOutcome>? EditOutcomes = null,
-    ArtisansNativeLockedChestRuntimeBundleIntent? ArtisansNativeLockedChestRuntimeBundle = null);
+    LockedChestRuntimeBundleIntent? LockedChestRuntimeBundle = null);
 
 public sealed record MobySourceEditOutcome(
     int EditorTrueIndex,

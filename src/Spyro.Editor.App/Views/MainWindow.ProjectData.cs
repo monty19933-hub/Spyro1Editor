@@ -208,7 +208,7 @@ public sealed partial class MainWindow
         });
         body.Children.Add(new TextBlock
         {
-            Text = "Choose the old SpyroEditor-beta folder. Saved edits, custom skies/textures, settings, and research files are copied into this project. The old folder is never moved or deleted, and existing project files are never overwritten.",
+            Text = "Choose the old SpyroEditor-beta folder. Saved edits, custom skies, textures, and settings are copied into this project. The old folder is never moved or deleted, and existing project files are never overwritten.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(ModernMutedInk),
             LineHeight = 20

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AssemblyName>Spyro.Editor.TreeTopsCount113PolyBuffer1BF40ControlSmoke</AssemblyName>
+    <RootNamespace>Spyro.Editor.TreeTopsCount113PolyBuffer1BF40ControlSmoke</RootNamespace>
+  </PropertyGroup>
+</Project>

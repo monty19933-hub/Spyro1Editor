@@ -59,6 +59,10 @@ foreach (NativeMobyPath path in paths)
         path.PathPointer == path.PropertiesPointer + EggThiefPathLocator.EggThiefPathOffsetInProperties,
         $"{path.LevelName} T{path.OwnerTrueIndex} no longer uses the verified m_Props+0x5C wrapper.");
     Assert(path.Nodes.All(node => node.CoordinateWadOffset >= path.PathWadOffset + 8), "Node offset precedes PathData nodes.");
+    Assert(
+        NativeMobyPathTraversalProfileRegistry.Resolve(path)?.ClosingTraversal ==
+            NativeMobyPathClosingTraversal.CyclicForwardOrReverse,
+        $"{path.LevelName} T{path.OwnerTrueIndex} lost its disassembly-proven cyclic traversal profile.");
 }
 
 NativeMobyPathPatchPlan noEditPlan = NativeMobyPathPatchExporter.BuildPlan(paths);

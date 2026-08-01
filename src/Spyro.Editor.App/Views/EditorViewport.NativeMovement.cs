@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Input;
 using Avalonia.Media;
+using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
 
@@ -83,6 +84,35 @@ public sealed partial class EditorViewport
             if (projected[index].Node.Index == projected[index - 1].Node.Index + 1)
             {
                 context.DrawLine(pathPen, projected[index - 1].Screen, projected[index].Screen);
+                _visibleNativePathSegmentCount++;
+            }
+        }
+
+        NativeMobyPathTraversalProfile? traversalProfile =
+            NativeMobyPathTraversalProfileRegistry.Resolve(path);
+        if (path.Nodes.Count > 1 &&
+            traversalProfile?.ClosingTraversal == NativeMobyPathClosingTraversal.CyclicForwardOrReverse)
+        {
+            NativePathNode firstNode = path.Nodes[0];
+            NativePathNode lastNode = path.Nodes[^1];
+            Dictionary<int, Point> projectedByNodeIndex = projected.ToDictionary(
+                item => item.Node.Index,
+                item => item.Screen);
+            if (projectedByNodeIndex.TryGetValue(firstNode.Index, out Point firstScreen) &&
+                projectedByNodeIndex.TryGetValue(lastNode.Index, out Point lastScreen))
+            {
+                DrawDashedLine(
+                    context,
+                    new Pen(new SolidColorBrush(Color.FromArgb(235, 255, 132, 67)), 2.4),
+                    lastScreen,
+                    firstScreen,
+                    8,
+                    5);
+                Point seamMidpoint = lastScreen + ((firstScreen - lastScreen) * 0.5);
+                DrawNativeMovementChip(
+                    context,
+                    seamMidpoint + new Vector(8, -22),
+                    "possible forward/reverse traversal");
                 _visibleNativePathSegmentCount++;
             }
         }

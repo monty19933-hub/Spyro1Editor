@@ -28,8 +28,8 @@ retain the exact numbered-beta contract understood by older installed clients.
 The published V3 bridge remains immutable and must not be retagged or replaced.
 
 After that bridge, incremental public updates use canonical dotted identities:
-`beta-v3.1`, `Spyro Editor Beta V3.1`, and matching `Beta-V3.1` assets. Those
-packages use manifest schema 2, carry `publicVersion: "3.1"`, and retain legacy
+`beta-v4.1`, `Spyro Editor Beta V4.1`, and matching `Beta-V4.1` assets. Those
+packages use manifest schema 2, carry `publicVersion: "4.1"`, and retain legacy
 integer beta metadata only for compatibility. Each `CHANGELOG.md` is solely the
 delta from the immediately previous public release, not accumulated history.
 
@@ -115,6 +115,10 @@ Current release features include:
   gameplay-frame claim.
 - Moving, cloning, removing, and editing supported gems, chests, enemies, keys,
   scenery, and other decoded mobys.
+- `Add Object` uses a picture-first gallery with larger generated previews for
+  every release-safe selector label. Duplicate ordinary chest choices are
+  collapsed, familiar editor designs stay consistent, and the Spring Chest
+  preview contains its gem reward rather than a literal spring.
 - All 12 verified native Egg Thieves expose their fixed ordered run paths as
   numbered handles and a polyline in Edit Map and Game Camera. Nodes support
   drag/exact XYZ, terrain snap, reset, persistence, and undo; moving the thief
@@ -287,16 +291,63 @@ Current release features include:
 - `Terrain` > `Choose Texture & Start Painting` presents the disc's decoded
   native terrain/building texture records in a six-column gallery. It loads the
   active level only; another level is read only after the user selects it and
-  presses `Load Level Textures`. Double-clicking an available tile enters paint
-  mode, while unsupported records stay visible as gray `BLOCKED` cards with an
-  exact reason. A same-level choice is a selected-face swap that carries the
+  presses `Load Level Textures`. Only a primary left-mouse double-click on an
+  available tile enters paint mode; selection, keyboard activation, touch, pen,
+  or a single click only update details. With a terrain section selected,
+  `Suggest Nearby Tiles` ranks up to six usable choices from the currently
+  loaded source using shared-edge and nearby sections, surface/behavior
+  metadata, and visual color. Unsupported records stay visible as gray
+  `BLOCKED` cards with an exact reason. A same-level choice is a selected-face swap that carries the
   donor's source-verified near/fade corner tints into private or unused color
   slots without recoloring neighboring faces. Save/reload and Undo preserve or
   remove that complete recipe rather than retaining only a texture number. Fast
-  cross-level paint is also face-local, but only when the selected destination
-  owns a unique safe texture record; shared targets are refused without
-  mutation. The existing explicit whole-record workflow remains on the separate
-  `Advanced / Shared Replacement` terrain-panel button, along with its custom
+  cross-level paint is also face-local when the selected destination owns a
+  unique safe texture record or can reuse the same donor already staged in a
+  proven record. Shared targets otherwise open a scope dialog for either the
+  selected section, when safe, or the exact linked-section count. The staged
+  texture manager supports selected/newest removal and session Undo Last without
+  discarding later geometry edits. The clean-USA Artisans profile may append up
+  to four runtime-proven private texture records in the normal editor, even
+  though all 68 retail rows are already referenced. The exact clean-USA
+  Gnasty's World profile may append up to 50 through its runtime-proven
+  `+0x2800` sector-relocation writer. The exact clean-USA Wizard Peak profile
+  may append up to 46 rows through its separately bounded runtime-proven
+  `+0x2000` writer. The four additional rows used by its focused candidate are
+  animation-source diagnostics and remain excluded from normal editor
+  allocation. A fifth Artisans row and appended-row growth for destinations other than
+  Artisans, Gnasty's World, and Wizard Peak remain research-gated. Source-proven unused
+  native stable rows can still provide bounded private capacity where the exact allocation
+  and donor pair pass. The isolated
+  research launcher admits a
+  guarded request of up to 50 distinct appended rows per destination, subject
+  to the seven-bit ID limit and exact native page fit for that donor/material
+  set; compatible rows remain reusable at the maximum. Safe distinct-50
+  ID/table-growth planning reaches 29/35 levels. The combined
+  structure-plus-current-one-row-page gate reaches 28/35; both are prerequisite
+  counts, not proof that 50 arbitrary art payloads fit together. Corrected
+  Wizard Peak and Tree Tops candidates assigned four artifact-only
+  animation-source diagnostic rows plus 46 appended rows to fifty visible faces
+  at `+0x2000`. Wizard Peak worked in DuckStation and promotes only the exact
+  fingerprint, `RuntimeProvenPlus2000` writer, and 46 appended rows. A later
+  focused Tree Tops diagnostic loaded with 32 appended native-T12 clone rows
+  after reducing the normal polygon span to `0x1BF40`; movement, music, enemies,
+  camera movement, and Inventory were reported working. The 33-row Tree Tops
+  artifact remains offline-proven only, and arbitrary donor art, normal Create
+  BIN integration, Save Fairy/flight paths, and public promotion remain
+  unproven. High Caves, Wizard Peak, Tree Tops, Lofty
+  Castle, Haunted Towers, and Gnorc Cove remain hard distinct-50 ID blockers;
+  their safe appended capacities are 37, 46, 47, 49, 39, and 33 respectively.
+  Every
+  level still has far more than 50 source-backed candidate textured faces when compatible rows
+  are reused; that census does not guarantee private slots or universal `Only Selected Section`
+  support. The exact Gnasty's World 50-row/50-face BIN passed all final
+  readback checks and was confirmed in DuckStation without a crash, so normal
+  Beta V4 admits that exact retail fingerprint and writer at up to 50 rows.
+  Wizard Peak separately admits at most 46 appended rows; its four diagnostic
+  source rows remain unavailable for normal allocation. These are not all-level
+  or arbitrary-50-donor promotions. The
+  existing explicit whole-record workflow
+  remains on the separate `Advanced / Shared Replacement` terrain-panel button, along with its custom
   color/import/paste controls. That action replaces the selected target texture
   record for every face that shares its texture ID. Apply is enabled only after
   the target's runtime-persistence,

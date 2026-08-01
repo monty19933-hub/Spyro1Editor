@@ -10,9 +10,9 @@ const int LowDetailDescriptorCount = 2;
 const int LeadingDescriptorCount = 1;
 const int NormalDescriptorCount = 4;
 const int CloseDescriptorCount = 16;
-const int GnastyWorld22RequiredBytes = 19_456;
-const int GnastyWorld22PixelBytes = 8_704;
-const int CompletePaletteBytes = 10_752;
+const int GnastyWorld22RequiredBytes = 5_632;
+const int GnastyWorld22PixelBytes = 4_608;
+const int CompletePaletteBytes = 1_024;
 
 string workspaceRoot = args.Length > 0 ? Path.GetFullPath(args[0]) : Directory.GetCurrentDirectory();
 string sourceImagePath = Path.Combine(workspaceRoot, "Spyro the Dragon (USA).bin");
@@ -25,6 +25,8 @@ LevelDefinition donorLevel = catalog.FindByKey("gnastysworld")
     ?? throw new InvalidOperationException("Gnasty's World is missing from the level catalog.");
 LevelDefinition artisansLevel = catalog.FindByKey("artisans")
     ?? throw new InvalidOperationException("Artisans is missing from the level catalog.");
+LevelDefinition darkPassageLevel = catalog.FindByKey("darkpassage")
+    ?? throw new InvalidOperationException("Dark Passage is missing from the level catalog.");
 const int donorTextureId = 22;
 List<AuditRow> rows = [];
 foreach (LevelDefinition level in LevelRealmCatalog.OrderLevels(catalog.Levels.Where(level => level.SourceWadEntry >= 0)))
@@ -147,6 +149,106 @@ AssertCompletePlan(completePlan!, artisansAudit, expectedClose16: 16, expectedCl
 Assert(completePlan!.AllocatedPixelByteCount == GnastyWorld22PixelBytes &&
        completePlan.AllocatedPaletteByteCount == CompletePaletteBytes,
     $"Gnasty's World texture 22 allocation split changed: expected {GnastyWorld22PixelBytes:N0} pixel and {CompletePaletteBytes:N0} palette bytes.");
+
+NativeTerrainTextureRelocationImport[] mixedDonorImports =
+[
+    new(5, darkPassageLevel.SourceWadEntry, 31, "both", PreserveTargetDescriptorMaterial: true),
+    new(10, donorLevel.SourceWadEntry, 9, "both", PreserveTargetDescriptorMaterial: true),
+    new(22, donorLevel.SourceWadEntry, 29, "both", PreserveTargetDescriptorMaterial: true),
+    new(48, donorLevel.SourceWadEntry, 23, "both", PreserveTargetDescriptorMaterial: true),
+    new(52, donorLevel.SourceWadEntry, 7, "both", PreserveTargetDescriptorMaterial: true),
+    new(54, donorLevel.SourceWadEntry, 23, "both", PreserveTargetDescriptorMaterial: true),
+    new(55, donorLevel.SourceWadEntry, 17, "both", PreserveTargetDescriptorMaterial: true),
+    new(56, donorLevel.SourceWadEntry, 16, "both", PreserveTargetDescriptorMaterial: true)
+];
+NativeTerrainTextureRelocationAudit mixedDonorAudit = NativeTerrainTextureRelocationAllocator.Audit(
+    sourceImagePath,
+    artisansLevel,
+    mixedDonorImports);
+bool mixedDonorBuilt = NativeTerrainTextureRelocationAllocator.TryBuild(
+    sourceImagePath,
+    artisansLevel,
+    mixedDonorImports,
+    BuildCompleteTestProof(mixedDonorAudit),
+    out NativeTerrainTextureRelocationPlan? mixedDonorPlan,
+    out string mixedDonorFailure);
+Assert(mixedDonorBuilt && mixedDonorPlan != null,
+    $"Artisans mixed Gnasty's World/Dark Passage eight-record batch relocation failed: {mixedDonorFailure}");
+Assert(mixedDonorPlan!.Imports.Count == 8 &&
+       mixedDonorPlan.Imports.Select(importItem => importItem.DonorWadEntry).Distinct().Count() == 2 &&
+       mixedDonorPlan.RewrittenDescriptorCount == CompleteDescriptorCount * 8 &&
+       mixedDonorPlan.LogicalReadbackVerified &&
+       mixedDonorPlan.ProtectedStorageVerified &&
+       mixedDonorPlan.TargetDescriptorMaterialPolicyVerified,
+    "The mixed-donor batch did not retain both source WADs or prove all eight complete records and protected output storage.");
+
+int[] mixedRequestedTargets = mixedDonorImports.Select(importItem => importItem.TargetTextureId).ToArray();
+int[] mixedOverlapClosure = NativeTexturePageOwnershipScanner
+    .FindTerrainTextureStorageOverlapClosure(sourceImagePath, artisansLevel, mixedRequestedTargets)
+    .ToArray();
+bool mixedSourceProofBuilt = NativeTexturePageOwnershipScanner.TryBuildRelocationOwnershipProof(
+    sourceImagePath,
+    artisansLevel,
+    mixedOverlapClosure,
+    out NativeTexturePageRelocationOwnershipProofResult? mixedSourceProof,
+    out string mixedSourceProofFailure);
+Assert(mixedSourceProofBuilt && mixedSourceProof != null,
+    $"Artisans eight-edit source-bound overlap proof failed: {mixedSourceProofFailure}");
+Dictionary<int, NativeTerrainTextureRelocationImport> mixedImportsByTarget = mixedDonorImports
+    .ToDictionary(importItem => importItem.TargetTextureId);
+NativeTerrainTextureRelocationImport[] mixedClosureImports = mixedOverlapClosure
+    .Select(textureId => mixedImportsByTarget.TryGetValue(textureId, out NativeTerrainTextureRelocationImport? requested)
+        ? requested
+        : new NativeTerrainTextureRelocationImport(
+            textureId,
+            artisansLevel.SourceWadEntry,
+            textureId,
+            "both",
+            PreserveTargetDescriptorMaterial: true))
+    .ToArray();
+bool mixedSourcePlanBuilt = NativeTerrainTextureRelocationAllocator.TryBuild(
+    sourceImagePath,
+    artisansLevel,
+    mixedClosureImports,
+    mixedSourceProof!.Proof,
+    out NativeTerrainTextureRelocationPlan? mixedSourcePlan,
+    out string mixedSourcePlanFailure);
+Assert(!mixedSourcePlanBuilt && mixedSourcePlan == null &&
+       mixedSourcePlanFailure.Contains("No byte-private", StringComparison.OrdinalIgnoreCase),
+    "The exact eight-edit source-bound Artisans batch unexpectedly bypassed its proven private-storage capacity limit.");
+
+int[] sharedTargetClosure = NativeTexturePageOwnershipScanner
+    .FindTerrainTextureStorageOverlapClosure(sourceImagePath, artisansLevel, [39])
+    .ToArray();
+Assert(sharedTargetClosure.SequenceEqual([35, 39]),
+    $"Artisans texture 39 overlap closure changed; expected 35,39, got {string.Join(",", sharedTargetClosure)}.");
+bool sharedProofBuilt = NativeTexturePageOwnershipScanner.TryBuildRelocationOwnershipProof(
+    sourceImagePath,
+    artisansLevel,
+    sharedTargetClosure,
+    out NativeTexturePageRelocationOwnershipProofResult? sharedProof,
+    out string sharedProofFailure);
+Assert(sharedProofBuilt && sharedProof != null,
+    $"Artisans shared texture 39 collective ownership proof failed: {sharedProofFailure}");
+NativeTerrainTextureRelocationImport[] sharedImports =
+[
+    new(35, artisansLevel.SourceWadEntry, 35, "both", PreserveTargetDescriptorMaterial: true),
+    new(39, donorLevel.SourceWadEntry, 17, "both", PreserveTargetDescriptorMaterial: true)
+];
+bool sharedPlanBuilt = NativeTerrainTextureRelocationAllocator.TryBuild(
+    sourceImagePath,
+    artisansLevel,
+    sharedImports,
+    sharedProof!.Proof,
+    out NativeTerrainTextureRelocationPlan? sharedPlan,
+    out string sharedPlanFailure);
+Assert(sharedPlanBuilt && sharedPlan != null,
+    $"Artisans texture 39 alias-safe relocation with preserved companion 35 failed: {sharedPlanFailure}");
+Assert(sharedPlan!.RewrittenDescriptorCount == CompleteDescriptorCount * 2 &&
+       sharedPlan.AllocatedPixelByteCount + sharedPlan.AllocatedPaletteByteCount == 10_752 &&
+       sharedPlan.LogicalReadbackVerified && sharedPlan.ProtectedStorageVerified &&
+       sharedPlan.TargetDescriptorMaterialPolicyVerified,
+    "Artisans texture 39 alias-safe plan did not preserve both complete records and every readback/material invariant.");
 
 NativeTerrainTextureRelocationImport artOnlyMaterialImport = new(
     54,

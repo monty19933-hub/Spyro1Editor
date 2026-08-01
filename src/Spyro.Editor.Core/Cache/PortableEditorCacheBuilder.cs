@@ -19,8 +19,8 @@ public sealed record PortableEditorCacheResult(
 
 public static class PortableEditorCacheBuilder
 {
-    public const int TerrainTexturePreviewCacheFormatVersion = 9;
-    public const string TerrainTexturePreviewDecoder = "hq8-dual-lod-plus-lq4-indexed16-plus-raw-hq-psx555-stp-abr-all-native-load-initialized-v8";
+    public const int TerrainTexturePreviewCacheFormatVersion = 10;
+    public const string TerrainTexturePreviewDecoder = "hq4or8-depth-aware-dual-lod-plus-lq4-indexed16-plus-raw-hq-psx555-stp-abr-all-native-load-initialized-v9";
     public const string TerrainTexturePreviewStateSemantics = "nativeLoadInitialState";
 
     public static async Task<PortableEditorCacheResult> BuildAsync(
@@ -414,6 +414,7 @@ public static class PortableEditorCacheBuilder
                 nativeMaterialZeroWordCount = highDetailMaterials.ZeroWordCount,
                 nativeMaterialStpSetWordCount = highDetailMaterials.StpSetWordCount,
                 nativeMaterialAbrDescriptorCounts = highDetailMaterials.AbrDescriptorCounts,
+                nativeMaterialBitsPerPixelDescriptorCounts = highDetailMaterials.BitsPerPixelDescriptorCounts,
                 nativeMaterialTexturePagesByteLength = highDetailMaterials.TexturePagesByteLength,
                 nativeMaterialTextureComponentByteLength = highDetailMaterials.TextureComponentByteLength,
                 nativeMaterialTexturePagesSha256 = highDetailMaterials.TexturePagesSha256,
@@ -701,6 +702,9 @@ public static class PortableEditorCacheBuilder
             compositeRawWordsSha256 = tier.CompositeRawWordsSha256,
             abrDescriptorCounts = Enumerable.Range(0, 4)
                 .Select(abr => tier.Descriptors.Count(descriptor => descriptor.Abr == abr))
+                .ToArray(),
+            bitsPerPixelDescriptorCounts = new[] { 4, 8 }
+                .Select(bitsPerPixel => tier.Descriptors.Count(descriptor => descriptor.BitsPerPixel == bitsPerPixel))
                 .ToArray(),
             rawDescriptorSetSha256 = Hash(tier.Descriptors.SelectMany(descriptor => descriptor.RawDescriptor.ToArray()).ToArray()),
             rawWordSetSha256 = Hash(tier.Descriptors.SelectMany(descriptor => descriptor.RawWordsLittleEndian.ToArray()).ToArray())
@@ -1112,7 +1116,8 @@ public static class PortableEditorCacheBuilder
                 set.TexturePagesByteLength != lowDetailTextures.TexturePagesByteLength ||
                 !string.Equals(set.TexturePagesSha256, lowDetailTextures.TexturePagesSha256, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(set.OriginalTextureComponentSha256, lowDetailTextures.OriginalTextureComponentSha256, StringComparison.OrdinalIgnoreCase) ||
-                !TryReadExactIntArray(root, "nativeMaterialAbrDescriptorCounts", set.AbrDescriptorCounts))
+                !TryReadExactIntArray(root, "nativeMaterialAbrDescriptorCounts", set.AbrDescriptorCounts) ||
+                !TryReadExactIntArray(root, "nativeMaterialBitsPerPixelDescriptorCounts", set.BitsPerPixelDescriptorCounts))
             {
                 return false;
             }
@@ -1170,7 +1175,11 @@ public static class PortableEditorCacheBuilder
             TryReadExactIntArray(
                 manifest,
                 "abrDescriptorCounts",
-                Enumerable.Range(0, 4).Select(abr => tier.Descriptors.Count(descriptor => descriptor.Abr == abr)).ToArray());
+                Enumerable.Range(0, 4).Select(abr => tier.Descriptors.Count(descriptor => descriptor.Abr == abr)).ToArray()) &&
+            TryReadExactIntArray(
+                manifest,
+                "bitsPerPixelDescriptorCounts",
+                new[] { 4, 8 }.Select(bitsPerPixel => tier.Descriptors.Count(descriptor => descriptor.BitsPerPixel == bitsPerPixel)).ToArray());
     }
 
     private static bool TryReadExactIntArray(JsonElement root, string propertyName, IReadOnlyList<int> expected)

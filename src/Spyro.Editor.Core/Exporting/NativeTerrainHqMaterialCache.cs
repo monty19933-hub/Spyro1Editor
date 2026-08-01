@@ -26,6 +26,7 @@ public sealed class NativeTerrainHqMaterialDescriptorPayload
         Abr = abr;
         RawDescriptorBytes = rawDescriptor.ToArray();
         RawWordBytes = rawWordBytes.ToArray();
+        BitsPerPixel = RawDescriptorBytes.Length == 8 && (RawDescriptorBytes[6] & 0x80) != 0 ? 8 : 4;
         RawDescriptorSha256 = NativeTerrainHqMaterialCacheCodec.Sha256Hex(RawDescriptorBytes);
         RawWordsSha256 = NativeTerrainHqMaterialCacheCodec.Sha256Hex(RawWordBytes);
         ZeroWordCount = CountWords(static word => word == 0);
@@ -37,6 +38,7 @@ public sealed class NativeTerrainHqMaterialDescriptorPayload
     public int DescriptorIndex { get; }
     public int Side { get; }
     public int Abr { get; }
+    public int BitsPerPixel { get; }
     public int WordCount => RawWordBytes.Length / sizeof(ushort);
     public ReadOnlyMemory<byte> RawDescriptor => RawDescriptorBytes;
     public ReadOnlyMemory<byte> RawWordsLittleEndian => RawWordBytes;
@@ -194,6 +196,9 @@ public sealed class NativeTerrainHqMaterialSet
         AbrDescriptorCounts = Enumerable.Range(0, 4)
             .Select(abr => Textures.Sum(texture => texture.Descriptors.Count(descriptor => descriptor.Abr == abr)))
             .ToArray();
+        BitsPerPixelDescriptorCounts = new[] { 4, 8 }
+            .Select(bitsPerPixel => Textures.Sum(texture => texture.Descriptors.Count(descriptor => descriptor.BitsPerPixel == bitsPerPixel)))
+            .ToArray();
         ContentSha256 = NativeTerrainHqMaterialCacheCodec.ComputeContentSha256(this);
     }
 
@@ -212,6 +217,7 @@ public sealed class NativeTerrainHqMaterialSet
     public int ZeroWordCount { get; }
     public int StpSetWordCount { get; }
     public IReadOnlyList<int> AbrDescriptorCounts { get; }
+    public IReadOnlyList<int> BitsPerPixelDescriptorCounts { get; }
     /// <summary>
     /// Stable material/provenance fingerprint, independent of the sidecar file
     /// path and suitable for viewport frame-cache keys.
@@ -300,7 +306,6 @@ public static class NativeTerrainHqMaterialCacheCodec
     private const int PackedTexturePageRowBytes = 1024;
     private const int FullVramTextureByteX = 1024;
     private const int TexturePageMaxRows = 512;
-    private const int PaletteByteLength = 256 * sizeof(ushort);
     private static readonly byte[] Magic = Encoding.ASCII.GetBytes("S1HQMAT1");
     private static readonly int[][] DescriptorMatrices =
     [
@@ -734,20 +739,23 @@ public static class NativeTerrainHqMaterialCacheCodec
         }
 
         int region = raw[6];
+        int bitsPerPixel = (region & 0x80) != 0 ? 8 : 4;
+        int pixelsPerPackedByte = 8 / bitsPerPixel;
         int abr = (region >> 5) & 3;
         int orientation = (raw[7] >> 4) & 7;
         int[] matrix = DescriptorMatrices[orientation];
-        int vramXMin = ((region * 128) % 2048) + raw[0];
+        int pagePackedByteX = (region & 0x0F) * 128;
         int vramYMin = (((region & 0x1F) / 16) * 256) + raw[1];
         int edge = side - 1;
         int startY = vramYMin + ((matrix[2] < 0 || matrix[3] < 0) ? edge : 0);
-        int startFullX = vramXMin + ((matrix[0] < 0 || matrix[1] < 0) ? edge : 0);
+        int startLocalPixelX = raw[0] + ((matrix[0] < 0 || matrix[1] < 0) ? edge : 0);
 
         ushort clutCode = BinaryPrimitives.ReadUInt16LittleEndian(raw.AsSpan(2, 2));
         int clutXWord = (clutCode & 0x3F) * 16;
         int clutY = (clutCode >> 6) & 0x1FF;
         int paletteByteStart = (clutY * PackedTexturePageRowBytes) + ((clutXWord - 512) * sizeof(ushort));
-        if (clutXWord < 512 || paletteByteStart < 0 || paletteByteStart + PaletteByteLength > texturePages.Length)
+        int paletteByteLength = (1 << bitsPerPixel) * sizeof(ushort);
+        if (clutXWord < 512 || paletteByteStart < 0 || paletteByteStart + paletteByteLength > texturePages.Length)
         {
             failure = "descriptor CLUT maps outside the loaded right-half VRAM payload";
             return false;
@@ -759,15 +767,22 @@ public static class NativeTerrainHqMaterialCacheCodec
             for (int x = 0; x < side; x++)
             {
                 int sampleY = startY + (x * matrix[2]) + (y * matrix[3]);
-                int samplePackedX = startFullX + (x * matrix[0]) + (y * matrix[1]) - FullVramTextureByteX;
+                int sampleLocalPixelX =
+                    startLocalPixelX + (x * matrix[0]) + (y * matrix[1]);
+                int samplePackedX =
+                    pagePackedByteX + (sampleLocalPixelX / pixelsPerPackedByte) - FullVramTextureByteX;
                 long pixelOffset = (sampleY * (long)PackedTexturePageRowBytes) + samplePackedX;
                 if (samplePackedX < 0 || samplePackedX >= PackedTexturePageRowBytes ||
+                    sampleLocalPixelX < 0 ||
                     sampleY < 0 || sampleY >= TexturePageMaxRows || pixelOffset < 0 || pixelOffset >= texturePages.Length)
                 {
                     failure = $"pixel ({x},{y}) maps outside the loaded right-half VRAM payload";
                     return false;
                 }
-                int paletteIndex = texturePages[(int)pixelOffset];
+                int packedPixel = texturePages[(int)pixelOffset];
+                int paletteIndex = bitsPerPixel == 8
+                    ? packedPixel
+                    : (packedPixel >> ((sampleLocalPixelX & 1) * 4)) & 0x0F;
                 int paletteOffset = paletteByteStart + (paletteIndex * sizeof(ushort));
                 ushort word = BinaryPrimitives.ReadUInt16LittleEndian(texturePages.Slice(paletteOffset, sizeof(ushort)));
                 BinaryPrimitives.WriteUInt16LittleEndian(

@@ -25,7 +25,9 @@ using Spyro.Editor.Core.Workspace;
 
 string sourceWorkspace = FindWorkspace(args.FirstOrDefault(argument =>
     !argument.StartsWith("--", StringComparison.Ordinal)));
-bool sourceFreeViewportSmoke = args.Contains("--terrain-occlusion-only", StringComparer.OrdinalIgnoreCase);
+bool sourceFreeViewportSmoke =
+    args.Contains("--terrain-occlusion-only", StringComparer.OrdinalIgnoreCase) ||
+    args.Contains("--private-texture-feasibility-cache-only", StringComparer.OrdinalIgnoreCase);
 string workspace = CreateIsolatedWorkspace(sourceWorkspace, includeSourceDiscSetting: !sourceFreeViewportSmoke);
 string previousDirectory = Environment.CurrentDirectory;
 string? previousWorkspace = Environment.GetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE");
@@ -38,6 +40,14 @@ try
     Environment.CurrentDirectory = workspace;
     Environment.SetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE", workspace);
     Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "1");
+    string resolvedSmokeWorkspace = EditorWorkspace.Find().RootPath;
+    if (!string.Equals(resolvedSmokeWorkspace, workspace, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            $"The UI smoke workspace locator resolved '{resolvedSmokeWorkspace}' instead of isolated workspace '{workspace}'. " +
+            $"Environment='{Environment.GetEnvironmentVariable("SPYRO_EDITOR_WORKSPACE")}', catalog={File.Exists(Path.Combine(workspace, "spyro-level-catalog.json"))}, " +
+            $"cache={Directory.Exists(Path.Combine(workspace, "editor-cache"))}.");
+    }
 
     HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
     if (Application.Current?.RequestedThemeVariant != ThemeVariant.Light)
@@ -77,9 +87,45 @@ try
         RunTerrainCrossLevelPaintOnly();
         return 0;
     }
+    if (args.Contains("--terrain-shared-route-matrix-only", StringComparer.OrdinalIgnoreCase))
+    {
+        string result = MainWindow.AssertAllLevelSharedTerrainTextureRouteForTesting(
+            LevelCatalog.Load(workspace));
+        Console.WriteLine($"Shared terrain replacement route matrix: {result}");
+        return 0;
+    }
+    if (args.Contains("--appended-private-texture-gate-only", StringComparer.OrdinalIgnoreCase))
+    {
+        RunAppendedPrivateTextureGateOnly();
+        return 0;
+    }
+    if (args.Contains("--private-texture-feasibility-cache-only", StringComparer.OrdinalIgnoreCase))
+    {
+        string result = Task
+            .Run(MainWindow.AssertPrivateTextureFeasibilityMemoizerForTestingAsync)
+            .GetAwaiter()
+            .GetResult();
+        Console.WriteLine($"Private-texture feasibility cache: {result}.");
+        return 0;
+    }
+    if (args.Contains("--appended-private-build-safety-only", StringComparer.OrdinalIgnoreCase))
+    {
+        RunAppendedPrivateBuildSafetyOnly();
+        return 0;
+    }
     if (args.Contains("--terrain-texture-paint-gallery-only", StringComparer.OrdinalIgnoreCase))
     {
         RunTerrainTexturePaintGalleryOnly();
+        return 0;
+    }
+    if (args.Contains("--object-gallery-only", StringComparer.OrdinalIgnoreCase))
+    {
+        RunObjectGalleryOnly();
+        return 0;
+    }
+    if (args.Contains("--create-bin-feedback-only", StringComparer.OrdinalIgnoreCase))
+    {
+        RunCreateBinFeedbackOnly();
         return 0;
     }
     if (args.Contains("--update-only", StringComparer.OrdinalIgnoreCase))
@@ -233,9 +279,9 @@ void RunNativePathOnly()
         if (mapOverlay.ViewMode != ViewportViewMode.Map ||
             mapOverlay.OwnerTrueIndex != thief.TrueIndex ||
             mapOverlay.ProjectedNodeHandleCount != path.NodeCount ||
-            mapOverlay.PolylineSegmentCount != path.NodeCount - 1)
+            mapOverlay.PolylineSegmentCount != path.NodeCount)
         {
-            throw new InvalidOperationException($"Edit Map did not render every numbered route node and ordered polyline segment: {mapOverlay}.");
+            throw new InvalidOperationException($"Stone Hill Edit Map did not render all 13 numbered nodes and all 13 possible forward/reverse handler traversal segments: {mapOverlay}.");
         }
 
         viewport.SetMapYFlipped(true);
@@ -258,6 +304,12 @@ void RunNativePathOnly()
             ?? throw new InvalidOperationException("Native path UI smoke could not inspect move-together state.");
         if (moveTogetherField.GetValue(window) is not true)
             throw new InvalidOperationException("Move thief and path together is not enabled by default.");
+        FieldInfo terrainSnapField = typeof(MainWindow).GetField(
+            "_snapNativePathNodesToTerrain",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Native path UI smoke could not inspect terrain-snap state.");
+        if (terrainSnapField.GetValue(window) is not true)
+            throw new InvalidOperationException("Egg-thief path terrain snapping is not enabled by default.");
 
         NativePathNode first = path.Nodes[0];
         Vector3f ownerBefore = thief.Position;
@@ -330,7 +382,172 @@ void RunNativePathOnly()
         if (path.HasEdits || path.NodeCount != 13 || !path.Nodes.Select(node => node.Index).SequenceEqual(Enumerable.Range(0, 13)))
             throw new InvalidOperationException("Reset Whole Path changed fixed node count/order or left edited coordinates behind.");
 
-        Console.WriteLine("Native path UI smoke passed: Edit Run Path visibility, Map/Game Camera handles and polyline, fixed ordering, move-together default, Undo, exact fixed-16 persistence, and node/whole-path reset.");
+        NativeMobyPathTraversalProfile[] cyclicProfiles =
+            NativeMobyPathTraversalProfileRegistry.Profiles.ToArray();
+        if (cyclicProfiles.Length != 12 ||
+            cyclicProfiles.Any(profile =>
+                profile.ClosingTraversal != NativeMobyPathClosingTraversal.CyclicForwardOrReverse))
+        {
+            throw new InvalidOperationException(
+                $"Native path UI smoke expected 12 proven class-0x21 cyclic profiles, found {cyclicProfiles.Length}.");
+        }
+
+        int checkedCyclicPaths = 0;
+        foreach (IGrouping<string, NativeMobyPathTraversalProfile> levelProfiles in cyclicProfiles
+            .GroupBy(profile => LevelCatalog.NormalizeKey(profile.LevelKey)))
+        {
+            LevelDefinition level = catalog.FindByKey(levelProfiles.Key)
+                ?? throw new InvalidOperationException(
+                    $"Native path UI smoke could not find traversal-profile level {levelProfiles.Key}.");
+            SelectLevelForViewportFit(window, level);
+            List<Moby> levelMobys = (List<Moby>)(mobysField.GetValue(window)
+                ?? throw new InvalidOperationException(
+                    $"Native path UI smoke found no {level.DisplayName} Moby list."));
+            List<NativeMobyPath> levelPaths = (List<NativeMobyPath>)(pathsField.GetValue(window)
+                ?? throw new InvalidOperationException(
+                    $"Native path UI smoke found no {level.DisplayName} routes."));
+            foreach (NativeMobyPathTraversalProfile profile in levelProfiles)
+            {
+                Moby pathOwner = levelMobys.Single(moby => moby.TrueIndex == profile.OwnerTrueIndex);
+                NativeMobyPath cyclicPath = levelPaths.Single(route =>
+                    route.OwnerTrueIndex == pathOwner.TrueIndex);
+                if (cyclicPath.OwnerNativeClass != EggThiefPathLocator.EggThiefNativeClass ||
+                    NativeMobyPathTraversalProfileRegistry.Resolve(cyclicPath)?.ClosingTraversal !=
+                        NativeMobyPathClosingTraversal.CyclicForwardOrReverse)
+                {
+                    throw new InvalidOperationException(
+                        $"{level.DisplayName} T{pathOwner.TrueIndex} did not retain proven class-0x21 cyclic semantics.");
+                }
+
+                viewport.SetViewMode(ViewportViewMode.Map);
+                viewport.SelectMoby(pathOwner, true);
+                FlushUi();
+                NativePathOverlaySnapshot cyclicOverlay =
+                    viewport.CaptureNativePathOverlaySnapshotForTesting();
+                if (cyclicPath.NodeCount > 1 &&
+                    (cyclicOverlay.OwnerTrueIndex != pathOwner.TrueIndex ||
+                     cyclicOverlay.ProjectedNodeHandleCount != cyclicPath.NodeCount ||
+                     cyclicOverlay.PolylineSegmentCount != cyclicPath.NodeCount))
+                {
+                    throw new InvalidOperationException(
+                        $"{level.DisplayName} T{pathOwner.TrueIndex} did not render N nodes and N possible forward/reverse traversal segments: {cyclicOverlay}.");
+                }
+
+                checkedCyclicPaths++;
+            }
+        }
+
+        if (checkedCyclicPaths != cyclicProfiles.Length)
+            throw new InvalidOperationException($"Checked {checkedCyclicPaths}/{cyclicProfiles.Length} cyclic path profiles.");
+
+        Console.WriteLine("Native path UI smoke passed: all 12 decoded class-0x21 routes render the proven forward/reverse closing seam, Map/Game Camera handles and fixed ordering remain intact, terrain snap and move-together default on, and Undo/persistence/node reset/whole-path reset passed.");
+    }
+    finally
+    {
+        window.Close();
+        FlushUi();
+    }
+}
+
+void RunCreateBinFeedbackOnly()
+{
+    MainWindow window = new()
+    {
+        Width = 1200,
+        Height = 760,
+        WindowStartupLocation = WindowStartupLocation.Manual,
+        Position = new PixelPoint(0, 0)
+    };
+    window.Show();
+    try
+    {
+        FieldInfo createButtonField = typeof(MainWindow).GetField(
+            "_toolbarCreateBinButton",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException(
+                "Create BIN feedback smoke could not inspect the toolbar button.");
+        Button createButton = (Button)(createButtonField.GetValue(window)
+            ?? throw new InvalidOperationException(
+                "Create BIN feedback smoke found no toolbar button."));
+        FieldInfo statusField = typeof(MainWindow).GetField(
+            "_statusText",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException(
+                "Create BIN feedback smoke could not inspect the status line.");
+        TextBlock statusText = (TextBlock)(statusField.GetValue(window)
+            ?? throw new InvalidOperationException(
+                "Create BIN feedback smoke found no status line."));
+
+        TaskCompletionSource pending = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        Task active = window.RunCreateBinCommandWithVisibleFeedbackAsync(
+            () => pending.Task);
+        FlushUi();
+        if (!string.Equals(
+                createButton.Content?.ToString(),
+                "Preparing BIN...",
+                StringComparison.Ordinal) ||
+            statusText.Text?.StartsWith(
+                "Create BIN started",
+                StringComparison.Ordinal) != true)
+        {
+            throw new InvalidOperationException(
+                "Create BIN did not expose immediate toolbar and status-line feedback while work was pending.");
+        }
+        MethodInfo refreshActions = typeof(MainWindow).GetMethod(
+            "RefreshActionAvailability",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException(
+                "Create BIN feedback smoke could not refresh toolbar availability.");
+        refreshActions.Invoke(window, null);
+        if (createButton.IsEnabled)
+        {
+            throw new InvalidOperationException(
+                "Refreshing editor actions re-enabled Create BIN while its first build was still pending.");
+        }
+
+        bool duplicateCommandRan = false;
+        Task duplicate = window.RunCreateBinCommandWithVisibleFeedbackAsync(
+            () =>
+            {
+                duplicateCommandRan = true;
+                return Task.CompletedTask;
+            });
+        WaitForUiTask(duplicate, "rejecting a duplicate Create BIN request");
+        if (duplicateCommandRan ||
+            statusText.Text?.Contains(
+                "Create BIN is already running",
+                StringComparison.Ordinal) != true)
+        {
+            throw new InvalidOperationException(
+                "Create BIN allowed a second overlapping export instead of reporting that the first one was active.");
+        }
+
+        pending.SetResult();
+        WaitForUiTask(active, "completing visible Create BIN feedback");
+        if (!string.Equals(
+                createButton.Content?.ToString(),
+                "Create BIN",
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Create BIN did not restore its toolbar label after completion.");
+        }
+
+        Task failed = window.RunCreateBinCommandWithVisibleFeedbackAsync(
+            () => Task.FromException(
+                new InvalidOperationException("focused feedback failure")));
+        WaitForUiTask(failed, "showing a Create BIN failure");
+        if (statusText.Text?.Contains(
+                "Could not create BIN: focused feedback failure",
+                StringComparison.Ordinal) != true)
+        {
+            throw new InvalidOperationException(
+                "An unexpected Create BIN exception was not surfaced in the visible status line.");
+        }
+
+        Console.WriteLine(
+            "Create BIN feedback smoke passed: pending work is visible, the toolbar label restores, and unexpected failures reach the status line.");
     }
     finally
     {
@@ -1358,6 +1575,37 @@ void RunTerrainFlyGameViewOnly()
                     $"{level.DisplayName} did not start from its portable retail entry pose: {entryPose}.");
             }
 
+            if (level.Key.Equals("artisans", StringComparison.OrdinalIgnoreCase))
+            {
+                string beforeGestureSha256 = Convert.ToHexString(
+                    System.Security.Cryptography.SHA256.HashData(
+                        File.ReadAllBytes(Path.Combine(outputDirectory, frame))));
+                viewport.SimulateFlyNavigationForTesting();
+                string activeFrame = "terrain-fly-game-view-artisans-input-active.png";
+                SaveFrame(window, activeFrame);
+                FlyTerrainInteractiveLodSnapshot activeGesture =
+                    viewport.CaptureFlyTerrainInteractiveLodSnapshotForTesting();
+                string activeGestureSha256 = Convert.ToHexString(
+                    System.Security.Cryptography.SHA256.HashData(
+                        File.ReadAllBytes(Path.Combine(outputDirectory, activeFrame))));
+                viewport.SettleFlyNavigationForTesting();
+                string settledFrame = "terrain-fly-game-view-artisans-input-settled.png";
+                SaveFrame(window, settledFrame);
+                string settledGestureSha256 = Convert.ToHexString(
+                    System.Security.Cryptography.SHA256.HashData(
+                        File.ReadAllBytes(Path.Combine(outputDirectory, settledFrame))));
+                if (!activeGesture.Active ||
+                    activeGesture.SimplifiedMaterialFaceCount != 0 ||
+                    activeGesture.FullMaterialFaceCount != activeGesture.VisibleTerrainFaceCount ||
+                    !string.Equals(beforeGestureSha256, activeGestureSha256, StringComparison.Ordinal) ||
+                    !string.Equals(beforeGestureSha256, settledGestureSha256, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Artisans Game Camera changed material pixels across a camera gesture: " +
+                        $"{beforeGestureSha256} -> {activeGestureSha256} -> {settledGestureSha256}; {activeGesture}.");
+                }
+            }
+
             if (level.Key.Equals("clifftown", StringComparison.OrdinalIgnoreCase) &&
                 (Math.Abs(entryPose.CameraX - 9152.0) > 0.01 ||
                  Math.Abs(entryPose.CameraY - 2591.045) > 0.02 ||
@@ -1735,6 +1983,325 @@ void RunTerrainCrossLevelPaintOnly()
     }
 }
 
+void RunAppendedPrivateTextureGateOnly()
+{
+    MainWindow window = new()
+    {
+        Width = 1200,
+        Height = 760,
+        WindowStartupLocation = WindowStartupLocation.Manual,
+        Position = new PixelPoint(0, 0)
+    };
+    window.Show();
+    try
+    {
+        WaitForLevelData(window);
+        Task<string> task =
+            window.AssertAppendedPrivateTerrainTextureGateForTestingAsync();
+        for (int attempt = 0; attempt < 36000 && !task.IsCompleted; attempt++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(5);
+        }
+        if (!task.IsCompleted)
+        {
+            throw new TimeoutException(
+                "The focused appended-private gate/stage/build-plan/Undo smoke exceeded 180 seconds.");
+        }
+        string result = task.GetAwaiter().GetResult();
+        Console.WriteLine($"Appended-private terrain texture gate UI/build: {result}.");
+    }
+    finally
+    {
+        window.Close();
+        FlushUi();
+    }
+}
+
+void RunAppendedPrivateBuildSafetyOnly()
+{
+    AssertAppendedPrivateBuildSafetyClassification();
+    MainWindow window = new()
+    {
+        Width = 1200,
+        Height = 760,
+        WindowStartupLocation = WindowStartupLocation.Manual,
+        Position = new PixelPoint(0, 0)
+    };
+    window.Show();
+    try
+    {
+        WaitForLevelData(window);
+        AssertAppendedPrivateBuildSafetyTerrainNavigation(window);
+    }
+    finally
+    {
+        window.Close();
+        FlushUi();
+    }
+}
+
+void AssertAppendedPrivateBuildSafetyClassification()
+{
+    LevelDefinition level = LevelCatalog.Load(workspace).FindByKey("artisans")
+        ?? throw new InvalidOperationException("Appended-private Build Safety smoke could not find Artisans.");
+    NativeTerrainTextureRecordAppendSourceBinding binding = new(
+        Version: NativeTerrainTextureRecordAppendBuilder.CurrentBindingVersion,
+        SourceImageSha256: new string('a', 64),
+        TargetLevelKey: level.Key,
+        TargetWadEntry: level.SourceWadEntry,
+        ExpectedSourceTextureCount: 68,
+        ExpectedTextureComponentSha256: new string('b', 64),
+        ExpectedLevelDataSha256: new string('c', 64));
+    NativeTerrainTextureRelocationEdit valid = new(
+        TargetTextureId: 68,
+        DonorLevelKey: "gnastysworld",
+        DonorLevelName: "Gnasty's World",
+        DonorWadEntry: 31,
+        DonorTextureId: 17,
+        DonorRuntimeKey: NativeTerrainTextureRelocationEditStore
+            .BuildTextureRecordProvenanceKey("gnastysworld", 17),
+        DescriptorTier: NativeTerrainTextureRelocationEditStore.CompleteDescriptorTier,
+        PreviewImagePath: "",
+        PreviewImageName: "",
+        CreatedAt: "2026-07-23T00:00:00.0000000Z",
+        ApplyMode: NativeTerrainTextureRelocationApplyMode.ArtOnlyPreserveTarget,
+        TargetRecordKind: NativeTerrainTextureTargetRecordKind.AppendedPrivate,
+        TargetWadEntry: binding.TargetWadEntry,
+        SourceImageSha256: binding.SourceImageSha256,
+        SourceTextureRecordCount: binding.ExpectedSourceTextureCount,
+        SourceTextureComponentSha256: binding.ExpectedTextureComponentSha256,
+        SourceLevelDataSha256: binding.ExpectedLevelDataSha256,
+        MaterialTemplateTextureId: 55,
+        PrivateRecordEditId: NativeTerrainTextureRelocationEditStore
+            .BuildAppendedPrivateRecordId(68));
+    NativeTerrainTextureRelocationEdit staleOrphan = valid with
+    {
+        TargetTextureId = 70,
+        DonorTextureId = 18,
+        DonorRuntimeKey = NativeTerrainTextureRelocationEditStore
+            .BuildTextureRecordProvenanceKey("gnastysworld", 18),
+        MaterialTemplateTextureId = 31,
+        PrivateRecordEditId = "stale-private-id"
+    };
+    MainWindow.TerrainTextureBuildSafetyFaceSnapshot[] faces =
+    [
+        new(12, "4:7:hp", 68, 55, false),
+        new(13, "4:8:hp", 69, 31, false),
+        new(14, "4:9:hp", 31, 31, false)
+    ];
+
+    IReadOnlyList<MobyBuildSafetyIssue> issues =
+        MainWindow.InspectAppendedPrivateTerrainTextureState(
+            level,
+            [valid, staleOrphan],
+            faces,
+            binding,
+            manifestError: "",
+            geometryError: "",
+            bindingError: "",
+            gateAllowed: false,
+            gateReason: "Normal Beta V4 remains fail-closed.");
+    string[] requiredCodes =
+    [
+        "terrain-appended-private-gate-disallowed-row",
+        "terrain-appended-private-manifest-needs-compaction",
+        "terrain-appended-private-row-invalid",
+        "terrain-appended-private-orphan-row",
+        "terrain-appended-private-missing-manifest-row"
+    ];
+    foreach (string code in requiredCodes)
+    {
+        if (!issues.Any(issue => string.Equals(issue.Code, code, StringComparison.Ordinal)))
+            throw new InvalidOperationException($"Appended-private Build Safety omitted required finding '{code}'.");
+    }
+    if (issues.Any(issue => issue.Status != MobyBuildSafetyStatus.Blocked))
+        throw new InvalidOperationException("An invalid appended-private texture finding was not blocking.");
+    NativeTerrainTextureRelocationEdit[] promotedRows = Enumerable.Range(68, 4)
+        .Select((textureId, index) => valid with
+        {
+            TargetTextureId = textureId,
+            DonorTextureId = 17 + index,
+            DonorRuntimeKey = NativeTerrainTextureRelocationEditStore
+                .BuildTextureRecordProvenanceKey("gnastysworld", 17 + index),
+            MaterialTemplateTextureId = index == 0 ? 55 : 31,
+            PrivateRecordEditId = NativeTerrainTextureRelocationEditStore
+                .BuildAppendedPrivateRecordId(textureId)
+        })
+        .ToArray();
+    MainWindow.TerrainTextureBuildSafetyFaceSnapshot[] promotedFaces = promotedRows
+        .Select((row, index) => new MainWindow.TerrainTextureBuildSafetyFaceSnapshot(
+            12 + index,
+            $"4:{7 + index}:hp",
+            row.TargetTextureId,
+            row.MaterialTemplateTextureId,
+            false))
+        .ToArray();
+    IReadOnlyList<MobyBuildSafetyIssue> promotedIssues =
+        MainWindow.InspectAppendedPrivateTerrainTextureState(
+            level,
+            promotedRows,
+            promotedFaces,
+            binding,
+            manifestError: "",
+            geometryError: "",
+            bindingError: "",
+            gateAllowed: true,
+            gateReason:
+                "Runtime-proven exact Artisans FixedTail profile matched four appended private records.");
+    if (promotedIssues.Count != 0)
+    {
+        throw new InvalidOperationException(
+            $"The valid four-record Artisans promotion produced Build Safety findings: " +
+            $"{string.Join(" | ", promotedIssues.Select(issue => $"{issue.Code}: {issue.Message}"))}");
+    }
+    IReadOnlyList<MobyBuildSafetyIssue> staleIssues =
+        MainWindow.InspectAppendedPrivateTerrainTextureState(
+            level,
+            [valid with { SourceImageSha256 = new string('d', 64) }],
+            faces.Take(1).ToArray(),
+            binding,
+            manifestError: "",
+            geometryError: "",
+            bindingError: "",
+            gateAllowed: false,
+            gateReason: "Normal Beta V4 remains fail-closed.");
+    if (!staleIssues.Any(issue =>
+            string.Equals(
+                issue.Code,
+                "terrain-appended-private-stale-source-binding",
+                StringComparison.Ordinal)))
+    {
+        throw new InvalidOperationException(
+            "Appended-private Build Safety omitted the stale source-preimage finding.");
+    }
+    MobyBuildSafetyIssue missing = issues.Single(issue =>
+        string.Equals(
+            issue.Code,
+            "terrain-appended-private-missing-manifest-row",
+            StringComparison.Ordinal));
+    if (missing.EditorTrueIndex != 13 || !string.Equals(missing.MobyLabel, "4:8:hp", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "The missing-manifest finding did not target its exact visible terrain section.");
+    }
+
+    IReadOnlyList<MobyBuildSafetyIssue> malformed =
+        MainWindow.InspectAppendedPrivateTerrainTextureState(
+            level,
+            [],
+            faces,
+            binding,
+            manifestError: "version-3 row is malformed",
+            geometryError: "",
+            bindingError: "",
+            gateAllowed: false,
+            gateReason: "Normal Beta V4 remains fail-closed.");
+    if (!malformed.Any(issue =>
+            string.Equals(
+                issue.Code,
+                "terrain-appended-private-manifest-invalid",
+                StringComparison.Ordinal)) ||
+        !malformed.Any(issue =>
+            string.Equals(
+                issue.Code,
+                "terrain-appended-private-missing-manifest-row",
+                StringComparison.Ordinal)))
+    {
+        throw new InvalidOperationException(
+            "Malformed-manifest Build Safety did not retain both the manifest and live future-ID findings.");
+    }
+
+    Console.WriteLine(
+        $"Appended-private Build Safety classification: the promoted four-record Artisans profile produced zero findings; {issues.Count} blocking issue(s), exact missing-row target, gate, orphan, stale preimage, invalid row, and compaction coverage passed.");
+}
+
+void AssertAppendedPrivateBuildSafetyTerrainNavigation(MainWindow owner)
+{
+    EditorViewport viewport = owner.GetLogicalDescendants()
+        .OfType<EditorViewport>()
+        .Single();
+    GeometryCandidate geometry = viewport.Geometry
+        ?? throw new InvalidOperationException("Build Safety terrain navigation has no loaded geometry.");
+    TerrainPolygon terrain = geometry.Polygons
+        .Where(face => !face.IsTerrainRemoved)
+        .OrderBy(face => face.SectorIndex)
+        .ThenBy(face => face.FaceIndex)
+        .First();
+    int terrainIndex = geometry.Polygons.IndexOf(terrain);
+    FieldInfo currentLevelField = typeof(MainWindow).GetField(
+        "_currentLevel",
+        BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("Could not inspect the current level for terrain Build Safety navigation.");
+    LevelDefinition level = (LevelDefinition)(currentLevelField.GetValue(owner)
+        ?? throw new InvalidOperationException("Terrain Build Safety navigation has no current level."));
+    MobyBuildSafetyIssue issue = new(
+        Code: "terrain-appended-private-ui-navigation",
+        Status: MobyBuildSafetyStatus.Blocked,
+        Message: "Synthetic appended-private issue used to verify terrain targeting.",
+        LevelKey: level.Key,
+        LevelName: level.DisplayName,
+        EditorTrueIndex: terrainIndex,
+        MobyLabel: terrain.RuntimeKey);
+
+    MethodInfo buildRow = typeof(MainWindow).GetMethod(
+        "BuildBuildSafetyIssueRow",
+        BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("Could not find the Build Safety issue-row builder.");
+    Window dialog = new()
+    {
+        Title = "Terrain Build Safety navigation smoke",
+        Width = 660,
+        Height = 220,
+        WindowStartupLocation = WindowStartupLocation.CenterOwner
+    };
+    Control row = (Control)(buildRow.Invoke(owner, [dialog, issue])
+        ?? throw new InvalidOperationException("Build Safety did not create a terrain issue row."));
+    dialog.Content = row;
+    Task<object?> dialogTask = dialog.ShowDialog<object?>(owner);
+    FlushUi();
+
+    AssertText(row, $"Terrain section {terrain.RuntimeKey}");
+    AssertTextContains(row, "Double-click to select and center this terrain section");
+    if (row.Cursor == null)
+        throw new InvalidOperationException("The terrain Build Safety issue was not visibly actionable.");
+    SaveFrame(dialog, "spyro-editor-build-safety-terrain-issue.png");
+
+    Point issuePoint = new(30, 25);
+    dialog.MouseDown(issuePoint, MouseButton.Left, RawInputModifiers.None);
+    dialog.MouseUp(issuePoint, MouseButton.Left, RawInputModifiers.None);
+    dialog.MouseDown(issuePoint, MouseButton.Left, RawInputModifiers.None);
+    if (!dialogTask.IsCompleted)
+        dialog.MouseUp(issuePoint, MouseButton.Left, RawInputModifiers.None);
+
+    FieldInfo selectedTerrainField = typeof(MainWindow).GetField(
+        "_selectedTerrain",
+        BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("Could not inspect selected terrain after Build Safety navigation.");
+    TerrainPolygon? selected = null;
+    for (int attempt = 0; attempt < 1000; attempt++)
+    {
+        Dispatcher.UIThread.RunJobs();
+        Thread.Sleep(5);
+        selected = selectedTerrainField.GetValue(owner) as TerrainPolygon;
+        if (string.Equals(selected?.RuntimeKey, terrain.RuntimeKey, StringComparison.OrdinalIgnoreCase))
+            break;
+    }
+    FlushUi();
+    if (!dialogTask.IsCompleted ||
+        !string.Equals(selected?.RuntimeKey, terrain.RuntimeKey, StringComparison.OrdinalIgnoreCase) ||
+        viewport.ViewMode != ViewportViewMode.Map)
+    {
+        throw new InvalidOperationException(
+            $"Double-click did not select and center terrain {terrain.RuntimeKey}; selected '{selected?.RuntimeKey}', view {viewport.ViewMode}.");
+    }
+    AssertTextContains(
+        owner,
+        $"Build Safety: selected and centered {level.DisplayName} terrain section {terrain.RuntimeKey}");
+    Console.WriteLine(
+        $"Appended-private Build Safety navigation: {level.DisplayName} terrain {terrain.RuntimeKey} selected and centered from a double-click.");
+}
+
 void RunTerrainTexturePaintGalleryOnly()
 {
     MainWindow window = new()
@@ -1750,6 +2317,35 @@ void RunTerrainTexturePaintGalleryOnly()
     try
     {
         WaitForLevelData(window);
+        TextBlock privateCapacity =
+            FindNamed<TextBlock>(window, "TerrainPrivateTextureCapacityText");
+        string privateCapacityText = privateCapacity.Text ?? "";
+        bool expectedCapacityText = AppendedPrivateTerrainTextureResearchGate.IsEnabled
+            ? privateCapacityText.Contains(
+                    "Research maximum: 20",
+                    StringComparison.OrdinalIgnoreCase) &&
+                privateCapacityText.Contains(
+                    "not guaranteed physical capacity or normal-release authorization",
+                    StringComparison.OrdinalIgnoreCase) &&
+                privateCapacityText.Contains(
+                    "reused at the maximum without adding a row",
+                    StringComparison.OrdinalIgnoreCase)
+            : privateCapacityText.Contains(
+                    "Single-tile cross-level painting is not available for this level yet",
+                    StringComparison.OrdinalIgnoreCase) &&
+                privateCapacityText.Contains(
+                    "0 of 0 proven native slot(s) remain",
+                    StringComparison.OrdinalIgnoreCase) &&
+                !privateCapacityText.Contains(
+                    "Research maximum: 20",
+                    StringComparison.OrdinalIgnoreCase);
+        if (!expectedCapacityText)
+        {
+            throw new InvalidOperationException(
+                $"The private-texture capacity panel did not match its normal/research safety mode: {privateCapacityText}");
+        }
+        int suggestionTargetTextureId =
+            window.SelectTerrainTextureSuggestionTargetForTesting();
         Window dialog = OpenAsyncDialog(
             window,
             FindButton(window, "Choose Texture & Start Painting"),
@@ -1764,8 +2360,13 @@ void RunTerrainTexturePaintGalleryOnly()
         }
 
         ListBox gallery = FindNamed<ListBox>(dialog, "TerrainTextureGallery");
+        ListBox suggestionGallery =
+            FindNamed<ListBox>(dialog, "TerrainTextureSuggestionGallery");
         ComboBox sourceLevelPicker = FindNamed<ComboBox>(dialog, "TerrainTextureSourceLevelPicker");
         Button loadLevelButton = FindNamed<Button>(dialog, "TerrainTextureLoadLevelButton");
+        Button suggestButton = FindNamed<Button>(dialog, "TerrainTextureSuggestButton");
+        Border suggestionPanel =
+            FindNamed<Border>(dialog, "TerrainTextureSuggestionPanel");
         if (sourceLevelPicker.SelectedItem is not object currentOption ||
             !TemplateValue<bool>(currentOption, "IsCurrent"))
         {
@@ -1799,29 +2400,54 @@ void RunTerrainTexturePaintGalleryOnly()
         }
         SaveFrame(dialog, "spyro-editor-terrain-texture-gallery.png");
 
-        object blockedItem = initialItems.FirstOrDefault(item => TemplateValue<bool>(item, "IsBlocked"))
-            ?? throw new InvalidOperationException("The current-level gallery exposed no blocked tile for its blocked-state UI check.");
-        Border blockedTile = dialog.GetLogicalDescendants()
-            .OfType<Border>()
-            .FirstOrDefault(tile =>
-                tile.Classes.Contains("terrain-texture-card") &&
-                ReferenceEquals(tile.DataContext, blockedItem))
-            ?? throw new InvalidOperationException("The blocked texture gallery item did not render a card.");
-        if (!blockedTile.Classes.Contains("blocked") ||
-            blockedTile.Background is not Avalonia.Media.SolidColorBrush blockedBackground ||
-            !IsNearlyGray(blockedBackground.Color) ||
-            !blockedTile.GetLogicalDescendants().OfType<Border>().Any(overlay =>
-                overlay.Classes.Contains("terrain-texture-blocked-overlay")) ||
-            !blockedTile.GetLogicalDescendants().OfType<TextBlock>().Any(text =>
-                string.Equals(text.Text, "BLOCKED", StringComparison.Ordinal)))
+        if (!suggestButton.IsEnabled)
+            throw new InvalidOperationException("The nearby-tile suggestion button stayed disabled with a selected terrain section.");
+        suggestButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, suggestButton));
+        FlushUi();
+        object[] suggestedItems = ReadItemsSource(
+            suggestionGallery,
+            "nearby terrain texture suggestions");
+        if (!suggestionPanel.IsVisible ||
+            suggestedItems.Length is < 4 or > 6 ||
+            suggestedItems.Any(item => TemplateValue<bool>(item, "IsBlocked")) ||
+            suggestedItems.Any(item =>
+                string.Equals(
+                    LevelCatalog.NormalizeKey(TemplateValue<string>(item, "LevelKey")),
+                    normalizedCurrentLevel,
+                    StringComparison.OrdinalIgnoreCase) &&
+                TemplateValue<int>(item, "TextureId") == suggestionTargetTextureId))
         {
-            throw new InvalidOperationException("A blocked texture tile was not gray with its visible BLOCKED overlay.");
+            throw new InvalidOperationException(
+                "Suggest Nearby Tiles did not show four-to-six usable alternatives or included the selected source texture.");
+        }
+        SaveFrame(dialog, "spyro-editor-terrain-texture-suggestions.png");
+        suggestionGallery.SelectedItem = suggestedItems[0];
+        FlushUi();
+        if (!window.OwnedWindows.Contains(dialog))
+        {
+            throw new InvalidOperationException(
+                "Single-click-style selection in the suggestion row activated painting; suggestions must also require a mouse double-click.");
+        }
+
+        object[] blockedCurrentItems = initialItems
+            .Where(item => TemplateValue<bool>(item, "IsBlocked"))
+            .ToArray();
+        if (blockedCurrentItems.Length != 0)
+        {
+            throw new InvalidOperationException(
+                $"The clean current-level gallery still blocked {blockedCurrentItems.Length:N0} load-initialized native art record(s). Face-less/controller records must be exposed as copy-only sources, not spare targets.");
         }
 
         if (sourceLevelPicker.ItemsSource is not System.Collections.IEnumerable sourceOptions)
             throw new InvalidOperationException("The source-level picker did not expose its level options.");
-        object donorOption = sourceOptions.Cast<object>()
-            .FirstOrDefault(option => !TemplateValue<bool>(option, "IsCurrent"))
+        object[] sourceOptionItems = sourceOptions.Cast<object>().ToArray();
+        object donorOption = sourceOptionItems
+            .FirstOrDefault(option =>
+                string.Equals(
+                    LevelCatalog.NormalizeKey(TemplateValue<LevelDefinition>(option, "Level").Key),
+                    "gnastysworld",
+                    StringComparison.OrdinalIgnoreCase))
+            ?? sourceOptionItems.FirstOrDefault(option => !TemplateValue<bool>(option, "IsCurrent"))
             ?? throw new InvalidOperationException("The source-level picker exposed no other level.");
         LevelDefinition donorLevel = TemplateValue<LevelDefinition>(donorOption, "Level");
         sourceLevelPicker.SelectedItem = donorOption;
@@ -1862,10 +2488,116 @@ void RunTerrainTexturePaintGalleryOnly()
                 $"The explicit {donorLevel.DisplayName} load did not produce a non-empty gallery containing only that level.");
         }
 
-        object usableItem = donorItems.FirstOrDefault(item => !TemplateValue<bool>(item, "IsBlocked"))
+        object secondDonorOption = sourceOptionItems
+            .FirstOrDefault(option =>
+                string.Equals(
+                    LevelCatalog.NormalizeKey(TemplateValue<LevelDefinition>(option, "Level").Key),
+                    "darkhollow",
+                    StringComparison.OrdinalIgnoreCase))
+            ?? sourceOptionItems.FirstOrDefault(option =>
+                !TemplateValue<bool>(option, "IsCurrent") &&
+                !ReferenceEquals(option, donorOption))
+            ?? throw new InvalidOperationException("The source-level picker exposed no second donor level.");
+        LevelDefinition secondDonorLevel = TemplateValue<LevelDefinition>(secondDonorOption, "Level");
+        sourceLevelPicker.SelectedItem = secondDonorOption;
+        FlushUi();
+        if (donorLoads.Count != 1 || ReadItemsSource(gallery, "unloaded second donor texture gallery").Length != 0)
+        {
+            throw new InvalidOperationException(
+                $"Selecting {secondDonorLevel.DisplayName} either loaded it eagerly or retained the previous donor's tiles.");
+        }
+        loadLevelButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, loadLevelButton));
+        for (int attempt = 0; attempt < 12000; attempt++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            if (loadLevelButton.IsEnabled && donorLoads.Count > 1)
+                break;
+            Thread.Sleep(5);
+        }
+        FlushUi();
+        if (donorLoads.Count != 2)
+        {
+            throw new InvalidOperationException(
+                $"Loading {secondDonorLevel.DisplayName} touched {donorLoads.Count} donor level(s) instead of exactly two independently loaded donors.");
+        }
+        object[] secondDonorItems = ReadItemsSource(gallery, $"{secondDonorLevel.DisplayName} texture gallery");
+        if (secondDonorItems.Length == 0)
+            throw new InvalidOperationException($"{secondDonorLevel.DisplayName} loaded an empty texture gallery.");
+
+        sourceLevelPicker.SelectedItem = donorOption;
+        FlushUi();
+        object[] restoredFirstDonorItems = ReadItemsSource(gallery, $"restored {donorLevel.DisplayName} texture gallery");
+        if (donorLoads.Count != 2 || restoredFirstDonorItems.Length != donorItems.Length)
+        {
+            throw new InvalidOperationException(
+                $"Switching back to {donorLevel.DisplayName} reloaded it or lost its {donorItems.Length:N0}-tile session cache.");
+        }
+
+        object usableItem = restoredFirstDonorItems.FirstOrDefault(item => !TemplateValue<bool>(item, "IsBlocked"))
             ?? throw new InvalidOperationException($"{donorLevel.DisplayName} exposed no usable tile for double-click activation.");
+        EditorViewport viewport = window.GetLogicalDescendants().OfType<EditorViewport>().Single();
         gallery.SelectedItem = usableItem;
         FlushUi();
+        if (!window.OwnedWindows.Contains(dialog) || viewport.TerrainTexturePaintMode)
+        {
+            throw new InvalidOperationException(
+                "Selecting a texture tile started painting; selection must only update the palette details.");
+        }
+        if (!MainWindow.IsStrictTerrainTextureGalleryDoubleClick(
+                PointerType.Mouse,
+                isPrimaryPointer: true,
+                clickCount: 2,
+                isLeftButtonPressed: true) ||
+            MainWindow.IsStrictTerrainTextureGalleryDoubleClick(
+                PointerType.Mouse,
+                isPrimaryPointer: true,
+                clickCount: 1,
+                isLeftButtonPressed: true) ||
+            MainWindow.IsStrictTerrainTextureGalleryDoubleClick(
+                PointerType.Mouse,
+                isPrimaryPointer: true,
+                clickCount: 3,
+                isLeftButtonPressed: true) ||
+            MainWindow.IsStrictTerrainTextureGalleryDoubleClick(
+                PointerType.Mouse,
+                isPrimaryPointer: false,
+                clickCount: 2,
+                isLeftButtonPressed: true) ||
+            MainWindow.IsStrictTerrainTextureGalleryDoubleClick(
+                PointerType.Mouse,
+                isPrimaryPointer: true,
+                clickCount: 2,
+                isLeftButtonPressed: false) ||
+            MainWindow.IsStrictTerrainTextureGalleryDoubleClick(
+                PointerType.Touch,
+                isPrimaryPointer: true,
+                clickCount: 2,
+                isLeftButtonPressed: true) ||
+            MainWindow.IsStrictTerrainTextureGalleryDoubleClick(
+                PointerType.Pen,
+                isPrimaryPointer: true,
+                clickCount: 2,
+                isLeftButtonPressed: true))
+        {
+            throw new InvalidOperationException(
+                "The texture gallery activation gate accepted a single/triple/right/non-primary/touch/pen gesture or rejected a primary left-mouse double-click.");
+        }
+        ListBoxItem usableContainer = dialog.GetLogicalDescendants()
+            .OfType<ListBoxItem>()
+            .FirstOrDefault(item => ReferenceEquals(item.DataContext, usableItem))
+            ?? throw new InvalidOperationException(
+                "The selected usable texture tile had no realized ListBoxItem for its keyboard activation guard.");
+        if (!usableContainer.Focus())
+            throw new InvalidOperationException("The selected texture tile could not receive keyboard focus for its activation guard.");
+        FlushUi();
+        dialog.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, "\r");
+        dialog.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+        FlushUi();
+        if (!window.OwnedWindows.Contains(dialog) || viewport.TerrainTexturePaintMode)
+        {
+            throw new InvalidOperationException(
+                "Enter or Space activated a selected texture; keyboard input must remain selection/details-only.");
+        }
         Border usableTile = dialog.GetLogicalDescendants()
             .OfType<Border>()
             .FirstOrDefault(tile =>
@@ -1880,6 +2612,12 @@ void RunTerrainTexturePaintGalleryOnly()
 
         dialog.MouseDown(activationPoint, MouseButton.Left, RawInputModifiers.None);
         dialog.MouseUp(activationPoint, MouseButton.Left, RawInputModifiers.None);
+        FlushUi();
+        if (!window.OwnedWindows.Contains(dialog) || viewport.TerrainTexturePaintMode)
+        {
+            throw new InvalidOperationException(
+                "A single texture-tile pointer/tap started painting; texture activation must require a deliberate double-click.");
+        }
         dialog.MouseDown(activationPoint, MouseButton.Left, RawInputModifiers.None);
         if (window.OwnedWindows.Contains(dialog))
             dialog.MouseUp(activationPoint, MouseButton.Left, RawInputModifiers.None);
@@ -1889,7 +2627,6 @@ void RunTerrainTexturePaintGalleryOnly()
             Thread.Sleep(5);
         }
         FlushUi();
-        EditorViewport viewport = window.GetLogicalDescendants().OfType<EditorViewport>().Single();
         if (window.OwnedWindows.Contains(dialog) || !viewport.TerrainTexturePaintMode)
             throw new InvalidOperationException("Double-clicking a usable texture tile did not close the chooser and enter Texture Paint mode.");
 
@@ -1906,7 +2643,7 @@ void RunTerrainTexturePaintGalleryOnly()
 
         if (viewport.TerrainTexturePaintMode)
             throw new InvalidOperationException("Returning to the texture palette left terrain-click interception active behind the dialog.");
-        if (donorLoads.Count != 1)
+        if (donorLoads.Count != 2)
         {
             throw new InvalidOperationException(
                 $"Returning to {donorLevel.DisplayName} reloaded donor data {donorLoads.Count} time(s) instead of retaining the loaded catalog.");
@@ -1954,16 +2691,98 @@ void RunTerrainTexturePaintGalleryOnly()
         FlushUi();
         if (window.OwnedWindows.Contains(returnedDialog) ||
             !viewport.TerrainTexturePaintMode ||
-            donorLoads.Count != 1)
+            donorLoads.Count != 2)
         {
             throw new InvalidOperationException(
                 "Canceling the retained palette did not resume the previous brush without reloading its donor.");
         }
 
+        Button stopPainting = FindButton(window, "Stop Painting");
+        stopPainting.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, stopPainting));
+        FlushUi();
+        if (viewport.TerrainTexturePaintMode)
+            throw new InvalidOperationException("Stop Painting did not leave texture paint mode before the session-cache check.");
+
+        Window reopenedDialog = OpenAsyncDialog(
+            window,
+            FindButton(window, "Choose Texture & Start Painting"),
+            "Choose Terrain Texture",
+            "session-cached terrain texture palette");
+        FlushUi();
+        if (donorLoads.Count != 2)
+        {
+            throw new InvalidOperationException(
+                $"Reopening the palette in the same level reloaded donor data {donorLoads.Count} time(s) instead of retaining the working-session cache.");
+        }
+        ComboBox reopenedSourcePicker = FindNamed<ComboBox>(reopenedDialog, "TerrainTextureSourceLevelPicker");
+        if (reopenedSourcePicker.SelectedItem is not object reopenedSourceOption ||
+            !string.Equals(
+                LevelCatalog.NormalizeKey(TemplateValue<LevelDefinition>(reopenedSourceOption, "Level").Key),
+                normalizedDonorLevel,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Reopening the palette in the same level did not retain the last loaded donor world.");
+        }
+        ListBox reopenedGallery = FindNamed<ListBox>(reopenedDialog, "TerrainTextureGallery");
+        object[] reopenedItems = ReadItemsSource(reopenedGallery, "session-cached donor texture gallery");
+        if (reopenedItems.Length != donorItems.Length)
+        {
+            throw new InvalidOperationException(
+                $"The session-cached donor gallery retained {reopenedItems.Length}/{donorItems.Length} texture tiles.");
+        }
+        Button cancelReopenedPalette = FindButton(reopenedDialog, "Cancel");
+        cancelReopenedPalette.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, cancelReopenedPalette));
+        for (int attempt = 0; attempt < 1000 && window.OwnedWindows.Contains(reopenedDialog); attempt++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(5);
+        }
+        FlushUi();
+        if (window.OwnedWindows.Contains(reopenedDialog) || viewport.TerrainTexturePaintMode)
+        {
+            throw new InvalidOperationException(
+                "Canceling the freshly reopened session palette unexpectedly resumed paint mode.");
+        }
+
+        Window manageDialog = OpenAsyncDialog(
+            window,
+            FindButton(window, "Manage Added Textures"),
+            "Manage Staged Cross-Level Textures",
+            "staged cross-level texture manager");
+        FlushUi();
+        TextBlock emptyManagerSummary = manageDialog.GetLogicalDescendants()
+            .OfType<TextBlock>()
+            .FirstOrDefault(text =>
+                (text.Text ?? "").Contains(
+                    "No cross-level texture records are staged",
+                    StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException(
+                "The staged texture manager did not explain its empty state.");
+        _ = emptyManagerSummary;
+        if (FindButton(manageDialog, "Remove Selected Staged Texture").IsEnabled ||
+            FindButton(manageDialog, "Remove Most Recently Staged Target").IsEnabled ||
+            FindButton(manageDialog, "Undo Last Texture Action").IsEnabled)
+        {
+            throw new InvalidOperationException(
+                "The empty staged texture manager enabled a destructive or unavailable history action.");
+        }
+        Button closeManager = FindButton(manageDialog, "Close");
+        closeManager.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, closeManager));
+        for (int attempt = 0; attempt < 1000 && window.OwnedWindows.Contains(manageDialog); attempt++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(5);
+        }
+        FlushUi();
+        if (window.OwnedWindows.Contains(manageDialog))
+            throw new InvalidOperationException("The staged texture manager did not close cleanly.");
+
         Console.WriteLine(
-            $"Terrain texture gallery UI: {currentLevel.DisplayName}-only initial open; six columns; gray BLOCKED tile; " +
-            $"{donorLevel.DisplayName} remained unloaded until requested, then loaded alone; double-click entered paint mode; " +
-            "Return to Texture Palette restored the donor world, tile, and catalog without another donor load.");
+            $"Terrain texture gallery UI: {currentLevel.DisplayName}-only initial open; six columns; every load-initialized resident/face-less/controller record exposed as direct or copy-only art; " +
+            "Suggest Nearby Tiles returned four-to-six usable local matches without activating on selection; " +
+            $"{donorLevel.DisplayName} and {secondDonorLevel.DisplayName} remained unloaded until individually requested, then both stayed cached; selection, Enter/Space, touch/pen, and a single pointer/tap stayed non-mutating while only a primary left-mouse double-click entered paint mode; " +
+            "Return to Texture Palette and a later same-level reopen restored the donor world, tile, and catalog without another donor load; Manage Staged Cross-Level Textures opened with safe empty-state actions disabled.");
     }
     finally
     {
@@ -2125,9 +2944,9 @@ void RunViewportFitOnly()
 
             // Keyboard/wheel/right-drag navigation must not expose the bounded
             // native-distance research renderer from the impossible whole-level
-            // Fit pose. Navigation uses a bounded HP-only material budget while
-            // input is active, then restores the identical full-HQ frame after
-            // input settles.
+            // Fit pose or switch visual quality while input is active. The
+            // identical source-material frame must remain before, during, and
+            // after a camera gesture.
             viewport.SimulateFlyNavigationForTesting();
             if (viewport.CaptureNativeTerrainFarLodSnapshotForTesting().PreviewMode !=
                 NativeTerrainLodPreviewMode.EditorOverviewHighDetail)
@@ -2143,22 +2962,25 @@ void RunViewportFitOnly()
                 viewport.CaptureFlyTerrainInteractiveLodSnapshotForTesting();
             if (!interactiveMaterialLod.Active ||
                 interactiveMaterialLod.VisibleTerrainFaceCount <= 0 ||
-                interactiveMaterialLod.SimplifiedMaterialFaceCount <= 0 ||
-                interactiveMaterialLod.FullMaterialFaceCount <= 0 ||
-                interactiveMaterialLod.FullMaterialFaceCount >
-                    interactiveMaterialLod.FullMaterialFaceBudget + interactiveMaterialLod.ForcedFullMaterialFaceCount ||
-                interactiveMaterialLod.FullMaterialFaceCount + interactiveMaterialLod.SimplifiedMaterialFaceCount !=
+                interactiveMaterialLod.SimplifiedMaterialFaceCount != 0 ||
+                interactiveMaterialLod.FullMaterialFaceCount !=
                     interactiveMaterialLod.VisibleTerrainFaceCount ||
                 interactiveMaterialLod.PartiallyFullMaterialSectorCount != 0)
             {
                 throw new InvalidOperationException(
-                    $"{level.DisplayName} Fly navigation did not use the bounded HP-only material path: " +
+                    $"{level.DisplayName} Fly navigation changed source-material quality while input was active: " +
                     $"{interactiveMaterialLod}.");
             }
             string overviewSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
                 File.ReadAllBytes(Path.Combine(outputDirectory, overviewFrame))));
             string protectedNavigationSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
                 File.ReadAllBytes(Path.Combine(outputDirectory, protectedNavigationFrame))));
+            if (!string.Equals(overviewSha256, protectedNavigationSha256, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"{level.DisplayName} Fly navigation changed pixels when the gesture began: " +
+                    $"{overviewSha256} -> {protectedNavigationSha256}; {interactiveMaterialLod}.");
+            }
 
             viewport.SettleFlyNavigationForTesting();
             string settledNavigationFrame = $"spyro-editor-{levelKey}-fly-navigation-settled.png";
@@ -2277,7 +3099,7 @@ void RunViewportFitOnly()
         File.WriteAllText(farLodMetricsPath, JsonSerializer.Serialize(new
         {
             contract = SourceSceneOverlayContract.TerrainLodPreview,
-            fitSemantics = "Fit/Reset is an editor-only all-HP overview. Active keyboard, wheel, right-drag look, and focused-object navigation retain all HP geometry with a bounded screen-space material budget; the identical full-HQ frame returns after input settles. Native distance LOD remains research-only.",
+            fitSemantics = "Fit/Reset is an editor-only all-HP overview. Active keyboard, wheel, right-drag look, and focused-object navigation retain identical source-material pixels before, during, and after input. Native distance LOD remains research-only.",
             nativeLodScope = "Static all-sector game-scale Fly 3D preview; exact sector and face distance gates; no runtime occlusion-group, PSX ordering-table, clipping, or animation equivalence claim.",
             hpCutoffEditorUnits = NativeTerrainFarLod.LodDistanceEditorUnits,
             sectorOverlapEditorUnits = NativeTerrainFarLod.SectorQueueOverlapEditorUnits,
@@ -2542,12 +3364,85 @@ void RunTerrainTextureLodOnly()
         viewport = window.GetLogicalDescendants().OfType<EditorViewport>().Single();
 
         viewport.SetTerrainTextureImageFiles(
-            new Dictionary<int, string> { [900] = normalPath },
+            new Dictionary<int, string>
+            {
+                [900] = normalPath,
+                [901] = normalPath
+            },
             new Dictionary<int, string>());
         string fallbackPath = viewport.ResolveTerrainTextureImagePathForTesting(900, 1)
             ?? throw new InvalidOperationException("Missing close HQ frame did not fall back to the available normal frame.");
         if (!string.Equals(fallbackPath, normalPath, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"Close HQ fallback selected {fallbackPath}, expected {normalPath}.");
+        if (!viewport.LoadTerrainTextureImageForTesting(900, 80) ||
+            !viewport.LoadTerrainTextureImageForTesting(901, 80))
+        {
+            throw new InvalidOperationException(
+                "Texture cache regression setup did not load both test textures.");
+        }
+        viewport.SetTerrainTextureImageFiles(
+            new Dictionary<int, string>
+            {
+                [900] = normalPath,
+                [901] = normalPath
+            },
+            new Dictionary<int, string>());
+        IReadOnlyList<(int TextureId, NativeTerrainTexturePreviewTier Tier)> stableCache =
+            viewport.GetLoadedTerrainTextureImageCacheKeysForTesting();
+        if (!stableCache.Any(key => key.TextureId == 900) ||
+            !stableCache.Any(key => key.TextureId == 901))
+        {
+            throw new InvalidOperationException(
+                "An unchanged texture-file refresh flushed warm viewport bitmaps.");
+        }
+        viewport.SetTerrainTextureImageFiles(
+            new Dictionary<int, string>
+            {
+                [900] = closePath,
+                [901] = normalPath
+            },
+            new Dictionary<int, string>());
+        IReadOnlyList<(int TextureId, NativeTerrainTexturePreviewTier Tier)> deltaCache =
+            viewport.GetLoadedTerrainTextureImageCacheKeysForTesting();
+        if (deltaCache.Any(key => key.TextureId == 900) ||
+            !deltaCache.Any(key => key.TextureId == 901))
+        {
+            throw new InvalidOperationException(
+                "A one-texture preview change did not invalidate exactly its target bitmap.");
+        }
+        string overwritePath = Path.Combine(
+            outputDirectory,
+            "terrain-texture-in-place-overwrite-regression.png");
+        try
+        {
+            File.Copy(normalPath, overwritePath, overwrite: true);
+            viewport.SetTerrainTextureImageFiles(
+                new Dictionary<int, string> { [902] = overwritePath },
+                new Dictionary<int, string>());
+            if (!viewport.LoadTerrainTextureImageForTesting(902, 80))
+            {
+                throw new InvalidOperationException(
+                    "In-place texture overwrite regression setup did not load its test bitmap.");
+            }
+
+            DateTime firstWrite = File.GetLastWriteTimeUtc(overwritePath);
+            File.Copy(closePath, overwritePath, overwrite: true);
+            File.SetLastWriteTimeUtc(overwritePath, firstWrite.AddSeconds(2));
+            viewport.SetTerrainTextureImageFiles(
+                new Dictionary<int, string> { [902] = overwritePath },
+                new Dictionary<int, string>());
+            if (viewport.GetLoadedTerrainTextureImageCacheKeysForTesting()
+                .Any(key => key.TextureId == 902))
+            {
+                throw new InvalidOperationException(
+                    "Overwriting a texture PNG at the same path retained a stale viewport bitmap.");
+            }
+        }
+        finally
+        {
+            if (File.Exists(overwritePath))
+                File.Delete(overwritePath);
+        }
 
         List<object> runtimePreviewCaptures = [];
         foreach ((string levelKey, int controlledTextureId, int? diagnosticSourceId) in new[]
@@ -4178,11 +5073,11 @@ void RenderObjectDialogs(MainWindow owner)
     AssertText(addDialog, "Add object");
     Expander addTechnical = addDialog.GetLogicalDescendants()
         .OfType<Expander>()
-        .First(expander => string.Equals((expander.Header as TextBlock)?.Text, "Exact placement and technical properties", StringComparison.Ordinal));
+        .First(expander => string.Equals((expander.Header as TextBlock)?.Text, "Exact position", StringComparison.Ordinal));
     addTechnical.IsExpanded = true;
     FlushUi();
-    AssertText(addDialog, "Render radius (+0x50)");
-    AssertText(addDialog, "Was drawn (+0x51)");
+    AssertTextAbsent(addDialog, "Render radius (+0x50)");
+    AssertTextAbsent(addDialog, "Was drawn (+0x51)");
     SaveFrame(addDialog, "spyro-editor-add-object-dialog.png");
     addDialog.Close(false);
     FlushUi();
@@ -4238,26 +5133,20 @@ void RenderObjectDialogs(MainWindow owner)
 
     ComboBox sourceFilter = swapDialog.GetLogicalDescendants()
         .OfType<ComboBox>()
-        .First(box => box.ItemsSource is IEnumerable<string> values && values.Contains("Resident-class tests", StringComparer.Ordinal));
-    sourceFilter.SelectedIndex = 3;
-    FlushUi();
-    FindButton(swapDialog, "Stage Swap Test");
-    SaveFrame(swapDialog, "spyro-editor-swap-catalog-cross-level.png");
+        .First(box => box.ItemsSource is IEnumerable<string> values && values.Contains("All available", StringComparer.Ordinal));
+    AssertTextAbsent(swapDialog, "Actor class:");
+    AssertTextAbsent(swapDialog, "Compatibility:");
+    FindButton(swapDialog, "Use This Object");
+    SaveFrame(swapDialog, "spyro-editor-swap-catalog-available.png");
     swapDialog.Close(null);
     FlushUi();
 
     Button edit = FindButton(owner, "Edit");
     Window editDialog = OpenDialog(owner, edit, "object editor");
-    AssertText(editDialog, "Technical properties");
-    Expander technical = editDialog.GetLogicalDescendants()
-        .OfType<Expander>()
-        .First(expander => string.Equals((expander.Header as TextBlock)?.Text, "Technical properties", StringComparison.Ordinal));
-    technical.IsExpanded = true;
-    FlushUi();
-    AssertText(editDialog, "Render radius (+0x50)");
-    AssertText(editDialog, "Was drawn (+0x51)");
-    AssertTextContains(editDialog, "Native class (+0x36/+0x37)");
-    AssertTextContains(editDialog, "Native class drives identity");
+    AssertTextAbsent(editDialog, "Technical properties");
+    AssertTextAbsent(editDialog, "Render radius (+0x50)");
+    AssertTextAbsent(editDialog, "Was drawn (+0x51)");
+    AssertTextAbsent(editDialog, "Native class (+0x36/+0x37)");
     SaveFrame(editDialog, "spyro-editor-object-dialog.png");
     editDialog.Close(false);
     FlushUi();
@@ -4274,6 +5163,242 @@ void RenderObjectDialogs(MainWindow owner)
     AssertLinkedChestContentGemLabelEdit(owner, browser);
     AssertBuildSafetyIssueNavigation(owner);
     AssertObservedIdentitySavePreservesScopes(owner, browser);
+}
+
+void RunObjectGalleryOnly()
+{
+    IReadOnlyList<MobyIconAtlasDiagnostics> generatedIconAtlases =
+        ObjectGalleryIconCatalog.LoadDiagnosticsForTesting();
+    if (generatedIconAtlases.Count != 12 ||
+        generatedIconAtlases.Any(diagnostic =>
+            !diagnostic.Succeeded ||
+            diagnostic.Width < 1200 ||
+            diagnostic.Height < 1200 ||
+            diagnostic.CheckerboardSampleCoverage < 0.98 ||
+            diagnostic.Cells
+                .Where(cell => cell.AtlasCell < diagnostic.Atlas.UsedCellCount)
+                .Any(cell => cell.OpaquePixelCount < 5000) ||
+            diagnostic.Cells
+                .Where(cell => cell.AtlasCell >= diagnostic.Atlas.UsedCellCount)
+                .Any(cell => cell.OpaquePixelCount != 0)))
+    {
+        throw new InvalidOperationException(
+            "One or more high-definition object-gallery atlases failed their decode, subject, or empty-cell contract:\n" +
+            string.Join(
+                "\n",
+                generatedIconAtlases.Select(diagnostic =>
+                    $"{diagnostic.Atlas.Key}: success={diagnostic.Succeeded}, size={diagnostic.Width}x{diagnostic.Height}, " +
+                    $"checker={diagnostic.CheckerboardSampleCoverage:P1}, cells=" +
+                    string.Join(",", diagnostic.Cells.Select(cell => $"{cell.AtlasCell}:{cell.OpaquePixelCount}")) +
+                    (string.IsNullOrWhiteSpace(diagnostic.FailureReason) ? "" : $", error={diagnostic.FailureReason}"))));
+    }
+    if (ObjectGalleryIconCatalog.DefinitionCount != 114)
+    {
+        throw new InvalidOperationException(
+            $"The high-definition object-gallery catalog exposed {ObjectGalleryIconCatalog.DefinitionCount} families instead of 114.");
+    }
+    string[] requiredHdGalleryLabels =
+    [
+        "Armored Gnorc",
+        "Barrel Engineer",
+        "Beast",
+        "Beast Makers Banner",
+        "Bull",
+        "Caged Fairy",
+        "Campfire",
+        "Chicken Cage",
+        "Clock Fool",
+        "Crocodile",
+        "Dockworker TNT Wrangler",
+        "Drawbridge Lever",
+        "Fairy Cage Prop",
+        "Fat Bat",
+        "Fat Claw Monster",
+        "Flight Direction Arrow Sign",
+        "Floor Shocker",
+        "Lantern Post",
+        "Metal Claw Monster",
+        "Ram",
+        "Rescue Fairy",
+        "Shepard",
+        "Shepherd",
+        "Shielded Greenie",
+        "Summoning Wizard",
+        "Volt Shooter",
+        "Wall Lantern"
+    ];
+    string[] unresolvedHdGalleryLabels = requiredHdGalleryLabels
+        .Where(label => !ObjectGalleryIconCatalog.TryResolve(label, out _))
+        .ToArray();
+    if (unresolvedHdGalleryLabels.Length > 0)
+    {
+        throw new InvalidOperationException(
+            $"Public object-gallery labels still use fallback previews: {string.Join(", ", unresolvedHdGalleryLabels)}.");
+    }
+
+    MainWindow window = new()
+    {
+        Width = 1440,
+        Height = 900,
+        WindowStartupLocation = WindowStartupLocation.Manual,
+        Position = new PixelPoint(0, 0)
+    };
+    window.Show();
+    try
+    {
+        WaitForLevelData(window);
+        Window addDialog = OpenDialog(window, FindButton(window, "Add"), "add object window");
+        Button chooser = FindNamed<Button>(addDialog, "ObjectGalleryButton");
+        if (!chooser.Content?.ToString()?.StartsWith("Choose Object", StringComparison.Ordinal) == true)
+            throw new InvalidOperationException("The Add Object dialog did not replace the technical object dropdown with the picture-gallery button.");
+
+        chooser.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, chooser));
+        Window? galleryDialog = null;
+        for (int attempt = 0; attempt < 200 && galleryDialog == null; attempt++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            galleryDialog = addDialog.OwnedWindows.LastOrDefault(candidate =>
+                string.Equals(candidate.Title, "Choose Object", StringComparison.Ordinal));
+            Thread.Sleep(10);
+        }
+        if (galleryDialog == null)
+            throw new InvalidOperationException("The Choose Object picture gallery did not open.");
+        ListBox gallery = FindNamed<ListBox>(galleryDialog, "ObjectGalleryList");
+        object[] items = ReadItemsSource(gallery, "safe object gallery");
+        if (items.Length < 2)
+            throw new InvalidOperationException($"The Stone Hill safe object gallery exposed only {items.Length} item(s).");
+        if (items.Any(item => !TemplateValue<bool>(item, "IsCreateBinSafe")))
+            throw new InvalidOperationException("The object gallery exposed an item that was not approved for normal Create BIN.");
+
+        string[] names = items.Select(item => TemplateValue<string>(item, "DisplayName")).ToArray();
+        object[] gemItems = items
+            .Where(item => string.Equals(
+                TemplateValue<string>(item, "DisplayName"),
+                "Gem / treasure",
+                StringComparison.Ordinal))
+            .ToArray();
+        if (gemItems.Length != 1)
+            throw new InvalidOperationException($"The object gallery exposed {gemItems.Length} Gem / treasure tiles instead of one.");
+        object gemTemplate = TemplateValue<object>(gemItems[0], "Template");
+        if (!TemplateValue<bool>(gemTemplate, "UsesGem") ||
+            TemplateValue<int>(gemTemplate, "Type") != 0x18 ||
+            TemplateValue<int>(gemTemplate, "SourceByte36") != 0x53 ||
+            TemplateValue<int>(gemTemplate, "SourceByte37") != 0x00 ||
+            TemplateValue<int>(gemTemplate, "SourceByte4F") != 0x01 ||
+            TemplateValue<int>(gemTemplate, "Flag4A") != 0x40 ||
+            TemplateValue<int>(gemTemplate, "Flag4B") != 0xFF)
+        {
+            throw new InvalidOperationException("The single Gem / treasure tile was not the canonical red loose-gem template.");
+        }
+
+        object[] flameChargeChests = items
+            .Where(item => ObjectGalleryActorId(item) == 0x00C2)
+            .ToArray();
+        object[] chargeChests = items
+            .Where(item => ObjectGalleryActorId(item) == 0x00C3)
+            .ToArray();
+        if (flameChargeChests.Length != 1 ||
+            !string.Equals(
+                TemplateValue<string>(flameChargeChests[0], "DisplayName"),
+                "Flame/charge chest",
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"The object gallery did not collapse Flame/charge reward variants to one exact tile: " +
+                $"{string.Join(" | ", flameChargeChests.Select(item => TemplateValue<string>(item, "DisplayName")))}");
+        }
+        if (chargeChests.Length != 1 ||
+            !string.Equals(
+                TemplateValue<string>(chargeChests[0], "DisplayName"),
+                "Charge chest",
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"The object gallery did not collapse Charge chest reward variants to one exact tile: " +
+                $"{string.Join(" | ", chargeChests.Select(item => TemplateValue<string>(item, "DisplayName")))}");
+        }
+        if (names.Any(name =>
+                name.StartsWith("Red gem", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("Green gem", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("Blue gem", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("Yellow gem", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("Purple gem", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Flame/charge chest (", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Charge chest (", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                $"The object gallery retained a redundant gem/chest reward variant: {string.Join(" | ", names)}");
+        }
+
+        string[] forbidden =
+        [
+            "From this level",
+            "borrowed",
+            "native donor",
+            "runtime-proven",
+            "recipe"
+        ];
+        if (names.Any(name => forbidden.Any(word => name.Contains(word, StringComparison.OrdinalIgnoreCase))))
+        {
+            throw new InvalidOperationException(
+                $"The object gallery leaked technical provenance wording: {string.Join(" | ", names)}");
+        }
+
+        FlushUi();
+        Button[] tiles = galleryDialog.GetLogicalDescendants()
+            .OfType<Button>()
+            .Where(button => string.Equals(button.Name, "ObjectGalleryTileButton", StringComparison.Ordinal))
+            .ToArray();
+        if (tiles.Length == 0 ||
+            galleryDialog.GetLogicalDescendants()
+                .OfType<Control>()
+                .Count(control => string.Equals(control.Name, "ObjectGalleryPreview", StringComparison.Ordinal)) == 0)
+        {
+            throw new InvalidOperationException("The object gallery did not render picture-first object tiles.");
+        }
+        SaveFrame(galleryDialog, "spyro-editor-object-gallery.png");
+
+        Button selectedTile = tiles.Length > 1 ? tiles[1] : tiles[0];
+        object selectedItem = selectedTile.Tag
+            ?? throw new InvalidOperationException("The object gallery tile did not retain its safe template.");
+        string selectedName = TemplateValue<string>(selectedItem, "DisplayName");
+        selectedTile.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, selectedTile));
+        for (int attempt = 0; attempt < 200 && addDialog.OwnedWindows.Contains(galleryDialog); attempt++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(10);
+        }
+        if (addDialog.OwnedWindows.Contains(galleryDialog))
+            throw new InvalidOperationException("The object gallery did not close after choosing a picture tile.");
+        FlushUi();
+        if (chooser.Content?.ToString()?.Contains(selectedName, StringComparison.OrdinalIgnoreCase) != true)
+            throw new InvalidOperationException($"Choosing '{selectedName}' did not update the Add Object selection.");
+
+        Button add = FindButton(addDialog, "Add object");
+        add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, add));
+        WaitForDialogToClose(window, addDialog, "add object");
+        EditorViewport viewport = window.GetLogicalDescendants().OfType<EditorViewport>().Single();
+        if (!viewport.ObjectPlacementMode)
+            throw new InvalidOperationException("Choosing a gallery object did not continue into the existing click-to-place flow.");
+        viewport.ObjectPlacementMode = false;
+
+        Console.WriteLine(
+            $"Object gallery UI: {items.Length} normal-Create-BIN-safe picture tile(s), concise names, click selection, and existing viewport placement flow passed.");
+    }
+    finally
+    {
+        foreach (Window owned in window.OwnedWindows.ToArray())
+            owned.Close();
+        window.Close();
+        FlushUi();
+    }
+}
+
+int ObjectGalleryActorId(object galleryItem)
+{
+    object template = TemplateValue<object>(galleryItem, "Template");
+    return ((TemplateValue<int>(template, "SourceByte37") & 0xFF) << 8) |
+        (TemplateValue<int>(template, "SourceByte36") & 0xFF);
 }
 
 void AssertLooseGemValueEdit(MainWindow owner, ListBox browser)
@@ -4931,7 +6056,7 @@ void AssertBuildSafetyInspection(MainWindow owner)
 
     Window dialog = OpenAsyncDialog(owner, inspect, "Build Safety", "build-safety report dialog");
     AssertText(dialog, "Build Safety: Stable");
-    AssertTextContains(dialog, "1 edited level(s); 0 true source-row append(s); 0 projected runtime slot(s) consumed; 0 skipped edit(s).");
+    AssertTextContains(dialog, "1 edited level(s) checked. No problems were found.");
     AssertTextContains(dialog, "Stone Hill  |  Stable");
     FindButton(dialog, "Open Report Folder");
     Button close = FindButton(dialog, "Close");
@@ -4939,8 +6064,9 @@ void AssertBuildSafetyInspection(MainWindow owner)
     string reportPrefix = Path.Combine(workspace, "output", "Spyro Editor - All Saved Edits.build-safety");
     string jsonPath = $"{reportPrefix}.json";
     string markdownPath = $"{reportPrefix}.md";
-    AssertTextContains(dialog, jsonPath);
-    AssertTextContains(dialog, markdownPath);
+    AssertTextAbsent(dialog, "true source-row append");
+    AssertTextAbsent(dialog, "projected runtime slot");
+    AssertTextAbsent(dialog, "JSON:");
     if (!File.Exists(jsonPath) || !File.Exists(markdownPath))
         throw new InvalidOperationException("The build-safety action opened its dialog without writing both reports.");
 
@@ -4993,7 +6119,7 @@ void AssertBuildSafetyInspection(MainWindow owner)
         ?? throw new InvalidOperationException("Could not inspect the build-safety summary field.");
     TextBlock summary = (TextBlock)(summaryField.GetValue(owner)
         ?? throw new InvalidOperationException("The build-safety summary control was unavailable."));
-    const string expectedSummary = "Stable: 1 level(s), 0 true append(s), 0 runtime slot(s) consumed, 0 skipped edit(s)";
+    const string expectedSummary = "Ready: 1 edited level(s) checked";
     if (!string.Equals(summary.Text, expectedSummary, StringComparison.Ordinal))
         throw new InvalidOperationException($"Unexpected build-safety summary: '{summary.Text}'.");
 
@@ -5046,7 +6172,7 @@ void AssertBuildSafetyIssueNavigation(MainWindow owner)
     if (row.Cursor == null || !ReferenceEquals(row.DataContext, issue))
         throw new InvalidOperationException("The object-specific Build Safety issue is not visibly actionable.");
     AssertText(row, issue.TargetLabel);
-    AssertTextContains(row, "Double-click to select and center this Moby");
+    AssertTextContains(row, "Double-click to select and center this object");
     SaveFrame(dialog, "spyro-editor-build-safety-actionable-issue.png");
 
     EditorViewport viewport = owner.GetLogicalDescendants().OfType<EditorViewport>().Single();
@@ -5431,13 +6557,6 @@ static object[] ReadItemsSource(ItemsControl control, string description)
     if (control.ItemsSource is not System.Collections.IEnumerable items)
         throw new InvalidOperationException($"The {description} did not expose an ItemsSource.");
     return items.Cast<object>().ToArray();
-}
-
-static bool IsNearlyGray(Avalonia.Media.Color color)
-{
-    byte minimum = Math.Min(color.R, Math.Min(color.G, color.B));
-    byte maximum = Math.Max(color.R, Math.Max(color.G, color.B));
-    return maximum - minimum <= 10;
 }
 
 static MobyRegressionSnapshot CaptureMoby(Moby moby)
@@ -5833,6 +6952,19 @@ static void FlushUi()
     AvaloniaHeadlessPlatform.ForceRenderTimerTick(2);
 }
 
+static void WaitForUiTask(Task task, string operation)
+{
+    for (int attempt = 0; attempt < 1000 && !task.IsCompleted; attempt++)
+    {
+        Dispatcher.UIThread.RunJobs();
+        Thread.Sleep(5);
+    }
+    if (!task.IsCompleted)
+        throw new TimeoutException($"{operation} exceeded five seconds.");
+    task.GetAwaiter().GetResult();
+    FlushUi();
+}
+
 static Button FindButton(Control root, string content) =>
     root.GetLogicalDescendants()
         .OfType<Button>()
@@ -5854,13 +6986,29 @@ static void AssertText(Control root, string expected)
         throw new InvalidOperationException($"Expected UI label '{expected}' was not present.");
 }
 
+static void AssertTextAbsent(Control root, string forbidden)
+{
+    bool found = root.GetLogicalDescendants()
+        .OfType<TextBlock>()
+        .Any(text => text.Text?.Contains(forbidden, StringComparison.OrdinalIgnoreCase) == true);
+    if (found)
+        throw new InvalidOperationException($"Release UI unexpectedly exposed '{forbidden}'.");
+}
+
 static void AssertTextContains(Control root, string expected)
 {
     bool found = root.GetLogicalDescendants()
         .OfType<TextBlock>()
         .Any(text => text.Text?.Contains(expected, StringComparison.OrdinalIgnoreCase) == true);
     if (!found)
-        throw new InvalidOperationException($"Expected UI text containing '{expected}' was not present.");
+    {
+        string available = string.Join(" | ", root.GetLogicalDescendants()
+            .OfType<TextBlock>()
+            .Select(text => text.Text)
+            .Where(text => !string.IsNullOrWhiteSpace(text)));
+        throw new InvalidOperationException(
+            $"Expected UI text containing '{expected}' was not present. Available text: {available}");
+    }
 }
 
 static void AssertJsonString(JsonElement element, string propertyName, string expected)
@@ -5956,17 +7104,26 @@ static string CreateIsolatedWorkspace(string sourceWorkspace, bool includeSource
     Directory.CreateDirectory(isolated);
     try
     {
-        foreach (string sourcePath in Directory.EnumerateFiles(sourceWorkspace, "*.json", SearchOption.TopDirectoryOnly))
+        string[] metadataRoots =
+        [
+            sourceWorkspace,
+            Path.Combine(sourceWorkspace, "support")
+        ];
+        foreach (string metadataRoot in metadataRoots.Where(Directory.Exists))
         {
-            string fileName = Path.GetFileName(sourcePath);
-            bool isReadOnlyEditorMetadata =
-                fileName is "spyro-level-catalog.json" or "spyro-object-templates.json" or
-                    "spyro-skybox-catalog.json" or "spyro-wad-analysis.json" or "global.json" ||
-                fileName.EndsWith("-behavior-links.json", StringComparison.OrdinalIgnoreCase) ||
-                fileName.EndsWith("-live-validation-overrides.json", StringComparison.OrdinalIgnoreCase) ||
-                fileName.EndsWith("-moby-user-overrides.json", StringComparison.OrdinalIgnoreCase);
-            if (isReadOnlyEditorMetadata)
-                File.Copy(sourcePath, Path.Combine(isolated, fileName));
+            foreach (string sourcePath in Directory.EnumerateFiles(metadataRoot, "*.json", SearchOption.TopDirectoryOnly))
+            {
+                string fileName = Path.GetFileName(sourcePath);
+                bool isReadOnlyEditorMetadata =
+                    fileName is "spyro-level-catalog.json" or "spyro-object-templates.json" or
+                        "spyro-skybox-catalog.json" or "spyro-wad-analysis.json" or "global.json" ||
+                    fileName.EndsWith("-behavior-links.json", StringComparison.OrdinalIgnoreCase) ||
+                    fileName.EndsWith("-live-validation-overrides.json", StringComparison.OrdinalIgnoreCase) ||
+                    fileName.EndsWith("-moby-user-overrides.json", StringComparison.OrdinalIgnoreCase);
+                string isolatedPath = Path.Combine(isolated, fileName);
+                if (isReadOnlyEditorMetadata && !File.Exists(isolatedPath))
+                    File.Copy(sourcePath, isolatedPath);
+            }
         }
 
         string sourceCache = Path.Combine(sourceWorkspace, "editor-cache");

@@ -14,13 +14,14 @@ namespace Spyro.Editor.App.Views;
 
 public sealed partial class MainWindow
 {
+    private const bool DefaultSnapNativePathNodesToTerrain = true;
     private List<NativeMobyPath> _currentNativeMobyPaths = [];
     private NativeMobyPathEditLoadResult _nativePathLoadResult =
         new(0, 0, Array.Empty<string>());
     private string _nativeMovementLoadMessage = "Native movement data has not been loaded.";
     private string _savedNativeMovementEditSignature = "";
     private bool _moveSelectedThiefPathWithOwner = true;
-    private bool _snapNativePathNodesToTerrain;
+    private bool _snapNativePathNodesToTerrain = DefaultSnapNativePathNodesToTerrain;
     private List<NativeDragonRunToEdit> _currentDragonRunToEdits = [];
     private DragonRunToEditLoadResult _dragonRunToLoadResult =
         new(Array.Empty<NativeDragonRunToEdit>(), 0, Array.Empty<string>());
@@ -76,7 +77,7 @@ public sealed partial class MainWindow
         _savedNativeMovementEditSignature = BuildNativeMovementEditSignature();
         _savedDragonRunToEditSignature = BuildDragonRunToEditSignature();
         _moveSelectedThiefPathWithOwner = true;
-        _snapNativePathNodesToTerrain = false;
+        _snapNativePathNodesToTerrain = DefaultSnapNativePathNodesToTerrain;
         RefreshAllDragonRunToViewportTargets();
         _viewport.SetNativeMovementData(_currentNativeMobyPaths, _currentDragonRunToViewportTargets.Values);
         RefreshNativeMovementActionButton();
@@ -153,6 +154,7 @@ public sealed partial class MainWindow
             return false;
 
         path.ResetEdits();
+        _snapNativePathNodesToTerrain = DefaultSnapNativePathNodesToTerrain;
         _viewport.RefreshNativeMovementData();
         return true;
     }
@@ -174,6 +176,12 @@ public sealed partial class MainWindow
     {
         if (_objectNativeMovementButton == null)
             return;
+        if (_releaseMode)
+        {
+            _objectNativeMovementButton.IsVisible = false;
+            _objectNativeMovementButton.IsEnabled = false;
+            return;
+        }
 
         bool available = CanEditSelectedNativeMovement();
         _objectNativeMovementButton.IsVisible = available;
@@ -182,7 +190,7 @@ public sealed partial class MainWindow
         ToolTip.SetTip(
             _objectNativeMovementButton,
             SelectedNativeMobyPath() != null
-                ? "Edit this egg thief's ordered native PathData nodes. Node count, order, headers, and unknown words remain untouched."
+                ? "Edit this egg thief's ordered native PathData route. The dashed closing seam is a possible forward or reverse handler traversal, not necessarily the immediate next step. Keep terrain snap enabled. Edited routes remain runtime-gated in normal Create BIN until their exact profile is proven."
                 : "Edit Spyro's native dragon-rescue approach destination without changing the cameras or choreography.");
     }
 
@@ -231,6 +239,9 @@ public sealed partial class MainWindow
             Content = "Snap path handles to terrain while dragging",
             IsChecked = _snapNativePathNodesToTerrain
         };
+        ToolTip.SetTip(
+            snapWhileDragging,
+            "Recommended: keep terrain snap enabled so moved route nodes remain on a valid terrain surface.");
         TextBlock warning = new()
         {
             TextWrapping = TextWrapping.Wrap,
@@ -238,10 +249,22 @@ public sealed partial class MainWindow
             IsVisible = !_moveSelectedThiefPathWithOwner,
             Text = "Warning: moving the thief without its route makes it return to the old path in-game."
         };
+        TextBlock snapWarning = new()
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(175, 66, 52)),
+            IsVisible = snapWhileDragging.IsChecked != true,
+            Text = "Warning: terrain snap is off. Off-surface route nodes can make the thief leave playable terrain or behave unpredictably."
+        };
         moveWithOwner.PropertyChanged += (_, e) =>
         {
             if (e.Property == CheckBox.IsCheckedProperty)
                 warning.IsVisible = moveWithOwner.IsChecked != true;
+        };
+        snapWhileDragging.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == CheckBox.IsCheckedProperty)
+                snapWarning.IsVisible = snapWhileDragging.IsChecked != true;
         };
 
         List<PathNodeEditorRow> rows = [];
@@ -316,7 +339,8 @@ public sealed partial class MainWindow
         {
             foreach (PathNodeEditorRow row in rows)
                 SetPathNodeEditorRow(row, row.Node.OriginalPosition);
-            validation.Text = "All node fields were reset to their source coordinates. Choose Apply Path to commit the reset.";
+            snapWhileDragging.IsChecked = DefaultSnapNativePathNodesToTerrain;
+            validation.Text = "All node fields were reset to their source coordinates and terrain snap was restored. Choose Apply Path to commit the reset.";
         };
         cancel.Click += (_, _) => dialog.Close(false);
         apply.Click += (_, _) =>
@@ -345,15 +369,28 @@ public sealed partial class MainWindow
         buttons.Children.Add(cancel);
         buttons.Children.Add(apply);
 
+        NativeMobyPathTraversalProfile? traversalProfile =
+            NativeMobyPathTraversalProfileRegistry.Resolve(path);
+        string traversalText =
+            traversalProfile?.ClosingTraversal == NativeMobyPathClosingTraversal.CyclicForwardOrReverse
+                ? "The dashed closing seam is proven handler traversal between the last and first nodes; it may be crossed forward or in reverse, possibly after other handler states."
+                : "Route-end behavior is handler-specific and no closing seam is shown unless traversal between the last and first nodes is proven.";
         StackPanel panel = new() { Spacing = 10, Margin = new Thickness(16) };
         panel.Children.Add(new TextBlock
         {
-            Text = $"Native owner T{path.OwnerTrueIndex}; {path.NodeCount} fixed ordered nodes. Only XYZ is editable. The 8-byte header, node count/order, traversal state, pointers, and each unknown fourth word are preserved.",
+            Text = $"Native owner T{path.OwnerTrueIndex}; {path.NodeCount} fixed ordered nodes. {traversalText} Only XYZ is editable. The 8-byte header, node count/order, traversal state, pointers, and each unknown fourth word are preserved.",
             TextWrapping = TextWrapping.Wrap
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Safety: keep terrain snap enabled so every moved node stays on terrain. Edited egg-thief routes are runtime-gated; normal Create BIN will not export an unproven route profile. Inspect Build Safety and validate a focused test in DuckStation before promotion.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(166, 106, 24))
         });
         panel.Children.Add(moveWithOwner);
         panel.Children.Add(snapWhileDragging);
         panel.Children.Add(warning);
+        panel.Children.Add(snapWarning);
         panel.Children.Add(headings);
         panel.Children.Add(new ScrollViewer
         {
@@ -383,7 +420,7 @@ public sealed partial class MainWindow
         _viewport.RefreshNativeMovementData();
         RefreshActionAvailability();
         _statusText.Text = path.HasEdits
-            ? $"Updated {owner.DisplayLabel}'s native run path; {path.Nodes.Count(node => node.HasEdit)} node(s) differ from the source disc."
+            ? $"Updated {owner.DisplayLabel}'s native run path; {path.Nodes.Count(node => node.HasEdit)} node(s) differ from the source disc. Keep terrain snap enabled; normal Create BIN remains runtime-gated until this route profile is proven."
             : $"Reset {owner.DisplayLabel}'s native run path to the source disc.";
     }
 

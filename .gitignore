@@ -107,6 +107,8 @@ spyro-*.md
 !src/Spyro.Editor.App/Assets/SkyPresets/*.png
 !src/Spyro.Editor.App/Assets/MobyIcons/
 !src/Spyro.Editor.App/Assets/MobyIcons/*.png
+!src/Spyro.Editor.App/Assets/ObjectGalleryIcons/
+!src/Spyro.Editor.App/Assets/ObjectGalleryIcons/*.png
 src/Spyro.Editor.App/Assets/Markers/
 
 # Build outputs

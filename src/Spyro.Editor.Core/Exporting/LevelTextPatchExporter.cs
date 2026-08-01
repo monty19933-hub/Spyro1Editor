@@ -56,7 +56,14 @@ public static class LevelTextPatchExporter
         if (request.WriteImage)
         {
             if (expandedPlan != null)
-                await WriteBatchImageAsync(request.SourceImagePath, request.SourceCuePath, outputImagePath, outputCuePath, expandedPlan, cancellationToken);
+                await WriteBatchImageAsync(
+                    request.SourceImagePath,
+                    request.SourceCuePath,
+                    outputImagePath,
+                    outputCuePath,
+                    expandedPlan,
+                    consumeDisposableSourceImage: false,
+                    cancellationToken);
             else
                 await WriteImageAsync(request.SourceImagePath, request.SourceCuePath, outputImagePath, outputCuePath, [plan], cancellationToken);
         }
@@ -137,7 +144,14 @@ public static class LevelTextPatchExporter
         await File.WriteAllTextAsync(outputPlanPath, JsonSerializer.Serialize(batchPlan, NewJsonOptions()), cancellationToken);
 
         if (request.WriteImage)
-            await WriteBatchImageAsync(request.SourceImagePath, request.SourceCuePath, outputImagePath, outputCuePath, batchPlan, cancellationToken);
+            await WriteBatchImageAsync(
+                request.SourceImagePath,
+                request.SourceCuePath,
+                outputImagePath,
+                outputCuePath,
+                batchPlan,
+                request.ConsumeDisposableSourceImage,
+                cancellationToken);
 
         return new LevelTextBatchPatchResult(outputImagePath, outputCuePath, outputPlanPath, batchPlan, request.WriteImage);
     }
@@ -740,7 +754,11 @@ public static class LevelTextPatchExporter
         IReadOnlyList<LevelTextPatchPlan> patches,
         CancellationToken cancellationToken)
     {
-        File.Copy(sourceImagePath, outputImagePath, true);
+        await DiscImageWorkingCopy.StageAsync(
+            sourceImagePath,
+            outputImagePath,
+            consumeDisposableSource: false,
+            cancellationToken);
         await using (FileStream stream = File.Open(outputImagePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
         {
             foreach (LevelTextPatchPlan patch in patches)
@@ -764,15 +782,43 @@ public static class LevelTextPatchExporter
         string outputImagePath,
         string outputCuePath,
         LevelTextBatchPatchPlan plan,
+        bool consumeDisposableSourceImage,
         CancellationToken cancellationToken)
     {
         if (plan.BinaryPatches.Count == 0)
         {
-            await WriteImageAsync(sourceImagePath, sourceCuePath, outputImagePath, outputCuePath, plan.Patches, cancellationToken);
+            if (consumeDisposableSourceImage)
+            {
+                await DiscImageWorkingCopy.StageAsync(
+                    sourceImagePath,
+                    outputImagePath,
+                    consumeDisposableSource: true,
+                    cancellationToken);
+                await ApplyFixedSlotPatchesAsync(
+                    outputImagePath,
+                    outputCuePath,
+                    sourceCuePath,
+                    plan.Patches,
+                    cancellationToken);
+            }
+            else
+            {
+                await WriteImageAsync(
+                    sourceImagePath,
+                    sourceCuePath,
+                    outputImagePath,
+                    outputCuePath,
+                    plan.Patches,
+                    cancellationToken);
+            }
             return;
         }
 
-        File.Copy(sourceImagePath, outputImagePath, true);
+        await DiscImageWorkingCopy.StageAsync(
+            sourceImagePath,
+            outputImagePath,
+            consumeDisposableSourceImage,
+            cancellationToken);
         await using (FileStream stream = File.Open(outputImagePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
         {
             foreach (LevelTextBinaryPatch patch in plan.BinaryPatches)
@@ -788,6 +834,40 @@ public static class LevelTextPatchExporter
 
         string cueText = DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath));
         await File.WriteAllTextAsync(outputCuePath, cueText, Encoding.ASCII, cancellationToken);
+    }
+
+    private static async Task ApplyFixedSlotPatchesAsync(
+        string outputImagePath,
+        string outputCuePath,
+        string sourceCuePath,
+        IReadOnlyList<LevelTextPatchPlan> patches,
+        CancellationToken cancellationToken)
+    {
+        await using (FileStream stream = File.Open(
+                         outputImagePath,
+                         FileMode.Open,
+                         FileAccess.ReadWrite,
+                         FileShare.Read))
+        {
+            foreach (LevelTextPatchPlan patch in patches)
+            {
+                DiscImage.WriteFileBytes(
+                    stream,
+                    new DiscLayout(patch.SectorSize, patch.UserOffset, 0, 0),
+                    patch.ExeLba,
+                    patch.ExeFileOffset,
+                    HexToBytes(patch.AfterHexPreview));
+            }
+        }
+
+        string cueText = DiscImage.BuildCueText(
+            sourceCuePath,
+            Path.GetFileName(outputImagePath));
+        await File.WriteAllTextAsync(
+            outputCuePath,
+            cueText,
+            Encoding.ASCII,
+            cancellationToken);
     }
 
     private static string ValidateReplacement(TextTargetEntry target, string replacementText)
@@ -877,7 +957,8 @@ public sealed record LevelTextBatchPatchRequest(
     string SourceCuePath,
     string OutputPrefix,
     IReadOnlyList<LevelTextReplacement> Edits,
-    bool WriteImage);
+    bool WriteImage,
+    bool ConsumeDisposableSourceImage = false);
 
 public sealed record LevelTextBatchPatchResult(
     string OutputImagePath,

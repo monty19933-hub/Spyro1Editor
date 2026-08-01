@@ -11,10 +11,11 @@ profile into normal `Add Object` or `Create BIN`.
 - The clean USA disc resolves exactly 12 owned egg-thief `PathData` blocks with
   121 fixed ordered nodes.
 - `Edit Run Path` is available only for the verified native owner.
-- The viewport shows numbered handles and an ordered polyline in Edit Map and
-  Game Camera.
-- Nodes support drag, exact XYZ entry, optional terrain snap, individual reset,
-  and whole-path reset.
+- The viewport shows numbered handles, every ordered segment, and the distinct
+  handler-traversed closing seam in Edit Map and Game Camera. The seam may be
+  taken forward or in reverse depending on the level handler.
+- Nodes support drag, exact XYZ entry, terrain snap (on by default), individual
+  reset, and whole-path reset.
 - `Move thief and path together` defaults on. Turning it off shows the in-game
   snap-back warning.
 - The versioned path document records the level, owner T index, native class,
@@ -25,6 +26,11 @@ profile into normal `Add Object` or `Create BIN`.
   pointers, or unknown fourth word.
 - A stale owner, class, pointer, node count, node preimage, or path fingerprint
   is rejected and targeted in Build Safety.
+- Runtime safety also checks every sequential and closing-edge vector, the
+  owner-to-current-node vector, the PS1 GTE signed-component and magnitude
+  limits, and each edited node's terrain clearance relative to its retail
+  preimage. Normal `Create BIN` fails closed for an unproven route fingerprint;
+  a disposable research build cannot override a geometric blocker.
 
 ### Dragon rescue approach
 

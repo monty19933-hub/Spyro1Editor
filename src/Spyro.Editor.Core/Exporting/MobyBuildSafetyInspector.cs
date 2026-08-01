@@ -102,9 +102,9 @@ public static class MobyBuildSafetyInspector
         if (highestPlannedCatalogIndex > 0)
             plannedRuntimeCount = Math.Max(plannedRuntimeCount, highestPlannedCatalogIndex - native.CatalogPrefixRows);
 
-        ArtisansNativeLockedChestRuntimeBundleIntent? artisansLockedChestBundle = plan.ArtisansNativeLockedChestRuntimeBundle;
-        if (artisansLockedChestBundle != null)
-            plannedRuntimeCount = Math.Max(plannedRuntimeCount, artisansLockedChestBundle.SourceRuntimeCountAfter);
+        LockedChestRuntimeBundleIntent? lockedChestBundle = plan.LockedChestRuntimeBundle;
+        if (lockedChestBundle != null)
+            plannedRuntimeCount = Math.Max(plannedRuntimeCount, lockedChestBundle.SourceRuntimeCountAfter);
 
         plannedRuntimeCount = Math.Max(native.RuntimeSourceCount, plannedRuntimeCount);
         int plannedCatalogCount = checked(plannedRuntimeCount + native.CatalogPrefixRows);
@@ -225,11 +225,12 @@ public static class MobyBuildSafetyInspector
             findings.Add("A copied 0x58-byte source row is not equivalent to the game's class-specific SpawnMoby initialization; linked props, pods, routes, controllers, and rewards remain family-specific requirements.");
         }
 
-        if (artisansLockedChestBundle != null)
+        if (lockedChestBundle != null)
         {
+            string rewardRows = string.Join(", ", lockedChestBundle.RewardMarkerOutputTrueIndices.Select(index => $"T{index}"));
             findings.Add(
-                $"The runtime-proven Artisans native Key + Locked Chest V2 bundle reserves T174-T180 atomically: two visible objects plus five hidden reward-marker rows, with matching scene props and a fixed +{artisansLockedChestBundle.TreasureDelta} treasure contract.");
-            recommendations.Add("Keep this first promoted bundle as exactly one Key/chest pair; standalone copies, duplicate pairs, and additional Artisans object edits are intentionally blocked before export.");
+                $"The runtime-proven Key + Locked Chest profile '{lockedChestBundle.ProfileId}' reserves T{lockedChestBundle.KeyOutputTrueIndex}/T{lockedChestBundle.LockedChestOutputTrueIndex} plus hidden reward rows {rewardRows} atomically, with matching scene props and a fixed +{lockedChestBundle.TreasureDelta} treasure contract.");
+            recommendations.Add("Keep this destination profile within its declared bundle capacity; partial pairs, orphaned companions, and incompatible structural edits are blocked before export.");
         }
 
         if (status == MobyBuildSafetyStatus.Stable)
@@ -369,13 +370,17 @@ public static class MobyBuildSafetyInspector
             }
         }
 
-        if (plan.ArtisansNativeLockedChestRuntimeBundle is ArtisansNativeLockedChestRuntimeBundleIntent lockedChestBundle)
+        if (plan.LockedChestRuntimeBundle is LockedChestRuntimeBundleIntent lockedChestBundle)
         {
             int slotsLost = Math.Max(0, nativeDynamicCapacity - Math.Max(0, projectedDynamicCapacity));
+            string allocatedRows = string.Join(", ",
+                new[] { lockedChestBundle.KeyOutputTrueIndex, lockedChestBundle.LockedChestOutputTrueIndex }
+                    .Concat(lockedChestBundle.RewardMarkerOutputTrueIndices)
+                    .Select(index => $"T{index}"));
             issues.Add(new MobyBuildSafetyIssue(
-                Code: "artisans-native-locked-chest-runtime-bundle-v2",
+                Code: "locked-chest-runtime-bundle",
                 Status: MobyBuildSafetyStatus.Review,
-                Message: $"Runtime-proven atomic Key + Locked Chest V2 reserves output T174-T180 (7 source rows / {lockedChestBundle.AppendedSourceRowCount * MobyRecordStride:N0} bytes). The projected dynamic allocator capacity is {nativeDynamicCapacity}->{Math.Max(0, projectedDynamicCapacity)} ({slotsLost} slot(s) consumed); the handler, reward props, +10 treasure, model, and private textures are resolved rather than an unresolved package risk.",
+                Message: $"Runtime-proven atomic Key + Locked Chest profile '{lockedChestBundle.ProfileId}' reserves output {allocatedRows} ({lockedChestBundle.AppendedSourceRowCount} source rows / {lockedChestBundle.AppendedSourceRowCount * MobyRecordStride:N0} bytes). The projected dynamic allocator capacity is {nativeDynamicCapacity}->{Math.Max(0, projectedDynamicCapacity)} ({slotsLost} slot(s) consumed); the handler, reward props, +{lockedChestBundle.TreasureDelta} treasure, model, and private textures are resolved rather than an unresolved package risk.",
                 LevelKey: level.Key,
                 LevelName: level.DisplayName,
                 EditorTrueIndex: lockedChestBundle.LockedChestEditorTrueIndex,

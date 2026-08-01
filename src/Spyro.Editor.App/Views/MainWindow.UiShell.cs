@@ -195,13 +195,16 @@ public sealed partial class MainWindow
         StyleModernPrimaryButton(_toolbarCreateBinButton, ModernBlue, 110);
         fileActions.Children.Add(_toolbarCreateBinButton);
 
-        Control more = BuildToolMenu(
-            "More",
-            new ToolbarAction("Project Data", ShowProjectDataAsync),
-            new ToolbarAction("Check for Updates", ShowUpdatesAsync),
-            new ToolbarAction("Build Safety", ShowBuildSafetyInspectorAsync),
-            new ToolbarAction("Diagnostics", ShowDiagnosticsAsync),
-            new ToolbarAction("Help", ShowHelpAsync));
+        List<ToolbarAction> moreActions =
+        [
+            new("Project Data", ShowProjectDataAsync),
+            new("Check for Updates", ShowUpdatesAsync),
+            new("Build Safety", ShowBuildSafetyInspectorAsync),
+            new("Help", ShowHelpAsync)
+        ];
+        if (!_releaseMode)
+            moreActions.Insert(3, new ToolbarAction("Diagnostics", ShowDiagnosticsAsync));
+        Control more = BuildToolMenu("More", moreActions.ToArray());
         if (more is ComboBox moreBox)
         {
             moreBox.Width = 112;
@@ -585,7 +588,8 @@ public sealed partial class MainWindow
         _objectNativeMovementButton = NewAsyncButton("Edit Native Movement", EditSelectedNativeMovementAsync);
         StyleModernPrimaryButton(_objectNativeMovementButton, Color.FromRgb(111, 86, 174));
         _objectNativeMovementButton.IsVisible = false;
-        panel.Children.Add(_objectNativeMovementButton);
+        if (!_releaseMode)
+            panel.Children.Add(_objectNativeMovementButton);
 
         _objectCopyButton = NewButton("Copy", CopySelectedMoby);
         _objectPasteButton = NewAsyncButton("Paste", PasteMobyClipboardAtLastPointerAsync);
@@ -643,7 +647,8 @@ public sealed partial class MainWindow
         _objectSwapTestButton.IsVisible = false;
         ToolTip.SetTip(_objectSwapCatalogButton, "Replace this existing chest or self-contained enemy slot from the swap catalogue.");
         ToolTip.SetTip(_objectSwapTestButton, "Create a disposable BIN/CUE for a staged cross-level swap.");
-        panel.Children.Add(_objectSwapTestButton);
+        if (!_releaseMode)
+            panel.Children.Add(_objectSwapTestButton);
 
         _objectUndoRemoveButton = NewButton("Undo last removal", UndoLastRemovedMoby);
         _objectRestoreLevelButton = NewAsyncButton("Restore entire level", RestoreCurrentLevelAsync);
@@ -892,7 +897,9 @@ public sealed partial class MainWindow
         };
         body.Children.Add(BuildModernDialogHeader(
             moby.DisplayLabel,
-            $"T{moby.TrueIndex}  |  {BuildFriendlyMobySummary(moby)}"));
+            _releaseMode
+                ? BuildFriendlyMobySummary(moby)
+                : $"T{moby.TrueIndex}  |  {BuildFriendlyMobySummary(moby)}"));
         body.Children.Add(BuildModernDialogField("Name", nameBox));
 
         Grid transform = new()
@@ -947,46 +954,58 @@ public sealed partial class MainWindow
             body.Children.Add(BuildModernDisclosure("Replace object", replace, false));
         }
 
-        Grid technical = new()
+        if (!_releaseMode)
         {
-            ColumnDefinitions =
+            Grid technical = new()
             {
-                new ColumnDefinition(GridLength.Star),
-                new ColumnDefinition(GridLength.Star)
-            },
-            ColumnSpacing = 12
-        };
-        technical.Children.Add(BuildModernDialogField(
-            "Render radius (+0x50)",
-            new StackPanel
-            {
-                Spacing = 4,
-                Children =
+                ColumnDefinitions =
                 {
-                    typeBox,
-                    SectionLabelWithHelp("Render-radius reference", async () => await ShowMobyTypeStateHelpAsync("Render radius", typeBox, stateBox))
-                }
-            }));
-        Control state = BuildModernDialogField(
-            "Was drawn (+0x51)",
-            new StackPanel
-            {
-                Spacing = 4,
-                Children =
+                    new ColumnDefinition(GridLength.Star),
+                    new ColumnDefinition(GridLength.Star)
+                },
+                ColumnSpacing = 12
+            };
+            technical.Children.Add(BuildModernDialogField(
+                "Render radius (+0x50)",
+                new StackPanel
                 {
-                    stateBox,
-                    SectionLabelWithHelp("Draw-state reference", async () => await ShowMobyTypeStateHelpAsync("Was drawn", typeBox, stateBox))
-                }
-            });
-        Grid.SetColumn(state, 1);
-        technical.Children.Add(state);
-        StackPanel technicalDetails = new() { Spacing = 8 };
-        technicalDetails.Children.Add(technical);
-        technicalDetails.Children.Add(NewSmallNote(
-            $"Native class (+0x36/+0x37): 0x{moby.SourceByte37:X2}{moby.SourceByte36:X2}. " +
-            $"Update distance (+0x52): 0x{moby.Flag4A:X2}; drop Moby/class (+0x53): 0x{moby.Flag4B:X2}; " +
-            $"specular/metal type (+0x4F): 0x{moby.SourceByte4F:X2}. Native class drives identity; radius and draw state do not."));
-        body.Children.Add(BuildModernDisclosure("Technical properties", technicalDetails, false));
+                    Spacing = 4,
+                    Children =
+                    {
+                        typeBox,
+                        SectionLabelWithHelp("Render-radius reference", async () => await ShowMobyTypeStateHelpAsync("Render radius", typeBox, stateBox))
+                    }
+                }));
+            Control state = BuildModernDialogField(
+                "Was drawn (+0x51)",
+                new StackPanel
+                {
+                    Spacing = 4,
+                    Children =
+                    {
+                        stateBox,
+                        SectionLabelWithHelp("Draw-state reference", async () => await ShowMobyTypeStateHelpAsync("Was drawn", typeBox, stateBox))
+                    }
+                });
+            Grid.SetColumn(state, 1);
+            technical.Children.Add(state);
+            StackPanel technicalDetails = new() { Spacing = 8 };
+            technicalDetails.Children.Add(technical);
+            technicalDetails.Children.Add(NewSmallNote(
+                $"Native class (+0x36/+0x37): 0x{moby.SourceByte37:X2}{moby.SourceByte36:X2}. " +
+                $"Update distance (+0x52): 0x{moby.Flag4A:X2}; drop Moby/class (+0x53): 0x{moby.Flag4B:X2}; " +
+                $"specular/metal type (+0x4F): 0x{moby.SourceByte4F:X2}. Native class drives identity; radius and draw state do not."));
+            body.Children.Add(BuildModernDisclosure("Technical properties", technicalDetails, false));
+        }
+        else
+        {
+            StackPanel hiddenNativeFields = new()
+            {
+                IsVisible = false,
+                Children = { typeBox, stateBox }
+            };
+            body.Children.Add(hiddenNativeFields);
+        }
 
         Button cancel = NewButton("Cancel");
         Button apply = NewButton("Apply changes");
@@ -1035,7 +1054,32 @@ public sealed partial class MainWindow
             Margin = new Thickness(20, 18, 20, 16)
         };
         body.Children.Add(BuildModernDialogHeader("Add object", "Create a new level object."));
-        body.Children.Add(BuildModernDialogField("Object", kindBox));
+        Button chooseObjectButton = NewButton("");
+        chooseObjectButton.Name = "ObjectGalleryButton";
+        chooseObjectButton.HorizontalContentAlignment = HorizontalAlignment.Left;
+        chooseObjectButton.MinHeight = 44;
+        StyleModernSecondaryButton(chooseObjectButton);
+        void RefreshObjectGalleryButton()
+        {
+            AddMobyTemplate selected = kindBox.SelectedItem as AddMobyTemplate
+                ?? (kindBox.ItemsSource as IEnumerable<AddMobyTemplate>)?.FirstOrDefault()
+                ?? throw new InvalidOperationException("The Add Object gallery has no safe templates.");
+            chooseObjectButton.Content = $"Choose Object — {BuildObjectGalleryDisplayName(selected)}";
+        }
+        chooseObjectButton.Click += async (_, _) =>
+        {
+            IReadOnlyList<AddMobyTemplate> templates =
+                (kindBox.ItemsSource as IEnumerable<AddMobyTemplate>)?.ToArray()
+                ?? Array.Empty<AddMobyTemplate>();
+            AddMobyTemplate selected = kindBox.SelectedItem as AddMobyTemplate
+                ?? templates.First();
+            AddMobyTemplate? chosen = await ShowObjectGalleryAsync(dialog, templates, selected);
+            if (chosen != null)
+                kindBox.SelectedItem = chosen;
+        };
+        kindBox.SelectionChanged += (_, _) => RefreshObjectGalleryButton();
+        RefreshObjectGalleryButton();
+        body.Children.Add(BuildModernDialogField("Object", chooseObjectButton));
 
         Control gemField = BuildModernDialogField("Gem value", gemBox);
         gemField.IsVisible = (kindBox.SelectedItem as AddMobyTemplate)?.UsesGem == true;
@@ -1059,21 +1103,35 @@ public sealed partial class MainWindow
 
         StackPanel exact = new() { Spacing = 10 };
         exact.Children.Add(BuildModernDialogField("Exact position", BuildMobyPositionFields(xBox, yBox, zBox)));
-        Grid native = new()
+        if (!_releaseMode)
         {
-            ColumnDefinitions =
+            Grid native = new()
             {
-                new ColumnDefinition(GridLength.Star),
-                new ColumnDefinition(GridLength.Star)
-            },
-            ColumnSpacing = 12
-        };
-        native.Children.Add(BuildModernDialogField("Render radius (+0x50)", typeBox));
-        Control stateField = BuildModernDialogField("Was drawn (+0x51)", stateBox);
-        Grid.SetColumn(stateField, 1);
-        native.Children.Add(stateField);
-        exact.Children.Add(native);
-        body.Children.Add(BuildModernDisclosure("Exact placement and technical properties", exact, false));
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition(GridLength.Star),
+                    new ColumnDefinition(GridLength.Star)
+                },
+                ColumnSpacing = 12
+            };
+            native.Children.Add(BuildModernDialogField("Render radius (+0x50)", typeBox));
+            Control stateField = BuildModernDialogField("Was drawn (+0x51)", stateBox);
+            Grid.SetColumn(stateField, 1);
+            native.Children.Add(stateField);
+            exact.Children.Add(native);
+        }
+        else
+        {
+            exact.Children.Add(new StackPanel
+            {
+                IsVisible = false,
+                Children = { typeBox, stateBox }
+            });
+        }
+        body.Children.Add(BuildModernDisclosure(
+            _releaseMode ? "Exact position" : "Exact placement and technical properties",
+            exact,
+            false));
 
         Button cancel = NewButton("Cancel");
         Button add = NewButton("Add object");
