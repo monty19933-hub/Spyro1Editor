@@ -326,7 +326,8 @@ public static class NativeLevelReplacementStore
                 StringComparison.Ordinal))
             throw new InvalidDataException("The native level-replacement identity is invalid.");
         if (manifest.EvidenceStatus != NativeLevelReplacementEvidenceStatus.StaticBaselineOnly)
-            throw new InvalidDataException("No Stone Hill replacement compiler has runtime proof yet.");
+            throw new InvalidDataException(
+                "Retail baseline manifests cannot carry recipe evidence. Runtime authorization must resolve from a checked replacement profile and separate intent.");
 
         NativeLevelSlotContract expected = NativeLevelReplacementSupportCatalog.RequireSupported(
             catalog,

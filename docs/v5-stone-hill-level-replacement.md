@@ -37,7 +37,7 @@ tools/Run-SpyroEditorOfflineQa.sh --stonehill-level-replacement-baseline-smoke-o
 This milestone is intentionally disconnected from the V4 editor UI and normal
 Create BIN. It cannot modify a level.
 
-## Milestone 2: complete Town Square pair - focused runtime pass
+## Milestone 2: complete Town Square pair - runtime proven
 
 Commit `46ae431` added a disposable compiler that installs Town Square's complete
 retail overlay/data pair into Stone Hill's existing fixed-capacity entries 11/12.
@@ -55,18 +55,44 @@ The focused candidate was:
 - Evidence recorded: 2026-08-01, interactive user report rather than automated
   emulator capture.
 
-The reported DuckStation session entered the Artisans portal labelled Stone
+The reported DuckStation sessions entered the Artisans portal labelled Stone
 Hill, completed the Town Square fly-in with zero errors, collected gems,
-rescued dragons, and returned successfully to Artisans through Return Home. The
-transition initially appeared to use Stone Hill's sky before abruptly handing
-off to Town Square's sky, with the inverse handoff while flying out. That is a
-nonfatal visual transition defect, not evidence of a failed destination load.
+rescued dragons, defeated enemies, collected the egg thief, used pause and
+Inventory, survived death/reload, returned successfully through Return Home,
+re-entered the replacement, and preserved progress across save/reload. Normal
+movement remained stable and no errors were reported during those checks.
 
-This is a focused runtime pass, not full promotion evidence. Enemies, the egg
-thief, pause/inventory, death/reload, re-entry, save persistence, title-demo
-playback, prolonged stability, and a seamless sky handoff remain unreported.
-The generated static-proof JSON correctly retains `runtimeClaim: false`; this
-section is the separate durable record of the user-observed runtime slice.
+Title-demo playback completed without error and showed Doctor Shemp twice. This
+is intentional: the candidate retires retail demo slot 0's Stone Hill metadata
+by replacing its level ID (11), duration (860 frames), and 16-byte start pose
+with exact copies of retail slot 1's Doctor Shemp metadata (level ID 24 and
+1,100 frames). Retail slot 1 remains unchanged, so the resulting four-slot
+cycle is Doctor Shemp, Doctor Shemp, Icy Flight, and Wizard Peak. This is a
+cosmetic consequence of the safety reroute, not a stuck demo index or a new
+runtime defect. No Town Square title demo has been authored or claimed.
+
+The transition initially appeared to use Stone Hill's sky before abruptly
+handing off to Town Square's sky, with the inverse handoff while flying out.
+The candidate preserves Artisans entries 9/10 and its linked level-11 portal
+transition data, so it does not replace Stone Hill's fly-in/out sky state. The
+observed handoff is consistent with that preserved transition state yielding to
+Town Square's own sky after the transplanted destination finishes loading. This
+is a nonfatal visual transition defect, not evidence of a failed destination
+load. Static capacity analysis reports that Town Square's corresponding linked
+sky is 312 bytes larger than Stone Hill's fixed copy; growing that copy has not
+been runtime-tested and remains a separate polish experiment.
+
+The exact retail-pair transplant profile is runtime-proven for this checklist.
+The original pre-playtest static-proof JSON beside the focused candidate
+correctly retains `runtimeClaim: false`; it records compiler/readback evidence
+created before playtesting and must not be relabelled. The guarded V5 artifact
+writer now emits `runtimeClaim: true` only when the saved intent resolves to
+this code-owned profile and the generated BIN matches the exact runtime-proven
+SHA-256 above. This section remains the durable record of the user-observed
+runtime result. Edited or newly compiled donor payloads, arbitrary donor levels,
+seamless transition-sky replacement, long-duration soak or broad
+emulator-version coverage, normal V4 Create BIN, and a new 36th slot are not
+implied.
 
 ## Next implementation gates
 
@@ -77,12 +103,14 @@ section is the separate durable record of the user-observed runtime slice.
    fixed Stone Hill capacity. Arbitrary newly compiled payloads are not implied.
 3. **Pending:** compile edited donor terrain/scene/object data and link imported
    actor packages instead of copying one unchanged retail pair.
-4. **Partially passed:** portal entry, fly-in, gems, dragons, and Return Home
-   passed in DuckStation. Exercise the remaining runtime checks listed above and
-   investigate the abrupt sky handoff.
-5. **Blocked pending gate 4:** expose a guarded
-   `Create Custom Level (replaces Stone Hill)` editor workflow only after the
-   complete candidate checklist passes.
+4. **Completed for the exact retail pair:** the complete portal, gameplay,
+   collection, reload, persistence, Return Home, re-entry, and title-demo
+   checklist passed in DuckStation. Investigate the abrupt sky handoff as an
+   isolated visual-polish candidate without changing the proven pair.
+5. **Ready for guarded research integration:** expose the checked Town Square
+   retail-pair profile as a separate V5 replacement-test workflow. Do not merge
+   it into normal V4 Create BIN or imply that ordinary saved edits are already
+   composed into the transplanted payload.
 6. Research a new 36th catalog/disc slot only after the complete Stone Hill
    replacement works. A 36th level requires new routing, level-table,
    executable, save/progression, WAD-growth, and runtime-dependency proofs; it is

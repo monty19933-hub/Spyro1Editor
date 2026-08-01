@@ -128,6 +128,11 @@ try
         RunCreateBinFeedbackOnly();
         return 0;
     }
+    if (args.Contains("--level-replacement-ui-only", StringComparer.OrdinalIgnoreCase))
+    {
+        RunNativeLevelReplacementUiOnly();
+        return 0;
+    }
     if (args.Contains("--update-only", StringComparer.OrdinalIgnoreCase))
     {
         RunUpdateOnly();
@@ -217,6 +222,140 @@ void RunTerrainAtomicOnly()
     {
         WaitForLevelData(window);
         AssertTerrainCatalogAtomicGuards(window);
+    }
+    finally
+    {
+        window.Close();
+        FlushUi();
+    }
+}
+
+void RunNativeLevelReplacementUiOnly()
+{
+    MainWindow window = new()
+    {
+        Width = 1320,
+        Height = 860,
+        WindowStartupLocation = WindowStartupLocation.Manual,
+        Position = new PixelPoint(0, 0)
+    };
+    window.Show();
+    try
+    {
+        WaitForLevelData(window);
+        SelectWorkspaceTab(window, "Level");
+
+        Expander disclosure = FindNamedUnique<Expander>(window, "NativeLevelReplacementDisclosure");
+        ComboBox donor = FindNamedUnique<ComboBox>(window, "NativeLevelReplacementDonorBox");
+        TextBlock status = FindNamedUnique<TextBlock>(window, "NativeLevelReplacementStatus");
+        Button save = FindNamedUnique<Button>(window, "NativeLevelReplacementSaveIntentButton");
+        Button inspect = FindNamedUnique<Button>(window, "NativeLevelReplacementInspectButton");
+        Button create = FindNamedUnique<Button>(window, "NativeLevelReplacementCreateTestButton");
+        Button restore = FindNamedUnique<Button>(window, "NativeLevelReplacementRestoreButton");
+
+        if (!disclosure.IsVisible)
+            throw new InvalidOperationException("The guarded V5 replacement disclosure is not visible on Stone Hill.");
+        AssertTextContains(window, "V5 research only");
+        object[] donors = ReadItemsSource(donor, "V5 replacement donor picker");
+        if (donors.Length != 1 ||
+            !string.Equals(donors[0].ToString(), "Town Square — complete retail level", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"The V5 replacement picker must expose exactly Town Square; found [{string.Join(", ", donors.Select(item => item.ToString()))}].");
+        }
+        PropertyInfo profileIdProperty = donors[0].GetType().GetProperty(
+            "ProfileId",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("The V5 donor option did not expose its checked profile id.");
+        if (!string.Equals(
+                profileIdProperty.GetValue(donors[0])?.ToString(),
+                NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillProfileId,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The V5 donor option does not bind the runtime-proven Town Square profile.");
+        }
+        if (!save.IsEnabled || inspect.IsEnabled || create.IsEnabled || restore.IsEnabled ||
+            !status.Text!.Contains("Original Stone Hill", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("The no-intent V5 replacement UI state is incorrect.");
+        }
+        FindButton(window, "Create BIN");
+        if (ReferenceEquals(FindButton(window, "Create BIN"), create))
+            throw new InvalidOperationException("The V5 replacement test button replaced normal Create BIN.");
+
+        save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, save));
+        string manifestPath = NativeLevelReplacementStore.GetPath(workspace, "stonehill");
+        string intentPath = NativeLevelReplacementIntentStore.GetPath(workspace, "stonehill");
+        WaitForCondition(
+            () => File.Exists(manifestPath) && File.Exists(intentPath) && save.IsEnabled,
+            TimeSpan.FromMinutes(2),
+            () => $"saving the replacement intent; status: {status.Text}");
+        if (!inspect.IsEnabled || !create.IsEnabled || !restore.IsEnabled ||
+            !status.Text!.Contains("Saved intent", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("The saved V5 replacement intent did not enable its guarded actions.");
+        }
+
+        string ordinaryEditPath = Path.Combine(workspace, "stonehill-terrain-edits.json");
+        File.WriteAllText(
+            ordinaryEditPath,
+            "{\"generatedAt\":\"2026-08-01T00:00:00Z\",\"editor\":\"Spyro.Editor.Core\",\"levelName\":\"Stone Hill\",\"note\":\"V5 UI preservation probe\",\"editCount\":0,\"edits\":[]}");
+        string ordinaryEditSha256 = FileSha256(ordinaryEditPath);
+
+        inspect.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, inspect));
+        Window safetyDialog = WaitForOwnedWindow(
+            window,
+            "V5 Replacement Safety — Stone Hill",
+            TimeSpan.FromMinutes(2),
+            () => $"inspecting replacement safety; status: {status.Text}");
+        AssertTextContains(safetyDialog, "Runtime-proven exact profile");
+        AssertTextContains(safetyDialog, "Writable scopes");
+        AssertTextContains(safetyDialog, "Protected scopes");
+        AssertTextContains(safetyDialog, "Normal Create BIN is unchanged");
+        AssertTextContains(safetyDialog, NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillOutputImageSha256);
+        FindButton(safetyDialog, "Close").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        WaitForDialogToClose(window, safetyDialog, "V5 replacement safety dialog");
+        WaitForCondition(
+            () => inspect.IsEnabled,
+            TimeSpan.FromSeconds(10),
+            () => "finishing the replacement safety command");
+
+        restore.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, restore));
+        Window restoreDialog = WaitForOwnedWindow(
+            window,
+            "Restore Original Stone Hill Intent",
+            TimeSpan.FromSeconds(10),
+            () => "opening the replacement restore confirmation");
+        AssertTextContains(restoreDialog, "does not delete normal terrain/object edits");
+        FindButton(restoreDialog, "Restore Original Stone Hill")
+            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        WaitForDialogToClose(window, restoreDialog, "V5 replacement restore dialog");
+        WaitForCondition(
+            () => !File.Exists(intentPath) && restore.IsEnabled == false,
+            TimeSpan.FromSeconds(10),
+            () => $"restoring the original intent; status: {status.Text}");
+        if (!File.Exists(manifestPath))
+            throw new InvalidOperationException("Restoring the original intent deleted the source-bound baseline manifest.");
+        if (!string.Equals(FileSha256(ordinaryEditPath), ordinaryEditSha256, StringComparison.Ordinal))
+            throw new InvalidOperationException("Restoring the original intent changed an ordinary terrain-edit file.");
+        if (create.IsEnabled || !save.IsEnabled ||
+            !status.Text!.Contains("Original Stone Hill", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("The restored V5 replacement UI state is incorrect.");
+        }
+
+        LevelCatalog catalog = LevelCatalog.Load(workspace);
+        LevelDefinition townSquare = catalog.FindByKey("townsquare")
+            ?? throw new InvalidOperationException("Town Square is missing from the focused UI smoke catalog.");
+        SelectLevelForViewportFit(window, townSquare);
+        SelectWorkspaceTab(window, "Level");
+        if (disclosure.IsVisible)
+            throw new InvalidOperationException("The Stone Hill replacement disclosure remained visible on Town Square.");
+
+        Console.WriteLine(
+            "V5 level-replacement UI smoke passed: Stone Hill-only disclosure, exact Town Square donor, " +
+            "source-bound Save Intent, safety inspection, intent-only restore, ordinary-edit preservation, " +
+            "and separate normal Create BIN control all passed.");
     }
     finally
     {
@@ -6552,6 +6691,18 @@ static T FindNamed<T>(Control root, string name) where T : Control
         .Single(control => string.Equals(control.Name, name, StringComparison.Ordinal));
 }
 
+static T FindNamedUnique<T>(Control root, string name) where T : Control
+{
+    T[] matches = root.GetLogicalDescendants()
+        .OfType<T>()
+        .Where(control => string.Equals(control.Name, name, StringComparison.Ordinal))
+        .ToArray();
+    return matches.Length > 0 && matches.All(control => ReferenceEquals(control, matches[0]))
+        ? matches[0]
+        : throw new InvalidOperationException(
+            $"Expected one distinct {typeof(T).Name} named '{name}', found {matches.Length}.");
+}
+
 static object[] ReadItemsSource(ItemsControl control, string description)
 {
     if (control.ItemsSource is not System.Collections.IEnumerable items)
@@ -6871,6 +7022,65 @@ Window OpenDialog(MainWindow owner, Button button, string description)
 
     return owner.OwnedWindows.LastOrDefault()
         ?? throw new InvalidOperationException($"The {description} did not open.");
+}
+
+void SelectWorkspaceTab(MainWindow owner, string header)
+{
+    FieldInfo field = typeof(MainWindow).GetField(
+        "_modernWorkspaceTabs",
+        BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("Could not inspect the modern workspace tabs.");
+    TabControl tabs = field.GetValue(owner) as TabControl
+        ?? throw new InvalidOperationException("The modern workspace tabs were unavailable.");
+    object[] items = ReadItemsSource(tabs, "modern workspace tabs");
+    int index = Array.FindIndex(items, item =>
+        item is TabItem tab &&
+        tab.Header is TextBlock text &&
+        string.Equals(text.Text, header, StringComparison.OrdinalIgnoreCase));
+    if (index < 0)
+        throw new InvalidOperationException($"The modern workspace has no '{header}' tab.");
+    tabs.SelectedIndex = index;
+    FlushUi();
+}
+
+Window WaitForOwnedWindow(
+    MainWindow owner,
+    string title,
+    TimeSpan timeout,
+    Func<string> operation)
+{
+    DateTime deadline = DateTime.UtcNow + timeout;
+    while (DateTime.UtcNow < deadline)
+    {
+        Dispatcher.UIThread.RunJobs();
+        Window? dialog = owner.OwnedWindows.LastOrDefault(window =>
+            string.Equals(window.Title, title, StringComparison.Ordinal));
+        if (dialog != null)
+            return dialog;
+        Thread.Sleep(10);
+    }
+
+    throw new TimeoutException($"Timed out while {operation()}.");
+}
+
+void WaitForCondition(
+    Func<bool> condition,
+    TimeSpan timeout,
+    Func<string> operation)
+{
+    DateTime deadline = DateTime.UtcNow + timeout;
+    while (DateTime.UtcNow < deadline)
+    {
+        Dispatcher.UIThread.RunJobs();
+        if (condition())
+        {
+            FlushUi();
+            return;
+        }
+        Thread.Sleep(10);
+    }
+
+    throw new TimeoutException($"Timed out while {operation()}.");
 }
 
 Window OpenAsyncDialog(MainWindow owner, Button button, string title, string description)

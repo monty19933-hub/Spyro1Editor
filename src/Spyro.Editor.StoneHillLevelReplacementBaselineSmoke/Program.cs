@@ -88,6 +88,92 @@ try
         PortableProjectArtifactKind.ProjectEdit,
         "Native level-replacement manifests are not protected by portable project migration.");
 
+    Require(NativeLevelReplacementProfileRegistry.Profiles.Count == 1 &&
+        NativeLevelReplacementProfileRegistry.Profiles is not NativeLevelReplacementProfile[],
+        "The guarded V5 replacement registry unexpectedly contains an unproven route.");
+    NativeLevelReplacementProfile profile =
+        NativeLevelReplacementProfileRegistry.RequireRuntimeProven(
+            NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillProfileId,
+            loaded,
+            catalog);
+    Require(profile.Evidence == NativeLevelReplacementEvidenceStatus.RuntimeProven &&
+        profile.MatchesBaseline(loaded) &&
+        profile.OutputImageSha256 ==
+            NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillOutputImageSha256,
+        "The exact runtime-proven Town Square -> Stone Hill profile did not match the retail baseline.");
+
+    Require(NativeLevelReplacementIntentStore.Load(
+            temporaryRoot,
+            "stonehill",
+            loaded,
+            catalog) is null,
+        "A Beta V1-V4 project without a V5 replacement intent did not load as native behavior.");
+
+    NativeLevelReplacementIntent intent = await NativeLevelReplacementIntentStore.StartAsync(
+        temporaryRoot,
+        profile.Id,
+        loaded,
+        catalog);
+    string manifestPath = NativeLevelReplacementStore.GetPath(temporaryRoot, "stonehill");
+    string intentPath = NativeLevelReplacementIntentStore.GetPath(temporaryRoot, "stonehill");
+    Require(File.Exists(manifestPath) && File.Exists(intentPath) && manifestPath != intentPath,
+        "The replacement intent was not persisted separately from the retail baseline manifest.");
+    NativeLevelReplacementIntent loadedIntent = NativeLevelReplacementIntentStore.Load(
+            temporaryRoot,
+            "stonehill",
+            loaded,
+            catalog)
+        ?? throw new InvalidOperationException("The guarded replacement intent was not loaded.");
+    Require(loadedIntent == intent &&
+        NativeLevelReplacementIntentStore.Validate(loadedIntent, loaded, catalog) == profile,
+        "The guarded replacement intent changed during atomic save/load.");
+    Require(PortableProjectMigration.Classify(
+            "stonehill-native-level-replacement-intent.json") ==
+        PortableProjectArtifactKind.ProjectEdit,
+        "Native level-replacement intents are not protected by portable project migration.");
+    Require(!Directory.EnumerateFiles(temporaryRoot, "*.tmp").Any(),
+        "Atomic replacement-intent persistence left a temporary file behind.");
+    ExpectFailure(
+        () => NativeLevelReplacementIntentStore.GetPath(temporaryRoot, "../stonehill"),
+        "A replacement-intent path traversal escaped the project root.");
+    ExpectFailure(
+        () => NativeLevelReplacementIntentStore.Validate(
+            loadedIntent with { ProfileRecipeVersion = loadedIntent.ProfileRecipeVersion + 1 },
+            loaded,
+            catalog),
+        "A stale replacement recipe version was accepted.");
+    ExpectFailure(
+        () => NativeLevelReplacementIntentStore.Validate(
+            loadedIntent with { ProfileId = loadedIntent.ProfileId.ToUpperInvariant() },
+            loaded,
+            catalog),
+        "A noncanonical replacement profile identity was accepted.");
+    ExpectFailure(
+        () => NativeLevelReplacementIntentStore.Validate(
+            loadedIntent with { DonorLevelKey = "darkhollow" },
+            loaded,
+            catalog),
+        "A modified replacement donor escaped the code-owned profile.");
+    ExpectFailure(
+        () => NativeLevelReplacementIntentStore.Validate(
+            loadedIntent with { SourceImageSha256 = new string('a', 64) },
+            loaded,
+            catalog),
+        "A stale replacement-intent source SHA-256 was accepted.");
+    ExpectFailure(
+        () => NativeLevelReplacementIntentStore.Validate(
+            loadedIntent with { Version = loadedIntent.Version + 1 },
+            loaded,
+            catalog),
+        "An unsupported replacement-intent version was accepted.");
+    await ExpectFailureAsync(
+        async () => _ = await NativeLevelReplacementIntentStore.StartAsync(
+            temporaryRoot,
+            "unregistered-profile",
+            loaded,
+            catalog),
+        "An unregistered replacement profile produced a persistent intent.");
+
     NativeLevelReplacementBaselinePlan baselinePlan =
         NativeLevelReplacementSafetyInspector.BuildBaselinePlan(loaded, catalog);
     Require(baselinePlan.PlannedWrites.Count == 0 && baselinePlan.Safety.PlannedPatchCount == 0,
@@ -230,9 +316,38 @@ try
     ExpectFailure(
         () => NativeLevelReplacementStore.Load(malformedRoot, "stonehill", catalog),
         "A malformed replacement manifest did not fail closed.");
+    await File.WriteAllTextAsync(
+        NativeLevelReplacementIntentStore.GetPath(malformedRoot, "stonehill"),
+        "{\"format\":\"spyro-editor-native-level-replacement-intent\",\"version\":1}");
+    ExpectFailure(
+        () => NativeLevelReplacementIntentStore.Load(
+            malformedRoot,
+            "stonehill",
+            loaded,
+            catalog),
+        "A malformed replacement intent did not fail closed.");
+    string unmappedRoot = Path.Combine(temporaryRoot, "unmapped-intent");
+    Directory.CreateDirectory(unmappedRoot);
+    string intentJson = await File.ReadAllTextAsync(intentPath);
+    int finalBrace = intentJson.LastIndexOf('}');
+    Require(finalBrace >= 0, "The saved replacement intent was not valid JSON text.");
+    await File.WriteAllTextAsync(
+        NativeLevelReplacementIntentStore.GetPath(unmappedRoot, "stonehill"),
+        intentJson.Insert(finalBrace, ",\n  \"evidenceStatus\": \"runtimeProven\"\n"));
+    ExpectFailure(
+        () => NativeLevelReplacementIntentStore.Load(
+            unmappedRoot,
+            "stonehill",
+            loaded,
+            catalog),
+        "An unmapped mutable evidence field was ignored instead of failing closed.");
+    Require(NativeLevelReplacementIntentStore.Delete(temporaryRoot, "stonehill") &&
+        !File.Exists(intentPath) && File.Exists(manifestPath) &&
+        !NativeLevelReplacementIntentStore.Delete(temporaryRoot, "stonehill"),
+        "Deleting a replacement intent did not leave the baseline manifest untouched and become idempotent.");
 
     Console.WriteLine(
-        "PASS: exact clean-USA Stone Hill slot, metadata/data/archive/table preimages, concrete portal/Return Home guards, portable persistence, path/alias rejection, and byte-identical no-edit BIN/CUE baseline.");
+        "PASS: exact clean-USA Stone Hill slot, runtime-proven code-owned profile, separate atomic/fail-closed intent persistence, metadata/data/archive/table preimages, concrete portal/Return Home guards, path/alias rejection, and byte-identical no-edit BIN/CUE baseline.");
 }
 finally
 {

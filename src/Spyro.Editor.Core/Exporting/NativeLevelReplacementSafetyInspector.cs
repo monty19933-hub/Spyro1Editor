@@ -74,7 +74,7 @@ public static class NativeLevelReplacementSafetyInspector
         [
             "The first V5 plan contains zero byte patches and is authorized only to prove a byte-identical BIN/CUE baseline.",
             "Stone Hill keeps retail level ID 11 and loaded data WAD entry 12; no new 36th level-table slot is created.",
-            "The complete Town Square pair has a focused DuckStation pass for portal entry, fly-in, gems, dragons, and Return Home. Full promotion remains blocked until enemies, thief, pause/inventory, death/reload, re-entry, save persistence, title demo, and prolonged stability are exercised."
+            "The exact Town Square retail-pair transplant passed the complete DuckStation portal, gameplay, collection, death/reload, Return Home, re-entry, save-persistence, and title-demo checklist. That proof does not authorize arbitrary donors, edited payload composition, normal V4 Create BIN, or a new 36th slot."
         ];
         return new NativeLevelReplacementSafetyReport(
             expected.TargetLevelKey,

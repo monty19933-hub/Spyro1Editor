@@ -9419,6 +9419,7 @@ public sealed partial class MainWindow : Window
         RefreshLevelTextTargetEditor();
         RefreshLevelMusicEditor(level);
         RefreshPortalControlPanel();
+        RefreshNativeLevelReplacementPanel();
     }
 
     private void RefreshLevelTextTargetEditor()

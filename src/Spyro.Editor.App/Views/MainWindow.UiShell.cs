@@ -753,6 +753,10 @@ public sealed partial class MainWindow
         _homeworldTextGroup = BuildModernDisclosure("Portal location", BuildPortalControlPanel(), false);
         panel.Children.Add(_homeworldTextGroup);
 
+        // V5 whole-level replacement is deliberately a separate, guarded research
+        // workflow. It never enters the normal Create BIN dispatcher.
+        panel.Children.Add(BuildNativeLevelReplacementDisclosure());
+
         _levelDetails.TextWrapping = TextWrapping.Wrap;
         _levelDetails.Foreground = new SolidColorBrush(ModernMutedInk);
         _levelDetails.FontSize = 12;

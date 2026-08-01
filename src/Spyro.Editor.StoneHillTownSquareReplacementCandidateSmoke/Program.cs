@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
@@ -23,18 +22,53 @@ NativeLevelReplacementManifest manifest = await NativeLevelReplacementStore.Star
     outputRoot,
     sourceImage,
     catalog);
+NativeLevelReplacementIntent intent = await NativeLevelReplacementIntentStore.StartAsync(
+    outputRoot,
+    NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillProfileId,
+    manifest,
+    catalog);
+NativeLevelReplacementIntent loadedIntent = NativeLevelReplacementIntentStore.Load(
+        outputRoot,
+        "stonehill",
+        manifest,
+        catalog)
+    ?? throw new InvalidOperationException("The persisted replacement intent was not loaded.");
+Require(loadedIntent == intent,
+    "The exact replacement intent changed during save/load.");
 
 string outputPrefix = Path.Combine(
     outputRoot,
     "Stone-Hill-slot-Town-Square-complete-level-RUNTIME-CANDIDATE");
-StoneHillTownSquareReplacementCandidateResult result =
-    await StoneHillTownSquareReplacementCandidateComposer.ExportAsync(new(
+StoneHillTownSquareReplacementCandidateRequest request = new(
         manifest,
+        loadedIntent,
         catalog,
         sourceImage,
         sourceCue,
         outputPrefix + ".bin",
-        outputPrefix + ".cue"));
+        outputPrefix + ".cue");
+await ExpectFailureAsync(
+    () => StoneHillTownSquareReplacementCandidateComposer.BuildPlanAsync(
+        request with
+        {
+            Intent = loadedIntent with
+            {
+                SourceImageSha256 = new string('0', 64)
+            }
+        }),
+    "A forged replacement intent reached candidate planning.");
+string invalidCue = Path.Combine(outputRoot, "invalid-source.cue");
+await File.WriteAllTextAsync(
+    invalidCue,
+    "FILE \"wrong.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n");
+await ExpectFailureAsync(
+    () => StoneHillTownSquareReplacementCandidateComposer.BuildPlanAsync(
+        request with { SourceCuePath = invalidCue }),
+    "A CUE that did not reference the bound retail BIN passed safety planning.");
+
+StoneHillTownSquareReplacementArtifactResult artifact =
+    await StoneHillTownSquareReplacementArtifactWriter.ExportAsync(request);
+StoneHillTownSquareReplacementCandidateResult result = artifact.Candidate;
 
 Require(result.Plan.Patches.Count == 8,
     "The candidate no longer has exactly two payload, two header-size, one dispatch, and three demo-safety patches.");
@@ -42,6 +76,16 @@ Require(result.Plan.DonorSubfiles.Count == 8 &&
     result.Plan.DonorSubfiles.Select(subfile => subfile.SubfileIndex)
         .SequenceEqual(Enumerable.Range(0, 8)),
     "The candidate did not carry Town Square's complete eight-subfile archive.");
+Require(result.Plan.ProfileId ==
+        NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillProfileId &&
+    result.Plan.ProfileRecipeVersion == 1 &&
+    result.Plan.Evidence == NativeLevelReplacementEvidenceStatus.RuntimeProven &&
+    result.Plan.ExpectedOutputImageSha256 ==
+        NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillOutputImageSha256 &&
+    result.OutputImageSha256 == result.Plan.ExpectedOutputImageSha256 &&
+    result.Plan.Safety.Status == "runtime-proven-profile-guarded" &&
+    !result.Plan.Safety.RequiresDuckStationRuntimeProof,
+    "The generated artifact was not bound to the exact runtime-proven profile and output SHA-256.");
 Require(result.Plan.TargetOverlayBefore.ByteLength >= result.Plan.OutputOverlayByteLength &&
     result.Plan.TargetDataBefore.ByteLength >= result.Plan.OutputDataByteLength,
     "The donor pair exceeded Stone Hill's fixed retail capacity.");
@@ -52,78 +96,28 @@ Require(result.ChangedWadBytes > 0 && result.ChangedExecutableBytes > 0 &&
     result.ResidualTargetCapacityPreserved && result.SourceImagePreserved &&
     result.AtomicRenameCompleted,
     "The final candidate omitted a source, diff, raw-sector, portal, donor, scene, or atomic proof.");
-
-JsonSerializerOptions jsonOptions = new()
+Require(File.Exists(artifact.StaticProofPath) && File.Exists(artifact.RuntimeChecklistPath) &&
+    !Directory.EnumerateFiles(outputRoot, "*.tmp").Any(),
+    "The artifact writer did not publish both evidence files with atomic per-file writes.");
+using (JsonDocument report = JsonDocument.Parse(await File.ReadAllTextAsync(artifact.StaticProofPath)))
 {
-    WriteIndented = true,
-    Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
-};
-string reportPath = outputPrefix + "-static-proof.json";
-await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(new
-{
-    status = "static-readback-passed-duckstation-runtime-pending",
-    runtimeClaim = false,
-    result.OutputImagePath,
-    result.OutputCuePath,
-    result.OutputImageSha256,
-    result.ChangedWadBytes,
-    result.ChangedExecutableBytes,
-    result.RebuiltRawSectorCount,
-    result.ExactLogicalDiffBoundaryVerified,
-    result.ArtisansPortalPreimagesVerified,
-    result.DonorEntriesPreserved,
-    result.TownSquareFlyInRelocatedExactly,
-    result.TownSquareReturnHomeRelocatedExactly,
-    result.ResidualTargetCapacityPreserved,
-    result.SourceImagePreserved,
-    result.AtomicRenameCompleted,
-    result.Plan
-}, jsonOptions));
-
-string checklistPath = outputPrefix + "-runtime-checklist.md";
-await File.WriteAllTextAsync(checklistPath,
-    $"""
-    # V5 Stone Hill slot replacement — DuckStation checklist
-
-    This is a disposable V5 research CUE. It does not change Beta V4, normal Create BIN,
-    the retail source image, or any saved editor project.
-
-    ## Start
-
-    1. Use a fresh game and a disposable memory card. Existing Stone Hill collection masks
-       can hide unrelated Town Square rows because this experiment intentionally keeps slot 11.
-    2. Boot `{Path.GetFileName(result.OutputCuePath)}` from a cold start.
-    3. Walk into the Artisans portal still labelled **Stone Hill**.
-
-    ## Expected replacement
-
-    - The portal should load the complete retail **Town Square** level payload in Stone Hill's slot.
-    - Town Square geometry, collision, textures, sky, actors, camera, fly-in, and actor sounds
-      should appear together. The UI/portal identity and music remain Stone Hill for this first proof.
-    - The former Stone Hill title-demo slot is safely rerouted to the native Doctor Shemp demo so
-      an idle title screen cannot read beyond Town Square's shorter scene package.
-
-    ## Exercise
-
-    - Run, jump, glide, charge, and flame around the opening and the raised town areas.
-    - Defeat several enemies and collect several gems.
-    - Rescue one dragon and complete its cutscene.
-    - Chase/collect the egg thief if practical.
-    - Pause, open Inventory, die/reload, and confirm the level remains functional.
-    - Use Town Square's Return Home portal, arrive in Artisans, then re-enter Stone Hill.
-    - Optionally return to the title screen and let the demo cycle once; it should run Doctor Shemp.
-
-    ## Report immediately
-
-    Record the last visible frame and whether music continued if there is a black screen,
-    freeze, crash, missing actor, wrong collision, repeated cutscene, or broken Return Home.
-    """);
+    Require(report.RootElement.GetProperty("status").GetString() ==
+            "runtime-proven-profile-guarded" &&
+        report.RootElement.GetProperty("runtimeClaim").GetBoolean() &&
+        report.RootElement.GetProperty("profileId").GetString() == result.Plan.ProfileId &&
+        report.RootElement.GetProperty("expectedOutputImageSha256").GetString() ==
+            result.OutputImageSha256,
+        "The generated static-proof report did not record the exact promoted profile/output.");
+}
+Require((await File.ReadAllTextAsync(artifact.RuntimeChecklistPath))
+        .Contains("Doctor Shemp is the expected safety reroute", StringComparison.Ordinal),
+    "The generated regression checklist did not record the proven title-demo behavior.");
 
 Console.WriteLine("PASS: complete Town Square overlay/data pair installed in the Stone Hill retail slot.");
 Console.WriteLine($"CUE: {result.OutputCuePath}");
 Console.WriteLine($"BIN: {result.OutputImagePath}");
-Console.WriteLine($"Checklist: {checklistPath}");
-Console.WriteLine($"Static proof: {reportPath}");
+Console.WriteLine($"Checklist: {artifact.RuntimeChecklistPath}");
+Console.WriteLine($"Static proof: {artifact.StaticProofPath}");
 Console.WriteLine(
     $"Changed logical bytes: WAD {result.ChangedWadBytes:N0}, SCUS {result.ChangedExecutableBytes:N0}; " +
     $"rebuilt raw sectors: {result.RebuiltRawSectorCount:N0}.");
@@ -147,4 +141,18 @@ static void Require(bool condition, string message)
 {
     if (!condition)
         throw new InvalidOperationException(message);
+}
+
+static async Task ExpectFailureAsync(Func<Task> action, string message)
+{
+    try
+    {
+        await action();
+    }
+    catch (Exception exception) when (
+        exception is InvalidOperationException or InvalidDataException or ArgumentException)
+    {
+        return;
+    }
+    throw new InvalidOperationException(message);
 }

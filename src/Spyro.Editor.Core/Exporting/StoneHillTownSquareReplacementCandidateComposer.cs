@@ -9,6 +9,7 @@ namespace Spyro.Editor.Core.Exporting;
 
 public sealed record StoneHillTownSquareReplacementCandidateRequest(
     NativeLevelReplacementManifest Manifest,
+    NativeLevelReplacementIntent Intent,
     LevelCatalog Catalog,
     string SourceImagePath,
     string SourceCuePath,
@@ -32,6 +33,11 @@ public sealed record StoneHillTownSquareReplacementSafetyReport(
 
 public sealed record StoneHillTownSquareReplacementCandidatePlan(
     DateTimeOffset GeneratedAtUtc,
+    string ProfileId,
+    int ProfileRecipeVersion,
+    NativeLevelReplacementEvidenceStatus Evidence,
+    string EvidenceId,
+    string ExpectedOutputImageSha256,
     string TargetLevelKey,
     string DonorLevelKey,
     NativeWadEntryPreimage TargetOverlayBefore,
@@ -66,9 +72,9 @@ public sealed record StoneHillTownSquareReplacementCandidateResult(
     bool AtomicRenameCompleted);
 
 /// <summary>
-/// Disposable V5 research compiler: installs the complete retail Town Square overlay/data pair
-/// in Stone Hill's existing slot. It does not participate in normal Create BIN and cannot be
-/// promoted without DuckStation evidence.
+/// Guarded V5 research compiler: installs the complete retail Town Square overlay/data pair
+/// in Stone Hill's existing slot. It does not participate in normal V4 Create BIN and accepts
+/// only a separately persisted intent that resolves to the exact runtime-proven code-owned profile.
 /// </summary>
 public static class StoneHillTownSquareReplacementCandidateComposer
 {
@@ -104,24 +110,10 @@ public static class StoneHillTownSquareReplacementCandidateComposer
     private const long TargetReturnHome96WadOffset = 0xD65A70;
     private const long TargetReturnHome97WadOffset = 0xD65AC8;
 
-    private const string TargetOverlaySha256 =
-        "876c0145649bb5b26921858d4d677468463974901dcc416dcba5ccea25caa069";
-    private const string TargetDataSha256 =
-        "c341a3a10a67590c69d23547f6ad147f05f0b6fb7d0fb1360d572793276e796b";
-    private const string DonorOverlaySha256 =
-        "9bc923cc8d27703537b81b01f51fde351e58aabee87d38a8afc630f1031878a5";
-    private const string DonorDataSha256 =
-        "7ddbf6d9a6ee6c0f64c8564a89e374ca0ca234ef608ec812aae68e8176de1dc0";
-    private const string PatchedWadHeaderSha256 =
-        "dcce03cf0af4be68ef5015b708dc0cad34bc18210107b9b0f21647a5bd545702";
-    private const string RetailExecutableSha256 =
-        "a533d75cab8afaae6107ec35a02a9a5fe979a92c7c955f9cf1ee50f693a1b998";
     private const string StoneDispatchSha256 =
         "7e394297f054d99c8bdc85d4289be3bc6cea35d10f2e101647a572749bcb613f";
     private const string TownDispatchSha256 =
         "fe4669229aedbbc8ff698d57a237327af36025aaeda0ff5cc2e1c806fd23e50b";
-    private const string PatchedExecutableSha256 =
-        "558d4f5f0f7dd482b035d5f5793bfc6cf886d9cdd218562f4cedd4b1effbfab9";
     private static readonly byte[] Demo0LevelIdBefore = UInt32Bytes(11);
     private static readonly byte[] Demo0LevelIdAfter = UInt32Bytes(24);
     private static readonly byte[] Demo0FrameCountBefore = UInt32Bytes(860);
@@ -244,6 +236,14 @@ public static class StoneHillTownSquareReplacementCandidateComposer
 
             NativeLevelReplacementBaselineExporter.ValidateCue(outputCue, outputImage, "MODE2/2352");
             string outputSha256 = await HashFileAsync(outputImage, cancellationToken);
+            if (!NativeLevelReplacementProfile.ShaEquals(
+                    outputSha256,
+                    prepared.Profile.OutputImageSha256))
+            {
+                throw new InvalidDataException(
+                    $"The exported replacement SHA-256 is {outputSha256}, expected the exact " +
+                    $"runtime-proven output {prepared.Profile.OutputImageSha256}.");
+            }
             string sourceSha256After = await HashFileAsync(sourceImage, cancellationToken);
             bool sourcePreserved = string.Equals(
                 sourceSha256After,
@@ -311,19 +311,30 @@ public static class StoneHillTownSquareReplacementCandidateComposer
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.Manifest);
+        ArgumentNullException.ThrowIfNull(request.Intent);
         ArgumentNullException.ThrowIfNull(request.Catalog);
+        NativeLevelReplacementProfile profile = NativeLevelReplacementIntentStore.Validate(
+            request.Intent,
+            request.Manifest,
+            request.Catalog);
+        RequireComposerRecipe(profile);
         NativeLevelReplacementSourceBinding sourceBinding =
             await NativeLevelReplacementStore.ValidateSourceAsync(
                 request.Manifest,
                 request.SourceImagePath,
                 request.Catalog,
                 cancellationToken);
+        string sourceImage = Path.GetFullPath(request.SourceImagePath);
+        string sourceCue = Path.GetFullPath(request.SourceCuePath);
+        NativeLevelReplacementBaselineExporter.ValidateCue(
+            sourceCue,
+            sourceImage,
+            "MODE2/2352");
         LevelDefinition townSquare = request.Catalog.FindByKey("townsquare")
             ?? throw new InvalidDataException("Town Square is missing from the retail level catalog.");
         if (townSquare.LevelId != 13 || townSquare.SourceWadEntry != DonorDataEntryIndex)
             throw new InvalidDataException("Town Square no longer resolves to retail level 13 / WAD entry 16.");
 
-        string sourceImage = Path.GetFullPath(request.SourceImagePath);
         DiscLayout layout = DiscImage.DetectLayout(sourceImage);
         await using FileStream source = new(sourceImage, FileMode.Open, FileAccess.Read, FileShare.Read);
         DiscFileRecord wad = DiscImage.FindRootFileRecord(source, layout, name =>
@@ -345,13 +356,13 @@ public static class StoneHillTownSquareReplacementCandidateComposer
         NativeWadEntryPreimage donorData = ReadEntry(
             source, layout, wad, wadHeader, DonorDataEntryIndex, cancellationToken);
         RequireEntry(targetOverlay, ExpectedTargetOverlayOffset, ExpectedTargetOverlayByteLength,
-            TargetOverlaySha256, "Stone Hill overlay");
+            profile.TargetOverlay.Sha256, "Stone Hill overlay");
         RequireEntry(targetData, ExpectedTargetDataOffset, ExpectedTargetDataByteLength,
-            TargetDataSha256, "Stone Hill data");
+            profile.TargetData.Sha256, "Stone Hill data");
         RequireEntry(donorOverlay, ExpectedDonorOverlayOffset, ExpectedDonorOverlayByteLength,
-            DonorOverlaySha256, "Town Square overlay");
+            profile.DonorOverlay.Sha256, "Town Square overlay");
         RequireEntry(donorData, ExpectedDonorDataOffset, ExpectedDonorDataByteLength,
-            DonorDataSha256, "Town Square data");
+            profile.DonorData.Sha256, "Town Square data");
         if (targetOverlay != sourceBinding.LoadedDataPredecessorEntry ||
             targetData != sourceBinding.LevelDataEntry)
             throw new InvalidDataException("The manifest's Stone Hill overlay/data preimages changed.");
@@ -376,11 +387,11 @@ public static class StoneHillTownSquareReplacementCandidateComposer
         BinaryPrimitives.WriteUInt32LittleEndian(
             outputWadHeader.AsSpan((TargetDataEntryIndex * 8) + 4, 4),
             (uint)donorData.ByteLength);
-        RequireHash(outputWadHeader, PatchedWadHeaderSha256, "replacement WAD header");
+        RequireHash(outputWadHeader, profile.OutputWadHeaderSha256, "replacement WAD header");
 
         byte[] executableBytes = DiscImage.ReadFileBytes(
             source, layout, executable.Lba, 0, executable.Size);
-        RequireHash(executableBytes, RetailExecutableSha256, "retail executable");
+        RequireHash(executableBytes, profile.SourceExecutableSha256, "retail executable");
         byte[] stoneDispatch = executableBytes.AsSpan((int)StoneDispatchFileOffset, DispatchByteLength).ToArray();
         byte[] townDispatch = executableBytes.AsSpan((int)TownDispatchFileOffset, DispatchByteLength).ToArray();
         RequireHash(stoneDispatch, StoneDispatchSha256, "Stone Hill overlay dispatch routine");
@@ -393,7 +404,7 @@ public static class StoneHillTownSquareReplacementCandidateComposer
         Demo0LevelIdAfter.CopyTo(patchedExecutable, (int)Demo0LevelIdFileOffset);
         Demo0FrameCountAfter.CopyTo(patchedExecutable, (int)Demo0FrameCountFileOffset);
         Demo0StartPoseAfter.CopyTo(patchedExecutable, (int)Demo0StartPoseFileOffset);
-        RequireHash(patchedExecutable, PatchedExecutableSha256, "replacement executable");
+        RequireHash(patchedExecutable, profile.OutputExecutableSha256, "replacement executable");
 
         IReadOnlyList<NativeNestedSubfilePreimage> donorSubfiles = ParseNestedSubfiles(donorDataBytes);
         if (donorSubfiles.Count != 8)
@@ -423,7 +434,7 @@ public static class StoneHillTownSquareReplacementCandidateComposer
                 Demo0StartPoseBefore, Demo0StartPoseAfter)
         ];
         StoneHillTownSquareReplacementSafetyReport safety = new(
-            "static-readback-passed-runtime-pending",
+            "runtime-proven-profile-guarded",
             WritableScopes:
             [
                 "Stone Hill WAD entries 11/12 payload bytes within their original fixed capacities",
@@ -447,25 +458,31 @@ public static class StoneHillTownSquareReplacementCandidateComposer
                 "Use a fresh save/disposable memory card while slot-11 progression behavior is under test",
                 "Allow the title demo cycle once; demo slot 0 should now use the native Doctor Shemp demo instead of reading beyond Town Square data"
             ],
-            RequiresDuckStationRuntimeProof: true);
+            RequiresDuckStationRuntimeProof: false);
         StoneHillTownSquareReplacementCandidatePlan plan = new(
             DateTimeOffset.UtcNow,
-            "stonehill",
-            "townsquare",
+            profile.Id,
+            profile.RecipeVersion,
+            profile.Evidence,
+            profile.EvidenceId,
+            profile.OutputImageSha256,
+            profile.NormalizedTargetLevelKey,
+            profile.NormalizedDonorLevelKey,
             targetOverlay,
             targetData,
             donorOverlay,
             donorData,
             outputOverlay.Length,
             donorDataBytes.Length,
-            DonorOverlaySha256,
+            profile.OutputTargetOverlaySha256,
             Hash(donorDataBytes),
             Hash(outputWadHeader),
-            PatchedExecutableSha256,
+            profile.OutputExecutableSha256,
             donorSubfiles,
             patches,
             safety);
         return new PreparedCandidate(
+            profile,
             plan,
             targetOverlay,
             targetData,
@@ -504,21 +521,21 @@ public static class StoneHillTownSquareReplacementCandidateComposer
 
         RequireHash(
             DiscImage.ReadFileBytes(output, outputLayout, outputWad.Lba, 0, WadHeaderByteLength),
-            PatchedWadHeaderSha256,
+            prepared.Profile.OutputWadHeaderSha256,
             "output WAD header");
         RequireHash(
             DiscImage.ReadFileBytes(output, outputLayout, outputWad.Lba,
                 prepared.TargetOverlay.WadOffset, prepared.OutputOverlay.Length),
-            DonorOverlaySha256,
+            prepared.Profile.OutputTargetOverlaySha256,
             "output Stone Hill overlay slot");
         RequireHash(
             DiscImage.ReadFileBytes(output, outputLayout, outputWad.Lba,
                 prepared.TargetData.WadOffset, prepared.DonorDataBytes.Length),
-            DonorDataSha256,
+            prepared.Profile.OutputTargetDataSha256,
             "output Stone Hill data slot");
         RequireHash(
             DiscImage.ReadFileBytes(output, outputLayout, outputExe.Lba, 0, outputExe.Size),
-            PatchedExecutableSha256,
+            prepared.Profile.OutputExecutableSha256,
             "output executable");
 
         VerifyBytesEqual(
@@ -716,6 +733,41 @@ public static class StoneHillTownSquareReplacementCandidateComposer
             throw new InvalidDataException($"The {label} preimage changed.");
     }
 
+    private static void RequireComposerRecipe(NativeLevelReplacementProfile profile)
+    {
+        if (!string.Equals(
+                profile.Id,
+                NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillProfileId,
+                StringComparison.Ordinal) ||
+            profile.RecipeVersion != 1 ||
+            profile.TargetLevelId != 11 ||
+            profile.DonorLevelId != 13 ||
+            profile.TargetOverlay.DirectoryIndex != TargetOverlayEntryIndex ||
+            profile.TargetOverlay.WadOffset != ExpectedTargetOverlayOffset ||
+            profile.TargetOverlay.ByteLength != ExpectedTargetOverlayByteLength ||
+            profile.TargetOverlay.FirstWord != TargetOverlayMarker ||
+            profile.TargetData.DirectoryIndex != TargetDataEntryIndex ||
+            profile.TargetData.WadOffset != ExpectedTargetDataOffset ||
+            profile.TargetData.ByteLength != ExpectedTargetDataByteLength ||
+            profile.DonorOverlay.DirectoryIndex != DonorOverlayEntryIndex ||
+            profile.DonorOverlay.WadOffset != ExpectedDonorOverlayOffset ||
+            profile.DonorOverlay.ByteLength != ExpectedDonorOverlayByteLength ||
+            profile.DonorOverlay.FirstWord != DonorOverlayMarker ||
+            profile.DonorData.DirectoryIndex != DonorDataEntryIndex ||
+            profile.DonorData.WadOffset != ExpectedDonorDataOffset ||
+            profile.DonorData.ByteLength != ExpectedDonorDataByteLength ||
+            !NativeLevelReplacementProfile.ShaEquals(
+                profile.OutputTargetOverlaySha256,
+                profile.DonorOverlay.Sha256) ||
+            !NativeLevelReplacementProfile.ShaEquals(
+                profile.OutputTargetDataSha256,
+                profile.DonorData.Sha256))
+        {
+            throw new InvalidDataException(
+                $"Runtime-proven profile '{profile.Id}' does not match this exact complete-pair composer recipe.");
+        }
+    }
+
     private static void RequireHash(ReadOnlySpan<byte> bytes, string expected, string label)
     {
         string actual = Hash(bytes);
@@ -774,6 +826,7 @@ public static class StoneHillTownSquareReplacementCandidateComposer
     }
 
     private sealed record PreparedCandidate(
+        NativeLevelReplacementProfile Profile,
         StoneHillTownSquareReplacementCandidatePlan Plan,
         NativeWadEntryPreimage TargetOverlay,
         NativeWadEntryPreimage TargetData,
