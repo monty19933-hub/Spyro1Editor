@@ -36,14 +36,14 @@ try
         "The complete retail WAD directory preimage changed.");
     Require(manifest.Source.LevelMetadataEntry.DirectoryIndex == 9 &&
         manifest.Source.LevelMetadataEntry.FirstWord == 11,
-        "Stone Hill's unique level-ID metadata is not WAD entry 9 / level ID 11.");
+        "The preceding Artisans overlay is not WAD entry 9 / loader marker 11.");
     Require(manifest.Source.MetadataAdjacentEntry.DirectoryIndex == 10,
-        "Stone Hill's metadata-adjacent archive identity changed.");
+        "The preceding Artisans level-data archive identity changed.");
     Require(manifest.Source.LoadedDataPredecessorEntry.DirectoryIndex == 11 &&
         manifest.Source.LoadedDataPredecessorEntry.FirstWord == 12 &&
         manifest.Source.LoadedDataPredecessorEntry.Sha256 ==
             "876c0145649bb5b26921858d4d677468463974901dcc416dcba5ccea25caa069",
-        "The loaded data predecessor WAD entry 11 preimage changed.");
+        "Stone Hill's overlay WAD entry 11 preimage changed.");
     Require(manifest.Source.LevelDataEntry.DirectoryIndex == 12 &&
         manifest.Source.LevelDataEntry.WadOffset == 0xB93800 &&
         manifest.Source.LevelDataEntry.ByteLength == 0x362800 &&
@@ -63,6 +63,12 @@ try
             0x98800,
             "9224302f1bf19a5f10ffe07ec8b983c9b0be8579874d55ece19e5047bfe6ba2c"),
         "Stone Hill's native level-data subfile preimage changed.");
+    Require(manifest.Source.LevelDataSubfiles.Count == 8 &&
+        manifest.Source.LevelDataSubfiles.Select(subfile => subfile.SubfileIndex)
+            .SequenceEqual(Enumerable.Range(0, 8)) &&
+        manifest.Source.LevelDataSubfiles.Sum(subfile => subfile.ByteLength) ==
+            manifest.Source.LevelDataEntry.ByteLength - manifest.Source.NestedHeaderByteLength,
+        "Stone Hill's complete eight-subfile archive inventory changed.");
     Require(manifest.Source.SourceMobyTableSubfile.SubfileIndex == 3 &&
         manifest.Source.SourceMobyTableSubfile.RelativeOffset == 0x1DF000 &&
         manifest.Source.SourceMobyTableSubfile.ByteLength == 0xC000 &&
@@ -220,7 +226,7 @@ try
     Directory.CreateDirectory(malformedRoot);
     await File.WriteAllTextAsync(
         NativeLevelReplacementStore.GetPath(malformedRoot, "stonehill"),
-        "{\"format\":\"spyro-editor-native-level-replacement\",\"version\":1}");
+        "{\"format\":\"spyro-editor-native-level-replacement\",\"version\":2}");
     ExpectFailure(
         () => NativeLevelReplacementStore.Load(malformedRoot, "stonehill", catalog),
         "A malformed replacement manifest did not fail closed.");

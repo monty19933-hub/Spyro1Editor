@@ -63,9 +63,9 @@ public static class NativeLevelReplacementSafetyInspector
         IReadOnlyList<string> readOnlyScopes =
         [
             $"{manifest.Source.Executable.Name} complete executable (level dispatch, save, and progression tables)",
-            $"WAD entry {expected.MetadataWadDirectoryIndex} Stone Hill level-ID metadata/overlay package",
-            $"WAD entry {expected.MetadataAdjacentWadDirectoryIndex} metadata-adjacent archive (relationship unresolved)",
-            $"WAD entry {expected.LoadedDataPredecessorWadDirectoryIndex} loaded-entry predecessor package",
+            $"WAD entry {expected.MetadataWadDirectoryIndex} preceding Artisans overlay package",
+            $"WAD entry {expected.MetadataAdjacentWadDirectoryIndex} preceding Artisans level-data archive",
+            $"WAD entry {expected.LoadedDataPredecessorWadDirectoryIndex} Stone Hill overlay package",
             "Artisans Stone Hill portal controls T38/T144/T157",
             "Stone Hill Return Home platform/helper T177/T179",
             "Normal Create BIN and every V4 retail-offset writer"

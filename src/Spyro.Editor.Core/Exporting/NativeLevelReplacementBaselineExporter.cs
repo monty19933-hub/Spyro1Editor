@@ -174,7 +174,7 @@ public static class NativeLevelReplacementBaselineExporter
         }
     }
 
-    private static void EnsureDistinctRoles(
+    internal static void EnsureDistinctRoles(
         string sourceImage,
         string sourceCue,
         string outputImage,
@@ -194,7 +194,7 @@ public static class NativeLevelReplacementBaselineExporter
             throw new InvalidOperationException($"Stone Hill baseline file roles alias each other: {string.Join(", ", collision.Select(role => role.Label))}.");
     }
 
-    private static void ValidateCue(string cuePath, string expectedImagePath, string expectedMode)
+    internal static void ValidateCue(string cuePath, string expectedImagePath, string expectedMode)
     {
         FileInfo info = new(cuePath);
         if (!info.Exists || info.Length <= 0 || info.Length > MaximumCueBytes)

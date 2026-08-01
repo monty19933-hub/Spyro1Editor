@@ -85,22 +85,18 @@ public static class NativeLevelSlotLocator
 
         int descriptorTableByteLength = checked(descriptors.Count * 8);
         string descriptorTableSha256 = HashBytes(nestedHeader.AsSpan(0, descriptorTableByteLength));
-        NativeNestedSubfilePreimage levelDataSubfile = ReadSubfilePreimage(
-            image,
-            layout,
-            wad,
-            dataEntry,
-            descriptors,
-            slot.LevelDataSubfileIndex,
-            cancellationToken);
-        NativeNestedSubfilePreimage mobyTableSubfile = ReadSubfilePreimage(
-            image,
-            layout,
-            wad,
-            dataEntry,
-            descriptors,
-            slot.SourceMobyTableSubfileIndex,
-            cancellationToken);
+        IReadOnlyList<NativeNestedSubfilePreimage> levelDataSubfiles = descriptors
+            .Select(descriptor => ReadSubfilePreimage(
+                image,
+                layout,
+                wad,
+                dataEntry,
+                descriptors,
+                descriptor.Index,
+                cancellationToken))
+            .ToArray();
+        NativeNestedSubfilePreimage levelDataSubfile = levelDataSubfiles[slot.LevelDataSubfileIndex];
+        NativeNestedSubfilePreimage mobyTableSubfile = levelDataSubfiles[slot.SourceMobyTableSubfileIndex];
 
         if (dataEntry.WadOffset + slot.SourceMobyTableRelativeOffset != slot.SourceMobyTableWadOffset)
             throw new InvalidDataException("Stone Hill's absolute and entry-relative source Moby table offsets disagree.");
@@ -136,7 +132,9 @@ public static class NativeLevelSlotLocator
             cancellationToken);
 
         return new NativeLevelReplacementSourceBinding(
-            SourceImageBytes: sourceInfo.Length,
+            // FileInfo.Length reports the link object on some macOS filesystems. The open
+            // stream resolves the configured BIN symlink and is the authoritative image size.
+            SourceImageBytes: image.Length,
             SourceImageSha256: sourceSha256,
             DiscSectorSize: layout.SectorSize,
             DiscUserOffset: layout.UserOffset,
@@ -160,6 +158,7 @@ public static class NativeLevelSlotLocator
             NestedHeaderSha256: HashBytes(nestedHeader),
             NestedDescriptorTableByteLength: descriptorTableByteLength,
             NestedDescriptorTableSha256: descriptorTableSha256,
+            LevelDataSubfiles: levelDataSubfiles,
             LevelDataSubfile: levelDataSubfile,
             SourceMobyTableSubfile: mobyTableSubfile,
             SourceMobyTableByteLength: mobyTableByteLength,

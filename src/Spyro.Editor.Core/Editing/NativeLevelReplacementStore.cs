@@ -71,6 +71,7 @@ public sealed record NativeLevelReplacementSourceBinding(
     string NestedHeaderSha256,
     int NestedDescriptorTableByteLength,
     string NestedDescriptorTableSha256,
+    IReadOnlyList<NativeNestedSubfilePreimage> LevelDataSubfiles,
     NativeNestedSubfilePreimage LevelDataSubfile,
     NativeNestedSubfilePreimage SourceMobyTableSubfile,
     int SourceMobyTableByteLength,
@@ -91,7 +92,7 @@ public static class NativeLevelReplacementSupportCatalog
 {
     public const string ManifestFormat = "spyro-editor-native-level-replacement";
     public const string FirstTargetLevelKey = "stonehill";
-    public const int CurrentManifestVersion = 1;
+    public const int CurrentManifestVersion = 2;
     public const string SupportedUsaRetailSha256 =
         "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37";
     public const long SupportedUsaRetailBytes = 661_547_040;
@@ -361,7 +362,8 @@ public static class NativeLevelReplacementStore
     {
         if (source.Executable is null || source.Wad is null || source.LevelMetadataEntry is null ||
             source.MetadataAdjacentEntry is null || source.LoadedDataPredecessorEntry is null ||
-            source.LevelDataEntry is null || source.LevelDataSubfile is null ||
+            source.LevelDataEntry is null || source.LevelDataSubfiles is null ||
+            source.LevelDataSubfile is null ||
             source.SourceMobyTableSubfile is null || source.ArtisansPortalControlRows is null ||
             source.StoneHillReturnHomeRows is null)
             throw new InvalidDataException("The native level-replacement source binding is incomplete.");
@@ -370,6 +372,19 @@ public static class NativeLevelReplacementStore
             source.NestedDescriptorTableByteLength <= 0 || source.SourceMobyTableByteLength !=
             checked(slot.SourceMobyRecordCount * slot.SourceMobyRecordStride))
             throw new InvalidDataException("The native level-replacement source dimensions are invalid.");
+
+        if (source.LevelDataSubfiles.Count != 8 ||
+            !source.LevelDataSubfiles.Select(subfile => subfile.SubfileIndex)
+                .SequenceEqual(Enumerable.Range(0, 8)) ||
+            source.LevelDataSubfiles.Any(subfile =>
+                subfile.ByteLength <= 0 || subfile.RelativeOffset < source.NestedHeaderByteLength ||
+                !IsSha256(subfile.Sha256)) ||
+            source.LevelDataSubfiles[slot.LevelDataSubfileIndex] != source.LevelDataSubfile ||
+            source.LevelDataSubfiles[slot.SourceMobyTableSubfileIndex] != source.SourceMobyTableSubfile)
+        {
+            throw new InvalidDataException(
+                "The native level-replacement source does not bind all eight packed Stone Hill subfiles.");
+        }
 
         string[] hashes =
         [
@@ -398,9 +413,11 @@ public static class NativeLevelReplacementStore
         NativeLevelReplacementSourceBinding actual) =>
         expected with
         {
+            LevelDataSubfiles = actual.LevelDataSubfiles,
             ArtisansPortalControlRows = actual.ArtisansPortalControlRows,
             StoneHillReturnHomeRows = actual.StoneHillReturnHomeRows
         } == actual &&
+        expected.LevelDataSubfiles.SequenceEqual(actual.LevelDataSubfiles) &&
         expected.ArtisansPortalControlRows.SequenceEqual(actual.ArtisansPortalControlRows) &&
         expected.StoneHillReturnHomeRows.SequenceEqual(actual.StoneHillReturnHomeRows);
 
