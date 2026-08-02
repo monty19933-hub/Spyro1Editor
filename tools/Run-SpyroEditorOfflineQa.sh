@@ -127,9 +127,10 @@ Options:
 
   --stone-hill-town-square-edited-donor-candidate-smoke
       Build the pending-runtime V5 edited Town Square donor CUE from the exact
-      runtime-proven display-identity control. Moves only Town Square T21's X
-      coordinate, guards the rebased Stone Hill-slot byte, original donor data,
-      evidence files, and unsafe-patch rejection; launches no emulator.
+      runtime-proven display-identity control. Moves Town Square T21's X
+      coordinate with its genuine derived placement/culling-sector byte; guards
+      both rebased Stone Hill-slot writes, original donor data, evidence files,
+      determinism, and unsafe-patch rejection; launches no emulator.
 
   -h, --help
       Show this help.
@@ -224,10 +225,10 @@ if [[ "$STONEHILL_TOWNSQUARE_IDENTITY_CANDIDATE_SMOKE_ONLY" -eq 1 ]]; then
 fi
 
 if [[ "$STONEHILL_TOWNSQUARE_EDITED_DONOR_CANDIDATE_SMOKE_ONLY" -eq 1 ]]; then
-    echo "Building focused V5 edited Town Square donor candidate smoke..."
+    echo "Building focused V5 edited Town Square donor + placement-sector candidate smoke..."
     dotnet build "$STONEHILL_TOWNSQUARE_EDITED_DONOR_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
     echo
-    echo "Running focused V5 edited Town Square donor candidate smoke..."
+    echo "Running focused V5 edited Town Square donor + placement-sector candidate smoke..."
     dotnet run --project "$STONEHILL_TOWNSQUARE_EDITED_DONOR_SMOKE_PROJECT" --configuration "$CONFIGURATION" --no-build -- "$ROOT_DIR"
     exit 0
 fi

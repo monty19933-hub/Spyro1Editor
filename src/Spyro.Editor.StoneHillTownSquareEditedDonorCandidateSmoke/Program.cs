@@ -10,6 +10,8 @@ const int EditedTrueIndex = 21;
 const float EditedWorldXDelta = -128f;
 const long ExpectedDonorPatchWadOffset = 0x136E8B4;
 const long ExpectedTargetPatchWadOffset = 0xD640B4;
+const long ExpectedDonorPlacementPatchWadOffset = 0x136E8F2;
+const long ExpectedTargetPlacementPatchWadOffset = 0xD640F2;
 
 string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
 (string sourceImage, string sourceCue) = ResolveCleanSource(repositoryRoot, args);
@@ -56,13 +58,15 @@ Require(
         ParseHexOffset(patch.WadRelativeOffset) == ExpectedDonorPatchWadOffset) &&
     editorObjectPlan.Patches.Any(patch =>
         patch.Kind == "moby-placement-sector" &&
-        ParseHexOffset(patch.WadRelativeOffset) == 0x136E8F2),
+        ParseHexOffset(patch.WadRelativeOffset) == ExpectedDonorPlacementPatchWadOffset),
     "The genuine saved Town Square edit no longer produces its known X patch plus opportunistic placement-sector patch. " +
     $"patchCount={editorObjectPlan.PatchCount}, bytes={editorObjectPlan.TotalPatchedBytes}, " +
     $"patches=[{string.Join(", ", editorObjectPlan.Patches.Select(patch => $"{patch.Kind}@{patch.WadRelativeOffset}+{patch.ByteLength}"))}], " +
     $"skips=[{string.Join("; ", editorObjectPlan.SkippedEdits)}].");
 MobySourcePatch donorPatch = editorObjectPlan.Patches.Single(patch =>
     patch.Kind == "moby-position-x");
+MobySourcePatch placementPatch = editorObjectPlan.Patches.Single(patch =>
+    patch.Kind == "moby-placement-sector");
 Require(
     donorPatch.Kind == "moby-position-x" &&
     donorPatch.LevelKey == "townsquare" &&
@@ -73,6 +77,15 @@ Require(
     NormalizeHex(donorPatch.BeforeHexPreview) == "5CE80100" &&
     NormalizeHex(donorPatch.AfterHexPreview) == "5CE00100",
     "Town Square T21's X-only donor patch changed offset, kind, length, or exact bytes.");
+Require(
+    placementPatch.LevelKey == "townsquare" &&
+    placementPatch.TrueIndex == EditedTrueIndex &&
+    ParseHexOffset(placementPatch.WadRelativeOffset) == ExpectedDonorPlacementPatchWadOffset &&
+    placementPatch.RecordOffset == "0x4A" &&
+    placementPatch.ByteLength == 1 &&
+    NormalizeHex(placementPatch.BeforeHexPreview) == "FF" &&
+    NormalizeHex(placementPatch.AfterHexPreview) == "D5",
+    "Town Square T21's derived placement-sector patch changed offset, kind, length, or exact bytes.");
 MobySourceEditOutcome editorOutcome = editorObjectPlan.EditOutcomes?.Single()
     ?? throw new InvalidDataException("The genuine saved Town Square edit has no unique source outcome.");
 Require(
@@ -80,28 +93,10 @@ Require(
     editorOutcome.PatchKinds.Contains("moby-position-x", StringComparer.Ordinal) &&
     editorOutcome.PatchKinds.Contains("moby-placement-sector", StringComparer.Ordinal),
     "The genuine saved edit outcome no longer identifies both planned patch kinds.");
-// This first runtime gate deliberately tests only the editor-requested X word.
-// Normalize the disposable candidate plan, not the saved user edit: the general
-// exporter derives +0x4A opportunistically from the terrain cache, and that byte
-// needs its own relocation/runtime proof before it may join this checked gate.
-MobySourcePatchPlan objectPlan = editorObjectPlan with
-{
-    PatchCount = 1,
-    TotalPatchedBytes = donorPatch.ByteLength,
-    Patches = [donorPatch],
-    EditOutcomes =
-    [
-        editorOutcome with
-        {
-            PatchKinds = ["moby-position-x"]
-        }
-    ],
-    Notes =
-    [
-        .. editorObjectPlan.Notes,
-        "V5 edited-donor first gate preserved the genuine saved edit but excluded its opportunistic placement-sector derivation from this disposable candidate."
-    ]
-};
+// The second runtime gate consumes the genuine editor plan without filtering:
+// both the requested X word and the derived native placement/culling-sector byte
+// must relocate together and pass DuckStation before normal Create BIN can use it.
+MobySourcePatchPlan objectPlan = editorObjectPlan;
 
 (string identityImage, string identityCue) = await EnsureExactIdentityBaseAsync(
     repositoryRoot,
@@ -112,7 +107,7 @@ string identityHashBefore = await HashFileAsync(identityImage);
 string retailHashBefore = await HashFileAsync(sourceImage);
 string outputPrefix = Path.Combine(
     outputRoot,
-    "Stone-Hill-slot-Town-Square-edited-T21-X-RUNTIME-CANDIDATE");
+    "Stone-Hill-slot-Town-Square-edited-T21-X-and-placement-sector-RUNTIME-CANDIDATE");
 StoneHillTownSquareEditedDonorCandidateRequest request = new(
     identityImage,
     identityCue,
@@ -130,19 +125,20 @@ MobySourcePatch extraPatch = donorPatch with
 };
 MobySourcePatchPlan extraPatchPlan = objectPlan with
 {
-    PatchCount = 2,
-    TotalPatchedBytes = 8,
-    Patches = [donorPatch, extraPatch]
+    PatchCount = 3,
+    TotalPatchedBytes = 9,
+    Patches = [donorPatch, placementPatch, extraPatch]
 };
 await ExpectFailureAsync(
     () => StoneHillTownSquareEditedDonorCandidateComposer.BuildPlanAsync(
         request with { MobyPatchPlan = extraPatchPlan }),
-    "An extra Town Square source patch passed the edited-donor first gate.");
+    "An extra Town Square source patch passed the edited-donor placement-sector gate.");
 MobySourcePatchPlan outsideDonorPlan = objectPlan with
 {
     Patches =
     [
-        donorPatch with
+        donorPatch,
+        placementPatch with
         {
             WadRelativeOffset = "0x118E800"
         }
@@ -151,16 +147,16 @@ MobySourcePatchPlan outsideDonorPlan = objectPlan with
 await ExpectFailureAsync(
     () => StoneHillTownSquareEditedDonorCandidateComposer.BuildPlanAsync(
         request with { MobyPatchPlan = outsideDonorPlan }),
-    "A patch outside the checked donor data/record offset passed the edited-donor first gate.");
+    "A patch outside the checked donor data/record offset passed the edited-donor placement-sector gate.");
 
 StoneHillTownSquareEditedDonorCandidatePlan plan =
     await StoneHillTownSquareEditedDonorCandidateComposer.BuildPlanAsync(request);
 Require(
-    plan.RecipeId == StoneHillTownSquareEditedDonorCandidateComposer.RecipeId &&
-    plan.RecipeVersion == StoneHillTownSquareEditedDonorCandidateComposer.RecipeVersion &&
+    plan.RecipeId == StoneHillTownSquareEditedDonorCandidateComposer.PlacementRecipeId &&
+    plan.RecipeVersion == StoneHillTownSquareEditedDonorCandidateComposer.PlacementRecipeVersion &&
     plan.Evidence == NativeLevelReplacementEvidenceStatus.StaticBaselineOnly &&
-    plan.EvidenceId == StoneHillTownSquareEditedDonorCandidateComposer.EvidenceId &&
-    plan.Safety.Status == StoneHillTownSquareEditedDonorCandidateComposer.Status &&
+    plan.EvidenceId == StoneHillTownSquareEditedDonorCandidateComposer.PlacementEvidenceId &&
+    plan.Safety.Status == StoneHillTownSquareEditedDonorCandidateComposer.PlacementStatus &&
     plan.Safety.RequiresDuckStationRuntimeProof &&
     plan.BaseImageSha256 == identityHashBefore &&
     plan.RetailSourceImageSha256 == retailHashBefore,
@@ -177,6 +173,20 @@ Require(
     IsSha256(plan.Patch.AfterSha256) &&
     plan.Patch.BeforeSha256 != plan.Patch.AfterSha256,
     "The checked donor-to-target rebase or exact T21 X byte contract changed.");
+StoneHillTownSquareEditedDonorPatchSummary plannedPlacement = plan.PlacementPatch
+    ?? throw new InvalidDataException("The placement-sector plan omitted its second logical patch.");
+Require(
+    plannedPlacement.Kind == "moby-placement-sector" &&
+    plannedPlacement.TrueIndex == EditedTrueIndex &&
+    plannedPlacement.DonorWadOffset == ExpectedDonorPlacementPatchWadOffset &&
+    plannedPlacement.TargetWadOffset == ExpectedTargetPlacementPatchWadOffset &&
+    plannedPlacement.ByteLength == 1 &&
+    plannedPlacement.BeforeHex == "FF" &&
+    plannedPlacement.AfterHex == "D5" &&
+    IsSha256(plannedPlacement.BeforeSha256) &&
+    IsSha256(plannedPlacement.AfterSha256) &&
+    plannedPlacement.BeforeSha256 != plannedPlacement.AfterSha256,
+    "The checked donor-to-target rebase or exact T21 placement-sector byte contract changed.");
 
 string expectedProofPath = outputPrefix + "-static-proof.json";
 string expectedChecklistPath = outputPrefix + "-runtime-checklist.md";
@@ -185,27 +195,17 @@ await File.WriteAllTextAsync(expectedChecklistPath, "stale interrupted sidecar")
 StoneHillTownSquareEditedDonorArtifactResult artifact =
     await StoneHillTownSquareEditedDonorArtifactWriter.ExportAsync(request);
 StoneHillTownSquareEditedDonorCandidateResult result = artifact.Candidate;
-await File.AppendAllTextAsync(
-    artifact.RuntimeChecklistPath,
-    """
-
-    ## Exact staged movement
-
-    - Town Square T21 Red Gem original X: `7813.75` (raw `125020`, `5C E8 01 00`).
-    - Town Square T21 Red Gem edited X: `7685.75` (raw `122972`, `5C E0 01 00`).
-    - Expected visible movement: 128 world units toward negative X.
-    - Native placement/culling sector byte at record `+0x4A` is intentionally unchanged in this first gate. The genuine saved editor edit also proposed a derived sector patch; the disposable candidate normalized only that derived patch away without altering the saved edit.
-    """);
 Require(
     result.Plan.RecipeId == plan.RecipeId &&
     result.Plan.RecipeVersion == plan.RecipeVersion &&
-    result.Plan.Patch == plan.Patch,
+    result.Plan.Patch == plan.Patch &&
+    result.Plan.PlacementPatch == plan.PlacementPatch,
     "The exported edited-donor candidate did not retain the checked plan recipe.");
 Require(
     result.OutputImageSha256 != identityHashBefore &&
     IsSha256(result.OutputImageSha256) &&
-    result.ChangedLogicalWadBytes == 1 &&
-    result.ChangedPhysicalImageBytes > result.ChangedLogicalWadBytes &&
+    result.ChangedLogicalWadBytes == 2 &&
+    result.ChangedPhysicalImageBytes == 40 &&
     result.RebuiltRawSectorCount == 1 &&
     result.ExactLogicalDiffBoundaryVerified &&
     result.ExactPhysicalSectorBoundaryVerified &&
@@ -213,7 +213,8 @@ Require(
     result.DisplayIdentityExecutablePreserved &&
     result.BaseImagePreserved &&
     result.RetailSourcePreserved &&
-    result.BinCuePublishCompleted,
+    result.BinCuePublishCompleted &&
+    result.PlacementSectorReadbackVerified,
     "The final edited-donor candidate omitted an exact diff, source, donor, SCUS, sector, or publication proof.");
 Require(
     artifact.StaticProofPath == expectedProofPath &&
@@ -227,11 +228,15 @@ using (JsonDocument proof = JsonDocument.Parse(await File.ReadAllTextAsync(artif
 {
     Require(
         proof.RootElement.GetProperty("status").GetString() ==
-            StoneHillTownSquareEditedDonorCandidateComposer.Status &&
+            StoneHillTownSquareEditedDonorCandidateComposer.PlacementStatus &&
         !proof.RootElement.GetProperty("runtimeClaim").GetBoolean() &&
         proof.RootElement.GetProperty("requiresDuckStationRuntimeProof").GetBoolean() &&
         proof.RootElement.GetProperty("evidenceId").GetString() == plan.EvidenceId &&
-        proof.RootElement.GetProperty("outputImageSha256").GetString() == result.OutputImageSha256,
+        proof.RootElement.GetProperty("outputImageSha256").GetString() == result.OutputImageSha256 &&
+        proof.RootElement.GetProperty("changedLogicalWadBytes").GetInt64() == 2 &&
+        proof.RootElement.GetProperty("changedPhysicalImageBytes").GetInt64() == 40 &&
+        proof.RootElement.GetProperty("rebuiltRawSectorCount").GetInt32() == 1 &&
+        proof.RootElement.GetProperty("placementSectorReadbackVerified").GetBoolean(),
         "The edited-donor static proof omitted its exact pending-runtime boundary or final hash.");
 }
 string checklist = await File.ReadAllTextAsync(artifact.RuntimeChecklistPath);
@@ -239,10 +244,10 @@ Require(
     checklist.Contains(result.OutputImageSha256, StringComparison.Ordinal) &&
     checklist.Contains("not runtime proof", StringComparison.OrdinalIgnoreCase) &&
     checklist.Contains("T21", StringComparison.Ordinal) &&
-    checklist.Contains("7813.75", StringComparison.Ordinal) &&
-    checklist.Contains("7685.75", StringComparison.Ordinal) &&
+    checklist.Contains("X position changed", StringComparison.OrdinalIgnoreCase) &&
     checklist.Contains("placement/culling sector", StringComparison.OrdinalIgnoreCase) &&
-    checklist.Contains("intentionally unchanged", StringComparison.OrdinalIgnoreCase) &&
+    checklist.Contains("FF", StringComparison.Ordinal) &&
+    checklist.Contains("D5", StringComparison.Ordinal) &&
     checklist.Contains("original retail Town Square", StringComparison.Ordinal),
     "The edited-donor checklist omitted the exact candidate, actor, runtime boundary, or donor-isolation checks.");
 Require(
@@ -265,7 +270,8 @@ try
     Require(
         deterministic.OutputImageSha256 == result.OutputImageSha256 &&
         deterministic.ChangedLogicalWadBytes == result.ChangedLogicalWadBytes &&
-        deterministic.ChangedPhysicalImageBytes == result.ChangedPhysicalImageBytes,
+        deterministic.ChangedPhysicalImageBytes == result.ChangedPhysicalImageBytes &&
+        deterministic.PlacementSectorReadbackVerified,
         "A second edited-donor export was not byte-deterministic.");
 }
 finally
@@ -274,16 +280,18 @@ finally
     DeleteIfExists(determinismPrefix + ".cue");
 }
 
-Console.WriteLine("PASS: deterministic Town Square T21 X-only edit was rebased into the Stone Hill replacement slot.");
+Console.WriteLine("PASS: deterministic Town Square T21 X + derived placement-sector edit was rebased into the Stone Hill replacement slot.");
 Console.WriteLine($"CUE: {result.OutputCuePath}");
 Console.WriteLine($"BIN: {result.OutputImagePath}");
 Console.WriteLine($"BIN SHA-256: {result.OutputImageSha256}");
 Console.WriteLine($"Checklist: {artifact.RuntimeChecklistPath}");
 Console.WriteLine($"Static proof: {artifact.StaticProofPath}");
 Console.WriteLine($"Native edit: {editPath}");
-Console.WriteLine("T21 X: 7813.75 -> 7685.75 (raw 125020 -> 122972); native +0x4A preserved.");
+Console.WriteLine("T21 X: 7813.75 -> 7685.75 (raw 125020 -> 122972); native +0x4A: FF -> D5.");
 Console.WriteLine($"Donor WAD offset: 0x{ExpectedDonorPatchWadOffset:X}");
 Console.WriteLine($"Expected Stone Hill-slot WAD offset: 0x{ExpectedTargetPatchWadOffset:X}");
+Console.WriteLine($"Placement donor WAD offset: 0x{ExpectedDonorPlacementPatchWadOffset:X}");
+Console.WriteLine($"Placement Stone Hill-slot WAD offset: 0x{ExpectedTargetPlacementPatchWadOffset:X}");
 
 static async Task<(string ImagePath, string CuePath)> EnsureExactIdentityBaseAsync(
     string repositoryRoot,
