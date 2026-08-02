@@ -83,13 +83,20 @@ StoneHillTownSquareIdentityCandidatePlan plan =
     await StoneHillTownSquareIdentityCandidateComposer.BuildPlanAsync(request);
 Require(
     plan.RecipeId == StoneHillTownSquareIdentityCandidateComposer.RecipeId &&
+    plan.RecipeId ==
+        NativeLevelReplacementIdentityProfileRegistry.TownSquareDisplayIdentityProfileId &&
     plan.RecipeVersion == StoneHillTownSquareIdentityCandidateComposer.RecipeVersion &&
     plan.BaseProfileId == NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillProfileId &&
-    plan.Evidence == NativeLevelReplacementEvidenceStatus.StaticBaselineOnly &&
+    plan.Evidence == NativeLevelReplacementEvidenceStatus.RuntimeProven &&
+    plan.EvidenceId ==
+        NativeLevelReplacementIdentityProfileRegistry.TownSquareDisplayIdentityEvidenceId &&
+    !string.IsNullOrWhiteSpace(plan.EvidenceSummary) &&
     plan.BaseImageSha256 == NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillOutputImageSha256 &&
+    plan.ExpectedOutputImageSha256 ==
+        NativeLevelReplacementIdentityProfileRegistry.TownSquareDisplayIdentityOutputImageSha256 &&
     plan.BaseExecutableSha256 == "558d4f5f0f7dd482b035d5f5793bfc6cf886d9cdd218562f4cedd4b1effbfab9" &&
     plan.OutputExecutableSha256 == "b17fd7679d586562ef325813b7c469aff58430f5200633f64b8e6900409e3304",
-    "The identity plan was not bound to the exact pending-runtime recipe and proven base.");
+    "The identity plan was not bound to the exact runtime-proven profile, evidence, and base.");
 Require(
     plan.NamePointerTableFileOffset == 0x5FFF0 &&
     plan.StoneHillNamePointerFileOffset == 0x5FFF4 &&
@@ -107,9 +114,32 @@ Require(
     plan.Patches[0].Kind == "alias-stone-hill-level-name-to-town-square" &&
     plan.Patches[0].LogicalOffset == 0x5FFF4 &&
     plan.Patches[0].ByteLength == 4 &&
-    plan.Safety.Status == "runtime-candidate-pending-duckstation" &&
-    plan.Safety.RequiresDuckStationRuntimeProof,
-    "The identity plan is no longer exactly one pending-runtime SCUS pointer patch.");
+    plan.Safety.Status == "runtime-proven-identity-profile-guarded" &&
+    !plan.Safety.RequiresDuckStationRuntimeProof,
+    "The identity plan is no longer exactly one guarded runtime-proven SCUS pointer patch.");
+
+string recordedEvidencePath = Path.Combine(
+    repositoryRoot,
+    "docs",
+    "runtime-evidence",
+    "stonehill-townsquare-display-identity-2026-08-01.json");
+Require(File.Exists(recordedEvidencePath), "The checked runtime-evidence record is missing.");
+using (JsonDocument evidence = JsonDocument.Parse(await File.ReadAllTextAsync(recordedEvidencePath)))
+{
+    JsonElement root = evidence.RootElement;
+    JsonElement boundary = root.GetProperty("patchBoundary");
+    Require(
+        root.GetProperty("evidenceId").GetString() == plan.EvidenceId &&
+        root.GetProperty("profileId").GetString() == plan.RecipeId &&
+        root.GetProperty("baseProfileId").GetString() == plan.BaseProfileId &&
+        root.GetProperty("baseOutputImageSha256").GetString() == plan.BaseImageSha256 &&
+        root.GetProperty("outputImageSha256").GetString() == plan.ExpectedOutputImageSha256 &&
+        !root.GetProperty("automatedEmulatorCapture").GetBoolean() &&
+        boundary.GetProperty("changedLogicalBytes").GetInt64() == 1 &&
+        boundary.GetProperty("changedPhysicalBytes").GetInt64() == 31 &&
+        boundary.GetProperty("rebuiltRawSectors").GetInt32() == 1,
+        "The durable runtime-evidence record drifted from the checked profile or diff boundary.");
+}
 
 string expectedProofPath = outputPrefix + "-static-proof.json";
 string expectedChecklistPath = outputPrefix + "-runtime-checklist.md";
@@ -149,29 +179,37 @@ using (JsonDocument report = JsonDocument.Parse(await File.ReadAllTextAsync(arti
 {
     Require(
         report.RootElement.GetProperty("status").GetString() ==
-            "runtime-candidate-pending-duckstation" &&
-        !report.RootElement.GetProperty("runtimeClaim").GetBoolean() &&
-        report.RootElement.GetProperty("requiresDuckStationRuntimeProof").GetBoolean() &&
+            "runtime-proven-identity-profile-guarded" &&
+        report.RootElement.GetProperty("runtimeClaim").GetBoolean() &&
+        !report.RootElement.GetProperty("requiresDuckStationRuntimeProof").GetBoolean() &&
         report.RootElement.GetProperty("evidencePublication").GetString() ==
             "derived-regenerable-sidecars" &&
+        report.RootElement.GetProperty("evidenceId").GetString() ==
+            NativeLevelReplacementIdentityProfileRegistry.TownSquareDisplayIdentityEvidenceId &&
+        report.RootElement.GetProperty("evidenceSummary").GetString() == plan.EvidenceSummary &&
         report.RootElement.GetProperty("outputImageSha256").GetString() == result.OutputImageSha256,
-        "The static-proof report made an invalid runtime claim or omitted the final hash.");
+        "The evidence report omitted the exact runtime claim, evidence binding, or final hash.");
 }
 string checklist = await File.ReadAllTextAsync(artifact.RuntimeChecklistPath);
 Require(
+    checklist.Contains("runtime-proven", StringComparison.OrdinalIgnoreCase) &&
+    checklist.Contains(
+        NativeLevelReplacementIdentityProfileRegistry.TownSquareDisplayIdentityEvidenceId,
+        StringComparison.Ordinal) &&
     checklist.Contains("0/200 gems", StringComparison.Ordinal) &&
     checklist.Contains("0/4 dragons", StringComparison.Ordinal) &&
     checklist.Contains("0/1 egg", StringComparison.Ordinal) &&
     checklist.Contains("original Town Square portal", StringComparison.Ordinal) &&
     checklist.Contains("Music remains Stone Hill", StringComparison.Ordinal),
-    "The runtime checklist omitted identity, progress-isolation, or known-unchanged checks.");
+    "The runtime-proven checklist omitted evidence, identity, progress-isolation, or known-unchanged checks.");
 
-Console.WriteLine("PASS: pending-runtime Town Square display identity candidate built from the exact proven base.");
+Console.WriteLine("PASS: exact Town Square display identity profile is recorded as runtime-proven.");
 Console.WriteLine($"CUE: {result.OutputCuePath}");
 Console.WriteLine($"BIN: {result.OutputImagePath}");
 Console.WriteLine($"BIN SHA-256: {result.OutputImageSha256}");
+Console.WriteLine($"Evidence: {plan.EvidenceId}");
 Console.WriteLine($"Checklist: {artifact.RuntimeChecklistPath}");
-Console.WriteLine($"Static proof: {artifact.StaticProofPath}");
+Console.WriteLine($"Evidence report: {artifact.StaticProofPath}");
 Console.WriteLine(
     $"Changed logical SCUS bytes: {result.ChangedLogicalExecutableBytes}; " +
     $"changed physical raw-sector bytes: {result.ChangedPhysicalImageBytes}; " +

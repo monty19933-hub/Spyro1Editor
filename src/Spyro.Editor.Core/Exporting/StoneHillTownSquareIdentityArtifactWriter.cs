@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Spyro.Editor.Core.Editing;
 
 namespace Spyro.Editor.Core.Exporting;
 
@@ -10,10 +11,10 @@ public sealed record StoneHillTownSquareIdentityArtifactResult(
     string RuntimeChecklistPath);
 
 /// <summary>
-/// Publishes the name-identity experiment and regenerable static evidence sidecars.
-/// Runtime evidence is deliberately never written by this class; it remains pending
-/// until DuckStation. Each file is replaced safely, while the final verification below
-/// detects incomplete or stale sidecars so the focused runner can regenerate them.
+/// Publishes the exact runtime-proven name-identity artifact and regenerable evidence
+/// sidecars. The runtime claim is permitted only for the pinned recipe and output hash.
+/// Each file is replaced safely, while the final verification below detects incomplete
+/// or stale sidecars so the focused runner can regenerate them.
 /// </summary>
 public static class StoneHillTownSquareIdentityArtifactWriter
 {
@@ -33,6 +34,7 @@ public static class StoneHillTownSquareIdentityArtifactWriter
             await StoneHillTownSquareIdentityCandidateComposer.ExportAsync(
                 request,
                 cancellationToken);
+        ValidateRuntimeProvenResult(result);
         string outputImage = Path.GetFullPath(result.OutputImagePath);
         string outputPrefix = Path.Combine(
             Path.GetDirectoryName(outputImage)!,
@@ -42,14 +44,16 @@ public static class StoneHillTownSquareIdentityArtifactWriter
 
         string report = JsonSerializer.Serialize(new
         {
-            status = "runtime-candidate-pending-duckstation",
-            runtimeClaim = false,
-            requiresDuckStationRuntimeProof = true,
+            status = "runtime-proven-identity-profile-guarded",
+            runtimeClaim = true,
+            requiresDuckStationRuntimeProof = false,
             evidencePublication = "derived-regenerable-sidecars",
             result.Plan.RecipeId,
             result.Plan.RecipeVersion,
             result.Plan.BaseProfileId,
             result.Plan.Evidence,
+            result.Plan.EvidenceId,
+            result.Plan.EvidenceSummary,
             result.Plan.BaseImageSha256,
             result.Plan.ExpectedOutputImageSha256,
             result.OutputImagePath,
@@ -68,16 +72,18 @@ public static class StoneHillTownSquareIdentityArtifactWriter
         }, JsonOptions);
         string checklist =
             $$"""
-            # V5 Town Square display-identity candidate — DuckStation checklist
+            # V5 Town Square display identity — regression checklist
 
             Recipe: `{{result.Plan.RecipeId}}`
+            Evidence: `{{result.Plan.EvidenceId}}`
             Base runtime-proven BIN SHA-256: `{{result.Plan.BaseImageSha256}}`
-            Candidate BIN SHA-256: `{{result.OutputImageSha256}}`
+            Exact proven BIN SHA-256: `{{result.OutputImageSha256}}`
 
-            This is a **pending-runtime disposable V5 research CUE**. It starts from the exact
-            already-proven Town-Square-in-Stone-Hill payload and changes only Stone Hill's indexed
-            level-name pointer. It does not change level ID 11, save ownership, completion totals,
-            music, the title-demo safety reroute, or the known transition-sky handoff.
+            This exact guarded V5 research artifact passed the complete interactive DuckStation
+            checklist on 2026-08-01. Recheck after any recipe, source-disc, emulator, or surrounding
+            edit change. The recipe changes only Stone Hill's indexed level-name pointer; it does not
+            change level ID 11, save ownership, completion totals, music, the title-demo safety
+            reroute, or the known transition-sky handoff.
 
             ## Start clean
 
@@ -124,6 +130,43 @@ public static class StoneHillTownSquareIdentityArtifactWriter
             checklistPath);
     }
 
+    private static void ValidateRuntimeProvenResult(
+        StoneHillTownSquareIdentityCandidateResult result)
+    {
+        NativeLevelReplacementIdentityProfile profile =
+            NativeLevelReplacementIdentityProfileRegistry.RequireRuntimeProven(
+                result.Plan.RecipeId);
+        if (result.Plan.RecipeVersion != profile.RecipeVersion ||
+            result.Plan.BaseProfileId != profile.BaseProfileId ||
+            result.Plan.Evidence != NativeLevelReplacementEvidenceStatus.RuntimeProven ||
+            result.Plan.EvidenceId != profile.EvidenceId ||
+            result.Plan.EvidenceSummary != profile.EvidenceSummary ||
+            !NativeLevelReplacementProfile.ShaEquals(
+                result.Plan.BaseImageSha256,
+                profile.BaseOutputImageSha256) ||
+            !NativeLevelReplacementProfile.ShaEquals(
+                result.Plan.ExpectedOutputImageSha256,
+                profile.OutputImageSha256) ||
+            !NativeLevelReplacementProfile.ShaEquals(
+                result.OutputImageSha256,
+                profile.OutputImageSha256) ||
+            result.ChangedLogicalExecutableBytes != profile.ExpectedLogicalChangedBytes ||
+            result.ChangedPhysicalImageBytes != profile.ExpectedPhysicalChangedBytes ||
+            result.RebuiltRawSectorCount != profile.ExpectedRebuiltRawSectorCount ||
+            result.Plan.Safety.Status != "runtime-proven-identity-profile-guarded" ||
+            result.Plan.Safety.RequiresDuckStationRuntimeProof ||
+            !result.ExactLogicalDiffBoundaryVerified ||
+            !result.ExactPhysicalSectorBoundaryVerified ||
+            !result.NamePointerReadbackVerified ||
+            !result.CountTablesPreserved ||
+            !result.BaseCandidatePreserved ||
+            !result.BinCuePublishCompleted)
+        {
+            throw new InvalidDataException(
+                "A Town Square display-identity runtime claim requires the exact checked profile and output hash.");
+        }
+    }
+
     private static async Task VerifyPublishedEvidenceAsync(
         string reportPath,
         string checklistPath,
@@ -133,25 +176,28 @@ public static class StoneHillTownSquareIdentityArtifactWriter
         string report = await File.ReadAllTextAsync(reportPath, cancellationToken);
         using JsonDocument document = JsonDocument.Parse(report);
         JsonElement root = document.RootElement;
-        if (root.GetProperty("status").GetString() != "runtime-candidate-pending-duckstation" ||
-            root.GetProperty("runtimeClaim").GetBoolean() ||
-            !root.GetProperty("requiresDuckStationRuntimeProof").GetBoolean() ||
+        if (root.GetProperty("status").GetString() != "runtime-proven-identity-profile-guarded" ||
+            !root.GetProperty("runtimeClaim").GetBoolean() ||
+            root.GetProperty("requiresDuckStationRuntimeProof").GetBoolean() ||
             root.GetProperty("evidencePublication").GetString() != "derived-regenerable-sidecars" ||
+            root.GetProperty("evidenceId").GetString() != result.Plan.EvidenceId ||
+            root.GetProperty("evidenceSummary").GetString() != result.Plan.EvidenceSummary ||
             root.GetProperty("outputImageSha256").GetString() != result.OutputImageSha256 ||
             root.GetProperty("expectedOutputImageSha256").GetString() !=
                 result.Plan.ExpectedOutputImageSha256)
         {
             throw new InvalidDataException(
-                "The published identity static proof is incomplete, stale, or makes a runtime claim.");
+                "The published identity proof is incomplete, stale, or not bound to the proven profile.");
         }
 
         string checklist = await File.ReadAllTextAsync(checklistPath, cancellationToken);
         if (!checklist.Contains(result.OutputImageSha256, StringComparison.Ordinal) ||
             !checklist.Contains(Path.GetFileName(result.OutputCuePath), StringComparison.Ordinal) ||
-            !checklist.Contains("pending-runtime disposable V5 research CUE", StringComparison.Ordinal))
+            !checklist.Contains(result.Plan.EvidenceId, StringComparison.Ordinal) ||
+            !checklist.Contains("passed the complete interactive DuckStation", StringComparison.Ordinal))
         {
             throw new InvalidDataException(
-                "The published identity runtime checklist does not identify the exact pending candidate.");
+                "The published identity regression checklist does not identify the exact proven artifact.");
         }
     }
 

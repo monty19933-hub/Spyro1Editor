@@ -64,6 +64,7 @@ artisans-*.md
 artisans-*.csv
 stonehill-*.json
 stonehill-*.md
+!docs/runtime-evidence/stonehill-townsquare-display-identity-2026-08-01.json
 spyro-*.json
 spyro-*.md
 !spyro-level-catalog.json

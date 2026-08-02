@@ -93,7 +93,7 @@ donor levels, seamless transition-sky replacement, long-duration soak or broad
 emulator-version coverage, normal V4 Create BIN, and a new 36th slot are not
 implied.
 
-## Milestone 3: Town Square display identity - pending runtime
+## Milestone 3: Town Square display identity - runtime proven
 
 The complete-pair candidate deliberately retained retail level/save slot 11, so
 its portal, transition, guidebook, and Inventory name remained Stone Hill. The
@@ -114,12 +114,39 @@ demo reroute, and transition sky are preserved.
   `71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9`
 - Static diff proof: one logical SCUS byte, 31 physical bytes within one rebuilt
   MODE2 Form 1 sector, and zero changes outside that sector.
-- Evidence status: `runtime-candidate-pending-duckstation`; `runtimeClaim` remains
-  false until the generated checklist is completed in DuckStation.
+- Evidence ID:
+  `stonehill-slot-townsquare-display-identity-duckstation-2026-08-01`
+- Evidence status: `runtime-proven-identity-profile-guarded` for this exact
+  profile and BIN hash only. The recorded result is an interactive user report,
+  not an automated emulator capture.
+
+On 2026-08-01, the exact candidate above completed its focused DuckStation
+checklist. The former Stone Hill portal, fly-in, guidebook, and Inventory all
+displayed Town Square; the level showed the expected 200 gems, four dragons,
+and one egg; normal gameplay worked; one gem, one dragon, and the egg each
+incremented exactly once; death/reload, Return Home/re-entry, and save/reload
+all worked; and retail Town Square remained independently accessible. Music
+and transitions behaved the same as the already proven complete-pair
+candidate.
+
+The result does not change the candidate's known boundaries. Music remains
+Stone Hill's, the brief Stone Hill/Town Square transition-sky handoff remains,
+the safety-rerouted title cycle still contains Doctor Shemp twice, and this
+second Town Square identity continues to own Stone Hill's slot-11 save state.
+Those behaviors were expected and unchanged during the successful checklist;
+they are not part of the display-name fix.
+
+The exact evidence record is stored at
+`docs/runtime-evidence/stonehill-townsquare-display-identity-2026-08-01.json`.
+It binds the report to the profile recipe, runtime-proven Milestone 2 base,
+executable pre/post hashes, output BIN hash, and one-sector diff boundary.
 
 Two visible Town Square entries are expected in this experiment. They retain
 independent slot-11 and slot-13 save state. Use a fresh game or disposable memory
 card because existing Stone Hill progress can legitimately carry into slot 11.
+This proof does not authorize arbitrary display names, other donor levels,
+edited donor payload composition, seamless transition-sky replacement, music
+replacement, normal V4 Create BIN, or a new 36th level.
 
 ## Next implementation gates
 
@@ -138,8 +165,14 @@ card because existing Stone Hill progress can legitimately carry into slot 11.
    retail-pair profile as a separate V5 replacement-test workflow. Do not merge
    it into normal V4 Create BIN or imply that ordinary saved edits are already
    composed into the transplanted payload.
-6. **Pending DuckStation:** prove the display-identity-only candidate without
-   changing its slot-11 save ownership or the original Town Square slot.
+6. **Completed for the exact display-identity profile:** portal, fly-in,
+   guidebook, and Inventory naming; 200/4/1 totals; one-time collection;
+   gameplay; death/reload; Return Home/re-entry; save/reload; and original Town
+   Square independence passed in DuckStation at BIN SHA-256
+   `71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9`.
+   Stone Hill music, the transition-sky handoff, duplicate Doctor Shemp demo,
+   and slot-11 save ownership remain expected limitations. This gate does not
+   promote any other identity recipe.
 7. Research a new 36th catalog/disc slot only after the complete Stone Hill
    replacement works. A 36th level requires new routing, level-table,
    executable, save/progression, WAD-growth, and runtime-dependency proofs; it is

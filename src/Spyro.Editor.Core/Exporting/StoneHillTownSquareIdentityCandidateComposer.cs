@@ -22,6 +22,8 @@ public sealed record StoneHillTownSquareIdentityCandidatePlan(
     int RecipeVersion,
     string BaseProfileId,
     NativeLevelReplacementEvidenceStatus Evidence,
+    string EvidenceId,
+    string EvidenceSummary,
     string BaseImageSha256,
     string ExpectedOutputImageSha256,
     string BaseExecutableSha256,
@@ -52,7 +54,7 @@ public sealed record StoneHillTownSquareIdentityCandidateResult(
     bool BinCuePublishCompleted);
 
 /// <summary>
-/// Pending-runtime V5 identity experiment. It starts from the exact runtime-proven
+/// Runtime-proven V5 identity profile. It starts from the exact runtime-proven
 /// Town-Square-in-Stone-Hill BIN and changes only Stone Hill's indexed level-name
 /// pointer to the already-present Town Square string. Save/progression ownership
 /// remains retail slot 11. Normal V4 Create BIN never calls this composer.
@@ -60,7 +62,7 @@ public sealed record StoneHillTownSquareIdentityCandidateResult(
 public static class StoneHillTownSquareIdentityCandidateComposer
 {
     public const string RecipeId =
-        "native-level-replacement-stonehill-townsquare-display-identity-clean-usa-v1";
+        NativeLevelReplacementIdentityProfileRegistry.TownSquareDisplayIdentityProfileId;
     public const int RecipeVersion = 1;
 
     private const int ExecutableLba = 53875;
@@ -84,7 +86,7 @@ public static class StoneHillTownSquareIdentityCandidateComposer
         "b17fd7679d586562ef325813b7c469aff58430f5200633f64b8e6900409e3304";
 
     public const string ExpectedOutputImageSha256 =
-        "71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9";
+        NativeLevelReplacementIdentityProfileRegistry.TownSquareDisplayIdentityOutputImageSha256;
 
     private static readonly byte[] StoneHillNamePointer = Convert.FromHexString("FC010180");
     private static readonly byte[] TownSquareNamePointer = Convert.FromHexString("E4010180");
@@ -161,6 +163,13 @@ public static class StoneHillTownSquareIdentityCandidateComposer
                 output.Flush(flushToDisk: true);
             }
 
+            if (rebuiltRawSectors != prepared.Profile.ExpectedRebuiltRawSectorCount)
+            {
+                throw new InvalidDataException(
+                    $"Identity export rebuilt {rebuiltRawSectors} raw sectors; expected " +
+                    $"{prepared.Profile.ExpectedRebuiltRawSectorCount}.");
+            }
+
             IdentityReadback readback = VerifyReadback(
                 baseImage,
                 temporaryImage,
@@ -189,17 +198,17 @@ public static class StoneHillTownSquareIdentityCandidateComposer
             string outputSha256 = await HashFileAsync(outputImage, cancellationToken);
             if (!NativeLevelReplacementProfile.ShaEquals(
                     outputSha256,
-                    ExpectedOutputImageSha256))
+                    prepared.Profile.OutputImageSha256))
             {
                 throw new InvalidDataException(
                     $"The identity candidate SHA-256 is {outputSha256}, expected " +
-                    $"{ExpectedOutputImageSha256}.");
+                    $"{prepared.Profile.OutputImageSha256}.");
             }
 
             string baseSha256After = await HashFileAsync(baseImage, cancellationToken);
             if (!NativeLevelReplacementProfile.ShaEquals(
                     baseSha256After,
-                    NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillOutputImageSha256))
+                    prepared.Profile.BaseOutputImageSha256))
             {
                 throw new InvalidDataException("The runtime-proven base BIN changed during identity export.");
             }
@@ -260,17 +269,20 @@ public static class StoneHillTownSquareIdentityCandidateComposer
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+        NativeLevelReplacementIdentityProfile profile =
+            NativeLevelReplacementIdentityProfileRegistry.RequireRuntimeProven(RecipeId);
+        ValidateIdentityProfile(profile);
         string baseImage = RequireExistingFile(request.BaseImagePath, "runtime-proven base BIN");
         string baseCue = RequireExistingFile(request.BaseCuePath, "runtime-proven base CUE");
         NativeLevelReplacementBaselineExporter.ValidateCue(baseCue, baseImage, "MODE2/2352");
         string baseImageSha256 = await HashFileAsync(baseImage, cancellationToken);
         if (!NativeLevelReplacementProfile.ShaEquals(
                 baseImageSha256,
-                NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillOutputImageSha256))
+                profile.BaseOutputImageSha256))
         {
             throw new InvalidDataException(
                 $"The identity experiment requires the exact runtime-proven base BIN " +
-                $"{NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillOutputImageSha256}, " +
+                $"{profile.BaseOutputImageSha256}, " +
                 $"not {baseImageSha256}.");
         }
 
@@ -289,7 +301,7 @@ public static class StoneHillTownSquareIdentityCandidateComposer
             executable.Lba,
             0,
             executable.Size);
-        RequireHash(executableBytes, BaseExecutableSha256, "runtime-proven base executable");
+        RequireHash(executableBytes, profile.BaseExecutableSha256, "runtime-proven base executable");
         RequireSlice(
             executableBytes,
             StoneHillNamePointerFileOffset,
@@ -305,8 +317,7 @@ public static class StoneHillTownSquareIdentityCandidateComposer
 
         StoneHillTownSquareIdentityTotals stoneHillTotals = ReadTotals(executableBytes, StoneHillTableIndex);
         StoneHillTownSquareIdentityTotals townSquareTotals = ReadTotals(executableBytes, TownSquareTableIndex);
-        StoneHillTownSquareIdentityTotals expectedTotals = new(200, 4, 1);
-        if (stoneHillTotals != expectedTotals || townSquareTotals != expectedTotals)
+        if (stoneHillTotals != profile.TargetTotals || townSquareTotals != profile.DonorTotals)
         {
             throw new InvalidDataException(
                 $"The guarded retail totals changed: Stone Hill {stoneHillTotals}, " +
@@ -315,7 +326,7 @@ public static class StoneHillTownSquareIdentityCandidateComposer
 
         byte[] patchedExecutable = executableBytes.ToArray();
         TownSquareNamePointer.CopyTo(patchedExecutable, (int)StoneHillNamePointerFileOffset);
-        RequireHash(patchedExecutable, OutputExecutableSha256, "identity candidate executable");
+        RequireHash(patchedExecutable, profile.OutputExecutableSha256, "identity candidate executable");
 
         IReadOnlyList<StoneHillTownSquareReplacementPatchSummary> patches =
         [
@@ -328,7 +339,7 @@ public static class StoneHillTownSquareIdentityCandidateComposer
                 Hash(TownSquareNamePointer))
         ];
         StoneHillTownSquareReplacementSafetyReport safety = new(
-            "runtime-candidate-pending-duckstation",
+            "runtime-proven-identity-profile-guarded",
             WritableScopes:
             [
                 "SCUS indexed level-name pointer for retail slot 11 only"
@@ -344,25 +355,26 @@ public static class StoneHillTownSquareIdentityCandidateComposer
             ],
             RuntimeChecks:
             [
-                "Use a fresh game or disposable memory card; slot-11 progress remains independent",
-                "Confirm the Stone Hill portal, fly-in text, guidebook, and Inventory now display Town Square",
-                "Confirm slot 11 starts at 0/200 gems, 0/4 dragons, and 0/1 egg",
-                "Collect one gem, rescue one dragon, and collect the egg; each counter must advance exactly once",
-                "Die/reload, Return Home, re-enter, save/reload, and revisit",
-                "Enter the original Town Square portal and confirm its separate slot-13 progress remains intact",
-                "Stone Hill music, duplicate Doctor Shemp demo, and the brief sky handoff remain expected"
+                "The exact pinned BIN passed the complete interactive DuckStation checklist on 2026-08-01",
+                "Recheck after any recipe, source-disc, emulator, or surrounding edit change",
+                "The portal, fly-in text, guidebook, and Inventory displayed Town Square",
+                "Slot 11 retained 200 gems, four dragons, one egg, and independent progression",
+                "Collection, death/reload, Return Home, re-entry, save/reload, and the original Town Square slot passed",
+                "Stone Hill music, duplicate Doctor Shemp demo, and the brief sky handoff remain expected and unchanged"
             ],
-            RequiresDuckStationRuntimeProof: true);
+            RequiresDuckStationRuntimeProof: false);
         StoneHillTownSquareIdentityCandidatePlan plan = new(
             DateTimeOffset.UtcNow,
-            RecipeId,
-            RecipeVersion,
-            NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillProfileId,
-            NativeLevelReplacementEvidenceStatus.StaticBaselineOnly,
+            profile.Id,
+            profile.RecipeVersion,
+            profile.BaseProfileId,
+            profile.Evidence,
+            profile.EvidenceId,
+            profile.EvidenceSummary,
             baseImageSha256,
-            ExpectedOutputImageSha256,
-            BaseExecutableSha256,
-            OutputExecutableSha256,
+            profile.OutputImageSha256,
+            profile.BaseExecutableSha256,
+            profile.OutputExecutableSha256,
             NamePointerTableFileOffset,
             StoneHillNamePointerFileOffset,
             TownSquareNamePointerFileOffset,
@@ -372,7 +384,29 @@ public static class StoneHillTownSquareIdentityCandidateComposer
             townSquareTotals,
             patches,
             safety);
-        return new PreparedIdentityCandidate(executable, executableBytes, plan);
+        return new PreparedIdentityCandidate(profile, executable, executableBytes, plan);
+    }
+
+    private static void ValidateIdentityProfile(NativeLevelReplacementIdentityProfile profile)
+    {
+        if (profile.Id != RecipeId ||
+            profile.RecipeVersion != RecipeVersion ||
+            profile.BaseProfileId != NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillProfileId ||
+            !NativeLevelReplacementProfile.ShaEquals(
+                profile.BaseOutputImageSha256,
+                NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillOutputImageSha256) ||
+            !NativeLevelReplacementProfile.ShaEquals(profile.BaseExecutableSha256, BaseExecutableSha256) ||
+            !NativeLevelReplacementProfile.ShaEquals(profile.OutputExecutableSha256, OutputExecutableSha256) ||
+            !NativeLevelReplacementProfile.ShaEquals(profile.OutputImageSha256, ExpectedOutputImageSha256) ||
+            profile.NamePointerTableFileOffset != NamePointerTableFileOffset ||
+            profile.TargetNamePointerFileOffset != StoneHillNamePointerFileOffset ||
+            profile.DonorNamePointerFileOffset != TownSquareNamePointerFileOffset ||
+            profile.TargetNamePointerBeforeHex != Convert.ToHexString(StoneHillNamePointer) ||
+            profile.TargetNamePointerAfterHex != Convert.ToHexString(TownSquareNamePointer))
+        {
+            throw new InvalidDataException(
+                "The runtime-proven display-identity profile no longer matches the guarded composer recipe.");
+        }
     }
 
     private static IdentityReadback VerifyReadback(
@@ -412,7 +446,10 @@ public static class StoneHillTownSquareIdentityCandidateComposer
             prepared.BaseExecutableBytes,
             baseExecutableBytes,
             "The runtime-proven base executable changed during identity readback.");
-        RequireHash(outputExecutableBytes, OutputExecutableSha256, "identity candidate executable readback");
+        RequireHash(
+            outputExecutableBytes,
+            prepared.Profile.OutputExecutableSha256,
+            "identity candidate executable readback");
         RequireSlice(
             outputExecutableBytes,
             StoneHillNamePointerFileOffset,
@@ -441,10 +478,11 @@ public static class StoneHillTownSquareIdentityCandidateComposer
                 index >= StoneHillNamePointerFileOffset + StoneHillNamePointer.Length)
                 outsideLogical++;
         }
-        if (changedLogical != 1 || outsideLogical != 0)
+        if (changedLogical != prepared.Profile.ExpectedLogicalChangedBytes || outsideLogical != 0)
         {
             throw new InvalidDataException(
-                $"Identity logical diff failed: changed={changedLogical}, outside={outsideLogical}; expected one byte.");
+                $"Identity logical diff failed: changed={changedLogical}, outside={outsideLogical}; expected " +
+                $"{prepared.Profile.ExpectedLogicalChangedBytes} changed byte(s).");
         }
 
         long affectedSector = outputExecutable.Lba + (StoneHillNamePointerFileOffset / UserSectorByteLength);
@@ -455,11 +493,11 @@ public static class StoneHillTownSquareIdentityCandidateComposer
             allowedPhysicalStart,
             RawSectorByteLength,
             cancellationToken);
-        if (changedPhysical <= 1 || outsidePhysical != 0)
+        if (changedPhysical != prepared.Profile.ExpectedPhysicalChangedBytes || outsidePhysical != 0)
         {
             throw new InvalidDataException(
                 $"Identity physical diff failed: changed={changedPhysical}, outside={outsidePhysical}; " +
-                "only the rebuilt raw SCUS sector may differ.");
+                $"expected exactly {prepared.Profile.ExpectedPhysicalChangedBytes} changes inside the rebuilt raw SCUS sector.");
         }
         return new IdentityReadback(changedLogical, changedPhysical);
     }
@@ -569,6 +607,7 @@ public static class StoneHillTownSquareIdentityCandidateComposer
     }
 
     private sealed record PreparedIdentityCandidate(
+        NativeLevelReplacementIdentityProfile Profile,
         DiscFileRecord Executable,
         byte[] BaseExecutableBytes,
         StoneHillTownSquareIdentityCandidatePlan Plan);
