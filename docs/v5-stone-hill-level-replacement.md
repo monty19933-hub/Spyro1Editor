@@ -154,9 +154,10 @@ The first edited-donor candidate starts from the exact Milestone 3
 display-identity BIN and composes one saved Town Square native-object edit into
 the transplanted payload. It changes only T21 Red Gem's X coordinate from
 `7813.75` to `7685.75`, a movement of 128 world units toward negative X. The
-disposable composer intentionally excluded the general object's derived
-placement/culling-sector patch so this first runtime question remained limited
-to the four-byte X word.
+disposable composer intentionally excluded the then-editor-derived `+0x4A`
+terrain-sector write so this first runtime question remained limited to the
+four-byte X word. Later disassembly identified `+0x4A` as a visibility sentinel,
+not terrain ownership.
 
 - CUE: `Stone-Hill-slot-Town-Square-edited-T21-X-RUNTIME-CANDIDATE.cue`
 - BIN SHA-256:
@@ -192,6 +193,9 @@ The exact partial evidence record is stored at
 It records this deliberately isolated X-only result and the then-pending
 `FF`-to-`D5` experiment at record `+0x4A`. That experiment has now received an
 independent DuckStation result and was rejected in Milestone 5 below.
+The later distance-focused pass used a renamed, byte-identical copy of this
+same X-only BIN and rejected the profile for continued far flicker; Milestone 6
+and its separate evidence record supersede this initial partial observation.
 
 ## Milestone 5: T21 X plus `+0x4A D5` - runtime rejected
 
@@ -234,14 +238,104 @@ Its field layout places `visable` at `+0x4A`.
 
 `D5` remains the terrain geometry sector returned for the edited coordinates;
 that does not make it a valid Moby visibility-byte value. The next corrective
-gate must preserve native `FF` and apply only the T21 X patch. It must explicitly
-verify visibility from distance through approach, one-time collection and
-cleanup, nearby-actor isolation, ordinary gameplay, death/reload, Return Home
-and re-entry, save/reload, and the original Town Square slot before any edited-
-donor promotion.
+gate therefore had to preserve native `FF` and apply only the T21 X patch while
+explicitly checking visibility from distance. Milestone 6 records that exact
+gate and its independent runtime rejection.
 
 The exact rejection record is stored at
 `docs/runtime-evidence/stonehill-townsquare-edited-donor-t21-x-d5-rejected-2026-08-01.json`.
+
+## Milestone 6: T21 X with native `+0x4A FF` - runtime rejected
+
+The corrective candidate returned to the exact X-only recipe and preserved the
+complete retail T21 record except for the requested X word. Its output is
+byte-identical to the original Milestone 4 X-only BIN; the `FF-visible` name
+makes the corrected test boundary explicit but does not create a different disc
+payload.
+
+- CUE:
+  `Stone-Hill-slot-Town-Square-edited-T21-X-FF-visible-RUNTIME-CANDIDATE.cue`
+- BIN SHA-256:
+  `ec3d8e354cf246d704860a6b26968a59cc7f77fe6409e08c299a777b7fc4df8e`
+- Base display-identity BIN SHA-256:
+  `71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9`
+- T21 X patch: donor WAD `0x136E8B4`, replacement-slot WAD `0xD640B4`,
+  record `+0x0C`, `5C E8 01 00` to `5C E0 01 00`.
+- Preserved native fields: pod `+0x43 = FF`, visibility-sector sentinel
+  `+0x4A/+0x4B = FF/00`, and render radius `+0x50 = 18`.
+- Evidence ID:
+  `stonehill-slot-townsquare-edited-donor-t21-x-native-ff-rejected-duckstation-2026-08-01`
+- Evidence status: `runtime-rejected-visibility-regression`; profile promotion
+  is not authorized. The result is an interactive user report, not an automated
+  emulator capture.
+
+On 2026-08-01, the user confirmed in DuckStation that T21 still flickered from
+afar in this exact native-`FF` candidate. The result rejects the X-only edited-
+donor profile. Preserving `+0x4A = FF` removed the invalid `D5` overwrite but was
+not sufficient to restore stable distant rendering.
+
+An independent byte audit found no alternate disc corruption path. Relative to
+the exact display-identity base, all 37 changed physical bytes are confined to
+raw sector `0x1AED`: one intended user-data byte at image offset `0xF7623D`
+(`E8` to `E0` inside the T21 X word), four regenerated EDC bytes, six ECC-P
+bytes, and 26 ECC-Q bytes. The retail donor record, identity donor record, and
+identity target record match across all `0x58` bytes before the edit. The output
+donor remains retail-identical, while the output target differs only at record
+`+0x0D`. No WAD growth, extent relocation, executable change, pointer fixup, or
+unrelated raw-sector change occurred.
+
+The currently decoded optional scene-list table provides no spatial owner to
+patch: its pointer and count are both zero. This is a static disassembly/census
+result, not a general proof that no other runtime visibility mechanism exists.
+T21's native pod byte is `+0x43 = FF`. Its original and edited fixed-point
+coordinates both resolve to collision cell `(15,14)`, so the 128-world-unit X
+move did not cross a collision-cell boundary. The edited X coordinate is only
+5.75 world units above that cell's lower X boundary, but the collision chain is
+not itself proof of the distant render failure.
+
+The next isolated diagnostic keeps the exact X patch and native `+0x4A = FF`,
+then changes only T21's clipping/render-radius byte at `+0x50` from `18` to
+`20` (donor WAD `0x136E8F8`, replacement-slot WAD `0xD640F8`). This is a
+disposable diagnostic, not a proposed general export rule. It must reproduce
+the same far-camera test, close approach, one-time collection and cleanup, and
+nearby-actor checks before any further conclusion.
+
+The exact native-`FF` rejection record is stored at
+`docs/runtime-evidence/stonehill-townsquare-edited-donor-t21-x-native-ff-rejected-2026-08-01.json`.
+
+## Milestone 7: isolated T21 render-radius candidate - pending runtime
+
+The next candidate is now generated from the exact display-identity base. It
+keeps the proven T21 X edit, preserves native `+0x4A/+0x4B = FF/00` and
+`+0x52/+0x53 = 40/FF`, and changes only render radius `+0x50` from the native
+loose-gem value `18` to value `20`, which other retail Town Square actor
+families use. It is not asserted to be a native loose-gem value.
+
+- CUE:
+  `Stone-Hill-slot-Town-Square-edited-T21-X-render-radius-20-RUNTIME-CANDIDATE.cue`
+- BIN SHA-256:
+  `329420e7f9e492ce69830f63c783421c05c5976fe8b0b04de7d49e52bf87e626`
+- Base display-identity BIN SHA-256:
+  `71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9`
+- X patch: donor WAD `0x136E8B4`, replacement-slot WAD `0xD640B4`,
+  `5C E8 01 00` to `5C E0 01 00`.
+- Render-radius patch: donor WAD `0x136E8F8`, replacement-slot WAD
+  `0xD640F8`, `18` to `20`.
+- Exact diff boundary: two logical WAD bytes and 46 physical BIN bytes in one
+  rebuilt MODE2 raw sector; the other 44 bytes are regenerated EDC/ECC.
+- Evidence ID:
+  `stonehill-slot-townsquare-edited-donor-t21-x-render-radius-pending-duckstation`
+- Evidence status: static baseline only; no runtime claim and no profile
+  promotion are authorized.
+
+The focused smoke rejects any alternate radius, secondary patch, unrelated
+record, or out-of-range write. It also proves deterministic output, original
+Town Square donor preservation, exact target readback, executable preservation,
+source preservation, and atomic BIN/CUE publication. The required discriminator
+is the same far-camera view that reproduced the rejection. If practical, compare
+nearby native T22 from that view, then approach and collect moved T21 exactly
+once. This candidate remains disposable until the exact hash above passes in
+DuckStation.
 
 ## Next implementation gates
 
@@ -250,17 +344,18 @@ The exact rejection record is stored at
 2. **Completed for an unchanged retail donor pair:** install Town Square's
    terrain, collision, textures, sky, scene, actors, and dragon packages in the
    fixed Stone Hill capacity. Arbitrary newly compiled payloads are not implied.
-3. **Focused partial result plus one rejected follow-up for an existing
-   object:** Town Square T21's saved X edit was visibly present in DuckStation
-   at BIN SHA-256
-   `ec3d8e354cf246d704860a6b26968a59cc7f77fe6409e08c299a777b7fc4df8e`.
-   The X-plus-`D5` follow-up at BIN SHA-256
+3. **Runtime-rejected edited object:** Town Square T21's saved X edit was
+   visibly present, but both the X-plus-`D5` candidate at BIN SHA-256
    `034ace2340dce2e71bbfd41df832d984dfebbe330dba6b0325d198cdf8ac0b81`
-   moved and collected T21 once but introduced distance flicker, so it is
-   runtime-rejected. The next isolated gate must preserve native `FF` at
-   `+0x4A`, apply only the X word, and complete the visibility, interaction, and
-   regression checklist. Edited terrain/scene data, other object edits,
-   additions, removals, and imported actor packages remain pending.
+   and the corrected X-only native-`FF` candidate at BIN SHA-256
+   `ec3d8e354cf246d704860a6b26968a59cc7f77fe6409e08c299a777b7fc4df8e`
+   flickered at distance. The byte-clean native-`FF` result rules out the
+   earlier invalid sector overwrite as the sole cause. The isolated `+0x50`
+   `18`-to-`20` diagnostic is now built at BIN SHA-256
+   `329420e7f9e492ce69830f63c783421c05c5976fe8b0b04de7d49e52bf87e626`;
+   it remains pending DuckStation. Edited
+   terrain/scene data, other object edits, additions, removals, and imported
+   actor packages remain pending.
 4. **Completed for the exact retail pair:** the complete portal, gameplay,
    collection, reload, persistence, Return Home, re-entry, and title-demo
    checklist passed in DuckStation. Investigate the abrupt sky handoff as an

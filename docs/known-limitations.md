@@ -403,7 +403,19 @@ Town Square research path also preserves the donor `0xFF` byte at record
 in all 107 Town Square rows, and a focused T21 candidate that replaced it with
 the derived terrain-sector value `D5` flickered at distance in DuckStation.
 The published Moby layout identifies `+0x4A` as the `visable` flag, not terrain
-ownership, so normal exports must preserve its native sentinel. The remaining
+ownership, so normal exports must preserve its native sentinel. However, the
+corrected X-only candidate preserved `+0x4A = FF` and still flickered from afar
+at exact BIN SHA-256
+`ec3d8e354cf246d704860a6b26968a59cc7f77fe6409e08c299a777b7fc4df8e`.
+A byte audit found only the intended X byte plus one sector's regenerated
+EDC/ECC. The currently decoded optional scene-list pointer and count are both
+zero, although that static result does not exclude every runtime visibility
+mechanism, and the move remains inside the same collision cell. The profile remains
+runtime-rejected. Its next disposable diagnostic preserves `FF` and changes
+only T21 render radius `+0x50` from `18` to `20`. That candidate is built at
+BIN SHA-256
+`329420e7f9e492ce69830f63c783421c05c5976fe8b0b04de7d49e52bf87e626`,
+but it must not be generalized before DuckStation evidence. The remaining
 3x Flame Chest clue is its colocated runtime/control row T108 (`renderRadius=0x1A`,
 `nativeClassLowByte=0x88`), which must be allocated with the chest shell before
 that family can be promoted.

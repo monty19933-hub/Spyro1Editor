@@ -43,6 +43,7 @@ public static class StoneHillTownSquareEditedDonorArtifactWriter
         string checklistPath = outputPrefix + "-runtime-checklist.md";
 
         bool placementMode = result.Plan.PlacementPatch != null;
+        bool renderRadiusMode = result.Plan.RenderRadiusPatch != null;
         string report = JsonSerializer.Serialize(new
         {
             status = result.Plan.Safety.Status,
@@ -70,17 +71,24 @@ public static class StoneHillTownSquareEditedDonorArtifactWriter
             result.RetailSourcePreserved,
             result.BinCuePublishCompleted,
             result.PlacementSectorReadbackVerified,
+            result.RenderRadiusReadbackVerified,
             result.Plan
         }, JsonOptions);
-        string checklistTitle = placementMode
-            ? "V5 Town Square edited-donor T21 X + placement sector"
-            : "V5 Town Square edited-donor T21 X";
-        string placementDisclosure = placementMode
-            ? "This second gate also relocates the genuine editor-derived native placement/culling-sector byte from FF to D5. Both logical edits share one rebuilt raw WAD sector."
-            : "This first gate preserves T21's native placement/culling-sector byte unchanged and relocates only the X word; the derived sector change is intentionally outside this control.";
-        string placementCheck = placementMode
-            ? "Confirm T21 remains visible and interactive at its edited position with the derived D5 placement/culling sector; watch for pop-in, premature culling, or a missing gem."
-            : "Confirm T21 remains visible and interactive at its edited position while its native placement/culling sector remains unchanged; record any pop-in or culling limitation.";
+        string checklistTitle = renderRadiusMode
+            ? "V5 Town Square edited-donor T21 X + isolated render radius"
+            : placementMode
+                ? "V5 Town Square edited-donor T21 X + placement sector"
+                : "V5 Town Square edited-donor T21 X";
+        string placementDisclosure = renderRadiusMode
+            ? "This diagnostic preserves the native +0x4A FF visibility sentinel and changes only T21 X plus its +0x50 render radius from the native loose-gem value 18 to value 20, which retail Town Square uses for other actor families. This is not a loose-gem promotion rule. Both logical edits share one rebuilt raw WAD sector."
+            : placementMode
+                ? "This rejected historical gate overwrites T21's native +0x4A FF visibility sentinel with the editor-derived terrain-sector value D5. Both logical edits share one rebuilt raw WAD sector."
+                : "This first gate preserves T21's native +0x4A FF visibility sentinel unchanged and relocates only the X word; the invalid derived terrain-sector write is intentionally outside this control.";
+        string placementCheck = renderRadiusMode
+            ? "From the same distant viewpoint that reproduced the regression, confirm T21 remains continuously visible with +0x50 = 20; compare adjacent native T22 if practical, then approach and collect T21 once."
+            : placementMode
+                ? "Confirm whether T21 remains visible and interactive after the rejected historical D5 visibility-byte overwrite; watch for pop-in, premature culling, or a missing gem."
+                : "Confirm T21 remains visible and interactive at its edited position while its native +0x4A FF visibility sentinel remains unchanged; record any pop-in or culling limitation.";
         string checklist =
             $$"""
             # {{checklistTitle}} — DuckStation checklist
@@ -139,18 +147,29 @@ public static class StoneHillTownSquareEditedDonorArtifactWriter
         StoneHillTownSquareEditedDonorCandidateResult result)
     {
         bool placementMode = result.Plan.PlacementPatch != null;
-        string expectedRecipeId = placementMode
-            ? StoneHillTownSquareEditedDonorCandidateComposer.PlacementRecipeId
-            : StoneHillTownSquareEditedDonorCandidateComposer.RecipeId;
-        int expectedRecipeVersion = placementMode
-            ? StoneHillTownSquareEditedDonorCandidateComposer.PlacementRecipeVersion
-            : StoneHillTownSquareEditedDonorCandidateComposer.RecipeVersion;
-        string expectedEvidenceId = placementMode
-            ? StoneHillTownSquareEditedDonorCandidateComposer.PlacementEvidenceId
-            : StoneHillTownSquareEditedDonorCandidateComposer.EvidenceId;
-        string expectedStatus = placementMode
-            ? StoneHillTownSquareEditedDonorCandidateComposer.PlacementStatus
-            : StoneHillTownSquareEditedDonorCandidateComposer.Status;
+        bool renderRadiusMode = result.Plan.RenderRadiusPatch != null;
+        if (placementMode && renderRadiusMode)
+            throw new InvalidDataException("The edited-donor candidate cannot combine placement and render-radius diagnostics.");
+        string expectedRecipeId = renderRadiusMode
+            ? StoneHillTownSquareEditedDonorCandidateComposer.RenderRadiusRecipeId
+            : placementMode
+                ? StoneHillTownSquareEditedDonorCandidateComposer.PlacementRecipeId
+                : StoneHillTownSquareEditedDonorCandidateComposer.RecipeId;
+        int expectedRecipeVersion = renderRadiusMode
+            ? StoneHillTownSquareEditedDonorCandidateComposer.RenderRadiusRecipeVersion
+            : placementMode
+                ? StoneHillTownSquareEditedDonorCandidateComposer.PlacementRecipeVersion
+                : StoneHillTownSquareEditedDonorCandidateComposer.RecipeVersion;
+        string expectedEvidenceId = renderRadiusMode
+            ? StoneHillTownSquareEditedDonorCandidateComposer.RenderRadiusEvidenceId
+            : placementMode
+                ? StoneHillTownSquareEditedDonorCandidateComposer.PlacementEvidenceId
+                : StoneHillTownSquareEditedDonorCandidateComposer.EvidenceId;
+        string expectedStatus = renderRadiusMode
+            ? StoneHillTownSquareEditedDonorCandidateComposer.RenderRadiusStatus
+            : placementMode
+                ? StoneHillTownSquareEditedDonorCandidateComposer.PlacementStatus
+                : StoneHillTownSquareEditedDonorCandidateComposer.Status;
         if (result.Plan.RecipeId != expectedRecipeId ||
             result.Plan.RecipeVersion != expectedRecipeVersion ||
             result.Plan.Evidence != NativeLevelReplacementEvidenceStatus.StaticBaselineOnly ||
@@ -172,11 +191,21 @@ public static class StoneHillTownSquareEditedDonorArtifactWriter
               result.Plan.PlacementPatch.ByteLength != 1 ||
               result.Plan.PlacementPatch.BeforeHex != "FF" ||
               result.Plan.PlacementPatch.AfterHex != "D5")) ||
+            (renderRadiusMode &&
+             (result.Plan.Patch.BeforeHex != "5CE80100" ||
+              result.Plan.Patch.AfterHex != "5CE00100" ||
+              result.Plan.RenderRadiusPatch!.Kind != "moby-render-radius" ||
+              result.Plan.RenderRadiusPatch.TrueIndex != 21 ||
+              result.Plan.RenderRadiusPatch.DonorWadOffset != 0x136E8F8 ||
+              result.Plan.RenderRadiusPatch.TargetWadOffset != 0xD640F8 ||
+              result.Plan.RenderRadiusPatch.ByteLength != 1 ||
+              result.Plan.RenderRadiusPatch.BeforeHex != "18" ||
+              result.Plan.RenderRadiusPatch.AfterHex != "20")) ||
             !NativeLevelReplacementProfile.IsSha256(result.OutputImageSha256) ||
             NativeLevelReplacementProfile.ShaEquals(
                 result.OutputImageSha256,
                 NativeLevelReplacementIdentityProfileRegistry.TownSquareDisplayIdentityOutputImageSha256) ||
-            (placementMode
+            (placementMode || renderRadiusMode
                 ? result.ChangedLogicalWadBytes != 2
                 : result.ChangedLogicalWadBytes is <= 0 or > 4) ||
             result.ChangedPhysicalImageBytes <= result.ChangedLogicalWadBytes ||
@@ -188,7 +217,8 @@ public static class StoneHillTownSquareEditedDonorArtifactWriter
             !result.BaseImagePreserved ||
             !result.RetailSourcePreserved ||
             !result.BinCuePublishCompleted ||
-            result.PlacementSectorReadbackVerified != placementMode)
+            result.PlacementSectorReadbackVerified != placementMode ||
+            result.RenderRadiusReadbackVerified != renderRadiusMode)
         {
             throw new InvalidDataException(
                 "The edited-donor static evidence is incomplete or incorrectly claims its checked gate boundary.");
@@ -221,7 +251,7 @@ public static class StoneHillTownSquareEditedDonorArtifactWriter
             !checklist.Contains(Path.GetFileName(result.OutputCuePath), StringComparison.Ordinal) ||
             !checklist.Contains(result.Plan.EvidenceId, StringComparison.Ordinal) ||
             !checklist.Contains("not runtime proof", StringComparison.Ordinal) ||
-            !checklist.Contains("placement/culling-sector", StringComparison.Ordinal) ||
+            !checklist.Contains("visibility sentinel", StringComparison.OrdinalIgnoreCase) ||
             !checklist.Contains("original retail Town Square", StringComparison.Ordinal))
         {
             throw new InvalidDataException(

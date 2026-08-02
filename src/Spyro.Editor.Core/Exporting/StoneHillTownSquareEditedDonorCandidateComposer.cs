@@ -39,7 +39,8 @@ public sealed record StoneHillTownSquareEditedDonorCandidatePlan(
     long TargetDataWadOffset,
     StoneHillTownSquareEditedDonorPatchSummary Patch,
     StoneHillTownSquareReplacementSafetyReport Safety,
-    StoneHillTownSquareEditedDonorPatchSummary? PlacementPatch = null);
+    StoneHillTownSquareEditedDonorPatchSummary? PlacementPatch = null,
+    StoneHillTownSquareEditedDonorPatchSummary? RenderRadiusPatch = null);
 
 public sealed record StoneHillTownSquareEditedDonorCandidateResult(
     string OutputImagePath,
@@ -56,7 +57,8 @@ public sealed record StoneHillTownSquareEditedDonorCandidateResult(
     bool BaseImagePreserved,
     bool RetailSourcePreserved,
     bool BinCuePublishCompleted,
-    bool PlacementSectorReadbackVerified = false);
+    bool PlacementSectorReadbackVerified = false,
+    bool RenderRadiusReadbackVerified = false);
 
 /// <summary>
 /// Isolated V5 research compiler for the first edited-donor runtime experiment.
@@ -80,6 +82,13 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
         "stonehill-slot-townsquare-edited-donor-t21-x-placement-sector-pending-duckstation";
     public const string PlacementStatus =
         "edited-donor-placement-runtime-candidate-pending-duckstation";
+    public const string RenderRadiusRecipeId =
+        "native-level-replacement-stonehill-townsquare-edited-donor-t21-x-render-radius-clean-usa-v3";
+    public const int RenderRadiusRecipeVersion = 3;
+    public const string RenderRadiusEvidenceId =
+        "stonehill-slot-townsquare-edited-donor-t21-x-render-radius-pending-duckstation";
+    public const string RenderRadiusStatus =
+        "edited-donor-render-radius-runtime-candidate-pending-duckstation";
 
     private const int WadLba = 37;
     private const int ExecutableLba = 53875;
@@ -96,12 +105,16 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
     private const long DonorPlacementPatchWadOffset = 0x136E8F2;
     private const long TargetPlacementPatchWadOffset = 0xD640F2;
     private const int PlacementPatchByteLength = 1;
+    private const long DonorRenderRadiusPatchWadOffset = 0x136E8F8;
+    private const long TargetRenderRadiusPatchWadOffset = 0xD640F8;
+    private const int RenderRadiusPatchByteLength = 1;
     private const int ExpectedTrueIndex = 21;
     private const int ExpectedSourceRecordCount = 107;
     private const int ExpectedRecordStride = 0x58;
     private const string ExpectedLevelKey = "townsquare";
     private const string ExpectedPatchKind = "moby-position-x";
     private const string ExpectedPlacementPatchKind = "moby-placement-sector";
+    private const string ExpectedRenderRadiusPatchKind = "moby-render-radius";
     private const string ExpectedSourceTableWadOffset = "0x136E170";
     private const string IdentityBaseImageSha256 =
         "71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9";
@@ -111,6 +124,8 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
     private static readonly byte[] ExpectedPlacementXAfter = Convert.FromHexString("5CE00100");
     private static readonly byte[] ExpectedPlacementSectorBefore = [0xFF];
     private static readonly byte[] ExpectedPlacementSectorAfter = [0xD5];
+    private static readonly byte[] ExpectedRenderRadiusBefore = [0x18];
+    private static readonly byte[] ExpectedRenderRadiusAfter = [0x20];
 
     public static async Task<StoneHillTownSquareEditedDonorCandidatePlan> BuildPlanAsync(
         StoneHillTownSquareEditedDonorCandidateRequest request,
@@ -236,7 +251,8 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
                 BaseImagePreserved: basePreserved,
                 RetailSourcePreserved: retailPreserved,
                 BinCuePublishCompleted: true,
-                PlacementSectorReadbackVerified: prepared.PlacementPatch != null);
+                PlacementSectorReadbackVerified: prepared.PlacementPatch != null,
+                RenderRadiusReadbackVerified: prepared.RenderRadiusPatch != null);
         }
         catch (Exception exportFailure)
         {
@@ -342,9 +358,19 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
         StoneHillTownSquareEditedDonorPatchSummary xSummary = BuildSummary(validated.XPatch);
         StoneHillTownSquareEditedDonorPatchSummary? placementSummary =
             validated.PlacementPatch == null ? null : BuildSummary(validated.PlacementPatch);
+        StoneHillTownSquareEditedDonorPatchSummary? renderRadiusSummary =
+            validated.RenderRadiusPatch == null ? null : BuildSummary(validated.RenderRadiusPatch);
+        bool renderRadiusMode = renderRadiusSummary != null;
         StoneHillTownSquareReplacementSafetyReport safety = new(
             validated.Status,
-            WritableScopes: placementSummary == null
+            WritableScopes: renderRadiusMode
+                ?
+                [
+                    "Stone Hill target data entry: transplanted Town Square T21 position.x word",
+                    "Stone Hill target data entry: transplanted Town Square T21 native render-radius byte (+0x50)",
+                    "MODE2 EDC/ECC for their one shared raw WAD sector"
+                ]
+                : placementSummary == null
                 ?
                 [
                     "Stone Hill target data entry: transplanted Town Square T21 position.x word only",
@@ -353,16 +379,18 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
                 :
                 [
                     "Stone Hill target data entry: transplanted Town Square T21 position.x word",
-                    "Stone Hill target data entry: transplanted Town Square T21 native placement/culling-sector byte",
+                    "Stone Hill target data entry: transplanted Town Square T21 historical +0x4A visibility-byte diagnostic",
                     "MODE2 EDC/ECC for their one shared raw WAD sector"
                 ],
             ProtectedScopes:
             [
                 "The exact runtime-proven display-identity control BIN",
                 "The clean retail source BIN and original Town Square data entry",
-                placementSummary == null
-                    ? "T21's native placement/culling-sector byte and every other transplanted Town Square byte"
-                    : "Every transplanted Town Square byte except T21 X and its derived placement/culling-sector byte",
+                renderRadiusMode
+                    ? "Every transplanted Town Square byte except T21 X and its isolated render-radius diagnostic byte"
+                    : placementSummary == null
+                    ? "T21's native +0x4A visibility sentinel and every other transplanted Town Square byte"
+                    : "Every transplanted Town Square byte except T21 X and its rejected historical +0x4A visibility-byte diagnostic",
                 "Every other WAD entry and raw sector",
                 "SCUS, slot identity, completion totals, music, title demo reroute, and save ownership",
                 "Actor packages, appends, removals, state/type/yaw/Z/Y edits, paths, terrain, and textures",
@@ -371,9 +399,11 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
             RuntimeChecks:
             [
                 "Cold-boot the generated CUE in DuckStation; static proof is not runtime proof",
-                placementSummary == null
-                    ? "Enter the replaced Town Square through Stone Hill's slot and locate moved T21 with its native placement/culling sector preserved"
-                    : "Enter the replaced Town Square through Stone Hill's slot and locate moved T21 with placement/culling behavior intact",
+                renderRadiusMode
+                    ? "Enter through Stone Hill's slot and verify moved T21 no longer flickers at distance with render radius 0x20"
+                    : placementSummary == null
+                    ? "Enter the replaced Town Square through Stone Hill's slot and locate moved T21 with its native +0x4A FF visibility sentinel preserved"
+                    : "Enter the replaced Town Square through Stone Hill's slot and reproduce the rejected historical +0x4A D5 visibility-byte diagnostic",
                 "Exercise gameplay, collection, dragon/egg progress, death/reload, Return Home, re-entry, and save/reload",
                 "Confirm the original retail Town Square slot remains unchanged and independently playable"
             ],
@@ -392,10 +422,12 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
             TargetDataWadOffset,
             xSummary,
             safety,
-            placementSummary);
+            placementSummary,
+            renderRadiusSummary);
         return new PreparedCandidate(
             validated.Patches,
             validated.PlacementPatch,
+            validated.RenderRadiusPatch,
             retailDonorData,
             executableBytes,
             candidatePlan);
@@ -420,15 +452,21 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
         bool placementMode =
             plan.PatchCount == 2 &&
             plan.TotalPatchedBytes == PatchByteLength + PlacementPatchByteLength &&
-            plan.Patches.Count == 2;
+            plan.Patches.Count == 2 &&
+            string.Equals(plan.Patches[1].Kind, ExpectedPlacementPatchKind, StringComparison.Ordinal);
         bool xOnlyMode =
             plan.PatchCount == 1 &&
             plan.TotalPatchedBytes == PatchByteLength &&
             plan.Patches.Count == 1;
-        if (!xOnlyMode && !placementMode)
+        bool renderRadiusMode =
+            plan.PatchCount == 2 &&
+            plan.TotalPatchedBytes == PatchByteLength + RenderRadiusPatchByteLength &&
+            plan.Patches.Count == 2 &&
+            string.Equals(plan.Patches[1].Kind, ExpectedRenderRadiusPatchKind, StringComparison.Ordinal);
+        if (!xOnlyMode && !placementMode && !renderRadiusMode)
         {
             throw new InvalidDataException(
-                "The edited-donor gate requires either the original X-only control or the exact genuine X-plus-placement two-patch plan.");
+                "The edited-donor gate requires the original X-only control, the rejected X-plus-placement diagnostic, or the isolated X-plus-render-radius diagnostic.");
         }
 
         MobySourcePatch patch = plan.Patches[0];
@@ -481,6 +519,7 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
                 [xPatch],
                 xPatch,
                 null,
+                null,
                 RecipeId,
                 RecipeVersion,
                 EvidenceId,
@@ -493,6 +532,71 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
             throw new InvalidDataException(
                 "The placement-sector gate requires the exact checked T21 X move 5CE80100 -> 5CE00100.");
         }
+        if (renderRadiusMode)
+        {
+            MobySourcePatch radius = plan.Patches[1];
+            if (!string.Equals(radius.LevelKey, ExpectedLevelKey, StringComparison.OrdinalIgnoreCase) ||
+                radius.TrueIndex != ExpectedTrueIndex ||
+                !string.Equals(radius.Kind, ExpectedRenderRadiusPatchKind, StringComparison.Ordinal) ||
+                radius.ByteLength != RenderRadiusPatchByteLength ||
+                ParseOffset(radius.WadRelativeOffset, "render-radius patch WAD offset") !=
+                    DonorRenderRadiusPatchWadOffset ||
+                !string.Equals(radius.RecordOffset, "0x50", StringComparison.OrdinalIgnoreCase) ||
+                string.IsNullOrWhiteSpace(radius.MobyLabel))
+            {
+                throw new InvalidDataException(
+                    $"The render-radius gate requires Town Square T{ExpectedTrueIndex} {ExpectedRenderRadiusPatchKind} at 0x{DonorRenderRadiusPatchWadOffset:X}.");
+            }
+            byte[] radiusBefore = ParseHexBytes(
+                radius.BeforeHexPreview,
+                RenderRadiusPatchByteLength,
+                "T21 render-radius preimage");
+            byte[] radiusAfter = ParseHexBytes(
+                radius.AfterHexPreview,
+                RenderRadiusPatchByteLength,
+                "T21 render-radius diagnostic value");
+            if (!radiusBefore.SequenceEqual(ExpectedRenderRadiusBefore) ||
+                !radiusAfter.SequenceEqual(ExpectedRenderRadiusAfter))
+            {
+                throw new InvalidDataException(
+                    "The render-radius gate requires the checked native-value diagnostic 18 -> 20.");
+            }
+            if (TargetRenderRadiusPatchWadOffset !=
+                    TargetDataWadOffset + (DonorRenderRadiusPatchWadOffset - DonorDataWadOffset) ||
+                DonorRenderRadiusPatchWadOffset < DonorDataWadOffset ||
+                DonorRenderRadiusPatchWadOffset + RenderRadiusPatchByteLength >
+                    DonorDataWadOffset + DonorDataByteLength ||
+                TargetRenderRadiusPatchWadOffset / UserSectorByteLength !=
+                    TargetPatchWadOffset / UserSectorByteLength)
+            {
+                throw new InvalidDataException(
+                    "The checked render-radius relocation or shared raw-sector boundary is malformed.");
+            }
+            if (outcome.PatchKinds.Count != 2 ||
+                !outcome.PatchKinds.Order(StringComparer.Ordinal).SequenceEqual(
+                    new[] { ExpectedPatchKind, ExpectedRenderRadiusPatchKind }.Order(StringComparer.Ordinal),
+                    StringComparer.Ordinal))
+            {
+                throw new InvalidDataException(
+                    "The render-radius gate outcome is not exactly T21 X plus its isolated +0x50 diagnostic.");
+            }
+            ValidatedPatch radiusPatch = new(
+                radius,
+                DonorRenderRadiusPatchWadOffset,
+                TargetRenderRadiusPatchWadOffset,
+                radiusBefore,
+                radiusAfter);
+            return new ValidatedPatchPlan(
+                [xPatch, radiusPatch],
+                xPatch,
+                null,
+                radiusPatch,
+                RenderRadiusRecipeId,
+                RenderRadiusRecipeVersion,
+                RenderRadiusEvidenceId,
+                RenderRadiusStatus);
+        }
+
         MobySourcePatch placement = plan.Patches[1];
         if (!string.Equals(placement.LevelKey, ExpectedLevelKey, StringComparison.OrdinalIgnoreCase) ||
             placement.TrueIndex != ExpectedTrueIndex ||
@@ -549,6 +653,7 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
             [xPatch, placementPatch],
             xPatch,
             placementPatch,
+            null,
             PlacementRecipeId,
             PlacementRecipeVersion,
             PlacementEvidenceId,
@@ -822,6 +927,7 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
         IReadOnlyList<ValidatedPatch> Patches,
         ValidatedPatch XPatch,
         ValidatedPatch? PlacementPatch,
+        ValidatedPatch? RenderRadiusPatch,
         string RecipeId,
         int RecipeVersion,
         string EvidenceId,
@@ -830,6 +936,7 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
     private sealed record PreparedCandidate(
         IReadOnlyList<ValidatedPatch> Patches,
         ValidatedPatch? PlacementPatch,
+        ValidatedPatch? RenderRadiusPatch,
         byte[] RetailDonorData,
         byte[] IdentityExecutable,
         StoneHillTownSquareEditedDonorCandidatePlan Plan);

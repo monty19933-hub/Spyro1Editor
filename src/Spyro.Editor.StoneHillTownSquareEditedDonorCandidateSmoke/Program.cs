@@ -12,8 +12,13 @@ const long ExpectedDonorRecordWadOffset = 0x136E8A8;
 const long ExpectedTargetRecordWadOffset = 0xD640A8;
 const long ExpectedDonorPatchWadOffset = 0x136E8B4;
 const long ExpectedTargetPatchWadOffset = 0xD640B4;
+const long ExpectedDonorRenderRadiusWadOffset = 0x136E8F8;
+const long ExpectedTargetRenderRadiusWadOffset = 0xD640F8;
 const string ExpectedOutputImageSha256 =
     "ec3d8e354cf246d704860a6b26968a59cc7f77fe6409e08c299a777b7fc4df8e";
+const string ExpectedRenderRadiusOutputImageSha256 =
+    "329420e7f9e492ce69830f63c783421c05c5976fe8b0b04de7d49e52bf87e626";
+const long ExpectedRenderRadiusChangedPhysicalBytes = 46;
 
 string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
 (string sourceImage, string sourceCue) = ResolveCleanSource(repositoryRoot, args);
@@ -41,6 +46,8 @@ byte[] donorRecordBefore = ReadMode2WadBytes(
 Require(
     donorRecordBefore[0x4A] == 0xFF &&
     donorRecordBefore[0x4B] == 0x00 &&
+    donorRecordBefore[0x50] == 0x18 &&
+    donorRecordBefore[0x51] == 0x00 &&
     donorRecordBefore[0x52] == 0x40 &&
     donorRecordBefore[0x53] == 0xFF &&
     edited.Flag4A == 0x40 &&
@@ -262,7 +269,7 @@ Require(
     checklist.Contains("not runtime proof", StringComparison.OrdinalIgnoreCase) &&
     checklist.Contains("T21", StringComparison.Ordinal) &&
     checklist.Contains("X position changed", StringComparison.OrdinalIgnoreCase) &&
-    checklist.Contains("placement/culling sector", StringComparison.OrdinalIgnoreCase) &&
+    checklist.Contains("visibility sentinel", StringComparison.OrdinalIgnoreCase) &&
     checklist.Contains("remains unchanged", StringComparison.OrdinalIgnoreCase) &&
     checklist.Contains("outside its near-detail range", StringComparison.OrdinalIgnoreCase) &&
     checklist.Contains("second camera angle", StringComparison.OrdinalIgnoreCase) &&
@@ -301,6 +308,143 @@ finally
     DeleteIfExists(determinismPrefix + ".cue");
 }
 
+MobySourcePatch renderRadiusPatch = donorPatch with
+{
+    Label = "townsquare-T21-render-radius-18-to-20",
+    Kind = "moby-render-radius",
+    RecordOffset = "0x50",
+    WadRelativeOffset = $"0x{ExpectedDonorRenderRadiusWadOffset:X}",
+    ImageOffset = "research-rebased-at-compose-time",
+    ByteLength = 1,
+    BeforeHexPreview = "18",
+    AfterHexPreview = "20",
+    Description = "Isolated native render-radius diagnostic: expand moved T21 from native loose-gem value 0x18 to value 0x20 used by other retail Town Square actor families; not a loose-gem promotion rule."
+};
+MobySourcePatchPlan renderRadiusPlan = objectPlan with
+{
+    PatchCount = 2,
+    TotalPatchedBytes = 5,
+    Patches = [donorPatch, renderRadiusPatch],
+    EditOutcomes =
+    [
+        editorOutcome with
+        {
+            PatchKinds = ["moby-position-x", "moby-render-radius"]
+        }
+    ],
+    Notes = objectPlan.Notes
+        .Concat([
+            "Focused far-flicker diagnostic: keep +0x4A = FF and +0x52 = 40; change only T21 X plus native render radius +0x50 from 0x18 to 0x20."
+        ])
+        .ToArray()
+};
+string renderRadiusPrefix = Path.Combine(
+    outputRoot,
+    "Stone-Hill-slot-Town-Square-edited-T21-X-render-radius-20-RUNTIME-CANDIDATE");
+StoneHillTownSquareEditedDonorCandidateRequest renderRadiusRequest = request with
+{
+    MobyPatchPlan = renderRadiusPlan,
+    OutputImagePath = renderRadiusPrefix + ".bin",
+    OutputCuePath = renderRadiusPrefix + ".cue"
+};
+StoneHillTownSquareEditedDonorCandidatePlan renderRadiusCandidatePlan =
+    await StoneHillTownSquareEditedDonorCandidateComposer.BuildPlanAsync(renderRadiusRequest);
+StoneHillTownSquareEditedDonorPatchSummary radiusSummary =
+    renderRadiusCandidatePlan.RenderRadiusPatch
+    ?? throw new InvalidDataException("The isolated render-radius plan has no render-radius summary.");
+Require(
+    renderRadiusCandidatePlan.RecipeId ==
+        StoneHillTownSquareEditedDonorCandidateComposer.RenderRadiusRecipeId &&
+    renderRadiusCandidatePlan.RecipeVersion ==
+        StoneHillTownSquareEditedDonorCandidateComposer.RenderRadiusRecipeVersion &&
+    renderRadiusCandidatePlan.EvidenceId ==
+        StoneHillTownSquareEditedDonorCandidateComposer.RenderRadiusEvidenceId &&
+    renderRadiusCandidatePlan.Safety.Status ==
+        StoneHillTownSquareEditedDonorCandidateComposer.RenderRadiusStatus &&
+    renderRadiusCandidatePlan.PlacementPatch == null &&
+    radiusSummary.Kind == "moby-render-radius" &&
+    radiusSummary.TrueIndex == EditedTrueIndex &&
+    radiusSummary.DonorWadOffset == ExpectedDonorRenderRadiusWadOffset &&
+    radiusSummary.TargetWadOffset == ExpectedTargetRenderRadiusWadOffset &&
+    radiusSummary.ByteLength == 1 &&
+    radiusSummary.BeforeHex == "18" &&
+    radiusSummary.AfterHex == "20",
+    "The isolated render-radius plan changed recipe, relocation, bytes, or evidence boundary.");
+MobySourcePatchPlan unsafeRadiusPlan = renderRadiusPlan with
+{
+    Patches = [donorPatch, renderRadiusPatch with { AfterHexPreview = "21" }]
+};
+await ExpectFailureAsync(
+    () => StoneHillTownSquareEditedDonorCandidateComposer.BuildPlanAsync(
+        renderRadiusRequest with { MobyPatchPlan = unsafeRadiusPlan }),
+    "An unapproved T21 render-radius value passed the isolated 18 -> 20 gate.");
+
+StoneHillTownSquareEditedDonorArtifactResult renderRadiusArtifact =
+    await StoneHillTownSquareEditedDonorArtifactWriter.ExportAsync(renderRadiusRequest);
+StoneHillTownSquareEditedDonorCandidateResult renderRadiusResult = renderRadiusArtifact.Candidate;
+Require(
+    renderRadiusResult.Plan.RenderRadiusPatch == radiusSummary &&
+    renderRadiusResult.Plan.PlacementPatch == null &&
+    renderRadiusResult.OutputImageSha256 == ExpectedRenderRadiusOutputImageSha256 &&
+    renderRadiusResult.ChangedLogicalWadBytes == 2 &&
+    renderRadiusResult.ChangedPhysicalImageBytes == ExpectedRenderRadiusChangedPhysicalBytes &&
+    renderRadiusResult.RebuiltRawSectorCount == 1 &&
+    renderRadiusResult.ExactLogicalDiffBoundaryVerified &&
+    renderRadiusResult.ExactPhysicalSectorBoundaryVerified &&
+    renderRadiusResult.OriginalTownSquareDonorPreserved &&
+    renderRadiusResult.DisplayIdentityExecutablePreserved &&
+    renderRadiusResult.BaseImagePreserved &&
+    renderRadiusResult.RetailSourcePreserved &&
+    renderRadiusResult.BinCuePublishCompleted &&
+    !renderRadiusResult.PlacementSectorReadbackVerified &&
+    renderRadiusResult.RenderRadiusReadbackVerified &&
+    IsSha256(renderRadiusResult.OutputImageSha256),
+    "The isolated render-radius candidate omitted an exact diff, readback, donor, SCUS, source, or publication proof.");
+byte[] radiusTargetAfter = ReadMode2WadBytes(
+    renderRadiusResult.OutputImagePath,
+    ExpectedTargetRecordWadOffset,
+    MobyLoader.RuntimeRecordStride);
+Require(
+    radiusTargetAfter[0x4A] == 0xFF &&
+    radiusTargetAfter[0x4B] == 0x00 &&
+    radiusTargetAfter[0x50] == 0x20 &&
+    radiusTargetAfter[0x51] == 0x00 &&
+    radiusTargetAfter[0x52] == 0x40 &&
+    radiusTargetAfter[0x53] == 0xFF,
+    "The render-radius candidate changed a T21 culling/update byte outside checked +0x50 = 20.");
+string radiusChecklist = await File.ReadAllTextAsync(renderRadiusArtifact.RuntimeChecklistPath);
+Require(
+    radiusChecklist.Contains(renderRadiusResult.OutputImageSha256, StringComparison.Ordinal) &&
+    radiusChecklist.Contains("render radius", StringComparison.OrdinalIgnoreCase) &&
+    radiusChecklist.Contains("+0x50", StringComparison.OrdinalIgnoreCase) &&
+    radiusChecklist.Contains("adjacent native T22", StringComparison.OrdinalIgnoreCase) &&
+    radiusChecklist.Contains("collect T21 once", StringComparison.OrdinalIgnoreCase),
+    "The isolated render-radius checklist omitted its exact far-distance discriminator.");
+string radiusDeterminismPrefix = Path.Combine(outputRoot, "render-radius-determinism-recheck");
+try
+{
+    StoneHillTownSquareEditedDonorCandidateResult radiusDeterministic =
+        await StoneHillTownSquareEditedDonorCandidateComposer.ExportAsync(
+            renderRadiusRequest with
+            {
+                OutputImagePath = radiusDeterminismPrefix + ".bin",
+                OutputCuePath = radiusDeterminismPrefix + ".cue"
+            });
+    Require(
+        radiusDeterministic.OutputImageSha256 == renderRadiusResult.OutputImageSha256 &&
+        radiusDeterministic.OutputImageSha256 == ExpectedRenderRadiusOutputImageSha256 &&
+        radiusDeterministic.ChangedLogicalWadBytes == 2 &&
+        radiusDeterministic.ChangedPhysicalImageBytes ==
+            renderRadiusResult.ChangedPhysicalImageBytes &&
+        radiusDeterministic.RenderRadiusReadbackVerified,
+        "A second render-radius export was not byte-deterministic.");
+}
+finally
+{
+    DeleteIfExists(radiusDeterminismPrefix + ".bin");
+    DeleteIfExists(radiusDeterminismPrefix + ".cue");
+}
+
 Console.WriteLine("PASS: deterministic Town Square T21 X-only edit was rebased while native +0x4A = FF remained unchanged.");
 Console.WriteLine($"CUE: {result.OutputCuePath}");
 Console.WriteLine($"BIN: {result.OutputImagePath}");
@@ -312,6 +456,13 @@ Console.WriteLine("T21 X: 7813.75 -> 7685.75 (raw 125020 -> 122972); native +0x4
 Console.WriteLine("Legacy cache flag4A/flag4B map to native +0x52/+0x53: 40/FF preserved.");
 Console.WriteLine($"Donor WAD offset: 0x{ExpectedDonorPatchWadOffset:X}");
 Console.WriteLine($"Expected Stone Hill-slot WAD offset: 0x{ExpectedTargetPatchWadOffset:X}");
+Console.WriteLine("PASS: isolated T21 render-radius diagnostic was rebased with every adjacent culling/update byte preserved.");
+Console.WriteLine($"Render-radius CUE: {renderRadiusResult.OutputCuePath}");
+Console.WriteLine($"Render-radius BIN: {renderRadiusResult.OutputImagePath}");
+Console.WriteLine($"Render-radius BIN SHA-256: {renderRadiusResult.OutputImageSha256}");
+Console.WriteLine($"Render-radius checklist: {renderRadiusArtifact.RuntimeChecklistPath}");
+Console.WriteLine($"Render-radius static proof: {renderRadiusArtifact.StaticProofPath}");
+Console.WriteLine($"T21 +0x50: 18 -> 20; donor WAD 0x{ExpectedDonorRenderRadiusWadOffset:X}; target WAD 0x{ExpectedTargetRenderRadiusWadOffset:X}.");
 
 static async Task<(string ImagePath, string CuePath)> EnsureExactIdentityBaseAsync(
     string repositoryRoot,
