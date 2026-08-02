@@ -83,16 +83,43 @@ sky is 312 bytes larger than Stone Hill's fixed copy; growing that copy has not
 been runtime-tested and remains a separate polish experiment.
 
 The exact retail-pair transplant profile is runtime-proven for this checklist.
-The original pre-playtest static-proof JSON beside the focused candidate
-correctly retains `runtimeClaim: false`; it records compiler/readback evidence
-created before playtesting and must not be relabelled. The guarded V5 artifact
-writer now emits `runtimeClaim: true` only when the saved intent resolves to
-this code-owned profile and the generated BIN matches the exact runtime-proven
-SHA-256 above. This section remains the durable record of the user-observed
-runtime result. Edited or newly compiled donor payloads, arbitrary donor levels,
-seamless transition-sky replacement, long-duration soak or broad
+Its pre-playtest proof was static-only. After promotion, the guarded V5 artifact
+writer emits `runtimeClaim: true` only when the saved intent resolves to this
+code-owned profile and the generated BIN matches the exact runtime-proven
+SHA-256 above; the currently generated proof beside the candidate therefore
+describes the promoted profile. This section remains the durable record of the
+user-observed runtime result. Edited or newly compiled donor payloads, arbitrary
+donor levels, seamless transition-sky replacement, long-duration soak or broad
 emulator-version coverage, normal V4 Create BIN, and a new 36th slot are not
 implied.
+
+## Milestone 3: Town Square display identity - pending runtime
+
+The complete-pair candidate deliberately retained retail level/save slot 11, so
+its portal, transition, guidebook, and Inventory name remained Stone Hill. The
+two retail levels already have identical completion targets: 200 gems, four
+dragons, and one egg. No completion-total patch is needed or permitted for this
+pair.
+
+The next disposable candidate starts from the exact runtime-proven Milestone 2
+BIN and aliases only Stone Hill's indexed level-name pointer at SCUS file offset
+`0x5FFF4` to Town Square's existing pointer from `0x5FFFC`. The shared name pool,
+level ID 11, save/progression ownership, both completion-total rows, original
+Town Square slot 13, WAD, terrain, collision, textures, scene, actors, music,
+demo reroute, and transition sky are preserved.
+
+- Directory: `town-square-display-identity-candidate`
+- CUE: `Stone-Hill-slot-Town-Square-complete-level-with-Town-Square-display-name-RUNTIME-CANDIDATE.cue`
+- BIN SHA-256:
+  `71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9`
+- Static diff proof: one logical SCUS byte, 31 physical bytes within one rebuilt
+  MODE2 Form 1 sector, and zero changes outside that sector.
+- Evidence status: `runtime-candidate-pending-duckstation`; `runtimeClaim` remains
+  false until the generated checklist is completed in DuckStation.
+
+Two visible Town Square entries are expected in this experiment. They retain
+independent slot-11 and slot-13 save state. Use a fresh game or disposable memory
+card because existing Stone Hill progress can legitimately carry into slot 11.
 
 ## Next implementation gates
 
@@ -111,7 +138,9 @@ implied.
    retail-pair profile as a separate V5 replacement-test workflow. Do not merge
    it into normal V4 Create BIN or imply that ordinary saved edits are already
    composed into the transplanted payload.
-6. Research a new 36th catalog/disc slot only after the complete Stone Hill
+6. **Pending DuckStation:** prove the display-identity-only candidate without
+   changing its slot-11 save ownership or the original Town Square slot.
+7. Research a new 36th catalog/disc slot only after the complete Stone Hill
    replacement works. A 36th level requires new routing, level-table,
    executable, save/progression, WAD-growth, and runtime-dependency proofs; it is
    not implied by the replacement compiler.

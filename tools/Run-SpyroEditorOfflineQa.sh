@@ -17,6 +17,7 @@ HQ_MATERIAL_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.HqMaterialCacheSmoke/Spyro
 PERSISTENCE_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.PersistenceSmoke/Spyro.Editor.PersistenceSmoke.csproj"
 UPDATE_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.UpdateSmoke/Spyro.Editor.UpdateSmoke.csproj"
 STONEHILL_LEVEL_REPLACEMENT_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.StoneHillLevelReplacementBaselineSmoke/Spyro.Editor.StoneHillLevelReplacementBaselineSmoke.csproj"
+STONEHILL_TOWNSQUARE_IDENTITY_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.StoneHillTownSquareIdentityCandidateSmoke/Spyro.Editor.StoneHillTownSquareIdentityCandidateSmoke.csproj"
 TERRAIN_TEXTURE_PROOF_PROJECTS=(
     "$ROOT_DIR/src/Spyro.Editor.TerrainCatalogSmoke/Spyro.Editor.TerrainCatalogSmoke.csproj"
     "$ROOT_DIR/src/Spyro.Editor.TerrainRelocationStoreSmoke/Spyro.Editor.TerrainRelocationStoreSmoke.csproj"
@@ -36,6 +37,7 @@ PROOF_BIN_DIR="$ROOT_DIR/_local/objects/control-role-proof-bins"
 BUILD_ONLY=0
 WITH_GRADE_WRITE_READBACK=0
 STONEHILL_LEVEL_REPLACEMENT_BASELINE_SMOKE_ONLY=0
+STONEHILL_TOWNSQUARE_IDENTITY_CANDIDATE_SMOKE_ONLY=0
 
 usage() {
     cat <<'USAGE'
@@ -116,6 +118,11 @@ Options:
       BIN/CUE baseline proof. Requires the configured clean retail source disc;
       writes no editor-visible level replacement and launches no emulator.
 
+  --stonehill-townsquare-identity-candidate-smoke-only
+      Build the pending-runtime V5 Town Square display-identity CUE from the exact
+      runtime-proven Stone Hill-slot replacement. Guards the single name-pointer
+      sector, completion totals, final hash, and evidence files; launches no emulator.
+
   -h, --help
       Show this help.
 
@@ -146,6 +153,9 @@ for argument in "$@"; do
         --stonehill-level-replacement-baseline-smoke-only)
             STONEHILL_LEVEL_REPLACEMENT_BASELINE_SMOKE_ONLY=1
             ;;
+        --stonehill-townsquare-identity-candidate-smoke-only)
+            STONEHILL_TOWNSQUARE_IDENTITY_CANDIDATE_SMOKE_ONLY=1
+            ;;
         -h|--help)
             usage
             exit 0
@@ -161,8 +171,13 @@ if [[ "$BUILD_ONLY" -eq 1 && "$WITH_GRADE_WRITE_READBACK" -eq 1 ]]; then
     fail "--build-only cannot be combined with --with-grade-write-readback."
 fi
 if [[ "$STONEHILL_LEVEL_REPLACEMENT_BASELINE_SMOKE_ONLY" -eq 1 &&
-      ("$BUILD_ONLY" -eq 1 || "$WITH_GRADE_WRITE_READBACK" -eq 1) ]]; then
+      ("$BUILD_ONLY" -eq 1 || "$WITH_GRADE_WRITE_READBACK" -eq 1 ||
+       "$STONEHILL_TOWNSQUARE_IDENTITY_CANDIDATE_SMOKE_ONLY" -eq 1) ]]; then
     fail "--stonehill-level-replacement-baseline-smoke-only cannot be combined with another QA mode."
+fi
+if [[ "$STONEHILL_TOWNSQUARE_IDENTITY_CANDIDATE_SMOKE_ONLY" -eq 1 &&
+      ("$BUILD_ONLY" -eq 1 || "$WITH_GRADE_WRITE_READBACK" -eq 1) ]]; then
+    fail "--stonehill-townsquare-identity-candidate-smoke-only cannot be combined with another QA mode."
 fi
 
 require_command dotnet
@@ -179,6 +194,15 @@ if [[ "$STONEHILL_LEVEL_REPLACEMENT_BASELINE_SMOKE_ONLY" -eq 1 ]]; then
     echo
     echo "Running focused V5 Stone Hill replacement baseline smoke..."
     dotnet run --project "$STONEHILL_LEVEL_REPLACEMENT_SMOKE_PROJECT" --configuration "$CONFIGURATION" --no-build -- "$ROOT_DIR"
+    exit 0
+fi
+
+if [[ "$STONEHILL_TOWNSQUARE_IDENTITY_CANDIDATE_SMOKE_ONLY" -eq 1 ]]; then
+    echo "Building focused V5 Town Square display-identity candidate smoke..."
+    dotnet build "$STONEHILL_TOWNSQUARE_IDENTITY_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
+    echo
+    echo "Running focused V5 Town Square display-identity candidate smoke..."
+    dotnet run --project "$STONEHILL_TOWNSQUARE_IDENTITY_SMOKE_PROJECT" --configuration "$CONFIGURATION" --no-build -- "$ROOT_DIR"
     exit 0
 fi
 
