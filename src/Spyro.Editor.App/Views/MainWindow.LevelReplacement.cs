@@ -128,7 +128,7 @@ public sealed partial class MainWindow
             Padding = new Thickness(9, 7),
             Child = new TextBlock
             {
-                Text = "Edited replacement test — pending DuckStation. This first X-only proof intentionally preserves T21's native placement/culling-sector byte; a later gate will validate the derived sector patch. It accepts exactly one saved Town Square T21 red-gem X move. Other objects, axes, additions, removals, paths, terrain, and textures remain blocked; normal Create BIN remains unchanged.",
+                Text = "Edited replacement test — pending DuckStation. This corrected X-only proof preserves T21's native +0x4A visibility sentinel (FF). The rejected FF → D5 terrain-sector experiment caused distance flicker, so terrain-sector IDs are no longer written into this visibility byte. It accepts exactly one saved Town Square T21 red-gem X move. Other objects, axes, additions, removals, paths, terrain, and textures remain blocked; normal Create BIN remains unchanged.",
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 11,
                 LineHeight = 16,
@@ -233,7 +233,7 @@ public sealed partial class MainWindow
             ? $"Blocked saved intent: {state.Error} Restore it or save the checked intent again before creating a test CUE."
             : "Original Stone Hill is active — no whole-level replacement intent is saved.";
         string editedStateText = hasTownSquareNativeObjectEdits
-            ? "Saved Town Square native object edits are present. This pending-DuckStation X-only proof preserves T21's native placement/culling-sector byte; a later gate will validate the derived sector patch."
+            ? "Saved Town Square native object edits are present. This pending-DuckStation X-only proof preserves T21's native +0x4A visibility sentinel (FF); the rejected FF → D5 experiment flickered at distance."
             : "Edited replacement test unavailable: save a Town Square native object edit first; the initial gate accepts only T21 Red Gem moved on X.";
         _nativeLevelReplacementStatusText.Text = string.IsNullOrWhiteSpace(_nativeLevelReplacementNotice)
             ? $"{stateText}\n\n{editedStateText}"
@@ -447,48 +447,31 @@ public sealed partial class MainWindow
                 string.Equals(patch.WadRelativeOffset, "0x136E8B4", StringComparison.OrdinalIgnoreCase) &&
                 patch.ByteLength == 4)
             .ToArray();
-        MobySourcePatch[] placementPatches = genuinePlan.Patches
-            .Where(patch =>
-                patch.TrueIndex == 21 &&
-                string.Equals(patch.Kind, "moby-placement-sector", StringComparison.Ordinal) &&
-                string.Equals(patch.WadRelativeOffset, "0x136E8F2", StringComparison.OrdinalIgnoreCase) &&
-                patch.ByteLength == 1)
-            .ToArray();
         MobySourceEditOutcome[] outcomes = (genuinePlan.EditOutcomes ?? [])
             .ToArray();
-        if (genuinePlan.PatchCount != 2 ||
-            genuinePlan.TotalPatchedBytes != 5 ||
-            genuinePlan.Patches.Count != 2 ||
+        if (genuinePlan.PatchCount != 1 ||
+            genuinePlan.TotalPatchedBytes != 4 ||
+            genuinePlan.Patches.Count != 1 ||
             xPatches.Length != 1 ||
-            placementPatches.Length != 1 ||
             genuinePlan.SkippedEdits.Count != 0 ||
             genuinePlan.PackageImportPreviews.Count != 0 ||
             outcomes.Length != 1 ||
             outcomes[0].EditorTrueIndex != 21 ||
             outcomes[0].SkippedReasons.Count != 0 ||
             outcomes[0].PackageOutcomes.Count != 0 ||
-            !outcomes[0].PatchKinds.Order(StringComparer.Ordinal).SequenceEqual(
-                new[] { "moby-placement-sector", "moby-position-x" },
-                StringComparer.Ordinal))
+            outcomes[0].PatchKinds.Count != 1 ||
+            !string.Equals(outcomes[0].PatchKinds[0], "moby-position-x", StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 "The saved Town Square edits are outside the first edited-replacement proof. " +
-                "This gate requires exactly T21 X plus the editor's one derived placement-sector patch; no other edits or dependencies are accepted.");
+                "This gate requires exactly T21 X while preserving its native +0x4A visibility sentinel (FF); no derived terrain-sector write, other edit, or dependency is accepted.");
         }
 
-        MobySourceEditOutcome xOnlyOutcome = outcomes[0] with
-        {
-            PatchKinds = ["moby-position-x"]
-        };
         return genuinePlan with
         {
-            PatchCount = 1,
-            TotalPatchedBytes = 4,
-            Patches = [xPatches[0]],
-            EditOutcomes = [xOnlyOutcome],
             Notes = genuinePlan.Notes
                 .Concat([
-                    "Focused edited-donor proof: the genuine editor plan also derived a placement/culling-sector byte, but this isolated first gate preserves T21's native sector and transplants X only."
+                    "Focused edited-donor proof: preserve Town Square T21's native +0x4A visibility sentinel (FF) and transplant X only. The rejected FF -> D5 terrain-sector experiment caused distance flicker in DuckStation."
                 ])
                 .ToArray()
         };

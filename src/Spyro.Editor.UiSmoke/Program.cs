@@ -266,8 +266,8 @@ void RunNativeLevelReplacementUiOnly()
         }
         AssertTextContains(window, "pending DuckStation");
         AssertTextContains(window, "T21 red-gem X move");
-        AssertTextContains(window, "preserves T21's native placement/culling-sector byte");
-        AssertTextContains(window, "a later gate will validate the derived sector patch");
+        AssertTextContains(window, "preserves T21's native +0x4A visibility sentinel (FF)");
+        AssertTextContains(window, "rejected FF → D5 terrain-sector experiment caused distance flicker");
         AssertTextContains(window, "normal Create BIN remains unchanged");
         object[] donors = ReadItemsSource(donor, "V5 replacement donor picker");
         if (donors.Length != 1 ||
@@ -337,7 +337,7 @@ void RunNativeLevelReplacementUiOnly()
         FlushUi();
         if (!createEdited.IsEnabled ||
             !status.Text!.Contains("pending-DuckStation X-only proof", StringComparison.OrdinalIgnoreCase) ||
-            !status.Text.Contains("native placement/culling-sector byte", StringComparison.OrdinalIgnoreCase))
+            !status.Text.Contains("native +0x4A visibility sentinel (FF)", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
                 $"A saved Town Square T21 X move did not enable the separate edited replacement action and pending-runtime disclosure. Enabled={createEdited.IsEnabled}; status={status.Text}");
