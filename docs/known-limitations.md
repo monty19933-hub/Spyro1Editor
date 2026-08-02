@@ -398,10 +398,13 @@ are consumed until the deeper actor/chest behavior allocation is decoded.
 The current research smoke report confirms that source-row append plus cloned
 special data is enough for the Bull baseline, and that native-clone research
 appends now preserve donor startup bytes instead of editor-cache state. The
-Town Square research path also preserves the donor `0xFF` placement-sector byte
-for guarded Torro/chest appends, because the prior forced terrain sector was a
-live-behavior mismatch against the working donors. The remaining 3x Flame Chest
-clue is its colocated runtime/control row T108 (`renderRadius=0x1A`,
+Town Square research path also preserves the donor `0xFF` byte at record
+`+0x4A` for guarded Torro/chest appends. A direct retail census found `FF` there
+in all 107 Town Square rows, and a focused T21 candidate that replaced it with
+the derived terrain-sector value `D5` flickered at distance in DuckStation.
+The published Moby layout identifies `+0x4A` as the `visable` flag, not terrain
+ownership, so normal exports must preserve its native sentinel. The remaining
+3x Flame Chest clue is its colocated runtime/control row T108 (`renderRadius=0x1A`,
 `nativeClassLowByte=0x88`), which must be allocated with the chest shell before
 that family can be promoted.
 

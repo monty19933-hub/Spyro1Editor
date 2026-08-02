@@ -189,12 +189,59 @@ not promoted by this observation.
 
 The exact partial evidence record is stored at
 `docs/runtime-evidence/stonehill-townsquare-edited-donor-t21-x-2026-08-01.json`.
-It records both this deliberately isolated X-only result and the next focused
-gate: compose the same X patch together with the genuine exporter-derived T21
-placement/culling-sector byte at record `+0x4A`, donor WAD `0x136E8F2`,
-replacement-slot WAD `0xD640F2`, from `FF` to `D5`. That X-plus-sector candidate
-must receive its own DuckStation result; this X-only observation does not prove
-the derived sector value.
+It records this deliberately isolated X-only result and the then-pending
+`FF`-to-`D5` experiment at record `+0x4A`. That experiment has now received an
+independent DuckStation result and was rejected in Milestone 5 below.
+
+## Milestone 5: T21 X plus `+0x4A D5` - runtime rejected
+
+The follow-up candidate paired the same T21 X edit with the geometry resolver's
+sector result, decimal 213 (`D5`), at donor WAD `0x136E8F2` and replacement-slot
+WAD `0xD640F2`. Static preimage, relocation, readback, source-preservation, and
+raw-sector-boundary checks passed, but the exact candidate failed its focused
+runtime behavior gate.
+
+- CUE:
+  `Stone-Hill-slot-Town-Square-edited-T21-X-and-placement-sector-RUNTIME-CANDIDATE.cue`
+- BIN SHA-256:
+  `034ace2340dce2e71bbfd41df832d984dfebbe330dba6b0325d198cdf8ac0b81`
+- Base display-identity BIN SHA-256:
+  `71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9`
+- T21 X patch: donor WAD `0x136E8B4`, replacement-slot WAD `0xD640B4`,
+  record `+0x0C`, `5C E8 01 00` to `5C E0 01 00`.
+- Rejected `+0x4A` patch: donor WAD `0x136E8F2`, replacement-slot WAD
+  `0xD640F2`, `FF` to `D5`.
+- Static boundary: two changed logical WAD bytes, 40 changed physical image
+  bytes, one rebuilt raw sector, and no changes to the retail donor or base BIN.
+- Evidence ID:
+  `stonehill-slot-townsquare-edited-donor-t21-x-d5-rejected-duckstation-2026-08-01`
+- Evidence status: `runtime-rejected-visibility-regression`; profile promotion
+  is not authorized. The result is an interactive user report, not an automated
+  emulator capture.
+
+On 2026-08-01, the user confirmed in DuckStation that T21 moved and could be
+collected exactly once. However, T21 flickered at distance and became stable
+only when Spyro moved close. That visibility regression rejects this exact BIN
+despite the successful movement and one-time collection observations.
+
+The byte interpretation also has independent structural support. A direct
+census of the clean USA Town Square source table found `FF` at record `+0x4A`
+in all 107 native rows. The primary Spyro 1 reverse-engineering Moby layout names
+that byte `visable` and documents `FF` as visible; the next byte is separately
+shadow-related. The pinned source is
+[`include/moby.h` lines 150-204 at commit 25d0faaa1cf6cf0d9d918d2a4e80dd07726cc9d3](https://github.com/c0mposer/spyro1-reverse-engineering/blob/25d0faaa1cf6cf0d9d918d2a4e80dd07726cc9d3/include/moby.h#L150-L204).
+Its field layout places `visable` at `+0x4A`.
+
+`D5` remains the terrain geometry sector returned for the edited coordinates;
+that does not make it a valid Moby visibility-byte value. The next corrective
+gate must preserve native `FF` and apply only the T21 X patch. It must explicitly
+verify visibility from distance through approach, one-time collection and
+cleanup, nearby-actor isolation, ordinary gameplay, death/reload, Return Home
+and re-entry, save/reload, and the original Town Square slot before any edited-
+donor promotion.
+
+The exact rejection record is stored at
+`docs/runtime-evidence/stonehill-townsquare-edited-donor-t21-x-d5-rejected-2026-08-01.json`.
 
 ## Next implementation gates
 
@@ -203,15 +250,17 @@ the derived sector value.
 2. **Completed for an unchanged retail donor pair:** install Town Square's
    terrain, collision, textures, sky, scene, actors, and dragon packages in the
    fixed Stone Hill capacity. Arbitrary newly compiled payloads are not implied.
-3. **Focused partial result for one existing object:** Town Square T21's saved
-   X edit was visibly present in DuckStation at BIN SHA-256
+3. **Focused partial result plus one rejected follow-up for an existing
+   object:** Town Square T21's saved X edit was visibly present in DuckStation
+   at BIN SHA-256
    `ec3d8e354cf246d704860a6b26968a59cc7f77fe6409e08c299a777b7fc4df8e`.
-   Collection and the full replacement regression remain unverified, so this
-   does not promote edited-donor composition. The next isolated gate must pair
-   the same X word with the exporter-derived placement/culling-sector byte
-   `FF` to `D5`, then validate visibility/culling, interaction, and the full
-   checklist. Edited terrain/scene data, other object edits, additions,
-   removals, and imported actor packages remain pending.
+   The X-plus-`D5` follow-up at BIN SHA-256
+   `034ace2340dce2e71bbfd41df832d984dfebbe330dba6b0325d198cdf8ac0b81`
+   moved and collected T21 once but introduced distance flicker, so it is
+   runtime-rejected. The next isolated gate must preserve native `FF` at
+   `+0x4A`, apply only the X word, and complete the visibility, interaction, and
+   regression checklist. Edited terrain/scene data, other object edits,
+   additions, removals, and imported actor packages remain pending.
 4. **Completed for the exact retail pair:** the complete portal, gameplay,
    collection, reload, persistence, Return Home, re-entry, and title-demo
    checklist passed in DuckStation. Investigate the abrupt sky handoff as an

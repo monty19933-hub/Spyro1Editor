@@ -1,0 +1,108 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-01",
+  "evidenceId": "stonehill-slot-townsquare-edited-donor-t21-x-d5-rejected-duckstation-2026-08-01",
+  "evidenceType": "interactive-user-report",
+  "automatedEmulatorCapture": false,
+  "evidenceStatus": "runtime-rejected-visibility-regression",
+  "promotionAuthorized": false,
+  "profileId": "native-level-replacement-stonehill-townsquare-edited-donor-t21-x-placement-sector-clean-usa-v2",
+  "profileRecipeVersion": 2,
+  "baseProfileId": "native-level-replacement-stonehill-townsquare-display-identity-clean-usa-v1",
+  "baseOutputImageSha256": "71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9",
+  "outputImageSha256": "034ace2340dce2e71bbfd41df832d984dfebbe330dba6b0325d198cdf8ac0b81",
+  "staticProofArtifact": "_local/v5-stone-hill-level-replacement/edited-donor-candidate/Stone-Hill-slot-Town-Square-edited-T21-X-and-placement-sector-RUNTIME-CANDIDATE-static-proof.json",
+  "editedObject": {
+    "sourceLevel": "Town Square",
+    "trueIndex": 21,
+    "label": "Red Gem",
+    "originalWorldPosition": [7813.75, 7189.75, 512.0],
+    "editedWorldPosition": [7685.75, 7189.75, 512.0],
+    "originalRawPosition": [125020, 115036, 8192],
+    "editedRawPosition": [122972, 115036, 8192]
+  },
+  "patchBoundary": {
+    "changedLogicalWadBytes": 2,
+    "changedPhysicalImageBytes": 40,
+    "rebuiltRawSectors": 1,
+    "patches": [
+      {
+        "kind": "moby-position-x",
+        "donorWadOffset": "0x136E8B4",
+        "replacementSlotWadOffset": "0xD640B4",
+        "recordOffset": "0x0C",
+        "byteLength": 4,
+        "beforeHex": "5CE80100",
+        "afterHex": "5CE00100"
+      },
+      {
+        "kind": "rejected-moby-visible-byte-overwrite",
+        "donorWadOffset": "0x136E8F2",
+        "replacementSlotWadOffset": "0xD640F2",
+        "recordOffset": "0x4A",
+        "byteLength": 1,
+        "beforeHex": "FF",
+        "afterHex": "D5"
+      }
+    ]
+  },
+  "runtimeObservation": {
+    "primaryEvidence": true,
+    "passedChecks": [
+      "Town Square T21 was visibly moved to its edited X position.",
+      "T21 was collected exactly once."
+    ],
+    "rejectionReason": "T21 flickered at distance and became stable only when Spyro moved close.",
+    "unverifiedChecks": [
+      "Cleanup and persistence after the one-time collection were not reported.",
+      "The complete movement, combat, dragon, egg, pause, Inventory, death/reload, Return Home/re-entry, and save/reload regression was not reported.",
+      "Other-actor isolation and the original retail Town Square were not reported for this edited BIN."
+    ]
+  },
+  "nativeFieldFinding": {
+    "recordOffset": "0x4A",
+    "publishedFieldName": "visable",
+    "publishedMeaning": "FF is visible; other values are not visible.",
+    "sourceReference": {
+      "repository": "c0mposer/spyro1-reverse-engineering",
+      "commit": "25d0faaa1cf6cf0d9d918d2a4e80dd07726cc9d3",
+      "file": "include/moby.h",
+      "lines": "150-204",
+      "permalink": "https://github.com/c0mposer/spyro1-reverse-engineering/blob/25d0faaa1cf6cf0d9d918d2a4e80dd07726cc9d3/include/moby.h#L150-L204",
+      "layoutNote": "The Moby struct field ordering places visable at +0x4A and the separately named shadow-related byte at +0x4B."
+    },
+    "retailTownSquareCensus": {
+      "retailSourceImageSha256": "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37",
+      "sourceTableWadOffset": "0x136E170",
+      "recordStride": "0x58",
+      "sourceRecordCount": 107,
+      "recordsWithFfAtOffset4A": 107,
+      "recordsWithOtherValueAtOffset4A": 0
+    }
+  },
+  "derivedTerrainCandidate": {
+    "editedWorldPosition": [7685.75, 7189.75, 512.0],
+    "terrainSectorDecimal": 213,
+    "terrainSectorHex": "D5",
+    "interpretation": "D5 is the geometry resolver's terrain-sector result, not a valid replacement for the native Moby visibility sentinel at +0x4A."
+  },
+  "correctiveNextGate": {
+    "id": "stonehill-slot-townsquare-edited-donor-t21-x-preserve-native-visible-ff",
+    "positionPatch": "Apply only the same T21 X word change.",
+    "visibilityRule": "Preserve native FF at record +0x4A.",
+    "requiredChecks": [
+      "T21 remains continuously visible from distance through close approach.",
+      "T21 moves to the edited X position, awards its reward exactly once, and cleans up normally.",
+      "Nearby actors and ordinary gameplay remain normal.",
+      "Death/reload, Return Home/re-entry, save/reload, and the original Town Square slot pass."
+    ],
+    "requiresIndependentDuckStationResult": true
+  },
+  "scopeLimitations": [
+    "The D5 candidate is runtime-rejected and must not be promoted.",
+    "Successful movement and one-time collection do not override the observed visibility regression.",
+    "This result applies only to the exact profile recipe and output BIN hash recorded here.",
+    "It does not authorize other objects, axes, additions, removals, paths, terrain, textures, imported actor packages, normal Create BIN, or a release workflow."
+  ]
+}
