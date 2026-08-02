@@ -3,6 +3,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using System.Security.Cryptography;
+using System.Text.Json;
 using Spyro.Editor.Core.Diagnostics;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
@@ -28,6 +30,7 @@ public sealed partial class MainWindow
     private Button? _nativeLevelReplacementSaveIntentButton;
     private Button? _nativeLevelReplacementInspectButton;
     private Button? _nativeLevelReplacementCreateTestButton;
+    private Button? _nativeLevelReplacementCreateEditedTestButton;
     private Button? _nativeLevelReplacementRestoreButton;
     private bool _nativeLevelReplacementBusy;
     private string _nativeLevelReplacementNotice = "";
@@ -60,7 +63,7 @@ public sealed partial class MainWindow
             Padding = new Thickness(9, 7),
             Child = new TextBlock
             {
-                Text = "V5 research only — this is separate from normal Create BIN. It replaces Stone Hill's complete retail level payload in an isolated test CUE; ordinary saved terrain and object edits are not composed into it.",
+                Text = "V5 research only — this is separate from normal Create BIN. The proven replacement test copies Stone Hill's complete retail Town Square payload unchanged. The edited replacement test consumes only saved Town Square native object edits; normal Create BIN remains unchanged.",
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 11,
                 LineHeight = 16,
@@ -97,12 +100,17 @@ public sealed partial class MainWindow
             "NativeLevelReplacementCreateTestButton",
             "Create Replacement Test CUE",
             CreateNativeLevelReplacementTestCueAsync);
+        _nativeLevelReplacementCreateEditedTestButton = NewNativeLevelReplacementAsyncButton(
+            "NativeLevelReplacementCreateEditedTestButton",
+            "Create Edited Replacement Test CUE",
+            CreateEditedNativeLevelReplacementTestCueAsync);
         _nativeLevelReplacementRestoreButton = NewNativeLevelReplacementAsyncButton(
             "NativeLevelReplacementRestoreButton",
             "Restore Original Stone Hill",
             RestoreNativeLevelReplacementIntentAsync);
         StyleModernPrimaryButton(_nativeLevelReplacementSaveIntentButton, Color.FromRgb(176, 103, 20));
         StyleModernPrimaryButton(_nativeLevelReplacementCreateTestButton, Color.FromRgb(111, 86, 174));
+        StyleModernPrimaryButton(_nativeLevelReplacementCreateEditedTestButton, Color.FromRgb(176, 103, 20));
         StyleModernSecondaryButton(_nativeLevelReplacementInspectButton);
         StyleModernSecondaryButton(_nativeLevelReplacementRestoreButton, ModernRed);
 
@@ -111,6 +119,23 @@ public sealed partial class MainWindow
         AddModernGridButton(firstRow, _nativeLevelReplacementInspectButton, 1);
         content.Children.Add(firstRow);
         content.Children.Add(_nativeLevelReplacementCreateTestButton);
+        content.Children.Add(new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(255, 247, 230)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(224, 174, 83)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(5),
+            Padding = new Thickness(9, 7),
+            Child = new TextBlock
+            {
+                Text = "Edited replacement test — pending DuckStation. This first X-only proof intentionally preserves T21's native placement/culling-sector byte; a later gate will validate the derived sector patch. It accepts exactly one saved Town Square T21 red-gem X move. Other objects, axes, additions, removals, paths, terrain, and textures remain blocked; normal Create BIN remains unchanged.",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 11,
+                LineHeight = 16,
+                Foreground = new SolidColorBrush(Color.FromRgb(126, 78, 11))
+            }
+        });
+        content.Children.Add(_nativeLevelReplacementCreateEditedTestButton);
         content.Children.Add(_nativeLevelReplacementRestoreButton);
 
         _nativeLevelReplacementDisclosure = (Expander)BuildModernDisclosure(
@@ -181,6 +206,7 @@ public sealed partial class MainWindow
         }
 
         NativeLevelReplacementUiState state = ReadNativeLevelReplacementUiState();
+        bool hasTownSquareNativeObjectEdits = HasSavedTownSquareNativeObjectEdits();
         bool available = !_nativeLevelReplacementBusy;
         if (_nativeLevelReplacementSaveIntentButton != null)
             _nativeLevelReplacementSaveIntentButton.IsEnabled = available;
@@ -188,17 +214,30 @@ public sealed partial class MainWindow
             _nativeLevelReplacementInspectButton.IsEnabled = available && state.HasIntent;
         if (_nativeLevelReplacementCreateTestButton != null)
             _nativeLevelReplacementCreateTestButton.IsEnabled = available && state.ValidIntent;
+        if (_nativeLevelReplacementCreateEditedTestButton != null)
+        {
+            _nativeLevelReplacementCreateEditedTestButton.IsEnabled =
+                available && state.ValidIntent && hasTownSquareNativeObjectEdits;
+            ToolTip.SetTip(
+                _nativeLevelReplacementCreateEditedTestButton,
+                hasTownSquareNativeObjectEdits
+                    ? "Build the guarded one-move Town Square donor candidate for DuckStation validation."
+                    : "Save a Town Square native object edit first. This gate currently accepts only T21 Red Gem moved on X.");
+        }
         if (_nativeLevelReplacementRestoreButton != null)
             _nativeLevelReplacementRestoreButton.IsEnabled = available && state.HasIntent;
 
         string stateText = state.ValidIntent
-            ? "Saved intent: replace Stone Hill with Town Square's complete retail level. The exact clean-USA recipe is runtime-proven. Portal identity and music remain Stone Hill, and title demo slot 0 safely uses Doctor Shemp."
+            ? "Saved intent: replace Stone Hill with Town Square's complete retail level. The exact clean-USA recipe is runtime-proven. The base replacement test keeps Stone Hill's portal identity and music; the edited test layers the proven Town Square display identity while retaining Stone Hill music and save-slot ownership. Title demo slot 0 safely uses Doctor Shemp."
             : state.HasIntent
             ? $"Blocked saved intent: {state.Error} Restore it or save the checked intent again before creating a test CUE."
             : "Original Stone Hill is active — no whole-level replacement intent is saved.";
+        string editedStateText = hasTownSquareNativeObjectEdits
+            ? "Saved Town Square native object edits are present. This pending-DuckStation X-only proof preserves T21's native placement/culling-sector byte; a later gate will validate the derived sector patch."
+            : "Edited replacement test unavailable: save a Town Square native object edit first; the initial gate accepts only T21 Red Gem moved on X.";
         _nativeLevelReplacementStatusText.Text = string.IsNullOrWhiteSpace(_nativeLevelReplacementNotice)
-            ? stateText
-            : $"{_nativeLevelReplacementNotice}\n\n{stateText}";
+            ? $"{stateText}\n\n{editedStateText}"
+            : $"{_nativeLevelReplacementNotice}\n\n{stateText}\n\n{editedStateText}";
         _nativeLevelReplacementStatusText.Foreground = new SolidColorBrush(
             _nativeLevelReplacementNoticeIsError || state.HasIntent && !state.ValidIntent
                 ? ModernRed
@@ -331,6 +370,264 @@ public sealed partial class MainWindow
         EditorDiagnostics.RecordAction(
             "V5 Stone Hill replacement test created",
             $"CUE: {result.Candidate.OutputCuePath}; SHA-256: {result.Candidate.OutputImageSha256}; profile: {result.Candidate.Plan.ProfileId}");
+    }
+
+    private async Task CreateEditedNativeLevelReplacementTestCueAsync()
+    {
+        RequireCurrentStoneHill();
+        NativeLevelReplacementUiState state = RequireValidNativeLevelReplacementIntent();
+        DiscImageSelection source = RequireNativeLevelReplacementSource();
+        string nativeEditsPath = TownSquareNativeObjectEditsPath();
+        if (!HasSavedTownSquareNativeObjectEdits())
+        {
+            throw new InvalidOperationException(
+                "Save a Town Square native object edit first. The initial edited-replacement gate accepts only T21 Red Gem moved on X.");
+        }
+
+        LevelDefinition townSquare = _catalog.FindByKey("townsquare")
+            ?? throw new InvalidDataException("Town Square is missing from the retail level catalog.");
+        string intermediateDirectory = NativeLevelReplacementPrivateIntermediateDirectory();
+        Directory.CreateDirectory(intermediateDirectory);
+        string planPrefix = Path.Combine(intermediateDirectory, "town-square-saved-object-plan");
+        MobySourcePatchPlan genuineMobyPatchPlan = await Task.Run(() =>
+            MobySourcePatchExporter.BuildPlan(
+                source.ImagePath,
+                source.CuePath,
+                planPrefix + ".bin",
+                planPrefix + ".cue",
+                townSquare,
+                nativeEditsPath));
+        MobyBuildSafetyLevelReport buildSafety = await Task.Run(() =>
+            MobyBuildSafetyInspector.InspectLevel(source.ImagePath, townSquare, genuineMobyPatchPlan));
+        if (buildSafety.Status != MobyBuildSafetyStatus.Stable)
+        {
+            throw new InvalidOperationException(
+                $"The saved Town Square object edit did not pass the focused native Build Safety gate ({buildSafety.StatusLabel}). " +
+                string.Join(" ", buildSafety.Findings));
+        }
+        MobySourcePatchPlan mobyPatchPlan = NormalizeFirstEditedDonorProofPlan(genuineMobyPatchPlan);
+        string savedEditSha256 = await HashFileSha256Async(nativeEditsPath);
+
+        SetNativeLevelReplacementNotice(
+            "Preparing the exact Town Square display-identity control and composing the saved T21 X move...",
+            isError: false);
+        RefreshNativeLevelReplacementPanel();
+        (string identityImage, string identityCue) = await Task.Run(
+            async () => await EnsureExactTownSquareDisplayIdentityControlAsync(
+                state,
+                source,
+                intermediateDirectory));
+        string outputPrefix = EditedNativeLevelReplacementOutputPrefix();
+        StoneHillTownSquareEditedDonorCandidateRequest request = new(
+            identityImage,
+            identityCue,
+            source.ImagePath,
+            mobyPatchPlan,
+            outputPrefix + ".bin",
+            outputPrefix + ".cue");
+        StoneHillTownSquareEditedDonorArtifactResult result = await Task.Run(
+            async () => await StoneHillTownSquareEditedDonorArtifactWriter.ExportAsync(request));
+        string message =
+            $"Created {Path.GetFileName(result.Candidate.OutputCuePath)} for the pending DuckStation T21 X-move gate. " +
+            $"Static proof: {Path.GetFileName(result.StaticProofPath)}. Checklist: {Path.GetFileName(result.RuntimeChecklistPath)}.";
+        SetNativeLevelReplacementNotice(message, isError: false);
+        _statusText.Text = message + OpenContainingFolderStatus(result.Candidate.OutputCuePath);
+        EditorDiagnostics.RecordAction(
+            "V5 edited Town Square donor replacement test created",
+            $"CUE: {result.Candidate.OutputCuePath}; SHA-256: {result.Candidate.OutputImageSha256}; source edits: {nativeEditsPath}; saved edit SHA-256: {savedEditSha256}; native placement sector preserved");
+    }
+
+    private static MobySourcePatchPlan NormalizeFirstEditedDonorProofPlan(
+        MobySourcePatchPlan genuinePlan)
+    {
+        MobySourcePatch[] xPatches = genuinePlan.Patches
+            .Where(patch =>
+                patch.TrueIndex == 21 &&
+                string.Equals(patch.Kind, "moby-position-x", StringComparison.Ordinal) &&
+                string.Equals(patch.WadRelativeOffset, "0x136E8B4", StringComparison.OrdinalIgnoreCase) &&
+                patch.ByteLength == 4)
+            .ToArray();
+        MobySourcePatch[] placementPatches = genuinePlan.Patches
+            .Where(patch =>
+                patch.TrueIndex == 21 &&
+                string.Equals(patch.Kind, "moby-placement-sector", StringComparison.Ordinal) &&
+                string.Equals(patch.WadRelativeOffset, "0x136E8F2", StringComparison.OrdinalIgnoreCase) &&
+                patch.ByteLength == 1)
+            .ToArray();
+        MobySourceEditOutcome[] outcomes = (genuinePlan.EditOutcomes ?? [])
+            .ToArray();
+        if (genuinePlan.PatchCount != 2 ||
+            genuinePlan.TotalPatchedBytes != 5 ||
+            genuinePlan.Patches.Count != 2 ||
+            xPatches.Length != 1 ||
+            placementPatches.Length != 1 ||
+            genuinePlan.SkippedEdits.Count != 0 ||
+            genuinePlan.PackageImportPreviews.Count != 0 ||
+            outcomes.Length != 1 ||
+            outcomes[0].EditorTrueIndex != 21 ||
+            outcomes[0].SkippedReasons.Count != 0 ||
+            outcomes[0].PackageOutcomes.Count != 0 ||
+            !outcomes[0].PatchKinds.Order(StringComparer.Ordinal).SequenceEqual(
+                new[] { "moby-placement-sector", "moby-position-x" },
+                StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "The saved Town Square edits are outside the first edited-replacement proof. " +
+                "This gate requires exactly T21 X plus the editor's one derived placement-sector patch; no other edits or dependencies are accepted.");
+        }
+
+        MobySourceEditOutcome xOnlyOutcome = outcomes[0] with
+        {
+            PatchKinds = ["moby-position-x"]
+        };
+        return genuinePlan with
+        {
+            PatchCount = 1,
+            TotalPatchedBytes = 4,
+            Patches = [xPatches[0]],
+            EditOutcomes = [xOnlyOutcome],
+            Notes = genuinePlan.Notes
+                .Concat([
+                    "Focused edited-donor proof: the genuine editor plan also derived a placement/culling-sector byte, but this isolated first gate preserves T21's native sector and transplants X only."
+                ])
+                .ToArray()
+        };
+    }
+
+    private async Task<(string ImagePath, string CuePath)> EnsureExactTownSquareDisplayIdentityControlAsync(
+        NativeLevelReplacementUiState state,
+        DiscImageSelection source,
+        string intermediateDirectory)
+    {
+        string developmentIdentityPrefix = Path.Combine(
+            _workspace.RootPath,
+            "_local",
+            "v5-stone-hill-level-replacement",
+            "town-square-display-identity-candidate",
+            "Stone-Hill-slot-Town-Square-complete-level-with-Town-Square-display-name-RUNTIME-CANDIDATE");
+        string privateIdentityPrefix = Path.Combine(
+            intermediateDirectory,
+            "Stone-Hill-slot-Town-Square-complete-level-with-Town-Square-display-name-RUNTIME-CANDIDATE");
+        foreach (string prefix in new[] { developmentIdentityPrefix, privateIdentityPrefix })
+        {
+            if (await IsExactBinCuePairAsync(
+                    prefix + ".bin",
+                    prefix + ".cue",
+                    NativeLevelReplacementIdentityProfileRegistry.TownSquareDisplayIdentityOutputImageSha256))
+            {
+                return (prefix + ".bin", prefix + ".cue");
+            }
+        }
+
+        string developmentBasePrefix = Path.Combine(
+            _workspace.RootPath,
+            "_local",
+            "v5-stone-hill-level-replacement",
+            "town-square-complete-pair-candidate",
+            "Stone-Hill-slot-Town-Square-complete-level-RUNTIME-CANDIDATE");
+        string privateBasePrefix = Path.Combine(
+            intermediateDirectory,
+            "Stone-Hill-slot-Town-Square-complete-level-RUNTIME-CANDIDATE");
+        string basePrefix = "";
+        foreach (string candidatePrefix in new[] { developmentBasePrefix, privateBasePrefix })
+        {
+            if (await IsExactBinCuePairAsync(
+                    candidatePrefix + ".bin",
+                    candidatePrefix + ".cue",
+                    NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillOutputImageSha256))
+            {
+                basePrefix = candidatePrefix;
+                break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(basePrefix))
+        {
+            basePrefix = privateBasePrefix;
+            StoneHillTownSquareReplacementCandidateRequest baseRequest = new(
+                state.Manifest!,
+                state.Intent!,
+                _catalog,
+                source.ImagePath,
+                source.CuePath,
+                basePrefix + ".bin",
+                basePrefix + ".cue");
+            _ = await StoneHillTownSquareReplacementArtifactWriter.ExportAsync(baseRequest);
+        }
+
+        StoneHillTownSquareIdentityCandidateRequest identityRequest = new(
+            basePrefix + ".bin",
+            basePrefix + ".cue",
+            privateIdentityPrefix + ".bin",
+            privateIdentityPrefix + ".cue");
+        _ = await StoneHillTownSquareIdentityArtifactWriter.ExportAsync(identityRequest);
+        if (!await IsExactBinCuePairAsync(
+                privateIdentityPrefix + ".bin",
+                privateIdentityPrefix + ".cue",
+                NativeLevelReplacementIdentityProfileRegistry.TownSquareDisplayIdentityOutputImageSha256))
+        {
+            throw new InvalidDataException(
+                "The private Town Square display-identity control did not match its exact runtime-proven hash after regeneration.");
+        }
+
+        return (privateIdentityPrefix + ".bin", privateIdentityPrefix + ".cue");
+    }
+
+    private static async Task<bool> IsExactBinCuePairAsync(
+        string imagePath,
+        string cuePath,
+        string expectedImageSha256)
+    {
+        if (!File.Exists(imagePath) || !File.Exists(cuePath))
+            return false;
+
+        await using FileStream image = new(
+            imagePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 1024 * 1024,
+            FileOptions.SequentialScan);
+        string actualImageSha256 = Convert.ToHexString(await SHA256.HashDataAsync(image)).ToLowerInvariant();
+        if (!string.Equals(actualImageSha256, expectedImageSha256, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        string cue = await File.ReadAllTextAsync(cuePath);
+        return cue.Contains($"FILE \"{Path.GetFileName(imagePath)}\" BINARY", StringComparison.OrdinalIgnoreCase) &&
+            cue.Contains("TRACK 01 MODE2/2352", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static async Task<string> HashFileSha256Async(string path)
+    {
+        await using FileStream stream = new(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 64 * 1024,
+            FileOptions.SequentialScan);
+        return Convert.ToHexString(await SHA256.HashDataAsync(stream)).ToLowerInvariant();
+    }
+
+    private string TownSquareNativeObjectEditsPath() =>
+        Path.Combine(_workspace.RootPath, "townsquare-native-edits.json");
+
+    private bool HasSavedTownSquareNativeObjectEdits()
+    {
+        string path = TownSquareNativeObjectEditsPath();
+        if (!File.Exists(path))
+            return false;
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(path));
+            return document.RootElement.TryGetProperty("edits", out JsonElement edits) &&
+                edits.ValueKind == JsonValueKind.Array &&
+                edits.GetArrayLength() > 0;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return false;
+        }
     }
 
     private async Task RestoreNativeLevelReplacementIntentAsync()
@@ -514,6 +811,14 @@ public sealed partial class MainWindow
     private string NativeLevelReplacementOutputPrefix() => Path.Combine(
         EnsureUserOutputDirectory(),
         "Spyro Editor V5 - Stone Hill replaced by Town Square - RESEARCH ONLY");
+
+    private string EditedNativeLevelReplacementOutputPrefix() => Path.Combine(
+        EnsureUserOutputDirectory(),
+        "Spyro Editor V5 - Stone Hill replaced by edited Town Square - RESEARCH ONLY");
+
+    private string NativeLevelReplacementPrivateIntermediateDirectory() => Path.Combine(
+        EnsureUserOutputDirectory(),
+        ".v5-edited-replacement-intermediate");
 
     private static NativeLevelReplacementProfile RequireTownSquareReplacementProfile() =>
         NativeLevelReplacementProfileRegistry.Find(

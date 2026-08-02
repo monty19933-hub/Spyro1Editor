@@ -251,11 +251,24 @@ void RunNativeLevelReplacementUiOnly()
         Button save = FindNamedUnique<Button>(window, "NativeLevelReplacementSaveIntentButton");
         Button inspect = FindNamedUnique<Button>(window, "NativeLevelReplacementInspectButton");
         Button create = FindNamedUnique<Button>(window, "NativeLevelReplacementCreateTestButton");
+        Button createEdited = FindNamedUnique<Button>(window, "NativeLevelReplacementCreateEditedTestButton");
         Button restore = FindNamedUnique<Button>(window, "NativeLevelReplacementRestoreButton");
 
         if (!disclosure.IsVisible)
             throw new InvalidOperationException("The guarded V5 replacement disclosure is not visible on Stone Hill.");
         AssertTextContains(window, "V5 research only");
+        if (!string.Equals(
+                createEdited.Content?.ToString(),
+                "Create Edited Replacement Test CUE",
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The separate edited replacement button label changed or is missing.");
+        }
+        AssertTextContains(window, "pending DuckStation");
+        AssertTextContains(window, "T21 red-gem X move");
+        AssertTextContains(window, "preserves T21's native placement/culling-sector byte");
+        AssertTextContains(window, "a later gate will validate the derived sector patch");
+        AssertTextContains(window, "normal Create BIN remains unchanged");
         object[] donors = ReadItemsSource(donor, "V5 replacement donor picker");
         if (donors.Length != 1 ||
             !string.Equals(donors[0].ToString(), "Town Square — complete retail level", StringComparison.Ordinal))
@@ -274,7 +287,7 @@ void RunNativeLevelReplacementUiOnly()
         {
             throw new InvalidOperationException("The V5 donor option does not bind the runtime-proven Town Square profile.");
         }
-        if (!save.IsEnabled || inspect.IsEnabled || create.IsEnabled || restore.IsEnabled ||
+        if (!save.IsEnabled || inspect.IsEnabled || create.IsEnabled || createEdited.IsEnabled || restore.IsEnabled ||
             !status.Text!.Contains("Original Stone Hill", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("The no-intent V5 replacement UI state is incorrect.");
@@ -294,6 +307,40 @@ void RunNativeLevelReplacementUiOnly()
             !status.Text!.Contains("Saved intent", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("The saved V5 replacement intent did not enable its guarded actions.");
+        }
+        if (createEdited.IsEnabled ||
+            !status.Text!.Contains("save a Town Square native object edit first", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The edited V5 replacement action was not disabled with a clear no-Town-Square-edits explanation.");
+        }
+
+        string townSquareEditsPath = Path.Combine(workspace, "townsquare-native-edits.json");
+        List<Moby> townSquareMobys = MobyLoader.LoadCached(
+            Path.Combine(workspace, "editor-cache", "townsquare-mobys.json")).ToList();
+        Moby townSquareT21 = townSquareMobys.Single(moby => moby.TrueIndex == 21);
+        townSquareT21.Position = new Vector3f(
+            townSquareT21.Position.X + 1f,
+            townSquareT21.Position.Y,
+            townSquareT21.Position.Z);
+        Task.Run(async () => await MobyEditStore.SaveAsync(
+                townSquareEditsPath,
+                townSquareMobys,
+                "Town Square edited replacement UI gate"))
+            .GetAwaiter()
+            .GetResult();
+        MethodInfo refreshReplacementPanel = typeof(MainWindow).GetMethod(
+            "RefreshNativeLevelReplacementPanel",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Could not refresh the V5 replacement panel after staging Town Square edits.");
+        refreshReplacementPanel.Invoke(window, null);
+        FlushUi();
+        if (!createEdited.IsEnabled ||
+            !status.Text!.Contains("pending-DuckStation X-only proof", StringComparison.OrdinalIgnoreCase) ||
+            !status.Text.Contains("native placement/culling-sector byte", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"A saved Town Square T21 X move did not enable the separate edited replacement action and pending-runtime disclosure. Enabled={createEdited.IsEnabled}; status={status.Text}");
         }
 
         string ordinaryEditPath = Path.Combine(workspace, "stonehill-terrain-edits.json");
@@ -338,7 +385,7 @@ void RunNativeLevelReplacementUiOnly()
             throw new InvalidOperationException("Restoring the original intent deleted the source-bound baseline manifest.");
         if (!string.Equals(FileSha256(ordinaryEditPath), ordinaryEditSha256, StringComparison.Ordinal))
             throw new InvalidOperationException("Restoring the original intent changed an ordinary terrain-edit file.");
-        if (create.IsEnabled || !save.IsEnabled ||
+        if (create.IsEnabled || createEdited.IsEnabled || !save.IsEnabled ||
             !status.Text!.Contains("Original Stone Hill", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("The restored V5 replacement UI state is incorrect.");
@@ -355,7 +402,7 @@ void RunNativeLevelReplacementUiOnly()
         Console.WriteLine(
             "V5 level-replacement UI smoke passed: Stone Hill-only disclosure, exact Town Square donor, " +
             "source-bound Save Intent, safety inspection, intent-only restore, ordinary-edit preservation, " +
-            "and separate normal Create BIN control all passed.");
+            "no-edit disabled state, saved T21-X edited-action enablement, and separate normal Create BIN control all passed.");
     }
     finally
     {
