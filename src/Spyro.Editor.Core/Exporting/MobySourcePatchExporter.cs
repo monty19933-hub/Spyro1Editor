@@ -3319,7 +3319,17 @@ public static class MobySourcePatchExporter
 
     private static bool ShouldApplyMovedExistingPlacementSector(byte[] recordBytes)
     {
-        return recordBytes.Length > 0x53 && recordBytes[TypeOffset] is 0x18 or 0x20;
+        if (recordBytes.Length <= 0x53)
+            return false;
+
+        // Retail Town Square keeps 0xFF at +0x4A for all 107 native source records.
+        // A DuckStation candidate that replaced T21's sentinel with the derived 0xD5
+        // sector moved and collected correctly but flickered at distance. Preserve the
+        // native sentinel instead of inventing placement/culling ownership for a move.
+        if (recordBytes[0x4A] == 0xFF)
+            return false;
+
+        return recordBytes[TypeOffset] is 0x18 or 0x20;
     }
 
     private static void AddMovedExistingPlacementSectorPatch(
