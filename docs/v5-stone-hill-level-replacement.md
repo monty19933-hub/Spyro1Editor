@@ -148,6 +148,54 @@ This proof does not authorize arbitrary display names, other donor levels,
 edited donor payload composition, seamless transition-sky replacement, music
 replacement, normal V4 Create BIN, or a new 36th level.
 
+## Milestone 4: edited Town Square T21 X - focused partial runtime result
+
+The first edited-donor candidate starts from the exact Milestone 3
+display-identity BIN and composes one saved Town Square native-object edit into
+the transplanted payload. It changes only T21 Red Gem's X coordinate from
+`7813.75` to `7685.75`, a movement of 128 world units toward negative X. The
+disposable composer intentionally excluded the general object's derived
+placement/culling-sector patch so this first runtime question remained limited
+to the four-byte X word.
+
+- CUE: `Stone-Hill-slot-Town-Square-edited-T21-X-RUNTIME-CANDIDATE.cue`
+- BIN SHA-256:
+  `ec3d8e354cf246d704860a6b26968a59cc7f77fe6409e08c299a777b7fc4df8e`
+- Base display-identity BIN SHA-256:
+  `71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9`
+- Patch: Town Square donor WAD `0x136E8B4`, replacement-slot WAD
+  `0xD640B4`, record `+0x0C`, `5C E8 01 00` to `5C E0 01 00`.
+- Static boundary: one changed logical WAD byte, 37 changed physical image
+  bytes, one rebuilt raw sector, and no changes to the retail donor or base BIN.
+- Evidence ID:
+  `stonehill-slot-townsquare-edited-donor-t21-x-partial-duckstation-2026-08-01`
+- Evidence status: `focused-partial-runtime-observation`; this is not profile
+  promotion. The result is an interactive user report, not an automated
+  emulator capture.
+
+On 2026-08-01, the user confirmed in DuckStation that T21 was visibly moved in
+the exact candidate BIN above. That observation answers only the first focused
+question: an editor-authored Town Square object-coordinate patch can survive
+composition into the Stone Hill replacement payload and become visible at
+runtime.
+
+No collection or interaction result was reported for T21, and no full
+replacement regression was performed for this candidate. One-time reward,
+cleanup/persistence, other-actor isolation, ordinary movement and combat,
+dragon and egg progress, death/reload, Return Home/re-entry, save/reload, and
+the original retail Town Square remain unverified for this edited BIN. The
+runtime sidecar therefore remains a pending checklist, and normal Create BIN is
+not promoted by this observation.
+
+The exact partial evidence record is stored at
+`docs/runtime-evidence/stonehill-townsquare-edited-donor-t21-x-2026-08-01.json`.
+It records both this deliberately isolated X-only result and the next focused
+gate: compose the same X patch together with the genuine exporter-derived T21
+placement/culling-sector byte at record `+0x4A`, donor WAD `0x136E8F2`,
+replacement-slot WAD `0xD640F2`, from `FF` to `D5`. That X-plus-sector candidate
+must receive its own DuckStation result; this X-only observation does not prove
+the derived sector value.
+
 ## Next implementation gates
 
 1. **Completed:** inventory and source-bind all eight Stone Hill entry-12
@@ -155,8 +203,15 @@ replacement, normal V4 Create BIN, or a new 36th level.
 2. **Completed for an unchanged retail donor pair:** install Town Square's
    terrain, collision, textures, sky, scene, actors, and dragon packages in the
    fixed Stone Hill capacity. Arbitrary newly compiled payloads are not implied.
-3. **Pending:** compile edited donor terrain/scene/object data and link imported
-   actor packages instead of copying one unchanged retail pair.
+3. **Focused partial result for one existing object:** Town Square T21's saved
+   X edit was visibly present in DuckStation at BIN SHA-256
+   `ec3d8e354cf246d704860a6b26968a59cc7f77fe6409e08c299a777b7fc4df8e`.
+   Collection and the full replacement regression remain unverified, so this
+   does not promote edited-donor composition. The next isolated gate must pair
+   the same X word with the exporter-derived placement/culling-sector byte
+   `FF` to `D5`, then validate visibility/culling, interaction, and the full
+   checklist. Edited terrain/scene data, other object edits, additions,
+   removals, and imported actor packages remain pending.
 4. **Completed for the exact retail pair:** the complete portal, gameplay,
    collection, reload, persistence, Return Home, re-entry, and title-demo
    checklist passed in DuckStation. Investigate the abrupt sky handoff as an
