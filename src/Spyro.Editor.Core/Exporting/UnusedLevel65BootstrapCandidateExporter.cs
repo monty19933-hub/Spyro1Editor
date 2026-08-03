@@ -8,7 +8,8 @@ public sealed record UnusedLevel65BootstrapCandidateRequest(
     string SourceImagePath,
     string SourceCuePath,
     string OutputImagePath,
-    string OutputCuePath);
+    string OutputCuePath,
+    bool ExcludeLevel65FromFlightClassification = false);
 
 public sealed record UnusedLevel65BootstrapPatch(
     string File,
@@ -33,7 +34,8 @@ public sealed record UnusedLevel65BootstrapCandidatePlan(
     string DonorDataSha256,
     IReadOnlyList<UnusedLevel65BootstrapPatch> Patches,
     IReadOnlyList<string> RuntimeChecklist,
-    bool RequiresDuckStationRuntimeProof);
+    bool RequiresDuckStationRuntimeProof,
+    bool ExcludesLevel65FromFlightClassification);
 
 public sealed record UnusedLevel65BootstrapCandidateResult(
     string OutputImagePath,
@@ -53,8 +55,10 @@ public sealed record UnusedLevel65BootstrapCandidateResult(
 /// It gives level ID 65 its already-reserved WAD directory row, aliases that row
 /// to Town Square's byte-identical retail pair, registers Town Square's checked
 /// callback dispatcher for ID 65, and widens only the hidden retail level-warp
-/// range by one value. No retail level is replaced and no normal editor build
-/// path consumes this exporter.
+/// range by one value. Its follow-up profile also adjusts the classifier's
+/// private divider so retail flights remain flights while ID 65 takes normal
+/// initialization. No retail level is replaced and no normal editor build path
+/// consumes this exporter.
 /// </summary>
 public static class UnusedLevel65BootstrapCandidateExporter
 {
@@ -62,6 +66,10 @@ public static class UnusedLevel65BootstrapCandidateExporter
         "unused-level-65-town-square-alias-clean-usa-disposable-v1";
     public const string ExpectedOutputImageSha256 =
         "33534481a43a7655b570194d9f78292467a20ab480f46e2ed5528a59fe39b2ea";
+    public const string Flight65ExceptionProfileId =
+        "unused-level-65-town-square-flight65-exception-clean-usa-disposable-v2";
+    public const string ExpectedFlight65ExceptionOutputImageSha256 =
+        "a77f32d715b614867958a491e25407b24fe0091509ad9eeee546bf3c70cc09e5";
     public const int LevelId = 65;
     public const string EntryInstructions =
         "Open Inventory; enter R1, R2, L1, L2, R1, L1, R2, L2; then press Left, then Down.";
@@ -94,6 +102,9 @@ public static class UnusedLevel65BootstrapCandidateExporter
         [0x37, 0xB6, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00];
     private static readonly byte[] WarpActivationAfter =
         [0x1C, 0x06, 0x84, 0xAF, 0x88, 0x06, 0x80, 0xAF];
+    private const long FlightClassifierMagicLuiFileOffset = 0x40C0;
+    private const uint FlightClassifierMagicLuiBefore = 0x3C026666;
+    private const uint ExcludeLevel65MagicLui = 0x3C025E00;
 
     private const string CleanUsaImageSha256 =
         "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37";
@@ -115,6 +126,13 @@ public static class UnusedLevel65BootstrapCandidateExporter
         string sourceCue = Path.GetFullPath(request.SourceCuePath);
         string outputImage = Path.GetFullPath(request.OutputImagePath);
         string outputCue = Path.GetFullPath(request.OutputCuePath);
+        bool excludeLevel65FromFlightClassification = request.ExcludeLevel65FromFlightClassification;
+        string profileId = excludeLevel65FromFlightClassification
+            ? Flight65ExceptionProfileId
+            : ProfileId;
+        string expectedOutputImageSha256 = excludeLevel65FromFlightClassification
+            ? ExpectedFlight65ExceptionOutputImageSha256
+            : ExpectedOutputImageSha256;
         NativeLevelReplacementBaselineExporter.EnsureDistinctRoles(
             sourceImage,
             sourceCue,
@@ -132,7 +150,7 @@ public static class UnusedLevel65BootstrapCandidateExporter
             throw new InvalidDataException(
                 $"Level-65 bootstrap accepts only the exact clean USA BIN ({CleanUsaImageSha256}); selected SHA-256 was {sourceImageSha256}.");
 
-        Prepared prepared = Prepare(sourceImage);
+        Prepared prepared = Prepare(sourceImage, excludeLevel65FromFlightClassification);
         Directory.CreateDirectory(Path.GetDirectoryName(outputImage)!);
         string operationId = Guid.NewGuid().ToString("N");
         string temporaryImage = Path.Combine(
@@ -190,6 +208,24 @@ public static class UnusedLevel65BootstrapCandidateExporter
                     ExecutableLba,
                     WarpActivationFileOffset,
                     WarpActivationAfter);
+                if (excludeLevel65FromFlightClassification)
+                {
+                    DiscImage.WriteFileBytes(
+                        output,
+                        layout,
+                        ExecutableLba,
+                        FlightClassifierMagicLuiFileOffset,
+                        UInt32Bytes(ExcludeLevel65MagicLui));
+                }
+
+                List<(long Offset, int Length)> executableRanges =
+                [
+                    (Level65DispatchPointerFileOffset, 4),
+                    (WarpUpperBoundFileOffset, 4),
+                    (WarpActivationFileOffset, WarpActivationAfter.Length)
+                ];
+                if (excludeLevel65FromFlightClassification)
+                    executableRanges.Add((FlightClassifierMagicLuiFileOffset, 4));
 
                 rebuiltRawSectors =
                     RawMode2Form1SectorIntegrity.RebuildFileRanges(
@@ -201,25 +237,26 @@ public static class UnusedLevel65BootstrapCandidateExporter
                         output,
                         layout,
                         ExecutableLba,
-                        [
-                            (Level65DispatchPointerFileOffset, 4),
-                            (WarpUpperBoundFileOffset, 4),
-                            (WarpActivationFileOffset, WarpActivationAfter.Length)
-                        ]);
+                        executableRanges);
                 output.Flush(flushToDisk: true);
             }
 
-            Readback readback = VerifyReadback(sourceImage, temporaryImage, prepared, cancellationToken);
+            Readback readback = VerifyReadback(
+                sourceImage,
+                temporaryImage,
+                prepared,
+                excludeLevel65FromFlightClassification,
+                cancellationToken);
             string cueText = DiscImage.BuildCueText(sourceCue, Path.GetFileName(outputImage));
             await File.WriteAllTextAsync(temporaryCue, cueText, Encoding.ASCII, cancellationToken);
             string outputImageSha256 = await HashFileAsync(temporaryImage, cancellationToken);
             if (!string.Equals(
                     outputImageSha256,
-                    ExpectedOutputImageSha256,
+                    expectedOutputImageSha256,
                     StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidDataException(
-                    $"Level-65 candidate SHA-256 is {outputImageSha256}, expected exact static output {ExpectedOutputImageSha256}.");
+                    $"Level-65 candidate SHA-256 is {outputImageSha256}, expected exact static output {expectedOutputImageSha256}.");
             }
 
             bool sourcePreserved = string.Equals(
@@ -254,7 +291,7 @@ public static class UnusedLevel65BootstrapCandidateExporter
 
             UnusedLevel65BootstrapCandidatePlan plan = new(
                 DateTimeOffset.UtcNow,
-                ProfileId,
+                profileId,
                 sourceImageSha256,
                 LevelId,
                 TargetOverlayEntryIndex,
@@ -266,8 +303,9 @@ public static class UnusedLevel65BootstrapCandidateExporter
                 TownSquareOverlaySha256,
                 TownSquareDataSha256,
                 prepared.Patches,
-                RuntimeChecklist(),
-                RequiresDuckStationRuntimeProof: true);
+                RuntimeChecklist(excludeLevel65FromFlightClassification),
+                RequiresDuckStationRuntimeProof: true,
+                ExcludesLevel65FromFlightClassification: excludeLevel65FromFlightClassification);
             return new UnusedLevel65BootstrapCandidateResult(
                 outputImage,
                 outputCue,
@@ -321,7 +359,9 @@ public static class UnusedLevel65BootstrapCandidateExporter
         }
     }
 
-    private static Prepared Prepare(string sourceImage)
+    private static Prepared Prepare(
+        string sourceImage,
+        bool excludeLevel65FromFlightClassification)
     {
         DiscLayout layout = DiscImage.DetectLayout(sourceImage);
         if (layout.SectorSize != 2352 || layout.UserOffset != 24)
@@ -401,6 +441,14 @@ public static class UnusedLevel65BootstrapCandidateExporter
             WarpActivationFileOffset,
             WarpActivationBefore,
             "retail warp activation");
+        if (excludeLevel65FromFlightClassification)
+        {
+            RequireUInt32(
+                executableBytes,
+                FlightClassifierMagicLuiFileOffset,
+                FlightClassifierMagicLuiBefore,
+                "retail flight-classifier magic LUI");
+        }
 
         byte[] targetRow = new byte[16];
         WriteDirectoryEntry(
@@ -413,7 +461,7 @@ public static class UnusedLevel65BootstrapCandidateExporter
             8,
             DonorDataWadOffset,
             DonorDataByteLength);
-        IReadOnlyList<UnusedLevel65BootstrapPatch> patches =
+        List<UnusedLevel65BootstrapPatch> patches =
         [
             Patch(
                 "WAD.WAD",
@@ -440,6 +488,15 @@ public static class UnusedLevel65BootstrapCandidateExporter
                 WarpActivationBefore,
                 WarpActivationAfter)
         ];
+        if (excludeLevel65FromFlightClassification)
+        {
+            patches.Add(Patch(
+                executable.Name,
+                "exclude-level-65-from-flight-classification",
+                FlightClassifierMagicLuiFileOffset,
+                UInt32Bytes(FlightClassifierMagicLuiBefore),
+                UInt32Bytes(ExcludeLevel65MagicLui)));
+        }
         return new Prepared(targetRow, patches);
     }
 
@@ -447,6 +504,7 @@ public static class UnusedLevel65BootstrapCandidateExporter
         string sourceImage,
         string outputImage,
         Prepared prepared,
+        bool excludeLevel65FromFlightClassification,
         CancellationToken cancellationToken)
     {
         DiscLayout sourceLayout = DiscImage.DetectLayout(sourceImage);
@@ -538,6 +596,14 @@ public static class UnusedLevel65BootstrapCandidateExporter
             WarpUpperBoundFileOffset,
             WarpUpperBoundAfter,
             "level-65 warp bound readback");
+        if (excludeLevel65FromFlightClassification)
+        {
+            RequireUInt32(
+                outputExecutableBytes,
+                FlightClassifierMagicLuiFileOffset,
+                ExcludeLevel65MagicLui,
+                "level-65 flight-classifier exception readback");
+        }
 
         (long changedWad, long outsideWad) = CompareLogicalFile(
             source,
@@ -547,17 +613,21 @@ public static class UnusedLevel65BootstrapCandidateExporter
             sourceWad.Size,
             [new LogicalRange(TargetOverlayEntryIndex * 8L, 16)],
             cancellationToken);
+        List<LogicalRange> executableRanges =
+        [
+            new(Level65DispatchPointerFileOffset, 4),
+            new(WarpUpperBoundFileOffset, 4),
+            new(WarpActivationFileOffset, WarpActivationAfter.Length)
+        ];
+        if (excludeLevel65FromFlightClassification)
+            executableRanges.Add(new(FlightClassifierMagicLuiFileOffset, 4));
         (long changedExecutable, long outsideExecutable) = CompareLogicalFile(
             source,
             output,
             sourceLayout,
             sourceExecutable.Lba,
             sourceExecutable.Size,
-            [
-                new LogicalRange(Level65DispatchPointerFileOffset, 4),
-                new LogicalRange(WarpUpperBoundFileOffset, 4),
-                new LogicalRange(WarpActivationFileOffset, WarpActivationAfter.Length)
-            ],
+            executableRanges,
             cancellationToken);
         if (changedWad == 0 || changedExecutable == 0 || outsideWad != 0 || outsideExecutable != 0)
         {
@@ -568,19 +638,33 @@ public static class UnusedLevel65BootstrapCandidateExporter
         return new Readback(changedWad, changedExecutable);
     }
 
-    private static IReadOnlyList<string> RuntimeChecklist() =>
-    [
-        "Disable memory-card insertion completely for this first identity/load probe. The retail serializer can record current level ID 65 and its slot-35 state; this candidate intentionally does not modify global save/load code.",
-        "Cold boot the candidate and reach a normal controllable game state before opening Inventory.",
-        EntryInstructions,
-        "Expected: the game begins a normal level transition and loads Town Square from the separate level ID 65 path. The level name may still display the retail placeholder A; identity is deliberately not patched yet.",
-        "Confirm geometry, textures, sky, the initial music track, camera, enemy animation, pause, and Inventory remain responsive during a short movement/sector-streaming check. Extended-session alternate music is unproven because its retail table has only 35 rows.",
-        "Open and close pause/Inventory only; do not select Exit Level or Quit Game because those transitions are not proven for portal-to-exit 65.",
-        "Do not attack or kill enemies, collect anything, rescue dragons, touch the egg thief, open or break chests, interact with gameplay objects, die/respawn, use a balloonist/save prompt, or save in this first loader/dispatch discriminator.",
-        "Do not enter Town Square's Return Home portal in this first probe: it records portal-to-exit 65, and Gnasty's World has no matching portal-65 landing object yet.",
-        "After the movement/streaming checks, reset DuckStation, boot again, and re-enter level 65 once through the Inventory sequence. Keep memory cards disabled and do not save from this static-only candidate.",
-        "After that focused re-entry, reset and confirm the untouched retail Town Square and Gnasty's Loot still load normally."
-    ];
+    private static IReadOnlyList<string> RuntimeChecklist(
+        bool excludeLevel65FromFlightClassification)
+    {
+        List<string> checklist =
+        [
+            "Disable memory-card insertion completely for this identity/load probe. The retail serializer can record current level ID 65; this candidate intentionally does not modify global save/load code.",
+            "Cold boot the candidate and reach a normal controllable game state before opening Inventory.",
+            EntryInstructions,
+            excludeLevel65FromFlightClassification
+                ? "Expected: the game begins a normal transition and attempts to load Town Square while retaining level ID 65, world ID 5, and continuous level index 35. The adjusted private classifier preserves exactly retail flight IDs 5/15/25/35/45/55; ID65 is the only supported level ID affected. The displayed name is not a pass/fail signal in this control."
+                : "Expected: the game begins a normal level transition and loads Town Square from the separate level ID 65 path. The level name may still display the retail placeholder A; identity is deliberately not patched yet.",
+            "This candidate does not include either superseded diagnostic: SCUS +0x40F4 retains its retail conditional branch, and +0x5E58 retains its retail continuous-index calculation.",
+            "Confirm geometry, textures, sky, the initial music track, camera, enemy animation, pause, and Inventory remain responsive during a short movement/sector-streaming check. Extended-session alternate music remains unproven.",
+            "Open and close pause/Inventory only; do not select Exit Level or Quit Game because those transitions are not proven for portal-to-exit 65.",
+            "Do not attack or kill enemies, collect anything, rescue dragons, touch the egg thief, open or break chests, interact with gameplay objects, die/respawn, use a balloonist/save prompt, or save in this discriminator.",
+            "Do not enter Town Square's Return Home portal in this probe: it records portal-to-exit 65, and Gnasty's World has no matching portal-65 landing object yet.",
+            "After the movement/streaming checks, reset DuckStation, boot again, and re-enter level 65 once through the Inventory sequence. Keep memory cards disabled and do not save from this static-only candidate.",
+            "After that focused re-entry, reset and confirm the untouched retail Town Square and Gnasty's Loot still load normally."
+        ];
+        if (excludeLevel65FromFlightClassification)
+        {
+            checklist.Add(
+                "Interpretation: a successful ID65 load confirms flight misclassification caused the prior crash; another immediate crash means a separate ID65/index35 assumption remains. After the focused ID65 reset/re-entry test, cold boot once more and confirm Sunny Flight still enters flight mode normally; do not collect or finish it."
+            );
+        }
+        return checklist;
+    }
 
     private static (long Changed, long Outside) CompareLogicalFile(
         FileStream source,
