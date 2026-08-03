@@ -410,12 +410,18 @@ at exact BIN SHA-256
 A byte audit found only the intended X byte plus one sector's regenerated
 EDC/ECC. The currently decoded optional scene-list pointer and count are both
 zero, although that static result does not exclude every runtime visibility
-mechanism, and the move remains inside the same collision cell. The profile remains
-runtime-rejected. Its next disposable diagnostic preserves `FF` and changes
-only T21 render radius `+0x50` from `18` to `20`. That candidate is built at
-BIN SHA-256
-`329420e7f9e492ce69830f63c783421c05c5976fe8b0b04de7d49e52bf87e626`,
-but it must not be generalized before DuckStation evidence. The remaining
+mechanism, and the move remains inside the same collision cell. The profile
+remains runtime-rejected. Its disposable `+0x50: 18 -> 20` diagnostic at BIN
+SHA-256
+`329420e7f9e492ce69830f63c783421c05c5976fe8b0b04de7d49e52bf87e626`
+also flickered, but only from farther away. This matches the executable's
+native radius calculation exactly: `18` gives 1536 editor units, `20` gives
+2048, and `+0x51` contributes 128 units of previous-frame hysteresis. The next
+one-byte discriminator uses maximum safe positive value `7F` at BIN SHA-256
+`a3db572356470e697c643e474728b5e75a73fa813fe9868143fb2ea6a4a98f36`;
+`80` through `FF` are blocked because they enter the special negative-radius
+screen/HUD renderer. The `7F` candidate remains unpromoted pending DuckStation
+evidence from the previously failing ordinary sightline. The remaining
 3x Flame Chest clue is its colocated runtime/control row T108 (`renderRadius=0x1A`,
 `nativeClassLowByte=0x88`), which must be allocated with the chest shell before
 that family can be promoted.

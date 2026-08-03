@@ -17,7 +17,7 @@ const long ExpectedTargetRenderRadiusWadOffset = 0xD640F8;
 const string ExpectedOutputImageSha256 =
     "ec3d8e354cf246d704860a6b26968a59cc7f77fe6409e08c299a777b7fc4df8e";
 const string ExpectedRenderRadiusOutputImageSha256 =
-    "329420e7f9e492ce69830f63c783421c05c5976fe8b0b04de7d49e52bf87e626";
+    "a3db572356470e697c643e474728b5e75a73fa813fe9868143fb2ea6a4a98f36";
 const long ExpectedRenderRadiusChangedPhysicalBytes = 46;
 
 string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
@@ -310,15 +310,15 @@ finally
 
 MobySourcePatch renderRadiusPatch = donorPatch with
 {
-    Label = "townsquare-T21-render-radius-18-to-20",
+    Label = "townsquare-T21-render-radius-18-to-7f",
     Kind = "moby-render-radius",
     RecordOffset = "0x50",
     WadRelativeOffset = $"0x{ExpectedDonorRenderRadiusWadOffset:X}",
     ImageOffset = "research-rebased-at-compose-time",
     ByteLength = 1,
     BeforeHexPreview = "18",
-    AfterHexPreview = "20",
-    Description = "Isolated native render-radius diagnostic: expand moved T21 from native loose-gem value 0x18 to value 0x20 used by other retail Town Square actor families; not a loose-gem promotion rule."
+    AfterHexPreview = "7F",
+    Description = "Isolated native render-radius diagnostic: expand moved T21 from native loose-gem value 0x18 to the maximum safe positive value 0x7F; values 0x80-0xFF select the renderer's special negative-radius path. This is not a loose-gem promotion rule."
 };
 MobySourcePatchPlan renderRadiusPlan = objectPlan with
 {
@@ -334,13 +334,13 @@ MobySourcePatchPlan renderRadiusPlan = objectPlan with
     ],
     Notes = objectPlan.Notes
         .Concat([
-            "Focused far-flicker diagnostic: keep +0x4A = FF and +0x52 = 40; change only T21 X plus native render radius +0x50 from 0x18 to 0x20."
+            "Focused far-flicker diagnostic: keep +0x4A = FF and +0x52 = 40; change only T21 X plus native render radius +0x50 from 0x18 to maximum safe positive 0x7F."
         ])
         .ToArray()
 };
 string renderRadiusPrefix = Path.Combine(
     outputRoot,
-    "Stone-Hill-slot-Town-Square-edited-T21-X-render-radius-20-RUNTIME-CANDIDATE");
+    "Stone-Hill-slot-Town-Square-edited-T21-X-render-radius-7F-RUNTIME-CANDIDATE");
 StoneHillTownSquareEditedDonorCandidateRequest renderRadiusRequest = request with
 {
     MobyPatchPlan = renderRadiusPlan,
@@ -368,16 +368,16 @@ Require(
     radiusSummary.TargetWadOffset == ExpectedTargetRenderRadiusWadOffset &&
     radiusSummary.ByteLength == 1 &&
     radiusSummary.BeforeHex == "18" &&
-    radiusSummary.AfterHex == "20",
+    radiusSummary.AfterHex == "7F",
     "The isolated render-radius plan changed recipe, relocation, bytes, or evidence boundary.");
 MobySourcePatchPlan unsafeRadiusPlan = renderRadiusPlan with
 {
-    Patches = [donorPatch, renderRadiusPatch with { AfterHexPreview = "21" }]
+    Patches = [donorPatch, renderRadiusPatch with { AfterHexPreview = "80" }]
 };
 await ExpectFailureAsync(
     () => StoneHillTownSquareEditedDonorCandidateComposer.BuildPlanAsync(
         renderRadiusRequest with { MobyPatchPlan = unsafeRadiusPlan }),
-    "An unapproved T21 render-radius value passed the isolated 18 -> 20 gate.");
+    "An unsafe negative-path T21 render-radius value passed the isolated 18 -> 7F gate.");
 
 StoneHillTownSquareEditedDonorArtifactResult renderRadiusArtifact =
     await StoneHillTownSquareEditedDonorArtifactWriter.ExportAsync(renderRadiusRequest);
@@ -407,11 +407,11 @@ byte[] radiusTargetAfter = ReadMode2WadBytes(
 Require(
     radiusTargetAfter[0x4A] == 0xFF &&
     radiusTargetAfter[0x4B] == 0x00 &&
-    radiusTargetAfter[0x50] == 0x20 &&
+    radiusTargetAfter[0x50] == 0x7F &&
     radiusTargetAfter[0x51] == 0x00 &&
     radiusTargetAfter[0x52] == 0x40 &&
     radiusTargetAfter[0x53] == 0xFF,
-    "The render-radius candidate changed a T21 culling/update byte outside checked +0x50 = 20.");
+    "The render-radius candidate changed a T21 culling/update byte outside checked +0x50 = 7F.");
 string radiusChecklist = await File.ReadAllTextAsync(renderRadiusArtifact.RuntimeChecklistPath);
 Require(
     radiusChecklist.Contains(renderRadiusResult.OutputImageSha256, StringComparison.Ordinal) &&
@@ -462,7 +462,7 @@ Console.WriteLine($"Render-radius BIN: {renderRadiusResult.OutputImagePath}");
 Console.WriteLine($"Render-radius BIN SHA-256: {renderRadiusResult.OutputImageSha256}");
 Console.WriteLine($"Render-radius checklist: {renderRadiusArtifact.RuntimeChecklistPath}");
 Console.WriteLine($"Render-radius static proof: {renderRadiusArtifact.StaticProofPath}");
-Console.WriteLine($"T21 +0x50: 18 -> 20; donor WAD 0x{ExpectedDonorRenderRadiusWadOffset:X}; target WAD 0x{ExpectedTargetRenderRadiusWadOffset:X}.");
+Console.WriteLine($"T21 +0x50: 18 -> 7F; donor WAD 0x{ExpectedDonorRenderRadiusWadOffset:X}; target WAD 0x{ExpectedTargetRenderRadiusWadOffset:X}.");
 
 static async Task<(string ImagePath, string CuePath)> EnsureExactIdentityBaseAsync(
     string repositoryRoot,

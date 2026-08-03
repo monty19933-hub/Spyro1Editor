@@ -83,10 +83,10 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
     public const string PlacementStatus =
         "edited-donor-placement-runtime-candidate-pending-duckstation";
     public const string RenderRadiusRecipeId =
-        "native-level-replacement-stonehill-townsquare-edited-donor-t21-x-render-radius-clean-usa-v3";
-    public const int RenderRadiusRecipeVersion = 3;
+        "native-level-replacement-stonehill-townsquare-edited-donor-t21-x-render-radius-7f-clean-usa-v4";
+    public const int RenderRadiusRecipeVersion = 4;
     public const string RenderRadiusEvidenceId =
-        "stonehill-slot-townsquare-edited-donor-t21-x-render-radius-pending-duckstation";
+        "stonehill-slot-townsquare-edited-donor-t21-x-render-radius-7f-pending-duckstation";
     public const string RenderRadiusStatus =
         "edited-donor-render-radius-runtime-candidate-pending-duckstation";
 
@@ -125,7 +125,7 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
     private static readonly byte[] ExpectedPlacementSectorBefore = [0xFF];
     private static readonly byte[] ExpectedPlacementSectorAfter = [0xD5];
     private static readonly byte[] ExpectedRenderRadiusBefore = [0x18];
-    private static readonly byte[] ExpectedRenderRadiusAfter = [0x20];
+    private static readonly byte[] ExpectedRenderRadiusAfter = [0x7F];
 
     public static async Task<StoneHillTownSquareEditedDonorCandidatePlan> BuildPlanAsync(
         StoneHillTownSquareEditedDonorCandidateRequest request,
@@ -400,7 +400,7 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
             [
                 "Cold-boot the generated CUE in DuckStation; static proof is not runtime proof",
                 renderRadiusMode
-                    ? "Enter through Stone Hill's slot and verify moved T21 no longer flickers at distance with render radius 0x20"
+                    ? "Enter through Stone Hill's slot and verify moved T21 no longer flickers from the previously failing normal in-level sightline with render radius 0x7F"
                     : placementSummary == null
                     ? "Enter the replaced Town Square through Stone Hill's slot and locate moved T21 with its native +0x4A FF visibility sentinel preserved"
                     : "Enter the replaced Town Square through Stone Hill's slot and reproduce the rejected historical +0x4A D5 visibility-byte diagnostic",
@@ -559,7 +559,7 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
                 !radiusAfter.SequenceEqual(ExpectedRenderRadiusAfter))
             {
                 throw new InvalidDataException(
-                    "The render-radius gate requires the checked native-value diagnostic 18 -> 20.");
+                    "The render-radius gate requires the checked maximum-positive diagnostic 18 -> 7F.");
             }
             if (TargetRenderRadiusPatchWadOffset !=
                     TargetDataWadOffset + (DonorRenderRadiusPatchWadOffset - DonorDataWadOffset) ||

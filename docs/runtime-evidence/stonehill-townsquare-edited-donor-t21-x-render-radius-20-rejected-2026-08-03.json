@@ -1,0 +1,89 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-03",
+  "evidenceId": "stonehill-slot-townsquare-edited-donor-t21-x-render-radius-20-rejected-duckstation-2026-08-03",
+  "evidenceType": "interactive-user-report",
+  "automatedEmulatorCapture": false,
+  "evidenceStatus": "runtime-rejected-distance-flicker-moved-outward",
+  "promotionAuthorized": false,
+  "supersedesEvidenceId": "stonehill-slot-townsquare-edited-donor-t21-x-render-radius-pending-duckstation",
+  "profileId": "native-level-replacement-stonehill-townsquare-edited-donor-t21-x-render-radius-clean-usa-v3",
+  "profileRecipeVersion": 3,
+  "baseProfileId": "native-level-replacement-stonehill-townsquare-display-identity-clean-usa-v1",
+  "baseOutputImageSha256": "71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9",
+  "outputImageSha256": "329420e7f9e492ce69830f63c783421c05c5976fe8b0b04de7d49e52bf87e626",
+  "staticProofArtifact": "_local/v5-stone-hill-level-replacement/edited-donor-candidate/Stone-Hill-slot-Town-Square-edited-T21-X-render-radius-20-RUNTIME-CANDIDATE-static-proof.json",
+  "editedObject": {
+    "sourceLevel": "Town Square",
+    "trueIndex": 21,
+    "label": "Red Gem",
+    "originalWorldPosition": [7813.75, 7189.75, 512.0],
+    "editedWorldPosition": [7685.75, 7189.75, 512.0]
+  },
+  "patchBoundary": {
+    "positionPatch": {
+      "donorWadOffset": "0x136E8B4",
+      "replacementSlotWadOffset": "0xD640B4",
+      "recordOffset": "0x0C",
+      "beforeHex": "5CE80100",
+      "afterHex": "5CE00100"
+    },
+    "renderRadiusPatch": {
+      "donorWadOffset": "0x136E8F8",
+      "replacementSlotWadOffset": "0xD640F8",
+      "recordOffset": "0x50",
+      "beforeHex": "18",
+      "afterHex": "20"
+    },
+    "changedLogicalWadBytes": 2,
+    "changedPhysicalImageBytes": 46,
+    "rebuiltRawSectors": 1,
+    "outsideAllowedRawSectorBytes": 0
+  },
+  "runtimeObservation": {
+    "primaryEvidence": true,
+    "passedChecks": [
+      "The moved T21 remained present and interactive.",
+      "Increasing +0x50 from 0x18 to 0x20 moved the distant flicker boundary farther away."
+    ],
+    "rejectionReason": "T21 still flickered when viewed from farther away; the patch changed the threshold rather than eliminating the threshold.",
+    "interpretation": "The result matches the RenderShadedMobys distance gate exactly: 0x18 gives a 1536-unit margin, while 0x20 gives a 2048-unit margin, with 128 units of previous-frame hysteresis."
+  },
+  "executableTrace": {
+    "retailExecutable": "Clean USA SCUS_942.28",
+    "function": "RenderShadedMobys",
+    "functionAddress": "0x80022A2C",
+    "radiusLoadAddress": "0x80022B20",
+    "previousFrameClearAddress": "0x80022B28",
+    "previousFrameSetAddress": "0x80022D98",
+    "radiusFormulaEditorUnits": "signed(record[0x50]) * 64, plus 128 when record[0x51] bit 0 records a successful previous draw",
+    "negativePathWarning": "Values 0x80 through 0xFF select the special negative-radius screen/HUD path and are unsafe for this world-object diagnostic."
+  },
+  "correctiveNextGate": {
+    "id": "stonehill-slot-townsquare-edited-donor-t21-x-plus-render-radius-7f",
+    "profileId": "native-level-replacement-stonehill-townsquare-edited-donor-t21-x-render-radius-7f-clean-usa-v4",
+    "additionalPatch": {
+      "kind": "moby-render-radius",
+      "recordOffset": "0x50",
+      "beforeHex": "18",
+      "afterHex": "7F"
+    },
+    "preservedControlBytes": {
+      "+0x43": "FF",
+      "+0x4A": "FF",
+      "+0x4B": "00",
+      "+0x51": "00",
+      "+0x52": "40",
+      "+0x53": "FF"
+    },
+    "purpose": "Remove the +0x50 render-radius boundary from ordinary Town Square sightlines without entering the renderer's negative-radius path or changing the separate native update radius.",
+    "requiresIndependentDuckStationResult": true
+  },
+  "scopeLimitations": [
+    "The 0x20 candidate is runtime-rejected and must not be promoted.",
+    "The 0x7F candidate remains a disposable diagnostic, not a general moved-gem rule.",
+    "Visibility beyond the unchanged +0x52 update radius is outside the 0x7F test's discriminator.",
+    "This evidence does not authorize normal V4 Create BIN, projects, releases, or the update channel."
+  ]
+}

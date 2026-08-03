@@ -303,9 +303,9 @@ nearby-actor checks before any further conclusion.
 The exact native-`FF` rejection record is stored at
 `docs/runtime-evidence/stonehill-townsquare-edited-donor-t21-x-native-ff-rejected-2026-08-01.json`.
 
-## Milestone 7: isolated T21 render-radius candidate - pending runtime
+## Milestone 7: isolated T21 render-radius `20` candidate - runtime rejected
 
-The next candidate is now generated from the exact display-identity base. It
+This candidate was generated from the exact display-identity base. It
 keeps the proven T21 X edit, preserves native `+0x4A/+0x4B = FF/00` and
 `+0x52/+0x53 = 40/FF`, and changes only render radius `+0x50` from the native
 loose-gem value `18` to value `20`, which other retail Town Square actor
@@ -325,8 +325,10 @@ families use. It is not asserted to be a native loose-gem value.
   rebuilt MODE2 raw sector; the other 44 bytes are regenerated EDC/ECC.
 - Evidence ID:
   `stonehill-slot-townsquare-edited-donor-t21-x-render-radius-pending-duckstation`
-- Evidence status: static baseline only; no runtime claim and no profile
-  promotion are authorized.
+- Runtime result (2026-08-03): rejected. The user confirmed that T21 still
+  flickered, but only after moving farther away. The patch therefore moved the
+  same distance boundary rather than correcting a relocation defect.
+- Evidence status: runtime rejected; no profile promotion is authorized.
 
 The focused smoke rejects any alternate radius, secondary patch, unrelated
 record, or out-of-range write. It also proves deterministic output, original
@@ -334,8 +336,44 @@ Town Square donor preservation, exact target readback, executable preservation,
 source preservation, and atomic BIN/CUE publication. The required discriminator
 is the same far-camera view that reproduced the rejection. If practical, compare
 nearby native T22 from that view, then approach and collect moved T21 exactly
-once. This candidate remains disposable until the exact hash above passes in
-DuckStation.
+once. The exact rejection record is stored at
+`docs/runtime-evidence/stonehill-townsquare-edited-donor-t21-x-render-radius-20-rejected-2026-08-03.json`.
+
+Disassembly explains the observation directly. `RenderShadedMobys` loads
+`+0x50/+0x51` at `0x80022B20`. The signed low byte supplies a radius of
+`value * 64` editor world units, and the previous-frame bit in `+0x51` adds
+128 units of hysteresis. The renderer clears that bit at `0x80022B28` and sets
+it again only after every clipping gate succeeds at `0x80022D98`. Thus `18`
+gives 1536 units, `20` gives 2048 units, and a camera hovering at either
+boundary can naturally alternate the object between drawn and culled frames.
+
+## Milestone 8: maximum-positive T21 render-radius discriminator - pending runtime
+
+The narrow next candidate changes the same single radius byte from `18` to
+`7F`, the largest value that stays on the normal world-render path. Values
+`80` through `FF` are explicitly blocked because their signed high bit enters
+the renderer's special screen/HUD path. T21 X remains the only position edit;
+native `+0x43 = FF`, `+0x4A/+0x4B = FF/00`, ephemeral `+0x51 = 00`, and the
+separate `+0x52/+0x53 = 40/FF` update controls remain untouched.
+
+- CUE:
+  `Stone-Hill-slot-Town-Square-edited-T21-X-render-radius-7F-RUNTIME-CANDIDATE.cue`
+- BIN SHA-256:
+  `a3db572356470e697c643e474728b5e75a73fa813fe9868143fb2ea6a4a98f36`
+- Render-radius patch: donor WAD `0x136E8F8`, replacement-slot WAD
+  `0xD640F8`, `18` to `7F`.
+- Exact diff boundary: two logical WAD bytes and 46 physical BIN bytes in one
+  rebuilt MODE2 raw sector; the other 44 bytes are regenerated EDC/ECC.
+- Evidence ID:
+  `stonehill-slot-townsquare-edited-donor-t21-x-render-radius-7f-pending-duckstation`
+- Evidence status: static baseline only; no runtime claim and no profile
+  promotion are authorized.
+
+Test from the ordinary in-level view where `18` and then `20` flickered; do not
+keep retreating beyond the unchanged native `+0x52 = 40` update distance. If
+`7F` still flickers inside that normal sightline, stop changing row fields and
+instrument the renderer between `0x80022B28` and `0x80022D98`. From the same
+camera, compare nearby untouched T22 as the native loose-gem control.
 
 ## Next implementation gates
 
@@ -351,9 +389,12 @@ DuckStation.
    `ec3d8e354cf246d704860a6b26968a59cc7f77fe6409e08c299a777b7fc4df8e`
    flickered at distance. The byte-clean native-`FF` result rules out the
    earlier invalid sector overwrite as the sole cause. The isolated `+0x50`
-   `18`-to-`20` diagnostic is now built at BIN SHA-256
-   `329420e7f9e492ce69830f63c783421c05c5976fe8b0b04de7d49e52bf87e626`;
-   it remains pending DuckStation. Edited
+   `18`-to-`20` diagnostic at BIN SHA-256
+   `329420e7f9e492ce69830f63c783421c05c5976fe8b0b04de7d49e52bf87e626`
+   moved the native flicker boundary farther away and is runtime-rejected. The
+   maximum-positive `7F` discriminator at BIN SHA-256
+   `a3db572356470e697c643e474728b5e75a73fa813fe9868143fb2ea6a4a98f36`
+   remains pending DuckStation. Edited
    terrain/scene data, other object edits, additions, removals, and imported
    actor packages remain pending.
 4. **Completed for the exact retail pair:** the complete portal, gameplay,

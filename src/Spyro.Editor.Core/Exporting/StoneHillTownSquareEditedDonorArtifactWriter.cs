@@ -80,12 +80,12 @@ public static class StoneHillTownSquareEditedDonorArtifactWriter
                 ? "V5 Town Square edited-donor T21 X + placement sector"
                 : "V5 Town Square edited-donor T21 X";
         string placementDisclosure = renderRadiusMode
-            ? "This diagnostic preserves the native +0x4A FF visibility sentinel and changes only T21 X plus its +0x50 render radius from the native loose-gem value 18 to value 20, which retail Town Square uses for other actor families. This is not a loose-gem promotion rule. Both logical edits share one rebuilt raw WAD sector."
+            ? "This diagnostic preserves the native +0x4A FF visibility sentinel and changes only T21 X plus its +0x50 render radius from the native loose-gem value 18 to the maximum safe positive value 7F. Values 80-FF select the renderer's special negative-radius path and are deliberately blocked. This is not a loose-gem promotion rule. Both logical edits share one rebuilt raw WAD sector."
             : placementMode
                 ? "This rejected historical gate overwrites T21's native +0x4A FF visibility sentinel with the editor-derived terrain-sector value D5. Both logical edits share one rebuilt raw WAD sector."
                 : "This first gate preserves T21's native +0x4A FF visibility sentinel unchanged and relocates only the X word; the invalid derived terrain-sector write is intentionally outside this control.";
         string placementCheck = renderRadiusMode
-            ? "From the same distant viewpoint that reproduced the regression, confirm T21 remains continuously visible with +0x50 = 20; compare adjacent native T22 if practical, then approach and collect T21 once."
+            ? "From the same normal in-level viewpoint that reproduced the regression, confirm T21 remains continuously visible with +0x50 = 7F; compare adjacent native T22 if practical, then approach and collect T21 once. Do not treat visibility beyond the unchanged +0x52 update radius as part of this test."
             : placementMode
                 ? "Confirm whether T21 remains visible and interactive after the rejected historical D5 visibility-byte overwrite; watch for pop-in, premature culling, or a missing gem."
                 : "Confirm T21 remains visible and interactive at its edited position while its native +0x4A FF visibility sentinel remains unchanged; record any pop-in or culling limitation.";
@@ -200,7 +200,7 @@ public static class StoneHillTownSquareEditedDonorArtifactWriter
               result.Plan.RenderRadiusPatch.TargetWadOffset != 0xD640F8 ||
               result.Plan.RenderRadiusPatch.ByteLength != 1 ||
               result.Plan.RenderRadiusPatch.BeforeHex != "18" ||
-              result.Plan.RenderRadiusPatch.AfterHex != "20")) ||
+              result.Plan.RenderRadiusPatch.AfterHex != "7F")) ||
             !NativeLevelReplacementProfile.IsSha256(result.OutputImageSha256) ||
             NativeLevelReplacementProfile.ShaEquals(
                 result.OutputImageSha256,
