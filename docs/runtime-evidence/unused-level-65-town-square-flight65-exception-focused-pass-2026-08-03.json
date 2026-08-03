@@ -1,0 +1,58 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-03",
+  "evidenceId": "unused-level-65-town-square-flight65-exception-focused-pass-duckstation-2026-08-03",
+  "evidenceType": "interactive-user-report",
+  "evidenceStatus": "focused-runtime-pass",
+  "automatedEmulatorCapture": false,
+  "promotionAuthorized": false,
+  "profileId": "unused-level-65-town-square-flight65-exception-clean-usa-disposable-v2",
+  "retailSourceImageSha256": "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37",
+  "outputImageSha256": "a77f32d715b614867958a491e25407b24fe0091509ad9eeee546bf3c70cc09e5",
+  "outputCue": "_local/v5-stone-hill-level-replacement/unused-level-65-bootstrap/Unused-Level-65-Town-Square-flight65-exception-RUNTIME-CANDIDATE.cue",
+  "staticProofArtifact": "_local/v5-stone-hill-level-replacement/unused-level-65-bootstrap/Unused-Level-65-Town-Square-flight65-exception-RUNTIME-CANDIDATE-static-proof.json",
+  "focusedRuntimeObservation": {
+    "primaryEvidence": true,
+    "userReports": [
+      "The ID65 Town Square candidate loaded and allowed gem collection.",
+      "The retail Town Square, Gnasty's Loot, and Sunny Flight comparison entries all ran normally.",
+      "The user summarized the comparison as: This is great! Everything runs just fine."
+    ],
+    "passedChecks": [
+      "Level ID65 reached a rendered, playable Town Square scene instead of freezing on entry.",
+      "A loose gem could be collected in ID65; the placeholder Inventory total displayed collected progress against a zero authored target.",
+      "Retail Town Square remained independently loadable.",
+      "Gnasty's Loot remained loadable.",
+      "Sunny Flight still entered normally after the classifier change."
+    ],
+    "conclusion": "The pre-frame crash was caused by retail flight classification of ID65. The one-word classifier exception preserves every retail flight and gives the reserved ID65 path a focused runtime pass."
+  },
+  "staticBoundary": {
+    "changedLogicalWadBytes": 9,
+    "changedLogicalExecutableBytes": 13,
+    "rebuiltRawSectors": 5,
+    "sourceImagePreserved": true,
+    "retailFlightsPreserved": [
+      5,
+      15,
+      25,
+      35,
+      45,
+      55
+    ]
+  },
+  "unverifiedRuntimeChecks": [
+    "The current rows 79/80 still alias Town Square's retail physical bytes; independent payload storage is not proven.",
+    "Death and respawn were not reported for ID65.",
+    "Return Home, Exit Level, Quit Game, portal-to-exit 65, save, load, and memory-card persistence remain untested and unauthorized.",
+    "Dragons, egg-thief progress, enemies, chests, extended-session alternate music, title demos, and every progression total were not separately validated for ID65.",
+    "ID65 still uses the placeholder display name and has no authored totals, music identity, portal landing pair, or save ownership."
+  ],
+  "nextGate": "Create a disposable physically independent ID65 clone by appending exact Town Square overlay/data sector copies, growing WAD.WAD, relocating the patched executable, and preserving the proven classifier exception. Do not add identity, portals, or persistence in the same discriminator.",
+  "scopeLimitations": [
+    "This evidence does not promote a 36th-level workflow into normal V4 Create BIN, releases, or the update channel.",
+    "It does not authorize arbitrary new terrain, textures, Mobys, object packages, routes, level metadata, portal routing, or save/progression structures in ID65.",
+    "The candidate remains disposable research until physical independence and later identity/progression gates pass."
+  ]
+}

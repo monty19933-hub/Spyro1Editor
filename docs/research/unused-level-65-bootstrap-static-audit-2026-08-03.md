@@ -25,6 +25,12 @@ The stronger pre-frame cause is retail flight classification. During loader stat
 
 The second runtime discriminator keeps ID65, world ID 5, continuous index 35, rows 79/80, and the Town Square dispatch unchanged. The classifier's private divide-by-ten magic is loaded at SCUS `+0x40C0/+0x40CC`; changing only the LUI at `+0x40C0` from `66 66 02 3C` to `00 5E 02 3C` changes the combined constant from `0x66666667` to `0x5E006667`. Exhaustive integer evaluation over IDs 0 through 99 proves that exactly the retail flight IDs 5/15/25/35/45/55 remain flights. ID65 is the only supported level ID affected; unused IDs 75/85/95 also take normal initialization. This avoids a code cave and preserves every retail flight during the focused test. Neither superseded diagnostic is combined with it: SCUS `+0x40F4` retains retail bytes `29 00 44 14`, and `+0x5E58` retains retail bytes `21 10 65 00`.
 
+## Second runtime result
+
+The exact flight-classifier exception candidate at BIN SHA-256 `a77f32d715b614867958a491e25407b24fe0091509ad9eeee546bf3c70cc09e5` passed its focused DuckStation test on 2026-08-03. ID65 rendered Town Square and supported gem collection instead of freezing on entry. The user then loaded the untouched retail Town Square and Gnasty's Loot entries and confirmed that Sunny Flight still entered normally. This confirms the prior crash was the flight-classification mismatch rather than the aliased WAD row or callback dispatch.
+
+The evidence record is `docs/runtime-evidence/unused-level-65-town-square-flight65-exception-focused-pass-2026-08-03.json`. This focused pass does not promote ID65 into the editor: its rows still alias Town Square's physical bytes, its Inventory identity remains placeholder `A`, and its portals, totals, save ownership, and persistence remain deliberately unimplemented.
+
 ## Deliberate phase-one limits
 
 - This is a static-proven, runtime-pending research CUE, not an editor feature.
