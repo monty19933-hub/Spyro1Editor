@@ -14,11 +14,16 @@ const long ExpectedDonorPatchWadOffset = 0x136E8B4;
 const long ExpectedTargetPatchWadOffset = 0xD640B4;
 const long ExpectedDonorRenderRadiusWadOffset = 0x136E8F8;
 const long ExpectedTargetRenderRadiusWadOffset = 0xD640F8;
+const long ExpectedDonorUpdateScheduleWadOffset = 0x136E8FA;
+const long ExpectedTargetUpdateScheduleWadOffset = 0xD640FA;
 const string ExpectedOutputImageSha256 =
     "ec3d8e354cf246d704860a6b26968a59cc7f77fe6409e08c299a777b7fc4df8e";
 const string ExpectedRenderRadiusOutputImageSha256 =
     "a3db572356470e697c643e474728b5e75a73fa813fe9868143fb2ea6a4a98f36";
 const long ExpectedRenderRadiusChangedPhysicalBytes = 46;
+const string ExpectedUnconditionalUpdateOutputImageSha256 =
+    "580af811c2f3e130f03fc1556da56d8310064a588eb57f819f5129c74ccc9329";
+const long ExpectedUnconditionalUpdateChangedPhysicalBytes = 53;
 
 string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
 (string sourceImage, string sourceCue) = ResolveCleanSource(repositoryRoot, args);
@@ -445,6 +450,154 @@ finally
     DeleteIfExists(radiusDeterminismPrefix + ".cue");
 }
 
+MobySourcePatch updateSchedulePatch = donorPatch with
+{
+    Label = "townsquare-T21-update-schedule-40-to-ff",
+    Kind = "moby-update-schedule",
+    RecordOffset = "0x52",
+    WadRelativeOffset = $"0x{ExpectedDonorUpdateScheduleWadOffset:X}",
+    ImageOffset = "research-rebased-at-compose-time",
+    ByteLength = 1,
+    BeforeHexPreview = "40",
+    AfterHexPreview = "FF",
+    Description = "Combined far-flicker diagnostic: keep the maximum safe positive +0x50 render radius and select the queue builder's unconditional scheduling path with signed +0x52 = FF. This is not a loose-gem promotion rule."
+};
+MobySourcePatchPlan unconditionalUpdatePlan = renderRadiusPlan with
+{
+    PatchCount = 3,
+    TotalPatchedBytes = 6,
+    Patches = [donorPatch, renderRadiusPatch, updateSchedulePatch],
+    EditOutcomes =
+    [
+        editorOutcome with
+        {
+            PatchKinds = ["moby-position-x", "moby-render-radius", "moby-update-schedule"]
+        }
+    ],
+    Notes = renderRadiusPlan.Notes
+        .Concat([
+            "Combined far-flicker discriminator: retain T21 X move and +0x50 = 7F, then change only native +0x52 from 40 to FF for unconditional update scheduling."
+        ])
+        .ToArray()
+};
+string unconditionalUpdatePrefix = Path.Combine(
+    outputRoot,
+    "Stone-Hill-slot-Town-Square-edited-T21-X-render-radius-7F-update-FF-RUNTIME-CANDIDATE");
+StoneHillTownSquareEditedDonorCandidateRequest unconditionalUpdateRequest = request with
+{
+    MobyPatchPlan = unconditionalUpdatePlan,
+    OutputImagePath = unconditionalUpdatePrefix + ".bin",
+    OutputCuePath = unconditionalUpdatePrefix + ".cue"
+};
+StoneHillTownSquareEditedDonorCandidatePlan unconditionalUpdateCandidatePlan =
+    await StoneHillTownSquareEditedDonorCandidateComposer.BuildPlanAsync(unconditionalUpdateRequest);
+StoneHillTownSquareEditedDonorPatchSummary updateScheduleSummary =
+    unconditionalUpdateCandidatePlan.UpdateSchedulePatch
+    ?? throw new InvalidDataException("The combined diagnostic plan has no update-schedule summary.");
+Require(
+    unconditionalUpdateCandidatePlan.RecipeId ==
+        StoneHillTownSquareEditedDonorCandidateComposer.UnconditionalUpdateRecipeId &&
+    unconditionalUpdateCandidatePlan.RecipeVersion ==
+        StoneHillTownSquareEditedDonorCandidateComposer.UnconditionalUpdateRecipeVersion &&
+    unconditionalUpdateCandidatePlan.EvidenceId ==
+        StoneHillTownSquareEditedDonorCandidateComposer.UnconditionalUpdateEvidenceId &&
+    unconditionalUpdateCandidatePlan.Safety.Status ==
+        StoneHillTownSquareEditedDonorCandidateComposer.UnconditionalUpdateStatus &&
+    unconditionalUpdateCandidatePlan.PlacementPatch == null &&
+    unconditionalUpdateCandidatePlan.RenderRadiusPatch == radiusSummary &&
+    updateScheduleSummary.Kind == "moby-update-schedule" &&
+    updateScheduleSummary.TrueIndex == EditedTrueIndex &&
+    updateScheduleSummary.DonorWadOffset == ExpectedDonorUpdateScheduleWadOffset &&
+    updateScheduleSummary.TargetWadOffset == ExpectedTargetUpdateScheduleWadOffset &&
+    updateScheduleSummary.ByteLength == 1 &&
+    updateScheduleSummary.BeforeHex == "40" &&
+    updateScheduleSummary.AfterHex == "FF",
+    "The combined update-scheduling plan changed recipe, relocation, bytes, or evidence boundary.");
+MobySourcePatchPlan unsafeUpdateSchedulePlan = unconditionalUpdatePlan with
+{
+    Patches = [donorPatch, renderRadiusPatch, updateSchedulePatch with { AfterHexPreview = "7F" }]
+};
+await ExpectFailureAsync(
+    () => StoneHillTownSquareEditedDonorCandidateComposer.BuildPlanAsync(
+        unconditionalUpdateRequest with { MobyPatchPlan = unsafeUpdateSchedulePlan }),
+    "A non-FF T21 +0x52 value passed the exact unconditional-update gate.");
+
+StoneHillTownSquareEditedDonorArtifactResult unconditionalUpdateArtifact =
+    await StoneHillTownSquareEditedDonorArtifactWriter.ExportAsync(unconditionalUpdateRequest);
+StoneHillTownSquareEditedDonorCandidateResult unconditionalUpdateResult =
+    unconditionalUpdateArtifact.Candidate;
+Require(
+    unconditionalUpdateResult.Plan.RenderRadiusPatch == radiusSummary &&
+    unconditionalUpdateResult.Plan.UpdateSchedulePatch == updateScheduleSummary &&
+    unconditionalUpdateResult.Plan.PlacementPatch == null &&
+    unconditionalUpdateResult.OutputImageSha256 ==
+        ExpectedUnconditionalUpdateOutputImageSha256 &&
+    unconditionalUpdateResult.ChangedLogicalWadBytes == 3 &&
+    unconditionalUpdateResult.ChangedPhysicalImageBytes ==
+        ExpectedUnconditionalUpdateChangedPhysicalBytes &&
+    unconditionalUpdateResult.RebuiltRawSectorCount == 1 &&
+    unconditionalUpdateResult.ExactLogicalDiffBoundaryVerified &&
+    unconditionalUpdateResult.ExactPhysicalSectorBoundaryVerified &&
+    unconditionalUpdateResult.OriginalTownSquareDonorPreserved &&
+    unconditionalUpdateResult.DisplayIdentityExecutablePreserved &&
+    unconditionalUpdateResult.BaseImagePreserved &&
+    unconditionalUpdateResult.RetailSourcePreserved &&
+    unconditionalUpdateResult.BinCuePublishCompleted &&
+    !unconditionalUpdateResult.PlacementSectorReadbackVerified &&
+    unconditionalUpdateResult.RenderRadiusReadbackVerified &&
+    unconditionalUpdateResult.UpdateScheduleReadbackVerified &&
+    IsSha256(unconditionalUpdateResult.OutputImageSha256),
+    "The combined unconditional-update candidate omitted an exact diff, readback, donor, SCUS, source, or publication proof.");
+byte[] unconditionalUpdateTargetAfter = ReadMode2WadBytes(
+    unconditionalUpdateResult.OutputImagePath,
+    ExpectedTargetRecordWadOffset,
+    MobyLoader.RuntimeRecordStride);
+Require(
+    unconditionalUpdateTargetAfter[0x4A] == 0xFF &&
+    unconditionalUpdateTargetAfter[0x4B] == 0x00 &&
+    unconditionalUpdateTargetAfter[0x50] == 0x7F &&
+    unconditionalUpdateTargetAfter[0x51] == 0x00 &&
+    unconditionalUpdateTargetAfter[0x52] == 0xFF &&
+    unconditionalUpdateTargetAfter[0x53] == 0xFF,
+    "The combined candidate changed a T21 culling/update byte outside checked +0x50 = 7F and +0x52 = FF.");
+string unconditionalUpdateChecklist =
+    await File.ReadAllTextAsync(unconditionalUpdateArtifact.RuntimeChecklistPath);
+Require(
+    unconditionalUpdateChecklist.Contains(unconditionalUpdateResult.OutputImageSha256, StringComparison.Ordinal) &&
+    unconditionalUpdateChecklist.Contains("+0x50 = 7F", StringComparison.OrdinalIgnoreCase) &&
+    unconditionalUpdateChecklist.Contains("+0x52 = FF", StringComparison.OrdinalIgnoreCase) &&
+    unconditionalUpdateChecklist.Contains("unconditional", StringComparison.OrdinalIgnoreCase) &&
+    unconditionalUpdateChecklist.Contains("collect T21 once", StringComparison.OrdinalIgnoreCase),
+    "The combined candidate checklist omitted its exact far-distance discriminator.");
+string unconditionalUpdateDeterminismPrefix =
+    Path.Combine(outputRoot, "unconditional-update-determinism-recheck");
+try
+{
+    StoneHillTownSquareEditedDonorCandidateResult unconditionalUpdateDeterministic =
+        await StoneHillTownSquareEditedDonorCandidateComposer.ExportAsync(
+            unconditionalUpdateRequest with
+            {
+                OutputImagePath = unconditionalUpdateDeterminismPrefix + ".bin",
+                OutputCuePath = unconditionalUpdateDeterminismPrefix + ".cue"
+            });
+    Require(
+        unconditionalUpdateDeterministic.OutputImageSha256 ==
+            unconditionalUpdateResult.OutputImageSha256 &&
+        unconditionalUpdateDeterministic.OutputImageSha256 ==
+            ExpectedUnconditionalUpdateOutputImageSha256 &&
+        unconditionalUpdateDeterministic.ChangedLogicalWadBytes == 3 &&
+        unconditionalUpdateDeterministic.ChangedPhysicalImageBytes ==
+            ExpectedUnconditionalUpdateChangedPhysicalBytes &&
+        unconditionalUpdateDeterministic.RenderRadiusReadbackVerified &&
+        unconditionalUpdateDeterministic.UpdateScheduleReadbackVerified,
+        "A second combined unconditional-update export was not byte-deterministic.");
+}
+finally
+{
+    DeleteIfExists(unconditionalUpdateDeterminismPrefix + ".bin");
+    DeleteIfExists(unconditionalUpdateDeterminismPrefix + ".cue");
+}
+
 Console.WriteLine("PASS: deterministic Town Square T21 X-only edit was rebased while native +0x4A = FF remained unchanged.");
 Console.WriteLine($"CUE: {result.OutputCuePath}");
 Console.WriteLine($"BIN: {result.OutputImagePath}");
@@ -463,6 +616,14 @@ Console.WriteLine($"Render-radius BIN SHA-256: {renderRadiusResult.OutputImageSh
 Console.WriteLine($"Render-radius checklist: {renderRadiusArtifact.RuntimeChecklistPath}");
 Console.WriteLine($"Render-radius static proof: {renderRadiusArtifact.StaticProofPath}");
 Console.WriteLine($"T21 +0x50: 18 -> 7F; donor WAD 0x{ExpectedDonorRenderRadiusWadOffset:X}; target WAD 0x{ExpectedTargetRenderRadiusWadOffset:X}.");
+Console.WriteLine("PASS: combined T21 maximum render-radius and unconditional update-scheduling diagnostic preserved every other byte.");
+Console.WriteLine($"Unconditional-update CUE: {unconditionalUpdateResult.OutputCuePath}");
+Console.WriteLine($"Unconditional-update BIN: {unconditionalUpdateResult.OutputImagePath}");
+Console.WriteLine($"Unconditional-update BIN SHA-256: {unconditionalUpdateResult.OutputImageSha256}");
+Console.WriteLine($"Unconditional-update changed physical bytes: {unconditionalUpdateResult.ChangedPhysicalImageBytes}");
+Console.WriteLine($"Unconditional-update checklist: {unconditionalUpdateArtifact.RuntimeChecklistPath}");
+Console.WriteLine($"Unconditional-update static proof: {unconditionalUpdateArtifact.StaticProofPath}");
+Console.WriteLine($"T21 +0x52: 40 -> FF; donor WAD 0x{ExpectedDonorUpdateScheduleWadOffset:X}; target WAD 0x{ExpectedTargetUpdateScheduleWadOffset:X}.");
 
 static async Task<(string ImagePath, string CuePath)> EnsureExactIdentityBaseAsync(
     string repositoryRoot,

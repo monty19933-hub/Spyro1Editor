@@ -44,6 +44,7 @@ public static class StoneHillTownSquareEditedDonorArtifactWriter
 
         bool placementMode = result.Plan.PlacementPatch != null;
         bool renderRadiusMode = result.Plan.RenderRadiusPatch != null;
+        bool unconditionalUpdateMode = result.Plan.UpdateSchedulePatch != null;
         string report = JsonSerializer.Serialize(new
         {
             status = result.Plan.Safety.Status,
@@ -72,19 +73,26 @@ public static class StoneHillTownSquareEditedDonorArtifactWriter
             result.BinCuePublishCompleted,
             result.PlacementSectorReadbackVerified,
             result.RenderRadiusReadbackVerified,
+            result.UpdateScheduleReadbackVerified,
             result.Plan
         }, JsonOptions);
-        string checklistTitle = renderRadiusMode
+        string checklistTitle = unconditionalUpdateMode
+            ? "V5 Town Square edited-donor T21 X + maximum render radius + unconditional update"
+            : renderRadiusMode
             ? "V5 Town Square edited-donor T21 X + isolated render radius"
             : placementMode
                 ? "V5 Town Square edited-donor T21 X + placement sector"
                 : "V5 Town Square edited-donor T21 X";
-        string placementDisclosure = renderRadiusMode
+        string placementDisclosure = unconditionalUpdateMode
+            ? "This diagnostic preserves the native +0x4A FF visibility sentinel and changes exactly T21 X, +0x50 render radius 18 -> 7F, and +0x52 update scheduling 40 -> FF. The signed +0x52 = FF value selects the queue builder's unconditional scheduling path; this is a diagnostic, not a loose-gem promotion rule. All three logical edits share one rebuilt raw WAD sector."
+            : renderRadiusMode
             ? "This diagnostic preserves the native +0x4A FF visibility sentinel and changes only T21 X plus its +0x50 render radius from the native loose-gem value 18 to the maximum safe positive value 7F. Values 80-FF select the renderer's special negative-radius path and are deliberately blocked. This is not a loose-gem promotion rule. Both logical edits share one rebuilt raw WAD sector."
             : placementMode
                 ? "This rejected historical gate overwrites T21's native +0x4A FF visibility sentinel with the editor-derived terrain-sector value D5. Both logical edits share one rebuilt raw WAD sector."
                 : "This first gate preserves T21's native +0x4A FF visibility sentinel unchanged and relocates only the X word; the invalid derived terrain-sector write is intentionally outside this control.";
-        string placementCheck = renderRadiusMode
+        string placementCheck = unconditionalUpdateMode
+            ? "From the same normal in-level viewpoint that reproduced the regression, confirm whether T21 remains continuously visible with +0x50 = 7F and +0x52 = FF; compare adjacent native T22 if practical, then approach and collect T21 once."
+            : renderRadiusMode
             ? "From the same normal in-level viewpoint that reproduced the regression, confirm T21 remains continuously visible with +0x50 = 7F; compare adjacent native T22 if practical, then approach and collect T21 once. Do not treat visibility beyond the unchanged +0x52 update radius as part of this test."
             : placementMode
                 ? "Confirm whether T21 remains visible and interactive after the rejected historical D5 visibility-byte overwrite; watch for pop-in, premature culling, or a missing gem."
@@ -148,24 +156,35 @@ public static class StoneHillTownSquareEditedDonorArtifactWriter
     {
         bool placementMode = result.Plan.PlacementPatch != null;
         bool renderRadiusMode = result.Plan.RenderRadiusPatch != null;
+        bool unconditionalUpdateMode = result.Plan.UpdateSchedulePatch != null;
         if (placementMode && renderRadiusMode)
             throw new InvalidDataException("The edited-donor candidate cannot combine placement and render-radius diagnostics.");
-        string expectedRecipeId = renderRadiusMode
+        if (unconditionalUpdateMode && !renderRadiusMode)
+            throw new InvalidDataException("The unconditional-update diagnostic requires the checked render-radius patch.");
+        string expectedRecipeId = unconditionalUpdateMode
+            ? StoneHillTownSquareEditedDonorCandidateComposer.UnconditionalUpdateRecipeId
+            : renderRadiusMode
             ? StoneHillTownSquareEditedDonorCandidateComposer.RenderRadiusRecipeId
             : placementMode
                 ? StoneHillTownSquareEditedDonorCandidateComposer.PlacementRecipeId
                 : StoneHillTownSquareEditedDonorCandidateComposer.RecipeId;
-        int expectedRecipeVersion = renderRadiusMode
+        int expectedRecipeVersion = unconditionalUpdateMode
+            ? StoneHillTownSquareEditedDonorCandidateComposer.UnconditionalUpdateRecipeVersion
+            : renderRadiusMode
             ? StoneHillTownSquareEditedDonorCandidateComposer.RenderRadiusRecipeVersion
             : placementMode
                 ? StoneHillTownSquareEditedDonorCandidateComposer.PlacementRecipeVersion
                 : StoneHillTownSquareEditedDonorCandidateComposer.RecipeVersion;
-        string expectedEvidenceId = renderRadiusMode
+        string expectedEvidenceId = unconditionalUpdateMode
+            ? StoneHillTownSquareEditedDonorCandidateComposer.UnconditionalUpdateEvidenceId
+            : renderRadiusMode
             ? StoneHillTownSquareEditedDonorCandidateComposer.RenderRadiusEvidenceId
             : placementMode
                 ? StoneHillTownSquareEditedDonorCandidateComposer.PlacementEvidenceId
                 : StoneHillTownSquareEditedDonorCandidateComposer.EvidenceId;
-        string expectedStatus = renderRadiusMode
+        string expectedStatus = unconditionalUpdateMode
+            ? StoneHillTownSquareEditedDonorCandidateComposer.UnconditionalUpdateStatus
+            : renderRadiusMode
             ? StoneHillTownSquareEditedDonorCandidateComposer.RenderRadiusStatus
             : placementMode
                 ? StoneHillTownSquareEditedDonorCandidateComposer.PlacementStatus
@@ -201,11 +220,21 @@ public static class StoneHillTownSquareEditedDonorArtifactWriter
               result.Plan.RenderRadiusPatch.ByteLength != 1 ||
               result.Plan.RenderRadiusPatch.BeforeHex != "18" ||
               result.Plan.RenderRadiusPatch.AfterHex != "7F")) ||
+            (unconditionalUpdateMode &&
+             (result.Plan.UpdateSchedulePatch!.Kind != "moby-update-schedule" ||
+              result.Plan.UpdateSchedulePatch.TrueIndex != 21 ||
+              result.Plan.UpdateSchedulePatch.DonorWadOffset != 0x136E8FA ||
+              result.Plan.UpdateSchedulePatch.TargetWadOffset != 0xD640FA ||
+              result.Plan.UpdateSchedulePatch.ByteLength != 1 ||
+              result.Plan.UpdateSchedulePatch.BeforeHex != "40" ||
+              result.Plan.UpdateSchedulePatch.AfterHex != "FF")) ||
             !NativeLevelReplacementProfile.IsSha256(result.OutputImageSha256) ||
             NativeLevelReplacementProfile.ShaEquals(
                 result.OutputImageSha256,
                 NativeLevelReplacementIdentityProfileRegistry.TownSquareDisplayIdentityOutputImageSha256) ||
-            (placementMode || renderRadiusMode
+            (unconditionalUpdateMode
+                ? result.ChangedLogicalWadBytes != 3
+                : placementMode || renderRadiusMode
                 ? result.ChangedLogicalWadBytes != 2
                 : result.ChangedLogicalWadBytes is <= 0 or > 4) ||
             result.ChangedPhysicalImageBytes <= result.ChangedLogicalWadBytes ||
@@ -218,7 +247,8 @@ public static class StoneHillTownSquareEditedDonorArtifactWriter
             !result.RetailSourcePreserved ||
             !result.BinCuePublishCompleted ||
             result.PlacementSectorReadbackVerified != placementMode ||
-            result.RenderRadiusReadbackVerified != renderRadiusMode)
+            result.RenderRadiusReadbackVerified != renderRadiusMode ||
+            result.UpdateScheduleReadbackVerified != unconditionalUpdateMode)
         {
             throw new InvalidDataException(
                 "The edited-donor static evidence is incomplete or incorrectly claims its checked gate boundary.");

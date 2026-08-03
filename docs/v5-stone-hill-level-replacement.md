@@ -347,7 +347,7 @@ it again only after every clipping gate succeeds at `0x80022D98`. Thus `18`
 gives 1536 units, `20` gives 2048 units, and a camera hovering at either
 boundary can naturally alternate the object between drawn and culled frames.
 
-## Milestone 8: maximum-positive T21 render-radius discriminator - pending runtime
+## Milestone 8: maximum-positive T21 render-radius discriminator - runtime rejected
 
 The narrow next candidate changes the same single radius byte from `18` to
 `7F`, the largest value that stays on the normal world-render path. Values
@@ -366,14 +366,44 @@ separate `+0x52/+0x53 = 40/FF` update controls remain untouched.
   rebuilt MODE2 raw sector; the other 44 bytes are regenerated EDC/ECC.
 - Evidence ID:
   `stonehill-slot-townsquare-edited-donor-t21-x-render-radius-7f-pending-duckstation`
+- Runtime result (2026-08-03): rejected. The user reported that T21 still
+  flickered with `+0x50 = 7F`.
+- Evidence status: runtime rejected; no profile promotion is authorized.
+
+The maximum-radius test did not eliminate the flicker, so no further `+0x50`
+probe is valid. The exact rejection record is stored at
+`docs/runtime-evidence/stonehill-townsquare-edited-donor-t21-x-render-radius-7f-rejected-2026-08-03.json`.
+
+## Milestone 9: exclude both decoded distance gates - pending runtime
+
+No higher `+0x50` value is safe: `7F` is the maximum positive world radius and
+`80` through `FF` enter a different renderer. The next checked candidate keeps
+the T21 X edit and `+0x50 = 7F`, then changes only the separate scheduling byte
+at `+0x52` from native loose-gem `40` to `FF`. The queue builder treats signed
+`FF` as unconditional scheduling, and three retail Town Square objects already
+use that value. T47 (green gem) and T22 (red gem) remain native matched controls.
+
+- CUE:
+  `Stone-Hill-slot-Town-Square-edited-T21-X-render-radius-7F-update-FF-RUNTIME-CANDIDATE.cue`
+- BIN SHA-256:
+  `580af811c2f3e130f03fc1556da56d8310064a588eb57f819f5129c74ccc9329`
+- X patch: donor WAD `0x136E8B4`, replacement-slot WAD `0xD640B4`,
+  `5CE80100` to `5CE00100`.
+- Render-radius patch: donor WAD `0x136E8F8`, replacement-slot WAD
+  `0xD640F8`, `18` to `7F`.
+- Update-scheduling patch: donor WAD `0x136E8FA`, replacement-slot WAD
+  `0xD640FA`, `40` to `FF`.
+- Exact diff boundary: three logical WAD bytes and 53 physical BIN bytes in
+  exactly one rebuilt MODE2 raw sector.
+- Evidence ID:
+  `stonehill-slot-townsquare-edited-donor-t21-x-render-radius-7f-update-unconditional-pending-duckstation`
 - Evidence status: static baseline only; no runtime claim and no profile
   promotion are authorized.
 
-Test from the ordinary in-level view where `18` and then `20` flickered; do not
-keep retreating beyond the unchanged native `+0x52 = 40` update distance. If
-`7F` still flickers inside that normal sightline, stop changing row fields and
-instrument the renderer between `0x80022B28` and `0x80022D98`. From the same
-camera, compare nearby untouched T22 as the native loose-gem control.
+If T21 still flickers after both distance gates are excluded, row-field probes
+end. The next action is a DuckStation GDB trace at the renderer's `+0x51` clear
+and successful-draw set points to identify the exact deeper frustum or draw
+gate; no further guessed Moby byte changes are authorized.
 
 ## Next implementation gates
 
@@ -394,7 +424,10 @@ camera, compare nearby untouched T22 as the native loose-gem control.
    moved the native flicker boundary farther away and is runtime-rejected. The
    maximum-positive `7F` discriminator at BIN SHA-256
    `a3db572356470e697c643e474728b5e75a73fa813fe9868143fb2ea6a4a98f36`
-   remains pending DuckStation. Edited
+   also flickered and is runtime-rejected. The final row-field discriminator
+   excludes the separate `+0x52` scheduling gate at BIN SHA-256
+   `580af811c2f3e130f03fc1556da56d8310064a588eb57f819f5129c74ccc9329`
+   before debugger tracing. Edited
    terrain/scene data, other object edits, additions, removals, and imported
    actor packages remain pending.
 4. **Completed for the exact retail pair:** the complete portal, gameplay,

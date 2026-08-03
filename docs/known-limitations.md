@@ -420,8 +420,14 @@ native radius calculation exactly: `18` gives 1536 editor units, `20` gives
 one-byte discriminator uses maximum safe positive value `7F` at BIN SHA-256
 `a3db572356470e697c643e474728b5e75a73fa813fe9868143fb2ea6a4a98f36`;
 `80` through `FF` are blocked because they enter the special negative-radius
-screen/HUD renderer. The `7F` candidate remains unpromoted pending DuckStation
-evidence from the previously failing ordinary sightline. The remaining
+screen/HUD renderer. The `7F` candidate also flickered in DuckStation and is
+runtime-rejected. One final controlled candidate will keep `+0x50 = 7F` and
+change only the separate update-scheduling byte `+0x52` from `40` to native-used
+unconditional value `FF`. That exact candidate is built at BIN SHA-256
+`580af811c2f3e130f03fc1556da56d8310064a588eb57f819f5129c74ccc9329`
+and remains unpromoted pending DuckStation. If it fails, record-field probes
+stop and the exact renderer gate must be captured through DuckStation's
+debugger. The remaining
 3x Flame Chest clue is its colocated runtime/control row T108 (`renderRadius=0x1A`,
 `nativeClassLowByte=0x88`), which must be allocated with the chest shell before
 that family can be promoted.

@@ -1,0 +1,75 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-03",
+  "evidenceId": "stonehill-slot-townsquare-edited-donor-t21-x-render-radius-7f-rejected-duckstation-2026-08-03",
+  "evidenceType": "interactive-user-report",
+  "automatedEmulatorCapture": false,
+  "evidenceStatus": "runtime-rejected-distance-flicker-persists",
+  "promotionAuthorized": false,
+  "supersedesEvidenceId": "stonehill-slot-townsquare-edited-donor-t21-x-render-radius-7f-pending-duckstation",
+  "profileId": "native-level-replacement-stonehill-townsquare-edited-donor-t21-x-render-radius-7f-clean-usa-v4",
+  "profileRecipeVersion": 4,
+  "baseProfileId": "native-level-replacement-stonehill-townsquare-display-identity-clean-usa-v1",
+  "baseOutputImageSha256": "71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9",
+  "outputImageSha256": "a3db572356470e697c643e474728b5e75a73fa813fe9868143fb2ea6a4a98f36",
+  "staticProofArtifact": "_local/v5-stone-hill-level-replacement/edited-donor-candidate/Stone-Hill-slot-Town-Square-edited-T21-X-render-radius-7F-RUNTIME-CANDIDATE-static-proof.json",
+  "editedObject": {
+    "sourceLevel": "Town Square",
+    "trueIndex": 21,
+    "label": "Red Gem",
+    "originalWorldPosition": [7813.75, 7189.75, 512.0],
+    "editedWorldPosition": [7685.75, 7189.75, 512.0]
+  },
+  "patchBoundary": {
+    "positionPatch": {
+      "recordOffset": "0x0C",
+      "donorWadOffset": "0x136E8B4",
+      "replacementSlotWadOffset": "0xD640B4",
+      "beforeHex": "5CE80100",
+      "afterHex": "5CE00100"
+    },
+    "renderRadiusPatch": {
+      "recordOffset": "0x50",
+      "donorWadOffset": "0x136E8F8",
+      "replacementSlotWadOffset": "0xD640F8",
+      "beforeHex": "18",
+      "afterHex": "7F"
+    },
+    "changedLogicalWadBytes": 2,
+    "changedPhysicalImageBytes": 46,
+    "rebuiltRawSectors": 1,
+    "outsideAllowedRawSectorBytes": 0
+  },
+  "runtimeObservation": {
+    "primaryEvidence": true,
+    "userReport": "ugh still flickering",
+    "rejectionReason": "T21 continued to flicker even with the maximum safe positive world-render radius.",
+    "conclusion": "+0x50 is not sufficient. Do not increase it again or enter its 0x80-0xFF special screen/HUD path."
+  },
+  "nextControlledGate": {
+    "id": "stonehill-slot-townsquare-edited-donor-t21-x-render-radius-7f-update-unconditional",
+    "positionPatch": "Keep 5CE80100 -> 5CE00100 at +0x0C.",
+    "renderRadiusPatch": "Keep 18 -> 7F at +0x50 to exclude the decoded world-render radius.",
+    "additionalPatch": {
+      "kind": "moby-update-schedule",
+      "recordOffset": "0x52",
+      "donorWadOffset": "0x136E8FA",
+      "replacementSlotWadOffset": "0xD640FA",
+      "beforeHex": "40",
+      "afterHex": "FF",
+      "runtimeMeaning": "The signed FF value takes the executable's unconditional scheduling branch; three native Town Square rows already use FF."
+    },
+    "matchedControls": [
+      "T47 green gem remains native.",
+      "T22 red gem remains native."
+    ],
+    "stopCondition": "If T21 still flickers after both decoded distance gates are excluded, stop row-field probes and instrument RenderShadedMobys between 0x80022B28 and 0x80022D98.",
+    "requiresIndependentDuckStationResult": true
+  },
+  "scopeLimitations": [
+    "The 0x7F candidate is runtime-rejected and must not be promoted.",
+    "The next combined candidate is diagnostic only; it is not a general moved-object export rule.",
+    "This evidence does not authorize normal V4 Create BIN, projects, releases, or the update channel."
+  ]
+}

@@ -40,7 +40,8 @@ public sealed record StoneHillTownSquareEditedDonorCandidatePlan(
     StoneHillTownSquareEditedDonorPatchSummary Patch,
     StoneHillTownSquareReplacementSafetyReport Safety,
     StoneHillTownSquareEditedDonorPatchSummary? PlacementPatch = null,
-    StoneHillTownSquareEditedDonorPatchSummary? RenderRadiusPatch = null);
+    StoneHillTownSquareEditedDonorPatchSummary? RenderRadiusPatch = null,
+    StoneHillTownSquareEditedDonorPatchSummary? UpdateSchedulePatch = null);
 
 public sealed record StoneHillTownSquareEditedDonorCandidateResult(
     string OutputImagePath,
@@ -58,7 +59,8 @@ public sealed record StoneHillTownSquareEditedDonorCandidateResult(
     bool RetailSourcePreserved,
     bool BinCuePublishCompleted,
     bool PlacementSectorReadbackVerified = false,
-    bool RenderRadiusReadbackVerified = false);
+    bool RenderRadiusReadbackVerified = false,
+    bool UpdateScheduleReadbackVerified = false);
 
 /// <summary>
 /// Isolated V5 research compiler for the first edited-donor runtime experiment.
@@ -89,6 +91,13 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
         "stonehill-slot-townsquare-edited-donor-t21-x-render-radius-7f-pending-duckstation";
     public const string RenderRadiusStatus =
         "edited-donor-render-radius-runtime-candidate-pending-duckstation";
+    public const string UnconditionalUpdateRecipeId =
+        "native-level-replacement-stonehill-townsquare-edited-donor-t21-x-render-radius-7f-update-unconditional-clean-usa-v5";
+    public const int UnconditionalUpdateRecipeVersion = 5;
+    public const string UnconditionalUpdateEvidenceId =
+        "stonehill-slot-townsquare-edited-donor-t21-x-render-radius-7f-update-unconditional-pending-duckstation";
+    public const string UnconditionalUpdateStatus =
+        "edited-donor-render-radius-unconditional-update-runtime-candidate-pending-duckstation";
 
     private const int WadLba = 37;
     private const int ExecutableLba = 53875;
@@ -108,6 +117,9 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
     private const long DonorRenderRadiusPatchWadOffset = 0x136E8F8;
     private const long TargetRenderRadiusPatchWadOffset = 0xD640F8;
     private const int RenderRadiusPatchByteLength = 1;
+    private const long DonorUpdateSchedulePatchWadOffset = 0x136E8FA;
+    private const long TargetUpdateSchedulePatchWadOffset = 0xD640FA;
+    private const int UpdateSchedulePatchByteLength = 1;
     private const int ExpectedTrueIndex = 21;
     private const int ExpectedSourceRecordCount = 107;
     private const int ExpectedRecordStride = 0x58;
@@ -115,6 +127,7 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
     private const string ExpectedPatchKind = "moby-position-x";
     private const string ExpectedPlacementPatchKind = "moby-placement-sector";
     private const string ExpectedRenderRadiusPatchKind = "moby-render-radius";
+    private const string ExpectedUpdateSchedulePatchKind = "moby-update-schedule";
     private const string ExpectedSourceTableWadOffset = "0x136E170";
     private const string IdentityBaseImageSha256 =
         "71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9";
@@ -126,6 +139,8 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
     private static readonly byte[] ExpectedPlacementSectorAfter = [0xD5];
     private static readonly byte[] ExpectedRenderRadiusBefore = [0x18];
     private static readonly byte[] ExpectedRenderRadiusAfter = [0x7F];
+    private static readonly byte[] ExpectedUpdateScheduleBefore = [0x40];
+    private static readonly byte[] ExpectedUpdateScheduleAfter = [0xFF];
 
     public static async Task<StoneHillTownSquareEditedDonorCandidatePlan> BuildPlanAsync(
         StoneHillTownSquareEditedDonorCandidateRequest request,
@@ -252,7 +267,8 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
                 RetailSourcePreserved: retailPreserved,
                 BinCuePublishCompleted: true,
                 PlacementSectorReadbackVerified: prepared.PlacementPatch != null,
-                RenderRadiusReadbackVerified: prepared.RenderRadiusPatch != null);
+                RenderRadiusReadbackVerified: prepared.RenderRadiusPatch != null,
+                UpdateScheduleReadbackVerified: prepared.UpdateSchedulePatch != null);
         }
         catch (Exception exportFailure)
         {
@@ -360,10 +376,21 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
             validated.PlacementPatch == null ? null : BuildSummary(validated.PlacementPatch);
         StoneHillTownSquareEditedDonorPatchSummary? renderRadiusSummary =
             validated.RenderRadiusPatch == null ? null : BuildSummary(validated.RenderRadiusPatch);
+        StoneHillTownSquareEditedDonorPatchSummary? updateScheduleSummary =
+            validated.UpdateSchedulePatch == null ? null : BuildSummary(validated.UpdateSchedulePatch);
         bool renderRadiusMode = renderRadiusSummary != null;
+        bool unconditionalUpdateMode = updateScheduleSummary != null;
         StoneHillTownSquareReplacementSafetyReport safety = new(
             validated.Status,
-            WritableScopes: renderRadiusMode
+            WritableScopes: unconditionalUpdateMode
+                ?
+                [
+                    "Stone Hill target data entry: transplanted Town Square T21 position.x word",
+                    "Stone Hill target data entry: transplanted Town Square T21 native render-radius byte (+0x50)",
+                    "Stone Hill target data entry: transplanted Town Square T21 update-scheduling byte (+0x52)",
+                    "MODE2 EDC/ECC for their one shared raw WAD sector"
+                ]
+                : renderRadiusMode
                 ?
                 [
                     "Stone Hill target data entry: transplanted Town Square T21 position.x word",
@@ -386,7 +413,9 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
             [
                 "The exact runtime-proven display-identity control BIN",
                 "The clean retail source BIN and original Town Square data entry",
-                renderRadiusMode
+                unconditionalUpdateMode
+                    ? "Every transplanted Town Square byte except T21 X, +0x50 render radius, and +0x52 update-scheduling diagnostic"
+                    : renderRadiusMode
                     ? "Every transplanted Town Square byte except T21 X and its isolated render-radius diagnostic byte"
                     : placementSummary == null
                     ? "T21's native +0x4A visibility sentinel and every other transplanted Town Square byte"
@@ -399,7 +428,9 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
             RuntimeChecks:
             [
                 "Cold-boot the generated CUE in DuckStation; static proof is not runtime proof",
-                renderRadiusMode
+                unconditionalUpdateMode
+                    ? "Enter through Stone Hill's slot and verify whether moved T21 remains continuously visible from the previously failing sightline with +0x50 = 7F and +0x52 = FF"
+                    : renderRadiusMode
                     ? "Enter through Stone Hill's slot and verify moved T21 no longer flickers from the previously failing normal in-level sightline with render radius 0x7F"
                     : placementSummary == null
                     ? "Enter the replaced Town Square through Stone Hill's slot and locate moved T21 with its native +0x4A FF visibility sentinel preserved"
@@ -423,11 +454,13 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
             xSummary,
             safety,
             placementSummary,
-            renderRadiusSummary);
+            renderRadiusSummary,
+            updateScheduleSummary);
         return new PreparedCandidate(
             validated.Patches,
             validated.PlacementPatch,
             validated.RenderRadiusPatch,
+            validated.UpdateSchedulePatch,
             retailDonorData,
             executableBytes,
             candidatePlan);
@@ -463,10 +496,17 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
             plan.TotalPatchedBytes == PatchByteLength + RenderRadiusPatchByteLength &&
             plan.Patches.Count == 2 &&
             string.Equals(plan.Patches[1].Kind, ExpectedRenderRadiusPatchKind, StringComparison.Ordinal);
-        if (!xOnlyMode && !placementMode && !renderRadiusMode)
+        bool unconditionalUpdateMode =
+            plan.PatchCount == 3 &&
+            plan.TotalPatchedBytes ==
+                PatchByteLength + RenderRadiusPatchByteLength + UpdateSchedulePatchByteLength &&
+            plan.Patches.Count == 3 &&
+            string.Equals(plan.Patches[1].Kind, ExpectedRenderRadiusPatchKind, StringComparison.Ordinal) &&
+            string.Equals(plan.Patches[2].Kind, ExpectedUpdateSchedulePatchKind, StringComparison.Ordinal);
+        if (!xOnlyMode && !placementMode && !renderRadiusMode && !unconditionalUpdateMode)
         {
             throw new InvalidDataException(
-                "The edited-donor gate requires the original X-only control, the rejected X-plus-placement diagnostic, or the isolated X-plus-render-radius diagnostic.");
+                "The edited-donor gate requires the original X-only control, the rejected X-plus-placement diagnostic, the isolated X-plus-render-radius diagnostic, or the exact X-plus-radius-plus-unconditional-update diagnostic.");
         }
 
         MobySourcePatch patch = plan.Patches[0];
@@ -520,6 +560,7 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
                 xPatch,
                 null,
                 null,
+                null,
                 RecipeId,
                 RecipeVersion,
                 EvidenceId,
@@ -532,7 +573,7 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
             throw new InvalidDataException(
                 "The placement-sector gate requires the exact checked T21 X move 5CE80100 -> 5CE00100.");
         }
-        if (renderRadiusMode)
+        if (renderRadiusMode || unconditionalUpdateMode)
         {
             MobySourcePatch radius = plan.Patches[1];
             if (!string.Equals(radius.LevelKey, ExpectedLevelKey, StringComparison.OrdinalIgnoreCase) ||
@@ -572,13 +613,18 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
                 throw new InvalidDataException(
                     "The checked render-radius relocation or shared raw-sector boundary is malformed.");
             }
-            if (outcome.PatchKinds.Count != 2 ||
+            string[] expectedPatchKinds = unconditionalUpdateMode
+                ? [ExpectedPatchKind, ExpectedRenderRadiusPatchKind, ExpectedUpdateSchedulePatchKind]
+                : [ExpectedPatchKind, ExpectedRenderRadiusPatchKind];
+            if (outcome.PatchKinds.Count != expectedPatchKinds.Length ||
                 !outcome.PatchKinds.Order(StringComparer.Ordinal).SequenceEqual(
-                    new[] { ExpectedPatchKind, ExpectedRenderRadiusPatchKind }.Order(StringComparer.Ordinal),
+                    expectedPatchKinds.Order(StringComparer.Ordinal),
                     StringComparer.Ordinal))
             {
                 throw new InvalidDataException(
-                    "The render-radius gate outcome is not exactly T21 X plus its isolated +0x50 diagnostic.");
+                    unconditionalUpdateMode
+                        ? "The unconditional-update gate outcome is not exactly T21 X plus +0x50 and +0x52 diagnostics."
+                        : "The render-radius gate outcome is not exactly T21 X plus its isolated +0x50 diagnostic.");
             }
             ValidatedPatch radiusPatch = new(
                 radius,
@@ -586,11 +632,69 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
                 TargetRenderRadiusPatchWadOffset,
                 radiusBefore,
                 radiusAfter);
+            if (unconditionalUpdateMode)
+            {
+                MobySourcePatch updateSchedule = plan.Patches[2];
+                if (!string.Equals(updateSchedule.LevelKey, ExpectedLevelKey, StringComparison.OrdinalIgnoreCase) ||
+                    updateSchedule.TrueIndex != ExpectedTrueIndex ||
+                    !string.Equals(updateSchedule.Kind, ExpectedUpdateSchedulePatchKind, StringComparison.Ordinal) ||
+                    updateSchedule.ByteLength != UpdateSchedulePatchByteLength ||
+                    ParseOffset(updateSchedule.WadRelativeOffset, "update-schedule patch WAD offset") !=
+                        DonorUpdateSchedulePatchWadOffset ||
+                    !string.Equals(updateSchedule.RecordOffset, "0x52", StringComparison.OrdinalIgnoreCase) ||
+                    string.IsNullOrWhiteSpace(updateSchedule.MobyLabel))
+                {
+                    throw new InvalidDataException(
+                        $"The unconditional-update gate requires Town Square T{ExpectedTrueIndex} {ExpectedUpdateSchedulePatchKind} at 0x{DonorUpdateSchedulePatchWadOffset:X}.");
+                }
+                byte[] updateBefore = ParseHexBytes(
+                    updateSchedule.BeforeHexPreview,
+                    UpdateSchedulePatchByteLength,
+                    "T21 update-schedule preimage");
+                byte[] updateAfter = ParseHexBytes(
+                    updateSchedule.AfterHexPreview,
+                    UpdateSchedulePatchByteLength,
+                    "T21 unconditional update-schedule value");
+                if (!updateBefore.SequenceEqual(ExpectedUpdateScheduleBefore) ||
+                    !updateAfter.SequenceEqual(ExpectedUpdateScheduleAfter))
+                {
+                    throw new InvalidDataException(
+                        "The unconditional-update gate requires the checked +0x52 diagnostic 40 -> FF.");
+                }
+                if (TargetUpdateSchedulePatchWadOffset !=
+                        TargetDataWadOffset + (DonorUpdateSchedulePatchWadOffset - DonorDataWadOffset) ||
+                    DonorUpdateSchedulePatchWadOffset < DonorDataWadOffset ||
+                    DonorUpdateSchedulePatchWadOffset + UpdateSchedulePatchByteLength >
+                        DonorDataWadOffset + DonorDataByteLength ||
+                    TargetUpdateSchedulePatchWadOffset / UserSectorByteLength !=
+                        TargetPatchWadOffset / UserSectorByteLength)
+                {
+                    throw new InvalidDataException(
+                        "The checked update-schedule relocation or shared raw-sector boundary is malformed.");
+                }
+                ValidatedPatch updateSchedulePatch = new(
+                    updateSchedule,
+                    DonorUpdateSchedulePatchWadOffset,
+                    TargetUpdateSchedulePatchWadOffset,
+                    updateBefore,
+                    updateAfter);
+                return new ValidatedPatchPlan(
+                    [xPatch, radiusPatch, updateSchedulePatch],
+                    xPatch,
+                    null,
+                    radiusPatch,
+                    updateSchedulePatch,
+                    UnconditionalUpdateRecipeId,
+                    UnconditionalUpdateRecipeVersion,
+                    UnconditionalUpdateEvidenceId,
+                    UnconditionalUpdateStatus);
+            }
             return new ValidatedPatchPlan(
                 [xPatch, radiusPatch],
                 xPatch,
                 null,
                 radiusPatch,
+                null,
                 RenderRadiusRecipeId,
                 RenderRadiusRecipeVersion,
                 RenderRadiusEvidenceId,
@@ -653,6 +757,7 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
             [xPatch, placementPatch],
             xPatch,
             placementPatch,
+            null,
             null,
             PlacementRecipeId,
             PlacementRecipeVersion,
@@ -928,6 +1033,7 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
         ValidatedPatch XPatch,
         ValidatedPatch? PlacementPatch,
         ValidatedPatch? RenderRadiusPatch,
+        ValidatedPatch? UpdateSchedulePatch,
         string RecipeId,
         int RecipeVersion,
         string EvidenceId,
@@ -937,6 +1043,7 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
         IReadOnlyList<ValidatedPatch> Patches,
         ValidatedPatch? PlacementPatch,
         ValidatedPatch? RenderRadiusPatch,
+        ValidatedPatch? UpdateSchedulePatch,
         byte[] RetailDonorData,
         byte[] IdentityExecutable,
         StoneHillTownSquareEditedDonorCandidatePlan Plan);
