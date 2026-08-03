@@ -110,8 +110,25 @@ MobySourceEditOutcome editorOutcome = editorObjectPlan.EditOutcomes?.Single()
     ?? throw new InvalidDataException("The genuine saved Town Square edit has no unique source outcome.");
 Require(
     editorOutcome.PatchKinds.Count == 1 &&
-    editorOutcome.PatchKinds.Single() == "moby-position-x",
-    "The genuine saved edit outcome must identify only the requested T21 X patch.");
+    editorOutcome.PatchKinds.Single() == "moby-position-x" &&
+    editorOutcome.SafetyFindings?.SingleOrDefault(finding =>
+        finding.Code == "moby-terrain-wall-clearance" &&
+        finding.Status == MobyBuildSafetyStatus.Review &&
+        finding.Message.Contains("T21", StringComparison.OrdinalIgnoreCase) == false &&
+        finding.Message.Contains("Red Gem", StringComparison.Ordinal) &&
+        finding.Message.Contains("9.25", StringComparison.Ordinal) &&
+        finding.Message.Contains("radius 24", StringComparison.OrdinalIgnoreCase)) is not null,
+    "The genuine saved edit outcome must identify only the requested T21 X patch and target its decoded wall-overlap review warning.");
+MobyBuildSafetyLevelReport wallOverlapSafety =
+    MobyBuildSafetyInspector.InspectLevel(sourceImage, townSquare, editorObjectPlan);
+Require(
+    wallOverlapSafety.Status == MobyBuildSafetyStatus.Review &&
+    wallOverlapSafety.Issues.SingleOrDefault(issue =>
+        issue.Code == "moby-terrain-wall-clearance" &&
+        issue.Status == MobyBuildSafetyStatus.Review &&
+        issue.EditorTrueIndex == EditedTrueIndex &&
+        issue.MobyLabel == "Red Gem") is not null,
+    "Build Safety did not preserve the moved gem's exact T21 target for double-click camera navigation.");
 // Consume the genuine editor plan without filtering. Native +0x4A = FF is a
 // retail sentinel and must remain byte-identical; the previously derived D5
 // candidate is retained only as rejected historical diagnostic evidence.
@@ -633,7 +650,9 @@ Require(
     safeDonorPatch.TrueIndex == EditedTrueIndex &&
     ParseHexOffset(safeDonorPatch.WadRelativeOffset) == ExpectedDonorPatchWadOffset &&
     NormalizeHex(safeDonorPatch.BeforeHexPreview) == "5CE80100" &&
-    NormalizeHex(safeDonorPatch.AfterHexPreview) == "00DB0100",
+    NormalizeHex(safeDonorPatch.AfterHexPreview) == "00DB0100" &&
+    safeObjectPlan.EditOutcomes?.Single().SafetyFindings?.Any(finding =>
+        finding.Code == "moby-terrain-wall-clearance") != true,
     "The safe open-ground T21 plan changed its exact one-patch boundary or coordinates.");
 string safeOutputPrefix = Path.Combine(
     outputRoot,

@@ -6,6 +6,7 @@ using Spyro.Editor.Core;
 using Spyro.Editor.Core.Analysis;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Levels;
+using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Rendering;
 using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Workspace;
@@ -400,6 +401,16 @@ public static class MobySourcePatchExporter
                 }
 
                 AddCoordinatePatches(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
+                AddMovedMobyTerrainClearanceFinding(
+                    imageStream,
+                    layout,
+                    level,
+                    levelGeometry,
+                    tableWadOffset,
+                    trueIndex,
+                    label,
+                    edit,
+                    editSafetyFindings);
                 TrackMovedPortalSourceData(level, trueIndex, label, edit, portalSourceData, portalMovements);
                 AddMovedDragonRescueCameraPatches(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, dragonRescueCameras, patches, writtenWadOffsets);
                 AddMovedExistingPlacementSectorPatch(imageStream, layout, level, levelGeometry, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
@@ -6527,6 +6538,62 @@ public static class MobySourcePatchExporter
         AddCoordinateAxisPatch(stream, layout, level, tableWadOffset, trueIndex, label, "x", XOffset, rawEdited, hasOriginal ? rawOriginal : default, hasOriginal, patches, writtenWadOffsets);
         AddCoordinateAxisPatch(stream, layout, level, tableWadOffset, trueIndex, label, "y", YOffset, rawEdited, hasOriginal ? rawOriginal : default, hasOriginal, patches, writtenWadOffsets);
         AddCoordinateAxisPatch(stream, layout, level, tableWadOffset, trueIndex, label, "z", ZOffset, rawEdited, hasOriginal ? rawOriginal : default, hasOriginal, patches, writtenWadOffsets);
+    }
+
+    private static void AddMovedMobyTerrainClearanceFinding(
+        FileStream stream,
+        DiscLayout layout,
+        LevelDefinition level,
+        GeometryCandidate? geometry,
+        long tableWadOffset,
+        int trueIndex,
+        string label,
+        JsonElement edit,
+        List<MobySourceEditSafetyFinding> safetyFindings)
+    {
+        if (!HasPositionEdit(edit) || geometry is not { Polygons.Count: > 0 })
+            return;
+
+        byte[] record = ReadWadBytes(
+            stream,
+            layout,
+            tableWadOffset + ((long)trueIndex * RecordStride),
+            RecordStride);
+        int nativeRenderRadius = record[0x50];
+        int originalRawX = BitConverter.ToInt32(record, XOffset);
+        int originalRawY = BitConverter.ToInt32(record, YOffset);
+        int originalRawZ = BitConverter.ToInt32(record, ZOffset);
+        int editedRawX = ReadEditedRawAxisOrDefault(edit, "x", originalRawX);
+        int editedRawY = ReadEditedRawAxisOrDefault(edit, "y", originalRawY);
+        int editedRawZ = ReadEditedRawAxisOrDefault(edit, "z", originalRawZ);
+        const float scale = 16f;
+        MobySourceEditSafetyFinding? finding = MobyTerrainClearanceSafety.Inspect(
+            geometry,
+            new Vector3f(originalRawX / scale, originalRawY / scale, originalRawZ / scale),
+            new Vector3f(editedRawX / scale, editedRawY / scale, editedRawZ / scale),
+            nativeRenderRadius,
+            label);
+        if (finding != null)
+            safetyFindings.Add(finding);
+    }
+
+    private static int ReadEditedRawAxisOrDefault(JsonElement edit, string axis, int fallback)
+    {
+        if (edit.TryGetProperty("rawEdited", out JsonElement rawEdited) &&
+            rawEdited.ValueKind == JsonValueKind.Object &&
+            rawEdited.TryGetProperty(axis, out _))
+        {
+            return JsonValue.GetInt32(rawEdited, axis, fallback);
+        }
+
+        if (edit.TryGetProperty("edited", out JsonElement edited) &&
+            edited.ValueKind == JsonValueKind.Object &&
+            edited.TryGetProperty(axis, out _))
+        {
+            return (int)Math.Round(JsonValue.GetSingle(edited, axis) * 16f);
+        }
+
+        return fallback;
     }
 
     private static void AddCoordinateAxisPatch(

@@ -434,12 +434,25 @@ decoding identified the cause: the test coordinate lies only 9.25 units from a
 vertical wall while the gem radius is 24, so the rotating gem intersects and
 is painter-sorted behind that wall. A corrected X-only candidate restores
 native `+0x50 = 18` and `+0x52 = 40`, moves T21 to X `7600` with decoded wall
-clearance `31.699`, and is pending DuckStation at BIN SHA-256
+clearance `31.699`. The resulting BIN has SHA-256
 `d6dd17bfd0a374ff7a9bb6aa7966846d0471b98ef15a6814331dcc452f81dd92`.
-It remains unpromoted until that focused runtime test passes. The remaining
+That exact candidate passed its focused DuckStation test: the gem was present,
+collectible, and no longer flickered from afar. The result supports the decoded
+wall-intersection diagnosis, but it does not authorize general edited-object
+export because exact reward/sound/cleanup persistence, native-control isolation,
+the broader replacement regression, and the original Town Square independence
+check were not reconfirmed for this BIN. The remaining
 3x Flame Chest clue is its colocated runtime/control row T108 (`renderRadius=0x1A`,
 `nativeClassLowByte=0x88`), which must be allocated with the chest shell before
 that family can be promoted.
+
+Moved native objects now receive a targeted Build Safety Review warning when
+their positive native render-radius envelope newly overlaps source-derived
+near-vertical terrain. This catches the proven T21 wall-intersection case and
+lets issue double-click center the exact object, but it remains advisory rather
+than blocking because some native scenery is intentionally wall-mounted. It is
+not a general collision solver and does not itself promote arbitrary object
+movement into the checked V5 replacement workflow.
 
 ## Spring Chest Status
 

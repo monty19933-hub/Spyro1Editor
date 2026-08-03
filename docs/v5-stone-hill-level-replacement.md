@@ -413,7 +413,7 @@ changes are authorized.
 The exact rejection and trace record is stored at
 `docs/runtime-evidence/stonehill-townsquare-edited-donor-t21-x-render-radius-7f-update-ff-rejected-2026-08-03.json`.
 
-## Milestone 10: isolate the wall-intersection cause - safe candidate pending runtime
+## Milestone 10: isolate the wall-intersection cause - focused runtime pass
 
 A second live trace followed moved T21 beyond `+0x51` through the shaded-model
 renderer's primitive cursor. T21 emitted GPU packets in all 12 sampled frames,
@@ -448,12 +448,33 @@ ground at `7600`:
 - Spatial boundary: same Z `512`, collision group `1`, decoded nearest-wall
   clearance `31.699`, and nearest-Moby two-radius clearance about `30.57`.
 - Evidence ID:
-  `stonehill-slot-townsquare-edited-donor-t21-safe-open-ground-pending-duckstation-2026-08-03`
-- Evidence status: static and spatial proof only; DuckStation runtime remains
-  required before edited-object promotion.
+  `stonehill-slot-townsquare-edited-donor-t21-safe-open-ground-focused-pass-duckstation-2026-08-03`
+- Runtime result (2026-08-03): focused pass. The user confirmed that the gem
+  was present, could be collected, and no longer flickered from afar.
+- Evidence status: focused runtime pass for this exact coordinate and BIN hash.
+  General edited-object promotion is not authorized because the broader
+  replacement regression was not rerun for this candidate.
 
-The pending evidence record is stored at
-`docs/runtime-evidence/stonehill-townsquare-edited-donor-t21-safe-open-ground-pending-2026-08-03.json`.
+This result validates the safe-open-ground discriminator and supports the
+wall-intersection diagnosis without requiring the rejected render-radius or
+update-scheduling overrides. It does not independently confirm exact gem value,
+sound, cleanup persistence, native-control isolation, death/reload, Return Home,
+re-entry, save/reload, or the original Town Square slot. Those checks remain
+required before promoting a general edited-object workflow.
+
+The focused runtime evidence record is stored at
+`docs/runtime-evidence/stonehill-townsquare-edited-donor-t21-safe-open-ground-focused-pass-2026-08-03.json`.
+
+Build Safety now applies the same diagnosis to ordinary moved native objects.
+When a move newly places or materially pushes an object's positive native
+render-radius envelope into source-derived near-vertical terrain, it emits the
+advisory `moby-terrain-wall-clearance` Review issue. The issue retains the
+object's true index and label, so double-clicking it selects the object and
+centers the editor camera. It is intentionally not a blocker: deliberate
+wall-mounted objects remain possible, while accidental intersections are made
+visible before Create BIN. The focused smoke proves that the rejected T21 X
+`7685.75` placement produces the targeted warning and the runtime-passed X
+`7600` placement does not.
 
 ## Next implementation gates
 
@@ -462,7 +483,8 @@ The pending evidence record is stored at
 2. **Completed for an unchanged retail donor pair:** install Town Square's
    terrain, collision, textures, sky, scene, actors, and dragon packages in the
    fixed Stone Hill capacity. Arbitrary newly compiled payloads are not implied.
-3. **Runtime-rejected edited object:** Town Square T21's saved X edit was
+3. **Focused safe-placement pass after rejected wall-intersection probes:**
+   Town Square T21's saved X edit was
    visibly present, but both the X-plus-`D5` candidate at BIN SHA-256
    `034ace2340dce2e71bbfd41df832d984dfebbe330dba6b0325d198cdf8ac0b81`
    and the corrected X-only native-`FF` candidate at BIN SHA-256
@@ -484,7 +506,9 @@ The pending evidence record is stored at
    wall's radius envelope by 14.75 units. The corrected native-field,
    open-ground X-only candidate at SHA-256
    `d6dd17bfd0a374ff7a9bb6aa7966846d0471b98ef15a6814331dcc452f81dd92`
-   is pending DuckStation. Edited
+   passed the focused DuckStation check: the gem was present, collectible, and
+   did not flicker. The broader replacement regression and general edited-object
+   export remain unverified. Edited
    terrain/scene data, other object edits, additions, removals, and imported
    actor packages remain pending.
 4. **Completed for the exact retail pair:** the complete portal, gameplay,
