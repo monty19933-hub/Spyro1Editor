@@ -1,0 +1,57 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-03",
+  "evidenceId": "stonehill-slot-townsquare-edited-donor-t21-safe-open-ground-pending-duckstation-2026-08-03",
+  "evidenceType": "static-proof-and-spatial-clearance-diagnosis",
+  "evidenceStatus": "pending-duckstation-runtime",
+  "promotionAuthorized": false,
+  "supersedesEvidenceId": "stonehill-slot-townsquare-edited-donor-t21-x-render-radius-7f-update-ff-rejected-duckstation-2026-08-03",
+  "outputImageSha256": "d6dd17bfd0a374ff7a9bb6aa7966846d0471b98ef15a6814331dcc452f81dd92",
+  "outputCue": "_local/v5-stone-hill-level-replacement/edited-donor-candidate/Stone-Hill-slot-Town-Square-edited-T21-X-safe-open-ground-RUNTIME-CANDIDATE.cue",
+  "staticProofArtifact": "_local/v5-stone-hill-level-replacement/edited-donor-candidate/Stone-Hill-slot-Town-Square-edited-T21-X-safe-open-ground-RUNTIME-CANDIDATE-static-proof.json",
+  "editedObject": {
+    "sourceLevel": "Town Square",
+    "trueIndex": 21,
+    "label": "Red Gem",
+    "originalWorldPosition": [7813.75, 7189.75, 512.0],
+    "editedWorldPosition": [7600.0, 7189.75, 512.0],
+    "positionPatchBeforeHex": "5CE80100",
+    "positionPatchAfterHex": "00DB0100"
+  },
+  "nativeFieldsPreserved": {
+    "+0x4A sectorIndex": "FF",
+    "+0x4B": "00",
+    "+0x50 renderRadius": "18",
+    "+0x51 wasDrawnPreimage": "00",
+    "+0x52 updateSchedule": "40",
+    "+0x53": "FF"
+  },
+  "patchBoundary": {
+    "changedLogicalWadBytes": 2,
+    "changedPhysicalImageBytes": 41,
+    "rebuiltRawSectors": 1,
+    "outsideAllowedRawSectorBytes": 0,
+    "deterministicReexportMatched": true
+  },
+  "spatialProof": {
+    "floorZ": 512.0,
+    "collisionGroup": 1,
+    "nearestWallClearance": 31.699,
+    "nativeGemRadius": 24.0,
+    "nearestMoby": "T47",
+    "nearestMobyCenterDistance": 78.57,
+    "twoGemRadiusClearance": 30.57
+  },
+  "requiredRuntimeChecks": [
+    "From the previously failing distant camera view, confirm T21 no longer collapses to a dark sliver or white X.",
+    "Approach T21 and confirm its position is visibly changed and it remains continuously visible.",
+    "Collect T21 exactly once and confirm the gem value, sound, cleanup, and persistence are normal.",
+    "Confirm native T22 and T47 remain unchanged.",
+    "Confirm movement, enemies, music, camera, pause, Inventory, death/reload, Return Home/re-entry, and save/reload remain normal."
+  ],
+  "scopeLimitations": [
+    "This safe-placement candidate has static and spatial proof only until DuckStation runtime confirmation is recorded.",
+    "It does not authorize general edited-donor promotion, normal V4 Create BIN, other objects, terrain edits, or a release."
+  ]
+}

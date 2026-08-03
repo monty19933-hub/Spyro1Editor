@@ -425,9 +425,18 @@ runtime-rejected. One final controlled candidate will keep `+0x50 = 7F` and
 change only the separate update-scheduling byte `+0x52` from `40` to native-used
 unconditional value `FF`. That exact candidate is built at BIN SHA-256
 `580af811c2f3e130f03fc1556da56d8310064a588eb57f819f5129c74ccc9329`
-and remains unpromoted pending DuckStation. If it fails, record-field probes
-stop and the exact renderer gate must be captured through DuckStation's
-debugger. The remaining
+and also flickered from afar in DuckStation, so it is runtime-rejected and
+unpromoted. A live debugger trace then sampled T21's `+0x51` renderer-admitted
+draw-attempt state for 60 frames at the failing distant view and reached admission
+in all 60 samples. A deeper primitive-cursor trace then proved that T21 emitted
+GPU packets in all 12 sampled frames, matching native gem controls. Spatial
+decoding identified the cause: the test coordinate lies only 9.25 units from a
+vertical wall while the gem radius is 24, so the rotating gem intersects and
+is painter-sorted behind that wall. A corrected X-only candidate restores
+native `+0x50 = 18` and `+0x52 = 40`, moves T21 to X `7600` with decoded wall
+clearance `31.699`, and is pending DuckStation at BIN SHA-256
+`d6dd17bfd0a374ff7a9bb6aa7966846d0471b98ef15a6814331dcc452f81dd92`.
+It remains unpromoted until that focused runtime test passes. The remaining
 3x Flame Chest clue is its colocated runtime/control row T108 (`renderRadius=0x1A`,
 `nativeClassLowByte=0x88`), which must be allocated with the chest shell before
 that family can be promoted.

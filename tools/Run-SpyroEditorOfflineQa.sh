@@ -127,11 +127,11 @@ Options:
 
   --stone-hill-town-square-edited-donor-candidate-smoke
       Build the pending-runtime V5 Town Square T21 X-only control plus the
-      isolated +0x50 render-radius diagnostic from the exact runtime-proven
-      display-identity control. Both preserve native +0x4A = FF; the diagnostic
-      changes render radius only from retail 0x18 to retail 0x20. Guards exact
-      rebases, final known hashes, original donor data, evidence, determinism,
-      and unsafe-patch rejection; launches no emulator.
+      rejected +0x50/+0x52 distance diagnostics and the corrected open-ground
+      X-only placement from the exact runtime-proven display-identity control.
+      The corrected candidate preserves native +0x4A = FF, +0x50 = 18, and
+      +0x52 = 40. Guards exact rebases, final known hashes, original donor data,
+      evidence, determinism, and unsafe-patch rejection; launches no emulator.
 
   -h, --help
       Show this help.
@@ -226,10 +226,10 @@ if [[ "$STONEHILL_TOWNSQUARE_IDENTITY_CANDIDATE_SMOKE_ONLY" -eq 1 ]]; then
 fi
 
 if [[ "$STONEHILL_TOWNSQUARE_EDITED_DONOR_CANDIDATE_SMOKE_ONLY" -eq 1 ]]; then
-    echo "Building focused V5 edited Town Square donor X-only and render-radius candidate smoke..."
+    echo "Building focused V5 edited Town Square donor and safe-placement candidate smoke..."
     dotnet build "$STONEHILL_TOWNSQUARE_EDITED_DONOR_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
     echo
-    echo "Running focused V5 edited Town Square donor X-only and render-radius candidate smoke..."
+    echo "Running focused V5 edited Town Square donor and safe-placement candidate smoke..."
     dotnet run --project "$STONEHILL_TOWNSQUARE_EDITED_DONOR_SMOKE_PROJECT" --configuration "$CONFIGURATION" --no-build -- "$ROOT_DIR"
     exit 0
 fi

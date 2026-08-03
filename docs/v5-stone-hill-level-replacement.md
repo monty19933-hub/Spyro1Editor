@@ -374,7 +374,7 @@ The maximum-radius test did not eliminate the flicker, so no further `+0x50`
 probe is valid. The exact rejection record is stored at
 `docs/runtime-evidence/stonehill-townsquare-edited-donor-t21-x-render-radius-7f-rejected-2026-08-03.json`.
 
-## Milestone 9: exclude both decoded distance gates - pending runtime
+## Milestone 9: exclude both decoded distance gates - runtime rejected
 
 No higher `+0x50` value is safe: `7F` is the maximum positive world radius and
 `80` through `FF` enter a different renderer. The next checked candidate keeps
@@ -396,14 +396,64 @@ use that value. T47 (green gem) and T22 (red gem) remain native matched controls
 - Exact diff boundary: three logical WAD bytes and 53 physical BIN bytes in
   exactly one rebuilt MODE2 raw sector.
 - Evidence ID:
-  `stonehill-slot-townsquare-edited-donor-t21-x-render-radius-7f-update-unconditional-pending-duckstation`
-- Evidence status: static baseline only; no runtime claim and no profile
-  promotion are authorized.
+  `stonehill-slot-townsquare-edited-donor-t21-x-render-radius-7f-update-ff-rejected-duckstation-2026-08-03`
+- Runtime result (2026-08-03): rejected. The user reported that T21 still
+  flickered from afar with both `+0x50 = 7F` and `+0x52 = FF`.
+- Evidence status: runtime rejected; no profile promotion is authorized.
 
-If T21 still flickers after both distance gates are excluded, row-field probes
-end. The next action is a DuckStation GDB trace at the renderer's `+0x51` clear
-and successful-draw set points to identify the exact deeper frustum or draw
-gate; no further guessed Moby byte changes are authorized.
+The follow-up live DuckStation debugger trace sampled T21's `+0x51`
+renderer-admitted draw-attempt state for 60 frames at the failing distant view.
+T21 reached that state in all 60 samples. This proves that T21 was neither
+omitted from the update/draw queue nor rejected by the coarse sphere/frustum
+gates. It does not by itself prove visible pixels because `+0x51` is set before
+vertex projection, face clipping, ordering-table selection, and primitive
+packet emission. Row-field probes end here, and no further guessed Moby byte
+changes are authorized.
+
+The exact rejection and trace record is stored at
+`docs/runtime-evidence/stonehill-townsquare-edited-donor-t21-x-render-radius-7f-update-ff-rejected-2026-08-03.json`.
+
+## Milestone 10: isolate the wall-intersection cause - safe candidate pending runtime
+
+A second live trace followed moved T21 beyond `+0x51` through the shaded-model
+renderer's primitive cursor. T21 emitted GPU packets in all 12 sampled frames,
+with packet sizes `132`, `172`, `192`, and `208` bytes. Native red T22 and
+green T47 also emitted packets in all 12 matched samples and showed overlapping
+packet-size variation as their gem models rotated. The visible T21 collapse is
+therefore not whole-model clipping, all-face rejection, or missing GPU packets.
+
+Frame-by-frame crops show the difference: native controls remain 8-15 pixels
+tall while rotating, but moved T21 alternates between a 1-2 pixel dark sliver
+and a bright white X. The decoded spatial cause is concrete. The rejected
+coordinate `(7685.75, 7189.75, 512)` is only `9.25` units from Town Square
+sector 213 face 110, a vertical wall spanning X `7652..7770`, Y `7199`, and Z
+`512..672`. A loose gem has native radius `0x18 = 24`, so the test coordinate
+penetrates the wall envelope by `14.75` units. Spyro 1 painter-sorts both the
+rotating gem and wall into the world ordering table without a z-buffer; the
+gem is emitted every frame but is alternately overdrawn as its face depths and
+silhouette rotate.
+
+The corrected discriminator removes both rejected row-field diagnostics,
+preserves native `+0x50 = 18` and `+0x52 = 40`, and changes only T21 X to open
+ground at `7600`:
+
+- CUE:
+  `Stone-Hill-slot-Town-Square-edited-T21-X-safe-open-ground-RUNTIME-CANDIDATE.cue`
+- BIN SHA-256:
+  `d6dd17bfd0a374ff7a9bb6aa7966846d0471b98ef15a6814331dcc452f81dd92`
+- X patch: donor WAD `0x136E8B4`, replacement-slot WAD `0xD640B4`,
+  `5CE80100` to `00DB0100` (world X `7813.75` to `7600`).
+- Exact diff boundary: two logical WAD bytes and 41 physical BIN bytes in one
+  rebuilt MODE2 raw sector; deterministic re-export matched.
+- Spatial boundary: same Z `512`, collision group `1`, decoded nearest-wall
+  clearance `31.699`, and nearest-Moby two-radius clearance about `30.57`.
+- Evidence ID:
+  `stonehill-slot-townsquare-edited-donor-t21-safe-open-ground-pending-duckstation-2026-08-03`
+- Evidence status: static and spatial proof only; DuckStation runtime remains
+  required before edited-object promotion.
+
+The pending evidence record is stored at
+`docs/runtime-evidence/stonehill-townsquare-edited-donor-t21-safe-open-ground-pending-2026-08-03.json`.
 
 ## Next implementation gates
 
@@ -427,7 +477,14 @@ gate; no further guessed Moby byte changes are authorized.
    also flickered and is runtime-rejected. The final row-field discriminator
    excludes the separate `+0x52` scheduling gate at BIN SHA-256
    `580af811c2f3e130f03fc1556da56d8310064a588eb57f819f5129c74ccc9329`
-   before debugger tracing. Edited
+   and is also runtime-rejected. A live 60-frame debugger sample reached
+   T21's `+0x51` renderer-admitted state in every frame, and a downstream
+   12-frame trace recorded nonzero primitive packets every frame. Spatial
+   decoding then found that the rejected X position penetrates a vertical
+   wall's radius envelope by 14.75 units. The corrected native-field,
+   open-ground X-only candidate at SHA-256
+   `d6dd17bfd0a374ff7a9bb6aa7966846d0471b98ef15a6814331dcc452f81dd92`
+   is pending DuckStation. Edited
    terrain/scene data, other object edits, additions, removals, and imported
    actor packages remain pending.
 4. **Completed for the exact retail pair:** the complete portal, gameplay,

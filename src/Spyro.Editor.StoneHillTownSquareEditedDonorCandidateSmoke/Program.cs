@@ -8,6 +8,7 @@ using Spyro.Editor.Core.Scene;
 
 const int EditedTrueIndex = 21;
 const float EditedWorldXDelta = -128f;
+const float SafeEditedWorldX = 7600f;
 const long ExpectedDonorRecordWadOffset = 0x136E8A8;
 const long ExpectedTargetRecordWadOffset = 0xD640A8;
 const long ExpectedDonorPatchWadOffset = 0x136E8B4;
@@ -24,6 +25,9 @@ const long ExpectedRenderRadiusChangedPhysicalBytes = 46;
 const string ExpectedUnconditionalUpdateOutputImageSha256 =
     "580af811c2f3e130f03fc1556da56d8310064a588eb57f819f5129c74ccc9329";
 const long ExpectedUnconditionalUpdateChangedPhysicalBytes = 53;
+const string ExpectedSafePlacementOutputImageSha256 =
+    "d6dd17bfd0a374ff7a9bb6aa7966846d0471b98ef15a6814331dcc452f81dd92";
+const long ExpectedSafePlacementChangedPhysicalBytes = 41;
 
 string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
 (string sourceImage, string sourceCue) = ResolveCleanSource(repositoryRoot, args);
@@ -598,6 +602,129 @@ finally
     DeleteIfExists(unconditionalUpdateDeterminismPrefix + ".cue");
 }
 
+// The original -128 X discriminator was intentionally obvious, but runtime
+// tracing proved that it placed the rotating gem inside the native radius of
+// sector 213 face 110's vertical wall. Keep that rejected artifact intact as
+// evidence and build a separate X-only placement on decoded open ground.
+List<Moby> safeMobys = MobyLoader.LoadCached(cachePath).ToList();
+Moby safeEdited = safeMobys.Single(moby => moby.TrueIndex == EditedTrueIndex);
+safeEdited.Position = safeEdited.OriginalPosition with { X = SafeEditedWorldX };
+safeEdited.Label = "Red Gem";
+string safeEditPath = Path.Combine(
+    outputRoot,
+    "town-square-T21-safe-open-ground-x-only-native-edits.json");
+Require(
+    await MobyEditStore.SaveAsync(safeEditPath, safeMobys, townSquare.DisplayName) == 1,
+    "The safe open-ground fixture did not save exactly one native Moby edit.");
+string safeStagingPrefix = Path.Combine(outputRoot, "town-square-safe-open-ground-plan-only");
+MobySourcePatchPlan safeObjectPlan = MobySourcePatchExporter.BuildPlan(
+    sourceImage,
+    sourceCue,
+    safeStagingPrefix + ".bin",
+    safeStagingPrefix + ".cue",
+    townSquare,
+    safeEditPath);
+Require(
+    safeObjectPlan.PatchCount == 1 &&
+    safeObjectPlan.TotalPatchedBytes == 4 &&
+    safeObjectPlan.SkippedEdits.Count == 0 &&
+    safeObjectPlan.Patches.Single() is { } safeDonorPatch &&
+    safeDonorPatch.Kind == "moby-position-x" &&
+    safeDonorPatch.TrueIndex == EditedTrueIndex &&
+    ParseHexOffset(safeDonorPatch.WadRelativeOffset) == ExpectedDonorPatchWadOffset &&
+    NormalizeHex(safeDonorPatch.BeforeHexPreview) == "5CE80100" &&
+    NormalizeHex(safeDonorPatch.AfterHexPreview) == "00DB0100",
+    "The safe open-ground T21 plan changed its exact one-patch boundary or coordinates.");
+string safeOutputPrefix = Path.Combine(
+    outputRoot,
+    "Stone-Hill-slot-Town-Square-edited-T21-X-safe-open-ground-RUNTIME-CANDIDATE");
+StoneHillTownSquareEditedDonorCandidateRequest safeRequest = new(
+    identityImage,
+    identityCue,
+    sourceImage,
+    safeObjectPlan,
+    safeOutputPrefix + ".bin",
+    safeOutputPrefix + ".cue");
+StoneHillTownSquareEditedDonorArtifactResult safeArtifact =
+    await StoneHillTownSquareEditedDonorArtifactWriter.ExportAsync(safeRequest);
+StoneHillTownSquareEditedDonorCandidateResult safeResult = safeArtifact.Candidate;
+await File.AppendAllTextAsync(
+    safeArtifact.RuntimeChecklistPath,
+    """
+
+    ## Safe open-ground placement focus
+
+    - This candidate restores T21's native +0x50 = 18 and +0x52 = 40 fields.
+    - T21 X is 7600 (raw 121600), on the same Z=512 floor and collision group 1.
+    - The decoded nearest-wall clearance is 31.699, greater than native radius 24.
+    - Hold the previous distant camera view and confirm the dark-sliver/white-X wall intersection is gone.
+    - Approach and collect T21 exactly once, then confirm T22 and T47 remain unchanged.
+    """);
+Require(
+    safeResult.Plan.RecipeId == StoneHillTownSquareEditedDonorCandidateComposer.RecipeId &&
+    safeResult.Plan.PlacementPatch == null &&
+    safeResult.Plan.RenderRadiusPatch == null &&
+    safeResult.Plan.UpdateSchedulePatch == null &&
+    safeResult.Plan.Patch.BeforeHex == "5CE80100" &&
+    safeResult.Plan.Patch.AfterHex == "00DB0100" &&
+    safeResult.OutputImageSha256 == ExpectedSafePlacementOutputImageSha256 &&
+    safeResult.ChangedLogicalWadBytes == 2 &&
+    safeResult.ChangedPhysicalImageBytes == ExpectedSafePlacementChangedPhysicalBytes &&
+    safeResult.RebuiltRawSectorCount == 1 &&
+    safeResult.ExactLogicalDiffBoundaryVerified &&
+    safeResult.ExactPhysicalSectorBoundaryVerified &&
+    safeResult.OriginalTownSquareDonorPreserved &&
+    safeResult.DisplayIdentityExecutablePreserved &&
+    safeResult.BaseImagePreserved &&
+    safeResult.RetailSourcePreserved &&
+    safeResult.BinCuePublishCompleted &&
+    IsSha256(safeResult.OutputImageSha256),
+    "The safe open-ground candidate omitted its exact X-only, source, donor, SCUS, or publication proof.");
+byte[] safeTargetAfter = ReadMode2WadBytes(
+    safeResult.OutputImagePath,
+    ExpectedTargetRecordWadOffset,
+    MobyLoader.RuntimeRecordStride);
+Require(
+    safeTargetAfter.AsSpan(0x0C, 4).SequenceEqual(Convert.FromHexString("00DB0100")) &&
+    safeTargetAfter[0x4A] == 0xFF &&
+    safeTargetAfter[0x4B] == 0x00 &&
+    safeTargetAfter[0x50] == 0x18 &&
+    safeTargetAfter[0x51] == 0x00 &&
+    safeTargetAfter[0x52] == 0x40 &&
+    safeTargetAfter[0x53] == 0xFF,
+    "The safe open-ground candidate changed bytes outside T21 X or failed to restore native draw/update fields.");
+string safeChecklist = await File.ReadAllTextAsync(safeArtifact.RuntimeChecklistPath);
+Require(
+    safeChecklist.Contains(safeResult.OutputImageSha256, StringComparison.Ordinal) &&
+    safeChecklist.Contains("31.699", StringComparison.Ordinal) &&
+    safeChecklist.Contains("native +0x50 = 18", StringComparison.OrdinalIgnoreCase) &&
+    safeChecklist.Contains("native radius 24", StringComparison.OrdinalIgnoreCase) &&
+    safeChecklist.Contains("collect T21 exactly once", StringComparison.OrdinalIgnoreCase),
+    "The safe open-ground checklist omitted its exact clearance and native-field discriminator.");
+string safeDeterminismPrefix = Path.Combine(outputRoot, "safe-open-ground-determinism-recheck");
+try
+{
+    StoneHillTownSquareEditedDonorCandidateResult safeDeterministic =
+        await StoneHillTownSquareEditedDonorCandidateComposer.ExportAsync(
+            safeRequest with
+            {
+                OutputImagePath = safeDeterminismPrefix + ".bin",
+                OutputCuePath = safeDeterminismPrefix + ".cue"
+            });
+    Require(
+        safeDeterministic.OutputImageSha256 == safeResult.OutputImageSha256 &&
+        safeDeterministic.OutputImageSha256 == ExpectedSafePlacementOutputImageSha256 &&
+        safeDeterministic.ChangedLogicalWadBytes == safeResult.ChangedLogicalWadBytes &&
+        safeDeterministic.ChangedPhysicalImageBytes ==
+            ExpectedSafePlacementChangedPhysicalBytes,
+        "A second safe open-ground export was not byte-deterministic.");
+}
+finally
+{
+    DeleteIfExists(safeDeterminismPrefix + ".bin");
+    DeleteIfExists(safeDeterminismPrefix + ".cue");
+}
+
 Console.WriteLine("PASS: deterministic Town Square T21 X-only edit was rebased while native +0x4A = FF remained unchanged.");
 Console.WriteLine($"CUE: {result.OutputCuePath}");
 Console.WriteLine($"BIN: {result.OutputImagePath}");
@@ -624,6 +751,14 @@ Console.WriteLine($"Unconditional-update changed physical bytes: {unconditionalU
 Console.WriteLine($"Unconditional-update checklist: {unconditionalUpdateArtifact.RuntimeChecklistPath}");
 Console.WriteLine($"Unconditional-update static proof: {unconditionalUpdateArtifact.StaticProofPath}");
 Console.WriteLine($"T21 +0x52: 40 -> FF; donor WAD 0x{ExpectedDonorUpdateScheduleWadOffset:X}; target WAD 0x{ExpectedTargetUpdateScheduleWadOffset:X}.");
+Console.WriteLine("PASS: safe open-ground T21 X-only candidate preserves all native draw/update fields.");
+Console.WriteLine($"Safe-placement CUE: {safeResult.OutputCuePath}");
+Console.WriteLine($"Safe-placement BIN: {safeResult.OutputImagePath}");
+Console.WriteLine($"Safe-placement BIN SHA-256: {safeResult.OutputImageSha256}");
+Console.WriteLine($"Safe-placement changed physical bytes: {safeResult.ChangedPhysicalImageBytes}");
+Console.WriteLine($"Safe-placement checklist: {safeArtifact.RuntimeChecklistPath}");
+Console.WriteLine($"Safe-placement static proof: {safeArtifact.StaticProofPath}");
+Console.WriteLine("T21 X: 7813.75 -> 7600 (raw 125020 -> 121600); nearest decoded wall clearance: 31.699; native radius: 24.");
 
 static async Task<(string ImagePath, string CuePath)> EnsureExactIdentityBaseAsync(
     string repositoryRoot,
