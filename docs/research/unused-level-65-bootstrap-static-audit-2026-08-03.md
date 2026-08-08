@@ -43,14 +43,37 @@ The evidence record is `docs/runtime-evidence/unused-level-65-town-square-flight
 - A normal portal transition has a separate retail `<65` guard at SCUS `0x47910`; the hidden Inventory warp bypasses it. A later portal-addressable candidate must change that guard to `<66` under its own preimage check.
 - The initial music table has an index-35 row, but the late alternate music table has only thirty-five rows. Extended-session music remains unproven.
 
-## Later gate after the non-flight control passes
+## Third candidate: physically independent payload
 
-Append a physical copy of the Town Square pair rather than aliasing it:
+After the non-flight control passed, the next candidate copied the Town Square
+pair into independent physical storage rather than aliasing the retail pair:
 
 - Entry 79 overlay at `0x6927000`, length `0xF800`.
 - Entry 80 data at `0x6936800`, length `0x2E2000`.
 - WAD size `0x6927000 -> 0x6C18800` (`+0x2F1800`, 1507 sectors).
 - Relocate `SCUS_942.28` from LBA 53875 to 55382; it ends at 55586, before `PETEXA0` at LBA 60000.
-- Patch both-endian ISO root fields and rebuild Mode-2 EDC/ECC for the header, append, relocated executable, and root-directory sectors.
+- Move the WAD XA EOR/EOF marker from old last sector LBA 53874 to new last sector LBA 55381. Relocated SCUS keeps its native final marker at LBA 55585.
+- Patch both-endian ISO root fields and rebuild Mode-2 EDC/ECC for the header, former WAD boundary, append, relocated executable, and root-directory sectors.
+
+The exporter first derives the exact runtime-proven alias BIN, copies SCUS before
+overwriting its old extent, initializes the former Form-2 padding with complete
+Form-1 sectors, rewrites every destination MSF address, and rebuilds EDC/ECC-P/Q.
+The final BIN is fail-closed on SHA-256
+`f585e45ff1d795f8b2de64f20e1ed2953bfc7f43adf1c0b47b03e849e4865e48`.
+Static readback proves:
+
+- Exactly 1,507 Town Square payload sectors and 204 patched SCUS sectors were copied.
+- Rows 79/80 contain `00 70 92 06 00 F8 00 00 00 68 93 06 00 20 2E 00` and point only to the new payload.
+- The original Town Square payloads remain byte-identical.
+- The ISO root exposes WAD size `0x6C18800` and SCUS LBA 55382.
+- Exactly 1,714 raw sectors differ from clean retail, matching the complete checked allowlist.
+- Every changed sector has a duplicated Form-1 subheader, correct destination MSF, and valid EDC/ECC.
+- The original clean source and total raw image length remain unchanged.
+
+The generated handoff is under
+`_local/v5-stone-hill-level-replacement/unused-level-65-physical-clone/`.
+Its status is static-proven and DuckStation-runtime-pending. It keeps memory cards
+disabled and tests only ID65 load/movement, one loose gem with reset/re-entry,
+retail Town Square, Gnasty's Loot, and Sunny Flight.
 
 Only after independent storage passes should the experiment add an authored name, totals/music identity, a portal-65 landing pair, and independently validated persistence.
