@@ -95,7 +95,50 @@ It does not authorize editor integration, an authored name or totals, music-tabl
 extension, portal-to-exit 65, Return Home, saving, memory-card persistence, or
 arbitrary level authoring.
 
-The next isolated level-format gate is an authored ID65 display-name
-discriminator. Independently addressed totals, music-table extension, portal
-routing, Return Home, content mutation, and memory-card persistence remain
-separate later gates.
+## Fourth candidate: authored display-name assignment
+
+The next isolated level-format gate now has a static-proven, runtime-pending
+candidate. It starts from the exact focused-runtime-passed physical clone at
+BIN SHA-256
+`f585e45ff1d795f8b2de64f20e1ed2953bfc7f43adf1c0b47b03e849e4865e48`
+and changes only continuous level-name table slot 35:
+
+- SCUS name-pointer table: `0x5FFF0`.
+- ID65/continuous-index-35 pointer: SCUS `0x6007C`.
+- Guarded preimage: `64 55 07 80`, pointer `0x80075564` to placeholder `A`.
+- Replacement: `E4 01 01 80`, the unchanged retail Town Square pointer
+  `0x800101E4` from slot 3.
+- The placeholder `A`, retail `TOWN SQUARE`, every other name pointer/string,
+  and every non-identity executable byte remain unchanged.
+
+The relocated SCUS remains at LBA 55382 with size `0x66000`. The pointer write
+changes exactly three logical executable bytes, and rebuilding MODE2 Form 1
+sector LBA 55574 changes 53 physical bytes inside that one raw sector. Static
+readback verifies correct duplicated subheaders, MSF, EDC/ECC, the complete
+patched executable, and a whole-BIN diff with zero bytes outside that sector.
+The passed base BIN is preserved byte-for-byte.
+
+- Profile:
+  `unused-level-65-town-square-display-name-clean-usa-disposable-v4`.
+- Output BIN SHA-256:
+  `9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8`.
+- Output SCUS SHA-256:
+  `fa5fc7981188b78fa7d7b78facca64c1f79dadb107515e9146ad178ade39d442`.
+- Generated directory:
+  `_local/v5-stone-hill-level-replacement/unused-level-65-display-name/`.
+
+Run the deterministic static export with:
+
+```sh
+dotnet run \
+  --project src/Spyro.Editor.UnusedLevel65DisplayNameCandidateSmoke/Spyro.Editor.UnusedLevel65DisplayNameCandidateSmoke.csproj \
+  --configuration Release -- "$PWD"
+```
+
+The generated checklist keeps memory cards disabled and checks only the new
+Town Square display identity, a short ID65 load/reset pass, retail Town Square,
+Gnasty's Loot, and Sunny Flight. Authored totals, music-table extension, portal
+routing, Return Home, save ownership, content mutation, editor integration,
+normal Create BIN, and release/update paths remain excluded. This candidate
+must not be promoted unless its exact BIN hash passes the focused DuckStation
+checklist.
