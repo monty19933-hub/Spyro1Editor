@@ -72,8 +72,30 @@ Static readback proves:
 
 The generated handoff is under
 `_local/v5-stone-hill-level-replacement/unused-level-65-physical-clone/`.
-Its status is static-proven and DuckStation-runtime-pending. It keeps memory cards
-disabled and tests only ID65 load/movement, one loose gem with reset/re-entry,
-retail Town Square, Gnasty's Loot, and Sunny Flight.
+It kept memory cards disabled and tested only ID65 load/movement, one loose gem
+with reset/re-entry, retail Town Square, Gnasty's Loot, and Sunny Flight.
 
-Only after independent storage passes should the experiment add an authored name, totals/music identity, a portal-65 landing pair, and independently validated persistence.
+## Third runtime result
+
+The exact physically independent candidate at BIN SHA-256
+`f585e45ff1d795f8b2de64f20e1ed2953bfc7f43adf1c0b47b03e849e4865e48`
+passed its focused DuckStation checklist on 2026-08-08. The user confirmed that
+every requested check passed: ID65 loaded and remained responsive across
+movement and streaming through several sectors, camera, initial music, enemies,
+pause and Inventory, and one-gem collection. After the no-card reset and
+re-entry, the gem was present again. Retail Town Square, Gnasty's Loot, and
+Sunny Flight also continued to load normally, including Sunny Flight's controls
+and timer. The supplied Inventory screenshot displayed the expected placeholder
+`A`, confirming that display identity was deliberately unchanged.
+
+The evidence record is
+`docs/runtime-evidence/unused-level-65-town-square-physical-clone-focused-pass-2026-08-08.json`.
+This records only the physical-storage discriminator as a focused runtime pass.
+It does not authorize editor integration, an authored name or totals, music-table
+extension, portal-to-exit 65, Return Home, saving, memory-card persistence, or
+arbitrary level authoring.
+
+The next isolated level-format gate is an authored ID65 display-name
+discriminator. Independently addressed totals, music-table extension, portal
+routing, Return Home, content mutation, and memory-card persistence remain
+separate later gates.

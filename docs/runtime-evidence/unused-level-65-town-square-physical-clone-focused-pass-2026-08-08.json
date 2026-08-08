@@ -1,0 +1,72 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-08",
+  "evidenceId": "unused-level-65-town-square-physical-clone-focused-pass-duckstation-2026-08-08",
+  "evidenceType": "interactive-user-report",
+  "evidenceStatus": "focused-runtime-pass",
+  "automatedEmulatorCapture": false,
+  "promotionAuthorized": false,
+  "profileId": "unused-level-65-town-square-physical-clone-clean-usa-disposable-v3",
+  "baseProfileId": "unused-level-65-town-square-flight65-exception-clean-usa-disposable-v2",
+  "baseOutputImageSha256": "a77f32d715b614867958a491e25407b24fe0091509ad9eeee546bf3c70cc09e5",
+  "retailSourceImageSha256": "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37",
+  "outputImageSha256": "f585e45ff1d795f8b2de64f20e1ed2953bfc7f43adf1c0b47b03e849e4865e48",
+  "outputCue": "_local/v5-stone-hill-level-replacement/unused-level-65-physical-clone/Unused-Level-65-Town-Square-independent-storage-RUNTIME-CANDIDATE.cue",
+  "runtimeChecklistArtifact": "_local/v5-stone-hill-level-replacement/unused-level-65-physical-clone/Unused-Level-65-Town-Square-independent-storage-RUNTIME-CANDIDATE-runtime-checklist.md",
+  "staticProofArtifact": "_local/v5-stone-hill-level-replacement/unused-level-65-physical-clone/Unused-Level-65-Town-Square-independent-storage-RUNTIME-CANDIDATE-static-proof.json",
+  "focusedRuntimeObservation": {
+    "primaryEvidence": true,
+    "userReports": [
+      "The user confirmed that every item in the generated physically independent ID65 runtime checklist passed.",
+      "The supplied screenshot showed the expected placeholder A Inventory identity."
+    ],
+    "passedChecks": [
+      "With memory-card insertion disabled, the candidate cold booted and ID65 loaded a rendered, playable Town Square scene from the independently stored rows 79/80.",
+      "Movement across several sectors, geometry, textures, sky, collision, camera, initial music, enemy animation, pause, and Inventory all remained functional.",
+      "Exactly one loose gem could be collected in ID65.",
+      "After resetting DuckStation and re-entering ID65, the collected gem was present again because the no-card reset discarded the prior session.",
+      "Retail Town Square remained independently loadable.",
+      "Gnasty's Loot remained loadable.",
+      "Sunny Flight retained normal flight controls and timer behavior.",
+      "Inventory continued to show the deliberately unchanged placeholder A identity."
+    ],
+    "conclusion": "The reserved ID65 loader path successfully consumed a physically independent Town Square overlay/data pair from appended WAD storage while the relocated patched executable and the three retail comparison entries remained functional. Physical payload independence now has a focused DuckStation runtime pass for this exact profile and BIN hash."
+  },
+  "staticBoundary": {
+    "directoryOverlayRow": 79,
+    "directoryDataRow": 80,
+    "targetOverlayWadOffset": "0x6927000",
+    "targetDataWadOffset": "0x6936800",
+    "originalWadByteLength": "0x6927000",
+    "expandedWadByteLength": "0x6C18800",
+    "originalExecutableLba": 53875,
+    "relocatedExecutableLba": 55382,
+    "copiedPayloadSectorCount": 1507,
+    "copiedExecutableSectorCount": 204,
+    "retaggedFileBoundarySectorCount": 2,
+    "changedRawSectorCount": 1714,
+    "changedRawBytes": 3553226,
+    "changedLogicalUserBytes": 3075411,
+    "exactRawDiffBoundaryVerified": true,
+    "independentPayloadReadbackVerified": true,
+    "retailPayloadsPreserved": true,
+    "protectedGapPreserved": true,
+    "rootRelocationVerified": true,
+    "sourceImagePreserved": true
+  },
+  "unverifiedRuntimeChecks": [
+    "Dragon rescue, egg-thief interaction, enemy attacks or kills, chest interaction, death, and respawn were deliberately not tested.",
+    "Return Home, Exit Level, Quit Game, and portal-to-exit 65 remain untested and unauthorized.",
+    "Save, load, memory-card insertion, ID65 save ownership, and persistence remain untested and unauthorized.",
+    "Extended-session alternate music, title demos, and authored treasure, dragon, and egg totals were not tested.",
+    "The physical clone still has Town Square content semantics and the placeholder A identity; no authored ID65 content mutation was included in this discriminator."
+  ],
+  "nextGate": "Create one disposable authored-display-name discriminator on top of this exact physical clone and change only the ID65 placeholder A identity. Keep totals, music-table extension, portal routing, Return Home, save ownership, memory-card insertion, and content edits out of that candidate.",
+  "scopeLimitations": [
+    "This focused result applies only to profile unused-level-65-town-square-physical-clone-clean-usa-disposable-v3 and BIN SHA-256 f585e45ff1d795f8b2de64f20e1ed2953bfc7f43adf1c0b47b03e849e4865e48.",
+    "It does not promote ID65 into normal Create BIN, an editor workspace, a release, or the update channel.",
+    "It does not establish an arbitrary authored-level workflow, new terrain or textures, Mobys, routes, portals, totals, music ownership, or save/progression structures.",
+    "The supplied screenshot corroborates only the expected placeholder A display identity and is not an automated emulator capture."
+  ]
+}
