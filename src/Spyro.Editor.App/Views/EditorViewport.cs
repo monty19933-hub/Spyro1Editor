@@ -1008,6 +1008,21 @@ public sealed partial class EditorViewport : Control
         InvalidateVisual();
     }
 
+    internal EditorViewportNavigationSnapshot CaptureNavigationSnapshotForTesting() => new(
+        _viewMode,
+        _flipMapY,
+        _zoom,
+        _pan,
+        _flyCamera.X,
+        _flyCamera.Y,
+        _flyCamera.Z,
+        _flyCamera.Yaw,
+        _flyCamera.Pitch,
+        _flyCameraIsOverview,
+        _selectedMobyIndex,
+        _selectedTerrainIndex,
+        _selectedTerrainPointIndex);
+
     internal NativeTerrainMapMaterialSnapshot CaptureNativeTerrainMapMaterialSnapshotForTesting() =>
         _nativeTerrainMapMaterialSnapshot;
 
@@ -12349,6 +12364,21 @@ public enum ViewportViewMode
     Map,
     Fly3D
 }
+
+internal sealed record EditorViewportNavigationSnapshot(
+    ViewportViewMode ViewMode,
+    bool FlipMapY,
+    double Zoom,
+    Vector Pan,
+    double FlyCameraX,
+    double FlyCameraY,
+    double FlyCameraZ,
+    double FlyCameraYaw,
+    double FlyCameraPitch,
+    bool FlyCameraIsOverview,
+    int SelectedMobyIndex,
+    int SelectedTerrainIndex,
+    int SelectedTerrainPointIndex);
 
 public enum TerrainSceneViewMode
 {

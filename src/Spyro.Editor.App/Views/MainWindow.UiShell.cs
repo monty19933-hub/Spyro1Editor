@@ -5,7 +5,9 @@ using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Spyro.Editor.Core;
+using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Scene;
+using Spyro.Editor.Core.Workspace;
 
 namespace Spyro.Editor.App.Views;
 
@@ -43,9 +45,31 @@ public sealed partial class MainWindow
         Content = "Game Camera",
         MinWidth = 108
     };
+    private readonly ToggleButton _objectManagerWorkspaceButton = new()
+    {
+        Name = "ObjectManagerWorkspaceButton",
+        Content = "Object Manager",
+        MinWidth = 142
+    };
+    private readonly ToggleButton _levelBuildingWorkspaceButton = new()
+    {
+        Name = "LevelBuildingEditorWorkspaceButton",
+        Content = "Level Building Editor",
+        MinWidth = 164
+    };
     private Button? _modernViewportActionButton;
     private TabControl? _modernWorkspaceTabs;
+    private TabItem? _modernObjectWorkspaceTab;
     private TabItem? _modernTerrainWorkspaceTab;
+    private TabItem? _modernLevelWorkspaceTab;
+    private TabItem? _modernEnvironmentWorkspaceTab;
+    private TabItem? _modernResearchWorkspaceTab;
+    private IReadOnlyList<TabItem> _objectManagerWorkspaceTabs = Array.Empty<TabItem>();
+    private IReadOnlyList<TabItem> _levelBuildingWorkspaceTabs = Array.Empty<TabItem>();
+    private TabItem? _lastObjectManagerWorkspaceTab;
+    private TabItem? _lastLevelBuildingWorkspaceTab;
+    private EditorShellWorkspace _activeEditorShellWorkspace = EditorShellWorkspace.ObjectManager;
+    private bool _switchingEditorShellWorkspace;
     private Expander? _modernLinkedObjectsExpander;
 
     private static readonly Color ModernInk = Color.FromRgb(31, 38, 45);
@@ -179,6 +203,10 @@ public sealed partial class MainWindow
             ColumnSpacing = 14
         };
         topRow.Children.Add(BuildModernBrandTitle());
+
+        Control editorWorkspace = BuildEditorWorkspaceControl();
+        Grid.SetColumn(editorWorkspace, 1);
+        topRow.Children.Add(editorWorkspace);
 
         StackPanel fileActions = new()
         {
@@ -323,6 +351,50 @@ public sealed partial class MainWindow
         return brand;
     }
 
+    private Control BuildEditorWorkspaceControl()
+    {
+        _objectManagerWorkspaceButton.MinHeight = 36;
+        _objectManagerWorkspaceButton.Padding = new Thickness(12, 7);
+        _objectManagerWorkspaceButton.Click += (_, _) =>
+            ActivateEditorShellWorkspace(EditorShellWorkspace.ObjectManager);
+        ToolTip.SetTip(
+            _objectManagerWorkspaceButton,
+            "Manage, place, replace, move, and inspect objects in the shared loaded level.");
+
+        _levelBuildingWorkspaceButton.MinHeight = 36;
+        _levelBuildingWorkspaceButton.Padding = new Thickness(12, 7);
+        _levelBuildingWorkspaceButton.Click += (_, _) =>
+            ActivateEditorShellWorkspace(EditorShellWorkspace.LevelBuildingEditor);
+        ToolTip.SetTip(
+            _levelBuildingWorkspaceButton,
+            "Build terrain, textures, level settings, and environment without opening a second project session.");
+
+        Grid segments = new()
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(GridLength.Star),
+                new ColumnDefinition(GridLength.Star)
+            }
+        };
+        segments.Children.Add(_objectManagerWorkspaceButton);
+        Grid.SetColumn(_levelBuildingWorkspaceButton, 1);
+        segments.Children.Add(_levelBuildingWorkspaceButton);
+        RefreshEditorWorkspaceButtons();
+
+        return new Border
+        {
+            Name = "EditorWorkspaceSelector",
+            BorderBrush = new SolidColorBrush(Color.FromRgb(188, 197, 207)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(5),
+            ClipToBounds = true,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = segments
+        };
+    }
+
     private Control BuildModernViewModeControl()
     {
         _modernMapViewButton.Padding = new Thickness(12, 6);
@@ -431,41 +503,169 @@ public sealed partial class MainWindow
         };
         layout.Children.Add(BuildModernLevelHeader());
 
-        List<TabItem> items =
-        [
-            NewModernWorkspaceTab("Objects", BuildModernObjectWorkspace())
-        ];
+        _modernObjectWorkspaceTab = NewModernWorkspaceTab(
+            "Objects",
+            BuildModernObjectWorkspace());
 
         _modernTerrainWorkspaceTab = NewModernWorkspaceTab(
             "Terrain",
             _releaseMode ? BuildReleaseTerrainTextureWorkspace() : BuildTerrainTabControls());
-        items.Add(_modernTerrainWorkspaceTab);
-
-        items.Add(NewModernWorkspaceTab("Level", BuildModernLevelWorkspace()));
-        items.Add(NewModernWorkspaceTab("Environment", BuildModernEnvironmentWorkspace()));
+        _modernLevelWorkspaceTab = NewModernWorkspaceTab("Level", BuildModernLevelWorkspace());
+        _modernEnvironmentWorkspaceTab = NewModernWorkspaceTab(
+            "Environment",
+            BuildModernEnvironmentWorkspace());
+        List<TabItem> objectManagerItems = [_modernObjectWorkspaceTab];
+        List<TabItem> levelBuildingItems =
+        [
+            _modernTerrainWorkspaceTab,
+            _modernLevelWorkspaceTab,
+            _modernEnvironmentWorkspaceTab
+        ];
         if (!_releaseMode)
-            items.Add(NewModernWorkspaceTab("Research", BuildModernResearchWorkspace()));
+        {
+            _modernResearchWorkspaceTab = NewModernWorkspaceTab(
+                "Research",
+                BuildModernResearchWorkspace());
+            objectManagerItems.Add(_modernResearchWorkspaceTab);
+            levelBuildingItems.Add(_modernResearchWorkspaceTab);
+        }
+        _objectManagerWorkspaceTabs = objectManagerItems;
+        _levelBuildingWorkspaceTabs = levelBuildingItems;
+        _lastObjectManagerWorkspaceTab = _modernObjectWorkspaceTab;
+        _lastLevelBuildingWorkspaceTab = _modernTerrainWorkspaceTab;
 
         _modernWorkspaceTabs = new TabControl
         {
-            ItemsSource = items,
-            SelectedIndex = 0,
+            Name = "EditorWorkspaceToolTabs",
             MinHeight = 0,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             VerticalContentAlignment = VerticalAlignment.Stretch
         };
         _modernWorkspaceTabs.SelectionChanged += (_, _) =>
         {
-            _viewport.TerrainFocusMode = _modernTerrainWorkspaceTab != null &&
-                ReferenceEquals(_modernWorkspaceTabs.SelectedItem, _modernTerrainWorkspaceTab);
+            if (!_switchingEditorShellWorkspace)
+                RememberSelectedEditorWorkspaceTab();
+            RefreshEditorWorkspaceTerrainFocusMode();
         };
-        _viewport.TerrainFocusMode = false;
+        ActivateEditorShellWorkspace(
+            EditorShellWorkspace.ObjectManager,
+            _modernObjectWorkspaceTab,
+            announce: false);
         Grid.SetRow(_modernWorkspaceTabs, 1);
         layout.Children.Add(_modernWorkspaceTabs);
 
         shell.Child = layout;
         return shell;
     }
+
+    private void ActivateEditorShellWorkspace(
+        EditorShellWorkspace workspace,
+        TabItem? preferredTab = null,
+        bool announce = true)
+    {
+        RememberSelectedEditorWorkspaceTab();
+        _switchingEditorShellWorkspace = true;
+        try
+        {
+            _activeEditorShellWorkspace = workspace;
+            if (_modernWorkspaceTabs != null)
+            {
+                IReadOnlyList<TabItem> tabs = workspace == EditorShellWorkspace.ObjectManager
+                    ? _objectManagerWorkspaceTabs
+                    : _levelBuildingWorkspaceTabs;
+                TabItem? target = preferredTab ?? (workspace == EditorShellWorkspace.ObjectManager
+                    ? _lastObjectManagerWorkspaceTab
+                    : _lastLevelBuildingWorkspaceTab);
+                if (target == null || !tabs.Contains(target))
+                    target = tabs.FirstOrDefault();
+                _modernWorkspaceTabs.ItemsSource = tabs;
+                _modernWorkspaceTabs.SelectedItem = target;
+                if (_modernWorkspaceTabs.SelectedItem == null && tabs.Count > 0)
+                    _modernWorkspaceTabs.SelectedIndex = 0;
+            }
+        }
+        finally
+        {
+            _switchingEditorShellWorkspace = false;
+        }
+        RememberSelectedEditorWorkspaceTab();
+
+        RefreshEditorWorkspaceButtons();
+        RefreshEditorWorkspaceTerrainFocusMode();
+        if (announce)
+        {
+            _statusText.Text = workspace == EditorShellWorkspace.ObjectManager
+                ? "Object Manager active. The loaded level, camera, selection, and unsaved building edits remain shared."
+                : "Level Building Editor active. The loaded level, camera, selection, and unsaved object edits remain shared.";
+        }
+    }
+
+    private void RememberSelectedEditorWorkspaceTab()
+    {
+        if (_modernWorkspaceTabs?.SelectedItem is not TabItem selected)
+            return;
+        if (_activeEditorShellWorkspace == EditorShellWorkspace.ObjectManager &&
+            _objectManagerWorkspaceTabs.Contains(selected))
+        {
+            _lastObjectManagerWorkspaceTab = selected;
+        }
+        else if (_activeEditorShellWorkspace == EditorShellWorkspace.LevelBuildingEditor &&
+                 _levelBuildingWorkspaceTabs.Contains(selected))
+        {
+            _lastLevelBuildingWorkspaceTab = selected;
+        }
+    }
+
+    private void RefreshEditorWorkspaceTerrainFocusMode()
+    {
+        _viewport.TerrainFocusMode =
+            _activeEditorShellWorkspace == EditorShellWorkspace.LevelBuildingEditor &&
+            _modernWorkspaceTabs != null &&
+            _modernTerrainWorkspaceTab != null &&
+            ReferenceEquals(_modernWorkspaceTabs.SelectedItem, _modernTerrainWorkspaceTab);
+    }
+
+    private void RefreshEditorWorkspaceButtons()
+    {
+        StyleEditorWorkspaceSegment(
+            _objectManagerWorkspaceButton,
+            _activeEditorShellWorkspace == EditorShellWorkspace.ObjectManager);
+        StyleEditorWorkspaceSegment(
+            _levelBuildingWorkspaceButton,
+            _activeEditorShellWorkspace == EditorShellWorkspace.LevelBuildingEditor);
+    }
+
+    private static void StyleEditorWorkspaceSegment(ToggleButton button, bool active)
+    {
+        button.IsChecked = active;
+        button.Background = new SolidColorBrush(active ? ModernTeal : Colors.White);
+        button.Foreground = new SolidColorBrush(active ? Colors.White : ModernInk);
+        button.BorderThickness = new Thickness(0);
+        button.HorizontalContentAlignment = HorizontalAlignment.Center;
+    }
+
+    internal EditorShellSessionSnapshot CaptureEditorShellSessionSnapshotForTesting() => new(
+        _activeEditorShellWorkspace,
+        _workspace,
+        _catalog,
+        _currentLevel,
+        _currentGeometry,
+        _currentMobys,
+        _selectedMoby,
+        _selectedTerrain,
+        _viewport,
+        _levelLoadRequestId,
+        _savedMobyEditSignature,
+        _savedTerrainEditSignature,
+        BuildMobyEditSignature(_currentMobys),
+        BuildTerrainEditSignature(_currentGeometry),
+        _savedNativeMovementEditSignature,
+        BuildNativeMovementEditSignature(),
+        _savedDragonRunToEditSignature,
+        BuildDragonRunToEditSignature(),
+        HasUnsavedMobyEdits(),
+        HasUnsavedTerrainEdits(),
+        _viewport.CaptureNavigationSnapshotForTesting());
 
     private Control BuildModernLevelHeader()
     {
@@ -1220,3 +1420,32 @@ public sealed partial class MainWindow
         return root;
     }
 }
+
+internal enum EditorShellWorkspace
+{
+    ObjectManager,
+    LevelBuildingEditor
+}
+
+internal sealed record EditorShellSessionSnapshot(
+    EditorShellWorkspace ActiveWorkspace,
+    EditorWorkspace Workspace,
+    LevelCatalog Catalog,
+    LevelDefinition? CurrentLevel,
+    GeometryCandidate? CurrentGeometry,
+    IReadOnlyList<Moby> CurrentMobys,
+    Moby? SelectedMoby,
+    TerrainPolygon? SelectedTerrain,
+    EditorViewport Viewport,
+    int LevelLoadRequestId,
+    string SavedMobyEditSignature,
+    string SavedTerrainEditSignature,
+    string CurrentMobyEditSignature,
+    string CurrentTerrainEditSignature,
+    string SavedNativeMovementEditSignature,
+    string CurrentNativeMovementEditSignature,
+    string SavedDragonRunToEditSignature,
+    string CurrentDragonRunToEditSignature,
+    bool HasUnsavedMobyEdits,
+    bool HasUnsavedTerrainEdits,
+    EditorViewportNavigationSnapshot Navigation);

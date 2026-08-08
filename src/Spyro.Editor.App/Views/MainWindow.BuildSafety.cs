@@ -1133,8 +1133,10 @@ public sealed partial class MainWindow
                     return;
                 }
 
-                if (_modernWorkspaceTabs != null && _modernTerrainWorkspaceTab != null)
-                    _modernWorkspaceTabs.SelectedItem = _modernTerrainWorkspaceTab;
+                ActivateEditorShellWorkspace(
+                    EditorShellWorkspace.LevelBuildingEditor,
+                    _modernTerrainWorkspaceTab,
+                    announce: false);
                 _viewport.FocusTerrain(terrainIndex);
                 _statusText.Text =
                     $"Build Safety: selected and centered {level.DisplayName} terrain section {terrain.RuntimeKey}.";
@@ -1154,8 +1156,10 @@ public sealed partial class MainWindow
                 return;
             }
 
-            if (_modernWorkspaceTabs != null)
-                _modernWorkspaceTabs.SelectedIndex = 0;
+            ActivateEditorShellWorkspace(
+                EditorShellWorkspace.ObjectManager,
+                _modernObjectWorkspaceTab,
+                announce: false);
             _mobySearchBox.Text = "";
             SelectMobyCategory("All objects");
             RefreshMobyList(moby);
