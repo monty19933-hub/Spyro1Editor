@@ -1,0 +1,140 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-08",
+  "evidenceId": "unused-level-65-town-square-display-name-focused-partial-duckstation-2026-08-08",
+  "evidenceType": "interactive-user-report-with-read-only-runtime-inspection",
+  "evidenceStatus": "focused-partial-runtime-observation",
+  "automatedEmulatorCapture": false,
+  "promotionAuthorized": false,
+  "profileId": "unused-level-65-town-square-display-name-clean-usa-disposable-v4",
+  "baseProfileId": "unused-level-65-town-square-physical-clone-clean-usa-disposable-v3",
+  "baseRuntimeEvidenceId": "unused-level-65-town-square-physical-clone-focused-pass-duckstation-2026-08-08",
+  "baseOutputImageSha256": "f585e45ff1d795f8b2de64f20e1ed2953bfc7f43adf1c0b47b03e849e4865e48",
+  "outputImageSha256": "9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8",
+  "outputExecutableSha256": "fa5fc7981188b78fa7d7b78facca64c1f79dadb107515e9146ad178ade39d442",
+  "outputCue": "_local/v5-stone-hill-level-replacement/unused-level-65-display-name/Unused-Level-65-Town-Square-independent-storage-with-Town-Square-display-name-RUNTIME-CANDIDATE.cue",
+  "runtimeChecklistArtifact": "_local/v5-stone-hill-level-replacement/unused-level-65-display-name/Unused-Level-65-Town-Square-independent-storage-with-Town-Square-display-name-RUNTIME-CANDIDATE-runtime-checklist.md",
+  "staticProofArtifact": "_local/v5-stone-hill-level-replacement/unused-level-65-display-name/Unused-Level-65-Town-Square-independent-storage-with-Town-Square-display-name-RUNTIME-CANDIDATE-static-proof.json",
+  "focusedRuntimeObservation": {
+    "primaryEvidence": true,
+    "userReports": [
+      "ID65 loaded and displayed Town Square instead of the placeholder A.",
+      "Movement, camera, collision, enemies, pause, and Inventory remained stable.",
+      "Music played, but it was Gnasty's Loot music rather than Town Square music.",
+      "After collecting a loose gem, resetting, and re-entering ID65, Inventory displayed 4/0 and the Town Square identity still appeared.",
+      "Retail Town Square, Gnasty's Loot, and Sunny Flight each loaded without issue.",
+      "Inventory homeworld-page cycling did not appear to work."
+    ],
+    "passedChecks": [
+      "The exact ID65 candidate loaded and displayed TOWN SQUARE instead of A.",
+      "Movement, camera, collision, enemy behavior, pause, and opening Inventory remained responsive.",
+      "Initial music playback started successfully.",
+      "Reset and re-entry retained the TOWN SQUARE display identity.",
+      "Retail Town Square remained loadable.",
+      "Gnasty's Loot remained loadable.",
+      "Sunny Flight remained loadable."
+    ],
+    "conclusion": "The exact display-name pointer discriminator has direct positive runtime evidence and did not prevent the three retail comparison levels from loading. The complete checklist remains open because DuckStation progression cheats contaminated gem/progression values and the current visited-homeworld state made page cycling non-diagnostic, so this is a focused partial observation rather than a full runtime pass."
+  },
+  "runtimeEnvironmentContamination": {
+    "duckStationGameSettingsPath": "/Users/john/Library/Application Support/DuckStation/gamesettings/SCUS-94228.ini",
+    "enableCheats": true,
+    "configuredAndEnabledCheats": [
+      "Moon Jump",
+      "Have Over 65,000 Jewels",
+      "Have All Dragon Eggs",
+      "Overall Have Freed All Dragons"
+    ],
+    "liveRamCorroboration": {
+      "eggCountRuntimeAddress": "0x80075810",
+      "observedEggCount": 12,
+      "gemValueRuntimeAddress": "0x80075860",
+      "observedGemBytesHex": "FF FF 08 00",
+      "dragonCountRuntimeAddress": "0x80075750",
+      "observedDragonCount": 69
+    },
+    "evidenceBoundary": "The display name and basic load/responsiveness observations remain usable. Gem, treasure, dragon, egg, reset, and persistence semantics from this run are contaminated; visited-homeworld and page-cycling behavior requires a controlled baseline. No DuckStation setting was changed during evidence collection."
+  },
+  "runtimeEnvironmentContext": {
+    "memoryCardStateDuringExactRunVerified": false,
+    "globalCard1TypeObservedAfterReport": "PerGameTitle",
+    "globalCard2TypeObservedAfterReport": "None",
+    "perGameCardObservedAfterReport": "/Users/john/Library/Application Support/DuckStation/memcards/Spyro the Dragon (USA)_1.mcd",
+    "perGameCardLastModified": "2026-08-08T14:29:09-07:00",
+    "interpretation": "The current global configuration and existing per-game card do not prove that a card was inserted during the exact reported run, but they prevent assuming the checklist's no-card condition. A clean repeat must explicitly disable card insertion."
+  },
+  "observedExcludedScope": [
+    "The unchanged index-35 initial-music row selected Gnasty's Loot track 19. Music ownership was deliberately excluded from the display-name candidate.",
+    "The displayed treasure value was 4/0. The zero target is the exact unchanged slot-35 value; the runtime numerator 4 is recorded literally and is not interpreted as authored totals or gem-restoration proof.",
+    "Inventory opened without crashing, but homeworld-page cycling did not appear to work in the observed runtime state. Page ownership and progression were outside this discriminator."
+  ],
+  "staticAndRuntimeExplanation": {
+    "displayName": {
+      "continuousLevelIndex": 35,
+      "pointerFileOffset": "0x6007C",
+      "beforeHex": "64 55 07 80",
+      "afterHex": "E4 01 01 80",
+      "changedLogicalExecutableBytes": 3,
+      "affectedRawSectorLba": 55574
+    },
+    "initialMusic": {
+      "mappingTableFileOffset": "0x5F79C",
+      "id65SlotFileOffset": "0x5F828",
+      "id65BeforeAndCurrentTrackId": 19,
+      "id65CurrentTrackName": "Gnasty's Loot",
+      "townSquareTrackId": 26,
+      "id65CurrentHex": "13 00 00 00",
+      "townSquareHex": "1A 00 00 00",
+      "lateAlternateTableFileOffset": "0x5F85C",
+      "lateAlternateRowCount": 35,
+      "conclusion": "Gnasty's Loot initial music is the exact preserved retail value for reserved index 35, not a regression caused by the display-name pointer. Index 35 has no late-alternate row, so extended-session music remains unsafe and unproven."
+    },
+    "treasureTarget": {
+      "tableFileOffset": "0x5FC38",
+      "id65SlotFileOffset": "0x5FC7E",
+      "currentHex": "00 00",
+      "targetTotal": 0,
+      "conclusion": "The /0 denominator is the exact unchanged unauthored slot-35 treasure target."
+    },
+    "inventoryPageCycling": {
+      "gLevelCheatActiveRuntimeAddress": "0x80075880",
+      "observedGLevelCheatActive": 0,
+      "visitedTableRuntimeAddress": "0x80078E78",
+      "observedVisitedContinuousIndices": [0, 3, 5, 30, 34, 35],
+      "dreamWeaversHomeContinuousIndex": 24,
+      "observedDreamWeaversVisited": 0,
+      "conclusion": "The completed warp had released the hidden cheat input state. Inventory page changes were being gated by adjacent homeworld visited flags; the unavailable Dream Weavers page prevented Left from index-35 page 5. This is not evidence that the three-byte name patch broke Inventory, but the enabled progression cheats mean the visited table is not a clean no-card/new-game baseline."
+    }
+  },
+  "unverifiedRuntimeChecks": [
+    "Whether the same loose gem was physically present again after reset was not reported.",
+    "Whether 4/0 was observed before or after recollecting any gem was not reported.",
+    "Gem, dragon, egg, treasure, reset, and persistence observations require a repeat with every DuckStation cheat disabled; visited-homeworld page cycling requires the controlled Dream Weavers baseline.",
+    "Memory-card-disabled cold-boot conditions and prohibited-path adherence were not explicitly reconfirmed in this report.",
+    "Geometry and textures were not separately reported.",
+    "Sunny Flight loaded, but its flight controls and timer were not separately reported.",
+    "The visited-homeworld Inventory cycling control has not yet been run by the user."
+  ],
+  "minimalFollowUpControl": {
+    "purpose": "Distinguish normal visited-homeworld page gating from an Inventory regression without changing the BIN.",
+    "requirements": [
+      "Use the same exact display-name candidate and keep memory cards disabled.",
+      "Disable every DuckStation cheat for SCUS-94228 before cold booting; do not resume a save state from the contaminated run.",
+      "Do not reset between the Dream Weavers and ID65 entries."
+    ],
+    "steps": [
+      "From controllable gameplay, press Select; enter R1, R2, L1, L2, R1, L1, R2, L2; then press Down, then Circle to load Dream Weavers homeworld ID50.",
+      "From controllable gameplay, press Select; enter R1, R2, L1, L2, R1, L1, R2, L2; then press Left, then Down to load ID65.",
+      "Open Inventory and use D-pad Left, then D-pad Right. Do not use L1/R1 for page cycling."
+    ],
+    "expectedResult": "Left reaches the now-visited Dream Weavers page and Right returns to the Gnasty page. No code change is justified unless this same-BIN control fails."
+  },
+  "nextGate": "Repeat the focused display-name, loose-gem restoration, and visited-homeworld Inventory cycling checks from a cheat-disabled, memory-card-disabled cold boot before upgrading this evidence to a full focused runtime pass. Do not promote ID65 or combine music, totals, portals, saving, or content changes into this evidence boundary.",
+  "scopeLimitations": [
+    "This partial result applies only to profile unused-level-65-town-square-display-name-clean-usa-disposable-v4 and BIN SHA-256 9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8.",
+    "It proves the ID65 indexed display-name assignment at runtime, not full authored-level identity or progression ownership.",
+    "It does not authorize normal Create BIN, editor workspace integration, a release, or update-channel publication.",
+    "Music ownership, late music, totals, portal routing, Return Home, saving, memory-card persistence, and content authoring remain separate gates."
+  ]
+}

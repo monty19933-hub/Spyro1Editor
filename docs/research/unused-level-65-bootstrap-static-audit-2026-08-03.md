@@ -162,3 +162,51 @@ routing, Return Home, save ownership, content mutation, editor integration,
 normal Create BIN, and release/update paths remain excluded. This candidate
 must not be promoted unless its exact BIN hash passes the focused DuckStation
 checklist.
+
+## Fourth runtime observation: positive identity, partial checklist
+
+The exact display-name candidate at BIN SHA-256
+`9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8`
+has positive interactive runtime evidence. ID65 loaded and displayed Town Square
+instead of A; movement, camera, collision, enemies, pause, and Inventory opening
+remained stable; reset/re-entry retained the Town Square identity; and retail
+Town Square, Gnasty's Loot, and Sunny Flight each loaded.
+
+The user also reported Gnasty's Loot music, a `4/0` treasure display, and no
+apparent homeworld-page cycling. These observations match deliberately unchanged
+or progression-gated state rather than the three-byte name-pointer write:
+
+- Initial-music slot 35 at SCUS `0x5F828` remains track 19, Gnasty's Loot.
+  Town Square is track 26. The candidate intentionally did not change music.
+- Treasure-target slot 35 at SCUS `0x5FC7E` remains `00 00`, so the `/0`
+  denominator is expected. The numerator 4 is recorded without interpreting it
+  as authored totals or proof that the same loose gem returned after reset.
+- Read-only live RAM inspection found `g_LevelCheatActive` at `0x80075880` had
+  returned to zero. Inventory page changes were gated by visited-homeworld flags;
+  Dream Weavers home index 24 was still unvisited in the current runtime state,
+  so Left from the Gnasty/ID65 page was rejected normally.
+
+The runtime environment was not clean for progression evidence. DuckStation's
+SCUS-94228 game settings had Moon Jump, over 65,000 jewels, all dragon eggs, and
+all dragons freed enabled, and live RAM corroborated the active progression
+values. The display name and basic loading/responsiveness observations remain
+useful, but gem/reset and totals semantics from this run are contaminated. The
+current visited-homeworld state makes page cycling non-diagnostic until the
+controlled baseline is run. No emulator setting was changed during inspection.
+The exact-run memory-card state was not captured; the current global DuckStation
+configuration uses a per-game card and a Spyro card file exists, so the no-card
+check must also be explicitly repeated rather than inferred.
+
+After disabling every DuckStation cheat and memory-card insertion, then cold
+booting without a resumed save state, the no-write Inventory control is to enter
+Dream Weavers ID50 first with
+`Select; R1, R2, L1, L2, R1, L1, R2, L2; Down, Circle`, then enter ID65 without
+resetting and use D-pad Left/Right in Inventory. A separate clarification must
+confirm whether the same loose gem was physically present again after reset and
+whether `4/0` was observed before or after recollection.
+
+The evidence record is
+`docs/runtime-evidence/unused-level-65-town-square-display-name-focused-partial-2026-08-08.json`.
+Its status is `focused-partial-runtime-observation`, and promotion remains
+unauthorized until a cheat-disabled repeat and the remaining confirmations close
+the checklist.
