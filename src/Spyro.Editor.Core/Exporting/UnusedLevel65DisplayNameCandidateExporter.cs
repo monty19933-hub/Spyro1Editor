@@ -545,11 +545,12 @@ public static class UnusedLevel65DisplayNameCandidateExporter
     private static IReadOnlyList<string> RuntimeChecklist() =>
     [
         "Disable memory-card insertion completely and cold boot the candidate.",
-        $"Open Inventory; enter {TestLevelWarpPatch.ActivationSequence}; then press Left, then Down. Confirm the ID65 entry now reads TOWN SQUARE instead of A and loads normally.",
+        $"From controllable gameplay, press Select to open Inventory; enter {TestLevelWarpPatch.ActivationSequence}; then press Left, then Down. Confirm the ID65 entry now reads TOWN SQUARE instead of A and loads normally.",
         "Move through several sectors, open pause/Inventory, and confirm geometry, textures, collision, camera, initial music, enemies, and the TOWN SQUARE display name remain stable.",
-        "Collect exactly one loose gem, reset DuckStation, cold boot, and re-enter ID65. Confirm the collected gem is present again because the no-card reset discarded the session, and confirm the TOWN SQUARE identity still appears.",
-        $"Reset and verify retail Town Square with {TestLevelWarpPatch.ActivationSequence}, then Cross, then Triangle; confirm it remains independently loadable.",
-        $"Reset and verify Gnasty's Loot with {TestLevelWarpPatch.ActivationSequence}, then Left, then Right, then reset and verify Sunny Flight with the sequence followed by Cross, then Down; check flight controls/timer only.",
+        $"Collect exactly one loose gem, reset DuckStation, cold boot, and reach controllable gameplay. Press Select to open Inventory; enter {TestLevelWarpPatch.ActivationSequence}; then press Left, then Down to re-enter ID65. Confirm the collected gem is present again because the no-card reset discarded the session, and confirm the TOWN SQUARE identity still appears.",
+        $"Reset and reach controllable gameplay. Press Select to open Inventory; enter {TestLevelWarpPatch.ActivationSequence}; then press Cross, then Triangle. Verify retail Town Square and confirm it remains independently loadable.",
+        $"Reset and reach controllable gameplay. Press Select to open Inventory; enter {TestLevelWarpPatch.ActivationSequence}; then press Left, then Right. Verify Gnasty's Loot.",
+        $"Reset and reach controllable gameplay. Press Select to open Inventory; enter {TestLevelWarpPatch.ActivationSequence}; then press Cross, then Down. Verify Sunny Flight and check flight controls/timer only.",
         "Do not rescue dragons, touch the egg thief, attack or kill enemies, open or break chests, die, insert a memory card, save, select Exit Level or Quit Game, or use Return Home. Totals, alternate music, portal routing, save ownership, and content edits remain out of scope."
     ];
 

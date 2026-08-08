@@ -135,6 +135,26 @@ dotnet run \
   --configuration Release -- "$PWD"
 ```
 
+## Disposable test handoff
+
+Each active ID65 smoke export now publishes an executable
+`*-Reveal-in-Finder.command` beside its CUE. The helper resolves the CUE relative
+to itself and runs `/usr/bin/open -R` so Finder selects the exact CUE rather than
+only opening its containing directory. Generation verifies that the CUE points
+to its same-prefix BIN, applies mode `0755` before atomic publication, and leaves
+the game image unchanged.
+
+Each adjacent runtime checklist repeats the complete controller input for every
+level used by the focused test:
+
+- ID65: `Select; R1, R2, L1, L2, R1, L1, R2, L2; Left, Down`.
+- Retail Town Square (ID13): `Select; R1, R2, L1, L2, R1, L1, R2, L2; Cross, Triangle`.
+- Gnasty's Loot (ID64): `Select; R1, R2, L1, L2, R1, L1, R2, L2; Left, Right`.
+- Sunny Flight (ID15): `Select; R1, R2, L1, L2, R1, L1, R2, L2; Cross, Down`.
+
+These Finder and checklist files are research sidecars only. They do not enter
+normal Create BIN, editor workspace, release, or update-channel paths.
+
 The generated checklist keeps memory cards disabled and checks only the new
 Town Square display identity, a short ID65 load/reset pass, retail Town Square,
 Gnasty's Loot, and Sunny Flight. Authored totals, music-table extension, portal

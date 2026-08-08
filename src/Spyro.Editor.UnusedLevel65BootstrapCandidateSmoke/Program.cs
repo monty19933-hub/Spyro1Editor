@@ -82,6 +82,18 @@ Require(!Directory.EnumerateFiles(outputRoot, ".*.tmp").Any() &&
         !Directory.EnumerateFiles(outputRoot, ".*.bak").Any(),
     "The transactional publisher left a temporary or backup artifact behind.");
 
+IReadOnlyList<RuntimeCandidateLoadCode> loadCodes =
+    RuntimeCandidateTestHandoff.Id65ComparisonLoadCodes;
+RuntimeCandidateFinderReveal finderReveal =
+    await RuntimeCandidateTestHandoff.WriteFinderRevealHelperAsync(result.OutputCuePath);
+Require(finderReveal.CuePairingVerified &&
+        finderReveal.HelperIsExecutable &&
+        string.Equals(finderReveal.CuePath, Path.GetFullPath(result.OutputCuePath), StringComparison.Ordinal) &&
+        string.Equals(finderReveal.PairedBinPath, Path.GetFullPath(result.OutputImagePath), StringComparison.Ordinal) &&
+        File.Exists(finderReveal.HelperPath) &&
+        !Directory.EnumerateFiles(outputRoot, ".*.tmp").Any(),
+    "The candidate did not publish an exact, executable Finder reveal handoff for its paired CUE/BIN.");
+
 string staticProofPath = outputPrefix + "-static-proof.json";
 string checklistPath = outputPrefix + "-runtime-checklist.md";
 object proof = new
@@ -116,6 +128,21 @@ object proof = new
     result.RetailRootDirectoryPreserved,
     result.SourceImagePreserved,
     patches = result.Plan.Patches,
+    testHandoff = new
+    {
+        cuePath = finderReveal.CuePath,
+        pairedBinPath = finderReveal.PairedBinPath,
+        finderRevealHelperPath = finderReveal.HelperPath,
+        terminalCommand = finderReveal.TerminalCommand,
+        cuePairingVerified = finderReveal.CuePairingVerified,
+        helperIsExecutable = finderReveal.HelperIsExecutable,
+        loadCodes = loadCodes.Select(code => new
+        {
+            testName = code.TestName,
+            levelId = code.LevelId,
+            inputCode = code.InputCode
+        }).ToArray()
+    },
     limits = new[]
     {
         "This is a disposable ID-65 recognition/load discriminator, not an editor feature.",
@@ -142,6 +169,8 @@ checklist.AppendLine("- Status: static proof complete; runtime proof pending.");
 checklist.AppendLine();
 checklist.AppendLine("This candidate does **not** replace Stone Hill or any other retail level. The prior native-index-35 candidate reached a frozen black transition with an Address Error Load before rendering. The game classifies every level ID ending in 5 as a flight, so this follow-up keeps level ID 65, world ID 5, continuous index 35, the ID-65 Town Square dispatch, and reserved rows 79/80 while changing one private classifier instruction. Exactly the retail flights 5/15/25/35/45/55 remain classified as flights; ID65 is the only supported level ID affected and now takes normal-level initialization. Neither earlier diagnostic is included: SCUS +0x40F4 and +0x5E58 retain their exact retail instructions.");
 checklist.AppendLine();
+RuntimeCandidateTestHandoff.AppendCandidateDiscSection(checklist, finderReveal);
+RuntimeCandidateTestHandoff.AppendLoadCodeTable(checklist, loadCodes);
 checklist.AppendLine("## Test");
 checklist.AppendLine();
 for (int index = 0; index < result.Plan.RuntimeChecklist.Count; index++)
@@ -151,9 +180,14 @@ checklist.AppendLine("## Report back");
 checklist.AppendLine();
 checklist.AppendLine("Please report the last visible screen and whether loading, movement through several sectors, camera, initial music, opening/closing pause or Inventory, reset, and re-entry each passed. Keep memory cards disabled; do not attack, collect, interact, die, save, choose Exit Level/Quit Game, or use Return Home. If this loads, retail flight misclassification caused the prior crash; if it crashes at the same point, another ID65/index35 assumption remains. Finally report whether Sunny Flight still starts in normal flight mode.");
 await File.WriteAllTextAsync(checklistPath, checklist.ToString(), Encoding.UTF8);
+RuntimeCandidateTestHandoff.VerifyChecklistReadback(
+    await File.ReadAllTextAsync(checklistPath),
+    finderReveal,
+    loadCodes);
 
 Console.WriteLine("PASS: level ID 65 and continuous index 35 are preserved while the flight classifier excludes only post-retail IDs ending in 5.");
 Console.WriteLine($"CUE: {result.OutputCuePath}");
+Console.WriteLine($"Reveal in Finder: {finderReveal.HelperPath}");
 Console.WriteLine($"BIN: {result.OutputImagePath}");
 Console.WriteLine($"Checklist: {checklistPath}");
 Console.WriteLine($"Static proof: {staticProofPath}");

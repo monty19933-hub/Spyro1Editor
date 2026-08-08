@@ -101,6 +101,19 @@ Require(
     "The exact runtime-passed physical-clone base changed during repeated export.");
 RequireNoTransactionalDebris(outputRoot);
 
+IReadOnlyList<RuntimeCandidateLoadCode> loadCodes =
+    RuntimeCandidateTestHandoff.Id65ComparisonLoadCodes;
+RuntimeCandidateFinderReveal finderReveal =
+    await RuntimeCandidateTestHandoff.WriteFinderRevealHelperAsync(repeat.OutputCuePath);
+Require(
+    finderReveal.CuePairingVerified &&
+    finderReveal.HelperIsExecutable &&
+    string.Equals(finderReveal.CuePath, Path.GetFullPath(repeat.OutputCuePath), StringComparison.Ordinal) &&
+    string.Equals(finderReveal.PairedBinPath, Path.GetFullPath(repeat.OutputImagePath), StringComparison.Ordinal) &&
+    File.Exists(finderReveal.HelperPath),
+    "The display-name candidate did not publish an exact, executable Finder reveal handoff for its paired CUE/BIN.");
+RequireNoTransactionalDebris(outputRoot);
+
 string runtimeChecklistText = string.Join('\n', repeat.Plan.RuntimeChecklist);
 Require(
     Contains(runtimeChecklistText, "memory-card") &&
@@ -167,6 +180,21 @@ object proof = new
     repeat.AtomicRenameCompleted,
     logicalPatches = repeat.Plan.LogicalPatches,
     runtimeChecklist = repeat.Plan.RuntimeChecklist,
+    testHandoff = new
+    {
+        cuePath = finderReveal.CuePath,
+        pairedBinPath = finderReveal.PairedBinPath,
+        finderRevealHelperPath = finderReveal.HelperPath,
+        terminalCommand = finderReveal.TerminalCommand,
+        cuePairingVerified = finderReveal.CuePairingVerified,
+        helperIsExecutable = finderReveal.HelperIsExecutable,
+        loadCodes = loadCodes.Select(code => new
+        {
+            testName = code.TestName,
+            levelId = code.LevelId,
+            inputCode = code.InputCode
+        }).ToArray()
+    },
     requiresDuckStationRuntimeProof = repeat.Plan.RequiresDuckStationRuntimeProof,
     limits = new[]
     {
@@ -199,6 +227,8 @@ checklist.AppendLine(
     "to the existing Town Square string. The physically independent rows 79/80 payload, " +
     "retail levels, totals, music, portals, Return Home, saving, and content are unchanged.");
 checklist.AppendLine();
+RuntimeCandidateTestHandoff.AppendCandidateDiscSection(checklist, finderReveal);
+RuntimeCandidateTestHandoff.AppendLoadCodeTable(checklist, loadCodes);
 checklist.AppendLine("## Test");
 checklist.AppendLine();
 for (int index = 0; index < repeat.Plan.RuntimeChecklist.Count; index++)
@@ -219,6 +249,7 @@ using (JsonDocument document = JsonDocument.Parse(await File.ReadAllTextAsync(st
     JsonElement root = document.RootElement;
     JsonElement diff = root.GetProperty("diffBoundary");
     JsonElement logicalPatch = root.GetProperty("logicalPatches")[0];
+    JsonElement handoff = root.GetProperty("testHandoff");
     Require(
         root.GetProperty("status").GetString() == "static-proven-runtime-pending" &&
         !root.GetProperty("runtimeClaim").GetBoolean() &&
@@ -237,10 +268,21 @@ using (JsonDocument document = JsonDocument.Parse(await File.ReadAllTextAsync(st
         logicalPatch.GetProperty("logicalOffset").GetInt64() == 0x6007C &&
         logicalPatch.GetProperty("byteLength").GetInt32() == 4 &&
         NormalizeHex(logicalPatch.GetProperty("beforeHex").GetString() ?? "") == "64550780" &&
-        NormalizeHex(logicalPatch.GetProperty("afterHex").GetString() ?? "") == "E4010180",
+        NormalizeHex(logicalPatch.GetProperty("afterHex").GetString() ?? "") == "E4010180" &&
+        handoff.GetProperty("cuePath").GetString() == finderReveal.CuePath &&
+        handoff.GetProperty("pairedBinPath").GetString() == finderReveal.PairedBinPath &&
+        handoff.GetProperty("finderRevealHelperPath").GetString() == finderReveal.HelperPath &&
+        handoff.GetProperty("terminalCommand").GetString() == finderReveal.TerminalCommand &&
+        handoff.GetProperty("cuePairingVerified").GetBoolean() &&
+        handoff.GetProperty("helperIsExecutable").GetBoolean() &&
+        handoff.GetProperty("loadCodes").GetArrayLength() == 4,
         "The generated static proof is incomplete or drifted from the exact diff boundary.");
 }
 string writtenChecklist = await File.ReadAllTextAsync(checklistPath);
+RuntimeCandidateTestHandoff.VerifyChecklistReadback(
+    writtenChecklist,
+    finderReveal,
+    loadCodes);
 Require(
     writtenChecklist.Contains(ExpectedOutputImageSha256, StringComparison.Ordinal) &&
     Contains(writtenChecklist, "Town Square instead of A") &&
@@ -257,6 +299,7 @@ RequireNoTransactionalDebris(outputRoot);
 
 Console.WriteLine("PASS: ID65 display identity is an exact one-pointer static candidate; DuckStation proof is pending.");
 Console.WriteLine($"CUE: {repeat.OutputCuePath}");
+Console.WriteLine($"Reveal in Finder: {finderReveal.HelperPath}");
 Console.WriteLine($"BIN: {repeat.OutputImagePath}");
 Console.WriteLine($"Checklist: {checklistPath}");
 Console.WriteLine($"Static proof: {staticProofPath}");

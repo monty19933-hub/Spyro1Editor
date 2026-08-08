@@ -72,7 +72,7 @@ public static class UnusedLevel65BootstrapCandidateExporter
         "a77f32d715b614867958a491e25407b24fe0091509ad9eeee546bf3c70cc09e5";
     public const int LevelId = 65;
     public const string EntryInstructions =
-        "Open Inventory; enter R1, R2, L1, L2, R1, L1, R2, L2; then press Left, then Down.";
+        "From controllable gameplay, press Select to open Inventory; enter R1, R2, L1, L2, R1, L1, R2, L2; then press Left, then Down.";
 
     private const int SectorBytes = 0x800;
     private const int WadLba = 37;
@@ -654,13 +654,14 @@ public static class UnusedLevel65BootstrapCandidateExporter
             "Open and close pause/Inventory only; do not select Exit Level or Quit Game because those transitions are not proven for portal-to-exit 65.",
             "Do not attack or kill enemies, collect anything, rescue dragons, touch the egg thief, open or break chests, interact with gameplay objects, die/respawn, use a balloonist/save prompt, or save in this discriminator.",
             "Do not enter Town Square's Return Home portal in this probe: it records portal-to-exit 65, and Gnasty's World has no matching portal-65 landing object yet.",
-            "After the movement/streaming checks, reset DuckStation, boot again, and re-enter level 65 once through the Inventory sequence. Keep memory cards disabled and do not save from this static-only candidate.",
-            "After that focused re-entry, reset and confirm the untouched retail Town Square and Gnasty's Loot still load normally."
+            $"After the movement/streaming checks, reset DuckStation and boot again. From controllable gameplay, press Select to open Inventory; enter {TestLevelWarpPatch.ActivationSequence}; then press Left, then Down to re-enter level 65. Keep memory cards disabled and do not save from this static-only candidate.",
+            $"After that focused re-entry, reset and reach controllable gameplay. Press Select to open Inventory; enter {TestLevelWarpPatch.ActivationSequence}; then press Cross, then Triangle. Confirm untouched retail Town Square still loads normally.",
+            $"Reset and reach controllable gameplay. Press Select to open Inventory; enter {TestLevelWarpPatch.ActivationSequence}; then press Left, then Right. Confirm untouched Gnasty's Loot still loads normally."
         ];
         if (excludeLevel65FromFlightClassification)
         {
             checklist.Add(
-                "Interpretation: a successful ID65 load confirms flight misclassification caused the prior crash; another immediate crash means a separate ID65/index35 assumption remains. After the focused ID65 reset/re-entry test, cold boot once more and confirm Sunny Flight still enters flight mode normally; do not collect or finish it."
+                $"Interpretation: a successful ID65 load confirms flight misclassification caused the prior crash; another immediate crash means a separate ID65/index35 assumption remains. After the focused ID65 reset/re-entry test, cold boot once more and reach controllable gameplay. Press Select to open Inventory; enter {TestLevelWarpPatch.ActivationSequence}; then press Cross, then Down. Confirm Sunny Flight still enters flight mode normally; do not collect or finish it."
             );
         }
         return checklist;

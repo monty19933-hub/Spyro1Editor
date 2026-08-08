@@ -125,6 +125,18 @@ Require(repeat.OutputImageSha256 == result.OutputImageSha256 &&
         !Directory.EnumerateFiles(outputRoot, ".*.alias.cue").Any(),
     "A deterministic replacement export changed the SHA or left transactional debris.");
 
+IReadOnlyList<RuntimeCandidateLoadCode> loadCodes =
+    RuntimeCandidateTestHandoff.Id65ComparisonLoadCodes;
+RuntimeCandidateFinderReveal finderReveal =
+    await RuntimeCandidateTestHandoff.WriteFinderRevealHelperAsync(repeat.OutputCuePath);
+Require(finderReveal.CuePairingVerified &&
+        finderReveal.HelperIsExecutable &&
+        string.Equals(finderReveal.CuePath, Path.GetFullPath(repeat.OutputCuePath), StringComparison.Ordinal) &&
+        string.Equals(finderReveal.PairedBinPath, Path.GetFullPath(repeat.OutputImagePath), StringComparison.Ordinal) &&
+        File.Exists(finderReveal.HelperPath) &&
+        !Directory.EnumerateFiles(outputRoot, ".*.tmp").Any(),
+    "The physical candidate did not publish an exact, executable Finder reveal handoff for its paired CUE/BIN.");
+
 string staticProofPath = outputPrefix + "-static-proof.json";
 string checklistPath = outputPrefix + "-runtime-checklist.md";
 object proof = new
@@ -169,6 +181,21 @@ object proof = new
     physicalSectorCopies = result.Plan.PhysicalSectorCopies,
     xaBoundaryRewrites = result.Plan.XaBoundaryRewrites,
     logicalPatches = result.Plan.LogicalPatches,
+    testHandoff = new
+    {
+        cuePath = finderReveal.CuePath,
+        pairedBinPath = finderReveal.PairedBinPath,
+        finderRevealHelperPath = finderReveal.HelperPath,
+        terminalCommand = finderReveal.TerminalCommand,
+        cuePairingVerified = finderReveal.CuePairingVerified,
+        helperIsExecutable = finderReveal.HelperIsExecutable,
+        loadCodes = loadCodes.Select(code => new
+        {
+            testName = code.TestName,
+            levelId = code.LevelId,
+            inputCode = code.InputCode
+        }).ToArray()
+    },
     limits = new[]
     {
         "This is a disposable ID65 physical-storage discriminator, not an editor feature.",
@@ -192,6 +219,8 @@ checklist.AppendLine("- Status: static proof complete; runtime proof pending.");
 checklist.AppendLine();
 checklist.AppendLine("This candidate keeps the runtime-proven ID65 dispatch and flight-classifier exception, but rows 79/80 now point to a physically separate copy of Town Square's overlay/data. The patched SCUS has also moved to its own guarded extent. It still is not a new authored level: placeholder name, totals, portals, music ownership, saving, and Return Home remain out of scope.");
 checklist.AppendLine();
+RuntimeCandidateTestHandoff.AppendCandidateDiscSection(checklist, finderReveal);
+RuntimeCandidateTestHandoff.AppendLoadCodeTable(checklist, loadCodes);
 checklist.AppendLine("## Test");
 checklist.AppendLine();
 for (int index = 0; index < result.Plan.RuntimeChecklist.Count; index++)
@@ -201,9 +230,14 @@ checklist.AppendLine("## Report back");
 checklist.AppendLine();
 checklist.AppendLine("Please report whether ID65 loaded, movement across several sectors, camera, music, enemies, pause/Inventory, one-gem collection, reset/re-entry, retail Town Square, Gnasty's Loot, and Sunny Flight each passed. Keep memory cards disabled and follow the interaction limits above.");
 await File.WriteAllTextAsync(checklistPath, checklist.ToString(), Encoding.UTF8);
+RuntimeCandidateTestHandoff.VerifyChecklistReadback(
+    await File.ReadAllTextAsync(checklistPath),
+    finderReveal,
+    loadCodes);
 
 Console.WriteLine("PASS: ID65 Town Square payload is physically independent and statically verified; DuckStation runtime proof is pending.");
 Console.WriteLine($"CUE: {result.OutputCuePath}");
+Console.WriteLine($"Reveal in Finder: {finderReveal.HelperPath}");
 Console.WriteLine($"BIN: {result.OutputImagePath}");
 Console.WriteLine($"Checklist: {checklistPath}");
 Console.WriteLine($"Static proof: {staticProofPath}");
