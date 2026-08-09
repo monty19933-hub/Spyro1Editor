@@ -499,3 +499,64 @@ component, append one new HP triangle with independent vertices, reuse only a
 genuinely zero-area-in-3D collision record, rebuild the collision index in
 existing capacity, and preserve every retail row. That structural candidate is
 not authorized until this simpler collision control passes at runtime.
+
+## Tenth runtime observation: small solid-triangle discriminator rejected
+
+The user reported, “Hmm im not seeing it in ID65.” This rejects the exact v3
+candidate-and-handoff as a useful visibility discriminator. It is not a
+collision failure: the slope was not recognizably located first, so none of the
+walking, charging, jumping, landing, or old-flat-plane checks can be inferred.
+
+Read-only corroboration rules out a stale final artifact. DuckStation held the
+exact v3 BIN open at SHA-256
+`976a1910264c48fbc7cec8a9a1291f849bcad898fc511bae5d986a7af1c66214`,
+and recent screen history showed the exact v3 CUE selected before gameplay.
+Live level-ID readback was 65. The exact authored vertex word `0x5C858460`,
+face-64 record, and collision-triangle-13853 bytes were all present in live RAM.
+That proves the candidate bytes loaded; it does not prove that the small face
+was visibly framed, submitted to the GPU, or contacted.
+
+A later exact overlap audit proved that the target was structurally invalid as
+both a visibility and collision discriminator. Sector 213 HP face 64 lies
+beneath overlapping sector 4 HP face 6 at Z 560. The v3 edit raised one target
+tip from Z 512 to Z 576, so 15/16 of its XY area remained at or below the
+retail face. Only the final 1/16 could protrude, by at most 16 units. The
+promised recognizable standalone grass slope therefore did not exist.
+
+The corresponding collision choice was invalid for the same reason. Retail
+collision triangles 1189 and 1190 occupy the overlapping Z-560 surface and
+shadow edited triangle 13853 in the intended contact area. The exact authored
+triangle-13853 bytes were loaded, but they did not provide an isolated surface
+for the walking, charging, jumping, or landing checks. This explains the
+negative discriminator without indicating a renderer, physical row-80 load,
+or general collision-decoding failure.
+
+The handoff also was not practically decisive. Its target was one roughly
+4,893.5-square-unit triangle about 296 XY units from spawn. “Turn approximately
+77 degrees right” depended on an unstated initial heading, normal gameplay did
+not expose the listed world coordinates, and the two-green-gem landmark still
+required searching for a same-material grass triangle. The exact candidate is
+retired and must not be loaded or retested; the user should not keep hunting
+for it.
+
+The exact run also had DuckStation's Moon Jump cheat enabled and a per-game
+memory-card configuration active. Those conditions do not invalidate the
+no-visibility report or exact runtime-byte readback, but they prevent clean
+movement, collision, reset, or persistence conclusions.
+
+The evidence record is
+`docs/runtime-evidence/unused-level-65-town-square-authored-terrain-solid-existing-triangle-control-not-observed-2026-08-08.json`.
+Its status is `runtime-rejected-visibility-discriminator-not-observed`, and
+`promotionAuthorized` remains false. The historical BIN/CUE remains only for
+rejected-evidence audit. Its Finder helper, checklist, and static-proof handoff
+are poison-pilled in the same manner as the rejected v1 artifact.
+
+The next isolated control must again start from the focused-runtime-passed
+display-name base. Candidate selection must first exclude every footprint with
+a higher visual face or higher collision triangle. Only then should it create a
+broad, unmistakable, vertically isolated existing-surface ramp directly in the
+spawn-forward view, remain within the collision format's unsigned 255-unit
+Z-delta limit, patch every affected shared HP face and exact matching collision
+triangle, and preserve all counts and component sizes. A true
+component-growing Add Terrain candidate remains gated until that visible
+surface and its traversal both pass.

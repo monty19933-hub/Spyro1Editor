@@ -258,6 +258,7 @@ public static class UnusedLevel65AuthoredTerrainSolidTriangleControlCandidateExp
         UnusedLevel65AuthoredTerrainSolidTriangleControlCandidateRequest request,
         CancellationToken cancellationToken = default)
     {
+        RejectRetiredCandidate();
         Prepared prepared = await PrepareAsync(request, cancellationToken);
         string baseImage = Path.GetFullPath(request.BaseImagePath);
         string baseCue = Path.GetFullPath(request.BaseCuePath);
@@ -443,6 +444,12 @@ public static class UnusedLevel65AuthoredTerrainSolidTriangleControlCandidateExp
                 TryDelete(backupCue);
         }
     }
+
+    private static void RejectRetiredCandidate() =>
+        throw new InvalidOperationException(
+            "The ID65 v3 solid-triangle candidate is retired and must not publish another BIN/CUE. " +
+            "Sector 213 face 64 is shadowed by sector 4 face 6 and collision triangles 1189/1190; " +
+            "use a separately designed replacement control.");
 
     private static async Task<Prepared> PrepareAsync(
         UnusedLevel65AuthoredTerrainSolidTriangleControlCandidateRequest request,
