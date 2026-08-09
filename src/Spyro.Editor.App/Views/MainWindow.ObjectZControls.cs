@@ -98,6 +98,11 @@ public sealed partial class MainWindow
     {
         if (_syncingSelectedMobyZControls || _selectedMoby == null || _selectedMoby.IsRemoved)
             return;
+        if (TryBlockId65ObjectMutation("Selected-object Z movement"))
+        {
+            RefreshSelectedMobyZControls(_selectedMoby);
+            return;
+        }
 
         Moby moby = _selectedMoby;
         float targetZ = (float)_selectedMobyZSlider.Value;
@@ -120,6 +125,11 @@ public sealed partial class MainWindow
     {
         if (_syncingSelectedMobyZControls || _selectedMoby == null || _selectedMoby.IsRemoved)
             return;
+        if (TryBlockId65ObjectMutation("Selected-object terrain Z snap"))
+        {
+            RefreshSelectedMobyZControls(_selectedMoby);
+            return;
+        }
 
         Moby moby = _selectedMoby;
         if (!ShouldSnapMobyToTerrain(moby))
@@ -152,6 +162,8 @@ public sealed partial class MainWindow
     private bool SnapSelectedMobyToCurrentTerrain(Moby moby, out int linkedCount)
     {
         linkedCount = 1;
+        if (TryBlockId65ObjectMutation("Selected-object terrain Z snap"))
+            return false;
         if (!TryFindTerrainZAt(moby.Position.X, moby.Position.Y, moby.Position.Z, out float terrainZ))
             return false;
 
@@ -170,7 +182,8 @@ public sealed partial class MainWindow
         try
         {
             bool hasSelection = moby != null && !moby.IsRemoved;
-            _selectedMobyZSlider.IsEnabled = hasSelection;
+            bool canMutateSelection = hasSelection && !IsId65BlankLabObjectInspectionOnly();
+            _selectedMobyZSlider.IsEnabled = canMutateSelection;
             if (!hasSelection)
             {
                 _selectedMobyZRangeKey = "";
@@ -206,7 +219,7 @@ public sealed partial class MainWindow
             _selectedMobyZValueText.Text = selected.Position.Z.ToString("0.0");
 
             bool supportsSnap = ShouldSnapMobyToTerrain(selected);
-            _selectedMobySnapZBox.IsEnabled = supportsSnap;
+            _selectedMobySnapZBox.IsEnabled = canMutateSelection && supportsSnap;
             _selectedMobySnapZBox.IsChecked = supportsSnap && ShouldAutoSnapMobyToTerrain(selected);
             if (supportsSnap && TryFindTerrainZAt(selected.Position.X, selected.Position.Y, selected.Position.Z, out float terrainZ))
             {

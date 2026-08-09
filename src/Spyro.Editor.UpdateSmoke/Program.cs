@@ -55,7 +55,7 @@ using (MemoryStream identityInput = new(validAppDll, writable: false))
     Assert(identity.HasExplicitPublicVersion, "The release app fixture is missing full public-version metadata.");
     Assert(identity.HasExplicitReleaseManifestSchema, "The release app fixture is missing release-manifest schema metadata.");
     Assert(identity.ReleaseManifestSchema == 1 && !identity.PublicVersion.IsIncremental,
-        "The V4 bridge fixture must retain whole-number schema-1 identity for legacy-client compatibility.");
+        "The V5 bridge fixture must retain whole-number schema-1 identity for legacy-client compatibility.");
     Assert(EditorSemanticVersion.TryParse(identity.InternalVersion, out _), "Fixture app DLL informational version is not a semantic version.");
     candidateBeta = identity.PublicBetaVersion;
     candidateVersion = identity.PublicVersion;
@@ -75,7 +75,7 @@ using (MemoryStream identityInput = new(validIncrementalAppDll, writable: false)
         identity.HasExplicitPublicVersion &&
         identity.ReleaseManifestSchema == 2 &&
         identity.HasExplicitReleaseManifestSchema,
-        "Incremental fixture app DLL does not carry canonical V4.1/schema-2 identity.");
+        "Incremental fixture app DLL does not carry canonical V5.1/schema-2 identity.");
     Assert(EditorSemanticVersion.TryParse(identity.InternalVersion, out _),
         "Incremental fixture app DLL informational version is not semantic.");
     incrementalInternalVersion = identity.InternalVersion;

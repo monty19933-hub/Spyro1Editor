@@ -957,6 +957,12 @@ public sealed partial class MainWindow
         // workflow. It never enters the normal Create BIN dispatcher.
         panel.Children.Add(BuildNativeLevelReplacementDisclosure());
 
+        // The evidence-bound ID65 lab is intentionally narrower than the full
+        // Research workspace and therefore remains reachable from the public V5
+        // shell. Its own disclosure owns the locked-base and disposable-output
+        // guards; it never enters normal Create BIN.
+        panel.Children.Add(BuildId65BlankLevelLabDisclosure());
+
         _levelDetails.TextWrapping = TextWrapping.Wrap;
         _levelDetails.Foreground = new SolidColorBrush(ModernMutedInk);
         _levelDetails.FontSize = 12;

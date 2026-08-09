@@ -176,7 +176,7 @@ public sealed partial class MainWindow
     {
         if (_objectNativeMovementButton == null)
             return;
-        if (_releaseMode)
+        if (_releaseMode || IsId65BlankLabObjectInspectionOnly())
         {
             _objectNativeMovementButton.IsVisible = false;
             _objectNativeMovementButton.IsEnabled = false;
@@ -196,6 +196,9 @@ public sealed partial class MainWindow
 
     private async Task EditSelectedNativeMovementAsync()
     {
+        if (TryBlockId65ObjectMutation("Native movement editing"))
+            return;
+
         NativeMobyPath? path = SelectedNativeMobyPath();
         if (path != null)
         {
@@ -426,6 +429,9 @@ public sealed partial class MainWindow
 
     private void MoveNativePathNodeFromViewport(ViewportNativePathNodeMoveRequestedEventArgs e)
     {
+        if (TryBlockId65ObjectMutation("Native path movement"))
+            return;
+
         Vector3f current = e.Node.Position;
         float x = current.X + e.Dx;
         float y = current.Y + e.Dy;
@@ -441,6 +447,9 @@ public sealed partial class MainWindow
 
     private void TranslateOwnedNativeMovement(Moby owner, Vector3f appliedDelta)
     {
+        if (TryBlockId65ObjectMutation("Native movement translation"))
+            return;
+
         NativeMobyPath? path = _currentNativeMobyPaths.SingleOrDefault(candidate => candidate.OwnerTrueIndex == owner.TrueIndex);
         if (path != null && _moveSelectedThiefPathWithOwner)
         {
@@ -532,6 +541,9 @@ public sealed partial class MainWindow
 
     private void MoveDragonRunToFromViewport(ViewportDragonRunToMoveRequestedEventArgs e)
     {
+        if (TryBlockId65ObjectMutation("Dragon run-to movement"))
+            return;
+
         NativeDragonRunToEdit? edit = _currentDragonRunToEdits.SingleOrDefault(candidate =>
             candidate.OwnerTrueIndex == e.Target.OwnerTrueIndex);
         if (edit == null)
@@ -558,6 +570,9 @@ public sealed partial class MainWindow
 
     private void TranslateOwnedDragonRunTo(Moby owner, Vector3f appliedDelta)
     {
+        if (TryBlockId65ObjectMutation("Dragon run-to translation"))
+            return;
+
         NativeDragonRunToEdit? edit = _currentDragonRunToEdits.SingleOrDefault(candidate =>
             candidate.OwnerTrueIndex == owner.TrueIndex);
         if (edit == null)

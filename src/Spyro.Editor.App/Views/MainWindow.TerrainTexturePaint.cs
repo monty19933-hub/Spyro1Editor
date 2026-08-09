@@ -3221,6 +3221,14 @@ public sealed partial class MainWindow
         bool reuseLoadedPalette,
         TerrainTexturePaintBrush? preferredBrush)
     {
+        if (TryBlockId65UnsupportedTerrainMutation(
+                _selectedTerrain,
+                "Terrain texture palette",
+                textureOrSurface: true))
+        {
+            return;
+        }
+
         if (_currentLevel == null || _currentGeometry == null)
         {
             _statusText.Text = "Choose a level before choosing a terrain texture.";
@@ -3473,6 +3481,14 @@ public sealed partial class MainWindow
 
     private async Task ApplyTerrainTexturePaintBrushAsync(int terrainIndex, TerrainPolygon terrain)
     {
+        if (TryBlockId65UnsupportedTerrainMutation(
+                terrain,
+                "Terrain texture paint",
+                textureOrSurface: true))
+        {
+            return;
+        }
+
         TerrainTexturePaintBrush? brush = _activeTerrainTexturePaintBrush;
         if (brush == null || !_viewport.TerrainTexturePaintMode)
             return;

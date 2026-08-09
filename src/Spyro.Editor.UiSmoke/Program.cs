@@ -138,6 +138,11 @@ try
         RunWorkspaceShellOnly();
         return 0;
     }
+    if (args.Contains("--id65-blank-lab-ui-only", StringComparer.OrdinalIgnoreCase))
+    {
+        RunId65BlankLabUiOnly();
+        return 0;
+    }
     if (args.Contains("--update-only", StringComparer.OrdinalIgnoreCase))
     {
         RunUpdateOnly();
@@ -365,6 +370,114 @@ void RunWorkspaceShellOnly()
     }
 
     RunResearchWorkspaceTabMemory();
+}
+
+void RunId65BlankLabUiOnly()
+{
+    MainWindow window = new()
+    {
+        Width = 1320,
+        Height = 860,
+        WindowStartupLocation = WindowStartupLocation.Manual,
+        Position = new PixelPoint(0, 0)
+    };
+    window.Show();
+    try
+    {
+        WaitForLevelData(window);
+        ToggleButton levelBuilding = FindNamedUnique<ToggleButton>(window, "LevelBuildingEditorWorkspaceButton");
+        TabControl toolTabs = FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs");
+        levelBuilding.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, levelBuilding));
+        FlushUi();
+        Expander disclosure = FindNamedUnique<Expander>(window, "Id65BlankLevelLabDisclosure");
+        if (!disclosure.IsVisible)
+            throw new InvalidOperationException("The narrow ID65 Blank-Level Lab disclosure is hidden in public release mode.");
+
+        MainWindow.Id65BlankLabUiSnapshot initial =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        if (initial.DisclosureTitle != "ID65 Blank-Level Lab" ||
+            initial.RetailCatalogCount != 35 ||
+            initial.HasId65CatalogLevel ||
+            !initial.BuildEnabled ||
+            initial.LoadEnabled ||
+            initial.SaveEnabled ||
+            initial.CreateCueEnabled ||
+            initial.RevealEnabled ||
+            initial.RevealButtonText != "Reveal Test CUE" ||
+            !initial.RepairsInvalidWorkspace ||
+            initial.DisposableExporterRoute != nameof(UnusedLevel65BlankLevelLabTerrainTestExporter) ||
+            !initial.StatusText.Contains("Setup required", StringComparison.Ordinal) ||
+            !initial.StatusText.Contains("ID65 stays out of the level picker", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Existing HP Z", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("True Add, LP authoring, and XY movement: unavailable", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Resident bytes: bound to the locked payload", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Resident records: inspection only", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"The clean public ID65 Lab state is not exact/fail-closed: {initial}");
+        }
+
+        AssertWorkspaceTabHeaders(toolTabs, ["Terrain", "Level", "Environment"], "public Level Building Editor");
+
+        UnusedLevel65BlankLevelLabWorkspacePaths paths =
+            UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(workspace);
+        UnusedLevel65BlankLevelLabManifest exactManifest =
+            UnusedLevel65BlankLevelLabProfileRegistry.CreateManifest(paths);
+        window.AdmitId65BlankLabManifestForTesting(exactManifest);
+        FlushUi();
+        MainWindow.Id65BlankLabUiSnapshot admitted =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        if (admitted.RetailCatalogCount != 35 ||
+            !admitted.HasId65CatalogLevel ||
+            !admitted.BuildEnabled ||
+            !admitted.LoadEnabled ||
+            admitted.SaveEnabled ||
+            admitted.CreateCueEnabled ||
+            admitted.RevealEnabled ||
+            admitted.RevealButtonText != "Reveal Test CUE" ||
+            !admitted.RepairsInvalidWorkspace ||
+            admitted.DisposableExporterRoute != nameof(UnusedLevel65BlankLevelLabTerrainTestExporter) ||
+            !admitted.StatusText.Contains("admitted only in memory", StringComparison.Ordinal) ||
+            !admitted.AuthoredLayerText.Contains("unique key 'unusedlevel65blank'", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"The exact-manifest public ID65 Lab state did not become 35+1 while remaining fail-closed: {admitted}");
+        }
+
+        string[] testKeys = Enumerable.Range(0, 128)
+            .Select(_ => MainWindow.CreateId65BlankLabDisposableTestKeyForTesting())
+            .ToArray();
+        if (testKeys.Distinct(StringComparer.Ordinal).Count() != testKeys.Length ||
+            testKeys.Any(key =>
+                key.Length is < 1 or > 64 ||
+                !key.StartsWith("id65-hp-z-", StringComparison.Ordinal) ||
+                key.Any(character =>
+                    character != '-' &&
+                    !char.IsAsciiDigit(character) &&
+                    !(character is >= 'a' and <= 'z'))))
+        {
+            throw new InvalidOperationException(
+                "The public ID65 disposable writer did not generate 128 unique Core-compatible collision-resistant keys.");
+        }
+
+        Console.WriteLine("ID65 UI smoke: starting mutation-boundary probe.");
+        Task<string> mutationTask = window.AssertId65BlankLabMutationGuardsForTestingAsync();
+        WaitForUiTask(mutationTask, "checking ID65 mutation boundaries");
+        string mutationGuards = mutationTask.GetAwaiter().GetResult();
+        Console.WriteLine("ID65 UI smoke: starting guarded-transition probe.");
+        Task<string> transitionTask = window.AssertId65BlankLabGuardedTransitionForTestingAsync();
+        WaitForUiTask(transitionTask, "checking the guarded ID65 level transition");
+        string transitionGuards = transitionTask.GetAwaiter().GetResult();
+
+        Console.WriteLine(
+            "ID65 Blank-Level Lab public UI smoke passed: clean 35-level startup, visible narrow disclosure, neutral reveal label, explicit repair contract, Core atomic-export route with 128 unique keys, hidden broad Research tab, and exact-manifest 35+1 in-memory admission passed; " +
+            $"mutation guards: {mutationGuards}; transition guards: {transitionGuards}.");
+    }
+    finally
+    {
+        window.Close();
+        FlushUi();
+    }
 }
 
 void RunResearchWorkspaceTabMemory()

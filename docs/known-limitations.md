@@ -1,4 +1,17 @@
-# Spyro Editor Beta V4 Known Limitations
+# Spyro Editor Beta V5 Known Limitations
+
+## ID65 Blank-Level Lab
+
+- The V5 Lab is a versioned, evidence-bound Town Square-derived construction
+  substrate in physically independent ID65 storage. It is not a byte-empty map.
+- The public Lab boundary is existing HP terrain Z edits with an atomic complete
+  native collision fan, cyclic winding preservation, and unchanged collision-cell
+  membership. Its test CUE remains separate from normal `Create BIN`.
+- True HP/LP face addition, component growth, LP or XY editing, arbitrary Mobys,
+  private/custom texture allocation, portals, totals, music ownership, Return
+  Home, and save ownership remain separate research gates.
+- The 35-row retail catalog remains unchanged. ID65 is admitted only in memory
+  after the exact clean-USA locked base and manifest validate.
 
 This beta is useful, but it is not a finished Spyro modding tool yet. Treat it as a testing build for editor workflow, object placement, terrain inspection, and moby identity mapping.
 
@@ -83,14 +96,14 @@ they can join the same offset-rebase map. Lofty Castle, Jacques, and Gnorc Cove
 remain selected-section blocked because their native page layouts still fail
 the exact alias-preserving packing proof. Shared-record replacement remains
 available there. This guarded path still needs DuckStation gameplay proof
-before it can be enabled broadly by the normal Beta V4 launcher. There are three
+before it can be enabled broadly by the normal Beta V5 launcher. There are three
 exact-source exceptions. The clean-USA Artisans fixed-tail writer first proved
 one dragon-eye row, and the later T68-T71 build proved four active private rows
 in DuckStation without a crash. The clean-USA Gnasty's World sector writer then
 proved 50 assigned faces and 50 appended rows at `+0x2800` in DuckStation without
 a crash. The corrected clean-USA Wizard Peak candidate assigned four
 artifact-only animation-source diagnostic rows plus 46 appended rows to fifty
-visible faces at `+0x2000` and also worked in DuckStation. Normal V4 may
+visible faces at `+0x2000` and also worked in DuckStation. Normal V5 may
 therefore use up to four appended records in Artisans, up to 50 in Gnasty's
 World, or up to 46 appended records in Wizard Peak when the exact retail
 fingerprint, writer, and normal structural policy match. The normal editor
@@ -168,7 +181,7 @@ destinations or endpoints without a terrain hit require Build Safety review.
 
 ### Special Chest Profiles
 
-Beta V4 includes the checked profile registry, atomic editor grouping, and
+Beta V5 includes the checked profile registry, atomic editor grouping, and
 Build Safety needed to develop special chests level by level. It does not mean
 every chest family is now runtime-proven in every level. Normal Add/Create BIN
 continues to expose only the proven Artisans gold Key + Locked Chest import.

@@ -13,18 +13,18 @@
       legacy SpyroEditorBetaRelease assembly metadata below.
 
       PublicReleaseVersion is the canonical release identity. Whole-number
-      compatibility bridges such as V4 use schema 1 so installed legacy
+      compatibility bridges such as V5 use schema 1 so installed legacy
       clients can discover them. Incremental releases use schema 2 and dotted
-      values such as "4.1" while retaining the bridge's legacy major.
+      values such as "5.1" while retaining the bridge's legacy major.
     -->
-    <BetaReleaseNumber>4</BetaReleaseNumber>
-    <PublicReleaseVersion>4</PublicReleaseVersion>
+    <BetaReleaseNumber>5</BetaReleaseNumber>
+    <PublicReleaseVersion>5</PublicReleaseVersion>
     <ReleaseManifestSchemaVersion>1</ReleaseManifestSchemaVersion>
-    <PreviousPublicReleaseVersion>3</PreviousPublicReleaseVersion>
-    <Version>0.1.0-beta.41</Version>
+    <PreviousPublicReleaseVersion>4</PreviousPublicReleaseVersion>
+    <Version>0.1.0-beta.42</Version>
     <AssemblyVersion>0.1.0.0</AssemblyVersion>
     <FileVersion>0.1.0.0</FileVersion>
-    <InformationalVersion>0.1.0-beta.41</InformationalVersion>
+    <InformationalVersion>0.1.0-beta.42</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Product>Spyro Editor Beta V$(PublicReleaseVersion)</Product>
     <Description>Spyro Editor Beta V$(PublicReleaseVersion)</Description>

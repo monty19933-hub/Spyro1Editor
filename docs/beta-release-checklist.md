@@ -1,7 +1,7 @@
 # Spyro Editor Public Beta Release Checklist
 
 Use this checklist only when publishing a deliberate public update such as
-**Spyro Editor Beta V4** or **Spyro Editor Beta V4.1**. Ordinary fixes and internal
+**Spyro Editor Beta V5** or **Spyro Editor Beta V5.1**. Ordinary fixes and internal
 `0.1.0-beta.N` builds are not public releases and must not create update prompts.
 
 ## V2-to-V3 compatibility bridge
@@ -22,28 +22,28 @@ Their next update must therefore be the exact bridge below:
 This exact V3 release is what makes the update notification appear in V2. A
 release named V2.1 would be ignored by those already-installed clients.
 
-## Incremental releases after the current V4 bridge
+## Incremental releases after the current V5 bridge
 
 Future incremental releases use a dotted canonical public version and schema 2.
-For example, V4.1 uses:
+For example, V5.1 uses:
 
-- `BetaReleaseNumber`: `4` (retained legacy major integer)
-- `PublicReleaseVersion`: `4.1`
+- `BetaReleaseNumber`: `5` (retained legacy major integer)
+- `PublicReleaseVersion`: `5.1`
 - `ReleaseManifestSchemaVersion`: `2`
-- `PreviousPublicReleaseVersion`: `4`
-- Git tag/title/assets: `beta-v4.1`, `Spyro Editor Beta V4.1`, and matching
-  `SpyroEditor-Beta-V4.1-<platform>.zip` files
-- Manifest: schema 2, retaining `publicBeta: 4` and adding
-  `publicVersion: "4.1"`
+- `PreviousPublicReleaseVersion`: `5`
+- Git tag/title/assets: `beta-v5.1`, `Spyro Editor Beta V5.1`, and matching
+  `SpyroEditor-Beta-V5.1-<platform>.zip` files
+- Manifest: schema 2, retaining `publicBeta: 5` and adding
+  `publicVersion: "5.1"`
 
-Users still on V2 first install a whole-number bridge; V4 can then discover V4.1.
+Users still on V2 first install a whole-number bridge; V5 can then discover V5.1.
 Never repoint an old tag or silently replace an already-published asset.
 
 The frozen Beta V2 updater reads only the newest 30 GitHub prereleases and
 ignores dotted identities. Keep at least one whole-number schema-1 bridge among
-those newest 30 releases. V4 is the current bridge. Before it would fall out of
-that window, publish the next deliberate whole-number bridge (for example V5
-with `BetaReleaseNumber: 5`, `PublicReleaseVersion: 5`, and schema 1). Dotted
+those newest 30 releases. V5 is the current bridge. Before it would fall out of
+that window, publish the next deliberate whole-number bridge (for example V6
+with `BetaReleaseNumber: 6`, `PublicReleaseVersion: 6`, and schema 1). Dotted
 releases between bridges continue to use schema 2.
 
 Every release assembly carries all three metadata fields:
@@ -52,17 +52,17 @@ Every release assembly carries all three metadata fields:
 - `SpyroEditorPublicReleaseVersion`: the canonical integer or dotted version
 - `SpyroEditorReleaseManifestSchema`: the package manifest schema (`1` or `2`)
 
-For the current V4 bridge those values are `4`, `4`, and `1`. For V4.1 they are
-`4`, `4.1`, and `2`. The historical V3/V3.1 pair followed the same rule and
-remains immutable.
+For the current V5 bridge those values are `5`, `5`, and `1`. For V5.1 they are
+`5`, `5.1`, and `2`. The historical V3/V3.1 and V4 releases followed the same
+rule and remain immutable.
 
 ## Choose the public release
 
 1. Set `PublicReleaseVersion`, `ReleaseManifestSchemaVersion`, and
    `PreviousPublicReleaseVersion` in
    `src/Spyro.Editor.App/Spyro.Editor.App.csproj` for the intended release.
-2. Keep `BetaReleaseNumber` as the positive-integer legacy major. V4 uses `4`;
-   V4.1 retains `4` while its canonical version becomes `4.1`.
+2. Keep `BetaReleaseNumber` as the positive-integer legacy major. V5 uses `5`;
+   V5.1 retains `5` while its canonical version becomes `5.1`.
 3. Keep `Version` as the independent internal build identity. It may advance for
    many fixes without changing `BetaReleaseNumber`.
 4. Replace `CHANGELOG.md` with only the delta from the immediately previous
@@ -201,8 +201,8 @@ Before publishing, confirm all of the following:
 Publishing—not pushing commits—is what makes the in-app notification appear.
 Beta V2 finds a whole-number compatibility bridge and checks no more than once
 per day in the background; users can force an immediate check with `More` >
-`Check for Updates`. After installing V4, the canonical-version updater can
-discover later dotted releases such as V4.1.
+`Check for Updates`. After installing V5, the canonical-version updater can
+discover later dotted releases such as V5.1.
 
 ## Manual packaged-app check
 

@@ -886,6 +886,49 @@ public static class TerrainPatchExporter
                         }
                         DiscImage.WriteFileBytes(stream, layout, WadLba, wadOffset, after);
                     }
+
+                    (long Offset, int ByteLength)[] rawIntegrityRanges = plan.Patches
+                        .Select(patch =>
+                        {
+                            long wadOffset = ParseRequiredLong(
+                                patch.WadRelativeOffset,
+                                "patch.wadRelativeOffset");
+                            int encodedByteLength = HexToBytes(patch.AfterHexPreview).Length;
+                            if (patch.ByteLength <= 0 || encodedByteLength != patch.ByteLength)
+                            {
+                                throw new InvalidDataException(
+                                    $"Terrain patch {patch.Kind} at 0x{wadOffset:X} has an inconsistent byte length.");
+                            }
+                            return (Offset: wadOffset, ByteLength: patch.ByteLength);
+                        })
+                        .ToArray();
+                    if (layout.SectorSize == 2352 && layout.UserOffset == 24)
+                    {
+                        int rebuiltSectorCount = RawMode2Form1SectorIntegrity.RebuildFileRanges(
+                            stream,
+                            layout,
+                            WadLba,
+                            rawIntegrityRanges);
+                        (int Lba, int SectorCount)[] changedSectors = rawIntegrityRanges
+                            .SelectMany(range => Enumerable.Range(
+                                checked(WadLba + (int)(range.Offset / 2048)),
+                                checked((int)((range.Offset + range.ByteLength - 1) / 2048 -
+                                    range.Offset / 2048 + 1))))
+                            .Distinct()
+                            .OrderBy(lba => lba)
+                            .Select(lba => (Lba: lba, SectorCount: 1))
+                            .ToArray();
+                        int verifiedSectorCount = RawMode2Form1SectorIntegrity.VerifyAbsoluteSectors(
+                            stream,
+                            layout,
+                            changedSectors);
+                        if (rebuiltSectorCount != changedSectors.Length ||
+                            verifiedSectorCount != changedSectors.Length)
+                        {
+                            throw new InvalidDataException(
+                                "Terrain export did not rebuild and verify every modified MODE2 Form 1 raw sector.");
+                        }
+                    }
                     await stream.FlushAsync(cancellationToken);
                     foreach (TerrainPatch patch in plan.Patches)
                     {
