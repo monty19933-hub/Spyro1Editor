@@ -449,3 +449,53 @@ matching source-derived native collision edits while leaving face counts and
 component sizes unchanged. Only after the raised surface is visibly and
 physically traversable should structural work proceed to component-aware
 environment growth for genuinely new vertices, faces, and collision.
+
+## Ninth static candidate: solid existing-triangle control
+
+The collision control starts again from the exact display-name base at SHA-256
+`9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8`.
+It does not layer changes on the v2 renderer-control BIN. The enormous v2
+ridge is intentionally absent because its 512-unit rise exceeds the native
+collision format's unsigned 255-unit Z-delta limit and its two edited vertices
+are shared by six visual faces.
+
+Instead, the control uses the small green-grass triangle `213:64:hp`, about 77
+degrees right of the ID65 entry landing. HP vertex 95 is referenced by that one
+face only. It moves from `(8167, 6325, 512)` to `(8167, 6325, 576)` at WAD
+`0x6A3EC40`:
+
+- visual word: `20 84 85 5C` → `60 84 85 5C`;
+- exact native collision triangle 13853 at `0x6A87B20`:
+  `BB 1F 8B DE 0A D9 EA D1 00 02 00 00` →
+  `BB 1F 8B DE 0A D9 EA D1 00 02 40 00`.
+
+The original and authored collision triangles occupy the same two lookup
+cells, `X31/Y24/Z2` and `X31/Y25/Z2`, through the same lookup words at WAD
+`0x6A51682` and `0x6A5191E`. The collision header, tree, blocks, assignment
+table, surface flags, all terrain and collision counts, sector and component
+sizes, LP terrain, retail Town Square, row-79 overlay, and executable remain
+unchanged. Exactly two logical WAD bytes differ. MODE2 Form1 rebuilding changes
+74 physical bytes across only raw LBAs 54434 and 54580, with one payload byte
+and valid EDC/ECC changes in each sector.
+
+The exact output BIN SHA-256 is
+`976a1910264c48fbc7cec8a9a1291f849bcad898fc511bae5d986a7af1c66214`;
+the ID65 data payload SHA-256 is
+`a824efbcde9481ad9be46f20531a3277ca76f14230c74113b562630ca2c95f35`.
+The CUE, proof, checklist, and executable Finder helper are in
+`_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-solid-existing-triangle-control/`.
+Runtime status is pending and `promotionAuthorized` is false.
+
+The focused runtime question is whether walking, charging, jumping, and landing
+follow the visible 64-unit grass incline instead of the old flat plane while
+retail Town Square remains unchanged. Passing this control will prove one
+existing row-80 face can be kept visually and physically coherent. It will not
+yet prove Add Terrain.
+
+The first true Add Terrain candidate remains a later, separate gate from the
+clean display-name base. Its implementation must grow the environment by 28
+bytes inside the existing model-subfile tail, shift and rebase every following
+component, append one new HP triangle with independent vertices, reuse only a
+genuinely zero-area-in-3D collision record, rebuild the collision index in
+existing capacity, and preserve every retail row. That structural candidate is
+not authorized until this simpler collision control passes at runtime.
