@@ -560,3 +560,62 @@ Z-delta limit, patch every affected shared HP face and exact matching collision
 triangle, and preserve all counts and component sizes. A true
 component-growing Add Terrain candidate remains gated until that visible
 surface and its traversal both pass.
+
+## Eleventh static experiment: exposed solid entry-ridge control
+
+The v3 rejection identified a test-design defect rather than a row-80 loading
+failure, so the next disposable candidate starts again from the exact
+focused-runtime-passed display-name BIN at SHA-256
+`9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8`.
+It does not reuse either the renderer-only v2 BIN or the retired v3 BIN.
+
+Profile
+`unused-level-65-town-square-authored-terrain-solid-entry-ramp-control-clean-usa-disposable-v4`
+uses the already runtime-visible sector-213 entrance surface directly in
+Spyro's initial facing. HP vertices 39 and 48 move from Z 512 to Z 608 at WAD
+offsets `0x6A3EB60` and `0x6A3EB84`. The central ascent is face `213:37`,
+the central descent is face `213:29`, and the shared edge also deforms faces
+`213:{25,26,38,43}`. The center rises 96 units over a 128-unit run and then
+descends over the next 128 units. Its near edge is 64 world units ahead of the
+entry landing, its crest is 192 units ahead, and flat ground resumes 320 units
+ahead.
+
+A complete walk of all 216 native scene sectors proves that the open central
+footprint intersects exactly HP face `213:37`; no higher HP face shadows it.
+A complete walk of all 19,808 collision records proves that the same open
+footprint contains only native collision triangles 1353 and 1354. The full
+source and authored shared-point fan is exactly triangles
+`1353,1354,1360,1361,1363,1369,1370,1395,1400,1401`. Each record is re-encoded
+with the exact global point transformation. Four records use cyclic vertex
+rotation so winding is preserved rather than choosing an arbitrary encodable
+permutation. Every record remains in the same X/Y lookup cells and Z block 2,
+with exact lookup-word offsets, assignment 0, flags 0, and byte-identical
+collision header, tree, block/index, assignment, and flag structures.
+
+The exact output BIN SHA-256 is
+`6f63a7645c0ed07ad21cc884856c52a5df598f5fa81c31441d342f44d5e16f0c`;
+the row-80 data SHA-256 is
+`90a08be221dedcecfefdf3fb9640e082cdb6b06a98a8edabb6c7410c1116288e`.
+Exactly 42 logical WAD bytes change. MODE2 Form 1 rebuilding produces exactly
+267 physical-byte changes across raw LBAs 54434 and 54507: LBA 54434 has 2
+payload, 4 EDC, 12 ECC-P, and 26 ECC-Q changes; LBA 54507 has 40 payload, 4
+EDC, 88 ECC-P, and 91 ECC-Q changes. No header or reserved byte changes. The
+smoke also injects a fault after new-image publication and proves the previous
+BIN/CUE pair is restored without temporary or backup debris.
+
+The CUE, BIN, static proof, runtime checklist, stamped location guide, and
+executable Finder helper are in
+`_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-solid-entry-ramp-control/`.
+The guide tells the tester to stop at the landing and walk straight through the
+center rather than search by angle or gem landmark. It includes the complete
+ID65, retail Town Square, Gnasty's Loot, and Sunny Flight load codes.
+
+Runtime status remains pending and `promotionAuthorized` is false. Passing
+requires the ridge to be unmistakably visible only in ID65 and for walking,
+charging, jumping, and landing to follow the center surface in both directions
+without the old flat plane remaining below it. LP/far-LOD terrain is unchanged,
+so this is a close-range existing-face visual/collision-coherence gate. It is
+not Add Terrain and is not integrated into the normal editor, Create BIN,
+release, or update paths. Structural environment growth remains gated until
+this exact control passes in DuckStation with cheats off, both card slots None,
+and no resumed save state.
