@@ -194,7 +194,17 @@ public static class TerrainSourceSearchBuilder
 
     private static byte[] ReadLogicalWad(FileStream stream, DiscLayout layout)
     {
-        int wadSize = (int)Math.Max(0, Math.Min(110260224L, 2048L * Math.Max(0, (stream.Length / layout.SectorSize) - WadLba)));
+        DiscFileRecord wadRecord = DiscImage.FindRootFileRecord(
+            stream,
+            layout,
+            name => string.Equals(name, "WAD.WAD", StringComparison.OrdinalIgnoreCase));
+        if (wadRecord.Lba != WadLba || wadRecord.Size <= 0)
+        {
+            throw new InvalidDataException(
+                $"The source disc maps WAD.WAD to LBA {wadRecord.Lba} with size {wadRecord.Size}, expected positive data at LBA {WadLba}.");
+        }
+
+        int wadSize = wadRecord.Size;
         byte[] wad = new byte[wadSize];
         int remaining = wad.Length;
         int written = 0;

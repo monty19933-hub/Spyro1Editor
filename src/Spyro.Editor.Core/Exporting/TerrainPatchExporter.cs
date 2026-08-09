@@ -1075,6 +1075,7 @@ public static class TerrainPatchExporter
                 collisionContext = TryBuildSourceDerivedCollisionPatchContext(
                     ram,
                     sourceSectorHits,
+                    modelSubfileInfo,
                     editsElement,
                     skippedEdits);
             }
@@ -1474,8 +1475,16 @@ public static class TerrainPatchExporter
         }
 
         byte[] cloneFaceBytes = sourceFaceBytes.ToArray();
-        int vertexReferenceCount = Math.Min(faceVertexIndexes.Count, 4);
-        for (int i = 0; i < vertexReferenceCount; i++)
+        // Native HP faces always carry four raw vertex slots. Triangles repeat
+        // one slot, so the number of unique/editable points can be three while
+        // all four bytes still need remapping to the cloned vertex set.
+        const int nativeVertexReferenceCount = 4;
+        if (cloneFaceBytes.Length < nativeVertexReferenceCount)
+        {
+            skippedEdits.Add($"{runtimeKey}: add-copy source face is shorter than four native vertex-reference bytes.");
+            return false;
+        }
+        for (int i = 0; i < nativeVertexReferenceCount; i++)
         {
             int sourceVertexIndex = cloneFaceBytes[i];
             if (!cloneIndexMap.TryGetValue(sourceVertexIndex, out byte cloneVertexIndex))
@@ -4970,11 +4979,20 @@ public static class TerrainPatchExporter
     private static CollisionPatchContext? TryBuildSourceDerivedCollisionPatchContext(
         byte[] wad,
         IReadOnlyDictionary<string, SourceSectorLocation> sourceSectorHits,
+        AssetSubfileInfo modelSubfileInfo,
         JsonElement editsElement,
         List<string> skippedEdits)
     {
         try
         {
+            if (TryBuildNativeSourceDerivedCollisionPatchContext(
+                wad,
+                modelSubfileInfo,
+                out CollisionPatchContext? nativeContext))
+            {
+                return nativeContext;
+            }
+
             Dictionary<CollisionWordTriple, int> patterns = new();
             foreach (JsonElement edit in editsElement.EnumerateArray())
             {
@@ -5114,6 +5132,157 @@ public static class TerrainPatchExporter
             skippedEdits.Add($"collision: source-derived exact triangle scan failed: {ex.Message}");
             return null;
         }
+    }
+
+    private static bool TryBuildNativeSourceDerivedCollisionPatchContext(
+        byte[] wad,
+        AssetSubfileInfo modelSubfileInfo,
+        out CollisionPatchContext? context)
+    {
+        context = null;
+        long modelStartLong = modelSubfileInfo.AbsoluteWadOffset;
+        long modelEndLong = modelStartLong + modelSubfileInfo.SubfileSize;
+        if (modelStartLong < 0 ||
+            modelEndLong <= modelStartLong ||
+            modelEndLong > wad.Length ||
+            modelEndLong > int.MaxValue)
+        {
+            return false;
+        }
+
+        int modelStart = (int)modelStartLong;
+        int modelEnd = (int)modelEndLong;
+        if (!TryAdvanceNativeSourceComponent(wad, modelStart, modelEnd, out int textureEnd) ||
+            !TryAdvanceNativeSourceComponent(wad, textureEnd, modelEnd, out int environmentEnd) ||
+            !TryAdvanceNativeSourceComponent(wad, environmentEnd, modelEnd, out int occlusionEnd) ||
+            !TryAdvanceNativeSourceComponent(wad, occlusionEnd, modelEnd, out int specialSurfaceEnd))
+        {
+            return false;
+        }
+
+        int collisionStart = specialSurfaceEnd;
+        if (!TryAdvanceNativeSourceComponent(wad, collisionStart, modelEnd, out int collisionEnd))
+            return false;
+
+        int headerOffset = collisionStart + 4;
+        if (headerOffset < collisionStart || headerOffset + 0x1C > collisionEnd)
+            return false;
+
+        int triangleCount = BinaryPrimitives.ReadInt32LittleEndian(wad.AsSpan(headerOffset, 4));
+        int blockTreeRelativeOffset = BinaryPrimitives.ReadInt32LittleEndian(wad.AsSpan(headerOffset + 8, 4));
+        int blocksRelativeOffset = BinaryPrimitives.ReadInt32LittleEndian(wad.AsSpan(headerOffset + 12, 4));
+        int trianglesRelativeOffset = BinaryPrimitives.ReadInt32LittleEndian(wad.AsSpan(headerOffset + 16, 4));
+        int assignmentsRelativeOffset = BinaryPrimitives.ReadInt32LittleEndian(wad.AsSpan(headerOffset + 20, 4));
+        if (triangleCount <= 0 || triangleCount > 50_000 ||
+            blockTreeRelativeOffset < 0x1C ||
+            blocksRelativeOffset <= blockTreeRelativeOffset ||
+            trianglesRelativeOffset <= blocksRelativeOffset ||
+            assignmentsRelativeOffset <= trianglesRelativeOffset)
+        {
+            return false;
+        }
+
+        long blockTreeOffsetLong = (long)headerOffset + blockTreeRelativeOffset;
+        long blocksOffsetLong = (long)headerOffset + blocksRelativeOffset;
+        long triangleOffsetLong = (long)headerOffset + trianglesRelativeOffset;
+        long assignmentsOffsetLong = (long)headerOffset + assignmentsRelativeOffset;
+        long triangleEndLong = triangleOffsetLong + ((long)triangleCount * 12);
+        if (blockTreeOffsetLong < headerOffset + 0x1C ||
+            blockTreeOffsetLong >= blocksOffsetLong ||
+            blocksOffsetLong >= triangleOffsetLong ||
+            triangleEndLong != assignmentsOffsetLong ||
+            assignmentsOffsetLong + triangleCount > collisionEnd ||
+            triangleEndLong > int.MaxValue)
+        {
+            return false;
+        }
+
+        int blockTreeOffset = (int)blockTreeOffsetLong;
+        int blocksOffset = (int)blocksOffsetLong;
+        int triangleOffset = (int)triangleOffsetLong;
+        List<SpyroCollisionTriangle> triangles = new(triangleCount);
+        Dictionary<int, byte[]> sourceTriangleBytesByIndex = new();
+        Dictionary<int, long> sourceTriangleWadOffsetsByIndex = new();
+        Dictionary<int, int> sourceTriangleLookupIndexByIndex = new();
+        Dictionary<string, List<SpyroCollisionTriangle>> trianglesByKey = new(StringComparer.Ordinal);
+        for (int index = 0; index < triangleCount; index++)
+        {
+            int wadOffset = triangleOffset + (index * 12);
+            byte[] sourceBytes = wad.AsSpan(wadOffset, 12).ToArray();
+            SpyroCollisionTriangle triangle = BuildCollisionTriangleFromWords(
+                index,
+                wadOffset,
+                BinaryPrimitives.ReadUInt32LittleEndian(sourceBytes.AsSpan(0, 4)),
+                BinaryPrimitives.ReadUInt32LittleEndian(sourceBytes.AsSpan(4, 4)),
+                BinaryPrimitives.ReadUInt32LittleEndian(sourceBytes.AsSpan(8, 4)));
+            triangles.Add(triangle);
+            sourceTriangleBytesByIndex[index] = sourceBytes;
+            sourceTriangleWadOffsetsByIndex[index] = wadOffset;
+            sourceTriangleLookupIndexByIndex[index] = index;
+            string key = CollisionTriangleKey(triangle.Points);
+            if (!trianglesByKey.TryGetValue(key, out List<SpyroCollisionTriangle>? matchingTriangles))
+            {
+                matchingTriangles = new List<SpyroCollisionTriangle>();
+                trianglesByKey[key] = matchingTriangles;
+            }
+            matchingTriangles.Add(triangle);
+        }
+
+        SpyroCollisionTable table = new(
+            Pointers: new SpyroSceneCollisionPointers(0, 0, 0, -1, 0, headerOffset),
+            HeaderOffset: headerOffset,
+            TriangleCount: triangleCount,
+            BlockTreeOffset: blockTreeOffset,
+            BlocksOffset: blocksOffset,
+            TriangleOffset: triangleOffset,
+            Etc1: ReadUInt32(wad, headerOffset + 20),
+            Etc2: ReadUInt32(wad, headerOffset + 24),
+            Triangles: triangles);
+        CollisionLookupIndex lookupIndex = BuildCollisionLookupIndex(table, wad);
+        Dictionary<int, ushort> sourceLookupWordsByOffset = new();
+        for (int offset = blocksOffset; offset + 2 <= triangleOffset; offset += 2)
+            sourceLookupWordsByOffset[offset] = BinaryPrimitives.ReadUInt16LittleEndian(wad.AsSpan(offset, 2));
+
+        context = new CollisionPatchContext(
+            table,
+            triangleOffset,
+            blockTreeOffset,
+            blocksOffset,
+            sourceTriangleWadOffsetsByIndex,
+            sourceTriangleLookupIndexByIndex,
+            trianglesByKey,
+            lookupIndex.LookupGroups,
+            lookupIndex.LookupGroupEntries,
+            lookupIndex.GroupIndexesByTriangleIndex,
+            lookupIndex.DegenerateTriangleIndexes,
+            lookupIndex.UnreferencedDegenerateTriangleIndexes,
+            sourceTriangleBytesByIndex,
+            lookupIndex.DegenerateTriangleIndexes,
+            sourceLookupWordsByOffset,
+            new Dictionary<int, IReadOnlyList<int>>(),
+            new HashSet<int>(),
+            SupportsCollisionIndexRebuild: true,
+            SupportsDirectLookupFallback: true);
+        return true;
+    }
+
+    private static bool TryAdvanceNativeSourceComponent(
+        byte[] wad,
+        int start,
+        int modelEnd,
+        out int end)
+    {
+        end = -1;
+        if (start < 0 || start + 4 > modelEnd || modelEnd > wad.Length)
+            return false;
+
+        int byteLength = BinaryPrimitives.ReadInt32LittleEndian(wad.AsSpan(start, 4));
+        long endLong = (long)start + byteLength;
+        if (byteLength < 4 || endLong > modelEnd || endLong > int.MaxValue)
+            return false;
+
+        end = (int)endLong;
+        return true;
     }
 
     private static CollisionPatchContext BuildSourceDerivedCollisionPatchContextFromTableSpans(byte[] wad, IReadOnlyList<SourceDerivedCollisionTableSpan> spans)
@@ -8323,7 +8492,17 @@ public static class TerrainPatchExporter
 
     private static byte[] ReadLogicalWad(FileStream stream, DiscLayout layout)
     {
-        int wadSize = (int)Math.Max(0, Math.Min(110260224L, 2048L * Math.Max(0, (stream.Length / layout.SectorSize) - WadLba)));
+        DiscFileRecord wadRecord = DiscImage.FindRootFileRecord(
+            stream,
+            layout,
+            name => string.Equals(name, "WAD.WAD", StringComparison.OrdinalIgnoreCase));
+        if (wadRecord.Lba != WadLba || wadRecord.Size <= 0)
+        {
+            throw new InvalidDataException(
+                $"The source disc maps WAD.WAD to LBA {wadRecord.Lba} with size {wadRecord.Size}, expected positive data at LBA {WadLba}.");
+        }
+
+        int wadSize = wadRecord.Size;
         byte[] wad = new byte[wadSize];
         int remaining = wad.Length;
         int written = 0;

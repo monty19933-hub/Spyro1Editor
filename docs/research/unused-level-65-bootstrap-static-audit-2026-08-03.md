@@ -258,3 +258,65 @@ This closes only the exact display-name discriminator: music ownership and late
 music, authored totals, portals, Return Home, saving and memory-card persistence,
 content authoring, normal Create BIN, editor integration, and release remain
 separate and unauthorized.
+
+## Fifth experiment: first authored collidable terrain in ID65
+
+The next isolated candidate layers one editor-authored terrain copy onto the
+exact focused-runtime-passed display-name BIN. ID65 remains a research-only
+`LevelDefinition` bound to independent WAD data row 80; it is not added to the
+retail catalog, normal Create BIN, editor integration, release, or update paths.
+
+The editor recipe copies native Town Square face `201:0:hp` with texture 27,
+keeps the original face, allocates three independent HP vertices, and displaces
+the copy by `+64 X`, `+24 Y`, with per-vertex Z offsets `+10`, `+13`, and `+16`.
+The authored vertices are `(8616,8196,746)`, `(8625,8234,749)`, and
+`(8540,8138,752)`. The cloned native face references are exactly
+`2B 2B 2C 2D`; all four raw slots, including the triangle's repeated slot, now
+point only to the three new vertices.
+
+The source-derived collision planner now decodes the selected row-80 model
+subfile's native component chain and complete 19,808-triangle collision table.
+That avoids the earlier duplicate-data heuristic and rebuilds the collision
+index entirely inside ID65's physical copy. The exact six patches are:
+
+- HP vertex count at WAD `0x6A3C04C`, one byte, `43` to `46`.
+- HP face count at WAD `0x6A3C04E`, one byte, `32` to `33`.
+- HP sector repack at WAD `0x6A3C180`, 916 bytes.
+- Collision block tree at WAD `0x6A40DE0`, 27,090 bytes.
+- Collision lookup blocks at WAD `0x6A47840`, 95,232 bytes.
+- Added collision triangle at WAD `0x6A5F1C4`, 12 bytes.
+
+The disposable output is deterministic:
+
+- Base BIN SHA-256:
+  `9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8`.
+- Output BIN SHA-256:
+  `db9230bbe1b8b5b15b52299267b3453cb60ec7494248295f323a40f597d7391f`.
+- Output ID65 data SHA-256:
+  `9e4d30371b9aeffed1071883848a67e1c80f6df313826bc7f4e5db2e926696b9`.
+- Exact logical WAD diff: 108,415 changed bytes, all inside the six pinned
+  patch ranges in row 80.
+- Exact physical BIN diff: 125,762 changed bytes in 63 rebuilt and verified
+  MODE2 Form1 sectors: LBA 54429 and LBA 54438 through 54499.
+
+The BIN, CUE, static proof, runtime checklist, and executable Finder-reveal
+helper stay together under
+`_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-add-copy/`.
+The CUE basename is
+`Unused-Level-65-Town-Square-first-authored-collidable-terrain-add-copy-RUNTIME-CANDIDATE.cue`;
+the adjacent `-Reveal-in-Finder.command` helper resolves and selects that exact
+CUE without participating in image composition.
+
+Retail Town Square overlay/data, the ID65 overlay, SCUS, WAD directory, base
+BIN, raw image length, and every byte outside those row-80 ranges remain
+unchanged. The candidate deliberately does not author low-detail terrain,
+vertical side walls, textures, surface behavior, Mobys, music, totals, portals,
+Return Home, saving, or persistence.
+
+Static/readback proof is complete, but runtime proof is pending. The focused
+DuckStation gate must confirm that the original triangle and exactly one raised
+copy appear, the copy is solid while standing/jumping/charging across its top
+and edges, nearby gameplay remains stable, retail Town Square does not contain
+the copy, and the comparison levels still load. Far-distance disappearance is
+recorded separately because this first experiment is HP-only; LP/far-LOD
+authoring is the next terrain gate rather than part of this candidate.
