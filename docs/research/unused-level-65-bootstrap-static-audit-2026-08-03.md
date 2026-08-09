@@ -416,3 +416,36 @@ Runtime status remains pending and `promotionAuthorized` remains false. A
 clearly visible ridge in ID65, absent from retail Town Square, will establish
 that existing row-80 HP vertices reach the renderer. Only then should a new
 component-aware structural Add Terrain candidate be attempted.
+
+## Eighth runtime observation: renderer visibility control passed
+
+The exact renderer-control BIN at SHA-256
+`01a170b19303eaab77fb00fbc8cfabf5425a640348c84aa09f8aa4eb5b57e6b1`
+passed its narrow DuckStation discriminator. The user reported that the terrain
+edit was visible in ID65 and absent from retail Town Square. Read-only
+open-file inspection after the report showed that the continuing DuckStation
+process held this exact candidate BIN open, and an on-disk hash readback matched
+the recorded SHA-256.
+
+The user could walk through and beneath the visible ridge while the original
+flat ground remained solid, and Spyro did not fall through that ground into the
+death plane in the tested entry area. That is the expected outcome of this
+control: only two existing HP vertex words changed, while every collision byte
+remained identical to the passed display-name base. The result therefore proves
+that authored row-80 HP vertices reach the ID65 renderer and that the visual
+edit is isolated from retail Town Square. It does not prove collision editing,
+a solid raised surface, a new face, or Add Terrain.
+
+The evidence record is
+`docs/runtime-evidence/unused-level-65-town-square-authored-terrain-render-visibility-control-focused-pass-2026-08-08.json`.
+Its status is `focused-runtime-pass` for this renderer discriminator only;
+`promotionAuthorized` remains false. LP/far-LOD behavior, broader comparison
+checks, emulator-state conditions, arbitrary textures or Mobys, normal Create
+BIN integration, and release remain outside this pass.
+
+The next isolated candidate must again start from the focused-runtime-passed
+display-name base. It should reproduce the same existing-face ridge with
+matching source-derived native collision edits while leaving face counts and
+component sizes unchanged. Only after the raised surface is visibly and
+physically traversable should structural work proceed to component-aware
+environment growth for genuinely new vertices, faces, and collision.
