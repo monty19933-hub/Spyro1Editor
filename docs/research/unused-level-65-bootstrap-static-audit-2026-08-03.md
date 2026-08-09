@@ -331,10 +331,11 @@ candidate BIN open, and the on-disk image still hashed to
 The required visible raised-copy discriminator was therefore not observed, so
 this candidate is runtime-rejected and cannot count as an Add Terrain pass.
 
-The static proof remains valid: six exact row-80 patch ranges, 108,415 logical
-changed bytes, 125,762 physical changed bytes, and 63 rebuilt/verified MODE2
-Form1 sectors still read back exactly. Those facts prove image construction,
-not recognizable runtime rendering. The report does not by itself tell us
+The static proof's mechanical facts remain valid: six exact row-80 patch ranges,
+108,415 logical changed bytes, 125,762 physical changed bytes, and 63
+rebuilt/verified MODE2 Form1 sectors still read back exactly. Those facts prove
+image construction, not safe construction or recognizable runtime rendering.
+The report does not by itself tell us
 whether the copied face was submitted to or accepted by the renderer, or
 whether it was rendered but too subtle, overlapped, occluded, or difficult to
 locate. Collision and far-LOD behavior also remain unproven.
@@ -358,6 +359,15 @@ with no side walls. The incorrect landmark and subtle geometry are sufficient
 to reject this candidate-and-handoff combination without claiming a renderer
 failure.
 
+A later exact bounds audit also invalidated the candidate independently of the
+runtime visibility result. Sector 201 begins at row-80 WAD offset `0x6A3C038`
+and is exactly 1,216 bytes long, so contiguous sector 202 begins at
+`0x6A3C4F8`. The 916-byte repack patch at `0x6A3C180` ends at `0x6A3C514`:
+28 bytes into sector 202's header. The previously reported 56-byte
+“slack” was not inter-sector capacity. This exact v1 BIN is structurally unsafe
+and must not be loaded or retested. A future Add Terrain implementation must
+grow and rebase the environment component rather than writing past a sector.
+
 The evidence record is
 `docs/runtime-evidence/unused-level-65-town-square-authored-terrain-add-copy-not-observed-2026-08-08.json`.
 Its status is `runtime-rejected-visibility-discriminator-not-observed`, and
@@ -365,8 +375,44 @@ Its status is `runtime-rejected-visibility-discriminator-not-observed`, and
 
 Before another add-copy/collision experiment, the next isolated control starts
 again from the focused-runtime-passed display-name base and deforms one existing
-HP face at an unmistakable, reproducible, spawn-visible landmark. That control
-keeps face counts, collision, LP terrain, textures, Mobys, and game-contract
-tables unchanged. It answers only whether authored row-80 vertex bytes reach the
-runtime renderer. LP/far-LOD work is no longer the immediate next gate; it waits
-until close-range row-80 visibility is positively established.
+HP face immediately ahead of the spawn landing. That control changes only two
+existing vertex words and keeps all counts, component sizes, collision, LP
+terrain, textures, Mobys, and game-contract tables unchanged. It answers only
+whether authored row-80 vertex bytes reach the runtime renderer. LP/far-LOD and
+component-aware structural growth wait until close-range row-80 visibility is
+positively established.
+
+## Seventh static candidate: spawn-visible renderer control
+
+The replacement control starts again from the exact focused-runtime-passed
+display-name BIN at SHA-256
+`9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8`.
+It does not use the rejected v1 terrain BIN. In row 80, HP face `213:37` is the
+quad immediately in front of the entry landing. The control raises only its far
+edge vertices from Z 512 to Z 1024:
+
+- vertex 39 at WAD `0x6A3EB60`: `20 D8 E7 29` → `20 DA E7 29`;
+- vertex 48 at WAD `0x6A3EB84`: `20 D8 E7 39` → `20 DA E7 39`.
+
+Those shared vertices deform exactly faces 25, 26, 29, 37, 38, and 43 into a
+128-unit-wide, 512-unit-high ridge directly ahead of Spyro. The landing face
+under Spyro remains byte-identical. Face counts, sector sizes, environment and
+following-sector headers, occlusion, special-surface data, collision, LP
+terrain, textures, Mobys, and SCUS remain unchanged. Collision deliberately
+stays on the original flat Z-512 ground, so this candidate is a renderer-only
+discriminator and not a collision or Add Terrain test.
+
+The exact output BIN SHA-256 is
+`01a170b19303eaab77fb00fbc8cfabf5425a640348c84aa09f8aa4eb5b57e6b1`;
+the ID65 data payload SHA-256 is
+`c20e5cee4abd551c2536eb23fba9d2a8868193c9991af9ccfe7883429c9b4a57`.
+Only two logical WAD bytes change. Rebuilding EDC/ECC changes 44 physical bytes
+in raw LBA 54434, and exact readback confines every logical and physical change
+to that boundary. A repeat export is deterministic.
+
+The CUE, static proof, runtime checklist, and executable Finder helper are in
+`_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-render-visibility-control/`.
+Runtime status remains pending and `promotionAuthorized` remains false. A
+clearly visible ridge in ID65, absent from retail Town Square, will establish
+that existing row-80 HP vertices reach the renderer. Only then should a new
+component-aware structural Add Terrain candidate be attempted.
