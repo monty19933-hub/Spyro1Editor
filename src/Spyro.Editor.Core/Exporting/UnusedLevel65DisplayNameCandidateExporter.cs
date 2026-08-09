@@ -544,13 +544,14 @@ public static class UnusedLevel65DisplayNameCandidateExporter
 
     private static IReadOnlyList<string> RuntimeChecklist() =>
     [
-        "Disable memory-card insertion completely and cold boot the candidate.",
+        "Disable every DuckStation cheat and memory-card insertion completely, then cold boot the candidate without resuming a save state.",
         $"From controllable gameplay, press Select to open Inventory; enter {TestLevelWarpPatch.ActivationSequence}; then press Left, then Down. Confirm the ID65 entry now reads TOWN SQUARE instead of A and loads normally.",
         "Move through several sectors, open pause/Inventory, and confirm geometry, textures, collision, camera, initial music, enemies, and the TOWN SQUARE display name remain stable.",
-        $"Collect exactly one loose gem, reset DuckStation, cold boot, and reach controllable gameplay. Press Select to open Inventory; enter {TestLevelWarpPatch.ActivationSequence}; then press Left, then Down to re-enter ID65. Confirm the collected gem is present again because the no-card reset discarded the session, and confirm the TOWN SQUARE identity still appears.",
+        $"Collect exactly one loose gem, reset DuckStation, cold boot, and reach controllable gameplay. Press Select to open Inventory; enter {TestLevelWarpPatch.ActivationSequence}; then press Left, then Down to re-enter ID65. Before recollecting anything, confirm Inventory reads 0/0, confirm the collected red gem is physically present again because the no-card reset discarded the session, and confirm the TOWN SQUARE identity still appears.",
         $"Reset and reach controllable gameplay. Press Select to open Inventory; enter {TestLevelWarpPatch.ActivationSequence}; then press Cross, then Triangle. Verify retail Town Square and confirm it remains independently loadable.",
         $"Reset and reach controllable gameplay. Press Select to open Inventory; enter {TestLevelWarpPatch.ActivationSequence}; then press Left, then Right. Verify Gnasty's Loot.",
         $"Reset and reach controllable gameplay. Press Select to open Inventory; enter {TestLevelWarpPatch.ActivationSequence}; then press Cross, then Down. Verify Sunny Flight and check flight controls/timer only.",
+        $"For the Inventory page control, cold boot without a resumed save state and do not reset between entries. Load Gnasty's World ID60 with Select; {TestLevelWarpPatch.ActivationSequence}; Left, then Circle. Load Dream Weavers ID50 with Select; {TestLevelWarpPatch.ActivationSequence}; Down, then Circle. Load ID65 with Select; {TestLevelWarpPatch.ActivationSequence}; Left, then Down. Open Inventory, use D-pad Left, wait for the Dream Weavers page transition to finish, then use D-pad Right. Confirm Left reaches Dream Weavers and Right returns to the now-visited Gnasty page.",
         "Do not rescue dragons, touch the egg thief, attack or kill enemies, open or break chests, die, insert a memory card, save, select Exit Level or Quit Game, or use Return Home. Totals, alternate music, portal routing, save ownership, and content edits remain out of scope."
     ];
 

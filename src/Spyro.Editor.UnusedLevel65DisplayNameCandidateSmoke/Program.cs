@@ -102,7 +102,30 @@ Require(
 RequireNoTransactionalDebris(outputRoot);
 
 IReadOnlyList<RuntimeCandidateLoadCode> loadCodes =
-    RuntimeCandidateTestHandoff.Id65ComparisonLoadCodes;
+[
+    new(
+        "Inventory prerequisite: Gnasty's World",
+        60,
+        TestLevelWarpPatch.TargetSelectionText(60)),
+    new(
+        "Inventory prerequisite: Dream Weavers",
+        50,
+        TestLevelWarpPatch.TargetSelectionText(50)),
+    .. RuntimeCandidateTestHandoff.Id65ComparisonLoadCodes
+];
+string[] expectedLoadCodeRows =
+[
+    "Inventory prerequisite: Gnasty's World|60|Select; then R1, R2, L1, L2, R1, L1, R2, L2; then Left, then Circle",
+    "Inventory prerequisite: Dream Weavers|50|Select; then R1, R2, L1, L2, R1, L1, R2, L2; then Down, then Circle",
+    "ID65 candidate|65|Select; then R1, R2, L1, L2, R1, L1, R2, L2; then Left, then Down",
+    "Retail Town Square|13|Select; then R1, R2, L1, L2, R1, L1, R2, L2; then Cross, then Triangle",
+    "Gnasty's Loot|64|Select; then R1, R2, L1, L2, R1, L1, R2, L2; then Left, then Right",
+    "Sunny Flight|15|Select; then R1, R2, L1, L2, R1, L1, R2, L2; then Cross, then Down"
+];
+Require(
+    loadCodes.Select(code => $"{code.TestName}|{code.LevelId}|{code.InputCode}")
+        .SequenceEqual(expectedLoadCodeRows),
+    "The generated test handoff lost an exact prerequisite, candidate, or retail comparison load code.");
 RuntimeCandidateFinderReveal finderReveal =
     await RuntimeCandidateTestHandoff.WriteFinderRevealHelperAsync(repeat.OutputCuePath);
 Require(
@@ -119,9 +142,17 @@ Require(
     Contains(runtimeChecklistText, "memory-card") &&
     Contains(runtimeChecklistText, "Town Square") &&
     Contains(runtimeChecklistText, "instead of A") &&
-    Contains(runtimeChecklistText, "collected gem is present again") &&
+    Contains(runtimeChecklistText, "physically present again") &&
     Contains(runtimeChecklistText, "Gnasty's Loot") &&
     Contains(runtimeChecklistText, "Sunny Flight") &&
+    Contains(runtimeChecklistText, "Gnasty's World ID60") &&
+    Contains(runtimeChecklistText, "Dream Weavers ID50") &&
+    Contains(runtimeChecklistText, "do not reset between entries") &&
+    Contains(runtimeChecklistText, "D-pad Left") &&
+    Contains(runtimeChecklistText, "D-pad Right") &&
+    Contains(runtimeChecklistText, "wait for the Dream Weavers page transition") &&
+    Contains(runtimeChecklistText, "returns to the now-visited Gnasty page") &&
+    Contains(runtimeChecklistText, "DuckStation cheat") &&
     Contains(runtimeChecklistText, "totals") &&
     Contains(runtimeChecklistText, "music") &&
     Contains(runtimeChecklistText, "portal") &&
@@ -220,7 +251,7 @@ checklist.AppendLine();
 checklist.AppendLine($"- BIN SHA-256: `{repeat.OutputImageSha256}`");
 checklist.AppendLine($"- Base BIN SHA-256: `{repeat.Plan.BaseImageSha256}`");
 checklist.AppendLine($"- Profile: `{repeat.Plan.ProfileId}`");
-checklist.AppendLine("- Status: static proof complete; focused runtime proof pending.");
+checklist.AppendLine("- Status: static proof complete; focused runtime evidence partial; remaining controls pending.");
 checklist.AppendLine();
 checklist.AppendLine(
     "This candidate changes only ID65's indexed name pointer from the placeholder A string " +
@@ -238,8 +269,10 @@ checklist.AppendLine("## Report back");
 checklist.AppendLine();
 checklist.AppendLine(
     "Please report whether ID65 displayed Town Square instead of A, loaded and remained responsive, " +
-    "and whether retail Town Square, Gnasty's Loot, and Sunny Flight each retained their expected identity and load behavior. " +
-    "Keep memory cards disabled and do not test any prohibited progression or content path.");
+    "whether the loose gem was physically present again after the actual reset/cold boot, whether the prepared Inventory " +
+    "control moved Left to Dream Weavers and then Right back to Gnasty's World, and whether retail Town Square, " +
+    "Gnasty's Loot, and Sunny Flight each retained their expected identity and load behavior. " +
+    "Keep every DuckStation cheat and memory cards disabled, and do not test any prohibited progression or content path.");
 await WriteTextAtomicallyAsync(
     checklistPath,
     checklist.ToString());
@@ -275,7 +308,7 @@ using (JsonDocument document = JsonDocument.Parse(await File.ReadAllTextAsync(st
         handoff.GetProperty("terminalCommand").GetString() == finderReveal.TerminalCommand &&
         handoff.GetProperty("cuePairingVerified").GetBoolean() &&
         handoff.GetProperty("helperIsExecutable").GetBoolean() &&
-        handoff.GetProperty("loadCodes").GetArrayLength() == 4,
+        handoff.GetProperty("loadCodes").GetArrayLength() == 6,
         "The generated static proof is incomplete or drifted from the exact diff boundary.");
 }
 string writtenChecklist = await File.ReadAllTextAsync(checklistPath);
@@ -285,8 +318,17 @@ RuntimeCandidateTestHandoff.VerifyChecklistReadback(
     loadCodes);
 Require(
     writtenChecklist.Contains(ExpectedOutputImageSha256, StringComparison.Ordinal) &&
+    Contains(writtenChecklist, "focused runtime evidence partial") &&
     Contains(writtenChecklist, "Town Square instead of A") &&
-    Contains(writtenChecklist, "collected gem is present again") &&
+    Contains(writtenChecklist, "physically present again") &&
+    Contains(writtenChecklist, "Before recollecting anything") &&
+    Contains(writtenChecklist, "0/0") &&
+    Contains(writtenChecklist, "Inventory prerequisite: Gnasty's World") &&
+    Contains(writtenChecklist, "Inventory prerequisite: Dream Weavers") &&
+    Contains(writtenChecklist, "wait for the Dream Weavers page transition") &&
+    Contains(writtenChecklist, "physically present again after the actual reset/cold boot") &&
+    Contains(writtenChecklist, "Right back to Gnasty's World") &&
+    Contains(writtenChecklist, "every DuckStation cheat") &&
     Contains(writtenChecklist, "memory cards disabled") &&
     Contains(writtenChecklist, "totals") &&
     Contains(writtenChecklist, "music") &&
@@ -297,7 +339,9 @@ Require(
     "The generated runtime checklist omitted the exact artifact, expected identity, or excluded scopes.");
 RequireNoTransactionalDebris(outputRoot);
 
-Console.WriteLine("PASS: ID65 display identity is an exact one-pointer static candidate; DuckStation proof is pending.");
+Console.WriteLine(
+    "PASS: ID65 display identity remains an exact one-pointer candidate; " +
+    "focused DuckStation evidence is partial and the remaining controls are pending.");
 Console.WriteLine($"CUE: {repeat.OutputCuePath}");
 Console.WriteLine($"Reveal in Finder: {finderReveal.HelperPath}");
 Console.WriteLine($"BIN: {repeat.OutputImagePath}");

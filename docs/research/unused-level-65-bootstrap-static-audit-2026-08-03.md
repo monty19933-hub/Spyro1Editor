@@ -191,22 +191,40 @@ SCUS-94228 game settings had Moon Jump, over 65,000 jewels, all dragon eggs, and
 all dragons freed enabled, and live RAM corroborated the active progression
 values. The display name and basic loading/responsiveness observations remain
 useful, but gem/reset and totals semantics from this run are contaminated. The
-current visited-homeworld state makes page cycling non-diagnostic until the
-controlled baseline is run. No emulator setting was changed during inspection.
+That original run's visited-homeworld state made its page-cycling report
+non-diagnostic. No emulator setting was changed during inspection.
 The exact-run memory-card state was not captured; the current global DuckStation
 configuration uses a per-game card and a Spyro card file exists, so the no-card
 check must also be explicitly repeated rather than inferred.
 
-After disabling every DuckStation cheat and memory-card insertion, then cold
-booting without a resumed save state, the no-write Inventory control is to enter
-Dream Weavers ID50 first with
-`Select; R1, R2, L1, L2, R1, L1, R2, L2; Down, Circle`, then enter ID65 without
-resetting and use D-pad Left/Right in Inventory. A separate clarification must
-confirm whether the same loose gem was physically present again after reset and
-whether `4/0` was observed before or after recollection.
+With DuckStation cheats confirmed inactive, a later same-session control entered
+Dream Weavers and then ID65. Exact memory-card insertion, cold-boot, and resumed-
+save-state conditions were not independently captured for that follow-up. D-pad
+Left successfully moved from the ID65 page to Dream Weavers, but D-pad Right did
+not return to Gnasty's World. Read-only live RAM inspection showed exactly
+visited indices 0, 24, and 35: Dream Weavers HOME index 24 was visited, while
+Gnasty's World HOME index 30 was not. Retail level load marks only the current
+continuous index, so loading child ID65 marks index 35 and does not synthesize
+the page's HOME index 30. The one-way result is therefore expected visited-state
+gating, not evidence of a page-cycling regression.
+
+The complete no-write Inventory control is now to enter Gnasty's World ID60 with
+`Select; R1, R2, L1, L2, R1, L1, R2, L2; Left, Circle`, enter Dream Weavers ID50
+with `Select; R1, R2, L1, L2, R1, L1, R2, L2; Down, Circle`, and then enter ID65
+with `Select; R1, R2, L1, L2, R1, L1, R2, L2; Left, Down`, without resetting
+between entries. D-pad Left in Inventory should reach Dream Weavers; after its
+page transition finishes, D-pad Right should return to the now-visited Gnasty
+page.
+
+In the same cheat-disabled follow-up, collecting one red gem produced `1/0`.
+After leaving and re-entering ID65 without a reset, that gem remained absent.
+This is expected same-session object retirement against the unchanged zero target;
+it does not test reset restoration or save ownership. The remaining gem control
+must perform an actual reset or cold boot and confirm that the same red gem is
+physically present before recollection, ideally with a pre-recollection `0/0`.
 
 The evidence record is
 `docs/runtime-evidence/unused-level-65-town-square-display-name-focused-partial-2026-08-08.json`.
 Its status is `focused-partial-runtime-observation`, and promotion remains
-unauthorized until a cheat-disabled repeat and the remaining confirmations close
-the checklist.
+unauthorized until the bidirectional page control, reset/cold-boot gem restoration,
+and the remaining confirmations close the checklist.

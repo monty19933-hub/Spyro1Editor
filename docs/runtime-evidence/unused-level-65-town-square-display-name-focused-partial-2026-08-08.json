@@ -35,9 +35,40 @@
       "Gnasty's Loot remained loadable.",
       "Sunny Flight remained loadable."
     ],
-    "conclusion": "The exact display-name pointer discriminator has direct positive runtime evidence and did not prevent the three retail comparison levels from loading. The complete checklist remains open because DuckStation progression cheats contaminated gem/progression values and the current visited-homeworld state made page cycling non-diagnostic, so this is a focused partial observation rather than a full runtime pass."
+    "conclusion": "The exact display-name pointer discriminator has direct positive runtime evidence and did not prevent the three retail comparison levels from loading. The complete checklist remains open because DuckStation progression cheats contaminated gem/progression values and that original run's visited-homeworld state made its page-cycling report non-diagnostic, so this is a focused partial observation rather than a full runtime pass."
   },
-  "runtimeEnvironmentContamination": {
+  "controlledFollowUpObservation": {
+    "userReports": [
+      "Inventory could move left from the ID65 page to Dream Weavers, but could not move right from Dream Weavers to Gnasty's World.",
+      "After collecting one red gem, leaving ID65, and re-entering ID65 without a reset, the gem remained absent and Inventory displayed 1/0."
+    ],
+    "readOnlyRuntimeInspection": {
+      "duckStationCheatsActive": false,
+      "liveProgressionValues": {
+        "dragonCount": 0,
+        "eggCount": 0,
+        "gemCount": 1
+      },
+      "currentLevelId": 65,
+      "currentContinuousLevelIndex": 35,
+      "inventoryPage": 5,
+      "gLevelCheatActive": 0,
+      "visitedContinuousIndices": [0, 24, 35],
+      "dreamWeaversHomeContinuousIndex": 24,
+      "dreamWeaversHomeVisited": 1,
+      "gnastysWorldHomeContinuousIndex": 30,
+      "gnastysWorldHomeVisited": 0
+    },
+    "passedChecks": [
+      "D-pad Left moved from the ID65 page to Dream Weavers when Dream Weavers HOME index 24 was visited.",
+      "A red gem awarded one gem against the unchanged unauthored target, displaying 1/0.",
+      "The collected red-gem object remained retired after leaving and re-entering ID65 in the same session without a reset."
+    ],
+    "interpretation": "Retail load logic marks only the current continuous level index as visited. Loading ID65 marked child index 35 but did not synthesize Gnasty's World HOME index 30, so Right from Dream Weavers was correctly gated. This is not evidence of a page-cycling regression. The red gem remaining absent proves same-session object retirement only; it does not test restoration after reset, cold boot, or memory-card persistence.",
+    "environmentBoundary": "DuckStation cheats were inactive and live dragon, egg, and gem values corroborated the follow-up observation. Exact memory-card insertion, cold-boot, and resumed-save-state conditions were not independently captured, so this follow-up is not promoted to a complete clean checklist pass.",
+    "conclusion": "The follow-up confirms leftward visited-page navigation and same-session red-gem collection state at 1/0. Rightward return was normally gated because Gnasty's World HOME index 30 was unvisited. Cold-boot gem restoration and a fully prepared bidirectional page control remain open; status stays partial."
+  },
+  "originalRuntimeEnvironmentContamination": {
     "duckStationGameSettingsPath": "/Users/john/Library/Application Support/DuckStation/gamesettings/SCUS-94228.ini",
     "enableCheats": true,
     "configuredAndEnabledCheats": [
@@ -66,8 +97,8 @@
   },
   "observedExcludedScope": [
     "The unchanged index-35 initial-music row selected Gnasty's Loot track 19. Music ownership was deliberately excluded from the display-name candidate.",
-    "The displayed treasure value was 4/0. The zero target is the exact unchanged slot-35 value; the runtime numerator 4 is recorded literally and is not interpreted as authored totals or gem-restoration proof.",
-    "Inventory opened without crashing, but homeworld-page cycling did not appear to work in the observed runtime state. Page ownership and progression were outside this discriminator."
+    "The original contaminated run displayed 4/0; the later cheat-disabled same-session control displayed 1/0 after collecting one red gem. In both cases the zero target is the exact unchanged slot-35 value. Neither observation proves reset restoration or authored totals.",
+    "Inventory opened without crashing. The later follow-up moved Left to the visited Dream Weavers page, while Right was normally gated because Gnasty's World HOME index 30 had not been visited. Page ownership and progression remain outside this discriminator."
   ],
   "staticAndRuntimeExplanation": {
     "displayName": {
@@ -99,38 +130,53 @@
     },
     "inventoryPageCycling": {
       "gLevelCheatActiveRuntimeAddress": "0x80075880",
-      "observedGLevelCheatActive": 0,
       "visitedTableRuntimeAddress": "0x80078E78",
-      "observedVisitedContinuousIndices": [0, 3, 5, 30, 34, 35],
-      "dreamWeaversHomeContinuousIndex": 24,
-      "observedDreamWeaversVisited": 0,
-      "conclusion": "The completed warp had released the hidden cheat input state. Inventory page changes were being gated by adjacent homeworld visited flags; the unavailable Dream Weavers page prevented Left from index-35 page 5. This is not evidence that the three-byte name patch broke Inventory, but the enabled progression cheats mean the visited table is not a clean no-card/new-game baseline."
+      "initialContaminatedInspection": {
+        "observedGLevelCheatActive": 0,
+        "observedVisitedContinuousIndices": [0, 3, 5, 30, 34, 35],
+        "dreamWeaversHomeContinuousIndex": 24,
+        "observedDreamWeaversVisited": 0
+      },
+      "laterCheatDisabledFollowUp": {
+        "observedGLevelCheatActive": 0,
+        "currentContinuousLevelIndex": 35,
+        "observedInventoryPage": 5,
+        "observedVisitedContinuousIndices": [0, 24, 35],
+        "dreamWeaversHomeContinuousIndex": 24,
+        "observedDreamWeaversVisited": 1,
+        "gnastysWorldHomeContinuousIndex": 30,
+        "observedGnastysWorldVisited": 0,
+        "leftToDreamWeavers": "passed",
+        "rightFromDreamWeaversToGnastysWorld": "correctly gated because HOME index 30 was unvisited"
+      },
+      "retailVisitedMarkingBehavior": "Level load marks only visited[currentContinuousIndex]. Loading ID65 marks index 35 and does not mark Gnasty's World HOME index 30.",
+      "conclusion": "The completed warp released the hidden cheat input state. The follow-up proves page cycling works toward a visited adjacent HOME row. Its blocked return was expected visited-state gating, not evidence that the three-byte name patch broke Inventory. A bidirectional control still needs both Dream Weavers HOME index 24 and Gnasty's World HOME index 30 visited first."
     }
   },
   "unverifiedRuntimeChecks": [
-    "Whether the same loose gem was physically present again after reset was not reported.",
-    "Whether 4/0 was observed before or after recollecting any gem was not reported.",
-    "Gem, dragon, egg, treasure, reset, and persistence observations require a repeat with every DuckStation cheat disabled; visited-homeworld page cycling requires the controlled Dream Weavers baseline.",
+    "Whether the same loose gem was physically present again after an actual reset or cold boot remains unverified; leaving and re-entering without reset tests only same-session persistence.",
+    "A clean reset/cold-boot control should observe the red gem physically present before recollection and ideally confirm the pre-recollection display is 0/0.",
+    "Complete bidirectional Inventory page cycling remains unverified until both Dream Weavers HOME index 24 and Gnasty's World HOME index 30 are visited first.",
     "Memory-card-disabled cold-boot conditions and prohibited-path adherence were not explicitly reconfirmed in this report.",
     "Geometry and textures were not separately reported.",
-    "Sunny Flight loaded, but its flight controls and timer were not separately reported.",
-    "The visited-homeworld Inventory cycling control has not yet been run by the user."
+    "Sunny Flight loaded, but its flight controls and timer were not separately reported."
   ],
   "minimalFollowUpControl": {
-    "purpose": "Distinguish normal visited-homeworld page gating from an Inventory regression without changing the BIN.",
+    "purpose": "Confirm bidirectional page navigation with both adjacent HOME rows visited, without changing the BIN.",
     "requirements": [
       "Use the same exact display-name candidate and keep memory cards disabled.",
       "Disable every DuckStation cheat for SCUS-94228 before cold booting; do not resume a save state from the contaminated run.",
-      "Do not reset between the Dream Weavers and ID65 entries."
+      "Do not reset between the Gnasty's World, Dream Weavers, and ID65 entries."
     ],
     "steps": [
+      "From controllable gameplay, press Select; enter R1, R2, L1, L2, R1, L1, R2, L2; then press Left, then Circle to load Gnasty's World homeworld ID60.",
       "From controllable gameplay, press Select; enter R1, R2, L1, L2, R1, L1, R2, L2; then press Down, then Circle to load Dream Weavers homeworld ID50.",
       "From controllable gameplay, press Select; enter R1, R2, L1, L2, R1, L1, R2, L2; then press Left, then Down to load ID65.",
-      "Open Inventory and use D-pad Left, then D-pad Right. Do not use L1/R1 for page cycling."
+      "Open Inventory and use D-pad Left, wait for the Dream Weavers page transition to finish, then use D-pad Right. Do not use L1/R1 for page cycling."
     ],
-    "expectedResult": "Left reaches the now-visited Dream Weavers page and Right returns to the Gnasty page. No code change is justified unless this same-BIN control fails."
+    "expectedResult": "Left reaches the now-visited Dream Weavers page and Right returns to the now-visited Gnasty page. No page-cycling code change is indicated by the current evidence."
   },
-  "nextGate": "Repeat the focused display-name, loose-gem restoration, and visited-homeworld Inventory cycling checks from a cheat-disabled, memory-card-disabled cold boot before upgrading this evidence to a full focused runtime pass. Do not promote ID65 or combine music, totals, portals, saving, or content changes into this evidence boundary.",
+  "nextGate": "On the same exact BIN, complete the bidirectional visited-homeworld Inventory control and verify that the same loose gem is physically present again after an actual cheat-disabled, memory-card-disabled reset or cold boot. Do not promote ID65 or combine music, totals, portals, saving, or content changes into this evidence boundary.",
   "scopeLimitations": [
     "This partial result applies only to profile unused-level-65-town-square-display-name-clean-usa-disposable-v4 and BIN SHA-256 9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8.",
     "It proves the ID65 indexed display-name assignment at runtime, not full authored-level identity or progression ownership.",
