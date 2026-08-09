@@ -320,3 +320,53 @@ and edges, nearby gameplay remains stable, retail Town Square does not contain
 the copy, and the comparison levels still load. Far-distance disappearance is
 recorded separately because this first experiment is HP-only; LP/far-LOD
 authoring is the next terrain gate rather than part of this candidate.
+
+## Sixth runtime observation: first terrain discriminator rejected
+
+The user tested the exact authored-terrain candidate and reported: “I honestly
+didnt see anything different from the normal townsquare and ID65.” A read-only
+post-report check found that the continuing DuckStation process had the exact
+candidate BIN open, and the on-disk image still hashed to
+`db9230bbe1b8b5b15b52299267b3453cb60ec7494248295f323a40f597d7391f`.
+The required visible raised-copy discriminator was therefore not observed, so
+this candidate is runtime-rejected and cannot count as an Add Terrain pass.
+
+The static proof remains valid: six exact row-80 patch ranges, 108,415 logical
+changed bytes, 125,762 physical changed bytes, and 63 rebuilt/verified MODE2
+Form1 sectors still read back exactly. Those facts prove image construction,
+not recognizable runtime rendering. The report does not by itself tell us
+whether the copied face was submitted to or accepted by the renderer, or
+whether it was rendered but too subtle, overlapped, occluded, or difficult to
+locate. Collision and far-LOD behavior also remain unproven.
+
+A later read-only GDB inspection narrowed that boundary without changing the
+runtime verdict. Live level-ID readback was 65, the hidden selector was inactive,
+and the exact authored sector header, three vertices, appended face record, and
+matching collision triangle were all present in live ID65 RAM. The base sector
+header was absent. This proves that the exact row-80 authored mesh and collision
+bytes were loaded at runtime and rules out a stale or wrong CUE. It still does
+not prove that the GPU drew the face recognizably. At the time of inspection,
+Spyro was about 990 XY units away from the authored face, so that later frame
+also cannot serve as the intended close-range view.
+
+The test handoff itself was also not decisive. It described “three loose red
+gems” near a bull, but the authored face was actually beside three loose green
+gems and the dragon pedestal; the closest red gems were roughly 1,200 XY units
+away, and the nearest bull was roughly 609 XY units away. The triangle was only
+about 1,183 square XY units, translated by 68 units and raised by 10–16 units,
+with no side walls. The incorrect landmark and subtle geometry are sufficient
+to reject this candidate-and-handoff combination without claiming a renderer
+failure.
+
+The evidence record is
+`docs/runtime-evidence/unused-level-65-town-square-authored-terrain-add-copy-not-observed-2026-08-08.json`.
+Its status is `runtime-rejected-visibility-discriminator-not-observed`, and
+`promotionAuthorized` remains false.
+
+Before another add-copy/collision experiment, the next isolated control starts
+again from the focused-runtime-passed display-name base and deforms one existing
+HP face at an unmistakable, reproducible, spawn-visible landmark. That control
+keeps face counts, collision, LP terrain, textures, Mobys, and game-contract
+tables unchanged. It answers only whether authored row-80 vertex bytes reach the
+runtime renderer. LP/far-LOD work is no longer the immediate next gate; it waits
+until close-range row-80 visibility is positively established.
