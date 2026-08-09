@@ -579,6 +579,14 @@ The editor can preview terrain surfaces, stage supported height edits, and swap
 source-proven native terrain/building texture records between levels. Terrain
 behavior outside the decoded native collision signatures is not fully decoded.
 
+Structural **Add Terrain Copy** remains capacity-gated. A direct append is
+allowed only when the bytes immediately after the exact native scene sector are
+proven free; source-search gaps may contain omitted LP-only sectors and are not
+treated as slack. Scene-sector suffix shifting is disabled because the current
+writer cannot yet grow the environment component and rebase the following
+occlusion, surface, collision, and later components. When direct capacity is not
+proven, the build rejects the whole structural edit before publishing a BIN/CUE.
+
 The shipping editor retains every captured editable source-terrain face; no
 normal view removes geometry from the project. **Edit Map** is the exhaustive
 top-down locator, and **Fit All** frames the complete captured scene. Every

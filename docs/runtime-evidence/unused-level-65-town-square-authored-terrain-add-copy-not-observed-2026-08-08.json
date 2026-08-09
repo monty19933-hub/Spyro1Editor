@@ -59,12 +59,26 @@
     "interpretation": "The checklist described the wrong gem color and an imprecise bull landmark, while the intended geometry was too subtle for a decisive visual handoff. This is a candidate-and-handoff rejection, not evidence that row-80 loading failed."
   },
   "staticProofBoundary": {
-    "staticStatusRemainsValid": true,
+    "mechanicalReadbackFactsRemainValid": true,
+    "candidateSafetyConclusionValid": false,
     "logicalPatchCount": 6,
     "changedLogicalWadBytes": 108415,
     "changedPhysicalImageBytes": 125762,
     "rebuiltAndChangedRawSectorCount": 63,
-    "interpretation": "The prior proof still establishes deterministic row-80 bytes, readback, exact diff containment, and MODE2 Form1 integrity. Static byte proof does not establish that the new face was rendered recognizably at runtime."
+    "interpretation": "The prior proof still establishes deterministic row-80 bytes, readback, exact diff containment, and MODE2 Form1 integrity. A later bounds audit proved that its structural-append safety interpretation was wrong, so the candidate is invalid independently of its failed visibility discriminator."
+  },
+  "staticSafetyDefect": {
+    "sourceSector": 201,
+    "sourceSectorWadOffset": "0x6A3C038",
+    "sourceSectorByteLength": 1216,
+    "sourceSectorEndExclusive": "0x6A3C4F8",
+    "followingSector": 202,
+    "followingSectorWadOffset": "0x6A3C4F8",
+    "repackPatchWadOffset": "0x6A3C180",
+    "repackPatchByteLength": 916,
+    "repackPatchEndExclusive": "0x6A3C514",
+    "overlapByteLength": 28,
+    "conclusion": "The repack crossed 28 bytes into the contiguous sector-202 header. The assumed inter-sector slack did not exist. This v1 candidate is structurally unsafe and must not be loaded or retested."
   },
   "unverifiedRuntimeChecks": [
     "The live RAM readback proves that the edited row-80 mesh and collision bytes were loaded, but it does not establish whether the face was submitted to or accepted by the renderer.",
@@ -72,11 +86,12 @@
     "Collision on the added face, close-versus-far LOD behavior, the exact route and camera angles used, and prohibited-path adherence were not independently captured.",
     "Gnasty's Loot and Sunny Flight comparison behavior was not included in this specific report."
   ],
-  "nextGate": "Return to the exact focused-runtime-passed display-name base and create a separate, unmistakable existing-HP-face deformation at a reproducible spawn-visible landmark. Keep face counts, collision, low-detail terrain, textures, Mobys, music, totals, portals, Return Home, saving, and persistence unchanged. Use it only to prove that authored ID65 row-80 vertex bytes reach the runtime renderer before retrying Add Terrain plus collision.",
+  "nextGate": "Return to the exact focused-runtime-passed display-name base and create a separate, unmistakable existing-HP-face deformation immediately ahead of the spawn landing. Keep face counts, component sizes, collision, low-detail terrain, textures, Mobys, music, totals, portals, Return Home, saving, and persistence unchanged. Use it only to prove that authored ID65 row-80 vertex bytes reach the runtime renderer. Any later structural Add Terrain candidate must grow and rebase the environment component instead of assuming inter-sector slack.",
   "scopeLimitations": [
     "This rejection applies only to profile unused-level-65-town-square-authored-terrain-add-copy-clean-usa-disposable-v1 and BIN db9230bbe1b8b5b15b52299267b3453cb60ec7494248295f323a40f597d7391f.",
-    "It rejects the required recognizable visibility discriminator; it does not mean that row-80 bytes were ignored, that the face was absent from live RAM, or that collision failed.",
+    "It rejects the required recognizable visibility discriminator; live RAM proves that row-80 bytes loaded, while the later bounds audit independently rejects the structural append as unsafe.",
     "Collision behavior, far LOD, broader gameplay stability, comparison-level behavior, and prohibited-path adherence remain unverified for this candidate.",
+    "The exact v1 BIN is retained only as rejected evidence and must not be loaded or retested.",
     "It does not authorize integration into the normal editor, Create BIN, release, or update paths."
   ]
 }

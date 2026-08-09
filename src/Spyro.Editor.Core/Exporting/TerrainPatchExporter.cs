@@ -1256,7 +1256,7 @@ public static class TerrainPatchExporter
                 collisionContext == null
                     ? "Terrain side walls need collision triangle source bytes and were not attempted."
                     : collisionContext.SupportsCollisionIndexRebuild
-                        ? "Terrain side walls are attempted for exposed raised/lowered high-detail edges, using direct append room or a bounded same-model sector shift when packed terrain needs more space."
+                        ? "Terrain side walls are attempted for exposed raised/lowered high-detail edges only when proved immediate scene-sector append room is available. Packed sectors wait for environment-component growth and following-component rebasing."
                         : collisionContext.SupportsDirectLookupFallback
                             ? "Source-derived terrain can patch existing top collision and can attempt copied terrain/solid side-wall collision through the decoded direct lookup fallback; full collision-index rebuild remains disabled."
                             : "Source-derived terrain can patch existing top collision, but copied terrain and solid side walls still need the collision lookup table decoded.",
@@ -1315,7 +1315,12 @@ public static class TerrainPatchExporter
             return;
         }
 
-        int appendSlack = FindSectorAppendSlack(sourceSectorHits, sourceSectorWadOffset, sector.SizeBytes);
+        int appendSlack = FindSectorAppendSlack(
+            imageStream,
+            layout,
+            sourceSectorHits,
+            sourceSectorWadOffset,
+            sector.SizeBytes);
         byte[] sourceFaceBytes = ram.AsSpan(faceOffset, 16).ToArray();
         int textureIdEdited = JsonValue.GetInt32(edit, "textureIdEdited", -1);
         if (textureIdEdited >= 0)
@@ -2021,7 +2026,12 @@ public static class TerrainPatchExporter
             long sourceSectorWadOffset = first.SourceSectorWadOffset;
             int hpVertexEndOffset = GetHpVertexDataEndOffset(sector);
             long repackWadOffset = sourceSectorWadOffset + (hpVertexEndOffset - sector.Offset);
-            int appendSlack = FindSectorAppendSlack(sourceSectorHits, sourceSectorWadOffset, sector.SizeBytes);
+            int appendSlack = FindSectorAppendSlack(
+                imageStream,
+                layout,
+                sourceSectorHits,
+                sourceSectorWadOffset,
+                sector.SizeBytes);
             int effectiveAppendSlack = appendSlack;
             TerrainSectorSuffixShiftPlan? suffixShiftPlan = null;
             foreach (IGrouping<string, TerrainSideWallCandidate> runtimeGroup in sectorCandidates.GroupBy(candidate => candidate.RuntimeKey, StringComparer.OrdinalIgnoreCase))
@@ -3135,7 +3145,12 @@ public static class TerrainPatchExporter
         return -1;
     }
 
-    private static int FindSectorAppendSlack(IReadOnlyDictionary<string, SourceSectorLocation> sourceSectorHits, long sourceSectorWadOffset, int sectorSizeBytes)
+    private static int FindSectorAppendSlack(
+        FileStream imageStream,
+        DiscLayout layout,
+        IReadOnlyDictionary<string, SourceSectorLocation> sourceSectorHits,
+        long sourceSectorWadOffset,
+        int sectorSizeBytes)
     {
         long sectorEnd = sourceSectorWadOffset + sectorSizeBytes;
         long nextSector = sourceSectorHits.Values
@@ -3147,8 +3162,104 @@ public static class TerrainPatchExporter
         if (nextSector < 0)
             return 0;
 
-        long slack = nextSector - sectorEnd;
+        long appendBoundary = FindFirstInterveningSceneSectorWadOffset(
+            imageStream,
+            layout,
+            sectorEnd,
+            nextSector);
+        if (appendBoundary < 0)
+            appendBoundary = nextSector;
+
+        long slack = appendBoundary - sectorEnd;
+        if (slack <= 0)
+            return 0;
         return slack > int.MaxValue ? int.MaxValue : (int)slack;
+    }
+
+    private static long FindFirstInterveningSceneSectorWadOffset(
+        FileStream imageStream,
+        DiscLayout layout,
+        long searchStartWadOffset,
+        long nextMappedSectorWadOffset)
+    {
+        const int sceneSectorHeaderBytes = 28;
+        if (searchStartWadOffset < 0 ||
+            nextMappedSectorWadOffset - searchStartWadOffset < sceneSectorHeaderBytes)
+        {
+            return -1;
+        }
+
+        // A source-search map contains only sectors represented by editable HP
+        // faces. LP-only sectors can therefore occupy what looks like append
+        // slack. Accept an intervening header only when one or more contiguous
+        // native sector records exactly fill the gap to the next mapped sector;
+        // this avoids treating arbitrary padding bytes as a sector boundary.
+        for (long candidate = searchStartWadOffset;
+             candidate + sceneSectorHeaderBytes <= nextMappedSectorWadOffset;
+             candidate += sizeof(uint))
+        {
+            long cursor = candidate;
+            while (cursor < nextMappedSectorWadOffset &&
+                   TryReadSceneSectorByteLength(
+                       imageStream,
+                       layout,
+                       cursor,
+                       nextMappedSectorWadOffset,
+                       out int sectorByteLength))
+            {
+                cursor = checked(cursor + sectorByteLength);
+            }
+
+            if (cursor == nextMappedSectorWadOffset)
+                return candidate;
+        }
+
+        return -1;
+    }
+
+    private static bool TryReadSceneSectorByteLength(
+        FileStream imageStream,
+        DiscLayout layout,
+        long sectorWadOffset,
+        long maximumEndWadOffset,
+        out int sectorByteLength)
+    {
+        const int sceneSectorHeaderBytes = 28;
+        sectorByteLength = 0;
+        if (sectorWadOffset < 0 ||
+            maximumEndWadOffset - sectorWadOffset < sceneSectorHeaderBytes)
+        {
+            return false;
+        }
+
+        byte[] header = ReadWadBytes(imageStream, layout, sectorWadOffset, sceneSectorHeaderBytes);
+        int numLpVertices = header[16];
+        int numLpColours = header[17];
+        int numLpFaces = header[18];
+        int numHpVertices = header[20];
+        int numHpColours = header[21];
+        int numHpFaces = header[22];
+        if (numLpVertices + numHpVertices == 0 || numLpFaces + numHpFaces == 0)
+            return false;
+
+        int sizeWords = checked(
+            7 +
+            numLpVertices +
+            numLpColours +
+            (numLpFaces * 2) +
+            numHpVertices +
+            (numHpColours * 2) +
+            (numHpFaces * 4));
+        int sizeBytes = checked(sizeWords * sizeof(uint));
+        if (sizeBytes < sceneSectorHeaderBytes ||
+            sizeBytes > 0x40000 ||
+            sectorWadOffset + sizeBytes > maximumEndWadOffset)
+        {
+            return false;
+        }
+
+        sectorByteLength = sizeBytes;
+        return true;
     }
 
     private static bool TryBuildTerrainSectorSuffixShiftPlan(
@@ -3165,7 +3276,12 @@ public static class TerrainPatchExporter
     {
         plan = null;
         skipReason = "";
-        int appendSlack = Math.Max(0, FindSectorAppendSlack(sourceSectorHits, sourceSectorWadOffset, sectorSizeBytes));
+        int appendSlack = FindSectorAppendSlack(
+            imageStream,
+            layout,
+            sourceSectorHits,
+            sourceSectorWadOffset,
+            sectorSizeBytes);
         int shiftBytes = requiredAppendBytes - appendSlack;
         if (shiftBytes <= 0)
         {
@@ -3173,73 +3289,17 @@ public static class TerrainPatchExporter
             return false;
         }
 
-        long sectorEnd = sourceSectorWadOffset + sectorSizeBytes;
-        SourceSectorLocation[] orderedLocations = sourceSectorHits.Values
-            .GroupBy(location => location.WadOffset)
-            .Select(group => group.First())
-            .OrderBy(location => location.WadOffset)
-            .ToArray();
-        SourceSectorLocation? nextLocation = orderedLocations.FirstOrDefault(location => location.WadOffset > sourceSectorWadOffset);
-        if (nextLocation == null || nextLocation.WadOffset < 0)
-        {
-            skipReason = "no following scene sector was found to shift.";
-            return false;
-        }
-
-        long suffixStart = nextLocation.WadOffset;
-        if (suffixStart < sectorEnd)
-        {
-            skipReason = "the next scene sector overlaps this sector, so appending side-wall bytes would be unsafe.";
-            return false;
-        }
-
-        long chainTailEnd = orderedLocations
-            .Select(location => location.WadOffset + location.SizeBytes)
-            .DefaultIfEmpty(-1)
-            .Max();
-        long modelEnd = modelSubfileInfo.AbsoluteWadOffset + modelSubfileInfo.SubfileSize;
-        if (chainTailEnd < suffixStart || chainTailEnd > modelEnd)
-        {
-            skipReason = "the scene-sector chain could not be bounded inside the level model data.";
-            return false;
-        }
-
-        long modelTailSlack = modelEnd - chainTailEnd;
-        if (modelTailSlack < shiftBytes)
-        {
-            skipReason = $"the model data has only {modelTailSlack} tail byte(s), but this side-wall edit needs {shiftBytes}.";
-            return false;
-        }
-
-        if (editedSceneSectorWadOffsets.Any(offset => offset >= suffixStart && offset < chainTailEnd))
-        {
-            skipReason = "another terrain edit touches a later scene sector that would be shifted; save/apply this side-wall edit separately until multi-sector rebasing is implemented.";
-            return false;
-        }
-
-        SourceSectorLocation[] shiftedLocations = orderedLocations
-            .Where(location => location.WadOffset >= suffixStart && location.WadOffset < chainTailEnd)
-            .ToArray();
-        if (shiftedLocations.Length == 0)
-        {
-            skipReason = "no later scene sectors were available to shift.";
-            return false;
-        }
-
-        long suffixLength = chainTailEnd - suffixStart;
-        if (suffixLength > int.MaxValue)
-        {
-            skipReason = "the scene-sector suffix is too large to patch safely in one terrain edit.";
-            return false;
-        }
-
-        plan = new TerrainSectorSuffixShiftPlan(
-            ShiftStartWadOffset: suffixStart,
-            ChainTailEndWadOffset: chainTailEnd,
-            ShiftBytes: shiftBytes,
-            ShiftedSectorCount: shiftedLocations.Length,
-            SuffixBytes: ReadWadBytes(imageStream, layout, suffixStart, (int)suffixLength));
-        return true;
+        // The scene chain ends at the environment-component boundary. Bytes
+        // after it belong to occlusion, special-surface, and collision data;
+        // they are not model-tail slack. Moving only the scene suffix would
+        // overwrite the following component and leave all native component
+        // lengths/offsets stale. Keep structural edits on proved immediate
+        // append room until component-aware growth and rebasing exists.
+        _ = modelSubfileInfo;
+        _ = editedSceneSectorWadOffsets;
+        skipReason =
+            "scene-sector suffix shifting is disabled until environment-component growth and following-component rebasing are implemented.";
+        return false;
     }
 
     private static void AddFaceRemovalPatches(
