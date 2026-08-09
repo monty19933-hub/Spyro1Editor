@@ -2,11 +2,12 @@
   "format": "spyro-editor-duckstation-runtime-evidence",
   "formatVersion": 1,
   "recordedDate": "2026-08-08",
-  "evidenceId": "unused-level-65-town-square-display-name-focused-partial-duckstation-2026-08-08",
+  "evidenceId": "unused-level-65-town-square-display-name-focused-pass-duckstation-2026-08-08",
   "evidenceType": "interactive-user-report-with-read-only-runtime-inspection",
-  "evidenceStatus": "focused-partial-runtime-observation",
+  "evidenceStatus": "focused-runtime-pass",
   "automatedEmulatorCapture": false,
   "promotionAuthorized": false,
+  "supersedesEvidenceId": "unused-level-65-town-square-display-name-focused-partial-duckstation-2026-08-08",
   "profileId": "unused-level-65-town-square-display-name-clean-usa-disposable-v4",
   "baseProfileId": "unused-level-65-town-square-physical-clone-clean-usa-disposable-v3",
   "baseRuntimeEvidenceId": "unused-level-65-town-square-physical-clone-focused-pass-duckstation-2026-08-08",
@@ -24,18 +25,23 @@
       "Music played, but it was Gnasty's Loot music rather than Town Square music.",
       "After collecting a loose gem, resetting, and re-entering ID65, Inventory displayed 4/0 and the Town Square identity still appeared.",
       "Retail Town Square, Gnasty's Loot, and Sunny Flight each loaded without issue.",
-      "Inventory homeworld-page cycling did not appear to work."
+      "Inventory homeworld-page cycling did not appear to work in the initial uncontrolled visited state.",
+      "After receiving the complete corrected checklist, the user reported that everything worked, including left and right Inventory cycling.",
+      "The user explicitly confirmed that the actual reset/cold-boot control used cheats and memory cards disabled, displayed 0/0 before recollection, and physically restored the same red gem."
     ],
     "passedChecks": [
       "The exact ID65 candidate loaded and displayed TOWN SQUARE instead of A.",
-      "Movement, camera, collision, enemy behavior, pause, and opening Inventory remained responsive.",
-      "Initial music playback started successfully.",
+      "Movement across several sectors, geometry, textures, collision, camera, initial music, enemies, pause, Inventory, and the TOWN SQUARE display identity remained stable.",
+      "Exactly one loose red gem could be collected in ID65.",
+      "After an actual cheat-disabled, memory-card-disabled reset/cold boot without a resumed save state, ID65 displayed 0/0 before recollection and the same red gem was physically present again.",
       "Reset and re-entry retained the TOWN SQUARE display identity.",
       "Retail Town Square remained loadable.",
       "Gnasty's Loot remained loadable.",
-      "Sunny Flight remained loadable."
+      "Sunny Flight remained loadable and retained normal flight controls and timer behavior.",
+      "After Gnasty's World HOME and Dream Weavers HOME were visited, Inventory cycled Left from ID65 to Dream Weavers and Right back to Gnasty's World.",
+      "Every prohibited action in checklist item 9 was avoided."
     ],
-    "conclusion": "The exact display-name pointer discriminator has direct positive runtime evidence and did not prevent the three retail comparison levels from loading. That original observation was partial because DuckStation progression cheats contaminated gem/progression values and its visited-homeworld state made the original page-cycling report non-diagnostic. Later controls closed page cycling, while the overall evidence remains partial for the separately listed unverified checks."
+    "conclusion": "The exact display-name pointer discriminator passed its complete focused DuckStation checklist. The initial contaminated progression observation and one-way visited-state control were superseded by later clean controls that passed reset/cold-boot gem restoration and bidirectional Inventory cycling. This pass applies only to the exact profile and BIN hash recorded here."
   },
   "controlledFollowUpObservation": {
     "userReports": [
@@ -66,7 +72,7 @@
     ],
     "interpretation": "Retail load logic marks only the current continuous level index as visited. Loading ID65 marked child index 35 but did not synthesize Gnasty's World HOME index 30, so Right from Dream Weavers was correctly gated. This is not evidence of a page-cycling regression. The red gem remaining absent proves same-session object retirement only; it does not test restoration after reset, cold boot, or memory-card persistence.",
     "environmentBoundary": "DuckStation cheats were inactive and live dragon, egg, and gem values corroborated the follow-up observation. Exact memory-card insertion, cold-boot, and resumed-save-state conditions were not independently captured, so this follow-up is not promoted to a complete clean checklist pass.",
-    "conclusion": "This follow-up confirmed leftward visited-page navigation and same-session red-gem collection state at 1/0. At that point, rightward return was normally gated because Gnasty's World HOME index 30 was unvisited. The later prepared control closed bidirectional page navigation, while cold-boot gem restoration remains open; status stays partial."
+    "conclusion": "This intermediate follow-up confirmed leftward visited-page navigation and same-session red-gem collection state at 1/0. At that point, rightward return was normally gated because Gnasty's World HOME index 30 was unvisited, so the evidence was still partial. Later controls closed bidirectional page navigation and clean reset/cold-boot gem restoration, and the user's complete-checklist report closed the focused discriminator."
   },
   "bidirectionalInventoryControlObservation": {
     "evidenceStatus": "passed-by-interactive-user-report",
@@ -96,7 +102,23 @@
       "After the page transition, D-pad Right returned to the visited Gnasty's World page."
     ],
     "conclusion": "The fully prepared control passed in both directions. Inventory page navigation follows the retail adjacent-HOME visited gates; no page-cycling regression is indicated by the display-name candidate.",
-    "evidenceBoundary": "This closes only the prepared bidirectional Inventory page control. Clean live progression values corroborate that progression cheats were inactive at inspection time, but they do not independently confirm reset/cold-boot gem restoration, pre-recollection 0/0, no resumed state, memory-card state, or any other remaining checklist item."
+    "evidenceBoundary": "This observation alone did not establish reset/cold-boot restoration or the clean no-card/no-resumed-state conditions; those are recorded separately in resetColdBootGemRestorationObservation. Clean live progression values corroborate that progression cheats were inactive at inspection time."
+  },
+  "resetColdBootGemRestorationObservation": {
+    "evidenceStatus": "passed-by-explicit-user-confirmation",
+    "prescribedEnvironmentIndependentlyVerified": false,
+    "clarificationPrompt": "Did everything also include the actual reset/cold-boot test with cheats/cards disabled, the red gem physically restored, and 0/0 shown before recollection?",
+    "userConfirmation": "Yes thats correc",
+    "passedChecks": [
+      "The gem-restoration control used an actual reset/cold boot.",
+      "DuckStation cheats and memory-card insertion were disabled for the control.",
+      "The cold boot did not resume the contaminated save state.",
+      "Before recollecting anything in ID65, Inventory displayed 0/0.",
+      "The previously collected red gem was physically present again after the reset/cold boot.",
+      "The TOWN SQUARE display identity still appeared after re-entry."
+    ],
+    "conclusion": "The clean no-card reset/cold-boot control discarded the prior session's collected-object state as expected. The red gem restored physically and the unchanged unauthored treasure target displayed 0/0 before recollection.",
+    "evidenceBoundary": "This closes reset/cold-boot loose-gem restoration only. It does not establish save ownership, memory-card persistence, authored totals, or any prohibited progression path."
   },
   "originalRuntimeEnvironmentContamination": {
     "duckStationGameSettingsPath": "/Users/john/Library/Application Support/DuckStation/gamesettings/SCUS-94228.ini",
@@ -117,17 +139,17 @@
     },
     "evidenceBoundary": "The display name and basic load/responsiveness observations remain usable. Gem, treasure, dragon, egg, reset, and persistence semantics from this run are contaminated; visited-homeworld and page-cycling behavior required a controlled baseline, which was later completed separately. No DuckStation setting was changed during evidence collection."
   },
-  "runtimeEnvironmentContext": {
+  "originalRuntimeEnvironmentContext": {
     "memoryCardStateDuringExactRunVerified": false,
     "globalCard1TypeObservedAfterReport": "PerGameTitle",
     "globalCard2TypeObservedAfterReport": "None",
     "perGameCardObservedAfterReport": "/Users/john/Library/Application Support/DuckStation/memcards/Spyro the Dragon (USA)_1.mcd",
     "perGameCardLastModified": "2026-08-08T14:29:09-07:00",
-    "interpretation": "The current global configuration and existing per-game card do not prove that a card was inserted during the exact reported run, but they prevent assuming the checklist's no-card condition. A clean repeat must explicitly disable card insertion."
+    "interpretation": "The original global configuration and existing per-game card prevented assuming a no-card condition for the first report. The later checklist-completing reset control explicitly used memory-card insertion disabled; this does not test memory-card persistence or save ownership."
   },
   "observedExcludedScope": [
     "The unchanged index-35 initial-music row selected Gnasty's Loot track 19. Music ownership was deliberately excluded from the display-name candidate.",
-    "The original contaminated run displayed 4/0; the later cheat-disabled same-session control displayed 1/0 after collecting one red gem. In both cases the zero target is the exact unchanged slot-35 value. Neither observation proves reset restoration or authored totals.",
+    "The original contaminated run displayed 4/0; the later cheat-disabled same-session control displayed 1/0 after collecting one red gem. In both cases the zero target is the exact unchanged slot-35 value. Neither historical observation alone proves reset restoration or authored totals; the later separate clean 0/0 control proves only reset restoration.",
     "Inventory opened without crashing. An earlier follow-up moved Left to the visited Dream Weavers page while Right was normally gated because Gnasty's World HOME index 30 had not been visited; after both adjacent HOME rows were deliberately visited, the prepared control subsequently passed Left and Right. Page ownership and progression remain outside this discriminator."
   ],
   "staticAndRuntimeExplanation": {
@@ -184,11 +206,11 @@
     }
   },
   "unverifiedRuntimeChecks": [
-    "Whether the same loose gem was physically present again after an actual reset or cold boot remains unverified; leaving and re-entering without reset tests only same-session persistence.",
-    "A clean reset/cold-boot control should observe the red gem physically present before recollection and ideally confirm the pre-recollection display is 0/0.",
-    "Memory-card-disabled cold-boot conditions and prohibited-path adherence were not explicitly reconfirmed in this report.",
-    "Geometry and textures were not separately reported.",
-    "Sunny Flight loaded, but its flight controls and timer were not separately reported."
+    "Dragon rescue, egg-thief interaction, enemy attacks or kills, chest interaction, death, and respawn were deliberately avoided and remain untested.",
+    "Return Home, Exit Level, Quit Game, and portal-to-exit 65 remain untested and unauthorized.",
+    "Save, load, memory-card insertion, ID65 save ownership, and persistence remain untested and unauthorized.",
+    "Extended-session alternate music, title demos, and authored treasure, dragon, and egg totals remain untested.",
+    "Authored content mutation beyond the display-name pointer was not included in this discriminator."
   ],
   "bidirectionalInventoryControl": {
     "evidenceStatus": "passed-by-interactive-user-report",
@@ -209,10 +231,10 @@
     "expectedResult": "Left reaches the now-visited Dream Weavers page and Right returns to the now-visited Gnasty page.",
     "observedResult": "Passed in both directions by explicit interactive user report. No page-cycling code change is indicated by the current evidence."
   },
-  "nextGate": "On the same exact BIN, verify that the same loose gem is physically present again with a pre-recollection 0/0 after an actual cheat-disabled, memory-card-disabled reset or cold boot, and close the remaining unreported focused-checklist items. Do not promote ID65 or combine music, totals, portals, saving, or content changes into this evidence boundary.",
+  "nextGate": "The authored display-name discriminator is closed for this exact profile and BIN. Preserve this candidate as an evidence-bound base only; any subsequent music, totals, portal, Return Home, saving, memory-card, or content experiment must be a separate disposable candidate with its own static and runtime gate. Normal Create BIN and release promotion remain unauthorized.",
   "scopeLimitations": [
-    "This partial result applies only to profile unused-level-65-town-square-display-name-clean-usa-disposable-v4 and BIN SHA-256 9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8.",
-    "It proves the ID65 indexed display-name assignment at runtime, not full authored-level identity or progression ownership.",
+    "This focused pass applies only to profile unused-level-65-town-square-display-name-clean-usa-disposable-v4 and BIN SHA-256 9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8.",
+    "It proves the ID65 indexed display-name assignment and its focused checklist at runtime, not full authored-level identity or progression ownership.",
     "It does not authorize normal Create BIN, editor workspace integration, a release, or update-channel publication.",
     "Music ownership, late music, totals, portal routing, Return Home, saving, memory-card persistence, and content authoring remain separate gates."
   ]

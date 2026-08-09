@@ -9,6 +9,12 @@ const string OutputExecutableSha256 =
     "fa5fc7981188b78fa7d7b78facca64c1f79dadb107515e9146ad178ade39d442";
 const string ExpectedOutputImageSha256 =
     "9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8";
+const string DisplayNameRuntimeEvidenceId =
+    "unused-level-65-town-square-display-name-focused-pass-duckstation-2026-08-08";
+const string SupersededDisplayNameRuntimeEvidenceId =
+    "unused-level-65-town-square-display-name-focused-partial-duckstation-2026-08-08";
+const string DisplayNameRuntimeEvidenceRelativePath =
+    "docs/runtime-evidence/unused-level-65-town-square-display-name-focused-pass-2026-08-08.json";
 
 string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
 string baseRoot = Path.Combine(
@@ -64,6 +70,46 @@ string outputPrefix = Path.Combine(
     "Unused-Level-65-Town-Square-independent-storage-with-Town-Square-display-name-RUNTIME-CANDIDATE");
 string staticProofPath = outputPrefix + "-static-proof.json";
 string checklistPath = outputPrefix + "-runtime-checklist.md";
+UnusedLevel65DisplayNameCandidateRequest request = new(
+    baseImage,
+    baseCue,
+    outputPrefix + ".bin",
+    outputPrefix + ".cue");
+string displayNameRuntimeEvidencePath = Path.Combine(
+    repositoryRoot,
+    DisplayNameRuntimeEvidenceRelativePath);
+Require(
+    File.Exists(displayNameRuntimeEvidencePath),
+    "The focused runtime-pass evidence for the ID65 display-name candidate is missing.");
+string expectedOutputCueArtifact = Path.GetRelativePath(repositoryRoot, request.OutputCuePath)
+    .Replace(Path.DirectorySeparatorChar, '/');
+string expectedChecklistArtifact = Path.GetRelativePath(repositoryRoot, checklistPath)
+    .Replace(Path.DirectorySeparatorChar, '/');
+string expectedStaticProofArtifact = Path.GetRelativePath(repositoryRoot, staticProofPath)
+    .Replace(Path.DirectorySeparatorChar, '/');
+using (JsonDocument displayNameRuntimeEvidence = JsonDocument.Parse(
+           await File.ReadAllTextAsync(displayNameRuntimeEvidencePath)))
+{
+    JsonElement root = displayNameRuntimeEvidence.RootElement;
+    Require(
+        root.GetProperty("evidenceId").GetString() == DisplayNameRuntimeEvidenceId &&
+        root.GetProperty("evidenceStatus").GetString() == "focused-runtime-pass" &&
+        !root.GetProperty("promotionAuthorized").GetBoolean() &&
+        !root.GetProperty("automatedEmulatorCapture").GetBoolean() &&
+        root.GetProperty("supersedesEvidenceId").GetString() ==
+            SupersededDisplayNameRuntimeEvidenceId &&
+        root.GetProperty("profileId").GetString() ==
+            UnusedLevel65DisplayNameCandidateExporter.ProfileId &&
+        root.GetProperty("baseProfileId").GetString() ==
+            UnusedLevel65PhysicalCloneCandidateExporter.ProfileId &&
+        root.GetProperty("baseOutputImageSha256").GetString() == baseHashBefore &&
+        root.GetProperty("outputImageSha256").GetString() == ExpectedOutputImageSha256 &&
+        root.GetProperty("outputExecutableSha256").GetString() == OutputExecutableSha256 &&
+        root.GetProperty("outputCue").GetString() == expectedOutputCueArtifact &&
+        root.GetProperty("runtimeChecklistArtifact").GetString() == expectedChecklistArtifact &&
+        root.GetProperty("staticProofArtifact").GetString() == expectedStaticProofArtifact,
+        "The ID65 display-name runtime evidence no longer binds this exact unpromoted profile, output, or artifact set.");
+}
 await File.WriteAllTextAsync(
     staticProofPath,
     "{\"status\":\"stale-interrupted-sidecar\"}\n",
@@ -72,12 +118,6 @@ await File.WriteAllTextAsync(
     checklistPath,
     "stale interrupted sidecar\n",
     new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-UnusedLevel65DisplayNameCandidateRequest request = new(
-    baseImage,
-    baseCue,
-    outputPrefix + ".bin",
-    outputPrefix + ".cue");
-
 UnusedLevel65DisplayNameCandidateResult result =
     await UnusedLevel65DisplayNameCandidateExporter.ExportAsync(request);
 VerifyResult(result);
@@ -163,8 +203,19 @@ Require(
 
 object proof = new
 {
-    status = "static-proven-runtime-pending",
+    status = "static-proven-external-focused-runtime-pass-recorded",
     runtimeClaim = false,
+    runtimeEvidence = new
+    {
+        evidenceId = DisplayNameRuntimeEvidenceId,
+        evidencePath = DisplayNameRuntimeEvidenceRelativePath,
+        evidenceStatus = "focused-runtime-pass",
+        promotionAuthorized = false,
+        automatedEmulatorCapture = false,
+        supersedesEvidenceId = SupersededDisplayNameRuntimeEvidenceId,
+        profileId = UnusedLevel65DisplayNameCandidateExporter.ProfileId,
+        outputImageSha256 = ExpectedOutputImageSha256
+    },
     generatedAtUtc = repeat.Plan.GeneratedAtUtc,
     profileId = repeat.Plan.ProfileId,
     baseProfileId = repeat.Plan.BaseProfileId,
@@ -233,7 +284,7 @@ object proof = new
         "Authored totals, music-table extension, portal routing, Return Home, save and memory-card ownership, and content edits remain out of scope.",
         "The passed physical-storage layout, retail comparison levels, WAD payloads, and every non-identity executable byte are protected.",
         "No normal Create BIN, editor workspace, release, or update-channel path consumes this candidate.",
-        "DuckStation runtime proof is mandatory before any promotion."
+        "The linked focused runtime evidence is interactive rather than automated; this static artifact makes no independent runtime claim and promotion remains unauthorized."
     }
 };
 JsonSerializerOptions jsonOptions = new()
@@ -251,7 +302,7 @@ checklist.AppendLine();
 checklist.AppendLine($"- BIN SHA-256: `{repeat.OutputImageSha256}`");
 checklist.AppendLine($"- Base BIN SHA-256: `{repeat.Plan.BaseImageSha256}`");
 checklist.AppendLine($"- Profile: `{repeat.Plan.ProfileId}`");
-checklist.AppendLine("- Status: static proof complete; focused runtime evidence partial; remaining controls pending.");
+checklist.AppendLine("- Status: exact focused DuckStation runtime pass recorded; candidate remains unpromoted and research-only.");
 checklist.AppendLine();
 checklist.AppendLine(
     "This candidate changes only ID65's indexed name pointer from the placeholder A string " +
@@ -283,9 +334,23 @@ using (JsonDocument document = JsonDocument.Parse(await File.ReadAllTextAsync(st
     JsonElement diff = root.GetProperty("diffBoundary");
     JsonElement logicalPatch = root.GetProperty("logicalPatches")[0];
     JsonElement handoff = root.GetProperty("testHandoff");
+    JsonElement runtimeEvidence = root.GetProperty("runtimeEvidence");
     Require(
-        root.GetProperty("status").GetString() == "static-proven-runtime-pending" &&
+        root.GetProperty("status").GetString() ==
+            "static-proven-external-focused-runtime-pass-recorded" &&
         !root.GetProperty("runtimeClaim").GetBoolean() &&
+        runtimeEvidence.GetProperty("evidenceId").GetString() == DisplayNameRuntimeEvidenceId &&
+        runtimeEvidence.GetProperty("evidencePath").GetString() ==
+            DisplayNameRuntimeEvidenceRelativePath &&
+        runtimeEvidence.GetProperty("evidenceStatus").GetString() == "focused-runtime-pass" &&
+        !runtimeEvidence.GetProperty("promotionAuthorized").GetBoolean() &&
+        !runtimeEvidence.GetProperty("automatedEmulatorCapture").GetBoolean() &&
+        runtimeEvidence.GetProperty("supersedesEvidenceId").GetString() ==
+            SupersededDisplayNameRuntimeEvidenceId &&
+        runtimeEvidence.GetProperty("profileId").GetString() ==
+            UnusedLevel65DisplayNameCandidateExporter.ProfileId &&
+        runtimeEvidence.GetProperty("outputImageSha256").GetString() ==
+            ExpectedOutputImageSha256 &&
         root.GetProperty("baseImageSha256").GetString() == baseHashBefore &&
         root.GetProperty("outputImageSha256").GetString() == ExpectedOutputImageSha256 &&
         root.GetProperty("requiresDuckStationRuntimeProof").GetBoolean() &&
@@ -318,7 +383,7 @@ RuntimeCandidateTestHandoff.VerifyChecklistReadback(
     loadCodes);
 Require(
     writtenChecklist.Contains(ExpectedOutputImageSha256, StringComparison.Ordinal) &&
-    Contains(writtenChecklist, "focused runtime evidence partial") &&
+    Contains(writtenChecklist, "exact focused DuckStation runtime pass recorded") &&
     Contains(writtenChecklist, "Town Square instead of A") &&
     Contains(writtenChecklist, "physically present again") &&
     Contains(writtenChecklist, "Before recollecting anything") &&
@@ -341,7 +406,7 @@ RequireNoTransactionalDebris(outputRoot);
 
 Console.WriteLine(
     "PASS: ID65 display identity remains an exact one-pointer candidate; " +
-    "focused DuckStation evidence is partial and the remaining controls are pending.");
+    "its exact focused DuckStation runtime pass is recorded and promotion remains unauthorized.");
 Console.WriteLine($"CUE: {repeat.OutputCuePath}");
 Console.WriteLine($"Reveal in Finder: {finderReveal.HelperPath}");
 Console.WriteLine($"BIN: {repeat.OutputImagePath}");
@@ -364,7 +429,7 @@ static void VerifyResult(UnusedLevel65DisplayNameCandidateResult result)
         result.OutputImageSha256 == UnusedLevel65DisplayNameCandidateExporter.ExpectedOutputImageSha256 &&
         result.OutputImageSha256 == ExpectedOutputImageSha256 &&
         result.Plan.RequiresDuckStationRuntimeProof,
-        "The display-name candidate lost its exact base, output, profile, or runtime-pending identity.");
+        "The display-name candidate lost its exact base, output, profile, or runtime-proof requirement.");
     Require(
         result.Plan.BaseExecutableSha256 == BaseExecutableSha256 &&
         result.Plan.OutputExecutableSha256 == OutputExecutableSha256 &&

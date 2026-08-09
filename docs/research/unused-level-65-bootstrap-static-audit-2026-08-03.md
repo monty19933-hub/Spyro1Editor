@@ -97,7 +97,7 @@ arbitrary level authoring.
 
 ## Fourth candidate: authored display-name assignment
 
-The next isolated level-format gate now has a static-proven, runtime-pending
+The next isolated level-format gate was built as a static-proven, runtime-pending
 candidate. It starts from the exact focused-runtime-passed physical clone at
 BIN SHA-256
 `f585e45ff1d795f8b2de64f20e1ed2953bfc7f43adf1c0b47b03e849e4865e48`
@@ -148,6 +148,10 @@ Each adjacent runtime checklist repeats the complete controller input for every
 level used by the focused test:
 
 - ID65: `Select; R1, R2, L1, L2, R1, L1, R2, L2; Left, Down`.
+- Gnasty's World prerequisite (ID60):
+  `Select; R1, R2, L1, L2, R1, L1, R2, L2; Left, Circle`.
+- Dream Weavers prerequisite (ID50):
+  `Select; R1, R2, L1, L2, R1, L1, R2, L2; Down, Circle`.
 - Retail Town Square (ID13): `Select; R1, R2, L1, L2, R1, L1, R2, L2; Cross, Triangle`.
 - Gnasty's Loot (ID64): `Select; R1, R2, L1, L2, R1, L1, R2, L2; Left, Right`.
 - Sunny Flight (ID15): `Select; R1, R2, L1, L2, R1, L1, R2, L2; Cross, Down`.
@@ -155,19 +159,21 @@ level used by the focused test:
 These Finder and checklist files are research sidecars only. They do not enter
 normal Create BIN, editor workspace, release, or update-channel paths.
 
-The generated checklist keeps memory cards disabled and checks only the new
-Town Square display identity, a short ID65 load/reset pass, retail Town Square,
-Gnasty's Loot, and Sunny Flight. Authored totals, music-table extension, portal
-routing, Return Home, save ownership, content mutation, editor integration,
-normal Create BIN, and release/update paths remain excluded. This candidate
-must not be promoted unless its exact BIN hash passes the focused DuckStation
-checklist.
+The generated checklist keeps every DuckStation cheat and memory-card insertion
+disabled. It checks the new Town Square display identity, a short ID65 load/reset
+pass, the Gnasty's World ID60 to Dream Weavers ID50 to ID65 bidirectional
+Inventory control, retail Town Square, Gnasty's Loot, and Sunny Flight. Authored
+totals, music-table extension, portal routing, Return Home, save ownership,
+content mutation, editor integration, normal Create BIN, and release/update paths
+remain excluded. The exact BIN now passes that focused checklist, but this result
+remains research-only and does not authorize promotion into normal Create BIN,
+editor integration, release, or update paths.
 
-## Fourth runtime observation: positive identity, partial checklist
+## Fourth runtime observation: focused display-name pass
 
 The exact display-name candidate at BIN SHA-256
 `9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8`
-has positive interactive runtime evidence. ID65 loaded and displayed Town Square
+now has a focused DuckStation runtime pass. ID65 loaded and displayed Town Square
 instead of A; movement, camera, collision, enemies, pause, and Inventory opening
 remained stable; reset/re-entry retained the Town Square identity; and retail
 Town Square, Gnasty's Loot, and Sunny Flight each loaded.
@@ -230,12 +236,25 @@ gem restoration, no-resumed-state condition, or memory-card condition.
 In the same cheat-disabled follow-up, collecting one red gem produced `1/0`.
 After leaving and re-entering ID65 without a reset, that gem remained absent.
 This is expected same-session object retirement against the unchanged zero target;
-it does not test reset restoration or save ownership. The remaining gem control
-must perform an actual reset or cold boot and confirm that the same red gem is
-physically present before recollection, ideally with a pre-recollection `0/0`.
+it does not by itself test reset restoration or save ownership. In a later
+explicit clarification, the user confirmed that the separate control used an
+actual reset/cold boot with DuckStation cheats and memory-card insertion disabled,
+showed `0/0` before recollection, and restored the same red gem physically. This
+closes clean reset/cold-boot loose-gem restoration, but it does not establish save
+ownership, memory-card persistence, or authored totals.
+
+The user's umbrella report that everything in the active generated checklist
+worked also closes its remaining rendering and comparison checks: ID65 geometry
+and textures remained normal, Sunny Flight retained normal controls and timer,
+and every prohibited action in checklist item 9 was avoided. Taken together, the
+original load report and the later clean controls pass every focused item. The
+initial contaminated `4/0` observation remains historical diagnostic context
+only and does not weaken the later clean `0/0` reset result.
 
 The evidence record is
-`docs/runtime-evidence/unused-level-65-town-square-display-name-focused-partial-2026-08-08.json`.
-Its status is `focused-partial-runtime-observation`, and promotion remains
-unauthorized until reset/cold-boot gem restoration and the remaining confirmations
-close the checklist.
+`docs/runtime-evidence/unused-level-65-town-square-display-name-focused-pass-2026-08-08.json`.
+Its status is `focused-runtime-pass`, but `promotionAuthorized` remains false.
+This closes only the exact display-name discriminator: music ownership and late
+music, authored totals, portals, Return Home, saving and memory-card persistence,
+content authoring, normal Create BIN, editor integration, and release remain
+separate and unauthorized.
