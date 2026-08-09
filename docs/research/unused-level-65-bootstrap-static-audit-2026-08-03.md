@@ -190,8 +190,8 @@ The runtime environment was not clean for progression evidence. DuckStation's
 SCUS-94228 game settings had Moon Jump, over 65,000 jewels, all dragon eggs, and
 all dragons freed enabled, and live RAM corroborated the active progression
 values. The display name and basic loading/responsiveness observations remain
-useful, but gem/reset and totals semantics from this run are contaminated. The
-That original run's visited-homeworld state made its page-cycling report
+useful, but gem/reset and totals semantics from this run are contaminated. That
+original run's visited-homeworld state made its page-cycling report
 non-diagnostic. No emulator setting was changed during inspection.
 The exact-run memory-card state was not captured; the current global DuckStation
 configuration uses a per-game card and a Spyro card file exists, so the no-card
@@ -208,13 +208,24 @@ continuous index, so loading child ID65 marks index 35 and does not synthesize
 the page's HOME index 30. The one-way result is therefore expected visited-state
 gating, not evidence of a page-cycling regression.
 
-The complete no-write Inventory control is now to enter Gnasty's World ID60 with
+The complete no-write Inventory control was to enter Gnasty's World ID60 with
 `Select; R1, R2, L1, L2, R1, L1, R2, L2; Left, Circle`, enter Dream Weavers ID50
 with `Select; R1, R2, L1, L2, R1, L1, R2, L2; Down, Circle`, and then enter ID65
 with `Select; R1, R2, L1, L2, R1, L1, R2, L2; Left, Down`, without resetting
 between entries. D-pad Left in Inventory should reach Dream Weavers; after its
 page transition finishes, D-pad Right should return to the now-visited Gnasty
 page.
+
+The user subsequently reported, "Ok looks like everything here works, including
+the left and right cycling of the inventory." This explicitly closes the prepared
+bidirectional page control: with both adjacent HOME rows visited, Left reached
+Dream Weavers and Right returned to Gnasty's World. The result matches the retail
+visited-page gates and does not indicate an Inventory regression from the name
+pointer change. Read-only live RAM inspection corroborated visited indices 0, 24,
+30, and 35, continuous index 35, Inventory page 5, and a released hidden-cheat
+input state; live gem, dragon, and egg values were zero, consistent with inactive
+progression cheats. This does not by itself confirm any separate reset/cold-boot
+gem restoration, no-resumed-state condition, or memory-card condition.
 
 In the same cheat-disabled follow-up, collecting one red gem produced `1/0`.
 After leaving and re-entering ID65 without a reset, that gem remained absent.
@@ -226,5 +237,5 @@ physically present before recollection, ideally with a pre-recollection `0/0`.
 The evidence record is
 `docs/runtime-evidence/unused-level-65-town-square-display-name-focused-partial-2026-08-08.json`.
 Its status is `focused-partial-runtime-observation`, and promotion remains
-unauthorized until the bidirectional page control, reset/cold-boot gem restoration,
-and the remaining confirmations close the checklist.
+unauthorized until reset/cold-boot gem restoration and the remaining confirmations
+close the checklist.
