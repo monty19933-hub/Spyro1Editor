@@ -44,6 +44,12 @@ public static class TerrainPatchExporter
         [2, 0, 1],
         [2, 1, 0]
     ];
+    private static readonly int[][] CollisionCyclicPointOrders =
+    [
+        [0, 1, 2],
+        [1, 2, 0],
+        [2, 0, 1]
+    ];
 
     public static int TextureAssetWadIndexForLevel(LevelDefinition level)
     {
@@ -1057,6 +1063,7 @@ public static class TerrainPatchExporter
         List<TerrainSideWallCandidate> sideWallCandidates = new();
         List<TerrainSideWallPatchSummary> sideWallSummaries = new();
         List<long> editedSceneSectorWadOffsets = new();
+        TerrainCollisionFanBatch collisionFanBatch = TerrainCollisionFanBatch.Empty;
         if (File.Exists(terrainEditsPath))
         {
             using FileStream editStream = File.OpenRead(terrainEditsPath);
@@ -1098,6 +1105,16 @@ public static class TerrainPatchExporter
                         $"native terrain behavior source collision/surface tables could not be decoded: {ex.Message}");
                 }
             }
+
+            collisionFanBatch = BuildTerrainCollisionFanBatch(
+                imageStream,
+                layout,
+                ram,
+                collisionContext,
+                sourceSectorHits,
+                sourceSearchPath,
+                editsElement,
+                skippedEdits);
 
             foreach (JsonElement edit in editsElement.EnumerateArray())
             {
@@ -1176,11 +1193,27 @@ public static class TerrainPatchExporter
                     edit,
                     nativeSurfaceBehaviorAssignments,
                     skippedEdits);
-                AddVertexPatches(imageStream, layout, ram, sector, sourceSectorWadOffset, sectorOffset, detail, edit, patchesByWadOffset, skippedEdits);
-                AddCollisionPatches(imageStream, layout, ram, collisionContext, sector, detail, edit, patchesByWadOffset, skippedEdits);
-                CollectTerrainSideWallCandidates(ram, collisionContext, sector, sourceSectorWadOffset, sectorOffset, detail, edit, sideWallCandidates, skippedEdits);
+                if (!collisionFanBatch.HasGeometryEdits || !HasTopologySafeGeometryEdit(edit))
+                {
+                    AddVertexPatches(imageStream, layout, ram, sector, sourceSectorWadOffset, sectorOffset, detail, edit, patchesByWadOffset, skippedEdits);
+                }
+                if (!collisionFanBatch.HasGeometryEdits)
+                {
+                    CollectTerrainSideWallCandidates(ram, collisionContext, sector, sourceSectorWadOffset, sectorOffset, detail, edit, sideWallCandidates, skippedEdits);
+                }
             }
 
+            AddTopologySafeVisualPatches(
+                imageStream,
+                layout,
+                collisionFanBatch,
+                patchesByWadOffset);
+            AddCollisionFanPatches(
+                imageStream,
+                layout,
+                collisionContext,
+                collisionFanBatch,
+                patchesByWadOffset);
             AddTerrainSideWallPatches(imageStream, layout, ram, collisionContext, sourceSectorHits, modelSubfileInfo, editedSceneSectorWadOffsets, sideWallCandidates, patchesByWadOffset, skippedEdits, sideWallSummaries);
             AddNativeSurfaceLayoutPatch(
                 imageStream,
@@ -1249,17 +1282,15 @@ public static class TerrainPatchExporter
                     : $"Patches {level.DisplayName} runtime scene-sector terrain vertices and texture ids using the source-search map for this level.",
                 $"Custom terrain texture patches target WAD asset {textureAssetWadIndex} subfile {TexturePagesSubfileIndex}, using the level-local texture descriptor table in subfile {ModelSubfileIndex}.",
                 collisionContext == null
-                    ? "Collision triangle source bytes were not located, so height edits are visual-scene patches only in this plan."
-                    : collisionContext.SupportsCollisionIndexRebuild
-                        ? $"Collision triangle Z patches are enabled from source WAD offset 0x{collisionContext.SourceTriangleWadOffset:X}."
-                        : $"Source-derived exact collision triangle patches are enabled for existing terrain faces from matched WAD offset 0x{collisionContext.SourceTriangleWadOffset:X}.",
-                collisionContext == null
-                    ? "Terrain side walls need collision triangle source bytes and were not attempted."
-                    : collisionContext.SupportsCollisionIndexRebuild
-                        ? "Terrain side walls are attempted for exposed raised/lowered high-detail edges only when proved immediate scene-sector append room is available. Packed sectors wait for environment-component growth and following-component rebasing."
-                        : collisionContext.SupportsDirectLookupFallback
-                            ? "Source-derived terrain can patch existing top collision and can attempt copied terrain/solid side-wall collision through the decoded direct lookup fallback; full collision-index rebuild remains disabled."
-                            : "Source-derived terrain can patch existing top collision, but copied terrain and solid side walls still need the collision lookup table decoded.",
+                    ? "Collision triangle source bytes were not located. Existing terrain geometry edits are rejected atomically instead of emitting visual-only height changes."
+                    : $"Topology-safe existing-terrain collision fan patches are enabled from source WAD offset 0x{collisionContext.SourceTriangleWadOffset:X}; existing HP Z edits update every referenced native triangle touching each physical vertex, preserve cyclic winding, and reject ambiguous aliases, close vertical overlaps, or exact collision-cell changes.",
+                collisionFanBatch.HasGeometryEdits
+                    ? "Automatic side-wall generation is deliberately disabled for topology-safe existing HP Z edits; LP, XY, side-wall, add/copy/remove, and component-growth authoring remain separate research gates."
+                    : collisionContext == null
+                        ? "Terrain side walls need collision triangle source bytes and were not attempted."
+                        : collisionContext.SupportsCollisionIndexRebuild
+                            ? "Terrain side walls are attempted only by their existing research path when no topology-safe existing-surface geometry edit is present."
+                            : "Terrain side-wall and structural collision authoring still needs its separate decoded/rebuilt-index research path.",
                 lowDetailTextureCompanion.Note
             ]);
     }
@@ -5884,6 +5915,14 @@ public static class TerrainPatchExporter
             }
 
             byte[] sourceTriangleBytes = ReadWadBytes(imageStream, layout, sourceTriangleWadOffset, tableLength);
+            if (table.TriangleOffset < 0 ||
+                table.TriangleOffset + tableLength > ram.Length ||
+                !ram.AsSpan(table.TriangleOffset, tableLength).SequenceEqual(sourceTriangleBytes))
+            {
+                skippedEdits.Add(
+                    "collision: the complete RAM triangle table does not equal the selected source BIN, so topology-safe fan ownership is unavailable.");
+                return null;
+            }
             Dictionary<int, byte[]> sourceTriangleBytesByIndex = new();
             HashSet<int> sourceDegenerateTriangleIndexes = new();
             for (int i = 0; i < table.TriangleCount; i++)
@@ -5921,15 +5960,43 @@ public static class TerrainPatchExporter
             long sourceBlocksWadOffset = table.BlocksOffset >= 0
                 ? sourceTriangleWadOffset - (table.TriangleOffset - table.BlocksOffset)
                 : -1;
+            if (sourceBlockTreeWadOffset < 0 ||
+                sourceBlocksWadOffset < 0 ||
+                table.BlockTreeOffset < 0 ||
+                table.BlocksOffset <= table.BlockTreeOffset ||
+                table.TriangleOffset <= table.BlocksOffset ||
+                table.TriangleOffset > ram.Length)
+            {
+                skippedEdits.Add(
+                    "collision: the complete RAM collision tree/blocks could not be mapped back to the selected source BIN.");
+                return null;
+            }
+            int sourceTreeLength = table.BlocksOffset - table.BlockTreeOffset;
+            int sourceBlocksLength = table.TriangleOffset - table.BlocksOffset;
+            byte[] sourceTreeBytes = ReadWadBytes(
+                imageStream,
+                layout,
+                sourceBlockTreeWadOffset,
+                sourceTreeLength);
+            byte[] sourceBlocksBytes = ReadWadBytes(
+                imageStream,
+                layout,
+                sourceBlocksWadOffset,
+                sourceBlocksLength);
+            if (!ram.AsSpan(table.BlockTreeOffset, sourceTreeLength).SequenceEqual(sourceTreeBytes) ||
+                !ram.AsSpan(table.BlocksOffset, sourceBlocksLength).SequenceEqual(sourceBlocksBytes))
+            {
+                skippedEdits.Add(
+                    "collision: the complete RAM collision tree/blocks do not equal the selected source BIN, so topology-safe lookup ownership is unavailable.");
+                return null;
+            }
             Dictionary<int, ushort> sourceLookupWordsByOffset = new();
             if (sourceBlocksWadOffset >= 0 &&
                 table.BlocksOffset >= 0 &&
                 table.TriangleOffset > table.BlocksOffset)
             {
-                int blockBytesLength = table.TriangleOffset - table.BlocksOffset;
-                byte[] sourceBlockBytes = ReadWadBytes(imageStream, layout, sourceBlocksWadOffset, blockBytesLength);
-                for (int byteOffset = 0; byteOffset + 2 <= sourceBlockBytes.Length; byteOffset += 2)
-                    sourceLookupWordsByOffset[table.BlocksOffset + byteOffset] = BitConverter.ToUInt16(sourceBlockBytes, byteOffset);
+                for (int byteOffset = 0; byteOffset + 2 <= sourceBlocksBytes.Length; byteOffset += 2)
+                    sourceLookupWordsByOffset[table.BlocksOffset + byteOffset] = BitConverter.ToUInt16(sourceBlocksBytes, byteOffset);
             }
 
             return new CollisionPatchContext(
@@ -6776,138 +6843,1091 @@ public static class TerrainPatchExporter
         return -1;
     }
 
-    private static void AddCollisionPatches(
+    private static bool HasTopologySafeGeometryEdit(JsonElement edit)
+    {
+        if (IsStructuralTerrainEdit(JsonValue.GetString(edit, "structureEditMode")))
+            return false;
+
+        return HasEditedVertexValues(
+            ReadFloatArray(edit, "originalZ"),
+            ReadFloatArray(edit, "editedZ"),
+            ReadVector2Array(edit, "originalPoints"),
+            ReadVector2Array(edit, "editedPoints"));
+    }
+
+    private static void ValidateTopologySafeSourceSearchCompleteness(
+        string sourceSearchPath,
+        IReadOnlyDictionary<string, SourceSectorLocation> sourceSectorHits)
+    {
+        if (string.IsNullOrWhiteSpace(sourceSearchPath) || !File.Exists(sourceSearchPath))
+        {
+            throw new InvalidOperationException(
+                "Topology-safe solid terrain export needs a complete native source-search report; no terrain BIN was built.");
+        }
+
+        using FileStream stream = File.OpenRead(sourceSearchPath);
+        using JsonDocument document = JsonDocument.Parse(stream);
+        JsonElement root = document.RootElement;
+        int sectorCount = JsonValue.GetInt32(root, "sectorCount", -1);
+        int matchedSectorCount = JsonValue.GetInt32(root, "matchedSectorCount", -1);
+        int ambiguousSectorCount = JsonValue.GetInt32(root, "ambiguousSectorCount", -1);
+        int missingSectorCount = JsonValue.GetInt32(root, "missingSectorCount", -1);
+        if (sectorCount <= 0 ||
+            matchedSectorCount != sectorCount ||
+            ambiguousSectorCount != 0 ||
+            missingSectorCount != 0 ||
+            !root.TryGetProperty("results", out JsonElement results) ||
+            results.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidOperationException(
+                $"Topology-safe solid terrain export requires every native scene sector to have one exact source hit; " +
+                $"report counts are matched {matchedSectorCount}/{sectorCount}, ambiguous {ambiguousSectorCount}, missing {missingSectorCount}. No terrain BIN was built.");
+        }
+
+        HashSet<(string SectorOffset, long WadOffset)> uniqueSectors = [];
+        int resultCount = 0;
+        foreach (JsonElement result in results.EnumerateArray())
+        {
+            string runtimeKey = JsonValue.GetString(result, "edit");
+            string sectorOffset = JsonValue.GetString(result, "sectorOffset");
+            if (string.IsNullOrWhiteSpace(runtimeKey) ||
+                string.IsNullOrWhiteSpace(sectorOffset) ||
+                !result.TryGetProperty("fullSectorHits", out JsonElement hits) ||
+                hits.ValueKind != JsonValueKind.Array)
+            {
+                throw new InvalidOperationException(
+                    "Topology-safe source-search report contains an incomplete face/sector row; no terrain BIN was built.");
+            }
+
+            JsonElement[] hitRows = hits.EnumerateArray().ToArray();
+            if (hitRows.Length != 1)
+            {
+                throw new InvalidOperationException(
+                    $"Topology-safe source-search row {runtimeKey} has {hitRows.Length} native sector hits, expected exactly one; no terrain BIN was built.");
+            }
+            long wadOffset = JsonValue.GetInt64(hitRows[0], "wadOffset", -1);
+            if (wadOffset < 0 ||
+                !sourceSectorHits.TryGetValue(runtimeKey, out SourceSectorLocation? loaded) ||
+                loaded.WadOffset != wadOffset ||
+                !string.Equals(loaded.SectorOffset, sectorOffset, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Topology-safe source-search row {runtimeKey} did not survive exact source-map loading; no terrain BIN was built.");
+            }
+            uniqueSectors.Add((sectorOffset, wadOffset));
+            resultCount++;
+        }
+
+        if (resultCount != sourceSectorHits.Count || uniqueSectors.Count != sectorCount)
+        {
+            throw new InvalidOperationException(
+                $"Topology-safe source map loaded {sourceSectorHits.Count}/{resultCount} face rows and " +
+                $"{uniqueSectors.Count}/{sectorCount} unique native sectors. The alias/overlap scan would be incomplete; no terrain BIN was built.");
+        }
+    }
+
+    private static TerrainHpTopologyInventory BuildTerrainHpTopologyInventory(
+        FileStream imageStream,
+        DiscLayout layout,
+        byte[] ram,
+        IReadOnlyDictionary<string, SourceSectorLocation> sourceSectorHits)
+    {
+        Dictionary<long, TerrainHpVertexReference> verticesByWadOffset = new();
+        Dictionary<string, List<TerrainHpVertexReference>> verticesByPointKey = new(StringComparer.Ordinal);
+        List<TerrainHpFaceReference> faces = new();
+        SourceSectorLocation[] sectors = sourceSectorHits.Values
+            .GroupBy(location => (location.SectorOffset, location.WadOffset))
+            .Select(group => group.First())
+            .OrderBy(location => location.WadOffset)
+            .ToArray();
+        if (sectors.Length == 0)
+        {
+            throw new InvalidOperationException(
+                "Topology-safe solid terrain export could not enumerate the level's native scene sectors; no terrain BIN was built.");
+        }
+
+        foreach (SourceSectorLocation location in sectors)
+        {
+            long runtimeOffsetLong = ParseRequiredLong(location.SectorOffset, "sourceSectorLocation.sectorOffset");
+            if (runtimeOffsetLong < 0 || runtimeOffsetLong > int.MaxValue)
+            {
+                throw new InvalidOperationException(
+                    $"Native scene sector {location.SectorOffset} is outside the supported runtime/source-WAD range; no terrain BIN was built.");
+            }
+
+            int runtimeOffset = (int)runtimeOffsetLong;
+            SceneSectorHeader sector = ReadSceneSectorHeader(ram, runtimeOffset);
+            if (location.SizeBytes > 0 && location.SizeBytes != sector.SizeBytes)
+            {
+                throw new InvalidOperationException(
+                    $"Native scene sector 0x{runtimeOffset:X} changed size from {location.SizeBytes} to {sector.SizeBytes}; no terrain BIN was built.");
+            }
+            byte[] currentSourceSector = ReadWadBytes(
+                imageStream,
+                layout,
+                location.WadOffset,
+                sector.SizeBytes);
+            if (!ram.AsSpan(runtimeOffset, sector.SizeBytes).SequenceEqual(currentSourceSector))
+            {
+                throw new InvalidOperationException(
+                    $"Native scene sector 0x{runtimeOffset:X} / WAD 0x{location.WadOffset:X} no longer matches the selected source BIN. " +
+                    "The complete alias/overlap inventory would be stale; no terrain BIN was built.");
+            }
+
+            TerrainHpVertexReference[] sectorVertices = new TerrainHpVertexReference[sector.NumHpVertices];
+            for (int vertexIndex = 0; vertexIndex < sector.NumHpVertices; vertexIndex++)
+            {
+                int vertexOffset = GetSceneVertexOffset(sector, "hp", vertexIndex);
+                long wadOffset = checked(location.WadOffset + (vertexOffset - runtimeOffset));
+                SpyroCollisionPoint point = ToCollisionPoint(
+                    DecodeSceneVertex(ReadUInt32(ram, vertexOffset), sector));
+                TerrainHpVertexReference reference = new(
+                    wadOffset,
+                    runtimeOffset,
+                    location.WadOffset,
+                    vertexIndex,
+                    point);
+                if (verticesByWadOffset.TryGetValue(wadOffset, out TerrainHpVertexReference? existing) &&
+                    existing != reference)
+                {
+                    throw new InvalidOperationException(
+                        $"Physical HP vertex WAD 0x{wadOffset:X} maps to conflicting native sectors; no terrain BIN was built.");
+                }
+                verticesByWadOffset[wadOffset] = reference;
+                string pointKey = CollisionPointKey(point.X, point.Y, point.Z);
+                if (!verticesByPointKey.TryGetValue(pointKey, out List<TerrainHpVertexReference>? pointReferences))
+                {
+                    pointReferences = [];
+                    verticesByPointKey[pointKey] = pointReferences;
+                }
+                if (!pointReferences.Any(item => item.WadOffset == wadOffset))
+                    pointReferences.Add(reference);
+                sectorVertices[vertexIndex] = reference;
+            }
+
+            int dataStart = runtimeOffset + 28;
+            int hpVertexStartWords = sector.NumLpVertices + sector.NumLpColours + (sector.NumLpFaces * 2);
+            int hpFaceStartWords = hpVertexStartWords + sector.NumHpVertices + (sector.NumHpColours * 2);
+            int hpFaceStart = dataStart + (hpFaceStartWords * 4);
+            string sectorLabel = location.RuntimeKey.Split(':', StringSplitOptions.TrimEntries).FirstOrDefault()
+                ?? $"0x{runtimeOffset:X}";
+            for (int faceIndex = 0; faceIndex < sector.NumHpFaces; faceIndex++)
+            {
+                int faceOffset = hpFaceStart + (faceIndex * 16);
+                if (faceOffset < runtimeOffset || faceOffset + 16 > runtimeOffset + sector.SizeBytes)
+                {
+                    throw new InvalidOperationException(
+                        $"Native HP face {sectorLabel}:{faceIndex} escaped scene sector 0x{runtimeOffset:X}; no terrain BIN was built.");
+                }
+
+                List<int> vertexIndexes = new(4);
+                for (int slot = 0; slot < 4; slot++)
+                {
+                    int vertexIndex = ram[faceOffset + slot];
+                    if (vertexIndex < 0 || vertexIndex >= sectorVertices.Length)
+                    {
+                        throw new InvalidOperationException(
+                            $"Native HP face {sectorLabel}:{faceIndex} references vertex {vertexIndex} outside {sectorVertices.Length}; no terrain BIN was built.");
+                    }
+                    if (!vertexIndexes.Contains(vertexIndex))
+                        vertexIndexes.Add(vertexIndex);
+                }
+
+                if (vertexIndexes.Count < 3)
+                    continue;
+                TerrainHpVertexReference[] faceVertices = vertexIndexes
+                    .Select(index => sectorVertices[index])
+                    .ToArray();
+                faces.Add(new TerrainHpFaceReference(
+                    $"{sectorLabel}:{faceIndex}:hp",
+                    location.WadOffset,
+                    runtimeOffset,
+                    checked(location.WadOffset + (faceOffset - runtimeOffset)),
+                    faceIndex,
+                    faceVertices.Select(vertex => vertex.WadOffset).ToArray(),
+                    faceVertices.Select(vertex => vertex.Point).ToArray()));
+            }
+        }
+
+        return new TerrainHpTopologyInventory(
+            verticesByWadOffset,
+            verticesByPointKey.ToDictionary(
+                pair => pair.Key,
+                pair => (IReadOnlyList<TerrainHpVertexReference>)pair.Value
+                    .OrderBy(vertex => vertex.WadOffset)
+                    .ToArray(),
+                StringComparer.Ordinal),
+            faces);
+    }
+
+    private static void ValidateTopologySafeTerrainExposure(
+        TerrainHpTopologyInventory topology,
+        IReadOnlyDictionary<long, TerrainPhysicalVertexTransformBuilder> physicalTransforms)
+    {
+        HashSet<long> editedVertexOffsets = physicalTransforms.Keys.ToHashSet();
+        TerrainHpFaceReference[] affectedFaces = topology.Faces
+            .Where(face => face.VertexWadOffsets.Any(editedVertexOffsets.Contains))
+            .ToArray();
+        if (affectedFaces.Length == 0)
+        {
+            throw new InvalidOperationException(
+                "Edited physical HP vertices are not referenced by any native HP face; no terrain BIN was built.");
+        }
+
+        HashSet<long> affectedFaceOffsets = affectedFaces.Select(face => face.FaceWadOffset).ToHashSet();
+        foreach (TerrainHpFaceReference affected in affectedFaces)
+        {
+            SpyroCollisionPoint[] target = affected.VertexWadOffsets
+                .Select((offset, index) => physicalTransforms.TryGetValue(
+                        offset,
+                        out TerrainPhysicalVertexTransformBuilder? transform)
+                    ? transform.Target
+                    : affected.Points[index])
+                .ToArray();
+            foreach (TerrainHpFaceReference other in topology.Faces)
+            {
+                if (affectedFaceOffsets.Contains(other.FaceWadOffset) ||
+                    !TryFindProjectedInteriorOverlapSamples(target, other.Points, out IReadOnlyList<(double X, double Y)> samples))
+                {
+                    continue;
+                }
+
+                foreach ((double x, double y) in samples)
+                {
+                    if (!TryInterpolateTerrainFaceHeight(affected.Points, x, y, out double sourceZ) ||
+                        !TryInterpolateTerrainFaceHeight(target, x, y, out double targetZ) ||
+                        !TryInterpolateTerrainFaceHeight(other.Points, x, y, out double otherZ))
+                    {
+                        continue;
+                    }
+
+                    double closeUpperLimit = Math.Max(sourceZ, targetZ) + 64.0;
+                    if (otherZ > targetZ + 0.5 && otherZ <= closeUpperLimit)
+                    {
+                        throw new InvalidOperationException(
+                            $"{affected.Label}: edited HP surface is vertically shadowed near X {x:0.0}, Y {y:0.0} by " +
+                            $"{other.Label} at Z {otherZ:0.0} (edited surface Z {targetZ:0.0}). " +
+                            "Close vertically overlapping terrain remains blocked so an underlying visual/collision surface cannot masquerade as a solid edit; no terrain BIN was built.");
+                    }
+                }
+            }
+        }
+    }
+
+    private static bool TryFindProjectedInteriorOverlapSamples(
+        IReadOnlyList<SpyroCollisionPoint> first,
+        IReadOnlyList<SpyroCollisionPoint> second,
+        out IReadOnlyList<(double X, double Y)> samples)
+    {
+        List<(double X, double Y)> candidates = [];
+        (double X, double Y) firstCentre = (
+            first.Average(point => point.X),
+            first.Average(point => point.Y));
+        (double X, double Y) secondCentre = (
+            second.Average(point => point.X),
+            second.Average(point => point.Y));
+        candidates.Add(firstCentre);
+        candidates.Add(secondCentre);
+        candidates.AddRange(first.Select(point => ((double)point.X, (double)point.Y)));
+        candidates.AddRange(second.Select(point => ((double)point.X, (double)point.Y)));
+
+        List<(double X, double Y)> intersections = [];
+        for (int firstIndex = 0; firstIndex < first.Count; firstIndex++)
+        {
+            (double X, double Y) firstA = (first[firstIndex].X, first[firstIndex].Y);
+            (double X, double Y) firstB = (
+                first[(firstIndex + 1) % first.Count].X,
+                first[(firstIndex + 1) % first.Count].Y);
+            for (int secondIndex = 0; secondIndex < second.Count; secondIndex++)
+            {
+                (double X, double Y) secondA = (second[secondIndex].X, second[secondIndex].Y);
+                (double X, double Y) secondB = (
+                    second[(secondIndex + 1) % second.Count].X,
+                    second[(secondIndex + 1) % second.Count].Y);
+                if (TryProjectedSegmentIntersection(
+                        firstA,
+                        firstB,
+                        secondA,
+                        secondB,
+                        out (double X, double Y) intersection))
+                {
+                    intersections.Add(intersection);
+                }
+            }
+        }
+        candidates.AddRange(intersections);
+        if (intersections.Count > 1)
+        {
+            candidates.Add((
+                intersections.Average(point => point.X),
+                intersections.Average(point => point.Y)));
+            for (int firstIntersection = 0; firstIntersection < intersections.Count; firstIntersection++)
+            {
+                for (int secondIntersection = firstIntersection + 1;
+                     secondIntersection < intersections.Count;
+                     secondIntersection++)
+                {
+                    candidates.Add((
+                        (intersections[firstIntersection].X + intersections[secondIntersection].X) / 2.0,
+                        (intersections[firstIntersection].Y + intersections[secondIntersection].Y) / 2.0));
+                }
+            }
+        }
+
+        List<(double X, double Y)> inside = candidates
+            .Where(point =>
+                PointInTerrainPolygon(point, first, includeBoundary: true) &&
+                PointInTerrainPolygon(point, second, includeBoundary: true) &&
+                (PointInTerrainPolygon(point, first, includeBoundary: false) ||
+                 PointInTerrainPolygon(point, second, includeBoundary: false)))
+            .DistinctBy(point => ($"{point.X:0.###}", $"{point.Y:0.###}"))
+            .ToList();
+        samples = inside;
+        return inside.Count > 0;
+    }
+
+    private static bool TryProjectedSegmentIntersection(
+        (double X, double Y) a,
+        (double X, double Y) b,
+        (double X, double Y) c,
+        (double X, double Y) d,
+        out (double X, double Y) intersection)
+    {
+        intersection = default;
+        double abX = b.X - a.X;
+        double abY = b.Y - a.Y;
+        double cdX = d.X - c.X;
+        double cdY = d.Y - c.Y;
+        double denominator = (abX * cdY) - (abY * cdX);
+        if (Math.Abs(denominator) <= 0.000001)
+            return false;
+        double acX = c.X - a.X;
+        double acY = c.Y - a.Y;
+        double firstRatio = ((acX * cdY) - (acY * cdX)) / denominator;
+        double secondRatio = ((acX * abY) - (acY * abX)) / denominator;
+        if (firstRatio <= 0.000001 || firstRatio >= 0.999999 ||
+            secondRatio <= 0.000001 || secondRatio >= 0.999999)
+        {
+            return false;
+        }
+        intersection = (a.X + (firstRatio * abX), a.Y + (firstRatio * abY));
+        return true;
+    }
+
+    private static bool PointInTerrainPolygon(
+        (double X, double Y) point,
+        IReadOnlyList<SpyroCollisionPoint> polygon,
+        bool includeBoundary)
+    {
+        for (int i = 0; i < polygon.Count; i++)
+        {
+            SpyroCollisionPoint a = polygon[i];
+            SpyroCollisionPoint b = polygon[(i + 1) % polygon.Count];
+            double cross = ((b.X - a.X) * (point.Y - a.Y)) - ((b.Y - a.Y) * (point.X - a.X));
+            if (Math.Abs(cross) <= 0.001 &&
+                point.X >= Math.Min(a.X, b.X) - 0.001 &&
+                point.X <= Math.Max(a.X, b.X) + 0.001 &&
+                point.Y >= Math.Min(a.Y, b.Y) - 0.001 &&
+                point.Y <= Math.Max(a.Y, b.Y) + 0.001)
+            {
+                return includeBoundary;
+            }
+        }
+
+        bool inside = false;
+        for (int current = 0, previous = polygon.Count - 1;
+             current < polygon.Count;
+             previous = current++)
+        {
+            SpyroCollisionPoint a = polygon[current];
+            SpyroCollisionPoint b = polygon[previous];
+            if ((a.Y > point.Y) != (b.Y > point.Y) &&
+                point.X < ((double)(b.X - a.X) * (point.Y - a.Y) / (b.Y - a.Y)) + a.X)
+            {
+                inside = !inside;
+            }
+        }
+        return inside;
+    }
+
+    private static bool TryInterpolateTerrainFaceHeight(
+        IReadOnlyList<SpyroCollisionPoint> polygon,
+        double x,
+        double y,
+        out double z)
+    {
+        z = 0;
+        if (polygon.Count < 3)
+            return false;
+        for (int i = 1; i < polygon.Count - 1; i++)
+        {
+            SpyroCollisionPoint a = polygon[0];
+            SpyroCollisionPoint b = polygon[i];
+            SpyroCollisionPoint c = polygon[i + 1];
+            double denominator = ((b.Y - c.Y) * (a.X - c.X)) + ((c.X - b.X) * (a.Y - c.Y));
+            if (Math.Abs(denominator) <= 0.001)
+                continue;
+            double alpha = (((b.Y - c.Y) * (x - c.X)) + ((c.X - b.X) * (y - c.Y))) / denominator;
+            double beta = (((c.Y - a.Y) * (x - c.X)) + ((a.X - c.X) * (y - c.Y))) / denominator;
+            double gamma = 1.0 - alpha - beta;
+            if (alpha < -0.001 || beta < -0.001 || gamma < -0.001)
+                continue;
+            z = (alpha * a.Z) + (beta * b.Z) + (gamma * c.Z);
+            return true;
+        }
+        return false;
+    }
+
+    private static TerrainCollisionFanBatch BuildTerrainCollisionFanBatch(
         FileStream imageStream,
         DiscLayout layout,
         byte[] ram,
         CollisionPatchContext? collisionContext,
-        SceneSectorHeader sector,
-        string detail,
-        JsonElement edit,
-        Dictionary<long, TerrainPatch> patchesByWadOffset,
+        IReadOnlyDictionary<string, SourceSectorLocation> sourceSectorHits,
+        string sourceSearchPath,
+        JsonElement editsElement,
         List<string> skippedEdits)
     {
-        if (collisionContext == null)
-            return;
+        JsonElement[] geometryEdits = editsElement
+            .EnumerateArray()
+            .Where(HasTopologySafeGeometryEdit)
+            .ToArray();
+        if (geometryEdits.Length == 0)
+            return TerrainCollisionFanBatch.Empty;
 
-        string runtimeKey = JsonValue.GetString(edit, "runtimeKey");
-        IReadOnlyList<float> editedZ = ReadFloatArray(edit, "editedZ");
-        IReadOnlyList<float> originalZ = ReadFloatArray(edit, "originalZ");
-        IReadOnlyList<Vector2f> editedPoints = ReadVector2Array(edit, "editedPoints");
-        IReadOnlyList<Vector2f> originalPoints = ReadVector2Array(edit, "originalPoints");
-        IReadOnlyList<int> vertexIndexes = ResolveEditableVertexIndexes(
-            sector,
-            detail,
-            ReadIntArray(edit, "vertexIndexes"),
-            MaxValueCount(editedZ.Count, originalZ.Count, editedPoints.Count, originalPoints.Count),
-            originalPoints,
-            originalZ);
-        if (!HasEditedVertexValues(originalZ, editedZ, originalPoints, editedPoints) || vertexIndexes.Count < 3)
-            return;
-
-        int vertexCount = Math.Min(vertexIndexes.Count, Math.Max(editedZ.Count, editedPoints.Count));
-        if (vertexCount < 3)
-            return;
-
-        List<CollisionPatchVertex> vertices = new(vertexCount);
-        Dictionary<string, SpyroCollisionPoint> editedPointByOriginalPoint = new(StringComparer.Ordinal);
-        for (int i = 0; i < vertexCount; i++)
+        if (editsElement.EnumerateArray().Any(edit =>
+                IsStructuralTerrainEdit(JsonValue.GetString(edit, "structureEditMode"))))
         {
-            int vertexOffset = GetSceneVertexOffset(sector, detail, vertexIndexes[i]);
-            if (vertexOffset < 0)
-                return;
-
-            Vector3f original = DecodeSceneVertex(ReadUInt32(ram, vertexOffset), sector);
-            Vector2f targetPoint = i < editedPoints.Count ? editedPoints[i] : new Vector2f(original.X, original.Y);
-            int targetZ = i < editedZ.Count ? (int)Math.Round(editedZ[i]) : (int)Math.Round(original.Z);
-            Vector3f target = new(targetPoint.X, targetPoint.Y, targetZ);
-            vertices.Add(new CollisionPatchVertex(original, target));
-            editedPointByOriginalPoint[CollisionPointKey((int)Math.Round(original.X), (int)Math.Round(original.Y), (int)Math.Round(original.Z))] = ToCollisionPoint(target);
+            throw new InvalidOperationException(
+                "Existing HP Z edits cannot be composed with research-only add/copy/remove terrain operations in one build. Split the experiments; no terrain BIN was built.");
         }
 
-        HashSet<int> patchedTriangles = new();
-        int matchedTriangles = 0;
-        int encodedTriangles = 0;
-        for (int i = 1; i < vertices.Count - 1; i++)
+        ValidateTopologySafeSourceSearchCompleteness(sourceSearchPath, sourceSectorHits);
+
+        foreach (JsonElement edit in geometryEdits)
         {
-            CollisionPatchVertex a = vertices[0];
-            CollisionPatchVertex b = vertices[i];
-            CollisionPatchVertex c = vertices[i + 1];
-            string key = CollisionTriangleKey(
-            [
-                new SpyroCollisionPoint((int)Math.Round(a.Original.X), (int)Math.Round(a.Original.Y), (int)Math.Round(a.Original.Z)),
-                new SpyroCollisionPoint((int)Math.Round(b.Original.X), (int)Math.Round(b.Original.Y), (int)Math.Round(b.Original.Z)),
-                new SpyroCollisionPoint((int)Math.Round(c.Original.X), (int)Math.Round(c.Original.Y), (int)Math.Round(c.Original.Z))
-            ]);
-
-            if (!collisionContext.TrianglesByKey.TryGetValue(key, out List<SpyroCollisionTriangle>? triangles))
-                continue;
-
-            foreach (SpyroCollisionTriangle triangle in triangles)
+            string runtimeKey = JsonValue.GetString(edit, "runtimeKey");
+            string detail = JsonValue.GetString(edit, "detail", "hp");
+            if (!string.Equals(detail, "hp", StringComparison.OrdinalIgnoreCase))
             {
-                matchedTriangles++;
-                if (!patchedTriangles.Add(triangle.Index))
-                    continue;
-                if (!TryBuildCollisionTriangleWords(triangle, editedPointByOriginalPoint, out uint newXWord, out uint newYWord, out uint newZWord, out string description))
-                    continue;
-                encodedTriangles++;
-                if (newXWord == triangle.XWord && newYWord == triangle.YWord && newZWord == triangle.ZWord)
-                    continue;
-
-                long wadOffset = GetCollisionTriangleWadOffset(collisionContext, triangle);
-                byte[] before = new byte[12];
-                byte[] after = new byte[12];
-                BitConverter.GetBytes(triangle.XWord).CopyTo(before, 0);
-                BitConverter.GetBytes(triangle.YWord).CopyTo(before, 4);
-                BitConverter.GetBytes(triangle.ZWord).CopyTo(before, 8);
-                BitConverter.GetBytes(newXWord).CopyTo(after, 0);
-                BitConverter.GetBytes(newYWord).CopyTo(after, 4);
-                BitConverter.GetBytes(newZWord).CopyTo(after, 8);
-                AddPatch(
-                    imageStream,
-                    layout,
-                    patchesByWadOffset,
-                    wadOffset,
-                    before,
-                    after,
-                    "collision-triangle",
-                    runtimeKey,
-                    $"Set collision triangle {triangle.Index} point values to {description}.");
+                throw new InvalidOperationException(
+                    $"{runtimeKey}: topology-safe solid terrain export currently supports existing high-detail (HP) Z edits only. LP edits remain research-only; no terrain BIN was built.");
+            }
+            IReadOnlyList<Vector2f> editedPoints = ReadVector2Array(edit, "editedPoints");
+            IReadOnlyList<Vector2f> originalPoints = ReadVector2Array(edit, "originalPoints");
+            if (HasEditedPointValues(originalPoints, editedPoints))
+            {
+                throw new InvalidOperationException(
+                    $"{runtimeKey}: topology-safe solid terrain export currently supports Z-only movement. XY edits remain research-only; no terrain BIN was built.");
             }
         }
 
-        if (matchedTriangles == 0)
-            skippedEdits.Add($"{runtimeKey}: no decoded collision triangles matched this edited terrain face.");
-        else if (encodedTriangles == 0)
-            skippedEdits.Add($"{runtimeKey}: matched {matchedTriangles} collision triangle(s), but the edited heights could not be packed into the current collision triangle format.");
+        if (collisionContext == null ||
+            collisionContext.Table.TriangleCount <= 0 ||
+            collisionContext.Table.Triangles.Count != collisionContext.Table.TriangleCount ||
+            collisionContext.LookupGroups.Count == 0 ||
+            collisionContext.GroupIndexesByTriangleIndex.Count == 0 ||
+            collisionContext.SourceBlocksWadOffset < 0 ||
+            collisionContext.SourceLookupWordsByOffset.Count == 0 ||
+            !collisionContext.SupportsCollisionIndexRebuild)
+        {
+            throw new InvalidOperationException(
+                "Existing terrain geometry changed, but a complete native collision table and lookup context were not available. Visual-only geometry export is blocked; no terrain BIN was built.");
+        }
+
+        TerrainHpTopologyInventory topology = BuildTerrainHpTopologyInventory(
+            imageStream,
+            layout,
+            ram,
+            sourceSectorHits);
+        Dictionary<long, TerrainPhysicalVertexTransformBuilder> physicalTransforms = new();
+        foreach (JsonElement edit in geometryEdits)
+        {
+            string runtimeKey = JsonValue.GetString(edit, "runtimeKey");
+            if (string.IsNullOrWhiteSpace(runtimeKey) ||
+                !sourceSectorHits.TryGetValue(runtimeKey, out SourceSectorLocation? sourceSectorLocation))
+            {
+                throw new InvalidOperationException(
+                    $"{runtimeKey}: topology-safe solid terrain export could not bind the edited face to one native source sector; no terrain BIN was built.");
+            }
+
+            int sectorOffset = JsonValue.GetInt32(edit, "sectorOffset", -1);
+            if (sectorOffset < 0 ||
+                ParseRequiredLong(sourceSectorLocation.SectorOffset, "sourceSectorLocation.sectorOffset") != sectorOffset)
+            {
+                throw new InvalidOperationException(
+                    $"{runtimeKey}: topology-safe solid terrain export found a stale or missing runtime sector offset; re-save the edit. No terrain BIN was built.");
+            }
+
+            SceneSectorHeader sector = ReadSceneSectorHeader(ram, sectorOffset);
+            const string detail = "hp";
+            int faceOffset = JsonValue.GetInt32(edit, "faceOffset", -1);
+            int faceIndex = JsonValue.GetInt32(edit, "faceIndex", -1);
+            long physicalFaceWadOffset = faceOffset >= sectorOffset
+                ? checked(sourceSectorLocation.WadOffset + (faceOffset - sectorOffset))
+                : -1;
+            TerrainHpFaceReference? editedFace = topology.Faces.SingleOrDefault(face =>
+                face.SourceSectorWadOffset == sourceSectorLocation.WadOffset &&
+                face.RuntimeSectorOffset == sectorOffset &&
+                face.FaceWadOffset == physicalFaceWadOffset &&
+                face.FaceIndex == faceIndex);
+            if (editedFace == null)
+            {
+                throw new InvalidOperationException(
+                    $"{runtimeKey}: topology-safe solid terrain export could not bind face index {faceIndex} / " +
+                    $"offset 0x{Math.Max(faceOffset, 0):X} to one native HP face in its source sector; no terrain BIN was built.");
+            }
+
+            IReadOnlyList<float> editedZ = ReadFloatArray(edit, "editedZ");
+            IReadOnlyList<float> originalZ = ReadFloatArray(edit, "originalZ");
+            IReadOnlyList<Vector2f> editedPoints = ReadVector2Array(edit, "editedPoints");
+            IReadOnlyList<Vector2f> originalPoints = ReadVector2Array(edit, "originalPoints");
+            int valueCount = MaxValueCount(
+                editedZ.Count,
+                originalZ.Count,
+                editedPoints.Count,
+                originalPoints.Count);
+            IReadOnlyList<int> vertexIndexes = NormalizeVertexIndexes(
+                ReadIntArray(edit, "vertexIndexes"),
+                valueCount);
+            if (vertexIndexes.Count == 0 ||
+                vertexIndexes.Count < valueCount ||
+                vertexIndexes.Count != vertexIndexes.Distinct().Count() ||
+                !VertexIndexesMatchOriginal(
+                    sector,
+                    detail,
+                    vertexIndexes,
+                    valueCount,
+                    originalPoints,
+                    originalZ))
+            {
+                throw new InvalidOperationException(
+                    $"{runtimeKey}: topology-safe solid terrain export could not prove the saved HP vertex indexes against this exact native face; re-save the edit. No terrain BIN was built.");
+            }
+
+            int vertexCount = Math.Min(vertexIndexes.Count, Math.Max(editedZ.Count, editedPoints.Count));
+            HashSet<int> seenVertexIndexes = new();
+            for (int i = 0; i < vertexCount; i++)
+            {
+                bool zChanged = IsZEditedAt(originalZ, editedZ, i);
+                bool pointChanged = IsPointEditedAt(originalPoints, editedPoints, i);
+                if (!zChanged && !pointChanged)
+                    continue;
+
+                int vertexIndex = vertexIndexes[i];
+                if (!seenVertexIndexes.Add(vertexIndex))
+                    continue;
+
+                int vertexOffset = GetSceneVertexOffset(sector, detail, vertexIndex);
+                if (vertexOffset < 0)
+                {
+                    throw new InvalidOperationException(
+                        $"{runtimeKey}: topology-safe collision fan planning could not resolve {detail} vertex {vertexIndex}; no terrain BIN was built.");
+                }
+
+                uint oldWord = ReadUInt32(ram, vertexOffset);
+                Vector3f original = DecodeSceneVertex(oldWord, sector);
+                if ((i < originalPoints.Count &&
+                     (Math.Abs(original.X - originalPoints[i].X) > 0.001f ||
+                      Math.Abs(original.Y - originalPoints[i].Y) > 0.001f)) ||
+                    (i < originalZ.Count && Math.Abs(original.Z - originalZ[i]) > 0.001f))
+                {
+                    throw new InvalidOperationException(
+                        $"{runtimeKey}: saved original point {i + 1} no longer exactly matches HP vertex {vertexIndex}; no terrain BIN was built.");
+                }
+                float targetZ = i < editedZ.Count ? editedZ[i] : original.Z;
+                uint newWord;
+                try
+                {
+                    newWord = SetSceneVertexZWord(oldWord, sector, targetZ);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    throw new InvalidOperationException(
+                        $"{runtimeKey}: topology-safe collision fan planning could not encode {detail} vertex {vertexIndex}; no terrain BIN was built. {ex.Message}",
+                        ex);
+                }
+
+                SpyroCollisionPoint originalPoint = ToCollisionPoint(original);
+                SpyroCollisionPoint targetCollisionPoint = ToCollisionPoint(DecodeSceneVertex(newWord, sector));
+                if (originalPoint == targetCollisionPoint)
+                    continue;
+
+                long physicalWadOffset = checked(
+                    sourceSectorLocation.WadOffset + (vertexOffset - sectorOffset));
+                if (!editedFace.VertexWadOffsets.Contains(physicalWadOffset))
+                {
+                    throw new InvalidOperationException(
+                        $"{runtimeKey}: HP vertex {vertexIndex} at WAD 0x{physicalWadOffset:X} is not owned by the exact saved face; no terrain BIN was built.");
+                }
+                if (!topology.VerticesByWadOffset.TryGetValue(
+                        physicalWadOffset,
+                        out TerrainHpVertexReference? sourceVertex) ||
+                    sourceVertex.Point != originalPoint ||
+                    sourceVertex.VertexIndex != vertexIndex)
+                {
+                    throw new InvalidOperationException(
+                        $"{runtimeKey}: HP vertex {vertexIndex} at WAD 0x{physicalWadOffset:X} no longer matches the complete native topology inventory; no terrain BIN was built.");
+                }
+
+                if (!physicalTransforms.TryGetValue(
+                        physicalWadOffset,
+                        out TerrainPhysicalVertexTransformBuilder? physicalTransform))
+                {
+                    physicalTransform = new TerrainPhysicalVertexTransformBuilder(
+                        sourceVertex,
+                        targetCollisionPoint,
+                        oldWord,
+                        newWord);
+                    physicalTransforms[physicalWadOffset] = physicalTransform;
+                }
+                else if (physicalTransform.Target != targetCollisionPoint)
+                {
+                    string priorKeys = string.Join(", ", physicalTransform.RuntimeKeys.OrderBy(value => value, StringComparer.OrdinalIgnoreCase));
+                    throw new InvalidOperationException(
+                        $"Terrain edits {priorKeys} and {runtimeKey} move physical HP vertex 0x{physicalWadOffset:X} to different packed targets; join the seam or undo one edit. No terrain BIN was built.");
+                }
+
+                physicalTransform.RuntimeKeys.Add(runtimeKey);
+            }
+        }
+
+        if (physicalTransforms.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "The requested HP Z edit rounded back to the original packed vertices. No terrain BIN was built.");
+        }
+
+        Dictionary<string, TerrainCollisionPointTransformBuilder> transforms = new(StringComparer.Ordinal);
+        foreach (IGrouping<string, TerrainPhysicalVertexTransformBuilder> group in physicalTransforms.Values
+            .GroupBy(
+                transform => CollisionPointKey(
+                    transform.Source.Point.X,
+                    transform.Source.Point.Y,
+                    transform.Source.Point.Z),
+                StringComparer.Ordinal))
+        {
+            TerrainPhysicalVertexTransformBuilder[] editedOccurrences = group
+                .OrderBy(transform => transform.Source.WadOffset)
+                .ToArray();
+            TerrainHpVertexReference[] nativeOccurrences = topology.VerticesByPointKey[group.Key]
+                .OrderBy(vertex => vertex.WadOffset)
+                .ToArray();
+            long[] editedOffsets = editedOccurrences.Select(transform => transform.Source.WadOffset).ToArray();
+            long[] nativeOffsets = nativeOccurrences.Select(vertex => vertex.WadOffset).Distinct().Order().ToArray();
+            if (!editedOffsets.Distinct().Order().SequenceEqual(nativeOffsets))
+            {
+                throw new InvalidOperationException(
+                    $"Edited native point {group.Key} is stored in {nativeOffsets.Length} independent HP vertex slots " +
+                    $"({string.Join(", ", nativeOffsets.Select(offset => $"0x{offset:X}"))}), but this edit changes only " +
+                    $"{editedOffsets.Distinct().Count()}. Coordinate-alias collision ownership is ambiguous; no terrain BIN was built.");
+            }
+
+            SpyroCollisionPoint[] targets = editedOccurrences.Select(transform => transform.Target).Distinct().ToArray();
+            if (targets.Length != 1)
+            {
+                throw new InvalidOperationException(
+                    $"Independent HP vertex slots for native point {group.Key} have conflicting packed targets; no terrain BIN was built.");
+            }
+
+            TerrainCollisionPointTransformBuilder transform = new(
+                editedOccurrences[0].Source.Point,
+                targets[0]);
+            foreach (TerrainPhysicalVertexTransformBuilder occurrence in editedOccurrences)
+            {
+                transform.PhysicalWadOffsets.Add(occurrence.Source.WadOffset);
+                transform.RuntimeKeys.UnionWith(occurrence.RuntimeKeys);
+            }
+            foreach (TerrainHpFaceReference face in topology.Faces.Where(face =>
+                         face.VertexWadOffsets.Any(transform.PhysicalWadOffsets.Contains)))
+            {
+                transform.AffectedFaces.Add(face.Label);
+            }
+            transforms[group.Key] = transform;
+        }
+
+        foreach ((string sourceKey, TerrainCollisionPointTransformBuilder transform) in transforms)
+        {
+            string targetKey = CollisionPointKey(transform.Target.X, transform.Target.Y, transform.Target.Z);
+            if (!string.Equals(sourceKey, targetKey, StringComparison.Ordinal) &&
+                topology.VerticesByPointKey.TryGetValue(targetKey, out IReadOnlyList<TerrainHpVertexReference>? occupiedTarget))
+            {
+                throw new InvalidOperationException(
+                    $"Edited native point {sourceKey} would land on {occupiedTarget.Count} independent HP vertex slot(s) already at {targetKey}. " +
+                    "Target-coordinate collision ownership is ambiguous; no terrain BIN was built.");
+            }
+            if (!string.Equals(sourceKey, targetKey, StringComparison.Ordinal) &&
+                collisionContext.Table.Triangles.Any(triangle =>
+                    collisionContext.GroupIndexesByTriangleIndex.ContainsKey(triangle.Index) &&
+                    !IsZeroAreaCollisionTriangle3D(triangle) &&
+                    triangle.Points.Any(point =>
+                        string.Equals(
+                            CollisionPointKey(point.X, point.Y, point.Z),
+                            targetKey,
+                            StringComparison.Ordinal))))
+            {
+                throw new InvalidOperationException(
+                    $"Edited native point {sourceKey} would land on a pre-existing referenced collision point at {targetKey}. " +
+                    "Target-coordinate collision ownership is ambiguous; no terrain BIN was built.");
+            }
+        }
+        foreach (IGrouping<string, KeyValuePair<string, TerrainCollisionPointTransformBuilder>> targetGroup in transforms
+            .GroupBy(
+                pair => CollisionPointKey(pair.Value.Target.X, pair.Value.Target.Y, pair.Value.Target.Z),
+                StringComparer.Ordinal))
+        {
+            if (targetGroup.Count() <= 1)
+                continue;
+            throw new InvalidOperationException(
+                $"Multiple independent native points would merge at {targetGroup.Key}. Target-coordinate collision ownership is ambiguous; no terrain BIN was built.");
+        }
+
+        ValidateTopologySafeTerrainExposure(topology, physicalTransforms);
+
+        Dictionary<string, int> referencedTriangleMatchesByPoint = transforms.Keys
+            .ToDictionary(key => key, _ => 0, StringComparer.Ordinal);
+        List<TerrainCollisionFanPatch> patches = new();
+        foreach (SpyroCollisionTriangle triangle in collisionContext.Table.Triangles)
+        {
+            if (!collisionContext.GroupIndexesByTriangleIndex.ContainsKey(triangle.Index) ||
+                IsZeroAreaCollisionTriangle3D(triangle))
+            {
+                continue;
+            }
+
+            TerrainCollisionPointTransformBuilder[] contributors = triangle.Points
+                .Select(point => transforms.GetValueOrDefault(CollisionPointKey(point.X, point.Y, point.Z)))
+                .Where(transform => transform != null)
+                .Cast<TerrainCollisionPointTransformBuilder>()
+                .Distinct()
+                .ToArray();
+            if (contributors.Length == 0)
+                continue;
+
+            foreach (TerrainCollisionPointTransformBuilder contributor in contributors)
+            {
+                string key = CollisionPointKey(
+                    contributor.Original.X,
+                    contributor.Original.Y,
+                    contributor.Original.Z);
+                referencedTriangleMatchesByPoint[key]++;
+            }
+
+            SpyroCollisionPoint[] targetPoints = triangle.Points
+                .Select(point => transforms.TryGetValue(
+                        CollisionPointKey(point.X, point.Y, point.Z),
+                        out TerrainCollisionPointTransformBuilder? transform)
+                    ? transform.Target
+                    : point)
+                .ToArray();
+            string runtimeKeys = string.Join(", ", contributors
+                .SelectMany(contributor => contributor.RuntimeKeys)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase));
+            if (!HasPreservedCollisionWinding(triangle.Points, targetPoints))
+            {
+                throw new InvalidOperationException(
+                    $"{runtimeKeys}: collision triangle {triangle.Index} would become flat or reverse its native winding; reduce the point movement. No terrain BIN was built.");
+            }
+
+            IReadOnlySet<CollisionLookupCell> sourceCells = CollisionTouchedCellsFor(triangle.Points);
+            IReadOnlySet<CollisionLookupCell> targetCells = CollisionTouchedCellsFor(targetPoints);
+            if (!sourceCells.SetEquals(targetCells))
+            {
+                throw new InvalidOperationException(
+                    $"{runtimeKeys}: collision triangle {triangle.Index} would move from exact native lookup cells " +
+                    $"[{FormatCollisionCells(sourceCells)}] to [{FormatCollisionCells(targetCells)}]. " +
+                    "Collision-cell-changing edits remain blocked until the rebuilt index has its own runtime gate; no terrain BIN was built.");
+            }
+
+            if (!TryBuildCollisionTriangleWordsCyclic(
+                    targetPoints,
+                    triangle.ZWord & 0x0000C000u,
+                    out uint newXWord,
+                    out uint newYWord,
+                    out uint newZWord,
+                    out string description))
+            {
+                throw new InvalidOperationException(
+                    $"{runtimeKeys}: collision triangle {triangle.Index} cannot encode the edited points without reversing native winding; reduce the height or XY movement. No terrain BIN was built.");
+            }
+
+            SpyroCollisionTriangle encoded = BuildCollisionTriangleFromWords(
+                triangle.Index,
+                triangle.Offset,
+                newXWord,
+                newYWord,
+                newZWord);
+            if (!IsCyclicCollisionRotation(targetPoints, encoded.Points) ||
+                (encoded.ZWord & 0x0000C000u) != (triangle.ZWord & 0x0000C000u))
+            {
+                throw new InvalidOperationException(
+                    $"{runtimeKeys}: collision triangle {triangle.Index} did not read back as the exact cyclic, flag-preserving target; no terrain BIN was built.");
+            }
+
+            if (newXWord == triangle.XWord && newYWord == triangle.YWord && newZWord == triangle.ZWord)
+                continue;
+
+            patches.Add(new TerrainCollisionFanPatch(
+                triangle,
+                newXWord,
+                newYWord,
+                newZWord,
+                contributors
+                    .SelectMany(contributor => contributor.RuntimeKeys)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+                contributors
+                    .SelectMany(contributor => contributor.AffectedFaces)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
+                description));
+        }
+
+        foreach ((string pointKey, int matchCount) in referencedTriangleMatchesByPoint)
+        {
+            if (matchCount != 0)
+                continue;
+
+            TerrainCollisionPointTransformBuilder transform = transforms[pointKey];
+            throw new InvalidOperationException(
+                $"{string.Join(", ", transform.RuntimeKeys.OrderBy(value => value, StringComparer.OrdinalIgnoreCase))}: " +
+                $"edited point {pointKey} has no referenced native collision fan. Visual-only geometry export is blocked; no terrain BIN was built.");
+        }
+
+        return new TerrainCollisionFanBatch(
+            true,
+            transforms.Count,
+            referencedTriangleMatchesByPoint.Count(pair => pair.Value > 0),
+            transforms.Values
+                .SelectMany(transform => transform.AffectedFaces)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            physicalTransforms.Values
+                .OrderBy(transform => transform.Source.WadOffset)
+                .Select(transform => new TerrainVisualVertexFanPatch(
+                    transform.Source.WadOffset,
+                    transform.Source.VertexIndex,
+                    transform.OldWord,
+                    transform.NewWord,
+                    transform.RuntimeKeys
+                        .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                        .ToArray(),
+                    topology.Faces
+                        .Where(face => face.VertexWadOffsets.Contains(transform.Source.WadOffset))
+                        .Select(face => face.Label)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                        .ToArray()))
+                .ToArray(),
+            patches);
     }
 
-    private static bool TryBuildCollisionTriangleWords(
-        SpyroCollisionTriangle triangle,
-        IReadOnlyDictionary<string, SpyroCollisionPoint> editedPointByOriginalPoint,
+    private static void AddTopologySafeVisualPatches(
+        FileStream imageStream,
+        DiscLayout layout,
+        TerrainCollisionFanBatch batch,
+        Dictionary<long, TerrainPatch> patchesByWadOffset)
+    {
+        foreach (TerrainVisualVertexFanPatch visual in batch.VisualPatches)
+        {
+            string runtimeKey = visual.RuntimeKeys.FirstOrDefault() ?? "terrain-collision-fan";
+            AddPatch(
+                imageStream,
+                layout,
+                patchesByWadOffset,
+                visual.WadOffset,
+                BitConverter.GetBytes(visual.OldWord),
+                BitConverter.GetBytes(visual.NewWord),
+                "visual-hp-topology-safe",
+                runtimeKey,
+                $"Set physical HP vertex {visual.VertexIndex} for the complete affected face set " +
+                $"[{string.Join(", ", visual.AffectedFaces)}]; its referenced native collision fan is committed atomically.");
+        }
+    }
+
+    private static void AddCollisionFanPatches(
+        FileStream imageStream,
+        DiscLayout layout,
+        CollisionPatchContext? collisionContext,
+        TerrainCollisionFanBatch batch,
+        Dictionary<long, TerrainPatch> patchesByWadOffset)
+    {
+        if (collisionContext == null || batch.Patches.Count == 0)
+            return;
+
+        foreach (TerrainCollisionFanPatch fanPatch in batch.Patches.OrderBy(patch => patch.Triangle.Index))
+        {
+            SpyroCollisionTriangle triangle = fanPatch.Triangle;
+            long wadOffset = GetCollisionTriangleWadOffset(collisionContext, triangle);
+            byte[] before = new byte[12];
+            byte[] after = new byte[12];
+            BitConverter.GetBytes(triangle.XWord).CopyTo(before, 0);
+            BitConverter.GetBytes(triangle.YWord).CopyTo(before, 4);
+            BitConverter.GetBytes(triangle.ZWord).CopyTo(before, 8);
+            BitConverter.GetBytes(fanPatch.XWord).CopyTo(after, 0);
+            BitConverter.GetBytes(fanPatch.YWord).CopyTo(after, 4);
+            BitConverter.GetBytes(fanPatch.ZWord).CopyTo(after, 8);
+            string runtimeKey = fanPatch.RuntimeKeys.FirstOrDefault() ?? "terrain-collision-fan";
+            AddPatch(
+                imageStream,
+                layout,
+                patchesByWadOffset,
+                wadOffset,
+                before,
+                after,
+                "collision-triangle-fan",
+                runtimeKey,
+                $"Update complete native collision fan triangle {triangle.Index} for affected HP faces " +
+                $"[{string.Join(", ", fanPatch.AffectedFaces)}] from {string.Join(", ", fanPatch.RuntimeKeys)} " +
+                $"with cyclic winding preserved: {fanPatch.Description}.");
+        }
+    }
+
+    private static bool TryBuildCollisionTriangleWordsCyclic(
+        IReadOnlyList<SpyroCollisionPoint> points,
+        uint zFlags,
         out uint xWord,
         out uint yWord,
         out uint zWord,
         out string description)
     {
-        xWord = triangle.XWord;
-        yWord = triangle.YWord;
-        zWord = triangle.ZWord;
+        xWord = 0;
+        yWord = 0;
+        zWord = 0;
         description = "";
-        SpyroCollisionPoint[] points = new SpyroCollisionPoint[3];
-        for (int i = 0; i < triangle.Points.Count; i++)
+        foreach (int[] order in CollisionCyclicPointOrders)
         {
-            SpyroCollisionPoint point = triangle.Points[i];
-            if (!editedPointByOriginalPoint.TryGetValue(CollisionPointKey(point.X, point.Y, point.Z), out SpyroCollisionPoint? target) ||
-                target == null)
-            {
-                return false;
-            }
+            if (!TryBuildCollisionTriangleWordsInOrder(points, order, zFlags, out CollisionWordTriple triple))
+                continue;
 
-            points[i] = target;
+            xWord = triple.XWord;
+            yWord = triple.YWord;
+            zWord = triple.ZWord;
+            description = string.Join("; ", order.Select(index =>
+                $"{points[index].X},{points[index].Y},{points[index].Z}"));
+            return true;
         }
 
-        return TryBuildCollisionTriangleWords(points, triangle.ZWord & 0x0000C000u, out xWord, out yWord, out zWord, out description);
+        return false;
+    }
+
+    private static bool HasPreservedCollisionWinding(
+        IReadOnlyList<SpyroCollisionPoint> source,
+        IReadOnlyList<SpyroCollisionPoint> target)
+    {
+        if (source.Count < 3 || target.Count < 3)
+            return false;
+
+        (long X, long Y, long Z) sourceNormal = CollisionNormal(source[0], source[1], source[2]);
+        (long X, long Y, long Z) targetNormal = CollisionNormal(target[0], target[1], target[2]);
+        if (sourceNormal == (0L, 0L, 0L) || targetNormal == (0L, 0L, 0L))
+            return false;
+
+        return (sourceNormal.X * targetNormal.X) +
+            (sourceNormal.Y * targetNormal.Y) +
+            (sourceNormal.Z * targetNormal.Z) > 0;
+    }
+
+    private static (long X, long Y, long Z) CollisionNormal(
+        SpyroCollisionPoint a,
+        SpyroCollisionPoint b,
+        SpyroCollisionPoint c)
+    {
+        long abX = b.X - a.X;
+        long abY = b.Y - a.Y;
+        long abZ = b.Z - a.Z;
+        long acX = c.X - a.X;
+        long acY = c.Y - a.Y;
+        long acZ = c.Z - a.Z;
+        return (
+            (abY * acZ) - (abZ * acY),
+            (abZ * acX) - (abX * acZ),
+            (abX * acY) - (abY * acX));
+    }
+
+    private static IReadOnlySet<CollisionLookupCell> CollisionTouchedCellsFor(
+        IReadOnlyList<SpyroCollisionPoint> points)
+    {
+        if (points.Count < 3 || points.Any(point =>
+                point.X < 0 || point.X > 0x3FFF ||
+                point.Y < 0 || point.Y > 0x3FFF ||
+                point.Z < 0 || point.Z > 0x3FFF))
+        {
+            throw new InvalidOperationException(
+                "Edited collision points are outside the native 0..16383 coordinate range; no terrain BIN was built.");
+        }
+
+        int minX = points.Min(point => point.X) >> 8;
+        int maxX = points.Max(point => point.X) >> 8;
+        int minY = points.Min(point => point.Y) >> 8;
+        int maxY = points.Max(point => point.Y) >> 8;
+        int minZ = points.Min(point => point.Z) >> 8;
+        int maxZ = points.Max(point => point.Z) >> 8;
+        SpyroCollisionTriangle triangle = new(
+            -1,
+            -1,
+            0,
+            0,
+            0,
+            0,
+            points[0],
+            points[1],
+            points[2]);
+        CollisionTriangleBounds bounds = new(
+            triangle,
+            minX,
+            maxX,
+            minY,
+            maxY,
+            minZ,
+            maxZ);
+        HashSet<CollisionLookupCell> result = [];
+        for (int z = minZ; z <= maxZ; z++)
+        {
+            for (int y = minY; y <= maxY; y++)
+            {
+                for (int x = minX; x <= maxX; x++)
+                {
+                    if (CollisionTriangleTouchesBlock(bounds, x, y, z))
+                        result.Add(new CollisionLookupCell(x, y, z));
+                }
+            }
+        }
+        return result;
+    }
+
+    private static string FormatCollisionCells(IEnumerable<CollisionLookupCell> cells) =>
+        string.Join(", ", cells
+            .OrderBy(cell => cell.Z)
+            .ThenBy(cell => cell.Y)
+            .ThenBy(cell => cell.X)
+            .Select(cell => $"{cell.X}/{cell.Y}/{cell.Z}"));
+
+    private static bool IsCyclicCollisionRotation(
+        IReadOnlyList<SpyroCollisionPoint> expected,
+        IReadOnlyList<SpyroCollisionPoint> actual)
+    {
+        if (expected.Count != actual.Count)
+            return false;
+        for (int shift = 0; shift < expected.Count; shift++)
+        {
+            bool matches = true;
+            for (int index = 0; index < expected.Count; index++)
+            {
+                if (expected[index] != actual[(index + shift) % actual.Count])
+                {
+                    matches = false;
+                    break;
+                }
+            }
+            if (matches)
+                return true;
+        }
+        return false;
     }
 
     private static bool TryBuildCollisionTriangleWords(
@@ -8940,6 +9960,109 @@ public static class TerrainPatchExporter
         bool SupportsDirectLookupFallback);
 
     private readonly record struct CollisionWordTriple(uint XWord, uint YWord, uint ZWord);
+
+    private sealed class TerrainCollisionPointTransformBuilder
+    {
+        public TerrainCollisionPointTransformBuilder(
+            SpyroCollisionPoint original,
+            SpyroCollisionPoint target)
+        {
+            Original = original;
+            Target = target;
+        }
+
+        public SpyroCollisionPoint Original { get; }
+
+        public SpyroCollisionPoint Target { get; }
+
+        public HashSet<string> RuntimeKeys { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public HashSet<long> PhysicalWadOffsets { get; } = [];
+
+        public HashSet<string> AffectedFaces { get; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private sealed class TerrainPhysicalVertexTransformBuilder
+    {
+        public TerrainPhysicalVertexTransformBuilder(
+            TerrainHpVertexReference source,
+            SpyroCollisionPoint target,
+            uint oldWord,
+            uint newWord)
+        {
+            Source = source;
+            Target = target;
+            OldWord = oldWord;
+            NewWord = newWord;
+        }
+
+        public TerrainHpVertexReference Source { get; }
+
+        public SpyroCollisionPoint Target { get; }
+
+        public uint OldWord { get; }
+
+        public uint NewWord { get; }
+
+        public HashSet<string> RuntimeKeys { get; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private sealed record TerrainHpVertexReference(
+        long WadOffset,
+        int RuntimeSectorOffset,
+        long SourceSectorWadOffset,
+        int VertexIndex,
+        SpyroCollisionPoint Point);
+
+    private sealed record TerrainHpFaceReference(
+        string Label,
+        long SourceSectorWadOffset,
+        int RuntimeSectorOffset,
+        long FaceWadOffset,
+        int FaceIndex,
+        IReadOnlyList<long> VertexWadOffsets,
+        IReadOnlyList<SpyroCollisionPoint> Points);
+
+    private sealed record TerrainHpTopologyInventory(
+        IReadOnlyDictionary<long, TerrainHpVertexReference> VerticesByWadOffset,
+        IReadOnlyDictionary<string, IReadOnlyList<TerrainHpVertexReference>> VerticesByPointKey,
+        IReadOnlyList<TerrainHpFaceReference> Faces);
+
+    private sealed record TerrainVisualVertexFanPatch(
+        long WadOffset,
+        int VertexIndex,
+        uint OldWord,
+        uint NewWord,
+        IReadOnlyList<string> RuntimeKeys,
+        IReadOnlyList<string> AffectedFaces);
+
+    private sealed record TerrainCollisionFanPatch(
+        SpyroCollisionTriangle Triangle,
+        uint XWord,
+        uint YWord,
+        uint ZWord,
+        IReadOnlyList<string> RuntimeKeys,
+        IReadOnlyList<string> AffectedFaces,
+        string Description);
+
+    private sealed record TerrainCollisionFanBatch(
+        bool HasGeometryEdits,
+        int TransformedPointCount,
+        int CollisionBackedPointCount,
+        IReadOnlyList<string> AffectedFaces,
+        IReadOnlyList<TerrainVisualVertexFanPatch> VisualPatches,
+        IReadOnlyList<TerrainCollisionFanPatch> Patches)
+    {
+        public static TerrainCollisionFanBatch Empty { get; } = new(
+            false,
+            0,
+            0,
+            Array.Empty<string>(),
+            Array.Empty<TerrainVisualVertexFanPatch>(),
+            Array.Empty<TerrainCollisionFanPatch>());
+    }
+
+    private readonly record struct CollisionLookupCell(int X, int Y, int Z);
 
     private sealed record CollisionLookupIndex(
         IReadOnlyList<IReadOnlyList<int>> LookupGroups,

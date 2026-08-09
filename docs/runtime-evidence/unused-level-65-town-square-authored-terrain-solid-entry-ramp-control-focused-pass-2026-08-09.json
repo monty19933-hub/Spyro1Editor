@@ -1,0 +1,106 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-09",
+  "evidenceId": "unused-level-65-town-square-authored-terrain-solid-entry-ramp-control-focused-pass-duckstation-2026-08-09",
+  "evidenceType": "interactive-user-report-bound-to-exact-v4-handoff",
+  "evidenceStatus": "focused-runtime-pass",
+  "evidenceScope": "complete-edited-surface-solidity-only",
+  "automatedEmulatorCapture": false,
+  "promotionAuthorized": false,
+  "normalEditorIntegrationAuthorized": false,
+  "normalCreateBinIntegrationAuthorized": false,
+  "profileId": "unused-level-65-town-square-authored-terrain-solid-entry-ramp-control-clean-usa-disposable-v4",
+  "baseProfileId": "unused-level-65-town-square-display-name-clean-usa-disposable-v4",
+  "baseRuntimeEvidenceId": "unused-level-65-town-square-display-name-focused-pass-duckstation-2026-08-08",
+  "predecessorRendererRuntimeEvidenceId": "unused-level-65-town-square-authored-terrain-render-visibility-control-focused-pass-duckstation-2026-08-08",
+  "predecessorRejectedEvidenceId": "unused-level-65-town-square-authored-terrain-solid-existing-triangle-control-not-observed-duckstation-2026-08-08",
+  "baseOutputImageSha256": "9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8",
+  "outputImageSha256": "6f63a7645c0ed07ad21cc884856c52a5df598f5fa81c31441d342f44d5e16f0c",
+  "outputId65DataSha256": "90a08be221dedcecfefdf3fb9640e082cdb6b06a98a8edabb6c7410c1116288e",
+  "outputExecutableSha256": "fa5fc7981188b78fa7d7b78facca64c1f79dadb107515e9146ad178ade39d442",
+  "outputCue": "_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-solid-entry-ramp-control/Unused-Level-65-Town-Square-authored-terrain-solid-entry-ramp-control-RUNTIME-CANDIDATE.cue",
+  "runtimeChecklistArtifact": "_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-solid-entry-ramp-control/Unused-Level-65-Town-Square-authored-terrain-solid-entry-ramp-control-RUNTIME-CANDIDATE-runtime-checklist.md",
+  "staticProofArtifact": "_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-solid-entry-ramp-control/Unused-Level-65-Town-Square-authored-terrain-solid-entry-ramp-control-RUNTIME-CANDIDATE-static-proof.json",
+  "locationGuideArtifact": "_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-solid-entry-ramp-control/Unused-Level-65-Town-Square-authored-terrain-solid-entry-ramp-control-RUNTIME-CANDIDATE-location-guide.svg",
+  "focusedRuntimeObservation": {
+    "primaryEvidence": true,
+    "userReport": "Holy crap, the entire edited surface is solid!  Did you just figure it out and can apply this to the rest of the editor for other levels?  We were struggling with this and having one side be solid and the other not.",
+    "requiredDiscriminator": "The whole v4 edited entrance-ridge surface tested by the user must be solid, resolving the prior failure mode in which one side was solid and the other was not.",
+    "passedChecks": [
+      "The user reported that the entire edited surface was solid.",
+      "The user explicitly contrasted this result with the prior one-side-solid and other-side-not-solid failure mode, establishing that the tested v4 surface did not retain that failure mode."
+    ],
+    "conclusion": "The exact v4 existing-face control passes its focused complete-edited-surface solidity discriminator. The matching shared-HP-vertex and exact native-collision-fan rewrite produced a solid tested surface across the area the user identified. This conclusion applies only to this exact candidate and does not by itself establish the rest of the runtime checklist, another level, normal editor integration, or true Add Terrain."
+  },
+  "exactCandidateStaticBinding": {
+    "runtimeKey": "213:37:hp",
+    "sourceSectorIndex": 213,
+    "authoredVertexIndexes": [
+      39,
+      48
+    ],
+    "affectedFaceIndexes": [
+      25,
+      26,
+      29,
+      37,
+      38,
+      43
+    ],
+    "collisionTriangleIndexes": [
+      1353,
+      1354,
+      1360,
+      1361,
+      1363,
+      1369,
+      1370,
+      1395,
+      1400,
+      1401
+    ],
+    "authoredHeightDelta": 96,
+    "countsAndComponentSizesUnchanged": true,
+    "collisionIndexRebuildRequired": false,
+    "changedLogicalWadBytes": 42,
+    "changedPhysicalImageBytes": 267,
+    "affectedRawSectorLbas": [
+      54434,
+      54507
+    ],
+    "visualFootprintIntersections": [
+      "213:37"
+    ],
+    "centralCollisionFootprintTriangleIndexes": [
+      1353,
+      1354
+    ],
+    "staticProofStatusBeforeRuntimeReport": "static-proven-runtime-pending",
+    "interpretation": "Static proof binds the report to a vertically exposed existing HP surface, its complete ten-triangle shared-point collision fan, unchanged collision lookup structures, and the exact two-sector MODE2 boundary. The user's report supplies the focused runtime solidity result; static readback alone did not."
+  },
+  "runtimeReportBoundary": {
+    "reportDirectlyFollowsExactV4Handoff": true,
+    "exactCueLaunchIndependentlyCaptured": false,
+    "independentProcessOrOpenFileCorroboration": false,
+    "separateResetOrComparisonReportReceived": false,
+    "boundary": "The active handoff and exact candidate identity bind this report to v4 in the conversation. No independent emulator capture, process inspection, exact-CUE launch observation, reset result, or comparison-level result was added to this evidence."
+  },
+  "unverifiedRuntimeChecks": [
+    "Reset and cold-boot repeatability were not separately reported for this exact v4 BIN.",
+    "Retail Town Square isolation, Gnasty's Loot loading, and Sunny Flight loading or flight controls were not reported for this exact v4 run.",
+    "Walking, charging, jumping, landing, reverse traversal, the absence of the old flat plane, and individual side-taper behavior were not separately itemized in the report.",
+    "Texture stability, camera behavior, enemies, pause, Inventory, and broader gameplay stability were not separately reported.",
+    "Cheat-disabled, both-memory-card-slots-None, no-save-state, and prohibited-action conditions were not independently captured.",
+    "The report does not establish newly allocated terrain vertices or faces, component growth, arbitrary textures, Mobys, another level, or a complete new level."
+  ],
+  "nextGate": "Treat matching existing HP geometry and its complete source-derived native collision fan as focused runtime-proven only for this exact v4 surface. Before exposing the technique for other levels or normal editor/Create BIN use, implement level-agnostic discovery and validation of shared visual vertices, every matching collision triangle, cyclic winding, lookup-cell membership, and overlap isolation, then pass a separately scoped candidate on another existing surface. True Add Terrain remains a distinct later gate because v4 changed no counts or component sizes and allocated no new face or vertex.",
+  "scopeLimitations": [
+    "This focused pass applies only to profile unused-level-65-town-square-authored-terrain-solid-entry-ramp-control-clean-usa-disposable-v4 and BIN 6f63a7645c0ed07ad21cc884856c52a5df598f5fa81c31441d342f44d5e16f0c.",
+    "It records the user's complete-edited-surface solidity result and resolution of the prior one-sided-solidity failure mode for the tested v4 surface.",
+    "It is not a pass for unreported reset, comparison-level, environment, persistence, or full movement-checklist items.",
+    "It does not prove the method on another level and does not authorize applying it throughout the editor yet.",
+    "It does not prove true Add Terrain: all terrain counts and component sizes remained unchanged, and v4 deformed existing geometry with matching existing collision records.",
+    "It does not authorize normal editor, Create BIN, release, or update integration."
+  ]
+}

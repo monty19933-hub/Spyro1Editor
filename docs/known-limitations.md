@@ -579,13 +579,31 @@ The editor can preview terrain surfaces, stage supported height edits, and swap
 source-proven native terrain/building texture records between levels. Terrain
 behavior outside the decoded native collision signatures is not fully decoded.
 
-Structural **Add Terrain Copy** remains capacity-gated. A direct append is
-allowed only when the bytes immediately after the exact native scene sector are
-proven free; source-search gaps may contain omitted LP-only sectors and are not
-treated as slack. Scene-sector suffix shifting is disabled because the current
-writer cannot yet grow the environment component and rebase the following
-occlusion, surface, collision, and later components. When direct capacity is not
-proven, the build rejects the whole structural edit before publishing a BIN/CUE.
+The guarded normal geometry boundary is limited to Z edits on existing
+high-detail (HP) terrain. For every affected point, `Create BIN` must discover
+the complete referenced native collision fan, preserve cyclic winding, and keep
+every triangle in its original collision lookup cells. An unsafe, unresolved,
+unencodable, or cell-changing fan rejects the whole terrain export atomically;
+it never publishes a partial visible/collision patch. XY edits, LP geometry
+edits, add/copy/remove terrain operations, and structural growth remain
+research-only.
+
+The exact v4 ID65 runtime report proves only that its complete edited surface
+was solid and resolved the prior one-sided-solidity failure. It does not prove
+reset repeatability, comparison levels, the other checklist movements, other
+levels, or true Add Terrain, and it does not authorize a broader runtime claim.
+The scoped record is
+`docs/runtime-evidence/unused-level-65-town-square-authored-terrain-solid-entry-ramp-control-focused-pass-2026-08-09.json`.
+
+Research-only **Add Terrain Copy** remains capacity-gated. A direct append can
+be investigated only when the bytes immediately after the exact native scene
+sector are proven free; source-search gaps may contain omitted LP-only sectors
+and are not treated as slack. Scene-sector suffix shifting is disabled because
+the current writer cannot yet grow the environment component and rebase the
+following occlusion, surface, collision, and later components. When direct
+capacity is not proven, the research build rejects the whole structural edit
+before publishing a BIN/CUE. Passing that static guard does not promote the
+operation into normal editor support.
 
 The shipping editor retains every captured editable source-terrain face; no
 normal view removes geometry from the project. **Edit Map** is the exhaustive

@@ -29,6 +29,11 @@ const string RejectedProfileId =
     "unused-level-65-town-square-authored-terrain-solid-existing-triangle-control-clean-usa-disposable-v3";
 const string RejectedImageSha256 =
     "976a1910264c48fbc7cec8a9a1291f849bcad898fc511bae5d986a7af1c66214";
+const string FocusedRuntimeEvidenceId =
+    "unused-level-65-town-square-authored-terrain-solid-entry-ramp-control-focused-pass-duckstation-2026-08-09";
+const string FocusedRuntimeEvidencePath =
+    "docs/runtime-evidence/unused-level-65-town-square-authored-terrain-solid-entry-ramp-control-focused-pass-2026-08-09.json";
+const string FocusedRuntimeEvidenceRecordedDate = "2026-08-09";
 const string CandidatePrefix =
     "Unused-Level-65-Town-Square-authored-terrain-solid-entry-ramp-control-RUNTIME-CANDIDATE";
 
@@ -62,6 +67,19 @@ string outputCue = outputPrefix + ".cue";
 string staticProofPath = outputPrefix + "-static-proof.json";
 string checklistPath = outputPrefix + "-runtime-checklist.md";
 string guidePath = outputPrefix + "-location-guide.svg";
+string focusedRuntimeEvidenceFile = Path.Combine(repositoryRoot, FocusedRuntimeEvidencePath);
+Require(File.Exists(focusedRuntimeEvidenceFile),
+    "The focused runtime-pass evidence for the solid-entry-ramp control is missing.");
+string expectedOutputCueArtifact = RepositoryRelativePath(repositoryRoot, outputCue);
+string expectedChecklistArtifact = RepositoryRelativePath(repositoryRoot, checklistPath);
+string expectedStaticProofArtifact = RepositoryRelativePath(repositoryRoot, staticProofPath);
+string expectedLocationGuideArtifact = RepositoryRelativePath(repositoryRoot, guidePath);
+VerifyFocusedRuntimeEvidence(
+    focusedRuntimeEvidenceFile,
+    expectedOutputCueArtifact,
+    expectedChecklistArtifact,
+    expectedStaticProofArtifact,
+    expectedLocationGuideArtifact);
 
 await WriteTextAtomicallyAsync(staticProofPath, "{\"stale\":true}\n");
 await WriteTextAtomicallyAsync(checklistPath, "STALE CHECKLIST\n");
@@ -132,10 +150,31 @@ object proof = new
 {
     format = "spyro-editor-static-proof",
     formatVersion = 1,
-    status = "static-proven-runtime-pending",
+    status = "static-proven-external-focused-runtime-pass-recorded",
     runtimeClaim = false,
     promotionAuthorized = false,
-    generatedAtUtc = repeat.Plan.GeneratedAtUtc,
+    runtimeEvidence = new
+    {
+        evidenceId = FocusedRuntimeEvidenceId,
+        evidencePath = FocusedRuntimeEvidencePath,
+        evidenceStatus = "focused-runtime-pass",
+        evidenceScope = "complete-edited-surface-solidity-only",
+        automatedEmulatorCapture = false,
+        promotionAuthorized = false,
+        normalEditorIntegrationAuthorized = false,
+        normalCreateBinIntegrationAuthorized = false,
+        profileId = UnusedLevel65AuthoredTerrainSolidEntryRampControlCandidateExporter.ProfileId,
+        outputImageSha256 =
+            UnusedLevel65AuthoredTerrainSolidEntryRampControlCandidateExporter.ExpectedOutputImageSha256,
+        outputId65DataSha256 =
+            UnusedLevel65AuthoredTerrainSolidEntryRampControlCandidateExporter.ExpectedOutputDataSha256,
+        outputExecutableSha256 = ExecutableSha256,
+        outputCue = expectedOutputCueArtifact,
+        runtimeChecklistArtifact = expectedChecklistArtifact,
+        staticProofArtifact = expectedStaticProofArtifact,
+        locationGuideArtifact = expectedLocationGuideArtifact
+    },
+    generatedFromRuntimeEvidenceRecordedDate = FocusedRuntimeEvidenceRecordedDate,
     profileId = repeat.Plan.ProfileId,
     baseProfileId = repeat.Plan.BaseProfileId,
     baseRuntimeEvidence = new
@@ -303,7 +342,8 @@ object proof = new
         "LP/far-LOD terrain, counts, sector/component sizes, textures, Mobys, music, totals, portals, Return Home, saving, and persistence are unchanged.",
         "The retired v3 976a candidate is not reused and must not be loaded or retested.",
         "No normal editor, Create BIN, release, or update path references this candidate.",
-        "Static/readback proof does not claim DuckStation runtime success or authorize promotion."
+        "The external evidence records only complete-edited-surface solidity and resolution of the prior one-sided-solidity failure; the other checklist items remain unverified.",
+        "This static/readback artifact makes no independent runtime claim and does not authorize promotion."
     }
 };
 JsonSerializerOptions jsonOptions = new()
@@ -323,13 +363,18 @@ checklist.AppendLine($"- Base BIN SHA-256: `{repeat.Plan.BaseImageSha256}`");
 checklist.AppendLine($"- Profile: `{repeat.Plan.ProfileId}`");
 checklist.AppendLine($"- Location guide: `{guidePath}`");
 checklist.AppendLine($"- Location-guide SHA-256: `{guideSha256}`");
-checklist.AppendLine("- Status: static/readback proven; focused DuckStation runtime proof pending; research-only and unpromoted.");
+checklist.AppendLine("- Status: exact external focused complete-edited-surface solidity pass recorded; static/readback proof remains static with `runtimeClaim: false`; research-only and unpromoted.");
 checklist.AppendLine();
 checklist.AppendLine(
     "This control starts from the clean passed display-name base. It raises the broad entry " +
     "ridge directly in front of Spyro by 96 units and rewrites every matching native collision " +
     "triangle. Counts, component sizes, collision lookup/index, and retail levels remain unchanged. " +
     "This is not yet Add Terrain.");
+checklist.AppendLine();
+checklist.AppendLine(
+    "The linked external evidence records that the entire edited v4 surface was solid and that the " +
+    "prior one-side-solid/other-side-not-solid failure mode was resolved. It does not mark reset, " +
+    "comparison levels, separately itemized movement checks, or any other checklist item as passed.");
 checklist.AppendLine();
 checklist.AppendLine(
     $"**Do not load the retired v3 `{RejectedImageSha256}` candidate. Its target was hidden under " +
@@ -342,6 +387,8 @@ checklist.AppendLine();
 checklist.AppendLine($"Open `{guidePath}` before booting. At the ID65 landing, stop and walk straight ahead; do not turn or search near gems.");
 checklist.AppendLine();
 checklist.AppendLine("## Test");
+checklist.AppendLine();
+checklist.AppendLine("The original checklist remains below only for the runtime items not covered by the recorded focused solidity report:");
 checklist.AppendLine();
 for (int index = 0; index < repeat.Plan.RuntimeChecklist.Count; index++)
     checklist.AppendLine($"{index + 1}. {repeat.Plan.RuntimeChecklist[index]}");
@@ -356,7 +403,17 @@ checklist.AppendLine(
     "avoid every prohibited action.");
 await WriteTextAtomicallyAsync(checklistPath, checklist.ToString());
 
-VerifyProofReadback(staticProofPath, repeat, finderReveal, loadCodes, guidePath, guideSha256);
+VerifyProofReadback(
+    staticProofPath,
+    repeat,
+    finderReveal,
+    loadCodes,
+    guidePath,
+    guideSha256,
+    expectedOutputCueArtifact,
+    expectedChecklistArtifact,
+    expectedStaticProofArtifact,
+    expectedLocationGuideArtifact);
 string writtenChecklist = await File.ReadAllTextAsync(checklistPath);
 RuntimeCandidateTestHandoff.VerifyChecklistReadback(writtenChecklist, finderReveal, loadCodes);
 string writtenGuide = await File.ReadAllTextAsync(guidePath);
@@ -367,6 +424,11 @@ Require(
     Contains(writtenChecklist, "96 units") &&
     Contains(writtenChecklist, "old flat plane") &&
     Contains(writtenChecklist, "not yet Add Terrain") &&
+    Contains(writtenChecklist, "external focused complete-edited-surface solidity pass recorded") &&
+    Contains(writtenChecklist, "runtimeClaim: false") &&
+    Contains(writtenChecklist, "one-side-solid/other-side-not-solid failure mode was resolved") &&
+    Contains(writtenChecklist, "does not mark reset") &&
+    Contains(writtenChecklist, "items not covered by the recorded focused solidity report") &&
     Contains(writtenChecklist, "both card slots None") &&
     Contains(writtenChecklist, "Moon Jump") &&
     Contains(writtenChecklist, "Retail Town Square") &&
@@ -383,7 +445,8 @@ RequireNoTransactionalDebris(outputRoot);
 
 Console.WriteLine(
     "PASS: the ID65 solid-entry-ramp control is deterministic, exposed, collision-coherent, " +
-    "and statically proven; focused DuckStation runtime proof remains pending and promotion unauthorized.");
+    "and statically proven; its exact external focused complete-edited-surface solidity pass is " +
+    "recorded while this static proof keeps runtimeClaim false and promotion unauthorized.");
 Console.WriteLine($"CUE: {repeat.OutputCuePath}");
 Console.WriteLine($"Reveal in Finder: {finderReveal.HelperPath}");
 Console.WriteLine($"Guide: {guidePath}");
@@ -410,6 +473,41 @@ static void VerifyDisplayEvidence(string path)
         !root.GetProperty("automatedEmulatorCapture").GetBoolean() &&
         !root.GetProperty("promotionAuthorized").GetBoolean(),
         "The entry-ramp control lost its exact display-name runtime-pass base evidence.");
+}
+
+static void VerifyFocusedRuntimeEvidence(
+    string path,
+    string expectedOutputCueArtifact,
+    string expectedChecklistArtifact,
+    string expectedStaticProofArtifact,
+    string expectedLocationGuideArtifact)
+{
+    using JsonDocument evidence = JsonDocument.Parse(File.ReadAllText(path));
+    JsonElement root = evidence.RootElement;
+    Require(
+        root.GetProperty("evidenceId").GetString() == FocusedRuntimeEvidenceId &&
+        root.GetProperty("recordedDate").GetString() == FocusedRuntimeEvidenceRecordedDate &&
+        root.GetProperty("evidenceStatus").GetString() == "focused-runtime-pass" &&
+        root.GetProperty("evidenceScope").GetString() == "complete-edited-surface-solidity-only" &&
+        !root.GetProperty("automatedEmulatorCapture").GetBoolean() &&
+        !root.GetProperty("promotionAuthorized").GetBoolean() &&
+        !root.GetProperty("normalEditorIntegrationAuthorized").GetBoolean() &&
+        !root.GetProperty("normalCreateBinIntegrationAuthorized").GetBoolean() &&
+        root.GetProperty("profileId").GetString() ==
+            UnusedLevel65AuthoredTerrainSolidEntryRampControlCandidateExporter.ProfileId &&
+        root.GetProperty("baseProfileId").GetString() ==
+            UnusedLevel65DisplayNameCandidateExporter.ProfileId &&
+        root.GetProperty("baseOutputImageSha256").GetString() == BaseImageSha256 &&
+        root.GetProperty("outputImageSha256").GetString() ==
+            UnusedLevel65AuthoredTerrainSolidEntryRampControlCandidateExporter.ExpectedOutputImageSha256 &&
+        root.GetProperty("outputId65DataSha256").GetString() ==
+            UnusedLevel65AuthoredTerrainSolidEntryRampControlCandidateExporter.ExpectedOutputDataSha256 &&
+        root.GetProperty("outputExecutableSha256").GetString() == ExecutableSha256 &&
+        root.GetProperty("outputCue").GetString() == expectedOutputCueArtifact &&
+        root.GetProperty("runtimeChecklistArtifact").GetString() == expectedChecklistArtifact &&
+        root.GetProperty("staticProofArtifact").GetString() == expectedStaticProofArtifact &&
+        root.GetProperty("locationGuideArtifact").GetString() == expectedLocationGuideArtifact,
+        "The solid-entry-ramp runtime evidence no longer binds this exact unpromoted profile, output, executable, data, or artifact set.");
 }
 
 static void VerifyRendererEvidence(string path)
@@ -591,10 +689,15 @@ static void VerifyProofReadback(
     RuntimeCandidateFinderReveal finderReveal,
     IReadOnlyList<RuntimeCandidateLoadCode> loadCodes,
     string guidePath,
-    string guideSha256)
+    string guideSha256,
+    string expectedOutputCueArtifact,
+    string expectedChecklistArtifact,
+    string expectedStaticProofArtifact,
+    string expectedLocationGuideArtifact)
 {
     using JsonDocument document = JsonDocument.Parse(File.ReadAllText(proofPath));
     JsonElement root = document.RootElement;
+    JsonElement runtimeEvidence = root.GetProperty("runtimeEvidence");
     JsonElement baseEvidence = root.GetProperty("baseRuntimeEvidence");
     JsonElement renderer = root.GetProperty("predecessorRendererRuntimeEvidence");
     JsonElement rejected = root.GetProperty("predecessorRejectedEvidence");
@@ -604,16 +707,37 @@ static void VerifyProofReadback(
     JsonElement handoff = root.GetProperty("testHandoff");
     Require(
         !root.TryGetProperty("stale", out _) &&
-        root.GetProperty("status").GetString() == "static-proven-runtime-pending" &&
+        root.GetProperty("status").GetString() ==
+            "static-proven-external-focused-runtime-pass-recorded" &&
         !root.GetProperty("runtimeClaim").GetBoolean() &&
         !root.GetProperty("promotionAuthorized").GetBoolean() &&
+        root.GetProperty("generatedFromRuntimeEvidenceRecordedDate").GetString() ==
+            FocusedRuntimeEvidenceRecordedDate &&
+        runtimeEvidence.GetProperty("evidenceId").GetString() == FocusedRuntimeEvidenceId &&
+        runtimeEvidence.GetProperty("evidencePath").GetString() == FocusedRuntimeEvidencePath &&
+        runtimeEvidence.GetProperty("evidenceStatus").GetString() == "focused-runtime-pass" &&
+        runtimeEvidence.GetProperty("evidenceScope").GetString() ==
+            "complete-edited-surface-solidity-only" &&
+        !runtimeEvidence.GetProperty("automatedEmulatorCapture").GetBoolean() &&
+        !runtimeEvidence.GetProperty("promotionAuthorized").GetBoolean() &&
+        !runtimeEvidence.GetProperty("normalEditorIntegrationAuthorized").GetBoolean() &&
+        !runtimeEvidence.GetProperty("normalCreateBinIntegrationAuthorized").GetBoolean() &&
+        runtimeEvidence.GetProperty("profileId").GetString() ==
+            UnusedLevel65AuthoredTerrainSolidEntryRampControlCandidateExporter.ProfileId &&
+        runtimeEvidence.GetProperty("outputImageSha256").GetString() == result.OutputImageSha256 &&
+        runtimeEvidence.GetProperty("outputId65DataSha256").GetString() == result.OutputDataSha256 &&
+        runtimeEvidence.GetProperty("outputExecutableSha256").GetString() == ExecutableSha256 &&
+        runtimeEvidence.GetProperty("outputCue").GetString() == expectedOutputCueArtifact &&
+        runtimeEvidence.GetProperty("runtimeChecklistArtifact").GetString() == expectedChecklistArtifact &&
+        runtimeEvidence.GetProperty("staticProofArtifact").GetString() == expectedStaticProofArtifact &&
+        runtimeEvidence.GetProperty("locationGuideArtifact").GetString() == expectedLocationGuideArtifact &&
         root.GetProperty("profileId").GetString() ==
             UnusedLevel65AuthoredTerrainSolidEntryRampControlCandidateExporter.ProfileId &&
         root.GetProperty("baseImageSha256").GetString() == BaseImageSha256 &&
         root.GetProperty("outputImageSha256").GetString() == result.OutputImageSha256 &&
         root.GetProperty("outputId65DataSha256").GetString() == result.OutputDataSha256 &&
         root.GetProperty("requiresDuckStationRuntimeProof").GetBoolean(),
-        "The static proof lost its pending/unpromoted status or exact hashes.");
+        "The static proof lost its external focused-pass binding, static runtimeClaim=false boundary, or exact hashes.");
     Require(
         baseEvidence.GetProperty("evidenceId").GetString() == DisplayEvidenceId &&
         baseEvidence.GetProperty("evidenceStatus").GetString() == "focused-runtime-pass" &&
@@ -815,7 +939,7 @@ static string BuildGuideSvg(
   <text x="880" y="812" fill="#ffcf5a" font-family="sans-serif" font-size="14">Card 1/2 NONE · cold boot CUE</text>
   <text x="880" y="838" fill="#ffcf5a" font-family="sans-serif" font-size="14">No save state · under 8 minutes</text>
   <text x="60" y="920" fill="#dcecff" font-family="sans-serif" font-size="17">Start at the landing. Walk the dashed center line forward and backward. Test walking, charge, jump, and landing.</text>
-  <text x="60" y="945" fill="#9fc1d9" font-family="monospace" font-size="10">Runtime pending · unpromoted · BIN SHA-256: {{imageSha256}}</text>
+  <text x="60" y="945" fill="#9fc1d9" font-family="monospace" font-size="10">External focused solidity pass recorded · static guide · unpromoted · BIN SHA-256: {{imageSha256}}</text>
   <text x="60" y="965" fill="#9fc1d9" font-family="monospace" font-size="9">Profile: {{Escape(profileId)}}</text>
   <text x="60" y="984" fill="#9fc1d9" font-family="monospace" font-size="9">Use only with exact CUE: {{Escape(cueFileName)}}</text>
 </svg>
@@ -824,6 +948,9 @@ static string BuildGuideSvg(
 
 static bool Contains(string value, string expected) =>
     value.Contains(expected, StringComparison.OrdinalIgnoreCase);
+
+static string RepositoryRelativePath(string repositoryRoot, string path) =>
+    Path.GetRelativePath(repositoryRoot, path).Replace(Path.DirectorySeparatorChar, '/');
 
 static async Task<string> HashFileAsync(string path)
 {

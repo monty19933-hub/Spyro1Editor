@@ -610,12 +610,62 @@ The guide tells the tester to stop at the landing and walk straight through the
 center rather than search by angle or gem landmark. It includes the complete
 ID65, retail Town Square, Gnasty's Loot, and Sunny Flight load codes.
 
-Runtime status remains pending and `promotionAuthorized` is false. Passing
-requires the ridge to be unmistakably visible only in ID65 and for walking,
-charging, jumping, and landing to follow the center surface in both directions
-without the old flat plane remaining below it. LP/far-LOD terrain is unchanged,
-so this is a close-range existing-face visual/collision-coherence gate. It is
-not Add Terrain and is not integrated into the normal editor, Create BIN,
-release, or update paths. Structural environment growth remains gated until
-this exact control passes in DuckStation with cheats off, both card slots None,
-and no resumed save state.
+At handoff time, runtime status remained pending and `promotionAuthorized` was
+false. Passing the complete checklist required the ridge to be unmistakably
+visible only in ID65 and for walking, charging, jumping, and landing to follow
+the center surface in both directions without the old flat plane remaining
+below it. LP/far-LOD terrain is unchanged, so this is a close-range
+existing-face visual/collision-coherence gate. It is not Add Terrain and is not
+integrated into the normal editor, Create BIN, release, or update paths.
+
+### Focused runtime result: complete edited-surface solidity
+
+The user's exact report for the v4 handoff was:
+
+> Holy crap, the entire edited surface is solid!  Did you just figure it out and can apply this to the rest of the editor for other levels?  We were struggling with this and having one side be solid and the other not.
+
+This is a focused runtime pass for the complete-edited-surface solidity
+discriminator. It resolves the earlier one-side-solid and other-side-not-solid
+failure mode on this exact tested v4 surface. Together with the static binding,
+it establishes that deforming the complete shared HP face fan and rewriting
+every exact source-derived native collision triangle can produce a solid,
+collision-coherent existing surface for this one control.
+
+The report did not separately itemize walking, charging, jumping, landing,
+reverse traversal, old-flat-plane absence, reset repeatability, retail Town
+Square, Gnasty's Loot, Sunny Flight, or broader gameplay stability. Those
+checklist items remain unverified for this exact BIN. Cheat, memory-card, and
+save-state conditions also were not independently captured. The focused pass
+therefore does not authorize promotion or normal editor/Create BIN integration.
+
+This result identifies the missing technical rule for existing terrain edits:
+discover the complete shared visual-vertex fan, rewrite every matching native
+collision record with preserved cyclic winding, keep it in its original lookup
+cells, and reject vertically shadowed footprints. Applying that rule to other
+levels still requires level-agnostic discovery and a separate runtime gate. It
+is also not true Add Terrain: v4 allocated no new vertex or face and changed no
+terrain count or component size. Component-growing structural authoring remains
+a distinct later experiment.
+
+The scoped evidence record is
+`docs/runtime-evidence/unused-level-65-town-square-authored-terrain-solid-entry-ramp-control-focused-pass-2026-08-09.json`.
+Its status is `focused-runtime-pass`; `promotionAuthorized` remains false.
+
+### Guarded editor boundary derived from v4
+
+The generalized safety rule derived from v4 is deliberately narrower than the
+terrain controls that can be staged in research tooling. Normal guarded
+geometry support is limited to Z edits on existing HP terrain. It must discover
+and update the complete referenced native collision fan, accept only cyclic
+winding, preserve collision lookup-cell membership, and reject the entire
+terrain export atomically when any member is unresolved, unsafe, conflicting,
+unencodable, flat/reversed, or cell-changing. No partial visible-only handoff is
+permitted when that contract fails.
+
+XY edits, LP geometry edits, add/copy/remove operations, and component-growing
+structural terrain authoring remain research-only. This boundary is an exporter
+safety contract, not additional runtime evidence. The exact v4 focused pass
+above remains limited to the user's complete-edited-surface solidity report for
+the isolated ID65 control; it still does not prove reset/comparison checks,
+other separately itemized checklist behavior, other levels, or true Add Terrain,
+and `promotionAuthorized` remains false.

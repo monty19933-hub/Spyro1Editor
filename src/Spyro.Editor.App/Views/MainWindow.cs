@@ -14925,7 +14925,6 @@ public sealed partial class MainWindow : Window
             : $"Selected face {_selectedTerrainIndex} ({_selectedTerrain.RuntimeKey}), texture {_selectedTerrain.TextureId}, {TerrainMaterialClassifier.FormatSurface(_selectedTerrain.Surface)}.";
         string geometryStatus = geometry?.Status ?? "not generated";
         string textureStatus = texture?.Status ?? "not generated";
-        string structureStatus = structure?.Status ?? "not generated";
 
         items.Add(new TerrainCapabilityReviewItem
         {
@@ -14936,10 +14935,13 @@ public sealed partial class MainWindow : Window
             Details =
                 $"{levelName} movement and single-point editing\n" +
                 $"{selection}\n\n" +
-                "What this covers:\n" +
-                "- Raise/lower whole faces.\n" +
-                "- Move whole faces in X/Y/Z.\n" +
-                "- Edit one selected terrain point in X/Y/Z.\n\n" +
+                "Guarded Create BIN boundary:\n" +
+                "- Edit Z on existing high-detail (HP) terrain points, including whole-face height edits.\n" +
+                "- Update every referenced native collision triangle in the complete affected fan with cyclic winding.\n" +
+                "- Reject the whole terrain export atomically when a fan is unsafe, unencodable, or would change collision-cell membership.\n\n" +
+                "Still research-only:\n" +
+                "- XY edits, LP edits, add/copy/remove terrain operations, and structural growth.\n" +
+                "- The exact v4 runtime result proves complete edited-surface solidity only for its isolated ID65 control; it is not a broad cross-level runtime pass.\n\n" +
                 (geometry == null
                     ? "No generated readiness row is available yet. Use Preflight BIN after staging a move/point edit, or rerun the terrain smoke/readiness pass."
                     : $"Readiness: {FormatTerrainGeometryReadiness(geometry)}\nSample edit: {geometry.Edit}\nSource sectors: {geometry.MatchedSectorCount}/{geometry.SourceSectorCount}\nPatches: {geometry.PatchCount} total, {geometry.VisualPatchCount} visual.\nNotes: {geometry.Notes}")
@@ -14954,15 +14956,14 @@ public sealed partial class MainWindow : Window
         {
             SortRank = 1,
             Feature = "Remove terrain",
-            Status = structureStatus,
-            Evidence = removeEvidence,
+            Status = "research-only",
+            Evidence = $"Research-only; {removeEvidence}",
             Details =
                 $"{levelName} remove-face editing\n" +
                 $"{selection}\n\n" +
-                "What this covers:\n" +
-                "- Stage a selected face for removal.\n" +
-                "- Create BIN neutralizes the visible face record and matched collision triangles together.\n" +
-                "- Visual-only deletion stays blocked in the normal editor because gameplay collision would remain.\n\n" +
+                "Research-only boundary:\n" +
+                "- Remove may be staged for research/preflight, but it is not part of the guarded existing-HP-Z Create BIN support.\n" +
+                "- Static structure readiness does not promote remove or structural growth to normal runtime-proven editing.\n\n" +
                 (_selectedTerrain == null ? "" : $"Selected face: {BuildTerrainRemoveFaceReadinessText(_selectedTerrain)}\n") +
                 (structure == null
                     ? "No generated structure readiness row is available yet."
@@ -14978,15 +14979,14 @@ public sealed partial class MainWindow : Window
         {
             SortRank = 2,
             Feature = "Add copied terrain",
-            Status = structureStatus,
-            Evidence = addEvidence,
+            Status = "research-only",
+            Evidence = $"Research-only; {addEvidence}",
             Details =
                 $"{levelName} add-copy terrain editing\n" +
                 $"{selection}\n\n" +
-                "What this covers:\n" +
-                "- Copy a proven source face and place the copy with X/Y/Z offsets.\n" +
-                "- Patch independent visible vertices when the source sector has enough safe room.\n" +
-                "- Copy playable collision when a matching collision placeholder is available.\n\n" +
+                "Research-only boundary:\n" +
+                "- Add/copy and component-growing structural terrain authoring are not part of the guarded existing-HP-Z Create BIN support.\n" +
+                "- Capacity, placeholder, or static preflight results do not constitute a runtime promotion.\n\n" +
                 (_selectedTerrain == null ? "Select a terrain face or use Find Best Add Face to inspect a source.\n" : $"{BuildTerrainAddCopyFaceReadinessText(_selectedTerrain)}\n") +
                 (structure == null
                     ? "No generated structure readiness row is available yet."
@@ -18057,7 +18057,8 @@ public sealed partial class MainWindow : Window
             $"Original: X {originalPoint.X:0.###}, Y {originalPoint.Y:0.###}, Z {originalZ:0.###}.",
             $"Current: X {point.X:0.###}, Y {point.Y:0.###}, Z {currentZ:0.###}.",
             seam,
-            playable
+            playable,
+            BuildSelectedTerrainPointPatchStatus(terrain, pointIndex)
         ]);
     }
 
@@ -18335,13 +18336,39 @@ public sealed partial class MainWindow : Window
 
     private string BuildSelectedTerrainPointPatchStatus(TerrainPolygon terrain, int pointIndex)
     {
+        const string guardedBoundary =
+            "Guarded normal support is limited to existing high-detail (HP) Z edits; XY, LP, add/copy/remove, and structural growth remain research-only.";
+
+        bool isHighDetail = terrain.Detail.Equals("hp", StringComparison.OrdinalIgnoreCase);
+        bool hasZEdit =
+            pointIndex >= 0 &&
+            pointIndex < terrain.ZValues.Length &&
+            pointIndex < terrain.OriginalZValues.Length &&
+            Math.Abs(terrain.ZValues[pointIndex] - terrain.OriginalZValues[pointIndex]) > 0.001f;
+        bool hasXyEdit =
+            pointIndex >= 0 &&
+            pointIndex < terrain.Points.Count &&
+            pointIndex < terrain.OriginalPoints.Count &&
+            (Math.Abs(terrain.Points[pointIndex].X - terrain.OriginalPoints[pointIndex].X) > 0.001f ||
+             Math.Abs(terrain.Points[pointIndex].Y - terrain.OriginalPoints[pointIndex].Y) > 0.001f);
+
+        if (!isHighDetail)
+            return $"This is a low-detail (LP) point, so its geometry is outside the guarded Create BIN path. {guardedBoundary}";
+
+        if (hasXyEdit)
+            return $"This point has an XY edit, so it is outside the guarded Create BIN path even if Z also changed. {guardedBoundary}";
+
         TerrainCollisionCoverage coverage = GetTerrainCollisionCoverage(terrain);
         bool hasCollision = coverage.VertexIndexes.Contains(pointIndex);
         if (_terrainCollisionTriangleKeys.Count == 0)
-            return "Create BIN can patch the visible vertex, but playable collision is not matched for this level yet.";
+            return $"Playable collision is not matched for this level, so the complete collision fan cannot be proven for this point. {guardedBoundary}";
         if (hasCollision)
-            return "Create BIN should patch this visible vertex and matched playable collision triangle(s).";
-        return "Create BIN may only move the visible mesh for this point; Spyro collision is not matched here.";
+        {
+            string tense = hasZEdit ? "will" : "can";
+            return $"Create BIN {tense} update this existing HP point and its complete referenced native collision fan with cyclic winding. The whole terrain export is rejected atomically if the fan is unsafe, cannot be encoded, or would change collision-cell membership. {guardedBoundary}";
+        }
+
+        return $"Spyro collision is not matched here, so an HP Z edit at this point is outside the guarded Create BIN path. {guardedBoundary}";
     }
 
     private static string TerrainVertexKey(TerrainPolygon polygon, int index)
