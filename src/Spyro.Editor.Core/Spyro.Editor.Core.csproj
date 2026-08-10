@@ -22,5 +22,8 @@
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65FoundationTerrainComposerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65PassiveMobyRuntimeCandidateSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65RemoteBlankIsolationSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65FoundationTerrainAddRemoveRuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65RemoteBlankIsolationRuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65ProgressionOwnershipSmoke" />
   </ItemGroup>
 </Project>
