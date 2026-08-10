@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
@@ -6,18 +7,18 @@ using Spyro.Editor.Core.Exporting;
 
 const string LockedBaseSha256 = "9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8";
 const string FoundationSha256 = "92e4046ce4d14771ebb70a72c2a024b8e76f5575e38771f7067ff2b4303ac222";
-const string OutputBinSha256 = "f76765081433a8ce4e68eaffa833ede6970684431e2a430c1e8eb18be9752f0d";
-const string OutputId65DataSha256 = "782672262a9961ea114ba676f691ed8d6d1f29dcbbfcd9f9d1071ed3836bd96e";
-const string RawDiffSha256 = "ae1a93b94dc6485a312f29dce23d7981e3d164d8678dd68affc3998fb2ca6607";
+const string OutputBinSha256 = "e4bfebdca057b5f90e0aa5fe94b0983e2d7338fd13d82a2cdfbb21d4f07ca081";
+const string OutputId65DataSha256 = "75b5d7561d38efd6fe3ac08142f444c181406d80577d3a74c5c33dc329827635";
+const string RawDiffSha256 = "28c89ddf46477f5c7151375c46311274607bfd35f5f4754f5fd6f241439f87b8";
 
 // Pinned after the first deterministic clean publication. These cover every
 // sidecar byte, including the absolute-path-bearing receipt.
-const string ExpectedCueSha256 = "72b4ded8fd7c2ec683c39de2cc71ea8cb5bf0c07f838d53d704b143d099f17de";
-const string ExpectedPlanSha256 = "ba70036336527fd6fd8274d0017a13694559184f5be8c1958560fb80d528328c";
-const string ExpectedReceiptSha256 = "d26659144464ed57e38c5404abfe83f7e235458472afc7071d1ff3c00c185554";
-const string ExpectedChecklistSha256 = "26bfc0739179a11cec6f434f4705abf57ee830da883bbf95ec1cc62d7a2a0d2b";
-const string ExpectedGuideSha256 = "76e7cb5c8fc5e17a144f392416cdc22d7766b113554644d13bd826f516e50823";
-const string ExpectedFinderHelperSha256 = "9a6c6c891c6d89e6dee493167bae873d945641cb0e5994d58ce16b8fa18fbb6f";
+const string ExpectedCueSha256 = "2de0fad7fcac35a737ddc6559d6cfdd85fb655c8f4ccf0ab98f7c1248667e777";
+const string ExpectedPlanSha256 = "7da2dc98ecc746144afc74f5ef68dd42207e8753704a8b880382e2c8ad21a65d";
+const string ExpectedReceiptSha256 = "f31f03cce92fd1609b7170352ca1ee9d63a3a8d51ac7c27472414e85f558cf25";
+const string ExpectedChecklistSha256 = "92e98d792c7646b4dba7e94d2bc9164fbbe7087c88990afdd8ae953161eed727";
+const string ExpectedGuideSha256 = "5ff393c02d8d6d6d7ee3ccf5baee3dbbaedf2a1fed10fda63af918e9e13de3c3";
+const string ExpectedFinderHelperSha256 = "0acd6a34b5177a798a2b906ca1253da0489ac5cad277f3b73241b6a89062ce8f";
 
 ExpectedLoadCode[] exactLoadCodes =
 [
@@ -46,7 +47,7 @@ string foundationCue = Path.ChangeExtension(foundation, ".cue");
 string outputDirectory = Path.Combine(
     root,
     "_local/v5-stone-hill-level-replacement",
-    UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.OutputDirectoryName);
+    UnusedLevel65PassiveMobyRuntimeCandidateExporter.OutputDirectoryName);
 
 RequireFile(lockedBase, "locked base");
 RequireFile(foundation, "foundation BIN");
@@ -54,7 +55,7 @@ RequireFile(foundationCue, "foundation CUE");
 string foundationHashBefore = await HashFileAsync(foundation);
 DateTime foundationTimeBefore = File.GetLastWriteTimeUtc(foundation);
 
-UnusedLevel65StandaloneSpawnRuntimeCandidateRequest normalRequest = new(
+UnusedLevel65PassiveMobyRuntimeCandidateRequest normalRequest = new(
     root,
     lockedBase,
     foundation,
@@ -67,11 +68,11 @@ UnusedLevel65StandaloneSpawnRuntimeCandidateRequest normalRequest = new(
 TaskCompletionSource leaseHeld = new(TaskCreationOptions.RunContinuationsAsynchronously);
 TaskCompletionSource releaseLease = new(TaskCreationOptions.RunContinuationsAsynchronously);
 DirectorySnapshot outputBeforeLease = SnapshotDirectory(outputDirectory);
-UnusedLevel65StandaloneSpawnRuntimeCandidatePaths knownPaths =
-    UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.CreatePaths(outputDirectory);
+UnusedLevel65PassiveMobyRuntimeCandidatePaths knownPaths =
+    UnusedLevel65PassiveMobyRuntimeCandidateExporter.CreatePaths(outputDirectory);
 DirectorySnapshot operationsBeforeLease = SnapshotDirectory(knownPaths.OperationsDirectoryPath);
-Task<UnusedLevel65StandaloneSpawnRuntimeCandidateResult> firstTask = Task.Run(async () =>
-    await UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.CreateAsync(normalRequest with
+Task<UnusedLevel65PassiveMobyRuntimeCandidateResult> firstTask = Task.Run(async () =>
+    await UnusedLevel65PassiveMobyRuntimeCandidateExporter.CreateAsync(normalRequest with
     {
         TestStageHook = stage =>
         {
@@ -86,30 +87,30 @@ Stopwatch contentionTimer = Stopwatch.StartNew();
 bool contentionRejected = false;
 try
 {
-    await UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.CreateAsync(normalRequest);
+    await UnusedLevel65PassiveMobyRuntimeCandidateExporter.CreateAsync(normalRequest);
 }
-catch (IOException ex) when (ex.Message.Contains("Another standalone-spawn writer is active", StringComparison.Ordinal))
+catch (IOException ex) when (ex.Message.Contains("Another passive-moby writer is active", StringComparison.Ordinal))
 {
     contentionRejected = true;
 }
 contentionTimer.Stop();
 Require(contentionRejected && contentionTimer.Elapsed < TimeSpan.FromSeconds(3),
-    "A competing spawn writer did not fail immediately on the nonblocking OS lease.");
+    "A competing passive-Moby writer did not fail immediately on the nonblocking OS lease.");
 RequireSnapshotsEqual(outputBeforeLease, SnapshotDirectory(outputDirectory), "Held-writer output boundary");
 RequireSnapshotsEqual(operationsBeforeLease, SnapshotDirectory(knownPaths.OperationsDirectoryPath), "Held-writer operation boundary");
 releaseLease.TrySetResult();
-UnusedLevel65StandaloneSpawnRuntimeCandidateResult first = await firstTask;
+UnusedLevel65PassiveMobyRuntimeCandidateResult first = await firstTask;
 
 VerifyResult(first, expectedStartupRecovery: false);
 DirectorySnapshot authoritative = SnapshotDirectory(outputDirectory);
 Require(authoritative.Files.Count == 7,
-    "The standalone-spawn publication did not contain exactly seven handoff artifacts.");
+    "The passive-moby publication did not contain exactly seven handoff artifacts.");
 EnsureNoOperationDebris(knownPaths);
 
 bool replaceRefused = false;
 try
 {
-    await UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.CreateAsync(normalRequest with
+    await UnusedLevel65PassiveMobyRuntimeCandidateExporter.CreateAsync(normalRequest with
     {
         ReplaceExistingCandidate = false
     });
@@ -118,13 +119,13 @@ catch (InvalidOperationException ex) when (ex.Message.Contains("already exists",
 {
     replaceRefused = true;
 }
-Require(replaceRefused, "The standalone-spawn writer did not refuse an unapproved replacement.");
+Require(replaceRefused, "The passive-moby writer did not refuse an unapproved replacement.");
 RequireSnapshotsEqual(authoritative, SnapshotDirectory(outputDirectory), "Replace=false refusal");
 
 await VerifyInProcessRollbackAsync("after-previous-candidate-backup", authoritative);
 await VerifyInProcessRollbackAsync("after-candidate-publication", authoritative);
 
-UnusedLevel65StandaloneSpawnRuntimeCandidateResult priorRecovered =
+UnusedLevel65PassiveMobyRuntimeCandidateResult priorRecovered =
     await VerifyPriorCandidateCrashRestartAsync(authoritative);
 VerifyResult(priorRecovered, expectedStartupRecovery: true);
 EnsureNoOperationDebris(knownPaths);
@@ -133,8 +134,8 @@ await VerifyNoPreviousCandidateMoveBeforeJournalRestartAsync();
 
 // A recovered receipt must say true; the next two clean operations must both
 // say false and converge byte-for-byte on the original authoritative handoff.
-UnusedLevel65StandaloneSpawnRuntimeCandidateResult cleanOne =
-    await UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.CreateAsync(normalRequest with
+UnusedLevel65PassiveMobyRuntimeCandidateResult cleanOne =
+    await UnusedLevel65PassiveMobyRuntimeCandidateExporter.CreateAsync(normalRequest with
     {
         ReplaceExistingCandidate = true
     });
@@ -142,8 +143,8 @@ VerifyResult(cleanOne, expectedStartupRecovery: false);
 DirectorySnapshot cleanSnapshot = SnapshotDirectory(outputDirectory);
 RequireSnapshotsEqual(authoritative, cleanSnapshot, "Clean rerun after restart recovery");
 
-UnusedLevel65StandaloneSpawnRuntimeCandidateResult cleanTwo =
-    await UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.CreateAsync(normalRequest with
+UnusedLevel65PassiveMobyRuntimeCandidateResult cleanTwo =
+    await UnusedLevel65PassiveMobyRuntimeCandidateExporter.CreateAsync(normalRequest with
     {
         ReplaceExistingCandidate = true
     });
@@ -152,7 +153,7 @@ RequireSnapshotsEqual(cleanSnapshot, SnapshotDirectory(outputDirectory), "Second
 Require(first.Receipt.OutputImageSha256 == cleanTwo.Receipt.OutputImageSha256 &&
         first.Receipt.OutputId65DataSha256 == cleanTwo.Receipt.OutputId65DataSha256 &&
         first.Receipt.RawSectorDiffSha256 == cleanTwo.Receipt.RawSectorDiffSha256,
-    "A deterministic standalone-spawn rebuild changed its BIN/data/raw-diff hashes.");
+    "A deterministic passive-moby rebuild changed its BIN/data/raw-diff hashes.");
 
 PinCleanHandoff(cleanTwo);
 await VerifyStaleGuideRejectionAsync(cleanTwo);
@@ -160,10 +161,10 @@ EnsureNoOperationDebris(knownPaths);
 
 Require(await HashFileAsync(foundation) == foundationHashBefore &&
         File.GetLastWriteTimeUtc(foundation) == foundationTimeBefore,
-    "The standalone-spawn smoke modified the exact foundation source.");
+    "The passive-moby smoke modified the exact foundation source.");
 
 Console.WriteLine(
-    "PASS UnusedLevel65StandaloneSpawnRuntimeCandidateSmoke: exact foundation -> coupled landing/T92 native-apron candidate; " +
+    "PASS UnusedLevel65PassiveMobyRuntimeCandidateSmoke: exact foundation -> isolated T107 Artisans Grass 0x01F5 native-apron candidate; " +
     $"BIN={cleanTwo.Receipt.OutputImageSha256}; data={cleanTwo.Receipt.OutputId65DataSha256}; " +
     $"logical={cleanTwo.Receipt.ChangedLogicalWadBytes}; physical={cleanTwo.Receipt.ChangedPhysicalImageBytes}; " +
     $"rawDiff={cleanTwo.Receipt.RawSectorDiffSha256}; nonblocking lease/refusal/in-process rollback/" +
@@ -174,17 +175,17 @@ async Task VerifyInProcessRollbackAsync(string injectedStage, DirectorySnapshot 
     bool injected = false;
     try
     {
-        await UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.CreateAsync(normalRequest with
+        await UnusedLevel65PassiveMobyRuntimeCandidateExporter.CreateAsync(normalRequest with
         {
             ReplaceExistingCandidate = true,
             TestStageHook = stage =>
             {
                 if (stage == injectedStage)
-                    throw new InvalidOperationException("Injected standalone-spawn rollback smoke at " + stage);
+                    throw new InvalidOperationException("Injected passive-moby rollback smoke at " + stage);
             }
         });
     }
-    catch (InvalidOperationException ex) when (ex.Message.Contains("Injected standalone-spawn rollback smoke", StringComparison.Ordinal))
+    catch (InvalidOperationException ex) when (ex.Message.Contains("Injected passive-moby rollback smoke", StringComparison.Ordinal))
     {
         injected = true;
     }
@@ -193,13 +194,13 @@ async Task VerifyInProcessRollbackAsync(string injectedStage, DirectorySnapshot 
     EnsureNoOperationDebris(knownPaths);
 }
 
-async Task<UnusedLevel65StandaloneSpawnRuntimeCandidateResult> VerifyPriorCandidateCrashRestartAsync(
+async Task<UnusedLevel65PassiveMobyRuntimeCandidateResult> VerifyPriorCandidateCrashRestartAsync(
     DirectorySnapshot expectedPrior)
 {
     EnsureNoOperationDebris(knownPaths);
     string operationId = Guid.NewGuid().ToString("N");
-    string stage = Path.Combine(knownPaths.OperationsDirectoryPath, "spawn-stage-" + operationId);
-    string backup = Path.Combine(knownPaths.OperationsDirectoryPath, "spawn-backup-" + operationId);
+    string stage = Path.Combine(knownPaths.OperationsDirectoryPath, "moby-stage-" + operationId);
+    string backup = Path.Combine(knownPaths.OperationsDirectoryPath, "moby-backup-" + operationId);
     Directory.CreateDirectory(knownPaths.OperationsDirectoryPath);
     CloneDirectory(outputDirectory, stage);
 
@@ -236,8 +237,8 @@ async Task<UnusedLevel65StandaloneSpawnRuntimeCandidateResult> VerifyPriorCandid
         "Prior-candidate crash fixture publication move");
 
     bool recoveryHookSeen = false;
-    UnusedLevel65StandaloneSpawnRuntimeCandidateResult recovered =
-        await UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.CreateAsync(normalRequest with
+    UnusedLevel65PassiveMobyRuntimeCandidateResult recovered =
+        await UnusedLevel65PassiveMobyRuntimeCandidateExporter.CreateAsync(normalRequest with
         {
             ReplaceExistingCandidate = true,
             TestStageHook = hook =>
@@ -257,27 +258,27 @@ async Task<UnusedLevel65StandaloneSpawnRuntimeCandidateResult> VerifyPriorCandid
 
 async Task VerifyNoPreviousCandidateMoveBeforeJournalRestartAsync()
 {
-    string temporaryParent = Directory.CreateTempSubdirectory("spyro-id65-spawn-no-previous-recovery-").FullName;
+    string temporaryParent = Directory.CreateTempSubdirectory("spyro-id65-moby-no-previous-recovery-").FullName;
     try
     {
         string isolatedOutput = Path.Combine(
             temporaryParent,
-            UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.OutputDirectoryName);
-        UnusedLevel65StandaloneSpawnRuntimeCandidateRequest isolatedRequest = normalRequest with
+            UnusedLevel65PassiveMobyRuntimeCandidateExporter.OutputDirectoryName);
+        UnusedLevel65PassiveMobyRuntimeCandidateRequest isolatedRequest = normalRequest with
         {
             OutputDirectoryPath = isolatedOutput,
             ReplaceExistingCandidate = false,
             TestStageHook = null
         };
-        UnusedLevel65StandaloneSpawnRuntimeCandidateResult seed =
-            await UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.CreateAsync(isolatedRequest);
+        UnusedLevel65PassiveMobyRuntimeCandidateResult seed =
+            await UnusedLevel65PassiveMobyRuntimeCandidateExporter.CreateAsync(isolatedRequest);
         VerifyResult(seed, expectedStartupRecovery: false);
 
-        UnusedLevel65StandaloneSpawnRuntimeCandidatePaths isolatedPaths =
-            UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.CreatePaths(isolatedOutput);
+        UnusedLevel65PassiveMobyRuntimeCandidatePaths isolatedPaths =
+            UnusedLevel65PassiveMobyRuntimeCandidateExporter.CreatePaths(isolatedOutput);
         EnsureNoOperationDebris(isolatedPaths);
         string operationId = Guid.NewGuid().ToString("N");
-        string stage = Path.Combine(isolatedPaths.OperationsDirectoryPath, "spawn-stage-" + operationId);
+        string stage = Path.Combine(isolatedPaths.OperationsDirectoryPath, "moby-stage-" + operationId);
         Directory.CreateDirectory(isolatedPaths.OperationsDirectoryPath);
 
         // Put the already verified seed at the exact path where BuildStageAsync
@@ -289,8 +290,8 @@ async Task VerifyNoPreviousCandidateMoveBeforeJournalRestartAsync()
         Directory.Move(stage, isolatedOutput);
 
         bool recoveryHookSeen = false;
-        UnusedLevel65StandaloneSpawnRuntimeCandidateResult recovered =
-            await UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.CreateAsync(isolatedRequest with
+        UnusedLevel65PassiveMobyRuntimeCandidateResult recovered =
+            await UnusedLevel65PassiveMobyRuntimeCandidateExporter.CreateAsync(isolatedRequest with
             {
                 TestStageHook = hook =>
                 {
@@ -303,8 +304,8 @@ async Task VerifyNoPreviousCandidateMoveBeforeJournalRestartAsync()
             });
         Require(recoveryHookSeen, "The no-previous restart did not cross the startup-recovery hook.");
         VerifyResult(recovered, expectedStartupRecovery: true);
-        Require(recovered.Receipt.OutputImageSha256 == OutputBinSha256 &&
-                recovered.Receipt.OutputId65DataSha256 == OutputId65DataSha256,
+        Require(MatchesPin(recovered.Receipt.OutputImageSha256, OutputBinSha256) &&
+                MatchesPin(recovered.Receipt.OutputId65DataSha256, OutputId65DataSha256),
             "The no-previous recovered publication did not deterministically rebuild the candidate.");
         EnsureNoOperationDebris(isolatedPaths);
     }
@@ -315,7 +316,7 @@ async Task VerifyNoPreviousCandidateMoveBeforeJournalRestartAsync()
     }
 }
 
-async Task VerifyStaleGuideRejectionAsync(UnusedLevel65StandaloneSpawnRuntimeCandidateResult expected)
+async Task VerifyStaleGuideRejectionAsync(UnusedLevel65PassiveMobyRuntimeCandidateResult expected)
 {
     byte[] exactGuide = await File.ReadAllBytesAsync(expected.Paths.GuidePath);
     DirectorySnapshot exactSnapshot = SnapshotDirectory(expected.Paths.OutputDirectoryPath);
@@ -324,11 +325,11 @@ async Task VerifyStaleGuideRejectionAsync(UnusedLevel65StandaloneSpawnRuntimeCan
     {
         await File.AppendAllTextAsync(
             expected.Paths.GuidePath,
-            "\n<!-- stale standalone-spawn guide smoke -->\n",
+            "\n<!-- stale passive-moby guide smoke -->\n",
             new UTF8Encoding(false));
         try
         {
-            await UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.VerifyPublishedAsync(
+            await UnusedLevel65PassiveMobyRuntimeCandidateExporter.VerifyPublishedAsync(
                 expected.Paths.OutputDirectoryPath);
         }
         catch (InvalidDataException ex) when (ex.Message.Contains("guide", StringComparison.OrdinalIgnoreCase))
@@ -344,66 +345,121 @@ async Task VerifyStaleGuideRejectionAsync(UnusedLevel65StandaloneSpawnRuntimeCan
     Require(staleRejected, "Published readback accepted a stale or tampered guide.");
     RequireSnapshotsEqual(exactSnapshot, SnapshotDirectory(expected.Paths.OutputDirectoryPath),
         "Stale-guide restoration");
-    UnusedLevel65StandaloneSpawnRuntimeCandidateResult readback =
-        await UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.VerifyPublishedAsync(
+    UnusedLevel65PassiveMobyRuntimeCandidateResult readback =
+        await UnusedLevel65PassiveMobyRuntimeCandidateExporter.VerifyPublishedAsync(
             expected.Paths.OutputDirectoryPath);
     VerifyResult(readback, expectedStartupRecovery: false);
     PinCleanHandoff(readback);
 }
 
 void VerifyResult(
-    UnusedLevel65StandaloneSpawnRuntimeCandidateResult result,
+    UnusedLevel65PassiveMobyRuntimeCandidateResult result,
     bool expectedStartupRecovery)
 {
-    UnusedLevel65StandaloneSpawnRuntimeCandidatePlan plan = result.Plan;
-    UnusedLevel65StandaloneSpawnRuntimeCandidateReceipt receipt = result.Receipt;
-    Require(plan.ProfileId == UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.ProfileId &&
+    UnusedLevel65PassiveMobyRuntimeCandidatePlan plan = result.Plan;
+    UnusedLevel65PassiveMobyRuntimeCandidateReceipt receipt = result.Receipt;
+    Require(plan.ProfileId == UnusedLevel65PassiveMobyRuntimeCandidateExporter.ProfileId &&
             plan.FoundationImageSha256 == FoundationSha256 &&
             plan.LockedBaseImageSha256 == LockedBaseSha256 &&
-            plan.LevelId == 65 && plan.ContinuousLevelIndex == 35,
-        "The standalone-spawn substrate/profile boundary changed.");
-    Require(plan.BeforeLandingRawX == 125_225 && plan.BeforeLandingRawY == 100_506 && plan.BeforeLandingRawZ == 8_550 &&
-            plan.BeforePlayerRawX == 125_225 && plan.BeforePlayerRawY == 100_506 && plan.BeforePlayerRawZ == 8_704 &&
-            plan.AuthoredLandingRawX == 124_585 && plan.AuthoredLandingRawY == 102_954 && plan.AuthoredLandingRawZ == 8_550 &&
-            plan.AuthoredPlayerRawX == 124_585 && plan.AuthoredPlayerRawY == 102_954 && plan.AuthoredPlayerRawZ == 8_704 &&
-            plan.YawByte == 0x40 && plan.DeltaRawX == -640 && plan.DeltaRawY == 2_448 && plan.DeltaRawZ == 0,
-        "The exact coupled landing/T92 authored coordinates changed.");
-    Require(plan.Patches.Count == 2 && plan.Patches.Sum(patch => patch.ChangedByteCount) == 8 &&
-            plan.AffectedRawSectorLbas.SequenceEqual(new[] { 54_834, 54_838 }) &&
-            plan.LandingAndPlayerAnchorCoupledAtomically,
-        "The exact two-record/two-sector patch boundary changed.");
+            plan.ClosedContractProfileId == "unused-level-65-moby-dependency-bundle-artisans-grass-static-closure-v2" &&
+            plan.ClosedContractSha256 == "8ec952c5972d7e2a37e5e89f8ec2be26144635b92b58cba85f745f7d05a76d4f" &&
+            plan.LevelId == 65 && plan.ContinuousLevelIndex == 35 &&
+            plan.DonorLevelName == "Artisans" && plan.DonorTrueIndex == 121 &&
+            plan.TargetTrueIndex == 107 && plan.ActorId == 0x01F5 && plan.TargetActorRootIndex == 37,
+        "The passive-moby substrate/profile boundary changed.");
+    Require(plan.AuthoredRawX == 124_384 && plan.AuthoredRawY == 102_304 && plan.AuthoredRawZ == 8_192 &&
+            plan.DonorYawByte == 0x04 &&
+            plan.SourceRowSha256 == "de8450049c0bea92fba8fe4e7f9f9cb749a514d1318dbd83dc9b6b1b18a0b190" &&
+            plan.SourcePropertiesSha256 == "9eeeff662fd5b77dbc35de8ed01e0d1fd149cee49126625b69f65553c4b7c20b" &&
+            plan.SourceActorPackageSha256 == "90ca71a190c4567817d728753f25df667d56515e1721d24e19e6da9dc07edcc3" &&
+            plan.DonorDispatchTraceSha256 == "ffdacdf97f86f1aed4505e0869ee2a9bfbdaad92025704fd33d1d4bfb9ba6d88" &&
+            plan.TargetDispatchTraceSha256 == "cb3c5bf3677e27833294c86b83ea12e6a1d5a91fd8cd155aa548f1f59f02809f",
+        "The exact donor/T107/placement/closed-dispatch identity changed.");
+
+    (string Name, long Offset, int Length)[] exactPatchLayout =
+    [
+        ("ID65 actor root 37", 0x69368E4, 4),
+        ("ID65 actor id 37", 0x693699A, 2),
+        ("ID65 actor 0x01F5 package", 0x6B06244, 0x174),
+        ("ID65 object count 107 to 108", 0x6B0696C, 4),
+        ("ID65 T107 Artisans Grass row and native-apron placement", 0x6B08E38, 0x58),
+        ("ID65 pointer-fixup count 0x81 to 0x82", 0x6B0E728, 4),
+        ("ID65 T107 m_Props pointer fixup", 0x6B0E930, 4),
+        ("ID65 exact Grass properties", 0x6B0E938, 8)
+    ];
+    Require(plan.Patches.Count == exactPatchLayout.Length &&
+            plan.AffectedRawSectorLbas.SequenceEqual(new[] { 53_906, 54_833, 54_834, 54_838, 54_849, 54_850 }),
+        "The exact eight-field/six-sector passive-Moby boundary changed.");
+    for (int index = 0; index < exactPatchLayout.Length; index++)
+    {
+        UnusedLevel65PassiveMobyPatch actual = plan.Patches[index];
+        (string expectedName, long expectedOffset, int expectedLength) = exactPatchLayout[index];
+        int[] exactChangedCounts = [3, 2, 260, 1, 22, 1, 2, 2];
+        Require(actual.Name == expectedName && actual.WadOffset == expectedOffset &&
+                Convert.FromHexString(actual.BeforeHex).Length == expectedLength &&
+                Convert.FromHexString(actual.AfterHex).Length == expectedLength &&
+                actual.ChangedByteCount == exactChangedCounts[index],
+            $"Passive-Moby patch {index} changed identity, offset, length, or became redundant.");
+    }
+    Require(plan.Patches.All(patch =>
+            !RangesOverlap(patch.WadOffset, Convert.FromHexString(patch.AfterHex).Length, 0x6B06800, 0x10) &&
+            !RangesOverlap(patch.WadOffset, Convert.FromHexString(patch.AfterHex).Length, 0x6B08910, 0x58)),
+        "The Moby-only patch set overlaps the forbidden foundation landing or T92 player anchor.");
+    Require(plan.Patches[0].BeforeHex == "00000000" && plan.Patches[0].AfterHex == "44FA1C00" &&
+            plan.Patches[1].BeforeHex == "0000" && plan.Patches[1].AfterHex == "F501" &&
+            HashBytes(Convert.FromHexString(plan.Patches[2].AfterHex)) == plan.SourceActorPackageSha256 &&
+            plan.Patches[3].BeforeHex == "6B000000" && plan.Patches[3].AfterHex == "6C000000" &&
+            HashBytes(Convert.FromHexString(plan.Patches[4].BeforeHex)) == "10eef285deef7a4b7c82b22aa53589b7833df29de3814649c772bbd5c832f365" &&
+            plan.Patches[5].BeforeHex == "81000000" && plan.Patches[5].AfterHex == "82000000" &&
+            plan.Patches[6].BeforeHex == "00000000" && plan.Patches[6].AfterHex == "38260000" &&
+            HashBytes(Convert.FromHexString(plan.Patches[7].AfterHex)) == plan.SourcePropertiesSha256,
+        "The exact root/id/package/count/fixup/properties bytes changed.");
+    byte[] authoredRow = Convert.FromHexString(plan.Patches[4].AfterHex);
+    Require(BinaryPrimitives.ReadUInt32LittleEndian(authoredRow.AsSpan(0, 4)) == 0x8138 &&
+            BinaryPrimitives.ReadInt32LittleEndian(authoredRow.AsSpan(0x0C, 4)) == 124_384 &&
+            BinaryPrimitives.ReadInt32LittleEndian(authoredRow.AsSpan(0x10, 4)) == 102_304 &&
+            BinaryPrimitives.ReadInt32LittleEndian(authoredRow.AsSpan(0x14, 4)) == 8_192 &&
+            BinaryPrimitives.ReadUInt16LittleEndian(authoredRow.AsSpan(0x36, 2)) == 0x01F5 &&
+            HashBytes(authoredRow) == "d42e49248278759d2c2020bba4d4c4db18817bf120d73829a2bbba7dddcef9fb",
+        "The exact T107 m_Props/XYZ/actor-id readback changed.");
     Require(plan.Support.TerrainSectorIndex == 213 && plan.Support.TerrainFaceIndex == 37 &&
             plan.Support.CollisionTriangleIndex == 1_353 &&
             plan.Support.CollisionTriangleHex == "521E20004A1960C000020000" &&
             plan.Support.CollisionAssignment == 0 && plan.Support.CollisionFlags == 0 &&
             plan.Support.CollisionNormalZ == -16_384 &&
-            plan.Support.DestinationCell == new UnusedLevel65StandaloneSpawnCollisionCell(30, 25, 2) &&
-            plan.Support.NativeLeftEdgeMarginRaw == 393 &&
-            plan.Support.NativeDiagonalMarginRaw == 237 &&
-            plan.Support.FoundationTriangleSeparationRaw == 316 &&
+            plan.Support.DestinationCell == new UnusedLevel65PassiveMobyCollisionCell(30, 25, 2) &&
+            plan.Support.NativeLeftEdgeMarginRaw == 192 &&
+            plan.Support.NativeDiagonalMarginRaw == 1_088 &&
+            plan.Support.FoundationTriangleSeparationRaw == 192 &&
             plan.Support.NativeGroundRawZ == 8_192 &&
-            plan.Support.LandingClearanceRaw == 358 &&
-            plan.Support.PlayerAnchorClearanceRaw == 512 &&
+            plan.Support.PlacementRawX == 124_384 && plan.Support.PlacementRawY == 102_304 &&
+            plan.Support.PlacementRawZ == 8_192 &&
+            plan.Support.DistanceFromFoundationSpawnRaw == 1_985 &&
+            plan.Support.DistanceFromReservedStandaloneSpawnRaw == 680 &&
+            plan.Support.MinimumSpawnSeparationRaw == 680 &&
             plan.Support.DestinationStrictlyInsideNativeCollision &&
             plan.Support.DestinationStrictlyOutsideFoundationTriangle &&
             plan.Support.SupportIsTopmostAtDestination &&
             plan.Support.TerrainFaceReadbackVerified &&
-            plan.Support.RuntimeEvidenceBoundToExactNativeFan,
+            plan.Support.RuntimeEvidenceBoundToExactNativeFan &&
+            plan.Support.RuntimeEvidenceSha256 == "3ddfb471fd316c68459c6c09f5d3caa85ab0b134b9720e2f86025aa398b1ea87",
         "The exact native-apron destination support proof changed.");
-    Require(plan.MusicPreserved && plan.TotalsPreserved && plan.ExitPreserved && plan.SaveCodePreserved &&
+    Require(plan.ClosedDependencyContractVerified && plan.LandingAndPlayerAnchorPreserved &&
+            plan.FoundationTerrainPreserved && plan.PassiveNoControllerDependencies &&
+            plan.MusicPreserved && plan.TotalsPreserved && plan.ExitPreserved && plan.SaveCodePreserved &&
             plan.RetailLevelsPreserved && plan.RequiresDuckStationRuntimeProof && !plan.RuntimePassed &&
             !plan.NormalCreateBinEnabled && !plan.PromotionAuthorized,
-        "The standalone-spawn behavior/promotion boundary changed.");
+        "The passive-moby behavior/promotion boundary changed.");
     VerifyExactLoadCodes(plan.LoadCodes);
     Require(plan.LoadCodes.SequenceEqual(receipt.LoadCodes),
-        "The standalone-spawn plan and receipt load codes differ.");
+        "The passive-moby plan and receipt load codes differ.");
 
-    Require(receipt.ProfileId == UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.ProfileId &&
+    Require(receipt.ProfileId == UnusedLevel65PassiveMobyRuntimeCandidateExporter.ProfileId &&
             receipt.LockedBaseImageSha256 == LockedBaseSha256 &&
             receipt.FoundationImageSha256 == FoundationSha256 &&
-            receipt.OutputImageSha256 == OutputBinSha256 &&
-            receipt.OutputId65DataSha256 == OutputId65DataSha256 &&
-            receipt.RawSectorDiffSha256 == RawDiffSha256,
+            MatchesPin(receipt.OutputImageSha256, OutputBinSha256) &&
+            MatchesPin(receipt.OutputId65DataSha256, OutputId65DataSha256) &&
+            MatchesPin(receipt.RawSectorDiffSha256, RawDiffSha256),
         "The receipt lost an exact base/foundation/output/data/raw-diff hash.");
     RequirePath(receipt.LockedBaseImagePath, lockedBase, "receipt locked-base path");
     RequirePath(receipt.FoundationImagePath, foundation, "receipt foundation path");
@@ -417,24 +473,28 @@ void VerifyResult(
     RequirePath(receipt.GuidePath, result.Paths.GuidePath, "receipt guide path");
     Require(!string.IsNullOrWhiteSpace(receipt.FinderHelperPath), "The receipt lost its Finder helper path.");
     RequirePath(receipt.FinderHelperPath!, result.Paths.RevealHelperPath, "receipt Finder helper path");
-    Require(receipt.ChangedLogicalWadBytes == 8 && receipt.ChangedPhysicalImageBytes == 116 &&
-            receipt.RawSectorDiffs.Count == 2 &&
-            receipt.RawSectorDiffs.Select(diff => diff.RawSectorLba).SequenceEqual(new[] { 54_834, 54_838 }) &&
-            receipt.RawSectorDiffs.Select(diff => diff.PayloadChangedBytes).SequenceEqual(new[] { 4, 4 }) &&
-            receipt.RawSectorDiffs.Select(diff => diff.EdcChangedBytes).SequenceEqual(new[] { 4, 4 }) &&
-            receipt.RawSectorDiffs.Select(diff => diff.EccPChangedBytes).SequenceEqual(new[] { 16, 16 }) &&
-            receipt.RawSectorDiffs.Select(diff => diff.EccQChangedBytes).SequenceEqual(new[] { 36, 32 }) &&
-            receipt.RawSectorDiffs.Select(diff => diff.TotalChangedBytes).SequenceEqual(new[] { 60, 56 }) &&
+    Require(receipt.ChangedLogicalWadBytes == 293 &&
+            receipt.ChangedLogicalWadBytes == plan.Patches.Sum(patch => (long)patch.ChangedByteCount) &&
+            receipt.ChangedPhysicalImageBytes == 904 &&
+            receipt.ChangedPhysicalImageBytes == receipt.RawSectorDiffs.Sum(diff => (long)diff.TotalChangedBytes) &&
+            receipt.RawSectorDiffs.Count == 6 &&
+            receipt.RawSectorDiffs.Select(diff => diff.RawSectorLba).SequenceEqual(plan.AffectedRawSectorLbas) &&
+            receipt.RawSectorDiffs.Select(diff => diff.TotalChangedBytes).SequenceEqual(new[] { 67, 540, 33, 165, 37, 62 }) &&
+            receipt.RawSectorDiffs.Select(diff => diff.PayloadChangedBytes).SequenceEqual(new[] { 5, 260, 1, 22, 1, 4 }) &&
+            receipt.RawSectorDiffs.Select(diff => diff.EdcChangedBytes).SequenceEqual(new[] { 4, 4, 4, 4, 4, 4 }) &&
+            receipt.RawSectorDiffs.Select(diff => diff.EccPChangedBytes).SequenceEqual(new[] { 18, 172, 10, 52, 10, 16 }) &&
+            receipt.RawSectorDiffs.Select(diff => diff.EccQChangedBytes).SequenceEqual(new[] { 40, 104, 18, 87, 22, 38 }) &&
             receipt.RawSectorDiffs.All(diff => diff.HeaderChangedBytes == 0 &&
                                                diff.SubheaderChangedBytes == 0 &&
                                                diff.ReservedChangedBytes == 0) &&
-            receipt.ExactPatchReadbackVerified && receipt.CoupledLandingAndPlayerAnchorVerified &&
-            receipt.DestinationSupportVerified && receipt.FoundationPreserved && receipt.ExecutablePreserved &&
+            receipt.ExactPatchReadbackVerified && receipt.ClosedDependencyContractVerified &&
+            receipt.LandingAndPlayerAnchorPreserved && receipt.DestinationSupportVerified &&
+            receipt.FoundationUnrelatedBytesPreserved && receipt.ExecutablePreserved &&
             receipt.RetailTownSquarePreserved && receipt.MusicTotalsExitSavePreserved &&
             receipt.RawSectorIntegrityVerified && receipt.AtomicDirectoryPublicationCompleted && receipt.RollbackGuardsEnabled &&
             receipt.StartupRecoveryPerformed == expectedStartupRecovery &&
             receipt.RuntimePending && !receipt.NormalCreateBinEnabled && !receipt.PromotionAuthorized,
-        "The standalone-spawn receipt/readback/recovery boundary changed.");
+        "The passive-moby receipt/readback/recovery boundary changed.");
 
     Require(receipt.OutputCueSha256 == result.ArtifactHashes.CueSha256 &&
             receipt.PlanSha256 == result.ArtifactHashes.PlanSha256 &&
@@ -466,26 +526,42 @@ void VerifyResult(
             receiptJson.Contains("\"planSha256\"", StringComparison.Ordinal) &&
             receiptJson.Contains("\"loadCodes\"", StringComparison.Ordinal),
         "The plan/receipt JSON lost required handoff fields.");
-    Require(checklist.Contains(UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.ProfileId, StringComparison.Ordinal) &&
+    Require(checklist.Contains(UnusedLevel65PassiveMobyRuntimeCandidateExporter.ProfileId, StringComparison.Ordinal) &&
             checklist.Contains(cueName, StringComparison.Ordinal) &&
-            checklist.Contains(OutputBinSha256, StringComparison.Ordinal) &&
+            checklist.Contains(receipt.OutputImageSha256, StringComparison.Ordinal) &&
             checklist.Contains("Runtime status: **pending / unpromoted**", StringComparison.Ordinal) &&
-            checklist.Contains("death", StringComparison.OrdinalIgnoreCase) &&
-            checklist.Contains("reset/cold-boot", StringComparison.OrdinalIgnoreCase),
-        "The checklist lost its identity or death/reset pending boundary.");
+            checklist.Contains("T107", StringComparison.Ordinal) &&
+            checklist.Contains("0x01F5", StringComparison.Ordinal) &&
+            checklist.Contains("landing and T92 player anchor are byte-for-byte unchanged", StringComparison.Ordinal) &&
+            checklist.Contains("far LOD", StringComparison.Ordinal) &&
+            checklist.Contains("60 seconds", StringComparison.Ordinal) &&
+            checklist.Contains("NO CARDS / DO NOT SAVE", StringComparison.Ordinal) &&
+            checklist.Contains("reset/cold boot", StringComparison.OrdinalIgnoreCase) &&
+            !checklist.Contains("authored landing", StringComparison.OrdinalIgnoreCase) &&
+            !checklist.Contains("death respawn", StringComparison.OrdinalIgnoreCase),
+        "The checklist lost its Moby-only identity, preservation, passive/LOD, or no-card boundary.");
     Require(guide.Contains("width=\"1200\" height=\"1000\" viewBox=\"0 0 1200 1000\"", StringComparison.Ordinal) &&
-            guide.Contains(UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.ProfileId, StringComparison.Ordinal) &&
+            guide.Contains(UnusedLevel65PassiveMobyRuntimeCandidateExporter.ProfileId, StringComparison.Ordinal) &&
             guide.Contains(cueName, StringComparison.Ordinal) &&
-            guide.Contains(OutputBinSha256, StringComparison.Ordinal) &&
+            guide.Contains(receipt.OutputImageSha256, StringComparison.Ordinal) &&
             guide.Contains("<rect x=\"770\" y=\"25\" width=\"370\" height=\"48\"", StringComparison.Ordinal) &&
             guide.Contains("<text x=\"955\" y=\"55\" text-anchor=\"middle\" fill=\"#ffffff\" font-family=\"sans-serif\" font-size=\"14\" font-weight=\"700\">RUNTIME PENDING / UNPROMOTED</text>", StringComparison.Ordinal) &&
-            guide.Contains("<text x=\"720\" y=\"428\" fill=\"#f0dcff\" font-family=\"sans-serif\" font-size=\"14\">Raw (124585, 102954)</text>", StringComparison.Ordinal) &&
-            guide.Contains("<text x=\"720\" y=\"452\" fill=\"#f0dcff\" font-family=\"sans-serif\" font-size=\"14\">19.75 scene units outside foundation triangle</text>", StringComparison.Ordinal) &&
-            !guide.Contains("<text x=\"735\" y=\"445\"", StringComparison.Ordinal) &&
-            guide.Contains("AUTHORED START", StringComparison.Ordinal) &&
-            guide.Contains("death respawn", StringComparison.OrdinalIgnoreCase) &&
-            guide.Contains("reset/cold-boot", StringComparison.OrdinalIgnoreCase),
-        "The 1200x1000 guide lost its safe badge/wrapped-coordinate layout or identity/runtime/death/reset stamps.");
+            guide.Contains("T107 GRASS 0x01F5", StringComparison.Ordinal) &&
+            guide.Contains("raw (124384, 102304, 8192)", StringComparison.Ordinal) &&
+            guide.Contains("UNCHANGED SPAWN / T92 (1,985 raw away)", StringComparison.Ordinal) &&
+            guide.Contains("<text x=\"650\" y=\"150\" fill=\"#f0dcff\"", StringComparison.Ordinal) &&
+            guide.Contains("<circle cx=\"300\" cy=\"205\" r=\"14\"", StringComparison.Ordinal) &&
+            guide.Contains("<text x=\"330\" y=\"205\" fill=\"#ffdf98\"", StringComparison.Ordinal) &&
+            guide.Contains("RESERVED STANDALONE-SPAWN", StringComparison.Ordinal) &&
+            guide.Contains("<text x=\"330\" y=\"228\" fill=\"#ffdf98\"", StringComparison.Ordinal) &&
+            guide.Contains("680 raw from T107", StringComparison.Ordinal) &&
+            !guide.Contains("<circle cx=\"360\" cy=\"205\"", StringComparison.Ordinal) &&
+            !guide.Contains("<text x=\"390\" y=\"210\"", StringComparison.Ordinal) &&
+            guide.Contains("far/near LOD", StringComparison.Ordinal) &&
+            guide.Contains("NO CARDS / DO NOT SAVE", StringComparison.Ordinal) &&
+            !guide.Contains("AUTHORED START", StringComparison.Ordinal) &&
+            !guide.Contains("death respawn", StringComparison.OrdinalIgnoreCase),
+        "The 1200x1000 guide lost its distinct T107 placement, preservation, passive/LOD, or no-card boundary.");
     foreach (ExpectedLoadCode exact in exactLoadCodes)
     {
         Require(checklist.Contains($"| {exact.TestName} | {exact.LevelId} | `{exact.InputCode}` |", StringComparison.Ordinal),
@@ -505,18 +581,22 @@ void VerifyResult(
                 (UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
                  UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
                  UnixFileMode.OtherRead | UnixFileMode.OtherExecute),
-            "The standalone-spawn Finder helper is not exact 0755.");
+            "The passive-moby Finder helper is not exact 0755.");
     }
+    Require(Directory.EnumerateFileSystemEntries(result.Paths.OutputDirectoryPath)
+            .All(path => !Path.GetFileName(path).Contains("card", StringComparison.OrdinalIgnoreCase) &&
+                         !Path.GetFileName(path).Contains("save", StringComparison.OrdinalIgnoreCase)),
+        "The passive-Moby publication unexpectedly created a card/save artifact.");
 }
 
-void PinCleanHandoff(UnusedLevel65StandaloneSpawnRuntimeCandidateResult result)
+void PinCleanHandoff(UnusedLevel65PassiveMobyRuntimeCandidateResult result)
 {
-    Require(result.ArtifactHashes.CueSha256 == ExpectedCueSha256 &&
-            result.ArtifactHashes.PlanSha256 == ExpectedPlanSha256 &&
-            result.ArtifactHashes.ReceiptSha256 == ExpectedReceiptSha256 &&
-            result.ArtifactHashes.ChecklistSha256 == ExpectedChecklistSha256 &&
-            result.ArtifactHashes.GuideSha256 == ExpectedGuideSha256 &&
-            result.ArtifactHashes.FinderHelperSha256 == ExpectedFinderHelperSha256,
+    Require(MatchesPin(result.ArtifactHashes.CueSha256, ExpectedCueSha256) &&
+            MatchesPin(result.ArtifactHashes.PlanSha256, ExpectedPlanSha256) &&
+            MatchesPin(result.ArtifactHashes.ReceiptSha256, ExpectedReceiptSha256) &&
+            MatchesPin(result.ArtifactHashes.ChecklistSha256, ExpectedChecklistSha256) &&
+            MatchesPin(result.ArtifactHashes.GuideSha256, ExpectedGuideSha256) &&
+            MatchesPin(result.ArtifactHashes.FinderHelperSha256 ?? "", ExpectedFinderHelperSha256),
         "A pinned clean handoff sidecar hash changed.");
 }
 
@@ -534,7 +614,7 @@ void VerifyExactLoadCodes(IReadOnlyList<RuntimeCandidateLoadCode> actual)
 }
 
 static void WriteRecoveryJournal(
-    UnusedLevel65StandaloneSpawnRuntimeCandidatePaths paths,
+    UnusedLevel65PassiveMobyRuntimeCandidatePaths paths,
     string operationId,
     string phase,
     bool hadPreviousCandidate)
@@ -545,12 +625,12 @@ static void WriteRecoveryJournal(
     var journal = new
     {
         SchemaVersion = 2,
-        OperationKind = "unused-level-65-standalone-spawn-publication",
+        OperationKind = "unused-level-65-passive-moby-publication",
         OperationId = operationId,
         OutputDirectoryPath = Path.GetFullPath(paths.OutputDirectoryPath),
         Phase = phase,
-        StageDirectoryPath = Path.Combine(paths.OperationsDirectoryPath, "spawn-stage-" + operationId),
-        BackupDirectoryPath = Path.Combine(paths.OperationsDirectoryPath, "spawn-backup-" + operationId),
+        StageDirectoryPath = Path.Combine(paths.OperationsDirectoryPath, "moby-stage-" + operationId),
+        BackupDirectoryPath = Path.Combine(paths.OperationsDirectoryPath, "moby-backup-" + operationId),
         HadPreviousCandidate = hadPreviousCandidate
     };
     JsonSerializerOptions options = new()
@@ -582,13 +662,13 @@ static void CloneDirectory(string source, string destination)
     }
 }
 
-static void EnsureNoOperationDebris(UnusedLevel65StandaloneSpawnRuntimeCandidatePaths paths)
+static void EnsureNoOperationDebris(UnusedLevel65PassiveMobyRuntimeCandidatePaths paths)
 {
     if (!Directory.Exists(paths.OperationsDirectoryPath))
         return;
     string[] debris = Directory.EnumerateFileSystemEntries(paths.OperationsDirectoryPath).ToArray();
     Require(debris.Length == 0,
-        "The standalone-spawn writer left operation journal/stage/backup/temp debris: " +
+        "The passive-moby writer left operation journal/stage/backup/temp debris: " +
         string.Join(", ", debris.Select(Path.GetFileName)));
 }
 
@@ -629,6 +709,16 @@ static string HashFile(string path)
     using FileStream stream = File.OpenRead(path);
     return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
 }
+
+static string HashBytes(ReadOnlySpan<byte> bytes) =>
+    Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+
+static bool MatchesPin(string actual, string expected) =>
+    expected.StartsWith("PENDING-PASSIVE-MOBY-", StringComparison.Ordinal) ||
+    string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase);
+
+static bool RangesOverlap(long leftOffset, int leftLength, long rightOffset, int rightLength) =>
+    leftOffset < rightOffset + rightLength && rightOffset < leftOffset + leftLength;
 
 static async Task<string> HashFileAsync(string path)
 {

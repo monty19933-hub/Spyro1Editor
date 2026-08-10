@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Spyro.Editor.UnusedLevel65FoundationTerrainComposerSmoke</AssemblyName>
+    <RootNamespace>Spyro.Editor.UnusedLevel65FoundationTerrainComposerSmoke</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj" />
+  </ItemGroup>
+</Project>

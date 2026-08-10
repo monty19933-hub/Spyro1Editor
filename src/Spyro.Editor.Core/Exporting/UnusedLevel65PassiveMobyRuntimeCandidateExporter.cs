@@ -7,7 +7,7 @@ using System.Text.Json;
 
 namespace Spyro.Editor.Core.Exporting;
 
-internal sealed record UnusedLevel65StandaloneSpawnRuntimeCandidateRequest(
+internal sealed record UnusedLevel65PassiveMobyRuntimeCandidateRequest(
     string WorkspaceRoot,
     string LockedBaseImagePath,
     string FoundationImagePath,
@@ -16,7 +16,7 @@ internal sealed record UnusedLevel65StandaloneSpawnRuntimeCandidateRequest(
     bool ReplaceExistingCandidate = false,
     Action<string>? TestStageHook = null);
 
-internal sealed record UnusedLevel65StandaloneSpawnRuntimeCandidatePaths(
+internal sealed record UnusedLevel65PassiveMobyRuntimeCandidatePaths(
     string PublicationParentPath,
     string OutputDirectoryPath,
     string OperationsDirectoryPath,
@@ -29,35 +29,39 @@ internal sealed record UnusedLevel65StandaloneSpawnRuntimeCandidatePaths(
     string GuidePath,
     string RevealHelperPath);
 
-internal sealed record UnusedLevel65StandaloneSpawnPatch(
+internal sealed record UnusedLevel65PassiveMobyPatch(
     string Name,
     long WadOffset,
     string BeforeHex,
     string AfterHex,
     int ChangedByteCount);
 
-internal readonly record struct UnusedLevel65StandaloneSpawnPoint(int X, int Y, int Z);
+internal readonly record struct UnusedLevel65PassiveMobyPoint(int X, int Y, int Z);
 
-internal readonly record struct UnusedLevel65StandaloneSpawnCollisionCell(int X, int Y, int Z);
+internal readonly record struct UnusedLevel65PassiveMobyCollisionCell(int X, int Y, int Z);
 
-internal sealed record UnusedLevel65StandaloneSpawnSupportProof(
+internal sealed record UnusedLevel65PassiveMobySupportProof(
     int TerrainSectorIndex,
     int TerrainFaceIndex,
-    IReadOnlyList<UnusedLevel65StandaloneSpawnPoint> NativeFacePoints,
+    IReadOnlyList<UnusedLevel65PassiveMobyPoint> NativeFacePoints,
     int CollisionTriangleIndex,
     string CollisionTriangleHex,
-    IReadOnlyList<UnusedLevel65StandaloneSpawnPoint> CollisionPoints,
+    IReadOnlyList<UnusedLevel65PassiveMobyPoint> CollisionPoints,
     int CollisionAssignment,
     int CollisionFlags,
     long CollisionNormalZ,
-    UnusedLevel65StandaloneSpawnCollisionCell DestinationCell,
+    UnusedLevel65PassiveMobyCollisionCell DestinationCell,
     IReadOnlyList<long> CollisionLookupWadOffsets,
     int NativeLeftEdgeMarginRaw,
     int NativeDiagonalMarginRaw,
     int FoundationTriangleSeparationRaw,
     int NativeGroundRawZ,
-    int LandingClearanceRaw,
-    int PlayerAnchorClearanceRaw,
+    int PlacementRawX,
+    int PlacementRawY,
+    int PlacementRawZ,
+    int DistanceFromFoundationSpawnRaw,
+    int DistanceFromReservedStandaloneSpawnRaw,
+    int MinimumSpawnSeparationRaw,
     bool DestinationStrictlyInsideNativeCollision,
     bool DestinationStrictlyOutsideFoundationTriangle,
     bool SupportIsTopmostAtDestination,
@@ -65,34 +69,40 @@ internal sealed record UnusedLevel65StandaloneSpawnSupportProof(
     bool RuntimeEvidenceBoundToExactNativeFan,
     string RuntimeEvidenceSha256);
 
-internal sealed record UnusedLevel65StandaloneSpawnRuntimeCandidatePlan(
+internal sealed record UnusedLevel65PassiveMobyRuntimeCandidatePlan(
     int SchemaVersion,
     string ProfileId,
     string FoundationImageSha256,
     string LockedBaseImageSha256,
+    string ClosedContractProfileId,
+    string ClosedContractSha256,
     int LevelId,
     int ContinuousLevelIndex,
-    IReadOnlyList<UnusedLevel65StandaloneSpawnPatch> Patches,
-    int BeforeLandingRawX,
-    int BeforeLandingRawY,
-    int BeforeLandingRawZ,
-    int BeforePlayerRawX,
-    int BeforePlayerRawY,
-    int BeforePlayerRawZ,
-    int AuthoredLandingRawX,
-    int AuthoredLandingRawY,
-    int AuthoredLandingRawZ,
-    int AuthoredPlayerRawX,
-    int AuthoredPlayerRawY,
-    int AuthoredPlayerRawZ,
-    int YawByte,
-    int DeltaRawX,
-    int DeltaRawY,
-    int DeltaRawZ,
-    UnusedLevel65StandaloneSpawnSupportProof Support,
+    string DonorLevelName,
+    int DonorTrueIndex,
+    int TargetTrueIndex,
+    int ActorId,
+    int TargetActorRootIndex,
+    IReadOnlyList<UnusedLevel65PassiveMobyPatch> Patches,
+    int DonorRawX,
+    int DonorRawY,
+    int DonorRawZ,
+    int AuthoredRawX,
+    int AuthoredRawY,
+    int AuthoredRawZ,
+    int DonorYawByte,
+    string SourceRowSha256,
+    string SourcePropertiesSha256,
+    string SourceActorPackageSha256,
+    string DonorDispatchTraceSha256,
+    string TargetDispatchTraceSha256,
+    UnusedLevel65PassiveMobySupportProof Support,
     IReadOnlyList<int> AffectedRawSectorLbas,
     IReadOnlyList<RuntimeCandidateLoadCode> LoadCodes,
-    bool LandingAndPlayerAnchorCoupledAtomically,
+    bool ClosedDependencyContractVerified,
+    bool LandingAndPlayerAnchorPreserved,
+    bool FoundationTerrainPreserved,
+    bool PassiveNoControllerDependencies,
     bool MusicPreserved,
     bool TotalsPreserved,
     bool ExitPreserved,
@@ -103,7 +113,7 @@ internal sealed record UnusedLevel65StandaloneSpawnRuntimeCandidatePlan(
     bool NormalCreateBinEnabled,
     bool PromotionAuthorized);
 
-internal sealed record UnusedLevel65StandaloneSpawnRawSectorDiff(
+internal sealed record UnusedLevel65PassiveMobyRawSectorDiff(
     int RawSectorLba,
     int HeaderChangedBytes,
     int SubheaderChangedBytes,
@@ -114,7 +124,7 @@ internal sealed record UnusedLevel65StandaloneSpawnRawSectorDiff(
     int EccQChangedBytes,
     int TotalChangedBytes);
 
-internal sealed record UnusedLevel65StandaloneSpawnRuntimeCandidateReceipt(
+internal sealed record UnusedLevel65PassiveMobyRuntimeCandidateReceipt(
     int SchemaVersion,
     string ProfileId,
     string LockedBaseImagePath,
@@ -140,12 +150,13 @@ internal sealed record UnusedLevel65StandaloneSpawnRuntimeCandidateReceipt(
     IReadOnlyList<RuntimeCandidateLoadCode> LoadCodes,
     long ChangedLogicalWadBytes,
     long ChangedPhysicalImageBytes,
-    IReadOnlyList<UnusedLevel65StandaloneSpawnRawSectorDiff> RawSectorDiffs,
+    IReadOnlyList<UnusedLevel65PassiveMobyRawSectorDiff> RawSectorDiffs,
     string RawSectorDiffSha256,
     bool ExactPatchReadbackVerified,
-    bool CoupledLandingAndPlayerAnchorVerified,
+    bool ClosedDependencyContractVerified,
+    bool LandingAndPlayerAnchorPreserved,
     bool DestinationSupportVerified,
-    bool FoundationPreserved,
+    bool FoundationUnrelatedBytesPreserved,
     bool ExecutablePreserved,
     bool RetailTownSquarePreserved,
     bool MusicTotalsExitSavePreserved,
@@ -157,7 +168,7 @@ internal sealed record UnusedLevel65StandaloneSpawnRuntimeCandidateReceipt(
     bool NormalCreateBinEnabled,
     bool PromotionAuthorized);
 
-internal sealed record UnusedLevel65StandaloneSpawnPublishedArtifactHashes(
+internal sealed record UnusedLevel65PassiveMobyPublishedArtifactHashes(
     string CueSha256,
     string PlanSha256,
     string ReceiptSha256,
@@ -165,26 +176,26 @@ internal sealed record UnusedLevel65StandaloneSpawnPublishedArtifactHashes(
     string GuideSha256,
     string? FinderHelperSha256);
 
-internal sealed record UnusedLevel65StandaloneSpawnRuntimeCandidateResult(
-    UnusedLevel65StandaloneSpawnRuntimeCandidatePaths Paths,
-    UnusedLevel65StandaloneSpawnRuntimeCandidatePlan Plan,
-    UnusedLevel65StandaloneSpawnRuntimeCandidateReceipt Receipt,
-    UnusedLevel65StandaloneSpawnPublishedArtifactHashes ArtifactHashes);
+internal sealed record UnusedLevel65PassiveMobyRuntimeCandidateResult(
+    UnusedLevel65PassiveMobyRuntimeCandidatePaths Paths,
+    UnusedLevel65PassiveMobyRuntimeCandidatePlan Plan,
+    UnusedLevel65PassiveMobyRuntimeCandidateReceipt Receipt,
+    UnusedLevel65PassiveMobyPublishedArtifactHashes ArtifactHashes);
 
 /// <summary>
-/// Disposable first ownership gate for ID65's landing and T92 player anchor.
-/// It moves both records as one transaction to a statically exposed point on
-/// the exact entrance collision fan that already has focused runtime solidity
-/// evidence. The destination is deliberately outside the new, runtime-pending
-/// foundation triangle, and every other behavior-owning byte remains unchanged.
+/// Disposable first passive cross-level Moby gate for ID65. It installs the
+/// exact Artisans T121 Grass row, scene properties/fixup, and actor 0x01F5
+/// package into the pinned T107/root-37 allocations and places it on the
+/// runtime-proven native entry apron. Landing, T92, totals, save, overlays,
+/// executable, and every retail level remain byte-identical.
 /// </summary>
-internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
+internal static class UnusedLevel65PassiveMobyRuntimeCandidateExporter
 {
     public const string ProfileId =
-        "unused-level-65-standalone-spawn-ownership-native-apron-clean-usa-disposable-v1";
-    public const string OutputDirectoryName = "unused-level-65-standalone-spawn-ownership";
+        "unused-level-65-artisans-grass-01f5-native-apron-clean-usa-disposable-v1";
+    public const string OutputDirectoryName = "unused-level-65-passive-moby-artisans-grass";
     public const string OutputPrefix =
-        "Unused-Level-65-Standalone-Spawn-Owned-Native-Apron-RUNTIME-CANDIDATE";
+        "Unused-Level-65-Artisans-Grass-01F5-Native-Apron-RUNTIME-CANDIDATE";
 
     public const string FoundationImageSha256 =
         UnusedLevel65StandaloneBehaviorOwnershipInspector.FoundationImageSha256;
@@ -192,11 +203,11 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         UnusedLevel65StandaloneBehaviorOwnershipInspector.LockedBaseImageSha256;
 
     public const string ExpectedOutputImageSha256 =
-        "f76765081433a8ce4e68eaffa833ede6970684431e2a430c1e8eb18be9752f0d";
+        "e4bfebdca057b5f90e0aa5fe94b0983e2d7338fd13d82a2cdfbb21d4f07ca081";
     public const string ExpectedOutputId65DataSha256 =
-        "782672262a9961ea114ba676f691ed8d6d1f29dcbbfcd9f9d1071ed3836bd96e";
+        "75b5d7561d38efd6fe3ac08142f444c181406d80577d3a74c5c33dc329827635";
     public const string ExpectedRawSectorDiffSha256 =
-        "ae1a93b94dc6485a312f29dce23d7981e3d164d8678dd68affc3998fb2ca6607";
+        "28c89ddf46477f5c7151375c46311274607bfd35f5f4754f5fd6f241439f87b8";
 
     private const int PlanSchemaVersion = 1;
     private const int ReceiptSchemaVersion = 1;
@@ -220,6 +231,42 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
     private const string ExecutableSha256 =
         UnusedLevel65StandaloneBehaviorOwnershipInspector.ExecutableSha256;
 
+    private const long ArtisansGrassRowWadOffset = 0x9D6C44;
+    private const int MobyRowByteLength = 0x58;
+    private const long ArtisansGrassPropertiesWadOffset = 0x9DBACC;
+    private const int GrassPropertiesByteLength = 8;
+    private const long ArtisansGrassPackageWadOffset = 0x9C1D20;
+    private const int GrassPackageByteLength = 0x174;
+    private const long Id65ObjectCountWadOffset = 0x6B0696C;
+    private const long Id65TargetRowWadOffset = 0x6B08E38;
+    private const long Id65FixupCountWadOffset = 0x6B0E728;
+    private const long Id65FixupAppendWadOffset = 0x6B0E930;
+    private const long Id65PropertiesWadOffset = 0x6B0E938;
+    private const long Id65ActorRootSlotWadOffset = 0x69368E4;
+    private const long Id65ActorIdSlotWadOffset = 0x693699A;
+    private const long Id65ActorPackageWadOffset = 0x6B06244;
+    private const int DonorTrueIndex = 121;
+    private const int TargetTrueIndex = 107;
+    private const int TargetActorRootIndex = 37;
+    private const ushort GrassActorId = 0x01F5;
+    private const int ObjectCountBefore = 107;
+    private const int ObjectCountAfter = 108;
+    private const int FixupCountBefore = 0x81;
+    private const int FixupCountAfter = 0x82;
+    private const uint TargetPropertiesSceneOffset = 0x8138;
+    private const uint TargetPointerFieldSceneOffset = 0x2638;
+    private const uint TargetActorPackageEntryOffset = 0x1CFA44;
+    private const string ZeroRowSha256 =
+        "10eef285deef7a4b7c82b22aa53589b7833df29de3814649c772bbd5c832f365";
+    private const string GrassRowSha256 =
+        "de8450049c0bea92fba8fe4e7f9f9cb749a514d1318dbd83dc9b6b1b18a0b190";
+    private const string GrassPropertiesSha256 =
+        "9eeeff662fd5b77dbc35de8ed01e0d1fd149cee49126625b69f65553c4b7c20b";
+    private const string GrassPackageSha256 =
+        "90ca71a190c4567817d728753f25df667d56515e1721d24e19e6da9dc07edcc3";
+    private const string ClosedContractSha256 =
+        "8ec952c5972d7e2a37e5e89f8ec2be26144635b92b58cba85f745f7d05a76d4f";
+
     private const long LandingWadOffset = 0x6B06800;
     private const long PlayerAnchorWadOffset = 0x6B08910;
     private const int PlayerAnchorByteLength = 0x58;
@@ -231,12 +278,16 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
     private const int BeforeRawY = 100_506;
     private const int LandingRawZ = 8_550;
     private const int PlayerRawZ = 8_704;
-    private const int YawByte = 0x40;
+    private const int DonorYawByte = 0x04;
 
-    // Scene point (7786.5625, 6434.625). Keeping the native fractional
-    // residues makes the authored pair exact in raw coordinates.
-    private const int AuthoredRawX = 124_585;
-    private const int AuthoredRawY = 102_954;
+    // Exact scene point (7774, 6394), safely inside native collision T1353 and
+    // outside the authored foundation triangle. It is deliberately distinct
+    // from both the unchanged foundation spawn and the separately reserved
+    // standalone-spawn candidate so the two runtime gates remain composable.
+    private const int AuthoredRawX = 124_384;
+    private const int AuthoredRawY = 102_304;
+    private const int ReservedStandaloneSpawnRawX = 124_585;
+    private const int ReservedStandaloneSpawnRawY = 102_954;
     private const int NativeGroundRawZ = 8_192;
     private const int CollisionTriangleIndex = 1_353;
     private const int FoundationCollisionTriangleIndex = 13_995;
@@ -263,12 +314,12 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
     private const string RuntimeEvidenceSha256 =
         "3ddfb471fd316c68459c6c09f5d3caa85ab0b134b9720e2f86025aa398b1ea87";
 
-    private const string OperationsDirectoryName = ".unused-level-65-standalone-spawn-operations";
-    private const string WriterLeaseFileName = ".unused-level-65-standalone-spawn-writer.lease";
+    private const string OperationsDirectoryName = ".unused-level-65-passive-moby-operations";
+    private const string WriterLeaseFileName = ".unused-level-65-passive-moby-writer.lease";
     private const string JournalFileName = "operation-journal.json";
-    private const string JournalOperationKind = "unused-level-65-standalone-spawn-publication";
-    private const string StagePrefix = "spawn-stage-";
-    private const string BackupPrefix = "spawn-backup-";
+    private const string JournalOperationKind = "unused-level-65-passive-moby-publication";
+    private const string StagePrefix = "moby-stage-";
+    private const string BackupPrefix = "moby-backup-";
     private const string PhaseStaged = "staged";
     private const string PhaseBackupIntent = "backup-intent";
     private const string PhasePreviousBackedUp = "previous-backed-up";
@@ -282,18 +333,18 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         WriteIndented = true
     };
 
-    public static UnusedLevel65StandaloneSpawnRuntimeCandidatePaths CreatePaths(string outputDirectoryPath)
+    public static UnusedLevel65PassiveMobyRuntimeCandidatePaths CreatePaths(string outputDirectoryPath)
     {
         if (string.IsNullOrWhiteSpace(outputDirectoryPath))
-            throw new ArgumentException("The standalone-spawn output directory is missing.", nameof(outputDirectoryPath));
+            throw new ArgumentException("The passive-moby output directory is missing.", nameof(outputDirectoryPath));
         string output = Path.GetFullPath(outputDirectoryPath);
         if (!string.Equals(Path.GetFileName(output), OutputDirectoryName, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                $"The standalone-spawn writer owns only a directory named '{OutputDirectoryName}'.");
+                $"The passive-moby writer owns only a directory named '{OutputDirectoryName}'.");
         }
         string parent = Path.GetDirectoryName(output)
-            ?? throw new InvalidOperationException("The standalone-spawn publication parent is missing.");
+            ?? throw new InvalidOperationException("The passive-moby publication parent is missing.");
         return new(
             parent,
             output,
@@ -301,15 +352,15 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             Path.Combine(parent, WriterLeaseFileName),
             Path.Combine(output, OutputPrefix + ".bin"),
             Path.Combine(output, OutputPrefix + ".cue"),
-            Path.Combine(output, OutputPrefix + "-spawn-plan.json"),
+            Path.Combine(output, OutputPrefix + "-moby-plan.json"),
             Path.Combine(output, OutputPrefix + "-static-readback-receipt.json"),
             Path.Combine(output, OutputPrefix + "-runtime-checklist.md"),
             Path.Combine(output, OutputPrefix + "-location-guide.svg"),
             Path.Combine(output, OutputPrefix + "-Reveal-in-Finder.command"));
     }
 
-    public static async Task<UnusedLevel65StandaloneSpawnRuntimeCandidateResult> CreateAsync(
-        UnusedLevel65StandaloneSpawnRuntimeCandidateRequest request,
+    public static async Task<UnusedLevel65PassiveMobyRuntimeCandidateResult> CreateAsync(
+        UnusedLevel65PassiveMobyRuntimeCandidateRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -317,7 +368,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         string lockedBase = RequireFile(request.LockedBaseImagePath, "exact locked ID65 base BIN");
         string foundation = RequireFile(request.FoundationImagePath, "exact ID65 foundation BIN");
         string foundationCue = RequireFile(request.FoundationCuePath, "exact ID65 foundation CUE");
-        UnusedLevel65StandaloneSpawnRuntimeCandidatePaths paths = CreatePaths(request.OutputDirectoryPath);
+        UnusedLevel65PassiveMobyRuntimeCandidatePaths paths = CreatePaths(request.OutputDirectoryPath);
         RequireSafeRoles(lockedBase, foundation, foundationCue, paths);
         Directory.CreateDirectory(paths.PublicationParentPath);
 
@@ -328,7 +379,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         if (Directory.Exists(paths.OutputDirectoryPath) && !request.ReplaceExistingCandidate)
         {
             throw new InvalidOperationException(
-                "The standalone-spawn runtime candidate already exists. Set ReplaceExistingCandidate only for an intentional deterministic rebuild.");
+                "The passive-moby runtime candidate already exists. Set ReplaceExistingCandidate only for an intentional deterministic rebuild.");
         }
 
         NativeLevelReplacementBaselineExporter.ValidateCue(foundationCue, foundation, "MODE2/2352");
@@ -394,7 +445,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             WriteJournal(paths, journal);
             request.TestStageHook?.Invoke("after-candidate-publication");
 
-            UnusedLevel65StandaloneSpawnRuntimeCandidateResult result =
+            UnusedLevel65PassiveMobyRuntimeCandidateResult result =
                 await ReadPublishedResultAsync(paths, cancellationToken);
             if (priorBackedUp)
             {
@@ -442,7 +493,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             if (recoveryFailures.Count > 0)
             {
                 throw new IOException(
-                    "Standalone-spawn publication failed and exact prior-candidate rollback was incomplete.",
+                    "Passive-Moby publication failed and exact prior-candidate rollback was incomplete.",
                     new AggregateException([failure, .. recoveryFailures]));
             }
             throw;
@@ -493,6 +544,18 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         {
             throw new InvalidDataException("The exact static-only foundation composition contract changed.");
         }
+        UnusedLevel65MobyDependencyBundleContract closedContract =
+            UnusedLevel65MobyDependencyBundleFoundation.InspectFirstCrossLevelDonor(foundation);
+        if (closedContract.ProfileId != UnusedLevel65MobyDependencyBundleFoundation.ProfileId ||
+            closedContract.DeterministicContractSha256 != ClosedContractSha256 ||
+            !closedContract.StructurallyCompleteAllocation ||
+            !closedContract.StaticRuntimeDependencyClosureComplete ||
+            closedContract.RunnableBundleSupport || !closedContract.StaticInspectionOnly ||
+            closedContract.HardRuntimePublicationBlockers.Count != 1 ||
+            !closedContract.HardRuntimePublicationBlockers[0].StartsWith("runtime-acceptance: ", StringComparison.Ordinal))
+        {
+            throw new InvalidDataException("The committed passive-Moby dependency closure changed.");
+        }
 
         DiscLayout layout = DiscImage.DetectLayout(foundation);
         RequireMode2(layout, "foundation");
@@ -533,13 +596,13 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         {
             throw new InvalidDataException("The foundation sector-213 HP counts/face-37 slots changed.");
         }
-        UnusedLevel65StandaloneSpawnPoint[] nativeFacePoints = face37.AsSpan(0, 4)
+        UnusedLevel65PassiveMobyPoint[] nativeFacePoints = face37.AsSpan(0, 4)
             .ToArray()
             .Select(vertexIndex => DecodeSceneVertex(
                 model.AsSpan(vertexRelative + (vertexIndex * 4), 4),
                 sectorHeader))
             .ToArray();
-        UnusedLevel65StandaloneSpawnPoint[] expectedNativeFacePoints =
+        UnusedLevel65PassiveMobyPoint[] expectedNativeFacePoints =
         [
             new(7_762, 6_346, 512),
             new(7_890, 6_346, 512),
@@ -577,15 +640,15 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             12).ToArray();
         RequireHex(supportTriangleBytes, ExpectedSupportTriangleHex, "native support triangle 1353");
         RequireHex(foundationTriangleBytes, ExpectedFoundationTriangleHex, "foundation triangle 13995");
-        IReadOnlyList<UnusedLevel65StandaloneSpawnPoint> supportPoints = DecodeCollisionTriangle(supportTriangleBytes);
-        IReadOnlyList<UnusedLevel65StandaloneSpawnPoint> expectedSupportPoints =
+        IReadOnlyList<UnusedLevel65PassiveMobyPoint> supportPoints = DecodeCollisionTriangle(supportTriangleBytes);
+        IReadOnlyList<UnusedLevel65PassiveMobyPoint> expectedSupportPoints =
         [
             new(7_762, 6_474, 512),
             new(7_890, 6_346, 512),
             new(7_762, 6_346, 512)
         ];
-        IReadOnlyList<UnusedLevel65StandaloneSpawnPoint> foundationPoints = DecodeCollisionTriangle(foundationTriangleBytes);
-        IReadOnlyList<UnusedLevel65StandaloneSpawnPoint> expectedFoundationPoints =
+        IReadOnlyList<UnusedLevel65PassiveMobyPoint> foundationPoints = DecodeCollisionTriangle(foundationTriangleBytes);
+        IReadOnlyList<UnusedLevel65PassiveMobyPoint> expectedFoundationPoints =
         [
             new(7_762, 6_346, 512),
             new(7_890, 6_346, 512),
@@ -608,7 +671,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             collision.AsSpan(CollisionBlocksRelativeOffset, CollisionBlocksByteLength),
             construction.CollisionBlocksUsedBytes,
             CollisionTriangleCount);
-        UnusedLevel65StandaloneSpawnCollisionCell destinationCell = new(30, 25, 2);
+        UnusedLevel65PassiveMobyCollisionCell destinationCell = new(30, 25, 2);
         if (!index.Cells.TryGetValue(destinationCell, out CollisionCell? cell) ||
             !cell.TriangleIndexes.Contains(CollisionTriangleIndex) ||
             !cell.TriangleIndexes.Contains(FoundationCollisionTriangleIndex))
@@ -629,19 +692,25 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         int foundationLeftBoundaryRaw = (7_762 * 16) +
                                         ((AuthoredRawY - (6_346 * 16)) / 2);
         int foundationSeparationRaw = foundationLeftBoundaryRaw - AuthoredRawX;
-        if (nativeLeftMarginRaw != 393 || nativeDiagonalMarginRaw != 237 ||
-            foundationSeparationRaw != 316 ||
+        const int distanceFromFoundationSpawnRaw = 1_985;
+        const int distanceFromReservedStandaloneSpawnRaw = 680;
+        const int minimumSpawnSeparationRaw = 680;
+        if (nativeLeftMarginRaw != 192 || nativeDiagonalMarginRaw != 1_088 ||
+            foundationSeparationRaw != 192 ||
+            Distance2dRaw(AuthoredRawX, AuthoredRawY, BeforeRawX, BeforeRawY) != distanceFromFoundationSpawnRaw ||
+            Distance2dRaw(AuthoredRawX, AuthoredRawY, ReservedStandaloneSpawnRawX, ReservedStandaloneSpawnRawY) != distanceFromReservedStandaloneSpawnRaw ||
+            Math.Min(distanceFromFoundationSpawnRaw, distanceFromReservedStandaloneSpawnRaw) != minimumSpawnSeparationRaw ||
             !PointInsideTriangleStrictRaw16(supportPoints, AuthoredRawX, AuthoredRawY) ||
             PointInsideTriangleInclusiveRaw16(foundationPoints, AuthoredRawX, AuthoredRawY))
         {
-            throw new InvalidDataException("The authored landing is not strictly inside native T1353 and outside foundation T13995.");
+            throw new InvalidDataException("The passive-Moby placement lost its exact native/foundation/spawn separation proof.");
         }
 
         List<CollisionSurfaceHit> hits = [];
         for (int triangleIndex = 0; triangleIndex < CollisionTriangleCount; triangleIndex++)
         {
             byte[] bytes = collision.AsSpan(CollisionTrianglesRelativeOffset + (triangleIndex * 12), 12).ToArray();
-            IReadOnlyList<UnusedLevel65StandaloneSpawnPoint> points = DecodeCollisionTriangle(bytes);
+            IReadOnlyList<UnusedLevel65PassiveMobyPoint> points = DecodeCollisionTriangle(bytes);
             if (!PointInsideTriangleInclusiveRaw16(points, AuthoredRawX, AuthoredRawY))
                 continue;
             if (!TryInterpolateRawZ(points, AuthoredRawX, AuthoredRawY, out int rawZ, out long normalZ))
@@ -663,12 +732,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         }
 
         byte[] beforeLanding = DiscImage.ReadFileBytes(image, layout, WadLba, LandingWadOffset, 0x10);
-        byte[] beforePlayerAnchor = DiscImage.ReadFileBytes(
-            image,
-            layout,
-            WadLba,
-            PlayerAnchorWadOffset,
-            PlayerAnchorByteLength);
+        byte[] beforePlayerAnchor = DiscImage.ReadFileBytes(image, layout, WadLba, PlayerAnchorWadOffset, PlayerAnchorByteLength);
         RequireHex(beforeLanding, BeforeLandingHex, "foundation landing");
         RequireHash(beforePlayerAnchor, BeforePlayerAnchorSha256, "foundation T92 player anchor");
         int playerX = BinaryPrimitives.ReadInt32LittleEndian(beforePlayerAnchor.AsSpan(0x0C, 4));
@@ -677,35 +741,71 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         if (playerX != BeforeRawX || playerY != BeforeRawY || playerZ != PlayerRawZ)
             throw new InvalidDataException("The foundation T92 coordinate preimage changed.");
 
-        byte[] afterLanding = beforeLanding.ToArray();
-        BinaryPrimitives.WriteInt32LittleEndian(afterLanding.AsSpan(0, 4), AuthoredRawX);
-        BinaryPrimitives.WriteInt32LittleEndian(afterLanding.AsSpan(4, 4), AuthoredRawY);
-        byte[] beforePlayerCoordinates = beforePlayerAnchor.AsSpan(0x0C, 12).ToArray();
-        byte[] afterPlayerCoordinates = beforePlayerCoordinates.ToArray();
-        BinaryPrimitives.WriteInt32LittleEndian(afterPlayerCoordinates.AsSpan(0, 4), AuthoredRawX);
-        BinaryPrimitives.WriteInt32LittleEndian(afterPlayerCoordinates.AsSpan(4, 4), AuthoredRawY);
-
-        UnusedLevel65StandaloneSpawnPatch[] patches =
-        [
-            new(
-                "ID65 fly-in landing XYZ/yaw record",
-                LandingWadOffset,
-                Convert.ToHexString(beforeLanding),
-                Convert.ToHexString(afterLanding),
-                CountDifferentBytes(beforeLanding, afterLanding)),
-            new(
-                "ID65 T92 player-anchor XYZ",
-                PlayerAnchorWadOffset + 0x0C,
-                Convert.ToHexString(beforePlayerCoordinates),
-                Convert.ToHexString(afterPlayerCoordinates),
-                CountDifferentBytes(beforePlayerCoordinates, afterPlayerCoordinates))
-        ];
-        if (patches.Sum(patch => patch.ChangedByteCount) != 8 ||
-            afterLanding[0x0E] != YawByte ||
-            BinaryPrimitives.ReadInt32LittleEndian(afterLanding.AsSpan(8, 4)) != LandingRawZ ||
-            BinaryPrimitives.ReadInt32LittleEndian(afterPlayerCoordinates.AsSpan(8, 4)) != PlayerRawZ)
+        byte[] sourceRow = DiscImage.ReadFileBytes(image, layout, WadLba, ArtisansGrassRowWadOffset, MobyRowByteLength);
+        byte[] sourceProperties = DiscImage.ReadFileBytes(image, layout, WadLba, ArtisansGrassPropertiesWadOffset, GrassPropertiesByteLength);
+        byte[] sourcePackage = DiscImage.ReadFileBytes(image, layout, WadLba, ArtisansGrassPackageWadOffset, GrassPackageByteLength);
+        RequireHash(sourceRow, GrassRowSha256, "Artisans T121 Grass row");
+        RequireHash(sourceProperties, GrassPropertiesSha256, "Artisans Grass properties");
+        RequireHash(sourcePackage, GrassPackageSha256, "Artisans actor 0x01F5 package");
+        if (BinaryPrimitives.ReadUInt16LittleEndian(sourceRow.AsSpan(0x36, 2)) != GrassActorId ||
+            sourceRow[0x47] != DonorYawByte ||
+            !sourceProperties.SequenceEqual(Convert.FromHexString("040000008A000000")))
         {
-            throw new InvalidDataException("The atomic landing/T92 patch changed more than exact X/Y ownership.");
+            throw new InvalidDataException("The exact passive Grass donor identity changed.");
+        }
+
+        byte[] beforeObjectCount = DiscImage.ReadFileBytes(image, layout, WadLba, Id65ObjectCountWadOffset, 4);
+        byte[] beforeTargetRow = DiscImage.ReadFileBytes(image, layout, WadLba, Id65TargetRowWadOffset, MobyRowByteLength);
+        byte[] beforeFixupCount = DiscImage.ReadFileBytes(image, layout, WadLba, Id65FixupCountWadOffset, 4);
+        byte[] beforeFixupAppend = DiscImage.ReadFileBytes(image, layout, WadLba, Id65FixupAppendWadOffset, 4);
+        byte[] beforeProperties = DiscImage.ReadFileBytes(image, layout, WadLba, Id65PropertiesWadOffset, GrassPropertiesByteLength);
+        byte[] beforeRoot = DiscImage.ReadFileBytes(image, layout, WadLba, Id65ActorRootSlotWadOffset, 4);
+        byte[] beforeActorId = DiscImage.ReadFileBytes(image, layout, WadLba, Id65ActorIdSlotWadOffset, 2);
+        byte[] beforePackage = DiscImage.ReadFileBytes(image, layout, WadLba, Id65ActorPackageWadOffset, GrassPackageByteLength);
+        RequireUInt32(beforeObjectCount, ObjectCountBefore, "ID65 object count");
+        RequireHash(beforeTargetRow, ZeroRowSha256, "ID65 T107 blank row");
+        RequireUInt32(beforeFixupCount, FixupCountBefore, "ID65 pointer-fixup count");
+        RequireZero(beforeFixupAppend, "ID65 fixup append slot");
+        RequireZero(beforeProperties, "ID65 Grass properties allocation");
+        RequireZero(beforeRoot, "ID65 actor root 37 slot");
+        RequireZero(beforeActorId, "ID65 actor id 37 slot");
+        RequireZero(beforePackage, "ID65 actor package tail allocation");
+
+        byte[] authoredRow = sourceRow.ToArray();
+        int donorRawX = BinaryPrimitives.ReadInt32LittleEndian(authoredRow.AsSpan(0x0C, 4));
+        int donorRawY = BinaryPrimitives.ReadInt32LittleEndian(authoredRow.AsSpan(0x10, 4));
+        int donorRawZ = BinaryPrimitives.ReadInt32LittleEndian(authoredRow.AsSpan(0x14, 4));
+        BinaryPrimitives.WriteUInt32LittleEndian(authoredRow.AsSpan(0, 4), TargetPropertiesSceneOffset);
+        BinaryPrimitives.WriteInt32LittleEndian(authoredRow.AsSpan(0x0C, 4), AuthoredRawX);
+        BinaryPrimitives.WriteInt32LittleEndian(authoredRow.AsSpan(0x10, 4), AuthoredRawY);
+        BinaryPrimitives.WriteInt32LittleEndian(authoredRow.AsSpan(0x14, 4), NativeGroundRawZ);
+        if (!authoredRow.AsSpan(4, 8).SequenceEqual(sourceRow.AsSpan(4, 8)) ||
+            !authoredRow.AsSpan(0x18).SequenceEqual(sourceRow.AsSpan(0x18)) ||
+            BinaryPrimitives.ReadUInt16LittleEndian(authoredRow.AsSpan(0x36, 2)) != GrassActorId)
+        {
+            throw new InvalidDataException("The destination row changed outside m_Props and XYZ placement fields.");
+        }
+
+        byte[] afterObjectCount = UInt32Bytes(ObjectCountAfter);
+        byte[] afterFixupCount = UInt32Bytes(FixupCountAfter);
+        byte[] afterFixupAppend = UInt32Bytes(TargetPointerFieldSceneOffset);
+        byte[] afterRoot = UInt32Bytes(TargetActorPackageEntryOffset);
+        byte[] afterActorId = UInt16Bytes(GrassActorId);
+        UnusedLevel65PassiveMobyPatch[] patches =
+        [
+            Patch("ID65 actor root 37", Id65ActorRootSlotWadOffset, beforeRoot, afterRoot),
+            Patch("ID65 actor id 37", Id65ActorIdSlotWadOffset, beforeActorId, afterActorId),
+            Patch("ID65 actor 0x01F5 package", Id65ActorPackageWadOffset, beforePackage, sourcePackage),
+            Patch("ID65 object count 107 to 108", Id65ObjectCountWadOffset, beforeObjectCount, afterObjectCount),
+            Patch("ID65 T107 Artisans Grass row and native-apron placement", Id65TargetRowWadOffset, beforeTargetRow, authoredRow),
+            Patch("ID65 pointer-fixup count 0x81 to 0x82", Id65FixupCountWadOffset, beforeFixupCount, afterFixupCount),
+            Patch("ID65 T107 m_Props pointer fixup", Id65FixupAppendWadOffset, beforeFixupAppend, afterFixupAppend),
+            Patch("ID65 exact Grass properties", Id65PropertiesWadOffset, beforeProperties, sourceProperties)
+        ];
+        if (patches.Select(patch => patch.WadOffset).Distinct().Count() != patches.Length ||
+            patches.Any(patch => patch.ChangedByteCount <= 0))
+        {
+            throw new InvalidDataException("The passive-Moby patch set is empty, overlapping, or redundant.");
         }
 
         int[] affectedLbas = patches
@@ -713,13 +813,13 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             .Distinct()
             .Order()
             .ToArray();
-        if (!affectedLbas.SequenceEqual(new[] { 54_834, 54_838 }))
-            throw new InvalidDataException($"The spawn patch escaped its exact two raw sectors: [{string.Join(',', affectedLbas)}].");
+        if (!affectedLbas.SequenceEqual(new[] { 53_906, 54_833, 54_834, 54_838, 54_849, 54_850 }))
+            throw new InvalidDataException($"The passive-Moby patch escaped its exact six raw sectors: [{string.Join(',', affectedLbas)}].");
         IReadOnlyList<RuntimeCandidateLoadCode> loadCodes =
             RuntimeCandidateTestHandoff.Id65ComparisonLoadCodes;
         VerifyLoadCodes(loadCodes);
 
-        UnusedLevel65StandaloneSpawnSupportProof support = new(
+        UnusedLevel65PassiveMobySupportProof support = new(
             213,
             37,
             nativeFacePoints,
@@ -735,42 +835,52 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             nativeDiagonalMarginRaw,
             foundationSeparationRaw,
             NativeGroundRawZ,
-            LandingRawZ - NativeGroundRawZ,
-            PlayerRawZ - NativeGroundRawZ,
+            AuthoredRawX,
+            AuthoredRawY,
+            NativeGroundRawZ,
+            distanceFromFoundationSpawnRaw,
+            distanceFromReservedStandaloneSpawnRaw,
+            minimumSpawnSeparationRaw,
             DestinationStrictlyInsideNativeCollision: true,
             DestinationStrictlyOutsideFoundationTriangle: true,
             SupportIsTopmostAtDestination: true,
             TerrainFaceReadbackVerified: true,
             RuntimeEvidenceBoundToExactNativeFan: true,
             RuntimeEvidenceSha256);
-        UnusedLevel65StandaloneSpawnRuntimeCandidatePlan plan = new(
+        UnusedLevel65PassiveMobyRuntimeCandidatePlan plan = new(
             PlanSchemaVersion,
             ProfileId,
             FoundationImageSha256,
             LockedBaseImageSha256,
+            closedContract.ProfileId,
+            closedContract.DeterministicContractSha256,
             65,
             35,
+            "Artisans",
+            DonorTrueIndex,
+            TargetTrueIndex,
+            GrassActorId,
+            TargetActorRootIndex,
             patches,
-            BeforeRawX,
-            BeforeRawY,
-            LandingRawZ,
-            BeforeRawX,
-            BeforeRawY,
-            PlayerRawZ,
+            donorRawX,
+            donorRawY,
+            donorRawZ,
             AuthoredRawX,
             AuthoredRawY,
-            LandingRawZ,
-            AuthoredRawX,
-            AuthoredRawY,
-            PlayerRawZ,
-            YawByte,
-            AuthoredRawX - BeforeRawX,
-            AuthoredRawY - BeforeRawY,
-            0,
+            NativeGroundRawZ,
+            DonorYawByte,
+            GrassRowSha256,
+            GrassPropertiesSha256,
+            GrassPackageSha256,
+            closedContract.BehaviorClosure.DonorDispatch.ExecutedTraceSha256,
+            closedContract.BehaviorClosure.TargetDispatch.ExecutedTraceSha256,
             support,
             affectedLbas,
             loadCodes,
-            LandingAndPlayerAnchorCoupledAtomically: true,
+            ClosedDependencyContractVerified: true,
+            LandingAndPlayerAnchorPreserved: true,
+            FoundationTerrainPreserved: true,
+            PassiveNoControllerDependencies: true,
             MusicPreserved: true,
             TotalsPreserved: true,
             ExitPreserved: true,
@@ -784,6 +894,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             layout,
             plan,
             ownership,
+            closedContract,
             executableBytes,
             beforeLanding,
             beforePlayerAnchor,
@@ -796,14 +907,14 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         Prepared prepared,
         string foundation,
         string foundationCue,
-        UnusedLevel65StandaloneSpawnRuntimeCandidatePaths finalPaths,
+        UnusedLevel65PassiveMobyRuntimeCandidatePaths finalPaths,
         string stageDirectory,
         bool rollbackRecoveryVerified,
         CancellationToken cancellationToken)
     {
         string imagePath = Path.Combine(stageDirectory, OutputPrefix + ".bin");
         string cuePath = Path.Combine(stageDirectory, OutputPrefix + ".cue");
-        string planPath = Path.Combine(stageDirectory, OutputPrefix + "-spawn-plan.json");
+        string planPath = Path.Combine(stageDirectory, OutputPrefix + "-moby-plan.json");
         string receiptPath = Path.Combine(stageDirectory, OutputPrefix + "-static-readback-receipt.json");
         string checklistPath = Path.Combine(stageDirectory, OutputPrefix + "-runtime-checklist.md");
         string guidePath = Path.Combine(stageDirectory, OutputPrefix + "-location-guide.svg");
@@ -811,7 +922,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
 
         await DiscImageWorkingCopy.StageAsync(foundation, imagePath, false, cancellationToken);
         DiscLayout layout = DiscImage.DetectLayout(imagePath);
-        RequireMode2(layout, "staged standalone-spawn candidate");
+        RequireMode2(layout, "staged passive-moby candidate");
         int rebuilt;
         await using (FileStream output = new(
                          imagePath,
@@ -821,7 +932,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
                          bufferSize: 1 << 20,
                          FileOptions.Asynchronous))
         {
-            foreach (UnusedLevel65StandaloneSpawnPatch patch in prepared.Plan.Patches)
+            foreach (UnusedLevel65PassiveMobyPatch patch in prepared.Plan.Patches)
             {
                 byte[] before = Convert.FromHexString(patch.BeforeHex);
                 byte[] after = Convert.FromHexString(patch.AfterHex);
@@ -839,7 +950,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
                     .Select(patch => (patch.WadOffset, Convert.FromHexString(patch.AfterHex).Length))
                     .ToArray());
             if (rebuilt != prepared.Plan.AffectedRawSectorLbas.Count)
-                throw new InvalidDataException("The spawn writer did not rebuild exactly its two owned raw sectors.");
+                throw new InvalidDataException("The passive-Moby writer did not rebuild exactly its six owned raw sectors.");
             VerifyRawSectors(output, layout, prepared.Plan.AffectedRawSectorLbas);
             await output.FlushAsync(cancellationToken);
             output.Flush(flushToDisk: true);
@@ -851,11 +962,11 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             imagePath,
             cancellationToken);
         if (!IsPendingHash(ExpectedOutputImageSha256))
-            RequireTextHash(readback.OutputImageSha256, ExpectedOutputImageSha256, "standalone-spawn output BIN");
+            RequireTextHash(readback.OutputImageSha256, ExpectedOutputImageSha256, "passive-moby output BIN");
         if (!IsPendingHash(ExpectedOutputId65DataSha256))
-            RequireTextHash(readback.OutputId65DataSha256, ExpectedOutputId65DataSha256, "standalone-spawn ID65 data");
+            RequireTextHash(readback.OutputId65DataSha256, ExpectedOutputId65DataSha256, "passive-moby ID65 data");
         if (!IsPendingHash(ExpectedRawSectorDiffSha256))
-            RequireTextHash(readback.RawSectorDiffSha256, ExpectedRawSectorDiffSha256, "standalone-spawn raw diff");
+            RequireTextHash(readback.RawSectorDiffSha256, ExpectedRawSectorDiffSha256, "passive-moby raw diff");
 
         string cueText = DiscImage.BuildCueText(foundationCue, Path.GetFileName(imagePath));
         await WriteTextAsync(cuePath, cueText, Encoding.ASCII, cancellationToken);
@@ -869,7 +980,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             cancellationToken);
         await WriteTextAsync(
             guidePath,
-            BuildGuide(prepared.Plan),
+            BuildGuide(prepared.Plan, readback.OutputImageSha256),
             new UTF8Encoding(false),
             cancellationToken);
         string cueName = Path.GetFileName(finalPaths.CuePath);
@@ -899,7 +1010,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         string guideSha256 = await HashFileAsync(guidePath, cancellationToken);
         string helperSha256 = await HashFileAsync(revealPath, cancellationToken);
 
-        UnusedLevel65StandaloneSpawnRuntimeCandidateReceipt receipt = new(
+        UnusedLevel65PassiveMobyRuntimeCandidateReceipt receipt = new(
             ReceiptSchemaVersion,
             ProfileId,
             prepared.LockedBaseImagePath,
@@ -928,9 +1039,10 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             readback.RawSectorDiffs,
             readback.RawSectorDiffSha256,
             ExactPatchReadbackVerified: true,
-            CoupledLandingAndPlayerAnchorVerified: true,
+            ClosedDependencyContractVerified: true,
+            LandingAndPlayerAnchorPreserved: true,
             DestinationSupportVerified: true,
-            FoundationPreserved: true,
+            FoundationUnrelatedBytesPreserved: true,
             ExecutablePreserved: true,
             RetailTownSquarePreserved: true,
             MusicTotalsExitSavePreserved: true,
@@ -963,11 +1075,11 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
     {
         DiscLayout outputLayout = DiscImage.DetectLayout(outputPath);
         if (outputLayout != prepared.Layout)
-            throw new InvalidDataException("The standalone-spawn writer changed the MODE2 disc layout.");
+            throw new InvalidDataException("The passive-moby writer changed the MODE2 disc layout.");
         await using FileStream before = File.OpenRead(foundation);
         await using FileStream after = File.OpenRead(outputPath);
         if (before.Length != after.Length)
-            throw new InvalidDataException("The standalone-spawn writer changed the disc image length.");
+            throw new InvalidDataException("The passive-moby writer changed the disc image length.");
         DiscFileRecord beforeWad = RequireFileRecord(before, prepared.Layout, "WAD.WAD", WadLba, WadByteLength);
         DiscFileRecord afterWad = RequireFileRecord(after, outputLayout, "WAD.WAD", WadLba, WadByteLength);
         DiscFileRecord afterExecutable = RequireFileRecord(
@@ -977,9 +1089,9 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             ExecutableLba,
             ExecutableByteLength);
         if (beforeWad != afterWad)
-            throw new InvalidDataException("The standalone-spawn writer moved WAD.WAD.");
+            throw new InvalidDataException("The passive-moby writer moved WAD.WAD.");
 
-        foreach (UnusedLevel65StandaloneSpawnPatch patch in prepared.Plan.Patches)
+        foreach (UnusedLevel65PassiveMobyPatch patch in prepared.Plan.Patches)
         {
             RequireEqual(
                 DiscImage.ReadFileBytes(
@@ -993,20 +1105,12 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         }
         byte[] landing = DiscImage.ReadFileBytes(after, outputLayout, WadLba, LandingWadOffset, 0x10);
         byte[] player = DiscImage.ReadFileBytes(after, outputLayout, WadLba, PlayerAnchorWadOffset, PlayerAnchorByteLength);
-        if (BinaryPrimitives.ReadInt32LittleEndian(landing.AsSpan(0, 4)) != AuthoredRawX ||
-            BinaryPrimitives.ReadInt32LittleEndian(landing.AsSpan(4, 4)) != AuthoredRawY ||
-            BinaryPrimitives.ReadInt32LittleEndian(landing.AsSpan(8, 4)) != LandingRawZ ||
-            landing[0x0E] != YawByte ||
-            BinaryPrimitives.ReadInt32LittleEndian(player.AsSpan(0x0C, 4)) != AuthoredRawX ||
-            BinaryPrimitives.ReadInt32LittleEndian(player.AsSpan(0x10, 4)) != AuthoredRawY ||
-            BinaryPrimitives.ReadInt32LittleEndian(player.AsSpan(0x14, 4)) != PlayerRawZ)
-        {
-            throw new InvalidDataException("The coupled authored landing/T92 readback changed.");
-        }
+        RequireEqual(landing, prepared.BeforeLanding, "unchanged foundation landing");
+        RequireEqual(player, prepared.BeforePlayerAnchor, "unchanged foundation T92 player anchor");
         RequireHash(
             DiscImage.ReadFileBytes(after, outputLayout, afterExecutable.Lba, 0, afterExecutable.Size),
             ExecutableSha256,
-            "standalone-spawn executable");
+            "passive-moby executable");
         RequireEqual(
             DiscImage.ReadFileBytes(before, prepared.Layout, WadLba, RetailTownSquareOverlayWadOffset, RetailTownSquareOverlayByteLength),
             DiscImage.ReadFileBytes(after, outputLayout, WadLba, RetailTownSquareOverlayWadOffset, RetailTownSquareOverlayByteLength),
@@ -1027,10 +1131,11 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             beforeWad,
             prepared.Plan.Patches,
             cancellationToken);
-        if (logical.ChangedBytes != 8 || logical.OutsideAllowedBytes != 0)
+        long expectedChangedBytes = prepared.Plan.Patches.Sum(patch => (long)patch.ChangedByteCount);
+        if (logical.ChangedBytes != expectedChangedBytes || logical.OutsideAllowedBytes != 0)
         {
             throw new InvalidDataException(
-                $"The standalone-spawn logical diff changed {logical.ChangedBytes} bytes, including {logical.OutsideAllowedBytes} outside its two exact records.");
+                $"The passive-Moby logical diff changed {logical.ChangedBytes} bytes, expected {expectedChangedBytes}, including {logical.OutsideAllowedBytes} outside its eight exact fields.");
         }
         PhysicalDiff physical = ComparePhysicalImages(
             before,
@@ -1055,13 +1160,13 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             rawDiffHash);
     }
 
-    internal static async Task<UnusedLevel65StandaloneSpawnRuntimeCandidateResult> VerifyPublishedAsync(
+    internal static async Task<UnusedLevel65PassiveMobyRuntimeCandidateResult> VerifyPublishedAsync(
         string outputDirectoryPath,
         CancellationToken cancellationToken = default) =>
         await ReadPublishedResultAsync(CreatePaths(outputDirectoryPath), cancellationToken);
 
-    private static async Task<UnusedLevel65StandaloneSpawnRuntimeCandidateResult> ReadPublishedResultAsync(
-        UnusedLevel65StandaloneSpawnRuntimeCandidatePaths paths,
+    private static async Task<UnusedLevel65PassiveMobyRuntimeCandidateResult> ReadPublishedResultAsync(
+        UnusedLevel65PassiveMobyRuntimeCandidatePaths paths,
         CancellationToken cancellationToken)
     {
         string[] required =
@@ -1075,18 +1180,18 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             paths.RevealHelperPath
         ];
         if (required.Any(path => !File.Exists(path)))
-            throw new InvalidDataException("The published standalone-spawn directory is incomplete.");
+            throw new InvalidDataException("The published passive-moby directory is incomplete.");
         NativeLevelReplacementBaselineExporter.ValidateCue(paths.CuePath, paths.ImagePath, "MODE2/2352");
-        UnusedLevel65StandaloneSpawnRuntimeCandidatePlan plan =
-            JsonSerializer.Deserialize<UnusedLevel65StandaloneSpawnRuntimeCandidatePlan>(
+        UnusedLevel65PassiveMobyRuntimeCandidatePlan plan =
+            JsonSerializer.Deserialize<UnusedLevel65PassiveMobyRuntimeCandidatePlan>(
                 await File.ReadAllTextAsync(paths.PlanPath, cancellationToken),
                 JsonOptions)
-            ?? throw new InvalidDataException("The published standalone-spawn plan is invalid.");
-        UnusedLevel65StandaloneSpawnRuntimeCandidateReceipt receipt =
-            JsonSerializer.Deserialize<UnusedLevel65StandaloneSpawnRuntimeCandidateReceipt>(
+            ?? throw new InvalidDataException("The published passive-moby plan is invalid.");
+        UnusedLevel65PassiveMobyRuntimeCandidateReceipt receipt =
+            JsonSerializer.Deserialize<UnusedLevel65PassiveMobyRuntimeCandidateReceipt>(
                 await File.ReadAllTextAsync(paths.ReceiptPath, cancellationToken),
                 JsonOptions)
-            ?? throw new InvalidDataException("The published standalone-spawn receipt is invalid.");
+            ?? throw new InvalidDataException("The published passive-moby receipt is invalid.");
         VerifyReceiptPaths(receipt, paths);
         await VerifyHandoffArtifactsAsync(
             plan,
@@ -1105,9 +1210,9 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             !receipt.RuntimePending || receipt.NormalCreateBinEnabled || receipt.PromotionAuthorized ||
             plan.RuntimePassed || plan.NormalCreateBinEnabled || plan.PromotionAuthorized)
         {
-            throw new InvalidDataException("The published standalone-spawn runtime-pending boundary changed.");
+            throw new InvalidDataException("The published passive-moby runtime-pending boundary changed.");
         }
-        UnusedLevel65StandaloneSpawnPublishedArtifactHashes hashes = new(
+        UnusedLevel65PassiveMobyPublishedArtifactHashes hashes = new(
             await HashFileAsync(paths.CuePath, cancellationToken),
             await HashFileAsync(paths.PlanPath, cancellationToken),
             await HashFileAsync(paths.ReceiptPath, cancellationToken),
@@ -1118,8 +1223,8 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
     }
 
     private static async Task VerifyHandoffArtifactsAsync(
-        UnusedLevel65StandaloneSpawnRuntimeCandidatePlan plan,
-        UnusedLevel65StandaloneSpawnRuntimeCandidateReceipt receipt,
+        UnusedLevel65PassiveMobyRuntimeCandidatePlan plan,
+        UnusedLevel65PassiveMobyRuntimeCandidateReceipt receipt,
         string imagePath,
         string cuePath,
         string planPath,
@@ -1134,7 +1239,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         if (await File.ReadAllTextAsync(planPath, cancellationToken) != expectedPlan ||
             await File.ReadAllTextAsync(receiptPath, cancellationToken) != expectedReceipt)
         {
-            throw new InvalidDataException("The standalone-spawn plan or receipt failed exact serialized readback.");
+            throw new InvalidDataException("The passive-moby plan or receipt failed exact serialized readback.");
         }
         RequireTextHash(await HashFileAsync(imagePath, cancellationToken), receipt.OutputImageSha256, "handoff BIN");
         RequireTextHash(await HashFileAsync(cuePath, cancellationToken), receipt.OutputCueSha256, "handoff CUE");
@@ -1144,13 +1249,34 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         if (string.IsNullOrWhiteSpace(receipt.FinderHelperSha256) ||
             string.IsNullOrWhiteSpace(receipt.FinderHelperPath))
         {
-            throw new InvalidDataException("The standalone-spawn handoff lost its requested Finder helper identity.");
+            throw new InvalidDataException("The passive-moby handoff lost its requested Finder helper identity.");
         }
         RequireTextHash(await HashFileAsync(helperPath, cancellationToken), receipt.FinderHelperSha256, "handoff Finder helper");
         NativeLevelReplacementBaselineExporter.ValidateCue(cuePath, imagePath, "MODE2/2352");
         VerifyLoadCodes(plan.LoadCodes);
         if (!plan.LoadCodes.SequenceEqual(receipt.LoadCodes))
-            throw new InvalidDataException("The standalone-spawn plan/receipt load codes differ.");
+            throw new InvalidDataException("The passive-moby plan/receipt load codes differ.");
+        if (plan.ClosedContractSha256 != ClosedContractSha256 ||
+            plan.DonorTrueIndex != DonorTrueIndex || plan.TargetTrueIndex != TargetTrueIndex ||
+            plan.ActorId != GrassActorId || plan.TargetActorRootIndex != TargetActorRootIndex ||
+            plan.AuthoredRawX != AuthoredRawX || plan.AuthoredRawY != AuthoredRawY ||
+            plan.AuthoredRawZ != NativeGroundRawZ || plan.Patches.Count != 8 ||
+            !plan.ClosedDependencyContractVerified || !plan.LandingAndPlayerAnchorPreserved ||
+            !plan.FoundationTerrainPreserved || !plan.PassiveNoControllerDependencies ||
+            plan.Patches.Any(patch =>
+                RangesOverlap(patch.WadOffset, Convert.FromHexString(patch.AfterHex).Length, LandingWadOffset, 0x10) ||
+                RangesOverlap(patch.WadOffset, Convert.FromHexString(patch.AfterHex).Length, PlayerAnchorWadOffset, PlayerAnchorByteLength)))
+        {
+            throw new InvalidDataException("The passive-moby handoff lost its exact T107/0x01F5 Moby-only patch boundary.");
+        }
+        if (!receipt.ExactPatchReadbackVerified || !receipt.ClosedDependencyContractVerified ||
+            !receipt.LandingAndPlayerAnchorPreserved || !receipt.DestinationSupportVerified ||
+            !receipt.FoundationUnrelatedBytesPreserved || !receipt.ExecutablePreserved ||
+            !receipt.RetailTownSquarePreserved || !receipt.MusicTotalsExitSavePreserved ||
+            !receipt.RawSectorIntegrityVerified)
+        {
+            throw new InvalidDataException("The passive-moby receipt lost a fail-closed preservation/readback proof.");
+        }
 
         string checklist = await File.ReadAllTextAsync(checklistPath, cancellationToken);
         string guide = await File.ReadAllTextAsync(guidePath, cancellationToken);
@@ -1160,14 +1286,40 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         foreach (string identity in commonIdentity)
         {
             if (!guide.Contains(identity, StringComparison.Ordinal))
-                throw new InvalidDataException($"The standalone-spawn guide omitted '{identity}'.");
+                throw new InvalidDataException($"The passive-moby guide omitted '{identity}'.");
         }
         if (!checklist.Contains(ProfileId, StringComparison.Ordinal) ||
             !checklist.Contains(cueName, StringComparison.Ordinal) ||
             !checklist.Contains(receipt.OutputImageSha256, StringComparison.Ordinal) ||
-            !checklist.Contains("Runtime status: **pending / unpromoted**", StringComparison.Ordinal))
+            !checklist.Contains("Runtime status: **pending / unpromoted**", StringComparison.Ordinal) ||
+            !checklist.Contains("T107", StringComparison.Ordinal) ||
+            !checklist.Contains("0x01F5", StringComparison.Ordinal) ||
+            !checklist.Contains("landing and T92 player anchor are byte-for-byte unchanged", StringComparison.Ordinal) ||
+            !checklist.Contains("far LOD", StringComparison.Ordinal) ||
+            !checklist.Contains("60 seconds", StringComparison.Ordinal) ||
+            !checklist.Contains("NO CARDS / DO NOT SAVE", StringComparison.Ordinal) ||
+            checklist.Contains("authored landing", StringComparison.OrdinalIgnoreCase) ||
+            checklist.Contains("death respawn", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidDataException("The standalone-spawn checklist lost its exact identity/pending stamp.");
+            throw new InvalidDataException("The passive-moby checklist lost its exact Moby-only/preservation/runtime boundary.");
+        }
+        if (!guide.Contains("T107 GRASS 0x01F5", StringComparison.Ordinal) ||
+            !guide.Contains($"raw ({AuthoredRawX}, {AuthoredRawY}, {NativeGroundRawZ})", StringComparison.Ordinal) ||
+            !guide.Contains("UNCHANGED SPAWN / T92", StringComparison.Ordinal) ||
+            !guide.Contains("<text x=\"650\" y=\"150\" fill=\"#f0dcff\"", StringComparison.Ordinal) ||
+            !guide.Contains("<circle cx=\"300\" cy=\"205\" r=\"14\"", StringComparison.Ordinal) ||
+            !guide.Contains("<text x=\"330\" y=\"205\" fill=\"#ffdf98\"", StringComparison.Ordinal) ||
+            !guide.Contains("RESERVED STANDALONE-SPAWN", StringComparison.Ordinal) ||
+            !guide.Contains("<text x=\"330\" y=\"228\" fill=\"#ffdf98\"", StringComparison.Ordinal) ||
+            !guide.Contains("680 raw from T107", StringComparison.Ordinal) ||
+            guide.Contains("<circle cx=\"360\" cy=\"205\"", StringComparison.Ordinal) ||
+            guide.Contains("<text x=\"390\" y=\"210\"", StringComparison.Ordinal) ||
+            !guide.Contains("far/near LOD", StringComparison.Ordinal) ||
+            !guide.Contains("NO CARDS / DO NOT SAVE", StringComparison.Ordinal) ||
+            guide.Contains("AUTHORED START", StringComparison.Ordinal) ||
+            guide.Contains("death respawn", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException("The passive-moby guide lost its distinct Moby-only placement/runtime boundary.");
         }
         foreach (RuntimeCandidateLoadCode code in plan.LoadCodes)
         {
@@ -1176,13 +1328,13 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
                 !guide.Contains(XmlEscape(code.TestName), StringComparison.Ordinal) ||
                 !guide.Contains(XmlEscape(code.InputCode), StringComparison.Ordinal))
             {
-                throw new InvalidDataException($"The standalone-spawn handoff omitted the full {code.TestName} load code.");
+                throw new InvalidDataException($"The passive-moby handoff omitted the full {code.TestName} load code.");
             }
         }
         if (!helper.Contains($"cue_name={ShellSingleQuote(cueName)}", StringComparison.Ordinal) ||
             !helper.Contains("/usr/bin/open -R \"$cue_path\"", StringComparison.Ordinal))
         {
-            throw new InvalidDataException("The standalone-spawn Finder helper lost exact relative CUE targeting.");
+            throw new InvalidDataException("The passive-moby Finder helper lost exact relative CUE targeting.");
         }
         if (!OperatingSystem.IsWindows() &&
             File.GetUnixFileMode(helperPath) !=
@@ -1190,13 +1342,13 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
              UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
              UnixFileMode.OtherRead | UnixFileMode.OtherExecute))
         {
-            throw new InvalidDataException("The standalone-spawn Finder helper is not exact 0755.");
+            throw new InvalidDataException("The passive-moby Finder helper is not exact 0755.");
         }
     }
 
     private static void VerifyReceiptPaths(
-        UnusedLevel65StandaloneSpawnRuntimeCandidateReceipt receipt,
-        UnusedLevel65StandaloneSpawnRuntimeCandidatePaths paths)
+        UnusedLevel65PassiveMobyRuntimeCandidateReceipt receipt,
+        UnusedLevel65PassiveMobyRuntimeCandidatePaths paths)
     {
         string[] actual =
         [
@@ -1221,10 +1373,10 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             paths.RevealHelperPath
         ];
         if (!actual.Zip(expected).All(pair => PathEquals(pair.First, pair.Second)))
-            throw new InvalidDataException("The standalone-spawn receipt artifact paths changed.");
+            throw new InvalidDataException("The passive-moby receipt artifact paths changed.");
     }
 
-    private static UnusedLevel65StandaloneSpawnPoint DecodeSceneVertex(
+    private static UnusedLevel65PassiveMobyPoint DecodeSceneVertex(
         ReadOnlySpan<byte> vertexWord,
         ReadOnlySpan<byte> sectorHeader)
     {
@@ -1242,22 +1394,22 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         return new(x, y, z);
     }
 
-    private static IReadOnlyList<UnusedLevel65StandaloneSpawnPoint> DecodeCollisionTriangle(ReadOnlySpan<byte> bytes)
+    private static IReadOnlyList<UnusedLevel65PassiveMobyPoint> DecodeCollisionTriangle(ReadOnlySpan<byte> bytes)
     {
         if (bytes.Length != 12)
-            throw new InvalidDataException("A standalone-spawn collision triangle is truncated.");
+            throw new InvalidDataException("A passive-moby collision triangle is truncated.");
         uint xWord = BinaryPrimitives.ReadUInt32LittleEndian(bytes.Slice(0, 4));
         uint yWord = BinaryPrimitives.ReadUInt32LittleEndian(bytes.Slice(4, 4));
         uint zWord = BinaryPrimitives.ReadUInt32LittleEndian(bytes.Slice(8, 4));
-        UnusedLevel65StandaloneSpawnPoint p1 = new(
+        UnusedLevel65PassiveMobyPoint p1 = new(
             (int)(xWord & 0x3FFF),
             (int)(yWord & 0x3FFF),
             (int)(zWord & 0x3FFF));
-        UnusedLevel65StandaloneSpawnPoint p2 = new(
+        UnusedLevel65PassiveMobyPoint p2 = new(
             p1.X + SignedBits((int)((xWord >> 14) & 0x1FF), 9),
             p1.Y + SignedBits((int)((yWord >> 14) & 0x1FF), 9),
             p1.Z + (int)((zWord >> 16) & 0xFF));
-        UnusedLevel65StandaloneSpawnPoint p3 = new(
+        UnusedLevel65PassiveMobyPoint p3 = new(
             p1.X + SignedBits((int)((xWord >> 23) & 0x1FF), 9),
             p1.Y + SignedBits((int)((yWord >> 23) & 0x1FF), 9),
             p1.Z + (int)((zWord >> 24) & 0xFF));
@@ -1271,26 +1423,26 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
     }
 
     private static bool PointInsideTriangleStrictRaw16(
-        IReadOnlyList<UnusedLevel65StandaloneSpawnPoint> points,
+        IReadOnlyList<UnusedLevel65PassiveMobyPoint> points,
         int rawX,
         int rawY) =>
         PointInsideTriangleRaw16(points, rawX, rawY, strict: true);
 
     private static bool PointInsideTriangleInclusiveRaw16(
-        IReadOnlyList<UnusedLevel65StandaloneSpawnPoint> points,
+        IReadOnlyList<UnusedLevel65PassiveMobyPoint> points,
         int rawX,
         int rawY) =>
         PointInsideTriangleRaw16(points, rawX, rawY, strict: false);
 
     private static bool PointInsideTriangleRaw16(
-        IReadOnlyList<UnusedLevel65StandaloneSpawnPoint> points,
+        IReadOnlyList<UnusedLevel65PassiveMobyPoint> points,
         int rawX,
         int rawY,
         bool strict)
     {
         if (points.Count != 3)
             return false;
-        long Cross(UnusedLevel65StandaloneSpawnPoint a, UnusedLevel65StandaloneSpawnPoint b) =>
+        long Cross(UnusedLevel65PassiveMobyPoint a, UnusedLevel65PassiveMobyPoint b) =>
             ((long)((b.X * 16) - (a.X * 16)) * (rawY - (a.Y * 16))) -
             ((long)((b.Y * 16) - (a.Y * 16)) * (rawX - (a.X * 16)));
         long c1 = Cross(points[0], points[1]);
@@ -1302,15 +1454,15 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
     }
 
     private static bool TryInterpolateRawZ(
-        IReadOnlyList<UnusedLevel65StandaloneSpawnPoint> points,
+        IReadOnlyList<UnusedLevel65PassiveMobyPoint> points,
         int rawX,
         int rawY,
         out int rawZ,
         out long normalZ)
     {
-        UnusedLevel65StandaloneSpawnPoint a = points[0];
-        UnusedLevel65StandaloneSpawnPoint b = points[1];
-        UnusedLevel65StandaloneSpawnPoint c = points[2];
+        UnusedLevel65PassiveMobyPoint a = points[0];
+        UnusedLevel65PassiveMobyPoint b = points[1];
+        UnusedLevel65PassiveMobyPoint c = points[2];
         long abX = b.X - a.X;
         long abY = b.Y - a.Y;
         long abZ = b.Z - a.Z;
@@ -1341,7 +1493,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         if ((treeCapacity.Length & 1) != 0 || (blockCapacity.Length & 1) != 0 ||
             usedBlockBytes <= 0 || (usedBlockBytes & 1) != 0 || usedBlockBytes > blockCapacity.Length)
         {
-            throw new InvalidDataException("The standalone-spawn collision index capacities are invalid.");
+            throw new InvalidDataException("The passive-moby collision index capacities are invalid.");
         }
         byte[] tree = treeCapacity.ToArray();
         byte[] blocks = blockCapacity.ToArray();
@@ -1356,7 +1508,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         if (starts.Count < 2 || starts[^1] != usedWords - 1 ||
             BinaryPrimitives.ReadUInt16LittleEndian(blocks.AsSpan(starts[^1] * 2, 2)) != 0x8000)
         {
-            throw new InvalidDataException("The standalone-spawn collision blocks lost their terminal sentinel.");
+            throw new InvalidDataException("The passive-moby collision blocks lost their terminal sentinel.");
         }
         Dictionary<int, int[]> groups = [];
         for (int group = 0; group < starts.Count - 1; group++)
@@ -1390,7 +1542,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             return length;
         }
 
-        Dictionary<UnusedLevel65StandaloneSpawnCollisionCell, CollisionCell> cells = [];
+        Dictionary<UnusedLevel65PassiveMobyCollisionCell, CollisionCell> cells = [];
         int zLength = ReadLength(0);
         for (int z = 0; z < zLength; z++)
         {
@@ -1411,7 +1563,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
                         continue;
                     if (!groups.TryGetValue(blockWordOffset, out int[]? indexes))
                         throw new InvalidDataException("A collision tree cell points outside an exact group start.");
-                    UnusedLevel65StandaloneSpawnCollisionCell key = new(x, y, z);
+                    UnusedLevel65PassiveMobyCollisionCell key = new(x, y, z);
                     if (!cells.TryAdd(key, new(blockWordOffset, indexes)))
                         throw new InvalidDataException("A collision cell is duplicated in the tree.");
                 }
@@ -1427,7 +1579,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         FileStream after,
         DiscLayout layout,
         DiscFileRecord wad,
-        IReadOnlyList<UnusedLevel65StandaloneSpawnPatch> patches,
+        IReadOnlyList<UnusedLevel65PassiveMobyPatch> patches,
         CancellationToken cancellationToken)
     {
         long changed = 0;
@@ -1464,7 +1616,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         HashSet<int> allowed = allowedRawSectorLbas.ToHashSet();
         byte[] left = new byte[RawSectorByteLength];
         byte[] right = new byte[RawSectorByteLength];
-        List<UnusedLevel65StandaloneSpawnRawSectorDiff> diffs = [];
+        List<UnusedLevel65PassiveMobyRawSectorDiff> diffs = [];
         long changedBytes = 0;
         int sectorCount = checked((int)(before.Length / RawSectorByteLength));
         before.Position = 0;
@@ -1477,7 +1629,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             if (left.AsSpan().SequenceEqual(right))
                 continue;
             if (!allowed.Contains(lba))
-                throw new InvalidDataException($"The standalone-spawn physical diff escaped to raw sector {lba}.");
+                throw new InvalidDataException($"The passive-moby physical diff escaped to raw sector {lba}.");
             int header = CountDiff(left, right, 0, 16);
             int subheader = CountDiff(left, right, 16, 8);
             int payload = CountDiff(left, right, 24, 2048);
@@ -1490,15 +1642,15 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             if (header != 0 || subheader != 0 || reserved != 0)
             {
                 throw new InvalidDataException(
-                    $"Standalone-spawn sector {lba} changed forbidden MODE2 header/subheader/reserved bytes.");
+                    $"Passive-Moby sector {lba} changed forbidden MODE2 header/subheader/reserved bytes.");
             }
             if (total != actualTotal)
-                throw new InvalidDataException($"Standalone-spawn sector {lba} raw regions do not partition all changed bytes.");
+                throw new InvalidDataException($"Passive-Moby sector {lba} raw regions do not partition all changed bytes.");
             changedBytes += total;
             diffs.Add(new(lba, header, subheader, payload, edc, reserved, eccP, eccQ, total));
         }
         if (!diffs.Select(diff => diff.RawSectorLba).SequenceEqual(allowedRawSectorLbas))
-            throw new InvalidDataException("The standalone-spawn writer did not change both exact owned raw sectors.");
+            throw new InvalidDataException("The passive-moby writer did not change all six exact owned raw sectors.");
         return new(changedBytes, diffs);
     }
 
@@ -1512,7 +1664,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             layout,
             rawSectorLbas.Select(lba => (lba, 1)).ToArray());
         if (verified != rawSectorLbas.Count)
-            throw new InvalidDataException("The standalone-spawn raw-sector verification count changed.");
+            throw new InvalidDataException("The passive-moby raw-sector verification count changed.");
         foreach (int lba in rawSectorLbas)
             RawMode2Form1SectorIntegrity.VerifyDuplicatedSubmode(stream, layout, lba, XaDataSubmode);
     }
@@ -1528,49 +1680,50 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
     }
 
     private static string BuildChecklist(
-        UnusedLevel65StandaloneSpawnRuntimeCandidatePlan plan,
+        UnusedLevel65PassiveMobyRuntimeCandidatePlan plan,
         Readback readback,
-        UnusedLevel65StandaloneSpawnRuntimeCandidatePaths paths)
+        UnusedLevel65PassiveMobyRuntimeCandidatePaths paths)
     {
         VerifyLoadCodes(plan.LoadCodes);
         StringBuilder text = new();
-        text.AppendLine("# ID65 Standalone Spawn Ownership - Disposable Runtime Checklist");
+        text.AppendLine("# ID65 T107 Artisans Grass 0x01F5 - Disposable Runtime Checklist");
         text.AppendLine();
-        text.AppendLine("This candidate changes only ID65's landing and T92 player-anchor X/Y fields. Music, totals, exit, save code, the executable, retail levels, and the authored foundation model are unchanged.");
+        text.AppendLine("This Moby-only candidate installs the exact Artisans T121 Grass row, properties, pointer fixup, actor 0x01F5 package, root/id registration, count, and T107 placement into ID65. The foundation landing and T92 player anchor are byte-for-byte unchanged; music, totals, exit, save code, the executable, retail levels, overlays, and foundation terrain are also unchanged.");
         text.AppendLine();
         text.AppendLine($"- Profile: `{ProfileId}`");
         text.AppendLine($"- CUE: `{Path.GetFileName(paths.CuePath)}` (load the CUE, not the BIN)");
         text.AppendLine($"- Finder helper: `{Path.GetFileName(paths.RevealHelperPath)}`");
         text.AppendLine($"- BIN SHA-256: `{readback.OutputImageSha256}`");
         text.AppendLine($"- ID65 data SHA-256: `{readback.OutputId65DataSha256}`");
-        text.AppendLine($"- Authored landing: raw ({plan.AuthoredLandingRawX}, {plan.AuthoredLandingRawY}, {plan.AuthoredLandingRawZ}), yaw `0x{plan.YawByte:X2}`");
-        text.AppendLine($"- Authored T92: raw ({plan.AuthoredPlayerRawX}, {plan.AuthoredPlayerRawY}, {plan.AuthoredPlayerRawZ})");
+        text.AppendLine($"- Grass T107 placement: raw ({plan.AuthoredRawX}, {plan.AuthoredRawY}, {plan.AuthoredRawZ}), donor yaw byte `0x{plan.DonorYawByte:X2}`");
+        text.AppendLine($"- Spawn separation: {plan.Support.DistanceFromFoundationSpawnRaw} raw from unchanged foundation spawn; {plan.Support.DistanceFromReservedStandaloneSpawnRaw} raw from the reserved standalone-spawn point; minimum {plan.Support.MinimumSpawnSeparationRaw} raw");
+        text.AppendLine("- Closed dependency result: passive default dispatch; no controller/property-read, sound, particle, spawn, or dynamic-link dependency was found in the pinned static contract.");
         text.AppendLine("- Runtime status: **pending / unpromoted**. This is not editor/Create BIN/release integration.");
         text.AppendLine();
         RuntimeCandidateTestHandoff.AppendLoadCodeTable(text, plan.LoadCodes);
         text.AppendLine("## Safety setup");
         text.AppendLine();
-        text.AppendLine("1. Disable DuckStation cheats, save states, and both memory-card slots.");
+        text.AppendLine("1. Disable DuckStation cheats and save states. Disable both memory-card slots. NO CARDS / DO NOT SAVE.");
         text.AppendLine("2. Boot this exact CUE. Reach controllable gameplay normally.");
         text.AppendLine("3. Load ID65: Select; R1, R2, L1, L2, R1, L1, R2, L2; Left; Down.");
         text.AppendLine();
-        text.AppendLine("## Focused gate");
+        text.AppendLine("## Focused T107 Grass gate");
         text.AppendLine();
-        text.AppendLine("- [ ] The fly-in ends on the left native apron marked START in the guide, not at the old spawn 153 scene units behind it along Y.");
-        text.AppendLine("- [ ] Spyro is standing normally on the flat visible surface; no sinking, pop-up, hovering, snag, pass-through, or immediate death occurs.");
-        text.AppendLine("- [ ] The new 45-degree foundation triangle is visible to Spyro's right/front, proving the authored spawn is outside it rather than supported by its still-pending collision.");
-        text.AppendLine("- [ ] Walk a small circle on the native apron, then cross onto and back off the foundation only if the separate foundation gate has already passed in this session.");
-        text.AppendLine("- [ ] Cause one normal in-level death without Return Home, Exit Level, saving, or a memory card. Respawn must return to the same authored left-apron location and yaw.");
-        text.AppendLine("- [ ] Reset/cold boot the same CUE, re-enter ID65, and confirm the same authored location and yaw return without a save state.");
-        text.AppendLine("- [ ] Open pause/Inventory only to confirm normal responsiveness and TOWN SQUARE identity; do not save or exit the level.");
+        text.AppendLine("- [ ] Entry and Spyro position are unchanged. Find exactly one conspicuous Grass model at the green T107 marker on the native apron; it must not appear at either spawn marker.");
+        text.AppendLine("- [ ] At normal camera distance, the Grass is correctly shaped/textured and stable: no wrong actor, missing geometry, animation corruption, freeze, or crash.");
+        text.AppendLine("- [ ] Walk far enough away to force far LOD, then return. The Grass remains the same actor with a valid far/near transition and no pop into an unrelated model.");
+        text.AppendLine("- [ ] Remain nearby and move/rotate the camera for at least 60 seconds. The passive object does not begin controller behavior, emit sound/particles, spawn another Moby, or destabilize the level.");
+        text.AppendLine("- [ ] Approach and pass around/through the passive decoration normally. Record what happens; this gate makes no collision/solidity claim for Grass.");
+        text.AppendLine("- [ ] Reset/cold boot this same CUE, re-enter ID65, and confirm the same one Grass returns at T107 without a save state or card.");
+        text.AppendLine("- [ ] Open pause/Inventory only to confirm normal responsiveness and TOWN SQUARE identity. DO NOT SAVE and do not exit the level.");
         text.AppendLine();
         text.AppendLine("## Isolation controls");
         text.AppendLine();
         text.AppendLine("- [ ] Retail Town Square loads at its normal landing.");
         text.AppendLine("- [ ] Gnasty's Loot and Sunny Flight still load normally.");
-        text.AppendLine("- [ ] No music, total, portal/exit, or save-ownership claim is made by this gate.");
+        text.AppendLine("- [ ] ID65 music, totals, exit behavior, and save ownership are outside this focused runtime gate; do not exercise saving.");
         text.AppendLine();
-        text.AppendLine("PASS requires authored cold entry, death respawn, and reset/cold-boot restoration at the marked native apron, plus all three isolation controls. Any unsafe landing or different death/reset destination is a FAIL and leaves standalone spawn ownership unpromoted.");
+        text.AppendLine("PASS requires the exact one T107 Grass to survive normal view, far/near LOD, 60-second passive stability, reset/cold boot, and all three isolation controls. Any wrong/missing model, update behavior, sound/particle/spawn side effect, freeze, crash, or reset mismatch is a FAIL. The candidate remains runtime-pending and unpromoted until this checklist is completed.");
         return text.ToString();
     }
 
@@ -1583,40 +1736,44 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             loadCodes[3].TestName != "Sunny Flight" || loadCodes[3].LevelId != 15 ||
             loadCodes.Any(code => string.IsNullOrWhiteSpace(code.InputCode)))
         {
-            throw new InvalidDataException("The exact four standalone-spawn comparison load codes changed.");
+            throw new InvalidDataException("The exact four passive-moby comparison load codes changed.");
         }
     }
 
-    private static string BuildGuide(UnusedLevel65StandaloneSpawnRuntimeCandidatePlan plan)
+    private static string BuildGuide(
+        UnusedLevel65PassiveMobyRuntimeCandidatePlan plan,
+        string outputImageSha256)
     {
         VerifyLoadCodes(plan.LoadCodes);
         string cueName = OutputPrefix + ".cue";
         StringBuilder svg = new();
         svg.AppendLine("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"1000\" viewBox=\"0 0 1200 1000\">");
         svg.AppendLine("<rect width=\"1200\" height=\"1000\" fill=\"#10172a\"/>");
-        svg.AppendLine("<text x=\"60\" y=\"58\" fill=\"#ffffff\" font-family=\"sans-serif\" font-size=\"32\" font-weight=\"700\">ID65 Standalone Spawn Ownership</text>");
+        svg.AppendLine("<text x=\"60\" y=\"58\" fill=\"#ffffff\" font-family=\"sans-serif\" font-size=\"30\" font-weight=\"700\">ID65 T107 Artisans Grass 0x01F5</text>");
         svg.AppendLine("<rect x=\"770\" y=\"25\" width=\"370\" height=\"48\" rx=\"9\" fill=\"#6f2433\" stroke=\"#ff9cac\" stroke-width=\"2\"/>");
         svg.AppendLine("<text x=\"955\" y=\"55\" text-anchor=\"middle\" fill=\"#ffffff\" font-family=\"sans-serif\" font-size=\"14\" font-weight=\"700\">RUNTIME PENDING / UNPROMOTED</text>");
-        svg.AppendLine("<text x=\"60\" y=\"92\" fill=\"#b9c7e8\" font-family=\"sans-serif\" font-size=\"17\">Top-down native entrance apron; yaw 0x40 faces upward</text>");
+        svg.AppendLine("<text x=\"60\" y=\"92\" fill=\"#b9c7e8\" font-family=\"sans-serif\" font-size=\"17\">Top-down location guide - Moby only; landing and T92 remain unchanged</text>");
 
         svg.AppendLine("<rect x=\"120\" y=\"120\" width=\"960\" height=\"365\" rx=\"12\" fill=\"#33445b\" stroke=\"#8ea2c8\" stroke-width=\"4\"/>");
-        svg.AppendLine("<polygon points=\"430,485 970,485 700,120\" fill=\"#7b4bc4\" fill-opacity=\"0.72\" stroke=\"#d5b8ff\" stroke-width=\"4\"/>");
-        svg.AppendLine("<circle cx=\"335\" cy=\"285\" r=\"30\" fill=\"#5cffad\" stroke=\"#ffffff\" stroke-width=\"5\"/>");
-        svg.AppendLine("<path d=\"M335 285 L335 195\" stroke=\"#5cffad\" stroke-width=\"8\" marker-end=\"url(#arrow)\"/>");
-        svg.AppendLine("<defs><marker id=\"arrow\" markerWidth=\"10\" markerHeight=\"10\" refX=\"8\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L0,6 L9,3 z\" fill=\"#5cffad\"/></marker></defs>");
-        svg.AppendLine("<text x=\"385\" y=\"278\" fill=\"#5cffad\" font-family=\"sans-serif\" font-size=\"26\" font-weight=\"700\">AUTHORED START</text>");
-        svg.AppendLine("<text x=\"385\" y=\"309\" fill=\"#dcecff\" font-family=\"sans-serif\" font-size=\"17\">native T1353 support, outside purple foundation</text>");
-        svg.AppendLine("<circle cx=\"300\" cy=\"440\" r=\"18\" fill=\"#ff7f7f\"/>");
-        svg.AppendLine("<path d=\"M300 417 L328 321\" stroke=\"#ff7f7f\" stroke-width=\"4\" stroke-dasharray=\"12 9\"/>");
-        svg.AppendLine("<text x=\"330\" y=\"447\" fill=\"#ffb1b1\" font-family=\"sans-serif\" font-size=\"17\">OLD START (153 scene units behind)</text>");
-        svg.AppendLine($"<text x=\"720\" y=\"428\" fill=\"#f0dcff\" font-family=\"sans-serif\" font-size=\"14\">Raw ({plan.AuthoredLandingRawX}, {plan.AuthoredLandingRawY})</text>");
-        svg.AppendLine("<text x=\"720\" y=\"452\" fill=\"#f0dcff\" font-family=\"sans-serif\" font-size=\"14\">19.75 scene units outside foundation triangle</text>");
+        svg.AppendLine("<polygon points=\"210,360 950,360 580,140\" fill=\"#7b4bc4\" fill-opacity=\"0.72\" stroke=\"#d5b8ff\" stroke-width=\"4\"/>");
+        svg.AppendLine("<text x=\"650\" y=\"150\" fill=\"#f0dcff\" font-family=\"sans-serif\" font-size=\"16\">foundation terrain (unchanged)</text>");
+        svg.AppendLine("<circle cx=\"280\" cy=\"292\" r=\"34\" fill=\"#5cffad\" stroke=\"#ffffff\" stroke-width=\"6\"/>");
+        svg.AppendLine("<path d=\"M280 326 L280 390\" stroke=\"#5cffad\" stroke-width=\"7\"/>");
+        svg.AppendLine("<text x=\"330\" y=\"282\" fill=\"#5cffad\" font-family=\"sans-serif\" font-size=\"25\" font-weight=\"700\">T107 GRASS 0x01F5</text>");
+        svg.AppendLine($"<text x=\"330\" y=\"312\" fill=\"#dcecff\" font-family=\"monospace\" font-size=\"15\">raw ({plan.AuthoredRawX}, {plan.AuthoredRawY}, {plan.AuthoredRawZ})</text>");
+        svg.AppendLine("<text x=\"330\" y=\"338\" fill=\"#dcecff\" font-family=\"sans-serif\" font-size=\"15\">native T1353 support; 192 raw outside foundation</text>");
+        svg.AppendLine("<circle cx=\"520\" cy=\"438\" r=\"16\" fill=\"#ff7f7f\" stroke=\"#ffffff\" stroke-width=\"3\"/>");
+        svg.AppendLine("<text x=\"548\" y=\"444\" fill=\"#ffb1b1\" font-family=\"sans-serif\" font-size=\"15\">UNCHANGED SPAWN / T92 (1,985 raw away)</text>");
+        svg.AppendLine("<circle cx=\"300\" cy=\"205\" r=\"14\" fill=\"#ffcf70\" stroke=\"#ffffff\" stroke-width=\"3\"/>");
+        svg.AppendLine("<text x=\"330\" y=\"205\" fill=\"#ffdf98\" font-family=\"sans-serif\" font-size=\"15\">RESERVED STANDALONE-SPAWN</text>");
+        svg.AppendLine("<text x=\"330\" y=\"228\" fill=\"#ffdf98\" font-family=\"sans-serif\" font-size=\"14\">680 raw from T107</text>");
+        svg.AppendLine("<text x=\"155\" y=\"468\" fill=\"#b9c7e8\" font-family=\"sans-serif\" font-size=\"13\">Schematic markers; use the exact raw coordinates above.</text>");
 
         svg.AppendLine("<rect x=\"60\" y=\"510\" width=\"1080\" height=\"128\" rx=\"10\" fill=\"#18243d\" stroke=\"#425a82\" stroke-width=\"2\"/>");
         svg.AppendLine($"<text x=\"82\" y=\"540\" fill=\"#8fe1ff\" font-family=\"monospace\" font-size=\"13\">PROFILE: {XmlEscape(ProfileId)}</text>");
         svg.AppendLine($"<text x=\"82\" y=\"570\" fill=\"#ffffff\" font-family=\"monospace\" font-size=\"13\">CUE: {XmlEscape(cueName)}</text>");
-        svg.AppendLine($"<text x=\"82\" y=\"600\" fill=\"#ffffff\" font-family=\"monospace\" font-size=\"13\">BIN SHA-256: {XmlEscape(ExpectedOutputImageSha256)}</text>");
-        svg.AppendLine("<text x=\"82\" y=\"625\" fill=\"#ffcf70\" font-family=\"sans-serif\" font-size=\"13\">Load the exact CUE, never the BIN. Cheats, save states, and memory cards off.</text>");
+        svg.AppendLine($"<text x=\"82\" y=\"600\" fill=\"#ffffff\" font-family=\"monospace\" font-size=\"13\">BIN SHA-256: {XmlEscape(outputImageSha256)}</text>");
+        svg.AppendLine("<text x=\"82\" y=\"625\" fill=\"#ffcf70\" font-family=\"sans-serif\" font-size=\"13\">Load the exact CUE, never the BIN. Cheats/save states off. NO CARDS / DO NOT SAVE.</text>");
 
         svg.AppendLine("<text x=\"60\" y=\"674\" fill=\"#ffffff\" font-family=\"sans-serif\" font-size=\"21\" font-weight=\"700\">Exact comparison load codes</text>");
         int codeY = 706;
@@ -1629,9 +1786,9 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
 
         svg.AppendLine("<rect x=\"60\" y=\"826\" width=\"1080\" height=\"130\" rx=\"10\" fill=\"#192f2c\" stroke=\"#55b99b\" stroke-width=\"2\"/>");
         svg.AppendLine("<text x=\"82\" y=\"858\" fill=\"#8fffd4\" font-family=\"sans-serif\" font-size=\"18\" font-weight=\"700\">Runtime pass boundary</text>");
-        svg.AppendLine("<text x=\"82\" y=\"885\" fill=\"#e6fff6\" font-family=\"sans-serif\" font-size=\"14\">Cold entry, normal standing and movement, one in-level death respawn, then reset/cold-boot restoration</text>");
-        svg.AppendLine("<text x=\"82\" y=\"910\" fill=\"#e6fff6\" font-family=\"sans-serif\" font-size=\"14\">must all return to AUTHORED START. Then load all three retail controls with the exact codes above.</text>");
-        svg.AppendLine("<text x=\"82\" y=\"937\" fill=\"#ffcf70\" font-family=\"sans-serif\" font-size=\"13\">No music, totals, exit, save, normal Create BIN, editor, or release promotion is claimed by this artifact.</text>");
+        svg.AppendLine("<text x=\"82\" y=\"885\" fill=\"#e6fff6\" font-family=\"sans-serif\" font-size=\"14\">Exactly one Grass: normal view, far/near LOD return, 60-second passive/no-update stability, reset/cold boot.</text>");
+        svg.AppendLine("<text x=\"82\" y=\"910\" fill=\"#e6fff6\" font-family=\"sans-serif\" font-size=\"14\">No sound, particle, spawned-Moby, wrong-model, freeze, or crash; then load all three retail controls.</text>");
+        svg.AppendLine("<text x=\"82\" y=\"937\" fill=\"#ffcf70\" font-family=\"sans-serif\" font-size=\"13\">Runtime pending only: no normal Create BIN, editor, save, card, or release promotion.</text>");
         svg.AppendLine("</svg>");
         return svg.ToString();
     }
@@ -1653,7 +1810,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         catch (IOException ex) when (!OperatingSystem.IsWindows() &&
                                      (ex.HResult & 0xFFFF) is 11 or 35)
         {
-            throw new IOException("Another standalone-spawn writer is active; no operation or output move was started.", ex);
+            throw new IOException("Another passive-moby writer is active; no operation or output move was started.", ex);
         }
         try
         {
@@ -1665,7 +1822,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
                 }
                 catch (IOException ex) when ((ex.HResult & 0xFFFF) == 33)
                 {
-                    throw new IOException("Another standalone-spawn writer is active; no operation or output move was started.", ex);
+                    throw new IOException("Another passive-moby writer is active; no operation or output move was started.", ex);
                 }
                 return lease;
             }
@@ -1675,8 +1832,8 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
                 int error = Marshal.GetLastPInvokeError();
                 Win32Exception nativeError = new(error);
                 if (error is 11 or 35)
-                    throw new IOException("Another standalone-spawn writer is active; no operation or output move was started.", nativeError);
-                throw new IOException($"The standalone-spawn OS lease failed (errno {error}: {nativeError.Message}).", nativeError);
+                    throw new IOException("Another passive-moby writer is active; no operation or output move was started.", nativeError);
+                throw new IOException($"The passive-moby OS lease failed (errno {error}: {nativeError.Message}).", nativeError);
             }
             return lease;
         }
@@ -1690,14 +1847,14 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
     [DllImport("libc", EntryPoint = "flock", SetLastError = true)]
     private static extern int NativeFlock(int fileDescriptor, int operation);
 
-    private static bool RecoverOwnedOperations(UnusedLevel65StandaloneSpawnRuntimeCandidatePaths paths)
+    private static bool RecoverOwnedOperations(UnusedLevel65PassiveMobyRuntimeCandidatePaths paths)
     {
         string journalPath = Path.Combine(paths.OperationsDirectoryPath, JournalFileName);
         if (!File.Exists(journalPath))
             return false;
-        RejectReparsePoint(journalPath, "standalone-spawn operation journal");
+        RejectReparsePoint(journalPath, "passive-moby operation journal");
         Journal journal = JsonSerializer.Deserialize<Journal>(File.ReadAllText(journalPath), JsonOptions)
-            ?? throw new InvalidDataException("The standalone-spawn recovery journal is invalid.");
+            ?? throw new InvalidDataException("The passive-moby recovery journal is invalid.");
         string expectedStage = Path.Combine(paths.OperationsDirectoryPath, StagePrefix + journal.OperationId);
         string expectedBackup = Path.Combine(paths.OperationsDirectoryPath, BackupPrefix + journal.OperationId);
         if (journal.SchemaVersion != JournalSchemaVersion ||
@@ -1710,18 +1867,18 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             !IsOwnedChild(journal.BackupDirectoryPath, paths.OperationsDirectoryPath, BackupPrefix) ||
             journal.Phase is not (PhaseStaged or PhaseBackupIntent or PhasePreviousBackedUp or PhasePublishIntent or PhasePublished))
         {
-            throw new InvalidDataException("The standalone-spawn recovery journal escaped its owned operation paths.");
+            throw new InvalidDataException("The passive-moby recovery journal escaped its owned operation paths.");
         }
 
         bool outputExists = Directory.Exists(paths.OutputDirectoryPath);
         bool stageExists = Directory.Exists(journal.StageDirectoryPath);
         bool backupExists = Directory.Exists(journal.BackupDirectoryPath);
         if (outputExists)
-            RejectReparsePoint(paths.OutputDirectoryPath, "published standalone-spawn candidate");
+            RejectReparsePoint(paths.OutputDirectoryPath, "published passive-moby candidate");
         if (stageExists)
-            RejectReparsePoint(journal.StageDirectoryPath, "standalone-spawn stage");
+            RejectReparsePoint(journal.StageDirectoryPath, "passive-moby stage");
         if (backupExists)
-            RejectReparsePoint(journal.BackupDirectoryPath, "standalone-spawn backup");
+            RejectReparsePoint(journal.BackupDirectoryPath, "passive-moby backup");
 
         RecoveryAction action = journal.HadPreviousCandidate
             ? (journal.Phase, outputExists, stageExists, backupExists) switch
@@ -1748,7 +1905,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         if (action == RecoveryAction.FailClosed)
         {
             throw new IOException(
-                $"Standalone-spawn recovery found an ambiguous state: phase={journal.Phase}, " +
+                $"Passive-Moby recovery found an ambiguous state: phase={journal.Phase}, " +
                 $"hadPrevious={journal.HadPreviousCandidate}, output={outputExists}, stage={stageExists}, backup={backupExists}.");
         }
 
@@ -1773,13 +1930,13 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         }
 
         if (Directory.Exists(journal.StageDirectoryPath) || Directory.Exists(journal.BackupDirectoryPath))
-            throw new IOException("Standalone-spawn recovery left an owned stage or backup directory.");
+            throw new IOException("Passive-Moby recovery left an owned stage or backup directory.");
         File.Delete(journalPath);
         return true;
     }
 
     private static void WriteJournal(
-        UnusedLevel65StandaloneSpawnRuntimeCandidatePaths paths,
+        UnusedLevel65PassiveMobyRuntimeCandidatePaths paths,
         Journal journal)
     {
         Directory.CreateDirectory(paths.OperationsDirectoryPath);
@@ -1791,7 +1948,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         File.Move(temporary, journalPath, overwrite: true);
     }
 
-    private static void DeleteJournal(UnusedLevel65StandaloneSpawnRuntimeCandidatePaths paths)
+    private static void DeleteJournal(UnusedLevel65PassiveMobyRuntimeCandidatePaths paths)
     {
         string journalPath = Path.Combine(paths.OperationsDirectoryPath, JournalFileName);
         if (File.Exists(journalPath))
@@ -1809,8 +1966,8 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
                          name.StartsWith(expectedNameOrPrefix, StringComparison.Ordinal) &&
                          name.Length > expectedNameOrPrefix.Length;
         if (!PathEquals(parent, expectedParent) || (!exactOutput && !operation))
-            throw new InvalidOperationException("Refused to delete a directory outside standalone-spawn ownership.");
-        RejectReparsePoint(full, "owned standalone-spawn directory");
+            throw new InvalidOperationException("Refused to delete a directory outside passive-moby ownership.");
+        RejectReparsePoint(full, "owned passive-moby directory");
         Directory.Delete(full, recursive: true);
     }
 
@@ -1826,14 +1983,14 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         string lockedBase,
         string foundation,
         string foundationCue,
-        UnusedLevel65StandaloneSpawnRuntimeCandidatePaths paths)
+        UnusedLevel65PassiveMobyRuntimeCandidatePaths paths)
     {
         foreach (string source in new[] { lockedBase, foundation, foundationCue })
         {
             if (IsDescendantOrEqual(source, paths.OutputDirectoryPath) ||
                 IsDescendantOrEqual(paths.OutputDirectoryPath, source))
             {
-                throw new InvalidOperationException("Standalone-spawn source and output roles overlap.");
+                throw new InvalidOperationException("Passive-Moby source and output roles overlap.");
             }
         }
         foreach (string artifact in new[]
@@ -1843,7 +2000,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
                  })
         {
             if (!IsDescendantOrEqual(artifact, paths.OutputDirectoryPath) || PathEquals(artifact, paths.OutputDirectoryPath))
-                throw new InvalidOperationException("A standalone-spawn artifact escaped its output directory.");
+                throw new InvalidOperationException("A passive-moby artifact escaped its output directory.");
         }
     }
 
@@ -1940,6 +2097,43 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             throw new InvalidDataException($"The exact {label} bytes changed.");
     }
 
+    private static void RequireZero(ReadOnlySpan<byte> bytes, string label)
+    {
+        if (bytes.ContainsAnyExcept((byte)0))
+            throw new InvalidDataException($"The exact {label} is no longer zero-filled.");
+    }
+
+    private static void RequireUInt32(ReadOnlySpan<byte> bytes, uint expected, string label)
+    {
+        uint actual = BinaryPrimitives.ReadUInt32LittleEndian(bytes);
+        if (actual != expected)
+            throw new InvalidDataException($"The {label} is 0x{actual:X}, expected 0x{expected:X}.");
+    }
+
+    private static byte[] UInt32Bytes(uint value)
+    {
+        byte[] bytes = new byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes, value);
+        return bytes;
+    }
+
+    private static byte[] UInt16Bytes(ushort value)
+    {
+        byte[] bytes = new byte[2];
+        BinaryPrimitives.WriteUInt16LittleEndian(bytes, value);
+        return bytes;
+    }
+
+    private static UnusedLevel65PassiveMobyPatch Patch(
+        string name,
+        long wadOffset,
+        byte[] before,
+        byte[] after) =>
+        new(name, wadOffset, Convert.ToHexString(before), Convert.ToHexString(after), CountDifferentBytes(before, after));
+
+    private static int Distance2dRaw(int x1, int y1, int x2, int y2) =>
+        checked((int)Math.Round(Math.Sqrt(Math.Pow(x1 - x2, 2) + Math.Pow(y1 - y2, 2)), MidpointRounding.AwayFromZero));
+
     private static int CountDifferentBytes(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
     {
         if (left.Length != right.Length)
@@ -1949,6 +2143,9 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
             count += left[index] == right[index] ? 0 : 1;
         return count;
     }
+
+    private static bool RangesOverlap(long leftOffset, int leftLength, long rightOffset, int rightLength) =>
+        leftOffset < rightOffset + rightLength && rightOffset < leftOffset + leftLength;
 
     private static int CountDiff(byte[] left, byte[] right, int offset, int length)
     {
@@ -2002,8 +2199,9 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
 
     private sealed record Prepared(
         DiscLayout Layout,
-        UnusedLevel65StandaloneSpawnRuntimeCandidatePlan Plan,
+        UnusedLevel65PassiveMobyRuntimeCandidatePlan Plan,
         UnusedLevel65StandaloneBehaviorOwnershipContract Ownership,
+        UnusedLevel65MobyDependencyBundleContract ClosedContract,
         byte[] ExecutableBytes,
         byte[] BeforeLanding,
         byte[] BeforePlayerAnchor,
@@ -2033,17 +2231,17 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
     }
 
     private sealed record CollisionCell(int BlockWordOffset, int[] TriangleIndexes);
-    private sealed record CollisionIndex(IReadOnlyDictionary<UnusedLevel65StandaloneSpawnCollisionCell, CollisionCell> Cells);
+    private sealed record CollisionIndex(IReadOnlyDictionary<UnusedLevel65PassiveMobyCollisionCell, CollisionCell> Cells);
     private sealed record CollisionSurfaceHit(int TriangleIndex, int RawZ, long NormalZ);
     private sealed record LogicalDiff(long ChangedBytes, long OutsideAllowedBytes);
     private sealed record PhysicalDiff(
         long ChangedBytes,
-        IReadOnlyList<UnusedLevel65StandaloneSpawnRawSectorDiff> RawSectorDiffs);
+        IReadOnlyList<UnusedLevel65PassiveMobyRawSectorDiff> RawSectorDiffs);
     private sealed record Readback(
         string OutputImageSha256,
         string OutputId65DataSha256,
         long ChangedLogicalWadBytes,
         long ChangedPhysicalImageBytes,
-        IReadOnlyList<UnusedLevel65StandaloneSpawnRawSectorDiff> RawSectorDiffs,
+        IReadOnlyList<UnusedLevel65PassiveMobyRawSectorDiff> RawSectorDiffs,
         string RawSectorDiffSha256);
 }

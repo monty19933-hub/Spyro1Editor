@@ -19,5 +19,8 @@
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65MobyDependencyBundleSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65StandaloneSpawnRuntimeCandidateSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65NativeTextureRuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65FoundationTerrainComposerSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65PassiveMobyRuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65RemoteBlankIsolationSmoke" />
   </ItemGroup>
 </Project>
