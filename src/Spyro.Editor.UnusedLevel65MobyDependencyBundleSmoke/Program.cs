@@ -21,7 +21,7 @@ UnusedLevel65MobyDependencyBundleContract second =
     UnusedLevel65MobyDependencyBundleFoundation.InspectFirstCrossLevelDonor(foundationImagePath);
 
 Require(first.ProfileId == UnusedLevel65MobyDependencyBundleFoundation.ProfileId &&
-        first.SchemaVersion == 1 &&
+        first.SchemaVersion == 2 &&
         first.FoundationImageSha256 == UnusedLevel65MobyDependencyBundleFoundation.ExpectedFoundationImageSha256 &&
         first.LockedIndependentBaseImageSha256 ==
             UnusedLevel65MobyDependencyBundleFoundation.LockedIndependentBaseImageSha256 &&
@@ -125,6 +125,87 @@ Require(destination.ScenePointerFixupCountOffset == 0x7F28 && destination.SceneP
         !destination.RequiresDataEntryGrowth && destination.StructuralAllocationComplete,
     "The exact ID65 scene props/fixup allocation or no-growth boundary changed.");
 
+UnusedLevel65MobyBehaviorClosureManifest behavior = first.BehaviorClosure;
+RequireDispatch(
+    behavior.DonorDispatch,
+    "artisans",
+    "Artisans",
+    9,
+    0x7F2800,
+    0xE000,
+    "7df6cf2f3ed4a71a123f03621019470bd6fe0cd243f75b1e8c3a115e6b1fcb55",
+    0x8007DA74,
+    0x86630036,
+    0x8007DA9C,
+    0x8007DBDC,
+    "ba55f492574c72c1eed3c21a4cf20c57dc49fe07136f9156b422ca4825455c40",
+    0x80085780,
+    "427d89f344d0cc0fde0faa67e9ab199d67cf68510d3433478cdf646c50a4c61b",
+    "ffdacdf97f86f1aed4505e0869ee2a9bfbdaad92025704fd33d1d4bfb9ba6d88",
+    new uint[]
+    {
+        0x8007DA9C, 0x8007DAA0, 0x8007DAA4, 0x8007DBDC, 0x8007DBE0, 0x8007DBE4,
+        0x8007DBE8, 0x8007DBEC, 0x8007DC7C, 0x8007DC80, 0x8007DC84, 0x8007DCD4,
+        0x8007DCD8, 0x8007DCDC, 0x8007DCF0, 0x8007DCF4, 0x8007DCF8, 0x8007DCFC,
+        0x8007DD00
+    },
+    new uint[]
+    {
+        0x28620101, 0x1040004E, 0x286200FF, 0x2402015E, 0x10621A8A, 0x2862015F,
+        0x10400024, 0x2402012C, 0x286201A9, 0x10400014, 0x286201A7, 0x286201C4,
+        0x10400005, 0x286201AA, 0x240201DD, 0x10621AA7, 0x00000000, 0x080215E0,
+        0x00000000
+    },
+    adjacentClass: null,
+    adjacentHandler: null);
+RequireDispatch(
+    behavior.TargetDispatch,
+    "id65-town-square",
+    "ID65 / Town Square overlay",
+    79,
+    0x6927000,
+    0xF800,
+    "9bc923cc8d27703537b81b01f51fde351e58aabee87d38a8afc630f1031878a5",
+    0x8007DB0C,
+    0x86640036,
+    0x8007DB34,
+    0x8007DC70,
+    "fc27e64af0f02e3617fd9b791759ea4b2663b9bfc6aeb19abb885f68d41e5b44",
+    0x80087258,
+    "edb2f325f44eafb8149e0f2b93912a9009e7aea08c77d17bdeb71bb6af20e372",
+    "cb3c5bf3677e27833294c86b83ea12e6a1d5a91fd8cd155aa548f1f59f02809f",
+    new uint[]
+    {
+        0x8007DB34, 0x8007DB38, 0x8007DB3C, 0x8007DC70, 0x8007DC74, 0x8007DC78,
+        0x8007DC7C, 0x8007DC80, 0x8007DD10, 0x8007DD14, 0x8007DD18, 0x8007DD60,
+        0x8007DD64, 0x8007DD68, 0x8007DD7C, 0x8007DD80, 0x8007DD84, 0x8007DD88,
+        0x8007DD8C, 0x8007DD90, 0x8007DD94
+    },
+    new uint[]
+    {
+        0x28820101, 0x1040004D, 0x288200FF, 0x24020188, 0x10822054, 0x28820189,
+        0x10400024, 0x28820138, 0x288201A9, 0x10400012, 0x288201A7, 0x288201C4,
+        0x10400005, 0x288201AA, 0x240201DD, 0x10821F35, 0x240201F6, 0x108224D9,
+        0x00000000, 0x08021C96, 0x00000000
+    },
+    adjacentClass: 0x01F6,
+    adjacentHandler: 0x800870F0);
+
+UnusedLevel65MobyGlobalExecutableManifest executable = behavior.GlobalExecutable;
+Require(executable.Lba == 55_382 && executable.ByteLength == 0x66000 &&
+        executable.Sha256 == "fa5fc7981188b78fa7d7b78facca64c1f79dadb107515e9146ad178ade39d442" &&
+        executable.HeaderByteLength == 0x800 && executable.InitialProgramCounter == 0x8005B8E0 &&
+        executable.TextLoadAddress == 0x80010000 && executable.TextByteLength == 0x65800 &&
+        executable.TextSha256 == "94eb7b3679075fdd2a856316abe1ac1278819a36a4e12584149d683715e70c5a" &&
+        executable.ActorId == 0x01F5 && executable.AlignedITypeImmediateOccurrenceCount == 0,
+    "The exact relocated global executable or no-class-0x01F5 immediate census changed.");
+Require(behavior.ExactPropertiesWords.SequenceEqual(new uint[] { 0x00000004, 0x0000008A }) &&
+        !behavior.PropertiesContainPointers && !behavior.PropertiesControllerSemanticsRequired &&
+        !behavior.SoundDependencyRequired && !behavior.ParticleOrEffectDependencyRequired &&
+        !behavior.DynamicSpawnDependencyRequired && !behavior.DynamicNativeLinkDependencyRequired &&
+        behavior.StaticRuntimeDependencyClosureComplete,
+    "The passive Grass properties/controller/sound/particle/spawn/link closure changed.");
+
 string[] expectedDependencyIds =
 [
     "source-row",
@@ -147,15 +228,19 @@ Require(first.Dependencies.Select(dependency => dependency.Id).SequenceEqual(exp
     "The dependency-bundle schema or its deterministic order changed.");
 Require(first.Dependencies.Single(dependency => dependency.Id == "texture-pixels-and-cluts").EvidenceState ==
             UnusedLevel65MobyDependencyEvidenceState.NotRequiredByDecodedGrammar &&
+        first.Dependencies.Single(dependency => dependency.Id == "overlay-dispatch-controller").EvidenceState ==
+            UnusedLevel65MobyDependencyEvidenceState.NotRequiredByDecodedGrammar &&
+        first.Dependencies.Single(dependency => dependency.Id == "controller-property-semantics").EvidenceState ==
+            UnusedLevel65MobyDependencyEvidenceState.NotRequiredByDecodedGrammar &&
+        first.Dependencies.Single(dependency => dependency.Id == "sound-particle-spawn-closure").EvidenceState ==
+            UnusedLevel65MobyDependencyEvidenceState.NotRequiredByDecodedGrammar &&
+        first.Dependencies.Single(dependency => dependency.Id == "native-dynamic-link-closure").EvidenceState ==
+            UnusedLevel65MobyDependencyEvidenceState.NotRequiredByDecodedGrammar &&
         first.Dependencies.Single(dependency => dependency.Id == "reward-totals-persistence").EvidenceState ==
             UnusedLevel65MobyDependencyEvidenceState.ExcludedByPinnedDonorIdentity,
-    "The zero-texture or excluded reward/totals closure changed.");
+    "The zero-texture, no-handler, or excluded reward/totals closure changed.");
 string[] expectedBlockerIds =
 [
-    "overlay-dispatch-controller",
-    "controller-property-semantics",
-    "sound-particle-spawn-closure",
-    "native-dynamic-link-closure",
     "runtime-acceptance"
 ];
 Require(first.Dependencies
@@ -175,10 +260,11 @@ Require(boundary.PropertiesPointerPolicy.Contains("scene-relative", StringCompar
         !boundary.ExistingActorPackageRecipeIsSufficient && boundary.ExactReasons.Count == 4 &&
         boundary.ExactReasons.Any(reason => reason.Contains("entry-relative", StringComparison.Ordinal)) &&
         boundary.ExactReasons.Any(reason => reason.Contains("legacy +0x08", StringComparison.Ordinal)) &&
-        boundary.ExactReasons.Any(reason => reason.Contains("overlay dispatch", StringComparison.Ordinal)),
+        boundary.ExactReasons.Any(reason => reason.Contains("no-handler", StringComparison.Ordinal)),
     "The fail-closed generic exporter/recipe compatibility boundary changed.");
 
-Require(first.StructurallyCompleteAllocation && !first.RunnableBundleSupport && first.StaticInspectionOnly &&
+Require(first.StructurallyCompleteAllocation && first.StaticRuntimeDependencyClosureComplete &&
+        !first.RunnableBundleSupport && first.StaticInspectionOnly &&
         !first.ProducesPatches && !first.WritesBin && !first.WritesCue &&
         !first.DisposableRuntimeCandidateAuthorized && !first.AppIntegrated &&
         !first.NormalCreateBinEnabled && !first.ReleasePublicationAuthorized,
@@ -194,6 +280,12 @@ Require(first.DeterministicContractSha256 ==
         first.Destination.ScenePointerFixupActiveSha256 == second.Destination.ScenePointerFixupActiveSha256 &&
         first.Destination.SceneTailPreimageSha256 == second.Destination.SceneTailPreimageSha256 &&
         first.Destination.FuturePlacementMutationOffsets.SequenceEqual(second.Destination.FuturePlacementMutationOffsets) &&
+        DispatchEqual(first.BehaviorClosure.DonorDispatch, second.BehaviorClosure.DonorDispatch) &&
+        DispatchEqual(first.BehaviorClosure.TargetDispatch, second.BehaviorClosure.TargetDispatch) &&
+        first.BehaviorClosure.GlobalExecutable == second.BehaviorClosure.GlobalExecutable &&
+        first.BehaviorClosure.ExactPropertiesWords.SequenceEqual(second.BehaviorClosure.ExactPropertiesWords) &&
+        first.BehaviorClosure.StaticRuntimeDependencyClosureComplete ==
+            second.BehaviorClosure.StaticRuntimeDependencyClosureComplete &&
         DependenciesEqual(first.Dependencies, second.Dependencies) &&
         first.HardRuntimePublicationBlockers.SequenceEqual(second.HardRuntimePublicationBlockers) &&
         first.ExporterBoundary.PropertiesPointerPolicy == second.ExporterBoundary.PropertiesPointerPolicy &&
@@ -216,10 +308,56 @@ Console.WriteLine($"  faces: normal={package.NormalFaces.RecordCount}/{package.N
 Console.WriteLine($"  rows: T{destination.FirstAppendTrueIndex} scene+0x{destination.FirstAppendRowSceneOffset:X}; complete capacity={destination.CompleteAppendRowCapacity}");
 Console.WriteLine($"  actor allocation: slot={destination.NewActorRootIndex}, root=0x{destination.NewActorRootEntryRelativeOffset:X}, end=0x{destination.NewActorPackageEndEntryRelativeOffset:X}, remaining=0x{destination.ActorTailBytesRemaining:X}");
 Console.WriteLine($"  scene allocation: fixup 0x{destination.ScenePointerFixupCountBefore:X}->0x{destination.ScenePointerFixupCountAfter:X} append=0x{destination.ScenePointerFixupAppendOffset:X}; props=0x{destination.PropertiesAllocationSceneOffset:X}; remaining=0x{destination.SceneTailBytesRemaining:X}");
+Console.WriteLine($"  donor dispatch: 0x{behavior.DonorDispatch.DispatchStartAddress:X8} -> default 0x{behavior.DonorDispatch.DefaultLoopExitAddress:X8}, trace={behavior.DonorDispatch.ExecutedTraceSha256}");
+Console.WriteLine($"  target dispatch: 0x{behavior.TargetDispatch.DispatchStartAddress:X8} -> default 0x{behavior.TargetDispatch.DefaultLoopExitAddress:X8}, trace={behavior.TargetDispatch.ExecutedTraceSha256}");
+Console.WriteLine($"  global executable: {executable.Sha256}, class-0x{executable.ActorId:X4} I-type immediates={executable.AlignedITypeImmediateOccurrenceCount}");
 foreach (string blocker in first.HardRuntimePublicationBlockers)
     Console.WriteLine($"  HARD BLOCKER: {blocker}");
 Console.WriteLine($"  deterministic contract: {first.DeterministicContractSha256}");
-Console.WriteLine("PASS UnusedLevel65MobyDependencyBundleSmoke: exact retail/foundation preimages, scene-relative props and fixups, untextured normal/far-LOD package, independent ID65 row/root/tail allocation, fail-closed overlay/controller/sound/link/runtime blockers, and no-write/no-CUE/no-Create-BIN gates passed.");
+Console.WriteLine("PASS UnusedLevel65MobyDependencyBundleSmoke: exact retail/foundation preimages, scene-relative props and fixups, untextured normal/far-LOD package, independent ID65 row/root/tail allocation, exact donor+target no-update dispatch traces, closed controller/sound/particle/spawn/link dependencies, sole fail-closed runtime gate, and no-write/no-CUE/no-Create-BIN gates passed.");
+
+static void RequireDispatch(
+    UnusedLevel65MobyDispatchTraceManifest dispatch,
+    string levelKey,
+    string levelName,
+    int wadEntry,
+    long wadOffset,
+    int byteLength,
+    string overlaySha256,
+    uint classLoadAddress,
+    uint classLoadWord,
+    uint dispatchStartAddress,
+    uint decisionWindowAddress,
+    string decisionWindowSha256,
+    uint defaultLoopExitAddress,
+    string defaultLoopExitSha256,
+    string traceSha256,
+    IReadOnlyList<uint> traceAddresses,
+    IReadOnlyList<uint> traceWords,
+    ushort? adjacentClass,
+    uint? adjacentHandler)
+{
+    Require(dispatch.LevelKey == levelKey && dispatch.LevelName == levelName &&
+            dispatch.OverlayWadEntry == wadEntry && dispatch.OverlayWadOffset == wadOffset &&
+            dispatch.OverlayByteLength == byteLength && dispatch.OverlaySha256 == overlaySha256 &&
+            dispatch.OverlayLoadAddress == 0x8007AA38 && dispatch.ActorId == 0x01F5 &&
+            dispatch.ClassLoadAddress == classLoadAddress && dispatch.ClassLoadWord == classLoadWord &&
+            dispatch.DispatchStartAddress == dispatchStartAddress &&
+            dispatch.DecisionWindowAddress == decisionWindowAddress &&
+            dispatch.DecisionWindowByteLength == 0x128 &&
+            dispatch.DecisionWindowSha256 == decisionWindowSha256 &&
+            dispatch.DefaultLoopExitAddress == defaultLoopExitAddress &&
+            dispatch.DefaultLoopExitSha256 == defaultLoopExitSha256 &&
+            dispatch.ExecutedTraceSha256 == traceSha256 &&
+            dispatch.ExecutedInstructionAddresses.SequenceEqual(traceAddresses) &&
+            dispatch.ExecutedInstructionWords.SequenceEqual(traceWords) &&
+            dispatch.AdjacentDedicatedClassId == adjacentClass &&
+            dispatch.AdjacentDedicatedHandlerAddress == adjacentHandler &&
+            dispatch.CallInstructionCount == 0 && dispatch.PropertiesReadCount == 0 &&
+            dispatch.RuntimeActorWriteCount == 0 && !dispatch.DedicatedHandlerPresent &&
+            dispatch.ReachesDefaultLoopExit && !dispatch.ClassSpecificControllerPresent,
+        $"The exact {levelName} class-0x01F5 default-dispatch trace changed.");
+}
 
 static void RequireFaceStream(
     UnusedLevel65MobyFaceStreamManifest stream,
@@ -283,6 +421,32 @@ static bool DependenciesEqual(
         pair.First.EvidenceState == pair.Second.EvidenceState &&
         pair.First.DependsOn.SequenceEqual(pair.Second.DependsOn) &&
         pair.First.Evidence == pair.Second.Evidence);
+
+static bool DispatchEqual(
+    UnusedLevel65MobyDispatchTraceManifest left,
+    UnusedLevel65MobyDispatchTraceManifest right) =>
+    left.LevelKey == right.LevelKey && left.LevelName == right.LevelName &&
+    left.OverlayWadEntry == right.OverlayWadEntry && left.OverlayWadOffset == right.OverlayWadOffset &&
+    left.OverlayByteLength == right.OverlayByteLength && left.OverlaySha256 == right.OverlaySha256 &&
+    left.OverlayLoadAddress == right.OverlayLoadAddress && left.ActorId == right.ActorId &&
+    left.ClassLoadAddress == right.ClassLoadAddress && left.ClassLoadWord == right.ClassLoadWord &&
+    left.DispatchStartAddress == right.DispatchStartAddress &&
+    left.DecisionWindowAddress == right.DecisionWindowAddress &&
+    left.DecisionWindowByteLength == right.DecisionWindowByteLength &&
+    left.DecisionWindowSha256 == right.DecisionWindowSha256 &&
+    left.DefaultLoopExitAddress == right.DefaultLoopExitAddress &&
+    left.DefaultLoopExitSha256 == right.DefaultLoopExitSha256 &&
+    left.ExecutedInstructionAddresses.SequenceEqual(right.ExecutedInstructionAddresses) &&
+    left.ExecutedInstructionWords.SequenceEqual(right.ExecutedInstructionWords) &&
+    left.ExecutedTraceSha256 == right.ExecutedTraceSha256 &&
+    left.AdjacentDedicatedClassId == right.AdjacentDedicatedClassId &&
+    left.AdjacentDedicatedHandlerAddress == right.AdjacentDedicatedHandlerAddress &&
+    left.CallInstructionCount == right.CallInstructionCount &&
+    left.PropertiesReadCount == right.PropertiesReadCount &&
+    left.RuntimeActorWriteCount == right.RuntimeActorWriteCount &&
+    left.DedicatedHandlerPresent == right.DedicatedHandlerPresent &&
+    left.ReachesDefaultLoopExit == right.ReachesDefaultLoopExit &&
+    left.ClassSpecificControllerPresent == right.ClassSpecificControllerPresent;
 
 static void Require(bool condition, string message)
 {
