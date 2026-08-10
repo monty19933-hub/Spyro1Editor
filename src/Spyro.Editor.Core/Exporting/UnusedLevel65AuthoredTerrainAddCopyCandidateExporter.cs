@@ -91,6 +91,10 @@ public sealed record UnusedLevel65AuthoredTerrainAddCopyCandidateResult(
 /// </summary>
 public static class UnusedLevel65AuthoredTerrainAddCopyCandidateExporter
 {
+    public static bool Retired => true;
+    public static string RetirementReason =>
+        "RETIRED: exact v1 BIN db9230bbe1b8b5b15b52299267b3453cb60ec7494248295f323a40f597d7391f crossed 28 bytes into the sector-202 header; preserve it only as rejected evidence and do not publish, load, or retest it. See docs/runtime-evidence/unused-level-65-town-square-authored-terrain-add-copy-not-observed-2026-08-08.json.";
+
     public const string ProfileId =
         "unused-level-65-town-square-authored-terrain-add-copy-clean-usa-disposable-v1";
     public const string ExpectedOutputImageSha256 =
@@ -209,6 +213,9 @@ public static class UnusedLevel65AuthoredTerrainAddCopyCandidateExporter
         UnusedLevel65AuthoredTerrainAddCopyCandidateRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (Retired)
+            throw new InvalidOperationException(RetirementReason);
+
         ArgumentNullException.ThrowIfNull(request);
         string baseImage = RequireExistingFile(request.BaseImagePath, "focused-runtime-passed ID65 display-name BIN");
         string baseCue = RequireExistingFile(request.BaseCuePath, "focused-runtime-passed ID65 display-name CUE");

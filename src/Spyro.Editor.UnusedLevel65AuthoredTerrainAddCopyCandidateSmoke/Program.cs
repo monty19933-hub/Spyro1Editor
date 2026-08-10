@@ -2,6 +2,33 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Spyro.Editor.Core.Exporting;
 
+if (UnusedLevel65AuthoredTerrainAddCopyCandidateExporter.Retired)
+{
+    bool retiredBeforeInputInspection = false;
+    try
+    {
+        await UnusedLevel65AuthoredTerrainAddCopyCandidateExporter.ExportAsync(null!);
+    }
+    catch (InvalidOperationException ex) when (
+        string.Equals(
+            ex.Message,
+            UnusedLevel65AuthoredTerrainAddCopyCandidateExporter.RetirementReason,
+            StringComparison.Ordinal))
+    {
+        retiredBeforeInputInspection = true;
+    }
+
+    if (!retiredBeforeInputInspection)
+    {
+        throw new InvalidOperationException(
+            "The retired authored-terrain add-copy publisher did not fail closed before input/filesystem inspection.");
+    }
+
+    Console.WriteLine(
+        $"PASS authored-terrain add-copy retired fail-close: {UnusedLevel65AuthoredTerrainAddCopyCandidateExporter.RetirementReason}");
+    return;
+}
+
 const string BaseImageSha256 =
     "9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8";
 const string RejectedEvidenceId =

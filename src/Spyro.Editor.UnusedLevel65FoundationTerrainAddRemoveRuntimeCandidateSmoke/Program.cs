@@ -6,6 +6,33 @@ using System.Text.Json;
 using System.Xml.Linq;
 using Spyro.Editor.Core.Exporting;
 
+if (UnusedLevel65FoundationTerrainAddRemoveRuntimeCandidateExporter.Retired)
+{
+    bool retiredBeforeInputInspection = false;
+    try
+    {
+        await UnusedLevel65FoundationTerrainAddRemoveRuntimeCandidateExporter.CreateAsync(null!);
+    }
+    catch (InvalidOperationException ex) when (
+        string.Equals(
+            ex.Message,
+            UnusedLevel65FoundationTerrainAddRemoveRuntimeCandidateExporter.RetirementReason,
+            StringComparison.Ordinal))
+    {
+        retiredBeforeInputInspection = true;
+    }
+
+    if (!retiredBeforeInputInspection)
+    {
+        throw new InvalidOperationException(
+            "The retired foundation terrain add/remove publisher did not fail closed before input/filesystem inspection.");
+    }
+
+    Console.WriteLine(
+        $"PASS foundation terrain add/remove retired fail-close: {UnusedLevel65FoundationTerrainAddRemoveRuntimeCandidateExporter.RetirementReason}");
+    return;
+}
+
 const string ExpectedBaseImageSha256 =
     "92e4046ce4d14771ebb70a72c2a024b8e76f5575e38771f7067ff2b4303ac222";
 const string ExpectedAuthoredModelSha256 =

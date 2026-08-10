@@ -191,6 +191,10 @@ internal sealed record UnusedLevel65PassiveMobyRuntimeCandidateResult(
 /// </summary>
 internal static class UnusedLevel65PassiveMobyRuntimeCandidateExporter
 {
+    public static bool Retired => true;
+    public static string RetirementReason =>
+        "RETIRED: this candidate is stacked on the positive-wound ID65 foundation collision convention, which is not runtime-proven and matches the failed remote-blank v1 sign. Preserve frozen artifacts only as historical evidence; do not republish or load them. Use the isolated collision-winding-repair v2 discriminator until DuckStation establishes the playable convention.";
+
     public const string ProfileId =
         "unused-level-65-artisans-grass-01f5-native-apron-clean-usa-disposable-v1";
     public const string OutputDirectoryName = "unused-level-65-passive-moby-artisans-grass";
@@ -363,6 +367,9 @@ internal static class UnusedLevel65PassiveMobyRuntimeCandidateExporter
         UnusedLevel65PassiveMobyRuntimeCandidateRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (Retired)
+            throw new InvalidOperationException(RetirementReason);
+
         ArgumentNullException.ThrowIfNull(request);
         string root = RequireDirectory(request.WorkspaceRoot, "Spyro Editor workspace");
         string lockedBase = RequireFile(request.LockedBaseImagePath, "exact locked ID65 base BIN");

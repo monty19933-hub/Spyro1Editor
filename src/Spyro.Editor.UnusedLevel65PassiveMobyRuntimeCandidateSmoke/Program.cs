@@ -5,6 +5,33 @@ using System.Text;
 using System.Text.Json;
 using Spyro.Editor.Core.Exporting;
 
+if (UnusedLevel65PassiveMobyRuntimeCandidateExporter.Retired)
+{
+    bool retiredBeforeInputInspection = false;
+    try
+    {
+        await UnusedLevel65PassiveMobyRuntimeCandidateExporter.CreateAsync(null!);
+    }
+    catch (InvalidOperationException ex) when (
+        string.Equals(
+            ex.Message,
+            UnusedLevel65PassiveMobyRuntimeCandidateExporter.RetirementReason,
+            StringComparison.Ordinal))
+    {
+        retiredBeforeInputInspection = true;
+    }
+
+    if (!retiredBeforeInputInspection)
+    {
+        throw new InvalidOperationException(
+            "The retired passive-moby publisher did not fail closed before input/filesystem inspection.");
+    }
+
+    Console.WriteLine(
+        $"PASS passive-moby retired fail-close: {UnusedLevel65PassiveMobyRuntimeCandidateExporter.RetirementReason}");
+    return;
+}
+
 const string LockedBaseSha256 = "9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8";
 const string FoundationSha256 = "92e4046ce4d14771ebb70a72c2a024b8e76f5575e38771f7067ff2b4303ac222";
 const string OutputBinSha256 = "e4bfebdca057b5f90e0aa5fe94b0983e2d7338fd13d82a2cdfbb21d4f07ca081";

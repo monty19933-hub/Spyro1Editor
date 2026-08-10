@@ -154,6 +154,10 @@ internal sealed record UnusedLevel65FullAuthoringFoundationRuntimeCandidateResul
 
 internal static class UnusedLevel65FullAuthoringFoundationRuntimeCandidateExporter
 {
+    public static bool Retired => true;
+    public static string RetirementReason =>
+        "RETIRED: this candidate is stacked on the positive-wound ID65 foundation collision convention, which is not runtime-proven and matches the failed remote-blank v1 sign. Preserve frozen artifacts only as historical evidence; do not republish or load them. Use the isolated collision-winding-repair v2 discriminator until DuckStation establishes the playable convention.";
+
     public const string ProfileId =
         "unused-level-65-full-authoring-foundation-native-membership-clean-usa-disposable-v1";
     public const string OutputPrefix =
@@ -233,6 +237,9 @@ internal static class UnusedLevel65FullAuthoringFoundationRuntimeCandidateExport
         UnusedLevel65FullAuthoringFoundationRuntimeCandidateRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (Retired)
+            throw new InvalidOperationException(RetirementReason);
+
         ArgumentNullException.ThrowIfNull(request);
         string baseImage = RequireExistingFile(request.BaseImagePath, "ID65 construction baseline BIN");
         string baseCue = RequireExistingFile(request.BaseCuePath, "ID65 construction baseline CUE");

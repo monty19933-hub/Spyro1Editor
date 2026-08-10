@@ -6,6 +6,33 @@ using System.Text.Json;
 using System.Xml.Linq;
 using Spyro.Editor.Core.Exporting;
 
+if (UnusedLevel65FullAuthoringFoundationRuntimeCandidateExporter.Retired)
+{
+    bool retiredBeforeInputInspection = false;
+    try
+    {
+        await UnusedLevel65FullAuthoringFoundationRuntimeCandidateExporter.CreateAsync(null!);
+    }
+    catch (InvalidOperationException ex) when (
+        string.Equals(
+            ex.Message,
+            UnusedLevel65FullAuthoringFoundationRuntimeCandidateExporter.RetirementReason,
+            StringComparison.Ordinal))
+    {
+        retiredBeforeInputInspection = true;
+    }
+
+    if (!retiredBeforeInputInspection)
+    {
+        throw new InvalidOperationException(
+            "The retired full-authoring foundation publisher did not fail closed before input/filesystem inspection.");
+    }
+
+    Console.WriteLine(
+        $"PASS full-authoring foundation retired fail-close: {UnusedLevel65FullAuthoringFoundationRuntimeCandidateExporter.RetirementReason}");
+    return;
+}
+
 const string ExpectedBaseImageSha256 =
     "9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8";
 const string ExpectedAuthoredModelSha256 =

@@ -4,6 +4,33 @@ using System.Text;
 using System.Text.Json;
 using Spyro.Editor.Core.Exporting;
 
+if (UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.Retired)
+{
+    bool retiredBeforeInputInspection = false;
+    try
+    {
+        await UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.CreateAsync(null!);
+    }
+    catch (InvalidOperationException ex) when (
+        string.Equals(
+            ex.Message,
+            UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.RetirementReason,
+            StringComparison.Ordinal))
+    {
+        retiredBeforeInputInspection = true;
+    }
+
+    if (!retiredBeforeInputInspection)
+    {
+        throw new InvalidOperationException(
+            "The retired standalone-spawn publisher did not fail closed before input/filesystem inspection.");
+    }
+
+    Console.WriteLine(
+        $"PASS standalone-spawn retired fail-close: {UnusedLevel65StandaloneSpawnRuntimeCandidateExporter.RetirementReason}");
+    return;
+}
+
 const string LockedBaseSha256 = "9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8";
 const string FoundationSha256 = "92e4046ce4d14771ebb70a72c2a024b8e76f5575e38771f7067ff2b4303ac222";
 const string OutputBinSha256 = "f76765081433a8ce4e68eaffa833ede6970684431e2a430c1e8eb18be9752f0d";

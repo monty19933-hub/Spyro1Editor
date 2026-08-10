@@ -190,6 +190,10 @@ internal sealed record UnusedLevel65RemoteBlankIsolationRuntimeCandidateResult(
 
 internal static class UnusedLevel65RemoteBlankIsolationRuntimeCandidateExporter
 {
+    public static bool Retired => true;
+    public static string RetirementReason =>
+        "RETIRED: exact remote-blank v1 BIN 8020947d4ab5e7e4b0eac4bc6409ff3d6f11212b0e118bbf007d870812014a8e failed to establish a landing and reached GAME OVER; preserve it only as rejected evidence and do not publish, load, or retest it. Use the isolated collision-winding-repair v2 discriminator.";
+
     public const string ProfileId =
         "unused-level-65-remote-blank-isolation-sector216-clean-usa-disposable-v1";
     public const string OutputDirectoryName =
@@ -272,6 +276,9 @@ internal static class UnusedLevel65RemoteBlankIsolationRuntimeCandidateExporter
         UnusedLevel65RemoteBlankIsolationRuntimeCandidateRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (Retired)
+            throw new InvalidOperationException(RetirementReason);
+
         ArgumentNullException.ThrowIfNull(request);
         string baseImage = RequireExistingFile(request.BaseImagePath, "exact locked ID65 display-name BIN");
         string baseCue = RequireExistingFile(request.BaseCuePath, "exact locked ID65 display-name CUE");

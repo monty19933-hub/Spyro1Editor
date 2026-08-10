@@ -6,6 +6,33 @@ using System.Text.Json;
 using System.Xml.Linq;
 using Spyro.Editor.Core.Exporting;
 
+if (UnusedLevel65RemoteBlankIsolationRuntimeCandidateExporter.Retired)
+{
+    bool retiredBeforeInputInspection = false;
+    try
+    {
+        await UnusedLevel65RemoteBlankIsolationRuntimeCandidateExporter.CreateAsync(null!);
+    }
+    catch (InvalidOperationException ex) when (
+        string.Equals(
+            ex.Message,
+            UnusedLevel65RemoteBlankIsolationRuntimeCandidateExporter.RetirementReason,
+            StringComparison.Ordinal))
+    {
+        retiredBeforeInputInspection = true;
+    }
+
+    if (!retiredBeforeInputInspection)
+    {
+        throw new InvalidOperationException(
+            "The retired remote-blank v1 publisher did not fail closed before input/filesystem inspection.");
+    }
+
+    Console.WriteLine(
+        $"PASS remote-blank v1 retired fail-close: {UnusedLevel65RemoteBlankIsolationRuntimeCandidateExporter.RetirementReason}");
+    return;
+}
+
 const string ExpectedBaseImageSha256 =
     "9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8";
 const string ExpectedSourceDataSha256 =

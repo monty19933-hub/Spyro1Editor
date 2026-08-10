@@ -168,6 +168,10 @@ internal sealed record UnusedLevel65NativeTextureRuntimeCandidateResult(
 
 internal static class UnusedLevel65NativeTextureRuntimeCandidateExporter
 {
+    public static bool Retired => true;
+    public static string RetirementReason =>
+        "RETIRED: this candidate is stacked on the positive-wound ID65 foundation collision convention, which is not runtime-proven and matches the failed remote-blank v1 sign. Preserve frozen artifacts only as historical evidence; do not republish or load them. Use the isolated collision-winding-repair v2 discriminator until DuckStation establishes the playable convention.";
+
     public const string ProfileId =
         "unused-level-65-native-texture-gnastys-world-t12-private-t66-disposable-runtime-v1";
     public const string OutputPrefix =
@@ -235,6 +239,9 @@ internal static class UnusedLevel65NativeTextureRuntimeCandidateExporter
         UnusedLevel65NativeTextureRuntimeCandidateRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (Retired)
+            throw new InvalidOperationException(RetirementReason);
+
         ArgumentNullException.ThrowIfNull(request);
         string baseImage = RequireExistingFile(request.BaseImagePath, "exact ID65 foundation BIN");
         string baseCue = RequireExistingFile(request.BaseCuePath, "exact ID65 foundation CUE");
