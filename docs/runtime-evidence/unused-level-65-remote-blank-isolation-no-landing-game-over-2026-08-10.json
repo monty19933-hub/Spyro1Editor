@@ -1,0 +1,92 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-10",
+  "evidenceId": "unused-level-65-remote-blank-isolation-no-landing-game-over-duckstation-2026-08-10",
+  "evidenceType": "computer-use-isolated-runtime-observation",
+  "evidenceStatus": "runtime-rejected-no-landing-repeat-death-game-over",
+  "automatedEmulatorCapture": true,
+  "promotionAuthorized": false,
+  "doNotLoadOrRetest": true,
+  "profileId": "unused-level-65-remote-blank-isolation-sector216-clean-usa-disposable-v1",
+  "outputImageSha256": "8020947d4ab5e7e4b0eac4bc6409ff3d6f11212b0e118bbf007d870812014a8e",
+  "outputId65DataSha256": "8d10aa62b134414aec80eec10d1fcede13bd55806ee13f6eb7c752f0fa1a9061",
+  "outputCueSha256": "abbf2d8bada563b5d619a3e1974c635f5750f7d8a92eda0bccc25bcbc5af787b",
+  "outputCue": "_local/v5-stone-hill-level-replacement/unused-level-65-remote-blank-isolation/Unused-Level-65-Remote-Blank-Isolation-Sector216-RUNTIME-CANDIDATE.cue",
+  "runtimeChecklistArtifact": "_local/v5-stone-hill-level-replacement/unused-level-65-remote-blank-isolation/Unused-Level-65-Remote-Blank-Isolation-Sector216-RUNTIME-CANDIDATE-runtime-checklist.md",
+  "runtimeEnvironment": {
+    "emulator": "DuckStation 0.1-11580-ge7f2f101c",
+    "portableProfile": true,
+    "isolatedFromNormalUserProfile": true,
+    "card1Type": "None",
+    "card2Type": "None",
+    "perGameSettingsPresent": false,
+    "cheatOverlayObserved": false,
+    "saveStateResumeEnabled": false,
+    "normalSpeedPercent": 100,
+    "controllerType": "DigitalController",
+    "inputMethod": "Dedicated press-to-toggle controller macros held each requested retail button across multiple 30 FPS game frames.",
+    "normalUserSettingsSha256BeforeAndAfter": "6e024a6a245835b2f21f1da942a7b3c18dd1284c4110f6895bb08575bc031d8c",
+    "normalUserProfileMutated": false
+  },
+  "runtimeObservation": {
+    "primaryEvidence": true,
+    "coldBoot": true,
+    "startedNewGameWithoutMemoryCard": true,
+    "reachedControllableArtisans": true,
+    "loadCode": "Select; R1, R2, L1, L2, R1, L1, R2, L2; Left; Down",
+    "selectorAccepted": true,
+    "id65FlyInObserved": true,
+    "flyInBackground": "A solid green field was visible behind the flying player model.",
+    "isolatedPadObserved": false,
+    "playableLandingObserved": false,
+    "terminalResult": "GAME OVER appeared approximately eight seconds after the ID65 fly-in began.",
+    "conclusion": "The exact remote-blank candidate failed its first mandatory runtime discriminator. It did not establish sector-216 rendering, landing collision, spawn safety, death, or respawn and must remain unpromoted."
+  },
+  "foundationSelectorControl": {
+    "purpose": "Distinguish a test-selector failure from a remote sector/spawn failure.",
+    "outputImageSha256": "92e4046ce4d14771ebb70a72c2a024b8e76f5575e38771f7067ff2b4303ac222",
+    "outputId65DataSha256": "eb5ca8459300392de12246e57770a57447f7bd64ccf3e978137d2362d7694160",
+    "outputCueSha256": "77f46b1bb003170ef0a12722ccb78684d0ea63155ce036367740b98c46b5707d",
+    "outputCue": "_local/v5-stone-hill-level-replacement/unused-level-65-full-authoring-foundation-native-membership/Unused-Level-65-Full-Authoring-Foundation-HP-LP-45deg-NATIVE-MEMBERSHIP-RUNTIME-CANDIDATE.cue",
+    "sameColdBootNoCardNoCheatProcedure": true,
+    "sameHeldButtonSelectorProcedure": true,
+    "id65Loaded": true,
+    "livesDisplayedAfterEntry": 4,
+    "playerObservedAliveAfterEntry": true,
+    "nativeGeometryObserved": true,
+    "visualQualityAccepted": false,
+    "interpretation": "The identical selector procedure loaded ID65 and left the player alive on the foundation control. This exonerates the input macro and hidden selector as the cause of the remote candidate's immediate no-landing failure; it is not a full runtime pass for the foundation candidate."
+  },
+  "staticDeathPathCorrelation": {
+    "deathPlaneCheckExecutableFileOffset": "0x3ACF4",
+    "deathPlaneCallExecutableFileOffset": "0x3ACD8",
+    "playerZRuntimeAddress": "0x80078A60",
+    "deathPlaneThreshold": 1024,
+    "deathRoutineRuntimeAddress": "0x8002C85C",
+    "livesRuntimeAddress": "0x8007582C",
+    "interpretation": "The retail path calls the common death routine when player Z is below 0x400. The control showed four lives after ID65 entry. The remote observation is therefore consistent with a bad landing followed by rapid repeated deaths until GAME OVER, but no live-RAM capture proved the exact Z or life value during the rejected run."
+  },
+  "failedChecks": [
+    "The fly-in did not end on the authored sector-216 pad.",
+    "The authored pad was not visibly established.",
+    "Playable HP terrain and collision were not established.",
+    "A single death followed by same-pad respawn was not established.",
+    "The candidate exhausted into GAME OVER before any movement or camera checklist could begin."
+  ],
+  "unverifiedChecks": [
+    "360-degree blank-isolation visibility",
+    "walking, charging, jumping, and landing across the pad",
+    "falling from each edge and respawning at the same authored center and yaw",
+    "cold-boot repeatability after a successful landing",
+    "far-LOD visibility",
+    "retail Town Square, Gnasty's Loot, and Sunny Flight controls for this exact run"
+  ],
+  "nextGate": "Keep the exact remote candidate retired. Use the alive foundation/control substrate to build one disposable discriminator that changes only one ownership variable at a time: first move landing and T92 onto proven native sector-213 collision while leaving sector216 unreferenced; then separately test sector216 render/collision ownership. Require four-life entry, a visible landing, at least ten seconds of stable control, one deliberate fall, and exactly one same-location respawn before testing blank isolation.",
+  "scopeLimitations": [
+    "This rejection applies only to BIN 8020947d4ab5e7e4b0eac4bc6409ff3d6f11212b0e118bbf007d870812014a8e and its exact CUE.",
+    "It does not invalidate the candidate's deterministic static readback, MODE2 integrity, receipt binding, or transactional publication proof.",
+    "It does invalidate every runtime/promotion claim for remote sector216, landing collision, death, and respawn.",
+    "It does not authorize App, normal Create BIN, release, or update integration."
+  ]
+}

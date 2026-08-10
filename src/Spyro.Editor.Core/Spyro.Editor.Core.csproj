@@ -25,5 +25,9 @@
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65FoundationTerrainAddRemoveRuntimeCandidateSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65RemoteBlankIsolationRuntimeCandidateSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65ProgressionOwnershipSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65MusicOwnershipClosureSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65SaveDeathRespawnOwnershipClosureSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65ReturnHomeOwnershipSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateSmoke" />
   </ItemGroup>
 </Project>
