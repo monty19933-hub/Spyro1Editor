@@ -32,5 +32,7 @@
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65ReturnHomeNativeApronRuntimeCandidateSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringManifestCompilerSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65ZeroEggRuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65DragonSaveTriggerRuntimeCandidateSmoke" />
   </ItemGroup>
 </Project>
