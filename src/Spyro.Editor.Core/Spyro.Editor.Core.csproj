@@ -41,5 +41,6 @@
     <InternalsVisibleTo Include="Spyro.Editor.Id65RewardCensusContractSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringSupportReplacementCompilerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65RewardSupportLayoutContractSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringRewardStagingCompilerSmoke" />
   </ItemGroup>
 </Project>
