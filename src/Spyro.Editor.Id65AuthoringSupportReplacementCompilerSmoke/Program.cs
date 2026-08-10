@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using Spyro.Editor.Core.Exporting;
 
 string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
@@ -69,6 +70,102 @@ Require(empty.CanonicalSha256 == "fc162fc5db6afa30952ca749ac4f60ce98cee6d9bce1ff
         core.AuthoredTranslationWorld == 752 && core.AuthoredTranslationRaw == 12_032 &&
         full.AuthoredTranslationWorld == 752 && full.AuthoredTranslationRaw == 12_032,
     "A frozen support manifest identity or authored translation unit changed.");
+
+int compileTransitionCalls = 0;
+Id65SupportDesiredStateProjection desiredCore =
+    Id65AuthoringSupportReplacementCompiler.BuildCore4DesiredStateProjection(lockedSource, core);
+Console.WriteLine(
+    $"  desired pins page={desiredCore.TexturePageDescriptorMapSha256}; " +
+    $"leaves={desiredCore.DesiredLeafMapSha256}; readback={desiredCore.ReadbackSha256}; " +
+    $"capacity={desiredCore.CapacitySha256}; projection={desiredCore.CanonicalSha256}");
+Require(desiredCore.ProfileId == Id65AuthoringSupportReplacementCompiler.DesiredProjectionProfileId &&
+        desiredCore.LockedRow80Sha256 == Id65AuthoringSupportReplacementCompiler.ExpectedLockedRow80Sha256 &&
+        desiredCore.TextureWitnessSha256 == Id65V2NativeTextureCompositionCompiler.ExpectedWitnessSha256 &&
+        desiredCore.TextureProjectionSha256 ==
+            Id65AuthoringSupportReplacementCompiler.ExpectedTextureProjectionSha256 &&
+        desiredCore.CoreManifestSha256 == Id65AuthoringSupportReplacementCompiler.ExpectedCoreManifestSha256 &&
+        desiredCore.CoreModelByteLength == 0x94800 &&
+        desiredCore.CoreModelSha256 == Id65AuthoringSupportReplacementCompiler.ExpectedCoreModelSha256 &&
+        desiredCore.CoreRow80CrossCheckSha256 ==
+            Id65AuthoringSupportReplacementCompiler.ExpectedCoreRow80Sha256 &&
+        desiredCore.TexturePageDescriptorCount == 7_949 &&
+        desiredCore.TexturePageChangedByteCount == 402_194 &&
+        desiredCore.TexturePageDescriptorMapSha256 ==
+            Id65AuthoringSupportReplacementCompiler.ExpectedCoreDesiredPageDescriptorMapSha256 &&
+        desiredCore.DesiredLeafMapSha256 ==
+            Id65AuthoringSupportReplacementCompiler.ExpectedCoreDesiredLeafMapSha256 &&
+        desiredCore.ReadbackSha256 ==
+            Id65AuthoringSupportReplacementCompiler.ExpectedCoreDesiredReadbackSha256 &&
+        desiredCore.CapacitySha256 ==
+            Id65AuthoringSupportReplacementCompiler.ExpectedCoreDesiredCapacitySha256 &&
+        desiredCore.CanonicalSha256 ==
+            Id65AuthoringSupportReplacementCompiler.ExpectedCoreDesiredProjectionSha256 &&
+        desiredCore.DesiredLeaves.Count == 2 && desiredCore.Readback.SectorCount == 4 &&
+        desiredCore.Capacity.SourceSectorCount == 217 && desiredCore.Capacity.OutputSectorCount == 4 &&
+        desiredCore.Capacity.TextureCount == 67 && desiredCore.Capacity.HighestTextureId == 66 &&
+        desiredCore.DirectLockedSourceDerived && !desiredCore.ContainsFullAuthoredRow80 &&
+        !desiredCore.ContainsCompiledAfterimage && !desiredCore.AfterimageStackingAuthorized &&
+        !desiredCore.ContainsSlicePlan && !desiredCore.ContainsPath && !desiredCore.WritesFileSystem &&
+        !desiredCore.WritesDiscImage && !desiredCore.WritesCue && !desiredCore.PublisherCalled &&
+        !desiredCore.WriterAuthorized && !desiredCore.AppIntegrated && !desiredCore.CreateBinEnabled &&
+        !desiredCore.NormalCreateBinEnabled && !desiredCore.RuntimeCandidateAuthorized &&
+        !desiredCore.RuntimeAccepted && !desiredCore.ReleaseIntegrated &&
+        !desiredCore.PromotionAuthorized && !desiredCore.Publishable &&
+        desiredCore.ExecutableMutationExcluded && desiredCore.Full8Excluded,
+    "The direct Core4 desired-state identity or safety boundary changed.");
+
+byte[] desiredModelCopy = desiredCore.CopyCoreModel();
+IReadOnlyList<Id65V2NativeTexturePagePatch> desiredPageCopies =
+    desiredCore.CopyTexturePageDescriptors();
+IReadOnlyList<Id65SupportDesiredLeaf> desiredLeafCopies = desiredCore.CopyDesiredLeaves();
+List<Id65SupportOwnedRange> externalLedger = [];
+for (int index = 0; index < desiredPageCopies.Count; index++)
+{
+    Id65V2NativeTexturePagePatch descriptor = desiredPageCopies[index];
+    externalLedger.Add(new Id65SupportOwnedRange(
+        $"texture-page.{index:D4}",
+        "support.desired.t66-pages",
+        0x800 + descriptor.RelativeOffset,
+        descriptor.CopyBefore(),
+        descriptor.CopyAfter()));
+}
+externalLedger.Add(new Id65SupportOwnedRange(
+    "support.model.core4",
+    "support.desired.core4-model",
+    0xDE800,
+    directRow80.AsSpan(0xDE800, 0x94800).ToArray(),
+    desiredModelCopy));
+externalLedger.AddRange(desiredLeafCopies.Select(leaf => new Id65SupportOwnedRange(
+    leaf.StableId,
+    "support.desired.placement",
+    leaf.DataRelativeOffset,
+    leaf.CopyLockedPreimage(),
+    leaf.CopyDesiredBytes())));
+byte[] externallyComposedCore = ApplyExternalLedger(directRow80, externalLedger);
+string externalLedgerSha256 = HashExternalLedger(externalLedger);
+const string expectedExternalLedgerSha256 =
+    "3c235d791578ce6496d975d99868d487813ee1343ce5ddd15f31cd9dd79dcaf3";
+Console.WriteLine($"  desired external ledger={externalLedgerSha256}");
+Require(externalLedger.Count == 7_952 &&
+        externalLedger.Sum(item => item.ByteLength) == 1_010_466 &&
+        externalLedger.Select(item => item.StableId).Distinct(StringComparer.Ordinal).Count() ==
+            externalLedger.Count &&
+        Hash(externallyComposedCore) == Id65AuthoringSupportReplacementCompiler.ExpectedCoreRow80Sha256 &&
+        compileTransitionCalls == 0 &&
+        externalLedgerSha256 == expectedExternalLedgerSha256,
+    "The projection did not populate one exact external locked-source ledger without CompileTransition.");
+
+desiredModelCopy[0] ^= 1;
+byte[] desiredPageAfterCopy = desiredPageCopies[0].CopyAfter();
+desiredPageAfterCopy[0] ^= 1;
+byte[] desiredLeafAfterCopy = desiredLeafCopies[0].CopyDesiredBytes();
+desiredLeafAfterCopy[0] ^= 1;
+Require(Hash(desiredCore.CopyCoreModel()) == desiredCore.CoreModelSha256 &&
+        Hash(desiredCore.CopyTexturePageDescriptors()[0].CopyAfter()) ==
+            desiredCore.TexturePageDescriptors[0].AfterSha256 &&
+        Hash(desiredCore.CopyDesiredLeaves()[0].CopyDesiredBytes()) ==
+            desiredCore.DesiredLeaves[0].DesiredSha256,
+    "A desired-state model, page descriptor, or placement leaf escaped defensive copying.");
 
 Id65CompiledSupportReplacement addCore = Compile(empty, core);
 Id65CompiledSupportReplacement addBay = Compile(core, full);
@@ -261,6 +358,17 @@ byte[] wrongRow80 = directRow80.ToArray();
 wrongRow80[0] ^= 1;
 Reject("wrong locked row80", () =>
     Id65AuthoringSupportReplacementCompiler.CaptureLockedSource(wrongRow80, textureWitness));
+Id65AuthoringSupportLockedSource wrongDesiredSource = new(
+    wrongRow80,
+    completeTextureRows,
+    completePagePatches,
+    Id65V2NativeTextureCompositionCompiler.ExpectedWitnessSha256);
+Reject("desired-state wrong locked source", () =>
+    Id65AuthoringSupportReplacementCompiler.BuildCore4DesiredStateProjection(
+        wrongDesiredSource, core));
+Reject("desired-state wrong manifest", () =>
+    Id65AuthoringSupportReplacementCompiler.BuildCore4DesiredStateProjection(
+        lockedSource, empty));
 byte[] compiledAfterimage = addCore.CopyOutputRow80();
 Reject("compiled afterimage as locked source", () =>
     Id65AuthoringSupportReplacementCompiler.CaptureLockedSource(compiledAfterimage, textureWitness));
@@ -298,6 +406,9 @@ Id65AuthoringSupportLockedSource tamperedT1Projection = new(
     Id65V2NativeTextureCompositionCompiler.ExpectedWitnessSha256);
 Reject("materialized locked T1 tamper", () =>
     Id65AuthoringSupportReplacementCompiler.CompileTransition(tamperedT1Projection, empty, core));
+Reject("desired-state materialized locked T1 tamper", () =>
+    Id65AuthoringSupportReplacementCompiler.BuildCore4DesiredStateProjection(
+        tamperedT1Projection, core));
 byte[] badPageAfter = pagePatches[0].CopyAfter();
 badPageAfter[0] ^= 1;
 Id65V2NativeTexturePagePatch badPage = new(
@@ -312,6 +423,14 @@ Id65V2NativeTextureWitness pageTamper = CopyWitness(
     pagePatches: [badPage, .. pagePatches.Skip(1)]);
 Reject("T66 page tamper", () =>
     Id65AuthoringSupportReplacementCompiler.CaptureLockedSource(directRow80, pageTamper));
+Id65AuthoringSupportLockedSource tamperedPageProjection = new(
+    directRow80,
+    completeTextureRows,
+    [badPage, .. pagePatches.Skip(1)],
+    Id65V2NativeTextureCompositionCompiler.ExpectedWitnessSha256);
+Reject("desired-state T66 page tamper", () =>
+    Id65AuthoringSupportReplacementCompiler.BuildCore4DesiredStateProjection(
+        tamperedPageProjection, core));
 
 Reject("invalid Empty to Full8 edge", () => Compile(empty, full));
 Reject("invalid self edge", () => Compile(core, core));
@@ -445,7 +564,7 @@ tailModel.CopyTo(tailRow, 0xDE800);
 Reject("nonzero model tail", () => Id65AuthoringSupportReplacementCompiler.ValidateStateForSmoke(
     core, directRow80.AsSpan(0xDE800, 0x94800), tailModel, tailRow));
 
-Require(rejectionCount == 38, $"Support rejection matrix ran {rejectionCount}, expected 38.");
+Require(rejectionCount == 42, $"Support rejection matrix ran {rejectionCount}, expected 42.");
 Require(typeof(Id65AuthoringSupportReplacementCompiler)
             .GetMethod(nameof(Id65AuthoringSupportReplacementCompiler.CompileTransition))!
             .GetParameters()
@@ -454,6 +573,26 @@ Require(typeof(Id65AuthoringSupportReplacementCompiler)
                 !parameter.ParameterType.Name.Contains("Compiled", StringComparison.Ordinal) &&
                 !parameter.ParameterType.Name.Contains("Path", StringComparison.Ordinal)),
     "The support compile API accepts a compiled afterimage, slice plan, or path.");
+System.Reflection.MethodInfo desiredBuilder = typeof(Id65AuthoringSupportReplacementCompiler)
+    .GetMethod(nameof(Id65AuthoringSupportReplacementCompiler.BuildCore4DesiredStateProjection))!;
+Require(desiredBuilder.ReturnType == typeof(Id65SupportDesiredStateProjection) &&
+        desiredBuilder.GetParameters().Select(item => item.ParameterType).SequenceEqual(new[]
+        {
+            typeof(Id65AuthoringSupportLockedSource),
+            typeof(Id65AuthoringSupportManifest),
+            typeof(Id65AuthoringSupportCompilerLimits)
+        }) &&
+        desiredBuilder.GetParameters().All(parameter =>
+            parameter.ParameterType != typeof(Id65CompiledSupportReplacement) &&
+            !parameter.ParameterType.Name.Contains("StaticPlan", StringComparison.Ordinal) &&
+            !parameter.ParameterType.Name.Contains("Compiled", StringComparison.Ordinal) &&
+            !parameter.ParameterType.Name.Contains("Path", StringComparison.Ordinal)) &&
+        !typeof(Id65SupportDesiredStateProjection)
+            .GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.NonPublic)
+            .Any(method => method.ReturnType == typeof(byte[]) &&
+                method.Name.Contains("Row80", StringComparison.Ordinal)),
+    "The desired-state API gained a compiled/plan/path input or full row-80 byte output.");
 foreach (Id65CompiledSupportReplacement compiled in new[] { addCore, addBay, removeBay, removeCore })
 {
     Require(compiled.BuildsBothStatesFromExactLockedSource && !compiled.AcceptsCompiledAfterimages &&
@@ -491,9 +630,45 @@ Console.WriteLine(
 Id65CompiledSupportReplacement Compile(
     Id65AuthoringSupportManifest source,
     Id65AuthoringSupportManifest output,
-    Id65AuthoringSupportCompilerLimits? limits = null) =>
-    Id65AuthoringSupportReplacementCompiler.CompileTransition(
+    Id65AuthoringSupportCompilerLimits? limits = null)
+{
+    compileTransitionCalls++;
+    return Id65AuthoringSupportReplacementCompiler.CompileTransition(
         lockedSource, source, output, limits);
+}
+
+static byte[] ApplyExternalLedger(
+    byte[] lockedRow80,
+    IReadOnlyList<Id65SupportOwnedRange> ledger)
+{
+    Id65SupportOwnedRange[] ordered = ledger.OrderBy(item => item.DataRelativeOffset).ToArray();
+    if (ordered.Select(item => item.StableId).Distinct(StringComparer.Ordinal).Count() != ordered.Length ||
+        ordered.Any(item => item.DataRelativeOffset < 0 ||
+            item.DataRelativeOffset + (long)item.ByteLength > lockedRow80.Length) ||
+        ordered.Zip(ordered.Skip(1), (left, right) =>
+            left.DataRelativeOffset + left.ByteLength > right.DataRelativeOffset).Any(overlap => overlap))
+        throw new InvalidDataException("The external desired-state ledger has invalid ownership.");
+    byte[] output = lockedRow80.ToArray();
+    foreach (Id65SupportOwnedRange item in ordered)
+    {
+        byte[] before = item.CopyBefore();
+        byte[] after = item.CopyAfter();
+        if (!output.AsSpan(item.DataRelativeOffset, item.ByteLength).SequenceEqual(before))
+            throw new InvalidDataException($"External ledger preimage `{item.StableId}` changed.");
+        after.CopyTo(output, item.DataRelativeOffset);
+    }
+    return output;
+}
+
+static string HashExternalLedger(IEnumerable<Id65SupportOwnedRange> ledger)
+{
+    StringBuilder text = new();
+    foreach (Id65SupportOwnedRange item in ledger.OrderBy(item => item.DataRelativeOffset))
+        text.Append(item.StableId).Append('|').Append(item.OwnerId).Append('|')
+            .Append(item.DataRelativeOffset.ToString("X8")).Append('|').Append(item.ByteLength).Append('|')
+            .Append(item.BeforeSha256).Append('|').Append(item.AfterSha256).Append('\n');
+    return Hash(Encoding.UTF8.GetBytes(text.ToString()));
+}
 
 static void Print(string label, Id65CompiledSupportReplacement value)
 {

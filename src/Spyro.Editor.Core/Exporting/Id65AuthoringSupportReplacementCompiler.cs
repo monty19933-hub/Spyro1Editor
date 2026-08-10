@@ -400,6 +400,143 @@ internal sealed class Id65AuthoringSupportLockedSource
         _pagePatches.Select(item => item.DeepCopy()).ToArray();
 }
 
+internal sealed class Id65SupportDesiredLeaf
+{
+    private readonly byte[] _lockedPreimage;
+    private readonly byte[] _desiredBytes;
+
+    internal Id65SupportDesiredLeaf(
+        string stableId,
+        Id65LogicalAddress logicalAddress,
+        int dataRelativeOffset,
+        byte[] lockedPreimage,
+        byte[] desiredBytes)
+    {
+        if (lockedPreimage.Length == 0 || lockedPreimage.Length != desiredBytes.Length)
+            throw new ArgumentException("A support desired leaf must have equal nonempty preimage/output bytes.");
+        StableId = stableId;
+        LogicalAddress = logicalAddress;
+        DataRelativeOffset = dataRelativeOffset;
+        _lockedPreimage = lockedPreimage.ToArray();
+        _desiredBytes = desiredBytes.ToArray();
+        LockedPreimageSha256 = Id65AuthoringSupportReplacementCompiler.Hash(_lockedPreimage);
+        DesiredSha256 = Id65AuthoringSupportReplacementCompiler.Hash(_desiredBytes);
+    }
+
+    public string StableId { get; }
+    public Id65LogicalAddress LogicalAddress { get; }
+    public int DataRelativeOffset { get; }
+    public int ByteLength => _lockedPreimage.Length;
+    public string LockedPreimageSha256 { get; }
+    public string DesiredSha256 { get; }
+
+    internal byte[] CopyLockedPreimage() => _lockedPreimage.ToArray();
+    internal byte[] CopyDesiredBytes() => _desiredBytes.ToArray();
+    internal Id65SupportDesiredLeaf DeepCopy() =>
+        new(StableId, LogicalAddress, DataRelativeOffset, _lockedPreimage, _desiredBytes);
+}
+
+/// <summary>
+/// Immutable desired-state leaves for composing Core4 directly from the exact
+/// locked row. This deliberately exposes neither a complete row-80 afterimage
+/// nor a transition/slice plan; an owning composite must merge these typed
+/// leaves into its own single locked-source transaction.
+/// </summary>
+internal sealed class Id65SupportDesiredStateProjection
+{
+    private readonly byte[] _coreModel;
+    private readonly ReadOnlyCollection<Id65V2NativeTexturePagePatch> _texturePageDescriptors;
+    private readonly ReadOnlyCollection<Id65SupportDesiredLeaf> _desiredLeaves;
+
+    internal Id65SupportDesiredStateProjection(
+        string lockedRow80Sha256,
+        string textureWitnessSha256,
+        string textureProjectionSha256,
+        string coreManifestSha256,
+        byte[] coreModel,
+        string coreRow80CrossCheckSha256,
+        IEnumerable<Id65V2NativeTexturePagePatch> texturePageDescriptors,
+        int texturePageChangedByteCount,
+        string texturePageDescriptorMapSha256,
+        IEnumerable<Id65SupportDesiredLeaf> desiredLeaves,
+        string desiredLeafMapSha256,
+        Id65SupportStateReadback readback,
+        string readbackSha256,
+        Id65SupportCapacityReadback capacity,
+        string capacitySha256,
+        string canonicalSha256)
+    {
+        LockedRow80Sha256 = lockedRow80Sha256;
+        TextureWitnessSha256 = textureWitnessSha256;
+        TextureProjectionSha256 = textureProjectionSha256;
+        CoreManifestSha256 = coreManifestSha256;
+        _coreModel = coreModel.ToArray();
+        CoreModelSha256 = Id65AuthoringSupportReplacementCompiler.Hash(_coreModel);
+        CoreRow80CrossCheckSha256 = coreRow80CrossCheckSha256;
+        _texturePageDescriptors = Array.AsReadOnly(
+            texturePageDescriptors.Select(item => item.DeepCopy()).ToArray());
+        TexturePageChangedByteCount = texturePageChangedByteCount;
+        TexturePageDescriptorMapSha256 = texturePageDescriptorMapSha256;
+        _desiredLeaves = Array.AsReadOnly(desiredLeaves.Select(item => item.DeepCopy()).ToArray());
+        DesiredLeafMapSha256 = desiredLeafMapSha256;
+        Readback = readback;
+        ReadbackSha256 = readbackSha256;
+        Capacity = capacity;
+        CapacitySha256 = capacitySha256;
+        CanonicalSha256 = canonicalSha256;
+    }
+
+    public string ProfileId => Id65AuthoringSupportReplacementCompiler.DesiredProjectionProfileId;
+    public Id65SupportProfileKind Kind => Id65SupportProfileKind.Core4;
+    public string LockedRow80Sha256 { get; }
+    public string TextureWitnessSha256 { get; }
+    public string TextureProjectionSha256 { get; }
+    public string CoreManifestSha256 { get; }
+    public int CoreModelByteLength => _coreModel.Length;
+    public string CoreModelSha256 { get; }
+    public string CoreRow80CrossCheckSha256 { get; }
+    public IReadOnlyList<Id65V2NativeTexturePagePatch> TexturePageDescriptors =>
+        _texturePageDescriptors;
+    public int TexturePageDescriptorCount => _texturePageDescriptors.Count;
+    public int TexturePageChangedByteCount { get; }
+    public string TexturePageDescriptorMapSha256 { get; }
+    public IReadOnlyList<Id65SupportDesiredLeaf> DesiredLeaves => _desiredLeaves;
+    public string DesiredLeafMapSha256 { get; }
+    public Id65SupportStateReadback Readback { get; }
+    public string ReadbackSha256 { get; }
+    public Id65SupportCapacityReadback Capacity { get; }
+    public string CapacitySha256 { get; }
+    public string CanonicalSha256 { get; }
+
+    public bool DirectLockedSourceDerived => true;
+    public bool ContainsFullAuthoredRow80 => false;
+    public bool ContainsCompiledAfterimage => false;
+    public bool AfterimageStackingAuthorized => false;
+    public bool ContainsSlicePlan => false;
+    public bool ContainsPath => false;
+    public bool WritesFileSystem => false;
+    public bool WritesDiscImage => false;
+    public bool WritesCue => false;
+    public bool PublisherCalled => false;
+    public bool WriterAuthorized => false;
+    public bool AppIntegrated => false;
+    public bool CreateBinEnabled => false;
+    public bool NormalCreateBinEnabled => false;
+    public bool RuntimeCandidateAuthorized => false;
+    public bool RuntimeAccepted => false;
+    public bool ReleaseIntegrated => false;
+    public bool PromotionAuthorized => false;
+    public bool Publishable => false;
+    public bool ExecutableMutationExcluded => true;
+    public bool Full8Excluded => true;
+
+    internal byte[] CopyCoreModel() => _coreModel.ToArray();
+    internal IReadOnlyList<Id65V2NativeTexturePagePatch> CopyTexturePageDescriptors() =>
+        _texturePageDescriptors.Select(item => item.DeepCopy()).ToArray();
+    internal IReadOnlyList<Id65SupportDesiredLeaf> CopyDesiredLeaves() =>
+        _desiredLeaves.Select(item => item.DeepCopy()).ToArray();
+}
+
 internal sealed record Id65AuthoringSupportCompilerLimits(
     int ModelByteCapacity = 0x94800,
     int MaximumOutputUsedModelBytes = 0x94800,
@@ -635,6 +772,8 @@ internal sealed class Id65CompiledSupportReplacement
 internal static class Id65AuthoringSupportReplacementCompiler
 {
     public const string ProfileId = "id65-authoring-support-replacement-static-in-memory-v1";
+    public const string DesiredProjectionProfileId =
+        "id65-authoring-support-core4-desired-state-projection-v1";
     public const string EmptyProfileId = "support-empty-v1";
     public const string CoreProfileId = "support-core-4-v1";
     public const string FullProfileId = "support-full-8-v1";
@@ -691,6 +830,16 @@ internal static class Id65AuthoringSupportReplacementCompiler
         "aaac3076e2246aeb481e25241fcef9d564aa8c338bef07b0bdf83af11726c270";
     public const string ExpectedFullManifestSha256 =
         "4ccb922f43a9ed2551ce700f56270b6c1207adf1c49eb26984b96e0bdacdd0fb";
+    public const string ExpectedCoreDesiredPageDescriptorMapSha256 =
+        "f2330da51ac4066674c113588d8ceff57873ec4020d539097c65056bd37f4edc";
+    public const string ExpectedCoreDesiredLeafMapSha256 =
+        "cd889d2b24b0b7a37de066fc6e56500b8d414cd2889d58352897816da6074f73";
+    public const string ExpectedCoreDesiredReadbackSha256 =
+        "b59b8c317f3e1a0dae8eb43cf6ad299705e7d6760cec14016ffd87baec662195";
+    public const string ExpectedCoreDesiredCapacitySha256 =
+        "a573a9c0194388299dd99dc80059ef1a877fb44c035cacfc68b80009cdcc6d5b";
+    public const string ExpectedCoreDesiredProjectionSha256 =
+        "2dda622f3d08a78564a0f2a583cb73fee5ec731d5cacbac24302e093e9747fa2";
     public const int ExpectedTexturePagePatchCount = 7_949;
     public const int ExpectedTexturePageChangedByteCount = 402_194;
 
@@ -837,6 +986,71 @@ internal static class Id65AuthoringSupportReplacementCompiler
     {
         ValidateExactManifest(source, Id65SupportProfileKind.Core4);
         return BuildExpectedManifest(Id65SupportProfileKind.Empty);
+    }
+
+    public static Id65SupportDesiredStateProjection BuildCore4DesiredStateProjection(
+        Id65AuthoringSupportLockedSource lockedSource,
+        Id65AuthoringSupportManifest coreManifest,
+        Id65AuthoringSupportCompilerLimits? limits = null)
+    {
+        ArgumentNullException.ThrowIfNull(lockedSource);
+        ArgumentNullException.ThrowIfNull(coreManifest);
+        ValidateLockedSource(lockedSource);
+        ValidateExactManifest(coreManifest, Id65SupportProfileKind.Core4);
+        Id65AuthoringSupportManifest emptyManifest = BuildExpectedManifest(Id65SupportProfileKind.Empty);
+        ValidateLimits(limits ?? new(), emptyManifest, coreManifest);
+
+        byte[] lockedRow80 = lockedSource.CopyRow80();
+        byte[] lockedModel = lockedRow80.AsSpan(ModelOffset, ModelLength).ToArray();
+        IReadOnlyList<Id65V2NativeTexturePackedRow> textureRows = lockedSource.CopyTextureRows();
+        IReadOnlyList<Id65V2NativeTexturePagePatch> pageDescriptors =
+            lockedSource.CopyPagePatches();
+        byte[] coreModel = BuildStateModel(lockedModel, textureRows, coreManifest);
+
+        // Build the complete image only as an internal identity/readback cross-check.
+        // It is discarded here and is intentionally absent from the returned projection.
+        byte[] row80CrossCheck = BuildStateRow80(lockedRow80, coreModel, pageDescriptors);
+        RequireHash(Hash(row80CrossCheck), ExpectedCoreRow80Sha256,
+            "Core4 desired-state row identity cross-check");
+        Id65SupportStateReadback readback =
+            ValidateState(coreManifest, lockedModel, coreModel, row80CrossCheck);
+        Id65SupportCapacityReadback capacity = BuildCapacity(emptyManifest, coreManifest);
+        Id65SupportDesiredLeaf[] desiredLeaves = BuildCore4DesiredLeaves(lockedRow80);
+
+        string pageMapSha256 = HashTexturePageDescriptors(pageDescriptors);
+        string leafMapSha256 = HashDesiredLeaves(desiredLeaves);
+        string readbackSha256 = HashDesiredReadback(readback);
+        string capacitySha256 = HashDesiredCapacity(capacity);
+        string canonicalSha256 = HashCore4DesiredProjection(
+            lockedSource,
+            coreManifest,
+            coreModel,
+            pageDescriptors,
+            pageMapSha256,
+            desiredLeaves,
+            leafMapSha256,
+            readbackSha256,
+            capacitySha256);
+
+        Id65SupportDesiredStateProjection projection = new(
+            lockedSource.Row80Sha256,
+            lockedSource.TextureWitnessSha256,
+            lockedSource.TextureProjectionSha256,
+            coreManifest.CanonicalSha256,
+            coreModel,
+            ExpectedCoreRow80Sha256,
+            pageDescriptors,
+            pageDescriptors.Sum(item => item.ByteLength),
+            pageMapSha256,
+            desiredLeaves,
+            leafMapSha256,
+            readback,
+            readbackSha256,
+            capacity,
+            capacitySha256,
+            canonicalSha256);
+        ValidateCore4DesiredProjection(projection);
+        return projection;
     }
 
     public static Id65CompiledSupportReplacement CompileTransition(
@@ -1813,6 +2027,285 @@ internal static class Id65AuthoringSupportReplacementCompiler
             throw new InvalidDataException("The post-v2 landing/T92 XY readback changed.");
         return output;
     }
+
+    private static Id65SupportDesiredLeaf[] BuildCore4DesiredLeaves(byte[] lockedRow80)
+    {
+        byte[] lockedPlacement = Convert.FromHexString("29E901009A880100");
+        byte[] desiredPlacement = Convert.FromHexString("091800000A180000");
+        if (lockedRow80.Length != Row80ByteLength ||
+            !lockedRow80.AsSpan(LandingOffset, 8).SequenceEqual(lockedPlacement) ||
+            !lockedRow80.AsSpan(T92XyOffset, 8).SequenceEqual(lockedPlacement))
+            throw new InvalidDataException("The Core4 desired placement preimages changed.");
+        return
+        [
+            new Id65SupportDesiredLeaf(
+                "spawn.remote-pad",
+                new Id65LogicalAddress("landing-record", 0, 0),
+                LandingOffset,
+                lockedPlacement,
+                desiredPlacement),
+            new Id65SupportDesiredLeaf(
+                "moby.player-anchor.t92",
+                new Id65LogicalAddress("moby-row", 92, 0),
+                T92XyOffset,
+                lockedPlacement,
+                desiredPlacement)
+        ];
+    }
+
+    private static string HashTexturePageDescriptors(
+        IEnumerable<Id65V2NativeTexturePagePatch> descriptors)
+    {
+        StringBuilder text = new();
+        foreach (Id65V2NativeTexturePagePatch item in descriptors.OrderBy(item => item.RelativeOffset))
+            text.Append(item.RelativeOffset.ToString("X8", CultureInfo.InvariantCulture)).Append('|')
+                .Append(item.ByteLength).Append('|').Append(item.BeforeSha256).Append('|')
+                .Append(item.AfterSha256).Append('|').Append(Hash(item.CopyBefore())).Append('|')
+                .Append(Hash(item.CopyAfter())).Append('|').Append(item.Owner).Append('\n');
+        return Hash(Encoding.UTF8.GetBytes(text.ToString()));
+    }
+
+    private static string HashDesiredLeaves(IEnumerable<Id65SupportDesiredLeaf> leaves)
+    {
+        StringBuilder text = new();
+        foreach (Id65SupportDesiredLeaf item in leaves.OrderBy(item => item.DataRelativeOffset))
+            text.Append(item.StableId).Append('|').Append(item.LogicalAddress.Space).Append('|')
+                .Append(item.LogicalAddress.Primary).Append('|').Append(item.LogicalAddress.Secondary)
+                .Append('|').Append(item.DataRelativeOffset.ToString("X8", CultureInfo.InvariantCulture))
+                .Append('|').Append(item.ByteLength).Append('|').Append(item.LockedPreimageSha256)
+                .Append('|').Append(item.DesiredSha256).Append('|')
+                .Append(Hash(item.CopyLockedPreimage())).Append('|')
+                .Append(Hash(item.CopyDesiredBytes())).Append('\n');
+        return Hash(Encoding.UTF8.GetBytes(text.ToString()));
+    }
+
+    private static string HashDesiredReadback(Id65SupportStateReadback value)
+    {
+        string canonical = string.Join("|", new[]
+        {
+            value.Kind.ToString(),
+            value.Row80Sha256,
+            value.ModelSha256,
+            value.EnvironmentSha256,
+            value.CollisionSha256,
+            value.CollisionTreeSha256,
+            value.CollisionBlocksSha256,
+            value.OcclusionSha256,
+            value.SectorCount.ToString(CultureInfo.InvariantCulture),
+            value.CollisionTriangleCount.ToString(CultureInfo.InvariantCulture),
+            value.ActiveCollisionCellCount.ToString(CultureInfo.InvariantCulture),
+            value.CollisionBlocksUsedBytes.ToString(CultureInfo.InvariantCulture),
+            value.UsedModelBytes.ToString(CultureInfo.InvariantCulture),
+            value.ZeroTailBytes.ToString(CultureInfo.InvariantCulture),
+            value.InheritedActiveLeavesCleared ? "1" : "0",
+            value.ExactHpLpPairing ? "1" : "0",
+            value.ExactSeams ? "1" : "0",
+            value.ProtectedComponentsPreserved ? "1" : "0",
+            value.RuntimeAccepted ? "1" : "0"
+        });
+        return Hash(Encoding.UTF8.GetBytes(canonical));
+    }
+
+    private static string HashDesiredCapacity(Id65SupportCapacityReadback value)
+    {
+        string canonical = string.Join("|", new[]
+        {
+            value.ModelByteCapacity.ToString(CultureInfo.InvariantCulture),
+            value.SourceUsedModelBytes.ToString(CultureInfo.InvariantCulture),
+            value.OutputUsedModelBytes.ToString(CultureInfo.InvariantCulture),
+            value.SourceZeroTailBytes.ToString(CultureInfo.InvariantCulture),
+            value.OutputZeroTailBytes.ToString(CultureInfo.InvariantCulture),
+            value.SourceSectorCount.ToString(CultureInfo.InvariantCulture),
+            value.OutputSectorCount.ToString(CultureInfo.InvariantCulture),
+            value.SourceCollisionBlocksUsedBytes.ToString(CultureInfo.InvariantCulture),
+            value.OutputCollisionBlocksUsedBytes.ToString(CultureInfo.InvariantCulture),
+            value.CollisionTriangleCount.ToString(CultureInfo.InvariantCulture),
+            value.CollisionTreeCapacityBytes.ToString(CultureInfo.InvariantCulture),
+            value.CollisionBlockCapacityBytes.ToString(CultureInfo.InvariantCulture),
+            value.TextureCount.ToString(CultureInfo.InvariantCulture),
+            value.HighestTextureId.ToString(CultureInfo.InvariantCulture),
+            value.NativeObservedMinimumSectorCount.ToString(CultureInfo.InvariantCulture)
+        });
+        return Hash(Encoding.UTF8.GetBytes(canonical));
+    }
+
+    private static string HashCore4DesiredProjection(
+        Id65AuthoringSupportLockedSource lockedSource,
+        Id65AuthoringSupportManifest coreManifest,
+        byte[] coreModel,
+        IReadOnlyList<Id65V2NativeTexturePagePatch> pageDescriptors,
+        string pageMapSha256,
+        IReadOnlyList<Id65SupportDesiredLeaf> desiredLeaves,
+        string leafMapSha256,
+        string readbackSha256,
+        string capacitySha256) =>
+        HashCore4DesiredProjection(
+            lockedSource.Row80Sha256,
+            lockedSource.TextureWitnessSha256,
+            lockedSource.TextureProjectionSha256,
+            coreManifest.CanonicalSha256,
+            coreModel.Length,
+            Hash(coreModel),
+            ExpectedCoreRow80Sha256,
+            pageDescriptors.Count,
+            pageDescriptors.Sum(item => item.ByteLength),
+            pageMapSha256,
+            desiredLeaves.Count,
+            leafMapSha256,
+            readbackSha256,
+            capacitySha256);
+
+    private static string HashCore4DesiredProjection(Id65SupportDesiredStateProjection value) =>
+        HashCore4DesiredProjection(
+            value.LockedRow80Sha256,
+            value.TextureWitnessSha256,
+            value.TextureProjectionSha256,
+            value.CoreManifestSha256,
+            value.CoreModelByteLength,
+            value.CoreModelSha256,
+            value.CoreRow80CrossCheckSha256,
+            value.TexturePageDescriptorCount,
+            value.TexturePageChangedByteCount,
+            value.TexturePageDescriptorMapSha256,
+            value.DesiredLeaves.Count,
+            value.DesiredLeafMapSha256,
+            value.ReadbackSha256,
+            value.CapacitySha256);
+
+    private static string HashCore4DesiredProjection(
+        string lockedRow80Sha256,
+        string textureWitnessSha256,
+        string textureProjectionSha256,
+        string coreManifestSha256,
+        int coreModelByteLength,
+        string coreModelSha256,
+        string coreRow80CrossCheckSha256,
+        int pageDescriptorCount,
+        int pageChangedByteCount,
+        string pageMapSha256,
+        int desiredLeafCount,
+        string leafMapSha256,
+        string readbackSha256,
+        string capacitySha256)
+    {
+        StringBuilder text = new();
+        text.AppendLine(DesiredProjectionProfileId)
+            .AppendLine(lockedRow80Sha256)
+            .AppendLine(textureWitnessSha256)
+            .AppendLine(textureProjectionSha256)
+            .AppendLine(coreManifestSha256)
+            .Append(coreModelByteLength).Append('|').Append(coreModelSha256).Append('\n')
+            .AppendLine(coreRow80CrossCheckSha256)
+            .Append(pageDescriptorCount).Append('|').Append(pageChangedByteCount).Append('|')
+            .Append(pageMapSha256).Append('\n')
+            .Append(desiredLeafCount).Append('|').Append(leafMapSha256).Append('\n')
+            .AppendLine(readbackSha256)
+            .AppendLine(capacitySha256)
+            .AppendLine("direct-locked=1|full-row=0|compiled=0|stacking=0|plan=0|path=0")
+            .AppendLine("fs=0|bin=0|cue=0|writer=0|app=0|create-bin=0|normal-create-bin=0")
+            .AppendLine("runtime-candidate=0|runtime=0|release=0|promotion=0|publishable=0")
+            .AppendLine("executable-mutation-excluded=1|full8-excluded=1");
+        return Hash(Encoding.UTF8.GetBytes(text.ToString()));
+    }
+
+    private static void ValidateCore4DesiredProjection(Id65SupportDesiredStateProjection value)
+    {
+        byte[] model = value.CopyCoreModel();
+        IReadOnlyList<Id65V2NativeTexturePagePatch> pages = value.CopyTexturePageDescriptors();
+        IReadOnlyList<Id65SupportDesiredLeaf> leaves = value.CopyDesiredLeaves();
+        if (value.ProfileId != DesiredProjectionProfileId || value.Kind != Id65SupportProfileKind.Core4 ||
+            !HashEquals(value.LockedRow80Sha256, ExpectedLockedRow80Sha256) ||
+            !HashEquals(value.TextureWitnessSha256,
+                Id65V2NativeTextureCompositionCompiler.ExpectedWitnessSha256) ||
+            !HashEquals(value.TextureProjectionSha256, ExpectedTextureProjectionSha256) ||
+            !HashEquals(value.CoreManifestSha256, ExpectedCoreManifestSha256) ||
+            model.Length != ModelLength || !HashEquals(Hash(model), ExpectedCoreModelSha256) ||
+            !HashEquals(value.CoreModelSha256, ExpectedCoreModelSha256) ||
+            !HashEquals(value.CoreRow80CrossCheckSha256, ExpectedCoreRow80Sha256) ||
+            pages.Count != ExpectedTexturePagePatchCount ||
+            pages.Sum(item => item.ByteLength) != ExpectedTexturePageChangedByteCount ||
+            value.TexturePageDescriptorCount != ExpectedTexturePagePatchCount ||
+            value.TexturePageChangedByteCount != ExpectedTexturePageChangedByteCount ||
+            !HashEquals(HashTexturePageDescriptors(pages), value.TexturePageDescriptorMapSha256) ||
+            !HashEquals(HashDesiredLeaves(leaves), value.DesiredLeafMapSha256) ||
+            !HashEquals(HashDesiredReadback(value.Readback), value.ReadbackSha256) ||
+            !HashEquals(HashDesiredCapacity(value.Capacity), value.CapacitySha256) ||
+            !HashEquals(HashCore4DesiredProjection(value), value.CanonicalSha256) ||
+            !value.DirectLockedSourceDerived || value.ContainsFullAuthoredRow80 ||
+            value.ContainsCompiledAfterimage || value.AfterimageStackingAuthorized ||
+            value.ContainsSlicePlan || value.ContainsPath || value.WritesFileSystem ||
+            value.WritesDiscImage || value.WritesCue || value.PublisherCalled ||
+            value.WriterAuthorized || value.AppIntegrated || value.CreateBinEnabled ||
+            value.NormalCreateBinEnabled || value.RuntimeCandidateAuthorized || value.RuntimeAccepted ||
+            value.ReleaseIntegrated || value.PromotionAuthorized || value.Publishable ||
+            !value.ExecutableMutationExcluded || !value.Full8Excluded)
+            throw new InvalidDataException("The direct Core4 desired-state projection identity changed.");
+
+        for (int index = 0; index < pages.Count; index++)
+        {
+            Id65V2NativeTexturePagePatch page = pages[index];
+            if (page.ByteLength <= 0 || page.RelativeOffset < 0 ||
+                page.RelativeOffset + (long)page.ByteLength > TexturePagesLength ||
+                page.Owner != "terrain-texture-global-repack-data" ||
+                !HashEquals(Hash(page.CopyBefore()), page.BeforeSha256) ||
+                !HashEquals(Hash(page.CopyAfter()), page.AfterSha256) ||
+                index > 0 && pages[index - 1].RelativeOffset + pages[index - 1].ByteLength >
+                    page.RelativeOffset)
+                throw new InvalidDataException("A Core4 desired T66 page descriptor changed.");
+        }
+
+        if (leaves.Count != 2 || leaves.Select(item => item.StableId).Distinct(StringComparer.Ordinal).Count() != 2 ||
+            leaves.Any(item => string.IsNullOrWhiteSpace(item.StableId) || item.DataRelativeOffset < 0 ||
+                item.DataRelativeOffset + (long)item.ByteLength > Row80ByteLength) ||
+            leaves.OrderBy(item => item.DataRelativeOffset).Zip(
+                leaves.OrderBy(item => item.DataRelativeOffset).Skip(1),
+                (left, right) => left.DataRelativeOffset + left.ByteLength > right.DataRelativeOffset).Any(overlap => overlap))
+            throw new InvalidDataException("The Core4 desired leaf ownership map changed.");
+
+        byte[] lockedPlacement = Convert.FromHexString("29E901009A880100");
+        byte[] desiredPlacement = Convert.FromHexString("091800000A180000");
+        (string Id, Id65LogicalAddress Address, int Offset)[] expectedLeaves =
+        [
+            ("spawn.remote-pad", new Id65LogicalAddress("landing-record", 0, 0), LandingOffset),
+            ("moby.player-anchor.t92", new Id65LogicalAddress("moby-row", 92, 0), T92XyOffset)
+        ];
+        for (int index = 0; index < expectedLeaves.Length; index++)
+        {
+            Id65SupportDesiredLeaf leaf = leaves[index];
+            (string id, Id65LogicalAddress address, int offset) = expectedLeaves[index];
+            if (leaf.StableId != id || leaf.LogicalAddress != address || leaf.DataRelativeOffset != offset ||
+                leaf.ByteLength != 8 || !leaf.CopyLockedPreimage().SequenceEqual(lockedPlacement) ||
+                !leaf.CopyDesiredBytes().SequenceEqual(desiredPlacement) ||
+                !HashEquals(Hash(leaf.CopyLockedPreimage()), leaf.LockedPreimageSha256) ||
+                !HashEquals(Hash(leaf.CopyDesiredBytes()), leaf.DesiredSha256))
+                throw new InvalidDataException($"The Core4 desired leaf `{id}` changed.");
+        }
+
+        Id65AuthoringSupportManifest empty = BuildExpectedManifest(Id65SupportProfileKind.Empty);
+        Id65AuthoringSupportManifest core = BuildExpectedManifest(Id65SupportProfileKind.Core4);
+        if (value.Capacity != BuildCapacity(empty, core) ||
+            value.Readback.Kind != Id65SupportProfileKind.Core4 ||
+            !HashEquals(value.Readback.Row80Sha256, ExpectedCoreRow80Sha256) ||
+            !HashEquals(value.Readback.ModelSha256, ExpectedCoreModelSha256) ||
+            value.Readback.SectorCount != 4 || value.Readback.CollisionTriangleCount != CollisionTriangleCount ||
+            value.Readback.ActiveCollisionCellCount != 16 ||
+            value.Readback.CollisionBlocksUsedBytes != 0x82 || value.Readback.RuntimeAccepted)
+            throw new InvalidDataException("The Core4 desired readback or capacity changed.");
+
+        RequireDesiredProjectionPin(value.TexturePageDescriptorMapSha256,
+            ExpectedCoreDesiredPageDescriptorMapSha256, "Core4 desired T66 page descriptor map");
+        RequireDesiredProjectionPin(value.DesiredLeafMapSha256,
+            ExpectedCoreDesiredLeafMapSha256, "Core4 desired leaf map");
+        RequireDesiredProjectionPin(value.ReadbackSha256,
+            ExpectedCoreDesiredReadbackSha256, "Core4 desired readback");
+        RequireDesiredProjectionPin(value.CapacitySha256,
+            ExpectedCoreDesiredCapacitySha256, "Core4 desired capacity");
+        RequireDesiredProjectionPin(value.CanonicalSha256,
+            ExpectedCoreDesiredProjectionSha256, "Core4 desired projection canonical");
+    }
+
+    private static void RequireDesiredProjectionPin(string actual, string expected, string label)
+        => RequireHash(actual, expected, label);
 
     private static byte[] BuildTextureComponent(
         byte[] lockedModel,
