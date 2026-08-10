@@ -38,5 +38,6 @@
     <InternalsVisibleTo Include="Spyro.Editor.Id65V2NativeTextureCompositionCompilerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringMobyDependencyBundleCompilerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringCompositeCompilerSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65RewardCensusContractSmoke" />
   </ItemGroup>
 </Project>
