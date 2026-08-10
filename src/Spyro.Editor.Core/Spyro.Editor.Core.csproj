@@ -14,5 +14,8 @@
     <InternalsVisibleTo Include="Spyro.Editor.StoneHillLevelReplacementBaselineSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65BlankLevelLabSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65FullAuthoringFoundationRuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65NativeTextureAuthoringSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65StandaloneBehaviorOwnershipSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65MobyDependencyBundleSmoke" />
   </ItemGroup>
 </Project>
