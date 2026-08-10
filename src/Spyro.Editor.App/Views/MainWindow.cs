@@ -154,12 +154,19 @@ public sealed partial class MainWindow : Window
     private readonly CheckBox _skyboxEnvironmentChestBox = new() { Content = "Chests", IsVisible = NativeEnvironmentGradePlan.SupportsScopedObjectPaletteMatching };
     private readonly CheckBox _skyboxEnvironmentSceneryBox = new() { Content = "Scenery", IsVisible = NativeEnvironmentGradePlan.SupportsScopedObjectPaletteMatching };
     private readonly CheckBox _skyboxEnvironmentDragonBox = new() { Content = "Dragons and pedestals", IsVisible = NativeEnvironmentGradePlan.SupportsScopedObjectPaletteMatching };
+    private Button? _skyboxPaletteImportButton;
+    private Button? _skyboxCustomImportButton;
     private Button? _skyboxMatchEnvironmentButton;
+    private Button? _skyboxSaveButton;
+    private Button? _skyboxCreateTestButton;
+    private Button? _skyboxResetButton;
     private readonly TextBox _skyboxDiscImagePathBox = new();
     private readonly TextBox _skyboxWadAnalysisPathBox = new();
     private readonly TextBlock _levelTextDetails = new();
     private readonly ComboBox _levelTextTargetBox = new();
     private readonly TextBox _levelTextReplacementBox = new();
+    private Button? _levelTextSaveButton;
+    private Button? _levelTextResetButton;
     private readonly TextBlock _levelMusicDetails = new();
     private readonly ComboBox _levelMusicTrackBox = new();
     private Button? _levelMusicSaveButton;
@@ -1374,7 +1381,8 @@ public sealed partial class MainWindow : Window
 
         _skyboxPalettePanel.Children.Add(new TextBlock { Text = "Palette", FontWeight = FontWeight.SemiBold });
         _skyboxPalettePanel.Children.Add(_skyboxPresetBox);
-        _skyboxPalettePanel.Children.Add(NewAsyncButton("Import Colors From PNG", async () => await ChooseSkyPaletteImageAsync()));
+        _skyboxPaletteImportButton = NewAsyncButton("Import Colors From PNG", async () => await ChooseSkyPaletteImageAsync());
+        _skyboxPalettePanel.Children.Add(_skyboxPaletteImportButton);
         _skyboxCustomPalettePanel.Children.Add(new TextBlock { Text = "Custom colors", FontWeight = FontWeight.SemiBold });
         _skyboxCustomPalettePanel.Children.Add(_skyboxCustomPaletteBox);
         _skyboxPalettePanel.Children.Add(_skyboxCustomPalettePanel);
@@ -1437,17 +1445,22 @@ public sealed partial class MainWindow : Window
         });
 
         _skyboxImportPanel.Children.Add(_skyboxImportPathBox);
-        _skyboxImportPanel.Children.Add(NewAsyncButton("Choose .sky", async () => await ChooseCustomSkyAsync()));
+        _skyboxCustomImportButton = NewAsyncButton("Choose .sky", async () => await ChooseCustomSkyAsync());
+        _skyboxImportPanel.Children.Add(_skyboxCustomImportButton);
 
         WrapPanel buttons = new() { Orientation = Orientation.Horizontal };
-        buttons.Children.Add(NewAsyncButton(_releaseMode ? "Save Changes" : "Save Skybox", async () => { await SaveSkyboxPlanAsync(); }));
+        _skyboxSaveButton = NewAsyncButton(_releaseMode ? "Save Changes" : "Save Skybox", async () => { await SaveSkyboxPlanAsync(); });
+        buttons.Children.Add(_skyboxSaveButton);
         if (!_releaseMode)
-            buttons.Children.Add(NewAsyncButton("Create Sky Test", async () => await CreateSkyboxCueAsync()));
-        Button resetButton = NewButton("Reset to Normal Level Palette and Skybox", ResetSkyboxPlan);
-        resetButton.HorizontalAlignment = HorizontalAlignment.Stretch;
-        resetButton.HorizontalContentAlignment = HorizontalAlignment.Center;
-        resetButton.MinHeight = 40;
-        resetButton.FontSize = 12;
+        {
+            _skyboxCreateTestButton = NewAsyncButton("Create Sky Test", async () => await CreateSkyboxCueAsync());
+            buttons.Children.Add(_skyboxCreateTestButton);
+        }
+        _skyboxResetButton = NewButton("Reset to Normal Level Palette and Skybox", ResetSkyboxPlan);
+        _skyboxResetButton.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _skyboxResetButton.HorizontalContentAlignment = HorizontalAlignment.Center;
+        _skyboxResetButton.MinHeight = 40;
+        _skyboxResetButton.FontSize = 12;
 
         panel.Children.Add(_skyboxDetails);
         panel.Children.Add(_skyboxModeBox);
@@ -1456,7 +1469,7 @@ public sealed partial class MainWindow : Window
         panel.Children.Add(_skyboxOriginalPresetPanel);
         panel.Children.Add(_skyboxImportPanel);
         panel.Children.Add(buttons);
-        panel.Children.Add(resetButton);
+        panel.Children.Add(_skyboxResetButton);
         RefreshOriginalSkyPresetPreview();
         RefreshSkyboxModeControls();
         return panel;
@@ -1628,8 +1641,10 @@ public sealed partial class MainWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 6
         };
-        buttons.Children.Add(NewAsyncButton("Save Name", async () => await SaveLevelTextPlanAsync()));
-        buttons.Children.Add(NewButton("Reset", ResetLevelTextPlan));
+        _levelTextSaveButton = NewAsyncButton("Save Name", async () => await SaveLevelTextPlanAsync());
+        _levelTextResetButton = NewButton("Reset", ResetLevelTextPlan);
+        buttons.Children.Add(_levelTextSaveButton);
+        buttons.Children.Add(_levelTextResetButton);
 
         panel.Children.Add(_levelTextTargetBox);
         panel.Children.Add(_levelTextDetails);
@@ -9689,6 +9704,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateLevelToolPanels(LevelDefinition level)
     {
+        bool id65Unavailable = UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level);
         _activeEnvironmentGradeMatch = null;
         _viewport.SetEnvironmentGradePreview(null);
         _syncingSkyboxControls = true;
@@ -9705,21 +9721,26 @@ public sealed partial class MainWindow : Window
                 .ToList();
             _skyboxDonorBox.ItemsSource = donors;
             _skyboxDonorBox.SelectedItem = donors.FirstOrDefault();
-            LoadSavedSkyboxPlan(level);
+            if (!id65Unavailable)
+                LoadSavedSkyboxPlan(level);
         }
         finally
         {
             _syncingSkyboxControls = false;
         }
         RefreshSkyboxModeControls();
-        _ = RefreshSavedEnvironmentGradePreviewAsync(level, _levelLoadRequestId);
+        if (!id65Unavailable)
+            _ = RefreshSavedEnvironmentGradePreviewAsync(level, _levelLoadRequestId);
 
         bool isHomeWorld = IsHomeWorld(level);
         if (_homeworldTextGroup != null)
             _homeworldTextGroup.IsVisible = isHomeWorld;
 
-        _levelTextTargetBox.SelectedItem = _textTargets.FindForLevel(level) ?? _textTargets.Targets.FirstOrDefault();
+        _levelTextTargetBox.SelectedItem = id65Unavailable
+            ? null
+            : _textTargets.FindForLevel(level) ?? _textTargets.Targets.FirstOrDefault();
         RefreshLevelTextTargetEditor();
+        RefreshId65SkyAndNameAvailability(level);
         RefreshLevelMusicEditor(level);
         RefreshPortalControlPanel();
         RefreshNativeLevelReplacementPanel();
@@ -9727,6 +9748,15 @@ public sealed partial class MainWindow : Window
 
     private void RefreshLevelTextTargetEditor()
     {
+        if (IsCurrentId65BlankLab())
+        {
+            _levelTextDetails.Text =
+                "ID65 Blank-Level Lab level-name editing is unavailable in this profile. " +
+                "The locked TOWN SQUARE Inventory identity remains unchanged; no retail Town Square name plan is loaded or changed.";
+            _levelTextReplacementBox.Text = "";
+            return;
+        }
+
         if (_levelTextTargetBox.SelectedItem is not TextTargetEntry target)
         {
             _levelTextDetails.Text = "No level-name slot selected.";
@@ -9972,6 +10002,15 @@ public sealed partial class MainWindow : Window
 
     private void LoadSavedSkyboxPlan(LevelDefinition level)
     {
+        if (UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level))
+        {
+            _activeEnvironmentGradeMatch = null;
+            _viewport.SetEnvironmentGradePreview(null);
+            SetEnvironmentGradeControls(NativeEnvironmentGradePlan.Disabled);
+            RefreshSkyboxDetails(level, null);
+            return;
+        }
+
         NativeSkyEditPlan? saved = NativeSkyEditStore.Load(_workspace.RootPath, level);
         if (saved != null)
         {
@@ -10016,6 +10055,77 @@ public sealed partial class MainWindow : Window
         else
             ApplyEnvironmentGradePreviewFromControls();
         RefreshEnvironmentGradeDetails();
+        RefreshId65SkyAndNameAvailability(_currentLevel);
+    }
+
+    private void RefreshId65SkyAndNameAvailability(LevelDefinition? level)
+    {
+        bool unavailable = UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level);
+        bool enabled = !unavailable;
+
+        _skyboxModeBox.IsEnabled = enabled;
+        _skyboxPresetBox.IsEnabled = enabled;
+        _skyboxOriginalPresetBox.IsEnabled = enabled;
+        _skyboxCustomPaletteBox.IsEnabled = enabled;
+        _skyboxDonorBox.IsEnabled = enabled;
+        _skyboxImportPathBox.IsEnabled = enabled;
+        _skyboxPalettePanel.IsEnabled = enabled;
+        _skyboxSwapPanel.IsEnabled = enabled;
+        _skyboxOriginalPresetPanel.IsEnabled = enabled;
+        _skyboxImportPanel.IsEnabled = enabled;
+        _skyboxEnvironmentEnabledBox.IsEnabled = enabled;
+        _skyboxEnvironmentStrengthSlider.IsEnabled = enabled;
+        _skyboxEnvironmentBrightnessSlider.IsEnabled = enabled;
+        _skyboxEnvironmentSaturationSlider.IsEnabled = enabled;
+        _skyboxEnvironmentTintStrengthSlider.IsEnabled = enabled;
+        _skyboxEnvironmentTintBox.IsEnabled = enabled;
+        _skyboxEnvironmentSceneBox.IsEnabled = enabled;
+        _skyboxEnvironmentTextureBox.IsEnabled = enabled;
+        _skyboxEnvironmentMobyBox.IsEnabled = enabled;
+        _skyboxEnvironmentActorBox.IsEnabled = enabled;
+        _skyboxEnvironmentChestBox.IsEnabled = enabled;
+        _skyboxEnvironmentSceneryBox.IsEnabled = enabled;
+        _skyboxEnvironmentDragonBox.IsEnabled = enabled;
+        if (_skyboxPaletteImportButton != null)
+            _skyboxPaletteImportButton.IsEnabled = enabled;
+        if (_skyboxCustomImportButton != null)
+            _skyboxCustomImportButton.IsEnabled = enabled;
+        if (_skyboxMatchEnvironmentButton != null)
+        {
+            string mode = (_skyboxModeBox.SelectedItem as SkyboxEditModeOption)?.Id ?? NativeSkyEditPlan.PaletteMode;
+            _skyboxMatchEnvironmentButton.IsEnabled = enabled &&
+                string.Equals(mode, NativeSkyEditPlan.SwapMode, StringComparison.OrdinalIgnoreCase) &&
+                _skyboxDonorBox.SelectedItem is LevelDefinition;
+        }
+        if (_skyboxSaveButton != null)
+            _skyboxSaveButton.IsEnabled = enabled;
+        if (_skyboxCreateTestButton != null)
+            _skyboxCreateTestButton.IsEnabled = enabled;
+        if (_skyboxResetButton != null)
+            _skyboxResetButton.IsEnabled = enabled;
+
+        _levelTextTargetBox.IsEnabled = enabled;
+        _levelTextReplacementBox.IsEnabled = enabled;
+        if (_levelTextSaveButton != null)
+            _levelTextSaveButton.IsEnabled = enabled;
+        if (_levelTextResetButton != null)
+            _levelTextResetButton.IsEnabled = enabled;
+
+        if (!unavailable)
+            return;
+
+        _activeEnvironmentGradeMatch = null;
+        _viewport.SetEnvironmentGradePreview(null);
+        _skyboxDetails.Text =
+            "ID65 Blank-Level Lab sky editing is unavailable in this profile. " +
+            "Disposable test CUEs preserve the locked-base sky; no ID65 sky plan is loaded or included by normal Create BIN.";
+        _skyboxEnvironmentPreviewWarning.IsVisible = false;
+        _skyboxEnvironmentPreviewWarningText.Text = "";
+        _skyboxEnvironmentDetails.Text =
+            "ID65 Blank-Level Lab environment and sky matching are unavailable; the locked-base sky and lighting remain unchanged.";
+        _levelTextDetails.Text =
+            "ID65 Blank-Level Lab level-name editing is unavailable in this profile. " +
+            "The locked TOWN SQUARE Inventory identity remains unchanged; no retail Town Square name plan is loaded or changed.";
     }
 
     private void RefreshOriginalSkyPresetPreview()
@@ -10036,6 +10146,14 @@ public sealed partial class MainWindow : Window
 
     private void RefreshSkyboxDetails(LevelDefinition level, NativeSkyEditPlan? saved)
     {
+        if (UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level))
+        {
+            _skyboxDetails.Text =
+                "ID65 Blank-Level Lab sky editing is unavailable in this profile. " +
+                "Disposable test CUEs preserve the locked-base sky; no ID65 sky plan is loaded or included by normal Create BIN.";
+            return;
+        }
+
         Spyro1LevelSkyBlockLayout? layout = _nativeSkyReport?.Levels.FirstOrDefault(candidate =>
             string.Equals(LevelCatalog.NormalizeKey(candidate.Key), LevelCatalog.NormalizeKey(level.Key), StringComparison.OrdinalIgnoreCase));
         string nativeStatus;
@@ -10090,6 +10208,9 @@ public sealed partial class MainWindow : Window
 
     private async Task MatchLevelTerrainPaletteAsync()
     {
+        if (TryBlockId65SkyMutation("environment matching"))
+            return;
+
         if (_currentLevel == null || _skyboxDonorBox.SelectedItem is not LevelDefinition donor)
         {
             _statusText.Text = "Choose a level and a sky source first.";
@@ -10172,6 +10293,15 @@ public sealed partial class MainWindow : Window
 
     private void RefreshEnvironmentGradeDetails()
     {
+        if (IsCurrentId65BlankLab())
+        {
+            _skyboxEnvironmentPreviewWarning.IsVisible = false;
+            _skyboxEnvironmentPreviewWarningText.Text = "";
+            _skyboxEnvironmentDetails.Text =
+                "ID65 Blank-Level Lab environment and sky matching are unavailable; the locked-base sky and lighting remain unchanged.";
+            return;
+        }
+
         if (_skyboxDonorBox.SelectedItem is not LevelDefinition donor)
         {
             _skyboxEnvironmentPreviewWarning.IsVisible = false;
@@ -10254,6 +10384,13 @@ public sealed partial class MainWindow : Window
 
     private void ApplyEnvironmentGradePreviewFromControls()
     {
+        if (IsCurrentId65BlankLab())
+        {
+            _activeEnvironmentGradeMatch = null;
+            _viewport.SetEnvironmentGradePreview(null);
+            return;
+        }
+
         if (_activeEnvironmentGradeMatch == null || _skyboxDonorBox.SelectedItem is not LevelDefinition donor ||
             _skyboxEnvironmentEnabledBox.IsChecked != true)
         {
@@ -10279,6 +10416,9 @@ public sealed partial class MainWindow : Window
     {
         _activeEnvironmentGradeMatch = null;
         _viewport.SetEnvironmentGradePreview(null);
+        if (UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level))
+            return;
+
         NativeSkyEditPlan? saved = NativeSkyEditStore.Load(_workspace.RootPath, level);
         if (saved?.EnvironmentGrade.Enabled != true || !saved.IsSwap)
             return;
@@ -10311,6 +10451,9 @@ public sealed partial class MainWindow : Window
 
     private async Task ChooseSkyPaletteImageAsync()
     {
+        if (TryBlockId65SkyMutation("palette import"))
+            return;
+
         if (_currentLevel == null)
         {
             _statusText.Text = "Choose a level before importing sky colors.";
@@ -10363,6 +10506,9 @@ public sealed partial class MainWindow : Window
 
     private async Task ChooseCustomSkyAsync()
     {
+        if (TryBlockId65SkyMutation("custom sky import"))
+            return;
+
         if (_currentLevel == null)
         {
             _statusText.Text = "Choose a level before importing a sky.";
@@ -10492,6 +10638,9 @@ public sealed partial class MainWindow : Window
 
     private async Task<bool> SaveSkyboxPlanAsync()
     {
+        if (TryBlockId65SkyMutation("save"))
+            return false;
+
         if (_currentLevel == null)
         {
             _statusText.Text = "Choose a level before saving a skybox plan.";
@@ -10662,6 +10811,9 @@ public sealed partial class MainWindow : Window
 
     private void ResetSkyboxPlan()
     {
+        if (TryBlockId65SkyMutation("reset"))
+            return;
+
         if (_currentLevel == null)
             return;
 
@@ -10692,6 +10844,9 @@ public sealed partial class MainWindow : Window
 
     private async Task CreateSkyboxCueAsync()
     {
+        if (TryBlockId65SkyMutation("test CUE creation"))
+            return;
+
         if (_currentLevel == null)
         {
             _statusText.Text = "Choose a level before creating a skybox test.";
@@ -10776,6 +10931,9 @@ public sealed partial class MainWindow : Window
 
     private async Task SaveLevelTextPlanAsync()
     {
+        if (TryBlockId65LevelNameMutation("save"))
+            return;
+
         if (_levelTextTargetBox.SelectedItem is not TextTargetEntry target)
         {
             _statusText.Text = "Choose a level name first.";
@@ -10798,6 +10956,9 @@ public sealed partial class MainWindow : Window
 
     private void ResetLevelTextPlan()
     {
+        if (TryBlockId65LevelNameMutation("reset"))
+            return;
+
         if (_levelTextTargetBox.SelectedItem is not TextTargetEntry target)
         {
             _statusText.Text = "Choose a level name first.";

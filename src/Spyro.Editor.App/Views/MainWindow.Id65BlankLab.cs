@@ -12,6 +12,8 @@ using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Music;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
+using Spyro.Editor.Core.Skyboxes;
+using Spyro.Editor.Core.Text;
 
 namespace Spyro.Editor.App.Views;
 
@@ -761,6 +763,11 @@ public sealed partial class MainWindow
             reason = "Portable cross-level terrain textures need a proved ID65 destination profile.";
             return true;
         }
+        if (File.Exists(NativeSkyEditStore.PlanPath(_workspace.RootPath, key)))
+        {
+            reason = "Skybox editing is unavailable for this profile; remove the unsupported ID65 skybox plan.";
+            return true;
+        }
 
         reason = "";
         return false;
@@ -775,6 +782,7 @@ public sealed partial class MainWindow
             NativeEditFileHasEdits(NativeMobyPathEditPath(key)) ||
             CustomTerrainTextureFileHasTextures(CustomTerrainTextureStore.ManifestPath(_workspace.RootPath, key)) ||
             File.Exists(NativeTerrainTextureRelocationEditStore.ManifestPath(_workspace.RootPath, key)) ||
+            File.Exists(NativeSkyEditStore.PlanPath(_workspace.RootPath, key)) ||
             (_id65BlankLabPaths != null && Directory.Exists(_id65BlankLabPaths.AuthoredEditsDirectoryPath) &&
              Directory.EnumerateFiles(_id65BlankLabPaths.AuthoredEditsDirectoryPath, "*", SearchOption.AllDirectories)
                  .Any(path => !string.Equals(
@@ -853,6 +861,28 @@ public sealed partial class MainWindow
 
         _statusText.Text =
             $"ID65 Lab blocked {action}: resident Mobys and native movement records are inspection-only in this profile.";
+        return true;
+    }
+
+    private bool TryBlockId65SkyMutation(string action)
+    {
+        if (!IsCurrentId65BlankLab())
+            return false;
+
+        _statusText.Text =
+            $"ID65 Lab sky {action} refused: sky editing is unavailable in this profile. " +
+            "The locked-base sky remains unchanged; no ID65 sky plan or test CUE was changed, and normal Create BIN does not include ID65.";
+        return true;
+    }
+
+    private bool TryBlockId65LevelNameMutation(string action)
+    {
+        if (!IsCurrentId65BlankLab())
+            return false;
+
+        _statusText.Text =
+            $"ID65 Lab level-name {action} refused: level-name editing is unavailable in this profile. " +
+            "The locked TOWN SQUARE Inventory identity and retail Town Square name plan remain unchanged; normal Create BIN does not include ID65.";
         return true;
     }
 
@@ -1037,6 +1067,10 @@ public sealed partial class MainWindow
         string musicPlanPath = LevelMusicEditStore.PlanPath(
             _workspace.RootPath,
             UnusedLevel65BlankLevelLabProfileRegistry.Definition);
+        string skyPlanPath = NativeSkyEditStore.PlanPath(_workspace.RootPath, labKey);
+        TextTargetEntry townSquareTextTarget = _textTargets.Find("townsquare")
+            ?? throw new InvalidOperationException("The ID65 mutation-boundary probe found no Town Square name target.");
+        string townSquareNamePlanPath = LevelTextEditStore.PlanPath(_workspace.RootPath, townSquareTextTarget);
         string[] guardedMutationPaths =
         [
             objectEditsPath,
@@ -1044,7 +1078,9 @@ public sealed partial class MainWindow
             materialOverridesPath,
             customTexturesPath,
             nativeRelocationsPath,
-            musicPlanPath
+            musicPlanPath,
+            skyPlanPath,
+            townSquareNamePlanPath
         ];
         Dictionary<string, byte[]?> guardedMutationFilesBefore = guardedMutationPaths.ToDictionary(
             path => path,
@@ -1055,13 +1091,78 @@ public sealed partial class MainWindow
         string originalNativeRelocationState = JsonSerializer.Serialize(_nativeTerrainTextureRelocations);
         TerrainTexturePaintStageSnapshot originalHpPaintState = TerrainTexturePaintStageSnapshot.Capture(hp);
 
+        void RestoreGuardedMutationFile(string path)
+        {
+            byte[]? contents = guardedMutationFilesBefore[path];
+            if (contents == null)
+            {
+                if (File.Exists(path))
+                    File.Delete(path);
+                return;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? _workspace.RootPath);
+            File.WriteAllBytes(path, contents);
+        }
+
+        string CaptureSkyAndNameState() => JsonSerializer.Serialize(new
+        {
+            Mode = (_skyboxModeBox.SelectedItem as SkyboxEditModeOption)?.Id,
+            Preset = (_skyboxPresetBox.SelectedItem as SkyboxPreset)?.Id,
+            OriginalPreset = (_skyboxOriginalPresetBox.SelectedItem as OriginalSkyboxPreset)?.Id,
+            CustomPalette = _skyboxCustomPaletteBox.Text,
+            Donor = (_skyboxDonorBox.SelectedItem as LevelDefinition)?.Key,
+            ImportPath = _skyboxImportPathBox.Text,
+            EnvironmentEnabled = _skyboxEnvironmentEnabledBox.IsChecked,
+            EnvironmentStrength = _skyboxEnvironmentStrengthSlider.Value,
+            EnvironmentBrightness = _skyboxEnvironmentBrightnessSlider.Value,
+            EnvironmentSaturation = _skyboxEnvironmentSaturationSlider.Value,
+            EnvironmentTint = _skyboxEnvironmentTintBox.Text,
+            EnvironmentTintStrength = _skyboxEnvironmentTintStrengthSlider.Value,
+            EnvironmentScene = _skyboxEnvironmentSceneBox.IsChecked,
+            EnvironmentTextures = _skyboxEnvironmentTextureBox.IsChecked,
+            EnvironmentMobys = _skyboxEnvironmentMobyBox.IsChecked,
+            NameTarget = (_levelTextTargetBox.SelectedItem as TextTargetEntry)?.LevelKey,
+            NameReplacement = _levelTextReplacementBox.Text,
+            SkyDetails = _skyboxDetails.Text,
+            NameDetails = _levelTextDetails.Text
+        });
+
+        void AssertRefusalStatus(string operation, params string[] required)
+        {
+            string status = _statusText.Text ?? "";
+            if (required.Any(term => !status.Contains(term, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException(
+                    $"The ID65 {operation} refusal status was not truthful: {status}");
+            }
+        }
+
         try
         {
+            await NativeSkyEditStore.SaveAsync(_workspace.RootPath, new NativeSkyEditPlan(
+                Version: 2,
+                SavedAt: DateTimeOffset.UtcNow,
+                LevelKey: labKey,
+                LevelName: UnusedLevel65BlankLevelLabProfileRegistry.Definition.DisplayName,
+                Mode: NativeSkyEditPlan.SwapMode,
+                PalettePreset: SkyboxPresetCatalog.NativeDefault.Id,
+                CustomPaletteHex: "",
+                DonorLevelKey: originalLevel.Key,
+                ImportedSkyPath: "",
+                ImportedSkySha256: ""));
+            await LevelTextEditStore.SaveAsync(_workspace.RootPath, townSquareTextTarget, "TOWN PLAZA");
+            byte[] skyFixtureBytes = File.ReadAllBytes(skyPlanPath);
+            byte[] nameFixtureBytes = File.ReadAllBytes(townSquareNamePlanPath);
+            Id65BlankLabAuthoredLayerSnapshot outputBefore =
+                await CaptureId65BlankLabAuthoredLayerAsync(Path.Combine(_workspace.RootPath, "output"));
+
             _mobyClipboard = MobyClipboard.From(moby, originalLevel, terrainGroundOffset: null);
             _selectedMoby = moby;
             _selectedTerrain = hp;
             _selectedTerrainIndex = hpIndex;
             _currentLevel = UnusedLevel65BlankLevelLabProfileRegistry.Definition;
+            UpdateLevelToolPanels(_currentLevel);
 
             _viewport.ObjectPlacementMode = true;
             _viewport.TerrainTexturePaintMode = true;
@@ -1075,6 +1176,121 @@ public sealed partial class MainWindow
             {
                 throw new InvalidOperationException("Loading ID65 did not reset every incompatible placement/paint/seam mode.");
             }
+
+            if (_skyboxModeBox.IsEnabled ||
+                _skyboxPresetBox.IsEnabled ||
+                _skyboxOriginalPresetBox.IsEnabled ||
+                _skyboxCustomPaletteBox.IsEnabled ||
+                _skyboxDonorBox.IsEnabled ||
+                _skyboxImportPathBox.IsEnabled ||
+                _skyboxPalettePanel.IsEnabled ||
+                _skyboxSwapPanel.IsEnabled ||
+                _skyboxOriginalPresetPanel.IsEnabled ||
+                _skyboxImportPanel.IsEnabled ||
+                _skyboxEnvironmentEnabledBox.IsEnabled ||
+                _skyboxEnvironmentStrengthSlider.IsEnabled ||
+                _skyboxEnvironmentBrightnessSlider.IsEnabled ||
+                _skyboxEnvironmentSaturationSlider.IsEnabled ||
+                _skyboxEnvironmentTintStrengthSlider.IsEnabled ||
+                _skyboxEnvironmentTintBox.IsEnabled ||
+                _skyboxEnvironmentSceneBox.IsEnabled ||
+                _skyboxEnvironmentTextureBox.IsEnabled ||
+                _skyboxEnvironmentMobyBox.IsEnabled ||
+                _skyboxEnvironmentActorBox.IsEnabled ||
+                _skyboxEnvironmentChestBox.IsEnabled ||
+                _skyboxEnvironmentSceneryBox.IsEnabled ||
+                _skyboxEnvironmentDragonBox.IsEnabled ||
+                _skyboxPaletteImportButton == null ||
+                _skyboxPaletteImportButton.IsEnabled ||
+                _skyboxCustomImportButton == null ||
+                _skyboxCustomImportButton.IsEnabled ||
+                _skyboxMatchEnvironmentButton == null ||
+                _skyboxMatchEnvironmentButton.IsEnabled ||
+                _skyboxSaveButton == null ||
+                _skyboxSaveButton.IsEnabled ||
+                _skyboxCreateTestButton?.IsEnabled == true ||
+                _skyboxResetButton == null ||
+                _skyboxResetButton.IsEnabled ||
+                _levelTextTargetBox.IsEnabled ||
+                _levelTextReplacementBox.IsEnabled ||
+                _levelTextSaveButton == null ||
+                _levelTextSaveButton.IsEnabled ||
+                _levelTextResetButton == null ||
+                _levelTextResetButton.IsEnabled)
+            {
+                throw new InvalidOperationException("ID65 left a Skybox or Level Name editing control enabled.");
+            }
+            if ((_skyboxModeBox.SelectedItem as SkyboxEditModeOption)?.Id != NativeSkyEditPlan.PaletteMode ||
+                !string.IsNullOrWhiteSpace(_skyboxCustomPaletteBox.Text) ||
+                _levelTextTargetBox.SelectedItem != null ||
+                !string.IsNullOrEmpty(_levelTextReplacementBox.Text) ||
+                !(_skyboxDetails.Text ?? "").Contains("unavailable", StringComparison.OrdinalIgnoreCase) ||
+                !(_levelTextDetails.Text ?? "").Contains("unavailable", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "ID65 loaded an unsupported saved sky/name target instead of presenting the locked unavailable state.");
+            }
+            if (!TryGetId65BlankLabUnsupportedArtifact(out string skyArtifactReason) ||
+                !skyArtifactReason.Contains("skybox", StringComparison.OrdinalIgnoreCase) ||
+                !Id65BlankLabHasAnyAuthoredArtifacts())
+            {
+                throw new InvalidOperationException(
+                    "The ID65 unsupported-artifact boundary did not recognize its skybox edit plan.");
+            }
+
+            _skyboxModeBox.SelectedItem = SkyboxEditModeOptions.First(option =>
+                option.Id == NativeSkyEditPlan.SwapMode);
+            _skyboxPresetBox.SelectedItem = SkyboxPresetCatalog.NativePresets.Last();
+            _skyboxOriginalPresetBox.SelectedItem = SkyboxPresetCatalog.OriginalPresets.Last();
+            _skyboxCustomPaletteBox.Text = "#010203 #A0B0C0";
+            _skyboxDonorBox.SelectedItem = originalLevel;
+            _skyboxImportPathBox.Text = "blocked-id65-test.sky";
+            _skyboxEnvironmentEnabledBox.IsChecked = true;
+            _skyboxEnvironmentStrengthSlider.Value = 37;
+            _skyboxEnvironmentBrightnessSlider.Value = 83;
+            _skyboxEnvironmentSaturationSlider.Value = 71;
+            _skyboxEnvironmentTintBox.Text = "#112233";
+            _skyboxEnvironmentTintStrengthSlider.Value = 29;
+            _skyboxEnvironmentSceneBox.IsChecked = false;
+            _skyboxEnvironmentTextureBox.IsChecked = false;
+            _skyboxEnvironmentMobyBox.IsChecked = true;
+            _levelTextTargetBox.SelectedItem = townSquareTextTarget;
+            _levelTextReplacementBox.Text = "TOWN PLAZA";
+            string stagedSkyAndNameState = CaptureSkyAndNameState();
+
+            bool skySaved = await SaveSkyboxPlanAsync();
+            if (skySaved)
+                throw new InvalidOperationException("ID65 sky Save reported success for an unavailable capability.");
+            AssertRefusalStatus("sky save", "sky save refused", "unavailable", "locked-base", "normal Create BIN does not include ID65");
+            ResetSkyboxPlan();
+            AssertRefusalStatus("sky reset", "sky reset refused", "unavailable", "locked-base", "normal Create BIN does not include ID65");
+            await CreateSkyboxCueAsync();
+            AssertRefusalStatus("sky test CUE creation", "test CUE creation refused", "unavailable", "locked-base", "normal Create BIN does not include ID65");
+            await MatchLevelTerrainPaletteAsync();
+            AssertRefusalStatus("sky environment match", "environment matching refused", "unavailable", "locked-base");
+            await ChooseSkyPaletteImageAsync();
+            AssertRefusalStatus("sky palette import", "palette import refused", "unavailable", "locked-base");
+            await ChooseCustomSkyAsync();
+            AssertRefusalStatus("custom sky import", "custom sky import refused", "unavailable", "locked-base");
+            await SaveLevelTextPlanAsync();
+            AssertRefusalStatus("level-name save", "level-name save refused", "unavailable", "TOWN SQUARE", "normal Create BIN does not include ID65");
+            ResetLevelTextPlan();
+            AssertRefusalStatus("level-name reset", "level-name reset refused", "unavailable", "TOWN SQUARE", "normal Create BIN does not include ID65");
+
+            Id65BlankLabAuthoredLayerSnapshot outputAfter =
+                await CaptureId65BlankLabAuthoredLayerAsync(Path.Combine(_workspace.RootPath, "output"));
+            if (CaptureSkyAndNameState() != stagedSkyAndNameState ||
+                !File.ReadAllBytes(skyPlanPath).SequenceEqual(skyFixtureBytes) ||
+                !File.ReadAllBytes(townSquareNamePlanPath).SequenceEqual(nameFixtureBytes) ||
+                outputBefore.DirectoryExisted != outputAfter.DirectoryExisted ||
+                !outputBefore.Files.SequenceEqual(outputAfter.Files, StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "An ID65 sky/name method changed staged control state, a saved plan, or test-CUE output despite refusing the operation.");
+            }
+
+            RestoreGuardedMutationFile(skyPlanPath);
+            RestoreGuardedMutationFile(townSquareNamePlanPath);
 
             RefreshSelectedMobyZControls(moby);
             RefreshActionAvailability();
@@ -1237,7 +1453,7 @@ public sealed partial class MainWindow
                 nativePathNode.SetPosition(originalNativePathNodePosition.Value);
             }
 
-            return "disabled/direct object Z and terrain-snap controls preserved selected+linked Mobys, snap state, signatures, and files; selected/linked plus adjacent direct paint routes preserved resident/cross-level texture/surface state and files; Level Music controls/save/reset stayed unavailable and write-free; double-click, paste, object/native-movement viewport mutations, object move/rotate/remove, LP/XY/structural terrain gestures, mode reset, and inspection-only save refusal passed; existing HP Z remained editable";
+            return "Skybox and Level Name controls, saved-plan loading, Save/Reset/Create/import/match methods, unsupported-artifact detection, state, plans, and test-CUE output stayed unavailable and write-free; disabled/direct object Z and terrain-snap controls preserved selected+linked Mobys, snap state, signatures, and files; selected/linked plus adjacent direct paint routes preserved resident/cross-level texture/surface state and files; Level Music controls/save/reset stayed unavailable and write-free; double-click, paste, object/native-movement viewport mutations, object move/rotate/remove, LP/XY/structural terrain gestures, mode reset, and inspection-only save refusal passed; existing HP Z remained editable";
         }
         finally
         {
@@ -1278,7 +1494,7 @@ public sealed partial class MainWindow
                     File.WriteAllBytes(path, contents);
                 }
             }
-            RefreshLevelMusicEditor(originalLevel);
+            UpdateLevelToolPanels(originalLevel);
         }
     }
 

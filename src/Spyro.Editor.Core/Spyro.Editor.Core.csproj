@@ -12,5 +12,6 @@
     <InternalsVisibleTo Include="Spyro.Editor.FarLodTextureCompanionSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.SourceAnalysisSessionCacheSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.StoneHillLevelReplacementBaselineSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65BlankLevelLabSmoke" />
   </ItemGroup>
 </Project>

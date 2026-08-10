@@ -669,3 +669,125 @@ above remains limited to the user's complete-edited-surface solidity report for
 the isolated ID65 control; it still does not prove reset/comparison checks,
 other separately itemized checklist behavior, other levels, or true Add Terrain,
 and `promotionAuthorized` remains false.
+
+## Full-authoring construction contract: component-aware capacity
+
+The post-V5 full-authoring goal starts from the exact locked display-name base,
+not from a mutable editor project or any rejected terrain candidate. Core profile
+`unused-level-65-full-authoring-construction-template-clean-usa-research-v1`
+now rejects every other BIN hash and parses the complete row-80 model layout
+before structural planning:
+
+- row-80 data is WAD `0x6936800`, length `0x2E2000`;
+- model subfile 1 is WAD `0x6A15000`, length `0x94800`;
+- the native texture component has 66 records;
+- the environment contains 216 exact sector pointers, 2,853 LP vertices,
+  1,437 LP faces, 5,863 HP vertices, and 3,887 HP faces;
+- the collision container has 19,808 triangles;
+- the cloned object table remains 107 rows at WAD `0x6B06970`;
+- texture, environment, occlusion, special-surface, collision, cyclorama,
+  portal, particle, and sound components form one exact bounded chain ending at
+  WAD `0x6AA9508`;
+- the fixed model subfile has exactly `0x2F8` (760) all-zero tail bytes after
+  that semantic end.
+
+There is no inter-sector append slack in the baseline. A new component-aware
+capacity primitive therefore reserves aligned bytes by increasing the
+environment length, updating every later sector pointer, and relocating
+occlusion plus every following component together into the verified model
+tail. The first deterministic plan reserves 28 bytes after scene sector 213:
+the environment grows from `0x284A4` to `0x284C0`, sectors 214 and 215 move by
+28 bytes, occlusion moves from `0x6A4041C` to `0x6A40438`, collision moves from
+`0x6A40DC0` to `0x6A40DDC`, the semantic end becomes `0x6AA9524`, and verified
+zero tail becomes `0x2DC` (732 bytes). Every relocated component remains
+byte-identical.
+
+The 28-byte result remains the general capacity primitive, not a terrain
+candidate. The next internal static milestone now fills a separate 48-byte
+reservation after sector 213 with one independent LP triangle and one
+independent HP triangle. Each representation adds three encoded vertices and
+one face: 12 LP-vertex bytes, one 8-byte LP face, 12 HP-vertex bytes, and one
+16-byte HP face. The exact points are `(7762,6346,512)`, `(7890,6346,512)`, and
+`(7826,6474,640)`, encoded in both vertex tables as `0x29E5D820`,
+`0x39E5D820`, and `0x31E7D8A0`. The appended LP face is index 21 with slots
+`[35,36,37,37]`; the appended HP face is index 113 with slots
+`[140,140,141,142]` and native material/texture index 25. Sector 213 grows from
+`0x1118` to `0x1148`, occlusion moves from `0x6A4041C` to `0x6A4044C`, collision
+moves from `0x6A40DC0` to `0x6A40DF0`, and the verified zero tail becomes
+`0x2C8` (712 bytes). Exact reparsing proves the new counts, vertex words,
+face slots, color-slot bounds, material, cull containment, and byte-identical
+relocation of every following component before collision composition.
+
+Collision composition reuses only native triangle 13,995, one of four exact
+3D-zero-area rows. Its source bytes
+`A7A2140044631900E0010000`, assignment 255, and one native lookup reference
+are replaced by upward-wound bytes `521E2020CA18004000020080`, assignment 0,
+and exactly two references for authored cells `(30,24,2)` and `(30,25,2)`.
+The fixed 19,808-row triangle table does not grow. The other referenced
+zero-area rows 1,295, 1,298, and 11,184 retain their exact native cell
+memberships while the old triangle-13,995 cell `(34,35,1)` is removed.
+Assignment 0 is also proved to own sector 213 in the existing 16-group
+occlusion container.
+
+The accepted lookup operation is a native-ordered localized repack, not a
+fresh canonical geometry-derived rebuild. The canonical rebuild was rejected
+because it changed thousands of native ordered cell memberships and omitted
+referenced zero-area rows; fitting the fixed capacities and parsing back was
+not enough to preserve native runtime lookup semantics. The localized repack
+decodes all 4,252 native cells, retains 4,252 authored cells, preserves every
+unchanged per-cell sequence, and permits exactly three ordered semantic deltas:
+remove 13,995 from `(34,35,1)` and add it to `(30,24,2)` and `(30,25,2)`. The
+tree uses its exact `0x6A60`-byte capacity and the lookup blocks use `0x17962`
+of `0x17984` bytes with an all-zero remainder. Exact semantic readback and a
+second deterministic construction produce collision SHA-256
+`5e7b4430c9bfbd2793df1d9833d8d3af005924d7c110b66f0b0e1f8bc818c056`
+from source collision SHA-256
+`84901b6b9faa2f7fb0fce1d3aaa7e00fadf49e2d4bd7b2bcb2a0bb9a77397e2f`;
+the final in-memory model SHA-256 is
+`ccd18568b9b6cb7a41d2bf8a47c7dc475ca2cb1f9f127ac9a90ef9ac0a8be4f1`.
+
+The visibility discriminator is no longer assumed from proximity. A full
+static exposure walk covers all 216 sectors, 1,437 native LP faces, 3,887
+native HP faces, and all 19,808 collision triangles. Across the new triangle's
+open interior, the only native LP overlaps are sector `124:0` at Z 480 and
+sector `213:{1,3}` at Z 512; the centroid's native LP topmost face is `213:1`.
+The only native HP overlap is `213:37` at Z 512, and the only native collision
+overlaps are triangles 1,353 and 1,354 at Z 512. The appended LP face 21 and HP
+face 113 therefore sit above an exact identified foundation, with no higher
+native LP face, HP face, or collision triangle over their open interior. This
+supports a future close-HP/far-LP runtime guide, but remains static evidence
+until that guide is exercised in DuckStation.
+
+Spawn, appearance, and identity scaffolding are pinned independently of the
+model mutation. The fly-in landing at WAD `0x6B06800` remains exact bytes
+`29E901009A8801006621000000004000`, raw XYZ
+`(125225,100506,8550)`, and yaw byte 64. Object row T92 at WAD `0x6B08910`
+remains raw XYZ `(125225,100506,8704)`: identical landing XY and exactly 154
+raw Z units above it. The `0x84E4`-byte cyclorama at WAD `0x6AA08A8` remains
+SHA-256
+`8e8c62273ab0d4ea691a40409d5e4be77fe578cfebcfb2e3c6bb374cad7d40bb`.
+Executable `SCUS_942.28` still binds slot 35 through pointer bytes `E4010180`
+at executable offset `0x6007C` to the exact `TOWN SQUARE` string at `0x9E4`.
+All seven row-80 sibling subfiles outside model subfile 1 remain byte-identical.
+
+The App boundary now treats ID65 sky and level-name authoring as unavailable.
+It does not hydrate an ID65 sky plan or fall back from ID65 to the retail Town
+Square name target; every related control is disabled. Direct sky Save, Reset,
+test-CUE creation, palette/custom import, and environment-match calls, plus
+level-name Save and Reset calls, are guarded and proved write-free against
+staged UI state, saved plans, and output files. An ID65 sky plan is detected as
+an unsupported authored artifact instead of silently entering the lab output.
+The locked-base sky, cyclorama, lighting, and `TOWN SQUARE` Inventory identity
+therefore remain scaffolding, and normal Create BIN continues to exclude ID65.
+
+This milestone is deliberately internal and static-only. Inspection and all
+three planners leave the locked baseline and workspace artifact set unchanged;
+the composed bytes exist only in memory. It emits no BIN, no CUE, no Finder
+handoff, and no DuckStation candidate. `DisposableRuntimeCandidateAuthorized`,
+`publishable`, `promotionAuthorized`, and `NormalCreateBinEnabled` all remain
+false. It does not yet make ID65 blank-looking, expose Add Terrain in the App,
+replace the 107 object rows, authorize arbitrary textures or Mobys, or prove
+runtime rendering/collision. A separate transactional raw-MODE2 writer,
+whole-image/diff/readback proof, disposable CUE and checklist, and focused
+DuckStation HP/LP/collision gate are still required before any runtime or
+Create BIN claim.

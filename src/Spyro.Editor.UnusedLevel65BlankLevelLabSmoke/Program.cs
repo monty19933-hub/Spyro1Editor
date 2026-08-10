@@ -47,6 +47,7 @@ try
     UnusedLevel65BlankLevelLabBootstrapResult first =
         await UnusedLevel65BlankLevelLabBootstrapper.BootstrapAsync(bootstrapRequest);
     await VerifyFirstBootstrapAsync(first, cleanHashBefore, catalogHashBefore, catalogPath);
+    await VerifyFullAuthoringConstructionContractAsync(first.Paths);
     await VerifyBootstrapStaleOperationRecoveryAsync(first.Paths);
 
     byte[] manifestBytesBeforeReuse = await File.ReadAllBytesAsync(first.Paths.ManifestPath);
@@ -67,7 +68,7 @@ try
         await HashFileAsync(catalogPath) == catalogHashBefore,
         "The retail level catalog changed during the smoke.");
     Console.WriteLine(
-        "PASS UnusedLevel65BlankLevelLabSmoke: exact 35+1 catalog, immutable receipt provenance, journaled restart recovery, atomic replacement rollback, platform-aware handoff, and generic v4 parity passed.");
+        "PASS UnusedLevel65BlankLevelLabSmoke: exact 35+1 catalog, component-aware HP+LP allocation with native-ordered collision repack, full exposure/topmost proof, and occlusion ownership, immutable receipt provenance, journaled restart recovery, atomic replacement rollback, platform-aware handoff, and generic v4 parity passed.");
 }
 finally
 {
@@ -295,6 +296,396 @@ async Task VerifyFirstBootstrapAsync(
         $"First bootstrap retained unexpected files: {string.Join(", ", files)}");
     Require(await HashFileAsync(cleanImagePath) == sourceHashBefore, "First bootstrap changed the clean source BIN.");
     Require(await HashFileAsync(retailCatalogPath) == catalogHashBeforeValue, "First bootstrap changed the retail catalog.");
+}
+
+async Task VerifyFullAuthoringConstructionContractAsync(
+    UnusedLevel65BlankLevelLabWorkspacePaths paths)
+{
+    string[] artifactPathsBefore = SnapshotArtifactPaths(paths.RootPath);
+    string baselineHashBefore = await HashFileAsync(paths.LockedBaseImagePath);
+    UnusedLevel65FullAuthoringConstructionContract contract =
+        await UnusedLevel65FullAuthoringConstructionTemplate.InspectAsync(paths.LockedBaseImagePath);
+    Require(
+        contract.ProfileId == "unused-level-65-full-authoring-construction-template-clean-usa-research-v1" &&
+        contract.BaselineProfileId == UnusedLevel65BlankLevelLabProfileRegistry.ProfileId &&
+        contract.BaselineImageSha256 == ExpectedLockedBaseImageSha256,
+        "The full-authoring construction profile or V5 baseline binding drifted.");
+    Require(
+        contract.WadLba == 37 &&
+        contract.WadByteLength == 0x6C18800 &&
+        contract.DataEntryWadOffset == 0x6936800 &&
+        contract.DataEntryByteLength == 0x2E2000 &&
+        contract.ModelSubfileWadOffset == 0x6A15000 &&
+        contract.ModelSubfileByteLength == 0x94800,
+        "The full-authoring row-80/model-subfile storage contract drifted.");
+    Require(
+        contract.NativeTextureRecordCount == 66 &&
+        contract.SceneSectorCount == 216 &&
+        contract.LowDetailVertexCount == 2_853 &&
+        contract.LowDetailFaceCount == 1_437 &&
+        contract.HighDetailVertexCount == 5_863 &&
+        contract.HighDetailFaceCount == 3_887 &&
+        contract.SpecialSurfaceCount == 3 &&
+        contract.CollisionTriangleCount == 19_808 &&
+        contract.PortalCount == 0 &&
+        contract.ObjectTableWadOffset == 0x6B06970 &&
+        contract.ObjectRecordCount == 107,
+        "The full-authoring native content census drifted.");
+    Require(
+        contract.Landing.WadOffset == 0x6B06800 &&
+        contract.Landing.ByteLength == 0x10 &&
+        contract.Landing.Hex == "29E901009A8801006621000000004000" &&
+        contract.Landing.Sha256 == "ac6446f7f11382b1f5d9c4f73c17281cda8db6251b14ace4e237c3c3d9f1896e" &&
+        contract.Landing.RawX == 125_225 &&
+        contract.Landing.RawY == 100_506 &&
+        contract.Landing.RawZ == 8_550 &&
+        contract.Landing.YawByte == 64,
+        "The exact ID65 fly-in landing bytes, hash, coordinates, or heading drifted.");
+    Require(
+        contract.PlayerAnchor.TrueIndex == 92 &&
+        contract.PlayerAnchor.WadOffset == 0x6B08910 &&
+        contract.PlayerAnchor.ByteLength == 0x58 &&
+        contract.PlayerAnchor.Sha256 == "4987c539f3178c555da26e4ec2f6cdc25094a27382b9465c9845846a39679bb2" &&
+        contract.PlayerAnchor.RawX == 125_225 &&
+        contract.PlayerAnchor.RawY == 100_506 &&
+        contract.PlayerAnchor.RawZ == 8_704 &&
+        contract.PlayerAnchor.RawX == contract.Landing.RawX &&
+        contract.PlayerAnchor.RawY == contract.Landing.RawY &&
+        contract.PlayerAnchor.RawZ - contract.Landing.RawZ == 154,
+        "The exact ID65 T92 player anchor or its landing-relative spatial invariant drifted.");
+    Require(
+        contract.DisplayName.ExecutableName == "SCUS_942.28" &&
+        contract.DisplayName.ExecutableLba == 55_382 &&
+        contract.DisplayName.ExecutableByteLength == 0x66000 &&
+        contract.DisplayName.PointerTableFileOffset == 0x5FFF0 &&
+        contract.DisplayName.SlotIndex == 35 &&
+        contract.DisplayName.PointerFileOffset == 0x6007C &&
+        contract.DisplayName.PointerHex == "E4010180" &&
+        contract.DisplayName.ResolvedStringFileOffset == 0x9E4 &&
+        contract.DisplayName.ResolvedString == "TOWN SQUARE",
+        "The exact ID65 slot-35 Town Square display-name binding drifted.");
+    Require(
+        contract.UsedModelEndWadOffset == 0x6AA9508 &&
+        contract.VerifiedZeroTailBytes == 0x2F8 &&
+        contract.SceneSectors.All(sector => sector.GapBytesAfter == 0),
+        "The full-authoring component chain or verified model tail drifted.");
+    Require(
+        contract.Components.Single(component => component.Name == "cyclorama").Sha256 ==
+            "8e8c62273ab0d4ea691a40409d5e4be77fe578cfebcfb2e3c6bb374cad7d40bb",
+        "The exact ID65 cyclorama component hash drifted.");
+    Require(
+        contract.DataSubfiles.Select(subfile =>
+                (subfile.Index, subfile.RelativeOffset, subfile.WadOffset, subfile.ByteLength, subfile.Sha256))
+            .SequenceEqual(new[]
+            {
+                (0, 0x000800, 0x6937000L, 0x0DE000, "5fb81c4ac63eb235a172c4f16f83ef08efb148a6f543ef6100ba21359ade408f"),
+                (1, 0x0DE800, 0x6A15000L, 0x094800, "1aa6950fe78e71ef4506d823fd33806c13a32838cdb00aadc4e35daffcf17f47"),
+                (2, 0x173000, 0x6AA9800L, 0x05D000, "a37b7a8e5e5e660befed91e63c699a6c6d4b25ff8406f68b08e418c00d2a711d"),
+                (3, 0x1D0000, 0x6B06800L, 0x008800, "63b5e699b3f175c0289a795c4f6f36786b9bc33ce608e1f1e9bd7bb4c04f09f6"),
+                (4, 0x1D8800, 0x6B0F000L, 0x049800, "bdf27988f3d2b0fd4c4b905636b6980aff49ab1475d85edb4ce8aa2cc469351f"),
+                (5, 0x222000, 0x6B58800L, 0x042800, "23968146e46b3263997e16692a192bbdb049966b010673d17611f2ab6903cef0"),
+                (6, 0x264800, 0x6B9B000L, 0x05D000, "402bb40e21bf84922cbc35312b0e49b95292a2f96326636aba05685443686991"),
+                (7, 0x2C1800, 0x6BF8000L, 0x020800, "eabadb4ea663043665bc4ba2d2e00c1c7c104688906b56bac2d7aba7c6cae8da")
+            }) &&
+        contract.DataSubfiles.Where(subfile => subfile.Index != 1)
+            .All(subfile => subfile.MustRemainByteIdenticalInFirstTerrainGate) &&
+        !contract.DataSubfiles.Single(subfile => subfile.Index == 1).MustRemainByteIdenticalInFirstTerrainGate,
+        "The exact eight-subfile row-80 preservation contract drifted.");
+    Require(
+        contract.RequiresSpawnSafeHighAndLowDetailFoundation &&
+        contract.RequiresCompleteCollisionAndOcclusionOwnership &&
+        !contract.PromotionAuthorized &&
+        !contract.NormalCreateBinEnabled,
+        "The construction-template safety boundary was weakened.");
+    Require(
+        contract.Components.Single(component => component.Name == "environment").Policy ==
+            UnusedLevel65ConstructionComponentPolicy.RebuildAtomically &&
+        contract.Components.Single(component => component.Name == "collision").Policy ==
+            UnusedLevel65ConstructionComponentPolicy.RebuildAtomically &&
+        contract.Components.Single(component => component.Name == "texture").Policy ==
+            UnusedLevel65ConstructionComponentPolicy.PreserveContainer,
+        "The full-authoring component ownership policy drifted.");
+
+    UnusedLevel65SceneSectorCapacityPlan plan =
+        await UnusedLevel65FullAuthoringConstructionTemplate.BuildSectorCapacityPlanAsync(
+            paths.LockedBaseImagePath,
+            targetSectorIndex: 213,
+            reserveByteCount: 28);
+    UnusedLevel65SceneSectorCapacityPlan repeated =
+        await UnusedLevel65FullAuthoringConstructionTemplate.BuildSectorCapacityPlanAsync(
+            paths.LockedBaseImagePath,
+            targetSectorIndex: 213,
+            reserveByteCount: 28);
+    Require(
+        plan.TargetSectorIndex == 213 &&
+        plan.ReservedByteCount == 28 &&
+        plan.ReservationWadOffset == 0x6A3F9CC &&
+        plan.OldEnvironmentByteLength == 0x284A4 &&
+        plan.NewEnvironmentByteLength == 0x284C0 &&
+        plan.OldUsedModelEndWadOffset == 0x6AA9508 &&
+        plan.NewUsedModelEndWadOffset == 0x6AA9524 &&
+        plan.ZeroTailBytesBefore == 0x2F8 &&
+        plan.ZeroTailBytesAfter == 0x2DC,
+        "The first 28-byte component-aware terrain-capacity plan drifted.");
+    Require(
+        plan.SceneSectors[213].WadOffset == 0x6A3E8B4 &&
+        plan.SceneSectors[213].ByteLength == 0x1118 &&
+        plan.SceneSectors[213].GapBytesAfter == 28 &&
+        plan.SceneSectors[214].WadOffset == 0x6A3F9E8 &&
+        plan.SceneSectors[215].WadOffset == 0x6A3FF50,
+        "The sector-213 capacity plan did not preserve/relocate the exact native scene pointers.");
+    Require(
+        plan.RelocatedComponents.All(component => component.NewWadOffset == component.OldWadOffset + 28) &&
+        plan.RelocatedComponents.Single(component => component.Name == "occlusion").NewWadOffset == 0x6A40438 &&
+        plan.RelocatedComponents.Single(component => component.Name == "collision").NewWadOffset == 0x6A40DDC &&
+        plan.RelocatedComponents.Single(component => component.Name == "sound").NewWadOffset == 0x6AA8E2C,
+        "Following ID65 components did not relocate together by exactly 28 bytes.");
+    Require(
+        plan.ComponentContentsPreserved &&
+        !plan.RetailDataTouched &&
+        !plan.Publishable &&
+        !plan.PromotionAuthorized &&
+        !plan.NormalCreateBinEnabled,
+        "The structural-capacity primitive crossed its non-publishable safety boundary.");
+    Require(
+        plan.BeforeModelSha256 == repeated.BeforeModelSha256 &&
+        plan.AfterModelSha256 == repeated.AfterModelSha256 &&
+        plan.AfterModelBytes.AsSpan().SequenceEqual(repeated.AfterModelBytes),
+        "The full-authoring component-aware capacity plan is not deterministic.");
+
+    UnusedLevel65ConstructionVisualTerrainPlan visual =
+        await UnusedLevel65FullAuthoringConstructionTemplate.BuildFirstVisualTerrainPlanAsync(
+            paths.LockedBaseImagePath);
+    UnusedLevel65ConstructionVisualTerrainPlan visualRepeated =
+        await UnusedLevel65FullAuthoringConstructionTemplate.BuildFirstVisualTerrainPlanAsync(
+            paths.LockedBaseImagePath);
+    Require(
+        visual.SectorIndex == 213 &&
+        visual.AddedLowDetailVertexCount == 3 &&
+        visual.AddedLowDetailFaceCount == 1 &&
+        visual.AddedHighDetailVertexCount == 3 &&
+        visual.AddedHighDetailFaceCount == 1 &&
+        visual.SectorWadOffset == 0x6A3E8B4 &&
+        visual.OldSectorByteLength == 0x1118 &&
+        visual.NewSectorByteLength == 0x1148,
+        "The first independent HP+LP construction tile allocation drifted.");
+    Require(
+        visual.Points.SequenceEqual(new[]
+        {
+            new UnusedLevel65ConstructionPoint(7762, 6346, 512),
+            new UnusedLevel65ConstructionPoint(7890, 6346, 512),
+            new UnusedLevel65ConstructionPoint(7826, 6474, 640)
+        }) &&
+        visual.OldOcclusionWadOffset == 0x6A4041C &&
+        visual.NewOcclusionWadOffset == 0x6A4044C &&
+        visual.OldCollisionWadOffset == 0x6A40DC0 &&
+        visual.NewCollisionWadOffset == 0x6A40DF0 &&
+        visual.ZeroTailBytesAfter == 0x2C8,
+        "The first construction tile geometry or following-component relocation drifted.");
+    Require(
+        visual.HighAndLowDetailAllocated &&
+        visual.SectorCullBoundsPreserved &&
+        visual.OcclusionContainerPreserved &&
+        !visual.CollisionComposed &&
+        !visual.Publishable &&
+        !visual.PromotionAuthorized &&
+        !visual.NormalCreateBinEnabled,
+        "The visual-only construction tile crossed its collision/publication safety gate.");
+    Require(
+        visual.BeforeModelSha256 == visualRepeated.BeforeModelSha256 &&
+        visual.AfterModelSha256 == visualRepeated.AfterModelSha256 &&
+        visual.AfterModelBytes.AsSpan().SequenceEqual(visualRepeated.AfterModelBytes),
+        "The first independent HP+LP construction tile plan is not deterministic.");
+
+    UnusedLevel65ConstructionCollidableTerrainPlan collidable =
+        await UnusedLevel65FullAuthoringConstructionTemplate.BuildFirstCollidableTerrainPlanAsync(
+            paths.LockedBaseImagePath);
+    UnusedLevel65ConstructionCollidableTerrainPlan collidableRepeated =
+        await UnusedLevel65FullAuthoringConstructionTemplate.BuildFirstCollidableTerrainPlanAsync(
+            paths.LockedBaseImagePath);
+    Require(
+        collidable.CollisionBinding.ReusedTriangleIndex == 13_995 &&
+        collidable.CollisionBinding.SourceTriangleWadOffset == 0x6A881C8 &&
+        collidable.CollisionBinding.AuthoredTriangleWadOffset == 0x6A881F8 &&
+        collidable.CollisionBinding.BeforeHex == "A7A2140044631900E0010000" &&
+        collidable.CollisionBinding.AfterHex == "521E2020CA18004000020080" &&
+        collidable.CollisionBinding.SourceAssignment == 255 &&
+        collidable.CollisionBinding.TargetAssignment == 0 &&
+        collidable.CollisionBinding.SourceLookupReferenceCount == 1 &&
+        collidable.CollisionBinding.AuthoredLookupReferenceCount > 0,
+        "The first construction tile collision-slot binding drifted.");
+    Require(
+        collidable.CollisionBinding.TargetCells.SequenceEqual(new[]
+        {
+            new UnusedLevel65ConstructionCollisionCell(30, 24, 2),
+            new UnusedLevel65ConstructionCollisionCell(30, 25, 2)
+        }) &&
+        collidable.CollisionBinding.SourceWasZeroArea &&
+        collidable.CollisionBinding.UpwardWinding &&
+        collidable.CollisionBinding.OrdinaryCollisionFlags,
+        "The construction tile collision cells, winding, or ordinary native flags drifted.");
+    Require(
+        collidable.CollisionTreeCapacityBytes == 0x6A60 &&
+        collidable.CollisionTreeUsedBytes == 0x6A60 &&
+        collidable.CollisionBlocksCapacityBytes == 0x17984 &&
+        collidable.CollisionBlocksUsedBytes == 0x17962 &&
+        collidable.CollisionBinding.AuthoredLookupReferenceCount == 2 &&
+        collidable.CollisionBinding.AuthoredLookupWadOffsets.SequenceEqual(new long[]
+        {
+            0x6A5168A,
+            0x6A51918
+        }) &&
+        collidable.OcclusionGroupCount == 16 &&
+        collidable.OcclusionAssignment == 0 &&
+        collidable.AssignedOcclusionGroupContainsSector,
+        $"The native-ordered construction collision repack or native occlusion assignment drifted: " +
+        $"tree={collidable.CollisionTreeUsedBytes:X}/{collidable.CollisionTreeCapacityBytes:X}, " +
+        $"blocks={collidable.CollisionBlocksUsedBytes:X}/{collidable.CollisionBlocksCapacityBytes:X}, " +
+        $"refs={collidable.CollisionBinding.AuthoredLookupReferenceCount}, " +
+        $"offsets=[{string.Join(',', collidable.CollisionBinding.AuthoredLookupWadOffsets.Select(offset => $"0x{offset:X}"))}].");
+    Require(
+        collidable.PreservedDegenerateBindings.Select(binding => binding.TriangleIndex)
+            .SequenceEqual(new[] { 1_295, 1_298, 11_184 }) &&
+        collidable.PreservedDegenerateBindings.All(binding =>
+            binding.NativeCells.SequenceEqual(binding.AuthoredCells)) &&
+        collidable.PreservedDegenerateBindings.Single(binding => binding.TriangleIndex == 1_295)
+            .NativeLookupWadOffsets.SequenceEqual(new long[] { 0x6A51838, 0x6A51AEC }) &&
+        collidable.PreservedDegenerateBindings.Single(binding => binding.TriangleIndex == 1_295)
+            .AuthoredLookupWadOffsets.SequenceEqual(new long[] { 0x6A51868, 0x6A51B1E }) &&
+        collidable.PreservedDegenerateBindings.Single(binding => binding.TriangleIndex == 1_298)
+            .NativeLookupWadOffsets.SequenceEqual(new long[] { 0x6A51832 }) &&
+        collidable.PreservedDegenerateBindings.Single(binding => binding.TriangleIndex == 1_298)
+            .AuthoredLookupWadOffsets.SequenceEqual(new long[] { 0x6A51862 }) &&
+        collidable.PreservedDegenerateBindings.Single(binding => binding.TriangleIndex == 11_184)
+            .NativeLookupWadOffsets.SequenceEqual(new long[] { 0x6A4D5F8 }) &&
+        collidable.PreservedDegenerateBindings.Single(binding => binding.TriangleIndex == 11_184)
+            .AuthoredLookupWadOffsets.SequenceEqual(new long[] { 0x6A4D626 }),
+        "The native referenced degenerate collision rows were not preserved through the ordered construction index repack: " +
+        string.Join("; ", collidable.PreservedDegenerateBindings.Select(binding =>
+            $"T{binding.TriangleIndex} src=[{string.Join(',', binding.NativeLookupWadOffsets.Select(offset => $"0x{offset:X}"))}] " +
+            $"dst=[{string.Join(',', binding.AuthoredLookupWadOffsets.Select(offset => $"0x{offset:X}"))}]").ToArray()));
+    Require(
+        collidable.NativeCollisionCellCount == 4_252 &&
+        collidable.AuthoredCollisionCellCount == 4_252 &&
+        collidable.ChangedCollisionCells.SequenceEqual(new[]
+        {
+            new UnusedLevel65ConstructionCollisionCell(34, 35, 1),
+            new UnusedLevel65ConstructionCollisionCell(30, 24, 2),
+            new UnusedLevel65ConstructionCollisionCell(30, 25, 2)
+        }) &&
+        collidable.UnchangedCollisionCellSequencesPreserved &&
+        collidable.IntendedCollisionCellSequencesVerified &&
+        collidable.NativeCollisionOrderingPreserved,
+        $"The ordered collision semantic delta escaped its exact three cells: native={collidable.NativeCollisionCellCount}, " +
+        $"authored={collidable.AuthoredCollisionCellCount}, changed=[{string.Join(',', collidable.ChangedCollisionCells)}].");
+    UnusedLevel65ConstructionExposureProof exposure = collidable.ExposureProof;
+    Require(
+        exposure.ScannedSectorCount == 216 &&
+        exposure.ScannedLowDetailFaceCount == 1_437 &&
+        exposure.ScannedHighDetailFaceCount == 3_887 &&
+        exposure.ScannedCollisionTriangleCount == 19_808 &&
+        exposure.NativeLowDetailInteriorOverlaps.SequenceEqual(new[]
+        {
+            new UnusedLevel65ConstructionTerrainOverlap(124, 0, 480, 480),
+            new UnusedLevel65ConstructionTerrainOverlap(213, 1, 512, 512),
+            new UnusedLevel65ConstructionTerrainOverlap(213, 3, 512, 512)
+        }) &&
+        exposure.NativeHighDetailInteriorOverlaps.SequenceEqual(new[]
+        {
+            new UnusedLevel65ConstructionTerrainOverlap(213, 37, 512, 512)
+        }) &&
+        exposure.NativeCollisionInteriorOverlaps.SequenceEqual(new[]
+        {
+            new UnusedLevel65ConstructionCollisionOverlap(1_353, 512, 512),
+            new UnusedLevel65ConstructionCollisionOverlap(1_354, 512, 512)
+        }) &&
+        exposure.NativeLowDetailTopmostAtAuthoredCentroid.SequenceEqual(new[]
+        {
+            new UnusedLevel65ConstructionTerrainOverlap(213, 1, 512, 512)
+        }) &&
+        exposure.NativeHighDetailTopmostAtAuthoredCentroid.SequenceEqual(new[]
+        {
+            new UnusedLevel65ConstructionTerrainOverlap(213, 37, 512, 512)
+        }) &&
+        exposure.AuthoredLowDetailFaceIndex == 21 &&
+        exposure.AuthoredHighDetailFaceIndex == 113 &&
+        exposure.ExactUnderlyingFoundationIdentified &&
+        exposure.NoHigherNativeLowDetailFace &&
+        exposure.NoHigherNativeHighDetailFace &&
+        exposure.NoHigherNativeCollisionTriangle &&
+        exposure.AuthoredSurfaceTopmostOverOpenInterior &&
+        exposure.CloseHighDetailFarLowDetailRuntimeGuideSupported,
+        "The full 216-sector HP/LP and 19,808-triangle exposure/topmost proof drifted.");
+    Require(
+        collidable.BeforeCollisionSha256 ==
+            "84901b6b9faa2f7fb0fce1d3aaa7e00fadf49e2d4bd7b2bcb2a0bb9a77397e2f" &&
+        collidable.AfterCollisionSha256 ==
+            "5e7b4430c9bfbd2793df1d9833d8d3af005924d7c110b66f0b0e1f8bc818c056" &&
+        collidable.AfterModelSha256 ==
+            "ccd18568b9b6cb7a41d2bf8a47c7dc475ca2cb1f9f127ac9a90ef9ac0a8be4f1",
+        $"The exact first collidable construction component/model hashes drifted: collision={collidable.AfterCollisionSha256}, model={collidable.AfterModelSha256}.");
+    Require(
+        collidable.CollisionIndexRepacked &&
+        collidable.CollisionComposed &&
+        collidable.OcclusionOwnershipVerified &&
+        !collidable.DisposableRuntimeCandidateAuthorized &&
+        !collidable.Publishable &&
+        !collidable.PromotionAuthorized &&
+        !collidable.NormalCreateBinEnabled,
+        "The collidable construction tile crossed its static-only publication boundary.");
+    Require(
+        collidable.AfterModelSha256 == collidableRepeated.AfterModelSha256 &&
+        collidable.AfterModelBytes.AsSpan().SequenceEqual(collidableRepeated.AfterModelBytes) &&
+        collidable.CollisionBinding.AuthoredLookupWadOffsets.SequenceEqual(
+            collidableRepeated.CollisionBinding.AuthoredLookupWadOffsets) &&
+        collidable.ExposureProof.NativeLowDetailInteriorOverlaps.SequenceEqual(
+            collidableRepeated.ExposureProof.NativeLowDetailInteriorOverlaps) &&
+        collidable.ExposureProof.NativeHighDetailInteriorOverlaps.SequenceEqual(
+            collidableRepeated.ExposureProof.NativeHighDetailInteriorOverlaps) &&
+        collidable.ExposureProof.NativeCollisionInteriorOverlaps.SequenceEqual(
+            collidableRepeated.ExposureProof.NativeCollisionInteriorOverlaps),
+        "The first HP+LP+collision+occlusion construction plan is not deterministic.");
+
+    VerifyModelOnlyConstructionPlansPreserveSiblingSubfiles(
+        paths.LockedBaseImagePath,
+        contract,
+        plan.AfterModelBytes,
+        visual.AfterModelBytes,
+        collidable.AfterModelBytes);
+
+    bool unalignedRejected = false;
+    try
+    {
+        await UnusedLevel65FullAuthoringConstructionTemplate.BuildSectorCapacityPlanAsync(
+            paths.LockedBaseImagePath,
+            213,
+            2);
+    }
+    catch (ArgumentOutOfRangeException)
+    {
+        unalignedRejected = true;
+    }
+    Require(unalignedRejected, "An unaligned scene-sector capacity request was accepted.");
+
+    bool tailOverflowRejected = false;
+    try
+    {
+        await UnusedLevel65FullAuthoringConstructionTemplate.BuildSectorCapacityPlanAsync(
+            paths.LockedBaseImagePath,
+            213,
+            0x2FC);
+    }
+    catch (InvalidDataException)
+    {
+        tailOverflowRejected = true;
+    }
+    Require(tailOverflowRejected, "A scene-sector capacity request beyond the verified model tail was accepted.");
+    Require(
+        await HashFileAsync(paths.LockedBaseImagePath) == baselineHashBefore,
+        "The full-authoring construction inspection/capacity plan changed the locked V5 baseline.");
+    Require(
+        artifactPathsBefore.SequenceEqual(SnapshotArtifactPaths(paths.RootPath)),
+        "The full-authoring construction inspection/planner calls created or deleted a workspace artifact.");
 }
 
 async Task VerifyBootstrapStaleOperationRecoveryAsync(
@@ -809,6 +1200,59 @@ string CreateOwnedStaleOperation(string operationsRoot, string prefix)
     File.WriteAllText(Path.Combine(operation, "orphan.txt"), "strictly-owned stale smoke fixture\n");
     return operation;
 }
+
+void VerifyModelOnlyConstructionPlansPreserveSiblingSubfiles(
+    string baselineImagePath,
+    UnusedLevel65FullAuthoringConstructionContract contract,
+    params byte[][] afterModels)
+{
+    DiscLayout layout = DiscImage.DetectLayout(baselineImagePath);
+    using FileStream image = File.OpenRead(baselineImagePath);
+    DiscFileRecord wad = DiscImage.FindRootFileRecord(
+        image,
+        layout,
+        name => string.Equals(name, "WAD.WAD", StringComparison.OrdinalIgnoreCase));
+    Require(wad.Lba == contract.WadLba, "The model-only preservation proof resolved an unexpected WAD extent.");
+    byte[] baselineEntry = DiscImage.ReadFileBytes(
+        image,
+        layout,
+        wad.Lba,
+        contract.DataEntryWadOffset,
+        contract.DataEntryByteLength);
+    UnusedLevel65ConstructionDataSubfileLayout modelSubfile =
+        contract.DataSubfiles.Single(subfile => subfile.Index == 1);
+    Require(
+        modelSubfile.RelativeOffset == contract.ModelSubfileWadOffset - contract.DataEntryWadOffset &&
+        modelSubfile.ByteLength == contract.ModelSubfileByteLength,
+        "The construction model plan no longer maps exactly to row-80 subfile 1.");
+
+    foreach (byte[] afterModel in afterModels)
+    {
+        Require(
+            afterModel.Length == modelSubfile.ByteLength,
+            "A construction planner returned bytes outside the exact model-subfile length.");
+        byte[] composedEntry = baselineEntry.ToArray();
+        afterModel.AsSpan().CopyTo(composedEntry.AsSpan(modelSubfile.RelativeOffset, modelSubfile.ByteLength));
+        foreach (UnusedLevel65ConstructionDataSubfileLayout preserved in
+                 contract.DataSubfiles.Where(subfile => subfile.Index != modelSubfile.Index))
+        {
+            ReadOnlySpan<byte> baselineSubfile = baselineEntry.AsSpan(preserved.RelativeOffset, preserved.ByteLength);
+            ReadOnlySpan<byte> composedSubfile = composedEntry.AsSpan(preserved.RelativeOffset, preserved.ByteLength);
+            Require(
+                preserved.MustRemainByteIdenticalInFirstTerrainGate &&
+                baselineSubfile.SequenceEqual(composedSubfile) &&
+                HashBytes(composedSubfile) == preserved.Sha256,
+                $"The model-only construction plan changed preserved row-80 subfile {preserved.Index}.");
+        }
+    }
+}
+
+string[] SnapshotArtifactPaths(string root) =>
+    Directory.GetFileSystemEntries(root, "*", SearchOption.AllDirectories)
+        .Select(path =>
+            $"{(Directory.Exists(path) ? "D" : "F")}:{Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/')}")
+        .Order(StringComparer.Ordinal)
+        .ToArray();
 
 IReadOnlyDictionary<string, string> SnapshotDirectory(string root)
 {
