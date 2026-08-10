@@ -36,5 +36,6 @@
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65DragonSaveTriggerRuntimeCandidateSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringTerrainMutationCompilerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65V2NativeTextureCompositionCompilerSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringMobyDependencyBundleCompilerSmoke" />
   </ItemGroup>
 </Project>
