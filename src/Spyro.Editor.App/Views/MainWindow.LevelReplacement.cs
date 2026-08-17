@@ -580,7 +580,9 @@ public sealed partial class MainWindow
             cue.Contains("TRACK 01 MODE2/2352", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static async Task<string> HashFileSha256Async(string path)
+    private static async Task<string> HashFileSha256Async(
+        string path,
+        CancellationToken cancellationToken = default)
     {
         await using FileStream stream = new(
             path,
@@ -589,7 +591,8 @@ public sealed partial class MainWindow
             FileShare.Read,
             bufferSize: 64 * 1024,
             FileOptions.SequentialScan);
-        return Convert.ToHexString(await SHA256.HashDataAsync(stream)).ToLowerInvariant();
+        return Convert.ToHexString(
+            await SHA256.HashDataAsync(stream, cancellationToken)).ToLowerInvariant();
     }
 
     private string TownSquareNativeObjectEditsPath() =>

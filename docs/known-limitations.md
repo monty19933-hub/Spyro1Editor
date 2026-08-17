@@ -6,9 +6,12 @@
   substrate in physically independent ID65 storage. It is not a byte-empty map.
 - The public Lab boundary is existing HP terrain Z edits with an atomic complete
   native collision fan, cyclic winding preservation, and unchanged collision-cell
-  membership. Its test CUE remains separate from normal `Create BIN`.
+  membership, plus isolated editor-preview painting from the locked payload's
+  66 resident texture records. Resident paint preserves the target material,
+  tint, surface, and collision behavior. It is not runtime-exported yet; its
+  test CUE remains HP-Z-only and separate from normal `Create BIN`.
 - True HP/LP face addition, component growth, LP or XY editing, arbitrary Mobys,
-  private/custom texture allocation, portals, totals, music ownership, Return
+  cross-level/custom/private texture allocation, portals, totals, music ownership, Return
   Home, and save ownership remain separate research gates.
 - The 35-row retail catalog remains unchanged. ID65 is admitted only in memory
   after the exact clean-USA locked base and manifest validate.

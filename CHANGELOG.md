@@ -11,6 +11,11 @@
   outputs separate from retail projects. Normal `Create BIN`, release catalog
   iteration, portals, totals, music ownership, Return Home, and save ownership
   cannot silently consume or promote ID65 work.
+- The Lab now decodes the exact locked payload's 66 resident terrain textures
+  into a source-bound local preview cache and exposes the normal paint gallery
+  for existing HP faces. Resident paint saves and reloads in the isolated Lab
+  authored layer while preserving material, tint, surface, and collision state;
+  cross-level/custom/private art and runtime export remain fail-closed.
 - Existing high-detail terrain height edits now use a topology-safe atomic
   collision transaction: every shared physical vertex and referenced native
   collision triangle is resolved, cyclic winding is preserved, exact collision

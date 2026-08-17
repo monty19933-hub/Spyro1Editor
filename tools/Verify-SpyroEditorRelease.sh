@@ -391,17 +391,30 @@ validate_mac_distribution() {
         rm -f "$entitlements_file"
         fail "$phase macOS app entitlements could not be read."
     fi
-    if ! python3 - "$entitlements_file" <<'PY'
+    if ! python3 - "$entitlements_file" "$ALLOW_ADHOC" <<'PY'
 import plistlib
 import sys
 
 with open(sys.argv[1], "rb") as stream:
     entitlements = plistlib.load(stream)
 
+allow_adhoc = sys.argv[2] == "1"
 if entitlements.get("com.apple.security.cs.allow-jit") is not True:
     raise SystemExit("com.apple.security.cs.allow-jit must be true")
 if entitlements.get("com.apple.security.get-task-allow") not in (None, False):
     raise SystemExit("com.apple.security.get-task-allow must be absent or false")
+disable_library_validation = entitlements.get(
+    "com.apple.security.cs.disable-library-validation"
+)
+if allow_adhoc:
+    if disable_library_validation is not True:
+        raise SystemExit(
+            "community ad-hoc packages must disable library validation"
+        )
+elif disable_library_validation not in (None, False):
+    raise SystemExit(
+        "Developer ID packages must not disable library validation"
+    )
 PY
     then
         rm -f "$entitlements_file"

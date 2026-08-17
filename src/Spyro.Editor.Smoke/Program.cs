@@ -101,11 +101,18 @@ bool exportControlRoleProofBins =
     exportStrictTriggerProofBins;
 bool repairGnastyLootCache = args.Contains("--repair-gnastysloot-cache", StringComparer.OrdinalIgnoreCase);
 bool diagnosticsSmokeOnly = args.Contains("--diagnostics-smoke-only", StringComparer.OrdinalIgnoreCase);
+bool terrainEditStoreStrictSmokeOnly = args.Contains("--terrain-edit-store-strict-only", StringComparer.OrdinalIgnoreCase);
 string? workspaceArg = args.FirstOrDefault(arg => !arg.StartsWith("--", StringComparison.Ordinal));
 
 if (diagnosticsSmokeOnly)
 {
     ReportEditorDiagnosticsSmoke();
+    return 0;
+}
+
+if (terrainEditStoreStrictSmokeOnly)
+{
+    await ReportTerrainEditStoreStrictSmokeAsync();
     return 0;
 }
 
@@ -37314,6 +37321,259 @@ async Task ReportSourceSceneChainSelectionSmoke(
 
     Console.WriteLine(
         $"Source-scene chain selection: PASSED all {exportedLevels} levels with fully terminated chains, {totalSectors:N0} sector metadata records, {totalHighDetailFaces:N0} typed HP faces ({highDetailSemiTransparent:N0} true semitransparent, {highDetailUntexturedSentinels:N0} opaque-untextured 0xFF), and {totalLowDetailFaces:N0} exact packed LP faces; audited retail distance boundaries and Gnasty's World trimming remain locked.");
+}
+
+async Task ReportTerrainEditStoreStrictSmokeAsync()
+{
+    using SmokeTemporaryDirectory smoke = SmokeTemporaryDirectory.Create("spyro-terrain-edit-store-strict");
+    string editPath = Path.Combine(smoke.Path, "strict-terrain-edits.json");
+
+    TerrainPolygon CreateFixture(int sectorIndex = 7, int faceIndex = 11, string detail = "hp")
+    {
+        TerrainPolygon polygon = new(
+            points:
+            [
+                new Vector2f(100, 200),
+                new Vector2f(132, 200),
+                new Vector2f(132, 232),
+                new Vector2f(100, 232)
+            ],
+            zValues: [100, 101, 102, 103],
+            textureId: 5,
+            sectorIndex: sectorIndex,
+            faceIndex: faceIndex,
+            detail: detail,
+            faceColor: new ColorRgba(40, 80, 120),
+            sectorOffset: 0x1200 + sectorIndex,
+            faceOffset: 0x2200 + faceIndex,
+            vertexIndexes: [10, 11, 12, 13],
+            word3: "0x00000005",
+            word4: "0x00000000",
+            faceFlip: false,
+            faceDepth: 0,
+            colourIndexes: [20, 21, 22, 23]);
+        polygon.SetSurface("stone", new ColorRgba(40, 80, 120), "strict locked fixture");
+        polygon.SetBehavior("solid", "strict locked fixture", "exact", "immutable fixture metadata");
+        return polygon;
+    }
+
+    static JsonObject CloneRoot(byte[] bytes) =>
+        JsonNode.Parse(bytes)?.AsObject()
+        ?? throw new InvalidOperationException("Could not clone the strict terrain-edit fixture.");
+
+    static JsonObject FirstRow(JsonObject root) =>
+        root["edits"]?.AsArray()[0]?.AsObject()
+        ?? throw new InvalidOperationException("Strict terrain-edit fixture has no first row.");
+
+    int refusalCount = 0;
+    void AssertRefusal(string label, JsonObject root, params TerrainPolygon[] targets)
+    {
+        File.WriteAllText(editPath, root.ToJsonString());
+        foreach (TerrainPolygon target in targets)
+        {
+            target.ApplyTerrainVertexDeltas([2, 3, 4, 5]);
+            target.ApplyTerrainTranslation(7, -9);
+            target.ApplyTextureOverride(target.OriginalTextureId + 30);
+            target.StageTerrainRemoval();
+        }
+
+        var snapshots = targets.Select(target => new
+        {
+            Z = target.ZValues.ToArray(),
+            Points = target.Points.ToArray(),
+            target.TextureId,
+            target.StructureEdit,
+            target.Surface,
+            target.SurfaceSource,
+            target.SurfaceColor,
+            target.Behavior,
+            target.BehaviorSource,
+            target.BehaviorConfidence,
+            target.BehaviorNote
+        }).ToArray();
+
+        bool refused = false;
+        try
+        {
+            _ = TerrainEditStore.LoadStrict(editPath, targets);
+        }
+        catch (InvalidDataException)
+        {
+            refused = true;
+        }
+
+        bool unchanged = targets.Select((target, index) =>
+                target.ZValues.SequenceEqual(snapshots[index].Z) &&
+                target.Points.SequenceEqual(snapshots[index].Points) &&
+                target.TextureId == snapshots[index].TextureId &&
+                target.StructureEdit == snapshots[index].StructureEdit &&
+                string.Equals(target.Surface, snapshots[index].Surface, StringComparison.Ordinal) &&
+                string.Equals(target.SurfaceSource, snapshots[index].SurfaceSource, StringComparison.Ordinal) &&
+                target.SurfaceColor == snapshots[index].SurfaceColor &&
+                string.Equals(target.Behavior, snapshots[index].Behavior, StringComparison.Ordinal) &&
+                string.Equals(target.BehaviorSource, snapshots[index].BehaviorSource, StringComparison.Ordinal) &&
+                string.Equals(target.BehaviorConfidence, snapshots[index].BehaviorConfidence, StringComparison.Ordinal) &&
+                string.Equals(target.BehaviorNote, snapshots[index].BehaviorNote, StringComparison.Ordinal))
+            .All(value => value);
+        if (!refused || !unchanged)
+        {
+            throw new InvalidOperationException(
+                $"Strict terrain-edit refusal '{label}' was accepted or mutated target geometry.");
+        }
+
+        refusalCount++;
+    }
+
+    TerrainPolygon heightSource = CreateFixture();
+    heightSource.ApplyTerrainVertexDeltas([0, 5, 0, -3]);
+    if (await TerrainEditStore.SaveAsync(editPath, [heightSource], "strict height fixture") != 1)
+        throw new InvalidOperationException("Could not save the strict height fixture.");
+    byte[] validHeightBytes = await File.ReadAllBytesAsync(editPath);
+
+    TerrainPolygon loadedHeight = CreateFixture();
+    if (TerrainEditStore.LoadStrict(editPath, [loadedHeight]) != 1 ||
+        !loadedHeight.ZValues.SequenceEqual(new float[] { 100, 106, 102, 100 }) ||
+        loadedHeight.TextureId != loadedHeight.OriginalTextureId)
+    {
+        throw new InvalidOperationException("Strict terrain-edit loading did not apply the exact valid HP-Z row.");
+    }
+
+    TerrainPolygon textureSource = CreateFixture();
+    const int GenericUnboundedTextureId = 1024;
+    textureSource.ApplyTextureOverride(GenericUnboundedTextureId);
+    if (await TerrainEditStore.SaveAsync(editPath, [textureSource], "strict resident texture fixture") != 1)
+        throw new InvalidOperationException("Could not save the strict resident texture fixture.");
+    byte[] validTextureBytes = await File.ReadAllBytesAsync(editPath);
+
+    TerrainPolygon loadedTexture = CreateFixture();
+    if (TerrainEditStore.LoadStrict(editPath, [loadedTexture]) != 1 ||
+        loadedTexture.TextureId != GenericUnboundedTextureId ||
+        loadedTexture.HasHeightEdit)
+    {
+        throw new InvalidOperationException(
+            "Strict terrain-edit loading rejected a structurally valid texture ID outside app-owned ID65 policy.");
+    }
+
+    JsonObject noOpRoot = CloneRoot(validHeightBytes);
+    JsonObject noOpRow = FirstRow(noOpRoot);
+    noOpRow["editedZ"] = noOpRow["originalZ"]?.DeepClone();
+    noOpRow["vertexDeltaZ"] = JsonSerializer.SerializeToNode(new[] { 0f, 0f, 0f, 0f });
+    noOpRow["deltaZ"] = 0;
+    AssertRefusal("no-op Z row", noOpRoot, CreateFixture());
+
+    JsonObject missingPayloadRoot = CloneRoot(Encoding.UTF8.GetBytes(noOpRoot.ToJsonString()));
+    JsonObject missingPayloadRow = FirstRow(missingPayloadRoot);
+    missingPayloadRow.Remove("editedZ");
+    missingPayloadRow.Remove("vertexDeltaZ");
+    missingPayloadRow.Remove("deltaZ");
+    AssertRefusal("missing supported payload", missingPayloadRoot, CreateFixture());
+
+    JsonObject malformedZRoot = CloneRoot(validHeightBytes);
+    FirstRow(malformedZRoot)["editedZ"]!.AsArray()[1] = "not-a-number";
+    AssertRefusal("malformed editedZ", malformedZRoot, CreateFixture());
+
+    JsonObject nonFiniteZRoot = CloneRoot(validHeightBytes);
+    FirstRow(nonFiniteZRoot)["editedZ"]!.AsArray()[1] = JsonNode.Parse("1e100");
+    AssertRefusal("non-finite editedZ", nonFiniteZRoot, CreateFixture());
+
+    JsonObject shortZRoot = CloneRoot(validHeightBytes);
+    FirstRow(shortZRoot)["editedZ"]!.AsArray().RemoveAt(3);
+    AssertRefusal("editedZ count mismatch", shortZRoot, CreateFixture());
+
+    JsonObject countRoot = CloneRoot(validHeightBytes);
+    countRoot["editCount"] = 2;
+    AssertRefusal("declared row count mismatch", countRoot, CreateFixture());
+
+    JsonObject duplicateRoot = CloneRoot(validHeightBytes);
+    JsonArray duplicateRows = duplicateRoot["edits"]!.AsArray();
+    duplicateRows.Add(duplicateRows[0]?.DeepClone());
+    duplicateRoot["editCount"] = 2;
+    AssertRefusal("duplicate runtime key", duplicateRoot, CreateFixture());
+
+    JsonObject unknownRoot = CloneRoot(validHeightBytes);
+    JsonObject unknownRow = FirstRow(unknownRoot);
+    unknownRow["runtimeKey"] = "999:999:hp";
+    unknownRow["sectorIndex"] = 999;
+    unknownRow["faceIndex"] = 999;
+    AssertRefusal("unknown runtime key", unknownRoot, CreateFixture());
+
+    JsonObject identityRoot = CloneRoot(validHeightBytes);
+    FirstRow(identityRoot)["faceIndex"] = 12;
+    AssertRefusal("noncanonical bound HP identity", identityRoot, CreateFixture());
+
+    JsonObject offsetRoot = CloneRoot(validHeightBytes);
+    FirstRow(offsetRoot)["sectorOffset"] = "0x9999";
+    AssertRefusal("stale sector offset preimage", offsetRoot, CreateFixture());
+
+    JsonObject faceOffsetRoot = CloneRoot(validHeightBytes);
+    FirstRow(faceOffsetRoot)["faceOffset"] = "0x9999";
+    AssertRefusal("stale face offset preimage", faceOffsetRoot, CreateFixture());
+
+    JsonObject vertexRoot = CloneRoot(validHeightBytes);
+    FirstRow(vertexRoot)["vertexIndexes"]!.AsArray()[0] = 99;
+    AssertRefusal("stale vertex index preimage", vertexRoot, CreateFixture());
+
+    JsonObject wordRoot = CloneRoot(validHeightBytes);
+    FirstRow(wordRoot)["word3"] = "0x00000006";
+    AssertRefusal("stale material word preimage", wordRoot, CreateFixture());
+
+    JsonObject texturePreimageRoot = CloneRoot(validHeightBytes);
+    FirstRow(texturePreimageRoot)["textureId"] = 6;
+    AssertRefusal("stale original texture preimage", texturePreimageRoot, CreateFixture());
+
+    JsonObject originalZRoot = CloneRoot(validHeightBytes);
+    FirstRow(originalZRoot)["originalZ"]!.AsArray()[0] = 99;
+    AssertRefusal("stale originalZ preimage", originalZRoot, CreateFixture());
+
+    JsonObject shortOriginalZRoot = CloneRoot(validHeightBytes);
+    FirstRow(shortOriginalZRoot)["originalZ"]!.AsArray().RemoveAt(3);
+    AssertRefusal("originalZ vertex count mismatch", shortOriginalZRoot, CreateFixture());
+
+    JsonObject originalPointRoot = CloneRoot(validHeightBytes);
+    FirstRow(originalPointRoot)["originalPoints"]!.AsArray()[0]!.AsObject()["x"] = 99;
+    AssertRefusal("stale originalPoints preimage", originalPointRoot, CreateFixture());
+
+    JsonObject hostileSurfaceRoot = CloneRoot(validHeightBytes);
+    FirstRow(hostileSurfaceRoot)["surface"] = "lava";
+    AssertRefusal("hostile surface metadata", hostileSurfaceRoot, CreateFixture());
+
+    JsonObject hostileBehaviorRoot = CloneRoot(validHeightBytes);
+    FirstRow(hostileBehaviorRoot)["behaviorNote"] = "hostile behavior override";
+    AssertRefusal("hostile behavior metadata", hostileBehaviorRoot, CreateFixture());
+
+    JsonObject positionRoot = CloneRoot(validHeightBytes);
+    FirstRow(positionRoot)["editedPoints"]!.AsArray()[0]!.AsObject()["x"] = 101;
+    AssertRefusal("unsupported XY payload", positionRoot, CreateFixture());
+
+    JsonObject incompleteTextureRoot = CloneRoot(validTextureBytes);
+    FirstRow(incompleteTextureRoot).Remove("textureEditMode");
+    AssertRefusal("incomplete resident texture row", incompleteTextureRoot, CreateFixture());
+
+    JsonObject noOpTextureRoot = CloneRoot(validTextureBytes);
+    FirstRow(noOpTextureRoot)["textureIdEdited"] = 5;
+    AssertRefusal("no-op resident texture row", noOpTextureRoot, CreateFixture());
+
+    TerrainPolygon lowDetailSource = CreateFixture(sectorIndex: 8, faceIndex: 12, detail: "lp");
+    lowDetailSource.ApplyTerrainVertexDeltas([1, 1, 1, 1]);
+    if (await TerrainEditStore.SaveAsync(editPath, [lowDetailSource], "strict LP rejection fixture") != 1)
+        throw new InvalidOperationException("Could not save the strict LP rejection fixture.");
+    JsonObject lowDetailRoot = CloneRoot(await File.ReadAllBytesAsync(editPath));
+    AssertRefusal("bound low-detail row", lowDetailRoot, CreateFixture(8, 12, "lp"));
+
+    TerrainPolygon ordinaryTarget = CreateFixture();
+    await File.WriteAllTextAsync(
+        editPath,
+        "{\"edits\":[{\"runtimeKey\":\"7:11:hp\",\"editedZ\":[\"110\",\"111\",\"112\",\"113\"]}]}");
+    if (TerrainEditStore.Load(editPath, [ordinaryTarget]) != 1 ||
+        !ordinaryTarget.ZValues.SequenceEqual(new float[] { 110, 111, 112, 113 }))
+    {
+        throw new InvalidOperationException(
+            "Ordinary TerrainEditStore.Load lost its permissive legacy behavior.");
+    }
+
+    Console.WriteLine(
+        $"PASS TerrainEditStore strict smoke: valid HP-Z and unbounded generic texture-ID rows applied; " +
+        $"{refusalCount} hostile/no-op/stale rows refused atomically; ordinary Load remained permissive.");
 }
 
 sealed class WeakIdentityGroup

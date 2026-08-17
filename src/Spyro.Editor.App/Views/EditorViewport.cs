@@ -1023,6 +1023,21 @@ public sealed partial class EditorViewport : Control
         _selectedTerrainIndex,
         _selectedTerrainPointIndex);
 
+    internal void SelectTerrainForTesting(int terrainIndex)
+    {
+        GeometryCandidate? geometry = Geometry;
+        if (geometry == null || terrainIndex < 0 || terrainIndex >= geometry.Polygons.Count)
+            throw new ArgumentOutOfRangeException(nameof(terrainIndex));
+
+        _selectedMobyIndex = -1;
+        _selectedTerrainPointIndex = -1;
+        SetTerrainPresentationPin(ref _selectedTerrainIndex, terrainIndex);
+        SelectionChanged?.Invoke(
+            this,
+            ViewportSelectionChangedEventArgs.ForTerrain(terrainIndex, geometry.Polygons[terrainIndex]));
+        InvalidateVisual();
+    }
+
     internal NativeTerrainMapMaterialSnapshot CaptureNativeTerrainMapMaterialSnapshotForTesting() =>
         _nativeTerrainMapMaterialSnapshot;
 

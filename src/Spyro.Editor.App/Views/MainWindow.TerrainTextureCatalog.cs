@@ -333,10 +333,7 @@ public sealed partial class MainWindow
         out string error)
     {
         error = "";
-        string sourceImage = FirstExistingDiscImagePath(
-            _discImagePathBox.Text,
-            _skyboxDiscImagePathBox.Text,
-            DiscImageLocator.FindImage(_workspace));
+        string sourceImage = ResolveTerrainTextureSourceImage(level);
         if (string.IsNullOrWhiteSpace(sourceImage) || !File.Exists(sourceImage))
         {
             error = "Choose the Spyro BIN/CUE to decode native terrain behavior.";
@@ -432,10 +429,7 @@ public sealed partial class MainWindow
         error = "";
         IReadOnlyList<TerrainTextureSlot> slots = [];
         NativeTerrainTextureRuntimeControlAudit? runtimeControlAudit = null;
-        string sourceImage = FirstExistingDiscImagePath(
-            _discImagePathBox.Text,
-            _skyboxDiscImagePathBox.Text,
-            DiscImageLocator.FindImage(_workspace));
+        string sourceImage = ResolveTerrainTextureSourceImage(level);
         if (string.IsNullOrWhiteSpace(sourceImage) || !File.Exists(sourceImage))
         {
             error = "Choose the retail Spyro BIN/CUE to prove native texture records.";

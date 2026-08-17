@@ -12,6 +12,8 @@ namespace Spyro.Editor.App.Views;
 public sealed partial class MainWindow
 {
     private Border? _previousBetaProjectReminder;
+    private Button? _previousBetaProjectImportButton;
+    private Button? _projectDataImportButton;
 
     private Control BuildPreviousBetaProjectReminder()
     {
@@ -23,9 +25,12 @@ public sealed partial class MainWindow
             Foreground = new SolidColorBrush(Color.FromRgb(72, 55, 20)),
             FontWeight = FontWeight.SemiBold
         };
-        Button import = NewButton("Import Beta V1 Project");
-        import.Click += async (_, _) =>
+        _previousBetaProjectImportButton = NewButton("Import Beta V1 Project");
+        _previousBetaProjectImportButton.Click += async (_, _) =>
         {
+            if (TryBlockEditorMutationDuringId65BlankLabManualOperation(
+                    "opening the previous-beta project importer"))
+                return;
             if (_previousBetaProjectReminder != null)
                 _previousBetaProjectReminder.IsVisible = false;
             await ShowProjectDataAsync();
@@ -33,6 +38,9 @@ public sealed partial class MainWindow
         Button dismiss = NewButton("Not Needed");
         dismiss.Click += async (_, _) =>
         {
+            if (TryBlockEditorMutationDuringId65BlankLabManualOperation(
+                    "dismissing the previous-beta project reminder"))
+                return;
             if (_previousBetaProjectReminder != null)
                 _previousBetaProjectReminder.IsVisible = false;
             await MarkPreviousBetaProjectReminderHandledAsync();
@@ -48,8 +56,8 @@ public sealed partial class MainWindow
             ColumnSpacing = 8
         };
         content.Children.Add(message);
-        Grid.SetColumn(import, 1);
-        content.Children.Add(import);
+        Grid.SetColumn(_previousBetaProjectImportButton, 1);
+        content.Children.Add(_previousBetaProjectImportButton);
         Grid.SetColumn(dismiss, 2);
         content.Children.Add(dismiss);
         _previousBetaProjectReminder = new Border
@@ -134,6 +142,9 @@ public sealed partial class MainWindow
 
     private async Task ShowProjectDataAsync()
     {
+        if (TryBlockEditorMutationDuringId65BlankLabManualOperation("opening Project Data"))
+            return;
+
         ReleaseProjectContext? context = ReleaseProjectBootstrap.Current;
         if (!_releaseMode || context == null)
         {
@@ -226,65 +237,14 @@ public sealed partial class MainWindow
             Foreground = new SolidColorBrush(ModernMutedInk)
         };
         Button import = NewButton("Choose Previous Beta Folder...");
+        _projectDataImportButton = import;
         import.Click += async (_, _) =>
         {
-            if (HasUnsavedTerrainEdits() || HasUnsavedMobyEdits())
-            {
-                resultText.Text = "Save the current level before importing another beta project.";
-                return;
-            }
-
-            IReadOnlyList<IStorageFolder> folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-            {
-                Title = "Choose the previous Spyro Editor beta folder",
-                AllowMultiple = false
-            });
-            string sourceRoot = folders.FirstOrDefault()?.Path.LocalPath ?? "";
-            if (string.IsNullOrWhiteSpace(sourceRoot))
-                return;
-            if (string.Equals(Path.GetFullPath(sourceRoot), Path.GetFullPath(context.Project.RootPath), StringComparison.OrdinalIgnoreCase))
-            {
-                resultText.Text = "Choose the old application folder, not the current protected project folder.";
-                return;
-            }
-
-            import.IsEnabled = false;
-            resultText.Text = "Copying project data. Large generated outputs may take several minutes...";
-            try
-            {
-                PortableProjectMigrationResult result = await ReleaseProjectBootstrap.ImportPortableProjectAsync(
-                    sourceRoot,
-                    includeGeneratedOutputs: includeOutputs.IsChecked == true);
-                await MarkPreviousBetaProjectReminderHandledAsync();
-                if (_previousBetaProjectReminder != null)
-                    _previousBetaProjectReminder.IsVisible = false;
-                string conflictNote = result.ConflictCount == 0
-                    ? "No files were overwritten."
-                    : $" {result.ConflictCount} differing existing file(s) were preserved under _migration/conflicts.";
-                resultText.Text =
-                    $"Imported {result.CopiedCount} file(s), kept {result.ExistingCount} identical file(s), and skipped {result.SkippedCount} application/cache/game file(s)." +
-                    conflictNote + $" Migration report: {result.ReportPath}";
-                _nativeSkyReport = null;
-                _nativeSkyReportSourcePath = "";
-                string sourceImagePath = DiscImageLocator.FindImage(_workspace);
-                _skyboxDiscImagePathBox.Text = sourceImagePath;
-                _skyboxWadAnalysisPathBox.Text = WadAnalysisLocator.Find(_workspace);
-                _discImagePathBox.Text = sourceImagePath;
-                RefreshSourceDiscStatus();
-                LoadSavedExeStringPlan();
-                LoadLevels();
-                RefreshDiagnosticContext(includeSavedEdits: true);
-                EditorDiagnostics.RecordAction("Previous beta project imported", result.ReportPath);
-            }
-            catch (Exception exception)
-            {
-                resultText.Text = $"Could not import that beta folder: {exception.Message}";
-                EditorDiagnostics.RecordException("importing a previous beta project", exception);
-            }
-            finally
-            {
-                import.IsEnabled = true;
-            }
+            await ImportPreviousBetaProjectAsync(
+                context,
+                includeOutputs.IsChecked == true,
+                resultText,
+                import);
         };
         body.Children.Add(import);
         body.Children.Add(resultText);
@@ -293,6 +253,178 @@ public sealed partial class MainWindow
         close.HorizontalAlignment = HorizontalAlignment.Right;
         body.Children.Add(close);
         dialog.Content = new ScrollViewer { Content = body };
-        await dialog.ShowDialog(this);
+        try
+        {
+            await dialog.ShowDialog(this);
+        }
+        finally
+        {
+            if (ReferenceEquals(_projectDataImportButton, import))
+                _projectDataImportButton = null;
+        }
+    }
+
+    private async Task<bool> ImportPreviousBetaProjectAsync(
+        ReleaseProjectContext context,
+        bool includeGeneratedOutputs,
+        TextBlock? resultText,
+        Button? importButton)
+    {
+        if (TryBlockEditorMutationDuringId65BlankLabManualOperation(
+                "importing previous-beta project data"))
+            return false;
+        if (_projectDataImportBusy)
+        {
+            if (resultText != null)
+                resultText.Text = "A previous-beta project import is already running.";
+            return false;
+        }
+        if (HasUnsavedTerrainEdits() || HasUnsavedMobyEdits())
+        {
+            if (resultText != null)
+                resultText.Text = "Save the current level before importing another beta project.";
+            return false;
+        }
+
+        SourceDiscOperationIdentity captured = CaptureSourceDiscOperationIdentity();
+        string sourceRoot;
+        if (ProjectDataFolderPickerOverrideForTesting != null)
+        {
+            sourceRoot = await ProjectDataFolderPickerOverrideForTesting() ?? "";
+        }
+        else
+        {
+            IReadOnlyList<IStorageFolder> folders = await StorageProvider.OpenFolderPickerAsync(
+                new FolderPickerOpenOptions
+                {
+                    Title = "Choose the previous Spyro Editor beta folder",
+                    AllowMultiple = false
+                });
+            sourceRoot = folders.FirstOrDefault()?.Path.LocalPath ?? "";
+        }
+        if (string.IsNullOrWhiteSpace(sourceRoot) ||
+            !IsCurrentProjectDataContext(context) ||
+            !IsCurrentSourceDiscOperationIdentity(captured))
+            return false;
+        if (string.Equals(
+                Path.GetFullPath(sourceRoot),
+                Path.GetFullPath(context.Project.RootPath),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            if (resultText != null)
+                resultText.Text = "Choose the old application folder, not the current protected project folder.";
+            return false;
+        }
+
+        int generation = ++_projectDataImportGeneration;
+        _projectDataImportBusy = true;
+        SourceDiscOperationIdentity importIdentity = CaptureSourceDiscOperationIdentity();
+        RefreshId65BlankLabUi();
+        RefreshLevelSelectionAvailability();
+        RefreshActionAvailability();
+        if (resultText != null)
+            resultText.Text = "Copying project data. Large generated outputs may take several minutes...";
+        try
+        {
+            PortableProjectMigrationResult result =
+                await BeginPreviousBetaProjectImportAsync(
+                    sourceRoot,
+                    includeGeneratedOutputs);
+            if (generation != _projectDataImportGeneration ||
+                !IsCurrentProjectDataContext(context) ||
+                !IsCurrentSourceDiscOperationIdentity(
+                    importIdentity,
+                    allowProjectDataImport: true))
+                return false;
+
+            await MarkPreviousBetaProjectReminderHandledAsync();
+            if (generation != _projectDataImportGeneration ||
+                !IsCurrentProjectDataContext(context) ||
+                !IsCurrentSourceDiscOperationIdentity(
+                    importIdentity,
+                    allowProjectDataImport: true))
+                return false;
+            if (_previousBetaProjectReminder != null)
+                _previousBetaProjectReminder.IsVisible = false;
+            string conflictNote = result.ConflictCount == 0
+                ? "No files were overwritten."
+                : $" {result.ConflictCount} differing existing file(s) were preserved under _migration/conflicts.";
+            if (resultText != null)
+            {
+                resultText.Text =
+                    $"Imported {result.CopiedCount} file(s), kept {result.ExistingCount} identical file(s), and skipped {result.SkippedCount} application/cache/game file(s)." +
+                    conflictNote + $" Migration report: {result.ReportPath}";
+            }
+            _nativeSkyReport = null;
+            _nativeSkyReportSourcePath = "";
+            string sourceImagePath = DiscImageLocator.FindImage(captured.Workspace);
+            _skyboxDiscImagePathBox.Text = sourceImagePath;
+            _skyboxWadAnalysisPathBox.Text = WadAnalysisLocator.Find(captured.Workspace);
+            _discImagePathBox.Text = sourceImagePath;
+            RefreshSourceDiscStatus();
+            LoadSavedExeStringPlan();
+            LoadLevels();
+            RefreshDiagnosticContext(includeSavedEdits: true);
+            EditorDiagnostics.RecordAction("Previous beta project imported", result.ReportPath);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            if (generation != _projectDataImportGeneration ||
+                !IsCurrentSourceDiscOperationIdentity(
+                    importIdentity,
+                    requireSceneIdentity: false,
+                    allowProjectDataImport: true))
+                return false;
+            if (resultText != null)
+                resultText.Text = $"Could not import that beta folder: {exception.Message}";
+            EditorDiagnostics.RecordException("importing a previous beta project", exception);
+            return false;
+        }
+        finally
+        {
+            if (generation == _projectDataImportGeneration)
+            {
+                _projectDataImportBusy = false;
+                RefreshId65BlankLabUi();
+                RefreshLevelSelectionAvailability();
+                RefreshActionAvailability();
+            }
+            if (importButton != null && ReferenceEquals(_projectDataImportButton, importButton))
+                importButton.IsEnabled = !_id65BlankLabBusy &&
+                    !_regularEditorPersistenceBusy &&
+                    !_buildSafetyBusy;
+        }
+    }
+
+    internal Task<bool> ImportPreviousBetaProjectForTestingAsync()
+    {
+        ReleaseProjectContext context = ReleaseProjectBootstrap.Current ?? new ReleaseProjectContext(
+            InstallRoot: _workspace.RootPath,
+            UserData: new EditorUserDataLayout(
+                Path.Combine(_workspace.RootPath, "_local", "ui-smoke-user-data")),
+            Project: new EditorProjectLayout(_workspace.RootPath, "ui-smoke-project"),
+            AppVersion: "ui-smoke",
+            AutomaticMigration: null);
+        return ImportPreviousBetaProjectAsync(
+            context,
+            includeGeneratedOutputs: false,
+            resultText: null,
+            importButton: null);
+    }
+
+    private bool IsCurrentProjectDataContext(ReleaseProjectContext context) =>
+        ReferenceEquals(context, ReleaseProjectBootstrap.Current) ||
+        ProjectDataFolderPickerOverrideForTesting != null &&
+        PathsEqual(context.Project.RootPath, _workspace.RootPath);
+
+    private Task<PortableProjectMigrationResult> BeginPreviousBetaProjectImportAsync(
+        string sourceRoot,
+        bool includeGeneratedOutputs)
+    {
+        ProjectDataImportStartedForTesting?.Invoke();
+        return ReleaseProjectBootstrap.ImportPortableProjectAsync(
+            sourceRoot,
+            includeGeneratedOutputs: includeGeneratedOutputs);
     }
 }

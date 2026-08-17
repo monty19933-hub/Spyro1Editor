@@ -17,6 +17,10 @@ public sealed record CurrentProjectSettings(
     string ProjectRoot,
     DateTimeOffset SavedAtUtc);
 
+public sealed record PreparedReleaseProjectTransition(
+    ReleaseProjectContext SourceContext,
+    EditorProjectLayout Project);
+
 public sealed record AutomaticPortableMigrationMarker(
     int Version,
     string SourceRoot,
@@ -33,6 +37,7 @@ public static class ReleaseProjectBootstrap
     public const string ReleaseEnvironmentVariable = "SPYRO_EDITOR_RELEASE";
     public const string WorkspaceEnvironmentVariable = "SPYRO_EDITOR_WORKSPACE";
     private const string CurrentProjectFileName = "current-project.json";
+    private static readonly SemaphoreSlim ProjectCommitGate = new(1, 1);
 
     public static ReleaseProjectContext? Current { get; private set; }
 
@@ -130,6 +135,20 @@ public static class ReleaseProjectBootstrap
         string? displayName = null,
         CancellationToken cancellationToken = default)
     {
+        PreparedReleaseProjectTransition prepared = await PrepareProjectTransitionAsync(
+            projectRoot,
+            displayName,
+            cancellationToken);
+        return await CommitPreparedProjectTransitionAsync(
+            prepared,
+            cancellationToken);
+    }
+
+    public static async Task<PreparedReleaseProjectTransition> PrepareProjectTransitionAsync(
+        string projectRoot,
+        string? displayName = null,
+        CancellationToken cancellationToken = default)
+    {
         ReleaseProjectContext context = Current
             ?? throw new InvalidOperationException("Release project storage is not initialized.");
         EnsureProjectDoesNotOverlapInstall(context.InstallRoot, projectRoot);
@@ -140,10 +159,130 @@ public static class ReleaseProjectBootstrap
             context.AppVersion,
             cancellationToken);
         await SynchronizeSupportFilesAsync(context.InstallRoot, project.RootPath, cancellationToken);
-        await RememberProjectAsync(context.UserData, project, cancellationToken);
-        Environment.SetEnvironmentVariable(WorkspaceEnvironmentVariable, project.RootPath);
-        Current = context with { Project = project, AutomaticMigration = null };
-        return project;
+        return new PreparedReleaseProjectTransition(context, project);
+    }
+
+    public static Task<EditorProjectLayout> CommitPreparedProjectTransitionAsync(
+        PreparedReleaseProjectTransition prepared,
+        CancellationToken cancellationToken = default)
+    {
+        return CommitPreparedProjectTransitionCoreAsync(
+            prepared,
+            cancellationToken,
+            commitFaultForTesting: null);
+    }
+
+    public static Task<EditorProjectLayout> CommitPreparedProjectTransitionForEditorAsync(
+        PreparedReleaseProjectTransition prepared,
+        CancellationToken cancellationToken,
+        Action<string>? commitFaultForTesting)
+    {
+        return CommitPreparedProjectTransitionCoreAsync(
+            prepared,
+            cancellationToken,
+            commitFaultForTesting);
+    }
+
+    private static async Task<EditorProjectLayout> CommitPreparedProjectTransitionCoreAsync(
+        PreparedReleaseProjectTransition prepared,
+        CancellationToken cancellationToken,
+        Action<string>? commitFaultForTesting)
+    {
+        ArgumentNullException.ThrowIfNull(prepared);
+        await ProjectCommitGate.WaitAsync(cancellationToken);
+        try
+        {
+            ReleaseProjectContext sourceContext = prepared.SourceContext;
+            if (!ReferenceEquals(Current, sourceContext))
+            {
+                throw new OperationCanceledException(
+                    "The active release project changed before the prepared workspace could commit.",
+                    cancellationToken);
+            }
+
+            string settingsPath = Path.Combine(
+                sourceContext.UserData.SettingsPath,
+                CurrentProjectFileName);
+            byte[]? settingsBefore = File.Exists(settingsPath)
+                ? await File.ReadAllBytesAsync(settingsPath, cancellationToken)
+                : null;
+            string? workspaceEnvironmentBefore =
+                Environment.GetEnvironmentVariable(WorkspaceEnvironmentVariable);
+            ReleaseProjectContext? currentBefore = Current;
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!ReferenceEquals(Current, sourceContext))
+                {
+                    throw new OperationCanceledException(
+                        "The active release project changed before the prepared workspace could be remembered.",
+                        cancellationToken);
+                }
+
+                await RememberProjectAsync(
+                    sourceContext.UserData,
+                    prepared.Project,
+                    cancellationToken);
+                commitFaultForTesting?.Invoke("after-release-settings-publish");
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!ReferenceEquals(Current, sourceContext))
+                {
+                    throw new OperationCanceledException(
+                        "The active release project changed while the prepared workspace was being remembered.",
+                        cancellationToken);
+                }
+
+                Environment.SetEnvironmentVariable(
+                    WorkspaceEnvironmentVariable,
+                    prepared.Project.RootPath);
+                commitFaultForTesting?.Invoke("after-release-environment-publish");
+                Current = sourceContext with
+                {
+                    Project = prepared.Project,
+                    AutomaticMigration = null
+                };
+                commitFaultForTesting?.Invoke("after-release-context-publish");
+                return prepared.Project;
+            }
+            catch (Exception commitFailure)
+            {
+                List<Exception> failures = [commitFailure];
+                try
+                {
+                    await RestoreOptionalFileSnapshotAsync(
+                        settingsPath,
+                        settingsBefore);
+                }
+                catch (Exception rollbackFailure)
+                {
+                    failures.Add(rollbackFailure);
+                }
+
+                try
+                {
+                    Environment.SetEnvironmentVariable(
+                        WorkspaceEnvironmentVariable,
+                        workspaceEnvironmentBefore);
+                }
+                catch (Exception rollbackFailure)
+                {
+                    failures.Add(rollbackFailure);
+                }
+                Current = currentBefore;
+
+                if (failures.Count > 1)
+                {
+                    throw new AggregateException(
+                        "The prepared workspace commit failed and its release-context rollback was incomplete.",
+                        failures);
+                }
+                throw;
+            }
+        }
+        finally
+        {
+            ProjectCommitGate.Release();
+        }
     }
 
     public static async Task<PortableProjectMigrationResult> ImportPortableProjectAsync(
@@ -381,6 +520,31 @@ public static class ReleaseProjectBootstrap
             settingsPath,
             settings,
             cancellationToken);
+    }
+
+    private static async Task RestoreOptionalFileSnapshotAsync(
+        string path,
+        byte[]? contents)
+    {
+        if (contents == null)
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+            return;
+        }
+
+        string temporaryPath = $"{path}.{Guid.NewGuid():N}.restore";
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
+            await File.WriteAllBytesAsync(temporaryPath, contents);
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+                File.Delete(temporaryPath);
+        }
     }
 
     private static async Task<EditorProjectLayout> EnsureProjectAtPathAsync(

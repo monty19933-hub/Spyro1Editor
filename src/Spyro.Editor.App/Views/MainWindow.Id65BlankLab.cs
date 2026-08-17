@@ -5,15 +5,19 @@ using Avalonia.Media;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Spyro.Editor.Core.Cache;
+using Spyro.Editor.Core.Diagnostics;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Music;
+using Spyro.Editor.Core.Persistence;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Skyboxes;
 using Spyro.Editor.Core.Text;
+using Spyro.Editor.Core.Workspace;
 
 namespace Spyro.Editor.App.Views;
 
@@ -23,7 +27,7 @@ public sealed partial class MainWindow
     private const string Id65BlankLabTerrainCapability =
         "Existing HP Z: research-only through the topology-safe solid-terrain path. True Add, LP authoring, and XY movement: unavailable.";
     private const string Id65BlankLabTextureCapability =
-        "Resident bytes: bound to the locked payload. Portable/custom art: research-only and requires a proved destination profile before a test CUE.";
+        "Same-level resident textures: editor preview and isolated authored-layer saving. Cross-level/custom art and runtime export remain unavailable until a destination profile is proved.";
     private const string Id65BlankLabMobyCapability =
         "Resident records: inspection only. Mutation, portable imports, arbitrary actors, and linked families: unavailable until a destination profile exists.";
 
@@ -36,10 +40,38 @@ public sealed partial class MainWindow
     private Button? _id65BlankLabCreateCueButton;
     private Button? _id65BlankLabRevealButton;
     private bool _id65BlankLabBusy;
+    private CancellationTokenSource? _id65BlankLabManualOperationCancellation;
+    private int _id65BlankLabManualOperationGeneration;
+    private Id65BlankLabManualOperation? _id65BlankLabManualOperation;
     private string _id65BlankLabRevealPath = "";
     private UnusedLevel65BlankLevelLabWorkspacePaths? _id65BlankLabPaths;
     private UnusedLevel65BlankLevelLabManifest? _id65BlankLabManifest;
+    private string _id65BlankLabTextureOverlaySha256 = "";
     private string _id65BlankLabValidationFailure = "";
+    private CancellationTokenSource? _id65BlankLabCatalogValidationCancellation;
+    private int _id65BlankLabCatalogValidationGeneration;
+    private bool _id65BlankLabCatalogValidationBusy;
+    private bool _id65BlankLabCatalogValidationLifetimeEnded;
+    internal Func<
+        UnusedLevel65BlankLevelLabWorkspacePaths,
+        CancellationToken,
+        Task<UnusedLevel65BlankLevelLabManifest>>?
+        Id65BlankLabCatalogValidationOverrideForTesting { get; set; }
+    internal Func<string, CancellationToken, Task>?
+        Id65BlankLabManualOperationDelayOverrideForTesting { get; set; }
+    internal Action<string>? Id65BlankLabTerrainPersistenceFaultForTesting { get; set; }
+
+    private sealed record Id65BlankLabManualOperation(
+        int Generation,
+        string Name,
+        string WorkspaceRoot,
+        LevelDefinition? LevelIdentity,
+        GeometryCandidate? GeometryIdentity,
+        CancellationTokenSource Cancellation)
+    {
+        public LevelDefinition? ExpectedLevelIdentity { get; set; } = LevelIdentity;
+        public GeometryCandidate? ExpectedGeometryIdentity { get; set; } = GeometryIdentity;
+    }
 
     private Control BuildId65BlankLevelLabDisclosure()
     {
@@ -200,33 +232,117 @@ public sealed partial class MainWindow
         LineHeight = 16
     };
 
-    private LevelCatalog BuildCatalogWithValidatedId65BlankLab(LevelCatalog retailCatalog)
+    private LevelCatalog ResetCatalogForDeferredId65BlankLabValidation(LevelCatalog retailCatalog)
     {
         ArgumentNullException.ThrowIfNull(retailCatalog);
+        CancelId65BlankLabCatalogValidation();
         _id65BlankLabPaths =
             UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(_workspace.RootPath);
         _id65BlankLabManifest = null;
+        _id65BlankLabTextureOverlaySha256 = "";
         _id65BlankLabValidationFailure = "";
+        _id65BlankLabCatalogValidationBusy = !_id65BlankLabCatalogValidationLifetimeEnded;
+        return retailCatalog;
+    }
+
+    private async Task ValidateAndAdmitId65BlankLabCatalogAsync()
+    {
+        if (_id65BlankLabCatalogValidationLifetimeEnded)
+            return;
+
+        if (_id65BlankLabManifest != null &&
+            _catalog.FindByKey(UnusedLevel65BlankLevelLabProfileRegistry.Key) != null)
+        {
+            return;
+        }
+
+        UnusedLevel65BlankLevelLabWorkspacePaths paths = _id65BlankLabPaths ??
+            UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(_workspace.RootPath);
+        int generation = ++_id65BlankLabCatalogValidationGeneration;
+        _id65BlankLabCatalogValidationCancellation?.Cancel();
+        CancellationTokenSource cancellation = new();
+        _id65BlankLabCatalogValidationCancellation = cancellation;
+        _id65BlankLabCatalogValidationBusy = true;
+        RefreshId65BlankLabUi();
         try
         {
-            _id65BlankLabManifest = UnusedLevel65BlankLevelLabBootstrapper
-                .ValidatePublishedWorkspaceAsync(_id65BlankLabPaths)
-                .GetAwaiter()
-                .GetResult();
-            return UnusedLevel65BlankLevelLabProfileRegistry.AugmentCatalog(retailCatalog);
+            Func<
+                UnusedLevel65BlankLevelLabWorkspacePaths,
+                CancellationToken,
+                Task<UnusedLevel65BlankLevelLabManifest>> validator =
+                Id65BlankLabCatalogValidationOverrideForTesting ??
+                UnusedLevel65BlankLevelLabBootstrapper.ValidatePublishedWorkspaceAsync;
+            UnusedLevel65BlankLevelLabManifest manifest =
+                await Task.Run(
+                    async () => await validator(paths, cancellation.Token).ConfigureAwait(false),
+                    cancellation.Token);
+            if (_id65BlankLabCatalogValidationLifetimeEnded ||
+                generation != _id65BlankLabCatalogValidationGeneration ||
+                cancellation.IsCancellationRequested)
+                return;
+
+            _id65BlankLabPaths = paths;
+            _id65BlankLabManifest = manifest;
+            _id65BlankLabValidationFailure = "";
+            AdmitValidatedId65BlankLabToCatalog();
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException or UnauthorizedAccessException)
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
+        }
+        catch (Exception ex) when (ex is
+            IOException or
+            InvalidDataException or
+            JsonException or
+            UnauthorizedAccessException)
+        {
+            if (generation != _id65BlankLabCatalogValidationGeneration)
+                return;
             _id65BlankLabValidationFailure = ex.Message;
-            return retailCatalog;
+            _id65BlankLabManifest = null;
+        }
+        catch (Exception ex)
+        {
+            if (generation != _id65BlankLabCatalogValidationGeneration)
+                return;
+            _id65BlankLabValidationFailure = ex.Message;
+            _id65BlankLabManifest = null;
+            EditorDiagnostics.RecordException("validating the deferred ID65 lab catalog", ex);
+        }
+        finally
+        {
+            if (generation == _id65BlankLabCatalogValidationGeneration)
+            {
+                _id65BlankLabCatalogValidationBusy = false;
+                if (ReferenceEquals(_id65BlankLabCatalogValidationCancellation, cancellation))
+                    _id65BlankLabCatalogValidationCancellation = null;
+                RefreshId65BlankLabUi();
+            }
+            cancellation.Dispose();
         }
     }
 
+    private void CancelId65BlankLabCatalogValidation()
+    {
+        ++_id65BlankLabCatalogValidationGeneration;
+        _id65BlankLabCatalogValidationCancellation?.Cancel();
+        _id65BlankLabCatalogValidationCancellation = null;
+        _id65BlankLabCatalogValidationBusy = false;
+    }
+
+    private void EndId65BlankLabCatalogValidationLifetime()
+    {
+        _id65BlankLabCatalogValidationLifetimeEnded = true;
+        CancelId65BlankLabCatalogValidation();
+    }
+
+    internal Task ValidateAndAdmitId65BlankLabCatalogForTestingAsync() =>
+        ValidateAndAdmitId65BlankLabCatalogAsync();
+
+    internal void EndId65BlankLabCatalogValidationLifetimeForTesting() =>
+        EndId65BlankLabCatalogValidationLifetime();
+
     private async Task BuildOrRefreshId65BlankLabBaseAsync()
     {
-        if (_id65BlankLabBusy)
-            return;
-
         string sourceImage = FirstExistingDiscImagePath(
             _discImagePathBox.Text,
             _skyboxDiscImagePathBox.Text,
@@ -239,14 +355,27 @@ public sealed partial class MainWindow
             return;
         }
 
-        SetId65BlankLabBusy(true);
+        if (!TryBeginId65BlankLabManualOperation(
+                "locked-base build/refresh",
+                out Id65BlankLabManualOperation? operation) ||
+            operation == null)
+        {
+            return;
+        }
+
         _statusText.Text = "ID65 Lab: validating the clean disc and building the evidence-bound locked base...";
         try
         {
+            await AwaitId65BlankLabManualOperationDelayForTestingAsync(
+                operation,
+                "build-started");
+            RequireCurrentId65BlankLabManualOperation(operation);
             UnusedLevel65BlankLevelLabWorkspacePaths requestedPaths =
-                UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(_workspace.RootPath);
+                UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(operation.WorkspaceRoot);
             Id65BlankLabAuthoredLayerSnapshot authoredBefore =
-                await CaptureId65BlankLabAuthoredLayerAsync(requestedPaths.AuthoredEditsDirectoryPath);
+                await CaptureId65BlankLabAuthoredLayerAsync(
+                    requestedPaths.AuthoredEditsDirectoryPath,
+                    operation.Cancellation.Token);
             bool repairingExistingWorkspace =
                 File.Exists(requestedPaths.ManifestPath) ||
                 File.Exists(requestedPaths.LockedBaseImagePath) ||
@@ -257,14 +386,24 @@ public sealed partial class MainWindow
                     new UnusedLevel65BlankLevelLabBootstrapRequest(
                         sourceImage,
                         sourceCue,
-                        _workspace.RootPath,
-                        ReplaceInvalidExistingWorkspace: true));
+                        operation.WorkspaceRoot,
+                        ReplaceInvalidExistingWorkspace: true),
+                    operation.Cancellation.Token);
+            RequireCurrentId65BlankLabManualOperation(operation);
             Id65BlankLabAuthoredLayerSnapshot authoredAfter =
-                await CaptureId65BlankLabAuthoredLayerAsync(result.Paths.AuthoredEditsDirectoryPath);
+                await CaptureId65BlankLabAuthoredLayerAsync(
+                    result.Paths.AuthoredEditsDirectoryPath,
+                    operation.Cancellation.Token);
             EnsureId65BlankLabAuthoredLayerPreserved(authoredBefore, authoredAfter);
-            await BuildId65BlankLabCacheAsync(result.Paths, overwrite: true);
+            UnusedLevel65BlankLevelLabManifest cacheManifest =
+                await BuildId65BlankLabCacheAsync(
+                    result.Paths,
+                    overwrite: true,
+                    operation.Cancellation.Token,
+                    operation);
+            RequireCurrentId65BlankLabManualOperation(operation);
             _id65BlankLabPaths = result.Paths;
-            _id65BlankLabManifest = result.Manifest;
+            _id65BlankLabManifest = cacheManifest;
             _id65BlankLabValidationFailure = "";
             AdmitValidatedId65BlankLabToCatalog();
             _statusText.Text = result.ReusedExistingLockedBase
@@ -273,38 +412,80 @@ public sealed partial class MainWindow
                     ? "ID65 Lab: invalid/partial locked-base files were repaired transactionally; the authored-edits layer and clean source BIN were preserved."
                     : "ID65 Lab: exact locked base was built and validated; the clean source BIN was preserved.";
         }
+        catch (OperationCanceledException) when (operation.Cancellation.IsCancellationRequested ||
+                                                 !IsCurrentId65BlankLabManualOperation(
+                                                     operation,
+                                                     requireSceneIdentity: true))
+        {
+            // A workspace/level/generation switch owns the visible state now.
+            // Never publish this older operation's status or manifest there.
+        }
         catch (Exception ex)
         {
-            _id65BlankLabValidationFailure = ex.Message;
-            _statusText.Text = $"Could not build the ID65 locked base: {ex.Message}";
+            if (IsCurrentId65BlankLabManualOperation(
+                    operation,
+                    requireSceneIdentity: true))
+            {
+                _id65BlankLabValidationFailure = ex.Message;
+                _statusText.Text = $"Could not build the ID65 locked base: {ex.Message}";
+            }
         }
         finally
         {
-            SetId65BlankLabBusy(false);
+            CompleteId65BlankLabManualOperation(operation);
         }
     }
 
     private async Task LoadId65BlankLabAsync()
     {
-        if (_id65BlankLabBusy)
+        if (!TryBeginId65BlankLabManualOperation(
+                "load",
+                out Id65BlankLabManualOperation? operation) ||
+            operation == null)
+        {
             return;
+        }
 
-        SetId65BlankLabBusy(true);
         try
         {
-            if (!await TryValidateId65BlankLabAsync())
+            await AwaitId65BlankLabManualOperationDelayForTestingAsync(
+                operation,
+                "load-started");
+            if (!await TryValidateId65BlankLabAsync(operation))
             {
+                RequireCurrentId65BlankLabManualOperation(operation);
                 _statusText.Text =
                     $"Build and validate the ID65 locked base before loading the lab. {_id65BlankLabValidationFailure}".Trim();
                 return;
             }
 
-            await BuildId65BlankLabCacheAsync(_id65BlankLabPaths!, overwrite: false);
+            UnusedLevel65BlankLevelLabWorkspacePaths paths = _id65BlankLabPaths!;
+            UnusedLevel65BlankLevelLabManifest manifest = await BuildId65BlankLabCacheAsync(
+                paths,
+                overwrite: false,
+                operation.Cancellation.Token,
+                operation);
+            RequireCurrentId65BlankLabManualOperation(operation);
             AdmitValidatedId65BlankLabToCatalog();
             LevelDefinition lab = _catalog.FindByKey(UnusedLevel65BlankLevelLabProfileRegistry.Key)
                 ?? throw new InvalidOperationException("The validated ID65 lab was not admitted to the in-memory catalog.");
             LevelDefinition? previousLevel = _currentLevel;
-            await SelectLevelFromPickerAsync(lab);
+            if (IsCurrentId65BlankLab())
+            {
+                if (HasUnsavedTerrainEdits())
+                {
+                    _statusText.Text =
+                        "ID65 Lab reload refused because the current terrain has unsaved edits. Save or undo those edits before reloading the locked workspace.";
+                    return;
+                }
+                await SelectLevelAsync(lab, operation);
+            }
+            else
+            {
+                await SelectLevelFromPickerAsync(lab, operation);
+            }
+            if (!IsCurrentId65BlankLabManualOperation(operation))
+                return;
             if (!IsCurrentId65BlankLab())
             {
                 if (ReferenceEquals(_currentLevel, previousLevel) ||
@@ -315,16 +496,26 @@ public sealed partial class MainWindow
                 }
                 return;
             }
+            _id65BlankLabManifest = manifest;
             _statusText.Text =
                 $"Loaded {lab.DisplayName} from its locked base: {_currentGeometry?.Polygons.Count ?? 0} terrain faces and {_currentMobys.Count} resident Mobys for inspection.";
         }
+        catch (OperationCanceledException) when (operation.Cancellation.IsCancellationRequested ||
+                                                 !IsCurrentId65BlankLabManualOperation(
+                                                     operation,
+                                                     requireSceneIdentity: true))
+        {
+        }
         catch (Exception ex)
         {
-            _statusText.Text = $"Could not load the ID65 lab: {ex.Message}";
+            if (IsCurrentId65BlankLabManualOperation(
+                    operation,
+                    requireSceneIdentity: true))
+                _statusText.Text = $"Could not load the ID65 lab: {ex.Message}";
         }
         finally
         {
-            SetId65BlankLabBusy(false);
+            CompleteId65BlankLabManualOperation(operation);
         }
     }
 
@@ -335,29 +526,39 @@ public sealed partial class MainWindow
 
     private async Task CreateId65BlankLabDisposableCueAsync()
     {
-        if (_id65BlankLabBusy)
-            return;
         if (!IsCurrentId65BlankLab())
         {
             _statusText.Text = "Load the validated ID65 lab before creating its disposable test CUE.";
             return;
         }
+        if (!TryBeginId65BlankLabManualOperation(
+                "disposable test CUE creation",
+                out Id65BlankLabManualOperation? operation) ||
+            operation == null)
+        {
+            return;
+        }
 
-        SetId65BlankLabBusy(true);
         try
         {
-            if (!await TryValidateId65BlankLabAsync())
+            await AwaitId65BlankLabManualOperationDelayForTestingAsync(
+                operation,
+                "create-started");
+            if (!await TryValidateId65BlankLabAsync(operation))
                 throw new InvalidDataException(_id65BlankLabValidationFailure);
-            if (_currentGeometry == null)
-                throw new InvalidOperationException("The ID65 lab terrain is not loaded.");
+            RequireCurrentId65BlankLabManualOperation(operation);
+            GeometryCandidate geometry = operation.GeometryIdentity
+                ?? throw new InvalidOperationException("The ID65 lab terrain is not loaded.");
 
-            if (!await SaveId65BlankLabWorkspaceCoreAsync(announce: false))
+            if (!await SaveId65BlankLabWorkspaceCoreAsync(
+                    announce: false,
+                    existingOperation: operation))
             {
                 throw new InvalidOperationException(
                     "The ID65 research workspace contains an unsupported edit and was not saved.");
             }
             if (!TryValidateId65BlankLabTerrainForDisposableCue(
-                    _currentGeometry,
+                    geometry,
                     out string terrainBlocker))
             {
                 throw new InvalidOperationException(terrainBlocker);
@@ -368,20 +569,28 @@ public sealed partial class MainWindow
                     $"This first disposable writer accepts only existing HP Z terrain edits. {unsupportedArtifact}");
             }
 
-            string terrainEditsPath = Id65BlankLabTerrainEditsPath();
+            UnusedLevel65BlankLevelLabWorkspacePaths paths =
+                UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(
+                    operation.WorkspaceRoot);
+            string terrainEditsPath = Path.Combine(
+                paths.AuthoredEditsDirectoryPath,
+                $"{UnusedLevel65BlankLevelLabProfileRegistry.Key}-terrain-edits.json");
             if (!TerrainEditFileHasEdits(terrainEditsPath))
                 throw new InvalidOperationException("Make and save at least one existing HP Z terrain edit first.");
 
+            RequireCurrentId65BlankLabManualOperation(operation);
             string testKey = CreateId65BlankLabDisposableTestKey();
             UnusedLevel65BlankLevelLabTerrainTestResult result =
                 await UnusedLevel65BlankLevelLabTerrainTestExporter.CreateDisposableTerrainTestAsync(
                     new UnusedLevel65BlankLevelLabTerrainTestRequest(
-                        WorkspaceContainerPath: _workspace.RootPath,
+                        WorkspaceContainerPath: operation.WorkspaceRoot,
                         TerrainEditsPath: terrainEditsPath,
                         TestKey: testKey,
                         TestDisplayName: "ID65 Blank-Level Lab HP-Z terrain test",
                         ReplaceExistingTest: false,
-                        RequestFinderReveal: OperatingSystem.IsMacOS()));
+                        RequestFinderReveal: OperatingSystem.IsMacOS()),
+                    operation.Cancellation.Token);
+            RequireCurrentId65BlankLabManualOperation(operation);
             _id65BlankLabRevealPath = result.Terrain.OutputCuePath;
             RefreshId65BlankLabUi();
             RevealId65BlankLabOutput();
@@ -390,13 +599,22 @@ public sealed partial class MainWindow
                 $"Checklist (all four load codes): {Path.GetFileName(result.Paths.RuntimeChecklistPath)}. " +
                 $"Readback verified across {result.VerifiedRawSectorCount} raw sector(s); BIN SHA-256 {result.OutputImageSha256}.";
         }
+        catch (OperationCanceledException) when (operation.Cancellation.IsCancellationRequested ||
+                                                 !IsCurrentId65BlankLabManualOperation(
+                                                     operation,
+                                                     requireSceneIdentity: true))
+        {
+        }
         catch (Exception ex)
         {
-            _statusText.Text = $"Could not create an ID65 disposable test CUE: {ex.Message}";
+            if (IsCurrentId65BlankLabManualOperation(
+                    operation,
+                    requireSceneIdentity: true))
+                _statusText.Text = $"Could not create an ID65 disposable test CUE: {ex.Message}";
         }
         finally
         {
-            SetId65BlankLabBusy(false);
+            CompleteId65BlankLabManualOperation(operation);
         }
     }
 
@@ -429,7 +647,13 @@ public sealed partial class MainWindow
         bool active = IsCurrentId65BlankLab();
         bool hasTerrain = TerrainEditFileHasEdits(Id65BlankLabTerrainEditsPath());
         bool hasUnsupported = TryGetId65BlankLabUnsupportedArtifact(out string unsupported);
-        _id65BlankLabStatusText.Text = valid
+        bool disposableTerrainReady =
+            active &&
+            _currentGeometry != null &&
+            TryValidateId65BlankLabTerrainForDisposableCue(_currentGeometry, out _);
+        _id65BlankLabStatusText.Text = _id65BlankLabCatalogValidationBusy
+            ? "Checking the existing ID65 locked base in the background. The editor remains available while its exact manifest and BIN identity are validated."
+            : valid
             ? "Validated evidence-bound lab. ID65 is admitted only in memory; the retail catalog file remains exactly 35 levels. Normal Create BIN never includes this lab."
             : "Setup required: choose the clean Spyro CUE/BIN, then build the versioned locked base. " +
               "ID65 stays out of the level picker until its manifest and base pass exact validation." +
@@ -441,26 +665,32 @@ public sealed partial class MainWindow
             : "Not built or not validated.";
         _id65BlankLabAuthoredLayerText.Text = valid
             ? $"Isolated by versioned manifest + unique key '{UnusedLevel65BlankLevelLabProfileRegistry.Key}'. " +
-              $"Saved HP-Z terrain: {(hasTerrain ? "present" : "none")}." +
+              $"Saved HP-Z/resident-texture terrain: {(hasTerrain ? "present" : "none")}." +
               (hasUnsupported ? $" Disposable writer blocked: {unsupported}" : "")
             : "No admitted lab workspace. Normal Create BIN remains separate.";
 
+        bool busy = _id65BlankLabBusy ||
+            _id65BlankLabCatalogValidationBusy ||
+            HasConflictingId65BlankLabManualOperationState();
         if (_id65BlankLabBuildButton != null)
-            _id65BlankLabBuildButton.IsEnabled = !_id65BlankLabBusy;
+            _id65BlankLabBuildButton.IsEnabled = !busy;
         if (_id65BlankLabLoadButton != null)
-            _id65BlankLabLoadButton.IsEnabled = valid && !_id65BlankLabBusy;
+            _id65BlankLabLoadButton.IsEnabled = valid && !busy;
         if (_id65BlankLabSaveButton != null)
-            _id65BlankLabSaveButton.IsEnabled = valid && active && !_id65BlankLabBusy;
+            _id65BlankLabSaveButton.IsEnabled = valid && active && !busy;
         if (_id65BlankLabCreateCueButton != null)
             _id65BlankLabCreateCueButton.IsEnabled =
-                valid && active && !_id65BlankLabBusy && !hasUnsupported &&
-                (hasTerrain || HasUnsavedTerrainEdits());
+                valid && active && !busy && !hasUnsupported &&
+                disposableTerrainReady;
         if (_id65BlankLabRevealButton != null)
             _id65BlankLabRevealButton.IsEnabled =
-                !_id65BlankLabBusy && File.Exists(_id65BlankLabRevealPath);
+                !busy && File.Exists(_id65BlankLabRevealPath);
     }
 
-    private async Task<bool> SaveId65BlankLabWorkspaceCoreAsync(bool announce)
+    private async Task<bool> SaveId65BlankLabWorkspaceCoreAsync(
+        bool announce,
+        Id65BlankLabManualOperation? existingOperation = null,
+        bool automaticTerrainPersistence = false)
     {
         if (!IsCurrentId65BlankLab() || _currentGeometry == null)
         {
@@ -468,114 +698,444 @@ public sealed partial class MainWindow
                 _statusText.Text = "Load the validated ID65 lab before saving its research workspace.";
             return false;
         }
-        if (HasUnsavedMobyEdits() ||
-            _currentMobys.Any(moby => moby.HasAnyEdit) ||
-            HasUnsavedNativeMovementEdits() ||
-            HasUnsavedDragonRunToEdits())
+        bool ownsOperation = existingOperation == null;
+        Id65BlankLabManualOperation? operation = existingOperation;
+        if (ownsOperation &&
+            (!TryBeginId65BlankLabManualOperation(
+                 automaticTerrainPersistence ? "automatic terrain persistence" : "save",
+                 out operation,
+                 allowActiveTerrainPersistence: automaticTerrainPersistence) ||
+             operation == null))
         {
-            _statusText.Text =
-                "ID65 Lab save refused: resident Mobys and native movement records are inspection-only. Undo the object/native movement mutation or reload the Lab; the editor did not mark it saved.";
             return false;
         }
-        if (!TryValidateId65BlankLabTerrainEdits(
-                _currentGeometry,
-                requireAtLeastOneEdit: false,
-                out string terrainBlocker))
-        {
-            _statusText.Text = $"ID65 Lab save refused: {terrainBlocker}";
-            return false;
-        }
-        if (!await TryValidateId65BlankLabAsync())
-        {
-            if (announce)
-                _statusText.Text = $"Could not validate the ID65 research workspace: {_id65BlankLabValidationFailure}";
-            return false;
-        }
+        if (operation == null)
+            throw new InvalidOperationException("The ID65 Lab save operation context is missing.");
 
-        int terrainCount = await PersistCurrentTerrainEditsAsync();
-        RefreshCurrentLevelDetails();
-        RefreshId65BlankLabUi();
-        if (announce)
-        {
-            _statusText.Text =
-                $"Saved {terrainCount} ID65 terrain edit(s) under the unique versioned lab identity. " +
-                "Resident Mobys remain inspection-only, and this authored layer is excluded from normal Create BIN.";
-        }
-        return true;
-    }
-
-    private async Task<bool> TryValidateId65BlankLabAsync()
-    {
-        if (Id65BlankLabValidationOverrideForTesting != null)
-            return await Id65BlankLabValidationOverrideForTesting();
-
-        _id65BlankLabPaths ??=
-            UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(_workspace.RootPath);
+        UnusedLevel65BlankLevelLabManifest? expectedManifest = _id65BlankLabManifest;
+        string? stagedTerrainEditsPath = null;
         try
         {
-            _id65BlankLabManifest = await UnusedLevel65BlankLevelLabBootstrapper
-                .ValidatePublishedWorkspaceAsync(_id65BlankLabPaths);
+            if (ownsOperation)
+            {
+                await AwaitId65BlankLabManualOperationDelayForTestingAsync(
+                    operation,
+                    "save-started");
+            }
+            RequireCurrentId65BlankLabManualOperation(operation);
+            if (HasUnsavedMobyEdits() ||
+                _currentMobys.Any(moby => moby.HasAnyEdit) ||
+                HasUnsavedNativeMovementEdits() ||
+                HasUnsavedDragonRunToEdits())
+            {
+                _statusText.Text =
+                    "ID65 Lab save refused: resident Mobys and native movement records are inspection-only. Undo the object/native movement mutation or reload the Lab; the editor did not mark it saved.";
+                return false;
+            }
+            GeometryCandidate geometry = operation.GeometryIdentity
+                ?? throw new InvalidOperationException("The ID65 Lab save lost its captured terrain identity.");
+            if (!TryValidateId65BlankLabTerrainEdits(
+                    geometry,
+                    requireAtLeastOneEdit: false,
+                    allowResidentTextureEdits: true,
+                    out string terrainBlocker))
+            {
+                _statusText.Text = $"ID65 Lab save refused: {terrainBlocker}";
+                return false;
+            }
+            if (!await TryValidateId65BlankLabAsync(operation))
+            {
+                RequireCurrentId65BlankLabManualOperation(operation);
+                _statusText.Text =
+                    $"Could not validate the ID65 research workspace: {_id65BlankLabValidationFailure}";
+                return false;
+            }
+
+            RequireCurrentId65BlankLabManualOperation(operation);
+            UnusedLevel65BlankLevelLabWorkspacePaths paths =
+                UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(
+                    operation.WorkspaceRoot);
+            if (expectedManifest == null)
+                throw new InvalidDataException("The ID65 save has no admitted locked-workspace manifest identity.");
+            UnusedLevel65BlankLevelLabManifest validatedCacheManifest =
+                await BuildId65BlankLabCacheAsync(
+                    paths,
+                    overwrite: false,
+                    operation.Cancellation.Token,
+                    operation);
+            RequireCurrentId65BlankLabManualOperation(operation);
+            if (!Equals(validatedCacheManifest, expectedManifest))
+            {
+                throw new InvalidDataException(
+                    "The published ID65 workspace changed after this Lab scene was admitted. Reload the Lab before saving terrain.");
+            }
+
+            string terrainEditsPath = Path.Combine(
+                paths.AuthoredEditsDirectoryPath,
+                $"{UnusedLevel65BlankLevelLabProfileRegistry.Key}-terrain-edits.json");
+            Directory.CreateDirectory(paths.AuthoredEditsDirectoryPath);
+            string persistedTerrainSignature = BuildTerrainEditSignature(geometry);
+            stagedTerrainEditsPath = Path.Combine(
+                paths.AuthoredEditsDirectoryPath,
+                $".{UnusedLevel65BlankLevelLabProfileRegistry.Key}-terrain-edits-save-{operation.Generation}-{Guid.NewGuid():N}.tmp");
+            int terrainCount = await TerrainEditStore.SaveAsync(
+                stagedTerrainEditsPath,
+                geometry.Polygons,
+                operation.LevelIdentity?.DisplayName ??
+                    UnusedLevel65BlankLevelLabProfileRegistry.Definition.DisplayName,
+                operation.Cancellation.Token);
+            Id65BlankLabTerrainPersistenceFaultForTesting?.Invoke(stagedTerrainEditsPath);
+            await AwaitId65BlankLabManualOperationDelayForTestingAsync(
+                operation,
+                "save-work-completed");
+            RequireCurrentId65BlankLabManualOperation(operation);
+            if (!string.Equals(
+                    BuildTerrainEditSignature(geometry),
+                    persistedTerrainSignature,
+                    StringComparison.Ordinal))
+            {
+                throw new OperationCanceledException(
+                    "The ID65 terrain changed while its staged save was being serialized; the prior authored file remains unchanged.",
+                    operation.Cancellation.Token);
+            }
+
+            UnusedLevel65BlankLevelLabManifest publishManifest =
+                await UnusedLevel65BlankLevelLabBootstrapper.ValidatePublishedWorkspaceAsync(
+                    paths,
+                    operation.Cancellation.Token);
+            RequireCurrentId65BlankLabManualOperation(operation);
+            if (!Equals(publishManifest, expectedManifest) ||
+                !await IsCurrentId65BlankLabDerivedCacheAsync(
+                    paths,
+                    publishManifest,
+                    operation.Cancellation.Token))
+            {
+                throw new InvalidDataException(
+                    "The ID65 locked source, published manifest, or derived binding changed while the staged terrain save was being prepared.");
+            }
+            RequireCurrentId65BlankLabManualOperation(operation);
+
+            File.Move(stagedTerrainEditsPath, terrainEditsPath, overwrite: true);
+            stagedTerrainEditsPath = null;
+            _loadedTerrainEdits = terrainCount;
+            _savedTerrainEditSignature = persistedTerrainSignature;
+            InvalidateBuildSafetySummary();
+            RefreshTerrainReadinessHint();
+            RefreshCurrentLevelDetails();
+            RefreshId65BlankLabUi();
+            if (announce)
+            {
+                _statusText.Text =
+                    $"Saved {terrainCount} ID65 terrain edit(s) under the unique versioned lab identity. " +
+                    "Resident texture-ID paints are editor preview only; resident Mobys remain inspection-only, " +
+                    "and this authored layer is excluded from normal Create BIN.";
+            }
+            return true;
+        }
+        catch (OperationCanceledException) when (operation.Cancellation.IsCancellationRequested ||
+                                                 !IsCurrentId65BlankLabManualOperation(
+                                                     operation,
+                                                     requireSceneIdentity: true))
+        {
+            if (!ownsOperation)
+                throw;
+            return false;
+        }
+        finally
+        {
+            if (!string.IsNullOrWhiteSpace(stagedTerrainEditsPath) &&
+                File.Exists(stagedTerrainEditsPath))
+            {
+                try
+                {
+                    File.Delete(stagedTerrainEditsPath);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    Debug.WriteLine(ex);
+                }
+            }
+            if (ownsOperation)
+                CompleteId65BlankLabManualOperation(operation);
+        }
+    }
+
+    private async Task<bool> TryValidateId65BlankLabAsync(
+        Id65BlankLabManualOperation? operation = null)
+    {
+        CancellationToken cancellationToken = operation?.Cancellation.Token ?? default;
+        if (Id65BlankLabValidationOverrideForTesting != null)
+        {
+            bool overridden = await Id65BlankLabValidationOverrideForTesting()
+                .WaitAsync(cancellationToken);
+            if (operation != null)
+                RequireCurrentId65BlankLabManualOperation(operation);
+            return overridden;
+        }
+
+        UnusedLevel65BlankLevelLabWorkspacePaths paths = _id65BlankLabPaths ??
+            UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(
+                operation?.WorkspaceRoot ?? _workspace.RootPath);
+        try
+        {
+            UnusedLevel65BlankLevelLabManifest manifest =
+                await UnusedLevel65BlankLevelLabBootstrapper
+                    .ValidatePublishedWorkspaceAsync(paths, cancellationToken);
+            if (operation != null)
+                RequireCurrentId65BlankLabManualOperation(operation);
+            else
+            {
+                _id65BlankLabPaths = paths;
+                _id65BlankLabManifest = manifest;
+            }
             _id65BlankLabValidationFailure = "";
             return true;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException or UnauthorizedAccessException)
         {
-            _id65BlankLabManifest = null;
+            if (operation != null)
+                RequireCurrentId65BlankLabManualOperation(operation);
+            else
+                _id65BlankLabManifest = null;
             _id65BlankLabValidationFailure = ex.Message;
             return false;
         }
     }
 
-    private async Task BuildId65BlankLabCacheAsync(
+    private async Task<UnusedLevel65BlankLevelLabManifest> BuildId65BlankLabCacheAsync(
         UnusedLevel65BlankLevelLabWorkspacePaths paths,
-        bool overwrite)
+        bool overwrite,
+        CancellationToken cancellationToken,
+        Id65BlankLabManualOperation operation)
     {
-        await UnusedLevel65BlankLevelLabBootstrapper.ValidatePublishedWorkspaceAsync(paths);
+        UnusedLevel65BlankLevelLabManifest manifest =
+            await UnusedLevel65BlankLevelLabBootstrapper.ValidatePublishedWorkspaceAsync(
+                paths,
+                cancellationToken);
+        RequireCurrentId65BlankLabManualOperation(operation);
         string cacheDirectory = Id65BlankLabCacheDirectory(paths);
-        string wadAnalysisPath = Id65BlankLabWadAnalysisPath(paths);
         string overlayPath = Id65BlankLabOverlayPath(paths);
-        string mobyPath = Id65BlankLabMobyCachePath(paths);
-        string sourceSearchPath = Id65BlankLabSourceSearchPath(paths);
         Directory.CreateDirectory(cacheDirectory);
 
-        if (overwrite || !File.Exists(wadAnalysisPath))
-            await WadAnalysisBuilder.BuildAsync(paths.LockedBaseImagePath, wadAnalysisPath);
-        if (overwrite || !File.Exists(overlayPath))
+        if (overwrite || !await IsCurrentId65BlankLabDerivedCacheAsync(
+                paths,
+                manifest,
+                cancellationToken))
         {
-            await SourceSceneOverlayExporter.ExportAsync(
-                paths.LockedBaseImagePath,
-                wadAnalysisPath,
-                UnusedLevel65BlankLevelLabProfileRegistry.Definition,
-                overlayPath);
+            await RebuildId65BlankLabDerivedCacheAsync(
+                paths,
+                manifest,
+                cancellationToken);
         }
+        RequireCurrentId65BlankLabManualOperation(operation);
+
         GeometryCacheHealthIssue? issue = GeometryCacheHealth.InspectOverlay(
             UnusedLevel65BlankLevelLabProfileRegistry.Key,
             overlayPath);
         if (issue?.BlocksLoading == true)
             throw new InvalidDataException(issue.Message);
-        GeometryCandidate geometry = GeometryOverlayLoader.LoadFirstCandidate(overlayPath);
-        if (overwrite || !File.Exists(mobyPath))
+        _ = GeometryOverlayLoader.LoadFirstCandidate(overlayPath);
+        if (MobyLoader.LoadCached(Id65BlankLabMobyCachePath(paths)).Count <= 0)
         {
+            throw new InvalidDataException("The ID65 locked-base Moby cache is empty.");
+        }
+
+        string sourceBoundOverlaySha256 = await HashFileSha256Async(
+            overlayPath,
+            cancellationToken);
+        int texturePreviewCount = await PortableEditorCacheBuilder
+            .BuildTerrainTexturePreviewCacheFromSourceAsync(
+                paths.LockedBaseImagePath,
+                overlayPath,
+                paths.RootPath,
+                UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+                overwrite,
+                expectedSourceImageSha256: manifest.LockedBaseImageSha256,
+                expectedSourceOverlaySha256: sourceBoundOverlaySha256,
+                cancellationToken: cancellationToken);
+        if (texturePreviewCount != UnusedLevel65BlankLevelLabProfileRegistry.ResidentTextureCount)
+        {
+            throw new InvalidDataException(
+                $"The ID65 locked base produced {texturePreviewCount} resident texture records; " +
+                $"exactly {UnusedLevel65BlankLevelLabProfileRegistry.ResidentTextureCount} are required.");
+        }
+        RequireCurrentId65BlankLabManualOperation(operation);
+        _id65BlankLabTextureOverlaySha256 = sourceBoundOverlaySha256;
+        ClearTerrainTextureCatalogPreviewCache();
+        _terrainTexturePreviewBundleCache.Clear();
+        return manifest;
+    }
+
+    private static async Task<bool> IsCurrentId65BlankLabDerivedCacheAsync(
+        UnusedLevel65BlankLevelLabWorkspacePaths paths,
+        UnusedLevel65BlankLevelLabManifest manifest,
+        CancellationToken cancellationToken = default)
+    {
+        string bindingPath = Id65BlankLabDerivedCacheBindingPath(paths);
+        string wadAnalysisPath = Id65BlankLabWadAnalysisPath(paths);
+        string overlayPath = Id65BlankLabOverlayPath(paths);
+        string mobyPath = Id65BlankLabMobyCachePath(paths);
+        string sourceSearchPath = Id65BlankLabSourceSearchPath(paths);
+        if (!File.Exists(bindingPath) ||
+            !File.Exists(wadAnalysisPath) ||
+            !File.Exists(overlayPath) ||
+            !File.Exists(mobyPath) ||
+            !File.Exists(sourceSearchPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            Id65BlankLabDerivedCacheBinding binding = JsonSerializer.Deserialize<Id65BlankLabDerivedCacheBinding>(
+                await File.ReadAllTextAsync(bindingPath, cancellationToken))
+                ?? throw new InvalidDataException("The ID65 derived-cache binding is empty.");
+            if (binding.SchemaVersion != 1 ||
+                !string.Equals(binding.LevelKey, UnusedLevel65BlankLevelLabProfileRegistry.Key, StringComparison.Ordinal) ||
+                !string.Equals(binding.LockedSourceImageSha256, manifest.LockedBaseImageSha256, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(await HashFileSha256Async(wadAnalysisPath, cancellationToken), binding.WadAnalysisSha256, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(await HashFileSha256Async(overlayPath, cancellationToken), binding.SceneOverlaySha256, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(await HashFileSha256Async(mobyPath, cancellationToken), binding.MobyCacheSha256, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(await HashFileSha256Async(sourceSearchPath, cancellationToken), binding.SourceSearchSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            GeometryCacheHealthIssue? issue = GeometryCacheHealth.InspectOverlay(
+                UnusedLevel65BlankLevelLabProfileRegistry.Key,
+                overlayPath);
+            return issue?.BlocksLoading != true &&
+                GeometryOverlayLoader.LoadFirstCandidate(overlayPath).Polygons.Count > 0 &&
+                MobyLoader.LoadCached(mobyPath).Count > 0;
+        }
+        catch (Exception ex) when (ex is
+            IOException or
+            UnauthorizedAccessException or
+            JsonException or
+            InvalidDataException or
+            InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private static async Task RebuildId65BlankLabDerivedCacheAsync(
+        UnusedLevel65BlankLevelLabWorkspacePaths paths,
+        UnusedLevel65BlankLevelLabManifest manifest,
+        CancellationToken cancellationToken)
+    {
+        string operationRoot = Path.Combine(
+            paths.RootPath,
+            ".derived-cache-operations",
+            Guid.NewGuid().ToString("N"));
+        string stagedWadAnalysisPath = Path.Combine(operationRoot, "locked-base-wad-analysis.json");
+        string stagedOverlayPath = Path.Combine(operationRoot, "locked-base-scene-overlay.json");
+        string stagedMobyPath = Path.Combine(operationRoot, "locked-base-mobys.json");
+        string stagedSourceSearchPath = Path.Combine(operationRoot, "locked-base-source-search.json");
+        string stagedBindingPath = Path.Combine(operationRoot, "derived-cache-source-binding.json");
+        Directory.CreateDirectory(operationRoot);
+        try
+        {
+            await WadAnalysisBuilder.BuildAsync(
+                paths.LockedBaseImagePath,
+                stagedWadAnalysisPath,
+                cancellationToken: cancellationToken);
+            await SourceSceneOverlayExporter.ExportAsync(
+                paths.LockedBaseImagePath,
+                stagedWadAnalysisPath,
+                UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+                stagedOverlayPath,
+                cancellationToken: cancellationToken);
+
+            JsonObject overlayRoot = JsonNode.Parse(
+                await File.ReadAllTextAsync(stagedOverlayPath, cancellationToken))?.AsObject()
+                ?? throw new InvalidDataException("The regenerated ID65 source overlay is empty.");
+            overlayRoot["sourceImage"] = paths.LockedBaseImagePath;
+            overlayRoot["sourceWadAnalysis"] = Id65BlankLabWadAnalysisPath(paths);
+            await File.WriteAllTextAsync(
+                stagedOverlayPath,
+                overlayRoot.ToJsonString(),
+                cancellationToken);
+
+            GeometryCacheHealthIssue? issue = GeometryCacheHealth.InspectOverlay(
+                UnusedLevel65BlankLevelLabProfileRegistry.Key,
+                stagedOverlayPath);
+            if (issue?.BlocksLoading == true)
+                throw new InvalidDataException(issue.Message);
+            GeometryCandidate geometry = GeometryOverlayLoader.LoadFirstCandidate(stagedOverlayPath);
+
             await SourceMobyCacheBuilder.BuildAsync(
                 paths.LockedBaseImagePath,
                 UnusedLevel65BlankLevelLabProfileRegistry.Definition,
-                mobyPath);
-        }
-        _ = MobyLoader.LoadCached(mobyPath).Count;
-        if (overwrite || !File.Exists(sourceSearchPath))
-        {
+                stagedMobyPath,
+                cancellationToken);
+            if (MobyLoader.LoadCached(stagedMobyPath).Count <= 0)
+                throw new InvalidDataException("The regenerated ID65 Moby cache is empty.");
+
             TerrainSourceSearchResult search = await TerrainSourceSearchBuilder.BuildSourceDerivedAsync(
                 new SourceDerivedTerrainSourceSearchRequest(
                     paths.LockedBaseImagePath,
-                    sourceSearchPath,
+                    stagedSourceSearchPath,
                     UnusedLevel65BlankLevelLabProfileRegistry.Definition,
-                    geometry));
+                    geometry),
+                cancellationToken);
             if (search.Report.SectorCount <= 0 ||
                 search.Report.MatchedSectorCount != search.Report.SectorCount ||
                 search.Report.AmbiguousSectorCount != 0 ||
                 search.Report.MissingSectorCount != 0)
             {
-                throw new InvalidDataException("The ID65 locked-base terrain source-search map is incomplete.");
+                throw new InvalidDataException("The regenerated ID65 locked-base terrain source-search map is incomplete.");
+            }
+
+            string sourceAfterSha256 = await HashFileSha256Async(
+                paths.LockedBaseImagePath,
+                cancellationToken);
+            if (!string.Equals(sourceAfterSha256, manifest.LockedBaseImageSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new IOException("The ID65 locked source changed while its derived cache was being rebuilt.");
+            }
+
+            Id65BlankLabDerivedCacheBinding binding = new(
+                SchemaVersion: 1,
+                LevelKey: UnusedLevel65BlankLevelLabProfileRegistry.Key,
+                LockedSourceImageSha256: sourceAfterSha256,
+                WadAnalysisSha256: await HashFileSha256Async(stagedWadAnalysisPath, cancellationToken),
+                SceneOverlaySha256: await HashFileSha256Async(stagedOverlayPath, cancellationToken),
+                MobyCacheSha256: await HashFileSha256Async(stagedMobyPath, cancellationToken),
+                SourceSearchSha256: await HashFileSha256Async(stagedSourceSearchPath, cancellationToken));
+            await File.WriteAllTextAsync(
+                stagedBindingPath,
+                JsonSerializer.Serialize(binding, new JsonSerializerOptions { WriteIndented = true }) + "\n",
+                cancellationToken);
+
+            Directory.CreateDirectory(Id65BlankLabCacheDirectory(paths));
+            File.Move(stagedWadAnalysisPath, Id65BlankLabWadAnalysisPath(paths), overwrite: true);
+            File.Move(stagedOverlayPath, Id65BlankLabOverlayPath(paths), overwrite: true);
+            File.Move(stagedMobyPath, Id65BlankLabMobyCachePath(paths), overwrite: true);
+            File.Move(stagedSourceSearchPath, Id65BlankLabSourceSearchPath(paths), overwrite: true);
+            // The binding is the commit marker and is published last. Any interrupted
+            // mixed generation remains untrusted and is rebuilt on the next load.
+            File.Move(stagedBindingPath, Id65BlankLabDerivedCacheBindingPath(paths), overwrite: true);
+
+            if (!await IsCurrentId65BlankLabDerivedCacheAsync(
+                    paths,
+                    manifest,
+                    cancellationToken))
+                throw new IOException("The published ID65 derived cache failed exact source-bound readback.");
+        }
+        finally
+        {
+            if (Directory.Exists(operationRoot))
+            {
+                try
+                {
+                    Directory.Delete(operationRoot, recursive: true);
+                }
+                catch (IOException)
+                {
+                    // Derived-cache debris contains no user edits. A later build can
+                    // safely replace it; never mask the primary build/readback result.
+                }
             }
         }
     }
@@ -599,16 +1159,24 @@ public sealed partial class MainWindow
             if (issue?.BlocksLoading == true)
                 throw new InvalidDataException(issue.Message);
             GeometryCandidate geometry = GeometryOverlayLoader.LoadFirstCandidate(overlayPath);
-            if (includeAuthoredTerrainEdits)
+            using (FileStream overlayStream = File.OpenRead(overlayPath))
             {
-                TerrainMaterialClassifier.Apply(
-                    UnusedLevel65BlankLevelLabProfileRegistry.Key,
-                    _workspace.RootPath,
-                    geometry);
+                _id65BlankLabTextureOverlaySha256 = Convert.ToHexString(
+                    SHA256.HashData(overlayStream)).ToLowerInvariant();
             }
             int edits = includeAuthoredTerrainEdits
-                ? TerrainEditStore.Load(Id65BlankLabTerrainEditsPath(), geometry.Polygons)
+                ? TerrainEditStore.LoadStrict(Id65BlankLabTerrainEditsPath(), geometry.Polygons)
                 : 0;
+            if (includeAuthoredTerrainEdits &&
+                !TryValidateId65BlankLabTerrainEdits(
+                    geometry,
+                    requireAtLeastOneEdit: false,
+                    allowResidentTextureEdits: true,
+                    out string authoredBlocker))
+            {
+                throw new InvalidDataException(
+                    $"The isolated ID65 authored terrain layer is invalid: {authoredBlocker}");
+            }
             return new TerrainGeometryLoadData(
                 geometry,
                 edits,
@@ -654,22 +1222,42 @@ public sealed partial class MainWindow
         out UnusedLevel65BlankLevelLabWorkspacePaths? paths,
         out string error)
     {
-        paths = _id65BlankLabPaths ??
-            UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(_workspace.RootPath);
+        paths = _id65BlankLabPaths;
         error = "";
+        if (paths == null || _id65BlankLabManifest == null)
+        {
+            error = "Validate and prepare the ID65 locked workspace before loading the Lab.";
+            return false;
+        }
+        UnusedLevel65BlankLevelLabWorkspacePaths validatedPaths = paths;
+        UnusedLevel65BlankLevelLabManifest validatedManifest = _id65BlankLabManifest;
+
         try
         {
-            _id65BlankLabManifest = UnusedLevel65BlankLevelLabBootstrapper
-                .ValidatePublishedWorkspaceAsync(paths)
+            UnusedLevel65BlankLevelLabProfileRegistry.ValidateManifest(
+                validatedManifest,
+                validatedPaths);
+            bool derivedCacheCurrent = Task.Run(() =>
+                    IsCurrentId65BlankLabDerivedCacheAsync(validatedPaths, validatedManifest))
                 .GetAwaiter()
                 .GetResult();
-            _id65BlankLabPaths = paths;
+            if (!derivedCacheCurrent)
+            {
+                error =
+                    "The ID65 source-bound derived cache is missing or changed; select Load Lab again to rebuild it.";
+                return false;
+            }
+
             _id65BlankLabValidationFailure = "";
             return true;
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is
+            IOException or
+            InvalidDataException or
+            InvalidOperationException or
+            JsonException or
+            UnauthorizedAccessException)
         {
-            _id65BlankLabManifest = null;
             _id65BlankLabValidationFailure = ex.Message;
             error = $"The ID65 locked base failed validation: {ex.Message}";
             return false;
@@ -698,10 +1286,202 @@ public sealed partial class MainWindow
         RefreshId65BlankLabUi();
     }
 
-    private void SetId65BlankLabBusy(bool busy)
+    private bool TryBeginId65BlankLabManualOperation(
+        string name,
+        out Id65BlankLabManualOperation? operation,
+        bool allowActiveLevelSelection = false,
+        bool allowActiveTerrainPersistence = false)
     {
-        _id65BlankLabBusy = busy;
+        if (_id65BlankLabBusy || _id65BlankLabManualOperation != null)
+        {
+            operation = null;
+            _statusText.Text =
+                $"ID65 Lab {name} did not start because another Lab operation is still active.";
+            return false;
+        }
+        if (HasConflictingId65BlankLabManualOperationState(
+                allowActiveLevelSelection,
+                allowActiveTerrainPersistence))
+        {
+            operation = null;
+            _statusText.Text =
+                $"ID65 Lab {name} did not start because a save, Build Safety, level load, cache build, texture operation, Create BIN, or other navigation operation is still active.";
+            return false;
+        }
+
+        CancellationTokenSource cancellation = new();
+        operation = new Id65BlankLabManualOperation(
+            Generation: ++_id65BlankLabManualOperationGeneration,
+            Name: name,
+            WorkspaceRoot: Path.GetFullPath(_workspace.RootPath),
+            LevelIdentity: _currentLevel,
+            GeometryIdentity: _currentGeometry,
+            Cancellation: cancellation);
+        _id65BlankLabManualOperationCancellation = cancellation;
+        _id65BlankLabManualOperation = operation;
+        _id65BlankLabBusy = true;
         RefreshId65BlankLabUi();
+        RefreshLevelSelectionAvailability();
+        RefreshActionAvailability();
+        return true;
+    }
+
+    private bool HasConflictingId65BlankLabManualOperationState(
+        bool allowActiveLevelSelection = false,
+        bool allowActiveTerrainPersistence = false) =>
+        _buildingPortableCache ||
+        _projectDataImportBusy ||
+        _workspaceTransitionBusy ||
+        _regularEditorPersistenceBusy ||
+        _buildSafetyBusy ||
+        _loadingLevel ||
+        (!allowActiveLevelSelection && _handlingLevelSelection) ||
+        _levelSelectionAsyncInFlight > 0 ||
+        (!allowActiveTerrainPersistence && _terrainTexturePaintBusy) ||
+        (!allowActiveTerrainPersistence && _terrainTextureRelocationBusy) ||
+        (!allowActiveTerrainPersistence && _terrainTexturePaintHistoryRestoreBusy) ||
+        _createBinBusy ||
+        _nativeLevelReplacementBusy ||
+        _id65BlankLabCatalogValidationBusy;
+
+    private bool TryBlockTerrainMutationDuringId65BlankLabManualOperation(
+        string action,
+        WorkspaceTransitionOperation? owningWorkspaceTransition = null)
+    {
+        if (_workspaceTransitionBusy &&
+            (owningWorkspaceTransition == null ||
+             !IsCurrentWorkspaceTransition(
+                 owningWorkspaceTransition,
+                 allowOwnedRegularPersistence: true)))
+        {
+            _statusText.Text =
+                $"Wait for the active workspace transition to finish before {action}. No terrain or saved edit was changed.";
+            return true;
+        }
+        if (!_id65BlankLabBusy || _id65BlankLabManualOperation == null)
+            return false;
+
+        _statusText.Text =
+            $"Wait for the active ID65 Lab {_id65BlankLabManualOperation.Name} operation to finish before {action}. No terrain or saved edit was changed.";
+        return true;
+    }
+
+    private async Task AwaitId65BlankLabManualOperationDelayForTestingAsync(
+        Id65BlankLabManualOperation operation,
+        string stage)
+    {
+        RequireCurrentId65BlankLabManualOperation(operation);
+        if (Id65BlankLabManualOperationDelayOverrideForTesting != null)
+        {
+            await Id65BlankLabManualOperationDelayOverrideForTesting(
+                stage,
+                operation.Cancellation.Token);
+        }
+        RequireCurrentId65BlankLabManualOperation(operation);
+    }
+
+    private void RequireCurrentId65BlankLabManualOperation(
+        Id65BlankLabManualOperation operation,
+        bool requireSceneIdentity = true)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        operation.Cancellation.Token.ThrowIfCancellationRequested();
+        bool sameOperation =
+            operation.Generation == _id65BlankLabManualOperationGeneration &&
+            ReferenceEquals(_id65BlankLabManualOperation, operation) &&
+            ReferenceEquals(_id65BlankLabManualOperationCancellation, operation.Cancellation);
+        bool sameWorkspace = PathsEqual(operation.WorkspaceRoot, _workspace.RootPath);
+        bool sameScene = !requireSceneIdentity ||
+            (ReferenceEquals(operation.ExpectedLevelIdentity, _currentLevel) &&
+             ReferenceEquals(operation.ExpectedGeometryIdentity, _currentGeometry));
+        if (!sameOperation || !sameWorkspace || !sameScene)
+        {
+            throw new OperationCanceledException(
+                $"The ID65 Lab {operation.Name} result belongs to an older workspace, level, or geometry generation.",
+                operation.Cancellation.Token);
+        }
+    }
+
+    private bool IsCurrentId65BlankLabManualOperation(
+        Id65BlankLabManualOperation operation,
+        bool requireSceneIdentity = false) =>
+        operation.Generation == _id65BlankLabManualOperationGeneration &&
+        ReferenceEquals(_id65BlankLabManualOperation, operation) &&
+        ReferenceEquals(_id65BlankLabManualOperationCancellation, operation.Cancellation) &&
+        !operation.Cancellation.IsCancellationRequested &&
+        PathsEqual(operation.WorkspaceRoot, _workspace.RootPath) &&
+        (!requireSceneIdentity ||
+         (ReferenceEquals(operation.ExpectedLevelIdentity, _currentLevel) &&
+          ReferenceEquals(operation.ExpectedGeometryIdentity, _currentGeometry)));
+
+    private void TransitionId65BlankLabManualOperationSceneIdentity(
+        Id65BlankLabManualOperation operation,
+        LevelDefinition? expectedPreviousLevel,
+        GeometryCandidate? expectedPreviousGeometry,
+        LevelDefinition? nextLevel,
+        GeometryCandidate? nextGeometry)
+    {
+        RequireCurrentId65BlankLabManualOperation(operation, requireSceneIdentity: false);
+        if (!ReferenceEquals(operation.ExpectedLevelIdentity, expectedPreviousLevel) ||
+            !ReferenceEquals(operation.ExpectedGeometryIdentity, expectedPreviousGeometry) ||
+            !ReferenceEquals(_currentLevel, nextLevel) ||
+            !ReferenceEquals(_currentGeometry, nextGeometry))
+        {
+            throw new OperationCanceledException(
+                $"The ID65 Lab {operation.Name} scene changed outside its guarded identity transition.",
+                operation.Cancellation.Token);
+        }
+
+        operation.ExpectedLevelIdentity = nextLevel;
+        operation.ExpectedGeometryIdentity = nextGeometry;
+        RequireCurrentId65BlankLabManualOperation(operation);
+    }
+
+    private void ResetId65BlankLabManualOperationSceneIdentityAfterRollback(
+        Id65BlankLabManualOperation operation,
+        LevelDefinition? level,
+        GeometryCandidate? geometry)
+    {
+        RequireCurrentId65BlankLabManualOperation(operation, requireSceneIdentity: false);
+        if (!ReferenceEquals(_currentLevel, level) || !ReferenceEquals(_currentGeometry, geometry))
+        {
+            throw new InvalidDataException(
+                $"The ID65 Lab {operation.Name} rollback did not restore its captured scene identity.");
+        }
+        operation.ExpectedLevelIdentity = level;
+        operation.ExpectedGeometryIdentity = geometry;
+        RequireCurrentId65BlankLabManualOperation(operation);
+    }
+
+    private void CompleteId65BlankLabManualOperation(Id65BlankLabManualOperation operation)
+    {
+        bool current =
+            operation.Generation == _id65BlankLabManualOperationGeneration &&
+            ReferenceEquals(_id65BlankLabManualOperation, operation) &&
+            ReferenceEquals(_id65BlankLabManualOperationCancellation, operation.Cancellation);
+        if (current)
+        {
+            _id65BlankLabManualOperation = null;
+            _id65BlankLabManualOperationCancellation = null;
+            _id65BlankLabBusy = false;
+            RefreshId65BlankLabUi();
+            RefreshLevelSelectionAvailability();
+            RefreshActionAvailability();
+        }
+        operation.Cancellation.Dispose();
+    }
+
+    private void CancelId65BlankLabManualOperationForWorkspaceChange()
+    {
+        ++_id65BlankLabManualOperationGeneration;
+        _id65BlankLabManualOperationCancellation?.Cancel();
+        _id65BlankLabManualOperationCancellation = null;
+        _id65BlankLabManualOperation = null;
+        _id65BlankLabBusy = false;
+        _loadingLevel = false;
+        RefreshId65BlankLabUi();
+        RefreshLevelSelectionAvailability();
+        RefreshActionAvailability();
     }
 
     private bool IsCurrentId65BlankLab() =>
@@ -744,28 +1524,52 @@ public sealed partial class MainWindow
             Id65BlankLabCacheDirectory(paths),
             $"{UnusedLevel65BlankLevelLabProfileRegistry.Key}-runtime-terrain-source-search-native.json");
 
+    private static string Id65BlankLabDerivedCacheBindingPath(UnusedLevel65BlankLevelLabWorkspacePaths paths) =>
+        Path.Combine(
+            Id65BlankLabCacheDirectory(paths),
+            $"{UnusedLevel65BlankLevelLabProfileRegistry.Key}-locked-source-derived-cache-binding.json");
+
     private bool TryGetId65BlankLabUnsupportedArtifact(out string reason)
     {
         string key = UnusedLevel65BlankLevelLabProfileRegistry.Key;
         string objectEditsPath = Path.Combine(_workspace.RootPath, $"{key}-native-edits.json");
-        if (NativeEditFileHasEdits(objectEditsPath) || NativeEditFileHasEdits(NativeMobyPathEditPath(key)))
+        string movementEditsPath = NativeMobyPathEditPath(key);
+        string customTexturesPath = CustomTerrainTextureStore.ManifestPath(_workspace.RootPath, key);
+        string relocationPath = NativeTerrainTextureRelocationEditStore.ManifestPath(_workspace.RootPath, key);
+        string materialOverridesPath = Path.Combine(
+            _workspace.RootPath,
+            $"{key}-terrain-material-overrides.json");
+        string musicPlanPath = LevelMusicEditStore.PlanPath(
+            _workspace.RootPath,
+            UnusedLevel65BlankLevelLabProfileRegistry.Definition);
+        if (File.Exists(objectEditsPath) || File.Exists(movementEditsPath))
         {
             reason = "Resident Moby/path mutation is present but this profile permits inspection only.";
             return true;
         }
-        if (CustomTerrainTextureFileHasTextures(CustomTerrainTextureStore.ManifestPath(_workspace.RootPath, key)))
+        if (File.Exists(customTexturesPath))
         {
             reason = "Custom/imported terrain art needs a proved ID65 destination profile.";
             return true;
         }
-        if (File.Exists(NativeTerrainTextureRelocationEditStore.ManifestPath(_workspace.RootPath, key)))
+        if (File.Exists(relocationPath))
         {
             reason = "Portable cross-level terrain textures need a proved ID65 destination profile.";
+            return true;
+        }
+        if (File.Exists(materialOverridesPath))
+        {
+            reason = "Retail terrain material overrides cannot be applied to the locked ID65 presentation; remove the unsupported override file.";
             return true;
         }
         if (File.Exists(NativeSkyEditStore.PlanPath(_workspace.RootPath, key)))
         {
             reason = "Skybox editing is unavailable for this profile; remove the unsupported ID65 skybox plan.";
+            return true;
+        }
+        if (File.Exists(musicPlanPath))
+        {
+            reason = "Music editing is unavailable for this profile; remove the unsupported ID65 music plan.";
             return true;
         }
 
@@ -777,18 +1581,66 @@ public sealed partial class MainWindow
     {
         string key = UnusedLevel65BlankLevelLabProfileRegistry.Key;
         string terrainEditsPath = Id65BlankLabTerrainEditsPath();
-        return TerrainEditFileHasEdits(terrainEditsPath) ||
-            NativeEditFileHasEdits(Path.Combine(_workspace.RootPath, $"{key}-native-edits.json")) ||
-            NativeEditFileHasEdits(NativeMobyPathEditPath(key)) ||
-            CustomTerrainTextureFileHasTextures(CustomTerrainTextureStore.ManifestPath(_workspace.RootPath, key)) ||
-            File.Exists(NativeTerrainTextureRelocationEditStore.ManifestPath(_workspace.RootPath, key)) ||
+        string objectEditsPath = Path.Combine(_workspace.RootPath, $"{key}-native-edits.json");
+        string movementEditsPath = NativeMobyPathEditPath(key);
+        string customTexturesPath = CustomTerrainTextureStore.ManifestPath(_workspace.RootPath, key);
+        string relocationPath = NativeTerrainTextureRelocationEditStore.ManifestPath(_workspace.RootPath, key);
+        string materialOverridesPath = Path.Combine(
+            _workspace.RootPath,
+            $"{key}-terrain-material-overrides.json");
+        string musicPlanPath = LevelMusicEditStore.PlanPath(
+            _workspace.RootPath,
+            UnusedLevel65BlankLevelLabProfileRegistry.Definition);
+        return Id65TerrainEditFileBlocksNormalCreateBin(terrainEditsPath) ||
+            File.Exists(objectEditsPath) ||
+            File.Exists(movementEditsPath) ||
+            File.Exists(customTexturesPath) ||
+            File.Exists(relocationPath) ||
+            File.Exists(materialOverridesPath) ||
             File.Exists(NativeSkyEditStore.PlanPath(_workspace.RootPath, key)) ||
+            File.Exists(musicPlanPath) ||
             (_id65BlankLabPaths != null && Directory.Exists(_id65BlankLabPaths.AuthoredEditsDirectoryPath) &&
              Directory.EnumerateFiles(_id65BlankLabPaths.AuthoredEditsDirectoryPath, "*", SearchOption.AllDirectories)
                  .Any(path => !string.Equals(
                      Path.GetFullPath(path),
                      Path.GetFullPath(terrainEditsPath),
                      StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool Id65TerrainEditFileBlocksNormalCreateBin(string path)
+    {
+        if (!File.Exists(path))
+            return false;
+
+        try
+        {
+            using FileStream stream = File.OpenRead(path);
+            using JsonDocument document = JsonDocument.Parse(stream);
+            JsonElement root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("editCount", out JsonElement countElement) ||
+                countElement.ValueKind != JsonValueKind.Number ||
+                !countElement.TryGetInt32(out int count) ||
+                count < 0 ||
+                !root.TryGetProperty("edits", out JsonElement editsElement) ||
+                editsElement.ValueKind != JsonValueKind.Array ||
+                editsElement.GetArrayLength() != count)
+            {
+                return true;
+            }
+
+            return count > 0;
+        }
+        catch (Exception ex) when (ex is
+            IOException or
+            UnauthorizedAccessException or
+            JsonException or
+            InvalidOperationException)
+        {
+            // A present but unreadable/malformed authored layer must block normal
+            // export; treating it as empty would silently omit the user's data.
+            return true;
+        }
     }
 
     private bool TryGetId65BlankLabNormalCreateBinBlockReason(out string reason)
@@ -799,11 +1651,177 @@ public sealed partial class MainWindow
                 "Normal Create BIN is unavailable while ID65 Blank-Level Lab is loaded. Use Create Disposable Test CUE in the ID65 Lab disclosure.";
             return true;
         }
+        if (TryGetInvalidRetailTerrainTextureRelocationDonorBlockReason(out reason))
+            return true;
         if (Id65BlankLabHasAnyAuthoredArtifacts())
         {
             reason =
                 "Normal Create BIN is blocked because the isolated ID65 lab has authored research edits that the retail all-saved-edits writer must neither omit nor include. Load ID65 and use its disposable test writer, or restore its research layer first.";
             return true;
+        }
+
+        reason = "";
+        return false;
+    }
+
+    private bool TryGetInvalidRetailTerrainTextureRelocationDonorBlockReason(
+        out string reason)
+    {
+        foreach (LevelDefinition level in _retailCatalog.Levels)
+        {
+            string manifestPath = NativeTerrainTextureRelocationEditStore.ManifestPath(
+                _workspace.RootPath,
+                level.Key);
+            if (!File.Exists(manifestPath))
+                continue;
+
+            if (TryGetPersistedRetailTerrainTextureRelocationDonorIdentityError(
+                    manifestPath,
+                    level,
+                    out reason))
+            {
+                return true;
+            }
+
+            IReadOnlyList<NativeTerrainTextureRelocationEdit> relocations;
+            try
+            {
+                relocations = NativeTerrainTextureRelocationEditStore.Load(
+                    _workspace.RootPath,
+                    level.Key);
+            }
+            catch (InvalidDataException)
+            {
+                // The general saved-edit validation reports malformed v3
+                // manifests. This boundary is specifically about a valid row
+                // trying to name the isolated Lab as a retail donor.
+                continue;
+            }
+
+            if (TryGetRetailTerrainTextureRelocationDonorIdentityError(
+                    level,
+                    relocations,
+                    out reason))
+            {
+                return true;
+            }
+        }
+
+        reason = "";
+        return false;
+    }
+
+    private bool TryGetPersistedRetailTerrainTextureRelocationDonorIdentityError(
+        string manifestPath,
+        LevelDefinition destination,
+        out string reason)
+    {
+        if (!File.Exists(manifestPath))
+        {
+            reason = "";
+            return false;
+        }
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(manifestPath));
+            if (document.RootElement.ValueKind != JsonValueKind.Object ||
+                !document.RootElement.TryGetProperty("relocations", out JsonElement rows) ||
+                rows.ValueKind != JsonValueKind.Array)
+            {
+                reason = "";
+                return false;
+            }
+
+            foreach (JsonElement row in rows.EnumerateArray())
+            {
+                if (row.ValueKind != JsonValueKind.Object ||
+                    !row.TryGetProperty("targetTextureId", out JsonElement targetElement) ||
+                    !targetElement.TryGetInt32(out int targetTextureId) ||
+                    !row.TryGetProperty("donorLevelKey", out JsonElement keyElement) ||
+                    keyElement.ValueKind != JsonValueKind.String ||
+                    !row.TryGetProperty("donorLevelName", out JsonElement nameElement) ||
+                    nameElement.ValueKind != JsonValueKind.String ||
+                    !row.TryGetProperty("donorWadEntry", out JsonElement wadElement) ||
+                    !wadElement.TryGetInt32(out int donorWadEntry))
+                {
+                    // The existing manifest-envelope/strict-v3 loader owns
+                    // malformed-row reporting. This gate handles well-shaped
+                    // rows whose donor identity is nevertheless forged.
+                    continue;
+                }
+
+                string persistedKey = keyElement.GetString() ?? "";
+                string persistedName = nameElement.GetString() ?? "";
+                string normalizedKey = LevelCatalog.NormalizeKey(persistedKey);
+                if (IsId65BlankLabKey(normalizedKey) ||
+                    donorWadEntry == UnusedLevel65BlankLevelLabProfileRegistry.DataWadEntry)
+                {
+                    reason =
+                        $"Saved native terrain texture relocation for {destination.DisplayName} T{targetTextureId} is blocked because its persisted donor identity names the source-bound ID65 Lab/WAD {UnusedLevel65BlankLevelLabProfileRegistry.DataWadEntry}.";
+                    return true;
+                }
+
+                LevelDefinition? donor = _retailCatalog.FindByKey(persistedKey);
+                if (donor == null ||
+                    !string.Equals(persistedKey, donor.Key, StringComparison.Ordinal) ||
+                    !string.Equals(persistedName, donor.DisplayName, StringComparison.Ordinal) ||
+                    donorWadEntry != donor.SourceWadEntry)
+                {
+                    string expected = donor == null
+                        ? "one exact retail catalog key/name/WAD identity"
+                        : $"'{donor.Key}'/'{donor.DisplayName}'/WAD {donor.SourceWadEntry}";
+                    reason =
+                        $"Saved native terrain texture relocation for {destination.DisplayName} T{targetTextureId} is blocked because persisted donor '{persistedKey}'/'{persistedName}'/WAD {donorWadEntry} does not exactly match {expected}.";
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            // General manifest validation reports unreadable/malformed files.
+        }
+
+        reason = "";
+        return false;
+    }
+
+    private bool TryGetRetailTerrainTextureRelocationDonorIdentityError(
+        LevelDefinition destination,
+        IReadOnlyList<NativeTerrainTextureRelocationEdit> relocations,
+        out string reason)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        ArgumentNullException.ThrowIfNull(relocations);
+        foreach (NativeTerrainTextureRelocationEdit edit in relocations)
+        {
+            string donorKey = LevelCatalog.NormalizeKey(edit.DonorLevelKey);
+            if (IsId65BlankLabKey(donorKey) ||
+                edit.DonorWadEntry == UnusedLevel65BlankLevelLabProfileRegistry.DataWadEntry)
+            {
+                reason =
+                    $"Saved native terrain texture relocation for {destination.DisplayName} T{edit.TargetTextureId} is blocked because its donor identity names the source-bound ID65 Lab/WAD {UnusedLevel65BlankLevelLabProfileRegistry.DataWadEntry}. " +
+                    "ID65 resident textures are available only inside the Lab and cannot enter retail Build Safety or Create BIN.";
+                return true;
+            }
+
+            LevelDefinition? donor = _retailCatalog.FindByKey(donorKey);
+            if (donor == null ||
+                UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(donor))
+            {
+                reason =
+                    $"Saved native terrain texture relocation for {destination.DisplayName} T{edit.TargetTextureId} is blocked because donor key '{edit.DonorLevelKey}' is not one of the exact retail catalog levels.";
+                return true;
+            }
+
+            if (!string.Equals(donorKey, LevelCatalog.NormalizeKey(donor.Key), StringComparison.Ordinal) ||
+                !string.Equals(edit.DonorLevelName, donor.DisplayName, StringComparison.Ordinal) ||
+                edit.DonorWadEntry != donor.SourceWadEntry)
+            {
+                reason =
+                    $"Saved native terrain texture relocation for {destination.DisplayName} T{edit.TargetTextureId} is blocked because donor '{edit.DonorLevelKey}'/'{edit.DonorLevelName}'/WAD {edit.DonorWadEntry} does not exactly match retail catalog donor '{donor.Key}'/'{donor.DisplayName}'/WAD {donor.SourceWadEntry}.";
+                return true;
+            }
         }
 
         reason = "";
@@ -816,11 +1834,13 @@ public sealed partial class MainWindow
         TryValidateId65BlankLabTerrainEdits(
             geometry,
             requireAtLeastOneEdit: true,
+            allowResidentTextureEdits: false,
             out reason);
 
     private static bool TryValidateId65BlankLabTerrainEdits(
         GeometryCandidate geometry,
         bool requireAtLeastOneEdit,
+        bool allowResidentTextureEdits,
         out string reason)
     {
         TerrainPolygon[] edits = geometry.Polygons.Where(polygon => polygon.IsTerrainEdited).ToArray();
@@ -831,16 +1851,25 @@ public sealed partial class MainWindow
         }
         TerrainPolygon? unsupported = edits.FirstOrDefault(polygon =>
             !string.Equals(polygon.Detail, "hp", StringComparison.OrdinalIgnoreCase) ||
-            !polygon.HasHeightEdit ||
+            (!polygon.HasHeightEdit &&
+             !(allowResidentTextureEdits && polygon.HasTextureEdit)) ||
             polygon.HasPositionEdit ||
-            polygon.HasTextureEdit ||
+            (!allowResidentTextureEdits && polygon.HasTextureEdit) ||
+            (polygon.HasTextureEdit &&
+             (polygon.TextureId is < 0 or >= UnusedLevel65BlankLevelLabProfileRegistry.ResidentTextureCount ||
+              polygon.OriginalTextureId is < 0 or >= UnusedLevel65BlankLevelLabProfileRegistry.ResidentTextureCount)) ||
             polygon.HasTextureVisualEdit ||
             polygon.HasStructureEdit ||
             polygon.HasSurfaceBehaviorEdit);
         if (unsupported != null)
         {
-            reason =
-                $"Face {unsupported.RuntimeKey} is outside the first safe gate. Disposable CUEs currently accept existing high-detail (HP), Z-only edits; Add/remove, LP, XY, surface, and texture edits stay in the research workspace.";
+            reason = allowResidentTextureEdits
+                ? $"Face {unsupported.RuntimeKey} is outside the editor-safe ID65 authored layer. " +
+                  $"Only existing high-detail (HP) Z edits and resident texture IDs 0-{UnusedLevel65BlankLevelLabProfileRegistry.ResidentTextureCount - 1} are saved; " +
+                  "Add/remove, LP, XY, custom/cross-level textures, visual/material transfer, and surface edits remain unavailable."
+                : $"Face {unsupported.RuntimeKey} is outside the first runtime-safe gate. " +
+                  "Disposable CUEs currently accept existing high-detail (HP), Z-only edits; " +
+                  "resident texture previews and every other texture/surface/structure edit remain editor-only or unavailable.";
             return false;
         }
 
@@ -854,8 +1883,114 @@ public sealed partial class MainWindow
         return $"id65-hp-z-{DateTime.UtcNow:yyyyMMdd-HHmmssfff}-{nonce}";
     }
 
+    private bool TryBlockEditorMutationDuringId65BlankLabManualOperation(string action)
+    {
+        if (_workspaceTransitionBusy)
+        {
+            _statusText.Text =
+                $"Wait for the active workspace transition to finish before {action}. No editor state or saved file was changed.";
+            return true;
+        }
+        if (!_id65BlankLabBusy || _id65BlankLabManualOperation == null)
+            return false;
+
+        _statusText.Text =
+            $"Wait for the active ID65 Lab {_id65BlankLabManualOperation.Name} operation to finish before {action}. No editor state or saved file was changed.";
+        return true;
+    }
+
+    private EditorMutationSceneIdentity CaptureEditorMutationSceneIdentity(LevelDefinition level) => new(
+        Workspace: _workspace,
+        WorkspaceRoot: Path.GetFullPath(_workspace.RootPath),
+        Level: level,
+        Mobys: _currentMobys,
+        LevelLoadRequestId: _levelLoadRequestId,
+        Id65OperationGeneration: _id65BlankLabManualOperationGeneration,
+        WorkspaceTransitionGeneration: _workspaceTransitionGeneration);
+
+    private bool IsCurrentEditorMutationSceneIdentity(EditorMutationSceneIdentity captured) =>
+        !_id65BlankLabBusy &&
+        _id65BlankLabManualOperation == null &&
+        !_workspaceTransitionBusy &&
+        !_regularEditorPersistenceBusy &&
+        !_buildSafetyBusy &&
+        captured.Id65OperationGeneration == _id65BlankLabManualOperationGeneration &&
+        captured.WorkspaceTransitionGeneration == _workspaceTransitionGeneration &&
+        captured.LevelLoadRequestId == _levelLoadRequestId &&
+        ReferenceEquals(captured.Workspace, _workspace) &&
+        PathsEqual(captured.WorkspaceRoot, _workspace.RootPath) &&
+        ReferenceEquals(captured.Level, _currentLevel) &&
+        ReferenceEquals(captured.Mobys, _currentMobys);
+
+    private ObjectDialogSceneIdentity CaptureObjectDialogSceneIdentity(
+        LevelDefinition level,
+        Moby target) => new(
+            Scene: CaptureEditorMutationSceneIdentity(level),
+            Target: target,
+            TargetIndex: target.Index,
+            TargetTrueIndex: target.TrueIndex,
+            TargetWasRemoved: target.IsRemoved,
+            MobyEditSignature: BuildMobyEditSignature(_currentMobys));
+
+    private bool IsCurrentObjectDialogSceneIdentity(
+        ObjectDialogSceneIdentity captured,
+        bool requireOriginalMobySignature = true) =>
+        IsCurrentEditorMutationSceneIdentity(captured.Scene) &&
+        captured.Target.Index == captured.TargetIndex &&
+        captured.Target.TrueIndex == captured.TargetTrueIndex &&
+        captured.Target.IsRemoved == captured.TargetWasRemoved &&
+        _currentMobys.Any(candidate => ReferenceEquals(candidate, captured.Target)) &&
+        (!requireOriginalMobySignature ||
+         string.Equals(
+             BuildMobyEditSignature(_currentMobys),
+             captured.MobyEditSignature,
+             StringComparison.Ordinal));
+
+    private SourceDiscOperationIdentity CaptureSourceDiscOperationIdentity() => new(
+        Workspace: _workspace,
+        WorkspaceRoot: Path.GetFullPath(_workspace.RootPath),
+        Level: _currentLevel,
+        Geometry: _currentGeometry,
+        Mobys: _currentMobys,
+        LevelLoadRequestId: _levelLoadRequestId,
+        Id65OperationGeneration: _id65BlankLabManualOperationGeneration,
+        PortableCacheBuildGeneration: _portableCacheBuildGeneration,
+        ProjectDataImportGeneration: _projectDataImportGeneration,
+        RegularPersistenceGeneration: _regularEditorPersistenceGeneration,
+        BuildSafetyGeneration: _buildSafetyGeneration,
+        WorkspaceTransitionGeneration: _workspaceTransitionGeneration);
+
+    private bool IsCurrentSourceDiscOperationIdentity(
+        SourceDiscOperationIdentity captured,
+        bool requireSceneIdentity = true,
+        bool allowPortableCacheBuild = false,
+        bool allowProjectDataImport = false) =>
+        !_id65BlankLabBusy &&
+        _id65BlankLabManualOperation == null &&
+        !_workspaceTransitionBusy &&
+        captured.Id65OperationGeneration == _id65BlankLabManualOperationGeneration &&
+        captured.WorkspaceTransitionGeneration == _workspaceTransitionGeneration &&
+        captured.PortableCacheBuildGeneration == _portableCacheBuildGeneration &&
+        captured.ProjectDataImportGeneration == _projectDataImportGeneration &&
+        captured.RegularPersistenceGeneration == _regularEditorPersistenceGeneration &&
+        captured.BuildSafetyGeneration == _buildSafetyGeneration &&
+        (allowPortableCacheBuild || !_buildingPortableCache) &&
+        (allowProjectDataImport || !_projectDataImportBusy) &&
+        !_regularEditorPersistenceBusy &&
+        !_buildSafetyBusy &&
+        ReferenceEquals(captured.Workspace, _workspace) &&
+        PathsEqual(captured.WorkspaceRoot, _workspace.RootPath) &&
+        (!requireSceneIdentity ||
+         captured.LevelLoadRequestId == _levelLoadRequestId &&
+         ReferenceEquals(captured.Level, _currentLevel) &&
+         ReferenceEquals(captured.Geometry, _currentGeometry) &&
+         ReferenceEquals(captured.Mobys, _currentMobys));
+
     private bool TryBlockId65ObjectMutation(string action)
     {
+        if (TryBlockEditorMutationDuringId65BlankLabManualOperation(action))
+            return true;
+
         if (!IsId65BlankLabObjectInspectionOnly())
             return false;
 
@@ -866,6 +2001,9 @@ public sealed partial class MainWindow
 
     private bool TryBlockId65SkyMutation(string action)
     {
+        if (TryBlockEditorMutationDuringId65BlankLabManualOperation($"sky {action}"))
+            return true;
+
         if (!IsCurrentId65BlankLab())
             return false;
 
@@ -877,6 +2015,9 @@ public sealed partial class MainWindow
 
     private bool TryBlockId65LevelNameMutation(string action)
     {
+        if (TryBlockEditorMutationDuringId65BlankLabManualOperation($"level-name {action}"))
+            return true;
+
         if (!IsCurrentId65BlankLab())
             return false;
 
@@ -891,10 +2032,40 @@ public sealed partial class MainWindow
         string action,
         bool movesXy = false,
         bool structural = false,
-        bool textureOrSurface = false)
+        bool textureOrSurface = false,
+        bool releaseViewportGesture = false)
     {
+        if (TryBlockTerrainMutationDuringId65BlankLabManualOperation(action))
+            return true;
+
         if (!IsCurrentId65BlankLab())
+        {
+            if (!_releaseMode)
+                return false;
+
+            if (textureOrSurface && !releaseViewportGesture)
+                return false;
+
+            if (releaseViewportGesture || structural || movesXy)
+            {
+                _statusText.Text =
+                    $"Beta V5 blocked {action}: release terrain editing uses the visible HP Raise/Lower and guarded texture-paint controls. " +
+                    "XY movement, drag sculpting, full edit dialogs, add/remove, and hidden viewport shortcuts remain research-only.";
+                return true;
+            }
+
+            if (terrain == null ||
+                !string.Equals(terrain.Detail, "hp", StringComparison.OrdinalIgnoreCase) ||
+                terrain.IsTerrainRemoved ||
+                terrain.IsTerrainAddClone)
+            {
+                _statusText.Text =
+                    $"Beta V5 blocked {action}: only existing high-detail (HP) faces may receive Z-height edits.";
+                return true;
+            }
+
             return false;
+        }
 
         if (structural || movesXy || textureOrSurface)
         {
@@ -934,7 +2105,8 @@ public sealed partial class MainWindow
     }
 
     private static async Task<Id65BlankLabAuthoredLayerSnapshot> CaptureId65BlankLabAuthoredLayerAsync(
-        string directoryPath)
+        string directoryPath,
+        CancellationToken cancellationToken = default)
     {
         string fullDirectory = Path.GetFullPath(directoryPath);
         if (!Directory.Exists(fullDirectory))
@@ -944,9 +2116,11 @@ public sealed partial class MainWindow
         foreach (string path in Directory.EnumerateFiles(fullDirectory, "*", SearchOption.AllDirectories)
                      .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             string relative = Path.GetRelativePath(fullDirectory, path).Replace('\\', '/');
             await using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            string hash = Convert.ToHexString(await SHA256.HashDataAsync(stream)).ToLowerInvariant();
+            string hash = Convert.ToHexString(
+                await SHA256.HashDataAsync(stream, cancellationToken)).ToLowerInvariant();
             files.Add($"{relative}|{stream.Length}|{hash}");
         }
         return new Id65BlankLabAuthoredLayerSnapshot(DirectoryExisted: true, Files: files);
@@ -1320,14 +2494,13 @@ public sealed partial class MainWindow
 
             string terrainSignatureBeforePaint = BuildTerrainEditSignature(_currentGeometry);
             await PaintSelectedTerrainFaceAsync();
-            await ChooseTerrainTexturePaintBrushAsync();
             if (BuildTerrainEditSignature(_currentGeometry) != terrainSignatureBeforePaint ||
                 TerrainTexturePaintStageSnapshot.Capture(hp) != originalHpPaintState ||
                 JsonSerializer.Serialize(_customTerrainTextures) != originalCustomTextureState ||
                 JsonSerializer.Serialize(_nativeTerrainTextureRelocations) != originalNativeRelocationState)
             {
                 throw new InvalidOperationException(
-                    "An ID65 selected/linked or adjacent direct terrain-paint route staged resident, cross-level, surface, or texture state.");
+                    "The blocked ID65 selected/linked terrain-look route staged texture or surface state.");
             }
 
             RefreshLevelMusicEditor(_currentLevel);
@@ -1453,7 +2626,7 @@ public sealed partial class MainWindow
                 nativePathNode.SetPosition(originalNativePathNodePosition.Value);
             }
 
-            return "Skybox and Level Name controls, saved-plan loading, Save/Reset/Create/import/match methods, unsupported-artifact detection, state, plans, and test-CUE output stayed unavailable and write-free; disabled/direct object Z and terrain-snap controls preserved selected+linked Mobys, snap state, signatures, and files; selected/linked plus adjacent direct paint routes preserved resident/cross-level texture/surface state and files; Level Music controls/save/reset stayed unavailable and write-free; double-click, paste, object/native-movement viewport mutations, object move/rotate/remove, LP/XY/structural terrain gestures, mode reset, and inspection-only save refusal passed; existing HP Z remained editable";
+            return "Skybox and Level Name controls, saved-plan loading, Save/Reset/Create/import/match methods, unsupported-artifact detection, state, plans, and test-CUE output stayed unavailable and write-free; disabled/direct object Z and terrain-snap controls preserved selected+linked Mobys, snap state, signatures, and files; selected/linked full terrain-look transfer remained blocked; Level Music controls/save/reset stayed unavailable and write-free; double-click, paste, object/native-movement viewport mutations, object move/rotate/remove, LP/XY/structural terrain gestures, mode reset, and inspection-only save refusal passed; existing HP Z remained editable";
         }
         finally
         {
@@ -1495,6 +2668,966 @@ public sealed partial class MainWindow
                 }
             }
             UpdateLevelToolPanels(originalLevel);
+        }
+    }
+
+    internal async Task<string> AssertId65ResidentTexturePaintingForTestingAsync()
+    {
+        if (!IsCurrentId65BlankLab() || _currentLevel == null || _currentGeometry == null ||
+            _id65BlankLabManifest == null || _id65BlankLabPaths == null)
+        {
+            throw new InvalidOperationException(
+                "The resident-texture probe requires the validated, loaded ID65 Lab.");
+        }
+
+        string labKey = UnusedLevel65BlankLevelLabProfileRegistry.Key;
+        string isolatedEditsPath = Id65BlankLabTerrainEditsPath();
+        string retailEditsPath = Path.Combine(_workspace.RootPath, $"{labKey}-terrain-edits.json");
+        string overlayPath = Id65BlankLabOverlayPath(_id65BlankLabPaths);
+        string derivedBindingPath = Id65BlankLabDerivedCacheBindingPath(_id65BlankLabPaths);
+        string materialOverridesPath = Path.Combine(
+            _workspace.RootPath,
+            $"{labKey}-terrain-material-overrides.json");
+        LevelDefinition retailDonorGuardTarget = _retailCatalog.Levels.First();
+        string retailRelocationPath = NativeTerrainTextureRelocationEditStore.ManifestPath(
+            _workspace.RootPath,
+            retailDonorGuardTarget.Key);
+        byte[]? isolatedBefore = File.Exists(isolatedEditsPath)
+            ? File.ReadAllBytes(isolatedEditsPath)
+            : null;
+        byte[]? retailBefore = File.Exists(retailEditsPath)
+            ? File.ReadAllBytes(retailEditsPath)
+            : null;
+        byte[]? materialOverridesBefore = File.Exists(materialOverridesPath)
+            ? File.ReadAllBytes(materialOverridesPath)
+            : null;
+        byte[]? retailRelocationBefore = File.Exists(retailRelocationPath)
+            ? File.ReadAllBytes(retailRelocationPath)
+            : null;
+        byte[] derivedBindingBefore = File.ReadAllBytes(derivedBindingPath);
+        long overlayLengthBefore = new FileInfo(overlayPath).Length;
+        int loadedEditsBefore = _loadedTerrainEdits;
+        string savedSignatureBefore = _savedTerrainEditSignature;
+        TerrainPolygon? selectedBefore = _selectedTerrain;
+        int selectedIndexBefore = _selectedTerrainIndex;
+        int selectedPointBefore = _selectedTerrainPointIndex;
+        TerrainTexturePaintBrush? activeBrushBefore = _activeTerrainTexturePaintBrush;
+
+        TerrainPolygon target = _currentGeometry.Polygons
+            .Where(face =>
+                !face.IsTerrainRemoved &&
+                !face.IsTerrainAddClone &&
+                string.Equals(face.Detail, "hp", StringComparison.OrdinalIgnoreCase) &&
+                face.OriginalTextureId is >= 0 and < UnusedLevel65BlankLevelLabProfileRegistry.ResidentTextureCount &&
+                !face.IsTerrainEdited)
+            .OrderBy(face => face.RuntimeKey, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault()
+            ?? throw new InvalidOperationException(
+                "The loaded ID65 Lab has no clean resident-textured HP face.");
+        int targetIndex = _currentGeometry.Polygons.IndexOf(target);
+        float[] targetZBefore = target.TerrainVertexDeltas().ToArray();
+        Vector2f[] targetXyBefore = target.TerrainVertexXYDeltas().ToArray();
+        TerrainTexturePaintStageSnapshot targetPaintBefore =
+            TerrainTexturePaintStageSnapshot.Capture(target);
+
+        void RestoreFile(string path, byte[]? contents)
+        {
+            if (contents == null)
+            {
+                if (File.Exists(path))
+                    File.Delete(path);
+                return;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? _workspace.RootPath);
+            File.WriteAllBytes(path, contents);
+        }
+
+        async Task AssertPersistedRetailDonorIdentityRefusedAsync(
+            string donorLevelKey,
+            string donorLevelName,
+            int donorWadEntry,
+            string fixtureName,
+            string? rawPersistedDonorKey = null)
+        {
+            RestoreFile(retailRelocationPath, retailRelocationBefore);
+            await NativeTerrainTextureRelocationEditStore.AddOrReplaceArtOnlyAsync(
+                _workspace.RootPath,
+                retailDonorGuardTarget.Key,
+                retailDonorGuardTarget.DisplayName,
+                targetTextureId: 0,
+                donorLevelKey,
+                donorLevelName,
+                donorWadEntry,
+                donorTextureId: 0);
+            if (!string.IsNullOrWhiteSpace(rawPersistedDonorKey))
+            {
+                JsonObject manifestRoot = JsonNode.Parse(
+                    await File.ReadAllTextAsync(retailRelocationPath))?.AsObject()
+                    ?? throw new InvalidOperationException(
+                        $"The {fixtureName} donor fixture manifest is empty.");
+                JsonObject firstRow = manifestRoot["relocations"]?.AsArray()[0]?.AsObject()
+                    ?? throw new InvalidOperationException(
+                        $"The {fixtureName} donor fixture manifest has no first row.");
+                firstRow["donorLevelKey"] = rawPersistedDonorKey;
+                await File.WriteAllTextAsync(
+                    retailRelocationPath,
+                    manifestRoot.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            }
+            if (!TryGetInvalidRetailTerrainTextureRelocationDonorBlockReason(
+                    out string donorBlockReason))
+            {
+                throw new InvalidOperationException(
+                    $"The {fixtureName} persisted donor fixture did not block Build Safety/Create BIN.");
+            }
+
+            bool retailLoadRefused = false;
+            try
+            {
+                _ = LoadLevelData(retailDonorGuardTarget.Key);
+            }
+            catch (InvalidDataException ex) when (
+                ex.Message.Contains("Saved native terrain texture relocation", StringComparison.Ordinal) &&
+                ex.Message.Contains("blocked", StringComparison.Ordinal))
+            {
+                retailLoadRefused = true;
+            }
+            if (!retailLoadRefused)
+            {
+                throw new InvalidOperationException(
+                    $"The {fixtureName} persisted donor fixture loaded into a retail level.");
+            }
+        }
+
+        try
+        {
+            LevelDefinition canonicalRetailDonor = _retailCatalog.Levels
+                .First(level => !string.Equals(
+                    LevelCatalog.NormalizeKey(level.Key),
+                    LevelCatalog.NormalizeKey(retailDonorGuardTarget.Key),
+                    StringComparison.Ordinal));
+            LevelDefinition alternateRetailDonor = _retailCatalog.Levels
+                .First(level =>
+                    level.SourceWadEntry != canonicalRetailDonor.SourceWadEntry &&
+                    level.SourceWadEntry != UnusedLevel65BlankLevelLabProfileRegistry.DataWadEntry);
+            await AssertPersistedRetailDonorIdentityRefusedAsync(
+                labKey,
+                _currentLevel.DisplayName,
+                canonicalRetailDonor.SourceWadEntry,
+                "ID65-key");
+            await AssertPersistedRetailDonorIdentityRefusedAsync(
+                canonicalRetailDonor.Key,
+                canonicalRetailDonor.DisplayName,
+                UnusedLevel65BlankLevelLabProfileRegistry.DataWadEntry,
+                "ID65-WAD80");
+            await AssertPersistedRetailDonorIdentityRefusedAsync(
+                "unknown-retail-donor",
+                "Unknown Retail Donor",
+                canonicalRetailDonor.SourceWadEntry,
+                "unknown-key");
+            await AssertPersistedRetailDonorIdentityRefusedAsync(
+                canonicalRetailDonor.Key,
+                $"{canonicalRetailDonor.DisplayName} forged",
+                canonicalRetailDonor.SourceWadEntry,
+                "mismatched-name");
+            await AssertPersistedRetailDonorIdentityRefusedAsync(
+                canonicalRetailDonor.Key,
+                canonicalRetailDonor.DisplayName,
+                alternateRetailDonor.SourceWadEntry,
+                "mismatched-WAD");
+            await AssertPersistedRetailDonorIdentityRefusedAsync(
+                canonicalRetailDonor.Key,
+                canonicalRetailDonor.DisplayName,
+                canonicalRetailDonor.SourceWadEntry,
+                "noncanonical-key-spelling",
+                $"{canonicalRetailDonor.Key[0]}_{canonicalRetailDonor.Key[1..]}");
+            RestoreFile(retailRelocationPath, retailRelocationBefore);
+
+            if (!string.Equals(
+                    ResolveTerrainTextureSourceImage(_currentLevel),
+                    _id65BlankLabPaths.LockedBaseImagePath,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(
+                    FindCachedTerrainOverlayPath(labKey),
+                    overlayPath,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(
+                    ResolveTerrainTextureCacheWorkspaceRoot(labKey),
+                    _id65BlankLabPaths.RootPath,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !await IsCurrentId65BlankLabDerivedCacheAsync(
+                    _id65BlankLabPaths,
+                    _id65BlankLabManifest) ||
+                !IsCurrentTerrainTexturePreviewCacheForLevel(
+                    _id65BlankLabPaths.RootPath,
+                    labKey))
+            {
+                throw new InvalidOperationException(
+                    "ID65 did not resolve its texture catalog, overlay, and preview cache from the exact locked Lab workspace.");
+            }
+
+            Id65BlankLabDerivedCacheBinding forgedBinding = JsonSerializer.Deserialize<Id65BlankLabDerivedCacheBinding>(
+                derivedBindingBefore)
+                ?? throw new InvalidOperationException("The ID65 derived-cache binding is empty.");
+            File.WriteAllText(
+                derivedBindingPath,
+                JsonSerializer.Serialize(forgedBinding with { SceneOverlaySha256 = new string('0', 64) }));
+            if (await IsCurrentId65BlankLabDerivedCacheAsync(_id65BlankLabPaths, _id65BlankLabManifest))
+                throw new InvalidOperationException("ID65 admitted a forged derived-cache binding.");
+
+            GeometryCandidate sceneBeforeSynchronousReload = _currentGeometry;
+            string editsBeforeSynchronousReload = BuildTerrainEditSignature(_currentGeometry);
+            if (SelectLevel(_currentLevel) ||
+                !ReferenceEquals(_currentGeometry, sceneBeforeSynchronousReload) ||
+                BuildTerrainEditSignature(_currentGeometry) != editsBeforeSynchronousReload ||
+                !(_statusText.Text ?? "").Contains("awaited source-bound loader", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "The legacy synchronous level route reloaded ID65 or changed its scene while the derived binding was forged.");
+            }
+            File.WriteAllBytes(derivedBindingPath, derivedBindingBefore);
+
+            await using (FileStream overlayAppend = new(
+                overlayPath,
+                FileMode.Append,
+                FileAccess.Write,
+                FileShare.None))
+            {
+                overlayAppend.WriteByte((byte)' ');
+                await overlayAppend.FlushAsync();
+            }
+            if (await IsCurrentId65BlankLabDerivedCacheAsync(_id65BlankLabPaths, _id65BlankLabManifest))
+                throw new InvalidOperationException("ID65 admitted a validly shaped but byte-divergent source overlay.");
+            using (FileStream overlayRestore = new(overlayPath, FileMode.Open, FileAccess.Write, FileShare.None))
+                overlayRestore.SetLength(overlayLengthBefore);
+            if (!await IsCurrentId65BlankLabDerivedCacheAsync(_id65BlankLabPaths, _id65BlankLabManifest))
+                throw new InvalidOperationException("The exact restored ID65 derived cache did not validate again.");
+
+            _selectedTerrain = target;
+            _selectedTerrainIndex = targetIndex;
+            _selectedTerrainPointIndex = -1;
+            TerrainTextureSwapChoice[] residentPalette = BuildTerrainTextureSwapChoices()
+                .Where(choice =>
+                    choice.CanUseArt &&
+                    !choice.RequiresPrivateCopy &&
+                    choice.TextureId is >= 0 and < UnusedLevel65BlankLevelLabProfileRegistry.ResidentTextureCount)
+                .GroupBy(choice => choice.TextureId)
+                .Select(group => group.First())
+                .OrderBy(choice => choice.TextureId)
+                .ToArray();
+            if (!residentPalette.Select(choice => choice.TextureId).SequenceEqual(
+                    Enumerable.Range(0, UnusedLevel65BlankLevelLabProfileRegistry.ResidentTextureCount)))
+            {
+                throw new InvalidOperationException(
+                    "The locked ID65 palette did not expose every resident texture ID exactly once.");
+            }
+            TerrainTextureSwapChoice source = residentPalette
+                .FirstOrDefault(choice => choice.TextureId != target.OriginalTextureId)
+                ?? throw new InvalidOperationException(
+                    "The locked ID65 payload exposed no second source-verified resident texture.");
+
+            float[] raisedZ = targetZBefore.ToArray();
+            raisedZ[0] += 1;
+            target.ApplyTerrainVertexDeltas(raisedZ);
+            await PersistCurrentTerrainEditsAsync();
+
+            string preservedSurface = target.Surface;
+            string preservedSurfaceSource = target.SurfaceSource;
+            ColorRgba preservedSurfaceColor = target.SurfaceColor;
+            string preservedBehavior = target.Behavior;
+            string preservedBehaviorSource = target.BehaviorSource;
+            TerrainTexturePaintBrush brush = TerrainTexturePaintBrush.FromSameLevel(
+                labKey,
+                _currentLevel.DisplayName,
+                source,
+                preserveTargetNativeSurface: true);
+            StartTerrainTexturePaintMode(brush);
+            await ApplyTerrainTexturePaintBrushAsync(targetIndex, target);
+            RefreshId65BlankLabUi();
+
+            if (target.TextureId != source.TextureId ||
+                !target.HasTextureEdit ||
+                !target.TerrainVertexDeltas().SequenceEqual(raisedZ) ||
+                target.HasTextureVisualEdit ||
+                target.HasSurfaceBehaviorEdit ||
+                !string.Equals(target.Surface, preservedSurface, StringComparison.Ordinal) ||
+                !string.Equals(target.SurfaceSource, preservedSurfaceSource, StringComparison.Ordinal) ||
+                target.SurfaceColor != preservedSurfaceColor ||
+                !string.Equals(target.Behavior, preservedBehavior, StringComparison.Ordinal) ||
+                !string.Equals(target.BehaviorSource, preservedBehaviorSource, StringComparison.Ordinal) ||
+                !File.Exists(isolatedEditsPath) ||
+                File.Exists(retailEditsPath) != (retailBefore != null) ||
+                (retailBefore != null && !File.ReadAllBytes(retailEditsPath).SequenceEqual(retailBefore)) ||
+                _customTerrainTextures.Count != 0 ||
+                _nativeTerrainTextureRelocations.Count != 0 ||
+                _id65BlankLabCreateCueButton?.IsEnabled == true ||
+                TryValidateId65BlankLabTerrainForDisposableCue(_currentGeometry, out _))
+            {
+                throw new InvalidOperationException(
+                    "ID65 resident paint did not preserve HP height/material/tint/collision state, use only the isolated file, or block runtime CUE export.");
+            }
+
+            GeometryCandidate reloaded = GeometryOverlayLoader.LoadFirstCandidate(overlayPath);
+            int reloadedCount = TerrainEditStore.LoadStrict(isolatedEditsPath, reloaded.Polygons);
+            TerrainPolygon reloadedTarget = reloaded.Polygons.Single(face =>
+                string.Equals(face.RuntimeKey, target.RuntimeKey, StringComparison.OrdinalIgnoreCase));
+            if (reloadedCount <= 0 ||
+                reloadedTarget.TextureId != source.TextureId ||
+                !reloadedTarget.TerrainVertexDeltas().SequenceEqual(raisedZ) ||
+                reloadedTarget.HasTextureVisualEdit ||
+                reloadedTarget.HasSurfaceBehaviorEdit)
+            {
+                throw new InvalidOperationException(
+                    "The isolated ID65 resident texture and HP height did not reload exactly.");
+            }
+
+            _selectedTerrain = target;
+            _selectedTerrainIndex = targetIndex;
+            await UndoSelectedTerrainTexturePaintAsync();
+            RefreshId65BlankLabUi();
+            if (target.TextureId != target.OriginalTextureId ||
+                target.HasTextureEdit ||
+                !target.TerrainVertexDeltas().SequenceEqual(raisedZ) ||
+                _id65BlankLabCreateCueButton?.IsEnabled != true)
+            {
+                throw new InvalidOperationException(
+                    "ID65 texture-only Undo did not preserve the HP height or restore disposable-CUE eligibility.");
+            }
+
+            byte[] beforeInjectedFailure = File.ReadAllBytes(isolatedEditsPath);
+            TerrainTexturePaintStageSnapshot beforeInjectedState =
+                TerrainTexturePaintStageSnapshot.Capture(target);
+            TerrainTexturePaintPersistenceFaultForTesting = _ =>
+                throw new IOException("Injected ID65 resident texture persistence failure.");
+            bool injectedApplied = await ApplySelectedTerrainResidentArtOnlyAsync(source, target);
+            TerrainTexturePaintPersistenceFaultForTesting = null;
+            if (injectedApplied ||
+                TerrainTexturePaintStageSnapshot.Capture(target) != beforeInjectedState ||
+                !File.ReadAllBytes(isolatedEditsPath).SequenceEqual(beforeInjectedFailure))
+            {
+                throw new InvalidOperationException(
+                    "Injected ID65 resident-texture persistence failure did not restore memory and isolated bytes exactly.");
+            }
+
+            TerrainTextureSwapChoice privateChoice = new()
+            {
+                TextureId = source.TextureId,
+                CanUseArt = true,
+                RequiresPrivateCopy = true
+            };
+            TerrainTextureSwapChoice outOfRangeChoice = new()
+            {
+                TextureId = UnusedLevel65BlankLevelLabProfileRegistry.ResidentTextureCount,
+                CanUseArt = true,
+                RequiresPrivateCopy = false
+            };
+            if (await ApplySelectedTerrainResidentArtOnlyAsync(privateChoice, target) ||
+                await ApplySelectedTerrainResidentArtOnlyAsync(outOfRangeChoice, target) ||
+                TerrainTexturePaintStageSnapshot.Capture(target) != beforeInjectedState ||
+                !File.ReadAllBytes(isolatedEditsPath).SequenceEqual(beforeInjectedFailure))
+            {
+                throw new InvalidOperationException(
+                    "ID65 admitted a private/cross-level or out-of-range texture into its resident-only authored layer.");
+            }
+
+            string surfaceBeforeRegularUndo = target.Surface;
+            string behaviorBeforeRegularUndo = target.Behavior;
+            string hostileSurface = string.Equals(
+                TerrainMaterialClassifier.NormalizeSurfaceName(surfaceBeforeRegularUndo),
+                "water",
+                StringComparison.Ordinal)
+                ? "lava"
+                : "water";
+            Directory.CreateDirectory(Path.GetDirectoryName(materialOverridesPath) ?? _workspace.RootPath);
+            File.WriteAllBytes(
+                materialOverridesPath,
+                JsonSerializer.SerializeToUtf8Bytes(new
+                {
+                    generatedAt = "2000-01-01T00:00:00",
+                    editor = "ID65 resident-texture smoke hostile fixture",
+                    levelKey = labKey,
+                    overrides = new[]
+                    {
+                        new { textureId = target.TextureId, surface = hostileSurface }
+                    }
+                }));
+            await UndoSelectedTerrainAsync();
+            if (!string.Equals(target.Surface, surfaceBeforeRegularUndo, StringComparison.Ordinal) ||
+                !string.Equals(target.Behavior, behaviorBeforeRegularUndo, StringComparison.Ordinal) ||
+                target.IsTerrainEdited)
+            {
+                throw new InvalidOperationException(
+                    "Regular ID65 Undo admitted a retail-root material override or failed to clear the selected edit.");
+            }
+
+            void AssertStrictAuthoredLayerRefusal(byte[] bytes, string label)
+            {
+                File.WriteAllBytes(isolatedEditsPath, bytes);
+                GeometryCandidate strictFixture = GeometryOverlayLoader.LoadFirstCandidate(overlayPath);
+                bool refused = false;
+                try
+                {
+                    _ = TerrainEditStore.LoadStrict(isolatedEditsPath, strictFixture.Polygons);
+                }
+                catch (Exception ex) when (ex is InvalidDataException or JsonException)
+                {
+                    refused = true;
+                }
+                if (!refused || strictFixture.Polygons.Any(face => face.IsTerrainEdited) ||
+                    !Id65TerrainEditFileBlocksNormalCreateBin(isolatedEditsPath) ||
+                    !TryGetId65BlankLabNormalCreateBinBlockReason(out _))
+                {
+                    throw new InvalidOperationException(
+                        $"The {label} ID65 authored layer was silently accepted, partially applied, or omitted by normal Create BIN.");
+                }
+            }
+
+            AssertStrictAuthoredLayerRefusal("["u8.ToArray(), "malformed");
+
+            JsonObject duplicateRoot = JsonNode.Parse(beforeInjectedFailure)?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the valid ID65 authored fixture.");
+            JsonArray duplicateEdits = duplicateRoot["edits"]?.AsArray()
+                ?? throw new InvalidOperationException("The valid ID65 authored fixture has no edits array.");
+            duplicateEdits.Add(JsonNode.Parse(duplicateEdits[0]?.ToJsonString() ?? "null"));
+            duplicateRoot["editCount"] = duplicateEdits.Count;
+            AssertStrictAuthoredLayerRefusal(
+                JsonSerializer.SerializeToUtf8Bytes(duplicateRoot),
+                "duplicate-key");
+
+            JsonObject unknownRoot = JsonNode.Parse(beforeInjectedFailure)?.AsObject()
+                ?? throw new InvalidOperationException("Could not clone the valid ID65 authored fixture.");
+            JsonObject unknownEdit = unknownRoot["edits"]?.AsArray()[0]?.AsObject()
+                ?? throw new InvalidOperationException("The valid ID65 authored fixture has no first edit.");
+            unknownEdit["runtimeKey"] = "999999:999999:hp";
+            unknownEdit["sectorIndex"] = 999999;
+            unknownEdit["faceIndex"] = 999999;
+            AssertStrictAuthoredLayerRefusal(
+                JsonSerializer.SerializeToUtf8Bytes(unknownRoot),
+                "unknown-key");
+
+            return
+                $"locked-source cache and palette exposed {UnusedLevel65BlankLevelLabProfileRegistry.ResidentTextureCount} resident slots; " +
+                "one HP face painted and reloaded from the isolated authored layer while preserving height/material/tint/collision; " +
+                "texture-only Undo preserved height and regular Undo ignored hostile retail overrides; persistence rollback was exact; " +
+                "private/out-of-range sources, ID65 key/WAD80/unknown/noncanonical-name/noncanonical-key/mismatched-WAD retail donors, and disposable runtime export stayed blocked; the synchronous reload route refused ID65; " +
+                "malformed, duplicate, and unknown authored rows stayed unconsumable";
+        }
+        finally
+        {
+            TerrainTexturePaintPersistenceFaultForTesting = null;
+            StopTerrainTexturePaintMode(announce: false);
+            targetPaintBefore.Restore();
+            target.ApplyTerrainVertexDeltas(targetZBefore);
+            target.ApplyTerrainVertexXYDeltas(targetXyBefore);
+            RestoreFile(isolatedEditsPath, isolatedBefore);
+            RestoreFile(retailEditsPath, retailBefore);
+            RestoreFile(materialOverridesPath, materialOverridesBefore);
+            RestoreFile(retailRelocationPath, retailRelocationBefore);
+            RestoreFile(derivedBindingPath, derivedBindingBefore);
+            if (File.Exists(overlayPath) && new FileInfo(overlayPath).Length != overlayLengthBefore)
+            {
+                using FileStream overlayRestore = new(overlayPath, FileMode.Open, FileAccess.Write, FileShare.None);
+                overlayRestore.SetLength(overlayLengthBefore);
+            }
+            _loadedTerrainEdits = loadedEditsBefore;
+            _savedTerrainEditSignature = savedSignatureBefore;
+            _selectedTerrain = selectedBefore;
+            _selectedTerrainIndex = selectedIndexBefore;
+            _selectedTerrainPointIndex = selectedPointBefore;
+            _activeTerrainTexturePaintBrush = activeBrushBefore;
+            RefreshCurrentLevelDetails();
+            RefreshId65BlankLabUi();
+        }
+    }
+
+    internal async Task<string> AssertId65BlankLabStaleEditorContinuationsForTestingAsync()
+    {
+        if (_currentLevel == null || _currentGeometry == null || _currentMobys.Count == 0 ||
+            IsCurrentId65BlankLab())
+        {
+            throw new InvalidOperationException(
+                "The stale editor-continuation probe requires one loaded retail level.");
+        }
+
+        LevelDefinition retailLevel = _currentLevel;
+        GeometryCandidate retailGeometry = _currentGeometry;
+        List<Moby> retailMobys = _currentMobys;
+        Moby? retailSelection = _selectedMoby;
+        string retailMobySignature = BuildMobyEditSignature(retailMobys);
+        string retailTerrainSignature = BuildTerrainEditSignature(retailGeometry);
+        string retailSavedMobySignature = _savedMobyEditSignature;
+        string retailSavedTerrainSignature = _savedTerrainEditSignature;
+        Func<string, string, Task<string>>? originalUnsavedOverride =
+            UnsavedTerrainDecisionOverrideForTesting;
+        TaskCompletionSource? manualLoadRelease = null;
+        string projectImportFixtureRoot = "";
+
+        static bool IsEnabled(Control? control) => control?.IsEnabled == true;
+        static byte[]? ReadOptionalFile(string path) =>
+            File.Exists(path) ? File.ReadAllBytes(path) : null;
+        static bool OptionalFileIsExact(string path, byte[]? expected) =>
+            expected == null
+                ? !File.Exists(path)
+                : File.Exists(path) && File.ReadAllBytes(path).SequenceEqual(expected);
+
+        try
+        {
+            UnsavedTerrainDecisionOverrideForTesting = (_, _) => Task.FromResult("Discard");
+            if (_discImageChooseButton == null)
+                _ = BuildDiscImagePanel();
+
+            TaskCompletionSource manualLoadStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            manualLoadRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Id65BlankLabManualOperationDelayOverrideForTesting = (stage, cancellationToken) =>
+            {
+                if (!string.Equals(stage, "load-started", StringComparison.Ordinal))
+                    return Task.CompletedTask;
+                manualLoadStarted.TrySetResult();
+                return manualLoadRelease.Task.WaitAsync(cancellationToken);
+            };
+            Task delayedLoad = LoadId65BlankLabAsync();
+            await manualLoadStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            RefreshActionAvailability();
+            RefreshId65SkyAndNameAvailability(_currentLevel);
+            RefreshLevelMusicEditor(_currentLevel);
+            RefreshNativeMovementActionButton();
+            RefreshSelectedMobyZControls(_selectedMoby);
+            if (!_id65BlankLabBusy || _id65BlankLabManualOperation == null ||
+                IsEnabled(_viewport) ||
+                IsEnabled(_objectManagerWorkspaceButton) ||
+                IsEnabled(_levelBuildingWorkspaceButton) ||
+                IsEnabled(_modernWorkspaceTabs) ||
+                IsEnabled(_modernObjectWorkspaceTab) ||
+                IsEnabled(_modernTerrainWorkspaceTab) ||
+                IsEnabled(_modernLevelWorkspaceTab) ||
+                IsEnabled(_modernEnvironmentWorkspaceTab) ||
+                IsEnabled(_modernResearchWorkspaceTab) ||
+                IsEnabled(_toolbarOpenDiscImageButton) ||
+                IsEnabled(_discImageChooseButton) ||
+                IsEnabled(_toolbarMoreControl) ||
+                IsEnabled(_previousBetaProjectReminder) ||
+                IsEnabled(_previousBetaProjectImportButton) ||
+                IsEnabled(_updateNotificationBanner) ||
+                IsEnabled(_inspectBuildSafetyButton) ||
+                IsEnabled(_modernMapViewButton) ||
+                IsEnabled(_modernFlyViewButton) ||
+                IsEnabled(_modernViewportActionButton) ||
+                IsEnabled(_toolbarCreateBinButton) ||
+                IsEnabled(_objectAddButton) ||
+                IsEnabled(_objectRemoveButton) ||
+                IsEnabled(_objectEditButton) ||
+                IsEnabled(_objectNativeMovementButton) ||
+                IsEnabled(_objectSwapCatalogButton) ||
+                IsEnabled(_objectCopyButton) ||
+                IsEnabled(_objectPasteButton) ||
+                IsEnabled(_objectUndoButton) ||
+                IsEnabled(_selectedMobyZSlider) ||
+                IsEnabled(_selectedMobySnapZBox) ||
+                _skyboxModeBox.IsEnabled ||
+                IsEnabled(_skyboxCustomImportButton) ||
+                IsEnabled(_skyboxSaveButton) ||
+                _levelTextTargetBox.IsEnabled ||
+                IsEnabled(_levelTextSaveButton) ||
+                _levelMusicTrackBox.IsEnabled ||
+                IsEnabled(_levelMusicSaveButton))
+            {
+                throw new InvalidOperationException(
+                    "A manual ID65 Load left an editing workspace, Create command, object action, or nested Level/Environment control enabled.");
+            }
+            string directSourceConfigPath = Path.Combine(
+                _workspace.RootPath,
+                "_local",
+                "settings",
+                "source-disc.json");
+            byte[]? directSourceConfigBefore = ReadOptionalFile(directSourceConfigPath);
+            Id65BlankLabAuthoredLayerSnapshot directCacheBefore =
+                await CaptureId65BlankLabAuthoredLayerAsync(
+                    Path.Combine(_workspace.RootPath, "editor-cache"));
+            int portableGenerationBeforeDirectRefusal = _portableCacheBuildGeneration;
+            int projectGenerationBeforeDirectRefusal = _projectDataImportGeneration;
+            int regularPersistenceGenerationBeforeDirectRefusal =
+                _regularEditorPersistenceGeneration;
+            int buildSafetyGenerationBeforeDirectRefusal = _buildSafetyGeneration;
+            await BuildPortableCacheAsync();
+            await ImportEditorCacheAsync();
+            await ChooseSourceDiscImageAsync();
+            await ShowProjectDataAsync();
+            bool buildSafetyDuringManual =
+                await RunBuildSafetyInspectorForTestingAsync();
+            if (ReleaseProjectBootstrap.Current != null &&
+                await ImportPreviousBetaProjectForTestingAsync())
+            {
+                throw new InvalidOperationException(
+                    "Direct Project Data import succeeded during a manual ID65 Load.");
+            }
+            RunContextualViewportAction();
+            Id65BlankLabAuthoredLayerSnapshot directCacheAfter =
+                await CaptureId65BlankLabAuthoredLayerAsync(
+                    Path.Combine(_workspace.RootPath, "editor-cache"));
+            if (_buildingPortableCache ||
+                _projectDataImportBusy ||
+                _regularEditorPersistenceBusy ||
+                _buildSafetyBusy ||
+                buildSafetyDuringManual ||
+                portableGenerationBeforeDirectRefusal != _portableCacheBuildGeneration ||
+                projectGenerationBeforeDirectRefusal != _projectDataImportGeneration ||
+                regularPersistenceGenerationBeforeDirectRefusal !=
+                    _regularEditorPersistenceGeneration ||
+                buildSafetyGenerationBeforeDirectRefusal != _buildSafetyGeneration ||
+                !OptionalFileIsExact(directSourceConfigPath, directSourceConfigBefore) ||
+                directCacheBefore.DirectoryExisted != directCacheAfter.DirectoryExisted ||
+                !directCacheBefore.Files.SequenceEqual(directCacheAfter.Files, StringComparer.Ordinal) ||
+                !ReferenceEquals(_currentLevel, retailLevel) ||
+                !ReferenceEquals(_currentGeometry, retailGeometry) ||
+                !ReferenceEquals(_currentMobys, retailMobys) ||
+                BuildMobyEditSignature(retailMobys) != retailMobySignature ||
+                BuildTerrainEditSignature(retailGeometry) != retailTerrainSignature)
+            {
+                throw new InvalidOperationException(
+                    "A direct source/cache/Project Data command mutated state during the delayed manual ID65 Load.");
+            }
+            CancelId65BlankLabManualOperationForWorkspaceChange();
+            manualLoadRelease.TrySetResult();
+            await delayedLoad;
+            Id65BlankLabManualOperationDelayOverrideForTesting = null;
+            if (!ReferenceEquals(_currentLevel, retailLevel) ||
+                !ReferenceEquals(_currentGeometry, retailGeometry) ||
+                !ReferenceEquals(_currentMobys, retailMobys) ||
+                !ReferenceEquals(_selectedMoby, retailSelection) ||
+                BuildMobyEditSignature(retailMobys) != retailMobySignature ||
+                BuildTerrainEditSignature(retailGeometry) != retailTerrainSignature ||
+                _savedMobyEditSignature != retailSavedMobySignature ||
+                _savedTerrainEditSignature != retailSavedTerrainSignature)
+            {
+                throw new InvalidOperationException(
+                    "Canceling the delayed manual ID65 Load changed the retail scene or signatures.");
+            }
+
+            string sourceConfigPath = Path.Combine(
+                _workspace.RootPath,
+                "_local",
+                "settings",
+                "source-disc.json");
+            byte[]? sourceConfigBefore = ReadOptionalFile(sourceConfigPath);
+            Id65BlankLabAuthoredLayerSnapshot retailCacheBeforeSourcePicker =
+                await CaptureId65BlankLabAuthoredLayerAsync(
+                    Path.Combine(_workspace.RootPath, "editor-cache"));
+            string sourcePickerReturnPath = FirstExistingDiscImagePath(
+                _discImagePathBox.Text,
+                _skyboxDiscImagePathBox.Text,
+                DiscImageLocator.FindImage(_workspace));
+            LevelDefinition? sourceLabLevel = null;
+            GeometryCandidate? sourceLabGeometry = null;
+            List<Moby>? sourceLabMobys = null;
+            Moby? sourceLabSelection = null;
+            string sourceLabMobySignature = "";
+            string sourceLabTerrainSignature = "";
+            string sourceLabSavedMobySignature = "";
+            string sourceLabSavedTerrainSignature = "";
+            string sourceLabDiscPath = "";
+            string sourceLabSkyDiscPath = "";
+            string sourceLabStatus = "";
+            Spyro1SkyBlockReport? sourceLabSkyReport = null;
+            string sourceLabSkyReportPath = "";
+            long sourceLabPrivateTextureGeneration = 0;
+            Dictionary<string, TerrainTexturePreviewBundleCacheEntry>? sourceLabPreviewCache = null;
+            SourceDiscFilePickerOverrideForTesting = async () =>
+            {
+                await LoadId65BlankLabAsync();
+                if (!IsCurrentId65BlankLab() || _currentLevel == null || _currentGeometry == null)
+                    throw new InvalidOperationException("The stale source-picker fixture could not load ID65.");
+                sourceLabLevel = _currentLevel;
+                sourceLabGeometry = _currentGeometry;
+                sourceLabMobys = _currentMobys;
+                sourceLabSelection = _selectedMoby;
+                sourceLabMobySignature = BuildMobyEditSignature(_currentMobys);
+                sourceLabTerrainSignature = BuildTerrainEditSignature(_currentGeometry);
+                sourceLabSavedMobySignature = _savedMobyEditSignature;
+                sourceLabSavedTerrainSignature = _savedTerrainEditSignature;
+                sourceLabDiscPath = _discImagePathBox.Text ?? "";
+                sourceLabSkyDiscPath = _skyboxDiscImagePathBox.Text ?? "";
+                sourceLabStatus = _statusText.Text ?? "";
+                sourceLabSkyReport = _nativeSkyReport;
+                sourceLabSkyReportPath = _nativeSkyReportSourcePath;
+                sourceLabPrivateTextureGeneration = _privateTexturePreflightOperationGeneration;
+                sourceLabPreviewCache = new Dictionary<string, TerrainTexturePreviewBundleCacheEntry>(
+                    _terrainTexturePreviewBundleCache,
+                    StringComparer.OrdinalIgnoreCase);
+                return sourcePickerReturnPath;
+            };
+            await ChooseSourceDiscImageAsync();
+            SourceDiscFilePickerOverrideForTesting = null;
+            Id65BlankLabAuthoredLayerSnapshot retailCacheAfterSourcePicker =
+                await CaptureId65BlankLabAuthoredLayerAsync(
+                    Path.Combine(_workspace.RootPath, "editor-cache"));
+            bool previewCacheExact = sourceLabPreviewCache != null &&
+                sourceLabPreviewCache.Count == _terrainTexturePreviewBundleCache.Count &&
+                sourceLabPreviewCache.All(entry =>
+                    _terrainTexturePreviewBundleCache.TryGetValue(
+                        entry.Key,
+                        out TerrainTexturePreviewBundleCacheEntry? current) &&
+                    ReferenceEquals(current, entry.Value));
+            if (sourceLabLevel == null || sourceLabGeometry == null || sourceLabMobys == null ||
+                !ReferenceEquals(_currentLevel, sourceLabLevel) ||
+                !ReferenceEquals(_currentGeometry, sourceLabGeometry) ||
+                !ReferenceEquals(_currentMobys, sourceLabMobys) ||
+                !ReferenceEquals(_selectedMoby, sourceLabSelection) ||
+                BuildMobyEditSignature(sourceLabMobys) != sourceLabMobySignature ||
+                BuildTerrainEditSignature(sourceLabGeometry) != sourceLabTerrainSignature ||
+                _savedMobyEditSignature != sourceLabSavedMobySignature ||
+                _savedTerrainEditSignature != sourceLabSavedTerrainSignature ||
+                !string.Equals(_discImagePathBox.Text ?? "", sourceLabDiscPath, StringComparison.Ordinal) ||
+                !string.Equals(_skyboxDiscImagePathBox.Text ?? "", sourceLabSkyDiscPath, StringComparison.Ordinal) ||
+                !string.Equals(_statusText.Text, sourceLabStatus, StringComparison.Ordinal) ||
+                !ReferenceEquals(_nativeSkyReport, sourceLabSkyReport) ||
+                !string.Equals(_nativeSkyReportSourcePath, sourceLabSkyReportPath, StringComparison.Ordinal) ||
+                _privateTexturePreflightOperationGeneration != sourceLabPrivateTextureGeneration ||
+                !previewCacheExact ||
+                !OptionalFileIsExact(sourceConfigPath, sourceConfigBefore) ||
+                retailCacheBeforeSourcePicker.DirectoryExisted != retailCacheAfterSourcePicker.DirectoryExisted ||
+                !retailCacheBeforeSourcePicker.Files.SequenceEqual(
+                    retailCacheAfterSourcePicker.Files,
+                    StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "A stale retail source picker changed source settings, caches, ID65 scene, controls, selection, or signatures.");
+            }
+
+            await SelectLevelAsync(retailLevel);
+            if (!ReferenceEquals(_currentLevel, retailLevel))
+                throw new InvalidOperationException("The stale Project Data fixture could not reload its retail scene.");
+
+            var projectContext = ReleaseProjectBootstrap.Current ?? new ReleaseProjectContext(
+                InstallRoot: _workspace.RootPath,
+                UserData: new EditorUserDataLayout(
+                    Path.Combine(_workspace.RootPath, "_local", "ui-smoke-user-data")),
+                Project: new EditorProjectLayout(_workspace.RootPath, "ui-smoke-project"),
+                AppVersion: "ui-smoke",
+                AutomaticMigration: null);
+            string projectCanaryName =
+                $"stale-id65-{Guid.NewGuid():N}-terrain-edits.json";
+            string projectCanaryTarget = Path.Combine(
+                projectContext.Project.RootPath,
+                projectCanaryName);
+            if (File.Exists(projectCanaryTarget))
+                throw new InvalidOperationException("The stale Project Data fixture target already exists.");
+            projectImportFixtureRoot = Path.Combine(
+                Path.GetTempPath(),
+                $"spyro-editor-stale-project-{Guid.NewGuid():N}");
+            string projectFixtureSupport = Path.Combine(projectImportFixtureRoot, "support");
+            Directory.CreateDirectory(projectFixtureSupport);
+            File.Copy(
+                Path.Combine(_workspace.RootPath, "spyro-level-catalog.json"),
+                Path.Combine(projectFixtureSupport, "spyro-level-catalog.json"));
+            File.Copy(
+                Path.Combine(_workspace.RootPath, "spyro-object-templates.json"),
+                Path.Combine(projectFixtureSupport, "spyro-object-templates.json"));
+            File.WriteAllText(Path.Combine(projectImportFixtureRoot, "Launch Spyro Editor.command"), "");
+            File.WriteAllText(Path.Combine(projectImportFixtureRoot, projectCanaryName), "{}\n");
+            LevelDefinition? projectLabLevel = null;
+            GeometryCandidate? projectLabGeometry = null;
+            List<Moby>? projectLabMobys = null;
+            Moby? projectLabSelection = null;
+            string projectLabMobySignature = "";
+            string projectLabTerrainSignature = "";
+            string projectLabSavedMobySignature = "";
+            string projectLabSavedTerrainSignature = "";
+            string projectLabDiscPath = "";
+            string projectLabSkyDiscPath = "";
+            string projectLabStatus = "";
+            ProjectDataFolderPickerOverrideForTesting = async () =>
+            {
+                await LoadId65BlankLabAsync();
+                if (!IsCurrentId65BlankLab() || _currentLevel == null || _currentGeometry == null)
+                    throw new InvalidOperationException("The stale Project Data fixture could not load ID65.");
+                projectLabLevel = _currentLevel;
+                projectLabGeometry = _currentGeometry;
+                projectLabMobys = _currentMobys;
+                projectLabSelection = _selectedMoby;
+                projectLabMobySignature = BuildMobyEditSignature(_currentMobys);
+                projectLabTerrainSignature = BuildTerrainEditSignature(_currentGeometry);
+                projectLabSavedMobySignature = _savedMobyEditSignature;
+                projectLabSavedTerrainSignature = _savedTerrainEditSignature;
+                projectLabDiscPath = _discImagePathBox.Text ?? "";
+                projectLabSkyDiscPath = _skyboxDiscImagePathBox.Text ?? "";
+                projectLabStatus = _statusText.Text ?? "";
+                return projectImportFixtureRoot;
+            };
+            bool projectImportStarted = false;
+            ProjectDataImportStartedForTesting = () => projectImportStarted = true;
+            bool staleProjectImported = await ImportPreviousBetaProjectForTestingAsync();
+            ProjectDataImportStartedForTesting = null;
+            ProjectDataFolderPickerOverrideForTesting = null;
+            if (staleProjectImported ||
+                projectImportStarted ||
+                File.Exists(projectCanaryTarget) ||
+                _projectDataImportBusy ||
+                projectLabLevel == null || projectLabGeometry == null || projectLabMobys == null ||
+                !ReferenceEquals(_currentLevel, projectLabLevel) ||
+                !ReferenceEquals(_currentGeometry, projectLabGeometry) ||
+                !ReferenceEquals(_currentMobys, projectLabMobys) ||
+                !ReferenceEquals(_selectedMoby, projectLabSelection) ||
+                BuildMobyEditSignature(projectLabMobys) != projectLabMobySignature ||
+                BuildTerrainEditSignature(projectLabGeometry) != projectLabTerrainSignature ||
+                _savedMobyEditSignature != projectLabSavedMobySignature ||
+                _savedTerrainEditSignature != projectLabSavedTerrainSignature ||
+                !string.Equals(_discImagePathBox.Text ?? "", projectLabDiscPath, StringComparison.Ordinal) ||
+                !string.Equals(_skyboxDiscImagePathBox.Text ?? "", projectLabSkyDiscPath, StringComparison.Ordinal) ||
+                !string.Equals(_statusText.Text, projectLabStatus, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "A stale Project Data folder picker imported files or changed the ID65 scene, controls, selection, or signatures.");
+            }
+            Directory.Delete(projectImportFixtureRoot, recursive: true);
+            projectImportFixtureRoot = "";
+
+            await SelectLevelAsync(retailLevel);
+            if (!ReferenceEquals(_currentLevel, retailLevel))
+                throw new InvalidOperationException("The stale object fixture could not reload its retail scene.");
+
+            Moby retailTarget = retailMobys.First(candidate =>
+                !candidate.IsEditorControl &&
+                !candidate.IsRemoved &&
+                !candidate.IsFlyInLandingControl &&
+                !IsMappedPortalControlMoby(candidate));
+            string retailTargetSignature = BuildMobyEditSignature([retailTarget]);
+            LevelDefinition? objectLabLevel = null;
+            GeometryCandidate? objectLabGeometry = null;
+            List<Moby>? objectLabMobys = null;
+            Moby? objectLabSelection = null;
+            string objectLabMobySignature = "";
+            string objectLabTerrainSignature = "";
+            string objectLabSavedMobySignature = "";
+            string objectLabSavedTerrainSignature = "";
+            string objectLabStatus = "";
+            MobyEditDialogOverrideForTesting = async (target, nameBox) =>
+            {
+                if (!ReferenceEquals(target, retailTarget))
+                    throw new InvalidOperationException("The stale object fixture received the wrong retail target.");
+                nameBox.Text = "stale dialog must not commit";
+                await LoadId65BlankLabAsync();
+                if (!IsCurrentId65BlankLab() || _currentLevel == null || _currentGeometry == null)
+                    throw new InvalidOperationException("The stale object fixture could not load ID65.");
+                objectLabLevel = _currentLevel;
+                objectLabGeometry = _currentGeometry;
+                objectLabMobys = _currentMobys;
+                objectLabSelection = _selectedMoby;
+                objectLabMobySignature = BuildMobyEditSignature(_currentMobys);
+                objectLabTerrainSignature = BuildTerrainEditSignature(_currentGeometry);
+                objectLabSavedMobySignature = _savedMobyEditSignature;
+                objectLabSavedTerrainSignature = _savedTerrainEditSignature;
+                objectLabStatus = _statusText.Text ?? "";
+                return true;
+            };
+            await EditMobyAsync(retailTarget);
+            MobyEditDialogOverrideForTesting = null;
+            if (objectLabLevel == null || objectLabGeometry == null || objectLabMobys == null ||
+                !ReferenceEquals(_currentLevel, objectLabLevel) ||
+                !ReferenceEquals(_currentGeometry, objectLabGeometry) ||
+                !ReferenceEquals(_currentMobys, objectLabMobys) ||
+                !ReferenceEquals(_selectedMoby, objectLabSelection) ||
+                BuildMobyEditSignature(objectLabMobys) != objectLabMobySignature ||
+                BuildTerrainEditSignature(objectLabGeometry) != objectLabTerrainSignature ||
+                _savedMobyEditSignature != objectLabSavedMobySignature ||
+                _savedTerrainEditSignature != objectLabSavedTerrainSignature ||
+                !string.Equals(_statusText.Text, objectLabStatus, StringComparison.Ordinal) ||
+                BuildMobyEditSignature([retailTarget]) != retailTargetSignature)
+            {
+                throw new InvalidOperationException(
+                    "An accepted stale retail object dialog mutated its detached target, ID65 scene, selection, or signatures.");
+            }
+
+            await SelectLevelAsync(retailLevel);
+            if (!ReferenceEquals(_currentLevel, retailLevel))
+                throw new InvalidOperationException("The stale sky fixture could not reload its retail scene.");
+
+            LevelDefinition labLevel = _catalog.FindByKey(UnusedLevel65BlankLevelLabProfileRegistry.Key)
+                ?? throw new InvalidOperationException("The stale sky fixture requires the admitted ID65 row.");
+            string id65SkyDirectory = Path.Combine(
+                _workspace.RootPath,
+                "custom-skyboxes",
+                LevelCatalog.NormalizeKey(labLevel.Key));
+            Id65BlankLabAuthoredLayerSnapshot id65SkyBefore =
+                await CaptureId65BlankLabAuthoredLayerAsync(id65SkyDirectory);
+            LevelDefinition? skyLabLevel = null;
+            GeometryCandidate? skyLabGeometry = null;
+            List<Moby>? skyLabMobys = null;
+            Moby? skyLabSelection = null;
+            string skyLabMobySignature = "";
+            string skyLabTerrainSignature = "";
+            string skyLabSavedMobySignature = "";
+            string skyLabSavedTerrainSignature = "";
+            object? skyLabMode = null;
+            string skyLabImportPath = "";
+            NativeEnvironmentGradeMatch? skyLabEnvironment = null;
+            string skyLabStatus = "";
+            CustomSkyFilePickerOverrideForTesting = async () =>
+            {
+                await LoadId65BlankLabAsync();
+                if (!IsCurrentId65BlankLab() || _currentLevel == null || _currentGeometry == null)
+                    throw new InvalidOperationException("The stale sky fixture could not load ID65.");
+                skyLabLevel = _currentLevel;
+                skyLabGeometry = _currentGeometry;
+                skyLabMobys = _currentMobys;
+                skyLabSelection = _selectedMoby;
+                skyLabMobySignature = BuildMobyEditSignature(_currentMobys);
+                skyLabTerrainSignature = BuildTerrainEditSignature(_currentGeometry);
+                skyLabSavedMobySignature = _savedMobyEditSignature;
+                skyLabSavedTerrainSignature = _savedTerrainEditSignature;
+                skyLabMode = _skyboxModeBox.SelectedItem;
+                skyLabImportPath = _skyboxImportPathBox.Text ?? "";
+                skyLabEnvironment = _activeEnvironmentGradeMatch;
+                skyLabStatus = _statusText.Text ?? "";
+                return Path.Combine(_workspace.RootPath, "injected-stale-id65.sky");
+            };
+            await ChooseCustomSkyAsync();
+            CustomSkyFilePickerOverrideForTesting = null;
+            Id65BlankLabAuthoredLayerSnapshot id65SkyAfter =
+                await CaptureId65BlankLabAuthoredLayerAsync(id65SkyDirectory);
+            if (skyLabLevel == null || skyLabGeometry == null || skyLabMobys == null ||
+                !ReferenceEquals(_currentLevel, skyLabLevel) ||
+                !ReferenceEquals(_currentGeometry, skyLabGeometry) ||
+                !ReferenceEquals(_currentMobys, skyLabMobys) ||
+                !ReferenceEquals(_selectedMoby, skyLabSelection) ||
+                BuildMobyEditSignature(skyLabMobys) != skyLabMobySignature ||
+                BuildTerrainEditSignature(skyLabGeometry) != skyLabTerrainSignature ||
+                _savedMobyEditSignature != skyLabSavedMobySignature ||
+                _savedTerrainEditSignature != skyLabSavedTerrainSignature ||
+                !ReferenceEquals(_skyboxModeBox.SelectedItem, skyLabMode) ||
+                !string.Equals(_skyboxImportPathBox.Text ?? "", skyLabImportPath, StringComparison.Ordinal) ||
+                !ReferenceEquals(_activeEnvironmentGradeMatch, skyLabEnvironment) ||
+                !string.Equals(_statusText.Text, skyLabStatus, StringComparison.Ordinal) ||
+                id65SkyBefore.DirectoryExisted != id65SkyAfter.DirectoryExisted ||
+                !id65SkyBefore.Files.SequenceEqual(id65SkyAfter.Files, StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "A stale retail sky picker wrote an ID65 artifact or changed its scene, controls, selection, or signatures.");
+            }
+
+            return
+                "manual Load disabled the full editor/source/cache/More command surface; direct source, cache, Project Data, and viewport commands refused; canceled Load preserved retail state; stale source-disc and previous-project pickers stayed settings/cache/file write-free; accepted stale object and sky-picker continuations could not mutate detached retail data, ID65 files, scene, selection, controls, or signatures";
+        }
+        finally
+        {
+            manualLoadRelease?.TrySetResult();
+            Id65BlankLabManualOperationDelayOverrideForTesting = null;
+            MobyEditDialogOverrideForTesting = null;
+            CustomSkyFilePickerOverrideForTesting = null;
+            SourceDiscFilePickerOverrideForTesting = null;
+            EditorCacheFolderPickerOverrideForTesting = null;
+            ProjectDataFolderPickerOverrideForTesting = null;
+            ProjectDataImportStartedForTesting = null;
+            UnsavedTerrainDecisionOverrideForTesting = originalUnsavedOverride;
+            if (_id65BlankLabManualOperation != null || _id65BlankLabBusy)
+                CancelId65BlankLabManualOperationForWorkspaceChange();
+            if (!ReferenceEquals(_currentLevel, retailLevel))
+                await SelectLevelAsync(retailLevel);
+            if (!string.IsNullOrWhiteSpace(projectImportFixtureRoot) &&
+                Directory.Exists(projectImportFixtureRoot))
+            {
+                Directory.Delete(projectImportFixtureRoot, recursive: true);
+            }
+            RefreshActionAvailability();
         }
     }
 
@@ -1598,7 +3731,9 @@ public sealed partial class MainWindow
                 !NativeEditFileHasEdits(mobyEditsPath))
             {
                 throw new InvalidOperationException(
-                    "The guarded ID65 transition did not persist retail terrain and Moby edits before loading the Lab.");
+                    "The guarded ID65 transition did not persist retail terrain and Moby edits before loading the Lab. " +
+                    $"current={_currentLevel?.Key ?? "<none>"}; terrainSaved={TerrainEditFileHasEdits(terrainEditsPath)}; " +
+                    $"mobySaved={NativeEditFileHasEdits(mobyEditsPath)}; status={_statusText.Text}");
             }
 
             ApplyLoadedLevel(lab, CreateCleanLockedCacheFixture());
@@ -1688,6 +3823,110 @@ public sealed partial class MainWindow
                     $"Returned={genericTerrainSaved}; file={savedTerrainFileHasEdits}; unsaved={terrainStillUnsaved}; status={_statusText.Text}");
             }
 
+            _selectedTerrain = labTerrain;
+            _selectedTerrainIndex = _currentGeometry.Polygons.IndexOf(labTerrain);
+            _selectedTerrainPointIndex = 0;
+            byte[] automaticPersistFileBefore = File.ReadAllBytes(labAuthoredTerrainPath);
+            string automaticPersistTerrainSignatureBefore = BuildTerrainEditSignature(_currentGeometry);
+            string automaticPersistSavedSignatureBefore = _savedTerrainEditSignature;
+            float[] automaticPersistHeightBefore = labTerrain.TerrainVertexDeltas().ToArray();
+
+            void AssertAutomaticHeightUndoRolledBack(string fixture)
+            {
+                bool exact =
+                    labTerrain.TerrainVertexDeltas().SequenceEqual(automaticPersistHeightBefore) &&
+                    BuildTerrainEditSignature(_currentGeometry) == automaticPersistTerrainSignatureBefore &&
+                    _savedTerrainEditSignature == automaticPersistSavedSignatureBefore &&
+                    File.Exists(labAuthoredTerrainPath) &&
+                    File.ReadAllBytes(labAuthoredTerrainPath).SequenceEqual(automaticPersistFileBefore) &&
+                    (_statusText.Text ?? "").Contains(
+                        "Could not undo terrain height",
+                        StringComparison.OrdinalIgnoreCase);
+                if (!exact)
+                {
+                    throw new InvalidOperationException(
+                        $"The {fixture} automatic ID65 persistence failure changed the face, signature, or authored file. Status: {_statusText.Text}");
+                }
+            }
+
+            Id65BlankLabTerrainPersistenceFaultForTesting = _ =>
+                throw new IOException("Injected staged automatic ID65 persistence failure.");
+            try
+            {
+                await UndoSelectedTerrainHeightAsync();
+            }
+            finally
+            {
+                Id65BlankLabTerrainPersistenceFaultForTesting = null;
+            }
+            AssertAutomaticHeightUndoRolledBack("injected staged-write");
+
+            UnusedLevel65BlankLevelLabWorkspacePaths automaticPersistPaths = _id65BlankLabPaths ??
+                throw new InvalidOperationException("The ID65 paths disappeared before automatic persistence testing.");
+            string automaticPersistLockedImagePath = automaticPersistPaths.LockedBaseImagePath;
+            long automaticPersistTamperOffset;
+            byte automaticPersistLockedByteBefore;
+            using (FileStream lockedStream = new(
+                       automaticPersistLockedImagePath,
+                       FileMode.Open,
+                       FileAccess.ReadWrite,
+                       FileShare.Read))
+            {
+                automaticPersistTamperOffset = Math.Min(8192, lockedStream.Length - 1);
+                lockedStream.Position = automaticPersistTamperOffset;
+                int originalByte = lockedStream.ReadByte();
+                if (originalByte < 0)
+                    throw new InvalidDataException("The ID65 locked BIN is empty.");
+                automaticPersistLockedByteBefore = (byte)originalByte;
+                lockedStream.Position = automaticPersistTamperOffset;
+                lockedStream.WriteByte((byte)(automaticPersistLockedByteBefore ^ 0x3C));
+                lockedStream.Flush(flushToDisk: true);
+            }
+            try
+            {
+                await UndoSelectedTerrainHeightAsync();
+            }
+            finally
+            {
+                using FileStream lockedStream = new(
+                    automaticPersistLockedImagePath,
+                    FileMode.Open,
+                    FileAccess.Write,
+                    FileShare.Read);
+                lockedStream.Position = automaticPersistTamperOffset;
+                lockedStream.WriteByte(automaticPersistLockedByteBefore);
+                lockedStream.Flush(flushToDisk: true);
+            }
+            AssertAutomaticHeightUndoRolledBack("locked-BIN tamper");
+
+            string automaticPersistManifestPath = automaticPersistPaths.ManifestPath;
+            byte[] automaticPersistManifestBefore = File.ReadAllBytes(automaticPersistManifestPath);
+            JsonObject automaticPersistTamperedManifest = JsonNode.Parse(
+                    File.ReadAllText(automaticPersistManifestPath))?.AsObject()
+                ?? throw new InvalidDataException("The ID65 published manifest fixture is empty.");
+            string automaticPersistProfileVersionProperty = automaticPersistTamperedManifest
+                .Select(property => property.Key)
+                .FirstOrDefault(key => string.Equals(
+                    key,
+                    "profileVersion",
+                    StringComparison.OrdinalIgnoreCase))
+                ?? throw new InvalidDataException("The ID65 published manifest has no profileVersion field.");
+            automaticPersistTamperedManifest[automaticPersistProfileVersionProperty] = -1;
+            File.WriteAllText(
+                automaticPersistManifestPath,
+                automaticPersistTamperedManifest.ToJsonString());
+            try
+            {
+                await UndoSelectedTerrainHeightAsync();
+            }
+            finally
+            {
+                File.WriteAllBytes(
+                    automaticPersistManifestPath,
+                    automaticPersistManifestBefore);
+            }
+            AssertAutomaticHeightUndoRolledBack("published-manifest tamper");
+
             string restoredRuntimeKey = labTerrain.RuntimeKey;
             byte[] authoredBeforeFailedRestore = File.ReadAllBytes(labAuthoredTerrainPath);
             LevelDefinition levelBeforeFailedRestore = _currentLevel!;
@@ -1696,6 +3935,7 @@ public sealed partial class MainWindow
             Moby? selectedMobyBeforeFailedRestore = _selectedMoby;
             TerrainPolygon? selectedTerrainBeforeFailedRestore = _selectedTerrain;
             int selectedTerrainIndexBeforeFailedRestore = _selectedTerrainIndex;
+            int selectedTerrainPointIndexBeforeFailedRestore = _selectedTerrainPointIndex;
             string terrainSignatureBeforeFailedRestore = BuildTerrainEditSignature(_currentGeometry);
             string savedTerrainSignatureBeforeFailedRestore = _savedTerrainEditSignature;
             string mobySignatureBeforeFailedRestore = BuildMobyEditSignature(_currentMobys);
@@ -1760,6 +4000,181 @@ public sealed partial class MainWindow
                 }
                 return Task.FromResult(CreateCleanLockedCacheFixture());
             };
+
+            void AssertFailedRestoreRemainedExact(string fixture, bool result)
+            {
+                bool fileExact = File.Exists(labAuthoredTerrainPath) &&
+                    File.ReadAllBytes(labAuthoredTerrainPath).SequenceEqual(authoredBeforeFailedRestore);
+                bool sceneExact =
+                    ReferenceEquals(_currentLevel, levelBeforeFailedRestore) &&
+                    ReferenceEquals(_currentGeometry, geometryBeforeFailedRestore) &&
+                    ReferenceEquals(_currentMobys, mobysBeforeFailedRestore) &&
+                    ReferenceEquals(_selectedMoby, selectedMobyBeforeFailedRestore) &&
+                    ReferenceEquals(_selectedTerrain, selectedTerrainBeforeFailedRestore) &&
+                    _selectedTerrainIndex == selectedTerrainIndexBeforeFailedRestore &&
+                    _selectedTerrainPointIndex == selectedTerrainPointIndexBeforeFailedRestore;
+                bool signaturesExact =
+                    BuildTerrainEditSignature(_currentGeometry) == terrainSignatureBeforeFailedRestore &&
+                    _savedTerrainEditSignature == savedTerrainSignatureBeforeFailedRestore &&
+                    BuildMobyEditSignature(_currentMobys) == mobySignatureBeforeFailedRestore &&
+                    _savedMobyEditSignature == savedMobySignatureBeforeFailedRestore;
+                bool statusTruthful = (_statusText.Text ?? "")
+                    .Contains("refused", StringComparison.OrdinalIgnoreCase);
+                if (result || !fileExact || !sceneExact || !signaturesExact || !statusTruthful)
+                {
+                    throw new InvalidOperationException(
+                        $"The {fixture} ID65 Restore fixture was not atomic. " +
+                        $"result={result}; file={fileExact}; scene={sceneExact}; signatures={signaturesExact}; " +
+                        $"status={statusTruthful} ({_statusText.Text})");
+                }
+            }
+
+            async Task AssertSnapshotReadFailureReleasedOperationAsync(
+                string fixture,
+                Exception injectedFailure)
+            {
+                Id65BlankLabRestoreSnapshotReadFaultForTesting = _ => throw injectedFailure;
+                bool result;
+                try
+                {
+                    result = await RestoreId65BlankLabTerrainAsync("terrain");
+                }
+                finally
+                {
+                    Id65BlankLabRestoreSnapshotReadFaultForTesting = null;
+                }
+
+                AssertFailedRestoreRemainedExact(fixture, result);
+                Id65BlankLabUiSnapshot availableUi = CaptureId65BlankLabUiSnapshotForTesting();
+                if (_id65BlankLabBusy ||
+                    _id65BlankLabManualOperation != null ||
+                    _loadingLevel ||
+                    !_levelJumpBox.IsEnabled ||
+                    !_levelList.IsEnabled ||
+                    !_viewport.IsEnabled ||
+                    !availableUi.LoadEnabled ||
+                    !availableUi.SaveEnabled)
+                {
+                    throw new InvalidOperationException(
+                        $"The {fixture} ID65 Restore fixture leaked its operation fence or left the editor unavailable. " +
+                        $"busy={_id65BlankLabBusy}; operation={_id65BlankLabManualOperation != null}; " +
+                        $"loading={_loadingLevel}; jump={_levelJumpBox.IsEnabled}; list={_levelList.IsEnabled}; " +
+                        $"viewport={_viewport.IsEnabled}; load={availableUi.LoadEnabled}; save={availableUi.SaveEnabled}.");
+                }
+            }
+
+            await AssertSnapshotReadFailureReleasedOperationAsync(
+                "authored snapshot-read I/O failure",
+                new IOException("Injected authored snapshot-read failure."));
+            await AssertSnapshotReadFailureReleasedOperationAsync(
+                "authored snapshot-read permission failure",
+                new UnauthorizedAccessException("Injected authored snapshot-read permission failure."));
+
+            Id65BlankLabRestorePostApplyFaultForTesting = () =>
+                throw new InvalidOperationException("Injected post-apply ID65 restore failure.");
+            bool postApplyFailureResult;
+            try
+            {
+                postApplyFailureResult = await RestoreId65BlankLabTerrainAsync("terrain");
+            }
+            finally
+            {
+                Id65BlankLabRestorePostApplyFaultForTesting = null;
+            }
+            AssertFailedRestoreRemainedExact("post-apply failure", postApplyFailureResult);
+
+            Id65BlankLabRestoreDeleteFaultForTesting = _ =>
+                throw new IOException("Injected authored-file delete failure.");
+            bool deleteFailureResult;
+            try
+            {
+                deleteFailureResult = await RestoreId65BlankLabTerrainAsync("terrain");
+            }
+            finally
+            {
+                Id65BlankLabRestoreDeleteFaultForTesting = null;
+            }
+            AssertFailedRestoreRemainedExact("authored-file delete failure", deleteFailureResult);
+
+            Id65BlankLabRestoreDeleteFaultForTesting = _ =>
+                throw new UnauthorizedAccessException("Injected authored-file delete permission failure.");
+            bool unauthorizedDeleteFailureResult;
+            try
+            {
+                unauthorizedDeleteFailureResult = await RestoreId65BlankLabTerrainAsync("terrain");
+            }
+            finally
+            {
+                Id65BlankLabRestoreDeleteFaultForTesting = null;
+            }
+            AssertFailedRestoreRemainedExact(
+                "authored-file unauthorized delete failure",
+                unauthorizedDeleteFailureResult);
+
+            UnusedLevel65BlankLevelLabWorkspacePaths activeLabPaths = _id65BlankLabPaths ??
+                throw new InvalidOperationException("The ID65 locked paths disappeared during Restore testing.");
+            string lockedImagePath = activeLabPaths.LockedBaseImagePath;
+            long lockedTamperOffset;
+            byte lockedByteBefore;
+            using (FileStream lockedStream = new(
+                       lockedImagePath,
+                       FileMode.Open,
+                       FileAccess.ReadWrite,
+                       FileShare.Read))
+            {
+                lockedTamperOffset = Math.Min(4096, lockedStream.Length - 1);
+                lockedStream.Position = lockedTamperOffset;
+                int originalByte = lockedStream.ReadByte();
+                if (originalByte < 0)
+                    throw new InvalidDataException("The ID65 locked BIN is empty.");
+                lockedByteBefore = (byte)originalByte;
+                lockedStream.Position = lockedTamperOffset;
+                lockedStream.WriteByte((byte)(lockedByteBefore ^ 0x5A));
+                lockedStream.Flush(flushToDisk: true);
+            }
+            bool lockedTamperResult;
+            try
+            {
+                lockedTamperResult = await RestoreId65BlankLabTerrainAsync("terrain");
+            }
+            finally
+            {
+                using FileStream lockedStream = new(
+                    lockedImagePath,
+                    FileMode.Open,
+                    FileAccess.Write,
+                    FileShare.Read);
+                lockedStream.Position = lockedTamperOffset;
+                lockedStream.WriteByte(lockedByteBefore);
+                lockedStream.Flush(flushToDisk: true);
+            }
+            AssertFailedRestoreRemainedExact("locked BIN tamper", lockedTamperResult);
+
+            string publishedManifestPath = activeLabPaths.ManifestPath;
+            byte[] publishedManifestBefore = File.ReadAllBytes(publishedManifestPath);
+            JsonObject tamperedManifest = JsonNode.Parse(
+                    File.ReadAllText(publishedManifestPath))?.AsObject()
+                ?? throw new InvalidDataException("The ID65 published manifest fixture is empty.");
+            string profileVersionProperty = tamperedManifest
+                .Select(property => property.Key)
+                .FirstOrDefault(key => string.Equals(
+                    key,
+                    "profileVersion",
+                    StringComparison.OrdinalIgnoreCase))
+                ?? throw new InvalidDataException("The ID65 published manifest has no profileVersion field.");
+            tamperedManifest[profileVersionProperty] = -1;
+            File.WriteAllText(publishedManifestPath, tamperedManifest.ToJsonString());
+            bool manifestTamperResult;
+            try
+            {
+                manifestTamperResult = await RestoreId65BlankLabTerrainAsync("terrain");
+            }
+            finally
+            {
+                File.WriteAllBytes(publishedManifestPath, publishedManifestBefore);
+            }
+            AssertFailedRestoreRemainedExact("published-manifest tamper", manifestTamperResult);
+
             if (!await RestoreId65BlankLabTerrainAsync("terrain") ||
                 File.Exists(labAuthoredTerrainPath) ||
                 !IsCurrentId65BlankLab() ||
@@ -1779,13 +4194,27 @@ public sealed partial class MainWindow
                     "ID65 restore did not return the saved HP-Z face to locked-cache coordinates or touched a retail/object path.");
             }
 
-            return "Cancel preserved retail level/camera/selection/unsaved edits; Save persisted retail terrain and Mobys before the guarded ID65 transition; unsupported ID65 Save-to-retail stayed put without file/signature writes; generic Moby persistence failed closed; generic Terrain Save used the isolated Lab route; authored bytes stayed durable through injected Restore reload failure and exact in-memory/signature state remained; successful candidate validation/application committed removal of the actual saved HP-Z layer, reloaded locked cache, and left retail/object paths untouched";
+            // Finish on the actual locked-source geometry rather than the compact
+            // transition fixture so the resident-texture probe exercises the real Lab.
+            Id65BlankLabReloadOverrideForTesting = null;
+            await SelectLevelAsync(lab);
+            if (!IsCurrentId65BlankLab() || _currentGeometry == null || _currentMobys.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "The guarded transition could not reload the actual source-bound ID65 Lab.");
+            }
+
+            return "Cancel preserved retail level/camera/selection/unsaved edits; Save persisted retail terrain and Mobys before the guarded ID65 transition; unsupported ID65 Save-to-retail stayed put without file/signature writes; generic Moby persistence failed closed; generic Terrain Save and supported autosaves used the isolated staged/atomic Lab route; automatic Undo Height rolled back memory/signatures/files under injected write, locked-BIN, and published-manifest failures; Restore preserved authored bytes and exact in-memory/signature state under injected reload, post-apply, delete, locked-BIN-tamper, and published-manifest-tamper failures; successful validated candidate application committed authored-layer removal and left resident objects plus retail paths untouched";
         }
         finally
         {
             UnsavedTerrainDecisionOverrideForTesting = null;
             Id65BlankLabReloadOverrideForTesting = null;
             Id65BlankLabValidationOverrideForTesting = null;
+            Id65BlankLabRestoreSnapshotReadFaultForTesting = null;
+            Id65BlankLabRestorePostApplyFaultForTesting = null;
+            Id65BlankLabRestoreDeleteFaultForTesting = null;
+            Id65BlankLabTerrainPersistenceFaultForTesting = null;
             foreach ((string path, byte[]? contents) in preservedLabPaths)
             {
                 if (contents == null)
@@ -1798,6 +4227,1278 @@ public sealed partial class MainWindow
                     Directory.CreateDirectory(Path.GetDirectoryName(path) ?? _workspace.RootPath);
                     File.WriteAllBytes(path, contents);
                 }
+            }
+        }
+    }
+
+    internal async Task<string> AssertId65BlankLabReverseRegularPersistenceFencingForTestingAsync()
+    {
+        if (!IsCurrentId65BlankLab() || _currentLevel == null || _currentGeometry == null ||
+            _id65BlankLabPaths == null || _id65BlankLabManifest == null)
+        {
+            throw new InvalidOperationException(
+                "The reverse regular-persistence probe requires the validated, loaded ID65 Lab.");
+        }
+
+        LevelDefinition lab = _currentLevel;
+        LevelDefinition retail = _retailCatalog.FindByKey("stonehill")
+            ?? throw new InvalidOperationException(
+                "The reverse regular-persistence probe requires the Stone Hill retail catalog level.");
+        await SelectLevelAsync(retail);
+        if (!ReferenceEquals(_currentLevel, retail) || _currentGeometry == null ||
+            _currentMobys.Count == 0 || _currentNativeMobyPaths.Count == 0 ||
+            _currentDragonRunToEdits.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "The reverse regular-persistence probe could not load Stone Hill Mobys, native paths, and dragon run-to controls.");
+        }
+
+        GeometryCandidate retailGeometry = _currentGeometry;
+        List<Moby> retailMobys = _currentMobys;
+        Moby objectTarget = retailMobys.First(candidate =>
+            !candidate.IsAdded &&
+            !candidate.IsRemoved &&
+            !candidate.IsEditorControl &&
+            candidate.TrueIndex >= 0);
+        NativeMobyPath nativePathTarget = _currentNativeMobyPaths[0];
+        NativePathNode nativePathNodeTarget = nativePathTarget.Nodes[0];
+        NativeDragonRunToEdit dragonRunToTarget = _currentDragonRunToEdits[0];
+        Vector3f objectPositionBefore = objectTarget.Position;
+        (int X, int Y, int Z) nativePathPositionBefore = (
+            nativePathNodeTarget.RawX,
+            nativePathNodeTarget.RawY,
+            nativePathNodeTarget.RawZ);
+        (int X, int Y) dragonRunToPositionBefore = (
+            dragonRunToTarget.RawX,
+            dragonRunToTarget.RawY);
+        string mobyPath = Path.Combine(
+            _workspace.RootPath,
+            $"{retail.Key}-native-edits.json");
+        string nativeMovementPath = Path.Combine(
+            _workspace.RootPath,
+            NativeMobyPathEditStore.DefaultFileName(retail.Key));
+        string terrainPath = Path.Combine(
+            _workspace.RootPath,
+            $"{retail.Key}-terrain-edits.json");
+        string[] persistedPaths = [mobyPath, nativeMovementPath, terrainPath];
+        Dictionary<string, byte[]?> persistedBefore = persistedPaths.ToDictionary(
+            path => path,
+            path => File.Exists(path) ? File.ReadAllBytes(path) : null,
+            StringComparer.OrdinalIgnoreCase);
+        string savedMobySignatureBefore = _savedMobyEditSignature;
+        string savedTerrainSignatureBefore = _savedTerrainEditSignature;
+        string savedNativeMovementSignatureBefore = _savedNativeMovementEditSignature;
+        string savedDragonRunToSignatureBefore = _savedDragonRunToEditSignature;
+        int loadedMobyEditsBefore = _loadedMobyEdits;
+        int loadedTerrainEditsBefore = _loadedTerrainEdits;
+        TerrainPolygon terrain = retailGeometry.Polygons.First(candidate =>
+            !candidate.IsTerrainRemoved &&
+            !candidate.IsTerrainAddClone &&
+            string.Equals(candidate.Detail, "hp", StringComparison.OrdinalIgnoreCase));
+        float[] terrainDeltasBefore = terrain.TerrainVertexDeltas().ToArray();
+
+        static bool FileStateIsExact(string path, byte[]? expected) =>
+            expected == null
+                ? !File.Exists(path)
+                : File.Exists(path) && File.ReadAllBytes(path).SequenceEqual(expected);
+        static bool IsEnabled(Control? control) => control?.IsEnabled == true;
+
+        static bool ManifestContainsRow(
+            string path,
+            Func<JsonElement, bool> predicate)
+        {
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(path));
+            return document.RootElement.TryGetProperty("edits", out JsonElement edits) &&
+                edits.ValueKind == JsonValueKind.Array &&
+                edits.EnumerateArray().Any(predicate);
+        }
+
+        bool updateSnapshotStarted = false;
+        UpdateSnapshotStartedForTesting = () => updateSnapshotStarted = true;
+
+        void AssertReloadedObjectLayers(
+            Vector3f expectedMobyPosition,
+            (int X, int Y, int Z) expectedNativePathPosition,
+            (int X, int Y) expectedDragonRunToPosition,
+            string label)
+        {
+            LevelLoadData reloaded = LoadLevelData(retail.Key);
+            Moby reloadedMoby = reloaded.Mobys.Single(candidate =>
+                candidate.TrueIndex == objectTarget.TrueIndex);
+            NativeMobyPath reloadedPath = reloaded.NativeMovement.Paths.Single(candidate =>
+                candidate.OwnerTrueIndex == nativePathTarget.OwnerTrueIndex);
+            NativePathNode reloadedNode = reloadedPath.Nodes.Single(candidate =>
+                candidate.Index == nativePathNodeTarget.Index);
+            NativeDragonRunToEdit reloadedDragon =
+                reloaded.NativeMovement.DragonRunToEdits.Single(candidate =>
+                    candidate.OwnerTrueIndex == dragonRunToTarget.OwnerTrueIndex);
+            if (reloadedMoby.Position != expectedMobyPosition ||
+                reloadedNode.RawX != expectedNativePathPosition.X ||
+                reloadedNode.RawY != expectedNativePathPosition.Y ||
+                reloadedNode.RawZ != expectedNativePathPosition.Z ||
+                reloadedDragon.RawX != expectedDragonRunToPosition.X ||
+                reloadedDragon.RawY != expectedDragonRunToPosition.Y)
+            {
+                throw new InvalidOperationException(
+                    $"{label} did not reload the exact Moby, native path, and dragon run-to edits.");
+            }
+        }
+
+        async Task AssertRegularPersistenceBlocksLabAsync(
+            string stage,
+            string label,
+            Func<Task<bool>> start)
+        {
+            TaskCompletionSource started =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource release =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+            Dictionary<string, byte[]?> beforeDelay = persistedPaths.ToDictionary(
+                path => path,
+                path => File.Exists(path) ? File.ReadAllBytes(path) : null,
+                StringComparer.OrdinalIgnoreCase);
+            int id65GenerationBefore = _id65BlankLabManualOperationGeneration;
+            RegularEditorPersistenceDelayOverrideForTesting = observedStage =>
+            {
+                if (!string.Equals(observedStage, stage, StringComparison.Ordinal))
+                    return Task.CompletedTask;
+                started.TrySetResult();
+                return release.Task;
+            };
+
+            Task<bool>? pending = null;
+            try
+            {
+                pending = start();
+                await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+                RefreshActionAvailability();
+                Id65BlankLabUiSnapshot labUi = CaptureId65BlankLabUiSnapshotForTesting();
+                if (!_regularEditorPersistenceBusy || _buildSafetyBusy ||
+                    _regularEditorPersistenceOperation == null ||
+                    _levelJumpBox.IsEnabled || _levelList.IsEnabled ||
+                    (_openWorkspaceButton != null && _openWorkspaceButton.IsEnabled) ||
+                    _viewport.IsEnabled ||
+                    (_inspectBuildSafetyButton != null && _inspectBuildSafetyButton.IsEnabled) ||
+                    IsEnabled(_updateNotificationBanner) ||
+                    labUi.BuildEnabled || labUi.LoadEnabled || labUi.SaveEnabled ||
+                    labUi.CreateCueEnabled)
+                {
+                    throw new InvalidOperationException(
+                        $"Delayed {label} did not disable level/workspace/editor and ID65 Lab admission controls.");
+                }
+                if (beforeDelay.Any(pair => !FileStateIsExact(pair.Key, pair.Value)))
+                {
+                    throw new InvalidOperationException(
+                        $"Delayed {label} wrote a retail edit file before its guarded persistence continuation was released.");
+                }
+                if (TryBeginUpdateSnapshotForTesting() || updateSnapshotStarted)
+                {
+                    throw new InvalidOperationException(
+                        $"Delayed {label} admitted an update safety snapshot action.");
+                }
+
+                await LoadId65BlankLabAsync();
+                if (!ReferenceEquals(_currentLevel, retail) ||
+                    !ReferenceEquals(_currentGeometry, retailGeometry) ||
+                    !ReferenceEquals(_currentMobys, retailMobys) ||
+                    _id65BlankLabBusy || _id65BlankLabManualOperation != null ||
+                    id65GenerationBefore != _id65BlankLabManualOperationGeneration ||
+                    beforeDelay.Any(pair => !FileStateIsExact(pair.Key, pair.Value)))
+                {
+                    throw new InvalidOperationException(
+                        $"ID65 Lab admission overlapped or changed delayed {label} state.");
+                }
+
+                release.TrySetResult();
+                bool saved = await pending;
+                if (!saved || _regularEditorPersistenceBusy || _buildSafetyBusy ||
+                    !ReferenceEquals(_currentLevel, retail) ||
+                    !ReferenceEquals(_currentGeometry, retailGeometry) ||
+                    !ReferenceEquals(_currentMobys, retailMobys) ||
+                    !string.Equals(
+                        _savedMobyEditSignature,
+                        BuildMobyEditSignature(retailMobys),
+                        StringComparison.Ordinal) ||
+                    !string.Equals(
+                        _savedTerrainEditSignature,
+                        BuildTerrainEditSignature(retailGeometry),
+                        StringComparison.Ordinal) ||
+                    !string.Equals(
+                        _savedNativeMovementEditSignature,
+                        BuildNativeMovementEditSignature(),
+                        StringComparison.Ordinal) ||
+                    !string.Equals(
+                        _savedDragonRunToEditSignature,
+                        BuildDragonRunToEditSignature(),
+                        StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Delayed {label} did not complete from its exact captured retail snapshot.");
+                }
+            }
+            finally
+            {
+                release.TrySetResult();
+                if (pending != null && !pending.IsCompleted)
+                {
+                    try
+                    {
+                        await pending;
+                    }
+                    catch
+                    {
+                        // Preserve the fixture's primary assertion failure.
+                    }
+                }
+                RegularEditorPersistenceDelayOverrideForTesting = null;
+            }
+        }
+
+        try
+        {
+            await AssertRegularPersistenceBlocksLabAsync(
+                "moby-save-started",
+                "full Save",
+                () => SaveCurrentEditsAsync());
+            await AssertRegularPersistenceBlocksLabAsync(
+                "moby-save-started",
+                "immediate object persistence",
+                async () =>
+                {
+                    _ = await PersistCurrentMobyEditsAsync();
+                    return true;
+                });
+
+            nativePathNodeTarget.TranslateRaw(1, 2, 0);
+            dragonRunToTarget.TranslateRaw(1, -1);
+            (int X, int Y, int Z) persistedNativePathPosition = (
+                nativePathNodeTarget.RawX,
+                nativePathNodeTarget.RawY,
+                nativePathNodeTarget.RawZ);
+            (int X, int Y) persistedDragonRunToPosition = (
+                dragonRunToTarget.RawX,
+                dragonRunToTarget.RawY);
+            _ = await PersistCurrentDragonRunToEditsAsync();
+            if (!ManifestContainsRow(
+                    mobyPath,
+                    row => row.TryGetProperty(
+                            "editorControlKind",
+                            out JsonElement controlKind) &&
+                        string.Equals(
+                            controlKind.GetString(),
+                            dragonRunToTarget.StableId,
+                            StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException(
+                    "The initial dragon run-to save did not publish its synthetic manifest row.");
+            }
+
+            objectTarget.Position = new Vector3f(
+                objectTarget.Position.X + 0.25f,
+                objectTarget.Position.Y,
+                objectTarget.Position.Z);
+            Vector3f persistedMobyPosition = objectTarget.Position;
+            _ = await PersistCurrentMobyEditsAsync();
+            if (!ManifestContainsRow(
+                    mobyPath,
+                    row => row.TryGetProperty("trueIndex", out JsonElement trueIndex) &&
+                        trueIndex.ValueKind == JsonValueKind.Number &&
+                        trueIndex.GetInt32() == objectTarget.TrueIndex) ||
+                !ManifestContainsRow(
+                    mobyPath,
+                    row => row.TryGetProperty(
+                            "editorControlKind",
+                            out JsonElement controlKind) &&
+                        string.Equals(
+                            controlKind.GetString(),
+                            dragonRunToTarget.StableId,
+                            StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException(
+                    "Immediate Moby persistence dropped either the ordinary Moby row or the saved dragon synthetic row.");
+            }
+            AssertReloadedObjectLayers(
+                persistedMobyPosition,
+                persistedNativePathPosition,
+                persistedDragonRunToPosition,
+                "Immediate compound object persistence");
+
+            byte[] manifestBeforeInjectedFailure = File.ReadAllBytes(mobyPath);
+            byte[] nativePathBeforeInjectedFailure = File.ReadAllBytes(nativeMovementPath);
+            string savedMobyBeforeInjectedFailure = _savedMobyEditSignature;
+            string savedNativeBeforeInjectedFailure = _savedNativeMovementEditSignature;
+            string savedDragonBeforeInjectedFailure = _savedDragonRunToEditSignature;
+            int loadedMobyBeforeInjectedFailure = _loadedMobyEdits;
+            objectTarget.Position = new Vector3f(
+                objectTarget.Position.X,
+                objectTarget.Position.Y + 0.25f,
+                objectTarget.Position.Z);
+            bool injectedFailureObserved = false;
+            RegularObjectPersistenceFaultForTesting = stage =>
+            {
+                if (string.Equals(
+                        stage,
+                        "after-native-manifest-publish",
+                        StringComparison.Ordinal))
+                {
+                    throw new IOException(
+                        "Injected compound object persistence failure after manifest publication.");
+                }
+            };
+            try
+            {
+                _ = await PersistCurrentMobyEditsAsync();
+            }
+            catch (IOException exception) when (exception.Message.Contains(
+                "Injected compound object persistence failure",
+                StringComparison.Ordinal))
+            {
+                injectedFailureObserved = true;
+            }
+            finally
+            {
+                RegularObjectPersistenceFaultForTesting = null;
+            }
+            if (!injectedFailureObserved ||
+                _regularEditorPersistenceBusy ||
+                _regularEditorPersistenceOperation != null ||
+                !File.ReadAllBytes(mobyPath).SequenceEqual(
+                    manifestBeforeInjectedFailure) ||
+                !File.ReadAllBytes(nativeMovementPath).SequenceEqual(
+                    nativePathBeforeInjectedFailure) ||
+                !string.Equals(
+                    _savedMobyEditSignature,
+                    savedMobyBeforeInjectedFailure,
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    _savedNativeMovementEditSignature,
+                    savedNativeBeforeInjectedFailure,
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    _savedDragonRunToEditSignature,
+                    savedDragonBeforeInjectedFailure,
+                    StringComparison.Ordinal) ||
+                _loadedMobyEdits != loadedMobyBeforeInjectedFailure)
+            {
+                throw new InvalidOperationException(
+                    "Injected compound object persistence failure did not restore both files, all saved signatures, and the shared operation fence exactly.");
+            }
+
+            async Task AssertStageCleanupFailureAsync(
+                string label,
+                Func<string, Exception> createFailure)
+            {
+                objectTarget.Position = new Vector3f(
+                    objectTarget.Position.X + 0.125f,
+                    objectTarget.Position.Y,
+                    objectTarget.Position.Z);
+                Vector3f expectedMobyPosition = objectTarget.Position;
+                (int X, int Y, int Z) expectedNativePathPosition = (
+                    nativePathNodeTarget.RawX,
+                    nativePathNodeTarget.RawY,
+                    nativePathNodeTarget.RawZ);
+                (int X, int Y) expectedDragonRunToPosition = (
+                    dragonRunToTarget.RawX,
+                    dragonRunToTarget.RawY);
+                List<string> cleanupAttempts = [];
+                Exception? observedFailure = null;
+                RegularObjectPersistenceStageCleanupFaultForTesting = stage =>
+                {
+                    cleanupAttempts.Add(stage);
+                    throw createFailure(stage);
+                };
+                try
+                {
+                    _ = await PersistCurrentMobyEditsAsync();
+                }
+                catch (Exception failure)
+                {
+                    observedFailure = failure;
+                }
+                finally
+                {
+                    RegularObjectPersistenceStageCleanupFaultForTesting = null;
+                }
+
+                Type expectedFailureType = createFailure("expected-type").GetType();
+                if (observedFailure?.GetType() != expectedFailureType ||
+                    cleanupAttempts.Count != 2 ||
+                    !string.Equals(
+                        cleanupAttempts[0],
+                        "native-manifest-stage",
+                        StringComparison.Ordinal) ||
+                    !string.Equals(
+                        cleanupAttempts[1],
+                        "native-path-stage",
+                        StringComparison.Ordinal) ||
+                    _regularEditorPersistenceBusy ||
+                    _regularEditorPersistenceOperation != null ||
+                    !string.Equals(
+                        _savedMobyEditSignature,
+                        BuildMobyEditSignature(retailMobys),
+                        StringComparison.Ordinal) ||
+                    !string.Equals(
+                        _savedNativeMovementEditSignature,
+                        BuildNativeMovementEditSignature(),
+                        StringComparison.Ordinal) ||
+                    !string.Equals(
+                        _savedDragonRunToEditSignature,
+                        BuildDragonRunToEditSignature(),
+                        StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Injected {label} stage cleanup failure did not attempt both stage deletions, preserve the exact published signatures, and release the persistence fence.");
+                }
+                AssertReloadedObjectLayers(
+                    expectedMobyPosition,
+                    expectedNativePathPosition,
+                    expectedDragonRunToPosition,
+                    $"Injected {label} stage cleanup failure");
+            }
+
+            await AssertStageCleanupFailureAsync(
+                "IOException",
+                stage => new IOException(
+                    $"Injected IOException while cleaning {stage}."));
+            await AssertStageCleanupFailureAsync(
+                "UnauthorizedAccessException",
+                stage => new UnauthorizedAccessException(
+                    $"Injected UnauthorizedAccessException while cleaning {stage}."));
+
+            nativePathNodeTarget.TranslateRaw(2, -1, 1);
+            dragonRunToTarget.TranslateRaw(-1, 2);
+            Vector3f beforeLeaveMobyPosition = objectTarget.Position;
+            (int X, int Y, int Z) beforeLeaveNativePathPosition = (
+                nativePathNodeTarget.RawX,
+                nativePathNodeTarget.RawY,
+                nativePathNodeTarget.RawZ);
+            (int X, int Y) beforeLeaveDragonRunToPosition = (
+                dragonRunToTarget.RawX,
+                dragonRunToTarget.RawY);
+            if (!await PersistCurrentMobyEditsBeforeLeavingLevelAsync(lab))
+            {
+                throw new InvalidOperationException(
+                    "The guarded level-leave path refused the compound object/native-movement save.");
+            }
+            AssertReloadedObjectLayers(
+                beforeLeaveMobyPosition,
+                beforeLeaveNativePathPosition,
+                beforeLeaveDragonRunToPosition,
+                "Guarded level-leave persistence");
+            if (!string.Equals(
+                    _savedMobyEditSignature,
+                    BuildMobyEditSignature(retailMobys),
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    _savedNativeMovementEditSignature,
+                    BuildNativeMovementEditSignature(),
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    _savedDragonRunToEditSignature,
+                    BuildDragonRunToEditSignature(),
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "The guarded level-leave save did not publish all three exact saved signatures.");
+            }
+
+            float[] changedTerrain = terrainDeltasBefore.ToArray();
+            changedTerrain[0] += 1;
+            terrain.ApplyTerrainVertexDeltas(changedTerrain);
+            RefreshActionAvailability();
+            await AssertRegularPersistenceBlocksLabAsync(
+                "terrain-save-started",
+                "Save Terrain Changes",
+                () => TrySaveCurrentTerrainEditsAsync());
+            if (!TerrainEditFileHasEdits(terrainPath) ||
+                !string.Equals(
+                    _savedTerrainEditSignature,
+                    BuildTerrainEditSignature(retailGeometry),
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Save Terrain Changes did not publish the exact captured retail terrain snapshot.");
+            }
+
+            TaskCompletionSource buildSafetyStarted =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource buildSafetyRelease =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+            BuildSafetyInspectionDelayOverrideForTesting = stage =>
+            {
+                if (!string.Equals(stage, "build-safety-scan-started", StringComparison.Ordinal))
+                    return Task.CompletedTask;
+                buildSafetyStarted.TrySetResult();
+                return buildSafetyRelease.Task;
+            };
+            Task<bool> buildSafety = RunBuildSafetyInspectorForTestingAsync();
+            try
+            {
+                await buildSafetyStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+                RefreshActionAvailability();
+                Id65BlankLabUiSnapshot labUi = CaptureId65BlankLabUiSnapshotForTesting();
+                int id65GenerationBefore = _id65BlankLabManualOperationGeneration;
+                if (!_regularEditorPersistenceBusy || !_buildSafetyBusy ||
+                    _regularEditorPersistenceOperation == null ||
+                    _levelJumpBox.IsEnabled || _levelList.IsEnabled ||
+                    (_openWorkspaceButton != null && _openWorkspaceButton.IsEnabled) ||
+                    _viewport.IsEnabled ||
+                    (_inspectBuildSafetyButton != null && _inspectBuildSafetyButton.IsEnabled) ||
+                    IsEnabled(_updateNotificationBanner) ||
+                    labUi.BuildEnabled || labUi.LoadEnabled || labUi.SaveEnabled ||
+                    labUi.CreateCueEnabled)
+                {
+                    throw new InvalidOperationException(
+                        "Delayed Build Safety did not own the shared persistence fence or disable ID65 admission.");
+                }
+                if (TryBeginUpdateSnapshotForTesting() || updateSnapshotStarted)
+                {
+                    throw new InvalidOperationException(
+                        "Delayed Build Safety admitted an update safety snapshot action.");
+                }
+
+                await LoadId65BlankLabAsync();
+                if (!ReferenceEquals(_currentLevel, retail) ||
+                    !ReferenceEquals(_currentGeometry, retailGeometry) ||
+                    !ReferenceEquals(_currentMobys, retailMobys) ||
+                    _id65BlankLabBusy || _id65BlankLabManualOperation != null ||
+                    id65GenerationBefore != _id65BlankLabManualOperationGeneration)
+                {
+                    throw new InvalidOperationException(
+                        "ID65 Lab admission overlapped the delayed Build Safety scan.");
+                }
+
+                buildSafetyRelease.TrySetResult();
+                if (!await buildSafety || _regularEditorPersistenceBusy || _buildSafetyBusy)
+                {
+                    throw new InvalidOperationException(
+                        "Build Safety did not complete and release its shared persistence fence exactly once.");
+                }
+            }
+            finally
+            {
+                buildSafetyRelease.TrySetResult();
+                if (!buildSafety.IsCompleted)
+                {
+                    try
+                    {
+                        await buildSafety;
+                    }
+                    catch
+                    {
+                        // Preserve the fixture's primary assertion failure.
+                    }
+                }
+                BuildSafetyInspectionDelayOverrideForTesting = null;
+            }
+
+            return
+                "Full Save, immediate object/native/dragon persistence, guarded level-leave persistence, Save Terrain Changes, and Build Safety held one exact retail-scene persistence fence; Moby saves preserved dragon rows, compound publication failure rolled both files back exactly, IOException and UnauthorizedAccess cleanup faults attempted both stages and released the fence with exact published state, update snapshots and reverse ID65 admission stayed disabled/refused until each operation completed";
+        }
+        finally
+        {
+            RegularEditorPersistenceDelayOverrideForTesting = null;
+            BuildSafetyInspectionDelayOverrideForTesting = null;
+            RegularObjectPersistenceFaultForTesting = null;
+            RegularObjectPersistenceStageCleanupFaultForTesting = null;
+            UpdateSnapshotStartedForTesting = null;
+            objectTarget.Position = objectPositionBefore;
+            nativePathNodeTarget.SetRawPosition(
+                nativePathPositionBefore.X,
+                nativePathPositionBefore.Y,
+                nativePathPositionBefore.Z);
+            dragonRunToTarget.SetRawEndpoint(
+                dragonRunToPositionBefore.X,
+                dragonRunToPositionBefore.Y);
+            terrain.ApplyTerrainVertexDeltas(terrainDeltasBefore);
+            foreach ((string path, byte[]? contents) in persistedBefore)
+            {
+                if (contents == null)
+                {
+                    if (File.Exists(path))
+                        File.Delete(path);
+                }
+                else
+                {
+                    Directory.CreateDirectory(
+                        Path.GetDirectoryName(path) ?? _workspace.RootPath);
+                    File.WriteAllBytes(path, contents);
+                }
+            }
+            _savedMobyEditSignature = savedMobySignatureBefore;
+            _savedTerrainEditSignature = savedTerrainSignatureBefore;
+            _savedNativeMovementEditSignature = savedNativeMovementSignatureBefore;
+            _savedDragonRunToEditSignature = savedDragonRunToSignatureBefore;
+            _loadedMobyEdits = loadedMobyEditsBefore;
+            _loadedTerrainEdits = loadedTerrainEditsBefore;
+            InvalidateBuildSafetySummary();
+            if (!ReferenceEquals(_currentLevel, lab))
+                await SelectLevelAsync(lab);
+            if (!IsCurrentId65BlankLab() || _currentGeometry == null)
+            {
+                throw new InvalidOperationException(
+                    "The reverse regular-persistence probe did not restore the loaded ID65 Lab.");
+            }
+        }
+    }
+
+    internal async Task<string> AssertId65BlankLabManualOperationFencingForTestingAsync()
+    {
+        if (!IsCurrentId65BlankLab() || _currentLevel == null || _currentGeometry == null ||
+            _id65BlankLabPaths == null || _id65BlankLabManifest == null)
+        {
+            throw new InvalidOperationException(
+                "The ID65 manual-operation fence probe requires the validated, loaded Lab.");
+        }
+
+        EditorWorkspace originalWorkspace = _workspace;
+        LevelDefinition originalLevel = _currentLevel;
+        GeometryCandidate originalGeometry = _currentGeometry;
+        UnusedLevel65BlankLevelLabWorkspacePaths originalPaths = _id65BlankLabPaths;
+        UnusedLevel65BlankLevelLabManifest originalManifest = _id65BlankLabManifest;
+        string originalSavedTerrainSignature = _savedTerrainEditSignature;
+        string originalRevealPath = _id65BlankLabRevealPath;
+        Moby? originalSelectedMoby = _selectedMoby;
+        TerrainPolygon? originalSelectedTerrain = _selectedTerrain;
+        int originalSelectedTerrainIndex = _selectedTerrainIndex;
+        int originalSelectedTerrainPointIndex = _selectedTerrainPointIndex;
+        int mutationTargetIndex = originalGeometry.Polygons.FindIndex(candidate =>
+            !candidate.IsTerrainRemoved &&
+            !candidate.IsTerrainAddClone &&
+            string.Equals(candidate.Detail, "hp", StringComparison.OrdinalIgnoreCase));
+        if (mutationTargetIndex < 0)
+            throw new InvalidOperationException("The ID65 operation fence probe found no existing HP terrain face.");
+        TerrainPolygon mutationTarget = originalGeometry.Polygons[mutationTargetIndex];
+        _selectedMoby = null;
+        _selectedTerrain = mutationTarget;
+        _selectedTerrainIndex = mutationTargetIndex;
+        _selectedTerrainPointIndex = 0;
+        RefreshActionAvailability();
+        string authoredPath = Id65BlankLabTerrainEditsPath();
+        byte[]? authoredBefore = File.Exists(authoredPath)
+            ? File.ReadAllBytes(authoredPath)
+            : null;
+
+        bool AuthoredFileIsExact() => authoredBefore == null
+            ? !File.Exists(authoredPath)
+            : File.Exists(authoredPath) &&
+              File.ReadAllBytes(authoredPath).SequenceEqual(authoredBefore);
+
+        async Task AssertCanceledBeforeMutationAsync(
+            string stage,
+            Func<Task> startOperation)
+        {
+            TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            Id65BlankLabManualOperationDelayOverrideForTesting = (observedStage, cancellationToken) =>
+            {
+                if (!string.Equals(observedStage, stage, StringComparison.Ordinal))
+                    return Task.CompletedTask;
+                started.TrySetResult();
+                return release.Task.WaitAsync(cancellationToken);
+            };
+
+            Task task = startOperation();
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            Id65BlankLabUiSnapshot busySnapshot = CaptureId65BlankLabUiSnapshotForTesting();
+            if (!_id65BlankLabBusy ||
+                (_openWorkspaceButton != null && _openWorkspaceButton.IsEnabled) ||
+                _levelJumpBox.IsEnabled ||
+                _levelList.IsEnabled ||
+                _viewport.IsEnabled ||
+                (_modernTerrainWorkspaceTab != null && _modernTerrainWorkspaceTab.IsEnabled) ||
+                (_releaseTerrainRaiseFaceButton != null && _releaseTerrainRaiseFaceButton.IsEnabled) ||
+                (_releaseTerrainLowerFaceButton != null && _releaseTerrainLowerFaceButton.IsEnabled) ||
+                (_releaseTerrainUndoHeightButton != null && _releaseTerrainUndoHeightButton.IsEnabled) ||
+                (_terrainTaskSaveButton != null && _terrainTaskSaveButton.IsEnabled) ||
+                busySnapshot.BuildEnabled ||
+                busySnapshot.LoadEnabled ||
+                busySnapshot.SaveEnabled ||
+                busySnapshot.CreateCueEnabled)
+            {
+                throw new InvalidOperationException(
+                    $"The delayed {stage} operation did not disable workspace, level, and peer Lab commands. " +
+                    $"busy={_id65BlankLabBusy}; open={(_openWorkspaceButton == null ? "<missing>" : _openWorkspaceButton.IsEnabled.ToString())}; " +
+                    $"jump={_levelJumpBox.IsEnabled}; list={_levelList.IsEnabled}; " +
+                    $"build={busySnapshot.BuildEnabled}; load={busySnapshot.LoadEnabled}; " +
+                    $"save={busySnapshot.SaveEnabled}; create={busySnapshot.CreateCueEnabled}.");
+            }
+
+            string mutationSignatureBefore = BuildTerrainEditSignature(originalGeometry);
+            byte[]? mutationFileBefore = File.Exists(authoredPath)
+                ? File.ReadAllBytes(authoredPath)
+                : null;
+            NudgeSelectedTerrain(32);
+            MoveTerrainFromViewport(new ViewportTerrainMoveRequestedEventArgs(
+                mutationTargetIndex,
+                mutationTarget,
+                0,
+                0,
+                32,
+                stageAddCopy: false));
+            ApplySelectedTerrainPointEdit(value => value + 32, null, "Raised");
+            await UndoSelectedTerrainHeightAsync();
+            await UndoSelectedTerrainAsync();
+            await UndoSelectedTerrainTexturePaintAsync();
+            await ApplyTerrainTexturePaintBrushAsync(mutationTargetIndex, mutationTarget);
+            bool regularSaveSucceeded = await TrySaveCurrentTerrainEditsAsync();
+            bool mutationFileExact = mutationFileBefore == null
+                ? !File.Exists(authoredPath)
+                : File.Exists(authoredPath) &&
+                  File.ReadAllBytes(authoredPath).SequenceEqual(mutationFileBefore);
+            if (regularSaveSucceeded ||
+                !string.Equals(
+                    BuildTerrainEditSignature(originalGeometry),
+                    mutationSignatureBefore,
+                    StringComparison.Ordinal) ||
+                !mutationFileExact)
+            {
+                throw new InvalidOperationException(
+                    $"A regular height, point, viewport, texture, Undo, or Save route escaped delayed {stage} fencing.");
+            }
+            if (SelectLevel(_retailCatalog.Levels.First()) ||
+                !ReferenceEquals(_currentLevel, originalLevel) ||
+                !ReferenceEquals(_currentGeometry, originalGeometry))
+            {
+                throw new InvalidOperationException(
+                    $"A synchronous level route escaped delayed {stage} fencing.");
+            }
+            await OpenWorkspaceAsync();
+            if (!ReferenceEquals(_workspace, originalWorkspace) ||
+                !_id65BlankLabBusy ||
+                !(_statusText.Text ?? "").Contains(
+                    "active ID65 Lab operation",
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Open Workspace did not fail closed during delayed {stage}.");
+            }
+
+            CancelId65BlankLabManualOperationForWorkspaceChange();
+            const string staleStatusMarker = "new generation owns this status";
+            _statusText.Text = staleStatusMarker;
+            release.TrySetResult();
+            await task;
+            bool statusExact = string.Equals(
+                _statusText.Text,
+                staleStatusMarker,
+                StringComparison.Ordinal);
+            bool workspaceExact = ReferenceEquals(_workspace, originalWorkspace);
+            bool levelExact = ReferenceEquals(_currentLevel, originalLevel);
+            bool geometryExact = ReferenceEquals(_currentGeometry, originalGeometry);
+            bool pathsExact = ReferenceEquals(_id65BlankLabPaths, originalPaths);
+            bool manifestExact = ReferenceEquals(_id65BlankLabManifest, originalManifest);
+            bool signatureExact = _savedTerrainEditSignature == originalSavedTerrainSignature;
+            bool revealExact = _id65BlankLabRevealPath == originalRevealPath;
+            bool authoredExact = AuthoredFileIsExact();
+            if (!statusExact || !workspaceExact || !levelExact || !geometryExact ||
+                !pathsExact || !manifestExact || !signatureExact || !revealExact ||
+                !authoredExact)
+            {
+                throw new InvalidOperationException(
+                    $"The canceled {stage} completion changed guarded state. " +
+                    $"status={statusExact}; workspace={workspaceExact}; level={levelExact}; " +
+                    $"geometry={geometryExact}; paths={pathsExact}; manifest={manifestExact}; " +
+                    $"signature={signatureExact}; reveal={revealExact}; authored={authoredExact}.");
+            }
+            Id65BlankLabManualOperationDelayOverrideForTesting = null;
+        }
+
+        try
+        {
+            await AssertCanceledBeforeMutationAsync(
+                "build-started",
+                BuildOrRefreshId65BlankLabBaseAsync);
+            await AssertCanceledBeforeMutationAsync(
+                "load-started",
+                LoadId65BlankLabAsync);
+            await AssertCanceledBeforeMutationAsync(
+                "load-work-completed",
+                LoadId65BlankLabAsync);
+            await AssertCanceledBeforeMutationAsync(
+                "save-started",
+                async () => _ = await SaveId65BlankLabWorkspaceCoreAsync(announce: true));
+            await AssertCanceledBeforeMutationAsync(
+                "save-work-completed",
+                async () => _ = await SaveId65BlankLabWorkspaceCoreAsync(announce: true));
+            await AssertCanceledBeforeMutationAsync(
+                "save-work-completed",
+                async () =>
+                {
+                    try
+                    {
+                        _ = await PersistCurrentTerrainEditsAsync();
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Cancellation is surfaced to the mutation caller so it can
+                        // restore its in-memory preimage; the fence assertions below
+                        // verify that no staged file or shared signature committed.
+                    }
+                });
+            await AssertCanceledBeforeMutationAsync(
+                "create-started",
+                CreateId65BlankLabDisposableCueAsync);
+            await AssertCanceledBeforeMutationAsync(
+                "restore-started",
+                async () => _ = await RestoreId65BlankLabTerrainAsync("terrain"));
+            await AssertCanceledBeforeMutationAsync(
+                "restore-work-completed",
+                async () => _ = await RestoreId65BlankLabTerrainAsync("terrain"));
+
+            TaskCompletionSource overlapStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource overlapRelease = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            Id65BlankLabManualOperationDelayOverrideForTesting = (stage, cancellationToken) =>
+            {
+                if (!string.Equals(stage, "save-started", StringComparison.Ordinal))
+                    return Task.CompletedTask;
+                overlapStarted.TrySetResult();
+                return overlapRelease.Task.WaitAsync(cancellationToken);
+            };
+            Task<bool> firstSave = SaveId65BlankLabWorkspaceCoreAsync(announce: true);
+            await overlapStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            Id65BlankLabManualOperation? firstOperation = _id65BlankLabManualOperation;
+            int firstGeneration = _id65BlankLabManualOperationGeneration;
+            bool overlappingSave = await SaveId65BlankLabWorkspaceCoreAsync(announce: true);
+            if (overlappingSave || firstOperation == null ||
+                !ReferenceEquals(firstOperation, _id65BlankLabManualOperation) ||
+                firstGeneration != _id65BlankLabManualOperationGeneration)
+            {
+                throw new InvalidOperationException(
+                    "A second ID65 Save overlapped or displaced the active single-flight operation.");
+            }
+            CancelId65BlankLabManualOperationForWorkspaceChange();
+            overlapRelease.TrySetResult();
+            if (await firstSave)
+            {
+                throw new InvalidOperationException(
+                    "The canceled first ID65 Save reported success after an overlapping Save was refused.");
+            }
+            Id65BlankLabManualOperationDelayOverrideForTesting = null;
+
+            TaskCompletionSource regularLoadStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource regularLoadRelease = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            LevelSelectionDelayOverrideForTesting = stage =>
+            {
+                if (!string.Equals(stage, "level-load-work-completed", StringComparison.Ordinal))
+                    return Task.CompletedTask;
+                regularLoadStarted.TrySetResult();
+                return regularLoadRelease.Task;
+            };
+            LevelDefinition pendingRetailLevel = _retailCatalog.Levels.First();
+            Task pendingRetailLoad = SelectLevelAsync(pendingRetailLevel);
+            await regularLoadStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            Id65BlankLabUiSnapshot navigationBusySnapshot = CaptureId65BlankLabUiSnapshotForTesting();
+            int operationGenerationBeforeRefusals = _id65BlankLabManualOperationGeneration;
+            await OpenWorkspaceAsync();
+            bool reverseSynchronousLevelChange = SelectLevel(_retailCatalog.Levels.Last());
+            await SelectLevelAsync(_retailCatalog.Levels.Last());
+            await BuildOrRefreshId65BlankLabBaseAsync();
+            bool reverseSave = await SaveId65BlankLabWorkspaceCoreAsync(announce: true);
+            bool reverseRestore = await RestoreId65BlankLabTerrainAsync("terrain");
+            if (reverseSynchronousLevelChange || reverseSave || reverseRestore ||
+                _id65BlankLabManualOperation != null ||
+                _id65BlankLabBusy ||
+                (_openWorkspaceButton != null && _openWorkspaceButton.IsEnabled) ||
+                _levelJumpBox.IsEnabled ||
+                _levelList.IsEnabled ||
+                !ReferenceEquals(_currentLevel, originalLevel) ||
+                !ReferenceEquals(_currentGeometry, originalGeometry) ||
+                operationGenerationBeforeRefusals != _id65BlankLabManualOperationGeneration ||
+                navigationBusySnapshot.BuildEnabled ||
+                navigationBusySnapshot.LoadEnabled ||
+                navigationBusySnapshot.SaveEnabled ||
+                navigationBusySnapshot.CreateCueEnabled)
+            {
+                throw new InvalidOperationException(
+                    "An ID65 Build, Save, or Restore started while a regular awaited level load was still in flight.");
+            }
+            _levelLoadRequestId++;
+            regularLoadRelease.TrySetResult();
+            await pendingRetailLoad;
+            LevelSelectionDelayOverrideForTesting = null;
+            if (!ReferenceEquals(_currentLevel, originalLevel) ||
+                !ReferenceEquals(_currentGeometry, originalGeometry))
+            {
+                throw new InvalidOperationException(
+                    "The delayed regular level load committed after its request generation was invalidated.");
+            }
+
+            TaskCompletionSource switchStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource switchRelease = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            Id65BlankLabManualOperationDelayOverrideForTesting = (stage, cancellationToken) =>
+            {
+                if (!string.Equals(stage, "save-started", StringComparison.Ordinal))
+                    return Task.CompletedTask;
+                switchStarted.TrySetResult();
+                return switchRelease.Task.WaitAsync(cancellationToken);
+            };
+            Task<bool> staleSave = SaveId65BlankLabWorkspaceCoreAsync(announce: true);
+            await switchStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            LevelDefinition switchedLevel = _retailCatalog.Levels.First();
+            CancelId65BlankLabManualOperationForWorkspaceChange();
+            _workspace = new EditorWorkspace(
+                originalWorkspace.RootPath + "-id65-operation-fence-other");
+            _currentLevel = switchedLevel;
+            _currentGeometry = null;
+            const string switchedStatus = "switched workspace and level own this status";
+            _statusText.Text = switchedStatus;
+            switchRelease.TrySetResult();
+            bool staleSaveResult = await staleSave;
+            if (staleSaveResult ||
+                !string.Equals(_statusText.Text, switchedStatus, StringComparison.Ordinal) ||
+                PathsEqual(_workspace.RootPath, originalWorkspace.RootPath) ||
+                !ReferenceEquals(_currentLevel, switchedLevel) ||
+                _currentGeometry != null ||
+                !ReferenceEquals(_id65BlankLabPaths, originalPaths) ||
+                !ReferenceEquals(_id65BlankLabManifest, originalManifest) ||
+                !AuthoredFileIsExact())
+            {
+                throw new InvalidOperationException(
+                    "A delayed ID65 Save completion crossed a forced workspace/level/geometry generation switch.");
+            }
+
+            return
+                "Build, Load, manual/automatic Save, Create CUE, and Restore canceled at start and after load/save/restore worker completion; viewport, regular terrain mutation/Undo/Save routes, workspace and level controls, and peer Lab commands stayed fenced; overlapping Save was single-flight; reverse-order regular level loading refused Lab operations; delayed completions could not commit status, identity, signatures, reveal state, or authored bytes across generation switches";
+        }
+        finally
+        {
+            Id65BlankLabManualOperationDelayOverrideForTesting = null;
+            LevelSelectionDelayOverrideForTesting = null;
+            Id65BlankLabTerrainPersistenceFaultForTesting = null;
+            if (_id65BlankLabManualOperation != null || _id65BlankLabBusy)
+                CancelId65BlankLabManualOperationForWorkspaceChange();
+            _workspace = originalWorkspace;
+            _currentLevel = originalLevel;
+            _currentGeometry = originalGeometry;
+            _id65BlankLabPaths = originalPaths;
+            _id65BlankLabManifest = originalManifest;
+            _savedTerrainEditSignature = originalSavedTerrainSignature;
+            _id65BlankLabRevealPath = originalRevealPath;
+            _selectedMoby = originalSelectedMoby;
+            _selectedTerrain = originalSelectedTerrain;
+            _selectedTerrainIndex = originalSelectedTerrainIndex;
+            _selectedTerrainPointIndex = originalSelectedTerrainPointIndex;
+            if (authoredBefore == null)
+            {
+                if (File.Exists(authoredPath))
+                    File.Delete(authoredPath);
+            }
+            else
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(authoredPath) ?? originalWorkspace.RootPath);
+                File.WriteAllBytes(authoredPath, authoredBefore);
+            }
+            _loadingLevel = false;
+            SyncLevelPickers(originalLevel);
+            _viewport.Geometry = originalGeometry;
+            RefreshId65BlankLabUi();
+            RefreshLevelSelectionAvailability();
+        }
+    }
+
+    internal async Task<string> AssertWorkspaceTransitionFencingForTestingAsync()
+    {
+        ReleaseProjectContext originalReleaseContext = ReleaseProjectBootstrap.Current
+            ?? throw new InvalidOperationException(
+                "The workspace-transition probe requires initialized release project storage.");
+        if (!PathsEqual(originalReleaseContext.Project.RootPath, _workspace.RootPath))
+        {
+            throw new InvalidOperationException(
+                "The workspace-transition probe release context does not own the active editor workspace.");
+        }
+        if (_currentLevel == null || _currentGeometry == null)
+        {
+            throw new InvalidOperationException(
+                "The workspace-transition probe requires a fully loaded source scene.");
+        }
+
+        string targetRoot = Path.Combine(
+            Path.GetTempPath(),
+            $"spyro-editor-workspace-transition-{Guid.NewGuid():N}");
+        string currentProjectSettingsPath = Path.Combine(
+            originalReleaseContext.UserData.SettingsPath,
+            "current-project.json");
+        byte[]? currentProjectSettingsBefore = File.Exists(currentProjectSettingsPath)
+            ? File.ReadAllBytes(currentProjectSettingsPath)
+            : null;
+        string? workspaceEnvironmentBefore = Environment.GetEnvironmentVariable(
+            ReleaseProjectBootstrap.WorkspaceEnvironmentVariable);
+        EditorWorkspace originalWorkspace = _workspace;
+        LevelCatalog originalRetailCatalog = _retailCatalog;
+        LevelCatalog originalCatalog = _catalog;
+        LevelDefinition originalLevel = _currentLevel;
+        GeometryCandidate originalGeometry = _currentGeometry;
+        List<Moby> originalMobys = _currentMobys;
+        List<NativeMobyPath> originalNativePaths = _currentNativeMobyPaths;
+        Moby? originalSelectedMoby = _selectedMoby;
+        TerrainPolygon? originalSelectedTerrain = _selectedTerrain;
+        int originalSelectedTerrainIndex = _selectedTerrainIndex;
+        int originalSelectedTerrainPointIndex = _selectedTerrainPointIndex;
+        UnusedLevel65BlankLevelLabWorkspacePaths? originalId65Paths =
+            _id65BlankLabPaths;
+        UnusedLevel65BlankLevelLabManifest? originalId65Manifest =
+            _id65BlankLabManifest;
+        int originalLevelLoadRequestId = _levelLoadRequestId;
+        string originalTerrainSignature = BuildTerrainEditSignature(originalGeometry);
+        string originalMobySignature = BuildMobyEditSignature(originalMobys);
+        string originalNativeSignature = BuildNativeMovementEditSignature();
+        string originalDragonSignature = BuildDragonRunToEditSignature();
+        string originalSavedTerrainSignature = _savedTerrainEditSignature;
+        string originalSavedMobySignature = _savedMobyEditSignature;
+        string originalSavedNativeSignature = _savedNativeMovementEditSignature;
+        string originalSavedDragonSignature = _savedDragonRunToEditSignature;
+        int commitCountBefore = WorkspaceTransitionCommitCountForTesting;
+        TerrainPolygon mutationTarget = originalGeometry.Polygons.First(candidate =>
+            !candidate.IsTerrainRemoved &&
+            !candidate.IsTerrainAddClone &&
+            string.Equals(candidate.Detail, "hp", StringComparison.OrdinalIgnoreCase));
+        _selectedMoby = null;
+        _selectedTerrain = mutationTarget;
+        _selectedTerrainIndex = originalGeometry.Polygons.IndexOf(mutationTarget);
+        _selectedTerrainPointIndex = 0;
+        float[] mutationDeltasBefore = mutationTarget.TerrainVertexDeltas().ToArray();
+
+        bool OptionalFileIsExact(string path, byte[]? expected) =>
+            expected == null
+                ? !File.Exists(path)
+                : File.Exists(path) && File.ReadAllBytes(path).SequenceEqual(expected);
+
+        bool OldReleaseStateIsExact() =>
+            ReferenceEquals(ReleaseProjectBootstrap.Current, originalReleaseContext) &&
+            string.Equals(
+                Environment.GetEnvironmentVariable(
+                    ReleaseProjectBootstrap.WorkspaceEnvironmentVariable),
+                workspaceEnvironmentBefore,
+                StringComparison.Ordinal) &&
+            OptionalFileIsExact(
+                currentProjectSettingsPath,
+                currentProjectSettingsBefore);
+
+        bool OldEditorStateIsExact() =>
+            ReferenceEquals(_workspace, originalWorkspace) &&
+            ReferenceEquals(_retailCatalog, originalRetailCatalog) &&
+            ReferenceEquals(_catalog, originalCatalog) &&
+            ReferenceEquals(_currentLevel, originalLevel) &&
+            ReferenceEquals(_currentGeometry, originalGeometry) &&
+            ReferenceEquals(_currentMobys, originalMobys) &&
+            ReferenceEquals(_currentNativeMobyPaths, originalNativePaths) &&
+            ReferenceEquals(_id65BlankLabPaths, originalId65Paths) &&
+            ReferenceEquals(_id65BlankLabManifest, originalId65Manifest) &&
+            ReferenceEquals(_selectedTerrain, mutationTarget) &&
+            _selectedTerrainIndex == originalGeometry.Polygons.IndexOf(mutationTarget) &&
+            _selectedTerrainPointIndex == 0 &&
+            _levelLoadRequestId == originalLevelLoadRequestId &&
+            mutationTarget.TerrainVertexDeltas().SequenceEqual(mutationDeltasBefore) &&
+            string.Equals(
+                BuildTerrainEditSignature(originalGeometry),
+                originalTerrainSignature,
+                StringComparison.Ordinal) &&
+            string.Equals(
+                BuildMobyEditSignature(originalMobys),
+                originalMobySignature,
+                StringComparison.Ordinal) &&
+            string.Equals(
+                BuildNativeMovementEditSignature(),
+                originalNativeSignature,
+                StringComparison.Ordinal) &&
+            string.Equals(
+                BuildDragonRunToEditSignature(),
+                originalDragonSignature,
+                StringComparison.Ordinal) &&
+            string.Equals(
+                _savedTerrainEditSignature,
+                originalSavedTerrainSignature,
+                StringComparison.Ordinal) &&
+            string.Equals(
+                _savedMobyEditSignature,
+                originalSavedMobySignature,
+                StringComparison.Ordinal) &&
+            string.Equals(
+                _savedNativeMovementEditSignature,
+                originalSavedNativeSignature,
+                StringComparison.Ordinal) &&
+            string.Equals(
+                _savedDragonRunToEditSignature,
+                originalSavedDragonSignature,
+                StringComparison.Ordinal);
+
+        static bool IsEnabled(Control? control) => control?.IsEnabled == true;
+
+        void AssertTransitionControlsDisabled(string label)
+        {
+            Id65BlankLabUiSnapshot labUi = CaptureId65BlankLabUiSnapshotForTesting();
+            if (!_workspaceTransitionBusy || _workspaceTransitionOperation == null ||
+                _levelJumpBox.IsEnabled || _levelList.IsEnabled ||
+                IsEnabled(_openWorkspaceButton) || _viewport.IsEnabled ||
+                IsEnabled(_modernWorkspaceTabs) ||
+                IsEnabled(_modernObjectWorkspaceTab) ||
+                IsEnabled(_modernTerrainWorkspaceTab) ||
+                IsEnabled(_modernLevelWorkspaceTab) ||
+                IsEnabled(_modernEnvironmentWorkspaceTab) ||
+                IsEnabled(_toolbarCreateBinButton) ||
+                IsEnabled(_toolbarOpenDiscImageButton) ||
+                IsEnabled(_toolbarMoreControl) ||
+                IsEnabled(_updateNotificationBanner) ||
+                labUi.BuildEnabled || labUi.LoadEnabled || labUi.SaveEnabled ||
+                labUi.CreateCueEnabled)
+            {
+                throw new InvalidOperationException(
+                    $"Delayed {label} did not disable the complete navigation, editing, source, update, and ID65 command surface.");
+            }
+        }
+
+        async Task AssertMutationAndNavigationRefusedAsync(string label)
+        {
+            LevelDefinition retailTarget = _retailCatalog.Levels.First();
+            bool synchronousSelection = SelectLevel(retailTarget);
+            await SelectLevelAsync(retailTarget);
+            bool saved = await SaveCurrentEditsAsync();
+            NudgeSelectedTerrain(32);
+            await LoadId65BlankLabAsync();
+            if (synchronousSelection || saved ||
+                !OldEditorStateIsExact() || !OldReleaseStateIsExact())
+            {
+                throw new InvalidOperationException(
+                    $"Delayed {label} admitted a level change, Save, terrain mutation, Lab operation, or release-context write.");
+            }
+        }
+
+        WorkspaceFolderPickerOverrideForTesting = () =>
+            Task.FromResult<string?>(targetRoot);
+        UnsavedTerrainDecisionOverrideForTesting = (_, _) =>
+            Task.FromResult("Discard");
+        try
+        {
+            TaskCompletionSource prepareStarted =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource prepareRelease =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+            int delayedPrepareCount = 0;
+            WorkspaceTransitionDelayOverrideForTesting = (stage, cancellationToken) =>
+            {
+                if (!string.Equals(stage, "prepare-completed", StringComparison.Ordinal))
+                    return Task.CompletedTask;
+                delayedPrepareCount++;
+                prepareStarted.TrySetResult();
+                return prepareRelease.Task.WaitAsync(cancellationToken);
+            };
+
+            Task canceledTransition = OpenWorkspaceAsync();
+            await prepareStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            RefreshActionAvailability();
+            AssertTransitionControlsDisabled("workspace preparation");
+            if (!OldEditorStateIsExact() || !OldReleaseStateIsExact() ||
+                delayedPrepareCount != 1 ||
+                WorkspaceTransitionCommitCountForTesting != commitCountBefore)
+            {
+                throw new InvalidOperationException(
+                    "Prepared workspace files changed the active editor or global release context before commit.");
+            }
+            await AssertMutationAndNavigationRefusedAsync("workspace preparation");
+            CancelWorkspaceTransitionForTesting();
+            prepareRelease.TrySetResult();
+            await canceledTransition;
+            WorkspaceTransitionDelayOverrideForTesting = null;
+            if (_workspaceTransitionBusy || _workspaceTransitionOperation != null ||
+                !OldEditorStateIsExact() || !OldReleaseStateIsExact() ||
+                WorkspaceTransitionCommitCountForTesting != commitCountBefore)
+            {
+                throw new InvalidOperationException(
+                    "A canceled prepared workspace transition changed editor/global state or leaked its operation fence.");
+            }
+
+            WorkspaceTransitionFaultForTesting = stage =>
+            {
+                if (string.Equals(
+                        stage,
+                        "after-release-environment-publish",
+                        StringComparison.Ordinal))
+                {
+                    throw new IOException(
+                        "Injected workspace commit failure after environment publication.");
+                }
+            };
+            await OpenWorkspaceAsync();
+            WorkspaceTransitionFaultForTesting = null;
+            if (_workspaceTransitionBusy || _workspaceTransitionOperation != null ||
+                !OldEditorStateIsExact() || !OldReleaseStateIsExact() ||
+                WorkspaceTransitionCommitCountForTesting != commitCountBefore)
+            {
+                throw new InvalidOperationException(
+                    "An injected post-settings/environment workspace commit failure did not restore the exact editor and release context.");
+            }
+
+            int successfulPrepareCount = 0;
+            WorkspaceTransitionDelayOverrideForTesting = (stage, _) =>
+            {
+                if (string.Equals(stage, "prepare-completed", StringComparison.Ordinal))
+                    successfulPrepareCount++;
+                return Task.CompletedTask;
+            };
+            await OpenWorkspaceAsync();
+            WorkspaceTransitionDelayOverrideForTesting = null;
+
+            ReleaseProjectContext committedContext = ReleaseProjectBootstrap.Current
+                ?? throw new InvalidOperationException(
+                    "The successful workspace transition cleared release project context.");
+            CurrentProjectSettings committedSettings = JsonSerializer.Deserialize<CurrentProjectSettings>(
+                File.ReadAllBytes(currentProjectSettingsPath),
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                ?? throw new InvalidDataException(
+                    "The successful workspace transition wrote an empty current-project setting.");
+            if (_workspaceTransitionBusy || _workspaceTransitionOperation != null ||
+                successfulPrepareCount != 1 ||
+                WorkspaceTransitionCommitCountForTesting != commitCountBefore + 1 ||
+                ReferenceEquals(_workspace, originalWorkspace) ||
+                !PathsEqual(_workspace.RootPath, targetRoot) ||
+                ReferenceEquals(_retailCatalog, originalRetailCatalog) ||
+                ReferenceEquals(_catalog, originalCatalog) ||
+                ReferenceEquals(_currentGeometry, originalGeometry) ||
+                ReferenceEquals(_currentMobys, originalMobys) ||
+                _currentGeometry != null || _currentMobys.Count != 0 ||
+                ReferenceEquals(committedContext, originalReleaseContext) ||
+                !PathsEqual(committedContext.Project.RootPath, targetRoot) ||
+                !PathsEqual(committedSettings.ProjectRoot, targetRoot) ||
+                !PathsEqual(
+                    Environment.GetEnvironmentVariable(
+                        ReleaseProjectBootstrap.WorkspaceEnvironmentVariable) ?? "",
+                    targetRoot))
+            {
+                throw new InvalidOperationException(
+                    "The successful workspace transition did not commit exactly once or retained stale source-scene/global context.");
+            }
+
+            return
+                "Open Workspace held one captured generation/CTS fence through confirmation, owned saves, target preparation, transactional release settings/environment/context publication, and app workspace/catalog commit; delayed mutation/navigation/Lab admission stayed refused, cancellation preserved the exact old state, injected post-publication failure rolled global state back, and success committed once without retaining the old scene";
+        }
+        finally
+        {
+            WorkspaceFolderPickerOverrideForTesting = null;
+            WorkspaceTransitionDelayOverrideForTesting = null;
+            WorkspaceTransitionFaultForTesting = null;
+            UnsavedTerrainDecisionOverrideForTesting = null;
+            if (_workspaceTransitionOperation != null)
+            {
+                CancelWorkspaceTransitionForTesting();
+                CompleteWorkspaceTransition(_workspaceTransitionOperation);
+            }
+            if (PathsEqual(_workspace.RootPath, originalWorkspace.RootPath))
+            {
+                _selectedMoby = originalSelectedMoby;
+                _selectedTerrain = originalSelectedTerrain;
+                _selectedTerrainIndex = originalSelectedTerrainIndex;
+                _selectedTerrainPointIndex = originalSelectedTerrainPointIndex;
+            }
+            try
+            {
+                if (Directory.Exists(targetRoot))
+                    Directory.Delete(targetRoot, recursive: true);
+            }
+            catch (Exception exception) when (
+                exception is IOException or UnauthorizedAccessException)
+            {
+                Debug.WriteLine(exception);
             }
         }
     }
@@ -1831,7 +5532,47 @@ public sealed partial class MainWindow
         bool RepairsInvalidWorkspace,
         string DisposableExporterRoute);
 
+    private sealed record EditorMutationSceneIdentity(
+        EditorWorkspace Workspace,
+        string WorkspaceRoot,
+        LevelDefinition Level,
+        List<Moby> Mobys,
+        int LevelLoadRequestId,
+        int Id65OperationGeneration,
+        int WorkspaceTransitionGeneration);
+
+    private sealed record ObjectDialogSceneIdentity(
+        EditorMutationSceneIdentity Scene,
+        Moby Target,
+        int TargetIndex,
+        int TargetTrueIndex,
+        bool TargetWasRemoved,
+        string MobyEditSignature);
+
+    private sealed record SourceDiscOperationIdentity(
+        EditorWorkspace Workspace,
+        string WorkspaceRoot,
+        LevelDefinition? Level,
+        GeometryCandidate? Geometry,
+        List<Moby> Mobys,
+        int LevelLoadRequestId,
+        int Id65OperationGeneration,
+        int PortableCacheBuildGeneration,
+        int ProjectDataImportGeneration,
+        int RegularPersistenceGeneration,
+        int BuildSafetyGeneration,
+        int WorkspaceTransitionGeneration);
+
     private sealed record Id65BlankLabAuthoredLayerSnapshot(
         bool DirectoryExisted,
         IReadOnlyList<string> Files);
+
+    private sealed record Id65BlankLabDerivedCacheBinding(
+        int SchemaVersion,
+        string LevelKey,
+        string LockedSourceImageSha256,
+        string WadAnalysisSha256,
+        string SceneOverlaySha256,
+        string MobyCacheSha256,
+        string SourceSearchSha256);
 }

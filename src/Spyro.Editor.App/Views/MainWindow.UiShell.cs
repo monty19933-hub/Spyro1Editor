@@ -215,9 +215,9 @@ public sealed partial class MainWindow
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Right
         };
-        Button open = NewAsyncButton("Open BIN/CUE", ChooseSourceDiscImageAsync);
-        StyleModernToolbarButton(open, 118);
-        fileActions.Children.Add(open);
+        _toolbarOpenDiscImageButton = NewAsyncButton("Open BIN/CUE", ChooseSourceDiscImageAsync);
+        StyleModernToolbarButton(_toolbarOpenDiscImageButton, 118);
+        fileActions.Children.Add(_toolbarOpenDiscImageButton);
 
         _toolbarCreateBinButton = NewAsyncButton("Create BIN", CreateObjectTestBinAsync);
         StyleModernPrimaryButton(_toolbarCreateBinButton, ModernBlue, 110);
@@ -232,14 +232,14 @@ public sealed partial class MainWindow
         ];
         if (!_releaseMode)
             moreActions.Insert(3, new ToolbarAction("Diagnostics", ShowDiagnosticsAsync));
-        Control more = BuildToolMenu("More", moreActions.ToArray());
-        if (more is ComboBox moreBox)
+        _toolbarMoreControl = BuildToolMenu("More", moreActions.ToArray());
+        if (_toolbarMoreControl is ComboBox moreBox)
         {
             moreBox.Width = 112;
             moreBox.MinHeight = 34;
             moreBox.Margin = new Thickness(0);
         }
-        fileActions.Children.Add(more);
+        fileActions.Children.Add(_toolbarMoreControl);
         Grid.SetColumn(fileActions, 2);
         topRow.Children.Add(fileActions);
         layout.Children.Add(topRow);
@@ -444,6 +444,9 @@ public sealed partial class MainWindow
 
     private void RunContextualViewportAction()
     {
+        if (TryBlockEditorMutationDuringId65BlankLabManualOperation("using viewport commands"))
+            return;
+
         if (_viewport.ViewMode == ViewportViewMode.Map)
         {
             _viewport.ResetView();

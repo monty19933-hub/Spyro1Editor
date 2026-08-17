@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Globalization;
 using Spyro.Editor.Core;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
@@ -112,26 +113,64 @@ public static class TerrainEditStore
         return edits.Count;
     }
 
-    public static int Load(string path, IEnumerable<TerrainPolygon> polygons)
+    public static int Load(string path, IEnumerable<TerrainPolygon> polygons) =>
+        LoadCore(path, polygons, requireExactBindings: false);
+
+    public static int LoadStrict(string path, IEnumerable<TerrainPolygon> polygons) =>
+        LoadCore(path, polygons, requireExactBindings: true);
+
+    private static int LoadCore(
+        string path,
+        IEnumerable<TerrainPolygon> polygons,
+        bool requireExactBindings)
     {
         TerrainPolygon[] polygonArray = polygons.ToArray();
-        foreach (TerrainPolygon polygon in polygonArray)
-            polygon.ResetTerrainEdit();
-
         if (!File.Exists(path))
+        {
+            foreach (TerrainPolygon polygon in polygonArray)
+                polygon.ResetTerrainEdit();
             return 0;
+        }
 
         using FileStream stream = File.OpenRead(path);
         using JsonDocument document = JsonDocument.Parse(stream);
-        if (!document.RootElement.TryGetProperty("edits", out JsonElement editsElement) || editsElement.ValueKind != JsonValueKind.Array)
+        if (document.RootElement.ValueKind != JsonValueKind.Object ||
+            !document.RootElement.TryGetProperty("edits", out JsonElement editsElement) ||
+            editsElement.ValueKind != JsonValueKind.Array)
+        {
+            if (requireExactBindings)
+                throw new InvalidDataException("The terrain-edit file must contain one root object with an edits array.");
+            foreach (TerrainPolygon polygon in polygonArray)
+                polygon.ResetTerrainEdit();
             return 0;
+        }
 
         Dictionary<string, TerrainPolygon> byKey = polygonArray
             .Where(polygon => !string.IsNullOrWhiteSpace(polygon.RuntimeKey))
             .ToDictionary(polygon => polygon.RuntimeKey, StringComparer.OrdinalIgnoreCase);
+        JsonElement[] edits = editsElement.EnumerateArray().ToArray();
+        StrictTerrainEditRow[] strictRows = requireExactBindings
+            ? ValidateStrictRows(document.RootElement, edits, byKey)
+            : Array.Empty<StrictTerrainEditRow>();
+
+        foreach (TerrainPolygon polygon in polygonArray)
+            polygon.ResetTerrainEdit();
+
+        if (requireExactBindings)
+        {
+            foreach (StrictTerrainEditRow row in strictRows)
+            {
+                if (row.EditedZ != null)
+                    row.Polygon.ApplyTerrainZValues(row.EditedZ);
+                if (row.EditedTextureId.HasValue)
+                    row.Polygon.ApplyTextureOverride(row.EditedTextureId.Value);
+            }
+
+            return strictRows.Length;
+        }
 
         int applied = 0;
-        foreach (JsonElement edit in editsElement.EnumerateArray())
+        foreach (JsonElement edit in edits)
         {
             string key = JsonValue.GetString(edit, "runtimeKey");
             if (string.IsNullOrWhiteSpace(key))
@@ -160,6 +199,582 @@ public static class TerrainEditStore
         }
 
         return applied;
+    }
+
+    private static StrictTerrainEditRow[] ValidateStrictRows(
+        JsonElement root,
+        IReadOnlyList<JsonElement> edits,
+        IReadOnlyDictionary<string, TerrainPolygon> byKey)
+    {
+        if (!root.TryGetProperty("editCount", out JsonElement editCountElement) ||
+            editCountElement.ValueKind != JsonValueKind.Number ||
+            !editCountElement.TryGetInt32(out int declaredEditCount) ||
+            declaredEditCount < 0 ||
+            declaredEditCount != edits.Count)
+        {
+            throw new InvalidDataException(
+                "The terrain-edit file's editCount must exactly match its edits array.");
+        }
+
+        List<StrictTerrainEditRow> rows = new(edits.Count);
+        HashSet<string> seenKeys = new(StringComparer.OrdinalIgnoreCase);
+        foreach (JsonElement edit in edits)
+        {
+            if (edit.ValueKind != JsonValueKind.Object)
+                throw new InvalidDataException("Every terrain-edit row must be an object.");
+
+            string runtimeKey = RequireStrictString(edit, "runtimeKey", "terrain-edit row");
+            if (string.IsNullOrWhiteSpace(runtimeKey) || !seenKeys.Add(runtimeKey))
+            {
+                throw new InvalidDataException(
+                    "Every terrain-edit row must have one unique, nonempty runtimeKey.");
+            }
+            if (!byKey.TryGetValue(runtimeKey, out TerrainPolygon? polygon))
+            {
+                throw new InvalidDataException(
+                    $"Terrain-edit row '{runtimeKey}' does not bind to the locked source geometry.");
+            }
+
+            int sectorIndex = RequireStrictInt32(edit, "sectorIndex", runtimeKey);
+            int faceIndex = RequireStrictInt32(edit, "faceIndex", runtimeKey);
+            string detail = RequireStrictString(edit, "detail", runtimeKey);
+            if (!string.Equals(polygon.Detail, "hp", StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(detail, "hp", StringComparison.OrdinalIgnoreCase) ||
+                sectorIndex != polygon.SectorIndex ||
+                faceIndex != polygon.FaceIndex ||
+                !string.Equals(runtimeKey, polygon.RuntimeKey, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(
+                    runtimeKey,
+                    $"{sectorIndex}:{faceIndex}:{detail}",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(
+                    $"Terrain-edit row '{runtimeKey}' does not exactly match one locked HP sector, face, and detail identity.");
+            }
+
+            int vertexCount = polygon.OriginalZValues.Length;
+            if (vertexCount <= 0 ||
+                polygon.ZValues.Length != vertexCount ||
+                polygon.OriginalPoints.Count != vertexCount ||
+                polygon.Points.Count != vertexCount)
+            {
+                throw new InvalidDataException(
+                    $"Locked HP face '{runtimeKey}' does not have one exact point/Z value per vertex.");
+            }
+
+            RequireStrictOffset(edit, "sectorOffset", polygon.SectorOffset, runtimeKey);
+            RequireStrictOffset(edit, "faceOffset", polygon.FaceOffset, runtimeKey);
+            RequireStrictIntArray(
+                edit,
+                "vertexIndexes",
+                NormalizeVertexIndexes(polygon.VertexIndexes, vertexCount),
+                runtimeKey);
+            RequireStrictNullableString(edit, "word3", polygon.Word3, runtimeKey);
+            RequireStrictNullableString(edit, "word4", polygon.Word4, runtimeKey);
+            RequireStrictNullableInt32(edit, "depth", polygon.FaceDepth, runtimeKey);
+            RequireStrictBoolean(edit, "flip", polygon.FaceFlip, runtimeKey);
+            RequireStrictIntArray(edit, "colourIndexes", polygon.ColourIndexes, runtimeKey);
+            int originalTextureId = RequireStrictInt32(edit, "textureId", runtimeKey);
+            if (originalTextureId != polygon.OriginalTextureId)
+            {
+                throw new InvalidDataException(
+                    $"Terrain-edit row '{runtimeKey}' does not match the locked face's original texture ID.");
+            }
+
+            Vector2f[] originalPoints = RequireStrictVector2Array(
+                edit,
+                "originalPoints",
+                vertexCount,
+                runtimeKey);
+            RequireExactPoints(originalPoints, polygon.OriginalPoints, "originalPoints", runtimeKey);
+            float[] originalZ = RequireStrictFloatArray(
+                edit,
+                "originalZ",
+                vertexCount,
+                runtimeKey);
+            RequireExactFloats(originalZ, polygon.OriginalZValues, "originalZ", runtimeKey);
+
+            ValidateStrictMaterialMetadata(edit, polygon, runtimeKey);
+            ValidateStrictUnsupportedEdits(edit, polygon, vertexCount, runtimeKey);
+
+            float[]? editedZ = null;
+            bool hasHeightEdit = false;
+            if (edit.TryGetProperty("editedZ", out JsonElement editedZElement))
+            {
+                editedZ = ReadStrictFloatArray(
+                    editedZElement,
+                    "editedZ",
+                    vertexCount,
+                    runtimeKey);
+                hasHeightEdit = editedZ
+                    .Zip(polygon.OriginalZValues, (edited, original) => MathF.Abs(edited - original))
+                    .Any(delta => delta > 0.001f);
+            }
+
+            ValidateStrictDerivedHeightPayload(edit, polygon, editedZ, vertexCount, runtimeKey);
+            int? editedTextureId = ValidateStrictTexturePayload(edit, polygon, runtimeKey);
+            if (!hasHeightEdit && !editedTextureId.HasValue)
+            {
+                throw new InvalidDataException(
+                    $"Terrain-edit row '{runtimeKey}' has no real supported HP-Z or resident texture-ID edit.");
+            }
+
+            rows.Add(new StrictTerrainEditRow(polygon, editedZ, editedTextureId));
+        }
+
+        return rows.ToArray();
+    }
+
+    private static void ValidateStrictMaterialMetadata(
+        JsonElement edit,
+        TerrainPolygon polygon,
+        string runtimeKey)
+    {
+        RequireOptionalExactString(edit, "surface", polygon.Surface, runtimeKey);
+        RequireOptionalExactString(edit, "surfaceSource", polygon.SurfaceSource, runtimeKey);
+        RequireOptionalExactString(edit, "surfaceColor", ToHex(polygon.SurfaceColor), runtimeKey, ignoreCase: true);
+        RequireOptionalExactString(edit, "behavior", polygon.Behavior, runtimeKey);
+        RequireOptionalExactString(edit, "behaviorSource", polygon.BehaviorSource, runtimeKey);
+        RequireOptionalExactString(edit, "behaviorConfidence", polygon.BehaviorConfidence, runtimeKey);
+        RequireOptionalExactString(edit, "behaviorNote", polygon.BehaviorNote, runtimeKey);
+    }
+
+    private static void ValidateStrictUnsupportedEdits(
+        JsonElement edit,
+        TerrainPolygon polygon,
+        int vertexCount,
+        string runtimeKey)
+    {
+        string structureEditMode = edit.TryGetProperty("structureEditMode", out _)
+            ? RequireStrictString(edit, "structureEditMode", runtimeKey)
+            : "none";
+        if (!string.Equals(structureEditMode, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{runtimeKey}' contains an unsupported structural edit.");
+        }
+
+        if (edit.EnumerateObject().Any(property =>
+                property.Name.StartsWith("nativeTextureVisual", StringComparison.Ordinal) ||
+                property.Name.StartsWith("nativeSurface", StringComparison.Ordinal)))
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{runtimeKey}' contains an unsupported native visual or surface-behavior edit.");
+        }
+
+        if (edit.TryGetProperty("editedPoints", out JsonElement editedPointsElement))
+        {
+            Vector2f[] editedPoints = ReadStrictVector2Array(
+                editedPointsElement,
+                "editedPoints",
+                vertexCount,
+                runtimeKey);
+            RequireExactPoints(editedPoints, polygon.OriginalPoints, "editedPoints", runtimeKey);
+        }
+
+        if (edit.TryGetProperty("vertexDeltaXY", out JsonElement vertexDeltaElement))
+        {
+            Vector2f[] vertexDeltas = ReadStrictVector2Array(
+                vertexDeltaElement,
+                "vertexDeltaXY",
+                vertexCount,
+                runtimeKey);
+            if (vertexDeltas.Any(delta => delta.X != 0 || delta.Y != 0))
+            {
+                throw new InvalidDataException(
+                    $"Terrain-edit row '{runtimeKey}' contains an unsupported XY position edit.");
+            }
+        }
+    }
+
+    private static void ValidateStrictDerivedHeightPayload(
+        JsonElement edit,
+        TerrainPolygon polygon,
+        IReadOnlyList<float>? editedZ,
+        int vertexCount,
+        string runtimeKey)
+    {
+        if (edit.TryGetProperty("vertexDeltaZ", out JsonElement vertexDeltaElement))
+        {
+            float[] vertexDeltas = ReadStrictFloatArray(
+                vertexDeltaElement,
+                "vertexDeltaZ",
+                vertexCount,
+                runtimeKey);
+            for (int index = 0; index < vertexCount; index++)
+            {
+                float expected = editedZ == null
+                    ? 0
+                    : editedZ[index] - polygon.OriginalZValues[index];
+                if (MathF.Abs(vertexDeltas[index] - expected) > 0.001f)
+                {
+                    throw new InvalidDataException(
+                        $"Terrain-edit row '{runtimeKey}' has a vertexDeltaZ array inconsistent with editedZ.");
+                }
+            }
+        }
+
+        if (edit.TryGetProperty("deltaZ", out JsonElement deltaElement))
+        {
+            float deltaZ = ReadStrictFiniteSingle(deltaElement, "deltaZ", runtimeKey);
+            float expected = editedZ == null
+                ? 0
+                : editedZ.Zip(polygon.OriginalZValues, (edited, original) => edited - original).Average();
+            if (MathF.Abs(deltaZ - expected) > 0.001f)
+            {
+                throw new InvalidDataException(
+                    $"Terrain-edit row '{runtimeKey}' has a deltaZ value inconsistent with editedZ.");
+            }
+        }
+    }
+
+    private static int? ValidateStrictTexturePayload(
+        JsonElement edit,
+        TerrainPolygon polygon,
+        string runtimeKey)
+    {
+        bool hasMode = edit.TryGetProperty("textureEditMode", out _);
+        bool hasOriginal = edit.TryGetProperty("textureIdOriginal", out _);
+        bool hasEdited = edit.TryGetProperty("textureIdEdited", out _);
+        if (!hasMode && !hasOriginal && !hasEdited)
+            return null;
+        if (!hasMode || !hasOriginal || !hasEdited)
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{runtimeKey}' has an incomplete resident texture-ID edit.");
+        }
+
+        string mode = RequireStrictString(edit, "textureEditMode", runtimeKey);
+        int original = RequireStrictInt32(edit, "textureIdOriginal", runtimeKey);
+        int edited = RequireStrictInt32(edit, "textureIdEdited", runtimeKey);
+        if (!string.Equals(mode, "texture-id-preview", StringComparison.Ordinal) ||
+            original != polygon.OriginalTextureId ||
+            edited < 0 ||
+            edited == original)
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{runtimeKey}' is not one real resident texture-ID override from the locked original texture.");
+        }
+
+        return edited;
+    }
+
+    private static int RequireStrictInt32(JsonElement element, string name, string context)
+    {
+        if (!element.TryGetProperty(name, out JsonElement value) ||
+            value.ValueKind != JsonValueKind.Number ||
+            !value.TryGetInt32(out int result))
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' must contain an exact integer {name}.");
+        }
+
+        return result;
+    }
+
+    private static string RequireStrictString(JsonElement element, string name, string context)
+    {
+        if (!element.TryGetProperty(name, out JsonElement value) || value.ValueKind != JsonValueKind.String)
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' must contain a string {name}.");
+        }
+
+        return value.GetString() ?? "";
+    }
+
+    private static void RequireStrictOffset(
+        JsonElement element,
+        string name,
+        int expected,
+        string context)
+    {
+        if (!element.TryGetProperty(name, out JsonElement value))
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' is missing locked preimage field {name}.");
+        }
+
+        if (expected < 0 && value.ValueKind == JsonValueKind.Null)
+            return;
+
+        int actual;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out actual))
+        {
+        }
+        else if (value.ValueKind == JsonValueKind.String)
+        {
+            string text = (value.GetString() ?? "").Trim();
+            bool parsed = text.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+                ? int.TryParse(text[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out actual)
+                : int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out actual);
+            if (!parsed)
+            {
+                throw new InvalidDataException(
+                    $"Terrain-edit row '{context}' has a malformed locked {name}.");
+            }
+        }
+        else
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' has a malformed locked {name}.");
+        }
+
+        if (actual != expected)
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' does not match locked {name}.");
+        }
+    }
+
+    private static void RequireStrictNullableString(
+        JsonElement element,
+        string name,
+        string expected,
+        string context)
+    {
+        if (!element.TryGetProperty(name, out JsonElement value))
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' is missing locked preimage field {name}.");
+        }
+
+        string actual = value.ValueKind switch
+        {
+            JsonValueKind.Null when string.IsNullOrWhiteSpace(expected) => "",
+            JsonValueKind.String => value.GetString() ?? "",
+            _ => throw new InvalidDataException(
+                $"Terrain-edit row '{context}' has a malformed locked {name}.")
+        };
+        if (!string.Equals(actual, expected ?? "", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' does not match locked {name}.");
+        }
+    }
+
+    private static void RequireStrictNullableInt32(
+        JsonElement element,
+        string name,
+        int expected,
+        string context)
+    {
+        if (!element.TryGetProperty(name, out JsonElement value))
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' is missing locked preimage field {name}.");
+        }
+
+        if (expected < 0 && value.ValueKind == JsonValueKind.Null)
+            return;
+        if (value.ValueKind != JsonValueKind.Number ||
+            !value.TryGetInt32(out int actual) ||
+            actual != expected)
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' does not match locked {name}.");
+        }
+    }
+
+    private static void RequireStrictBoolean(
+        JsonElement element,
+        string name,
+        bool expected,
+        string context)
+    {
+        if (!element.TryGetProperty(name, out JsonElement value) ||
+            value.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
+            value.GetBoolean() != expected)
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' does not match locked {name}.");
+        }
+    }
+
+    private static void RequireStrictIntArray(
+        JsonElement element,
+        string name,
+        IReadOnlyList<int> expected,
+        string context)
+    {
+        if (!element.TryGetProperty(name, out JsonElement values) || values.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' must contain a numeric {name} array.");
+        }
+
+        JsonElement[] items = values.EnumerateArray().ToArray();
+        if (items.Length != expected.Count)
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' has the wrong {name} count.");
+        }
+        for (int index = 0; index < items.Length; index++)
+        {
+            if (items[index].ValueKind != JsonValueKind.Number ||
+                !items[index].TryGetInt32(out int actual) ||
+                actual != expected[index])
+            {
+                throw new InvalidDataException(
+                    $"Terrain-edit row '{context}' does not match locked {name}.");
+            }
+        }
+    }
+
+    private static float[] RequireStrictFloatArray(
+        JsonElement element,
+        string name,
+        int expectedCount,
+        string context)
+    {
+        if (!element.TryGetProperty(name, out JsonElement values))
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' is missing locked preimage array {name}.");
+        }
+
+        return ReadStrictFloatArray(values, name, expectedCount, context);
+    }
+
+    private static float[] ReadStrictFloatArray(
+        JsonElement values,
+        string name,
+        int expectedCount,
+        string context)
+    {
+        if (values.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' must contain a numeric {name} array.");
+        }
+
+        JsonElement[] items = values.EnumerateArray().ToArray();
+        if (items.Length != expectedCount)
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' has the wrong {name} count.");
+        }
+
+        float[] result = new float[items.Length];
+        for (int index = 0; index < items.Length; index++)
+            result[index] = ReadStrictFiniteSingle(items[index], $"{name}[{index}]", context);
+        return result;
+    }
+
+    private static Vector2f[] RequireStrictVector2Array(
+        JsonElement element,
+        string name,
+        int expectedCount,
+        string context)
+    {
+        if (!element.TryGetProperty(name, out JsonElement values))
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' is missing locked preimage array {name}.");
+        }
+
+        return ReadStrictVector2Array(values, name, expectedCount, context);
+    }
+
+    private static Vector2f[] ReadStrictVector2Array(
+        JsonElement values,
+        string name,
+        int expectedCount,
+        string context)
+    {
+        if (values.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' must contain a numeric {name} array.");
+        }
+
+        JsonElement[] items = values.EnumerateArray().ToArray();
+        if (items.Length != expectedCount)
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' has the wrong {name} count.");
+        }
+
+        Vector2f[] result = new Vector2f[items.Length];
+        for (int index = 0; index < items.Length; index++)
+        {
+            JsonElement item = items[index];
+            if (item.ValueKind != JsonValueKind.Object ||
+                !item.TryGetProperty("x", out JsonElement xElement) ||
+                !item.TryGetProperty("y", out JsonElement yElement))
+            {
+                throw new InvalidDataException(
+                    $"Terrain-edit row '{context}' has a malformed {name}[{index}] point.");
+            }
+
+            result[index] = new Vector2f(
+                ReadStrictFiniteSingle(xElement, $"{name}[{index}].x", context),
+                ReadStrictFiniteSingle(yElement, $"{name}[{index}].y", context));
+        }
+
+        return result;
+    }
+
+    private static float ReadStrictFiniteSingle(JsonElement value, string name, string context)
+    {
+        if (value.ValueKind != JsonValueKind.Number ||
+            !value.TryGetSingle(out float result) ||
+            !float.IsFinite(result))
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' has a malformed or non-finite {name} value.");
+        }
+
+        return result;
+    }
+
+    private static void RequireExactFloats(
+        IReadOnlyList<float> actual,
+        IReadOnlyList<float> expected,
+        string name,
+        string context)
+    {
+        if (actual.Count != expected.Count ||
+            actual.Where((value, index) => value != expected[index]).Any())
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' does not match locked {name}.");
+        }
+    }
+
+    private static void RequireExactPoints(
+        IReadOnlyList<Vector2f> actual,
+        IReadOnlyList<Vector2f> expected,
+        string name,
+        string context)
+    {
+        if (actual.Count != expected.Count ||
+            actual.Where((point, index) =>
+                point.X != expected[index].X || point.Y != expected[index].Y).Any())
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' does not match locked {name}.");
+        }
+    }
+
+    private static void RequireOptionalExactString(
+        JsonElement element,
+        string name,
+        string expected,
+        string context,
+        bool ignoreCase = false)
+    {
+        if (!element.TryGetProperty(name, out JsonElement value))
+            return;
+        if (value.ValueKind != JsonValueKind.String ||
+            !string.Equals(
+                value.GetString() ?? "",
+                expected ?? "",
+                ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(
+                $"Terrain-edit row '{context}' has {name} metadata that differs from the locked face.");
+        }
     }
 
     private static void ApplyMaterialMetadata(TerrainPolygon polygon, JsonElement edit)
@@ -363,4 +978,9 @@ public static class TerrainEditStore
 
         return result.Count == zValueCount ? result : indexes.Take(zValueCount).ToArray();
     }
+
+    private sealed record StrictTerrainEditRow(
+        TerrainPolygon Polygon,
+        float[]? EditedZ,
+        int? EditedTextureId);
 }

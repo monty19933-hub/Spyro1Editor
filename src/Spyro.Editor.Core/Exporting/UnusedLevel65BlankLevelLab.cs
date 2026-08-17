@@ -134,6 +134,7 @@ public static class UnusedLevel65BlankLevelLabProfileRegistry
     public const int ExpectedRetailCatalogCount = 35;
     public const int LevelId = 65;
     public const int DataWadEntry = 80;
+    public const int ResidentTextureCount = 66;
     public const long ObjectTableWadOffset = 0x6B06970;
     public const long ObjectTableRelativeOffset = 0x1D0170;
     public const int ObjectRecordCount = 107;
@@ -229,6 +230,7 @@ public static class UnusedLevel65BlankLevelLabProfileRegistry
     static UnusedLevel65BlankLevelLabProfileRegistry()
     {
         if (ObjectTableWadOffset - ObjectTableRelativeOffset != 0x6936800 ||
+            ResidentTextureCount != 66 ||
             !IsSha256(CleanUsaImageSha256) ||
             !IsSha256(PhysicalCloneEvidenceSha256) ||
             !IsSha256(LockedBaseEvidenceSha256) ||

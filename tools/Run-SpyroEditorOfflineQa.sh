@@ -13,6 +13,7 @@ MOBY_ICON_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.MobyIconSmoke/Spyro.Editor.M
 PSX_BLEND_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.PsxBlendSmoke/Spyro.Editor.PsxBlendSmoke.csproj"
 GTE_PROJECTION_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.GteProjectionSmoke/Spyro.Editor.GteProjectionSmoke.csproj"
 NATIVE_TERRAIN_BASE_PROJECTION_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.NativeTerrainBaseProjectionSmoke/Spyro.Editor.NativeTerrainBaseProjectionSmoke.csproj"
+TERRAIN_COLLISION_FAN_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.TerrainCollisionFanSmoke/Spyro.Editor.TerrainCollisionFanSmoke.csproj"
 HQ_MATERIAL_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.HqMaterialCacheSmoke/Spyro.Editor.HqMaterialCacheSmoke.csproj"
 PERSISTENCE_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.PersistenceSmoke/Spyro.Editor.PersistenceSmoke.csproj"
 UPDATE_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.UpdateSmoke/Spyro.Editor.UpdateSmoke.csproj"
@@ -89,6 +90,8 @@ Default smoke modes:
                                SXY/SZ FIFOs, and FLAG saturation rules
   native terrain base smoke   explicit raw/simple/full HP queue contexts,
                                near-SXY rerun, CPU outcodes, and raw-slot NCLIP
+  terrain collision fan smoke exact supported HP-height collision-fan patches
+                               plus atomic fail-closed rejection coverage
   raw HQ material cache       all 35 native-load material sidecars, descriptor
                                shapes, raw PSX555/STP words, hashes, and tamper guards
   ID65 Blank-Level Lab        exact locked-base bootstrap, 35+1 in-memory catalog,
@@ -109,8 +112,8 @@ Default smoke modes:
 Options:
   --build-only
       Build the app, smoke runner, cache tool, identity/icon audits, PSX blend,
-      GTE/base projection, raw-material/classifier proofs, and headless UI
-      smoke without tests.
+      GTE/base projection, terrain collision-fan, raw-material/classifier
+      proofs, and headless UI smoke without tests.
 
   --with-grade-write-readback
       After the default suite, run the 35-level/1,190-pair environment matrix,
@@ -268,65 +271,69 @@ if [[ "$ID65_BLANK_LEVEL_LAB_SMOKE_ONLY" -eq 1 ]]; then
     exit 0
 fi
 
-echo "[1/15] Building Avalonia app (compile only)..."
+echo "[1/16] Building Avalonia app (compile only)..."
 dotnet build "$APP_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[2/15] Building command-line smoke runner..."
+echo "[2/16] Building command-line smoke runner..."
 dotnet build "$SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[3/15] Building cache tool..."
+echo "[3/16] Building cache tool..."
 dotnet build "$CACHE_TOOL_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[4/15] Building identity coverage audit..."
+echo "[4/16] Building identity coverage audit..."
 dotnet build "$IDENTITY_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[5/15] Building headless UI smoke..."
+echo "[5/16] Building headless UI smoke..."
 dotnet build "$UI_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[6/15] Building dormant broad-sheet classifier regression..."
+echo "[6/16] Building dormant broad-sheet classifier regression..."
 dotnet build "$PLAYABLE_TERRAIN_VIEW_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[7/15] Building project persistence smoke..."
+echo "[7/16] Building project persistence smoke..."
 dotnet build "$PERSISTENCE_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[8/15] Building update integrity smoke..."
+echo "[8/16] Building update integrity smoke..."
 dotnet build "$UPDATE_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[9/15] Building terrain texture/property proof smokes..."
+echo "[9/16] Building terrain texture/property proof smokes..."
 for project in "${TERRAIN_TEXTURE_PROOF_PROJECTS[@]}"; do
     dotnet build "$project" --configuration "$CONFIGURATION" --nologo
 done
 
 echo
-echo "[10/15] Building all-level Moby raster-icon audit..."
+echo "[10/16] Building terrain collision-fan smoke..."
+dotnet build "$TERRAIN_COLLISION_FAN_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
+
+echo
+echo "[11/16] Building all-level Moby raster-icon audit..."
 dotnet build "$MOBY_ICON_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[11/15] Building exact PSX terrain blend-kernel smoke..."
+echo "[12/16] Building exact PSX terrain blend-kernel smoke..."
 dotnet build "$PSX_BLEND_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[12/15] Building exact PS1 GTE RTPS/RTPT projection smoke..."
+echo "[13/16] Building exact PS1 GTE RTPS/RTPT projection smoke..."
 dotnet build "$GTE_PROJECTION_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[13/15] Building native terrain HP base-projection smoke..."
+echo "[14/16] Building native terrain HP base-projection smoke..."
 dotnet build "$NATIVE_TERRAIN_BASE_PROJECTION_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[14/15] Building raw PSX HQ terrain-material cache smoke..."
+echo "[15/16] Building raw PSX HQ terrain-material cache smoke..."
 dotnet build "$HQ_MATERIAL_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[15/15] Building public V5 ID65 Blank-Level Lab smoke..."
+echo "[16/16] Building public V5 ID65 Blank-Level Lab smoke..."
 dotnet build "$ID65_BLANK_LEVEL_LAB_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 if [[ "$BUILD_ONLY" -eq 1 ]]; then
@@ -554,6 +561,15 @@ for project in "${TERRAIN_TEXTURE_PROOF_PROJECTS[@]}"; do
 done
 
 echo
+echo "Running exact supported terrain HP-height/collision-fan smoke..."
+dotnet run \
+    --project "$TERRAIN_COLLISION_FAN_SMOKE_PROJECT" \
+    --configuration "$CONFIGURATION" \
+    --no-build \
+    -- \
+    "$ROOT_DIR"
+
+echo
 echo "Running focused native-unreferenced art-only terrain export smoke..."
 dotnet run \
     --project "$ROOT_DIR/src/Spyro.Editor.TerrainTextureExportSmoke/Spyro.Editor.TerrainTextureExportSmoke.csproj" \
@@ -605,6 +621,16 @@ dotnet run \
     --no-build \
     -- \
     "$ROOT_DIR"
+
+echo
+echo "Running release workspace shell and guarded HP-height UI smoke..."
+dotnet run \
+    --project "$UI_SMOKE_PROJECT" \
+    --configuration "$CONFIGURATION" \
+    --no-build \
+    -- \
+    "$ROOT_DIR" \
+    --workspace-shell-only
 
 echo
 echo "Running focused Moby atlas masking/render UI smoke..."

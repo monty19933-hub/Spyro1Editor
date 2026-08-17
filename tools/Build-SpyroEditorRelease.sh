@@ -6,6 +6,7 @@ CONFIGURATION="${CONFIGURATION:-Release}"
 DIST_DIR="${DIST_DIR:-$ROOT_DIR/dist/release}"
 APP_PROJECT="$ROOT_DIR/src/Spyro.Editor.App/Spyro.Editor.App.csproj"
 MAC_ENTITLEMENTS="$ROOT_DIR/tools/SpyroEditor.macOS.entitlements"
+MAC_COMMUNITY_ENTITLEMENTS="$ROOT_DIR/tools/SpyroEditor.macOS.community.entitlements"
 MAC_BUILD_MODE="${SPYRO_EDITOR_MAC_BUILD_MODE:-}"
 MAC_SIGN_IDENTITY="${SPYRO_EDITOR_MAC_SIGN_IDENTITY:-}"
 NOTARY_KEYCHAIN_PROFILE="${SPYRO_EDITOR_NOTARY_KEYCHAIN_PROFILE:-}"
@@ -242,8 +243,8 @@ sign_macos_bundle_community() {
     local app_bundle="$1"
     local main_executable="$app_bundle/Contents/MacOS/Spyro.Editor.App"
 
-    [[ -f "$MAC_ENTITLEMENTS" ]] || {
-        echo "Missing macOS entitlements: $MAC_ENTITLEMENTS" >&2
+    [[ -f "$MAC_COMMUNITY_ENTITLEMENTS" ]] || {
+        echo "Missing macOS community entitlements: $MAC_COMMUNITY_ENTITLEMENTS" >&2
         return 1
     }
     command -v codesign >/dev/null 2>&1 || {
@@ -270,7 +271,7 @@ sign_macos_bundle_community() {
     codesign \
         --force \
         --options runtime \
-        --entitlements "$MAC_ENTITLEMENTS" \
+        --entitlements "$MAC_COMMUNITY_ENTITLEMENTS" \
         --sign - \
         "$app_bundle"
     codesign --verify --deep --strict --verbose=2 "$app_bundle"
@@ -455,6 +456,10 @@ preflight_release_build() {
         return 1
     }
     if [[ "$mac_build_mode" == "community" ]]; then
+        [[ -f "$MAC_COMMUNITY_ENTITLEMENTS" ]] || {
+            echo "Missing macOS community entitlements: $MAC_COMMUNITY_ENTITLEMENTS" >&2
+            return 1
+        }
         return
     fi
     resolve_developer_id_identity >/dev/null

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Spyro.Editor.Core.Cache;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
@@ -68,7 +69,7 @@ try
         await HashFileAsync(catalogPath) == catalogHashBefore,
         "The retail level catalog changed during the smoke.");
     Console.WriteLine(
-        "PASS UnusedLevel65BlankLevelLabSmoke: exact 35+1 catalog, component-aware HP+LP allocation with native-ordered collision repack, full exposure/topmost proof, and occlusion ownership, immutable receipt provenance, journaled restart recovery, atomic replacement rollback, platform-aware handoff, and generic v4 parity passed.");
+        "PASS UnusedLevel65BlankLevelLabSmoke: exact 35+1 catalog, source-bound 66-record native texture cache with tamper refusal and atomic rollback, component-aware HP+LP allocation with native-ordered collision repack, full exposure/topmost proof, and occlusion ownership, immutable receipt provenance, journaled restart recovery, atomic replacement rollback, platform-aware handoff, and generic v4 parity passed.");
 }
 finally
 {
@@ -622,7 +623,7 @@ async Task VerifyFullAuthoringConstructionContractAsync(
         collidable.AfterCollisionSha256 ==
             "5e7b4430c9bfbd2793df1d9833d8d3af005924d7c110b66f0b0e1f8bc818c056" &&
         collidable.AfterModelSha256 ==
-            "ccd18568b9b6cb7a41d2bf8a47c7dc475ca2cb1f9f127ac9a90ef9ac0a8be4f1",
+            "784166cb6bb8c00b3cff0ef8a75712f6bf68df10c0feb93413338881fbea8ff4",
         $"The exact first collidable construction component/model hashes drifted: collision={collidable.AfterCollisionSha256}, model={collidable.AfterModelSha256}.");
     Require(
         collidable.CollisionIndexRepacked &&
@@ -823,6 +824,8 @@ async Task VerifyGenericTerrainV4ParityAsync(
     Require(
         overlay.WadEntry == 80 && overlay.SectorCount == 216 && overlay.HpFaces == 3887 && overlay.LpFaces == 1437,
         $"ID65 source overlay drifted: sectors={overlay.SectorCount}, HP={overlay.HpFaces}, LP={overlay.LpFaces}.");
+
+    await VerifySourceBoundTextureCacheAsync(labPaths, parityRoot, overlayPath);
 
     GeometryCandidate geometry = GeometryOverlayLoader.LoadFirstCandidate(overlayPath);
     TerrainSourceSearchResult sourceSearch = await TerrainSourceSearchBuilder.BuildSourceDerivedAsync(new(
@@ -1190,6 +1193,236 @@ async Task VerifyGenericTerrainV4ParityAsync(
         noFinder.LoadCodes.All(code => noFinderChecklist.Contains(code.InputCode, StringComparison.Ordinal)),
         "Finder-disabled handoff omitted its CUE or comparison codes.");
     Require(await HashFileAsync(labPaths.LockedBaseImagePath) == ExpectedLockedBaseImageSha256, "Rollback/platform handoff tests changed the locked base.");
+}
+
+async Task VerifySourceBoundTextureCacheAsync(
+    UnusedLevel65BlankLevelLabWorkspacePaths labPaths,
+    string parityRoot,
+    string overlayPath)
+{
+    LevelDefinition level = UnusedLevel65BlankLevelLabProfileRegistry.Definition;
+    string cacheWorkspaceRoot = Path.Combine(parityRoot, "id65-source-bound-texture-cache");
+    string cacheDirectory = Path.Combine(
+        cacheWorkspaceRoot,
+        "editor-cache",
+        "terrain-textures",
+        LevelCatalog.NormalizeKey(level.Key));
+    string operationsRoot = Path.Combine(cacheWorkspaceRoot, ".terrain-texture-cache-operations");
+    string sourceImageSha256 = await HashFileAsync(labPaths.LockedBaseImagePath);
+    string sourceOverlaySha256 = await HashFileAsync(overlayPath);
+    FileInfo sourceImageInfo = new(labPaths.LockedBaseImagePath);
+    FileInfo sourceOverlayInfo = new(overlayPath);
+    string wrongSourceSha256 = sourceImageSha256[0] == '0'
+        ? $"1{sourceImageSha256[1..]}"
+        : $"0{sourceImageSha256[1..]}";
+    string wrongOverlaySha256 = sourceOverlaySha256[0] == '0'
+        ? $"1{sourceOverlaySha256[1..]}"
+        : $"0{sourceOverlaySha256[1..]}";
+
+    Require(
+        sourceImageSha256 == ExpectedLockedBaseImageSha256 &&
+        level.LevelId == 65 &&
+        level.SourceWadEntry == 80,
+        "The source-bound texture-cache fixture is not the exact locked ID65 row-80 source.");
+
+    int textureCount = await PortableEditorCacheBuilder.BuildTerrainTexturePreviewCacheFromSourceAsync(
+        labPaths.LockedBaseImagePath,
+        overlayPath,
+        cacheWorkspaceRoot,
+        level,
+        overwrite: true,
+        expectedSourceImageSha256: sourceImageSha256,
+        expectedSourceOverlaySha256: sourceOverlaySha256);
+    Require(textureCount == 66, $"The source-bound ID65 texture cache decoded {textureCount} records instead of 66.");
+    Require(
+        PortableEditorCacheBuilder.IsCurrentTerrainTexturePreviewCacheFromSource(
+            cacheWorkspaceRoot,
+            level,
+            sourceImageSha256,
+            sourceOverlaySha256,
+            sourceImageInfo.Length,
+            sourceOverlayInfo.Length,
+            expectedTextureCount: 66),
+        "The exact ID65 source/overlay-bound texture cache failed immediate readback.");
+
+    string manifestPath = Path.Combine(cacheDirectory, "manifest.json");
+    string bindingPath = Path.Combine(cacheDirectory, "source-binding.json");
+    Require(File.Exists(manifestPath) && File.Exists(bindingPath), "The source-bound cache omitted its manifest or binding receipt.");
+    using (JsonDocument manifest = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath)))
+    {
+        JsonElement root = manifest.RootElement;
+        JsonElement textures = root.GetProperty("textures");
+        int[] textureIds = textures.EnumerateArray()
+            .Select(texture => texture.GetProperty("textureId").GetInt32())
+            .Distinct()
+            .Order()
+            .ToArray();
+        Require(
+            root.GetProperty("nativeTextureCount").GetInt32() == 66 &&
+            root.GetProperty("requestedTextureCount").GetInt32() == 66 &&
+            root.GetProperty("decodedTextureCount").GetInt32() == 66 &&
+            root.GetProperty("completeDualTierTextureCount").GetInt32() == 66 &&
+            textures.GetArrayLength() == 132 &&
+            textureIds.SequenceEqual(Enumerable.Range(0, 66)) &&
+            Directory.GetFiles(cacheDirectory, "*.png", SearchOption.TopDirectoryOnly).Length == 132,
+            "The exact ID65 cache is not a complete 66-record, 132-frame dual-tier cache.");
+    }
+    byte[] bindingBytes = await File.ReadAllBytesAsync(bindingPath);
+    using (JsonDocument binding = JsonDocument.Parse(bindingBytes))
+    {
+        JsonElement root = binding.RootElement;
+        Require(
+            root.GetProperty("bindingSchemaVersion").GetInt32() == 1 &&
+            root.GetProperty("levelKey").GetString() == LevelCatalog.NormalizeKey(level.Key) &&
+            root.GetProperty("levelId").GetInt32() == 65 &&
+            root.GetProperty("sourceWadEntry").GetInt32() == 80 &&
+            root.GetProperty("sourceImageByteLength").GetInt64() == sourceImageInfo.Length &&
+            root.GetProperty("sourceImageSha256").GetString() == sourceImageSha256 &&
+            root.GetProperty("sourceOverlayByteLength").GetInt64() == sourceOverlayInfo.Length &&
+            root.GetProperty("sourceOverlaySha256").GetString() == sourceOverlaySha256 &&
+            root.GetProperty("textureCount").GetInt32() == 66,
+            "The ID65 texture-cache binding receipt is not exact for its source, overlay, level, and 66 records.");
+    }
+
+    Require(
+        !PortableEditorCacheBuilder.IsCurrentTerrainTexturePreviewCacheFromSource(
+            cacheWorkspaceRoot,
+            level,
+            wrongSourceSha256,
+            sourceOverlaySha256,
+            sourceImageInfo.Length,
+            sourceOverlayInfo.Length,
+            expectedTextureCount: 66) &&
+        !PortableEditorCacheBuilder.IsCurrentTerrainTexturePreviewCacheFromSource(
+            cacheWorkspaceRoot,
+            level,
+            sourceImageSha256,
+            wrongOverlaySha256,
+            sourceImageInfo.Length,
+            sourceOverlayInfo.Length,
+            expectedTextureCount: 66),
+        "The source-bound cache accepted a wrong expected source or overlay hash.");
+
+    string bindingJson = Encoding.UTF8.GetString(bindingBytes);
+    string tamperedBindingJson = bindingJson.Replace(
+        "\"levelId\": 65",
+        "\"levelId\": 64",
+        StringComparison.Ordinal);
+    Require(tamperedBindingJson != bindingJson, "The binding-tamper fixture did not alter the serialized level identity.");
+    await File.WriteAllTextAsync(
+        bindingPath,
+        tamperedBindingJson,
+        new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    Require(
+        PortableEditorCacheBuilder.IsCurrentTerrainTexturePreviewCache(cacheWorkspaceRoot, level.Key) &&
+        !PortableEditorCacheBuilder.IsCurrentTerrainTexturePreviewCacheFromSource(
+            cacheWorkspaceRoot,
+            level,
+            sourceImageSha256,
+            sourceOverlaySha256,
+            sourceImageInfo.Length,
+            sourceOverlayInfo.Length,
+            expectedTextureCount: 66),
+        "The exact source-binding guard accepted a tampered binding receipt.");
+    await File.WriteAllBytesAsync(bindingPath, bindingBytes);
+
+    string pngPath = Directory.GetFiles(cacheDirectory, "*.png", SearchOption.TopDirectoryOnly)
+        .Order(StringComparer.Ordinal)
+        .First();
+    byte[] pngBytes = await File.ReadAllBytesAsync(pngPath);
+    await File.WriteAllBytesAsync(pngPath, [.. pngBytes, 0]);
+    Require(
+        !PortableEditorCacheBuilder.IsCurrentTerrainTexturePreviewCacheFromSource(
+            cacheWorkspaceRoot,
+            level,
+            sourceImageSha256,
+            sourceOverlaySha256,
+            sourceImageInfo.Length,
+            sourceOverlayInfo.Length,
+            expectedTextureCount: 66),
+        "The source-bound cache accepted a tampered PNG frame.");
+    await File.WriteAllBytesAsync(pngPath, pngBytes);
+    Require(
+        PortableEditorCacheBuilder.IsCurrentTerrainTexturePreviewCacheFromSource(
+            cacheWorkspaceRoot,
+            level,
+            sourceImageSha256,
+            sourceOverlaySha256,
+            sourceImageInfo.Length,
+            sourceOverlayInfo.Length,
+            expectedTextureCount: 66),
+        "Restoring the binding and PNG bytes did not restore the exact source-bound cache.");
+
+    IReadOnlyDictionary<string, string> priorCache = SnapshotDirectory(cacheDirectory);
+    await ExpectInvalidDataAsync(
+        async () =>
+        {
+            _ = await PortableEditorCacheBuilder.BuildTerrainTexturePreviewCacheFromSourceAsync(
+                labPaths.LockedBaseImagePath,
+                overlayPath,
+                cacheWorkspaceRoot,
+                level,
+                overwrite: true,
+                expectedSourceImageSha256: wrongSourceSha256,
+                expectedSourceOverlaySha256: sourceOverlaySha256);
+        },
+        "wrong expected texture-cache source");
+    await ExpectInvalidDataAsync(
+        async () =>
+        {
+            _ = await PortableEditorCacheBuilder.BuildTerrainTexturePreviewCacheFromSourceAsync(
+                labPaths.LockedBaseImagePath,
+                overlayPath,
+                cacheWorkspaceRoot,
+                level,
+                overwrite: true,
+                expectedSourceImageSha256: sourceImageSha256,
+                expectedSourceOverlaySha256: wrongOverlaySha256);
+        },
+        "wrong expected texture-cache overlay");
+    RequireSnapshot(cacheDirectory, priorCache);
+
+    bool postPublicationFailureObserved = false;
+    try
+    {
+        _ = await PortableEditorCacheBuilder.BuildTerrainTexturePreviewCacheFromSourceAsync(
+            labPaths.LockedBaseImagePath,
+            overlayPath,
+            cacheWorkspaceRoot,
+            level,
+            overwrite: true,
+            expectedSourceImageSha256: sourceImageSha256,
+            expectedSourceOverlaySha256: sourceOverlaySha256,
+            testStageHook: stage =>
+            {
+                if (stage == "after-candidate-publication")
+                    throw new IOException("Injected source-bound texture-cache publication failure.");
+            });
+    }
+    catch (IOException ex) when (
+        ex.Message.Contains("Injected source-bound texture-cache publication failure", StringComparison.Ordinal))
+    {
+        postPublicationFailureObserved = true;
+    }
+    Require(postPublicationFailureObserved, "The source-bound cache did not reach its injected post-publication failure.");
+    RequireSnapshot(cacheDirectory, priorCache);
+    Require(
+        !Directory.Exists(operationsRoot) || !Directory.EnumerateFileSystemEntries(operationsRoot).Any(),
+        "The source-bound cache rollback retained operation or backup debris.");
+    Require(
+        PortableEditorCacheBuilder.IsCurrentTerrainTexturePreviewCacheFromSource(
+            cacheWorkspaceRoot,
+            level,
+            sourceImageSha256,
+            sourceOverlaySha256,
+            sourceImageInfo.Length,
+            sourceOverlayInfo.Length,
+            expectedTextureCount: 66),
+        "The injected publication failure did not restore the exact prior source-bound cache.");
+    Require(
+        await HashFileAsync(labPaths.LockedBaseImagePath) == sourceImageSha256 &&
+        await HashFileAsync(overlayPath) == sourceOverlaySha256,
+        "The source-bound cache build or rollback changed its source image or overlay.");
 }
 
 string CreateOwnedStaleOperation(string operationsRoot, string prefix)

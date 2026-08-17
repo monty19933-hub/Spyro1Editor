@@ -89,17 +89,12 @@ public sealed partial class MainWindow
     private string DragonRunToEditPath(string levelKey) =>
         Path.Combine(_workspace.RootPath, $"{LevelCatalog.NormalizeKey(levelKey)}-native-edits.json");
 
-    private async Task<int> PersistCurrentNativeMovementEditsAsync()
+    private async Task<int> PersistCurrentNativeMovementEditsAsync(
+        RegularEditorPersistenceOperation? existingOperation = null)
     {
-        if (_currentLevel == null)
-            return 0;
-
-        int count = await NativeMobyPathEditStore.SaveAsync(
-            NativeMobyPathEditPath(_currentLevel.Key),
-            _currentLevel.DisplayName,
-            _currentNativeMobyPaths);
-        _savedNativeMovementEditSignature = BuildNativeMovementEditSignature();
-        return count;
+        RegularObjectPersistenceResult result =
+            await PersistCurrentObjectAndMovementEditsAsync(existingOperation);
+        return result.NativePathCount;
     }
 
     private string BuildNativeMovementEditSignature()
@@ -118,15 +113,12 @@ public sealed partial class MainWindow
             _savedNativeMovementEditSignature,
             StringComparison.Ordinal);
 
-    private async Task<int> PersistCurrentDragonRunToEditsAsync()
+    private async Task<int> PersistCurrentDragonRunToEditsAsync(
+        RegularEditorPersistenceOperation? existingOperation = null)
     {
-        if (_currentLevel == null)
-            return 0;
-        int count = await DragonRunToEditStore.MergeIntoMobyManifestAsync(
-            DragonRunToEditPath(_currentLevel.Key),
-            _currentDragonRunToEdits);
-        _savedDragonRunToEditSignature = BuildDragonRunToEditSignature();
-        return count;
+        RegularObjectPersistenceResult result =
+            await PersistCurrentObjectAndMovementEditsAsync(existingOperation);
+        return result.DragonRunToCount;
     }
 
     private string BuildDragonRunToEditSignature() => string.Join(
@@ -134,6 +126,18 @@ public sealed partial class MainWindow
         _currentDragonRunToEdits
             .OrderBy(edit => edit.OwnerTrueIndex)
             .Select(edit => $"{edit.OwnerTrueIndex}:{edit.RawX}:{edit.RawY}"));
+
+    private IReadOnlyList<NativeDragonRunToEdit> CaptureCurrentDragonRunToEdits()
+    {
+        return _currentDragonRunToEdits
+            .Select(edit =>
+            {
+                NativeDragonRunToEdit captured = new(edit.LevelKey, edit.Scene);
+                captured.SetRawEndpoint(edit.RawX, edit.RawY);
+                return captured;
+            })
+            .ToArray();
+    }
 
     private bool HasUnsavedDragonRunToEdits() =>
         !string.Equals(BuildDragonRunToEditSignature(), _savedDragonRunToEditSignature, StringComparison.Ordinal);
@@ -176,7 +180,12 @@ public sealed partial class MainWindow
     {
         if (_objectNativeMovementButton == null)
             return;
-        if (_releaseMode || IsId65BlankLabObjectInspectionOnly())
+        if (_releaseMode ||
+            IsId65BlankLabObjectInspectionOnly() ||
+            _workspaceTransitionBusy ||
+            _id65BlankLabBusy && _id65BlankLabManualOperation != null ||
+            _regularEditorPersistenceBusy ||
+            _buildSafetyBusy)
         {
             _objectNativeMovementButton.IsVisible = false;
             _objectNativeMovementButton.IsEnabled = false;
@@ -214,12 +223,17 @@ public sealed partial class MainWindow
 
     private async Task EditNativeMobyPathAsync(NativeMobyPath path)
     {
+        if (TryBlockId65ObjectMutation("Native path editing") || _currentLevel == null)
+            return;
+
         Moby? owner = _currentMobys.FirstOrDefault(moby => moby.TrueIndex == path.OwnerTrueIndex && !moby.IsRemoved);
         if (owner == null)
         {
             _statusText.Text = $"The owner of native route T{path.OwnerTrueIndex} is not present in this level view.";
             return;
         }
+        ObjectDialogSceneIdentity capturedScene =
+            CaptureObjectDialogSceneIdentity(_currentLevel, owner);
 
         Window dialog = new()
         {
@@ -406,6 +420,8 @@ public sealed partial class MainWindow
         dialog.Content = panel;
 
         bool accepted = await dialog.ShowDialog<bool>(this);
+        if (!IsCurrentObjectDialogSceneIdentity(capturedScene))
+            return;
         _moveSelectedThiefPathWithOwner = moveWithOwner.IsChecked == true;
         _snapNativePathNodesToTerrain = snapWhileDragging.IsChecked == true;
         if (!accepted)
@@ -586,10 +602,15 @@ public sealed partial class MainWindow
 
     private async Task<bool> TryEditSelectedDragonRunToAsync()
     {
+        if (TryBlockId65ObjectMutation("Dragon run-to editing") || _currentLevel == null)
+            return false;
+
         if (!TryGetSelectedDragonRunToEdit(out NativeDragonRunToEdit? edit) || edit == null || _selectedMoby == null)
             return false;
 
         Moby dragon = _selectedMoby;
+        ObjectDialogSceneIdentity capturedScene =
+            CaptureObjectDialogSceneIdentity(_currentLevel, dragon);
         Window dialog = new()
         {
             Title = $"Edit Spyro Run-To - {dragon.DisplayLabel}",
@@ -726,6 +747,8 @@ public sealed partial class MainWindow
         RefreshPreview();
 
         bool accepted = await dialog.ShowDialog<bool>(this);
+        if (!IsCurrentObjectDialogSceneIdentity(capturedScene))
+            return true;
         if (!accepted)
             return true;
 

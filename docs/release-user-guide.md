@@ -34,15 +34,19 @@ levels and the release contains no game data.
 
 The first public Lab boundary is existing high-detail terrain Z editing through
 the complete referenced collision-fan writer that was confirmed solid in
-DuckStation. Lab edits are isolated from retail edits and produce a separate
-disposable CUE with a Finder/Explorer reveal action and explicit load codes.
-Normal `Create BIN` never consumes ID65 Lab edits.
+DuckStation, plus editor-preview painting from the 66 resident textures decoded
+from the exact locked payload. Resident paint changes only a face texture ID and
+preserves its material, tint, surface, and collision behavior. Lab edits are
+isolated from retail edits. The separate disposable CUE remains HP-Z-only, so
+resident texture paints must be undone before that writer is enabled. Normal
+`Create BIN` never consumes or silently omits ID65 Lab edits.
 
 This is a construction substrate, not a byte-empty map. True Add Terrain,
-low-detail or XY geometry editing, arbitrary Mobys, private/custom texture
-allocation, portals, totals, music ownership, Return Home, and save ownership
-remain unavailable or research-only. The UI reports those boundaries instead
-of implying whole-game asset portability.
+low-detail or XY geometry editing, arbitrary Mobys, cross-level/custom/private
+texture allocation, runtime export of resident texture previews, portals,
+totals, music ownership, Return Home, and save ownership remain unavailable or
+research-only. The UI reports those boundaries instead of implying whole-game
+asset portability.
 
 ## Performance during texture work and builds
 
