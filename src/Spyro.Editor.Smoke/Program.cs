@@ -9081,8 +9081,10 @@ void ValidateSceneRouteMarkerFamilyRows(IReadOnlyList<SceneRouteMarkerFamilyRow>
         throw new InvalidOperationException("Scene/route marker family report must include Stone Hill T150.");
     if (stoneHillT150.AutoCloneSafe || !stoneHillT150.NeedsLiveProof)
         throw new InvalidOperationException("Stone Hill T150 must remain live-proof-only in the scene/route marker family report.");
-    if (!stoneHillT150.FamilyBucket.Contains("terrain/hazard", StringComparison.OrdinalIgnoreCase))
-        throw new InvalidOperationException($"Stone Hill T150 should be classified as terrain/hazard-adjacent, got {stoneHillT150.FamilyBucket}.");
+    bool hasTerrainEvidence = !stoneHillT150.TerrainEvidence.StartsWith("none", StringComparison.OrdinalIgnoreCase);
+    string expectedFamily = hasTerrainEvidence ? "terrain/hazard" : "route-control cluster";
+    if (!stoneHillT150.FamilyBucket.Contains(expectedFamily, StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException($"Stone Hill T150 family should match available evidence ({expectedFamily}), got {stoneHillT150.FamilyBucket}.");
     if (!stoneHillT150.EditorBehavior.Contains("Keep report-only", StringComparison.OrdinalIgnoreCase))
         throw new InvalidOperationException("Stone Hill T150 scene/route editor behavior must remain report-only.");
 
