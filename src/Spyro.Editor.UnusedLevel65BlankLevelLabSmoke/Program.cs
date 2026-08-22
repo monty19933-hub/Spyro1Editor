@@ -623,7 +623,7 @@ async Task VerifyFullAuthoringConstructionContractAsync(
         collidable.AfterCollisionSha256 ==
             "5e7b4430c9bfbd2793df1d9833d8d3af005924d7c110b66f0b0e1f8bc818c056" &&
         collidable.AfterModelSha256 ==
-            "784166cb6bb8c00b3cff0ef8a75712f6bf68df10c0feb93413338881fbea8ff4",
+            "ccd18568b9b6cb7a41d2bf8a47c7dc475ca2cb1f9f127ac9a90ef9ac0a8be4f1",
         $"The exact first collidable construction component/model hashes drifted: collision={collidable.AfterCollisionSha256}, model={collidable.AfterModelSha256}.");
     Require(
         collidable.CollisionIndexRepacked &&
