@@ -13,29 +13,29 @@ GitHub Releases are the intended place for public Mac and Windows builds.
 
 The release packages are self-contained:
 
-- `SpyroEditor-Beta-V4-osx-arm64.zip`
-- `SpyroEditor-Beta-V4-win-x64.zip`
+- `SpyroEditor-Beta-V5-osx-arm64.zip`
+- `SpyroEditor-Beta-V5-win-x64.zip`
 
 The public release name is independent of internal build iterations. Publish
-only intentional bundled releases: tag `beta-v4`, use the exact GitHub title
-`Spyro Editor Beta V4`, mark it as a prerelease, attach the two exact package
+only intentional bundled releases: tag `beta-v5`, use the exact GitHub title
+`Spyro Editor Beta V5`, mark it as a prerelease, attach the two exact package
 names above, and paste `CHANGELOG.md` unchanged into the GitHub release body.
 Ordinary commits and fixes do not create update prompts.
 
-V4 is the current whole-number compatibility bridge. Its tag, title, asset
-names, schema-1 manifest, `publicBeta: 4`, and legacy integer assembly identity
+V5 is the current whole-number compatibility bridge. Its tag, title, asset
+names, schema-1 manifest, `publicBeta: 5`, and legacy integer assembly identity
 retain the exact numbered-beta contract understood by older installed clients.
-The published V3 bridge remains immutable and must not be retagged or replaced.
+The published V3 and V4 bridges remain immutable and must not be retagged or replaced.
 
 After that bridge, incremental public updates use canonical dotted identities:
-`beta-v4.1`, `Spyro Editor Beta V4.1`, and matching `Beta-V4.1` assets. Those
-packages use manifest schema 2, carry `publicVersion: "4.1"`, and retain legacy
+`beta-v5.1`, `Spyro Editor Beta V5.1`, and matching `Beta-V5.1` assets. Those
+packages use manifest schema 2, carry `publicVersion: "5.1"`, and retain legacy
 integer beta metadata only for compatibility. Each `CHANGELOG.md` is solely the
 delta from the immediately previous public release, not accumulated history.
 
 The frozen V2 updater scans only the newest 30 prereleases and ignores dotted
 identities. The release checklist therefore keeps a whole-number schema-1 bridge
-inside that window, publishing a later bridge such as V4 before the previous one
+inside that window, publishing a later bridge such as V5 before the previous one
 ages out. Dotted increments between those bridges continue to use schema 2.
 
 The updater rejects a mismatched tag, title, public beta, platform, archive
@@ -64,9 +64,9 @@ be replaced by the normal notarized asset as soon as possible.
 When the release owner explicitly approves an accept-the-risk package because
 no Developer ID identity is installed, `SPYRO_EDITOR_MAC_BUILD_MODE=community`
 produces a hardened ad-hoc-signed ZIP with the same opening instructions and
-published SHA-256 digests. The local Beta V4 test package uses the `signed-only`
+published SHA-256 digests. A local Beta V5 test package may use the `signed-only`
 path: it is Developer ID signed, hardened, and securely timestamped, but not
-notarized. A public V4 package should use the normal notarized path when Apple
+notarized. A public V5 package should use the normal notarized path when Apple
 notarization credentials are available.
 
 ## Current Editor
@@ -74,6 +74,16 @@ notarization credentials are available.
 The active app lives in `src/Spyro.Editor.App`.
 
 Current release features include:
+
+- **ID65 Blank-Level Lab (V5 beta):** the Level workspace can build a versioned,
+  evidence-bound ID65 construction lab from the user's exact clean USA BIN/CUE.
+  The retail catalog on disk remains 35 levels; ID65 is admitted in memory only
+  after its locked independent base and manifest validate. The Lab creates a
+  separate disposable test CUE and never enters normal `Create BIN`. Its current
+  promoted authoring boundary is existing HP terrain Z edits with complete
+  collision-fan writeback. True Add Terrain, LP/XY editing, arbitrary cross-level
+  Mobys, private texture allocation, portals, totals, music ownership, and save
+  ownership remain unavailable or research-only rather than being implied safe.
 
 - Protected external project storage keeps saved object, terrain, sky, music,
   text, and custom-art plans plus generated output outside the installed app.
@@ -342,7 +352,7 @@ Current release features include:
   are reused; that census does not guarantee private slots or universal `Only Selected Section`
   support. The exact Gnasty's World 50-row/50-face BIN passed all final
   readback checks and was confirmed in DuckStation without a crash, so normal
-  Beta V4 admits that exact retail fingerprint and writer at up to 50 rows.
+  Beta V5 retains that exact retail fingerprint and writer at up to 50 rows.
   Wizard Peak separately admits at most 46 appended rows; its four diagnostic
   source rows remain unavailable for normal allocation. These are not all-level
   or arbitrary-50-donor promotions. The
@@ -453,8 +463,12 @@ dotnet run --project src/Spyro.Editor.App/Spyro.Editor.App.csproj
 Run the smoke suite:
 
 ```bash
-dotnet run --project src/Spyro.Editor.Smoke/Spyro.Editor.Smoke.csproj
+./tools/Run-SpyroEditorOfflineQa.sh
 ```
+
+The release QA script runs the curated build and smoke matrix. Do not substitute
+the unfiltered legacy smoke executable for the release gate; it retains older
+diagnostic assertions that are not the packaged V5 acceptance contract.
 
 ## Repository Layout
 

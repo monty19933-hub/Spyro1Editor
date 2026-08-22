@@ -46,6 +46,8 @@ public static class PortableProjectMigration
     [
         "-native-edits.json",
         "-native-moby-path-edits.json",
+        "-native-level-replacement-intent.json",
+        "-native-level-replacement.json",
         "-terrain-edits.json",
         "-terrain-material-overrides.json",
         "-terrain-behavior-proofs.json",

@@ -1,4 +1,20 @@
-# Spyro Editor Beta V4 Known Limitations
+# Spyro Editor Beta V5 Known Limitations
+
+## ID65 Blank-Level Lab
+
+- The V5 Lab is a versioned, evidence-bound Town Square-derived construction
+  substrate in physically independent ID65 storage. It is not a byte-empty map.
+- The public Lab boundary is existing HP terrain Z edits with an atomic complete
+  native collision fan, cyclic winding preservation, and unchanged collision-cell
+  membership, plus isolated editor-preview painting from the locked payload's
+  66 resident texture records. Resident paint preserves the target material,
+  tint, surface, and collision behavior. It is not runtime-exported yet; its
+  test CUE remains HP-Z-only and separate from normal `Create BIN`.
+- True HP/LP face addition, component growth, LP or XY editing, arbitrary Mobys,
+  cross-level/custom/private texture allocation, portals, totals, music ownership, Return
+  Home, and save ownership remain separate research gates.
+- The 35-row retail catalog remains unchanged. ID65 is admitted only in memory
+  after the exact clean-USA locked base and manifest validate.
 
 This beta is useful, but it is not a finished Spyro modding tool yet. Treat it as a testing build for editor workflow, object placement, terrain inspection, and moby identity mapping.
 
@@ -83,14 +99,14 @@ they can join the same offset-rebase map. Lofty Castle, Jacques, and Gnorc Cove
 remain selected-section blocked because their native page layouts still fail
 the exact alias-preserving packing proof. Shared-record replacement remains
 available there. This guarded path still needs DuckStation gameplay proof
-before it can be enabled broadly by the normal Beta V4 launcher. There are three
+before it can be enabled broadly by the normal Beta V5 launcher. There are three
 exact-source exceptions. The clean-USA Artisans fixed-tail writer first proved
 one dragon-eye row, and the later T68-T71 build proved four active private rows
 in DuckStation without a crash. The clean-USA Gnasty's World sector writer then
 proved 50 assigned faces and 50 appended rows at `+0x2800` in DuckStation without
 a crash. The corrected clean-USA Wizard Peak candidate assigned four
 artifact-only animation-source diagnostic rows plus 46 appended rows to fifty
-visible faces at `+0x2000` and also worked in DuckStation. Normal V4 may
+visible faces at `+0x2000` and also worked in DuckStation. Normal V5 may
 therefore use up to four appended records in Artisans, up to 50 in Gnasty's
 World, or up to 46 appended records in Wizard Peak when the exact retail
 fingerprint, writer, and normal structural policy match. The normal editor
@@ -168,7 +184,7 @@ destinations or endpoints without a terrain hit require Build Safety review.
 
 ### Special Chest Profiles
 
-Beta V4 includes the checked profile registry, atomic editor grouping, and
+Beta V5 includes the checked profile registry, atomic editor grouping, and
 Build Safety needed to develop special chests level by level. It does not mean
 every chest family is now runtime-proven in every level. Normal Add/Create BIN
 continues to expose only the proven Artisans gold Key + Locked Chest import.
@@ -398,12 +414,61 @@ are consumed until the deeper actor/chest behavior allocation is decoded.
 The current research smoke report confirms that source-row append plus cloned
 special data is enough for the Bull baseline, and that native-clone research
 appends now preserve donor startup bytes instead of editor-cache state. The
-Town Square research path also preserves the donor `0xFF` placement-sector byte
-for guarded Torro/chest appends, because the prior forced terrain sector was a
-live-behavior mismatch against the working donors. The remaining 3x Flame Chest
-clue is its colocated runtime/control row T108 (`renderRadius=0x1A`,
+Town Square research path also preserves the donor `0xFF` byte at record
+`+0x4A` for guarded Torro/chest appends. A direct retail census found `FF` there
+in all 107 Town Square rows, and a focused T21 candidate that replaced it with
+the derived terrain-sector value `D5` flickered at distance in DuckStation.
+The published Moby layout identifies `+0x4A` as the `visable` flag, not terrain
+ownership, so normal exports must preserve its native sentinel. However, the
+corrected X-only candidate preserved `+0x4A = FF` and still flickered from afar
+at exact BIN SHA-256
+`ec3d8e354cf246d704860a6b26968a59cc7f77fe6409e08c299a777b7fc4df8e`.
+A byte audit found only the intended X byte plus one sector's regenerated
+EDC/ECC. The currently decoded optional scene-list pointer and count are both
+zero, although that static result does not exclude every runtime visibility
+mechanism, and the move remains inside the same collision cell. The profile
+remains runtime-rejected. Its disposable `+0x50: 18 -> 20` diagnostic at BIN
+SHA-256
+`329420e7f9e492ce69830f63c783421c05c5976fe8b0b04de7d49e52bf87e626`
+also flickered, but only from farther away. This matches the executable's
+native radius calculation exactly: `18` gives 1536 editor units, `20` gives
+2048, and `+0x51` contributes 128 units of previous-frame hysteresis. The next
+one-byte discriminator uses maximum safe positive value `7F` at BIN SHA-256
+`a3db572356470e697c643e474728b5e75a73fa813fe9868143fb2ea6a4a98f36`;
+`80` through `FF` are blocked because they enter the special negative-radius
+screen/HUD renderer. The `7F` candidate also flickered in DuckStation and is
+runtime-rejected. One final controlled candidate will keep `+0x50 = 7F` and
+change only the separate update-scheduling byte `+0x52` from `40` to native-used
+unconditional value `FF`. That exact candidate is built at BIN SHA-256
+`580af811c2f3e130f03fc1556da56d8310064a588eb57f819f5129c74ccc9329`
+and also flickered from afar in DuckStation, so it is runtime-rejected and
+unpromoted. A live debugger trace then sampled T21's `+0x51` renderer-admitted
+draw-attempt state for 60 frames at the failing distant view and reached admission
+in all 60 samples. A deeper primitive-cursor trace then proved that T21 emitted
+GPU packets in all 12 sampled frames, matching native gem controls. Spatial
+decoding identified the cause: the test coordinate lies only 9.25 units from a
+vertical wall while the gem radius is 24, so the rotating gem intersects and
+is painter-sorted behind that wall. A corrected X-only candidate restores
+native `+0x50 = 18` and `+0x52 = 40`, moves T21 to X `7600` with decoded wall
+clearance `31.699`. The resulting BIN has SHA-256
+`d6dd17bfd0a374ff7a9bb6aa7966846d0471b98ef15a6814331dcc452f81dd92`.
+That exact candidate passed its focused DuckStation test: the gem was present,
+collectible, and no longer flickered from afar. The result supports the decoded
+wall-intersection diagnosis, but it does not authorize general edited-object
+export because exact reward/sound/cleanup persistence, native-control isolation,
+the broader replacement regression, and the original Town Square independence
+check were not reconfirmed for this BIN. The remaining
+3x Flame Chest clue is its colocated runtime/control row T108 (`renderRadius=0x1A`,
 `nativeClassLowByte=0x88`), which must be allocated with the chest shell before
 that family can be promoted.
+
+Moved native objects now receive a targeted Build Safety Review warning when
+their positive native render-radius envelope newly overlaps source-derived
+near-vertical terrain. This catches the proven T21 wall-intersection case and
+lets issue double-click center the exact object, but it remains advisory rather
+than blocking because some native scenery is intentionally wall-mounted. It is
+not a general collision solver and does not itself promote arbitrary object
+movement into the checked V5 replacement workflow.
 
 ## Spring Chest Status
 
@@ -529,6 +594,32 @@ that a runtime range is an unused code cave.
 The editor can preview terrain surfaces, stage supported height edits, and swap
 source-proven native terrain/building texture records between levels. Terrain
 behavior outside the decoded native collision signatures is not fully decoded.
+
+The guarded normal geometry boundary is limited to Z edits on existing
+high-detail (HP) terrain. For every affected point, `Create BIN` must discover
+the complete referenced native collision fan, preserve cyclic winding, and keep
+every triangle in its original collision lookup cells. An unsafe, unresolved,
+unencodable, or cell-changing fan rejects the whole terrain export atomically;
+it never publishes a partial visible/collision patch. XY edits, LP geometry
+edits, add/copy/remove terrain operations, and structural growth remain
+research-only.
+
+The exact v4 ID65 runtime report proves only that its complete edited surface
+was solid and resolved the prior one-sided-solidity failure. It does not prove
+reset repeatability, comparison levels, the other checklist movements, other
+levels, or true Add Terrain, and it does not authorize a broader runtime claim.
+The scoped record is
+`docs/runtime-evidence/unused-level-65-town-square-authored-terrain-solid-entry-ramp-control-focused-pass-2026-08-09.json`.
+
+Research-only **Add Terrain Copy** remains capacity-gated. A direct append can
+be investigated only when the bytes immediately after the exact native scene
+sector are proven free; source-search gaps may contain omitted LP-only sectors
+and are not treated as slack. Scene-sector suffix shifting is disabled because
+the current writer cannot yet grow the environment component and rebase the
+following occlusion, surface, collision, and later components. When direct
+capacity is not proven, the research build rejects the whole structural edit
+before publishing a BIN/CUE. Passing that static guard does not promote the
+operation into normal editor support.
 
 The shipping editor retains every captured editable source-terrain face; no
 normal view removes geometry from the project. **Edit Map** is the exhaustive

@@ -1,0 +1,97 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-08",
+  "evidenceId": "unused-level-65-town-square-authored-terrain-add-copy-not-observed-duckstation-2026-08-08",
+  "evidenceType": "interactive-user-report-with-read-only-runtime-corroboration",
+  "evidenceStatus": "runtime-rejected-visibility-discriminator-not-observed",
+  "automatedEmulatorCapture": false,
+  "promotionAuthorized": false,
+  "profileId": "unused-level-65-town-square-authored-terrain-add-copy-clean-usa-disposable-v1",
+  "baseProfileId": "unused-level-65-town-square-display-name-clean-usa-disposable-v4",
+  "baseRuntimeEvidenceId": "unused-level-65-town-square-display-name-focused-pass-duckstation-2026-08-08",
+  "baseOutputImageSha256": "9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8",
+  "outputImageSha256": "db9230bbe1b8b5b15b52299267b3453cb60ec7494248295f323a40f597d7391f",
+  "outputId65DataSha256": "9e4d30371b9aeffed1071883848a67e1c80f6df313826bc7f4e5db2e926696b9",
+  "outputCue": "_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-add-copy/Unused-Level-65-Town-Square-first-authored-collidable-terrain-add-copy-RUNTIME-CANDIDATE.cue",
+  "runtimeChecklistArtifact": "_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-add-copy/Unused-Level-65-Town-Square-first-authored-collidable-terrain-add-copy-RUNTIME-CANDIDATE-runtime-checklist.md",
+  "staticProofArtifact": "_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-add-copy/Unused-Level-65-Town-Square-first-authored-collidable-terrain-add-copy-RUNTIME-CANDIDATE-static-proof.json",
+  "runtimeObservation": {
+    "primaryEvidence": true,
+    "userReport": "I honestly didnt see anything different from the normal townsquare and ID65",
+    "requiredDiscriminator": "The original flat face and one recognizable raised textured copy must be visually distinguishable in ID65, while the copy remains absent from retail Town Square.",
+    "observedResult": "No recognizable authored visual difference was observed between ID65 and retail Town Square.",
+    "failedCheck": "The candidate did not provide its required visible authored-terrain discriminator.",
+    "conclusion": "This exact candidate is runtime-rejected for its visibility gate and must not be promoted or treated as an Add Terrain runtime pass."
+  },
+  "readOnlyRuntimeCorroboration": {
+    "candidateImageOpenByDuckStationAfterReport": true,
+    "openImagePath": "_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-add-copy/Unused-Level-65-Town-Square-first-authored-collidable-terrain-add-copy-RUNTIME-CANDIDATE.bin",
+    "openImageSha256Readback": "db9230bbe1b8b5b15b52299267b3453cb60ec7494248295f323a40f597d7391f",
+    "chronicleContext": "Recent screen history showed the same continuing DuckStation process running Town Square gameplay after the exact candidate handoff and later showing the retail Town Square comparison Inventory page.",
+    "boundary": "The open-file and screen-history observations corroborate the candidate test context, but they are not automated frame-by-frame proof of the authored face or collision."
+  },
+  "readOnlyLiveRamCorroboration": {
+    "levelIdReadback": 65,
+    "levelCheatActive": false,
+    "candidateSectorHeaderAddress": "0x800B0F04",
+    "baseSectorHeaderAbsent": true,
+    "authoredVertexAddress": "0x800B104C",
+    "authoredVertexBytes": "0A 8C 23 70 0D 24 44 71 10 A4 A2 66",
+    "authoredVertices": [
+      { "x": 8616, "y": 8196, "z": 746 },
+      { "x": 8625, "y": 8234, "z": 749 },
+      { "x": 8540, "y": 8138, "z": 752 }
+    ],
+    "authoredFaceAddress": "0x800B13D0",
+    "authoredFaceBytes": "2B 2B 2C 2D 00 00 02 01 1B 00 A0 01 10 C4 10 00",
+    "authoredCollisionAddress": "0x800D4090",
+    "authoredCollisionBytes": "A8 61 02 DA 04 A0 09 E3 EA 02 03 06",
+    "playerPositionAtInspection": { "x": 7913.1, "y": 8895.8, "z": 758.4 },
+    "playerApproximateXyDistanceFromAuthoredFace": 990,
+    "interpretation": "The exact authored mesh and collision bytes were loaded into live ID65 RAM from the exact candidate. This rules out a stale or wrong CUE and proves row-80 runtime loading, but it does not prove that the GPU drew the face recognizably or that the tester reached the intended view."
+  },
+  "handoffRouteAudit": {
+    "checklistLandmark": "the flat ground immediately before the line of three loose red gems leading toward the nearby bull",
+    "actualNearbyLandmark": "The authored face was beside three loose green gems and the dragon pedestal; the closest bull was about 609 XY units away.",
+    "actualRedGemDistance": "The nearest loose red gems were about 1,200 XY units away.",
+    "authoredFaceSize": "The copied triangle had only about 1,183 square XY units of area, 39/96/128-unit sides, a 68-unit horizontal displacement, and a 10-to-16-unit rise with no side walls.",
+    "interpretation": "The checklist described the wrong gem color and an imprecise bull landmark, while the intended geometry was too subtle for a decisive visual handoff. This is a candidate-and-handoff rejection, not evidence that row-80 loading failed."
+  },
+  "staticProofBoundary": {
+    "mechanicalReadbackFactsRemainValid": true,
+    "candidateSafetyConclusionValid": false,
+    "logicalPatchCount": 6,
+    "changedLogicalWadBytes": 108415,
+    "changedPhysicalImageBytes": 125762,
+    "rebuiltAndChangedRawSectorCount": 63,
+    "interpretation": "The prior proof still establishes deterministic row-80 bytes, readback, exact diff containment, and MODE2 Form1 integrity. A later bounds audit proved that its structural-append safety interpretation was wrong, so the candidate is invalid independently of its failed visibility discriminator."
+  },
+  "staticSafetyDefect": {
+    "sourceSector": 201,
+    "sourceSectorWadOffset": "0x6A3C038",
+    "sourceSectorByteLength": 1216,
+    "sourceSectorEndExclusive": "0x6A3C4F8",
+    "followingSector": 202,
+    "followingSectorWadOffset": "0x6A3C4F8",
+    "repackPatchWadOffset": "0x6A3C180",
+    "repackPatchByteLength": 916,
+    "repackPatchEndExclusive": "0x6A3C514",
+    "overlapByteLength": 28,
+    "conclusion": "The repack crossed 28 bytes into the contiguous sector-202 header. The assumed inter-sector slack did not exist. This v1 candidate is structurally unsafe and must not be loaded or retested."
+  },
+  "unverifiedRuntimeChecks": [
+    "The live RAM readback proves that the edited row-80 mesh and collision bytes were loaded, but it does not establish whether the face was submitted to or accepted by the renderer.",
+    "It does not distinguish an absent GPU-drawn face from a drawn face that was too small, overlapping, occluded, or difficult to locate.",
+    "Collision on the added face, close-versus-far LOD behavior, the exact route and camera angles used, and prohibited-path adherence were not independently captured.",
+    "Gnasty's Loot and Sunny Flight comparison behavior was not included in this specific report."
+  ],
+  "nextGate": "Return to the exact focused-runtime-passed display-name base and create a separate, unmistakable existing-HP-face deformation immediately ahead of the spawn landing. Keep face counts, component sizes, collision, low-detail terrain, textures, Mobys, music, totals, portals, Return Home, saving, and persistence unchanged. Use it only to prove that authored ID65 row-80 vertex bytes reach the runtime renderer. Any later structural Add Terrain candidate must grow and rebase the environment component instead of assuming inter-sector slack.",
+  "scopeLimitations": [
+    "This rejection applies only to profile unused-level-65-town-square-authored-terrain-add-copy-clean-usa-disposable-v1 and BIN db9230bbe1b8b5b15b52299267b3453cb60ec7494248295f323a40f597d7391f.",
+    "It rejects the required recognizable visibility discriminator; live RAM proves that row-80 bytes loaded, while the later bounds audit independently rejects the structural append as unsafe.",
+    "Collision behavior, far LOD, broader gameplay stability, comparison-level behavior, and prohibited-path adherence remain unverified for this candidate.",
+    "The exact v1 BIN is retained only as rejected evidence and must not be loaded or retested.",
+    "It does not authorize integration into the normal editor, Create BIN, release, or update paths."
+  ]
+}

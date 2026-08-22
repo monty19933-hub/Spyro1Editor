@@ -1,0 +1,58 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-01",
+  "evidenceId": "stonehill-slot-townsquare-display-identity-duckstation-2026-08-01",
+  "evidenceType": "interactive-user-report",
+  "automatedEmulatorCapture": false,
+  "profileId": "native-level-replacement-stonehill-townsquare-display-identity-clean-usa-v1",
+  "profileRecipeVersion": 1,
+  "baseProfileId": "native-level-replacement-stonehill-townsquare-clean-usa-v1",
+  "baseOutputImageSha256": "5c23ad350edc6dcdab2c144d9d07a8d8ea98dda9b35c151d0335dd58a636c93d",
+  "baseExecutableSha256": "558d4f5f0f7dd482b035d5f5793bfc6cf886d9cdd218562f4cedd4b1effbfab9",
+  "outputExecutableSha256": "b17fd7679d586562ef325813b7c469aff58430f5200633f64b8e6900409e3304",
+  "outputImageSha256": "71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9",
+  "patchBoundary": {
+    "levelNamePointerTableFileOffset": "0x5FFF0",
+    "targetPointerFileOffset": "0x5FFF4",
+    "donorPointerFileOffset": "0x5FFFC",
+    "targetPointerBeforeHex": "FC010180",
+    "targetPointerAfterHex": "E4010180",
+    "changedLogicalBytes": 1,
+    "changedPhysicalBytes": 31,
+    "rebuiltRawSectors": 1
+  },
+  "completionTotals": {
+    "targetLevelId": 11,
+    "donorLevelId": 13,
+    "gems": 200,
+    "dragons": 4,
+    "eggs": 1,
+    "totalsPatched": false
+  },
+  "passedChecks": [
+    "The former Stone Hill portal displays Town Square.",
+    "The destination fly-in displays Town Square.",
+    "The guidebook and Inventory display Town Square.",
+    "The replacement displays 200 gems, four dragons, and one egg.",
+    "Normal movement, combat, pause, Inventory, music, and transitions work.",
+    "One gem, one dragon, and the egg each increment exactly once.",
+    "Death and reload work.",
+    "Return Home and re-entry work.",
+    "Save and reload preserve progress.",
+    "The original Town Square slot remains independently accessible."
+  ],
+  "expectedUnchangedBehaviors": [
+    "Music remains Stone Hill's slot-11 music.",
+    "The brief Stone Hill/Town Square transition-sky handoff remains.",
+    "The title-demo safety reroute still produces Doctor Shemp twice.",
+    "The replacement continues to use Stone Hill's slot-11 save ownership."
+  ],
+  "scopeLimitations": [
+    "This evidence applies only to the exact profile recipe and output BIN hash recorded here.",
+    "It does not authorize arbitrary display-name edits or other donor levels.",
+    "It does not prove edited donor payload composition, seamless transition-sky replacement, or music replacement.",
+    "It does not promote the workflow into normal Beta V4 Create BIN.",
+    "It does not prove or add a new 36th level."
+  ]
+}

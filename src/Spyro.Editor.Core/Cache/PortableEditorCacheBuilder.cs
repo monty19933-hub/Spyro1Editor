@@ -119,8 +119,8 @@ public static class PortableEditorCacheBuilder
                 overlayCacheCount++;
 
             int levelTexturePreviewCount = hasOverlay
-                ? await BuildTerrainTexturePreviewCacheAsync(
-                    workspace,
+                ? await BuildTerrainTexturePreviewCacheCoreAsync(
+                    DiscImageLocator.FindImage(workspace),
                     level,
                     overlayCacheFile,
                     cacheDir,
@@ -217,15 +217,247 @@ public static class PortableEditorCacheBuilder
         };
     }
 
-    private static async Task<int> BuildTerrainTexturePreviewCacheAsync(
-        EditorWorkspace workspace,
+    public static async Task<int> BuildTerrainTexturePreviewCacheFromSourceAsync(
+        string sourceImagePath,
+        string overlayPath,
+        string workspaceRoot,
+        LevelDefinition level,
+        bool overwrite = true,
+        string expectedSourceImageSha256 = "",
+        string expectedSourceOverlaySha256 = "",
+        Action<string>? testStageHook = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceImagePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(overlayPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceRoot);
+        ArgumentNullException.ThrowIfNull(level);
+
+        string sourceImage = Path.GetFullPath(sourceImagePath);
+        string sourceOverlay = Path.GetFullPath(overlayPath);
+        string root = Path.GetFullPath(workspaceRoot);
+        if (!File.Exists(sourceImage))
+            throw new FileNotFoundException("The explicit terrain-texture source image is missing.", sourceImage);
+        if (!File.Exists(sourceOverlay))
+            throw new FileNotFoundException("The explicit terrain-texture source overlay is missing.", sourceOverlay);
+
+        string expectedSourceSha256 = expectedSourceImageSha256.Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(expectedSourceSha256) &&
+            !IsSha256Hex(expectedSourceSha256))
+            throw new InvalidDataException("The explicit terrain-texture source SHA-256 is invalid.");
+        string sourceSha256 = await HashFileSha256Async(sourceImage, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(expectedSourceSha256) &&
+            !string.Equals(sourceSha256, expectedSourceSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                "The explicit terrain-texture source does not match its expected SHA-256.");
+        }
+        string expectedOverlaySha256 = expectedSourceOverlaySha256.Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(expectedOverlaySha256) &&
+            !IsSha256Hex(expectedOverlaySha256))
+            throw new InvalidDataException("The explicit terrain-texture source overlay SHA-256 is invalid.");
+        string overlaySha256 = await HashFileSha256Async(sourceOverlay, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(expectedOverlaySha256) &&
+            !string.Equals(overlaySha256, expectedOverlaySha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                "The explicit terrain-texture source overlay does not match its expected SHA-256.");
+        }
+        FileInfo sourceInfo = new(sourceImage);
+        FileInfo overlayInfo = new(sourceOverlay);
+
+        if (!overwrite && IsCurrentTerrainTexturePreviewCacheFromSource(
+                root,
+                level,
+                sourceSha256,
+                overlaySha256,
+                sourceInfo.Length,
+                overlayInfo.Length,
+                expectedTextureCount: null))
+        {
+            return CountTerrainTexturePreviewFiles(Path.Combine(root, "editor-cache"), level.Key);
+        }
+
+        string operationRoot = Path.Combine(
+            root,
+            ".terrain-texture-cache-operations",
+            Guid.NewGuid().ToString("N"));
+        string stagedWorkspaceRoot = Path.Combine(operationRoot, "staged-workspace");
+        string stagedCacheDir = Path.Combine(stagedWorkspaceRoot, "editor-cache");
+        string stagedDirectory = TerrainTexturePreviewDirectory(stagedCacheDir, level.Key);
+        string finalDirectory = TerrainTexturePreviewDirectory(
+            Path.Combine(root, "editor-cache"),
+            level.Key);
+        string backupDirectory = Path.Combine(operationRoot, "previous-cache");
+        bool previousBackedUp = false;
+        bool candidatePublished = false;
+        bool preserveOperationRoot = false;
+
+        Directory.CreateDirectory(stagedCacheDir);
+        try
+        {
+            int decodedTextureCount = await BuildTerrainTexturePreviewCacheCoreAsync(
+                sourceImage,
+                level,
+                sourceOverlay,
+                stagedCacheDir,
+                overwrite: true,
+                cancellationToken);
+            if (decodedTextureCount <= 0 ||
+                !IsCurrentTerrainTexturePreviewCache(stagedWorkspaceRoot, level.Key))
+            {
+                throw new InvalidDataException(
+                    "The explicit terrain-texture cache did not produce a complete staged cache.");
+            }
+
+            FileInfo sourceAfter = new(sourceImage);
+            FileInfo overlayAfter = new(sourceOverlay);
+            if (sourceAfter.Length != sourceInfo.Length ||
+                sourceAfter.LastWriteTimeUtc != sourceInfo.LastWriteTimeUtc ||
+                overlayAfter.Length != overlayInfo.Length ||
+                overlayAfter.LastWriteTimeUtc != overlayInfo.LastWriteTimeUtc)
+            {
+                throw new IOException(
+                    "The explicit terrain-texture source or overlay changed while its cache was being built.");
+            }
+            string sourceAfterSha256 = await HashFileSha256Async(sourceImage, cancellationToken);
+            string overlayAfterSha256 = await HashFileSha256Async(sourceOverlay, cancellationToken);
+            if (!string.Equals(sourceAfterSha256, sourceSha256, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(overlayAfterSha256, overlaySha256, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new IOException(
+                    "The explicit terrain-texture source or overlay bytes changed while their cache was being built.");
+            }
+
+            await WriteTerrainTextureSourceBindingAsync(
+                stagedDirectory,
+                level,
+                sourceInfo.Length,
+                sourceSha256,
+                overlayInfo.Length,
+                overlaySha256,
+                decodedTextureCount,
+                cancellationToken);
+            if (!IsCurrentTerrainTexturePreviewCacheFromSource(
+                    stagedWorkspaceRoot,
+                    level,
+                    sourceSha256,
+                    overlaySha256,
+                    sourceInfo.Length,
+                    overlayInfo.Length,
+                    decodedTextureCount))
+            {
+                throw new InvalidDataException(
+                    "The staged terrain-texture cache did not match its exact source binding.");
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(finalDirectory) ?? root);
+            if (Directory.Exists(finalDirectory))
+            {
+                Directory.Move(finalDirectory, backupDirectory);
+                previousBackedUp = true;
+            }
+            Directory.Move(stagedDirectory, finalDirectory);
+            candidatePublished = true;
+            testStageHook?.Invoke("after-candidate-publication");
+            if (!IsCurrentTerrainTexturePreviewCacheFromSource(
+                    root,
+                    level,
+                    sourceSha256,
+                    overlaySha256,
+                    sourceInfo.Length,
+                    overlayInfo.Length,
+                    decodedTextureCount))
+            {
+                throw new InvalidDataException(
+                    "The published terrain-texture cache failed exact source-bound readback.");
+            }
+
+            if (previousBackedUp && Directory.Exists(backupDirectory))
+                Directory.Delete(backupDirectory, recursive: true);
+            return decodedTextureCount;
+        }
+        catch (Exception publicationFailure)
+        {
+            try
+            {
+                if (candidatePublished && Directory.Exists(finalDirectory))
+                    Directory.Delete(finalDirectory, recursive: true);
+                if (previousBackedUp && Directory.Exists(backupDirectory) && !Directory.Exists(finalDirectory))
+                    Directory.Move(backupDirectory, finalDirectory);
+            }
+            catch (Exception recoveryFailure)
+            {
+                preserveOperationRoot = true;
+                throw new IOException(
+                    "Terrain-texture cache publication failed and its prior cache could not be restored; the operation directory was preserved for recovery.",
+                    new AggregateException(publicationFailure, recoveryFailure));
+            }
+            throw;
+        }
+        finally
+        {
+            if (!preserveOperationRoot && Directory.Exists(operationRoot))
+                Directory.Delete(operationRoot, recursive: true);
+        }
+    }
+
+    private static async Task<string> HashFileSha256Async(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        await using FileStream stream = new(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            1024 * 1024,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        return Convert.ToHexString(
+            await SHA256.HashDataAsync(stream, cancellationToken))
+            .ToLowerInvariant();
+    }
+
+    private static async Task WriteTerrainTextureSourceBindingAsync(
+        string directory,
+        LevelDefinition level,
+        long sourceImageByteLength,
+        string sourceImageSha256,
+        long sourceOverlayByteLength,
+        string sourceOverlaySha256,
+        int textureCount,
+        CancellationToken cancellationToken)
+    {
+        string path = Path.Combine(directory, "source-binding.json");
+        await using FileStream stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(
+            stream,
+            new
+            {
+                bindingSchemaVersion = 1,
+                levelKey = LevelCatalog.NormalizeKey(level.Key),
+                levelId = level.LevelId,
+                sourceWadEntry = level.SourceWadEntry,
+                sourceImageByteLength,
+                sourceImageSha256,
+                sourceOverlayByteLength,
+                sourceOverlaySha256,
+                textureCount
+            },
+            new JsonSerializerOptions { WriteIndented = true },
+            cancellationToken);
+        await stream.FlushAsync(cancellationToken);
+        stream.Flush(flushToDisk: true);
+    }
+
+    private static async Task<int> BuildTerrainTexturePreviewCacheCoreAsync(
+        string sourceImage,
         LevelDefinition level,
         string overlayPath,
         string cacheDir,
         bool overwrite,
         CancellationToken cancellationToken)
     {
-        string sourceImage = DiscImageLocator.FindImage(workspace);
         if (!File.Exists(sourceImage) || !File.Exists(overlayPath))
             return CountTerrainTexturePreviewFiles(cacheDir, level.Key);
 
@@ -827,6 +1059,118 @@ public static class PortableEditorCacheBuilder
             return false;
         string cacheDir = Path.Combine(workspaceRoot, "editor-cache");
         return IsCurrentTerrainTexturePreviewManifest(TerrainTexturePreviewDirectory(cacheDir, levelKey));
+    }
+
+    public static bool IsCurrentTerrainTexturePreviewCacheFromSource(
+        string workspaceRoot,
+        string levelKey,
+        string expectedSourceImageSha256,
+        string expectedSourceOverlaySha256,
+        int? expectedTextureCount)
+    {
+        if (string.IsNullOrWhiteSpace(workspaceRoot) ||
+            !string.Equals(
+                LevelCatalog.NormalizeKey(levelKey),
+                UnusedLevel65BlankLevelLabProfileRegistry.Key,
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(
+                expectedSourceImageSha256,
+                UnusedLevel65BlankLevelLabProfileRegistry.Profile.LockedBaseImageSha256,
+                StringComparison.OrdinalIgnoreCase) ||
+            expectedTextureCount != UnusedLevel65BlankLevelLabProfileRegistry.ResidentTextureCount)
+        {
+            return false;
+        }
+
+        try
+        {
+            string root = Path.GetFullPath(workspaceRoot);
+            string sourceImagePath = Path.Combine(
+                root,
+                "locked-base",
+                $"{UnusedLevel65BlankLevelLabProfileRegistry.Key}-locked-base-v{UnusedLevel65BlankLevelLabProfileRegistry.WorkspaceLayoutVersion}.bin");
+            string sourceOverlayPath = Path.Combine(
+                root,
+                "editor-cache",
+                $"{UnusedLevel65BlankLevelLabProfileRegistry.Key}-runtime-scene-editor-overlay.json");
+            if (!File.Exists(sourceImagePath) || !File.Exists(sourceOverlayPath))
+                return false;
+
+            FileInfo sourceImageInfo = new(sourceImagePath);
+            FileInfo sourceOverlayInfo = new(sourceOverlayPath);
+            return IsCurrentTerrainTexturePreviewCacheFromSource(
+                root,
+                UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+                expectedSourceImageSha256,
+                expectedSourceOverlaySha256,
+                sourceImageInfo.Length,
+                sourceOverlayInfo.Length,
+                expectedTextureCount);
+        }
+        catch (Exception ex) when (
+            ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    public static bool IsCurrentTerrainTexturePreviewCacheFromSource(
+        string workspaceRoot,
+        LevelDefinition level,
+        string expectedSourceImageSha256,
+        string expectedSourceOverlaySha256,
+        long expectedSourceImageByteLength,
+        long expectedSourceOverlayByteLength,
+        int? expectedTextureCount)
+    {
+        if (string.IsNullOrWhiteSpace(workspaceRoot) ||
+            level == null ||
+            string.IsNullOrWhiteSpace(level.Key) ||
+            !IsSha256Hex(expectedSourceImageSha256) ||
+            !IsSha256Hex(expectedSourceOverlaySha256) ||
+            expectedSourceImageByteLength <= 0 ||
+            expectedSourceOverlayByteLength <= 0 ||
+            !IsCurrentTerrainTexturePreviewCache(workspaceRoot, level.Key))
+        {
+            return false;
+        }
+
+        try
+        {
+            string directory = TerrainTexturePreviewDirectory(
+                Path.Combine(Path.GetFullPath(workspaceRoot), "editor-cache"),
+                level.Key);
+            string bindingPath = Path.Combine(directory, "source-binding.json");
+            using FileStream stream = File.OpenRead(bindingPath);
+            using JsonDocument document = JsonDocument.Parse(stream);
+            JsonElement root = document.RootElement;
+            int textureCount = JsonValue.GetInt32(root, "textureCount", -1);
+            return JsonValue.GetInt32(root, "bindingSchemaVersion", 0) == 1 &&
+                string.Equals(
+                    LevelCatalog.NormalizeKey(JsonValue.GetString(root, "levelKey")),
+                    LevelCatalog.NormalizeKey(level.Key),
+                    StringComparison.OrdinalIgnoreCase) &&
+                JsonValue.GetInt32(root, "levelId", -1) == level.LevelId &&
+                JsonValue.GetInt32(root, "sourceWadEntry", -1) == level.SourceWadEntry &&
+                string.Equals(
+                    JsonValue.GetString(root, "sourceImageSha256"),
+                    expectedSourceImageSha256,
+                    StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(
+                    JsonValue.GetString(root, "sourceOverlaySha256"),
+                    expectedSourceOverlaySha256,
+                    StringComparison.OrdinalIgnoreCase) &&
+                JsonValue.GetInt64(root, "sourceImageByteLength", -1) == expectedSourceImageByteLength &&
+                JsonValue.GetInt64(root, "sourceOverlayByteLength", -1) == expectedSourceOverlayByteLength &&
+                textureCount > 0 &&
+                (!expectedTextureCount.HasValue || textureCount == expectedTextureCount.Value);
+        }
+        catch (Exception ex) when (
+            ex is IOException or JsonException or UnauthorizedAccessException or
+                ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
     }
 
     public static bool TryLoadNativeTerrainLqTextureCache(

@@ -1,0 +1,120 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-08",
+  "evidenceId": "unused-level-65-town-square-authored-terrain-solid-existing-triangle-control-not-observed-duckstation-2026-08-08",
+  "evidenceType": "interactive-user-report-with-read-only-runtime-corroboration",
+  "evidenceStatus": "runtime-rejected-visibility-discriminator-not-observed",
+  "automatedEmulatorCapture": false,
+  "promotionAuthorized": false,
+  "doNotLoadOrRetest": true,
+  "profileId": "unused-level-65-town-square-authored-terrain-solid-existing-triangle-control-clean-usa-disposable-v3",
+  "baseProfileId": "unused-level-65-town-square-display-name-clean-usa-disposable-v4",
+  "baseRuntimeEvidenceId": "unused-level-65-town-square-display-name-focused-pass-duckstation-2026-08-08",
+  "predecessorRendererRuntimeEvidenceId": "unused-level-65-town-square-authored-terrain-render-visibility-control-focused-pass-duckstation-2026-08-08",
+  "baseOutputImageSha256": "9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8",
+  "outputImageSha256": "976a1910264c48fbc7cec8a9a1291f849bcad898fc511bae5d986a7af1c66214",
+  "outputId65DataSha256": "a824efbcde9481ad9be46f20531a3277ca76f14230c74113b562630ca2c95f35",
+  "outputExecutableSha256": "fa5fc7981188b78fa7d7b78facca64c1f79dadb107515e9146ad178ade39d442",
+  "outputCue": "_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-solid-existing-triangle-control/Unused-Level-65-Town-Square-authored-terrain-solid-existing-triangle-control-RUNTIME-CANDIDATE.cue",
+  "runtimeChecklistArtifact": "_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-solid-existing-triangle-control/Unused-Level-65-Town-Square-authored-terrain-solid-existing-triangle-control-RUNTIME-CANDIDATE-runtime-checklist.md",
+  "staticProofArtifact": "_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-solid-existing-triangle-control/Unused-Level-65-Town-Square-authored-terrain-solid-existing-triangle-control-RUNTIME-CANDIDATE-static-proof.json",
+  "runtimeObservation": {
+    "primaryEvidence": true,
+    "userReport": "Hmm im not seeing it in ID65",
+    "requiredDiscriminator": "The small authored grass slope must be visibly identifiable in ID65 before its matching collision can be tested.",
+    "observedResult": "The user did not observe the intended slope in ID65.",
+    "failedCheck": "The candidate did not provide its required recognizable visual discriminator.",
+    "conclusion": "This exact v3 candidate-and-handoff is runtime-rejected for its visibility gate and remains unpromoted. A later structural audit proves that the chosen face was invalid as both a visibility and collision discriminator; no collision behavior can be inferred from this report."
+  },
+  "readOnlyRuntimeCorroboration": {
+    "candidateImageOpenByDuckStationAfterReport": true,
+    "duckStationProcessId": 15463,
+    "openImagePath": "_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-solid-existing-triangle-control/Unused-Level-65-Town-Square-authored-terrain-solid-existing-triangle-control-RUNTIME-CANDIDATE.bin",
+    "openImageSha256Readback": "976a1910264c48fbc7cec8a9a1291f849bcad898fc511bae5d986a7af1c66214",
+    "chronicleContext": "Recent screen history showed the exact v3 CUE selected in Finder, DuckStation starting it, and subsequent Town Square gameplay. No captured frame established that the tester reached or framed the exact face-64 target.",
+    "boundary": "The open-file, hash, and recent-screen observations make a stale or wrong candidate unlikely. They prove neither GPU submission nor contact, and the later overlap audit independently explains why this target could not provide the promised recognizable surface."
+  },
+  "readOnlyLiveRamCorroboration": {
+    "levelIdRuntimeAddresses": ["0x800758B4", "0x8007596C"],
+    "levelIdReadback": 65,
+    "gLevelCheatActiveRuntimeAddress": "0x80075880",
+    "gLevelCheatActiveReadback": 0,
+    "authoredVertexRuntimeAddress": "0x800B3B0C",
+    "authoredVertexWord": "0x5C858460",
+    "authoredVertex": { "x": 8167, "y": 6325, "z": 576 },
+    "faceRuntimeAddress": "0x800B4588",
+    "faceBytes": "5D 5D 5F 5E 6D 6D 6C 6B 05 00 00 00 20 00 10 00",
+    "collisionTriangleRuntimeAddress": "0x800FC9EC",
+    "collisionTriangleBytes": "BB 1F 8B DE 0A D9 EA D1 00 02 40 00",
+    "playerPositionAtLaterInspection": { "x": 8162.56, "y": 6805.19, "z": 726.44 },
+    "playerApproximateXyDistanceFromTargetCentroidAtLaterInspection": 456,
+    "interpretation": "The exact authored visual word, face record, and matching collision triangle were present in live level-65 RAM from the exact v3 BIN. This proves runtime loading of the candidate bytes, but not recognizable drawing, contact, or traversal. The later structural overlap audit proves that the selected face and collision triangle were shadowed by higher retail geometry, so the negative result is not evidence of a renderer or row-80 loading failure. The later player position was outside the small target footprint and does not reconstruct the route used before the report."
+  },
+  "structuralDiscriminatorDefect": {
+    "targetRuntimeKey": "213:64:hp",
+    "targetSectorIndex": 213,
+    "targetFaceIndex": 64,
+    "targetOriginalZ": 512,
+    "targetAuthoredPeakZ": 576,
+    "overlappingVisualRuntimeKey": "4:6:hp",
+    "overlappingVisualSectorIndex": 4,
+    "overlappingVisualFaceIndex": 6,
+    "overlappingVisualZ": 560,
+    "maximumProtrusionAboveOverlappingFace": 16,
+    "maximumProtrudingXyAreaFraction": "1/16",
+    "coveredOrBelowXyAreaFraction": "15/16",
+    "targetCollisionTriangleIndex": 13853,
+    "shadowingCollisionTriangleIndexes": [1189, 1190],
+    "shadowingCollisionZ": 560,
+    "visualInterpretation": "Sector 213 HP face 64 lies beneath overlapping sector 4 HP face 6 at Z 560. Raising one target tip from Z 512 to Z 576 leaves 15/16 of the target XY area at or below the retail face. Only the final 1/16 can protrude, and even that cap rises at most 16 units above the visible retail surface. The promised recognizable grass slope therefore could not exist as handed off.",
+    "collisionInterpretation": "Retail collision triangles 1189 and 1190 occupy the overlapping Z-560 surface and shadow edited triangle 13853 in the intended contact area. The loaded triangle-13853 bytes therefore did not provide an isolated playable slope for the requested walking, charging, jumping, or landing checks.",
+    "conclusion": "The chosen v3 target was structurally invalid as both a visibility and collision discriminator. Preserve the exact BIN/CUE only as rejected evidence; do not load or retest it. This defect does not indicate a renderer, physical-row loading, or general collision-decoding failure."
+  },
+  "handoffAudit": {
+    "targetRuntimeKey": "213:64:hp",
+    "targetApproximateXyArea": 4893.5,
+    "targetApproximateXyDistanceFromSpawn": 296,
+    "authoredHeightDelta": 64,
+    "targetDescription": "Turn approximately 77 degrees right and find the small green-grass triangle between the two nearest right-side green gems.",
+    "problems": [
+      "The angle depended on an unstated starting heading.",
+      "World coordinates were not visible in normal gameplay.",
+      "The two-green-gem landmark still required searching for a small same-material triangle.",
+      "A single 64-unit tip was not an unmistakable visible discriminator at normal gameplay scale."
+    ],
+    "conclusion": "The handoff was not merely too subtle: the later overlap audit proves that its promised standalone slope was structurally absent. The candidate is retired without asking the user to keep hunting for the triangle."
+  },
+  "runtimeEnvironmentContext": {
+    "duckStationGameSettingsPath": "/Users/john/Library/Application Support/DuckStation/gamesettings/SCUS-94228.ini",
+    "configuredAndEnabledCheats": ["Moon Jump"],
+    "enableCheats": true,
+    "globalCard1Type": "PerGameTitle",
+    "globalCard2Type": "None",
+    "chronicleMemoryCardToastObserved": true,
+    "interpretation": "These settings do not invalidate the narrow no-visibility report or exact runtime-byte readback. They do prevent treating movement, collision, reset, or persistence behavior from this run as clean evidence. The hidden ID65 warp selector itself was inactive after entry."
+  },
+  "staticProofBoundary": {
+    "mechanicalReadbackFactsRemainValid": true,
+    "discriminatorValidityConclusion": false,
+    "changedLogicalWadBytes": 2,
+    "changedPhysicalImageBytes": 74,
+    "affectedRawSectorLbas": [54434, 54580],
+    "rawSectorIntegrityVerified": true,
+    "interpretation": "Static proof and live RAM establish the exact authored bytes and MODE2 integrity. They did not audit overlapping visual or collision geometry and therefore did not establish a valid discriminator. The later sector-4 and collision-triangle overlap proof supersedes that test-design assumption."
+  },
+  "unverifiedRuntimeChecks": [
+    "Recognizable GPU rendering of the edited face was not established, and the structural overlap means this candidate cannot validly test it.",
+    "Walking, charging, jumping, landing, pass-through, hovering, snagging, and old-flat-plane behavior were not established.",
+    "Retail Town Square isolation, Gnasty's Loot, and Sunny Flight were not reported for this run.",
+    "Cold-boot, cheat-disabled, memory-card-disabled, and no-resumed-state conditions were not satisfied or independently established."
+  ],
+  "nextGate": "Return to the exact focused-runtime-passed display-name base and first reject every candidate footprint that intersects any higher visual face or higher collision triangle. Then create one unmistakable spawn-forward existing-surface visual-plus-collision control on a vertically isolated footprint. Use a broad 128-to-192-unit ramp or ridge that stays within the unsigned 255-unit collision Z-delta limit, patch every affected shared HP face and every exact native collision triangle, keep all counts and component sizes unchanged, and provide an immediate line-of-sight landmark rather than an angle-and-coordinate search. Structural Add Terrain remains gated until this visible surface and its traversal pass.",
+  "scopeLimitations": [
+    "This rejection applies only to profile unused-level-65-town-square-authored-terrain-solid-existing-triangle-control-clean-usa-disposable-v3 and BIN 976a1910264c48fbc7cec8a9a1291f849bcad898fc511bae5d986a7af1c66214.",
+    "It rejects the required recognizable visibility discriminator; the later overlap audit also invalidates triangle 13853 as the promised isolated collision discriminator. Live RAM proves the exact candidate bytes loaded but does not prove GPU submission or contact behavior.",
+    "It is not evidence that ID65 row-80 loading, rendering generally, or collision decoding failed.",
+    "The exact v3 BIN/CUE is retained only for rejected-evidence audit and must not be loaded or retested.",
+    "It does not authorize structural Add Terrain, normal editor or Create BIN integration, release, or update paths."
+  ]
+}

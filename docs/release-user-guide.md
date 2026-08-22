@@ -1,6 +1,6 @@
-# Spyro Editor Beta V4 Guide
+# Spyro Editor Beta V5 Guide
 
-Internal diagnostic build: `0.1.0-beta.41`.
+Internal diagnostic build: `0.1.0-beta.42`.
 
 This beta build uses three everyday workspaces around the unchanged level view:
 `Objects`, `Level`, and `Environment`. Internal research probes stay hidden.
@@ -24,9 +24,33 @@ not into the replaceable application folder. If saved edits are not export-ready
 the editor removes older matching test BIN/CUE output instead of leaving a stale
 disc to load.
 
+## ID65 Blank-Level Lab
+
+Beta V5 exposes a narrow ID65 construction lab from the Level workspace. It
+builds an independent, versioned locked base from the user's exact clean USA
+BIN/CUE, validates the runtime-evidence-bound manifest, and only then adds ID65
+to the in-memory level picker. The checked-in retail catalog remains exactly 35
+levels and the release contains no game data.
+
+The first public Lab boundary is existing high-detail terrain Z editing through
+the complete referenced collision-fan writer that was confirmed solid in
+DuckStation, plus editor-preview painting from the 66 resident textures decoded
+from the exact locked payload. Resident paint changes only a face texture ID and
+preserves its material, tint, surface, and collision behavior. Lab edits are
+isolated from retail edits. The separate disposable CUE remains HP-Z-only, so
+resident texture paints must be undone before that writer is enabled. Normal
+`Create BIN` never consumes or silently omits ID65 Lab edits.
+
+This is a construction substrate, not a byte-empty map. True Add Terrain,
+low-detail or XY geometry editing, arbitrary Mobys, cross-level/custom/private
+texture allocation, runtime export of resident texture previews, portals,
+totals, music ownership, Return Home, and save ownership remain unavailable or
+research-only. The UI reports those boundaries instead of implying whole-game
+asset portability.
+
 ## Performance during texture work and builds
 
-Beta V4 caches terrain-preview color analysis and loaded donor previews. Applying
+Beta V5 caches terrain-preview color analysis and loaded donor previews. Applying
 another texture refreshes only the native texture IDs that changed, while lengthy
 paint planning runs in the background without disabling the entire editor window.
 
@@ -47,7 +71,7 @@ the ZIP came from the official Spyro Editor GitHub release. The file states
 whether the package is Developer ID signed but not notarized, or uses the more
 limited disclosed ad-hoc community signature. If macOS blocks it, use System
 Settings > Privacy & Security > Open Anyway only if you accept that exact risk.
-This Beta V4 test package is Developer ID signed, hardened, and securely
+This Beta V5 test package is Developer ID signed, hardened, and securely
 timestamped, but it is not notarized; compare its SHA-256 digest before opening
 it.
 
@@ -75,7 +99,7 @@ destination files win, and differing incoming files are preserved under
 gigabytes. `editor-cache` and `spyro-wad-analysis.json` are deliberately rebuilt
 against the selected disc instead of being trusted across installations.
 
-Beta V4 checks GitHub Releases at most once per day. When a deliberate next
+Beta V5 checks GitHub Releases at most once per day. When a deliberate next
 canonical release exists, a visible in-app notification offers `What's New &
 Download`; `More` > `Check for Updates` performs an immediate check. The update
 window shows the full release changelog in a scrollable panel. A copy of that
@@ -87,10 +111,10 @@ It remains published with the exact legacy identity `beta-v3`, title
 `publicBeta: 3`, and legacy assembly beta integer `3`. It must not be renamed
 V2.1 because the V2 updater accepts positive integer release identities only.
 
-V4 is the current whole-number schema-1 bridge. After installing V4, later
-incremental releases use dotted canonical identities such as `beta-v4.1`,
-`Spyro Editor Beta V4.1`, matching `Beta-V4.1` assets, and manifest schema 2
-with `publicVersion: "4.1"`. Their changelog contains only changes since the
+V5 is the current whole-number schema-1 bridge. After installing V5, later
+incremental releases use dotted canonical identities such as `beta-v5.1`,
+`Spyro Editor Beta V5.1`, matching `Beta-V5.1` assets, and manifest schema 2
+with `publicVersion: "5.1"`. Their changelog contains only changes since the
 immediately previous public release. Users still on V2 can take a whole-number
 bridge before receiving a dotted update.
 
@@ -351,7 +375,7 @@ contain copied disc data.
   output because they are not yet part of the same rebase map. Lofty Castle,
   Jacques, and Gnorc Cove remain explicitly blocked for selected-section
   allocation; use their confirmed shared-record scope until their dense native
-  page layouts pass the exact packing proof. The normal Beta V4 launcher keeps
+  page layouts pass the exact packing proof. The normal Beta V5 launcher keeps
   appended rows disabled except for three exact clean-USA profiles. The Artisans
   dragon-eye CUE proved one fixed-tail row, and the later T68-T71 build proved
   four simultaneously active rows in DuckStation. The Gnasty's World
@@ -387,7 +411,7 @@ contain copied disc data.
   fails the current one-row page pack. These prerequisite counts do not prove a
   50-art-payload pack. The exact
   clean-USA Gnasty's World 50-row/50-face output is the one extended exception:
-  its registered final BIN was confirmed in DuckStation and normal V4 may use
+  its registered final BIN was confirmed in DuckStation and normal V5 may use
   its `RuntimeProvenExtended` writer at up to 50 rows. Every level has at least
   50 source-backed candidate textured faces when compatible rows are reused;
   selected-section availability remains slot-, profile-, and donor-pair-dependent. Wizard Peak's
@@ -422,7 +446,7 @@ contain copied disc data.
   overwrite a static transplant after load.
 - Previewing RGB, RGBA, grayscale, or indexed PNG terrain art within the
   editor's image-size limits. Custom PNG texture manifests are staging/research
-  data only in Beta V4; `Create BIN` rejects them rather than using the obsolete
+  data only in Beta V5; `Create BIN` rejects them rather than using the obsolete
   fixed-layout normal/close-detail writer.
 - `Objects` > `Special Chest Support` shows the exact checked status of Key +
   Locked, Life, Armored/Strong, Firework, 3x Flame/Multi-hit, and Spring Chest

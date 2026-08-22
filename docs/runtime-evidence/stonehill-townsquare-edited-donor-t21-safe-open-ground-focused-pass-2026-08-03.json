@@ -1,0 +1,86 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-03",
+  "evidenceId": "stonehill-slot-townsquare-edited-donor-t21-safe-open-ground-focused-pass-duckstation-2026-08-03",
+  "evidenceType": "interactive-user-report",
+  "evidenceStatus": "focused-runtime-pass",
+  "automatedEmulatorCapture": false,
+  "promotionAuthorized": false,
+  "supersedesEvidenceId": "stonehill-slot-townsquare-edited-donor-t21-safe-open-ground-pending-duckstation-2026-08-03",
+  "profileId": "native-level-replacement-stonehill-townsquare-edited-donor-t21-x-clean-usa-v1",
+  "profileRecipeVersion": 1,
+  "baseProfileId": "native-level-replacement-stonehill-townsquare-display-identity-clean-usa-v1",
+  "baseOutputImageSha256": "71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9",
+  "retailSourceImageSha256": "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37",
+  "outputImageSha256": "d6dd17bfd0a374ff7a9bb6aa7966846d0471b98ef15a6814331dcc452f81dd92",
+  "outputCue": "_local/v5-stone-hill-level-replacement/edited-donor-candidate/Stone-Hill-slot-Town-Square-edited-T21-X-safe-open-ground-RUNTIME-CANDIDATE.cue",
+  "staticProofArtifact": "_local/v5-stone-hill-level-replacement/edited-donor-candidate/Stone-Hill-slot-Town-Square-edited-T21-X-safe-open-ground-RUNTIME-CANDIDATE-static-proof.json",
+  "editedObject": {
+    "sourceLevel": "Town Square",
+    "trueIndex": 21,
+    "label": "Red Gem",
+    "originalWorldPosition": [
+      7813.75,
+      7189.75,
+      512.0
+    ],
+    "editedWorldPosition": [
+      7600.0,
+      7189.75,
+      512.0
+    ],
+    "positionPatchBeforeHex": "5CE80100",
+    "positionPatchAfterHex": "00DB0100"
+  },
+  "nativeFieldsPreserved": {
+    "+0x4A sectorIndex": "FF",
+    "+0x4B": "00",
+    "+0x50 renderRadius": "18",
+    "+0x51 wasDrawnPreimage": "00",
+    "+0x52 updateSchedule": "40",
+    "+0x53": "FF"
+  },
+  "patchBoundary": {
+    "changedLogicalWadBytes": 2,
+    "changedPhysicalImageBytes": 41,
+    "rebuiltRawSectors": 1,
+    "outsideAllowedRawSectorBytes": 0,
+    "deterministicReexportMatched": true
+  },
+  "spatialProof": {
+    "floorZ": 512.0,
+    "collisionGroup": 1,
+    "nearestWallClearance": 31.699,
+    "nativeGemRadius": 24.0,
+    "nearestMoby": "T47",
+    "nearestMobyCenterDistance": 78.57,
+    "twoGemRadiusClearance": 30.57
+  },
+  "focusedRuntimeObservation": {
+    "primaryEvidence": true,
+    "userReport": "Yep that fixed it, gem is there and collectable, and not flickering.",
+    "passedChecks": [
+      "T21 was present at the safe open-ground placement.",
+      "T21 could be collected.",
+      "T21 did not flicker from afar."
+    ],
+    "conclusion": "The exact safe-open-ground candidate passes the focused visibility and interaction discriminator and supports the wall-intersection diagnosis."
+  },
+  "unverifiedRuntimeChecks": [
+    "The exact gem value, collection sound, cleanup behavior, and persistence across reload or re-entry were not separately reported.",
+    "Native T22 and T47 isolation were not separately reported for this candidate.",
+    "Movement, enemies, music, camera, pause, Inventory, dragon and egg progress, death/reload, Return Home, re-entry, and save/reload were not reconfirmed for this candidate.",
+    "The original retail Town Square slot and its independent T21 position/progression were not reconfirmed for this candidate.",
+    "The DuckStation version and fresh-save or memory-card state were not recorded with this focused report."
+  ],
+  "diagnosticConclusion": {
+    "wallIntersection": "Moving T21 outside the decoded wall-radius envelope eliminated the reported flicker in the focused test.",
+    "nativeFields": "Native +0x50 = 18 and +0x52 = 40 were sufficient at the safe placement; the rejected diagnostic overrides are not needed.",
+    "promotionBoundary": "This is a focused pass for one exact object, coordinate, recipe, and BIN hash, not approval for general edited-object export."
+  },
+  "scopeLimitations": [
+    "General edited-donor promotion remains unauthorized until the broader replacement regression passes.",
+    "This result does not authorize other coordinates, objects, axes, additions, removals, paths, terrain, textures, imported actor packages, normal V4 Create BIN, releases, or the update channel."
+  ]
+}

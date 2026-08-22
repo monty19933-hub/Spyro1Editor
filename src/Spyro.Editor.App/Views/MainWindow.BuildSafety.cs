@@ -58,6 +58,80 @@ public sealed partial class MainWindow
 
     private async Task ShowBuildSafetyInspectorAsync()
     {
+        _ = await RunBuildSafetyInspectorAsync(showDialog: true);
+    }
+
+    internal Task<bool> RunBuildSafetyInspectorForTestingAsync() =>
+        RunBuildSafetyInspectorAsync(showDialog: false);
+
+    private bool TryBeginBuildSafetyOperation(
+        out RegularEditorPersistenceOperation? persistenceOperation,
+        out int generation)
+    {
+        generation = _buildSafetyGeneration;
+        if (_buildSafetyBusy)
+        {
+            persistenceOperation = null;
+            _statusText.Text = "Build Safety is already running.";
+            return false;
+        }
+        if (!TryBeginRegularEditorPersistenceOperation(
+                "inspecting Build Safety",
+                out persistenceOperation) ||
+            persistenceOperation == null)
+        {
+            return false;
+        }
+
+        generation = ++_buildSafetyGeneration;
+        _buildSafetyBusy = true;
+        RefreshId65BlankLabUi();
+        RefreshLevelSelectionAvailability();
+        RefreshActionAvailability();
+        return true;
+    }
+
+    private void RequireCurrentBuildSafetyOperation(
+        RegularEditorPersistenceOperation persistenceOperation,
+        int generation)
+    {
+        RequireCurrentRegularEditorPersistenceOperation(persistenceOperation);
+        if (!_buildSafetyBusy || generation != _buildSafetyGeneration)
+            throw new OperationCanceledException("The Build Safety operation no longer owns its captured editor scene.");
+    }
+
+    private async Task AwaitBuildSafetyInspectionDelayForTestingAsync(
+        RegularEditorPersistenceOperation persistenceOperation,
+        int generation,
+        string stage)
+    {
+        RequireCurrentBuildSafetyOperation(persistenceOperation, generation);
+        if (BuildSafetyInspectionDelayOverrideForTesting != null)
+            await BuildSafetyInspectionDelayOverrideForTesting(stage);
+        RequireCurrentBuildSafetyOperation(persistenceOperation, generation);
+    }
+
+    private void CompleteBuildSafetyOperation(
+        RegularEditorPersistenceOperation persistenceOperation,
+        int generation)
+    {
+        if (generation == _buildSafetyGeneration)
+            _buildSafetyBusy = false;
+        CompleteRegularEditorPersistenceOperation(persistenceOperation);
+    }
+
+    private async Task<bool> RunBuildSafetyInspectorAsync(bool showDialog)
+    {
+        if (TryBlockEditorMutationDuringId65BlankLabManualOperation("inspecting Build Safety"))
+            return false;
+        if (TryGetInvalidRetailTerrainTextureRelocationDonorBlockReason(
+                out string donorIdentityBlocker))
+        {
+            _statusText.Text =
+                $"Build Safety refused the saved terrain texture donor identity: {donorIdentityBlocker}";
+            return false;
+        }
+
         string sourceImage = FirstExistingDiscImagePath(
             _discImagePathBox.Text,
             _skyboxDiscImagePathBox.Text,
@@ -65,13 +139,48 @@ public sealed partial class MainWindow
         if (!File.Exists(sourceImage))
         {
             _statusText.Text = "Choose the original Spyro BIN/CUE before inspecting build safety.";
-            return;
+            return false;
         }
 
-        await SaveCurrentEditsAsync();
-        IReadOnlyList<EditedLevelExportTarget> targets = FindEditedLevelExportTargets();
-        MobyBuildSafetyInspectionResult inspection = await InspectSavedObjectBuildSafetyAsync(sourceImage, targets);
-        await ShowBuildSafetyDialogAsync(inspection, allowCreateAnyway: false);
+        if (!TryBeginBuildSafetyOperation(
+                out RegularEditorPersistenceOperation? persistenceOperation,
+                out int generation) ||
+            persistenceOperation == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (!await SaveCurrentEditsAsync(persistenceOperation))
+                return false;
+            RequireCurrentBuildSafetyOperation(persistenceOperation, generation);
+            IReadOnlyList<EditedLevelExportTarget> targets = FindEditedLevelExportTargets();
+            await AwaitBuildSafetyInspectionDelayForTestingAsync(
+                persistenceOperation,
+                generation,
+                "build-safety-scan-started");
+            MobyBuildSafetyInspectionResult inspection =
+                await InspectSavedObjectBuildSafetyAsync(sourceImage, targets);
+            RequireCurrentBuildSafetyOperation(persistenceOperation, generation);
+            if (showDialog)
+            {
+                await ShowBuildSafetyDialogAsync(inspection, allowCreateAnyway: false);
+                RequireCurrentBuildSafetyOperation(persistenceOperation, generation);
+            }
+            return true;
+        }
+        catch (OperationCanceledException) when (
+            !_buildSafetyBusy ||
+            generation != _buildSafetyGeneration ||
+            !IsCurrentRegularEditorPersistenceOperation(persistenceOperation))
+        {
+            return false;
+        }
+        finally
+        {
+            CompleteBuildSafetyOperation(persistenceOperation, generation);
+        }
     }
 
     private async Task<MobyBuildSafetyInspectionResult> InspectSavedObjectBuildSafetyAsync(
@@ -1133,8 +1242,10 @@ public sealed partial class MainWindow
                     return;
                 }
 
-                if (_modernWorkspaceTabs != null && _modernTerrainWorkspaceTab != null)
-                    _modernWorkspaceTabs.SelectedItem = _modernTerrainWorkspaceTab;
+                ActivateEditorShellWorkspace(
+                    EditorShellWorkspace.LevelBuildingEditor,
+                    _modernTerrainWorkspaceTab,
+                    announce: false);
                 _viewport.FocusTerrain(terrainIndex);
                 _statusText.Text =
                     $"Build Safety: selected and centered {level.DisplayName} terrain section {terrain.RuntimeKey}.";
@@ -1154,8 +1265,10 @@ public sealed partial class MainWindow
                 return;
             }
 
-            if (_modernWorkspaceTabs != null)
-                _modernWorkspaceTabs.SelectedIndex = 0;
+            ActivateEditorShellWorkspace(
+                EditorShellWorkspace.ObjectManager,
+                _modernObjectWorkspaceTab,
+                announce: false);
             _mobySearchBox.Text = "";
             SelectMobyCategory("All objects");
             RefreshMobyList(moby);

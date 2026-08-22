@@ -11,5 +11,36 @@
     <InternalsVisibleTo Include="Spyro.Editor.DeadUnreferencedTextureStorageSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.FarLodTextureCompanionSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.SourceAnalysisSessionCacheSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.StoneHillLevelReplacementBaselineSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65BlankLevelLabSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65FullAuthoringFoundationRuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65NativeTextureAuthoringSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65StandaloneBehaviorOwnershipSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65MobyDependencyBundleSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65StandaloneSpawnRuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65NativeTextureRuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65FoundationTerrainComposerSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65PassiveMobyRuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65RemoteBlankIsolationSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65FoundationTerrainAddRemoveRuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65RemoteBlankIsolationRuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65ProgressionOwnershipSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65MusicOwnershipClosureSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65MusicRuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65SaveDeathRespawnOwnershipClosureSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65ReturnHomeOwnershipSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65ReturnHomeNativeApronRuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringManifestCompilerSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65ZeroEggRuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65DragonSaveTriggerRuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringTerrainMutationCompilerSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65V2NativeTextureCompositionCompilerSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringMobyDependencyBundleCompilerSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringCompositeCompilerSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65RewardCensusContractSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringSupportReplacementCompilerSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65RewardSupportLayoutContractSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringRewardStagingCompilerSmoke" />
   </ItemGroup>
 </Project>

@@ -128,6 +128,21 @@ try
         RunCreateBinFeedbackOnly();
         return 0;
     }
+    if (args.Contains("--level-replacement-ui-only", StringComparer.OrdinalIgnoreCase))
+    {
+        RunNativeLevelReplacementUiOnly();
+        return 0;
+    }
+    if (args.Contains("--workspace-shell-only", StringComparer.OrdinalIgnoreCase))
+    {
+        RunWorkspaceShellOnly();
+        return 0;
+    }
+    if (args.Contains("--id65-blank-lab-ui-only", StringComparer.OrdinalIgnoreCase))
+    {
+        RunId65BlankLabUiOnly();
+        return 0;
+    }
     if (args.Contains("--update-only", StringComparer.OrdinalIgnoreCase))
     {
         RunUpdateOnly();
@@ -225,8 +240,1243 @@ void RunTerrainAtomicOnly()
     }
 }
 
+void RunWorkspaceShellOnly()
+{
+    MainWindow window = new()
+    {
+        Width = 1320,
+        Height = 860,
+        WindowStartupLocation = WindowStartupLocation.Manual,
+        Position = new PixelPoint(0, 0)
+    };
+    window.Show();
+    try
+    {
+        WaitForLevelData(window);
+        ToggleButton objectManager = FindNamedUnique<ToggleButton>(window, "ObjectManagerWorkspaceButton");
+        ToggleButton levelBuilding = FindNamedUnique<ToggleButton>(window, "LevelBuildingEditorWorkspaceButton");
+        TabControl toolTabs = FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs");
+        if (!string.Equals(objectManager.Content?.ToString(), "Object Manager", StringComparison.Ordinal) ||
+            !string.Equals(levelBuilding.Content?.ToString(), "Level Building Editor", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The two top-level editor workspace labels changed.");
+        }
+
+        EditorShellSessionSnapshot initial = window.CaptureEditorShellSessionSnapshotForTesting();
+        if (initial.ActiveWorkspace != EditorShellWorkspace.ObjectManager ||
+            objectManager.IsChecked != true ||
+            levelBuilding.IsChecked == true)
+        {
+            throw new InvalidOperationException("The release shell did not open in Object Manager.");
+        }
+        AssertWorkspaceTabHeaders(toolTabs, ["Objects"], "Object Manager");
+        if (window.GetLogicalDescendants().OfType<EditorViewport>().Distinct().Count() != 1)
+            throw new InvalidOperationException("The editor shell must own exactly one shared viewport.");
+        if (initial.CurrentLevel == null || initial.CurrentGeometry == null || initial.CurrentMobys.Count == 0)
+            throw new InvalidOperationException("The editor workspace was not fully loaded before continuity testing.");
+
+        SortedDictionary<string, string> projectHashesBefore =
+            CaptureTerrainProjectInputHashes(workspace, initial.CurrentLevel.Key);
+        Moby moby = initial.CurrentMobys.First(candidate =>
+            !candidate.IsRemoved &&
+            !candidate.IsEditorControl &&
+            !candidate.IsAdded);
+        Vector3f originalMobyPosition = moby.Position;
+        bool originalMobyLoadedEdit = moby.HasLoadedNativeEdit;
+        string originalMobySummary = moby.LoadedNativeEditSummary;
+        TerrainPolygon terrain = initial.CurrentGeometry.Polygons.First(candidate =>
+            !candidate.IsTerrainRemoved &&
+            !candidate.IsTerrainAddClone &&
+            string.Equals(candidate.Detail, "hp", StringComparison.OrdinalIgnoreCase) &&
+            candidate.ZValues.Length > 0 &&
+            candidate.OriginalZValues.Length > 0);
+        float[] originalTerrainDeltas = terrain.TerrainVertexDeltas().ToArray();
+
+        initial.Viewport.SetMapYFlipped(true);
+        initial.Viewport.SetViewMode(ViewportViewMode.Fly3D);
+        initial.Viewport.SelectMoby(moby, focus: true);
+        moby.Position = new Vector3f(moby.Position.X + 1f, moby.Position.Y, moby.Position.Z);
+        moby.HasLoadedNativeEdit = true;
+        moby.LoadedNativeEditSummary = "workspace-switch continuity smoke";
+        terrain.ApplyTerrainVertexDeltas(originalTerrainDeltas.Select(delta => delta + 1f).ToArray());
+        initial.Viewport.NotifyTerrainPresentationDataChanged();
+        InvokePrivateVoid(window, "RefreshCurrentLevelDetails");
+        FlushUi();
+
+        EditorShellSessionSnapshot dirtyBeforeSwitch = window.CaptureEditorShellSessionSnapshotForTesting();
+        if (!dirtyBeforeSwitch.HasUnsavedMobyEdits || !dirtyBeforeSwitch.HasUnsavedTerrainEdits)
+            throw new InvalidOperationException("The continuity fixture did not stage both unsaved object and terrain edits.");
+        AssertTextContains(window, "unsaved objects/terrain");
+
+        levelBuilding.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, levelBuilding));
+        FlushUi();
+        EditorShellSessionSnapshot building = window.CaptureEditorShellSessionSnapshotForTesting();
+        AssertWorkspaceTabHeaders(toolTabs, ["Terrain", "Level", "Environment"], "Level Building Editor");
+        if (building.ActiveWorkspace != EditorShellWorkspace.LevelBuildingEditor ||
+            levelBuilding.IsChecked != true ||
+            objectManager.IsChecked == true ||
+            !initial.Viewport.TerrainFocusMode)
+        {
+            throw new InvalidOperationException("Level Building Editor did not activate its terrain workspace.");
+        }
+        AssertWorkspaceSessionContinuity(dirtyBeforeSwitch, building, "Object Manager -> Level Building Editor");
+
+        Button raiseTerrain = FindNamedUnique<Button>(window, "ReleaseTerrainRaiseSelectedFaceButton");
+        Button lowerTerrain = FindNamedUnique<Button>(window, "ReleaseTerrainLowerSelectedFaceButton");
+        Button undoHeight = FindNamedUnique<Button>(window, "ReleaseTerrainUndoHeightButton");
+        Button saveTerrain = FindNamedUnique<Button>(window, "ReleaseTerrainSaveButton");
+        TextBlock statusText = (TextBlock)(typeof(MainWindow).GetField(
+                "_statusText",
+                BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(window)
+            ?? throw new InvalidOperationException("The workspace shell smoke could not inspect the status line."));
+        TextBlock heightHint = FindNamedUnique<TextBlock>(window, "ReleaseTerrainHeightHint");
+        if (raiseTerrain.IsEnabled || lowerTerrain.IsEnabled || undoHeight.IsEnabled)
+            throw new InvalidOperationException("Release terrain-height controls enabled without an HP terrain selection.");
+        if (!(heightHint.Text ?? string.Empty).Contains("Select an existing HP terrain face", StringComparison.Ordinal))
+            throw new InvalidOperationException("Release terrain-height controls did not explain their disabled no-selection state.");
+        GeometryCandidate buildingGeometry = building.CurrentGeometry
+            ?? throw new InvalidOperationException("The release terrain-height fixture lost its loaded geometry.");
+        int terrainIndex = Enumerable.Range(0, buildingGeometry.Polygons.Count)
+            .Single(index => ReferenceEquals(buildingGeometry.Polygons[index], terrain));
+        building.Viewport.SelectTerrainForTesting(terrainIndex);
+        FlushUi();
+        if (!raiseTerrain.IsEnabled || !lowerTerrain.IsEnabled || !undoHeight.IsEnabled)
+            throw new InvalidOperationException("The release terrain-height controls did not enable for an existing HP face.");
+        float[] beforeHeightControls = terrain.TerrainVertexDeltas().ToArray();
+        float[] nonUniformHeightControls = beforeHeightControls
+            .Select((value, index) => value + index)
+            .ToArray();
+        terrain.ApplyTerrainVertexDeltas(nonUniformHeightControls);
+        initial.Viewport.NotifyTerrainPresentationDataChanged();
+        raiseTerrain.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, raiseTerrain));
+        FlushUi();
+        float[] raisedByControls = terrain.TerrainVertexDeltas().ToArray();
+        if (!raisedByControls.SequenceEqual(nonUniformHeightControls.Select(value => value + 32f)))
+            throw new InvalidOperationException("Raise Selected Face did not add the exact +32 HP-Z delta to every nonuniform vertex.");
+        lowerTerrain.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, lowerTerrain));
+        FlushUi();
+        if (!terrain.TerrainVertexDeltas().SequenceEqual(nonUniformHeightControls))
+            throw new InvalidOperationException("Lower Selected Face did not exactly reverse the release height edit.");
+        terrain.ApplyTerrainVertexDeltas(beforeHeightControls);
+        initial.Viewport.NotifyTerrainPresentationDataChanged();
+
+        float[] guardedZ = terrain.TerrainVertexDeltas().ToArray();
+        Vector2f[] guardedXy = terrain.TerrainVertexXYDeltas().ToArray();
+        int guardedTextureId = terrain.TextureId;
+        TerrainTextureVisualEdit? guardedTextureVisual = terrain.TextureVisualEdit;
+        TerrainSurfaceBehaviorEdit? guardedSurface = terrain.SurfaceBehaviorEdit;
+        WaitForUiTask(
+            InvokePrivate<Task>(window, "EditTerrainAsync", terrainIndex, terrain),
+            "refusing the hidden full-face terrain dialog in release mode");
+        WaitForUiTask(
+            InvokePrivate<Task>(window, "EditTerrainPointAsync", terrainIndex, terrain, 0),
+            "refusing the hidden full-point terrain dialog in release mode");
+        InvokePrivateVoid(
+            window,
+            "MoveTerrainFromViewport",
+            new ViewportTerrainMoveRequestedEventArgs(terrainIndex, terrain, 0, 0, 32, stageAddCopy: false));
+        InvokePrivateVoid(
+            window,
+            "MoveTerrainFromViewport",
+            new ViewportTerrainMoveRequestedEventArgs(terrainIndex, terrain, 32, -32, 0, stageAddCopy: false));
+        InvokePrivateVoid(
+            window,
+            "MoveTerrainFromViewport",
+            new ViewportTerrainMoveRequestedEventArgs(terrainIndex, terrain, 0, 0, 0, stageAddCopy: true));
+        InvokePrivateVoid(
+            window,
+            "MoveTerrainPointFromViewport",
+            new ViewportTerrainPointMoveRequestedEventArgs(terrainIndex, 0, terrain, 0, 0, 32));
+        InvokePrivateVoid(
+            window,
+            "ApplyViewportTerrainBrush",
+            new ViewportTerrainBrushRequestedEventArgs(
+                terrainIndex,
+                terrain,
+                terrain.Center,
+                TerrainBrushAction.Raise,
+                isStrokeStart: true));
+        InvokePrivateVoid(window, "StageTerrainRemovalFromViewport", terrainIndex, terrain);
+        bool stagedCopy = InvokePrivate<bool>(window, "StageTerrainAddCopyFromViewport", terrainIndex, terrain);
+        bool hiddenPasteBlocked = InvokePrivate<bool>(
+            window,
+            "TryBlockId65UnsupportedTerrainMutation",
+            terrain,
+            "the hidden terrain-look paste shortcut",
+            false,
+            false,
+            true,
+            true);
+        foreach (Key key in new[] { Key.D1, Key.Delete, Key.V })
+        {
+            building.Viewport.RaiseEvent(new KeyEventArgs
+            {
+                RoutedEvent = InputElement.KeyDownEvent,
+                Key = key
+            });
+            FlushUi();
+        }
+        if (!terrain.TerrainVertexDeltas().SequenceEqual(guardedZ) ||
+            !terrain.TerrainVertexXYDeltas().SequenceEqual(guardedXy) ||
+            terrain.TextureId != guardedTextureId ||
+            terrain.TextureVisualEdit != guardedTextureVisual ||
+            terrain.SurfaceBehaviorEdit != guardedSurface ||
+            terrain.IsTerrainRemoved ||
+            terrain.IsTerrainAddClone ||
+            stagedCopy ||
+            !hiddenPasteBlocked ||
+            building.Viewport.TerrainBrushAction != TerrainBrushAction.Off)
+        {
+            throw new InvalidOperationException(
+                "A hidden release terrain dialog, drag, point, brush, add/remove, or look-paste route mutated the HP face.");
+        }
+        building.Viewport.SelectMoby(moby, focus: false);
+        FlushUi();
+
+        object environmentTab = ReadItemsSource(toolTabs, "Level Building Editor tabs")
+            .Single(item => item is TabItem tab &&
+                string.Equals((tab.Header as TextBlock)?.Text, "Environment", StringComparison.Ordinal));
+        toolTabs.SelectedItem = environmentTab;
+        FlushUi();
+        if (initial.Viewport.TerrainFocusMode)
+            throw new InvalidOperationException("Terrain focus remained enabled on the Environment tab.");
+
+        objectManager.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, objectManager));
+        FlushUi();
+        EditorShellSessionSnapshot returnedObjects = window.CaptureEditorShellSessionSnapshotForTesting();
+        AssertWorkspaceTabHeaders(toolTabs, ["Objects"], "returned Object Manager");
+        AssertWorkspaceSessionContinuity(dirtyBeforeSwitch, returnedObjects, "Level Building Editor -> Object Manager");
+
+        levelBuilding.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, levelBuilding));
+        FlushUi();
+        if (!ReferenceEquals(toolTabs.SelectedItem, environmentTab))
+            throw new InvalidOperationException("Level Building Editor did not restore its last selected inner tab.");
+        EditorShellSessionSnapshot returnedBuilding = window.CaptureEditorShellSessionSnapshotForTesting();
+        AssertWorkspaceSessionContinuity(dirtyBeforeSwitch, returnedBuilding, "Object Manager -> restored Level Building Editor");
+
+        SortedDictionary<string, string> projectHashesAfter =
+            CaptureTerrainProjectInputHashes(workspace, initial.CurrentLevel.Key);
+        if (!projectHashesBefore.SequenceEqual(projectHashesAfter))
+            throw new InvalidOperationException("Switching editor workspaces wrote or changed project data on disk.");
+
+        moby.Position = originalMobyPosition;
+        moby.HasLoadedNativeEdit = originalMobyLoadedEdit;
+        moby.LoadedNativeEditSummary = originalMobySummary;
+        terrain.ApplyTerrainVertexDeltas(originalTerrainDeltas);
+        initial.Viewport.NotifyTerrainPresentationDataChanged();
+        InvokePrivateVoid(window, "RefreshCurrentLevelDetails");
+        FlushUi();
+        EditorShellSessionSnapshot restored = window.CaptureEditorShellSessionSnapshotForTesting();
+        if (restored.HasUnsavedMobyEdits != initial.HasUnsavedMobyEdits ||
+            restored.HasUnsavedTerrainEdits != initial.HasUnsavedTerrainEdits)
+        {
+            throw new InvalidOperationException("The continuity fixture did not restore the workspace's original dirty state.");
+        }
+
+        initial.Viewport.SelectTerrainForTesting(terrainIndex);
+        TerrainSurfaceBehaviorEdit retainedSurface = new(
+            SurfaceType: 7,
+            Param1: 11,
+            Param2: 13,
+            SourceLevelKey: "ui-smoke",
+            SourceRuntimeKey: terrain.RuntimeKey,
+            Label: "height-only undo preservation");
+        terrain.ApplySurfaceBehaviorEdit(retainedSurface);
+        terrain.ApplyTerrainVertexDeltas(originalTerrainDeltas.Select((value, index) => value + 20f + index).ToArray());
+        InvokePrivateVoid(window, "RefreshCurrentLevelDetails");
+        FlushUi();
+        if (!undoHeight.IsEnabled || !saveTerrain.IsEnabled)
+            throw new InvalidOperationException("Release terrain Undo/Save did not enable for a staged HP-height edit.");
+
+        string terrainEditsPath = Path.Combine(workspace, $"{initial.CurrentLevel.Key}-terrain-edits.json");
+        undoHeight.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, undoHeight));
+        WaitForCondition(
+            () =>
+            {
+                return File.Exists(terrainEditsPath) &&
+                    !terrain.HasHeightEdit &&
+                    !undoHeight.IsEnabled &&
+                    (statusText.Text ?? string.Empty).Contains("Undid only the height edit", StringComparison.Ordinal);
+            },
+            TimeSpan.FromSeconds(10),
+            () => "clicking Undo Height Only and refreshing its final disabled state");
+        if (terrain.HasHeightEdit || terrain.SurfaceBehaviorEdit != retainedSurface)
+            throw new InvalidOperationException("Undo Height Only changed a non-height terrain edit or failed to clear Z.");
+
+        using (JsonDocument undoDocument = JsonDocument.Parse(File.ReadAllText(terrainEditsPath)))
+        {
+            JsonElement saved = undoDocument.RootElement.GetProperty("edits")
+                .EnumerateArray()
+                .Single(edit => string.Equals(
+                    edit.GetProperty("runtimeKey").GetString(),
+                    terrain.RuntimeKey,
+                    StringComparison.Ordinal));
+            if (!saved.GetProperty("nativeSurfaceBehaviorEdit").GetBoolean() ||
+                saved.GetProperty("vertexDeltaZ").EnumerateArray().Any(value => Math.Abs(value.GetSingle()) > 0.001f))
+            {
+                throw new InvalidOperationException("Height-only undo persistence did not preserve surface state with zero Z deltas.");
+            }
+        }
+
+        float[] savedHeight = originalTerrainDeltas.Select((value, index) => value + 9f + index).ToArray();
+        terrain.ApplyTerrainVertexDeltas(savedHeight);
+        InvokePrivateVoid(window, "RefreshCurrentLevelDetails");
+        FlushUi();
+        if (!saveTerrain.IsEnabled || !undoHeight.IsEnabled)
+            throw new InvalidOperationException("Release terrain Save/Undo did not enable after staging a new HP-height edit.");
+        saveTerrain.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, saveTerrain));
+        WaitForCondition(
+            () =>
+            {
+                return File.Exists(terrainEditsPath) &&
+                    !saveTerrain.IsEnabled &&
+                    (statusText.Text ?? string.Empty).Contains("Saved terrain edits", StringComparison.Ordinal);
+            },
+            TimeSpan.FromSeconds(10),
+            () => "clicking the shared Save Terrain Changes button and refreshing its final disabled state");
+        using (JsonDocument saveDocument = JsonDocument.Parse(File.ReadAllText(terrainEditsPath)))
+        {
+            JsonElement saved = saveDocument.RootElement.GetProperty("edits")
+                .EnumerateArray()
+                .Single(edit => string.Equals(
+                    edit.GetProperty("runtimeKey").GetString(),
+                    terrain.RuntimeKey,
+                    StringComparison.Ordinal));
+            float[] persistedHeight = saved.GetProperty("vertexDeltaZ")
+                .EnumerateArray()
+                .Select(value => value.GetSingle())
+                .ToArray();
+            if (!persistedHeight.SequenceEqual(savedHeight) ||
+                !saved.GetProperty("nativeSurfaceBehaviorEdit").GetBoolean())
+            {
+                throw new InvalidOperationException("Save Terrain Changes did not persist height and preserved surface state together.");
+            }
+        }
+
+        string validReleaseTerrainJson = File.ReadAllText(terrainEditsPath);
+        if (MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(terrainEditsPath) != null)
+            throw new InvalidOperationException("The release saved-edit gate rejected a valid existing-HP height/surface edit.");
+
+        string researchFixturePath = Path.Combine(workspace, "release-research-terrain-edit-fixture.json");
+        JsonObject validLowDetailSurfaceRoot = JsonNode.Parse(validReleaseTerrainJson)?.AsObject()
+            ?? throw new InvalidOperationException("Could not clone the valid LP texture/surface fixture.");
+        JsonObject validLowDetailSurfaceEdit = validLowDetailSurfaceRoot["edits"]?.AsArray()[0]?.AsObject()
+            ?? throw new InvalidOperationException("The valid LP texture/surface fixture has no saved edit.");
+        int validLowDetailSectorIndex = validLowDetailSurfaceEdit["sectorIndex"]?.GetValue<int>()
+            ?? throw new InvalidOperationException("The valid LP texture/surface fixture has no sectorIndex.");
+        int validLowDetailFaceIndex = validLowDetailSurfaceEdit["faceIndex"]?.GetValue<int>()
+            ?? throw new InvalidOperationException("The valid LP texture/surface fixture has no faceIndex.");
+        validLowDetailSurfaceEdit["detail"] = "lp";
+        validLowDetailSurfaceEdit["runtimeKey"] = $"{validLowDetailSectorIndex}:{validLowDetailFaceIndex}:lp";
+        validLowDetailSurfaceEdit["deltaZ"] = 0;
+        JsonArray originalZ = validLowDetailSurfaceEdit["originalZ"]?.AsArray()
+            ?? throw new InvalidOperationException("The valid LP texture/surface fixture has no originalZ array.");
+        validLowDetailSurfaceEdit["editedZ"] = originalZ.DeepClone();
+        validLowDetailSurfaceEdit["vertexDeltaZ"] = new JsonArray(
+            originalZ.Select(_ => JsonValue.Create(0)).ToArray());
+        File.WriteAllText(researchFixturePath, validLowDetailSurfaceRoot.ToJsonString());
+        if (MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(researchFixturePath) != null)
+            throw new InvalidOperationException("The release saved-edit gate rejected a valid LP texture/surface-only edit.");
+
+        File.WriteAllText(researchFixturePath, "[]");
+        string? rootArrayBlocker = MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(researchFixturePath);
+        if (rootArrayBlocker == null || !rootArrayBlocker.Contains("root", StringComparison.Ordinal))
+            throw new InvalidOperationException("The release saved-edit gate admitted a non-object root.");
+
+        JsonObject structuralRoot = JsonNode.Parse(validReleaseTerrainJson)?.AsObject()
+            ?? throw new InvalidOperationException("Could not clone the release structural-edit fixture.");
+        JsonObject structuralEdit = structuralRoot["edits"]?.AsArray()[0]?.AsObject()
+            ?? throw new InvalidOperationException("The release structural-edit fixture has no saved edit.");
+        structuralEdit["structureEditMode"] = "add-clone-face";
+        File.WriteAllText(researchFixturePath, structuralRoot.ToJsonString());
+        string? structuralBlocker = MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(researchFixturePath);
+        if (structuralBlocker == null || !structuralBlocker.Contains("structural edit", StringComparison.Ordinal))
+            throw new InvalidOperationException("The release saved-edit gate admitted a research add-clone topology edit.");
+
+        JsonObject missingStructureRoot = JsonNode.Parse(validReleaseTerrainJson)?.AsObject()
+            ?? throw new InvalidOperationException("Could not clone the malformed structure fixture.");
+        JsonObject missingStructureEdit = missingStructureRoot["edits"]?.AsArray()[0]?.AsObject()
+            ?? throw new InvalidOperationException("The malformed structure fixture has no saved edit.");
+        missingStructureEdit.Remove("structureEditMode");
+        File.WriteAllText(researchFixturePath, missingStructureRoot.ToJsonString());
+        string? missingStructureBlocker = MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(researchFixturePath);
+        if (missingStructureBlocker == null ||
+            !missingStructureBlocker.Contains("structureEditMode", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The release saved-edit gate admitted a missing structureEditMode field.");
+        }
+
+        JsonObject wrongKindStructureRoot = JsonNode.Parse(validReleaseTerrainJson)?.AsObject()
+            ?? throw new InvalidOperationException("Could not clone the wrong-kind structure fixture.");
+        JsonObject wrongKindStructureEdit = wrongKindStructureRoot["edits"]?.AsArray()[0]?.AsObject()
+            ?? throw new InvalidOperationException("The wrong-kind structure fixture has no saved edit.");
+        wrongKindStructureEdit["structureEditMode"] = 0;
+        File.WriteAllText(researchFixturePath, wrongKindStructureRoot.ToJsonString());
+        string? wrongKindStructureBlocker = MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(researchFixturePath);
+        if (wrongKindStructureBlocker == null ||
+            !wrongKindStructureBlocker.Contains("structureEditMode", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The release saved-edit gate admitted a wrong-kind structureEditMode field.");
+        }
+
+        JsonObject emptyStructureRoot = JsonNode.Parse(validReleaseTerrainJson)?.AsObject()
+            ?? throw new InvalidOperationException("Could not clone the empty structure fixture.");
+        JsonObject emptyStructureEdit = emptyStructureRoot["edits"]?.AsArray()[0]?.AsObject()
+            ?? throw new InvalidOperationException("The empty structure fixture has no saved edit.");
+        emptyStructureEdit["structureEditMode"] = "";
+        File.WriteAllText(researchFixturePath, emptyStructureRoot.ToJsonString());
+        string? emptyStructureBlocker = MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(researchFixturePath);
+        if (emptyStructureBlocker == null ||
+            !emptyStructureBlocker.Contains("empty structureEditMode", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The release saved-edit gate admitted an empty structureEditMode field.");
+        }
+
+        JsonObject malformedXyRoot = JsonNode.Parse(validReleaseTerrainJson)?.AsObject()
+            ?? throw new InvalidOperationException("Could not clone the malformed XY fixture.");
+        JsonObject malformedXyEdit = malformedXyRoot["edits"]?.AsArray()[0]?.AsObject()
+            ?? throw new InvalidOperationException("The malformed XY fixture has no saved edit.");
+        malformedXyEdit["vertexDeltaXY"] = "not-an-array";
+        File.WriteAllText(researchFixturePath, malformedXyRoot.ToJsonString());
+        string? malformedXyBlocker = MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(researchFixturePath);
+        if (malformedXyBlocker == null ||
+            !malformedXyBlocker.Contains("malformed geometry", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The release saved-edit gate admitted malformed vertexDeltaXY data.");
+        }
+
+        JsonObject malformedZRoot = JsonNode.Parse(validReleaseTerrainJson)?.AsObject()
+            ?? throw new InvalidOperationException("Could not clone the malformed Z fixture.");
+        JsonObject malformedZEdit = malformedZRoot["edits"]?.AsArray()[0]?.AsObject()
+            ?? throw new InvalidOperationException("The malformed Z fixture has no saved edit.");
+        malformedZEdit["vertexDeltaZ"] = new JsonArray("not-a-number");
+        File.WriteAllText(researchFixturePath, malformedZRoot.ToJsonString());
+        string? malformedZBlocker = MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(researchFixturePath);
+        if (malformedZBlocker == null ||
+            !malformedZBlocker.Contains("malformed geometry", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The release saved-edit gate admitted malformed vertexDeltaZ data.");
+        }
+
+        JsonObject missingOriginalPointsRoot = JsonNode.Parse(validReleaseTerrainJson)?.AsObject()
+            ?? throw new InvalidOperationException("Could not clone the missing originalPoints fixture.");
+        JsonObject missingOriginalPointsEdit = missingOriginalPointsRoot["edits"]?.AsArray()[0]?.AsObject()
+            ?? throw new InvalidOperationException("The missing originalPoints fixture has no saved edit.");
+        missingOriginalPointsEdit.Remove("originalPoints");
+        File.WriteAllText(researchFixturePath, missingOriginalPointsRoot.ToJsonString());
+        string? missingOriginalPointsBlocker = MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(researchFixturePath);
+        if (missingOriginalPointsBlocker == null ||
+            !missingOriginalPointsBlocker.Contains("malformed geometry", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The release saved-edit gate admitted editedPoints without originalPoints.");
+        }
+
+        JsonObject crossCountRoot = JsonNode.Parse(validReleaseTerrainJson)?.AsObject()
+            ?? throw new InvalidOperationException("Could not clone the cross-count geometry fixture.");
+        JsonObject crossCountEdit = crossCountRoot["edits"]?.AsArray()[0]?.AsObject()
+            ?? throw new InvalidOperationException("The cross-count geometry fixture has no saved edit.");
+        foreach (string property in new[] { "vertexDeltaXY", "originalPoints", "editedPoints" })
+        {
+            JsonArray values = crossCountEdit[property]?.AsArray()
+                ?? throw new InvalidOperationException($"The cross-count geometry fixture has no {property} array.");
+            values.RemoveAt(values.Count - 1);
+        }
+        File.WriteAllText(researchFixturePath, crossCountRoot.ToJsonString());
+        string? crossCountBlocker = MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(researchFixturePath);
+        if (crossCountBlocker == null ||
+            !crossCountBlocker.Contains("inconsistent geometry", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The release saved-edit gate admitted point/Z arrays with different counts.");
+        }
+
+        JsonObject outOfFloatRoot = JsonNode.Parse(validReleaseTerrainJson)?.AsObject()
+            ?? throw new InvalidOperationException("Could not clone the out-of-float-range fixture.");
+        JsonObject outOfFloatEdit = outOfFloatRoot["edits"]?.AsArray()[0]?.AsObject()
+            ?? throw new InvalidOperationException("The out-of-float-range fixture has no saved edit.");
+        outOfFloatEdit["deltaZ"] = 1e100;
+        File.WriteAllText(researchFixturePath, outOfFloatRoot.ToJsonString());
+        string? outOfFloatBlocker = MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(researchFixturePath);
+        if (outOfFloatBlocker == null ||
+            !outOfFloatBlocker.Contains("malformed geometry", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The release saved-edit gate admitted a geometry value outside float range.");
+        }
+
+        JsonObject spoofedIdentityRoot = JsonNode.Parse(validReleaseTerrainJson)?.AsObject()
+            ?? throw new InvalidOperationException("Could not clone the spoofed identity fixture.");
+        JsonObject spoofedIdentityEdit = spoofedIdentityRoot["edits"]?.AsArray()[0]?.AsObject()
+            ?? throw new InvalidOperationException("The spoofed identity fixture has no saved edit.");
+        int spoofedSectorIndex = spoofedIdentityEdit["sectorIndex"]?.GetValue<int>()
+            ?? throw new InvalidOperationException("The spoofed identity fixture has no sectorIndex.");
+        int spoofedFaceIndex = spoofedIdentityEdit["faceIndex"]?.GetValue<int>()
+            ?? throw new InvalidOperationException("The spoofed identity fixture has no faceIndex.");
+        spoofedIdentityEdit["runtimeKey"] = $"{spoofedSectorIndex}:{spoofedFaceIndex}:lp";
+        File.WriteAllText(researchFixturePath, spoofedIdentityRoot.ToJsonString());
+        string? spoofedIdentityBlocker = MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(researchFixturePath);
+        if (spoofedIdentityBlocker == null ||
+            !spoofedIdentityBlocker.Contains("noncanonical runtimeKey", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The release saved-edit gate admitted a spoofed HP/LP runtime identity.");
+        }
+
+        JsonObject xyRoot = JsonNode.Parse(validReleaseTerrainJson)?.AsObject()
+            ?? throw new InvalidOperationException("Could not clone the release XY-edit fixture.");
+        JsonObject xyEdit = xyRoot["edits"]?.AsArray()[0]?.AsObject()
+            ?? throw new InvalidOperationException("The release XY-edit fixture has no saved edit.");
+        JsonObject xyDelta = xyEdit["vertexDeltaXY"]?.AsArray()[0]?.AsObject()
+            ?? throw new InvalidOperationException("The release XY-edit fixture has no vertexDeltaXY entry.");
+        xyDelta["x"] = 1;
+        File.WriteAllText(researchFixturePath, xyRoot.ToJsonString());
+        string? xyBlocker = MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(researchFixturePath);
+        if (xyBlocker == null || !xyBlocker.Contains("X/Y", StringComparison.Ordinal))
+            throw new InvalidOperationException("The release saved-edit gate admitted research XY movement.");
+
+        JsonObject lpRoot = JsonNode.Parse(validReleaseTerrainJson)?.AsObject()
+            ?? throw new InvalidOperationException("Could not clone the release LP-height fixture.");
+        JsonObject lpEdit = lpRoot["edits"]?.AsArray()[0]?.AsObject()
+            ?? throw new InvalidOperationException("The release LP-height fixture has no saved edit.");
+        int lpSectorIndex = lpEdit["sectorIndex"]?.GetValue<int>()
+            ?? throw new InvalidOperationException("The release LP-height fixture has no sectorIndex.");
+        int lpFaceIndex = lpEdit["faceIndex"]?.GetValue<int>()
+            ?? throw new InvalidOperationException("The release LP-height fixture has no faceIndex.");
+        lpEdit["detail"] = "lp";
+        lpEdit["runtimeKey"] = $"{lpSectorIndex}:{lpFaceIndex}:lp";
+        JsonArray lpDeltaZ = lpEdit["vertexDeltaZ"]?.AsArray()
+            ?? throw new InvalidOperationException("The release LP-height fixture has no vertexDeltaZ array.");
+        lpDeltaZ[0] = 1;
+        File.WriteAllText(researchFixturePath, lpRoot.ToJsonString());
+        string? lpBlocker = MainWindow.FindUnsupportedReleaseTerrainEditFileBlocker(researchFixturePath);
+        if (lpBlocker == null || !lpBlocker.Contains("non-HP", StringComparison.Ordinal))
+            throw new InvalidOperationException("The release saved-edit gate admitted a research LP-height edit.");
+
+        string nonCurrentLevelKey = string.Equals(initial.CurrentLevel.Key, "artisans", StringComparison.OrdinalIgnoreCase)
+            ? "stonehill"
+            : "artisans";
+        string nonCurrentTerrainPath = Path.Combine(workspace, $"{nonCurrentLevelKey}-terrain-edits.json");
+        byte[]? priorNonCurrentTerrain = File.Exists(nonCurrentTerrainPath)
+            ? File.ReadAllBytes(nonCurrentTerrainPath)
+            : null;
+        try
+        {
+            File.WriteAllText(nonCurrentTerrainPath, structuralRoot.ToJsonString());
+            object?[] blockerArguments = [null];
+            bool blockedSavedTarget = InvokePrivate<bool>(
+                window,
+                "TryGetSavedReleaseTerrainEditBlockReason",
+                blockerArguments);
+            if (!blockedSavedTarget || blockerArguments[0] is not string savedTargetReason ||
+                !savedTargetReason.Contains("structural edit", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Create BIN's release-wide gate admitted a non-current saved research structural edit.");
+            }
+        }
+        finally
+        {
+            if (priorNonCurrentTerrain == null)
+                File.Delete(nonCurrentTerrainPath);
+            else
+                File.WriteAllBytes(nonCurrentTerrainPath, priorNonCurrentTerrain);
+            File.Delete(researchFixturePath);
+        }
+
+        TerrainPolygon researchOnlyFace = buildingGeometry.Polygons.First(face =>
+            !ReferenceEquals(face, terrain) && !face.IsTerrainEdited);
+        string savedReleaseTerrainSha256 = FileSha256(terrainEditsPath);
+        researchOnlyFace.StageTerrainRemoval();
+
+        float[] selectedHeightBeforeRefusedUndo = terrain.TerrainVertexDeltas().ToArray();
+        Task refusedUndoTask = InvokePrivate<Task>(window, "UndoSelectedTerrainHeightAsync");
+        WaitForUiTask(refusedUndoTask, "refusing height-only Undo while another release structural edit is staged");
+        if (!terrain.TerrainVertexDeltas().SequenceEqual(selectedHeightBeforeRefusedUndo) ||
+            !researchOnlyFace.IsTerrainRemoved ||
+            !string.Equals(FileSha256(terrainEditsPath), savedReleaseTerrainSha256, StringComparison.Ordinal) ||
+            !(statusText.Text ?? string.Empty).Contains("Beta V5 refused", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Undo Height Only partially mutated or persisted terrain while another release structural edit was staged.");
+        }
+
+        AssertDirectTerrainPersistenceRefused(
+            window,
+            terrainEditsPath,
+            savedReleaseTerrainSha256,
+            "a structural terrain edit");
+
+        researchOnlyFace.ResetTerrainEdit();
+        researchOnlyFace.ApplyTerrainPointPositions(researchOnlyFace.Points
+            .Select((point, index) => index == 0 ? new Vector2f(point.X + 1f, point.Y) : point)
+            .ToArray());
+        AssertDirectTerrainPersistenceRefused(
+            window,
+            terrainEditsPath,
+            savedReleaseTerrainSha256,
+            "an XY terrain edit");
+
+        researchOnlyFace.ResetTerrainEdit();
+        TerrainPolygon lowDetailFace = new(
+            researchOnlyFace.Points,
+            researchOnlyFace.ZValues,
+            researchOnlyFace.TextureId,
+            sectorIndex: 999,
+            faceIndex: 999,
+            detail: "lp",
+            faceColor: researchOnlyFace.FaceColor);
+        buildingGeometry.Polygons.Add(lowDetailFace);
+        try
+        {
+            lowDetailFace.ApplyTerrainVertexDeltas(lowDetailFace.TerrainVertexDeltas()
+                .Select(value => value + 1f)
+                .ToArray());
+            AssertDirectTerrainPersistenceRefused(
+                window,
+                terrainEditsPath,
+                savedReleaseTerrainSha256,
+                "a non-HP height edit");
+        }
+        finally
+        {
+            buildingGeometry.Polygons.Remove(lowDetailFace);
+        }
+
+        researchOnlyFace.StageTerrainRemoval();
+
+        Task<bool> blockedSaveTask = InvokePrivate<Task<bool>>(
+            window,
+            "TrySaveCurrentTerrainEditsAsync",
+            (object?)null);
+        WaitForUiTask(blockedSaveTask, "refusing a live release structural terrain save");
+        if (blockedSaveTask.GetAwaiter().GetResult() ||
+            !string.Equals(FileSha256(terrainEditsPath), savedReleaseTerrainSha256, StringComparison.Ordinal) ||
+            !(statusText.Text ?? string.Empty).Contains("Beta V5 refused", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Save Terrain Changes admitted or rewrote data for a live research structural terrain edit.");
+        }
+        researchOnlyFace.ResetTerrainEdit();
+        InvokePrivateVoid(window, "RefreshCurrentLevelDetails");
+        FlushUi();
+
+        Console.WriteLine(
+            "Workspace shell smoke passed: one shared session/viewport, exact Object Manager and Level Building Editor tabs, " +
+            "level-load identity, camera/selection, unsaved object and terrain edits, last inner tab, write-free switching, " +
+            "non-flattening HP-Z controls, actual height-only Undo/Save state, release shortcut refusals, and release-wide " +
+            "research-edit Save/Create BIN gates all remained intact.");
+    }
+    finally
+    {
+        window.Close();
+        FlushUi();
+    }
+
+    RunResearchWorkspaceTabMemory();
+}
+
+void RunId65BlankLabUiOnly()
+{
+    string releaseInstallRoot = Path.Combine(
+        Path.GetTempPath(),
+        $"spyro-editor-id65-transition-install-{Guid.NewGuid():N}");
+    string releaseUserDataRoot = Path.Combine(
+        Path.GetTempPath(),
+        $"spyro-editor-id65-transition-user-{Guid.NewGuid():N}");
+    string? previousInstallRoot = Environment.GetEnvironmentVariable(
+        ReleaseProjectBootstrap.InstallRootEnvironmentVariable);
+    string? previousDataRoot = Environment.GetEnvironmentVariable(
+        EditorUserDataLayout.DataRootEnvironmentVariable);
+    string? previousProjectsRoot = Environment.GetEnvironmentVariable(
+        EditorUserDataLayout.ProjectsRootEnvironmentVariable);
+    try
+    {
+        string supportRoot = Path.Combine(releaseInstallRoot, "support");
+        Directory.CreateDirectory(supportRoot);
+        foreach (string sourcePath in Directory.EnumerateFiles(
+                     workspace,
+                     "*.json",
+                     SearchOption.TopDirectoryOnly))
+        {
+            File.Copy(
+                sourcePath,
+                Path.Combine(supportRoot, Path.GetFileName(sourcePath)),
+                overwrite: true);
+        }
+        Environment.SetEnvironmentVariable(
+            ReleaseProjectBootstrap.InstallRootEnvironmentVariable,
+            releaseInstallRoot);
+        Environment.SetEnvironmentVariable(
+            EditorUserDataLayout.DataRootEnvironmentVariable,
+            releaseUserDataRoot);
+        Environment.SetEnvironmentVariable(
+            EditorUserDataLayout.ProjectsRootEnvironmentVariable,
+            Path.Combine(releaseUserDataRoot, "Projects"));
+        ReleaseProjectContext context = Task.Run(() => ReleaseProjectBootstrap.PrepareAsync(
+            "Spyro Editor ID65 workspace-transition UI smoke",
+            explicitInstallRoot: releaseInstallRoot,
+            forceReleaseMode: true)).GetAwaiter().GetResult()
+            ?? throw new InvalidOperationException(
+                "The focused ID65 UI smoke did not initialize release project storage.");
+        if (!string.Equals(
+                Path.GetFullPath(context.Project.RootPath),
+                Path.GetFullPath(workspace),
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "The focused ID65 UI smoke release context did not retain the isolated source workspace.");
+        }
+    }
+    catch
+    {
+        Environment.SetEnvironmentVariable(
+            ReleaseProjectBootstrap.InstallRootEnvironmentVariable,
+            previousInstallRoot);
+        Environment.SetEnvironmentVariable(
+            EditorUserDataLayout.DataRootEnvironmentVariable,
+            previousDataRoot);
+        Environment.SetEnvironmentVariable(
+            EditorUserDataLayout.ProjectsRootEnvironmentVariable,
+            previousProjectsRoot);
+        TryDeleteDirectory(releaseUserDataRoot);
+        TryDeleteDirectory(releaseInstallRoot);
+        throw;
+    }
+
+    MainWindow window = new()
+    {
+        Width = 1320,
+        Height = 860,
+        WindowStartupLocation = WindowStartupLocation.Manual,
+        Position = new PixelPoint(0, 0)
+    };
+    MainWindow.Id65BlankLabUiSnapshot pendingBeforeOpen =
+        window.CaptureId65BlankLabUiSnapshotForTesting();
+    if (!pendingBeforeOpen.StatusText.Contains("background", StringComparison.Ordinal) ||
+        pendingBeforeOpen.BuildEnabled ||
+        pendingBeforeOpen.LoadEnabled ||
+        pendingBeforeOpen.SaveEnabled ||
+        pendingBeforeOpen.CreateCueEnabled)
+    {
+        throw new InvalidOperationException(
+            $"ID65 commands were exposed before deferred startup validation began: {pendingBeforeOpen}");
+    }
+    window.Show();
+    try
+    {
+        WaitForLevelData(window);
+        ToggleButton levelBuilding = FindNamedUnique<ToggleButton>(window, "LevelBuildingEditorWorkspaceButton");
+        TabControl toolTabs = FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs");
+        levelBuilding.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, levelBuilding));
+        FlushUi();
+        Expander disclosure = FindNamedUnique<Expander>(window, "Id65BlankLevelLabDisclosure");
+        if (!disclosure.IsVisible)
+            throw new InvalidOperationException("The narrow ID65 Blank-Level Lab disclosure is hidden in public release mode.");
+
+        MainWindow.Id65BlankLabUiSnapshot initial =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        if (initial.DisclosureTitle != "ID65 Blank-Level Lab" ||
+            initial.RetailCatalogCount != 35 ||
+            initial.HasId65CatalogLevel ||
+            !initial.BuildEnabled ||
+            initial.LoadEnabled ||
+            initial.SaveEnabled ||
+            initial.CreateCueEnabled ||
+            initial.RevealEnabled ||
+            initial.RevealButtonText != "Reveal Test CUE" ||
+            !initial.RepairsInvalidWorkspace ||
+            initial.DisposableExporterRoute != nameof(UnusedLevel65BlankLevelLabTerrainTestExporter) ||
+            !initial.StatusText.Contains("Setup required", StringComparison.Ordinal) ||
+            !initial.StatusText.Contains("ID65 stays out of the level picker", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Existing HP Z", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("True Add, LP authoring, and XY movement: unavailable", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Same-level resident textures", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Cross-level/custom art and runtime export remain unavailable", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Resident records: inspection only", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"The clean public ID65 Lab state is not exact/fail-closed: {initial}");
+        }
+
+        AssertWorkspaceTabHeaders(toolTabs, ["Terrain", "Level", "Environment"], "public Level Building Editor");
+
+        UnusedLevel65BlankLevelLabWorkspacePaths paths =
+            UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(workspace);
+        UnusedLevel65BlankLevelLabManifest exactManifest =
+            UnusedLevel65BlankLevelLabProfileRegistry.CreateManifest(paths);
+
+        window.Id65BlankLabCatalogValidationOverrideForTesting =
+            (_, _) => Task.FromException<UnusedLevel65BlankLevelLabManifest>(
+                new InvalidOperationException("injected deferred-validation fault"));
+        Task faultedValidation = window.ValidateAndAdmitId65BlankLabCatalogForTestingAsync();
+        WaitForUiTask(faultedValidation, "failing deferred ID65 catalog validation closed");
+        MainWindow.Id65BlankLabUiSnapshot faulted =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        if (faulted.HasId65CatalogLevel ||
+            !faulted.StatusText.Contains("injected deferred-validation fault", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"An unexpected deferred ID65 validation fault escaped or admitted the lab: {faulted}");
+        }
+
+        TaskCompletionSource<UnusedLevel65BlankLevelLabManifest> validationGate =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        window.Id65BlankLabCatalogValidationOverrideForTesting =
+            (_, cancellationToken) => validationGate.Task.WaitAsync(cancellationToken);
+        Task deferredValidation = window.ValidateAndAdmitId65BlankLabCatalogForTestingAsync();
+        FlushUi();
+        MainWindow.Id65BlankLabUiSnapshot validating =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        if (deferredValidation.IsCompleted ||
+            !validating.StatusText.Contains("background", StringComparison.Ordinal) ||
+            validating.BuildEnabled ||
+            validating.LoadEnabled ||
+            validating.SaveEnabled ||
+            validating.CreateCueEnabled)
+        {
+            throw new InvalidOperationException(
+                $"ID65 catalog validation blocked the UI or exposed commands before exact validation completed: {validating}");
+        }
+
+        window.Id65BlankLabCatalogValidationOverrideForTesting =
+            (_, _) => Task.FromResult(exactManifest);
+        Task replacementValidation = window.ValidateAndAdmitId65BlankLabCatalogForTestingAsync();
+        WaitForUiTask(replacementValidation, "completing replacement ID65 catalog validation");
+        WaitForUiTask(deferredValidation, "cancelling stale ID65 catalog validation");
+        window.Id65BlankLabCatalogValidationOverrideForTesting = null;
+        MainWindow.Id65BlankLabUiSnapshot admitted =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        if (admitted.RetailCatalogCount != 35 ||
+            !admitted.HasId65CatalogLevel ||
+            !admitted.BuildEnabled ||
+            !admitted.LoadEnabled ||
+            admitted.SaveEnabled ||
+            admitted.CreateCueEnabled ||
+            admitted.RevealEnabled ||
+            admitted.RevealButtonText != "Reveal Test CUE" ||
+            !admitted.RepairsInvalidWorkspace ||
+            admitted.DisposableExporterRoute != nameof(UnusedLevel65BlankLevelLabTerrainTestExporter) ||
+            !admitted.StatusText.Contains("admitted only in memory", StringComparison.Ordinal) ||
+            !admitted.AuthoredLayerText.Contains("unique key 'unusedlevel65blank'", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"The exact-manifest public ID65 Lab state did not become 35+1 while remaining fail-closed: {admitted}");
+        }
+
+        string[] testKeys = Enumerable.Range(0, 128)
+            .Select(_ => MainWindow.CreateId65BlankLabDisposableTestKeyForTesting())
+            .ToArray();
+        if (testKeys.Distinct(StringComparer.Ordinal).Count() != testKeys.Length ||
+            testKeys.Any(key =>
+                key.Length is < 1 or > 64 ||
+                !key.StartsWith("id65-hp-z-", StringComparison.Ordinal) ||
+                key.Any(character =>
+                    character != '-' &&
+                    !char.IsAsciiDigit(character) &&
+                    !(character is >= 'a' and <= 'z'))))
+        {
+            throw new InvalidOperationException(
+                "The public ID65 disposable writer did not generate 128 unique Core-compatible collision-resistant keys.");
+        }
+
+        string cleanImagePath = Path.Combine(sourceWorkspace, "Spyro the Dragon (USA).bin");
+        string cleanCuePath = Path.Combine(sourceWorkspace, "Spyro the Dragon (USA).cue");
+        Task<UnusedLevel65BlankLevelLabBootstrapResult> labBootstrapTask = Task.Run(() =>
+            UnusedLevel65BlankLevelLabBootstrapper.BootstrapAsync(new(
+                cleanImagePath,
+                cleanCuePath,
+                workspace)));
+        WaitForUiTask(labBootstrapTask, "bootstrapping the isolated locked ID65 workspace");
+        UnusedLevel65BlankLevelLabBootstrapResult labBootstrap =
+            labBootstrapTask.GetAwaiter().GetResult();
+        if (!labBootstrap.SourceImagePreserved ||
+            !labBootstrap.AtomicPublicationCompleted ||
+            !labBootstrap.OwnedTemporaryIntermediatesRemoved ||
+            !string.Equals(
+                labBootstrap.LockedBaseImageSha256,
+                UnusedLevel65BlankLevelLabProfileRegistry.Profile.LockedBaseImageSha256,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The isolated UI smoke could not publish the exact locked ID65 workspace before exercising its real texture palette.");
+        }
+        window.AdmitId65BlankLabManifestForTesting(labBootstrap.Manifest);
+
+        Console.WriteLine("ID65 UI smoke: starting mutation-boundary probe.");
+        Task<string> mutationTask = window.AssertId65BlankLabMutationGuardsForTestingAsync();
+        WaitForUiTask(mutationTask, "checking ID65 mutation boundaries");
+        string mutationGuards = mutationTask.GetAwaiter().GetResult();
+        Console.WriteLine("ID65 UI smoke: starting stale editor-continuation probe.");
+        Task<string> staleContinuationTask =
+            window.AssertId65BlankLabStaleEditorContinuationsForTestingAsync();
+        WaitForUiTask(
+            staleContinuationTask,
+            "checking stale Object and Environment continuations",
+            timeoutSeconds: 240);
+        string staleContinuations = staleContinuationTask.GetAwaiter().GetResult();
+        Console.WriteLine("ID65 UI smoke: starting guarded-transition probe.");
+        Task<string> transitionTask = window.AssertId65BlankLabGuardedTransitionForTestingAsync();
+        WaitForUiTask(
+            transitionTask,
+            "checking the guarded ID65 level transition",
+            timeoutSeconds: 60);
+        string transitionGuards = transitionTask.GetAwaiter().GetResult();
+        Console.WriteLine("ID65 UI smoke: starting resident-texture probe.");
+        Task<string> residentTextureTask = window.AssertId65ResidentTexturePaintingForTestingAsync();
+        WaitForUiTask(
+            residentTextureTask,
+            "checking ID65 resident texture painting",
+            timeoutSeconds: 60);
+        string residentTexture = residentTextureTask.GetAwaiter().GetResult();
+        Console.WriteLine("ID65 UI smoke: starting reverse regular-persistence fence probe.");
+        Task<string> reversePersistenceTask =
+            window.AssertId65BlankLabReverseRegularPersistenceFencingForTestingAsync();
+        WaitForUiTask(
+            reversePersistenceTask,
+            "checking reverse regular Save and Build Safety fencing",
+            timeoutSeconds: 120);
+        string reversePersistence = reversePersistenceTask.GetAwaiter().GetResult();
+        Console.WriteLine("ID65 UI smoke: starting manual-operation generation fence probe.");
+        Task<string> operationFenceTask =
+            window.AssertId65BlankLabManualOperationFencingForTestingAsync();
+        WaitForUiTask(
+            operationFenceTask,
+            "checking ID65 manual-operation generation fencing",
+            timeoutSeconds: 60);
+        string operationFence = operationFenceTask.GetAwaiter().GetResult();
+        Console.WriteLine("ID65 UI smoke: starting workspace-transition fence probe.");
+        Task<string> workspaceTransitionTask =
+            window.AssertWorkspaceTransitionFencingForTestingAsync();
+        WaitForUiTask(
+            workspaceTransitionTask,
+            "checking transactional Open Workspace fencing",
+            timeoutSeconds: 120);
+        string workspaceTransition = workspaceTransitionTask.GetAwaiter().GetResult();
+
+        int postLifetimeValidatorCalls = 0;
+        window.Id65BlankLabCatalogValidationOverrideForTesting = (_, _) =>
+        {
+            postLifetimeValidatorCalls++;
+            return Task.FromResult(exactManifest);
+        };
+        window.EndId65BlankLabCatalogValidationLifetimeForTesting();
+        Task postLifetimeValidation = window.ValidateAndAdmitId65BlankLabCatalogForTestingAsync();
+        WaitForUiTask(postLifetimeValidation, "refusing deferred ID65 validation after the window lifetime ended");
+        if (postLifetimeValidatorCalls != 0)
+        {
+            throw new InvalidOperationException(
+                "Deferred ID65 validation restarted after the window lifetime ended.");
+        }
+        window.Id65BlankLabCatalogValidationOverrideForTesting = null;
+
+        Console.WriteLine(
+            "ID65 Blank-Level Lab public UI smoke passed: clean 35-level startup, visible narrow disclosure, neutral reveal label, explicit repair contract, Core atomic-export route with 128 unique keys, hidden broad Research tab, and exact-manifest 35+1 in-memory admission passed; " +
+            $"isolated locked workspace bootstrap: exact and source-preserving; mutation guards: {mutationGuards}; stale continuations: {staleContinuations}; transition guards: {transitionGuards}; resident textures: {residentTexture}; reverse persistence: {reversePersistence}; operation fence: {operationFence}; workspace transition: {workspaceTransition}.");
+    }
+    finally
+    {
+        window.Close();
+        FlushUi();
+        Environment.SetEnvironmentVariable(
+            ReleaseProjectBootstrap.InstallRootEnvironmentVariable,
+            previousInstallRoot);
+        Environment.SetEnvironmentVariable(
+            EditorUserDataLayout.DataRootEnvironmentVariable,
+            previousDataRoot);
+        Environment.SetEnvironmentVariable(
+            EditorUserDataLayout.ProjectsRootEnvironmentVariable,
+            previousProjectsRoot);
+        TryDeleteDirectory(releaseUserDataRoot);
+        TryDeleteDirectory(releaseInstallRoot);
+    }
+}
+
+void RunResearchWorkspaceTabMemory()
+{
+    Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "0");
+    MainWindow researchWindow = new()
+    {
+        Width = 1320,
+        Height = 860,
+        WindowStartupLocation = WindowStartupLocation.Manual,
+        Position = new PixelPoint(0, 0)
+    };
+    researchWindow.Show();
+    try
+    {
+        WaitForLevelData(researchWindow);
+        ToggleButton researchObjects = FindNamedUnique<ToggleButton>(researchWindow, "ObjectManagerWorkspaceButton");
+        ToggleButton researchBuilding = FindNamedUnique<ToggleButton>(researchWindow, "LevelBuildingEditorWorkspaceButton");
+        TabControl researchTabs = FindNamedUnique<TabControl>(researchWindow, "EditorWorkspaceToolTabs");
+
+        researchBuilding.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, researchBuilding));
+        FlushUi();
+        AssertWorkspaceTabHeaders(researchTabs, ["Terrain", "Level", "Environment", "Research"], "research Level Building Editor");
+        TabItem environment = ReadItemsSource(researchTabs, "research Level Building Editor tabs")
+            .OfType<TabItem>()
+            .Single(tab => string.Equals((tab.Header as TextBlock)?.Text, "Environment", StringComparison.Ordinal));
+        researchTabs.SelectedItem = environment;
+        FlushUi();
+
+        researchObjects.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, researchObjects));
+        FlushUi();
+        AssertWorkspaceTabHeaders(researchTabs, ["Objects", "Research"], "research Object Manager");
+        TabItem research = ReadItemsSource(researchTabs, "research Object Manager tabs")
+            .OfType<TabItem>()
+            .Single(tab => string.Equals((tab.Header as TextBlock)?.Text, "Research", StringComparison.Ordinal));
+        researchTabs.SelectedItem = research;
+        FlushUi();
+
+        researchBuilding.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, researchBuilding));
+        FlushUi();
+        if (!ReferenceEquals(researchTabs.SelectedItem, environment))
+            throw new InvalidOperationException("Shared Research tab selection overwrote Level Building Editor's remembered Environment tab.");
+        researchObjects.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, researchObjects));
+        FlushUi();
+        if (!ReferenceEquals(researchTabs.SelectedItem, research))
+            throw new InvalidOperationException("Level Building Editor switching overwrote Object Manager's remembered Research tab.");
+        Console.WriteLine("Research workspace tab-memory smoke passed: shared Research content did not cross-contaminate either workspace's last selected tab.");
+    }
+    finally
+    {
+        researchWindow.Close();
+        FlushUi();
+        Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "1");
+    }
+}
+
+static void AssertWorkspaceSessionContinuity(
+    EditorShellSessionSnapshot expected,
+    EditorShellSessionSnapshot actual,
+    string transition)
+{
+    if (!ReferenceEquals(expected.Workspace, actual.Workspace) ||
+        !ReferenceEquals(expected.Catalog, actual.Catalog) ||
+        !ReferenceEquals(expected.CurrentLevel, actual.CurrentLevel) ||
+        !ReferenceEquals(expected.CurrentGeometry, actual.CurrentGeometry) ||
+        !ReferenceEquals(expected.CurrentMobys, actual.CurrentMobys) ||
+        !ReferenceEquals(expected.SelectedMoby, actual.SelectedMoby) ||
+        !ReferenceEquals(expected.SelectedTerrain, actual.SelectedTerrain) ||
+        !ReferenceEquals(expected.Viewport, actual.Viewport) ||
+        expected.LevelLoadRequestId != actual.LevelLoadRequestId ||
+        !string.Equals(expected.SavedMobyEditSignature, actual.SavedMobyEditSignature, StringComparison.Ordinal) ||
+        !string.Equals(expected.SavedTerrainEditSignature, actual.SavedTerrainEditSignature, StringComparison.Ordinal) ||
+        !string.Equals(expected.CurrentMobyEditSignature, actual.CurrentMobyEditSignature, StringComparison.Ordinal) ||
+        !string.Equals(expected.CurrentTerrainEditSignature, actual.CurrentTerrainEditSignature, StringComparison.Ordinal) ||
+        !string.Equals(expected.SavedNativeMovementEditSignature, actual.SavedNativeMovementEditSignature, StringComparison.Ordinal) ||
+        !string.Equals(expected.CurrentNativeMovementEditSignature, actual.CurrentNativeMovementEditSignature, StringComparison.Ordinal) ||
+        !string.Equals(expected.SavedDragonRunToEditSignature, actual.SavedDragonRunToEditSignature, StringComparison.Ordinal) ||
+        !string.Equals(expected.CurrentDragonRunToEditSignature, actual.CurrentDragonRunToEditSignature, StringComparison.Ordinal) ||
+        expected.HasUnsavedMobyEdits != actual.HasUnsavedMobyEdits ||
+        expected.HasUnsavedTerrainEdits != actual.HasUnsavedTerrainEdits ||
+        expected.Navigation != actual.Navigation)
+    {
+        List<string> differences = [];
+        if (!ReferenceEquals(expected.SelectedMoby, actual.SelectedMoby)) differences.Add("selected moby");
+        if (!ReferenceEquals(expected.SelectedTerrain, actual.SelectedTerrain)) differences.Add("selected terrain");
+        if (!string.Equals(expected.CurrentMobyEditSignature, actual.CurrentMobyEditSignature, StringComparison.Ordinal)) differences.Add("Moby signature");
+        if (!string.Equals(expected.CurrentTerrainEditSignature, actual.CurrentTerrainEditSignature, StringComparison.Ordinal)) differences.Add("terrain signature");
+        if (expected.HasUnsavedMobyEdits != actual.HasUnsavedMobyEdits) differences.Add("Moby dirty state");
+        if (expected.HasUnsavedTerrainEdits != actual.HasUnsavedTerrainEdits) differences.Add("terrain dirty state");
+        if (expected.Navigation != actual.Navigation) differences.Add("navigation");
+        throw new InvalidOperationException(
+            $"{transition} changed shared editor-session state: {string.Join(", ", differences.DefaultIfEmpty("identity or saved signature"))}.");
+    }
+}
+
+static void AssertWorkspaceTabHeaders(TabControl tabs, string[] expected, string workspaceName)
+{
+    string[] actual = ReadItemsSource(tabs, $"{workspaceName} tabs")
+        .Select(item => item is TabItem tab ? (tab.Header as TextBlock)?.Text ?? "<missing>" : "<not a tab>")
+        .ToArray();
+    if (!actual.SequenceEqual(expected, StringComparer.Ordinal))
+    {
+        throw new InvalidOperationException(
+            $"{workspaceName} exposed [{string.Join(", ", actual)}] instead of [{string.Join(", ", expected)}].");
+    }
+}
+
+void RunNativeLevelReplacementUiOnly()
+{
+    MainWindow window = new()
+    {
+        Width = 1320,
+        Height = 860,
+        WindowStartupLocation = WindowStartupLocation.Manual,
+        Position = new PixelPoint(0, 0)
+    };
+    window.Show();
+    try
+    {
+        WaitForLevelData(window);
+        SelectWorkspaceTab(window, "Level");
+
+        Expander disclosure = FindNamedUnique<Expander>(window, "NativeLevelReplacementDisclosure");
+        ComboBox donor = FindNamedUnique<ComboBox>(window, "NativeLevelReplacementDonorBox");
+        TextBlock status = FindNamedUnique<TextBlock>(window, "NativeLevelReplacementStatus");
+        Button save = FindNamedUnique<Button>(window, "NativeLevelReplacementSaveIntentButton");
+        Button inspect = FindNamedUnique<Button>(window, "NativeLevelReplacementInspectButton");
+        Button create = FindNamedUnique<Button>(window, "NativeLevelReplacementCreateTestButton");
+        Button createEdited = FindNamedUnique<Button>(window, "NativeLevelReplacementCreateEditedTestButton");
+        Button restore = FindNamedUnique<Button>(window, "NativeLevelReplacementRestoreButton");
+
+        if (!disclosure.IsVisible)
+            throw new InvalidOperationException("The guarded V5 replacement disclosure is not visible on Stone Hill.");
+        AssertTextContains(window, "V5 research only");
+        if (!string.Equals(
+                createEdited.Content?.ToString(),
+                "Create Edited Replacement Test CUE",
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The separate edited replacement button label changed or is missing.");
+        }
+        AssertTextContains(window, "pending DuckStation");
+        AssertTextContains(window, "T21 red-gem X move");
+        AssertTextContains(window, "preserves T21's native +0x4A visibility sentinel (FF)");
+        AssertTextContains(window, "rejected FF → D5 terrain-sector experiment caused distance flicker");
+        AssertTextContains(window, "normal Create BIN remains unchanged");
+        object[] donors = ReadItemsSource(donor, "V5 replacement donor picker");
+        if (donors.Length != 1 ||
+            !string.Equals(donors[0].ToString(), "Town Square — complete retail level", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"The V5 replacement picker must expose exactly Town Square; found [{string.Join(", ", donors.Select(item => item.ToString()))}].");
+        }
+        PropertyInfo profileIdProperty = donors[0].GetType().GetProperty(
+            "ProfileId",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("The V5 donor option did not expose its checked profile id.");
+        if (!string.Equals(
+                profileIdProperty.GetValue(donors[0])?.ToString(),
+                NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillProfileId,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The V5 donor option does not bind the runtime-proven Town Square profile.");
+        }
+        if (!save.IsEnabled || inspect.IsEnabled || create.IsEnabled || createEdited.IsEnabled || restore.IsEnabled ||
+            !status.Text!.Contains("Original Stone Hill", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("The no-intent V5 replacement UI state is incorrect.");
+        }
+        FindButton(window, "Create BIN");
+        if (ReferenceEquals(FindButton(window, "Create BIN"), create))
+            throw new InvalidOperationException("The V5 replacement test button replaced normal Create BIN.");
+
+        save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, save));
+        string manifestPath = NativeLevelReplacementStore.GetPath(workspace, "stonehill");
+        string intentPath = NativeLevelReplacementIntentStore.GetPath(workspace, "stonehill");
+        WaitForCondition(
+            () => File.Exists(manifestPath) && File.Exists(intentPath) && save.IsEnabled,
+            TimeSpan.FromMinutes(2),
+            () => $"saving the replacement intent; status: {status.Text}");
+        if (!inspect.IsEnabled || !create.IsEnabled || !restore.IsEnabled ||
+            !status.Text!.Contains("Saved intent", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("The saved V5 replacement intent did not enable its guarded actions.");
+        }
+        if (createEdited.IsEnabled ||
+            !status.Text!.Contains("save a Town Square native object edit first", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The edited V5 replacement action was not disabled with a clear no-Town-Square-edits explanation.");
+        }
+
+        string townSquareEditsPath = Path.Combine(workspace, "townsquare-native-edits.json");
+        List<Moby> townSquareMobys = MobyLoader.LoadCached(
+            Path.Combine(workspace, "editor-cache", "townsquare-mobys.json")).ToList();
+        Moby townSquareT21 = townSquareMobys.Single(moby => moby.TrueIndex == 21);
+        townSquareT21.Position = new Vector3f(
+            townSquareT21.Position.X + 1f,
+            townSquareT21.Position.Y,
+            townSquareT21.Position.Z);
+        Task.Run(async () => await MobyEditStore.SaveAsync(
+                townSquareEditsPath,
+                townSquareMobys,
+                "Town Square edited replacement UI gate"))
+            .GetAwaiter()
+            .GetResult();
+        MethodInfo refreshReplacementPanel = typeof(MainWindow).GetMethod(
+            "RefreshNativeLevelReplacementPanel",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Could not refresh the V5 replacement panel after staging Town Square edits.");
+        refreshReplacementPanel.Invoke(window, null);
+        FlushUi();
+        if (!createEdited.IsEnabled ||
+            !status.Text!.Contains("pending-DuckStation X-only proof", StringComparison.OrdinalIgnoreCase) ||
+            !status.Text.Contains("native +0x4A visibility sentinel (FF)", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"A saved Town Square T21 X move did not enable the separate edited replacement action and pending-runtime disclosure. Enabled={createEdited.IsEnabled}; status={status.Text}");
+        }
+
+        string ordinaryEditPath = Path.Combine(workspace, "stonehill-terrain-edits.json");
+        File.WriteAllText(
+            ordinaryEditPath,
+            "{\"generatedAt\":\"2026-08-01T00:00:00Z\",\"editor\":\"Spyro.Editor.Core\",\"levelName\":\"Stone Hill\",\"note\":\"V5 UI preservation probe\",\"editCount\":0,\"edits\":[]}");
+        string ordinaryEditSha256 = FileSha256(ordinaryEditPath);
+
+        inspect.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, inspect));
+        Window safetyDialog = WaitForOwnedWindow(
+            window,
+            "V5 Replacement Safety — Stone Hill",
+            TimeSpan.FromMinutes(2),
+            () => $"inspecting replacement safety; status: {status.Text}");
+        AssertTextContains(safetyDialog, "Runtime-proven exact profile");
+        AssertTextContains(safetyDialog, "Writable scopes");
+        AssertTextContains(safetyDialog, "Protected scopes");
+        AssertTextContains(safetyDialog, "Normal Create BIN is unchanged");
+        AssertTextContains(safetyDialog, NativeLevelReplacementProfileRegistry.TownSquareIntoStoneHillOutputImageSha256);
+        FindButton(safetyDialog, "Close").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        WaitForDialogToClose(window, safetyDialog, "V5 replacement safety dialog");
+        WaitForCondition(
+            () => inspect.IsEnabled,
+            TimeSpan.FromSeconds(10),
+            () => "finishing the replacement safety command");
+
+        restore.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, restore));
+        Window restoreDialog = WaitForOwnedWindow(
+            window,
+            "Restore Original Stone Hill Intent",
+            TimeSpan.FromSeconds(10),
+            () => "opening the replacement restore confirmation");
+        AssertTextContains(restoreDialog, "does not delete normal terrain/object edits");
+        FindButton(restoreDialog, "Restore Original Stone Hill")
+            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        WaitForDialogToClose(window, restoreDialog, "V5 replacement restore dialog");
+        WaitForCondition(
+            () => !File.Exists(intentPath) && restore.IsEnabled == false,
+            TimeSpan.FromSeconds(10),
+            () => $"restoring the original intent; status: {status.Text}");
+        if (!File.Exists(manifestPath))
+            throw new InvalidOperationException("Restoring the original intent deleted the source-bound baseline manifest.");
+        if (!string.Equals(FileSha256(ordinaryEditPath), ordinaryEditSha256, StringComparison.Ordinal))
+            throw new InvalidOperationException("Restoring the original intent changed an ordinary terrain-edit file.");
+        if (create.IsEnabled || createEdited.IsEnabled || !save.IsEnabled ||
+            !status.Text!.Contains("Original Stone Hill", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("The restored V5 replacement UI state is incorrect.");
+        }
+
+        LevelCatalog catalog = LevelCatalog.Load(workspace);
+        LevelDefinition townSquare = catalog.FindByKey("townsquare")
+            ?? throw new InvalidOperationException("Town Square is missing from the focused UI smoke catalog.");
+        SelectLevelForViewportFit(window, townSquare);
+        SelectWorkspaceTab(window, "Level");
+        if (disclosure.IsVisible)
+            throw new InvalidOperationException("The Stone Hill replacement disclosure remained visible on Town Square.");
+
+        Console.WriteLine(
+            "V5 level-replacement UI smoke passed: Stone Hill-only disclosure, exact Town Square donor, " +
+            "source-bound Save Intent, safety inspection, intent-only restore, ordinary-edit preservation, " +
+            "no-edit disabled state, saved T21-X edited-action enablement, and separate normal Create BIN control all passed.");
+    }
+    finally
+    {
+        window.Close();
+        FlushUi();
+    }
+}
+
 void RunNativePathOnly()
 {
+    Environment.SetEnvironmentVariable("SPYRO_EDITOR_RELEASE", "0");
     MainWindow window = new()
     {
         Width = 1440,
@@ -250,7 +1500,7 @@ void RunNativePathOnly()
         List<Moby> mobys = (List<Moby>)(mobysField.GetValue(window)
             ?? throw new InvalidOperationException("Native path UI smoke found no current Moby list."));
         Moby thief = mobys.Single(moby => moby.TrueIndex == 166);
-        EditorViewport viewport = window.GetLogicalDescendants().OfType<EditorViewport>().Single();
+        EditorViewport viewport = window.CaptureEditorShellSessionSnapshotForTesting().Viewport;
         viewport.SetViewMode(ViewportViewMode.Map);
         viewport.SelectMoby(thief, true);
         FlushUi();
@@ -348,7 +1598,7 @@ void RunNativePathOnly()
             "PersistCurrentNativeMovementEditsAsync",
             BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("Native path UI smoke could not save route edits.");
-        Task<int> saveTask = (Task<int>)(persist.Invoke(window, null)
+        Task<int> saveTask = (Task<int>)(persist.Invoke(window, [null])
             ?? throw new InvalidOperationException("Saving native route edits returned no task."));
         for (int attempt = 0; attempt < 1000 && !saveTask.IsCompleted; attempt++)
         {
@@ -1933,6 +3183,7 @@ void RunTerrainTexturePaintModeOnly()
     try
     {
         WaitForLevelData(window);
+        SelectWorkspaceTab(window, "Terrain");
         FindButton(window, "Choose Texture & Start Painting");
         Task<string> task = window.AssertTerrainTexturePaintModeForTestingAsync();
         for (int attempt = 0; attempt < 12000 && !task.IsCompleted; attempt++)
@@ -2261,7 +3512,7 @@ void AssertAppendedPrivateBuildSafetyTerrainNavigation(MainWindow owner)
     Task<object?> dialogTask = dialog.ShowDialog<object?>(owner);
     FlushUi();
 
-    AssertText(row, $"Terrain section {terrain.RuntimeKey}");
+    AssertText(row, "Terrain section");
     AssertTextContains(row, "Double-click to select and center this terrain section");
     if (row.Cursor == null)
         throw new InvalidOperationException("The terrain Build Safety issue was not visibly actionable.");
@@ -2295,6 +3546,13 @@ void AssertAppendedPrivateBuildSafetyTerrainNavigation(MainWindow owner)
         throw new InvalidOperationException(
             $"Double-click did not select and center terrain {terrain.RuntimeKey}; selected '{selected?.RuntimeKey}', view {viewport.ViewMode}.");
     }
+    EditorShellSessionSnapshot navigation = owner.CaptureEditorShellSessionSnapshotForTesting();
+    if (navigation.ActiveWorkspace != EditorShellWorkspace.LevelBuildingEditor ||
+        !viewport.TerrainFocusMode)
+    {
+        throw new InvalidOperationException(
+            "Terrain Build Safety navigation did not activate Level Building Editor / Terrain.");
+    }
     AssertTextContains(
         owner,
         $"Build Safety: selected and centered {level.DisplayName} terrain section {terrain.RuntimeKey}");
@@ -2317,8 +3575,9 @@ void RunTerrainTexturePaintGalleryOnly()
     try
     {
         WaitForLevelData(window);
+        SelectWorkspaceTab(window, "Terrain");
         TextBlock privateCapacity =
-            FindNamed<TextBlock>(window, "TerrainPrivateTextureCapacityText");
+            FindNamedUnique<TextBlock>(window, "TerrainPrivateTextureCapacityText");
         string privateCapacityText = privateCapacity.Text ?? "";
         bool expectedCapacityText = AppendedPrivateTerrainTextureResearchGate.IsEnabled
             ? privateCapacityText.Contains(
@@ -2535,7 +3794,7 @@ void RunTerrainTexturePaintGalleryOnly()
 
         object usableItem = restoredFirstDonorItems.FirstOrDefault(item => !TemplateValue<bool>(item, "IsBlocked"))
             ?? throw new InvalidOperationException($"{donorLevel.DisplayName} exposed no usable tile for double-click activation.");
-        EditorViewport viewport = window.GetLogicalDescendants().OfType<EditorViewport>().Single();
+        EditorViewport viewport = window.CaptureEditorShellSessionSnapshotForTesting().Viewport;
         gallery.SelectedItem = usableItem;
         FlushUi();
         if (!window.OwnedWindows.Contains(dialog) || viewport.TerrainTexturePaintMode)
@@ -4813,7 +6072,7 @@ void SelectLevelForViewportFit(MainWindow owner, LevelDefinition level)
         "SelectLevelAsync",
         BindingFlags.Instance | BindingFlags.NonPublic)
         ?? throw new InvalidOperationException("Could not select a viewport-fit fixture level.");
-    Task task = (Task)(selectLevelMethod.Invoke(owner, [level])
+    Task task = (Task)(selectLevelMethod.Invoke(owner, [level, null])
         ?? throw new InvalidOperationException($"Selecting {level.DisplayName} returned no task."));
     for (int attempt = 0; attempt < 2000 && !task.IsCompleted; attempt++)
     {
@@ -4886,14 +6145,14 @@ void Render(double width, double height, string fileName)
     WaitForLevelData(window);
     AvaloniaHeadlessPlatform.ForceRenderTimerTick(3);
 
+    FindButton(window, "Object Manager");
+    FindButton(window, "Level Building Editor");
     AssertText(window, "Objects");
-    AssertText(window, "Level");
-    AssertText(window, "Environment");
     AssertText(window, "Add");
     AssertText(window, "Edit");
     AssertText(window, "Replace");
-    AssertText(window, "Build safety");
     AssertText(window, "Create BIN");
+    FindButton(window, "Inspect Build Safety");
     FindButton(window, "Edit Map");
     FindButton(window, "Game Camera");
     if (window.GetLogicalDescendants().OfType<Button>().Any(button =>
@@ -4904,8 +6163,16 @@ void Render(double width, double height, string fileName)
     {
         throw new InvalidOperationException("The normal release shell exposed a retired terrain-presentation control.");
     }
-    FindButton(window, "Inspect Build Safety");
     AssertWorkspaceTabContrast(window);
+    FindNamedUnique<ToggleButton>(window, "LevelBuildingEditorWorkspaceButton")
+        .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    FlushUi();
+    AssertText(window, "Terrain");
+    AssertText(window, "Level");
+    AssertText(window, "Environment");
+    FindNamedUnique<ToggleButton>(window, "ObjectManagerWorkspaceButton")
+        .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    FlushUi();
 
     using Avalonia.Media.Imaging.Bitmap bitmap = window.CaptureRenderedFrame()
         ?? throw new InvalidOperationException($"Avalonia did not render the {width}x{height} editor frame.");
@@ -5021,16 +6288,21 @@ static void WaitForLevelData(MainWindow window)
 
 void AssertWorkspaceTabContrast(MainWindow window)
 {
-    TabControl workspaceTabs = window.GetLogicalDescendants()
-        .OfType<TabControl>()
-        .First(tabs => tabs.ItemsSource is IEnumerable<TabItem> items &&
-            items.Any(item => string.Equals((item.Header as TextBlock)?.Text, "Objects", StringComparison.OrdinalIgnoreCase)));
-
-    foreach (TabItem tab in (IEnumerable<TabItem>)workspaceTabs.ItemsSource!)
+    TabControl workspaceTabs = FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs");
+    ToggleButton objectManager = FindNamedUnique<ToggleButton>(window, "ObjectManagerWorkspaceButton");
+    ToggleButton levelBuilding = FindNamedUnique<ToggleButton>(window, "LevelBuildingEditorWorkspaceButton");
+    foreach (ToggleButton workspaceButton in new[] { objectManager, levelBuilding })
     {
-        if (tab.Header is not TextBlock label || label.Foreground is null)
-            throw new InvalidOperationException("A workspace tab is missing its explicit readable label color.");
+        workspaceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, workspaceButton));
+        FlushUi();
+        foreach (TabItem tab in (IEnumerable<TabItem>)workspaceTabs.ItemsSource!)
+        {
+            if (tab.Header is not TextBlock label || label.Foreground is null)
+                throw new InvalidOperationException("A workspace tab is missing its explicit readable label color.");
+        }
     }
+    objectManager.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, objectManager));
+    FlushUi();
 }
 
 void RenderWorkspaceTabs(MainWindow window)
@@ -5048,15 +6320,16 @@ void RenderWorkspaceTab(double width, double height, int selectedIndex, string f
         WindowStartupLocation = WindowStartupLocation.Manual,
         Position = new PixelPoint(0, 0)
     };
-    TabControl workspaceTabs = window.GetLogicalDescendants()
-        .OfType<TabControl>()
-        .First(tabs => tabs.ItemsSource is IEnumerable<TabItem> items &&
-            items.Any(item => string.Equals((item.Header as TextBlock)?.Text, "Objects", StringComparison.OrdinalIgnoreCase)));
-    workspaceTabs.SelectedIndex = selectedIndex;
     window.Show();
     try
     {
         WaitForLevelData(window);
+        ToggleButton levelBuilding = FindNamedUnique<ToggleButton>(window, "LevelBuildingEditorWorkspaceButton");
+        levelBuilding.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, levelBuilding));
+        FlushUi();
+        TabControl workspaceTabs = FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs");
+        workspaceTabs.SelectedIndex = selectedIndex;
+        FlushUi();
         SaveFrame(window, fileName);
     }
     finally
@@ -6138,6 +7411,10 @@ void AssertBuildSafetyInspection(MainWindow owner)
 
 void AssertBuildSafetyIssueNavigation(MainWindow owner)
 {
+    ToggleButton levelBuilding = FindNamedUnique<ToggleButton>(owner, "LevelBuildingEditorWorkspaceButton");
+    levelBuilding.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, levelBuilding));
+    FlushUi();
+    SelectWorkspaceTab(owner, "Environment");
     const string targetLevelKey = "darkhollow";
     const string targetLevelName = "Dark Hollow";
     string cachePath = Path.Combine(workspace, "editor-cache", $"{targetLevelKey}-mobys.json");
@@ -6225,6 +7502,9 @@ void AssertBuildSafetyIssueNavigation(MainWindow owner)
     }
     if (viewport.ViewMode != ViewportViewMode.Fly3D || Equals(flyCameraBefore, flyCameraField.GetValue(viewport)))
         throw new InvalidOperationException("Build Safety navigation did not preserve and recenter the Fly 3D camera.");
+    EditorShellSessionSnapshot navigation = owner.CaptureEditorShellSessionSnapshotForTesting();
+    if (navigation.ActiveWorkspace != EditorShellWorkspace.ObjectManager)
+        throw new InvalidOperationException("Object Build Safety navigation did not activate Object Manager.");
 
     ListBox browser = owner.GetLogicalDescendants()
         .OfType<ListBox>()
@@ -6244,7 +7524,7 @@ void AssertObservedIdentitySavePreservesScopes(MainWindow owner, ListBox browser
         "SelectLevelAsync",
         BindingFlags.Instance | BindingFlags.NonPublic)
         ?? throw new InvalidOperationException("Could not select the observed-ID fixture level.");
-    Task selectLevelTask = (Task)(selectLevelMethod.Invoke(owner, [identityFixtureLevel])
+    Task selectLevelTask = (Task)(selectLevelMethod.Invoke(owner, [identityFixtureLevel, null])
         ?? throw new InvalidOperationException("Selecting the observed-ID fixture level returned no task."));
     for (int attempt = 0; attempt < 1000 && !selectLevelTask.IsCompleted; attempt++)
     {
@@ -6550,6 +7830,18 @@ static T FindNamed<T>(Control root, string name) where T : Control
     return root.GetLogicalDescendants()
         .OfType<T>()
         .Single(control => string.Equals(control.Name, name, StringComparison.Ordinal));
+}
+
+static T FindNamedUnique<T>(Control root, string name) where T : Control
+{
+    T[] matches = root.GetLogicalDescendants()
+        .OfType<T>()
+        .Where(control => string.Equals(control.Name, name, StringComparison.Ordinal))
+        .ToArray();
+    return matches.Length > 0 && matches.All(control => ReferenceEquals(control, matches[0]))
+        ? matches[0]
+        : throw new InvalidOperationException(
+            $"Expected one distinct {typeof(T).Name} named '{name}', found {matches.Length}.");
 }
 
 static object[] ReadItemsSource(ItemsControl control, string description)
@@ -6873,6 +8165,71 @@ Window OpenDialog(MainWindow owner, Button button, string description)
         ?? throw new InvalidOperationException($"The {description} did not open.");
 }
 
+void SelectWorkspaceTab(MainWindow owner, string header)
+{
+    string workspaceButtonName = string.Equals(header, "Objects", StringComparison.OrdinalIgnoreCase)
+        ? "ObjectManagerWorkspaceButton"
+        : "LevelBuildingEditorWorkspaceButton";
+    ToggleButton workspaceButton = FindNamedUnique<ToggleButton>(owner, workspaceButtonName);
+    workspaceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, workspaceButton));
+    FlushUi();
+    FieldInfo field = typeof(MainWindow).GetField(
+        "_modernWorkspaceTabs",
+        BindingFlags.Instance | BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException("Could not inspect the modern workspace tabs.");
+    TabControl tabs = field.GetValue(owner) as TabControl
+        ?? throw new InvalidOperationException("The modern workspace tabs were unavailable.");
+    object[] items = ReadItemsSource(tabs, "modern workspace tabs");
+    int index = Array.FindIndex(items, item =>
+        item is TabItem tab &&
+        tab.Header is TextBlock text &&
+        string.Equals(text.Text, header, StringComparison.OrdinalIgnoreCase));
+    if (index < 0)
+        throw new InvalidOperationException($"The modern workspace has no '{header}' tab.");
+    tabs.SelectedIndex = index;
+    FlushUi();
+}
+
+Window WaitForOwnedWindow(
+    MainWindow owner,
+    string title,
+    TimeSpan timeout,
+    Func<string> operation)
+{
+    DateTime deadline = DateTime.UtcNow + timeout;
+    while (DateTime.UtcNow < deadline)
+    {
+        Dispatcher.UIThread.RunJobs();
+        Window? dialog = owner.OwnedWindows.LastOrDefault(window =>
+            string.Equals(window.Title, title, StringComparison.Ordinal));
+        if (dialog != null)
+            return dialog;
+        Thread.Sleep(10);
+    }
+
+    throw new TimeoutException($"Timed out while {operation()}.");
+}
+
+void WaitForCondition(
+    Func<bool> condition,
+    TimeSpan timeout,
+    Func<string> operation)
+{
+    DateTime deadline = DateTime.UtcNow + timeout;
+    while (DateTime.UtcNow < deadline)
+    {
+        Dispatcher.UIThread.RunJobs();
+        if (condition())
+        {
+            FlushUi();
+            return;
+        }
+        Thread.Sleep(10);
+    }
+
+    throw new TimeoutException($"Timed out while {operation()}.");
+}
+
 Window OpenAsyncDialog(MainWindow owner, Button button, string title, string description)
 {
     button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
@@ -6952,17 +8309,47 @@ static void FlushUi()
     AvaloniaHeadlessPlatform.ForceRenderTimerTick(2);
 }
 
-static void WaitForUiTask(Task task, string operation)
+static void WaitForUiTask(Task task, string operation, int timeoutSeconds = 5)
 {
-    for (int attempt = 0; attempt < 1000 && !task.IsCompleted; attempt++)
+    int attempts = Math.Max(1, timeoutSeconds) * 200;
+    for (int attempt = 0; attempt < attempts && !task.IsCompleted; attempt++)
     {
         Dispatcher.UIThread.RunJobs();
         Thread.Sleep(5);
     }
     if (!task.IsCompleted)
-        throw new TimeoutException($"{operation} exceeded five seconds.");
+        throw new TimeoutException($"{operation} exceeded {timeoutSeconds} seconds.");
     task.GetAwaiter().GetResult();
     FlushUi();
+}
+
+static void AssertDirectTerrainPersistenceRefused(
+    MainWindow window,
+    string terrainEditsPath,
+    string expectedSha256,
+    string context)
+{
+    Task<int> directPersistTask = InvokePrivate<Task<int>>(
+        window,
+        "PersistCurrentTerrainEditsAsync",
+        null,
+        null);
+    bool refused = false;
+    try
+    {
+        WaitForUiTask(directPersistTask, $"centrally refusing direct persistence of {context}");
+    }
+    catch (InvalidOperationException ex) when (ex.Message.Contains("Beta V5 refused", StringComparison.Ordinal))
+    {
+        refused = true;
+    }
+
+    if (!refused ||
+        !string.Equals(FileSha256(terrainEditsPath), expectedSha256, StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            $"A direct release texture/restore/undo persistence route admitted or rewrote {context}.");
+    }
 }
 
 static Button FindButton(Control root, string content) =>

@@ -1,0 +1,146 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-01",
+  "evidenceId": "stonehill-slot-townsquare-edited-donor-t21-x-native-ff-rejected-duckstation-2026-08-01",
+  "evidenceType": "interactive-user-report",
+  "automatedEmulatorCapture": false,
+  "evidenceStatus": "runtime-rejected-visibility-regression",
+  "promotionAuthorized": false,
+  "supersedesEvidenceId": "stonehill-slot-townsquare-edited-donor-t21-x-partial-duckstation-2026-08-01",
+  "profileId": "native-level-replacement-stonehill-townsquare-edited-donor-t21-x-clean-usa-v1",
+  "profileRecipeVersion": 1,
+  "baseProfileId": "native-level-replacement-stonehill-townsquare-display-identity-clean-usa-v1",
+  "baseOutputImageSha256": "71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9",
+  "outputImageSha256": "ec3d8e354cf246d704860a6b26968a59cc7f77fe6409e08c299a777b7fc4df8e",
+  "staticProofArtifact": "_local/v5-stone-hill-level-replacement/edited-donor-candidate/Stone-Hill-slot-Town-Square-edited-T21-X-FF-visible-RUNTIME-CANDIDATE-static-proof.json",
+  "editedObject": {
+    "sourceLevel": "Town Square",
+    "trueIndex": 21,
+    "label": "Red Gem",
+    "originalWorldPosition": [
+      7813.75,
+      7189.75,
+      512.0
+    ],
+    "editedWorldPosition": [
+      7685.75,
+      7189.75,
+      512.0
+    ],
+    "originalRawPosition": [
+      125020,
+      115036,
+      8192
+    ],
+    "editedRawPosition": [
+      122972,
+      115036,
+      8192
+    ]
+  },
+  "patchBoundary": {
+    "kind": "moby-position-x",
+    "donorWadOffset": "0x136E8B4",
+    "replacementSlotWadOffset": "0xD640B4",
+    "recordOffset": "0x0C",
+    "byteLength": 4,
+    "beforeHex": "5CE80100",
+    "afterHex": "5CE00100",
+    "changedLogicalWadBytes": 1,
+    "changedPhysicalImageBytes": 37,
+    "rebuiltRawSectors": 1,
+    "changedRawSectorIndex": "0x1AED",
+    "changedUserDataImageOffset": "0xF7623D",
+    "regeneratedEdcBytes": 4,
+    "regeneratedEccPBytes": 6,
+    "regeneratedEccQBytes": 26,
+    "outsideAllowedRawSectorBytes": 0
+  },
+  "byteCleanAudit": {
+    "retailSourceImageSha256": "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37",
+    "retailDonorRecordMatchesIdentityDonorRecord": true,
+    "retailDonorRecordMatchesIdentityTargetRecord": true,
+    "outputDonorRecordPreserved": true,
+    "outputTargetRecordDiffersFromRetailOnlyAtRecordOffset": "0x0D",
+    "displayIdentityExecutablePreserved": true,
+    "baseImagePreserved": true,
+    "retailSourcePreserved": true,
+    "wadRelocatedOrGrown": false,
+    "executableOrPointerFixupsChanged": false,
+    "summary": "The output differs from the exact display-identity base by one intended T21 X user byte and the 36 corresponding MODE2 EDC/ECC bytes in one raw sector; no unrelated logical or physical byte changed."
+  },
+  "nativeSpatialAudit": {
+    "podByteRecordOffset": "0x43",
+    "podByteHex": "FF",
+    "decodedOptionalSceneGroupPointer": 0,
+    "decodedOptionalSceneGroupCount": 0,
+    "decodedOptionalSceneMobyGroupListReferenceCount": 0,
+    "sceneListScopeLimitation": "This static loader/table census proves that the decoded optional scene list supplies no owner to patch for Town Square T21; it does not exclude every other runtime visibility mechanism.",
+    "visibilitySectorRecordOffset": "0x4A",
+    "visibilitySectorHex": "FF",
+    "visibilityInterpretation": "FF bypasses rendered-world-sector gating in func_800521C0; the rejected D5 terrain-sector overwrite is absent.",
+    "originalCollisionCell": {
+      "x": 15,
+      "y": 14
+    },
+    "editedCollisionCell": {
+      "x": 15,
+      "y": 14
+    },
+    "collisionCellCrossed": false,
+    "editedDistanceFromLowerXCellBoundaryWorldUnits": 5.75,
+    "reverseEngineeringSource": {
+      "repositoryCommit": "25d0faaa1cf6cf0d9d918d2a4e80dd07726cc9d3",
+      "mobyLayoutFile": "include/moby.h",
+      "retailExecutable": "Clean USA SCUS_942.28",
+      "runtimeFunctionsInspected": [
+        "0x80013F24-0x80014018 Moby table and optional group-list loader",
+        "0x80022A2C RenderShadedMobys",
+        "0x80051FEC Moby draw/update queue builder"
+      ]
+    }
+  },
+  "runtimeObservation": {
+    "primaryEvidence": true,
+    "passedChecks": [
+      "Town Square T21 was visibly present at its edited X position in the exact output BIN."
+    ],
+    "rejectionReason": "T21 still flickered from afar while its native +0x4A FF visibility sentinel was preserved.",
+    "unverifiedChecks": [
+      "Collection, reward, cleanup, and persistence were not reconfirmed for this exact native-FF test pass.",
+      "The complete movement, combat, dragon, egg, pause, Inventory, death/reload, Return Home/re-entry, and save/reload regression was not reconfirmed for this exact native-FF test pass.",
+      "Other-actor isolation and the original retail Town Square were not reconfirmed for this exact native-FF test pass."
+    ]
+  },
+  "correctiveNextGate": {
+    "id": "stonehill-slot-townsquare-edited-donor-t21-x-plus-render-radius-20",
+    "profileId": "native-level-replacement-stonehill-townsquare-edited-donor-t21-x-render-radius-clean-usa-v3",
+    "positionPatch": "Keep the exact T21 X word change 5CE80100 -> 5CE00100.",
+    "visibilityRule": "Preserve native FF at record +0x4A.",
+    "additionalPatch": {
+      "kind": "moby-render-radius",
+      "donorWadOffset": "0x136E8F8",
+      "replacementSlotWadOffset": "0xD640F8",
+      "recordOffset": "0x50",
+      "byteLength": 1,
+      "beforeHex": "18",
+      "afterHex": "20"
+    },
+    "purpose": "Test clipping/render-radius behavior independently after byte corruption, Moby pod/group membership, the +0x4A sector sentinel, and collision-cell crossing were excluded.",
+    "requiredChecks": [
+      "T21 remains continuously visible from the same far camera positions that reproduced the rejection.",
+      "T21 remains visible through close approach and retains its edited X position.",
+      "T21 awards its reward exactly once and cleans up normally.",
+      "Nearby actors and ordinary gameplay remain normal."
+    ],
+    "requiresIndependentDuckStationResult": true
+  },
+  "scopeLimitations": [
+    "The exact native-FF X-only candidate is runtime-rejected and must not be promoted.",
+    "Preserving +0x4A FF is necessary but was not sufficient to prevent the observed distance flicker.",
+    "The planned +0x50 18 -> 20 change is an isolated diagnostic, not a supported object-edit rule.",
+    "This result applies only to the exact profile recipe and output BIN hash recorded here.",
+    "It does not authorize other objects, axes, additions, removals, paths, terrain, textures, imported actor packages, normal Create BIN, or a release workflow."
+  ]
+}

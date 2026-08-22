@@ -1,0 +1,70 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-01",
+  "evidenceId": "stonehill-slot-townsquare-edited-donor-t21-x-partial-duckstation-2026-08-01",
+  "evidenceType": "interactive-user-report",
+  "automatedEmulatorCapture": false,
+  "evidenceStatus": "focused-partial-runtime-observation",
+  "promotionAuthorized": false,
+  "profileId": "native-level-replacement-stonehill-townsquare-edited-donor-t21-x-clean-usa-v1",
+  "profileRecipeVersion": 1,
+  "baseProfileId": "native-level-replacement-stonehill-townsquare-display-identity-clean-usa-v1",
+  "baseOutputImageSha256": "71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9",
+  "outputImageSha256": "ec3d8e354cf246d704860a6b26968a59cc7f77fe6409e08c299a777b7fc4df8e",
+  "editedObject": {
+    "sourceLevel": "Town Square",
+    "trueIndex": 21,
+    "label": "Red Gem",
+    "axis": "X",
+    "originalWorldValue": 7813.75,
+    "editedWorldValue": 7685.75,
+    "worldDelta": -128,
+    "originalRawValue": 125020,
+    "editedRawValue": 122972
+  },
+  "patchBoundary": {
+    "kind": "moby-position-x",
+    "donorWadOffset": "0x136E8B4",
+    "replacementSlotWadOffset": "0xD640B4",
+    "recordOffset": "0x0C",
+    "byteLength": 4,
+    "beforeHex": "5CE80100",
+    "afterHex": "5CE00100",
+    "changedLogicalWadBytes": 1,
+    "changedPhysicalImageBytes": 37,
+    "rebuiltRawSectors": 1
+  },
+  "passedChecks": [
+    "Town Square T21 was visibly moved to its edited X position in DuckStation."
+  ],
+  "unverifiedChecks": [
+    "T21 collection, reward, cleanup, and persistence were not reported.",
+    "No full movement, combat, dragon, egg, pause, or Inventory regression was reported for this edited BIN.",
+    "Death and reload were not reported for this edited BIN.",
+    "Return Home and re-entry were not reported for this edited BIN.",
+    "Save and reload were not reported for this edited BIN.",
+    "Other-actor isolation and the original retail Town Square were not reported for this edited BIN."
+  ],
+  "nextGate": {
+    "id": "stonehill-slot-townsquare-edited-donor-t21-x-plus-derived-placement-sector",
+    "purpose": "Validate the same visible T21 X move together with the editor-derived placement/culling-sector byte.",
+    "additionalPatch": {
+      "kind": "moby-placement-sector",
+      "donorWadOffset": "0x136E8F2",
+      "replacementSlotWadOffset": "0xD640F2",
+      "recordOffset": "0x4A",
+      "byteLength": 1,
+      "beforeHex": "FF",
+      "afterHex": "D5"
+    },
+    "requiresIndependentDuckStationResult": true
+  },
+  "scopeLimitations": [
+    "This evidence applies only to the exact profile recipe and output BIN hash recorded here.",
+    "It proves visible movement only; it is not a full runtime checklist pass.",
+    "It does not prove the derived placement/culling-sector value.",
+    "It does not authorize other objects, axes, additions, removals, paths, terrain, textures, or imported actor packages.",
+    "It does not promote edited-donor composition into normal Create BIN or a release workflow."
+  ]
+}

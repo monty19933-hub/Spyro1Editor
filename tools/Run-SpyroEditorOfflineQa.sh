@@ -13,9 +13,14 @@ MOBY_ICON_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.MobyIconSmoke/Spyro.Editor.M
 PSX_BLEND_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.PsxBlendSmoke/Spyro.Editor.PsxBlendSmoke.csproj"
 GTE_PROJECTION_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.GteProjectionSmoke/Spyro.Editor.GteProjectionSmoke.csproj"
 NATIVE_TERRAIN_BASE_PROJECTION_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.NativeTerrainBaseProjectionSmoke/Spyro.Editor.NativeTerrainBaseProjectionSmoke.csproj"
+TERRAIN_COLLISION_FAN_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.TerrainCollisionFanSmoke/Spyro.Editor.TerrainCollisionFanSmoke.csproj"
 HQ_MATERIAL_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.HqMaterialCacheSmoke/Spyro.Editor.HqMaterialCacheSmoke.csproj"
 PERSISTENCE_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.PersistenceSmoke/Spyro.Editor.PersistenceSmoke.csproj"
 UPDATE_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.UpdateSmoke/Spyro.Editor.UpdateSmoke.csproj"
+STONEHILL_LEVEL_REPLACEMENT_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.StoneHillLevelReplacementBaselineSmoke/Spyro.Editor.StoneHillLevelReplacementBaselineSmoke.csproj"
+STONEHILL_TOWNSQUARE_IDENTITY_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.StoneHillTownSquareIdentityCandidateSmoke/Spyro.Editor.StoneHillTownSquareIdentityCandidateSmoke.csproj"
+STONEHILL_TOWNSQUARE_EDITED_DONOR_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.StoneHillTownSquareEditedDonorCandidateSmoke/Spyro.Editor.StoneHillTownSquareEditedDonorCandidateSmoke.csproj"
+ID65_BLANK_LEVEL_LAB_SMOKE_PROJECT="$ROOT_DIR/src/Spyro.Editor.UnusedLevel65BlankLevelLabSmoke/Spyro.Editor.UnusedLevel65BlankLevelLabSmoke.csproj"
 TERRAIN_TEXTURE_PROOF_PROJECTS=(
     "$ROOT_DIR/src/Spyro.Editor.TerrainCatalogSmoke/Spyro.Editor.TerrainCatalogSmoke.csproj"
     "$ROOT_DIR/src/Spyro.Editor.TerrainRelocationStoreSmoke/Spyro.Editor.TerrainRelocationStoreSmoke.csproj"
@@ -34,6 +39,10 @@ PROOF_BIN_DIR="$ROOT_DIR/_local/objects/control-role-proof-bins"
 
 BUILD_ONLY=0
 WITH_GRADE_WRITE_READBACK=0
+STONEHILL_LEVEL_REPLACEMENT_BASELINE_SMOKE_ONLY=0
+STONEHILL_TOWNSQUARE_IDENTITY_CANDIDATE_SMOKE_ONLY=0
+STONEHILL_TOWNSQUARE_EDITED_DONOR_CANDIDATE_SMOKE_ONLY=0
+ID65_BLANK_LEVEL_LAB_SMOKE_ONLY=0
 
 usage() {
     cat <<'USAGE'
@@ -81,8 +90,12 @@ Default smoke modes:
                                SXY/SZ FIFOs, and FLAG saturation rules
   native terrain base smoke   explicit raw/simple/full HP queue contexts,
                                near-SXY rerun, CPU outcodes, and raw-slot NCLIP
+  terrain collision fan smoke exact supported HP-height collision-fan patches
+                               plus atomic fail-closed rejection coverage
   raw HQ material cache       all 35 native-load material sidecars, descriptor
                                shapes, raw PSX555/STP words, hashes, and tamper guards
+  ID65 Blank-Level Lab        exact locked-base bootstrap, 35+1 in-memory catalog,
+                               atomic disposable HP-Z/collision export, and public UI guards
   native Map material smoke  all 35 top-down editor maps use native normal-HQ
                                tiles plus the physical table-2 overview colors
   classifier regression      dormant/non-shipping broad-sheet research remains
@@ -99,8 +112,8 @@ Default smoke modes:
 Options:
   --build-only
       Build the app, smoke runner, cache tool, identity/icon audits, PSX blend,
-      GTE/base projection, raw-material/classifier proofs, and headless UI
-      smoke without tests.
+      GTE/base projection, terrain collision-fan, raw-material/classifier
+      proofs, and headless UI smoke without tests.
 
   --with-grade-write-readback
       After the default suite, run the 35-level/1,190-pair environment matrix,
@@ -108,6 +121,31 @@ Options:
       environment-grade copied-BIN/readback smoke. These remain offline and
       clean their disposable BIN/CUE files, but temporarily need several
       source-image-sized files of free disk space.
+
+  --stonehill-level-replacement-baseline-smoke-only
+      Run only the V5 clean-USA Stone Hill retail-slot manifest and byte-identical
+      BIN/CUE baseline proof. Requires the configured clean retail source disc;
+      writes no editor-visible level replacement and launches no emulator.
+
+  --stonehill-townsquare-identity-candidate-smoke-only
+      Build the pending-runtime V5 Town Square display-identity CUE from the exact
+      runtime-proven Stone Hill-slot replacement. Guards the single name-pointer
+      sector, completion totals, final hash, and evidence files; launches no emulator.
+
+  --stone-hill-town-square-edited-donor-candidate-smoke
+      Build the pending-runtime V5 Town Square T21 X-only control plus the
+      rejected +0x50/+0x52 distance diagnostics and the corrected open-ground
+      X-only placement from the exact runtime-proven display-identity control.
+      The corrected candidate preserves native +0x4A = FF, +0x50 = 18, and
+      +0x52 = 40. Guards exact rebases, final known hashes, original donor data,
+      evidence, determinism, and unsafe-patch rejection; launches no emulator.
+
+  --id65-blank-level-lab-smoke-only
+      Build the public V5 ID65 Blank-Level Lab from the exact clean USA source,
+      prove the retail 35+1 in-memory catalog boundary, locked-base bootstrap and
+      deterministic reuse, manifest/capability guards, temporary-data cleanup,
+      and generic terrain-export parity with the runtime-passed solid ramp. No
+      emulator is launched and all disposable smoke data is removed.
 
   -h, --help
       Show this help.
@@ -136,6 +174,18 @@ for argument in "$@"; do
         --with-grade-write-readback)
             WITH_GRADE_WRITE_READBACK=1
             ;;
+        --stonehill-level-replacement-baseline-smoke-only)
+            STONEHILL_LEVEL_REPLACEMENT_BASELINE_SMOKE_ONLY=1
+            ;;
+        --stonehill-townsquare-identity-candidate-smoke-only)
+            STONEHILL_TOWNSQUARE_IDENTITY_CANDIDATE_SMOKE_ONLY=1
+            ;;
+        --stone-hill-town-square-edited-donor-candidate-smoke)
+            STONEHILL_TOWNSQUARE_EDITED_DONOR_CANDIDATE_SMOKE_ONLY=1
+            ;;
+        --id65-blank-level-lab-smoke-only)
+            ID65_BLANK_LEVEL_LAB_SMOKE_ONLY=1
+            ;;
         -h|--help)
             usage
             exit 0
@@ -150,6 +200,28 @@ done
 if [[ "$BUILD_ONLY" -eq 1 && "$WITH_GRADE_WRITE_READBACK" -eq 1 ]]; then
     fail "--build-only cannot be combined with --with-grade-write-readback."
 fi
+if [[ "$STONEHILL_LEVEL_REPLACEMENT_BASELINE_SMOKE_ONLY" -eq 1 &&
+      ("$BUILD_ONLY" -eq 1 || "$WITH_GRADE_WRITE_READBACK" -eq 1 ||
+       "$STONEHILL_TOWNSQUARE_IDENTITY_CANDIDATE_SMOKE_ONLY" -eq 1 ||
+       "$STONEHILL_TOWNSQUARE_EDITED_DONOR_CANDIDATE_SMOKE_ONLY" -eq 1 ||
+       "$ID65_BLANK_LEVEL_LAB_SMOKE_ONLY" -eq 1) ]]; then
+    fail "--stonehill-level-replacement-baseline-smoke-only cannot be combined with another QA mode."
+fi
+if [[ "$STONEHILL_TOWNSQUARE_IDENTITY_CANDIDATE_SMOKE_ONLY" -eq 1 &&
+      ("$BUILD_ONLY" -eq 1 || "$WITH_GRADE_WRITE_READBACK" -eq 1 ||
+       "$STONEHILL_TOWNSQUARE_EDITED_DONOR_CANDIDATE_SMOKE_ONLY" -eq 1 ||
+       "$ID65_BLANK_LEVEL_LAB_SMOKE_ONLY" -eq 1) ]]; then
+    fail "--stonehill-townsquare-identity-candidate-smoke-only cannot be combined with another QA mode."
+fi
+if [[ "$STONEHILL_TOWNSQUARE_EDITED_DONOR_CANDIDATE_SMOKE_ONLY" -eq 1 &&
+      ("$BUILD_ONLY" -eq 1 || "$WITH_GRADE_WRITE_READBACK" -eq 1 ||
+       "$ID65_BLANK_LEVEL_LAB_SMOKE_ONLY" -eq 1) ]]; then
+    fail "--stone-hill-town-square-edited-donor-candidate-smoke cannot be combined with another QA mode."
+fi
+if [[ "$ID65_BLANK_LEVEL_LAB_SMOKE_ONLY" -eq 1 &&
+      ("$BUILD_ONLY" -eq 1 || "$WITH_GRADE_WRITE_READBACK" -eq 1) ]]; then
+    fail "--id65-blank-level-lab-smoke-only cannot be combined with another QA mode."
+fi
 
 require_command dotnet
 
@@ -159,62 +231,110 @@ echo "Configuration: $CONFIGURATION"
 echo "Safety: compile, command-line smoke, and in-memory UI render only; no visible app or emulator launch."
 echo
 
-echo "[1/14] Building Avalonia app (compile only)..."
+if [[ "$STONEHILL_LEVEL_REPLACEMENT_BASELINE_SMOKE_ONLY" -eq 1 ]]; then
+    echo "Building focused V5 Stone Hill replacement baseline smoke..."
+    dotnet build "$STONEHILL_LEVEL_REPLACEMENT_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
+    echo
+    echo "Running focused V5 Stone Hill replacement baseline smoke..."
+    dotnet run --project "$STONEHILL_LEVEL_REPLACEMENT_SMOKE_PROJECT" --configuration "$CONFIGURATION" --no-build -- "$ROOT_DIR"
+    exit 0
+fi
+
+if [[ "$STONEHILL_TOWNSQUARE_IDENTITY_CANDIDATE_SMOKE_ONLY" -eq 1 ]]; then
+    echo "Building focused V5 Town Square display-identity candidate smoke..."
+    dotnet build "$STONEHILL_TOWNSQUARE_IDENTITY_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
+    echo
+    echo "Running focused V5 Town Square display-identity candidate smoke..."
+    dotnet run --project "$STONEHILL_TOWNSQUARE_IDENTITY_SMOKE_PROJECT" --configuration "$CONFIGURATION" --no-build -- "$ROOT_DIR"
+    exit 0
+fi
+
+if [[ "$STONEHILL_TOWNSQUARE_EDITED_DONOR_CANDIDATE_SMOKE_ONLY" -eq 1 ]]; then
+    echo "Building focused V5 edited Town Square donor and safe-placement candidate smoke..."
+    dotnet build "$STONEHILL_TOWNSQUARE_EDITED_DONOR_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
+    echo
+    echo "Running focused V5 edited Town Square donor and safe-placement candidate smoke..."
+    dotnet run --project "$STONEHILL_TOWNSQUARE_EDITED_DONOR_SMOKE_PROJECT" --configuration "$CONFIGURATION" --no-build -- "$ROOT_DIR"
+    exit 0
+fi
+
+if [[ "$ID65_BLANK_LEVEL_LAB_SMOKE_ONLY" -eq 1 ]]; then
+    echo "Building focused V5 ID65 Blank-Level Lab smoke..."
+    dotnet build "$ID65_BLANK_LEVEL_LAB_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
+    dotnet build "$UI_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
+    echo
+    echo "Running focused V5 ID65 Blank-Level Lab smoke..."
+    dotnet run --project "$ID65_BLANK_LEVEL_LAB_SMOKE_PROJECT" --configuration "$CONFIGURATION" --no-build -- "$ROOT_DIR"
+    echo
+    echo "Running public V5 ID65 Blank-Level Lab UI smoke..."
+    dotnet run --project "$UI_SMOKE_PROJECT" --configuration "$CONFIGURATION" --no-build -- "$ROOT_DIR" --id65-blank-lab-ui-only
+    exit 0
+fi
+
+echo "[1/16] Building Avalonia app (compile only)..."
 dotnet build "$APP_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[2/14] Building command-line smoke runner..."
+echo "[2/16] Building command-line smoke runner..."
 dotnet build "$SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[3/14] Building cache tool..."
+echo "[3/16] Building cache tool..."
 dotnet build "$CACHE_TOOL_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[4/14] Building identity coverage audit..."
+echo "[4/16] Building identity coverage audit..."
 dotnet build "$IDENTITY_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[5/14] Building headless UI smoke..."
+echo "[5/16] Building headless UI smoke..."
 dotnet build "$UI_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[6/14] Building dormant broad-sheet classifier regression..."
+echo "[6/16] Building dormant broad-sheet classifier regression..."
 dotnet build "$PLAYABLE_TERRAIN_VIEW_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[7/14] Building project persistence smoke..."
+echo "[7/16] Building project persistence smoke..."
 dotnet build "$PERSISTENCE_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[8/14] Building update integrity smoke..."
+echo "[8/16] Building update integrity smoke..."
 dotnet build "$UPDATE_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[9/14] Building terrain texture/property proof smokes..."
+echo "[9/16] Building terrain texture/property proof smokes..."
 for project in "${TERRAIN_TEXTURE_PROOF_PROJECTS[@]}"; do
     dotnet build "$project" --configuration "$CONFIGURATION" --nologo
 done
 
 echo
-echo "[10/14] Building all-level Moby raster-icon audit..."
+echo "[10/16] Building terrain collision-fan smoke..."
+dotnet build "$TERRAIN_COLLISION_FAN_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
+
+echo
+echo "[11/16] Building all-level Moby raster-icon audit..."
 dotnet build "$MOBY_ICON_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[11/14] Building exact PSX terrain blend-kernel smoke..."
+echo "[12/16] Building exact PSX terrain blend-kernel smoke..."
 dotnet build "$PSX_BLEND_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[12/14] Building exact PS1 GTE RTPS/RTPT projection smoke..."
+echo "[13/16] Building exact PS1 GTE RTPS/RTPT projection smoke..."
 dotnet build "$GTE_PROJECTION_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[13/14] Building native terrain HP base-projection smoke..."
+echo "[14/16] Building native terrain HP base-projection smoke..."
 dotnet build "$NATIVE_TERRAIN_BASE_PROJECTION_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 echo
-echo "[14/14] Building raw PSX HQ terrain-material cache smoke..."
+echo "[15/16] Building raw PSX HQ terrain-material cache smoke..."
 dotnet build "$HQ_MATERIAL_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
+
+echo
+echo "[16/16] Building public V5 ID65 Blank-Level Lab smoke..."
+dotnet build "$ID65_BLANK_LEVEL_LAB_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
 
 if [[ "$BUILD_ONLY" -eq 1 ]]; then
     echo
@@ -405,6 +525,25 @@ cleanup_offline_qa() {
 }
 trap cleanup_offline_qa EXIT
 
+echo
+echo "Running public V5 ID65 Blank-Level Lab locked-base/export smoke..."
+dotnet run \
+    --project "$ID65_BLANK_LEVEL_LAB_SMOKE_PROJECT" \
+    --configuration "$CONFIGURATION" \
+    --no-build \
+    -- \
+    "$ROOT_DIR"
+
+echo
+echo "Running public V5 ID65 Blank-Level Lab UI smoke..."
+dotnet run \
+    --project "$UI_SMOKE_PROJECT" \
+    --configuration "$CONFIGURATION" \
+    --no-build \
+    -- \
+    "$ROOT_DIR" \
+    --id65-blank-lab-ui-only
+
 for project in "${TERRAIN_TEXTURE_PROOF_PROJECTS[@]}"; do
     project_name="$(basename "$(dirname "$project")")"
     project_arguments=("$ROOT_DIR")
@@ -420,6 +559,15 @@ for project in "${TERRAIN_TEXTURE_PROOF_PROJECTS[@]}"; do
         -- \
         "${project_arguments[@]}"
 done
+
+echo
+echo "Running exact supported terrain HP-height/collision-fan smoke..."
+dotnet run \
+    --project "$TERRAIN_COLLISION_FAN_SMOKE_PROJECT" \
+    --configuration "$CONFIGURATION" \
+    --no-build \
+    -- \
+    "$ROOT_DIR"
 
 echo
 echo "Running focused native-unreferenced art-only terrain export smoke..."
@@ -473,6 +621,16 @@ dotnet run \
     --no-build \
     -- \
     "$ROOT_DIR"
+
+echo
+echo "Running release workspace shell and guarded HP-height UI smoke..."
+dotnet run \
+    --project "$UI_SMOKE_PROJECT" \
+    --configuration "$CONFIGURATION" \
+    --no-build \
+    -- \
+    "$ROOT_DIR" \
+    --workspace-shell-only
 
 echo
 echo "Running focused Moby atlas masking/render UI smoke..."

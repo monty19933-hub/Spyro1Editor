@@ -64,6 +64,7 @@ artisans-*.md
 artisans-*.csv
 stonehill-*.json
 stonehill-*.md
+!docs/runtime-evidence/stonehill-townsquare-display-identity-2026-08-01.json
 spyro-*.json
 spyro-*.md
 !spyro-level-catalog.json
@@ -177,6 +178,7 @@ unsafe-tests/
 !/tools/Build-SpyroEditorRelease.sh
 !/tools/Run-SpyroEditorOfflineQa.sh
 !/tools/Verify-SpyroEditorRelease.sh
+!/tools/Watch-SpyroId65RuntimeState.py
 
 # Local research probes that are useful while reversing but should be promoted
 # intentionally before release.

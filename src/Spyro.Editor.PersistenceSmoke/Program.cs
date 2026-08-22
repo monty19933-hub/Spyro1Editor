@@ -21,6 +21,7 @@ try
     Write(importedSky, "sky bytes");
     Write(importedTexture, "texture bytes");
     Write(Path.Combine(portableRoot, "artisans-native-edits.json"), "{\"editCount\":1,\"edits\":[{}]}");
+    Write(Path.Combine(portableRoot, "stonehill-native-level-replacement.json"), "{\"format\":\"spyro-editor-native-level-replacement\",\"version\":1}");
     Write(Path.Combine(portableRoot, "artisans-skybox-edit-plan.json"), $$"""
         {"mode":"custom-sky-import","importedSkyPath":{{Json(importedSky)}}}
         """);
@@ -84,9 +85,10 @@ try
 
     PortableProjectMigrationOptions preserveOutputs = new(IncludeGeneratedOutputs: true);
     PortableProjectMigrationResult first = await PortableProjectMigration.MigrateAsync(portableRoot, project, preserveOutputs);
-    Assert(first.CopiedCount == 10, $"Expected 10 migrated files, got {first.CopiedCount}.");
+    Assert(first.CopiedCount == 11, $"Expected 11 migrated files, got {first.CopiedCount}.");
     Assert(first.ConflictCount == 0, "Unexpected first-run migration conflict.");
     Assert(File.Exists(Path.Combine(project.RootPath, "artisans-native-edits.json")), "Object edits were not migrated.");
+    Assert(File.Exists(Path.Combine(project.RootPath, "stonehill-native-level-replacement.json")), "Native level-replacement research was not migrated.");
     Assert(File.Exists(Path.Combine(project.RootPath, "output", "My Build.bin")), "Generated output was not preserved.");
     Assert(!File.Exists(Path.Combine(project.RootPath, "editor-cache", "artisans-mobys.json")), "Rebuildable cache migrated by default.");
     Assert(!File.Exists(Path.Combine(project.RootPath, "spyro-wad-analysis.json")), "Source-dependent WAD analysis migrated by default.");
@@ -117,7 +119,7 @@ try
     PortableProjectMigrationResult second = await PortableProjectMigration.MigrateAsync(portableRoot, project, preserveOutputs);
     if (second.ConflictCount > 0)
         Console.WriteLine($"Retry conflicts: {string.Join(", ", second.ConflictPaths)}");
-    Assert(second.ExistingCount == 10, $"Expected 10 identical existing files, got {second.ExistingCount}; copied={second.CopiedCount}, conflicts={second.ConflictCount}, skipped={second.SkippedCount}.");
+    Assert(second.ExistingCount == 11, $"Expected 11 identical existing files, got {second.ExistingCount}; copied={second.CopiedCount}, conflicts={second.ConflictCount}, skipped={second.SkippedCount}.");
     Assert(second.ConflictCount == 0, "Idempotent migration created a conflict.");
     JsonNode recoveredSkyPlan = JsonNode.Parse(File.ReadAllText(Path.Combine(project.RootPath, "artisans-skybox-edit-plan.json")))!;
     Assert(recoveredSkyPlan["importedSkyPath"]!.GetValue<string>() == rebasedSky, "An interrupted path-rebase was not recovered on retry.");

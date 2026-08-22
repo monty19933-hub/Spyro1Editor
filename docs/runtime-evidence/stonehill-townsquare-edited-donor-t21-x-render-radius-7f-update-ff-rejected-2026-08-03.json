@@ -1,0 +1,153 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-03",
+  "evidenceId": "stonehill-slot-townsquare-edited-donor-t21-x-render-radius-7f-update-ff-rejected-duckstation-2026-08-03",
+  "evidenceType": "interactive-user-report-and-live-debugger-trace",
+  "automatedEmulatorCapture": false,
+  "evidenceStatus": "runtime-rejected-distance-flicker-persists",
+  "promotionAuthorized": false,
+  "supersedesEvidenceId": "stonehill-slot-townsquare-edited-donor-t21-x-render-radius-7f-update-unconditional-pending-duckstation",
+  "profileId": "native-level-replacement-stonehill-townsquare-edited-donor-t21-x-render-radius-7f-update-unconditional-clean-usa-v5",
+  "profileRecipeVersion": 5,
+  "baseProfileId": "native-level-replacement-stonehill-townsquare-display-identity-clean-usa-v1",
+  "baseOutputImageSha256": "71808a4b5e0d0891e4f6f49be8b2712de018a393695b1b606b79e9ecbd3166c9",
+  "retailSourceImageSha256": "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37",
+  "outputImageSha256": "580af811c2f3e130f03fc1556da56d8310064a588eb57f819f5129c74ccc9329",
+  "staticProofArtifact": "_local/v5-stone-hill-level-replacement/edited-donor-candidate/Stone-Hill-slot-Town-Square-edited-T21-X-render-radius-7F-update-FF-RUNTIME-CANDIDATE-static-proof.json",
+  "editedObject": {
+    "sourceLevel": "Town Square",
+    "trueIndex": 21,
+    "label": "Red Gem",
+    "originalWorldPosition": [
+      7813.75,
+      7189.75,
+      512.0
+    ],
+    "editedWorldPosition": [
+      7685.75,
+      7189.75,
+      512.0
+    ]
+  },
+  "patchBoundary": {
+    "positionPatch": {
+      "recordOffset": "0x0C",
+      "donorWadOffset": "0x136E8B4",
+      "replacementSlotWadOffset": "0xD640B4",
+      "beforeHex": "5CE80100",
+      "afterHex": "5CE00100"
+    },
+    "renderRadiusPatch": {
+      "recordOffset": "0x50",
+      "donorWadOffset": "0x136E8F8",
+      "replacementSlotWadOffset": "0xD640F8",
+      "beforeHex": "18",
+      "afterHex": "7F"
+    },
+    "updateSchedulePatch": {
+      "recordOffset": "0x52",
+      "donorWadOffset": "0x136E8FA",
+      "replacementSlotWadOffset": "0xD640FA",
+      "beforeHex": "40",
+      "afterHex": "FF"
+    },
+    "changedLogicalWadBytes": 3,
+    "changedPhysicalImageBytes": 53,
+    "rebuiltRawSectors": 1,
+    "outsideAllowedRawSectorBytes": 0
+  },
+  "runtimeObservation": {
+    "primaryEvidence": true,
+    "userReport": "It still flickers from afar",
+    "rejectionReason": "T21 continued to flicker from afar after both the maximum safe positive world-render radius and unconditional update scheduling were applied.",
+    "unverifiedChecks": [
+      "Collection, reward, cleanup, and persistence were not reconfirmed for this exact combined candidate.",
+      "The complete movement, combat, dragon, egg, pause, Inventory, death/reload, Return Home/re-entry, and save/reload regression was not reconfirmed for this exact combined candidate.",
+      "Other-actor isolation and the original retail Town Square were not reconfirmed for this exact combined candidate."
+    ]
+  },
+  "liveDebuggerTrace": {
+    "target": "Town Square T21 in the Stone Hill replacement slot",
+    "sampleScope": "The distant view where the user-visible flicker persisted",
+    "recordFieldOffset": "0x51",
+    "decodedField": "renderer-admitted draw-attempt / m_WasDrawn state",
+    "sampledFrames": 60,
+    "rendererAdmittedSamples": 60,
+    "nonAdmittedSamples": 0,
+    "result": "T21 reached the +0x51 renderer-admitted draw-attempt state in every sampled frame.",
+    "interpretation": "Within this 60-frame sample, T21 was not omitted from the update/draw queue and passed the coarse CPU-side sphere/frustum gates before vertex projection.",
+    "scopeLimitation": "+0x51 is set before whole-model clipping, per-face clipping, NCLIP, depth/order selection, and primitive packet emission; it is not by itself proof that visible pixels reached the frame."
+  },
+  "livePrimitiveEmissionTrace": {
+    "tool": "tools/Trace-SpyroMobyPrimitiveEmission.py",
+    "levelMobysBase": "0x8017B544",
+    "sampleScope": "The same distant chicken-courtyard view",
+    "samplesPerObject": 12,
+    "targets": [
+      {
+        "trueIndex": 21,
+        "label": "moved red gem",
+        "address": "0x8017BC7C",
+        "emittedSamples": 12,
+        "zeroPacketSamples": 0,
+        "primitiveBytesUnique": [132, 172, 192, 208]
+      },
+      {
+        "trueIndex": 22,
+        "label": "native red-gem control",
+        "address": "0x8017BCD4",
+        "emittedSamples": 12,
+        "zeroPacketSamples": 0,
+        "primitiveBytesUnique": [144, 168, 208]
+      },
+      {
+        "trueIndex": 47,
+        "label": "native green-gem control",
+        "address": "0x8017C56C",
+        "emittedSamples": 12,
+        "zeroPacketSamples": 0,
+        "primitiveBytesUnique": [112, 132, 148, 152, 168, 208]
+      }
+    ],
+    "result": "Moved T21 emitted GPU primitive packets in all 12 sampled frames, just like both native controls. Its packet-size variation overlaps the normal rotational variation of T22 and T47.",
+    "interpretation": "The visible collapse is downstream terrain overdraw/intersection, not missing Moby scheduling, coarse culling, whole-model clipping, or all-face rejection."
+  },
+  "spatialDiagnosis": {
+    "editedT21Center": [7685.75, 7189.75, 512.0],
+    "supportingFloor": {
+      "sector": 213,
+      "face": 79,
+      "collisionGroup": 1,
+      "floorZ": 512.0
+    },
+    "nearestVerticalWall": {
+      "sector": 213,
+      "face": 110,
+      "textureId": 17,
+      "vertices": [
+        [7652.0, 7199.0, 512.0],
+        [7770.0, 7199.0, 512.0],
+        [7770.0, 7199.0, 672.0],
+        [7652.0, 7199.0, 672.0]
+      ],
+      "centerDistance": 9.25
+    },
+    "nativeGemRadius": 24.0,
+    "wallEnvelopePenetration": 14.75,
+    "screenCaptureResult": "In unobscured frames T21 alternated between a 1-2 pixel dark sliver and a bright white X while native controls remained 8-15 pixels tall.",
+    "orderingTableExplanation": "Spyro 1 painter-sorts gem faces and adjacent terrain into the world ordering table without a z-buffer. T21's rotating face depth and silhouette therefore alternately peek around and are overdrawn by the wall it intersects."
+  },
+  "diagnosticConclusion": {
+    "renderRadiusResult": "+0x50 = 7F did not eliminate the flicker and must not be promoted.",
+    "updateScheduleResult": "+0x52 = FF did not eliminate the flicker and must not be promoted.",
+    "queueAndCullingConclusion": "The sampled flicker is not queue omission or primitive dropout: +0x51 admitted T21 in all 60 sampled frames and T21 emitted primitive packets in all 12 downstream samples.",
+    "rootCause": "The -128 X test coordinate places the radius-24 rotating gem only 9.25 units from and therefore inside a vertical wall's envelope.",
+    "nextBoundary": "Restore native +0x50 = 18 and +0x52 = 40, then test an X-only open-ground placement at X=7600 with decoded wall clearance 31.699."
+  },
+  "scopeLimitations": [
+    "The combined 0x7F/0xFF candidate is runtime-rejected and must not be promoted.",
+    "The 60-frame debugger result is limited to the sampled failing view and does not establish a universal renderer diagnosis.",
+    "This evidence does not authorize ordinary moved-object export, other objects or edits, normal V4 Create BIN, projects, releases, or the update channel."
+  ]
+}

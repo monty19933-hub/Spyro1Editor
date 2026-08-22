@@ -19,6 +19,7 @@ public sealed partial class MainWindow
     private Border? _updateNotificationBanner;
     private TextBlock? _updateNotificationText;
     private EditorUpdateInfo? _bannerUpdate;
+    internal Action? UpdateSnapshotStartedForTesting { get; set; }
 
     private Control BuildAppNotificationArea()
     {
@@ -41,6 +42,9 @@ public sealed partial class MainWindow
         Button details = NewButton("What's New & Download");
         details.Click += async (_, _) =>
         {
+            if (TryBlockUpdateActionDuringEditorPersistence(
+                    "opening update download actions"))
+                return;
             EditorUpdateInfo? update = _bannerUpdate;
             if (update == null)
                 return;
@@ -96,6 +100,8 @@ public sealed partial class MainWindow
         _updateNotificationText.Text =
             $"{update.DisplayName} is available. See what's new and download it without changing your project files.";
         _updateNotificationBanner.IsVisible = true;
+        _updateNotificationBanner.IsEnabled =
+            !UpdateActionsBlockedByEditorPersistence();
     }
 
     private void BeginQuietUpdateCheck()
@@ -231,6 +237,9 @@ public sealed partial class MainWindow
 
     private async Task ShowUpdateResultDialogAsync(EditorUpdateInfo? update, string message)
     {
+        if (TryBlockUpdateActionDuringEditorPersistence(
+                "opening update download actions"))
+            return;
         if (_updateDialogOpen)
             return;
         _updateDialogOpen = true;
@@ -354,6 +363,12 @@ public sealed partial class MainWindow
         {
             if (context == null)
                 return;
+            if (!TryBeginUpdateSnapshotAction())
+            {
+                result.Text =
+                    "Update download paused while the editor finishes its active save or Build Safety operation.";
+                return;
+            }
             if (HasUnsavedTerrainEdits() || HasUnsavedMobyEdits())
             {
                 result.Text = "Save the current level before downloading so the safety snapshot contains every staged object and terrain edit.";
@@ -398,6 +413,39 @@ public sealed partial class MainWindow
         dialog.Content = new ScrollViewer { Content = body };
         await dialog.ShowDialog(this);
     }
+
+    private bool UpdateActionsBlockedByEditorPersistence() =>
+        _workspaceTransitionBusy ||
+        _id65BlankLabBusy && _id65BlankLabManualOperation != null ||
+        _regularEditorPersistenceBusy ||
+        _buildSafetyBusy;
+
+    private bool TryBlockUpdateActionDuringEditorPersistence(string action)
+    {
+        if (TryBlockEditorMutationDuringId65BlankLabManualOperation(action))
+            return true;
+        if (!_regularEditorPersistenceBusy && !_buildSafetyBusy)
+            return false;
+
+        _statusText.Text =
+            $"Wait for the active save or Build Safety operation before {action}.";
+        return true;
+    }
+
+    private bool TryBeginUpdateSnapshotAction()
+    {
+        if (TryBlockUpdateActionDuringEditorPersistence(
+                "creating an update safety snapshot"))
+        {
+            return false;
+        }
+
+        UpdateSnapshotStartedForTesting?.Invoke();
+        return true;
+    }
+
+    internal bool TryBeginUpdateSnapshotForTesting() =>
+        TryBeginUpdateSnapshotAction();
 
     private static string UpdateStatePath(ReleaseProjectContext context) =>
         Path.Combine(context.UserData.SettingsPath, "update-check.json");

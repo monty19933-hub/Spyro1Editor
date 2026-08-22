@@ -1,0 +1,87 @@
+{
+  "format": "spyro-editor-duckstation-runtime-evidence",
+  "formatVersion": 1,
+  "recordedDate": "2026-08-08",
+  "evidenceId": "unused-level-65-town-square-authored-terrain-render-visibility-control-focused-pass-duckstation-2026-08-08",
+  "evidenceType": "interactive-user-report-with-read-only-runtime-corroboration",
+  "evidenceStatus": "focused-runtime-pass",
+  "automatedEmulatorCapture": false,
+  "promotionAuthorized": false,
+  "profileId": "unused-level-65-town-square-authored-terrain-render-visibility-control-clean-usa-disposable-v2",
+  "baseProfileId": "unused-level-65-town-square-display-name-clean-usa-disposable-v4",
+  "baseRuntimeEvidenceId": "unused-level-65-town-square-display-name-focused-pass-duckstation-2026-08-08",
+  "baseOutputImageSha256": "9e42b43bd1341b40915748432d1b2dc760e22a81c0a320ec09ae6a71ca2efcd8",
+  "outputImageSha256": "01a170b19303eaab77fb00fbc8cfabf5425a640348c84aa09f8aa4eb5b57e6b1",
+  "outputId65DataSha256": "c20e5cee4abd551c2536eb23fba9d2a8868193c9991af9ccfe7883429c9b4a57",
+  "outputExecutableSha256": "fa5fc7981188b78fa7d7b78facca64c1f79dadb107515e9146ad178ade39d442",
+  "outputCue": "_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-render-visibility-control/Unused-Level-65-Town-Square-authored-terrain-render-visibility-control-RUNTIME-CANDIDATE.cue",
+  "runtimeChecklistArtifact": "_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-render-visibility-control/Unused-Level-65-Town-Square-authored-terrain-render-visibility-control-RUNTIME-CANDIDATE-runtime-checklist.md",
+  "staticProofArtifact": "_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-render-visibility-control/Unused-Level-65-Town-Square-authored-terrain-render-visibility-control-RUNTIME-CANDIDATE-static-proof.json",
+  "focusedRuntimeObservation": {
+    "primaryEvidence": true,
+    "userReport": "Heres the report:  Town Square normal doesnt have the terrain edit, but ID65 does.  The terrain is not solid, you can walk through it, and under the terrain its still solid as if it wasnt raised.  You dont fall through the ground into the death plane.",
+    "requiredDiscriminator": "The unmistakable existing-HP-face ridge must be visible immediately ahead of the ID65 entry landing and absent from retail Town Square. Collision must remain on the unchanged original flat ground because this candidate deliberately contains no collision edits.",
+    "passedChecks": [
+      "The authored terrain deformation was visible in ID65.",
+      "The same terrain deformation was absent from retail Town Square.",
+      "Spyro could pass through and beneath the visible deformation in the tested entry area.",
+      "The unchanged original flat ground remained solid beneath the deformation in the tested entry area.",
+      "Spyro did not fall through that original ground into the death plane in the tested entry area."
+    ],
+    "conclusion": "The exact renderer-visibility control passes its focused discriminator. Existing row-80 HP vertex edits reach the ID65 runtime renderer and remain isolated from retail Town Square. The visible ridge and unchanged flat collision diverge exactly as designed; this is not a solid-terrain or Add Terrain pass."
+  },
+  "readOnlyRuntimeCorroboration": {
+    "candidateImageOpenByDuckStationAfterReport": true,
+    "duckStationProcessId": 15463,
+    "openImagePath": "_local/v5-stone-hill-level-replacement/unused-level-65-authored-terrain-render-visibility-control/Unused-Level-65-Town-Square-authored-terrain-render-visibility-control-RUNTIME-CANDIDATE.bin",
+    "openImageSha256Readback": "01a170b19303eaab77fb00fbc8cfabf5425a640348c84aa09f8aa4eb5b57e6b1",
+    "boundary": "The open-file and on-disk hash readbacks bind the continuing DuckStation process to the exact candidate BIN. They do not independently prove which CUE path launched it, the user-visible frame, or any unreported emulator conditions."
+  },
+  "staticAndRuntimeExplanation": {
+    "runtimeKey": "213:37:hp",
+    "sourceSectorIndex": 213,
+    "authoredVertexPatches": [
+      {
+        "vertexIndex": 39,
+        "wadOffset": "0x6A3EB60",
+        "beforeHex": "20 D8 E7 29",
+        "afterHex": "20 DA E7 29",
+        "originalPoint": { "x": 7762, "y": 6474, "z": 512 },
+        "authoredPoint": { "x": 7762, "y": 6474, "z": 1024 }
+      },
+      {
+        "vertexIndex": 48,
+        "wadOffset": "0x6A3EB84",
+        "beforeHex": "20 D8 E7 39",
+        "afterHex": "20 DA E7 39",
+        "originalPoint": { "x": 7890, "y": 6474, "z": 512 },
+        "authoredPoint": { "x": 7890, "y": 6474, "z": 1024 }
+      }
+    ],
+    "patchBoundary": {
+      "changedLogicalWadBytes": 2,
+      "changedPhysicalImageBytes": 44,
+      "rebuiltRawSectorCount": 1,
+      "affectedRawSectorLbas": [54434]
+    },
+    "collisionIntentionallyUnchanged": true,
+    "faceCountChanged": false,
+    "sectorSizeChanged": false,
+    "componentSizeChanged": false,
+    "interpretation": "The user-visible deformation proves that the two existing-vertex changes reached the renderer. Walking through it while the original floor remained solid is the expected consequence of preserving every native collision byte."
+  },
+  "unverifiedRuntimeChecks": [
+    "This report does not establish authored collision writeback or a solid raised surface.",
+    "It does not establish creation of any new vertex or face; all terrain counts and component sizes remained unchanged.",
+    "Low-detail or far-LOD behavior, texture stability from several camera angles, and unrelated stretching outside the reported view were not separately reported.",
+    "Reset or cold-boot repeatability, the TOWN SQUARE label, Gnasty's Loot, Sunny Flight, and broader gameplay stability were not reconfirmed for this exact BIN.",
+    "Cheat, memory-card, save-state, and prohibited-action conditions were not independently captured with this report."
+  ],
+  "nextGate": "Start again from the exact focused-runtime-passed display-name base and reproduce the same existing-face ridge with matching source-derived native collision edits while preserving all face counts and component sizes. Require the raised surface to support walking, standing, jumping, and charging while retail Town Square remains unchanged. Only after that isolated collision-writeback control passes should component-aware environment growth be used for a genuinely new face, vertices, and collision.",
+  "scopeLimitations": [
+    "This pass applies only to profile unused-level-65-town-square-authored-terrain-render-visibility-control-clean-usa-disposable-v2 and BIN 01a170b19303eaab77fb00fbc8cfabf5425a640348c84aa09f8aa4eb5b57e6b1.",
+    "It proves an authored deformation of existing row-80 HP terrain reaches the ID65 renderer and is absent from retail Town Square.",
+    "It does not prove Add Terrain, collision authoring, LP terrain, arbitrary textures or Mobys, or a complete new level.",
+    "It does not authorize integration into the normal editor, Create BIN, release, or update paths."
+  ]
+}

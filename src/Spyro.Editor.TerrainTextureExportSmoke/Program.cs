@@ -168,7 +168,7 @@ foreach (TerrainPatch patch in result.Plan.Patches)
 
 ExactDiffResult exactDiff = CompareExactPhysicalDiff(sourceImagePath, outputImagePath, disc, result.Plan.Patches);
 Assert(exactDiff.UnexpectedDifferenceCount == 0,
-    $"The candidate contains {exactDiff.UnexpectedDifferenceCount:N0} byte differences outside the retained plan.");
+    $"The candidate contains {exactDiff.UnexpectedDifferenceCount:N0} byte differences outside the retained logical plan or its touched-sector MODE2 Form 1 integrity spans.");
 Assert(exactDiff.ExpectedDifferenceCount == ExpectedPatchedBytes &&
        exactDiff.ObservedExpectedDifferenceCount == ExpectedPatchedBytes,
     $"Exact BIN comparison observed {exactDiff.ObservedExpectedDifferenceCount:N0}/{exactDiff.ExpectedDifferenceCount:N0} expected differences.");
@@ -460,7 +460,7 @@ static async Task RunArtOnlyPreserveTargetExportSmokeAsync(
     Assert(exactDiff.UnexpectedDifferenceCount == 0 &&
            exactDiff.ExpectedDifferenceCount > 0 &&
            exactDiff.ObservedExpectedDifferenceCount == exactDiff.ExpectedDifferenceCount,
-        "Art-only output contains an absent planned difference or any byte difference outside native texture relocation patches.");
+        "Art-only output contains an absent planned logical difference or a byte difference outside native texture relocation patches and their touched-sector MODE2 Form 1 integrity spans.");
     Assert(ReadFileLength(outputImagePath) == sourceLengthBefore &&
            ReadFileLength(sourceImagePath) == sourceLengthBefore &&
            Sha256File(sourceImagePath) == sourceShaBefore,
@@ -696,7 +696,7 @@ static async Task RunMultiDonorArtOnlyExportSmokeAsync(
     Assert(exactDiff.UnexpectedDifferenceCount == 0 &&
            exactDiff.ExpectedDifferenceCount > 0 &&
            exactDiff.ObservedExpectedDifferenceCount == exactDiff.ExpectedDifferenceCount,
-        "The mixed-donor BIN contains an absent planned difference or a byte difference outside its retained native-texture plan.");
+        "The mixed-donor BIN contains an absent planned logical difference or a byte difference outside its retained native-texture plan and touched-sector MODE2 Form 1 integrity spans.");
     Assert(ReadFileLength(outputImagePath) == sourceLengthBefore &&
            ReadFileLength(sourceImagePath) == sourceLengthBefore &&
            string.Equals(Sha256File(sourceImagePath), sourceShaBefore, StringComparison.OrdinalIgnoreCase),
@@ -1093,7 +1093,7 @@ static async Task<MissingSurfaceAppendEvidence> RunMissingSurfaceDescriptorAppen
     Assert(exactDiff.UnexpectedDifferenceCount == 0 &&
            exactDiff.ObservedExpectedDifferenceCount == exactDiff.ExpectedDifferenceCount &&
            exactDiff.ExpectedDifferenceCount > 0,
-        "The missing-descriptor candidate contains an unexpected or absent physical byte difference.");
+        "The missing-descriptor candidate contains an absent planned logical difference or an unexpected byte outside touched-sector MODE2 Form 1 integrity spans.");
     Assert(ReadFileLength(outputImagePath) == expectedSourceLength,
         "The missing-descriptor candidate changed the fixed retail BIN length.");
 
@@ -1206,7 +1206,7 @@ static async Task<MissingSurfaceAppendEvidence> RunMissingSurfaceDescriptorAppen
         - Native art strategy: `{artSummary.Strategy}`; complete descriptors: {artSummary.CompleteDescriptorCount}; art changed bytes: {artSummary.PatchedByteCount:N0}.
         - Native surface table: {targetSource.SpecialSurfaces.Count}->{outputSurface.SpecialSurfaces.Count}; appended descriptor {appendedIndex}; exact descriptor growth: 16 bytes.
         - Final reparse: all affected faces resolve to appended type 0 / param1 0 / param2 0 damaging water.
-        - Exact full-BIN comparison: {exactDiff.ObservedExpectedDifferenceCount:N0} planned changed bytes, zero differences outside the retained plan.
+        - Exact full-BIN comparison: {exactDiff.ObservedExpectedDifferenceCount:N0} planned logical changed bytes; {exactDiff.RawIntegrityDifferenceCount:N0} EDC/ECC byte changes across {exactDiff.ObservedRawIntegritySectorCount:N0}/{exactDiff.ExpectedRawIntegritySectorCount:N0} touched MODE2 Form 1 sector(s); zero differences outside those exact scopes.
         - Retail source SHA-256 remained `{expectedSourceSha256}`.
 
         Runtime candidate: `{outputCuePath}`
@@ -1378,7 +1378,16 @@ static ExactDiffResult CompareExactPhysicalDiff(
     DiscLayoutInfo layout,
     IReadOnlyList<TerrainPatch> patches)
 {
+    const int LogicalSectorBytes = 2048;
+    const int RawMode2SectorBytes = 2352;
+    const int RawMode2UserOffset = 24;
+    const int RawMode2IntegrityOffset = RawMode2UserOffset + LogicalSectorBytes;
+    bool hasRawMode2Integrity =
+        layout.SectorSize == RawMode2SectorBytes &&
+        layout.UserOffset == RawMode2UserOffset;
     Dictionary<long, byte> expectedAfterByPhysicalOffset = [];
+    HashSet<long> expectedRawIntegritySectors = [];
+    HashSet<long> logicallyChangedRawSectors = [];
     foreach (TerrainPatch patch in patches)
     {
         long wadOffset = ParseHexLong(patch.WadRelativeOffset);
@@ -1386,15 +1395,24 @@ static ExactDiffResult CompareExactPhysicalDiff(
         byte[] after = ParsePatchBytes(patch.AfterHexPreview);
         Assert(before.Length == after.Length,
             $"Patch {patch.Label} has unequal before/after lengths during exact BIN comparison.");
+        if (hasRawMode2Integrity)
+        {
+            long firstSector = WadLba + (wadOffset / LogicalSectorBytes);
+            long lastSector = WadLba + ((wadOffset + after.Length - 1) / LogicalSectorBytes);
+            for (long sector = firstSector; sector <= lastSector; sector++)
+                expectedRawIntegritySectors.Add(sector);
+        }
         for (int index = 0; index < after.Length; index++)
         {
             if (before[index] == after[index])
                 continue;
             long logical = wadOffset + index;
-            long sector = WadLba + (logical / 2048);
-            long physical = (sector * layout.SectorSize) + layout.UserOffset + (logical % 2048);
+            long sector = WadLba + (logical / LogicalSectorBytes);
+            long physical = (sector * layout.SectorSize) + layout.UserOffset + (logical % LogicalSectorBytes);
             if (!expectedAfterByPhysicalOffset.TryAdd(physical, after[index]))
                 throw new InvalidDataException($"The patch plan overlaps physical byte 0x{physical:X}.");
+            if (hasRawMode2Integrity)
+                logicallyChangedRawSectors.Add(sector);
         }
     }
 
@@ -1405,7 +1423,10 @@ static ExactDiffResult CompareExactPhysicalDiff(
     byte[] outputBuffer = new byte[sourceBuffer.Length];
     long physicalBase = 0;
     int observedExpected = 0;
-    int unexpected = 0;
+    int rawIntegrityDifferences = 0;
+    int unexpectedLogical = 0;
+    int unexpectedNonIntegrityPhysical = 0;
+    HashSet<long> observedRawIntegritySectors = [];
     while (physicalBase < source.Length)
     {
         int requested = checked((int)Math.Min(sourceBuffer.Length, source.Length - physicalBase));
@@ -1423,12 +1444,48 @@ static ExactDiffResult CompareExactPhysicalDiff(
             }
             else if (differs)
             {
-                unexpected++;
+                long sector = physical / layout.SectorSize;
+                int sectorOffset = checked((int)(physical % layout.SectorSize));
+                bool insideLogicalUserData =
+                    sectorOffset >= layout.UserOffset &&
+                    sectorOffset < layout.UserOffset + LogicalSectorBytes;
+                if (insideLogicalUserData)
+                {
+                    unexpectedLogical++;
+                }
+                else if (hasRawMode2Integrity &&
+                         sectorOffset >= RawMode2IntegrityOffset &&
+                         sectorOffset < RawMode2SectorBytes &&
+                         expectedRawIntegritySectors.Contains(sector))
+                {
+                    rawIntegrityDifferences++;
+                    observedRawIntegritySectors.Add(sector);
+                }
+                else
+                {
+                    unexpectedNonIntegrityPhysical++;
+                }
             }
         }
         physicalBase += requested;
     }
-    return new ExactDiffResult(expectedAfterByPhysicalOffset.Count, observedExpected, unexpected);
+    if (hasRawMode2Integrity &&
+        !logicallyChangedRawSectors.IsSubsetOf(observedRawIntegritySectors))
+    {
+        string missing = string.Join(", ", logicallyChangedRawSectors
+            .Except(observedRawIntegritySectors)
+            .OrderBy(sector => sector));
+        throw new InvalidDataException(
+            $"Planned logical changes did not produce rebuilt EDC/ECC bytes in MODE2 Form 1 sector(s): {missing}.");
+    }
+    return new ExactDiffResult(
+        expectedAfterByPhysicalOffset.Count,
+        observedExpected,
+        expectedRawIntegritySectors.Count,
+        observedRawIntegritySectors.Count,
+        rawIntegrityDifferences,
+        unexpectedLogical,
+        unexpectedNonIntegrityPhysical);
 }
 
 static long ParseHexLong(string text)
@@ -2007,7 +2064,15 @@ sealed record DiscLayoutInfo(int SectorSize, int UserOffset);
 sealed record ExactDiffResult(
     int ExpectedDifferenceCount,
     int ObservedExpectedDifferenceCount,
-    int UnexpectedDifferenceCount);
+    int ExpectedRawIntegritySectorCount,
+    int ObservedRawIntegritySectorCount,
+    int RawIntegrityDifferenceCount,
+    int UnexpectedLogicalDifferenceCount,
+    int UnexpectedNonIntegrityPhysicalDifferenceCount)
+{
+    public int UnexpectedDifferenceCount =>
+        UnexpectedLogicalDifferenceCount + UnexpectedNonIntegrityPhysicalDifferenceCount;
+}
 
 sealed record MissingSurfaceAppendEvidence(
     string TargetLevel,
