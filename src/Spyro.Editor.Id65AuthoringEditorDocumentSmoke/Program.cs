@@ -884,6 +884,7 @@ static void VerifySourceTopology(string repositoryRoot)
     string[] expectedOwners =
     [
         Path.Combine("src", "Spyro.Editor.Core", "Exporting", "Id65AuthoringEditorDocument.cs"),
+        Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorAggregatePlanProjector.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorDocumentStore.cs"),
         Path.Combine("src", "Spyro.Editor.Id65AuthoringEditorDocumentSmoke", "Program.cs")
     ];
@@ -903,6 +904,7 @@ static void VerifySourceTopology(string repositoryRoot)
         .ToArray();
     string[] expectedCallsiteOwners =
     [
+        Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorAggregatePlanProjector.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorDocumentStore.cs"),
         Path.Combine("src", "Spyro.Editor.Id65AuthoringEditorDocumentSmoke", "Program.cs")
     ];
