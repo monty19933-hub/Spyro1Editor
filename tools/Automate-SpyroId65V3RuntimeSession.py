@@ -11,7 +11,8 @@ coordinator:
 * PID-targeted macOS keyboard events behind the existing Accessibility grant;
 * a fixed action allowlist with save/load-state keys intentionally absent;
 * exception-safe release of every host key that might have been pressed; and
-* a read-only pad-word confirmation interface; and
+* a read-only pad-word confirmation interface;
+* an offline-only, production-unwired one-connection GDB lifecycle; and
 * the manual V3 capture coordinator's persistent cross-tool advisory lease.
 
 The frozen external-HOME profile binds PowerOff only to F12 and TogglePause
@@ -39,6 +40,7 @@ import fcntl
 import hashlib
 import io
 import json
+import math
 import os
 import pathlib
 import re
@@ -82,21 +84,36 @@ PAD_CONFIRMATION_TIMEOUT_SECONDS: Final = 1.5
 PAD_CONFIRMATION_INTERVAL_SECONDS: Final = 0.01
 PAD_CONFIRMATION_STABLE_SAMPLES: Final = 2
 
-# These two pre-framed packets are the reader's entire GDB command surface.
-# There is intentionally no generic address or packet API: expanding this
-# allowlist requires another reviewed source checkpoint before production use.
+# These pre-framed packets are the session's entire GDB command surface.  The
+# two memory reads remain available through narrow read methods.  The one
+# continue packet is owned only by the connect/resume lifecycle below; there is
+# intentionally no generic address, packet, pause, step, or breakpoint API.
 GDB_HOST: Final = "127.0.0.1"
 GDB_PORT: Final = 2345
+GDB_SOURCE_COMMIT: Final = "e7f2f101c2489e68446deff6dae9083e7a2114ea"
 GDB_SOCKET_TIMEOUT_SECONDS: Final = 2.0
 GDB_MAX_RSP_PAYLOAD_BYTES: Final = 4096
 GDB_MAX_RSP_EVENTS_PER_READ: Final = 32
+# This is an evidence-acceptance deadline, not a promise that every native
+# subprocess returns within 250 ms.  The clock is checked after every blocking
+# sample so late evidence is always refused.  Native socket/lsof calls retain
+# their own fail-closed timeouts.
+GDB_VBLANK_PROGRESS_TIMEOUT_SECONDS: Final = 0.25
+GDB_VBLANK_PROGRESS_INTERVAL_SECONDS: Final = 0.01
+GDB_VBLANK_PROGRESS_MAX_SAMPLES: Final = 32
+GDB_PAUSED_CONFIRMATION_MIN_SECONDS: Final = 0.05
 GDB_PAD_READ_PACKET: Final = b"$m800786a0,4#9b"
 GDB_VBLANK_READ_PACKET: Final = b"$m800758c8,4#a4"
-GDB_ALLOWED_OUTBOUND: Final = frozenset({
+GDB_CONTINUE_PACKET: Final = b"$c#63"
+GDB_READ_ONLY_OUTBOUND: Final = frozenset({
     GDB_PAD_READ_PACKET,
     GDB_VBLANK_READ_PACKET,
     b"+",
     b"-",
+})
+GDB_SESSION_OUTBOUND: Final = frozenset({
+    *GDB_READ_ONLY_OUTBOUND,
+    GDB_CONTINUE_PACKET,
 })
 GDB_LSOF_COMMAND: Final = (
     "/usr/sbin/lsof",
@@ -104,6 +121,14 @@ GDB_LSOF_COMMAND: Final = (
     "-a",
     "-iTCP:2345",
     "-sTCP:LISTEN",
+    "-F0pfadDikstnPT",
+)
+GDB_CONNECTION_SET_LSOF_COMMAND: Final = (
+    "/usr/sbin/lsof",
+    "-nP",
+    "-Tqs",
+    "-a",
+    "-iTCP:2345",
     "-F0pfadDikstnPT",
 )
 
@@ -252,6 +277,18 @@ FORBIDDEN_ACTION_TOKENS: Final = frozenset({
 
 class AutomationRefusal(RuntimeError):
     """A fail-closed refusal that must not be converted into acceptance."""
+
+
+class _GdbUnexpectedStopRefusal(AutomationRefusal):
+    """A checksum-valid S/T notification proved that emulation stopped."""
+
+
+class _GdbTopologyDriftRefusal(AutomationRefusal):
+    """The exact process/listener/client topology became unprovable."""
+
+
+class _GdbPauseContradictionRefusal(AutomationRefusal):
+    """Guest progress directly contradicted a claimed stable paused state."""
 
 
 class ReleasedWithEnvironmentDrift(AutomationRefusal):
@@ -442,6 +479,59 @@ class InputPlan:
             events=tuple(parsed),
             sha256=hashlib.sha256(raw).hexdigest(),
         )
+
+
+class PlannedEmulationState(str, enum.Enum):
+    RUNNING = "RUNNING"
+    PAUSED = "PAUSED"
+
+
+@dataclasses.dataclass(frozen=True)
+class GdbSessionInputLifecycle:
+    """Pure plan result relative to the post-continue RUNNING baseline."""
+
+    states_after_events: tuple[PlannedEmulationState, ...]
+    toggle_pause_count: int
+    terminal_state: PlannedEmulationState
+
+
+def validate_gdb_session_input_lifecycle(
+    plan: InputPlan,
+) -> GdbSessionInputLifecycle:
+    """Validate only the future one-shot GDB execution policy.
+
+    The existing production foundation remains unwired.  A later coordinator
+    must call this pure function before any listener connection or host event.
+    PowerOff is deliberately excluded until process exit has its own terminal
+    evidence contract.
+    """
+
+    if type(plan) is not InputPlan or not plan.events:
+        raise AutomationRefusal("GDB session input lifecycle plan is malformed.")
+    state = PlannedEmulationState.RUNNING
+    states: list[PlannedEmulationState] = []
+    toggle_count = 0
+    for event in plan.events:
+        if event.action is KeyAction.POWER_OFF:
+            raise AutomationRefusal(
+                "PowerOff is unavailable in the one-shot GDB session lifecycle."
+            )
+        if state is PlannedEmulationState.PAUSED:
+            if event.action is not KeyAction.TOGGLE_PAUSE:
+                raise AutomationRefusal(
+                    "Only the matching TogglePause resume may follow a planned pause."
+                )
+            state = PlannedEmulationState.RUNNING
+            toggle_count += 1
+        elif event.action is KeyAction.TOGGLE_PAUSE:
+            state = PlannedEmulationState.PAUSED
+            toggle_count += 1
+        states.append(state)
+    if state is not PlannedEmulationState.RUNNING or toggle_count % 2 != 0:
+        raise AutomationRefusal(
+            "TogglePause lifecycle must contain pairs and terminate RUNNING."
+        )
+    return GdbSessionInputLifecycle(tuple(states), toggle_count, state)
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -2033,6 +2123,255 @@ class GdbListenerIdentity:
             raise AutomationRefusal("DuckStation GDB listener identity is malformed.")
 
 
+@dataclasses.dataclass(frozen=True)
+class GdbClientEndpointIdentity:
+    """The exact local endpoint created by this automation process."""
+
+    pid: int
+    descriptor: int
+    address: str
+    port: int
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.pid) is not int
+            or self.pid <= 1
+            or self.pid > 2_147_483_647
+            or type(self.descriptor) is not int
+            or self.descriptor < 0
+            or self.descriptor > 2_147_483_647
+            or self.address != GDB_HOST
+            or type(self.port) is not int
+            or not 1 <= self.port <= 65_535
+            or self.port == GDB_PORT
+        ):
+            raise AutomationRefusal("DuckStation GDB client endpoint is malformed.")
+
+
+@dataclasses.dataclass(frozen=True)
+class GdbObservedConnectionSet:
+    """One lsof observation of the listener and optional sole client pair.
+
+    This excludes stable or accidental competing clients at every observation.
+    Like any userspace snapshot, it is not an OS-enforced defence against a
+    hostile client that connects, acts, and disconnects between observations.
+    The production coordinator remains disabled while that residual exists.
+    """
+
+    listener: GdbListenerIdentity
+    client_endpoint: GdbClientEndpointIdentity | None
+    server_descriptor: int | None
+    server_device_token: str | None
+    client_descriptor: int | None
+    client_device_token: str | None
+
+    def __post_init__(self) -> None:
+        if type(self.listener) is not GdbListenerIdentity:
+            raise AutomationRefusal("DuckStation GDB connection set listener is malformed.")
+        optional_values = (
+            self.server_descriptor,
+            self.server_device_token,
+            self.client_descriptor,
+            self.client_device_token,
+        )
+        if self.client_endpoint is None:
+            if any(value is not None for value in optional_values):
+                raise AutomationRefusal(
+                    "Unconnected DuckStation GDB set contains client socket fields."
+                )
+            return
+        if (
+            type(self.client_endpoint) is not GdbClientEndpointIdentity
+            or self.client_endpoint.pid == self.listener.pid
+            or type(self.server_descriptor) is not int
+            or self.server_descriptor < 0
+            or self.server_descriptor > 2_147_483_647
+            or self.server_descriptor == self.listener.descriptor
+            or type(self.client_descriptor) is not int
+            or self.client_descriptor < 0
+            or self.client_descriptor > 2_147_483_647
+            or self.client_descriptor != self.client_endpoint.descriptor
+            or re.fullmatch(
+                r"0x[0-9a-f]+", self.server_device_token or "", re.ASCII
+            )
+            is None
+            or re.fullmatch(
+                r"0x[0-9a-f]+", self.client_device_token or "", re.ASCII
+            )
+            is None
+            or self.server_device_token == self.listener.device_token
+            or self.client_device_token == self.listener.device_token
+            or self.server_device_token == self.client_device_token
+        ):
+            raise AutomationRefusal("DuckStation GDB established socket pair is malformed.")
+
+
+def _parse_gdb_connection_set_lsof(
+    raw: bytes,
+    duckstation_pid: int,
+    expected_client: GdbClientEndpointIdentity | None,
+) -> GdbObservedConnectionSet:
+    """Parse a global macOS lsof snapshot and require the exact whole set."""
+
+    if (
+        type(raw) is not bytes
+        or not raw
+        or len(raw) > 64 * 1024
+        or not raw.endswith(b"\x00\n")
+        or raw.startswith(b"\xef\xbb\xbf")
+        or type(duckstation_pid) is not int
+        or duckstation_pid <= 1
+        or duckstation_pid > 2_147_483_647
+        or (
+            expected_client is not None
+            and type(expected_client) is not GdbClientEndpointIdentity
+        )
+    ):
+        raise AutomationRefusal("GDB connection-set lsof framing is invalid.")
+    try:
+        decoded = raw.decode("utf-8", "strict")
+    except UnicodeDecodeError as exc:
+        raise AutomationRefusal(
+            "GDB connection-set lsof output is not strict UTF-8."
+        ) from exc
+    records = decoded.split("\x00\n")
+    if records[-1] != "":
+        raise AutomationRefusal("GDB connection-set lsof output is unterminated.")
+
+    groups: dict[int, list[tuple[str, ...]]] = {}
+    current_pid: int | None = None
+    for record in records[:-1]:
+        fields = tuple(record.split("\x00"))
+        if any(
+            not field or "\x00" in field or "\r" in field or "\n" in field
+            for field in fields
+        ):
+            raise AutomationRefusal(
+                "GDB connection-set lsof fields contain control text."
+            )
+        if len(fields) == 1 and re.fullmatch(
+            r"p[1-9][0-9]{0,9}", fields[0], re.ASCII
+        ):
+            current_pid = int(fields[0][1:], 10)
+            if current_pid > 2_147_483_647 or current_pid in groups:
+                raise AutomationRefusal(
+                    "GDB connection-set lsof process record is duplicated or oversized."
+                )
+            groups[current_pid] = []
+            continue
+        if current_pid is None or len(fields) != 9:
+            raise AutomationRefusal(
+                "GDB connection-set lsof socket record is misplaced or incomplete."
+            )
+        expected_prefixes = ("f", "a", "t", "d", "P", "n", "T", "T", "T")
+        if tuple(field[:1] for field in fields) != expected_prefixes:
+            raise AutomationRefusal(
+                "GDB connection-set lsof fields are reordered, duplicated, or unknown."
+            )
+        descriptor_text = fields[0][1:]
+        if (
+            re.fullmatch(r"0|[1-9][0-9]{0,9}", descriptor_text, re.ASCII) is None
+            or int(descriptor_text, 10) > 2_147_483_647
+            or fields[1] != "au"
+            or fields[2] != "tIPv4"
+            or re.fullmatch(r"d0x[0-9a-f]+", fields[3], re.ASCII) is None
+            or fields[4] != "PTCP"
+            or fields[6] not in {"TST=LISTEN", "TST=ESTABLISHED"}
+            or re.fullmatch(r"TQR=(0|[1-9][0-9]{0,9})", fields[7], re.ASCII)
+            is None
+            or re.fullmatch(r"TQS=(0|[1-9][0-9]{0,9})", fields[8], re.ASCII)
+            is None
+            or int(fields[7][4:], 10) > 2_147_483_647
+            or int(fields[8][4:], 10) > 2_147_483_647
+        ):
+            raise AutomationRefusal(
+                "GDB connection-set lsof socket identity is not pinned."
+            )
+        groups[current_pid].append(fields)
+
+    expected_pids = {duckstation_pid}
+    if expected_client is not None:
+        expected_pids.add(expected_client.pid)
+    if set(groups) != expected_pids or any(not sockets for sockets in groups.values()):
+        if expected_client is None and duckstation_pid in groups:
+            raise AutomationRefusal(
+                "A GDB client was already established or foreign before ownership."
+            )
+        raise AutomationRefusal(
+            "GDB connection-set lsof contains a missing or foreign process."
+        )
+
+    duckstation_sockets = groups[duckstation_pid]
+    listener_sockets = [
+        fields
+        for fields in duckstation_sockets
+        if fields[5] == f"n{GDB_HOST}:{GDB_PORT}"
+        and fields[6] == "TST=LISTEN"
+    ]
+    if len(listener_sockets) != 1:
+        raise AutomationRefusal(
+            "GDB connection-set lsof does not contain one exact listener."
+        )
+    listener_fields = listener_sockets[0]
+    if listener_fields[7:] != ("TQR=0", "TQS=0"):
+        raise AutomationRefusal("DuckStation GDB listener queues are not empty.")
+    listener = GdbListenerIdentity(
+        pid=duckstation_pid,
+        descriptor=int(listener_fields[0][1:], 10),
+        access="u",
+        socket_type="IPv4",
+        device_token=listener_fields[3][1:],
+        protocol="TCP",
+        endpoint=f"{GDB_HOST}:{GDB_PORT}",
+        tcp_state="LISTEN",
+        receive_queue=0,
+        send_queue=0,
+    )
+    if expected_client is None:
+        if len(duckstation_sockets) != 1:
+            raise AutomationRefusal(
+                "A GDB client was already established before ownership."
+            )
+        return GdbObservedConnectionSet(listener, None, None, None, None, None)
+
+    server_endpoint = (
+        f"n{GDB_HOST}:{GDB_PORT}->{expected_client.address}:{expected_client.port}"
+    )
+    client_endpoint = (
+        f"n{expected_client.address}:{expected_client.port}->{GDB_HOST}:{GDB_PORT}"
+    )
+    server_sockets = [
+        fields
+        for fields in duckstation_sockets
+        if fields[5] == server_endpoint and fields[6] == "TST=ESTABLISHED"
+    ]
+    client_sockets = [
+        fields
+        for fields in groups[expected_client.pid]
+        if fields[5] == client_endpoint and fields[6] == "TST=ESTABLISHED"
+    ]
+    if (
+        len(duckstation_sockets) != 2
+        or len(groups[expected_client.pid]) != 1
+        or len(server_sockets) != 1
+        or len(client_sockets) != 1
+        or int(client_sockets[0][0][1:], 10) != expected_client.descriptor
+    ):
+        raise AutomationRefusal(
+            "GDB connection-set lsof is not one exact reversed socket pair."
+        )
+    server = server_sockets[0]
+    client = client_sockets[0]
+    return GdbObservedConnectionSet(
+        listener,
+        expected_client,
+        int(server[0][1:], 10),
+        server[3][1:],
+        int(client[0][1:], 10),
+        client[3][1:],
+    )
+
+
 def _parse_gdb_listener_lsof(raw: bytes) -> GdbListenerIdentity:
     """Parse the empirically pinned macOS ``lsof -F0`` listener schema.
 
@@ -2115,9 +2454,15 @@ def _parse_gdb_listener_lsof(raw: bytes) -> GdbListenerIdentity:
 class GdbEndpointAttestor(Protocol):
     def observe(self, process: ProcessIdentity) -> GdbListenerIdentity: ...
 
+    def observe_connection_set(
+        self,
+        process: ProcessIdentity,
+        expected_client: GdbClientEndpointIdentity | None,
+    ) -> GdbObservedConnectionSet: ...
+
 
 class MacGdbEndpointAttestor:
-    """Bind the fixed GDB endpoint to one exact lsof socket identity."""
+    """Bind the fixed endpoint to its listener and observed whole client set."""
 
     def __init__(
         self,
@@ -2169,12 +2514,51 @@ class MacGdbEndpointAttestor:
             )
         return listener
 
+    def observe_connection_set(
+        self,
+        process: ProcessIdentity,
+        expected_client: GdbClientEndpointIdentity | None,
+    ) -> GdbObservedConnectionSet:
+        if type(process) is not ProcessIdentity or process.pid <= 1:
+            raise AutomationRefusal("GDB connection-set process binding is invalid.")
+        if (
+            expected_client is not None
+            and type(expected_client) is not GdbClientEndpointIdentity
+        ):
+            raise AutomationRefusal("GDB expected client endpoint is malformed.")
+        try:
+            completed = self._runner(GDB_CONNECTION_SET_LSOF_COMMAND)
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise AutomationRefusal(
+                "Cannot inspect the DuckStation GDB connection set."
+            ) from exc
+        if (
+            type(completed.returncode) is not int
+            or completed.returncode != 0
+            or type(completed.stdout) is not bytes
+            or type(completed.stderr) is not bytes
+            or completed.stderr
+        ):
+            raise AutomationRefusal(
+                "DuckStation GDB connection-set inspection failed closed."
+            )
+        observed = _parse_gdb_connection_set_lsof(
+            completed.stdout, process.pid, expected_client
+        )
+        if observed.listener.pid != process.pid:
+            raise AutomationRefusal(
+                "The GDB connection set is not owned by the exact DuckStation process."
+            )
+        return observed
+
 
 class _GdbSocket(Protocol):
     def settimeout(self, value: float | None) -> None: ...
     def sendall(self, data: bytes) -> None: ...
     def recv(self, maximum_bytes: int) -> bytes: ...
     def getpeername(self) -> Any: ...
+    def getsockname(self) -> Any: ...
+    def fileno(self) -> int: ...
     def close(self) -> None: ...
 
 
@@ -2186,12 +2570,43 @@ class _GdbReaderState(enum.Enum):
     CLOSED = enum.auto()
 
 
-class PersistentReadOnlyDuckStationGdbReader:
-    """Persistent, fixed-address, read-only DuckStation RSP client.
+@dataclasses.dataclass(frozen=True)
+class _GdbTransportStatus:
+    """Side-effect-free lifecycle snapshot for the internal RSP transport."""
 
-    This class is deliberately not constructed by :func:`main`.  A GDB
-    connection pauses emulation, so production wiring must be reviewed with
-    the input-pulse confirmation ordering rather than enabled implicitly.
+    state: str
+    bound_process: ProcessIdentity | None
+    bound_listener: GdbListenerIdentity | None
+    client_endpoint: GdbClientEndpointIdentity | None
+    connection_attempts: int
+
+    def __post_init__(self) -> None:
+        if (
+            self.state not in {state.name for state in _GdbReaderState}
+            or (
+                self.bound_process is not None
+                and type(self.bound_process) is not ProcessIdentity
+            )
+            or (
+                self.bound_listener is not None
+                and type(self.bound_listener) is not GdbListenerIdentity
+            )
+            or (
+                self.client_endpoint is not None
+                and type(self.client_endpoint) is not GdbClientEndpointIdentity
+            )
+            or type(self.connection_attempts) is not int
+            or not 0 <= self.connection_attempts <= 2_147_483_647
+        ):
+            raise AutomationRefusal("DuckStation GDB transport status is malformed.")
+
+
+class _PersistentDuckStationGdbTransport:
+    """Internal one-connection RSP transport with a fixed packet surface.
+
+    The public session below is the sole owner of the exact continue packet.
+    Keeping this transport private prevents the read-only confirmation policy
+    from acquiring a generic GDB control surface.
     """
 
     def __init__(
@@ -2211,15 +2626,94 @@ class PersistentReadOnlyDuckStationGdbReader:
         self._socket: _GdbSocket | None = None
         self._process: ProcessIdentity | None = None
         self._listener: GdbListenerIdentity | None = None
+        self._client_endpoint: GdbClientEndpointIdentity | None = None
+        self._connection_attempts = 0
         self._state_guard = threading.Lock()
         self._operation_lock = threading.Lock()
 
+    def status(self) -> _GdbTransportStatus:
+        """Return state only; never inspect lsof, open a socket, or send RSP."""
+
+        with self._state_guard:
+            return _GdbTransportStatus(
+                self._state.name,
+                self._process,
+                self._listener,
+                self._client_endpoint,
+                self._connection_attempts,
+            )
+
+    def require_existing_connection(self, process: ProcessIdentity) -> None:
+        """Require one already-open exact connection without creating one."""
+
+        if type(process) is not ProcessIdentity:
+            raise AutomationRefusal(
+                "Existing DuckStation GDB process identity is malformed."
+            )
+        with self._state_guard:
+            if (
+                self._state is not _GdbReaderState.CONNECTED
+                or self._socket is None
+                or self._listener is None
+                or self._client_endpoint is None
+                or self._process != process
+                or self._connection_attempts != 1
+            ):
+                raise AutomationRefusal(
+                    "DuckStation GDB reader is not one exact existing connection."
+                )
+
+    def connect_once(self, process: ProcessIdentity) -> None:
+        """Create the sole socket without sending any RSP bytes."""
+
+        if not self._operation_lock.acquire(blocking=False):
+            raise AutomationRefusal("Concurrent DuckStation GDB operations are forbidden.")
+        try:
+            try:
+                if type(process) is not ProcessIdentity:
+                    raise AutomationRefusal(
+                        "DuckStation GDB process identity is malformed."
+                    )
+                self._connect(process)
+            except BaseException as exc:
+                self._poison_and_raise(exc)
+        finally:
+            self._operation_lock.release()
+
+    def invalidate(self) -> None:
+        """Poison and close immediately, including during a concurrent operation."""
+
+        with self._state_guard:
+            if self._state is _GdbReaderState.CLOSED:
+                return
+            self._state = _GdbReaderState.POISONED
+            active = self._socket
+            self._socket = None
+        if active is not None:
+            try:
+                active.close()
+            except BaseException:
+                pass
+
     def read_pad_word(self, process: ProcessIdentity) -> int:
+        return self._read_pad_word(process, strict_running=False)
+
+    def read_pad_word_strict_running(self, process: ProcessIdentity) -> int:
+        return self._read_pad_word(process, strict_running=True)
+
+    def _read_pad_word(
+        self, process: ProcessIdentity, *, strict_running: bool
+    ) -> int:
         if not self._operation_lock.acquire(blocking=False):
             raise AutomationRefusal("Concurrent DuckStation GDB reads are forbidden.")
         try:
             try:
-                raw = self._read_fixed_packet(process, GDB_PAD_READ_PACKET)
+                raw = self._read_fixed_packet(
+                    process,
+                    GDB_PAD_READ_PACKET,
+                    strict_ack=strict_running,
+                    allow_stop_notifications=not strict_running,
+                )
                 if raw[0] != 0 or raw[1] != 0x41:
                     raise AutomationRefusal(
                         "DuckStation pad reply is not the pinned digital-pad frame."
@@ -2231,12 +2725,112 @@ class PersistentReadOnlyDuckStationGdbReader:
             self._operation_lock.release()
 
     def read_vblank_tick(self, process: ProcessIdentity) -> int:
+        return self._read_vblank_tick(process, strict_running=False)
+
+    def read_vblank_tick_strict_running(self, process: ProcessIdentity) -> int:
+        return self._read_vblank_tick(process, strict_running=True)
+
+    def _read_vblank_tick(
+        self, process: ProcessIdentity, *, strict_running: bool
+    ) -> int:
         if not self._operation_lock.acquire(blocking=False):
             raise AutomationRefusal("Concurrent DuckStation GDB reads are forbidden.")
         try:
             try:
-                raw = self._read_fixed_packet(process, GDB_VBLANK_READ_PACKET)
+                raw = self._read_fixed_packet(
+                    process,
+                    GDB_VBLANK_READ_PACKET,
+                    strict_ack=strict_running,
+                    allow_stop_notifications=not strict_running,
+                )
                 return int.from_bytes(raw, byteorder="little", signed=False)
+            except BaseException as exc:
+                self._poison_and_raise(exc)
+        finally:
+            self._operation_lock.release()
+
+    def continue_from_connection_pause(
+        self,
+        process: ProcessIdentity,
+        *,
+        before_send: Callable[[], None],
+    ) -> None:
+        """Send the one literal source-pinned continue and require its raw ACK."""
+
+        if not callable(before_send):
+            raise AutomationRefusal("DuckStation GDB continue owner is unavailable.")
+        if not self._operation_lock.acquire(blocking=False):
+            raise AutomationRefusal("Concurrent DuckStation GDB operations are forbidden.")
+        try:
+            try:
+                self.require_existing_connection(process)
+                self._attest_bound_endpoint()
+                if before_send() is not None:
+                    raise AutomationRefusal(
+                        "DuckStation GDB continue owner returned an unexpected value."
+                    )
+                self._send_outbound(GDB_CONTINUE_PACKET)
+                # At the pinned DuckStation commit, literal $c#63 is handled
+                # before normal packet dispatch.  OnSystemResumed emits exactly
+                # one raw '+'; there is no ACK-framed payload for this command.
+                if self._read_byte() != ord("+"):
+                    raise AutomationRefusal(
+                        "DuckStation GDB continue acknowledgement is not exact."
+                    )
+                self._attest_bound_endpoint()
+            except BaseException as exc:
+                self._poison_and_raise(exc)
+        finally:
+            self._operation_lock.release()
+
+    def consume_planned_pause_notification(
+        self, process: ProcessIdentity
+    ) -> None:
+        """Consume exact ``+$S05#b8`` and ACK only the framed stop reply."""
+
+        if not self._operation_lock.acquire(blocking=False):
+            raise AutomationRefusal("Concurrent DuckStation GDB operations are forbidden.")
+        try:
+            try:
+                self.require_existing_connection(process)
+                self._attest_bound_endpoint()
+                if self._read_byte() != ord("+") or self._read_byte() != ord("$"):
+                    raise AutomationRefusal(
+                        "DuckStation planned pause notification prefix is not exact."
+                    )
+                payload, checksum_text = self._read_packet_payload_with_checksum()
+                self._send_outbound(b"+")
+                if payload != b"S05" or checksum_text != b"b8":
+                    refusal_type = (
+                        _GdbUnexpectedStopRefusal
+                        if self._is_stop_notification(payload)
+                        else AutomationRefusal
+                    )
+                    raise refusal_type(
+                        "DuckStation planned pause notification is not exact S05#b8."
+                    )
+                self._attest_bound_endpoint()
+            except BaseException as exc:
+                self._poison_and_raise(exc)
+        finally:
+            self._operation_lock.release()
+
+    def consume_planned_resume_notification(
+        self, process: ProcessIdentity
+    ) -> None:
+        """Consume the one raw resume ``+`` without acknowledging it."""
+
+        if not self._operation_lock.acquire(blocking=False):
+            raise AutomationRefusal("Concurrent DuckStation GDB operations are forbidden.")
+        try:
+            try:
+                self.require_existing_connection(process)
+                self._attest_bound_endpoint()
+                if self._read_byte() != ord("+"):
+                    raise AutomationRefusal(
+                        "DuckStation planned resume notification is not exact."
+                    )
+                self._attest_bound_endpoint()
             except BaseException as exc:
                 self._poison_and_raise(exc)
         finally:
@@ -2267,22 +2861,18 @@ class PersistentReadOnlyDuckStationGdbReader:
             self._operation_lock.release()
 
     def _poison_and_raise(self, exc: BaseException) -> None:
-        with self._state_guard:
-            if self._state is not _GdbReaderState.CLOSED:
-                self._state = _GdbReaderState.POISONED
-            active = self._socket
-            self._socket = None
-        if active is not None:
-            try:
-                active.close()
-            except BaseException:
-                pass
+        self.invalidate()
         if isinstance(exc, AutomationRefusal):
             raise exc
         raise AutomationRefusal("DuckStation GDB reader failed closed.") from exc
 
     def _read_fixed_packet(
-        self, process: ProcessIdentity, packet: bytes
+        self,
+        process: ProcessIdentity,
+        packet: bytes,
+        *,
+        strict_ack: bool = False,
+        allow_stop_notifications: bool = True,
     ) -> bytes:
         with self._state_guard:
             state = self._state
@@ -2304,7 +2894,10 @@ class PersistentReadOnlyDuckStationGdbReader:
             )
         self._attest_bound_endpoint()
         self._send_outbound(packet)
-        reply = self._read_data_reply()
+        reply = self._read_data_reply(
+            strict_ack=strict_ack,
+            allow_stop_notifications=allow_stop_notifications,
+        )
         self._attest_bound_endpoint()
         return reply
 
@@ -2328,6 +2921,17 @@ class PersistentReadOnlyDuckStationGdbReader:
             raise AutomationRefusal(
                 "DuckStation GDB listener is not bound to the exact process."
             )
+        with self._state_guard:
+            if (
+                self._state is not _GdbReaderState.CONNECTING
+                or self._connection_attempts != 0
+            ):
+                raise AutomationRefusal(
+                    "DuckStation GDB connector attempt is not singular."
+                )
+            # This counter crosses the native boundary with the attempt.  A
+            # connector exception still consumes the sole allowed attempt.
+            self._connection_attempts = 1
         active = self._connector(
             (GDB_HOST, GDB_PORT), GDB_SOCKET_TIMEOUT_SECONDS
         )
@@ -2356,6 +2960,28 @@ class PersistentReadOnlyDuckStationGdbReader:
             or peer[1] != GDB_PORT
         ):
             raise AutomationRefusal("DuckStation GDB socket peer is not exact loopback.")
+        local = active.getsockname()
+        self._require_connecting()
+        if (
+            type(local) is not tuple
+            or len(local) != 2
+            or local[0] != GDB_HOST
+            or type(local[1]) is not int
+            or isinstance(local[1], bool)
+        ):
+            raise AutomationRefusal("DuckStation GDB local socket endpoint is not exact.")
+        descriptor = active.fileno()
+        self._require_connecting()
+        if (
+            type(descriptor) is not int
+            or isinstance(descriptor, bool)
+            or descriptor < 0
+            or descriptor > 2_147_483_647
+        ):
+            raise AutomationRefusal("DuckStation GDB client descriptor is not exact.")
+        client_endpoint = GdbClientEndpointIdentity(
+            os.getpid(), descriptor, local[0], local[1]
+        )
         observed_after = self._observer.observe(process.pid)
         self._require_connecting()
         if (
@@ -2382,6 +3008,7 @@ class PersistentReadOnlyDuckStationGdbReader:
                 )
             self._process = process
             self._listener = listener_before
+            self._client_endpoint = client_endpoint
             self._state = _GdbReaderState.CONNECTED
 
     def _require_connecting(self) -> None:
@@ -2399,24 +3026,36 @@ class PersistentReadOnlyDuckStationGdbReader:
             process = self._process
             listener = self._listener
         if not connected or active is None or process is None or listener is None:
-            raise AutomationRefusal("DuckStation GDB connection is not fully bound.")
-        observed = self._observer.observe(process.pid)
+            raise _GdbTopologyDriftRefusal(
+                "DuckStation GDB connection is not fully bound."
+            )
+        try:
+            observed = self._observer.observe(process.pid)
+        except BaseException as exc:
+            raise _GdbTopologyDriftRefusal(
+                "DuckStation process identity became unobservable around GDB work."
+            ) from exc
         if type(observed) is not ProcessIdentity or observed != process:
-            raise AutomationRefusal(
+            raise _GdbTopologyDriftRefusal(
                 "DuckStation process identity changed around a GDB read."
             )
-        observed_listener = self._endpoint_attestor.observe(observed)
+        try:
+            observed_listener = self._endpoint_attestor.observe(observed)
+        except BaseException as exc:
+            raise _GdbTopologyDriftRefusal(
+                "DuckStation GDB listener became unobservable around GDB work."
+            ) from exc
         if (
             type(observed_listener) is not GdbListenerIdentity
             or observed_listener.pid != observed.pid
             or observed_listener != listener
         ):
-            raise AutomationRefusal(
+            raise _GdbTopologyDriftRefusal(
                 "DuckStation GDB listener identity changed around a read."
             )
 
     def _send_outbound(self, data: bytes) -> None:
-        if type(data) is not bytes or data not in GDB_ALLOWED_OUTBOUND:
+        if type(data) is not bytes or data not in GDB_SESSION_OUTBOUND:
             raise AutomationRefusal("DuckStation GDB outbound packet is forbidden.")
         with self._state_guard:
             active = self._socket
@@ -2449,7 +3088,7 @@ class PersistentReadOnlyDuckStationGdbReader:
         self._send_outbound(b"-")
         raise AutomationRefusal(reason)
 
-    def _read_packet_payload(self) -> bytes:
+    def _read_packet_payload_with_checksum(self) -> tuple[bytes, bytes]:
         payload = bytearray()
         while True:
             value = self._read_byte()
@@ -2464,23 +3103,39 @@ class PersistentReadOnlyDuckStationGdbReader:
         expected_checksum = int(checksum_text.decode("ascii"), 16)
         if sum(payload) & 0xFF != expected_checksum:
             self._reject_bad_packet("DuckStation GDB packet checksum does not match.")
-        return bytes(payload)
+        return bytes(payload), checksum_text
+
+    def _read_packet_payload(self) -> bytes:
+        payload, _ = self._read_packet_payload_with_checksum()
+        return payload
 
     @classmethod
     def _is_stop_notification(cls, payload: bytes) -> bool:
-        return (
-            len(payload) >= 3
-            and payload[:1] in {b"S", b"T"}
-            and cls._is_hex_byte(payload[1])
-            and cls._is_hex_byte(payload[2])
-            and (payload[:1] == b"T" or len(payload) == 3)
-        )
+        if (
+            len(payload) < 3
+            or payload[:1] not in {b"S", b"T"}
+            or not cls._is_hex_byte(payload[1])
+            or not cls._is_hex_byte(payload[2])
+        ):
+            return False
+        if payload[:1] == b"S":
+            return len(payload) == 3
+        return re.fullmatch(
+            rb"T[0-9A-Fa-f]{2}(?:[0-9A-Za-z_.-]+:[0-9A-Za-z_.-]+;)+",
+            payload,
+        ) is not None
 
-    def _read_data_reply(self) -> bytes:
+    def _read_data_reply(
+        self, *, strict_ack: bool = False, allow_stop_notifications: bool = True
+    ) -> bytes:
         server_acknowledged = False
         for _ in range(GDB_MAX_RSP_EVENTS_PER_READ):
             marker = self._read_byte()
             if marker == ord("+"):
+                if strict_ack and server_acknowledged:
+                    raise AutomationRefusal(
+                        "DuckStation GDB server sent a duplicate request acknowledgement."
+                    )
                 server_acknowledged = True
                 continue
             if marker == ord("-"):
@@ -2492,6 +3147,10 @@ class PersistentReadOnlyDuckStationGdbReader:
             payload = self._read_packet_payload()
             self._send_outbound(b"+")
             if self._is_stop_notification(payload):
+                if not allow_stop_notifications:
+                    raise _GdbUnexpectedStopRefusal(
+                        "DuckStation GDB stop notification interrupted RUNNING state."
+                    )
                 continue
             if not server_acknowledged:
                 raise AutomationRefusal(
@@ -2512,6 +3171,738 @@ class PersistentReadOnlyDuckStationGdbReader:
                 )
             return bytes.fromhex(payload.decode("ascii"))
         raise AutomationRefusal("DuckStation GDB reply exceeded its event bound.")
+
+
+class _GdbSessionState(enum.Enum):
+    NEW = enum.auto()
+    CONNECTING = enum.auto()
+    CONNECTED_PAUSED = enum.auto()
+    CONTINUE_IN_FLIGHT = enum.auto()
+    RUNNING = enum.auto()
+    EXPECTING_PLAN_PAUSE = enum.auto()
+    PAUSED_BY_PLAN = enum.auto()
+    EXPECTING_PLAN_RESUME = enum.auto()
+    POISONED = enum.auto()
+    CLOSED = enum.auto()
+
+
+@dataclasses.dataclass(frozen=True)
+class GdbSessionStatus:
+    """Non-I/O status for the one owner of pause, resume, and fixed reads."""
+
+    state: str
+    bound_process: ProcessIdentity | None
+    bound_listener: GdbListenerIdentity | None
+    connection_attempts: int
+    continue_attempts: int
+    pause_state_certain: bool
+    single_client_observed: bool
+
+    def __post_init__(self) -> None:
+        if (
+            self.state not in {state.name for state in _GdbSessionState}
+            or (
+                self.bound_process is not None
+                and type(self.bound_process) is not ProcessIdentity
+            )
+            or (
+                self.bound_listener is not None
+                and type(self.bound_listener) is not GdbListenerIdentity
+            )
+            or type(self.connection_attempts) is not int
+            or not 0 <= self.connection_attempts <= 2_147_483_647
+            or type(self.continue_attempts) is not int
+            or not 0 <= self.continue_attempts <= 2_147_483_647
+            or type(self.pause_state_certain) is not bool
+            or type(self.single_client_observed) is not bool
+        ):
+            raise AutomationRefusal("DuckStation GDB session status is malformed.")
+        bound = self.bound_process is not None and self.bound_listener is not None
+        if (self.bound_process is None) != (self.bound_listener is None):
+            raise AutomationRefusal("DuckStation GDB status binding is incomplete.")
+        exact_active = (
+            bound
+            and self.connection_attempts == 1
+            and self.continue_attempts == 1
+            and self.single_client_observed
+        )
+        if self.state == "NEW" and (
+            bound
+            or self.connection_attempts != 0
+            or self.continue_attempts != 0
+            or self.pause_state_certain
+            or self.single_client_observed
+        ):
+            raise AutomationRefusal("Fresh DuckStation GDB session status is inconsistent.")
+        if self.state in {"RUNNING", "PAUSED_BY_PLAN"} and (
+            not exact_active or not self.pause_state_certain
+        ):
+            raise AutomationRefusal("Confirmed DuckStation GDB session status is inconsistent.")
+        if self.state in {"EXPECTING_PLAN_PAUSE", "EXPECTING_PLAN_RESUME"} and (
+            not exact_active or self.pause_state_certain
+        ):
+            raise AutomationRefusal("Armed DuckStation GDB session status is inconsistent.")
+
+
+class PersistentDuckStationGdbSession:
+    """One fixed DuckStation connection with one exact resume capability.
+
+    Construction and :meth:`status` are side-effect free.  Only
+    :meth:`connect_resume_once` may create the socket.  It first proves the
+    connection-induced pause with a stable guest VBlank tick, sends literal
+    ``$c#63`` once, and requires forward VBlank progress before exposing pad or
+    VBlank reads.  This class is deliberately absent from :func:`main`.
+    """
+
+    def __init__(
+        self,
+        observer: ProcessObserver,
+        endpoint_attestor: GdbEndpointAttestor,
+        connector: Callable[[tuple[str, int], float], _GdbSocket] | None = None,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        sleeper: Callable[[float], None] = time.sleep,
+        timeout_seconds: float = GDB_VBLANK_PROGRESS_TIMEOUT_SECONDS,
+        interval_seconds: float = GDB_VBLANK_PROGRESS_INTERVAL_SECONDS,
+        paused_minimum_seconds: float = GDB_PAUSED_CONFIRMATION_MIN_SECONDS,
+        maximum_samples: int = GDB_VBLANK_PROGRESS_MAX_SAMPLES,
+    ) -> None:
+        numeric_policy = (timeout_seconds, interval_seconds, paused_minimum_seconds)
+        if (
+            not callable(clock)
+            or not callable(sleeper)
+            or any(
+                type(value) not in {int, float}
+                or not math.isfinite(float(value))
+                or value <= 0
+                for value in numeric_policy
+            )
+            or paused_minimum_seconds >= timeout_seconds
+            or type(maximum_samples) is not int
+            or maximum_samples < 2
+            or maximum_samples > 4096
+        ):
+            raise AutomationRefusal("DuckStation GDB session timing policy is invalid.")
+        if not callable(getattr(endpoint_attestor, "observe_connection_set", None)):
+            raise AutomationRefusal(
+                "DuckStation GDB whole connection-set attestor is unavailable."
+            )
+        self._transport = _PersistentDuckStationGdbTransport(
+            observer, endpoint_attestor, connector=connector
+        )
+        self._connection_set_attestor = endpoint_attestor
+        self._clock = clock
+        self._sleeper = sleeper
+        self._timeout_seconds = float(timeout_seconds)
+        self._interval_seconds = float(interval_seconds)
+        self._paused_minimum_seconds = float(paused_minimum_seconds)
+        self._maximum_samples = maximum_samples
+        self._state = _GdbSessionState.NEW
+        self._bound_process: ProcessIdentity | None = None
+        self._bound_listener: GdbListenerIdentity | None = None
+        self._observed_connection_set: GdbObservedConnectionSet | None = None
+        self._continue_attempts = 0
+        self._pause_state_certain = False
+        self._single_client_observed = False
+        self._planned_paused_tick: int | None = None
+        self._state_guard = threading.Lock()
+        self._operation_lock = threading.Lock()
+
+    def status(self) -> GdbSessionStatus:
+        """Return session state without observer, lsof, socket, or RSP work."""
+
+        # Serialize the two internal snapshots with every public mutation.  A
+        # status caller may wait for a bounded operation, but can never observe
+        # RUNNING paired with a pre-connect or poisoned transport snapshot.
+        with self._operation_lock:
+            transport = self._transport.status()
+            with self._state_guard:
+                if self._state in {
+                    _GdbSessionState.CONNECTED_PAUSED,
+                    _GdbSessionState.CONTINUE_IN_FLIGHT,
+                    _GdbSessionState.RUNNING,
+                    _GdbSessionState.EXPECTING_PLAN_PAUSE,
+                    _GdbSessionState.PAUSED_BY_PLAN,
+                    _GdbSessionState.EXPECTING_PLAN_RESUME,
+                } and (
+                    transport.state != "CONNECTED"
+                    or transport.bound_process != self._bound_process
+                    or transport.bound_listener != self._bound_listener
+                    or transport.client_endpoint is None
+                    or transport.connection_attempts != 1
+                ):
+                    raise AutomationRefusal(
+                        "DuckStation GDB session/transport status is inconsistent."
+                    )
+                return GdbSessionStatus(
+                    self._state.name,
+                    self._bound_process,
+                    self._bound_listener,
+                    transport.connection_attempts,
+                    self._continue_attempts,
+                    self._pause_state_certain,
+                    self._single_client_observed,
+                )
+
+    @staticmethod
+    def _require_tick(value: int) -> int:
+        if type(value) is not int or not 0 <= value <= 0xFFFFFFFF:
+            raise AutomationRefusal("DuckStation VBlank tick is malformed.")
+        return value
+
+    def _clock_value(self) -> float:
+        value = self._clock()
+        if (
+            type(value) not in {int, float}
+            or not math.isfinite(float(value))
+            or value < 0
+        ):
+            raise AutomationRefusal("DuckStation GDB session clock is malformed.")
+        return float(value)
+
+    @staticmethod
+    def _certainty_after_failure(
+        exc: BaseException, current: bool
+    ) -> bool:
+        if isinstance(exc, _GdbTopologyDriftRefusal):
+            return False
+        if isinstance(exc, _GdbPauseContradictionRefusal):
+            return False
+        if isinstance(exc, _GdbUnexpectedStopRefusal):
+            return True
+        return current
+
+    def _sleep_once(self) -> None:
+        if self._sleeper(self._interval_seconds) is not None:
+            raise AutomationRefusal("DuckStation GDB session sleeper is malformed.")
+
+    def _observe_connection_set(
+        self,
+        process: ProcessIdentity,
+        expected_client: GdbClientEndpointIdentity | None,
+    ) -> GdbObservedConnectionSet:
+        observed = self._connection_set_attestor.observe_connection_set(
+            process, expected_client
+        )
+        if (
+            type(observed) is not GdbObservedConnectionSet
+            or observed.listener.pid != process.pid
+            or observed.client_endpoint != expected_client
+        ):
+            raise AutomationRefusal(
+                "DuckStation GDB whole connection-set evidence is malformed."
+            )
+        return observed
+
+    def _attest_no_existing_client(
+        self, process: ProcessIdentity
+    ) -> GdbObservedConnectionSet:
+        observed = self._observe_connection_set(process, None)
+        if observed.client_endpoint is not None:
+            raise AutomationRefusal(
+                "DuckStation GDB already has an established client."
+            )
+        return observed
+
+    def _attest_single_client(
+        self, process: ProcessIdentity, *, bind: bool = False
+    ) -> GdbObservedConnectionSet:
+        transport = self._transport.status()
+        if (
+            transport.state != "CONNECTED"
+            or transport.bound_process != process
+            or transport.bound_listener is None
+            or transport.client_endpoint is None
+            or transport.connection_attempts != 1
+        ):
+            raise _GdbTopologyDriftRefusal(
+                "DuckStation GDB transport cannot attest one existing client."
+            )
+        try:
+            observed = self._observe_connection_set(
+                process, transport.client_endpoint
+            )
+        except BaseException as exc:
+            raise _GdbTopologyDriftRefusal(
+                "DuckStation GDB whole connection set became unobservable: "
+                f"{exc}"
+            ) from exc
+        if observed.listener != transport.bound_listener:
+            raise _GdbTopologyDriftRefusal(
+                "DuckStation GDB listener changed in the whole connection set."
+            )
+        with self._state_guard:
+            expected = self._observed_connection_set
+        if bind:
+            if expected is not None:
+                raise AutomationRefusal(
+                    "DuckStation GDB client socket set was already bound."
+                )
+            with self._state_guard:
+                self._observed_connection_set = observed
+                self._single_client_observed = True
+        elif expected is None or observed != expected:
+            raise _GdbTopologyDriftRefusal(
+                "DuckStation GDB established client set changed around an operation."
+            )
+        return observed
+
+    def _read_vblank_owned(self, process: ProcessIdentity) -> int:
+        self._attest_single_client(process)
+        value = self._require_tick(
+            self._transport.read_vblank_tick_strict_running(process)
+        )
+        self._attest_single_client(process)
+        return value
+
+    @staticmethod
+    def _forward_delta(before: int, after: int) -> int:
+        return (after - before) & 0xFFFFFFFF
+
+    def _confirm_stable_pause(
+        self,
+        process: ProcessIdentity,
+        baseline_tick: int,
+        *,
+        label: str,
+        start_clock: float,
+    ) -> tuple[int, float]:
+        if label not in {"connection-induced", "planned"}:
+            raise AutomationRefusal("DuckStation GDB pause proof label is malformed.")
+        start = start_clock
+        previous_clock = self._clock_value()
+        if previous_clock < start:
+            raise AutomationRefusal("DuckStation GDB session clock moved backward.")
+        if previous_clock - start > self._timeout_seconds:
+            raise AutomationRefusal(
+                f"DuckStation {label} pause confirmation timed out."
+            )
+        for _ in range(self._maximum_samples):
+            self._sleep_once()
+            observed_clock = self._clock_value()
+            if observed_clock < previous_clock:
+                raise AutomationRefusal("DuckStation GDB session clock moved backward.")
+            previous_clock = observed_clock
+            elapsed = observed_clock - start
+            if elapsed > self._timeout_seconds:
+                break
+            observed_tick = self._require_tick(
+                self._read_vblank_owned(process)
+            )
+            after_read_clock = self._clock_value()
+            if after_read_clock < observed_clock:
+                raise AutomationRefusal("DuckStation GDB session clock moved backward.")
+            previous_clock = after_read_clock
+            elapsed = after_read_clock - start
+            if observed_tick != baseline_tick:
+                raise _GdbPauseContradictionRefusal(
+                    f"DuckStation did not remain at the {label} pause."
+                )
+            if elapsed > self._timeout_seconds:
+                break
+            if elapsed >= self._paused_minimum_seconds:
+                return observed_tick, after_read_clock
+        raise AutomationRefusal(
+            f"DuckStation {label} pause confirmation timed out."
+        )
+
+    def _confirm_running(
+        self, process: ProcessIdentity, paused_tick: int, start_clock: float
+    ) -> tuple[int, float]:
+        previous_clock = start_clock
+        for _ in range(self._maximum_samples):
+            self._sleep_once()
+            observed_clock = self._clock_value()
+            if observed_clock < previous_clock:
+                raise AutomationRefusal("DuckStation GDB session clock moved backward.")
+            previous_clock = observed_clock
+            if observed_clock - start_clock > self._timeout_seconds:
+                break
+            observed_tick = self._require_tick(
+                self._read_vblank_owned(process)
+            )
+            after_read_clock = self._clock_value()
+            if after_read_clock < observed_clock:
+                raise AutomationRefusal("DuckStation GDB session clock moved backward.")
+            previous_clock = after_read_clock
+            if after_read_clock - start_clock > self._timeout_seconds:
+                break
+            delta = self._forward_delta(paused_tick, observed_tick)
+            if delta == 0:
+                continue
+            if delta >= 0x80000000:
+                raise AutomationRefusal(
+                    "DuckStation VBlank tick moved backward or reset after resume."
+                )
+            return observed_tick, after_read_clock
+        raise AutomationRefusal("DuckStation did not prove RUNNING after GDB resume.")
+
+    def connect_resume_once(self, process: ProcessIdentity) -> None:
+        """Own the sole connection pause and literal one-shot continue."""
+
+        if not self._operation_lock.acquire(blocking=False):
+            self._poison_and_raise(
+                AutomationRefusal("Concurrent DuckStation GDB session work is forbidden."),
+                pause_state_certain=False,
+            )
+        try:
+            try:
+                if type(process) is not ProcessIdentity:
+                    raise AutomationRefusal(
+                        "DuckStation GDB session process identity is malformed."
+                    )
+                with self._state_guard:
+                    if self._state is not _GdbSessionState.NEW:
+                        raise AutomationRefusal(
+                            "DuckStation GDB session can connect and resume only once."
+                        )
+                    self._state = _GdbSessionState.CONNECTING
+                preconnect_set = self._attest_no_existing_client(process)
+                self._transport.connect_once(process)
+                transport = self._transport.status()
+                if (
+                    transport.state != "CONNECTED"
+                    or transport.bound_process != process
+                    or transport.bound_listener is None
+                    or transport.bound_listener.pid != process.pid
+                    or transport.bound_listener != preconnect_set.listener
+                    or transport.client_endpoint is None
+                    or transport.connection_attempts != 1
+                ):
+                    raise AutomationRefusal(
+                        "DuckStation GDB session transport binding is not exact."
+                    )
+                with self._state_guard:
+                    self._bound_process = process
+                    self._bound_listener = transport.bound_listener
+                    self._state = _GdbSessionState.CONNECTED_PAUSED
+                    self._pause_state_certain = False
+                self._attest_single_client(process, bind=True)
+                pause_proof_clock = self._clock_value()
+                paused_tick = self._read_vblank_owned(process)
+                paused_tick, paused_clock = self._confirm_stable_pause(
+                    process,
+                    paused_tick,
+                    label="connection-induced",
+                    start_clock=pause_proof_clock,
+                )
+                with self._state_guard:
+                    if self._state is not _GdbSessionState.CONNECTED_PAUSED:
+                        raise AutomationRefusal(
+                            "DuckStation GDB paused-session ownership changed."
+                        )
+                    self._pause_state_certain = True
+
+                def own_continue_boundary() -> None:
+                    self._attest_single_client(process)
+                    with self._state_guard:
+                        if (
+                            self._state is not _GdbSessionState.CONNECTED_PAUSED
+                            or not self._pause_state_certain
+                            or self._continue_attempts != 0
+                        ):
+                            raise AutomationRefusal(
+                                "DuckStation GDB continue attempt is not singular."
+                            )
+                        # Sending can fail after partial delivery.  From this
+                        # exact callback until VBlank advances, pause state is
+                        # deliberately unknown.
+                        self._continue_attempts = 1
+                        self._state = _GdbSessionState.CONTINUE_IN_FLIGHT
+                        self._pause_state_certain = False
+
+                self._transport.continue_from_connection_pause(
+                    process, before_send=own_continue_boundary
+                )
+                self._attest_single_client(process)
+                self._confirm_running(process, paused_tick, paused_clock)
+                self._transport.require_existing_connection(process)
+                with self._state_guard:
+                    if self._state is not _GdbSessionState.CONTINUE_IN_FLIGHT:
+                        raise AutomationRefusal(
+                            "DuckStation GDB resume ownership changed."
+                        )
+                    self._state = _GdbSessionState.RUNNING
+                    self._pause_state_certain = True
+            except BaseException as exc:
+                with self._state_guard:
+                    certain = self._certainty_after_failure(
+                        exc, self._pause_state_certain
+                    )
+                self._poison_and_raise(exc, pause_state_certain=certain)
+        finally:
+            self._operation_lock.release()
+
+    def arm_planned_pause(self, process: ProcessIdentity) -> None:
+        """Arm RUNNING -> PAUSED before the caller begins one Space pulse.
+
+        The future coordinator must finish and resolve the owed key-up before
+        calling :meth:`confirm_planned_pause`.  This offline session never
+        posts the host key itself and remains absent from production ``main``.
+        """
+
+        self._arm_planned_transition(
+            process,
+            required=_GdbSessionState.RUNNING,
+            armed=_GdbSessionState.EXPECTING_PLAN_PAUSE,
+        )
+
+    def arm_planned_resume(self, process: ProcessIdentity) -> None:
+        """Arm PAUSED -> RUNNING before the caller begins one Space pulse."""
+
+        self._arm_planned_transition(
+            process,
+            required=_GdbSessionState.PAUSED_BY_PLAN,
+            armed=_GdbSessionState.EXPECTING_PLAN_RESUME,
+        )
+
+    def _arm_planned_transition(
+        self,
+        process: ProcessIdentity,
+        *,
+        required: _GdbSessionState,
+        armed: _GdbSessionState,
+    ) -> None:
+        if not self._operation_lock.acquire(blocking=False):
+            self._poison_and_raise(
+                AutomationRefusal("Concurrent DuckStation GDB transition is forbidden."),
+                pause_state_certain=False,
+            )
+        try:
+            try:
+                if type(process) is not ProcessIdentity:
+                    raise AutomationRefusal(
+                        "DuckStation GDB transition process identity is malformed."
+                    )
+                with self._state_guard:
+                    if (
+                        self._state is not required
+                        or not self._pause_state_certain
+                        or self._bound_process != process
+                        or not self._single_client_observed
+                    ):
+                        raise AutomationRefusal(
+                            "DuckStation GDB planned transition baseline is not exact."
+                        )
+                self._attest_single_client(process)
+                with self._state_guard:
+                    if self._state is not required:
+                        raise AutomationRefusal(
+                            "DuckStation GDB planned transition state changed while arming."
+                        )
+                    self._state = armed
+                    # Once a release is armed, an external/UI race can make the
+                    # resulting emulation state unknowable until its exact RSP
+                    # notification and VBlank semantics are consumed.
+                    self._pause_state_certain = False
+            except BaseException as exc:
+                with self._state_guard:
+                    certain = self._certainty_after_failure(
+                        exc, self._pause_state_certain
+                    )
+                self._poison_and_raise(exc, pause_state_certain=certain)
+        finally:
+            self._operation_lock.release()
+
+    def confirm_planned_pause(self, process: ProcessIdentity) -> None:
+        """After resolved Space key-up, consume stop evidence and prove PAUSED."""
+
+        if not self._operation_lock.acquire(blocking=False):
+            self._poison_and_raise(
+                AutomationRefusal("Concurrent DuckStation GDB transition is forbidden."),
+                pause_state_certain=False,
+            )
+        try:
+            try:
+                with self._state_guard:
+                    if (
+                        self._state is not _GdbSessionState.EXPECTING_PLAN_PAUSE
+                        or self._bound_process != process
+                        or self._pause_state_certain
+                    ):
+                        raise AutomationRefusal(
+                            "DuckStation GDB planned pause was not armed exactly."
+                        )
+                self._attest_single_client(process)
+                self._transport.consume_planned_pause_notification(process)
+                self._attest_single_client(process)
+                # Exact S05 establishes PAUSED even if the stronger stable-tick
+                # proof later times out; preserve that fact in poisoned status.
+                with self._state_guard:
+                    self._pause_state_certain = True
+                pause_proof_clock = self._clock_value()
+                paused_tick = self._read_vblank_owned(process)
+                paused_tick, _ = self._confirm_stable_pause(
+                    process,
+                    paused_tick,
+                    label="planned",
+                    start_clock=pause_proof_clock,
+                )
+                with self._state_guard:
+                    if self._state is not _GdbSessionState.EXPECTING_PLAN_PAUSE:
+                        raise AutomationRefusal(
+                            "DuckStation GDB planned pause ownership changed."
+                        )
+                    self._planned_paused_tick = paused_tick
+                    self._state = _GdbSessionState.PAUSED_BY_PLAN
+                    self._pause_state_certain = True
+            except BaseException as exc:
+                with self._state_guard:
+                    certain = self._certainty_after_failure(
+                        exc, self._pause_state_certain
+                    )
+                self._poison_and_raise(exc, pause_state_certain=certain)
+        finally:
+            self._operation_lock.release()
+
+    def confirm_planned_resume(self, process: ProcessIdentity) -> None:
+        """After resolved Space key-up, consume raw resume and prove RUNNING."""
+
+        if not self._operation_lock.acquire(blocking=False):
+            self._poison_and_raise(
+                AutomationRefusal("Concurrent DuckStation GDB transition is forbidden."),
+                pause_state_certain=False,
+            )
+        try:
+            try:
+                with self._state_guard:
+                    paused_tick = self._planned_paused_tick
+                    if (
+                        self._state is not _GdbSessionState.EXPECTING_PLAN_RESUME
+                        or self._bound_process != process
+                        or self._pause_state_certain
+                        or type(paused_tick) is not int
+                    ):
+                        raise AutomationRefusal(
+                            "DuckStation GDB planned resume was not armed exactly."
+                        )
+                resume_clock = self._clock_value()
+                self._attest_single_client(process)
+                self._transport.consume_planned_resume_notification(process)
+                self._attest_single_client(process)
+                self._confirm_running(process, paused_tick, resume_clock)
+                with self._state_guard:
+                    if self._state is not _GdbSessionState.EXPECTING_PLAN_RESUME:
+                        raise AutomationRefusal(
+                            "DuckStation GDB planned resume ownership changed."
+                        )
+                    self._planned_paused_tick = None
+                    self._state = _GdbSessionState.RUNNING
+                    self._pause_state_certain = True
+            except BaseException as exc:
+                with self._state_guard:
+                    certain = self._certainty_after_failure(
+                        exc, self._pause_state_certain
+                    )
+                self._poison_and_raise(exc, pause_state_certain=certain)
+        finally:
+            self._operation_lock.release()
+
+    def require_paused(self, process: ProcessIdentity) -> None:
+        """Require confirmed planned PAUSED state without native I/O."""
+
+        with self._state_guard:
+            valid = (
+                self._state is _GdbSessionState.PAUSED_BY_PLAN
+                and self._pause_state_certain
+                and self._bound_process == process
+                and self._bound_listener is not None
+                and self._continue_attempts == 1
+                and self._single_client_observed
+                and type(self._planned_paused_tick) is int
+            )
+        if not valid:
+            raise AutomationRefusal(
+                "DuckStation GDB session is not exact confirmed PAUSED state."
+            )
+        self._transport.require_existing_connection(process)
+
+    def require_running(self, process: ProcessIdentity) -> None:
+        """Require the already-confirmed RUNNING binding without native I/O."""
+
+        with self._state_guard:
+            valid = (
+                self._state is _GdbSessionState.RUNNING
+                and self._pause_state_certain
+                and self._bound_process == process
+                and self._bound_listener is not None
+                and self._continue_attempts == 1
+                and self._single_client_observed
+            )
+        if not valid:
+            raise AutomationRefusal(
+                "DuckStation GDB session is not exact confirmed RUNNING state."
+            )
+        self._transport.require_existing_connection(process)
+
+    def _read_while_running(
+        self, process: ProcessIdentity, reader: Callable[[ProcessIdentity], int]
+    ) -> int:
+        if not self._operation_lock.acquire(blocking=False):
+            self._poison_and_raise(
+                AutomationRefusal("Concurrent DuckStation GDB session reads are forbidden."),
+                pause_state_certain=False,
+            )
+        try:
+            try:
+                self.require_running(process)
+                self._attest_single_client(process)
+                value = reader(process)
+                self._attest_single_client(process)
+                self.require_running(process)
+                return value
+            except BaseException as exc:
+                self._poison_and_raise(
+                    exc,
+                    pause_state_certain=self._certainty_after_failure(exc, False),
+                )
+        finally:
+            self._operation_lock.release()
+
+    def read_pad_word(self, process: ProcessIdentity) -> int:
+        return self._read_while_running(
+            process, self._transport.read_pad_word_strict_running
+        )
+
+    def read_vblank_tick(self, process: ProcessIdentity) -> int:
+        return self._require_tick(
+            self._read_while_running(
+                process, self._transport.read_vblank_tick_strict_running
+            )
+        )
+
+    def close(self) -> None:
+        if not self._operation_lock.acquire(blocking=False):
+            self._poison_and_raise(
+                AutomationRefusal("Concurrent DuckStation GDB session close is forbidden."),
+                pause_state_certain=False,
+            )
+        try:
+            try:
+                with self._state_guard:
+                    if self._state is _GdbSessionState.CLOSED:
+                        return
+                    if self._state is not _GdbSessionState.POISONED:
+                        self._state = _GdbSessionState.CLOSED
+                self._transport.close()
+                with self._state_guard:
+                    self._single_client_observed = False
+            except BaseException as exc:
+                self._poison_and_raise(exc, pause_state_certain=False)
+        finally:
+            self._operation_lock.release()
+
+    def _poison_and_raise(
+        self, exc: BaseException, *, pause_state_certain: bool
+    ) -> None:
+        with self._state_guard:
+            self._state = _GdbSessionState.POISONED
+            self._pause_state_certain = pause_state_certain
+            self._single_client_observed = False
+        self._transport.invalidate()
+        if isinstance(exc, AutomationRefusal):
+            raise exc
+        raise AutomationRefusal("DuckStation GDB session failed closed.") from exc
 
 
 @dataclasses.dataclass(frozen=True)
