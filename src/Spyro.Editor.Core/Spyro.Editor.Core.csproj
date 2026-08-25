@@ -51,7 +51,9 @@
     <InternalsVisibleTo Include="Spyro.Editor.Id65RewardSupportLayoutContractSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringRewardStagingCompilerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65V3RuntimeEvidenceContractSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringAggregateV1RuntimeEvidenceContractSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65V3RuntimeEvidenceFinalizer" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringAggregateV1RuntimeEvidenceFinalizer" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringRewardStagingRuntimeCandidatePublisherSmoke" />
   </ItemGroup>
 </Project>
