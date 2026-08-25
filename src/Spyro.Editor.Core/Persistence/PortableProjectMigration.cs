@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Spyro.Editor.Core.Exporting;
 
 namespace Spyro.Editor.Core.Persistence;
 
@@ -14,7 +15,9 @@ public enum PortableProjectArtifactKind
     RebuildableCache,
     ApplicationFile,
     GameImage,
-    Unknown
+    Unknown,
+    NonPortableDerivedOutput,
+    TransientWorkspaceState
 }
 
 public sealed record PortableProjectArtifact(
@@ -86,6 +89,76 @@ public static class PortableProjectMigration
         string relative = NormalizeRelativePath(relativePath);
         string fileName = Path.GetFileName(relative);
         string extension = Path.GetExtension(relative);
+        string id65WorkspaceRoot =
+            UnusedLevel65BlankLevelLabProfileRegistry.WorkspaceLayoutRelativeRoot
+                .TrimStart('/', '\\')
+                .Replace('\\', '/') + "/";
+
+        if (relative.Equals(
+                id65WorkspaceRoot + "authored-edits/" +
+                Id65AuthoringEditorDocumentStore.FileName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return PortableProjectArtifactKind.ProjectEdit;
+        }
+
+        if (relative.StartsWith(
+                id65WorkspaceRoot + "materialized-candidates/",
+                StringComparison.OrdinalIgnoreCase) ||
+            relative.StartsWith(
+                id65WorkspaceRoot + "runtime-tests/",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return PortableProjectArtifactKind.NonPortableDerivedOutput;
+        }
+
+        if (relative.StartsWith(
+                id65WorkspaceRoot + ".aggregate-candidate-operations/",
+                StringComparison.OrdinalIgnoreCase) ||
+            relative.StartsWith(
+                id65WorkspaceRoot + ".bootstrap-operations/",
+                StringComparison.OrdinalIgnoreCase) ||
+            relative.StartsWith(
+                id65WorkspaceRoot + ".derived-cache-operations/",
+                StringComparison.OrdinalIgnoreCase) ||
+            relative.StartsWith(
+                id65WorkspaceRoot + ".terrain-test-operations/",
+                StringComparison.OrdinalIgnoreCase) ||
+            relative.Equals(
+                id65WorkspaceRoot +
+                ".unusedlevel65blank-aggregate-candidate-v1.writer.lock",
+                StringComparison.OrdinalIgnoreCase) ||
+            relative.Equals(
+                id65WorkspaceRoot + "authored-edits/" +
+                ".unusedlevel65blank-authoring-document-v1.json.writer.lock",
+                StringComparison.OrdinalIgnoreCase) ||
+            (relative.StartsWith(
+                 id65WorkspaceRoot + "authored-edits/",
+                 StringComparison.OrdinalIgnoreCase) &&
+             IsExactId65AuthoringDocumentTemporary(fileName)))
+        {
+            return PortableProjectArtifactKind.TransientWorkspaceState;
+        }
+
+        if (relative.StartsWith(
+                id65WorkspaceRoot + "editor-cache/",
+                StringComparison.OrdinalIgnoreCase) ||
+            relative.StartsWith(
+                id65WorkspaceRoot + "generated-cache/",
+                StringComparison.OrdinalIgnoreCase) ||
+            relative.Equals(
+                id65WorkspaceRoot + "locked-base-wad-analysis.json",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return PortableProjectArtifactKind.RebuildableCache;
+        }
+
+        if (relative.Equals(
+                id65WorkspaceRoot + "lab-manifest.json",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return PortableProjectArtifactKind.UserResearch;
+        }
 
         if (relative.StartsWith("support/", StringComparison.OrdinalIgnoreCase) ||
             relative.StartsWith("Spyro Editor.app/", StringComparison.OrdinalIgnoreCase) ||
@@ -151,6 +224,25 @@ public static class PortableProjectMigration
         }
 
         return PortableProjectArtifactKind.Unknown;
+    }
+
+    private static bool IsExactId65AuthoringDocumentTemporary(string fileName)
+    {
+        string prefix = "." + Id65AuthoringEditorDocumentStore.FileName + ".";
+        const string suffix = ".tmp";
+        if (!fileName.StartsWith(prefix, StringComparison.Ordinal) ||
+            !fileName.EndsWith(suffix, StringComparison.Ordinal) ||
+            fileName.Length != prefix.Length + 32 + suffix.Length)
+        {
+            return false;
+        }
+
+        foreach (char character in fileName.AsSpan(prefix.Length, 32))
+        {
+            if (character is not (>= '0' and <= '9') and not (>= 'a' and <= 'f'))
+                return false;
+        }
+        return true;
     }
 
     public static async Task<PortableProjectMigrationResult> MigrateAsync(

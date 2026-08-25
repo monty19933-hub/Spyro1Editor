@@ -48,6 +48,20 @@ internal sealed record Id65AuthoringEditorDocumentStoreResult(
 }
 
 /// <summary>
+/// Path-free canonical identity recovered from a persisted editor-document
+/// envelope. Unlike a store result, this identity deliberately does not claim
+/// that the document was reprojected against the current native inputs.
+/// </summary>
+internal sealed record Id65AuthoringEditorDocumentEnvelopeIdentity(
+    Id65AuthoringEditorDocument Document,
+    string EnvelopeCanonicalSha256,
+    string ProjectionContractId,
+    string CompositeProfileId,
+    string CompositeManifestSha256,
+    string CompositeOutputRow80Sha256,
+    string CompositeDeterministicPlanSha256);
+
+/// <summary>
 /// Internal, Core-only persistence boundary for the exact ID65 authoring editor
 /// document. It owns one canonical JSON file under the lab's authored-edits
 /// directory. It never stores a composite afterimage, native source bytes,
@@ -262,6 +276,135 @@ internal static class Id65AuthoringEditorDocumentStore
             cancellationToken);
         return result;
     }
+
+    internal static Task<Id65AuthoringEditorDocumentEnvelopeIdentity?>
+        InspectEnvelopeIdentityAsync(
+            UnusedLevel65BlankLevelLabWorkspacePaths paths,
+            UnusedLevel65BlankLevelLabManifest expectedLabManifest,
+            CancellationToken cancellationToken = default) =>
+        InspectEnvelopeIdentityCoreAsync(
+            paths,
+            expectedLabManifest,
+            afterFirstReadForTesting: null,
+            cancellationToken);
+
+    internal static Task<Id65AuthoringEditorDocumentEnvelopeIdentity?>
+        InspectEnvelopeIdentityForSmokeAsync(
+            UnusedLevel65BlankLevelLabWorkspacePaths paths,
+            UnusedLevel65BlankLevelLabManifest expectedLabManifest,
+            Func<Task> afterFirstReadForTesting,
+            CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(afterFirstReadForTesting);
+        return InspectEnvelopeIdentityCoreAsync(
+            paths,
+            expectedLabManifest,
+            afterFirstReadForTesting,
+            cancellationToken);
+    }
+
+    private static async Task<Id65AuthoringEditorDocumentEnvelopeIdentity?>
+        InspectEnvelopeIdentityCoreAsync(
+            UnusedLevel65BlankLevelLabWorkspacePaths paths,
+            UnusedLevel65BlankLevelLabManifest expectedLabManifest,
+            Func<Task>? afterFirstReadForTesting,
+            CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        ArgumentNullException.ThrowIfNull(expectedLabManifest);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        string path = GetPath(paths);
+        await RequireExpectedPublishedWorkspaceAsync(
+            paths,
+            expectedLabManifest,
+            cancellationToken);
+        if (!ExactPathEntryExists(path, "editor-document destination"))
+        {
+            await RequireExpectedPublishedWorkspaceAsync(
+                paths,
+                expectedLabManifest,
+                cancellationToken);
+            string absentPath = GetPath(paths);
+            if (!PathsEqual(path, absentPath) ||
+                ExactPathEntryExists(
+                    absentPath,
+                    "repeated absent editor-document destination"))
+            {
+                throw new InvalidDataException(
+                    "The ID65 editor-document destination changed while its absence was being inspected.");
+            }
+            return null;
+        }
+
+        RefuseSymbolicLink(path, "editor-document destination");
+        if (!File.Exists(path))
+        {
+            throw new InvalidDataException(
+                "The ID65 editor-document destination must be one regular file.");
+        }
+        byte[] firstBytes = await ReadEnvelopeBytesAsync(
+            path,
+            "persisted editor-document envelope inspection",
+            cancellationToken);
+        Id65AuthoringEditorDocumentEnvelopeIdentity first =
+            ParseAndValidateEnvelopeIdentity(
+                firstBytes,
+                expectedLabManifest);
+
+        if (afterFirstReadForTesting != null)
+            await afterFirstReadForTesting();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await RequireExpectedPublishedWorkspaceAsync(
+            paths,
+            expectedLabManifest,
+            cancellationToken);
+        string repeatedPath = GetPath(paths);
+        if (!PathsEqual(path, repeatedPath) || !File.Exists(repeatedPath))
+        {
+            throw new InvalidDataException(
+                "The ID65 editor-document destination changed before deterministic inspection readback.");
+        }
+        RefuseSymbolicLink(repeatedPath, "editor-document destination");
+        byte[] repeatedBytes = await ReadEnvelopeBytesAsync(
+            repeatedPath,
+            "repeated editor-document envelope inspection",
+            cancellationToken);
+        Id65AuthoringEditorDocumentEnvelopeIdentity repeated =
+            ParseAndValidateEnvelopeIdentity(
+                repeatedBytes,
+                expectedLabManifest);
+        if (!EnvelopeIdentitiesEqual(first, repeated) ||
+            !firstBytes.AsSpan().SequenceEqual(repeatedBytes))
+        {
+            throw new InvalidDataException(
+                "The persisted ID65 editor-document envelope changed during deterministic inspection readback.");
+        }
+
+        await RequireExpectedPublishedWorkspaceAsync(
+            paths,
+            expectedLabManifest,
+            cancellationToken);
+        string finalPath = GetPath(paths);
+        if (!PathsEqual(path, finalPath) || !File.Exists(finalPath))
+        {
+            throw new InvalidDataException(
+                "The ID65 editor-document destination changed after deterministic inspection readback.");
+        }
+        return repeated;
+    }
+
+    private static bool EnvelopeIdentitiesEqual(
+        Id65AuthoringEditorDocumentEnvelopeIdentity left,
+        Id65AuthoringEditorDocumentEnvelopeIdentity right) =>
+        left.EnvelopeCanonicalSha256 == right.EnvelopeCanonicalSha256 &&
+        left.ProjectionContractId == right.ProjectionContractId &&
+        left.CompositeProfileId == right.CompositeProfileId &&
+        left.CompositeManifestSha256 == right.CompositeManifestSha256 &&
+        left.CompositeOutputRow80Sha256 == right.CompositeOutputRow80Sha256 &&
+        left.CompositeDeterministicPlanSha256 == right.CompositeDeterministicPlanSha256 &&
+        left.Document.SerializeUtf8().SequenceEqual(right.Document.SerializeUtf8());
 
     private static async Task RequireExpectedPriorAsync(
         string path,
@@ -626,6 +769,42 @@ internal static class Id65AuthoringEditorDocumentStore
         UnusedLevel65BlankLevelLabManifest expectedLabManifest,
         Id65AuthoringEditorDocumentProjectionInputs projectionInputs)
     {
+        Id65AuthoringEditorDocumentEnvelopeIdentity identity =
+            ParseAndValidateEnvelopeIdentity(bytes, expectedLabManifest);
+        ProjectionIdentity projected = ProjectAndCaptureIdentity(
+            identity.Document,
+            projectionInputs);
+        if (projected.CompositeProfileId != identity.CompositeProfileId ||
+            !HashEquals(
+                projected.CompositeManifestSha256,
+                identity.CompositeManifestSha256) ||
+            !HashEquals(
+                projected.CompositeOutputRow80Sha256,
+                identity.CompositeOutputRow80Sha256) ||
+            !HashEquals(
+                projected.CompositeDeterministicPlanSha256,
+                identity.CompositeDeterministicPlanSha256))
+        {
+            throw new InvalidDataException(
+                "The persisted ID65 editor-document projection identity does not match current semantic projection.");
+        }
+
+        return new Id65AuthoringEditorDocumentStoreResult(
+            path,
+            identity.Document,
+            identity.EnvelopeCanonicalSha256,
+            identity.ProjectionContractId,
+            identity.CompositeProfileId,
+            identity.CompositeManifestSha256,
+            identity.CompositeOutputRow80Sha256,
+            identity.CompositeDeterministicPlanSha256);
+    }
+
+    private static Id65AuthoringEditorDocumentEnvelopeIdentity
+        ParseAndValidateEnvelopeIdentity(
+            ReadOnlySpan<byte> bytes,
+            UnusedLevel65BlankLevelLabManifest expectedLabManifest)
+    {
         if (bytes.IsEmpty)
             throw new InvalidDataException("The persisted ID65 editor-document envelope is empty.");
         if (bytes.StartsWith(new byte[] { 0xEF, 0xBB, 0xBF }))
@@ -696,19 +875,15 @@ internal static class Id65AuthoringEditorDocumentStore
                     "The ID65 editor-document envelope schema/workspace/base/document/projection identity is unsupported or stale.");
             }
 
-            ProjectionIdentity projected = ProjectAndCaptureIdentity(document, projectionInputs);
-            if (projected.CompositeProfileId != compositeProfileId ||
-                !HashEquals(projected.CompositeManifestSha256, compositeManifestSha256) ||
-                !HashEquals(projected.CompositeOutputRow80Sha256, compositeOutputRow80Sha256) ||
-                !HashEquals(
-                    projected.CompositeDeterministicPlanSha256,
-                    compositeDeterministicPlanSha256))
-            {
-                throw new InvalidDataException(
-                    "The persisted ID65 editor-document projection identity does not match current semantic projection.");
-            }
-
-            EnvelopeBytes expected = BuildEnvelope(expectedLabManifest, document, projected);
+            ProjectionIdentity persisted = new(
+                compositeProfileId,
+                compositeManifestSha256.ToLowerInvariant(),
+                compositeOutputRow80Sha256.ToLowerInvariant(),
+                compositeDeterministicPlanSha256.ToLowerInvariant());
+            EnvelopeBytes expected = BuildEnvelope(
+                expectedLabManifest,
+                document,
+                persisted);
             if (!HashEquals(envelopeContentSha256, expected.ContentSha256) ||
                 !bytes.SequenceEqual(expected.CanonicalBytes))
             {
@@ -716,15 +891,14 @@ internal static class Id65AuthoringEditorDocumentStore
                     "The persisted ID65 editor-document envelope is not exact canonical JSON or its content hash is invalid.");
             }
 
-            return new Id65AuthoringEditorDocumentStoreResult(
-                path,
+            return new Id65AuthoringEditorDocumentEnvelopeIdentity(
                 document,
                 expected.CanonicalSha256,
                 ProjectionContractId,
-                projected.CompositeProfileId,
-                projected.CompositeManifestSha256,
-                projected.CompositeOutputRow80Sha256,
-                projected.CompositeDeterministicPlanSha256);
+                persisted.CompositeProfileId,
+                persisted.CompositeManifestSha256,
+                persisted.CompositeOutputRow80Sha256,
+                persisted.CompositeDeterministicPlanSha256);
         }
         catch (InvalidDataException)
         {
@@ -734,7 +908,7 @@ internal static class Id65AuthoringEditorDocumentStore
             JsonException or InvalidOperationException or FormatException or OverflowException)
         {
             throw new InvalidDataException(
-                $"The persisted ID65 editor-document envelope is invalid: {path}",
+                "The persisted ID65 editor-document envelope is invalid.",
                 exception);
         }
     }
@@ -892,6 +1066,25 @@ internal static class Id65AuthoringEditorDocumentStore
             throw;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new InvalidDataException(
+                $"The ID65 editor-document {role} cannot be inspected safely.",
+                exception);
+        }
+    }
+
+    private static bool ExactPathEntryExists(string path, string role)
+    {
+        try
+        {
+            DirectoryInfo directory = new(path);
+            if (directory.Exists || !string.IsNullOrWhiteSpace(directory.LinkTarget))
+                return true;
+            FileInfo file = new(path);
+            return file.Exists || !string.IsNullOrWhiteSpace(file.LinkTarget);
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException)
         {
             throw new InvalidDataException(
                 $"The ID65 editor-document {role} cannot be inspected safely.",

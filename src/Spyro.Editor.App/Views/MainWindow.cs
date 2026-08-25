@@ -10312,7 +10312,9 @@ public sealed partial class MainWindow : Window
         SetButtonEnabled(_objectUndoRemoveButton, _lastRemovedMoby != null && !id65ObjectInspectionOnly);
         if (_objectUndoRemoveButton != null)
             _objectUndoRemoveButton.IsVisible = _lastRemovedMoby != null;
-        SetButtonEnabled(_toolbarCreateBinButton, hasLevel && !_createBinBusy && !editorMutationOperationActive);
+        SetButtonEnabled(
+            _toolbarCreateBinButton,
+            hasLevel && !IsCurrentId65BlankLab() && !_createBinBusy && !editorMutationOperationActive);
         SetButtonEnabled(_toolbarOpenDiscImageButton, sourceCommandEnabled);
         SetButtonEnabled(_discImageChooseButton, sourceCommandEnabled);
         SetButtonEnabled(_importEditorCacheButton, sourceCommandEnabled);

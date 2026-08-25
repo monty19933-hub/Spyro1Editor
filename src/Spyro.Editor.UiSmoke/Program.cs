@@ -1125,6 +1125,15 @@ void RunId65BlankLabUiOnly()
             "checking ID65 resident texture painting",
             timeoutSeconds: 60);
         string residentTexture = residentTextureTask.GetAwaiter().GetResult();
+        Console.WriteLine("ID65 UI smoke: starting canonical-document legacy-writer guard probe.");
+        Task<string> canonicalDocumentGuardTask =
+            window.AssertId65CanonicalAuthoringDocumentLegacyWriterGuardForTestingAsync();
+        WaitForUiTask(
+            canonicalDocumentGuardTask,
+            "checking the canonical ID65 document legacy-writer guards",
+            timeoutSeconds: 60);
+        string canonicalDocumentGuard =
+            canonicalDocumentGuardTask.GetAwaiter().GetResult();
         Console.WriteLine("ID65 UI smoke: starting reverse regular-persistence fence probe.");
         Task<string> reversePersistenceTask =
             window.AssertId65BlankLabReverseRegularPersistenceFencingForTestingAsync();
@@ -1168,7 +1177,7 @@ void RunId65BlankLabUiOnly()
 
         Console.WriteLine(
             "ID65 Blank-Level Lab public UI smoke passed: clean 35-level startup, visible narrow disclosure, neutral reveal label, explicit repair contract, Core atomic-export route with 128 unique keys, hidden broad Research tab, and exact-manifest 35+1 in-memory admission passed; " +
-            $"isolated locked workspace bootstrap: exact and source-preserving; mutation guards: {mutationGuards}; stale continuations: {staleContinuations}; transition guards: {transitionGuards}; resident textures: {residentTexture}; reverse persistence: {reversePersistence}; operation fence: {operationFence}; workspace transition: {workspaceTransition}.");
+            $"isolated locked workspace bootstrap: exact and source-preserving; mutation guards: {mutationGuards}; stale continuations: {staleContinuations}; transition guards: {transitionGuards}; resident textures: {residentTexture}; canonical document guard: {canonicalDocumentGuard}; reverse persistence: {reversePersistence}; operation fence: {operationFence}; workspace transition: {workspaceTransition}.");
     }
     finally
     {

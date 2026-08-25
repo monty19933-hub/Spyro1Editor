@@ -30,6 +30,8 @@ public sealed partial class MainWindow
         "Same-level resident textures: editor preview and isolated authored-layer saving. Cross-level/custom art and runtime export remain unavailable until a destination profile is proved.";
     private const string Id65BlankLabMobyCapability =
         "Resident records: inspection only. Mutation, portable imports, arbitrary actors, and linked families: unavailable until a destination profile exists.";
+    private const string Id65AuthoringDocumentFileName =
+        Id65AuthoringEditorDocumentWorkspaceInspector.DocumentFileName;
 
     private readonly TextBlock _id65BlankLabStatusText = new();
     private readonly TextBlock _id65BlankLabLockedBaseText = new();
@@ -531,6 +533,12 @@ public sealed partial class MainWindow
             _statusText.Text = "Load the validated ID65 lab before creating its disposable test CUE.";
             return;
         }
+        if (Id65BlankLabHasCanonicalAuthoringDocument())
+        {
+            _statusText.Text =
+                "The legacy ID65 disposable test CUE is disabled because the canonical authoring-document filename was detected. This App bridge has not validated or reprojected that file; it must not run a terrain-only writer that could omit structural terrain, texture, or Moby intent.";
+            return;
+        }
         if (!TryBeginId65BlankLabManualOperation(
                 "disposable test CUE creation",
                 out Id65BlankLabManualOperation? operation) ||
@@ -646,6 +654,7 @@ public sealed partial class MainWindow
         bool valid = _id65BlankLabManifest != null && _id65BlankLabPaths != null;
         bool active = IsCurrentId65BlankLab();
         bool hasTerrain = TerrainEditFileHasEdits(Id65BlankLabTerrainEditsPath());
+        bool hasAuthoringDocument = Id65BlankLabHasCanonicalAuthoringDocument();
         bool hasUnsupported = TryGetId65BlankLabUnsupportedArtifact(out string unsupported);
         bool disposableTerrainReady =
             active &&
@@ -664,9 +673,11 @@ public sealed partial class MainWindow
             ? $"Profile v{_id65BlankLabManifest!.ProfileVersion}; exact BIN {_id65BlankLabManifest.LockedBaseImageSha256[..12]}...; {Path.GetFileName(_id65BlankLabPaths!.LockedBaseCuePath)}."
             : "Not built or not validated.";
         _id65BlankLabAuthoredLayerText.Text = valid
-            ? $"Isolated by versioned manifest + unique key '{UnusedLevel65BlankLevelLabProfileRegistry.Key}'. " +
-              $"Saved HP-Z/resident-texture terrain: {(hasTerrain ? "present" : "none")}." +
-              (hasUnsupported ? $" Disposable writer blocked: {unsupported}" : "")
+            ? hasAuthoringDocument
+                ? "Canonical full-authoring document filename detected, but this App bridge has not validated or reprojected its contents. It is inspect-only here; legacy HP-Z save/test actions are disabled so they cannot omit possible structural terrain, private texture, or Moby intent."
+                : $"Isolated by versioned manifest + unique key '{UnusedLevel65BlankLevelLabProfileRegistry.Key}'. " +
+                  $"Saved HP-Z/resident-texture terrain: {(hasTerrain ? "present" : "none")}." +
+                  (hasUnsupported ? $" Disposable writer blocked: {unsupported}" : "")
             : "No admitted lab workspace. Normal Create BIN remains separate.";
 
         bool busy = _id65BlankLabBusy ||
@@ -677,7 +688,8 @@ public sealed partial class MainWindow
         if (_id65BlankLabLoadButton != null)
             _id65BlankLabLoadButton.IsEnabled = valid && !busy;
         if (_id65BlankLabSaveButton != null)
-            _id65BlankLabSaveButton.IsEnabled = valid && active && !busy;
+            _id65BlankLabSaveButton.IsEnabled =
+                valid && active && !busy && !hasAuthoringDocument;
         if (_id65BlankLabCreateCueButton != null)
             _id65BlankLabCreateCueButton.IsEnabled =
                 valid && active && !busy && !hasUnsupported &&
@@ -696,6 +708,12 @@ public sealed partial class MainWindow
         {
             if (announce)
                 _statusText.Text = "Load the validated ID65 lab before saving its research workspace.";
+            return false;
+        }
+        if (Id65BlankLabHasCanonicalAuthoringDocument())
+        {
+            _statusText.Text =
+                "Legacy ID65 terrain save is disabled because the canonical full-authoring document filename was detected. This App bridge has not validated or reprojected that file; it must inspect and translate it through the exact Core contract instead of creating a second, conflicting HP-Z layer.";
             return false;
         }
         bool ownsOperation = existingOperation == null;
@@ -1503,6 +1521,42 @@ public sealed partial class MainWindow
                 .AuthoredEditsDirectoryPath,
             $"{UnusedLevel65BlankLevelLabProfileRegistry.Key}-terrain-edits.json");
 
+    private string Id65BlankLabAuthoringDocumentPath()
+    {
+        UnusedLevel65BlankLevelLabWorkspacePaths paths =
+            _id65BlankLabPaths ??
+            UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(
+                _workspace.RootPath);
+        return Path.Combine(
+            paths.AuthoredEditsDirectoryPath,
+            Id65AuthoringDocumentFileName);
+    }
+
+    private bool Id65BlankLabHasCanonicalAuthoringDocument() =>
+        Id65BlankLabExactPathEntryExistsOrIsUninspectable(
+            Id65BlankLabAuthoringDocumentPath());
+
+    private static bool Id65BlankLabExactPathEntryExistsOrIsUninspectable(
+        string path)
+    {
+        try
+        {
+            DirectoryInfo directory = new(path);
+            if (directory.Exists || !string.IsNullOrWhiteSpace(directory.LinkTarget))
+                return true;
+            FileInfo file = new(path);
+            return file.Exists || !string.IsNullOrWhiteSpace(file.LinkTarget);
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException)
+        {
+            // An unreadable reserved destination must fail closed. Treating it
+            // as absent could let a legacy writer omit or collide with the
+            // canonical authoring layer.
+            return true;
+        }
+    }
+
     private static string Id65BlankLabCacheDirectory(UnusedLevel65BlankLevelLabWorkspacePaths paths) =>
         Path.Combine(paths.RootPath, "editor-cache");
 
@@ -1531,6 +1585,13 @@ public sealed partial class MainWindow
 
     private bool TryGetId65BlankLabUnsupportedArtifact(out string reason)
     {
+        if (Id65BlankLabHasCanonicalAuthoringDocument())
+        {
+            reason =
+                "The canonical full-authoring document filename was detected but has not been validated or reprojected by this App bridge. The legacy terrain-only disposable writer is disabled so it cannot silently omit possible structural terrain, private texture, or Moby intent.";
+            return true;
+        }
+
         string key = UnusedLevel65BlankLevelLabProfileRegistry.Key;
         string objectEditsPath = Path.Combine(_workspace.RootPath, $"{key}-native-edits.json");
         string movementEditsPath = NativeMobyPathEditPath(key);
@@ -1645,6 +1706,12 @@ public sealed partial class MainWindow
 
     private bool TryGetId65BlankLabNormalCreateBinBlockReason(out string reason)
     {
+        if (Id65BlankLabHasCanonicalAuthoringDocument())
+        {
+            reason =
+                "Normal Create BIN is unavailable because the canonical ID65 full-authoring document filename was detected. This App bridge has not validated or reprojected that file; normal Create BIN and the legacy terrain-only test writer remain disabled so possible structural terrain, texture, or Moby intent cannot be omitted.";
+            return true;
+        }
         if (IsCurrentId65BlankLab())
         {
             reason =
@@ -2183,6 +2250,347 @@ public sealed partial class MainWindow
 
     internal static string CreateId65BlankLabDisposableTestKeyForTesting() =>
         CreateId65BlankLabDisposableTestKey();
+
+    internal async Task<string> AssertId65CanonicalAuthoringDocumentLegacyWriterGuardForTestingAsync()
+    {
+        if (!IsCurrentId65BlankLab() || _currentLevel == null || _currentGeometry == null ||
+            _id65BlankLabManifest == null || _id65BlankLabPaths == null)
+        {
+            throw new InvalidOperationException(
+                "The canonical-document writer guard probe requires the validated, loaded ID65 Lab.");
+        }
+        if (_id65BlankLabBusy || _id65BlankLabManualOperation != null ||
+            _createBinBusy || _loadingLevel)
+        {
+            throw new InvalidOperationException(
+                "The canonical-document writer guard probe requires an idle ID65 Lab.");
+        }
+        if (!string.Equals(
+                Id65AuthoringDocumentFileName,
+                "unusedlevel65blank-authoring-document-v1.json",
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "The App guard is not bound to the canonical Core inspector filename.");
+        }
+
+        UnusedLevel65BlankLevelLabWorkspacePaths paths = _id65BlankLabPaths;
+        string documentPath = Id65BlankLabAuthoringDocumentPath();
+        string nearMissPath = documentPath + ".bak";
+        if (Id65BlankLabHasCanonicalAuthoringDocument() ||
+            Id65BlankLabExactPathEntryExistsOrIsUninspectable(nearMissPath))
+        {
+            throw new InvalidOperationException(
+                "The canonical-document writer guard probe refuses to replace a pre-existing exact or near-miss fixture.");
+        }
+
+        RefreshId65BlankLabUi();
+        RefreshActionAvailability();
+        Id65BlankLabUiSnapshot uiBefore = CaptureId65BlankLabUiSnapshotForTesting();
+        if (!uiBefore.SaveEnabled)
+        {
+            throw new InvalidOperationException(
+                "The canonical-document writer guard probe requires legacy Save to be enabled before the exact filename is installed.");
+        }
+        string mainStatusBefore = _statusText.Text ?? "";
+        Id65BlankLabAuthoredLayerSnapshot authoredBefore =
+            await CaptureId65BlankLabAuthoredLayerAsync(paths.AuthoredEditsDirectoryPath);
+        string[] protectedOutputDirectories =
+        [
+            paths.OperationsDirectoryPath,
+            Path.Combine(paths.RootPath, ".terrain-test-operations"),
+            Path.Combine(paths.RootPath, "runtime-tests"),
+            Path.Combine(paths.RootPath, "materialized-candidates"),
+            Path.Combine(_workspace.RootPath, "output")
+        ];
+        Dictionary<string, Id65BlankLabAuthoredLayerSnapshot> protectedBefore =
+            new(StringComparer.OrdinalIgnoreCase);
+        foreach (string directory in protectedOutputDirectories)
+        {
+            protectedBefore[directory] =
+                await CaptureId65BlankLabAuthoredLayerAsync(directory);
+        }
+
+        int operationGenerationBefore = _id65BlankLabManualOperationGeneration;
+        CancellationTokenSource? operationCancellationBefore =
+            _id65BlankLabManualOperationCancellation;
+        string revealPathBefore = _id65BlankLabRevealPath;
+        LevelDefinition levelBefore = _currentLevel;
+        GeometryCandidate geometryBefore = _currentGeometry;
+        List<Moby> mobysBefore = _currentMobys;
+        string terrainSignatureBefore = BuildTerrainEditSignature(_currentGeometry);
+        string mobySignatureBefore = BuildMobyEditSignature(_currentMobys);
+        string savedTerrainSignatureBefore = _savedTerrainEditSignature;
+        string savedMobySignatureBefore = _savedMobyEditSignature;
+        object? toolbarCreateBinContentBefore = _toolbarCreateBinButton?.Content;
+
+        static bool SnapshotIsExact(
+            Id65BlankLabAuthoredLayerSnapshot expected,
+            Id65BlankLabAuthoredLayerSnapshot actual) =>
+            expected.DirectoryExisted == actual.DirectoryExisted &&
+            expected.Files.SequenceEqual(actual.Files, StringComparer.Ordinal);
+
+        async Task AssertWriterBoundariesUnchangedAsync(
+            string label,
+            Id65BlankLabAuthoredLayerSnapshot expectedAuthored)
+        {
+            Id65BlankLabAuthoredLayerSnapshot authoredNow =
+                await CaptureId65BlankLabAuthoredLayerAsync(
+                    paths.AuthoredEditsDirectoryPath);
+            bool protectedOutputsExact = true;
+            foreach ((string directory, Id65BlankLabAuthoredLayerSnapshot expected) in
+                     protectedBefore)
+            {
+                Id65BlankLabAuthoredLayerSnapshot actual =
+                    await CaptureId65BlankLabAuthoredLayerAsync(directory);
+                protectedOutputsExact &= SnapshotIsExact(expected, actual);
+            }
+
+            if (!SnapshotIsExact(expectedAuthored, authoredNow) ||
+                !protectedOutputsExact ||
+                _id65BlankLabBusy || _id65BlankLabManualOperation != null ||
+                _createBinBusy || _loadingLevel ||
+                _id65BlankLabManualOperationGeneration != operationGenerationBefore ||
+                !ReferenceEquals(
+                    _id65BlankLabManualOperationCancellation,
+                    operationCancellationBefore) ||
+                !string.Equals(_id65BlankLabRevealPath, revealPathBefore, StringComparison.Ordinal) ||
+                !ReferenceEquals(_currentLevel, levelBefore) ||
+                !ReferenceEquals(_currentGeometry, geometryBefore) ||
+                !ReferenceEquals(_currentMobys, mobysBefore) ||
+                !Equals(_toolbarCreateBinButton?.Content, toolbarCreateBinContentBefore) ||
+                !string.Equals(
+                    BuildTerrainEditSignature(_currentGeometry),
+                    terrainSignatureBefore,
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    BuildMobyEditSignature(_currentMobys),
+                    mobySignatureBefore,
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    _savedTerrainEditSignature,
+                    savedTerrainSignatureBefore,
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    _savedMobyEditSignature,
+                    savedMobySignatureBefore,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"The {label} canonical-document refusal changed authored/output files, operation state, or the loaded scene.");
+            }
+        }
+
+        try
+        {
+            Directory.CreateDirectory(paths.AuthoredEditsDirectoryPath);
+            File.WriteAllBytes(nearMissPath, "near-miss-must-not-bind"u8.ToArray());
+            RefreshId65BlankLabUi();
+            RefreshActionAvailability();
+            Id65BlankLabUiSnapshot nearMissUi =
+                CaptureId65BlankLabUiSnapshotForTesting();
+            if (Id65BlankLabHasCanonicalAuthoringDocument() || nearMissUi != uiBefore)
+            {
+                throw new InvalidOperationException(
+                    "A near-miss canonical document filename changed the ID65 writer guards.");
+            }
+            File.Delete(nearMissPath);
+
+            Directory.CreateDirectory(documentPath);
+            RefreshId65BlankLabUi();
+            RefreshActionAvailability();
+            Id65BlankLabUiSnapshot reservedDirectoryUi =
+                CaptureId65BlankLabUiSnapshotForTesting();
+            Id65BlankLabAuthoredLayerSnapshot authoredWithReservedDirectory =
+                await CaptureId65BlankLabAuthoredLayerAsync(
+                    paths.AuthoredEditsDirectoryPath);
+            if (!Id65BlankLabHasCanonicalAuthoringDocument() ||
+                !Directory.Exists(documentPath) ||
+                reservedDirectoryUi.SaveEnabled ||
+                reservedDirectoryUi.CreateCueEnabled ||
+                !reservedDirectoryUi.AuthoredLayerText.Contains(
+                    "filename detected",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "A directory reserving the exact canonical document path did not fail closed.");
+            }
+            await SaveId65BlankLabWorkspaceAsync();
+            if (!(_statusText.Text ?? "").Contains(
+                    "terrain save is disabled",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Legacy Save did not refuse a directory at the canonical document path.");
+            }
+            await CreateId65BlankLabDisposableCueAsync();
+            if (!Directory.Exists(documentPath) ||
+                !(_statusText.Text ?? "").Contains(
+                    "test CUE is disabled",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "The disposable-CUE route did not preserve and refuse a directory at the canonical document path.");
+            }
+            await AssertWriterBoundariesUnchangedAsync(
+                "reserved canonical-path directory",
+                authoredWithReservedDirectory);
+            Directory.Delete(documentPath, recursive: false);
+
+            File.WriteAllBytes(
+                documentPath,
+                "canonical-filename-only-invalid-json-sentinel"u8.ToArray());
+            Id65BlankLabAuthoredLayerSnapshot authoredWithSentinel =
+                await CaptureId65BlankLabAuthoredLayerAsync(
+                    paths.AuthoredEditsDirectoryPath);
+            RefreshId65BlankLabUi();
+            RefreshActionAvailability();
+            Id65BlankLabUiSnapshot guardedUi =
+                CaptureId65BlankLabUiSnapshotForTesting();
+            string disclosure = guardedUi.AuthoredLayerText;
+            if (!Id65BlankLabHasCanonicalAuthoringDocument() ||
+                _id65BlankLabSaveButton == null ||
+                _id65BlankLabCreateCueButton == null ||
+                _toolbarCreateBinButton == null ||
+                guardedUi.SaveEnabled || guardedUi.CreateCueEnabled ||
+                _toolbarCreateBinButton.IsEnabled ||
+                !disclosure.Contains("filename detected", StringComparison.OrdinalIgnoreCase) ||
+                !disclosure.Contains("not validated or reprojected", StringComparison.OrdinalIgnoreCase) ||
+                !disclosure.Contains("inspect-only", StringComparison.OrdinalIgnoreCase) ||
+                !disclosure.Contains("legacy", StringComparison.OrdinalIgnoreCase) ||
+                !TryGetId65BlankLabUnsupportedArtifact(out string unsupportedReason) ||
+                !unsupportedReason.Contains("not been validated or reprojected", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "The exact canonical filename did not truthfully disable the complete legacy ID65 writer surface.");
+            }
+
+            await SaveId65BlankLabWorkspaceAsync();
+            if (!(_statusText.Text ?? "").Contains("terrain save is disabled", StringComparison.OrdinalIgnoreCase) ||
+                !(_statusText.Text ?? "").Contains("not validated or reprojected", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "The direct legacy ID65 Save route did not refuse the canonical filename truthfully.");
+            }
+            await AssertWriterBoundariesUnchangedAsync(
+                "legacy Save",
+                authoredWithSentinel);
+
+            await CreateId65BlankLabDisposableCueAsync();
+            if (!(_statusText.Text ?? "").Contains("test CUE is disabled", StringComparison.OrdinalIgnoreCase) ||
+                !(_statusText.Text ?? "").Contains("not validated or reprojected", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "The direct legacy ID65 disposable-CUE route masked the canonical filename refusal.");
+            }
+            await AssertWriterBoundariesUnchangedAsync(
+                "legacy disposable CUE",
+                authoredWithSentinel);
+
+            await CreateObjectTestBinAsync();
+            if (!(_statusText.Text ?? "").Contains("Normal Create BIN is unavailable", StringComparison.OrdinalIgnoreCase) ||
+                !(_statusText.Text ?? "").Contains("not validated or reprojected", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "The direct normal Create BIN route did not refuse the canonical filename truthfully.");
+            }
+            await AssertWriterBoundariesUnchangedAsync(
+                "normal Create BIN",
+                authoredWithSentinel);
+
+            LevelDefinition retailLevel = _retailCatalog.Levels.First();
+            string retailCreateBinStatus = "";
+            try
+            {
+                _currentLevel = retailLevel;
+                RefreshActionAvailability();
+                if (_toolbarCreateBinButton?.IsEnabled != true)
+                {
+                    throw new InvalidOperationException(
+                        "The retail-current Create BIN handler was not user-reachable before its canonical filename refusal.");
+                }
+                await CreateObjectTestBinAsync();
+                retailCreateBinStatus = _statusText.Text ?? "";
+            }
+            finally
+            {
+                _currentLevel = levelBefore;
+                RefreshId65BlankLabUi();
+                RefreshActionAvailability();
+            }
+            if (!retailCreateBinStatus.Contains(
+                    "Normal Create BIN is unavailable",
+                    StringComparison.OrdinalIgnoreCase) ||
+                !retailCreateBinStatus.Contains(
+                    "not validated or reprojected",
+                    StringComparison.OrdinalIgnoreCase) ||
+                retailCreateBinStatus.Contains(
+                    "use its disposable test writer",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "A retail-current normal Create BIN route did not use the canonical filename-specific refusal.");
+            }
+            await AssertWriterBoundariesUnchangedAsync(
+                "retail-current normal Create BIN",
+                authoredWithSentinel);
+
+            return
+                "exact-name guard disabled wired legacy Save, disposable CUE, and normal Create BIN from both ID65 and retail-current routes; near-miss filename did not bind and an exact-path directory failed closed; filename-only detection remained explicitly unvalidated/unreprojected; handlers recovered toolbar/busy state and changed no authored/output/operation/scene state";
+        }
+        finally
+        {
+            _currentLevel = levelBefore;
+            if (Directory.Exists(documentPath))
+                Directory.Delete(documentPath, recursive: false);
+            else if (Id65BlankLabExactPathEntryExistsOrIsUninspectable(documentPath))
+                File.Delete(documentPath);
+            if (Directory.Exists(nearMissPath))
+                Directory.Delete(nearMissPath, recursive: false);
+            else if (Id65BlankLabExactPathEntryExistsOrIsUninspectable(nearMissPath))
+                File.Delete(nearMissPath);
+            if (!authoredBefore.DirectoryExisted &&
+                Directory.Exists(paths.AuthoredEditsDirectoryPath) &&
+                !Directory.EnumerateFileSystemEntries(
+                    paths.AuthoredEditsDirectoryPath).Any())
+            {
+                Directory.Delete(paths.AuthoredEditsDirectoryPath);
+            }
+
+            RefreshId65BlankLabUi();
+            RefreshActionAvailability();
+            _statusText.Text = mainStatusBefore;
+            Id65BlankLabAuthoredLayerSnapshot authoredAfter =
+                await CaptureId65BlankLabAuthoredLayerAsync(
+                    paths.AuthoredEditsDirectoryPath);
+            Id65BlankLabUiSnapshot uiAfter =
+                CaptureId65BlankLabUiSnapshotForTesting();
+            bool protectedOutputsRestored = true;
+            foreach ((string directory, Id65BlankLabAuthoredLayerSnapshot expected) in
+                     protectedBefore)
+            {
+                Id65BlankLabAuthoredLayerSnapshot actual =
+                    await CaptureId65BlankLabAuthoredLayerAsync(directory);
+                protectedOutputsRestored &= SnapshotIsExact(expected, actual);
+            }
+            if (!SnapshotIsExact(authoredBefore, authoredAfter) ||
+                !protectedOutputsRestored || uiAfter != uiBefore ||
+                _id65BlankLabBusy || _id65BlankLabManualOperation != null ||
+                _createBinBusy || _loadingLevel ||
+                _id65BlankLabManualOperationGeneration != operationGenerationBefore ||
+                !ReferenceEquals(
+                    _id65BlankLabManualOperationCancellation,
+                    operationCancellationBefore) ||
+                !ReferenceEquals(_currentLevel, levelBefore) ||
+                !ReferenceEquals(_currentGeometry, geometryBefore) ||
+                !ReferenceEquals(_currentMobys, mobysBefore) ||
+                !Equals(_toolbarCreateBinButton?.Content, toolbarCreateBinContentBefore))
+            {
+                throw new InvalidOperationException(
+                    "The canonical-document writer guard probe did not restore its exact pre-probe files, UI, or operation state.");
+            }
+        }
+    }
 
     internal async Task<string> AssertId65BlankLabMutationGuardsForTestingAsync()
     {

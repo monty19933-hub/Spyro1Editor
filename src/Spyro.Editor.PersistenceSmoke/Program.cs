@@ -65,6 +65,179 @@ try
     Assert(
         PortableProjectMigration.Classify("_local/release-qa/proof.json") == PortableProjectArtifactKind.UserResearch,
         "Release QA evidence was not classified as user research.");
+    const string id65ResearchRoot = "_research/unusedlevel65blank/v1";
+    const string id65DocumentRelative =
+        id65ResearchRoot + "/authored-edits/unusedlevel65blank-authoring-document-v1.json";
+    Assert(
+        PortableProjectMigration.Classify(id65DocumentRelative) == PortableProjectArtifactKind.ProjectEdit,
+        "The canonical ID65 authoring document was not classified as a project edit.");
+    Assert(
+        PortableProjectMigration.Classify(
+            id65ResearchRoot + "/materialized-candidates/aggregate-proof/candidate.receipt.json") ==
+        PortableProjectArtifactKind.NonPortableDerivedOutput,
+        "An ID65 materialized-candidate receipt was not classified as non-portable derived output.");
+    Assert(
+        PortableProjectMigration.Classify(
+            id65ResearchRoot + "/runtime-tests/terrain-proof/terrain-proof-static-readback-receipt.json") ==
+        PortableProjectArtifactKind.NonPortableDerivedOutput,
+        "A legacy ID65 runtime-test receipt was not classified as non-portable derived output.");
+    Assert(
+        PortableProjectMigration.Classify(
+            id65ResearchRoot + "/.aggregate-candidate-operations/materialize-proof/operation-journal.json") ==
+        PortableProjectArtifactKind.TransientWorkspaceState,
+        "An ID65 candidate operation journal was not classified as non-migratable transient state.");
+    Assert(
+        PortableProjectMigration.Classify(
+            id65ResearchRoot + "/.unusedlevel65blank-aggregate-candidate-v1.writer.lock") ==
+        PortableProjectArtifactKind.TransientWorkspaceState,
+        "The ID65 aggregate-candidate writer lease was not classified as non-migratable transient state.");
+    Assert(
+        PortableProjectMigration.Classify(
+            id65ResearchRoot +
+            "/authored-edits/.unusedlevel65blank-authoring-document-v1.json.11111111111111111111111111111111.tmp") ==
+        PortableProjectArtifactKind.TransientWorkspaceState,
+        "An ID65 authoring-document staged temporary was not classified as non-migratable transient state.");
+    Assert(
+        PortableProjectMigration.Classify(
+            id65ResearchRoot + "/.derived-cache-operations/11111111111111111111111111111111/staged.json") ==
+        PortableProjectArtifactKind.TransientWorkspaceState,
+        "An ID65 derived-cache operation was not classified as non-migratable transient state.");
+    Assert(
+        PortableProjectMigration.Classify(
+            id65ResearchRoot + "/.bootstrap-operations/11111111111111111111111111111111/operation-journal.json") ==
+        PortableProjectArtifactKind.TransientWorkspaceState,
+        "An ID65 bootstrap operation was not classified as non-migratable transient state.");
+    Assert(
+        PortableProjectMigration.Classify(
+            id65ResearchRoot + "/.terrain-test-operations/terrain-test-11111111111111111111111111111111/operation-journal.json") ==
+        PortableProjectArtifactKind.TransientWorkspaceState,
+        "A legacy ID65 terrain-test operation was not classified as non-migratable transient state.");
+    Assert(
+        PortableProjectMigration.Classify(
+            id65ResearchRoot + "/editor-cache/terrain-derived.json") ==
+        PortableProjectArtifactKind.RebuildableCache,
+        "An ID65 editor-cache artifact was not classified as opt-in rebuildable cache.");
+    Assert(
+        PortableProjectMigration.Classify(
+            id65ResearchRoot + "/locked-base-wad-analysis.json") ==
+        PortableProjectArtifactKind.RebuildableCache,
+        "The ID65 locked-base analysis was not classified as opt-in rebuildable cache.");
+    Assert(
+        PortableProjectMigration.Classify(
+            id65ResearchRoot + "/generated-cache/terrain-source-v1/id65-source-overlay.json") ==
+        PortableProjectArtifactKind.RebuildableCache,
+        "A legacy ID65 generated-cache artifact was not classified as opt-in rebuildable cache.");
+    Assert(
+        PortableProjectMigration.Classify(
+            id65ResearchRoot + "/authored-edits/future-user-authored.lock") ==
+        PortableProjectArtifactKind.Unknown,
+        "A future user-authored ID65 lock-named file was over-broadly classified as rebuildable state.");
+    Assert(
+        PortableProjectMigration.Classify(
+            id65ResearchRoot +
+            "/authored-edits/.unusedlevel65blank-authoring-document-v1.json.not-32-hex.tmp") ==
+        PortableProjectArtifactKind.Unknown,
+        "A malformed ID65 document temporary name was over-broadly classified as rebuildable state.");
+    Assert(
+        PortableProjectMigration.Classify(
+            id65ResearchRoot + "/materialized-candidates/aggregate-proof/candidate.bin") ==
+        PortableProjectArtifactKind.NonPortableDerivedOutput,
+        "An ID65 materialized candidate BIN was not classified as non-portable derived output.");
+    Assert(
+        PortableProjectMigration.Classify(id65ResearchRoot + "/lab-manifest.json") ==
+        PortableProjectArtifactKind.UserResearch,
+        "The ID65 lab manifest was not classified as research metadata.");
+    string id65PortableRoot = Path.Combine(temporaryRoot, "id65-portable-project");
+    Write(Path.Combine(id65PortableRoot, id65DocumentRelative.Replace('/', Path.DirectorySeparatorChar)), "{\"documentFixture\":true}");
+    Write(Path.Combine(id65PortableRoot, id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar), "lab-manifest.json"), "{\"manifestFixture\":true}");
+    Write(Path.Combine(id65PortableRoot, id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar), "locked-base", "unusedlevel65blank-locked-base-v1.bin"), "locked game image");
+    Write(Path.Combine(id65PortableRoot, id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar), "locked-base", "unusedlevel65blank-locked-base-v1.cue"), "locked game cue");
+    Write(Path.Combine(id65PortableRoot, id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar), "materialized-candidates", "aggregate-proof", "candidate.bin"), "generated candidate");
+    Write(Path.Combine(id65PortableRoot, id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar), "materialized-candidates", "aggregate-proof", "candidate.receipt.json"), "{\"receiptFixture\":true}");
+    Write(Path.Combine(id65PortableRoot, id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar), "runtime-tests", "terrain-proof", "terrain-proof.cue"), "FILE \"terrain-proof.bin\" BINARY");
+    Write(Path.Combine(id65PortableRoot, id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar), "runtime-tests", "terrain-proof", "terrain-proof-static-readback-receipt.json"), "{\"legacyReceiptFixture\":true}");
+    Write(Path.Combine(id65PortableRoot, id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar), ".aggregate-candidate-operations", "materialize-proof", "operation-journal.json"), "{\"operationFixture\":true}");
+    Write(Path.Combine(id65PortableRoot, id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar), ".bootstrap-operations", "11111111111111111111111111111111", "operation-journal.json"), "{\"bootstrapOperationFixture\":true}");
+    Write(Path.Combine(id65PortableRoot, id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar), ".derived-cache-operations", "11111111111111111111111111111111", "staged.json"), "{\"derivedOperationFixture\":true}");
+    Write(Path.Combine(id65PortableRoot, id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar), ".terrain-test-operations", "terrain-test-11111111111111111111111111111111", "operation-journal.json"), "{\"terrainTestOperationFixture\":true}");
+    Write(Path.Combine(id65PortableRoot, id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar), ".unusedlevel65blank-aggregate-candidate-v1.writer.lock"), "");
+    Write(Path.Combine(id65PortableRoot, id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar), "editor-cache", "terrain-derived.json"), "{\"cacheFixture\":true}");
+    Write(Path.Combine(id65PortableRoot, id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar), "generated-cache", "terrain-source-v1", "id65-source-overlay.json"), "{\"generatedCacheFixture\":true}");
+    Write(Path.Combine(id65PortableRoot, id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar), "locked-base-wad-analysis.json"), "{\"analysisFixture\":true}");
+    EditorProjectLayout id65MigrationProject =
+        await userData.EnsureProjectAsync("id65-migration-check", "ID65 Migration Check");
+    PortableProjectMigrationResult id65Migration = await PortableProjectMigration.MigrateAsync(
+        id65PortableRoot,
+        id65MigrationProject);
+    Assert(
+        id65Migration.CopiedCount == 2 && id65Migration.ConflictCount == 0 &&
+        File.Exists(Path.Combine(
+            id65MigrationProject.RootPath,
+            id65DocumentRelative.Replace('/', Path.DirectorySeparatorChar))) &&
+        File.Exists(Path.Combine(
+            id65MigrationProject.RootPath,
+            id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar),
+            "lab-manifest.json")),
+        $"Default project migration did not preserve exactly the ID65 authored document and lab metadata: copied={id65Migration.CopiedCount}, skipped={id65Migration.SkippedCount}, conflicts={id65Migration.ConflictCount}.");
+    Assert(
+        !Directory.Exists(Path.Combine(
+            id65MigrationProject.RootPath,
+            id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar),
+            "materialized-candidates")) &&
+        !Directory.Exists(Path.Combine(
+            id65MigrationProject.RootPath,
+            id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar),
+            ".aggregate-candidate-operations")) &&
+        !Directory.Exists(Path.Combine(
+            id65MigrationProject.RootPath,
+            id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar),
+            "runtime-tests")) &&
+        !Directory.Exists(Path.Combine(
+            id65MigrationProject.RootPath,
+            id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar),
+            ".terrain-test-operations")) &&
+        !File.Exists(Path.Combine(
+            id65MigrationProject.RootPath,
+            id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar),
+            ".unusedlevel65blank-aggregate-candidate-v1.writer.lock")) &&
+        !File.Exists(Path.Combine(
+            id65MigrationProject.RootPath,
+            id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar),
+            "locked-base",
+            "unusedlevel65blank-locked-base-v1.bin")),
+        "Default project migration copied ID65 game data, generated candidates, cache, or transient operation state.");
+    EditorProjectLayout id65CacheMigrationProject =
+        await userData.EnsureProjectAsync("id65-cache-migration-check", "ID65 Cache Migration Check");
+    PortableProjectMigrationResult id65CacheMigration = await PortableProjectMigration.MigrateAsync(
+        id65PortableRoot,
+        id65CacheMigrationProject,
+        new PortableProjectMigrationOptions(
+            IncludeGeneratedOutputs: true,
+            IncludeRebuildableCache: true));
+    string id65CacheMigrationRoot = Path.Combine(
+        id65CacheMigrationProject.RootPath,
+        id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar));
+    Assert(
+        id65CacheMigration.CopiedCount == 5 &&
+        File.Exists(Path.Combine(id65CacheMigrationRoot, "editor-cache", "terrain-derived.json")) &&
+        File.Exists(Path.Combine(
+            id65CacheMigrationRoot,
+            "generated-cache",
+            "terrain-source-v1",
+            "id65-source-overlay.json")) &&
+        File.Exists(Path.Combine(id65CacheMigrationRoot, "locked-base-wad-analysis.json")),
+        $"Opt-in ID65 cache migration did not copy exactly the three rebuildable cache artifacts in addition to the document and manifest: copied={id65CacheMigration.CopiedCount}.");
+    Assert(
+        !Directory.Exists(Path.Combine(id65CacheMigrationRoot, ".aggregate-candidate-operations")) &&
+        !Directory.Exists(Path.Combine(id65CacheMigrationRoot, ".bootstrap-operations")) &&
+        !Directory.Exists(Path.Combine(id65CacheMigrationRoot, ".derived-cache-operations")) &&
+        !Directory.Exists(Path.Combine(id65CacheMigrationRoot, ".terrain-test-operations")) &&
+        !Directory.Exists(Path.Combine(id65CacheMigrationRoot, "materialized-candidates")) &&
+        !Directory.Exists(Path.Combine(id65CacheMigrationRoot, "runtime-tests")) &&
+        !File.Exists(Path.Combine(
+            id65CacheMigrationRoot,
+            ".unusedlevel65blank-aggregate-candidate-v1.writer.lock")),
+        "Opt-in generated-output/cache migration copied an ID65 candidate, operation journal, or writer lease.");
     EditorProjectLayout identityCheck = await userData.EnsureProjectAsync("manifest-check", "Manifest Check");
     JsonNode identityManifest = JsonNode.Parse(File.ReadAllText(identityCheck.ManifestPath))!;
     identityManifest["projectId"] = "wrong-project";
@@ -507,9 +680,71 @@ try
         "artisans",
         "preserved.sky");
     string excludedWad = Path.Combine(bootstrap.Project.RootPath, "WAD.WAD");
+    string id65DocumentPath = Path.Combine(
+        bootstrap.Project.RootPath,
+        id65DocumentRelative.Replace('/', Path.DirectorySeparatorChar));
+    string id65LabManifestPath = Path.Combine(
+        bootstrap.Project.RootPath,
+        id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar),
+        "lab-manifest.json");
+    string id65GeneratedReceiptPath = Path.Combine(
+        bootstrap.Project.RootPath,
+        id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar),
+        "materialized-candidates",
+        "aggregate-proof",
+        "candidate.receipt.json");
+    string id65OperationJournalPath = Path.Combine(
+        bootstrap.Project.RootPath,
+        id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar),
+        ".aggregate-candidate-operations",
+        "materialize-proof",
+        "operation-journal.json");
+    string id65LegacyRuntimeReceiptPath = Path.Combine(
+        bootstrap.Project.RootPath,
+        id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar),
+        "runtime-tests",
+        "terrain-proof",
+        "terrain-proof-static-readback-receipt.json");
+    string id65LegacyTerrainOperationPath = Path.Combine(
+        bootstrap.Project.RootPath,
+        id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar),
+        ".terrain-test-operations",
+        "terrain-test-11111111111111111111111111111111",
+        "operation-journal.json");
+    string id65LegacyGeneratedCachePath = Path.Combine(
+        bootstrap.Project.RootPath,
+        id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar),
+        "generated-cache",
+        "terrain-source-v1",
+        "id65-source-overlay.json");
+    string id65DerivedCacheOperationPath = Path.Combine(
+        bootstrap.Project.RootPath,
+        id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar),
+        ".derived-cache-operations",
+        "11111111111111111111111111111111",
+        "staged.json");
+    string id65AggregateWriterLeasePath = Path.Combine(
+        bootstrap.Project.RootPath,
+        id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar),
+        ".unusedlevel65blank-aggregate-candidate-v1.writer.lock");
+    string id65DocumentWriterLeasePath = Path.Combine(
+        bootstrap.Project.RootPath,
+        id65ResearchRoot.Replace('/', Path.DirectorySeparatorChar),
+        "authored-edits",
+        ".unusedlevel65blank-authoring-document-v1.json.writer.lock");
     Write(futureProjectFile, "future project state");
     Write(preservedConflictAsset, "preserved conflict asset");
     Write(excludedWad, "game data fixture");
+    Write(id65DocumentPath, "{\"canonicalId65AuthoringDocumentFixture\":true}");
+    Write(id65LabManifestPath, "{\"labManifestFixture\":true}");
+    Write(id65GeneratedReceiptPath, "{\"generatedCandidateReceiptFixture\":true}");
+    Write(id65OperationJournalPath, "{\"rebuildableCandidateOperationFixture\":true}");
+    Write(id65LegacyRuntimeReceiptPath, "{\"legacyRuntimeReceiptFixture\":true}");
+    Write(id65LegacyTerrainOperationPath, "{\"legacyTerrainOperationFixture\":true}");
+    Write(id65LegacyGeneratedCachePath, "{\"legacyGeneratedCacheFixture\":true}");
+    Write(id65DerivedCacheOperationPath, "{\"rebuildableDerivedCacheFixture\":true}");
+    Write(id65AggregateWriterLeasePath, "");
+    Write(id65DocumentWriterLeasePath, "");
     string overlappingBackupRoot = Path.Combine(bootstrap.Project.RootPath, "unsafe-backups");
     await AssertInvalidOperationAsync(
         async () => await ProjectSnapshotService.CreateAsync(
@@ -527,6 +762,32 @@ try
     {
         Assert(snapshotArchive.GetEntry("artisans-native-edits.json") != null, "Project snapshot omitted saved object edits.");
         Assert(snapshotArchive.GetEntry("future-editor-state.projectdata") != null, "Project snapshot omitted an unclassified future project file.");
+        Assert(snapshotArchive.GetEntry(id65DocumentRelative) != null, "Project snapshot omitted the canonical ID65 authoring document.");
+        Assert(snapshotArchive.GetEntry(id65ResearchRoot + "/lab-manifest.json") != null, "Project snapshot omitted the ID65 lab manifest.");
+        Assert(snapshotArchive.GetEntry(
+            id65ResearchRoot + "/materialized-candidates/aggregate-proof/candidate.receipt.json") == null,
+            "Project snapshot included a generated ID65 candidate receipt.");
+        Assert(snapshotArchive.GetEntry(
+            id65ResearchRoot + "/.aggregate-candidate-operations/materialize-proof/operation-journal.json") == null,
+            "Project snapshot included rebuildable ID65 candidate-operation state.");
+        Assert(snapshotArchive.GetEntry(
+            id65ResearchRoot + "/runtime-tests/terrain-proof/terrain-proof-static-readback-receipt.json") == null,
+            "Project snapshot included a legacy ID65 runtime-test receipt.");
+        Assert(snapshotArchive.GetEntry(
+            id65ResearchRoot + "/.terrain-test-operations/terrain-test-11111111111111111111111111111111/operation-journal.json") == null,
+            "Project snapshot included legacy ID65 terrain-test operation state.");
+        Assert(snapshotArchive.GetEntry(
+            id65ResearchRoot + "/generated-cache/terrain-source-v1/id65-source-overlay.json") == null,
+            "Project snapshot included a legacy ID65 generated-cache artifact.");
+        Assert(snapshotArchive.GetEntry(
+            id65ResearchRoot + "/.derived-cache-operations/11111111111111111111111111111111/staged.json") == null,
+            "Project snapshot included rebuildable ID65 derived-cache operation state.");
+        Assert(snapshotArchive.GetEntry(
+            id65ResearchRoot + "/.unusedlevel65blank-aggregate-candidate-v1.writer.lock") == null,
+            "Project snapshot included the ID65 aggregate-candidate writer lease.");
+        Assert(snapshotArchive.GetEntry(
+            id65ResearchRoot + "/authored-edits/.unusedlevel65blank-authoring-document-v1.json.writer.lock") == null,
+            "Project snapshot included the ID65 authoring-document writer lease.");
         Assert(snapshotArchive.GetEntry("_migration/conflicts/manual-proof/custom-skyboxes/artisans/preserved.sky") != null, "Project snapshot omitted a preserved migration conflict asset.");
         Assert(snapshotArchive.GetEntry("WAD.WAD") == null, "Project snapshot included source game data with an unclassified WAD path.");
         Assert(snapshotArchive.GetEntry("_local/.app/support-ownership.json") == null, "Project snapshot included replaceable application bookkeeping.");

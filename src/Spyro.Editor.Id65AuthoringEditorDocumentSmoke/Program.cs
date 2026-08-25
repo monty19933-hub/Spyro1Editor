@@ -887,6 +887,8 @@ static void VerifySourceTopology(string repositoryRoot)
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorAggregateCandidateMaterializer.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorAggregatePlanProjector.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorDocumentStore.cs"),
+        Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorDocumentWorkspaceInspector.cs"),
+        Path.Combine("src", "Spyro.Editor.Core", "Persistence", "PortableProjectMigration.cs"),
         Path.Combine("src", "Spyro.Editor.Id65AuthoringEditorDocumentSmoke", "Program.cs")
     ];
     Require(symbolOwners.SequenceEqual(expectedOwners.Order(StringComparer.Ordinal)),
