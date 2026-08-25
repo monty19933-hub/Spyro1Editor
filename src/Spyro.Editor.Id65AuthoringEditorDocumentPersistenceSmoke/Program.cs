@@ -165,20 +165,76 @@ try
         "Unknown reserved persistence residue was deleted or publication continued.");
     File.Delete(unknownReservedPath);
 
+    await ExpectRejectedAsync(
+        "null prepared-result callback",
+        async () => _ = await Id65AuthoringEditorDocumentStore
+            .SavePreparedAsync<object>(
+                paths,
+                manifest,
+                fullDocument,
+                projectionInputs,
+                preparePublishedResult: null!,
+                expectedPriorEnvelopeCanonicalSha256: null),
+        requiredText: "preparePublishedResult");
+    await ExpectRejectedAsync(
+        "null prepared result",
+        async () => _ = await Id65AuthoringEditorDocumentStore
+            .SavePreparedAsync<object?>(
+                paths,
+                manifest,
+                fullDocument,
+                projectionInputs,
+                _ => null,
+                expectedPriorEnvelopeCanonicalSha256: null),
+        requiredText: "returned null");
+    int throwingCreatePreparationCount = 0;
+    await ExpectRejectedAsync(
+        "throwing create preparation",
+        async () => _ = await Id65AuthoringEditorDocumentStore
+            .SavePreparedAsync<object>(
+                paths,
+                manifest,
+                fullDocument,
+                projectionInputs,
+                staged =>
+                {
+                    throwingCreatePreparationCount++;
+                    AssertClosedResult(staged, fullDocument);
+                    throw new InvalidDataException(
+                        "Injected prepared create-result failure.");
+                },
+                expectedPriorEnvelopeCanonicalSha256: null),
+        requiredText: "Injected prepared create-result failure");
+    Require(
+        throwingCreatePreparationCount == 1 && !File.Exists(documentPath),
+        "A throwing create preparation was not invoked exactly once or published a document.");
+    AssertNoOrphans(authoredRoot, documentExpected: false);
+
     string exactStaleTemporaryPath = Path.Combine(
         authoredRoot,
         $".{Id65AuthoringEditorDocumentStore.FileName}.{new string('a', 32)}.tmp");
     await File.WriteAllTextAsync(exactStaleTemporaryPath, "owned-stale-temp\n");
+    int successfulPreparationCount = 0;
+    Id65AuthoringEditorDocumentStoreResult? stagedFirst = null;
     Id65AuthoringEditorDocumentStoreResult first =
-        await Id65AuthoringEditorDocumentStore.SaveAsync(
+        await Id65AuthoringEditorDocumentStore.SavePreparedAsync(
             paths,
             manifest,
             fullDocument,
             projectionInputs,
+            staged =>
+            {
+                successfulPreparationCount++;
+                AssertClosedResult(staged, fullDocument);
+                stagedFirst = staged;
+                return staged;
+            },
             expectedPriorEnvelopeCanonicalSha256: null);
     Require(
+        successfulPreparationCount == 1 &&
+        ReferenceEquals(first, stagedFirst) &&
         !File.Exists(exactStaleTemporaryPath),
-        "An exact owned stale persistence temporary was not recovered under the lease.");
+        "The prepared result was not returned exactly once or stale persistence residue survived.");
     Require(
         File.Exists(writerLeasePath) &&
         (await File.ReadAllBytesAsync(writerLeasePath)).SequenceEqual(persistentLeaseSentinel),
@@ -195,6 +251,30 @@ try
     Id65AuthoringEditorDocumentStoreResult loadedFirst =
         await RequireLoadedAsync(paths, manifest, projectionInputs);
     RequireEquivalent(first, loadedFirst, "first create/load");
+
+    int throwingReplacementPreparationCount = 0;
+    await ExpectRejectedAsync(
+        "throwing replacement preparation",
+        async () => _ = await Id65AuthoringEditorDocumentStore
+            .SavePreparedAsync<object>(
+                paths,
+                manifest,
+                noTerrainDocument,
+                projectionInputs,
+                staged =>
+                {
+                    throwingReplacementPreparationCount++;
+                    AssertClosedResult(staged, noTerrainDocument);
+                    throw new InvalidDataException(
+                        "Injected prepared replacement-result failure.");
+                },
+                first.EnvelopeCanonicalSha256),
+        requiredText: "Injected prepared replacement-result failure");
+    Require(
+        throwingReplacementPreparationCount == 1 &&
+        (await File.ReadAllBytesAsync(documentPath)).SequenceEqual(firstEnvelopeBytes),
+        "A throwing replacement preparation was not invoked exactly once or changed the published envelope.");
+    AssertNoOrphans(authoredRoot, documentExpected: true);
 
     Id65AuthoringEditorDocumentStoreResult deterministicReplacement =
         await Id65AuthoringEditorDocumentStore.SaveAsync(
@@ -550,7 +630,7 @@ try
         "Persistence changed a clean source or catalog fixture.");
 
     Console.WriteLine(
-        "PASS Id65AuthoringEditorDocumentPersistenceSmoke: isolated exact-lab create/load and deterministic CAS replacement, stale/wrong/missing/create-only refusal, strict envelope/document/profile/layout/base/projection tamper rejection, 256-KiB bounded reads, pre-cancellation, symlink/escape refusal, persistent exclusive lease reuse, exact stale-temp recovery, read-only workspace validation, immutable BIN/CUE/manifest/source fixtures, and fail-closed production flags passed. Deterministic injected mid-stage faults remain unavailable; hostile parent-directory swaps remain explicitly unsafe and App/Create BIN stay unwired.");
+        "PASS Id65AuthoringEditorDocumentPersistenceSmoke: isolated exact-lab create/load and deterministic CAS replacement, pre-publication result preparation success/null/throw atomicity, stale/wrong/missing/create-only refusal, strict envelope/document/profile/layout/base/projection tamper rejection, 256-KiB bounded reads, pre-cancellation, symlink/escape refusal, persistent exclusive lease reuse, exact stale-temp recovery, read-only workspace validation, immutable BIN/CUE/manifest/source fixtures, and fail-closed production flags passed. Other deterministic injected mid-stage faults remain unavailable; hostile parent-directory swaps remain explicitly unsafe and App/Create BIN stay unwired.");
 }
 finally
 {
@@ -715,6 +795,15 @@ static void AssertStoreApiBoundary()
             parameter.ParameterType != typeof(Id65CompiledAuthoringComposite) &&
             parameter.ParameterType != typeof(Id65AuthoringEditorProjection)),
         "The store Save API gained a fault hook, raw byte/stream input, or compiled afterimage input.");
+    MethodInfo preparedSave = typeof(Id65AuthoringEditorDocumentStore)
+        .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+        .Single(method => method.Name == "SavePreparedAsync");
+    Require(
+        preparedSave.IsAssembly && preparedSave.IsGenericMethodDefinition &&
+        preparedSave.GetGenericArguments().Length == 1 &&
+        preparedSave.GetParameters().Count(parameter =>
+            typeof(Delegate).IsAssignableFrom(parameter.ParameterType)) == 1,
+        "The pre-publication result seam is not one internal generic callback boundary.");
     Require(
         typeof(Id65AuthoringEditorDocumentStoreResult)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -793,7 +882,8 @@ static async Task ExpectRejectedAsync(
         await action();
     }
     catch (Exception exception) when (exception is
-        InvalidDataException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        ArgumentNullException or InvalidDataException or InvalidOperationException or
+        IOException or UnauthorizedAccessException)
     {
         rejection = exception;
     }

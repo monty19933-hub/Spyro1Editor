@@ -126,11 +126,29 @@ internal static class Id65AuthoringEditorDocumentStore
         return path;
     }
 
-    public static async Task<Id65AuthoringEditorDocumentStoreResult> SaveAsync(
+    public static Task<Id65AuthoringEditorDocumentStoreResult> SaveAsync(
         UnusedLevel65BlankLevelLabWorkspacePaths paths,
         UnusedLevel65BlankLevelLabManifest expectedLabManifest,
         Id65AuthoringEditorDocument document,
         Id65AuthoringEditorDocumentProjectionInputs projectionInputs,
+        string? expectedPriorEnvelopeCanonicalSha256,
+        CancellationToken cancellationToken = default) =>
+        SavePreparedAsync(
+            paths,
+            expectedLabManifest,
+            document,
+            projectionInputs,
+            static staged => staged,
+            expectedPriorEnvelopeCanonicalSha256,
+            cancellationToken);
+
+    internal static async Task<TPublishedResult> SavePreparedAsync<TPublishedResult>(
+        UnusedLevel65BlankLevelLabWorkspacePaths paths,
+        UnusedLevel65BlankLevelLabManifest expectedLabManifest,
+        Id65AuthoringEditorDocument document,
+        Id65AuthoringEditorDocumentProjectionInputs projectionInputs,
+        Func<Id65AuthoringEditorDocumentStoreResult, TPublishedResult>
+            preparePublishedResult,
         string? expectedPriorEnvelopeCanonicalSha256,
         CancellationToken cancellationToken = default)
     {
@@ -138,6 +156,7 @@ internal static class Id65AuthoringEditorDocumentStore
         ArgumentNullException.ThrowIfNull(expectedLabManifest);
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(projectionInputs);
+        ArgumentNullException.ThrowIfNull(preparePublishedResult);
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(projectionInputs.NativeInputs);
         Id65AuthoringEditorNativeInputProvider.ValidateForConsumption(
@@ -207,6 +226,12 @@ internal static class Id65AuthoringEditorDocumentStore
                 throw new InvalidDataException(
                     "The staged ID65 editor-document readback changed before publication.");
             }
+            TPublishedResult prepared = preparePublishedResult(staged);
+            if (prepared is null)
+            {
+                throw new InvalidDataException(
+                    "The ID65 staged publication result factory returned null.");
+            }
 
             await RequireExpectedPublishedWorkspaceAsync(
                 paths,
@@ -233,7 +258,7 @@ internal static class Id65AuthoringEditorDocumentStore
                 temporaryPath,
                 path,
                 overwrite: expectedPriorEnvelopeCanonicalSha256 != null);
-            return staged;
+            return prepared;
         }
         finally
         {

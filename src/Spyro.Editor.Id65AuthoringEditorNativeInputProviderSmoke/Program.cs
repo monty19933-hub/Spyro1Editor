@@ -353,6 +353,8 @@ static void AssertTopology(string repositoryRoot)
         Path.Combine("src", "Spyro.Editor.Core", "Persistence",
             "Id65AuthoringEditorDocumentStore.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence",
+            "Id65AuthoringEditorDocumentWorkspaceWriter.cs"),
+        Path.Combine("src", "Spyro.Editor.Core", "Persistence",
             "Id65AuthoringEditorNativeInputProvider.cs")
     ];
     Regex loadCall = new(
@@ -368,7 +370,9 @@ static void AssertTopology(string repositoryRoot)
         productionLoadOwners.SequenceEqual(
         [
             Path.Combine("src", "Spyro.Editor.Core", "Persistence",
-                "Id65AuthoringEditorAggregateCandidateMaterializer.cs")
+                "Id65AuthoringEditorAggregateCandidateMaterializer.cs"),
+            Path.Combine("src", "Spyro.Editor.Core", "Persistence",
+                "Id65AuthoringEditorDocumentWorkspaceWriter.cs")
         ]) &&
         !providerOwners.Any(path => HasPathSegment(path, "Spyro.Editor.App")),
         "The provider callsite topology changed or the cheap App inspector became a native-input loader.");
