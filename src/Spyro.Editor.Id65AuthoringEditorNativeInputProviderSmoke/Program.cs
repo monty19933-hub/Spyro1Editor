@@ -261,7 +261,7 @@ try
         $"witness={recovered.PrivateTextureWitnessSha256}, bundle={recovered.GrassBundleSha256}, " +
         $"inputSet={recovered.CanonicalInputSetSha256}, positiveLoads={positiveLoads}, " +
         $"failClosedRejects={failClosedRejects}, cacheBuilds={recoveredCache.DerivedPairBuildCount}. " +
-        "Exact locked-project derivation, concurrent fan-in, failed-build eviction/recovery, semantic projection, path-free topology, immutable workspace, and App/Create-BIN/runtime/release false boundaries passed without a retired foundation path.");
+        "Exact locked-project derivation, concurrent fan-in, failed-build eviction/recovery, semantic projection, path-free topology, immutable workspace, and no App/UI/Create-BIN/runtime/release authority passed without a retired foundation path.");
 }
 finally
 {

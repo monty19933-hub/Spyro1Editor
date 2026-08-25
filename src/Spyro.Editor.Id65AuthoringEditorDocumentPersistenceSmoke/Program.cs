@@ -630,7 +630,7 @@ try
         "Persistence changed a clean source or catalog fixture.");
 
     Console.WriteLine(
-        "PASS Id65AuthoringEditorDocumentPersistenceSmoke: isolated exact-lab create/load and deterministic CAS replacement, pre-publication result preparation success/null/throw atomicity, stale/wrong/missing/create-only refusal, strict envelope/document/profile/layout/base/projection tamper rejection, 256-KiB bounded reads, pre-cancellation, symlink/escape refusal, persistent exclusive lease reuse, exact stale-temp recovery, read-only workspace validation, immutable BIN/CUE/manifest/source fixtures, and fail-closed production flags passed. Other deterministic injected mid-stage faults remain unavailable; hostile parent-directory swaps remain explicitly unsafe and App/Create BIN stay unwired.");
+        "PASS Id65AuthoringEditorDocumentPersistenceSmoke: isolated exact-lab create/load and deterministic CAS replacement, pre-publication result preparation success/null/throw atomicity, stale/wrong/missing/create-only refusal, strict envelope/document/profile/layout/base/projection tamper rejection, 256-KiB bounded reads, pre-cancellation, symlink/escape refusal, persistent exclusive lease reuse, exact stale-temp recovery, read-only workspace validation, immutable BIN/CUE/manifest/source fixtures, and fail-closed production flags passed. Other deterministic injected mid-stage faults remain unavailable; hostile parent-directory swaps remain explicitly unsafe, the Store remains internal and carries no App/Create-BIN authority, and normal Create BIN stays unwired.");
 }
 finally
 {

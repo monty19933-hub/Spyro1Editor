@@ -200,7 +200,7 @@ Console.WriteLine(
 Console.WriteLine(
     $"ID65_AUTHORING_EDITOR_CONTROL_STATE_COMPILER_SMOKE_OK states={cases.Length} " +
     $"compilations={validCompilations + parallelResults.Length} rejects={rejectionCount} " +
-    "path-free exact document translation/recovery passed without native derivation, persistence, App/UI, Create BIN, runtime, or release authority.");
+    "path-free exact document translation/recovery passed without native derivation, persistence, or App/UI/Create-BIN/runtime/release authority.");
 
 static IEnumerable<string> PlacementIds(Case item)
 {

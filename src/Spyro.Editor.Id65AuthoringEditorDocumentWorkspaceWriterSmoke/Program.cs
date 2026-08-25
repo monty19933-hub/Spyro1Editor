@@ -370,7 +370,7 @@ try
         $"states={cases.Length} publications={publications} rejects={rejects} " +
         $"finalDocument={final.DocumentCanonicalSha256} " +
         $"finalEnvelope={final.EnvelopeCanonicalSha256} " +
-        "explicit provider-owned-input CAS publication, legacy conflict refusal, deterministic readback, path-free receipts, immutable locked inputs, and App/Create-BIN/runtime/release false boundaries passed.");
+        "explicit provider-owned-input CAS publication, legacy conflict refusal, deterministic readback, path-free receipts, immutable locked inputs, and no App/UI authority or Create-BIN/runtime/release authority passed.");
 }
 finally
 {
@@ -528,6 +528,23 @@ static void AssertSourceTopology(string repositoryRoot)
         "Spyro.Editor.Core",
         "Persistence",
         "Id65AuthoringEditorDocumentStore.cs");
+    string expectedAppOwner = Path.Combine(
+        "src",
+        "Spyro.Editor.App",
+        "Views",
+        "MainWindow.Id65BlankLab.cs");
+    string[] appWriterOwners = Directory
+        .EnumerateFiles(appRoot, "*.cs", SearchOption.AllDirectories)
+        .Where(path => !HasPathSegment(path, "bin") && !HasPathSegment(path, "obj"))
+        .Where(path => File.ReadAllText(path).Contains(
+            "Id65AuthoringEditorDocumentWorkspaceWriter",
+            StringComparison.Ordinal))
+        .Select(path => Path.GetRelativePath(repositoryRoot, path))
+        .Order(StringComparer.Ordinal)
+        .ToArray();
+    Regex publicWriterCall = new(
+        @"\bId65AuthoringEditorDocumentWorkspaceWriter\s*\.\s*SaveExactAsync\s*\(",
+        RegexOptions.CultureInvariant);
     Require(
         saveOwners.Length == 0 &&
         preparedSaveOwners.SequenceEqual([expectedWriter]) &&
@@ -538,12 +555,10 @@ static void AssertSourceTopology(string repositoryRoot)
                 @"await\s+RequireNoConflictingLegacyTerrainLayerAsync\s*\(",
                 RegexOptions.CultureInvariant)
             .Count == 2 &&
-        !Directory.EnumerateFiles(appRoot, "*.cs", SearchOption.AllDirectories)
-            .Where(path => !HasPathSegment(path, "bin") && !HasPathSegment(path, "obj"))
-            .Any(path => File.ReadAllText(path).Contains(
-                "Id65AuthoringEditorDocumentWorkspaceWriter",
-                StringComparison.Ordinal)),
-        "The prepared Store publication owner, two-phase legacy check, or pre-UI App boundary changed.");
+        appWriterOwners.SequenceEqual([expectedAppOwner]) &&
+        publicWriterCall.Matches(File.ReadAllText(
+            Path.Combine(repositoryRoot, expectedAppOwner))).Count == 1,
+        "The prepared Store publication owner, two-phase legacy check, or explicit App writer boundary changed.");
 }
 
 static async Task ExpectRejectedAsync(

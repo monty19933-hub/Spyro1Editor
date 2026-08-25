@@ -129,8 +129,7 @@ public sealed class Id65AuthoringEditorDocumentReadModel
     public bool WritesFileSystem => false;
     public bool WritesDiscImage => false;
     public bool WritesCue => false;
-    public bool AppIntegrated => false;
-    public bool UiIntegrated => false;
+    public bool CarriesAppOrUiAuthority => false;
     public bool CreateBinEnabled => false;
     public bool NormalCreateBinEnabled => false;
     public bool RuntimeCandidateAuthorized => false;

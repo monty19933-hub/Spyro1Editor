@@ -25,11 +25,11 @@ public sealed partial class MainWindow
 {
     private const string Id65BlankLabDisclosureTitle = "ID65 Blank-Level Lab";
     private const string Id65BlankLabTerrainCapability =
-        "Existing HP Z: research-only through the topology-safe solid-terrain path. True Add, LP authoring, and XY movement: unavailable.";
+        "Exact structural HP/LP + collision/occlusion intent: available through the Full Authoring Document. Existing HP Z remains on the legacy research path; arbitrary geometry and XY movement remain unavailable.";
     private const string Id65BlankLabTextureCapability =
-        "Same-level resident textures: editor preview and isolated authored-layer saving. Cross-level/custom art and runtime export remain unavailable until a destination profile is proved.";
+        "The proved private T66 native texture swap is fixed into every Full Authoring Document. Arbitrary cross-level/custom art remains unavailable.";
     private const string Id65BlankLabMobyCapability =
-        "Resident records: inspection only. Mutation, portable imports, arbitrary actors, and linked families: unavailable until a destination profile exists.";
+        "The proved Grass placements at T88 and T107 can be included independently. Other resident records remain inspection-only; arbitrary actors and linked families remain unavailable.";
     private const string Id65AuthoringDocumentFileName =
         Id65AuthoringEditorDocumentWorkspaceInspector.DocumentFileName;
 
@@ -38,6 +38,7 @@ public sealed partial class MainWindow
     private readonly TextBlock _id65BlankLabAuthoredLayerText = new();
     private Button? _id65BlankLabBuildButton;
     private Button? _id65BlankLabLoadButton;
+    private Button? _id65BlankLabAuthoringDocumentButton;
     private Button? _id65BlankLabSaveButton;
     private Button? _id65BlankLabCreateCueButton;
     private Button? _id65BlankLabRevealButton;
@@ -62,6 +63,12 @@ public sealed partial class MainWindow
     internal Func<string, CancellationToken, Task>?
         Id65BlankLabManualOperationDelayOverrideForTesting { get; set; }
     internal Action<string>? Id65BlankLabTerrainPersistenceFaultForTesting { get; set; }
+    internal Func<
+        Id65AuthoringEditorControlState,
+        bool,
+        CancellationToken,
+        Task<Id65AuthoringEditorControlState?>>?
+        Id65AuthoringDocumentDialogOverrideForTesting { get; set; }
 
     private sealed record Id65BlankLabManualOperation(
         int Generation,
@@ -127,6 +134,12 @@ public sealed partial class MainWindow
             "Build / Refresh Locked Base",
             BuildOrRefreshId65BlankLabBaseAsync);
         _id65BlankLabLoadButton = NewAsyncButton("Load Lab", LoadId65BlankLabAsync);
+        _id65BlankLabAuthoringDocumentButton = NewAsyncButton(
+            "Edit Full Authoring Document…",
+            EditId65AuthoringDocumentAsync,
+            RefreshId65BlankLabUi);
+        _id65BlankLabAuthoringDocumentButton.Name =
+            "Id65BlankLabAuthoringDocumentButton";
         _id65BlankLabSaveButton = NewAsyncButton(
             "Save Research Workspace",
             SaveId65BlankLabWorkspaceAsync);
@@ -139,6 +152,9 @@ public sealed partial class MainWindow
 
         StyleModernPrimaryButton(_id65BlankLabBuildButton, Color.FromRgb(173, 104, 27));
         StyleModernPrimaryButton(_id65BlankLabLoadButton, ModernTeal);
+        StyleModernPrimaryButton(
+            _id65BlankLabAuthoringDocumentButton,
+            Color.FromRgb(117, 80, 158));
         StyleModernSecondaryButton(_id65BlankLabSaveButton);
         StyleModernPrimaryButton(_id65BlankLabCreateCueButton, Color.FromRgb(117, 80, 158));
         StyleModernSecondaryButton(_id65BlankLabRevealButton);
@@ -147,6 +163,7 @@ public sealed partial class MainWindow
         AddModernGridButton(firstActions, _id65BlankLabBuildButton, 0);
         AddModernGridButton(firstActions, _id65BlankLabLoadButton, 1);
         panel.Children.Add(firstActions);
+        panel.Children.Add(_id65BlankLabAuthoringDocumentButton);
 
         Grid secondActions = NewEqualButtonGrid(2);
         AddModernGridButton(secondActions, _id65BlankLabSaveButton, 0);
@@ -526,6 +543,366 @@ public sealed partial class MainWindow
         _ = await SaveId65BlankLabWorkspaceCoreAsync(announce: true);
     }
 
+    private async Task EditId65AuthoringDocumentAsync()
+    {
+        if (_id65BlankLabPaths == null ||
+            _id65BlankLabManifest == null)
+        {
+            _statusText.Text =
+                "Build and validate the ID65 lab before editing its Full Authoring Document.";
+            return;
+        }
+        if (IsCurrentId65BlankLab() &&
+            (HasUnsavedTerrainEdits() || HasUnsavedMobyEdits() ||
+             HasUnsavedNativeMovementEdits() || HasUnsavedDragonRunToEdits()))
+        {
+            _statusText.Text =
+                "Save, undo, or reload the current scene edits before opening the ID65 Full Authoring Document. The document does not translate unsaved legacy scene mutations.";
+            return;
+        }
+        if (!TryBeginId65BlankLabManualOperation(
+                "full-authoring document edit",
+                out Id65BlankLabManualOperation? operation) ||
+            operation == null)
+        {
+            return;
+        }
+
+        try
+        {
+            await AwaitId65BlankLabManualOperationDelayForTestingAsync(
+                operation,
+                "authoring-document-started");
+            RequireCurrentId65BlankLabManualOperation(operation);
+            UnusedLevel65BlankLevelLabWorkspacePaths paths =
+                UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(
+                    operation.WorkspaceRoot);
+            UnusedLevel65BlankLevelLabManifest manifest =
+                _id65BlankLabManifest ?? throw new InvalidDataException(
+                    "The ID65 Full Authoring Document has no admitted locked-workspace manifest.");
+            UnusedLevel65BlankLevelLabProfileRegistry.ValidateManifest(
+                manifest,
+                paths);
+
+            _statusText.Text =
+                "ID65 Full Authoring Document: validating the existing canonical document…";
+            Id65AuthoringEditorDocumentReadModel? existing =
+                await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                    paths,
+                    manifest,
+                    operation.Cancellation.Token);
+            RequireCurrentId65BlankLabManualOperation(operation);
+            Id65AuthoringEditorControlState initial = existing == null
+                ? Id65AuthoringEditorControlState.CreateDefault()
+                : Id65AuthoringEditorControlStateCompiler.RecoverControlState(existing);
+
+            Id65AuthoringEditorControlState? selected =
+                Id65AuthoringDocumentDialogOverrideForTesting != null
+                    ? await Id65AuthoringDocumentDialogOverrideForTesting(
+                            initial,
+                            existing != null,
+                            operation.Cancellation.Token)
+                        .WaitAsync(operation.Cancellation.Token)
+                    : await ShowId65AuthoringDocumentDialogAsync(
+                        initial,
+                        existing != null);
+            RequireCurrentId65BlankLabManualOperation(operation);
+            if (selected == null)
+            {
+                _statusText.Text =
+                    "ID65 Full Authoring Document was closed without saving.";
+                return;
+            }
+            if (existing != null && Id65AuthoringControlStatesEqual(initial, selected))
+            {
+                _statusText.Text =
+                    "ID65 Full Authoring Document: confirming the canonical envelope is still current…";
+                Id65AuthoringEditorDocumentReadModel? current =
+                    await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                        paths,
+                        manifest,
+                        operation.Cancellation.Token);
+                RequireCurrentId65BlankLabManualOperation(operation);
+                if (current == null ||
+                    current.EnvelopeCanonicalSha256 !=
+                        existing.EnvelopeCanonicalSha256 ||
+                    current.DocumentCanonicalSha256 !=
+                        existing.DocumentCanonicalSha256 ||
+                    !Id65AuthoringControlStatesEqual(
+                        Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                            current),
+                        initial))
+                {
+                    throw new InvalidDataException(
+                        "The canonical ID65 authoring document changed while the dialog was open. Reopen it before saving or accepting an unchanged state.");
+                }
+                _statusText.Text =
+                    $"ID65 Full Authoring Document already matches the selected controls ({current.DocumentCanonicalSha256[..12]}…). No file was changed.";
+                return;
+            }
+            if (IsCurrentId65BlankLab() &&
+                (HasUnsavedTerrainEdits() || HasUnsavedMobyEdits() ||
+                 HasUnsavedNativeMovementEdits() || HasUnsavedDragonRunToEdits()))
+            {
+                throw new OperationCanceledException(
+                    "The loaded scene changed while the ID65 authoring dialog was open.",
+                    operation.Cancellation.Token);
+            }
+
+            _statusText.Text =
+                "ID65 Full Authoring Document: revalidating native inputs and publishing with compare-and-swap…";
+            Id65AuthoringEditorControlStateCompilation selectedCompilation =
+                Id65AuthoringEditorControlStateCompiler.Compile(selected);
+            Id65AuthoringEditorDocumentWriteResult written =
+                await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
+                    paths,
+                    manifest,
+                    selected,
+                    existing?.EnvelopeCanonicalSha256,
+                    operation.Cancellation.Token);
+            RequireCurrentId65BlankLabManualOperation(operation);
+            if (written.DocumentCanonicalSha256 !=
+                    selectedCompilation.DocumentCanonicalSha256 ||
+                written.DocumentContentSha256 !=
+                    selectedCompilation.DocumentContentSha256 ||
+                !written.ExplicitSaveInvocationRequired ||
+                !written.CompareAndSwapEnforced ||
+                !written.AtomicPublicationCompleted ||
+                !written.PersistencePerformed ||
+                written.CarriesAppOrUiAuthority ||
+                written.WritesDiscImage || written.WritesCue ||
+                written.AggregateMaterializationEnabled ||
+                written.NormalCreateBinEnabled ||
+                written.RuntimeCandidateAuthorized || written.Publishable)
+            {
+                throw new InvalidDataException(
+                    "The ID65 Full Authoring Document receipt crossed an App, BIN, runtime, or publication boundary.");
+            }
+
+            InvalidateBuildSafetySummary();
+            RefreshId65BlankLabUi();
+            RefreshActionAvailability();
+            _statusText.Text =
+                $"{(written.CreatedNewDocument ? "Created" : "Updated")} the canonical ID65 Full Authoring Document " +
+                $"({written.DocumentCanonicalSha256[..12]}…): structural terrain " +
+                $"{(written.ControlState.IncludeStructuralTerrain ? "included" : "omitted")}; " +
+                $"Grass T88 {(written.ControlState.IncludeGrassAtT88 ? "included" : "omitted")}; " +
+                $"Grass T107 {(written.ControlState.IncludeGrassAtT107 ? "included" : "omitted")}. " +
+                "The proved private T66 texture swap and baseline spawn/music/totals/exit/save handles remain fixed. Normal Create BIN is still blocked until aggregate materialization is wired and validated.";
+        }
+        catch (OperationCanceledException) when (
+            operation.Cancellation.IsCancellationRequested ||
+            !IsCurrentId65BlankLabManualOperation(
+                operation,
+                requireSceneIdentity: true))
+        {
+        }
+        catch (Exception ex)
+        {
+            if (IsCurrentId65BlankLabManualOperation(
+                    operation,
+                    requireSceneIdentity: true))
+            {
+                _statusText.Text =
+                    $"Could not save the ID65 Full Authoring Document: {ex.Message}";
+            }
+        }
+        finally
+        {
+            CompleteId65BlankLabManualOperation(operation);
+        }
+    }
+
+    private async Task<Id65AuthoringEditorControlState?>
+        ShowId65AuthoringDocumentDialogAsync(
+            Id65AuthoringEditorControlState initial,
+            bool replacingExistingDocument)
+    {
+        Window dialog = new()
+        {
+            Title = "ID65 Full Authoring Document",
+            Width = 700,
+            Height = 620,
+            MinWidth = 560,
+            MinHeight = 480,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = true
+        };
+        dialog.Opened += (_, _) =>
+        {
+            dialog.Activate();
+            dialog.Focus();
+        };
+
+        CheckBox terrain = new()
+        {
+            Name = "Id65AuthoringStructuralTerrainBox",
+            Content = "Include exact structural terrain intent",
+            IsChecked = initial.IncludeStructuralTerrain
+        };
+        CheckBox t88 = new()
+        {
+            Name = "Id65AuthoringGrassT88Box",
+            Content = "Include proved Grass placement at T88",
+            IsChecked = initial.IncludeGrassAtT88
+        };
+        CheckBox t107 = new()
+        {
+            Name = "Id65AuthoringGrassT107Box",
+            Content = "Include proved Grass placement at T107",
+            IsChecked = initial.IncludeGrassAtT107
+        };
+        TextBlock validation = new()
+        {
+            Text = "Choose at least one proved Grass placement.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(ModernRed),
+            IsVisible = false
+        };
+        TextBlock exactPreview = new()
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(ModernMutedInk),
+            FontSize = 11,
+            LineHeight = 16
+        };
+
+        StackPanel body = new()
+        {
+            Spacing = 12,
+            Margin = new Thickness(18)
+        };
+        body.Children.Add(BuildModernDialogHeader(
+            replacingExistingDocument
+                ? "Edit the canonical ID65 document"
+                : "Create the canonical ID65 document",
+            "These are exact, evidence-bound authoring choices. Saving publishes only the canonical project document; it does not create a BIN or claim runtime proof."));
+        body.Children.Add(BuildId65AuthoringChoice(
+            terrain,
+            "Adds or removes the one proved HP/LP terrain intent together with its collision and occlusion ownership."));
+        body.Children.Add(BuildId65AuthoringChoice(
+            t88,
+            "Uses the exact replacement-row policy and preserves the destination coordinate."));
+        body.Children.Add(BuildId65AuthoringChoice(
+            t107,
+            "Uses the exact contiguous append policy, authored coordinate, yaw, and proved support handle."));
+        body.Children.Add(new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(243, 247, 251)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(204, 216, 228)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10),
+            Child = new TextBlock
+            {
+                Text =
+                    "Always fixed: the proved private T66 native texture swap and the baseline spawn, music, totals, exit, and save handles. Arbitrary terrain, textures, Mobys, and behavior are not accepted by this first exact contract.",
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(ModernMutedInk),
+                LineHeight = 18
+            }
+        });
+        body.Children.Add(exactPreview);
+        body.Children.Add(validation);
+
+        Button cancel = NewButton("Cancel");
+        Button save = NewButton(
+            replacingExistingDocument
+                ? "Save Exact Document"
+                : "Create Exact Document");
+        StyleModernSecondaryButton(cancel);
+        StyleModernPrimaryButton(save, Color.FromRgb(117, 80, 158), 132);
+        void RefreshExactPreview()
+        {
+            Id65AuthoringEditorControlState selected = new(
+                terrain.IsChecked == true,
+                t88.IsChecked == true,
+                t107.IsChecked == true);
+            try
+            {
+                Id65AuthoringEditorControlStateCompilation compilation =
+                    Id65AuthoringEditorControlStateCompiler.Compile(selected);
+                exactPreview.Text =
+                    $"Exact document {compilation.DocumentCanonicalSha256[..12]}…; " +
+                    $"terrain intents {compilation.TerrainIntentCount}; Grass targets " +
+                    $"{string.Join(", ", compilation.MobyTargetTrueIndices.Select(index => $"T{index}"))}; " +
+                    $"private texture destination T{compilation.PrivateTextureDestinationRecordIndex}.";
+                validation.IsVisible = false;
+                save.IsEnabled = true;
+            }
+            catch (InvalidDataException ex)
+            {
+                exactPreview.Text = "This transient choice cannot form an exact document.";
+                validation.Text = ex.Message;
+                validation.IsVisible = true;
+                save.IsEnabled = false;
+            }
+        }
+        terrain.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == CheckBox.IsCheckedProperty)
+                RefreshExactPreview();
+        };
+        t88.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == CheckBox.IsCheckedProperty)
+                RefreshExactPreview();
+        };
+        t107.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == CheckBox.IsCheckedProperty)
+                RefreshExactPreview();
+        };
+        cancel.Click += (_, _) =>
+            dialog.Close((Id65AuthoringEditorControlState?)null);
+        save.Click += (_, _) =>
+        {
+            Id65AuthoringEditorControlState selected = new(
+                terrain.IsChecked == true,
+                t88.IsChecked == true,
+                t107.IsChecked == true);
+            try
+            {
+                _ = Id65AuthoringEditorControlStateCompiler.Compile(selected);
+                validation.IsVisible = false;
+                dialog.Close(selected);
+            }
+            catch (InvalidDataException ex)
+            {
+                validation.Text = ex.Message;
+                validation.IsVisible = true;
+            }
+        };
+        RefreshExactPreview();
+        dialog.Content = BuildModernDialogFrame(body, cancel, save);
+        return await dialog.ShowDialog<Id65AuthoringEditorControlState?>(this);
+    }
+
+    private static Control BuildId65AuthoringChoice(
+        CheckBox choice,
+        string description)
+    {
+        StackPanel panel = new() { Spacing = 4 };
+        panel.Children.Add(choice);
+        panel.Children.Add(new TextBlock
+        {
+            Text = description,
+            Margin = new Thickness(24, 0, 0, 0),
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(ModernMutedInk),
+            FontSize = 11,
+            LineHeight = 16
+        });
+        return panel;
+    }
+
+    private static bool Id65AuthoringControlStatesEqual(
+        Id65AuthoringEditorControlState left,
+        Id65AuthoringEditorControlState right) =>
+        left.IncludeStructuralTerrain == right.IncludeStructuralTerrain &&
+        left.IncludeGrassAtT88 == right.IncludeGrassAtT88 &&
+        left.IncludeGrassAtT107 == right.IncludeGrassAtT107;
+
     private async Task CreateId65BlankLabDisposableCueAsync()
     {
         if (!IsCurrentId65BlankLab())
@@ -536,7 +913,7 @@ public sealed partial class MainWindow
         if (Id65BlankLabHasCanonicalAuthoringDocument())
         {
             _statusText.Text =
-                "The legacy ID65 disposable test CUE is disabled because the canonical authoring-document filename was detected. This App bridge has not validated or reprojected that file; it must not run a terrain-only writer that could omit structural terrain, texture, or Moby intent.";
+                "The legacy ID65 disposable test CUE is disabled because it does not consume the canonical Full Authoring Document. Use Edit Full Authoring Document… to inspect or update that exact layer; normal Create BIN remains blocked until aggregate materialization is validated.";
             return;
         }
         if (!TryBeginId65BlankLabManualOperation(
@@ -674,7 +1051,7 @@ public sealed partial class MainWindow
             : "Not built or not validated.";
         _id65BlankLabAuthoredLayerText.Text = valid
             ? hasAuthoringDocument
-                ? "Canonical full-authoring document filename detected, but this App bridge has not validated or reprojected its contents. It is inspect-only here; legacy HP-Z save/test actions are disabled so they cannot omit possible structural terrain, private texture, or Moby intent."
+                ? "Canonical Full Authoring Document filename detected. Its contents are inspected only through the explicit Edit Full Authoring Document… action; legacy HP-Z save/test actions remain disabled because they do not consume the canonical terrain, private-texture, and Moby intent."
                 : $"Isolated by versioned manifest + unique key '{UnusedLevel65BlankLevelLabProfileRegistry.Key}'. " +
                   $"Saved HP-Z/resident-texture terrain: {(hasTerrain ? "present" : "none")}." +
                   (hasUnsupported ? $" Disposable writer blocked: {unsupported}" : "")
@@ -687,6 +1064,8 @@ public sealed partial class MainWindow
             _id65BlankLabBuildButton.IsEnabled = !busy;
         if (_id65BlankLabLoadButton != null)
             _id65BlankLabLoadButton.IsEnabled = valid && !busy;
+        if (_id65BlankLabAuthoringDocumentButton != null)
+            _id65BlankLabAuthoringDocumentButton.IsEnabled = valid && !busy;
         if (_id65BlankLabSaveButton != null)
             _id65BlankLabSaveButton.IsEnabled =
                 valid && active && !busy && !hasAuthoringDocument;
@@ -713,7 +1092,7 @@ public sealed partial class MainWindow
         if (Id65BlankLabHasCanonicalAuthoringDocument())
         {
             _statusText.Text =
-                "Legacy ID65 terrain save is disabled because the canonical full-authoring document filename was detected. This App bridge has not validated or reprojected that file; it must inspect and translate it through the exact Core contract instead of creating a second, conflicting HP-Z layer.";
+                "Legacy ID65 terrain save is disabled because it does not consume the canonical Full Authoring Document. Use Edit Full Authoring Document… for the exact terrain/private-texture/Moby layer instead of creating a conflicting HP-Z file.";
             return false;
         }
         bool ownsOperation = existingOperation == null;
@@ -1588,7 +1967,7 @@ public sealed partial class MainWindow
         if (Id65BlankLabHasCanonicalAuthoringDocument())
         {
             reason =
-                "The canonical full-authoring document filename was detected but has not been validated or reprojected by this App bridge. The legacy terrain-only disposable writer is disabled so it cannot silently omit possible structural terrain, private texture, or Moby intent.";
+                "The canonical Full Authoring Document filename was detected. The legacy terrain-only disposable writer does not consume that document and is disabled so it cannot silently omit structural terrain, private texture, or Moby intent; use Edit Full Authoring Document… to inspect or update it.";
             return true;
         }
 
@@ -1709,7 +2088,7 @@ public sealed partial class MainWindow
         if (Id65BlankLabHasCanonicalAuthoringDocument())
         {
             reason =
-                "Normal Create BIN is unavailable because the canonical ID65 full-authoring document filename was detected. This App bridge has not validated or reprojected that file; normal Create BIN and the legacy terrain-only test writer remain disabled so possible structural terrain, texture, or Moby intent cannot be omitted.";
+                "Normal Create BIN is unavailable because the canonical ID65 Full Authoring Document requires the exact aggregate materializer, which is not wired into normal Create BIN yet. The legacy terrain-only test writer also remains disabled because it does not consume the canonical structural terrain, private-texture, and Moby intent.";
             return true;
         }
         if (IsCurrentId65BlankLab())
@@ -2241,6 +2620,10 @@ public sealed partial class MainWindow
         HasId65CatalogLevel: _catalog.Levels.Any(level => level.LevelId == 65),
         BuildEnabled: _id65BlankLabBuildButton?.IsEnabled == true,
         LoadEnabled: _id65BlankLabLoadButton?.IsEnabled == true,
+        AuthoringDocumentEnabled:
+            _id65BlankLabAuthoringDocumentButton?.IsEnabled == true,
+        AuthoringDocumentButtonText:
+            _id65BlankLabAuthoringDocumentButton?.Content?.ToString() ?? "",
         SaveEnabled: _id65BlankLabSaveButton?.IsEnabled == true,
         CreateCueEnabled: _id65BlankLabCreateCueButton?.IsEnabled == true,
         RevealEnabled: _id65BlankLabRevealButton?.IsEnabled == true,
@@ -2453,13 +2836,13 @@ public sealed partial class MainWindow
                 _id65BlankLabCreateCueButton == null ||
                 _toolbarCreateBinButton == null ||
                 guardedUi.SaveEnabled || guardedUi.CreateCueEnabled ||
+                !guardedUi.AuthoringDocumentEnabled ||
                 _toolbarCreateBinButton.IsEnabled ||
                 !disclosure.Contains("filename detected", StringComparison.OrdinalIgnoreCase) ||
-                !disclosure.Contains("not validated or reprojected", StringComparison.OrdinalIgnoreCase) ||
-                !disclosure.Contains("inspect-only", StringComparison.OrdinalIgnoreCase) ||
+                !disclosure.Contains("inspected only through", StringComparison.OrdinalIgnoreCase) ||
                 !disclosure.Contains("legacy", StringComparison.OrdinalIgnoreCase) ||
                 !TryGetId65BlankLabUnsupportedArtifact(out string unsupportedReason) ||
-                !unsupportedReason.Contains("not been validated or reprojected", StringComparison.OrdinalIgnoreCase))
+                !unsupportedReason.Contains("does not consume", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
                     "The exact canonical filename did not truthfully disable the complete legacy ID65 writer surface.");
@@ -2467,7 +2850,7 @@ public sealed partial class MainWindow
 
             await SaveId65BlankLabWorkspaceAsync();
             if (!(_statusText.Text ?? "").Contains("terrain save is disabled", StringComparison.OrdinalIgnoreCase) ||
-                !(_statusText.Text ?? "").Contains("not validated or reprojected", StringComparison.OrdinalIgnoreCase))
+                !(_statusText.Text ?? "").Contains("does not consume", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
                     "The direct legacy ID65 Save route did not refuse the canonical filename truthfully.");
@@ -2478,7 +2861,7 @@ public sealed partial class MainWindow
 
             await CreateId65BlankLabDisposableCueAsync();
             if (!(_statusText.Text ?? "").Contains("test CUE is disabled", StringComparison.OrdinalIgnoreCase) ||
-                !(_statusText.Text ?? "").Contains("not validated or reprojected", StringComparison.OrdinalIgnoreCase))
+                !(_statusText.Text ?? "").Contains("does not consume", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
                     "The direct legacy ID65 disposable-CUE route masked the canonical filename refusal.");
@@ -2489,7 +2872,7 @@ public sealed partial class MainWindow
 
             await CreateObjectTestBinAsync();
             if (!(_statusText.Text ?? "").Contains("Normal Create BIN is unavailable", StringComparison.OrdinalIgnoreCase) ||
-                !(_statusText.Text ?? "").Contains("not validated or reprojected", StringComparison.OrdinalIgnoreCase))
+                !(_statusText.Text ?? "").Contains("aggregate materializer", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
                     "The direct normal Create BIN route did not refuse the canonical filename truthfully.");
@@ -2522,7 +2905,7 @@ public sealed partial class MainWindow
                     "Normal Create BIN is unavailable",
                     StringComparison.OrdinalIgnoreCase) ||
                 !retailCreateBinStatus.Contains(
-                    "not validated or reprojected",
+                    "aggregate materializer",
                     StringComparison.OrdinalIgnoreCase) ||
                 retailCreateBinStatus.Contains(
                     "use its disposable test writer",
@@ -2536,7 +2919,7 @@ public sealed partial class MainWindow
                 authoredWithSentinel);
 
             return
-                "exact-name guard disabled wired legacy Save, disposable CUE, and normal Create BIN from both ID65 and retail-current routes; near-miss filename did not bind and an exact-path directory failed closed; filename-only detection remained explicitly unvalidated/unreprojected; handlers recovered toolbar/busy state and changed no authored/output/operation/scene state";
+                "exact-name guard disabled wired legacy Save, disposable CUE, and normal Create BIN from both ID65 and retail-current routes; near-miss filename did not bind and an exact-path directory failed closed; filename-only detection directed inspection to the explicit Full Authoring Document action; handlers recovered toolbar/busy state and changed no authored/output/operation/scene state";
         }
         finally
         {
@@ -4788,7 +5171,8 @@ public sealed partial class MainWindow
                     _viewport.IsEnabled ||
                     (_inspectBuildSafetyButton != null && _inspectBuildSafetyButton.IsEnabled) ||
                     IsEnabled(_updateNotificationBanner) ||
-                    labUi.BuildEnabled || labUi.LoadEnabled || labUi.SaveEnabled ||
+                    labUi.BuildEnabled || labUi.LoadEnabled ||
+                    labUi.AuthoringDocumentEnabled || labUi.SaveEnabled ||
                     labUi.CreateCueEnabled)
                 {
                     throw new InvalidOperationException(
@@ -5153,7 +5537,8 @@ public sealed partial class MainWindow
                     _viewport.IsEnabled ||
                     (_inspectBuildSafetyButton != null && _inspectBuildSafetyButton.IsEnabled) ||
                     IsEnabled(_updateNotificationBanner) ||
-                    labUi.BuildEnabled || labUi.LoadEnabled || labUi.SaveEnabled ||
+                    labUi.BuildEnabled || labUi.LoadEnabled ||
+                    labUi.AuthoringDocumentEnabled || labUi.SaveEnabled ||
                     labUi.CreateCueEnabled)
                 {
                     throw new InvalidOperationException(
@@ -5321,6 +5706,7 @@ public sealed partial class MainWindow
                 (_terrainTaskSaveButton != null && _terrainTaskSaveButton.IsEnabled) ||
                 busySnapshot.BuildEnabled ||
                 busySnapshot.LoadEnabled ||
+                busySnapshot.AuthoringDocumentEnabled ||
                 busySnapshot.SaveEnabled ||
                 busySnapshot.CreateCueEnabled)
             {
@@ -5515,6 +5901,7 @@ public sealed partial class MainWindow
                 operationGenerationBeforeRefusals != _id65BlankLabManualOperationGeneration ||
                 navigationBusySnapshot.BuildEnabled ||
                 navigationBusySnapshot.LoadEnabled ||
+                navigationBusySnapshot.AuthoringDocumentEnabled ||
                 navigationBusySnapshot.SaveEnabled ||
                 navigationBusySnapshot.CreateCueEnabled)
             {
@@ -5748,7 +6135,8 @@ public sealed partial class MainWindow
                 IsEnabled(_toolbarOpenDiscImageButton) ||
                 IsEnabled(_toolbarMoreControl) ||
                 IsEnabled(_updateNotificationBanner) ||
-                labUi.BuildEnabled || labUi.LoadEnabled || labUi.SaveEnabled ||
+                labUi.BuildEnabled || labUi.LoadEnabled ||
+                labUi.AuthoringDocumentEnabled || labUi.SaveEnabled ||
                 labUi.CreateCueEnabled)
             {
                 throw new InvalidOperationException(
@@ -5911,6 +6299,314 @@ public sealed partial class MainWindow
         }
     }
 
+    internal async Task<string>
+        AssertId65CanonicalAuthoringDocumentEditorForTestingAsync()
+    {
+        if (_id65BlankLabManifest == null || _id65BlankLabPaths == null)
+        {
+            throw new InvalidOperationException(
+                "The canonical authoring editor probe requires an admitted exact ID65 workspace.");
+        }
+        if (_id65BlankLabBusy || _id65BlankLabManualOperation != null ||
+            _createBinBusy || _loadingLevel)
+        {
+            throw new InvalidOperationException(
+                "The canonical authoring editor probe requires an idle editor.");
+        }
+
+        UnusedLevel65BlankLevelLabWorkspacePaths paths = _id65BlankLabPaths;
+        UnusedLevel65BlankLevelLabManifest manifest = _id65BlankLabManifest;
+        UnusedLevel65BlankLevelLabProfileRegistry.ValidateManifest(manifest, paths);
+        string documentPath = Id65BlankLabAuthoringDocumentPath();
+        if (Id65BlankLabHasCanonicalAuthoringDocument())
+        {
+            throw new InvalidOperationException(
+                "The canonical authoring editor probe refuses to replace a pre-existing fixture.");
+        }
+        string legacyPath = Id65BlankLabTerrainEditsPath();
+        if (TerrainEditFileHasEdits(legacyPath))
+        {
+            throw new InvalidOperationException(
+                "The canonical authoring editor probe requires no positive legacy terrain edits.");
+        }
+
+        LevelDefinition? levelBefore = _currentLevel;
+        GeometryCandidate? geometryBefore = _currentGeometry;
+        List<Moby> mobysBefore = _currentMobys;
+        string terrainSignatureBefore = _currentGeometry == null
+            ? ""
+            : BuildTerrainEditSignature(_currentGeometry);
+        string mobySignatureBefore = BuildMobyEditSignature(_currentMobys);
+        FileInfo lockedImage = new(paths.LockedBaseImagePath);
+        long lockedImageLengthBefore = lockedImage.Length;
+        DateTime lockedImageWriteBefore = lockedImage.LastWriteTimeUtc;
+        byte[] cueBefore = await File.ReadAllBytesAsync(paths.LockedBaseCuePath);
+        byte[] manifestBefore = await File.ReadAllBytesAsync(paths.ManifestPath);
+        string[] protectedOutputDirectories =
+        [
+            paths.OperationsDirectoryPath,
+            Path.Combine(paths.RootPath, ".terrain-test-operations"),
+            Path.Combine(paths.RootPath, "runtime-tests"),
+            Path.Combine(paths.RootPath, "materialized-candidates"),
+            Path.Combine(_workspace.RootPath, "output")
+        ];
+        Dictionary<string, Id65BlankLabAuthoredLayerSnapshot> protectedBefore =
+            new(StringComparer.OrdinalIgnoreCase);
+        foreach (string directory in protectedOutputDirectories)
+        {
+            protectedBefore[directory] =
+                await CaptureId65BlankLabAuthoredLayerAsync(directory);
+        }
+
+        static bool Equivalent(
+            Id65AuthoringEditorControlState left,
+            Id65AuthoringEditorControlState right) =>
+            left.IncludeStructuralTerrain == right.IncludeStructuralTerrain &&
+            left.IncludeGrassAtT88 == right.IncludeGrassAtT88 &&
+            left.IncludeGrassAtT107 == right.IncludeGrassAtT107;
+
+        try
+        {
+            int dialogCount = 0;
+            Id65AuthoringDocumentDialogOverrideForTesting =
+                (initial, exists, _) =>
+                {
+                    dialogCount++;
+                    if (exists || !Equivalent(
+                            initial,
+                            Id65AuthoringEditorControlState.CreateDefault()))
+                    {
+                        throw new InvalidOperationException(
+                            "The missing-document dialog did not receive the exact default state.");
+                    }
+                    return Task.FromResult<Id65AuthoringEditorControlState?>(null);
+                };
+            await EditId65AuthoringDocumentAsync();
+            if (dialogCount != 1 || File.Exists(documentPath) ||
+                !(_statusText.Text ?? "").Contains(
+                    "closed without saving",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "Cancelling the missing canonical document dialog changed a file or status boundary.");
+            }
+
+            Id65AuthoringDocumentDialogOverrideForTesting =
+                (initial, exists, _) =>
+                {
+                    if (exists)
+                    {
+                        throw new InvalidOperationException(
+                            "The first canonical save was not based on an inspected absence.");
+                    }
+                    return Task.FromResult<Id65AuthoringEditorControlState?>(new(
+                        initial.IncludeStructuralTerrain,
+                        initial.IncludeGrassAtT88,
+                        initial.IncludeGrassAtT107));
+                };
+            await EditId65AuthoringDocumentAsync();
+            Id65AuthoringEditorDocumentReadModel created =
+                await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                    paths,
+                    manifest)
+                ?? throw new InvalidOperationException(
+                    "The explicit App action did not create its canonical document.");
+            Id65AuthoringEditorControlState createdState =
+                Id65AuthoringEditorControlStateCompiler.RecoverControlState(created);
+            if (!Equivalent(
+                    createdState,
+                    Id65AuthoringEditorControlState.CreateDefault()) ||
+                !(_statusText.Text ?? "").Contains(
+                    "Created the canonical ID65 Full Authoring Document",
+                    StringComparison.Ordinal) ||
+                !(_statusText.Text ?? "").Contains(
+                    "Normal Create BIN is still blocked",
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "The explicit App create action lost its exact state or fail-closed status.");
+            }
+
+            byte[] createdBytes = await File.ReadAllBytesAsync(documentPath);
+            Id65AuthoringDocumentDialogOverrideForTesting =
+                (initial, exists, _) =>
+                {
+                    if (!exists || !Equivalent(initial, createdState))
+                    {
+                        throw new InvalidOperationException(
+                            "The stale no-op probe did not reopen the exact created state.");
+                    }
+                    File.Delete(documentPath);
+                    return Task.FromResult<Id65AuthoringEditorControlState?>(new(
+                        initial.IncludeStructuralTerrain,
+                        initial.IncludeGrassAtT88,
+                        initial.IncludeGrassAtT107));
+                };
+            bool staleNoOpLeftDocumentAbsent;
+            string staleNoOpStatus;
+            try
+            {
+                await EditId65AuthoringDocumentAsync();
+                staleNoOpLeftDocumentAbsent = !File.Exists(documentPath);
+                staleNoOpStatus = _statusText.Text ?? "";
+            }
+            finally
+            {
+                await File.WriteAllBytesAsync(documentPath, createdBytes);
+            }
+            Id65AuthoringEditorDocumentReadModel restoredAfterStaleNoOp =
+                await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                    paths,
+                    manifest)
+                ?? throw new InvalidOperationException(
+                    "The stale no-op probe could not restore its exact fixture.");
+            if (!staleNoOpLeftDocumentAbsent ||
+                !staleNoOpStatus.Contains(
+                    "changed while the dialog was open",
+                    StringComparison.OrdinalIgnoreCase) ||
+                restoredAfterStaleNoOp.EnvelopeCanonicalSha256 !=
+                    created.EnvelopeCanonicalSha256)
+            {
+                throw new InvalidOperationException(
+                    "An unchanged selection trusted a deleted or stale pre-dialog envelope.");
+            }
+
+            Id65AuthoringDocumentDialogOverrideForTesting =
+                (initial, exists, _) =>
+                {
+                    if (!exists || !Equivalent(initial, createdState))
+                    {
+                        throw new InvalidOperationException(
+                            "The existing canonical document did not reopen as its exact control state.");
+                    }
+                    return Task.FromResult<Id65AuthoringEditorControlState?>(new(
+                        initial.IncludeStructuralTerrain,
+                        initial.IncludeGrassAtT88,
+                        initial.IncludeGrassAtT107));
+                };
+            await EditId65AuthoringDocumentAsync();
+            if (!(await File.ReadAllBytesAsync(documentPath)).SequenceEqual(createdBytes) ||
+                !(_statusText.Text ?? "").Contains(
+                    "already matches",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "An unchanged canonical dialog selection rewrote its envelope.");
+            }
+
+            Id65AuthoringDocumentDialogOverrideForTesting =
+                (_, exists, _) =>
+                {
+                    if (!exists)
+                    {
+                        throw new InvalidOperationException(
+                            "The invalid-state probe lost its inspected existing document.");
+                    }
+                    return Task.FromResult<Id65AuthoringEditorControlState?>(new(
+                        includeStructuralTerrain: true,
+                        includeGrassAtT88: false,
+                        includeGrassAtT107: false));
+                };
+            await EditId65AuthoringDocumentAsync();
+            if (!(await File.ReadAllBytesAsync(documentPath)).SequenceEqual(createdBytes) ||
+                !(_statusText.Text ?? "").Contains(
+                    "Could not save",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "An invalid no-placement App state changed the canonical envelope.");
+            }
+
+            Id65AuthoringEditorControlState replacement = new(
+                includeStructuralTerrain: false,
+                includeGrassAtT88: true,
+                includeGrassAtT107: false);
+            Id65AuthoringDocumentDialogOverrideForTesting =
+                (_, exists, _) =>
+                {
+                    if (!exists)
+                    {
+                        throw new InvalidOperationException(
+                            "The replacement probe lost its inspected existing document.");
+                    }
+                    return Task.FromResult<Id65AuthoringEditorControlState?>(replacement);
+                };
+            await EditId65AuthoringDocumentAsync();
+            Id65AuthoringEditorDocumentReadModel replaced =
+                await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                    paths,
+                    manifest)
+                ?? throw new InvalidOperationException(
+                    "The explicit App replacement action removed its canonical document.");
+            Id65AuthoringEditorControlState replacedState =
+                Id65AuthoringEditorControlStateCompiler.RecoverControlState(replaced);
+            Id65AuthoringEditorControlStateCompilation expectedReplacement =
+                Id65AuthoringEditorControlStateCompiler.Compile(replacement);
+            RefreshId65BlankLabUi();
+            RefreshActionAvailability();
+            Id65BlankLabUiSnapshot ui = CaptureId65BlankLabUiSnapshotForTesting();
+            if (!Equivalent(replacedState, replacement) ||
+                replaced.DocumentCanonicalSha256 !=
+                    expectedReplacement.DocumentCanonicalSha256 ||
+                replaced.EnvelopeCanonicalSha256 == created.EnvelopeCanonicalSha256 ||
+                !(_statusText.Text ?? "").Contains(
+                    "Updated the canonical ID65 Full Authoring Document",
+                    StringComparison.Ordinal) ||
+                !ui.AuthoringDocumentEnabled || ui.SaveEnabled || ui.CreateCueEnabled ||
+                !TryGetId65BlankLabNormalCreateBinBlockReason(
+                    out string createBinReason) ||
+                !createBinReason.Contains(
+                    "aggregate materializer",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "The explicit App replacement action lost exact CAS state or reopened a legacy/Create-BIN gate.");
+            }
+
+            FileInfo lockedImageAfter = new(paths.LockedBaseImagePath);
+            bool protectedOutputsExact = true;
+            foreach ((string directory, Id65BlankLabAuthoredLayerSnapshot before) in
+                     protectedBefore)
+            {
+                Id65BlankLabAuthoredLayerSnapshot after =
+                    await CaptureId65BlankLabAuthoredLayerAsync(directory);
+                protectedOutputsExact &=
+                    before.DirectoryExisted == after.DirectoryExisted &&
+                    before.Files.SequenceEqual(after.Files, StringComparer.Ordinal);
+            }
+            if (lockedImageAfter.Length != lockedImageLengthBefore ||
+                lockedImageAfter.LastWriteTimeUtc != lockedImageWriteBefore ||
+                !(await File.ReadAllBytesAsync(paths.LockedBaseCuePath))
+                    .SequenceEqual(cueBefore) ||
+                !(await File.ReadAllBytesAsync(paths.ManifestPath))
+                    .SequenceEqual(manifestBefore) ||
+                !protectedOutputsExact ||
+                !ReferenceEquals(_currentLevel, levelBefore) ||
+                !ReferenceEquals(_currentGeometry, geometryBefore) ||
+                !ReferenceEquals(_currentMobys, mobysBefore) ||
+                (_currentGeometry != null && !string.Equals(
+                    BuildTerrainEditSignature(_currentGeometry),
+                    terrainSignatureBefore,
+                    StringComparison.Ordinal)) ||
+                !string.Equals(
+                    BuildMobyEditSignature(_currentMobys),
+                    mobySignatureBefore,
+                    StringComparison.Ordinal) ||
+                _id65BlankLabBusy || _id65BlankLabManualOperation != null)
+            {
+                throw new InvalidOperationException(
+                    "The explicit App authoring action changed locked/output/scene state or retained an operation fence.");
+            }
+
+            return
+                "explicit cancel preserved absence; create, stale-envelope no-op refusal, exact reopen/no-op, invalid-state refusal, and CAS replacement passed; legacy Save/disposable CUE and normal Create BIN stayed closed; locked BIN/CUE/manifest, outputs, and loaded scene stayed unchanged";
+        }
+        finally
+        {
+            Id65AuthoringDocumentDialogOverrideForTesting = null;
+        }
+    }
+
     internal void AdmitId65BlankLabManifestForTesting(
         UnusedLevel65BlankLevelLabManifest manifest)
     {
@@ -5933,6 +6629,8 @@ public sealed partial class MainWindow
         bool HasId65CatalogLevel,
         bool BuildEnabled,
         bool LoadEnabled,
+        bool AuthoringDocumentEnabled,
+        string AuthoringDocumentButtonText,
         bool SaveEnabled,
         bool CreateCueEnabled,
         bool RevealEnabled,

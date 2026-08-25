@@ -206,7 +206,7 @@ try
         SnapshotFixture(lockedFixturePath) == fixtureBefore,
         "Inspection changed the locked-base fixture.");
     Console.WriteLine(
-        "PASS Id65AuthoringEditorDocumentWorkspaceInspectorSmoke: canonical filename parity, missing/valid deterministic read-only inspection, complete immutable terrain/texture/Moby/baseline projection, independent read-model content address, strict tamper/size/manifest/symlink/race/cancellation refusal, and truthful path/byte/App/UI/Create-BIN/runtime/release/promotion/publication false flags passed. Current native reprojection and source freshness remain explicitly false.");
+        "PASS Id65AuthoringEditorDocumentWorkspaceInspectorSmoke: canonical filename parity, missing/valid deterministic read-only inspection, complete immutable terrain/texture/Moby/baseline projection, independent read-model content address, strict tamper/size/manifest/symlink/race/cancellation refusal, and truthful path/byte plus no App/UI/Create-BIN/runtime/release/promotion/publication authority passed. Current native reprojection and source freshness remain explicitly false.");
 }
 finally
 {
@@ -428,13 +428,13 @@ static void AssertClosedCapabilities(Id65AuthoringEditorDocumentReadModel value)
         !value.PersistenceEnabled &&
         !value.FileSystemMutationPerformed &&
         !value.WritesFileSystem && !value.WritesDiscImage && !value.WritesCue &&
-        !value.AppIntegrated && !value.UiIntegrated &&
+        !value.CarriesAppOrUiAuthority &&
         !value.CreateBinEnabled && !value.NormalCreateBinEnabled &&
         !value.RuntimeCandidateAuthorized && !value.RuntimeProven &&
         !value.ReleaseIntegrated && !value.PromotionAuthorized && !value.Publishable &&
         value.RequiresTrustedExclusiveWorkspaceDirectory &&
         !value.HostileFilesystemRaceSafe && !value.CommonWorkspaceLeaseOwned,
-        "The inspect-only result overclaims a native/App/Create-BIN/runtime/release capability.");
+        "The inspect-only result overclaims native, App/UI, Create-BIN, runtime, or release authority.");
 }
 
 static void AssertPublicApiBoundary(Id65AuthoringEditorDocumentReadModel sample)

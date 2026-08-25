@@ -548,7 +548,7 @@ Console.WriteLine(
     $"document={firstProjection.DocumentCanonicalSha256}; manifest={first.ManifestSha256}; " +
     $"row80={first.OutputRow80Sha256}; plan={first.DeterministicPlanSha256}; rejects={rejectionCount}; " +
     "terrain present/absent, exact T66 + T88/T107 projection, inverse/rollback, defensive copies, " +
-    "and no filesystem/BIN/CUE/App/CreateBIN/runtime/release/promotion/publication.");
+    "and no filesystem/BIN/CUE or App/CreateBIN/runtime/release/promotion/publication authority.");
 
 Id65AuthoringEditorProjection Project(
     Id65AuthoringEditorDocument selectedDocument,

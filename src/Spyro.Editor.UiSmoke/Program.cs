@@ -952,6 +952,7 @@ void RunId65BlankLabUiOnly()
     if (!pendingBeforeOpen.StatusText.Contains("background", StringComparison.Ordinal) ||
         pendingBeforeOpen.BuildEnabled ||
         pendingBeforeOpen.LoadEnabled ||
+        pendingBeforeOpen.AuthoringDocumentEnabled ||
         pendingBeforeOpen.SaveEnabled ||
         pendingBeforeOpen.CreateCueEnabled)
     {
@@ -977,6 +978,8 @@ void RunId65BlankLabUiOnly()
             initial.HasId65CatalogLevel ||
             !initial.BuildEnabled ||
             initial.LoadEnabled ||
+            initial.AuthoringDocumentEnabled ||
+            initial.AuthoringDocumentButtonText != "Edit Full Authoring Document…" ||
             initial.SaveEnabled ||
             initial.CreateCueEnabled ||
             initial.RevealEnabled ||
@@ -985,11 +988,12 @@ void RunId65BlankLabUiOnly()
             initial.DisposableExporterRoute != nameof(UnusedLevel65BlankLevelLabTerrainTestExporter) ||
             !initial.StatusText.Contains("Setup required", StringComparison.Ordinal) ||
             !initial.StatusText.Contains("ID65 stays out of the level picker", StringComparison.Ordinal) ||
-            !initial.CapabilityText.Contains("Existing HP Z", StringComparison.Ordinal) ||
-            !initial.CapabilityText.Contains("True Add, LP authoring, and XY movement: unavailable", StringComparison.Ordinal) ||
-            !initial.CapabilityText.Contains("Same-level resident textures", StringComparison.Ordinal) ||
-            !initial.CapabilityText.Contains("Cross-level/custom art and runtime export remain unavailable", StringComparison.Ordinal) ||
-            !initial.CapabilityText.Contains("Resident records: inspection only", StringComparison.Ordinal))
+            !initial.CapabilityText.Contains("Exact structural HP/LP + collision/occlusion intent", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("arbitrary geometry and XY movement remain unavailable", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("proved private T66 native texture swap", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Arbitrary cross-level/custom art remains unavailable", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Grass placements at T88 and T107", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Other resident records remain inspection-only", StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 $"The clean public ID65 Lab state is not exact/fail-closed: {initial}");
@@ -1028,6 +1032,7 @@ void RunId65BlankLabUiOnly()
             !validating.StatusText.Contains("background", StringComparison.Ordinal) ||
             validating.BuildEnabled ||
             validating.LoadEnabled ||
+            validating.AuthoringDocumentEnabled ||
             validating.SaveEnabled ||
             validating.CreateCueEnabled)
         {
@@ -1047,6 +1052,8 @@ void RunId65BlankLabUiOnly()
             !admitted.HasId65CatalogLevel ||
             !admitted.BuildEnabled ||
             !admitted.LoadEnabled ||
+            !admitted.AuthoringDocumentEnabled ||
+            admitted.AuthoringDocumentButtonText != "Edit Full Authoring Document…" ||
             admitted.SaveEnabled ||
             admitted.CreateCueEnabled ||
             admitted.RevealEnabled ||
@@ -1150,6 +1157,14 @@ void RunId65BlankLabUiOnly()
             "checking ID65 manual-operation generation fencing",
             timeoutSeconds: 60);
         string operationFence = operationFenceTask.GetAwaiter().GetResult();
+        Console.WriteLine("ID65 UI smoke: starting canonical full-authoring editor probe.");
+        Task<string> authoringEditorTask =
+            window.AssertId65CanonicalAuthoringDocumentEditorForTestingAsync();
+        WaitForUiTask(
+            authoringEditorTask,
+            "checking the explicit canonical ID65 authoring editor",
+            timeoutSeconds: 300);
+        string authoringEditor = authoringEditorTask.GetAwaiter().GetResult();
         Console.WriteLine("ID65 UI smoke: starting workspace-transition fence probe.");
         Task<string> workspaceTransitionTask =
             window.AssertWorkspaceTransitionFencingForTestingAsync();
@@ -1177,7 +1192,7 @@ void RunId65BlankLabUiOnly()
 
         Console.WriteLine(
             "ID65 Blank-Level Lab public UI smoke passed: clean 35-level startup, visible narrow disclosure, neutral reveal label, explicit repair contract, Core atomic-export route with 128 unique keys, hidden broad Research tab, and exact-manifest 35+1 in-memory admission passed; " +
-            $"isolated locked workspace bootstrap: exact and source-preserving; mutation guards: {mutationGuards}; stale continuations: {staleContinuations}; transition guards: {transitionGuards}; resident textures: {residentTexture}; canonical document guard: {canonicalDocumentGuard}; reverse persistence: {reversePersistence}; operation fence: {operationFence}; workspace transition: {workspaceTransition}.");
+            $"isolated locked workspace bootstrap: exact and source-preserving; mutation guards: {mutationGuards}; stale continuations: {staleContinuations}; transition guards: {transitionGuards}; resident textures: {residentTexture}; canonical document guard: {canonicalDocumentGuard}; reverse persistence: {reversePersistence}; operation fence: {operationFence}; workspace transition: {workspaceTransition}; full authoring editor: {authoringEditor}.");
     }
     finally
     {
