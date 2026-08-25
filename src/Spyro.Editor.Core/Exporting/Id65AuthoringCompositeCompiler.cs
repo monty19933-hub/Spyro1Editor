@@ -63,7 +63,7 @@ internal sealed class Id65AuthoringCompositeManifest
             new
             {
                 profileId = Id65AuthoringCompositeCompiler.ProfileId,
-                mandatoryNegativeWindingV2 = true,
+                mandatoryV3CollisionAndEnvironmentHeaderRepairs = true,
                 optionalTerrainTriangle,
                 privateTextureId = Id65V2NativeTextureCompositionCompiler.PrivateTextureId,
                 textureWitnessSha256,
@@ -79,7 +79,7 @@ internal sealed class Id65AuthoringCompositeManifest
     }
 
     public string ProfileId => Id65AuthoringCompositeCompiler.ProfileId;
-    public bool MandatoryNegativeWindingV2 => true;
+    public bool MandatoryV3CollisionAndEnvironmentHeaderRepairs => true;
     public Id65TerrainTriangleIntent? OptionalTerrainTriangle { get; }
     public string TextureWitnessSha256 { get; }
     public string MobyBundleSha256 { get; }
@@ -149,7 +149,7 @@ internal sealed record Id65AuthoringCompositeDiffRange(
     string AfterSha256);
 
 internal sealed record Id65AuthoringCompositeTerrainReadback(
-    bool MandatoryNegativeWindingV2,
+    bool MandatoryV3CollisionAndEnvironmentHeaderRepairs,
     bool OptionalTrianglePresent,
     int SectorIndex,
     int LowDetailVertexCount,
@@ -374,7 +374,7 @@ internal sealed class Id65CompiledAuthoringComposite
     public bool AcceptsSlicePlans => false;
     public bool CrossSliceCompositionSupported => false;
     public bool AppliesOneNonOverlappingLedger => true;
-    public bool OwnsV2CollisionWinding => true;
+    public bool OwnsV3CollisionAndEnvironmentHeaderRepairs => true;
     public bool OwnsOptionalTerrainTriangle => true;
     public bool OwnsPrivateT66Texture => true;
     public bool OwnsMobyDependencyBundles => true;
@@ -413,7 +413,7 @@ internal sealed class Id65CompiledAuthoringComposite
 /// </summary>
 internal static class Id65AuthoringCompositeCompiler
 {
-    public const string ProfileId = "id65-authoring-single-pass-composite-v1";
+    public const string ProfileId = "id65-authoring-single-pass-composite-v3";
     public const string ExpectedLockedRow80Sha256 =
         "7ddbf6d9a6ee6c0f64c8564a89e374ca0ca234ef608ec812aae68e8176de1dc0";
     public const string ExpectedLockedModelSha256 =
@@ -423,30 +423,30 @@ internal static class Id65AuthoringCompositeCompiler
     public const string ExpectedGlobalExecutableSha256 =
         "fa5fc7981188b78fa7d7b78facca64c1f79dadb107515e9146ad178ade39d442";
     public const string ExpectedCombinedModelSha256 =
-        "3973e0fcc9358050153c8dba2eed96b168dd959d182d42d9a73869384b0a5f75";
+        "fcbd5bcd1abdf0d55ce2673a1743670760e800f0460b0150576a7f88c371ae63";
 
     // Frozen after the dedicated smoke independently derives the complete
     // locked-source -> terrain + T66 + T88 + T107 row-80 witness.
     public const string ExpectedCombinedManifestSha256 =
-        "f3e08613e272df4a5bac8db4b459dcd5053b53cdfd5fd1689dfcc4a707e57c6c";
+        "62635a61a79a59a59d052f50c3f719b56ea1bcdecf09ae91030063be410cfa34";
     public const string ExpectedCombinedOutputRow80Sha256 =
-        "ae7128e958fd86736de3b4eb3100e0a59f20839fd77aacb8b266a93ef84a8fdd";
+        "dad25853f92e4f8300036edd85dae374672d265ba17c7b2682c6b524661b75f3";
     public const int ExpectedCombinedChangedByteCount = 921_121;
     public const int ExpectedCombinedDiffRangeCount = 55_105;
     public const string ExpectedCombinedDiffManifestSha256 =
-        "c32f0b9f030118316883cc5b9836d2e46dae2018dbd53bc0669f85510ad1163b";
+        "0f6bfdbf1e5e695715e4ceb6579cc616ff54d681f01fef5478c30e9549d8746d";
     public const string ExpectedCombinedOwnedRangeMapSha256 =
-        "12c7971011baa6e759e6fa86fb66fc7ca237accc9338c01e9e65c6735c71f3ea";
+        "97a52bb81f0496257e000634a0aeffffbfc4a0615f9e0fb0b7c1d07d18848705";
     public const string ExpectedCombinedRelocationMapSha256 =
-        "395a8414babfce68497972f1200b5a15cfac0747aa0f6ee6738b4f8a25a7da21";
+        "0ddddcb9aa0418936404b928cca5a20254a920387972f3cba124eb28ad1bce8d";
     public const string ExpectedCombinedRebaseMapSha256 =
         "c8bbf5da21b4687495b06fab7b8b9d2e0e86a13d0f4efcf11ac487058f5cdc6b";
     public const string ExpectedCombinedMobyAssetRelocationMapSha256 =
         "4f661cbfbfbbcb1bcbab9752dcd6bdfa1093aa1557915c47d3f0be913d75e076";
     public const string ExpectedCombinedTransactionSha256 =
-        "74eca954c216436c7409292a9d4d4e0b796534bf5e47f567e0df8333f43a466a";
+        "acd92f040f9385f042848f6cd2e8fe5376eb46d40234483c88af1fe07567ea7f";
     public const string ExpectedCombinedDeterministicPlanSha256 =
-        "3f7cc40e89d5786bf249386db9af4728f0e0efaaf5cbb39266ef3279d85a588e";
+        "5665fb2bbac4387afc294eb5af80a6e409344be47dd4087b715a72282c2a813e";
 
     private const int Row80ByteLength = 0x2E2000;
     private const int TexturePagesOffset = 0x800;
@@ -909,7 +909,7 @@ internal static class Id65AuthoringCompositeCompiler
             texture.CanonicalSha256,
             bundle.CanonicalSha256,
             placements);
-        if (manifest.ProfileId != ProfileId || !manifest.MandatoryNegativeWindingV2 ||
+        if (manifest.ProfileId != ProfileId || !manifest.MandatoryV3CollisionAndEnvironmentHeaderRepairs ||
             manifest.CanonicalJson != expected.CanonicalJson ||
             manifest.CanonicalSha256 != expected.CanonicalSha256 ||
             manifest.TextureWitnessSha256 != texture.CanonicalSha256 ||
@@ -961,6 +961,7 @@ internal static class Id65AuthoringCompositeCompiler
         sector.CopyTo(output, sectorOffset);
         if (sectorOffset != source.Length + 4 || sectorOffset + sector.Length != output.Length)
             throw new InvalidDataException("The remote sector append boundary changed.");
+        ValidateEnvironmentSectorHeaders(output, "composite v3 remote environment");
         return output;
     }
 
@@ -968,7 +969,7 @@ internal static class Id65AuthoringCompositeCompiler
     {
         byte[][] parts =
         [
-            Convert.FromHexString("80018001C000000200010001000000020303010003030109FFFFFFFF"),
+            Convert.FromHexString("80018001C000000200010001000000020303010003030108FFFFFFFF"),
             Convert.FromHexString("004000020040001E00C00310"),
             Convert.FromHexString("2D39300030552C0037622C00"),
             Convert.FromHexString("0082100000821000"),
@@ -985,8 +986,10 @@ internal static class Id65AuthoringCompositeCompiler
         }
         if (cursor != sector.Length)
             throw new InvalidDataException("The exact remote HP/LP sector length changed.");
+        Id65EnvironmentSectorHeaderContract.Stamp(sector);
+        _ = Id65EnvironmentSectorHeaderContract.ReadExactSector(sector, "composite remote sector 216");
         RequireHash(Hash(sector),
-            UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedNewSectorSha256,
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedNewSectorSha256,
             "remote sector 216");
         return sector;
     }
@@ -1092,9 +1095,9 @@ internal static class Id65AuthoringCompositeCompiler
         (byte[] outputTree, byte[] outputBlocks, int usedBytes) =
             RepackCollision(native, desired, 19_808, targetCellKey, targetPointer);
         if (usedBytes != 0x17960)
-            throw new InvalidDataException("The direct v2 collision-block used length changed.");
+            throw new InvalidDataException("The direct v3 collision-block used length changed.");
         RequireHash(Hash(outputTree),
-            UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputTreeSha256,
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputTreeSha256,
             "remote collision tree");
         RequireHash(Hash(outputBlocks),
             UnusedLevel65RemoteBlankIsolationConstruction.ExpectedOutputBlocksSha256,
@@ -1316,8 +1319,8 @@ internal static class Id65AuthoringCompositeCompiler
             throw new InvalidDataException("The direct collision-winding component preimage changed.");
         negativeTriangle.CopyTo(collision, collisionTriangleRelativeOffset);
         RequireHash(Hash(collision),
-            UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputCollisionComponentSha256,
-            "direct v2 collision component");
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputCollisionComponentSha256,
+            "direct v3 collision component");
         if (terrain)
             collision = ExpandRemoteCollisionForOptionalTriangle(collision);
 
@@ -1356,11 +1359,11 @@ internal static class Id65AuthoringCompositeCompiler
         if (terrain)
         {
             RequireHash(Hash(finalEnvironment),
-                "c41f70eacc4c507401743dfe7d8fe20de2443b62de78682a16211306b3e4c617",
+                "a9437ef4b1bba478f2cdd49146673e6584cc83fe6a37a81666d632532536c42e",
                 "combined final environment");
             int sectorOffset = 4 + ReadInt32(finalEnvironment, 8 + (216 * 4));
             RequireHash(Hash(finalEnvironment.AsSpan(sectorOffset, 0x90)),
-                "8537b07f283bdbfebf3816048269e0a93454456749e710a94f7f5ead000c4111",
+                "aad982e416ed73bc54fdae3030073be79052eeadfac457caa0b311577bbf88cb",
                 "combined final sector 216");
         }
         return final;
@@ -1400,15 +1403,15 @@ internal static class Id65AuthoringCompositeCompiler
         return output;
     }
 
-    private static byte[] ExpandRemoteEnvironmentForOptionalTriangle(byte[] v2Environment)
+    private static byte[] ExpandRemoteEnvironmentForOptionalTriangle(byte[] v3Environment)
     {
-        if (v2Environment.Length != 0x28518 || ReadInt32(v2Environment, 0) != v2Environment.Length ||
-            ReadInt32(v2Environment, 4) != 217)
-            throw new InvalidDataException("The direct v2 environment header changed.");
-        int sectorOffset = 4 + ReadInt32(v2Environment, 8 + (216 * 4));
-        if (sectorOffset + 0x70 != v2Environment.Length)
-            throw new InvalidDataException("Sector 216 is no longer the final v2 sector.");
-        byte[] source = v2Environment.AsSpan(sectorOffset, 0x70).ToArray();
+        if (v3Environment.Length != 0x28518 || ReadInt32(v3Environment, 0) != v3Environment.Length ||
+            ReadInt32(v3Environment, 4) != 217)
+            throw new InvalidDataException("The direct v3 environment header changed.");
+        int sectorOffset = 4 + ReadInt32(v3Environment, 8 + (216 * 4));
+        if (sectorOffset + 0x70 != v3Environment.Length)
+            throw new InvalidDataException("Sector 216 is no longer the final v3 sector.");
+        byte[] source = v3Environment.AsSpan(sectorOffset, 0x70).ToArray();
         byte[] header = source.AsSpan(0, 28).ToArray();
         header[16] = 4;
         header[18] = 2;
@@ -1437,29 +1440,59 @@ internal static class Id65AuthoringCompositeCompiler
         Append(highFace);
         if (cursor != sector.Length)
             throw new InvalidDataException("The optional terrain sector length changed.");
+        Id65EnvironmentSectorHeaderContract.Stamp(sector);
+        _ = Id65EnvironmentSectorHeaderContract.ReadExactSector(
+            sector,
+            "composite optional terrain sector 216");
         RequireHash(Hash(sector), Id65AuthoringTerrainMutationCompiler.ExpectedTwoTileSectorSha256,
             "optional terrain sector before T66 binding");
         byte[] output = new byte[0x28538];
-        v2Environment.AsSpan(0, sectorOffset).CopyTo(output);
+        v3Environment.AsSpan(0, sectorOffset).CopyTo(output);
         sector.CopyTo(output, sectorOffset);
         WriteInt32(output, 0, output.Length);
         RequireHash(Hash(output), Id65AuthoringTerrainMutationCompiler.ExpectedTwoTileEnvironmentSha256,
             "optional terrain environment before T66 binding");
+        ValidateEnvironmentSectorHeaders(output, "composite v3 optional-terrain environment");
         return output;
     }
 
-    private static byte[] ExpandRemoteCollisionForOptionalTriangle(byte[] v2Collision)
+    private static void ValidateEnvironmentSectorHeaders(byte[] environment, string label)
+    {
+        if (environment.Length < 12 || ReadInt32(environment, 0) != environment.Length)
+            throw new InvalidDataException($"The {label} length word changed.");
+        int sectorCount = ReadInt32(environment, 4);
+        int pointerTableEnd = checked(8 + (sectorCount * 4));
+        if (sectorCount <= 0 || pointerTableEnd > environment.Length)
+            throw new InvalidDataException($"The {label} pointer table is outside its bounds.");
+        for (int sectorIndex = 0; sectorIndex < sectorCount; sectorIndex++)
+        {
+            int sectorOffset = checked(4 + ReadInt32(environment, 8 + (sectorIndex * 4)));
+            int nextOffset = sectorIndex + 1 < sectorCount
+                ? checked(4 + ReadInt32(environment, 8 + ((sectorIndex + 1) * 4)))
+                : environment.Length;
+            if (sectorOffset < pointerTableEnd || nextOffset <= sectorOffset || nextOffset > environment.Length)
+                throw new InvalidDataException($"The {label} sector {sectorIndex} pointer span changed.");
+            int pointerSpan = nextOffset - sectorOffset;
+            _ = Id65EnvironmentSectorHeaderContract.ReadPointerSpan(
+                environment.AsSpan(sectorOffset, pointerSpan),
+                pointerSpan,
+                requireExactEnd: false,
+                $"{label} sector {sectorIndex}");
+        }
+    }
+
+    private static byte[] ExpandRemoteCollisionForOptionalTriangle(byte[] v3Collision)
     {
         CompositeCollisionLayout layout = ParseCollisionLayout(
-            v2Collision, 19_808, 0x58480, 0x5D1E0, 0x5FAE8);
-        byte[] tree = Slice(v2Collision, layout.TreeOffset, layout.TreeCapacityBytes);
-        byte[] blocks = Slice(v2Collision, layout.BlocksOffset, layout.BlocksCapacityBytes);
+            v3Collision, 19_808, 0x58480, 0x5D1E0, 0x5FAE8);
+        byte[] tree = Slice(v3Collision, layout.TreeOffset, layout.TreeCapacityBytes);
+        byte[] blocks = Slice(v3Collision, layout.BlocksOffset, layout.BlocksCapacityBytes);
         CompositeCollisionIndex native = DecodeCollisionIndex(
             tree, blocks, 0x17960, 19_808, requireZeroTail: true);
         Id65AuthoringCollisionCell target = new(1, 1, 2);
         if (!native.Cells.TryGetValue(target, out CompositeCollisionBinding? targetBinding) ||
             !targetBinding.OrderedTriangleIndexes.SequenceEqual([13_995]))
-            throw new InvalidDataException("The v2 target cell no longer owns exactly T13995.");
+            throw new InvalidDataException("The v3 target cell no longer owns exactly T13995.");
         Dictionary<Id65AuthoringCollisionCell, int[]> desired = native.Cells
             .ToDictionary(pair => pair.Key, pair => pair.Value.OrderedTriangleIndexes.ToArray());
         desired[target] = [19_808, 13_995];
@@ -1488,12 +1521,12 @@ internal static class Id65AuthoringCompositeCompiler
         int flagsOffset = 4 + 0x5D1F0;
         outputTree.CopyTo(result, treeOffset);
         outputBlocks.CopyTo(result, blocksOffset);
-        v2Collision.AsSpan(layout.TriangleOffset, 19_808 * 12).CopyTo(result.AsSpan(trianglesOffset));
+        v3Collision.AsSpan(layout.TriangleOffset, 19_808 * 12).CopyTo(result.AsSpan(trianglesOffset));
         Convert.FromHexString(Id65AuthoringTerrainMutationCompiler.ExpectedCollisionTriangleHex)
             .CopyTo(result, trianglesOffset + (19_808 * 12));
-        v2Collision.AsSpan(layout.AssignmentsOffset, 19_808).CopyTo(result.AsSpan(assignmentsOffset));
+        v3Collision.AsSpan(layout.AssignmentsOffset, 19_808).CopyTo(result.AsSpan(assignmentsOffset));
         result[assignmentsOffset + 19_808] = 0;
-        v2Collision.AsSpan(layout.FlagsOffset, 0x2904).CopyTo(result.AsSpan(flagsOffset));
+        v3Collision.AsSpan(layout.FlagsOffset, 0x2904).CopyTo(result.AsSpan(flagsOffset));
         RequireHash(Hash(result), Id65AuthoringTerrainMutationCompiler.ExpectedTwoTileCollisionSha256,
             "optional terrain collision component");
         return result;
@@ -1522,14 +1555,14 @@ internal static class Id65AuthoringCompositeCompiler
                 patch.CopyAfter(),
                 patch.CopyBefore());
         }
-        AddRange(ranges, source, "model.final", "composite.v2-terrain-t66",
+        AddRange(ranges, source, "model.final", "composite.v3-terrain-t66",
             ModelOffset, finalModel);
-        AddRange(ranges, source, "spawn.landing-xy", "composite.v2-spawn",
+        AddRange(ranges, source, "spawn.landing-xy", "composite.v3-spawn",
             LandingOffset, Convert.FromHexString("091800000A180000"));
         byte[] playerXy = new byte[8];
         WriteInt32(playerXy, 0, 6_153);
         WriteInt32(playerXy, 4, 6_154);
-        AddRange(ranges, source, "spawn.t92-player-anchor-xy", "composite.v2-spawn",
+        AddRange(ranges, source, "spawn.t92-player-anchor-xy", "composite.v3-spawn",
             T92XyOffset, playerXy);
 
         byte[] package = Convert.FromHexString(bundle.ActorPackages.Single().ExactHex);
@@ -1626,7 +1659,7 @@ internal static class Id65AuthoringCompositeCompiler
         }
         if (ledger.Count(item => item.StableId.StartsWith("texture.page.", StringComparison.Ordinal)) != 7_949 ||
             ledger.Count(item => item.StableId == "model.final") != 1 ||
-            ledger.Count(item => item.OwnerId == "composite.v2-spawn") != 2)
+            ledger.Count(item => item.OwnerId == "composite.v3-spawn") != 2)
             throw new InvalidDataException("The texture/model/spawn ownership partition changed.");
     }
 
@@ -1714,13 +1747,13 @@ internal static class Id65AuthoringCompositeCompiler
                 "The final T88/private/T107 scene-fixup occurrence readback changed.");
         if (!output.AsSpan(LandingOffset, 8).SequenceEqual(Convert.FromHexString("091800000A180000")) ||
             ReadInt32(output, T92XyOffset) != 6_153 || ReadInt32(output, T92XyOffset + 4) != 6_154)
-            throw new InvalidDataException("The direct v2 landing/player-anchor XY readback changed.");
+            throw new InvalidDataException("The direct v3 landing/player-anchor XY readback changed.");
 
         int collisionOffset = terrain ? 0x2BF0C : 0x2BEEC;
         int collisionLength = terrain ? 0x5FAF8 : 0x5FAE8;
         string collisionHash = terrain
             ? Id65AuthoringTerrainMutationCompiler.ExpectedTwoTileCollisionSha256
-            : UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputCollisionComponentSha256;
+            : UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputCollisionComponentSha256;
         RequireHash(Hash(finalModel.AsSpan(collisionOffset, collisionLength)), collisionHash,
             "final collision component");
         int triangleIndex = terrain ? 19_808 : 13_995;
@@ -2218,11 +2251,11 @@ internal static class Id65AuthoringCompositeCompiler
             !result.OcclusionContainsSector ||
             result.CollisionSha256 != (terrain
                 ? Id65AuthoringTerrainMutationCompiler.ExpectedTwoTileCollisionSha256
-                : UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputCollisionComponentSha256) ||
+                : UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputCollisionComponentSha256) ||
             result.CollisionTreeSha256 != Id65AuthoringTerrainMutationCompiler.ExpectedTwoTileTreeSha256 ||
             result.CollisionBlocksSha256 != (terrain
                 ? Id65AuthoringTerrainMutationCompiler.ExpectedTwoTileBlocksSha256
-                : UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputBlocksSha256))
+                : UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputBlocksSha256))
             throw new InvalidDataException("The direct terrain semantic readback changed.");
         return result;
     }
@@ -2408,12 +2441,24 @@ internal static class Id65AuthoringCompositeCompiler
 
     private static void VerifyFrozenCombinedPins(Id65CompiledAuthoringComposite compiled)
     {
-        if (compiled.ManifestSha256 != ExpectedCombinedManifestSha256 ||
-            compiled.OutputRow80Sha256 != ExpectedCombinedOutputRow80Sha256 ||
-            compiled.OutputModelSha256 != ExpectedCombinedModelSha256 ||
-            compiled.ChangedByteCount != ExpectedCombinedChangedByteCount ||
-            compiled.DiffRangeCount != ExpectedCombinedDiffRangeCount)
-            throw new InvalidDataException("The concrete combined output witness changed.");
+        RequireHash(compiled.ManifestSha256, ExpectedCombinedManifestSha256,
+            "combined manifest");
+        RequireHash(compiled.OutputRow80Sha256, ExpectedCombinedOutputRow80Sha256,
+            "combined output row-80");
+        RequireHash(compiled.OutputModelSha256, ExpectedCombinedModelSha256,
+            "combined output model");
+        if (compiled.ChangedByteCount != ExpectedCombinedChangedByteCount)
+        {
+            throw new InvalidDataException(
+                $"Combined changed-byte count changed: expected " +
+                $"{ExpectedCombinedChangedByteCount}, got {compiled.ChangedByteCount}.");
+        }
+        if (compiled.DiffRangeCount != ExpectedCombinedDiffRangeCount)
+        {
+            throw new InvalidDataException(
+                $"Combined diff-range count changed: expected " +
+                $"{ExpectedCombinedDiffRangeCount}, got {compiled.DiffRangeCount}.");
+        }
         RequireHash(compiled.DiffManifestSha256, ExpectedCombinedDiffManifestSha256,
             "combined diff manifest");
         RequireHash(compiled.OwnedRangeMapSha256, ExpectedCombinedOwnedRangeMapSha256,

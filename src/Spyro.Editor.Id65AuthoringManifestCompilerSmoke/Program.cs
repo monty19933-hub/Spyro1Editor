@@ -15,9 +15,9 @@ DateTime sourceWriteBefore = File.GetLastWriteTimeUtc(baseImagePath);
 IReadOnlyDictionary<string, FileState> sourceDirectoryBefore =
     SnapshotDirectory(Path.GetDirectoryName(baseImagePath)!);
 
-UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan v2Template =
-    UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.BuildStaticPlan(baseImagePath);
-Id65AuthoringManifest manifest = Id65AuthoringModelCompiler.CreateMinimalV2EquivalentManifest();
+UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3StaticPlan v3Template =
+    UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.BuildStaticPlan(baseImagePath);
+Id65AuthoringManifest manifest = Id65AuthoringModelCompiler.CreateMinimalV3EquivalentManifest();
 Id65AuthoringManifest reordered = CopyManifest(
     manifest,
     sectors: manifest.Sectors.Reverse(),
@@ -48,17 +48,19 @@ catch (NotSupportedException)
 }
 Require(readOnlyCollectionObserved, "The manifest exposed a mutable vertex collection.");
 
-Id65CompiledAuthoringModel first = Id65AuthoringModelCompiler.Compile(manifest, v2Template);
-Id65CompiledAuthoringModel repeat = Id65AuthoringModelCompiler.Compile(reordered, v2Template);
+Id65CompiledAuthoringModel first = Id65AuthoringModelCompiler.Compile(manifest, v3Template);
+Id65CompiledAuthoringModel repeat = Id65AuthoringModelCompiler.Compile(reordered, v3Template);
 
 Require(first.ProfileId == Id65AuthoringModelCompiler.ProfileId &&
         first.Manifest.ProfileId == Id65AuthoringModelCompiler.MinimalManifestProfileId &&
         first.ManifestSha256 == manifest.CanonicalSha256 &&
         first.ManifestSha256 == Id65AuthoringModelCompiler.ExpectedMinimalManifestSha256 &&
         first.SourceModelSha256 ==
-            UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedSourceModelSha256 &&
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedSourceModelSha256 &&
         first.OutputModelSha256 ==
-            UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputModelSha256,
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputModelSha256 &&
+        first.CopyOutputModel()[UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.HeaderModelRelativeOffset] ==
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.RepairedHpVertexWordOffset,
     "The compiler/base/output identity changed.");
 Require(first.ChangedModelByteCount == Id65AuthoringModelCompiler.ExpectedMinimalChangedModelByteCount &&
         first.DiffRangeCount == Id65AuthoringModelCompiler.ExpectedMinimalModelDiffRangeCount &&
@@ -66,7 +68,7 @@ Require(first.ChangedModelByteCount == Id65AuthoringModelCompiler.ExpectedMinima
         first.RelocationMapSha256 == Id65AuthoringModelCompiler.ExpectedMinimalRelocationMapSha256 &&
         first.HandleRebaseMapSha256 == Id65AuthoringModelCompiler.ExpectedMinimalHandleRebaseMapSha256 &&
         first.DeterministicPlanSha256 == Id65AuthoringModelCompiler.ExpectedMinimalDeterministicPlanSha256,
-    "A deterministic minimal-v2 compiler pin changed.");
+    "A deterministic minimal-v3 compiler pin changed.");
 Require(first.RenderFaceNormalZ == 50_176 && first.CollisionNormalZ == -50_176 &&
         first.Manifest.RenderFaces.Single().OrderPolicy ==
             Id65RenderFaceOrderPolicy.DeclaredAbcGpuOrder &&
@@ -98,7 +100,7 @@ Require(capacity.ModelByteCapacity == 0x94800 &&
         capacity.CollisionBlocksUsedBytes == 0x17960 &&
         capacity.CollisionBlocksCapacityBytes == 0x17984 &&
         capacity.HighestTextureRecordIndex == 25 && capacity.HighestMobyTrueIndex == 92,
-    "The exact minimal-v2 capacity readback changed.");
+    "The exact minimal-v3 capacity readback changed.");
 
 Require(first.Relocations.Count == 9 &&
         first.Relocations[0].StableId == "component.texture" &&
@@ -133,7 +135,7 @@ byte[] sourceModel = first.CopySourceModel();
 byte[] outputModel = Id65AuthoringModelCompiler.ApplyModelTransactional(first, sourceModel, reverse: false);
 byte[] inverseModel = Id65AuthoringModelCompiler.ApplyModelTransactional(first, outputModel, reverse: true);
 Require(outputModel.SequenceEqual(first.CopyOutputModel()) && inverseModel.SequenceEqual(sourceModel),
-    "The compiled minimal-v2 model did not round-trip exactly.");
+    "The compiled minimal-v3 model did not round-trip exactly.");
 byte[] tamperedSource = sourceModel.ToArray();
 tamperedSource[0x2F78] ^= 0x01;
 ExpectReject(
@@ -141,7 +143,8 @@ ExpectReject(
     () => Id65AuthoringModelCompiler.ApplyModelTransactional(first, tamperedSource, reverse: false),
     "preimage changed");
 byte[] tamperedOutput = outputModel.ToArray();
-tamperedOutput[UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.TriangleModelRelativeOffset + 2] ^= 0x01;
+tamperedOutput[UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.HeaderModelRelativeOffset] =
+    UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.SupersededHpVertexWordOffset;
 ExpectReject(
     "transactional model afterimage",
     () => Id65AuthoringModelCompiler.ApplyModelTransactional(first, tamperedOutput, reverse: true),
@@ -151,14 +154,14 @@ ExpectReject(
     "locked base conflict",
     () => Id65AuthoringModelCompiler.Compile(
         CopyManifest(manifest, lockedBase: manifest.LockedBase with { ModelSha256 = new string('0', 64) }),
-        v2Template),
+        v3Template),
     "locked display-name base");
 ExpectReject(
     "global stable ID conflict",
     () => Id65AuthoringModelCompiler.Compile(
         CopyManifest(manifest, vertices:
         [manifest.Vertices[0] with { Handle = manifest.Sectors[0].Id }, .. manifest.Vertices.Skip(1)]),
-        v2Template),
+        v3Template),
     "globally unique");
 Id65CollisionIntent wrongWinding = manifest.Collision.Single() with
 {
@@ -167,7 +170,7 @@ Id65CollisionIntent wrongWinding = manifest.Collision.Single() with
 };
 ExpectReject(
     "render/collision order conflict",
-    () => Id65AuthoringModelCompiler.Compile(CopyManifest(manifest, collision: [wrongWinding]), v2Template),
+    () => Id65AuthoringModelCompiler.Compile(CopyManifest(manifest, collision: [wrongWinding]), v3Template),
     "collision intents");
 ExpectReject(
     "unproven music authorship conflict",
@@ -177,7 +180,7 @@ ExpectReject(
             Disposition = Id65AuthoringIntentDisposition.AuthorExact,
             TrackId = 0
         }),
-        v2Template),
+        v3Template),
     "ownership intent");
 
 int capacityRejectionCount = 0;
@@ -230,7 +233,7 @@ void ExpectCapacityReject(Id65AuthoringCompilerLimits limits, string requiredTex
 {
     ExpectReject(
         requiredText,
-        () => Id65AuthoringModelCompiler.Compile(manifest, v2Template, limits),
+        () => Id65AuthoringModelCompiler.Compile(manifest, v3Template, limits),
         requiredText);
     capacityRejectionCount++;
 }

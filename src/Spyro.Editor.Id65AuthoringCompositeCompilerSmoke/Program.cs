@@ -104,7 +104,7 @@ Require(noTerrain.OutputModelSha256 ==
 Require(first.OwnedRanges.Count == 7_961 &&
         first.OwnedRanges.Count(item => item.StableId.StartsWith("texture.page.", StringComparison.Ordinal)) == 7_949 &&
         first.OwnedRanges.Count(item => item.StableId == "model.final") == 1 &&
-        first.OwnedRanges.Count(item => item.OwnerId == "composite.v2-spawn") == 2 &&
+        first.OwnedRanges.Count(item => item.OwnerId == "composite.v3-spawn") == 2 &&
         first.OwnedRanges.Select(item => item.StableId).Distinct(StringComparer.Ordinal).Count() ==
             first.OwnedRanges.Count,
     "The complete nonoverlapping composite ledger count/identity changed.");
@@ -170,16 +170,16 @@ Require(first.MobyAssetRelocations.Count == 5 &&
     "The direct Moby asset relocation/dedupe readback changed.");
 
 Id65AuthoringCompositeTerrainReadback terrainReadback = first.Terrain;
-Require(terrainReadback.MandatoryNegativeWindingV2 && terrainReadback.OptionalTrianglePresent &&
+Require(terrainReadback.MandatoryV3CollisionAndEnvironmentHeaderRepairs && terrainReadback.OptionalTrianglePresent &&
         terrainReadback.SectorIndex == 216 && terrainReadback.LowDetailVertexCount == 4 &&
         terrainReadback.LowDetailFaceCount == 2 && terrainReadback.HighDetailVertexCount == 4 &&
         terrainReadback.HighDetailFaceCount == 2 && terrainReadback.BaseCollisionTriangleIndex == 13_995 &&
         terrainReadback.BaseCollisionTriangleHex == "10011C701001380000020000" &&
         terrainReadback.BaseCollisionNormalZ == -50_176 &&
         terrainReadback.EnvironmentSha256 ==
-            "c41f70eacc4c507401743dfe7d8fe20de2443b62de78682a16211306b3e4c617" &&
+            "a9437ef4b1bba478f2cdd49146673e6584cc83fe6a37a81666d632532536c42e" &&
         terrainReadback.SectorSha256 ==
-            "8537b07f283bdbfebf3816048269e0a93454456749e710a94f7f5ead000c4111" &&
+            "aad982e416ed73bc54fdae3030073be79052eeadfac457caa0b311577bbf88cb" &&
         terrainReadback.CollisionSha256 == Id65AuthoringTerrainMutationCompiler.ExpectedTwoTileCollisionSha256 &&
         terrainReadback.CollisionTreeSha256 == Id65AuthoringTerrainMutationCompiler.ExpectedTwoTileTreeSha256 &&
         terrainReadback.CollisionBlocksSha256 == Id65AuthoringTerrainMutationCompiler.ExpectedTwoTileBlocksSha256 &&
@@ -443,7 +443,7 @@ Require(typeof(Id65AuthoringCompositeCompileRequest).GetProperties().All(propert
 Require(first.BuildsDirectlyFromLockedSource && first.SinglePassCompositeRebuildOwned &&
         !first.AcceptsCompiledSliceAfterimages && !first.AcceptsSlicePlans &&
         !first.CrossSliceCompositionSupported && first.AppliesOneNonOverlappingLedger &&
-        first.OwnsV2CollisionWinding && first.OwnsOptionalTerrainTriangle &&
+        first.OwnsV3CollisionAndEnvironmentHeaderRepairs && first.OwnsOptionalTerrainTriangle &&
         first.OwnsPrivateT66Texture && first.OwnsMobyDependencyBundles &&
         first.DirectRelocationsAndRebases && first.ExactInverseVerified &&
         first.DeterministicReadbackRequired && first.ProtectedRetailEntriesPreserved &&
@@ -475,7 +475,7 @@ Console.WriteLine($"  owned={first.OwnedRangeMapSha256}; relocations={first.Relo
 Console.WriteLine($"  rebases={first.RebaseMapSha256}; mobyAssets={first.MobyAssetRelocationMapSha256}");
 Console.WriteLine($"  transaction={first.TransactionSha256}; plan={first.DeterministicPlanSha256}");
 Console.WriteLine(
-    "PASS Id65AuthoringCompositeCompilerSmoke: direct locked-source negative-winding v2 + optional terrain + " +
+    "PASS Id65AuthoringCompositeCompilerSmoke: direct locked-source header-repaired v3 + optional terrain + " +
     "private T66 + deduplicated T88/T107 Moby bundles, one complete ledger, maximal owned diffs, exact rollback, " +
     $"defensive readback, {rejectionCount} rejects, and no filesystem/BIN/CUE/App/CreateBIN/runtime/release/promotion.");
 
@@ -521,7 +521,7 @@ static bool Equivalent(Id65CompiledAuthoringComposite left, Id65CompiledAuthorin
 static bool TerrainEquivalent(
     Id65AuthoringCompositeTerrainReadback left,
     Id65AuthoringCompositeTerrainReadback right) =>
-    left.MandatoryNegativeWindingV2 == right.MandatoryNegativeWindingV2 &&
+    left.MandatoryV3CollisionAndEnvironmentHeaderRepairs == right.MandatoryV3CollisionAndEnvironmentHeaderRepairs &&
     left.OptionalTrianglePresent == right.OptionalTrianglePresent &&
     left.SectorIndex == right.SectorIndex &&
     left.LowDetailVertexCount == right.LowDetailVertexCount &&

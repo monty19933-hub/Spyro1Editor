@@ -678,8 +678,13 @@ internal static class UnusedLevel65FullAuthoringConstructionTemplate
         byte hpVertices = sourceSectorBytes[20];
         byte hpColours = sourceSectorBytes[21];
         byte hpFaces = sourceSectorBytes[22];
+        Id65EnvironmentSectorHeaderReadback sourceHeader =
+            Id65EnvironmentSectorHeaderContract.ReadExactSector(
+                sourceSectorBytes,
+                "full-authoring source sector 213");
         if (lpVertices != 35 || lpColours != 48 || lpFaces != 21 ||
-            hpVertices != 140 || hpColours != 185 || hpFaces != 113)
+            hpVertices != 140 || hpColours != 185 || hpFaces != 113 ||
+            sourceHeader.HighDetailVertexWordOffset != 0x7D)
         {
             throw new InvalidDataException("The sector-213 HP/LP source counts changed before first visual terrain allocation.");
         }
@@ -758,6 +763,13 @@ internal static class UnusedLevel65FullAuthoringConstructionTemplate
         output += newHpFace.Length;
         if (output != newSector.Length)
             throw new InvalidDataException("The first ID65 HP/LP terrain allocation did not consume its exact sector capacity.");
+        Id65EnvironmentSectorHeaderContract.Stamp(newSector);
+        Id65EnvironmentSectorHeaderReadback authoredHeader =
+            Id65EnvironmentSectorHeaderContract.ReadExactSector(
+                newSector,
+                "full-authoring sector 213");
+        if (authoredHeader.HighDetailVertexWordOffset != 0x82)
+            throw new InvalidDataException("The full-authoring sector-213 HP-table offset is not the literal 0x82 oracle.");
 
         byte[] afterModel = capacity.AfterModelBytes.ToArray();
         newSector.CopyTo(afterModel, sectorOffset);
@@ -1238,19 +1250,19 @@ internal static class UnusedLevel65FullAuthoringConstructionTemplate
             if (sectorOffset < environmentOffset + 8 + (sectorCount * 4) || sectorOffset >= nextOffset)
                 throw new InvalidDataException($"ID65 scene-sector pointer {index} is not strictly ordered inside the environment component.");
 
-            RequireRange(model, sectorOffset, 28, $"scene sector {index} header");
-            int lpVertices = model[sectorOffset + 16];
-            int lpColours = model[sectorOffset + 17];
-            int lpFaces = model[sectorOffset + 18];
-            int hpVertices = model[sectorOffset + 20];
-            int hpColours = model[sectorOffset + 21];
-            int hpFaces = model[sectorOffset + 22];
-            int size = checked((7 + lpVertices + lpColours + (lpFaces * 2) + hpVertices + (hpColours * 2) + (hpFaces * 4)) * 4);
-            if (size < 28 || sectorOffset + size > nextOffset)
-                throw new InvalidDataException($"ID65 scene sector {index} overruns its next native pointer.");
-            int gap = nextOffset - (sectorOffset + size);
-            if (gap > 0 && model.AsSpan(sectorOffset + size, gap).IndexOfAnyExcept((byte)0) >= 0)
-                throw new InvalidDataException($"ID65 scene sector {index} has nonzero bytes in its pointer-bounded gap.");
+            int pointerSpan = nextOffset - sectorOffset;
+            Id65EnvironmentSectorHeaderReadback header =
+                Id65EnvironmentSectorHeaderContract.ReadPointerSpan(
+                    model.AsSpan(sectorOffset, pointerSpan),
+                    pointerSpan,
+                    requireExactEnd: false,
+                    $"ID65 scene sector {index}");
+            int lpVertices = header.LowDetailVertexCount;
+            int lpFaces = header.LowDetailFaceCount;
+            int hpVertices = header.HighDetailVertexCount;
+            int hpFaces = header.HighDetailFaceCount;
+            int size = header.ExactSectorByteLength;
+            int gap = header.PointerGapByteLength;
             sectors.Add(new(
                 index,
                 modelWadOffset + sectorOffset,

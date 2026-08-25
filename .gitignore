@@ -65,6 +65,7 @@ artisans-*.csv
 stonehill-*.json
 stonehill-*.md
 !docs/runtime-evidence/stonehill-townsquare-display-identity-2026-08-01.json
+!docs/runtime-evidence/unused-level-65-remote-blank-environment-header-repair-v3-runtime-evidence.json
 spyro-*.json
 spyro-*.md
 !spyro-level-catalog.json
@@ -102,6 +103,10 @@ spyro-*.md
 *.jpeg
 *.tga
 *.webp
+!docs/runtime-evidence/assets/unused-level-65-remote-blank-environment-header-repair-v3/**/*.png
+!docs/runtime-evidence/assets/unused-level-65-remote-blank-environment-header-repair-v3/**/*.json
+!docs/runtime-evidence/assets/unused-level-65-remote-blank-environment-header-repair-v3/**/*.ndjson
+!docs/runtime-evidence/assets/unused-level-65-remote-blank-environment-header-repair-v3/**/*.mov
 !src/Spyro.Editor.App/Assets/Brand/app-icon.png
 !src/Spyro.Editor.App/Assets/Brand/spyro-editor-title.png
 !src/Spyro.Editor.App/Assets/SkyPresets/
@@ -128,6 +133,10 @@ release/
 
 # Logs and transient command output
 *.log
+!docs/runtime-evidence/assets/unused-level-65-remote-blank-environment-header-repair-v3/**/*.log
+docs/runtime-evidence/assets/unused-level-65-remote-blank-environment-header-repair-v3/.capture-coordinator-authority.lock
+docs/runtime-evidence/assets/unused-level-65-remote-blank-environment-header-repair-v3/capture-staging/.capture-coordinator.lock
+docs/runtime-evidence/.id65-v3-runtime-evidence.tmp-*
 *.out.txt
 *.err.txt
 native-startup-error.txt
@@ -179,6 +188,15 @@ unsafe-tests/
 !/tools/Run-SpyroEditorOfflineQa.sh
 !/tools/Verify-SpyroEditorRelease.sh
 !/tools/Watch-SpyroId65RuntimeState.py
+!/tools/Capture-SpyroId65V3RuntimeSession.py
+!/tools/Test-Capture-SpyroId65V3RuntimeSession.py
+!/tools/Automate-SpyroId65V3RuntimeSession.py
+!/tools/Test-Automate-SpyroId65V3RuntimeSession.py
+!/tools/Build-SpyroId65UnattendedProfile.py
+!/tools/Test-Build-SpyroId65UnattendedProfile.py
+!/tools/Verify-SpyroId65UnattendedProfile.py
+!/tools/Test-Verify-SpyroId65UnattendedProfile.py
+!/tools/Run-SpyroId65V3ResearchCheckpointQa.sh
 
 # Local research probes that are useful while reversing but should be promoted
 # intentionally before release.

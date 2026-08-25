@@ -31,6 +31,7 @@
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65ReturnHomeOwnershipSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65ReturnHomeNativeApronRuntimeCandidateSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3RuntimeCandidateSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringManifestCompilerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65ZeroEggRuntimeCandidateSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65DragonSaveTriggerRuntimeCandidateSmoke" />
@@ -42,5 +43,8 @@
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringSupportReplacementCompilerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65RewardSupportLayoutContractSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringRewardStagingCompilerSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65V3RuntimeEvidenceContractSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65V3RuntimeEvidenceFinalizer" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringRewardStagingRuntimeCandidatePublisherSmoke" />
   </ItemGroup>
 </Project>

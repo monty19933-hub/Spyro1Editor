@@ -320,7 +320,9 @@ try
 {
     _ = UnusedLevel65FoundationTerrainComposer.BuildStaticPlanFromModelForSmoke(mutatedModel, twoTileManifest);
 }
-catch (InvalidDataException ex) when (ex.Message.Contains("accepts only exact foundation model", StringComparison.OrdinalIgnoreCase))
+catch (InvalidDataException ex) when (ex.Message.Contains(
+    "neither the exact historical 0x7D preimage nor the repaired 0x82 model",
+    StringComparison.OrdinalIgnoreCase))
 {
     wrongModelRejected = true;
 }

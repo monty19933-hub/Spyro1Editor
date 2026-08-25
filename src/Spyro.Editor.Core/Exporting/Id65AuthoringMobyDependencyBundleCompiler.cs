@@ -163,7 +163,7 @@ internal sealed record Id65MobyBundleCompilerLimits(
 
 internal sealed record Id65MobyBundleCompileRequest(
     Id65AuthoringManifest Manifest,
-    UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan V2Template,
+    UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3StaticPlan V3Template,
     IReadOnlyList<Id65MobyDependencyBundleDescriptor> Bundles,
     IReadOnlyList<Id65MobyPlacementIntent> Placements,
     Id65MobyBundleCompilerLimits? Limits = null);
@@ -223,12 +223,12 @@ internal sealed class Id65CompiledMobyDependencyBundles
         byte[] sourceData,
         byte[] outputData,
         string sourceDataSha256,
-        string v2OutputDataSha256,
+        string v3OutputDataSha256,
         string outputDataSha256,
         int changedDataByteCount,
         int diffRangeCount,
         string diffManifestSha256,
-        int mobyChangedByteCountOverV2,
+        int mobyChangedByteCountOverV3,
         IEnumerable<Id65MobyOwnedDataRange> ownedRanges,
         string ownedRangeMapSha256,
         IEnumerable<Id65MobyAssetRelocation> assetRelocations,
@@ -245,12 +245,12 @@ internal sealed class Id65CompiledMobyDependencyBundles
         _sourceData = sourceData.ToArray();
         _outputData = outputData.ToArray();
         SourceDataSha256 = sourceDataSha256;
-        V2OutputDataSha256 = v2OutputDataSha256;
+        V3OutputDataSha256 = v3OutputDataSha256;
         OutputDataSha256 = outputDataSha256;
         ChangedDataByteCount = changedDataByteCount;
         DiffRangeCount = diffRangeCount;
         DiffManifestSha256 = diffManifestSha256;
-        MobyChangedByteCountOverV2 = mobyChangedByteCountOverV2;
+        MobyChangedByteCountOverV3 = mobyChangedByteCountOverV3;
         _ownedRanges = Array.AsReadOnly(ownedRanges.ToArray());
         OwnedRangeMapSha256 = ownedRangeMapSha256;
         _assetRelocations = Array.AsReadOnly(assetRelocations.ToArray());
@@ -267,12 +267,12 @@ internal sealed class Id65CompiledMobyDependencyBundles
     public string ManifestSha256 { get; }
     public string BundleDescriptorSha256 { get; }
     public string SourceDataSha256 { get; }
-    public string V2OutputDataSha256 { get; }
+    public string V3OutputDataSha256 { get; }
     public string OutputDataSha256 { get; }
     public int ChangedDataByteCount { get; }
     public int DiffRangeCount { get; }
     public string DiffManifestSha256 { get; }
-    public int MobyChangedByteCountOverV2 { get; }
+    public int MobyChangedByteCountOverV3 { get; }
     public IReadOnlyList<Id65MobyOwnedDataRange> OwnedRanges => _ownedRanges;
     public string OwnedRangeMapSha256 { get; }
     public IReadOnlyList<Id65MobyAssetRelocation> AssetRelocations => _assetRelocations;
@@ -296,7 +296,8 @@ internal sealed class Id65CompiledMobyDependencyBundles
     public bool RuntimeCandidateAuthorized => false;
     public bool PromotionAuthorized => false;
     public bool Publishable => false;
-    public bool V2StructuralPatchesComposedAtomically => true;
+    public bool V3StructuralPatchesComposedAtomically => true;
+    public bool V3EnvironmentHeaderRepairPreserved => true;
     public bool ExactInverseVerified => true;
     public bool DeterministicReadbackVerified => true;
     public bool RootPackageAndPropertiesDeduplicated => true;
@@ -310,7 +311,7 @@ internal sealed class Id65CompiledMobyDependencyBundles
 internal static class Id65AuthoringMobyDependencyBundleCompiler
 {
     public const string ProfileId =
-        "id65-authoring-moby-dependency-bundle-v2-backed-static-in-memory-v1";
+        "id65-authoring-moby-dependency-bundle-v3-header-repair-backed-static-in-memory-v2";
 
     public const string ArtisansGrassBundleId = "bundle.artisans-grass.actor-01f5";
     public const string ArtisansGrassRowTemplateId = "row.artisans-grass.t121";
@@ -319,9 +320,12 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
     public const string AppendScenarioId = "scenario.artisans-grass.t107";
     public const string ZeroEggScenarioId = "scenario.zero-egg.t88";
     public const string CombinedScenarioId = "scenario.artisans-grass.t107-plus-zero-egg.t88";
-    public const string AppendManifestProfileId = "id65-authoring-manifest-v2-plus-artisans-grass-t107-v1";
-    public const string ZeroEggManifestProfileId = "id65-authoring-manifest-v2-plus-zero-egg-t88-v1";
-    public const string CombinedManifestProfileId = "id65-authoring-manifest-v2-plus-grass-t107-zero-egg-t88-v1";
+    public const string AppendManifestProfileId =
+        "id65-authoring-manifest-v3-header-repair-plus-artisans-grass-t107-v2";
+    public const string ZeroEggManifestProfileId =
+        "id65-authoring-manifest-v3-header-repair-plus-zero-egg-t88-v2";
+    public const string CombinedManifestProfileId =
+        "id65-authoring-manifest-v3-header-repair-plus-grass-t107-zero-egg-t88-v2";
 
     public const string T107PlacementId = "placement.artisans-grass.t107";
     public const string T88PlacementId = "placement.zero-egg.t88";
@@ -330,30 +334,30 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
     public const string ExpectedArtisansGrassBundleSha256 =
         "22e43e5a192b4486cf0d30f6d42bcbc92249a19b8998e02dc13e98b3c672ca91";
     public const string ExpectedAppendManifestSha256 =
-        "e06735a29e031735ad1d3abaec46e6961f461ddb1ffd83e4bc4535f370270940";
+        "2b376e69de6a3964310e97cc433c073a93248e4e5d1be8dec1f40445c4311ec8";
     public const string ExpectedZeroEggManifestSha256 =
-        "69a5f4b8b15a36feff16003917800b34460ee36273f82f0b7613b43cc9b21343";
+        "fe66d19449200760f47f9bb8d0bd9ccc0c63fb813cced42b87b2152820419527";
     public const string ExpectedCombinedManifestSha256 =
-        "12c40e52dc0542c3e515df5c75a5d39b376253ba8c43ba647e98d3bf4da38310";
+        "2c80f094f44b4f33bddea36a7260438e5824e6dc13e2f8f1e487112672beb49d";
     public const string ExpectedAppendOutputDataSha256 =
-        "fcec571bba9178c2e48bc161493d7b7bd160b70882e22b44fbad6a7ab8f05c8d";
+        "c0fda51605b099e4cee8ba69889926348db35407d571c00cb375fa601da881da";
     public const string ExpectedZeroEggOutputDataSha256 =
-        "8955ffdeab54d04e4a58e76ee68bd27fb4363d930087411e298bc0966104c5b2";
+        "3f00ddee10b42eef3dba9257649b2790b20767dafa0899e9e12b9cdc5ee2cd67";
     public const string ExpectedCombinedOutputDataSha256 =
-        "ecece3083bf720b9e5ee2e4aa18051cffa688cb327b2c8eb337007cb7fcfa875";
+        "f5b4acbacbec2645707f4c8a1d2d7f1104c22a8f1b18f6bf57f43eeb6099ea3d";
     public const int ExpectedAppendChangedDataByteCount = 484_629;
     public const int ExpectedAppendDiffRangeCount = 55_450;
     public const int ExpectedZeroEggChangedDataByteCount = 484_612;
     public const int ExpectedZeroEggDiffRangeCount = 55_441;
     public const int ExpectedCombinedChangedDataByteCount = 484_638;
     public const int ExpectedCombinedDiffRangeCount = 55_456;
-    public const int ExpectedCombinedMobyChangedBytesOverV2 = 302;
+    public const int ExpectedCombinedMobyChangedBytesOverV3 = 302;
     public const string ExpectedAppendDiffManifestSha256 =
-        "0467a0ac778b484f441094e9f9d5325cc077399ce58c61b4ff257becbb945947";
+        "11ad0bd8742e70686d95878ff1853310f876514e2c7f211309271563e2c20a16";
     public const string ExpectedZeroEggDiffManifestSha256 =
-        "3cdeb506b71b02ac434716831c4221ae0694e8ee6788acc4bec143bb564f5f68";
+        "df2f5e1c5b10525a9fd0cf03f552be9afe7708e1fc39251fdb300423437c0994";
     public const string ExpectedCombinedDiffManifestSha256 =
-        "85d876ef66dc16af8a46a83463abf94ceb53ebe84af45fcb53ad770162b49b07";
+        "6233dea82487f93e53af19c3ed205a4b65a4c9fb30340f7a34a61118665f2de8";
     public const string ExpectedAppendOwnedRangeMapSha256 =
         "3e06b5fde25166cb7488caed0ad7ccb611ca0a4754c45bdaf154bba96cc2a64e";
     public const string ExpectedZeroEggOwnedRangeMapSha256 =
@@ -361,11 +365,11 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
     public const string ExpectedCombinedOwnedRangeMapSha256 =
         "a6b54f8dc15fae3450af3c8e4ee8871bdab51da0a42f345ecbdcd399e1abd14f";
     public const string ExpectedAppendTransactionSha256 =
-        "a552e705b67d33cd25654d2965c9446588f6edc21221e681219e919f91ef65fa";
+        "7c78e6106c9e649b6d27cdec1c9e7282b718f773558619dbb8ab0973352412c8";
     public const string ExpectedZeroEggTransactionSha256 =
-        "4bf379c7b6ed26ae9e83644ea5c37473e0397591b4e90422728e25008b0e711e";
+        "9f98d8866e4321dd6f90000d9810a622831961e844e9fbe1eec61098d704ebb7";
     public const string ExpectedCombinedTransactionSha256 =
-        "f52effdef57ccf6fd1cb83a1709691ef24743578403bfd86b14ef9d9b402ad46";
+        "d574cb14d79804f64fde674de272386a9622e98da218a0f808ba024b747348ee";
     public const string ExpectedAppendRelocationMapSha256 =
         "ceefb6f18d939a10c2cc95ba82ba65c8782002a9fc371e55e9efc108aab8eff2";
     public const string ExpectedZeroEggRelocationMapSha256 =
@@ -373,11 +377,11 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
     public const string ExpectedCombinedRelocationMapSha256 =
         "89d23fb4e8109584e827a2356911ca8d6e73af8f59cda033c2966eee50791d93";
     public const string ExpectedAppendDeterministicPlanSha256 =
-        "4104df081b35e1c1d5984ae05601af885b4bab22c23b0fd6bc1a65268713784e";
+        "67b5f809ad76895f3a2e957c7739ab71b11aa34d91b127896ebb2ac1d618173c";
     public const string ExpectedZeroEggDeterministicPlanSha256 =
-        "efd639f72bde7b188a58c8741e406f53f8dae913687d231e01743fdfe5596410";
+        "a54854f04756fb02d9256036b6fb108f180c8ee5f3372fbd61c4ecebc9613d43";
     public const string ExpectedCombinedDeterministicPlanSha256 =
-        "74bc981eafa5fb5ebd17db8c88a99fbca14d0fb50bde0bc517d4ce2f36151a07";
+        "9e9ef275d667b7c25b6c79400ffc7d0bccc3a263d9f97a69850177d30e093206";
 
     private const int DataByteLength = 0x2E2000;
     private const int RecordByteLength = 0x58;
@@ -547,13 +551,13 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.Manifest);
-        ArgumentNullException.ThrowIfNull(request.V2Template);
+        ArgumentNullException.ThrowIfNull(request.V3Template);
         ArgumentNullException.ThrowIfNull(request.Bundles);
         ArgumentNullException.ThrowIfNull(request.Placements);
         Id65MobyBundleCompilerLimits limits = request.Limits ?? new();
 
-        Id65AuthoringManifest minimal = Id65AuthoringModelCompiler.CreateMinimalV2EquivalentManifest();
-        _ = Id65AuthoringModelCompiler.Compile(minimal, request.V2Template);
+        Id65AuthoringManifest minimal = Id65AuthoringModelCompiler.CreateMinimalV3EquivalentManifest();
+        _ = Id65AuthoringModelCompiler.Compile(minimal, request.V3Template);
         ValidateManifestEnvelope(request.Manifest, minimal);
 
         foreach (Id65MobyDependencyBundleDescriptor candidate in request.Bundles)
@@ -566,19 +570,28 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
             out string scenarioId);
         ValidateLimits(limits, placements);
 
-        byte[] source = request.V2Template.SourceData.ToArray();
-        byte[] v2Output = request.V2Template.OutputData.ToArray();
-        if (source.Length != DataByteLength || v2Output.Length != DataByteLength)
+        byte[] source = request.V3Template.SourceData.ToArray();
+        byte[] v3Output = request.V3Template.OutputData.ToArray();
+        if (source.Length != DataByteLength || v3Output.Length != DataByteLength)
             throw new InvalidDataException("The locked ID65 row-80 data length changed.");
-        RequireHash(Hash(source), UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedSourceDataSha256, "locked row-80 data");
-        RequireHash(Hash(v2Output), UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputDataSha256, "winding-v2 row-80 data");
+        RequireHash(Hash(source), UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedSourceDataSha256, "locked row-80 data");
+        RequireHash(Hash(v3Output), UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputDataSha256, "header-repaired v3 row-80 data");
+        if (v3Output[UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.HeaderDataRelativeOffset] !=
+                UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.RepairedHpVertexWordOffset ||
+            !request.V3Template.EnvironmentHeaderRepair.OneByteAllowlistComplete ||
+            !request.V3Template.EnvironmentHeaderRepair.ByteInverseVerified ||
+            !request.V3Template.EnvironmentHeaderRepair.FailedV1Rejected ||
+            !request.V3Template.EnvironmentHeaderRepair.SupersededV2Rejected)
+        {
+            throw new InvalidDataException("The exact sector-216 v3 environment-header authority changed or weakened.");
+        }
 
         List<Id65MobyOwnedDataRange> owned = BuildOwnedRanges(source, bundle, placements);
-        ValidateOwnedRangesAgainstV2(source, v2Output, owned, request.V2Template.StructuralPatches);
+        ValidateOwnedRangesAgainstV3(source, v3Output, owned, request.V3Template.StructuralPatches);
         TransactionPatch[] combinedPatches =
         [
-            .. request.V2Template.StructuralPatches.Select(patch => new TransactionPatch(
-                $"v2:{patch.Kind}",
+            .. request.V3Template.StructuralPatches.Select(patch => new TransactionPatch(
+                $"v3:{patch.Kind}",
                 patch.DataRelativeOffset,
                 patch.Before.ToArray(),
                 patch.After.ToArray())),
@@ -592,8 +605,13 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
         byte[] output = ApplyPatches(source, combinedPatches, reverse: false);
         byte[] inverse = ApplyPatches(output, combinedPatches, reverse: true);
         if (!inverse.SequenceEqual(source))
-            throw new InvalidDataException("The combined v2/Moby transaction did not invert to the locked source.");
-        VerifyOnlyOwnedDifferencesFromV2(v2Output, output, owned);
+            throw new InvalidDataException("The combined v3/Moby transaction did not invert to the locked source.");
+        VerifyOnlyOwnedDifferencesFromV3(v3Output, output, owned);
+        if (output[UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.HeaderDataRelativeOffset] !=
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.RepairedHpVertexWordOffset)
+        {
+            throw new InvalidDataException("The combined Moby output regressed the sector-216 v3 environment header.");
+        }
 
         Id65MobyPlacementReadback[] placementReadback = BuildPlacementReadback(output, placements);
         VerifySemanticReadback(source, output, placements, placementReadback);
@@ -601,7 +619,7 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
         string ownedMapHash = HashOwnedRanges(owned);
         string relocationMapHash = HashRelocations(relocations);
         DiffProof diff = BuildDiffProof(source, output);
-        int mobyChangedOverV2 = CountChangedBytes(v2Output, output);
+        int mobyChangedOverV3 = CountChangedBytes(v3Output, output);
         Id65MobyBundleCapacityReadback capacity = new(
             ObjectCountBefore,
             placements.Any(item => item.RowPolicy == Id65MobyRowAllocationPolicy.AppendContiguous) ? 108 : 107,
@@ -619,13 +637,13 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
             request.Manifest.CanonicalSha256,
             bundle.CanonicalSha256,
             Hash(source),
-            Hash(v2Output),
+            Hash(v3Output),
             Hash(output),
             diff.ManifestSha256,
             ownedMapHash,
             relocationMapHash,
             transactionHash,
-            mobyChangedOverV2.ToString(CultureInfo.InvariantCulture)
+            mobyChangedOverV3.ToString(CultureInfo.InvariantCulture)
         ])));
 
         VerifyFrozenScenarioPins(
@@ -633,7 +651,7 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
             request.Manifest.CanonicalSha256,
             output,
             diff,
-            mobyChangedOverV2,
+            mobyChangedOverV3,
             ownedMapHash,
             transactionHash,
             relocationMapHash,
@@ -645,12 +663,12 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
             source,
             output,
             Hash(source),
-            Hash(v2Output),
+            Hash(v3Output),
             Hash(output),
             diff.ChangedByteCount,
             diff.RangeCount,
             diff.ManifestSha256,
-            mobyChangedOverV2,
+            mobyChangedOverV3,
             owned,
             ownedMapHash,
             relocations,
@@ -909,7 +927,7 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
             !manifest.Mobys.Contains(minimal.Mobys.Single()) ||
             manifest.Mobys.Count is < 2 or > 3)
         {
-            throw new InvalidDataException("The winding-v2 locked manifest envelope changed outside Moby ownership.");
+            throw new InvalidDataException("The header-repaired v3 locked manifest envelope changed outside Moby ownership.");
         }
     }
 
@@ -993,30 +1011,30 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
             Hash(after)));
     }
 
-    private static void ValidateOwnedRangesAgainstV2(
+    private static void ValidateOwnedRangesAgainstV3(
         byte[] source,
-        byte[] v2Output,
+        byte[] v3Output,
         IReadOnlyList<Id65MobyOwnedDataRange> owned,
-        IReadOnlyList<UnusedLevel65RemoteBlankStructuralPatch> v2Patches)
+        IReadOnlyList<UnusedLevel65RemoteBlankStructuralPatch> v3Patches)
     {
         for (int index = 0; index < owned.Count; index++)
         {
             Id65MobyOwnedDataRange range = owned[index];
             if (!source.AsSpan(range.DataRelativeOffset, range.ByteLength)
-                    .SequenceEqual(v2Output.AsSpan(range.DataRelativeOffset, range.ByteLength)))
-                throw new InvalidDataException($"Moby ownership range `{range.StableId}` overlaps winding-v2 output bytes.");
+                    .SequenceEqual(v3Output.AsSpan(range.DataRelativeOffset, range.ByteLength)))
+                throw new InvalidDataException($"Moby ownership range `{range.StableId}` overlaps v3 structural output bytes.");
             if (index > 0 && RangesOverlap(
                     owned[index - 1].DataRelativeOffset,
                     owned[index - 1].ByteLength,
                     range.DataRelativeOffset,
                     range.ByteLength))
                 throw new InvalidDataException("Moby owned data ranges overlap.");
-            if (v2Patches.Any(patch => RangesOverlap(
+            if (v3Patches.Any(patch => RangesOverlap(
                     patch.DataRelativeOffset,
                     patch.Before.Length,
                     range.DataRelativeOffset,
                     range.ByteLength)))
-                throw new InvalidDataException($"Moby range `{range.StableId}` overlaps a v2 structural patch.");
+                throw new InvalidDataException($"Moby range `{range.StableId}` overlaps a v3 structural patch.");
         }
     }
 
@@ -1034,7 +1052,7 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
                     ordered[index - 1].Before.Length,
                     patch.Offset,
                     patch.Before.Length))
-                throw new InvalidDataException("Combined v2/Moby transaction patches overlap.");
+                throw new InvalidDataException("Combined v3/Moby transaction patches overlap.");
         }
     }
 
@@ -1055,8 +1073,8 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
         return output;
     }
 
-    private static void VerifyOnlyOwnedDifferencesFromV2(
-        byte[] v2Output,
+    private static void VerifyOnlyOwnedDifferencesFromV3(
+        byte[] v3Output,
         byte[] output,
         IReadOnlyList<Id65MobyOwnedDataRange> owned)
     {
@@ -1065,7 +1083,7 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
             Array.Fill(allowed, true, range.DataRelativeOffset, range.ByteLength);
         for (int index = 0; index < output.Length; index++)
         {
-            if (v2Output[index] != output[index] && !allowed[index])
+            if (v3Output[index] != output[index] && !allowed[index])
                 throw new InvalidDataException($"Combined output escaped Moby ownership at data+0x{index:X}.");
         }
     }
@@ -1183,7 +1201,7 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
         string manifestSha256,
         byte[] output,
         DiffProof diff,
-        int mobyChangedOverV2,
+        int mobyChangedOverV3,
         string ownedMapSha256,
         string transactionSha256,
         string relocationMapSha256,
@@ -1195,7 +1213,7 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
             ZeroEggScenarioId => ExpectedZeroEggOutputDataSha256,
             _ => ExpectedCombinedOutputDataSha256
         };
-        RequireHash(Hash(output), expected, $"{scenarioId} output data");
+        string outputSha256 = Hash(output);
         (int expectedChanged, int expectedRanges, int expectedMobyChanged, string expectedDiff,
             string expectedOwned, string expectedTransaction, string expectedManifest,
             string expectedRelocation, string expectedPlan) = scenarioId switch
@@ -1223,7 +1241,7 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
             _ => (
                 ExpectedCombinedChangedDataByteCount,
                 ExpectedCombinedDiffRangeCount,
-                ExpectedCombinedMobyChangedBytesOverV2,
+                ExpectedCombinedMobyChangedBytesOverV3,
                 ExpectedCombinedDiffManifestSha256,
                 ExpectedCombinedOwnedRangeMapSha256,
                 ExpectedCombinedTransactionSha256,
@@ -1231,13 +1249,19 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
                 ExpectedCombinedRelocationMapSha256,
                 ExpectedCombinedDeterministicPlanSha256)
         };
-        if (diff.ChangedByteCount != expectedChanged || diff.RangeCount != expectedRanges ||
-            mobyChangedOverV2 != expectedMobyChanged || diff.ManifestSha256 != expectedDiff ||
+        if (outputSha256 != expected || diff.ChangedByteCount != expectedChanged ||
+            diff.RangeCount != expectedRanges ||
+            mobyChangedOverV3 != expectedMobyChanged || diff.ManifestSha256 != expectedDiff ||
             ownedMapSha256 != expectedOwned || transactionSha256 != expectedTransaction ||
             manifestSha256 != expectedManifest || relocationMapSha256 != expectedRelocation ||
             deterministicPlanSha256 != expectedPlan)
         {
-            throw new InvalidDataException("The frozen v2/Grass/ZeroEgg scenario diff pins changed.");
+            throw new InvalidDataException(
+                $"The frozen v3/Grass/ZeroEgg scenario diff pins changed: scenario={scenarioId}; " +
+                $"manifest={manifestSha256}; output={outputSha256}; changed={diff.ChangedByteCount}; " +
+                $"ranges={diff.RangeCount}; overV3={mobyChangedOverV3}; diff={diff.ManifestSha256}; " +
+                $"owned={ownedMapSha256}; transaction={transactionSha256}; relocation={relocationMapSha256}; " +
+                $"plan={deterministicPlanSha256}.");
         }
     }
 

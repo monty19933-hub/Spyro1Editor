@@ -23,10 +23,12 @@ IReadOnlyList<string> lockedDirectoryBefore = SnapshotDirectory(Path.GetDirector
 IReadOnlyList<string> foundationDirectoryBefore = SnapshotDirectory(Path.GetDirectoryName(foundationImagePath)!);
 
 byte[] directRow80 = ReadRootFile(lockedImagePath, "WAD.WAD", 0x6936800, 0x2E2000);
-UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan v2 =
-    UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.BuildStaticPlan(lockedImagePath);
-Require(directRow80.SequenceEqual(v2.SourceData),
-    "The support smoke direct row 80 differs from the exact locked v2 proof source.");
+UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3StaticPlan v3 =
+    UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.BuildStaticPlan(lockedImagePath);
+Require(directRow80.SequenceEqual(v3.SourceData) &&
+        v3.OutputModelSha256 == UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputModelSha256 &&
+        v3.OutputData[UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.HeaderDataRelativeOffset] == 0x08,
+    "The support smoke direct row 80 or exact v3 repair proof source changed.");
 UnusedLevel65NativeTextureStaticPlan oldTextureProof =
     UnusedLevel65NativeTextureAuthoringContract.BuildFirstStaticPlan(foundationImagePath);
 Id65V2NativeTextureWitness textureWitness =
@@ -60,9 +62,9 @@ Require(core.CanonicalJson == coreFromFull.CanonicalJson &&
         empty.CanonicalJson == emptyFromCore.CanonicalJson &&
         empty.CanonicalSha256 == emptyFromCore.CanonicalSha256,
     "Support manifest add/remove factories do not return exact canonical states.");
-Require(empty.CanonicalSha256 == "fc162fc5db6afa30952ca749ac4f60ce98cee6d9bce1ff8aa3f7ed3ac856182f" &&
-        core.CanonicalSha256 == "aaac3076e2246aeb481e25241fcef9d564aa8c338bef07b0bdf83af11726c270" &&
-        full.CanonicalSha256 == "4ccb922f43a9ed2551ce700f56270b6c1207adf1c49eb26984b96e0bdacdd0fb" &&
+Require(empty.CanonicalSha256 == "1853ca2c7500b7d7c994d47709ef90fa09671727d94447a1a29ba16c49001ac7" &&
+        core.CanonicalSha256 == "97dbe141893bd0ee0a60f51fae9ada15360363fa16570b05536902fe2e3ce573" &&
+        full.CanonicalSha256 == "aaa6bdcfbfc257818fe796f04f1bc42b0150dd61d422764328bd4321e72b11db" &&
         empty.CanonicalSha256 == Id65AuthoringSupportReplacementCompiler.ExpectedEmptyManifestSha256 &&
         core.CanonicalSha256 == Id65AuthoringSupportReplacementCompiler.ExpectedCoreManifestSha256 &&
         full.CanonicalSha256 == Id65AuthoringSupportReplacementCompiler.ExpectedFullManifestSha256 &&
@@ -144,7 +146,7 @@ externalLedger.AddRange(desiredLeafCopies.Select(leaf => new Id65SupportOwnedRan
 byte[] externallyComposedCore = ApplyExternalLedger(directRow80, externalLedger);
 string externalLedgerSha256 = HashExternalLedger(externalLedger);
 const string expectedExternalLedgerSha256 =
-    "3c235d791578ce6496d975d99868d487813ee1343ce5ddd15f31cd9dd79dcaf3";
+    "292aea9ebaf02cfc878f277e5509b448e791243bc9df850ed3dbc1d75fca22e9";
 Console.WriteLine($"  desired external ledger={externalLedgerSha256}");
 Require(externalLedger.Count == 7_952 &&
         externalLedger.Sum(item => item.ByteLength) == 1_010_466 &&
@@ -598,7 +600,7 @@ foreach (Id65CompiledSupportReplacement compiled in new[] { addCore, addBay, rem
     Require(compiled.BuildsBothStatesFromExactLockedSource && !compiled.AcceptsCompiledAfterimages &&
             !compiled.AcceptsSlicePlans && compiled.DirectRelocationsAndRebases &&
             compiled.ExactInverseVerified && compiled.DeterministicReadbackRequired &&
-            compiled.PostV2RetirementDiscriminatorOnly &&
+            compiled.PostV3EnvironmentHeaderRepairRequired &&
             compiled.FourOrEightSectorsBelowNativeObservedMinimum64 && !compiled.RuntimeAccepted &&
             !compiled.WritesFileSystem && !compiled.WritesDiscImage && !compiled.WritesCue &&
             !compiled.RetiredPublisherCalled && !compiled.AppIntegrated && !compiled.CreateBinEnabled &&
@@ -706,41 +708,41 @@ static FrozenSmokeTransitionPins FrozenPinsFor(Id65SupportTransitionKind transit
     transition switch
     {
         Id65SupportTransitionKind.AddCoreSupport => new(
-            550_741,
-            27_683,
-            "1461d1e4b3e1a4fee36ecd241189a5b32cc8e2b2e0ab54b91bc58d8924fd3619",
-            "ed6f76359de3278e6ebed1b7efea6df093d51a06bc54a004bf18b85837a86917",
-            "c18302c4c6c14ae00022dd6db8827d1021205231a0bb18bdfa742b7844020cf5",
+            550_737,
+            27_687,
+            "606f6f790734a8d10cf1c362347a599082969d41900fc9346238e8784240b35d",
+            "a6922f2daa26f28c619d56f454a129cd5d87b2e3804f4aef176dff30d5b30902",
+            "8fb9b8c7a1c8c41f11a982bc224390cef3602ac6d2c3b00cb77ff158203cbce4",
             "c8f83a8f7318221169989b9b9f188666163bc0a7daf697cda993bf155be954ab",
-            "c1e427bc481ed287aa216477bab99214f38f38673e9d5cec403f17c40eac981a",
-            "dbac770db883f551fc7f37bbc38eeb13b1d5ed1ff5a385e58077981536637d3e"),
+            "b60090f6efe2c0e948defb613ad651898c43abd3221fcbf5f0a0c9075891bf45",
+            "65847eef51956f924791bbf3cdf1075d087f8da2d4bde114e0f9c98165e88dca"),
         Id65SupportTransitionKind.AddEnemyBay => new(
-            225_506,
-            25_424,
-            "793281faee27ae95b6f144db5912b9f8c6b0f2091ca2ab1d4fcae19c95bf5c8a",
-            "a995e2b2245a8a554b3c5f79b857a83bf80b58ea997c7b9c4129a3ed1e6ac50f",
-            "897759c9bd28e97f5e2673e6f264c6195adb5290cd04edde64d11ca91fbac7ee",
+            225_505,
+            25_425,
+            "716d3879a7a1a6f9d13893ee7a483d62d5f7a3d30c0686b7345dcf9f64292f3f",
+            "676f97e860f73c9129decc8f4b28834f1a9a17f00f5e3db955288a6447d382c6",
+            "0136834a3a09f330a05854f875795b34c922528789d964d31f2a58d7f6fbd68a",
             "04e9f8c23ccdf1d32745402437c9b431e202750484183bf8036748a3ebde55eb",
-            "98032389fd159d1bb4a48473f9a87dfc7ebf70c2a811626b0557da533a17fa1e",
-            "9010c618ee6d20c81ba8a1a8b6110c2a2d9ce9bb7df661502925c94e9100bb92"),
+            "9beecc21ac14e6dceb7d97da2a9742d9d6305b8ca64fbb06d9bf84a1b49caabc",
+            "1d6022abe9844029886d3a0edca708454bf545e100e07db1ee3f2a8b58f97779"),
         Id65SupportTransitionKind.RemoveEnemyBay => new(
-            225_506,
-            25_424,
-            "e00cb4d235f36f75bc5b9c4decf971aed2bca0250b9f0e9c328c613b9290dda1",
-            "42279113c8679676937641a6e89569b7c08fdad8228305bfd0cdc9e4c465ee01",
-            "42b0cdc4f1b552cde62bacee88a5d37157fd9b47e92cd07a87db165830d805b4",
+            225_505,
+            25_425,
+            "06b53aef63120eb7391684fc76544702794bb640d20c67b3bfb2b941652bc386",
+            "16224f505bff68e06b84ce1f2a149b55722f6a727630222a2203002820dae6a9",
+            "3fbedb2ecc5d0b319a47efa8254fe134f04fa71a03cea04f88c78d12a32e6258",
             "4b2010a89ee6af2abd354253602870fb968ad790c0b3f82cb6ea5f92709d0529",
-            "29ad57ab6559ac861c9ef3aa21c1f8f50d4160290be6723680ec02a5c70a0b74",
-            "f51a21927eb701a134399681a793eb1cdd097d8180c549c8c9506e6c2932db60"),
+            "9001de5e1302d35fbec49d0413c8fac979b97dbd1040c9dd4f76f07acd345844",
+            "615d6098f1abc1ca88cdf7b962d4580777080239b544c2d07d74481d443471e3"),
         Id65SupportTransitionKind.RemoveCore => new(
-            550_741,
-            27_683,
-            "e9ec44809fa10ca97bbcd31b5aef7c1b91db491de347751a476b922874a9a5cc",
-            "b3a4428d1ac6dacbbfd93be569dffabdf00ddd29ac0b917cd52d2b18a14fe5bf",
-            "84258e4c0a181fafd9c16ebabd6896ae60db2f4e9094cdc9cea4c3ecf97145d4",
+            550_737,
+            27_687,
+            "6407ef83595d2540d07073441394c3563b9888c031c17d0b4b607fbeb1bfd177",
+            "a066df45a06f712ddf5bdcbc1836034beb39ab7d753cf65eb5aa1a439eab7abc",
+            "ca8a9b3e6f5aa793a39874b65d104315b7908a89dc7910c4db5dc08d9dc3cbaa",
             "4554e8cf2fb31da501ad27912b7ea431558d7b98944f4ad3d3be12ded48a7e7b",
-            "0364dc4e7984445a582abf3f99c4462fa2aef3beb9d9625dbdb0105210e0006b",
-            "051c65f5af2062a8a0fdcb2d20abf9446ee9db0879ac7fccaa44bbc2556db606"),
+            "653ef2f92a996ef63fb63222ac02abd9b0b1f91f063f8bc3b1bebf6514318782",
+            "499eefb89be2f677d04c4d5e50968acd522e0a9435a3b8085643977c1b3340f8"),
         _ => throw new InvalidDataException("Unknown support transition kind.")
     };
 

@@ -418,6 +418,7 @@ internal sealed class Id65CompiledRewardStaging
     public Id65RewardStagingStructuralReadback Structure { get; }
 
     public bool BuildsDirectlyFromLockedSourceOnce => true;
+    public bool V3EnvironmentHeaderRepairSubstrateRequired => true;
     public bool AcceptsCompiledSupportAfterimage => false;
     public bool AcceptsCompiledCompositeAfterimage => false;
     public bool AcceptsCompiledMobyAfterimage => false;
@@ -465,7 +466,7 @@ internal sealed class Id65CompiledRewardStaging
 internal static class Id65AuthoringRewardStagingCompiler
 {
     public const string ProfileId =
-        "id65-authoring-reward-staging-locked-source-core4-static-in-memory-v1";
+        "id65-authoring-reward-staging-v3-header-repair-locked-source-core4-static-in-memory-v2";
     public const string RequiredSmokeAssemblyName =
         "Spyro.Editor.Id65AuthoringRewardStagingCompilerSmoke";
 
@@ -477,7 +478,7 @@ internal static class Id65AuthoringRewardStagingCompiler
     public const int ExpectedMobileReservationRewardTotal = 29;
     public const int ExpectedTrackFrameCount = 1_269;
     public const string ExpectedSupportExternalLedgerSha256 =
-        "3c235d791578ce6496d975d99868d487813ee1343ce5ddd15f31cd9dd79dcaf3";
+        "292aea9ebaf02cfc878f277e5509b448e791243bc9df850ed3dbc1d75fca22e9";
 
     public const string ExpectedStationarySourceRowsSha256 =
         "17e150c2af25ff795c360d991ce7e7a310bbbc0d4a25be52dcf8ae19c98d8e45";
@@ -503,25 +504,25 @@ internal static class Id65AuthoringRewardStagingCompiler
     // Filled from the first executed direct compiler pass, then frozen by the
     // dedicated smoke before this slice is released.
     public const string ExpectedCoreManifestSha256 =
-        "fe4f41fe1523d933d2a1c11bb8a121de06335b9ce622d41e2109fbb6c0fbc200";
+        "c4f5c29a08a0e9eb7ae357b0a49bdb8c0a30170a06fd4dfafde7afafc8913fba";
     public const string ExpectedGrassDescriptorFullFieldSha256 =
         "1848e15c38f12ab5ec47177755854d9bf7d6dadf25711a1a428d8b72ad7a9059";
     public const string ExpectedOutputRow80Sha256 =
-        "749267fc4635b25111b68a7c1b58282d4787efc83e2ddf3413e31fa3385f2755";
+        "f3fd8c343781a18cb394d03bc218b6e94541a3a8d9e6c442cbbe5cf6b8d0f947";
     public const string ExpectedDiffManifestSha256 =
-        "eeab2116daeaad75b4adaf409e308684cf081881b06f28c3c2008090345cf922";
+        "8fe049093be996cf528c5a59994726168767faa9db943197ae393ec99f870e2e";
     public const string ExpectedOwnedRangeMapSha256 =
-        "320da2ee310b39283d0f3a4526ca4928f3a9483524a1944e14126ed1339f3e47";
+        "35dd8e35164f4d0e47ec9530461995925748e520a4564d89a294ab1bf9a68ba4";
     public const string ExpectedInverseRangeMapSha256 =
-        "13768a15f6aa5b5e451d1ebbced6bc24f93169d3f274b3f198fd789e3d59ec15";
+        "f4d54cd94280713e8eb0f05006203260f8d172a8b5f688946c04c833c657f494";
     public const string ExpectedTransactionSha256 =
-        "af53d20c84e8b71d1d93bafecbf0b105f4215f3f15d5dbaab621430e84338bbc";
+        "5f88ff2a0fcc412d0a3d463cb5e002fe0e9427a7bfa77bcbeff5832bf9d19165";
     public const string ExpectedProtectedComplementSha256 =
         "c72370b6d0998ab37f42729be510a7b89d1c41629dfe773ee6c89579aa95e9e7";
     public const string ExpectedDeterministicPlanSha256 =
-        "18911d8229ba7383c9480dfef1d237071f0a8d9717d85c471b6b44c504f5d404";
-    public const int ExpectedChangedByteCount = 972_520;
-    public const int ExpectedDiffRangeCount = 42_011;
+        "7c1154b6cef975b2ee8482504eaacd9578170b87f45f689a2bb84a6078769afd";
+    public const int ExpectedChangedByteCount = 972_516;
+    public const int ExpectedDiffRangeCount = 42_015;
 
     internal static readonly JsonSerializerOptions CanonicalJsonOptions = new()
     {
@@ -1847,7 +1848,9 @@ internal static class Id65AuthoringRewardStagingCompiler
             compiled.Dragons.Count(item => !item.RunToEndpointInsideNamedPrecinct) != 1 ||
             compiled.Dragons.Single(item => !item.RunToEndpointInsideNamedPrecinct).Id != "dragon-b" ||
             !compiled.Dragons.All(item => item.RunToEndpointInsideCore4) ||
-            !compiled.BuildsDirectlyFromLockedSourceOnce || compiled.AcceptsCompiledSupportAfterimage ||
+            !compiled.BuildsDirectlyFromLockedSourceOnce ||
+            !compiled.V3EnvironmentHeaderRepairSubstrateRequired ||
+            compiled.AcceptsCompiledSupportAfterimage ||
             compiled.AcceptsCompiledCompositeAfterimage || compiled.AcceptsCompiledMobyAfterimage ||
             compiled.CallsRetiredPublisher || compiled.WriterAuthorized || compiled.WritesFileSystem ||
             compiled.WritesDiscImage || compiled.WritesBin || compiled.WritesCue ||

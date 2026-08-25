@@ -22,7 +22,7 @@ internal sealed record Id65TerrainTriangleIntent(
     int OcclusionGroupIndex);
 
 /// <summary>
-/// Immutable terrain layer over the exact minimal negative-winding v2
+/// Immutable terrain layer over the exact minimal environment-header-repaired v3
 /// authoring manifest. The first gate owns at most one optional triangle and
 /// deliberately carries no path, stream, image, publisher, or App state.
 /// </summary>
@@ -32,14 +32,14 @@ internal sealed class Id65TerrainAuthoringManifest
 
     public Id65TerrainAuthoringManifest(
         string profileId,
-        Id65AuthoringManifest lockedV2Base,
+        Id65AuthoringManifest lockedV3Base,
         IEnumerable<Id65TerrainTriangleIntent> optionalTriangles)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(profileId);
-        ArgumentNullException.ThrowIfNull(lockedV2Base);
+        ArgumentNullException.ThrowIfNull(lockedV3Base);
         ArgumentNullException.ThrowIfNull(optionalTriangles);
         ProfileId = profileId;
-        LockedV2Base = lockedV2Base;
+        LockedV3Base = lockedV3Base;
         _optionalTriangles = Array.AsReadOnly(optionalTriangles.ToArray());
         CanonicalJson = BuildCanonicalJson();
         CanonicalSha256 = Id65AuthoringTerrainMutationCompiler.Hash(
@@ -47,7 +47,7 @@ internal sealed class Id65TerrainAuthoringManifest
     }
 
     public string ProfileId { get; }
-    public Id65AuthoringManifest LockedV2Base { get; }
+    public Id65AuthoringManifest LockedV3Base { get; }
     public IReadOnlyList<Id65TerrainTriangleIntent> OptionalTriangles => _optionalTriangles;
     public string CanonicalJson { get; }
     public string CanonicalSha256 { get; }
@@ -59,7 +59,7 @@ internal sealed class Id65TerrainAuthoringManifest
         {
             json.WriteStartObject();
             json.WriteString("profileId", ProfileId);
-            json.WriteString("lockedV2BaseManifestSha256", LockedV2Base.CanonicalSha256);
+            json.WriteString("lockedV3BaseManifestSha256", LockedV3Base.CanonicalSha256);
             json.WritePropertyName("optionalTriangles");
             json.WriteStartArray();
             foreach (Id65TerrainTriangleIntent triangle in
@@ -110,7 +110,7 @@ internal enum Id65TerrainMutationKind
 
 internal sealed record Id65TerrainCompilerLimits(
     int ModelByteCapacity = UnusedLevel65RemoteBlankIsolationConstruction.ModelByteLength,
-    int AvailableV2TailBytes = UnusedLevel65RemoteBlankIsolationConstruction.OutputZeroTailByteCount,
+    int AvailableV3TailBytes = UnusedLevel65RemoteBlankIsolationConstruction.OutputZeroTailByteCount,
     int MaximumOutputUsedModelBytes = UnusedLevel65RemoteBlankIsolationConstruction.ModelByteLength,
     int MaximumLowDetailVertexCount = 64,
     int MaximumHighDetailVertexCount = 256,
@@ -260,7 +260,7 @@ internal sealed class Id65CompiledTerrainMutation
     public Id65TerrainCapacityReadback Capacity { get; }
     public Id65TerrainTriangleReadback Triangle { get; }
     public string DeterministicPlanSha256 { get; }
-    public bool ExactV2SubstrateVerified => true;
+    public bool ExactV3SubstrateVerified => true;
     public bool ExactHpLpPairingVerified => true;
     public bool NegativeCollisionWindingVerified => true;
     public bool CollisionCellTreeReadbackVerified => true;
@@ -288,35 +288,35 @@ internal sealed class Id65CompiledTerrainMutation
 
 /// <summary>
 /// Pure in-memory, exact-preimage terrain transaction compiler layered over
-/// the runtime-discriminator v2 negative-winding model. It supports the first
+/// the environment-header-repaired v3 negative-winding model. It supports the first
 /// concrete removable adjacent triangle only. Every target model is rebuilt
-/// from immutable v2 bytes; no retired composer or publisher is callable.
-/// Its afterimage is not authorized to stack with another exact-v2-only
+/// from immutable v3 bytes; no retired composer or publisher is callable.
+/// Its afterimage is not authorized to stack with another exact-v3-only
 /// compiler; a later single-pass composite compiler must own all slices.
 /// </summary>
 internal static class Id65AuthoringTerrainMutationCompiler
 {
-    public const string ProfileId = "id65-authoring-terrain-mutation-v2-one-optional-triangle-v1";
+    public const string ProfileId = "id65-authoring-terrain-mutation-v3-one-optional-triangle-v1";
     public const string TriangleId = "tile.remote-pad.1";
     public const string AddedVertexHandle = "vertex.remote-pad.d";
     public const string ExpectedSubstrateManifestSha256 =
-        "17e6b91722b3c975e615d19b1eb0646c578ecbd3080156edb6dae29a8aa540e8";
+        "74108b19c390185b0f5ec464bbce7d56618d7d3b5aeb7f4c3f94a1730df532d2";
     public const string ExpectedTwoTileManifestSha256 =
-        "58bc4bc2a1116b05b0c5d25e4fad206164ca60abe785a33db26568a506bcb919";
-    public const string ExpectedV2ModelSha256 =
-        UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputModelSha256;
+        "afb1127b2dd7c9e1e2bd9703b73ecdacdec54ef85d0d46e0b7c52b5946ff258c";
+    public const string ExpectedV3ModelSha256 =
+        UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputModelSha256;
     public const string ExpectedTwoTileSectorSha256 =
-        "d13af9610af732ca91c5abd31ea70d987906fc902a30fb4302a2c9d0bf0f9565";
+        "e93ec00c2b7dcf43f7246c727c80a7d9ddc3764e07cb1c7ac969b80590d6dc72";
     public const string ExpectedTwoTileEnvironmentSha256 =
-        "f306844498a86a3566d66fc5e8233d83711d58013027fbedcd4f9b99eb3d1023";
+        "a4272868936eaaececd757a4d6fe236563bcbecc24116abb0eefe368e8f090df";
     public const string ExpectedTwoTileTreeSha256 =
-        UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputTreeSha256;
+        UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputTreeSha256;
     public const string ExpectedTwoTileBlocksSha256 =
         "f813f0708c5747e59ad559e43da7e44495cc7a4db60caf55a1fc97391003e719";
     public const string ExpectedTwoTileCollisionSha256 =
         "0f6507872d7f29fefd3f70cebcedc8e47b145d08a1cc0ebc48eb47e56ed7cfcb";
     public const string ExpectedTwoTileModelSha256 =
-        "fb22ec02de9fc1eb1ce27dfacf2bdf92e671e8e9ac7a7f5d9248a586db770908";
+        "047b0043c6892e57dd3cdb76c656b93650461e68105352f5d8e3ae2f6d1c8644";
     public const string ExpectedAddedVertexWordHex = "00C0031E";
     public const string ExpectedLowDetailFaceHex = "0082300400821000";
     public const string ExpectedHighDetailFaceHex = "010103020101000219024001080A1000";
@@ -324,47 +324,47 @@ internal static class Id65AuthoringTerrainMutationCompiler
     public const int ExpectedTwoTileUsedModelBytes = 0x945AC;
     public const int ExpectedTwoTileZeroTailBytes = 0x254;
     public const int ExpectedTwoTileBlocksUsedBytes = 0x17962;
-    public const int ExpectedTwoTileChangedModelByteCount = 342_464;
+    public const int ExpectedTwoTileChangedModelByteCount = 342_465;
     public const int ExpectedTwoTileDiffRangeCount = 46_189;
     public const string ExpectedAddDiffManifestSha256 =
-        "9bddd4248cafe2c07e704ba4fa784a65f8ade5db586e1405024bec73233a4015";
+        "c4c6b2ecf0e0350da26e669d5721570917ccb65d004621357b5aef45a3fa6a39";
     public const string ExpectedAddRelocationMapSha256 =
-        "a42761dfcab42857d0c9f1de714414c97715d0c325f1bcd361de0fe15f694efd";
+        "7ee77df1faac36d3e539af1deee906d86931ab2606573b5030ddf152bebcea44";
     public const string ExpectedAddHandleRebaseMapSha256 =
         "153c8236a582d22cb0fb9a3cbc9547853679e046342ddaae2f217c2a95e154d0";
     public const string ExpectedAddDeterministicPlanSha256 =
-        "456d68512c544ad293427c7b1b65682321cf21c46e0f8d799028e8ba51cb34aa";
+        "a9ca291d587fbc7699a35e0c913f5d90d159fd4b256af1ff1fa795daa384448a";
     public const string ExpectedRemoveDiffManifestSha256 =
-        "a2e0e8e418a5bed9e901aee9a8870ef19c0a418f18eb393c839534b874237ea2";
+        "c8fee0dd7460c93fdbf03df7a16bc04bde46f37ce1831a2154b29765556e5584";
     public const string ExpectedRemoveRelocationMapSha256 =
-        "0ff175a94c6135369ba0d390babe6b9fa47158c6774c413dd298d5f446da752e";
+        "c18a4ffeb3139ffcfb98ccdf9733eee892c73447b5b6609776d050681589c08d";
     public const string ExpectedRemoveHandleRebaseMapSha256 =
         "d947a341ddc8d23d989cbe42fd45840c77e5b7adbae5015550854947d2f46885";
     public const string ExpectedRemoveDeterministicPlanSha256 =
-        "147e29257629311539b8ac3698d9817adddb23c23c5fbaa148d38f7c9bcb67dd";
+        "afd2b864d56ab1846ef932b2db436aa8c949140a228618d46feef6393db9eb9a";
 
     private const int ModelByteLength = 0x94800;
-    private const int V2UsedModelBytes = 0x9457C;
-    private const int V2ZeroTailBytes = 0x284;
+    private const int V3UsedModelBytes = 0x9457C;
+    private const int V3ZeroTailBytes = 0x284;
     private const int TextureOffset = 0x00000;
     private const int TextureLength = 0x02F78;
-    private const int V2EnvironmentOffset = 0x02F78;
-    private const int V2EnvironmentLength = 0x28518;
+    private const int V3EnvironmentOffset = 0x02F78;
+    private const int V3EnvironmentLength = 0x28518;
     private const int TwoTileEnvironmentLength = 0x28538;
-    private const int V2OcclusionOffset = 0x2B490;
+    private const int V3OcclusionOffset = 0x2B490;
     private const int OcclusionLength = 0x974;
-    private const int V2SpecialOffset = 0x2BE04;
+    private const int V3SpecialOffset = 0x2BE04;
     private const int SpecialLength = 0x30;
-    private const int V2CollisionOffset = 0x2BE34;
-    private const int V2CollisionLength = 0x5FAE8;
+    private const int V3CollisionOffset = 0x2BE34;
+    private const int V3CollisionLength = 0x5FAE8;
     private const int TwoTileCollisionLength = 0x5FAF8;
-    private const int V2CycloramaOffset = 0x8B91C;
+    private const int V3CycloramaOffset = 0x8B91C;
     private const int CycloramaLength = 0x84E4;
-    private const int V2PortalOffset = 0x93E00;
+    private const int V3PortalOffset = 0x93E00;
     private const int PortalLength = 4;
-    private const int V2ParticlesOffset = 0x93E04;
+    private const int V3ParticlesOffset = 0x93E04;
     private const int ParticlesLength = 0x80;
-    private const int V2SoundOffset = 0x93E84;
+    private const int V3SoundOffset = 0x93E84;
     private const int SoundLength = 0x6F8;
     private const int TwoTileOcclusionOffset = 0x2B4B0;
     private const int TwoTileSpecialOffset = 0x2BE24;
@@ -379,13 +379,13 @@ internal static class Id65AuthoringTerrainMutationCompiler
     private const int CollisionTreeRelativeOffset = 0x1C;
     private const int CollisionBlocksRelativeOffset = 0x6A7C;
     private const int CollisionTrianglesRelativeOffset = 0x1E400;
-    private const int V2CollisionAssignmentsRelativeOffset = 0x58480;
-    private const int V2CollisionFlagsRelativeOffset = 0x5D1E0;
+    private const int V3CollisionAssignmentsRelativeOffset = 0x58480;
+    private const int V3CollisionFlagsRelativeOffset = 0x5D1E0;
     private const int TwoTileCollisionAssignmentsRelativeOffset = 0x5848C;
     private const int TwoTileCollisionFlagsRelativeOffset = 0x5D1F0;
     private const int CollisionTreeCapacityBytes = 0x6A60;
     private const int CollisionBlocksCapacityBytes = 0x17984;
-    private const int V2CollisionBlocksUsedBytes = 0x17960;
+    private const int V3CollisionBlocksUsedBytes = 0x17960;
     private const int BaseCollisionTriangleCount = 19_808;
     private const int AddedCollisionTriangleIndex = 19_808;
     private const int CollisionFlagsLength = 0x2904;
@@ -401,10 +401,10 @@ internal static class Id65AuthoringTerrainMutationCompiler
     private static readonly Id65AuthoringPoint PointD = new(496, 496, 512);
     private static readonly Id65AuthoringCollisionCell TargetCell = new(1, 1, 2);
 
-    public static Id65TerrainAuthoringManifest CreateV2SubstrateManifest() =>
+    public static Id65TerrainAuthoringManifest CreateV3SubstrateManifest() =>
         new(
             ProfileId,
-            Id65AuthoringModelCompiler.CreateMinimalV2EquivalentManifest(),
+            Id65AuthoringModelCompiler.CreateMinimalV3EquivalentManifest(),
             Array.Empty<Id65TerrainTriangleIntent>());
 
     public static Id65TerrainTriangleIntent CreateConcreteTwoTileWitness() =>
@@ -430,9 +430,9 @@ internal static class Id65AuthoringTerrainMutationCompiler
         ArgumentNullException.ThrowIfNull(triangle);
         ValidateLayerManifest(source);
         if (source.OptionalTriangles.Count != 0)
-            throw new InvalidDataException("The v2 terrain manifest already owns its one optional triangle.");
+            throw new InvalidDataException("The v3 terrain manifest already owns its one optional triangle.");
         ValidateExactTriangle(triangle);
-        Id65TerrainAuthoringManifest output = new(ProfileId, source.LockedV2Base, [triangle]);
+        Id65TerrainAuthoringManifest output = new(ProfileId, source.LockedV3Base, [triangle]);
         ValidateLayerManifest(output);
         return output;
     }
@@ -449,7 +449,7 @@ internal static class Id65AuthoringTerrainMutationCompiler
         {
             throw new InvalidDataException("The requested optional terrain triangle is not active exactly once.");
         }
-        Id65TerrainAuthoringManifest output = new(ProfileId, source.LockedV2Base, []);
+        Id65TerrainAuthoringManifest output = new(ProfileId, source.LockedV3Base, []);
         ValidateLayerManifest(output);
         return output;
     }
@@ -457,17 +457,17 @@ internal static class Id65AuthoringTerrainMutationCompiler
     public static Id65CompiledTerrainMutation CompileTransition(
         Id65TerrainAuthoringManifest source,
         Id65TerrainAuthoringManifest target,
-        UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan v2Template,
+        UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3StaticPlan v3Template,
         Id65TerrainCompilerLimits? limits = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(target);
-        ArgumentNullException.ThrowIfNull(v2Template);
+        ArgumentNullException.ThrowIfNull(v3Template);
         limits ??= new();
         ValidateLayerManifest(source);
         ValidateLayerManifest(target);
-        if (source.LockedV2Base.CanonicalSha256 != target.LockedV2Base.CanonicalSha256)
-            throw new InvalidDataException("The terrain transition changed its locked v2 base manifest.");
+        if (source.LockedV3Base.CanonicalSha256 != target.LockedV3Base.CanonicalSha256)
+            throw new InvalidDataException("The terrain transition changed its locked v3 base manifest.");
 
         Id65TerrainMutationKind kind;
         if (source.OptionalTriangles.Count == 0 && target.OptionalTriangles.Count == 1)
@@ -477,14 +477,14 @@ internal static class Id65AuthoringTerrainMutationCompiler
         else
             throw new InvalidDataException("A terrain transition must add or remove exactly one optional triangle.");
 
-        Id65CompiledAuthoringModel lockedV2 = Id65AuthoringModelCompiler.Compile(
-            source.LockedV2Base,
-            v2Template);
-        byte[] v2Model = lockedV2.CopyOutputModel();
-        RequireHash(Hash(v2Model), ExpectedV2ModelSha256, "negative-winding v2 substrate model");
+        Id65CompiledAuthoringModel lockedV3 = Id65AuthoringModelCompiler.Compile(
+            source.LockedV3Base,
+            v3Template);
+        byte[] v3Model = lockedV3.CopyOutputModel();
+        RequireHash(Hash(v3Model), ExpectedV3ModelSha256, "negative-winding v3 substrate model");
 
-        ModelState baseState = ParseAndValidateV2(v2Model, v2Template, lockedV2);
-        ModelState twoTileState = BuildAndValidateTwoTile(v2Model, baseState);
+        ModelState baseState = ParseAndValidateV3(v3Model, v3Template, lockedV3);
+        ModelState twoTileState = BuildAndValidateTwoTile(v3Model, baseState);
         ValidateLimits(limits, baseState, twoTileState);
 
         ModelState sourceState = source.OptionalTriangles.Count == 0 ? baseState : twoTileState;
@@ -493,7 +493,8 @@ internal static class Id65AuthoringTerrainMutationCompiler
         if (diff.ChangedByteCount != ExpectedTwoTileChangedModelByteCount ||
             diff.RangeCount != ExpectedTwoTileDiffRangeCount)
         {
-            throw new InvalidDataException("The exact two-tile model diff boundary changed.");
+            throw new InvalidDataException(
+                $"The exact two-tile model diff boundary changed to {diff.ChangedByteCount} bytes / {diff.RangeCount} ranges.");
         }
 
         Id65ModelComponentRelocation[] relocations = BuildRelocations(sourceState, outputState);
@@ -504,7 +505,7 @@ internal static class Id65AuthoringTerrainMutationCompiler
             throw new InvalidDataException("The terrain component relocation map is not exactly invertible.");
         }
 
-        Id65StableHandleRebase[] rebases = BuildHandleRebases(sourceState, outputState, lockedV2);
+        Id65StableHandleRebase[] rebases = BuildHandleRebases(sourceState, outputState, lockedV3);
         string rebaseHash = HashHandleRebases(rebases);
         if (!Id65AuthoringModelCompiler.InvertHandleRebases(
                 Id65AuthoringModelCompiler.InvertHandleRebases(rebases)).SequenceEqual(rebases))
@@ -629,12 +630,12 @@ internal static class Id65AuthoringTerrainMutationCompiler
     private static void ValidateLayerManifest(Id65TerrainAuthoringManifest manifest)
     {
         Id65AuthoringManifest expectedBase =
-            Id65AuthoringModelCompiler.CreateMinimalV2EquivalentManifest();
+            Id65AuthoringModelCompiler.CreateMinimalV3EquivalentManifest();
         if (manifest.ProfileId != ProfileId ||
-            manifest.LockedV2Base.CanonicalSha256 != expectedBase.CanonicalSha256 ||
-            manifest.LockedV2Base.CanonicalJson != expectedBase.CanonicalJson)
+            manifest.LockedV3Base.CanonicalSha256 != expectedBase.CanonicalSha256 ||
+            manifest.LockedV3Base.CanonicalJson != expectedBase.CanonicalJson)
         {
-            throw new InvalidDataException("The immutable minimal-v2 terrain base manifest changed.");
+            throw new InvalidDataException("The immutable minimal-v3 terrain base manifest changed.");
         }
         if (manifest.OptionalTriangles.Count > 1)
             throw new InvalidDataException("The first terrain gate accepts at most one optional triangle.");
@@ -686,38 +687,39 @@ internal static class Id65AuthoringTerrainMutationCompiler
         }
     }
 
-    private static ModelState ParseAndValidateV2(
+    private static ModelState ParseAndValidateV3(
         byte[] model,
-        UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan template,
-        Id65CompiledAuthoringModel lockedV2)
+        UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3StaticPlan template,
+        Id65CompiledAuthoringModel lockedV3)
     {
-        RequireHash(Hash(model), ExpectedV2ModelSha256, "v2 terrain substrate");
-        if (template.ProfileId != UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ProfileId ||
-            template.OutputModelSha256 != ExpectedV2ModelSha256 ||
-            lockedV2.OutputModelSha256 != ExpectedV2ModelSha256 ||
-            lockedV2.CollisionNormalZ != -50_176 || !lockedV2.NegativeCollisionWindingVerified)
+        RequireHash(Hash(model), ExpectedV3ModelSha256, "v3 terrain substrate");
+        if (template.ProfileId != UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ProfileId ||
+            template.OutputModelSha256 != ExpectedV3ModelSha256 ||
+            lockedV3.OutputModelSha256 != ExpectedV3ModelSha256 ||
+            lockedV3.CollisionNormalZ != -50_176 || !lockedV3.NegativeCollisionWindingVerified)
         {
-            throw new InvalidDataException("The terrain compiler requires the exact negative-winding v2 proof.");
+            throw new InvalidDataException("The terrain compiler requires the exact negative-winding v3 proof.");
         }
         ComponentState[] components =
         [
             Component(model, "texture", TextureOffset, TextureLength),
-            Component(model, "environment", V2EnvironmentOffset, V2EnvironmentLength),
-            Component(model, "occlusion", V2OcclusionOffset, OcclusionLength),
-            Component(model, "special-surface", V2SpecialOffset, SpecialLength),
-            Component(model, "collision", V2CollisionOffset, V2CollisionLength),
-            Component(model, "cyclorama", V2CycloramaOffset, CycloramaLength),
-            Component(model, "portal-table", V2PortalOffset, PortalLength, hasLengthWord: false),
-            Component(model, "particles", V2ParticlesOffset, ParticlesLength),
-            Component(model, "sound", V2SoundOffset, SoundLength)
+            Component(model, "environment", V3EnvironmentOffset, V3EnvironmentLength),
+            Component(model, "occlusion", V3OcclusionOffset, OcclusionLength),
+            Component(model, "special-surface", V3SpecialOffset, SpecialLength),
+            Component(model, "collision", V3CollisionOffset, V3CollisionLength),
+            Component(model, "cyclorama", V3CycloramaOffset, CycloramaLength),
+            Component(model, "portal-table", V3PortalOffset, PortalLength, hasLengthWord: false),
+            Component(model, "particles", V3ParticlesOffset, ParticlesLength),
+            Component(model, "sound", V3SoundOffset, SoundLength)
         ];
-        RequireZeroTail(model, V2UsedModelBytes);
+        RequireZeroTail(model, V3UsedModelBytes);
         byte[] environment = components.Single(item => item.Name == "environment").Bytes;
+        ValidateEnvironmentSectorHeaders(environment, "v3 terrain substrate");
         byte[] sector = ExtractLastSector216(environment, BaseSectorLength);
         RequireHash(
             Hash(sector),
-            UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedNewSectorSha256,
-            "v2 sector 216");
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedNewSectorSha256,
+            "v3 sector 216");
         ValidateSectorCounts(sector, 3, 1, 3, 1);
         byte[] occlusion = components.Single(item => item.Name == "occlusion").Bytes;
         ValidateOcclusion(occlusion);
@@ -725,18 +727,18 @@ internal static class Id65AuthoringTerrainMutationCompiler
         CollisionIndexReadback collisionIndex = ValidateCollisionComponent(
             collision,
             BaseCollisionTriangleCount,
-            V2CollisionAssignmentsRelativeOffset,
-            V2CollisionFlagsRelativeOffset,
-            V2CollisionBlocksUsedBytes,
-            UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputTreeSha256,
-            UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputBlocksSha256,
-            UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputCollisionComponentSha256,
+            V3CollisionAssignmentsRelativeOffset,
+            V3CollisionFlagsRelativeOffset,
+            V3CollisionBlocksUsedBytes,
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputTreeSha256,
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputBlocksSha256,
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputCollisionComponentSha256,
             expectedTargetSequence: [ExistingCollisionTriangleIndex]);
         return new(
             model.ToArray(),
             components,
-            V2UsedModelBytes,
-            V2ZeroTailBytes,
+            V3UsedModelBytes,
+            V3ZeroTailBytes,
             environment.Length,
             collision.Length,
             3,
@@ -748,10 +750,11 @@ internal static class Id65AuthoringTerrainMutationCompiler
             collisionIndex.TargetSequence);
     }
 
-    private static ModelState BuildAndValidateTwoTile(byte[] v2Model, ModelState baseState)
+    private static ModelState BuildAndValidateTwoTile(byte[] v3Model, ModelState baseState)
     {
         byte[] environment = BuildTwoTileEnvironment(
             baseState.Components.Single(item => item.Name == "environment").Bytes);
+        ValidateEnvironmentSectorHeaders(environment, "two-tile terrain output");
         byte[] collision = BuildTwoTileCollision(
             baseState.Components.Single(item => item.Name == "collision").Bytes);
         Dictionary<string, byte[]> replacements = new(StringComparer.Ordinal)
@@ -776,7 +779,7 @@ internal static class Id65AuthoringTerrainMutationCompiler
         ComponentState[] components =
         [
             Component(output, "texture", TextureOffset, TextureLength),
-            Component(output, "environment", V2EnvironmentOffset, TwoTileEnvironmentLength),
+            Component(output, "environment", V3EnvironmentOffset, TwoTileEnvironmentLength),
             Component(output, "occlusion", TwoTileOcclusionOffset, OcclusionLength),
             Component(output, "special-surface", TwoTileSpecialOffset, SpecialLength),
             Component(output, "collision", TwoTileCollisionOffset, TwoTileCollisionLength),
@@ -825,17 +828,17 @@ internal static class Id65AuthoringTerrainMutationCompiler
             index.TargetSequence);
     }
 
-    private static byte[] BuildTwoTileEnvironment(byte[] v2Environment)
+    private static byte[] BuildTwoTileEnvironment(byte[] v3Environment)
     {
-        if (v2Environment.Length != V2EnvironmentLength || ReadInt32(v2Environment, 0) != V2EnvironmentLength ||
-            ReadInt32(v2Environment, 4) != 217)
+        if (v3Environment.Length != V3EnvironmentLength || ReadInt32(v3Environment, 0) != V3EnvironmentLength ||
+            ReadInt32(v3Environment, 4) != 217)
         {
-            throw new InvalidDataException("The exact v2 environment header changed.");
+            throw new InvalidDataException("The exact v3 environment header changed.");
         }
-        int sectorOffset = checked(4 + ReadInt32(v2Environment, 8 + (SectorIndex * 4)));
-        if (sectorOffset + BaseSectorLength != v2Environment.Length)
-            throw new InvalidDataException("Sector 216 is no longer the exact final v2 sector.");
-        byte[] source = v2Environment.AsSpan(sectorOffset, BaseSectorLength).ToArray();
+        int sectorOffset = checked(4 + ReadInt32(v3Environment, 8 + (SectorIndex * 4)));
+        if (sectorOffset + BaseSectorLength != v3Environment.Length)
+            throw new InvalidDataException("Sector 216 is no longer the exact final v3 sector.");
+        byte[] source = v3Environment.AsSpan(sectorOffset, BaseSectorLength).ToArray();
         byte[] header = source.AsSpan(0, 28).ToArray();
         header[16] = 4;
         header[18] = 2;
@@ -864,9 +867,13 @@ internal static class Id65AuthoringTerrainMutationCompiler
         Append(highFace);
         if (cursor != sector.Length)
             throw new InvalidDataException("The exact two-tile sector did not consume 0x90 bytes.");
+        Id65EnvironmentSectorHeaderContract.Stamp(sector);
+        _ = Id65EnvironmentSectorHeaderContract.ReadExactSector(
+            sector,
+            "terrain-mutation two-tile sector 216");
         RequireHash(Hash(sector), ExpectedTwoTileSectorSha256, "two-tile sector bytes");
         byte[] output = new byte[TwoTileEnvironmentLength];
-        v2Environment.AsSpan(0, sectorOffset).CopyTo(output);
+        v3Environment.AsSpan(0, sectorOffset).CopyTo(output);
         sector.CopyTo(output, sectorOffset);
         WriteInt32(output, 0, output.Length);
         if (sectorOffset + sector.Length != output.Length)
@@ -875,21 +882,21 @@ internal static class Id65AuthoringTerrainMutationCompiler
         return output;
     }
 
-    private static byte[] BuildTwoTileCollision(byte[] v2Collision)
+    private static byte[] BuildTwoTileCollision(byte[] v3Collision)
     {
         CollisionLayout layout = ParseCollisionLayout(
-            v2Collision,
+            v3Collision,
             BaseCollisionTriangleCount,
-            V2CollisionAssignmentsRelativeOffset,
-            V2CollisionFlagsRelativeOffset);
-        byte[] tree = v2Collision.AsSpan(layout.TreeOffset, layout.TreeCapacityBytes).ToArray();
-        byte[] blocks = v2Collision.AsSpan(layout.BlocksOffset, layout.BlocksCapacityBytes).ToArray();
+            V3CollisionAssignmentsRelativeOffset,
+            V3CollisionFlagsRelativeOffset);
+        byte[] tree = v3Collision.AsSpan(layout.TreeOffset, layout.TreeCapacityBytes).ToArray();
+        byte[] blocks = v3Collision.AsSpan(layout.BlocksOffset, layout.BlocksCapacityBytes).ToArray();
         NativeCollisionIndex native = DecodeCollisionIndex(
-            tree, blocks, V2CollisionBlocksUsedBytes, BaseCollisionTriangleCount);
+            tree, blocks, V3CollisionBlocksUsedBytes, BaseCollisionTriangleCount);
         if (!native.Cells.TryGetValue(TargetCell, out CollisionCellBinding? target) ||
             !target.OrderedTriangleIndexes.SequenceEqual([ExistingCollisionTriangleIndex]))
         {
-            throw new InvalidDataException("The exact v2 target cell no longer owns only T13995.");
+            throw new InvalidDataException("The exact v3 target cell no longer owns only T13995.");
         }
         Dictionary<Id65AuthoringCollisionCell, int[]> desired = native.Cells
             .ToDictionary(pair => pair.Key, pair => pair.Value.OrderedTriangleIndexes.ToArray());
@@ -923,11 +930,11 @@ internal static class Id65AuthoringTerrainMutationCompiler
         int flagsOffset = 4 + TwoTileCollisionFlagsRelativeOffset;
         repack.TreeBytes.CopyTo(result, treeOffset);
         repack.BlockBytes.CopyTo(result, blocksOffset);
-        v2Collision.AsSpan(layout.TriangleOffset, BaseCollisionTriangleCount * 12)
+        v3Collision.AsSpan(layout.TriangleOffset, BaseCollisionTriangleCount * 12)
             .CopyTo(result.AsSpan(trianglesOffset));
         Convert.FromHexString(ExpectedCollisionTriangleHex)
             .CopyTo(result, trianglesOffset + (AddedCollisionTriangleIndex * 12));
-        v2Collision.AsSpan(layout.AssignmentsOffset, BaseCollisionTriangleCount)
+        v3Collision.AsSpan(layout.AssignmentsOffset, BaseCollisionTriangleCount)
             .CopyTo(result.AsSpan(assignmentsOffset));
         result[assignmentsOffset + AddedCollisionTriangleIndex] = 0;
         if (result.AsSpan(
@@ -937,7 +944,7 @@ internal static class Id65AuthoringTerrainMutationCompiler
         {
             throw new InvalidDataException("The expanded collision assignment alignment is not zero.");
         }
-        v2Collision.AsSpan(layout.FlagsOffset, CollisionFlagsLength).CopyTo(result.AsSpan(flagsOffset));
+        v3Collision.AsSpan(layout.FlagsOffset, CollisionFlagsLength).CopyTo(result.AsSpan(flagsOffset));
         RequireHash(Hash(result), ExpectedTwoTileCollisionSha256, "two-tile collision component");
         return result;
     }
@@ -1202,6 +1209,8 @@ internal static class Id65AuthoringTerrainMutationCompiler
         int highVertices,
         int highFaces)
     {
+        Id65EnvironmentSectorHeaderReadback header =
+            Id65EnvironmentSectorHeaderContract.ReadExactSector(sector, "terrain-mutation sector 216");
         if (sector[16] != lowVertices || sector[17] != 3 || sector[18] != lowFaces ||
             sector[20] != highVertices || sector[21] != 3 || sector[22] != highFaces)
         {
@@ -1209,7 +1218,8 @@ internal static class Id65AuthoringTerrainMutationCompiler
         }
         int expectedLength = checked((7 + lowVertices + 3 + (lowFaces * 2) +
                                       highVertices + 6 + (highFaces * 4)) * 4);
-        if (sector.Length != expectedLength)
+        if (sector.Length != expectedLength ||
+            header.HighDetailVertexWordOffset != lowVertices + 3 + (2 * lowFaces))
             throw new InvalidDataException("Sector 216 table counts do not exactly partition its bytes.");
     }
 
@@ -1218,7 +1228,7 @@ internal static class Id65AuthoringTerrainMutationCompiler
         if (occlusion.Length != OcclusionLength || ReadInt32(occlusion, 0) != occlusion.Length ||
             ReadInt32(occlusion, 8) != 16)
         {
-            throw new InvalidDataException("The fixed v2 occlusion directory changed.");
+            throw new InvalidDataException("The fixed v3 occlusion directory changed.");
         }
         int environmentEnd = 4 + ReadInt32(occlusion, 4);
         int owners = 0;
@@ -1251,8 +1261,8 @@ internal static class Id65AuthoringTerrainMutationCompiler
     {
         if (limits.ModelByteCapacity < ModelByteLength)
             throw new InvalidDataException("ID65 terrain model byte capacity is insufficient.");
-        if (limits.AvailableV2TailBytes < ExpectedTwoTileUsedModelBytes - V2UsedModelBytes)
-            throw new InvalidDataException("ID65 terrain v2 tail capacity is insufficient.");
+        if (limits.AvailableV3TailBytes < ExpectedTwoTileUsedModelBytes - V3UsedModelBytes)
+            throw new InvalidDataException("ID65 terrain v3 tail capacity is insufficient.");
         if (limits.MaximumOutputUsedModelBytes < ExpectedTwoTileUsedModelBytes)
             throw new InvalidDataException("ID65 terrain used-model capacity is insufficient.");
         if (limits.MaximumLowDetailVertexCount < twoTileState.LowVertices)
@@ -1289,12 +1299,12 @@ internal static class Id65AuthoringTerrainMutationCompiler
     private static Id65StableHandleRebase[] BuildHandleRebases(
         ModelState source,
         ModelState output,
-        Id65CompiledAuthoringModel lockedV2)
+        Id65CompiledAuthoringModel lockedV3)
     {
         Dictionary<string, (string Kind, Id65LogicalAddress Address)> sourceAddresses =
-            BuildStateAddresses(source, lockedV2);
+            BuildStateAddresses(source, lockedV3);
         Dictionary<string, (string Kind, Id65LogicalAddress Address)> outputAddresses =
-            BuildStateAddresses(output, lockedV2);
+            BuildStateAddresses(output, lockedV3);
         return sourceAddresses.Keys.Concat(outputAddresses.Keys).Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .Select(id =>
@@ -1314,13 +1324,13 @@ internal static class Id65AuthoringTerrainMutationCompiler
 
     private static Dictionary<string, (string Kind, Id65LogicalAddress Address)> BuildStateAddresses(
         ModelState state,
-        Id65CompiledAuthoringModel lockedV2)
+        Id65CompiledAuthoringModel lockedV3)
     {
         Dictionary<string, (string Kind, Id65LogicalAddress Address)> result = new(StringComparer.Ordinal);
-        foreach (Id65StableHandleRebase rebase in lockedV2.HandleRebases)
+        foreach (Id65StableHandleRebase rebase in lockedV3.HandleRebases)
         {
             if (!rebase.Output.HasValue)
-                throw new InvalidDataException("The locked v2 base has an unresolved stable handle.");
+                throw new InvalidDataException("The locked v3 base has an unresolved stable handle.");
             result.Add(rebase.StableId, (rebase.Kind, rebase.Output.Value));
         }
         if (state.CollisionTriangles == BaseCollisionTriangleCount + 1)
@@ -1497,7 +1507,11 @@ internal static class Id65AuthoringTerrainMutationCompiler
             rebaseHash != expectedRebases ||
             deterministicHash != expectedPlan)
         {
-            throw new InvalidDataException("The frozen deterministic ID65 terrain transaction pins changed.");
+            throw new InvalidDataException(
+                $"The frozen deterministic ID65 terrain {kind} pins changed: " +
+                $"sourceManifest={source.CanonicalSha256}; outputManifest={output.CanonicalSha256}; " +
+                $"diff={diff.ManifestSha256}; relocations={relocationHash}; rebases={rebaseHash}; " +
+                $"plan={deterministicHash}.");
         }
     }
 
@@ -1518,18 +1532,46 @@ internal static class Id65AuthoringTerrainMutationCompiler
         if (hasLengthWord && ReadInt32(bytes, 0) != length)
             throw new InvalidDataException($"The {name} component length word changed.");
         if (!hasLengthWord && name == "portal-table" && ReadInt32(bytes, 0) != 0)
-            throw new InvalidDataException("The v2 portal count changed from zero.");
+            throw new InvalidDataException("The v3 portal count changed from zero.");
         return new(name, offset, length, bytes, Hash(bytes));
     }
 
     private static byte[] ExtractLastSector216(byte[] environment, int expectedLength)
     {
         if (ReadInt32(environment, 4) != 217)
-            throw new InvalidDataException("The v2 environment no longer owns 217 sectors.");
+            throw new InvalidDataException("The v3 environment no longer owns 217 sectors.");
         int offset = checked(4 + ReadInt32(environment, 8 + (SectorIndex * 4)));
         if (offset + expectedLength != environment.Length)
             throw new InvalidDataException("Sector 216 no longer exactly terminates the environment.");
         return environment.AsSpan(offset, expectedLength).ToArray();
+    }
+
+    private static void ValidateEnvironmentSectorHeaders(byte[] environment, string label)
+    {
+        if (environment.Length < 12 || ReadInt32(environment, 0) != environment.Length)
+            throw new InvalidDataException($"The {label} length word changed.");
+        int sectorCount = ReadInt32(environment, 4);
+        if (sectorCount <= 0 || checked(8 + (sectorCount * 4)) > environment.Length)
+            throw new InvalidDataException($"The {label} pointer table is outside its bounds.");
+
+        for (int sectorIndex = 0; sectorIndex < sectorCount; sectorIndex++)
+        {
+            int sectorOffset = checked(4 + ReadInt32(environment, 8 + (sectorIndex * 4)));
+            int nextOffset = sectorIndex + 1 < sectorCount
+                ? checked(4 + ReadInt32(environment, 8 + ((sectorIndex + 1) * 4)))
+                : environment.Length;
+            if (sectorOffset < checked(8 + (sectorCount * 4)) || nextOffset <= sectorOffset ||
+                nextOffset > environment.Length)
+            {
+                throw new InvalidDataException($"The {label} sector {sectorIndex} pointer span changed.");
+            }
+            int pointerSpan = nextOffset - sectorOffset;
+            _ = Id65EnvironmentSectorHeaderContract.ReadPointerSpan(
+                environment.AsSpan(sectorOffset, pointerSpan),
+                pointerSpan,
+                requireExactEnd: false,
+                $"{label} sector {sectorIndex}");
+        }
     }
 
     private static Id65AuthoringPoint DecodeSceneVertex(byte[] sector, uint word)
@@ -1550,13 +1592,13 @@ internal static class Id65AuthoringTerrainMutationCompiler
     private static ModelState StateForCompiledModel(byte[] model, int usedBytes)
     {
         bool expanded = Hash(model) == ExpectedTwoTileModelSha256;
-        if (!expanded && Hash(model) != ExpectedV2ModelSha256)
+        if (!expanded && Hash(model) != ExpectedV3ModelSha256)
             throw new InvalidDataException("An inverted terrain plan contains an unknown model.");
         ComponentState[] components = expanded
             ?
             [
                 Component(model, "texture", TextureOffset, TextureLength),
-                Component(model, "environment", V2EnvironmentOffset, TwoTileEnvironmentLength),
+                Component(model, "environment", V3EnvironmentOffset, TwoTileEnvironmentLength),
                 Component(model, "occlusion", TwoTileOcclusionOffset, OcclusionLength),
                 Component(model, "special-surface", TwoTileSpecialOffset, SpecialLength),
                 Component(model, "collision", TwoTileCollisionOffset, TwoTileCollisionLength),
@@ -1568,28 +1610,28 @@ internal static class Id65AuthoringTerrainMutationCompiler
             :
             [
                 Component(model, "texture", TextureOffset, TextureLength),
-                Component(model, "environment", V2EnvironmentOffset, V2EnvironmentLength),
-                Component(model, "occlusion", V2OcclusionOffset, OcclusionLength),
-                Component(model, "special-surface", V2SpecialOffset, SpecialLength),
-                Component(model, "collision", V2CollisionOffset, V2CollisionLength),
-                Component(model, "cyclorama", V2CycloramaOffset, CycloramaLength),
-                Component(model, "portal-table", V2PortalOffset, PortalLength, false),
-                Component(model, "particles", V2ParticlesOffset, ParticlesLength),
-                Component(model, "sound", V2SoundOffset, SoundLength)
+                Component(model, "environment", V3EnvironmentOffset, V3EnvironmentLength),
+                Component(model, "occlusion", V3OcclusionOffset, OcclusionLength),
+                Component(model, "special-surface", V3SpecialOffset, SpecialLength),
+                Component(model, "collision", V3CollisionOffset, V3CollisionLength),
+                Component(model, "cyclorama", V3CycloramaOffset, CycloramaLength),
+                Component(model, "portal-table", V3PortalOffset, PortalLength, false),
+                Component(model, "particles", V3ParticlesOffset, ParticlesLength),
+                Component(model, "sound", V3SoundOffset, SoundLength)
             ];
         return new(
             model.ToArray(),
             components,
             usedBytes,
             ModelByteLength - usedBytes,
-            expanded ? TwoTileEnvironmentLength : V2EnvironmentLength,
-            expanded ? TwoTileCollisionLength : V2CollisionLength,
+            expanded ? TwoTileEnvironmentLength : V3EnvironmentLength,
+            expanded ? TwoTileCollisionLength : V3CollisionLength,
             expanded ? 4 : 3,
             expanded ? 2 : 1,
             expanded ? 4 : 3,
             expanded ? 2 : 1,
             expanded ? BaseCollisionTriangleCount + 1 : BaseCollisionTriangleCount,
-            expanded ? ExpectedTwoTileBlocksUsedBytes : V2CollisionBlocksUsedBytes,
+            expanded ? ExpectedTwoTileBlocksUsedBytes : V3CollisionBlocksUsedBytes,
             expanded ? [AddedCollisionTriangleIndex, ExistingCollisionTriangleIndex] : [ExistingCollisionTriangleIndex]);
     }
 

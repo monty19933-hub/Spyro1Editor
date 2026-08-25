@@ -133,17 +133,19 @@ internal sealed record UnusedLevel65FoundationTerrainStaticPlan(
 internal static class UnusedLevel65FoundationTerrainComposer
 {
     public const string ProfileId =
-        "unused-level-65-foundation-terrain-two-tile-inverse-static-clean-usa-v1";
+        "unused-level-65-foundation-terrain-two-tile-inverse-static-clean-usa-v3";
     public const string ExpectedFoundationImageSha256 =
         "92e4046ce4d14771ebb70a72c2a024b8e76f5575e38771f7067ff2b4303ac222";
-    public const string ExpectedFoundationModelSha256 =
+    public const string ExpectedHistoricalFoundationModelSha256 =
         "ccd18568b9b6cb7a41d2bf8a47c7dc475ca2cb1f9f127ac9a90ef9ac0a8be4f1";
+    public const string ExpectedFoundationModelSha256 =
+        "784166cb6bb8c00b3cff0ef8a75712f6bf68df10c0feb93413338881fbea8ff4";
     public const string ExpectedTwoTileModelSha256 =
-        "8422c32ca6b8555bc6dd5f8d0f266e4be90c8e4648c6facbeaef165f0a75a02b";
+        "62d82727e85736fb3f3fb65941fdc7f507ba02a8749b71e27052777aa5f93ce5";
     public const string ExpectedTwoTileEnvironmentSha256 =
-        "7388a616b370a9bea47b63779046bd25effcfb9eeec70bcf30fe3683ce3ea069";
+        "873fc50a1dddcc12d689a869cc5edd443fe666ed05706e9bbd425b01b2c8daff";
     public const string ExpectedTwoTileSectorSha256 =
-        "df8c25910c638c802e057063b6a879092d529b818e4bb3e7c852c60ffff3e3f9";
+        "81f770e58b3df7ab167e8a15d382d574752d37be83f0ec0d4125c672be9f92a3";
     public const string ExpectedTwoTileCollisionSha256 =
         "59aa6b65712fbcdb96358c7ea2854e1eda18cc0115f34d793f131bd8dec0dd1f";
     public const string ExpectedTwoTileTreeSha256 =
@@ -151,7 +153,7 @@ internal static class UnusedLevel65FoundationTerrainComposer
     public const string ExpectedTwoTileBlocksSha256 =
         "372ad0bb9d0ef51b2c7b9a01acf9a8aada3049b1caefdba597f67d54cb084d26";
     public const string ExpectedTwoTilePlanSha256 =
-        "7db62a3d9a388c7e2388a6f77969d0511dab6e3ff6f01ccc9ab863e5fff81ced";
+        "270e0c3ce6aa7d77c3c515f2f583f4b6e621861c4c2d3c11a7f00bbd94fd5cb0";
     public const string ExpectedFoundationTreeSha256 =
         "0318210317487c34a7c25cf487805a203dbe4b03ee1250141cab05f624ab09dd";
     public const string ExpectedFoundationBlocksSha256 =
@@ -173,6 +175,7 @@ internal static class UnusedLevel65FoundationTerrainComposer
     private const int FoundationZeroTailBytes = 0x2C8;
     private const int TargetSectorIndex = 213;
     private const int FoundationSectorOffset = 0x298B4;
+    private const int FoundationHeaderWordOffset = FoundationSectorOffset + 0x17;
     private const int FoundationSectorByteLength = 0x1148;
     private const int FoundationCollisionOffset = 0x2BDF0;
     private const int FoundationCollisionByteLength = 0x5FAE8;
@@ -263,7 +266,11 @@ internal static class UnusedLevel65FoundationTerrainComposer
             wad.Lba,
             ModelWadOffset,
             ModelByteLength);
-        return BuildFromExactModel(imageHash, model, manifest, limits: null);
+        return BuildFromExactModel(
+            imageHash,
+            NormalizeHistoricalFoundationDonor(model),
+            manifest,
+            limits: null);
     }
 
     internal static UnusedLevel65FoundationTerrainStaticPlan BuildStaticPlanForSmoke(
@@ -284,7 +291,7 @@ internal static class UnusedLevel65FoundationTerrainComposer
             discLayout,
             name => name.Equals("WAD.WAD", StringComparison.OrdinalIgnoreCase));
         byte[] model = DiscImage.ReadFileBytes(image, discLayout, wad.Lba, ModelWadOffset, ModelByteLength);
-        return BuildFromExactModel(imageHash, model, manifest, limits);
+        return BuildFromExactModel(imageHash, NormalizeHistoricalFoundationDonor(model), manifest, limits);
     }
 
     internal static UnusedLevel65FoundationTerrainStaticPlan BuildStaticPlanFromModelForSmoke(
@@ -292,7 +299,33 @@ internal static class UnusedLevel65FoundationTerrainComposer
         UnusedLevel65FoundationTerrainManifest manifest)
     {
         ArgumentNullException.ThrowIfNull(model);
-        return BuildFromExactModel(ExpectedFoundationImageSha256, model.ToArray(), manifest, limits: null);
+        return BuildFromExactModel(
+            ExpectedFoundationImageSha256,
+            NormalizeHistoricalFoundationDonor(model),
+            manifest,
+            limits: null);
+    }
+
+    private static byte[] NormalizeHistoricalFoundationDonor(byte[] model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        if (model.Length != ModelByteLength)
+            throw new InvalidDataException("The historical foundation donor model length changed.");
+        string hash = Hash(model);
+        if (hash == ExpectedFoundationModelSha256)
+            return model.ToArray();
+        if (hash != ExpectedHistoricalFoundationModelSha256 ||
+            model[FoundationSectorOffset + 0x13] != 0x00 ||
+            model[FoundationHeaderWordOffset] != 0x7D)
+        {
+            throw new InvalidDataException(
+                "The foundation donor is neither the exact historical 0x7D preimage nor the repaired 0x82 model.");
+        }
+        byte[] repaired = model.ToArray();
+        repaired[FoundationHeaderWordOffset] = 0x82;
+        if (Hash(repaired) != ExpectedFoundationModelSha256)
+            throw new InvalidDataException("The one-byte historical foundation donor normalization changed.");
+        return repaired;
     }
 
     private static UnusedLevel65FoundationTerrainStaticPlan BuildFromExactModel(
@@ -598,17 +631,20 @@ internal static class UnusedLevel65FoundationTerrainComposer
             int nextOffset = index + 1 < environmentCount
                 ? checked(environment.Offset + 4 + ReadInt32(model, environment.Offset + 8 + ((index + 1) * 4)))
                 : environment.Offset + environment.ByteLength;
-            RequireRange(model, sectorOffset, 28, $"sector {index} header");
-            int lpVertices = model[sectorOffset + 16];
-            int lpColors = model[sectorOffset + 17];
-            int lpFaces = model[sectorOffset + 18];
-            int hpVertices = model[sectorOffset + 20];
-            int hpColors = model[sectorOffset + 21];
-            int hpFaces = model[sectorOffset + 22];
-            int size = checked((7 + lpVertices + lpColors + (lpFaces * 2) + hpVertices +
-                                (hpColors * 2) + (hpFaces * 4)) * 4);
-            if (sectorOffset + size != nextOffset)
-                throw new InvalidDataException($"Sector {index} does not exactly fill its pointer span.");
+            int pointerSpan = nextOffset - sectorOffset;
+            Id65EnvironmentSectorHeaderReadback header =
+                Id65EnvironmentSectorHeaderContract.ReadPointerSpan(
+                    model.AsSpan(sectorOffset, pointerSpan),
+                    pointerSpan,
+                    requireExactEnd: true,
+                    $"foundation terrain sector {index}");
+            int lpVertices = header.LowDetailVertexCount;
+            int lpColors = header.LowDetailColorCount;
+            int lpFaces = header.LowDetailFaceCount;
+            int hpVertices = header.HighDetailVertexCount;
+            int hpColors = header.HighDetailColorCount;
+            int hpFaces = header.HighDetailFaceCount;
+            int size = header.ExactSectorByteLength;
             sectors.Add(new(
                 index,
                 sectorOffset,
@@ -918,8 +954,13 @@ internal static class UnusedLevel65FoundationTerrainComposer
         int hpVertices = source[20];
         int hpColors = source[21];
         int hpFaces = source[22];
+        Id65EnvironmentSectorHeaderReadback sourceHeader =
+            Id65EnvironmentSectorHeaderContract.ReadExactSector(
+                source,
+                "foundation-composer source sector 213");
         if (lpVertices != 38 || lpColors != 48 || lpFaces != 22 ||
-            hpVertices != 143 || hpColors != 185 || hpFaces != 114)
+            hpVertices != 143 || hpColors != 185 || hpFaces != 114 ||
+            sourceHeader.HighDetailVertexWordOffset != 0x82)
             throw new InvalidDataException("Sector 213 counts changed before two-tile composition.");
 
         int lpVertexStart = 28;
@@ -968,7 +1009,15 @@ internal static class UnusedLevel65FoundationTerrainComposer
         output += hpFaces * 16;
         highDetailFace.CopyTo(authoredSector, output);
         output += 16;
-        if (output != authoredSector.Length || Hash(authoredSector) != ExpectedTwoTileSectorSha256)
+        if (output != authoredSector.Length)
+            throw new InvalidDataException("The exact sector-213 two-tile tables did not consume their output bytes.");
+        Id65EnvironmentSectorHeaderContract.Stamp(authoredSector);
+        Id65EnvironmentSectorHeaderReadback authoredHeader =
+            Id65EnvironmentSectorHeaderContract.ReadExactSector(
+                authoredSector,
+                "foundation-composer two-tile sector 213");
+        if (authoredHeader.HighDetailVertexWordOffset != 0x85 ||
+            Hash(authoredSector) != ExpectedTwoTileSectorSha256)
             throw new InvalidDataException("The exact sector-213 two-tile bytes changed.");
 
         int relativeSectorStart = sector.Offset - environment.Offset;

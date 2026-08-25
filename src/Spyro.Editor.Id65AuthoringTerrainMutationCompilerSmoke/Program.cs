@@ -15,10 +15,10 @@ DateTime sourceWriteBefore = File.GetLastWriteTimeUtc(baseImagePath);
 IReadOnlyDictionary<string, FileState> sourceDirectoryBefore =
     SnapshotDirectory(Path.GetDirectoryName(baseImagePath)!);
 
-UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan v2Template =
-    UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.BuildStaticPlan(baseImagePath);
+UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3StaticPlan v3Template =
+    UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.BuildStaticPlan(baseImagePath);
 Id65TerrainAuthoringManifest substrate =
-    Id65AuthoringTerrainMutationCompiler.CreateV2SubstrateManifest();
+    Id65AuthoringTerrainMutationCompiler.CreateV3SubstrateManifest();
 Id65TerrainTriangleIntent witness =
     Id65AuthoringTerrainMutationCompiler.CreateConcreteTwoTileWitness();
 Id65TerrainAuthoringManifest twoTile =
@@ -28,7 +28,7 @@ Id65TerrainAuthoringManifest removed =
 
 Require(removed.CanonicalJson == substrate.CanonicalJson &&
         removed.CanonicalSha256 == substrate.CanonicalSha256,
-    "Remove(Add(v2, triangle)) did not restore the exact canonical substrate manifest.");
+    "Remove(Add(v3, triangle)) did not restore the exact canonical substrate manifest.");
 Id65TerrainAuthoringManifest readded =
     Id65AuthoringTerrainMutationCompiler.AddTriangle(removed, witness);
 Require(readded.CanonicalJson == twoTile.CanonicalJson &&
@@ -38,7 +38,7 @@ Require(readded.CanonicalJson == twoTile.CanonicalJson &&
 Id65TerrainTriangleIntent[] callerOwned = [witness];
 Id65TerrainAuthoringManifest defensive = new(
     Id65AuthoringTerrainMutationCompiler.ProfileId,
-    substrate.LockedV2Base,
+    substrate.LockedV3Base,
     callerOwned);
 callerOwned[0] = witness with { Id = "tile.caller-mutated" };
 Require(defensive.OptionalTriangles.Single() == witness &&
@@ -58,15 +58,15 @@ Require(readOnlyObserved, "The terrain manifest exposed a mutable optional-trian
 Id65CompiledTerrainMutation add = Id65AuthoringTerrainMutationCompiler.CompileTransition(
     substrate,
     twoTile,
-    v2Template);
+    v3Template);
 Id65CompiledTerrainMutation repeat = Id65AuthoringTerrainMutationCompiler.CompileTransition(
     substrate,
     readded,
-    v2Template);
+    v3Template);
 Id65CompiledTerrainMutation remove = Id65AuthoringTerrainMutationCompiler.CompileTransition(
     twoTile,
     removed,
-    v2Template);
+    v3Template);
 Id65CompiledTerrainMutation inverted = Id65AuthoringTerrainMutationCompiler.Invert(add);
 Id65CompiledTerrainMutation doubleInverted = Id65AuthoringTerrainMutationCompiler.Invert(inverted);
 
@@ -76,7 +76,7 @@ Require(add.Kind == Id65TerrainMutationKind.AddTriangle &&
             Id65AuthoringTerrainMutationCompiler.ExpectedSubstrateManifestSha256 &&
         twoTile.CanonicalSha256 ==
             Id65AuthoringTerrainMutationCompiler.ExpectedTwoTileManifestSha256 &&
-        add.SourceModelSha256 == Id65AuthoringTerrainMutationCompiler.ExpectedV2ModelSha256 &&
+        add.SourceModelSha256 == Id65AuthoringTerrainMutationCompiler.ExpectedV3ModelSha256 &&
         add.OutputModelSha256 == Id65AuthoringTerrainMutationCompiler.ExpectedTwoTileModelSha256 &&
         remove.SourceModelSha256 == add.OutputModelSha256 &&
         remove.OutputModelSha256 == add.SourceModelSha256,
@@ -175,15 +175,15 @@ Require(Id65AuthoringModelCompiler.InvertRelocations(
             Id65AuthoringModelCompiler.InvertHandleRebases(add.HandleRebases)).SequenceEqual(add.HandleRebases),
     "A terrain relocation/rebase double inverse did not restore the exact map.");
 
-byte[] v2Model = add.CopySourceModel();
-byte[] twoTileModel = Id65AuthoringTerrainMutationCompiler.ApplyTransactional(add, v2Model, reverse: false);
-byte[] v2RoundTrip = Id65AuthoringTerrainMutationCompiler.ApplyTransactional(add, twoTileModel, reverse: true);
-Require(twoTileModel.SequenceEqual(add.CopyOutputModel()) && v2RoundTrip.SequenceEqual(v2Model),
+byte[] v3Model = add.CopySourceModel();
+byte[] twoTileModel = Id65AuthoringTerrainMutationCompiler.ApplyTransactional(add, v3Model, reverse: false);
+byte[] v3RoundTrip = Id65AuthoringTerrainMutationCompiler.ApplyTransactional(add, twoTileModel, reverse: true);
+Require(twoTileModel.SequenceEqual(add.CopyOutputModel()) && v3RoundTrip.SequenceEqual(v3Model),
     "The terrain model transaction did not round-trip exactly.");
-byte[] tamperedV2 = v2Model.ToArray();
-tamperedV2[0x2F78] ^= 0x01;
+byte[] tamperedV3 = v3Model.ToArray();
+tamperedV3[0x2F78] ^= 0x01;
 ExpectReject("forward preimage tamper",
-    () => Id65AuthoringTerrainMutationCompiler.ApplyTransactional(add, tamperedV2, reverse: false),
+    () => Id65AuthoringTerrainMutationCompiler.ApplyTransactional(add, tamperedV3, reverse: false),
     "preimage changed");
 byte[] tamperedTwoTile = twoTileModel.ToArray();
 tamperedTwoTile[0x2F78] ^= 0x01;
@@ -199,7 +199,7 @@ void Reject(string label, Action action, string text)
 }
 
 Reject("identity transition",
-    () => Id65AuthoringTerrainMutationCompiler.CompileTransition(substrate, substrate, v2Template),
+    () => Id65AuthoringTerrainMutationCompiler.CompileTransition(substrate, substrate, v3Template),
     "add or remove exactly one");
 Reject("duplicate add",
     () => Id65AuthoringTerrainMutationCompiler.AddTriangle(twoTile, witness),
@@ -213,21 +213,21 @@ Reject("wrong remove id",
 Reject("multiple optional triangles",
     () => Id65AuthoringTerrainMutationCompiler.CompileTransition(
         substrate,
-        new(Id65AuthoringTerrainMutationCompiler.ProfileId, substrate.LockedV2Base,
+        new(Id65AuthoringTerrainMutationCompiler.ProfileId, substrate.LockedV3Base,
             [witness, witness with { Id = "tile.remote-pad.2" }]),
-        v2Template),
+        v3Template),
     "at most one");
 Reject("layer profile drift",
     () => Id65AuthoringTerrainMutationCompiler.CompileTransition(
-        new("wrong-profile", substrate.LockedV2Base, []), twoTile, v2Template),
-    "minimal-v2 terrain base");
+        new("wrong-profile", substrate.LockedV3Base, []), twoTile, v3Template),
+    "minimal-v3 terrain base");
 Reject("locked base drift",
     () => Id65AuthoringTerrainMutationCompiler.CompileTransition(
         new(Id65AuthoringTerrainMutationCompiler.ProfileId,
-            CopyBase(substrate.LockedV2Base, profileId: "changed-base"), []),
+            CopyBase(substrate.LockedV3Base, profileId: "changed-base"), []),
         twoTile,
-        v2Template),
-    "minimal-v2 terrain base");
+        v3Template),
+    "minimal-v3 terrain base");
 Reject("triangle id drift", () => Id65AuthoringTerrainMutationCompiler.AddTriangle(
         substrate, witness with { Id = "tile.remote-pad.changed" }), "exact negative-winding");
 Reject("vertex handle drift", () => Id65AuthoringTerrainMutationCompiler.AddTriangle(
@@ -253,11 +253,11 @@ Reject("occlusion drift", () => Id65AuthoringTerrainMutationCompiler.AddTriangle
 void CapacityReject(Id65TerrainCompilerLimits limits, string text)
 {
     Reject(text,
-        () => Id65AuthoringTerrainMutationCompiler.CompileTransition(substrate, twoTile, v2Template, limits),
+        () => Id65AuthoringTerrainMutationCompiler.CompileTransition(substrate, twoTile, v3Template, limits),
         text);
 }
 CapacityReject(new(ModelByteCapacity: 0x947FF), "model byte capacity");
-CapacityReject(new(AvailableV2TailBytes: 0x2F), "v2 tail capacity");
+CapacityReject(new(AvailableV3TailBytes: 0x2F), "v3 tail capacity");
 CapacityReject(new(MaximumOutputUsedModelBytes: 0x945AB), "used-model capacity");
 CapacityReject(new(MaximumLowDetailVertexCount: 3), "LP vertex capacity");
 CapacityReject(new(MaximumHighDetailVertexCount: 3), "HP vertex capacity");
@@ -266,22 +266,22 @@ CapacityReject(new(MaximumCollisionTriangleCount: 19_808), "collision triangle c
 CapacityReject(new(CollisionTreeCapacityBytes: 0x6A5F), "collision tree capacity");
 CapacityReject(new(CollisionBlockCapacityBytes: 0x17961), "collision block capacity");
 
-UnusedLevel65RemoteBlankStructuralPatch[] positivePatches = v2Template.StructuralPatches
+UnusedLevel65RemoteBlankStructuralPatch[] positivePatches = v3Template.StructuralPatches
     .Select(patch => patch.Kind == "id65-model"
         ? patch with
         {
-            After = v2Template.FailedV1Plan.StructuralPatches
+            After = v3Template.SupersededV2Plan.FailedV1Plan.StructuralPatches
                 .Single(item => item.Kind == "id65-model").After.ToArray()
         }
         : patch)
     .ToArray();
 Reject("positive-winding substrate",
     () => Id65AuthoringTerrainMutationCompiler.CompileTransition(
-        substrate, twoTile, v2Template with { StructuralPatches = positivePatches }),
-    "v2 model");
+        substrate, twoTile, v3Template with { StructuralPatches = positivePatches }),
+    "v3 header-repaired model");
 
 Require(rejectionCount == 27, $"The full terrain rejection matrix ran {rejectionCount}, expected 27.");
-Require(add.ExactV2SubstrateVerified && add.ExactHpLpPairingVerified &&
+Require(add.ExactV3SubstrateVerified && add.ExactHpLpPairingVerified &&
         add.NegativeCollisionWindingVerified && add.CollisionCellTreeReadbackVerified &&
         add.OcclusionOwnershipVerified && add.CapacityAndRebaseVerified &&
         add.ExactInverseVerified && add.DeterministicReadbackRequired &&
@@ -301,7 +301,7 @@ Require(sourceHashBefore == HashFile(baseImagePath) &&
 Console.WriteLine(
     "PASS Id65AuthoringTerrainMutationCompilerSmoke: " +
     $"baseManifest={substrate.CanonicalSha256}; twoTileManifest={twoTile.CanonicalSha256}; " +
-    $"v2={add.SourceModelSha256}; twoTile={add.OutputModelSha256}; " +
+    $"v3={add.SourceModelSha256}; twoTile={add.OutputModelSha256}; " +
     $"changed={add.ChangedModelByteCount}; ranges={add.DiffRangeCount}; diff={add.DiffManifestSha256}; " +
     $"relocations={add.RelocationMapSha256}; rebases={add.HandleRebaseMapSha256}; " +
     $"plan={add.DeterministicPlanSha256}; removeDiff={remove.DiffManifestSha256}; " +

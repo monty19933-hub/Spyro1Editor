@@ -18,9 +18,10 @@ import argparse
 import io
 import math
 import socket
+import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Protocol
 
 
@@ -260,17 +261,51 @@ def capture_sample(client: ReadOnlyRspClient) -> RuntimeSample:
     return decode_sample(lives_raw, death_state_raw, player_z_raw)
 
 
-def print_sample(sample: RuntimeSample) -> None:
-    timestamp = datetime.now().astimezone().isoformat(timespec="milliseconds")
-    print(
-        f"{timestamp} "
+def format_sample(
+    sample: RuntimeSample,
+    *,
+    timestamp: datetime,
+    ordinal: int,
+    elapsed_ms: int,
+) -> str:
+    if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+        raise ValueError("sample timestamp must be timezone-aware")
+    if ordinal < 0:
+        raise ValueError("sample ordinal must be non-negative")
+    if elapsed_ms < 0:
+        raise ValueError("sample elapsed time must be non-negative")
+
+    utc_timestamp = timestamp.astimezone(timezone.utc)
+    timestamp_text = (
+        utc_timestamp.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    )
+    return (
+        f"{timestamp_text} "
+        f"sample={ordinal} "
+        f"elapsed-ms={elapsed_ms} "
         f"lives={sample.lives} "
         f"death-state={sample.death_state}({death_state_label(sample.death_state)}) "
         f"player-Z={sample.player_z} [{z_marker(sample.player_z)}] "
         "raw="
         f"{sample.lives_raw.hex()}/"
         f"{sample.death_state_raw.hex()}/"
-        f"{sample.player_z_raw.hex()}",
+        f"{sample.player_z_raw.hex()}"
+    )
+
+
+def print_sample(
+    sample: RuntimeSample,
+    *,
+    ordinal: int,
+    elapsed_ms: int,
+) -> None:
+    print(
+        format_sample(
+            sample,
+            timestamp=datetime.now(timezone.utc),
+            ordinal=ordinal,
+            elapsed_ms=elapsed_ms,
+        ),
         flush=True,
     )
 
@@ -295,6 +330,11 @@ def reply_frame(payload: bytes, *, checksum: int | None = None) -> bytes:
 
 
 def self_test() -> None:
+    if sys.flags.optimize != 0:
+        raise RuntimeError(
+            "Watcher self-test must run without -O or PYTHONOPTIMIZE so assertions execute."
+        )
+
     expected_frames = {
         LIVES_ADDRESS: b"$m8007582c,4#9e",
         DEATH_STATE_ADDRESS: b"$m800757d8,4#a4",
@@ -319,6 +359,39 @@ def self_test() -> None:
     assert death_state_label(9) == "other-9"
     assert z_marker(1023) == "Z<0x400:YES"
     assert z_marker(1024) == "Z<0x400:no"
+    assert format_sample(
+        decoded,
+        timestamp=datetime.fromisoformat("2026-08-10T12:34:56.789-07:00"),
+        ordinal=7,
+        elapsed_ms=701,
+    ) == (
+        "2026-08-10T19:34:56.789Z sample=7 elapsed-ms=701 "
+        "lives=4 death-state=5(game-over) player-Z=-1024 [Z<0x400:YES] "
+        "raw=04000000/05000000/00fcffff"
+    )
+    try:
+        format_sample(
+            decoded,
+            timestamp=datetime(2026, 8, 10),
+            ordinal=0,
+            elapsed_ms=0,
+        )
+    except ValueError as exc:
+        assert "timezone-aware" in str(exc)
+    else:
+        raise AssertionError("A timezone-naive watcher timestamp was accepted.")
+    for invalid_ordinal, invalid_elapsed in ((-1, 0), (0, -1)):
+        try:
+            format_sample(
+                decoded,
+                timestamp=datetime.now(timezone.utc),
+                ordinal=invalid_ordinal,
+                elapsed_ms=invalid_elapsed,
+            )
+        except ValueError as exc:
+            assert "non-negative" in str(exc)
+        else:
+            raise AssertionError("A negative watcher sequence field was accepted.")
     assert reply_frame(b"S05") == b"$S05#b8"
 
     good_reply = b"04000000"
@@ -493,13 +566,19 @@ def run_watch(period: float) -> int:
             f"then press Return here to begin the {period:g}-second-period watch: "
         )
         print(
-            "Watching one near-contemporaneous tuple per period; "
+            "Watching one numbered near-contemporaneous tuple per period with "
+            "monotonic elapsed milliseconds; "
             "press Ctrl-C to stop cleanly.",
             flush=True,
         )
+        watch_started_ns = time.monotonic_ns()
+        ordinal = 0
         while True:
             started = time.monotonic()
-            print_sample(capture_sample(client))
+            sample = capture_sample(client)
+            elapsed_ms = (time.monotonic_ns() - watch_started_ns) // 1_000_000
+            print_sample(sample, ordinal=ordinal, elapsed_ms=elapsed_ms)
+            ordinal += 1
             remaining = period - (time.monotonic() - started)
             if remaining > 0.0:
                 time.sleep(remaining)

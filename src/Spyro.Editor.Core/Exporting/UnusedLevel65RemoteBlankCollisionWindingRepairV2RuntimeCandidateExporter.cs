@@ -197,6 +197,11 @@ internal sealed record UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCa
 
 internal static class UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateExporter
 {
+    public const string RetirementReason =
+        "Rejected v1/v2 runtime-candidate history is preserved only as a forensic preimage. " +
+        "V2 publication and verification authority are permanently retired; use frozen v3 successor " +
+        "unused-level-65-remote-blank-environment-header-repair-v3 with BIN SHA-256 " +
+        "42e4d5cae98d4786023bef26517d0435b43aff365b797495386813f44ecb0c45.";
     public const string ProfileId =
         "unused-level-65-remote-blank-collision-winding-repair-sector216-clean-usa-disposable-v2";
     public const string OutputDirectoryName =
@@ -282,6 +287,7 @@ internal static class UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCan
         UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateRequest request,
         CancellationToken cancellationToken = default)
     {
+        RejectRetiredPublicationAuthority();
         ArgumentNullException.ThrowIfNull(request);
         string baseImage = RequireExistingFile(request.BaseImagePath, "exact locked ID65 display-name BIN");
         string baseCue = RequireExistingFile(request.BaseCuePath, "exact locked ID65 display-name CUE");
@@ -445,6 +451,7 @@ internal static class UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCan
         UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidatePaths paths,
         CancellationToken cancellationToken = default)
     {
+        RejectRetiredPublicationAuthority();
         ArgumentNullException.ThrowIfNull(paths);
         cancellationToken.ThrowIfCancellationRequested();
         UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidatePaths exactPaths =
@@ -465,6 +472,7 @@ internal static class UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCan
         VerifyStagedCandidateArtifacts(paths.OutputDirectoryPath, paths, includeFinderReveal);
         foreach (string artifact in EnumeratePublishedArtifactPaths(paths, includeFinderReveal))
             _ = RequireExistingFile(artifact, "published remote-blank artifact");
+        RequireExactPublishedCandidateModes(paths, includeFinderReveal);
 
         RequireHash(
             await HashFileAsync(paths.OutputCuePath, cancellationToken),
@@ -604,6 +612,9 @@ internal static class UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCan
             PromotionAuthorized: false,
             NormalCreateBinEnabled: false);
     }
+
+    private static void RejectRetiredPublicationAuthority() =>
+        throw new InvalidOperationException(RetirementReason);
 
     public static UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidatePaths CreatePaths(
         string outputDirectoryPath)
@@ -844,6 +855,9 @@ internal static class UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCan
             PromotionAuthorized: false,
             NormalCreateBinEnabled: false);
         await WriteJsonAsync(stagedReceipt, receipt, cancellationToken);
+        NormalizeStagedCandidateModes(
+            [stagedImage, stagedCue, stagedPlan, stagedReceipt, stagedChecklist, stagedGuide],
+            stagedReveal?.HelperPath);
         VerifyStagedCandidateArtifacts(stagedDirectory, finalPaths, includeFinderReveal);
         VerifyTextReadback(stagedPlan, JsonSerializer.Serialize(plan, JsonOptions) + "\n", "composition plan");
         VerifyTextReadback(stagedReceipt, JsonSerializer.Serialize(receipt, JsonOptions) + "\n", "static receipt");
@@ -1583,6 +1597,23 @@ internal static class UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCan
         builder.AppendLine($"- Location guide: `{Path.GetFileName(paths.LocationGuidePath)}`");
         builder.AppendLine();
         RuntimeCandidateTestHandoff.AppendLoadCodeTable(builder, loadCodes);
+        builder.AppendLine("## Fixed edge map");
+        builder.AppendLine();
+        builder.AppendLine("- `A = (272,272,512)`; `B = (496,272,512)`; `C = (384,496,512)`.");
+        builder.AppendLine(
+            "- Landing/player raw XY `6153/6154` decodes to `(384.5625,384.625)`, inside triangle `A-B-C`.");
+        builder.AppendLine("- `S` is the landing/spawn point. Preserved Spyro body yaw `0x40` is `+Y / 90°`, facing apex `C`.");
+        builder.AppendLine(
+            "- At completed landing, Spyro's body must point toward visible apex `C`; if it does not, stop, do not remap, and do not continue.");
+        builder.AppendLine(
+            "- The guide is a top-down schematic, not a camera view. For E1/E2 selection, face Spyro's body toward `C`: right-hand/east and left-hand/west are relative to that body-facing reference regardless of camera position; camera alignment is not world-direction evidence.");
+        builder.AppendLine(
+            "- `E0=A-B`: rear/base edge, `-Y`, opposite spawn yaw; inside-lip midpoint target `(384,272,512)` — session `candidate-primary-edge-0`.");
+        builder.AppendLine(
+            "- `E1=B-C`: right/east slope, `+X`; inside-lip midpoint target `(440,384,512)` — session `candidate-edge-1`.");
+        builder.AppendLine(
+            "- `E2=C-A`: left/west slope, `-X`; inside-lip midpoint target `(328,384,512)` — session `candidate-edge-2`.");
+        builder.AppendLine();
         builder.AppendLine("## Clean-run controls");
         builder.AppendLine();
         builder.AppendLine("1. Quit DuckStation completely. Disable Moon Jump and every other cheat.");
@@ -1595,12 +1626,13 @@ internal static class UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCan
         builder.AppendLine("- [ ] **Initial lives + completed landing:** the HUD shows exactly `4` lives, the entry/fly-in fully completes, and controllable Spyro is visibly resting on the authored pad before any movement input.");
         builder.AppendLine("- [ ] **20-second hands-off stability:** after completed landing, provide no movement input for at least `20` continuous real-time seconds; lives remain `4`, control remains available, and no spontaneous fall, death, respawn, or Game Over occurs.");
         builder.AppendLine("- [ ] **Lone-pad visibility:** after the 20-second stability hold, one small triangular pad is visible and no inherited terrain or Mobys are visibly connected to it.");
-        builder.AppendLine("- [ ] **Full 360 camera:** rotate the camera completely around Spyro twice; the same lone pad remains visible with no nearby native surface popping into view.");
+        builder.AppendLine("- [ ] **Full 360 camera:** rotate the camera completely around Spyro twice; the same lone pad remains visible with no nearby native surface popping into view, then return to the original spawn view before continuing.");
         builder.AppendLine("- [ ] **Walk:** traverse the pad center and perimeter in both directions without pass-through, snag, hover, or hidden support.");
         builder.AppendLine("- [ ] **Charge:** charge across the center toward all three edges; movement follows the visible pad and never catches an invisible wall.");
         builder.AppendLine("- [ ] **Jump/land:** jump at the center and near every corner; each landing rests on the visible surface.");
-        builder.AppendLine("- [ ] **One deliberate fall + exact respawn:** only after the stable/movement gates, deliberately leave one edge once; confirm one completed death changes lives exactly `4 → 3`, then controllable Spyro returns to the same isolated pad at the same yaw/orientation without a warp or save state.");
-        builder.AppendLine("- [ ] **Remaining edge controls:** use separate cold runs for the other two edges; report each clean departure independently and do not substitute these extra falls for the required first `4 → 3` discriminator.");
+        builder.AppendLine("- [ ] **E0 deliberate fall + exact respawn:** in session `candidate-primary-edge-0`, only after the stable/movement gates and the E0 pre-fall frame, depart across `E0=A-B` once; confirm one completed death changes lives exactly `4 → 3`, then controllable Spyro returns to the same isolated pad at the same yaw/orientation without a warp or save state.");
+        builder.AppendLine("- [ ] **E1 edge control:** in a separate cold run/session `candidate-edge-1`, capture the E1 pre-fall frame and depart across `E1=B-C`; report the clean departure and same-pad/yaw respawn independently.");
+        builder.AppendLine("- [ ] **E2 edge control:** in a separate cold run/session `candidate-edge-2`, capture the E2 pre-fall frame and depart across `E2=C-A`; report the clean departure and same-pad/yaw respawn independently.");
         builder.AppendLine("- [ ] **Cold reset:** quit or hard-reset, cold boot the CUE again, enter the complete ID65 code, and confirm the same pad/spawn behavior.");
         builder.AppendLine();
         builder.AppendLine("## Runtime-pending boundaries");
@@ -1632,20 +1664,31 @@ internal static class UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCan
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"1000\" viewBox=\"0 0 1200 1000\" data-safe-left=\"60\" data-safe-right=\"1140\">\n" +
         "  <rect width=\"1200\" height=\"1000\" fill=\"#0d1320\"/>\n" +
+        "  <defs><marker id=\"yaw-arrow\" markerWidth=\"10\" markerHeight=\"10\" refX=\"8\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L0,6 L9,3 z\" fill=\"#ffcf70\"/></marker></defs>\n" +
         "  <text x=\"60\" y=\"58\" fill=\"#ffffff\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"31\" font-weight=\"700\">ID65 Remote Blank Pad v2 Winding Repair</text>\n" +
         "  <text x=\"60\" y=\"94\" fill=\"#b9c7e8\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"18\">Sector 216 • one isolated HP + LP pad • inherited boot scaffolding remains remote</text>\n" +
         "  <rect x=\"60\" y=\"125\" width=\"1080\" height=\"430\" rx=\"22\" fill=\"#18233a\" stroke=\"#657da8\" stroke-width=\"3\"/>\n" +
         "  <circle cx=\"600\" cy=\"336\" r=\"154\" fill=\"#101827\" stroke=\"#4f668c\" stroke-width=\"2\" stroke-dasharray=\"9 11\"/>\n" +
+        "  <text x=\"600\" y=\"151\" text-anchor=\"middle\" fill=\"#9fb3da\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"13\" font-weight=\"700\">TOP-DOWN SCHEMATIC — NOT CAMERA VIEW</text>\n" +
         "  <polygon points=\"600,190 460,448 740,448\" fill=\"#4fd7a0\" stroke=\"#e3fff4\" stroke-width=\"6\"/>\n" +
         "  <circle cx=\"600\" cy=\"350\" r=\"24\" fill=\"#8d68ff\" stroke=\"#ffffff\" stroke-width=\"4\"/>\n" +
-        "  <text x=\"557\" y=\"357\" fill=\"#ffffff\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"15\" font-weight=\"700\">SPYRO</text>\n" +
+        "  <text x=\"595\" y=\"357\" fill=\"#ffffff\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"16\" font-weight=\"700\">S</text>\n" +
+        "  <text x=\"612\" y=\"374\" fill=\"#ffffff\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"13\" font-weight=\"700\">spawn</text>\n" +
+        "  <line x1=\"600\" y1=\"320\" x2=\"600\" y2=\"232\" stroke=\"#ffcf70\" stroke-width=\"5\" marker-end=\"url(#yaw-arrow)\"/>\n" +
+        "  <text x=\"612\" y=\"286\" fill=\"#ffcf70\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"15\" font-weight=\"700\">yaw 0x40 → C / +Y (90°)</text>\n" +
+        "  <text x=\"610\" y=\"184\" fill=\"#ffffff\" font-family=\"Menlo,monospace\" font-size=\"14\" font-weight=\"700\">C (384,496,512)</text>\n" +
+        "  <text x=\"155\" y=\"322\" fill=\"#ffcf70\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"15\" font-weight=\"700\">E2=C-A left/west • mid (328,384)</text>\n" +
+        "  <text x=\"758\" y=\"322\" fill=\"#ffcf70\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"15\" font-weight=\"700\">E1=B-C right/east • mid (440,384)</text>\n" +
+        "  <text x=\"280\" y=\"448\" fill=\"#ffffff\" font-family=\"Menlo,monospace\" font-size=\"14\" font-weight=\"700\">A (272,272,512)</text>\n" +
+        "  <text x=\"752\" y=\"448\" fill=\"#ffffff\" font-family=\"Menlo,monospace\" font-size=\"14\" font-weight=\"700\">B (496,272,512)</text>\n" +
+        "  <text x=\"445\" y=\"480\" fill=\"#ffcf70\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"15\" font-weight=\"700\">E0=A-B rear/base • mid (384,272)</text>\n" +
         "  <text x=\"90\" y=\"174\" fill=\"#ffcf70\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"18\" font-weight=\"700\">Expected view</text>\n" +
         "  <text x=\"90\" y=\"205\" fill=\"#d8e3fa\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"16\">One lone triangle only.</text>\n" +
-        "  <text x=\"90\" y=\"232\" fill=\"#d8e3fa\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"16\">Rotate camera 360° twice.</text>\n" +
+        "  <text x=\"90\" y=\"232\" fill=\"#d8e3fa\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"16\">Rotate camera 360° twice; return to spawn view.</text>\n" +
         "  <text x=\"820\" y=\"174\" fill=\"#ffcf70\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"18\" font-weight=\"700\">Test all three edges</text>\n" +
         "  <text x=\"820\" y=\"205\" fill=\"#d8e3fa\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"16\">Walk • charge • jump</text>\n" +
         "  <text x=\"820\" y=\"232\" fill=\"#d8e3fa\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"14\">One fall • lives 4→3 • same pad/yaw</text>\n" +
-        "  <text x=\"90\" y=\"510\" fill=\"#9fb3da\" font-family=\"Menlo,monospace\" font-size=\"13\">Pad points: (272,272,512)  (496,272,512)  (384,496,512)</text>\n" +
+        "  <text x=\"90\" y=\"510\" fill=\"#9fb3da\" font-family=\"Menlo,monospace\" font-size=\"13\">Landing raw XY 6153/6154 → (384.5625,384.625), inside A-B-C</text>\n" +
         "  <text x=\"60\" y=\"578\" fill=\"#ffcf70\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"14\" font-weight=\"700\">Cards 1/2: None • Do not save • Cold boot • Cheats off • Load paired CUE</text>\n" +
         "  <text x=\"60\" y=\"601\" fill=\"#d8e3fa\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"14\">Gate 1: HUD lives exactly 4 • entry fully completes • Spyro visibly lands before input</text>\n" +
         "  <text x=\"60\" y=\"624\" fill=\"#d8e3fa\" font-family=\"Helvetica,Arial,sans-serif\" font-size=\"14\">Gate 2: hands off ≥20 continuous seconds • lives stay 4 • no spontaneous death</text>\n" +
@@ -1697,13 +1740,39 @@ internal static class UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCan
             "at least `20` continuous real-time seconds",
             "**Lone-pad visibility:**",
             "**Full 360 camera:**",
+            "return to the original spawn view",
             "**Walk:**",
             "**Charge:**",
             "**Jump/land:**",
-            "**One deliberate fall + exact respawn:**",
+            "A = (272,272,512)",
+            "B = (496,272,512)",
+            "C = (384,496,512)",
+            "Landing/player raw XY `6153/6154`",
+            "(384.5625,384.625)",
+            "body yaw `0x40`",
+            "`+Y / 90°`",
+            "Spyro's body must point toward visible apex `C`",
+            "stop, do not remap, and do not continue",
+            "top-down schematic, not a camera view",
+            "right-hand/east and left-hand/west are relative to that body-facing reference regardless of camera position",
+            "camera alignment is not world-direction evidence",
+            "`E0=A-B`",
+            "rear/base edge, `-Y`, opposite spawn yaw",
+            "midpoint target `(384,272,512)`",
+            "session `candidate-primary-edge-0`",
+            "`E1=B-C`",
+            "right/east slope, `+X`",
+            "midpoint target `(440,384,512)`",
+            "session `candidate-edge-1`",
+            "`E2=C-A`",
+            "left/west slope, `-X`",
+            "midpoint target `(328,384,512)`",
+            "session `candidate-edge-2`",
+            "**E0 deliberate fall + exact respawn:**",
             "lives exactly `4 → 3`",
             "same isolated pad at the same yaw/orientation",
-            "**Remaining edge controls:**",
+            "**E1 edge control:**",
+            "**E2 edge control:**",
             "**Cold reset:**",
             "**Far LP is unclaimable in this discriminator:**",
             "Do not report an LP pass from this candidate",
@@ -1733,6 +1802,7 @@ internal static class UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCan
             "Sector 216",
             "one isolated HP + LP pad",
             "Rotate camera 360° twice",
+            "return to spawn view",
             "Walk • charge • jump",
             "HUD lives exactly 4",
             "hands off ≥20 continuous seconds",
@@ -1749,6 +1819,18 @@ internal static class UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCan
             "272,272,512",
             "496,272,512",
             "384,496,512",
+            "Landing raw XY 6153/6154",
+            "384.5625,384.625",
+            "TOP-DOWN SCHEMATIC — NOT CAMERA VIEW",
+            ">S<",
+            ">spawn<",
+            "yaw 0x40 → C / +Y (90°)",
+            "E0=A-B rear/base",
+            "mid (384,272)",
+            "E1=B-C right/east",
+            "mid (440,384)",
+            "E2=C-A left/west",
+            "mid (328,384)",
             "Pinned candidate identity",
             ProfileId,
             OutputPrefix + ".cue",
@@ -2342,6 +2424,59 @@ internal static class UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCan
                 paths.LocationGuidePath
             ];
 
+    private static void NormalizeStagedCandidateModes(
+        IReadOnlyList<string> nonExecutablePaths,
+        string? finderHelperPath)
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        foreach (string path in nonExecutablePaths)
+            File.SetUnixFileMode(path, ExactCandidateDataMode());
+        if (finderHelperPath is not null)
+            File.SetUnixFileMode(finderHelperPath, ExactFinderMode());
+        foreach (string path in nonExecutablePaths)
+        {
+            if (File.GetUnixFileMode(path) != ExactCandidateDataMode())
+                throw new InvalidDataException("A staged remote-blank data artifact is not exact 0644.");
+        }
+        if (finderHelperPath is not null &&
+            File.GetUnixFileMode(finderHelperPath) != ExactFinderMode())
+        {
+            throw new InvalidDataException("The staged remote-blank Finder helper is not exact 0755.");
+        }
+    }
+
+    private static void RequireExactPublishedCandidateModes(
+        UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidatePaths paths,
+        bool includeFinderReveal)
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        string[] nonExecutablePaths =
+        [
+            paths.OutputImagePath,
+            paths.OutputCuePath,
+            paths.ConstructionPlanPath,
+            paths.StaticReadbackReceiptPath,
+            paths.RuntimeChecklistPath,
+            paths.LocationGuidePath
+        ];
+        foreach (string path in nonExecutablePaths)
+        {
+            if (File.GetUnixFileMode(path) != ExactCandidateDataMode())
+            {
+                throw new InvalidDataException(
+                    "The published remote-blank data artifact modes are not exact 0644.");
+            }
+        }
+        if (includeFinderReveal &&
+            File.GetUnixFileMode(paths.FinderHelperPath) != ExactFinderMode())
+        {
+            throw new InvalidDataException(
+                "The published remote-blank Finder helper is not exact 0755.");
+        }
+    }
+
     private static void ValidatePublishedReceiptIdentity(
         UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateReceipt receipt,
         UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidatePaths paths,
@@ -2472,6 +2607,7 @@ internal static class UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCan
             paths.OutputDirectoryPath,
             paths,
             staged.FinderReveal != null);
+        RequireExactPublishedCandidateModes(paths, staged.FinderReveal != null);
         NativeLevelReplacementBaselineExporter.ValidateCue(
             paths.OutputCuePath,
             paths.OutputImagePath,
@@ -2826,6 +2962,12 @@ internal static class UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCan
         byte[] hash = await SHA256.HashDataAsync(stream, cancellationToken);
         return Convert.ToHexStringLower(hash);
     }
+
+    private static UnixFileMode ExactCandidateDataMode() =>
+        UnixFileMode.UserRead |
+        UnixFileMode.UserWrite |
+        UnixFileMode.GroupRead |
+        UnixFileMode.OtherRead;
 
     private static UnixFileMode ExactFinderMode() =>
         UnixFileMode.UserRead |

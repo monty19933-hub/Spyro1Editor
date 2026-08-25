@@ -192,7 +192,7 @@ internal static class UnusedLevel65RemoteBlankIsolationRuntimeCandidateExporter
 {
     public static bool Retired => true;
     public static string RetirementReason =>
-        "RETIRED: exact remote-blank v1 BIN 8020947d4ab5e7e4b0eac4bc6409ff3d6f11212b0e118bbf007d870812014a8e failed to establish a landing and reached GAME OVER; preserve it only as rejected evidence and do not publish, load, or retest it. Use the isolated collision-winding-repair v2 discriminator.";
+        "RETIRED: exact remote-blank v1 BIN 8020947d4ab5e7e4b0eac4bc6409ff3d6f11212b0e118bbf007d870812014a8e failed to establish a landing and reached GAME OVER; preserve it only as rejected evidence and do not publish, load, or retest it. For any new isolated discriminator run, use only the frozen environment-header-repair v3 candidate with BIN SHA-256 42e4d5cae98d4786023bef26517d0435b43aff365b797495386813f44ecb0c45; superseded v2 BIN 23ce483a29187996827148d986fb12f483fc2caa82fc953106882568ea9254a6 must not be loaded or retested.";
 
     public const string ProfileId =
         "unused-level-65-remote-blank-isolation-sector216-clean-usa-disposable-v1";

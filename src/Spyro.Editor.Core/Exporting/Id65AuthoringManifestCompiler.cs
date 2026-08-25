@@ -593,24 +593,26 @@ internal sealed class Id65CompiledAuthoringModel
 
 /// <summary>
 /// Pure in-memory compiler boundary for the first minimal one-pad manifest.
-/// It consumes the exact v2 negative-winding construction as an immutable
-/// readback template, never the failed positive-winding bytes as authority.
+/// It consumes the exact v3 environment-header-repaired construction as an
+/// immutable readback template. Failed v1 and superseded v2 bytes are retained
+/// only as rejected forensic identities, never as authoring authority.
 /// </summary>
 internal static class Id65AuthoringModelCompiler
 {
-    public const string ProfileId = "id65-authoring-model-compiler-static-in-memory-v1";
+    public const string ProfileId =
+        "id65-authoring-model-compiler-environment-header-repair-v3-static-in-memory-v2";
     public const string MinimalManifestProfileId =
-        "id65-authoring-manifest-minimal-v2-equivalent-one-pad-v1";
+        "id65-authoring-manifest-minimal-environment-header-repair-v3-one-pad-v2";
     public const string ExpectedMinimalManifestSha256 =
-        "4c2b27f175b67b6abedb06632a14b4d0093d44b8078813be7f681c7d8873b789";
+        "8efde901403b23a9826ed920d623ee7cbbfa7d25fe575e5168cb745555fdccee";
     public const string ExpectedMinimalRelocationMapSha256 =
-        "5493511a3fa5b764a938680bce6545264623362cabc45f55464a3744ac16ac31";
+        "f406f62cc3436745c7833485d36f7779e8c1b288d6cb07daaa598e3ebddd7f8f";
     public const string ExpectedMinimalHandleRebaseMapSha256 =
         "c5dcc61650cb4b01c9eb840a6ebd2030de37654c5f1a7f556bd031a2f2ae04a4";
     public const string ExpectedMinimalModelDiffManifestSha256 =
-        "2fa64f8ef0b3931f45b8eaf1206b6996e4603f44a8253e576bbb73d78b37dfdc";
+        "62ff829ec77c56a83cfb33239651833a1971d3120c4266fa9d41ffcd86fc30b9";
     public const string ExpectedMinimalDeterministicPlanSha256 =
-        "cc9bf65aa1680eef105cfb53eecf480a202669a07060bfb956a45dfb8dd44932";
+        "148faac28f0a8ce40cb3a7ec3e84a87eba8ef256b9d5f485fef96a43d8c39a0e";
     public const int ExpectedMinimalChangedModelByteCount = 484_324;
     public const int ExpectedMinimalModelDiffRangeCount = 55_382;
 
@@ -633,14 +635,14 @@ internal static class Id65AuthoringModelCompiler
     private static readonly Id65AuthoringPoint PointB = new(496, 272, 512);
     private static readonly Id65AuthoringPoint PointC = new(384, 496, 512);
 
-    public static Id65AuthoringManifest CreateMinimalV2EquivalentManifest() =>
+    public static Id65AuthoringManifest CreateMinimalV3EquivalentManifest() =>
         new(
             MinimalManifestProfileId,
             new(
                 UnusedLevel65DisplayNameCandidateExporter.ProfileId,
-                UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedSourceImageSha256,
-                UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedSourceDataSha256,
-                UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedSourceModelSha256,
+                UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedSourceImageSha256,
+                UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedSourceDataSha256,
+                UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedSourceModelSha256,
                 UnusedLevel65RemoteBlankIsolationConstruction.ModelByteLength,
                 UnusedLevel65RemoteBlankIsolationConstruction.SourceUsedModelByteLength,
                 UnusedLevel65RemoteBlankIsolationConstruction.SourceZeroTailByteCount),
@@ -693,27 +695,27 @@ internal static class Id65AuthoringModelCompiler
 
     public static Id65CompiledAuthoringModel Compile(
         Id65AuthoringManifest manifest,
-        UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan v2Template,
+        UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3StaticPlan v3Template,
         Id65AuthoringCompilerLimits? limits = null)
     {
         ArgumentNullException.ThrowIfNull(manifest);
-        ArgumentNullException.ThrowIfNull(v2Template);
+        ArgumentNullException.ThrowIfNull(v3Template);
         limits ??= new();
         ValidateManifest(manifest, out long renderNormalZ, out long collisionNormalZ);
-        ValidateV2Template(v2Template, collisionNormalZ);
-        ValidateCapacity(manifest, v2Template, limits);
+        ValidateV3Template(v3Template, collisionNormalZ);
+        ValidateCapacity(manifest, v3Template, limits);
 
-        UnusedLevel65RemoteBlankStructuralPatch modelPatch = v2Template.StructuralPatches
+        UnusedLevel65RemoteBlankStructuralPatch modelPatch = v3Template.StructuralPatches
             .Single(patch => patch.Kind == "id65-model");
         byte[] sourceModel = modelPatch.Before.ToArray();
         byte[] outputModel = modelPatch.After.ToArray();
         string sourceHash = Hash(sourceModel);
         string outputHash = Hash(outputModel);
         RequireHash(sourceHash, UnusedLevel65RemoteBlankIsolationConstruction.ExpectedSourceModelSha256, "locked model");
-        RequireHash(outputHash, UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputModelSha256, "v2 model");
+        RequireHash(outputHash, UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputModelSha256, "v3 header-repaired model");
 
-        Id65ModelComponentRelocation[] relocations = BuildRelocations(v2Template);
-        ValidateRelocations(relocations, v2Template);
+        Id65ModelComponentRelocation[] relocations = BuildRelocations(v3Template);
+        ValidateRelocations(relocations, v3Template);
         string relocationHash = HashRelocations(relocations);
         Id65ModelComponentRelocation[] inverseRelocations = InvertRelocations(relocations).ToArray();
         if (!InvertRelocations(inverseRelocations).SequenceEqual(relocations))
@@ -729,15 +731,15 @@ internal static class Id65AuthoringModelCompiler
         ModelDiffProof diff = BuildModelDiffProof(sourceModel, outputModel);
         Id65AuthoringModelCapacityReadback capacity = new(
             limits.ModelByteCapacity,
-            v2Template.SourceUsedModelByteLength,
-            v2Template.OutputUsedModelByteLength,
-            v2Template.Scene.EnvironmentGrowthBytes,
-            v2Template.SourceZeroTailByteCount,
-            v2Template.OutputZeroTailByteCount,
-            v2Template.Scene.OutputSectorCount,
-            v2Template.Collision.TriangleCount,
-            v2Template.Collision.OutputBlocksUsedBytes,
-            v2Template.Collision.BlocksCapacityBytes,
+            v3Template.SourceUsedModelByteLength,
+            v3Template.OutputUsedModelByteLength,
+            v3Template.Scene.EnvironmentGrowthBytes,
+            v3Template.SourceZeroTailByteCount,
+            v3Template.OutputZeroTailByteCount,
+            v3Template.Scene.OutputSectorCount,
+            v3Template.Collision.TriangleCount,
+            v3Template.Collision.OutputBlocksUsedBytes,
+            v3Template.Collision.BlocksCapacityBytes,
             manifest.Textures.Max(texture => texture.DestinationRecordIndex),
             manifest.Mobys.Max(moby => moby.TrueIndex));
         string deterministicHash = Hash(Encoding.UTF8.GetBytes(string.Join('\n',
@@ -751,7 +753,7 @@ internal static class Id65AuthoringModelCompiler
             rebaseHash,
             renderNormalZ.ToString(CultureInfo.InvariantCulture),
             collisionNormalZ.ToString(CultureInfo.InvariantCulture),
-            v2Template.DeterministicPlanSha256
+            v3Template.DeterministicPlanSha256
         ])));
         if (manifest.CanonicalSha256 != ExpectedMinimalManifestSha256 ||
             diff.ChangedByteCount != ExpectedMinimalChangedModelByteCount ||
@@ -761,7 +763,10 @@ internal static class Id65AuthoringModelCompiler
             rebaseHash != ExpectedMinimalHandleRebaseMapSha256 ||
             deterministicHash != ExpectedMinimalDeterministicPlanSha256)
         {
-            throw new InvalidDataException("The deterministic minimal-v2 authoring compiler pins changed.");
+            throw new InvalidDataException(
+                $"The deterministic minimal-v3 authoring compiler pins changed: manifest={manifest.CanonicalSha256}; " +
+                $"changed={diff.ChangedByteCount}; ranges={diff.RangeCount}; diff={diff.ManifestSha256}; " +
+                $"relocations={relocationHash}; rebases={rebaseHash}; plan={deterministicHash}.");
         }
 
         Id65CompiledAuthoringModel compiled = new(
@@ -835,7 +840,7 @@ internal static class Id65AuthoringModelCompiler
         out long renderNormalZ,
         out long collisionNormalZ)
     {
-        Id65AuthoringManifest expected = CreateMinimalV2EquivalentManifest();
+        Id65AuthoringManifest expected = CreateMinimalV3EquivalentManifest();
         ValidateStableTokens(manifest);
         if (manifest.ProfileId != MinimalManifestProfileId || manifest.LockedBase != expected.LockedBase)
             throw new InvalidDataException("The immutable locked display-name base identity changed.");
@@ -849,7 +854,7 @@ internal static class Id65AuthoringModelCompiler
         if (manifest.Spawn != expected.Spawn || manifest.Music != expected.Music ||
             manifest.Totals != expected.Totals || manifest.Exit != expected.Exit || manifest.Save != expected.Save)
         {
-            throw new InvalidDataException("A spawn/music/totals/exit/save ownership intent conflicts with the minimal v2 contract.");
+            throw new InvalidDataException("A spawn/music/totals/exit/save ownership intent conflicts with the minimal v3 contract.");
         }
 
         Dictionary<string, Id65AuthoringPoint> points = manifest.Vertices
@@ -947,16 +952,16 @@ internal static class Id65AuthoringModelCompiler
             (character >= '0' && character <= '9') ||
             character is '.' or '-' or ':');
 
-    private static void ValidateV2Template(
-        UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan plan,
+    private static void ValidateV3Template(
+        UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3StaticPlan plan,
         long manifestCollisionNormalZ)
     {
-        if (plan.ProfileId != UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ProfileId ||
-            plan.SourceImageSha256 != UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedSourceImageSha256 ||
-            plan.SourceDataSha256 != UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedSourceDataSha256 ||
-            plan.SourceModelSha256 != UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedSourceModelSha256 ||
-            plan.OutputModelSha256 != UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputModelSha256 ||
-            plan.OutputDataSha256 != UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputDataSha256 ||
+        if (plan.ProfileId != UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ProfileId ||
+            plan.SourceImageSha256 != UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedSourceImageSha256 ||
+            plan.SourceDataSha256 != UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedSourceDataSha256 ||
+            plan.SourceModelSha256 != UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedSourceModelSha256 ||
+            plan.OutputModelSha256 != UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputModelSha256 ||
+            plan.OutputDataSha256 != UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputDataSha256 ||
             plan.ModelByteLength != UnusedLevel65RemoteBlankIsolationConstruction.ModelByteLength ||
             plan.Scene.NewSectorIndex != 216 || plan.Scene.OutputSectorCount != 217 ||
             plan.Scene.MaterialTextureId != 25 || !plan.Scene.ExactHpLpPairing ||
@@ -971,11 +976,27 @@ internal static class Id65AuthoringModelCompiler
             !plan.Repair.SpawnIdentical || !plan.Repair.ProtectedDataIdentical ||
             !plan.PatchPreimagesVerified || !plan.PatchAllowlistComplete || !plan.ByteInverseVerified ||
             !plan.ProtectedSubfilesPreserved || !plan.InheritedObjectRowsPreserved ||
+            plan.EnvironmentHeaderRepair.SectorIndex != 216 ||
+            plan.EnvironmentHeaderRepair.HeaderModelRelativeOffset !=
+                UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.HeaderModelRelativeOffset ||
+            plan.EnvironmentHeaderRepair.SupersededHpVertexWordOffset != 0x09 ||
+            plan.EnvironmentHeaderRepair.RepairedHpVertexWordOffset != 0x08 ||
+            plan.EnvironmentHeaderRepair.ChangedByteCount != 1 ||
+            !plan.EnvironmentHeaderRepair.ExactSupersededV2OutputConsumed ||
+            !plan.EnvironmentHeaderRepair.OneByteAllowlistComplete ||
+            !plan.EnvironmentHeaderRepair.ByteInverseVerified ||
+            !plan.EnvironmentHeaderRepair.ReservedByteZeroVerified ||
+            !plan.EnvironmentHeaderRepair.HpTableOffsetDerivedFromLowDetailCounts ||
+            !plan.EnvironmentHeaderRepair.ExactSectorTableEndVerified ||
+            !plan.EnvironmentHeaderRepair.FailedV1Rejected ||
+            !plan.EnvironmentHeaderRepair.SupersededV2Rejected ||
+            plan.OutputData[UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.HeaderDataRelativeOffset] != 0x08 ||
+            plan.SupersededV2OutputData[UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.HeaderDataRelativeOffset] != 0x09 ||
             !plan.RetailWadEntriesExcluded || !plan.ExecutableExcluded ||
             plan.SourceImageMutationPossible || plan.DisposableRuntimeCandidateAuthorized ||
             plan.PromotionAuthorized || plan.NormalCreateBinEnabled)
         {
-            throw new InvalidDataException("The exact negative-winding v2 in-memory template changed or weakened.");
+            throw new InvalidDataException("The exact negative-winding/header-repaired v3 in-memory template changed or weakened.");
         }
         if (plan.Spawn.LandingRawX != UnusedLevel65RemoteBlankIsolationConstruction.AuthoredRawX ||
             plan.Spawn.LandingRawY != UnusedLevel65RemoteBlankIsolationConstruction.AuthoredRawY ||
@@ -985,13 +1006,13 @@ internal static class Id65AuthoringModelCompiler
             plan.Spawn.GroundRawZ != UnusedLevel65RemoteBlankIsolationConstruction.GroundRawZ ||
             !plan.Spawn.AtomicXyOnly)
         {
-            throw new InvalidDataException("The exact v2 spawn/T92 readback changed.");
+            throw new InvalidDataException("The exact v3 spawn/T92 readback changed.");
         }
     }
 
     private static void ValidateCapacity(
         Id65AuthoringManifest manifest,
-        UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan plan,
+        UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3StaticPlan plan,
         Id65AuthoringCompilerLimits limits)
     {
         if (limits.ModelByteCapacity < plan.ModelByteLength)
@@ -1014,7 +1035,7 @@ internal static class Id65AuthoringModelCompiler
     }
 
     private static Id65ModelComponentRelocation[] BuildRelocations(
-        UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan plan)
+        UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3StaticPlan plan)
     {
         UnusedLevel65RemoteBlankComponentProof[] components = plan.Components
             .OrderBy(component => component.SourceRelativeOffset)
@@ -1041,7 +1062,7 @@ internal static class Id65AuthoringModelCompiler
 
     private static void ValidateRelocations(
         IReadOnlyList<Id65ModelComponentRelocation> relocations,
-        UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan plan)
+        UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3StaticPlan plan)
     {
         if (relocations.Count != 9 || relocations[0].StableId != "component.texture" ||
             relocations[^1].StableId != "component.sound")
@@ -1186,7 +1207,7 @@ internal static class Id65AuthoringModelCompiler
         T[] left = actual.OrderBy(key, StringComparer.Ordinal).ToArray();
         T[] right = expected.OrderBy(key, StringComparer.Ordinal).ToArray();
         if (!left.SequenceEqual(right))
-            throw new InvalidDataException($"The exact minimal-v2 {label} changed or conflict.");
+            throw new InvalidDataException($"The exact minimal-v3 {label} changed or conflict.");
     }
 
     private static long NormalZ(Id65AuthoringPoint a, Id65AuthoringPoint b, Id65AuthoringPoint c) =>

@@ -8,7 +8,7 @@ namespace Spyro.Editor.Core.Exporting;
 
 internal sealed record Id65V2NativeTextureCompilerLimits(
     int ModelByteCapacity = Id65V2NativeTextureCompositionCompiler.ModelByteLength,
-    int AvailableV2TailBytes = Id65V2NativeTextureCompositionCompiler.SourceZeroTailBytes,
+    int AvailableV3TailBytes = Id65V2NativeTextureCompositionCompiler.SourceZeroTailBytes,
     int MaximumOutputUsedModelBytes = Id65V2NativeTextureCompositionCompiler.ModelByteLength,
     int MaximumNativeTextureId = 127,
     int AuthorizedWitnessRecordCount = 1);
@@ -303,6 +303,9 @@ internal sealed class Id65CompiledV2NativeTextureComposition
     public bool DestinationPrivateRecordVerified => true;
     public bool DestinationPrivatePageAllocationVerified => true;
     public bool ExactHpLpBindingReadbackVerified => true;
+    public bool V3EnvironmentHeaderRepairPreserved => true;
+    public bool V3SourceEnvironmentPointerTableVerified => true;
+    public bool V3RelocatedEnvironmentPointerTableVerified => true;
     public bool CollisionAndOcclusionPreserved => true;
     public bool TargetEntryHeaderPreserved => true;
     public bool ProtectedRow80SubfilesPreserved => true;
@@ -339,16 +342,19 @@ internal sealed class Id65CompiledV2NativeTextureComposition
 }
 
 /// <summary>
-/// Pure in-memory T66 texture proof over the exact negative-winding v2 model.
+/// Pure in-memory T66 texture proof over the exact negative-winding,
+/// environment-header-repaired v3 model.
 /// It consumes a typed projection of the old static page/row proof, never its
 /// retired positive-wound model bytes. It has no path, writer, CUE, App,
 /// Create-BIN, runtime-candidate, release, or promotion surface.
 /// </summary>
 internal static class Id65V2NativeTextureCompositionCompiler
 {
-    public const string ProfileId = "id65-v2-native-texture-composition-static-in-memory-v1";
-    public const string ManifestProfileId = "id65-authoring-manifest-minimal-v2-private-t66-v1";
-    public const string WitnessProfileId = "id65-v2-native-texture-witness-gnastysworld-t12-private-t66-v1";
+    public const string ProfileId = "id65-v3-native-texture-composition-static-in-memory-v2";
+    public const string ManifestProfileId =
+        "id65-authoring-manifest-environment-header-repair-v3-private-t66-v2";
+    public const string WitnessProfileId =
+        "id65-v3-native-texture-witness-gnastysworld-t12-private-t66-v2";
     public const string PrivateTextureIntentId = "texture.private.record66.gnastysworld-t12";
     public const string PrivateTextureSourceHandle = "donor.gnastysworld.wad70.t12";
     public const int Row80ByteLength = 0x2E2000;
@@ -379,9 +385,9 @@ internal static class Id65V2NativeTextureCompositionCompiler
     public const long TexturePagesWadOffset = 0x6937000;
     public const long ModelWadOffset = 0x6A15000;
     public const string ExpectedSourceRow80Sha256 =
-        "a21e3ace8f16e981dc1d75c4d2210e96ba2833200bd4e3054b2a1c0bb540ade9";
+        "a759fba359722aedde2e5af4559f8bfe94a83cdeb263c364ebab5a8af7b92dcb";
     public const string ExpectedOutputRow80Sha256 =
-        "9a7ba28aa977c7f2211c5a467d09f5f0f8e8ebc6bcdd5366d22564f44dadd237";
+        "abad8357bad20559c6aeca74737753774cdb09f2394b6e6552a31371de3217b7";
     public const string ExpectedSourceTexturePagesSha256 =
         "5fb81c4ac63eb235a172c4f16f83ef08efb148a6f543ef6100ba21359ade408f";
     public const string ExpectedOutputTexturePagesSha256 =
@@ -391,9 +397,9 @@ internal static class Id65V2NativeTextureCompositionCompiler
     public const string ExpectedOutputTextureComponentSha256 =
         "cb1002ff28dd862dc441a388dc09de57bc821467850791de67fb990b8f6ea79f";
     public const string ExpectedSourceModelSha256 =
-        "2ea39a0c19f51f16abfd3cae73d13df01191e16d70f31644ae8c14c977581b79";
+        "00c88deb64eed8d829b504422e1dd21b1d6b4449c75126bdb2c0821d077c17b1";
     public const string ExpectedOutputModelSha256 =
-        "e9650867deb28a9b1673d56b7ae6f8576c0c9b1e739c6f52fdd321a53bab376f";
+        "01981912169cb118dd095ec709a3326927b1ea5371247486670d1e48fc85ccd0";
     public const string ExpectedExecutableSha256 =
         "fa5fc7981188b78fa7d7b78facca64c1f79dadb107515e9146ad178ade39d442";
     public const string ExpectedPrivateLowRowSha256 =
@@ -401,17 +407,17 @@ internal static class Id65V2NativeTextureCompositionCompiler
     public const string ExpectedPrivateHighRowSha256 =
         "d63d613b56b7dcd5adf506847bab76fb9aa69e3ebb9d00643c76aec929557fcc";
     public const string ExpectedManifestSha256 =
-        "94b2afea05dcc1539395ed3517c7d122d1f5433380240ece698f0b985a7b9f2b";
+        "043d77528e66146b74419401150ce10bd1ece70542c26cd078375e4b666ab8d7";
     public const string ExpectedWitnessSha256 =
-        "b21ea01647b6a5b9484f5ce54efa8ed848836c9757a3fe927d15c84fa3b07b20";
+        "c253640dd20db9f32cd33f437df65d00941e18d238cf5bdc7deb28714c3423a3";
     public const string ExpectedDiffManifestSha256 =
-        "ad5df7fcf67bca07f9751004ba75a05a45267e85c2e982eda8b7951f43116ac4";
+        "48eec2ddb8cfe10c2ac631e6b9218f9256793348800feb0dff8cd304bf5d37ee";
     public const string ExpectedRelocationMapSha256 =
-        "d3f447d0d6278380b466afa4419d889e1607bb2cf3f4ce666ba8a6c28c534ebd";
+        "63a4244e8d294114f2a39d7488928d2e778fa38d4eafae24c965cd942e35a303";
     public const string ExpectedHandleRebaseMapSha256 =
         "59d08d33ce7177d7e9f762bb40311a154ce26f2dd70dcaf90f3c24c606d219d5";
     public const string ExpectedDeterministicPlanSha256 =
-        "e1d1d8f6247951aa6b99ab48426877fae8a48306fef8b84dcc7e14c3878d03bf";
+        "64274fff2f24052285d63a4fb6592764b484e7cafd9d6b030fbe3dd02d8ed1ea";
     public const int ExpectedChangedPageBytes = 402_194;
     public const int ExpectedChangedModelBytes = 517_811;
     public const int ExpectedChangedRow80Bytes = 920_005;
@@ -425,9 +431,9 @@ internal static class Id65V2NativeTextureCompositionCompiler
     private const string ExpectedSourceHighFaceHex = "000001020101000219024001080A1000";
     private const string ExpectedOutputHighFaceHex = "000001020101000242024001080A1000";
 
-    public static Id65AuthoringManifest CreateMinimalV2T66Manifest()
+    public static Id65AuthoringManifest CreateMinimalV3T66Manifest()
     {
-        Id65AuthoringManifest baseline = Id65AuthoringModelCompiler.CreateMinimalV2EquivalentManifest();
+        Id65AuthoringManifest baseline = Id65AuthoringModelCompiler.CreateMinimalV3EquivalentManifest();
         Id65TextureIntent locked = baseline.Textures.Single();
         Id65TextureIntent authored = new(
             PrivateTextureIntentId,
@@ -530,31 +536,31 @@ internal static class Id65V2NativeTextureCompositionCompiler
 
     public static Id65CompiledV2NativeTextureComposition Compile(
         Id65AuthoringManifest manifest,
-        Id65CompiledAuthoringModel v2Model,
-        UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan v2Template,
+        Id65CompiledAuthoringModel v3Model,
+        UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3StaticPlan v3Template,
         Id65V2NativeTextureWitness witness,
         Id65V2NativeTextureCompilerLimits? limits = null)
     {
         ArgumentNullException.ThrowIfNull(manifest);
-        ArgumentNullException.ThrowIfNull(v2Model);
-        ArgumentNullException.ThrowIfNull(v2Template);
+        ArgumentNullException.ThrowIfNull(v3Model);
+        ArgumentNullException.ThrowIfNull(v3Template);
         ArgumentNullException.ThrowIfNull(witness);
         limits ??= new();
         ValidateManifest(manifest);
-        ValidateV2Inputs(v2Model, v2Template);
+        ValidateV3Inputs(v3Model, v3Template);
         ValidateWitness(witness);
         ValidateCapacity(limits);
 
-        byte[] sourceRow80 = v2Template.OutputData.ToArray();
-        RequireHash(Hash(sourceRow80), ExpectedSourceRow80Sha256, "negative-winding v2 row80");
+        byte[] sourceRow80 = v3Template.OutputData.ToArray();
+        RequireHash(Hash(sourceRow80), ExpectedSourceRow80Sha256, "header-repaired v3 row80");
         byte[] sourcePages = sourceRow80.AsSpan(TexturePagesDataRelativeOffset, TexturePagesByteLength).ToArray();
-        byte[] sourceModel = v2Model.CopyOutputModel();
+        byte[] sourceModel = v3Model.CopyOutputModel();
         if (!sourceRow80.AsSpan(ModelDataRelativeOffset, ModelByteLength).SequenceEqual(sourceModel))
-            throw new InvalidDataException("The compiled v2 model and v2 row80 model subfile conflict.");
-        RequireHash(Hash(sourcePages), ExpectedSourceTexturePagesSha256, "v2 texture pages");
-        RequireHash(Hash(sourceModel), ExpectedSourceModelSha256, "v2 source model");
+            throw new InvalidDataException("The compiled v3 model and v3 row80 model subfile conflict.");
+        RequireHash(Hash(sourcePages), ExpectedSourceTexturePagesSha256, "v3 texture pages");
+        RequireHash(Hash(sourceModel), ExpectedSourceModelSha256, "v3 source model");
         RequireHash(Hash(sourceModel.AsSpan(0, SourceTextureComponentBytes)),
-            ExpectedSourceTextureComponentSha256, "v2 source texture component");
+            ExpectedSourceTextureComponentSha256, "v3 source texture component");
 
         byte[] outputPages = ApplyPagePatches(sourcePages, witness.CopyPagePatches(), reverse: false);
         byte[] outputTexture = BuildOutputTextureComponent(sourceModel, witness.CopyPackedRows());
@@ -567,11 +573,32 @@ internal static class Id65V2NativeTextureCompositionCompiler
         RequireHash(Hash(outputTexture), ExpectedOutputTextureComponentSha256, "T66 output texture component");
         RequireHash(Hash(outputModel), ExpectedOutputModelSha256, "T66 output model");
         RequireHash(Hash(outputRow80), ExpectedOutputRow80Sha256, "T66 output row80");
+        if (ValidateEnvironmentPointerTable(
+                sourceModel,
+                SourceTextureComponentBytes,
+                v3Template.Scene.OutputEnvironmentByteLength,
+                "v3 T66 source environment") != v3Template.Scene.OutputSectorCount ||
+            ValidateEnvironmentPointerTable(
+                outputModel,
+                OutputTextureComponentBytes,
+                v3Template.Scene.OutputEnvironmentByteLength,
+                "v3 T66 relocated output environment") != v3Template.Scene.OutputSectorCount)
+        {
+            throw new InvalidDataException("The complete v3 T66 environment pointer-table count changed.");
+        }
+        if (sourceModel[UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.HeaderModelRelativeOffset] !=
+                UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.RepairedHpVertexWordOffset ||
+            outputModel[UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.HeaderModelRelativeOffset +
+                RecordGrowthBytes] !=
+                UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.RepairedHpVertexWordOffset)
+        {
+            throw new InvalidDataException("The sector-216 v3 header repair was not preserved across T66 relocation.");
+        }
 
         Id65V2NativeTextureFaceBindingReadback face = ValidateFaceBinding(sourceModel, outputModel);
         Id65ModelComponentRelocation[] relocations = BuildAndValidateRelocations(sourceModel, outputModel);
         string relocationHash = HashRelocations(relocations);
-        Id65StableHandleRebase[] rebases = BuildAndValidateHandleRebases(v2Model, manifest);
+        Id65StableHandleRebase[] rebases = BuildAndValidateHandleRebases(v3Model, manifest);
         string rebaseHash = HashHandleRebases(rebases);
         Id65V2NativeTextureDiffRange[] ranges = BuildDiffRanges(sourcePages, outputPages, sourceModel, outputModel);
         string diffHash = HashDiffManifest(ranges);
@@ -586,7 +613,7 @@ internal static class Id65V2NativeTextureCompositionCompiler
         {
             throw new InvalidDataException("The exact T66 page/model/row80 diff boundary changed.");
         }
-        ValidateProtectedData(sourceRow80, outputRow80, v2Template, relocations);
+        ValidateProtectedData(sourceRow80, outputRow80, v3Template, relocations);
 
         Id65V2NativeTextureAllocationReadback allocation = new(
             SourceTextureCount,
@@ -652,6 +679,52 @@ internal static class Id65V2NativeTextureCompositionCompiler
             throw new InvalidDataException("The T66 composition or its relocation/rebase map is not exactly invertible.");
         }
         return compiled;
+    }
+
+    internal static int ValidateEnvironmentPointerTable(
+        byte[] model,
+        int environmentRelativeOffset,
+        int environmentByteLength,
+        string label)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentException.ThrowIfNullOrWhiteSpace(label);
+        if (environmentRelativeOffset < 0 || environmentByteLength < 0 ||
+            environmentRelativeOffset + (long)environmentByteLength > model.Length)
+        {
+            throw new InvalidDataException($"The {label} range is outside its model.");
+        }
+        ReadOnlySpan<byte> environment = model.AsSpan(environmentRelativeOffset, environmentByteLength);
+        if (environment.Length < 8)
+            throw new InvalidDataException($"The {label} header is truncated.");
+        int declaredLength = BinaryPrimitives.ReadInt32LittleEndian(environment.Slice(0, 4));
+        int sectorCount = BinaryPrimitives.ReadInt32LittleEndian(environment.Slice(4, 4));
+        if (declaredLength != environment.Length || sectorCount != 217)
+            throw new InvalidDataException($"The {label} length/count header changed.");
+        int pointerTableEnd = checked(8 + (sectorCount * 4));
+        for (int sectorIndex = 0; sectorIndex < sectorCount; sectorIndex++)
+        {
+            int pointerOffset = checked(8 + (sectorIndex * 4));
+            int sectorOffset = checked(4 + BinaryPrimitives.ReadInt32LittleEndian(
+                environment.Slice(pointerOffset, 4)));
+            int nextOffset = sectorIndex + 1 < sectorCount
+                ? checked(4 + BinaryPrimitives.ReadInt32LittleEndian(
+                    environment.Slice(pointerOffset + 4, 4)))
+                : environment.Length;
+            if (sectorOffset < pointerTableEnd || nextOffset <= sectorOffset ||
+                nextOffset > environment.Length)
+            {
+                throw new InvalidDataException(
+                    $"The {label} sector {sectorIndex} pointer span changed.");
+            }
+            int pointerSpan = nextOffset - sectorOffset;
+            _ = Id65EnvironmentSectorHeaderContract.ReadPointerSpan(
+                environment.Slice(sectorOffset, pointerSpan),
+                pointerSpan,
+                requireExactEnd: false,
+                $"{label} sector {sectorIndex}");
+        }
+        return sectorCount;
     }
 
     internal static byte[] ApplyRow80Transactional(
@@ -818,10 +891,14 @@ internal static class Id65V2NativeTextureCompositionCompiler
 
     private static void ValidateManifest(Id65AuthoringManifest manifest)
     {
-        Id65AuthoringManifest expected = CreateMinimalV2T66Manifest();
+        Id65AuthoringManifest expected = CreateMinimalV3T66Manifest();
         if (manifest.ProfileId != ManifestProfileId || manifest.CanonicalJson != expected.CanonicalJson ||
             !HashEquals(manifest.CanonicalSha256, ExpectedManifestSha256))
-            throw new InvalidDataException("The exact minimal-v2 T66 authoring manifest changed or conflicts with another slice.");
+        {
+            throw new InvalidDataException(
+                $"The exact minimal-v3 T66 authoring manifest changed or conflicts with another slice: " +
+                $"actual {manifest.CanonicalSha256}, expected {ExpectedManifestSha256}.");
+        }
         Id65TextureIntent[] textures = manifest.Textures.OrderBy(item => item.DestinationRecordIndex).ToArray();
         if (textures.Length != 2 || textures[0].Id != LockedTextureIntentId ||
             textures[0].Disposition != Id65AuthoringIntentDisposition.PreserveLockedBase ||
@@ -836,32 +913,40 @@ internal static class Id65V2NativeTextureCompositionCompiler
         }
     }
 
-    private static void ValidateV2Inputs(
-        Id65CompiledAuthoringModel v2Model,
-        UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan v2)
+    private static void ValidateV3Inputs(
+        Id65CompiledAuthoringModel v3Model,
+        UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3StaticPlan v3)
     {
-        if (v2Model.ProfileId != Id65AuthoringModelCompiler.ProfileId ||
-            !HashEquals(v2Model.ManifestSha256, Id65AuthoringModelCompiler.ExpectedMinimalManifestSha256) ||
-            !HashEquals(v2Model.OutputModelSha256, ExpectedSourceModelSha256) ||
-            v2.ProfileId != UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ProfileId ||
-            !HashEquals(v2.OutputModelSha256, ExpectedSourceModelSha256) ||
-            !HashEquals(v2.OutputDataSha256, ExpectedSourceRow80Sha256) ||
-            !HashEquals(v2.ExecutableSha256, ExpectedExecutableSha256) || v2.Scene.NewSectorIndex != SectorIndex ||
-            v2.Scene.MaterialTextureId != MaterialTemplateTextureId || !v2.Scene.ExactHpLpPairing ||
-            v2.Collision.OutputTriangleHex != "10011C701001380000020000" || v2.Collision.UpwardWinding ||
-            v2.Repair.RepairedNormalZ != -50_176 || !v2.Repair.AcbOrderVerified ||
-            !v2.Repair.CollisionTreeIdentical || !v2.Repair.CollisionBlocksIdentical ||
-            !v2.Repair.CollisionAssignmentIdentical || !v2.Repair.OcclusionIdentical ||
-            !v2.Repair.ProtectedDataIdentical || !v2.ProtectedSubfilesPreserved ||
-            !v2.RetailWadEntriesExcluded || !v2.ExecutableExcluded ||
-            v2.DisposableRuntimeCandidateAuthorized || v2.PromotionAuthorized || v2.NormalCreateBinEnabled)
+        if (v3Model.ProfileId != Id65AuthoringModelCompiler.ProfileId ||
+            !HashEquals(v3Model.ManifestSha256, Id65AuthoringModelCompiler.ExpectedMinimalManifestSha256) ||
+            !HashEquals(v3Model.OutputModelSha256, ExpectedSourceModelSha256) ||
+            v3.ProfileId != UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ProfileId ||
+            !HashEquals(v3.OutputModelSha256, ExpectedSourceModelSha256) ||
+            !HashEquals(v3.OutputDataSha256, ExpectedSourceRow80Sha256) ||
+            !HashEquals(v3.ExecutableSha256, ExpectedExecutableSha256) || v3.Scene.NewSectorIndex != SectorIndex ||
+            v3.Scene.MaterialTextureId != MaterialTemplateTextureId || !v3.Scene.ExactHpLpPairing ||
+            v3.Collision.OutputTriangleHex != "10011C701001380000020000" || v3.Collision.UpwardWinding ||
+            v3.Repair.RepairedNormalZ != -50_176 || !v3.Repair.AcbOrderVerified ||
+            !v3.Repair.CollisionTreeIdentical || !v3.Repair.CollisionBlocksIdentical ||
+            !v3.Repair.CollisionAssignmentIdentical || !v3.Repair.OcclusionIdentical ||
+            !v3.Repair.ProtectedDataIdentical || !v3.ProtectedSubfilesPreserved ||
+            !v3.EnvironmentHeaderRepair.OneByteAllowlistComplete ||
+            !v3.EnvironmentHeaderRepair.ByteInverseVerified ||
+            !v3.EnvironmentHeaderRepair.HpTableOffsetDerivedFromLowDetailCounts ||
+            !v3.EnvironmentHeaderRepair.FailedV1Rejected ||
+            !v3.EnvironmentHeaderRepair.SupersededV2Rejected ||
+            v3.OutputData[UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.HeaderDataRelativeOffset] != 0x08 ||
+            !v3.RetailWadEntriesExcluded || !v3.ExecutableExcluded ||
+            v3.DisposableRuntimeCandidateAuthorized || v3.PromotionAuthorized || v3.NormalCreateBinEnabled)
         {
-            throw new InvalidDataException("The exact negative-winding v2 input changed, weakened, or was replaced by positive-wound foundation bytes.");
+            throw new InvalidDataException("The exact negative-winding/header-repaired v3 input changed or weakened.");
         }
-        if (HashEquals(v2Model.OutputModelSha256,
+        if (HashEquals(v3Model.OutputModelSha256,
                 UnusedLevel65NativeTextureAuthoringContract.ExpectedSourceModelSha256) ||
-            HashEquals(v2Model.OutputModelSha256,
-                UnusedLevel65NativeTextureAuthoringContract.ExpectedOutputModelSha256))
+            HashEquals(v3Model.OutputModelSha256,
+                UnusedLevel65NativeTextureAuthoringContract.ExpectedOutputModelSha256) ||
+            HashEquals(v3Model.OutputModelSha256,
+                UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedSupersededV2OutputModelSha256))
         {
             throw new InvalidDataException("Retired positive-wound foundation/native-texture model bytes are forbidden.");
         }
@@ -915,8 +1000,8 @@ internal static class Id65V2NativeTextureCompositionCompiler
     {
         if (limits.ModelByteCapacity < ModelByteLength)
             throw new InvalidDataException("T66 model byte capacity is insufficient.");
-        if (limits.AvailableV2TailBytes < RecordGrowthBytes)
-            throw new InvalidDataException("T66 v2 model tail capacity is insufficient.");
+        if (limits.AvailableV3TailBytes < RecordGrowthBytes)
+            throw new InvalidDataException("T66 v3 model tail capacity is insufficient.");
         if (limits.MaximumOutputUsedModelBytes < OutputUsedModelBytes)
             throw new InvalidDataException("T66 output used-model capacity is insufficient.");
         if (limits.MaximumNativeTextureId < PrivateTextureId || limits.MaximumNativeTextureId > 127)
@@ -955,7 +1040,7 @@ internal static class Id65V2NativeTextureCompositionCompiler
         ReadOnlySpan<byte> source = sourceModel.AsSpan(0, SourceTextureComponentBytes);
         if (BinaryPrimitives.ReadInt32LittleEndian(source) != SourceTextureComponentBytes ||
             BinaryPrimitives.ReadInt32LittleEndian(source[4..]) != SourceTextureCount)
-            throw new InvalidDataException("The v2 native texture table length/count changed.");
+            throw new InvalidDataException("The v3-substrate native texture table length/count changed.");
         Dictionary<int, Id65V2NativeTexturePackedRow> packed = packedRows.ToDictionary(row => row.TextureId);
         byte[] output = new byte[OutputTextureComponentBytes];
         BinaryPrimitives.WriteInt32LittleEndian(output, OutputTextureComponentBytes);
@@ -1131,10 +1216,10 @@ internal static class Id65V2NativeTextureCompositionCompiler
     }
 
     private static Id65StableHandleRebase[] BuildAndValidateHandleRebases(
-        Id65CompiledAuthoringModel v2Model,
+        Id65CompiledAuthoringModel v3Model,
         Id65AuthoringManifest manifest)
     {
-        List<Id65StableHandleRebase> result = v2Model.HandleRebases.ToList();
+        List<Id65StableHandleRebase> result = v3Model.HandleRebases.ToList();
         result.Add(new(
             PrivateTextureIntentId,
             "texture-record",
@@ -1160,7 +1245,7 @@ internal static class Id65V2NativeTextureCompositionCompiler
         return BuildRanges("texture-pages", TexturePagesWadOffset, sourcePages, outputPages,
                 "id65-private-texture-pages")
             .Concat(BuildRanges("model", ModelWadOffset, sourceModel, outputModel,
-                "id65-v2-private-t66-model"))
+                "id65-v3-private-t66-model"))
             .OrderBy(item => item.WadOffset)
             .ToArray();
     }
@@ -1198,7 +1283,7 @@ internal static class Id65V2NativeTextureCompositionCompiler
     private static void ValidateProtectedData(
         byte[] source,
         byte[] output,
-        UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan v2,
+        UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3StaticPlan v3,
         IReadOnlyList<Id65ModelComponentRelocation> relocations)
     {
         if (!source.AsSpan(0, 0x800).SequenceEqual(output.AsSpan(0, 0x800)) ||
@@ -1209,7 +1294,7 @@ internal static class Id65V2NativeTextureCompositionCompiler
                     "component.collision" or "component.cyclorama" or "component.portal-table" or
                     "component.particles" or "component.sound")
                 .Any(item => !item.ContentsPreserved) ||
-            !HashEquals(v2.ExecutableSha256, ExpectedExecutableSha256))
+            !HashEquals(v3.ExecutableSha256, ExpectedExecutableSha256))
         {
             throw new InvalidDataException("The T66 plan changed the row80 header, protected subfiles, LP face, collision/occlusion, or SCUS identity.");
         }

@@ -186,6 +186,11 @@ static byte[] BuildSyntheticSector(int textureId, byte lpCommand)
     BinaryPrimitives.WriteUInt32LittleEndian(
         bytes.AsSpan(hpFaceStart + 8, 4),
         (uint)(textureId & 0x7F));
+    Id65EnvironmentSectorHeaderContract.Stamp(bytes);
+    Id65EnvironmentSectorHeaderReadback header =
+        Id65EnvironmentSectorHeaderContract.ReadExactSector(bytes, "FarLod synthetic sector");
+    Assert(header.HighDetailVertexWordOffset == 0x0A,
+        "FarLod synthetic sector lost the literal 0x0A HP-table oracle.");
     return bytes;
 }
 

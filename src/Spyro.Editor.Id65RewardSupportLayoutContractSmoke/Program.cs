@@ -64,8 +64,8 @@ Require(first.Profiles.Count == 2, "The exact two support profiles changed.");
 Id65RewardSupportProfile core = first.Profiles[0];
 Id65RewardSupportProfile full = first.Profiles[1];
 Require(
-    core.Id == "reward-support-core4-v1" &&
-    core.TerrainSupportProfileId == "support-core-4-v1" &&
+    core.Id == "reward-support-core4-v3-substrate-v2" &&
+    core.TerrainSupportProfileId == "support-core-4-v3-substrate-v2" &&
     core.TerrainSupportCanonicalSha256 == coreSupport.CanonicalSha256 &&
     core.Kind == Id65RewardSupportLayoutProfileKind.Core4 &&
     core.TerrainSectorCount == 4 && core.StationaryOwnerCapacity == 71 &&
@@ -75,8 +75,8 @@ Require(
     !core.Total200RuntimeAccepted && !core.RuntimeSafe && !core.PromotionAuthorized,
     "Core4 is not the strict 71-row/171 non-promotable capacity profile.");
 Require(
-    full.Id == "reward-support-full8-v1" &&
-    full.TerrainSupportProfileId == "support-full-8-v1" &&
+    full.Id == "reward-support-full8-v3-substrate-v2" &&
+    full.TerrainSupportProfileId == "support-full-8-v3-substrate-v2" &&
     full.TerrainSupportCanonicalSha256 == fullSupport.CanonicalSha256 &&
     full.Kind == Id65RewardSupportLayoutProfileKind.Full8 &&
     full.TerrainSectorCount == 8 && full.StationaryOwnerCapacity == 71 &&

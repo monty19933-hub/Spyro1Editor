@@ -111,7 +111,8 @@ Require(applied.SequenceEqual(compiled.CopyOutputRow80()) &&
 Id65AuthoringRewardStagingCompiler.ValidateOwnershipForSmoke(
     compiled.CopySourceRow80(), compiled.CopyOutputRow80(), compiled.OwnedRanges);
 
-Require(!compiled.AcceptsCompiledSupportAfterimage && !compiled.AcceptsCompiledCompositeAfterimage &&
+Require(compiled.V3EnvironmentHeaderRepairSubstrateRequired &&
+        !compiled.AcceptsCompiledSupportAfterimage && !compiled.AcceptsCompiledCompositeAfterimage &&
         !compiled.AcceptsCompiledMobyAfterimage && !compiled.CallsRetiredPublisher &&
         !compiled.WriterAuthorized && !compiled.WritesFileSystem && !compiled.WritesDiscImage &&
         !compiled.WritesBin && !compiled.WritesCue && !compiled.EnemyRoutesProven &&

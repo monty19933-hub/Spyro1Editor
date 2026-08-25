@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Spyro.Editor.Core.Exporting;
 
@@ -19,24 +20,24 @@ Require(File.Exists(foundationImage), $"Missing exact static texture-witness sou
 IReadOnlyDictionary<string, FileState> lockedBefore = SnapshotDirectory(Path.GetDirectoryName(lockedBaseImage)!);
 IReadOnlyDictionary<string, FileState> foundationBefore = SnapshotDirectory(Path.GetDirectoryName(foundationImage)!);
 
-UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan v2 =
-    UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.BuildStaticPlan(lockedBaseImage);
-Id65AuthoringManifest baseManifest = Id65AuthoringModelCompiler.CreateMinimalV2EquivalentManifest();
-Id65CompiledAuthoringModel v2Model = Id65AuthoringModelCompiler.Compile(baseManifest, v2);
+UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3StaticPlan v3 =
+    UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.BuildStaticPlan(lockedBaseImage);
+Id65AuthoringManifest baseManifest = Id65AuthoringModelCompiler.CreateMinimalV3EquivalentManifest();
+Id65CompiledAuthoringModel v3Model = Id65AuthoringModelCompiler.Compile(baseManifest, v3);
 UnusedLevel65NativeTextureStaticPlan oldStaticTextureProof =
     UnusedLevel65NativeTextureAuthoringContract.BuildFirstStaticPlan(foundationImage);
 Id65V2NativeTextureWitness witness =
     Id65V2NativeTextureCompositionCompiler.ImportPinnedT66Witness(oldStaticTextureProof);
 Id65AuthoringManifest manifest =
-    Id65V2NativeTextureCompositionCompiler.CreateMinimalV2T66Manifest();
+    Id65V2NativeTextureCompositionCompiler.CreateMinimalV3T66Manifest();
 
 Id65CompiledV2NativeTextureComposition first =
-    Id65V2NativeTextureCompositionCompiler.Compile(manifest, v2Model, v2, witness);
+    Id65V2NativeTextureCompositionCompiler.Compile(manifest, v3Model, v3, witness);
 Id65CompiledV2NativeTextureComposition repeat =
     Id65V2NativeTextureCompositionCompiler.Compile(
-        Id65V2NativeTextureCompositionCompiler.CreateMinimalV2T66Manifest(),
-        v2Model,
-        v2,
+        Id65V2NativeTextureCompositionCompiler.CreateMinimalV3T66Manifest(),
+        v3Model,
+        v3,
         Id65V2NativeTextureCompositionCompiler.ImportPinnedT66Witness(oldStaticTextureProof));
 
 Require(first.ProfileId == Id65V2NativeTextureCompositionCompiler.ProfileId &&
@@ -54,7 +55,7 @@ Require(first.ProfileId == Id65V2NativeTextureCompositionCompiler.ProfileId &&
         first.RelocationMapSha256 == Id65V2NativeTextureCompositionCompiler.ExpectedRelocationMapSha256 &&
         first.HandleRebaseMapSha256 == Id65V2NativeTextureCompositionCompiler.ExpectedHandleRebaseMapSha256 &&
         first.DeterministicPlanSha256 == Id65V2NativeTextureCompositionCompiler.ExpectedDeterministicPlanSha256,
-    "The exact v2/T66 source or output identity changed.");
+    "The exact v3/T66 source or output identity changed.");
 Require(first.Manifest.Textures.Count == 2 &&
         first.Manifest.Textures.Single(item => item.Id == "texture.locked.record25").DestinationRecordIndex == 25 &&
         first.Manifest.Textures.Single(item => item.Id ==
@@ -93,6 +94,23 @@ byte[] outputModel = first.CopyOutputModel();
 Require(Hash(outputModel.AsSpan(0x428, 16)) == Id65V2NativeTextureCompositionCompiler.ExpectedPrivateLowRowSha256 &&
         Hash(outputModel.AsSpan(0x2F88, 168)) == Id65V2NativeTextureCompositionCompiler.ExpectedPrivateHighRowSha256,
     "The exact private T66 LQ/HQ rows or output offsets changed.");
+Require(first.CopySourceModel()[UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.HeaderModelRelativeOffset] ==
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.RepairedHpVertexWordOffset &&
+        outputModel[UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.HeaderModelRelativeOffset +
+            Id65V2NativeTextureCompositionCompiler.RecordGrowthBytes] ==
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.RepairedHpVertexWordOffset,
+    "The sector-216 v3 environment-header repair did not survive the T66 component rebase.");
+Require(Id65V2NativeTextureCompositionCompiler.ValidateEnvironmentPointerTable(
+            first.CopySourceModel(),
+            Id65V2NativeTextureCompositionCompiler.SourceTextureComponentBytes,
+            v3.Scene.OutputEnvironmentByteLength,
+            "smoke v3 source environment") == 217 &&
+        Id65V2NativeTextureCompositionCompiler.ValidateEnvironmentPointerTable(
+            outputModel,
+            Id65V2NativeTextureCompositionCompiler.OutputTextureComponentBytes,
+            v3.Scene.OutputEnvironmentByteLength,
+            "smoke v3 relocated environment") == 217,
+    "The complete source/output environment pointer-table scans did not cover all 217 sectors.");
 Require(first.ChangedTexturePageByteCount == 402_194 && first.ChangedModelByteCount == 517_811 &&
         first.ChangedRow80ByteCount == 920_005 && first.DiffRanges.Count == 55_243 &&
         first.DiffRanges.Count(item => item.Space == "texture-pages") == 7_949 &&
@@ -138,11 +156,49 @@ ExpectReject("unproven music", () => Compile(CopyManifest(manifest,
     music: manifest.Music with { Disposition = Id65AuthoringIntentDisposition.AuthorExact, TrackId = 0 })), "manifest");
 ExpectReject("positive-wound model", () => Id65V2NativeTextureCompositionCompiler.Compile(
     manifest,
-    v2Model,
-    v2 with { OutputModelSha256 = UnusedLevel65NativeTextureAuthoringContract.ExpectedSourceModelSha256 },
+    v3Model,
+    v3 with { OutputModelSha256 = UnusedLevel65NativeTextureAuthoringContract.ExpectedSourceModelSha256 },
     witness), "negative-winding");
 ExpectReject("weakened collision", () => Id65V2NativeTextureCompositionCompiler.Compile(
-    manifest, v2Model, v2 with { Collision = v2.Collision with { UpwardWinding = true } }, witness), "negative-winding");
+    manifest, v3Model, v3 with { Collision = v3.Collision with { UpwardWinding = true } }, witness), "negative-winding");
+ExpectReject("superseded v2 model authority", () => Id65V2NativeTextureCompositionCompiler.Compile(
+    manifest,
+    v3Model,
+    v3 with
+    {
+        OutputModelSha256 =
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedSupersededV2OutputModelSha256
+    },
+    witness), "header-repaired v3");
+byte[] regressedV3Data = v3.OutputData.ToArray();
+regressedV3Data[UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.HeaderDataRelativeOffset] =
+    UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.SupersededHpVertexWordOffset;
+ExpectReject("regressed sector-216 header byte", () => Id65V2NativeTextureCompositionCompiler.Compile(
+    manifest, v3Model, v3 with { OutputData = regressedV3Data }, witness), "header-repaired v3");
+byte[] sourceEnvironmentReservedTamper = first.CopySourceModel();
+int sourceEnvironmentOffset = Id65V2NativeTextureCompositionCompiler.SourceTextureComponentBytes;
+int sourceSector0Offset = 4 + BinaryPrimitives.ReadInt32LittleEndian(
+    sourceEnvironmentReservedTamper.AsSpan(sourceEnvironmentOffset + 8, 4));
+sourceEnvironmentReservedTamper[sourceEnvironmentOffset + sourceSector0Offset + 0x13] = 1;
+ExpectReject("source environment sector-header walk", () =>
+    Id65V2NativeTextureCompositionCompiler.ValidateEnvironmentPointerTable(
+        sourceEnvironmentReservedTamper,
+        sourceEnvironmentOffset,
+        v3.Scene.OutputEnvironmentByteLength,
+        "tampered v3 source environment"), "reserved header byte");
+byte[] outputEnvironmentPointerTamper = first.CopyOutputModel();
+int outputEnvironmentOffset = Id65V2NativeTextureCompositionCompiler.OutputTextureComponentBytes;
+int outputFirstPointer = BinaryPrimitives.ReadInt32LittleEndian(
+    outputEnvironmentPointerTamper.AsSpan(outputEnvironmentOffset + 8, 4));
+BinaryPrimitives.WriteInt32LittleEndian(
+    outputEnvironmentPointerTamper.AsSpan(outputEnvironmentOffset + 12, 4),
+    outputFirstPointer);
+ExpectReject("relocated environment pointer-table walk", () =>
+    Id65V2NativeTextureCompositionCompiler.ValidateEnvironmentPointerTable(
+        outputEnvironmentPointerTamper,
+        outputEnvironmentOffset,
+        v3.Scene.OutputEnvironmentByteLength,
+        "tampered v3 relocated environment"), "pointer span");
 ExpectReject("runtime-controlled donor", () => Id65V2NativeTextureCompositionCompiler.ImportPinnedT66Witness(
     oldStaticTextureProof with { Donor = oldStaticTextureProof.Donor with { RuntimeControlled = true } }), "witness");
 ExpectReject("weakened page proof", () => Id65V2NativeTextureCompositionCompiler.ImportPinnedT66Witness(
@@ -252,7 +308,7 @@ ExpectReject("non-contiguous private id", () => Compile(witness: CopyWitness(
     witness, packedRows: [.. rows.Where(item => !item.Synthetic), wrongId])), "out-of-range");
 
 ExpectReject("model capacity", () => Compile(limits: new(ModelByteCapacity: 0x947FF)), "model byte capacity");
-ExpectReject("tail capacity", () => Compile(limits: new(AvailableV2TailBytes: 0xB7)), "tail capacity");
+ExpectReject("tail capacity", () => Compile(limits: new(AvailableV3TailBytes: 0xB7)), "tail capacity");
 ExpectReject("used-model capacity", () => Compile(limits: new(MaximumOutputUsedModelBytes: 0x94633)), "used-model capacity");
 ExpectReject("seven-bit capacity", () => Compile(limits: new(MaximumNativeTextureId: 65)), "seven-bit");
 ExpectReject("unproven record count", () => Compile(limits: new(AuthorizedWitnessRecordCount: 2)), "one-record");
@@ -266,7 +322,7 @@ tamperedOutput[0xDE800 + 0x2B540] ^= 1;
 ExpectReject("transaction afterimage", () =>
     Id65V2NativeTextureCompositionCompiler.ApplyRow80Transactional(first, tamperedOutput, true), "afterimage");
 
-Require(rejectionCount == 26, $"The complete T66 rejection matrix ran {rejectionCount}, expected 26.");
+Require(rejectionCount == 30, $"The complete T66 rejection matrix ran {rejectionCount}, expected 30.");
 Require(first.ManifestSha256 == repeat.ManifestSha256 && first.WitnessSha256 == repeat.WitnessSha256 &&
         first.OutputRow80Sha256 == repeat.OutputRow80Sha256 &&
         first.OutputTexturePagesSha256 == repeat.OutputTexturePagesSha256 &&
@@ -281,6 +337,9 @@ Require(first.ManifestSha256 == repeat.ManifestSha256 && first.WitnessSha256 == 
     "Two exact T66 compiles were not deterministic.");
 Require(first.TypedWitnessProjectionVerified && first.DestinationPrivateRecordVerified &&
         first.DestinationPrivatePageAllocationVerified && first.ExactHpLpBindingReadbackVerified &&
+        first.V3EnvironmentHeaderRepairPreserved &&
+        first.V3SourceEnvironmentPointerTableVerified &&
+        first.V3RelocatedEnvironmentPointerTableVerified &&
         first.CollisionAndOcclusionPreserved && first.TargetEntryHeaderPreserved &&
         first.ProtectedRow80SubfilesPreserved && first.RetailWadEntriesExcluded &&
         first.ExecutableExcluded && first.ScusPreserved && first.ExactInverseVerified &&
@@ -317,8 +376,8 @@ void Compile(
     Id65V2NativeTextureCompilerLimits? limits = null) =>
     Id65V2NativeTextureCompositionCompiler.Compile(
         selectedManifest ?? manifest,
-        v2Model,
-        v2,
+        v3Model,
+        v3,
         witness ?? Id65V2NativeTextureCompositionCompiler.ImportPinnedT66Witness(oldStaticTextureProof),
         limits);
 

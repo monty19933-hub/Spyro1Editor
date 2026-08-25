@@ -741,7 +741,7 @@ internal sealed class Id65CompiledSupportReplacement
     public bool DirectRelocationsAndRebases => true;
     public bool ExactInverseVerified => true;
     public bool DeterministicReadbackRequired => true;
-    public bool PostV2RetirementDiscriminatorOnly => true;
+    public bool PostV3EnvironmentHeaderRepairRequired => true;
     public bool FourOrEightSectorsBelowNativeObservedMinimum64 =>
         SourceManifest.Sectors.Count is 4 or 8 || OutputManifest.Sectors.Count is 4 or 8;
     public bool RuntimeAccepted => false;
@@ -764,31 +764,31 @@ internal sealed class Id65CompiledSupportReplacement
 }
 
 /// <summary>
-/// Pure in-memory, post-v2 support replacement compiler. Both sides of every
+/// Pure in-memory, v3-header-repaired support replacement compiler. Both sides of every
 /// transition are independently reconstructed from the immutable display-name
 /// row 80 and the frozen typed T66 witness. Compiled afterimages are never an
 /// input and no filesystem or publication surface exists.
 /// </summary>
 internal static class Id65AuthoringSupportReplacementCompiler
 {
-    public const string ProfileId = "id65-authoring-support-replacement-static-in-memory-v1";
+    public const string ProfileId = "id65-authoring-support-replacement-static-in-memory-v3";
     public const string DesiredProjectionProfileId =
-        "id65-authoring-support-core4-desired-state-projection-v1";
-    public const string EmptyProfileId = "support-empty-v1";
-    public const string CoreProfileId = "support-core-4-v1";
-    public const string FullProfileId = "support-full-8-v1";
+        "id65-authoring-support-core4-desired-state-projection-v3-substrate-v2";
+    public const string EmptyProfileId = "support-empty-v3-substrate-v2";
+    public const string CoreProfileId = "support-core-4-v3-substrate-v2";
+    public const string FullProfileId = "support-full-8-v3-substrate-v2";
     public const string ExpectedLockedRow80Sha256 =
         "7ddbf6d9a6ee6c0f64c8564a89e374ca0ca234ef608ec812aae68e8176de1dc0";
     public const string ExpectedLockedModelSha256 =
         "1aa6950fe78e71ef4506d823fd33806c13a32838cdb00aadc4e35daffcf17f47";
     public const string ExpectedEmptyModelSha256 =
-        "e9650867deb28a9b1673d56b7ae6f8576c0c9b1e739c6f52fdd321a53bab376f";
+        "01981912169cb118dd095ec709a3326927b1ea5371247486670d1e48fc85ccd0";
     public const string ExpectedEmptyRow80Sha256 =
-        "9a7ba28aa977c7f2211c5a467d09f5f0f8e8ebc6bcdd5366d22564f44dadd237";
+        "abad8357bad20559c6aeca74737753774cdb09f2394b6e6552a31371de3217b7";
     public const string ExpectedCoreEnvironmentSha256 =
-        "17d99300e91e05bab3f694f8bfc187c481251a61cb8a0fc382a14f6f10cc346c";
+        "adcd0e20287c0823e79ffe67fdae309f351c165f06a6426bcc3953e66fe7bcb6";
     public const string ExpectedFullEnvironmentSha256 =
-        "57801025e0795aa2a805bf043299dd5af5ce7e7ed68173620a4caeb063ddea1c";
+        "42806cbc27c63709dbb2640c401209a47d851c9e2b33e93e13f3a0d1d8380b96";
     public const string ExpectedCoreTreeSha256 =
         "c113ac30da735d5b8d3477a5686f9a2bd8a92dd6df9ec8ca9be54e821495c96b";
     public const string ExpectedCoreBlocksSha256 =
@@ -811,13 +811,13 @@ internal static class Id65AuthoringSupportReplacementCompiler
     // Frozen by the dedicated smoke after independently deriving the exact
     // locked-source state images and transition proofs.
     public const string ExpectedCoreModelSha256 =
-        "c062d328be8ee14e4afd1e95d7235472242993266cdcd44f21a99df4ce34bfcd";
+        "3261e7f6e331b881662a78fdf30761e89c2d4313465de0c96b36587cc5040ed8";
     public const string ExpectedFullModelSha256 =
-        "8967fbd01fdcffe17509b3fa3579d27211f77dbfd17611d93ceb501ac5db540f";
+        "3596dfe62f28b91e0bd5cf53545cf2d35b9f3906ed90151b8b4b1e9f1443d26a";
     public const string ExpectedCoreRow80Sha256 =
-        "e6921e57cc34dbf3d8922e04381701f9b416aecdc53b16b4fae2f257541c44ba";
+        "24135680f8ec9f45c2764ff861859fb3aa04df3f0090ae8c4c6b73ea6ab0d950";
     public const string ExpectedFullRow80Sha256 =
-        "3017eb5a3c402cfa25b0145ffe467fa8eac05f37b8fe7a80de808418fb412c1a";
+        "ed38cb6b458170fb77360f0f2b9a6fe51d51e5b028761e6e3bf6863c51e6ec5b";
     public const string ExpectedLockedT1LowRowSha256 =
         "9fcb815b1bd5707fcdbb0c6187fe78611d2d21ea2156de972195bdf7461c13d0";
     public const string ExpectedLockedT1HighRowSha256 =
@@ -825,21 +825,21 @@ internal static class Id65AuthoringSupportReplacementCompiler
     public const string ExpectedTextureProjectionSha256 =
         "899bc97cdbf7a3f9da2fa5132d25665fb6cf6f2596d7b49d68733ca0e52212a7";
     public const string ExpectedEmptyManifestSha256 =
-        "fc162fc5db6afa30952ca749ac4f60ce98cee6d9bce1ff8aa3f7ed3ac856182f";
+        "1853ca2c7500b7d7c994d47709ef90fa09671727d94447a1a29ba16c49001ac7";
     public const string ExpectedCoreManifestSha256 =
-        "aaac3076e2246aeb481e25241fcef9d564aa8c338bef07b0bdf83af11726c270";
+        "97dbe141893bd0ee0a60f51fae9ada15360363fa16570b05536902fe2e3ce573";
     public const string ExpectedFullManifestSha256 =
-        "4ccb922f43a9ed2551ce700f56270b6c1207adf1c49eb26984b96e0bdacdd0fb";
+        "aaa6bdcfbfc257818fe796f04f1bc42b0150dd61d422764328bd4321e72b11db";
     public const string ExpectedCoreDesiredPageDescriptorMapSha256 =
         "f2330da51ac4066674c113588d8ceff57873ec4020d539097c65056bd37f4edc";
     public const string ExpectedCoreDesiredLeafMapSha256 =
         "cd889d2b24b0b7a37de066fc6e56500b8d414cd2889d58352897816da6074f73";
     public const string ExpectedCoreDesiredReadbackSha256 =
-        "b59b8c317f3e1a0dae8eb43cf6ad299705e7d6760cec14016ffd87baec662195";
+        "f65781bb430312b6f92dfb7610c6828428c8b0d9981242cb40fee3934bb1a395";
     public const string ExpectedCoreDesiredCapacitySha256 =
         "a573a9c0194388299dd99dc80059ef1a877fb44c035cacfc68b80009cdcc6d5b";
     public const string ExpectedCoreDesiredProjectionSha256 =
-        "2dda622f3d08a78564a0f2a583cb73fee5ec731d5cacbac24302e093e9747fa2";
+        "663f4aa4ad10a1ce2e7531f9fdb14250d9b44523fa330553b430b9983d2c2b8e";
     public const int ExpectedTexturePagePatchCount = 7_949;
     public const int ExpectedTexturePageChangedByteCount = 402_194;
 
@@ -886,26 +886,26 @@ internal static class Id65AuthoringSupportReplacementCompiler
 
     private static readonly string[] SectorHeaders =
     [
-        "000200025401000200010001000000020503040905030409FFFFFFFF",
-        "E003000254010002E0020001000000020503040905030409FFFFFFFF",
-        "0002E003540100020001E002000000020503040905030409FFFFFFFF",
-        "E003E00354010002E002E002000000020503040905030409FFFFFFFF",
-        "C005000254010002C0040001000000020503040905030409FFFFFFFF",
-        "A007000254010002A0060001000000020503040905030409FFFFFFFF",
-        "C005E00354010002C004E002000000020503040905030409FFFFFFFF",
-        "A007E00354010002A006E002000000020503040905030409FFFFFFFF"
+        "000200025401000200010001000000020503040005030410FFFFFFFF",
+        "E003000254010002E0020001000000020503040005030410FFFFFFFF",
+        "0002E003540100020001E002000000020503040005030410FFFFFFFF",
+        "E003E00354010002E002E002000000020503040005030410FFFFFFFF",
+        "C005000254010002C0040001000000020503040005030410FFFFFFFF",
+        "A007000254010002A0060001000000020503040005030410FFFFFFFF",
+        "C005E00354010002C004E002000000020503040005030410FFFFFFFF",
+        "A007E00354010002A006E002000000020503040005030410FFFFFFFF"
     ];
 
     private static readonly string[] SectorHashes =
     [
-        "7b9193499920903f81bcf08dbf089fb68d9afe8c894b95f47c172cbc4de41529",
-        "b3759494929c4f83a44a2ab0ef745ee345affd6ba2c52420d72dc44d29a70348",
-        "e5a6aa6c2fe6e6989b5eb3a88e70b39e6d4d0184a79a2ba41eb4737fc4cd5718",
-        "8fd2f5d075936d96d0528da538af21728253d22d10f7da1cd392e47b2d553259",
-        "0488ca7cb68d1e84ccaf951e3a06330b810706490dc9c567cc902da31eef55b4",
-        "3d5ad914cd4d1b104a125e255fba52d2a6702ac6578e5a9849d059bd32b395e0",
-        "03755b4baeb4075b696256d26fa6ea02113e45c73ba422102059f6591960082e",
-        "ae91c5cb7b24b82f4dc73dda3a0c1633720a7cb197472c14714dd74455353112"
+        "d112c97f12ab0d021a53f2255e5cd59ae92fcd948a06b5a2922a28bf100bd990",
+        "4fda2ead3b0c937c0cc056e88dd474c50a3ac8efd74705aba48d58e0e02d8947",
+        "13ae18269a36ca8e24e81ff7f5d0ae51fe7da73dac4f74d04ca435edadcefb62",
+        "2936ecb5c4ae5e9b054a5e7b6e952e4489071af3b04989220760e5e7e2edcf05",
+        "6451cf15b0e7b1786ed7bb9e522014f1e6212fa00a690eb88b8de3646bae246f",
+        "11c58e14d72e589c98f723c9b245b3369b1cf565c29a66d886b766d26083a183",
+        "f057cbe134354e846e1aaa2ac88c5a7d577a7a2e008e567bbd54bbb27f8ea834",
+        "a8deb719d01009e79c14bb41700b574643023124d6783c8249e422d15d7a1050"
     ];
 
     private static readonly int[][] CollisionRows =
@@ -1237,7 +1237,7 @@ internal static class Id65AuthoringSupportReplacementCompiler
         string treeHash = kind switch
         {
             Id65SupportProfileKind.Empty =>
-                UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputTreeSha256,
+                UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputTreeSha256,
             Id65SupportProfileKind.Core4 => ExpectedCoreTreeSha256,
             Id65SupportProfileKind.Full8 => ExpectedFullTreeSha256,
             _ => throw new InvalidDataException("Unknown support profile kind.")
@@ -1252,7 +1252,7 @@ internal static class Id65AuthoringSupportReplacementCompiler
         string collisionHash = kind switch
         {
             Id65SupportProfileKind.Empty =>
-                UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputCollisionComponentSha256,
+                UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputCollisionComponentSha256,
             Id65SupportProfileKind.Core4 => ExpectedCoreCollisionSha256,
             Id65SupportProfileKind.Full8 => ExpectedFullCollisionSha256,
             _ => throw new InvalidDataException("Unknown support profile kind.")
@@ -1928,12 +1928,12 @@ internal static class Id65AuthoringSupportReplacementCompiler
         const int repairedTriangleRelative = CollisionTrianglesOffset + (13_995 * 12);
         byte[] failed = Convert.FromHexString("100138381001007000020000");
         if (!remoteCollision.AsSpan(repairedTriangleRelative, 12).SequenceEqual(failed))
-            throw new InvalidDataException("The exact post-v2 collision winding preimage changed.");
+            throw new InvalidDataException("The exact post-v3 collision winding preimage changed.");
         Convert.FromHexString("10011C701001380000020000")
             .CopyTo(remoteCollision, repairedTriangleRelative);
         RequireHash(Hash(remoteCollision),
-            UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputCollisionComponentSha256,
-            "negative-winding v2 collision");
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputCollisionComponentSha256,
+            "negative-winding v3 collision");
 
         byte[] environment;
         byte[] occlusion;
@@ -1980,7 +1980,7 @@ internal static class Id65AuthoringSupportReplacementCompiler
             if ((textureWord & 0x7F) != 25)
                 throw new InvalidDataException("The empty v2 face lost its locked T25 binding preimage.");
             WriteUInt32(output, textureWordOffset, (textureWord & 0xFFFFFF80u) | 66u);
-            RequireHash(Hash(output), ExpectedEmptyModelSha256, "empty post-v2 T66 model");
+            RequireHash(Hash(output), ExpectedEmptyModelSha256, "empty post-v3 T66 model");
         }
         else
         {
@@ -2024,7 +2024,7 @@ internal static class Id65AuthoringSupportReplacementCompiler
         WriteInt32(output, T92XyOffset + 4, 6_154);
         if (!output.AsSpan(LandingOffset, 8).SequenceEqual(Convert.FromHexString("091800000A180000")) ||
             ReadInt32(output, T92XyOffset) != 6_153 || ReadInt32(output, T92XyOffset + 4) != 6_154)
-            throw new InvalidDataException("The post-v2 landing/T92 XY readback changed.");
+            throw new InvalidDataException("The post-v3 landing/T92 XY readback changed.");
         return output;
     }
 
@@ -2357,6 +2357,7 @@ internal static class Id65AuthoringSupportReplacementCompiler
         sector.CopyTo(output, sectorOffset);
         if (sectorOffset != source.Length + 4 || sectorOffset + sector.Length != output.Length)
             throw new InvalidDataException("The remote sector append boundary changed.");
+        ValidateEnvironmentSectorHeaders(output, "support v3 remote environment");
         return output;
     }
 
@@ -2364,7 +2365,7 @@ internal static class Id65AuthoringSupportReplacementCompiler
     {
         byte[][] parts =
         [
-            Convert.FromHexString("80018001C000000200010001000000020303010003030109FFFFFFFF"),
+            Convert.FromHexString("80018001C000000200010001000000020303010003030108FFFFFFFF"),
             Convert.FromHexString("004000020040001E00C00310"),
             Convert.FromHexString("2D39300030552C0037622C00"),
             Convert.FromHexString("0082100000821000"),
@@ -2375,8 +2376,12 @@ internal static class Id65AuthoringSupportReplacementCompiler
         byte[] sector = parts.SelectMany(item => item).ToArray();
         if (sector.Length != 0x70)
             throw new InvalidDataException("The remote sector byte length changed.");
+        Id65EnvironmentSectorHeaderContract.Stamp(sector);
+        _ = Id65EnvironmentSectorHeaderContract.ReadExactSector(
+            sector,
+            "support compiler remote sector 216");
         RequireHash(Hash(sector),
-            UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedNewSectorSha256,
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedNewSectorSha256,
             "remote sector 216");
         return sector;
     }
@@ -2397,13 +2402,46 @@ internal static class Id65AuthoringSupportReplacementCompiler
                 manifest.Sectors[index].ExactHeaderHex + CommonSectorPayloadHex);
             if (sector.Length != 0xC8)
                 throw new InvalidDataException("An authored support sector has the wrong byte length.");
+            Id65EnvironmentSectorHeaderContract.Stamp(sector);
+            Id65EnvironmentSectorHeaderReadback header =
+                Id65EnvironmentSectorHeaderContract.ReadExactSector(
+                    sector,
+                    $"authored support sector {index}");
+            if (header.HighDetailVertexWordOffset != 0x10)
+                throw new InvalidDataException($"Authored support sector {index} lost the literal 0x10 HP-table oracle.");
             RequireHash(Hash(sector), manifest.Sectors[index].ExactSectorSha256,
                 $"support sector {index}");
             sector.CopyTo(output, payload + (index * 0xC8));
         }
         string expected = count == 4 ? ExpectedCoreEnvironmentSha256 : ExpectedFullEnvironmentSha256;
         RequireHash(Hash(output), expected, $"{count}-sector support environment");
+        ValidateEnvironmentSectorHeaders(output, $"{count}-sector authored support environment");
         return output;
+    }
+
+    private static void ValidateEnvironmentSectorHeaders(byte[] environment, string label)
+    {
+        if (environment.Length < 12 || ReadInt32(environment, 0) != environment.Length)
+            throw new InvalidDataException($"The {label} length word changed.");
+        int sectorCount = ReadInt32(environment, 4);
+        int pointerTableEnd = checked(8 + (sectorCount * 4));
+        if (sectorCount <= 0 || pointerTableEnd > environment.Length)
+            throw new InvalidDataException($"The {label} pointer table is outside its bounds.");
+        for (int sectorIndex = 0; sectorIndex < sectorCount; sectorIndex++)
+        {
+            int sectorOffset = checked(4 + ReadInt32(environment, 8 + (sectorIndex * 4)));
+            int nextOffset = sectorIndex + 1 < sectorCount
+                ? checked(4 + ReadInt32(environment, 8 + ((sectorIndex + 1) * 4)))
+                : environment.Length;
+            if (sectorOffset < pointerTableEnd || nextOffset <= sectorOffset || nextOffset > environment.Length)
+                throw new InvalidDataException($"The {label} sector {sectorIndex} pointer span changed.");
+            int pointerSpan = nextOffset - sectorOffset;
+            _ = Id65EnvironmentSectorHeaderContract.ReadPointerSpan(
+                environment.AsSpan(sectorOffset, pointerSpan),
+                pointerSpan,
+                requireExactEnd: false,
+                $"{label} sector {sectorIndex}");
+        }
     }
 
     private static byte[] BuildRemoteOcclusion(byte[] source)
@@ -2530,12 +2568,12 @@ internal static class Id65AuthoringSupportReplacementCompiler
         (byte[] outputTree, byte[] outputBlocks, int usedBytes) =
             RepackCollision(native, desired, targetCell, targetLeaf.PointerByteOffset);
         if (usedBytes != 0x17960)
-            throw new InvalidDataException("The negative-winding v2 block used length changed.");
+            throw new InvalidDataException("The negative-winding v3 block used length changed.");
         RequireHash(Hash(outputTree),
-            UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputTreeSha256,
-            "negative-winding v2 tree");
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputTreeSha256,
+            "negative-winding v3 tree");
         RequireHash(Hash(outputBlocks), UnusedLevel65RemoteBlankIsolationConstruction.ExpectedOutputBlocksSha256,
-            "negative-winding v2 blocks");
+            "negative-winding v3 blocks");
 
         byte[] output = source.ToArray();
         outputTree.CopyTo(output, CollisionTreeOffset);
@@ -2547,20 +2585,20 @@ internal static class Id65AuthoringSupportReplacementCompiler
     }
 
     private static byte[] BuildSupportCollision(
-        byte[] postV2Collision,
+        byte[] v3Collision,
         Id65AuthoringSupportManifest manifest)
     {
-        ValidateCollisionHeader(postV2Collision);
+        ValidateCollisionHeader(v3Collision);
         int sectorCount = manifest.Sectors.Count;
         if (sectorCount is not (4 or 8))
             throw new InvalidDataException("Support collision requires four or eight sectors.");
-        byte[] tree = Slice(postV2Collision, CollisionTreeOffset, CollisionTreeLength);
-        byte[] sourceBlocks = Slice(postV2Collision, CollisionBlocksOffset, CollisionBlocksLength);
+        byte[] tree = Slice(v3Collision, CollisionTreeOffset, CollisionTreeLength);
+        byte[] sourceBlocks = Slice(v3Collision, CollisionBlocksOffset, CollisionBlocksLength);
         NativeCollisionIndex postV2Index = DecodeCollisionIndex(
             tree, sourceBlocks, 0x17960, CollisionTriangleCount, requireZeroTail: true);
         TreeLeaf[] leaves = EnumerateTreeLeaves(tree);
         if (postV2Index.Cells.Count != 4_253 || leaves.Count(item => item.BlockWordOffset != 0xFFFF) != 4_253)
-            throw new InvalidDataException("The exact 4,253-leaf post-v2 collision substrate changed.");
+            throw new InvalidDataException("The exact 4,253-leaf post-v3 collision substrate changed.");
         foreach (TreeLeaf leaf in leaves)
             WriteUInt16(tree, leaf.PointerByteOffset, 0xFFFF);
 
@@ -2589,7 +2627,7 @@ internal static class Id65AuthoringSupportReplacementCompiler
         if (usedBytes != manifest.CollisionBlocksUsedBytes)
             throw new InvalidDataException("The support collision block capacity readback changed.");
 
-        byte[] output = postV2Collision.ToArray();
+        byte[] output = v3Collision.ToArray();
         tree.CopyTo(output, CollisionTreeOffset);
         blocks.CopyTo(output, CollisionBlocksOffset);
         HashSet<int> ownedRows = [];
@@ -2609,12 +2647,12 @@ internal static class Id65AuthoringSupportReplacementCompiler
             if (ownedRows.Contains(index))
                 continue;
             if (!output.AsSpan(CollisionTrianglesOffset + (index * 12), 12)
-                    .SequenceEqual(postV2Collision.AsSpan(CollisionTrianglesOffset + (index * 12), 12)) ||
-                output[CollisionAssignmentsOffset + index] != postV2Collision[CollisionAssignmentsOffset + index])
+                    .SequenceEqual(v3Collision.AsSpan(CollisionTrianglesOffset + (index * 12), 12)) ||
+                output[CollisionAssignmentsOffset + index] != v3Collision[CollisionAssignmentsOffset + index])
                 throw new InvalidDataException("Support collision mutated an unowned triangle or assignment row.");
         }
-        if (!output.AsSpan(0, CollisionTreeOffset).SequenceEqual(postV2Collision.AsSpan(0, CollisionTreeOffset)) ||
-            !output.AsSpan(CollisionFlagsOffset).SequenceEqual(postV2Collision.AsSpan(CollisionFlagsOffset)))
+        if (!output.AsSpan(0, CollisionTreeOffset).SequenceEqual(v3Collision.AsSpan(0, CollisionTreeOffset)) ||
+            !output.AsSpan(CollisionFlagsOffset).SequenceEqual(v3Collision.AsSpan(CollisionFlagsOffset)))
             throw new InvalidDataException("Support collision changed a protected header or flag table.");
 
         NativeCollisionIndex readback = DecodeCollisionIndex(
@@ -2747,7 +2785,7 @@ internal static class Id65AuthoringSupportReplacementCompiler
         int addedTreePointer)
     {
         if (desired.Count != native.Cells.Count + 1)
-            throw new InvalidDataException("The v2 collision repack ownership envelope changed.");
+            throw new InvalidDataException("The v3 collision repack ownership envelope changed.");
         Dictionary<string, int> emitted = new(StringComparer.Ordinal);
         Dictionary<Id65AuthoringCollisionCell, int> offsets = [];
         List<ushort> words = [];
@@ -2780,7 +2818,7 @@ internal static class Id65AuthoringSupportReplacementCompiler
         words.Add(0x8000);
         int usedBytes = words.Count * 2;
         if (usedBytes > CollisionBlocksLength)
-            throw new InvalidDataException("The v2 collision repack exceeds block capacity.");
+            throw new InvalidDataException("The v3 collision repack exceeds block capacity.");
         byte[] tree = native.Tree.ToArray();
         foreach (NativeCollisionBinding binding in native.Cells.Values)
             WriteUInt16(tree, binding.TreePointerByteOffset, checked((ushort)offsets[binding.Cell]));
@@ -2792,7 +2830,7 @@ internal static class Id65AuthoringSupportReplacementCompiler
             tree, blocks, usedBytes, CollisionTriangleCount, requireZeroTail: true);
         if (readback.Cells.Count != desired.Count ||
             readback.Cells.Any(item => !desired[item.Key].SequenceEqual(item.Value.TriangleIndexes)))
-            throw new InvalidDataException("The v2 collision repack semantic readback failed.");
+            throw new InvalidDataException("The v3 collision repack semantic readback failed.");
         return (tree, blocks, usedBytes);
     }
 
@@ -2867,13 +2905,14 @@ internal static class Id65AuthoringSupportReplacementCompiler
             "support readback T66 pages");
         if (!stateRow80.AsSpan(LandingOffset, 8).SequenceEqual(Convert.FromHexString("091800000A180000")) ||
             ReadInt32(stateRow80, T92XyOffset) != 6_153 || ReadInt32(stateRow80, T92XyOffset + 4) != 6_154)
-            throw new InvalidDataException("The support state lost post-v2 spawn ownership.");
+            throw new InvalidDataException("The support state lost post-v3 spawn ownership.");
 
         Id65SupportStateLayout layout = manifest.Layout;
         if (layout.UsedModelBytes + layout.ZeroTailBytes != ModelLength ||
             stateModel.AsSpan(layout.UsedModelBytes).IndexOfAnyExcept((byte)0) >= 0)
             throw new InvalidDataException("The support state used/tail contract changed.");
         byte[] environment = Slice(stateModel, layout.EnvironmentOffset, layout.EnvironmentByteLength);
+        ValidateEnvironmentSectorHeaders(environment, $"support state {manifest.Kind}");
         byte[] occlusion = Slice(stateModel, layout.OcclusionOffset, layout.OcclusionByteLength);
         byte[] collision = Slice(stateModel, layout.CollisionOffset, layout.CollisionByteLength);
         ValidateCollisionHeader(collision);
@@ -2893,7 +2932,7 @@ internal static class Id65AuthoringSupportReplacementCompiler
         if (manifest.Kind == Id65SupportProfileKind.Empty)
         {
             if (ReadInt32(environment, 0) != environment.Length || ReadInt32(environment, 4) != 217)
-                throw new InvalidDataException("The empty post-v2 environment lost 217 sectors.");
+                throw new InvalidDataException("The empty post-v3 environment lost 217 sectors.");
             sectorCount = 217;
             NativeCollisionIndex index = DecodeCollisionIndex(
                 Slice(collision, CollisionTreeOffset, CollisionTreeLength),
@@ -2902,7 +2941,7 @@ internal static class Id65AuthoringSupportReplacementCompiler
                 CollisionTriangleCount,
                 requireZeroTail: true);
             if (index.Cells.Count != 4_253)
-                throw new InvalidDataException("The empty post-v2 collision lookup changed.");
+                throw new InvalidDataException("The empty post-v3 collision lookup changed.");
             inheritedCleared = false;
             hpLp = true;
             seams = true;
@@ -3407,41 +3446,41 @@ internal static class Id65AuthoringSupportReplacementCompiler
         transition switch
         {
             Id65SupportTransitionKind.AddCoreSupport => new(
-                550_741,
-                27_683,
-                "1461d1e4b3e1a4fee36ecd241189a5b32cc8e2b2e0ab54b91bc58d8924fd3619",
-                "ed6f76359de3278e6ebed1b7efea6df093d51a06bc54a004bf18b85837a86917",
-                "c18302c4c6c14ae00022dd6db8827d1021205231a0bb18bdfa742b7844020cf5",
+                550_737,
+                27_687,
+                "606f6f790734a8d10cf1c362347a599082969d41900fc9346238e8784240b35d",
+                "a6922f2daa26f28c619d56f454a129cd5d87b2e3804f4aef176dff30d5b30902",
+                "8fb9b8c7a1c8c41f11a982bc224390cef3602ac6d2c3b00cb77ff158203cbce4",
                 "c8f83a8f7318221169989b9b9f188666163bc0a7daf697cda993bf155be954ab",
-                "c1e427bc481ed287aa216477bab99214f38f38673e9d5cec403f17c40eac981a",
-                "dbac770db883f551fc7f37bbc38eeb13b1d5ed1ff5a385e58077981536637d3e"),
+                "b60090f6efe2c0e948defb613ad651898c43abd3221fcbf5f0a0c9075891bf45",
+                "65847eef51956f924791bbf3cdf1075d087f8da2d4bde114e0f9c98165e88dca"),
             Id65SupportTransitionKind.AddEnemyBay => new(
-                225_506,
-                25_424,
-                "793281faee27ae95b6f144db5912b9f8c6b0f2091ca2ab1d4fcae19c95bf5c8a",
-                "a995e2b2245a8a554b3c5f79b857a83bf80b58ea997c7b9c4129a3ed1e6ac50f",
-                "897759c9bd28e97f5e2673e6f264c6195adb5290cd04edde64d11ca91fbac7ee",
+                225_505,
+                25_425,
+                "716d3879a7a1a6f9d13893ee7a483d62d5f7a3d30c0686b7345dcf9f64292f3f",
+                "676f97e860f73c9129decc8f4b28834f1a9a17f00f5e3db955288a6447d382c6",
+                "0136834a3a09f330a05854f875795b34c922528789d964d31f2a58d7f6fbd68a",
                 "04e9f8c23ccdf1d32745402437c9b431e202750484183bf8036748a3ebde55eb",
-                "98032389fd159d1bb4a48473f9a87dfc7ebf70c2a811626b0557da533a17fa1e",
-                "9010c618ee6d20c81ba8a1a8b6110c2a2d9ce9bb7df661502925c94e9100bb92"),
+                "9beecc21ac14e6dceb7d97da2a9742d9d6305b8ca64fbb06d9bf84a1b49caabc",
+                "1d6022abe9844029886d3a0edca708454bf545e100e07db1ee3f2a8b58f97779"),
             Id65SupportTransitionKind.RemoveEnemyBay => new(
-                225_506,
-                25_424,
-                "e00cb4d235f36f75bc5b9c4decf971aed2bca0250b9f0e9c328c613b9290dda1",
-                "42279113c8679676937641a6e89569b7c08fdad8228305bfd0cdc9e4c465ee01",
-                "42b0cdc4f1b552cde62bacee88a5d37157fd9b47e92cd07a87db165830d805b4",
+                225_505,
+                25_425,
+                "06b53aef63120eb7391684fc76544702794bb640d20c67b3bfb2b941652bc386",
+                "16224f505bff68e06b84ce1f2a149b55722f6a727630222a2203002820dae6a9",
+                "3fbedb2ecc5d0b319a47efa8254fe134f04fa71a03cea04f88c78d12a32e6258",
                 "4b2010a89ee6af2abd354253602870fb968ad790c0b3f82cb6ea5f92709d0529",
-                "29ad57ab6559ac861c9ef3aa21c1f8f50d4160290be6723680ec02a5c70a0b74",
-                "f51a21927eb701a134399681a793eb1cdd097d8180c549c8c9506e6c2932db60"),
+                "9001de5e1302d35fbec49d0413c8fac979b97dbd1040c9dd4f76f07acd345844",
+                "615d6098f1abc1ca88cdf7b962d4580777080239b544c2d07d74481d443471e3"),
             Id65SupportTransitionKind.RemoveCore => new(
-                550_741,
-                27_683,
-                "e9ec44809fa10ca97bbcd31b5aef7c1b91db491de347751a476b922874a9a5cc",
-                "b3a4428d1ac6dacbbfd93be569dffabdf00ddd29ac0b917cd52d2b18a14fe5bf",
-                "84258e4c0a181fafd9c16ebabd6896ae60db2f4e9094cdc9cea4c3ecf97145d4",
+                550_737,
+                27_687,
+                "6407ef83595d2540d07073441394c3563b9888c031c17d0b4b607fbeb1bfd177",
+                "a066df45a06f712ddf5bdcbc1836034beb39ab7d753cf65eb5aa1a439eab7abc",
+                "ca8a9b3e6f5aa793a39874b65d104315b7908a89dc7910c4db5dc08d9dc3cbaa",
                 "4554e8cf2fb31da501ad27912b7ea431558d7b98944f4ad3d3be12ded48a7e7b",
-                "0364dc4e7984445a582abf3f99c4462fa2aef3beb9d9625dbdb0105210e0006b",
-                "051c65f5af2062a8a0fdcb2d20abf9446ee9db0879ac7fccaa44bbc2556db606"),
+                "653ef2f92a996ef63fb63222ac02abd9b0b1f91f063f8bc3b1bebf6514318782",
+                "499eefb89be2f677d04c4d5e50968acd522e0a9435a3b8085643977c1b3340f8"),
             _ => throw new InvalidDataException("Unknown support transition kind.")
         };
 
@@ -3456,7 +3495,12 @@ internal static class Id65AuthoringSupportReplacementCompiler
             !HashEquals(compiled.RebaseMapSha256, expected.RebaseMapSha256) ||
             !HashEquals(compiled.TransactionSha256, expected.TransactionSha256) ||
             !HashEquals(compiled.DeterministicPlanSha256, expected.DeterministicPlanSha256))
-            throw new InvalidDataException($"The frozen {compiled.Transition} transition proof changed.");
+            throw new InvalidDataException(
+                $"The frozen {compiled.Transition} transition proof changed: " +
+                $"changed={compiled.ChangedByteCount}; ranges={compiled.DiffRangeCount}; " +
+                $"diff={compiled.DiffManifestSha256}; owned={compiled.OwnedRangeMapSha256}; " +
+                $"relocations={compiled.RelocationMapSha256}; rebases={compiled.RebaseMapSha256}; " +
+                $"transaction={compiled.TransactionSha256}; plan={compiled.DeterministicPlanSha256}.");
     }
 
     private static Id65CompiledSupportReplacement InvertCore(

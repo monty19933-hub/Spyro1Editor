@@ -23,8 +23,8 @@ FileState foundationBefore = SnapshotFile(foundationImagePath);
 IReadOnlyList<string> baseDirectoryBefore = SnapshotDirectory(Path.GetDirectoryName(baseImagePath)!);
 IReadOnlyList<string> foundationDirectoryBefore = SnapshotDirectory(Path.GetDirectoryName(foundationImagePath)!);
 
-UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan v2 =
-    UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.BuildStaticPlan(baseImagePath);
+UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3StaticPlan v3 =
+    UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.BuildStaticPlan(baseImagePath);
 UnusedLevel65MobyDependencyBundleContract contract =
     UnusedLevel65MobyDependencyBundleFoundation.InspectFirstCrossLevelDonor(foundationImagePath);
 byte[] packageBytes = ReadWad(foundationImagePath, 0x9C1D20, 0x174);
@@ -36,7 +36,7 @@ Require(bundle.CanonicalJson == repeatedBundle.CanonicalJson &&
         bundle.CanonicalSha256 == repeatedBundle.CanonicalSha256,
     "The exact Artisans Grass bundle descriptor is not deterministic.");
 
-Id65AuthoringManifest minimal = Id65AuthoringModelCompiler.CreateMinimalV2EquivalentManifest();
+Id65AuthoringManifest minimal = Id65AuthoringModelCompiler.CreateMinimalV3EquivalentManifest();
 Id65MobyPlacementIntent t107 =
     Id65AuthoringMobyDependencyBundleCompiler.CreateT107Placement();
 Id65MobyPlacementIntent t88 =
@@ -112,12 +112,12 @@ Require(combined.OutputDataSha256 ==
             Id65AuthoringMobyDependencyBundleCompiler.ExpectedCombinedChangedDataByteCount &&
         combined.DiffRangeCount ==
             Id65AuthoringMobyDependencyBundleCompiler.ExpectedCombinedDiffRangeCount &&
-        combined.MobyChangedByteCountOverV2 ==
-            Id65AuthoringMobyDependencyBundleCompiler.ExpectedCombinedMobyChangedBytesOverV2,
+        combined.MobyChangedByteCountOverV3 ==
+            Id65AuthoringMobyDependencyBundleCompiler.ExpectedCombinedMobyChangedBytesOverV3,
     "The independent combined witness pins changed.");
-Require(append.MobyChangedByteCountOverV2 == 293 &&
-        zeroEgg.MobyChangedByteCountOverV2 == 276 &&
-        combined.MobyChangedByteCountOverV2 == 302,
+Require(append.MobyChangedByteCountOverV3 == 293 &&
+        zeroEgg.MobyChangedByteCountOverV3 == 276 &&
+        combined.MobyChangedByteCountOverV3 == 302,
     "T107, ZeroEgg, or deduplicated combined Moby changed-byte counts changed.");
 Require(append.OwnedRanges.Count == 8 && append.OwnedRanges.Sum(item => item.ByteLength) == 486 &&
         zeroEgg.OwnedRanges.Count == 5 && zeroEgg.OwnedRanges.Sum(item => item.ByteLength) == 474 &&
@@ -165,7 +165,9 @@ Require(Hash(combinedOutput.AsSpan(0, 0x200)) ==
         Hash(combinedOutput.AsSpan(0x1D0170, 108 * 0x58)) ==
             "bf4c7d4f3f2f2f89c20da6a7d63c9033f4f109fad28a58c74212b95b83783104" &&
         Hash(combinedOutput.AsSpan(0xDE800, 0x94800)) ==
-            UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.ExpectedOutputModelSha256,
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedOutputModelSha256 &&
+        combinedOutput[UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.HeaderDataRelativeOffset] ==
+            UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.RepairedHpVertexWordOffset,
     "The combined header/actor/scene/object-table/model structural readback changed.");
 Require(BinaryPrimitives.ReadUInt32LittleEndian(combinedOutput.AsSpan(0xE4, 4)) == 0x1CFA44 &&
         BinaryPrimitives.ReadUInt16LittleEndian(combinedOutput.AsSpan(0x19A, 2)) == 0x01F5 &&
@@ -180,10 +182,10 @@ byte[] reversed = Id65AuthoringMobyDependencyBundleCompiler.ApplyTransactional(c
 Require(applied.SequenceEqual(combinedOutput) && reversed.SequenceEqual(source),
     "Combined transaction did not round-trip exactly.");
 ExpectReject(
-    "prior winding-v2 afterimage input",
+    "superseded winding-v2 afterimage input",
     () => Id65AuthoringMobyDependencyBundleCompiler.ApplyTransactional(
         combined,
-        v2.OutputData.ToArray(),
+        v3.SupersededV2OutputData.ToArray(),
         reverse: false),
     "locked-source preimage");
 byte[] tamperedSource = source.ToArray();
@@ -325,7 +327,7 @@ ExpectReject(
     "DragonSave requires SCUS",
     () => Id65AuthoringMobyDependencyBundleCompiler.Compile(new(
         appendManifest,
-        v2,
+        v3,
         [dragonSave],
         [t107])),
     "SCUS/global executable");
@@ -333,7 +335,8 @@ ExpectReject(
 Require(combined.BuildsFromLockedSourceInOneTransaction &&
         !combined.AcceptsPriorSliceAfterimage && !combined.CrossSliceCompositionSupported &&
         combined.DescriptorCanFeedFutureCompositeCompiler &&
-        combined.V2StructuralPatchesComposedAtomically && combined.ExactInverseVerified &&
+        combined.V3StructuralPatchesComposedAtomically &&
+        combined.V3EnvironmentHeaderRepairPreserved && combined.ExactInverseVerified &&
         combined.DeterministicReadbackVerified && combined.RootPackageAndPropertiesDeduplicated &&
         combined.ReplacedRowPrivateDataPreserved && combined.GlobalExecutableExcluded &&
         !combined.WritesFileSystem && !combined.WritesDiscImage && !combined.WritesCue &&
@@ -352,7 +355,7 @@ PrintPins("append", append);
 PrintPins("zeroEgg", zeroEgg);
 PrintPins("combined", combined);
 Console.WriteLine(
-    "PASS Id65AuthoringMobyDependencyBundleCompilerSmoke: exact winding-v2 + T107 append, " +
+    "PASS Id65AuthoringMobyDependencyBundleCompilerSmoke: exact header-repaired-v3 + T107 append, " +
     "ZeroEgg T88 alone, combined root37/package/properties dedupe with only T107 new fixup, " +
     "SCUS-bound DragonSave rejection, locked-source one-transaction exact inverse/readback, " +
     "and no filesystem/writer/CUE/App/CreateBIN/release/promotion gates passed.");
@@ -363,7 +366,7 @@ Id65CompiledMobyDependencyBundles Compile(
     Id65MobyBundleCompilerLimits? limits = null) =>
     Id65AuthoringMobyDependencyBundleCompiler.Compile(new(
         manifest,
-        v2,
+        v3,
         [bundle],
         placements,
         limits));
@@ -374,7 +377,7 @@ Id65CompiledMobyDependencyBundles CompileWithBundle(
     Id65MobyDependencyBundleDescriptor suppliedBundle) =>
     Id65AuthoringMobyDependencyBundleCompiler.Compile(new(
         manifest,
-        v2,
+        v3,
         [suppliedBundle],
         placements));
 
@@ -383,7 +386,7 @@ static void PrintPins(string label, Id65CompiledMobyDependencyBundles compiled)
     Console.WriteLine(
         $"  {label}: manifest={compiled.ManifestSha256}; output={compiled.OutputDataSha256}; " +
         $"changed={compiled.ChangedDataByteCount}; ranges={compiled.DiffRangeCount}; " +
-        $"diff={compiled.DiffManifestSha256}; mobyOverV2={compiled.MobyChangedByteCountOverV2}; " +
+        $"diff={compiled.DiffManifestSha256}; mobyOverV3={compiled.MobyChangedByteCountOverV3}; " +
         $"owned={compiled.OwnedRangeMapSha256}; relocations={compiled.AssetRelocationMapSha256}; " +
         $"transaction={compiled.CombinedTransactionSha256}; plan={compiled.DeterministicPlanSha256}");
 }

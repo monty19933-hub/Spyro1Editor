@@ -80,6 +80,18 @@ ValidateCuePair(failedV1CuePath, failedV1ImagePath);
 UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan directRepairPlan =
     UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.BuildStaticPlan(baseImagePath);
 VerifyDirectRepairTransactionMatrix(directRepairPlan);
+bool retiredPublicationVerified = await VerifyRetiredV2PublicationAuthorityAsync(
+    baseImagePath,
+    baseCuePath,
+    outputDirectoryPath);
+if (retiredPublicationVerified)
+{
+    Console.WriteLine(
+        "PASS UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateSmoke: " +
+        "pure v2 construction/preimage transaction retained; CreateAsync and VerifyPublishedAsync " +
+        "unconditionally reject all v2 publication authority in favor of frozen v3; no files changed.");
+    return;
+}
 
 string[] protectedIntegrationPaths =
 [
@@ -310,6 +322,28 @@ async Task VerifyResultAsync(
             .Order(StringComparer.Ordinal)
             .SequenceEqual(requiredFiles.Select(Path.GetFullPath).Order(StringComparer.Ordinal)),
         "The final remote-blank candidate directory contains an unexpected top-level artifact.");
+    if (!OperatingSystem.IsWindows())
+    {
+        foreach (string dataPath in requiredFiles[..^1])
+        {
+            Id65V3RuntimeEvidenceFinalizer.StableFileRead read =
+                Id65V3RuntimeEvidenceFinalizer.ReadStableOwnedFile(
+                    dataPath,
+                    expectedMode: 0x1A4,
+                    maximumBytes: new FileInfo(dataPath).Length,
+                    keepBytes: false);
+            Require(read.LinkCount == 1,
+                $"Canonical candidate data artifact is not exact 0644/current-UID/single-link: {dataPath}");
+        }
+        Id65V3RuntimeEvidenceFinalizer.StableFileRead helperRead =
+            Id65V3RuntimeEvidenceFinalizer.ReadStableOwnedFile(
+                result.Paths.FinderHelperPath,
+                expectedMode: 0x1ED,
+                maximumBytes: new FileInfo(result.Paths.FinderHelperPath).Length,
+                keepBytes: false);
+        Require(helperRead.LinkCount == 1,
+            "Canonical candidate Finder helper is not exact 0755/current-UID/single-link.");
+    }
     ValidateCuePair(result.Paths.OutputCuePath, result.Paths.OutputImagePath);
 
     Require(
@@ -679,6 +713,69 @@ IReadOnlyList<UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateRa
             total));
     }
     return diffs;
+}
+
+async Task<bool> VerifyRetiredV2PublicationAuthorityAsync(
+    string baseImage,
+    string baseCue,
+    string outputDirectory)
+{
+    bool outputExisted = Directory.Exists(outputDirectory);
+    IReadOnlyDictionary<string, string>? outputBefore = outputExisted
+        ? SnapshotDirectory(outputDirectory)
+        : null;
+    string baseImageBefore = await HashFileAsync(baseImage);
+    string baseCueBefore = await HashFileAsync(baseCue);
+    UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateRequest request = new(
+        baseImage,
+        baseCue,
+        outputDirectory,
+        ReplaceExistingCandidate: true,
+        RequestFinderReveal: false);
+    UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidatePaths paths =
+        UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateExporter.CreatePaths(outputDirectory);
+
+    async Task ExpectRetirementAsync(Func<Task> action, string label)
+    {
+        bool refused = false;
+        try
+        {
+            await action();
+        }
+        catch (InvalidOperationException ex) when (
+            ex.Message == UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateExporter.RetirementReason)
+        {
+            refused = true;
+        }
+        Require(refused, $"The retired v2 {label} did not fail closed with its exact retirement reason.");
+    }
+
+    await ExpectRetirementAsync(
+        async () => _ = await UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateExporter.CreateAsync(request),
+        "CreateAsync authority");
+    await ExpectRetirementAsync(
+        async () => _ = await UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateExporter.CreateAsync(null!),
+        "null-request first branch");
+    await ExpectRetirementAsync(
+        async () => _ = await UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateExporter.VerifyPublishedAsync(paths),
+        "VerifyPublishedAsync authority");
+
+    Require(
+        await HashFileAsync(baseImage) == baseImageBefore &&
+        await HashFileAsync(baseCue) == baseCueBefore &&
+        Directory.Exists(outputDirectory) == outputExisted,
+        "The retired v2 authority changed a protected input or output-directory existence.");
+    if (outputBefore != null)
+        RequireSnapshotsEqual(outputBefore, SnapshotDirectory(outputDirectory), "Retired v2 publication");
+    Require(
+        UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateExporter.RetirementReason
+            .Contains("Rejected v1/v2", StringComparison.Ordinal) &&
+        UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateExporter.RetirementReason
+            .Contains("unused-level-65-remote-blank-environment-header-repair-v3", StringComparison.Ordinal) &&
+        UnusedLevel65RemoteBlankCollisionWindingRepairV2RuntimeCandidateExporter.RetirementReason
+            .Contains("42e4d5cae98d4786023bef26517d0435b43aff365b797495386813f44ecb0c45", StringComparison.Ordinal),
+        "The v2 retirement reason lost the exact rejected-history/frozen-v3 successor identity.");
+    return true;
 }
 
 void VerifyDirectRepairTransactionMatrix(
@@ -1396,13 +1493,36 @@ async Task VerifySidecarsAsync(UnusedLevel65RemoteBlankCollisionWindingRepairV2R
         "at least `20` continuous real-time seconds",
         "**Lone-pad visibility:**",
         "**Full 360 camera:**",
+        "return to the original spawn view",
         "**Walk:**",
         "**Charge:**",
         "**Jump/land:**",
-        "**One deliberate fall + exact respawn:**",
+        "A = (272,272,512)",
+        "B = (496,272,512)",
+        "C = (384,496,512)",
+        "Landing/player raw XY `6153/6154`",
+        "(384.5625,384.625)",
+        "body yaw `0x40`",
+        "`+Y / 90°`",
+        "Spyro's body must point toward visible apex `C`",
+        "stop, do not remap, and do not continue",
+        "top-down schematic, not a camera view",
+        "right-hand/east and left-hand/west are relative to that body-facing reference regardless of camera position",
+        "camera alignment is not world-direction evidence",
+        "`E0=A-B`",
+        "midpoint target `(384,272,512)`",
+        "session `candidate-primary-edge-0`",
+        "`E1=B-C`",
+        "midpoint target `(440,384,512)`",
+        "session `candidate-edge-1`",
+        "`E2=C-A`",
+        "midpoint target `(328,384,512)`",
+        "session `candidate-edge-2`",
+        "**E0 deliberate fall + exact respawn:**",
         "lives exactly `4 → 3`",
         "same isolated pad at the same yaw/orientation",
-        "**Remaining edge controls:**",
+        "**E1 edge control:**",
+        "**E2 edge control:**",
         "**Cold reset:**",
         "**Far LP is unclaimable in this discriminator:**",
         "Do not report an LP pass from this candidate",
@@ -1425,6 +1545,19 @@ async Task VerifySidecarsAsync(UnusedLevel65RemoteBlankCollisionWindingRepairV2R
         svgRoot.Attribute("height")?.Value == "1000" &&
         svgText.Contains("Sector 216", StringComparison.Ordinal) &&
         svgText.Contains("360°", StringComparison.Ordinal) &&
+        svgText.Contains("return to spawn view", StringComparison.Ordinal) &&
+        svgText.Contains("A (272,272,512)", StringComparison.Ordinal) &&
+        svgText.Contains("B (496,272,512)", StringComparison.Ordinal) &&
+        svgText.Contains("C (384,496,512)", StringComparison.Ordinal) &&
+        svgText.Contains("Landing raw XY 6153/6154", StringComparison.Ordinal) &&
+        svgText.Contains("(384.5625,384.625)", StringComparison.Ordinal) &&
+        svgText.Contains("TOP-DOWN SCHEMATIC — NOT CAMERA VIEW", StringComparison.Ordinal) &&
+        svgText.Contains(">S<", StringComparison.Ordinal) &&
+        svgText.Contains(">spawn<", StringComparison.Ordinal) &&
+        svgText.Contains("yaw 0x40 → C / +Y (90°)", StringComparison.Ordinal) &&
+        svgText.Contains("E0=A-B rear/base • mid (384,272)", StringComparison.Ordinal) &&
+        svgText.Contains("E1=B-C right/east • mid (440,384)", StringComparison.Ordinal) &&
+        svgText.Contains("E2=C-A left/west • mid (328,384)", StringComparison.Ordinal) &&
         svgText.Contains("Walk • charge • jump", StringComparison.Ordinal) &&
         svgText.Contains("HUD lives exactly 4", StringComparison.Ordinal) &&
         svgText.Contains("hands off ≥20 continuous seconds", StringComparison.Ordinal) &&

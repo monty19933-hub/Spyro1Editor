@@ -182,7 +182,7 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
 {
     public static bool Retired => true;
     public static string RetirementReason =>
-        "RETIRED: this candidate is stacked on the positive-wound ID65 foundation collision convention, which is not runtime-proven and matches the failed remote-blank v1 sign. Preserve frozen artifacts only as historical evidence; do not republish or load them. Use the isolated collision-winding-repair v2 discriminator until DuckStation establishes the playable convention.";
+        "RETIRED: this candidate is stacked on the positive-wound ID65 foundation collision convention, which is not runtime-proven and matches the failed remote-blank v1 sign. Preserve frozen artifacts only as historical evidence; do not republish or load them. For any new isolated discriminator run, use only the frozen environment-header-repair v3 candidate with BIN SHA-256 42e4d5cae98d4786023bef26517d0435b43aff365b797495386813f44ecb0c45; superseded v2 BIN 23ce483a29187996827148d986fb12f483fc2caa82fc953106882568ea9254a6 must not be loaded or retested.";
 
     public const string ProfileId =
         "unused-level-65-standalone-spawn-ownership-native-apron-clean-usa-disposable-v1";

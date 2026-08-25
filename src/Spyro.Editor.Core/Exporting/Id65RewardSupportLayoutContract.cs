@@ -388,15 +388,15 @@ internal sealed class Id65RewardSupportLayout
 internal static class Id65RewardSupportLayoutContract
 {
     public const string ProfileId =
-        "id65-reward-support-layout-static-read-only-v1";
+        "id65-reward-support-layout-v3-header-repair-static-read-only-v2";
     public const string RequiredSmokeAssemblyName =
         "Spyro.Editor.Id65RewardSupportLayoutContractSmoke";
-    public const string CoreLayoutId = "reward-support-core4-v1";
-    public const string FullLayoutId = "reward-support-full8-v1";
-    public const string CoreTerrainSupportProfileId = "support-core-4-v1";
-    public const string FullTerrainSupportProfileId = "support-full-8-v1";
+    public const string CoreLayoutId = "reward-support-core4-v3-substrate-v2";
+    public const string FullLayoutId = "reward-support-full8-v3-substrate-v2";
+    public const string CoreTerrainSupportProfileId = "support-core-4-v3-substrate-v2";
+    public const string FullTerrainSupportProfileId = "support-full-8-v3-substrate-v2";
     public const string ExpectedDeterministicLayoutSha256 =
-        "5637ee969cb43431383341a246c2c4b7ed73eccad3073008ce6e58e7648305f5";
+        "9dee91515bb85657bd77cc0a0df14f51c7677db39f09e4c136ed676249c86171";
 
     private const int CoreMinimumWorld = 272;
     private const int CoreMaximumWorld = 1_232;
