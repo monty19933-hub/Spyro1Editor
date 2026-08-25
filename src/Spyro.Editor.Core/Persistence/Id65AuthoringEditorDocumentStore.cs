@@ -10,9 +10,7 @@ namespace Spyro.Editor.Core.Persistence;
 /// document's projection identity. The store never serializes these inputs.
 /// </summary>
 internal sealed record Id65AuthoringEditorDocumentProjectionInputs(
-    Id65AuthoringCompositeLockedSource LockedSource,
-    Id65V2NativeTextureWitness PrivateTextureWitness,
-    Id65MobyDependencyBundleDescriptor GrassBundle,
+    Id65AuthoringEditorNativeInputProvider.InputSet NativeInputs,
     Id65AuthoringCompositeCompilerLimits? Limits = null);
 
 /// <summary>
@@ -141,6 +139,9 @@ internal static class Id65AuthoringEditorDocumentStore
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(projectionInputs);
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(projectionInputs.NativeInputs);
+        Id65AuthoringEditorNativeInputProvider.ValidateForConsumption(
+            projectionInputs.NativeInputs);
 
         string path = GetPath(paths);
         await RequireExpectedPublishedWorkspaceAsync(
@@ -251,6 +252,9 @@ internal static class Id65AuthoringEditorDocumentStore
         ArgumentNullException.ThrowIfNull(expectedLabManifest);
         ArgumentNullException.ThrowIfNull(projectionInputs);
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(projectionInputs.NativeInputs);
+        Id65AuthoringEditorNativeInputProvider.ValidateForConsumption(
+            projectionInputs.NativeInputs);
 
         string path = GetPath(paths);
         await RequireExpectedPublishedWorkspaceAsync(
@@ -591,16 +595,15 @@ internal static class Id65AuthoringEditorDocumentStore
         Id65AuthoringEditorDocument document,
         Id65AuthoringEditorDocumentProjectionInputs inputs)
     {
-        ArgumentNullException.ThrowIfNull(inputs.LockedSource);
-        ArgumentNullException.ThrowIfNull(inputs.PrivateTextureWitness);
-        ArgumentNullException.ThrowIfNull(inputs.GrassBundle);
+        ArgumentNullException.ThrowIfNull(inputs.NativeInputs);
+        Id65AuthoringEditorNativeInputProvider.ValidateForConsumption(inputs.NativeInputs);
 
         Id65AuthoringEditorProjection projection =
             Id65AuthoringEditorDocumentProjector.Project(new(
                 document,
-                inputs.LockedSource,
-                inputs.PrivateTextureWitness,
-                inputs.GrassBundle,
+                inputs.NativeInputs.LockedSource,
+                inputs.NativeInputs.PrivateTextureWitness,
+                inputs.NativeInputs.GrassBundle,
                 inputs.Limits));
         Id65CompiledAuthoringComposite compiled = projection.Compiled;
         if (!HashEquals(projection.DocumentCanonicalSha256, document.CanonicalSha256) ||

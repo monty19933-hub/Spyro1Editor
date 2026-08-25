@@ -42,6 +42,7 @@
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorDocumentSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorDocumentPersistenceSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorDocumentWorkspaceInspectorSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorNativeInputProviderSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorAggregatePlanProjectorSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorAggregateCandidateMaterializerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65RewardCensusContractSmoke" />

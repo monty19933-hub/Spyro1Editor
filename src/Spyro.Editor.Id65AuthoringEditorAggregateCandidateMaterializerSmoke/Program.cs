@@ -18,22 +18,13 @@ string lockedImagePath = Path.Combine(
     "unused-level-65-display-name",
     "Unused-Level-65-Town-Square-independent-storage-with-Town-Square-display-name-RUNTIME-CANDIDATE.bin");
 string lockedCuePath = Path.ChangeExtension(lockedImagePath, ".cue");
-string foundationImagePath = Path.Combine(
-    repositoryRoot,
-    "_local",
-    "v5-stone-hill-level-replacement",
-    "unused-level-65-full-authoring-foundation-native-membership",
-    "Unused-Level-65-Full-Authoring-Foundation-HP-LP-45deg-NATIVE-MEMBERSHIP-RUNTIME-CANDIDATE.bin");
-foreach (string fixture in new[] { lockedImagePath, lockedCuePath, foundationImagePath })
+foreach (string fixture in new[] { lockedImagePath, lockedCuePath })
     Require(File.Exists(fixture), $"Missing aggregate materializer fixture: {fixture}");
 
 FileState lockedBefore = SnapshotFile(lockedImagePath);
 FileState lockedCueBefore = SnapshotFile(lockedCuePath);
-FileState foundationBefore = SnapshotFile(foundationImagePath);
 IReadOnlyList<string> lockedDirectoryBefore = SnapshotDirectory(
     Path.GetDirectoryName(lockedImagePath)!);
-IReadOnlyList<string> foundationDirectoryBefore = SnapshotDirectory(
-    Path.GetDirectoryName(foundationImagePath)!);
 
 string smokeRoot = Path.Combine(
     Path.GetTempPath(),
@@ -82,24 +73,10 @@ try
     FileState labManifestBefore = SnapshotFile(paths.ManifestPath);
     byte[] labLockedCueBytes = await File.ReadAllBytesAsync(paths.LockedBaseCuePath);
 
-    UnusedLevel65NativeTextureStaticPlan oldTextureProof =
-        UnusedLevel65NativeTextureAuthoringContract.BuildFirstStaticPlan(foundationImagePath);
-    Id65V2NativeTextureWitness textureWitness =
-        Id65V2NativeTextureCompositionCompiler.ImportPinnedT66Witness(oldTextureProof);
-    UnusedLevel65MobyDependencyBundleContract mobyContract =
-        UnusedLevel65MobyDependencyBundleFoundation.InspectFirstCrossLevelDonor(
-            foundationImagePath);
-    byte[] package = ReadRootFile(foundationImagePath, "WAD.WAD", 0x9C1D20, 0x174);
-    Id65MobyDependencyBundleDescriptor grassBundle =
-        Id65AuthoringMobyDependencyBundleCompiler.CreateArtisansGrassBundle(
-            mobyContract,
-            package);
-    Id65AuthoringEditorAggregateBoundSource boundSource =
-        Id65AuthoringEditorAggregateBoundSource.Capture(paths.LockedBaseImagePath);
+    Id65AuthoringEditorNativeInputProvider.InputSet nativeInputs =
+        await Id65AuthoringEditorNativeInputProvider.LoadAsync(paths, manifest);
     Id65AuthoringEditorDocumentProjectionInputs projectionInputs = new(
-        boundSource.LockedSource,
-        textureWitness,
-        grassBundle);
+        nativeInputs);
     Id65AuthoringEditorDocument document = Id65AuthoringEditorDocument.CreateExact();
     Id65AuthoringEditorDocumentStoreResult stored =
         await Id65AuthoringEditorDocumentStore.SaveAsync(
@@ -111,9 +88,7 @@ try
     Id65AuthoringEditorAggregateCandidateMaterializationRequest request = new(
         paths,
         manifest,
-        stored,
-        textureWitness,
-        grassBundle);
+        stored);
 
     await ExpectRejectedAsync(
         "smoke-only entrypoint without a fault",
@@ -585,12 +560,9 @@ try
             SnapshotFile(paths.ManifestPath) == labManifestBefore &&
             SnapshotFile(lockedImagePath) == lockedBefore &&
             SnapshotFile(lockedCuePath) == lockedCueBefore &&
-            SnapshotFile(foundationImagePath) == foundationBefore &&
             SnapshotDirectory(Path.GetDirectoryName(lockedImagePath)!)
-                .SequenceEqual(lockedDirectoryBefore) &&
-            SnapshotDirectory(Path.GetDirectoryName(foundationImagePath)!)
-                .SequenceEqual(foundationDirectoryBefore),
-        "The aggregate materializer changed a locked source, donor, or fixture directory.");
+                .SequenceEqual(lockedDirectoryBefore),
+        "The aggregate materializer changed a locked source or fixture directory.");
 
     Console.WriteLine(
         "ID65_AUTHORING_EDITOR_AGGREGATE_CANDIDATE_MATERIALIZER_SMOKE_OK " +
@@ -676,9 +648,7 @@ static void VerifyApiAndTopology(string repositoryRoot)
         [
             ("Paths", typeof(UnusedLevel65BlankLevelLabWorkspacePaths)),
             ("ExpectedManifest", typeof(UnusedLevel65BlankLevelLabManifest)),
-            ("ExpectedStoredDocument", typeof(Id65AuthoringEditorDocumentStoreResult)),
-            ("PrivateTextureWitness", typeof(Id65V2NativeTextureWitness)),
-            ("GrassBundle", typeof(Id65MobyDependencyBundleDescriptor))
+            ("ExpectedStoredDocument", typeof(Id65AuthoringEditorDocumentStoreResult))
         ]);
     Require(typeof(Id65AuthoringEditorAggregateCandidateMaterializationRequest)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)

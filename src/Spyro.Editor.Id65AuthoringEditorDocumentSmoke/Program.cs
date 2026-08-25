@@ -3,8 +3,10 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Spyro.Editor.Core.Exporting;
+using Spyro.Editor.Core.Persistence;
 
 const string ExpectedDocumentCanonicalSha256 =
     "8f27bfc3f97238402c0b7dd59a081335ae19df1acfaefa9575d9ca7110dce808";
@@ -18,49 +20,46 @@ string lockedImagePath = Path.Combine(
     "v5-stone-hill-level-replacement",
     "unused-level-65-display-name",
     "Unused-Level-65-Town-Square-independent-storage-with-Town-Square-display-name-RUNTIME-CANDIDATE.bin");
-string foundationImagePath = Path.Combine(
-    repositoryRoot,
-    "_local",
-    "v5-stone-hill-level-replacement",
-    "unused-level-65-full-authoring-foundation-native-membership",
-    "Unused-Level-65-Full-Authoring-Foundation-HP-LP-45deg-NATIVE-MEMBERSHIP-RUNTIME-CANDIDATE.bin");
+string lockedCuePath = Path.ChangeExtension(lockedImagePath, ".cue");
 Require(File.Exists(lockedImagePath), $"Missing exact locked display-name image: {lockedImagePath}");
-Require(File.Exists(foundationImagePath), $"Missing exact foundation donor image: {foundationImagePath}");
+Require(File.Exists(lockedCuePath), $"Missing exact locked display-name CUE: {lockedCuePath}");
 FileState lockedBefore = SnapshotFile(lockedImagePath);
-FileState foundationBefore = SnapshotFile(foundationImagePath);
+FileState lockedCueBefore = SnapshotFile(lockedCuePath);
 IReadOnlyList<string> lockedDirectoryBefore = SnapshotDirectory(Path.GetDirectoryName(lockedImagePath)!);
-IReadOnlyList<string> foundationDirectoryBefore = SnapshotDirectory(Path.GetDirectoryName(foundationImagePath)!);
+string smokeRoot = Path.Combine(
+    Path.GetTempPath(),
+    "Spyro.Editor.Id65AuthoringEditorDocumentSmoke-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(smokeRoot);
 
-UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan v2 =
-    UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.BuildStaticPlan(lockedImagePath);
-byte[] directRow80 = ReadRootFile(lockedImagePath, "WAD.WAD", 0x6936800, 0x2E2000);
-byte[] targetOverlay = ReadRootFile(lockedImagePath, "WAD.WAD", 0x6927000, 0xF800);
-byte[] globalExecutable = ReadRootFileWhere(
-    lockedImagePath,
-    name => name.StartsWith("SCUS_", StringComparison.OrdinalIgnoreCase),
-    0,
-    0x66000);
-Require(directRow80.SequenceEqual(v2.SourceData),
-    "The direct row-80 source differs from the exact locked display-name proof source.");
-
-byte[] sourceInput = directRow80.ToArray();
-byte[] overlayInput = targetOverlay.ToArray();
-byte[] executableInput = globalExecutable.ToArray();
-Id65AuthoringCompositeLockedSource source =
-    Id65AuthoringCompositeCompiler.CaptureLockedSource(sourceInput, overlayInput, executableInput);
-sourceInput[0] ^= 1;
-overlayInput[0] ^= 1;
-executableInput[0] ^= 1;
-
-UnusedLevel65NativeTextureStaticPlan oldTextureProof =
-    UnusedLevel65NativeTextureAuthoringContract.BuildFirstStaticPlan(foundationImagePath);
-Id65V2NativeTextureWitness textureWitness =
-    Id65V2NativeTextureCompositionCompiler.ImportPinnedT66Witness(oldTextureProof);
-UnusedLevel65MobyDependencyBundleContract mobyContract =
-    UnusedLevel65MobyDependencyBundleFoundation.InspectFirstCrossLevelDonor(foundationImagePath);
-byte[] package = ReadRootFile(foundationImagePath, "WAD.WAD", 0x9C1D20, 0x174);
-Id65MobyDependencyBundleDescriptor bundle =
-    Id65AuthoringMobyDependencyBundleCompiler.CreateArtisansGrassBundle(mobyContract, package);
+try
+{
+UnusedLevel65BlankLevelLabWorkspacePaths labPaths =
+    UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(
+        Path.Combine(smokeRoot, "workspace-container"));
+Directory.CreateDirectory(labPaths.LockedBaseDirectoryPath);
+Directory.CreateDirectory(labPaths.AuthoredEditsDirectoryPath);
+File.Copy(lockedImagePath, labPaths.LockedBaseImagePath, overwrite: false);
+await File.WriteAllTextAsync(
+    labPaths.LockedBaseCuePath,
+    DiscImage.BuildCueText(lockedCuePath, Path.GetFileName(labPaths.LockedBaseImagePath)),
+    Encoding.ASCII);
+UnusedLevel65BlankLevelLabManifest labManifest =
+    UnusedLevel65BlankLevelLabProfileRegistry.CreateManifest(labPaths);
+await File.WriteAllTextAsync(
+    labPaths.ManifestPath,
+    JsonSerializer.Serialize(labManifest, new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter() }
+    }) + "\n",
+    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+Id65AuthoringEditorNativeInputProvider.InputSet nativeInputs =
+    await Id65AuthoringEditorNativeInputProvider.LoadAsync(labPaths, labManifest);
+Id65AuthoringCompositeLockedSource source = nativeInputs.BoundSource.LockedSource;
+Id65V2NativeTextureWitness textureWitness = nativeInputs.PrivateTextureWitness;
+Id65MobyDependencyBundleDescriptor bundle = nativeInputs.GrassBundle;
 
 string[] reorderedPlacementIds =
 [
@@ -449,10 +448,10 @@ ExpectReject(
     () => Project(document, limits: new Id65AuthoringCompositeCompilerLimits(MaximumObjectCount: 107)),
     "capacity");
 rejectionCount++;
-byte[] tamperedRow80 = directRow80.ToArray();
+byte[] tamperedRow80 = source.CopyRow80();
 tamperedRow80[0] ^= 1;
 Id65AuthoringCompositeLockedSource tamperedSource =
-    new(tamperedRow80, targetOverlay, globalExecutable);
+    new(tamperedRow80, source.CopyTargetOverlay(), source.CopyGlobalExecutable());
 ExpectReject("source tamper", () => Project(document, selectedSource: tamperedSource), "source");
 rejectionCount++;
 
@@ -540,9 +539,8 @@ Require(projectorMethods.Length == 1 && publicProjectorMethods.Length == 1 &&
     "The editor document projector no longer exposes exactly one Project(request) entrypoint.");
 VerifySourceTopology(repositoryRoot);
 Require(SnapshotFile(lockedImagePath) == lockedBefore &&
-        SnapshotFile(foundationImagePath) == foundationBefore &&
-        SnapshotDirectory(Path.GetDirectoryName(lockedImagePath)!).SequenceEqual(lockedDirectoryBefore) &&
-        SnapshotDirectory(Path.GetDirectoryName(foundationImagePath)!).SequenceEqual(foundationDirectoryBefore),
+        SnapshotFile(lockedCuePath) == lockedCueBefore &&
+        SnapshotDirectory(Path.GetDirectoryName(lockedImagePath)!).SequenceEqual(lockedDirectoryBefore),
     "The pure editor-document smoke changed or published beside an input artifact.");
 
 Console.WriteLine(
@@ -564,6 +562,16 @@ Id65AuthoringEditorProjection Project(
         witness ?? textureWitness,
         suppliedBundle ?? bundle,
         limits));
+}
+finally
+{
+    if (Directory.Exists(smokeRoot))
+    {
+        Directory.Delete(smokeRoot, recursive: true);
+    }
+    Require(!Directory.Exists(smokeRoot),
+        "The editor-document smoke retained temporary game data.");
+}
 
 static bool Equivalent(Id65CompiledAuthoringComposite left, Id65CompiledAuthoringComposite right) =>
     left.ManifestSha256 == right.ManifestSha256 &&
@@ -1015,31 +1023,6 @@ static void ExpectReject(string label, Action action, string requiredText)
         rejected = true;
     }
     Require(rejected, $"Atomic rejection `{label}` was not observed with text `{requiredText}`.");
-}
-
-static byte[] ReadRootFile(
-    string imagePath,
-    string exactName,
-    long relativeOffset,
-    int byteLength) =>
-    ReadRootFileWhere(
-        imagePath,
-        name => string.Equals(name, exactName, StringComparison.OrdinalIgnoreCase),
-        relativeOffset,
-        byteLength);
-
-static byte[] ReadRootFileWhere(
-    string imagePath,
-    Predicate<string> predicate,
-    long relativeOffset,
-    int byteLength)
-{
-    DiscLayout layout = DiscImage.DetectLayout(imagePath);
-    using FileStream image = File.OpenRead(imagePath);
-    DiscFileRecord file = DiscImage.FindRootFileRecord(image, layout, predicate);
-    if (relativeOffset < 0 || relativeOffset + byteLength > file.Size)
-        throw new InvalidDataException("An editor-document smoke source read escaped its root file.");
-    return DiscImage.ReadFileBytes(image, layout, file.Lba, relativeOffset, byteLength);
 }
 
 static FileState SnapshotFile(string path) =>

@@ -425,6 +425,21 @@ internal static class Id65V2NativeTextureCompositionCompiler
     public const int ExpectedModelDiffRangeCount = 47_294;
     public const int ExpectedRow80DiffRangeCount = 55_243;
 
+    private const int LockedWadLba = 37;
+    private const int LockedWadByteLength = 0x6C18800;
+    private const int LockedTargetDataWadEntry = 80;
+    private const long LockedTargetDataWadOffset = 0x6936800;
+    private const int LockedTargetDataByteLength = 0x2E2000;
+    private const int LockedDonorDataWadEntry = 70;
+    private const long LockedDonorDataWadOffset = 0x51EE800;
+    private const int LockedDonorDataByteLength = 0x25B800;
+    private const long LockedDonorTexturePagesWadOffset = 0x51EF000;
+    private const int LockedDonorTexturePagesByteLength = 0xBB800;
+    private const long LockedDonorModelWadOffset = 0x52AA800;
+    private const int LockedDonorModelByteLength = 0x74000;
+    private const int LockedDonorTextureComponentByteLength = 0x1708;
+    private const int LockedDonorTextureCount = 32;
+
     private const string RenderFaceId = "terrain.remote-pad.face.0";
     private const string LockedTextureIntentId = "texture.locked.record25";
     private const string ExpectedLowFaceHex = "0082100000821000";
@@ -464,7 +479,164 @@ internal static class Id65V2NativeTextureCompositionCompiler
     {
         ArgumentNullException.ThrowIfNull(staticPlan);
         RequirePinnedStaticTexturePlan(staticPlan);
-        NativeTerrainTextureGlobalRepackSyntheticPlan global = staticPlan.Composition.GlobalPacking;
+        return BuildPinnedT66Witness(
+            staticPlan.Composition.GlobalPacking,
+            staticPlan.TargetTexturePagesWadOffset,
+            staticPlan.Donor.ManifestId,
+            staticPlan.Donor.CompleteRecordSha256,
+            staticPlan.SourceTexturePagesSha256,
+            staticPlan.OutputTexturePagesSha256,
+            ExpectedSourceTextureComponentSha256,
+            ExpectedOutputTextureComponentSha256,
+            staticPlan.SourceTextureCount,
+            staticPlan.OutputTextureCount,
+            staticPlan.PrivateTextureId,
+            staticPlan.Donor.DonorWadEntry,
+            staticPlan.Donor.DonorTextureId,
+            staticPlan.MaterialTemplateTextureId);
+    }
+
+    /// <summary>
+    /// Re-derives the exact immutable T66 page/row witness directly from the
+    /// project locked-base image. This path consumes neither the retired
+    /// positive-wound foundation plan nor any caller-supplied source bytes. It
+    /// models one synthetic row in memory and never builds an append afterimage
+    /// or an ordinary terrain-face patch.
+    /// </summary>
+    internal static Id65V2NativeTextureWitness DerivePinnedT66WitnessFromLockedBase(
+        string lockedBaseImagePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(lockedBaseImagePath);
+        string sourcePath = Path.GetFullPath(lockedBaseImagePath);
+        if (!File.Exists(sourcePath))
+        {
+            throw new FileNotFoundException(
+                "The exact locked ID65 display-name BIN is missing.",
+                sourcePath);
+        }
+
+        string sourceImageSha256 = HashFile(sourcePath);
+        RequireHash(
+            sourceImageSha256,
+            Id65RewardCensusContract.LockedSourceImageSha256,
+            "locked ID65 display-name BIN");
+        LockedBaseTextureWitnessSources sources = ReadLockedBaseTextureWitnessSources(
+            sourcePath);
+
+        NativeTerrainTextureGlobalRepackSyntheticRequest request = new(
+            sourcePath,
+            UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+            ExistingRecordOverrides: Array.Empty<NativeTerrainTextureRelocationImport>(),
+            SyntheticRecords:
+            [
+                new NativeTerrainTextureGlobalRepackSyntheticRecord(
+                    PrivateTextureId,
+                    UnusedLevel65NativeTextureAuthoringContract.DonorWadEntry,
+                    UnusedLevel65NativeTextureAuthoringContract.DonorTextureId,
+                    MaterialTemplateTextureId)
+            ],
+            DonorSourceImagePath: sourcePath);
+        if (!NativeTerrainTextureGlobalRepackerResearch.TryBuild(
+                request,
+                out NativeTerrainTextureGlobalRepackSyntheticPlan? global,
+                out string failureReason) ||
+            global == null)
+        {
+            throw new InvalidDataException(
+                $"The locked-base T66 global synthetic packing proof failed: {failureReason}");
+        }
+
+        Id65V2NativeTextureWitness witness = BuildPinnedT66Witness(
+            global,
+            TexturePagesWadOffset,
+            UnusedLevel65NativeTextureAuthoringContract.DonorManifestId,
+            sources.DonorCompleteRecordSha256,
+            sources.SourceTexturePagesSha256,
+            ExpectedOutputTexturePagesSha256,
+            sources.SourceTextureComponentSha256,
+            ExpectedOutputTextureComponentSha256,
+            SourceTextureCount,
+            OutputTextureCount,
+            PrivateTextureId,
+            UnusedLevel65NativeTextureAuthoringContract.DonorWadEntry,
+            UnusedLevel65NativeTextureAuthoringContract.DonorTextureId,
+            MaterialTemplateTextureId);
+
+        byte[] outputPages = ApplyPagePatches(
+            sources.SourceTexturePages,
+            witness.CopyPagePatches(),
+            reverse: false);
+        byte[] roundTripPages = ApplyPagePatches(
+            outputPages,
+            witness.CopyPagePatches(),
+            reverse: true);
+        if (!roundTripPages.SequenceEqual(sources.SourceTexturePages))
+            throw new InvalidDataException("The locked-base T66 texture-page witness is not exactly invertible.");
+        byte[] outputTextureComponent = BuildOutputTextureComponent(
+            sources.SourceTextureComponent,
+            witness.CopyPackedRows());
+        RequireHash(
+            Hash(outputPages),
+            ExpectedOutputTexturePagesSha256,
+            "locked-base T66 output texture pages");
+        RequireHash(
+            Hash(outputTextureComponent),
+            ExpectedOutputTextureComponentSha256,
+            "locked-base T66 output texture component");
+
+        RequireHash(
+            HashFile(sourcePath),
+            sourceImageSha256,
+            "locked ID65 display-name BIN after T66 witness derivation");
+        return witness;
+    }
+
+    private static Id65V2NativeTextureWitness BuildPinnedT66Witness(
+        NativeTerrainTextureGlobalRepackSyntheticPlan global,
+        long targetTexturePagesWadOffset,
+        string donorManifestId,
+        string donorCompleteRecordSha256,
+        string sourceTexturePagesSha256,
+        string outputTexturePagesSha256,
+        string sourceTextureComponentSha256,
+        string outputTextureComponentSha256,
+        int sourceTextureCount,
+        int outputTextureCount,
+        int privateTextureId,
+        int donorWadEntry,
+        int donorTextureId,
+        int materialTemplateTextureId)
+    {
+        ArgumentNullException.ThrowIfNull(global);
+        if (targetTexturePagesWadOffset != TexturePagesWadOffset ||
+            donorManifestId != UnusedLevel65NativeTextureAuthoringContract.DonorManifestId ||
+            !HashEquals(
+                donorCompleteRecordSha256,
+                UnusedLevel65NativeTextureAuthoringContract.ExpectedDonorCompleteRecordSha256) ||
+            !HashEquals(sourceTexturePagesSha256, ExpectedSourceTexturePagesSha256) ||
+            !HashEquals(outputTexturePagesSha256, ExpectedOutputTexturePagesSha256) ||
+            !HashEquals(sourceTextureComponentSha256, ExpectedSourceTextureComponentSha256) ||
+            !HashEquals(outputTextureComponentSha256, ExpectedOutputTextureComponentSha256) ||
+            sourceTextureCount != SourceTextureCount || outputTextureCount != OutputTextureCount ||
+            privateTextureId != PrivateTextureId ||
+            donorWadEntry != UnusedLevel65NativeTextureAuthoringContract.DonorWadEntry ||
+            donorTextureId != UnusedLevel65NativeTextureAuthoringContract.DonorTextureId ||
+            materialTemplateTextureId != MaterialTemplateTextureId ||
+            global.SourceTextureCount != SourceTextureCount ||
+            global.OutputTextureCount != OutputTextureCount ||
+            !global.SourceDescriptorOffsetsRemainUnmodified ||
+            !global.SyntheticRowsModeledOnlyInMemory ||
+            !global.RequiresStructuralComposer ||
+            !global.RequiresDuckStationRuntimeProof ||
+            global.PackingProof.TargetWadEntry !=
+                UnusedLevel65NativeTextureAuthoringContract.TargetWadEntry ||
+            global.PackingProof.TextureCount != OutputTextureCount ||
+            !HashEquals(global.PackingProof.TexturePagesSha256, ExpectedSourceTexturePagesSha256))
+        {
+            throw new InvalidDataException(
+                "The narrow T66 page/row source proof changed its exact locked identities or safety topology.");
+        }
+
         NativeTerrainTextureGlobalRepackResearchPlan packing = global.PackingProof;
         if (!packing.ExactIndexedPixelReadbackVerified || !packing.ExactPaletteReadbackVerified ||
             !packing.PixelAliasRelationshipsPreserved || !packing.PaletteAliasRelationshipsPreserved ||
@@ -485,7 +657,7 @@ internal static class Id65V2NativeTextureCompositionCompiler
             .OrderBy(patch => patch.WadOffset)
             .Select(patch =>
             {
-                int relative = checked((int)(patch.WadOffset - staticPlan.TargetTexturePagesWadOffset));
+                int relative = checked((int)(patch.WadOffset - targetTexturePagesWadOffset));
                 if (patch.Kind != "terrain-texture-global-repack-data" ||
                     patch.ByteLength <= 0 || patch.Before.Length != patch.ByteLength ||
                     patch.After.Length != patch.ByteLength || relative < 0 ||
@@ -506,32 +678,240 @@ internal static class Id65V2NativeTextureCompositionCompiler
 
         string witnessHash = ComputeWitnessCanonicalSha256(
             WitnessProfileId,
-            staticPlan.Donor.ManifestId,
-            staticPlan.Donor.CompleteRecordSha256,
-            staticPlan.SourceTexturePagesSha256,
-            staticPlan.OutputTexturePagesSha256,
-            ExpectedSourceTextureComponentSha256,
-            ExpectedOutputTextureComponentSha256,
+            donorManifestId,
+            donorCompleteRecordSha256,
+            sourceTexturePagesSha256,
+            outputTexturePagesSha256,
+            sourceTextureComponentSha256,
+            outputTextureComponentSha256,
             rows,
             patches);
         RequireHash(witnessHash, ExpectedWitnessSha256, "typed T66 witness identity");
-        return new(
+        Id65V2NativeTextureWitness witness = new(
             WitnessProfileId,
-            staticPlan.Donor.ManifestId,
-            staticPlan.Donor.CompleteRecordSha256,
-            staticPlan.SourceTexturePagesSha256,
-            staticPlan.OutputTexturePagesSha256,
-            ExpectedSourceTextureComponentSha256,
-            ExpectedOutputTextureComponentSha256,
-            staticPlan.SourceTextureCount,
-            staticPlan.OutputTextureCount,
-            staticPlan.PrivateTextureId,
-            staticPlan.Donor.DonorWadEntry,
-            staticPlan.Donor.DonorTextureId,
-            staticPlan.MaterialTemplateTextureId,
+            donorManifestId,
+            donorCompleteRecordSha256,
+            sourceTexturePagesSha256,
+            outputTexturePagesSha256,
+            sourceTextureComponentSha256,
+            outputTextureComponentSha256,
+            sourceTextureCount,
+            outputTextureCount,
+            privateTextureId,
+            donorWadEntry,
+            donorTextureId,
+            materialTemplateTextureId,
             rows,
             patches,
             witnessHash);
+        ValidateWitness(witness);
+        return witness;
+    }
+
+    private static LockedBaseTextureWitnessSources ReadLockedBaseTextureWitnessSources(
+        string sourcePath)
+    {
+        DiscLayout layout = DiscImage.DetectLayout(sourcePath);
+        if (layout.SectorSize != 2352 || layout.UserOffset != 24)
+        {
+            throw new InvalidDataException(
+                "The locked-base T66 witness requires the exact MODE2/2352 layout.");
+        }
+
+        using FileStream image = File.Open(
+            sourcePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read);
+        DiscFileRecord wad = DiscImage.FindRootFileRecord(
+            image,
+            layout,
+            name => string.Equals(name, "WAD.WAD", StringComparison.OrdinalIgnoreCase));
+        if (wad.Lba != LockedWadLba || wad.Size != LockedWadByteLength)
+            throw new InvalidDataException("The locked-base T66 WAD extent changed.");
+
+        RequireLockedWadEntry(
+            image,
+            layout,
+            wad.Lba,
+            LockedTargetDataWadEntry,
+            LockedTargetDataWadOffset,
+            LockedTargetDataByteLength);
+        RequireLockedWadEntry(
+            image,
+            layout,
+            wad.Lba,
+            LockedDonorDataWadEntry,
+            LockedDonorDataWadOffset,
+            LockedDonorDataByteLength);
+        RequireLockedLevelTextureModelLayout(
+            image,
+            layout,
+            wad.Lba,
+            LockedTargetDataWadOffset,
+            LockedTargetDataByteLength,
+            TexturePagesWadOffset,
+            TexturePagesByteLength,
+            ModelWadOffset,
+            ModelByteLength,
+            "ID65 WAD80");
+        RequireLockedLevelTextureModelLayout(
+            image,
+            layout,
+            wad.Lba,
+            LockedDonorDataWadOffset,
+            LockedDonorDataByteLength,
+            LockedDonorTexturePagesWadOffset,
+            LockedDonorTexturePagesByteLength,
+            LockedDonorModelWadOffset,
+            LockedDonorModelByteLength,
+            "Gnasty's World WAD70");
+
+        byte[] sourcePages = DiscImage.ReadFileBytes(
+            image,
+            layout,
+            wad.Lba,
+            TexturePagesWadOffset,
+            TexturePagesByteLength);
+        byte[] sourceTextureComponent = DiscImage.ReadFileBytes(
+            image,
+            layout,
+            wad.Lba,
+            ModelWadOffset,
+            SourceTextureComponentBytes);
+        if (BinaryPrimitives.ReadInt32LittleEndian(sourceTextureComponent) !=
+                SourceTextureComponentBytes ||
+            BinaryPrimitives.ReadInt32LittleEndian(sourceTextureComponent.AsSpan(4)) !=
+                SourceTextureCount)
+        {
+            throw new InvalidDataException(
+                "The locked ID65 texture component lost its exact 66-row header.");
+        }
+        string sourcePagesSha256 = Hash(sourcePages);
+        string sourceTextureComponentSha256 = Hash(sourceTextureComponent);
+        RequireHash(
+            sourcePagesSha256,
+            ExpectedSourceTexturePagesSha256,
+            "locked ID65 source texture pages");
+        RequireHash(
+            sourceTextureComponentSha256,
+            ExpectedSourceTextureComponentSha256,
+            "locked ID65 source texture component");
+
+        byte[] donorPages = DiscImage.ReadFileBytes(
+            image,
+            layout,
+            wad.Lba,
+            LockedDonorTexturePagesWadOffset,
+            LockedDonorTexturePagesByteLength);
+        byte[] donorTextureComponent = DiscImage.ReadFileBytes(
+            image,
+            layout,
+            wad.Lba,
+            LockedDonorModelWadOffset,
+            LockedDonorTextureComponentByteLength);
+        if (BinaryPrimitives.ReadInt32LittleEndian(donorTextureComponent) !=
+                LockedDonorTextureComponentByteLength ||
+            BinaryPrimitives.ReadInt32LittleEndian(donorTextureComponent.AsSpan(4)) !=
+                LockedDonorTextureCount)
+        {
+            throw new InvalidDataException(
+                "The locked Gnasty's World donor lost its exact 32-row texture header.");
+        }
+        RequireHash(
+            Hash(donorPages),
+            UnusedLevel65NativeTextureAuthoringContract.ExpectedDonorTexturePagesSha256,
+            "locked Gnasty's World donor texture pages");
+        RequireHash(
+            Hash(donorTextureComponent),
+            UnusedLevel65NativeTextureAuthoringContract.ExpectedDonorTextureComponentSha256,
+            "locked Gnasty's World donor texture component");
+
+        int donorLowOffset = checked(8 +
+            (UnusedLevel65NativeTextureAuthoringContract.DonorTextureId * 16));
+        int donorHighOffset = checked(8 + (LockedDonorTextureCount * 16) +
+            (UnusedLevel65NativeTextureAuthoringContract.DonorTextureId * 168));
+        byte[] donorLow = donorTextureComponent.AsSpan(donorLowOffset, 16).ToArray();
+        byte[] donorHigh = donorTextureComponent.AsSpan(donorHighOffset, 168).ToArray();
+        RequireHash(
+            Hash(donorLow),
+            UnusedLevel65NativeTextureAuthoringContract.ExpectedDonorLowDetailRowSha256,
+            "locked Gnasty's World T12 low-detail row");
+        RequireHash(
+            Hash(donorHigh),
+            UnusedLevel65NativeTextureAuthoringContract.ExpectedDonorHighDetailRowSha256,
+            "locked Gnasty's World T12 high-detail row");
+        byte[] donorCompleteRecord = [.. donorLow, .. donorHigh];
+        string donorCompleteRecordSha256 = Hash(donorCompleteRecord);
+        RequireHash(
+            donorCompleteRecordSha256,
+            UnusedLevel65NativeTextureAuthoringContract.ExpectedDonorCompleteRecordSha256,
+            "locked Gnasty's World T12 complete record");
+
+        return new(
+            sourcePages,
+            sourceTextureComponent,
+            sourcePagesSha256,
+            sourceTextureComponentSha256,
+            donorCompleteRecordSha256);
+    }
+
+    private static void RequireLockedWadEntry(
+        FileStream image,
+        DiscLayout layout,
+        int wadLba,
+        int wadEntry,
+        long expectedOffset,
+        int expectedByteLength)
+    {
+        byte[] row = DiscImage.ReadFileBytes(
+            image,
+            layout,
+            wadLba,
+            wadEntry * 8L,
+            8);
+        long offset = BinaryPrimitives.ReadUInt32LittleEndian(row);
+        long byteLength = BinaryPrimitives.ReadUInt32LittleEndian(row.AsSpan(4));
+        if (offset != expectedOffset || byteLength != expectedByteLength)
+        {
+            throw new InvalidDataException(
+                $"The locked-base T66 WAD entry {wadEntry} changed from " +
+                $"0x{expectedOffset:X}+0x{expectedByteLength:X}.");
+        }
+    }
+
+    private static void RequireLockedLevelTextureModelLayout(
+        FileStream image,
+        DiscLayout layout,
+        int wadLba,
+        long dataWadOffset,
+        int dataByteLength,
+        long expectedPagesWadOffset,
+        int expectedPagesByteLength,
+        long expectedModelWadOffset,
+        int expectedModelByteLength,
+        string label)
+    {
+        byte[] header = DiscImage.ReadFileBytes(
+            image,
+            layout,
+            wadLba,
+            dataWadOffset,
+            16);
+        long pagesRelativeOffset = BinaryPrimitives.ReadUInt32LittleEndian(header);
+        long pagesByteLength = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(4));
+        long modelRelativeOffset = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(8));
+        long modelByteLength = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(12));
+        if (dataWadOffset + pagesRelativeOffset != expectedPagesWadOffset ||
+            pagesByteLength != expectedPagesByteLength ||
+            dataWadOffset + modelRelativeOffset != expectedModelWadOffset ||
+            modelByteLength != expectedModelByteLength ||
+            pagesRelativeOffset + pagesByteLength > dataByteLength ||
+            modelRelativeOffset + modelByteLength > dataByteLength)
+        {
+            throw new InvalidDataException(
+                $"The locked-base T66 {label} texture/model subfile layout changed.");
+        }
     }
 
     public static Id65CompiledV2NativeTextureComposition Compile(
@@ -1346,6 +1726,16 @@ internal static class Id65V2NativeTextureCompositionCompiler
         return count;
     }
 
+    private static string HashFile(string path)
+    {
+        using FileStream stream = File.Open(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read);
+        return Convert.ToHexStringLower(SHA256.HashData(stream));
+    }
+
     private static string Hash(ReadOnlySpan<byte> bytes) =>
         Convert.ToHexStringLower(SHA256.HashData(bytes));
 
@@ -1357,4 +1747,11 @@ internal static class Id65V2NativeTextureCompositionCompiler
         if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException($"The exact {label} SHA-256 changed: {actual}.");
     }
+
+    private sealed record LockedBaseTextureWitnessSources(
+        byte[] SourceTexturePages,
+        byte[] SourceTextureComponent,
+        string SourceTexturePagesSha256,
+        string SourceTextureComponentSha256,
+        string DonorCompleteRecordSha256);
 }

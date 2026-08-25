@@ -270,6 +270,124 @@ internal sealed record UnusedLevel65MobyDependencyBundleContract(
     bool NormalCreateBinEnabled,
     bool ReleasePublicationAuthorized);
 
+internal sealed record UnusedLevel65MobyFoundationEquivalentReadSetMember(
+    string Id,
+    string AddressSpace,
+    int ContainerIndex,
+    long LogicalOffset,
+    int ByteLength,
+    string Sha256);
+
+/// <summary>
+/// Exact native evidence recovered from the project lab's locked display-name
+/// base. The retired full-authoring foundation remains a distinct historical
+/// proof anchor: this value records the actual locked-base identity and only
+/// claims equality for the explicit, pairwise-disjoint semantic read set.
+/// </summary>
+internal sealed class UnusedLevel65MobyLockedBaseDerivationEvidence
+{
+    private readonly byte[] _actorPackage;
+    private readonly IReadOnlyList<UnusedLevel65MobyFoundationEquivalentReadSetMember> _readSet;
+
+    internal UnusedLevel65MobyLockedBaseDerivationEvidence(
+        string lockedBaseImagePath,
+        string lockedBaseImageSha256,
+        string retiredFoundationImageSha256,
+        UnusedLevel65MobySourceRecordManifest sourceRecord,
+        UnusedLevel65MobyScenePropertiesManifest properties,
+        UnusedLevel65MobyActorPackageManifest actorPackage,
+        UnusedLevel65MobyDestinationAllocator destination,
+        UnusedLevel65MobyBehaviorClosureManifest behaviorClosure,
+        IReadOnlyList<UnusedLevel65MobyDependencyRequirement> dependencies,
+        IReadOnlyList<string> hardRuntimePublicationBlockers,
+        UnusedLevel65MobyExporterCompatibilityBoundary exporterBoundary,
+        byte[] exactActorPackage,
+        IReadOnlyList<UnusedLevel65MobyFoundationEquivalentReadSetMember> readSet,
+        string foundationEquivalentReadSetSha256,
+        string foundationEquivalentSemanticContractSha256,
+        string deterministicEvidenceSha256)
+    {
+        LockedBaseImagePath = lockedBaseImagePath;
+        LockedBaseImageSha256 = lockedBaseImageSha256;
+        RetiredFoundationImageSha256 = retiredFoundationImageSha256;
+        SourceRecord = sourceRecord;
+        Properties = properties;
+        ActorPackage = actorPackage;
+        Destination = destination;
+        BehaviorClosure = behaviorClosure;
+        Dependencies = Array.AsReadOnly(dependencies.ToArray());
+        HardRuntimePublicationBlockers = Array.AsReadOnly(hardRuntimePublicationBlockers.ToArray());
+        ExporterBoundary = exporterBoundary;
+        _actorPackage = exactActorPackage.ToArray();
+        _readSet = Array.AsReadOnly(readSet.ToArray());
+        FoundationEquivalentReadSetSha256 = foundationEquivalentReadSetSha256;
+        FoundationEquivalentSemanticContractSha256 =
+            foundationEquivalentSemanticContractSha256;
+        DeterministicEvidenceSha256 = deterministicEvidenceSha256;
+    }
+
+    public string LockedBaseImagePath { get; }
+    public string LockedBaseImageSha256 { get; }
+    public string RetiredFoundationImageSha256 { get; }
+    public UnusedLevel65MobySourceRecordManifest SourceRecord { get; }
+    public UnusedLevel65MobyScenePropertiesManifest Properties { get; }
+    public UnusedLevel65MobyActorPackageManifest ActorPackage { get; }
+    public UnusedLevel65MobyDestinationAllocator Destination { get; }
+    public UnusedLevel65MobyBehaviorClosureManifest BehaviorClosure { get; }
+    public IReadOnlyList<UnusedLevel65MobyDependencyRequirement> Dependencies { get; }
+    public IReadOnlyList<string> HardRuntimePublicationBlockers { get; }
+    public UnusedLevel65MobyExporterCompatibilityBoundary ExporterBoundary { get; }
+    public IReadOnlyList<UnusedLevel65MobyFoundationEquivalentReadSetMember> FoundationEquivalentReadSet =>
+        _readSet;
+    public string FoundationEquivalentReadSetSha256 { get; }
+    public string FoundationEquivalentSemanticContractSha256 { get; }
+    public string DeterministicEvidenceSha256 { get; }
+
+    public string ProfileId =>
+        UnusedLevel65MobyDependencyBundleFoundation.LockedBaseDerivationProfileId;
+    public int SchemaVersion => 1;
+    public string FoundationEquivalentReadSetBoundary =>
+        "Exact executable, WAD-directory, Artisans donor-entry, overlay, and ID65 Moby destination ranges only; unrelated ID65 terrain and texture bytes are excluded.";
+    public string ExactActorPackageParentReadSetMemberId => "artisans-data-entry";
+    public bool LockedBaseWholeImageIdentityVerified =>
+        LockedBaseImageSha256 ==
+        UnusedLevel65MobyDependencyBundleFoundation.LockedIndependentBaseImageSha256;
+    public bool LockedBaseAndRetiredFoundationWholeImagesAreDistinct =>
+        LockedBaseImageSha256 != RetiredFoundationImageSha256;
+    public bool FoundationEquivalentReadSetVerified =>
+        FoundationEquivalentReadSetSha256 ==
+        UnusedLevel65MobyDependencyBundleFoundation.ExpectedFoundationEquivalentReadSetSha256;
+    public bool FoundationEquivalentReadSetPairwiseDisjoint =>
+        _readSet
+            .GroupBy(member => (member.AddressSpace, member.ContainerIndex))
+            .All(group =>
+            {
+                long end = -1;
+                foreach (UnusedLevel65MobyFoundationEquivalentReadSetMember member in
+                         group.OrderBy(member => member.LogicalOffset))
+                {
+                    if (member.LogicalOffset < end)
+                        return false;
+                    end = checked(member.LogicalOffset + member.ByteLength);
+                }
+                return true;
+            });
+    public bool FoundationEquivalentReadSetUsesInMemoryDonorSlices => true;
+    public bool FoundationEquivalentReadSetExcludesUnrelatedId65TerrainAndTextureBytes => true;
+    public bool ExactActorPackageCapturedInSameInspection => true;
+    public bool RetiredFoundationImageRead => false;
+    public bool StaticInspectionOnly => true;
+    public bool ProducesPatches => false;
+    public bool WritesBin => false;
+    public bool WritesCue => false;
+    public bool AppIntegrated => false;
+    public bool NormalCreateBinEnabled => false;
+    public bool RuntimeCandidateAuthorized => false;
+    public bool ReleasePublicationAuthorized => false;
+
+    internal byte[] CopyExactActorPackage() => _actorPackage.ToArray();
+}
+
 /// <summary>
 /// Read-only dependency-bundle schema and first cross-level ID65 allocator.
 /// The first structural donor is Artisans Grass T121 (actor 0x01F5): its row,
@@ -292,6 +410,12 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
     public const string DonorId = "artisans:t121:actor-01f5:grass-untextured-no-update-v2";
     public const string ExpectedContractSha256 =
         "8ec952c5972d7e2a37e5e89f8ec2be26144635b92b58cba85f745f7d05a76d4f";
+    public const string LockedBaseDerivationProfileId =
+        "unused-level-65-moby-artisans-grass-project-locked-base-read-set-v1";
+    public const string ExpectedFoundationEquivalentReadSetSha256 =
+        "64befeed402deb00cb8366ce825f88e36605870cc1e82ac668b3d290b1e41f83";
+    public const string ExpectedLockedBaseDerivationEvidenceSha256 =
+        "215597cab5914a173a98443b48fdeb0e2669e870b0becbb5ca4be7db6c25067b";
 
     private const int WadLba = 37;
     private const int ExpectedWadByteLength = 0x6C18800;
@@ -329,6 +453,8 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
     private const int ArtisansDataEntry = 10;
     private const long ArtisansDataWadOffset = 0x800800;
     private const int ArtisansDataByteLength = 0x383000;
+    private const string ArtisansDataSha256 =
+        "86cde4f886d97821a3a4b869100b586842dbd4b9fb696558bead274bb547af4f";
     private const int ArtisansActorSubfileOffset = 0x17C000;
     private const int ArtisansActorSubfileByteLength = 0x4D800;
     private const int ArtisansSceneOffset = 0x1C9800;
@@ -387,6 +513,10 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
     private const int Id65SceneByteLength = 0x8800;
     private const int Id65ObjectCount = 107;
     private const int Id65ObjectTableOffset = 0x170;
+    private const string Id65ActorRootHeaderSha256 =
+        "f29e96e70f24dfb0cc0ceda02861f3832a918b74df6f8b6cb4cc5f8ff3720398";
+    private const string Id65ObjectCountSha256 =
+        "db15613685adaff9a991ea7f93de0c717fab1971b7ffca25b27e209ff0130391";
     private const string Id65ObjectTableSha256 =
         "2d5743b6895cb6142150812e06eb772b492ab21665edec239e17e98b9ed2af1d";
     private const int Id65FirstAppendRowOffset = 0x2638;
@@ -417,21 +547,165 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
     private const string Id65SceneTailSha256 =
         "2df7244b4c2c10726911058b50c0602fdc399c69d26ca4551f1633ab02666068";
 
+    private sealed record NativeInspection(
+        string ImagePath,
+        string ImageSha256,
+        UnusedLevel65MobySourceRecordManifest SourceRecord,
+        UnusedLevel65MobyScenePropertiesManifest Properties,
+        UnusedLevel65MobyActorPackageManifest ActorPackage,
+        UnusedLevel65MobyDestinationAllocator Destination,
+        UnusedLevel65MobyBehaviorClosureManifest BehaviorClosure,
+        IReadOnlyList<UnusedLevel65MobyDependencyRequirement> Dependencies,
+        IReadOnlyList<string> HardRuntimePublicationBlockers,
+        UnusedLevel65MobyExporterCompatibilityBoundary ExporterBoundary,
+        byte[] ExactActorPackage,
+        IReadOnlyList<UnusedLevel65MobyFoundationEquivalentReadSetMember> FoundationEquivalentReadSet,
+        string FoundationEquivalentReadSetSha256);
+
     public static UnusedLevel65MobyDependencyBundleContract InspectFirstCrossLevelDonor(
         string foundationImagePath)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(foundationImagePath);
-        string imagePath = Path.GetFullPath(foundationImagePath);
+        NativeInspection inspection = InspectNativeReadSet(
+            foundationImagePath,
+            ExpectedFoundationImageSha256,
+            "ID65 full-authoring foundation BIN");
+        RequireHash(
+            inspection.FoundationEquivalentReadSetSha256,
+            ExpectedFoundationEquivalentReadSetSha256,
+            "retired-foundation Moby semantic read set");
+        string deterministicContractSha256 = ComputeContractHash(
+            inspection.ImageSha256,
+            inspection.SourceRecord,
+            inspection.Properties,
+            inspection.ActorPackage,
+            inspection.Destination,
+            inspection.BehaviorClosure,
+            inspection.Dependencies,
+            inspection.HardRuntimePublicationBlockers,
+            inspection.ExporterBoundary);
+        RequireHash(
+            deterministicContractSha256,
+            ExpectedContractSha256,
+            "ID65 Moby dependency-bundle contract");
+
+        return new UnusedLevel65MobyDependencyBundleContract(
+            ProfileId,
+            SchemaVersion,
+            inspection.ImagePath,
+            inspection.ImageSha256,
+            LockedIndependentBaseImageSha256,
+            Id65ObjectTableSha256,
+            DonorId,
+            "artisans",
+            "Artisans",
+            inspection.SourceRecord,
+            inspection.Properties,
+            inspection.ActorPackage,
+            inspection.Destination,
+            inspection.BehaviorClosure,
+            inspection.Dependencies,
+            inspection.HardRuntimePublicationBlockers,
+            inspection.ExporterBoundary,
+            deterministicContractSha256,
+            StructurallyCompleteAllocation: true,
+            StaticRuntimeDependencyClosureComplete: true,
+            RunnableBundleSupport: false,
+            StaticInspectionOnly: true,
+            ProducesPatches: false,
+            WritesBin: false,
+            WritesCue: false,
+            DisposableRuntimeCandidateAuthorized: false,
+            AppIntegrated: false,
+            NormalCreateBinEnabled: false,
+            ReleasePublicationAuthorized: false);
+    }
+
+    public static UnusedLevel65MobyLockedBaseDerivationEvidence InspectLockedIndependentBase(
+        string lockedBaseImagePath)
+    {
+        NativeInspection inspection = InspectNativeReadSet(
+            lockedBaseImagePath,
+            LockedIndependentBaseImageSha256,
+            "project-locked ID65 base BIN");
+        if (inspection.ImageSha256 == ExpectedFoundationImageSha256)
+        {
+            throw new InvalidDataException(
+                "The locked-base Moby derivation was given the retired foundation image instead of the distinct project-locked base.");
+        }
+
+        // This historical contract hash is a semantic equivalence anchor only.
+        // The actual inspected image identity remains the distinct locked-base
+        // hash above and is never stored in a FoundationImagePath contract.
+        string foundationEquivalentSemanticContractSha256 = ComputeContractHash(
+            ExpectedFoundationImageSha256,
+            inspection.SourceRecord,
+            inspection.Properties,
+            inspection.ActorPackage,
+            inspection.Destination,
+            inspection.BehaviorClosure,
+            inspection.Dependencies,
+            inspection.HardRuntimePublicationBlockers,
+            inspection.ExporterBoundary);
+        RequireHash(
+            foundationEquivalentSemanticContractSha256,
+            ExpectedContractSha256,
+            "foundation-equivalent Moby semantic contract");
+        RequireHash(
+            inspection.FoundationEquivalentReadSetSha256,
+            ExpectedFoundationEquivalentReadSetSha256,
+            "foundation-equivalent Moby read set");
+
+        string deterministicEvidenceSha256 = ComputeLockedBaseDerivationEvidenceHash(
+            inspection.ImageSha256,
+            inspection.FoundationEquivalentReadSetSha256,
+            foundationEquivalentSemanticContractSha256,
+            inspection.ActorPackage.ActorPackageSha256);
+        RequireHash(
+            deterministicEvidenceSha256,
+            ExpectedLockedBaseDerivationEvidenceSha256,
+            "locked-base Moby derivation evidence");
+
+        return new UnusedLevel65MobyLockedBaseDerivationEvidence(
+            inspection.ImagePath,
+            inspection.ImageSha256,
+            ExpectedFoundationImageSha256,
+            inspection.SourceRecord,
+            inspection.Properties,
+            inspection.ActorPackage,
+            inspection.Destination,
+            inspection.BehaviorClosure,
+            inspection.Dependencies,
+            inspection.HardRuntimePublicationBlockers,
+            inspection.ExporterBoundary,
+            inspection.ExactActorPackage,
+            inspection.FoundationEquivalentReadSet,
+            inspection.FoundationEquivalentReadSetSha256,
+            foundationEquivalentSemanticContractSha256,
+            deterministicEvidenceSha256);
+    }
+
+    private static NativeInspection InspectNativeReadSet(
+        string inputImagePath,
+        string expectedImageSha256,
+        string inputLabel)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(inputImagePath);
+        string imagePath = Path.GetFullPath(inputImagePath);
         if (!File.Exists(imagePath))
-            throw new FileNotFoundException("The exact ID65 full-authoring foundation BIN is missing.", imagePath);
-        string imageSha256 = HashFile(imagePath);
-        RequireHash(imageSha256, ExpectedFoundationImageSha256, "ID65 full-authoring foundation BIN");
+            throw new FileNotFoundException($"The exact {inputLabel} is missing.", imagePath);
 
         DiscLayout layout = DiscImage.DetectLayout(imagePath);
         if (layout.SectorSize != 2352 || layout.UserOffset != 24)
             throw new InvalidDataException("The ID65 Moby dependency contract accepts only MODE2/2352 input.");
 
-        using FileStream image = File.OpenRead(imagePath);
+        using FileStream image = new(
+            imagePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read);
+        string imageSha256 = HashStream(image);
+        RequireHash(imageSha256, expectedImageSha256, inputLabel);
+        image.Position = 0;
         DiscFileRecord wad = DiscImage.FindRootFileRecord(
             image,
             layout,
@@ -468,40 +742,56 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
         if (executableClassImmediateCount != 0)
             throw new InvalidDataException("The global executable gained an aligned I-type class-0x01F5 immediate.");
 
-        RequireDirectoryEntry(image, layout, ArtisansOverlayEntry, ArtisansOverlayWadOffset, ArtisansOverlayByteLength);
-        RequireDirectoryEntry(image, layout, ArtisansDataEntry, ArtisansDataWadOffset, ArtisansDataByteLength);
-        RequireDirectoryEntry(image, layout, Id65OverlayEntry, Id65OverlayWadOffset, Id65OverlayByteLength);
-        RequireDirectoryEntry(image, layout, Id65DataEntry, Id65DataWadOffset, Id65DataByteLength);
-        byte[] artisansOverlay = ReadWad(image, layout, ArtisansOverlayWadOffset, ArtisansOverlayByteLength);
-        byte[] id65Overlay = ReadWad(image, layout, Id65OverlayWadOffset, Id65OverlayByteLength);
-        RequireHash(Hash(artisansOverlay), ArtisansOverlaySha256, "Artisans overlay preimage");
-        RequireHash(Hash(id65Overlay), Id65OverlaySha256, "ID65 Town Square overlay preimage");
-
-        RequireNestedSubfile(
+        byte[] artisansOverlayDirectoryRow = RequireDirectoryEntry(
             image,
             layout,
+            ArtisansOverlayEntry,
+            ArtisansOverlayWadOffset,
+            ArtisansOverlayByteLength);
+        byte[] artisansDataDirectoryRow = RequireDirectoryEntry(
+            image,
+            layout,
+            ArtisansDataEntry,
             ArtisansDataWadOffset,
+            ArtisansDataByteLength);
+        byte[] id65OverlayDirectoryRow = RequireDirectoryEntry(
+            image,
+            layout,
+            Id65OverlayEntry,
+            Id65OverlayWadOffset,
+            Id65OverlayByteLength);
+        byte[] id65DataDirectoryRow = RequireDirectoryEntry(
+            image,
+            layout,
+            Id65DataEntry,
+            Id65DataWadOffset,
+            Id65DataByteLength);
+        byte[] artisansOverlay = ReadWad(image, layout, ArtisansOverlayWadOffset, ArtisansOverlayByteLength);
+        byte[] artisansData = ReadWad(image, layout, ArtisansDataWadOffset, ArtisansDataByteLength);
+        byte[] id65Overlay = ReadWad(image, layout, Id65OverlayWadOffset, Id65OverlayByteLength);
+        byte[] id65Header = ReadWad(image, layout, Id65DataWadOffset, 0x200);
+        RequireHash(Hash(artisansOverlay), ArtisansOverlaySha256, "Artisans overlay preimage");
+        RequireHash(Hash(artisansData), ArtisansDataSha256, "Artisans donor data entry preimage");
+        RequireHash(Hash(id65Overlay), Id65OverlaySha256, "ID65 Town Square overlay preimage");
+        RequireHash(Hash(id65Header), Id65ActorRootHeaderSha256, "ID65 actor-root header preimage");
+
+        RequireNestedSubfile(
+            artisansData,
             2,
             ArtisansActorSubfileOffset,
             ArtisansActorSubfileByteLength);
         RequireNestedSubfile(
-            image,
-            layout,
-            ArtisansDataWadOffset,
+            artisansData,
             3,
             ArtisansSceneOffset,
             ArtisansSceneByteLength);
         RequireNestedSubfile(
-            image,
-            layout,
-            Id65DataWadOffset,
+            id65Header,
             2,
             Id65ActorSubfileOffset,
             Id65ActorSubfileByteLength);
         RequireNestedSubfile(
-            image,
-            layout,
-            Id65DataWadOffset,
+            id65Header,
             3,
             Id65SceneOffset,
             Id65SceneByteLength);
@@ -509,15 +799,23 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
         long artisansSceneWadOffset = ArtisansDataWadOffset + ArtisansSceneOffset;
         long id65SceneWadOffset = Id65DataWadOffset + Id65SceneOffset;
         RequireUInt32(
-            ReadWad(image, layout, artisansSceneWadOffset + ArtisansObjectTableOffset - 4, 4),
+            artisansData.AsSpan(ArtisansSceneOffset + ArtisansObjectTableOffset - 4, 4),
             ArtisansObjectCount,
             "Artisans source-record count");
+        byte[] id65ObjectCount = ReadWad(
+            image,
+            layout,
+            id65SceneWadOffset + Id65ObjectTableOffset - 4,
+            4);
+        RequireHash(Hash(id65ObjectCount), Id65ObjectCountSha256, "ID65 source-record count preimage");
         RequireUInt32(
-            ReadWad(image, layout, id65SceneWadOffset + Id65ObjectTableOffset - 4, 4),
+            id65ObjectCount,
             Id65ObjectCount,
             "ID65 source-record count");
 
-        byte[] grassRow = ReadWad(image, layout, artisansSceneWadOffset + GrassRowSceneOffset, RecordStride);
+        byte[] grassRow = artisansData
+            .AsSpan(ArtisansSceneOffset + GrassRowSceneOffset, RecordStride)
+            .ToArray();
         RequireHash(Hash(grassRow), GrassRowSha256, "Artisans Grass T121 row");
         if (GrassRowSceneOffset != ArtisansObjectTableOffset + (GrassTrueIndex * RecordStride))
             throw new InvalidDataException("The pinned Artisans T121 table arithmetic changed.");
@@ -531,20 +829,20 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
             throw new InvalidDataException("The pinned Artisans Grass scenery fingerprint changed.");
         }
 
-        byte[] properties = ReadWad(
-            image,
-            layout,
-            artisansSceneWadOffset + GrassPropertiesOffset,
-            GrassPropertiesByteLength);
+        byte[] properties = artisansData
+            .AsSpan(
+                ArtisansSceneOffset + checked((int)GrassPropertiesOffset),
+                GrassPropertiesByteLength)
+            .ToArray();
         RequireHash(Hash(properties), GrassPropertiesSha256, "Artisans Grass properties");
         if (!properties.AsSpan().SequenceEqual(Convert.FromHexString("040000008A000000")))
             throw new InvalidDataException("Artisans Grass properties are not the pinned two-word block.");
 
-        byte[] artisansRows = ReadWad(
-            image,
-            layout,
-            artisansSceneWadOffset + ArtisansObjectTableOffset,
-            ArtisansObjectCount * RecordStride);
+        byte[] artisansRows = artisansData
+            .AsSpan(
+                ArtisansSceneOffset + ArtisansObjectTableOffset,
+                ArtisansObjectCount * RecordStride)
+            .ToArray();
         List<int> sharingTrueIndices = [];
         SortedSet<int> positivePropertiesPointers = [];
         for (int index = 0; index < ArtisansObjectCount; index++)
@@ -564,11 +862,11 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
         if (nextPropertiesPointer != GrassPropertiesOffset + GrassPropertiesByteLength)
             throw new InvalidDataException("The exact Artisans Grass properties extent changed.");
 
-        byte[] artisansFixups = ReadWad(
-            image,
-            layout,
-            artisansSceneWadOffset + ArtisansFixupCountOffset,
-            ArtisansFixupActiveByteLength);
+        byte[] artisansFixups = artisansData
+            .AsSpan(
+                ArtisansSceneOffset + ArtisansFixupCountOffset,
+                ArtisansFixupActiveByteLength)
+            .ToArray();
         RequireHash(Hash(artisansFixups), ArtisansFixupActiveSha256, "Artisans pointer-fixup component");
         RequireUInt32(artisansFixups.AsSpan(0, 4), ArtisansFixupCount, "Artisans pointer-fixup count");
         int[] sourceFixupFields = ReadFixupFields(artisansFixups, ArtisansFixupCount);
@@ -581,7 +879,7 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
         if (internalPropertiesFixups.Length != 0)
             throw new InvalidDataException("The pinned Grass properties unexpectedly gained an internal scene pointer.");
 
-        byte[] artisansHeader = ReadWad(image, layout, ArtisansDataWadOffset, 0x200);
+        byte[] artisansHeader = artisansData.AsSpan(0, 0x200).ToArray();
         ActorRootTable artisansRoots = ReadActorRootTable(artisansHeader);
         if (artisansRoots.PopulatedCount != 35 ||
             artisansRoots.Roots[GrassActorRootIndex] != GrassActorRoot ||
@@ -590,11 +888,9 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
         {
             throw new InvalidDataException("The Artisans Grass actor-root envelope changed.");
         }
-        byte[] grassPackage = ReadWad(
-            image,
-            layout,
-            ArtisansDataWadOffset + GrassActorRoot,
-            GrassActorNextRoot - GrassActorRoot);
+        byte[] grassPackage = artisansData
+            .AsSpan(GrassActorRoot, GrassActorNextRoot - GrassActorRoot)
+            .ToArray();
         RequireHash(Hash(grassPackage), GrassActorPackageSha256, "Artisans Grass actor package");
         int animationCount = ReadInt32(grassPackage, 0);
         int modelDataRelative = ReadInt32(grassPackage, 0x34);
@@ -625,13 +921,6 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
             id65SceneWadOffset + Id65ObjectTableOffset,
             Id65ObjectCount * RecordStride);
         RequireHash(Hash(id65ObjectTable), Id65ObjectTableSha256, "ID65 107-row Town Square object table");
-        byte[] firstAppendRow = ReadWad(
-            image,
-            layout,
-            id65SceneWadOffset + Id65FirstAppendRowOffset,
-            RecordStride);
-        RequireHash(Hash(firstAppendRow), ZeroRecordSha256, "ID65 first append row T107");
-        RequireZero(firstAppendRow, "ID65 first append row T107");
         byte[] zeroRows = ReadWad(
             image,
             layout,
@@ -639,12 +928,14 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
             Id65ContiguousZeroRowBytes);
         RequireHash(Hash(zeroRows), Id65ContiguousZeroRowsSha256, "ID65 contiguous object-row reserve");
         RequireZero(zeroRows, "ID65 contiguous object-row reserve");
+        byte[] firstAppendRow = zeroRows.AsSpan(0, RecordStride).ToArray();
+        RequireHash(Hash(firstAppendRow), ZeroRecordSha256, "ID65 first append row T107");
+        RequireZero(firstAppendRow, "ID65 first append row T107");
         byte[] playerAnchor = id65ObjectTable.AsSpan(
             Id65PlayerAnchorTrueIndex * RecordStride,
             RecordStride).ToArray();
         RequireHash(Hash(playerAnchor), Id65PlayerAnchorSha256, "ID65 T92 player anchor");
 
-        byte[] id65Header = ReadWad(image, layout, Id65DataWadOffset, 0x200);
         ActorRootTable id65Roots = ReadActorRootTable(id65Header);
         if (id65Roots.PopulatedCount != Id65ExistingActorRootCount ||
             id65Roots.Roots[Id65ExistingActorRootCount - 1] != Id65LastActorRoot ||
@@ -923,31 +1214,110 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
                 "This contract is independent and read-only; it neither invokes nor mutates those shared paths."
             ]);
 
-        string deterministicContractSha256 = ComputeContractHash(
-            imageSha256,
-            sourceRecord,
-            propertiesManifest,
-            actorPackage,
-            destination,
-            behaviorClosure,
-            dependencies,
-            hardBlockers,
-            exporterBoundary);
-        RequireHash(
-            deterministicContractSha256,
-            ExpectedContractSha256,
-            "ID65 Moby dependency-bundle contract");
+        UnusedLevel65MobyFoundationEquivalentReadSetMember[] readSet =
+        [
+            ReadSetMember(
+                "global-executable",
+                "disc-root-file",
+                executable.Lba,
+                0,
+                executableBytes),
+            ReadSetMember(
+                "wad-directory-artisans-overlay",
+                "wad-file",
+                wad.Lba,
+                ArtisansOverlayEntry * 8L,
+                artisansOverlayDirectoryRow),
+            ReadSetMember(
+                "wad-directory-artisans-data",
+                "wad-file",
+                wad.Lba,
+                ArtisansDataEntry * 8L,
+                artisansDataDirectoryRow),
+            ReadSetMember(
+                "wad-directory-id65-overlay",
+                "wad-file",
+                wad.Lba,
+                Id65OverlayEntry * 8L,
+                id65OverlayDirectoryRow),
+            ReadSetMember(
+                "wad-directory-id65-data",
+                "wad-file",
+                wad.Lba,
+                Id65DataEntry * 8L,
+                id65DataDirectoryRow),
+            ReadSetMember(
+                "artisans-overlay",
+                "wad-file",
+                wad.Lba,
+                ArtisansOverlayWadOffset,
+                artisansOverlay),
+            ReadSetMember(
+                "artisans-data-entry",
+                "wad-file",
+                wad.Lba,
+                ArtisansDataWadOffset,
+                artisansData),
+            ReadSetMember(
+                "id65-overlay",
+                "wad-file",
+                wad.Lba,
+                Id65OverlayWadOffset,
+                id65Overlay),
+            ReadSetMember(
+                "id65-actor-root-header",
+                "wad-file",
+                wad.Lba,
+                Id65DataWadOffset,
+                id65Header),
+            ReadSetMember(
+                "id65-last-actor-used",
+                "wad-file",
+                wad.Lba,
+                Id65DataWadOffset + Id65LastActorRoot,
+                lastActorUsed),
+            ReadSetMember(
+                "id65-actor-tail",
+                "wad-file",
+                wad.Lba,
+                Id65DataWadOffset + Id65ActorTailOffset,
+                actorTail),
+            ReadSetMember(
+                "id65-object-count",
+                "wad-file",
+                wad.Lba,
+                id65SceneWadOffset + Id65ObjectTableOffset - 4,
+                id65ObjectCount),
+            ReadSetMember(
+                "id65-object-table",
+                "wad-file",
+                wad.Lba,
+                id65SceneWadOffset + Id65ObjectTableOffset,
+                id65ObjectTable),
+            ReadSetMember(
+                "id65-contiguous-zero-row-reserve",
+                "wad-file",
+                wad.Lba,
+                id65SceneWadOffset + Id65FirstAppendRowOffset,
+                zeroRows),
+            ReadSetMember(
+                "id65-active-scene-fixups",
+                "wad-file",
+                wad.Lba,
+                id65SceneWadOffset + Id65FixupCountOffset,
+                id65Fixups),
+            ReadSetMember(
+                "id65-post-fixup-scene-tail",
+                "wad-file",
+                wad.Lba,
+                id65SceneWadOffset + Id65FixupAppendOffset,
+                id65SceneTail)
+        ];
+        string readSetSha256 = ComputeFoundationEquivalentReadSetHash(readSet);
 
-        return new UnusedLevel65MobyDependencyBundleContract(
-            ProfileId,
-            SchemaVersion,
+        return new NativeInspection(
             imagePath,
             imageSha256,
-            LockedIndependentBaseImageSha256,
-            Id65ObjectTableSha256,
-            DonorId,
-            "artisans",
-            "Artisans",
             sourceRecord,
             propertiesManifest,
             actorPackage,
@@ -956,18 +1326,9 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
             dependencies,
             hardBlockers,
             exporterBoundary,
-            deterministicContractSha256,
-            StructurallyCompleteAllocation: true,
-            StaticRuntimeDependencyClosureComplete: true,
-            RunnableBundleSupport: false,
-            StaticInspectionOnly: true,
-            ProducesPatches: false,
-            WritesBin: false,
-            WritesCue: false,
-            DisposableRuntimeCandidateAuthorized: false,
-            AppIntegrated: false,
-            NormalCreateBinEnabled: false,
-            ReleasePublicationAuthorized: false);
+            grassPackage,
+            readSet,
+            readSetSha256);
     }
 
     private static List<UnusedLevel65MobyDependencyRequirement> BuildDependencies(
@@ -1411,6 +1772,101 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
             EndsExactlyUnderRetailRendererGrammar: cursor == end);
     }
 
+    private static UnusedLevel65MobyFoundationEquivalentReadSetMember ReadSetMember(
+        string id,
+        string addressSpace,
+        int containerIndex,
+        long logicalOffset,
+        ReadOnlySpan<byte> bytes) =>
+        new(
+            id,
+            addressSpace,
+            containerIndex,
+            logicalOffset,
+            bytes.Length,
+            Hash(bytes));
+
+    private static string ComputeFoundationEquivalentReadSetHash(
+        IReadOnlyList<UnusedLevel65MobyFoundationEquivalentReadSetMember> readSet)
+    {
+        if (readSet.Count == 0 ||
+            readSet.Select(member => member.Id).Distinct(StringComparer.Ordinal).Count() != readSet.Count)
+        {
+            throw new InvalidDataException(
+                "The foundation-equivalent Moby read set is empty or contains duplicate member ids.");
+        }
+
+        UnusedLevel65MobyFoundationEquivalentReadSetMember[] ordered = readSet
+            .OrderBy(member => member.AddressSpace, StringComparer.Ordinal)
+            .ThenBy(member => member.ContainerIndex)
+            .ThenBy(member => member.LogicalOffset)
+            .ThenBy(member => member.Id, StringComparer.Ordinal)
+            .ToArray();
+        foreach (IGrouping<(string AddressSpace, int ContainerIndex), UnusedLevel65MobyFoundationEquivalentReadSetMember> group in
+                 ordered.GroupBy(member => (member.AddressSpace, member.ContainerIndex)))
+        {
+            long end = -1;
+            foreach (UnusedLevel65MobyFoundationEquivalentReadSetMember member in group)
+            {
+                if (member.ByteLength <= 0 || member.LogicalOffset < 0 ||
+                    member.Sha256.Length != 64 ||
+                    member.Sha256.Any(character => !Uri.IsHexDigit(character)))
+                {
+                    throw new InvalidDataException(
+                        $"Foundation-equivalent read-set member {member.Id} has an invalid range or SHA-256.");
+                }
+                if (member.LogicalOffset < end)
+                {
+                    throw new InvalidDataException(
+                        $"Foundation-equivalent read-set member {member.Id} overlaps another semantic input range.");
+                }
+                end = checked(member.LogicalOffset + member.ByteLength);
+            }
+        }
+
+        StringBuilder canonical = new();
+        canonical.Append("foundation-equivalent-moby-read-set-v1\n");
+        canonical.Append(ordered.Length).Append('\n');
+        foreach (UnusedLevel65MobyFoundationEquivalentReadSetMember member in ordered)
+        {
+            canonical
+                .Append(member.Id).Append('|')
+                .Append(member.AddressSpace).Append('|')
+                .Append(member.ContainerIndex.ToString("X8", System.Globalization.CultureInfo.InvariantCulture)).Append('|')
+                .Append(member.LogicalOffset.ToString("X16", System.Globalization.CultureInfo.InvariantCulture)).Append('|')
+                .Append(member.ByteLength.ToString("X8", System.Globalization.CultureInfo.InvariantCulture)).Append('|')
+                .Append(member.Sha256)
+                .Append('\n');
+        }
+        return Hash(Encoding.UTF8.GetBytes(canonical.ToString()));
+    }
+
+    private static string ComputeLockedBaseDerivationEvidenceHash(
+        string lockedBaseImageSha256,
+        string readSetSha256,
+        string foundationEquivalentSemanticContractSha256,
+        string actorPackageSha256)
+    {
+        StringBuilder canonical = new();
+        canonical.Append(LockedBaseDerivationProfileId).Append('\n');
+        canonical.Append(1).Append('\n');
+        canonical.Append(lockedBaseImageSha256).Append('\n');
+        canonical.Append(ExpectedFoundationImageSha256).Append('\n');
+        canonical.Append(readSetSha256).Append('\n');
+        canonical.Append(foundationEquivalentSemanticContractSha256).Append('\n');
+        canonical.Append(actorPackageSha256).Append('\n');
+        canonical.Append("retired-foundation-image-read=false\n");
+        canonical.Append("static-inspection-only=true\n");
+        canonical.Append("produces-patches=false\n");
+        canonical.Append("writes-bin=false\n");
+        canonical.Append("writes-cue=false\n");
+        canonical.Append("app-integrated=false\n");
+        canonical.Append("normal-create-bin-enabled=false\n");
+        canonical.Append("runtime-candidate-authorized=false\n");
+        canonical.Append("release-publication-authorized=false\n");
+        return Hash(Encoding.UTF8.GetBytes(canonical.ToString()));
+    }
+
     private static string ComputeContractHash(
         string imageSha256,
         UnusedLevel65MobySourceRecordManifest row,
@@ -1577,7 +2033,7 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
             throw new InvalidDataException($"{label} used length is 0x{usedLength:X}, expected 0x{expectedUsedLength:X}.");
     }
 
-    private static void RequireDirectoryEntry(
+    private static byte[] RequireDirectoryEntry(
         FileStream image,
         DiscLayout layout,
         int index,
@@ -1587,27 +2043,26 @@ internal static class UnusedLevel65MobyDependencyBundleFoundation
         byte[] row = ReadWad(image, layout, index * 8L, 8);
         RequireUInt32(row.AsSpan(0, 4), checked((uint)expectedOffset), $"WAD row {index} offset");
         RequireUInt32(row.AsSpan(4, 4), checked((uint)expectedLength), $"WAD row {index} length");
+        return row;
     }
 
     private static void RequireNestedSubfile(
-        FileStream image,
-        DiscLayout layout,
-        long entryWadOffset,
+        ReadOnlySpan<byte> entry,
         int subfileIndex,
         int expectedOffset,
         int expectedLength)
     {
-        byte[] descriptor = ReadWad(image, layout, entryWadOffset + (subfileIndex * 8L), 8);
-        RequireUInt32(descriptor.AsSpan(0, 4), checked((uint)expectedOffset), $"nested subfile {subfileIndex} offset");
-        RequireUInt32(descriptor.AsSpan(4, 4), checked((uint)expectedLength), $"nested subfile {subfileIndex} length");
+        ReadOnlySpan<byte> descriptor = entry.Slice(subfileIndex * 8, 8);
+        RequireUInt32(descriptor.Slice(0, 4), checked((uint)expectedOffset), $"nested subfile {subfileIndex} offset");
+        RequireUInt32(descriptor.Slice(4, 4), checked((uint)expectedLength), $"nested subfile {subfileIndex} length");
     }
 
     private static byte[] ReadWad(FileStream image, DiscLayout layout, long offset, int length) =>
         DiscImage.ReadFileBytes(image, layout, WadLba, offset, length);
 
-    private static string HashFile(string path)
+    private static string HashStream(FileStream stream)
     {
-        using FileStream stream = File.OpenRead(path);
+        stream.Position = 0;
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 

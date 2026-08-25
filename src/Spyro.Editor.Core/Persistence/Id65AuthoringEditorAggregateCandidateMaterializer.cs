@@ -10,9 +10,7 @@ namespace Spyro.Editor.Core.Persistence;
 internal sealed record Id65AuthoringEditorAggregateCandidateMaterializationRequest(
     UnusedLevel65BlankLevelLabWorkspacePaths Paths,
     UnusedLevel65BlankLevelLabManifest ExpectedManifest,
-    Id65AuthoringEditorDocumentStoreResult ExpectedStoredDocument,
-    Id65V2NativeTextureWitness PrivateTextureWitness,
-    Id65MobyDependencyBundleDescriptor GrassBundle);
+    Id65AuthoringEditorDocumentStoreResult ExpectedStoredDocument);
 
 internal sealed record Id65AuthoringEditorAggregateCandidatePaths(
     string CandidateRootPath,
@@ -257,8 +255,6 @@ internal static class Id65AuthoringEditorAggregateCandidateMaterializer
         ArgumentNullException.ThrowIfNull(request.Paths);
         ArgumentNullException.ThrowIfNull(request.ExpectedManifest);
         ArgumentNullException.ThrowIfNull(request.ExpectedStoredDocument);
-        ArgumentNullException.ThrowIfNull(request.PrivateTextureWitness);
-        ArgumentNullException.ThrowIfNull(request.GrassBundle);
         if (!Enum.IsDefined(faultPoint))
             throw new ArgumentOutOfRangeException(nameof(faultPoint));
         if (!OperatingSystem.IsMacOS())
@@ -512,12 +508,13 @@ internal static class Id65AuthoringEditorAggregateCandidateMaterializer
             throw new InvalidDataException(
                 "The aggregate candidate workspace manifest changed from the expected exact lab manifest.");
 
-        Id65AuthoringEditorAggregateBoundSource boundSource =
-            Id65AuthoringEditorAggregateBoundSource.Capture(request.Paths.LockedBaseImagePath);
+        Id65AuthoringEditorNativeInputProvider.InputSet nativeInputs =
+            await Id65AuthoringEditorNativeInputProvider.LoadAsync(
+                request.Paths,
+                request.ExpectedManifest,
+                cancellationToken);
         Id65AuthoringEditorDocumentProjectionInputs projectionInputs = new(
-            boundSource.LockedSource,
-            request.PrivateTextureWitness,
-            request.GrassBundle);
+            nativeInputs);
         Id65AuthoringEditorDocumentStoreResult stored =
             await Id65AuthoringEditorDocumentStore.LoadAsync(
                 request.Paths,
@@ -530,10 +527,8 @@ internal static class Id65AuthoringEditorAggregateCandidateMaterializer
             Id65AuthoringEditorAggregatePlanProjector.Project(new(
                 stored,
                 request.ExpectedManifest,
-                boundSource,
-                request.PrivateTextureWitness,
-                request.GrassBundle));
-        return new(stored, plan, boundSource.SourceImageSha256);
+                nativeInputs));
+        return new(stored, plan, nativeInputs.LockedBaseImageSha256);
     }
 
     private static void RequireExpectedStoredDocument(

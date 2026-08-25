@@ -436,13 +436,54 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
     {
         ArgumentNullException.ThrowIfNull(contract);
         ValidateFoundationContract(contract, exactActorPackage);
+        return CreateArtisansGrassBundleCore(
+            contract.DeterministicContractSha256,
+            contract.SourceRecord,
+            contract.Properties,
+            contract.BehaviorClosure,
+            contract.Dependencies,
+            exactActorPackage);
+    }
+
+    /// <summary>
+    /// Derives the frozen Grass descriptor directly from the exact project-locked
+    /// BIN. The descriptor retains the historical foundation contract SHA only
+    /// as a verified semantic compatibility anchor; the locked BIN's distinct
+    /// whole-image identity is recorded by the derivation evidence and is never
+    /// labeled as the retired foundation.
+    /// </summary>
+    public static Id65MobyDependencyBundleDescriptor CreateArtisansGrassBundleFromLockedBase(
+        string lockedBaseImagePath)
+    {
+        UnusedLevel65MobyLockedBaseDerivationEvidence evidence =
+            UnusedLevel65MobyDependencyBundleFoundation.InspectLockedIndependentBase(
+                lockedBaseImagePath);
+        byte[] exactActorPackage = evidence.CopyExactActorPackage();
+        ValidateLockedBaseEvidence(evidence, exactActorPackage);
+        return CreateArtisansGrassBundleCore(
+            evidence.FoundationEquivalentSemanticContractSha256,
+            evidence.SourceRecord,
+            evidence.Properties,
+            evidence.BehaviorClosure,
+            evidence.Dependencies,
+            exactActorPackage);
+    }
+
+    private static Id65MobyDependencyBundleDescriptor CreateArtisansGrassBundleCore(
+        string foundationContractSha256,
+        UnusedLevel65MobySourceRecordManifest sourceRecord,
+        UnusedLevel65MobyScenePropertiesManifest propertiesManifest,
+        UnusedLevel65MobyBehaviorClosureManifest behaviorClosure,
+        IReadOnlyList<UnusedLevel65MobyDependencyRequirement> dependencies,
+        ReadOnlySpan<byte> exactActorPackage)
+    {
         Id65MobyRowTemplate row = new(
             ArtisansGrassRowTemplateId,
             "artisans",
             121,
             GrassActorId,
-            contract.SourceRecord.Hex,
-            contract.SourceRecord.Sha256,
+            sourceRecord.Hex,
+            sourceRecord.Sha256,
             ArtisansGrassPropertiesAssetId,
             Array.AsReadOnly(new[] { new Id65MobyFieldSpan(0, 4, "scene-relative-properties") }),
             Array.AsReadOnly(new[]
@@ -452,8 +493,8 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
             }));
         Id65MobyPropertiesAsset properties = new(
             ArtisansGrassPropertiesAssetId,
-            contract.Properties.PropertiesHex,
-            contract.Properties.PropertiesSha256,
+            propertiesManifest.PropertiesHex,
+            propertiesManifest.PropertiesSha256,
             4,
             Array.Empty<int>());
         Id65MobyActorPackageAsset package = new(
@@ -483,42 +524,42 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
                 Id65MobyExternalDependencyKind.TargetOverlay,
                 new Id65LogicalAddress("wad-entry", 79, 0),
                 0xF800,
-                contract.BehaviorClosure.TargetDispatch.OverlaySha256,
+                behaviorClosure.TargetDispatch.OverlaySha256,
                 Id65MobyExternalDependencyPolicy.PreserveExact),
             new(
                 "global-executable.no-01f5-handler",
                 Id65MobyExternalDependencyKind.GlobalExecutable,
                 new Id65LogicalAddress("disc-lba", 55_382, 0),
                 0x66000,
-                contract.BehaviorClosure.GlobalExecutable.Sha256,
+                behaviorClosure.GlobalExecutable.Sha256,
                 Id65MobyExternalDependencyPolicy.PreserveExact)
         ];
         string canonicalJson = BuildBundleCanonicalJson(
             ArtisansGrassBundleId,
             schemaVersion: 1,
-            contract.DeterministicContractSha256,
+            foundationContractSha256,
             [row],
             [properties],
             [package],
             [root],
             [fixup],
             external,
-            contract.BehaviorClosure,
-            contract.Dependencies);
+            behaviorClosure,
+            dependencies);
         string canonicalSha256 = Hash(Encoding.UTF8.GetBytes(canonicalJson));
         RequireHash(canonicalSha256, ExpectedArtisansGrassBundleSha256, "Artisans Grass descriptor");
         return new(
             ArtisansGrassBundleId,
             1,
-            contract.DeterministicContractSha256,
+            foundationContractSha256,
             [row],
             [properties],
             [package],
             [root],
             [fixup],
             external,
-            contract.BehaviorClosure,
-            contract.Dependencies,
+            behaviorClosure,
+            dependencies,
             canonicalJson,
             canonicalSha256);
     }
@@ -1291,6 +1332,58 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
             exactActorPackage.Length != PackageByteLength || Hash(exactActorPackage) != GrassPackageSha256)
         {
             throw new InvalidDataException("The frozen Artisans Grass foundation contract or exact package changed.");
+        }
+    }
+
+    private static void ValidateLockedBaseEvidence(
+        UnusedLevel65MobyLockedBaseDerivationEvidence evidence,
+        ReadOnlySpan<byte> exactActorPackage)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
+        if (evidence.ProfileId !=
+                UnusedLevel65MobyDependencyBundleFoundation.LockedBaseDerivationProfileId ||
+            evidence.SchemaVersion != 1 ||
+            evidence.LockedBaseImageSha256 !=
+                UnusedLevel65MobyDependencyBundleFoundation.LockedIndependentBaseImageSha256 ||
+            evidence.RetiredFoundationImageSha256 !=
+                UnusedLevel65MobyDependencyBundleFoundation.ExpectedFoundationImageSha256 ||
+            evidence.LockedBaseImageSha256 == evidence.RetiredFoundationImageSha256 ||
+            evidence.FoundationEquivalentReadSetSha256 !=
+                UnusedLevel65MobyDependencyBundleFoundation.ExpectedFoundationEquivalentReadSetSha256 ||
+            evidence.FoundationEquivalentSemanticContractSha256 !=
+                UnusedLevel65MobyDependencyBundleFoundation.ExpectedContractSha256 ||
+            evidence.DeterministicEvidenceSha256 !=
+                UnusedLevel65MobyDependencyBundleFoundation.ExpectedLockedBaseDerivationEvidenceSha256 ||
+            evidence.FoundationEquivalentReadSet.Count != 16 ||
+            evidence.SourceRecord.TrueIndex != 121 ||
+            evidence.SourceRecord.ActorId != GrassActorId ||
+            evidence.SourceRecord.Sha256 != GrassRowSha256 ||
+            evidence.Properties.PropertiesSha256 != GrassPropertiesSha256 ||
+            evidence.ActorPackage.ActorPackageSha256 != GrassPackageSha256 ||
+            evidence.ActorPackage.ActorPackageByteLength != PackageByteLength ||
+            evidence.ActorPackage.TexturePixelsRequired || evidence.ActorPackage.ClutsRequired ||
+            evidence.ActorPackage.PackageRebaseRequired ||
+            evidence.Destination.FirstAppendTrueIndex != 107 ||
+            evidence.Destination.NewActorRootIndex != 37 ||
+            evidence.Destination.NewActorRootEntryRelativeOffset != PackageOffset ||
+            evidence.Destination.PropertiesAllocationSceneOffset != 0x8138 ||
+            evidence.Destination.AppendedPointerFieldSceneOffset != 0x2638 ||
+            !evidence.LockedBaseWholeImageIdentityVerified ||
+            !evidence.LockedBaseAndRetiredFoundationWholeImagesAreDistinct ||
+            !evidence.FoundationEquivalentReadSetVerified ||
+            !evidence.FoundationEquivalentReadSetPairwiseDisjoint ||
+            !evidence.FoundationEquivalentReadSetUsesInMemoryDonorSlices ||
+            !evidence.FoundationEquivalentReadSetExcludesUnrelatedId65TerrainAndTextureBytes ||
+            !evidence.ExactActorPackageCapturedInSameInspection ||
+            evidence.RetiredFoundationImageRead || !evidence.StaticInspectionOnly ||
+            evidence.ProducesPatches || evidence.WritesBin || evidence.WritesCue ||
+            evidence.AppIntegrated || evidence.NormalCreateBinEnabled ||
+            evidence.RuntimeCandidateAuthorized || evidence.ReleasePublicationAuthorized ||
+            exactActorPackage.Length != PackageByteLength ||
+            Hash(exactActorPackage) != GrassPackageSha256)
+        {
+            throw new InvalidDataException(
+                "The locked-base Artisans Grass derivation evidence or exact in-memory package changed.");
         }
     }
 

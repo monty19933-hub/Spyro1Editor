@@ -84,9 +84,15 @@ internal sealed record Id65AuthoringEditorAggregateAtomicGroup(
 internal sealed record Id65AuthoringEditorAggregatePlanRequest(
     Id65AuthoringEditorDocumentStoreResult StoredDocument,
     UnusedLevel65BlankLevelLabManifest LabManifest,
-    Id65AuthoringEditorAggregateBoundSource BoundSource,
-    Id65V2NativeTextureWitness PrivateTextureWitness,
-    Id65MobyDependencyBundleDescriptor GrassBundle);
+    Id65AuthoringEditorNativeInputProvider.InputSet NativeInputs)
+{
+    internal Id65AuthoringEditorAggregateBoundSource BoundSource =>
+        NativeInputs.BoundSource;
+    internal Id65V2NativeTextureWitness PrivateTextureWitness =>
+        NativeInputs.PrivateTextureWitness;
+    internal Id65MobyDependencyBundleDescriptor GrassBundle =>
+        NativeInputs.GrassBundle;
+}
 
 /// <summary>
 /// Exact row-80/overlay/executable capture tied to the physically inspected
@@ -507,6 +513,8 @@ internal static class Id65AuthoringEditorAggregatePlanProjector
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.StoredDocument);
         ArgumentNullException.ThrowIfNull(request.LabManifest);
+        ArgumentNullException.ThrowIfNull(request.NativeInputs);
+        Id65AuthoringEditorNativeInputProvider.ValidateForConsumption(request.NativeInputs);
         ArgumentNullException.ThrowIfNull(request.BoundSource);
         ArgumentNullException.ThrowIfNull(request.PrivateTextureWitness);
         ArgumentNullException.ThrowIfNull(request.GrassBundle);
@@ -777,6 +785,8 @@ internal static class Id65AuthoringEditorAggregatePlanProjector
             !request.BoundSource.PhysicalDirectorySnapshotVerified ||
             !request.BoundSource.RetailCloneComparedAndExcluded ||
             request.BoundSource.CurrentOnDiskFreshnessVerified ||
+            request.NativeInputs.CanonicalInputSetSha256 !=
+                Id65AuthoringEditorNativeInputProvider.ExpectedCanonicalInputSetSha256 ||
             source.Row80ByteLength != ExpectedRow80ByteLength ||
             source.TargetOverlayByteLength != TargetOverlayByteLength ||
             source.GlobalExecutableByteLength != 0x66000 ||

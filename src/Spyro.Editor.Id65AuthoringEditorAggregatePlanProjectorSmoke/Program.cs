@@ -1,6 +1,8 @@
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Persistence;
@@ -12,36 +14,48 @@ string lockedImagePath = Path.Combine(
     "v5-stone-hill-level-replacement",
     "unused-level-65-display-name",
     "Unused-Level-65-Town-Square-independent-storage-with-Town-Square-display-name-RUNTIME-CANDIDATE.bin");
-string foundationImagePath = Path.Combine(
-    repositoryRoot,
-    "_local",
-    "v5-stone-hill-level-replacement",
-    "unused-level-65-full-authoring-foundation-native-membership",
-    "Unused-Level-65-Full-Authoring-Foundation-HP-LP-45deg-NATIVE-MEMBERSHIP-RUNTIME-CANDIDATE.bin");
+string lockedCuePath = Path.ChangeExtension(lockedImagePath, ".cue");
+string wrongPhysicalImagePath = Path.Combine(repositoryRoot, "Spyro the Dragon (USA).bin");
 Require(File.Exists(lockedImagePath), $"Missing exact aggregate locked image: {lockedImagePath}");
-Require(File.Exists(foundationImagePath), $"Missing exact aggregate donor image: {foundationImagePath}");
+Require(File.Exists(lockedCuePath) && File.Exists(wrongPhysicalImagePath),
+    "Missing exact aggregate CUE or wrong-image rejection fixture.");
 FileState lockedBefore = SnapshotFile(lockedImagePath);
-FileState foundationBefore = SnapshotFile(foundationImagePath);
 IReadOnlyList<string> lockedDirectoryBefore = SnapshotDirectory(Path.GetDirectoryName(lockedImagePath)!);
-IReadOnlyList<string> foundationDirectoryBefore = SnapshotDirectory(Path.GetDirectoryName(foundationImagePath)!);
+string smokeRoot = Path.Combine(
+    Path.GetTempPath(),
+    "Spyro.Editor.Id65AuthoringEditorAggregatePlanProjectorSmoke-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(smokeRoot);
 
-Id65AuthoringEditorAggregateBoundSource boundSource =
-    Id65AuthoringEditorAggregateBoundSource.Capture(lockedImagePath);
-UnusedLevel65NativeTextureStaticPlan oldTextureProof =
-    UnusedLevel65NativeTextureAuthoringContract.BuildFirstStaticPlan(foundationImagePath);
-Id65V2NativeTextureWitness textureWitness =
-    Id65V2NativeTextureCompositionCompiler.ImportPinnedT66Witness(oldTextureProof);
-UnusedLevel65MobyDependencyBundleContract mobyContract =
-    UnusedLevel65MobyDependencyBundleFoundation.InspectFirstCrossLevelDonor(foundationImagePath);
-byte[] package = ReadRootFile(foundationImagePath, "WAD.WAD", 0x9C1D20, 0x174);
-Id65MobyDependencyBundleDescriptor grassBundle =
-    Id65AuthoringMobyDependencyBundleCompiler.CreateArtisansGrassBundle(mobyContract, package);
-Id65AuthoringEditorDocument document = Id65AuthoringEditorDocument.CreateExact();
+try
+{
 UnusedLevel65BlankLevelLabWorkspacePaths labPaths =
     UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(
-        Path.Combine(Path.GetTempPath(), "id65-aggregate-projector-smoke-logical-workspace"));
+        Path.Combine(smokeRoot, "workspace-container"));
+Directory.CreateDirectory(labPaths.LockedBaseDirectoryPath);
+Directory.CreateDirectory(labPaths.AuthoredEditsDirectoryPath);
+File.Copy(lockedImagePath, labPaths.LockedBaseImagePath, overwrite: false);
+await File.WriteAllTextAsync(
+    labPaths.LockedBaseCuePath,
+    DiscImage.BuildCueText(lockedCuePath, Path.GetFileName(labPaths.LockedBaseImagePath)),
+    Encoding.ASCII);
 UnusedLevel65BlankLevelLabManifest labManifest =
     UnusedLevel65BlankLevelLabProfileRegistry.CreateManifest(labPaths);
+await File.WriteAllTextAsync(
+    labPaths.ManifestPath,
+    JsonSerializer.Serialize(labManifest, new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter() }
+    }) + "\n",
+    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+Id65AuthoringEditorNativeInputProvider.InputSet nativeInputs =
+    await Id65AuthoringEditorNativeInputProvider.LoadAsync(labPaths, labManifest);
+Id65AuthoringEditorAggregateBoundSource boundSource = nativeInputs.BoundSource;
+Id65V2NativeTextureWitness textureWitness = nativeInputs.PrivateTextureWitness;
+Id65MobyDependencyBundleDescriptor grassBundle = nativeInputs.GrassBundle;
+Id65AuthoringEditorDocument document = Id65AuthoringEditorDocument.CreateExact();
 
 Id65AuthoringEditorProjection storedProjection =
     Id65AuthoringEditorDocumentProjector.Project(new(
@@ -69,9 +83,7 @@ Id65AuthoringEditorAggregatePlan Project(Id65AuthoringEditorDocumentStoreResult 
     Id65AuthoringEditorAggregatePlanProjector.Project(new(
         selectedStored,
         labManifest,
-        boundSource,
-        textureWitness,
-        grassBundle));
+        nativeInputs));
 
 Id65AuthoringEditorAggregatePlan first = Project(stored);
 positivePlans++;
@@ -189,12 +201,18 @@ void RejectIdentity(
     Id65V2NativeTextureWitness? selectedWitness = null,
     Id65MobyDependencyBundleDescriptor? selectedBundle = null)
 {
+    Id65AuthoringEditorNativeInputProvider.InputSet selectedInputs =
+        selectedSource == null && selectedWitness == null && selectedBundle == null
+            ? nativeInputs
+            : ForgeProviderInputSetForNegativeTest(
+                selectedSource ?? boundSource,
+                selectedWitness ?? textureWitness,
+                selectedBundle ?? grassBundle,
+                nativeInputs.CanonicalInputSetSha256);
     ExpectRejected(label, () => _ = Id65AuthoringEditorAggregatePlanProjector.Project(new(
         selectedStored,
         selectedLab ?? labManifest,
-        selectedSource ?? boundSource,
-        selectedWitness ?? textureWitness,
-        selectedBundle ?? grassBundle)));
+        selectedInputs)));
     identityRejects++;
 }
 
@@ -248,7 +266,7 @@ void RejectPhysicalCapture(string label, string selectedPath)
 
 RejectPhysicalCapture("missing absolute bound source",
     Path.Combine(Path.GetTempPath(), "id65-aggregate-missing-physical-source.bin"));
-RejectPhysicalCapture("wrong physical image", foundationImagePath);
+RejectPhysicalCapture("wrong physical image", wrongPhysicalImagePath);
 
 RejectIdentity("T66 declared identity", stored, selectedWitness:
     CopyWitness(textureWitness, canonicalSha256: new string('0', 64)));
@@ -459,10 +477,8 @@ Require(partitionRejects == 11, $"The aggregate partition matrix ran {partitionR
 Require(aliasCopyChecks == 10, $"The aggregate copy/alias matrix ran {aliasCopyChecks}, expected 10.");
 Require(positivePlans == 2, $"The aggregate positive matrix ran {positivePlans}, expected 2.");
 Require(SnapshotFile(lockedImagePath) == lockedBefore &&
-        SnapshotFile(foundationImagePath) == foundationBefore &&
-        SnapshotDirectory(Path.GetDirectoryName(lockedImagePath)!).SequenceEqual(lockedDirectoryBefore) &&
-        SnapshotDirectory(Path.GetDirectoryName(foundationImagePath)!).SequenceEqual(foundationDirectoryBefore),
-    "The aggregate projector changed or published beside a locked input/donor fixture.");
+        SnapshotDirectory(Path.GetDirectoryName(lockedImagePath)!).SequenceEqual(lockedDirectoryBefore),
+    "The aggregate projector changed or published beside a locked input fixture.");
 
 Console.WriteLine(
     "ID65_AUTHORING_EDITOR_AGGREGATE_PLAN_PROJECTOR_SMOKE_OK " +
@@ -474,6 +490,19 @@ Console.WriteLine(
     $"protectedModel={first.ProtectedModelComponentMapSha256} semantic={first.SemanticReadbackSha256} " +
     $"baseline={first.BaselineOwnershipSha256} atomic={first.AtomicGroupMapSha256} " +
     $"aggregate={first.DeterministicAggregatePlanSha256}");
+}
+finally
+{
+    if (Directory.Exists(smokeRoot) &&
+        Path.GetFileName(smokeRoot).StartsWith(
+            "Spyro.Editor.Id65AuthoringEditorAggregatePlanProjectorSmoke-",
+            StringComparison.Ordinal))
+    {
+        Directory.Delete(smokeRoot, recursive: true);
+    }
+    Require(!Directory.Exists(smokeRoot),
+        "The aggregate projector smoke retained temporary game data.");
+}
 
 static bool Equivalent(
     Id65AuthoringEditorAggregatePlan left,
@@ -553,6 +582,47 @@ static Id65V2NativeTextureWitness CopyWitness(
         pagePatches ?? source.CopyPagePatches(),
         canonicalSha256 ?? source.CanonicalSha256);
 
+static Id65AuthoringEditorNativeInputProvider.InputSet ForgeProviderInputSetForNegativeTest(
+    Id65AuthoringEditorAggregateBoundSource boundSource,
+    Id65V2NativeTextureWitness textureWitness,
+    Id65MobyDependencyBundleDescriptor grassBundle,
+    string canonicalInputSetSha256)
+{
+    Type provider = typeof(Id65AuthoringEditorNativeInputProvider);
+    Type implementation = provider.GetNestedType(
+            "ProviderInputSet",
+            BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException(
+            "The provider-owned native-input implementation is missing.");
+    ConstructorInfo constructor = implementation.GetConstructors(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+        .Single();
+    Require(
+        implementation.IsNestedPrivate && implementation.IsSealed &&
+        implementation.BaseType == typeof(Id65AuthoringEditorNativeInputProvider.InputSet) &&
+        constructor.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual(
+        [
+            typeof(Id65AuthoringEditorAggregateBoundSource),
+            typeof(Id65V2NativeTextureWitness),
+            typeof(Id65MobyDependencyBundleDescriptor),
+            typeof(string)
+        ]),
+        "The provider-owned native-input implementation topology changed.");
+    return (Id65AuthoringEditorNativeInputProvider.InputSet)(Activator.CreateInstance(
+        implementation,
+        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+        binder: null,
+        args:
+        [
+            boundSource,
+            textureWitness,
+            grassBundle,
+            canonicalInputSetSha256
+        ],
+        culture: null) ?? throw new InvalidOperationException(
+            "The provider-owned negative-test input could not be created."));
+}
+
 static Id65MobyDependencyBundleDescriptor CopyBundle(
     Id65MobyDependencyBundleDescriptor source,
     string? canonicalJson = null,
@@ -631,23 +701,6 @@ static void VerifySourceTopology(string repositoryRoot)
 static bool HasPathSegment(string path, string segment) =>
     path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
         .Contains(segment, StringComparer.OrdinalIgnoreCase);
-
-static byte[] ReadRootFile(
-    string imagePath,
-    string exactName,
-    long relativeOffset,
-    int byteLength)
-{
-    DiscLayout layout = DiscImage.DetectLayout(imagePath);
-    using FileStream image = File.OpenRead(imagePath);
-    DiscFileRecord file = DiscImage.FindRootFileRecord(
-        image,
-        layout,
-        name => string.Equals(name, exactName, StringComparison.OrdinalIgnoreCase));
-    if (relativeOffset < 0 || relativeOffset + byteLength > file.Size)
-        throw new InvalidDataException("An aggregate smoke source read escaped its root file.");
-    return DiscImage.ReadFileBytes(image, layout, file.Lba, relativeOffset, byteLength);
-}
 
 static FileState SnapshotFile(string path) =>
     new(new FileInfo(path).Length, File.GetLastWriteTimeUtc(path), HashFile(path));

@@ -17,26 +17,12 @@ string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
 string cleanImagePath = Path.Combine(repositoryRoot, "Spyro the Dragon (USA).bin");
 string cleanCuePath = Path.Combine(repositoryRoot, "Spyro the Dragon (USA).cue");
 string catalogPath = Path.Combine(repositoryRoot, "spyro-level-catalog.json");
-string lockedImagePath = Path.Combine(
-    repositoryRoot,
-    "_local",
-    "v5-stone-hill-level-replacement",
-    "unused-level-65-display-name",
-    "Unused-Level-65-Town-Square-independent-storage-with-Town-Square-display-name-RUNTIME-CANDIDATE.bin");
-string foundationImagePath = Path.Combine(
-    repositoryRoot,
-    "_local",
-    "v5-stone-hill-level-replacement",
-    "unused-level-65-full-authoring-foundation-native-membership",
-    "Unused-Level-65-Full-Authoring-Foundation-HP-LP-45deg-NATIVE-MEMBERSHIP-RUNTIME-CANDIDATE.bin");
 
 foreach (string requiredPath in new[]
          {
              cleanImagePath,
              cleanCuePath,
-             catalogPath,
-             lockedImagePath,
-             foundationImagePath
+             catalogPath
          })
 {
     Require(File.Exists(requiredPath), $"Missing persistence-smoke fixture: {requiredPath}");
@@ -45,18 +31,10 @@ foreach (string requiredPath in new[]
 FileState cleanImageBefore = SnapshotFile(cleanImagePath);
 FileState cleanCueBefore = SnapshotFile(cleanCuePath);
 FileState catalogBefore = SnapshotFile(catalogPath);
-FileState lockedImageBefore = SnapshotFile(lockedImagePath);
-FileState foundationImageBefore = SnapshotFile(foundationImagePath);
-IReadOnlyList<string> lockedDirectoryBefore =
-    SnapshotDirectory(Path.GetDirectoryName(lockedImagePath)!);
-IReadOnlyList<string> foundationDirectoryBefore =
-    SnapshotDirectory(Path.GetDirectoryName(foundationImagePath)!);
 Require(
     cleanImageBefore.Sha256 == ExpectedCleanImageSha256,
     "The persistence smoke is not bound to the exact clean USA source image.");
 
-Id65AuthoringEditorDocumentProjectionInputs projectionInputs =
-    BuildProjectionInputs(lockedImagePath, foundationImagePath);
 Id65AuthoringEditorDocument fullDocument =
     Id65AuthoringEditorDocument.CreateExact(includeOptionalTerrain: true);
 Id65AuthoringEditorDocument noTerrainDocument =
@@ -82,6 +60,9 @@ try
 
     UnusedLevel65BlankLevelLabWorkspacePaths paths = bootstrap.Paths;
     UnusedLevel65BlankLevelLabManifest manifest = bootstrap.Manifest;
+    Id65AuthoringEditorNativeInputProvider.InputSet nativeInputs =
+        await Id65AuthoringEditorNativeInputProvider.LoadAsync(paths, manifest);
+    Id65AuthoringEditorDocumentProjectionInputs projectionInputs = new(nativeInputs);
     FileState labImageBefore = SnapshotFile(paths.LockedBaseImagePath);
     FileState labCueBefore = SnapshotFile(paths.LockedBaseCuePath);
     FileState labManifestBefore = SnapshotFile(paths.ManifestPath);
@@ -131,6 +112,34 @@ try
     Require(
         !Directory.Exists(authoredRoot),
         "Loading a missing editor document created its authored-edits directory.");
+
+    Id65AuthoringEditorNativeInputProvider.InputSet forgedCanonicalInputs =
+        ForgeProviderInputSetForNegativeTest(
+            nativeInputs.BoundSource,
+            nativeInputs.PrivateTextureWitness,
+            nativeInputs.GrassBundle,
+            new string('0', 64));
+    Id65AuthoringEditorDocumentProjectionInputs forgedProjectionInputs =
+        new(forgedCanonicalInputs);
+    await ExpectRejectedAsync(
+        "missing load with forged native-input canonical identity",
+        async () => _ = await Id65AuthoringEditorDocumentStore.LoadAsync(
+            paths,
+            manifest,
+            forgedProjectionInputs),
+        requiredText: "provider-owned input generation");
+    await ExpectRejectedAsync(
+        "forged native-input canonical identity",
+        async () => _ = await Id65AuthoringEditorDocumentStore.SaveAsync(
+            paths,
+            manifest,
+            fullDocument,
+            forgedProjectionInputs,
+            expectedPriorEnvelopeCanonicalSha256: null),
+        requiredText: "provider-owned input generation");
+    Require(
+        !Directory.Exists(authoredRoot),
+        "A forged native-input identity created the authored-edits directory.");
 
     Directory.CreateDirectory(authoredRoot);
     byte[] persistentLeaseSentinel = Encoding.UTF8.GetBytes("persistent-crash-residue\n");
@@ -537,12 +546,8 @@ try
     Require(
         SnapshotFile(cleanImagePath) == cleanImageBefore &&
         SnapshotFile(cleanCuePath) == cleanCueBefore &&
-        SnapshotFile(catalogPath) == catalogBefore &&
-        SnapshotFile(lockedImagePath) == lockedImageBefore &&
-        SnapshotFile(foundationImagePath) == foundationImageBefore &&
-        SnapshotDirectory(Path.GetDirectoryName(lockedImagePath)!).SequenceEqual(lockedDirectoryBefore) &&
-        SnapshotDirectory(Path.GetDirectoryName(foundationImagePath)!).SequenceEqual(foundationDirectoryBefore),
-        "Persistence changed a clean source, catalog, locked projection source, donor fixture, or fixture directory.");
+        SnapshotFile(catalogPath) == catalogBefore,
+        "Persistence changed a clean source or catalog fixture.");
 
     Console.WriteLine(
         "PASS Id65AuthoringEditorDocumentPersistenceSmoke: isolated exact-lab create/load and deterministic CAS replacement, stale/wrong/missing/create-only refusal, strict envelope/document/profile/layout/base/projection tamper rejection, 256-KiB bounded reads, pre-cancellation, symlink/escape refusal, persistent exclusive lease reuse, exact stale-temp recovery, read-only workspace validation, immutable BIN/CUE/manifest/source fixtures, and fail-closed production flags passed. Deterministic injected mid-stage faults remain unavailable; hostile parent-directory swaps remain explicitly unsafe and App/Create BIN stay unwired.");
@@ -557,43 +562,6 @@ finally
     Require(!Directory.Exists(smokeRoot), "The persistence smoke retained temporary game data.");
 }
 
-static Id65AuthoringEditorDocumentProjectionInputs BuildProjectionInputs(
-    string lockedImagePath,
-    string foundationImagePath)
-{
-    UnusedLevel65RemoteBlankCollisionWindingRepairV2StaticPlan v2 =
-        UnusedLevel65RemoteBlankCollisionWindingRepairV2Construction.BuildStaticPlan(lockedImagePath);
-    byte[] directRow80 = ReadRootFile(lockedImagePath, "WAD.WAD", 0x6936800, 0x2E2000);
-    byte[] targetOverlay = ReadRootFile(lockedImagePath, "WAD.WAD", 0x6927000, 0xF800);
-    byte[] globalExecutable = ReadRootFileWhere(
-        lockedImagePath,
-        name => name.StartsWith("SCUS_", StringComparison.OrdinalIgnoreCase),
-        0,
-        0x66000);
-    Require(
-        directRow80.SequenceEqual(v2.SourceData),
-        "The persistence smoke locked row-80 source differs from the V2 proof source.");
-    Id65AuthoringCompositeLockedSource source =
-        Id65AuthoringCompositeCompiler.CaptureLockedSource(
-            directRow80,
-            targetOverlay,
-            globalExecutable);
-
-    UnusedLevel65NativeTextureStaticPlan oldTextureProof =
-        UnusedLevel65NativeTextureAuthoringContract.BuildFirstStaticPlan(foundationImagePath);
-    Id65V2NativeTextureWitness textureWitness =
-        Id65V2NativeTextureCompositionCompiler.ImportPinnedT66Witness(oldTextureProof);
-    UnusedLevel65MobyDependencyBundleContract mobyContract =
-        UnusedLevel65MobyDependencyBundleFoundation.InspectFirstCrossLevelDonor(
-            foundationImagePath);
-    byte[] package = ReadRootFile(foundationImagePath, "WAD.WAD", 0x9C1D20, 0x174);
-    Id65MobyDependencyBundleDescriptor bundle =
-        Id65AuthoringMobyDependencyBundleCompiler.CreateArtisansGrassBundle(
-            mobyContract,
-            package);
-    return new(source, textureWitness, bundle);
-}
-
 static async Task<Id65AuthoringEditorDocumentStoreResult> RequireLoadedAsync(
     UnusedLevel65BlankLevelLabWorkspacePaths paths,
     UnusedLevel65BlankLevelLabManifest manifest,
@@ -604,6 +572,39 @@ static async Task<Id65AuthoringEditorDocumentStoreResult> RequireLoadedAsync(
         manifest,
         projectionInputs) ?? throw new InvalidOperationException(
             "The expected persisted ID65 editor document was missing.");
+}
+
+static Id65AuthoringEditorNativeInputProvider.InputSet ForgeProviderInputSetForNegativeTest(
+    Id65AuthoringEditorAggregateBoundSource boundSource,
+    Id65V2NativeTextureWitness textureWitness,
+    Id65MobyDependencyBundleDescriptor grassBundle,
+    string canonicalInputSetSha256)
+{
+    Type implementation = typeof(Id65AuthoringEditorNativeInputProvider).GetNestedType(
+            "ProviderInputSet",
+            BindingFlags.NonPublic)
+        ?? throw new InvalidOperationException(
+            "The private provider-owned native-input implementation is missing.");
+    ConstructorInfo constructor = implementation.GetConstructors(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+        .Single();
+    Require(
+        implementation.IsNestedPrivate && implementation.IsSealed &&
+        implementation.BaseType == typeof(Id65AuthoringEditorNativeInputProvider.InputSet),
+        "The provider-owned negative-test implementation topology changed.");
+    return (Id65AuthoringEditorNativeInputProvider.InputSet)(Activator.CreateInstance(
+        implementation,
+        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+        binder: null,
+        args:
+        [
+            boundSource,
+            textureWitness,
+            grassBundle,
+            canonicalInputSetSha256
+        ],
+        culture: null) ?? throw new InvalidOperationException(
+            "The provider-owned negative-test input could not be created."));
 }
 
 static async Task RejectStoredEnvelopeAsync(
@@ -806,31 +807,6 @@ static async Task ExpectRejectedAsync(
     }
 }
 
-static byte[] ReadRootFile(
-    string imagePath,
-    string exactName,
-    long relativeOffset,
-    int byteLength) =>
-    ReadRootFileWhere(
-        imagePath,
-        name => string.Equals(name, exactName, StringComparison.OrdinalIgnoreCase),
-        relativeOffset,
-        byteLength);
-
-static byte[] ReadRootFileWhere(
-    string imagePath,
-    Predicate<string> predicate,
-    long relativeOffset,
-    int byteLength)
-{
-    DiscLayout layout = DiscImage.DetectLayout(imagePath);
-    using FileStream image = File.OpenRead(imagePath);
-    DiscFileRecord file = DiscImage.FindRootFileRecord(image, layout, predicate);
-    if (relativeOffset < 0 || relativeOffset + byteLength > file.Size)
-        throw new InvalidDataException("A persistence-smoke source read escaped its root file.");
-    return DiscImage.ReadFileBytes(image, layout, file.Lba, relativeOffset, byteLength);
-}
-
 static FileState SnapshotFile(string path)
 {
     FileInfo info = new(path);
@@ -848,18 +824,6 @@ static FileState SnapshotFile(string path)
         linkTarget,
         resolvedTarget);
 }
-
-static IReadOnlyList<string> SnapshotDirectory(string path) =>
-    Directory.GetFileSystemEntries(path)
-        .Select(entry =>
-        {
-            FileSystemInfo info = Directory.Exists(entry)
-                ? new DirectoryInfo(entry)
-                : new FileInfo(entry);
-            return $"{Path.GetFileName(entry)}|{info.LastWriteTimeUtc:O}|{info.LinkTarget}";
-        })
-        .Order(StringComparer.Ordinal)
-        .ToArray();
 
 static string Hash(ReadOnlySpan<byte> bytes) =>
     Convert.ToHexStringLower(SHA256.HashData(bytes));
