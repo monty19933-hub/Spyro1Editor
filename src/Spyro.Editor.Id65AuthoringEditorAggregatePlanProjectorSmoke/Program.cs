@@ -620,6 +620,8 @@ static void VerifySourceTopology(string repositoryRoot)
         }) &&
         calls.SequenceEqual(new[]
         {
+            Path.Combine("src", "Spyro.Editor.Core", "Persistence",
+                "Id65AuthoringEditorAggregateCandidateMaterializer.cs"),
             Path.Combine("src", "Spyro.Editor.Id65AuthoringEditorAggregatePlanProjectorSmoke", "Program.cs")
         }),
         $"Aggregate projector declaration/call topology changed: defs={string.Join(",", declarations)}; " +
