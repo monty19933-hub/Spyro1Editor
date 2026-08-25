@@ -283,7 +283,7 @@ Require(Id65V3RuntimeEvidenceContract.ExpectedWatcherSha256 ==
         Id65V3RuntimeEvidenceContract.ExpectedRuntimeProfileSha256 ==
             "29d01f1b791e4dc08ebfc4d62cf5a1b91600a5c55ec175ac6da45b13123100ad" &&
         Id65V3RuntimeEvidenceContract.ExpectedSourceClosureSha256 ==
-            "1ec8cbcc0590a25c865d36ecd682e218db0555dada84c68a865ea5415c7aaacf" &&
+            "95869243ad94ec4aaf3725d0fceb65107cb82ffa3737222c0b94bce4336e9436" &&
         pending.SourceIdentity.CaptureCoordinatorRelativePath ==
             "tools/Capture-SpyroId65V3RuntimeSession.py" &&
         pending.SourceIdentity.CaptureCoordinatorSha256 ==
@@ -320,7 +320,7 @@ Require(Id65V3RuntimeEvidenceContract.ExpectedWatcherSha256 ==
         pending.SourceIdentity.ProfileVerifierSha256 ==
             "74f4ed279a3e3f60af6c4c0a0b1fa8ffc0a67886c478d8cc7d1a288b093c3671" &&
         pending.SourceIdentity.AutomationSha256 ==
-            "2ea6ce2104b4dbbcdc116d84807ca2425bfb80436f01895b5b618d92ec6773bd" &&
+            "6462628d0248f4ed94551e3c0bad53414f2da31081d90045618896d1de145d01" &&
         pending.RuntimeProfile.ProfileId == "duckstation-id65-unattended-v1" &&
         pending.RuntimeProfile.PackageRelativePath ==
             "_local/v5-stone-hill-level-replacement/duckstation-id65-unattended-v1" &&

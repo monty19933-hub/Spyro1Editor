@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Fail-closed input transport foundation for an existing pinned DuckStation.
 
-This tool does not launch DuckStation, connect to its GDB server, capture media,
-write evidence, or finalize runtime acceptance.  It provides the narrow pieces
-needed for a later unattended ID65 V3 capture coordinator:
+This tool's production CLI does not launch DuckStation, connect to its GDB
+server, capture media, write evidence, or finalize runtime acceptance.  It
+provides the narrow pieces needed for a later unattended ID65 V3 capture
+coordinator:
 
 * exact PID/start-time/UID/path and mapped-text-vnode process pinning;
 * a canonical, replay-resistant input-plan format;
@@ -41,9 +42,11 @@ import json
 import os
 import pathlib
 import re
+import socket
 import stat
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType, ModuleType
@@ -78,6 +81,31 @@ KEY_PULSE_SECONDS: Final = 0.035
 PAD_CONFIRMATION_TIMEOUT_SECONDS: Final = 1.5
 PAD_CONFIRMATION_INTERVAL_SECONDS: Final = 0.01
 PAD_CONFIRMATION_STABLE_SAMPLES: Final = 2
+
+# These two pre-framed packets are the reader's entire GDB command surface.
+# There is intentionally no generic address or packet API: expanding this
+# allowlist requires another reviewed source checkpoint before production use.
+GDB_HOST: Final = "127.0.0.1"
+GDB_PORT: Final = 2345
+GDB_SOCKET_TIMEOUT_SECONDS: Final = 2.0
+GDB_MAX_RSP_PAYLOAD_BYTES: Final = 4096
+GDB_MAX_RSP_EVENTS_PER_READ: Final = 32
+GDB_PAD_READ_PACKET: Final = b"$m800786a0,4#9b"
+GDB_VBLANK_READ_PACKET: Final = b"$m800758c8,4#a4"
+GDB_ALLOWED_OUTBOUND: Final = frozenset({
+    GDB_PAD_READ_PACKET,
+    GDB_VBLANK_READ_PACKET,
+    b"+",
+    b"-",
+})
+GDB_LSOF_COMMAND: Final = (
+    "/usr/sbin/lsof",
+    "-nP",
+    "-a",
+    "-iTCP:2345",
+    "-sTCP:LISTEN",
+    "-F0pfadDikstnPT",
+)
 
 PROFILE_PACKAGE_RELATIVE_PATH: Final = (
     "_local/v5-stone-hill-level-replacement/duckstation-id65-unattended-v1"
@@ -1971,6 +1999,522 @@ class PadWordReader(Protocol):
 
 
 @dataclasses.dataclass(frozen=True)
+class GdbListenerIdentity:
+    """One exact IPv4 loopback lsof listener record owned by DuckStation."""
+
+    pid: int
+    descriptor: int
+    access: str
+    socket_type: str
+    device_token: str
+    protocol: str
+    endpoint: str
+    tcp_state: str
+    receive_queue: int
+    send_queue: int
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.pid) is not int
+            or self.pid <= 1
+            or type(self.descriptor) is not int
+            or self.descriptor < 0
+            or self.access != "u"
+            or self.socket_type != "IPv4"
+            or re.fullmatch(r"0x[0-9a-f]+", self.device_token, re.ASCII) is None
+            or self.protocol != "TCP"
+            or self.endpoint != f"{GDB_HOST}:{GDB_PORT}"
+            or self.tcp_state != "LISTEN"
+            or type(self.receive_queue) is not int
+            or self.receive_queue != 0
+            or type(self.send_queue) is not int
+            or self.send_queue != 0
+        ):
+            raise AutomationRefusal("DuckStation GDB listener identity is malformed.")
+
+
+def _parse_gdb_listener_lsof(raw: bytes) -> GdbListenerIdentity:
+    """Parse the empirically pinned macOS ``lsof -F0`` listener schema.
+
+    The query is intentionally global rather than PID-filtered.  Requiring one
+    process record and one socket record therefore rejects extra listeners as
+    well as a listener owned by the wrong process.
+    """
+
+    if (
+        type(raw) is not bytes
+        or not raw
+        or len(raw) > 64 * 1024
+        or not raw.endswith(b"\x00\n")
+        or raw.startswith(b"\xef\xbb\xbf")
+    ):
+        raise AutomationRefusal("GDB listener lsof output framing is invalid.")
+    try:
+        decoded = raw.decode("utf-8", "strict")
+    except UnicodeDecodeError as exc:
+        raise AutomationRefusal(
+            "GDB listener lsof output is not strict UTF-8."
+        ) from exc
+    records = decoded.split("\x00\n")
+    if records[-1] != "" or len(records) != 3:
+        raise AutomationRefusal(
+            "lsof did not return exactly one GDB process and listener record."
+        )
+    process_fields = records[0].split("\x00")
+    listener_fields = records[1].split("\x00")
+    if (
+        len(process_fields) != 1
+        or re.fullmatch(r"p[1-9][0-9]{0,9}", process_fields[0], re.ASCII) is None
+    ):
+        raise AutomationRefusal("GDB listener lsof process record is malformed.")
+    if len(listener_fields) != 9:
+        raise AutomationRefusal("GDB listener lsof socket record is incomplete.")
+    expected_prefixes = ("f", "a", "t", "d", "P", "n", "T", "T", "T")
+    if tuple(field[:1] for field in listener_fields) != expected_prefixes:
+        raise AutomationRefusal(
+            "GDB listener lsof fields are reordered, duplicated, or unknown."
+        )
+    if any(
+        not field
+        or "\x00" in field
+        or "\r" in field
+        or "\n" in field
+        for field in process_fields + listener_fields
+    ):
+        raise AutomationRefusal("GDB listener lsof fields contain control text.")
+    pid_text = process_fields[0][1:]
+    descriptor_text = listener_fields[0][1:]
+    if (
+        re.fullmatch(r"0|[1-9][0-9]{0,9}", descriptor_text, re.ASCII) is None
+        or listener_fields[1] != "au"
+        or listener_fields[2] != "tIPv4"
+        or re.fullmatch(r"d0x[0-9a-f]+", listener_fields[3], re.ASCII) is None
+        or listener_fields[4] != "PTCP"
+        or listener_fields[5] != f"n{GDB_HOST}:{GDB_PORT}"
+        or listener_fields[6:] != ["TST=LISTEN", "TQR=0", "TQS=0"]
+    ):
+        raise AutomationRefusal("GDB listener lsof socket identity is not pinned.")
+    pid = int(pid_text, 10)
+    descriptor = int(descriptor_text, 10)
+    if pid > 2_147_483_647 or descriptor > 2_147_483_647:
+        raise AutomationRefusal("GDB listener PID or descriptor exceeds its native bound.")
+    return GdbListenerIdentity(
+        pid=pid,
+        descriptor=descriptor,
+        access="u",
+        socket_type="IPv4",
+        device_token=listener_fields[3][1:],
+        protocol="TCP",
+        endpoint=f"{GDB_HOST}:{GDB_PORT}",
+        tcp_state="LISTEN",
+        receive_queue=0,
+        send_queue=0,
+    )
+
+
+class GdbEndpointAttestor(Protocol):
+    def observe(self, process: ProcessIdentity) -> GdbListenerIdentity: ...
+
+
+class MacGdbEndpointAttestor:
+    """Bind the fixed GDB endpoint to one exact lsof socket identity."""
+
+    def __init__(
+        self,
+        runner: Callable[
+            [Sequence[str]], subprocess.CompletedProcess[bytes]
+        ] | None = None,
+    ) -> None:
+        if runner is None:
+            if sys.platform != "darwin":
+                raise AutomationRefusal("Native GDB listener inspection is macOS-only.")
+            runner = self._run_lsof
+        self._runner = runner
+
+    @staticmethod
+    def _run_lsof(command: Sequence[str]) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.run(
+            list(command),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            close_fds=True,
+            timeout=10,
+            env={
+                "LC_ALL": "C",
+                "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+            },
+        )
+
+    def observe(self, process: ProcessIdentity) -> GdbListenerIdentity:
+        if type(process) is not ProcessIdentity or process.pid <= 1:
+            raise AutomationRefusal("GDB listener process binding is invalid.")
+        try:
+            completed = self._runner(GDB_LSOF_COMMAND)
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise AutomationRefusal("Cannot inspect the DuckStation GDB listener.") from exc
+        if (
+            type(completed.returncode) is not int
+            or completed.returncode != 0
+            or type(completed.stdout) is not bytes
+            or type(completed.stderr) is not bytes
+            or completed.stderr
+        ):
+            raise AutomationRefusal("DuckStation GDB listener inspection failed closed.")
+        listener = _parse_gdb_listener_lsof(completed.stdout)
+        if listener.pid != process.pid:
+            raise AutomationRefusal(
+                "The fixed GDB listener is not owned by the exact DuckStation process."
+            )
+        return listener
+
+
+class _GdbSocket(Protocol):
+    def settimeout(self, value: float | None) -> None: ...
+    def sendall(self, data: bytes) -> None: ...
+    def recv(self, maximum_bytes: int) -> bytes: ...
+    def getpeername(self) -> Any: ...
+    def close(self) -> None: ...
+
+
+class _GdbReaderState(enum.Enum):
+    NEW = enum.auto()
+    CONNECTING = enum.auto()
+    CONNECTED = enum.auto()
+    POISONED = enum.auto()
+    CLOSED = enum.auto()
+
+
+class PersistentReadOnlyDuckStationGdbReader:
+    """Persistent, fixed-address, read-only DuckStation RSP client.
+
+    This class is deliberately not constructed by :func:`main`.  A GDB
+    connection pauses emulation, so production wiring must be reviewed with
+    the input-pulse confirmation ordering rather than enabled implicitly.
+    """
+
+    def __init__(
+        self,
+        observer: ProcessObserver,
+        endpoint_attestor: GdbEndpointAttestor,
+        connector: Callable[[tuple[str, int], float], _GdbSocket] | None = None,
+    ) -> None:
+        if observer is None or endpoint_attestor is None:
+            raise AutomationRefusal("GDB reader dependencies are unavailable.")
+        if connector is None:
+            connector = socket.create_connection
+        self._observer = observer
+        self._endpoint_attestor = endpoint_attestor
+        self._connector = connector
+        self._state = _GdbReaderState.NEW
+        self._socket: _GdbSocket | None = None
+        self._process: ProcessIdentity | None = None
+        self._listener: GdbListenerIdentity | None = None
+        self._state_guard = threading.Lock()
+        self._operation_lock = threading.Lock()
+
+    def read_pad_word(self, process: ProcessIdentity) -> int:
+        if not self._operation_lock.acquire(blocking=False):
+            raise AutomationRefusal("Concurrent DuckStation GDB reads are forbidden.")
+        try:
+            try:
+                raw = self._read_fixed_packet(process, GDB_PAD_READ_PACKET)
+                if raw[0] != 0 or raw[1] != 0x41:
+                    raise AutomationRefusal(
+                        "DuckStation pad reply is not the pinned digital-pad frame."
+                    )
+                return raw[2] | (raw[3] << 8)
+            except BaseException as exc:
+                self._poison_and_raise(exc)
+        finally:
+            self._operation_lock.release()
+
+    def read_vblank_tick(self, process: ProcessIdentity) -> int:
+        if not self._operation_lock.acquire(blocking=False):
+            raise AutomationRefusal("Concurrent DuckStation GDB reads are forbidden.")
+        try:
+            try:
+                raw = self._read_fixed_packet(process, GDB_VBLANK_READ_PACKET)
+                return int.from_bytes(raw, byteorder="little", signed=False)
+            except BaseException as exc:
+                self._poison_and_raise(exc)
+        finally:
+            self._operation_lock.release()
+
+    def close(self) -> None:
+        if not self._operation_lock.acquire(blocking=False):
+            raise AutomationRefusal("Concurrent DuckStation GDB close is forbidden.")
+        try:
+            with self._state_guard:
+                if self._state in {
+                    _GdbReaderState.CLOSED, _GdbReaderState.POISONED
+                }:
+                    return
+                active = self._socket
+                self._socket = None
+                self._state = _GdbReaderState.CLOSED
+            if active is not None:
+                try:
+                    active.close()
+                except BaseException as exc:
+                    with self._state_guard:
+                        self._state = _GdbReaderState.POISONED
+                    raise AutomationRefusal(
+                        "DuckStation GDB socket close failed."
+                    ) from exc
+        finally:
+            self._operation_lock.release()
+
+    def _poison_and_raise(self, exc: BaseException) -> None:
+        with self._state_guard:
+            if self._state is not _GdbReaderState.CLOSED:
+                self._state = _GdbReaderState.POISONED
+            active = self._socket
+            self._socket = None
+        if active is not None:
+            try:
+                active.close()
+            except BaseException:
+                pass
+        if isinstance(exc, AutomationRefusal):
+            raise exc
+        raise AutomationRefusal("DuckStation GDB reader failed closed.") from exc
+
+    def _read_fixed_packet(
+        self, process: ProcessIdentity, packet: bytes
+    ) -> bytes:
+        with self._state_guard:
+            state = self._state
+        if state is _GdbReaderState.CLOSED:
+            raise AutomationRefusal("DuckStation GDB reader is closed.")
+        if state is _GdbReaderState.POISONED:
+            raise AutomationRefusal("DuckStation GDB reader is poisoned.")
+        if state not in {_GdbReaderState.NEW, _GdbReaderState.CONNECTED}:
+            raise AutomationRefusal("DuckStation GDB reader state is not readable.")
+        if type(process) is not ProcessIdentity:
+            raise AutomationRefusal("DuckStation GDB process identity is malformed.")
+        if packet not in {GDB_PAD_READ_PACKET, GDB_VBLANK_READ_PACKET}:
+            raise AutomationRefusal("DuckStation GDB read packet is outside the allowlist.")
+        if state is _GdbReaderState.NEW:
+            self._connect(process)
+        if self._process != process:
+            raise AutomationRefusal(
+                "DuckStation GDB reader cannot be rebound to another process."
+            )
+        self._attest_bound_endpoint()
+        self._send_outbound(packet)
+        reply = self._read_data_reply()
+        self._attest_bound_endpoint()
+        return reply
+
+    def _connect(self, process: ProcessIdentity) -> None:
+        with self._state_guard:
+            if self._state is not _GdbReaderState.NEW:
+                raise AutomationRefusal("DuckStation GDB connection state is not new.")
+            self._state = _GdbReaderState.CONNECTING
+        observed_before = self._observer.observe(process.pid)
+        self._require_connecting()
+        if type(observed_before) is not ProcessIdentity or observed_before != process:
+            raise AutomationRefusal(
+                "DuckStation process identity changed before GDB connection."
+            )
+        listener_before = self._endpoint_attestor.observe(observed_before)
+        self._require_connecting()
+        if (
+            type(listener_before) is not GdbListenerIdentity
+            or listener_before.pid != observed_before.pid
+        ):
+            raise AutomationRefusal(
+                "DuckStation GDB listener is not bound to the exact process."
+            )
+        active = self._connector(
+            (GDB_HOST, GDB_PORT), GDB_SOCKET_TIMEOUT_SECONDS
+        )
+        with self._state_guard:
+            connection_is_live = self._state is _GdbReaderState.CONNECTING
+            if connection_is_live:
+                self._socket = active
+        if not connection_is_live:
+            try:
+                active.close()
+            except BaseException:
+                pass
+            raise AutomationRefusal(
+                "DuckStation GDB connection was poisoned while opening."
+            )
+        if active.settimeout(GDB_SOCKET_TIMEOUT_SECONDS) is not None:
+            raise AutomationRefusal("DuckStation GDB socket timeout setup was malformed.")
+        self._require_connecting()
+        peer = active.getpeername()
+        self._require_connecting()
+        if (
+            type(peer) is not tuple
+            or len(peer) != 2
+            or peer[0] != GDB_HOST
+            or type(peer[1]) is not int
+            or peer[1] != GDB_PORT
+        ):
+            raise AutomationRefusal("DuckStation GDB socket peer is not exact loopback.")
+        observed_after = self._observer.observe(process.pid)
+        self._require_connecting()
+        if (
+            type(observed_after) is not ProcessIdentity
+            or observed_after != observed_before
+        ):
+            raise AutomationRefusal(
+                "DuckStation process identity changed during GDB connection."
+            )
+        listener_after = self._endpoint_attestor.observe(observed_after)
+        self._require_connecting()
+        if (
+            type(listener_after) is not GdbListenerIdentity
+            or listener_after.pid != observed_after.pid
+            or listener_after != listener_before
+        ):
+            raise AutomationRefusal(
+                "DuckStation GDB listener was replaced during connection."
+            )
+        with self._state_guard:
+            if self._state is not _GdbReaderState.CONNECTING:
+                raise AutomationRefusal(
+                    "DuckStation GDB connection was poisoned during setup."
+                )
+            self._process = process
+            self._listener = listener_before
+            self._state = _GdbReaderState.CONNECTED
+
+    def _require_connecting(self) -> None:
+        with self._state_guard:
+            connecting = self._state is _GdbReaderState.CONNECTING
+        if not connecting:
+            raise AutomationRefusal(
+                "DuckStation GDB connection was poisoned during setup."
+            )
+
+    def _attest_bound_endpoint(self) -> None:
+        with self._state_guard:
+            connected = self._state is _GdbReaderState.CONNECTED
+            active = self._socket
+            process = self._process
+            listener = self._listener
+        if not connected or active is None or process is None or listener is None:
+            raise AutomationRefusal("DuckStation GDB connection is not fully bound.")
+        observed = self._observer.observe(process.pid)
+        if type(observed) is not ProcessIdentity or observed != process:
+            raise AutomationRefusal(
+                "DuckStation process identity changed around a GDB read."
+            )
+        observed_listener = self._endpoint_attestor.observe(observed)
+        if (
+            type(observed_listener) is not GdbListenerIdentity
+            or observed_listener.pid != observed.pid
+            or observed_listener != listener
+        ):
+            raise AutomationRefusal(
+                "DuckStation GDB listener identity changed around a read."
+            )
+
+    def _send_outbound(self, data: bytes) -> None:
+        if type(data) is not bytes or data not in GDB_ALLOWED_OUTBOUND:
+            raise AutomationRefusal("DuckStation GDB outbound packet is forbidden.")
+        with self._state_guard:
+            active = self._socket
+        if active is None:
+            raise AutomationRefusal("DuckStation GDB socket is unavailable.")
+        if active.sendall(data) is not None:
+            raise AutomationRefusal("DuckStation GDB outbound write was malformed.")
+
+    def _read_byte(self) -> int:
+        with self._state_guard:
+            active = self._socket
+        if active is None:
+            raise AutomationRefusal("DuckStation GDB socket is unavailable.")
+        # Avoid read-ahead: a byte received before a later fixed request must
+        # never be buffered and misattributed to that later transaction.
+        received = active.recv(1)
+        if type(received) is not bytes or len(received) != 1:
+            raise AutomationRefusal("DuckStation GDB reply ended or was malformed.")
+        return received[0]
+
+    @staticmethod
+    def _is_hex_byte(value: int) -> bool:
+        return (
+            ord("0") <= value <= ord("9")
+            or ord("a") <= value <= ord("f")
+            or ord("A") <= value <= ord("F")
+        )
+
+    def _reject_bad_packet(self, reason: str) -> None:
+        self._send_outbound(b"-")
+        raise AutomationRefusal(reason)
+
+    def _read_packet_payload(self) -> bytes:
+        payload = bytearray()
+        while True:
+            value = self._read_byte()
+            if value == ord("#"):
+                break
+            payload.append(value)
+            if len(payload) > GDB_MAX_RSP_PAYLOAD_BYTES:
+                self._reject_bad_packet("DuckStation GDB packet payload is oversized.")
+        checksum_text = bytes((self._read_byte(), self._read_byte()))
+        if not all(self._is_hex_byte(value) for value in checksum_text):
+            self._reject_bad_packet("DuckStation GDB packet checksum is malformed.")
+        expected_checksum = int(checksum_text.decode("ascii"), 16)
+        if sum(payload) & 0xFF != expected_checksum:
+            self._reject_bad_packet("DuckStation GDB packet checksum does not match.")
+        return bytes(payload)
+
+    @classmethod
+    def _is_stop_notification(cls, payload: bytes) -> bool:
+        return (
+            len(payload) >= 3
+            and payload[:1] in {b"S", b"T"}
+            and cls._is_hex_byte(payload[1])
+            and cls._is_hex_byte(payload[2])
+            and (payload[:1] == b"T" or len(payload) == 3)
+        )
+
+    def _read_data_reply(self) -> bytes:
+        server_acknowledged = False
+        for _ in range(GDB_MAX_RSP_EVENTS_PER_READ):
+            marker = self._read_byte()
+            if marker == ord("+"):
+                server_acknowledged = True
+                continue
+            if marker == ord("-"):
+                raise AutomationRefusal(
+                    "DuckStation GDB server negatively acknowledged a fixed read."
+                )
+            if marker != ord("$"):
+                raise AutomationRefusal("DuckStation GDB reply marker is unexpected.")
+            payload = self._read_packet_payload()
+            self._send_outbound(b"+")
+            if self._is_stop_notification(payload):
+                continue
+            if not server_acknowledged:
+                raise AutomationRefusal(
+                    "DuckStation GDB server omitted the required request acknowledgement."
+                )
+            if (
+                len(payload) == 3
+                and payload[:1] == b"E"
+                and self._is_hex_byte(payload[1])
+                and self._is_hex_byte(payload[2])
+            ):
+                raise AutomationRefusal("DuckStation GDB memory read returned an error.")
+            if len(payload) != 8 or not all(
+                self._is_hex_byte(value) for value in payload
+            ):
+                raise AutomationRefusal(
+                    "DuckStation GDB memory reply is not exactly four hex bytes."
+                )
+            return bytes.fromhex(payload.decode("ascii"))
+        raise AutomationRefusal("DuckStation GDB reply exceeded its event bound.")
+
+
+@dataclasses.dataclass(frozen=True)
 class PadConfirmationReadiness:
     source_id: str
     ready: bool
@@ -2102,11 +2646,12 @@ class PollingReadOnlyPadConfirmer:
 
 
 class UnavailableNativePadConfirmer:
-    """Production refusal until the exact ID65 pad-word address is pinned."""
+    """Production refusal until GDB pause/resume and pulse ordering are pinned."""
 
     REFUSAL_REASON: Final = (
-        "Native read-only GDB confirmation is not pinned; the entire input plan "
-        "is refused before any host key event."
+        "Native read-only GDB confirmation is not production-wired because the "
+        "pause/resume and input-pulse lifecycle is not pinned; the entire input "
+        "plan is refused before any host key event."
     )
 
     def readiness(self) -> PadConfirmationReadiness:

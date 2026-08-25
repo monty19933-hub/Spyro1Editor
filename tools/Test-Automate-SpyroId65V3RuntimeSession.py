@@ -31,6 +31,7 @@ sys.modules[SPEC.name] = automation
 SPEC.loader.exec_module(automation)
 
 ACTUAL_DUCKSTATION_CALLS = 0
+ACTUAL_GDB_CONNECTION_ATTEMPTS = 0
 PRODUCTION_EVENT_POSTS = 0
 NATIVE_EVENT_POST_ATTEMPTS = 0
 
@@ -1183,6 +1184,604 @@ class DeadPadReader:
     def read_pad_word(self, process: Any) -> int:
         self.processes.append(process)
         raise OSError("injected unavailable read-only GDB reader")
+
+
+def expect_any_refusal(callback: Any) -> str:
+    try:
+        callback()
+    except automation.AutomationRefusal as exc:
+        return str(exc)
+    else:
+        raise AssertionError("Expected a fail-closed AutomationRefusal.")
+
+
+def gdb_rsp_packet(payload: bytes) -> bytes:
+    if type(payload) is not bytes:
+        raise AssertionError("Offline RSP fixture payload must be bytes.")
+    checksum = sum(payload) & 0xFF
+    return b"$" + payload + b"#" + f"{checksum:02x}".encode("ascii")
+
+
+def gdb_lsof_records(
+    *records: Sequence[bytes], terminal: bytes = b"\x00\n"
+) -> bytes:
+    if not records:
+        return b""
+    return b"\x00\n".join(b"\x00".join(record) for record in records) + terminal
+
+
+def gdb_listener_fields(**changes: bytes) -> tuple[bytes, ...]:
+    fields = {
+        "descriptor": b"f3",
+        "access": b"au",
+        "socket_type": b"tIPv4",
+        "device": b"d0x2cb90ff55f15ccdc",
+        "protocol": b"PTCP",
+        "endpoint": b"n127.0.0.1:2345",
+        "state": b"TST=LISTEN",
+        "receive_queue": b"TQR=0",
+        "send_queue": b"TQS=0",
+    }
+    unknown = set(changes).difference(fields)
+    if unknown:
+        raise AssertionError(f"Unknown lsof fixture fields: {sorted(unknown)!r}")
+    fields.update(changes)
+    return (
+        fields["descriptor"],
+        fields["access"],
+        fields["socket_type"],
+        fields["device"],
+        fields["protocol"],
+        fields["endpoint"],
+        fields["state"],
+        fields["receive_queue"],
+        fields["send_queue"],
+    )
+
+
+def make_gdb_listener(**changes: object) -> Any:
+    values: dict[str, object] = {
+        "pid": 700,
+        "descriptor": 3,
+        "access": "u",
+        "socket_type": "IPv4",
+        "device_token": "0x2cb90ff55f15ccdc",
+        "protocol": "TCP",
+        "endpoint": "127.0.0.1:2345",
+        "tcp_state": "LISTEN",
+        "receive_queue": 0,
+        "send_queue": 0,
+    }
+    values.update(changes)
+    return automation.GdbListenerIdentity(**values)
+
+
+class FakeGdbEndpointAttestor:
+    def __init__(self, listeners: Sequence[Any]) -> None:
+        if not listeners:
+            raise AssertionError("Fake GDB attestor requires an identity.")
+        self.listeners = list(listeners)
+        self.processes: list[Any] = []
+
+    def observe(self, process: Any) -> Any:
+        self.processes.append(process)
+        if len(self.listeners) == 1:
+            return self.listeners[0]
+        return self.listeners.pop(0)
+
+
+class FakeFragmentedGdbSocket:
+    def __init__(
+        self,
+        chunks: Sequence[bytes | BaseException],
+        *,
+        peer: object = ("127.0.0.1", 2345),
+        fail_send_number: int | None = None,
+        fail_close: bool = False,
+    ) -> None:
+        self.chunks = list(chunks)
+        self.peer = peer
+        self.fail_send_number = fail_send_number
+        self.fail_close = fail_close
+        self.timeouts: list[float | None] = []
+        self.sent: list[bytes] = []
+        self.recv_sizes: list[int] = []
+        self.close_calls = 0
+        self.closed = False
+
+    def settimeout(self, value: float | None) -> None:
+        self.timeouts.append(value)
+
+    def sendall(self, data: bytes) -> None:
+        if self.closed:
+            raise OSError("injected send on closed fake GDB socket")
+        self.sent.append(data)
+        if len(self.sent) == self.fail_send_number:
+            raise OSError("injected GDB send failure")
+
+    def recv(self, maximum_bytes: int) -> bytes:
+        self.recv_sizes.append(maximum_bytes)
+        if self.closed:
+            raise OSError("injected receive on closed fake GDB socket")
+        if not self.chunks:
+            return b""
+        current = self.chunks.pop(0)
+        if isinstance(current, BaseException):
+            raise current
+        if len(current) <= maximum_bytes:
+            return current
+        self.chunks.insert(0, current[maximum_bytes:])
+        return current[:maximum_bytes]
+
+    def getpeername(self) -> object:
+        return self.peer
+
+    def close(self) -> None:
+        self.close_calls += 1
+        self.closed = True
+        if self.fail_close:
+            raise OSError("injected GDB close failure")
+
+
+class FakeGdbConnector:
+    def __init__(
+        self,
+        fake_socket: FakeFragmentedGdbSocket | None = None,
+        *,
+        error: BaseException | None = None,
+    ) -> None:
+        self.fake_socket = fake_socket
+        self.error = error
+        self.calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    def __call__(self, *args: object, **kwargs: object) -> Any:
+        self.calls.append((args, kwargs))
+        if self.error is not None:
+            raise self.error
+        if self.fake_socket is None:
+            raise AssertionError("Fake GDB connector has no socket.")
+        return self.fake_socket
+
+
+def make_gdb_reader(
+    chunks: Sequence[bytes | BaseException],
+    *,
+    process: Any | None = None,
+    observer: Any | None = None,
+    listeners: Sequence[Any] | None = None,
+    peer: object = ("127.0.0.1", 2345),
+    fail_send_number: int | None = None,
+    connector_error: BaseException | None = None,
+) -> tuple[Any, FakeFragmentedGdbSocket, FakeGdbConnector, FakeGdbEndpointAttestor]:
+    selected_process = process or make_process()
+    fake_socket = FakeFragmentedGdbSocket(
+        chunks,
+        peer=peer,
+        fail_send_number=fail_send_number,
+    )
+    connector = FakeGdbConnector(fake_socket, error=connector_error)
+    attestor = FakeGdbEndpointAttestor(
+        listeners or (make_gdb_listener(pid=selected_process.pid),)
+    )
+    reader = automation.PersistentReadOnlyDuckStationGdbReader(
+        observer or FakeObserver([selected_process]),
+        attestor,
+        connector=connector,
+    )
+    return reader, fake_socket, connector, attestor
+
+
+def test_strict_gdb_listener_parser_and_native_negative() -> None:
+    literal_lsof_command = (
+        "/usr/sbin/lsof",
+        "-nP",
+        "-a",
+        "-iTCP:2345",
+        "-sTCP:LISTEN",
+        "-F0pfadDikstnPT",
+    )
+    if automation.GDB_LSOF_COMMAND != literal_lsof_command:
+        raise AssertionError("Fixed global GDB listener lsof command changed.")
+    process_record = (b"p700",)
+    listener_record = gdb_listener_fields()
+    valid = gdb_lsof_records(process_record, listener_record)
+    observed = automation._parse_gdb_listener_lsof(valid)
+    if observed != make_gdb_listener():
+        raise AssertionError("Strict lsof parser changed the pinned listener identity.")
+
+    reordered = list(listener_record)
+    reordered[1], reordered[2] = reordered[2], reordered[1]
+    invalid_outputs = (
+        b"",
+        valid[:-1],
+        b"\xef\xbb\xbf" + valid,
+        valid.replace(b"d0x2cb", b"d\xff2cb", 1),
+        gdb_lsof_records((b"p0",), listener_record),
+        gdb_lsof_records((b"p0700",), listener_record),
+        gdb_lsof_records((b"p2147483648",), listener_record),
+        gdb_lsof_records((b"p" + b"9" * 5000,), listener_record),
+        gdb_lsof_records(process_record, listener_record, listener_record),
+        gdb_lsof_records(process_record, process_record, listener_record),
+        gdb_lsof_records(process_record, listener_record[:-1]),
+        gdb_lsof_records(process_record, listener_record + (b"zunknown",)),
+        gdb_lsof_records(process_record, tuple(reordered)),
+        gdb_lsof_records(
+            process_record,
+            listener_record[:1] + (listener_record[0],) + listener_record[2:],
+        ),
+        gdb_lsof_records(process_record, gdb_listener_fields(descriptor=b"f-1")),
+        gdb_lsof_records(
+            process_record, gdb_listener_fields(descriptor=b"f2147483648")
+        ),
+        gdb_lsof_records(
+            process_record, gdb_listener_fields(descriptor=b"f" + b"9" * 5000)
+        ),
+        gdb_lsof_records(process_record, gdb_listener_fields(access=b"ar")),
+        gdb_lsof_records(process_record, gdb_listener_fields(socket_type=b"tIPv6")),
+        gdb_lsof_records(process_record, gdb_listener_fields(device=b"d1234")),
+        gdb_lsof_records(process_record, gdb_listener_fields(protocol=b"PUDP")),
+        gdb_lsof_records(
+            process_record, gdb_listener_fields(endpoint=b"n0.0.0.0:2345")
+        ),
+        gdb_lsof_records(
+            process_record, gdb_listener_fields(endpoint=b"n127.0.0.1:1234")
+        ),
+        gdb_lsof_records(
+            process_record, gdb_listener_fields(state=b"TST=ESTABLISHED")
+        ),
+        gdb_lsof_records(
+            process_record, gdb_listener_fields(receive_queue=b"TQR=1")
+        ),
+        gdb_lsof_records(
+            process_record, gdb_listener_fields(send_queue=b"TQS=1")
+        ),
+    )
+    for index, raw in enumerate(invalid_outputs):
+        message = expect_any_refusal(
+            lambda raw=raw: automation._parse_gdb_listener_lsof(raw)
+        )
+        if not message:
+            raise AssertionError(f"lsof refusal {index} had no diagnostic.")
+
+    runner_calls: list[tuple[str, ...]] = []
+
+    def exact_runner(command: Sequence[str]) -> subprocess.CompletedProcess[bytes]:
+        runner_calls.append(tuple(command))
+        return subprocess.CompletedProcess(tuple(command), 0, valid, b"")
+
+    attestor = automation.MacGdbEndpointAttestor(runner=exact_runner)
+    if attestor.observe(make_process()) != make_gdb_listener():
+        raise AssertionError("Injected lsof attestor did not return the exact listener.")
+    if runner_calls != [automation.GDB_LSOF_COMMAND]:
+        raise AssertionError("GDB attestor changed the fixed global lsof command.")
+    expect_any_refusal(lambda: attestor.observe(make_process(pid=701)))
+
+    def noisy_runner(command: Sequence[str]) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(tuple(command), 0, valid, b"warning")
+
+    expect_any_refusal(
+        lambda: automation.MacGdbEndpointAttestor(runner=noisy_runner).observe(
+            make_process()
+        )
+    )
+
+    # This native check is read-only.  It never opens a socket: whether port
+    # 2345 is free or owned by some other process, this test PID cannot own its
+    # listener and therefore the global attestor must refuse it.
+    if sys.platform == "darwin":
+        native_process = make_process(pid=os.getpid())
+        expect_any_refusal(
+            lambda: automation.MacGdbEndpointAttestor().observe(native_process)
+        )
+
+
+def test_persistent_gdb_reader_fixed_packets_and_fragmentation() -> None:
+    process = make_process()
+    literal_pad_packet = b"$m800786a0,4#9b"
+    literal_vblank_packet = b"$m800758c8,4#a4"
+    if (
+        automation.GDB_PAD_READ_PACKET != literal_pad_packet
+        or automation.GDB_VBLANK_READ_PACKET != literal_vblank_packet
+        or automation.GDB_ALLOWED_OUTBOUND
+        != frozenset({literal_pad_packet, literal_vblank_packet, b"+", b"-"})
+    ):
+        raise AssertionError("Fixed GDB addresses, checksums, or outbound set changed.")
+    stop_s = gdb_rsp_packet(b"S05")
+    stop_t = gdb_rsp_packet(b"T05thread:1;")
+    first_reply = b"++" + stop_s + gdb_rsp_packet(b"00417fff")
+    second_reply = b"+" + stop_t + gdb_rsp_packet(b"78563412")
+    # One-byte fragments prove the parser does not depend on recv boundaries.
+    chunks = [bytes((value,)) for value in first_reply + second_reply]
+    reader, fake_socket, connector, attestor = make_gdb_reader(
+        chunks, process=process
+    )
+    if reader.read_pad_word(process) != 0xFF7F:
+        raise AssertionError("Digital-pad reply was not decoded little-endian.")
+    if reader.read_vblank_tick(process) != 0x12345678:
+        raise AssertionError("Vblank reply was not decoded as an unsigned uint32.")
+    expected_outbound = [
+        automation.GDB_PAD_READ_PACKET,
+        b"+",
+        b"+",
+        automation.GDB_VBLANK_READ_PACKET,
+        b"+",
+        b"+",
+    ]
+    if fake_socket.sent != expected_outbound:
+        raise AssertionError(
+            f"Persistent GDB outbound surface changed: {fake_socket.sent!r}"
+        )
+    if any(packet not in automation.GDB_ALLOWED_OUTBOUND for packet in fake_socket.sent):
+        raise AssertionError("GDB reader emitted bytes outside the fixed allowlist.")
+    if connector.calls != [
+        (((automation.GDB_HOST, automation.GDB_PORT), automation.GDB_SOCKET_TIMEOUT_SECONDS), {})
+    ]:
+        raise AssertionError(f"Persistent GDB connector calls changed: {connector.calls!r}")
+    if fake_socket.timeouts != [automation.GDB_SOCKET_TIMEOUT_SECONDS]:
+        raise AssertionError("Persistent GDB socket timeout was not pinned once.")
+    if not fake_socket.recv_sizes or set(fake_socket.recv_sizes) != {1}:
+        raise AssertionError("GDB reader performed transaction-unsafe socket read-ahead.")
+    if len(attestor.processes) != 6 or any(item != process for item in attestor.processes):
+        raise AssertionError("Persistent reads skipped exact listener re-attestation.")
+    reader.close()
+    reader.close()
+    if fake_socket.close_calls != 1:
+        raise AssertionError("Normal GDB close is not idempotent.")
+    sent_before = tuple(fake_socket.sent)
+    expect_any_refusal(lambda: reader.read_pad_word(process))
+    if tuple(fake_socket.sent) != sent_before or len(connector.calls) != 1:
+        raise AssertionError("Closed GDB reader sent or reconnected.")
+
+    # Only the exact three-byte Ehh form is an RSP error.  Eight hexadecimal
+    # digits beginning with E are valid four-byte memory data and must not be
+    # misclassified by a prefix-only check.
+    e_data_reader, e_data_socket, e_data_connector, _ = make_gdb_reader(
+        (b"+" + gdb_rsp_packet(b"E0000000"),), process=process
+    )
+    if e_data_reader.read_vblank_tick(process) != 0x000000E0:
+        raise AssertionError("Valid E0000000 memory data was mistaken for an RSP error.")
+    if e_data_socket.sent != [automation.GDB_VBLANK_READ_PACKET, b"+"]:
+        raise AssertionError("Valid E-prefixed data changed the fixed vblank exchange.")
+    e_data_reader.close()
+    if len(e_data_connector.calls) != 1 or e_data_socket.close_calls != 1:
+        raise AssertionError("Valid E-prefixed data did not use one persistent socket.")
+
+    # An asynchronous stop notification may arrive before the server's ACK for
+    # this request.  It is still checksum-validated and client-ACKed, while the
+    # actual memory data remains forbidden until the request '+' is observed.
+    early_stop_reader, early_stop_socket, early_stop_connector, _ = make_gdb_reader(
+        (
+            gdb_rsp_packet(b"S05")
+            + b"+"
+            + gdb_rsp_packet(b"00417fff"),
+        ),
+        process=process,
+    )
+    if early_stop_reader.read_pad_word(process) != 0xFF7F:
+        raise AssertionError("A valid pre-ACK stop notification blocked pad data.")
+    if early_stop_socket.sent != [automation.GDB_PAD_READ_PACKET, b"+", b"+"]:
+        raise AssertionError("Pre-ACK stop notification acknowledgement changed.")
+    early_stop_reader.close()
+    if len(early_stop_connector.calls) != 1 or early_stop_socket.close_calls != 1:
+        raise AssertionError("Pre-ACK stop fixture did not use one persistent socket.")
+
+    released_reader, released_socket, released_connector, _ = make_gdb_reader(
+        (b"+" + gdb_rsp_packet(b"0041ffff"),), process=process
+    )
+    if released_reader.read_pad_word(process) != 0xFFFF:
+        raise AssertionError("Fully released digital-pad word was decoded incorrectly.")
+    released_reader.close()
+    if len(released_connector.calls) != 1 or released_socket.close_calls != 1:
+        raise AssertionError("Released-pad fixture did not use one persistent socket.")
+
+
+def test_persistent_gdb_reader_rsp_refusal_matrix() -> None:
+    good_data = gdb_rsp_packet(b"00417fff")
+    too_many_stops = b"+" + gdb_rsp_packet(b"S05") * (
+        automation.GDB_MAX_RSP_EVENTS_PER_READ + 1
+    )
+    oversized_payload = (
+        b"+"
+        + b"$"
+        + b"a" * (automation.GDB_MAX_RSP_PAYLOAD_BYTES + 1)
+    )
+    cases: tuple[tuple[str, Sequence[bytes | BaseException], bool], ...] = (
+        ("negative-ack", (b"-",), False),
+        ("missing-ack", (good_data,), False),
+        ("unexpected-marker", (b"+?",), False),
+        ("eof", (b"+",), False),
+        ("eof-mid-payload", (b"+$0041",), False),
+        ("eof-mid-checksum", (b"+$00417fff#8",), False),
+        ("socket-error", (OSError("injected receive failure"),), False),
+        ("bad-checksum", (b"+$00417fff#00",), True),
+        ("malformed-checksum", (b"+$00417fff#gg",), True),
+        ("oversized", (oversized_payload[:4096], oversized_payload[4096:]), True),
+        ("memory-error", (b"+" + gdb_rsp_packet(b"E01"),), False),
+        ("nonhex-data", (b"+" + gdb_rsp_packet(b"zzzzzzzz"),), False),
+        ("short-data", (b"+" + gdb_rsp_packet(b"0000"),), False),
+        ("long-data", (b"+" + gdb_rsp_packet(b"0000000000"),), False),
+        ("malformed-s-stop", (b"+" + gdb_rsp_packet(b"S0g"),), False),
+        (
+            "malformed-t-stop",
+            (b"+" + gdb_rsp_packet(b"T0gthread:1;"),),
+            False,
+        ),
+        ("event-bound", (too_many_stops,), False),
+    )
+    process = make_process()
+    for name, chunks, requires_nack in cases:
+        reader, fake_socket, connector, attestor = make_gdb_reader(
+            chunks, process=process
+        )
+        message = expect_any_refusal(lambda: reader.read_pad_word(process))
+        if not message or fake_socket.close_calls != 1 or not fake_socket.closed:
+            raise AssertionError(f"RSP case {name} did not poison and close.")
+        if len(connector.calls) != 1:
+            raise AssertionError(f"RSP case {name} did not use one connection.")
+        if not fake_socket.sent or fake_socket.sent[0] != automation.GDB_PAD_READ_PACKET:
+            raise AssertionError(f"RSP case {name} changed the fixed read packet.")
+        if requires_nack and b"-" not in fake_socket.sent:
+            raise AssertionError(f"RSP case {name} omitted its one negative ACK.")
+        if fake_socket.sent.count(b"-") > 1:
+            raise AssertionError(f"RSP case {name} retransmitted a negative ACK.")
+        sent_before = tuple(fake_socket.sent)
+        attests_before = len(attestor.processes)
+        expect_any_refusal(lambda: reader.read_pad_word(process))
+        if (
+            tuple(fake_socket.sent) != sent_before
+            or len(connector.calls) != 1
+            or len(attestor.processes) != attests_before
+            or fake_socket.close_calls != 1
+        ):
+            raise AssertionError(f"Poisoned RSP case {name} retried native work.")
+
+    # Socket setup and writes share the same irreversible poison semantics.
+    setup_reader, setup_socket, setup_connector, setup_attestor = make_gdb_reader(
+        (), process=process, connector_error=OSError("injected connect failure")
+    )
+    expect_any_refusal(lambda: setup_reader.read_pad_word(process))
+    expect_any_refusal(lambda: setup_reader.read_pad_word(process))
+    if len(setup_connector.calls) != 1 or setup_socket.sent or len(setup_attestor.processes) != 1:
+        raise AssertionError("Failed GDB connect was retried or sent bytes.")
+
+    send_reader, send_socket, send_connector, _ = make_gdb_reader(
+        (), process=process, fail_send_number=1
+    )
+    expect_any_refusal(lambda: send_reader.read_pad_word(process))
+    expect_any_refusal(lambda: send_reader.read_pad_word(process))
+    if len(send_connector.calls) != 1 or send_socket.close_calls != 1 or len(send_socket.sent) != 1:
+        raise AssertionError("Failed GDB send was retried after poison.")
+
+
+def test_persistent_gdb_reader_semantic_and_binding_refusals() -> None:
+    process = make_process()
+    changed_process = dataclasses.replace(process, start_microseconds=654321)
+    listener = make_gdb_listener()
+    changed_listener = dataclasses.replace(listener, device_token="0xfeedface")
+    valid = b"+" + gdb_rsp_packet(b"00417fff")
+
+    main_names = frozenset(automation.main.__code__.co_names)
+    if not callable(automation.PersistentReadOnlyDuckStationGdbReader):
+        raise AssertionError("The reviewed read-only GDB reader is not public.")
+    if (
+        "PersistentReadOnlyDuckStationGdbReader" in main_names
+        or "UnavailableNativePadConfirmer" not in main_names
+    ):
+        raise AssertionError(
+            "Production main wired the persistent reader before pulse-order review."
+        )
+
+    bad_header_reader, bad_header_socket, bad_header_connector, _ = make_gdb_reader(
+        (b"+" + gdb_rsp_packet(b"01417fff"),), process=process
+    )
+    expect_any_refusal(lambda: bad_header_reader.read_pad_word(process))
+    if bad_header_socket.close_calls != 1 or len(bad_header_connector.calls) != 1:
+        raise AssertionError("Bad PS1 pad header did not poison the connection.")
+
+    pre_process_reader, pre_process_socket, pre_process_connector, pre_process_attestor = (
+        make_gdb_reader(
+            (), process=process, observer=FakeObserver([changed_process])
+        )
+    )
+    expect_any_refusal(lambda: pre_process_reader.read_pad_word(process))
+    if pre_process_connector.calls or pre_process_socket.sent or pre_process_attestor.processes:
+        raise AssertionError("Pre-connect process drift reached listener or socket work.")
+
+    pre_listener_reader, pre_listener_socket, pre_listener_connector, _ = make_gdb_reader(
+        (), process=process, listeners=(dataclasses.replace(listener, pid=701),)
+    )
+    expect_any_refusal(lambda: pre_listener_reader.read_pad_word(process))
+    if pre_listener_connector.calls or pre_listener_socket.sent:
+        raise AssertionError("Wrong listener owner reached the connector.")
+
+    malformed_peers: tuple[tuple[str, object], ...] = (
+        ("wrong-host", ("127.0.0.2", 2345)),
+        ("wrong-port", ("127.0.0.1", 2346)),
+        ("list-not-tuple", ["127.0.0.1", 2345]),
+        ("short-tuple", ("127.0.0.1",)),
+        ("long-tuple", ("127.0.0.1", 2345, 0)),
+        ("boolean-port", ("127.0.0.1", True)),
+        ("text-port", ("127.0.0.1", "2345")),
+    )
+    for name, peer in malformed_peers:
+        peer_reader, peer_socket, peer_connector, _ = make_gdb_reader(
+            (), process=process, peer=peer
+        )
+        expect_any_refusal(lambda: peer_reader.read_pad_word(process))
+        if (
+            len(peer_connector.calls) != 1
+            or peer_socket.sent
+            or peer_socket.close_calls != 1
+        ):
+            raise AssertionError(
+                f"Malformed GDB peer {name} did not close before sending."
+            )
+
+    post_connect_process_reader, post_connect_process_socket, _, _ = make_gdb_reader(
+        (),
+        process=process,
+        observer=FakeObserver([process, changed_process]),
+    )
+    expect_any_refusal(lambda: post_connect_process_reader.read_pad_word(process))
+    if post_connect_process_socket.sent or post_connect_process_socket.close_calls != 1:
+        raise AssertionError("Post-connect process replacement reached a read packet.")
+
+    post_connect_listener_reader, post_connect_listener_socket, _, _ = make_gdb_reader(
+        (), process=process, listeners=(listener, changed_listener)
+    )
+    expect_any_refusal(lambda: post_connect_listener_reader.read_pad_word(process))
+    if post_connect_listener_socket.sent or post_connect_listener_socket.close_calls != 1:
+        raise AssertionError("Post-connect listener replacement reached a read packet.")
+
+    pre_read_process_reader, pre_read_process_socket, _, _ = make_gdb_reader(
+        (),
+        process=process,
+        observer=FakeObserver([process, process, changed_process]),
+    )
+    expect_any_refusal(lambda: pre_read_process_reader.read_pad_word(process))
+    if pre_read_process_socket.sent:
+        raise AssertionError("Pre-read process drift sent a packet.")
+
+    pre_read_listener_reader, pre_read_listener_socket, _, _ = make_gdb_reader(
+        (), process=process, listeners=(listener, listener, changed_listener)
+    )
+    expect_any_refusal(lambda: pre_read_listener_reader.read_pad_word(process))
+    if pre_read_listener_socket.sent:
+        raise AssertionError("Pre-read listener drift sent a packet.")
+
+    post_read_process_reader, post_read_process_socket, _, _ = make_gdb_reader(
+        (valid,),
+        process=process,
+        observer=FakeObserver([process, process, process, changed_process]),
+    )
+    expect_any_refusal(lambda: post_read_process_reader.read_pad_word(process))
+    if post_read_process_socket.sent != [automation.GDB_PAD_READ_PACKET, b"+"]:
+        raise AssertionError("Post-read process drift did not discard an exact reply.")
+
+    post_read_listener_reader, post_read_listener_socket, _, _ = make_gdb_reader(
+        (valid,),
+        process=process,
+        listeners=(listener, listener, listener, changed_listener),
+    )
+    expect_any_refusal(lambda: post_read_listener_reader.read_pad_word(process))
+    if post_read_listener_socket.sent != [automation.GDB_PAD_READ_PACKET, b"+"]:
+        raise AssertionError("Post-read listener drift did not discard an exact reply.")
+
+    rebound_reader, rebound_socket, rebound_connector, rebound_attestor = make_gdb_reader(
+        (valid,), process=process
+    )
+    if rebound_reader.read_pad_word(process) != 0xFF7F:
+        raise AssertionError("Rebind fixture did not complete its first read.")
+    sent_before = tuple(rebound_socket.sent)
+    attests_before = len(rebound_attestor.processes)
+    expect_any_refusal(lambda: rebound_reader.read_vblank_tick(changed_process))
+    if (
+        tuple(rebound_socket.sent) != sent_before
+        or len(rebound_connector.calls) != 1
+        or len(rebound_attestor.processes) != attests_before
+        or rebound_socket.close_calls != 1
+    ):
+        raise AssertionError("Process-rebind refusal performed new native work.")
 
 
 def test_hotkey_only_plan_requires_process_bound_pad_probe() -> None:
@@ -2550,7 +3149,8 @@ def test_native_read_only_boundaries(repository_root: pathlib.Path) -> str:
 
 
 def main() -> int:
-    global ACTUAL_DUCKSTATION_CALLS, NATIVE_EVENT_POST_ATTEMPTS
+    global ACTUAL_DUCKSTATION_CALLS, ACTUAL_GDB_CONNECTION_ATTEMPTS
+    global NATIVE_EVENT_POST_ATTEMPTS
     repository_root = pathlib.Path(__file__).resolve().parent.parent
     tests = (
         test_canonical_plan_and_allowlist,
@@ -2569,6 +3169,10 @@ def main() -> int:
         test_exception_path_releases_key,
         test_stuck_key_is_retried_and_refused,
         test_transport_rejects_non_enum_action,
+        test_strict_gdb_listener_parser_and_native_negative,
+        test_persistent_gdb_reader_fixed_packets_and_fragmentation,
+        test_persistent_gdb_reader_rsp_refusal_matrix,
+        test_persistent_gdb_reader_semantic_and_binding_refusals,
         test_hotkey_only_plan_requires_process_bound_pad_probe,
         test_read_only_pad_confirmation_and_timeout,
         test_macro_baseline_and_compensating_untoggle,
@@ -2587,6 +3191,7 @@ def main() -> int:
     )
     original_run = subprocess.run
     original_popen = subprocess.Popen
+    original_gdb_connector = automation.socket.create_connection
 
     def tracked_run(*args: object, **kwargs: object) -> Any:
         # subprocess.run delegates to the tracked Popen below, so counting here
@@ -2599,6 +3204,12 @@ def main() -> int:
         if _command_launches_production_duckstation(command, repository_root):
             ACTUAL_DUCKSTATION_CALLS += 1
         return original_popen(*args, **kwargs)
+
+    def refuse_real_gdb_connection(*args: object, **kwargs: object) -> Any:
+        del args, kwargs
+        global ACTUAL_GDB_CONNECTION_ATTEMPTS
+        ACTUAL_GDB_CONNECTION_ATTEMPTS += 1
+        raise AssertionError("Deep test attempted a real DuckStation GDB connection.")
 
     native_post_methods = (
         "post_key_down",
@@ -2622,6 +3233,7 @@ def main() -> int:
 
     subprocess.run = tracked_run
     subprocess.Popen = tracked_popen
+    automation.socket.create_connection = refuse_real_gdb_connection
     for method_name in native_post_methods:
         setattr(
             automation.MacCGEventBackend,
@@ -2637,19 +3249,22 @@ def main() -> int:
     finally:
         subprocess.run = original_run
         subprocess.Popen = original_popen
+        automation.socket.create_connection = original_gdb_connector
         for method_name, method in original_native_posts.items():
             setattr(automation.MacCGEventBackend, method_name, method)
     if (
         ACTUAL_DUCKSTATION_CALLS != 0
+        or ACTUAL_GDB_CONNECTION_ATTEMPTS != 0
         or NATIVE_EVENT_POST_ATTEMPTS != 0
         or PRODUCTION_EVENT_POSTS != 0
     ):
         raise AssertionError(
-            "Deep test crossed a forbidden DuckStation launch/native-post boundary."
+            "Deep test crossed a forbidden DuckStation launch/GDB/native-post boundary."
         )
     print(
         f"{automation.SELF_TEST_STATUS} tests={len(tests) + 1} "
         f"actualDuckStationCalls={ACTUAL_DUCKSTATION_CALLS} "
+        f"actualGdbConnectionAttempts={ACTUAL_GDB_CONNECTION_ATTEMPTS} "
         f"nativeEventPostAttempts={NATIVE_EVENT_POST_ATTEMPTS} "
         f"productionFakeEventPosts={PRODUCTION_EVENT_POSTS} "
         f"machineFinalized=false {native}"
