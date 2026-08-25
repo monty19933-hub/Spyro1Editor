@@ -534,11 +534,11 @@ internal static partial class Id65V3RuntimeEvidenceContract
     internal const string ExpectedRuntimeProfileSha256 =
         "29d01f1b791e4dc08ebfc4d62cf5a1b91600a5c55ec175ac6da45b13123100ad";
     internal const string ExpectedSourceClosureSha256 =
-        "fa9cdaaa5bebfb649e6db92f177ff664392ee007bc8ffeb11b5b4c7152e6ddb3";
+        "1ec8cbcc0590a25c865d36ecd682e218db0555dada84c68a865ea5415c7aaacf";
     internal const string ExpectedWatcherSha256 =
         "eac3953a0ff7ff8acdefbe43cf987f296d44091ad51619efd225690ba1dc0677";
     internal const string ExpectedCaptureCoordinatorSha256 =
-        "d6bf96ece91f8964842f4c8a19de082644ebcd29f292574e6d94c57a222dd6d6";
+        "c7c2a10660aa36e69580be0886a1624cdb265030754c553a0b435047976e7e77";
     internal const string FocusedRuntimeEvidenceRelativePath =
         "docs/runtime-evidence/unused-level-65-remote-blank-environment-header-repair-v3-runtime-evidence.json";
     internal static readonly string ExpectedFocusedRuntimeEvidenceSha256 = "PENDING";
@@ -5514,8 +5514,12 @@ internal static partial class Id65V3RuntimeEvidenceContract
             process,
             "environmentNulSha256",
             "capture process");
-        if (externalHomeObserved != externalHomePath)
-            throw new InvalidDataException("Capture process external HOME changed.");
+        if (externalHomeObserved != externalHomePath ||
+            environmentNulSha256 != RecomputeCaptureEnvironmentNulSha256(externalHomePath))
+        {
+            throw new InvalidDataException(
+                "Capture process external HOME or exact environment byte hash changed.");
+        }
         string expectedProcessId = RecomputeCaptureProcessInstanceId(
             runId,
             bootIdentity,
@@ -5635,6 +5639,17 @@ internal static partial class Id65V3RuntimeEvidenceContract
             $"environmentNulSha256={environmentNulSha256}\n" +
             $"externalHomeRealPath={externalHomeRealPath}\n";
         return "id65v3-process-" + HashUtf8(manifest)[..32];
+    }
+
+    private static string RecomputeCaptureEnvironmentNulSha256(string externalHomeRealPath)
+    {
+        string manifest =
+            $"HOME={externalHomeRealPath}\0" +
+            "LANG=C\0" +
+            "LC_ALL=C\0" +
+            "PATH=/usr/bin:/bin:/usr/sbin:/sbin\0" +
+            "SPYRO_ID65_CAPTURE_ENVIRONMENT_END_V1=duckstation-id65-unattended-v1\0";
+        return Hash(StrictUtf8.GetBytes(manifest));
     }
 
     private static string CaptureProcessStartUtc(long startSeconds, long startMicroseconds)

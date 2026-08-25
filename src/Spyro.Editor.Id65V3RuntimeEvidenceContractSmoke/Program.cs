@@ -283,7 +283,7 @@ Require(Id65V3RuntimeEvidenceContract.ExpectedWatcherSha256 ==
         Id65V3RuntimeEvidenceContract.ExpectedRuntimeProfileSha256 ==
             "29d01f1b791e4dc08ebfc4d62cf5a1b91600a5c55ec175ac6da45b13123100ad" &&
         Id65V3RuntimeEvidenceContract.ExpectedSourceClosureSha256 ==
-            "fa9cdaaa5bebfb649e6db92f177ff664392ee007bc8ffeb11b5b4c7152e6ddb3" &&
+            "1ec8cbcc0590a25c865d36ecd682e218db0555dada84c68a865ea5415c7aaacf" &&
         pending.SourceIdentity.CaptureCoordinatorRelativePath ==
             "tools/Capture-SpyroId65V3RuntimeSession.py" &&
         pending.SourceIdentity.CaptureCoordinatorSha256 ==
@@ -2682,6 +2682,40 @@ try
         rechain: true,
         "process argv byte hash changed");
     RejectJournalTamper(
+        "journal legacy HOME-only environment NUL hash",
+        fixture,
+        primaryJournalId,
+        root =>
+        {
+            JsonObject payload = CaptureEventPayload(root, "process-start-observed");
+            string home = payload["externalHomeRealPath"]!.GetValue<string>();
+            payload["environmentNulSha256"] = Hash(
+                Encoding.UTF8.GetBytes($"HOME={home}\0"));
+        },
+        rechain: true,
+        "exact environment byte hash changed",
+        allowProjectionFallback: false);
+    RejectJournalTamper(
+        "journal extra environment entry NUL hash",
+        fixture,
+        primaryJournalId,
+        root =>
+        {
+            JsonObject payload = CaptureEventPayload(root, "process-start-observed");
+            string home = payload["externalHomeRealPath"]!.GetValue<string>();
+            string environment =
+                $"HOME={home}\0" +
+                "LANG=C\0" +
+                "LC_ALL=C\0" +
+                "PATH=/usr/bin:/bin:/usr/sbin:/sbin\0" +
+                "SPYRO_ID65_CAPTURE_ENVIRONMENT_END_V1=duckstation-id65-unattended-v1\0" +
+                "EXTRA=bad\0";
+            payload["environmentNulSha256"] = Hash(Encoding.UTF8.GetBytes(environment));
+        },
+        rechain: true,
+        "exact environment byte hash changed",
+        allowProjectionFallback: false);
+    RejectJournalTamper(
         "journal executable vnode identity",
         fixture,
         primaryJournalId,
@@ -2997,7 +3031,7 @@ try
         rechain: true,
         "Cross-session capture clocks diverged",
         allowProjectionFallback: false);
-    Require(captureJournalTamperRejects == 62,
+    Require(captureJournalTamperRejects == 64,
         "The closed capture-journal tamper matrix did not execute completely.");
 
     CompleteFixture duplicateProcessFixture = BuildCompleteFixture(
@@ -3602,7 +3636,7 @@ Require(!typeof(Id65V3RuntimeEvidenceContract)
             forbiddenMethodFragments.Any(fragment =>
                 method.Name.Contains(fragment, StringComparison.OrdinalIgnoreCase))),
     "The evidence contract exposed a writer, publisher, Create BIN, launcher, or DuckStation connection API.");
-Require(fullPassTamperRejects == 119 && finalizerRefusals == 47,
+Require(fullPassTamperRejects == 121 && finalizerRefusals == 47,
     $"Exact finalizer/full-readback refusal coverage drifted: " +
     $"fullPassTamperRejects={fullPassTamperRejects}, finalizerRefusals={finalizerRefusals}.");
 
@@ -4280,8 +4314,13 @@ CompleteFixture BuildCompleteFixture(
             processEpoch.AddMilliseconds(processStartedMilliseconds));
         string[] argv = [liveExecutable, cuePath];
         string argvNulSha256 = Hash(Encoding.UTF8.GetBytes(string.Join('\0', argv) + '\0'));
-        string environmentNulSha256 = Hash(Encoding.UTF8.GetBytes(
-            $"HOME={Path.GetFullPath(liveExternalHomeRoot)}\0"));
+        string environmentNul =
+            $"HOME={Path.GetFullPath(liveExternalHomeRoot)}\0" +
+            "LANG=C\0" +
+            "LC_ALL=C\0" +
+            "PATH=/usr/bin:/bin:/usr/sbin:/sbin\0" +
+            "SPYRO_ID65_CAPTURE_ENVIRONMENT_END_V1=duckstation-id65-unattended-v1\0";
+        string environmentNulSha256 = Hash(Encoding.UTF8.GetBytes(environmentNul));
         string processManifest =
             "id65-v3-runtime-process-instance-v2\n" +
             $"runId={runId}\n" +

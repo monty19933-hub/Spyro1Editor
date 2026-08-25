@@ -324,11 +324,9 @@ class FakeBoundary:
                     + "\0"
                 ).encode()
             ).hexdigest(),
-            environment_nul_sha256=hashlib.sha256(
-                (
-                    "HOME=" + os.path.realpath(self.source.external_home_root) + "\0"
-                ).encode()
-            ).hexdigest(),
+            environment_nul_sha256=capture._runtime_environment_nul_sha256(
+                os.path.realpath(self.source.external_home_root)
+            ),
             external_home_real_path=os.path.realpath(self.source.external_home_root),
             open_files=(
                 capture.OpenFileObservation("21r", 10, 12, 456, 1, bin_path),
@@ -1473,8 +1471,15 @@ def run_verifier_binding_regressions() -> int:
 
 
 def _synthetic_procargs2(
-    argv: tuple[str, ...], environment: tuple[bytes, ...]
+    argv: tuple[str, ...], environment: tuple[bytes, ...],
+    *, auxiliary: tuple[bytes, ...] = (),
+    post_environment_padding: int = 4,
 ) -> bytes:
+    require(
+        type(post_environment_padding) is int
+        and 0 <= post_environment_padding <= 64,
+        "Synthetic KERN_PROCARGS2 padding is invalid.",
+    )
     executable = argv[0].encode("utf-8", "strict")
     return (
         len(argv).to_bytes(4, sys.byteorder, signed=True)
@@ -1482,15 +1487,34 @@ def _synthetic_procargs2(
         + b"\0".join(item.encode("utf-8", "strict") for item in argv)
         + b"\0"
         + b"\0".join(environment)
-        + b"\0\0\0"
+        + b"\0"
+        + (b"\0" * post_environment_padding)
+        + b"\0".join(auxiliary)
+        + (b"\0" if auxiliary else b"")
     )
 
 
 def run_kern_procargs_home_regressions() -> int:
     home = "/private/tmp/id65-external-home"
     argv = ("/private/tmp/DuckStation", "/private/tmp/candidate.cue")
+    expected_environment = tuple(
+        item.encode("utf-8", "strict")
+        for item in capture._runtime_environment_assignments(home)
+    )
+    valid_auxiliary = (
+        b"ptr_munge=",
+        b"main_stack=",
+        b"executable_file=0x1a01000000000001,0x1234",
+        b"dyld_file=0x1a01000000000002,0x5678",
+        b"executable_cdhash=0123456789abcdef0123456789abcdef01234567",
+        b"executable_boothash=89abcdef0123456789abcdef0123456789abcdef",
+        b"th_port=",
+        b"security_config=0x0",
+    )
     good = _synthetic_procargs2(
-        argv, (f"HOME={home}".encode(), b"VALUE=contains=equals")
+        argv,
+        expected_environment,
+        auxiliary=valid_auxiliary,
     )
     parsed_argv, environment_hash, parsed_home = capture._parse_kern_procargs2(
         good, home
@@ -1498,17 +1522,77 @@ def run_kern_procargs_home_regressions() -> int:
     require(
         parsed_argv == argv
         and parsed_home == home
-        and capture.SHA256_RE.fullmatch(environment_hash) is not None,
+        and environment_hash == hashlib.sha256(
+            b"\0".join(expected_environment) + b"\0"
+        ).hexdigest(),
         "Synthetic KERN_PROCARGS2 did not bind exact argv/HOME/environment hash.",
     )
+    zero_gap = _synthetic_procargs2(
+        argv,
+        expected_environment,
+        auxiliary=valid_auxiliary,
+        post_environment_padding=0,
+    )
+    require(
+        capture._parse_kern_procargs2(zero_gap, home)
+        == (argv, environment_hash, home),
+        "Zero-gap Apple auxiliary strings changed the exact environment identity.",
+    )
+    empty_env_with_home_aux = _synthetic_procargs2(
+        argv, (), auxiliary=expected_environment, post_environment_padding=0
+    )
+    extra_after_sentinel = _synthetic_procargs2(
+        argv,
+        (*expected_environment, b"EXTRA=bad"),
+        auxiliary=valid_auxiliary,
+        post_environment_padding=0,
+    )
+    auxiliary_home_first = _synthetic_procargs2(
+        argv,
+        expected_environment,
+        auxiliary=(f"HOME={home}".encode(), *valid_auxiliary),
+        post_environment_padding=0,
+    )
+    fake_pfz_environment_shim = _synthetic_procargs2(
+        argv,
+        (*expected_environment, b"pfz=attacker"),
+        auxiliary=valid_auxiliary,
+        post_environment_padding=0,
+    )
+    duplicate_visible_key = _synthetic_procargs2(
+        argv,
+        expected_environment,
+        auxiliary=(b"ptr_munge=attacker", *valid_auxiliary),
+        post_environment_padding=0,
+    )
+    reordered_visible_keys = _synthetic_procargs2(
+        argv,
+        expected_environment,
+        auxiliary=(valid_auxiliary[1], valid_auxiliary[0], *valid_auxiliary[2:]),
+        post_environment_padding=0,
+    )
+    malformed_visible_value = _synthetic_procargs2(
+        argv,
+        expected_environment,
+        auxiliary=(*valid_auxiliary[:-1], b"security_config=0X0"),
+        post_environment_padding=0,
+    )
     cases = (
-        (_synthetic_procargs2(argv, (b"A=B",)), home, "omits HOME"),
-        (_synthetic_procargs2(argv, (f"HOME={home}".encode(), f"HOME={home}".encode())), home, "duplicated"),
-        (_synthetic_procargs2(argv, (b"HOME=/Users/john",)), home, "not the pinned external HOME"),
-        (_synthetic_procargs2(argv, (b"HOME=/tmp/duckstation-id65-isolated.xizA5B",)), home, "not the pinned external HOME"),
-        (good, "/private/tmp/rebound-home", "not the pinned external HOME"),
-        (_synthetic_procargs2(argv, (f"HOME={home}".encode(), b"BROKEN")), home, "no assignment"),
-        (_synthetic_procargs2(argv, (f"HOME={home}".encode(), b"BAD=\xff")), home, "not UTF-8"),
+        (_synthetic_procargs2(argv, expected_environment[1:]), home, "differs from the exact pinned"),
+        (_synthetic_procargs2(argv, (expected_environment[0], *expected_environment)), home, "duplicated"),
+        (_synthetic_procargs2(argv, (b"HOME=/Users/john", *expected_environment[1:])), home, "differs from the exact pinned"),
+        (good, "/private/tmp/rebound-home", "differs from the exact pinned"),
+        (_synthetic_procargs2(argv, (b"BROKEN", *expected_environment[1:])), home, "no assignment"),
+        (_synthetic_procargs2(argv, (b"BAD=\xff", *expected_environment[1:])), home, "not UTF-8"),
+        (empty_env_with_home_aux, home, "omits the exact pinned"),
+        (_synthetic_procargs2(argv, (expected_environment[1], expected_environment[0], *expected_environment[2:])), home, "differs from the exact pinned"),
+        (extra_after_sentinel, home, "unexpected item after the exact launch environment"),
+        (auxiliary_home_first, home, "unexpected item after the exact launch environment"),
+        (fake_pfz_environment_shim, home, "unexpected item after the exact launch environment"),
+        (duplicate_visible_key, home, "unexpected item after the exact launch environment"),
+        (reordered_visible_keys, home, "unexpected item after the exact launch environment"),
+        (malformed_visible_value, home, "value grammar changed"),
+        (good[:-1], home, "tail is unterminated"),
     )
     for raw, expected, message in cases:
         expect_refusal(
@@ -1518,6 +1602,119 @@ def run_kern_procargs_home_regressions() -> int:
             message,
         )
     return len(cases)
+
+
+def run_native_kern_procargs2_regression(repository_root: pathlib.Path) -> None:
+    if sys.platform != "darwin":
+        return
+    boundary = capture.RealMacBoundary(repository_root)
+    external_home = os.path.realpath(
+        repository_root / capture.EXTERNAL_HOME_RELATIVE_PATH
+    )
+
+    def reap(child: subprocess.Popen[bytes]) -> None:
+        if child.poll() is None:
+            child.terminate()
+        try:
+            child.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.wait(timeout=5)
+
+    child_assignments = capture._runtime_environment_assignments(external_home)
+    expected_child_environment_hash = hashlib.sha256(
+        b"\0".join(
+            assignment.encode("utf-8", "strict")
+            for assignment in child_assignments
+        )
+        + b"\0"
+    ).hexdigest()
+    with tempfile.TemporaryDirectory(prefix="id65-procargs-helper-") as temp:
+        helper_root = pathlib.Path(temp).resolve(strict=True)
+        helper_source = helper_root / "procargs-helper.c"
+        helper_executable = helper_root / "procargs-helper"
+        helper_source.write_bytes(
+            b"#include <unistd.h>\n"
+            b"int main(void) { sleep(30); return 0; }\n"
+        )
+        compiled = subprocess.run(
+            ["/usr/bin/cc", str(helper_source), "-o", str(helper_executable)],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            close_fds=True,
+            timeout=30,
+            env={
+                "LANG": "C",
+                "LC_ALL": "C",
+                "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+            },
+        )
+        require(
+            compiled.returncode == 0
+            and not compiled.stdout
+            and helper_executable.is_file(),
+            "Native KERN_PROCARGS2 helper did not compile cleanly.",
+        )
+        cue_argument = helper_root / "candidate cue.cue"
+        cue_argument.write_bytes(b"FILE candidate.bin BINARY\n")
+        child_command = (str(helper_executable), str(cue_argument))
+        env_i_command = (
+            "/usr/bin/env",
+            "-i",
+            *child_assignments,
+            *child_command,
+        )
+        child_hashes: list[str] = []
+        for _ in range(2):
+            child = subprocess.Popen(
+                env_i_command,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True,
+            )
+            observed_identity: tuple[tuple[str, ...], str, str] | None = None
+            last_refusal: BaseException | None = None
+            deadline = capture.time.monotonic() + 5.0
+            try:
+                while capture.time.monotonic() < deadline:
+                    if child.poll() is not None:
+                        break
+                    try:
+                        observed_identity = boundary._pid_argv_environment(
+                            child.pid, external_home
+                        )
+                    except capture.CaptureRefusal as error:
+                        last_refusal = error
+                        capture.time.sleep(0.01)
+                        continue
+                    if observed_identity[0] == child_command:
+                        break
+                    observed_identity = None
+                    capture.time.sleep(0.01)
+                require(
+                    child.poll() is None
+                    and observed_identity
+                    == (
+                        child_command,
+                        expected_child_environment_hash,
+                        external_home,
+                    ),
+                    "Literal /usr/bin/env -i launch did not produce the exact pinned "
+                    f"argv/environment/HOME identity (last refusal: {last_refusal}).",
+                )
+                child_hashes.append(observed_identity[1])
+            finally:
+                reap(child)
+        require(
+            child_hashes == [
+                expected_child_environment_hash,
+                expected_child_environment_hash,
+            ],
+            "Apple auxiliary entropy changed the exact launch-environment hash.",
+        )
 
 
 def run_snapshot_v2_regressions() -> int:
@@ -3450,7 +3647,7 @@ def run(*, offline_only: bool = False) -> None:
         and source_closure_rejects == 4
         and source_topology_rejects == 4
         and verifier_binding_rejects == 4
-        and kern_home_rejects == 7
+        and kern_home_rejects == 15
         and snapshot_v2_rejects == 10,
         "The shared-authority/source-closure refusal matrices did not execute exactly.",
     )
@@ -3460,6 +3657,7 @@ def run(*, offline_only: bool = False) -> None:
     run_native_tty_countdown_regression()
     run_native_fresh_visual_confirmation_regression()
     run_native_watcher_bootstrap_regression(TOOL_PATH.parent.parent)
+    run_native_kern_procargs2_regression(TOOL_PATH.parent.parent)
     run_native_open_file_lifecycle_with_injected_procargs_regression(
         TOOL_PATH.parent.parent
     )
@@ -3588,6 +3786,35 @@ def run(*, offline_only: bool = False) -> None:
             lambda: coordinator._validate_process(
                 dataclasses.replace(valid_process, argv_nul_sha256="f" * 64)
             ),
+            "external-HOME DuckStation",
+        )
+        legacy_home_only_hash = hashlib.sha256(
+            f"HOME={valid_process.external_home_real_path}\0".encode("utf-8")
+        ).hexdigest()
+        expect_refusal(
+            lambda: coordinator._validate_process(dataclasses.replace(
+                valid_process,
+                environment_nul_sha256=legacy_home_only_hash,
+            )),
+            "external-HOME DuckStation",
+        )
+        extra_environment_hash = hashlib.sha256(
+            b"\0".join(
+                item.encode("utf-8", "strict")
+                for item in (
+                    *capture._runtime_environment_assignments(
+                        valid_process.external_home_real_path
+                    ),
+                    "EXTRA=bad",
+                )
+            )
+            + b"\0"
+        ).hexdigest()
+        expect_refusal(
+            lambda: coordinator._validate_process(dataclasses.replace(
+                valid_process,
+                environment_nul_sha256=extra_environment_hash,
+            )),
             "external-HOME DuckStation",
         )
 
@@ -3901,17 +4128,29 @@ def run(*, offline_only: bool = False) -> None:
                 coordinator.capture_session(session_id) == run_id,
                 "Coordinator did not preserve its internally generated run ID.",
             )
+        expected_launch_argv = (
+            "/usr/bin/env",
+            "-i",
+            *capture._runtime_environment_assignments(
+                os.path.realpath(source.external_home_root)
+            ),
+            os.path.realpath(source.executable_path),
+            os.path.realpath(source.cue_path),
+        )
+        expected_launch_command = " ".join(
+            capture.shlex.quote(item) for item in expected_launch_argv
+        )
         launch_prompts = [
             prompt for prompt in boundary.prompts
-            if "exactly this HOME, executable, and CUE" in prompt
+            if "this exact empty-environment command" in prompt
         ]
         require(
             len(launch_prompts) == len(capture.SESSION_IDS)
-            and all(os.path.realpath(source.cue_path) in prompt
-                    and os.path.realpath(source.external_home_root) in prompt
-                    and os.path.realpath(source.executable_path) in prompt
-                    for prompt in launch_prompts),
-            "Launch prompts did not display exact external HOME/executable/CUE.",
+            and all(
+                expected_launch_command in prompt
+                for prompt in launch_prompts
+            ),
+            "Launch prompts did not display the exact clean runtime command.",
         )
         resume_prompts = [
             prompt for prompt in boundary.prompts
@@ -5889,7 +6128,7 @@ def run(*, offline_only: bool = False) -> None:
             "boundedStreamGrowthReject=1 "
             "nativeBootIdentity=1 nativeWatcherBootstrap=1 "
             "nativeWatcherEarlyExitDiagnostic=1 nativeOpenFileLifecycle=1 "
-            "nativeKernProcargs2=INJECTED nativeCache=1 "
+            "nativeKernProcargs2=LIVE_TWO_LOCAL_CHILDREN nativeCache=1 "
             "nativeExtraDiscRejects=2 "
             f"actualDuckStationCalls={len(ACTUAL_DUCKSTATION_CALLS)} "
             f"nativeAquaWindowServerMediaGate={native_aqua_media_gate} "

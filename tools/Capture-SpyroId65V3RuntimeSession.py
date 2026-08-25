@@ -35,6 +35,7 @@ import pwd
 import re
 import secrets
 import select
+import shlex
 import signal
 import stat
 import struct
@@ -172,6 +173,34 @@ ASSISTED_PRIMARY_LANDING_MAXIMUM_MILLISECONDS: Final = 30_000
 ZERO_SHA256: Final = "0" * 64
 GDB_HOST: Final = "127.0.0.1"
 GDB_PORT: Final = 2345
+RUNTIME_ENVIRONMENT_SENTINEL_NAME: Final = (
+    "SPYRO_ID65_CAPTURE_ENVIRONMENT_END_V1"
+)
+RUNTIME_ENVIRONMENT_SENTINEL_VALUE: Final = (
+    "duckstation-id65-unattended-v1"
+)
+RUNTIME_ENVIRONMENT_FIXED_ASSIGNMENTS: Final = (
+    "LANG=C",
+    "LC_ALL=C",
+    "PATH=/usr/bin:/bin:/usr/sbin:/sbin",
+    f"{RUNTIME_ENVIRONMENT_SENTINEL_NAME}="
+    f"{RUNTIME_ENVIRONMENT_SENTINEL_VALUE}",
+)
+APPLE_AUXILIARY_VISIBLE_KEY_ORDER: Final = (
+    "ptr_munge",
+    "main_stack",
+    "executable_file",
+    "dyld_file",
+    "executable_cdhash",
+    "executable_boothash",
+    "th_port",
+    "security_config",
+)
+APPLE_AUXILIARY_REDACTED_VALUE_KEYS: Final = frozenset({
+    "ptr_munge",
+    "main_stack",
+    "th_port",
+})
 
 CANDIDATE_DIRECTORY: Final = (
     "_local/v5-stone-hill-level-replacement/"
@@ -1102,10 +1131,127 @@ class ProcessObservation:
         return frozenset(item.real_path for item in self.open_files)
 
 
+def _runtime_environment_assignments(expected_external_home: str) -> tuple[str, ...]:
+    if (
+        type(expected_external_home) is not str
+        or not os.path.isabs(expected_external_home)
+        or os.path.normpath(expected_external_home) != expected_external_home
+        or os.path.realpath(expected_external_home) != expected_external_home
+    ):
+        raise CaptureRefusal("Pinned runtime HOME is not one canonical real path.")
+    assignments = (
+        f"HOME={expected_external_home}",
+        *RUNTIME_ENVIRONMENT_FIXED_ASSIGNMENTS,
+    )
+    if (
+        assignments[-1]
+        != f"{RUNTIME_ENVIRONMENT_SENTINEL_NAME}="
+        f"{RUNTIME_ENVIRONMENT_SENTINEL_VALUE}"
+    ):
+        raise CaptureRefusal("Pinned runtime environment sentinel is not terminal.")
+    return assignments
+
+
+def _runtime_environment_nul_sha256(expected_external_home: str) -> str:
+    return sha256_bytes(
+        b"\0".join(
+            assignment.encode("utf-8", "strict")
+            for assignment in _runtime_environment_assignments(
+                expected_external_home
+            )
+        )
+        + b"\0"
+    )
+
+
+def _decode_environment_assignment(raw: bytes, *, label: str) -> tuple[str, str]:
+    if type(raw) is not bytes or not raw or b"\0" in raw:
+        raise CaptureRefusal(f"{label} environment item is empty or contains NUL.")
+    try:
+        text = raw.decode("utf-8", "strict")
+    except UnicodeDecodeError as exc:
+        raise CaptureRefusal(f"{label} environment is not UTF-8.") from exc
+    if "=" not in text:
+        raise CaptureRefusal(f"{label} environment item has no assignment.")
+    name, value = text.split("=", 1)
+    if (
+        not name
+        or any(ord(character) < 0x21 or ord(character) == 0x7f for character in name)
+        or "=" in name
+    ):
+        raise CaptureRefusal(f"{label} environment key is malformed.")
+    return name, value
+
+
+def _expected_environment_bytes(
+    expected_external_home: str,
+    expected_environment: tuple[bytes, ...] | None,
+) -> tuple[tuple[bytes, ...], dict[str, str]]:
+    if expected_environment is None:
+        expected_environment = tuple(
+            item.encode("utf-8", "strict")
+            for item in _runtime_environment_assignments(expected_external_home)
+        )
+    if (
+        type(expected_environment) is not tuple
+        or not expected_environment
+        or len(expected_environment) > 4096
+    ):
+        raise CaptureRefusal("Expected process environment manifest is invalid.")
+    parsed: dict[str, str] = {}
+    for raw in expected_environment:
+        name, value = _decode_environment_assignment(raw, label="Expected process")
+        if name in parsed:
+            raise CaptureRefusal("Expected process environment key is duplicated.")
+        parsed[name] = value
+    if parsed.get("HOME") != expected_external_home:
+        raise CaptureRefusal("Expected process environment does not bind pinned HOME.")
+    return expected_environment, parsed
+
+
+def _require_apple_auxiliary_tail(data: bytes, cursor: int) -> None:
+    visible: list[tuple[str, str]] = []
+    while cursor < len(data):
+        while cursor < len(data) and data[cursor] == 0:
+            cursor += 1
+        if cursor == len(data):
+            break
+        end = data.find(b"\0", cursor)
+        if end < 0:
+            raise CaptureRefusal("KERN_PROCARGS2 Apple auxiliary tail is unterminated.")
+        visible.append(_decode_environment_assignment(
+            data[cursor:end], label="KERN_PROCARGS2 Apple auxiliary"
+        ))
+        cursor = end + 1
+    names = tuple(name for name, _value in visible)
+    if names != APPLE_AUXILIARY_VISIBLE_KEY_ORDER:
+        raise CaptureRefusal(
+            "KERN_PROCARGS2 has an unexpected item after the exact launch environment."
+        )
+    for name, value in visible:
+        if name in APPLE_AUXILIARY_REDACTED_VALUE_KEYS:
+            valid = value == ""
+        elif name in {"executable_file", "dyld_file"}:
+            valid = re.fullmatch(r"0x[0-9a-f]+,0x[0-9a-f]+", value) is not None
+        elif name in {"executable_cdhash", "executable_boothash"}:
+            valid = re.fullmatch(r"[0-9a-f]{40}", value) is not None
+        elif name == "security_config":
+            valid = re.fullmatch(r"0x[0-9a-f]+", value) is not None
+        else:
+            valid = False
+        if not valid:
+            raise CaptureRefusal(
+                "KERN_PROCARGS2 Apple auxiliary value grammar changed."
+            )
+
+
 def _parse_kern_procargs2(
-    data: bytes, expected_external_home: str
+    data: bytes,
+    expected_external_home: str,
+    *,
+    expected_environment: tuple[bytes, ...] | None = None,
 ) -> tuple[tuple[str, ...], str, str]:
-    """Parse one exact KERN_PROCARGS2 record without exposing environment values."""
+    """Parse exact argv and a caller-owned environment manifest from PROCARGS2."""
     if (
         type(data) is not bytes
         or not 4 <= len(data) <= 4 * 1024 * 1024
@@ -1140,42 +1286,36 @@ def _parse_kern_procargs2(
         except UnicodeDecodeError as exc:
             raise CaptureRefusal("KERN_PROCARGS2 argv is not UTF-8.") from exc
         cursor = end + 1
+    expected_raw, expected_values = _expected_environment_bytes(
+        expected_external_home, expected_environment
+    )
     environment_raw: list[bytes] = []
     environment: dict[str, str] = {}
-    while cursor < len(data):
-        if data[cursor] == 0:
-            if not any(data[cursor:]):
-                break
-            # Darwin may place more than one NUL between argv and environ.
-            # It may not place an empty assignment once environment parsing starts.
-            if environment_raw:
-                raise CaptureRefusal("KERN_PROCARGS2 has an empty environment item.")
-            cursor += 1
-            continue
+    for expected_item in expected_raw:
+        if cursor >= len(data) or data[cursor] == 0:
+            raise CaptureRefusal(
+                "Observed process omits the exact pinned launch environment."
+            )
         end = data.find(b"\0", cursor)
         if end < 0:
             raise CaptureRefusal("KERN_PROCARGS2 environment is unterminated.")
         raw = data[cursor:end]
-        try:
-            text = raw.decode("utf-8", "strict")
-        except UnicodeDecodeError as exc:
-            raise CaptureRefusal("KERN_PROCARGS2 environment is not UTF-8.") from exc
-        if "=" not in text:
-            raise CaptureRefusal("KERN_PROCARGS2 environment item has no assignment.")
-        name, value = text.split("=", 1)
-        if (
-            not name
-            or name in environment
-            or any(ord(character) < 0x21 or ord(character) == 0x7f for character in name)
-            or "=" in name
-        ):
-            raise CaptureRefusal("KERN_PROCARGS2 environment key is malformed or duplicated.")
+        name, value = _decode_environment_assignment(
+            raw, label="KERN_PROCARGS2"
+        )
+        if name in environment:
+            raise CaptureRefusal("KERN_PROCARGS2 environment key is duplicated.")
+        if raw != expected_item:
+            raise CaptureRefusal(
+                "Observed process environment differs from the exact pinned launch manifest."
+            )
         environment[name] = value
         environment_raw.append(raw)
         cursor = end + 1
+    if environment != expected_values:
+        raise CaptureRefusal("Observed process environment manifest is reordered.")
+    _require_apple_auxiliary_tail(data, cursor)
     home = environment.get("HOME")
-    if home is None:
-        raise CaptureRefusal("Observed DuckStation environment omits HOME.")
     if (
         home != expected_external_home
         or not os.path.isabs(home)
@@ -4652,12 +4792,18 @@ class CaptureCoordinator:
         candidate_cue_real_path = os.path.realpath(self.source.cue_path)
         external_home_real_path = os.path.realpath(self.source.external_home_root)
         executable_real_path = os.path.realpath(self.source.executable_path)
+        launch_argv = (
+            "/usr/bin/env",
+            "-i",
+            *_runtime_environment_assignments(external_home_real_path),
+            executable_real_path,
+            candidate_cue_real_path,
+        )
+        launch_command = " ".join(shlex.quote(item) for item in launch_argv)
         self.boundary.confirm(
             "Manually launch the pinned external-HOME DuckStation from Terminal with "
-            "exactly this HOME, executable, and CUE (do not use Finder or the normal HOME):\n"
-            f"HOME={external_home_real_path}\n"
-            f"EXECUTABLE={executable_real_path}\n"
-            f"CUE={candidate_cue_real_path}\n"
+            "this exact empty-environment command (do not use Finder or the normal HOME):\n"
+            f"{launch_command}\n"
             "This coordinator will only observe it. Press Return when launched."
         )
         process = self.boundary.wait_for_duckstation(candidate_cue_real_path)
@@ -5714,7 +5860,8 @@ class CaptureCoordinator:
                 b"\0".join(arg.encode("utf-8", "strict") for arg in process.argv)
                 + b"\0"
             )
-            or not SHA256_RE.fullmatch(process.environment_nul_sha256)
+            or process.environment_nul_sha256
+            != _runtime_environment_nul_sha256(expected_home)
             or process.external_home_real_path != expected_home
         ):
             raise CaptureRefusal(
@@ -7886,7 +8033,13 @@ def _build_offline_capture_run(
             ),
             argv_nul_sha256="",
             environment_nul_sha256=sha256_bytes(
-                f"HOME={os.path.realpath(source.external_home_root)}\0".encode("utf-8")
+                b"\0".join(
+                    item.encode("utf-8", "strict")
+                    for item in _runtime_environment_assignments(
+                        os.path.realpath(source.external_home_root)
+                    )
+                )
+                + b"\0"
             ),
             external_home_real_path=os.path.realpath(source.external_home_root),
             open_files=(),
@@ -10863,7 +11016,11 @@ class RealMacBoundary:
         return buffer.value.decode("utf-8", "strict")
 
     def _pid_argv_environment(
-        self, pid: int, expected_external_home: str
+        self,
+        pid: int,
+        expected_external_home: str,
+        *,
+        expected_environment: tuple[bytes, ...] | None = None,
     ) -> tuple[tuple[str, ...], str, str]:
         def read_once() -> bytes:
             mib = (ctypes.c_int * 3)(self.CTL_KERN, self.KERN_PROCARGS2, pid)
@@ -10894,7 +11051,11 @@ class RealMacBoundary:
         second = read_once()
         if first != second:
             raise CaptureRefusal("KERN_PROCARGS2 changed across its stable mirrored read.")
-        return _parse_kern_procargs2(first, expected_external_home)
+        return _parse_kern_procargs2(
+            first,
+            expected_external_home,
+            expected_environment=expected_environment,
+        )
 
     def _open_files(self, pid: int) -> list[OpenFileObservation]:
         completed = self._run_fixed(
