@@ -9,5 +9,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj" />
+    <ProjectReference Include="../Spyro.Editor.Id65AuthoringEditorAggregateCandidateStager/Spyro.Editor.Id65AuthoringEditorAggregateCandidateStager.csproj" />
   </ItemGroup>
 </Project>

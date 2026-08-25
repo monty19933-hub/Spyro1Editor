@@ -11,6 +11,12 @@ using Spyro.Editor.Core.Persistence;
 const string SmokeRootPrefix =
     "Spyro.Editor.Id65AuthoringEditorAggregateCandidateMaterializerSmoke-";
 
+if (!OperatingSystem.IsMacOS())
+{
+    throw new PlatformNotSupportedException(
+        "The Darwin-anchored aggregate materializer smoke requires macOS.");
+}
+
 string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
 string lockedImagePath = Path.Combine(
     repositoryRoot,
@@ -28,7 +34,8 @@ IReadOnlyList<string> lockedDirectoryBefore = SnapshotDirectory(
     Path.GetDirectoryName(lockedImagePath)!);
 
 string smokeRoot = Path.Combine(
-    Path.GetTempPath(),
+    repositoryRoot,
+    "_local",
     SmokeRootPrefix + Guid.NewGuid().ToString("N"));
 string workspaceContainer = Path.Combine(smokeRoot, "workspace-container");
 Directory.CreateDirectory(smokeRoot);
@@ -635,6 +642,508 @@ try
                 receiptBeforeReuse.Sha256,
         "Post-rename recovery changed candidate contents or retained its owned journal.");
 
+    string cleanSourceImagePath = Path.Combine(
+        repositoryRoot,
+        "Spyro the Dragon (USA).bin");
+    string cleanSourceCuePath = Path.Combine(
+        repositoryRoot,
+        "Spyro the Dragon (USA).cue");
+    Require(File.Exists(cleanSourceImagePath) && File.Exists(cleanSourceCuePath),
+        "The persistent stager integration is missing its exact clean source links.");
+    StagerInvocation help = await InvokeStagerAsync(["--help"]);
+    Require(help.ExitCode == 0 &&
+            help.StandardOutput.StartsWith("Usage:", StringComparison.Ordinal) &&
+            string.IsNullOrWhiteSpace(help.StandardError),
+        "The persistent stager help contract changed.");
+    StagerInvocation relativePathRefusal = await InvokeStagerAsync(
+    [
+        "stage",
+        "--source-bin", "relative.bin",
+        "--source-cue", "relative.cue",
+        "--workspace-container", "relative-workspace"
+    ]);
+    RequireSafetyRefusal(
+        relativePathRefusal,
+        "source BIN path must be absolute");
+
+    string userProfile = Environment.GetFolderPath(
+        Environment.SpecialFolder.UserProfile) + Path.DirectorySeparatorChar;
+    const string outsideHomeExistingFile = "/etc/hosts";
+    Require(File.Exists(outsideHomeExistingFile),
+        "The persistent stager path-guard probe requires /etc/hosts.");
+    StagerInvocation broadHomeRefusal = await InvokeStagerAsync(
+    [
+        "stage",
+        "--source-bin", outsideHomeExistingFile,
+        "--source-cue", outsideHomeExistingFile,
+        "--workspace-container", userProfile
+    ]);
+    RequireSafetyRefusal(
+        broadHomeRefusal,
+        "workspace-container path is too broad");
+    StagerInvocation caseVariantHomeRefusal = await InvokeStagerAsync(
+    [
+        "stage",
+        "--source-bin", outsideHomeExistingFile,
+        "--source-cue", outsideHomeExistingFile,
+        "--workspace-container", userProfile.ToUpperInvariant()
+    ]);
+    RequireSafetyRefusal(
+        caseVariantHomeRefusal,
+        "workspace-container path is too broad");
+
+    string containedSourceContainer = Path.Combine(
+        smokeRoot,
+        "contained-source-container");
+    Directory.CreateDirectory(containedSourceContainer);
+    string containedSourceImage = Path.Combine(
+        containedSourceContainer,
+        "contained.bin");
+    string containedSourceCue = Path.Combine(
+        containedSourceContainer,
+        "contained.cue");
+    await File.WriteAllBytesAsync(containedSourceImage, [0]);
+    await File.WriteAllTextAsync(containedSourceCue, "contained\n");
+    string containedSourceDirectoryAlias = Path.Combine(
+        smokeRoot,
+        "contained-source-directory-alias");
+    Directory.CreateSymbolicLink(
+        containedSourceDirectoryAlias,
+        containedSourceContainer);
+    try
+    {
+        StagerInvocation containedSourceRefusal = await InvokeStagerAsync(
+        [
+            "stage",
+            "--source-bin", Path.Combine(
+                containedSourceDirectoryAlias,
+                Path.GetFileName(containedSourceImage)),
+            "--source-cue", Path.Combine(
+                containedSourceDirectoryAlias,
+                Path.GetFileName(containedSourceCue)),
+            "--workspace-container", containedSourceContainer
+        ]);
+        RequireSafetyRefusal(
+            containedSourceRefusal,
+            "contains a source fixture");
+        Require(
+            !Directory.Exists(Path.Combine(containedSourceContainer, "_research")),
+            "The physically contained source refusal partially bootstrapped a workspace.");
+    }
+    finally
+    {
+        Directory.Delete(containedSourceDirectoryAlias);
+    }
+
+    string descendantAliasContainer = Path.Combine(
+        smokeRoot,
+        "descendant-alias-container");
+    string descendantAliasTarget = Path.Combine(
+        smokeRoot,
+        "descendant-alias-outside-target");
+    Directory.CreateDirectory(descendantAliasContainer);
+    Directory.CreateDirectory(descendantAliasTarget);
+    string researchAliasPath = Path.Combine(
+        descendantAliasContainer,
+        "_research");
+    Directory.CreateSymbolicLink(researchAliasPath, descendantAliasTarget);
+    try
+    {
+        StagerInvocation descendantAliasRefusal = await InvokeStagerAsync(
+        [
+            "stage",
+            "--source-bin", cleanSourceImagePath,
+            "--source-cue", cleanSourceCuePath,
+            "--workspace-container", descendantAliasContainer
+        ]);
+        RequireSafetyRefusal(
+            descendantAliasRefusal,
+            "fixed workspace path");
+        Require(
+            !Directory.EnumerateFileSystemEntries(descendantAliasTarget).Any(),
+            "The descendant-alias refusal wrote through the redirected _research path.");
+    }
+    finally
+    {
+        Directory.Delete(researchAliasPath);
+    }
+
+    string unsafeModeContainer = Path.Combine(
+        smokeRoot,
+        "unsafe-mode-container");
+    string unsafeModeResearch = Path.Combine(
+        unsafeModeContainer,
+        "_research");
+    Directory.CreateDirectory(unsafeModeResearch);
+    UnixFileMode safeResearchMode = File.GetUnixFileMode(unsafeModeResearch);
+    try
+    {
+        File.SetUnixFileMode(
+            unsafeModeResearch,
+            safeResearchMode | UnixFileMode.GroupWrite);
+        StagerInvocation unsafeModeRefusal = await InvokeStagerAsync(
+        [
+            "stage",
+            "--source-bin", cleanSourceImagePath,
+            "--source-cue", cleanSourceCuePath,
+            "--workspace-container", unsafeModeContainer
+        ]);
+        RequireSafetyRefusal(
+            unsafeModeRefusal,
+            "must not be group- or other-writable");
+        Require(
+            !Directory.Exists(Path.Combine(
+                unsafeModeResearch,
+                "unusedlevel65blank")),
+            "The unsafe-mode refusal created the versioned workspace.");
+    }
+    finally
+    {
+        File.SetUnixFileMode(unsafeModeResearch, safeResearchMode);
+    }
+
+    string unsafeFileContainer = Path.Combine(
+        smokeRoot,
+        "unsafe-file-container");
+    UnusedLevel65BlankLevelLabWorkspacePaths unsafeFilePaths =
+        UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(
+            unsafeFileContainer);
+    Directory.CreateDirectory(unsafeFilePaths.RootPath);
+    await File.WriteAllTextAsync(unsafeFilePaths.ManifestPath, "{}\n");
+    UnixFileMode safeManifestMode = File.GetUnixFileMode(
+        unsafeFilePaths.ManifestPath);
+    try
+    {
+        File.SetUnixFileMode(
+            unsafeFilePaths.ManifestPath,
+            safeManifestMode | UnixFileMode.OtherWrite);
+        StagerInvocation unsafeFileRefusal = await InvokeStagerAsync(
+        [
+            "stage",
+            "--source-bin", cleanSourceImagePath,
+            "--source-cue", cleanSourceCuePath,
+            "--workspace-container", unsafeFileContainer
+        ]);
+        RequireSafetyRefusal(
+            unsafeFileRefusal,
+            "must not be group- or other-writable");
+        Require(
+            !Directory.Exists(unsafeFilePaths.LockedBaseDirectoryPath),
+            "The unsafe-file refusal partially bootstrapped a workspace.");
+    }
+    finally
+    {
+        File.SetUnixFileMode(unsafeFilePaths.ManifestPath, safeManifestMode);
+    }
+
+    string hardeningContainer = Path.Combine(
+        smokeRoot,
+        "new-bootstrap-hardening-container");
+    UnusedLevel65BlankLevelLabWorkspacePaths hardeningPaths =
+        UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(
+            hardeningContainer);
+    Directory.CreateDirectory(hardeningPaths.LockedBaseDirectoryPath);
+    await File.WriteAllTextAsync(hardeningPaths.ManifestPath, "{}\n");
+    await File.WriteAllBytesAsync(hardeningPaths.LockedBaseImagePath, [0]);
+    await File.WriteAllTextAsync(hardeningPaths.LockedBaseCuePath, "cue\n");
+    string[] hardeningFiles =
+    [
+        hardeningPaths.ManifestPath,
+        hardeningPaths.LockedBaseImagePath,
+        hardeningPaths.LockedBaseCuePath
+    ];
+    File.SetUnixFileMode(
+        hardeningPaths.ManifestPath,
+        File.GetUnixFileMode(hardeningPaths.ManifestPath) |
+            UnixFileMode.OtherWrite);
+    File.SetUnixFileMode(
+        hardeningPaths.LockedBaseImagePath,
+        File.GetUnixFileMode(hardeningPaths.LockedBaseImagePath) |
+            UnixFileMode.GroupWrite);
+    File.SetUnixFileMode(
+        hardeningPaths.LockedBaseCuePath,
+        File.GetUnixFileMode(hardeningPaths.LockedBaseCuePath) |
+            UnixFileMode.GroupWrite | UnixFileMode.OtherWrite);
+    UnixFileMode[] hardeningModesBefore = hardeningFiles
+        .Select(File.GetUnixFileMode)
+        .ToArray();
+    UnixFileMode[] expectedHardenedModes = hardeningModesBefore
+        .Select(mode => mode &
+            ~(UnixFileMode.GroupWrite | UnixFileMode.OtherWrite))
+        .ToArray();
+    Require(
+        AggregateCandidateStager.HardenNewBootstrapFilesForStaging(
+            hardeningPaths) &&
+        hardeningFiles.Select(File.GetUnixFileMode).SequenceEqual(
+            expectedHardenedModes) &&
+        AggregateCandidateStager.HardenNewBootstrapFilesForStaging(
+            hardeningPaths) == false &&
+        hardeningFiles.Select(File.GetUnixFileMode).SequenceEqual(
+            expectedHardenedModes),
+        "New bootstrap permission hardening was not exact and idempotent.");
+
+    string reservedLegacyContainer = Path.Combine(
+        smokeRoot,
+        "reserved-legacy-container");
+    Directory.CreateDirectory(reservedLegacyContainer);
+    string reservedLegacyPath = Path.Combine(
+        reservedLegacyContainer,
+        "unusedlevel65blank-native-edits.json");
+    await File.WriteAllTextAsync(reservedLegacyPath, "{}\n");
+    StagerInvocation reservedLegacyRefusal = await InvokeStagerAsync(
+    [
+        "stage",
+        "--source-bin", cleanSourceImagePath,
+        "--source-cue", cleanSourceCuePath,
+        "--workspace-container", reservedLegacyContainer
+    ]);
+    RequireSafetyRefusal(
+        reservedLegacyRefusal,
+        "must be absent before exact aggregate staging");
+    Require(
+        !Directory.Exists(Path.Combine(reservedLegacyContainer, "_research")),
+        "The reserved-legacy refusal partially bootstrapped a workspace.");
+
+    byte[] validManifestBytes = await File.ReadAllBytesAsync(paths.ManifestPath);
+    DateTime validManifestWriteUtc = File.GetLastWriteTimeUtc(paths.ManifestPath);
+    StagerInvocation malformedManifestRefusal;
+    try
+    {
+        await File.WriteAllTextAsync(paths.ManifestPath, "{");
+        malformedManifestRefusal = await InvokeStagerAsync(
+        [
+            "stage",
+            "--source-bin", cleanSourceImagePath,
+            "--source-cue", cleanSourceCuePath,
+            "--workspace-container", workspaceContainer
+        ]);
+    }
+    finally
+    {
+        await File.WriteAllBytesAsync(paths.ManifestPath, validManifestBytes);
+        File.SetLastWriteTimeUtc(paths.ManifestPath, validManifestWriteUtc);
+    }
+    RequireSafetyRefusal(malformedManifestRefusal, "");
+
+    string freshStagerContainer = Path.Combine(
+        smokeRoot,
+        "fresh-stager-container");
+    StagerInvocation freshStager = await InvokeStagerAsync(
+    [
+        "stage",
+        "--source-bin", cleanSourceImagePath,
+        "--source-cue", cleanSourceCuePath,
+        "--workspace-container", freshStagerContainer
+    ]);
+    try
+    {
+        Require(freshStager.ExitCode == 0 &&
+                freshStager.StandardError.Contains(
+                    "ID65_AUTHORING_EDITOR_AGGREGATE_CANDIDATE_STAGED",
+                    StringComparison.Ordinal),
+            "The fresh persistent-stager integration did not complete.");
+        using JsonDocument freshReportDocument = JsonDocument.Parse(
+            freshStager.StandardOutput);
+        JsonElement freshReport = freshReportDocument.RootElement;
+        UnusedLevel65BlankLevelLabWorkspacePaths freshPaths =
+            UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(
+                freshStagerContainer);
+        Require(
+            freshReport.GetProperty("documentCreatedThisCall").GetBoolean() &&
+            freshReport.GetProperty("bootstrapPermissionsHardenedThisCall").GetBoolean() &&
+            freshReport.GetProperty("bootstrapRecoveryMutationPerformedThisCall").GetBoolean() == false &&
+            freshReport.GetProperty("reusedExistingLockedBase").GetBoolean() == false &&
+            freshReport.GetProperty("reusedExistingCandidate").GetBoolean() == false &&
+            freshReport.GetProperty("candidateArtifactsWrittenThisCall").GetBoolean() &&
+            freshReport.GetProperty("fileSystemMutationPerformed").GetBoolean() &&
+            (File.GetUnixFileMode(freshPaths.ManifestPath) &
+                (UnixFileMode.GroupWrite | UnixFileMode.OtherWrite)) == 0 &&
+            (File.GetUnixFileMode(freshPaths.LockedBaseImagePath) &
+                (UnixFileMode.GroupWrite | UnixFileMode.OtherWrite)) == 0 &&
+            (File.GetUnixFileMode(freshPaths.LockedBaseCuePath) &
+                (UnixFileMode.GroupWrite | UnixFileMode.OtherWrite)) == 0,
+            "The fresh stager lost its permission-hardening or mutation-report contract.");
+    }
+    finally
+    {
+        if (Directory.Exists(freshStagerContainer))
+            Directory.Delete(freshStagerContainer, recursive: true);
+    }
+
+    string workspaceAliasPath = Path.Combine(
+        smokeRoot,
+        "workspace-container-alias");
+    Directory.CreateSymbolicLink(workspaceAliasPath, workspaceContainer);
+    try
+    {
+        StagerInvocation symlinkAncestorRefusal = await InvokeStagerAsync(
+        [
+            "stage",
+            "--source-bin", cleanSourceImagePath,
+            "--source-cue", cleanSourceCuePath,
+            "--workspace-container", Path.Combine(workspaceAliasPath, "child")
+        ]);
+        RequireSafetyRefusal(
+            symlinkAncestorRefusal,
+            "never files, links, or reparse points");
+    }
+    finally
+    {
+        Directory.Delete(workspaceAliasPath);
+    }
+
+    FileState stagerImageBefore = SnapshotFile(
+        recoveredPublication.Paths.CandidateImagePath);
+    FileState stagerCueBefore = SnapshotFile(
+        recoveredPublication.Paths.CandidateCuePath);
+    FileState stagerReceiptBefore = SnapshotFile(
+        recoveredPublication.Paths.CandidateReceiptPath);
+    StagerInvocation stagerReuse = await InvokeStagerAsync(
+    [
+        "stage",
+        "--source-bin", cleanSourceImagePath,
+        "--source-cue", cleanSourceCuePath,
+        "--workspace-container", workspaceContainer
+    ]);
+    Require(stagerReuse.ExitCode == 0 &&
+            stagerReuse.StandardError.Contains(
+                "ID65_AUTHORING_EDITOR_AGGREGATE_CANDIDATE_STAGED",
+                StringComparison.Ordinal) &&
+            SnapshotFile(recoveredPublication.Paths.CandidateImagePath) ==
+                stagerImageBefore &&
+            SnapshotFile(recoveredPublication.Paths.CandidateCuePath) ==
+                stagerCueBefore &&
+            SnapshotFile(recoveredPublication.Paths.CandidateReceiptPath) ==
+                stagerReceiptBefore,
+        "The persistent stager did not reuse the exact candidate without rewriting it.");
+    using (JsonDocument stagerReport = JsonDocument.Parse(
+               stagerReuse.StandardOutput))
+    {
+        JsonElement report = stagerReport.RootElement;
+        Require(report.GetProperty("schemaVersion").GetInt32() == 1 &&
+                report.GetProperty("documentCreatedThisCall").GetBoolean() == false &&
+                report.GetProperty("bootstrapPermissionsHardenedThisCall").GetBoolean() == false &&
+                report.GetProperty("bootstrapRecoveryMutationPerformedThisCall").GetBoolean() == false &&
+                report.GetProperty("reusedExistingLockedBase").GetBoolean() &&
+                report.GetProperty("reusedExistingCandidate").GetBoolean() &&
+                report.GetProperty("candidateArtifactsWrittenThisCall").GetBoolean() == false &&
+                report.GetProperty("fileSystemMutationPerformed").GetBoolean() == false &&
+                report.GetProperty("outputImageSha256").GetString() ==
+                    first.Receipt.OutputImageSha256 &&
+                report.GetProperty("candidateCueSha256").GetString() ==
+                    first.Receipt.CandidateCueSha256 &&
+                report.GetProperty("receiptContentSha256").GetString() ==
+                    first.Receipt.ReceiptContentSha256 &&
+                report.GetProperty("requiresFocusedRuntimeValidation").GetBoolean() &&
+                report.GetProperty("runtimeCandidateAuthorized").GetBoolean() == false &&
+                report.GetProperty("runtimeProven").GetBoolean() == false &&
+                report.GetProperty("carriesCreateBinAuthority").GetBoolean() == false &&
+                report.GetProperty("normalRetailCreateBinComposed").GetBoolean() == false &&
+                report.GetProperty("releaseIntegrated").GetBoolean() == false &&
+                report.GetProperty("promotionAuthorized").GetBoolean() == false &&
+                report.GetProperty("publishable").GetBoolean() == false &&
+                report.GetProperty("currentOnDiskFreshnessVerified").GetBoolean() == false &&
+                report.GetProperty("hostileFilesystemRaceSafe").GetBoolean() == false &&
+                report.GetProperty("requiresTrustedExclusiveWorkspaceDirectory").GetBoolean() &&
+                report.GetProperty("commonWorkspaceLeaseOwned").GetBoolean() == false &&
+                report.GetProperty("existingWorkspaceTreeValidatedThisCall").GetBoolean(),
+            "The persistent stager machine report lost an exact reuse or closed-authority field.");
+    }
+
+    Directory.CreateDirectory(paths.OperationsDirectoryPath);
+    StagerInvocation recoveredBootstrapDebris = await InvokeStagerAsync(
+    [
+        "stage",
+        "--source-bin", cleanSourceImagePath,
+        "--source-cue", cleanSourceCuePath,
+        "--workspace-container", workspaceContainer
+    ]);
+    Require(recoveredBootstrapDebris.ExitCode == 0 &&
+            !Directory.Exists(paths.OperationsDirectoryPath) &&
+            SnapshotFile(recoveredPublication.Paths.CandidateImagePath) ==
+                stagerImageBefore &&
+            SnapshotFile(recoveredPublication.Paths.CandidateCuePath) ==
+                stagerCueBefore &&
+            SnapshotFile(recoveredPublication.Paths.CandidateReceiptPath) ==
+                stagerReceiptBefore,
+        "Bootstrap debris recovery changed the exact candidate or retained its empty owned root.");
+    using (JsonDocument recoveryReport = JsonDocument.Parse(
+               recoveredBootstrapDebris.StandardOutput))
+    {
+        JsonElement report = recoveryReport.RootElement;
+        Require(report.GetProperty("documentCreatedThisCall").GetBoolean() == false &&
+                report.GetProperty("bootstrapPermissionsHardenedThisCall").GetBoolean() == false &&
+                report.GetProperty("bootstrapRecoveryMutationPerformedThisCall").GetBoolean() &&
+                report.GetProperty("reusedExistingLockedBase").GetBoolean() &&
+                report.GetProperty("reusedExistingCandidate").GetBoolean() &&
+                report.GetProperty("candidateArtifactsWrittenThisCall").GetBoolean() == false &&
+                report.GetProperty("fileSystemMutationPerformed").GetBoolean(),
+            "Owned bootstrap-debris recovery was not reported as a filesystem mutation.");
+    }
+
+    string stagerDocumentPath = Path.Combine(
+        paths.AuthoredEditsDirectoryPath,
+        Id65AuthoringEditorDocumentWorkspaceInspector.DocumentFileName);
+    File.Delete(stagerDocumentPath);
+    StagerInvocation recreatedDocument = await InvokeStagerAsync(
+    [
+        "stage",
+        "--source-bin", cleanSourceImagePath,
+        "--source-cue", cleanSourceCuePath,
+        "--workspace-container", workspaceContainer
+    ]);
+    Require(recreatedDocument.ExitCode == 0 &&
+            SnapshotFile(recoveredPublication.Paths.CandidateImagePath) ==
+                stagerImageBefore &&
+            SnapshotFile(recoveredPublication.Paths.CandidateCuePath) ==
+                stagerCueBefore &&
+            SnapshotFile(recoveredPublication.Paths.CandidateReceiptPath) ==
+                stagerReceiptBefore,
+        "Recreating the canonical document changed the exact candidate.");
+    using (JsonDocument recreationReport = JsonDocument.Parse(
+               recreatedDocument.StandardOutput))
+    {
+        JsonElement report = recreationReport.RootElement;
+        Require(report.GetProperty("documentCreatedThisCall").GetBoolean() &&
+                report.GetProperty("bootstrapPermissionsHardenedThisCall").GetBoolean() == false &&
+                report.GetProperty("bootstrapRecoveryMutationPerformedThisCall").GetBoolean() == false &&
+                report.GetProperty("reusedExistingLockedBase").GetBoolean() &&
+                report.GetProperty("reusedExistingCandidate").GetBoolean() &&
+                report.GetProperty("candidateArtifactsWrittenThisCall").GetBoolean() == false &&
+                report.GetProperty("fileSystemMutationPerformed").GetBoolean(),
+            "Document recreation was not reported as an exact filesystem mutation.");
+    }
+
+    Id65AuthoringEditorDocumentStoreResult stagerNonDefault =
+        await Id65AuthoringEditorDocumentStore.SaveAsync(
+            paths,
+            manifest,
+            Id65AuthoringEditorDocument.CreateExact(includeOptionalTerrain: false),
+            projectionInputs,
+            stored.EnvelopeCanonicalSha256);
+    StagerInvocation nonDefaultRefusal = await InvokeStagerAsync(
+    [
+        "stage",
+        "--source-bin", cleanSourceImagePath,
+        "--source-cue", cleanSourceCuePath,
+        "--workspace-container", workspaceContainer
+    ]);
+    RequireSafetyRefusal(nonDefaultRefusal, "never replaces authored intent");
+    Require(SnapshotFile(recoveredPublication.Paths.CandidateImagePath) ==
+                stagerImageBefore &&
+            SnapshotFile(recoveredPublication.Paths.CandidateCuePath) ==
+                stagerCueBefore &&
+            SnapshotFile(recoveredPublication.Paths.CandidateReceiptPath) ==
+                stagerReceiptBefore,
+        "A non-default stager refusal changed the exact published candidate.");
+    stored = await Id65AuthoringEditorDocumentStore.SaveAsync(
+        paths,
+        manifest,
+        document,
+        projectionInputs,
+        stagerNonDefault.EnvelopeCanonicalSha256);
+    request = request with { ExpectedStoredDocument = stored };
+
     VerifyApiAndTopology(repositoryRoot);
     Require(positiveMaterializations == 12,
         $"The aggregate materializer positive matrix ran {positiveMaterializations}, expected 12.");
@@ -1034,7 +1543,11 @@ static void VerifyApiAndTopology(string repositoryRoot)
     [
         Path.Combine("src", "Spyro.Editor.App", "Views",
             "MainWindow.Id65BlankLab.cs"),
-        smokeRelative
+        smokeRelative,
+        Path.Combine(
+            "src",
+            "Spyro.Editor.Id65AuthoringEditorAggregateCandidateStager",
+            "Program.cs")
     ];
     Require(facadeDeclarations.SequenceEqual(new[] { facadeRelative }) &&
             facadeCalls.SequenceEqual(expectedFacadeOwners) &&
@@ -1135,6 +1648,45 @@ static void RequireExactBooleanProperties(Type type, IReadOnlyList<string> expec
         $"{string.Join(',', actual)}.");
 }
 
+static async Task<StagerInvocation> InvokeStagerAsync(string[] arguments)
+{
+    TextWriter originalOutput = Console.Out;
+    TextWriter originalError = Console.Error;
+    using StringWriter standardOutput = new();
+    using StringWriter standardError = new();
+    try
+    {
+        Console.SetOut(standardOutput);
+        Console.SetError(standardError);
+        int exitCode = await AggregateCandidateStager.RunAsync(arguments);
+        return new(
+            exitCode,
+            standardOutput.ToString().Trim(),
+            standardError.ToString().Trim());
+    }
+    finally
+    {
+        Console.SetOut(originalOutput);
+        Console.SetError(originalError);
+    }
+}
+
+static void RequireSafetyRefusal(
+    StagerInvocation invocation,
+    string requiredText)
+{
+    Require(invocation.ExitCode == 3 &&
+            string.IsNullOrWhiteSpace(invocation.StandardOutput) &&
+            invocation.StandardError.Contains(
+                "ID65_AUTHORING_EDITOR_AGGREGATE_CANDIDATE_STAGER_REFUSED kind=safety",
+                StringComparison.Ordinal) &&
+            invocation.StandardError.Contains(
+                requiredText,
+                StringComparison.OrdinalIgnoreCase),
+        $"The persistent stager did not fail closed with '{requiredText}': " +
+        $"exit={invocation.ExitCode}; stdout={invocation.StandardOutput}; stderr={invocation.StandardError}.");
+}
+
 static async Task ExpectRejectedAsync(
     string label,
     Func<Task> action,
@@ -1214,3 +1766,8 @@ static void Require(bool condition, string message)
 }
 
 internal sealed record FileState(long Length, DateTime LastWriteUtc, string Sha256);
+
+internal sealed record StagerInvocation(
+    int ExitCode,
+    string StandardOutput,
+    string StandardError);
