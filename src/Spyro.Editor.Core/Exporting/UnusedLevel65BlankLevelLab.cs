@@ -648,11 +648,12 @@ public static class UnusedLevel65BlankLevelLabBootstrapper
         ValidatePublishedWorkspaceCoreAsync(paths, recoverStaleOperations: true, cancellationToken);
 
     /// <summary>
-    /// Read-only validation for persistence transactions that must never run
-    /// bootstrap recovery as a side effect. Recovery remains an explicit
-    /// bootstrap/load responsibility at the public boundary above.
+    /// Read-only validation for passive catalog admission and persistence
+    /// transactions that must never run bootstrap recovery as a side effect.
+    /// Recovery remains an explicit bootstrap/load responsibility at the
+    /// recovery-capable public boundary above.
     /// </summary>
-    internal static Task<UnusedLevel65BlankLevelLabManifest> ValidatePublishedWorkspaceReadOnlyAsync(
+    public static Task<UnusedLevel65BlankLevelLabManifest> ValidatePublishedWorkspaceReadOnlyAsync(
         UnusedLevel65BlankLevelLabWorkspacePaths paths,
         CancellationToken cancellationToken = default) =>
         ValidatePublishedWorkspaceCoreAsync(paths, recoverStaleOperations: false, cancellationToken);

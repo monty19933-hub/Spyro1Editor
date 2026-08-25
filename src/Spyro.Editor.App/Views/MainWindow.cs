@@ -530,7 +530,7 @@ public sealed partial class MainWindow : Window
         if (_currentLevel == null || _currentGeometry != null || _currentMobys.Count > 0)
         {
             await Task.Yield();
-            await ValidateAndAdmitId65BlankLabCatalogAsync();
+            BeginId65BlankLabCatalogValidationInBackground();
             return;
         }
 
@@ -546,7 +546,7 @@ public sealed partial class MainWindow : Window
         }
 
         await Task.Yield();
-        await ValidateAndAdmitId65BlankLabCatalogAsync();
+        BeginId65BlankLabCatalogValidationInBackground();
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)
@@ -575,14 +575,6 @@ public sealed partial class MainWindow : Window
                 "Finishing the active ID65 Lab operation before the editor can close.";
             return;
         }
-        if (_id65BlankLabCatalogValidationBusy)
-        {
-            e.Cancel = true;
-            base.OnClosing(e);
-            _statusText.Text =
-                "Finishing ID65 workspace validation before the editor can close.";
-            return;
-        }
         if (_terrainTexturePaintBusy || _terrainTextureRelocationBusy)
         {
             e.Cancel = true;
@@ -595,6 +587,11 @@ public sealed partial class MainWindow : Window
             _statusText.Text = "Finishing the current native texture operation before the editor can close.";
             return;
         }
+
+        bool restartId65ValidationIfCloseCanceled =
+            _id65BlankLabCatalogValidationBusy;
+        if (restartId65ValidationIfCloseCanceled)
+            CancelId65BlankLabCatalogValidation();
 
         if (_allowCloseWithUnsavedTerrain || !HasUnsavedTerrainEdits() && !HasUnsavedMobyEdits())
         {
@@ -612,10 +609,14 @@ public sealed partial class MainWindow : Window
                 out WorkspaceTransitionOperation? operation) ||
             operation == null)
         {
+            if (restartId65ValidationIfCloseCanceled)
+                BeginId65BlankLabCatalogValidationInBackground();
             return;
         }
         _showingCloseUnsavedTerrainDialog = true;
-        _ = ConfirmCloseWithUnsavedTerrainAsync(operation);
+        _ = ConfirmCloseWithUnsavedTerrainAsync(
+            operation,
+            restartId65ValidationIfCloseCanceled);
     }
 
     protected override void OnClosed(EventArgs e)
@@ -2220,7 +2221,8 @@ public sealed partial class MainWindow : Window
     }
 
     private async Task ConfirmCloseWithUnsavedTerrainAsync(
-        WorkspaceTransitionOperation operation)
+        WorkspaceTransitionOperation operation,
+        bool restartId65ValidationIfCloseCanceled)
     {
         bool closeApproved = false;
         try
@@ -2274,6 +2276,10 @@ public sealed partial class MainWindow : Window
         {
             _allowCloseWithUnsavedTerrain = true;
             Close();
+        }
+        else if (restartId65ValidationIfCloseCanceled)
+        {
+            BeginId65BlankLabCatalogValidationInBackground();
         }
     }
 
@@ -2579,14 +2585,21 @@ public sealed partial class MainWindow : Window
 
             if (string.IsNullOrWhiteSpace(folderPath))
                 return;
+            bool restartId65ValidationAfterCanceledTransition =
+                _id65BlankLabCatalogValidationBusy;
+            if (restartId65ValidationAfterCanceledTransition)
+                CancelId65BlankLabCatalogValidation();
             if (!TryBeginWorkspaceTransition(
                     "workspace change",
                     out WorkspaceTransitionOperation? operation) ||
                 operation == null)
             {
+                if (restartId65ValidationAfterCanceledTransition)
+                    BeginId65BlankLabCatalogValidationInBackground();
                 return;
             }
 
+            bool validateCommittedWorkspace = false;
             try
             {
                 if (!await ConfirmLeaveWorkspaceWithUnsavedTerrainAsync(
@@ -2631,6 +2644,7 @@ public sealed partial class MainWindow : Window
                 ClearPrivateTexturePreflightSessionCache();
                 _retailCatalog = preparedRetailCatalog;
                 _catalog = ResetCatalogForDeferredId65BlankLabValidation(_retailCatalog);
+                validateCommittedWorkspace = true;
                 _nativeSkyReport = null;
                 _nativeSkyReportSourcePath = "";
                 _skyboxDiscImagePathBox.Text = DiscImageLocator.FindImage(_workspace);
@@ -2643,8 +2657,6 @@ public sealed partial class MainWindow : Window
                 _statusText.Text = $"Opened workspace: {_workspace.RootPath}";
                 RefreshDiagnosticContext(includeSavedEdits: true);
                 EditorDiagnostics.RecordAction("Workspace opened", _workspace.RootPath);
-                await Task.Yield();
-                await ValidateAndAdmitId65BlankLabCatalogAsync();
             }
             catch (OperationCanceledException) when (
                 operation.Cancellation.IsCancellationRequested ||
@@ -2655,6 +2667,11 @@ public sealed partial class MainWindow : Window
             finally
             {
                 CompleteWorkspaceTransition(operation);
+                if (validateCommittedWorkspace ||
+                    restartId65ValidationAfterCanceledTransition)
+                {
+                    BeginId65BlankLabCatalogValidationInBackground();
+                }
             }
         }
         catch (Exception ex)

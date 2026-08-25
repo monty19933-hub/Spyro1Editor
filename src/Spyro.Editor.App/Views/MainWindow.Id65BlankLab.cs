@@ -55,6 +55,7 @@ public sealed partial class MainWindow
     private int _id65BlankLabCatalogValidationGeneration;
     private bool _id65BlankLabCatalogValidationBusy;
     private bool _id65BlankLabCatalogValidationLifetimeEnded;
+    private Task _id65BlankLabCatalogValidationTask = Task.CompletedTask;
     internal Func<
         UnusedLevel65BlankLevelLabWorkspacePaths,
         CancellationToken,
@@ -282,7 +283,7 @@ public sealed partial class MainWindow
         CancellationTokenSource cancellation = new();
         _id65BlankLabCatalogValidationCancellation = cancellation;
         _id65BlankLabCatalogValidationBusy = true;
-        RefreshId65BlankLabUi();
+        RefreshLevelSelectionAvailability();
         try
         {
             Func<
@@ -290,7 +291,8 @@ public sealed partial class MainWindow
                 CancellationToken,
                 Task<UnusedLevel65BlankLevelLabManifest>> validator =
                 Id65BlankLabCatalogValidationOverrideForTesting ??
-                UnusedLevel65BlankLevelLabBootstrapper.ValidatePublishedWorkspaceAsync;
+                UnusedLevel65BlankLevelLabBootstrapper
+                    .ValidatePublishedWorkspaceReadOnlyAsync;
             UnusedLevel65BlankLevelLabManifest manifest =
                 await Task.Run(
                     async () => await validator(paths, cancellation.Token).ConfigureAwait(false),
@@ -334,9 +336,33 @@ public sealed partial class MainWindow
                 _id65BlankLabCatalogValidationBusy = false;
                 if (ReferenceEquals(_id65BlankLabCatalogValidationCancellation, cancellation))
                     _id65BlankLabCatalogValidationCancellation = null;
-                RefreshId65BlankLabUi();
+                RefreshLevelSelectionAvailability();
             }
             cancellation.Dispose();
+        }
+    }
+
+    private void BeginId65BlankLabCatalogValidationInBackground()
+    {
+        if (_id65BlankLabCatalogValidationLifetimeEnded)
+            return;
+
+        _id65BlankLabCatalogValidationTask =
+            ObserveId65BlankLabCatalogValidationAsync();
+    }
+
+    private async Task ObserveId65BlankLabCatalogValidationAsync()
+    {
+        try
+        {
+            await ValidateAndAdmitId65BlankLabCatalogAsync();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex);
+            EditorDiagnostics.RecordException(
+                "observing deferred ID65 lab validation",
+                ex);
         }
     }
 
@@ -356,6 +382,9 @@ public sealed partial class MainWindow
 
     internal Task ValidateAndAdmitId65BlankLabCatalogForTestingAsync() =>
         ValidateAndAdmitId65BlankLabCatalogAsync();
+
+    internal Task CurrentId65BlankLabCatalogValidationTaskForTesting =>
+        _id65BlankLabCatalogValidationTask;
 
     internal void EndId65BlankLabCatalogValidationLifetimeForTesting() =>
         EndId65BlankLabCatalogValidationLifetime();
@@ -6007,10 +6036,26 @@ public sealed partial class MainWindow
             throw new InvalidOperationException(
                 "The workspace-transition probe requires a fully loaded source scene.");
         }
+        UnusedLevel65BlankLevelLabWorkspacePaths originalId65Paths =
+            _id65BlankLabPaths ?? throw new InvalidOperationException(
+                "The workspace-transition probe requires admitted exact ID65 paths.");
+        UnusedLevel65BlankLevelLabManifest originalId65Manifest =
+            _id65BlankLabManifest ?? throw new InvalidOperationException(
+                "The workspace-transition probe requires an admitted exact ID65 manifest.");
+        if (_catalog.FindByKey(
+                UnusedLevel65BlankLevelLabProfileRegistry.Key) == null)
+        {
+            throw new InvalidOperationException(
+                "The workspace-transition probe requires ID65 to be admitted before its background-validation transition checks.");
+        }
 
         string targetRoot = Path.Combine(
             Path.GetTempPath(),
             $"spyro-editor-workspace-transition-{Guid.NewGuid():N}");
+        string secondTargetRoot = Path.Combine(
+            Path.GetTempPath(),
+            $"spyro-editor-workspace-transition-second-{Guid.NewGuid():N}");
+        string selectedTargetRoot = targetRoot;
         string currentProjectSettingsPath = Path.Combine(
             originalReleaseContext.UserData.SettingsPath,
             "current-project.json");
@@ -6030,10 +6075,6 @@ public sealed partial class MainWindow
         TerrainPolygon? originalSelectedTerrain = _selectedTerrain;
         int originalSelectedTerrainIndex = _selectedTerrainIndex;
         int originalSelectedTerrainPointIndex = _selectedTerrainPointIndex;
-        UnusedLevel65BlankLevelLabWorkspacePaths? originalId65Paths =
-            _id65BlankLabPaths;
-        UnusedLevel65BlankLevelLabManifest? originalId65Manifest =
-            _id65BlankLabManifest;
         int originalLevelLoadRequestId = _levelLoadRequestId;
         string originalTerrainSignature = BuildTerrainEditSignature(originalGeometry);
         string originalMobySignature = BuildMobyEditSignature(originalMobys);
@@ -6161,9 +6202,13 @@ public sealed partial class MainWindow
         }
 
         WorkspaceFolderPickerOverrideForTesting = () =>
-            Task.FromResult<string?>(targetRoot);
+            Task.FromResult<string?>(selectedTargetRoot);
         UnsavedTerrainDecisionOverrideForTesting = (_, _) =>
             Task.FromResult("Discard");
+        TaskCompletionSource<UnusedLevel65BlankLevelLabManifest>?
+            targetValidationGate = null;
+        TaskCompletionSource<UnusedLevel65BlankLevelLabManifest>?
+            rearmedValidationGate = null;
         try
         {
             TaskCompletionSource prepareStarted =
@@ -6225,6 +6270,42 @@ public sealed partial class MainWindow
                     "An injected post-settings/environment workspace commit failure did not restore the exact editor and release context.");
             }
 
+            TaskCompletionSource targetValidationStarted =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource rearmedValidationStarted =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+            targetValidationGate = new(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            rearmedValidationGate = new(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            int validationCallCount = 0;
+            CancellationToken targetValidationToken = default;
+            CancellationToken rearmedValidationToken = default;
+            string targetValidationRoot = "";
+            string rearmedValidationRoot = "";
+            Id65BlankLabCatalogValidationOverrideForTesting =
+                (paths, cancellationToken) =>
+                {
+                    int call = Interlocked.Increment(ref validationCallCount);
+                    if (call == 1)
+                    {
+                        targetValidationRoot = paths.ContainerRootPath;
+                        targetValidationToken = cancellationToken;
+                        targetValidationStarted.TrySetResult();
+                        return targetValidationGate.Task;
+                    }
+                    if (call == 2)
+                    {
+                        rearmedValidationRoot = paths.ContainerRootPath;
+                        rearmedValidationToken = cancellationToken;
+                        rearmedValidationStarted.TrySetResult();
+                        return rearmedValidationGate.Task;
+                    }
+                    return Task.FromException<UnusedLevel65BlankLevelLabManifest>(
+                        new InvalidOperationException(
+                            $"Unexpected background ID65 validation call {call}."));
+                };
+
             int successfulPrepareCount = 0;
             WorkspaceTransitionDelayOverrideForTesting = (stage, _) =>
             {
@@ -6232,8 +6313,12 @@ public sealed partial class MainWindow
                     successfulPrepareCount++;
                 return Task.CompletedTask;
             };
-            await OpenWorkspaceAsync();
+            Task successfulTransition = OpenWorkspaceAsync();
+            await targetValidationStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            await successfulTransition.WaitAsync(TimeSpan.FromSeconds(5));
             WorkspaceTransitionDelayOverrideForTesting = null;
+            Task targetValidationTask =
+                CurrentId65BlankLabCatalogValidationTaskForTesting;
 
             ReleaseProjectContext committedContext = ReleaseProjectBootstrap.Current
                 ?? throw new InvalidOperationException(
@@ -6259,14 +6344,113 @@ public sealed partial class MainWindow
                 !PathsEqual(
                     Environment.GetEnvironmentVariable(
                         ReleaseProjectBootstrap.WorkspaceEnvironmentVariable) ?? "",
-                    targetRoot))
+                    targetRoot) ||
+                targetValidationTask.IsCompleted ||
+                targetValidationGate.Task.IsCompleted ||
+                !_id65BlankLabCatalogValidationBusy ||
+                !PathsEqual(targetValidationRoot, targetRoot))
             {
                 throw new InvalidOperationException(
-                    "The successful workspace transition did not commit exactly once or retained stale source-scene/global context.");
+                    "The successful workspace transition did not commit exactly once, retained stale source-scene/global context, or waited for background ID65 validation.");
+            }
+
+            Id65BlankLabUiSnapshot targetValidationUi =
+                CaptureId65BlankLabUiSnapshotForTesting();
+            if (targetValidationUi.RetailCatalogCount != 35 ||
+                targetValidationUi.HasId65CatalogLevel ||
+                !targetValidationUi.StatusText.Contains(
+                    "background",
+                    StringComparison.Ordinal) ||
+                targetValidationUi.BuildEnabled || targetValidationUi.LoadEnabled ||
+                targetValidationUi.AuthoringDocumentEnabled ||
+                targetValidationUi.SaveEnabled ||
+                targetValidationUi.CreateCueEnabled ||
+                !_levelJumpBox.IsEnabled || !_levelList.IsEnabled ||
+                !_viewport.IsEnabled ||
+                (_openWorkspaceButton != null &&
+                 !_openWorkspaceButton.IsEnabled) ||
+                _id65BlankLabManifest != null)
+            {
+                throw new InvalidOperationException(
+                    $"A gated target ID65 validation did not leave the committed retail workspace available and fail-closed: {targetValidationUi}");
+            }
+
+            selectedTargetRoot = secondTargetRoot;
+            TaskCompletionSource secondPrepareStarted =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource secondPrepareRelease =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+            WorkspaceTransitionDelayOverrideForTesting = (stage, cancellationToken) =>
+            {
+                if (!string.Equals(stage, "prepare-completed", StringComparison.Ordinal))
+                    return Task.CompletedTask;
+                secondPrepareStarted.TrySetResult();
+                return secondPrepareRelease.Task.WaitAsync(cancellationToken);
+            };
+            Task canceledSecondTransition = OpenWorkspaceAsync();
+            await secondPrepareStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            if (!targetValidationToken.IsCancellationRequested ||
+                targetValidationTask.IsCompleted ||
+                !_workspaceTransitionBusy || _workspaceTransitionOperation == null)
+            {
+                throw new InvalidOperationException(
+                    "A new Open Workspace action waited for or failed to cancel the old background ID65 validator before taking its transition fence.");
+            }
+            CancelWorkspaceTransitionForTesting();
+            secondPrepareRelease.TrySetResult();
+            await canceledSecondTransition;
+            WorkspaceTransitionDelayOverrideForTesting = null;
+            await rearmedValidationStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            Task rearmedValidationTask =
+                CurrentId65BlankLabCatalogValidationTaskForTesting;
+            if (_workspaceTransitionBusy || _workspaceTransitionOperation != null ||
+                ReferenceEquals(rearmedValidationTask, targetValidationTask) ||
+                rearmedValidationTask.IsCompleted ||
+                rearmedValidationGate.Task.IsCompleted ||
+                rearmedValidationToken.IsCancellationRequested ||
+                !PathsEqual(rearmedValidationRoot, targetRoot) ||
+                !PathsEqual(_workspace.RootPath, targetRoot) ||
+                !_id65BlankLabCatalogValidationBusy)
+            {
+                throw new InvalidOperationException(
+                    "Canceling a workspace transition did not rearm a fresh validator for the unchanged committed workspace.");
+            }
+
+            targetValidationGate.TrySetResult(originalId65Manifest);
+            await targetValidationTask.WaitAsync(TimeSpan.FromSeconds(30));
+            if (!_id65BlankLabCatalogValidationBusy ||
+                _id65BlankLabManifest != null ||
+                _catalog.FindByKey(
+                    UnusedLevel65BlankLevelLabProfileRegistry.Key) != null)
+            {
+                throw new InvalidOperationException(
+                    "A canceled token-ignoring ID65 validator admitted stale manifest state after a newer validation generation began.");
+            }
+
+            rearmedValidationGate.TrySetException(
+                new InvalidDataException(
+                    "injected current-generation background validation fault"));
+            await rearmedValidationTask.WaitAsync(TimeSpan.FromSeconds(30));
+            Id65BlankLabUiSnapshot failedValidationUi =
+                CaptureId65BlankLabUiSnapshotForTesting();
+            if (validationCallCount != 2 ||
+                _id65BlankLabCatalogValidationBusy ||
+                _id65BlankLabManifest != null ||
+                failedValidationUi.RetailCatalogCount != 35 ||
+                failedValidationUi.HasId65CatalogLevel ||
+                !failedValidationUi.BuildEnabled || failedValidationUi.LoadEnabled ||
+                failedValidationUi.AuthoringDocumentEnabled ||
+                failedValidationUi.SaveEnabled || failedValidationUi.CreateCueEnabled ||
+                !failedValidationUi.StatusText.Contains(
+                    "injected current-generation background validation fault",
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"The fresh current-generation background validation fault did not settle retail-only and fail-closed: {failedValidationUi}");
             }
 
             return
-                "Open Workspace held one captured generation/CTS fence through confirmation, owned saves, target preparation, transactional release settings/environment/context publication, and app workspace/catalog commit; delayed mutation/navigation/Lab admission stayed refused, cancellation preserved the exact old state, injected post-publication failure rolled global state back, and success committed once without retaining the old scene";
+                "Open Workspace held one captured generation/CTS fence through confirmation, owned saves, target preparation, transactional release settings/environment/context publication, and app workspace/catalog commit; delayed mutation/navigation/Lab admission stayed refused, cancellation preserved the exact old state, injected post-publication failure rolled global state back, success committed once without retaining the old scene or waiting for full-BIN ID65 validation, another Open canceled the old validator and took the transition fence, canceled transition rearmed the unchanged workspace, stale token-ignoring completion stayed unadmitted, and a current-generation validation fault settled retail-only";
         }
         finally
         {
@@ -6274,6 +6458,10 @@ public sealed partial class MainWindow
             WorkspaceTransitionDelayOverrideForTesting = null;
             WorkspaceTransitionFaultForTesting = null;
             UnsavedTerrainDecisionOverrideForTesting = null;
+            Id65BlankLabCatalogValidationOverrideForTesting = null;
+            CancelId65BlankLabCatalogValidation();
+            targetValidationGate?.TrySetCanceled();
+            rearmedValidationGate?.TrySetCanceled();
             if (_workspaceTransitionOperation != null)
             {
                 CancelWorkspaceTransitionForTesting();
@@ -6286,15 +6474,18 @@ public sealed partial class MainWindow
                 _selectedTerrainIndex = originalSelectedTerrainIndex;
                 _selectedTerrainPointIndex = originalSelectedTerrainPointIndex;
             }
-            try
+            foreach (string temporaryRoot in new[] { targetRoot, secondTargetRoot })
             {
-                if (Directory.Exists(targetRoot))
-                    Directory.Delete(targetRoot, recursive: true);
-            }
-            catch (Exception exception) when (
-                exception is IOException or UnauthorizedAccessException)
-            {
-                Debug.WriteLine(exception);
+                try
+                {
+                    if (Directory.Exists(temporaryRoot))
+                        Directory.Delete(temporaryRoot, recursive: true);
+                }
+                catch (Exception exception) when (
+                    exception is IOException or UnauthorizedAccessException)
+                {
+                    Debug.WriteLine(exception);
+                }
             }
         }
     }

@@ -56,10 +56,25 @@ try
             Converters = { new JsonStringEnumConverter() }
         }) + "\n",
         new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    string passiveValidationSentinelDirectory = Path.Combine(
+        paths.OperationsDirectoryPath,
+        "passive-validation-must-not-recover");
+    string passiveValidationSentinelPath = Path.Combine(
+        passiveValidationSentinelDirectory,
+        "sentinel.bin");
+    Directory.CreateDirectory(passiveValidationSentinelDirectory);
+    await File.WriteAllBytesAsync(
+        passiveValidationSentinelPath,
+        [0x49, 0x44, 0x36, 0x35]);
+    FileState passiveValidationSentinelBefore =
+        SnapshotFile(passiveValidationSentinelPath);
     Require(
         await UnusedLevel65BlankLevelLabBootstrapper
-            .ValidatePublishedWorkspaceReadOnlyAsync(paths) == manifest,
-        "The provider smoke workspace did not validate exactly.");
+            .ValidatePublishedWorkspaceReadOnlyAsync(paths) == manifest &&
+        Directory.Exists(passiveValidationSentinelDirectory) &&
+        SnapshotFile(passiveValidationSentinelPath) ==
+            passiveValidationSentinelBefore,
+        "Read-only validation changed owned operation debris instead of leaving recovery to an explicit bootstrap action.");
 
     FileState labImageBefore = SnapshotFile(paths.LockedBaseImagePath);
     FileState labCueBefore = SnapshotFile(paths.LockedBaseCuePath);
@@ -261,7 +276,7 @@ try
         $"witness={recovered.PrivateTextureWitnessSha256}, bundle={recovered.GrassBundleSha256}, " +
         $"inputSet={recovered.CanonicalInputSetSha256}, positiveLoads={positiveLoads}, " +
         $"failClosedRejects={failClosedRejects}, cacheBuilds={recoveredCache.DerivedPairBuildCount}. " +
-        "Exact locked-project derivation, concurrent fan-in, failed-build eviction/recovery, semantic projection, path-free topology, immutable workspace, and no App/UI/Create-BIN/runtime/release authority passed without a retired foundation path.");
+        "Exact locked-project derivation, public passive validation without bootstrap recovery, concurrent fan-in, failed-build eviction/recovery, semantic projection, path-free topology, immutable workspace, and no App/UI/Create-BIN/runtime/release authority passed without a retired foundation path.");
 }
 finally
 {
@@ -333,6 +348,10 @@ static void AssertTopology(string repositoryRoot)
 
     string coreRoot = Path.Combine(repositoryRoot, "src", "Spyro.Editor.Core");
     string appRoot = Path.Combine(repositoryRoot, "src", "Spyro.Editor.App");
+    string appId65Source = File.ReadAllText(Path.Combine(
+        appRoot,
+        "Views",
+        "MainWindow.Id65BlankLab.cs"));
     string[] productionFiles = new[] { coreRoot, appRoot }
         .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
         .Where(path => !HasPathSegment(path, "bin") && !HasPathSegment(path, "obj"))
@@ -376,6 +395,12 @@ static void AssertTopology(string repositoryRoot)
         ]) &&
         !providerOwners.Any(path => HasPathSegment(path, "Spyro.Editor.App")),
         "The provider callsite topology changed or the cheap App inspector became a native-input loader.");
+    Require(
+        Regex.Matches(
+            appId65Source,
+            @"Id65BlankLabCatalogValidationOverrideForTesting\s*\?\?\s*UnusedLevel65BlankLevelLabBootstrapper\s*\.\s*ValidatePublishedWorkspaceReadOnlyAsync",
+            RegexOptions.CultureInvariant).Count == 1,
+        "Passive App catalog admission no longer defaults to the public read-only validator.");
 
 }
 

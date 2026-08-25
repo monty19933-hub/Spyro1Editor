@@ -959,10 +959,49 @@ void RunId65BlankLabUiOnly()
         throw new InvalidOperationException(
             $"ID65 commands were exposed before deferred startup validation began: {pendingBeforeOpen}");
     }
+    TaskCompletionSource startupValidationStarted =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    TaskCompletionSource<UnusedLevel65BlankLevelLabManifest> startupValidationGate =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    window.Id65BlankLabCatalogValidationOverrideForTesting =
+        (_, cancellationToken) =>
+        {
+            startupValidationStarted.TrySetResult();
+            return startupValidationGate.Task.WaitAsync(cancellationToken);
+        };
     window.Show();
     try
     {
         WaitForLevelData(window);
+        WaitForUiTask(
+            startupValidationStarted.Task,
+            "starting non-blocking startup ID65 validation");
+        Task startupValidation =
+            window.CurrentId65BlankLabCatalogValidationTaskForTesting;
+        FlushUi();
+        MainWindow.Id65BlankLabUiSnapshot startupValidating =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        if (startupValidation.IsCompleted || startupValidationGate.Task.IsCompleted ||
+            startupValidating.RetailCatalogCount != 35 ||
+            startupValidating.HasId65CatalogLevel ||
+            !startupValidating.StatusText.Contains(
+                "background",
+                StringComparison.Ordinal) ||
+            startupValidating.BuildEnabled || startupValidating.LoadEnabled ||
+            startupValidating.AuthoringDocumentEnabled ||
+            startupValidating.SaveEnabled || startupValidating.CreateCueEnabled)
+        {
+            throw new InvalidOperationException(
+                $"The main window or retail level load waited for optional ID65 BIN validation: {startupValidating}");
+        }
+        startupValidationGate.TrySetException(
+            new InvalidDataException(
+                "injected non-blocking startup validation completion"));
+        WaitForUiTask(
+            startupValidation,
+            "finishing non-blocking startup ID65 validation");
+        window.Id65BlankLabCatalogValidationOverrideForTesting = null;
+
         ToggleButton levelBuilding = FindNamedUnique<ToggleButton>(window, "LevelBuildingEditorWorkspaceButton");
         TabControl toolTabs = FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs");
         levelBuilding.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, levelBuilding));
