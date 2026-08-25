@@ -1365,6 +1365,23 @@ def run_source_closure_regressions() -> int:
         mixed_suffix,
         "repair lineage is internally mixed",
     )
+    for field, changed_value in (
+        ("candidateScusName", "SCUS_000.00"),
+        ("candidateScusLba", 55_381),
+        ("candidateScusByteLength", 417_791),
+        ("candidateScusSha256", "0" * 64),
+        ("inputTimingStaticProvenanceRelativePath", "docs/research/forged.json"),
+        ("inputTimingStaticProvenanceSha256", "0" * 64),
+    ):
+        tampered_suffix = tuple(
+            (name, changed_value if name == field else value)
+            for name, value in original_suffix
+        )
+        reject_variant(
+            original_prefix,
+            tampered_suffix,
+            "repair lineage is internally mixed",
+        )
     require(
         capture.recompute_source_closure(coordinator_sha256) == baseline,
         "Source-closure negative fixtures did not restore the exact manifest.",
@@ -1411,6 +1428,7 @@ def run_source_topology_regressions() -> int:
         capture.PROFILE_BUILDER_RELATIVE_PATH,
         capture.PROFILE_VERIFIER_RELATIVE_PATH,
         capture.AUTOMATION_RELATIVE_PATH,
+        capture.INPUT_TIMING_STATIC_PROVENANCE_RELATIVE_PATH,
     ):
         def tampered_reader(
             path: pathlib.Path, *args: Any, target: str = relative, **kwargs: Any
@@ -3644,8 +3662,8 @@ def run(*, offline_only: bool = False) -> None:
     snapshot_v2_rejects = run_snapshot_v2_regressions()
     require(
         shared_authority_rejects == 4
-        and source_closure_rejects == 4
-        and source_topology_rejects == 4
+        and source_closure_rejects == 10
+        and source_topology_rejects == 5
         and verifier_binding_rejects == 4
         and kern_home_rejects == 15
         and snapshot_v2_rejects == 10,
@@ -4518,38 +4536,42 @@ def run(*, offline_only: bool = False) -> None:
             )
             legacy_version_domain_rejects += 1
 
-        legacy_source_lines = ["id65-v3-runtime-source-closure-v1"]
-        legacy_source_lines.extend(
-            f"{name}={value}"
-            for name, value in capture.SOURCE_CLOSURE_PREFIX_FIELDS
-        )
-        legacy_source_lines.append(
-            f"captureCoordinatorSha256={origin['captureCoordinatorSha256']}"
-        )
-        legacy_source_lines.extend(
-            f"{name}={value}"
-            for name, value in capture.SOURCE_CLOSURE_SUFFIX_FIELDS
-        )
-        legacy_source_closure = hashlib.sha256(
-            ("\n".join(legacy_source_lines) + "\n").encode("utf-8", "strict")
-        ).hexdigest()
-        require(
-            legacy_source_closure != origin["sourceClosureSha256"],
-            "The retired source-closure-v1 domain collided with v2.",
-        )
-        legacy_source_origin = copy.deepcopy(origin)
-        legacy_source_origin["sourceClosureSha256"] = legacy_source_closure
-        try:
-            origin_path.write_bytes(capture.canonical_bytes(legacy_source_origin))
-            origin_path.chmod(0o600)
-            expect_refusal(
-                lambda: coordinator._load_run(run_id, expected_pins),
-                "Run origin differs from current frozen source pins",
+        for legacy_source_domain in (
+            "id65-v3-runtime-source-closure-v1",
+            "id65-v3-runtime-source-closure-v2",
+        ):
+            legacy_source_lines = [legacy_source_domain]
+            legacy_source_lines.extend(
+                f"{name}={value}"
+                for name, value in capture.SOURCE_CLOSURE_PREFIX_FIELDS
             )
-        finally:
-            origin_path.write_bytes(original_origin_bytes)
-            origin_path.chmod(0o600)
-        legacy_version_domain_rejects += 1
+            legacy_source_lines.append(
+                f"captureCoordinatorSha256={origin['captureCoordinatorSha256']}"
+            )
+            legacy_source_lines.extend(
+                f"{name}={value}"
+                for name, value in capture.SOURCE_CLOSURE_SUFFIX_FIELDS
+            )
+            legacy_source_closure = hashlib.sha256(
+                ("\n".join(legacy_source_lines) + "\n").encode("utf-8", "strict")
+            ).hexdigest()
+            require(
+                legacy_source_closure != origin["sourceClosureSha256"],
+                f"The retired {legacy_source_domain} collided with v3.",
+            )
+            legacy_source_origin = copy.deepcopy(origin)
+            legacy_source_origin["sourceClosureSha256"] = legacy_source_closure
+            try:
+                origin_path.write_bytes(capture.canonical_bytes(legacy_source_origin))
+                origin_path.chmod(0o600)
+                expect_refusal(
+                    lambda: coordinator._load_run(run_id, expected_pins),
+                    "Run origin differs from current frozen source pins",
+                )
+            finally:
+                origin_path.write_bytes(original_origin_bytes)
+                origin_path.chmod(0o600)
+            legacy_version_domain_rejects += 1
 
         legacy_event_journal = copy.deepcopy(journal)
         legacy_event_header = {
@@ -4594,7 +4616,7 @@ def run(*, offline_only: bool = False) -> None:
             "The retired V2 run/process/inner-format rejection matrix drifted.",
         )
         require(
-            legacy_version_domain_rejects == 6,
+            legacy_version_domain_rejects == 7,
             "The retired V1/V2 schema and domain rejection matrix drifted.",
         )
         primary_events = journal["events"]

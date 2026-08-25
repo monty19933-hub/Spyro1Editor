@@ -59,6 +59,8 @@ string activeV3AuthoritySource = string.Join('\n', new[]
     File.ReadAllText(Path.Combine(repositoryRoot,
         "src/Spyro.Editor.Core/Exporting/Id65V3RuntimeEvidenceContract.cs"), Encoding.UTF8),
     File.ReadAllText(Path.Combine(repositoryRoot,
+        "src/Spyro.Editor.Core/Exporting/Id65V3InputTimingStaticProvenance.cs"), Encoding.UTF8),
+    File.ReadAllText(Path.Combine(repositoryRoot,
         "src/Spyro.Editor.Core/Exporting/Id65V3RuntimeEvidenceFinalizer.cs"), Encoding.UTF8),
     File.ReadAllText(Path.Combine(repositoryRoot,
         "src/Spyro.Editor.Core/Exporting/Id65V3RuntimeEvidenceFinalizer.Filesystem.cs"), Encoding.UTF8),
@@ -77,6 +79,7 @@ string[] retiredV2FinalAuthorityTokens =
     "spyro-editor-id65-v2-runtime-human-attestation",
     "spyro-editor-id65-v2-runtime-check-evidence-binding",
     "id65-v2-runtime-source-closure-v1",
+    "id65-v3-runtime-source-closure-v2",
     "id65-v2-runtime-artifact-set-v1",
     "id65-v2-runtime-evidence-contract-v1",
     "id65-v2-runtime-finalizer-stable-input-v1",
@@ -127,8 +130,22 @@ string[] sourceClosureLines = sourceClosureManifest.Split('\n', StringSplitOptio
 string[] sourceClosureLabels = sourceClosureLines.Skip(1)
     .Select(line => line[..line.IndexOf('=')])
     .ToArray();
-Require(sourceClosureLines[0] == "id65-v3-runtime-source-closure-v2" &&
+string[] inputTimingClosureLabels =
+[
+    "candidateScusName", "candidateScusLba", "candidateScusByteLength",
+    "candidateScusSha256", "inputTimingStaticProvenanceRelativePath",
+    "inputTimingStaticProvenanceSha256"
+];
+int candidateCueSha256Index = Array.IndexOf(sourceClosureLabels, "candidateCueSha256");
+Require(sourceClosureLines[0] == "id65-v3-runtime-source-closure-v3" &&
+        sourceClosureLabels.Length == 78 &&
         sourceClosureLabels.Length == sourceClosureLabels.Distinct(StringComparer.Ordinal).Count() &&
+        candidateCueSha256Index >= 0 &&
+        sourceClosureLabels.Skip(candidateCueSha256Index + 1)
+            .Take(inputTimingClosureLabels.Length)
+            .SequenceEqual(inputTimingClosureLabels, StringComparer.Ordinal) &&
+        sourceClosureLabels.Contains("candidateScusSha256", StringComparer.Ordinal) &&
+        sourceClosureLabels.Contains("inputTimingStaticProvenanceSha256", StringComparer.Ordinal) &&
         sourceClosureLabels.Contains("collisionWindingV2RepairDiffManifestSha256", StringComparer.Ordinal) &&
         sourceClosureLabels.Contains("environmentHeaderRepairV3BeforeRow80DataSha256", StringComparer.Ordinal) &&
         sourceClosureLabels.Contains("environmentHeaderRepairV3AfterRow80DataSha256", StringComparer.Ordinal) &&
@@ -283,7 +300,7 @@ Require(Id65V3RuntimeEvidenceContract.ExpectedWatcherSha256 ==
         Id65V3RuntimeEvidenceContract.ExpectedRuntimeProfileSha256 ==
             "29d01f1b791e4dc08ebfc4d62cf5a1b91600a5c55ec175ac6da45b13123100ad" &&
         Id65V3RuntimeEvidenceContract.ExpectedSourceClosureSha256 ==
-            "1004799a4a41bd4222a5d6843f3ab495d9bef4d57e3b0698b9bb66f11279bbff" &&
+            "8e43136feec31a2e1155fdbb0db60362a53b4641e8d79228f59b18a44103b27f" &&
         pending.SourceIdentity.CaptureCoordinatorRelativePath ==
             "tools/Capture-SpyroId65V3RuntimeSession.py" &&
         pending.SourceIdentity.CaptureCoordinatorSha256 ==
@@ -292,6 +309,15 @@ Require(Id65V3RuntimeEvidenceContract.ExpectedWatcherSha256 ==
             "42e4d5cae98d4786023bef26517d0435b43aff365b797495386813f44ecb0c45" &&
         pending.SourceIdentity.CandidateCueSha256 ==
             "ab91adb4ffcbad70bf7a226a2a4a6d0f6efe6b54fbed0b8126e59d1b8ecaf6df" &&
+        pending.SourceIdentity.CandidateScusName == "SCUS_942.28" &&
+        pending.SourceIdentity.CandidateScusLba == 55_382 &&
+        pending.SourceIdentity.CandidateScusByteLength == 417_792 &&
+        pending.SourceIdentity.CandidateScusSha256 ==
+            "fa5fc7981188b78fa7d7b78facca64c1f79dadb107515e9146ad178ade39d442" &&
+        pending.SourceIdentity.InputTimingStaticProvenanceRelativePath ==
+            "docs/research/unused-level-65-v3-input-timing-static-provenance.json" &&
+        pending.SourceIdentity.InputTimingStaticProvenanceSha256 ==
+            Id65V3RuntimeEvidenceContract.ExpectedInputTimingStaticProvenanceSha256 &&
         pending.SourceIdentity.StaticReadbackReceiptSha256 ==
             "e4494a9364165951f6a7e54676574c085495a3f800b65e616da2193fa0d01be4" &&
         pending.SourceIdentity.RuntimeChecklistSha256 ==
@@ -320,7 +346,7 @@ Require(Id65V3RuntimeEvidenceContract.ExpectedWatcherSha256 ==
         pending.SourceIdentity.ProfileVerifierSha256 ==
             "74f4ed279a3e3f60af6c4c0a0b1fa8ffc0a67886c478d8cc7d1a288b093c3671" &&
         pending.SourceIdentity.AutomationSha256 ==
-            "049b4fbeecb4b176d415614165589162c10d8322f349af9c1ef6e93c6e1c2899" &&
+            "42a5dc7c4028fa4cabb8f4ee3ef5494ae51117857a4d8a7a932e38d1cb74e3ec" &&
         pending.RuntimeProfile.ProfileId == "duckstation-id65-unattended-v1" &&
         pending.RuntimeProfile.PackageRelativePath ==
             "_local/v5-stone-hill-level-replacement/duckstation-id65-unattended-v1" &&
@@ -744,8 +770,292 @@ RejectSourceIdentity(
         }
     },
     "Pinned V3 candidate source identity");
-Require(sourceIdentityRejects == 10,
+RejectSourceIdentity(
+    "forged input timing provenance hash",
+    pending with
+    {
+        SourceIdentity = pending.SourceIdentity with
+        {
+            InputTimingStaticProvenanceSha256 = new string('0', 64)
+        }
+    },
+    "Pinned V3 candidate source identity");
+RejectSourceIdentity(
+    "moved candidate SCUS extent",
+    pending with
+    {
+        SourceIdentity = pending.SourceIdentity with { CandidateScusLba = 55_381 }
+    },
+    "Pinned V3 candidate source identity");
+RejectSourceIdentity(
+    "forged candidate SCUS hash",
+    pending with
+    {
+        SourceIdentity = pending.SourceIdentity with
+        {
+            CandidateScusSha256 = new string('0', 64)
+        }
+    },
+    "Pinned V3 candidate source identity");
+RejectSourceIdentity(
+    "renamed candidate SCUS executable",
+    pending with
+    {
+        SourceIdentity = pending.SourceIdentity with { CandidateScusName = "SCUS_000.00" }
+    },
+    "Pinned V3 candidate source identity");
+RejectSourceIdentity(
+    "resized candidate SCUS executable",
+    pending with
+    {
+        SourceIdentity = pending.SourceIdentity with { CandidateScusByteLength = 417_791 }
+    },
+    "Pinned V3 candidate source identity");
+RejectSourceIdentity(
+    "moved input timing provenance artifact",
+    pending with
+    {
+        SourceIdentity = pending.SourceIdentity with
+        {
+            InputTimingStaticProvenanceRelativePath =
+                "docs/research/forged-input-timing-static-provenance.json"
+        }
+    },
+    "Pinned V3 candidate source identity");
+Require(sourceIdentityRejects == 16,
     "The V3 source-identity and retired-V2 reject matrix did not execute completely.");
+
+int inputTimingStaticPositiveChecks = 0;
+int inputTimingStaticRejects = 0;
+string inputTimingArtifactPath = Path.Combine(
+    repositoryRoot,
+    pending.SourceIdentity.InputTimingStaticProvenanceRelativePath);
+byte[] inputTimingArtifactBytes = File.ReadAllBytes(inputTimingArtifactPath);
+Require(inputTimingArtifactBytes.Length == 8_382 &&
+        Hash(inputTimingArtifactBytes) == pending.SourceIdentity.InputTimingStaticProvenanceSha256,
+    "The checked-in ID65 input/timing provenance artifact identity changed.");
+Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceArtifactForTest(
+    inputTimingArtifactBytes);
+inputTimingStaticPositiveChecks++;
+
+string inputTimingArtifactJson = Encoding.UTF8.GetString(inputTimingArtifactBytes);
+RejectInputTimingStatic(
+    "non-canonical whitespace",
+    () => Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceArtifactForTest(
+        Encoding.UTF8.GetBytes(ReplaceOnce(
+            inputTimingArtifactJson,
+            "\"candidate\":",
+            "\"candidate\" :"))));
+RejectInputTimingStatic(
+    "duplicate root property",
+    () => Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceArtifactForTest(
+        Encoding.UTF8.GetBytes(ReplaceOnce(
+            inputTimingArtifactJson,
+            "{\"candidate\":",
+            "{\"candidate\":null,\"candidate\":"))));
+RejectInputTimingStatic(
+    "unknown root property",
+    () => Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceArtifactForTest(
+        Encoding.UTF8.GetBytes(ReplaceOnce(
+            inputTimingArtifactJson,
+            "{\"candidate\":",
+            "{\"aaa\":0,\"candidate\":"))));
+RejectInputTimingStatic(
+    "missing required root property",
+    () => Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceArtifactForTest(
+        Encoding.UTF8.GetBytes(ReplaceOnce(
+            inputTimingArtifactJson,
+            "\"formatVersion\":1,",
+            string.Empty))));
+RejectInputTimingStatic(
+    "pad RSP checksum drift",
+    () => Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceArtifactForTest(
+        Encoding.UTF8.GetBytes(ReplaceOnce(
+            inputTimingArtifactJson,
+            "$m800786a0,4#9b",
+            "$m800786a0,4#00"))));
+RejectInputTimingStatic(
+    "counter RSP checksum drift",
+    () => Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceArtifactForTest(
+        Encoding.UTF8.GetBytes(ReplaceOnce(
+            inputTimingArtifactJson,
+            "$m800758c8,4#a4",
+            "$m800758c8,4#00"))));
+RejectInputTimingStatic(
+    "action name drift",
+    () => Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceArtifactForTest(
+        Encoding.UTF8.GetBytes(ReplaceOnce(
+            inputTimingArtifactJson,
+            "\"action\":\"PAD_R1_TOGGLE\"",
+            "\"action\":\"PAD_R1_FORGED\""))));
+RejectInputTimingStatic(
+    "active-low raw bit drift",
+    () => Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceArtifactForTest(
+        Encoding.UTF8.GetBytes(ReplaceOnce(
+            inputTimingArtifactJson,
+            "\"rawBit\":11",
+            "\"rawBit\":12"))));
+RejectInputTimingStatic(
+    "profile action binding drift",
+    () => Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceArtifactForTest(
+        Encoding.UTF8.GetBytes(ReplaceOnce(
+            inputTimingArtifactJson,
+            "[\"Pad1\",\"Macro1\",\"Keyboard/1\"]",
+            "[\"Pad1\",\"Macro1\",\"Keyboard/9\"]"))));
+RejectInputTimingStatic(
+    "scope overclaim",
+    () => Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceArtifactForTest(
+        Encoding.UTF8.GetBytes(ReplaceOnce(
+            inputTimingArtifactJson,
+            "\"live-process-use\"",
+            "\"live-process-use-proven\""))));
+RejectInputTimingStatic(
+    "instruction witness drift",
+    () => Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceArtifactForTest(
+        Encoding.UTF8.GetBytes(ReplaceOnce(
+            inputTimingArtifactJson,
+            "\"word\":\"0x3c048008\"",
+            "\"word\":\"0x3c048009\""))));
+
+string inputTimingCuePath = Path.Combine(
+    repositoryRoot,
+    pending.SourceIdentity.CandidateCueRelativePath);
+byte[] inputTimingCueBytes = File.ReadAllBytes(inputTimingCuePath);
+string inputTimingBinLeaf = Path.GetFileName(pending.SourceIdentity.CandidateBinRelativePath);
+Require(inputTimingCueBytes.Length == 148 &&
+        Hash(inputTimingCueBytes) == pending.SourceIdentity.CandidateCueSha256,
+    "The checked-in ID65 input/timing candidate CUE identity changed.");
+Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceCueForTest(
+    inputTimingCueBytes,
+    inputTimingBinLeaf);
+inputTimingStaticPositiveChecks++;
+string inputTimingCueText = Encoding.ASCII.GetString(inputTimingCueBytes);
+RejectInputTimingStatic(
+    "CUE FILE leaf drift",
+    () => Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceCueForTest(
+        Encoding.ASCII.GetBytes(ReplaceOnce(
+            inputTimingCueText,
+            inputTimingBinLeaf,
+            "forged-runtime-candidate.bin")),
+        inputTimingBinLeaf));
+RejectInputTimingStatic(
+    "CUE CRLF drift",
+    () => Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceCueForTest(
+        Encoding.ASCII.GetBytes(inputTimingCueText.Replace(
+            "\n",
+            "\r\n",
+            StringComparison.Ordinal)),
+        inputTimingBinLeaf));
+
+const int inputTimingSmokeVolumeBlocks = 100_000;
+byte[] inputTimingSmokePvd = new byte[2048];
+inputTimingSmokePvd[0] = 1;
+"CD001"u8.CopyTo(inputTimingSmokePvd.AsSpan(1, 5));
+inputTimingSmokePvd[6] = 1;
+WriteSmokeBothEndianUInt32(inputTimingSmokePvd, 80, inputTimingSmokeVolumeBlocks);
+BinaryPrimitives.WriteUInt16LittleEndian(inputTimingSmokePvd.AsSpan(128, 2), 2048);
+BinaryPrimitives.WriteUInt16BigEndian(inputTimingSmokePvd.AsSpan(130, 2), 2048);
+inputTimingSmokePvd[156] = 34;
+WriteSmokeBothEndianUInt32(inputTimingSmokePvd, 158, 22);
+WriteSmokeBothEndianUInt32(inputTimingSmokePvd, 166, 2048);
+inputTimingSmokePvd[181] = 0x02;
+inputTimingSmokePvd[188] = 1;
+inputTimingSmokePvd[189] = 0;
+var inputTimingSmokeIsoRoot =
+    Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenancePvdForTest(
+        inputTimingSmokePvd,
+        inputTimingSmokeVolumeBlocks);
+Require(inputTimingSmokeIsoRoot == new Id65V3RuntimeEvidenceContract.InputTimingIsoRoot(
+        22,
+        2048,
+        inputTimingSmokeVolumeBlocks),
+    "The strict ID65 input/timing PVD helper changed its exact root projection.");
+inputTimingStaticPositiveChecks++;
+byte[] inputTimingBadPvd = (byte[])inputTimingSmokePvd.Clone();
+BinaryPrimitives.WriteUInt32BigEndian(inputTimingBadPvd.AsSpan(84, 4), 99_999);
+RejectInputTimingStatic(
+    "PVD dual-endian volume drift",
+    () => Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenancePvdForTest(
+        inputTimingBadPvd,
+        inputTimingSmokeVolumeBlocks));
+
+byte[] inputTimingSmokeDirectory = new byte[2048];
+int inputTimingSmokeRecordLength = WriteSmokeIsoRecord(
+    inputTimingSmokeDirectory,
+    0,
+    "SCUS_942.28;1",
+    55_382,
+    417_792);
+DiscFileRecord inputTimingSmokeScus =
+    Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceIsoRootForTest(
+        inputTimingSmokeDirectory);
+Require(inputTimingSmokeScus == new DiscFileRecord("SCUS_942.28", 55_382, 417_792),
+    "The strict ID65 input/timing ISO-root helper changed its exact SCUS projection.");
+inputTimingStaticPositiveChecks++;
+byte[] inputTimingBadLbaDirectory = (byte[])inputTimingSmokeDirectory.Clone();
+WriteSmokeBothEndianUInt32(inputTimingBadLbaDirectory, 2, 55_381);
+RejectInputTimingStatic(
+    "ISO-root SCUS LBA drift",
+    () => Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceIsoRootForTest(
+        inputTimingBadLbaDirectory));
+byte[] inputTimingDuplicateDirectory = new byte[2048];
+inputTimingSmokeDirectory.AsSpan(0, inputTimingSmokeRecordLength).CopyTo(
+    inputTimingDuplicateDirectory);
+inputTimingSmokeDirectory.AsSpan(0, inputTimingSmokeRecordLength).CopyTo(
+    inputTimingDuplicateDirectory.AsSpan(inputTimingSmokeRecordLength));
+RejectInputTimingStatic(
+    "ISO-root duplicate SCUS",
+    () => Id65V3RuntimeEvidenceContract.ValidateInputTimingStaticProvenanceIsoRootForTest(
+        inputTimingDuplicateDirectory));
+
+string inputTimingRebindDirectory = Path.Combine(
+    repositoryRoot,
+    "_local",
+    ".id65-v3-input-timing-rebind-" + Guid.NewGuid().ToString("N"));
+string inputTimingRebindPath = Path.Combine(inputTimingRebindDirectory, "candidate.bin");
+string inputTimingMovedPath = Path.Combine(inputTimingRebindDirectory, "candidate-original.bin");
+Directory.CreateDirectory(inputTimingRebindDirectory);
+File.SetUnixFileMode(
+    inputTimingRebindDirectory,
+    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+try
+{
+    byte[] rebindBytes = [0x65, 0x03, 0x65, 0x03];
+    File.WriteAllBytes(inputTimingRebindPath, rebindBytes);
+    File.SetUnixFileMode(inputTimingRebindPath,
+        UnixFileMode.UserRead | UnixFileMode.UserWrite |
+        UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+    RejectInputTimingStatic(
+        "same-handle candidate path rebinding",
+        () => Id65V3RuntimeEvidenceFinalizer.InspectStableOwnedFileHandle(
+            inputTimingRebindPath,
+            0x1A4,
+            rebindBytes.Length,
+            stream =>
+            {
+                Require(stream.ReadByte() == rebindBytes[0],
+                    "The same-handle rebinding fixture opened unexpected bytes.");
+                File.Move(inputTimingRebindPath, inputTimingMovedPath);
+                File.WriteAllBytes(inputTimingRebindPath, rebindBytes);
+                File.SetUnixFileMode(inputTimingRebindPath,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite |
+                    UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+                return true;
+            },
+            "ID65 input/timing same-handle rebinding smoke"));
+}
+finally
+{
+    if (File.Exists(inputTimingRebindPath))
+        File.Delete(inputTimingRebindPath);
+    if (File.Exists(inputTimingMovedPath))
+        File.Delete(inputTimingMovedPath);
+    if (Directory.Exists(inputTimingRebindDirectory))
+        Directory.Delete(inputTimingRebindDirectory);
+}
+Require(inputTimingStaticPositiveChecks == 4 && inputTimingStaticRejects == 17,
+    $"The input/timing static helper matrix did not execute exactly: " +
+    $"positiveChecks={inputTimingStaticPositiveChecks}, rejects={inputTimingStaticRejects}.");
 
 const string Warning =
     "WARNING: connecting to this DuckStation GDB server pauses a running game exactly once.";
@@ -3647,6 +3957,8 @@ Console.WriteLine(
     $"pathRejects={pathRejects} captureJournalTamperRejects={captureJournalTamperRejects} " +
     $"processFingerprintRejects={processFingerprintRejects} " +
     $"sourceIdentityRejects={sourceIdentityRejects} " +
+    $"inputTimingStaticPositiveChecks={inputTimingStaticPositiveChecks} " +
+    $"inputTimingStaticRejects={inputTimingStaticRejects} " +
     $"pinnedSourceBoundaryRejects={pinnedSourceBoundaryRejects} " +
     $"fullPassTamperRejects={fullPassTamperRejects} finalizerRefusals={finalizerRefusals} " +
     $"watcher={Id65V3RuntimeEvidenceContract.ExpectedWatcherSha256} " +
@@ -3687,6 +3999,21 @@ void RejectSourceIdentity(
         $"Source-identity tamper '{name}' did not reach '{expectedErrorFragment}': " +
         string.Join(" | ", validation.Errors));
     sourceIdentityRejects++;
+}
+
+void RejectInputTimingStatic(string name, Action validate)
+{
+    try
+    {
+        validate();
+    }
+    catch (InvalidDataException)
+    {
+        inputTimingStaticRejects++;
+        return;
+    }
+    throw new InvalidOperationException(
+        $"Input/timing static helper accepted forbidden fixture '{name}'.");
 }
 
 void RejectFullReadback(
@@ -5737,6 +6064,35 @@ static string ReplaceOnce(string source, string oldValue, string newValue)
     if (index < 0)
         throw new InvalidOperationException($"Smoke fixture token '{oldValue}' was not found.");
     return source[..index] + newValue + source[(index + oldValue.Length)..];
+}
+
+static void WriteSmokeBothEndianUInt32(byte[] destination, int littleEndianOffset, uint value)
+{
+    BinaryPrimitives.WriteUInt32LittleEndian(
+        destination.AsSpan(littleEndianOffset, 4),
+        value);
+    BinaryPrimitives.WriteUInt32BigEndian(
+        destination.AsSpan(littleEndianOffset + 4, 4),
+        value);
+}
+
+static int WriteSmokeIsoRecord(
+    byte[] directory,
+    int offset,
+    string name,
+    uint logicalBlockAddress,
+    uint byteLength)
+{
+    byte[] nameBytes = Encoding.ASCII.GetBytes(name);
+    int recordLength = 33 + nameBytes.Length + (nameBytes.Length % 2 == 0 ? 1 : 0);
+    directory[offset] = checked((byte)recordLength);
+    WriteSmokeBothEndianUInt32(directory, offset + 2, logicalBlockAddress);
+    WriteSmokeBothEndianUInt32(directory, offset + 10, byteLength);
+    BinaryPrimitives.WriteUInt16LittleEndian(directory.AsSpan(offset + 28, 2), 1);
+    BinaryPrimitives.WriteUInt16BigEndian(directory.AsSpan(offset + 30, 2), 1);
+    directory[offset + 32] = checked((byte)nameBytes.Length);
+    nameBytes.AsSpan().CopyTo(directory.AsSpan(offset + 33));
+    return recordLength;
 }
 
 static string SyntheticCheckAttestation(string checkId)

@@ -323,9 +323,30 @@ EXPECTED_CANDIDATE_CUE_SHA256: Final = (
 EXPECTED_CANDIDATE_BIN_SHA256: Final = (
     "42e4d5cae98d4786023bef26517d0435b43aff365b797495386813f44ecb0c45"
 )
+INPUT_TIMING_STATIC_PROVENANCE_RELATIVE_PATH: Final = (
+    "docs/research/unused-level-65-v3-input-timing-static-provenance.json"
+)
+INPUT_TIMING_STATIC_PROVENANCE_FORMAT: Final = (
+    "spyro-id65-v3-input-timing-static-provenance"
+)
+INPUT_TIMING_STATIC_PROVENANCE_FORMAT_VERSION: Final = 1
+INPUT_TIMING_STATIC_PROVENANCE_MAX_BYTES: Final = 1024 * 1024
+EXPECTED_INPUT_TIMING_STATIC_PROVENANCE_SHA256: Final = (
+    "e60a6e63aa013d1f08ab594052efc83ff6401841203fcacf2d1c2f81167b3e32"
+)
+EXPECTED_CANDIDATE_SCUS_NAME: Final = "SCUS_942.28"
+EXPECTED_CANDIDATE_SCUS_LBA: Final = 55_382
+EXPECTED_CANDIDATE_SCUS_BYTE_LENGTH: Final = 417_792
+EXPECTED_CANDIDATE_SCUS_SHA256: Final = (
+    "fa5fc7981188b78fa7d7b78facca64c1f79dadb107515e9146ad178ade39d442"
+)
+EXPECTED_CANDIDATE_SCUS_ENTRY_POINT: Final = 0x8005B8E0
+EXPECTED_CANDIDATE_SCUS_LOAD_ADDRESS: Final = 0x80010000
+EXPECTED_CANDIDATE_SCUS_TEXT_BYTE_LENGTH: Final = 0x65800
 
 PLAN_NONCE_RE: Final = re.compile(r"\A[0-9a-f]{32}\Z", re.ASCII)
 SHA256_RE: Final = re.compile(r"\A[0-9a-f]{64}\Z", re.ASCII)
+LOWER_HEX32_RE: Final = re.compile(r"\A0x[0-9a-f]{8}\Z", re.ASCII)
 CANONICAL_UTC_RE: Final = re.compile(
     r"\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z\Z", re.ASCII
 )
@@ -620,6 +641,619 @@ def canonical_json(value: Any) -> bytes:
         )
         + "\n"
     ).encode("ascii")
+
+
+@dataclasses.dataclass(frozen=True)
+class InputTimingStaticProvenance:
+    """Narrow result of the offline, hash-pinned provenance cross-check."""
+
+    sha256: str
+    pad_read_packet: bytes
+    vsync_counter_read_packet: bytes
+    button_actions: tuple[KeyAction, ...]
+    false_scope_boundaries: tuple[str, ...]
+
+
+def _provenance_object(
+    value: object, expected_keys: set[str], label: str
+) -> dict[str, Any]:
+    if type(value) is not dict:
+        raise AutomationRefusal(f"Static provenance {label} is not an object.")
+    _require_exact_keys(value, expected_keys, f"static provenance {label}")
+    return value
+
+
+def _provenance_exact(value: object, expected: object, label: str) -> None:
+    if type(value) is not type(expected) or value != expected:
+        raise AutomationRefusal(f"Static provenance {label} changed.")
+
+
+def _rsp_memory_read_packet(address: int, byte_length: int) -> bytes:
+    if (
+        type(address) is not int
+        or address < 0
+        or address > 0xFFFFFFFF
+        or type(byte_length) is not int
+        or byte_length <= 0
+        or byte_length > 0xFFFFFFFF
+    ):
+        raise AutomationRefusal("Static provenance RSP memory-read range is invalid.")
+    body = f"m{address:08x},{byte_length:x}".encode("ascii")
+    return b"$" + body + f"#{sum(body) & 0xff:02x}".encode("ascii")
+
+
+def parse_input_timing_static_provenance(
+    raw: bytes,
+) -> InputTimingStaticProvenance:
+    """Parse and independently cross-check only the frozen static artifact.
+
+    This is deliberately a pure byte parser.  It neither observes a process nor
+    connects to GDB, posts input, queries UI state, or promotes static evidence
+    into runtime acceptance.
+    """
+
+    if (
+        type(raw) is not bytes
+        or not raw
+        or len(raw) > INPUT_TIMING_STATIC_PROVENANCE_MAX_BYTES
+    ):
+        raise AutomationRefusal("Static provenance byte length is invalid.")
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raise AutomationRefusal("Static provenance may not contain a UTF-8 BOM.")
+    try:
+        text = raw.decode("utf-8", "strict")
+        payload = json.loads(text, object_pairs_hook=_unique_object)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AutomationRefusal("Static provenance is not strict UTF-8 JSON.") from exc
+    if type(payload) is not dict:
+        raise AutomationRefusal("Static provenance root is not an object.")
+    try:
+        canonical = canonical_json(payload)
+    except (TypeError, ValueError, UnicodeEncodeError) as exc:
+        raise AutomationRefusal("Static provenance is not canonical JCS JSON.") from exc
+    if raw != canonical:
+        raise AutomationRefusal("Static provenance is not exact canonical JSON.")
+
+    root = _provenance_object(
+        payload,
+        {
+            "candidate",
+            "discExecutable",
+            "duckStation",
+            "format",
+            "formatVersion",
+            "pad",
+            "scope",
+            "vsyncCounter",
+            "witnesses",
+        },
+        "root",
+    )
+    _provenance_exact(
+        root["format"], INPUT_TIMING_STATIC_PROVENANCE_FORMAT, "format"
+    )
+    _provenance_exact(
+        root["formatVersion"],
+        INPUT_TIMING_STATIC_PROVENANCE_FORMAT_VERSION,
+        "format version",
+    )
+
+    candidate = _provenance_object(root["candidate"], {"bin", "cue"}, "candidate")
+    candidate_bin = _provenance_object(
+        candidate["bin"], {"relativePath", "byteLength", "sha256"}, "candidate BIN"
+    )
+    for field, expected in {
+        "relativePath": CANDIDATE_BIN_RELATIVE_PATH,
+        "byteLength": EXPECTED_CANDIDATE_BIN_SIZE,
+        "sha256": EXPECTED_CANDIDATE_BIN_SHA256,
+    }.items():
+        _provenance_exact(candidate_bin[field], expected, f"candidate BIN {field}")
+    candidate_cue = _provenance_object(
+        candidate["cue"],
+        {"relativePath", "byteLength", "sha256", "track"},
+        "candidate CUE",
+    )
+    for field, expected in {
+        "relativePath": CANDIDATE_CUE_RELATIVE_PATH,
+        "byteLength": EXPECTED_CANDIDATE_CUE_SIZE,
+        "sha256": EXPECTED_CANDIDATE_CUE_SHA256,
+    }.items():
+        _provenance_exact(candidate_cue[field], expected, f"candidate CUE {field}")
+    cue_track = _provenance_object(
+        candidate_cue["track"],
+        {
+            "fileLeaf",
+            "fileType",
+            "indexNumber",
+            "indexTime",
+            "trackMode",
+            "trackNumber",
+        },
+        "candidate CUE track",
+    )
+    for field, expected in {
+        "fileLeaf": f"{CANDIDATE_STEM}.bin",
+        "fileType": "BINARY",
+        "indexNumber": 1,
+        "indexTime": "00:00:00",
+        "trackMode": "MODE2/2352",
+        "trackNumber": 1,
+    }.items():
+        _provenance_exact(cue_track[field], expected, f"candidate CUE track {field}")
+
+    disc_executable = _provenance_object(
+        root["discExecutable"],
+        {
+            "byteLength",
+            "isoFileIdentifier",
+            "logicalBlockAddress",
+            "logicalName",
+            "psxExe",
+            "sha256",
+        },
+        "disc executable",
+    )
+    for field, expected in {
+        "byteLength": EXPECTED_CANDIDATE_SCUS_BYTE_LENGTH,
+        "isoFileIdentifier": f"{EXPECTED_CANDIDATE_SCUS_NAME};1",
+        "logicalBlockAddress": EXPECTED_CANDIDATE_SCUS_LBA,
+        "logicalName": EXPECTED_CANDIDATE_SCUS_NAME,
+        "sha256": EXPECTED_CANDIDATE_SCUS_SHA256,
+    }.items():
+        _provenance_exact(disc_executable[field], expected, f"disc executable {field}")
+    psx_exe = _provenance_object(
+        disc_executable["psxExe"],
+        {
+            "entryPoint",
+            "headerByteLength",
+            "instructionSet",
+            "loadAddress",
+            "magic",
+            "textByteLength",
+        },
+        "PS-X EXE",
+    )
+    for field, expected in {
+        "entryPoint": f"0x{EXPECTED_CANDIDATE_SCUS_ENTRY_POINT:08x}",
+        "headerByteLength": 0x800,
+        "instructionSet": "mips-i-little-endian",
+        "loadAddress": f"0x{EXPECTED_CANDIDATE_SCUS_LOAD_ADDRESS:08x}",
+        "magic": "PS-X EXE",
+        "textByteLength": EXPECTED_CANDIDATE_SCUS_TEXT_BYTE_LENGTH,
+    }.items():
+        _provenance_exact(psx_exe[field], expected, f"PS-X EXE {field}")
+    if (
+        psx_exe["headerByteLength"] + psx_exe["textByteLength"]
+        != disc_executable["byteLength"]
+    ):
+        raise AutomationRefusal("Static provenance PS-X EXE size chain changed.")
+
+    duck_station = _provenance_object(
+        root["duckStation"],
+        {
+            "executableByteLength",
+            "executableSha256",
+            "sourceCommit",
+            "version",
+        },
+        "DuckStation",
+    )
+    for field, expected in {
+        "executableByteLength": EXPECTED_EXECUTABLE_SIZE,
+        "executableSha256": EXPECTED_DUCKSTATION_SHA256,
+        "sourceCommit": GDB_SOURCE_COMMIT,
+        "version": EXPECTED_APP_VERSION,
+    }.items():
+        _provenance_exact(duck_station[field], expected, f"DuckStation {field}")
+
+    pad = _provenance_object(
+        root["pad"],
+        {"bufferAddress", "buttons", "consumer", "frame", "producer", "rspReadPacket"},
+        "pad",
+    )
+    _provenance_exact(pad["bufferAddress"], "0x800786a0", "pad buffer address")
+    frame = _provenance_object(
+        pad["frame"],
+        {
+            "activeLow",
+            "byteLength",
+            "firstInputByteOffset",
+            "gameHeldExpression",
+            "rawWordExpression",
+            "requiredStatus",
+            "requiredType",
+            "secondInputByteOffset",
+            "statusOffset",
+            "typeOffset",
+        },
+        "pad frame",
+    )
+    expected_frame = {
+        "activeLow": True,
+        "byteLength": 4,
+        "firstInputByteOffset": 2,
+        "gameHeldExpression": "~rawWord & 0xffff",
+        "rawWordExpression": "(firstInputByte << 8) | secondInputByte",
+        "requiredStatus": 0,
+        "requiredType": 0x41,
+        "secondInputByteOffset": 3,
+        "statusOffset": 0,
+        "typeOffset": 1,
+    }
+    for field, expected in expected_frame.items():
+        _provenance_exact(frame[field], expected, f"pad frame {field}")
+    expected_pad_packet = _rsp_memory_read_packet(
+        int(pad["bufferAddress"], 16), frame["byteLength"]
+    )
+    try:
+        artifact_pad_packet = pad["rspReadPacket"].encode("ascii", "strict")
+    except (AttributeError, UnicodeEncodeError) as exc:
+        raise AutomationRefusal("Static provenance pad RSP packet is invalid.") from exc
+    if artifact_pad_packet != expected_pad_packet or expected_pad_packet != GDB_PAD_READ_PACKET:
+        raise AutomationRefusal("Static provenance pad RSP checksum changed.")
+
+    producer = _provenance_object(
+        pad["producer"],
+        {"directPadVSync", "padInitDirect", "padStartCom", "vsyncCallback"},
+        "pad producer",
+    )
+    pad_init_direct = _provenance_object(
+        producer["padInitDirect"],
+        {
+            "argument0Address",
+            "argument0PreserveAddress",
+            "argument0StoreAddress",
+            "argument1Address",
+            "argument1PreserveAddress",
+            "argument1StoreAddress",
+            "callAddress",
+            "targetAddress",
+        },
+        "PadInitDirect producer",
+    )
+    for field, expected in {
+        "argument0Address": "0x800786a0",
+        "argument0PreserveAddress": "0x8006b018",
+        "argument0StoreAddress": "0x8006b0e8",
+        "argument1Address": "0x80078e50",
+        "argument1PreserveAddress": "0x8006b03c",
+        "argument1StoreAddress": "0x8006b0ec",
+        "callAddress": "0x800123e0",
+        "targetAddress": "0x8006b010",
+    }.items():
+        _provenance_exact(pad_init_direct[field], expected, f"PadInitDirect {field}")
+    for producer_name, expected in {
+        "padStartCom": {
+            "callAddress": "0x8001242c",
+            "targetAddress": "0x80069060",
+        },
+        "directPadVSync": {
+            "callAddress": "0x80012434",
+            "targetAddress": "0x80053c68",
+        },
+    }.items():
+        producer_call = _provenance_object(
+            producer[producer_name], {"callAddress", "targetAddress"}, producer_name
+        )
+        for field, expected_value in expected.items():
+            _provenance_exact(
+                producer_call[field], expected_value, f"{producer_name} {field}"
+            )
+    vsync_callback = _provenance_object(
+        producer["vsyncCallback"],
+        {
+            "callAddress",
+            "callbackAddress",
+            "callbackLoadHighAddress",
+            "callbackLoadLowAddress",
+            "targetAddress",
+            "wrapperArgumentMoveAddress",
+            "wrapperDispatchAddress",
+            "wrapperServiceSelector",
+            "wrapperServiceSelectorAddress",
+        },
+        "VSyncCallback producer",
+    )
+    for field, expected in {
+        "callAddress": "0x80012444",
+        "callbackAddress": "0x80053c68",
+        "callbackLoadHighAddress": "0x8001243c",
+        "callbackLoadLowAddress": "0x80012440",
+        "targetAddress": "0x8005de58",
+        "wrapperArgumentMoveAddress": "0x8005de64",
+        "wrapperDispatchAddress": "0x8005de74",
+        "wrapperServiceSelector": 4,
+        "wrapperServiceSelectorAddress": "0x8005de78",
+    }.items():
+        _provenance_exact(vsync_callback[field], expected, f"VSyncCallback {field}")
+
+    consumer = _provenance_object(
+        pad["consumer"],
+        {
+            "activeLowCombineAddress",
+            "firstInputByte",
+            "firstInputByteShiftAddress",
+            "secondInputByte",
+            "status",
+            "type",
+        },
+        "pad consumer",
+    )
+    for field, expected in {
+        "activeLowCombineAddress": "0x80053fbc",
+        "firstInputByteShiftAddress": "0x80053fb8",
+    }.items():
+        _provenance_exact(consumer[field], expected, f"pad consumer {field}")
+    expected_consumer_bytes = {
+        "status": ("0x80053efc", "0x80053f00", "0x800786a0"),
+        "type": ("0x80053f20", "0x80053f24", "0x800786a1"),
+        "firstInputByte": ("0x80053fa8", "0x80053fac", "0x800786a2"),
+        "secondInputByte": ("0x80053fb0", "0x80053fb4", "0x800786a3"),
+    }
+    for name, (lui_address, load_address, effective_address) in (
+        expected_consumer_bytes.items()
+    ):
+        byte_source = _provenance_object(
+            consumer[name], {"effectiveAddress", "loadAddress", "luiAddress"}, name
+        )
+        for field, expected in {
+            "effectiveAddress": effective_address,
+            "loadAddress": load_address,
+            "luiAddress": lui_address,
+        }.items():
+            _provenance_exact(byte_source[field], expected, f"{name} {field}")
+
+    expected_button_actions = (
+        KeyAction.PAD_R1_TOGGLE,
+        KeyAction.PAD_R2_TOGGLE,
+        KeyAction.PAD_L1_TOGGLE,
+        KeyAction.PAD_L2_TOGGLE,
+        KeyAction.PAD_LEFT_TOGGLE,
+        KeyAction.PAD_DOWN_TOGGLE,
+    )
+    if tuple(
+        action for action, spec in ACTION_SPECS.items() if spec.pad_bit is not None
+    ) != expected_button_actions:
+        raise AutomationRefusal(
+            "Static provenance no longer covers every raw-bit ACTION_SPECS entry."
+        )
+    expected_profile_bind = ("R1", "R2", "L1", "L2", "Left", "Down")
+    buttons = pad["buttons"]
+    if type(buttons) is not list or len(buttons) != len(expected_button_actions):
+        raise AutomationRefusal("Static provenance button mapping count changed.")
+    for index, (row, action, profile_bind) in enumerate(
+        zip(buttons, expected_button_actions, expected_profile_bind, strict=True)
+    ):
+        button = _provenance_object(
+            row,
+            {
+                "action",
+                "actionSpecKeyCode",
+                "actionSpecProfileBinding",
+                "gameLogicalBit",
+                "profileTargetBinding",
+                "profileToggleBinding",
+                "rawBit",
+                "rawMask",
+            },
+            f"button {index}",
+        )
+        spec = ACTION_SPECS[action]
+        if spec.pad_bit is None:
+            raise AutomationRefusal("Static provenance action lost its raw pad bit.")
+        expected_target = [
+            spec.profile_binding[0],
+            f"{spec.profile_binding[1]}Binds",
+            profile_bind,
+        ]
+        expected_toggle = [
+            spec.profile_binding[0],
+            f"{spec.profile_binding[1]}Toggle",
+            "true",
+        ]
+        expected_row = {
+            "action": action.value,
+            "actionSpecKeyCode": spec.key_code,
+            "actionSpecProfileBinding": list(spec.profile_binding),
+            "gameLogicalBit": spec.pad_bit ^ 8,
+            "profileTargetBinding": expected_target,
+            "profileToggleBinding": expected_toggle,
+            "rawBit": spec.pad_bit,
+            "rawMask": f"0x{1 << spec.pad_bit:04x}",
+        }
+        for field, expected in expected_row.items():
+            _provenance_exact(button[field], expected, f"button {index} {field}")
+
+    vsync_counter = _provenance_object(
+        root["vsyncCounter"],
+        {
+            "address",
+            "callbackAddress",
+            "increment",
+            "reset",
+            "rspReadPacket",
+            "semantics",
+        },
+        "VSync counter",
+    )
+    for field, expected in {
+        "address": "0x800758c8",
+        "callbackAddress": "0x80053c68",
+        "semantics": "callback-invocation-level-tick-counter",
+    }.items():
+        _provenance_exact(vsync_counter[field], expected, f"VSync counter {field}")
+    increment = _provenance_object(
+        vsync_counter["increment"],
+        {"addAddress", "beforeFirstBranch", "delta", "loadAddress", "storeAddress"},
+        "VSync counter increment",
+    )
+    for field, expected in {
+        "addAddress": "0x80053c88",
+        "beforeFirstBranch": True,
+        "delta": 1,
+        "loadAddress": "0x80053c6c",
+        "storeAddress": "0x80053c90",
+    }.items():
+        _provenance_exact(increment[field], expected, f"VSync increment {field}")
+    reset = _provenance_object(
+        vsync_counter["reset"],
+        {"sequenceAddress", "storeAddress", "value"},
+        "VSync counter reset",
+    )
+    for field, expected in {
+        "sequenceAddress": "0x80013694",
+        "storeAddress": "0x80013698",
+        "value": 0,
+    }.items():
+        _provenance_exact(reset[field], expected, f"VSync reset {field}")
+    expected_counter_packet = _rsp_memory_read_packet(
+        int(vsync_counter["address"], 16), 4
+    )
+    try:
+        artifact_counter_packet = vsync_counter["rspReadPacket"].encode(
+            "ascii", "strict"
+        )
+    except (AttributeError, UnicodeEncodeError) as exc:
+        raise AutomationRefusal("Static provenance VSync RSP packet is invalid.") from exc
+    if (
+        artifact_counter_packet != expected_counter_packet
+        or expected_counter_packet != GDB_VBLANK_READ_PACKET
+    ):
+        raise AutomationRefusal("Static provenance VSync RSP checksum changed.")
+
+    scope = _provenance_object(
+        root["scope"], {"doesNotProve", "proves"}, "scope"
+    )
+    proves = scope["proves"]
+    does_not_prove = scope["doesNotProve"]
+    expected_proves = [
+        "exact-candidate-bin-cue-identity",
+        "exact-logical-scus-identity",
+        "exact-duckstation-executable-identity",
+        "static-pad-producer-consumer-address-chain",
+        "static-active-low-digital-pad-bit-mapping",
+        "static-vsync-callback-counter-increment-and-reset",
+    ]
+    required_false_scope = (
+        "live-process-use",
+        "four-byte-pad-read-atomicity",
+        "one-rendered-frame-cadence",
+        "globally-monotonic-vblank-clock",
+        "runtime-acceptance",
+        "release-acceptance",
+    )
+    if proves != expected_proves or does_not_prove != list(required_false_scope):
+        raise AutomationRefusal("Static provenance false scope boundary changed.")
+
+    witnesses = root["witnesses"]
+    expected_witnesses = (
+        (
+            "pad-initializer",
+            "0x800123c8",
+            132,
+            "a310596376bacd387e196afe5295562ab0283ffcb1c290b5439c3142c8c6be8e",
+        ),
+        (
+            "pad-init-direct",
+            "0x8006b010",
+            352,
+            "05e7f29edce802e27b998d33bf0de7c8fe874a7d5e19a31fc37fe510895695fe",
+        ),
+        (
+            "vsync-callback-wrapper",
+            "0x8005de58",
+            52,
+            "ceae3d1addb804daa1f2d456420c64049c4c00b3b5b8f0c9db72eb9853d8c7d3",
+        ),
+        (
+            "vsync-counter-prefix",
+            "0x80053c68",
+            44,
+            "fe52b87b3a506bc8730f42279fb78b70d378d2132b17009f59f14c0cd690bec2",
+        ),
+        (
+            "pad-consumer",
+            "0x80053efc",
+            200,
+            "6b09cc3b11aeb129090bbfd8032060055afc45d8263b327b5f6413254232498e",
+        ),
+        (
+            "vsync-counter-reset",
+            "0x80013694",
+            8,
+            "8251d8de5f6dfe846c8b2fb7ef8aba4d722a5c636eedfe3d025d58f4c6fae211",
+        ),
+    )
+    if type(witnesses) is not list or len(witnesses) != len(expected_witnesses):
+        raise AutomationRefusal("Static provenance witnesses are unavailable.")
+    for index, (witness, expected_witness) in enumerate(
+        zip(witnesses, expected_witnesses, strict=True)
+    ):
+        item = _provenance_object(
+            witness,
+            {"byteLength", "id", "instructions", "sha256", "startVirtualAddress"},
+            f"witness {index}",
+        )
+        expected_id, expected_start, expected_length, expected_sha256 = expected_witness
+        if (
+            item["id"] != expected_id
+            or type(item["id"]) is not str
+            or item["startVirtualAddress"] != expected_start
+            or type(item["startVirtualAddress"]) is not str
+            or LOWER_HEX32_RE.fullmatch(item["startVirtualAddress"]) is None
+            or item["byteLength"] != expected_length
+            or type(item["byteLength"]) is not int
+            or item["sha256"] != expected_sha256
+            or type(item["sha256"]) is not str
+            or type(item["instructions"]) is not list
+            or not item["instructions"]
+        ):
+            raise AutomationRefusal(f"Static provenance witness {index} is invalid.")
+        for instruction_index, instruction in enumerate(item["instructions"]):
+            instruction_item = _provenance_object(
+                instruction,
+                {"address", "word"},
+                f"witness instruction {index}:{instruction_index}",
+            )
+            if (
+                type(instruction_item["address"]) is not str
+                or LOWER_HEX32_RE.fullmatch(instruction_item["address"]) is None
+                or type(instruction_item["word"]) is not str
+                or LOWER_HEX32_RE.fullmatch(instruction_item["word"]) is None
+            ):
+                raise AutomationRefusal(
+                    "Static provenance witness instruction is invalid: "
+                    f"{index}:{instruction_index}."
+                )
+
+    observed_sha256 = hashlib.sha256(raw).hexdigest()
+    if (
+        SHA256_RE.fullmatch(EXPECTED_INPUT_TIMING_STATIC_PROVENANCE_SHA256) is None
+        or observed_sha256 != EXPECTED_INPUT_TIMING_STATIC_PROVENANCE_SHA256
+    ):
+        raise AutomationRefusal("Static provenance artifact identity changed.")
+    return InputTimingStaticProvenance(
+        sha256=observed_sha256,
+        pad_read_packet=expected_pad_packet,
+        vsync_counter_read_packet=expected_counter_packet,
+        button_actions=expected_button_actions,
+        false_scope_boundaries=required_false_scope,
+    )
+
+
+def verify_checked_in_input_timing_static_provenance(
+    repository_root: pathlib.Path,
+) -> InputTimingStaticProvenance:
+    """Read the one checked-in artifact and run the pure cross-check above."""
+
+    repository_root = _require_audited_repository_root(repository_root)
+    _identity, raw = read_pinned_bytes(
+        repository_root / INPUT_TIMING_STATIC_PROVENANCE_RELATIVE_PATH,
+        EXPECTED_INPUT_TIMING_STATIC_PROVENANCE_SHA256,
+        maximum_bytes=INPUT_TIMING_STATIC_PROVENANCE_MAX_BYTES,
+        expected_owner_uid=os.geteuid(),
+    )
+    return parse_input_timing_static_provenance(raw)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1028,6 +1662,10 @@ class FrozenProfileVerifier:
         uid = os.geteuid()
         if uid == 0 or os.getuid() != uid:
             raise AutomationRefusal("Automation requires one non-root real/effective UID.")
+        # Static address provenance is a prerequisite to the production
+        # preflight, but remains only a read-only checked-in artifact gate.  It
+        # does not instantiate the GDB reader or a native pad confirmer.
+        verify_checked_in_input_timing_static_provenance(self.repository_root)
         verifier = _load_external_home_verifier(self.repository_root)
         captured_at_utc = _canonical_utc_now()
         try:
@@ -5235,13 +5873,16 @@ class PollingReadOnlyPadConfirmer:
 
 
 class UnavailableNativePadConfirmer:
-    """Production refusal until the candidate-native pad evidence is pinned."""
+    """Production refusal beyond the now-pinned static pad provenance."""
 
     REFUSAL_REASON: Final = (
-        "Native read-only GDB confirmation is not production-wired because "
-        "candidate provenance for the pad-frame address, update timing, and bit "
-        "mapping plus shared-session deadlines and macro compensation is not "
-        "pinned; the entire input plan is refused before any host key event."
+        "Native read-only GDB confirmation remains production-unwired. The exact "
+        "candidate's static pad-frame address, producer/consumer chain, and "
+        "active-low bit mapping are pinned, but static evidence does not prove "
+        "live-process use or four-byte read atomicity. The exclusive persistent "
+        "shared-session reader, live timing/deadline boundary, and macro "
+        "compensation are not production-accepted; the entire input plan is "
+        "refused before any host key event."
     )
 
     def readiness(self) -> PadConfirmationReadiness:
@@ -7359,6 +8000,14 @@ def _example_plan_bytes() -> bytes:
 
 
 def run_self_test() -> AutomationResult:
+    provenance = verify_checked_in_input_timing_static_provenance(
+        AUTOMATION_REPOSITORY_ROOT
+    )
+    if (
+        provenance.pad_read_packet != GDB_PAD_READ_PACKET
+        or provenance.vsync_counter_read_packet != GDB_VBLANK_READ_PACKET
+    ):
+        raise AutomationRefusal("Self-test static provenance packet cross-check changed.")
     plan = InputPlan.parse(_example_plan_bytes())
     if plan.events[0].action is not KeyAction.TOGGLE_PAUSE:
         raise AutomationRefusal("Self-test allowlist parse changed.")
@@ -7420,6 +8069,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise AutomationRefusal(
                     "Preflight/execute requires repository root, exact PID, and input plan."
                 )
+            # Refuse a changed static-provenance artifact before plan parsing,
+            # profile imports, process observation, GDB, or native input work.
+            verify_checked_in_input_timing_static_provenance(
+                arguments.repository_root
+            )
             plan = _read_plan(arguments.input_plan)
             foundation = UnattendedFoundation(
                 verifier=FrozenProfileVerifier(arguments.repository_root),

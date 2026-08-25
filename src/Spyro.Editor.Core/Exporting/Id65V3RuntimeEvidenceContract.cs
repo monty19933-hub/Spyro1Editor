@@ -53,6 +53,12 @@ internal sealed record Id65V3RuntimeEvidenceSourceIdentity(
     string CandidateBinSha256,
     string CandidateCueRelativePath,
     string CandidateCueSha256,
+    string CandidateScusName,
+    int CandidateScusLba,
+    int CandidateScusByteLength,
+    string CandidateScusSha256,
+    string InputTimingStaticProvenanceRelativePath,
+    string InputTimingStaticProvenanceSha256,
     string LockedBaseRow80DataSha256,
     string LockedBaseModelSha256,
     string EnvironmentHeaderRepairV3BeforeRow80DataSha256,
@@ -534,11 +540,11 @@ internal static partial class Id65V3RuntimeEvidenceContract
     internal const string ExpectedRuntimeProfileSha256 =
         "29d01f1b791e4dc08ebfc4d62cf5a1b91600a5c55ec175ac6da45b13123100ad";
     internal const string ExpectedSourceClosureSha256 =
-        "1004799a4a41bd4222a5d6843f3ab495d9bef4d57e3b0698b9bb66f11279bbff";
+        "8e43136feec31a2e1155fdbb0db60362a53b4641e8d79228f59b18a44103b27f";
     internal const string ExpectedWatcherSha256 =
         "eac3953a0ff7ff8acdefbe43cf987f296d44091ad51619efd225690ba1dc0677";
     internal const string ExpectedCaptureCoordinatorSha256 =
-        "ec40078f667699f2e78edfc959b53a1971acd9cd0a813f87ad92d995d8891262";
+        "153871778877a8736a1243ce2e84453e4d0d8e2fb945f9e96fdc01fbf00278ec";
     internal const string FocusedRuntimeEvidenceRelativePath =
         "docs/runtime-evidence/unused-level-65-remote-blank-environment-header-repair-v3-runtime-evidence.json";
     internal static readonly string ExpectedFocusedRuntimeEvidenceSha256 = "PENDING";
@@ -576,7 +582,7 @@ internal static partial class Id65V3RuntimeEvidenceContract
     private const string ExpectedProfileVerifierSha256 =
         "74f4ed279a3e3f60af6c4c0a0b1fa8ffc0a67886c478d8cc7d1a288b093c3671";
     private const string ExpectedAutomationSha256 =
-        "049b4fbeecb4b176d415614165589162c10d8322f349af9c1ef6e93c6e1c2899";
+        "42a5dc7c4028fa4cabb8f4ee3ef5494ae51117857a4d8a7a932e38d1cb74e3ec";
     private const string Canonicalization = "rfc8785-jcs-utf8-v1";
     private const string ProfileSnapshotFormat = "spyro-editor-id65-v3-runtime-profile-snapshot";
     private const int ProfileSnapshotFormatVersion = 2;
@@ -2632,6 +2638,8 @@ internal static partial class Id65V3RuntimeEvidenceContract
             (source.RuntimeChecklistRelativePath, source.RuntimeChecklistSha256, 0x1A4),
             (source.LocationGuideRelativePath, source.LocationGuideSha256, 0x1A4),
             (source.RevealCommandRelativePath, source.RevealCommandSha256, 0x1ED),
+            (source.InputTimingStaticProvenanceRelativePath,
+                source.InputTimingStaticProvenanceSha256, 0x1A4),
             (source.WatcherRelativePath, source.WatcherSha256, 0x1A4),
             (source.ProfileBuilderRelativePath, source.ProfileBuilderSha256, 0x1A4),
             (source.ProfileVerifierRelativePath, source.ProfileVerifierSha256, 0x1A4),
@@ -2676,6 +2684,26 @@ internal static partial class Id65V3RuntimeEvidenceContract
                 keepBytes: false);
             if (identity.Sha256 != expected)
                 throw new InvalidDataException($"Pinned source artifact '{relative}' hash changed.");
+        }
+        Id65V3InputTimingStaticProvenanceValidation provenance =
+            VerifyPinnedInputTimingStaticProvenance(repositoryRoot);
+        if (provenance.ArtifactSha256 != source.InputTimingStaticProvenanceSha256 ||
+            provenance.ArtifactByteLength <= 0 ||
+            provenance.CandidateCueSha256 != source.CandidateCueSha256 ||
+            provenance.CandidateBinSha256 != source.CandidateBinSha256 ||
+            provenance.DiscExecutableSha256 != source.CandidateScusSha256 ||
+            provenance.PadBufferAddress != 0x800786A0 ||
+            provenance.VsyncCounterAddress != 0x800758C8 ||
+            provenance.LiveProcessUseProven ||
+            provenance.FourBytePadReadAtomicityProven ||
+            provenance.OneRenderedFrameCadenceProven ||
+            provenance.GloballyMonotonicVblankClockProven ||
+            provenance.RuntimeAccepted ||
+            provenance.NormalCreateBinAuthorized ||
+            provenance.ReleaseAccepted)
+        {
+            throw new InvalidDataException(
+                "Pinned ID65 input/timing static provenance changed identity or overclaimed scope.");
         }
         return true;
     }
@@ -6952,7 +6980,7 @@ internal static partial class Id65V3RuntimeEvidenceContract
     }
 
     private static string BuildSourceClosureManifest(Id65V3RuntimeEvidenceSourceIdentity source) =>
-        "id65-v3-runtime-source-closure-v2\n" +
+        "id65-v3-runtime-source-closure-v3\n" +
         $"watcherRelativePath={source.WatcherRelativePath}\n" +
         $"watcherSha256={source.WatcherSha256}\n" +
         $"watcherMode={source.WatcherMode}\n" +
@@ -6977,6 +7005,12 @@ internal static partial class Id65V3RuntimeEvidenceContract
         $"candidateBinSha256={source.CandidateBinSha256}\n" +
         $"candidateCueRelativePath={source.CandidateCueRelativePath}\n" +
         $"candidateCueSha256={source.CandidateCueSha256}\n" +
+        $"candidateScusName={source.CandidateScusName}\n" +
+        $"candidateScusLba={source.CandidateScusLba}\n" +
+        $"candidateScusByteLength={source.CandidateScusByteLength}\n" +
+        $"candidateScusSha256={source.CandidateScusSha256}\n" +
+        $"inputTimingStaticProvenanceRelativePath={source.InputTimingStaticProvenanceRelativePath}\n" +
+        $"inputTimingStaticProvenanceSha256={source.InputTimingStaticProvenanceSha256}\n" +
         $"lockedBaseRow80DataSha256={source.LockedBaseRow80DataSha256}\n" +
         $"lockedBaseModelSha256={source.LockedBaseModelSha256}\n" +
         $"environmentHeaderRepairV3BeforeRow80DataSha256={source.EnvironmentHeaderRepairV3BeforeRow80DataSha256}\n" +
@@ -7114,6 +7148,12 @@ internal static partial class Id65V3RuntimeEvidenceContract
             CandidateBinSha256: "42e4d5cae98d4786023bef26517d0435b43aff365b797495386813f44ecb0c45",
             CandidateCueRelativePath: cue,
             CandidateCueSha256: "ab91adb4ffcbad70bf7a226a2a4a6d0f6efe6b54fbed0b8126e59d1b8ecaf6df",
+            CandidateScusName: "SCUS_942.28",
+            CandidateScusLba: 55_382,
+            CandidateScusByteLength: 417_792,
+            CandidateScusSha256: "fa5fc7981188b78fa7d7b78facca64c1f79dadb107515e9146ad178ade39d442",
+            InputTimingStaticProvenanceRelativePath: InputTimingStaticProvenanceRelativePath,
+            InputTimingStaticProvenanceSha256: ExpectedInputTimingStaticProvenanceSha256,
             LockedBaseRow80DataSha256: "7ddbf6d9a6ee6c0f64c8564a89e374ca0ca234ef608ec812aae68e8176de1dc0",
             LockedBaseModelSha256: "1aa6950fe78e71ef4506d823fd33806c13a32838cdb00aadc4e35daffcf17f47",
             EnvironmentHeaderRepairV3BeforeRow80DataSha256: "a21e3ace8f16e981dc1d75c4d2210e96ba2833200bd4e3054b2a1c0bb540ade9",

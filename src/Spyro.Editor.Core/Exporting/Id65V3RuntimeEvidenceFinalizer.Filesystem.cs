@@ -161,6 +161,54 @@ internal static partial class Id65V3RuntimeEvidenceFinalizer
             expectedMode: null,
             context: context);
 
+    internal static T InspectStableOwnedFileHandle<T>(
+        string path,
+        int expectedMode,
+        long expectedByteLength,
+        Func<FileStream, T> inspector,
+        string context)
+    {
+        RequireDarwin();
+        if (expectedByteLength <= 0)
+            throw new ArgumentOutOfRangeException(nameof(expectedByteLength));
+        ArgumentNullException.ThrowIfNull(inspector);
+        string full = Path.GetFullPath(path);
+        RequireTrustedAbsolutePath(
+            full,
+            targetIsDirectory: false,
+            allowMissingLeaf: false,
+            context);
+        RequireNoSymlinkSegments(full, allowMissingLeaf: false);
+        StableIdentity pathBefore = ReadPathIdentity(full, $"{context} before open");
+        RequireOwnedRegular(pathBefore, expectedMode, $"{context} before open");
+        if (pathBefore.ByteLength != expectedByteLength)
+            throw new InvalidDataException($"The exact-length file '{full}' changed.");
+
+        using FileStream stream = new(full, FileMode.Open, FileAccess.Read, FileShare.Read);
+        StableIdentity before = ReadHandleIdentity(stream, $"{context} handle before inspection");
+        RequireOwnedRegular(before, expectedMode, $"{context} handle before inspection");
+        if (pathBefore != before || before.ByteLength != expectedByteLength ||
+            stream.Length != expectedByteLength)
+        {
+            throw new InvalidDataException(
+                $"The file '{full}' changed between path and handle validation.");
+        }
+
+        T result = inspector(stream);
+
+        StableIdentity after = ReadHandleIdentity(stream, $"{context} handle after inspection");
+        StableIdentity pathAfter = ReadPathIdentity(full, $"{context} path after inspection");
+        RequireOwnedRegular(after, expectedMode, $"{context} handle after inspection");
+        RequireOwnedRegular(pathAfter, expectedMode, $"{context} path after inspection");
+        if (before != after || after != pathAfter || after.ByteLength != expectedByteLength ||
+            stream.Length != expectedByteLength)
+        {
+            throw new InvalidDataException(
+                $"The file '{full}' changed or rebound during stable-handle inspection.");
+        }
+        return result;
+    }
+
     internal static void RequireOwnedDirectoryPath(
         string path,
         int expectedMode,

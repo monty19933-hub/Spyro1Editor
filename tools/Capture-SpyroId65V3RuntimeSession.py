@@ -222,6 +222,18 @@ EXPECTED_CANDIDATE_CUE_SHA256: Final = (
 EXPECTED_CANDIDATE_BIN_SHA256: Final = (
     "42e4d5cae98d4786023bef26517d0435b43aff365b797495386813f44ecb0c45"
 )
+CANDIDATE_SCUS_NAME: Final = "SCUS_942.28"
+CANDIDATE_SCUS_LBA: Final = 55_382
+CANDIDATE_SCUS_BYTE_LENGTH: Final = 417_792
+EXPECTED_CANDIDATE_SCUS_SHA256: Final = (
+    "fa5fc7981188b78fa7d7b78facca64c1f79dadb107515e9146ad178ade39d442"
+)
+INPUT_TIMING_STATIC_PROVENANCE_RELATIVE_PATH: Final = (
+    "docs/research/unused-level-65-v3-input-timing-static-provenance.json"
+)
+EXPECTED_INPUT_TIMING_STATIC_PROVENANCE_SHA256: Final = (
+    "e60a6e63aa013d1f08ab594052efc83ff6401841203fcacf2d1c2f81167b3e32"
+)
 FAILED_V1_BIN_SHA256: Final = (
     "8020947d4ab5e7e4b0eac4bc6409ff3d6f11212b0e118bbf007d870812014a8e"
 )
@@ -241,7 +253,7 @@ EXPECTED_PROFILE_VERIFIER_SHA256: Final = (
     "74f4ed279a3e3f60af6c4c0a0b1fa8ffc0a67886c478d8cc7d1a288b093c3671"
 )
 EXPECTED_AUTOMATION_SHA256: Final = (
-    "049b4fbeecb4b176d415614165589162c10d8322f349af9c1ef6e93c6e1c2899"
+    "42a5dc7c4028fa4cabb8f4ee3ef5494ae51117857a4d8a7a932e38d1cb74e3ec"
 )
 
 SOURCE_PROFILE_ID: Final = (
@@ -556,6 +568,8 @@ PINNED_SOURCE_FILES: Final = {
     (
         f"{CANDIDATE_DIRECTORY}/{CANDIDATE_STEM}-Reveal-in-Finder.command"
     ): "e5e5c9485666e36aed50e6b0e9f43158f58fcf91f1fbb07f3207f8ccdc0be52a",
+    INPUT_TIMING_STATIC_PROVENANCE_RELATIVE_PATH:
+        EXPECTED_INPUT_TIMING_STATIC_PROVENANCE_SHA256,
     WATCHER_RELATIVE_PATH: EXPECTED_WATCHER_SHA256,
 }
 
@@ -578,6 +592,14 @@ REPAIR_LINEAGE_PREFIX_FIELDS: Final = (
     ("candidateBinSha256", EXPECTED_CANDIDATE_BIN_SHA256),
     ("candidateCueRelativePath", CANDIDATE_CUE_RELATIVE_PATH),
     ("candidateCueSha256", EXPECTED_CANDIDATE_CUE_SHA256),
+    ("candidateScusName", CANDIDATE_SCUS_NAME),
+    ("candidateScusLba", CANDIDATE_SCUS_LBA),
+    ("candidateScusByteLength", CANDIDATE_SCUS_BYTE_LENGTH),
+    ("candidateScusSha256", EXPECTED_CANDIDATE_SCUS_SHA256),
+    ("inputTimingStaticProvenanceRelativePath",
+     INPUT_TIMING_STATIC_PROVENANCE_RELATIVE_PATH),
+    ("inputTimingStaticProvenanceSha256",
+     EXPECTED_INPUT_TIMING_STATIC_PROVENANCE_SHA256),
     ("lockedBaseRow80DataSha256", "7ddbf6d9a6ee6c0f64c8564a89e374ca0ca234ef608ec812aae68e8176de1dc0"),
     ("lockedBaseModelSha256", "1aa6950fe78e71ef4506d823fd33806c13a32838cdb00aadc4e35daffcf17f47"),
     ("environmentHeaderRepairV3BeforeRow80DataSha256", "a21e3ace8f16e981dc1d75c4d2210e96ba2833200bd4e3054b2a1c0bb540ade9"),
@@ -1594,6 +1616,15 @@ def recompute_source_closure(capture_coordinator_sha256: str) -> str:
         != values["collisionWindingV2OutputModelSha256"]
         or values["environmentHeaderRepairV3BeforeByte"] != 9
         or values["environmentHeaderRepairV3AfterByte"] != 8
+        or values["candidateScusName"] != "SCUS_942.28"
+        or values["candidateScusLba"] != 55_382
+        or values["candidateScusByteLength"] != 417_792
+        or values["candidateScusSha256"]
+        != "fa5fc7981188b78fa7d7b78facca64c1f79dadb107515e9146ad178ade39d442"
+        or values["inputTimingStaticProvenanceRelativePath"]
+        != "docs/research/unused-level-65-v3-input-timing-static-provenance.json"
+        or values["inputTimingStaticProvenanceSha256"]
+        != EXPECTED_INPUT_TIMING_STATIC_PROVENANCE_SHA256
         or values["environmentHeaderRepairV3ChangedByteCount"] != 1
         or values["environmentHeaderRepairV3RangeCount"] != 1
         or values["environmentHeaderRepairV3RawSectorLba"] != 54_437
@@ -1601,7 +1632,7 @@ def recompute_source_closure(capture_coordinator_sha256: str) -> str:
         or values["supersededV2RetestForbidden"] != "true"
     ):
         raise CaptureRefusal("V3 source-closure repair lineage is internally mixed.")
-    lines = ["id65-v3-runtime-source-closure-v2"]
+    lines = ["id65-v3-runtime-source-closure-v3"]
     lines.extend(
         f"{name}={value}" for name, value in SOURCE_CLOSURE_PREFIX_FIELDS
     )

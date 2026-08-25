@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import pathlib
@@ -576,6 +578,193 @@ def make_foundation(
     foundation._offline_state_temp = state_temp
     foundation._offline_lease_temp = lease_temp
     return foundation, selected_backend, selected_confirmer
+
+
+def test_input_timing_static_provenance_cross_check() -> None:
+    repository_root = pathlib.Path(__file__).resolve().parent.parent
+    artifact_path = (
+        repository_root / automation.INPUT_TIMING_STATIC_PROVENANCE_RELATIVE_PATH
+    )
+    raw = artifact_path.read_bytes()
+    before_native_counts = (
+        ACTUAL_DUCKSTATION_CALLS,
+        ACTUAL_GDB_CONNECTION_ATTEMPTS,
+        NATIVE_EVENT_POST_ATTEMPTS,
+        PRODUCTION_EVENT_POSTS,
+    )
+    verified = automation.verify_checked_in_input_timing_static_provenance(
+        repository_root
+    )
+    if (
+        verified.sha256
+        != automation.EXPECTED_INPUT_TIMING_STATIC_PROVENANCE_SHA256
+        or verified.pad_read_packet != automation.GDB_PAD_READ_PACKET
+        or verified.vsync_counter_read_packet
+        != automation.GDB_VBLANK_READ_PACKET
+        or verified.button_actions
+        != (
+            automation.KeyAction.PAD_R1_TOGGLE,
+            automation.KeyAction.PAD_R2_TOGGLE,
+            automation.KeyAction.PAD_L1_TOGGLE,
+            automation.KeyAction.PAD_L2_TOGGLE,
+            automation.KeyAction.PAD_LEFT_TOGGLE,
+            automation.KeyAction.PAD_DOWN_TOGGLE,
+        )
+        or verified.false_scope_boundaries
+        != (
+            "live-process-use",
+            "four-byte-pad-read-atomicity",
+            "one-rendered-frame-cadence",
+            "globally-monotonic-vblank-clock",
+            "runtime-acceptance",
+            "release-acceptance",
+        )
+    ):
+        raise AssertionError("Checked-in static provenance projection changed.")
+
+    def changed(
+        mutate: Any,
+    ) -> bytes:
+        payload = json.loads(raw)
+        mutate(payload)
+        return automation.canonical_json(payload)
+
+    expect_refusal(
+        lambda: automation.parse_input_timing_static_provenance(
+            raw.replace(b'"candidate":', b'"candidate" :', 1)
+        ),
+        "canonical",
+    )
+    duplicate = b'{"candidate":null,' + raw[1:]
+    expect_refusal(
+        lambda: automation.parse_input_timing_static_provenance(duplicate),
+        "duplicate",
+    )
+    expect_refusal(
+        lambda: automation.parse_input_timing_static_provenance(
+            changed(lambda value: value["candidate"]["bin"].__setitem__(
+                "sha256", "0" * 64
+            ))
+        ),
+        "candidate bin sha256",
+    )
+    expect_refusal(
+        lambda: automation.parse_input_timing_static_provenance(
+            changed(lambda value: value["pad"].__setitem__(
+                "rspReadPacket", "$m800786a0,4#00"
+            ))
+        ),
+        "checksum",
+    )
+    expect_refusal(
+        lambda: automation.parse_input_timing_static_provenance(
+            changed(lambda value: value["vsyncCounter"].__setitem__(
+                "rspReadPacket", "$m800758c8,4#00"
+            ))
+        ),
+        "checksum",
+    )
+    expect_refusal(
+        lambda: automation.parse_input_timing_static_provenance(
+            changed(lambda value: value["pad"]["buttons"][0].__setitem__(
+                "rawBit", 10
+            ))
+        ),
+        "rawbit",
+    )
+    expect_refusal(
+        lambda: automation.parse_input_timing_static_provenance(
+            changed(lambda value: value["pad"]["buttons"][0].__setitem__(
+                "actionSpecProfileBinding", ["Pad1", "Macro1", "Keyboard/9"]
+            ))
+        ),
+        "actionspecprofilebinding",
+    )
+    expect_refusal(
+        lambda: automation.parse_input_timing_static_provenance(
+            changed(lambda value: value["scope"]["doesNotProve"].__setitem__(
+                0, "live-process-use-proven"
+            ))
+        ),
+        "false scope",
+    )
+    expect_refusal(
+        lambda: automation.parse_input_timing_static_provenance(
+            changed(lambda value: value["scope"]["doesNotProve"].__setitem__(
+                1, "four-byte-pad-read-atomicity-proven"
+            ))
+        ),
+        "false scope",
+    )
+    expect_refusal(
+        lambda: automation.parse_input_timing_static_provenance(
+            changed(lambda value: value["scope"]["doesNotProve"].__setitem__(
+                3, "globally-monotonic-vblank-clock-proven"
+            ))
+        ),
+        "false scope",
+    )
+    # This remains schema-valid static witness data, so only the independent
+    # whole-artifact identity pin can reject it.
+    expect_refusal(
+        lambda: automation.parse_input_timing_static_provenance(
+            changed(lambda value: value["witnesses"][0]["instructions"][0].__setitem__(
+                "word", "0x3c048009"
+            ))
+        ),
+        "artifact identity",
+    )
+
+    provenance_calls: list[pathlib.Path] = []
+    plan_reads: list[pathlib.Path] = []
+    original_provenance_verifier = (
+        automation.verify_checked_in_input_timing_static_provenance
+    )
+    original_plan_reader = automation._read_plan
+
+    def refusing_provenance(root: pathlib.Path) -> Any:
+        provenance_calls.append(root)
+        raise automation.AutomationRefusal("offline provenance sentinel")
+
+    def forbidden_plan_read(path: pathlib.Path) -> Any:
+        plan_reads.append(path)
+        raise AssertionError("Plan read crossed refused provenance preflight.")
+
+    automation.verify_checked_in_input_timing_static_provenance = refusing_provenance
+    automation._read_plan = forbidden_plan_read
+    stderr = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(stderr):
+            return_code = automation.main([
+                "--preflight",
+                "--repository-root",
+                os.fspath(repository_root),
+                "--pid",
+                "700",
+                "--input-plan",
+                os.fspath(repository_root / "must-not-be-read.json"),
+            ])
+    finally:
+        automation.verify_checked_in_input_timing_static_provenance = (
+            original_provenance_verifier
+        )
+        automation._read_plan = original_plan_reader
+    if (
+        return_code != 2
+        or provenance_calls != [repository_root]
+        or plan_reads
+        or "offline provenance sentinel" not in stderr.getvalue()
+    ):
+        raise AssertionError(
+            "Production preflight did not refuse provenance before plan/native work."
+        )
+    if before_native_counts != (
+        ACTUAL_DUCKSTATION_CALLS,
+        ACTUAL_GDB_CONNECTION_ATTEMPTS,
+        NATIVE_EVENT_POST_ATTEMPTS,
+        PRODUCTION_EVENT_POSTS,
+    ):
+        raise AssertionError("Static provenance cross-check reached a native boundary.")
 
 
 def test_canonical_plan_and_allowlist() -> None:
@@ -5886,6 +6075,19 @@ def test_macro_baseline_and_compensating_untoggle() -> None:
 
 
 def test_native_pad_source_refuses_before_input() -> None:
+    refusal_reason = automation.UnavailableNativePadConfirmer.REFUSAL_REASON
+    required_boundaries = (
+        "static pad-frame address",
+        "active-low bit mapping are pinned",
+        "live-process use",
+        "four-byte read atomicity",
+        "exclusive persistent shared-session reader",
+        "entire input plan",
+    )
+    if any(boundary not in refusal_reason for boundary in required_boundaries):
+        raise AssertionError("Production pad refusal overclaims the static provenance.")
+    if "PollingReadOnlyPadConfirmer" in automation.main.__code__.co_names:
+        raise AssertionError("Production main wired the offline polling pad confirmer.")
     plans = (
         parse_plan(
             ("PAD_DOWN_TOGGLE", "HELD"),
@@ -7189,6 +7391,7 @@ def main() -> int:
     global NATIVE_EVENT_POST_ATTEMPTS
     repository_root = pathlib.Path(__file__).resolve().parent.parent
     tests = (
+        test_input_timing_static_provenance_cross_check,
         test_canonical_plan_and_allowlist,
         test_pure_gdb_session_input_lifecycle_policy,
         test_plan_v1_and_retired_profile_are_refused,
