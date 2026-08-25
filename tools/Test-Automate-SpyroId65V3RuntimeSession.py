@@ -132,6 +132,11 @@ def make_profile(
         settings=resource,
         candidate_cue=cue,
         candidate_bin=candidate_bin,
+        external_home_real_path="/pinned/home",
+        allowed_process_cache_real_path=(
+            "/pinned/home/Library/Application Support/DuckStation/"
+            "cache/vulkan_shaders.bin"
+        ),
         handoff_receipt_sha256=automation.EXPECTED_HANDOFF_RECEIPT_SHA256,
         app_content_manifest_sha256=automation.EXPECTED_APP_CONTENT_MANIFEST_SHA256,
         app_output_tree_manifest_sha256=(
@@ -142,6 +147,11 @@ def make_profile(
         host_normal_settings_sentinel_sha256=(
             automation.EXPECTED_HOST_SETTINGS_SENTINEL_SHA256
         ),
+        receipt_closure_sha256=automation.EXPECTED_RECEIPT_CLOSURE_SHA256,
+        home_output_tree_manifest_sha256=(
+            automation.EXPECTED_HOME_OUTPUT_TREE_MANIFEST_SHA256
+        ),
+        candidate_manifest_sha256=automation.EXPECTED_CANDIDATE_MANIFEST_SHA256,
         enabled_actions=(enabled_actions if enabled_actions is not None else frozenset({
             automation.KeyAction.PAD_R1_TOGGLE,
             automation.KeyAction.PAD_R2_TOGGLE,
@@ -2302,6 +2312,1387 @@ def test_one_shot_gdb_session_resume_and_shared_reads() -> None:
     expect_any_refusal(lambda: session.connect_resume_once(process))
     if tuple(fake_socket.sent) != sent_before or len(connector.calls) != 1:
         raise AssertionError("Closed one-shot GDB session retried control work.")
+
+
+def test_gdb_runtime_session_sentinel_exact_and_refusals() -> None:
+    process = make_process()
+    connect_transcript = b"".join((
+        gdb_u32_reply(100),
+        gdb_u32_reply(100),
+        gdb_u32_reply(100),
+        b"+",
+        gdb_u32_reply(100),
+        gdb_u32_reply(101),
+    ))
+    session, fake_socket, connector, attestor, _ = make_gdb_session(
+        [bytes((value,)) for value in connect_transcript], process=process
+    )
+    session.connect_resume_once(process)
+    sent_before = tuple(fake_socket.sent)
+    receives_before = tuple(fake_socket.recv_sizes)
+    timeouts_before = tuple(fake_socket.timeouts)
+    topology_before = len(attestor.connection_calls)
+    expected_set = make_gdb_connection_set(
+        make_gdb_listener(pid=process.pid), make_gdb_client_endpoint()
+    )
+    expected = automation.GdbRuntimeSessionSentinel(
+        "RUNNING",
+        process,
+        make_gdb_listener(pid=process.pid),
+        expected_set,
+        1,
+        1,
+        True,
+        True,
+        None,
+    )
+    first = session.attest_running_owned(process)
+    second = session.attest_running_owned(process)
+    if first != expected or second != expected or first is second:
+        raise AssertionError("RUNNING GDB sentinel was not exact and immutable-valued.")
+    if (
+        tuple(fake_socket.sent) != sent_before
+        or tuple(fake_socket.recv_sizes) != receives_before
+        or tuple(fake_socket.timeouts) != timeouts_before
+        or len(connector.calls) != 1
+        or len(attestor.connection_calls) - topology_before != 2
+        or fake_socket.close_calls
+    ):
+        raise AssertionError("Runtime sentinel sent RSP bytes, read the socket, or reconnected.")
+    try:
+        first.state = "PAUSED_BY_PLAN"
+    except dataclasses.FrozenInstanceError:
+        pass
+    else:
+        raise AssertionError("GDB runtime sentinel was mutable.")
+
+    class RunningText(str):
+        pass
+
+    class RunningEqual:
+        def __eq__(self, other: object) -> bool:
+            return other == "RUNNING"
+
+    for listener_changes in (
+        {"pid": 2_147_483_648},
+        {"descriptor": 2_147_483_648},
+        {"access": RunningText("u")},
+        {"socket_type": RunningText("IPv4")},
+        {"device_token": RunningText("0x2cb90ff55f15ccdc")},
+        {"protocol": RunningText("TCP")},
+        {"endpoint": RunningText("127.0.0.1:2345")},
+        {"tcp_state": RunningText("LISTEN")},
+        {"device_token": "0x" + ("a" * 17)},
+    ):
+        expect_any_refusal(
+            lambda changes=listener_changes: dataclasses.replace(
+                make_gdb_listener(), **changes
+            )
+        )
+    expect_any_refusal(
+        lambda: dataclasses.replace(
+            make_gdb_client_endpoint(),
+            address=RunningText(automation.GDB_HOST),
+        )
+    )
+    expect_any_refusal(
+        lambda: dataclasses.replace(
+            expected_set,
+            server_device_token=RunningText("0xaaa1"),
+        )
+    )
+    expect_any_refusal(
+        lambda: dataclasses.replace(
+            expected_set,
+            client_device_token=RunningText("0xbbb2"),
+        )
+    )
+    expect_any_refusal(
+        lambda: dataclasses.replace(
+            expected_set,
+            server_device_token="0x" + ("a" * 17),
+        )
+    )
+
+    malformed = (
+        {"state": "PAUSED_BY_PLAN"},
+        {"state": RunningText("RUNNING")},
+        {"state": RunningEqual()},
+        {"bound_listener": make_gdb_listener(pid=701)},
+        {
+            "observed_connection_set": make_gdb_connection_set(
+                make_gdb_listener(pid=process.pid), None
+            )
+        },
+        {"connection_attempts": 0},
+        {"connection_attempts": 2},
+        {"continue_attempts": 0},
+        {"continue_attempts": 2},
+        {"pause_state_certain": False},
+        {"single_client_observed": False},
+        {"planned_paused_tick": 100},
+    )
+    for changes in malformed:
+        expect_any_refusal(lambda changes=changes: dataclasses.replace(first, **changes))
+
+    session._operation_lock.acquire()
+    try:
+        expect_refusal(
+            lambda: session.attest_running_owned(process),
+            "Concurrent DuckStation GDB runtime attestation",
+        )
+    finally:
+        session._operation_lock.release()
+    if session.status().state != "RUNNING" or fake_socket.close_calls:
+        raise AssertionError("Contended read-only sentinel poisoned its RUNNING owner.")
+
+    new_session, new_socket, new_connector, new_attestor, _ = make_gdb_session(
+        (), process=process
+    )
+    expect_refusal(
+        lambda: new_session.attest_running_owned(process),
+        "requires exact RUNNING ownership",
+    )
+    if (
+        new_session.status().state != "NEW"
+        or new_connector.calls
+        or new_attestor.connection_calls
+        or new_socket.sent
+        or new_socket.recv_sizes
+        or new_socket.close_calls
+    ):
+        raise AssertionError("NEW sentinel refusal changed state or crossed a boundary.")
+
+    armed_session, armed_socket, armed_connector, armed_attestor, _ = make_gdb_session(
+        [bytes((value,)) for value in connect_transcript], process=process
+    )
+    armed_session.connect_resume_once(process)
+    armed_session.arm_planned_pause(process)
+    armed_sent = tuple(armed_socket.sent)
+    armed_receives = tuple(armed_socket.recv_sizes)
+    armed_topology_calls = len(armed_attestor.connection_calls)
+    expect_refusal(
+        lambda: armed_session.attest_running_owned(process),
+        "requires exact RUNNING ownership",
+    )
+    if (
+        armed_session.status().state != "EXPECTING_PLAN_PAUSE"
+        or tuple(armed_socket.sent) != armed_sent
+        or tuple(armed_socket.recv_sizes) != armed_receives
+        or len(armed_connector.calls) != 1
+        or len(armed_attestor.connection_calls) != armed_topology_calls
+        or armed_socket.close_calls
+    ):
+        raise AssertionError("Armed sentinel refusal destroyed its recovery state.")
+
+    pause_transcript = connect_transcript + b"".join((
+        b"+" + gdb_rsp_packet(b"S05"),
+        gdb_u32_reply(200),
+        gdb_u32_reply(200),
+        gdb_u32_reply(200),
+        b"+",
+        gdb_u32_reply(201),
+    ))
+    paused_session, paused_socket, paused_connector, paused_attestor, _ = make_gdb_session(
+        [bytes((value,)) for value in pause_transcript], process=process
+    )
+    paused_session.connect_resume_once(process)
+    paused_session.arm_planned_pause(process)
+    paused_session.confirm_planned_pause(process)
+    paused_sent = tuple(paused_socket.sent)
+    paused_receives = tuple(paused_socket.recv_sizes)
+    paused_topology_calls = len(paused_attestor.connection_calls)
+    expect_refusal(
+        lambda: paused_session.attest_running_owned(process),
+        "requires exact RUNNING ownership",
+    )
+    if (
+        paused_session.status().state != "PAUSED_BY_PLAN"
+        or tuple(paused_socket.sent) != paused_sent
+        or tuple(paused_socket.recv_sizes) != paused_receives
+        or len(paused_connector.calls) != 1
+        or len(paused_attestor.connection_calls) != paused_topology_calls
+        or paused_socket.close_calls
+    ):
+        raise AssertionError("PAUSED sentinel refusal destroyed exact pause state.")
+    paused_session.arm_planned_resume(process)
+    resume_armed_sent = tuple(paused_socket.sent)
+    resume_armed_receives = tuple(paused_socket.recv_sizes)
+    resume_armed_topology_calls = len(paused_attestor.connection_calls)
+    expect_refusal(
+        lambda: paused_session.attest_running_owned(process),
+        "requires exact RUNNING ownership",
+    )
+    if (
+        paused_session.status().state != "EXPECTING_PLAN_RESUME"
+        or tuple(paused_socket.sent) != resume_armed_sent
+        or tuple(paused_socket.recv_sizes) != resume_armed_receives
+        or len(paused_attestor.connection_calls) != resume_armed_topology_calls
+        or paused_socket.close_calls
+    ):
+        raise AssertionError("Resume-armed sentinel refusal destroyed recovery state.")
+    paused_session.confirm_planned_resume(process)
+    resumed_sent = tuple(paused_socket.sent)
+    resumed = paused_session.attest_running_owned(process)
+    if (
+        resumed.state != "RUNNING"
+        or paused_session.status().state != "RUNNING"
+        or tuple(paused_socket.sent) != resumed_sent
+    ):
+        raise AssertionError("Preserved resume recovery did not return to RUNNING.")
+    paused_session.close()
+
+    topology_gate = {"drift": False}
+
+    def sentinel_topology(
+        observed_process: Any, expected_client: Any | None, _call: int
+    ) -> Any:
+        changes: dict[str, object] = {}
+        if topology_gate["drift"] and expected_client is not None:
+            changes["server_device_token"] = "0xcccc"
+        return make_gdb_connection_set(
+            make_gdb_listener(pid=observed_process.pid),
+            expected_client,
+            **changes,
+        )
+
+    drift_session, drift_socket, drift_connector, _, _ = make_gdb_session(
+        [bytes((value,)) for value in connect_transcript],
+        process=process,
+        connection_observer=sentinel_topology,
+    )
+    drift_session.connect_resume_once(process)
+    topology_gate["drift"] = True
+    drift_sent = tuple(drift_socket.sent)
+    drift_receives = tuple(drift_socket.recv_sizes)
+    expect_any_refusal(lambda: drift_session.attest_running_owned(process))
+    if (
+        drift_session.status().state != "POISONED"
+        or drift_session.status().pause_state_certain
+        or tuple(drift_socket.sent) != drift_sent
+        or tuple(drift_socket.recv_sizes) != drift_receives
+        or len(drift_connector.calls) != 1
+        or drift_socket.close_calls != 1
+    ):
+        raise AssertionError("Topology-drift sentinel sent RSP bytes or stayed reusable.")
+    poisoned_sent = tuple(drift_socket.sent)
+    expect_refusal(
+        lambda: drift_session.attest_running_owned(process),
+        "requires exact RUNNING ownership",
+    )
+    if (
+        drift_session.status().state != "POISONED"
+        or tuple(drift_socket.sent) != poisoned_sent
+        or drift_socket.close_calls != 1
+    ):
+        raise AssertionError("POISONED sentinel refusal retried or changed state.")
+
+    changed_process = dataclasses.replace(process, start_microseconds=654321)
+    process_session, process_socket, _, process_attestor, _ = make_gdb_session(
+        [bytes((value,)) for value in connect_transcript], process=process
+    )
+    process_session.connect_resume_once(process)
+    process_sent = tuple(process_socket.sent)
+    process_topology_calls = len(process_attestor.connection_calls)
+    expect_refusal(
+        lambda: process_session.attest_running_owned(object()),
+        "process is malformed",
+    )
+    expect_refusal(
+        lambda: process_session.attest_running_owned(changed_process),
+        "requires exact RUNNING ownership",
+    )
+    if (
+        process_session.status().state != "RUNNING"
+        or tuple(process_socket.sent) != process_sent
+        or process_socket.close_calls
+        or len(process_attestor.connection_calls) != process_topology_calls
+    ):
+        raise AssertionError("Process-rebind sentinel performed I/O or poisoned RUNNING.")
+    process_session.close()
+    session.close()
+    closed_sent = tuple(fake_socket.sent)
+    expect_refusal(
+        lambda: session.attest_running_owned(process),
+        "requires exact RUNNING ownership",
+    )
+    if (
+        session.status().state != "CLOSED"
+        or tuple(fake_socket.sent) != closed_sent
+        or fake_socket.close_calls != 1
+    ):
+        raise AssertionError("CLOSED sentinel refusal retried or changed state.")
+
+    poison_gate = {"active": False}
+    poison_entered = threading.Event()
+    poison_continue = threading.Event()
+
+    def blocking_sentinel_topology(
+        observed_process: Any, expected_client: Any | None, _call: int
+    ) -> Any:
+        if poison_gate["active"] and expected_client is not None:
+            poison_entered.set()
+            if not poison_continue.wait(timeout=1):
+                raise AssertionError("Sentinel poison-race fixture timed out.")
+        return make_gdb_connection_set(
+            make_gdb_listener(pid=observed_process.pid), expected_client
+        )
+
+    race_session, race_socket, race_connector, _, _ = make_gdb_session(
+        [bytes((value,)) for value in connect_transcript],
+        process=process,
+        connection_observer=blocking_sentinel_topology,
+    )
+    race_session.connect_resume_once(process)
+    race_sent = tuple(race_socket.sent)
+    race_results: list[Any] = []
+    race_errors: list[BaseException] = []
+
+    def emit_during_poison() -> None:
+        try:
+            race_results.append(race_session.attest_running_owned(process))
+        except BaseException as exc:
+            race_errors.append(exc)
+
+    poison_gate["active"] = True
+    race_thread = threading.Thread(target=emit_during_poison, daemon=True)
+    race_thread.start()
+    if not poison_entered.wait(timeout=1):
+        raise AssertionError("Sentinel poison race did not reach topology attestation.")
+    expect_refusal(
+        lambda: race_session.require_running_owned(process),
+        "Concurrent DuckStation GDB ownership check",
+    )
+    poison_continue.set()
+    race_thread.join(timeout=1)
+    if (
+        race_thread.is_alive()
+        or race_results
+        or len(race_errors) != 1
+        or not isinstance(race_errors[0], automation.AutomationRefusal)
+        or race_session.status().state != "POISONED"
+        or tuple(race_socket.sent) != race_sent
+        or len(race_connector.calls) != 1
+        or race_socket.close_calls != 1
+    ):
+        raise AssertionError("Concurrent transport poison escaped as a RUNNING sentinel.")
+
+    main_names = frozenset(automation.main.__code__.co_names)
+    foundation_names = frozenset(
+        automation.UnattendedFoundation.run.__code__.co_names
+    ) | frozenset(
+        automation.UnattendedFoundation._run_with_coordinator_lease.__code__.co_names
+    ) | frozenset(automation.UnattendedFoundation._execute.__code__.co_names)
+    coordinator_names = frozenset(
+        automation.GdbInputPulseLifecycleCoordinator.__init__.__code__.co_names
+    ) | frozenset(
+        automation.GdbInputPulseLifecycleCoordinator.start_execute.__code__.co_names
+    ) | frozenset(
+        automation.GdbInputPulseLifecycleCoordinator.execute_next.__code__.co_names
+    )
+    if (
+        "GdbRuntimeSessionSentinel" in main_names
+        or "attest_running_owned" in main_names
+        or "attest_running_owned" in foundation_names
+        or "attest_running_owned" in coordinator_names
+    ):
+        raise AssertionError("Production main crossed the offline GDB sentinel gate.")
+
+
+def test_exact_runtime_session_attestor_and_disc_binding() -> None:
+    def exact_identity(
+        relative_path: str,
+        digest: str,
+        byte_length: int,
+        mode: int,
+        inode: int,
+    ) -> Any:
+        return automation.FileIdentity(
+            real_path=os.fspath(
+                automation.AUTOMATION_REPOSITORY_ROOT / relative_path
+            ),
+            device=8,
+            inode=inode,
+            byte_length=byte_length,
+            owner_uid=501,
+            mode=mode,
+            link_count=1,
+            sha256=digest,
+        )
+
+    profile = make_profile()
+    profile = dataclasses.replace(
+        profile,
+        executable=exact_identity(
+            automation.DUCKSTATION_EXECUTABLE_RELATIVE_PATH,
+            automation.EXPECTED_DUCKSTATION_SHA256,
+            automation.EXPECTED_EXECUTABLE_SIZE,
+            0o755,
+            9,
+        ),
+        settings=exact_identity(
+            automation.SETTINGS_RELATIVE_PATH,
+            automation.EXPECTED_SETTINGS_SHA256,
+            automation.EXPECTED_SETTINGS_SIZE,
+            0o600,
+            10,
+        ),
+        candidate_cue=exact_identity(
+            automation.CANDIDATE_CUE_RELATIVE_PATH,
+            automation.EXPECTED_CANDIDATE_CUE_SHA256,
+            automation.EXPECTED_CANDIDATE_CUE_SIZE,
+            0o644,
+            11,
+        ),
+        candidate_bin=exact_identity(
+            automation.CANDIDATE_BIN_RELATIVE_PATH,
+            automation.EXPECTED_CANDIDATE_BIN_SHA256,
+            automation.EXPECTED_CANDIDATE_BIN_SIZE,
+            0o644,
+            12,
+        ),
+        external_home_real_path=os.fspath(
+            automation.AUTOMATION_REPOSITORY_ROOT
+            / automation.EXTERNAL_HOME_RELATIVE_PATH
+        ),
+        allowed_process_cache_real_path=os.fspath(
+            automation.AUTOMATION_REPOSITORY_ROOT
+            / automation.ALLOWED_PROCESS_CACHE_PATH
+        ),
+    )
+    process = make_process(executable=profile.executable)
+
+    def nul_sha256(values: Sequence[str]) -> str:
+        return hashlib.sha256(
+            ("\0".join(values) + "\0").encode("utf-8", "strict")
+        ).hexdigest()
+
+    def opened(
+        identity: Any,
+        fd: str,
+        **changes: object,
+    ) -> Any:
+        values: dict[str, object] = {
+            "fd": fd,
+            "device": identity.device,
+            "inode": identity.inode,
+            "byte_length": identity.byte_length,
+            "link_count": identity.link_count,
+            "real_path": identity.real_path,
+        }
+        values.update(changes)
+        return automation.RuntimeSessionOpenFileObservation(**values)
+
+    default_argv = (
+        profile.executable.real_path,
+        profile.candidate_cue.real_path,
+    )
+    default_environment = automation.runtime_environment_assignments(
+        profile.external_home_real_path
+    )
+
+    def observation(
+        *,
+        observed_process: Any = process,
+        argv: Sequence[str] = default_argv,
+        argv_sha256: str | None = None,
+        environment: Sequence[str] = default_environment,
+        environment_sha256: str | None = None,
+        external_home: str = profile.external_home_real_path,
+        open_files: Sequence[Any] | None = None,
+        current_cue: Any = profile.candidate_cue,
+        current_bin: Any = profile.candidate_bin,
+        current_cache: Any | None = None,
+    ) -> Any:
+        argv_tuple = tuple(argv)
+        environment_tuple = tuple(environment)
+        files = tuple(open_files) if open_files is not None else (
+            opened(profile.candidate_bin, "17r"),
+        )
+        return automation.RuntimeSessionObservation(
+            process=observed_process,
+            argv=argv_tuple,
+            argv_nul_sha256=(
+                argv_sha256
+                if argv_sha256 is not None
+                else nul_sha256(argv_tuple)
+            ),
+            environment=environment_tuple,
+            environment_nul_sha256=(
+                environment_sha256
+                if environment_sha256 is not None
+                else nul_sha256(environment_tuple)
+            ),
+            external_home_real_path=external_home,
+            open_files=tuple(
+                sorted(files, key=lambda item: (item.real_path, item.fd))
+            ),
+            current_candidate_cue=current_cue,
+            current_candidate_bin=current_bin,
+            current_allowed_process_cache=current_cache,
+        )
+
+    class SequenceRuntimeObserver:
+        def __init__(self, values: Sequence[Any]) -> None:
+            self.values = list(values)
+            self.calls: list[tuple[Any, Any]] = []
+
+        def observe(self, observed_profile: Any, observed_process: Any) -> Any:
+            self.calls.append((observed_profile, observed_process))
+            if not self.values:
+                raise AssertionError("Runtime-observation fixture was exhausted.")
+            return self.values.pop(0)
+
+    base = observation()
+    binding = automation.validate_runtime_session_observation(
+        profile, process, base
+    )
+    if (
+        binding.process != process
+        or binding.argv != default_argv
+        or binding.environment != default_environment
+        or binding.candidate_cue != profile.candidate_cue
+        or binding.candidate_bin != profile.candidate_bin
+        or binding.candidate_bin_descriptor.fd != "17r"
+        or binding.allowed_process_cache is not None
+    ):
+        raise AssertionError("Exact runtime process/disc binding was incomplete.")
+
+    connect_transcript = b"".join((
+        gdb_u32_reply(100),
+        gdb_u32_reply(100),
+        gdb_u32_reply(100),
+        b"+",
+        gdb_u32_reply(100),
+        gdb_u32_reply(101),
+    ))
+    session, fake_socket, connector, gdb_attestor, _ = make_gdb_session(
+        [bytes((value,)) for value in connect_transcript], process=process
+    )
+    session.connect_resume_once(process)
+    sent_before = tuple(fake_socket.sent)
+    receives_before = tuple(fake_socket.recv_sizes)
+    timeouts_before = tuple(fake_socket.timeouts)
+    topology_before = len(gdb_attestor.connection_calls)
+    runtime_observer = SequenceRuntimeObserver((base,) * 6)
+    exact = automation.ExactRuntimeSessionAttestor(runtime_observer, session)
+    readiness = exact.readiness()
+    if readiness != automation.RuntimeSessionAttestationReadiness(
+        automation.EXACT_RUNTIME_SESSION_ATTESTOR_ID, True, None
+    ):
+        raise AssertionError("Exact runtime-session readiness was not exact.")
+    class AttestorText(str):
+        pass
+
+    for malformed_readiness in (
+        (123, True, None),
+        (object(), False, object()),
+        (AttestorText("exact-runtime-session-attestor-v1"), True, None),
+        ("Uppercase", True, None),
+        ("offline", 1, None),
+        ("offline", True, "unexpected"),
+        ("offline", False, None),
+        ("offline", False, object()),
+        ("offline", False, " leading"),
+        ("offline", False, "line\nbreak"),
+    ):
+        expect_any_refusal(
+            lambda values=malformed_readiness: (
+                automation.RuntimeSessionAttestationReadiness(*values)
+            )
+        )
+    first = exact.attest_exact(profile, process)
+    second = exact.attest_exact(profile, process)
+    if exact.attest(profile, process) is not None:
+        raise AssertionError("RuntimeSessionAttestor compatibility leaked a witness.")
+    if (
+        type(first) is not automation.RuntimeSessionAttestation
+        or first != second
+        or first is second
+        or first.process_binding != binding
+        or first.gdb.bound_process != process
+        or first.attestor_id != automation.EXACT_RUNTIME_SESSION_ATTESTOR_ID
+        or first.profile_id != automation.PROFILE_ID
+        or tuple(fake_socket.sent) != sent_before
+        or tuple(fake_socket.recv_sizes) != receives_before
+        or tuple(fake_socket.timeouts) != timeouts_before
+        or len(connector.calls) != 1
+        or len(gdb_attestor.connection_calls) - topology_before != 6
+        or fake_socket.close_calls
+        or runtime_observer.calls != [(profile, process)] * 6
+    ):
+        raise AssertionError(
+            "Exact runtime attestor sent RSP work, reconnected, or tore its binding."
+        )
+    serialized = first.serialize()
+    payload = json.loads(serialized)
+    if (
+        serialized != second.serialize()
+        or first.canonical_sha256 != hashlib.sha256(serialized).hexdigest()
+        or payload["format"] != automation.RUNTIME_SESSION_ATTESTATION_FORMAT
+        or payload["formatVersion"]
+        != automation.RUNTIME_SESSION_ATTESTATION_FORMAT_VERSION
+        or payload["allowedProcessCache"] is not None
+        or payload["disc"]["candidateBinDescriptor"]["fd"] != "17r"
+        or payload["gdb"]["state"] != "RUNNING"
+        or payload["gdb"]["clientEndpoint"]["pid"] != os.getpid()
+        or payload["profile"]["externalHomeSettings"]["sha256"]
+        != automation.EXPECTED_SETTINGS_SHA256
+        or payload["profile"]["handoffReceiptSha256"]
+        != automation.EXPECTED_HANDOFF_RECEIPT_SHA256
+        or payload["profile"]["receiptClosureSha256"]
+        != automation.EXPECTED_RECEIPT_CLOSURE_SHA256
+        or payload["profile"]["homeOutputTreeManifestSha256"]
+        != automation.EXPECTED_HOME_OUTPUT_TREE_MANIFEST_SHA256
+        or payload["profile"]["candidateManifestSha256"]
+        != automation.EXPECTED_CANDIDATE_MANIFEST_SHA256
+        or payload["profile"]["enabledActions"]
+        != sorted(action.value for action in profile.enabled_actions)
+        or b"capturedAt" in serialized
+        or b"nonce" in serialized.lower()
+        or not serialized.endswith(b"\n")
+    ):
+        raise AssertionError("Exact runtime attestation serialization drifted.")
+    try:
+        first.profile_id = "changed"
+    except dataclasses.FrozenInstanceError:
+        pass
+    else:
+        raise AssertionError("Exact runtime attestation was mutable.")
+    try:
+        automation.RuntimeSessionAttestation(
+            first.attestor_id,
+            first.profile,
+            first.process_binding,
+            first.gdb,
+            FORMAT="spoofed",
+        )
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("Runtime attestation format constant became an input field.")
+    expect_any_refusal(
+        lambda: dataclasses.replace(first, attestor_id="lookalike-attestor")
+    )
+    expect_any_refusal(
+        lambda: dataclasses.replace(
+            first,
+            profile=dataclasses.replace(first.profile, profile_id="other-profile"),
+        )
+    )
+
+    irrelevant_before = observation(
+        open_files=(
+            opened(profile.candidate_bin, "17r"),
+            automation.RuntimeSessionOpenFileObservation(
+                "9w", 8, 80, 12, 1, "/private/tmp/runtime-log.txt"
+            ),
+        )
+    )
+    irrelevant_after = observation(
+        open_files=(
+            opened(profile.candidate_bin, "17r"),
+            automation.RuntimeSessionOpenFileObservation(
+                "10r", 8, 81, 99, 1, "/private/tmp/unrelated.dat"
+            ),
+        )
+    )
+    irrelevant_observer = SequenceRuntimeObserver(
+        (irrelevant_before, irrelevant_after)
+    )
+    irrelevant_attestation = automation.ExactRuntimeSessionAttestor(
+        irrelevant_observer, session
+    ).attest_exact(profile, process)
+    if irrelevant_attestation.process_binding != binding:
+        raise AssertionError("Unrelated non-disc descriptor churn caused false drift.")
+
+    cache = automation.FileIdentity(
+        real_path=profile.allowed_process_cache_real_path,
+        device=8,
+        inode=13,
+        byte_length=65_536,
+        owner_uid=profile.effective_uid,
+        mode=0o644,
+        link_count=1,
+        sha256="4" * 64,
+    )
+    with_cache = observation(
+        open_files=(
+            opened(profile.candidate_bin, "17r"),
+            opened(cache, "21u"),
+        ),
+        current_cache=cache,
+    )
+    cache_attestation = automation.ExactRuntimeSessionAttestor(
+        SequenceRuntimeObserver((with_cache, with_cache)), session
+    ).attest_exact(profile, process)
+    if (
+        cache_attestation.process_binding.allowed_process_cache != cache
+        or cache_attestation.to_payload()["allowedProcessCache"]["descriptor"]["fd"]
+        != "21u"
+    ):
+        raise AssertionError("Exact code-owned process cache was not bound.")
+
+    other_process = dataclasses.replace(process, start_microseconds=654321)
+    changed_cue = dataclasses.replace(profile.candidate_cue, sha256="a" * 64)
+    changed_bin = dataclasses.replace(profile.candidate_bin, sha256="b" * 64)
+    alternate_media = automation.RuntimeSessionOpenFileObservation(
+        "30r", 8, 90, 4096, 1, "/pinned/alternate.iso"
+    )
+    invalid_observations = (
+        ("process", observation(observed_process=other_process)),
+        (
+            "argv",
+            observation(
+                argv=(profile.executable.real_path, "/pinned/other.cue")
+            ),
+        ),
+        ("argv-hash", observation(argv_sha256="f" * 64)),
+        (
+            "environment",
+            observation(environment=(*default_environment, "EXTRA=1")),
+        ),
+        ("environment-hash", observation(environment_sha256="f" * 64)),
+        ("home", observation(external_home="/pinned/other-home")),
+        ("current-cue", observation(current_cue=changed_cue)),
+        ("current-bin", observation(current_bin=changed_bin)),
+        ("missing-bin", observation(open_files=())),
+        (
+            "duplicate-bin",
+            observation(
+                open_files=(
+                    opened(profile.candidate_bin, "17r"),
+                    opened(profile.candidate_bin, "18r"),
+                )
+            ),
+        ),
+        (
+            "writable-bin",
+            observation(open_files=(opened(profile.candidate_bin, "17u"),)),
+        ),
+        (
+            "bin-device",
+            observation(
+                open_files=(opened(profile.candidate_bin, "17r", device=99),)
+            ),
+        ),
+        (
+            "bin-inode",
+            observation(
+                open_files=(opened(profile.candidate_bin, "17r", inode=99),)
+            ),
+        ),
+        (
+            "bin-size",
+            observation(
+                open_files=(
+                    opened(profile.candidate_bin, "17r", byte_length=1),
+                )
+            ),
+        ),
+        (
+            "bin-link",
+            observation(
+                open_files=(opened(profile.candidate_bin, "17r", link_count=2),)
+            ),
+        ),
+        (
+            "cue-open",
+            observation(
+                open_files=(
+                    opened(profile.candidate_bin, "17r"),
+                    opened(profile.candidate_cue, "18r"),
+                )
+            ),
+        ),
+        (
+            "alternate-media",
+            observation(
+                open_files=(
+                    opened(profile.candidate_bin, "17r"),
+                    alternate_media,
+                )
+            ),
+        ),
+        (
+            "cache-identity-only",
+            observation(current_cache=cache),
+        ),
+        (
+            "cache-descriptor-only",
+            observation(
+                open_files=(
+                    opened(profile.candidate_bin, "17r"),
+                    opened(cache, "21u"),
+                )
+            ),
+        ),
+        (
+            "duplicate-cache",
+            observation(
+                open_files=(
+                    opened(profile.candidate_bin, "17r"),
+                    opened(cache, "21u"),
+                    opened(cache, "22u"),
+                ),
+                current_cache=cache,
+            ),
+        ),
+        (
+            "cache-owner",
+            observation(
+                open_files=(
+                    opened(profile.candidate_bin, "17r"),
+                    opened(dataclasses.replace(cache, owner_uid=502), "21u"),
+                ),
+                current_cache=dataclasses.replace(cache, owner_uid=502),
+            ),
+        ),
+        (
+            "cache-mode",
+            observation(
+                open_files=(
+                    opened(profile.candidate_bin, "17r"),
+                    opened(dataclasses.replace(cache, mode=0o666), "21u"),
+                ),
+                current_cache=dataclasses.replace(cache, mode=0o666),
+            ),
+        ),
+        (
+            "cache-link",
+            observation(
+                open_files=(
+                    opened(profile.candidate_bin, "17r"),
+                    opened(dataclasses.replace(cache, link_count=2), "21u"),
+                ),
+                current_cache=dataclasses.replace(cache, link_count=2),
+            ),
+        ),
+        (
+            "cache-size",
+            observation(
+                open_files=(
+                    opened(profile.candidate_bin, "17r"),
+                    opened(
+                        dataclasses.replace(
+                            cache,
+                            byte_length=automation.MAX_PROCESS_CACHE_BIN_BYTES + 1,
+                        ),
+                        "21u",
+                    ),
+                ),
+                current_cache=dataclasses.replace(
+                    cache,
+                    byte_length=automation.MAX_PROCESS_CACHE_BIN_BYTES + 1,
+                ),
+            ),
+        ),
+        (
+            "cache-access",
+            observation(
+                open_files=(
+                    opened(profile.candidate_bin, "17r"),
+                    opened(cache, "21r"),
+                ),
+                current_cache=cache,
+            ),
+        ),
+        (
+            "cache-descriptor-identity",
+            observation(
+                open_files=(
+                    opened(profile.candidate_bin, "17r"),
+                    opened(cache, "21u", inode=999),
+                ),
+                current_cache=cache,
+            ),
+        ),
+    )
+    for label, invalid in invalid_observations:
+        try:
+            automation.validate_runtime_session_observation(
+                profile, process, invalid
+            )
+        except automation.AutomationRefusal:
+            pass
+        else:
+            raise AssertionError(f"Runtime observation accepted {label} drift.")
+    bundled_media_suffixes = (
+        ".bin", ".img", ".iso", ".cue", ".chd", ".cpe", ".ecm",
+        ".mds", ".pbp", ".ccd", ".elf", ".exe", ".psexe",
+        ".ps-exe", ".psx", ".psf", ".minipsf", ".m3u", ".psxgpu",
+        ".psxgpu.zst", ".psxgpu.xz",
+    )
+    if not set(bundled_media_suffixes).issubset(
+        automation.RUNTIME_MEDIA_SOURCE_SUFFIXES
+    ):
+        raise AssertionError("Bundled DuckStation media suffix coverage regressed.")
+    for index, suffix in enumerate((
+        ".cpe", ".elf", ".exe", ".psx", ".psxgpu",
+        ".psxgpu.zst", ".psxgpu.xz",
+    )):
+        alternate = automation.RuntimeSessionOpenFileObservation(
+            f"{40 + index}r",
+            8,
+            100 + index,
+            4096,
+            1,
+            f"/pinned/alternate{suffix}",
+        )
+        expect_any_refusal(
+            lambda alternate=alternate: automation.validate_runtime_session_observation(
+                profile,
+                process,
+                observation(
+                    open_files=(
+                        opened(profile.candidate_bin, "17r"),
+                        alternate,
+                    )
+                ),
+            )
+        )
+    expect_any_refusal(
+        lambda: observation(
+            open_files=(
+                opened(profile.candidate_bin, "17r"),
+                opened(cache, "17u"),
+            ),
+            current_cache=cache,
+        )
+    )
+    expect_any_refusal(
+        lambda: dataclasses.replace(
+            binding,
+            allowed_process_cache=cache,
+            allowed_process_cache_descriptor=opened(cache, "17u"),
+        )
+    )
+    expect_any_refusal(
+        lambda: automation.RuntimeSessionOpenFileObservation(
+            "2147483648r", 8, 91, 1, 1, "/pinned/too-large.bin"
+        )
+    )
+    expect_any_refusal(
+        lambda: automation.RuntimeSessionOpenFileObservation(
+            ("9" * 5_000) + "r", 8, 92, 1, 1, "/pinned/absurd-fd.bin"
+        )
+    )
+    for numeric_changes in (
+        {"device": automation.RUNTIME_ATTESTATION_MAX_SAFE_INTEGER + 1},
+        {"inode": automation.RUNTIME_ATTESTATION_MAX_SAFE_INTEGER + 1},
+        {"byte_length": automation.RUNTIME_ATTESTATION_MAX_SAFE_INTEGER + 1},
+        {"link_count": automation.NATIVE_LINK_COUNT_MAX + 1},
+    ):
+        expect_any_refusal(
+            lambda changes=numeric_changes: dataclasses.replace(
+                opened(profile.candidate_bin, "17r"), **changes
+            )
+        )
+    expect_any_refusal(
+        lambda: automation.RuntimeSessionOpenFileObservation(
+            "93r",
+            8,
+            93,
+            1,
+            1,
+            "/pinned/" + ("a" * automation.RUNTIME_ATTESTATION_MAX_PATH_BYTES),
+        )
+    )
+
+    forged_binding = dataclasses.replace(
+        binding,
+        candidate_bin=dataclasses.replace(
+            binding.candidate_bin, sha256="f" * 64
+        ),
+    )
+    expect_any_refusal(
+        lambda: dataclasses.replace(first, process_binding=forged_binding)
+    )
+
+    class DigestText(str):
+        pass
+
+    class ClosureEqual:
+        def __eq__(self, other: object) -> bool:
+            return other == automation.EXPECTED_HANDOFF_RECEIPT_SHA256
+
+    class ActionEqual:
+        def __hash__(self) -> int:
+            return hash(automation.KeyAction.PAD_R1_TOGGLE)
+
+        def __eq__(self, other: object) -> bool:
+            return other is automation.KeyAction.PAD_R1_TOGGLE
+
+    spoofed_actions = set(profile.enabled_actions)
+    spoofed_actions.remove(automation.KeyAction.PAD_R1_TOGGLE)
+    spoofed_actions.add(ActionEqual())
+
+    pure_invalid_profiles = (
+        dataclasses.replace(profile, profile_id=DigestText(automation.PROFILE_ID)),
+        dataclasses.replace(profile, effective_uid=True),
+        dataclasses.replace(
+            profile,
+            executable=dataclasses.replace(profile.executable, sha256="f" * 64),
+        ),
+        dataclasses.replace(
+            profile,
+            executable=dataclasses.replace(
+                profile.executable,
+                sha256=DigestText(automation.EXPECTED_DUCKSTATION_SHA256),
+            ),
+        ),
+        dataclasses.replace(
+            profile,
+            executable=dataclasses.replace(
+                profile.executable,
+                byte_length=automation.EXPECTED_EXECUTABLE_SIZE - 1,
+            ),
+        ),
+        dataclasses.replace(
+            profile,
+            executable=dataclasses.replace(profile.executable, mode=0o777),
+        ),
+        dataclasses.replace(
+            profile,
+            settings=dataclasses.replace(profile.settings, sha256="f" * 64),
+        ),
+        dataclasses.replace(
+            profile,
+            settings=dataclasses.replace(profile.settings, mode=0o644),
+        ),
+        dataclasses.replace(
+            profile,
+            candidate_cue=dataclasses.replace(
+                profile.candidate_cue, sha256="f" * 64
+            ),
+        ),
+        dataclasses.replace(
+            profile,
+            candidate_cue=dataclasses.replace(profile.candidate_cue, mode=0o600),
+        ),
+        dataclasses.replace(
+            profile,
+            candidate_bin=dataclasses.replace(
+                profile.candidate_bin, sha256="f" * 64
+            ),
+        ),
+        dataclasses.replace(
+            profile,
+            candidate_bin=dataclasses.replace(profile.candidate_bin, mode=0o600),
+        ),
+        dataclasses.replace(
+            profile,
+            external_home_real_path=DigestText(profile.external_home_real_path),
+        ),
+        dataclasses.replace(
+            profile,
+            allowed_process_cache_real_path=DigestText(
+                profile.allowed_process_cache_real_path
+            ),
+        ),
+        dataclasses.replace(profile, handoff_receipt_sha256="f" * 64),
+        dataclasses.replace(profile, handoff_receipt_sha256=ClosureEqual()),
+        dataclasses.replace(profile, app_content_manifest_sha256="f" * 64),
+        dataclasses.replace(profile, app_output_tree_manifest_sha256="f" * 64),
+        dataclasses.replace(profile, package_envelope_sha256="f" * 64),
+        dataclasses.replace(profile, external_home_bios_sha256="f" * 64),
+        dataclasses.replace(
+            profile, host_normal_settings_sentinel_sha256="f" * 64
+        ),
+        dataclasses.replace(profile, receipt_closure_sha256="f" * 64),
+        dataclasses.replace(
+            profile, home_output_tree_manifest_sha256="f" * 64
+        ),
+        dataclasses.replace(profile, candidate_manifest_sha256="f" * 64),
+        dataclasses.replace(profile, enabled_actions=frozenset()),
+        dataclasses.replace(profile, enabled_actions=frozenset(spoofed_actions)),
+    )
+    pure_observer = SequenceRuntimeObserver((base, base))
+    pure_attestor = automation.ExactRuntimeSessionAttestor(
+        pure_observer, session
+    )
+    pure_topology_before = len(gdb_attestor.connection_calls)
+    pure_sent_before = tuple(fake_socket.sent)
+    for invalid_profile in pure_invalid_profiles:
+        expect_any_refusal(
+            lambda invalid_profile=invalid_profile: pure_attestor.attest_exact(
+                invalid_profile, process
+            )
+        )
+    expect_any_refusal(
+        lambda: pure_attestor.attest_exact(
+            profile, dataclasses.replace(process, pid=True)
+        )
+    )
+    expect_any_refusal(
+        lambda: pure_attestor.attest_exact(
+            profile,
+            dataclasses.replace(
+                process,
+                start_seconds=automation.RUNTIME_ATTESTATION_MAX_SAFE_INTEGER + 1,
+            ),
+        )
+    )
+    expect_any_refusal(
+        lambda: pure_attestor.attest_exact(
+            dataclasses.replace(profile, effective_uid=automation.NATIVE_UID_MAX + 1),
+            dataclasses.replace(
+                process,
+                effective_uid=automation.NATIVE_UID_MAX + 1,
+                real_uid=automation.NATIVE_UID_MAX + 1,
+                saved_uid=automation.NATIVE_UID_MAX + 1,
+            ),
+        )
+    )
+    if (
+        pure_observer.calls
+        or len(gdb_attestor.connection_calls) != pure_topology_before
+        or tuple(fake_socket.sent) != pure_sent_before
+        or session.status().state != "RUNNING"
+    ):
+        raise AssertionError(
+            "Malformed frozen profile/process reached observation or GDB."
+        )
+
+    bad_before_session, bad_before_socket, bad_before_connector, bad_before_gdb, _ = (
+        make_gdb_session(
+            [bytes((value,)) for value in connect_transcript], process=process
+        )
+    )
+    bad_before_session.connect_resume_once(process)
+    bad_before_observer = SequenceRuntimeObserver((invalid_observations[1][1],))
+    bad_before_sent = tuple(bad_before_socket.sent)
+    bad_before_topology = len(bad_before_gdb.connection_calls)
+    bad_before_exact = automation.ExactRuntimeSessionAttestor(
+        bad_before_observer, bad_before_session
+    )
+    expect_any_refusal(
+        lambda: bad_before_exact.attest_exact(profile, process)
+    )
+    if (
+        len(bad_before_observer.calls) != 1
+        or len(bad_before_gdb.connection_calls) != bad_before_topology
+        or tuple(bad_before_socket.sent) != bad_before_sent
+        or len(bad_before_connector.calls) != 1
+        or bad_before_socket.close_calls != 1
+        or bad_before_session.status().state != "POISONED"
+    ):
+        raise AssertionError(
+            "Invalid bracket-start observation crossed GDB or stayed reusable."
+        )
+    retry_calls = len(bad_before_observer.calls)
+    expect_any_refusal(
+        lambda: bad_before_exact.attest_exact(profile, process)
+    )
+    if len(bad_before_observer.calls) != retry_calls:
+        raise AssertionError("POISONED exact attestor retried process observation.")
+
+    binding_drift_session, binding_drift_socket, binding_drift_connector, binding_drift_gdb, _ = (
+        make_gdb_session(
+            [bytes((value,)) for value in connect_transcript], process=process
+        )
+    )
+    binding_drift_session.connect_resume_once(process)
+    descriptor_drift = observation(
+        open_files=(opened(profile.candidate_bin, "18r"),)
+    )
+    binding_drift_observer = SequenceRuntimeObserver((base, descriptor_drift))
+    binding_drift_sent = tuple(binding_drift_socket.sent)
+    binding_drift_topology = len(binding_drift_gdb.connection_calls)
+    binding_drift_results: list[Any] = []
+    expect_any_refusal(
+        lambda: binding_drift_results.append(
+            automation.ExactRuntimeSessionAttestor(
+                binding_drift_observer, binding_drift_session
+            ).attest_exact(profile, process)
+        )
+    )
+    if (
+        binding_drift_results
+        or len(binding_drift_observer.calls) != 2
+        or len(binding_drift_gdb.connection_calls) - binding_drift_topology != 1
+        or tuple(binding_drift_socket.sent) != binding_drift_sent
+        or len(binding_drift_connector.calls) != 1
+        or binding_drift_socket.close_calls != 1
+        or binding_drift_session.status().state != "POISONED"
+    ):
+        raise AssertionError(
+            "Individually valid before/after disc binding drift escaped the bracket."
+        )
+
+    topology_gate = {"drift": False}
+
+    def bracket_topology(
+        observed_process: Any, expected_client: Any | None, _call: int
+    ) -> Any:
+        changes: dict[str, object] = {}
+        if topology_gate["drift"] and expected_client is not None:
+            changes["server_device_token"] = "0xcccc"
+        return make_gdb_connection_set(
+            make_gdb_listener(pid=observed_process.pid),
+            expected_client,
+            **changes,
+        )
+
+    topology_session, topology_socket, topology_connector, topology_gdb, _ = (
+        make_gdb_session(
+            [bytes((value,)) for value in connect_transcript],
+            process=process,
+            connection_observer=bracket_topology,
+        )
+    )
+    topology_session.connect_resume_once(process)
+
+    class TopologyGateObserver(SequenceRuntimeObserver):
+        def observe(self, observed_profile: Any, observed_process: Any) -> Any:
+            value = super().observe(observed_profile, observed_process)
+            if len(self.calls) == 2:
+                topology_gate["drift"] = True
+            return value
+
+    topology_observer = TopologyGateObserver((base, base))
+    topology_sent = tuple(topology_socket.sent)
+    topology_calls = len(topology_gdb.connection_calls)
+    expect_any_refusal(
+        lambda: automation.ExactRuntimeSessionAttestor(
+            topology_observer, topology_session
+        ).attest_exact(profile, process)
+    )
+    if (
+        len(topology_observer.calls) != 2
+        or len(topology_gdb.connection_calls) - topology_calls != 2
+        or tuple(topology_socket.sent) != topology_sent
+        or len(topology_connector.calls) != 1
+        or topology_socket.close_calls != 1
+        or topology_session.status().state != "POISONED"
+        or topology_session.status().pause_state_certain
+    ):
+        raise AssertionError(
+            "Post-observation competing GDB client escaped the exact bracket."
+        )
+
+    race_entered = threading.Event()
+    race_continue = threading.Event()
+
+    class BlockingAfterObserver(SequenceRuntimeObserver):
+        def observe(self, observed_profile: Any, observed_process: Any) -> Any:
+            value = super().observe(observed_profile, observed_process)
+            if len(self.calls) == 2:
+                race_entered.set()
+                if not race_continue.wait(timeout=1):
+                    raise AssertionError("Exact bracket race fixture timed out.")
+            return value
+
+    race_session, race_socket, race_connector, _, _ = make_gdb_session(
+        [bytes((value,)) for value in connect_transcript], process=process
+    )
+    race_session.connect_resume_once(process)
+    race_observer = BlockingAfterObserver((base, base))
+    race_exact = automation.ExactRuntimeSessionAttestor(
+        race_observer, race_session
+    )
+    race_results: list[Any] = []
+    race_errors: list[BaseException] = []
+
+    def attest_during_pause_race() -> None:
+        try:
+            race_results.append(race_exact.attest_exact(profile, process))
+        except BaseException as exc:
+            race_errors.append(exc)
+
+    race_sent = tuple(race_socket.sent)
+    race_thread = threading.Thread(target=attest_during_pause_race, daemon=True)
+    race_thread.start()
+    if not race_entered.wait(timeout=1):
+        raise AssertionError("Exact bracket did not reach its second observation.")
+    expect_refusal(
+        lambda: race_session.arm_planned_pause(process),
+        "Concurrent DuckStation GDB transition",
+    )
+    race_continue.set()
+    race_thread.join(timeout=1)
+    if (
+        race_thread.is_alive()
+        or race_results
+        or len(race_errors) != 1
+        or not isinstance(race_errors[0], automation.AutomationRefusal)
+        or race_session.status().state != "POISONED"
+        or tuple(race_socket.sent) != race_sent
+        or len(race_connector.calls) != 1
+        or race_socket.close_calls != 1
+    ):
+        raise AssertionError(
+            "Concurrent pause escaped as a stale RUNNING runtime witness."
+        )
+
+    new_session, new_socket, new_connector, new_gdb, _ = make_gdb_session(
+        (), process=process
+    )
+    new_observer = SequenceRuntimeObserver((base,))
+    expect_any_refusal(
+        lambda: automation.ExactRuntimeSessionAttestor(
+            new_observer, new_session
+        ).attest_exact(profile, process)
+    )
+    if (
+        new_observer.calls
+        or new_session.status().state != "NEW"
+        or new_connector.calls
+        or new_gdb.connection_calls
+        or new_socket.sent
+        or new_socket.recv_sizes
+        or new_socket.close_calls
+    ):
+        raise AssertionError("NEW composite attestation crossed a boundary.")
+
+    armed_session, armed_socket, armed_connector, armed_gdb, _ = make_gdb_session(
+        [bytes((value,)) for value in connect_transcript], process=process
+    )
+    armed_session.connect_resume_once(process)
+    armed_session.arm_planned_pause(process)
+    armed_observer = SequenceRuntimeObserver((base,))
+    armed_sent = tuple(armed_socket.sent)
+    armed_topology = len(armed_gdb.connection_calls)
+    expect_any_refusal(
+        lambda: automation.ExactRuntimeSessionAttestor(
+            armed_observer, armed_session
+        ).attest_exact(profile, process)
+    )
+    if (
+        armed_observer.calls
+        or armed_session.status().state != "EXPECTING_PLAN_PAUSE"
+        or tuple(armed_socket.sent) != armed_sent
+        or len(armed_gdb.connection_calls) != armed_topology
+        or len(armed_connector.calls) != 1
+        or armed_socket.close_calls
+    ):
+        raise AssertionError("Armed composite attestation destroyed recovery state.")
+    armed_session.close()
+
+    source = TOOL_PATH.read_text(encoding="utf-8")
+    main_names = frozenset(automation.main.__code__.co_names)
+    foundation_names = frozenset(
+        automation.UnattendedFoundation.run.__code__.co_names
+    ) | frozenset(
+        automation.UnattendedFoundation._run_with_coordinator_lease.__code__.co_names
+    ) | frozenset(automation.UnattendedFoundation._execute.__code__.co_names)
+    coordinator_names = frozenset(
+        automation.GdbInputPulseLifecycleCoordinator.__init__.__code__.co_names
+    ) | frozenset(
+        automation.GdbInputPulseLifecycleCoordinator.start_execute.__code__.co_names
+    ) | frozenset(
+        automation.GdbInputPulseLifecycleCoordinator.execute_next.__code__.co_names
+    )
+    if (
+        "ExactRuntimeSessionAttestor" in main_names
+        or "ExactRuntimeSessionAttestor" in foundation_names
+        or "ExactRuntimeSessionAttestor" in coordinator_names
+        or "UnavailableRuntimeSessionAttestor" not in main_names
+        or source.count("attest_running_owned(") != 1
+        or source.count("attest_running_owned_bracketed(") != 2
+    ):
+        raise AssertionError("Production crossed the offline exact-attestor gate.")
+    session.close()
 
 
 def test_planned_space_pause_resume_lifecycle() -> None:
@@ -5821,6 +7212,8 @@ def main() -> int:
         test_persistent_gdb_reader_rsp_refusal_matrix,
         test_persistent_gdb_reader_semantic_and_binding_refusals,
         test_one_shot_gdb_session_resume_and_shared_reads,
+        test_gdb_runtime_session_sentinel_exact_and_refusals,
+        test_exact_runtime_session_attestor_and_disc_binding,
         test_planned_space_pause_resume_lifecycle,
         test_targeted_key_transport_exclusive_capability,
         test_targeted_key_transport_claim_races_and_coordinator_validation,

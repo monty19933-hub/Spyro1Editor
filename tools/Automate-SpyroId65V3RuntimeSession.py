@@ -54,7 +54,7 @@ import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType, ModuleType
-from typing import Any, Final, Protocol
+from typing import Any, ClassVar, Final, Protocol
 
 
 PLAN_FORMAT: Final = "spyro-editor-id65-v3-unattended-input-plan"
@@ -150,10 +150,60 @@ PACKAGED_APP_RELATIVE_PATH: Final = (
 DUCKSTATION_EXECUTABLE_RELATIVE_PATH: Final = (
     f"{PACKAGED_APP_RELATIVE_PATH}/Contents/MacOS/DuckStation"
 )
+EXTERNAL_HOME_RELATIVE_PATH: Final = f"{PROFILE_PACKAGE_RELATIVE_PATH}/home"
 EXTERNAL_HOME_DATA_RELATIVE_PATH: Final = (
-    f"{PROFILE_PACKAGE_RELATIVE_PATH}/home/Library/Application Support/DuckStation"
+    f"{EXTERNAL_HOME_RELATIVE_PATH}/Library/Application Support/DuckStation"
 )
 SETTINGS_RELATIVE_PATH: Final = f"{EXTERNAL_HOME_DATA_RELATIVE_PATH}/settings.ini"
+ALLOWED_PROCESS_CACHE_BIN_RELATIVE_PATH: Final = "cache/vulkan_shaders.bin"
+ALLOWED_PROCESS_CACHE_PATH: Final = (
+    f"{EXTERNAL_HOME_DATA_RELATIVE_PATH}/{ALLOWED_PROCESS_CACHE_BIN_RELATIVE_PATH}"
+)
+MAX_PROCESS_CACHE_BIN_BYTES: Final = 64 * 1024 * 1024
+RUNTIME_ENVIRONMENT_FIXED_ASSIGNMENTS: Final = (
+    "LANG=C",
+    "LC_ALL=C",
+    "PATH=/usr/bin:/bin:/usr/sbin:/sbin",
+    "SPYRO_ID65_CAPTURE_ENVIRONMENT_END_V1=duckstation-id65-unattended-v1",
+)
+EXACT_RUNTIME_SESSION_ATTESTOR_ID: Final = "exact-runtime-session-attestor-v1"
+RUNTIME_SESSION_ATTESTATION_FORMAT: Final = (
+    "spyro-id65-exact-runtime-session-attestation"
+)
+RUNTIME_SESSION_ATTESTATION_FORMAT_VERSION: Final = 1
+RUNTIME_ATTESTATION_MAX_SAFE_INTEGER: Final = 9_007_199_254_740_991
+RUNTIME_ATTESTATION_MAX_PATH_BYTES: Final = 4_096
+NATIVE_UID_MAX: Final = 4_294_967_295
+NATIVE_LINK_COUNT_MAX: Final = 2_147_483_647
+RUNTIME_MEDIA_SOURCE_SUFFIXES: Final = (
+    ".bin",
+    ".ccd",
+    ".chd",
+    ".cpe",
+    ".cso",
+    ".cue",
+    ".ecm",
+    ".elf",
+    ".exe",
+    ".img",
+    ".iso",
+    ".m3u",
+    ".mdf",
+    ".mds",
+    ".minipsf",
+    ".minipsf2",
+    ".pbp",
+    ".ps-exe",
+    ".psexe",
+    ".psf",
+    ".psf2",
+    ".psx",
+    ".psxgpu",
+    ".psxgpu.xz",
+    ".psxgpu.zst",
+    ".sub",
+    ".zso",
+)
 RECEIPT_RELATIVE_PATH: Final = (
     f"{PROFILE_PACKAGE_RELATIVE_PATH}/handoff-receipt.json"
 )
@@ -603,12 +653,17 @@ class VerifiedProfile:
     settings: FileIdentity
     candidate_cue: FileIdentity
     candidate_bin: FileIdentity
+    external_home_real_path: str
+    allowed_process_cache_real_path: str
     handoff_receipt_sha256: str
     app_content_manifest_sha256: str
     app_output_tree_manifest_sha256: str
     package_envelope_sha256: str
     external_home_bios_sha256: str
     host_normal_settings_sentinel_sha256: str
+    receipt_closure_sha256: str
+    home_output_tree_manifest_sha256: str
+    candidate_manifest_sha256: str
     enabled_actions: frozenset[KeyAction]
 
 
@@ -1012,6 +1067,24 @@ class FrozenProfileVerifier:
             maximum_bytes=1024 * 1024 * 1024,
             expected_owner_uid=uid,
         )
+        external_home_real_path = os.fspath(
+            pathlib.Path(
+                os.path.abspath(self.repository_root / EXTERNAL_HOME_RELATIVE_PATH)
+            )
+        )
+        allowed_process_cache_real_path = os.fspath(
+            pathlib.Path(
+                os.path.abspath(self.repository_root / ALLOWED_PROCESS_CACHE_PATH)
+            )
+        )
+        if (
+            os.path.realpath(external_home_real_path) != external_home_real_path
+            or os.path.realpath(allowed_process_cache_real_path)
+            != allowed_process_cache_real_path
+        ):
+            raise AutomationRefusal(
+                "External HOME or allowed process-cache path is not canonical."
+            )
         parser = configparser.ConfigParser(
             interpolation=None,
             strict=True,
@@ -1047,6 +1120,8 @@ class FrozenProfileVerifier:
             settings=settings,
             candidate_cue=cue,
             candidate_bin=candidate_bin,
+            external_home_real_path=external_home_real_path,
+            allowed_process_cache_real_path=allowed_process_cache_real_path,
             handoff_receipt_sha256=EXPECTED_HANDOFF_RECEIPT_SHA256,
             app_content_manifest_sha256=EXPECTED_APP_CONTENT_MANIFEST_SHA256,
             app_output_tree_manifest_sha256=EXPECTED_APP_OUTPUT_TREE_MANIFEST_SHA256,
@@ -1055,6 +1130,11 @@ class FrozenProfileVerifier:
             host_normal_settings_sentinel_sha256=(
                 EXPECTED_HOST_SETTINGS_SENTINEL_SHA256
             ),
+            receipt_closure_sha256=EXPECTED_RECEIPT_CLOSURE_SHA256,
+            home_output_tree_manifest_sha256=(
+                EXPECTED_HOME_OUTPUT_TREE_MANIFEST_SHA256
+            ),
+            candidate_manifest_sha256=EXPECTED_CANDIDATE_MANIFEST_SHA256,
             enabled_actions=frozenset(enabled),
         )
 
@@ -2340,13 +2420,24 @@ class GdbListenerIdentity:
         if (
             type(self.pid) is not int
             or self.pid <= 1
+            or self.pid > 2_147_483_647
             or type(self.descriptor) is not int
             or self.descriptor < 0
+            or self.descriptor > 2_147_483_647
+            or type(self.access) is not str
             or self.access != "u"
+            or type(self.socket_type) is not str
             or self.socket_type != "IPv4"
-            or re.fullmatch(r"0x[0-9a-f]+", self.device_token, re.ASCII) is None
+            or type(self.device_token) is not str
+            or re.fullmatch(
+                r"0x[0-9a-f]{1,16}", self.device_token, re.ASCII
+            )
+            is None
+            or type(self.protocol) is not str
             or self.protocol != "TCP"
+            or type(self.endpoint) is not str
             or self.endpoint != f"{GDB_HOST}:{GDB_PORT}"
+            or type(self.tcp_state) is not str
             or self.tcp_state != "LISTEN"
             or type(self.receive_queue) is not int
             or self.receive_queue != 0
@@ -2373,6 +2464,7 @@ class GdbClientEndpointIdentity:
             or type(self.descriptor) is not int
             or self.descriptor < 0
             or self.descriptor > 2_147_483_647
+            or type(self.address) is not str
             or self.address != GDB_HOST
             or type(self.port) is not int
             or not 1 <= self.port <= 65_535
@@ -2424,12 +2516,14 @@ class GdbObservedConnectionSet:
             or self.client_descriptor < 0
             or self.client_descriptor > 2_147_483_647
             or self.client_descriptor != self.client_endpoint.descriptor
+            or type(self.server_device_token) is not str
             or re.fullmatch(
-                r"0x[0-9a-f]+", self.server_device_token or "", re.ASCII
+                r"0x[0-9a-f]{1,16}", self.server_device_token or "", re.ASCII
             )
             is None
+            or type(self.client_device_token) is not str
             or re.fullmatch(
-                r"0x[0-9a-f]+", self.client_device_token or "", re.ASCII
+                r"0x[0-9a-f]{1,16}", self.client_device_token or "", re.ASCII
             )
             is None
             or self.server_device_token == self.listener.device_token
@@ -3477,6 +3571,42 @@ class GdbSessionStatus:
             raise AutomationRefusal("Armed DuckStation GDB session status is inconsistent.")
 
 
+@dataclasses.dataclass(frozen=True)
+class GdbRuntimeSessionSentinel:
+    """Immutable whole-topology witness for one exact confirmed RUNNING state."""
+
+    state: str
+    bound_process: ProcessIdentity
+    bound_listener: GdbListenerIdentity
+    observed_connection_set: GdbObservedConnectionSet
+    connection_attempts: int
+    continue_attempts: int
+    pause_state_certain: bool
+    single_client_observed: bool
+    planned_paused_tick: int | None
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.state) is not str
+            or self.state != "RUNNING"
+            or type(self.bound_process) is not ProcessIdentity
+            or type(self.bound_listener) is not GdbListenerIdentity
+            or type(self.observed_connection_set) is not GdbObservedConnectionSet
+            or self.bound_listener.pid != self.bound_process.pid
+            or self.observed_connection_set.listener != self.bound_listener
+            or self.observed_connection_set.client_endpoint is None
+            or self.observed_connection_set.client_endpoint.pid != os.getpid()
+            or type(self.connection_attempts) is not int
+            or self.connection_attempts != 1
+            or type(self.continue_attempts) is not int
+            or self.continue_attempts != 1
+            or self.pause_state_certain is not True
+            or self.single_client_observed is not True
+            or self.planned_paused_tick is not None
+        ):
+            raise AutomationRefusal("DuckStation GDB runtime sentinel is malformed.")
+
+
 class PersistentDuckStationGdbSession:
     """One fixed DuckStation connection with one exact resume capability.
 
@@ -4215,6 +4345,158 @@ class PersistentDuckStationGdbSession:
                 process, self._transport.read_vblank_tick_strict_running
             )
         )
+
+    def _attest_running_owned_locked(
+        self,
+        process: ProcessIdentity,
+        before_callback: Callable[[], Any] | None,
+        after_callback: Callable[[], Any] | None,
+    ) -> tuple[Any, GdbRuntimeSessionSentinel, Any]:
+        """Return a witness while the caller holds the session operation lock."""
+
+        baseline_accepted = False
+        try:
+            if type(process) is not ProcessIdentity:
+                raise AutomationRefusal(
+                    "DuckStation GDB runtime-attestation process is malformed."
+                )
+            if (
+                (before_callback is None) != (after_callback is None)
+                or (
+                    before_callback is not None
+                    and not callable(before_callback)
+                )
+                or after_callback is not None
+                and not callable(after_callback)
+            ):
+                raise AutomationRefusal(
+                    "DuckStation GDB runtime-attestation arguments are malformed."
+                )
+
+            def exact_running_state() -> bool:
+                return (
+                    self._state is _GdbSessionState.RUNNING
+                    and self._bound_process == process
+                    and self._bound_listener is not None
+                    and self._continue_attempts == 1
+                    and self._pause_state_certain
+                    and self._single_client_observed
+                    and self._planned_paused_tick is None
+                    and self._observed_connection_set is not None
+                )
+
+            with self._state_guard:
+                if not exact_running_state():
+                    raise AutomationRefusal(
+                        "DuckStation GDB runtime sentinel requires exact RUNNING ownership."
+                    )
+                expected_set = self._observed_connection_set
+                expected_listener = self._bound_listener
+            baseline_accepted = True
+            before_value = (
+                before_callback() if before_callback is not None else None
+            )
+            observed = self._attest_single_client(process)
+            self._transport.require_existing_connection(process)
+            transport = self._transport.status()
+            after_value = after_callback() if after_callback is not None else None
+            observed_after = (
+                self._attest_single_client(process)
+                if after_callback is not None
+                else observed
+            )
+            transport_after = self._transport.status()
+            with self._state_guard:
+                if (
+                    not exact_running_state()
+                    or expected_set is None
+                    or expected_listener is None
+                    or observed != expected_set
+                    or observed_after != expected_set
+                    or self._observed_connection_set != expected_set
+                    or self._bound_listener != expected_listener
+                    or transport != transport_after
+                    or transport.state != "CONNECTED"
+                    or transport.bound_process != process
+                    or transport.bound_listener != expected_listener
+                    or transport.client_endpoint != expected_set.client_endpoint
+                    or transport.connection_attempts != 1
+                ):
+                    raise AutomationRefusal(
+                        "DuckStation GDB runtime sentinel changed while attesting."
+                    )
+                sentinel = GdbRuntimeSessionSentinel(
+                    state="RUNNING",
+                    bound_process=process,
+                    bound_listener=expected_listener,
+                    observed_connection_set=expected_set,
+                    connection_attempts=transport.connection_attempts,
+                    continue_attempts=self._continue_attempts,
+                    pause_state_certain=self._pause_state_certain,
+                    single_client_observed=self._single_client_observed,
+                    planned_paused_tick=self._planned_paused_tick,
+                )
+            return before_value, sentinel, after_value
+        except BaseException as exc:
+            if not baseline_accepted:
+                if isinstance(exc, AutomationRefusal):
+                    raise
+                raise AutomationRefusal(
+                    "DuckStation GDB runtime sentinel baseline failed closed."
+                ) from exc
+            with self._state_guard:
+                certain = self._certainty_after_failure(
+                    exc, self._pause_state_certain
+                )
+            self._poison_and_raise(exc, pause_state_certain=certain)
+
+    def attest_running_owned(
+        self, process: ProcessIdentity
+    ) -> GdbRuntimeSessionSentinel:
+        """Reattest sole-client topology and return one non-torn RUNNING witness.
+
+        The operation sends no RSP packet and opens no connection.  It remains
+        offline-only because this session is absent from production ``main``.
+        """
+
+        if not self._operation_lock.acquire(blocking=False):
+            raise AutomationRefusal(
+                "Concurrent DuckStation GDB runtime attestation is forbidden."
+            )
+        try:
+            _, sentinel, _ = self._attest_running_owned_locked(
+                process, None, None
+            )
+            return sentinel
+        finally:
+            self._operation_lock.release()
+
+    def attest_running_owned_bracketed(
+        self,
+        process: ProcessIdentity,
+        before_callback: Callable[[], Any],
+        after_callback: Callable[[], Any],
+    ) -> tuple[Any, GdbRuntimeSessionSentinel, Any]:
+        """Hold exclusive session ownership over a complete evidence bracket."""
+
+        if (
+            type(process) is not ProcessIdentity
+            or not callable(before_callback)
+            or not callable(after_callback)
+        ):
+            raise AutomationRefusal(
+                "Bracketed DuckStation GDB runtime-attestation inputs are malformed."
+            )
+        if not self._operation_lock.acquire(blocking=False):
+            raise AutomationRefusal(
+                "Concurrent bracketed GDB runtime attestation is forbidden."
+            )
+        try:
+            return self._attest_running_owned_locked(
+                process, before_callback, after_callback
+            )
+        finally:
+            self._operation_lock.release()
 
     def close(self) -> None:
         if not self._operation_lock.acquire(blocking=False):
@@ -4990,6 +5272,785 @@ class UnavailableNativePadConfirmer:
         raise AutomationRefusal("Native read-only GDB pad confirmation is unavailable.")
 
 
+def _canonical_runtime_path(value: object, label: str) -> str:
+    if (
+        type(value) is not str
+        or not value
+        or any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+    ):
+        raise AutomationRefusal(f"{label} is not one canonical real path.")
+    try:
+        encoded = value.encode("utf-8", "strict")
+    except UnicodeError as exc:
+        raise AutomationRefusal(f"{label} is not strict UTF-8.") from exc
+    if (
+        len(encoded) > RUNTIME_ATTESTATION_MAX_PATH_BYTES
+        or not os.path.isabs(value)
+        or os.path.normpath(value) != value
+        or os.path.realpath(value) != value
+    ):
+        raise AutomationRefusal(f"{label} is not one canonical real path.")
+    return value
+
+
+def _nul_manifest_bytes(items: object, label: str) -> bytes:
+    if type(items) is not tuple or not items:
+        raise AutomationRefusal(f"{label} is not one nonempty tuple.")
+    encoded: list[bytes] = []
+    for item in items:
+        if (
+            type(item) is not str
+            or not item
+            or "\0" in item
+            or any(ord(character) < 0x20 or ord(character) == 0x7F for character in item)
+        ):
+            raise AutomationRefusal(f"{label} contains a malformed item.")
+        try:
+            encoded.append(item.encode("utf-8", "strict"))
+        except UnicodeError as exc:
+            raise AutomationRefusal(f"{label} is not strict UTF-8.") from exc
+    return b"\0".join(encoded) + b"\0"
+
+
+def _require_runtime_file_identity(value: object, label: str) -> FileIdentity:
+    if type(value) is not FileIdentity:
+        raise AutomationRefusal(f"{label} identity has the wrong type.")
+    _canonical_runtime_path(value.real_path, f"{label} path")
+    if (
+        type(value.device) is not int
+        or value.device <= 0
+        or value.device > RUNTIME_ATTESTATION_MAX_SAFE_INTEGER
+        or type(value.inode) is not int
+        or value.inode <= 0
+        or value.inode > RUNTIME_ATTESTATION_MAX_SAFE_INTEGER
+        or type(value.byte_length) is not int
+        or value.byte_length < 0
+        or value.byte_length > RUNTIME_ATTESTATION_MAX_SAFE_INTEGER
+        or type(value.owner_uid) is not int
+        or value.owner_uid < 0
+        or value.owner_uid > NATIVE_UID_MAX
+        or type(value.mode) is not int
+        or not 0 <= value.mode <= 0o7777
+        or type(value.link_count) is not int
+        or value.link_count < 1
+        or value.link_count > NATIVE_LINK_COUNT_MAX
+        or type(value.sha256) is not str
+        or SHA256_RE.fullmatch(value.sha256) is None
+    ):
+        raise AutomationRefusal(f"{label} identity is malformed.")
+    return value
+
+
+def _require_runtime_process_identity(
+    value: object, label: str
+) -> ProcessIdentity:
+    if type(value) is not ProcessIdentity:
+        raise AutomationRefusal(f"{label} has the wrong type.")
+    if (
+        type(value.pid) is not int
+        or value.pid <= 1
+        or value.pid > 2_147_483_647
+        or type(value.effective_uid) is not int
+        or value.effective_uid <= 0
+        or value.effective_uid > NATIVE_UID_MAX
+        or type(value.real_uid) is not int
+        or value.real_uid != value.effective_uid
+        or type(value.saved_uid) is not int
+        or value.saved_uid != value.effective_uid
+        or type(value.start_seconds) is not int
+        or value.start_seconds <= 0
+        or value.start_seconds > RUNTIME_ATTESTATION_MAX_SAFE_INTEGER
+        or type(value.start_microseconds) is not int
+        or not 0 <= value.start_microseconds < 1_000_000
+    ):
+        raise AutomationRefusal(f"{label} is malformed.")
+    _require_runtime_file_identity(value.executable, f"{label} executable")
+    return value
+
+
+def runtime_environment_assignments(external_home_real_path: str) -> tuple[str, ...]:
+    home = _canonical_runtime_path(
+        external_home_real_path, "Runtime external HOME"
+    )
+    return (f"HOME={home}", *RUNTIME_ENVIRONMENT_FIXED_ASSIGNMENTS)
+
+
+def _exact_runtime_repository_path(relative_path: str, label: str) -> str:
+    if (
+        type(relative_path) is not str
+        or not relative_path
+        or os.path.isabs(relative_path)
+        or os.path.normpath(relative_path) != relative_path
+        or relative_path.startswith("../")
+    ):
+        raise AutomationRefusal(f"{label} relative path is malformed.")
+    return _canonical_runtime_path(
+        os.fspath(AUTOMATION_REPOSITORY_ROOT / relative_path), label
+    )
+
+
+def _require_exact_runtime_profile_process(
+    profile: object,
+    process: object,
+) -> tuple[str, str]:
+    """Purely pin the complete frozen profile before any native observation."""
+
+    if type(profile) is not VerifiedProfile or type(process) is not ProcessIdentity:
+        raise AutomationRefusal("Exact runtime profile/process inputs are malformed.")
+    if (
+        type(profile.profile_id) is not str
+        or profile.profile_id != PROFILE_ID
+        or type(profile.effective_uid) is not int
+        or profile.effective_uid <= 0
+    ):
+        raise AutomationRefusal("Exact runtime profile identity is malformed.")
+    checked_process = _require_runtime_process_identity(
+        process, "Exact runtime process"
+    )
+    expected_paths = (
+        (
+            profile.executable,
+            DUCKSTATION_EXECUTABLE_RELATIVE_PATH,
+            EXPECTED_DUCKSTATION_SHA256,
+            EXPECTED_EXECUTABLE_SIZE,
+            0o755,
+            "Exact DuckStation executable",
+        ),
+        (
+            profile.settings,
+            SETTINGS_RELATIVE_PATH,
+            EXPECTED_SETTINGS_SHA256,
+            EXPECTED_SETTINGS_SIZE,
+            0o600,
+            "Exact external-HOME settings",
+        ),
+        (
+            profile.candidate_cue,
+            CANDIDATE_CUE_RELATIVE_PATH,
+            EXPECTED_CANDIDATE_CUE_SHA256,
+            EXPECTED_CANDIDATE_CUE_SIZE,
+            0o644,
+            "Exact candidate CUE",
+        ),
+        (
+            profile.candidate_bin,
+            CANDIDATE_BIN_RELATIVE_PATH,
+            EXPECTED_CANDIDATE_BIN_SHA256,
+            EXPECTED_CANDIDATE_BIN_SIZE,
+            0o644,
+            "Exact candidate BIN",
+        ),
+    )
+    for (
+        identity,
+        relative_path,
+        digest,
+        byte_length,
+        mode,
+        label,
+    ) in expected_paths:
+        checked = _require_runtime_file_identity(identity, label)
+        if (
+            checked.real_path
+            != _exact_runtime_repository_path(relative_path, f"{label} path")
+            or checked.sha256 != digest
+            or checked.byte_length != byte_length
+            or checked.mode != mode
+            or checked.owner_uid != profile.effective_uid
+            or checked.link_count != 1
+        ):
+            raise AutomationRefusal(f"{label} is outside the frozen pinset.")
+    expected_home = _exact_runtime_repository_path(
+        EXTERNAL_HOME_RELATIVE_PATH, "Exact external HOME"
+    )
+    expected_cache_path = _exact_runtime_repository_path(
+        ALLOWED_PROCESS_CACHE_PATH, "Exact allowed process cache"
+    )
+    observed_home = _canonical_runtime_path(
+        profile.external_home_real_path, "Observed exact external HOME"
+    )
+    observed_cache_path = _canonical_runtime_path(
+        profile.allowed_process_cache_real_path,
+        "Observed exact allowed process cache",
+    )
+    expected_enabled_actions = frozenset(
+        action for action in ACTION_SPECS if action is not KeyAction.PAD_ANALOG
+    )
+    closure_digests = (
+        (profile.handoff_receipt_sha256, EXPECTED_HANDOFF_RECEIPT_SHA256),
+        (profile.app_content_manifest_sha256, EXPECTED_APP_CONTENT_MANIFEST_SHA256),
+        (
+            profile.app_output_tree_manifest_sha256,
+            EXPECTED_APP_OUTPUT_TREE_MANIFEST_SHA256,
+        ),
+        (profile.package_envelope_sha256, EXPECTED_PACKAGE_ENVELOPE_SHA256),
+        (profile.external_home_bios_sha256, EXPECTED_EXTERNAL_HOME_BIOS_SHA256),
+        (
+            profile.host_normal_settings_sentinel_sha256,
+            EXPECTED_HOST_SETTINGS_SENTINEL_SHA256,
+        ),
+        (profile.receipt_closure_sha256, EXPECTED_RECEIPT_CLOSURE_SHA256),
+        (
+            profile.home_output_tree_manifest_sha256,
+            EXPECTED_HOME_OUTPUT_TREE_MANIFEST_SHA256,
+        ),
+        (profile.candidate_manifest_sha256, EXPECTED_CANDIDATE_MANIFEST_SHA256),
+    )
+    if (
+        observed_home != expected_home
+        or observed_cache_path != expected_cache_path
+        or any(
+            type(observed) is not str
+            or SHA256_RE.fullmatch(observed) is None
+            or observed != expected
+            for observed, expected in closure_digests
+        )
+        or type(profile.enabled_actions) is not frozenset
+        or any(type(action) is not KeyAction for action in profile.enabled_actions)
+        or profile.enabled_actions != expected_enabled_actions
+    ):
+        raise AutomationRefusal("Exact runtime profile closure changed.")
+    verify_exact_process(
+        checked_process, expected_pid=checked_process.pid, profile=profile
+    )
+    return expected_home, expected_cache_path
+
+
+def _runtime_numeric_descriptor(value: str) -> tuple[int, str] | None:
+    match = re.fullmatch(r"(0|[1-9][0-9]*)([rwu])", value, re.ASCII)
+    if match is None:
+        return None
+    digits = match.group(1)
+    if len(digits) > 10:
+        raise AutomationRefusal("Runtime open-file descriptor exceeds its native bound.")
+    number = int(digits, 10)
+    if number > 2_147_483_647:
+        raise AutomationRefusal("Runtime open-file descriptor exceeds its native bound.")
+    return number, match.group(2)
+
+
+@dataclasses.dataclass(frozen=True)
+class RuntimeSessionOpenFileObservation:
+    fd: str
+    device: int
+    inode: int
+    byte_length: int
+    link_count: int
+    real_path: str
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.fd) is not str
+            or re.fullmatch(
+                r"(?:[a-z]{2,8}|(?:0|[1-9][0-9]*)[rwu])", self.fd, re.ASCII
+            )
+            is None
+            or type(self.device) is not int
+            or self.device <= 0
+            or self.device > RUNTIME_ATTESTATION_MAX_SAFE_INTEGER
+            or type(self.inode) is not int
+            or self.inode <= 0
+            or self.inode > RUNTIME_ATTESTATION_MAX_SAFE_INTEGER
+            or type(self.byte_length) is not int
+            or self.byte_length < 0
+            or self.byte_length > RUNTIME_ATTESTATION_MAX_SAFE_INTEGER
+            or type(self.link_count) is not int
+            or self.link_count < 1
+            or self.link_count > NATIVE_LINK_COUNT_MAX
+        ):
+            raise AutomationRefusal("Runtime open-file observation is malformed.")
+        _runtime_numeric_descriptor(self.fd)
+        _canonical_runtime_path(self.real_path, "Runtime open-file path")
+
+
+@dataclasses.dataclass(frozen=True)
+class RuntimeSessionObservation:
+    process: ProcessIdentity
+    argv: tuple[str, ...]
+    argv_nul_sha256: str
+    environment: tuple[str, ...]
+    environment_nul_sha256: str
+    external_home_real_path: str
+    open_files: tuple[RuntimeSessionOpenFileObservation, ...]
+    current_candidate_cue: FileIdentity
+    current_candidate_bin: FileIdentity
+    current_allowed_process_cache: FileIdentity | None
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.process) is not ProcessIdentity
+            or type(self.argv_nul_sha256) is not str
+            or SHA256_RE.fullmatch(self.argv_nul_sha256) is None
+            or type(self.environment_nul_sha256) is not str
+            or SHA256_RE.fullmatch(self.environment_nul_sha256) is None
+            or type(self.open_files) is not tuple
+            or any(
+                type(item) is not RuntimeSessionOpenFileObservation
+                for item in self.open_files
+            )
+            or self.open_files
+            != tuple(sorted(self.open_files, key=lambda item: (item.real_path, item.fd)))
+            or len({(item.real_path, item.fd) for item in self.open_files})
+            != len(self.open_files)
+            or (
+                self.current_allowed_process_cache is not None
+                and type(self.current_allowed_process_cache) is not FileIdentity
+            )
+        ):
+            raise AutomationRefusal("Runtime-session observation is malformed.")
+        numeric_descriptors = tuple(
+            descriptor
+            for item in self.open_files
+            if (descriptor := _runtime_numeric_descriptor(item.fd)) is not None
+        )
+        if (
+            len({descriptor[0] for descriptor in numeric_descriptors})
+            != len(numeric_descriptors)
+        ):
+            raise AutomationRefusal(
+                "Runtime-session observation aliases one numeric descriptor."
+            )
+        _require_runtime_process_identity(
+            self.process, "Observed runtime process"
+        )
+        _nul_manifest_bytes(self.argv, "Runtime argv")
+        _nul_manifest_bytes(self.environment, "Runtime environment")
+        _canonical_runtime_path(
+            self.external_home_real_path, "Runtime observed external HOME"
+        )
+        _require_runtime_file_identity(
+            self.current_candidate_cue, "Current candidate CUE"
+        )
+        _require_runtime_file_identity(
+            self.current_candidate_bin, "Current candidate BIN"
+        )
+        if self.current_allowed_process_cache is not None:
+            _require_runtime_file_identity(
+                self.current_allowed_process_cache, "Current allowed process cache"
+            )
+
+
+class RuntimeSessionObservationProvider(Protocol):
+    def observe(
+        self, profile: VerifiedProfile, process: ProcessIdentity
+    ) -> RuntimeSessionObservation: ...
+
+
+@dataclasses.dataclass(frozen=True)
+class RuntimeSessionProcessBinding:
+    process: ProcessIdentity
+    argv: tuple[str, ...]
+    argv_nul_sha256: str
+    environment: tuple[str, ...]
+    environment_nul_sha256: str
+    external_home_real_path: str
+    candidate_cue: FileIdentity
+    candidate_bin: FileIdentity
+    candidate_bin_descriptor: RuntimeSessionOpenFileObservation
+    allowed_process_cache: FileIdentity | None
+    allowed_process_cache_descriptor: RuntimeSessionOpenFileObservation | None
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.candidate_bin_descriptor)
+            is not RuntimeSessionOpenFileObservation
+            or (self.allowed_process_cache is None)
+            != (self.allowed_process_cache_descriptor is None)
+            or (
+                self.allowed_process_cache is not None
+                and type(self.allowed_process_cache) is not FileIdentity
+            )
+            or (
+                self.allowed_process_cache_descriptor is not None
+                and type(self.allowed_process_cache_descriptor)
+                is not RuntimeSessionOpenFileObservation
+            )
+            or type(self.argv_nul_sha256) is not str
+            or SHA256_RE.fullmatch(self.argv_nul_sha256) is None
+            or type(self.environment_nul_sha256) is not str
+            or SHA256_RE.fullmatch(self.environment_nul_sha256) is None
+        ):
+            raise AutomationRefusal("Runtime-session process binding is malformed.")
+        process = _require_runtime_process_identity(
+            self.process, "Bound runtime process"
+        )
+        argv_bytes = _nul_manifest_bytes(self.argv, "Bound runtime argv")
+        environment_bytes = _nul_manifest_bytes(
+            self.environment, "Bound runtime environment"
+        )
+        home = _canonical_runtime_path(
+            self.external_home_real_path, "Bound runtime external HOME"
+        )
+        cue = _require_runtime_file_identity(
+            self.candidate_cue, "Bound candidate CUE"
+        )
+        candidate_bin = _require_runtime_file_identity(
+            self.candidate_bin, "Bound candidate BIN"
+        )
+        descriptor = self.candidate_bin_descriptor
+        candidate_numeric = _runtime_numeric_descriptor(descriptor.fd)
+        if (
+            self.argv != (process.executable.real_path, cue.real_path)
+            or self.argv_nul_sha256
+            != hashlib.sha256(argv_bytes).hexdigest()
+            or self.environment != runtime_environment_assignments(home)
+            or self.environment_nul_sha256
+            != hashlib.sha256(environment_bytes).hexdigest()
+            or cue.real_path == candidate_bin.real_path
+            or descriptor.real_path != candidate_bin.real_path
+            or descriptor.device != candidate_bin.device
+            or descriptor.inode != candidate_bin.inode
+            or descriptor.byte_length != candidate_bin.byte_length
+            or descriptor.link_count != candidate_bin.link_count
+            or descriptor.link_count != 1
+            or candidate_numeric is None
+            or candidate_numeric[1] != "r"
+        ):
+            raise AutomationRefusal(
+                "Runtime-session process binding is internally inconsistent."
+            )
+        if self.allowed_process_cache is not None:
+            cache = _require_runtime_file_identity(
+                self.allowed_process_cache, "Bound allowed process cache"
+            )
+            cache_descriptor = self.allowed_process_cache_descriptor
+            if cache_descriptor is None:
+                raise AutomationRefusal(
+                    "Bound allowed process cache descriptor is missing."
+                )
+            cache_numeric = _runtime_numeric_descriptor(cache_descriptor.fd)
+            expected_cache_path = _canonical_runtime_path(
+                os.path.join(
+                    home,
+                    "Library/Application Support/DuckStation",
+                    ALLOWED_PROCESS_CACHE_BIN_RELATIVE_PATH,
+                ),
+                "Bound allowed process-cache path",
+            )
+            if (
+                cache.real_path != expected_cache_path
+                or cache.owner_uid != process.effective_uid
+                or cache.mode != 0o644
+                or cache.link_count != 1
+                or cache.byte_length > MAX_PROCESS_CACHE_BIN_BYTES
+                or cache_descriptor.real_path != cache.real_path
+                or cache_descriptor.device != cache.device
+                or cache_descriptor.inode != cache.inode
+                or cache_descriptor.byte_length != cache.byte_length
+                or cache_descriptor.link_count != cache.link_count
+                or cache_numeric is None
+                or cache_numeric[1] != "u"
+                or candidate_numeric is None
+                or cache_numeric[0] == candidate_numeric[0]
+            ):
+                raise AutomationRefusal(
+                    "Bound allowed process cache is internally inconsistent."
+                )
+
+
+def validate_runtime_session_observation(
+    profile: VerifiedProfile,
+    process: ProcessIdentity,
+    observation: RuntimeSessionObservation,
+) -> RuntimeSessionProcessBinding:
+    if (
+        type(profile) is not VerifiedProfile
+        or type(process) is not ProcessIdentity
+        or type(observation) is not RuntimeSessionObservation
+    ):
+        raise AutomationRefusal("Runtime-session validation inputs are not exact.")
+    expected_home, expected_cache_path = _require_exact_runtime_profile_process(
+        profile, process
+    )
+    if observation.process != process:
+        raise AutomationRefusal("Runtime-session observation changed process identity.")
+    _require_runtime_file_identity(profile.candidate_cue, "Verified candidate CUE")
+    _require_runtime_file_identity(profile.candidate_bin, "Verified candidate BIN")
+    expected_argv = (profile.executable.real_path, profile.candidate_cue.real_path)
+    argv_bytes = _nul_manifest_bytes(observation.argv, "Runtime argv")
+    if (
+        observation.argv != expected_argv
+        or observation.argv_nul_sha256 != hashlib.sha256(argv_bytes).hexdigest()
+    ):
+        raise AutomationRefusal("Runtime argv differs from the exact candidate launch.")
+    expected_environment = runtime_environment_assignments(expected_home)
+    environment_bytes = _nul_manifest_bytes(
+        observation.environment, "Runtime environment"
+    )
+    if (
+        observation.environment != expected_environment
+        or observation.environment_nul_sha256
+        != hashlib.sha256(environment_bytes).hexdigest()
+        or observation.external_home_real_path != expected_home
+    ):
+        raise AutomationRefusal(
+            "Runtime environment or external HOME differs from the pinned launch."
+        )
+    if (
+        observation.current_candidate_cue != profile.candidate_cue
+        or observation.current_candidate_bin != profile.candidate_bin
+    ):
+        raise AutomationRefusal("Current candidate CUE/BIN source identity changed.")
+
+    bin_matches = tuple(
+        item
+        for item in observation.open_files
+        if item.real_path == profile.candidate_bin.real_path
+    )
+    if len(bin_matches) != 1:
+        raise AutomationRefusal("Runtime must hold one exact candidate BIN descriptor.")
+    bin_descriptor = bin_matches[0]
+    if (
+        re.fullmatch(r"(?:0|[1-9][0-9]*)r", bin_descriptor.fd, re.ASCII)
+        is None
+        or bin_descriptor.device != profile.candidate_bin.device
+        or bin_descriptor.inode != profile.candidate_bin.inode
+        or bin_descriptor.byte_length != profile.candidate_bin.byte_length
+        or bin_descriptor.link_count != 1
+    ):
+        raise AutomationRefusal("Candidate BIN descriptor identity or access is unsafe.")
+    if any(
+        item.real_path == profile.candidate_cue.real_path
+        for item in observation.open_files
+    ):
+        raise AutomationRefusal("Runtime still has the parsed candidate CUE open.")
+
+    cache_matches = tuple(
+        item for item in observation.open_files if item.real_path == expected_cache_path
+    )
+    if len(cache_matches) > 1:
+        raise AutomationRefusal("Runtime has duplicate allowed cache descriptors.")
+    cache_identity = observation.current_allowed_process_cache
+    cache_descriptor = cache_matches[0] if cache_matches else None
+    if (cache_identity is None) != (cache_descriptor is None):
+        raise AutomationRefusal("Runtime cache path identity and descriptor are incomplete.")
+    if cache_identity is not None and cache_descriptor is not None:
+        _require_runtime_file_identity(cache_identity, "Current allowed process cache")
+        if (
+            cache_identity.real_path != expected_cache_path
+            or cache_identity.owner_uid != profile.effective_uid
+            or cache_identity.mode != 0o644
+            or cache_identity.link_count != 1
+            or cache_identity.byte_length > MAX_PROCESS_CACHE_BIN_BYTES
+            or re.fullmatch(
+                r"(?:0|[1-9][0-9]*)u", cache_descriptor.fd, re.ASCII
+            )
+            is None
+            or cache_descriptor.device != cache_identity.device
+            or cache_descriptor.inode != cache_identity.inode
+            or cache_descriptor.byte_length != cache_identity.byte_length
+            or cache_descriptor.link_count != 1
+        ):
+            raise AutomationRefusal("Allowed process-cache descriptor is unsafe.")
+    for opened in observation.open_files:
+        if not opened.real_path.lower().endswith(RUNTIME_MEDIA_SOURCE_SUFFIXES):
+            continue
+        if opened.real_path == profile.candidate_bin.real_path:
+            continue
+        if cache_descriptor is not None and opened.real_path == expected_cache_path:
+            continue
+        raise AutomationRefusal("Runtime has another supported media source open.")
+    return RuntimeSessionProcessBinding(
+        process=process,
+        argv=observation.argv,
+        argv_nul_sha256=observation.argv_nul_sha256,
+        environment=observation.environment,
+        environment_nul_sha256=observation.environment_nul_sha256,
+        external_home_real_path=observation.external_home_real_path,
+        candidate_cue=observation.current_candidate_cue,
+        candidate_bin=observation.current_candidate_bin,
+        candidate_bin_descriptor=bin_descriptor,
+        allowed_process_cache=cache_identity,
+        allowed_process_cache_descriptor=cache_descriptor,
+    )
+
+
+def _runtime_file_identity_payload(identity: FileIdentity) -> dict[str, Any]:
+    _require_runtime_file_identity(identity, "Serialized runtime file")
+    return {
+        "byteLength": identity.byte_length,
+        "device": identity.device,
+        "inode": identity.inode,
+        "linkCount": identity.link_count,
+        "mode": f"{identity.mode:04o}",
+        "ownerUid": identity.owner_uid,
+        "realPath": identity.real_path,
+        "sha256": identity.sha256,
+    }
+
+
+def _runtime_open_file_payload(
+    opened: RuntimeSessionOpenFileObservation,
+) -> dict[str, Any]:
+    return {
+        "byteLength": opened.byte_length,
+        "device": opened.device,
+        "fd": opened.fd,
+        "inode": opened.inode,
+        "linkCount": opened.link_count,
+        "realPath": opened.real_path,
+    }
+
+
+@dataclasses.dataclass(frozen=True)
+class RuntimeSessionAttestation:
+    attestor_id: str
+    profile: VerifiedProfile
+    process_binding: RuntimeSessionProcessBinding
+    gdb: GdbRuntimeSessionSentinel
+
+    FORMAT: ClassVar[str] = RUNTIME_SESSION_ATTESTATION_FORMAT
+    FORMAT_VERSION: ClassVar[int] = RUNTIME_SESSION_ATTESTATION_FORMAT_VERSION
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.attestor_id) is not str
+            or self.attestor_id != EXACT_RUNTIME_SESSION_ATTESTOR_ID
+            or type(self.profile) is not VerifiedProfile
+            or type(self.process_binding) is not RuntimeSessionProcessBinding
+            or type(self.gdb) is not GdbRuntimeSessionSentinel
+            or self.gdb.bound_process != self.process_binding.process
+        ):
+            raise AutomationRefusal("Exact runtime-session attestation is malformed.")
+        _require_exact_runtime_profile_process(
+            self.profile, self.process_binding.process
+        )
+        if (
+            self.profile.executable != self.process_binding.process.executable
+            or self.profile.candidate_cue != self.process_binding.candidate_cue
+            or self.profile.candidate_bin != self.process_binding.candidate_bin
+            or self.profile.external_home_real_path
+            != self.process_binding.external_home_real_path
+        ):
+            raise AutomationRefusal(
+                "Exact runtime-session attestation changed its frozen profile binding."
+            )
+
+    @property
+    def profile_id(self) -> str:
+        return self.profile.profile_id
+
+    def to_payload(self) -> dict[str, Any]:
+        binding = self.process_binding
+        process = binding.process
+        listener = self.gdb.bound_listener
+        connection = self.gdb.observed_connection_set
+        client = connection.client_endpoint
+        if client is None:
+            raise AutomationRefusal("Serialized runtime GDB sentinel has no client.")
+        cache: dict[str, Any] | None = None
+        if (
+            binding.allowed_process_cache is not None
+            and binding.allowed_process_cache_descriptor is not None
+        ):
+            cache = {
+                "descriptor": _runtime_open_file_payload(
+                    binding.allowed_process_cache_descriptor
+                ),
+                "identity": _runtime_file_identity_payload(
+                    binding.allowed_process_cache
+                ),
+            }
+        return {
+            "allowedProcessCache": cache,
+            "argv": list(binding.argv),
+            "argvNulSha256": binding.argv_nul_sha256,
+            "attestorId": self.attestor_id,
+            "disc": {
+                "candidateBin": _runtime_file_identity_payload(binding.candidate_bin),
+                "candidateBinDescriptor": _runtime_open_file_payload(
+                    binding.candidate_bin_descriptor
+                ),
+                "candidateCue": _runtime_file_identity_payload(binding.candidate_cue),
+            },
+            "environment": list(binding.environment),
+            "environmentNulSha256": binding.environment_nul_sha256,
+            "externalHomeRealPath": binding.external_home_real_path,
+            "format": self.FORMAT,
+            "formatVersion": self.FORMAT_VERSION,
+            "gdb": {
+                "boundListener": {
+                    "access": listener.access,
+                    "descriptor": listener.descriptor,
+                    "deviceToken": listener.device_token,
+                    "endpoint": listener.endpoint,
+                    "pid": listener.pid,
+                    "protocol": listener.protocol,
+                    "receiveQueue": listener.receive_queue,
+                    "sendQueue": listener.send_queue,
+                    "socketType": listener.socket_type,
+                    "tcpState": listener.tcp_state,
+                },
+                "clientEndpoint": {
+                    "address": client.address,
+                    "descriptor": client.descriptor,
+                    "pid": client.pid,
+                    "port": client.port,
+                },
+                "clientSocketDescriptor": connection.client_descriptor,
+                "clientSocketDeviceToken": connection.client_device_token,
+                "connectionAttempts": self.gdb.connection_attempts,
+                "continueAttempts": self.gdb.continue_attempts,
+                "pauseStateCertain": self.gdb.pause_state_certain,
+                "plannedPausedTick": self.gdb.planned_paused_tick,
+                "serverSocketDescriptor": connection.server_descriptor,
+                "serverSocketDeviceToken": connection.server_device_token,
+                "singleClientObserved": self.gdb.single_client_observed,
+                "state": self.gdb.state,
+            },
+            "process": {
+                "effectiveUid": process.effective_uid,
+                "executable": _runtime_file_identity_payload(process.executable),
+                "pid": process.pid,
+                "realUid": process.real_uid,
+                "savedUid": process.saved_uid,
+                "startMicroseconds": process.start_microseconds,
+                "startSeconds": process.start_seconds,
+            },
+            "profile": {
+                "appContentManifestSha256": (
+                    self.profile.app_content_manifest_sha256
+                ),
+                "appOutputTreeManifestSha256": (
+                    self.profile.app_output_tree_manifest_sha256
+                ),
+                "allowedProcessCacheRealPath": (
+                    self.profile.allowed_process_cache_real_path
+                ),
+                "enabledActions": sorted(
+                    action.value for action in self.profile.enabled_actions
+                ),
+                "candidateManifestSha256": (
+                    self.profile.candidate_manifest_sha256
+                ),
+                "externalHomeBiosSha256": (
+                    self.profile.external_home_bios_sha256
+                ),
+                "externalHomeRealPath": self.profile.external_home_real_path,
+                "externalHomeSettings": _runtime_file_identity_payload(
+                    self.profile.settings
+                ),
+                "handoffReceiptSha256": self.profile.handoff_receipt_sha256,
+                "homeOutputTreeManifestSha256": (
+                    self.profile.home_output_tree_manifest_sha256
+                ),
+                "hostNormalSettingsSentinelSha256": (
+                    self.profile.host_normal_settings_sentinel_sha256
+                ),
+                "packageEnvelopeSha256": self.profile.package_envelope_sha256,
+                "receiptClosureSha256": self.profile.receipt_closure_sha256,
+            },
+            "profileId": self.profile_id,
+        }
+
+    def serialize(self) -> bytes:
+        return canonical_json(self.to_payload())
+
+    @property
+    def canonical_sha256(self) -> str:
+        return hashlib.sha256(self.serialize()).hexdigest()
+
+
 @dataclasses.dataclass(frozen=True)
 class RuntimeSessionAttestationReadiness:
     attestor_id: str
@@ -4997,11 +6058,27 @@ class RuntimeSessionAttestationReadiness:
     refusal_reason: str | None
 
     def __post_init__(self) -> None:
-        if not self.attestor_id or type(self.ready) is not bool:
+        if (
+            type(self.attestor_id) is not str
+            or re.fullmatch(
+                r"[a-z][a-z0-9-]{0,127}", self.attestor_id, re.ASCII
+            )
+            is None
+            or type(self.ready) is not bool
+        ):
             raise AutomationRefusal("Runtime-session attestor readiness is malformed.")
         if self.ready and self.refusal_reason is not None:
             raise AutomationRefusal("Ready runtime attestor cannot carry a refusal reason.")
-        if not self.ready and not self.refusal_reason:
+        if not self.ready and (
+            type(self.refusal_reason) is not str
+            or not self.refusal_reason
+            or len(self.refusal_reason) > 4_096
+            or self.refusal_reason != self.refusal_reason.strip()
+            or any(
+                ord(character) < 0x20 or ord(character) == 0x7F
+                for character in self.refusal_reason
+            )
+        ):
             raise AutomationRefusal("Unavailable runtime attestor requires a refusal reason.")
 
 
@@ -5010,12 +6087,132 @@ class RuntimeSessionAttestor(Protocol):
     def attest(self, profile: VerifiedProfile, process: ProcessIdentity) -> None: ...
 
 
+class ExactRuntimeSessionAttestor:
+    """Offline-only exact process/disc/GDB witness over one existing session.
+
+    Two process observations bracket the sole-client GDB sentinel.  Only the
+    exact launch, current source identities, candidate BIN read descriptor, and
+    optional code-owned cache descriptor survive into the binding, so unrelated
+    non-disc descriptor churn cannot create false drift.  This class has no
+    construction path from production :func:`main`.
+    """
+
+    ATTESTOR_ID: ClassVar[str] = EXACT_RUNTIME_SESSION_ATTESTOR_ID
+
+    def __init__(
+        self,
+        observer: RuntimeSessionObservationProvider,
+        gdb_session: PersistentDuckStationGdbSession,
+    ) -> None:
+        if (
+            not callable(getattr(observer, "observe", None))
+            or type(gdb_session) is not PersistentDuckStationGdbSession
+        ):
+            raise AutomationRefusal(
+                "Exact runtime-session attestor dependencies are invalid."
+            )
+        self._observer = observer
+        self._gdb_session = gdb_session
+        self._operation_lock = threading.Lock()
+
+    def readiness(self) -> RuntimeSessionAttestationReadiness:
+        return RuntimeSessionAttestationReadiness(
+            self.ATTESTOR_ID, True, None
+        )
+
+    def _observe(
+        self,
+        profile: VerifiedProfile,
+        process: ProcessIdentity,
+        phase: str,
+    ) -> RuntimeSessionObservation:
+        try:
+            observed = self._observer.observe(profile, process)
+        except AutomationRefusal:
+            raise
+        except BaseException as exc:
+            raise AutomationRefusal(
+                f"Exact runtime-session {phase} observation failed closed."
+            ) from exc
+        if type(observed) is not RuntimeSessionObservation:
+            raise AutomationRefusal(
+                f"Exact runtime-session {phase} observation has the wrong type."
+            )
+        return observed
+
+    def attest_exact(
+        self, profile: VerifiedProfile, process: ProcessIdentity
+    ) -> RuntimeSessionAttestation:
+        if type(profile) is not VerifiedProfile or type(process) is not ProcessIdentity:
+            raise AutomationRefusal(
+                "Exact runtime-session attestation inputs are malformed."
+            )
+        _require_exact_runtime_profile_process(profile, process)
+        if not self._operation_lock.acquire(blocking=False):
+            raise AutomationRefusal(
+                "Concurrent exact runtime-session attestation is forbidden."
+            )
+        try:
+            def observe_and_validate(phase: str) -> RuntimeSessionProcessBinding:
+                return validate_runtime_session_observation(
+                    profile,
+                    process,
+                    self._observe(profile, process, phase),
+                )
+
+            bracket_before: RuntimeSessionProcessBinding | None = None
+
+            def observe_before() -> RuntimeSessionProcessBinding:
+                nonlocal bracket_before
+                bracket_before = observe_and_validate("before")
+                return bracket_before
+
+            def observe_after() -> RuntimeSessionProcessBinding:
+                after_binding = observe_and_validate("after")
+                if bracket_before is None or after_binding != bracket_before:
+                    raise AutomationRefusal(
+                        "Exact runtime-session process or disc binding drifted around GDB."
+                    )
+                return after_binding
+
+            before, gdb, after = (
+                self._gdb_session.attest_running_owned_bracketed(
+                    process,
+                    observe_before,
+                    observe_after,
+                )
+            )
+            if (
+                type(before) is not RuntimeSessionProcessBinding
+                or type(after) is not RuntimeSessionProcessBinding
+                or type(gdb) is not GdbRuntimeSessionSentinel
+                or gdb.bound_process != process
+            ):
+                raise AutomationRefusal(
+                    "Exact runtime-session bracket returned malformed evidence."
+                )
+            if after != before:
+                raise AutomationRefusal("Exact runtime-session bracket tore its binding.")
+            return RuntimeSessionAttestation(
+                attestor_id=self.ATTESTOR_ID,
+                profile=profile,
+                process_binding=before,
+                gdb=gdb,
+            )
+        finally:
+            self._operation_lock.release()
+
+    def attest(self, profile: VerifiedProfile, process: ProcessIdentity) -> None:
+        self.attest_exact(profile, process)
+
+
 class UnavailableRuntimeSessionAttestor:
-    """Production refusal until the full live session closure is implemented."""
+    """Production refusal until the offline exact witness is safely integrated."""
 
     REFUSAL_REASON: Final = (
-        "Runtime session attestation is unavailable: exact argv, open candidate "
-        "CUE/BIN descriptors, and owned GDB sentinels are not implemented."
+        "Runtime session attestation is unavailable in production: exact argv, "
+        "environment, and open-file observation has no vetted native provider, "
+        "and the offline owned-GDB attestor has no exclusive coordinator integration."
     )
 
     def readiness(self) -> RuntimeSessionAttestationReadiness:

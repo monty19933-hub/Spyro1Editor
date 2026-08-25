@@ -534,11 +534,11 @@ internal static partial class Id65V3RuntimeEvidenceContract
     internal const string ExpectedRuntimeProfileSha256 =
         "29d01f1b791e4dc08ebfc4d62cf5a1b91600a5c55ec175ac6da45b13123100ad";
     internal const string ExpectedSourceClosureSha256 =
-        "3670c33561ec910b1260c1ad160a0dfbcbbe42d60e6bc1b9829ccfbae631b06f";
+        "1004799a4a41bd4222a5d6843f3ab495d9bef4d57e3b0698b9bb66f11279bbff";
     internal const string ExpectedWatcherSha256 =
         "eac3953a0ff7ff8acdefbe43cf987f296d44091ad51619efd225690ba1dc0677";
     internal const string ExpectedCaptureCoordinatorSha256 =
-        "212598047b17f6fba44f8660039a14945bf584cdaaa1def28e5fd59844ee7bec";
+        "ec40078f667699f2e78edfc959b53a1971acd9cd0a813f87ad92d995d8891262";
     internal const string FocusedRuntimeEvidenceRelativePath =
         "docs/runtime-evidence/unused-level-65-remote-blank-environment-header-repair-v3-runtime-evidence.json";
     internal static readonly string ExpectedFocusedRuntimeEvidenceSha256 = "PENDING";
@@ -576,7 +576,7 @@ internal static partial class Id65V3RuntimeEvidenceContract
     private const string ExpectedProfileVerifierSha256 =
         "74f4ed279a3e3f60af6c4c0a0b1fa8ffc0a67886c478d8cc7d1a288b093c3671";
     private const string ExpectedAutomationSha256 =
-        "881f8040a8cadd54c8b31b59efd6cf8351f0be6aec75050bc412b9a11862e501";
+        "049b4fbeecb4b176d415614165589162c10d8322f349af9c1ef6e93c6e1c2899";
     private const string Canonicalization = "rfc8785-jcs-utf8-v1";
     private const string ProfileSnapshotFormat = "spyro-editor-id65-v3-runtime-profile-snapshot";
     private const int ProfileSnapshotFormatVersion = 2;
