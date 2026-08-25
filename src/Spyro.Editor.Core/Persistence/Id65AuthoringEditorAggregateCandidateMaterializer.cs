@@ -491,6 +491,8 @@ internal static class Id65AuthoringEditorAggregateCandidateMaterializer
         Id65AuthoringEditorAggregateCandidateMaterializationRequest request,
         CancellationToken cancellationToken)
     {
+        Id65AuthoringEditorAggregateCandidateWorkspaceGuard
+            .RequireExactCanonicalAuthoredLayer(request.Paths);
         RefuseReparsePoint(request.Paths.RootPath, "ID65 lab workspace root");
         RefuseReparsePoint(request.Paths.ManifestPath, "ID65 lab manifest");
         RefuseReparsePoint(request.Paths.LockedBaseDirectoryPath, "ID65 lab locked-base root");
@@ -522,6 +524,8 @@ internal static class Id65AuthoringEditorAggregateCandidateMaterializer
                 projectionInputs,
                 cancellationToken) ?? throw new InvalidDataException(
                     "The aggregate candidate requires one persisted full ID65 editor document.");
+        Id65AuthoringEditorAggregateCandidateWorkspaceGuard
+            .RequireExactCanonicalAuthoredLayer(request.Paths);
         RequireExpectedStoredDocument(request.ExpectedStoredDocument, stored);
         Id65AuthoringEditorAggregatePlan plan =
             Id65AuthoringEditorAggregatePlanProjector.Project(new(

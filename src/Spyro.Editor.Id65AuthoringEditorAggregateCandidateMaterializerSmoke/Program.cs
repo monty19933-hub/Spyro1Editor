@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Persistence;
 
@@ -161,6 +162,35 @@ try
         inCallMutatedStore!.EnvelopeCanonicalSha256);
     request = request with { ExpectedStoredDocument = stored };
 
+    string lateUnsupportedAuthoredEntry = Path.Combine(
+        paths.AuthoredEditsDirectoryPath,
+        "late-unsupported-authored-sentinel.json");
+    try
+    {
+        await ExpectRejectedAsync(
+            "in-call unsupported authored entry before prepublish audit",
+            async () => _ = await Id65AuthoringEditorAggregateCandidateMaterializer
+                .MaterializeForSmokeAsync(
+                    request,
+                    Id65AuthoringEditorAggregateCandidateFaultPoint
+                        .AfterStagedReadbackBeforePrepublishAudit,
+                    () => File.WriteAllTextAsync(
+                        lateUnsupportedAuthoredEntry,
+                        "{}\n")),
+            requiredText: "unsupported entry");
+        failClosedRejects++;
+        Require((!Directory.Exists(materializedRoot) ||
+                    !Directory.EnumerateDirectories(materializedRoot).Any()) &&
+                (!Directory.Exists(operationsRoot) ||
+                    !Directory.EnumerateFileSystemEntries(operationsRoot).Any()),
+            "The late unsupported authored entry was not rejected before publication or left operation residue.");
+    }
+    finally
+    {
+        if (File.Exists(lateUnsupportedAuthoredEntry))
+            File.Delete(lateUnsupportedAuthoredEntry);
+    }
+
     Id65AuthoringEditorAggregateCandidateMaterializationResult first =
         await Id65AuthoringEditorAggregateCandidateMaterializer.MaterializeAsync(request);
     positiveMaterializations++;
@@ -227,6 +257,56 @@ try
             SnapshotFile(reused.Paths.CandidateCuePath) == cueBeforeReuse &&
             SnapshotFile(reused.Paths.CandidateReceiptPath) == receiptBeforeReuse,
         "Exact content-addressed candidate reuse changed a published artifact.");
+
+    Id65AuthoringEditorAggregateCandidateWorkspaceResult facadeReuse =
+        await Id65AuthoringEditorAggregateCandidateWorkspaceMaterializer
+            .MaterializeExactAsync(paths, manifest);
+    positiveMaterializations++;
+    AssertWorkspaceResult(
+        facadeReuse,
+        first,
+        reused: true,
+        candidateWritten: false,
+        filesystemMutated: false);
+
+    string unsupportedAuthoredEntry = Path.Combine(
+        paths.AuthoredEditsDirectoryPath,
+        "unsupported-authored-sentinel.json");
+    await File.WriteAllTextAsync(unsupportedAuthoredEntry, "{}\n");
+    await ExpectRejectedAsync(
+        "unsupported simultaneous authored layer",
+        async () => _ = await Id65AuthoringEditorAggregateCandidateWorkspaceMaterializer
+            .MaterializeExactAsync(paths, manifest),
+        requiredText: "unsupported entry");
+    failClosedRejects++;
+    File.Delete(unsupportedAuthoredEntry);
+
+    string reservedLegacyDirectory = Path.Combine(
+        paths.ContainerRootPath,
+        $"{UnusedLevel65BlankLevelLabProfileRegistry.Key}-native-edits.json");
+    Directory.CreateDirectory(reservedLegacyDirectory);
+    await ExpectRejectedAsync(
+        "reserved legacy authored directory",
+        async () => _ = await Id65AuthoringEditorAggregateCandidateWorkspaceMaterializer
+            .MaterializeExactAsync(paths, manifest),
+        requiredText: "cannot omit reserved legacy authored entry");
+    failClosedRejects++;
+    Directory.Delete(reservedLegacyDirectory, recursive: false);
+
+    string reservedLegacyBrokenLink = Path.Combine(
+        paths.ContainerRootPath,
+        NativeMobyPathEditStore.DefaultFileName(
+            UnusedLevel65BlankLevelLabProfileRegistry.Key));
+    File.CreateSymbolicLink(
+        reservedLegacyBrokenLink,
+        Path.Combine(paths.ContainerRootPath, "missing-legacy-target.json"));
+    await ExpectRejectedAsync(
+        "reserved legacy authored broken link",
+        async () => _ = await Id65AuthoringEditorAggregateCandidateWorkspaceMaterializer
+            .MaterializeExactAsync(paths, manifest),
+        requiredText: "cannot omit reserved legacy authored entry");
+    failClosedRejects++;
+    File.Delete(reservedLegacyBrokenLink);
 
     await File.AppendAllTextAsync(
         paths.LockedBaseCuePath,
@@ -514,6 +594,17 @@ try
             StringComparison.Ordinal),
         "The post-rename recovery test candidate escaped its temporary smoke root.");
     Directory.Delete(first.Paths.CandidateDirectoryPath, recursive: true);
+    Id65AuthoringEditorAggregateCandidateWorkspaceResult facadeFresh =
+        await Id65AuthoringEditorAggregateCandidateWorkspaceMaterializer
+            .MaterializeExactAsync(paths, manifest);
+    positiveMaterializations++;
+    AssertWorkspaceResult(
+        facadeFresh,
+        first,
+        reused: false,
+        candidateWritten: true,
+        filesystemMutated: true);
+    Directory.Delete(facadeFresh.CandidateDirectoryPath, recursive: true);
     await ExpectRejectedAsync(
         "post-rename pre-cleanup injected fault",
         async () => _ = await Id65AuthoringEditorAggregateCandidateMaterializer
@@ -545,10 +636,10 @@ try
         "Post-rename recovery changed candidate contents or retained its owned journal.");
 
     VerifyApiAndTopology(repositoryRoot);
-    Require(positiveMaterializations == 10,
-        $"The aggregate materializer positive matrix ran {positiveMaterializations}, expected 10.");
-    Require(failClosedRejects == 8,
-        $"The aggregate materializer rejection matrix ran {failClosedRejects}, expected 8.");
+    Require(positiveMaterializations == 12,
+        $"The aggregate materializer positive matrix ran {positiveMaterializations}, expected 12.");
+    Require(failClosedRejects == 12,
+        $"The aggregate materializer rejection matrix ran {failClosedRejects}, expected 12.");
     Require(shapeRejects == 3,
         $"The aggregate materializer shape matrix ran {shapeRejects}, expected 3.");
     Require(reprojectionRejects == 1,
@@ -643,6 +734,82 @@ static void VerifyApiAndTopology(string repositoryRoot)
                 typeof(CancellationToken)
             }),
         "The aggregate materializer gained a public API beyond MaterializeAsync(request, cancellation).");
+    MethodInfo[] facadeMethods =
+        typeof(Id65AuthoringEditorAggregateCandidateWorkspaceMaterializer)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
+    Require(facadeMethods.Length == 1 &&
+            facadeMethods[0].Name == "MaterializeExactAsync" &&
+            facadeMethods[0].GetParameters().Select(item => item.ParameterType)
+                .SequenceEqual(new[]
+                {
+                    typeof(UnusedLevel65BlankLevelLabWorkspacePaths),
+                    typeof(UnusedLevel65BlankLevelLabManifest),
+                    typeof(CancellationToken)
+                }) &&
+            facadeMethods[0].ReturnType ==
+                typeof(Task<Id65AuthoringEditorAggregateCandidateWorkspaceResult>),
+        "The aggregate workspace facade lost its one exact public method surface.");
+    Require(typeof(Id65AuthoringEditorAggregateCandidateWorkspaceResult).IsSealed &&
+            typeof(Id65AuthoringEditorAggregateCandidateWorkspaceResult)
+                .GetConstructors(BindingFlags.Public | BindingFlags.Instance).Length == 0 &&
+            typeof(Id65AuthoringEditorAggregateCandidateWorkspaceResult)
+                .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .All(property => property.PropertyType != typeof(byte[]) &&
+                    !typeof(Stream).IsAssignableFrom(property.PropertyType) &&
+                    !typeof(Delegate).IsAssignableFrom(property.PropertyType) &&
+                    property.PropertyType != typeof(Id65AuthoringEditorDocumentStoreResult) &&
+                    property.PropertyType != typeof(Id65AuthoringEditorAggregatePlan) &&
+                    property.PropertyType != typeof(Id65CompiledAuthoringComposite)),
+        "The aggregate workspace facade result is open or leaks an internal/native payload surface.");
+    RequireExactPropertyShape(
+        typeof(Id65AuthoringEditorAggregateCandidateWorkspaceResult),
+        [
+            ("AggregatePlanSha256", typeof(string)),
+            ("AtomicNoReplacePublicationVerified", typeof(bool)),
+            ("CandidateArtifactsWrittenThisCall", typeof(bool)),
+            ("CandidateCuePath", typeof(string)),
+            ("CandidateCueSha256", typeof(string)),
+            ("CandidateDirectoryPath", typeof(string)),
+            ("CandidateImagePath", typeof(string)),
+            ("CandidateReceiptPath", typeof(string)),
+            ("CarriesAppOrUiAuthority", typeof(bool)),
+            ("CarriesCreateBinAuthority", typeof(bool)),
+            ("ChangedPhysicalImageBytes", typeof(long)),
+            ("ChangedRawSectorCount", typeof(int)),
+            ("CommonWorkspaceLeaseOwned", typeof(bool)),
+            ("ContainsCue", typeof(bool)),
+            ("ContainsFilePaths", typeof(bool)),
+            ("ContainsFullDiscImage", typeof(bool)),
+            ("CurrentOnDiskFreshnessVerified", typeof(bool)),
+            ("DocumentCanonicalSha256", typeof(string)),
+            ("DocumentEnvelopeSha256", typeof(string)),
+            ("ExactInverseReadbackVerified", typeof(bool)),
+            ("ExactLockedBaseRecaptured", typeof(bool)),
+            ("ExactRow80ReadbackVerified", typeof(bool)),
+            ("ExactStoreReloadVerified", typeof(bool)),
+            ("ExecutablePreserved", typeof(bool)),
+            ("FileSystemMutationPerformed", typeof(bool)),
+            ("HostileFilesystemRaceSafe", typeof(bool)),
+            ("NormalRetailCreateBinComposed", typeof(bool)),
+            ("OutputImageSha256", typeof(string)),
+            ("OutputRow80Sha256", typeof(string)),
+            ("OwnedTemporaryResidueRemoved", typeof(bool)),
+            ("PhysicalComplementVerified", typeof(bool)),
+            ("PromotionAuthorized", typeof(bool)),
+            ("ProtectedComplementVerified", typeof(bool)),
+            ("Publishable", typeof(bool)),
+            ("RawSectorIntegrityVerified", typeof(bool)),
+            ("ReceiptContentSha256", typeof(string)),
+            ("ReleaseIntegrated", typeof(bool)),
+            ("RequiresExactFullDefaultDocument", typeof(bool)),
+            ("RequiresFocusedRuntimeValidation", typeof(bool)),
+            ("RequiresTrustedExclusiveWorkspaceDirectory", typeof(bool)),
+            ("RetailTownSquarePreserved", typeof(bool)),
+            ("ReusedExistingCandidate", typeof(bool)),
+            ("RuntimeCandidateAuthorized", typeof(bool)),
+            ("RuntimeProven", typeof(bool)),
+            ("TargetOverlayPreserved", typeof(bool))
+        ]);
     RequireExactPropertyShape(
         typeof(Id65AuthoringEditorAggregateCandidateMaterializationRequest),
         [
@@ -765,19 +932,29 @@ static void VerifyApiAndTopology(string repositoryRoot)
         "src",
         "Spyro.Editor.Id65AuthoringEditorAggregateCandidateMaterializerSmoke",
         "Program.cs");
+    string facadeRelative = Path.Combine(
+        "src",
+        "Spyro.Editor.Core",
+        "Persistence",
+        "Id65AuthoringEditorAggregateCandidateWorkspaceMaterializer.cs");
     Require(declarations.SequenceEqual(new[]
         {
             Path.Combine("src", "Spyro.Editor.Core", "Persistence",
                 "Id65AuthoringEditorAggregateCandidateMaterializer.cs")
         }) && calls.SequenceEqual(new[]
         {
+            facadeRelative,
             Path.Combine("src",
                 "Spyro.Editor.Id65AuthoringEditorAggregateCandidateMaterializerSmoke",
                 "Program.cs")
         }) && smokeCalls.SequenceEqual(new[]
         {
             smokeRelative
-        }) && qualifiedMemberOwners.SequenceEqual(new[] { smokeRelative }),
+        }) && qualifiedMemberOwners.SequenceEqual(new[]
+        {
+            facadeRelative,
+            smokeRelative
+        }),
         $"Aggregate materializer topology changed: defs={string.Join(',', declarations)}; " +
         $"calls={string.Join(',', calls)}; smokeCalls={string.Join(',', smokeCalls)}; " +
         $"members={string.Join(',', qualifiedMemberOwners)}.");
@@ -816,6 +993,116 @@ static void VerifyApiAndTopology(string repositoryRoot)
         Require(typeOfCount == (relative == smokeRelative ? 1 : 0),
             $"The aggregate materializer reflection surface changed in {relative}.");
     }
+
+    Regex facadeCall = new(
+        @"\bId65AuthoringEditorAggregateCandidateWorkspaceMaterializer\s*\.\s*MaterializeExactAsync\s*\(",
+        RegexOptions.CultureInvariant);
+    Regex facadeMember = new(
+        @"\bId65AuthoringEditorAggregateCandidateWorkspaceMaterializer\s*\.\s*MaterializeExactAsync\b",
+        RegexOptions.CultureInvariant);
+    Regex facadeDeclaration = new(
+        @"\bpublic\s+static\s+class\s+Id65AuthoringEditorAggregateCandidateWorkspaceMaterializer\b",
+        RegexOptions.CultureInvariant);
+    Regex usingStaticFacade = new(
+        @"\busing\s+static\s+(?:(?:global::)?Spyro\.Editor\.Core\.Persistence\.)?Id65AuthoringEditorAggregateCandidateWorkspaceMaterializer\s*;",
+        RegexOptions.CultureInvariant);
+    Regex facadeAlias = new(
+        @"\busing\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:(?:global::)?Spyro\.Editor\.Core\.Persistence\.)?Id65AuthoringEditorAggregateCandidateWorkspaceMaterializer\s*;",
+        RegexOptions.CultureInvariant);
+    Regex facadeTypeOf = new(
+        @"\btypeof\s*\(\s*(?:(?:global::)?Spyro\.Editor\.Core\.Persistence\.)?Id65AuthoringEditorAggregateCandidateWorkspaceMaterializer\s*\)",
+        RegexOptions.CultureInvariant);
+    Regex facadeStringReflection = new(
+        @"\bGetType\s*\([^;\r\n]*[\""'][^\""'\r\n]*Id65AuthoringEditorAggregateCandidate[W]orkspaceMaterializer[^\""'\r\n]*[\""']",
+        RegexOptions.CultureInvariant);
+    string[] facadeDeclarations = files
+        .Where(path => facadeDeclaration.IsMatch(File.ReadAllText(path)))
+        .Select(path => Path.GetRelativePath(repositoryRoot, path))
+        .Order(StringComparer.Ordinal)
+        .ToArray();
+    string[] facadeCalls = files
+        .Where(path => facadeCall.IsMatch(File.ReadAllText(path)))
+        .Select(path => Path.GetRelativePath(repositoryRoot, path))
+        .Order(StringComparer.Ordinal)
+        .ToArray();
+    string[] facadeMemberOwners = files
+        .Where(path => facadeMember.IsMatch(File.ReadAllText(path)))
+        .Select(path => Path.GetRelativePath(repositoryRoot, path))
+        .Order(StringComparer.Ordinal)
+        .ToArray();
+    string[] expectedFacadeOwners =
+    [
+        Path.Combine("src", "Spyro.Editor.App", "Views",
+            "MainWindow.Id65BlankLab.cs"),
+        smokeRelative
+    ];
+    Require(facadeDeclarations.SequenceEqual(new[] { facadeRelative }) &&
+            facadeCalls.SequenceEqual(expectedFacadeOwners) &&
+            facadeMemberOwners.SequenceEqual(expectedFacadeOwners),
+        $"The aggregate workspace facade topology changed: defs={string.Join(',', facadeDeclarations)}; calls={string.Join(',', facadeCalls)}; members={string.Join(',', facadeMemberOwners)}.");
+    foreach (string path in files)
+    {
+        string sourceText = File.ReadAllText(path);
+        if (!sourceText.Contains(
+                "Id65AuthoringEditorAggregateCandidateWorkspaceMaterializer",
+                StringComparison.Ordinal))
+        {
+            continue;
+        }
+        string relative = Path.GetRelativePath(repositoryRoot, path);
+        Require(!usingStaticFacade.IsMatch(sourceText) &&
+                !facadeAlias.IsMatch(sourceText) &&
+                !facadeStringReflection.IsMatch(sourceText),
+            $"The aggregate workspace facade acquired an alias, using-static, or string-reflection path in {relative}.");
+        int typeOfCount = facadeTypeOf.Matches(sourceText).Count;
+        Require(typeOfCount == (relative == smokeRelative ? 1 : 0),
+            $"The aggregate workspace facade reflection surface changed in {relative}.");
+    }
+}
+
+static void AssertWorkspaceResult(
+    Id65AuthoringEditorAggregateCandidateWorkspaceResult result,
+    Id65AuthoringEditorAggregateCandidateMaterializationResult expected,
+    bool reused,
+    bool candidateWritten,
+    bool filesystemMutated)
+{
+    Require(result.CandidateDirectoryPath == expected.Paths.CandidateDirectoryPath &&
+            result.CandidateImagePath == expected.Paths.CandidateImagePath &&
+            result.CandidateCuePath == expected.Paths.CandidateCuePath &&
+            result.CandidateReceiptPath == expected.Paths.CandidateReceiptPath &&
+            result.DocumentEnvelopeSha256 == expected.Receipt.DocumentEnvelopeSha256 &&
+            result.DocumentCanonicalSha256 == expected.Receipt.DocumentCanonicalSha256 &&
+            result.AggregatePlanSha256 == expected.Receipt.AggregatePlanSha256 &&
+            result.OutputRow80Sha256 == expected.Receipt.OutputRow80Sha256 &&
+            result.OutputImageSha256 == expected.Receipt.OutputImageSha256 &&
+            result.CandidateCueSha256 == expected.Receipt.CandidateCueSha256 &&
+            result.ReceiptContentSha256 == expected.Receipt.ReceiptContentSha256 &&
+            result.ChangedRawSectorCount == expected.Receipt.ChangedRawSectorCount &&
+            result.ChangedPhysicalImageBytes == expected.Receipt.ChangedPhysicalImageBytes &&
+            result.ReusedExistingCandidate == reused &&
+            result.CandidateArtifactsWrittenThisCall == candidateWritten &&
+            result.FileSystemMutationPerformed == filesystemMutated &&
+            result.ContainsFilePaths &&
+            result.ContainsFullDiscImage && result.ContainsCue &&
+            result.ExactStoreReloadVerified && result.ExactLockedBaseRecaptured &&
+            result.ExactRow80ReadbackVerified && result.ExactInverseReadbackVerified &&
+            result.ProtectedComplementVerified && result.RetailTownSquarePreserved &&
+            result.TargetOverlayPreserved && result.ExecutablePreserved &&
+            result.RawSectorIntegrityVerified && result.PhysicalComplementVerified &&
+            result.AtomicNoReplacePublicationVerified &&
+            result.OwnedTemporaryResidueRemoved &&
+            result.RequiresExactFullDefaultDocument &&
+            result.RequiresFocusedRuntimeValidation &&
+            !result.CarriesAppOrUiAuthority && !result.CarriesCreateBinAuthority &&
+            !result.NormalRetailCreateBinComposed &&
+            !result.RuntimeCandidateAuthorized && !result.RuntimeProven &&
+            !result.ReleaseIntegrated && !result.PromotionAuthorized &&
+            !result.Publishable && !result.CurrentOnDiskFreshnessVerified &&
+            !result.HostileFilesystemRaceSafe &&
+            result.RequiresTrustedExclusiveWorkspaceDirectory &&
+            !result.CommonWorkspaceLeaseOwned,
+        "The public aggregate workspace facade lost an exact identity or offline boundary.");
 }
 
 static void RequireExactPropertyShape(

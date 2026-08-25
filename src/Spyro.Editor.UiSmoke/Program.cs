@@ -140,6 +140,12 @@ try
     }
     if (args.Contains("--id65-blank-lab-ui-only", StringComparer.OrdinalIgnoreCase))
     {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Console.WriteLine(
+                "ID65_BLANK_LAB_UI_SMOKE_SKIPPED platform=non-macOS reason=the exact aggregate candidate publication and its focused UI contract are explicitly macOS-only");
+            return 0;
+        }
         RunId65BlankLabUiOnly();
         return 0;
     }

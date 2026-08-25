@@ -78,7 +78,7 @@ internal static class Id65AuthoringEditorDocumentStore
     public const bool RequiresTrustedExclusiveWorkspaceDirectory = true;
     public const bool HostileFilesystemRaceSafe = false;
     public const bool CommonWorkspaceLeaseOwned = false;
-    private const string WriterLeaseFileName =
+    internal const string WriterLeaseFileName =
         ".unusedlevel65blank-authoring-document-v1.json.writer.lock";
 
     private static readonly string[] EnvelopePropertyNames =

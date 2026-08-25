@@ -39,6 +39,7 @@ public sealed partial class MainWindow
     private Button? _id65BlankLabBuildButton;
     private Button? _id65BlankLabLoadButton;
     private Button? _id65BlankLabAuthoringDocumentButton;
+    private Button? _id65BlankLabAuthoringCandidateButton;
     private Button? _id65BlankLabSaveButton;
     private Button? _id65BlankLabCreateCueButton;
     private Button? _id65BlankLabRevealButton;
@@ -70,6 +71,48 @@ public sealed partial class MainWindow
         CancellationToken,
         Task<Id65AuthoringEditorControlState?>>?
         Id65AuthoringDocumentDialogOverrideForTesting { get; set; }
+    internal Func<
+        UnusedLevel65BlankLevelLabWorkspacePaths,
+        UnusedLevel65BlankLevelLabManifest,
+        CancellationToken,
+        Task<Id65BlankLabAuthoringCandidateAppResult>>?
+        Id65AuthoringCandidateMaterializerOverrideForTesting { get; set; }
+
+    internal sealed record Id65BlankLabAuthoringCandidateAppResult(
+        string CandidateDirectoryPath,
+        string CandidateImagePath,
+        string CandidateCuePath,
+        string CandidateReceiptPath,
+        string DocumentEnvelopeSha256,
+        string DocumentCanonicalSha256,
+        string AggregatePlanSha256,
+        string OutputImageSha256,
+        string CandidateCueSha256,
+        string ReceiptContentSha256,
+        int ChangedRawSectorCount,
+        long ChangedPhysicalImageBytes,
+        bool ReusedExistingCandidate,
+        bool CandidateArtifactsWrittenThisCall,
+        bool FileSystemMutationPerformed,
+        bool ExactReadbackVerified,
+        bool ProtectedComplementVerified,
+        bool RetailTownSquarePreserved,
+        bool TargetOverlayPreserved,
+        bool ExecutablePreserved,
+        bool AtomicNoReplacePublicationVerified,
+        bool OwnedTemporaryResidueRemoved,
+        bool CarriesAppOrUiAuthority,
+        bool CarriesCreateBinAuthority,
+        bool NormalRetailCreateBinComposed,
+        bool RuntimeCandidateAuthorized,
+        bool RuntimeProven,
+        bool ReleaseIntegrated,
+        bool PromotionAuthorized,
+        bool Publishable,
+        bool CurrentOnDiskFreshnessVerified,
+        bool HostileFilesystemRaceSafe,
+        bool RequiresTrustedExclusiveWorkspaceDirectory,
+        bool CommonWorkspaceLeaseOwned);
 
     private sealed record Id65BlankLabManualOperation(
         int Generation,
@@ -141,6 +184,12 @@ public sealed partial class MainWindow
             RefreshId65BlankLabUi);
         _id65BlankLabAuthoringDocumentButton.Name =
             "Id65BlankLabAuthoringDocumentButton";
+        _id65BlankLabAuthoringCandidateButton = NewAsyncButton(
+            "Create Exact Full Candidate",
+            CreateId65AuthoringAggregateCandidateAsync,
+            RefreshId65BlankLabUi);
+        _id65BlankLabAuthoringCandidateButton.Name =
+            "Id65BlankLabAuthoringCandidateButton";
         _id65BlankLabSaveButton = NewAsyncButton(
             "Save Research Workspace",
             SaveId65BlankLabWorkspaceAsync);
@@ -156,6 +205,9 @@ public sealed partial class MainWindow
         StyleModernPrimaryButton(
             _id65BlankLabAuthoringDocumentButton,
             Color.FromRgb(117, 80, 158));
+        StyleModernPrimaryButton(
+            _id65BlankLabAuthoringCandidateButton,
+            Color.FromRgb(42, 104, 155));
         StyleModernSecondaryButton(_id65BlankLabSaveButton);
         StyleModernPrimaryButton(_id65BlankLabCreateCueButton, Color.FromRgb(117, 80, 158));
         StyleModernSecondaryButton(_id65BlankLabRevealButton);
@@ -165,6 +217,7 @@ public sealed partial class MainWindow
         AddModernGridButton(firstActions, _id65BlankLabLoadButton, 1);
         panel.Children.Add(firstActions);
         panel.Children.Add(_id65BlankLabAuthoringDocumentButton);
+        panel.Children.Add(_id65BlankLabAuthoringCandidateButton);
 
         Grid secondActions = NewEqualButtonGrid(2);
         AddModernGridButton(secondActions, _id65BlankLabSaveButton, 0);
@@ -261,6 +314,8 @@ public sealed partial class MainWindow
         _id65BlankLabManifest = null;
         _id65BlankLabTextureOverlaySha256 = "";
         _id65BlankLabValidationFailure = "";
+        _id65BlankLabRevealPath = "";
+        ResetId65AuthoringCandidateButtonLabel();
         _id65BlankLabCatalogValidationBusy = !_id65BlankLabCatalogValidationLifetimeEnded;
         return retailCatalog;
     }
@@ -708,6 +763,7 @@ public sealed partial class MainWindow
                     "The ID65 Full Authoring Document receipt crossed an App, BIN, runtime, or publication boundary.");
             }
 
+            _id65BlankLabRevealPath = "";
             InvalidateBuildSafetySummary();
             RefreshId65BlankLabUi();
             RefreshActionAvailability();
@@ -717,7 +773,8 @@ public sealed partial class MainWindow
                 $"{(written.ControlState.IncludeStructuralTerrain ? "included" : "omitted")}; " +
                 $"Grass T88 {(written.ControlState.IncludeGrassAtT88 ? "included" : "omitted")}; " +
                 $"Grass T107 {(written.ControlState.IncludeGrassAtT107 ? "included" : "omitted")}. " +
-                "The proved private T66 texture swap and baseline spawn/music/totals/exit/save handles remain fixed. Normal Create BIN is still blocked until aggregate materialization is wired and validated.";
+                "The proved private T66 texture swap and baseline spawn/music/totals/exit/save handles remain fixed. " +
+                "The explicit exact candidate action currently accepts only structural terrain with both Grass placements; normal Create BIN remains blocked pending runtime and atomic retail-composition proof.";
         }
         catch (OperationCanceledException) when (
             operation.Cancellation.IsCancellationRequested ||
@@ -741,6 +798,299 @@ public sealed partial class MainWindow
             CompleteId65BlankLabManualOperation(operation);
         }
     }
+
+    private async Task CreateId65AuthoringAggregateCandidateAsync()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            _statusText.Text =
+                "The exact ID65 aggregate candidate is currently available only on macOS because its atomic directory publication is Darwin-anchored.";
+            return;
+        }
+        if (!IsCurrentId65BlankLab() || _id65BlankLabPaths == null ||
+            _id65BlankLabManifest == null)
+        {
+            _statusText.Text =
+                "Load the validated ID65 Blank-Level Lab before creating its exact full candidate.";
+            return;
+        }
+        if (!Id65BlankLabHasCanonicalAuthoringDocument())
+        {
+            _statusText.Text =
+                "Create the ID65 Full Authoring Document before creating its exact full candidate.";
+            return;
+        }
+        _id65BlankLabRevealPath = "";
+        RefreshId65BlankLabUi();
+        if (HasUnsavedTerrainEdits() || HasUnsavedMobyEdits() ||
+            HasUnsavedNativeMovementEdits() || HasUnsavedDragonRunToEdits())
+        {
+            _statusText.Text =
+                "Save, undo, or reload the current scene edits before creating the exact ID65 candidate. The candidate consumes only the canonical Full Authoring Document.";
+            return;
+        }
+        if (TryGetId65BlankLabNonCanonicalUnsupportedArtifact(out string unsupported))
+        {
+            _statusText.Text =
+                $"Could not create the exact ID65 candidate: {unsupported}";
+            return;
+        }
+        if (!TryBeginId65BlankLabManualOperation(
+                "exact aggregate candidate materialization",
+                out Id65BlankLabManualOperation? operation) ||
+            operation == null)
+        {
+            return;
+        }
+
+        object? idleButtonContent = _id65BlankLabAuthoringCandidateButton?.Content;
+        if (_id65BlankLabAuthoringCandidateButton != null)
+            _id65BlankLabAuthoringCandidateButton.Content = "Checking exact document…";
+        try
+        {
+            await AwaitId65BlankLabManualOperationDelayForTestingAsync(
+                operation,
+                "authoring-candidate-started");
+            RequireCurrentId65BlankLabManualOperation(operation);
+
+            UnusedLevel65BlankLevelLabWorkspacePaths paths =
+                UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(
+                    operation.WorkspaceRoot);
+            UnusedLevel65BlankLevelLabManifest manifest =
+                _id65BlankLabManifest ?? throw new InvalidDataException(
+                    "The exact ID65 candidate lost its admitted workspace manifest.");
+            if (_id65BlankLabPaths != paths)
+            {
+                throw new InvalidDataException(
+                    "The exact ID65 candidate workspace paths changed after the operation fence was acquired.");
+            }
+            UnusedLevel65BlankLevelLabProfileRegistry.ValidateManifest(
+                manifest,
+                paths);
+
+            Id65AuthoringEditorDocumentReadModel document =
+                await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                    paths,
+                    manifest,
+                    operation.Cancellation.Token) ?? throw new InvalidDataException(
+                    "Create the canonical ID65 Full Authoring Document before materializing an exact candidate.");
+            RequireCurrentId65BlankLabManualOperation(operation);
+            Id65AuthoringEditorControlState state =
+                Id65AuthoringEditorControlStateCompiler.RecoverControlState(document);
+            if (!state.IncludeStructuralTerrain ||
+                !state.IncludeGrassAtT88 ||
+                !state.IncludeGrassAtT107)
+            {
+                throw new InvalidDataException(
+                    "The current exact materializer supports only the full document: enable structural terrain plus both proved Grass placements at T88 and T107, save the document, then try again.");
+            }
+
+            if (_id65BlankLabAuthoringCandidateButton != null)
+                _id65BlankLabAuthoringCandidateButton.Content = "Building exact candidate…";
+            _statusText.Text =
+                "ID65 candidate: revalidating the locked base, native texture/Moby inputs, and canonical document before atomic materialization…";
+            Id65BlankLabAuthoringCandidateAppResult result =
+                Id65AuthoringCandidateMaterializerOverrideForTesting != null
+                    ? await Id65AuthoringCandidateMaterializerOverrideForTesting(
+                            paths,
+                            manifest,
+                            operation.Cancellation.Token)
+                        .WaitAsync(operation.Cancellation.Token)
+                    : await MaterializeId65AuthoringCandidateForAppAsync(
+                        paths,
+                        manifest,
+                        operation.Cancellation.Token);
+            RequireCurrentId65BlankLabManualOperation(operation);
+            RequireExactId65AuthoringCandidateAppResult(
+                paths,
+                document,
+                result);
+            Id65AuthoringEditorDocumentReadModel currentDocument =
+                await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                    paths,
+                    manifest,
+                    operation.Cancellation.Token) ?? throw new InvalidDataException(
+                    "The canonical ID65 Full Authoring Document disappeared after candidate materialization.");
+            RequireCurrentId65BlankLabManualOperation(operation);
+            if (currentDocument.EnvelopeCanonicalSha256 !=
+                    result.DocumentEnvelopeSha256 ||
+                currentDocument.DocumentCanonicalSha256 !=
+                    result.DocumentCanonicalSha256)
+            {
+                throw new InvalidDataException(
+                    "The canonical ID65 Full Authoring Document changed after candidate materialization. Run the exact candidate action again for the current document.");
+            }
+
+            _id65BlankLabRevealPath = result.CandidateCuePath;
+            RefreshId65BlankLabUi();
+            string verb = result.ReusedExistingCandidate
+                ? "Reused"
+                : "Created";
+            _statusText.Text =
+                $"{verb} the exact offline ID65 full-authoring candidate " +
+                $"{Path.GetFileName(result.CandidateCuePath)} " +
+                $"(image {result.OutputImageSha256[..12]}…, plan {result.AggregatePlanSha256[..12]}…; " +
+                $"{result.ChangedRawSectorCount} changed raw sectors). " +
+                "Its structural terrain, private T66 texture, both Grass placements, and protected retail complement passed deterministic readback. " +
+                "This hash-bound workspace snapshot is not normal Create BIN, runtime proof, or a release artifact yet; use Reveal Test CUE for the focused DuckStation gate.";
+        }
+        catch (OperationCanceledException) when (
+            operation.Cancellation.IsCancellationRequested ||
+            !IsCurrentId65BlankLabManualOperation(
+                operation,
+                requireSceneIdentity: true))
+        {
+        }
+        catch (Exception exception)
+        {
+            if (IsCurrentId65BlankLabManualOperation(
+                    operation,
+                    requireSceneIdentity: true))
+            {
+                _statusText.Text =
+                    $"Could not create the exact ID65 full-authoring candidate: {exception.Message}";
+            }
+        }
+        finally
+        {
+            if (IsCurrentId65BlankLabManualOperation(
+                    operation,
+                    requireSceneIdentity: false) ||
+                (!_id65BlankLabBusy && _id65BlankLabManualOperation == null))
+            {
+                if (_id65BlankLabAuthoringCandidateButton != null)
+                {
+                    _id65BlankLabAuthoringCandidateButton.Content =
+                        idleButtonContent ?? "Create Exact Full Candidate";
+                }
+            }
+            CompleteId65BlankLabManualOperation(operation);
+        }
+    }
+
+    private static async Task<Id65BlankLabAuthoringCandidateAppResult>
+        MaterializeId65AuthoringCandidateForAppAsync(
+            UnusedLevel65BlankLevelLabWorkspacePaths paths,
+            UnusedLevel65BlankLevelLabManifest manifest,
+            CancellationToken cancellationToken)
+    {
+        Id65AuthoringEditorAggregateCandidateWorkspaceResult result =
+            await Id65AuthoringEditorAggregateCandidateWorkspaceMaterializer
+                .MaterializeExactAsync(paths, manifest, cancellationToken);
+        return new(
+            result.CandidateDirectoryPath,
+            result.CandidateImagePath,
+            result.CandidateCuePath,
+            result.CandidateReceiptPath,
+            result.DocumentEnvelopeSha256,
+            result.DocumentCanonicalSha256,
+            result.AggregatePlanSha256,
+            result.OutputImageSha256,
+            result.CandidateCueSha256,
+            result.ReceiptContentSha256,
+            result.ChangedRawSectorCount,
+            result.ChangedPhysicalImageBytes,
+            result.ReusedExistingCandidate,
+            result.CandidateArtifactsWrittenThisCall,
+            result.FileSystemMutationPerformed,
+            result.ExactStoreReloadVerified &&
+                result.ExactLockedBaseRecaptured &&
+                result.ExactRow80ReadbackVerified &&
+                result.ExactInverseReadbackVerified &&
+                result.RawSectorIntegrityVerified &&
+                result.PhysicalComplementVerified,
+            result.ProtectedComplementVerified,
+            result.RetailTownSquarePreserved,
+            result.TargetOverlayPreserved,
+            result.ExecutablePreserved,
+            result.AtomicNoReplacePublicationVerified,
+            result.OwnedTemporaryResidueRemoved,
+            result.CarriesAppOrUiAuthority,
+            result.CarriesCreateBinAuthority,
+            result.NormalRetailCreateBinComposed,
+            result.RuntimeCandidateAuthorized,
+            result.RuntimeProven,
+            result.ReleaseIntegrated,
+            result.PromotionAuthorized,
+            result.Publishable,
+            result.CurrentOnDiskFreshnessVerified,
+            result.HostileFilesystemRaceSafe,
+            result.RequiresTrustedExclusiveWorkspaceDirectory,
+            result.CommonWorkspaceLeaseOwned);
+    }
+
+    private static void RequireExactId65AuthoringCandidateAppResult(
+        UnusedLevel65BlankLevelLabWorkspacePaths paths,
+        Id65AuthoringEditorDocumentReadModel expectedDocument,
+        Id65BlankLabAuthoringCandidateAppResult result)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        ArgumentNullException.ThrowIfNull(expectedDocument);
+        ArgumentNullException.ThrowIfNull(result);
+        string candidateRoot = Path.GetFullPath(Path.Combine(
+            paths.RootPath,
+            "materialized-candidates"));
+        string candidateDirectory = Path.GetFullPath(result.CandidateDirectoryPath);
+        string expectedPrefix = candidateRoot.EndsWith(Path.DirectorySeparatorChar)
+            ? candidateRoot
+            : candidateRoot + Path.DirectorySeparatorChar;
+        StringComparison pathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        bool exactFiles =
+            Path.GetFullPath(result.CandidateImagePath).StartsWith(
+                candidateDirectory + Path.DirectorySeparatorChar,
+                pathComparison) &&
+            Path.GetFullPath(result.CandidateCuePath).StartsWith(
+                candidateDirectory + Path.DirectorySeparatorChar,
+                pathComparison) &&
+            Path.GetFullPath(result.CandidateReceiptPath).StartsWith(
+                candidateDirectory + Path.DirectorySeparatorChar,
+                pathComparison) &&
+            File.Exists(result.CandidateImagePath) &&
+            File.Exists(result.CandidateCuePath) &&
+            File.Exists(result.CandidateReceiptPath);
+        if (!candidateDirectory.StartsWith(expectedPrefix, pathComparison) ||
+            !exactFiles ||
+            result.ReusedExistingCandidate ==
+                result.CandidateArtifactsWrittenThisCall ||
+            (result.CandidateArtifactsWrittenThisCall &&
+                !result.FileSystemMutationPerformed) ||
+            result.DocumentEnvelopeSha256 !=
+                expectedDocument.EnvelopeCanonicalSha256 ||
+            result.DocumentCanonicalSha256 !=
+                expectedDocument.DocumentCanonicalSha256 ||
+            !IsCanonicalLowerSha256(result.AggregatePlanSha256) ||
+            !IsCanonicalLowerSha256(result.OutputImageSha256) ||
+            !IsCanonicalLowerSha256(result.CandidateCueSha256) ||
+            !IsCanonicalLowerSha256(result.ReceiptContentSha256) ||
+            result.ChangedRawSectorCount <= 0 ||
+            result.ChangedPhysicalImageBytes <= 0 ||
+            !result.ExactReadbackVerified ||
+            !result.ProtectedComplementVerified ||
+            !result.RetailTownSquarePreserved ||
+            !result.TargetOverlayPreserved ||
+            !result.ExecutablePreserved ||
+            !result.AtomicNoReplacePublicationVerified ||
+            !result.OwnedTemporaryResidueRemoved ||
+            result.CarriesAppOrUiAuthority ||
+            result.CarriesCreateBinAuthority ||
+            result.NormalRetailCreateBinComposed ||
+            result.RuntimeCandidateAuthorized || result.RuntimeProven ||
+            result.ReleaseIntegrated || result.PromotionAuthorized ||
+            result.Publishable || result.CurrentOnDiskFreshnessVerified ||
+            result.HostileFilesystemRaceSafe ||
+            !result.RequiresTrustedExclusiveWorkspaceDirectory ||
+            result.CommonWorkspaceLeaseOwned)
+        {
+            throw new InvalidDataException(
+                "The ID65 candidate result lost an exact path, identity, readback, or offline safety boundary.");
+        }
+    }
+
+    private static bool IsCanonicalLowerSha256(string value) =>
+        value.Length == 64 && value.All(character =>
+            character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     private async Task<Id65AuthoringEditorControlState?>
         ShowId65AuthoringDocumentDialogAsync(
@@ -942,7 +1292,7 @@ public sealed partial class MainWindow
         if (Id65BlankLabHasCanonicalAuthoringDocument())
         {
             _statusText.Text =
-                "The legacy ID65 disposable test CUE is disabled because it does not consume the canonical Full Authoring Document. Use Edit Full Authoring Document… to inspect or update that exact layer; normal Create BIN remains blocked until aggregate materialization is validated.";
+                "The legacy ID65 disposable test CUE is disabled because it does not consume the canonical Full Authoring Document. Use Edit Full Authoring Document… to inspect or update that exact layer, then Create Exact Full Candidate for the separately guarded offline artifact; normal Create BIN remains blocked pending runtime and atomic retail-composition proof.";
             return;
         }
         if (!TryBeginId65BlankLabManualOperation(
@@ -1037,7 +1387,8 @@ public sealed partial class MainWindow
         if (string.IsNullOrWhiteSpace(_id65BlankLabRevealPath) ||
             !File.Exists(_id65BlankLabRevealPath))
         {
-            _statusText.Text = "Create a safely routeable disposable ID65 test CUE before revealing it.";
+            _statusText.Text =
+                "Create an exact full-authoring candidate or a safely routeable disposable ID65 test CUE before revealing it.";
             return;
         }
 
@@ -1047,7 +1398,8 @@ public sealed partial class MainWindow
             string fileManager = OperatingSystem.IsMacOS()
                 ? "Finder"
                 : OperatingSystem.IsWindows() ? "Explorer" : "the file manager";
-            _statusText.Text = $"Revealed the exact ID65 test CUE in {fileManager}: {_id65BlankLabRevealPath}";
+            _statusText.Text =
+                $"Revealed the exact ID65 CUE in {fileManager}: {_id65BlankLabRevealPath}";
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
@@ -1069,7 +1421,7 @@ public sealed partial class MainWindow
         _id65BlankLabStatusText.Text = _id65BlankLabCatalogValidationBusy
             ? "Checking the existing ID65 locked base in the background. The editor remains available while its exact manifest and BIN identity are validated."
             : valid
-            ? "Validated evidence-bound lab. ID65 is admitted only in memory; the retail catalog file remains exactly 35 levels. Normal Create BIN never includes this lab."
+            ? "Validated evidence-bound lab. ID65 is admitted only in memory; the retail catalog file remains exactly 35 levels. Exact full-document candidates use the separate offline materializer; normal Create BIN still does not include this lab."
             : "Setup required: choose the clean Spyro CUE/BIN, then build the versioned locked base. " +
               "ID65 stays out of the level picker until its manifest and base pass exact validation." +
               (string.IsNullOrWhiteSpace(_id65BlankLabValidationFailure)
@@ -1080,7 +1432,7 @@ public sealed partial class MainWindow
             : "Not built or not validated.";
         _id65BlankLabAuthoredLayerText.Text = valid
             ? hasAuthoringDocument
-                ? "Canonical Full Authoring Document filename detected. Its contents are inspected only through the explicit Edit Full Authoring Document… action; legacy HP-Z save/test actions remain disabled because they do not consume the canonical terrain, private-texture, and Moby intent."
+                ? "Canonical Full Authoring Document filename detected. Edit inspects it exactly; Create Exact Full Candidate revalidates its contents and currently accepts only structural terrain plus both proved Grass placements. Legacy HP-Z save/test actions remain disabled because they do not consume the canonical terrain, private-texture, and Moby intent."
                 : $"Isolated by versioned manifest + unique key '{UnusedLevel65BlankLevelLabProfileRegistry.Key}'. " +
                   $"Saved HP-Z/resident-texture terrain: {(hasTerrain ? "present" : "none")}." +
                   (hasUnsupported ? $" Disposable writer blocked: {unsupported}" : "")
@@ -1095,6 +1447,12 @@ public sealed partial class MainWindow
             _id65BlankLabLoadButton.IsEnabled = valid && !busy;
         if (_id65BlankLabAuthoringDocumentButton != null)
             _id65BlankLabAuthoringDocumentButton.IsEnabled = valid && !busy;
+        if (_id65BlankLabAuthoringCandidateButton != null)
+        {
+            _id65BlankLabAuthoringCandidateButton.IsEnabled =
+                valid && active && hasAuthoringDocument &&
+                OperatingSystem.IsMacOS() && !busy;
+        }
         if (_id65BlankLabSaveButton != null)
             _id65BlankLabSaveButton.IsEnabled =
                 valid && active && !busy && !hasAuthoringDocument;
@@ -1905,9 +2263,19 @@ public sealed partial class MainWindow
         _id65BlankLabManualOperation = null;
         _id65BlankLabBusy = false;
         _loadingLevel = false;
+        ResetId65AuthoringCandidateButtonLabel();
         RefreshId65BlankLabUi();
         RefreshLevelSelectionAvailability();
         RefreshActionAvailability();
+    }
+
+    private void ResetId65AuthoringCandidateButtonLabel()
+    {
+        if (_id65BlankLabAuthoringCandidateButton != null)
+        {
+            _id65BlankLabAuthoringCandidateButton.Content =
+                "Create Exact Full Candidate";
+        }
     }
 
     private bool IsCurrentId65BlankLab() =>
@@ -2000,6 +2368,12 @@ public sealed partial class MainWindow
             return true;
         }
 
+        return TryGetId65BlankLabNonCanonicalUnsupportedArtifact(out reason);
+    }
+
+    private bool TryGetId65BlankLabNonCanonicalUnsupportedArtifact(
+        out string reason)
+    {
         string key = UnusedLevel65BlankLevelLabProfileRegistry.Key;
         string objectEditsPath = Path.Combine(_workspace.RootPath, $"{key}-native-edits.json");
         string movementEditsPath = NativeMobyPathEditPath(key);
@@ -2011,32 +2385,34 @@ public sealed partial class MainWindow
         string musicPlanPath = LevelMusicEditStore.PlanPath(
             _workspace.RootPath,
             UnusedLevel65BlankLevelLabProfileRegistry.Definition);
-        if (File.Exists(objectEditsPath) || File.Exists(movementEditsPath))
+        if (Id65BlankLabExactPathEntryExistsOrIsUninspectable(objectEditsPath) ||
+            Id65BlankLabExactPathEntryExistsOrIsUninspectable(movementEditsPath))
         {
             reason = "Resident Moby/path mutation is present but this profile permits inspection only.";
             return true;
         }
-        if (File.Exists(customTexturesPath))
+        if (Id65BlankLabExactPathEntryExistsOrIsUninspectable(customTexturesPath))
         {
             reason = "Custom/imported terrain art needs a proved ID65 destination profile.";
             return true;
         }
-        if (File.Exists(relocationPath))
+        if (Id65BlankLabExactPathEntryExistsOrIsUninspectable(relocationPath))
         {
             reason = "Portable cross-level terrain textures need a proved ID65 destination profile.";
             return true;
         }
-        if (File.Exists(materialOverridesPath))
+        if (Id65BlankLabExactPathEntryExistsOrIsUninspectable(materialOverridesPath))
         {
             reason = "Retail terrain material overrides cannot be applied to the locked ID65 presentation; remove the unsupported override file.";
             return true;
         }
-        if (File.Exists(NativeSkyEditStore.PlanPath(_workspace.RootPath, key)))
+        if (Id65BlankLabExactPathEntryExistsOrIsUninspectable(
+                NativeSkyEditStore.PlanPath(_workspace.RootPath, key)))
         {
             reason = "Skybox editing is unavailable for this profile; remove the unsupported ID65 skybox plan.";
             return true;
         }
-        if (File.Exists(musicPlanPath))
+        if (Id65BlankLabExactPathEntryExistsOrIsUninspectable(musicPlanPath))
         {
             reason = "Music editing is unavailable for this profile; remove the unsupported ID65 music plan.";
             return true;
@@ -2117,7 +2493,7 @@ public sealed partial class MainWindow
         if (Id65BlankLabHasCanonicalAuthoringDocument())
         {
             reason =
-                "Normal Create BIN is unavailable because the canonical ID65 Full Authoring Document requires the exact aggregate materializer, which is not wired into normal Create BIN yet. The legacy terrain-only test writer also remains disabled because it does not consume the canonical structural terrain, private-texture, and Moby intent.";
+                "Normal Create BIN is unavailable because the exact ID65 aggregate materializer is intentionally a separate offline candidate action and is not authorized for normal retail composition yet. Focused runtime proof and an atomic cross-process composition coordinator are still required. The legacy terrain-only test writer also remains disabled because it does not consume the canonical structural terrain, private-texture, and Moby intent.";
             return true;
         }
         if (IsCurrentId65BlankLab())
@@ -2653,6 +3029,10 @@ public sealed partial class MainWindow
             _id65BlankLabAuthoringDocumentButton?.IsEnabled == true,
         AuthoringDocumentButtonText:
             _id65BlankLabAuthoringDocumentButton?.Content?.ToString() ?? "",
+        AuthoringCandidateEnabled:
+            _id65BlankLabAuthoringCandidateButton?.IsEnabled == true,
+        AuthoringCandidateButtonText:
+            _id65BlankLabAuthoringCandidateButton?.Content?.ToString() ?? "",
         SaveEnabled: _id65BlankLabSaveButton?.IsEnabled == true,
         CreateCueEnabled: _id65BlankLabCreateCueButton?.IsEnabled == true,
         RevealEnabled: _id65BlankLabRevealButton?.IsEnabled == true,
@@ -2866,9 +3246,10 @@ public sealed partial class MainWindow
                 _toolbarCreateBinButton == null ||
                 guardedUi.SaveEnabled || guardedUi.CreateCueEnabled ||
                 !guardedUi.AuthoringDocumentEnabled ||
+                !guardedUi.AuthoringCandidateEnabled ||
                 _toolbarCreateBinButton.IsEnabled ||
                 !disclosure.Contains("filename detected", StringComparison.OrdinalIgnoreCase) ||
-                !disclosure.Contains("inspected only through", StringComparison.OrdinalIgnoreCase) ||
+                !disclosure.Contains("Create Exact Full Candidate", StringComparison.Ordinal) ||
                 !disclosure.Contains("legacy", StringComparison.OrdinalIgnoreCase) ||
                 !TryGetId65BlankLabUnsupportedArtifact(out string unsupportedReason) ||
                 !unsupportedReason.Contains("does not consume", StringComparison.OrdinalIgnoreCase))
@@ -2947,11 +3328,36 @@ public sealed partial class MainWindow
                 "retail-current normal Create BIN",
                 authoredWithSentinel);
 
+            int invalidCandidateMaterializerCalls = 0;
+            Id65AuthoringCandidateMaterializerOverrideForTesting =
+                (_, _, _) =>
+                {
+                    invalidCandidateMaterializerCalls++;
+                    throw new InvalidOperationException(
+                        "An invalid canonical envelope reached the candidate materializer seam.");
+                };
+            await CreateId65AuthoringAggregateCandidateAsync();
+            Id65AuthoringCandidateMaterializerOverrideForTesting = null;
+            if (invalidCandidateMaterializerCalls != 0 ||
+                !(_statusText.Text ?? "").Contains(
+                    "Could not create the exact ID65 full-authoring candidate",
+                    StringComparison.OrdinalIgnoreCase) ||
+                _id65BlankLabBusy || _id65BlankLabManualOperation != null)
+            {
+                throw new InvalidOperationException(
+                    "The invalid canonical envelope did not fail before aggregate candidate materialization.");
+            }
+            operationGenerationBefore = _id65BlankLabManualOperationGeneration;
+            await AssertWriterBoundariesUnchangedAsync(
+                "invalid canonical candidate",
+                authoredWithSentinel);
+
             return
-                "exact-name guard disabled wired legacy Save, disposable CUE, and normal Create BIN from both ID65 and retail-current routes; near-miss filename did not bind and an exact-path directory failed closed; filename-only detection directed inspection to the explicit Full Authoring Document action; handlers recovered toolbar/busy state and changed no authored/output/operation/scene state";
+                "exact-name guard disabled wired legacy Save, disposable CUE, and normal Create BIN from both ID65 and retail-current routes; near-miss filename did not bind and an exact-path directory failed closed; invalid envelope failed before the explicit candidate materializer; filename-only detection directed inspection to the explicit Full Authoring Document action; handlers recovered toolbar/busy state and changed no authored/output/operation/scene state";
         }
         finally
         {
+            Id65AuthoringCandidateMaterializerOverrideForTesting = null;
             _currentLevel = levelBefore;
             if (Directory.Exists(documentPath))
                 Directory.Delete(documentPath, recursive: false);
@@ -6075,6 +6481,9 @@ public sealed partial class MainWindow
         TerrainPolygon? originalSelectedTerrain = _selectedTerrain;
         int originalSelectedTerrainIndex = _selectedTerrainIndex;
         int originalSelectedTerrainPointIndex = _selectedTerrainPointIndex;
+        string originalRevealPath = _id65BlankLabRevealPath;
+        string workspaceBoundRevealFixture = originalId65Paths.LockedBaseCuePath;
+        _id65BlankLabRevealPath = workspaceBoundRevealFixture;
         int originalLevelLoadRequestId = _levelLoadRequestId;
         string originalTerrainSignature = BuildTerrainEditSignature(originalGeometry);
         string originalMobySignature = BuildMobyEditSignature(originalMobys);
@@ -6121,6 +6530,10 @@ public sealed partial class MainWindow
             ReferenceEquals(_currentNativeMobyPaths, originalNativePaths) &&
             ReferenceEquals(_id65BlankLabPaths, originalId65Paths) &&
             ReferenceEquals(_id65BlankLabManifest, originalId65Manifest) &&
+            string.Equals(
+                _id65BlankLabRevealPath,
+                workspaceBoundRevealFixture,
+                StringComparison.Ordinal) &&
             ReferenceEquals(_selectedTerrain, mutationTarget) &&
             _selectedTerrainIndex == originalGeometry.Polygons.IndexOf(mutationTarget) &&
             _selectedTerrainPointIndex == 0 &&
@@ -6348,7 +6761,8 @@ public sealed partial class MainWindow
                 targetValidationTask.IsCompleted ||
                 targetValidationGate.Task.IsCompleted ||
                 !_id65BlankLabCatalogValidationBusy ||
-                !PathsEqual(targetValidationRoot, targetRoot))
+                !PathsEqual(targetValidationRoot, targetRoot) ||
+                !string.IsNullOrWhiteSpace(_id65BlankLabRevealPath))
             {
                 throw new InvalidOperationException(
                     "The successful workspace transition did not commit exactly once, retained stale source-scene/global context, or waited for background ID65 validation.");
@@ -6469,6 +6883,7 @@ public sealed partial class MainWindow
             }
             if (PathsEqual(_workspace.RootPath, originalWorkspace.RootPath))
             {
+                _id65BlankLabRevealPath = originalRevealPath;
                 _selectedMoby = originalSelectedMoby;
                 _selectedTerrain = originalSelectedTerrain;
                 _selectedTerrainIndex = originalSelectedTerrainIndex;
@@ -6533,6 +6948,17 @@ public sealed partial class MainWindow
         DateTime lockedImageWriteBefore = lockedImage.LastWriteTimeUtc;
         byte[] cueBefore = await File.ReadAllBytesAsync(paths.LockedBaseCuePath);
         byte[] manifestBefore = await File.ReadAllBytesAsync(paths.ManifestPath);
+        string candidateDirectory = Path.Combine(
+            paths.RootPath,
+            "materialized-candidates",
+            "ui-smoke-exact-full-candidate");
+        string candidateImage = Path.Combine(candidateDirectory, "candidate.bin");
+        string candidateCue = Path.Combine(candidateDirectory, "candidate.cue");
+        string candidateReceipt = Path.Combine(candidateDirectory, "candidate.receipt.json");
+        Directory.CreateDirectory(candidateDirectory);
+        await File.WriteAllBytesAsync(candidateImage, "ui-smoke-image"u8.ToArray());
+        await File.WriteAllBytesAsync(candidateCue, "ui-smoke-cue"u8.ToArray());
+        await File.WriteAllBytesAsync(candidateReceipt, "ui-smoke-receipt"u8.ToArray());
         string[] protectedOutputDirectories =
         [
             paths.OperationsDirectoryPath,
@@ -6611,11 +7037,206 @@ public sealed partial class MainWindow
                     "Created the canonical ID65 Full Authoring Document",
                     StringComparison.Ordinal) ||
                 !(_statusText.Text ?? "").Contains(
-                    "Normal Create BIN is still blocked",
-                    StringComparison.Ordinal))
+                    "normal Create BIN remains blocked",
+                    StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(
                     "The explicit App create action lost its exact state or fail-closed status.");
+            }
+
+            int materializerCalls = 0;
+            Id65BlankLabAuthoringCandidateAppResult? latestCandidateResult = null;
+            Func<
+                UnusedLevel65BlankLevelLabWorkspacePaths,
+                UnusedLevel65BlankLevelLabManifest,
+                CancellationToken,
+                Task<Id65BlankLabAuthoringCandidateAppResult>>
+                successfulCandidateMaterializer =
+                (actualPaths, actualManifest, _) =>
+                {
+                    materializerCalls++;
+                    if (actualPaths != paths || actualManifest != manifest)
+                    {
+                        throw new InvalidOperationException(
+                            "The explicit candidate action lost its admitted path or manifest identity.");
+                    }
+                    latestCandidateResult = new Id65BlankLabAuthoringCandidateAppResult(
+                        candidateDirectory,
+                        candidateImage,
+                        candidateCue,
+                        candidateReceipt,
+                        created.EnvelopeCanonicalSha256,
+                        created.DocumentCanonicalSha256,
+                        new string('a', 64),
+                        new string('b', 64),
+                        new string('c', 64),
+                        new string('d', 64),
+                        ChangedRawSectorCount: 558,
+                        ChangedPhysicalImageBytes: 1_075_276,
+                        ReusedExistingCandidate: materializerCalls > 1,
+                        CandidateArtifactsWrittenThisCall: materializerCalls == 1,
+                        FileSystemMutationPerformed: materializerCalls == 1,
+                        ExactReadbackVerified: true,
+                        ProtectedComplementVerified: true,
+                        RetailTownSquarePreserved: true,
+                        TargetOverlayPreserved: true,
+                        ExecutablePreserved: true,
+                        AtomicNoReplacePublicationVerified: true,
+                        OwnedTemporaryResidueRemoved: true,
+                        CarriesAppOrUiAuthority: false,
+                        CarriesCreateBinAuthority: false,
+                        NormalRetailCreateBinComposed: false,
+                        RuntimeCandidateAuthorized: false,
+                        RuntimeProven: false,
+                        ReleaseIntegrated: false,
+                        PromotionAuthorized: false,
+                        Publishable: false,
+                        CurrentOnDiskFreshnessVerified: false,
+                        HostileFilesystemRaceSafe: false,
+                        RequiresTrustedExclusiveWorkspaceDirectory: true,
+                        CommonWorkspaceLeaseOwned: false);
+                    return Task.FromResult(latestCandidateResult);
+                };
+            Id65AuthoringCandidateMaterializerOverrideForTesting =
+                successfulCandidateMaterializer;
+            await CreateId65AuthoringAggregateCandidateAsync();
+            string createdCandidateStatus = _statusText.Text ?? "";
+            await CreateId65AuthoringAggregateCandidateAsync();
+            string reusedCandidateStatus = _statusText.Text ?? "";
+            if (materializerCalls != 2 ||
+                !createdCandidateStatus.Contains(
+                    "Created the exact offline ID65 full-authoring candidate",
+                    StringComparison.Ordinal) ||
+                !createdCandidateStatus.Contains(
+                    "not normal Create BIN",
+                    StringComparison.OrdinalIgnoreCase) ||
+                !reusedCandidateStatus.Contains(
+                    "Reused the exact offline ID65 full-authoring candidate",
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    _id65BlankLabRevealPath,
+                    candidateCue,
+                    StringComparison.Ordinal) ||
+                _id65BlankLabBusy || _id65BlankLabManualOperation != null)
+            {
+                throw new InvalidOperationException(
+                    "The explicit ID65 candidate action lost exact create/reuse, offline truth, reveal, or operation-state behavior.");
+            }
+
+            Id65BlankLabAuthoringCandidateAppResult validCandidateResult =
+                latestCandidateResult ?? throw new InvalidOperationException(
+                    "The exact candidate seam returned no reusable test receipt.");
+            Id65AuthoringCandidateMaterializerOverrideForTesting =
+                (_, _, _) => Task.FromResult(validCandidateResult with
+                {
+                    ReusedExistingCandidate = true,
+                    CandidateArtifactsWrittenThisCall = true,
+                    FileSystemMutationPerformed = true
+                });
+            await CreateId65AuthoringAggregateCandidateAsync();
+            if (materializerCalls != 2 ||
+                !(_statusText.Text ?? "").Contains(
+                    "lost an exact path, identity, readback, or offline safety boundary",
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.IsNullOrWhiteSpace(_id65BlankLabRevealPath))
+            {
+                throw new InvalidOperationException(
+                    "A contradictory exact-candidate create/reuse receipt was accepted or retained a stale reveal path.");
+            }
+            Id65AuthoringCandidateMaterializerOverrideForTesting =
+                successfulCandidateMaterializer;
+
+            byte[] exactDocumentBeforePostReturnMutation =
+                await File.ReadAllBytesAsync(documentPath);
+            Id65AuthoringCandidateMaterializerOverrideForTesting =
+                async (_, _, _) =>
+                {
+                    await File.WriteAllTextAsync(documentPath, "{}\n");
+                    return validCandidateResult;
+                };
+            await CreateId65AuthoringAggregateCandidateAsync();
+            string postReturnMutationStatus = _statusText.Text ?? "";
+            string postReturnMutationReveal = _id65BlankLabRevealPath;
+            bool postReturnMutationOperationSettled =
+                !_id65BlankLabBusy && _id65BlankLabManualOperation == null;
+            await File.WriteAllBytesAsync(
+                documentPath,
+                exactDocumentBeforePostReturnMutation);
+            Id65AuthoringCandidateMaterializerOverrideForTesting =
+                successfulCandidateMaterializer;
+            if (materializerCalls != 2 ||
+                !postReturnMutationStatus.Contains(
+                    "Could not create the exact ID65 full-authoring candidate",
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.IsNullOrWhiteSpace(postReturnMutationReveal) ||
+                !postReturnMutationOperationSettled)
+            {
+                throw new InvalidOperationException(
+                    "A canonical document mutation at candidate return crossed the post-materializer reinspection boundary.");
+            }
+
+            TaskCompletionSource candidateDelayStarted =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource candidateDelayRelease =
+                new(TaskCreationOptions.RunContinuationsAsynchronously);
+            Id65BlankLabManualOperationDelayOverrideForTesting =
+                (stage, cancellationToken) =>
+                {
+                    if (!string.Equals(
+                            stage,
+                            "authoring-candidate-started",
+                            StringComparison.Ordinal))
+                    {
+                        return Task.CompletedTask;
+                    }
+                    candidateDelayStarted.TrySetResult();
+                    return candidateDelayRelease.Task.WaitAsync(cancellationToken);
+                };
+            Task staleCandidate = CreateId65AuthoringAggregateCandidateAsync();
+            await candidateDelayStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            LevelDefinition? delayedCandidateLevel = _currentLevel;
+            string delayedCandidateTerrainSignature = _currentGeometry == null
+                ? ""
+                : BuildTerrainEditSignature(_currentGeometry);
+            string delayedCandidateMobySignature =
+                BuildMobyEditSignature(_currentMobys);
+            int materializerCallsBeforeFencedDuplicate = materializerCalls;
+            bool fencedLevelSelection = SelectLevel(_retailCatalog.Levels.First());
+            await CreateId65AuthoringAggregateCandidateAsync();
+            if (_id65BlankLabAuthoringCandidateButton?.IsEnabled != false ||
+                fencedLevelSelection || _currentLevel != delayedCandidateLevel ||
+                (_currentGeometry == null
+                    ? ""
+                    : BuildTerrainEditSignature(_currentGeometry)) !=
+                    delayedCandidateTerrainSignature ||
+                BuildMobyEditSignature(_currentMobys) !=
+                    delayedCandidateMobySignature ||
+                materializerCalls != materializerCallsBeforeFencedDuplicate)
+            {
+                throw new InvalidOperationException(
+                    "The delayed exact-candidate operation did not fence duplicate creation, level navigation, terrain, or Moby state.");
+            }
+            CancelId65BlankLabManualOperationForWorkspaceChange();
+            const string candidateGenerationStatus =
+                "new candidate generation owns this status";
+            _statusText.Text = candidateGenerationStatus;
+            candidateDelayRelease.TrySetResult();
+            await staleCandidate;
+            Id65BlankLabManualOperationDelayOverrideForTesting = null;
+            if (materializerCalls != 2 ||
+                !string.Equals(
+                    _statusText.Text,
+                    candidateGenerationStatus,
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    _id65BlankLabAuthoringCandidateButton?.Content?.ToString(),
+                    "Create Exact Full Candidate",
+                    StringComparison.Ordinal) ||
+                !string.IsNullOrWhiteSpace(_id65BlankLabRevealPath) ||
+                _id65BlankLabBusy || _id65BlankLabManualOperation != null)
+            {
+                throw new InvalidOperationException(
+                    "A stale exact-candidate continuation changed the newer status, retained a stale reveal binding, changed the button label, or leaked operation state.");
             }
 
             byte[] createdBytes = await File.ReadAllBytesAsync(documentPath);
@@ -6736,14 +7357,24 @@ public sealed partial class MainWindow
             RefreshId65BlankLabUi();
             RefreshActionAvailability();
             Id65BlankLabUiSnapshot ui = CaptureId65BlankLabUiSnapshotForTesting();
+            string replacementStatus = _statusText.Text ?? "";
+            int callsBeforeUnsupportedVariant = materializerCalls;
+            await CreateId65AuthoringAggregateCandidateAsync();
+            string unsupportedVariantStatus = _statusText.Text ?? "";
             if (!Equivalent(replacedState, replacement) ||
                 replaced.DocumentCanonicalSha256 !=
                     expectedReplacement.DocumentCanonicalSha256 ||
                 replaced.EnvelopeCanonicalSha256 == created.EnvelopeCanonicalSha256 ||
-                !(_statusText.Text ?? "").Contains(
+                !replacementStatus.Contains(
                     "Updated the canonical ID65 Full Authoring Document",
                     StringComparison.Ordinal) ||
-                !ui.AuthoringDocumentEnabled || ui.SaveEnabled || ui.CreateCueEnabled ||
+                !ui.AuthoringDocumentEnabled || !ui.AuthoringCandidateEnabled ||
+                ui.SaveEnabled || ui.CreateCueEnabled ||
+                callsBeforeUnsupportedVariant != materializerCalls ||
+                !unsupportedVariantStatus.Contains(
+                    "supports only the full document",
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.IsNullOrWhiteSpace(_id65BlankLabRevealPath) ||
                 !TryGetId65BlankLabNormalCreateBinBlockReason(
                     out string createBinReason) ||
                 !createBinReason.Contains(
@@ -6790,11 +7421,13 @@ public sealed partial class MainWindow
             }
 
             return
-                "explicit cancel preserved absence; create, stale-envelope no-op refusal, exact reopen/no-op, invalid-state refusal, and CAS replacement passed; legacy Save/disposable CUE and normal Create BIN stayed closed; locked BIN/CUE/manifest, outputs, and loaded scene stayed unchanged";
+                "explicit cancel preserved absence; create, exact offline candidate create/reuse, stale-envelope no-op refusal, exact reopen/no-op, invalid-state refusal, and CAS replacement passed; unsupported document variants failed before materialization; legacy Save/disposable CUE and normal Create BIN stayed closed; locked BIN/CUE/manifest, outputs, and loaded scene stayed unchanged";
         }
         finally
         {
             Id65AuthoringDocumentDialogOverrideForTesting = null;
+            Id65AuthoringCandidateMaterializerOverrideForTesting = null;
+            Id65BlankLabManualOperationDelayOverrideForTesting = null;
         }
     }
 
@@ -6822,6 +7455,8 @@ public sealed partial class MainWindow
         bool LoadEnabled,
         bool AuthoringDocumentEnabled,
         string AuthoringDocumentButtonText,
+        bool AuthoringCandidateEnabled,
+        string AuthoringCandidateButtonText,
         bool SaveEnabled,
         bool CreateCueEnabled,
         bool RevealEnabled,
