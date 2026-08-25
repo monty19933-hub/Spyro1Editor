@@ -1880,6 +1880,81 @@ class _PendingRelease:
     post_release_drift_observer: Callable[[], None]
 
 
+@dataclasses.dataclass(frozen=True)
+class TargetedKeyTransportStatus:
+    """One atomic, read-only snapshot of accepted transport mutation state."""
+
+    exclusive_claimed: bool
+    raw_mutation_attempts: int
+    posted_down_count: int
+    possibly_held: tuple[tuple[int, KeyAction], ...]
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.exclusive_claimed) is not bool
+            or type(self.raw_mutation_attempts) is not int
+            or self.raw_mutation_attempts < 0
+            or type(self.posted_down_count) is not int
+            or self.posted_down_count < 0
+            or type(self.possibly_held) is not tuple
+            or any(
+                type(token) is not tuple
+                or len(token) != 2
+                or type(token[0]) is not int
+                or token[0] <= 1
+                or type(token[1]) is not KeyAction
+                for token in self.possibly_held
+            )
+        ):
+            raise AutomationRefusal("Key-transport status is malformed.")
+
+
+class _ExclusiveTargetedKeyTransportCapability:
+    """Single-use mutation authority for one already-pristine key transport.
+
+    This is an offline ownership primitive, not a production-ready security
+    boundary.  It prevents a retained :class:`TargetedKeyTransport` alias from
+    posting or releasing through that transport after a lifecycle coordinator
+    claims it.  A caller that retained the original EventBackend can still
+    bypass this Python object, so production promotion remains blocked on an
+    outer owner that constructs and contains the backend itself.
+    """
+
+    __slots__ = ("__owner", "__token")
+
+    def __init__(self, owner: "TargetedKeyTransport", token: object) -> None:
+        self.__owner = owner
+        self.__token = token
+
+    def require_target(self, pid: int) -> None:
+        self.__owner._exclusive_require_target(self.__token, pid)
+
+    def tap(
+        self,
+        pid: int,
+        action: KeyAction,
+        *,
+        release_identity_validator: Callable[[], None],
+        post_release_drift_observer: Callable[[], None],
+        pre_key_down_validator: Callable[[], None],
+    ) -> None:
+        self.__owner._exclusive_tap(
+            self.__token,
+            pid,
+            action,
+            release_identity_validator=release_identity_validator,
+            post_release_drift_observer=post_release_drift_observer,
+            pre_key_down_validator=pre_key_down_validator,
+        )
+
+    def release_all(self) -> tuple[str, ...]:
+        return self.__owner._exclusive_release_all(self.__token)
+
+    @property
+    def possibly_held(self) -> tuple[tuple[int, KeyAction], ...]:
+        return self.__owner._exclusive_possibly_held(self.__token)
+
+
 class TargetedKeyTransport:
     def __init__(
         self,
@@ -1887,17 +1962,110 @@ class TargetedKeyTransport:
         *,
         sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
-        self.backend = backend
-        self.sleeper = sleeper
+        self._backend = backend
+        self._sleeper = sleeper
         self._possibly_held: dict[tuple[int, KeyAction], _PendingRelease] = {}
         self._posted_down_count = 0
+        self._operation_lock = threading.RLock()
+        self._exclusive_token: object | None = None
+        self._raw_mutation_attempts = 0
+
+    def _begin_raw_mutation_attempt(self) -> None:
+        self._require_direct_access()
+        self._raw_mutation_attempts += 1
+
+    def _require_direct_access(self) -> None:
+        if self._exclusive_token is not None:
+            raise AutomationRefusal(
+                "Direct key-transport mutation is forbidden after exclusive claim."
+            )
+
+    def _require_exclusive_access(self, token: object) -> None:
+        if self._exclusive_token is None or self._exclusive_token is not token:
+            raise AutomationRefusal(
+                "Exclusive key-transport capability is absent or stale."
+            )
+
+    def claim_exclusive_lifecycle(self) -> _ExclusiveTargetedKeyTransportCapability:
+        """Consume the pristine transport's only lifecycle mutation capability."""
+
+        with self._operation_lock:
+            if type(self) is not TargetedKeyTransport:
+                raise AutomationRefusal(
+                    "Exclusive key transport requires the exact reviewed type."
+                )
+            if self._exclusive_token is not None:
+                raise AutomationRefusal(
+                    "Key transport already has an exclusive lifecycle owner."
+                )
+            if (
+                self._raw_mutation_attempts != 0
+                or self._possibly_held
+                or self._posted_down_count != 0
+            ):
+                raise AutomationRefusal(
+                    "Exclusive key transport must be claimed before any pulse work."
+                )
+            token = object()
+            capability = _ExclusiveTargetedKeyTransportCapability(self, token)
+            self._exclusive_token = token
+            return capability
 
     def require_target(self, pid: int) -> None:
-        if not self.backend.preflight_access():
+        with self._operation_lock:
+            self._begin_raw_mutation_attempt()
+            self._require_target_owned(pid)
+
+    def _exclusive_require_target(self, token: object, pid: int) -> None:
+        with self._operation_lock:
+            self._require_exclusive_access(token)
+            self._require_target_owned(pid)
+
+    def _require_target_owned(self, pid: int) -> None:
+        if not self._backend.preflight_access():
             raise AutomationRefusal("Accessibility post-event permission is not already granted.")
-        self.backend.require_frontmost_pid(pid)
+        self._backend.require_frontmost_pid(pid)
 
     def tap(
+        self,
+        pid: int,
+        action: KeyAction,
+        *,
+        release_identity_validator: Callable[[], None],
+        post_release_drift_observer: Callable[[], None],
+        pre_key_down_validator: Callable[[], None],
+    ) -> None:
+        with self._operation_lock:
+            self._begin_raw_mutation_attempt()
+            self._tap_owned(
+                pid,
+                action,
+                release_identity_validator=release_identity_validator,
+                post_release_drift_observer=post_release_drift_observer,
+                pre_key_down_validator=pre_key_down_validator,
+            )
+
+    def _exclusive_tap(
+        self,
+        token: object,
+        pid: int,
+        action: KeyAction,
+        *,
+        release_identity_validator: Callable[[], None],
+        post_release_drift_observer: Callable[[], None],
+        pre_key_down_validator: Callable[[], None],
+    ) -> None:
+        with self._operation_lock:
+            self._require_exclusive_access(token)
+            self._tap_owned(
+                pid,
+                action,
+                release_identity_validator=release_identity_validator,
+                post_release_drift_observer=post_release_drift_observer,
+                pre_key_down_validator=pre_key_down_validator,
+            )
+
+    def _tap_owned(
         self,
         pid: int,
         action: KeyAction,
@@ -1934,8 +2102,8 @@ class TargetedKeyTransport:
                 raise KeyDownNotPostedRefusal(
                     "Key-down ownership was refused before an event could be posted."
                 ) from exc
-            self.backend.post_key_down(pid, spec.key_code)
-            self.sleeper(KEY_PULSE_SECONDS)
+            self._backend.post_key_down(pid, spec.key_code)
+            self._sleeper(KEY_PULSE_SECONDS)
         except KeyDownNotPostedRefusal as exc:
             self._posted_down_count -= 1
             self._possibly_held.pop(token, None)
@@ -1977,6 +2145,25 @@ class TargetedKeyTransport:
         post_release_drift_observer: Callable[[], None],
         pre_key_down_validator: Callable[[], None],
     ) -> bool:
+        with self._operation_lock:
+            self._begin_raw_mutation_attempt()
+            return self._compensating_toggle_owned(
+                pid,
+                action,
+                identity_validator=identity_validator,
+                post_release_drift_observer=post_release_drift_observer,
+                pre_key_down_validator=pre_key_down_validator,
+            )
+
+    def _compensating_toggle_owned(
+        self,
+        pid: int,
+        action: KeyAction,
+        *,
+        identity_validator: Callable[[], None],
+        post_release_drift_observer: Callable[[], None],
+        pre_key_down_validator: Callable[[], None],
+    ) -> bool:
         """Force one exact logical untoggle and release its physical host key.
 
         Returns whether focus drift was observed.  Drift never blocks cleanup,
@@ -2009,7 +2196,7 @@ class TargetedKeyTransport:
                 raise KeyDownNotPostedRefusal(
                     "Compensating key-down ownership was refused before posting."
                 ) from exc
-            down_focus = self.backend.force_compensating_key_down(
+            down_focus = self._backend.force_compensating_key_down(
                 pid,
                 spec.key_code,
                 identity_validator=identity_validator,
@@ -2040,7 +2227,7 @@ class TargetedKeyTransport:
         # The backend invokes this validator immediately before its forced
         # release.  If PID identity changed, posting to a recycled PID is less
         # safe than retaining the explicit uncertain-state refusal.
-        environment = self.backend.force_key_up(
+        environment = self._backend.force_key_up(
             pid,
             pending.key_code,
             identity_validator=pending.identity_validator,
@@ -2071,6 +2258,16 @@ class TargetedKeyTransport:
             )
 
     def release_all(self) -> tuple[str, ...]:
+        with self._operation_lock:
+            self._begin_raw_mutation_attempt()
+            return self._release_all_owned()
+
+    def _exclusive_release_all(self, token: object) -> tuple[str, ...]:
+        with self._operation_lock:
+            self._require_exclusive_access(token)
+            return self._release_all_owned()
+
+    def _release_all_owned(self) -> tuple[str, ...]:
         errors: list[str] = []
         for token, _pending in sorted(
             tuple(self._possibly_held.items()), key=lambda item: (item[0][0], item[0][1].value)
@@ -2084,11 +2281,38 @@ class TargetedKeyTransport:
 
     @property
     def possibly_held(self) -> tuple[tuple[int, KeyAction], ...]:
-        return tuple(sorted(self._possibly_held, key=lambda item: (item[0], item[1].value)))
+        return self.status().possibly_held
+
+    def _exclusive_possibly_held(
+        self, token: object
+    ) -> tuple[tuple[int, KeyAction], ...]:
+        with self._operation_lock:
+            self._require_exclusive_access(token)
+            return tuple(
+                sorted(self._possibly_held, key=lambda item: (item[0], item[1].value))
+            )
 
     @property
     def posted_down_count(self) -> int:
-        return self._posted_down_count
+        return self.status().posted_down_count
+
+    @property
+    def exclusive_claimed(self) -> bool:
+        return self.status().exclusive_claimed
+
+    def status(self) -> TargetedKeyTransportStatus:
+        with self._operation_lock:
+            return TargetedKeyTransportStatus(
+                self._exclusive_token is not None,
+                self._raw_mutation_attempts,
+                self._posted_down_count,
+                tuple(
+                    sorted(
+                        self._possibly_held,
+                        key=lambda item: (item[0], item[1].value),
+                    )
+                ),
+            )
 
 
 class PadWordReader(Protocol):
@@ -4120,18 +4344,23 @@ class GdbInputPulseCoordinatorStatus:
 class GdbInputPulseLifecycleCoordinator:
     """Offline-only owner of arm -> host pulse -> GDB confirmation ordering.
 
-    Construction performs only pure validation.  This adapter deliberately is
-    not referenced by :func:`main` or :class:`UnattendedFoundation`.  It exists
-    so the cross-domain lifecycle can be proved with fake sockets and a fake
-    event backend before any production coordinator is permitted to use it.
+    Construction performs pure dependency/state validation followed by one
+    in-memory capability claim; it performs no process or native I/O.  This
+    adapter deliberately is not referenced by :func:`main` or
+    :class:`UnattendedFoundation`.  It exists so the cross-domain lifecycle can
+    be proved with fake sockets and a fake event backend before any production
+    coordinator is permitted to use it.
 
     A poisoned status deliberately has no general close/cancel operation.  If
     its explicit emulation state is PAUSED or UNKNOWN, disconnecting could
     strand DuckStation in the wrong state.  The session state and
     ``recovery_required`` bit preserve that promotion blocker for a later
-    recovery-capable outer coordinator.  Direct aliases of the key transport
-    also remain a production blocker because this offline adapter cannot make
-    the transport itself exclusively owned.
+    recovery-capable outer coordinator.  Construction consumes the pristine
+    key transport's single mutation capability, so retained aliases of that
+    transport refuse.  A retained alias of the underlying EventBackend remains
+    an explicit production blocker until an outer owner constructs it privately.
+    Recovery/cancellation and one native-boundary-aware absolute deadline are
+    also deliberately absent, so this adapter remains offline-only.
     """
 
     def __init__(
@@ -4151,10 +4380,14 @@ class GdbInputPulseLifecycleCoordinator:
             or type(pulse_timeout_seconds) not in {int, float}
             or not math.isfinite(float(pulse_timeout_seconds))
             or pulse_timeout_seconds <= 0
-            or transport.possibly_held
         ):
             raise AutomationRefusal(
                 "GDB input-pulse coordinator dependencies are not exact."
+            )
+        transport_status = transport.status()
+        if transport_status != TargetedKeyTransportStatus(False, 0, 0, ()):
+            raise AutomationRefusal(
+                "GDB input-pulse coordinator requires one pristine key transport."
             )
         session_status = session.status()
         if session_status.state != "NEW":
@@ -4164,7 +4397,6 @@ class GdbInputPulseLifecycleCoordinator:
         self._plan = plan
         self._lifecycle = lifecycle
         self._session = session
-        self._transport = transport
         self._clock = clock
         self._pulse_timeout_seconds = float(pulse_timeout_seconds)
         self._state = _GdbInputPulseCoordinatorState.NEW
@@ -4179,6 +4411,11 @@ class GdbInputPulseLifecycleCoordinator:
         # waits for one atomic settled snapshot.
         self._operation_lock = threading.RLock()
         self._mutation_active = False
+        # Claim last: every constructor refusal above leaves the caller's
+        # transport pristine and directly usable.  A successful coordinator
+        # owns the only transport mutation route for its full lifetime,
+        # including CLOSED and POISONED terminal states.
+        self._transport_capability = transport.claim_exclusive_lifecycle()
 
     def status(self) -> GdbInputPulseCoordinatorStatus:
         """Return one atomic status without process, lsof, socket, or post work."""
@@ -4193,7 +4430,7 @@ class GdbInputPulseLifecycleCoordinator:
                     len(self._plan.events),
                     self._settled_event_count,
                     self._emulation_state,
-                    self._transport.possibly_held,
+                    self._transport_capability.possibly_held,
                     session_status.state,
                     self._state is _GdbInputPulseCoordinatorState.POISONED,
                 )
@@ -4253,7 +4490,7 @@ class GdbInputPulseLifecycleCoordinator:
         cleanup_errors: Sequence[str] = (),
     ) -> None:
         self._set_poisoned()
-        held = self._transport.possibly_held
+        held = self._transport_capability.possibly_held
         if held:
             details = ",".join(cleanup_errors) if cleanup_errors else "none"
             raise AutomationRefusal(
@@ -4270,9 +4507,9 @@ class GdbInputPulseLifecycleCoordinator:
     def _release_owed_keys(self) -> tuple[str, ...]:
         errors: list[str] = []
         for _ in range(GDB_PULSE_RELEASE_CLEANUP_ATTEMPTS):
-            if not self._transport.possibly_held:
+            if not self._transport_capability.possibly_held:
                 break
-            errors.extend(self._transport.release_all())
+            errors.extend(self._transport_capability.release_all())
         return tuple(errors)
 
     def start_execute(self, process: ProcessIdentity) -> None:
@@ -4287,14 +4524,14 @@ class GdbInputPulseLifecycleCoordinator:
                         or self._state is not _GdbInputPulseCoordinatorState.NEW
                         or self._bound_process is not None
                         or self._next_event_index != 0
-                        or self._transport.possibly_held
+                        or self._transport_capability.possibly_held
                     ):
                         raise AutomationRefusal(
                             "GDB input-pulse coordinator can start exactly once."
                         )
                 # Accessibility and exact frontmost-PID proof must fail before
                 # the GDB connection can induce any pause.
-                self._transport.require_target(process.pid)
+                self._transport_capability.require_target(process.pid)
                 self._session.connect_resume_once(process)
                 self._session.require_running_owned(process)
                 with self._state_guard:
@@ -4349,7 +4586,7 @@ class GdbInputPulseLifecycleCoordinator:
                         or index >= len(self._plan.events)
                         or self._plan.events[index] != event
                         or self._settled_event_count != index
-                        or self._transport.possibly_held
+                        or self._transport_capability.possibly_held
                     ):
                         raise AutomationRefusal(
                             "GDB input-pulse event order or ownership is not exact."
@@ -4473,7 +4710,7 @@ class GdbInputPulseLifecycleCoordinator:
                     if deadline_error is not None:
                         raise deadline_error
 
-                self._transport.tap(
+                self._transport_capability.tap(
                     process.pid,
                     event.action,
                     release_identity_validator=release_identity_validator,
@@ -4488,7 +4725,7 @@ class GdbInputPulseLifecycleCoordinator:
                         or self._next_event_index != index + 1
                         or self._settled_event_count != index + 1
                         or self._emulation_state is not after_state
-                        or self._transport.possibly_held
+                        or self._transport_capability.possibly_held
                     ):
                         raise AutomationRefusal(
                             "GDB input-pulse event did not settle exactly once."
@@ -4520,7 +4757,7 @@ class GdbInputPulseLifecycleCoordinator:
                 or self._next_event_index != len(self._plan.events)
                 or self._settled_event_count != len(self._plan.events)
                 or self._emulation_state is not PlannedEmulationState.RUNNING
-                or self._transport.possibly_held
+                or self._transport_capability.possibly_held
             ):
                 raise AutomationRefusal(
                     "GDB input-pulse coordinator is not terminal RUNNING."
@@ -4535,7 +4772,7 @@ class GdbInputPulseLifecycleCoordinator:
                 or self._bound_process != process
                 or self._next_event_index != len(self._plan.events)
                 or self._settled_event_count != len(self._plan.events)
-                or self._transport.possibly_held
+                or self._transport_capability.possibly_held
             ):
                 raise AutomationRefusal(
                     "GDB input-pulse completion ownership changed."
@@ -4716,12 +4953,13 @@ class PollingReadOnlyPadConfirmer:
 
 
 class UnavailableNativePadConfirmer:
-    """Production refusal until GDB pause/resume and pulse ordering are pinned."""
+    """Production refusal until the candidate-native pad evidence is pinned."""
 
     REFUSAL_REASON: Final = (
-        "Native read-only GDB confirmation is not production-wired because the "
-        "pause/resume and input-pulse lifecycle is not pinned; the entire input "
-        "plan is refused before any host key event."
+        "Native read-only GDB confirmation is not production-wired because "
+        "candidate provenance for the pad-frame address, update timing, and bit "
+        "mapping plus shared-session deadlines and macro compensation is not "
+        "pinned; the entire input plan is refused before any host key event."
     )
 
     def readiness(self) -> PadConfirmationReadiness:

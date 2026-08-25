@@ -2396,6 +2396,429 @@ def test_planned_space_pause_resume_lifecycle() -> None:
         raise AssertionError("Planned Space lifecycle did not close once.")
 
 
+def test_targeted_key_transport_exclusive_capability() -> None:
+    process = make_process()
+    pristine_backend = FakeBackend()
+    pristine = automation.TargetedKeyTransport(
+        pristine_backend, sleeper=lambda _: None
+    )
+    expected_pristine = automation.TargetedKeyTransportStatus(False, 0, 0, ())
+    if pristine.status() != expected_pristine:
+        raise AssertionError("Fresh key transport was not an atomic pristine snapshot.")
+    capability = pristine.claim_exclusive_lifecycle()
+    if (
+        pristine.status()
+        != automation.TargetedKeyTransportStatus(True, 0, 0, ())
+        or pristine_backend.preflight_calls
+        or pristine_backend.frontmost_checks
+        or pristine_backend.posts
+    ):
+        raise AssertionError("Exclusive claim crossed a fake native boundary or counter.")
+    expect_refusal(
+        pristine.claim_exclusive_lifecycle,
+        "already has an exclusive lifecycle owner",
+    )
+    if any(
+        hasattr(capability, name)
+        for name in ("backend", "owner", "token", "transport")
+    ):
+        raise AssertionError("Exclusive capability exposed a public owner or token alias.")
+
+    callback_calls = 0
+
+    def count_callback() -> None:
+        nonlocal callback_calls
+        callback_calls += 1
+
+    expect_refusal(
+        lambda: pristine.require_target(process.pid),
+        "Direct key-transport mutation",
+    )
+    expect_refusal(
+        lambda: pristine.tap(
+            process.pid,
+            automation.KeyAction.PAD_LEFT_TOGGLE,
+            release_identity_validator=count_callback,
+            post_release_drift_observer=count_callback,
+            pre_key_down_validator=count_callback,
+        ),
+        "Direct key-transport mutation",
+    )
+    expect_refusal(
+        lambda: pristine.compensating_toggle(
+            process.pid,
+            automation.KeyAction.PAD_LEFT_TOGGLE,
+            identity_validator=count_callback,
+            post_release_drift_observer=count_callback,
+            pre_key_down_validator=count_callback,
+        ),
+        "Direct key-transport mutation",
+    )
+    expect_refusal(pristine.release_all, "Direct key-transport mutation")
+    if (
+        pristine.status()
+        != automation.TargetedKeyTransportStatus(True, 0, 0, ())
+        or callback_calls
+        or pristine_backend.preflight_calls
+        or pristine_backend.frontmost_checks
+        or pristine_backend.posts
+    ):
+        raise AssertionError("Retained raw alias reached callbacks or fake native work.")
+    if capability.release_all() != ():
+        raise AssertionError("Owned no-op cleanup returned an unexpected error.")
+
+    foreign_backend = FakeBackend()
+    foreign = automation.TargetedKeyTransport(
+        foreign_backend, sleeper=lambda _: None
+    )
+    foreign_capability = foreign.claim_exclusive_lifecycle()
+    foreign_token = object.__getattribute__(
+        foreign_capability,
+        "_ExclusiveTargetedKeyTransportCapability__token",
+    )
+    expect_refusal(
+        lambda: pristine._exclusive_release_all(object()),
+        "absent or stale",
+    )
+    expect_refusal(
+        lambda: pristine._exclusive_release_all(foreign_token),
+        "absent or stale",
+    )
+    if foreign_capability.release_all() != () or foreign_backend.posts:
+        raise AssertionError("Capability identity was not bound to one transport.")
+
+    class DerivedTransport(automation.TargetedKeyTransport):
+        pass
+
+    derived = DerivedTransport(FakeBackend(), sleeper=lambda _: None)
+    expect_refusal(derived.claim_exclusive_lifecycle, "exact reviewed type")
+    if derived.status() != expected_pristine:
+        raise AssertionError("Derived-type claim refusal changed transport state.")
+
+    def expect_prior_attempt_blocks_claim(
+        label: str,
+        mutate: Any,
+        transport: Any,
+    ) -> None:
+        try:
+            mutate()
+        except automation.AutomationRefusal:
+            pass
+        if transport.status().raw_mutation_attempts != 1:
+            raise AssertionError(f"{label} did not record one raw mutation attempt.")
+        expect_refusal(
+            transport.claim_exclusive_lifecycle,
+            "before any pulse work",
+        )
+        if transport.exclusive_claimed:
+            raise AssertionError(f"{label} transport was claimed after prior use.")
+
+    targeted = automation.TargetedKeyTransport(FakeBackend(), sleeper=lambda _: None)
+    expect_prior_attempt_blocks_claim(
+        "target preflight",
+        lambda: targeted.require_target(process.pid),
+        targeted,
+    )
+
+    no_op_cleanup = automation.TargetedKeyTransport(
+        FakeBackend(), sleeper=lambda _: None
+    )
+    expect_prior_attempt_blocks_claim(
+        "no-op cleanup", no_op_cleanup.release_all, no_op_cleanup
+    )
+
+    successful = automation.TargetedKeyTransport(FakeBackend(), sleeper=lambda _: None)
+    expect_prior_attempt_blocks_claim(
+        "successful pulse",
+        lambda: successful.tap(
+            process.pid,
+            automation.KeyAction.PAD_LEFT_TOGGLE,
+            release_identity_validator=lambda: None,
+            post_release_drift_observer=lambda: None,
+            pre_key_down_validator=lambda: None,
+        ),
+        successful,
+    )
+    if successful.status().posted_down_count != 1:
+        raise AssertionError("Successful prior pulse lost its monotonic post count.")
+
+    predown = automation.TargetedKeyTransport(FakeBackend(), sleeper=lambda _: None)
+
+    def refuse_predown() -> None:
+        raise automation.AutomationRefusal("Injected pre-down refusal.")
+
+    expect_prior_attempt_blocks_claim(
+        "pre-down-refused pulse",
+        lambda: predown.tap(
+            process.pid,
+            automation.KeyAction.PAD_LEFT_TOGGLE,
+            release_identity_validator=lambda: None,
+            post_release_drift_observer=lambda: None,
+            pre_key_down_validator=refuse_predown,
+        ),
+        predown,
+    )
+    if predown.status().posted_down_count != 0 or predown.possibly_held:
+        raise AssertionError("Pre-down refusal fixture did not return to zero post state.")
+
+    held = automation.TargetedKeyTransport(
+        FakeBackend(fail_up_count=1), sleeper=lambda _: None
+    )
+    expect_prior_attempt_blocks_claim(
+        "unresolved release",
+        lambda: held.tap(
+            process.pid,
+            automation.KeyAction.PAD_LEFT_TOGGLE,
+            release_identity_validator=lambda: None,
+            post_release_drift_observer=lambda: None,
+            pre_key_down_validator=lambda: None,
+        ),
+        held,
+    )
+    if held.possibly_held != ((process.pid, automation.KeyAction.PAD_LEFT_TOGGLE),):
+        raise AssertionError("Failed release did not remain visible after claim refusal.")
+
+
+def test_targeted_key_transport_claim_races_and_coordinator_validation() -> None:
+    process = make_process()
+    plan = parse_plan(
+        ("TOGGLE_PAUSE", "NOT_APPLICABLE"),
+        ("TOGGLE_PAUSE", "NOT_APPLICABLE"),
+        nonce="13131313242424243535353546464646",
+    )
+
+    simultaneous = automation.TargetedKeyTransport(
+        FakeBackend(), sleeper=lambda _: None
+    )
+    simultaneous_start = threading.Event()
+    simultaneous_capabilities: list[Any] = []
+    simultaneous_errors: list[BaseException] = []
+
+    def claim_simultaneously() -> None:
+        if not simultaneous_start.wait(timeout=1):
+            simultaneous_errors.append(
+                AssertionError("Simultaneous claim fixture did not start.")
+            )
+            return
+        try:
+            simultaneous_capabilities.append(
+                simultaneous.claim_exclusive_lifecycle()
+            )
+        except BaseException as exc:
+            simultaneous_errors.append(exc)
+
+    simultaneous_threads = [
+        threading.Thread(target=claim_simultaneously, daemon=True) for _ in range(2)
+    ]
+    for thread in simultaneous_threads:
+        thread.start()
+    simultaneous_start.set()
+    for thread in simultaneous_threads:
+        thread.join(timeout=1)
+    if (
+        any(thread.is_alive() for thread in simultaneous_threads)
+        or len(simultaneous_capabilities) != 1
+        or len(simultaneous_errors) != 1
+        or not isinstance(simultaneous_errors[0], automation.AutomationRefusal)
+        or simultaneous.status()
+        != automation.TargetedKeyTransportStatus(True, 0, 0, ())
+    ):
+        raise AssertionError("Simultaneous claims did not produce exactly one owner.")
+
+    cleanup_backend = FakeBackend(fail_up_count=1)
+    cleanup_transport = automation.TargetedKeyTransport(
+        cleanup_backend, sleeper=lambda _: None
+    )
+    cleanup_capability = cleanup_transport.claim_exclusive_lifecycle()
+    expect_any_refusal(
+        lambda: cleanup_capability.tap(
+            process.pid,
+            automation.KeyAction.PAD_LEFT_TOGGLE,
+            release_identity_validator=lambda: None,
+            post_release_drift_observer=lambda: None,
+            pre_key_down_validator=lambda: None,
+        )
+    )
+    if cleanup_transport.possibly_held != (
+        (process.pid, automation.KeyAction.PAD_LEFT_TOGGLE),
+    ):
+        raise AssertionError("Injected capability failure hid its release obligation.")
+    cleanup_results: list[tuple[str, ...]] = []
+
+    def finish_cleanup_on_another_thread() -> None:
+        cleanup_results.append(cleanup_capability.release_all())
+
+    cleanup_thread = threading.Thread(
+        target=finish_cleanup_on_another_thread, daemon=True
+    )
+    cleanup_thread.start()
+    cleanup_thread.join(timeout=1)
+    if (
+        cleanup_thread.is_alive()
+        or cleanup_results != [()]
+        or cleanup_transport.possibly_held
+        or cleanup_backend.posts
+        != [
+            (process.pid, 23, True),
+            (process.pid, 23, False),
+            (process.pid, 23, False),
+        ]
+    ):
+        raise AssertionError("Capability exception retained its RLock or cleanup debt.")
+
+    claimed_backend = FakeBackend()
+    claimed = automation.TargetedKeyTransport(
+        claimed_backend, sleeper=lambda _: None
+    )
+    claimed.claim_exclusive_lifecycle()
+    raw_error: list[BaseException] = []
+
+    def raw_after_claim() -> None:
+        try:
+            claimed.require_target(process.pid)
+        except BaseException as exc:
+            raw_error.append(exc)
+
+    raw_thread = threading.Thread(target=raw_after_claim, daemon=True)
+    raw_thread.start()
+    raw_thread.join(timeout=1)
+    if (
+        raw_thread.is_alive()
+        or len(raw_error) != 1
+        or not isinstance(raw_error[0], automation.AutomationRefusal)
+        or claimed_backend.preflight_calls
+        or claimed_backend.frontmost_checks
+        or claimed_backend.posts
+    ):
+        raise AssertionError("Claim-winning race allowed retained raw work.")
+
+    raw_entered = threading.Event()
+    raw_continue = threading.Event()
+
+    class BlockingBackend(FakeBackend):
+        def preflight_access(self) -> bool:
+            raw_entered.set()
+            if not raw_continue.wait(timeout=1):
+                raise AssertionError("Raw-winner race fixture timed out.")
+            return super().preflight_access()
+
+    raw_first_backend = BlockingBackend()
+    raw_first = automation.TargetedKeyTransport(
+        raw_first_backend, sleeper=lambda _: None
+    )
+    raw_first_errors: list[BaseException] = []
+    claim_errors: list[BaseException] = []
+
+    def run_raw_first() -> None:
+        try:
+            raw_first.require_target(process.pid)
+        except BaseException as exc:
+            raw_first_errors.append(exc)
+
+    def run_late_claim() -> None:
+        try:
+            raw_first.claim_exclusive_lifecycle()
+        except BaseException as exc:
+            claim_errors.append(exc)
+
+    raw_first_thread = threading.Thread(target=run_raw_first, daemon=True)
+    raw_first_thread.start()
+    if not raw_entered.wait(timeout=1):
+        raise AssertionError("Raw-winner race did not enter under the transport lock.")
+    claim_thread = threading.Thread(target=run_late_claim, daemon=True)
+    claim_thread.start()
+    raw_continue.set()
+    raw_first_thread.join(timeout=1)
+    claim_thread.join(timeout=1)
+    if (
+        raw_first_thread.is_alive()
+        or claim_thread.is_alive()
+        or raw_first_errors
+        or len(claim_errors) != 1
+        or not isinstance(claim_errors[0], automation.AutomationRefusal)
+        or raw_first.status()
+        != automation.TargetedKeyTransportStatus(False, 1, 0, ())
+        or raw_first_backend.preflight_calls != 1
+        or raw_first_backend.frontmost_checks != [(process.pid, process.pid)]
+        or raw_first_backend.posts
+    ):
+        raise AssertionError("Raw-winning race did not permanently block the late claim.")
+
+    def fresh_session() -> Any:
+        session, _, _, _, _ = make_gdb_session((), process=process)
+        return session
+
+    invalid_cases: tuple[tuple[str, Any], ...] = (
+        (
+            "bad-session-type",
+            lambda transport: automation.GdbInputPulseLifecycleCoordinator(
+                plan, object(), transport
+            ),
+        ),
+        (
+            "bad-clock",
+            lambda transport: automation.GdbInputPulseLifecycleCoordinator(
+                plan, fresh_session(), transport, clock=None
+            ),
+        ),
+        (
+            "bad-timeout",
+            lambda transport: automation.GdbInputPulseLifecycleCoordinator(
+                plan, fresh_session(), transport, pulse_timeout_seconds=0
+            ),
+        ),
+    )
+    for label, construct in invalid_cases:
+        transport = automation.TargetedKeyTransport(
+            FakeBackend(), sleeper=lambda _: None
+        )
+        expect_any_refusal(lambda construct=construct, transport=transport: construct(transport))
+        if transport.status() != automation.TargetedKeyTransportStatus(False, 0, 0, ()):
+            raise AssertionError(f"Invalid {label} constructor consumed the transport.")
+
+    class DerivedTransport(automation.TargetedKeyTransport):
+        pass
+
+    derived = DerivedTransport(FakeBackend(), sleeper=lambda _: None)
+    expect_any_refusal(
+        lambda: automation.GdbInputPulseLifecycleCoordinator(
+            plan, fresh_session(), derived
+        )
+    )
+    if derived.status() != automation.TargetedKeyTransportStatus(False, 0, 0, ()):
+        raise AssertionError("Derived transport constructor refusal consumed its state.")
+
+    previously_targeted = automation.TargetedKeyTransport(
+        FakeBackend(), sleeper=lambda _: None
+    )
+    previously_targeted.require_target(process.pid)
+    expect_refusal(
+        lambda: automation.GdbInputPulseLifecycleCoordinator(
+            plan, fresh_session(), previously_targeted
+        ),
+        "pristine key transport",
+    )
+    if previously_targeted.status() != automation.TargetedKeyTransportStatus(
+        False, 1, 0, ()
+    ):
+        raise AssertionError("Non-pristine constructor refusal changed history.")
+
+    shared = automation.TargetedKeyTransport(FakeBackend(), sleeper=lambda _: None)
+    first = automation.GdbInputPulseLifecycleCoordinator(
+        plan, fresh_session(), shared
+    )
+    if not shared.exclusive_claimed or first.status().state != "NEW":
+        raise AssertionError("Valid coordinator did not consume the pristine transport.")
+    expect_refusal(
+        lambda: automation.GdbInputPulseLifecycleCoordinator(
+            plan, fresh_session(), shared
+        ),
+        "pristine key transport",
+    )
+    if shared.status().raw_mutation_attempts != 0:
+        raise AssertionError("Second coordinator attempted raw transport mutation.")
+
+
 def test_gdb_input_pulse_coordinator_exact_order() -> None:
     process = make_process()
     plan = parse_plan(
@@ -2476,14 +2899,17 @@ def test_gdb_input_pulse_coordinator_exact_order() -> None:
         "NEW", None, 0, 4, 0, None, (), "NEW", False
     ):
         raise AssertionError("Coordinator construction was not pure NEW state.")
+    if transport.status() != automation.TargetedKeyTransportStatus(True, 0, 0, ()):
+        raise AssertionError("Coordinator did not consume one pristine transport claim.")
     if connector.calls or fake_socket.sent or backend.posts:
         raise AssertionError("Coordinator construction crossed a native boundary.")
 
     coordinator.start_execute(process)
     reentrant_mutation_checked = False
+    raw_alias_checked = False
 
     def observe_reentrant_status(label: str) -> None:
-        nonlocal reentrant_mutation_checked
+        nonlocal raw_alias_checked, reentrant_mutation_checked
         if coordinator.status().state != "PULSE_IN_FLIGHT":
             raise AssertionError("Callback did not observe its in-flight pulse.")
         if not reentrant_mutation_checked:
@@ -2492,6 +2918,12 @@ def test_gdb_input_pulse_coordinator_exact_order() -> None:
                 "Reentrant GDB input-pulse completion",
             )
             reentrant_mutation_checked = True
+        if not raw_alias_checked:
+            expect_refusal(
+                transport.release_all,
+                "Direct key-transport mutation",
+            )
+            raw_alias_checked = True
         trace.append(label)
 
     for event in plan.events:
@@ -2518,8 +2950,8 @@ def test_gdb_input_pulse_coordinator_exact_order() -> None:
         < trace.index("external-1")
     ):
         raise AssertionError(f"Coordinator pulse ordering changed: {trace!r}")
-    if not reentrant_mutation_checked:
-        raise AssertionError("Callback reentrant mutation refusal was not exercised.")
+    if not reentrant_mutation_checked or not raw_alias_checked:
+        raise AssertionError("Callback reentrant mutation refusals were not exercised.")
     if any(
         trace.index(f"external-{index}") < trace.index(f"up-return-{index + 1}")
         for index in range(4)
@@ -2540,7 +2972,12 @@ def test_gdb_input_pulse_coordinator_exact_order() -> None:
     coordinator.require_complete(process)
     coordinator.close(process)
     coordinator.close(process)
-    if coordinator.status().state != "CLOSED" or fake_socket.close_calls != 1:
+    if (
+        coordinator.status().state != "CLOSED"
+        or fake_socket.close_calls != 1
+        or not transport.exclusive_claimed
+        or transport.status().raw_mutation_attempts != 0
+    ):
         raise AssertionError("Coordinator did not close exactly once from RUNNING.")
     if len(connector.calls) != 1:
         raise AssertionError("Coordinator opened more than one GDB connection.")
@@ -2556,9 +2993,16 @@ def test_gdb_input_pulse_coordinator_exact_order() -> None:
         raise AssertionError(f"Coordinator host pulse transcript changed: {backend.posts!r}")
 
     main_names = frozenset(automation.main.__code__.co_names)
+    foundation_names = frozenset(
+        automation.UnattendedFoundation.run.__code__.co_names
+    ) | frozenset(
+        automation.UnattendedFoundation._run_with_coordinator_lease.__code__.co_names
+    ) | frozenset(automation.UnattendedFoundation._execute.__code__.co_names)
     if (
         "GdbInputPulseLifecycleCoordinator" in main_names
         or "PersistentDuckStationGdbSession" in main_names
+        or "claim_exclusive_lifecycle" in main_names
+        or "claim_exclusive_lifecycle" in foundation_names
         or "UnavailableNativePadConfirmer" not in main_names
         or "UnavailableRuntimeSessionAttestor" not in main_names
     ):
@@ -2608,7 +3052,12 @@ def test_gdb_input_pulse_coordinator_failure_matrix() -> None:
         ),
         "pairs and terminate RUNNING",
     )
-    if untouched_connector.calls or untouched_socket.sent or untouched_transport.posted_down_count:
+    if (
+        untouched_connector.calls
+        or untouched_socket.sent
+        or untouched_transport.status()
+        != automation.TargetedKeyTransportStatus(False, 0, 0, ())
+    ):
         raise AssertionError("Invalid plan reached a connector or event boundary.")
 
     preused_session, preused_socket, preused_connector, _, _ = make_gdb_session(
@@ -2633,6 +3082,8 @@ def test_gdb_input_pulse_coordinator_failure_matrix() -> None:
         or len(preused_connector.calls) != preused_connector_calls
         or preused_socket.close_calls != 0
         or preused_backend.posts
+        or preused_transport.status()
+        != automation.TargetedKeyTransportStatus(False, 0, 0, ())
     ):
         raise AssertionError(
             "Pre-used session constructor refusal mutated its prior owner."
@@ -5371,6 +5822,8 @@ def main() -> int:
         test_persistent_gdb_reader_semantic_and_binding_refusals,
         test_one_shot_gdb_session_resume_and_shared_reads,
         test_planned_space_pause_resume_lifecycle,
+        test_targeted_key_transport_exclusive_capability,
+        test_targeted_key_transport_claim_races_and_coordinator_validation,
         test_gdb_input_pulse_coordinator_exact_order,
         test_gdb_input_pulse_coordinator_failure_matrix,
         test_planned_space_transition_failure_matrix,
