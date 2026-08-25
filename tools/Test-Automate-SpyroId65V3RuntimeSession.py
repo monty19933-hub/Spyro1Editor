@@ -2396,6 +2396,893 @@ def test_planned_space_pause_resume_lifecycle() -> None:
         raise AssertionError("Planned Space lifecycle did not close once.")
 
 
+def test_gdb_input_pulse_coordinator_exact_order() -> None:
+    process = make_process()
+    plan = parse_plan(
+        ("TOGGLE_PAUSE", "NOT_APPLICABLE"),
+        ("TOGGLE_PAUSE", "NOT_APPLICABLE"),
+        ("PAD_LEFT_TOGGLE", "HELD"),
+        ("PAD_LEFT_TOGGLE", "RELEASED"),
+        nonce="10101010202020203030303040404040",
+    )
+    transcript = b"".join((
+        gdb_u32_reply(100),
+        gdb_u32_reply(100),
+        gdb_u32_reply(100),
+        b"+",
+        gdb_u32_reply(100),
+        gdb_u32_reply(101),
+        b"+" + gdb_rsp_packet(b"S05"),
+        gdb_u32_reply(200),
+        gdb_u32_reply(200),
+        gdb_u32_reply(200),
+        b"+",
+        gdb_u32_reply(201),
+    ))
+    session, fake_socket, connector, _, session_clock = make_gdb_session(
+        [bytes((value,)) for value in transcript], process=process
+    )
+    trace: list[str] = []
+
+    class TracingBackend(FakeBackend):
+        def __init__(self) -> None:
+            super().__init__()
+            self.pulse = 0
+
+        def post_key_down(self, pid: int, key_code: int) -> None:
+            self.pulse += 1
+            trace.append(f"down-{self.pulse}")
+            super().post_key_down(pid, key_code)
+
+        def force_key_up(
+            self,
+            pid: int,
+            key_code: int,
+            *,
+            identity_validator: Any,
+        ) -> Any:
+            trace.append(f"up-enter-{self.pulse}")
+            result = super().force_key_up(
+                pid, key_code, identity_validator=identity_validator
+            )
+            trace.append(f"up-return-{self.pulse}")
+            return result
+
+    backend = TracingBackend()
+    transport = automation.TargetedKeyTransport(backend, sleeper=lambda _: None)
+
+    def trace_session_method(name: str, label: str) -> None:
+        original = getattr(session, name)
+
+        def traced(bound_process: Any) -> None:
+            trace.append(label)
+            original(bound_process)
+
+        setattr(session, name, traced)
+
+    trace_session_method("arm_planned_pause", "arm-pause")
+    trace_session_method("confirm_planned_pause", "confirm-pause")
+    trace_session_method("arm_planned_resume", "arm-resume")
+    trace_session_method("confirm_planned_resume", "confirm-resume")
+
+    coordinator = automation.GdbInputPulseLifecycleCoordinator(
+        plan,
+        session,
+        transport,
+        clock=session_clock.clock,
+        pulse_timeout_seconds=1.0,
+    )
+    if coordinator.status() != automation.GdbInputPulseCoordinatorStatus(
+        "NEW", None, 0, 4, 0, None, (), "NEW", False
+    ):
+        raise AssertionError("Coordinator construction was not pure NEW state.")
+    if connector.calls or fake_socket.sent or backend.posts:
+        raise AssertionError("Coordinator construction crossed a native boundary.")
+
+    coordinator.start_execute(process)
+    reentrant_mutation_checked = False
+
+    def observe_reentrant_status(label: str) -> None:
+        nonlocal reentrant_mutation_checked
+        if coordinator.status().state != "PULSE_IN_FLIGHT":
+            raise AssertionError("Callback did not observe its in-flight pulse.")
+        if not reentrant_mutation_checked:
+            expect_refusal(
+                lambda: coordinator.require_complete(process),
+                "Reentrant GDB input-pulse completion",
+            )
+            reentrant_mutation_checked = True
+        trace.append(label)
+
+    for event in plan.events:
+        coordinator.execute_next(
+            event,
+            process,
+            release_identity_validator=lambda event=event: observe_reentrant_status(
+                f"identity-{event.sequence}"
+            ),
+            pulse_ownership_validator=lambda event=event: observe_reentrant_status(
+                f"ownership-{event.sequence}"
+            ),
+            post_release_drift_observer=lambda event=event: observe_reentrant_status(
+                f"external-{event.sequence}"
+            ),
+        )
+
+    if not (
+        trace.index("arm-pause") < trace.index("down-1")
+        < trace.index("up-return-1") < trace.index("confirm-pause")
+        < trace.index("external-0")
+        and trace.index("arm-resume") < trace.index("down-2")
+        < trace.index("up-return-2") < trace.index("confirm-resume")
+        < trace.index("external-1")
+    ):
+        raise AssertionError(f"Coordinator pulse ordering changed: {trace!r}")
+    if not reentrant_mutation_checked:
+        raise AssertionError("Callback reentrant mutation refusal was not exercised.")
+    if any(
+        trace.index(f"external-{index}") < trace.index(f"up-return-{index + 1}")
+        for index in range(4)
+    ):
+        raise AssertionError("Coordinator confirmed an event before key-up returned.")
+    if coordinator.status() != automation.GdbInputPulseCoordinatorStatus(
+        "COMPLETE",
+        process,
+        4,
+        4,
+        4,
+        automation.PlannedEmulationState.RUNNING,
+        (),
+        "RUNNING",
+        False,
+    ):
+        raise AssertionError("Coordinator did not reach exact terminal RUNNING.")
+    coordinator.require_complete(process)
+    coordinator.close(process)
+    coordinator.close(process)
+    if coordinator.status().state != "CLOSED" or fake_socket.close_calls != 1:
+        raise AssertionError("Coordinator did not close exactly once from RUNNING.")
+    if len(connector.calls) != 1:
+        raise AssertionError("Coordinator opened more than one GDB connection.")
+    if fake_socket.sent.count(automation.GDB_CONTINUE_PACKET) != 1:
+        raise AssertionError("Coordinator emitted more than the initial continue.")
+    if transport.possibly_held:
+        raise AssertionError("Coordinator left a physical key obligation.")
+    if backend.posts != [
+        (process.pid, automation.ACTION_SPECS[event.action].key_code, is_down)
+        for event in plan.events
+        for is_down in (True, False)
+    ]:
+        raise AssertionError(f"Coordinator host pulse transcript changed: {backend.posts!r}")
+
+    main_names = frozenset(automation.main.__code__.co_names)
+    if (
+        "GdbInputPulseLifecycleCoordinator" in main_names
+        or "PersistentDuckStationGdbSession" in main_names
+        or "UnavailableNativePadConfirmer" not in main_names
+        or "UnavailableRuntimeSessionAttestor" not in main_names
+    ):
+        raise AssertionError("Production main crossed the offline coordinator gate.")
+    if TOOL_PATH.read_bytes().count(b"GdbInputPulseLifecycleCoordinator") != 1:
+        raise AssertionError(
+            "Offline coordinator was referenced outside its class definition."
+        )
+
+
+def test_gdb_input_pulse_coordinator_failure_matrix() -> None:
+    process = make_process()
+    plan = parse_plan(
+        ("TOGGLE_PAUSE", "NOT_APPLICABLE"),
+        ("TOGGLE_PAUSE", "NOT_APPLICABLE"),
+        nonce="50505050606060607070707080808080",
+    )
+    connect_transcript = b"".join((
+        gdb_u32_reply(100),
+        gdb_u32_reply(100),
+        gdb_u32_reply(100),
+        b"+",
+        gdb_u32_reply(100),
+        gdb_u32_reply(101),
+    ))
+    pause_transcript = b"".join((
+        connect_transcript,
+        b"+" + gdb_rsp_packet(b"S05"),
+        gdb_u32_reply(200),
+        gdb_u32_reply(200),
+        gdb_u32_reply(200),
+    ))
+
+    odd = parse_plan(
+        ("TOGGLE_PAUSE", "NOT_APPLICABLE"),
+        nonce="90909090a0a0a0a0b0b0b0b0c0c0c0c0",
+    )
+    untouched_session, untouched_socket, untouched_connector, _, _ = make_gdb_session(
+        (connect_transcript,), process=process
+    )
+    untouched_transport = automation.TargetedKeyTransport(
+        FakeBackend(), sleeper=lambda _: None
+    )
+    expect_refusal(
+        lambda: automation.GdbInputPulseLifecycleCoordinator(
+            odd, untouched_session, untouched_transport
+        ),
+        "pairs and terminate RUNNING",
+    )
+    if untouched_connector.calls or untouched_socket.sent or untouched_transport.posted_down_count:
+        raise AssertionError("Invalid plan reached a connector or event boundary.")
+
+    preused_session, preused_socket, preused_connector, _, _ = make_gdb_session(
+        (connect_transcript,), process=process
+    )
+    preused_session.connect_resume_once(process)
+    preused_sent = tuple(preused_socket.sent)
+    preused_connector_calls = len(preused_connector.calls)
+    preused_backend = FakeBackend()
+    preused_transport = automation.TargetedKeyTransport(
+        preused_backend, sleeper=lambda _: None
+    )
+    expect_refusal(
+        lambda: automation.GdbInputPulseLifecycleCoordinator(
+            plan, preused_session, preused_transport
+        ),
+        "fresh NEW session",
+    )
+    if (
+        preused_session.status().state != "RUNNING"
+        or tuple(preused_socket.sent) != preused_sent
+        or len(preused_connector.calls) != preused_connector_calls
+        or preused_socket.close_calls != 0
+        or preused_backend.posts
+    ):
+        raise AssertionError(
+            "Pre-used session constructor refusal mutated its prior owner."
+        )
+
+    inaccessible_session, inaccessible_socket, inaccessible_connector, _, _ = (
+        make_gdb_session((connect_transcript,), process=process)
+    )
+    inaccessible_backend = FakeBackend(permission=False)
+    inaccessible_transport = automation.TargetedKeyTransport(
+        inaccessible_backend, sleeper=lambda _: None
+    )
+    inaccessible = automation.GdbInputPulseLifecycleCoordinator(
+        plan, inaccessible_session, inaccessible_transport
+    )
+    expect_refusal(
+        lambda: inaccessible.start_execute(process),
+        "Accessibility post-event permission",
+    )
+    inaccessible_status = inaccessible.status()
+    if (
+        inaccessible_status.state != "POISONED"
+        or inaccessible_status.session_state != "NEW"
+        or not inaccessible_status.recovery_required
+        or inaccessible_connector.calls
+        or inaccessible_socket.sent
+        or inaccessible_backend.posts
+    ):
+        raise AssertionError(
+            "Accessibility/focus preflight did not precede the GDB connector."
+        )
+
+    wrong_session, _, wrong_connector, _, _ = make_gdb_session(
+        (connect_transcript,), process=process
+    )
+    wrong_backend = FakeBackend()
+    wrong_transport = automation.TargetedKeyTransport(
+        wrong_backend, sleeper=lambda _: None
+    )
+    wrong = automation.GdbInputPulseLifecycleCoordinator(
+        plan, wrong_session, wrong_transport
+    )
+    wrong.start_execute(process)
+    expect_refusal(
+        lambda: wrong.execute_next(
+            plan.events[1],
+            process,
+            release_identity_validator=lambda: None,
+            pulse_ownership_validator=lambda: None,
+            post_release_drift_observer=lambda: None,
+        ),
+        "event order",
+    )
+    if wrong.status().state != "POISONED" or wrong_backend.posts:
+        raise AssertionError("Wrong event order did not refuse before host input.")
+    calls_before_retry = len(wrong_connector.calls)
+    expect_any_refusal(
+        lambda: wrong.execute_next(
+            plan.events[0],
+            process,
+            release_identity_validator=lambda: None,
+            pulse_ownership_validator=lambda: None,
+            post_release_drift_observer=lambda: None,
+        )
+    )
+    if len(wrong_connector.calls) != calls_before_retry or wrong_backend.posts:
+        raise AssertionError("Poisoned coordinator retried connector or input work.")
+
+    predown_session, _, _, _, _ = make_gdb_session(
+        (connect_transcript,), process=process
+    )
+    predown_backend = FakeBackend()
+    predown_transport = automation.TargetedKeyTransport(
+        predown_backend, sleeper=lambda _: None
+    )
+    predown = automation.GdbInputPulseLifecycleCoordinator(
+        plan, predown_session, predown_transport
+    )
+    predown.start_execute(process)
+
+    def refuse_ownership() -> None:
+        raise automation.AutomationRefusal("Injected pulse ownership drift.")
+
+    expect_refusal(
+        lambda: predown.execute_next(
+            plan.events[0],
+            process,
+            release_identity_validator=lambda: None,
+            pulse_ownership_validator=refuse_ownership,
+            post_release_drift_observer=lambda: None,
+        ),
+        "key-down ownership",
+    )
+    if (
+        predown.status().state != "POISONED"
+        or predown.status().next_event_index != 0
+        or predown.status().emulation_state is not None
+        or predown.status().session_state != "EXPECTING_PLAN_PAUSE"
+        or not predown.status().recovery_required
+        or predown_backend.posts
+        or predown_transport.possibly_held
+    ):
+        raise AssertionError(
+            "Pre-down refusal did not expose its armed recovery requirement."
+        )
+
+    possible_session, _, _, _, _ = make_gdb_session(
+        [bytes((value,)) for value in pause_transcript], process=process
+    )
+    possible_backend = FakeBackend(fail_down=True)
+    possible_transport = automation.TargetedKeyTransport(
+        possible_backend, sleeper=lambda _: None
+    )
+    possible = automation.GdbInputPulseLifecycleCoordinator(
+        plan, possible_session, possible_transport
+    )
+    possible.start_execute(process)
+    expect_refusal(
+        lambda: possible.execute_next(
+            plan.events[0],
+            process,
+            release_identity_validator=lambda: None,
+            pulse_ownership_validator=lambda: None,
+            post_release_drift_observer=lambda: None,
+        ),
+        "failed before release",
+    )
+    possible_status = possible.status()
+    if (
+        possible_status.state != "POISONED"
+        or possible_status.next_event_index != 1
+        or possible_status.emulation_state is not automation.PlannedEmulationState.PAUSED
+        or possible_status.session_state != "PAUSED_BY_PLAN"
+        or possible_transport.possibly_held
+        or possible_backend.posts != [
+            (process.pid, 49, True),
+            (process.pid, 49, False),
+        ]
+    ):
+        raise AssertionError(
+            "Possible-post key-down failure did not release and classify once."
+        )
+
+    drift_session, _, _, _, _ = make_gdb_session(
+        [bytes((value,)) for value in pause_transcript], process=process
+    )
+    drift_backend = FakeBackend()
+    drift_transport = automation.TargetedKeyTransport(
+        drift_backend, sleeper=lambda _: None
+    )
+    drift = automation.GdbInputPulseLifecycleCoordinator(
+        plan, drift_session, drift_transport
+    )
+    drift.start_execute(process)
+    drift_calls = 0
+
+    def refuse_post_release() -> None:
+        nonlocal drift_calls
+        drift_calls += 1
+        raise automation.AutomationRefusal("Injected post-release process drift.")
+
+    expect_refusal(
+        lambda: drift.execute_next(
+            plan.events[0],
+            process,
+            release_identity_validator=lambda: None,
+            pulse_ownership_validator=lambda: None,
+            post_release_drift_observer=refuse_post_release,
+        ),
+        "environment drifted",
+    )
+    drift_status = drift.status()
+    if (
+        drift_status.state != "POISONED"
+        or drift_status.next_event_index != 1
+        or drift_status.emulation_state is not automation.PlannedEmulationState.PAUSED
+        or drift_status.session_state != "PAUSED_BY_PLAN"
+        or drift_calls != 1
+        or drift_transport.possibly_held
+        or drift_backend.posts != [
+            (process.pid, 49, True),
+            (process.pid, 49, False),
+        ]
+    ):
+        raise AssertionError(
+            "Post-release drift lost exactly-once transition classification."
+        )
+
+    confirmation_transcript = connect_transcript + b"+" + gdb_rsp_packet(b"S04")
+    confirmation_session, confirmation_socket, _, _, _ = make_gdb_session(
+        [bytes((value,)) for value in confirmation_transcript], process=process
+    )
+    confirmation_backend = FakeBackend()
+    confirmation_transport = automation.TargetedKeyTransport(
+        confirmation_backend, sleeper=lambda _: None
+    )
+    confirmation = automation.GdbInputPulseLifecycleCoordinator(
+        plan, confirmation_session, confirmation_transport
+    )
+    confirmation_external_calls = 0
+
+    def count_confirmation_external() -> None:
+        nonlocal confirmation_external_calls
+        confirmation_external_calls += 1
+
+    confirmation.start_execute(process)
+    expect_refusal(
+        lambda: confirmation.execute_next(
+            plan.events[0],
+            process,
+            release_identity_validator=lambda: None,
+            pulse_ownership_validator=lambda: None,
+            post_release_drift_observer=count_confirmation_external,
+        ),
+        "not exact S05#b8",
+    )
+    confirmation_status = confirmation.status()
+    if (
+        confirmation_status.state != "POISONED"
+        or confirmation_status.next_event_index != 0
+        or confirmation_status.emulation_state is not None
+        or confirmation_status.session_state != "POISONED"
+        or confirmation_external_calls != 0
+        or confirmation_transport.possibly_held
+        or confirmation_socket.close_calls != 1
+        or confirmation_backend.posts != [
+            (process.pid, 49, True),
+            (process.pid, 49, False),
+        ]
+    ):
+        raise AssertionError(
+            "Failed GDB confirmation forged settlement or skipped physical release."
+        )
+
+    topology_ownership_calls = 0
+
+    def pre_up_topology(
+        observed_process: Any, expected_client: Any | None, _call: int
+    ) -> Any:
+        changes: dict[str, object] = {}
+        if topology_ownership_calls >= 2 and expected_client is not None:
+            changes["server_device_token"] = "0xdead"
+        return make_gdb_connection_set(
+            make_gdb_listener(pid=observed_process.pid),
+            expected_client,
+            **changes,
+        )
+
+    topology_session, topology_socket, _, _, _ = make_gdb_session(
+        (connect_transcript,),
+        process=process,
+        connection_observer=pre_up_topology,
+    )
+    topology_backend = FakeBackend()
+    topology_transport = automation.TargetedKeyTransport(
+        topology_backend, sleeper=lambda _: None
+    )
+    topology = automation.GdbInputPulseLifecycleCoordinator(
+        plan, topology_session, topology_transport
+    )
+    topology_external_calls = 0
+
+    def count_topology_ownership() -> None:
+        nonlocal topology_ownership_calls
+        topology_ownership_calls += 1
+
+    def count_topology_external() -> None:
+        nonlocal topology_external_calls
+        topology_external_calls += 1
+
+    topology.start_execute(process)
+    expect_refusal(
+        lambda: topology.execute_next(
+            plan.events[0],
+            process,
+            release_identity_validator=lambda: None,
+            pulse_ownership_validator=count_topology_ownership,
+            post_release_drift_observer=count_topology_external,
+        ),
+        "environment drifted",
+    )
+    topology_status = topology.status()
+    if (
+        topology_status.state != "POISONED"
+        or topology_status.next_event_index != 0
+        or topology_status.emulation_state is not None
+        or topology_status.session_state != "POISONED"
+        or topology_external_calls != 0
+        or topology_transport.possibly_held
+        or topology_socket.close_calls != 1
+        or topology_backend.posts != [
+            (process.pid, 49, True),
+            (process.pid, 49, False),
+        ]
+    ):
+        raise AssertionError(
+            "Pre-up topology poison vetoed the owed key-up or forged certainty."
+        )
+
+    retry_session, _, _, _, _ = make_gdb_session(
+        [bytes((value,)) for value in pause_transcript], process=process
+    )
+    retry_backend = FakeBackend(fail_up_count=1)
+    retry_transport = automation.TargetedKeyTransport(
+        retry_backend, sleeper=lambda _: None
+    )
+    retry = automation.GdbInputPulseLifecycleCoordinator(
+        plan, retry_session, retry_transport
+    )
+    retry_confirmations = 0
+    original_retry_confirm = retry_session.confirm_planned_pause
+
+    def count_retry_confirmation(bound_process: Any) -> None:
+        nonlocal retry_confirmations
+        retry_confirmations += 1
+        original_retry_confirm(bound_process)
+
+    retry_session.confirm_planned_pause = count_retry_confirmation
+    retry.start_execute(process)
+    expect_refusal(
+        lambda: retry.execute_next(
+            plan.events[0],
+            process,
+            release_identity_validator=lambda: None,
+            pulse_ownership_validator=lambda: None,
+            post_release_drift_observer=lambda: None,
+        ),
+        "mandatory key-up failed",
+    )
+    retry_status = retry.status()
+    if (
+        retry_status.state != "POISONED"
+        or retry_status.next_event_index != 1
+        or retry_status.emulation_state is not automation.PlannedEmulationState.PAUSED
+        or retry_confirmations != 1
+        or retry_transport.possibly_held
+        or retry_session.status().state != "PAUSED_BY_PLAN"
+        or retry_backend.posts != [
+            (process.pid, 49, True),
+            (process.pid, 49, False),
+            (process.pid, 49, False),
+        ]
+    ):
+        raise AssertionError("Cleanup key-up did not confirm exactly once then refuse.")
+
+    final_retry_session, _, _, _, _ = make_gdb_session(
+        [bytes((value,)) for value in pause_transcript], process=process
+    )
+    final_retry_backend = FakeBackend(fail_up_count=2)
+    final_retry_transport = automation.TargetedKeyTransport(
+        final_retry_backend, sleeper=lambda _: None
+    )
+    final_retry = automation.GdbInputPulseLifecycleCoordinator(
+        plan, final_retry_session, final_retry_transport
+    )
+    final_retry_confirmations = 0
+    original_final_retry_confirm = final_retry_session.confirm_planned_pause
+
+    def count_final_retry_confirmation(bound_process: Any) -> None:
+        nonlocal final_retry_confirmations
+        final_retry_confirmations += 1
+        original_final_retry_confirm(bound_process)
+
+    final_retry_session.confirm_planned_pause = count_final_retry_confirmation
+    final_retry.start_execute(process)
+    observed_final_retry_error = ""
+    try:
+        final_retry.execute_next(
+            plan.events[0],
+            process,
+            release_identity_validator=lambda: None,
+            pulse_ownership_validator=lambda: None,
+            post_release_drift_observer=lambda: None,
+        )
+    except automation.AutomationRefusal as exc:
+        observed_final_retry_error = str(exc)
+    else:
+        raise AssertionError("Final cleanup retry unexpectedly accepted the pulse.")
+    final_retry_status = final_retry.status()
+    if (
+        "mandatory key-up failed" not in observed_final_retry_error.lower()
+        or "cleanup remains incomplete" in observed_final_retry_error.lower()
+        or final_retry_status.state != "POISONED"
+        or final_retry_status.next_event_index != 1
+        or final_retry_status.emulation_state
+        is not automation.PlannedEmulationState.PAUSED
+        or final_retry_confirmations != 1
+        or final_retry_transport.possibly_held
+        or final_retry_backend.posts != [
+            (process.pid, 49, True),
+            (process.pid, 49, False),
+            (process.pid, 49, False),
+            (process.pid, 49, False),
+        ]
+    ):
+        raise AssertionError(
+            "Successful final key-up retry was reported as still incomplete."
+        )
+
+    stuck_session, _, _, _, _ = make_gdb_session(
+        (connect_transcript,), process=process
+    )
+    stuck_backend = FakeBackend(fail_up_count=3)
+    stuck_transport = automation.TargetedKeyTransport(
+        stuck_backend, sleeper=lambda _: None
+    )
+    stuck = automation.GdbInputPulseLifecycleCoordinator(
+        plan, stuck_session, stuck_transport
+    )
+    stuck.start_execute(process)
+    expect_refusal(
+        lambda: stuck.execute_next(
+            plan.events[0],
+            process,
+            release_identity_validator=lambda: None,
+            pulse_ownership_validator=lambda: None,
+            post_release_drift_observer=lambda: None,
+        ),
+        "cleanup remains incomplete",
+    )
+    if (
+        stuck.status().state != "POISONED"
+        or stuck.status().next_event_index != 0
+        or stuck_transport.possibly_held != ((process.pid, automation.KeyAction.TOGGLE_PAUSE),)
+        or stuck_backend.posts != [
+            (process.pid, 49, True),
+            (process.pid, 49, False),
+            (process.pid, 49, False),
+            (process.pid, 49, False),
+        ]
+    ):
+        raise AssertionError("Exhausted cleanup hid the held key or posted another Space down.")
+
+    arm_clock = FakeClock()
+    arm_gate = {"active": False, "advanced": False}
+
+    def slow_arm_set(
+        observed_process: Any, expected_client: Any | None, _call: int
+    ) -> Any:
+        if arm_gate["active"] and not arm_gate["advanced"]:
+            arm_clock.value += 3.0
+            arm_gate["advanced"] = True
+        return make_gdb_connection_set(
+            make_gdb_listener(pid=observed_process.pid), expected_client
+        )
+
+    arm_session, _, _, _, _ = make_gdb_session(
+        (connect_transcript,),
+        process=process,
+        connection_observer=slow_arm_set,
+    )
+    arm_backend = FakeBackend()
+    arm_transport = automation.TargetedKeyTransport(
+        arm_backend, sleeper=lambda _: None
+    )
+    arm = automation.GdbInputPulseLifecycleCoordinator(
+        plan,
+        arm_session,
+        arm_transport,
+        clock=arm_clock.clock,
+        pulse_timeout_seconds=2.0,
+    )
+    arm.start_execute(process)
+    arm_gate["active"] = True
+    expect_refusal(
+        lambda: arm.execute_next(
+            plan.events[0],
+            process,
+            release_identity_validator=lambda: None,
+            pulse_ownership_validator=lambda: None,
+            post_release_drift_observer=lambda: None,
+        ),
+        "key-down ownership",
+    )
+    arm_status = arm.status()
+    if (
+        not arm_gate["advanced"]
+        or arm_status.state != "POISONED"
+        or arm_status.next_event_index != 0
+        or arm_status.emulation_state is not None
+        or arm_status.session_state != "EXPECTING_PLAN_PAUSE"
+        or arm_backend.posts
+        or arm_transport.possibly_held
+    ):
+        raise AssertionError("Time consumed while arming reset the pulse deadline.")
+
+    late_session, _, _, _, _ = make_gdb_session(
+        [bytes((value,)) for value in pause_transcript], process=process
+    )
+    late_clock = FakeClock()
+    late_backend = FakeBackend()
+    late_transport = automation.TargetedKeyTransport(
+        late_backend, sleeper=lambda _seconds: late_clock.sleep(3.0)
+    )
+    late = automation.GdbInputPulseLifecycleCoordinator(
+        plan,
+        late_session,
+        late_transport,
+        clock=late_clock.clock,
+        pulse_timeout_seconds=2.0,
+    )
+    late.start_execute(process)
+    expect_refusal(
+        lambda: late.execute_next(
+            plan.events[0],
+            process,
+            release_identity_validator=lambda: None,
+            pulse_ownership_validator=lambda: None,
+            post_release_drift_observer=lambda: None,
+        ),
+        "absolute acceptance deadline",
+    )
+    if (
+        late.status().state != "POISONED"
+        or late.status().next_event_index != 1
+        or late.status().emulation_state is not automation.PlannedEmulationState.PAUSED
+        or late_transport.possibly_held
+        or late_session.status().state != "PAUSED_BY_PLAN"
+        or late_backend.posts != [
+            (process.pid, 49, True),
+            (process.pid, 49, False),
+        ]
+    ):
+        raise AssertionError("Late pulse did not release, classify, and then refuse.")
+
+    mixed_plan = parse_plan(
+        ("TOGGLE_PAUSE", "NOT_APPLICABLE"),
+        ("TOGGLE_PAUSE", "NOT_APPLICABLE"),
+        ("PAD_LEFT_TOGGLE", "HELD"),
+        ("PAD_LEFT_TOGGLE", "RELEASED"),
+        nonce="d0d0d0d0e0e0e0e0f0f0f0f001010101",
+    )
+    resume_transcript = pause_transcript + b"+" + gdb_u32_reply(201)
+    non_toggle_gate = {"active": False}
+
+    def non_toggle_set(
+        observed_process: Any, expected_client: Any | None, _call: int
+    ) -> Any:
+        changes: dict[str, object] = {}
+        if non_toggle_gate["active"] and expected_client is not None:
+            changes["server_device_token"] = "0xbeef"
+        return make_gdb_connection_set(
+            make_gdb_listener(pid=observed_process.pid),
+            expected_client,
+            **changes,
+        )
+
+    non_toggle_session, non_toggle_socket, _, _, _ = make_gdb_session(
+        [bytes((value,)) for value in resume_transcript],
+        process=process,
+        connection_observer=non_toggle_set,
+    )
+    non_toggle_backend = FakeBackend()
+    non_toggle_transport = automation.TargetedKeyTransport(
+        non_toggle_backend, sleeper=lambda _: None
+    )
+    non_toggle = automation.GdbInputPulseLifecycleCoordinator(
+        mixed_plan, non_toggle_session, non_toggle_transport
+    )
+    non_toggle.start_execute(process)
+    for event in mixed_plan.events[:2]:
+        non_toggle.execute_next(
+            event,
+            process,
+            release_identity_validator=lambda: None,
+            pulse_ownership_validator=lambda: None,
+            post_release_drift_observer=lambda: None,
+        )
+    non_toggle_gate["active"] = True
+    expect_any_refusal(
+        lambda: non_toggle.execute_next(
+            mixed_plan.events[2],
+            process,
+            release_identity_validator=lambda: None,
+            pulse_ownership_validator=lambda: None,
+            post_release_drift_observer=lambda: None,
+        )
+    )
+    non_toggle_status = non_toggle.status()
+    if (
+        non_toggle_status.state != "POISONED"
+        or non_toggle_status.next_event_index != 2
+        or non_toggle_status.emulation_state is not None
+        or non_toggle_status.session_state != "POISONED"
+        or non_toggle_socket.close_calls != 1
+        or non_toggle_transport.possibly_held
+        or non_toggle_backend.posts != [
+            (process.pid, 49, True),
+            (process.pid, 49, False),
+            (process.pid, 49, True),
+            (process.pid, 49, False),
+        ]
+    ):
+        raise AssertionError(
+            "Non-toggle ownership poison preserved false RUNNING certainty."
+        )
+
+    completion_gate = {"active": False}
+
+    def completion_set(
+        observed_process: Any, expected_client: Any | None, _call: int
+    ) -> Any:
+        changes: dict[str, object] = {}
+        if completion_gate["active"] and expected_client is not None:
+            changes["server_device_token"] = "0xcafe"
+        return make_gdb_connection_set(
+            make_gdb_listener(pid=observed_process.pid),
+            expected_client,
+            **changes,
+        )
+
+    completion_session, completion_socket, _, _, _ = make_gdb_session(
+        [bytes((value,)) for value in resume_transcript],
+        process=process,
+        connection_observer=completion_set,
+    )
+    completion_backend = FakeBackend()
+    completion_transport = automation.TargetedKeyTransport(
+        completion_backend, sleeper=lambda _: None
+    )
+    completion = automation.GdbInputPulseLifecycleCoordinator(
+        plan, completion_session, completion_transport
+    )
+    completion.start_execute(process)
+    for event in plan.events:
+        completion.execute_next(
+            event,
+            process,
+            release_identity_validator=lambda: None,
+            pulse_ownership_validator=lambda: None,
+            post_release_drift_observer=lambda: None,
+        )
+    if completion.status().state != "COMPLETE":
+        raise AssertionError("Completion-drift fixture did not reach COMPLETE.")
+    completion_gate["active"] = True
+    expect_any_refusal(lambda: completion.require_complete(process))
+    completion_status = completion.status()
+    if (
+        completion_status.state != "POISONED"
+        or completion_status.next_event_index != len(plan.events)
+        or completion_status.emulation_state is not None
+        or completion_status.session_state != "POISONED"
+        or completion_socket.close_calls != 1
+        or completion_transport.possibly_held
+    ):
+        raise AssertionError(
+            "Terminal reattestation poison preserved false RUNNING certainty."
+        )
+
+
 def test_planned_space_transition_failure_matrix() -> None:
     process = make_process()
     connect_transcript = b"".join((
@@ -2451,6 +3338,51 @@ def test_planned_space_transition_failure_matrix() -> None:
         or malformed_socket.sent[-1:] != [b"-"]
     ):
         raise AssertionError("Malformed planned stop did not NACK with uncertainty.")
+
+    notification_clock = FakeClock()
+    notification_gate = {"armed": False, "advanced": False}
+
+    def late_notification_set(
+        observed_process: Any, expected_client: Any | None, _call: int
+    ) -> Any:
+        if notification_gate["armed"] and not notification_gate["advanced"]:
+            notification_clock.value += 1.0
+            notification_gate["advanced"] = True
+        return make_gdb_connection_set(
+            make_gdb_listener(pid=observed_process.pid), expected_client
+        )
+
+    late_notification = b"".join((
+        connect_transcript,
+        b"+" + gdb_rsp_packet(b"S05"),
+        gdb_u32_reply(200),
+        gdb_u32_reply(200),
+        gdb_u32_reply(200),
+    ))
+    notification, notification_socket, _, _, _ = make_gdb_session(
+        (late_notification,),
+        process=process,
+        clock=notification_clock.clock,
+        sleeper=notification_clock.sleep,
+        connection_observer=late_notification_set,
+    )
+    notification.connect_resume_once(process)
+    notification.arm_planned_pause(process)
+    notification_sent_before = len(notification_socket.sent)
+    notification_gate["armed"] = True
+    expect_refusal(
+        lambda: notification.confirm_planned_pause(process),
+        "planned pause confirmation timed out",
+    )
+    if (
+        notification.status().state != "POISONED"
+        or not notification.status().pause_state_certain
+        or not notification_gate["advanced"]
+        or notification_socket.sent[notification_sent_before:] != [b"+"]
+    ):
+        raise AssertionError(
+            "Late exact S05 reset the deadline or triggered another memory read."
+        )
 
     frozen_pause = b"".join((
         connect_transcript,
@@ -4439,6 +5371,8 @@ def main() -> int:
         test_persistent_gdb_reader_semantic_and_binding_refusals,
         test_one_shot_gdb_session_resume_and_shared_reads,
         test_planned_space_pause_resume_lifecycle,
+        test_gdb_input_pulse_coordinator_exact_order,
+        test_gdb_input_pulse_coordinator_failure_matrix,
         test_planned_space_transition_failure_matrix,
         test_one_shot_gdb_session_rollover_and_failure_matrix,
         test_gdb_session_ownership_deadline_and_status_boundaries,

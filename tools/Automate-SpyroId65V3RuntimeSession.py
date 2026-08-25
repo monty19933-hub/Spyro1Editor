@@ -13,6 +13,8 @@ coordinator:
 * exception-safe release of every host key that might have been pressed; and
 * a read-only pad-word confirmation interface;
 * an offline-only, production-unwired one-connection GDB lifecycle; and
+* an offline-only adapter that orders one complete host pulse around that
+  lifecycle without exposing either capability through the production CLI; and
 * the manual V3 capture coordinator's persistent cross-tool advisory lease.
 
 The frozen external-HOME profile binds PowerOff only to F12 and TogglePause
@@ -102,6 +104,13 @@ GDB_VBLANK_PROGRESS_TIMEOUT_SECONDS: Final = 0.25
 GDB_VBLANK_PROGRESS_INTERVAL_SECONDS: Final = 0.01
 GDB_VBLANK_PROGRESS_MAX_SAMPLES: Final = 32
 GDB_PAUSED_CONFIRMATION_MIN_SECONDS: Final = 0.05
+# This outer pulse-acceptance deadline begins before a planned transition is
+# armed.  Expiry can never veto an already-owed physical key-up; the transition
+# is consumed and classified after release, then the late pulse is refused.
+# Production remains unwired until every native boundary shares one absolute
+# operation/cancellation budget rather than this offline adapter's clock.
+GDB_SPACE_PULSE_ACCEPTANCE_TIMEOUT_SECONDS: Final = 2.0
+GDB_PULSE_RELEASE_CLEANUP_ATTEMPTS: Final = 2
 GDB_PAD_READ_PACKET: Final = b"$m800786a0,4#9b"
 GDB_VBLANK_READ_PACKET: Final = b"$m800758c8,4#a4"
 GDB_CONTINUE_PACKET: Final = b"$c#63"
@@ -3723,6 +3732,10 @@ class PersistentDuckStationGdbSession:
                         raise AutomationRefusal(
                             "DuckStation GDB planned pause was not armed exactly."
                         )
+                # Start the evidence deadline before either lsof attestation or
+                # the blocking stop-frame read.  A late exact S05 is consumed
+                # and classified, but cannot reset the acceptance window.
+                pause_proof_clock = self._clock_value()
                 self._attest_single_client(process)
                 self._transport.consume_planned_pause_notification(process)
                 self._attest_single_client(process)
@@ -3730,7 +3743,18 @@ class PersistentDuckStationGdbSession:
                 # proof later times out; preserve that fact in poisoned status.
                 with self._state_guard:
                     self._pause_state_certain = True
-                pause_proof_clock = self._clock_value()
+                after_notification_clock = self._clock_value()
+                if after_notification_clock < pause_proof_clock:
+                    raise AutomationRefusal(
+                        "DuckStation GDB session clock moved backward."
+                    )
+                if (
+                    after_notification_clock - pause_proof_clock
+                    > self._timeout_seconds
+                ):
+                    raise AutomationRefusal(
+                        "DuckStation planned pause confirmation timed out."
+                    )
                 paused_tick = self._read_vblank_owned(process)
                 paused_tick, _ = self._confirm_stable_pause(
                     process,
@@ -3797,6 +3821,103 @@ class PersistentDuckStationGdbSession:
                 self._poison_and_raise(exc, pause_state_certain=certain)
         finally:
             self._operation_lock.release()
+
+    def _require_owned_state(
+        self,
+        process: ProcessIdentity,
+        *,
+        expected: _GdbSessionState,
+        pause_state_certain: bool,
+        require_paused_tick: bool,
+    ) -> None:
+        """Reattest the sole-client topology without sending an RSP packet."""
+
+        if not self._operation_lock.acquire(blocking=False):
+            self._poison_and_raise(
+                AutomationRefusal("Concurrent DuckStation GDB ownership check is forbidden."),
+                pause_state_certain=False,
+            )
+        try:
+            try:
+                if type(process) is not ProcessIdentity:
+                    raise AutomationRefusal(
+                        "DuckStation GDB ownership process identity is malformed."
+                    )
+
+                def state_is_exact() -> bool:
+                    return (
+                        self._state is expected
+                        and self._pause_state_certain is pause_state_certain
+                        and self._bound_process == process
+                        and self._bound_listener is not None
+                        and self._continue_attempts == 1
+                        and self._single_client_observed
+                        and (
+                            not require_paused_tick
+                            or type(self._planned_paused_tick) is int
+                        )
+                    )
+
+                with self._state_guard:
+                    if not state_is_exact():
+                        raise AutomationRefusal(
+                            "DuckStation GDB owned state is not exact before pulse work."
+                        )
+                self._attest_single_client(process)
+                self._transport.require_existing_connection(process)
+                with self._state_guard:
+                    if not state_is_exact():
+                        raise AutomationRefusal(
+                            "DuckStation GDB owned state changed during pulse work."
+                        )
+            except BaseException as exc:
+                with self._state_guard:
+                    certain = self._certainty_after_failure(
+                        exc, self._pause_state_certain
+                    )
+                self._poison_and_raise(exc, pause_state_certain=certain)
+        finally:
+            self._operation_lock.release()
+
+    def require_running_owned(self, process: ProcessIdentity) -> None:
+        """Require RUNNING and reattest the one exact connection set."""
+
+        self._require_owned_state(
+            process,
+            expected=_GdbSessionState.RUNNING,
+            pause_state_certain=True,
+            require_paused_tick=False,
+        )
+
+    def require_paused_owned(self, process: ProcessIdentity) -> None:
+        """Require planned PAUSED and reattest the one exact connection set."""
+
+        self._require_owned_state(
+            process,
+            expected=_GdbSessionState.PAUSED_BY_PLAN,
+            pause_state_certain=True,
+            require_paused_tick=True,
+        )
+
+    def require_planned_pause_armed(self, process: ProcessIdentity) -> None:
+        """Require the exact uncertain RUNNING -> PAUSED armed state."""
+
+        self._require_owned_state(
+            process,
+            expected=_GdbSessionState.EXPECTING_PLAN_PAUSE,
+            pause_state_certain=False,
+            require_paused_tick=False,
+        )
+
+    def require_planned_resume_armed(self, process: ProcessIdentity) -> None:
+        """Require the exact uncertain PAUSED -> RUNNING armed state."""
+
+        self._require_owned_state(
+            process,
+            expected=_GdbSessionState.EXPECTING_PLAN_RESUME,
+            pause_state_certain=False,
+            require_paused_tick=True,
+        )
 
     def require_paused(self, process: ProcessIdentity) -> None:
         """Require confirmed planned PAUSED state without native I/O."""
@@ -3903,6 +4024,564 @@ class PersistentDuckStationGdbSession:
         if isinstance(exc, AutomationRefusal):
             raise exc
         raise AutomationRefusal("DuckStation GDB session failed closed.") from exc
+
+
+class _GdbInputPulseCoordinatorState(enum.Enum):
+    NEW = enum.auto()
+    STARTED = enum.auto()
+    PULSE_IN_FLIGHT = enum.auto()
+    COMPLETE = enum.auto()
+    POISONED = enum.auto()
+    CLOSED = enum.auto()
+
+
+@dataclasses.dataclass(frozen=True)
+class GdbInputPulseCoordinatorStatus:
+    """Non-I/O truth for the offline event-aware GDB/pulse adapter."""
+
+    state: str
+    bound_process: ProcessIdentity | None
+    next_event_index: int
+    planned_count: int
+    settled_event_count: int
+    emulation_state: PlannedEmulationState | None
+    possibly_held: tuple[tuple[int, KeyAction], ...]
+    session_state: str
+    recovery_required: bool
+
+    def __post_init__(self) -> None:
+        if (
+            self.state
+            not in {state.name for state in _GdbInputPulseCoordinatorState}
+            or (
+                self.bound_process is not None
+                and type(self.bound_process) is not ProcessIdentity
+            )
+            or type(self.next_event_index) is not int
+            or type(self.planned_count) is not int
+            or type(self.settled_event_count) is not int
+            or not 0 <= self.next_event_index <= self.planned_count
+            or self.planned_count < 1
+            or self.settled_event_count != self.next_event_index
+            or (
+                self.emulation_state is not None
+                and type(self.emulation_state) is not PlannedEmulationState
+            )
+            or type(self.possibly_held) is not tuple
+            or any(
+                type(token) is not tuple
+                or len(token) != 2
+                or type(token[0]) is not int
+                or token[0] <= 1
+                or type(token[1]) is not KeyAction
+                for token in self.possibly_held
+            )
+            or self.session_state not in {state.name for state in _GdbSessionState}
+            or type(self.recovery_required) is not bool
+        ):
+            raise AutomationRefusal("GDB input-pulse coordinator status is malformed.")
+        if self.state == "NEW" and (
+            self.bound_process is not None
+            or self.next_event_index != 0
+            or self.emulation_state is not None
+            or self.possibly_held
+            or self.session_state != "NEW"
+            or self.recovery_required
+        ):
+            raise AutomationRefusal("Fresh GDB input-pulse status is inconsistent.")
+        if self.state in {"STARTED", "COMPLETE", "CLOSED"} and (
+            self.bound_process is None or self.possibly_held
+        ):
+            raise AutomationRefusal("Settled GDB input-pulse status is inconsistent.")
+        if self.state in {"COMPLETE", "CLOSED"} and (
+            self.next_event_index != self.planned_count
+            or self.emulation_state is not PlannedEmulationState.RUNNING
+        ):
+            raise AutomationRefusal("Terminal GDB input-pulse status is inconsistent.")
+        if self.recovery_required != (self.state == "POISONED"):
+            raise AutomationRefusal(
+                "GDB input-pulse recovery requirement is inconsistent."
+            )
+        expected_session_state = {
+            PlannedEmulationState.RUNNING: "RUNNING",
+            PlannedEmulationState.PAUSED: "PAUSED_BY_PLAN",
+        }.get(self.emulation_state)
+        if self.state in {"STARTED", "COMPLETE"} and (
+            expected_session_state is None
+            or self.session_state != expected_session_state
+        ):
+            raise AutomationRefusal(
+                "Settled GDB input-pulse/session states are inconsistent."
+            )
+        if self.state == "CLOSED" and self.session_state != "CLOSED":
+            raise AutomationRefusal("Closed GDB input-pulse status is inconsistent.")
+
+
+class GdbInputPulseLifecycleCoordinator:
+    """Offline-only owner of arm -> host pulse -> GDB confirmation ordering.
+
+    Construction performs only pure validation.  This adapter deliberately is
+    not referenced by :func:`main` or :class:`UnattendedFoundation`.  It exists
+    so the cross-domain lifecycle can be proved with fake sockets and a fake
+    event backend before any production coordinator is permitted to use it.
+
+    A poisoned status deliberately has no general close/cancel operation.  If
+    its explicit emulation state is PAUSED or UNKNOWN, disconnecting could
+    strand DuckStation in the wrong state.  The session state and
+    ``recovery_required`` bit preserve that promotion blocker for a later
+    recovery-capable outer coordinator.  Direct aliases of the key transport
+    also remain a production blocker because this offline adapter cannot make
+    the transport itself exclusively owned.
+    """
+
+    def __init__(
+        self,
+        plan: InputPlan,
+        session: PersistentDuckStationGdbSession,
+        transport: TargetedKeyTransport,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        pulse_timeout_seconds: float = GDB_SPACE_PULSE_ACCEPTANCE_TIMEOUT_SECONDS,
+    ) -> None:
+        lifecycle = validate_gdb_session_input_lifecycle(plan)
+        if (
+            type(session) is not PersistentDuckStationGdbSession
+            or type(transport) is not TargetedKeyTransport
+            or not callable(clock)
+            or type(pulse_timeout_seconds) not in {int, float}
+            or not math.isfinite(float(pulse_timeout_seconds))
+            or pulse_timeout_seconds <= 0
+            or transport.possibly_held
+        ):
+            raise AutomationRefusal(
+                "GDB input-pulse coordinator dependencies are not exact."
+            )
+        session_status = session.status()
+        if session_status.state != "NEW":
+            raise AutomationRefusal(
+                "GDB input-pulse coordinator requires one fresh NEW session."
+            )
+        self._plan = plan
+        self._lifecycle = lifecycle
+        self._session = session
+        self._transport = transport
+        self._clock = clock
+        self._pulse_timeout_seconds = float(pulse_timeout_seconds)
+        self._state = _GdbInputPulseCoordinatorState.NEW
+        self._bound_process: ProcessIdentity | None = None
+        self._next_event_index = 0
+        self._settled_event_count = 0
+        self._emulation_state: PlannedEmulationState | None = None
+        self._state_guard = threading.Lock()
+        # Caller-supplied validators/observers may inspect status.  An RLock
+        # permits that same-thread read without allowing a second pulse to pass
+        # the explicit PULSE_IN_FLIGHT state checks.  Cross-thread status still
+        # waits for one atomic settled snapshot.
+        self._operation_lock = threading.RLock()
+        self._mutation_active = False
+
+    def status(self) -> GdbInputPulseCoordinatorStatus:
+        """Return one atomic status without process, lsof, socket, or post work."""
+
+        with self._operation_lock:
+            session_status = self._session.status()
+            with self._state_guard:
+                return GdbInputPulseCoordinatorStatus(
+                    self._state.name,
+                    self._bound_process,
+                    self._next_event_index,
+                    len(self._plan.events),
+                    self._settled_event_count,
+                    self._emulation_state,
+                    self._transport.possibly_held,
+                    session_status.state,
+                    self._state is _GdbInputPulseCoordinatorState.POISONED,
+                )
+
+    def _begin_mutation(self, label: str) -> None:
+        if label not in {"start", "event", "completion", "close"}:
+            raise AutomationRefusal("GDB input-pulse mutation label is malformed.")
+        if not self._operation_lock.acquire(blocking=False):
+            raise AutomationRefusal(
+                f"Concurrent GDB input-pulse {label} is forbidden."
+            )
+        with self._state_guard:
+            if self._mutation_active:
+                self._operation_lock.release()
+                raise AutomationRefusal(
+                    f"Reentrant GDB input-pulse {label} is forbidden."
+                )
+            self._mutation_active = True
+
+    def _end_mutation(self) -> None:
+        with self._state_guard:
+            if not self._mutation_active:
+                self._operation_lock.release()
+                raise AutomationRefusal(
+                    "GDB input-pulse mutation ownership was lost."
+                )
+            self._mutation_active = False
+        self._operation_lock.release()
+
+    def _clock_value(self) -> float:
+        value = self._clock()
+        if (
+            type(value) not in {int, float}
+            or not math.isfinite(float(value))
+            or value < 0
+        ):
+            raise AutomationRefusal("GDB input-pulse coordinator clock is malformed.")
+        return float(value)
+
+    def _require_pulse_deadline(self, started_at: float) -> None:
+        observed = self._clock_value()
+        if observed < started_at:
+            raise AutomationRefusal("GDB input-pulse coordinator clock moved backward.")
+        if observed - started_at > self._pulse_timeout_seconds:
+            raise AutomationRefusal(
+                "GDB input-pulse transition exceeded its absolute acceptance deadline."
+            )
+
+    def _set_poisoned(self) -> None:
+        with self._state_guard:
+            self._state = _GdbInputPulseCoordinatorState.POISONED
+
+    def _raise_poisoned(
+        self,
+        exc: BaseException,
+        *,
+        cleanup_errors: Sequence[str] = (),
+    ) -> None:
+        self._set_poisoned()
+        held = self._transport.possibly_held
+        if held:
+            details = ",".join(cleanup_errors) if cleanup_errors else "none"
+            raise AutomationRefusal(
+                "GDB input-pulse work failed and mandatory key-up cleanup "
+                f"remains incomplete (errors={details};held={held!r})."
+            ) from exc
+        # Historical cleanup errors are resolved if a later bounded attempt
+        # removed the token.  Preserve the original refusal without falsely
+        # claiming that a physical key remains held.
+        if isinstance(exc, AutomationRefusal):
+            raise exc
+        raise AutomationRefusal("GDB input-pulse coordinator failed closed.") from exc
+
+    def _release_owed_keys(self) -> tuple[str, ...]:
+        errors: list[str] = []
+        for _ in range(GDB_PULSE_RELEASE_CLEANUP_ATTEMPTS):
+            if not self._transport.possibly_held:
+                break
+            errors.extend(self._transport.release_all())
+        return tuple(errors)
+
+    def start_execute(self, process: ProcessIdentity) -> None:
+        """Create/resume the one GDB session before any host pulse."""
+
+        self._begin_mutation("start")
+        try:
+            try:
+                with self._state_guard:
+                    if (
+                        type(process) is not ProcessIdentity
+                        or self._state is not _GdbInputPulseCoordinatorState.NEW
+                        or self._bound_process is not None
+                        or self._next_event_index != 0
+                        or self._transport.possibly_held
+                    ):
+                        raise AutomationRefusal(
+                            "GDB input-pulse coordinator can start exactly once."
+                        )
+                # Accessibility and exact frontmost-PID proof must fail before
+                # the GDB connection can induce any pause.
+                self._transport.require_target(process.pid)
+                self._session.connect_resume_once(process)
+                self._session.require_running_owned(process)
+                with self._state_guard:
+                    if self._state is not _GdbInputPulseCoordinatorState.NEW:
+                        raise AutomationRefusal(
+                            "GDB input-pulse coordinator start ownership changed."
+                        )
+                    self._bound_process = process
+                    self._emulation_state = PlannedEmulationState.RUNNING
+                    self._state = _GdbInputPulseCoordinatorState.STARTED
+            except BaseException as exc:
+                self._raise_poisoned(exc)
+        finally:
+            self._end_mutation()
+
+    def execute_next(
+        self,
+        event: InputEvent,
+        process: ProcessIdentity,
+        *,
+        release_identity_validator: Callable[[], None],
+        pulse_ownership_validator: Callable[[], None],
+        post_release_drift_observer: Callable[[], None],
+    ) -> None:
+        """Own one event; settle its GDB state only after resolved key-up.
+
+        Non-Space events prove only that the shared session remained RUNNING.
+        Pad-bit confirmation and macro compensation remain unavailable in the
+        production foundation and are not claimed by this counter.
+        """
+
+        self._begin_mutation("event")
+        try:
+            index: int | None = None
+            session_boundary_crossed = False
+            try:
+                if (
+                    type(event) is not InputEvent
+                    or type(process) is not ProcessIdentity
+                    or not callable(release_identity_validator)
+                    or not callable(pulse_ownership_validator)
+                    or not callable(post_release_drift_observer)
+                ):
+                    raise AutomationRefusal(
+                        "GDB input-pulse event or callback contract is malformed."
+                    )
+                with self._state_guard:
+                    index = self._next_event_index
+                    if (
+                        self._state is not _GdbInputPulseCoordinatorState.STARTED
+                        or self._bound_process != process
+                        or index >= len(self._plan.events)
+                        or self._plan.events[index] != event
+                        or self._settled_event_count != index
+                        or self._transport.possibly_held
+                    ):
+                        raise AutomationRefusal(
+                            "GDB input-pulse event order or ownership is not exact."
+                        )
+                    before_state = (
+                        PlannedEmulationState.RUNNING
+                        if index == 0
+                        else self._lifecycle.states_after_events[index - 1]
+                    )
+                    after_state = self._lifecycle.states_after_events[index]
+                    if self._emulation_state is not before_state:
+                        raise AutomationRefusal(
+                            "GDB input-pulse emulation baseline is not exact."
+                        )
+
+                pulse_started_at = self._clock_value()
+                self._require_pulse_deadline(pulse_started_at)
+
+                if event.action is KeyAction.TOGGLE_PAUSE:
+                    if (
+                        before_state is PlannedEmulationState.RUNNING
+                        and after_state is PlannedEmulationState.PAUSED
+                    ):
+                        arm_transition = self._session.arm_planned_pause
+                        require_armed = self._session.require_planned_pause_armed
+                        confirm_transition = self._session.confirm_planned_pause
+                        require_after = self._session.require_paused_owned
+                    elif (
+                        before_state is PlannedEmulationState.PAUSED
+                        and after_state is PlannedEmulationState.RUNNING
+                    ):
+                        arm_transition = self._session.arm_planned_resume
+                        require_armed = self._session.require_planned_resume_armed
+                        confirm_transition = self._session.confirm_planned_resume
+                        require_after = self._session.require_running_owned
+                    else:
+                        raise AutomationRefusal(
+                            "GDB input-pulse TogglePause transition is malformed."
+                        )
+                    with self._state_guard:
+                        self._emulation_state = None
+                    session_boundary_crossed = True
+                    arm_transition(process)
+                else:
+                    if (
+                        before_state is not PlannedEmulationState.RUNNING
+                        or after_state is not PlannedEmulationState.RUNNING
+                    ):
+                        raise AutomationRefusal(
+                            "Non-toggle input cannot execute while DuckStation is paused."
+                        )
+                    with self._state_guard:
+                        self._emulation_state = None
+                    session_boundary_crossed = True
+                    self._session.require_running_owned(process)
+                    with self._state_guard:
+                        if self._state is not _GdbInputPulseCoordinatorState.STARTED:
+                            raise AutomationRefusal(
+                                "GDB input-pulse ownership changed during RUNNING proof."
+                            )
+                        self._emulation_state = PlannedEmulationState.RUNNING
+                    require_armed = self._session.require_running_owned
+                    confirm_transition = self._session.require_running_owned
+                    require_after = self._session.require_running_owned
+
+                with self._state_guard:
+                    if self._state is not _GdbInputPulseCoordinatorState.STARTED:
+                        raise AutomationRefusal(
+                            "GDB input-pulse ownership changed before host input."
+                        )
+                    self._state = _GdbInputPulseCoordinatorState.PULSE_IN_FLIGHT
+
+                def validate_pulse_ownership() -> None:
+                    pulse_ownership_validator()
+                    require_armed(process)
+                    self._require_pulse_deadline(pulse_started_at)
+
+                def confirm_after_resolved_key_up() -> None:
+                    with self._state_guard:
+                        if (
+                            self._state
+                            is not _GdbInputPulseCoordinatorState.PULSE_IN_FLIGHT
+                            or self._next_event_index != index
+                            or self._settled_event_count != index
+                        ):
+                            raise AutomationRefusal(
+                                "GDB input-pulse confirmation ownership changed."
+                            )
+                    confirm_transition(process)
+                    require_after(process)
+                    with self._state_guard:
+                        if (
+                            self._state
+                            is not _GdbInputPulseCoordinatorState.PULSE_IN_FLIGHT
+                            or self._next_event_index != index
+                            or self._settled_event_count != index
+                        ):
+                            raise AutomationRefusal(
+                                "GDB input-pulse confirmation was duplicated."
+                            )
+                        self._next_event_index = index + 1
+                        self._settled_event_count = index + 1
+                        self._emulation_state = after_state
+                    deadline_error: BaseException | None = None
+                    try:
+                        self._require_pulse_deadline(pulse_started_at)
+                    except BaseException as exc:
+                        deadline_error = exc
+                    try:
+                        result = post_release_drift_observer()
+                        if result is not None:
+                            raise AutomationRefusal(
+                                "GDB post-release drift observer returned a value."
+                            )
+                    except BaseException as exc:
+                        if deadline_error is not None:
+                            raise AutomationRefusal(
+                                "GDB input pulse was late and post-release drifted."
+                            ) from exc
+                        raise
+                    if deadline_error is not None:
+                        raise deadline_error
+
+                self._transport.tap(
+                    process.pid,
+                    event.action,
+                    release_identity_validator=release_identity_validator,
+                    post_release_drift_observer=confirm_after_resolved_key_up,
+                    pre_key_down_validator=validate_pulse_ownership,
+                )
+                self._require_pulse_deadline(pulse_started_at)
+                with self._state_guard:
+                    if (
+                        self._state
+                        is not _GdbInputPulseCoordinatorState.PULSE_IN_FLIGHT
+                        or self._next_event_index != index + 1
+                        or self._settled_event_count != index + 1
+                        or self._emulation_state is not after_state
+                        or self._transport.possibly_held
+                    ):
+                        raise AutomationRefusal(
+                            "GDB input-pulse event did not settle exactly once."
+                        )
+                    self._state = (
+                        _GdbInputPulseCoordinatorState.COMPLETE
+                        if self._next_event_index == len(self._plan.events)
+                        else _GdbInputPulseCoordinatorState.STARTED
+                    )
+            except BaseException as exc:
+                cleanup_errors = self._release_owed_keys()
+                with self._state_guard:
+                    if (
+                        session_boundary_crossed
+                        and index is not None
+                        and self._settled_event_count == index
+                    ):
+                        self._emulation_state = None
+                self._raise_poisoned(exc, cleanup_errors=cleanup_errors)
+        finally:
+            self._end_mutation()
+
+    def _require_complete_locked(self, process: ProcessIdentity) -> None:
+        with self._state_guard:
+            if (
+                type(process) is not ProcessIdentity
+                or self._state is not _GdbInputPulseCoordinatorState.COMPLETE
+                or self._bound_process != process
+                or self._next_event_index != len(self._plan.events)
+                or self._settled_event_count != len(self._plan.events)
+                or self._emulation_state is not PlannedEmulationState.RUNNING
+                or self._transport.possibly_held
+            ):
+                raise AutomationRefusal(
+                    "GDB input-pulse coordinator is not terminal RUNNING."
+                )
+            # Reattestation can poison the underlying session.  Clear the
+            # coordinator's claim until the check returns successfully.
+            self._emulation_state = None
+        self._session.require_running_owned(process)
+        with self._state_guard:
+            if (
+                self._state is not _GdbInputPulseCoordinatorState.COMPLETE
+                or self._bound_process != process
+                or self._next_event_index != len(self._plan.events)
+                or self._settled_event_count != len(self._plan.events)
+                or self._transport.possibly_held
+            ):
+                raise AutomationRefusal(
+                    "GDB input-pulse completion ownership changed."
+                )
+            self._emulation_state = PlannedEmulationState.RUNNING
+
+    def require_complete(self, process: ProcessIdentity) -> None:
+        """Reattest exact terminal RUNNING state after every event settled."""
+
+        self._begin_mutation("completion")
+        try:
+            try:
+                self._require_complete_locked(process)
+            except BaseException as exc:
+                self._raise_poisoned(exc)
+        finally:
+            self._end_mutation()
+
+    def close(self, process: ProcessIdentity) -> None:
+        """Close only after exact terminal RUNNING; paused/armed close is absent."""
+
+        self._begin_mutation("close")
+        try:
+            with self._state_guard:
+                if self._state is _GdbInputPulseCoordinatorState.CLOSED:
+                    if self._bound_process != process:
+                        raise AutomationRefusal(
+                            "Closed GDB input-pulse process binding changed."
+                        )
+                    return
+            try:
+                self._require_complete_locked(process)
+                with self._state_guard:
+                    self._emulation_state = None
+                self._session.close()
+                with self._state_guard:
+                    if self._state is not _GdbInputPulseCoordinatorState.COMPLETE:
+                        raise AutomationRefusal(
+                            "GDB input-pulse close ownership changed."
+                        )
+                    self._emulation_state = PlannedEmulationState.RUNNING
+                    self._state = _GdbInputPulseCoordinatorState.CLOSED
+            except BaseException as exc:
+                self._raise_poisoned(exc)
+        finally:
+            self._end_mutation()
 
 
 @dataclasses.dataclass(frozen=True)
