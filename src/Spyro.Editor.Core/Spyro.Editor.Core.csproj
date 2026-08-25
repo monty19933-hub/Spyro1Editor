@@ -39,6 +39,8 @@
     <InternalsVisibleTo Include="Spyro.Editor.Id65V2NativeTextureCompositionCompilerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringMobyDependencyBundleCompilerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringCompositeCompilerSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorDocumentSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorDocumentPersistenceSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65RewardCensusContractSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringSupportReplacementCompilerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65RewardSupportLayoutContractSmoke" />
