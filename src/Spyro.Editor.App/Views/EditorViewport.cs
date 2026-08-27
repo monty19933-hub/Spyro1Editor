@@ -14,6 +14,7 @@ using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Skyboxes;
+using Spyro.Editor.Core.Workspace;
 
 namespace Spyro.Editor.App.Views;
 
@@ -76,6 +77,7 @@ public sealed partial class EditorViewport : Control
     private readonly Dictionary<int, Color?> _normalTerrainTextureAverageColorCache = new();
     private readonly Dictionary<int, NativeTerrainLqTextureRecordPayload> _nativeTerrainLqTextureRecords = new();
     private readonly Dictionary<NativeTerrainLqFrameCacheKey, Bitmap?> _nativeTerrainLqFrameCache = new();
+    private Id65FreshLevelT66ViewportTextureProjection? _id65FreshLevelT66ViewportTextureProjection;
     private readonly DispatcherTimer _flyNavigationSettleTimer;
     private readonly HashSet<Key> _activeFlyNavigationKeys = new();
 
@@ -647,6 +649,42 @@ public sealed partial class EditorViewport : Control
 
         if (changedLowDetailIds.Count > 0)
             OnNativeTerrainLqRecordsChanged();
+        InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Adds the exact witnessed T66 frame without writing a preview PNG or
+    /// changing the ordinary retail cache contract. This projection is scoped
+    /// to the exact ID65 fresh-level presentation and owns no export authority.
+    /// </summary>
+    public void SetId65FreshLevelT66ViewportTextureProjection(
+        Id65FreshLevelT66ViewportTextureProjection? projection)
+    {
+        if (ReferenceEquals(_id65FreshLevelT66ViewportTextureProjection, projection))
+            return;
+
+        int previousTextureId = _id65FreshLevelT66ViewportTextureProjection?.TextureId ?? -1;
+        int nextTextureId = projection?.TextureId ?? -1;
+        _id65FreshLevelT66ViewportTextureProjection = projection;
+        HashSet<int> changedTextureIds = new[] { previousTextureId, nextTextureId }
+            .Where(textureId => textureId >= 0)
+            .ToHashSet();
+        foreach (var key in _terrainTextureImageCache.Keys
+                     .Where(key => changedTextureIds.Contains(key.TextureId))
+                     .ToArray())
+        {
+            _terrainTextureImageCache[key]?.Dispose();
+            _terrainTextureImageCache.Remove(key);
+        }
+        foreach (NativeTerrainLqFrameCacheKey key in _nativeTerrainLqFrameCache.Keys
+                     .Where(key => changedTextureIds.Contains(key.TextureId))
+                     .ToArray())
+        {
+            _nativeTerrainLqFrameCache[key]?.Dispose();
+            _nativeTerrainLqFrameCache.Remove(key);
+        }
+        foreach (int textureId in changedTextureIds)
+            _normalTerrainTextureAverageColorCache.Remove(textureId);
         InvalidateVisual();
     }
 
@@ -10461,6 +10499,36 @@ public sealed partial class EditorViewport : Control
         if (_terrainTextureImageCache.TryGetValue(key, out Bitmap? cached))
             return cached;
 
+        if (_id65FreshLevelT66ViewportTextureProjection is { } projection &&
+            textureId == projection.TextureId)
+        {
+            try
+            {
+                Id65FreshLevelT66ViewportFrame frame = tier == NativeTerrainTexturePreviewTier.Close
+                    ? projection.Close
+                    : projection.Normal;
+                Bitmap bitmap = CreateBitmapFromTightRgba(
+                    frame.Width,
+                    frame.Height,
+                    frame.CopyRgbaBytes());
+                _terrainTextureImageCache[key] = bitmap;
+                if (tier == NativeTerrainTexturePreviewTier.Normal &&
+                    !_normalTerrainTextureAverageColorCache.ContainsKey(textureId))
+                {
+                    _normalTerrainTextureAverageColorCache[textureId] =
+                        CalculateTextureAverageColor(bitmap);
+                }
+                return bitmap;
+            }
+            catch (Exception ex) when (
+                ex is IOException or InvalidDataException or
+                    ArgumentException or OverflowException)
+            {
+                _terrainTextureImageCache[key] = null;
+                return null;
+            }
+        }
+
         string? path = ResolveTerrainTextureImagePath(textureId, tier);
         if (path == null)
         {
@@ -10710,6 +10778,12 @@ public sealed partial class EditorViewport : Control
 
     private Bitmap? GetTerrainTextureImageExact(int textureId, NativeTerrainTexturePreviewTier tier)
     {
+        if (_id65FreshLevelT66ViewportTextureProjection is { } projection &&
+            textureId == projection.TextureId)
+        {
+            return GetTerrainTextureImage(textureId, tier);
+        }
+
         Dictionary<int, string> exactFiles = tier == NativeTerrainTexturePreviewTier.Close
             ? _closeTerrainTextureImageFiles
             : _normalTerrainTextureImageFiles;

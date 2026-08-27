@@ -40,6 +40,8 @@ public sealed partial class MainWindow : Window
     private const double DefaultTerrainBrushFeather = 68;
     private const float DefaultTerrainAddCopyOffset = 64f;
     private const float DefaultTerrainGroundOffset = 0f;
+    private const string Id65FreshProjectionOfflineCandidateGuidance =
+        "No disposable test CUE path exists. Use Edit Full Authoring Document… and Create Exact Full Candidate for the separately guarded offline artifact. Normal Create BIN, runtime use, and release promotion remain unauthorized.";
     private readonly Dictionary<string, TerrainTexturePreviewBundleCacheEntry>
         _terrainTexturePreviewBundleCache = new(StringComparer.OrdinalIgnoreCase);
 
@@ -1899,6 +1901,8 @@ public sealed partial class MainWindow : Window
         _lastRemovedMoby = null;
         _lastRemovedMobyBundle.Clear();
         _currentLevel = null;
+        _id65FreshAuthoringDocument = null;
+        _id65FreshDocumentProjectionSynchronized = false;
         ApplyEditorExperienceForCurrentLevel();
         _currentGeometry = null;
         _currentMobys = [];
@@ -2008,6 +2012,15 @@ public sealed partial class MainWindow : Window
             if (level == null)
                 return;
 
+            if (IsId65BlankLabKey(level.Key) &&
+                !UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level))
+            {
+                SyncLevelPickers(_currentLevel);
+                _statusText.Text =
+                    "ID65 selection refused: this row has the Lab key but not its exact level identity.";
+                return;
+            }
+
             if (_currentLevel != null && string.Equals(level.Key, _currentLevel.Key, StringComparison.OrdinalIgnoreCase))
             {
                 SyncLevelPickers(_currentLevel);
@@ -2025,7 +2038,8 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            if (IsId65BlankLabKey(level.Key) && id65Operation == null)
+            if (UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level) &&
+                id65Operation == null)
             {
                 if (!TryBeginId65BlankLabManualOperation(
                         "load",
@@ -2869,7 +2883,15 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
-        if (IsId65BlankLabKey(level.Key))
+        if (IsId65BlankLabKey(level.Key) &&
+            !UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level))
+        {
+            _statusText.Text =
+                "ID65 reload refused: this row has the Lab key but not its exact level identity.";
+            return false;
+        }
+
+        if (UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level))
         {
             _statusText.Text =
                 "ID65 reload refused: the Lab must use its awaited source-bound loader. Choose Load Lab or select the Lab again.";
@@ -2885,6 +2907,15 @@ public sealed partial class MainWindow : Window
         LevelDefinition level,
         Id65BlankLabManualOperation? existingId65Operation = null)
     {
+        if (IsId65BlankLabKey(level.Key) &&
+            !UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level))
+        {
+            _statusText.Text =
+                "ID65 load refused: this row has the Lab key but not its exact level identity.";
+            return;
+        }
+        bool exactId65BlankLab =
+            UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level);
         if (_workspaceTransitionBusy)
         {
             _statusText.Text =
@@ -2916,7 +2947,7 @@ public sealed partial class MainWindow : Window
 
         bool ownsId65Operation = false;
         Id65BlankLabManualOperation? id65Operation = existingId65Operation;
-        if (IsId65BlankLabKey(level.Key) && id65Operation == null)
+        if (exactId65BlankLab && id65Operation == null)
         {
             if (!TryBeginId65BlankLabManualOperation("load", out id65Operation) ||
                 id65Operation == null)
@@ -2932,9 +2963,11 @@ public sealed partial class MainWindow : Window
         LevelDefinition? previousLevelIdentity = _currentLevel;
         GeometryCandidate? previousGeometryIdentity = _currentGeometry;
         UnusedLevel65BlankLevelLabManifest? preparedId65Manifest = null;
+        Id65AuthoringEditorDocumentReadModel?
+            preparedId65AuthoringDocument = null;
         try
         {
-            if (IsId65BlankLabKey(level.Key))
+            if (exactId65BlankLab)
             {
                 if (_id65BlankLabManifest == null || _id65BlankLabPaths == null)
                 {
@@ -2952,13 +2985,24 @@ public sealed partial class MainWindow : Window
                     id65Operation.Cancellation.Token,
                     id65Operation);
                 RequireCurrentId65BlankLabManualOperation(id65Operation);
+                _statusText.Text =
+                    "Inspecting the canonical ID65 Full Authoring Document before projecting the fresh scene...";
+                preparedId65AuthoringDocument =
+                    await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                        _id65BlankLabPaths,
+                        preparedId65Manifest,
+                        id65Operation.Cancellation.Token);
+                RequireCurrentId65BlankLabManualOperation(id65Operation);
             }
 
             int requestId = ++_levelLoadRequestId;
             LevelLoadData loaded = id65Operation == null
                 ? await Task.Run(() => LoadLevelData(level.Key))
                 : await Task.Run(
-                    () => LoadLevelData(level.Key),
+                    () => LoadLevelData(
+                        level.Key,
+                        id65AuthoringDocument: preparedId65AuthoringDocument,
+                        id65AuthoringDocumentInspectionCompleted: true),
                     id65Operation.Cancellation.Token);
             if (id65Operation != null)
             {
@@ -2983,6 +3027,25 @@ public sealed partial class MainWindow : Window
                 {
                     throw new InvalidDataException(
                         "The ID65 locked source, published manifest, or derived binding changed before the loaded scene could commit.");
+                }
+                Id65AuthoringEditorDocumentReadModel? commitDocument =
+                    await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                        commitPaths,
+                        commitManifest,
+                        id65Operation.Cancellation.Token);
+                if (!Id65AuthoringDocumentSnapshotsEqual(
+                        preparedId65AuthoringDocument,
+                        commitDocument))
+                {
+                    throw new InvalidDataException(
+                        "The canonical ID65 Full Authoring Document changed before the fresh scene could commit. Load the Lab again for the current document.");
+                }
+                if (loaded.Id65AuthoringDocument !=
+                        preparedId65AuthoringDocument ||
+                    loaded.Id65FreshSceneProjection == null)
+                {
+                    throw new InvalidDataException(
+                        "The awaited ID65 load lost its inspected document-bound projection.");
                 }
                 RequireCurrentId65BlankLabManualOperation(id65Operation);
             }
@@ -3035,10 +3098,45 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        bool exactId65BlankLab =
+            UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level);
+        if (exactId65BlankLab)
+        {
+            Id65FreshLevelSceneProjection projection =
+                loaded.Id65FreshSceneProjection ?? throw new InvalidDataException(
+                    "The exact ID65 load completed without a fresh-scene projection.");
+            if (!ReferenceEquals(projection.Geometry, loaded.Geometry) ||
+                !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(
+                    loaded.Geometry) ||
+                (loaded.Id65AuthoringDocument == null &&
+                 projection.CanonicalDocumentBound) ||
+                (loaded.Id65AuthoringDocument != null &&
+                 (!projection.CanonicalDocumentBound ||
+                  projection.DocumentCanonicalSha256 !=
+                      loaded.Id65AuthoringDocument.DocumentCanonicalSha256 ||
+                  projection.DocumentContentSha256 !=
+                      loaded.Id65AuthoringDocument.DocumentContentSha256)))
+            {
+                throw new InvalidDataException(
+                    "The exact ID65 load lost its inspected document-to-projection identity.");
+            }
+        }
+        else if (!exactId65BlankLab &&
+                 (loaded.Id65AuthoringDocument != null ||
+                  loaded.Id65FreshSceneProjection != null))
+        {
+            throw new InvalidDataException(
+                "A retail level load carried ID65 authoring projection state.");
+        }
+        _id65FreshDocumentProjectionSynchronized = false;
+
         StopTerrainTexturePaintMode(announce: false);
         ClearTerrainTextureCatalogPreviewCache(rebindActivePreview: false);
         AdvancePrivateTexturePreflightOperationGeneration();
         _currentLevel = level;
+        _id65FreshAuthoringDocument = exactId65BlankLab
+            ? loaded.Id65AuthoringDocument
+            : null;
         ResetId65BlankLabIncompatibleModes();
         _levelTitle.Text = level.DisplayName;
         ClearTerrainBrushUndoHistory();
@@ -3065,6 +3163,11 @@ public sealed partial class MainWindow : Window
         _lastRemovedMobyBundle.Clear();
         RefreshTerrainTextureImageFiles();
         _viewport.Geometry = _currentGeometry;
+        if (exactId65BlankLab)
+        {
+            Id65FreshProjectionApplyFaultForTesting?.Invoke(
+                "after-viewport-geometry-before-dependent-refresh");
+        }
         ConfigureCompleteTerrainEditing();
         _viewport.Mobys = _currentMobys;
         ApplyNativeMovementLoadData(loaded.NativeMovement);
@@ -3085,6 +3188,7 @@ public sealed partial class MainWindow : Window
         _statusText.Text = $"{level.DisplayName}: {_viewport.Geometry?.Polygons.Count ?? 0} terrain faces, {_viewport.Mobys.Count} mobys";
         RefreshDiagnosticContext();
         EditorDiagnostics.RecordAction("Level loaded", $"{level.DisplayName} ({level.Key}); {_viewport.Mobys.Count} mobys; {_viewport.Geometry?.Polygons.Count ?? 0} terrain faces");
+        _id65FreshDocumentProjectionSynchronized = exactId65BlankLab;
         RefreshId65BlankLabUi();
     }
 
@@ -3114,6 +3218,7 @@ public sealed partial class MainWindow : Window
         if (_currentLevel == null)
         {
             _viewport.SetTerrainTextureImageFiles(null);
+            _viewport.SetId65FreshLevelT66ViewportTextureProjection(null);
             _viewport.SetNativeTerrainHqMaterialSet(
                 null,
                 compatible: false,
@@ -3138,6 +3243,21 @@ public sealed partial class MainWindow : Window
             foreach (NativeTerrainLqTextureRecordPayload texture in nativeBundle.LowDetailTextures.Textures)
                 lowDetailTextures[texture.TextureId] = texture;
             nativeHighDetailMaterials = nativeBundle.HighDetailMaterials;
+        }
+
+        Id65FreshLevelT66ViewportTextureProjection? exactId65T66 =
+            UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(_currentLevel)
+                ? _id65FreshLevelT66ViewportTextureProjection
+                : null;
+        if (exactId65T66 != null)
+        {
+            lowDetailTextures.Clear();
+            foreach (NativeTerrainLqTextureRecordPayload texture in
+                     exactId65T66.LowDetailTextures.Textures)
+            {
+                lowDetailTextures[texture.TextureId] = texture;
+            }
+            nativeHighDetailMaterials = exactId65T66.HighDetailMaterials;
         }
 
         foreach (CustomTerrainTextureImport import in _customTerrainTextures)
@@ -3204,6 +3324,7 @@ public sealed partial class MainWindow : Window
         }
 
         _viewport.SetTerrainTextureImageFiles(normalFiles, closeFiles, lowDetailTextures);
+        _viewport.SetId65FreshLevelT66ViewportTextureProjection(exactId65T66);
         if (_customTerrainTextures.Count > 0)
         {
             _viewport.SetNativeTerrainHqMaterialSet(
@@ -4535,6 +4656,12 @@ public sealed partial class MainWindow : Window
             _statusText.Text = "Load the validated ID65 Lab before restoring its authored terrain layer.";
             return false;
         }
+        if (Id65FreshLevelSceneProjector.IsProjectionGeometry(_currentGeometry))
+        {
+            _statusText.Text =
+                "Generic ID65 terrain restore is unavailable for the fresh-level scene. The projection never loads TerrainEditStore rows, so this action will not delete or apply a legacy terrain edit file. Use Edit Full Authoring Document… for coupled terrain create/remove work.";
+            return false;
+        }
         if (!TryBeginId65BlankLabManualOperation(
                 $"{actionLabel} restore",
                 out Id65BlankLabManualOperation? operation) ||
@@ -4572,7 +4699,7 @@ public sealed partial class MainWindow : Window
                 operation.WorkspaceRoot);
         string terrainEditsPath = Path.Combine(
             capturedPaths.AuthoredEditsDirectoryPath,
-            $"{UnusedLevel65BlankLevelLabProfileRegistry.Key}-terrain-edits.json");
+            Id65FreshLevelSceneProjector.TerrainEditFileName);
         byte[]? authoredTerrainBefore = null;
         if (File.Exists(terrainEditsPath))
         {
@@ -10292,6 +10419,9 @@ public sealed partial class MainWindow : Window
             !_projectDataImportBusy;
         bool id65ObjectInspectionOnly = IsId65BlankLabObjectInspectionOnly();
         bool id65TerrainZOnly = IsCurrentId65BlankLab();
+        bool id65FreshProjectionTerrainLocked =
+            id65TerrainZOnly &&
+            Id65FreshLevelSceneProjector.IsProjectionGeometry(_currentGeometry);
         bool hasObject = _selectedMoby != null && !_selectedMoby.IsRemoved;
         bool objectHasEdits = hasObject && HasUndoableMobyEdits(_selectedMoby!);
         bool selectedProtectedControl = hasObject && IsReleaseProtectedControlMoby(_selectedMoby!);
@@ -10355,13 +10485,17 @@ public sealed partial class MainWindow : Window
         SetButtonEnabled(_objectRestoreLevelButton, hasLevel && !id65ObjectInspectionOnly);
         SetButtonEnabled(_objectSelectedIdTestButton, hasObject && !id65ObjectInspectionOnly && IsQuestionableMoby(_selectedMoby!));
 
-        SetButtonEnabled(_terrainUndoButton, terrainHasEdits);
+        SetButtonEnabled(
+            _terrainUndoButton,
+            terrainHasEdits && !id65FreshProjectionTerrainLocked);
         bool canStageSelectedAddCopy = canUseTerrainAddCopyInLevel && hasTerrain && CanStageTerrainAddCopy(_selectedTerrain!);
         bool canStageAnyAddCopy = canUseTerrainAddCopyInLevel && (canStageSelectedAddCopy || (_currentGeometry?.Polygons.Count > 0 && HasAnyTerrainAddCopySource()));
         SetButtonEnabled(_terrainFindAddSourceButton, canUseTerrainAddCopyInLevel && HasAnyTerrainAddCopySource());
-        bool id65SelectedHpPoint = !id65TerrainZOnly ||
-            (hasTerrainPoint && string.Equals(_selectedTerrain!.Detail, "hp", StringComparison.OrdinalIgnoreCase));
-        bool selectedExistingHpFace = hasTerrain &&
+        bool id65SelectedHpPoint = !id65FreshProjectionTerrainLocked &&
+            (!id65TerrainZOnly ||
+             (hasTerrainPoint && string.Equals(_selectedTerrain!.Detail, "hp", StringComparison.OrdinalIgnoreCase)));
+        bool selectedExistingHpFace = !id65FreshProjectionTerrainLocked &&
+            hasTerrain &&
             !_selectedTerrain!.IsTerrainRemoved &&
             !_selectedTerrain.IsTerrainAddClone &&
             string.Equals(_selectedTerrain.Detail, "hp", StringComparison.OrdinalIgnoreCase);
@@ -10374,6 +10508,7 @@ public sealed partial class MainWindow : Window
         SetButtonEnabled(_terrainTaskSinglePointButton, hasTerrainPoint && !id65TerrainZOnly);
         SetButtonEnabled(
             _terrainTaskPaintFaceButton,
+            !id65FreshProjectionTerrainLocked &&
             _currentLevel != null &&
             _currentGeometry?.Polygons.Any(face =>
                 !face.IsTerrainRemoved &&
@@ -10385,7 +10520,9 @@ public sealed partial class MainWindow : Window
             hasTerrain && !id65TerrainZOnly && _selectedTerrain!.TextureId >= 0);
         SetButtonEnabled(_terrainTaskAddCopyButton, canStageAnyAddCopy);
         SetButtonEnabled(_terrainTaskRemoveFaceButton, canRemoveSelectedTerrain);
-        SetButtonEnabled(_terrainTaskSaveButton, hasUnsavedTerrainEdits);
+        SetButtonEnabled(
+            _terrainTaskSaveButton,
+            hasUnsavedTerrainEdits && !id65FreshProjectionTerrainLocked);
         SetButtonEnabled(_terrainPointPreviousButton, hasTerrainPoint);
         SetButtonEnabled(_terrainPointNextButton, hasTerrainPoint);
         SetButtonEnabled(_terrainPointPlayableButton, hasTerrainPoint && HasPlayableTerrainPoint(_selectedTerrain!));
@@ -10395,14 +10532,25 @@ public sealed partial class MainWindow : Window
         SetButtonEnabled(_terrainPointXPlusButton, hasTerrainPoint && !id65TerrainZOnly);
         SetButtonEnabled(_terrainPointYMinusButton, hasTerrainPoint && !id65TerrainZOnly);
         SetButtonEnabled(_terrainPointYPlusButton, hasTerrainPoint && !id65TerrainZOnly);
-        SetButtonEnabled(_terrainPointResetButton, hasTerrainPoint && SelectedTerrainPointHasEdit());
+        SetButtonEnabled(
+            _terrainPointResetButton,
+            hasTerrainPoint &&
+            !id65FreshProjectionTerrainLocked &&
+            SelectedTerrainPointHasEdit());
         SetButtonEnabled(_terrainPointEditButton, hasTerrainPoint && !id65TerrainZOnly);
 
-        _objectActionHint.Text = id65ObjectInspectionOnly
+        _objectActionHint.Text = id65FreshProjectionTerrainLocked
+            ? "Fresh ID65 scene: zero visible user/test Mobys. The protected spawn is not an editable object. " +
+              Id65FreshProjectionOfflineCandidateGuidance
+            : id65ObjectInspectionOnly
             ? "ID65 Lab: resident Mobys are visible for inspection only; mutation and cross-level imports are unavailable in this profile."
             : BuildObjectActionHint(hasLevel, hasObject, objectHasEdits);
-        _terrainActionHint.Text = BuildTerrainActionHint(hasLevel, hasTerrain, terrainHasEdits, hasUnsavedTerrainEdits, canUseTerrainRemoveInLevel, canRemoveSelectedTerrain);
-        _terrainTaskHint.Text = BuildTerrainTaskHint(hasLevel, hasTerrain, terrainHasEdits, hasUnsavedTerrainEdits, hasTerrainPoint, canStageAnyAddCopy, hasAnyTerrainReviewItem, canUseTerrainRemoveInLevel, canUseTerrainAddCopyInLevel, canRemoveSelectedTerrain);
+        _terrainActionHint.Text = id65FreshProjectionTerrainLocked
+            ? "Fresh ID65 scene: generic HP-Z, texture, add/remove, undo, and save controls are intentionally unavailable because a one-sided edit would desynchronize HP, LP, collision, occlusion, and the protected spawn. Use Edit Full Authoring Document… for coupled terrain create/remove work."
+            : BuildTerrainActionHint(hasLevel, hasTerrain, terrainHasEdits, hasUnsavedTerrainEdits, canUseTerrainRemoveInLevel, canRemoveSelectedTerrain);
+        _terrainTaskHint.Text = id65FreshProjectionTerrainLocked
+            ? "This blank-looking starter scene is a read-only authoring projection. No generic TerrainEditStore row is loaded or saved; coupled terrain changes belong in the Full Authoring Document."
+            : BuildTerrainTaskHint(hasLevel, hasTerrain, terrainHasEdits, hasUnsavedTerrainEdits, hasTerrainPoint, canStageAnyAddCopy, hasAnyTerrainReviewItem, canUseTerrainRemoveInLevel, canUseTerrainAddCopyInLevel, canRemoveSelectedTerrain);
         RefreshReleaseTerrainHeightHint(selectedExistingHpFace);
         RefreshTerrainPointControls();
         RefreshObjectReadinessHint();
@@ -10571,6 +10719,11 @@ public sealed partial class MainWindow : Window
         if (button != null)
             button.IsEnabled = enabled;
     }
+
+    private bool IsExactFreshId65SceneProjection(LevelDefinition? level) =>
+        UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level) &&
+        IsCurrentId65BlankLab() &&
+        Id65FreshLevelSceneProjector.IsProjectionGeometry(_currentGeometry);
 
     private string BuildObjectActionHint(bool hasLevel, bool hasObject, bool objectHasEdits)
     {
@@ -11378,9 +11531,11 @@ public sealed partial class MainWindow : Window
     {
         if (IsCurrentId65BlankLab())
         {
-            _levelTextDetails.Text =
-                "ID65 Blank-Level Lab level-name editing is unavailable in this profile. " +
-                "The locked TOWN SQUARE Inventory identity remains unchanged; no retail Town Square name plan is loaded or changed.";
+            _levelTextDetails.Text = IsExactFreshId65SceneProjection(_currentLevel)
+                ? "Fresh ID65 scene level-name editing is unavailable; its exact display-name identity remains fixed. " +
+                  Id65FreshProjectionOfflineCandidateGuidance
+                : "ID65 Blank-Level Lab level-name editing is unavailable in this profile. " +
+                  "The locked TOWN SQUARE Inventory identity remains unchanged; no retail Town Square name plan is loaded or changed.";
             _levelTextReplacementBox.Text = "";
             return;
         }
@@ -11407,6 +11562,7 @@ public sealed partial class MainWindow : Window
     private void RefreshLevelMusicEditor(LevelDefinition level)
     {
         bool id65Unavailable = UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level);
+        bool freshProjection = IsExactFreshId65SceneProjection(level);
         bool enabled = !id65Unavailable &&
             !(_id65BlankLabBusy && _id65BlankLabManualOperation != null) &&
             !_regularEditorPersistenceBusy &&
@@ -11419,9 +11575,11 @@ public sealed partial class MainWindow : Window
         if (id65Unavailable)
         {
             _levelMusicTrackBox.SelectedItem = MusicTrackCatalog.Find(MusicTrackCatalog.GetNativeTrackId(level));
-            _levelMusicDetails.Text =
-                "ID65 Blank-Level Lab music is unavailable in this profile. " +
-                "Disposable test CUEs preserve the locked-base music; no retail music edit plan is created or included by normal Create BIN.";
+            _levelMusicDetails.Text = freshProjection
+                ? "Fresh ID65 scene music is fixed by the exact authoring contract and is not editable here. " +
+                  Id65FreshProjectionOfflineCandidateGuidance
+                : "ID65 Blank-Level Lab music is unavailable in this profile. " +
+                  "Disposable test CUEs preserve the locked-base music; no retail music edit plan is created or included by normal Create BIN.";
             return;
         }
 
@@ -11435,9 +11593,11 @@ public sealed partial class MainWindow : Window
     {
         if (IsCurrentId65BlankLab())
         {
-            _levelMusicDetails.Text =
-                "ID65 Blank-Level Lab music is unavailable in this profile. " +
-                "Disposable test CUEs preserve the locked-base music; no retail music edit plan is created or included by normal Create BIN.";
+            _levelMusicDetails.Text = IsExactFreshId65SceneProjection(_currentLevel)
+                ? "Fresh ID65 scene music is fixed by the exact authoring contract and is not editable here. " +
+                  Id65FreshProjectionOfflineCandidateGuidance
+                : "ID65 Blank-Level Lab music is unavailable in this profile. " +
+                  "Disposable test CUEs preserve the locked-base music; no retail music edit plan is created or included by normal Create BIN.";
             return;
         }
 
@@ -11693,6 +11853,7 @@ public sealed partial class MainWindow : Window
     private void RefreshId65SkyAndNameAvailability(LevelDefinition? level)
     {
         bool unavailable = UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level);
+        bool freshProjection = IsExactFreshId65SceneProjection(level);
         bool enabled = !unavailable &&
             !(_id65BlankLabBusy && _id65BlankLabManualOperation != null) &&
             !_regularEditorPersistenceBusy &&
@@ -11751,16 +11912,22 @@ public sealed partial class MainWindow : Window
 
         _activeEnvironmentGradeMatch = null;
         _viewport.SetEnvironmentGradePreview(null);
-        _skyboxDetails.Text =
-            "ID65 Blank-Level Lab sky editing is unavailable in this profile. " +
-            "Disposable test CUEs preserve the locked-base sky; no ID65 sky plan is loaded or included by normal Create BIN.";
+        _skyboxDetails.Text = freshProjection
+            ? "Fresh ID65 scene sky editing is unavailable; the starter projection does not expose a mutable sky layer. " +
+              Id65FreshProjectionOfflineCandidateGuidance
+            : "ID65 Blank-Level Lab sky editing is unavailable in this profile. " +
+              "Disposable test CUEs preserve the locked-base sky; no ID65 sky plan is loaded or included by normal Create BIN.";
         _skyboxEnvironmentPreviewWarning.IsVisible = false;
         _skyboxEnvironmentPreviewWarningText.Text = "";
-        _skyboxEnvironmentDetails.Text =
-            "ID65 Blank-Level Lab environment and sky matching are unavailable; the locked-base sky and lighting remain unchanged.";
-        _levelTextDetails.Text =
-            "ID65 Blank-Level Lab level-name editing is unavailable in this profile. " +
-            "The locked TOWN SQUARE Inventory identity remains unchanged; no retail Town Square name plan is loaded or changed.";
+        _skyboxEnvironmentDetails.Text = freshProjection
+            ? "Fresh ID65 scene environment and sky matching are unavailable. " +
+              Id65FreshProjectionOfflineCandidateGuidance
+            : "ID65 Blank-Level Lab environment and sky matching are unavailable; the locked-base sky and lighting remain unchanged.";
+        _levelTextDetails.Text = freshProjection
+            ? "Fresh ID65 scene level-name editing is unavailable; its exact display-name identity remains fixed. " +
+              Id65FreshProjectionOfflineCandidateGuidance
+            : "ID65 Blank-Level Lab level-name editing is unavailable in this profile. " +
+              "The locked TOWN SQUARE Inventory identity remains unchanged; no retail Town Square name plan is loaded or changed.";
     }
 
     private void RefreshOriginalSkyPresetPreview()
@@ -11783,9 +11950,11 @@ public sealed partial class MainWindow : Window
     {
         if (UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level))
         {
-            _skyboxDetails.Text =
-                "ID65 Blank-Level Lab sky editing is unavailable in this profile. " +
-                "Disposable test CUEs preserve the locked-base sky; no ID65 sky plan is loaded or included by normal Create BIN.";
+            _skyboxDetails.Text = IsExactFreshId65SceneProjection(level)
+                ? "Fresh ID65 scene sky editing is unavailable; the starter projection does not expose a mutable sky layer. " +
+                  Id65FreshProjectionOfflineCandidateGuidance
+                : "ID65 Blank-Level Lab sky editing is unavailable in this profile. " +
+                  "Disposable test CUEs preserve the locked-base sky; no ID65 sky plan is loaded or included by normal Create BIN.";
             return;
         }
 
@@ -11937,8 +12106,10 @@ public sealed partial class MainWindow : Window
         {
             _skyboxEnvironmentPreviewWarning.IsVisible = false;
             _skyboxEnvironmentPreviewWarningText.Text = "";
-            _skyboxEnvironmentDetails.Text =
-                "ID65 Blank-Level Lab environment and sky matching are unavailable; the locked-base sky and lighting remain unchanged.";
+            _skyboxEnvironmentDetails.Text = IsExactFreshId65SceneProjection(_currentLevel)
+                ? "Fresh ID65 scene environment and sky matching are unavailable. " +
+                  Id65FreshProjectionOfflineCandidateGuidance
+                : "ID65 Blank-Level Lab environment and sky matching are unavailable; the locked-base sky and lighting remain unchanged.";
             return;
         }
 
@@ -17240,6 +17411,7 @@ public sealed partial class MainWindow : Window
     private Control BuildTerrainTabControls()
     {
         StackPanel outer = new() { Spacing = 9, Margin = new Thickness(0, 10, 0, 0) };
+        outer.Children.Add(BuildId65FreshOptionalTerrainControls());
         outer.Children.Add(BuildTerrainTaskControls());
         outer.Children.Add(BuildTerrainBrushControls());
         outer.Children.Add(BuildCollapsedPanel("Material and paint", BuildTerrainMaterialControls()));
@@ -17261,6 +17433,7 @@ public sealed partial class MainWindow : Window
             Spacing = 10,
             Margin = new Thickness(0, 10, 0, 0)
         };
+        panel.Children.Add(BuildId65FreshOptionalTerrainControls());
         panel.Children.Add(new TextBlock
         {
             Text = "Terrain Height Editing",
@@ -18537,6 +18710,25 @@ public sealed partial class MainWindow : Window
         if (geometry == null || geometry.Polygons.Count == 0)
             return new TerrainCollisionLoadData(triangleKeys, "Playable terrain collision: no terrain loaded", 0);
 
+        LevelDefinition? collisionLevel = _catalog.FindByKey(levelKey);
+        if (UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(collisionLevel) &&
+            Id65FreshLevelSceneProjector.IsProjectionGeometry(geometry) &&
+            geometry.NativeTerrainOcclusion is NativeTerrainOcclusionData projectionOcclusion)
+        {
+            foreach (NativeTerrainOcclusionTriangle triangle in projectionOcclusion.CollisionTriangles)
+            {
+                triangleKeys.Add(string.Join("|", new[] { triangle.P1, triangle.P2, triangle.P3 }
+                    .Select(point => VisualPointKey(point.X, point.Y, point.Z))
+                    .OrderBy(value => value, StringComparer.Ordinal)));
+            }
+            int matchedFaces = geometry.Polygons.Count(polygon =>
+                HasTerrainCollisionMatch(polygon, triangleKeys));
+            return new TerrainCollisionLoadData(
+                triangleKeys,
+                $"Fresh authoring-scene collision: {matchedFaces}/{geometry.Polygons.Count} faces matched; this is presentation metadata, not runtime acceptance.",
+                matchedFaces);
+        }
+
         string ramPath = TerrainPatchDataLocator.FindRamDump(_workspace, levelKey);
         if (!File.Exists(ramPath))
             return new TerrainCollisionLoadData(triangleKeys, "Playable terrain collision: RAM capture missing", 0);
@@ -18942,6 +19134,9 @@ public sealed partial class MainWindow : Window
 
     private void RefreshTerrainBrushHistoryText()
     {
+        bool id65FreshProjectionTerrainLocked =
+            IsCurrentId65BlankLab() &&
+            Id65FreshLevelSceneProjector.IsProjectionGeometry(_currentGeometry);
         string mode = BuildTerrainBrushModeSummary();
         string history = _terrainBrushUndoHistory.Count == 0 && _terrainBrushRedoHistory.Count == 0
             ? "No brush strokes to undo yet."
@@ -18954,12 +19149,14 @@ public sealed partial class MainWindow : Window
                 !_id65BlankLabBusy &&
                 !_regularEditorPersistenceBusy &&
                 !_buildSafetyBusy &&
+                !id65FreshProjectionTerrainLocked &&
                 _terrainBrushUndoHistory.Count > 0;
         if (_terrainRedoStrokeButton != null)
             _terrainRedoStrokeButton.IsEnabled =
                 !_id65BlankLabBusy &&
                 !_regularEditorPersistenceBusy &&
                 !_buildSafetyBusy &&
+                !id65FreshProjectionTerrainLocked &&
                 _terrainBrushRedoHistory.Count > 0;
     }
 
@@ -20003,6 +20200,13 @@ public sealed partial class MainWindow : Window
     {
         if (TryBlockTerrainMutationDuringId65BlankLabManualOperation("undoing terrain brush edits"))
             return;
+        if (TryBlockId65UnsupportedTerrainMutation(
+                _selectedTerrain,
+                "terrain brush area undo",
+                releaseViewportGesture: true))
+        {
+            return;
+        }
 
         if (_selectedTerrain == null || _currentGeometry == null)
         {
@@ -20044,6 +20248,13 @@ public sealed partial class MainWindow : Window
     {
         if (TryBlockTerrainMutationDuringId65BlankLabManualOperation("undoing a terrain brush stroke"))
             return;
+        if (TryBlockId65UnsupportedTerrainMutation(
+                _selectedTerrain,
+                "terrain brush stroke undo",
+                releaseViewportGesture: true))
+        {
+            return;
+        }
 
         if (_terrainBrushUndoHistory.Count == 0)
         {
@@ -20077,6 +20288,13 @@ public sealed partial class MainWindow : Window
     {
         if (TryBlockTerrainMutationDuringId65BlankLabManualOperation("redoing a terrain brush stroke"))
             return;
+        if (TryBlockId65UnsupportedTerrainMutation(
+                _selectedTerrain,
+                "terrain brush stroke redo",
+                releaseViewportGesture: true))
+        {
+            return;
+        }
 
         if (_terrainBrushRedoHistory.Count == 0)
         {
@@ -21630,6 +21848,13 @@ public sealed partial class MainWindow : Window
     {
         if (TryBlockTerrainMutationDuringId65BlankLabManualOperation("applying a terrain brush gesture"))
             return new TerrainBrushResult(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        if (TryBlockId65UnsupportedTerrainMutation(
+                _selectedTerrain,
+                "terrain brush sculpting",
+                releaseViewportGesture: true))
+        {
+            return new TerrainBrushResult(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        }
 
         if (_currentGeometry == null)
             return new TerrainBrushResult(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -26961,6 +27186,8 @@ public sealed partial class MainWindow : Window
         ArgumentNullException.ThrowIfNull(level);
         if (IsId65BlankLabKey(level.Key))
         {
+            if (!UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level))
+                return "";
             UnusedLevel65BlankLevelLabWorkspacePaths paths =
                 _id65BlankLabPaths ??
                 UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(_workspace.RootPath);
@@ -30643,17 +30870,54 @@ public sealed partial class MainWindow : Window
 
     private LevelLoadData LoadLevelData(
         string levelKey,
-        bool ignoreId65AuthoredTerrainEdits = false)
+        bool ignoreId65AuthoredTerrainEdits = false,
+        Id65AuthoringEditorDocumentReadModel? id65AuthoringDocument = null,
+        bool id65AuthoringDocumentInspectionCompleted = false)
     {
-        bool id65BlankLabLevel = IsId65BlankLabKey(levelKey);
+        LevelDefinition? resolvedLevel = _catalog.FindByKey(levelKey);
+        bool id65Key = IsId65BlankLabKey(levelKey);
+        bool id65BlankLabLevel =
+            UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(resolvedLevel);
+        if (id65Key && !id65BlankLabLevel)
+        {
+            throw new InvalidDataException(
+                "ID65 load refused: the requested key does not resolve to the exact Blank-Level Lab identity.");
+        }
         bool isolatedId65LockedBaseLoad =
             ignoreId65AuthoredTerrainEdits && id65BlankLabLevel;
-        TerrainGeometryLoadData geometry = isolatedId65LockedBaseLoad
-            ? LoadId65BlankLabGeometryData(includeAuthoredTerrainEdits: false)
+        Id65AuthoringEditorDocumentReadModel? effectiveId65AuthoringDocument =
+            isolatedId65LockedBaseLoad ? null : id65AuthoringDocument;
+        if (id65BlankLabLevel &&
+            !isolatedId65LockedBaseLoad &&
+            !id65AuthoringDocumentInspectionCompleted)
+        {
+            if (!TryGetValidatedId65BlankLabForLoad(
+                    out UnusedLevel65BlankLevelLabWorkspacePaths? paths,
+                    out string inspectionError) ||
+                paths == null || _id65BlankLabManifest == null)
+            {
+                throw new InvalidDataException(inspectionError);
+            }
+            effectiveId65AuthoringDocument =
+                Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                        paths,
+                        _id65BlankLabManifest)
+                    .GetAwaiter()
+                    .GetResult();
+        }
+        TerrainGeometryLoadData geometry = id65BlankLabLevel
+            ? LoadId65BlankLabGeometryData(
+                resolvedLevel!,
+                includeAuthoredTerrainEdits: !isolatedId65LockedBaseLoad,
+                authoringDocument: effectiveId65AuthoringDocument)
             : LoadGeometryData(levelKey);
-        MobyLoadData mobys = LoadMobyData(levelKey);
+        MobyLoadData mobys = id65BlankLabLevel
+            ? LoadId65BlankLabMobyData(
+                resolvedLevel!,
+                geometry.Id65FreshSceneProjection)
+            : LoadMobyData(levelKey);
         NativeMovementLoadData nativeMovement = id65BlankLabLevel
-            ? NativeMovementLoadData.Empty("ID65 Lab resident Mobys are inspection-only; native movement mutation is unavailable in this profile.")
+            ? NativeMovementLoadData.Empty("The fresh ID65 starter scene exposes no user/test Mobys or native movement records; its protected spawn is not an editable object.")
             : LoadNativeMovementData(levelKey);
         TerrainCollisionLoadData collision = LoadTerrainCollisionData(levelKey, geometry.Geometry);
         IReadOnlyList<CustomTerrainTextureImport> customTextures = id65BlankLabLevel
@@ -30707,41 +30971,40 @@ public sealed partial class MainWindow : Window
             customTextures,
             nativeRelocations,
             levelEntryPose,
-            nativeMovement);
+            nativeMovement,
+            id65BlankLabLevel ? effectiveId65AuthoringDocument : null,
+            geometry.Id65FreshSceneProjection);
     }
 
     private PortableLevelEntryPose? TryLoadLevelEntryPose(string levelKey)
     {
-        if (IsId65BlankLabKey(levelKey))
+        LevelDefinition? resolvedLevel = _catalog.FindByKey(levelKey);
+        if (IsId65BlankLabKey(levelKey) &&
+            !UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(resolvedLevel))
         {
-            if (!TryGetValidatedId65BlankLabForLoad(
-                    out UnusedLevel65BlankLevelLabWorkspacePaths? paths,
-                    out _) ||
-                paths == null)
+            return null;
+        }
+        if (UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(resolvedLevel))
+        {
+            if (!TryGetValidatedId65BlankLabForLoad(out _, out _))
             {
                 return null;
             }
-            try
-            {
-                LevelDefinition lab = UnusedLevel65BlankLevelLabProfileRegistry.Definition;
-                FlyInLandingData landing = FlyInLandingLocator.Locate(paths.LockedBaseImagePath, lab);
-                return new PortableLevelEntryPose(
-                    lab.Key,
-                    lab.DisplayName,
-                    lab.LevelId,
-                    lab.SourceWadEntry,
-                    landing.WadOffset,
-                    landing.RawX,
-                    landing.RawY,
-                    landing.RawZ,
-                    landing.YawByte,
-                    landing.EntryDataByteLength);
-            }
-            catch (Exception ex) when (ex is IOException or InvalidOperationException or EndOfStreamException)
-            {
-                Debug.WriteLine(ex);
-                return null;
-            }
+
+            LevelDefinition lab = resolvedLevel!;
+            Id65FreshLevelProtectedSpawn spawn =
+                Id65FreshLevelSceneProjector.ProjectExact(lab).ProtectedSpawn;
+            return new PortableLevelEntryPose(
+                lab.Key,
+                lab.DisplayName,
+                lab.LevelId,
+                lab.SourceWadEntry,
+                spawn.LandingWadOffset,
+                spawn.RawX,
+                spawn.RawY,
+                spawn.LandingRawZ,
+                spawn.YawByte,
+                spawn.EntryDataByteLength);
         }
 
         if (PortableLevelEntryPoseCache.TryLoadPose(
@@ -30784,7 +31047,15 @@ public sealed partial class MainWindow : Window
     private TerrainGeometryLoadData LoadGeometryData(string levelKey)
     {
         if (IsId65BlankLabKey(levelKey))
-            return LoadId65BlankLabGeometryData();
+        {
+            LevelDefinition? lab = _catalog.FindByKey(levelKey);
+            return UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(lab)
+                ? LoadId65BlankLabGeometryData(lab!)
+                : new TerrainGeometryLoadData(
+                    null,
+                    0,
+                    "ID65 terrain projection refused a forged or noncanonical level identity.");
+        }
 
         int loadedTerrainEdits = 0;
         string terrainCacheHealthMessage = "";
@@ -30973,7 +31244,12 @@ public sealed partial class MainWindow : Window
     private MobyLoadData LoadMobyData(string levelKey)
     {
         if (IsId65BlankLabKey(levelKey))
-            return LoadId65BlankLabMobyData();
+        {
+            LevelDefinition? lab = _catalog.FindByKey(levelKey);
+            if (!UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(lab))
+                throw new InvalidDataException("ID65 Moby projection refused a forged or noncanonical level identity.");
+            return LoadId65BlankLabMobyData(lab!);
+        }
 
         int loadedMobyEdits = 0;
         string cachePath = Path.Combine(_workspace.RootPath, "editor-cache", $"{levelKey}-mobys.json");
@@ -31406,12 +31682,15 @@ public sealed partial class MainWindow : Window
         IReadOnlyList<CustomTerrainTextureImport> CustomTerrainTextures,
         IReadOnlyList<NativeTerrainTextureRelocationEdit> NativeTerrainTextureRelocations,
         PortableLevelEntryPose? LevelEntryPose,
-        NativeMovementLoadData NativeMovement);
+        NativeMovementLoadData NativeMovement,
+        Id65AuthoringEditorDocumentReadModel? Id65AuthoringDocument,
+        Id65FreshLevelSceneProjection? Id65FreshSceneProjection);
 
     private sealed record TerrainGeometryLoadData(
         GeometryCandidate? Geometry,
         int LoadedTerrainEdits,
-        string TerrainCacheHealthMessage);
+        string TerrainCacheHealthMessage,
+        Id65FreshLevelSceneProjection? Id65FreshSceneProjection = null);
 
     private sealed record EditedLevelExportTarget(
         LevelDefinition Level,

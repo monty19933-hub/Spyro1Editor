@@ -1038,14 +1038,17 @@ void RunId65BlankLabUiOnly()
             initial.AuthoringDocumentButtonText != "Edit Full Authoring Document…" ||
             initial.SaveEnabled ||
             initial.CreateCueEnabled ||
+            initial.OptionalTerrainVisible ||
+            initial.CreateOptionalTerrainEnabled ||
+            initial.RemoveOptionalTerrainEnabled ||
             initial.RevealEnabled ||
             initial.RevealButtonText != "Reveal Test CUE" ||
             !initial.RepairsInvalidWorkspace ||
             initial.DisposableExporterRoute != nameof(UnusedLevel65BlankLevelLabTerrainTestExporter) ||
             !initial.StatusText.Contains("Setup required", StringComparison.Ordinal) ||
             !initial.StatusText.Contains("ID65 stays out of the level picker", StringComparison.Ordinal) ||
-            !initial.CapabilityText.Contains("Exact structural HP/LP + collision/occlusion intent", StringComparison.Ordinal) ||
-            !initial.CapabilityText.Contains("arbitrary geometry and XY movement remain unavailable", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Exact coupled HP/LP + collision/occlusion/spawn intent", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Generic HP-Z, texture, XY, add/remove, undo, and TerrainEditStore persistence are intentionally unavailable", StringComparison.Ordinal) ||
             !initial.CapabilityText.Contains("proved private T66 native texture swap", StringComparison.Ordinal) ||
             !initial.CapabilityText.Contains("Arbitrary cross-level/custom art remains unavailable", StringComparison.Ordinal) ||
             !initial.CapabilityText.Contains("Grass placements at T88 and T107", StringComparison.Ordinal) ||
@@ -1123,6 +1126,9 @@ void RunId65BlankLabUiOnly()
             admitted.AuthoringDocumentButtonText != "Edit Full Authoring Document…" ||
             admitted.SaveEnabled ||
             admitted.CreateCueEnabled ||
+            admitted.OptionalTerrainVisible ||
+            admitted.CreateOptionalTerrainEnabled ||
+            admitted.RemoveOptionalTerrainEnabled ||
             admitted.RevealEnabled ||
             admitted.RevealButtonText != "Reveal Test CUE" ||
             !admitted.RepairsInvalidWorkspace ||
@@ -1199,15 +1205,19 @@ void RunId65BlankLabUiOnly()
             window.CaptureEditorShellSessionSnapshotForTesting();
         if (loadedLab.ActiveExperience != LevelEditorExperience.FreshBlankLevel ||
             !UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(loadedLab.CurrentLevel) ||
-            loadedLab.CurrentGeometry == null ||
-            loadedLab.CurrentGeometry.Polygons.Count == 0 ||
-            loadedLab.CurrentMobys.Count == 0 ||
             !editorIndicator.IsEffectivelyVisible ||
             !levelBuildingIndicator.IsEffectivelyVisible)
         {
             throw new InvalidOperationException(
                 "The exact loaded ID65 identity did not enter the sole visible Level Building Editor experience.");
         }
+        AssertFreshId65StarterScene(loadedLab, "loaded ID65 Lab");
+        AssertFreshId65Guidance(window, "loaded ID65 Lab");
+        AssertFreshId65OptionalTerrainControls(
+            window,
+            expectedTerrainPresent: false,
+            expectedDocumentPresent: false,
+            label: "loaded ID65 Lab without a canonical document");
         AssertWorkspaceTabHeaders(
             toolTabs,
             ["Terrain", "Level", "Environment"],
@@ -1220,6 +1230,34 @@ void RunId65BlankLabUiOnly()
         AssertNoWholeLevelWipeAction(window);
 
         LevelDefinition labRoundTrip = loadedLab.CurrentLevel!;
+        LevelDefinition forgedLab = labRoundTrip with { Confidence = "forged-same-key-ui-smoke" };
+        Task forgedRouteTask = InvokePrivate<Task>(
+            window,
+            "SelectLevelFromPickerAsync",
+            forgedLab,
+            null);
+        WaitForUiTask(
+            forgedRouteTask,
+            "refusing a forged same-key ID65 picker row",
+            timeoutSeconds: 30);
+        EditorShellSessionSnapshot afterForgedRoute =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        TextBlock id65Status = (TextBlock)(typeof(MainWindow).GetField(
+                "_statusText",
+                BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(window)
+            ?? throw new InvalidOperationException(
+                "The ID65 UI smoke could not inspect the status line."));
+        if (!ReferenceEquals(afterForgedRoute.CurrentLevel, loadedLab.CurrentLevel) ||
+            !ReferenceEquals(afterForgedRoute.CurrentGeometry, loadedLab.CurrentGeometry) ||
+            !ReferenceEquals(afterForgedRoute.CurrentMobys, loadedLab.CurrentMobys) ||
+            afterForgedRoute.LevelLoadRequestId != loadedLab.LevelLoadRequestId ||
+            !(id65Status.Text ?? "").Contains(
+                "not its exact level identity",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The production level picker admitted or misreported a forged same-key ID65 definition.");
+        }
         LevelDefinition retailRoundTrip = loadedLab.Catalog.FindByKey("stonehill")
             ?? throw new InvalidOperationException(
                 "The real ID65 routing round-trip requires the Stone Hill retail level.");
@@ -1277,9 +1315,6 @@ void RunId65BlankLabUiOnly()
             !ReferenceEquals(returnedLab.CurrentLevel, labRoundTrip) ||
             returnedLab.LevelLoadRequestId != loadedLab.LevelLoadRequestId + 2 ||
             returnedLab.ActiveExperience != LevelEditorExperience.FreshBlankLevel ||
-            returnedLab.CurrentGeometry == null ||
-            returnedLab.CurrentGeometry.Polygons.Count == 0 ||
-            returnedLab.CurrentMobys.Count == 0 ||
             !string.Equals(
                 returnedLab.CurrentMobyEditSignature,
                 loadedLab.CurrentMobyEditSignature,
@@ -1294,6 +1329,13 @@ void RunId65BlankLabUiOnly()
             throw new InvalidOperationException(
                 "The real ID65 -> retail -> ID65 routing round-trip did not restore the same Lab identity, shared session, source scene, or fresh blank-level editor.");
         }
+        AssertFreshId65StarterScene(returnedLab, "returned ID65 Lab");
+        AssertFreshId65Guidance(window, "returned ID65 Lab");
+        AssertFreshId65OptionalTerrainControls(
+            window,
+            expectedTerrainPresent: false,
+            expectedDocumentPresent: false,
+            label: "returned ID65 Lab without a canonical document");
         AssertWorkspaceTabHeaders(
             toolTabs,
             ["Terrain", "Level", "Environment"],
@@ -1351,6 +1393,299 @@ void RunId65BlankLabUiOnly()
             "checking the explicit canonical ID65 authoring editor",
             timeoutSeconds: 300);
         string authoringEditor = authoringEditorTask.GetAwaiter().GetResult();
+        EditorShellSessionSnapshot documentBoundLab =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        if (!authoringEditor.Contains(
+                "true-false-true optional-terrain toggle",
+                StringComparison.Ordinal) ||
+            !authoringEditor.Contains(
+                "partial Apply full-sync recovery",
+                StringComparison.Ordinal) ||
+            !authoringEditor.Contains(
+                "external stale-document viewport refresh",
+                StringComparison.Ordinal) ||
+            !UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(
+                documentBoundLab.CurrentLevel) ||
+            documentBoundLab.CurrentGeometry == null ||
+            documentBoundLab.CurrentGeometry.Polygons.Count != 1 ||
+            documentBoundLab.CurrentGeometry.LowDetailPolygons.Count != 1 ||
+            documentBoundLab.CurrentMobys.Count != 0)
+        {
+            throw new InvalidOperationException(
+                "The canonical authoring editor probe did not leave the exact document-bound terrain-absent projection or prove its true-false-true toggle sequence.");
+        }
+        AssertFreshId65OptionalTerrainControls(
+            window,
+            expectedTerrainPresent: false,
+            expectedDocumentPresent: true,
+            label: "document-bound ID65 Lab after the full authoring editor probe");
+        Task<Id65AuthoringEditorDocumentReadModel?> projectedDocumentTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(
+            projectedDocumentTask,
+            "re-inspecting the document-bound ID65 viewport");
+        Id65AuthoringEditorDocumentReadModel projectedDocument =
+            projectedDocumentTask.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "The document-bound ID65 UI smoke lost its canonical document.");
+        Id65AuthoringEditorControlState projectedState =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                projectedDocument);
+        if (projectedState.IncludeStructuralTerrain ||
+            !projectedState.IncludeGrassAtT88 ||
+            projectedState.IncludeGrassAtT107 ||
+            File.Exists(Path.Combine(
+                paths.AuthoredEditsDirectoryPath,
+                Id65FreshLevelSceneProjector.TerrainEditFileName)))
+        {
+            throw new InvalidOperationException(
+                "The document-bound ID65 viewport lost the final modal state or created a generic TerrainEditStore file.");
+        }
+
+        Button createOptionalTerrain = FindNamedUnique<Button>(
+            window,
+            "Id65FreshCreateOptionalTerrainButton");
+        Button removeOptionalTerrain = FindNamedUnique<Button>(
+            window,
+            "Id65FreshRemoveOptionalTerrainButton");
+        SortedDictionary<string, string> retailArtifactsBeforeButtonToggles =
+            CaptureTerrainProjectInputHashes(workspace, retailRoundTrip.Key);
+        string legacyId65TerrainEditPath = Path.Combine(
+            paths.AuthoredEditsDirectoryPath,
+            Id65FreshLevelSceneProjector.TerrainEditFileName);
+
+        createOptionalTerrain.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, createOptionalTerrain));
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.DocumentProjectionSynchronized &&
+                    !snapshot.CreateOptionalTerrainEnabled &&
+                    snapshot.RemoveOptionalTerrainEnabled;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "clicking Create optional terrain and waiting for its exact document projection");
+        Task<Id65AuthoringEditorDocumentReadModel?> buttonCreatedDocumentTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(
+            buttonCreatedDocumentTask,
+            "re-inspecting the button-created optional terrain document");
+        Id65AuthoringEditorDocumentReadModel buttonCreatedDocument =
+            buttonCreatedDocumentTask.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "The Create optional terrain button lost the canonical document.");
+        Id65AuthoringEditorControlState buttonCreatedState =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                buttonCreatedDocument);
+        EditorShellSessionSnapshot buttonCreatedLab =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        if (!buttonCreatedState.IncludeStructuralTerrain ||
+            !buttonCreatedState.IncludeGrassAtT88 ||
+            buttonCreatedState.IncludeGrassAtT107 ||
+            buttonCreatedLab.CurrentGeometry?.Polygons.Count != 2 ||
+            buttonCreatedLab.CurrentGeometry.LowDetailPolygons.Count != 2 ||
+            !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(
+                buttonCreatedLab.CurrentGeometry) ||
+            buttonCreatedLab.CurrentMobys.Count != 0 ||
+            File.Exists(legacyId65TerrainEditPath))
+        {
+            throw new InvalidOperationException(
+                "The Create optional terrain button did not preserve the asymmetric Grass choices, apply the exact two-face projection, or avoid TerrainEditStore.");
+        }
+        AssertFreshId65OptionalTerrainControls(
+            window,
+            expectedTerrainPresent: true,
+            expectedDocumentPresent: true,
+            label: "ID65 Lab after the Create optional terrain button event");
+
+        removeOptionalTerrain.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, removeOptionalTerrain));
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.DocumentProjectionSynchronized &&
+                    snapshot.CreateOptionalTerrainEnabled &&
+                    !snapshot.RemoveOptionalTerrainEnabled;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "clicking Remove optional terrain and waiting for its exact document projection");
+        Task<Id65AuthoringEditorDocumentReadModel?> buttonRemovedDocumentTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(
+            buttonRemovedDocumentTask,
+            "re-inspecting the button-removed optional terrain document");
+        Id65AuthoringEditorDocumentReadModel buttonRemovedDocument =
+            buttonRemovedDocumentTask.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "The Remove optional terrain button lost the canonical document.");
+        Id65AuthoringEditorControlState buttonRemovedState =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                buttonRemovedDocument);
+        EditorShellSessionSnapshot buttonRemovedLab =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        if (buttonRemovedState.IncludeStructuralTerrain ||
+            !buttonRemovedState.IncludeGrassAtT88 ||
+            buttonRemovedState.IncludeGrassAtT107 ||
+            buttonRemovedLab.CurrentGeometry?.Polygons.Count != 1 ||
+            buttonRemovedLab.CurrentGeometry.LowDetailPolygons.Count != 1 ||
+            !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(
+                buttonRemovedLab.CurrentGeometry) ||
+            buttonRemovedLab.CurrentMobys.Count != 0 ||
+            File.Exists(legacyId65TerrainEditPath))
+        {
+            throw new InvalidOperationException(
+                "The Remove optional terrain button did not preserve the asymmetric Grass choices, apply the exact one-face projection, or avoid TerrainEditStore.");
+        }
+        AssertFreshId65OptionalTerrainControls(
+            window,
+            expectedTerrainPresent: false,
+            expectedDocumentPresent: true,
+            label: "ID65 Lab after the Remove optional terrain button event");
+        AssertArtifactHashesEqual(
+            retailArtifactsBeforeButtonToggles,
+            CaptureTerrainProjectInputHashes(workspace, retailRoundTrip.Key),
+            "The ID65 optional-terrain button events changed retail project persistence");
+
+        Id65AuthoringEditorControlState oppositeAsymmetricGrassState = new(
+            includeStructuralTerrain: false,
+            includeGrassAtT88: false,
+            includeGrassAtT107: true);
+        window.Id65AuthoringDocumentDialogOverrideForTesting =
+            (_, exists, _) =>
+            {
+                if (!exists)
+                {
+                    throw new InvalidOperationException(
+                        "The opposite-asymmetric button fixture lost its canonical document.");
+                }
+                return Task.FromResult<Id65AuthoringEditorControlState?>(
+                    oppositeAsymmetricGrassState);
+            };
+        try
+        {
+            Task oppositeAsymmetricSetup = InvokePrivate<Task>(
+                window,
+                "EditId65AuthoringDocumentAsync");
+            WaitForUiTask(
+                oppositeAsymmetricSetup,
+                "setting the opposite asymmetric Grass choices through the canonical document editor",
+                timeoutSeconds: 60);
+        }
+        finally
+        {
+            window.Id65AuthoringDocumentDialogOverrideForTesting = null;
+        }
+        AssertFreshId65OptionalTerrainControls(
+            window,
+            expectedTerrainPresent: false,
+            expectedDocumentPresent: true,
+            label: "ID65 Lab before the opposite-asymmetric button cycle");
+
+        createOptionalTerrain.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, createOptionalTerrain));
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.DocumentProjectionSynchronized &&
+                    !snapshot.CreateOptionalTerrainEnabled &&
+                    snapshot.RemoveOptionalTerrainEnabled;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "clicking Create optional terrain with T88 omitted and T107 included");
+        Task<Id65AuthoringEditorDocumentReadModel?> oppositeCreatedDocumentTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(
+            oppositeCreatedDocumentTask,
+            "re-inspecting the opposite-asymmetric button-created document");
+        Id65AuthoringEditorDocumentReadModel oppositeCreatedDocument =
+            oppositeCreatedDocumentTask.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "The opposite-asymmetric Create button lost the canonical document.");
+        Id65AuthoringEditorControlState oppositeCreatedState =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                oppositeCreatedDocument);
+        EditorShellSessionSnapshot oppositeCreatedLab =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        if (!oppositeCreatedState.IncludeStructuralTerrain ||
+            oppositeCreatedState.IncludeGrassAtT88 ||
+            !oppositeCreatedState.IncludeGrassAtT107 ||
+            oppositeCreatedLab.CurrentGeometry?.Polygons.Count != 2 ||
+            oppositeCreatedLab.CurrentGeometry.LowDetailPolygons.Count != 2 ||
+            !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(
+                oppositeCreatedLab.CurrentGeometry) ||
+            oppositeCreatedLab.CurrentMobys.Count != 0 ||
+            File.Exists(legacyId65TerrainEditPath))
+        {
+            throw new InvalidOperationException(
+                "The opposite-asymmetric Create button did not preserve T88=false/T107=true or apply the exact two-face projection.");
+        }
+
+        removeOptionalTerrain.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, removeOptionalTerrain));
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.DocumentProjectionSynchronized &&
+                    snapshot.CreateOptionalTerrainEnabled &&
+                    !snapshot.RemoveOptionalTerrainEnabled;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "clicking Remove optional terrain with T88 omitted and T107 included");
+        Task<Id65AuthoringEditorDocumentReadModel?> oppositeRemovedDocumentTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(
+            oppositeRemovedDocumentTask,
+            "re-inspecting the opposite-asymmetric button-removed document");
+        Id65AuthoringEditorDocumentReadModel oppositeRemovedDocument =
+            oppositeRemovedDocumentTask.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "The opposite-asymmetric Remove button lost the canonical document.");
+        Id65AuthoringEditorControlState oppositeRemovedState =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                oppositeRemovedDocument);
+        EditorShellSessionSnapshot oppositeRemovedLab =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        if (oppositeRemovedState.IncludeStructuralTerrain ||
+            oppositeRemovedState.IncludeGrassAtT88 ||
+            !oppositeRemovedState.IncludeGrassAtT107 ||
+            oppositeRemovedLab.CurrentGeometry?.Polygons.Count != 1 ||
+            oppositeRemovedLab.CurrentGeometry.LowDetailPolygons.Count != 1 ||
+            !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(
+                oppositeRemovedLab.CurrentGeometry) ||
+            oppositeRemovedLab.CurrentMobys.Count != 0 ||
+            File.Exists(legacyId65TerrainEditPath))
+        {
+            throw new InvalidOperationException(
+                "The opposite-asymmetric Remove button did not preserve T88=false/T107=true or apply the exact one-face projection.");
+        }
+        AssertFreshId65OptionalTerrainControls(
+            window,
+            expectedTerrainPresent: false,
+            expectedDocumentPresent: true,
+            label: "ID65 Lab after the opposite-asymmetric button cycle");
+        AssertArtifactHashesEqual(
+            retailArtifactsBeforeButtonToggles,
+            CaptureTerrainProjectInputHashes(workspace, retailRoundTrip.Key),
+            "Both ID65 optional-terrain button cycles changed retail project persistence");
+
         Console.WriteLine("ID65 UI smoke: starting workspace-transition fence probe.");
         Task<string> workspaceTransitionTask =
             window.AssertWorkspaceTransitionFencingForTestingAsync();
@@ -1497,6 +1832,167 @@ static void AssertWorkspaceTabHeaders(TabControl tabs, string[] expected, string
     {
         throw new InvalidOperationException(
             $"{workspaceName} exposed [{string.Join(", ", actual)}] instead of [{string.Join(", ", expected)}].");
+    }
+}
+
+static void AssertFreshId65StarterScene(
+    EditorShellSessionSnapshot snapshot,
+    string label)
+{
+    GeometryCandidate geometry = snapshot.CurrentGeometry
+        ?? throw new InvalidOperationException($"The {label} has no geometry.");
+    TerrainPolygon hp = geometry.Polygons.SingleOrDefault()
+        ?? throw new InvalidOperationException($"The {label} is not exactly one HP face.");
+    LowDetailTerrainPolygon lp = geometry.LowDetailPolygons.SingleOrDefault()
+        ?? throw new InvalidOperationException($"The {label} is not exactly one LP face.");
+    NativeTerrainOcclusionData occlusion = geometry.NativeTerrainOcclusion
+        ?? throw new InvalidOperationException($"The {label} has no collision/occlusion projection.");
+    NativeTerrainOcclusionTriangle triangle = occlusion.CollisionTriangles.SingleOrDefault()
+        ?? throw new InvalidOperationException($"The {label} does not have exactly one collision triangle.");
+    GameCameraEntrySnapshot entry =
+        snapshot.Viewport.CaptureGameCameraEntrySnapshotForTesting();
+
+    if (!Id65FreshLevelSceneProjector.IsProjectionGeometry(geometry) ||
+        geometry.Polygons.Count != 1 ||
+        geometry.LowDetailPolygons.Count != 1 ||
+        geometry.SourceSectors.Count != 1 ||
+        geometry.SourceSectors[0].SectorIndex != 216 ||
+        hp.RuntimeKey != "216:0:hp" ||
+        hp.TextureId != 66 ||
+        hp.NativeTextureId != 66 ||
+        hp.NativeFaceWord2 != 0x01400242 ||
+        lp.RuntimeKey != "216:0:lp" ||
+        lp.RawWord0 != 0x00108200 ||
+        lp.RawWord1 != 0x00108200 ||
+        snapshot.CurrentMobys.Count != 0 ||
+        occlusion.EnvironmentGroups.Count != 16 ||
+        !occlusion.EnvironmentGroups[0].SequenceEqual(new[] { 216 }) ||
+        triangle.Index != 13_995 ||
+        triangle.GroupIndex != 0 ||
+        !entry.PoseAvailable ||
+        Math.Abs(entry.FocusX - (6_153 / 16.0)) > 0.000001 ||
+        Math.Abs(entry.FocusY - (6_154 / 16.0)) > 0.000001 ||
+        Math.Abs(entry.FocusZ - (8_550 / 16.0)) > 0.000001 ||
+        entry.YawByte != 0x40)
+    {
+        throw new InvalidOperationException(
+            $"The {label} exposed Town Square/test scaffolding or lost its exact pad/T66/collision/protected-spawn projection.");
+    }
+}
+
+static void AssertFreshId65OptionalTerrainControls(
+    MainWindow window,
+    bool expectedTerrainPresent,
+    bool expectedDocumentPresent,
+    string label)
+{
+    MainWindow.Id65BlankLabUiSnapshot snapshot =
+        window.CaptureId65BlankLabUiSnapshotForTesting();
+    Button create = FindNamedUnique<Button>(
+        window,
+        "Id65FreshCreateOptionalTerrainButton");
+    Button remove = FindNamedUnique<Button>(
+        window,
+        "Id65FreshRemoveOptionalTerrainButton");
+    if (!snapshot.OptionalTerrainVisible ||
+        !snapshot.DocumentProjectionSynchronized ||
+        !string.Equals(
+            create.Content?.ToString(),
+            "Create optional terrain",
+            StringComparison.Ordinal) ||
+        !string.Equals(
+            remove.Content?.ToString(),
+            "Remove optional terrain",
+            StringComparison.Ordinal) ||
+        snapshot.CreateOptionalTerrainEnabled !=
+            (expectedDocumentPresent && !expectedTerrainPresent) ||
+        snapshot.RemoveOptionalTerrainEnabled !=
+            (expectedDocumentPresent && expectedTerrainPresent))
+    {
+        throw new InvalidOperationException(
+            $"The {label} exposed incorrect optional-terrain controls: {snapshot}");
+    }
+
+    string status = snapshot.OptionalTerrainStatusText;
+    if (!expectedDocumentPresent)
+    {
+        if (!status.Contains("Mandatory starter pad only", StringComparison.Ordinal) ||
+            !status.Contains("no default was silently persisted", StringComparison.OrdinalIgnoreCase) ||
+            !status.Contains("Edit Full Authoring Document", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"The {label} did not explain the mandatory-base/no-silent-default boundary: {status}");
+        }
+        return;
+    }
+
+    string expectedPresence = expectedTerrainPresent ? "is present" : "is absent";
+    if (!status.Contains(expectedPresence, StringComparison.Ordinal) ||
+        !status.Contains("Grass T88", StringComparison.Ordinal) ||
+        !status.Contains("Grass T107", StringComparison.Ordinal) ||
+        !status.Contains("will be preserved", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            $"The {label} did not expose document-bound terrain/Grass preservation state: {status}");
+    }
+}
+
+static void AssertFreshId65Guidance(MainWindow window, string label)
+{
+    static string ReadText(MainWindow owner, string fieldName)
+    {
+        FieldInfo field = typeof(MainWindow).GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException(
+                $"The UI smoke could not find fresh-guidance field {fieldName}.");
+        return (field.GetValue(owner) as TextBlock)?.Text ?? "";
+    }
+
+    Dictionary<string, string> guidance = new(StringComparer.Ordinal)
+    {
+        ["objects"] = ReadText(window, "_objectActionHint"),
+        ["music"] = ReadText(window, "_levelMusicDetails"),
+        ["sky"] = ReadText(window, "_skyboxDetails"),
+        ["environment"] = ReadText(window, "_skyboxEnvironmentDetails"),
+        ["level name"] = ReadText(window, "_levelTextDetails")
+    };
+    string combined = string.Join("\n", guidance.Values);
+    string[] staleClaims =
+    [
+        "resident Mobys are visible for inspection only",
+        "Disposable test CUEs preserve",
+        "locked-base music",
+        "locked-base sky and lighting remain unchanged",
+        "locked TOWN SQUARE Inventory identity"
+    ];
+    if (staleClaims.Any(claim =>
+            combined.Contains(claim, StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException(
+            $"The {label} exposed stale pre-projection guidance: {combined}");
+    }
+
+    string objectGuidance = guidance["objects"];
+    if (!objectGuidance.Contains("zero visible user/test Mobys", StringComparison.OrdinalIgnoreCase) ||
+        !objectGuidance.Contains("protected spawn is not an editable object", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException(
+            $"The {label} did not explain its zero-visible-Moby/protected-spawn boundary: {objectGuidance}");
+    }
+
+    foreach ((string surface, string text) in guidance)
+    {
+        if (!text.Contains("No disposable test CUE path exists", StringComparison.OrdinalIgnoreCase) ||
+            !text.Contains("Full Authoring Document", StringComparison.OrdinalIgnoreCase) ||
+            !text.Contains("Create Exact Full Candidate", StringComparison.OrdinalIgnoreCase) ||
+            !text.Contains("Normal Create BIN", StringComparison.OrdinalIgnoreCase) ||
+            !text.Contains("runtime use", StringComparison.OrdinalIgnoreCase) ||
+            !text.Contains("release promotion", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"The {label} {surface} guidance did not preserve the exact offline/runtime/release boundary: {text}");
+        }
     }
 }
 

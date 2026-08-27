@@ -7,6 +7,9 @@ using Spyro.Editor.Core.Cache;
 using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
+using Spyro.Editor.Core.Persistence;
+using Spyro.Editor.Core.Primitives;
+using Spyro.Editor.Core.Rendering;
 using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Workspace;
 
@@ -39,6 +42,7 @@ Directory.CreateDirectory(smokeRoot);
 try
 {
     VerifyProfileAndCatalog(repositoryRoot, catalogHashBefore);
+    VerifyFreshLevelSceneProjection();
     VerifyPathsManifestAndGuards(workspaceContainer);
     await VerifyInvalidSourceRejectionAsync(smokeRoot);
 
@@ -49,6 +53,7 @@ try
     UnusedLevel65BlankLevelLabBootstrapResult first =
         await UnusedLevel65BlankLevelLabBootstrapper.BootstrapAsync(bootstrapRequest);
     await VerifyFirstBootstrapAsync(first, cleanHashBefore, catalogHashBefore, catalogPath);
+    VerifyFreshLevelT66ViewportTextureProjection(first.Paths);
     await VerifyFullAuthoringConstructionContractAsync(first.Paths);
     await VerifyBootstrapStaleOperationRecoveryAsync(first.Paths);
 
@@ -83,6 +88,542 @@ finally
     }
 
     Require(!Directory.Exists(smokeRoot), "The smoke retained temporary game data.");
+}
+
+void VerifyFreshLevelSceneProjection()
+{
+    Id65FreshLevelSceneProjection first =
+        Id65FreshLevelSceneProjector.ProjectExact(
+            UnusedLevel65BlankLevelLabProfileRegistry.Definition);
+    Id65FreshLevelSceneProjection second =
+        Id65FreshLevelSceneProjector.ProjectExact(
+            UnusedLevel65BlankLevelLabProfileRegistry.Definition);
+
+    Require(
+        first.ProfileId == Id65FreshLevelSceneProjector.ProfileId &&
+        first.SchemaVersion == 1 &&
+        first.LevelKey == UnusedLevel65BlankLevelLabProfileRegistry.Key &&
+        first.LevelId == 65 &&
+        first.SourceWadEntry == 80 &&
+        first.CanonicalSha256 == Id65FreshLevelSceneProjector.ExpectedCanonicalSha256 &&
+        first.GraphCanonicalSha256 ==
+            Id65FreshLevelSceneProjector.ExpectedCanonicalSha256,
+        "The versioned ID65 fresh-level scene projection identity drifted.");
+    Require(
+        first.IsPresentationOnly &&
+        !first.WritesWorkspace &&
+        !first.WritesLockedBase &&
+        !first.AuthorizesCreateBin &&
+        !first.AuthorizesRuntimeCandidate &&
+        !first.AuthorizesReleasePromotion,
+        "The ID65 fresh-level scene projection acquired write, runtime, Create BIN, or release authority.");
+    Require(
+        first.VisibleMobyCount == 0 &&
+        first.VisibleMobyTrueIndexes.Count == 0,
+        "The fresh ID65 authoring scene exposed a user/test Moby.");
+
+    Id65AuthoringEditorDocument fullDocument =
+        Id65AuthoringEditorDocument.CreateExact(includeOptionalTerrain: true);
+    Id65AuthoringEditorDocument noTerrainDocument =
+        Id65AuthoringEditorDocument.CreateExact(includeOptionalTerrain: false);
+    Id65AuthoringEditorDocumentReadModel fullReadModel =
+        CreateSceneProjectionReadModel(fullDocument);
+    Id65AuthoringEditorDocumentReadModel noTerrainReadModel =
+        CreateSceneProjectionReadModel(noTerrainDocument);
+    Id65FreshLevelSceneProjection full = Id65FreshLevelSceneProjector.ProjectExact(
+        UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+        fullReadModel);
+    Id65FreshLevelSceneProjection absent = Id65FreshLevelSceneProjector.ProjectExact(
+        UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+        noTerrainReadModel);
+    Id65FreshLevelSceneProjection fullRepeat = Id65FreshLevelSceneProjector.ProjectExact(
+        UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+        fullReadModel);
+    Require(
+        full.StructuralTerrainPresent && !absent.StructuralTerrainPresent &&
+        full.CanonicalDocumentBound && absent.CanonicalDocumentBound &&
+        full.DocumentCanonicalSha256 == fullDocument.CanonicalSha256 &&
+        full.DocumentContentSha256 == fullDocument.ContentSha256 &&
+        absent.DocumentCanonicalSha256 == noTerrainDocument.CanonicalSha256 &&
+        absent.DocumentContentSha256 == noTerrainDocument.ContentSha256 &&
+        full.GraphCanonicalSha256 ==
+            Id65FreshLevelSceneProjector.ExpectedStructuralGraphCanonicalSha256 &&
+        absent.GraphCanonicalSha256 ==
+            Id65FreshLevelSceneProjector.ExpectedCanonicalSha256 &&
+        full.CanonicalSha256 ==
+            Id65FreshLevelSceneProjector.ExpectedDefaultStructuralDocumentProjectionSha256 &&
+        absent.CanonicalSha256 ==
+            Id65FreshLevelSceneProjector.ExpectedDefaultBaseDocumentProjectionSha256 &&
+        full.CanonicalSha256 == fullRepeat.CanonicalSha256 &&
+        full.CanonicalSha256 != absent.CanonicalSha256 &&
+        !full.WritesWorkspace && !absent.WritesWorkspace &&
+        !full.AuthorizesCreateBin && !absent.AuthorizesCreateBin &&
+        !full.AuthorizesRuntimeCandidate && !absent.AuthorizesRuntimeCandidate &&
+        !full.AuthorizesReleasePromotion && !absent.AuthorizesReleasePromotion,
+        "Document-driven fresh projections lost deterministic identity or fail-closed authority: " +
+        $"structural={full.CanonicalSha256}; base={absent.CanonicalSha256}.");
+
+    GeometryCandidate fullGeometry = full.Geometry;
+    GeometryCandidate absentGeometry = absent.Geometry;
+    Require(
+        Id65FreshLevelSceneProjector.IsProjectionGeometry(fullGeometry) &&
+        Id65FreshLevelSceneProjector.IsProjectionGeometry(absentGeometry) &&
+        Id65FreshLevelSceneProjector.IsExactProjectionGeometry(fullGeometry) &&
+        Id65FreshLevelSceneProjector.IsExactProjectionGeometry(absentGeometry) &&
+        fullGeometry.Polygons.Count == 2 &&
+        fullGeometry.LowDetailPolygons.Count == 2 &&
+        fullGeometry.Edges.Count == 5 &&
+        fullGeometry.SourceSectors.Single().LowDetailVertexCount == 4 &&
+        fullGeometry.SourceSectors.Single().LowDetailFaceCount == 2 &&
+        fullGeometry.SourceSectors.Single().HighDetailVertexCount == 4 &&
+        fullGeometry.SourceSectors.Single().HighDetailFaceCount == 2 &&
+        absentGeometry.Polygons.Count == 1 &&
+        absentGeometry.LowDetailPolygons.Count == 1 &&
+        absentGeometry.Edges.Count == 3 &&
+        absentGeometry.SourceSectors.Single().LowDetailVertexCount == 3 &&
+        absentGeometry.SourceSectors.Single().LowDetailFaceCount == 1 &&
+        absentGeometry.SourceSectors.Single().HighDetailVertexCount == 3 &&
+        absentGeometry.SourceSectors.Single().HighDetailFaceCount == 1,
+        "Document-driven fresh projection did not select exact base/base-plus-optional topology.");
+    TerrainPolygon optionalHp = fullGeometry.Polygons.Single(item => item.FaceIndex == 1);
+    LowDetailTerrainPolygon optionalLp =
+        fullGeometry.LowDetailPolygons.Single(item => item.FaceIndex == 1);
+    NativeTerrainOcclusionData fullOcclusion = fullGeometry.NativeTerrainOcclusion
+        ?? throw new InvalidOperationException("Full document projection lost occlusion.");
+    Require(
+        optionalHp.RuntimeKey == "216:1:hp" && optionalHp.TextureId == 25 &&
+        optionalHp.Detail == "hp" &&
+        optionalHp.SectorOffset == -1 && optionalHp.FaceOffset == -1 &&
+        optionalHp.NativeTextureId == 25 && optionalHp.NativeMaterialByte == 25 &&
+        optionalHp.Points.SequenceEqual(new[]
+        {
+            new Spyro.Editor.Core.Primitives.Vector2f(496, 272),
+            new Spyro.Editor.Core.Primitives.Vector2f(496, 496),
+            new Spyro.Editor.Core.Primitives.Vector2f(384, 496)
+        }) &&
+        optionalHp.VertexIndexes.SequenceEqual(new[] { 1, 1, 3, 2 }) &&
+        optionalHp.NativeFaceWord0 == 0x02030101 &&
+        optionalHp.NativeFaceWord1 == 0x02000101 &&
+        optionalHp.NativeFaceWord2 == 0x01400219 &&
+        optionalHp.NativeFaceWord3 == 0x00100A08 &&
+        optionalHp.FaceColor == ColorRgba.FromRgb(124, 96, 103) &&
+        optionalHp.NearColors.SequenceEqual(new[]
+        {
+            ColorRgba.FromRgb(128, 98, 104),
+            ColorRgba.FromRgb(128, 98, 104),
+            ColorRgba.FromRgb(119, 93, 102),
+            ColorRgba.FromRgb(122, 95, 104)
+        }) &&
+        optionalHp.FarColors.SequenceEqual(new[]
+        {
+            ColorRgba.FromRgb(119, 93, 102),
+            ColorRgba.FromRgb(119, 93, 102),
+            ColorRgba.FromRgb(153, 117, 107),
+            ColorRgba.FromRgb(137, 106, 106)
+        }) &&
+        !optionalHp.IsNativeUntexturedSentinel &&
+        !optionalHp.NativePrimitiveSemiTransparent &&
+        !optionalHp.FaceFlip && optionalHp.FaceDepth == 1 &&
+        !optionalHp.LqFadeBypass && !optionalHp.HqOverlayBypass &&
+        optionalLp.RuntimeKey == "216:1:lp" &&
+        optionalLp.SectorOffset == -1 && optionalLp.FaceOffset == -1 &&
+        optionalLp.RawWord0 == 0x04308200 && optionalLp.RawWord1 == 0x00108200 &&
+        optionalLp.VertexIndexes.SequenceEqual(new[] { 1, 3, 2, 2 }) &&
+        optionalLp.CornerPointIndexes.SequenceEqual(new[] { 0, 1, 2, 2 }) &&
+        optionalLp.ColorIndexes.SequenceEqual(new[] { 0, 1, 2, 2 }) &&
+        optionalLp.CornerColors.SequenceEqual(new[]
+        {
+            ColorRgba.FromRgb(45, 57, 48),
+            ColorRgba.FromRgb(48, 85, 44),
+            ColorRgba.FromRgb(55, 98, 44),
+            ColorRgba.FromRgb(55, 98, 44)
+        }) &&
+        optionalLp.TransitionBias == 0 && !optionalLp.DoubleSided &&
+        !optionalLp.SemiTransparent && optionalLp.BlendMode == 0 &&
+        optionalLp.OrderingTableBias == 0 &&
+        fullOcclusion.CollisionTriangles.Select(item => item.Index)
+            .SequenceEqual(new[] { 19_808, 13_995 }) &&
+        fullOcclusion.CollisionTriangles[0].P1 == new SpyroCollisionPoint(496, 272, 512) &&
+        fullOcclusion.CollisionTriangles[0].P2 == new SpyroCollisionPoint(384, 496, 512) &&
+        fullOcclusion.CollisionTriangles[0].P3 == new SpyroCollisionPoint(496, 496, 512) &&
+        fullOcclusion.TryResolveGroup(
+            480,
+            400,
+            534,
+            out int optionalGroupIndex,
+            out int optionalTriangleIndex,
+            out double optionalFloorZ) &&
+        optionalGroupIndex == 0 && optionalTriangleIndex == 19_808 &&
+        optionalFloorZ == 512,
+        "Optional B-D-C HP/LP/T19808 projection drifted from the compiler witness.");
+    Require(
+        absentGeometry.Polygons.Single().ContainsXY(
+            (float)absent.ProtectedSpawn.X,
+            (float)absent.ProtectedSpawn.Y) &&
+        fullGeometry.Polygons.Single(item => item.FaceIndex == 0).ContainsXY(
+            (float)full.ProtectedSpawn.X,
+            (float)full.ProtectedSpawn.Y),
+        "The mandatory base pad stopped supporting the protected spawn in one document state.");
+    Require(
+        full.Geometry.Polygons.Count == 2 && absent.Geometry.Polygons.Count == 1 &&
+        fullRepeat.Geometry.Polygons.Count == 2 &&
+        !ReferenceEquals(full.Geometry, fullRepeat.Geometry) &&
+        !ReferenceEquals(full.Geometry.Polygons[0], fullRepeat.Geometry.Polygons[0]),
+        "True-false-true projection reused or mutated a prior geometry graph.");
+
+    GeometryCandidate malformed = fullRepeat.Geometry;
+    malformed.Polygons.Add(malformed.Polygons[1]);
+    Require(
+        Id65FreshLevelSceneProjector.IsProjectionGeometry(malformed) &&
+        !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(malformed),
+        "A malformed named fresh projection either escaped strict validation or lost its sticky mutation lock.");
+
+    GeometryCandidate malformedLp = Id65FreshLevelSceneProjector.ProjectExact(
+        UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+        fullReadModel).Geometry;
+    int optionalLpIndex = malformedLp.LowDetailPolygons.FindIndex(item => item.FaceIndex == 1);
+    LowDetailTerrainPolygon sourceLp = malformedLp.LowDetailPolygons[optionalLpIndex];
+    malformedLp.LowDetailPolygons[optionalLpIndex] = new LowDetailTerrainPolygon(
+        sourceLp.Points,
+        sourceLp.ZValues,
+        sourceLp.SectorIndex,
+        sourceLp.FaceIndex,
+        sourceLp.SectorOffset,
+        sourceLp.FaceOffset,
+        sourceLp.VertexIndexes,
+        sourceLp.CornerPointIndexes,
+        sourceLp.ColorIndexes,
+        sourceLp.CornerColors,
+        sourceLp.RawWord0,
+        sourceLp.RawWord1,
+        sourceLp.TransitionBias,
+        doubleSided: true,
+        sourceLp.SemiTransparent,
+        sourceLp.BlendMode,
+        sourceLp.OrderingTableBias);
+    Require(
+        Id65FreshLevelSceneProjector.IsProjectionGeometry(malformedLp) &&
+        !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(malformedLp),
+        "The exact fresh projection accepted an LP replacement with divergent native flags.");
+
+    GeometryCandidate malformedLpColor = Id65FreshLevelSceneProjector.ProjectExact(
+        UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+        noTerrainReadModel).Geometry;
+    LowDetailTerrainPolygon sourceLpColor = malformedLpColor.LowDetailPolygons.Single();
+    malformedLpColor.LowDetailPolygons[0] = new LowDetailTerrainPolygon(
+        sourceLpColor.Points,
+        sourceLpColor.ZValues,
+        sourceLpColor.SectorIndex,
+        sourceLpColor.FaceIndex,
+        sourceLpColor.SectorOffset,
+        sourceLpColor.FaceOffset,
+        sourceLpColor.VertexIndexes,
+        sourceLpColor.CornerPointIndexes,
+        sourceLpColor.ColorIndexes,
+        new[]
+        {
+            ColorRgba.FromRgb(1, 2, 3),
+            sourceLpColor.CornerColors[1],
+            sourceLpColor.CornerColors[2],
+            sourceLpColor.CornerColors[3]
+        },
+        sourceLpColor.RawWord0,
+        sourceLpColor.RawWord1,
+        sourceLpColor.TransitionBias,
+        sourceLpColor.DoubleSided,
+        sourceLpColor.SemiTransparent,
+        sourceLpColor.BlendMode,
+        sourceLpColor.OrderingTableBias);
+    Require(
+        Id65FreshLevelSceneProjector.IsProjectionGeometry(malformedLpColor) &&
+        !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(malformedLpColor),
+        "The exact fresh projection accepted divergent LP corner colors.");
+
+    GeometryCandidate malformedHp = Id65FreshLevelSceneProjector.ProjectExact(
+        UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+        fullReadModel).Geometry;
+    int optionalHpIndex = malformedHp.Polygons.FindIndex(item => item.FaceIndex == 1);
+    TerrainPolygon sourceHp = malformedHp.Polygons[optionalHpIndex];
+    malformedHp.Polygons[optionalHpIndex] = new TerrainPolygon(
+        sourceHp.Points,
+        sourceHp.ZValues,
+        sourceHp.TextureId,
+        sourceHp.SectorIndex,
+        sourceHp.FaceIndex,
+        sourceHp.Detail,
+        ColorRgba.FromRgb(1, 2, 3),
+        sectorOffset: 123,
+        faceOffset: sourceHp.FaceOffset,
+        vertexIndexes: sourceHp.VertexIndexes,
+        word3: sourceHp.Word3,
+        word4: sourceHp.Word4,
+        faceFlip: sourceHp.FaceFlip,
+        faceDepth: sourceHp.FaceDepth,
+        colourIndexes: sourceHp.ColourIndexes,
+        nearColors: sourceHp.NearColors,
+        farColors: sourceHp.FarColors,
+        cornerPointIndexes: sourceHp.CornerPointIndexes,
+        nativeFaceWord2: sourceHp.NativeFaceWord2,
+        nativeMaterialByte: sourceHp.NativeMaterialByte,
+        nativeUntexturedSentinel: sourceHp.IsNativeUntexturedSentinel,
+        nativePrimitiveSemiTransparent: sourceHp.NativePrimitiveSemiTransparent,
+        nativeTextureId: sourceHp.NativeTextureId,
+        nativeFaceWord0: sourceHp.NativeFaceWord0,
+        nativeFaceWord1: sourceHp.NativeFaceWord1,
+        nativeFaceWord3: sourceHp.NativeFaceWord3);
+    Require(
+        Id65FreshLevelSceneProjector.IsProjectionGeometry(malformedHp) &&
+        !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(malformedHp),
+        "The exact fresh projection accepted an HP replacement with divergent offset/color state.");
+
+    GeometryCandidate malformedSector = Id65FreshLevelSceneProjector.ProjectExact(
+        UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+        fullReadModel).Geometry;
+    SceneSectorRenderMetadata sourceSector = malformedSector.SourceSectors.Single();
+    NativeTerrainHpSectorCoordinatePayload sourceCoordinates =
+        sourceSector.HighPolyCoordinates ??
+        throw new InvalidOperationException("The exact fresh projection lost HP coordinates.");
+    malformedSector.SourceSectors[0] = sourceSector with
+    {
+        HighPolyCoordinates = sourceCoordinates with
+        {
+            Certification = SpyroRetailTerrainCoordinateCertification.None
+        }
+    };
+    Require(
+        Id65FreshLevelSceneProjector.IsProjectionGeometry(malformedSector) &&
+        !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(malformedSector),
+        "The exact fresh projection accepted uncertified sector coordinates.");
+
+    GeometryCandidate nullEntry = Id65FreshLevelSceneProjector.ProjectExact(
+        UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+        noTerrainReadModel).Geometry;
+    nullEntry.LowDetailPolygons[0] = null!;
+    Require(
+        Id65FreshLevelSceneProjector.IsProjectionGeometry(nullEntry) &&
+        !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(nullEntry),
+        "The exact fresh projection threw or accepted a null graph entry instead of refusing it.");
+
+    Id65AuthoringEditorDocumentReadModel forged =
+        CreateSceneProjectionReadModel(fullDocument);
+    typeof(Id65AuthoringEditorDocumentReadModel)
+        .GetField("<DocumentCanonicalSha256>k__BackingField",
+            System.Reflection.BindingFlags.Instance |
+            System.Reflection.BindingFlags.NonPublic)!
+        .SetValue(forged, new string('f', 64));
+    ExpectInvalidData(
+        () => Id65FreshLevelSceneProjector.ProjectExact(
+            UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+            forged),
+        "document-canonical hash mismatch in the fresh projection");
+
+    GeometryCandidate geometry = first.Geometry;
+    Require(
+        Id65FreshLevelSceneProjector.IsProjectionGeometry(geometry) &&
+        geometry.Polygons.Count == 1 &&
+        geometry.LowDetailPolygons.Count == 1 &&
+        geometry.Edges.Count == 3 &&
+        geometry.SourceSectors.Count == 1 &&
+        geometry.Bounds == Spyro.Editor.Core.Primitives.Rect2f.FromBounds(272, 272, 496, 496) &&
+        geometry.MinZ == 512 && geometry.MaxZ == 512,
+        "The fresh ID65 authoring scene is not exactly one remote HP/LP pad.");
+
+    TerrainPolygon hp = geometry.Polygons.Single();
+    Require(
+        hp.SectorIndex == Id65FreshLevelSceneProjector.AuthoredSectorIndex &&
+        hp.FaceIndex == Id65FreshLevelSceneProjector.AuthoredFaceIndex &&
+        hp.RuntimeKey == "216:0:hp" &&
+        hp.Detail == "hp" && hp.SectorOffset == -1 && hp.FaceOffset == -1 &&
+        hp.TextureId == Id65FreshLevelSceneProjector.StarterTextureId &&
+        hp.OriginalTextureId == Id65FreshLevelSceneProjector.StarterTextureId &&
+        hp.NativeTextureId == Id65FreshLevelSceneProjector.StarterTextureId &&
+        hp.NativeMaterialByte == 66 &&
+        hp.NativeFaceWord0 == 0x02010000 &&
+        hp.NativeFaceWord1 == 0x02000101 &&
+        hp.NativeFaceWord2 == 0x01400242 &&
+        hp.NativeFaceWord3 == 0x00100A08 &&
+        hp.FaceColor == ColorRgba.FromRgb(124, 96, 103) &&
+        !hp.IsNativeUntexturedSentinel && !hp.NativePrimitiveSemiTransparent &&
+        !hp.FaceFlip && hp.FaceDepth == 1 &&
+        !hp.LqFadeBypass && !hp.HqOverlayBypass &&
+        hp.HasCompleteNativeHighPolyFacePayload &&
+        hp.HasNativeCornerPayload &&
+        hp.Points.SequenceEqual(new[]
+        {
+            new Spyro.Editor.Core.Primitives.Vector2f(272, 272),
+            new Spyro.Editor.Core.Primitives.Vector2f(496, 272),
+            new Spyro.Editor.Core.Primitives.Vector2f(384, 496)
+        }) &&
+        hp.ZValues.SequenceEqual(new float[] { 512, 512, 512 }),
+        "The fresh ID65 HP face lost its exact remote-pad/T66 payload.");
+
+    LowDetailTerrainPolygon lp = geometry.LowDetailPolygons.Single();
+    Require(
+        lp.SectorIndex == 216 &&
+        lp.FaceIndex == 0 &&
+        lp.RuntimeKey == "216:0:lp" &&
+        lp.SectorOffset == -1 && lp.FaceOffset == -1 &&
+        lp.RawWord0 == 0x00108200 &&
+        lp.RawWord1 == 0x00108200 &&
+        lp.VertexIndexes.SequenceEqual(new[] { 0, 1, 2, 2 }) &&
+        lp.ColorIndexes.SequenceEqual(new[] { 0, 1, 2, 2 }) &&
+        lp.CornerColors.SequenceEqual(new[]
+        {
+            ColorRgba.FromRgb(45, 57, 48),
+            ColorRgba.FromRgb(48, 85, 44),
+            ColorRgba.FromRgb(55, 98, 44),
+            ColorRgba.FromRgb(55, 98, 44)
+        }) &&
+        lp.TransitionBias == 0 && !lp.DoubleSided && !lp.SemiTransparent &&
+        lp.BlendMode == 0 && lp.OrderingTableBias == 0 &&
+        lp.HasCompleteNativePayload,
+        "The fresh ID65 LP companion lost its exact native payload.");
+
+    SceneSectorRenderMetadata sector = geometry.SourceSectors.Single();
+    Require(
+        sector.SectorIndex == 216 &&
+        sector.LowDetailVertexCount == 3 &&
+        sector.LowDetailColorCount == 3 &&
+        sector.LowDetailFaceCount == 1 &&
+        sector.HighDetailVertexCount == 3 &&
+        sector.HighDetailColorCount == 3 &&
+        sector.HighDetailFaceCount == 1 &&
+        sector.HighPolyCoordinates is { } coordinates &&
+        coordinates.NativeCenterXyWord == 0x01800180 &&
+        coordinates.NativeCenterZRadiusFlagsWord == 0x020000C0 &&
+        coordinates.NativeXyPositionWord == 0x01000100 &&
+        coordinates.NativeZPositionWord == 0x02000000 &&
+        coordinates.Certification ==
+            SpyroRetailTerrainCoordinateCertification.RetailPackedSceneWords,
+        "The fresh ID65 sector lost its exact header/LOD coordinate state.");
+
+    NativeTerrainOcclusionData occlusion = geometry.NativeTerrainOcclusion
+        ?? throw new InvalidOperationException("The fresh ID65 scene has no collision/occlusion projection.");
+    NativeTerrainOcclusionTriangle triangle = occlusion.CollisionTriangles.Single();
+    Require(
+        occlusion.EnvironmentGroups.Count == 16 &&
+        occlusion.EnvironmentGroups[0].SequenceEqual(new[] { 216 }) &&
+        occlusion.EnvironmentGroups.Skip(1).All(group => group.Count == 0) &&
+        triangle.Index == Id65FreshLevelSceneProjector.CollisionTriangleIndex &&
+        triangle.GroupIndex == Id65FreshLevelSceneProjector.OcclusionGroupIndex &&
+        triangle.P1 == new SpyroCollisionPoint(272, 272, 512) &&
+        triangle.P2 == new SpyroCollisionPoint(384, 496, 512) &&
+        triangle.P3 == new SpyroCollisionPoint(496, 272, 512) &&
+        occlusion.TryResolveGroup(384, 384, 534, out int groupIndex, out int triangleIndex, out double floorZ) &&
+        groupIndex == 0 && triangleIndex == 13_995 && floorZ == 512 &&
+        occlusion.VisibleSectorsForGroup(groupIndex)?.SetEquals(new[] { 216 }) == true,
+        "The fresh ID65 pad no longer matches its collision triangle and occlusion group.");
+
+    Id65FreshLevelProtectedSpawn spawn = first.ProtectedSpawn;
+    Require(
+        spawn.IsProtected &&
+        spawn.StableId == "spawn.remote-pad" &&
+        spawn.PlayerAnchorTrueIndex == 92 &&
+        spawn.LandingWadOffset == 0x6B06800 &&
+        spawn.PlayerAnchorWadOffset == 0x6B08910 &&
+        spawn.RawX == 6_153 && spawn.RawY == 6_154 &&
+        spawn.LandingRawZ == 8_550 && spawn.PlayerRawZ == 8_704 &&
+        spawn.GroundRawZ == 8_192 && spawn.YawByte == 0x40 &&
+        spawn.EntryDataByteLength == 0x10 &&
+        hp.ContainsXY((float)spawn.X, (float)spawn.Y),
+        "The fresh ID65 scene lost its protected remote-pad spawn.");
+
+    Require(
+        !ReferenceEquals(first.Geometry, second.Geometry) &&
+        !ReferenceEquals(first.Geometry.Polygons[0], second.Geometry.Polygons[0]),
+        "Two fresh scene projections shared mutable geometry.");
+    first.Geometry.Polygons[0].ApplyTerrainDeltaZ(32);
+    Require(
+        second.Geometry.Polygons[0].ZValues.SequenceEqual(new float[] { 512, 512, 512 }),
+        "Mutating one fresh-scene projection changed a later projection.");
+
+    LevelCatalog retail = LevelCatalog.Load(repositoryRoot);
+    LevelDefinition blankLookingRetail = retail.Levels[0] with
+    {
+        DisplayName = "Fresh Blank Test",
+        SourceRecordCount = 0,
+        RuntimeMobyPointer = ""
+    };
+    ExpectInvalidOperation(
+        () => Id65FreshLevelSceneProjector.ProjectExact(blankLookingRetail),
+        "blank-looking retail projection");
+    ExpectInvalidOperation(
+        () => Id65FreshLevelSceneProjector.ProjectExact(
+            UnusedLevel65BlankLevelLabProfileRegistry.Definition with { Confidence = "forged" }),
+        "forged ID65 projection");
+    ExpectInvalidOperation(
+        () => Id65FreshLevelSceneProjector.ProjectExact(null!),
+        "missing ID65 projection identity");
+}
+
+void VerifyFreshLevelT66ViewportTextureProjection(
+    UnusedLevel65BlankLevelLabWorkspacePaths paths)
+{
+    string lockedHashBefore = HashFile(paths.LockedBaseImagePath);
+    string[] artifactPathsBefore = SnapshotArtifactPaths(paths.RootPath);
+    Id65FreshLevelT66ViewportTextureProjection projection =
+        Id65FreshLevelT66ViewportTextureProjector.ProjectExact(
+            paths.LockedBaseImagePath);
+
+    Require(
+        projection.ProfileId == Id65FreshLevelT66ViewportTextureProjector.ProfileId &&
+        projection.SchemaVersion == 1 &&
+        projection.TextureId == 66 &&
+        projection.DonorWadEntry == 70 &&
+        projection.DonorTextureId == 12 &&
+        projection.ManifestSha256 == "043d77528e66146b74419401150ce10bd1ece70542c26cd078375e4b666ab8d7" &&
+        projection.WitnessSha256 == "c253640dd20db9f32cd33f437df65d00941e18d238cf5bdc7deb28714c3423a3" &&
+        projection.TexturePagesSha256 == "34a6d81c740c1e2494ede138e45556941e6daf59d21668ca2b594055f61ac47a" &&
+        projection.TextureComponentSha256 == "cb1002ff28dd862dc441a388dc09de57bc821467850791de67fb990b8f6ea79f" &&
+        projection.PrivateLowRowSha256 == "c32b270ab41d9e9299cca05a4a0d14f0addfa32a108c5aa8c4f509eef3b98d80" &&
+        projection.PrivateHighRowSha256 == "d63d613b56b7dcd5adf506847bab76fb9aa69e3ebb9d00643c76aec929557fcc",
+        "The fresh-level T66 viewport projection lost its pinned manifest, witness, page, component, or row identity.");
+    Require(
+        projection.IsPresentationOnly &&
+        !projection.WritesWorkspace &&
+        !projection.WritesLockedBase &&
+        !projection.WritesDiscImage &&
+        !projection.AuthorizesCreateBin &&
+        !projection.AuthorizesRuntimeCandidate &&
+        !projection.AuthorizesReleasePromotion,
+        "The T66 viewport projection acquired write, runtime, Create BIN, or release authority.");
+    Require(
+        projection.LowDetailTextures.NativeTextureCount == 67 &&
+        projection.LowDetailTextures.TextureCount == 67 &&
+        projection.LowDetailTextures.RetailAliasComplete &&
+        projection.LowDetailTextures.TryGetTexture(66, out NativeTerrainLqTextureRecordPayload? lq) &&
+        lq.Descriptors.Count == 2 &&
+        projection.HighDetailMaterials.NativeTextureCount == 67 &&
+        projection.HighDetailMaterials.TextureCount == 67 &&
+        projection.HighDetailMaterials.TryGetTexture(66, out NativeTerrainHqMaterialRecordPayload? hq) &&
+        hq.Normal.DescriptorCount == 4 &&
+        hq.Close.DescriptorCount == 16,
+        "The exact T66 projection did not decode a complete 67-row LQ/HQ viewport state.");
+
+    byte[] normal = projection.Normal.CopyRgbaBytes();
+    byte[] close = projection.Close.CopyRgbaBytes();
+    Require(
+        projection.Normal.Width == Id65FreshLevelT66ViewportTextureProjector.ExpectedNormalWidth &&
+        projection.Normal.Height == Id65FreshLevelT66ViewportTextureProjector.ExpectedNormalHeight &&
+        projection.Close.Width == Id65FreshLevelT66ViewportTextureProjector.ExpectedCloseWidth &&
+        projection.Close.Height == Id65FreshLevelT66ViewportTextureProjector.ExpectedCloseHeight &&
+        projection.Normal.RgbaSha256 == Id65FreshLevelT66ViewportTextureProjector.ExpectedNormalRgbaSha256 &&
+        projection.Close.RgbaSha256 == Id65FreshLevelT66ViewportTextureProjector.ExpectedCloseRgbaSha256 &&
+        projection.Normal.ByteLength == projection.Normal.PixelCount * 4 &&
+        projection.Close.ByteLength == projection.Close.PixelCount * 4 &&
+        normal.Chunk(4).Select(pixel => Convert.ToHexString(pixel)).Distinct().Count() > 16 &&
+        close.Chunk(4).Select(pixel => Convert.ToHexString(pixel)).Distinct().Count() > 16 &&
+        normal.Where((_, index) => index % 4 == 3).Any(alpha => alpha != 0) &&
+        close.Where((_, index) => index % 4 == 3).Any(alpha => alpha != 0),
+        "The exact T66 viewport RGBA frames are empty, flat, or malformed.");
+    normal[0] ^= 0xFF;
+    Require(
+        !projection.Normal.CopyRgbaBytes().SequenceEqual(normal),
+        "The exact T66 viewport projection exposed mutable RGBA storage.");
+    Require(
+        HashFile(paths.LockedBaseImagePath) == lockedHashBefore &&
+        artifactPathsBefore.SequenceEqual(SnapshotArtifactPaths(paths.RootPath)),
+        "The in-memory T66 viewport projection wrote to the locked base or Lab workspace.");
 }
 
 void VerifyProfileAndCatalog(string root, string catalogHash)
@@ -1570,6 +2111,16 @@ long ParseHexOffset(string value)
     return long.Parse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 }
 
+Id65AuthoringEditorDocumentReadModel CreateSceneProjectionReadModel(
+    Id65AuthoringEditorDocument document) => new(new(
+        document,
+        new string('a', 64),
+        Id65AuthoringEditorDocumentStore.ProjectionContractId,
+        Id65AuthoringCompositeCompiler.ProfileId,
+        new string('b', 64),
+        new string('c', 64),
+        new string('d', 64)));
+
 void ExpectInvalidData(Action action, string label)
 {
     try
@@ -1578,6 +2129,19 @@ void ExpectInvalidData(Action action, string label)
         throw new InvalidOperationException($"The {label} guard did not reject the input.");
     }
     catch (InvalidDataException)
+    {
+    }
+}
+
+void ExpectInvalidOperation(Action action, string label)
+{
+    try
+    {
+        action();
+        throw new InvalidOperationException($"The {label} guard did not reject the input.");
+    }
+    catch (InvalidOperationException ex) when (
+        ex.Message.Contains("accepts only the exact ID65", StringComparison.Ordinal))
     {
     }
 }

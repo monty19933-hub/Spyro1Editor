@@ -3234,8 +3234,7 @@ public sealed partial class MainWindow
         if (TryBlockTerrainMutationDuringId65BlankLabManualOperation("choosing a terrain texture paint brush"))
             return;
 
-        bool id65ResidentOnly = IsCurrentId65BlankLab();
-        if (!id65ResidentOnly && TryBlockId65UnsupportedTerrainMutation(
+        if (TryBlockId65UnsupportedTerrainMutation(
                 _selectedTerrain,
                 "Terrain texture palette",
                 textureOrSurface: true))
@@ -3248,6 +3247,7 @@ public sealed partial class MainWindow
             _statusText.Text = "Choose a level before choosing a terrain texture.";
             return;
         }
+        bool id65ResidentOnly = IsCurrentId65BlankLab();
 
         string normalizedTargetLevel = LevelCatalog.NormalizeKey(_currentLevel.Key);
         bool paletteMatchesTarget =
@@ -3527,27 +3527,7 @@ public sealed partial class MainWindow
             return;
 
         TerrainTexturePaintBrush? brush = _activeTerrainTexturePaintBrush;
-        bool id65ResidentPaint =
-            IsCurrentId65BlankLab() &&
-            brush?.Kind == TerrainTexturePaintSourceKind.SameLevel &&
-            string.Equals(
-                LevelCatalog.NormalizeKey(brush.TargetLevelKey),
-                LevelCatalog.NormalizeKey(UnusedLevel65BlankLevelLabProfileRegistry.Key),
-                StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(
-                LevelCatalog.NormalizeKey(brush.SourceLevelKey),
-                LevelCatalog.NormalizeKey(UnusedLevel65BlankLevelLabProfileRegistry.Key),
-                StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(terrain.Detail, "hp", StringComparison.OrdinalIgnoreCase) &&
-            !terrain.IsTerrainRemoved &&
-            !terrain.IsTerrainAddClone &&
-            !terrain.HasPositionEdit &&
-            !terrain.HasTextureVisualEdit &&
-            !terrain.HasStructureEdit &&
-            !terrain.HasSurfaceBehaviorEdit &&
-            brush.TextureId is >= 0 and < UnusedLevel65BlankLevelLabProfileRegistry.ResidentTextureCount &&
-            terrain.OriginalTextureId is >= 0 and < UnusedLevel65BlankLevelLabProfileRegistry.ResidentTextureCount;
-        if (!id65ResidentPaint && TryBlockId65UnsupportedTerrainMutation(
+        if (TryBlockId65UnsupportedTerrainMutation(
                 terrain,
                 "Terrain texture paint",
                 textureOrSurface: true))
