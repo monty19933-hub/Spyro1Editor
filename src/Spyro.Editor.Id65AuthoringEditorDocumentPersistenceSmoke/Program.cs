@@ -39,6 +39,8 @@ Id65AuthoringEditorDocument fullDocument =
     Id65AuthoringEditorDocument.CreateExact(includeOptionalTerrain: true);
 Id65AuthoringEditorDocument noTerrainDocument =
     Id65AuthoringEditorDocument.CreateExact(includeOptionalTerrain: false);
+Id65AuthoringEditorDocument residentT25Document =
+    Id65AuthoringEditorDocument.CreateExact(mandatoryBaseFaceTextureId: 25);
 
 string smokeRoot = Path.Combine(Path.GetTempPath(), $"{SmokeRootPrefix}{Guid.NewGuid():N}");
 string workspaceContainer = Path.Combine(smokeRoot, "workspace-container");
@@ -112,6 +114,27 @@ try
     Require(
         !Directory.Exists(authoredRoot),
         "Loading a missing editor document created its authored-edits directory.");
+    string[] beforeT25Refusal = Directory.EnumerateFiles(
+            paths.RootPath, "*", SearchOption.AllDirectories)
+        .Order(StringComparer.Ordinal)
+        .Select(path => $"{Path.GetRelativePath(paths.RootPath, path)}:{SnapshotFile(path).Sha256}")
+        .ToArray();
+    await ExpectRejectedAsync(
+        "resident T25 before frozen projection",
+        async () => _ = await Id65AuthoringEditorDocumentStore.SaveAsync(
+            paths,
+            manifest,
+            residentT25Document,
+            projectionInputs,
+            expectedPriorEnvelopeCanonicalSha256: null),
+        "cannot be persisted");
+    Require(
+        Directory.EnumerateFiles(paths.RootPath, "*", SearchOption.AllDirectories)
+            .Order(StringComparer.Ordinal)
+            .Select(path => $"{Path.GetRelativePath(paths.RootPath, path)}:{SnapshotFile(path).Sha256}")
+            .SequenceEqual(beforeT25Refusal) &&
+        !Directory.Exists(authoredRoot),
+        "Rejected resident T25 persistence created or mutated workspace bytes.");
 
     Id65AuthoringEditorNativeInputProvider.InputSet forgedCanonicalInputs =
         ForgeProviderInputSetForNegativeTest(
@@ -883,7 +906,7 @@ static async Task ExpectRejectedAsync(
     }
     catch (Exception exception) when (exception is
         ArgumentNullException or InvalidDataException or InvalidOperationException or
-        IOException or UnauthorizedAccessException)
+        IOException or UnauthorizedAccessException or NotSupportedException)
     {
         rejection = exception;
     }

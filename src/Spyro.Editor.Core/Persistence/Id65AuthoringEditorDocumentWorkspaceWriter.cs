@@ -78,6 +78,12 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         ArgumentNullException.ThrowIfNull(expectedLabManifest);
         ArgumentNullException.ThrowIfNull(state);
         cancellationToken.ThrowIfCancellationRequested();
+        if (state.MandatoryBaseFaceTextureId !=
+            Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId)
+        {
+            throw new NotSupportedException(
+                "Resident T25 authoring documents are exact but cannot be persisted until the T25 composite projection contract is frozen.");
+        }
 
         UnusedLevel65BlankLevelLabProfileRegistry.ValidateManifest(
             expectedLabManifest,
@@ -116,14 +122,15 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         Id65AuthoringEditorDocumentStoreResult stored,
         bool createdNewDocument)
     {
-        Id65AuthoringEditorDocumentReadModel readModel = new(new(
+        Id65AuthoringEditorDocumentEnvelopeIdentity identity = new(
             stored.Document,
             stored.EnvelopeCanonicalSha256,
             stored.ProjectionContractId,
             stored.CompositeProfileId,
             stored.CompositeManifestSha256,
             stored.CompositeOutputRow80Sha256,
-            stored.CompositeDeterministicPlanSha256));
+            stored.CompositeDeterministicPlanSha256);
+        Id65AuthoringEditorDocumentReadModel readModel = new(identity);
         Id65AuthoringEditorControlState recovered =
             Id65AuthoringEditorControlStateCompiler.RecoverControlState(readModel);
         RequireEquivalent(state, recovered);
@@ -249,7 +256,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
     {
         if (expected.IncludeStructuralTerrain != actual.IncludeStructuralTerrain ||
             expected.IncludeGrassAtT88 != actual.IncludeGrassAtT88 ||
-            expected.IncludeGrassAtT107 != actual.IncludeGrassAtT107)
+            expected.IncludeGrassAtT107 != actual.IncludeGrassAtT107 ||
+            expected.MandatoryBaseFaceTextureId != actual.MandatoryBaseFaceTextureId)
         {
             throw new InvalidDataException(
                 "The saved ID65 document did not recover its requested exact control state.");
@@ -309,7 +317,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             ControlState = new(
                 recovered.IncludeStructuralTerrain,
                 recovered.IncludeGrassAtT88,
-                recovered.IncludeGrassAtT107);
+                recovered.IncludeGrassAtT107,
+                recovered.MandatoryBaseFaceTextureId);
             Document = document;
             CreatedNewDocument = createdNewDocument;
         }

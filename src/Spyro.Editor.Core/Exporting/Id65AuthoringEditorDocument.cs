@@ -127,8 +127,13 @@ internal sealed record Id65AuthoringEditorBaselineHandles(
 internal sealed class Id65AuthoringEditorDocument
 {
     public const int CurrentSchemaVersion = 1;
+    public const int ResidentT25SchemaVersion = 2;
     public const int MaximumSerializedByteCount = 64 * 1024;
     public const string DocumentProfileId = "id65-authoring-editor-document-exact-composite-v1";
+    public const string ResidentT25DocumentProfileId =
+        "id65-authoring-editor-document-resident-t25-v2";
+    public const int ResidentMandatoryBaseFaceTextureId = 25;
+    public const int PrivateMandatoryBaseFaceTextureId = 66;
     public const string PrivateTextureSwapId = "swap.remote-pad.face0.private-t66";
     public const string OptionalTriangleCollisionId =
         Id65AuthoringTerrainMutationCompiler.TriangleId + ":collision";
@@ -149,7 +154,8 @@ internal sealed class Id65AuthoringEditorDocument
         IEnumerable<Id65AuthoringEditorTerrainIntent> terrain,
         Id65AuthoringEditorPrivateTextureSwap privateTextureSwap,
         IEnumerable<Id65AuthoringEditorMobyPlacement> mobyPlacements,
-        Id65AuthoringEditorBaselineHandles baselineHandles)
+        Id65AuthoringEditorBaselineHandles baselineHandles,
+        int mandatoryBaseFaceTextureId)
     {
         ArgumentNullException.ThrowIfNull(terrain);
         ArgumentNullException.ThrowIfNull(privateTextureSwap);
@@ -159,6 +165,7 @@ internal sealed class Id65AuthoringEditorDocument
         PrivateTextureSwap = privateTextureSwap;
         _mobyPlacements = Array.AsReadOnly(mobyPlacements.ToArray());
         BaselineHandles = baselineHandles;
+        MandatoryBaseFaceTextureId = mandatoryBaseFaceTextureId;
         ValidateExactDocument(this);
 
         byte[] canonicalContent = WriteCanonical(this, contentSha256: null);
@@ -168,8 +175,13 @@ internal sealed class Id65AuthoringEditorDocument
         CanonicalSha256 = Hash(_canonicalUtf8);
     }
 
-    public int SchemaVersion => CurrentSchemaVersion;
-    public string ProfileId => DocumentProfileId;
+    public int SchemaVersion => MandatoryBaseFaceTextureId == PrivateMandatoryBaseFaceTextureId
+        ? CurrentSchemaVersion
+        : ResidentT25SchemaVersion;
+    public string ProfileId => MandatoryBaseFaceTextureId == PrivateMandatoryBaseFaceTextureId
+        ? DocumentProfileId
+        : ResidentT25DocumentProfileId;
+    public int MandatoryBaseFaceTextureId { get; }
     public string LabProfileId => UnusedLevel65BlankLevelLabProfileRegistry.ProfileId;
     public int LabProfileVersion => UnusedLevel65BlankLevelLabProfileRegistry.ProfileVersion;
     public string WorkspaceKey => UnusedLevel65BlankLevelLabProfileRegistry.Key;
@@ -215,7 +227,8 @@ internal sealed class Id65AuthoringEditorDocument
 
     public static Id65AuthoringEditorDocument CreateExact(
         bool includeOptionalTerrain = true,
-        IEnumerable<string>? placementIds = null)
+        IEnumerable<string>? placementIds = null,
+        int mandatoryBaseFaceTextureId = PrivateMandatoryBaseFaceTextureId)
     {
         Id65AuthoringEditorTerrainIntent[] terrain = includeOptionalTerrain
             ? [CreateExactTerrainIntent()]
@@ -225,7 +238,8 @@ internal sealed class Id65AuthoringEditorDocument
             terrain,
             CreateExactPrivateTextureSwap(),
             placements,
-            CreateExactBaselineHandles());
+            CreateExactBaselineHandles(),
+            mandatoryBaseFaceTextureId);
     }
 
     public static Id65AuthoringEditorDocument Parse(string json)
@@ -262,30 +276,35 @@ internal sealed class Id65AuthoringEditorDocument
                     MaxDepth = 32
                 });
             JsonElement root = parsed.RootElement;
-            RequireObjectProperties(
-                root,
-                "root",
-                "schemaVersion",
-                "profileId",
-                "labProfileId",
-                "labProfileVersion",
-                "workspaceKey",
-                "workspaceLayoutVersion",
-                "workspaceLayoutRelativeRoot",
-                "lockedBaseProfileId",
-                "lockedBaseImageSha256",
-                "lockedRow80Sha256",
-                "compositeProfileId",
-                "privateTextureWitnessSha256",
-                "mobyBundleSha256",
-                "terrain",
-                "privateTextureSwap",
-                "mobyPlacements",
-                "baselineHandles",
-                "contentSha256");
-
             int schemaVersion = RequireInt32(root, "schemaVersion", "root");
             string profileId = RequireString(root, "profileId", "root");
+            bool residentT25 = schemaVersion == ResidentT25SchemaVersion &&
+                profileId == ResidentT25DocumentProfileId;
+            if (residentT25)
+            {
+                RequireObjectProperties(
+                    root,
+                    "root",
+                    "schemaVersion", "profileId", "mandatoryBaseFaceTextureId",
+                    "labProfileId", "labProfileVersion", "workspaceKey",
+                    "workspaceLayoutVersion", "workspaceLayoutRelativeRoot",
+                    "lockedBaseProfileId", "lockedBaseImageSha256", "lockedRow80Sha256",
+                    "compositeProfileId", "privateTextureWitnessSha256", "mobyBundleSha256",
+                    "terrain", "privateTextureSwap", "mobyPlacements", "baselineHandles",
+                    "contentSha256");
+            }
+            else
+            {
+                RequireObjectProperties(
+                    root,
+                    "root",
+                    "schemaVersion", "profileId", "labProfileId", "labProfileVersion",
+                    "workspaceKey", "workspaceLayoutVersion", "workspaceLayoutRelativeRoot",
+                    "lockedBaseProfileId", "lockedBaseImageSha256", "lockedRow80Sha256",
+                    "compositeProfileId", "privateTextureWitnessSha256", "mobyBundleSha256",
+                    "terrain", "privateTextureSwap", "mobyPlacements", "baselineHandles",
+                    "contentSha256");
+            }
             string labProfileId = RequireString(root, "labProfileId", "root");
             int labProfileVersion = RequireInt32(root, "labProfileVersion", "root");
             string workspaceKey = RequireString(root, "workspaceKey", "root");
@@ -300,8 +319,11 @@ internal sealed class Id65AuthoringEditorDocument
                 RequireString(root, "privateTextureWitnessSha256", "root");
             string mobyBundleSha256 = RequireString(root, "mobyBundleSha256", "root");
             string contentSha256 = RequireString(root, "contentSha256", "root");
-            if (schemaVersion != CurrentSchemaVersion ||
-                profileId != DocumentProfileId ||
+            int mandatoryBaseFaceTextureId = residentT25
+                ? RequireInt32(root, "mandatoryBaseFaceTextureId", "root")
+                : PrivateMandatoryBaseFaceTextureId;
+            if ((!residentT25 && (schemaVersion != CurrentSchemaVersion || profileId != DocumentProfileId)) ||
+                (residentT25 && mandatoryBaseFaceTextureId != ResidentMandatoryBaseFaceTextureId) ||
                 labProfileId != UnusedLevel65BlankLevelLabProfileRegistry.ProfileId ||
                 labProfileVersion != UnusedLevel65BlankLevelLabProfileRegistry.ProfileVersion ||
                 workspaceKey != UnusedLevel65BlankLevelLabProfileRegistry.Key ||
@@ -342,7 +364,8 @@ internal sealed class Id65AuthoringEditorDocument
                 terrain,
                 privateTexture,
                 placements,
-                baselineHandles);
+                baselineHandles,
+                mandatoryBaseFaceTextureId);
             if (!HashEquals(contentSha256, document.ContentSha256))
                 throw new InvalidDataException("The ID65 editor document content SHA-256 is invalid or tampered.");
             if (!utf8Json.SequenceEqual(document._canonicalUtf8))
@@ -487,6 +510,12 @@ internal sealed class Id65AuthoringEditorDocument
 
     private static void ValidateExactDocument(Id65AuthoringEditorDocument document)
     {
+        if (document.MandatoryBaseFaceTextureId is not
+            (ResidentMandatoryBaseFaceTextureId or PrivateMandatoryBaseFaceTextureId))
+        {
+            throw new InvalidDataException(
+                "The ID65 mandatory base face texture must be exactly resident T25 or proved private T66.");
+        }
         if (document._terrain.Count > 1)
             throw new InvalidDataException("The first ID65 editor document supports zero or one exact optional terrain intent.");
         if (document._terrain.Count == 1)
@@ -542,8 +571,14 @@ internal sealed class Id65AuthoringEditorDocument
                }))
         {
             json.WriteStartObject();
-            json.WriteNumber("schemaVersion", CurrentSchemaVersion);
-            json.WriteString("profileId", DocumentProfileId);
+            json.WriteNumber("schemaVersion", document.SchemaVersion);
+            json.WriteString("profileId", document.ProfileId);
+            if (document.MandatoryBaseFaceTextureId == ResidentMandatoryBaseFaceTextureId)
+            {
+                json.WriteNumber(
+                    "mandatoryBaseFaceTextureId",
+                    document.MandatoryBaseFaceTextureId);
+            }
             json.WriteString(
                 "labProfileId",
                 UnusedLevel65BlankLevelLabProfileRegistry.ProfileId);

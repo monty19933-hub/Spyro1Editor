@@ -16,26 +16,35 @@ public sealed class Id65AuthoringEditorControlState
     public const int SchemaVersion = 1;
     public const int T88TargetTrueIndex = 88;
     public const int T107TargetTrueIndex = 107;
+    public const int ResidentMandatoryBaseFaceTextureId = 25;
+    public const int PrivateMandatoryBaseFaceTextureId = 66;
 
     public Id65AuthoringEditorControlState(
         bool includeStructuralTerrain,
         bool includeGrassAtT88,
-        bool includeGrassAtT107)
+        bool includeGrassAtT107,
+        int mandatoryBaseFaceTextureId = PrivateMandatoryBaseFaceTextureId)
     {
+        if (mandatoryBaseFaceTextureId is not
+            (ResidentMandatoryBaseFaceTextureId or PrivateMandatoryBaseFaceTextureId))
+            throw new ArgumentOutOfRangeException(nameof(mandatoryBaseFaceTextureId));
         IncludeStructuralTerrain = includeStructuralTerrain;
         IncludeGrassAtT88 = includeGrassAtT88;
         IncludeGrassAtT107 = includeGrassAtT107;
+        MandatoryBaseFaceTextureId = mandatoryBaseFaceTextureId;
     }
 
     public bool IncludeStructuralTerrain { get; }
     public bool IncludeGrassAtT88 { get; }
     public bool IncludeGrassAtT107 { get; }
+    public int MandatoryBaseFaceTextureId { get; }
 
     public static Id65AuthoringEditorControlState CreateDefault() =>
         new(
             includeStructuralTerrain: true,
             includeGrassAtT88: true,
-            includeGrassAtT107: true);
+            includeGrassAtT107: true,
+            mandatoryBaseFaceTextureId: PrivateMandatoryBaseFaceTextureId);
 }
 
 /// <summary>
@@ -62,6 +71,7 @@ public sealed class Id65AuthoringEditorControlStateCompilation
         if (state.IncludeStructuralTerrain != recovered.IncludeStructuralTerrain ||
             state.IncludeGrassAtT88 != recovered.IncludeGrassAtT88 ||
             state.IncludeGrassAtT107 != recovered.IncludeGrassAtT107 ||
+            state.MandatoryBaseFaceTextureId != recovered.MandatoryBaseFaceTextureId ||
             !canonical.SerializeUtf8().SequenceEqual(expected.SerializeUtf8()))
         {
             throw new InvalidDataException(
@@ -71,7 +81,8 @@ public sealed class Id65AuthoringEditorControlStateCompilation
         State = new(
             state.IncludeStructuralTerrain,
             state.IncludeGrassAtT88,
-            state.IncludeGrassAtT107);
+            state.IncludeGrassAtT107,
+            state.MandatoryBaseFaceTextureId);
         Document = canonical;
         DocumentProfileId = canonical.ProfileId;
         DocumentContentSha256 = canonical.ContentSha256;
@@ -159,8 +170,14 @@ public static class Id65AuthoringEditorControlStateCompiler
         Id65AuthoringEditorDocumentReadModel document)
     {
         ArgumentNullException.ThrowIfNull(document);
-        if (document.SchemaVersion != Id65AuthoringEditorDocument.CurrentSchemaVersion ||
-            document.ProfileId != Id65AuthoringEditorDocument.DocumentProfileId ||
+        bool supportedProfile =
+            (document.SchemaVersion == Id65AuthoringEditorDocument.CurrentSchemaVersion &&
+             document.ProfileId == Id65AuthoringEditorDocument.DocumentProfileId &&
+             document.MandatoryBaseFaceTextureId == Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId) ||
+            (document.SchemaVersion == Id65AuthoringEditorDocument.ResidentT25SchemaVersion &&
+             document.ProfileId == Id65AuthoringEditorDocument.ResidentT25DocumentProfileId &&
+             document.MandatoryBaseFaceTextureId == Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId);
+        if (!supportedProfile ||
             document.LabProfileId != UnusedLevel65BlankLevelLabProfileRegistry.ProfileId ||
             document.LabProfileVersion !=
                 UnusedLevel65BlankLevelLabProfileRegistry.ProfileVersion ||
@@ -196,7 +213,8 @@ public static class Id65AuthoringEditorControlStateCompiler
 
         Id65AuthoringEditorControlState state = SelectState(
             document.Terrain.Count,
-            document.MobyPlacements.Select(placement => placement.Id));
+            document.MobyPlacements.Select(placement => placement.Id),
+            document.MandatoryBaseFaceTextureId);
         Id65AuthoringEditorDocument expected = CompileExactDocument(state);
         if (document.DocumentCanonicalSha256 != expected.CanonicalSha256 ||
             document.DocumentContentSha256 != expected.ContentSha256)
@@ -227,7 +245,8 @@ public static class Id65AuthoringEditorControlStateCompiler
             placementIds.Add(Id65AuthoringMobyDependencyBundleCompiler.T107PlacementId);
         return Id65AuthoringEditorDocument.CreateExact(
             state.IncludeStructuralTerrain,
-            placementIds);
+            placementIds,
+            state.MandatoryBaseFaceTextureId);
     }
 
     internal static Id65AuthoringEditorControlState RecoverExactState(
@@ -238,7 +257,8 @@ public static class Id65AuthoringEditorControlStateCompiler
             Id65AuthoringEditorDocument.Parse(document.SerializeUtf8());
         Id65AuthoringEditorControlState state = SelectState(
             canonical.Terrain.Count,
-            canonical.MobyPlacements.Select(placement => placement.Id));
+            canonical.MobyPlacements.Select(placement => placement.Id),
+            canonical.MandatoryBaseFaceTextureId);
         Id65AuthoringEditorDocument expected = CompileExactDocument(state);
         if (!canonical.SerializeUtf8().SequenceEqual(expected.SerializeUtf8()))
         {
@@ -250,7 +270,8 @@ public static class Id65AuthoringEditorControlStateCompiler
 
     private static Id65AuthoringEditorControlState SelectState(
         int terrainIntentCount,
-        IEnumerable<string> placementIds)
+        IEnumerable<string> placementIds,
+        int mandatoryBaseFaceTextureId)
     {
         if (terrainIntentCount is < 0 or > 1)
             throw new InvalidDataException("The ID65 control state supports zero or one structural terrain intent.");
@@ -275,7 +296,7 @@ public static class Id65AuthoringEditorControlStateCompiler
             throw new InvalidDataException(
                 "The ID65 control state contains an unsupported Grass placement.");
         }
-        return new(terrainIntentCount == 1, t88, t107);
+        return new(terrainIntentCount == 1, t88, t107, mandatoryBaseFaceTextureId);
     }
 
     private static void RequireEquivalent(
@@ -284,7 +305,8 @@ public static class Id65AuthoringEditorControlStateCompiler
     {
         if (expected.IncludeStructuralTerrain != actual.IncludeStructuralTerrain ||
             expected.IncludeGrassAtT88 != actual.IncludeGrassAtT88 ||
-            expected.IncludeGrassAtT107 != actual.IncludeGrassAtT107)
+            expected.IncludeGrassAtT107 != actual.IncludeGrassAtT107 ||
+            expected.MandatoryBaseFaceTextureId != actual.MandatoryBaseFaceTextureId)
         {
             throw new InvalidDataException(
                 "The ID65 canonical document did not round-trip to its originating control state.");
@@ -294,7 +316,11 @@ public static class Id65AuthoringEditorControlStateCompiler
     private static void ValidateCompilation(
         Id65AuthoringEditorControlStateCompilation result)
     {
-        if (result.DocumentProfileId != Id65AuthoringEditorDocument.DocumentProfileId ||
+        string expectedProfile = result.State.MandatoryBaseFaceTextureId ==
+            Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId
+            ? Id65AuthoringEditorDocument.ResidentT25DocumentProfileId
+            : Id65AuthoringEditorDocument.DocumentProfileId;
+        if (result.DocumentProfileId != expectedProfile ||
             result.LockedBaseImageSha256 !=
                 UnusedLevel65BlankLevelLabProfileRegistry.Profile.LockedBaseImageSha256 ||
             result.LockedRow80Sha256 !=

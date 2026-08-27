@@ -87,7 +87,25 @@ try
     Id65AuthoringEditorDocument fullDocument =
         Id65AuthoringEditorDocument.CreateExact(includeOptionalTerrain: true);
     Id65AuthoringEditorDocument noTerrainDocument =
-        Id65AuthoringEditorDocument.CreateExact(includeOptionalTerrain: false);
+    Id65AuthoringEditorDocument.CreateExact(includeOptionalTerrain: false);
+Id65AuthoringEditorDocument residentT25Document =
+    Id65AuthoringEditorDocument.CreateExact(
+        includeOptionalTerrain: true,
+        mandatoryBaseFaceTextureId: 25);
+Id65AuthoringEditorDocumentReadModel residentT25Raw =
+    Id65AuthoringEditorDocumentWorkspaceInspector.InspectCanonicalDocument(
+        residentT25Document.SerializeUtf8());
+Require(
+    residentT25Raw.SchemaVersion == Id65AuthoringEditorDocument.ResidentT25SchemaVersion &&
+    residentT25Raw.ProfileId == Id65AuthoringEditorDocument.ResidentT25DocumentProfileId &&
+    residentT25Raw.MandatoryBaseFaceTextureId == 25 &&
+    residentT25Raw.DocumentCanonicalSha256 == residentT25Document.CanonicalSha256 &&
+    residentT25Raw.DocumentContentSha256 == residentT25Document.ContentSha256 &&
+    !residentT25Raw.EnvelopeCanonicalIdentityVerified &&
+    !residentT25Raw.DeterministicEnvelopeReadbackVerified &&
+    !residentT25Raw.PersistedProjectionIdentityPresent &&
+    residentT25Raw.EnvelopeCanonicalSha256.Length == 0,
+    "Raw canonical T25 inspection did not remain exact and explicitly non-persisted.");
     byte[] fullEnvelope = BuildCanonicalEnvelope(manifest, fullDocument);
     byte[] noTerrainEnvelope = BuildCanonicalEnvelope(manifest, noTerrainDocument);
     await File.WriteAllBytesAsync(documentPath, fullEnvelope);
@@ -97,6 +115,11 @@ try
         await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(paths, manifest));
     Id65AuthoringEditorDocumentReadModel repeated = RequirePresent(
         await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(paths, manifest));
+    Require(
+        inspected.EnvelopeCanonicalIdentityVerified &&
+        inspected.DeterministicEnvelopeReadbackVerified &&
+        inspected.PersistedProjectionIdentityPresent,
+        "Persisted T66 inspection lost its verified deterministic envelope identity.");
     Require(
         SnapshotTree(paths.RootPath).SequenceEqual(beforeValid),
         "Valid inspection mutated the lab workspace.");
@@ -536,9 +559,10 @@ static string ComputeExpectedReadModelSha256(
     {
         json.WriteStartObject();
         json.WriteString("format", "spyro-editor-id65-authoring-editor-document-read-model");
-        json.WriteNumber("readModelSchemaVersion", 1);
+        json.WriteNumber("readModelSchemaVersion", 2);
         json.WriteNumber("documentSchemaVersion", value.SchemaVersion);
         json.WriteString("profileId", value.ProfileId);
+        json.WriteNumber("mandatoryBaseFaceTextureId", value.MandatoryBaseFaceTextureId);
         json.WriteString("labProfileId", value.LabProfileId);
         json.WriteNumber("labProfileVersion", value.LabProfileVersion);
         json.WriteString("workspaceKey", value.WorkspaceKey);

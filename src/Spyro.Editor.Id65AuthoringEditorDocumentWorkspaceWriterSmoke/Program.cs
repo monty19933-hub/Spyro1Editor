@@ -104,6 +104,29 @@ try
         paths.AuthoredEditsDirectoryPath,
         $"{UnusedLevel65BlankLevelLabProfileRegistry.Key}-terrain-edits.json");
 
+    string[] beforeT25Refusal = Directory.EnumerateFiles(
+            paths.RootPath, "*", SearchOption.AllDirectories)
+        .Order(StringComparer.Ordinal)
+        .Select(path => $"{Path.GetRelativePath(paths.RootPath, path)}:{SnapshotFile(path).Sha256}")
+        .ToArray();
+    await ExpectRejectedAsync(
+        "resident T25 before frozen projection",
+        async () => _ = await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
+            paths,
+            manifest,
+            new Id65AuthoringEditorControlState(true, true, true, 25),
+            expectedPriorEnvelopeCanonicalSha256: null),
+        "cannot be persisted");
+    rejects++;
+    string[] afterT25Refusal = Directory.EnumerateFiles(
+            paths.RootPath, "*", SearchOption.AllDirectories)
+        .Order(StringComparer.Ordinal)
+        .Select(path => $"{Path.GetRelativePath(paths.RootPath, path)}:{SnapshotFile(path).Sha256}")
+        .ToArray();
+    Require(
+        beforeT25Refusal.SequenceEqual(afterT25Refusal) && !File.Exists(documentPath),
+        "Rejected resident T25 writer persistence changed workspace bytes.");
+
     using (CancellationTokenSource canceled = new())
     {
         canceled.Cancel();
@@ -557,7 +580,7 @@ static void AssertSourceTopology(string repositoryRoot)
             .Count == 2 &&
         appWriterOwners.SequenceEqual([expectedAppOwner]) &&
         publicWriterCall.Matches(File.ReadAllText(
-            Path.Combine(repositoryRoot, expectedAppOwner))).Count == 1,
+            Path.Combine(repositoryRoot, expectedAppOwner))).Count == 3,
         "The prepared Store publication owner, two-phase legacy check, or explicit App writer boundary changed.");
 }
 

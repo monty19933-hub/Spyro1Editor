@@ -31,7 +31,13 @@ Case[] cases =
     new(
         "no-terrain-t107", false, false, true,
         "30fa4c31c997bd41b93d0d8001bad62eea4c33882a8282504420f409a5b91642",
-        "625c4349569dda2a24388fee7da6de2bb3bab7ab7a96e997b75c99b37701009e")
+        "625c4349569dda2a24388fee7da6de2bb3bab7ab7a96e997b75c99b37701009e"),
+    new("t25-terrain-t88-t107", true, true, true, "ef66ec698c9acccb57c31754985f7f8f42553dfd8cbca6fe3a4d94c11a5d6ea1", "2249e27f53f2f3d26e028ab7a94f47ab3f8aecf1251f6d070fd52b9789df77b2", 25),
+    new("t25-terrain-t88", true, true, false, "592f3ab132ed88d33a91419d20664cd1e59004073e6d05ebaf98029d7df04a8a", "b46246d76093727d36e373fac72ffdb5332e5c7310a24a3e4e95dd731f47c764", 25),
+    new("t25-terrain-t107", true, false, true, "6016ea37052ca2722f5236b79eceec1e28b0d8f788cf83ceafe5dfb0b9384adc", "98e02f353719003b4491d24e509ff90c7c1e7442597b25c670e9706e5646d14e", 25),
+    new("t25-no-terrain-t88-t107", false, true, true, "3e382861087cdca0d105e25fac5fe10a899bf844eac51ad43eee69f7f29af8d5", "cfd90b4aa81485e9503cf0785d7966040755b1227dddde649777f6859e4d19b5", 25),
+    new("t25-no-terrain-t88", false, true, false, "d8fcf0cf9f994b094b24631504ed433e8728bb93512c5690ccbd626369849bf9", "35c700e8a4390c027a53c502169bf68e97178f5597407e4dce61800420a29f4b", 25),
+    new("t25-no-terrain-t107", false, false, true, "d30c63a0f188d5d6fa233813d423f4d9059f77c3d73a2dca3be22f3aa6e4f0f0", "15735dfdd2dda935c963e4f32a59320e3ffcb3a87d3a55a3a3a4d93b887a084f", 25)
 ];
 
 Dictionary<string, string> observed = new(StringComparer.Ordinal);
@@ -45,19 +51,22 @@ foreach (Case item in cases)
     Id65AuthoringEditorControlState state = new(
         item.Terrain,
         item.T88,
-        item.T107);
+        item.T107,
+        item.TextureId);
     Id65AuthoringEditorControlStateCompilation first =
         Id65AuthoringEditorControlStateCompiler.Compile(state);
     Id65AuthoringEditorControlStateCompilation repeat =
         Id65AuthoringEditorControlStateCompiler.Compile(new(
             item.Terrain,
             item.T88,
-            item.T107));
+            item.T107,
+            item.TextureId));
     validCompilations += 2;
     Id65AuthoringEditorDocument document = first.Document;
     Id65AuthoringEditorDocument direct = Id65AuthoringEditorDocument.CreateExact(
         item.Terrain,
-        PlacementIds(item));
+        PlacementIds(item),
+        item.TextureId);
     Require(
         document.SerializeUtf8().SequenceEqual(direct.SerializeUtf8()) &&
         document.SerializeUtf8().SequenceEqual(repeat.Document.SerializeUtf8()) &&
@@ -77,14 +86,15 @@ foreach (Case item in cases)
     Require(Equivalent(state, recovered),
         $"The {item.Key} document did not recover its exact control state.");
 
-    Id65AuthoringEditorDocumentReadModel readModel = new(new(
+    Id65AuthoringEditorDocumentEnvelopeIdentity identity = new(
         document,
         Hash($"envelope:{item.Key}"),
         Id65AuthoringEditorDocumentStore.ProjectionContractId,
         Id65AuthoringCompositeCompiler.ProfileId,
         Hash($"manifest:{item.Key}"),
         Hash($"row80:{item.Key}"),
-        Hash($"plan:{item.Key}")));
+        Hash($"plan:{item.Key}"));
+    Id65AuthoringEditorDocumentReadModel readModel = new(identity);
     Id65AuthoringEditorControlState recoveredFromPersistedReadModel =
         Id65AuthoringEditorControlStateCompiler.RecoverControlState(readModel);
     Require(Equivalent(state, recoveredFromPersistedReadModel),
@@ -104,7 +114,8 @@ foreach (Case item in cases)
             .SequenceEqual(expectedTargets) &&
         first.TerrainIntentCount == document.Terrain.Count &&
         first.MobyTargetTrueIndices.SequenceEqual(expectedTargets) &&
-        first.PrivateTextureDestinationRecordIndex == 66,
+        first.PrivateTextureDestinationRecordIndex == 66 &&
+        document.MandatoryBaseFaceTextureId == item.TextureId,
         $"The {item.Key} receipt lost terrain, T66, or exact Grass placement semantics.");
     if (item.T88)
     {
@@ -169,6 +180,10 @@ ExpectReject<ArgumentNullException>(
     "null control state",
     () => Id65AuthoringEditorControlStateCompiler.Compile(null!));
 rejectionCount++;
+ExpectReject<ArgumentOutOfRangeException>(
+    "unsupported mandatory base face texture",
+    () => _ = new Id65AuthoringEditorControlState(true, true, true, 24));
+rejectionCount++;
 ExpectReject<InvalidDataException>(
     "transient no-placement control state",
     () => Id65AuthoringEditorControlStateCompiler.Compile(new(
@@ -215,7 +230,8 @@ static bool Equivalent(
     Id65AuthoringEditorControlState right) =>
     left.IncludeStructuralTerrain == right.IncludeStructuralTerrain &&
     left.IncludeGrassAtT88 == right.IncludeGrassAtT88 &&
-    left.IncludeGrassAtT107 == right.IncludeGrassAtT107;
+    left.IncludeGrassAtT107 == right.IncludeGrassAtT107 &&
+    left.MandatoryBaseFaceTextureId == right.MandatoryBaseFaceTextureId;
 
 static void AssertFailClosed(
     Id65AuthoringEditorControlStateCompilation result,
@@ -243,24 +259,26 @@ static void AssertPublicSurface()
     PropertyInfo[] properties = state.GetProperties(
         BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
     Require(
-        state.IsPublic && state.IsSealed && properties.Length == 3 &&
-        properties.All(property => property.PropertyType == typeof(bool)) &&
+        state.IsPublic && state.IsSealed && properties.Length == 4 &&
+        properties.Count(property => property.PropertyType == typeof(bool)) == 3 &&
+        properties.Count(property => property.PropertyType == typeof(int)) == 1 &&
         properties.Select(property => property.Name).Order(StringComparer.Ordinal).SequenceEqual(
             new[]
             {
                 "IncludeGrassAtT107",
                 "IncludeGrassAtT88",
-                "IncludeStructuralTerrain"
+                "IncludeStructuralTerrain",
+                "MandatoryBaseFaceTextureId"
             }.Order(StringComparer.Ordinal)) &&
         properties.All(property => !property.CanWrite),
-        "The public control state is not exactly three immutable boolean choices.");
+        "The public control state is not exactly three immutable choices plus the exact texture selector.");
     ConstructorInfo[] constructors = state.GetConstructors(
         BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
     Require(
         constructors.Length == 1 &&
         constructors[0].GetParameters().Select(parameter => parameter.ParameterType)
-            .SequenceEqual([typeof(bool), typeof(bool), typeof(bool)]),
-        "The public control state constructor accepts something other than three booleans.");
+            .SequenceEqual([typeof(bool), typeof(bool), typeof(bool), typeof(int)]),
+        "The public control state constructor lost its exact four-choice contract.");
 
     MethodInfo[] compilerMethods = typeof(Id65AuthoringEditorControlStateCompiler).GetMethods(
             BindingFlags.Static | BindingFlags.Public | BindingFlags.DeclaredOnly)
@@ -348,4 +366,5 @@ internal sealed record Case(
     bool T88,
     bool T107,
     string ExpectedCanonicalSha256,
-    string ExpectedContentSha256);
+    string ExpectedContentSha256,
+    int TextureId = 66);

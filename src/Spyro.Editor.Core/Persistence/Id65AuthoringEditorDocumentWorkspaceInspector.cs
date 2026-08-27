@@ -28,6 +28,10 @@ public static class Id65AuthoringEditorDocumentWorkspaceInspector
             ? null
             : new Id65AuthoringEditorDocumentReadModel(identity);
     }
+
+    internal static Id65AuthoringEditorDocumentReadModel InspectCanonicalDocument(
+        ReadOnlySpan<byte> canonicalUtf8) =>
+        new(Id65AuthoringEditorDocument.Parse(canonicalUtf8));
 }
 
 /// <summary>
@@ -38,7 +42,7 @@ public sealed class Id65AuthoringEditorDocumentReadModel
 {
     private const string ReadModelFormat =
         "spyro-editor-id65-authoring-editor-document-read-model";
-    private const int ReadModelSchemaVersion = 1;
+    private const int ReadModelSchemaVersion = 2;
 
     private readonly ReadOnlyCollection<Id65AuthoringEditorTerrainReadModel> _terrain;
     private readonly ReadOnlyCollection<Id65AuthoringEditorMobyPlacementReadModel>
@@ -46,12 +50,24 @@ public sealed class Id65AuthoringEditorDocumentReadModel
 
     internal Id65AuthoringEditorDocumentReadModel(
         Id65AuthoringEditorDocumentEnvelopeIdentity identity)
+        : this(identity.Document, identity)
     {
-        ArgumentNullException.ThrowIfNull(identity);
-        Id65AuthoringEditorDocument document = identity.Document;
+    }
+
+    internal Id65AuthoringEditorDocumentReadModel(Id65AuthoringEditorDocument document)
+        : this(document, identity: null)
+    {
+    }
+
+    private Id65AuthoringEditorDocumentReadModel(
+        Id65AuthoringEditorDocument document,
+        Id65AuthoringEditorDocumentEnvelopeIdentity? identity)
+    {
+        ArgumentNullException.ThrowIfNull(document);
 
         SchemaVersion = document.SchemaVersion;
         ProfileId = document.ProfileId;
+        MandatoryBaseFaceTextureId = document.MandatoryBaseFaceTextureId;
         LabProfileId = document.LabProfileId;
         LabProfileVersion = document.LabProfileVersion;
         WorkspaceKey = document.WorkspaceKey;
@@ -64,12 +80,13 @@ public sealed class Id65AuthoringEditorDocumentReadModel
         MobyBundleSha256 = document.MobyBundleSha256;
         DocumentContentSha256 = document.ContentSha256;
         DocumentCanonicalSha256 = document.CanonicalSha256;
-        EnvelopeCanonicalSha256 = identity.EnvelopeCanonicalSha256;
-        ProjectionContractId = identity.ProjectionContractId;
-        CompositeManifestSha256 = identity.CompositeManifestSha256;
-        CompositeOutputRow80Sha256 = identity.CompositeOutputRow80Sha256;
+        EnvelopeCanonicalSha256 = identity?.EnvelopeCanonicalSha256 ?? string.Empty;
+        ProjectionContractId = identity?.ProjectionContractId ?? string.Empty;
+        CompositeManifestSha256 = identity?.CompositeManifestSha256 ?? string.Empty;
+        CompositeOutputRow80Sha256 = identity?.CompositeOutputRow80Sha256 ?? string.Empty;
         CompositeDeterministicPlanSha256 =
-            identity.CompositeDeterministicPlanSha256;
+            identity?.CompositeDeterministicPlanSha256 ?? string.Empty;
+        PersistedProjectionIdentityPresent = identity != null;
 
         _terrain = Array.AsReadOnly(document.Terrain
             .Select(Id65AuthoringEditorTerrainReadModel.FromInternal)
@@ -87,6 +104,7 @@ public sealed class Id65AuthoringEditorDocumentReadModel
 
     public int SchemaVersion { get; }
     public string ProfileId { get; }
+    public int MandatoryBaseFaceTextureId { get; }
     public string LabProfileId { get; }
     public int LabProfileVersion { get; }
     public string WorkspaceKey { get; }
@@ -111,10 +129,10 @@ public sealed class Id65AuthoringEditorDocumentReadModel
     public Id65AuthoringEditorBaselineHandlesReadModel BaselineHandles { get; }
     public string ReadModelCanonicalSha256 { get; }
 
-    public bool EnvelopeCanonicalIdentityVerified => true;
+    public bool EnvelopeCanonicalIdentityVerified => PersistedProjectionIdentityPresent;
     public bool DocumentCanonicalIdentityVerified => true;
-    public bool PersistedProjectionIdentityPresent => true;
-    public bool DeterministicEnvelopeReadbackVerified => true;
+    public bool PersistedProjectionIdentityPresent { get; }
+    public bool DeterministicEnvelopeReadbackVerified => PersistedProjectionIdentityPresent;
     public bool CurrentProjectionRevalidated => false;
     public bool CurrentLockedSourceReprojected => false;
     public bool CurrentOnDiskFreshnessVerified => false;
@@ -155,6 +173,7 @@ public sealed class Id65AuthoringEditorDocumentReadModel
             json.WriteNumber("readModelSchemaVersion", ReadModelSchemaVersion);
             json.WriteNumber("documentSchemaVersion", SchemaVersion);
             json.WriteString("profileId", ProfileId);
+            json.WriteNumber("mandatoryBaseFaceTextureId", MandatoryBaseFaceTextureId);
             json.WriteString("labProfileId", LabProfileId);
             json.WriteNumber("labProfileVersion", LabProfileVersion);
             json.WriteString("workspaceKey", WorkspaceKey);

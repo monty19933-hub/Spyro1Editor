@@ -158,6 +158,12 @@ internal static class Id65AuthoringEditorDocumentStore
         ArgumentNullException.ThrowIfNull(projectionInputs);
         ArgumentNullException.ThrowIfNull(preparePublishedResult);
         cancellationToken.ThrowIfCancellationRequested();
+        if (document.MandatoryBaseFaceTextureId !=
+            Id65AuthoringEditorDocument.PrivateMandatoryBaseFaceTextureId)
+        {
+            throw new NotSupportedException(
+                "Resident T25 authoring documents are exact but cannot be persisted until the T25 composite projection contract is frozen.");
+        }
         ArgumentNullException.ThrowIfNull(projectionInputs.NativeInputs);
         Id65AuthoringEditorNativeInputProvider.ValidateForConsumption(
             projectionInputs.NativeInputs);

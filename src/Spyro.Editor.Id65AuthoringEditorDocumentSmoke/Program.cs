@@ -90,8 +90,35 @@ Id65AuthoringEditorDocument reloadedFromString =
 Require(reloaded.SerializeUtf8().SequenceEqual(documentUtf8) &&
         reloadedFromString.SerializeUtf8().SequenceEqual(documentUtf8),
     "Canonical UTF-8 editor-document serialization did not round-trip exactly.");
+Id65AuthoringEditorDocument residentT25 = Id65AuthoringEditorDocument.CreateExact(
+    includeOptionalTerrain: true,
+    placementIds: canonicalPlacementIds,
+    mandatoryBaseFaceTextureId: 25);
+byte[] residentT25Utf8 = residentT25.SerializeUtf8();
+Require(
+    residentT25.SchemaVersion == Id65AuthoringEditorDocument.ResidentT25SchemaVersion &&
+    residentT25.ProfileId == Id65AuthoringEditorDocument.ResidentT25DocumentProfileId &&
+    residentT25.MandatoryBaseFaceTextureId == 25 &&
+    residentT25.CanonicalSha256 ==
+        "ef66ec698c9acccb57c31754985f7f8f42553dfd8cbca6fe3a4d94c11a5d6ea1" &&
+    residentT25.ContentSha256 ==
+        "2249e27f53f2f3d26e028ab7a94f47ab3f8aecf1251f6d070fd52b9789df77b2" &&
+    Id65AuthoringEditorDocument.Parse(residentT25Utf8).SerializeUtf8()
+        .SequenceEqual(residentT25Utf8),
+    "The strict resident T25 document profile did not round-trip its pinned canonical identity.");
+ExpectReject(
+    "T25 profile carrying T66 selector",
+    () => Id65AuthoringEditorDocument.Parse(
+        Encoding.UTF8.GetString(residentT25Utf8)
+            .Replace("\"mandatoryBaseFaceTextureId\":25", "\"mandatoryBaseFaceTextureId\":66", StringComparison.Ordinal)),
+    "unsupported");
+ExpectReject(
+    "unsupported mandatory base face texture",
+    () => Id65AuthoringEditorDocument.CreateExact(mandatoryBaseFaceTextureId: 24),
+    "exactly");
 Id65AuthoringManifest lockedManifest = Id65AuthoringModelCompiler.CreateMinimalV3EquivalentManifest();
 Require(document.SchemaVersion == Id65AuthoringEditorDocument.CurrentSchemaVersion &&
+        document.MandatoryBaseFaceTextureId == 66 &&
         document.ProfileId == Id65AuthoringEditorDocument.DocumentProfileId &&
         document.LabProfileId == UnusedLevel65BlankLevelLabProfileRegistry.ProfileId &&
         document.LabProfileVersion == UnusedLevel65BlankLevelLabProfileRegistry.ProfileVersion &&
@@ -893,12 +920,14 @@ static void VerifySourceTopology(string repositoryRoot)
     [
         Path.Combine("src", "Spyro.Editor.Core", "Exporting", "Id65AuthoringEditorDocument.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorAggregateCandidateMaterializer.cs"),
+        Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorAggregateCandidateWorkspaceMaterializer.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorAggregatePlanProjector.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorControlStateCompiler.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorDocumentStore.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorDocumentWorkspaceInspector.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorDocumentWorkspaceWriter.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "PortableProjectMigration.cs"),
+        Path.Combine("src", "Spyro.Editor.Core", "Workspace", "Id65FreshLevelSceneProjection.cs"),
         Path.Combine("src", "Spyro.Editor.Id65AuthoringEditorDocumentSmoke", "Program.cs")
     ];
     Require(symbolOwners.SequenceEqual(expectedOwners.Order(StringComparer.Ordinal)),
