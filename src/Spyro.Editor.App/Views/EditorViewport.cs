@@ -688,6 +688,9 @@ public sealed partial class EditorViewport : Control
         InvalidateVisual();
     }
 
+    internal bool IsId65FreshLevelT66ViewportTextureProjectionBoundForTesting =>
+        _id65FreshLevelT66ViewportTextureProjection != null;
+
     internal IReadOnlyList<(int TextureId, NativeTerrainTexturePreviewTier Tier)>
         GetLoadedTerrainTextureImageCacheKeysForTesting() =>
         _terrainTextureImageCache

@@ -89,6 +89,9 @@ public sealed partial class EditorViewport
     internal NativeTerrainBoundedCompositorSnapshot CaptureNativeTerrainBoundedCompositorSnapshotForTesting() =>
         _nativeTerrainBoundedSnapshot;
 
+    internal string CaptureNativeTerrainHqMaterialFingerprintForTesting() =>
+        _nativeTerrainHqMaterialFingerprint;
+
     internal NativeTerrainBoundedTileSeamProof CaptureNativeTerrainBoundedTileSeamProofForTesting(
         int gridColumns,
         int tileSide)

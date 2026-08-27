@@ -6,8 +6,9 @@ namespace Spyro.Editor.Core.Persistence;
 /// <summary>
 /// Framework-neutral control state for the exact first ID65 authoring document.
 /// It models only choices already proved by the canonical document/compiler
-/// chain. Private T66 and baseline spawn/music/totals/exit/save ownership remain
-/// fixed and cannot be disabled or replaced through this surface.
+/// chain. The mandatory base face is exactly Resident T25 or Proved private T66;
+/// baseline spawn/music/totals/exit/save ownership remains fixed and cannot be
+/// disabled or replaced through this surface.
 /// </summary>
 public sealed class Id65AuthoringEditorControlState
 {

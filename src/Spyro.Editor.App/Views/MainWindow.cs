@@ -41,7 +41,7 @@ public sealed partial class MainWindow : Window
     private const float DefaultTerrainAddCopyOffset = 64f;
     private const float DefaultTerrainGroundOffset = 0f;
     private const string Id65FreshProjectionOfflineCandidateGuidance =
-        "No disposable test CUE path exists. Use Edit Full Authoring Document… and Create Exact Full Candidate for the separately guarded offline artifact. Normal Create BIN, runtime use, and release promotion remain unauthorized.";
+        "No disposable test CUE path exists. Use Edit Full Authoring Document… to choose and explicitly save Resident T25 or Proved private T66. Resident T25 is offline-authoring/viewport-only and refuses candidate, Create BIN, runtime, and release paths; only a synchronized full T66 document can use the separately guarded Create Exact Full Candidate action. Normal Create BIN, runtime use, and release promotion remain unauthorized.";
     private readonly Dictionary<string, TerrainTexturePreviewBundleCacheEntry>
         _terrainTexturePreviewBundleCache = new(StringComparer.OrdinalIgnoreCase);
 
@@ -3245,9 +3245,30 @@ public sealed partial class MainWindow : Window
             nativeHighDetailMaterials = nativeBundle.HighDetailMaterials;
         }
 
+        bool id65FreshLab =
+            UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(_currentLevel);
+        int id65MandatoryBaseFaceTextureId =
+            Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId;
+        if (id65FreshLab && _id65FreshAuthoringDocument != null)
+        {
+            id65MandatoryBaseFaceTextureId =
+                Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                    _id65FreshAuthoringDocument).MandatoryBaseFaceTextureId;
+        }
+        if (id65FreshLab && id65MandatoryBaseFaceTextureId is not
+            (Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId or
+             Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId))
+        {
+            throw new InvalidDataException(
+                "The ID65 viewport refused an unsupported mandatory base-face texture.");
+        }
+
         Id65FreshLevelT66ViewportTextureProjection? exactId65T66 =
-            UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(_currentLevel)
-                ? _id65FreshLevelT66ViewportTextureProjection
+            id65FreshLab && id65MandatoryBaseFaceTextureId ==
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId
+                ? _id65FreshLevelT66ViewportTextureProjection ??
+                    throw new InvalidDataException(
+                        "The Proved private T66 ID65 viewport projection is unavailable; the editor refused to fall back to resident caches.")
                 : null;
         if (exactId65T66 != null)
         {
@@ -3320,6 +3341,26 @@ public sealed partial class MainWindow : Window
                     closeFiles.Remove(relocation.TargetTextureId);
                     lowDetailTextures.Remove(relocation.TargetTextureId);
                 }
+            }
+        }
+
+        if (id65FreshLab && id65MandatoryBaseFaceTextureId ==
+            Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId)
+        {
+            const int residentTextureId =
+                Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId;
+            if (_customTerrainTextures.Count != 0 ||
+                _nativeTerrainTextureRelocations.Count != 0 ||
+                !normalFiles.TryGetValue(residentTextureId, out string? residentNormal) ||
+                !File.Exists(residentNormal) ||
+                !closeFiles.TryGetValue(residentTextureId, out string? residentClose) ||
+                !File.Exists(residentClose) ||
+                !lowDetailTextures.ContainsKey(residentTextureId) ||
+                nativeHighDetailMaterials == null ||
+                !nativeHighDetailMaterials.TryGetTexture(residentTextureId, out _))
+            {
+                throw new InvalidDataException(
+                    "Resident T25 requires one complete ordinary resident normal, close, LQ, and HQ viewport cache with no custom or relocation overlay. The viewport was not rebound.");
             }
         }
 

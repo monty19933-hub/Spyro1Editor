@@ -139,7 +139,8 @@ try
         RunWorkspaceShellOnly();
         return 0;
     }
-    if (args.Contains("--id65-blank-lab-ui-only", StringComparer.OrdinalIgnoreCase))
+    if (args.Contains("--id65-blank-lab-ui-only", StringComparer.OrdinalIgnoreCase) ||
+        args.Contains("--id65-blank-lab-only", StringComparer.OrdinalIgnoreCase))
     {
         if (!OperatingSystem.IsMacOS())
         {
@@ -1049,7 +1050,9 @@ void RunId65BlankLabUiOnly()
             !initial.StatusText.Contains("ID65 stays out of the level picker", StringComparison.Ordinal) ||
             !initial.CapabilityText.Contains("Exact coupled HP/LP + collision/occlusion/spawn intent", StringComparison.Ordinal) ||
             !initial.CapabilityText.Contains("Generic HP-Z, texture, XY, add/remove, undo, and TerrainEditStore persistence are intentionally unavailable", StringComparison.Ordinal) ||
-            !initial.CapabilityText.Contains("proved private T66 native texture swap", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Resident T25 or Proved private T66", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("T25 is offline-authoring/viewport-only", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("cannot create a candidate, BIN, runtime, or release artifact", StringComparison.Ordinal) ||
             !initial.CapabilityText.Contains("Arbitrary cross-level/custom art remains unavailable", StringComparison.Ordinal) ||
             !initial.CapabilityText.Contains("Grass placements at T88 and T107", StringComparison.Ordinal) ||
             !initial.CapabilityText.Contains("Other resident records remain inspection-only", StringComparison.Ordinal))
@@ -1404,6 +1407,18 @@ void RunId65BlankLabUiOnly()
             !authoringEditor.Contains(
                 "external stale-document viewport refresh",
                 StringComparison.Ordinal) ||
+            !authoringEditor.Contains(
+                "mandatory two-choice selector transition",
+                StringComparison.Ordinal) ||
+            !authoringEditor.Contains(
+                "Resident T25 ordinary close/normal/LQ/HQ route exact",
+                StringComparison.Ordinal) ||
+            !authoringEditor.Contains(
+                "direct T25 pre-materializer/no-output/no-reveal/Create-BIN refusal",
+                StringComparison.Ordinal) ||
+            !authoringEditor.Contains(
+                "Proved private T66 close/normal/LQ/HQ route exact",
+                StringComparison.Ordinal) ||
             !UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(
                 documentBoundLab.CurrentLevel) ||
             documentBoundLab.CurrentGeometry == null ||
@@ -1413,6 +1428,167 @@ void RunId65BlankLabUiOnly()
         {
             throw new InvalidOperationException(
                 "The canonical authoring editor probe did not leave the exact document-bound terrain-absent projection or prove its true-false-true toggle sequence.");
+        }
+
+        string authoringDocumentPath = Path.Combine(
+            paths.AuthoredEditsDirectoryPath,
+            Id65AuthoringEditorDocumentWorkspaceInspector.DocumentFileName);
+        byte[] selectorDocumentBytesBefore =
+            File.ReadAllBytes(authoringDocumentPath);
+        DateTime selectorDocumentWriteBefore =
+            File.GetLastWriteTimeUtc(authoringDocumentPath);
+        GeometryCandidate selectorGeometryBefore = documentBoundLab.CurrentGeometry ??
+            throw new InvalidOperationException(
+                "The selector-only modal probe lost its initial ID65 geometry.");
+        EditorViewport selectorViewport = documentBoundLab.Viewport;
+        NativeTerrainLqFrameSnapshot selectorCloseBefore =
+            selectorViewport.CaptureNativeTerrainLqFrameForTesting(66, 79.999);
+        NativeTerrainLqFrameSnapshot selectorNormalBefore =
+            selectorViewport.CaptureNativeTerrainLqFrameForTesting(66, 511);
+        NativeTerrainLqFrameSnapshot selectorFarBefore =
+            selectorViewport.CaptureNativeTerrainLqFrameForTesting(66, 1088);
+        string selectorHqBefore =
+            selectorViewport.CaptureNativeTerrainHqMaterialFingerprintForTesting();
+        MainWindow.Id65BlankLabUiSnapshot selectorUiBefore =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        string candidateOutputRoot = Path.Combine(
+            paths.RootPath,
+            "materialized-candidates");
+        string[] selectorCandidateOutputsBefore = Directory.Exists(candidateOutputRoot)
+            ? Directory.GetFiles(candidateOutputRoot, "*", SearchOption.AllDirectories)
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .Select(path =>
+                    $"{Path.GetRelativePath(candidateOutputRoot, path)}:" +
+                    Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                        File.ReadAllBytes(path))))
+                .ToArray()
+            : [];
+
+        Button authoringDocumentButton = FindNamedUnique<Button>(
+            window,
+            "Id65BlankLabAuthoringDocumentButton");
+        Window selectorDialog = OpenAsyncDialog(
+            window,
+            authoringDocumentButton,
+            "ID65 Full Authoring Document",
+            "ID65 mandatory base texture selector dialog");
+        ComboBox mandatoryTextureSelector = FindNamedUnique<ComboBox>(
+            selectorDialog,
+            "Id65AuthoringMandatoryBaseTextureSelector");
+        TextBlock exactSelectorPreview = FindNamedUnique<TextBlock>(
+            selectorDialog,
+            "Id65AuthoringExactPreviewText");
+        Button applyAndSaveSelector = FindNamedUnique<Button>(
+            selectorDialog,
+            "Id65AuthoringSaveButton");
+        object[] mandatoryTextureItems = ReadItemsSource(
+            mandatoryTextureSelector,
+            "ID65 mandatory base texture selector");
+        string[] mandatoryTextureNames = mandatoryTextureItems
+            .Select(item => item.ToString() ?? "")
+            .ToArray();
+        if (!mandatoryTextureNames.SequenceEqual(
+                new[] { "Resident T25", "Proved private T66" },
+                StringComparer.Ordinal) ||
+            mandatoryTextureSelector.SelectedItem?.ToString() !=
+                "Proved private T66" ||
+            applyAndSaveSelector.Content?.ToString() !=
+                "Apply and Save Exact Document" ||
+            !applyAndSaveSelector.IsEnabled)
+        {
+            throw new InvalidOperationException(
+                "The real ID65 modal did not construct and strictly initialize the exact named mandatory two-item selector and explicit Apply/Save action.");
+        }
+
+        mandatoryTextureSelector.SelectedItem = null;
+        FlushUi();
+        if (applyAndSaveSelector.IsEnabled ||
+            !exactSelectorPreview.Text!.Contains(
+                "cannot form an exact document",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "A null/forged mandatory selector state fell back to T66 or left Apply enabled.");
+        }
+        mandatoryTextureSelector.SelectedItem = mandatoryTextureItems.Single(item =>
+            string.Equals(item.ToString(), "Resident T25", StringComparison.Ordinal));
+        FlushUi();
+        if (!applyAndSaveSelector.IsEnabled ||
+            !exactSelectorPreview.Text!.Contains("Resident T25", StringComparison.Ordinal) ||
+            !exactSelectorPreview.Text.Contains(
+                "offline-authoring-only",
+                StringComparison.OrdinalIgnoreCase) ||
+            !(File.ReadAllBytes(authoringDocumentPath))
+                .SequenceEqual(selectorDocumentBytesBefore) ||
+            File.GetLastWriteTimeUtc(authoringDocumentPath) !=
+                selectorDocumentWriteBefore ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
+                selectorGeometryBefore) ||
+            selectorViewport.CaptureNativeTerrainLqFrameForTesting(66, 79.999) !=
+                selectorCloseBefore ||
+            selectorViewport.CaptureNativeTerrainLqFrameForTesting(66, 511) !=
+                selectorNormalBefore ||
+            selectorViewport.CaptureNativeTerrainLqFrameForTesting(66, 1088) !=
+                selectorFarBefore ||
+            selectorViewport.CaptureNativeTerrainHqMaterialFingerprintForTesting() !=
+                selectorHqBefore ||
+            !selectorViewport.IsId65FreshLevelT66ViewportTextureProjectionBoundForTesting)
+        {
+            throw new InvalidOperationException(
+                "A real selector-only change to Resident T25 persisted or rebound the viewport before explicit Apply/Save.");
+        }
+
+        Button cancelSelector = selectorDialog.GetLogicalDescendants()
+            .OfType<Button>()
+            .Single(button => string.Equals(
+                button.Content?.ToString(),
+                "Cancel",
+                StringComparison.Ordinal));
+        cancelSelector.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, cancelSelector));
+        WaitForDialogToClose(
+            window,
+            selectorDialog,
+            "ID65 mandatory base texture selector dialog");
+        WaitForCondition(
+            () => window.CaptureId65BlankLabUiSnapshotForTesting()
+                .AuthoringDocumentEnabled,
+            TimeSpan.FromSeconds(30),
+            () => "settling the canceled ID65 mandatory selector dialog");
+        MainWindow.Id65BlankLabUiSnapshot selectorUiAfter =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        string[] selectorCandidateOutputsAfter = Directory.Exists(candidateOutputRoot)
+            ? Directory.GetFiles(candidateOutputRoot, "*", SearchOption.AllDirectories)
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .Select(path =>
+                    $"{Path.GetRelativePath(candidateOutputRoot, path)}:" +
+                    Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                        File.ReadAllBytes(path))))
+                .ToArray()
+            : [];
+        if (!(File.ReadAllBytes(authoringDocumentPath))
+                .SequenceEqual(selectorDocumentBytesBefore) ||
+            File.GetLastWriteTimeUtc(authoringDocumentPath) !=
+                selectorDocumentWriteBefore ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
+                selectorGeometryBefore) ||
+            selectorUiAfter.LoadedMandatoryBaseFaceTextureId !=
+                selectorUiBefore.LoadedMandatoryBaseFaceTextureId ||
+            selectorUiAfter.PrivateT66ViewportProjectionBound !=
+                selectorUiBefore.PrivateT66ViewportProjectionBound ||
+            selectorUiAfter.AuthoringCandidateEnabled !=
+                selectorUiBefore.AuthoringCandidateEnabled ||
+            selectorUiAfter.RevealEnabled != selectorUiBefore.RevealEnabled ||
+            selectorUiAfter.DocumentProjectionSynchronized !=
+                selectorUiBefore.DocumentProjectionSynchronized ||
+            !selectorCandidateOutputsAfter.SequenceEqual(
+                selectorCandidateOutputsBefore,
+                StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Canceling the real selector-only Resident T25 preview changed the canonical document, viewport/cache identity, candidate/reveal state, or outputs.");
         }
         AssertFreshId65OptionalTerrainControls(
             window,
@@ -1436,6 +1612,8 @@ void RunId65BlankLabUiOnly()
         if (projectedState.IncludeStructuralTerrain ||
             !projectedState.IncludeGrassAtT88 ||
             projectedState.IncludeGrassAtT107 ||
+            projectedState.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId ||
             File.Exists(Path.Combine(
                 paths.AuthoredEditsDirectoryPath,
                 Id65FreshLevelSceneProjector.TerrainEditFileName)))
@@ -1488,6 +1666,8 @@ void RunId65BlankLabUiOnly()
         if (!buttonCreatedState.IncludeStructuralTerrain ||
             !buttonCreatedState.IncludeGrassAtT88 ||
             buttonCreatedState.IncludeGrassAtT107 ||
+            buttonCreatedState.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId ||
             buttonCreatedLab.CurrentGeometry?.Polygons.Count != 2 ||
             buttonCreatedLab.CurrentGeometry.LowDetailPolygons.Count != 2 ||
             !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(
@@ -1536,6 +1716,8 @@ void RunId65BlankLabUiOnly()
         if (buttonRemovedState.IncludeStructuralTerrain ||
             !buttonRemovedState.IncludeGrassAtT88 ||
             buttonRemovedState.IncludeGrassAtT107 ||
+            buttonRemovedState.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId ||
             buttonRemovedLab.CurrentGeometry?.Polygons.Count != 1 ||
             buttonRemovedLab.CurrentGeometry.LowDetailPolygons.Count != 1 ||
             !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(
@@ -1559,7 +1741,9 @@ void RunId65BlankLabUiOnly()
         Id65AuthoringEditorControlState oppositeAsymmetricGrassState = new(
             includeStructuralTerrain: false,
             includeGrassAtT88: false,
-            includeGrassAtT107: true);
+            includeGrassAtT107: true,
+            mandatoryBaseFaceTextureId:
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId);
         window.Id65AuthoringDocumentDialogOverrideForTesting =
             (_, exists, _) =>
             {
@@ -1623,6 +1807,8 @@ void RunId65BlankLabUiOnly()
         if (!oppositeCreatedState.IncludeStructuralTerrain ||
             oppositeCreatedState.IncludeGrassAtT88 ||
             !oppositeCreatedState.IncludeGrassAtT107 ||
+            oppositeCreatedState.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId ||
             oppositeCreatedLab.CurrentGeometry?.Polygons.Count != 2 ||
             oppositeCreatedLab.CurrentGeometry.LowDetailPolygons.Count != 2 ||
             !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(
@@ -1666,6 +1852,8 @@ void RunId65BlankLabUiOnly()
         if (oppositeRemovedState.IncludeStructuralTerrain ||
             oppositeRemovedState.IncludeGrassAtT88 ||
             !oppositeRemovedState.IncludeGrassAtT107 ||
+            oppositeRemovedState.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId ||
             oppositeRemovedLab.CurrentGeometry?.Polygons.Count != 1 ||
             oppositeRemovedLab.CurrentGeometry.LowDetailPolygons.Count != 1 ||
             !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(
@@ -1712,7 +1900,7 @@ void RunId65BlankLabUiOnly()
         window.Id65BlankLabCatalogValidationOverrideForTesting = null;
 
         Console.WriteLine(
-            "ID65 Blank-Level Lab public UI smoke passed: clean 35-level startup, visible narrow disclosure, neutral reveal label, explicit repair contract, Core atomic-export route with 128 unique keys, hidden broad Research tab, and exact-manifest 35+1 in-memory admission passed; " +
+            "ID65 Blank-Level Lab public UI smoke passed: clean 35-level startup, visible narrow disclosure, exact named Resident T25 / Proved private T66 selector with null refusal, selection-change preview/no-write and explicit Apply/Save, neutral reveal label, explicit repair contract, Core atomic-export route with 128 unique keys, hidden broad Research tab, and exact-manifest 35+1 in-memory admission passed; " +
             $"isolated locked workspace bootstrap: exact and source-preserving; mutation guards: {mutationGuards}; stale continuations: {staleContinuations}; transition guards: {transitionGuards}; resident textures: {residentTexture}; canonical document guard: {canonicalDocumentGuard}; reverse persistence: {reversePersistence}; operation fence: {operationFence}; workspace transition: {workspaceTransition}; full authoring editor: {authoringEditor}.");
     }
     finally
@@ -1927,9 +2115,20 @@ static void AssertFreshId65OptionalTerrainControls(
     }
 
     string expectedPresence = expectedTerrainPresent ? "is present" : "is absent";
+    string expectedMandatoryTexture = snapshot.LoadedMandatoryBaseFaceTextureId switch
+    {
+        Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId =>
+            "Resident T25",
+        Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId =>
+            "Proved private T66",
+        _ => throw new InvalidOperationException(
+            $"The {label} loaded an unsupported mandatory base-face selector T{snapshot.LoadedMandatoryBaseFaceTextureId}.")
+    };
     if (!status.Contains(expectedPresence, StringComparison.Ordinal) ||
         !status.Contains("Grass T88", StringComparison.Ordinal) ||
         !status.Contains("Grass T107", StringComparison.Ordinal) ||
+        !status.Contains("mandatory base face", StringComparison.OrdinalIgnoreCase) ||
+        !status.Contains(expectedMandatoryTexture, StringComparison.Ordinal) ||
         !status.Contains("will be preserved", StringComparison.Ordinal))
     {
         throw new InvalidOperationException(
