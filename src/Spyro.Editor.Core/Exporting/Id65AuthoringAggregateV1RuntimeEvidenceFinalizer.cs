@@ -93,20 +93,20 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceFinalizer
     private const string FixtureStatement =
         "Offline fixture binding only; no game runtime or acceptance was observed.";
     private const string ExpectedCaptureCoordinatorSha256 =
-        "de7ca2b3886fc897f876fb9f53727c19596a188d8882979f60cce16fd3e63c2c";
-    private const long ExpectedCaptureCoordinatorByteLength = 104_888;
+        "83cf8e24455364d6ee6e66fe485ebec62e04518592c36edc0b262e14590445af";
+    private const long ExpectedCaptureCoordinatorByteLength = 166_832;
     private const string ExpectedFrozenCaptureCoreSha256 =
         "153871778877a8736a1243ce2e84453e4d0d8e2fb945f9e96fdc01fbf00278ec";
     private const long ExpectedFrozenCaptureCoreByteLength = 473_144;
     private const string ExpectedCaptureCoordinatorDeepTestSha256 =
-        "10104ab431260fafed5d215d5c16325c6f5792848dbfcb69c77b98cb4cdbfb72";
-    private const long ExpectedCaptureCoordinatorDeepTestByteLength = 77_990;
+        "ebad45c21b6c8b7e4c15998f4709256a52038a537a0dada9bdfa11081ce000b2";
+    private const long ExpectedCaptureCoordinatorDeepTestByteLength = 134_774;
     private const string ExpectedCaptureSourceClosureSha256 =
         "fa601b2d8aad8a8931ce49e8be9269afdc3bb3105e927d65c70c138e9a832a41";
     private const string ExpectedAggregateChecklistSha256 =
         "3fee9f6a9b8aa5e90a846834b29c4d1b3f17683d19f2b9804126d17527eefeef";
     private const string ExpectedExactPlanSha256 =
-        "23838ecb8f05c62f2d4d2df243fd37553eb5f36579e95d137ac7beb6209c1543";
+        "a8528be7d66a7944fd50bba03479ed42a839d4c0d2c43d1c9432dc1865499bb2";
     private const string ExpectedOperationalToolPinsSha256 =
         "ac30470f7741d0273a9d78a63f25fafb0709ce74f430c85256b83173ac7716c7";
     private const string ExpectedCaptureRuntimeProfileSha256 =
@@ -114,9 +114,9 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceFinalizer
     private const string ExpectedProfileReceiptClosureSha256 =
         "7b43c1c81e4ca40148c99c2c0d908891453e2882c9f93b0d0f9d440c52cb5330";
     private const string ExpectedCaptureSchemaClosureSha256 =
-        "3a30359f741bf31d9be46a168662b4d0cf2f38bbbe86806e304a0744808f01f4";
+        "f2932cade1dceb5890cfda610cbae06e5be1544de304067c4e0b0a3c7cbc4ba4";
     private const string ExpectedWorkflowDeclarationClosureSha256 =
-        "b086b7336c975a59b24cde401d4b5080b260ad9da563c12f2d33518d7096a9c3";
+        "e2d4dccc1f365076ca1028252eff08242cfb5284caa3e25ff5a388f042aefa3b";
     private const string ExpectedProductionCaptureBlockersSha256 =
         "9069369b35c43da4f6002477b094a8aa5e2be7e0076530c718366ecc95349769";
     private const string ExpectedFrozenWorkflowSha256 =

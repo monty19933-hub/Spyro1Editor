@@ -4,7 +4,7 @@
 This file deliberately does not implement or enable live capture.  It freezes
 the shorter three-session plan, the exact 17-check binding, the isolated
 save-card chain, and an authority-before-staging lease so those boundaries can
-be adversarially tested before any runtime engine is added.  It never launches,
+be adversarially tested before any live runtime engine is added.  It never launches,
 resumes, controls, or quits DuckStation and never imports the old aggregate V1
 wrapper, its high-level frozen CaptureCoordinator, or input automation.
 """
@@ -23,8 +23,8 @@ import re
 import stat
 import sys
 import tempfile
-from collections.abc import Mapping, Sequence
-from typing import Any, Final
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, Final, Protocol
 
 
 class ExactCaptureRefusal(RuntimeError):
@@ -352,6 +352,104 @@ CHECK_BINDING_OWNER_SESSION: Final[Mapping[str, str]] = {
     for binding in CHECK_BINDINGS
 }
 
+ENGINE_DERIVED_EVIDENCE_ROLES: Final[Mapping[str, tuple[str, ...]]] = {
+    SESSION_IDS[0]: ("session0-post-card",),
+    SESSION_IDS[1]: ("session1-pre-card", "distinct-process-fingerprints"),
+    SESSION_IDS[2]: (),
+}
+
+
+def _session_evidence_role_ids(session_id: str) -> tuple[str, ...]:
+    """Return first-declaration-order unique role IDs owned by one session."""
+
+    if session_id not in SESSION_IDS:
+        raise ExactCaptureRefusal("simulation session identity is invalid.")
+    observed: list[str] = []
+    owners: dict[str, str] = {}
+    for binding in CHECK_BINDINGS:
+        for role in binding.evidence_roles:
+            prior_owner = owners.setdefault(role.role_id, role.session_id)
+            if prior_owner != role.session_id:
+                raise ExactCaptureRefusal(
+                    "evidence role has conflicting session ownership."
+                )
+            if role.session_id == session_id and role.role_id not in observed:
+                observed.append(role.role_id)
+    return tuple(observed)
+
+
+def _build_evidence_role_checkpoint_ownership(
+) -> dict[str, dict[str, str | None]]:
+    return {
+        SESSION_IDS[0]: {
+            "candidate-load-armed": "resume-fresh-candidate",
+            "candidate-spawn-frame": "resume-fresh-candidate",
+            "landing-watcher": "resume-fresh-candidate",
+            "authored-face-view-frame": "face-texture-complete",
+            "grass-index-88-frame": "grass-index-88-framed",
+            "grass-index-107-frame": "grass-index-107-framed",
+            "authored-movement-interval": "movement-group-complete",
+            "movement-safe-watcher-suffix": "movement-group-complete",
+            "jump-start-frame": "movement-group-complete",
+            "stable-post-landing-frame": "movement-group-complete",
+            "camera-occlusion-interval": "camera-group-complete",
+            "camera-stable-endpoint": "camera-group-complete",
+            "music-observation-120500ms": "camera-group-complete",
+            "live-music-operator-attestation": "camera-group-complete",
+            "in-level-total-200-frame": "in-level-total-framed",
+            "pause-zero-egg-token": "pause-total-zero-egg-framed",
+            "pause-total-200-frame": "pause-total-zero-egg-framed",
+            "ordinary-save-completed-frame": "ordinary-save-complete",
+            "save-progress-token": "ordinary-save-complete",
+            "session0-post-card": None,
+        },
+        SESSION_IDS[1]: {
+            "candidate-reentry-watcher": "resume-clean-restart",
+            "ordinary-load-completed-frame": "loaded-save-confirmed",
+            "load-progress-token": "loaded-save-confirmed",
+            "normal-exit-started": "exit-destination-confirmed",
+            "destination-65-frame": "exit-destination-confirmed",
+            "fall-authorized-frame": "fall-authorized",
+            "fall-respawn-watcher": "fall-authorized",
+            "post-respawn-frame": "fall-authorized",
+            "session1-pre-card": None,
+            "distinct-process-fingerprints": None,
+        },
+        SESSION_IDS[2]: {
+            "town-square-terrain-visible-frame": "resume-fresh-town-square",
+            "town-square-collision-route-60500ms": "retail-route-complete",
+            "town-square-collision-watcher": "retail-route-complete",
+            "town-square-moby-visibility-frame": "retail-route-complete",
+            "town-square-music-observation-60500ms": "retail-route-complete",
+            "town-square-live-music-operator-attestation": (
+                "retail-route-complete"
+            ),
+            "town-square-totals-frame": "retail-totals-framed",
+            "town-square-save-transition": "retail-save-complete",
+            "town-square-exit-frame": "retail-exit-complete",
+        },
+    }
+
+
+EVIDENCE_ROLE_CHECKPOINT_OWNERSHIP: Final[
+    Mapping[str, Mapping[str, str | None]]
+] = _build_evidence_role_checkpoint_ownership()
+
+
+@dataclasses.dataclass(frozen=True)
+class ExactEvidenceReceipt:
+    run_id: str
+    session_id: str
+    checkpoint_id: str | None
+    role_id: str
+    artifact_id: str
+    repo_relative_path: str
+    kind: str
+    byte_length: int
+    sha256: str
+    captured_at_utc: str
+
+
 FORBIDDEN_LEGACY_TOKENS: Final = (
     "retail-gnastys-loot",
     "retail-sunny-flight",
@@ -507,6 +605,10 @@ def _plan_payload() -> dict[str, object]:
         "operatorCheckpoints": {
             session: list(OPERATOR_CHECKPOINTS[session]) for session in SESSION_IDS
         },
+        "evidenceRoleCheckpointOwnership": {
+            session: dict(EVIDENCE_ROLE_CHECKPOINT_OWNERSHIP[session])
+            for session in SESSION_IDS
+        },
         "operatorCheckpointCount": sum(map(len, OPERATOR_CHECKPOINTS.values())),
         "cardSnapshotFormat": CARD_SNAPSHOT_FORMAT,
         "cardSnapshotFormatVersion": CARD_SNAPSHOT_FORMAT_VERSION,
@@ -585,11 +687,19 @@ def _schema_closure_payload() -> dict[str, object]:
         "cleanRestartOrdering": "next-start-strictly-after-prior-clean-exit",
         "utcTimestampSemantics": "parsed-real-utc-milliseconds",
         "evidenceRoleOwnership": "explicit-owning-session-per-role",
+        "evidenceCheckpointOwnership": "frozen-role-to-checkpoint-map",
+        "evidenceTimestampSemantics": (
+            "inside-owning-process-start-through-clean-termination"
+        ),
+        "evidenceClosureSemantics": (
+            "canonical-receipt-payloads-bound-in-session-seal-and-run-bundle"
+        ),
         "cardChainLayout": [list(item) for item in CARD_CHAIN_LAYOUT],
         "journalEventTypes": [
             "session-open",
             "card-snapshot-bound",
             "operator-checkpoint",
+            "evidence-receipts-bound",
             "check-bound",
             "session-sealed",
         ],
@@ -819,6 +929,10 @@ def _validate_plan() -> None:
         != [9, 4, 5]
         or sum(map(len, OPERATOR_CHECKPOINTS.values())) != 18
         or set(CHECK_BINDING_OWNER_SESSION) != set(EVENTUAL_CHECK_IDS)
+        or {
+            session: dict(EVIDENCE_ROLE_CHECKPOINT_OWNERSHIP[session])
+            for session in EVIDENCE_ROLE_CHECKPOINT_OWNERSHIP
+        } != _build_evidence_role_checkpoint_ownership()
     ):
         raise ExactCaptureRefusal("exact session/check/checkpoint plan changed.")
     save = CHECK_BINDINGS[EVENTUAL_CHECK_IDS.index("candidate.save-persistence")]
@@ -834,6 +948,30 @@ def _validate_plan() -> None:
         )
     ):
         raise ExactCaptureRefusal("deterministic check-binding ownership changed.")
+    for session_id in SESSION_IDS:
+        ownership = EVIDENCE_ROLE_CHECKPOINT_OWNERSHIP[session_id]
+        roles = _session_evidence_role_ids(session_id)
+        if (
+            set(ownership) != set(roles)
+            or len(ownership) != len(roles)
+            or any(
+                (
+                    owner is None
+                    and role_id not in ENGINE_DERIVED_EVIDENCE_ROLES[session_id]
+                )
+                or (
+                    owner is not None
+                    and owner not in OPERATOR_CHECKPOINTS[session_id]
+                )
+                for role_id, owner in ownership.items()
+            )
+            or {
+                role_id for role_id, owner in ownership.items() if owner is None
+            } != set(ENGINE_DERIVED_EVIDENCE_ROLES[session_id])
+        ):
+            raise ExactCaptureRefusal(
+                "frozen evidence role/checkpoint ownership changed."
+            )
     if any(
         not binding.evidence_roles
         or len({role.role_id for role in binding.evidence_roles})
@@ -1346,9 +1484,11 @@ def validate_journal(journal: object) -> Mapping[str, object]:
         raise ExactCaptureRefusal("append-only journal identity changed.")
     previous = ZERO_SHA256
     last_clock = -1
+    evidence_receipts_sha256: str | None = None
+    evidence_receipt_count: int | None = None
     allowed_types = {
         "session-open", "card-snapshot-bound", "operator-checkpoint",
-        "check-bound", "session-sealed",
+        "evidence-receipts-bound", "check-bound", "session-sealed",
     }
     for sequence, event in enumerate(journal["events"]):
         if not isinstance(event, dict) or set(event) != {
@@ -1391,9 +1531,18 @@ def validate_journal(journal: object) -> Mapping[str, object]:
                 raise ExactCaptureRefusal("journal pre-card closure is malformed.")
         elif sequence == len(journal["events"]) - 1:
             if event_type != "session-sealed" or set(payload) != {
-                "postCardSnapshotSha256"
+                "postCardSnapshotSha256", "evidenceReceiptsSha256",
+                "evidenceReceiptCount",
             } or not isinstance(payload["postCardSnapshotSha256"], str) or (
                 _SHA256_RE.fullmatch(payload["postCardSnapshotSha256"]) is None
+            ) or not isinstance(payload["evidenceReceiptsSha256"], str) or (
+                _SHA256_RE.fullmatch(payload["evidenceReceiptsSha256"]) is None
+            ) or not isinstance(payload["evidenceReceiptCount"], int) or isinstance(
+                payload["evidenceReceiptCount"], bool
+            ) or payload["evidenceReceiptCount"] <= 0 or (
+                payload["evidenceReceiptsSha256"] != evidence_receipts_sha256
+            ) or (
+                payload["evidenceReceiptCount"] != evidence_receipt_count
             ):
                 raise ExactCaptureRefusal("journal session-sealed event changed.")
         elif event_type in {"session-open", "session-sealed"}:
@@ -1412,6 +1561,38 @@ def validate_journal(journal: object) -> Mapping[str, object]:
                 payload["ordinal"], int
             ) or isinstance(payload["ordinal"], bool) or payload["ordinal"] < 0:
                 raise ExactCaptureRefusal("journal operator checkpoint event changed.")
+        elif event_type == "evidence-receipts-bound":
+            if evidence_receipts_sha256 is not None or set(payload) != {
+                "receiptCount", "receiptsSha256", "receipts"
+            } or not isinstance(payload["receiptCount"], int) or isinstance(
+                payload["receiptCount"], bool
+            ) or payload["receiptCount"] <= 0 or not isinstance(
+                payload["receipts"], list
+            ) or payload["receiptCount"] != len(payload["receipts"]) or (
+                not isinstance(payload["receiptsSha256"], str)
+                or _SHA256_RE.fullmatch(payload["receiptsSha256"]) is None
+                or payload["receiptsSha256"]
+                != _sha256_canonical(payload["receipts"])
+            ):
+                raise ExactCaptureRefusal("journal evidence receipt closure changed.")
+            request = ExactEngineRequest(str(journal["runId"]))
+            spec = exact_session_specs()[int(journal["sessionOrdinal"])]
+            roles: list[str] = []
+            for raw_receipt in payload["receipts"]:
+                receipt = evidence_receipt_from_payload(raw_receipt)
+                _validate_evidence_receipt(
+                    receipt,
+                    request=request,
+                    spec=spec,
+                    checkpoint_id=receipt.checkpoint_id,
+                )
+                roles.append(receipt.role_id)
+            if tuple(roles) != spec.required_evidence_roles:
+                raise ExactCaptureRefusal(
+                    "journal evidence receipt role order changed."
+                )
+            evidence_receipts_sha256 = str(payload["receiptsSha256"])
+            evidence_receipt_count = int(payload["receiptCount"])
         elif event_type == "check-bound" and set(payload) != {
             "checkId", "sessionIds", "evidenceRoles"
         }:
@@ -1425,10 +1606,54 @@ def validate_journal(journal: object) -> Mapping[str, object]:
     return journal
 
 
+def _offline_run_origin(run_id: str) -> dict[str, object]:
+    """Return the declaration-only origin used by simulation fixtures.
+
+    The phase-one orchestration API deliberately shares this origin with the
+    existing offline fixture.  Every runtime, profile-preflight, evidence, and
+    production claim therefore remains false even when the pure engine drives
+    all three sessions through a fake backend.
+    """
+
+    if not isinstance(run_id, str) or RUN_ID_RE.fullmatch(run_id) is None:
+        raise ExactCaptureRefusal("simulation run identity is malformed.")
+    return {
+        "format": RUN_ORIGIN_FORMAT,
+        "formatVersion": 1,
+        "runId": run_id,
+        "orderedSessionIds": list(SESSION_IDS),
+        "checkIds": list(EVENTUAL_CHECK_IDS),
+        "exactPlanSha256": EXACT_PLAN_SHA256,
+        "exactChecklistSha256": EXACT_CHECKLIST_SHA256,
+        "profileId": PROFILE_ID,
+        "operationalToolPinsSha256": OPERATIONAL_TOOL_PINS_SHA256,
+        "profilePinSetSha256": PROFILE_PIN_SET_SHA256,
+        "profileReceiptClosureSha256": (
+            EXPECTED_PROFILE_RECEIPT_CLOSURE_SHA256
+        ),
+        "schemaClosureSha256": SCHEMA_CLOSURE_SHA256,
+        "sourceDeclarationClosureSha256": (
+            SOURCE_DECLARATION_CLOSURE_SHA256
+        ),
+        "workflowDeclarationClosureSha256": (
+            WORKFLOW_DECLARATION_CLOSURE_SHA256
+        ),
+        "declarationClosuresBindCoordinatorBytes": False,
+        "profilePinsVerified": False,
+        "saveProfilePreflightRun": False,
+        "runtimeObserved": False,
+        "productionCaptureEnabled": False,
+        "musicAudioTrackValidated": MUSIC_AUDIO_TRACK_VALIDATED,
+        "musicRequiresLiveOperatorAttestation": (
+            MUSIC_REQUIRES_LIVE_OPERATOR_ATTESTATION
+        ),
+    }
+
+
 def validate_run_bundle(bundle: object) -> Mapping[str, object]:
     _validate_plan()
     if not isinstance(bundle, dict) or set(bundle) != {
-        "origin", "journals", "cardSnapshots"
+        "origin", "journals", "cardSnapshots", "evidenceReceipts"
     }:
         raise ExactCaptureRefusal("exact run bundle schema changed.")
     origin = bundle["origin"]
@@ -1486,6 +1711,36 @@ def validate_run_bundle(bundle: object) -> Mapping[str, object]:
         snapshot_hashes[3],
         snapshot_hashes[5],
     )
+    raw_receipts = bundle["evidenceReceipts"]
+    if not isinstance(raw_receipts, list):
+        raise ExactCaptureRefusal("exact run evidence receipts is not an array.")
+    specs = exact_session_specs()
+    expected_receipt_count = sum(
+        len(spec.required_evidence_roles) for spec in specs
+    )
+    if len(raw_receipts) != expected_receipt_count:
+        raise ExactCaptureRefusal("exact run evidence receipt count changed.")
+    request = ExactEngineRequest(str(origin["runId"]))
+    receipt_cursor = 0
+    receipts_by_session: dict[str, tuple[ExactEvidenceReceipt, ...]] = {}
+    for spec in specs:
+        session_receipts: list[ExactEvidenceReceipt] = []
+        for role_id in spec.required_evidence_roles:
+            receipt = evidence_receipt_from_payload(raw_receipts[receipt_cursor])
+            receipt_cursor += 1
+            _validate_evidence_receipt(
+                receipt,
+                request=request,
+                spec=spec,
+                checkpoint_id=receipt.checkpoint_id,
+            )
+            if receipt.role_id != role_id:
+                raise ExactCaptureRefusal(
+                    "exact run evidence receipt role order changed."
+                )
+            session_receipts.append(receipt)
+        receipts_by_session[spec.session_id] = tuple(session_receipts)
+        _validate_receipt_process_interval(session_receipts, snapshots, spec)
     journals = bundle["journals"]
     if not isinstance(journals, list) or len(journals) != 3:
         raise ExactCaptureRefusal("exact run does not contain three journals.")
@@ -1528,6 +1783,13 @@ def validate_run_bundle(bundle: object) -> Mapping[str, object]:
                 OPERATOR_CHECKPOINTS[session_id]
             )
         )
+        receipt_closure = _receipt_closure_payload(
+            receipts_by_session[session_id]
+        )
+        semantic_events.append((
+            "evidence-receipts-bound",
+            receipt_closure,
+        ))
         semantic_events.extend(
             (
                 "check-bound",
@@ -1552,7 +1814,13 @@ def validate_run_bundle(bundle: object) -> Mapping[str, object]:
             ),
             (
                 "session-sealed",
-                {"postCardSnapshotSha256": expected_post_hashes[ordinal]},
+                {
+                    "postCardSnapshotSha256": expected_post_hashes[ordinal],
+                    "evidenceReceiptsSha256": (
+                        receipt_closure["receiptsSha256"]
+                    ),
+                    "evidenceReceiptCount": receipt_closure["receiptCount"],
+                },
             ),
         ))
         observed_events = [
@@ -1992,6 +2260,1256 @@ class AuthorityFirstExactLease:
                     setattr(self, name, -1)
 
 
+@dataclasses.dataclass(frozen=True)
+class ExactSessionSpec:
+    session_id: str
+    ordinal: int
+    checkpoints: tuple[str, ...]
+    required_evidence_roles: tuple[str, ...]
+    backend_evidence_roles: tuple[str, ...]
+
+
+def exact_session_specs() -> tuple[ExactSessionSpec, ...]:
+    """Project the frozen plan into the immutable simulation engine surface."""
+
+    _validate_plan()
+    expected_derived_roles = {
+        SESSION_IDS[0]: ("session0-post-card",),
+        SESSION_IDS[1]: (
+            "session1-pre-card", "distinct-process-fingerprints",
+        ),
+        SESSION_IDS[2]: (),
+    }
+    if dict(ENGINE_DERIVED_EVIDENCE_ROLES) != expected_derived_roles:
+        raise ExactCaptureRefusal(
+            "engine-derived evidence role boundary changed."
+        )
+    values: list[ExactSessionSpec] = []
+    for ordinal, session_id in enumerate(SESSION_IDS):
+        roles = _session_evidence_role_ids(session_id)
+        derived = ENGINE_DERIVED_EVIDENCE_ROLES[session_id]
+        if any(role not in roles for role in derived):
+            raise ExactCaptureRefusal(
+                "engine-derived role escaped the frozen evidence plan."
+            )
+        values.append(ExactSessionSpec(
+            session_id=session_id,
+            ordinal=ordinal,
+            checkpoints=OPERATOR_CHECKPOINTS[session_id],
+            required_evidence_roles=roles,
+            backend_evidence_roles=tuple(
+                role for role in roles if role not in derived
+            ),
+        ))
+    return tuple(values)
+
+
+@dataclasses.dataclass(frozen=True)
+class ExactEngineRequest:
+    run_id: str
+    simulation_only: bool = True
+    resume: bool = False
+
+
+@dataclasses.dataclass(frozen=True)
+class ExactSimulationPreflight:
+    simulation_only: bool
+    profile_pins_verified: bool
+    save_profile_preflight_run: bool
+    runtime_observed: bool
+    production_capture_enabled: bool
+
+
+@dataclasses.dataclass(frozen=True)
+class ExactResumeState:
+    origin: Mapping[str, object]
+    card_snapshots: tuple[Mapping[str, object], ...]
+    sealed_journals: tuple[Mapping[str, object], ...]
+    evidence_receipts: tuple[ExactEvidenceReceipt, ...]
+    active_session_id: str | None
+    quarantined: bool
+    final_bundle: Mapping[str, object] | None
+
+
+@dataclasses.dataclass(frozen=True)
+class ExactEngineResult:
+    run_id: str
+    simulation_only: bool
+    runtime_observed: bool
+    production_capture_enabled: bool
+    evidence_accepted: bool
+    create_bin_authorized: bool
+    release_authorized: bool
+    publishable: bool
+    resumed_session_count: int
+    bundle: Mapping[str, object]
+    evidence_receipts: tuple[ExactEvidenceReceipt, ...]
+
+
+class ExactRuntimeBackend(Protocol):
+    """No-launch adapter used only by the phase-one simulation engine."""
+
+    def preflight(self, request: ExactEngineRequest) -> ExactSimulationPreflight:
+        ...
+
+    def capture_prelaunch_empty_card(
+        self,
+        request: ExactEngineRequest,
+    ) -> Mapping[str, object]:
+        ...
+
+    def begin_session(
+        self,
+        spec: ExactSessionSpec,
+        prior_snapshot: Mapping[str, object],
+    ) -> object:
+        ...
+
+    def abort_pending_session(self, spec: ExactSessionSpec) -> None:
+        """Abort activation that began but did not return an owned handle."""
+        ...
+
+    def capture_card(
+        self,
+        handle: object,
+        phase: str,
+        prior_snapshot: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        ...
+
+    def checkpoint(
+        self,
+        handle: object,
+        checkpoint_id: str,
+        ordinal: int,
+    ) -> Sequence[ExactEvidenceReceipt]:
+        ...
+
+    def finish_session_cleanly(self, handle: object) -> None:
+        ...
+
+    def abort_active_session(self, handle: object) -> None:
+        ...
+
+    def assert_quiescent(self) -> None:
+        ...
+
+
+class ExactRunStore(Protocol):
+    """Lease-bound, exact-readback persistence seam for the pure engine.
+
+    Every commit returns the value read back from its durable identity.  A
+    retry with identical canonical bytes must be idempotent; different bytes
+    for the same identity must refuse.  No production implementation exists in
+    this phase.
+    """
+
+    def bind_lease(self, lease: object) -> None:
+        ...
+
+    def inspect_resume(self, run_id: str) -> ExactResumeState | None:
+        ...
+
+    def begin_run(
+        self,
+        origin: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        ...
+
+    def commit_card_snapshot(
+        self,
+        snapshot: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        ...
+
+    def begin_session(
+        self,
+        spec: ExactSessionSpec,
+        prior_snapshot_sha256: str,
+    ) -> Mapping[str, object]:
+        ...
+
+    def commit_evidence(
+        self,
+        receipts: Sequence[ExactEvidenceReceipt],
+    ) -> Sequence[ExactEvidenceReceipt]:
+        ...
+
+    def commit_journal_prefix(
+        self,
+        journal: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        ...
+
+    def seal_session(
+        self,
+        journal: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        ...
+
+    def commit_run_bundle(
+        self,
+        bundle: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        ...
+
+    def quarantine(self, run_id: str, reason: str) -> None:
+        ...
+
+
+def exact_engine_fault_points() -> tuple[str, ...]:
+    """Return every stable post-boundary hook exposed by the pure engine."""
+
+    points = [
+        "after-authority-lease",
+        "after-preflight",
+        "after-run-origin-commit",
+        "after-prelaunch-card-commit",
+    ]
+    for spec in exact_session_specs():
+        session_id = spec.session_id
+        points.append(f"after-session-begin:{session_id}")
+        if spec.ordinal:
+            points.append(f"after-pre-card-commit:{session_id}")
+        points.append(f"after-session-open-commit:{session_id}")
+        for checkpoint_id in spec.checkpoints:
+            points.extend((
+                f"after-evidence-commit:{session_id}:{checkpoint_id}",
+                f"after-checkpoint-commit:{session_id}:{checkpoint_id}",
+            ))
+        points.extend((
+            f"after-clean-exit:{session_id}",
+            f"after-post-card-commit:{session_id}",
+        ))
+        if ENGINE_DERIVED_EVIDENCE_ROLES[session_id]:
+            points.append(f"after-derived-evidence-commit:{session_id}")
+        points.extend((
+            f"after-evidence-closure-commit:{session_id}",
+            f"after-check-bindings-commit:{session_id}",
+            f"after-session-seal-projection:{session_id}",
+            f"after-session-logical-commit:{session_id}",
+        ))
+    points.extend((
+        "after-run-validate",
+        "after-run-bundle-commit",
+        "before-lease-release",
+    ))
+    return tuple(points)
+
+
+def _validate_simulation_request(request: object) -> ExactEngineRequest:
+    if (
+        not isinstance(request, ExactEngineRequest)
+        or not isinstance(request.run_id, str)
+        or RUN_ID_RE.fullmatch(request.run_id) is None
+        or request.simulation_only is not True
+        or not isinstance(request.resume, bool)
+    ):
+        raise ExactCaptureRefusal(
+            "phase-one exact engine accepts only an exact simulation request."
+        )
+    return request
+
+
+def _validate_simulation_preflight(value: object) -> None:
+    if (
+        not isinstance(value, ExactSimulationPreflight)
+        or value.simulation_only is not True
+        or value.profile_pins_verified is not False
+        or value.save_profile_preflight_run is not False
+        or value.runtime_observed is not False
+        or value.production_capture_enabled is not False
+    ):
+        raise ExactCaptureRefusal(
+            "simulation backend overstated a profile, runtime, or production claim."
+        )
+
+
+def _validate_evidence_receipt(
+    value: object,
+    *,
+    request: ExactEngineRequest,
+    spec: ExactSessionSpec,
+    checkpoint_id: str | None,
+) -> ExactEvidenceReceipt:
+    if not isinstance(value, ExactEvidenceReceipt):
+        raise ExactCaptureRefusal("simulation evidence receipt type changed.")
+    expected_checkpoint = EVIDENCE_ROLE_CHECKPOINT_OWNERSHIP[
+        spec.session_id
+    ].get(value.role_id, "undeclared-role")
+    if (
+        value.run_id != request.run_id
+        or value.session_id != spec.session_id
+        or value.checkpoint_id != checkpoint_id
+        or value.checkpoint_id != expected_checkpoint
+        or value.role_id not in spec.required_evidence_roles
+        or (
+            checkpoint_id is not None
+            and value.role_id not in spec.backend_evidence_roles
+        )
+        or (
+            checkpoint_id is None
+            and value.role_id
+            not in ENGINE_DERIVED_EVIDENCE_ROLES[spec.session_id]
+        )
+        or value.kind != "simulation-declaration"
+        or not isinstance(value.byte_length, int)
+        or isinstance(value.byte_length, bool)
+        or value.byte_length <= 0
+        or not isinstance(value.sha256, str)
+        or _SHA256_RE.fullmatch(value.sha256) is None
+    ):
+        raise ExactCaptureRefusal(
+            "simulation evidence receipt identity or claim scope changed."
+        )
+    _parse_utc_milliseconds(
+        value.captured_at_utc, "simulation evidence receipt UTC"
+    )
+    expected_artifact_id = (
+        f"evidence.{request.run_id}.{spec.session_id}.{value.role_id}"
+    )
+    expected_parent = (
+        EXACT_STAGING_PREFIX / request.run_id / "sessions" /
+        spec.session_id / "evidence"
+    )
+    try:
+        relative = pathlib.PurePosixPath(value.repo_relative_path)
+    except (TypeError, ValueError):
+        raise ExactCaptureRefusal(
+            "simulation evidence receipt path is malformed."
+        ) from None
+    if (
+        value.artifact_id != expected_artifact_id
+        or relative.is_absolute()
+        or any(part in {"", ".", ".."} for part in relative.parts)
+        or relative.parent != expected_parent
+        or relative.name != f"{expected_artifact_id}.json"
+    ):
+        raise ExactCaptureRefusal(
+            "simulation evidence receipt escaped exact staging identity."
+        )
+    return value
+
+
+def evidence_receipt_payload(
+    value: ExactEvidenceReceipt,
+) -> dict[str, object]:
+    return {
+        "runId": value.run_id,
+        "sessionId": value.session_id,
+        "checkpointId": value.checkpoint_id,
+        "roleId": value.role_id,
+        "artifactId": value.artifact_id,
+        "repoRelativePath": value.repo_relative_path,
+        "kind": value.kind,
+        "byteLength": value.byte_length,
+        "sha256": value.sha256,
+        "capturedAtUtc": value.captured_at_utc,
+    }
+
+
+def evidence_receipt_from_payload(value: object) -> ExactEvidenceReceipt:
+    expected_keys = {
+        "runId", "sessionId", "checkpointId", "roleId", "artifactId",
+        "repoRelativePath", "kind", "byteLength", "sha256", "capturedAtUtc",
+    }
+    if not isinstance(value, dict) or set(value) != expected_keys:
+        raise ExactCaptureRefusal("evidence receipt payload schema changed.")
+    return ExactEvidenceReceipt(
+        run_id=value["runId"],
+        session_id=value["sessionId"],
+        checkpoint_id=value["checkpointId"],
+        role_id=value["roleId"],
+        artifact_id=value["artifactId"],
+        repo_relative_path=value["repoRelativePath"],
+        kind=value["kind"],
+        byte_length=value["byteLength"],
+        sha256=value["sha256"],
+        captured_at_utc=value["capturedAtUtc"],
+    )
+
+
+def _receipt_closure_payload(
+    receipts: Sequence[ExactEvidenceReceipt],
+) -> dict[str, object]:
+    payloads = [evidence_receipt_payload(receipt) for receipt in receipts]
+    return {
+        "receiptCount": len(payloads),
+        "receiptsSha256": _sha256_canonical(payloads),
+        "receipts": payloads,
+    }
+
+
+def _derived_evidence_receipt(
+    request: ExactEngineRequest,
+    spec: ExactSessionSpec,
+    role_id: str,
+    material: Mapping[str, object],
+    captured_at_utc: str,
+) -> ExactEvidenceReceipt:
+    encoded = _canonical_json(material).encode("utf-8")
+    artifact_id = f"evidence.{request.run_id}.{spec.session_id}.{role_id}"
+    return ExactEvidenceReceipt(
+        run_id=request.run_id,
+        session_id=spec.session_id,
+        checkpoint_id=None,
+        role_id=role_id,
+        artifact_id=artifact_id,
+        repo_relative_path=(
+            EXACT_STAGING_PREFIX.as_posix()
+            + f"/{request.run_id}/sessions/{spec.session_id}/evidence/"
+            + f"{artifact_id}.json"
+        ),
+        kind="simulation-declaration",
+        byte_length=len(encoded),
+        sha256=_sha256_bytes(encoded),
+        captured_at_utc=captured_at_utc,
+    )
+
+
+def _require_exact_readback(expected: object, observed: object, label: str) -> None:
+    if isinstance(expected, Sequence) and not isinstance(
+        expected, (str, bytes, bytearray, dict)
+    ):
+        try:
+            identical_sequence = tuple(observed) == tuple(expected)
+        except TypeError:
+            identical_sequence = False
+        if not identical_sequence:
+            raise ExactCaptureRefusal(f"{label} durable readback changed.")
+        return
+    try:
+        identical = _canonical_json(observed) == _canonical_json(expected)
+    except (TypeError, ValueError):
+        identical = False
+    if not identical:
+        raise ExactCaptureRefusal(f"{label} durable readback changed.")
+
+
+def _build_exact_session_journal(
+    run_id: str,
+    ordinal: int,
+    pre_snapshot_sha256: str | None,
+    post_snapshot_sha256: str,
+    receipts: Sequence[ExactEvidenceReceipt],
+) -> dict[str, object]:
+    session_id = SESSION_IDS[ordinal]
+    writer = AppendOnlyJournal(run_id, session_id, ordinal)
+    clock = 1_000
+    writer.append(
+        "session-open",
+        {
+            "sessionId": session_id,
+            "preCardSnapshotSha256": pre_snapshot_sha256,
+        },
+        clock,
+    )
+    if pre_snapshot_sha256 is not None:
+        clock += 1_000
+        writer.append(
+            "card-snapshot-bound",
+            {
+                "role": "session-pre",
+                "snapshotSha256": pre_snapshot_sha256,
+            },
+            clock,
+        )
+    for checkpoint_ordinal, checkpoint_id in enumerate(
+        OPERATOR_CHECKPOINTS[session_id]
+    ):
+        clock += 1_000
+        writer.append(
+            "operator-checkpoint",
+            {"checkpointId": checkpoint_id, "ordinal": checkpoint_ordinal},
+            clock,
+        )
+    receipt_closure = _receipt_closure_payload(receipts)
+    clock += 1_000
+    writer.append(
+        "evidence-receipts-bound",
+        receipt_closure,
+        clock,
+    )
+    for binding in CHECK_BINDINGS:
+        if CHECK_BINDING_OWNER_SESSION[binding.check_id] != session_id:
+            continue
+        clock += 1_000
+        writer.append(
+            "check-bound",
+            {
+                "checkId": binding.check_id,
+                "sessionIds": list(binding.session_ids),
+                "evidenceRoles": [
+                    {"roleId": role.role_id, "sessionId": role.session_id}
+                    for role in binding.evidence_roles
+                ],
+            },
+            clock,
+        )
+    clock += 1_000
+    writer.append(
+        "card-snapshot-bound",
+        {"role": "session-post", "snapshotSha256": post_snapshot_sha256},
+        clock,
+    )
+    clock += 1_000
+    writer.append(
+        "session-sealed",
+        {
+            "postCardSnapshotSha256": post_snapshot_sha256,
+            "evidenceReceiptsSha256": receipt_closure["receiptsSha256"],
+            "evidenceReceiptCount": receipt_closure["receiptCount"],
+        },
+        clock,
+    )
+    document = writer.document()
+    validate_journal(document)
+    return document
+
+
+def _validate_card_chain_prefix(
+    snapshots: Sequence[Mapping[str, object]],
+    run_id: str,
+) -> tuple[Mapping[str, object], ...]:
+    values = tuple(snapshots)
+    if len(values) not in {1, 2, 4, 6}:
+        raise ExactCaptureRefusal("resume card chain is not a sealed-session prefix.")
+    for index, snapshot in enumerate(values):
+        phase, session_id = CARD_CHAIN_LAYOUT[index]
+        prior = values[index - 1] if index else None
+        validate_card_snapshot(
+            snapshot,
+            expected_phase=phase,
+            expected_session_id=session_id,
+            expected_run_id=run_id,
+            prior_snapshot=prior,
+        )
+    timestamps = [
+        _parse_utc_milliseconds(value["capturedAtUtc"], "resume card chain UTC")
+        for value in values
+    ]
+    if any(left >= right for left, right in zip(timestamps, timestamps[1:])):
+        raise ExactCaptureRefusal("resume card chronology is not exact.")
+    directories = [value["memcardsDirectory"] for value in values]
+    if any(value != directories[0] for value in directories[1:]):
+        raise ExactCaptureRefusal("resume memcards identity changed.")
+    process_starts = [values[index] for index in (1, 2, 4) if index < len(values)]
+    process_ids = [value["processInstanceId"] for value in process_starts]
+    os_ids = [
+        os_process_identity_sha256_from_fingerprint(value["processFingerprint"])
+        for value in process_starts
+    ]
+    if len(process_ids) != len(set(process_ids)) or len(os_ids) != len(set(os_ids)):
+        raise ExactCaptureRefusal("resume prefix reused a process identity.")
+    for pre_index, post_index in ((2, 3), (4, 5)):
+        if post_index >= len(values):
+            continue
+        pre = values[pre_index]
+        post = values[post_index]
+        if (
+            pre["processInstanceId"] != post["processInstanceId"]
+            or pre["processFingerprint"]["identity"]
+            != post["processFingerprint"]["identity"]
+        ):
+            raise ExactCaptureRefusal(
+                "resume prefix changed a within-session process identity."
+            )
+    for prior_post_index, next_pre_index in ((1, 2), (3, 4)):
+        if next_pre_index >= len(values):
+            continue
+        prior_termination = _parse_utc_milliseconds(
+            values[prior_post_index]["processFingerprint"]["termination"][
+                "capturedAtUtc"
+            ],
+            "resume prior process termination UTC",
+        )
+        next_start = _parse_utc_milliseconds(
+            values[next_pre_index]["processFingerprint"]["identity"][
+                "processStartUtc"
+            ],
+            "resume next process start UTC",
+        )
+        if next_start <= prior_termination:
+            raise ExactCaptureRefusal(
+                "resume process began before prior clean termination."
+            )
+    if len(values) == 6:
+        validate_card_chain(values)
+    return values
+
+
+def _validate_receipt_process_interval(
+    receipts: Sequence[ExactEvidenceReceipt],
+    snapshots: Sequence[Mapping[str, object]],
+    spec: ExactSessionSpec,
+) -> None:
+    post_index = spec.ordinal * 2 + 1
+    if post_index >= len(snapshots):
+        raise ExactCaptureRefusal(
+            "evidence receipts lack their owning process interval."
+        )
+    fingerprint = snapshots[post_index]["processFingerprint"]
+    process_start = _parse_utc_milliseconds(
+        fingerprint["identity"]["processStartUtc"],
+        "evidence owning process start UTC",
+    )
+    process_termination = _parse_utc_milliseconds(
+        fingerprint["termination"]["capturedAtUtc"],
+        "evidence owning process termination UTC",
+    )
+    for receipt in receipts:
+        captured = _parse_utc_milliseconds(
+            receipt.captured_at_utc, "evidence receipt process UTC"
+        )
+        if captured < process_start or captured > process_termination:
+            raise ExactCaptureRefusal(
+                "evidence receipt timestamp escaped its owning process interval."
+            )
+
+
+def _validate_resume_state(
+    state: object,
+    request: ExactEngineRequest,
+) -> int:
+    if not isinstance(state, ExactResumeState):
+        raise ExactCaptureRefusal("resume store returned an invalid state type.")
+    if state.quarantined:
+        raise ExactCaptureRefusal("simulation run is quarantined and cannot resume.")
+    if state.active_session_id is not None:
+        raise ExactCaptureRefusal(
+            "unsealed simulation session cannot be resumed automatically."
+        )
+    expected_origin = _offline_run_origin(request.run_id)
+    _require_exact_readback(expected_origin, state.origin, "resume origin")
+    journal_count = len(state.sealed_journals)
+    if journal_count > len(SESSION_IDS):
+        raise ExactCaptureRefusal("resume store contains too many sealed sessions.")
+    snapshot_count = len(state.card_snapshots)
+    expected_snapshot_count = 0 if journal_count == 0 else journal_count * 2
+    if journal_count == 0:
+        if snapshot_count not in {0, 1}:
+            raise ExactCaptureRefusal("resume pre-session card prefix changed.")
+    elif snapshot_count != expected_snapshot_count:
+        raise ExactCaptureRefusal("resume card/session prefix lengths disagree.")
+    snapshots = (
+        _validate_card_chain_prefix(state.card_snapshots, request.run_id)
+        if snapshot_count else ()
+    )
+    validated_journals = tuple(
+        validate_journal(raw_journal)
+        for raw_journal in state.sealed_journals
+    )
+    specs = exact_session_specs()
+    expected_receipt_key_prefix = tuple(
+        (spec.session_id, role_id)
+        for spec in specs[:journal_count]
+        for role_id in spec.required_evidence_roles
+    )
+    supplied_receipt_key_sequence = tuple(
+        (receipt.session_id, receipt.role_id)
+        for receipt in state.evidence_receipts
+    )
+    if supplied_receipt_key_sequence != expected_receipt_key_prefix:
+        raise ExactCaptureRefusal(
+            "resume evidence receipt sequence is not the exact sealed-session prefix."
+        )
+    receipt_keys: set[tuple[str, str]] = set()
+    receipt_by_key: dict[tuple[str, str], ExactEvidenceReceipt] = {}
+    for receipt in state.evidence_receipts:
+        if receipt.session_id not in SESSION_IDS[:journal_count]:
+            raise ExactCaptureRefusal(
+                "resume evidence belongs to an unsealed session."
+            )
+        spec = specs[SESSION_IDS.index(receipt.session_id)]
+        expected_checkpoint = receipt.checkpoint_id
+        if expected_checkpoint is not None and expected_checkpoint not in spec.checkpoints:
+            raise ExactCaptureRefusal("resume evidence checkpoint is foreign.")
+        _validate_evidence_receipt(
+            receipt,
+            request=request,
+            spec=spec,
+            checkpoint_id=expected_checkpoint,
+        )
+        key = (receipt.session_id, receipt.role_id)
+        if key in receipt_keys:
+            raise ExactCaptureRefusal("resume evidence role is duplicated.")
+        receipt_keys.add(key)
+        receipt_by_key[key] = receipt
+    for spec in specs[:journal_count]:
+        session_receipts = tuple(
+            receipt_by_key[(spec.session_id, role)]
+            for role in spec.required_evidence_roles
+            if (spec.session_id, role) in receipt_by_key
+        )
+        if tuple(receipt.role_id for receipt in session_receipts) != (
+            spec.required_evidence_roles
+        ):
+            raise ExactCaptureRefusal(
+                "resume sealed session lacks exact evidence-role coverage."
+            )
+        _validate_receipt_process_interval(session_receipts, snapshots, spec)
+        pre_hash = None if spec.ordinal == 0 else card_snapshot_sha256(
+            snapshots[spec.ordinal * 2]
+        )
+        post_hash = card_snapshot_sha256(snapshots[spec.ordinal * 2 + 1])
+        expected = _build_exact_session_journal(
+            request.run_id,
+            spec.ordinal,
+            pre_hash,
+            post_hash,
+            session_receipts,
+        )
+        _require_exact_readback(
+            expected,
+            validated_journals[spec.ordinal],
+            "sealed session journal",
+        )
+    if state.final_bundle is not None:
+        if journal_count != len(SESSION_IDS):
+            raise ExactCaptureRefusal("partial resume state contains a final bundle.")
+        validate_run_bundle(state.final_bundle)
+        expected_bundle = {
+            "origin": dict(state.origin),
+            "journals": list(state.sealed_journals),
+            "cardSnapshots": list(state.card_snapshots),
+            "evidenceReceipts": [
+                evidence_receipt_payload(receipt_by_key[(spec.session_id, role)])
+                for spec in specs
+                for role in spec.required_evidence_roles
+            ],
+        }
+        _require_exact_readback(expected_bundle, state.final_bundle, "final bundle")
+    return journal_count
+
+
+class ExactThreeSessionEngine:
+    """Drive the frozen three-session plan through injected simulation seams.
+
+    The class has no filesystem backend, process launcher, input automation, or
+    live CLI wiring.  It cannot turn declaration receipts into runtime evidence
+    and therefore always returns all acceptance/release claims false.
+    """
+
+    def __init__(
+        self,
+        backend: ExactRuntimeBackend,
+        store: ExactRunStore,
+        lease_factory: Callable[[str], object],
+        fault_hook: Callable[[str], None] | None = None,
+    ) -> None:
+        self.backend = backend
+        self.store = store
+        self.lease_factory = lease_factory
+        self.fault_hook = fault_hook
+
+    def _fault(self, boundary: str) -> None:
+        if self.fault_hook is not None:
+            self.fault_hook(boundary)
+
+    def run(self, raw_request: ExactEngineRequest) -> ExactEngineResult:
+        request = _validate_simulation_request(raw_request)
+        _validate_plan()
+        specs = exact_session_specs()
+        current_ordinal: int | None = None
+        active_handle: object | None = None
+        pending_spec: ExactSessionSpec | None = None
+        backend_active = False
+        store_bound = False
+        with self.lease_factory(request.run_id) as lease:
+            self.store.bind_lease(lease)
+            store_bound = True
+            self._fault("after-authority-lease")
+            try:
+                preflight = self.backend.preflight(request)
+                _validate_simulation_preflight(preflight)
+                self._fault("after-preflight")
+
+                state = self.store.inspect_resume(request.run_id)
+                origin = _offline_run_origin(request.run_id)
+                snapshots: list[Mapping[str, object]] = []
+                journals: list[Mapping[str, object]] = []
+                receipts: list[ExactEvidenceReceipt] = []
+                if state is None:
+                    if request.resume:
+                        raise ExactCaptureRefusal(
+                            "requested simulation resume state does not exist."
+                        )
+                    observed_origin = self.store.begin_run(origin)
+                    _require_exact_readback(
+                        origin, observed_origin, "simulation run origin"
+                    )
+                    self._fault("after-run-origin-commit")
+                    empty = dict(
+                        self.backend.capture_prelaunch_empty_card(request)
+                    )
+                    validate_card_snapshot(
+                        empty,
+                        expected_phase="prelaunch-empty",
+                        expected_session_id="preflight",
+                        expected_run_id=request.run_id,
+                    )
+                    observed_empty = self.store.commit_card_snapshot(empty)
+                    _require_exact_readback(
+                        empty, observed_empty, "prelaunch card snapshot"
+                    )
+                    snapshots.append(empty)
+                    self._fault("after-prelaunch-card-commit")
+                    start_ordinal = 0
+                else:
+                    if not request.resume:
+                        raise ExactCaptureRefusal(
+                            "simulation run identity already exists; resume is required."
+                        )
+                    if state.active_session_id is not None and not state.quarantined:
+                        self.store.quarantine(
+                            request.run_id,
+                            "unsealed-session-present-at-resume",
+                        )
+                    start_ordinal = _validate_resume_state(state, request)
+                    snapshots.extend(state.card_snapshots)
+                    journals.extend(state.sealed_journals)
+                    receipts.extend(state.evidence_receipts)
+                    if state.final_bundle is not None:
+                        self.backend.assert_quiescent()
+                        self._fault("before-lease-release")
+                        final_receipts = tuple(
+                            evidence_receipt_from_payload(raw_receipt)
+                            for raw_receipt in state.final_bundle[
+                                "evidenceReceipts"
+                            ]
+                        )
+                        return ExactEngineResult(
+                            run_id=request.run_id,
+                            simulation_only=True,
+                            runtime_observed=False,
+                            production_capture_enabled=False,
+                            evidence_accepted=False,
+                            create_bin_authorized=False,
+                            release_authorized=False,
+                            publishable=False,
+                            resumed_session_count=start_ordinal,
+                            bundle=state.final_bundle,
+                            evidence_receipts=final_receipts,
+                        )
+                    if not snapshots:
+                        empty = dict(
+                            self.backend.capture_prelaunch_empty_card(request)
+                        )
+                        validate_card_snapshot(
+                            empty,
+                            expected_phase="prelaunch-empty",
+                            expected_session_id="preflight",
+                            expected_run_id=request.run_id,
+                        )
+                        observed_empty = self.store.commit_card_snapshot(empty)
+                        _require_exact_readback(
+                            empty, observed_empty, "resumed prelaunch card snapshot"
+                        )
+                        snapshots.append(empty)
+                        self._fault("after-prelaunch-card-commit")
+
+                receipt_keys = {
+                    (receipt.session_id, receipt.role_id) for receipt in receipts
+                }
+                for spec in specs[start_ordinal:]:
+                    current_ordinal = spec.ordinal
+                    prior_snapshot = snapshots[-1]
+                    pending_spec = spec
+                    returned_handle = self.backend.begin_session(
+                        spec, prior_snapshot
+                    )
+                    if returned_handle is None:
+                        raise ExactCaptureRefusal(
+                            "simulation backend returned no owned session handle."
+                        )
+                    active_handle = returned_handle
+                    backend_active = True
+                    pending_spec = None
+                    marker = {
+                        "runId": request.run_id,
+                        "sessionId": spec.session_id,
+                        "sessionOrdinal": spec.ordinal,
+                        "priorSnapshotSha256": card_snapshot_sha256(prior_snapshot),
+                    }
+                    observed_marker = self.store.begin_session(
+                        spec, card_snapshot_sha256(prior_snapshot)
+                    )
+                    _require_exact_readback(
+                        marker, observed_marker, "active session marker"
+                    )
+                    self._fault(f"after-session-begin:{spec.session_id}")
+
+                    pre_hash: str | None = None
+                    if spec.ordinal:
+                        pre_snapshot = dict(self.backend.capture_card(
+                            active_handle, "pre-session", prior_snapshot
+                        ))
+                        validate_card_snapshot(
+                            pre_snapshot,
+                            expected_phase="pre-session",
+                            expected_session_id=spec.session_id,
+                            expected_run_id=request.run_id,
+                            prior_snapshot=prior_snapshot,
+                        )
+                        observed_pre = self.store.commit_card_snapshot(pre_snapshot)
+                        _require_exact_readback(
+                            pre_snapshot, observed_pre, "pre-session card snapshot"
+                        )
+                        snapshots.append(pre_snapshot)
+                        pre_hash = card_snapshot_sha256(pre_snapshot)
+                        self._fault(f"after-pre-card-commit:{spec.session_id}")
+
+                    writer = AppendOnlyJournal(
+                        request.run_id, spec.session_id, spec.ordinal
+                    )
+                    clock = 1_000
+                    writer.append(
+                        "session-open",
+                        {
+                            "sessionId": spec.session_id,
+                            "preCardSnapshotSha256": pre_hash,
+                        },
+                        clock,
+                    )
+                    if pre_hash is not None:
+                        clock += 1_000
+                        writer.append(
+                            "card-snapshot-bound",
+                            {"role": "session-pre", "snapshotSha256": pre_hash},
+                            clock,
+                        )
+                    prefix = writer.document()
+                    observed_prefix = self.store.commit_journal_prefix(prefix)
+                    _require_exact_readback(
+                        prefix, observed_prefix, "session-open journal prefix"
+                    )
+                    self._fault(
+                        f"after-session-open-commit:{spec.session_id}"
+                    )
+
+                    session_receipts: list[ExactEvidenceReceipt] = []
+                    for checkpoint_ordinal, checkpoint_id in enumerate(
+                        spec.checkpoints
+                    ):
+                        raw_receipts = tuple(self.backend.checkpoint(
+                            active_handle, checkpoint_id, checkpoint_ordinal
+                        ))
+                        validated: list[ExactEvidenceReceipt] = []
+                        for receipt in raw_receipts:
+                            value = _validate_evidence_receipt(
+                                receipt,
+                                request=request,
+                                spec=spec,
+                                checkpoint_id=checkpoint_id,
+                            )
+                            key = (value.session_id, value.role_id)
+                            if key in receipt_keys:
+                                raise ExactCaptureRefusal(
+                                    "simulation evidence role was committed twice."
+                                )
+                            receipt_keys.add(key)
+                            validated.append(value)
+                        observed_receipts = self.store.commit_evidence(validated)
+                        _require_exact_readback(
+                            tuple(validated), tuple(observed_receipts),
+                            "checkpoint evidence receipts",
+                        )
+                        receipts.extend(validated)
+                        session_receipts.extend(validated)
+                        self._fault(
+                            f"after-evidence-commit:{spec.session_id}:"
+                            f"{checkpoint_id}"
+                        )
+                        clock += 1_000
+                        writer.append(
+                            "operator-checkpoint",
+                            {
+                                "checkpointId": checkpoint_id,
+                                "ordinal": checkpoint_ordinal,
+                            },
+                            clock,
+                        )
+                        prefix = writer.document()
+                        observed_prefix = self.store.commit_journal_prefix(prefix)
+                        _require_exact_readback(
+                            prefix, observed_prefix, "checkpoint journal prefix"
+                        )
+                        self._fault(
+                            f"after-checkpoint-commit:{spec.session_id}:"
+                            f"{checkpoint_id}"
+                        )
+
+                    self.backend.finish_session_cleanly(active_handle)
+                    backend_active = False
+                    self._fault(f"after-clean-exit:{spec.session_id}")
+                    post_prior = snapshots[-1]
+                    post_snapshot = dict(self.backend.capture_card(
+                        active_handle, "post-session", post_prior
+                    ))
+                    validate_card_snapshot(
+                        post_snapshot,
+                        expected_phase="post-session",
+                        expected_session_id=spec.session_id,
+                        expected_run_id=request.run_id,
+                        prior_snapshot=post_prior,
+                    )
+                    observed_post = self.store.commit_card_snapshot(post_snapshot)
+                    _require_exact_readback(
+                        post_snapshot, observed_post, "post-session card snapshot"
+                    )
+                    snapshots.append(post_snapshot)
+                    post_hash = card_snapshot_sha256(post_snapshot)
+                    _validate_card_chain_prefix(snapshots, request.run_id)
+                    self._fault(f"after-post-card-commit:{spec.session_id}")
+
+                    derived: list[ExactEvidenceReceipt] = []
+                    for role_id in ENGINE_DERIVED_EVIDENCE_ROLES[spec.session_id]:
+                        if role_id == "session0-post-card":
+                            material: Mapping[str, object] = {
+                                "roleId": role_id,
+                                "snapshotSha256": post_hash,
+                            }
+                        elif role_id == "session1-pre-card":
+                            material = {
+                                "roleId": role_id,
+                                "snapshotSha256": pre_hash,
+                            }
+                        else:
+                            material = {
+                                "roleId": role_id,
+                                "processInstanceIds": [
+                                    snapshots[1]["processInstanceId"],
+                                    post_snapshot["processInstanceId"],
+                                ],
+                            }
+                        receipt = _derived_evidence_receipt(
+                            request,
+                            spec,
+                            role_id,
+                            material,
+                            str(
+                                post_snapshot["processFingerprint"]["termination"][
+                                    "capturedAtUtc"
+                                ]
+                            ),
+                        )
+                        _validate_evidence_receipt(
+                            receipt,
+                            request=request,
+                            spec=spec,
+                            checkpoint_id=None,
+                        )
+                        key = (receipt.session_id, receipt.role_id)
+                        if key in receipt_keys:
+                            raise ExactCaptureRefusal(
+                                "engine-derived evidence role was duplicated."
+                            )
+                        receipt_keys.add(key)
+                        derived.append(receipt)
+                    if derived:
+                        observed_derived = self.store.commit_evidence(derived)
+                        _require_exact_readback(
+                            tuple(derived), tuple(observed_derived),
+                            "engine-derived evidence receipts",
+                        )
+                        receipts.extend(derived)
+                        session_receipts.extend(derived)
+                        self._fault(
+                            f"after-derived-evidence-commit:{spec.session_id}"
+                        )
+
+                    if {item.role_id for item in session_receipts} != set(
+                        spec.required_evidence_roles
+                    ):
+                        raise ExactCaptureRefusal(
+                            "simulation session lacks exact evidence-role coverage."
+                        )
+                    receipt_by_role = {
+                        receipt.role_id: receipt for receipt in session_receipts
+                    }
+                    session_receipts = [
+                        receipt_by_role[role]
+                        for role in spec.required_evidence_roles
+                    ]
+                    _validate_receipt_process_interval(
+                        session_receipts, snapshots, spec
+                    )
+                    receipt_closure = _receipt_closure_payload(session_receipts)
+                    clock += 1_000
+                    writer.append(
+                        "evidence-receipts-bound",
+                        receipt_closure,
+                        clock,
+                    )
+                    prefix = writer.document()
+                    observed_prefix = self.store.commit_journal_prefix(prefix)
+                    _require_exact_readback(
+                        prefix, observed_prefix, "evidence closure journal prefix"
+                    )
+                    self._fault(
+                        f"after-evidence-closure-commit:{spec.session_id}"
+                    )
+                    for binding in CHECK_BINDINGS:
+                        if CHECK_BINDING_OWNER_SESSION[binding.check_id] != spec.session_id:
+                            continue
+                        if any(
+                            (role.session_id, role.role_id) not in receipt_keys
+                            for role in binding.evidence_roles
+                        ):
+                            raise ExactCaptureRefusal(
+                                "check binding precedes required evidence-role coverage."
+                            )
+                        clock += 1_000
+                        writer.append(
+                            "check-bound",
+                            {
+                                "checkId": binding.check_id,
+                                "sessionIds": list(binding.session_ids),
+                                "evidenceRoles": [
+                                    {
+                                        "roleId": role.role_id,
+                                        "sessionId": role.session_id,
+                                    }
+                                    for role in binding.evidence_roles
+                                ],
+                            },
+                            clock,
+                        )
+                        prefix = writer.document()
+                        observed_prefix = self.store.commit_journal_prefix(prefix)
+                        _require_exact_readback(
+                            prefix, observed_prefix, "check-binding journal prefix"
+                        )
+                    self._fault(
+                        f"after-check-bindings-commit:{spec.session_id}"
+                    )
+                    clock += 1_000
+                    writer.append(
+                        "card-snapshot-bound",
+                        {"role": "session-post", "snapshotSha256": post_hash},
+                        clock,
+                    )
+                    clock += 1_000
+                    writer.append(
+                        "session-sealed",
+                        {
+                            "postCardSnapshotSha256": post_hash,
+                            "evidenceReceiptsSha256": (
+                                receipt_closure["receiptsSha256"]
+                            ),
+                            "evidenceReceiptCount": (
+                                receipt_closure["receiptCount"]
+                            ),
+                        },
+                        clock,
+                    )
+                    journal = writer.document()
+                    validate_journal(journal)
+                    expected_journal = _build_exact_session_journal(
+                        request.run_id,
+                        spec.ordinal,
+                        pre_hash,
+                        post_hash,
+                        session_receipts,
+                    )
+                    _require_exact_readback(
+                        expected_journal, journal, "session seal projection"
+                    )
+                    self._fault(
+                        f"after-session-seal-projection:{spec.session_id}"
+                    )
+                    observed_journal = self.store.seal_session(journal)
+                    _require_exact_readback(
+                        journal, observed_journal, "sealed session journal"
+                    )
+                    journals.append(journal)
+                    self._fault(
+                        f"after-session-logical-commit:{spec.session_id}"
+                    )
+                    current_ordinal = None
+                    active_handle = None
+
+                self.backend.assert_quiescent()
+                chain = validate_card_chain(snapshots)
+                receipt_by_key = {
+                    (receipt.session_id, receipt.role_id): receipt
+                    for receipt in receipts
+                }
+                canonical_receipts = tuple(
+                    receipt_by_key[(spec.session_id, role)]
+                    for spec in specs
+                    for role in spec.required_evidence_roles
+                )
+                bundle = {
+                    "origin": origin,
+                    "journals": list(journals),
+                    "cardSnapshots": list(chain),
+                    "evidenceReceipts": [
+                        evidence_receipt_payload(receipt)
+                        for receipt in canonical_receipts
+                    ],
+                }
+                validate_run_bundle(bundle)
+                self._fault("after-run-validate")
+                observed_bundle = self.store.commit_run_bundle(bundle)
+                _require_exact_readback(
+                    bundle, observed_bundle, "final simulation run bundle"
+                )
+                self._fault("after-run-bundle-commit")
+                self._fault("before-lease-release")
+                return ExactEngineResult(
+                    run_id=request.run_id,
+                    simulation_only=True,
+                    runtime_observed=False,
+                    production_capture_enabled=False,
+                    evidence_accepted=False,
+                    create_bin_authorized=False,
+                    release_authorized=False,
+                    publishable=False,
+                    resumed_session_count=start_ordinal,
+                    bundle=bundle,
+                    evidence_receipts=canonical_receipts,
+                )
+            except BaseException:
+                cleanup_attempted = False
+                if pending_spec is not None:
+                    cleanup_attempted = True
+                    try:
+                        self.backend.abort_pending_session(pending_spec)
+                    except BaseException:
+                        pass
+                if backend_active and active_handle is not None:
+                    cleanup_attempted = True
+                    try:
+                        self.backend.abort_active_session(active_handle)
+                    except BaseException:
+                        pass
+                if cleanup_attempted:
+                    try:
+                        self.backend.assert_quiescent()
+                    except BaseException:
+                        pass
+                if store_bound and current_ordinal is not None:
+                    try:
+                        recovery = self.store.inspect_resume(request.run_id)
+                        sealed_count = (
+                            len(recovery.sealed_journals)
+                            if isinstance(recovery, ExactResumeState)
+                            else 0
+                        )
+                        if sealed_count <= current_ordinal and (
+                            not isinstance(recovery, ExactResumeState)
+                            or not recovery.quarantined
+                        ):
+                            self.store.quarantine(
+                                request.run_id,
+                                "unsafe-unsealed-session-after-engine-failure",
+                            )
+                    except BaseException:
+                        pass
+                raise
+
+
 def _synthetic_process_fingerprint(
     phase: str,
     session_id: str,
@@ -2096,6 +3614,86 @@ def _synthetic_snapshot(
     }
 
 
+def _synthetic_fixture_receipts(
+    run_id: str,
+    snapshots: Sequence[Mapping[str, object]],
+) -> tuple[ExactEvidenceReceipt, ...]:
+    timestamps = {
+        SESSION_IDS[0]: "1970-01-01T00:00:00.005Z",
+        SESSION_IDS[1]: "1970-01-01T00:00:00.020Z",
+        SESSION_IDS[2]: "1970-01-01T00:00:00.040Z",
+    }
+    request = ExactEngineRequest(run_id)
+    receipts: list[ExactEvidenceReceipt] = []
+    for spec in exact_session_specs():
+        for role_id in spec.required_evidence_roles:
+            checkpoint_id = EVIDENCE_ROLE_CHECKPOINT_OWNERSHIP[
+                spec.session_id
+            ][role_id]
+            if checkpoint_id is None:
+                if role_id == "session0-post-card":
+                    material: Mapping[str, object] = {
+                        "roleId": role_id,
+                        "snapshotSha256": card_snapshot_sha256(snapshots[1]),
+                    }
+                elif role_id == "session1-pre-card":
+                    material = {
+                        "roleId": role_id,
+                        "snapshotSha256": card_snapshot_sha256(snapshots[2]),
+                    }
+                else:
+                    material = {
+                        "roleId": role_id,
+                        "processInstanceIds": [
+                            snapshots[1]["processInstanceId"],
+                            snapshots[3]["processInstanceId"],
+                        ],
+                    }
+                captured_at_utc = str(
+                    snapshots[spec.ordinal * 2 + 1]["processFingerprint"][
+                        "termination"
+                    ]["capturedAtUtc"]
+                )
+                receipt = _derived_evidence_receipt(
+                    request,
+                    spec,
+                    role_id,
+                    material,
+                    captured_at_utc,
+                )
+            else:
+                material_bytes = (
+                    f"offline:{spec.session_id}:{checkpoint_id}:{role_id}"
+                ).encode("utf-8")
+                artifact_id = (
+                    f"evidence.{run_id}.{spec.session_id}.{role_id}"
+                )
+                receipt = ExactEvidenceReceipt(
+                    run_id=run_id,
+                    session_id=spec.session_id,
+                    checkpoint_id=checkpoint_id,
+                    role_id=role_id,
+                    artifact_id=artifact_id,
+                    repo_relative_path=(
+                        EXACT_STAGING_PREFIX.as_posix()
+                        + f"/{run_id}/sessions/{spec.session_id}/evidence/"
+                        + f"{artifact_id}.json"
+                    ),
+                    kind="simulation-declaration",
+                    byte_length=len(material_bytes),
+                    sha256=_sha256_bytes(material_bytes),
+                    captured_at_utc=timestamps[spec.session_id],
+                )
+            _validate_evidence_receipt(
+                receipt,
+                request=request,
+                spec=spec,
+                checkpoint_id=checkpoint_id,
+            )
+            receipts.append(receipt)
+    return tuple(receipts)
+
+
 def build_offline_fixture_bundle() -> dict[str, object]:
     """Build one deterministic no-runtime bundle for adversarial validation."""
 
@@ -2160,104 +3758,32 @@ def build_offline_fixture_bundle() -> dict[str, object]:
         snapshot_hashes[4],
     )
     post_hashes = (snapshot_hashes[1], snapshot_hashes[3], snapshot_hashes[5])
-    journals: list[dict[str, object]] = []
-    for ordinal, session_id in enumerate(SESSION_IDS):
-        writer = AppendOnlyJournal(run_id, session_id, ordinal)
-        clock = 1_000
-        writer.append(
-            "session-open",
-            {
-                "sessionId": session_id,
-                "preCardSnapshotSha256": pre_hashes[ordinal],
-            },
-            clock,
+    receipts = _synthetic_fixture_receipts(run_id, snapshots)
+    specs = exact_session_specs()
+    receipt_by_key = {
+        (receipt.session_id, receipt.role_id): receipt for receipt in receipts
+    }
+    journals = [
+        _build_exact_session_journal(
+            run_id,
+            spec.ordinal,
+            pre_hashes[spec.ordinal],
+            post_hashes[spec.ordinal],
+            tuple(
+                receipt_by_key[(spec.session_id, role)]
+                for role in spec.required_evidence_roles
+            ),
         )
-        if pre_hashes[ordinal] is not None:
-            clock += 1_000
-            writer.append(
-                "card-snapshot-bound",
-                {
-                    "role": "session-pre",
-                    "snapshotSha256": pre_hashes[ordinal],
-                },
-                clock,
-            )
-        for checkpoint_ordinal, checkpoint_id in enumerate(
-            OPERATOR_CHECKPOINTS[session_id]
-        ):
-            clock += 1_000
-            writer.append(
-                "operator-checkpoint",
-                {"checkpointId": checkpoint_id, "ordinal": checkpoint_ordinal},
-                clock,
-            )
-        for binding in CHECK_BINDINGS:
-            if CHECK_BINDING_OWNER_SESSION[binding.check_id] != session_id:
-                continue
-            clock += 1_000
-            writer.append(
-                "check-bound",
-                {
-                    "checkId": binding.check_id,
-                    "sessionIds": list(binding.session_ids),
-                    "evidenceRoles": [
-                        {"roleId": role.role_id, "sessionId": role.session_id}
-                        for role in binding.evidence_roles
-                    ],
-                },
-                clock,
-            )
-        clock += 1_000
-        writer.append(
-            "card-snapshot-bound",
-            {
-                "role": "session-post",
-                "snapshotSha256": post_hashes[ordinal],
-            },
-            clock,
-        )
-        clock += 1_000
-        writer.append(
-            "session-sealed",
-            {"postCardSnapshotSha256": post_hashes[ordinal]},
-            clock,
-        )
-        journals.append(writer.document())
+        for spec in specs
+    ]
 
     return {
-        "origin": {
-            "format": RUN_ORIGIN_FORMAT,
-            "formatVersion": 1,
-            "runId": run_id,
-            "orderedSessionIds": list(SESSION_IDS),
-            "checkIds": list(EVENTUAL_CHECK_IDS),
-            "exactPlanSha256": EXACT_PLAN_SHA256,
-            "exactChecklistSha256": EXACT_CHECKLIST_SHA256,
-            "profileId": PROFILE_ID,
-            "operationalToolPinsSha256": OPERATIONAL_TOOL_PINS_SHA256,
-            "profilePinSetSha256": PROFILE_PIN_SET_SHA256,
-            "profileReceiptClosureSha256": (
-                EXPECTED_PROFILE_RECEIPT_CLOSURE_SHA256
-            ),
-            "schemaClosureSha256": SCHEMA_CLOSURE_SHA256,
-            "sourceDeclarationClosureSha256": (
-                SOURCE_DECLARATION_CLOSURE_SHA256
-            ),
-            "workflowDeclarationClosureSha256": (
-                WORKFLOW_DECLARATION_CLOSURE_SHA256
-            ),
-            "declarationClosuresBindCoordinatorBytes": False,
-            "profilePinsVerified": False,
-            "saveProfilePreflightRun": False,
-            "runtimeObserved": False,
-            "productionCaptureEnabled": False,
-            "musicAudioTrackValidated": MUSIC_AUDIO_TRACK_VALIDATED,
-            "musicRequiresLiveOperatorAttestation": (
-                MUSIC_REQUIRES_LIVE_OPERATOR_ATTESTATION
-            ),
-        },
+        "origin": _offline_run_origin(run_id),
         "journals": journals,
         "cardSnapshots": snapshots,
+        "evidenceReceipts": [
+            evidence_receipt_payload(receipt) for receipt in receipts
+        ],
     }
 
 

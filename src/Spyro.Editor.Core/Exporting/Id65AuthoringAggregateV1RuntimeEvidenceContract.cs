@@ -236,11 +236,11 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceContract
         RuntimeAssetRelativePrefix + "capture-staging";
     internal static readonly string ExpectedFocusedRuntimeEvidenceSha256 = "PENDING";
     internal static readonly string ExpectedCaptureCoordinatorSha256 =
-        "de7ca2b3886fc897f876fb9f53727c19596a188d8882979f60cce16fd3e63c2c";
+        "83cf8e24455364d6ee6e66fe485ebec62e04518592c36edc0b262e14590445af";
     internal const string ExpectedAggregateChecklistSha256 =
         "3fee9f6a9b8aa5e90a846834b29c4d1b3f17683d19f2b9804126d17527eefeef";
     internal const string ExpectedExactPlanSha256 =
-        "23838ecb8f05c62f2d4d2df243fd37553eb5f36579e95d137ac7beb6209c1543";
+        "a8528be7d66a7944fd50bba03479ed42a839d4c0d2c43d1c9432dc1865499bb2";
     internal const string ExpectedOperationalToolPinsSha256 =
         "ac30470f7741d0273a9d78a63f25fafb0709ce74f430c85256b83173ac7716c7";
     internal const string ExpectedCaptureRuntimeProfileSha256 =
@@ -248,11 +248,11 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceContract
     internal const string ExpectedProfileReceiptClosureSha256 =
         "7b43c1c81e4ca40148c99c2c0d908891453e2882c9f93b0d0f9d440c52cb5330";
     internal const string ExpectedCaptureSchemaClosureSha256 =
-        "3a30359f741bf31d9be46a168662b4d0cf2f38bbbe86806e304a0744808f01f4";
+        "f2932cade1dceb5890cfda610cbae06e5be1544de304067c4e0b0a3c7cbc4ba4";
     internal const string ExpectedCaptureSourceClosureSha256 =
         "fa601b2d8aad8a8931ce49e8be9269afdc3bb3105e927d65c70c138e9a832a41";
     internal const string ExpectedWorkflowDeclarationClosureSha256 =
-        "b086b7336c975a59b24cde401d4b5080b260ad9da563c12f2d33518d7096a9c3";
+        "e2d4dccc1f365076ca1028252eff08242cfb5284caa3e25ff5a388f042aefa3b";
     internal const string ExpectedProductionCaptureBlockersSha256 =
         "9069369b35c43da4f6002477b094a8aa5e2be7e0076530c718366ecc95349769";
     internal const string ExpectedFrozenWorkflowSha256 =
@@ -262,7 +262,7 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceContract
     internal const string ExpectedRuntimeProfileClosureSha256 =
         "b9b9454b425bb7b743234f8f9056ea5820f26308989a75a1f19bdc4decd8243d";
     internal const string ExpectedToolSetClosureSha256 =
-        "3f9a89ab97ad8317eca975a604fb813b3cbc40018a836bb918be58619fa3b61f";
+        "b3c7b9e1b529566d6c69142f24ea84d9100f44a91d5cc59d395eb4e1bc85b454";
 
     private const string Canonicalization = "rfc8785-jcs-utf8-v1";
     private const string EvidenceId =
@@ -668,14 +668,14 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceContract
         new(
             "capture-coordinator",
             "tools/Capture-SpyroId65AuthoringAggregateExactV1RuntimeSession.py",
-            104_888,
+            166_832,
             ExpectedCaptureCoordinatorSha256,
             "0644"),
         new(
             "capture-deep-test",
             "tools/Test-Capture-SpyroId65AuthoringAggregateExactV1RuntimeSession.py",
-            77_990,
-            "10104ab431260fafed5d215d5c16325c6f5792848dbfcb69c77b98cb4cdbfb72",
+            134_774,
+            "ebad45c21b6c8b7e4c15998f4709256a52038a537a0dada9bdfa11081ce000b2",
             "0644")
     ];
 

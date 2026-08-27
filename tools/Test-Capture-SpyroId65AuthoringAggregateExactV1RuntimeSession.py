@@ -212,6 +212,575 @@ def _clone(value: object) -> Any:
     return copy.deepcopy(value)
 
 
+class InjectedEngineFailure(RuntimeError):
+    pass
+
+
+class LeaseState:
+    def __init__(self) -> None:
+        self.held = False
+        self.events: list[tuple[str, ...]] = []
+
+
+class GuardLease:
+    """Side-effect-free authority-held marker for exhaustive engine cuts."""
+
+    def __init__(self, state: LeaseState) -> None:
+        self.state = state
+
+    def __enter__(self) -> "GuardLease":
+        if self.state.held:
+            raise AssertionError("test lease was entered twice")
+        self.state.held = True
+        self.state.events.append(("lease-enter",))
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, trace: object) -> None:
+        self.state.events.append(("lease-exit",))
+        self.state.held = False
+
+
+class ActualLeaseProbe:
+    """Expose held state only after the hardened temp-root lease succeeds."""
+
+    def __init__(
+        self,
+        state: LeaseState,
+        root: pathlib.Path,
+    ) -> None:
+        self.state = state
+        self.inner = capture.AuthorityFirstExactLease(
+            root,
+            authority_directory=pathlib.PurePosixPath("authority"),
+            staging_prefix=pathlib.PurePosixPath("staging"),
+        )
+
+    def __enter__(self) -> "ActualLeaseProbe":
+        self.inner.__enter__()
+        self.state.held = True
+        self.state.events.append(("actual-authority-lease-enter",))
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, trace: object) -> None:
+        try:
+            self.inner.__exit__(exc_type, exc, trace)
+        finally:
+            self.state.events.append(("actual-authority-lease-exit",))
+            self.state.held = False
+
+
+class FakeExactRuntimeBackend:
+    """Deterministic adapter that never launches or controls a process."""
+
+    def __init__(
+        self,
+        lease_state: LeaseState,
+        *,
+        receipt_mode: str | None = None,
+        snapshot_mode: str | None = None,
+        begin_mode: str | None = None,
+    ) -> None:
+        self.lease_state = lease_state
+        self.receipt_mode = receipt_mode
+        self.snapshot_mode = snapshot_mode
+        self.begin_mode = begin_mode
+        self.events: list[tuple[str, ...]] = []
+        self.handles: list[dict[str, object]] = []
+        self.abort_count = 0
+        self.pending_abort_count = 0
+        self._duplicate_receipt: capture.ExactEvidenceReceipt | None = None
+
+    def _guard(self) -> None:
+        if not self.lease_state.held:
+            raise AssertionError("runtime adapter was called without authority lease")
+
+    def preflight(
+        self,
+        request: capture.ExactEngineRequest,
+    ) -> capture.ExactSimulationPreflight:
+        self._guard()
+        self.events.append(("preflight", request.run_id))
+        return capture.ExactSimulationPreflight(
+            simulation_only=True,
+            profile_pins_verified=False,
+            save_profile_preflight_run=False,
+            runtime_observed=False,
+            production_capture_enabled=False,
+        )
+
+    def capture_prelaunch_empty_card(
+        self,
+        request: capture.ExactEngineRequest,
+    ) -> Mapping[str, object]:
+        self._guard()
+        self.events.append(("prelaunch-card", request.run_id))
+        return capture._synthetic_snapshot(
+            "prelaunch-empty",
+            "preflight",
+            empty=True,
+            run_id=request.run_id,
+            captured_at_utc="1970-01-01T00:00:00.000Z",
+        )
+
+    def begin_session(
+        self,
+        spec: capture.ExactSessionSpec,
+        prior_snapshot: Mapping[str, object],
+    ) -> object:
+        self._guard()
+        handle: dict[str, object] = {
+            "spec": spec,
+            "active": True,
+            "finished": False,
+        }
+        self.handles.append(handle)
+        self.events.append(("begin", spec.session_id))
+        if self.begin_mode == "activate-then-raise" and spec.ordinal == 0:
+            raise InjectedEngineFailure("partial begin activation")
+        return handle
+
+    def abort_pending_session(self, spec: capture.ExactSessionSpec) -> None:
+        self._guard()
+        matches = [
+            handle for handle in self.handles
+            if handle["spec"] == spec and bool(handle["active"])
+        ]
+        if len(matches) != 1:
+            raise AssertionError("pending begin cleanup did not own one activation")
+        matches[0]["active"] = False
+        self.pending_abort_count += 1
+        self.events.append(("abort-pending", spec.session_id))
+
+    def _mutate_snapshot(
+        self,
+        snapshot: dict[str, object],
+        phase: str,
+        session_id: str,
+    ) -> None:
+        if self.snapshot_mode == "foreign-session" and (
+            session_id == capture.SESSION_IDS[0] and phase == "post-session"
+        ):
+            snapshot["sessionId"] = capture.SESSION_IDS[1]
+        elif self.snapshot_mode == "changed-adjacent-card" and (
+            session_id == capture.SESSION_IDS[1] and phase == "pre-session"
+        ):
+            entry = snapshot["entries"][0]
+            entry["sha256"] = "f" * 64
+            entry["archiveSha256"] = "f" * 64
+            snapshot["sourceArchiveReadbackSha256"] = "f" * 64
+        elif self.snapshot_mode == "unclean-exit" and (
+            session_id == capture.SESSION_IDS[1] and phase == "post-session"
+        ):
+            termination = snapshot["processFingerprint"]["termination"]
+            termination.update({
+                "observed": False,
+                "capturedAtUtc": None,
+                "exitCode": None,
+            })
+        elif self.snapshot_mode == "reused-process" and (
+            session_id == capture.SESSION_IDS[1]
+        ):
+            fingerprint = capture._synthetic_process_fingerprint(
+                phase, capture.SESSION_IDS[0]
+            )
+            snapshot["processFingerprint"] = fingerprint
+            snapshot["processInstanceId"] = (
+                capture.process_instance_id_from_fingerprint(fingerprint)
+            )
+
+    def capture_card(
+        self,
+        handle: object,
+        phase: str,
+        prior_snapshot: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        self._guard()
+        if not isinstance(handle, dict):
+            raise AssertionError("fake handle type changed")
+        spec = handle["spec"]
+        if not isinstance(spec, capture.ExactSessionSpec):
+            raise AssertionError("fake session spec type changed")
+        if phase == "pre-session" and handle["finished"]:
+            raise AssertionError("pre-card captured after clean finish")
+        if phase == "post-session" and not handle["finished"]:
+            raise AssertionError("post-card captured before clean finish")
+        ordinal = spec.ordinal
+        timestamps = {
+            (1, "pre-session"): "1970-01-01T00:00:00.020Z",
+            (2, "pre-session"): "1970-01-01T00:00:00.040Z",
+            (0, "post-session"): "1970-01-01T00:00:00.010Z",
+            (1, "post-session"): "1970-01-01T00:00:00.030Z",
+            (2, "post-session"): "1970-01-01T00:00:00.050Z",
+        }
+        card_hashes = {
+            (1, "pre-session"): "1" * 64,
+            (2, "pre-session"): "2" * 64,
+            (0, "post-session"): "1" * 64,
+            (1, "post-session"): "2" * 64,
+            (2, "post-session"): "3" * 64,
+        }
+        snapshot = capture._synthetic_snapshot(
+            phase,
+            spec.session_id,
+            prior=prior_snapshot,
+            card_sha256=card_hashes[(ordinal, phase)],
+            run_id=str(prior_snapshot["runId"]),
+            captured_at_utc=timestamps[(ordinal, phase)],
+        )
+        self._mutate_snapshot(snapshot, phase, spec.session_id)
+        self.events.append(("card", spec.session_id, phase))
+        return snapshot
+
+    def checkpoint(
+        self,
+        handle: object,
+        checkpoint_id: str,
+        ordinal: int,
+    ) -> Sequence[capture.ExactEvidenceReceipt]:
+        self._guard()
+        if not isinstance(handle, dict) or not handle["active"]:
+            raise AssertionError("checkpoint used an inactive fake handle")
+        spec = handle["spec"]
+        if not isinstance(spec, capture.ExactSessionSpec):
+            raise AssertionError("fake session spec type changed")
+        roles = [
+            role for role in spec.backend_evidence_roles
+            if capture.EVIDENCE_ROLE_CHECKPOINT_OWNERSHIP[
+                spec.session_id
+            ][role] == checkpoint_id
+        ]
+        if self.receipt_mode == "missing" and spec.ordinal == 0:
+            roles = [role for role in roles if role != spec.backend_evidence_roles[0]]
+        receipts: list[capture.ExactEvidenceReceipt] = []
+        for role_id in roles:
+            artifact_id = (
+                f"evidence.{capture.OFFLINE_FIXTURE_RUN_ID}."
+                f"{spec.session_id}.{role_id}"
+            )
+            material = f"{spec.session_id}:{checkpoint_id}:{role_id}".encode()
+            receipt = capture.ExactEvidenceReceipt(
+                run_id=capture.OFFLINE_FIXTURE_RUN_ID,
+                session_id=spec.session_id,
+                checkpoint_id=checkpoint_id,
+                role_id=role_id,
+                artifact_id=artifact_id,
+                repo_relative_path=(
+                    capture.EXACT_STAGING_PREFIX.as_posix()
+                    + f"/{capture.OFFLINE_FIXTURE_RUN_ID}/sessions/"
+                    + f"{spec.session_id}/evidence/{artifact_id}.json"
+                ),
+                kind="simulation-declaration",
+                byte_length=len(material),
+                sha256=hashlib.sha256(material).hexdigest(),
+                captured_at_utc={
+                    capture.SESSION_IDS[0]: "1970-01-01T00:00:00.005Z",
+                    capture.SESSION_IDS[1]: "1970-01-01T00:00:00.020Z",
+                    capture.SESSION_IDS[2]: "1970-01-01T00:00:00.040Z",
+                }[spec.session_id],
+            )
+            if (
+                self.receipt_mode == "foreign-role"
+                and spec.ordinal == 0 and not receipts and ordinal == 0
+            ):
+                receipt = capture.dataclasses.replace(
+                    receipt, role_id="foreign-role"
+                )
+            elif (
+                self.receipt_mode == "wrong-checkpoint"
+                and spec.ordinal == 0 and not receipts and ordinal == 0
+            ):
+                receipt = capture.dataclasses.replace(
+                    receipt, checkpoint_id="foreign-checkpoint"
+                )
+            receipts.append(receipt)
+            if self._duplicate_receipt is None:
+                self._duplicate_receipt = receipt
+        if (
+            self.receipt_mode == "duplicate"
+            and spec.ordinal == 0
+            and ordinal == 0
+            and self._duplicate_receipt is not None
+        ):
+            receipts.append(self._duplicate_receipt)
+        self.events.append(("checkpoint", spec.session_id, checkpoint_id))
+        return tuple(receipts)
+
+    def finish_session_cleanly(self, handle: object) -> None:
+        self._guard()
+        if not isinstance(handle, dict) or not handle["active"]:
+            raise AssertionError("fake clean finish used an inactive handle")
+        spec = handle["spec"]
+        handle["active"] = False
+        handle["finished"] = True
+        self.events.append(("finish", spec.session_id))
+
+    def abort_active_session(self, handle: object) -> None:
+        self._guard()
+        if not isinstance(handle, dict) or not handle["active"]:
+            raise AssertionError("fake abort was duplicated or not active")
+        spec = handle["spec"]
+        handle["active"] = False
+        self.abort_count += 1
+        self.events.append(("abort", spec.session_id))
+
+    def assert_quiescent(self) -> None:
+        self._guard()
+        if any(bool(handle["active"]) for handle in self.handles):
+            raise capture.ExactCaptureRefusal("fake runtime backend is not quiescent")
+        self.events.append(("quiescent",))
+
+
+class RecordingExactRunStore:
+    """In-memory exact/idempotent store with uncertain-commit injection."""
+
+    def __init__(
+        self,
+        lease_state: LeaseState,
+        *,
+        fail_boundary: str | None = None,
+        fail_commit_cut: tuple[str, int] | None = None,
+        corrupt_readback: str | None = None,
+    ) -> None:
+        self.lease_state = lease_state
+        self.fail_boundary = fail_boundary
+        self.fail_commit_cut = fail_commit_cut
+        self.corrupt_readback = corrupt_readback
+        self.origin: dict[str, object] | None = None
+        self.snapshots: list[dict[str, object]] = []
+        self.receipts: list[capture.ExactEvidenceReceipt] = []
+        self.journal_prefixes: dict[str, dict[str, object]] = {}
+        self.journals: list[dict[str, object]] = []
+        self.active: dict[str, object] | None = None
+        self.quarantined = False
+        self.bundle: dict[str, object] | None = None
+        self.events: list[tuple[str, ...]] = []
+        self.commit_index = 0
+        self.commit_labels: list[str] = []
+
+    def _guard(self) -> None:
+        if not self.lease_state.held:
+            raise AssertionError("run store was called without authority lease")
+
+    def _fail(self, boundary: str) -> None:
+        if self.fail_boundary == boundary:
+            raise InjectedEngineFailure(boundary)
+
+    def _before_commit(self, label: str) -> int:
+        index = self.commit_index
+        if self.fail_commit_cut == ("before", index):
+            raise InjectedEngineFailure(f"before-commit:{index}:{label}")
+        return index
+
+    def _after_commit(self, index: int, label: str) -> None:
+        if index != self.commit_index:
+            raise AssertionError("fake commit index changed during one write")
+        self.commit_labels.append(label)
+        self.commit_index += 1
+        if self.fail_commit_cut == ("after", index):
+            raise InjectedEngineFailure(f"after-commit:{index}:{label}")
+
+    def bind_lease(self, lease: object) -> None:
+        self._guard()
+        self.events.append(("bind-lease",))
+
+    def inspect_resume(
+        self,
+        run_id: str,
+    ) -> capture.ExactResumeState | None:
+        self._guard()
+        self.events.append(("inspect", run_id))
+        if self.origin is None:
+            return None
+        return capture.ExactResumeState(
+            origin=_clone(self.origin),
+            card_snapshots=tuple(_clone(self.snapshots)),
+            sealed_journals=tuple(_clone(self.journals)),
+            evidence_receipts=tuple(_clone(self.receipts)),
+            active_session_id=(
+                None if self.active is None else str(self.active["sessionId"])
+            ),
+            quarantined=self.quarantined,
+            final_bundle=None if self.bundle is None else _clone(self.bundle),
+        )
+
+    def begin_run(
+        self,
+        origin: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        self._guard()
+        commit_index = self._before_commit("run-origin")
+        value = _clone(dict(origin))
+        if self.origin is None:
+            self.origin = value
+        elif self.origin != value:
+            raise capture.ExactCaptureRefusal("run origin exact identity conflict")
+        self.events.append(("begin-run", str(origin["runId"])))
+        observed = _clone(self.origin)
+        if self.corrupt_readback == "origin":
+            observed["runtimeObserved"] = True
+        self._after_commit(commit_index, "run-origin")
+        return observed
+
+    def commit_card_snapshot(
+        self,
+        snapshot: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        self._guard()
+        label = f"card:{snapshot['snapshotId']}"
+        commit_index = self._before_commit(label)
+        value = _clone(dict(snapshot))
+        existing = next(
+            (
+                item for item in self.snapshots
+                if item["snapshotId"] == value["snapshotId"]
+            ),
+            None,
+        )
+        if existing is None:
+            self.snapshots.append(value)
+            existing = value
+        elif existing != value:
+            raise capture.ExactCaptureRefusal("card snapshot exact identity conflict")
+        self.events.append(("card", str(value["snapshotId"])))
+        self._after_commit(commit_index, label)
+        return _clone(existing)
+
+    def begin_session(
+        self,
+        spec: capture.ExactSessionSpec,
+        prior_snapshot_sha256: str,
+    ) -> Mapping[str, object]:
+        self._guard()
+        label = f"session-marker:{spec.session_id}"
+        commit_index = self._before_commit(label)
+        marker = {
+            "runId": str(self.origin["runId"]),
+            "sessionId": spec.session_id,
+            "sessionOrdinal": spec.ordinal,
+            "priorSnapshotSha256": prior_snapshot_sha256,
+        }
+        if self.active is None:
+            self.active = marker
+        elif self.active != marker:
+            raise capture.ExactCaptureRefusal("active session exact identity conflict")
+        self.events.append(("begin-session", spec.session_id))
+        self._after_commit(commit_index, label)
+        return _clone(self.active)
+
+    def commit_evidence(
+        self,
+        receipts: Sequence[capture.ExactEvidenceReceipt],
+    ) -> Sequence[capture.ExactEvidenceReceipt]:
+        self._guard()
+        label = "evidence:" + ",".join(receipt.role_id for receipt in receipts)
+        commit_index = self._before_commit(label)
+        observed: list[capture.ExactEvidenceReceipt] = []
+        for receipt in receipts:
+            existing = next(
+                (
+                    item for item in self.receipts
+                    if item.artifact_id == receipt.artifact_id
+                ),
+                None,
+            )
+            if existing is None:
+                self.receipts.append(_clone(receipt))
+                existing = receipt
+            elif existing != receipt:
+                raise capture.ExactCaptureRefusal("evidence exact identity conflict")
+            observed.append(_clone(existing))
+        required_receipt_order = {
+            (spec.session_id, role_id): ordinal
+            for ordinal, (spec, role_id) in enumerate(
+                (spec, role_id)
+                for spec in capture.exact_session_specs()
+                for role_id in spec.required_evidence_roles
+            )
+        }
+        self.receipts.sort(
+            key=lambda item: required_receipt_order[
+                (item.session_id, item.role_id)
+            ]
+        )
+        self.events.append(("evidence", str(len(receipts))))
+        self._after_commit(commit_index, label)
+        return tuple(observed)
+
+    def commit_journal_prefix(
+        self,
+        journal: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        self._guard()
+        value = _clone(dict(journal))
+        session_id = str(value["sessionId"])
+        label = f"journal-prefix:{session_id}:{len(value['events'])}"
+        commit_index = self._before_commit(label)
+        if self.active is None or self.active["sessionId"] != session_id:
+            raise capture.ExactCaptureRefusal("journal prefix lacks active session")
+        prior = self.journal_prefixes.get(session_id)
+        if prior is not None and prior != value:
+            prior_events = prior["events"]
+            new_events = value["events"]
+            if len(new_events) <= len(prior_events) or (
+                new_events[:len(prior_events)] != prior_events
+            ):
+                raise capture.ExactCaptureRefusal("journal prefix is not append-only")
+        self.journal_prefixes[session_id] = value
+        self.events.append(("journal-prefix", session_id, str(len(value["events"]))))
+        self._after_commit(commit_index, label)
+        return _clone(value)
+
+    def seal_session(
+        self,
+        journal: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        self._guard()
+        session_id = str(journal["sessionId"])
+        self._fail(f"before:seal:{session_id}")
+        label = f"session-seal:{session_id}"
+        commit_index = self._before_commit(label)
+        value = _clone(dict(journal))
+        capture.validate_journal(value)
+        prefix = self.journal_prefixes.get(session_id)
+        if prefix is None or value["events"][:len(prefix["events"])] != prefix["events"]:
+            raise capture.ExactCaptureRefusal("sealed journal lost its durable prefix")
+        ordinal = int(value["sessionOrdinal"])
+        if len(self.journals) == ordinal:
+            self.journals.append(value)
+        elif len(self.journals) > ordinal and self.journals[ordinal] == value:
+            pass
+        else:
+            raise capture.ExactCaptureRefusal("sealed journal identity conflict")
+        self.active = None
+        self.events.append(("seal", session_id))
+        self._after_commit(commit_index, label)
+        self._fail(f"after:seal:{session_id}")
+        return _clone(value)
+
+    def commit_run_bundle(
+        self,
+        bundle: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        self._guard()
+        self._fail("before:bundle")
+        commit_index = self._before_commit("run-bundle")
+        value = _clone(dict(bundle))
+        capture.validate_run_bundle(value)
+        if self.bundle is None:
+            self.bundle = value
+        elif self.bundle != value:
+            raise capture.ExactCaptureRefusal("final bundle exact identity conflict")
+        self.events.append(("bundle",))
+        self._after_commit(commit_index, "run-bundle")
+        self._fail("after:bundle")
+        return _clone(self.bundle)
+
+    def quarantine(self, run_id: str, reason: str) -> None:
+        self._guard()
+        self.quarantined = True
+        self.events.append(("quarantine", run_id, reason))
+
+
 def _expected_checks() -> tuple[str, ...]:
     return (
         "candidate.safe-load-and-spawn",
@@ -232,6 +801,60 @@ def _expected_checks() -> tuple[str, ...]:
         "candidate.save-persistence",
         "retail.town-square-preserved",
     )
+
+
+def _expected_role_checkpoint_ownership(
+) -> dict[str, dict[str, str | None]]:
+    sessions = capture.SESSION_IDS
+    return {
+        sessions[0]: {
+            "candidate-load-armed": "resume-fresh-candidate",
+            "candidate-spawn-frame": "resume-fresh-candidate",
+            "landing-watcher": "resume-fresh-candidate",
+            "authored-face-view-frame": "face-texture-complete",
+            "grass-index-88-frame": "grass-index-88-framed",
+            "grass-index-107-frame": "grass-index-107-framed",
+            "authored-movement-interval": "movement-group-complete",
+            "movement-safe-watcher-suffix": "movement-group-complete",
+            "jump-start-frame": "movement-group-complete",
+            "stable-post-landing-frame": "movement-group-complete",
+            "camera-occlusion-interval": "camera-group-complete",
+            "camera-stable-endpoint": "camera-group-complete",
+            "music-observation-120500ms": "camera-group-complete",
+            "live-music-operator-attestation": "camera-group-complete",
+            "in-level-total-200-frame": "in-level-total-framed",
+            "pause-zero-egg-token": "pause-total-zero-egg-framed",
+            "pause-total-200-frame": "pause-total-zero-egg-framed",
+            "ordinary-save-completed-frame": "ordinary-save-complete",
+            "save-progress-token": "ordinary-save-complete",
+            "session0-post-card": None,
+        },
+        sessions[1]: {
+            "candidate-reentry-watcher": "resume-clean-restart",
+            "ordinary-load-completed-frame": "loaded-save-confirmed",
+            "load-progress-token": "loaded-save-confirmed",
+            "normal-exit-started": "exit-destination-confirmed",
+            "destination-65-frame": "exit-destination-confirmed",
+            "fall-authorized-frame": "fall-authorized",
+            "fall-respawn-watcher": "fall-authorized",
+            "post-respawn-frame": "fall-authorized",
+            "session1-pre-card": None,
+            "distinct-process-fingerprints": None,
+        },
+        sessions[2]: {
+            "town-square-terrain-visible-frame": "resume-fresh-town-square",
+            "town-square-collision-route-60500ms": "retail-route-complete",
+            "town-square-collision-watcher": "retail-route-complete",
+            "town-square-moby-visibility-frame": "retail-route-complete",
+            "town-square-music-observation-60500ms": "retail-route-complete",
+            "town-square-live-music-operator-attestation": (
+                "retail-route-complete"
+            ),
+            "town-square-totals-frame": "retail-totals-framed",
+            "town-square-save-transition": "retail-save-complete",
+            "town-square-exit-frame": "retail-exit-complete",
+        },
+    }
 
 
 def _test_exact_plan(checks: Checks) -> None:
@@ -361,6 +984,25 @@ def _test_exact_plan(checks: Checks) -> None:
         tuple(len(capture.OPERATOR_CHECKPOINTS[item]) for item in expected_sessions)
         == (9, 4, 5),
         "the exact 18-checkpoint distribution changed",
+    )
+    expected_role_owners = _expected_role_checkpoint_ownership()
+    observed_role_owners = {
+        session: dict(capture.EVIDENCE_ROLE_CHECKPOINT_OWNERSHIP[session])
+        for session in expected_sessions
+    }
+    checks.require(
+        observed_role_owners == expected_role_owners,
+        "semantic evidence role/checkpoint ownership changed",
+    )
+    checks.require(
+        all(
+            set(observed_role_owners[session])
+            == set(capture._session_evidence_role_ids(session))
+            and len(observed_role_owners[session])
+            == len(capture._session_evidence_role_ids(session))
+            for session in expected_sessions
+        ),
+        "evidence role/checkpoint map does not own every role exactly once",
     )
     capture._validate_plan()
     checks.require(True, "exact plan validation failed")
@@ -1707,6 +2349,723 @@ def _invoke_cli(arguments: Sequence[str]) -> tuple[int, str, str]:
     return code, stdout.getvalue(), stderr.getvalue()
 
 
+def _test_simulation_three_session_engine(checks: Checks) -> None:
+    """Drive every pure-engine boundary without a process or production write."""
+
+    required_api = (
+        "ExactEngineRequest",
+        "ExactSimulationPreflight",
+        "ExactEvidenceReceipt",
+        "ExactResumeState",
+        "ExactEngineResult",
+        "ExactRuntimeBackend",
+        "ExactRunStore",
+        "ExactThreeSessionEngine",
+        "exact_session_specs",
+        "exact_engine_fault_points",
+    )
+    checks.require(
+        all(hasattr(capture, name) for name in required_api),
+        "simulation-only engine API is incomplete",
+    )
+    specs = capture.exact_session_specs()
+    checks.require(
+        tuple(spec.session_id for spec in specs) == capture.SESSION_IDS
+        and tuple(len(spec.checkpoints) for spec in specs) == (9, 4, 5),
+        "simulation session projection changed",
+    )
+    checks.require(
+        tuple(len(spec.required_evidence_roles) for spec in specs) == (20, 10, 9)
+        and sum(len(spec.required_evidence_roles) for spec in specs) == 39,
+        "simulation evidence-role union changed",
+    )
+    checks.require(
+        capture.ENGINE_DERIVED_EVIDENCE_ROLES
+        == {
+            capture.SESSION_IDS[0]: ("session0-post-card",),
+            capture.SESSION_IDS[1]: (
+                "session1-pre-card",
+                "distinct-process-fingerprints",
+            ),
+            capture.SESSION_IDS[2]: (),
+        },
+        "engine-derived evidence role boundary changed",
+    )
+    original_derived_roles = capture.ENGINE_DERIVED_EVIDENCE_ROLES
+    capture.ENGINE_DERIVED_EVIDENCE_ROLES = {
+        **dict(original_derived_roles),
+        capture.SESSION_IDS[2]: (
+            "town-square-terrain-visible-frame",
+        ),
+    }
+    try:
+        checks.refuses(
+            "forged engine-derived role boundary",
+            capture.exact_session_specs,
+            contains="evidence role/checkpoint",
+        )
+    finally:
+        capture.ENGINE_DERIVED_EVIDENCE_ROLES = original_derived_roles
+
+    # One happy path uses the real hardened lease with custom temporary paths.
+    with tempfile.TemporaryDirectory(prefix="id65-exact-engine-") as temporary:
+        root = pathlib.Path(temporary).resolve(strict=True)
+        os.chmod(root, 0o700)
+        (root / "authority").mkdir(mode=0o700)
+        lease_state = LeaseState()
+        backend = FakeExactRuntimeBackend(lease_state)
+        store = RecordingExactRunStore(lease_state)
+        hook_trace: list[str] = []
+        engine = capture.ExactThreeSessionEngine(
+            backend,
+            store,
+            lambda run_id: ActualLeaseProbe(lease_state, root),
+            hook_trace.append,
+        )
+        result = engine.run(capture.ExactEngineRequest(
+            capture.OFFLINE_FIXTURE_RUN_ID
+        ))
+        checks.require(
+            result.simulation_only is True
+            and result.runtime_observed is False
+            and result.production_capture_enabled is False
+            and result.evidence_accepted is False
+            and result.create_bin_authorized is False
+            and result.release_authorized is False
+            and result.publishable is False,
+            "simulation result overstated runtime/evidence/release acceptance",
+        )
+        capture.validate_run_bundle(_clone(result.bundle))
+        checks.require(True, "simulation engine produced an invalid exact bundle")
+        checks.require(
+            len(result.bundle["journals"]) == 3
+            and len(result.bundle["cardSnapshots"]) == 6
+            and len(result.evidence_receipts) == 39,
+            "simulation engine output counts changed",
+        )
+        bound_checks = [
+            event["payload"]["checkId"]
+            for journal in result.bundle["journals"]
+            for event in journal["events"]
+            if event["eventType"] == "check-bound"
+        ]
+        checks.require(
+            len(bound_checks) == len(set(bound_checks)) == 17
+            and set(bound_checks) == set(capture.EVENTUAL_CHECK_IDS),
+            "simulation engine did not bind 17 checks exactly once",
+        )
+        checks.require(
+            sum(event[0] == "begin" for event in backend.events) == 3
+            and sum(event[0] == "checkpoint" for event in backend.events) == 18
+            and sum(event[0] == "finish" for event in backend.events) == 3
+            and backend.abort_count == 0,
+            "simulation backend trace is not 3 sessions / 18 checkpoints",
+        )
+        checks.require(
+            hook_trace == list(capture.exact_engine_fault_points()),
+            "happy engine trace skipped or reordered a failure boundary",
+        )
+        checks.require(
+            lease_state.events[0] == ("actual-authority-lease-enter",)
+            and store.events[0] == ("bind-lease",)
+            and lease_state.events[-1] == ("actual-authority-lease-exit",)
+            and not lease_state.held,
+            "engine store access escaped the entered authority-first lease",
+        )
+        checks.require(
+            (root / "staging").is_dir()
+            and not any(root.glob("**/*.mcd"))
+            and not any(root.glob("**/*evidence*.json")),
+            "simulation engine wrote card/evidence artifacts instead of receipts",
+        )
+        happy_commit_labels = tuple(store.commit_labels)
+        checks.require(
+            len(happy_commit_labels) > len(capture.exact_engine_fault_points())
+            and happy_commit_labels[-1] == "run-bundle",
+            "fake store did not observe every exact durable commit",
+        )
+
+        # Completed-run resume is an idempotent readback, not a replay.
+        resume_backend = FakeExactRuntimeBackend(lease_state)
+        resumed = capture.ExactThreeSessionEngine(
+            resume_backend,
+            store,
+            lambda run_id: ActualLeaseProbe(lease_state, root),
+        ).run(capture.ExactEngineRequest(
+            capture.OFFLINE_FIXTURE_RUN_ID,
+            resume=True,
+        ))
+        checks.require(
+            resumed.resumed_session_count == 3
+            and resumed.bundle == result.bundle
+            and not any(event[0] == "begin" for event in resume_backend.events),
+            "completed exact resume replayed a session or changed the bundle",
+        )
+        with ActualLeaseProbe(lease_state, root) as lease:
+            store.bind_lease(lease)
+            repeated_origin = store.begin_run(result.bundle["origin"])
+            repeated_card = store.commit_card_snapshot(
+                result.bundle["cardSnapshots"][0]
+            )
+            repeated_bundle = store.commit_run_bundle(result.bundle)
+            checks.require(
+                repeated_origin == result.bundle["origin"]
+                and repeated_card == result.bundle["cardSnapshots"][0]
+                and repeated_bundle == result.bundle,
+                "same-byte durable retry was not idempotent",
+            )
+            conflicting_card = _clone(result.bundle["cardSnapshots"][0])
+            conflicting_card["capturedAtUtc"] = "1970-01-01T00:00:00.001Z"
+            checks.refuses(
+                "different bytes for an existing snapshot identity",
+                lambda: store.commit_card_snapshot(conflicting_card),
+                contains="identity conflict",
+            )
+
+    # Invalid request/preflight claims must fail before any simulated session.
+    lease_state = LeaseState()
+    backend = FakeExactRuntimeBackend(lease_state)
+    store = RecordingExactRunStore(lease_state)
+    engine = capture.ExactThreeSessionEngine(
+        backend, store, lambda run_id: GuardLease(lease_state)
+    )
+    checks.refuses(
+        "simulation-only false request",
+        lambda: engine.run(capture.ExactEngineRequest(
+            capture.OFFLINE_FIXTURE_RUN_ID,
+            simulation_only=False,
+        )),
+        contains="simulation request",
+    )
+    checks.require(
+        not backend.events and store.origin is None,
+        "invalid simulation request reached an adapter or store",
+    )
+
+    class OverstatingBackend(FakeExactRuntimeBackend):
+        def preflight(
+            self,
+            request: capture.ExactEngineRequest,
+        ) -> capture.ExactSimulationPreflight:
+            value = super().preflight(request)
+            return capture.dataclasses.replace(value, runtime_observed=True)
+
+    lease_state = LeaseState()
+    backend = OverstatingBackend(lease_state)
+    store = RecordingExactRunStore(lease_state)
+    checks.refuses(
+        "backend runtime claim",
+        lambda: capture.ExactThreeSessionEngine(
+            backend, store, lambda run_id: GuardLease(lease_state)
+        ).run(capture.ExactEngineRequest(capture.OFFLINE_FIXTURE_RUN_ID)),
+        contains="overstated",
+    )
+    checks.require(
+        store.origin is None,
+        "overstating backend reached run-origin persistence",
+    )
+
+    lease_state = LeaseState()
+    backend = FakeExactRuntimeBackend(
+        lease_state, begin_mode="activate-then-raise"
+    )
+    store = RecordingExactRunStore(lease_state)
+    try:
+        capture.ExactThreeSessionEngine(
+            backend,
+            store,
+            lambda run_id: GuardLease(lease_state),
+        ).run(capture.ExactEngineRequest(capture.OFFLINE_FIXTURE_RUN_ID))
+    except InjectedEngineFailure as exc:
+        if str(exc) != "partial begin activation":
+            raise
+    else:
+        raise AssertionError("partial begin activation did not fail")
+    checks.require(
+        backend.pending_abort_count == 1
+        and backend.abort_count == 0
+        and not any(bool(handle["active"]) for handle in backend.handles)
+        and backend.events[-2][0] == "abort-pending"
+        and backend.events[-1] == ("quiescent",)
+        and store.quarantined,
+        "partial begin activation escaped pending abort/quiescence/quarantine",
+    )
+
+    # Evidence and snapshot mutations fail closed at their narrowest boundary.
+    for mode, fragment in (
+        ("missing", "evidence-role coverage"),
+        ("foreign-role", "receipt identity"),
+        ("wrong-checkpoint", "receipt identity"),
+        ("duplicate", "committed twice"),
+    ):
+        lease_state = LeaseState()
+        backend = FakeExactRuntimeBackend(lease_state, receipt_mode=mode)
+        store = RecordingExactRunStore(lease_state)
+        checks.refuses(
+            f"simulation receipt adversary {mode}",
+            lambda backend=backend, store=store, lease_state=lease_state: (
+                capture.ExactThreeSessionEngine(
+                    backend,
+                    store,
+                    lambda run_id: GuardLease(lease_state),
+                ).run(capture.ExactEngineRequest(capture.OFFLINE_FIXTURE_RUN_ID))
+            ),
+            contains=fragment,
+        )
+        checks.require(
+            store.quarantined
+            and not any(bool(handle["active"]) for handle in backend.handles),
+            f"receipt adversary {mode} left an unsafe resumable session",
+        )
+
+    for mode in (
+        "foreign-session",
+        "changed-adjacent-card",
+        "unclean-exit",
+        "reused-process",
+    ):
+        lease_state = LeaseState()
+        backend = FakeExactRuntimeBackend(lease_state, snapshot_mode=mode)
+        store = RecordingExactRunStore(lease_state)
+        checks.refuses(
+            f"simulation snapshot adversary {mode}",
+            lambda backend=backend, store=store, lease_state=lease_state: (
+                capture.ExactThreeSessionEngine(
+                    backend,
+                    store,
+                    lambda run_id: GuardLease(lease_state),
+                ).run(capture.ExactEngineRequest(capture.OFFLINE_FIXTURE_RUN_ID))
+            ),
+        )
+        checks.require(
+            not any(bool(handle["active"]) for handle in backend.handles)
+            and (store.quarantined or len(store.journals) == 3),
+            f"snapshot adversary {mode} left unsafe runtime/store state",
+        )
+
+    # Every declared post-boundary hook must stop forward runtime progress.
+    fault_points = capture.exact_engine_fault_points()
+    checks.require(
+        len(fault_points) == len(set(fault_points)) and len(fault_points) > 60,
+        "engine failure boundary registry is incomplete or duplicated",
+    )
+    for target in fault_points:
+        lease_state = LeaseState()
+        backend = FakeExactRuntimeBackend(lease_state)
+        store = RecordingExactRunStore(lease_state)
+        backend_count_at_cut: list[int] = []
+
+        def inject(boundary: str, *, target: str = target) -> None:
+            if boundary == target:
+                backend_count_at_cut.append(len(backend.events))
+                raise InjectedEngineFailure(boundary)
+
+        try:
+            capture.ExactThreeSessionEngine(
+                backend,
+                store,
+                lambda run_id: GuardLease(lease_state),
+                inject,
+            ).run(capture.ExactEngineRequest(capture.OFFLINE_FIXTURE_RUN_ID))
+        except InjectedEngineFailure as exc:
+            if str(exc) != target:
+                raise AssertionError(
+                    f"fault hook raised at wrong boundary: {target}: {exc}"
+                ) from exc
+        else:
+            raise AssertionError(f"fault hook did not fire: {target}")
+        later_runtime = backend.events[backend_count_at_cut[0]:]
+        checks.require(
+            all(
+                event[0] in {"abort", "abort-pending", "quiescent"}
+                for event in later_runtime
+            )
+            and len(later_runtime) <= 2
+            and (
+                not later_runtime or later_runtime[-1][0] == "quiescent"
+            )
+            and not any(bool(handle["active"]) for handle in backend.handles)
+            and (store.active is None or store.quarantined),
+            f"fault {target} allowed forward runtime or unsafe active state",
+        )
+
+    # Only exact sealed-session commits are resumable; no checkpoint is replayed.
+    for completed_ordinal in (0, 1):
+        target = (
+            "after-session-logical-commit:"
+            + capture.SESSION_IDS[completed_ordinal]
+        )
+        lease_state = LeaseState()
+        first_backend = FakeExactRuntimeBackend(lease_state)
+        store = RecordingExactRunStore(lease_state)
+
+        def stop_after_seal(boundary: str, *, target: str = target) -> None:
+            if boundary == target:
+                raise InjectedEngineFailure(boundary)
+
+        try:
+            capture.ExactThreeSessionEngine(
+                first_backend,
+                store,
+                lambda run_id: GuardLease(lease_state),
+                stop_after_seal,
+            ).run(capture.ExactEngineRequest(capture.OFFLINE_FIXTURE_RUN_ID))
+        except InjectedEngineFailure:
+            pass
+        else:
+            raise AssertionError("sealed-prefix injection did not fire")
+        checks.require(
+            len(store.journals) == completed_ordinal + 1
+            and store.active is None
+            and not store.quarantined,
+            "logical session commit was not a safe sealed prefix",
+        )
+        resumed_backend = FakeExactRuntimeBackend(lease_state)
+        resumed = capture.ExactThreeSessionEngine(
+            resumed_backend,
+            store,
+            lambda run_id: GuardLease(lease_state),
+        ).run(capture.ExactEngineRequest(
+            capture.OFFLINE_FIXTURE_RUN_ID,
+            resume=True,
+        ))
+        replayed_sessions = {
+            event[1] for event in resumed_backend.events if event[0] == "checkpoint"
+        }
+        checks.require(
+            resumed.resumed_session_count == completed_ordinal + 1
+            and replayed_sessions.isdisjoint(
+                capture.SESSION_IDS[:completed_ordinal + 1]
+            ),
+            "sealed-prefix resume replayed completed checkpoints",
+        )
+
+    for field, replacement in (
+        ("checkpoint_id", "face-texture-complete"),
+        ("sha256", "f" * 64),
+        ("byte_length", 99_999),
+        ("captured_at_utc", "1970-01-01T00:00:00.006Z"),
+    ):
+        lease_state = LeaseState()
+        first_backend = FakeExactRuntimeBackend(lease_state)
+        store = RecordingExactRunStore(lease_state)
+        target = (
+            "after-session-logical-commit:"
+            + capture.SESSION_IDS[0]
+        )
+
+        def stop_receipt_prefix(boundary: str, *, target: str = target) -> None:
+            if boundary == target:
+                raise InjectedEngineFailure(boundary)
+
+        try:
+            capture.ExactThreeSessionEngine(
+                first_backend,
+                store,
+                lambda run_id: GuardLease(lease_state),
+                stop_receipt_prefix,
+            ).run(capture.ExactEngineRequest(capture.OFFLINE_FIXTURE_RUN_ID))
+        except InjectedEngineFailure:
+            pass
+        else:
+            raise AssertionError("receipt-prefix injection did not fire")
+        store.receipts[0] = capture.dataclasses.replace(
+            store.receipts[0], **{field: replacement}
+        )
+        resume_backend = FakeExactRuntimeBackend(lease_state)
+        checks.refuses(
+            f"resume substituted sealed receipt {field}",
+            lambda resume_backend=resume_backend, store=store, lease_state=lease_state: (
+                capture.ExactThreeSessionEngine(
+                    resume_backend,
+                    store,
+                    lambda run_id: GuardLease(lease_state),
+                ).run(capture.ExactEngineRequest(
+                    capture.OFFLINE_FIXTURE_RUN_ID,
+                    resume=True,
+                ))
+            ),
+        )
+        checks.require(
+            not any(event[0] == "begin" for event in resume_backend.events),
+            f"substituted resume receipt {field} reached a new session",
+        )
+
+    lease_state = LeaseState()
+    first_backend = FakeExactRuntimeBackend(lease_state)
+    store = RecordingExactRunStore(lease_state)
+    target = "after-session-logical-commit:" + capture.SESSION_IDS[0]
+
+    def stop_ordered_receipt_prefix(boundary: str) -> None:
+        if boundary == target:
+            raise InjectedEngineFailure(boundary)
+
+    try:
+        capture.ExactThreeSessionEngine(
+            first_backend,
+            store,
+            lambda run_id: GuardLease(lease_state),
+            stop_ordered_receipt_prefix,
+        ).run(capture.ExactEngineRequest(capture.OFFLINE_FIXTURE_RUN_ID))
+    except InjectedEngineFailure:
+        pass
+    else:
+        raise AssertionError("ordered receipt-prefix injection did not fire")
+    store.receipts[:] = reversed(store.receipts)
+    resume_backend = FakeExactRuntimeBackend(lease_state)
+    checks.refuses(
+        "resume reordered sealed receipt prefix",
+        lambda: capture.ExactThreeSessionEngine(
+            resume_backend,
+            store,
+            lambda run_id: GuardLease(lease_state),
+        ).run(capture.ExactEngineRequest(
+            capture.OFFLINE_FIXTURE_RUN_ID,
+            resume=True,
+        )),
+    )
+    checks.require(
+        not any(event[0] == "begin" for event in resume_backend.events),
+        "reordered resume receipt prefix reached a new session",
+    )
+
+    lease_state = LeaseState()
+    backend = FakeExactRuntimeBackend(lease_state)
+    store = RecordingExactRunStore(lease_state)
+    partial_target = (
+        f"after-checkpoint-commit:{capture.SESSION_IDS[0]}:"
+        f"{capture.OPERATOR_CHECKPOINTS[capture.SESSION_IDS[0]][0]}"
+    )
+
+    def stop_partial(boundary: str) -> None:
+        if boundary == partial_target:
+            raise InjectedEngineFailure(boundary)
+
+    try:
+        capture.ExactThreeSessionEngine(
+            backend,
+            store,
+            lambda run_id: GuardLease(lease_state),
+            stop_partial,
+        ).run(capture.ExactEngineRequest(capture.OFFLINE_FIXTURE_RUN_ID))
+    except InjectedEngineFailure:
+        pass
+    else:
+        raise AssertionError("partial-session injection did not fire")
+    checks.require(
+        store.quarantined and store.active is not None and backend.abort_count == 1,
+        "partial session was exposed as resumable",
+    )
+    resume_backend = FakeExactRuntimeBackend(lease_state)
+    checks.refuses(
+        "automatic resume of quarantined partial session",
+        lambda: capture.ExactThreeSessionEngine(
+            resume_backend,
+            store,
+            lambda run_id: GuardLease(lease_state),
+        ).run(capture.ExactEngineRequest(
+            capture.OFFLINE_FIXTURE_RUN_ID,
+            resume=True,
+        )),
+        contains="quarantined",
+    )
+    checks.require(
+        not any(event[0] == "begin" for event in resume_backend.events),
+        "partial resume began a runtime session",
+    )
+
+    # Store failures distinguish pre-commit quarantine from uncertain readback.
+    for boundary, safe_sealed_count in (
+        (f"before:seal:{capture.SESSION_IDS[0]}", None),
+        (f"after:seal:{capture.SESSION_IDS[0]}", 1),
+        ("before:bundle", 3),
+        ("after:bundle", 3),
+    ):
+        lease_state = LeaseState()
+        backend = FakeExactRuntimeBackend(lease_state)
+        store = RecordingExactRunStore(
+            lease_state, fail_boundary=boundary
+        )
+        try:
+            capture.ExactThreeSessionEngine(
+                backend,
+                store,
+                lambda run_id: GuardLease(lease_state),
+            ).run(capture.ExactEngineRequest(capture.OFFLINE_FIXTURE_RUN_ID))
+        except InjectedEngineFailure as exc:
+            if str(exc) != boundary:
+                raise
+        else:
+            raise AssertionError(f"store failure did not fire: {boundary}")
+        if safe_sealed_count is None:
+            checks.require(
+                store.quarantined and store.active is not None,
+                "pre-seal failure was not quarantined",
+            )
+            continue
+        checks.require(
+            len(store.journals) == safe_sealed_count
+            and store.active is None
+            and not store.quarantined,
+            f"uncertain commit {boundary} did not expose an exact sealed prefix",
+        )
+        store.fail_boundary = None
+        resumed_backend = FakeExactRuntimeBackend(lease_state)
+        resumed = capture.ExactThreeSessionEngine(
+            resumed_backend,
+            store,
+            lambda run_id: GuardLease(lease_state),
+        ).run(capture.ExactEngineRequest(
+            capture.OFFLINE_FIXTURE_RUN_ID,
+            resume=True,
+        ))
+        checks.require(
+            resumed.resumed_session_count == safe_sealed_count,
+            f"uncertain commit {boundary} resumed from the wrong prefix",
+        )
+
+    for phase in ("before", "after"):
+        for commit_index, commit_label in enumerate(happy_commit_labels):
+            lease_state = LeaseState()
+            backend = FakeExactRuntimeBackend(lease_state)
+            store = RecordingExactRunStore(
+                lease_state,
+                fail_commit_cut=(phase, commit_index),
+            )
+            expected_failure = (
+                f"{phase}-commit:{commit_index}:{commit_label}"
+            )
+            try:
+                capture.ExactThreeSessionEngine(
+                    backend,
+                    store,
+                    lambda run_id: GuardLease(lease_state),
+                ).run(capture.ExactEngineRequest(
+                    capture.OFFLINE_FIXTURE_RUN_ID
+                ))
+            except InjectedEngineFailure as exc:
+                if str(exc) != expected_failure:
+                    raise AssertionError(
+                        "durable cut fired at a different commit: "
+                        f"{expected_failure}: {exc}"
+                    ) from exc
+            else:
+                raise AssertionError(
+                    f"durable {phase} cut did not fire: {commit_index}:"
+                    f"{commit_label}"
+                )
+            for journal in store.journals:
+                capture.validate_journal(_clone(journal))
+            if store.bundle is not None:
+                capture.validate_run_bundle(_clone(store.bundle))
+            checks.require(
+                not any(bool(handle["active"]) for handle in backend.handles)
+                and (store.active is None or store.quarantined),
+                f"durable {phase} cut left unsafe state at {commit_label}",
+            )
+
+    lease_state = LeaseState()
+    backend = FakeExactRuntimeBackend(lease_state)
+    store = RecordingExactRunStore(lease_state, corrupt_readback="origin")
+    checks.refuses(
+        "corrupt durable origin readback",
+        lambda: capture.ExactThreeSessionEngine(
+            backend,
+            store,
+            lambda run_id: GuardLease(lease_state),
+        ).run(capture.ExactEngineRequest(capture.OFFLINE_FIXTURE_RUN_ID)),
+        contains="readback",
+    )
+    checks.require(
+        not any(event[0] == "begin" for event in backend.events),
+        "corrupt run-origin readback reached a simulated session",
+    )
+
+    prefix_bundle = capture.build_offline_fixture_bundle()
+    valid_prefix = _clone(prefix_bundle["cardSnapshots"][:4])
+    capture._validate_card_chain_prefix(
+        valid_prefix, capture.OFFLINE_FIXTURE_RUN_ID
+    )
+    checks.require(True, "valid two-session card prefix was refused")
+    changed_process = _clone(valid_prefix)
+    changed_process[3]["processFingerprint"]["identity"]["pid"] += 100
+    changed_process[3]["processInstanceId"] = (
+        capture.process_instance_id_from_fingerprint(
+            changed_process[3]["processFingerprint"]
+        )
+    )
+    checks.refuses(
+        "resume prefix within-session process substitution",
+        lambda: capture._validate_card_chain_prefix(
+            changed_process, capture.OFFLINE_FIXTURE_RUN_ID
+        ),
+        contains="within-session",
+    )
+    early_restart = _clone(valid_prefix)
+    for index in (2, 3):
+        fingerprint = early_restart[index]["processFingerprint"]
+        fingerprint["identity"]["processStartUtc"] = (
+            "1970-01-01T00:00:00.008Z"
+        )
+        early_restart[index]["processInstanceId"] = (
+            capture.process_instance_id_from_fingerprint(fingerprint)
+        )
+    early_restart[3]["priorSnapshotSha256"] = capture.card_snapshot_sha256(
+        early_restart[2]
+    )
+    checks.refuses(
+        "resume prefix restart before prior termination",
+        lambda: capture._validate_card_chain_prefix(
+            early_restart, capture.OFFLINE_FIXTURE_RUN_ID
+        ),
+        contains="prior clean termination",
+    )
+
+    class NonQuiescentBackend(FakeExactRuntimeBackend):
+        def assert_quiescent(self) -> None:
+            super().assert_quiescent()
+            raise capture.ExactCaptureRefusal(
+                "simulated extra runtime child is not quiescent"
+            )
+
+    lease_state = LeaseState()
+    backend = NonQuiescentBackend(lease_state)
+    store = RecordingExactRunStore(lease_state)
+    checks.refuses(
+        "non-quiescent backend at completion",
+        lambda: capture.ExactThreeSessionEngine(
+            backend,
+            store,
+            lambda run_id: GuardLease(lease_state),
+        ).run(capture.ExactEngineRequest(capture.OFFLINE_FIXTURE_RUN_ID)),
+        contains="not quiescent",
+    )
+    checks.require(
+        len(store.journals) == 3 and store.bundle is None,
+        "non-quiescent backend reached final bundle acceptance",
+    )
+
+    source = COORDINATOR_PATH.read_text(encoding="utf-8")
+    syntax = ast.parse(source, filename=os.fspath(COORDINATOR_PATH))
+    forbidden_names = {
+        "CaptureCoordinator",
+        "CoordinatorLease",
+        "AnchoredStaging",
+        "SourceGuard",
+        "JournalWriter",
+        "RealMacBoundary",
+    }
+    operational_names = {
+        node.id for node in ast.walk(syntax) if isinstance(node, ast.Name)
+    } | {
+        node.attr for node in ast.walk(syntax) if isinstance(node, ast.Attribute)
+    }
+    checks.require(
+        operational_names.isdisjoint(forbidden_names),
+        "simulation engine references a forbidden frozen high-level primitive",
+    )
+
+
 def _test_status_music_and_live_refusal(checks: Checks) -> None:
     status = capture._static_status()
     checks.require(status["sessionIds"] == list(capture.SESSION_IDS), "status session drift")
@@ -1885,6 +3244,20 @@ def _test_required_run_and_journal_surface(checks: Checks) -> None:
         ),
     )
     rejects_bundle(
+        "reordered run evidence receipts",
+        lambda value: value["evidenceReceipts"].reverse(),
+    )
+    rejects_bundle(
+        "truncated run evidence receipts",
+        lambda value: value["evidenceReceipts"].pop(),
+    )
+    rejects_bundle(
+        "duplicated run evidence receipt",
+        lambda value: value["evidenceReceipts"].append(
+            _clone(value["evidenceReceipts"][-1])
+        ),
+    )
+    rejects_bundle(
         "savestate artifact",
         lambda value: value.__setitem__(
             "saveStateArtifacts",
@@ -1934,6 +3307,86 @@ def _test_required_run_and_journal_surface(checks: Checks) -> None:
             event["eventSha256"] = capture._sha256_canonical(material)
             previous = event["eventSha256"]
         journal["terminalEventSha256"] = previous
+
+    def refresh_receipt_closure(
+        value: dict[str, object],
+        receipt_index: int,
+    ) -> None:
+        receipt = value["evidenceReceipts"][receipt_index]
+        journal = next(
+            item for item in value["journals"]
+            if item["sessionId"] == receipt["sessionId"]
+        )
+        closure_event = next(
+            event for event in journal["events"]
+            if event["eventType"] == "evidence-receipts-bound"
+        )
+        closure_receipts = closure_event["payload"]["receipts"]
+        closure_index = next(
+            index for index, item in enumerate(closure_receipts)
+            if item["roleId"] == receipt["roleId"]
+        )
+        closure_receipts[closure_index] = _clone(receipt)
+        closure_event["payload"]["receiptCount"] = len(closure_receipts)
+        closure_event["payload"]["receiptsSha256"] = (
+            capture._sha256_canonical(closure_receipts)
+        )
+        sealed = journal["events"][-1]["payload"]
+        sealed["evidenceReceiptCount"] = len(closure_receipts)
+        sealed["evidenceReceiptsSha256"] = closure_event["payload"][
+            "receiptsSha256"
+        ]
+        rehash_journal(journal)
+
+    checks.require(
+        len(bundle["evidenceReceipts"]) == 39
+        and sum(
+            event["eventType"] == "evidence-receipts-bound"
+            for journal_item in bundle["journals"]
+            for event in journal_item["events"]
+        ) == 3,
+        "fixture lacks the exact receipt/bound-session closure",
+    )
+    rejects_bundle(
+        "valid receipt hash substituted outside sealed closure",
+        lambda value: value["evidenceReceipts"][0].__setitem__(
+            "sha256", "f" * 64
+        ),
+    )
+    rejects_bundle(
+        "valid receipt length substituted outside sealed closure",
+        lambda value: value["evidenceReceipts"][0].__setitem__(
+            "byteLength", value["evidenceReceipts"][0]["byteLength"] + 1
+        ),
+    )
+    rejects_bundle(
+        "valid in-process receipt time substituted outside sealed closure",
+        lambda value: value["evidenceReceipts"][0].__setitem__(
+            "capturedAtUtc", "1970-01-01T00:00:00.006Z"
+        ),
+    )
+
+    def substitute_checkpoint_and_reclose(value: dict[str, object]) -> None:
+        value["evidenceReceipts"][0]["checkpointId"] = (
+            "face-texture-complete"
+        )
+        refresh_receipt_closure(value, 0)
+
+    rejects_bundle(
+        "semantically foreign valid checkpoint with recomputed closures",
+        substitute_checkpoint_and_reclose,
+    )
+
+    def escape_process_interval_and_reclose(value: dict[str, object]) -> None:
+        value["evidenceReceipts"][0]["capturedAtUtc"] = (
+            "1970-01-01T00:00:00.000Z"
+        )
+        refresh_receipt_closure(value, 0)
+
+    rejects_bundle(
+        "receipt timestamp outside owning process with recomputed closures",
+        escape_process_interval_and_reclose,
+    )
 
     journal = bundle["journals"][0]
     capture.validate_journal(_clone(journal))
@@ -2174,6 +3627,7 @@ def main() -> int:
         _test_profile_pin_declaration_guards(checks)
         _test_authority_order(checks)
         _test_card_schema_and_chain(checks)
+        _test_simulation_three_session_engine(checks)
         _test_status_music_and_live_refusal(checks)
         _test_required_run_and_journal_surface(checks)
         checks.require(not PROCESS_EVENTS, f"process launch was attempted: {PROCESS_EVENTS!r}")
