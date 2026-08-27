@@ -126,6 +126,14 @@ void VerifyFreshLevelSceneProjection()
         Id65AuthoringEditorDocument.CreateExact(includeOptionalTerrain: true);
     Id65AuthoringEditorDocument noTerrainDocument =
         Id65AuthoringEditorDocument.CreateExact(includeOptionalTerrain: false);
+    Id65AuthoringEditorDocument t25FullDocument =
+        Id65AuthoringEditorDocument.CreateExact(
+            includeOptionalTerrain: true,
+            mandatoryBaseFaceTextureId: 25);
+    Id65AuthoringEditorDocument t25BaseDocument =
+        Id65AuthoringEditorDocument.CreateExact(
+            includeOptionalTerrain: false,
+            mandatoryBaseFaceTextureId: 25);
     Id65AuthoringEditorDocumentReadModel fullReadModel =
         CreateSceneProjectionReadModel(fullDocument);
     Id65AuthoringEditorDocumentReadModel noTerrainReadModel =
@@ -139,6 +147,44 @@ void VerifyFreshLevelSceneProjection()
     Id65FreshLevelSceneProjection fullRepeat = Id65FreshLevelSceneProjector.ProjectExact(
         UnusedLevel65BlankLevelLabProfileRegistry.Definition,
         fullReadModel);
+    Id65FreshLevelSceneProjection t25Full = Id65FreshLevelSceneProjector.ProjectExact(
+        UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+        CreateSceneProjectionReadModel(t25FullDocument));
+    Id65FreshLevelSceneProjection t25Base = Id65FreshLevelSceneProjector.ProjectExact(
+        UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+        CreateSceneProjectionReadModel(t25BaseDocument));
+    Require(
+        t25Base.GraphCanonicalSha256 == Id65FreshLevelSceneProjector.ExpectedResidentT25BaseGraphCanonicalSha256 &&
+        t25Full.GraphCanonicalSha256 == Id65FreshLevelSceneProjector.ExpectedResidentT25StructuralGraphCanonicalSha256 &&
+        t25Base.CanonicalSha256 == Id65FreshLevelSceneProjector.ExpectedResidentT25DefaultBaseDocumentProjectionSha256 &&
+        t25Full.CanonicalSha256 == Id65FreshLevelSceneProjector.ExpectedResidentT25DefaultStructuralDocumentProjectionSha256 &&
+        t25Base.Geometry.Polygons.Single().TextureId == 25 &&
+        t25Full.Geometry.Polygons.Single(item => item.FaceIndex == Id65FreshLevelSceneProjector.AuthoredFaceIndex).TextureId == 25 &&
+        t25Full.Geometry.Polygons.Single(item => item.FaceIndex == Id65FreshLevelSceneProjector.OptionalFaceIndex).TextureId == 25,
+        "The frozen resident T25 base/structural graph, bound identity, or mandatory/optional presentation changed.");
+    foreach (int forgedTextureId in new[] { 24, 67 })
+    {
+        GeometryCandidate forgedTexture = Id65FreshLevelSceneProjector.ProjectExact(
+            UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+            CreateSceneProjectionReadModel(t25BaseDocument)).Geometry;
+        TerrainPolygon sourceFace = forgedTexture.Polygons.Single();
+        uint forgedWord2 = (sourceFace.NativeFaceWord2 & 0xFFFFFF80u) |
+            (uint)forgedTextureId;
+        forgedTexture.Polygons[0] = new TerrainPolygon(
+            sourceFace.Points, sourceFace.ZValues, forgedTextureId,
+            sourceFace.SectorIndex, sourceFace.FaceIndex, sourceFace.Detail,
+            sourceFace.FaceColor, sourceFace.SectorOffset, sourceFace.FaceOffset,
+            sourceFace.VertexIndexes, $"0x{forgedWord2:X8}", sourceFace.Word4,
+            sourceFace.FaceFlip, sourceFace.FaceDepth, sourceFace.ColourIndexes,
+            sourceFace.NearColors, sourceFace.FarColors, sourceFace.CornerPointIndexes,
+            forgedWord2, forgedTextureId, sourceFace.IsNativeUntexturedSentinel,
+            sourceFace.NativePrimitiveSemiTransparent, forgedTextureId,
+            sourceFace.NativeFaceWord0, sourceFace.NativeFaceWord1,
+            sourceFace.NativeFaceWord3);
+        Require(
+            !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(forgedTexture),
+            $"The exact fresh projection accepted forged mandatory T{forgedTextureId}.");
+    }
     Require(
         full.StructuralTerrainPresent && !absent.StructuralTerrainPresent &&
         full.CanonicalDocumentBound && absent.CanonicalDocumentBound &&
@@ -2112,14 +2158,18 @@ long ParseHexOffset(string value)
 }
 
 Id65AuthoringEditorDocumentReadModel CreateSceneProjectionReadModel(
-    Id65AuthoringEditorDocument document) => new(new(
+    Id65AuthoringEditorDocument document)
+{
+    Id65AuthoringEditorDocumentEnvelopeIdentity identity = new(
         document,
         new string('a', 64),
         Id65AuthoringEditorDocumentStore.ProjectionContractId,
         Id65AuthoringCompositeCompiler.ProfileId,
         new string('b', 64),
         new string('c', 64),
-        new string('d', 64)));
+        new string('d', 64));
+    return new(identity);
+}
 
 void ExpectInvalidData(Action action, string label)
 {

@@ -255,6 +255,9 @@ internal static class Id65AuthoringEditorAggregateCandidateMaterializer
         ArgumentNullException.ThrowIfNull(request.Paths);
         ArgumentNullException.ThrowIfNull(request.ExpectedManifest);
         ArgumentNullException.ThrowIfNull(request.ExpectedStoredDocument);
+        if (request.ExpectedStoredDocument.Document.MandatoryBaseFaceTextureId != 66)
+            throw new NotSupportedException(
+                "Aggregate candidate materialization remains restricted to the frozen T66 document profile.");
         if (!Enum.IsDefined(faultPoint))
             throw new ArgumentOutOfRangeException(nameof(faultPoint));
         if (!OperatingSystem.IsMacOS())

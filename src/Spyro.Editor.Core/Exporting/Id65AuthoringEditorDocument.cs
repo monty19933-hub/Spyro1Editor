@@ -1147,7 +1147,8 @@ internal static class Id65AuthoringEditorDocumentProjector
                 triangle,
                 request.PrivateTextureWitness,
                 request.GrassBundle,
-                placements);
+                placements,
+                document.MandatoryBaseFaceTextureId);
         Id65CompiledAuthoringComposite compiled =
             Id65AuthoringCompositeCompiler.Compile(new(
                 request.LockedSource,
@@ -1323,9 +1324,9 @@ internal static class Id65AuthoringEditorDocumentProjector
             texture.DonorTextureId != privateTexture.DonorTextureId ||
             texture.TemplateTextureId != privateTexture.MaterialTemplateTextureId ||
             texture.RenderFaceId != privateTexture.TargetRenderFaceId ||
-            texture.OutputTextureId != privateTexture.DestinationRecordIndex)
+            texture.OutputTextureId != document.MandatoryBaseFaceTextureId)
         {
-            throw new InvalidDataException("The ID65 editor projection private T66 semantic readback changed.");
+            throw new InvalidDataException("The ID65 editor projection mandatory face texture semantic readback changed.");
         }
         RequireAuthoredRebase(
             compiled.HandleRebases,

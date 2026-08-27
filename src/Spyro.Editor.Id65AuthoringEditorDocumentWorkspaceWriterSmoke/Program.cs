@@ -36,7 +36,13 @@ Case[] cases =
     new(
         "no-terrain-t107", false, false, true,
         "30fa4c31c997bd41b93d0d8001bad62eea4c33882a8282504420f409a5b91642",
-        "625c4349569dda2a24388fee7da6de2bb3bab7ab7a96e997b75c99b37701009e")
+        "625c4349569dda2a24388fee7da6de2bb3bab7ab7a96e997b75c99b37701009e"),
+    new("t25-terrain-both", true, true, true, "ef66ec698c9acccb57c31754985f7f8f42553dfd8cbca6fe3a4d94c11a5d6ea1", "2249e27f53f2f3d26e028ab7a94f47ab3f8aecf1251f6d070fd52b9789df77b2", 25),
+    new("t25-terrain-t88", true, true, false, "592f3ab132ed88d33a91419d20664cd1e59004073e6d05ebaf98029d7df04a8a", "b46246d76093727d36e373fac72ffdb5332e5c7310a24a3e4e95dd731f47c764", 25),
+    new("t25-terrain-t107", true, false, true, "6016ea37052ca2722f5236b79eceec1e28b0d8f788cf83ceafe5dfb0b9384adc", "98e02f353719003b4491d24e509ff90c7c1e7442597b25c670e9706e5646d14e", 25),
+    new("t25-base-both", false, true, true, "3e382861087cdca0d105e25fac5fe10a899bf844eac51ad43eee69f7f29af8d5", "cfd90b4aa81485e9503cf0785d7966040755b1227dddde649777f6859e4d19b5", 25),
+    new("t25-base-t88", false, true, false, "d8fcf0cf9f994b094b24631504ed433e8728bb93512c5690ccbd626369849bf9", "35c700e8a4390c027a53c502169bf68e97178f5597407e4dce61800420a29f4b", 25),
+    new("t25-base-t107", false, false, true, "d30c63a0f188d5d6fa233813d423f4d9059f77c3d73a2dca3be22f3aa6e4f0f0", "15735dfdd2dda935c963e4f32a59320e3ffcb3a87d3a55a3a3a4d93b887a084f", 25)
 ];
 
 string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
@@ -103,29 +109,6 @@ try
     string legacyPath = Path.Combine(
         paths.AuthoredEditsDirectoryPath,
         $"{UnusedLevel65BlankLevelLabProfileRegistry.Key}-terrain-edits.json");
-
-    string[] beforeT25Refusal = Directory.EnumerateFiles(
-            paths.RootPath, "*", SearchOption.AllDirectories)
-        .Order(StringComparer.Ordinal)
-        .Select(path => $"{Path.GetRelativePath(paths.RootPath, path)}:{SnapshotFile(path).Sha256}")
-        .ToArray();
-    await ExpectRejectedAsync(
-        "resident T25 before frozen projection",
-        async () => _ = await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
-            paths,
-            manifest,
-            new Id65AuthoringEditorControlState(true, true, true, 25),
-            expectedPriorEnvelopeCanonicalSha256: null),
-        "cannot be persisted");
-    rejects++;
-    string[] afterT25Refusal = Directory.EnumerateFiles(
-            paths.RootPath, "*", SearchOption.AllDirectories)
-        .Order(StringComparer.Ordinal)
-        .Select(path => $"{Path.GetRelativePath(paths.RootPath, path)}:{SnapshotFile(path).Sha256}")
-        .ToArray();
-    Require(
-        beforeT25Refusal.SequenceEqual(afterT25Refusal) && !File.Exists(documentPath),
-        "Rejected resident T25 writer persistence changed workspace bytes.");
 
     using (CancellationTokenSource canceled = new())
     {
@@ -252,7 +235,8 @@ try
         Id65AuthoringEditorControlState requested = new(
             item.Terrain,
             item.T88,
-            item.T107);
+            item.T107,
+            item.TextureId);
         Id65AuthoringEditorDocumentWriteResult result =
             await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
                 paths,
@@ -274,6 +258,7 @@ try
             Id65AuthoringEditorControlStateCompiler.RecoverControlState(inspected);
         Require(
             Equivalent(requested, recovered) &&
+            inspected.CompositeProfileId == "id65-authoring-single-pass-composite-v3" &&
             inspected.DocumentCanonicalSha256 == result.DocumentCanonicalSha256 &&
             inspected.DocumentContentSha256 == result.DocumentContentSha256 &&
             inspected.EnvelopeCanonicalSha256 == result.EnvelopeCanonicalSha256,
@@ -626,7 +611,8 @@ static bool Equivalent(
     Id65AuthoringEditorControlState right) =>
     left.IncludeStructuralTerrain == right.IncludeStructuralTerrain &&
     left.IncludeGrassAtT88 == right.IncludeGrassAtT88 &&
-    left.IncludeGrassAtT107 == right.IncludeGrassAtT107;
+    left.IncludeGrassAtT107 == right.IncludeGrassAtT107 &&
+    left.MandatoryBaseFaceTextureId == right.MandatoryBaseFaceTextureId;
 
 static bool HasPathSegment(string path, string segment) =>
     path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
@@ -678,7 +664,8 @@ internal sealed record Case(
     bool T88,
     bool T107,
     string ExpectedCanonicalSha256,
-    string ExpectedContentSha256);
+    string ExpectedContentSha256,
+    int TextureId = 66);
 
 internal sealed record FileState(
     long ByteLength,

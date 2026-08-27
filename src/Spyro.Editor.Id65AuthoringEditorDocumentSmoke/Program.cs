@@ -106,6 +106,28 @@ Require(
     Id65AuthoringEditorDocument.Parse(residentT25Utf8).SerializeUtf8()
         .SequenceEqual(residentT25Utf8),
     "The strict resident T25 document profile did not round-trip its pinned canonical identity.");
+Id65AuthoringEditorProjection residentT25Projection = Project(residentT25);
+Id65AuthoringEditorProjection residentT25BaseProjection = Project(
+    Id65AuthoringEditorDocument.CreateExact(
+        includeOptionalTerrain: false,
+        placementIds: canonicalPlacementIds,
+        mandatoryBaseFaceTextureId: 25));
+Require(
+    residentT25.CompositeProfileId == Id65AuthoringCompositeCompiler.ProfileId &&
+    residentT25Projection.Compiled.Manifest.ProfileId ==
+        Id65AuthoringCompositeCompiler.ResidentT25ProfileId &&
+    residentT25Projection.Compiled.ProfileId == Id65AuthoringCompositeCompiler.ProfileId &&
+    residentT25Projection.Compiled.ManifestSha256 == Id65AuthoringCompositeCompiler.ExpectedResidentT25StructuralManifestSha256 &&
+    residentT25Projection.Compiled.OutputRow80Sha256 == Id65AuthoringCompositeCompiler.ExpectedResidentT25StructuralOutputRow80Sha256 &&
+    residentT25Projection.Compiled.OutputModelSha256 == Id65AuthoringCompositeCompiler.ExpectedResidentT25StructuralModelSha256 &&
+    residentT25Projection.Compiled.DeterministicPlanSha256 == Id65AuthoringCompositeCompiler.ExpectedResidentT25StructuralDeterministicPlanSha256 &&
+    residentT25BaseProjection.Compiled.ManifestSha256 == Id65AuthoringCompositeCompiler.ExpectedResidentT25BaseManifestSha256 &&
+    residentT25BaseProjection.Compiled.OutputRow80Sha256 == Id65AuthoringCompositeCompiler.ExpectedResidentT25BaseOutputRow80Sha256 &&
+    residentT25BaseProjection.Compiled.OutputModelSha256 == Id65AuthoringCompositeCompiler.ExpectedResidentT25BaseModelSha256 &&
+    residentT25BaseProjection.Compiled.DeterministicPlanSha256 == Id65AuthoringCompositeCompiler.ExpectedResidentT25BaseDeterministicPlanSha256 &&
+    residentT25Projection.Compiled.Texture.OutputTextureId == 25 &&
+    residentT25Projection.Compiled.Texture.AddedTerrainFacePreservedT25,
+    "The resident T25 document/compiler/manifest profile distinction, frozen identities, or bindings changed.");
 ExpectReject(
     "T25 profile carrying T66 selector",
     () => Id65AuthoringEditorDocument.Parse(

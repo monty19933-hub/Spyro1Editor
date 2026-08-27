@@ -350,6 +350,10 @@ internal sealed class Id65CompiledV2NativeTextureComposition
 /// </summary>
 internal static class Id65V2NativeTextureCompositionCompiler
 {
+    public const string ResidentT25MandatoryFaceBindingProfileId =
+        "id65-native-texture-mandatory-face-binding-v1";
+    public const string ExpectedResidentT25MandatoryFaceBindingSha256 =
+        "e6b48e63f6da16812a50c3c0aec657ed772bc44c15c310d55f257c4c57be26e4";
     public const string ProfileId = "id65-v3-native-texture-composition-static-in-memory-v2";
     public const string ManifestProfileId =
         "id65-authoring-manifest-environment-header-repair-v3-private-t66-v2";

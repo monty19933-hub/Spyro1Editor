@@ -71,6 +71,33 @@ Id65CompiledAuthoringComposite repeat = Compile(reorderedManifest, [t88, t107]);
 Id65AuthoringCompositeManifest noTerrainManifest =
     Id65AuthoringCompositeCompiler.CreateManifest(null, textureWitness, bundle, [t88, t107]);
 Id65CompiledAuthoringComposite noTerrain = Compile(noTerrainManifest, [t88, t107]);
+Id65CompiledAuthoringComposite t25Structural = Compile(
+    Id65AuthoringCompositeCompiler.CreateManifest(
+        triangle, textureWitness, bundle, [t88, t107], 25),
+    [t88, t107]);
+Id65CompiledAuthoringComposite t25Base = Compile(
+    Id65AuthoringCompositeCompiler.CreateManifest(
+        null, textureWitness, bundle, [t88, t107], 25),
+    [t88, t107]);
+Require(
+    t25Structural.Manifest.ProfileId == Id65AuthoringCompositeCompiler.ResidentT25ProfileId &&
+    t25Structural.Manifest.CanonicalJson.Contains(
+        $"\"profileId\":\"{Id65AuthoringCompositeCompiler.ResidentT25ProfileId}\"",
+        StringComparison.Ordinal) &&
+    t25Structural.ProfileId == Id65AuthoringCompositeCompiler.ProfileId &&
+    first.Manifest.ProfileId == Id65AuthoringCompositeCompiler.ProfileId &&
+    first.ProfileId == Id65AuthoringCompositeCompiler.ProfileId &&
+    t25Structural.ManifestSha256 == Id65AuthoringCompositeCompiler.ExpectedResidentT25StructuralManifestSha256 &&
+    t25Structural.OutputRow80Sha256 == Id65AuthoringCompositeCompiler.ExpectedResidentT25StructuralOutputRow80Sha256 &&
+    t25Structural.OutputModelSha256 == Id65AuthoringCompositeCompiler.ExpectedResidentT25StructuralModelSha256 &&
+    t25Structural.DeterministicPlanSha256 == Id65AuthoringCompositeCompiler.ExpectedResidentT25StructuralDeterministicPlanSha256 &&
+    t25Structural.Texture.OutputTextureId == 25 && t25Structural.Texture.AddedTerrainFacePreservedT25 &&
+    t25Base.ManifestSha256 == Id65AuthoringCompositeCompiler.ExpectedResidentT25BaseManifestSha256 &&
+    t25Base.OutputRow80Sha256 == Id65AuthoringCompositeCompiler.ExpectedResidentT25BaseOutputRow80Sha256 &&
+    t25Base.OutputModelSha256 == Id65AuthoringCompositeCompiler.ExpectedResidentT25BaseModelSha256 &&
+    t25Base.DeterministicPlanSha256 == Id65AuthoringCompositeCompiler.ExpectedResidentT25BaseDeterministicPlanSha256 &&
+    t25Base.Texture.OutputTextureId == 25,
+    "The exact resident T25 profile distinction, base/structural composite pins, or face bindings changed.");
 
 Require(first.ProfileId == Id65AuthoringCompositeCompiler.ProfileId &&
         first.ManifestSha256 == Id65AuthoringCompositeCompiler.ExpectedCombinedManifestSha256 &&

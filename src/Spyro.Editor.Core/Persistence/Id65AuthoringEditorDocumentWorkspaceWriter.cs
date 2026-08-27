@@ -78,12 +78,6 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         ArgumentNullException.ThrowIfNull(expectedLabManifest);
         ArgumentNullException.ThrowIfNull(state);
         cancellationToken.ThrowIfCancellationRequested();
-        if (state.MandatoryBaseFaceTextureId !=
-            Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId)
-        {
-            throw new NotSupportedException(
-                "Resident T25 authoring documents are exact but cannot be persisted until the T25 composite projection contract is frozen.");
-        }
 
         UnusedLevel65BlankLevelLabProfileRegistry.ValidateManifest(
             expectedLabManifest,

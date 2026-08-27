@@ -97,6 +97,25 @@ Id65AuthoringEditorDocumentStoreResult pathAlias = stored with
 Id65AuthoringEditorAggregatePlan repeat = Project(pathAlias);
 positivePlans++;
 Require(Equivalent(first, repeat), "Repeated/reparsed/path-aliased aggregate projection was not deterministic.");
+Id65AuthoringEditorDocument t25Document = Id65AuthoringEditorDocument.CreateExact(
+    mandatoryBaseFaceTextureId: 25);
+Id65AuthoringEditorProjection t25Projection = Id65AuthoringEditorDocumentProjector.Project(new(
+    t25Document, boundSource.LockedSource, textureWitness, grassBundle));
+Id65AuthoringEditorDocumentStoreResult t25Stored = stored with
+{
+    Document = t25Document,
+    CompositeManifestSha256 = t25Projection.Compiled.ManifestSha256,
+    CompositeOutputRow80Sha256 = t25Projection.Compiled.OutputRow80Sha256,
+    CompositeDeterministicPlanSha256 = t25Projection.Compiled.DeterministicPlanSha256
+};
+ExpectNotSupported(
+    "resident T25 aggregate planning",
+    () => _ = Id65AuthoringEditorAggregatePlanProjector.Project(new(
+        t25Stored,
+        null!,
+        null!)),
+    "Aggregate planning remains restricted to the frozen T66 document profile.");
+identityRejects++;
 
 byte[] sourceRow = boundSource.LockedSource.CopyRow80();
 byte[] outputRow = Id65AuthoringEditorAggregatePlanProjector.ApplyExact(first, sourceRow, reverse: false);
@@ -472,7 +491,7 @@ Require(publicBoundSourceFactories.Length == 1 && publicBoundSourceFactories[0].
     "The aggregate bound source gained a caller-constructible snapshot or raw-byte factory.");
 VerifySourceTopology(repositoryRoot);
 
-Require(identityRejects == 27, $"The aggregate identity matrix ran {identityRejects}, expected 27.");
+Require(identityRejects == 28, $"The aggregate identity matrix ran {identityRejects}, expected 28.");
 Require(partitionRejects == 11, $"The aggregate partition matrix ran {partitionRejects}, expected 11.");
 Require(aliasCopyChecks == 10, $"The aggregate copy/alias matrix ran {aliasCopyChecks}, expected 10.");
 Require(positivePlans == 2, $"The aggregate positive matrix ran {positivePlans}, expected 2.");
@@ -656,11 +675,23 @@ static void ExpectRejected(string label, Action action)
     {
         action();
     }
-    catch (Exception exception) when (exception is InvalidDataException or ArgumentException or IOException)
+    catch (Exception exception) when (exception is InvalidDataException or ArgumentException or IOException or NotSupportedException)
     {
         rejected = true;
     }
     Require(rejected, $"Aggregate negative case '{label}' was accepted.");
+}
+
+static void ExpectNotSupported(string label, Action action, string expectedMessage)
+{
+    try
+    {
+        action();
+        throw new InvalidOperationException($"Aggregate negative case '{label}' was accepted.");
+    }
+    catch (NotSupportedException exception) when (exception.Message == expectedMessage)
+    {
+    }
 }
 
 static void VerifySourceTopology(string repositoryRoot)

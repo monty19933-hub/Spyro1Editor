@@ -512,6 +512,9 @@ internal static class Id65AuthoringEditorAggregatePlanProjector
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.StoredDocument);
+        if (request.StoredDocument.Document.MandatoryBaseFaceTextureId != 66)
+            throw new NotSupportedException(
+                "Aggregate planning remains restricted to the frozen T66 document profile.");
         ArgumentNullException.ThrowIfNull(request.LabManifest);
         ArgumentNullException.ThrowIfNull(request.NativeInputs);
         Id65AuthoringEditorNativeInputProvider.ValidateForConsumption(request.NativeInputs);

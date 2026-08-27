@@ -158,12 +158,6 @@ internal static class Id65AuthoringEditorDocumentStore
         ArgumentNullException.ThrowIfNull(projectionInputs);
         ArgumentNullException.ThrowIfNull(preparePublishedResult);
         cancellationToken.ThrowIfCancellationRequested();
-        if (document.MandatoryBaseFaceTextureId !=
-            Id65AuthoringEditorDocument.PrivateMandatoryBaseFaceTextureId)
-        {
-            throw new NotSupportedException(
-                "Resident T25 authoring documents are exact but cannot be persisted until the T25 composite projection contract is frozen.");
-        }
         ArgumentNullException.ThrowIfNull(projectionInputs.NativeInputs);
         Id65AuthoringEditorNativeInputProvider.ValidateForConsumption(
             projectionInputs.NativeInputs);
@@ -684,7 +678,7 @@ internal static class Id65AuthoringEditorDocumentStore
         }
 
         return new ProjectionIdentity(
-            Id65AuthoringCompositeCompiler.ProfileId,
+            compiled.ProfileId,
             compiled.ManifestSha256,
             compiled.OutputRow80Sha256,
             compiled.DeterministicPlanSha256);
@@ -694,8 +688,14 @@ internal static class Id65AuthoringEditorDocumentStore
         Id65AuthoringEditorDocument document,
         UnusedLevel65BlankLevelLabManifest expectedLabManifest)
     {
-        if (document.SchemaVersion != Id65AuthoringEditorDocument.CurrentSchemaVersion ||
-            document.ProfileId != Id65AuthoringEditorDocument.DocumentProfileId ||
+        bool supportedDocument =
+            (document.SchemaVersion == Id65AuthoringEditorDocument.CurrentSchemaVersion &&
+             document.ProfileId == Id65AuthoringEditorDocument.DocumentProfileId &&
+             document.MandatoryBaseFaceTextureId == 66) ||
+            (document.SchemaVersion == Id65AuthoringEditorDocument.ResidentT25SchemaVersion &&
+             document.ProfileId == Id65AuthoringEditorDocument.ResidentT25DocumentProfileId &&
+             document.MandatoryBaseFaceTextureId == 25);
+        if (!supportedDocument ||
             document.LabProfileId != expectedLabManifest.ProfileId ||
             document.LabProfileVersion != expectedLabManifest.ProfileVersion ||
             document.WorkspaceKey != expectedLabManifest.WorkspaceKey ||

@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using System.Text;
 using Spyro.Editor.Core.Exporting;
 
 string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
@@ -359,6 +360,15 @@ Require(!witness.ContainsFoundationModelBytes && !witness.ContainsFoundationFace
 Require(SnapshotsEqual(lockedBefore, SnapshotDirectory(Path.GetDirectoryName(lockedBaseImage)!)) &&
         SnapshotsEqual(foundationBefore, SnapshotDirectory(Path.GetDirectoryName(foundationImage)!)),
     "The pure T66 compiler changed or published beside an input artifact.");
+string residentBindingPayload =
+    "id65-native-texture-mandatory-face-binding-v1\n" +
+    "mandatoryBaseFaceTextureId=25\noptionalFaceTextureId=25\nprivateTextureAvailable=66\n";
+Require(
+    Id65V2NativeTextureCompositionCompiler.ResidentT25MandatoryFaceBindingProfileId ==
+        "id65-native-texture-mandatory-face-binding-v1" &&
+    Hash(Encoding.UTF8.GetBytes(residentBindingPayload)) ==
+        Id65V2NativeTextureCompositionCompiler.ExpectedResidentT25MandatoryFaceBindingSha256,
+    "The exact resident T25 mandatory/optional face binding identity changed.");
 
 Console.WriteLine(
     "PASS Id65V2NativeTextureCompositionCompilerSmoke: " +

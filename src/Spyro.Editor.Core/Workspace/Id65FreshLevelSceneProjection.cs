@@ -121,6 +121,14 @@ public static class Id65FreshLevelSceneProjector
         "d13d6d3df46e3fc95c5cdc28160d769b50cec131743d830bc680578bccf377bf";
     public const string ExpectedDefaultStructuralDocumentProjectionSha256 =
         "749be61b77986039e41f017145509924f59eb09400147863c7fdba9a5bc55d79";
+    public const string ExpectedResidentT25BaseGraphCanonicalSha256 =
+        "5a94a4bbda2fe71c5ea9b8a3088ccf2e1ba5f03f0624c5b354b35e55fdfdb5e4";
+    public const string ExpectedResidentT25StructuralGraphCanonicalSha256 =
+        "218d5df3988d47b1f08b360e580a45e079c8d1203a40301119f2bd50fad68e9f";
+    public const string ExpectedResidentT25DefaultBaseDocumentProjectionSha256 =
+        "ced56fb1a42873028902a0d68442d95635ef8665f2995da996ae332636ad188a";
+    public const string ExpectedResidentT25DefaultStructuralDocumentProjectionSha256 =
+        "ee551d307c75face36f44b4400cba7f9317c77adff15a328613fe97e93d36368";
 
     private const uint NativeCenterXyWord = 0x01800180;
     private const uint NativeCenterZRadiusFlagsWord = 0x020000C0;
@@ -226,11 +234,19 @@ public static class Id65FreshLevelSceneProjector
     {
         string baseSha256 = Hash(BaseGraphCanonicalPayload);
         string structuralSha256 = Hash(StructuralGraphCanonicalPayload);
+        string residentBaseSha256 = Hash(BaseGraphCanonicalPayload
+            .Replace("texture=66,66,66,66", "texture=25,25,25,25", StringComparison.Ordinal)
+            .Replace("42024001", "19024001", StringComparison.Ordinal));
+        string residentStructuralSha256 = Hash(StructuralGraphCanonicalPayload
+            .Replace("texture=66,66,66,66", "texture=25,25,25,25", StringComparison.Ordinal)
+            .Replace("42024001", "19024001", StringComparison.Ordinal));
         if (!string.Equals(baseSha256, ExpectedCanonicalSha256, StringComparison.Ordinal) ||
             !string.Equals(
                 structuralSha256,
                 ExpectedStructuralGraphCanonicalSha256,
-                StringComparison.Ordinal))
+                StringComparison.Ordinal) ||
+            residentBaseSha256 != ExpectedResidentT25BaseGraphCanonicalSha256 ||
+            residentStructuralSha256 != ExpectedResidentT25StructuralGraphCanonicalSha256)
         {
             throw new InvalidDataException(
                 "The versioned ID65 fresh-level scene projection canonical graph changed: " +
@@ -248,9 +264,9 @@ public static class Id65FreshLevelSceneProjector
                 "The fresh-level scene projection accepts only the exact ID65 Blank-Level Lab definition.");
         }
 
-        GeometryCandidate geometry = BuildGeometry(includeStructuralTerrain: false);
+        GeometryCandidate geometry = BuildGeometry(includeStructuralTerrain: false, StarterTextureId);
         Id65FreshLevelProtectedSpawn spawn = BuildProtectedSpawn();
-        ValidateProjectedGraph(geometry, spawn, includeStructuralTerrain: false);
+        ValidateProjectedGraph(geometry, spawn, includeStructuralTerrain: false, StarterTextureId);
         return new Id65FreshLevelSceneProjection(
             geometry,
             spawn,
@@ -273,12 +289,22 @@ public static class Id65FreshLevelSceneProjector
         ArgumentNullException.ThrowIfNull(document);
         Id65AuthoringEditorControlState state =
             Id65AuthoringEditorControlStateCompiler.RecoverControlState(document);
-        GeometryCandidate geometry = BuildGeometry(state.IncludeStructuralTerrain);
+        GeometryCandidate geometry = BuildGeometry(
+            state.IncludeStructuralTerrain,
+            state.MandatoryBaseFaceTextureId);
         Id65FreshLevelProtectedSpawn spawn = BuildProtectedSpawn();
-        ValidateProjectedGraph(geometry, spawn, state.IncludeStructuralTerrain);
-        string graphCanonicalSha256 = state.IncludeStructuralTerrain
-            ? ExpectedStructuralGraphCanonicalSha256
-            : ExpectedCanonicalSha256;
+        ValidateProjectedGraph(
+            geometry,
+            spawn,
+            state.IncludeStructuralTerrain,
+            state.MandatoryBaseFaceTextureId);
+        string graphCanonicalSha256 = state.MandatoryBaseFaceTextureId == 66
+            ? (state.IncludeStructuralTerrain
+                ? ExpectedStructuralGraphCanonicalSha256
+                : ExpectedCanonicalSha256)
+            : (state.IncludeStructuralTerrain
+                ? ExpectedResidentT25StructuralGraphCanonicalSha256
+                : ExpectedResidentT25BaseGraphCanonicalSha256);
         string identity = BindDocumentIdentity(
             graphCanonicalSha256,
             document.DocumentCanonicalSha256,
@@ -330,7 +356,9 @@ public static class Id65FreshLevelSceneProjector
             bool optional = geometry.Polygons.Count == 2;
             if (geometry.Polygons.Count is not (1 or 2))
                 return false;
-            ValidateProjectedGraph(geometry, BuildProtectedSpawn(), optional);
+            int textureId = geometry.Polygons.Single(item =>
+                item.FaceIndex == AuthoredFaceIndex).TextureId;
+            ValidateProjectedGraph(geometry, BuildProtectedSpawn(), optional, textureId);
             return true;
         }
         catch (Exception exception) when (IsMalformedGraphException(exception))
@@ -339,8 +367,13 @@ public static class Id65FreshLevelSceneProjector
         }
     }
 
-    private static GeometryCandidate BuildGeometry(bool includeStructuralTerrain)
+    private static GeometryCandidate BuildGeometry(
+        bool includeStructuralTerrain,
+        int mandatoryBaseFaceTextureId)
     {
+        if (mandatoryBaseFaceTextureId is not (25 or 66))
+            throw new InvalidDataException(
+                "The fresh ID65 mandatory face texture must be exactly T25 or T66.");
         Vector2f[] points =
         [
             new(272, 272),
@@ -371,7 +404,7 @@ public static class Id65FreshLevelSceneProjector
         geometry.Polygons.Add(new TerrainPolygon(
             points,
             zValues,
-            StarterTextureId,
+            mandatoryBaseFaceTextureId,
             AuthoredSectorIndex,
             AuthoredFaceIndex,
             "hp",
@@ -379,7 +412,7 @@ public static class Id65FreshLevelSceneProjector
             sectorOffset: -1,
             faceOffset: -1,
             vertexIndexes: highVertexIndexes,
-            word3: "0x01400242",
+            word3: mandatoryBaseFaceTextureId == 66 ? "0x01400242" : "0x01400219",
             word4: "0x00100A08",
             faceFlip: false,
             faceDepth: 1,
@@ -387,11 +420,13 @@ public static class Id65FreshLevelSceneProjector
             nearColors: nearColors,
             farColors: farColors,
             cornerPointIndexes: highCornerPointIndexes,
-            nativeFaceWord2: HighFaceWord2,
-            nativeMaterialByte: StarterTextureId,
+            nativeFaceWord2: mandatoryBaseFaceTextureId == 66
+                ? HighFaceWord2
+                : OptionalHighFaceWord2,
+            nativeMaterialByte: mandatoryBaseFaceTextureId,
             nativeUntexturedSentinel: false,
             nativePrimitiveSemiTransparent: false,
-            nativeTextureId: StarterTextureId,
+            nativeTextureId: mandatoryBaseFaceTextureId,
             nativeFaceWord0: HighFaceWord0,
             nativeFaceWord1: HighFaceWord1,
             nativeFaceWord3: HighFaceWord3));
@@ -536,8 +571,12 @@ public static class Id65FreshLevelSceneProjector
     private static void ValidateProjectedGraph(
         GeometryCandidate geometry,
         Id65FreshLevelProtectedSpawn spawn,
-        bool includeStructuralTerrain)
+        bool includeStructuralTerrain,
+        int mandatoryBaseFaceTextureId)
     {
+        if (mandatoryBaseFaceTextureId is not (25 or 66))
+            throw new InvalidDataException(
+                "The fresh ID65 mandatory face texture must be exactly T25 or T66.");
         int expectedFaceCount = includeStructuralTerrain ? 2 : 1;
         TerrainPolygon hp = geometry.Polygons.SingleOrDefault(item =>
                 item.FaceIndex == AuthoredFaceIndex)
@@ -608,15 +647,19 @@ public static class Id65FreshLevelSceneProjector
             hp.OriginalPoints.SequenceEqual(expectedPoints) &&
             hp.ZValues.SequenceEqual(expectedZ) &&
             hp.OriginalZValues.SequenceEqual(expectedZ) &&
-            hp.TextureId == StarterTextureId &&
-            hp.OriginalTextureId == StarterTextureId &&
-            hp.NativeTextureId == StarterTextureId &&
-            hp.NativeMaterialByte == StarterTextureId &&
+            hp.TextureId == mandatoryBaseFaceTextureId &&
+            hp.OriginalTextureId == mandatoryBaseFaceTextureId &&
+            hp.NativeTextureId == mandatoryBaseFaceTextureId &&
+            hp.NativeMaterialByte == mandatoryBaseFaceTextureId &&
             hp.NativeFaceWord0 == HighFaceWord0 &&
             hp.NativeFaceWord1 == HighFaceWord1 &&
-            hp.NativeFaceWord2 == HighFaceWord2 &&
+            hp.NativeFaceWord2 == (mandatoryBaseFaceTextureId == 66
+                ? HighFaceWord2
+                : OptionalHighFaceWord2) &&
             hp.NativeFaceWord3 == HighFaceWord3 &&
-            hp.Word3 == "0x01400242" &&
+            hp.Word3 == (mandatoryBaseFaceTextureId == 66
+                ? "0x01400242"
+                : "0x01400219") &&
             hp.Word4 == "0x00100A08" &&
             hp.VertexIndexes.SequenceEqual(new[] { 0, 0, 1, 2 }) &&
             hp.ColourIndexes.SequenceEqual(new[] { 1, 1, 0, 2 }) &&

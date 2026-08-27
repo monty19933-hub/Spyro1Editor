@@ -97,6 +97,27 @@ try
         paths,
         manifest,
         stored);
+    string[] beforeT25Refusal = Directory.EnumerateFileSystemEntries(paths.RootPath)
+        .Select(Path.GetFileName)
+        .Order(StringComparer.Ordinal)
+        .ToArray()!;
+    Id65AuthoringEditorDocumentStoreResult t25Expected = stored with
+    {
+        Document = Id65AuthoringEditorDocument.CreateExact(
+            mandatoryBaseFaceTextureId: 25)
+    };
+    await ExpectRejectedAsync(
+        "resident T25 candidate before any output/reuse",
+        async () => _ = await Id65AuthoringEditorAggregateCandidateMaterializer
+            .MaterializeAsync(request with { ExpectedStoredDocument = t25Expected }),
+        requiredText: "restricted to the frozen T66");
+    failClosedRejects++;
+    Require(
+        Directory.EnumerateFileSystemEntries(paths.RootPath)
+            .Select(Path.GetFileName)
+            .Order(StringComparer.Ordinal)
+            .SequenceEqual(beforeT25Refusal),
+        "Rejected resident T25 candidate materialization changed output/temp/reuse workspace state.");
 
     await ExpectRejectedAsync(
         "smoke-only entrypoint without a fault",
@@ -1147,8 +1168,8 @@ try
     VerifyApiAndTopology(repositoryRoot);
     Require(positiveMaterializations == 12,
         $"The aggregate materializer positive matrix ran {positiveMaterializations}, expected 12.");
-    Require(failClosedRejects == 12,
-        $"The aggregate materializer rejection matrix ran {failClosedRejects}, expected 12.");
+    Require(failClosedRejects == 13,
+        $"The aggregate materializer rejection matrix ran {failClosedRejects}, expected 13.");
     Require(shapeRejects == 3,
         $"The aggregate materializer shape matrix ran {shapeRejects}, expected 3.");
     Require(reprojectionRejects == 1,
@@ -1698,7 +1719,7 @@ static async Task ExpectRejectedAsync(
         await action();
     }
     catch (Exception exception) when (
-        exception is InvalidDataException or InvalidOperationException or IOException)
+        exception is InvalidDataException or InvalidOperationException or IOException or NotSupportedException)
     {
         captured = exception;
     }

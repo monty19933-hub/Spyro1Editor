@@ -51,16 +51,20 @@ internal sealed class Id65AuthoringCompositeManifest
         Id65TerrainTriangleIntent? optionalTerrainTriangle,
         string textureWitnessSha256,
         string mobyBundleSha256,
-        IEnumerable<Id65MobyPlacementIntent> placements)
+        IEnumerable<Id65MobyPlacementIntent> placements,
+        int mandatoryBaseFaceTextureId = 66)
     {
+        if (mandatoryBaseFaceTextureId is not (25 or 66))
+            throw new InvalidDataException("The mandatory base face texture must be exact T25 or T66.");
         OptionalTerrainTriangle = optionalTerrainTriangle;
         TextureWitnessSha256 = textureWitnessSha256;
         MobyBundleSha256 = mobyBundleSha256;
+        MandatoryBaseFaceTextureId = mandatoryBaseFaceTextureId;
         _placements = Array.AsReadOnly(placements
             .OrderBy(item => item.TargetTrueIndex)
             .ToArray());
-        CanonicalJson = JsonSerializer.Serialize(
-            new
+        object canonical = mandatoryBaseFaceTextureId == 66
+            ? new
             {
                 profileId = Id65AuthoringCompositeCompiler.ProfileId,
                 mandatoryV3CollisionAndEnvironmentHeaderRepairs = true,
@@ -69,7 +73,20 @@ internal sealed class Id65AuthoringCompositeManifest
                 textureWitnessSha256,
                 mobyBundleSha256,
                 placements = _placements
-            },
+            }
+            : new
+            {
+                profileId = Id65AuthoringCompositeCompiler.ResidentT25ProfileId,
+                mandatoryV3CollisionAndEnvironmentHeaderRepairs = true,
+                optionalTerrainTriangle,
+                mandatoryBaseFaceTextureId,
+                privateTextureId = Id65V2NativeTextureCompositionCompiler.PrivateTextureId,
+                textureWitnessSha256,
+                mobyBundleSha256,
+                placements = _placements
+            };
+        CanonicalJson = JsonSerializer.Serialize(
+            canonical,
             new JsonSerializerOptions
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -78,7 +95,9 @@ internal sealed class Id65AuthoringCompositeManifest
         CanonicalSha256 = Id65AuthoringCompositeCompiler.Hash(Encoding.UTF8.GetBytes(CanonicalJson));
     }
 
-    public string ProfileId => Id65AuthoringCompositeCompiler.ProfileId;
+    public string ProfileId =>
+        Id65AuthoringCompositeCompiler.GetProfileId(MandatoryBaseFaceTextureId);
+    public int MandatoryBaseFaceTextureId { get; }
     public bool MandatoryV3CollisionAndEnvironmentHeaderRepairs => true;
     public Id65TerrainTriangleIntent? OptionalTerrainTriangle { get; }
     public string TextureWitnessSha256 { get; }
@@ -340,6 +359,8 @@ internal sealed class Id65CompiledAuthoringComposite
         GlobalExecutableSha256 = globalExecutableSha256;
     }
 
+    // The compiler contract is intentionally generic; the selector-specific
+    // manifest profile is independently signed by ManifestSha256.
     public string ProfileId => Id65AuthoringCompositeCompiler.ProfileId;
     public Id65AuthoringCompositeManifest Manifest { get; }
     public string ManifestSha256 { get; }
@@ -413,7 +434,32 @@ internal sealed class Id65CompiledAuthoringComposite
 /// </summary>
 internal static class Id65AuthoringCompositeCompiler
 {
+    public const string ResidentT25ProfileId = "id65-authoring-composite-resident-t25-v1";
+    public const string ExpectedResidentT25StructuralManifestSha256 =
+        "d008ea0fa57f07ca3bc5eff5b97143240b824d8c5a27331355c3811946bcddf3";
+    public const string ExpectedResidentT25StructuralOutputRow80Sha256 =
+        "1739fce5b4f34a2e192771747d3828dfe274bdfb4add8c00a62b10ada9cad23f";
+    public const string ExpectedResidentT25StructuralModelSha256 =
+        "ad2d5e80f106f24ffc69fdb07cab75ec37384539f421658cedef107d2cdf084d";
+    public const string ExpectedResidentT25StructuralDeterministicPlanSha256 =
+        "07b9deee1090a69f0bba22e6065a8fb7d595ecc4df9df7387b226514f3e339e2";
+    public const string ExpectedResidentT25BaseManifestSha256 =
+        "63b56195e1ef06728b061d0b7915a16cb616dfec4a49fc55cc988ae3dca3dbae";
+    public const string ExpectedResidentT25BaseOutputRow80Sha256 =
+        "d74cedf57af6e12bc3c483cced39c917604bcf15e676c63e1efee42ec7ff869f";
+    public const string ExpectedResidentT25BaseModelSha256 =
+        "8045d564ec1f8daaf5ab70ea5074239bedf3f79ccefdb6aa8779aa7f950005e3";
+    public const string ExpectedResidentT25BaseDeterministicPlanSha256 =
+        "5e6cd118a36d73489320cf1e2435d1a5aad7a8c1cb165f17e370cf1110e5e6f6";
     public const string ProfileId = "id65-authoring-single-pass-composite-v3";
+    public static string GetProfileId(int mandatoryBaseFaceTextureId) =>
+        mandatoryBaseFaceTextureId switch
+        {
+            66 => ProfileId,
+            25 => ResidentT25ProfileId,
+            _ => throw new InvalidDataException(
+                "The composite profile requires exactly mandatory T25 or T66.")
+        };
     public const string ExpectedLockedRow80Sha256 =
         "7ddbf6d9a6ee6c0f64c8564a89e374ca0ca234ef608ec812aae68e8176de1dc0";
     public const string ExpectedLockedModelSha256 =
@@ -490,13 +536,14 @@ internal static class Id65AuthoringCompositeCompiler
         Id65TerrainTriangleIntent? optionalTerrainTriangle,
         Id65V2NativeTextureWitness textureWitness,
         Id65MobyDependencyBundleDescriptor mobyBundle,
-        IEnumerable<Id65MobyPlacementIntent> placements)
+        IEnumerable<Id65MobyPlacementIntent> placements,
+        int mandatoryBaseFaceTextureId = 66)
     {
         ArgumentNullException.ThrowIfNull(textureWitness);
         ArgumentNullException.ThrowIfNull(mobyBundle);
         ArgumentNullException.ThrowIfNull(placements);
         return new(optionalTerrainTriangle, textureWitness.CanonicalSha256,
-            mobyBundle.CanonicalSha256, placements);
+            mobyBundle.CanonicalSha256, placements, mandatoryBaseFaceTextureId);
     }
 
     public static Id65CompiledAuthoringComposite Compile(Id65AuthoringCompositeCompileRequest request)
@@ -521,11 +568,24 @@ internal static class Id65AuthoringCompositeCompiler
         byte[] sourceModel = source.AsSpan(ModelOffset, ModelLength).ToArray();
         RequireHash(Hash(sourceModel), ExpectedLockedModelSha256, "locked source model");
         byte[] finalModel = BuildFinalModelFromLockedSource(
-            sourceModel, textureRows, triangle is not null);
-        string expectedModel = triangle is null
-            ? Id65V2NativeTextureCompositionCompiler.ExpectedOutputModelSha256
-            : ExpectedCombinedModelSha256;
-        RequireHash(Hash(finalModel), expectedModel, "single-pass final model");
+            sourceModel, textureRows, triangle is not null,
+            request.Manifest.MandatoryBaseFaceTextureId);
+        if (request.Manifest.MandatoryBaseFaceTextureId == 66)
+        {
+            string expectedModel = triangle is null
+                ? Id65V2NativeTextureCompositionCompiler.ExpectedOutputModelSha256
+                : ExpectedCombinedModelSha256;
+            RequireHash(Hash(finalModel), expectedModel, "single-pass final model");
+        }
+        else
+        {
+            RequireHash(
+                Hash(finalModel),
+                triangle is null
+                    ? ExpectedResidentT25BaseModelSha256
+                    : ExpectedResidentT25StructuralModelSha256,
+                "resident T25 single-pass final model");
+        }
 
         List<Id65AuthoringCompositeOwnedRange> ledger = BuildLedger(
             source, finalModel, texturePatches, bundle, placements);
@@ -535,7 +595,8 @@ internal static class Id65AuthoringCompositeCompiler
         if (!inverse.SequenceEqual(source))
             throw new InvalidDataException("The composite ledger is not exactly invertible to locked source.");
 
-        VerifyFinalReadback(source, output, finalModel, triangle is not null, placements);
+        VerifyFinalReadback(source, output, finalModel, triangle is not null, placements,
+            request.Manifest.MandatoryBaseFaceTextureId);
         DiffProof diff = BuildDiffProof(source, output, ledger);
         Id65ModelComponentRelocation[] relocations = BuildRelocations(sourceModel, finalModel, triangle is not null);
         ValidateRelocations(relocations, sourceModel, finalModel, triangle is not null);
@@ -549,7 +610,8 @@ internal static class Id65AuthoringCompositeCompiler
         Id65AuthoringCompositeTerrainReadback terrainReadback =
             BuildTerrainReadback(finalModel, triangle is not null);
         Id65AuthoringCompositeTextureReadback textureReadback =
-            BuildTextureReadback(request.TextureWitness, finalModel, triangle is not null);
+            BuildTextureReadback(request.TextureWitness, finalModel, triangle is not null,
+                request.Manifest.MandatoryBaseFaceTextureId);
         string ownedHash = HashOwnedRanges(ledger);
         string relocationHash = HashRelocations(relocations);
         string rebaseHash = HashRebases(rebases);
@@ -612,9 +674,31 @@ internal static class Id65AuthoringCompositeCompiler
             !InvertHandleRebases(InvertHandleRebases(rebases)).SequenceEqual(rebases))
             throw new InvalidDataException("Composite transaction, relocation, or rebase inverse failed.");
 
-        if (triangle is not null && placements.Length == 2)
+        if (triangle is not null && placements.Length == 2 &&
+            request.Manifest.MandatoryBaseFaceTextureId == 66)
             VerifyFrozenCombinedPins(compiled);
+        if (placements.Length == 2 &&
+            request.Manifest.MandatoryBaseFaceTextureId == 25)
+            VerifyFrozenResidentT25Pins(compiled, triangle is not null);
         return compiled;
+    }
+
+    private static void VerifyFrozenResidentT25Pins(
+        Id65CompiledAuthoringComposite compiled,
+        bool structural)
+    {
+        RequireHash(compiled.ManifestSha256, structural
+            ? ExpectedResidentT25StructuralManifestSha256
+            : ExpectedResidentT25BaseManifestSha256, "resident T25 manifest");
+        RequireHash(compiled.OutputRow80Sha256, structural
+            ? ExpectedResidentT25StructuralOutputRow80Sha256
+            : ExpectedResidentT25BaseOutputRow80Sha256, "resident T25 row-80");
+        RequireHash(compiled.OutputModelSha256, structural
+            ? ExpectedResidentT25StructuralModelSha256
+            : ExpectedResidentT25BaseModelSha256, "resident T25 model");
+        RequireHash(compiled.DeterministicPlanSha256, structural
+            ? ExpectedResidentT25StructuralDeterministicPlanSha256
+            : ExpectedResidentT25BaseDeterministicPlanSha256, "resident T25 plan");
     }
 
     public static byte[] ApplyTransactional(
@@ -908,8 +992,10 @@ internal static class Id65AuthoringCompositeCompiler
             triangle,
             texture.CanonicalSha256,
             bundle.CanonicalSha256,
-            placements);
-        if (manifest.ProfileId != ProfileId || !manifest.MandatoryV3CollisionAndEnvironmentHeaderRepairs ||
+            placements,
+            manifest.MandatoryBaseFaceTextureId);
+        if (manifest.ProfileId != GetProfileId(manifest.MandatoryBaseFaceTextureId) ||
+            !manifest.MandatoryV3CollisionAndEnvironmentHeaderRepairs ||
             manifest.CanonicalJson != expected.CanonicalJson ||
             manifest.CanonicalSha256 != expected.CanonicalSha256 ||
             manifest.TextureWitnessSha256 != texture.CanonicalSha256 ||
@@ -1304,7 +1390,8 @@ internal static class Id65AuthoringCompositeCompiler
     private static byte[] BuildFinalModelFromLockedSource(
         byte[] sourceModel,
         IReadOnlyList<Id65V2NativeTexturePackedRow> textureRows,
-        bool terrain)
+        bool terrain,
+        int mandatoryBaseFaceTextureId)
     {
         byte[] texture = BuildFinalTextureComponent(sourceModel, textureRows);
         byte[] environment = BuildRemoteEnvironment(Slice(sourceModel, 0x02F78, 0x284A4));
@@ -1350,13 +1437,13 @@ internal static class Id65AuthoringCompositeCompiler
             throw new InvalidDataException("The direct final HP face is not bound to source T25.");
         BinaryPrimitives.WriteUInt32LittleEndian(
             final.AsSpan(textureWordOffset, 4),
-            (textureWord & 0xFFFFFF80u) | 66u);
+            (textureWord & 0xFFFFFF80u) | (uint)mandatoryBaseFaceTextureId);
         if (terrain &&
             (BinaryPrimitives.ReadUInt32LittleEndian(final.AsSpan(0x2B560, 4)) & 0x7F) != 25)
             throw new InvalidDataException("The added optional HP face lost its independent T25 binding.");
 
         byte[] finalEnvironment = Slice(final, 0x3030, terrain ? 0x28538 : 0x28518);
-        if (terrain)
+        if (terrain && mandatoryBaseFaceTextureId == 66)
         {
             RequireHash(Hash(finalEnvironment),
                 "a9437ef4b1bba478f2cdd49146673e6584cc83fe6a37a81666d632532536c42e",
@@ -1689,22 +1776,33 @@ internal static class Id65AuthoringCompositeCompiler
         byte[] output,
         byte[] finalModel,
         bool terrain,
-        Id65MobyPlacementIntent[] placements)
+        Id65MobyPlacementIntent[] placements,
+        int mandatoryBaseFaceTextureId)
     {
         if (!output.AsSpan(ModelOffset, ModelLength).SequenceEqual(finalModel))
             throw new InvalidDataException("The final model escaped its one whole-model ledger range.");
         RequireHash(Hash(output.AsSpan(TexturePagesOffset, TexturePagesLength)),
             Id65V2NativeTextureCompositionCompiler.ExpectedOutputTexturePagesSha256,
             "final texture pages");
-        RequireHash(Hash(finalModel), terrain
-            ? ExpectedCombinedModelSha256
-            : Id65V2NativeTextureCompositionCompiler.ExpectedOutputModelSha256,
-            "final model readback");
+        if (mandatoryBaseFaceTextureId == 66)
+        {
+            RequireHash(Hash(finalModel), terrain
+                ? ExpectedCombinedModelSha256
+                : Id65V2NativeTextureCompositionCompiler.ExpectedOutputModelSha256,
+                "final model readback");
+        }
+        else
+        {
+            RequireHash(Hash(finalModel), terrain
+                ? ExpectedResidentT25StructuralModelSha256
+                : ExpectedResidentT25BaseModelSha256,
+                "resident T25 final model readback");
+        }
         if (ReadInt32(finalModel, 0) != 0x3030 || ReadInt32(finalModel, 4) != 67)
             throw new InvalidDataException("The final private T66 texture table changed.");
         int textureWordOffset = terrain ? 0x2B550 : 0x2B540;
-        if ((ReadUInt32(finalModel, textureWordOffset) & 0x7F) != 66)
-            throw new InvalidDataException("The final authored HP face did not bind private T66.");
+        if ((ReadUInt32(finalModel, textureWordOffset) & 0x7F) != mandatoryBaseFaceTextureId)
+            throw new InvalidDataException("The final authored HP face lost its exact mandatory texture binding.");
         if (terrain && (ReadUInt32(finalModel, 0x2B560) & 0x7F) != 25)
             throw new InvalidDataException("The added optional HP face did not preserve T25.");
 
@@ -1764,7 +1862,7 @@ internal static class Id65AuthoringCompositeCompiler
         if (Convert.ToHexString(finalModel.AsSpan(triangleOffset, 12)) != expectedTriangle)
             throw new InvalidDataException("The final collision triangle lost exact negative winding.");
 
-        if (terrain && t88 && t107)
+        if (terrain && t88 && t107 && mandatoryBaseFaceTextureId == 66)
         {
             RequireHash(Hash(output.AsSpan(0, 0x200)),
                 "6157dc52dbf53f744378aa5577209751dc75eb397401504ba23a28f1d5dabd71",
@@ -2218,8 +2316,8 @@ internal static class Id65AuthoringCompositeCompiler
                 1,
                 19_808,
                 Id65AuthoringTerrainMutationCompiler.ExpectedAddedVertexWordHex,
-                Id65AuthoringTerrainMutationCompiler.ExpectedLowDetailFaceHex,
-                Id65AuthoringTerrainMutationCompiler.ExpectedHighDetailFaceHex,
+                Convert.ToHexString(finalModel.AsSpan(0x2B518, 8)),
+                Convert.ToHexString(finalModel.AsSpan(0x2B558, 16)),
                 Id65AuthoringTerrainMutationCompiler.ExpectedCollisionTriangleHex,
                 25_088,
                 -25_088,
@@ -2227,6 +2325,15 @@ internal static class Id65AuthoringCompositeCompiler
                 Array.AsReadOnly(new[] { 19_808, 13_995 }),
                 0)
             : null;
+        if (optional is not null &&
+            (optional.LowDetailFaceHex !=
+                Id65AuthoringTerrainMutationCompiler.ExpectedLowDetailFaceHex ||
+             optional.HighDetailFaceHex !=
+                Id65AuthoringTerrainMutationCompiler.ExpectedHighDetailFaceHex))
+        {
+            throw new InvalidDataException(
+                "The optional terrain HP/LP face bytes changed in final-model readback.");
+        }
         Id65AuthoringCompositeTerrainReadback result = new(
             true,
             terrain,
@@ -2263,7 +2370,8 @@ internal static class Id65AuthoringCompositeCompiler
     private static Id65AuthoringCompositeTextureReadback BuildTextureReadback(
         Id65V2NativeTextureWitness witness,
         byte[] finalModel,
-        bool terrain)
+        bool terrain,
+        int mandatoryBaseFaceTextureId)
     {
         int lowFaceOffset = terrain ? 0x2B510 : 0x2B50C;
         int highFaceOffset = terrain ? 0x2B548 : 0x2B538;
@@ -2299,9 +2407,13 @@ internal static class Id65AuthoringCompositeCompiler
             result.OutputTexturePagesSha256 !=
                 Id65V2NativeTextureCompositionCompiler.ExpectedOutputTexturePagesSha256 ||
             result.OutputLowFaceHex != "0082100000821000" ||
-            result.OutputHighFaceHex != "000001020101000242024001080A1000" ||
-            result.OutputTextureId != 66 || !result.AddedTerrainFacePreservedT25)
-            throw new InvalidDataException("The direct T66 semantic readback changed.");
+            (mandatoryBaseFaceTextureId == 66 &&
+             result.OutputHighFaceHex != "000001020101000242024001080A1000") ||
+            (mandatoryBaseFaceTextureId == 25 &&
+             result.OutputHighFaceHex != "000001020101000219024001080A1000") ||
+            result.OutputTextureId != mandatoryBaseFaceTextureId ||
+            !result.AddedTerrainFacePreservedT25)
+            throw new InvalidDataException("The direct texture semantic readback changed.");
         return result;
     }
 
