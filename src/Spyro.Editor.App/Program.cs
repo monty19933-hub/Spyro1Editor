@@ -29,7 +29,14 @@ internal static class Program
         {
             ResearchProjectWorkspaceBridgeResult researchProject =
                 ResearchProjectWorkspaceBridge.TryActivate();
-            ReleaseProjectContext? project = ReleaseProjectBootstrap.PrepareAsync(version).GetAwaiter().GetResult();
+            ReleaseProjectContext? project = ReleaseProjectBootstrap.PrepareAsync(
+                version,
+                observer: observation => EditorDiagnostics.RecordAction(
+                    "Release startup stage",
+                    $"{observation.Stage}; stage {observation.StageElapsed.TotalMilliseconds:F0} ms; " +
+                    $"total {observation.TotalElapsed.TotalMilliseconds:F0} ms"))
+                .GetAwaiter()
+                .GetResult();
             if (project != null)
             {
                 string migration = project.AutomaticMigration == null

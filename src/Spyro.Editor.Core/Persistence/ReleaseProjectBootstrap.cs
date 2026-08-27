@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
+using System.Diagnostics;
 
 namespace Spyro.Editor.Core.Persistence;
 
@@ -28,9 +29,32 @@ public sealed record AutomaticPortableMigrationMarker(
     DateTimeOffset CompletedAtUtc,
     string ReportPath);
 
+public sealed record ReleaseProjectBootstrapObservation(
+    string Stage,
+    TimeSpan StageElapsed,
+    TimeSpan TotalElapsed);
+
 internal sealed record SynchronizedSupportManifest(
     int Version,
-    IReadOnlyList<string> Files);
+    IReadOnlyList<SynchronizedSupportManifestEntry> Entries);
+
+internal sealed record SynchronizedSupportManifestEntry(
+    string RelativePath,
+    long ByteLength,
+    string Sha256);
+
+internal sealed record SynchronizedSupportOwnership(
+    int Version,
+    IReadOnlyList<SynchronizedSupportOwnedFile> Files);
+
+internal sealed record SynchronizedSupportOwnedFile(
+    string RelativePath,
+    long? ByteLength,
+    string? Sha256);
+
+internal sealed record SupportFileFingerprint(
+    long ByteLength,
+    byte[] Sha256);
 
 public static class ReleaseProjectBootstrap
 {
@@ -38,11 +62,19 @@ public static class ReleaseProjectBootstrap
     public const string ReleaseEnvironmentVariable = "SPYRO_EDITOR_RELEASE";
     public const string WorkspaceEnvironmentVariable = "SPYRO_EDITOR_WORKSPACE";
     private const string CurrentProjectFileName = "current-project.json";
+    private const long MaximumSupportManifestBytes = 4 * 1024 * 1024;
+    private static readonly TimeSpan SupportSynchronizationLeaseTimeout = TimeSpan.FromSeconds(30);
     private static readonly SemaphoreSlim ProjectCommitGate = new(1, 1);
+    private static readonly SemaphoreSlim SupportSynchronizationGate = new(1, 1);
+    private static readonly JsonSerializerOptions SupportManifestJsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
     public static ReleaseProjectContext? Current { get; private set; }
 
-    public static async Task<ReleaseProjectContext?> PrepareAsync(
+    public static Task<ReleaseProjectContext?> PrepareAsync(
         string appVersion,
         string? appBaseDirectory = null,
         EditorUserDataLayout? userData = null,
@@ -50,16 +82,73 @@ public static class ReleaseProjectBootstrap
         bool? forceReleaseMode = null,
         CancellationToken cancellationToken = default)
     {
+        return PrepareCoreAsync(
+            appVersion,
+            appBaseDirectory,
+            userData,
+            explicitInstallRoot,
+            forceReleaseMode,
+            cancellationToken,
+            observer: null);
+    }
+
+    public static Task<ReleaseProjectContext?> PrepareAsync(
+        string appVersion,
+        Action<ReleaseProjectBootstrapObservation> observer,
+        string? appBaseDirectory = null,
+        EditorUserDataLayout? userData = null,
+        string? explicitInstallRoot = null,
+        bool? forceReleaseMode = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(observer);
+        return PrepareCoreAsync(
+            appVersion,
+            appBaseDirectory,
+            userData,
+            explicitInstallRoot,
+            forceReleaseMode,
+            cancellationToken,
+            observer);
+    }
+
+    private static async Task<ReleaseProjectContext?> PrepareCoreAsync(
+        string appVersion,
+        string? appBaseDirectory,
+        EditorUserDataLayout? userData,
+        string? explicitInstallRoot,
+        bool? forceReleaseMode,
+        CancellationToken cancellationToken,
+        Action<ReleaseProjectBootstrapObservation>? observer)
+    {
+        long prepareStarted = Stopwatch.GetTimestamp();
+        long stageStarted = prepareStarted;
+        void Observe(string stage)
+        {
+            long now = Stopwatch.GetTimestamp();
+            ReleaseProjectBootstrapObservation observation = new(
+                stage,
+                Stopwatch.GetElapsedTime(stageStarted, now),
+                Stopwatch.GetElapsedTime(prepareStarted, now));
+            NotifyBootstrapObserver(observer, observation);
+            stageStarted = Stopwatch.GetTimestamp();
+        }
+
+        Observe("prepare-started");
         string baseDirectory = Path.GetFullPath(string.IsNullOrWhiteSpace(appBaseDirectory)
             ? AppContext.BaseDirectory
             : appBaseDirectory);
         string installRoot = FindInstallRoot(explicitInstallRoot, baseDirectory);
         bool releaseMode = forceReleaseMode ?? ResolveReleaseMode(installRoot);
         if (!releaseMode)
+        {
+            Observe("release-mode-skipped");
             return null;
+        }
         if (string.IsNullOrWhiteSpace(installRoot))
             throw new InvalidOperationException("The release installation root could not be located.");
         string applicationSupportRoot = FindApplicationSupportRoot(baseDirectory, installRoot);
+        Observe("release-root-resolved");
 
         userData ??= EditorUserDataLayout.CreateDefault();
         EnsureUserDataDoesNotOverlapInstall(installRoot, userData);
@@ -71,6 +160,7 @@ public static class ReleaseProjectBootstrap
         Directory.CreateDirectory(userData.SettingsPath);
         Directory.CreateDirectory(userData.UpdatesPath);
         Directory.CreateDirectory(userData.BackupsPath);
+        Observe("user-data-ready");
 
         string configuredWorkspace = Environment.GetEnvironmentVariable(WorkspaceEnvironmentVariable) ?? "";
         string registeredWorkspace = ReadCurrentProjectRoot(userData);
@@ -97,12 +187,14 @@ public static class ReleaseProjectBootstrap
                 appVersion,
                 cancellationToken);
         }
+        Observe("project-ready");
 
         PortableProjectMigrationResult? migration = null;
         string migrationMarkerPath = AutomaticMigrationMarkerPath(project, installRoot);
         PersistencePathSafety.EnsureWritePathWithinRoot(project.RootPath, migrationMarkerPath);
         if (!File.Exists(migrationMarkerPath) && HasPortableProjectData(installRoot))
         {
+            Observe("portable-migration-started");
             migration = await PortableProjectMigration.MigrateAsync(
                 installRoot,
                 project,
@@ -119,11 +211,16 @@ public static class ReleaseProjectBootstrap
                     CompletedAtUtc: DateTimeOffset.UtcNow,
                     ReportPath: migration.ReportPath),
                 cancellationToken);
+            Observe("portable-migration-completed");
         }
 
+        Observe("support-sync-started");
         await SynchronizeSupportFilesAsync(applicationSupportRoot, project.RootPath, cancellationToken);
+        Observe("support-sync-completed");
         await TouchManifestAsync(project, appVersion, cancellationToken);
+        Observe("project-manifest-ready");
         await RememberProjectAsync(userData, project, cancellationToken);
+        Observe("project-remembered");
 
         Environment.SetEnvironmentVariable(InstallRootEnvironmentVariable, installRoot);
         Environment.SetEnvironmentVariable(ReleaseEnvironmentVariable, "1");
@@ -135,6 +232,7 @@ public static class ReleaseProjectBootstrap
             project,
             appVersion,
             migration);
+        Observe("prepare-completed");
         return Current;
     }
 
@@ -675,6 +773,27 @@ public static class ReleaseProjectBootstrap
         string projectRoot,
         CancellationToken cancellationToken)
     {
+        await SupportSynchronizationGate.WaitAsync(cancellationToken);
+        try
+        {
+            await SynchronizeSupportFilesCoreAsync(
+                applicationSupportRoot,
+                projectRoot,
+                cancellationToken,
+                captureRaceForTesting: null);
+        }
+        finally
+        {
+            SupportSynchronizationGate.Release();
+        }
+    }
+
+    private static async Task SynchronizeSupportFilesCoreAsync(
+        string applicationSupportRoot,
+        string projectRoot,
+        CancellationToken cancellationToken,
+        Func<string, string, string, Task>? captureRaceForTesting)
+    {
         string sourceRoot = Path.GetFullPath(applicationSupportRoot);
         string destinationRoot = Path.Combine(projectRoot, "support");
         PersistencePathSafety.EnsureTreesDoNotOverlap(
@@ -683,62 +802,185 @@ public static class ReleaseProjectBootstrap
             "Application support files cannot be synchronized between overlapping source and project trees.");
         PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, destinationRoot);
 
-        string manifestPath = Path.Combine(projectRoot, "_local", ".app", "support-ownership.json");
-        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, manifestPath);
-        SynchronizedSupportManifest? previousManifest = await ReadSupportManifestAsync(manifestPath, cancellationToken);
-        List<(string SourcePath, string RelativePath)> sourceFiles = Directory
-            .EnumerateFiles(sourceRoot, "*", new EnumerationOptions
-            {
-                RecurseSubdirectories = true,
-                AttributesToSkip = FileAttributes.ReparsePoint,
-                IgnoreInaccessible = false
-            })
-            .Select(sourcePath => (
-                SourcePath: sourcePath,
-                RelativePath: NormalizeSupportRelativePath(Path.GetRelativePath(sourceRoot, sourcePath))))
-            .Where(file => !file.RelativePath.Equals("app", StringComparison.OrdinalIgnoreCase) &&
-                !file.RelativePath.StartsWith("app/", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(file => file.RelativePath, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        string applicationStateRoot = Path.Combine(projectRoot, "_local", ".app");
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, applicationStateRoot);
+        Directory.CreateDirectory(applicationStateRoot);
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, applicationStateRoot);
+        string synchronizationLeasePath = Path.Combine(applicationStateRoot, "support-sync.lock");
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, synchronizationLeasePath);
+        await using FileStream synchronizationLease = await AcquireSupportSynchronizationLeaseAsync(
+            projectRoot,
+            synchronizationLeasePath,
+            cancellationToken);
 
+        string manifestPath = Path.Combine(applicationStateRoot, "support-ownership.json");
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, manifestPath);
+        SynchronizedSupportOwnership? previousOwnership = await ReadSupportManifestAsync(
+            manifestPath,
+            cancellationToken);
+        Dictionary<string, SynchronizedSupportOwnedFile> previousOwnedFiles = previousOwnership?.Files
+            .ToDictionary(file => file.RelativePath, SupportPathComparer)
+            ?? new Dictionary<string, SynchronizedSupportOwnedFile>(SupportPathComparer);
+
+        HashSet<string> sourcePathIdentities = new(SupportPathComparer);
+        List<(string SourcePath, string RelativePath)> sourceFiles = [];
+        foreach (string sourcePath in Directory.EnumerateFiles(sourceRoot, "*", new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            AttributesToSkip = FileAttributes.ReparsePoint,
+            IgnoreInaccessible = false
+        }))
+        {
+            string relativePath = ValidateAndNormalizeSupportRelativePath(
+                Path.GetRelativePath(sourceRoot, sourcePath));
+            if (relativePath.Equals("app", StringComparison.OrdinalIgnoreCase) ||
+                relativePath.StartsWith("app/", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            if (Path.GetFileName(relativePath)
+                .EndsWith(".spyro-support-capture", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(
+                    $"Application support uses the reserved capture-file namespace: {relativePath}");
+            }
+            if (!sourcePathIdentities.Add(relativePath))
+            {
+                throw new InvalidDataException(
+                    $"Application support contains colliding relative paths: {relativePath}");
+            }
+            sourceFiles.Add((sourcePath, relativePath));
+        }
+        sourceFiles.Sort((left, right) => StringComparer.Ordinal.Compare(left.RelativePath, right.RelativePath));
+
+        List<SynchronizedSupportManifestEntry> currentEntries = new(sourceFiles.Count);
         foreach ((string sourcePath, string relativePath) in sourceFiles)
         {
             cancellationToken.ThrowIfCancellationRequested();
             string destinationPath = SafeSupportDestinationPath(projectRoot, destinationRoot, relativePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(destinationPath) ?? destinationRoot);
-            string temporaryPath = $"{destinationPath}.{Guid.NewGuid():N}.tmp";
-            PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, temporaryPath);
-            try
+            string destinationDirectory = Path.GetDirectoryName(destinationPath) ?? destinationRoot;
+            Directory.CreateDirectory(destinationDirectory);
+            PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, destinationPath);
+            await ReconcileInterruptedSupportCaptureAsync(
+                projectRoot,
+                applicationStateRoot,
+                relativePath,
+                destinationPath,
+                cancellationToken);
+
+            await using FileStream source = OpenSupportFileForHashing(sourcePath);
+            SupportFileFingerprint sourceFingerprint = await ComputeFingerprintAsync(
+                source,
+                sourcePath,
+                cancellationToken);
+            if (Directory.Exists(destinationPath))
             {
-                await using FileStream input = new(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                await using (FileStream output = new(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                throw new InvalidDataException(
+                    $"An application-owned support file destination became a directory: {destinationPath}");
+            }
+            SupportFileFingerprint? destinationFingerprint = File.Exists(destinationPath)
+                ? await ComputeFileFingerprintAsync(destinationPath, cancellationToken)
+                : null;
+            bool destinationMatches = destinationFingerprint != null &&
+                FingerprintsEqual(destinationFingerprint, sourceFingerprint);
+            if (!destinationMatches)
+            {
+                previousOwnedFiles.TryGetValue(
+                    relativePath,
+                    out SynchronizedSupportOwnedFile? previousOwnedFile);
+                if (destinationFingerprint != null && previousOwnedFile == null)
                 {
-                    await input.CopyToAsync(output, cancellationToken);
-                    await output.FlushAsync(cancellationToken);
+                    throw new InvalidDataException(
+                        $"Application support would overwrite a differing project-owned file: {destinationPath}");
                 }
-                File.Move(temporaryPath, destinationPath, overwrite: true);
+                if (destinationFingerprint != null &&
+                    previousOwnership?.Version == 2 &&
+                    !FingerprintsEqual(destinationFingerprint, ExpectedFingerprint(previousOwnedFile!)))
+                {
+                    throw new InvalidDataException(
+                        $"An application-owned support file was modified in the project and was preserved: {destinationPath}");
+                }
+                SupportFileFingerprint? expectedCapturedFingerprint = destinationFingerprint == null
+                    ? null
+                    : previousOwnership?.Version == 2
+                        ? ExpectedFingerprint(previousOwnedFile!)
+                        : destinationFingerprint;
+
+                string temporaryPath = Path.Combine(
+                    destinationDirectory,
+                    $".{Path.GetFileName(destinationPath)}.{Guid.NewGuid():N}.tmp");
+                PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, temporaryPath);
+                try
+                {
+                    source.Position = 0;
+                    await using (FileStream output = new(
+                        temporaryPath,
+                        FileMode.CreateNew,
+                        FileAccess.Write,
+                        FileShare.None,
+                        bufferSize: 128 * 1024,
+                        options: FileOptions.Asynchronous | FileOptions.SequentialScan))
+                    {
+                        await source.CopyToAsync(output, 128 * 1024, cancellationToken);
+                        await output.FlushAsync(cancellationToken);
+                        output.Flush(flushToDisk: true);
+                    }
+
+                    SupportFileFingerprint temporaryFingerprint = await ComputeFileFingerprintAsync(
+                        temporaryPath,
+                        cancellationToken);
+                    if (!FingerprintsEqual(sourceFingerprint, temporaryFingerprint))
+                    {
+                        throw new InvalidDataException(
+                            $"A staged application support file failed length/SHA-256 verification: {relativePath}");
+                    }
+
+                    await PublishStagedSupportFileAsync(
+                        projectRoot,
+                        applicationStateRoot,
+                        relativePath,
+                        destinationPath,
+                        temporaryPath,
+                        sourceFingerprint,
+                        expectedCapturedFingerprint,
+                        captureRaceForTesting,
+                        cancellationToken);
+                }
+                finally
+                {
+                    if (File.Exists(temporaryPath))
+                        File.Delete(temporaryPath);
+                }
             }
-            finally
-            {
-                if (File.Exists(temporaryPath))
-                    File.Delete(temporaryPath);
-            }
+
+            currentEntries.Add(new SynchronizedSupportManifestEntry(
+                relativePath,
+                sourceFingerprint.ByteLength,
+                FormatSha256(sourceFingerprint.Sha256)));
         }
 
-        HashSet<string> currentFiles = sourceFiles
-            .Select(file => file.RelativePath)
+        byte[] canonicalManifestBytes = SerializeCanonicalSupportManifest(
+            new SynchronizedSupportManifest(Version: 2, Entries: currentEntries));
+        HashSet<string> currentFiles = currentEntries
+            .Select(entry => entry.RelativePath)
             .ToHashSet(SupportPathComparer);
-        if (previousManifest != null)
+        if (previousOwnership != null)
         {
-            foreach (string retiredRelativePath in previousManifest.Files
-                .Where(path => !currentFiles.Contains(NormalizeSupportRelativePath(path)))
-                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            foreach (SynchronizedSupportOwnedFile retired in previousOwnership.Files
+                .Where(file => !currentFiles.Contains(file.RelativePath))
+                .OrderBy(file => file.RelativePath, StringComparer.Ordinal))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 string retiredPath = SafeSupportDestinationPath(
                     projectRoot,
                     destinationRoot,
-                    NormalizeSupportRelativePath(retiredRelativePath));
+                    retired.RelativePath);
+                await ReconcileInterruptedSupportCaptureAsync(
+                    projectRoot,
+                    applicationStateRoot,
+                    retired.RelativePath,
+                    retiredPath,
+                    cancellationToken);
                 if (Directory.Exists(retiredPath))
                 {
                     throw new InvalidDataException(
@@ -746,18 +988,963 @@ public static class ReleaseProjectBootstrap
                 }
                 if (!File.Exists(retiredPath))
                     continue;
-                File.Delete(retiredPath);
+
+                SupportFileFingerprint retiredFingerprint = await ComputeFileFingerprintAsync(
+                    retiredPath,
+                    cancellationToken);
+                SupportFileFingerprint expectedRetiredFingerprint = previousOwnership.Version == 2
+                    ? ExpectedFingerprint(retired)
+                    : retiredFingerprint;
+                if (previousOwnership.Version == 2)
+                {
+                    if (!FingerprintsEqual(retiredFingerprint, expectedRetiredFingerprint))
+                        continue;
+                }
+
+                await RetireSupportFileSafelyAsync(
+                    projectRoot,
+                    applicationStateRoot,
+                    retired.RelativePath,
+                    retiredPath,
+                    expectedRetiredFingerprint,
+                    captureRaceForTesting,
+                    cancellationToken);
                 DeleteEmptySupportParents(projectRoot, destinationRoot, Path.GetDirectoryName(retiredPath));
             }
         }
 
-        await EditorUserDataLayout.WriteJsonAtomicallyAsync(
+        await PublishSupportManifestAsync(
+            projectRoot,
             manifestPath,
-            new SynchronizedSupportManifest(Version: 1, Files: sourceFiles.Select(file => file.RelativePath).ToArray()),
+            canonicalManifestBytes,
             cancellationToken);
     }
 
-    private static async Task<SynchronizedSupportManifest?> ReadSupportManifestAsync(
+    private static async Task PublishStagedSupportFileAsync(
+        string projectRoot,
+        string applicationStateRoot,
+        string relativePath,
+        string destinationPath,
+        string stagedPath,
+        SupportFileFingerprint sourceFingerprint,
+        SupportFileFingerprint? expectedCapturedFingerprint,
+        Func<string, string, string, Task>? captureRaceForTesting,
+        CancellationToken cancellationToken)
+    {
+        EnsureSupportCaptureAndRecoveryShareVolume(
+            projectRoot,
+            destinationPath,
+            applicationStateRoot,
+            relativePath);
+        (string captureMarkerPath, string captureNonce, string capturePath) =
+            await BeginSupportCaptureAsync(
+                projectRoot,
+                applicationStateRoot,
+                relativePath,
+                destinationPath,
+                cancellationToken);
+        bool captured = false;
+        try
+        {
+            captured = TryCaptureSupportFile(
+                projectRoot,
+                destinationPath,
+                capturePath);
+            if (captured)
+            {
+                EnsureCapturedSupportFileIsRegular(projectRoot, capturePath);
+                if (captureRaceForTesting != null)
+                {
+                    await captureRaceForTesting(
+                        "after-current-capture",
+                        destinationPath,
+                        capturePath);
+                }
+                EnsureCapturedSupportFileIsRegular(projectRoot, capturePath);
+                SupportFileFingerprint capturedFingerprint = await ComputeFileFingerprintAsync(
+                    capturePath,
+                    cancellationToken);
+                if (FingerprintsEqual(capturedFingerprint, sourceFingerprint))
+                {
+                    string? conflictArchive = await RestoreCapturedSupportFileAsync(
+                        projectRoot,
+                        applicationStateRoot,
+                        relativePath,
+                        destinationPath,
+                        capturePath,
+                        cancellationToken);
+                    captured = SupportPathEntryExists(capturePath);
+                    if (conflictArchive != null)
+                    {
+                        throw new InvalidDataException(
+                            $"A project support file was recreated while matching release bytes were being adopted. " +
+                            $"The recreated file was preserved at {destinationPath}; the displaced bytes were archived at {conflictArchive}.");
+                    }
+                    return;
+                }
+                if (expectedCapturedFingerprint == null ||
+                    !FingerprintsEqual(capturedFingerprint, expectedCapturedFingerprint))
+                {
+                    string? conflictArchive = await RestoreCapturedSupportFileAsync(
+                        projectRoot,
+                        applicationStateRoot,
+                        relativePath,
+                        destinationPath,
+                        capturePath,
+                        cancellationToken);
+                    captured = SupportPathEntryExists(capturePath);
+                    string recovery = conflictArchive == null
+                        ? "The changed file was restored to its original project path."
+                        : $"A concurrent replacement remained at the project path; the displaced file was archived at {conflictArchive}.";
+                    throw new InvalidDataException(
+                        $"A project support file changed before its release update could be published: {destinationPath}. {recovery}");
+                }
+            }
+
+            PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, destinationPath);
+            PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, stagedPath);
+            if (Directory.Exists(destinationPath))
+            {
+                throw new InvalidDataException(
+                    $"An application-owned support file destination became a directory: {destinationPath}");
+            }
+            try
+            {
+                // No overwrite is intentional. The project lease serializes editor instances,
+                // but it does not grant authority over arbitrary external writers.
+                File.Move(stagedPath, destinationPath);
+            }
+            catch (IOException exception) when (SupportPathEntryExists(destinationPath))
+            {
+                throw new InvalidDataException(
+                    $"A project support file was recreated before release bytes could be published and was preserved: {destinationPath}",
+                    exception);
+            }
+
+            SupportFileFingerprint publishedFingerprint = await ComputeFileFingerprintAsync(
+                destinationPath,
+                cancellationToken);
+            if (!FingerprintsEqual(publishedFingerprint, sourceFingerprint))
+            {
+                throw new InvalidDataException(
+                    $"A published application support file did not retain its verified release identity: {destinationPath}");
+            }
+
+            if (captured)
+            {
+                await ArchiveCapturedSupportFileAsync(
+                    projectRoot,
+                    applicationStateRoot,
+                    relativePath,
+                    capturePath,
+                    cancellationToken);
+                captured = false;
+            }
+        }
+        catch (Exception operationException) when (IsRecoverableSupportSynchronizationException(operationException))
+        {
+            if (captured && SupportPathEntryExists(capturePath))
+            {
+                try
+                {
+                    await RestoreCapturedSupportFileAsync(
+                        projectRoot,
+                        applicationStateRoot,
+                        relativePath,
+                        destinationPath,
+                        capturePath,
+                        CancellationToken.None);
+                }
+                catch (Exception recoveryException) when (IsRecoverableSupportSynchronizationException(recoveryException))
+                {
+                    throw new InvalidDataException(
+                        $"Support publication failed and its displaced file could not be restored or archived safely: {destinationPath}",
+                        new AggregateException(operationException, recoveryException));
+                }
+            }
+            throw;
+        }
+        finally
+        {
+            if (!captured || !SupportPathEntryExists(capturePath))
+            {
+                await RemoveCompletedSupportCaptureMarkerAsync(
+                    projectRoot,
+                    captureMarkerPath,
+                    captureNonce,
+                    CancellationToken.None);
+            }
+        }
+    }
+
+    private static async Task RetireSupportFileSafelyAsync(
+        string projectRoot,
+        string applicationStateRoot,
+        string relativePath,
+        string retiredPath,
+        SupportFileFingerprint expectedFingerprint,
+        Func<string, string, string, Task>? captureRaceForTesting,
+        CancellationToken cancellationToken)
+    {
+        EnsureSupportCaptureAndRecoveryShareVolume(
+            projectRoot,
+            retiredPath,
+            applicationStateRoot,
+            relativePath);
+        (string captureMarkerPath, string captureNonce, string capturePath) =
+            await BeginSupportCaptureAsync(
+                projectRoot,
+                applicationStateRoot,
+                relativePath,
+                retiredPath,
+                cancellationToken);
+        bool captured = false;
+        try
+        {
+            captured = TryCaptureSupportFile(projectRoot, retiredPath, capturePath);
+            if (!captured)
+                return;
+
+            EnsureCapturedSupportFileIsRegular(projectRoot, capturePath);
+            if (captureRaceForTesting != null)
+            {
+                await captureRaceForTesting(
+                    "after-retired-capture",
+                    retiredPath,
+                    capturePath);
+            }
+            EnsureCapturedSupportFileIsRegular(projectRoot, capturePath);
+            SupportFileFingerprint capturedFingerprint = await ComputeFileFingerprintAsync(
+                capturePath,
+                cancellationToken);
+            if (!FingerprintsEqual(capturedFingerprint, expectedFingerprint))
+            {
+                string? conflictArchive = await RestoreCapturedSupportFileAsync(
+                    projectRoot,
+                    applicationStateRoot,
+                    relativePath,
+                    retiredPath,
+                    capturePath,
+                    cancellationToken);
+                captured = SupportPathEntryExists(capturePath);
+                if (conflictArchive != null)
+                {
+                    throw new InvalidDataException(
+                        $"A retired project support file changed while it was being captured. " +
+                        $"A concurrent replacement was preserved at {retiredPath}; the displaced file was archived at {conflictArchive}.");
+                }
+
+                // A changed retired file remains user data. Restoring it and omitting it
+                // from the new ownership manifest retires application authority safely.
+                return;
+            }
+
+            await ArchiveCapturedSupportFileAsync(
+                projectRoot,
+                applicationStateRoot,
+                relativePath,
+                capturePath,
+                cancellationToken);
+            captured = false;
+        }
+        catch (Exception operationException) when (IsRecoverableSupportSynchronizationException(operationException))
+        {
+            if (captured && SupportPathEntryExists(capturePath))
+            {
+                try
+                {
+                    await RestoreCapturedSupportFileAsync(
+                        projectRoot,
+                        applicationStateRoot,
+                        relativePath,
+                        retiredPath,
+                        capturePath,
+                        CancellationToken.None);
+                }
+                catch (Exception recoveryException) when (IsRecoverableSupportSynchronizationException(recoveryException))
+                {
+                    throw new InvalidDataException(
+                        $"Support retirement failed and its displaced file could not be restored or archived safely: {retiredPath}",
+                        new AggregateException(operationException, recoveryException));
+                }
+            }
+            throw;
+        }
+        finally
+        {
+            if (!captured || !SupportPathEntryExists(capturePath))
+            {
+                await RemoveCompletedSupportCaptureMarkerAsync(
+                    projectRoot,
+                    captureMarkerPath,
+                    captureNonce,
+                    CancellationToken.None);
+            }
+        }
+    }
+
+    private static async Task ReconcileInterruptedSupportCaptureAsync(
+        string projectRoot,
+        string applicationStateRoot,
+        string relativePath,
+        string destinationPath,
+        CancellationToken cancellationToken)
+    {
+        string captureMarkerPath = GetSupportCaptureMarkerPath(
+            projectRoot,
+            applicationStateRoot,
+            relativePath,
+            createDirectory: false);
+        if (!SupportPathEntryExists(captureMarkerPath))
+            return;
+        if (Directory.Exists(captureMarkerPath))
+        {
+            throw new InvalidDataException(
+                $"An interrupted support capture marker became a directory: {captureMarkerPath}");
+        }
+        string captureNonce = await ReadSupportCaptureNonceAsync(
+            projectRoot,
+            captureMarkerPath,
+            cancellationToken);
+        string capturePath = GetSupportCapturePath(
+            projectRoot,
+            relativePath,
+            destinationPath,
+            captureNonce);
+        if (!SupportPathEntryExists(capturePath))
+        {
+            await RemoveCompletedSupportCaptureMarkerAsync(
+                projectRoot,
+                captureMarkerPath,
+                captureNonce,
+                CancellationToken.None);
+            return;
+        }
+        if (Directory.Exists(capturePath))
+        {
+            throw new InvalidDataException(
+                $"An interrupted support capture path became a directory: {capturePath}");
+        }
+
+        string destinationDirectory = Path.GetDirectoryName(destinationPath) ?? projectRoot;
+        Directory.CreateDirectory(destinationDirectory);
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, destinationDirectory);
+        if (!SupportPathEntryExists(destinationPath))
+        {
+            try
+            {
+                PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, capturePath);
+                PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, destinationPath);
+                File.Move(capturePath, destinationPath);
+                await RemoveCompletedSupportCaptureMarkerAsync(
+                    projectRoot,
+                    captureMarkerPath,
+                    captureNonce,
+                    CancellationToken.None);
+                return;
+            }
+            catch (IOException) when (SupportPathEntryExists(destinationPath))
+            {
+                // A writer recreated the live name; preserve it and archive the capture below.
+            }
+        }
+
+        if (Directory.Exists(destinationPath))
+        {
+            throw new InvalidDataException(
+                $"An interrupted support capture and a directory now occupy the same project identity. " +
+                $"The capture was preserved at {capturePath}; the directory was not changed: {destinationPath}");
+        }
+        await ArchiveCapturedSupportFileAsync(
+            projectRoot,
+            applicationStateRoot,
+            relativePath,
+            capturePath,
+            cancellationToken);
+        await RemoveCompletedSupportCaptureMarkerAsync(
+            projectRoot,
+            captureMarkerPath,
+            captureNonce,
+            CancellationToken.None);
+    }
+
+    private static bool TryCaptureSupportFile(
+        string projectRoot,
+        string sourcePath,
+        string capturePath)
+    {
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, sourcePath);
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, capturePath);
+        if (SupportPathEntryExists(capturePath))
+        {
+            throw new InvalidDataException(
+                $"A support recovery capture already exists and was not overwritten: {capturePath}");
+        }
+        if (Directory.Exists(sourcePath))
+        {
+            throw new InvalidDataException(
+                $"A support file path became a directory before it could be captured: {sourcePath}");
+        }
+        if (!SupportPathEntryExists(sourcePath))
+            return false;
+
+        try
+        {
+            // This no-overwrite rename atomically removes exactly the path identity
+            // that will be validated; it never relies on the earlier fingerprint alone.
+            File.Move(sourcePath, capturePath);
+            return true;
+        }
+        catch (IOException) when (
+            !SupportPathEntryExists(sourcePath) &&
+            !SupportPathEntryExists(capturePath))
+        {
+            return false;
+        }
+    }
+
+    private static async Task<string?> RestoreCapturedSupportFileAsync(
+        string projectRoot,
+        string applicationStateRoot,
+        string relativePath,
+        string destinationPath,
+        string capturePath,
+        CancellationToken cancellationToken)
+    {
+        if (!SupportPathEntryExists(capturePath))
+            return null;
+        if (!SupportPathEntryExists(destinationPath))
+        {
+            try
+            {
+                PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, capturePath);
+                PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, destinationPath);
+                File.Move(capturePath, destinationPath);
+                return null;
+            }
+            catch (IOException) when (SupportPathEntryExists(destinationPath))
+            {
+                // Preserve the concurrent live replacement and archive the capture.
+            }
+        }
+
+        return await ArchiveCapturedSupportFileAsync(
+            projectRoot,
+            applicationStateRoot,
+            relativePath,
+            capturePath,
+            cancellationToken);
+    }
+
+    private static async Task<string> ArchiveCapturedSupportFileAsync(
+        string projectRoot,
+        string applicationStateRoot,
+        string relativePath,
+        string capturePath,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapturedSupportFileIsRegular(projectRoot, capturePath);
+        EnsureSupportCaptureAndRecoveryShareVolume(
+            projectRoot,
+            capturePath,
+            applicationStateRoot,
+            relativePath);
+        SupportFileFingerprint capturedFingerprint = await ComputeFileFingerprintAsync(
+            capturePath,
+            cancellationToken);
+        string archiveDirectory = GetSupportArchiveDirectory(
+            projectRoot,
+            applicationStateRoot,
+            relativePath,
+            createDirectory: true);
+        string archivePath = Path.Combine(
+            archiveDirectory,
+            $"{capturedFingerprint.ByteLength}-{FormatSha256(capturedFingerprint.Sha256)}.support-recovery");
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, archivePath);
+
+        try
+        {
+            File.Move(capturePath, archivePath);
+        }
+        catch (IOException) when (File.Exists(archivePath))
+        {
+            SupportFileFingerprint existingFingerprint = await ComputeFileFingerprintAsync(
+                archivePath,
+                cancellationToken);
+            SupportFileFingerprint currentCaptureFingerprint = await ComputeFileFingerprintAsync(
+                capturePath,
+                cancellationToken);
+            bool identitiesWereStable =
+                FingerprintsEqual(existingFingerprint, capturedFingerprint) &&
+                FingerprintsEqual(currentCaptureFingerprint, capturedFingerprint);
+            string eventArchivePath = await MoveSupportRecoveryToEventArchiveAsync(
+                projectRoot,
+                archiveDirectory,
+                capturePath,
+                currentCaptureFingerprint,
+                cancellationToken);
+            if (!identitiesWereStable)
+            {
+                throw new InvalidDataException(
+                    $"A support recovery identity changed during archival. Existing and captured bytes were preserved at " +
+                    $"{archivePath} and {eventArchivePath}.");
+            }
+
+            // Do not delete an apparently identical capture: an arbitrary writer could
+            // replace it after the hash and turn that delete into data loss. The primary
+            // archive is deterministic/content-addressed; repeated captured events get a
+            // collision-resistant event suffix. A retry after successful publication sees
+            // the already-correct live source and therefore creates no further archive.
+            // Disk use is consequently bounded by captured history, not retry count.
+            return eventArchivePath;
+        }
+
+        SupportFileFingerprint archivedFingerprint = await ComputeFileFingerprintAsync(
+            archivePath,
+            cancellationToken);
+        if (!FingerprintsEqual(archivedFingerprint, capturedFingerprint))
+        {
+            string eventArchivePath = await MoveSupportRecoveryToEventArchiveAsync(
+                projectRoot,
+                archiveDirectory,
+                archivePath,
+                archivedFingerprint,
+                cancellationToken);
+            throw new InvalidDataException(
+                $"An archived support recovery file changed after publication and was preserved at a unique event identity: {eventArchivePath}");
+        }
+        return archivePath;
+    }
+
+    private static async Task<string> MoveSupportRecoveryToEventArchiveAsync(
+        string projectRoot,
+        string archiveDirectory,
+        string sourcePath,
+        SupportFileFingerprint observedFingerprint,
+        CancellationToken cancellationToken)
+    {
+        string eventArchivePath;
+        do
+        {
+            eventArchivePath = Path.Combine(
+                archiveDirectory,
+                $"{observedFingerprint.ByteLength}-{FormatSha256(observedFingerprint.Sha256)}." +
+                $"{Guid.NewGuid():N}.event.support-recovery");
+            PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, eventArchivePath);
+        }
+        while (File.Exists(eventArchivePath));
+        File.Move(sourcePath, eventArchivePath);
+
+        SupportFileFingerprint eventFingerprint = await ComputeFileFingerprintAsync(
+            eventArchivePath,
+            cancellationToken);
+        if (!FingerprintsEqual(eventFingerprint, observedFingerprint))
+        {
+            // The GUID identity cannot collide with a future canonical archive even if
+            // a retained writer changes this inode again. Preserve it and fail closed.
+            throw new InvalidDataException(
+                $"A support recovery event continued changing after archival and was preserved at {eventArchivePath}.");
+        }
+        return eventArchivePath;
+    }
+
+    private static string GetSupportCapturePath(
+        string projectRoot,
+        string relativePath,
+        string livePath,
+        string captureNonce)
+    {
+        if (captureNonce.Length != 32 || !captureNonce.All(IsLowerHexCharacter))
+            throw new InvalidDataException("A support capture nonce is not canonical lowercase hexadecimal.");
+        string captureDirectory = Path.GetDirectoryName(livePath) ?? projectRoot;
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, captureDirectory);
+        string capturePath = Path.Combine(
+            captureDirectory,
+            $".{SupportRecoveryPathIdentity(relativePath)}.{captureNonce}.spyro-support-capture");
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, capturePath);
+        return capturePath;
+    }
+
+    private static async Task<(string MarkerPath, string Nonce, string CapturePath)> BeginSupportCaptureAsync(
+        string projectRoot,
+        string applicationStateRoot,
+        string relativePath,
+        string livePath,
+        CancellationToken cancellationToken)
+    {
+        string markerPath = GetSupportCaptureMarkerPath(
+            projectRoot,
+            applicationStateRoot,
+            relativePath,
+            createDirectory: true);
+        if (SupportPathEntryExists(markerPath))
+        {
+            throw new InvalidDataException(
+                $"An unresolved support capture marker was not overwritten: {markerPath}");
+        }
+
+        string nonce = Guid.NewGuid().ToString("N");
+        byte[] markerBytes = Encoding.ASCII.GetBytes(nonce + "\n");
+        string markerDirectory = Path.GetDirectoryName(markerPath) ?? applicationStateRoot;
+        string temporaryMarkerPath = Path.Combine(
+            markerDirectory,
+            $".{Path.GetFileName(markerPath)}.{Guid.NewGuid():N}.tmp");
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, temporaryMarkerPath);
+        try
+        {
+            await using (FileStream output = new(
+                temporaryMarkerPath,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 64,
+                options: FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
+                await output.WriteAsync(markerBytes, cancellationToken);
+                await output.FlushAsync(cancellationToken);
+                output.Flush(flushToDisk: true);
+            }
+            byte[] stagedMarker = await File.ReadAllBytesAsync(
+                temporaryMarkerPath,
+                cancellationToken);
+            if (!stagedMarker.AsSpan().SequenceEqual(markerBytes))
+                throw new InvalidDataException("A staged support capture marker failed verification.");
+            File.Move(temporaryMarkerPath, markerPath);
+        }
+        finally
+        {
+            if (File.Exists(temporaryMarkerPath))
+                File.Delete(temporaryMarkerPath);
+        }
+
+        return (
+            markerPath,
+            nonce,
+            GetSupportCapturePath(projectRoot, relativePath, livePath, nonce));
+    }
+
+    private static string GetSupportCaptureMarkerPath(
+        string projectRoot,
+        string applicationStateRoot,
+        string relativePath,
+        bool createDirectory)
+    {
+        string inflightRoot = Path.Combine(
+            GetSupportRecoveryRoot(projectRoot, applicationStateRoot),
+            "inflight");
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, inflightRoot);
+        if (createDirectory)
+        {
+            Directory.CreateDirectory(inflightRoot);
+            PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, inflightRoot);
+        }
+        string markerPath = Path.Combine(
+            inflightRoot,
+            $"{SupportRecoveryPathIdentity(relativePath)}.capture-marker");
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, markerPath);
+        return markerPath;
+    }
+
+    private static async Task<string> ReadSupportCaptureNonceAsync(
+        string projectRoot,
+        string markerPath,
+        CancellationToken cancellationToken)
+    {
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, markerPath);
+        FileAttributes markerAttributes = File.GetAttributes(markerPath);
+        if ((markerAttributes & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0 ||
+            new FileInfo(markerPath).Length != 33)
+        {
+            throw new InvalidDataException(
+                $"A support capture marker is not a regular canonical-size file and was preserved: {markerPath}");
+        }
+        byte[] markerBytes = await File.ReadAllBytesAsync(markerPath, cancellationToken);
+        if (markerBytes.Length != 33 || markerBytes[^1] != (byte)'\n')
+        {
+            throw new InvalidDataException(
+                $"A support capture marker is malformed and was preserved: {markerPath}");
+        }
+        string nonce = Encoding.ASCII.GetString(markerBytes.AsSpan(0, 32));
+        if (!nonce.All(IsLowerHexCharacter))
+        {
+            throw new InvalidDataException(
+                $"A support capture marker has a non-canonical nonce and was preserved: {markerPath}");
+        }
+        return nonce;
+    }
+
+    private static async Task RemoveCompletedSupportCaptureMarkerAsync(
+        string projectRoot,
+        string markerPath,
+        string expectedNonce,
+        CancellationToken cancellationToken)
+    {
+        if (!SupportPathEntryExists(markerPath))
+            return;
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, markerPath);
+        string actualNonce = await ReadSupportCaptureNonceAsync(
+            projectRoot,
+            markerPath,
+            cancellationToken);
+        if (!string.Equals(actualNonce, expectedNonce, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(
+                $"A support capture marker changed before cleanup and was preserved: {markerPath}");
+        }
+        File.Delete(markerPath);
+    }
+
+    private static bool IsLowerHexCharacter(char character)
+    {
+        return (character >= '0' && character <= '9') ||
+            (character >= 'a' && character <= 'f');
+    }
+
+    private static void EnsureSupportCaptureAndRecoveryShareVolume(
+        string projectRoot,
+        string captureOrLivePath,
+        string applicationStateRoot,
+        string relativePath)
+    {
+        string captureDirectory = Path.GetDirectoryName(captureOrLivePath)
+            ?? throw new InvalidDataException(
+                $"A support capture path has no containing directory: {captureOrLivePath}");
+        string archiveDirectory = GetSupportArchiveDirectory(
+            projectRoot,
+            applicationStateRoot,
+            relativePath,
+            createDirectory: true);
+        string captureVolume = FindContainingVolumeRoot(captureDirectory);
+        string recoveryVolume = FindContainingVolumeRoot(archiveDirectory);
+        if (!PathsEqualLexically(captureVolume, recoveryVolume))
+        {
+            throw new InvalidDataException(
+                "Project support and application recovery storage are on different mounted volumes. " +
+                "Support synchronization was refused before a non-atomic cross-volume capture/archive move.");
+        }
+    }
+
+    private static string GetSupportArchiveDirectory(
+        string projectRoot,
+        string applicationStateRoot,
+        string relativePath,
+        bool createDirectory)
+    {
+        string archiveDirectory = Path.Combine(
+            GetSupportRecoveryRoot(projectRoot, applicationStateRoot),
+            "archive",
+            SupportRecoveryPathIdentity(relativePath));
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, archiveDirectory);
+        if (createDirectory)
+        {
+            Directory.CreateDirectory(archiveDirectory);
+            PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, archiveDirectory);
+        }
+        return archiveDirectory;
+    }
+
+    private static string FindContainingVolumeRoot(string path)
+    {
+        string fullPath = ResolveSupportPhysicalPath(path);
+        StringComparison comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        string? bestMatch = null;
+        foreach (DriveInfo drive in DriveInfo.GetDrives())
+        {
+            string root = Path.TrimEndingDirectorySeparator(
+                Path.GetFullPath(drive.RootDirectory.FullName));
+            string rootWithSeparator = Path.EndsInDirectorySeparator(root)
+                ? root
+                : root + Path.DirectorySeparatorChar;
+            if (!string.Equals(fullPath, root, comparison) &&
+                !fullPath.StartsWith(rootWithSeparator, comparison))
+            {
+                continue;
+            }
+            if (bestMatch == null || root.Length > bestMatch.Length)
+                bestMatch = root;
+        }
+        return bestMatch ?? throw new InvalidDataException(
+            $"The mounted volume containing support storage could not be identified safely: {path}");
+    }
+
+    private static string ResolveSupportPhysicalPath(string path, int linkDepth = 0)
+    {
+        if (linkDepth > 64)
+        {
+            throw new InvalidDataException(
+                $"Support storage contains too many symbolic-link or junction hops: {path}");
+        }
+        string fullPath = Path.GetFullPath(path);
+        string root = Path.GetPathRoot(fullPath)
+            ?? throw new InvalidDataException($"Support storage has no rooted path: {path}");
+        string relative = Path.GetRelativePath(root, fullPath);
+        if (relative == ".")
+            return Path.GetFullPath(root);
+
+        string current = Path.GetFullPath(root);
+        foreach (string segment in relative.Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries))
+        {
+            string candidate = Path.GetFullPath(Path.Combine(current, segment));
+            FileSystemInfo? entry = FindExistingSupportPathEntry(candidate);
+            if (entry == null || string.IsNullOrWhiteSpace(entry.LinkTarget))
+            {
+                current = candidate;
+                continue;
+            }
+            try
+            {
+                FileSystemInfo resolved = entry.ResolveLinkTarget(returnFinalTarget: true)
+                    ?? throw new IOException($"The support-storage link has no target: {candidate}");
+                current = ResolveSupportPhysicalPath(resolved.FullName, linkDepth + 1);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                throw new InvalidDataException(
+                    $"A support-storage link cannot be resolved safely: {candidate}",
+                    exception);
+            }
+        }
+        return Path.TrimEndingDirectorySeparator(current);
+    }
+
+    private static FileSystemInfo? FindExistingSupportPathEntry(string path)
+    {
+        DirectoryInfo directory = new(path);
+        if (directory.Exists || !string.IsNullOrWhiteSpace(directory.LinkTarget))
+            return directory;
+        FileInfo file = new(path);
+        if (file.Exists || !string.IsNullOrWhiteSpace(file.LinkTarget))
+            return file;
+        return null;
+    }
+
+    private static string GetSupportRecoveryRoot(
+        string projectRoot,
+        string applicationStateRoot)
+    {
+        string recoveryRoot = Path.Combine(applicationStateRoot, "support-recovery");
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, recoveryRoot);
+        return recoveryRoot;
+    }
+
+    private static string SupportRecoveryPathIdentity(string relativePath)
+    {
+        string normalized = ValidateAndNormalizeSupportRelativePath(relativePath);
+        string identity = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? normalized.ToUpperInvariant()
+            : normalized;
+        return FormatSha256(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
+    }
+
+    private static void EnsureCapturedSupportFileIsRegular(
+        string projectRoot,
+        string capturePath)
+    {
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, capturePath);
+        FileAttributes attributes = File.GetAttributes(capturePath);
+        if ((attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0)
+        {
+            throw new InvalidDataException(
+                $"A captured support path is not a regular project-local file: {capturePath}");
+        }
+    }
+
+    private static bool SupportPathEntryExists(string path)
+    {
+        try
+        {
+            File.GetAttributes(path);
+            return true;
+        }
+        catch (FileNotFoundException)
+        {
+            return false;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsRecoverableSupportSynchronizationException(Exception exception)
+    {
+        return exception is not OutOfMemoryException and
+            not StackOverflowException and
+            not AccessViolationException;
+    }
+
+    private static async Task<FileStream> AcquireSupportSynchronizationLeaseAsync(
+        string projectRoot,
+        string leasePath,
+        CancellationToken cancellationToken)
+    {
+        long waitStarted = Stopwatch.GetTimestamp();
+        IOException? lastContention = null;
+        while (Stopwatch.GetElapsedTime(waitStarted) < SupportSynchronizationLeaseTimeout)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, leasePath);
+            if (Directory.Exists(leasePath))
+            {
+                throw new InvalidDataException(
+                    $"The support synchronization lease path became a directory: {leasePath}");
+            }
+            try
+            {
+                FileStream lease = new(
+                    leasePath,
+                    FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite,
+                    FileShare.None,
+                    bufferSize: 1,
+                    options: FileOptions.Asynchronous);
+                try
+                {
+                    PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, leasePath);
+                    return lease;
+                }
+                catch
+                {
+                    await lease.DisposeAsync();
+                    throw;
+                }
+            }
+            catch (IOException exception) when (
+                IsSupportSynchronizationLeaseContention(exception, leasePath))
+            {
+                lastContention = exception;
+                await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
+            }
+        }
+
+        throw new IOException(
+            $"Another Spyro Editor process did not release project support synchronization within " +
+            $"{SupportSynchronizationLeaseTimeout.TotalSeconds:F0} seconds: {leasePath}",
+            lastContention);
+    }
+
+    private static bool IsSupportSynchronizationLeaseContention(
+        IOException exception,
+        string leasePath)
+    {
+        if (!SupportPathEntryExists(leasePath) || Directory.Exists(leasePath))
+            return false;
+
+        int nativeError = exception.HResult & 0xffff;
+        if (OperatingSystem.IsWindows())
+            return nativeError is 32 or 33;
+        if (OperatingSystem.IsLinux())
+            return nativeError == 11;
+        if (OperatingSystem.IsMacOS())
+            return nativeError == 35;
+        return false;
+    }
+
+    private static async Task<SynchronizedSupportOwnership?> ReadSupportManifestAsync(
         string manifestPath,
         CancellationToken cancellationToken)
     {
@@ -765,15 +1952,51 @@ public static class ReleaseProjectBootstrap
             return null;
         try
         {
-            SynchronizedSupportManifest manifest = JsonSerializer.Deserialize<SynchronizedSupportManifest>(
-                await File.ReadAllTextAsync(manifestPath, cancellationToken),
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-                ?? throw new JsonException("Support ownership manifest is empty.");
-            if (manifest.Version != 1 || manifest.Files == null)
-                throw new JsonException("Support ownership manifest has an unsupported schema.");
-            return manifest;
+            long manifestLength = new FileInfo(manifestPath).Length;
+            if (manifestLength < 0 || manifestLength > MaximumSupportManifestBytes)
+                throw new JsonException("Support ownership manifest exceeds its safe size limit.");
+
+            await using FileStream input = new(
+                manifestPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: 16 * 1024,
+                options: FileOptions.Asynchronous | FileOptions.SequentialScan);
+            using JsonDocument document = await JsonDocument.ParseAsync(
+                input,
+                new JsonDocumentOptions
+                {
+                    AllowTrailingCommas = false,
+                    CommentHandling = JsonCommentHandling.Disallow,
+                    MaxDepth = 8
+                },
+                cancellationToken);
+            Dictionary<string, JsonElement> root = ReadStrictJsonObject(
+                document.RootElement,
+                "version",
+                "files",
+                "entries");
+            if (!root.TryGetValue("version", out JsonElement versionElement) ||
+                versionElement.ValueKind != JsonValueKind.Number ||
+                !versionElement.TryGetInt32(out int version))
+            {
+                throw new JsonException("Support ownership manifest has no valid version.");
+            }
+
+            IReadOnlyList<SynchronizedSupportOwnedFile> files = version switch
+            {
+                1 => ReadV1SupportOwnership(root),
+                2 => ReadV2SupportOwnership(root),
+                _ => throw new JsonException("Support ownership manifest has an unsupported schema.")
+            };
+            return new SynchronizedSupportOwnership(version, files);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        catch (Exception exception) when (exception is
+            IOException or
+            UnauthorizedAccessException or
+            JsonException or
+            InvalidDataException)
         {
             throw new InvalidDataException(
                 $"The application support ownership manifest cannot be read safely: {manifestPath}",
@@ -781,19 +2004,232 @@ public static class ReleaseProjectBootstrap
         }
     }
 
+    private static IReadOnlyList<SynchronizedSupportOwnedFile> ReadV1SupportOwnership(
+        IReadOnlyDictionary<string, JsonElement> root)
+    {
+        if (root.Count != 2 ||
+            root.ContainsKey("entries") ||
+            !root.TryGetValue("files", out JsonElement filesElement) ||
+            filesElement.ValueKind != JsonValueKind.Array)
+        {
+            throw new JsonException("Support ownership manifest v1 must contain only version and files.");
+        }
+
+        List<SynchronizedSupportOwnedFile> files = [];
+        foreach (JsonElement fileElement in filesElement.EnumerateArray())
+        {
+            if (fileElement.ValueKind != JsonValueKind.String || fileElement.GetString() is not string relativePath)
+                throw new JsonException("Support ownership manifest v1 contains a non-string path.");
+            files.Add(new SynchronizedSupportOwnedFile(
+                ValidateAndNormalizeSupportRelativePath(relativePath),
+                ByteLength: null,
+                Sha256: null));
+        }
+        return ValidateOwnedSupportPathIdentities(files);
+    }
+
+    private static IReadOnlyList<SynchronizedSupportOwnedFile> ReadV2SupportOwnership(
+        IReadOnlyDictionary<string, JsonElement> root)
+    {
+        if (root.Count != 2 ||
+            root.ContainsKey("files") ||
+            !root.TryGetValue("entries", out JsonElement entriesElement) ||
+            entriesElement.ValueKind != JsonValueKind.Array)
+        {
+            throw new JsonException("Support ownership manifest v2 must contain only version and entries.");
+        }
+
+        List<SynchronizedSupportOwnedFile> files = [];
+        foreach (JsonElement entryElement in entriesElement.EnumerateArray())
+        {
+            Dictionary<string, JsonElement> entry = ReadStrictJsonObject(
+                entryElement,
+                "relativePath",
+                "byteLength",
+                "sha256");
+            if (entry.Count != 3 ||
+                !entry.TryGetValue("relativePath", out JsonElement relativePathElement) ||
+                relativePathElement.ValueKind != JsonValueKind.String ||
+                relativePathElement.GetString() is not string relativePath ||
+                !entry.TryGetValue("byteLength", out JsonElement byteLengthElement) ||
+                byteLengthElement.ValueKind != JsonValueKind.Number ||
+                !byteLengthElement.TryGetInt64(out long byteLength) ||
+                byteLength < 0 ||
+                !entry.TryGetValue("sha256", out JsonElement sha256Element) ||
+                sha256Element.ValueKind != JsonValueKind.String ||
+                sha256Element.GetString() is not string sha256 ||
+                !IsCanonicalSha256(sha256))
+            {
+                throw new JsonException("Support ownership manifest v2 contains an invalid entry.");
+            }
+            files.Add(new SynchronizedSupportOwnedFile(
+                ValidateAndNormalizeSupportRelativePath(relativePath),
+                byteLength,
+                sha256));
+        }
+        return ValidateOwnedSupportPathIdentities(files);
+    }
+
+    private static IReadOnlyList<SynchronizedSupportOwnedFile> ValidateOwnedSupportPathIdentities(
+        IEnumerable<SynchronizedSupportOwnedFile> files)
+    {
+        HashSet<string> identities = new(SupportPathComparer);
+        List<SynchronizedSupportOwnedFile> validated = [];
+        foreach (SynchronizedSupportOwnedFile file in files)
+        {
+            if (!identities.Add(file.RelativePath))
+                throw new JsonException($"Support ownership manifest contains a colliding path: {file.RelativePath}");
+            validated.Add(file);
+        }
+        validated.Sort((left, right) => StringComparer.Ordinal.Compare(left.RelativePath, right.RelativePath));
+        return validated;
+    }
+
+    private static Dictionary<string, JsonElement> ReadStrictJsonObject(
+        JsonElement element,
+        params string[] allowedPropertyNames)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+            throw new JsonException("Support ownership manifest contains a non-object value.");
+        HashSet<string> allowed = new(allowedPropertyNames, StringComparer.Ordinal);
+        Dictionary<string, JsonElement> properties = new(StringComparer.Ordinal);
+        foreach (JsonProperty property in element.EnumerateObject())
+        {
+            if (!allowed.Contains(property.Name) || !properties.TryAdd(property.Name, property.Value))
+                throw new JsonException($"Support ownership manifest contains an unexpected or duplicate property: {property.Name}");
+        }
+        return properties;
+    }
+
+    private static async Task PublishSupportManifestAsync(
+        string projectRoot,
+        string manifestPath,
+        byte[] canonicalBytes,
+        CancellationToken cancellationToken)
+    {
+        if (File.Exists(manifestPath))
+        {
+            byte[] existingBytes = await File.ReadAllBytesAsync(manifestPath, cancellationToken);
+            if (existingBytes.AsSpan().SequenceEqual(canonicalBytes))
+                return;
+        }
+
+        string manifestDirectory = Path.GetDirectoryName(manifestPath) ?? projectRoot;
+        Directory.CreateDirectory(manifestDirectory);
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, manifestPath);
+        string temporaryPath = Path.Combine(
+            manifestDirectory,
+            $".{Path.GetFileName(manifestPath)}.{Guid.NewGuid():N}.tmp");
+        PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, temporaryPath);
+        try
+        {
+            await using (FileStream output = new(
+                temporaryPath,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 16 * 1024,
+                options: FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
+                await output.WriteAsync(canonicalBytes, cancellationToken);
+                await output.FlushAsync(cancellationToken);
+                output.Flush(flushToDisk: true);
+            }
+
+            byte[] stagedBytes = await File.ReadAllBytesAsync(temporaryPath, cancellationToken);
+            if (!stagedBytes.AsSpan().SequenceEqual(canonicalBytes))
+                throw new InvalidDataException("The staged support ownership manifest failed verification.");
+            PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, manifestPath);
+            PersistencePathSafety.EnsureWritePathWithinRoot(projectRoot, temporaryPath);
+            File.Move(temporaryPath, manifestPath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+                File.Delete(temporaryPath);
+        }
+    }
+
+    private static byte[] SerializeCanonicalSupportManifest(SynchronizedSupportManifest manifest)
+    {
+        byte[] canonicalBytes = JsonSerializer.SerializeToUtf8Bytes(
+            manifest,
+            SupportManifestJsonOptions);
+        if (canonicalBytes.LongLength > MaximumSupportManifestBytes)
+        {
+            throw new InvalidDataException(
+                "The generated support ownership manifest exceeds its safe size limit.");
+        }
+        return canonicalBytes;
+    }
+
+    private static async Task<SupportFileFingerprint> ComputeFileFingerprintAsync(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        await using FileStream input = OpenSupportFileForHashing(path);
+        return await ComputeFingerprintAsync(input, path, cancellationToken);
+    }
+
+    private static FileStream OpenSupportFileForHashing(string path)
+    {
+        return new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 128 * 1024,
+            options: FileOptions.Asynchronous | FileOptions.SequentialScan);
+    }
+
+    private static async Task<SupportFileFingerprint> ComputeFingerprintAsync(
+        FileStream input,
+        string path,
+        CancellationToken cancellationToken)
+    {
+        input.Position = 0;
+        long expectedLength = input.Length;
+        byte[] hash = await SHA256.HashDataAsync(input, cancellationToken);
+        if (input.Position != expectedLength || input.Length != expectedLength)
+            throw new InvalidDataException($"A support file changed while it was being hashed: {path}");
+        return new SupportFileFingerprint(expectedLength, hash);
+    }
+
+    private static bool FingerprintsEqual(
+        SupportFileFingerprint left,
+        SupportFileFingerprint right)
+    {
+        return left.ByteLength == right.ByteLength &&
+            CryptographicOperations.FixedTimeEquals(left.Sha256, right.Sha256);
+    }
+
+    private static SupportFileFingerprint ExpectedFingerprint(SynchronizedSupportOwnedFile ownedFile)
+    {
+        return new SupportFileFingerprint(
+            ownedFile.ByteLength ?? throw new InvalidDataException(
+                "A v2 support ownership entry omitted its byte length."),
+            Convert.FromHexString(ownedFile.Sha256 ?? throw new InvalidDataException(
+                "A v2 support ownership entry omitted its SHA-256.")));
+    }
+
+    private static string FormatSha256(byte[] hash)
+    {
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static bool IsCanonicalSha256(string value)
+    {
+        return value.Length == 64 && value.All(character =>
+            (character >= '0' && character <= '9') ||
+            (character >= 'a' && character <= 'f'));
+    }
+
     private static string SafeSupportDestinationPath(
         string projectRoot,
         string destinationRoot,
         string relativePath)
     {
-        string normalized = NormalizeSupportRelativePath(relativePath);
-        if (string.IsNullOrWhiteSpace(normalized) ||
-            Path.IsPathRooted(normalized) ||
-            normalized.Split('/').Any(segment => segment is "." or ".."))
-        {
-            throw new InvalidDataException($"The support ownership manifest contains an unsafe path: {relativePath}");
-        }
-
+        string normalized = ValidateAndNormalizeSupportRelativePath(relativePath);
         string destinationPath = Path.GetFullPath(Path.Combine(
             destinationRoot,
             normalized.Replace('/', Path.DirectorySeparatorChar)));
@@ -821,9 +2257,43 @@ public static class ReleaseProjectBootstrap
         }
     }
 
-    private static string NormalizeSupportRelativePath(string path)
+    private static string ValidateAndNormalizeSupportRelativePath(string path)
     {
-        return path.Replace('\\', '/').TrimStart('/');
+        if (string.IsNullOrWhiteSpace(path) ||
+            path.IndexOf('\0') >= 0 ||
+            Path.IsPathRooted(path) ||
+            path.StartsWith('/') ||
+            path.StartsWith('\\') ||
+            (path.Length >= 2 && char.IsLetter(path[0]) && path[1] == ':'))
+        {
+            throw new InvalidDataException(
+                $"The support ownership manifest contains an unsafe path: {path}");
+        }
+
+        string normalized = path.Replace('\\', '/');
+        if (normalized.Split('/').Any(segment =>
+            string.IsNullOrEmpty(segment) || segment is "." or ".."))
+        {
+            throw new InvalidDataException(
+                $"The support ownership manifest contains an unsafe path: {path}");
+        }
+        return normalized;
+    }
+
+    private static void NotifyBootstrapObserver(
+        Action<ReleaseProjectBootstrapObservation>? observer,
+        ReleaseProjectBootstrapObservation observation)
+    {
+        if (observer == null)
+            return;
+        try
+        {
+            observer(observation);
+        }
+        catch
+        {
+            // Startup observations are diagnostic-only and must never block the editor window.
+        }
     }
 
     private static StringComparer SupportPathComparer =>

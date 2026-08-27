@@ -1,4 +1,7 @@
 using System.IO.Compression;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Persistence;
@@ -41,6 +44,7 @@ try
     Write(Path.Combine(portableRoot, "support", "spyro-object-templates.json"), "{}");
     Write(Path.Combine(portableRoot, "support", "docs", "release-user-guide.md"), "guide");
     Write(Path.Combine(portableRoot, "support", "docs", "retired-in-next-release.md"), "retired guide");
+    Write(Path.Combine(portableRoot, "support", "docs", "modified-retired-in-next-release.md"), "modified retired guide");
     Write(Path.Combine(portableRoot, "support", "app", "must-not-copy.dll"), "application binary");
     Write(Path.Combine(portableRoot, "Spyro Editor.app", "Contents", "MacOS", "Spyro.Editor.App"), "app");
     Write(Path.Combine(portableRoot, "Launch Spyro Editor.command"), "#!/bin/zsh\n");
@@ -589,6 +593,181 @@ try
     Assert(File.Exists(Path.Combine(portableRoot, "artisans-native-edits.json")), "Automatic migration deleted legacy project data.");
     Assert(File.Exists(Path.Combine(userData.SettingsPath, "current-project.json")), "Current external project was not remembered outside the installation.");
 
+    string supportOwnershipManifestPath = Path.Combine(
+        bootstrap.Project.RootPath,
+        "_local",
+        ".app",
+        "support-ownership.json");
+    Dictionary<string, (long ByteLength, string Sha256)> initialSupportOwnership =
+        ReadSupportOwnershipManifestV2(supportOwnershipManifestPath);
+    Assert(
+        !initialSupportOwnership.Keys.Any(path =>
+            path.Equals("app", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("app/", StringComparison.OrdinalIgnoreCase)),
+        "The v2 support ownership manifest included excluded application binaries.");
+    foreach ((string relativePath, (long byteLength, string sha256)) in initialSupportOwnership)
+    {
+        string sourcePath = Path.Combine(
+            portableRoot,
+            "support",
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+        string destinationPath = Path.Combine(
+            bootstrap.Project.RootPath,
+            "support",
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+        Assert(File.Exists(sourcePath) && File.Exists(destinationPath), $"A v2-owned support file is missing: {relativePath}");
+        Assert(new FileInfo(sourcePath).Length == byteLength, $"A v2 support byte length did not match its source: {relativePath}");
+        Assert(HashFileSha256(sourcePath) == sha256, $"A v2 support hash did not match its source: {relativePath}");
+        Assert(HashFileSha256(destinationPath) == sha256, $"A v2 support hash did not match its destination: {relativePath}");
+    }
+
+    string catalogSourcePath = Path.Combine(portableRoot, "support", "spyro-level-catalog.json");
+    string catalogDestinationPath = Path.Combine(
+        bootstrap.Project.RootPath,
+        "support",
+        "spyro-level-catalog.json");
+    DateTime stableSupportTimestamp = new(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+    File.SetLastWriteTimeUtc(catalogDestinationPath, stableSupportTimestamp);
+    File.SetLastWriteTimeUtc(supportOwnershipManifestPath, stableSupportTimestamp);
+    DateTime catalogTimestampBeforeUnchangedRun = File.GetLastWriteTimeUtc(catalogDestinationPath);
+    DateTime manifestTimestampBeforeUnchangedRun = File.GetLastWriteTimeUtc(supportOwnershipManifestPath);
+    byte[] manifestBytesBeforeUnchangedRun = await File.ReadAllBytesAsync(supportOwnershipManifestPath);
+    List<ReleaseProjectBootstrapObservation> startupObservations = [];
+    ReleaseProjectContext observerBootstrap = await ReleaseProjectBootstrap.PrepareAsync(
+        appVersion: "0.1.0-beta.26",
+        appBaseDirectory: portableRoot,
+        userData: userData,
+        explicitInstallRoot: portableRoot,
+        forceReleaseMode: true,
+        observer: observation =>
+        {
+            startupObservations.Add(observation);
+            throw new InvalidOperationException("The smoke observer intentionally fails.");
+        }) ?? throw new InvalidOperationException("A throwing startup observer prevented release bootstrap.");
+    Assert(observerBootstrap.Project.RootPath == bootstrap.Project.RootPath, "A throwing observer changed the selected project.");
+    Assert(
+        File.GetLastWriteTimeUtc(catalogDestinationPath) == catalogTimestampBeforeUnchangedRun,
+        "An unchanged support destination was recopied.");
+    byte[] manifestBytesAfterUnchangedRun = await File.ReadAllBytesAsync(supportOwnershipManifestPath);
+    Assert(
+        File.GetLastWriteTimeUtc(supportOwnershipManifestPath) == manifestTimestampBeforeUnchangedRun &&
+        manifestBytesBeforeUnchangedRun.AsSpan().SequenceEqual(manifestBytesAfterUnchangedRun),
+        "An identical canonical v2 ownership manifest was rewritten.");
+    Assert(
+        startupObservations.Any(observation => observation.Stage == "support-sync-started") &&
+        startupObservations.Any(observation => observation.Stage == "support-sync-completed") &&
+        startupObservations.Any(observation => observation.Stage == "prepare-completed"),
+        "The prewindow observer omitted required startup stages.");
+    Assert(
+        startupObservations.All(observation => observation.StageElapsed >= TimeSpan.Zero) &&
+        startupObservations.Zip(startupObservations.Skip(1), (left, right) =>
+            right.TotalElapsed >= left.TotalElapsed).All(monotonic => monotonic),
+        "The prewindow observer reported negative or non-monotonic elapsed time.");
+
+    (long originalCatalogLength, string originalCatalogHash) = initialSupportOwnership["spyro-level-catalog.json"];
+    Write(catalogSourcePath, "[]");
+    Assert(new FileInfo(catalogSourcePath).Length == originalCatalogLength, "The same-length source-change fixture changed length.");
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    Dictionary<string, (long ByteLength, string Sha256)> changedSupportOwnership =
+        ReadSupportOwnershipManifestV2(supportOwnershipManifestPath);
+    Assert(File.ReadAllText(catalogDestinationPath) == "[]", "A same-length source change was not synchronized.");
+    Assert(
+        changedSupportOwnership["spyro-level-catalog.json"].ByteLength == originalCatalogLength &&
+        changedSupportOwnership["spyro-level-catalog.json"].Sha256 != originalCatalogHash,
+        "A same-length source change did not update the v2 SHA-256 identity.");
+
+    Write(catalogDestinationPath, "{}");
+    Assert(new FileInfo(catalogDestinationPath).Length == originalCatalogLength, "The same-length tamper fixture changed length.");
+    File.SetLastWriteTimeUtc(supportOwnershipManifestPath, stableSupportTimestamp);
+    DateTime manifestTimestampBeforeTamperRepair = File.GetLastWriteTimeUtc(supportOwnershipManifestPath);
+    byte[] manifestBytesBeforeTamperRepair = await File.ReadAllBytesAsync(supportOwnershipManifestPath);
+    await AssertInvalidDataAsync(
+        async () => await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath),
+        "A modified v2-owned current support file was overwritten.");
+    Assert(File.ReadAllText(catalogDestinationPath) == "{}", "A modified v2-owned support file was not preserved.");
+    byte[] manifestBytesAfterTamperRefusal = await File.ReadAllBytesAsync(supportOwnershipManifestPath);
+    Assert(
+        File.GetLastWriteTimeUtc(supportOwnershipManifestPath) == manifestTimestampBeforeTamperRepair &&
+        manifestBytesBeforeTamperRepair.AsSpan().SequenceEqual(manifestBytesAfterTamperRefusal),
+        "Refusing a modified v2-owned destination rewrote its ownership manifest.");
+    Write(catalogDestinationPath, "[]");
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    byte[] manifestBytesAfterTamperAdoption = await File.ReadAllBytesAsync(supportOwnershipManifestPath);
+    Assert(
+        manifestBytesBeforeTamperRepair.AsSpan().SequenceEqual(manifestBytesAfterTamperAdoption),
+        "Adopting destination bytes already equal to source rewrote an unchanged ownership manifest.");
+
+    string[] v1CurrentPaths = changedSupportOwnership.Keys.OrderBy(path => path, StringComparer.Ordinal).ToArray();
+    const string v1RetiredRelativePath = "docs/v1-retired-compatibility.txt";
+    string v1RetiredDestination = Path.Combine(
+        bootstrap.Project.RootPath,
+        "support",
+        "docs",
+        "v1-retired-compatibility.txt");
+    Write(v1RetiredDestination, "legacy v1 retirement remains path-owned");
+    Write(catalogDestinationPath, "{}");
+    string[] v1OwnedPaths = v1CurrentPaths
+        .Append(v1RetiredRelativePath)
+        .OrderBy(path => path, StringComparer.Ordinal)
+        .ToArray();
+    Write(
+        supportOwnershipManifestPath,
+        JsonSerializer.Serialize(new { version = 1, files = v1OwnedPaths }));
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    Dictionary<string, (long ByteLength, string Sha256)> upgradedV1Ownership =
+        ReadSupportOwnershipManifestV2(supportOwnershipManifestPath);
+    Assert(
+        File.ReadAllText(catalogDestinationPath) == "[]" && !File.Exists(v1RetiredDestination),
+        "Legacy v1 current-file overwrite or retired-file pruning compatibility changed.");
+    Assert(
+        upgradedV1Ownership.Keys.OrderBy(path => path, StringComparer.Ordinal).SequenceEqual(v1CurrentPaths),
+        "A valid v1 support ownership manifest was not upgraded to an equivalent v2 manifest.");
+
+    byte[] validV2ManifestBeforeMalformedTest = await File.ReadAllBytesAsync(supportOwnershipManifestPath);
+    string collisionHash = new('0', 64);
+    Write(
+        supportOwnershipManifestPath,
+        $$"""
+        {"version":2,"entries":[
+          {"relativePath":"docs/collision.txt","byteLength":0,"sha256":"{{collisionHash}}"},
+          {"relativePath":"docs/collision.txt","byteLength":0,"sha256":"{{collisionHash}}"}
+        ]}
+        """);
+    string catalogBeforeMalformedManifest = File.ReadAllText(catalogDestinationPath);
+    await AssertInvalidDataAsync(
+        async () => await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath),
+        "A malformed v2 ownership manifest with colliding paths was accepted.");
+    Assert(
+        File.ReadAllText(catalogDestinationPath) == catalogBeforeMalformedManifest,
+        "Malformed v2 ownership was not refused before support mutation.");
+    Write(supportOwnershipManifestPath, "{\"Version\":2,\"entries\":[]}");
+    await AssertInvalidDataAsync(
+        async () => await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath),
+        "A v2 ownership manifest with non-canonical property casing was accepted.");
+    await File.WriteAllBytesAsync(supportOwnershipManifestPath, validV2ManifestBeforeMalformedTest);
+
+    string unownedCollisionSource = Path.Combine(portableRoot, "support", "zz-unowned-collision.txt");
+    string unownedCollisionDestination = Path.Combine(
+        bootstrap.Project.RootPath,
+        "support",
+        "zz-unowned-collision.txt");
+    Write(unownedCollisionSource, "release-owned bytes");
+    Write(unownedCollisionDestination, "project-owned bytes");
+    byte[] manifestBeforeUnownedCollision = await File.ReadAllBytesAsync(supportOwnershipManifestPath);
+    await AssertInvalidDataAsync(
+        async () => await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath),
+        "A differing unowned project support file was overwritten.");
+    byte[] manifestAfterUnownedCollision = await File.ReadAllBytesAsync(supportOwnershipManifestPath);
+    Assert(
+        File.ReadAllText(unownedCollisionDestination) == "project-owned bytes" &&
+        manifestBeforeUnownedCollision.AsSpan().SequenceEqual(manifestAfterUnownedCollision),
+        "Refusing an unowned destination changed the file or ownership manifest.");
+    Write(unownedCollisionDestination, "release-owned bytes");
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    Assert(
+        ReadSupportOwnershipManifestV2(supportOwnershipManifestPath).ContainsKey("zz-unowned-collision.txt"),
+        "Destination bytes already equal to a new source were not safely adopted after an interrupted-style retry.");
+
     await AssertInvalidOperationAsync(
         async () => await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(portableRoot),
         "PrepareAndRememberProjectAsync accepted the replaceable installation as a project.");
@@ -659,12 +838,340 @@ try
         "A validated previous-beta import omitted project edits or user research.");
 
     Write(Path.Combine(bootstrap.Project.RootPath, "support", "user-notes.txt"), "user owned");
+    string modifiedRetiredSupportSource = Path.Combine(
+        portableRoot,
+        "support",
+        "docs",
+        "modified-retired-in-next-release.md");
+    string modifiedRetiredSupportDestination = Path.Combine(
+        bootstrap.Project.RootPath,
+        "support",
+        "docs",
+        "modified-retired-in-next-release.md");
+    Write(modifiedRetiredSupportDestination, "user modified retired guide");
     File.Delete(Path.Combine(portableRoot, "support", "docs", "retired-in-next-release.md"));
+    File.Delete(modifiedRetiredSupportSource);
     Write(Path.Combine(portableRoot, "support", "docs", "replacement-guide.md"), "replacement guide");
     await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
     Assert(!File.Exists(retiredSupportPath), "A retired app-owned support file survived a successful synchronization.");
+    Assert(
+        File.ReadAllText(modifiedRetiredSupportDestination) == "user modified retired guide",
+        "A user-modified retired v2-owned support file was deleted.");
     Assert(File.Exists(Path.Combine(bootstrap.Project.RootPath, "support", "docs", "replacement-guide.md")), "New support files were not copied before pruning.");
     Assert(File.Exists(Path.Combine(bootstrap.Project.RootPath, "support", "user-notes.txt")), "Support pruning removed a file the app did not own.");
+    Dictionary<string, (long ByteLength, string Sha256)> ownershipAfterRetirement =
+        ReadSupportOwnershipManifestV2(supportOwnershipManifestPath);
+    Assert(
+        !ownershipAfterRetirement.ContainsKey("docs/retired-in-next-release.md") &&
+        !ownershipAfterRetirement.ContainsKey("docs/modified-retired-in-next-release.md"),
+        "Retired support paths remained app-owned after prune/preservation.");
+
+    string failureRetiredSource = Path.Combine(
+        portableRoot,
+        "support",
+        "docs",
+        "failure-before-prune-retired.md");
+    string failureRetiredDestination = Path.Combine(
+        bootstrap.Project.RootPath,
+        "support",
+        "docs",
+        "failure-before-prune-retired.md");
+    Write(failureRetiredSource, "must survive a failed copy pass");
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    Assert(File.Exists(failureRetiredDestination), "The copy-before-prune fixture was not initially owned.");
+    File.Delete(failureRetiredSource);
+    string blockedCopySource = Path.Combine(portableRoot, "support", "blocked-copy-parent", "new.txt");
+    string blockedCopyParentDestination = Path.Combine(
+        bootstrap.Project.RootPath,
+        "support",
+        "blocked-copy-parent");
+    Write(blockedCopySource, "new support bytes");
+    Write(blockedCopyParentDestination, "a file blocks destination directory creation");
+    byte[] manifestBeforeFailedCopyPass = await File.ReadAllBytesAsync(supportOwnershipManifestPath);
+    await AssertIOExceptionAsync(
+        async () => await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath),
+        "A blocked support copy did not fail before pruning.");
+    byte[] manifestAfterFailedCopyPass = await File.ReadAllBytesAsync(supportOwnershipManifestPath);
+    Assert(
+        File.Exists(failureRetiredDestination) &&
+        manifestBeforeFailedCopyPass.AsSpan().SequenceEqual(manifestAfterFailedCopyPass),
+        "A failed copy pass pruned an owned file or published a new manifest.");
+    File.Delete(blockedCopyParentDestination);
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    Assert(
+        !File.Exists(failureRetiredDestination) &&
+        File.ReadAllText(Path.Combine(blockedCopyParentDestination, "new.txt")) == "new support bytes",
+        "The successful retry did not finish copies before pruning retired ownership.");
+
+    string supportRecoveryRoot = Path.Combine(
+        bootstrap.Project.RootPath,
+        "_local",
+        ".app",
+        "support-recovery");
+    string unmarkedCaptureLookalike = Path.Combine(
+        bootstrap.Project.RootPath,
+        "support",
+        "docs",
+        ".unmarked-user-file.spyro-support-capture");
+    Write(unmarkedCaptureLookalike, "unowned capture-looking user bytes");
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    Assert(
+        File.ReadAllText(unmarkedCaptureLookalike) == "unowned capture-looking user bytes",
+        "An unmarked capture-looking project file was treated as application-owned recovery state.");
+    File.Delete(unmarkedCaptureLookalike);
+
+    string reservedCaptureSource = Path.Combine(
+        portableRoot,
+        "support",
+        "docs",
+        ".release-file.spyro-support-capture");
+    byte[] manifestBeforeReservedCaptureSource = await File.ReadAllBytesAsync(
+        supportOwnershipManifestPath);
+    Write(reservedCaptureSource, "reserved release capture namespace");
+    await AssertInvalidDataAsync(
+        async () => await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath),
+        "A release source file entered the reserved capture namespace.");
+    byte[] manifestAfterReservedCaptureSource = await File.ReadAllBytesAsync(
+        supportOwnershipManifestPath);
+    Assert(
+        manifestBeforeReservedCaptureSource.AsSpan().SequenceEqual(
+            manifestAfterReservedCaptureSource),
+        "Refusing a reserved capture-source name rewrote ownership.");
+    File.Delete(reservedCaptureSource);
+
+    string currentRaceSource = Path.Combine(
+        portableRoot,
+        "support",
+        "docs",
+        "current-capture-race.txt");
+    string currentRaceDestination = Path.Combine(
+        bootstrap.Project.RootPath,
+        "support",
+        "docs",
+        "current-capture-race.txt");
+    const string currentRaceOldBytes = "current capture baseline identity";
+    const string currentRaceNewBytes = "current capture release replacement";
+    const string currentRaceExternalBytes = "external writer recreated current path";
+    Write(currentRaceSource, currentRaceOldBytes);
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    string currentRaceOldHash = HashFileSha256(currentRaceDestination);
+    int currentRaceOldArchiveCountBefore = CountRecoveryFilesWithHash(
+        supportRecoveryRoot,
+        currentRaceOldHash);
+    byte[] manifestBeforeCurrentCaptureRace = await File.ReadAllBytesAsync(
+        supportOwnershipManifestPath);
+    Write(currentRaceSource, currentRaceNewBytes);
+    await AssertInvalidDataAsync(
+        async () => await InvokeSupportSynchronizationCoreForTestingAsync(
+            Path.Combine(portableRoot, "support"),
+            bootstrap.Project.RootPath,
+            (stage, livePath, _) =>
+            {
+                if (stage == "after-current-capture" &&
+                    Path.GetFullPath(livePath) == Path.GetFullPath(currentRaceDestination))
+                {
+                    Write(livePath, currentRaceExternalBytes);
+                }
+                return Task.CompletedTask;
+            }),
+        "A current-file writer race replaced external bytes during capture-first publication.");
+    Assert(
+        File.ReadAllText(currentRaceDestination) == currentRaceExternalBytes,
+        "A current-file race did not preserve the concurrently recreated live path.");
+    byte[] manifestAfterCurrentCaptureRace = await File.ReadAllBytesAsync(
+        supportOwnershipManifestPath);
+    Assert(
+        manifestBeforeCurrentCaptureRace.AsSpan().SequenceEqual(
+            manifestAfterCurrentCaptureRace),
+        "A failed current-file race published a new support ownership manifest.");
+    Assert(
+        CountRecoveryFilesWithHash(supportRecoveryRoot, currentRaceOldHash) ==
+            currentRaceOldArchiveCountBefore + 1,
+        "A current-file race did not archive the exact displaced prior identity once.");
+
+    Write(currentRaceDestination, currentRaceNewBytes);
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    Assert(
+        File.ReadAllText(currentRaceDestination) == currentRaceNewBytes &&
+        ReadSupportOwnershipManifestV2(supportOwnershipManifestPath)
+            .ContainsKey("docs/current-capture-race.txt"),
+        "An interrupted current-file retry did not adopt live bytes already equal to the release source.");
+    Assert(
+        CountRecoveryFilesWithHash(supportRecoveryRoot, currentRaceOldHash) ==
+            currentRaceOldArchiveCountBefore + 1,
+        "A current-file retry created a duplicate recovery archive for the same path/content identity.");
+
+    // Cycle the fixture through the old identity repeatedly so capture archival
+    // enters the already-present content-addressed recovery branch. Retaining
+    // each captured event is intentional: eliminating it with a post-hash delete
+    // would reopen the writer race this smoke protects against.
+    Write(currentRaceSource, currentRaceOldBytes);
+    Write(currentRaceDestination, currentRaceOldBytes);
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    Write(currentRaceSource, currentRaceNewBytes);
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    Assert(
+        File.ReadAllText(currentRaceDestination) == currentRaceNewBytes &&
+        CountRecoveryFilesWithHash(supportRecoveryRoot, currentRaceOldHash) ==
+            currentRaceOldArchiveCountBefore + 2,
+        "The duplicate-recovery branch did not preserve its second exact identity.");
+    Write(currentRaceSource, currentRaceOldBytes);
+    Write(currentRaceDestination, currentRaceOldBytes);
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    Write(currentRaceSource, currentRaceNewBytes);
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    Assert(
+        File.ReadAllText(currentRaceDestination) == currentRaceNewBytes &&
+        CountRecoveryFilesWithHash(supportRecoveryRoot, currentRaceOldHash) ==
+            currentRaceOldArchiveCountBefore + 3,
+        "A third legitimate content cycle wedged duplicate recovery convergence.");
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    Assert(
+        CountRecoveryFilesWithHash(supportRecoveryRoot, currentRaceOldHash) ==
+            currentRaceOldArchiveCountBefore + 3,
+        "An unchanged retry created unbounded duplicate recovery identities.");
+
+    const string interruptedCaptureRelativePath = "docs/interrupted-capture-retry.txt";
+    string interruptedCaptureSource = Path.Combine(
+        portableRoot,
+        "support",
+        "docs",
+        "interrupted-capture-retry.txt");
+    string interruptedCaptureDestination = Path.Combine(
+        bootstrap.Project.RootPath,
+        "support",
+        "docs",
+        "interrupted-capture-retry.txt");
+    const string interruptedCaptureOldBytes = "interrupted capture prior identity";
+    const string interruptedCaptureNewBytes = "interrupted capture exact new release identity";
+    Write(interruptedCaptureSource, interruptedCaptureOldBytes);
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    byte[] manifestBeforeInterruptedCapture = await File.ReadAllBytesAsync(
+        supportOwnershipManifestPath);
+    Write(interruptedCaptureSource, interruptedCaptureNewBytes);
+    var (interruptedMarkerPath, _, interruptedCapturePath) =
+        await BeginSupportCaptureForTestingAsync(
+            bootstrap.Project.RootPath,
+            Path.Combine(bootstrap.Project.RootPath, "_local", ".app"),
+            interruptedCaptureRelativePath,
+            interruptedCaptureDestination);
+    File.Move(interruptedCaptureDestination, interruptedCapturePath);
+    Write(interruptedCaptureDestination, interruptedCaptureNewBytes);
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    byte[] manifestAfterInterruptedCapture = await File.ReadAllBytesAsync(
+        supportOwnershipManifestPath);
+    Assert(
+        File.ReadAllText(interruptedCaptureDestination) == interruptedCaptureNewBytes &&
+        !File.Exists(interruptedCapturePath) &&
+        !File.Exists(interruptedMarkerPath) &&
+        !manifestBeforeInterruptedCapture.AsSpan().SequenceEqual(manifestAfterInterruptedCapture),
+        "An interrupted captured-prior/live-new state did not converge and advance its old ownership manifest.");
+    Assert(
+        ReadSupportOwnershipManifestV2(supportOwnershipManifestPath)[interruptedCaptureRelativePath].Sha256 ==
+            HashFileSha256(interruptedCaptureDestination),
+        "Interrupted capture recovery did not publish the exact live/source identity.");
+
+    string retiredRaceSource = Path.Combine(
+        portableRoot,
+        "support",
+        "docs",
+        "retired-capture-race.txt");
+    string retiredRaceDestination = Path.Combine(
+        bootstrap.Project.RootPath,
+        "support",
+        "docs",
+        "retired-capture-race.txt");
+    const string retiredRaceBaselineBytes = "retired capture baseline identity";
+    const string retiredRaceCapturedWriterBytes = "writer modified the captured retired identity";
+    const string retiredRaceLiveWriterBytes = "writer recreated the retired live path";
+    Write(retiredRaceSource, retiredRaceBaselineBytes);
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    File.Delete(retiredRaceSource);
+    byte[] manifestBeforeRetiredCaptureRace = await File.ReadAllBytesAsync(
+        supportOwnershipManifestPath);
+    string retiredRaceCapturedWriterHash = HashTextSha256(retiredRaceCapturedWriterBytes);
+    int retiredRaceArchiveCountBefore = CountRecoveryFilesWithHash(
+        supportRecoveryRoot,
+        retiredRaceCapturedWriterHash);
+    await AssertInvalidDataAsync(
+        async () => await InvokeSupportSynchronizationCoreForTestingAsync(
+            Path.Combine(portableRoot, "support"),
+            bootstrap.Project.RootPath,
+            (stage, livePath, capturePath) =>
+            {
+                if (stage == "after-retired-capture" &&
+                    Path.GetFullPath(livePath) == Path.GetFullPath(retiredRaceDestination))
+                {
+                    Write(capturePath, retiredRaceCapturedWriterBytes);
+                    Write(livePath, retiredRaceLiveWriterBytes);
+                }
+                return Task.CompletedTask;
+            }),
+        "A retired-file writer race was treated as an application-owned deletion.");
+    Assert(
+        File.ReadAllText(retiredRaceDestination) == retiredRaceLiveWriterBytes,
+        "A retired-file race did not preserve the concurrently recreated live path.");
+    byte[] manifestAfterRetiredCaptureRace = await File.ReadAllBytesAsync(
+        supportOwnershipManifestPath);
+    Assert(
+        manifestBeforeRetiredCaptureRace.AsSpan().SequenceEqual(
+            manifestAfterRetiredCaptureRace),
+        "A failed retired-file race published a new support ownership manifest.");
+    Assert(
+        CountRecoveryFilesWithHash(supportRecoveryRoot, retiredRaceCapturedWriterHash) ==
+            retiredRaceArchiveCountBefore + 1,
+        "A retired-file race did not archive the exact captured writer identity once.");
+
+    await ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    Assert(
+        File.ReadAllText(retiredRaceDestination) == retiredRaceLiveWriterBytes &&
+        !ReadSupportOwnershipManifestV2(supportOwnershipManifestPath)
+            .ContainsKey("docs/retired-capture-race.txt"),
+        "A retry did not preserve a modified retired file while relinquishing application ownership.");
+    Assert(
+        CountRecoveryFilesWithHash(supportRecoveryRoot, retiredRaceCapturedWriterHash) ==
+            retiredRaceArchiveCountBefore + 1,
+        "A retired-file retry created a duplicate recovery archive for the same path/content identity.");
+    Assert(
+        !Directory.EnumerateFiles(
+            Path.Combine(bootstrap.Project.RootPath, "support"),
+            "*.spyro-support-capture",
+            SearchOption.AllDirectories).Any(),
+        "A completed support synchronization left an in-flight recovery capture behind.");
+    string supportCaptureMarkerRoot = Path.Combine(supportRecoveryRoot, "inflight");
+    Assert(
+        !Directory.Exists(supportCaptureMarkerRoot) ||
+        !Directory.EnumerateFileSystemEntries(supportCaptureMarkerRoot).Any(),
+        "A completed support synchronization left an in-flight capture marker behind.");
+
+    string supportSynchronizationLeasePath = Path.Combine(
+        bootstrap.Project.RootPath,
+        "_local",
+        ".app",
+        "support-sync.lock");
+    FileStream heldSupportSynchronizationLease = new(
+        supportSynchronizationLeasePath,
+        FileMode.OpenOrCreate,
+        FileAccess.ReadWrite,
+        FileShare.None);
+    Task<EditorProjectLayout> leaseWaitingSynchronization =
+        ReleaseProjectBootstrap.PrepareAndRememberProjectAsync(bootstrap.Project.RootPath);
+    try
+    {
+        await Task.Delay(150);
+        Assert(
+            !leaseWaitingSynchronization.IsCompleted,
+            "Support synchronization did not wait for the project-scoped cross-process lease.");
+    }
+    finally
+    {
+        await heldSupportSynchronizationLease.DisposeAsync();
+    }
+    EditorProjectLayout leaseSynchronizedProject = await leaseWaitingSynchronization.WaitAsync(
+        TimeSpan.FromSeconds(5));
+    Assert(
+        leaseSynchronizedProject.RootPath == bootstrap.Project.RootPath,
+        "Support synchronization did not resume after the project-scoped lease was released.");
 
     if (OperatingSystem.IsMacOS() || OperatingSystem.IsLinux())
         await VerifySymlinkEscapeProtectionAsync(temporaryRoot, portableRoot, bootstrap.Project.RootPath);
@@ -835,6 +1342,11 @@ try
         Assert(snapshotArchive.GetEntry("_migration/conflicts/manual-proof/custom-skyboxes/artisans/preserved.sky") != null, "Project snapshot omitted a preserved migration conflict asset.");
         Assert(snapshotArchive.GetEntry("WAD.WAD") == null, "Project snapshot included source game data with an unclassified WAD path.");
         Assert(snapshotArchive.GetEntry("_local/.app/support-ownership.json") == null, "Project snapshot included replaceable application bookkeeping.");
+        Assert(snapshotArchive.GetEntry("_local/.app/support-sync.lock") == null, "Project snapshot included the application synchronization lease.");
+        Assert(
+            snapshotArchive.Entries.All(entry =>
+                !entry.FullName.StartsWith("_local/.app/support-recovery/", StringComparison.OrdinalIgnoreCase)),
+            "Project snapshot included application-managed support recovery identities.");
         Assert(snapshotArchive.Entries.All(entry => !entry.FullName.StartsWith("output/", StringComparison.OrdinalIgnoreCase)), "Project snapshot bundled generated output.");
         Assert(snapshotArchive.Entries.All(entry => !entry.FullName.StartsWith("support/", StringComparison.OrdinalIgnoreCase)), "Project snapshot bundled replaceable application support files.");
     }
@@ -877,6 +1389,157 @@ static string Json(string value)
     return System.Text.Json.JsonSerializer.Serialize(value);
 }
 
+static Dictionary<string, (long ByteLength, string Sha256)> ReadSupportOwnershipManifestV2(
+    string manifestPath)
+{
+    using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(manifestPath));
+    Assert(document.RootElement.ValueKind == JsonValueKind.Object, "The support ownership manifest root is not an object.");
+    JsonProperty[] rootProperties = document.RootElement.EnumerateObject().ToArray();
+    Assert(
+        rootProperties.Length == 2 &&
+        rootProperties.Any(property => property.Name == "version") &&
+        rootProperties.Any(property => property.Name == "entries"),
+        "The support ownership manifest does not have the exact v2 root shape.");
+    Assert(
+        document.RootElement.GetProperty("version").GetInt32() == 2,
+        "The support ownership manifest was not written as v2.");
+    JsonElement entriesElement = document.RootElement.GetProperty("entries");
+    Assert(entriesElement.ValueKind == JsonValueKind.Array, "The v2 support entries value is not an array.");
+
+    StringComparer pathComparer = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+        ? StringComparer.OrdinalIgnoreCase
+        : StringComparer.Ordinal;
+    Dictionary<string, (long ByteLength, string Sha256)> entries = new(pathComparer);
+    List<string> serializedOrder = [];
+    foreach (JsonElement entry in entriesElement.EnumerateArray())
+    {
+        Assert(entry.ValueKind == JsonValueKind.Object, "A v2 support entry is not an object.");
+        JsonProperty[] entryProperties = entry.EnumerateObject().ToArray();
+        Assert(
+            entryProperties.Length == 3 &&
+            entryProperties.Any(property => property.Name == "relativePath") &&
+            entryProperties.Any(property => property.Name == "byteLength") &&
+            entryProperties.Any(property => property.Name == "sha256"),
+            "A v2 support entry does not have the exact relativePath/byteLength/sha256 shape.");
+        string relativePath = entry.GetProperty("relativePath").GetString()
+            ?? throw new InvalidOperationException("A v2 support entry has a null path.");
+        long byteLength = entry.GetProperty("byteLength").GetInt64();
+        string sha256 = entry.GetProperty("sha256").GetString()
+            ?? throw new InvalidOperationException("A v2 support entry has a null SHA-256.");
+        Assert(byteLength >= 0, $"A v2 support entry has a negative byte length: {relativePath}");
+        Assert(
+            sha256.Length == 64 && sha256.All(character =>
+                (character >= '0' && character <= '9') ||
+                (character >= 'a' && character <= 'f')),
+            $"A v2 support entry has a non-canonical SHA-256: {relativePath}");
+        Assert(entries.TryAdd(relativePath, (byteLength, sha256)), $"The v2 manifest has colliding paths: {relativePath}");
+        serializedOrder.Add(relativePath);
+    }
+    Assert(
+        serializedOrder.SequenceEqual(serializedOrder.OrderBy(path => path, StringComparer.Ordinal)),
+        "The v2 support ownership entries are not serialized in deterministic ordinal order.");
+    return entries;
+}
+
+static string HashFileSha256(string path)
+{
+    using FileStream input = new(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+    return Convert.ToHexString(SHA256.HashData(input)).ToLowerInvariant();
+}
+
+static string HashTextSha256(string contents)
+{
+    return Convert.ToHexString(
+        SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(contents)))
+        .ToLowerInvariant();
+}
+
+static int CountRecoveryFilesWithHash(string recoveryRoot, string expectedSha256)
+{
+    if (!Directory.Exists(recoveryRoot))
+        return 0;
+    return Directory.EnumerateFiles(recoveryRoot, "*", SearchOption.AllDirectories)
+        .Count(path => HashFileSha256(path) == expectedSha256);
+}
+
+static async Task InvokeSupportSynchronizationCoreForTestingAsync(
+    string applicationSupportRoot,
+    string projectRoot,
+    Func<string, string, string, Task> captureRaceForTesting)
+{
+    MethodInfo method = typeof(ReleaseProjectBootstrap).GetMethod(
+        "SynchronizeSupportFilesCoreAsync",
+        BindingFlags.Static | BindingFlags.NonPublic,
+        binder: null,
+        types:
+        [
+            typeof(string),
+            typeof(string),
+            typeof(CancellationToken),
+            typeof(Func<string, string, string, Task>)
+        ],
+        modifiers: null) ?? throw new InvalidOperationException(
+            "The private per-call support synchronization test seam is unavailable.");
+    object? invocation = method.Invoke(
+        obj: null,
+        parameters:
+        [
+            applicationSupportRoot,
+            projectRoot,
+            CancellationToken.None,
+            captureRaceForTesting
+        ]);
+    if (invocation is not Task synchronization)
+        throw new InvalidOperationException("The private support synchronization seam did not return a task.");
+    await synchronization;
+}
+
+static async Task<(string MarkerPath, string Nonce, string CapturePath)> BeginSupportCaptureForTestingAsync(
+    string projectRoot,
+    string applicationStateRoot,
+    string relativePath,
+    string livePath)
+{
+    MethodInfo method = typeof(ReleaseProjectBootstrap).GetMethod(
+        "BeginSupportCaptureAsync",
+        BindingFlags.Static | BindingFlags.NonPublic,
+        binder: null,
+        types:
+        [
+            typeof(string),
+            typeof(string),
+            typeof(string),
+            typeof(string),
+            typeof(CancellationToken)
+        ],
+        modifiers: null) ?? throw new InvalidOperationException(
+            "The private support capture crash-recovery helper is unavailable.");
+    object invocation = method.Invoke(
+        obj: null,
+        parameters:
+        [
+            projectRoot,
+            applicationStateRoot,
+            relativePath,
+            livePath,
+            CancellationToken.None
+        ]) ?? throw new InvalidOperationException(
+            "The private support capture helper returned no invocation task.");
+    if (invocation is not Task capturePreparation)
+        throw new InvalidOperationException("The private support capture helper did not return a task.");
+    await capturePreparation;
+    object result = invocation.GetType().GetProperty("Result")?.GetValue(invocation)
+        ?? throw new InvalidOperationException("The private support capture helper returned no result.");
+    Type resultType = result.GetType();
+    return (
+        (string)(resultType.GetField("Item1")?.GetValue(result)
+            ?? throw new InvalidOperationException("The support capture marker path was unavailable.")),
+        (string)(resultType.GetField("Item2")?.GetValue(result)
+            ?? throw new InvalidOperationException("The support capture nonce was unavailable.")),
+        (string)(resultType.GetField("Item3")?.GetValue(result)
+            ?? throw new InvalidOperationException("The support capture path was unavailable.")));
+}
+
 static async Task AssertInvalidOperationAsync(Func<Task> action, string message)
 {
     bool rejected = false;
@@ -899,6 +1562,20 @@ static async Task AssertInvalidDataAsync(Func<Task> action, string message)
         await action();
     }
     catch (InvalidDataException)
+    {
+        rejected = true;
+    }
+    Assert(rejected, message);
+}
+
+static async Task AssertIOExceptionAsync(Func<Task> action, string message)
+{
+    bool rejected = false;
+    try
+    {
+        await action();
+    }
+    catch (IOException)
     {
         rejected = true;
     }
