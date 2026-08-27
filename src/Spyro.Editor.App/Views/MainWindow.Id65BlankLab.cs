@@ -1409,6 +1409,7 @@ public sealed partial class MainWindow
 
     private void RefreshId65BlankLabUi()
     {
+        ApplyEditorExperienceForCurrentLevel();
         bool valid = _id65BlankLabManifest != null && _id65BlankLabPaths != null;
         bool active = IsCurrentId65BlankLab();
         bool hasTerrain = TerrainEditFileHasEdits(Id65BlankLabTerrainEditsPath());
@@ -4420,8 +4421,6 @@ public sealed partial class MainWindow
             RefreshSelectedMobyZControls(_selectedMoby);
             if (!_id65BlankLabBusy || _id65BlankLabManualOperation == null ||
                 IsEnabled(_viewport) ||
-                IsEnabled(_objectManagerWorkspaceButton) ||
-                IsEnabled(_levelBuildingWorkspaceButton) ||
                 IsEnabled(_modernWorkspaceTabs) ||
                 IsEnabled(_modernObjectWorkspaceTab) ||
                 IsEnabled(_modernTerrainWorkspaceTab) ||
@@ -4625,6 +4624,7 @@ public sealed partial class MainWindow
 
             var projectContext = ReleaseProjectBootstrap.Current ?? new ReleaseProjectContext(
                 InstallRoot: _workspace.RootPath,
+                ApplicationSupportRoot: Path.Combine(_workspace.RootPath, "support"),
                 UserData: new EditorUserDataLayout(
                     Path.Combine(_workspace.RootPath, "_local", "ui-smoke-user-data")),
                 Project: new EditorProjectLayout(_workspace.RootPath, "ui-smoke-project"),

@@ -6,6 +6,7 @@ namespace Spyro.Editor.Core.Persistence;
 
 public sealed record ReleaseProjectContext(
     string InstallRoot,
+    string ApplicationSupportRoot,
     EditorUserDataLayout UserData,
     EditorProjectLayout Project,
     string AppVersion,
@@ -58,6 +59,7 @@ public static class ReleaseProjectBootstrap
             return null;
         if (string.IsNullOrWhiteSpace(installRoot))
             throw new InvalidOperationException("The release installation root could not be located.");
+        string applicationSupportRoot = FindApplicationSupportRoot(baseDirectory, installRoot);
 
         userData ??= EditorUserDataLayout.CreateDefault();
         EnsureUserDataDoesNotOverlapInstall(installRoot, userData);
@@ -119,14 +121,20 @@ public static class ReleaseProjectBootstrap
                 cancellationToken);
         }
 
-        await SynchronizeSupportFilesAsync(installRoot, project.RootPath, cancellationToken);
+        await SynchronizeSupportFilesAsync(applicationSupportRoot, project.RootPath, cancellationToken);
         await TouchManifestAsync(project, appVersion, cancellationToken);
         await RememberProjectAsync(userData, project, cancellationToken);
 
         Environment.SetEnvironmentVariable(InstallRootEnvironmentVariable, installRoot);
         Environment.SetEnvironmentVariable(ReleaseEnvironmentVariable, "1");
         Environment.SetEnvironmentVariable(WorkspaceEnvironmentVariable, project.RootPath);
-        Current = new ReleaseProjectContext(installRoot, userData, project, appVersion, migration);
+        Current = new ReleaseProjectContext(
+            installRoot,
+            applicationSupportRoot,
+            userData,
+            project,
+            appVersion,
+            migration);
         return Current;
     }
 
@@ -158,7 +166,10 @@ public static class ReleaseProjectBootstrap
             string.IsNullOrWhiteSpace(displayName) ? Path.GetFileName(projectRoot) : displayName,
             context.AppVersion,
             cancellationToken);
-        await SynchronizeSupportFilesAsync(context.InstallRoot, project.RootPath, cancellationToken);
+        await SynchronizeSupportFilesAsync(
+            context.ApplicationSupportRoot,
+            project.RootPath,
+            cancellationToken);
         return new PreparedReleaseProjectTransition(context, project);
     }
 
@@ -302,7 +313,10 @@ public static class ReleaseProjectBootstrap
                 IncludeRebuildableCache: false,
                 IncludeUserResearch: includeUserResearch),
             cancellationToken);
-        await SynchronizeSupportFilesAsync(context.InstallRoot, context.Project.RootPath, cancellationToken);
+        await SynchronizeSupportFilesAsync(
+            context.ApplicationSupportRoot,
+            context.Project.RootPath,
+            cancellationToken);
         await TouchManifestAsync(context.Project, context.AppVersion, cancellationToken);
         return result;
     }
@@ -332,6 +346,24 @@ public static class ReleaseProjectBootstrap
         }
 
         return discoveredRoot;
+    }
+
+    private static string FindApplicationSupportRoot(
+        string appBaseDirectory,
+        string installRoot)
+    {
+        DirectoryInfo? cursor = new(Path.GetFullPath(appBaseDirectory));
+        while (cursor != null)
+        {
+            if (IsInstallRoot(cursor.FullName))
+                return Path.Combine(cursor.FullName, "support");
+            cursor = cursor.Parent;
+        }
+
+        // FindInstallRoot already validated this fallback. Keeping it separate
+        // from the migration root lets a packaged Mac app read support inside
+        // its own bundle without traversing the enclosing Documents folder.
+        return Path.Combine(installRoot, "support");
     }
 
     private static bool ResolveReleaseMode(string installRoot)
@@ -460,10 +492,7 @@ public static class ReleaseProjectBootstrap
             throw new InvalidDataException("Choose a valid Spyro Editor Beta installation folder.", exception);
         }
 
-        bool hasKnownLauncher =
-            File.Exists(Path.Combine(root, "Launch Spyro Editor.command")) ||
-            File.Exists(Path.Combine(root, "Launch Spyro Editor.bat"));
-        if (!IsInstallRoot(root) || !hasKnownLauncher)
+        if (!IsInstallRoot(root) || !HasKnownPortableLauncher(root))
         {
             throw new InvalidDataException(
                 "That folder is not a portable Spyro Editor Beta installation. Choose the folder containing the Spyro Editor launcher and support catalogs.");
@@ -642,11 +671,11 @@ public static class ReleaseProjectBootstrap
     }
 
     private static async Task SynchronizeSupportFilesAsync(
-        string installRoot,
+        string applicationSupportRoot,
         string projectRoot,
         CancellationToken cancellationToken)
     {
-        string sourceRoot = Path.Combine(installRoot, "support");
+        string sourceRoot = Path.GetFullPath(applicationSupportRoot);
         string destinationRoot = Path.Combine(projectRoot, "support");
         PersistencePathSafety.EnsureTreesDoNotOverlap(
             sourceRoot,
@@ -804,11 +833,24 @@ public static class ReleaseProjectBootstrap
 
     private static bool HasPortableProjectData(string installRoot)
     {
+        // A packaged Mac app can discover the outer release folder as its install
+        // root. Do not recursively enumerate that folder (and the app bundle inside
+        // it) unless it is an actual older portable installation eligible for
+        // automatic migration. Besides avoiding needless work, this prevents macOS
+        // privacy checks on a Documents-hosted release folder from blocking startup
+        // before the first window is created.
+        if (!HasKnownPortableLauncher(installRoot))
+            return false;
+
         return PortableProjectMigration.Inventory(installRoot).Any(artifact => artifact.Kind is
             PortableProjectArtifactKind.ProjectEdit or
             PortableProjectArtifactKind.ProjectAsset or
             PortableProjectArtifactKind.ProjectSetting);
     }
+
+    private static bool HasKnownPortableLauncher(string root) =>
+        File.Exists(Path.Combine(root, "Launch Spyro Editor.command")) ||
+        File.Exists(Path.Combine(root, "Launch Spyro Editor.bat"));
 
     private static string AutomaticMigrationMarkerPath(EditorProjectLayout project, string installRoot)
     {

@@ -1242,10 +1242,7 @@ public sealed partial class MainWindow
                     return;
                 }
 
-                ActivateEditorShellWorkspace(
-                    EditorShellWorkspace.LevelBuildingEditor,
-                    _modernTerrainWorkspaceTab,
-                    announce: false);
+                SelectEditorToolTab(_modernTerrainWorkspaceTab);
                 _viewport.FocusTerrain(terrainIndex);
                 _statusText.Text =
                     $"Build Safety: selected and centered {level.DisplayName} terrain section {terrain.RuntimeKey}.";
@@ -1265,10 +1262,7 @@ public sealed partial class MainWindow
                 return;
             }
 
-            ActivateEditorShellWorkspace(
-                EditorShellWorkspace.ObjectManager,
-                _modernObjectWorkspaceTab,
-                announce: false);
+            SelectEditorToolTab(_modernObjectWorkspaceTab);
             _mobySearchBox.Text = "";
             SelectMobyCategory("All objects");
             RefreshMobyList(moby);

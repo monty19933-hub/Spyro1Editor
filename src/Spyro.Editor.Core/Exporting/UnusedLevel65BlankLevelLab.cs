@@ -278,7 +278,8 @@ public static class UnusedLevel65BlankLevelLabProfileRegistry
                string.Equals(level.SourceTableWadOffset, Definition.SourceTableWadOffset, StringComparison.OrdinalIgnoreCase) &&
                string.Equals(level.SourceTableRelativeOffset, Definition.SourceTableRelativeOffset, StringComparison.OrdinalIgnoreCase) &&
                level.SourceRecordCount == ObjectRecordCount &&
-               level.Confidence == Definition.Confidence;
+               level.Confidence == Definition.Confidence &&
+               level.RuntimeMobyPointer == Definition.RuntimeMobyPointer;
     }
 
     public static bool TryResolve(LevelDefinition? level, out UnusedLevel65BlankLevelLabProfile? profile)

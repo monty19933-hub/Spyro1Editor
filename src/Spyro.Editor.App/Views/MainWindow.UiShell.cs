@@ -45,18 +45,12 @@ public sealed partial class MainWindow
         Content = "Game Camera",
         MinWidth = 108
     };
-    private readonly ToggleButton _objectManagerWorkspaceButton = new()
+    private readonly TextBlock _levelBuildingEditorIndicator = new()
     {
-        Name = "ObjectManagerWorkspaceButton",
-        Content = "Object Manager",
-        MinWidth = 142
+        Name = "LevelBuildingEditorIndicator",
+        Text = "Level Building Editor"
     };
-    private readonly ToggleButton _levelBuildingWorkspaceButton = new()
-    {
-        Name = "LevelBuildingEditorWorkspaceButton",
-        Content = "Level Building Editor",
-        MinWidth = 164
-    };
+    private Border? _editorWorkspaceIndicator;
     private Button? _modernViewportActionButton;
     private TabControl? _modernWorkspaceTabs;
     private TabItem? _modernObjectWorkspaceTab;
@@ -64,11 +58,11 @@ public sealed partial class MainWindow
     private TabItem? _modernLevelWorkspaceTab;
     private TabItem? _modernEnvironmentWorkspaceTab;
     private TabItem? _modernResearchWorkspaceTab;
-    private IReadOnlyList<TabItem> _objectManagerWorkspaceTabs = Array.Empty<TabItem>();
+    private IReadOnlyList<TabItem> _existingLevelEditorTabs = Array.Empty<TabItem>();
     private IReadOnlyList<TabItem> _levelBuildingWorkspaceTabs = Array.Empty<TabItem>();
-    private TabItem? _lastObjectManagerWorkspaceTab;
+    private TabItem? _lastExistingLevelEditorTab;
     private TabItem? _lastLevelBuildingWorkspaceTab;
-    private EditorShellWorkspace _activeEditorShellWorkspace = EditorShellWorkspace.ObjectManager;
+    private LevelEditorExperience _activeEditorExperience = LevelEditorExperience.ExistingLevel;
     private bool _switchingEditorShellWorkspace;
     private Expander? _modernLinkedObjectsExpander;
 
@@ -353,46 +347,27 @@ public sealed partial class MainWindow
 
     private Control BuildEditorWorkspaceControl()
     {
-        _objectManagerWorkspaceButton.MinHeight = 36;
-        _objectManagerWorkspaceButton.Padding = new Thickness(12, 7);
-        _objectManagerWorkspaceButton.Click += (_, _) =>
-            ActivateEditorShellWorkspace(EditorShellWorkspace.ObjectManager);
-        ToolTip.SetTip(
-            _objectManagerWorkspaceButton,
-            "Manage, place, replace, move, and inspect objects in the shared loaded level.");
+        _levelBuildingEditorIndicator.FontSize = 13;
+        _levelBuildingEditorIndicator.FontWeight = FontWeight.SemiBold;
+        _levelBuildingEditorIndicator.Foreground = Brushes.White;
+        _levelBuildingEditorIndicator.HorizontalAlignment = HorizontalAlignment.Center;
+        _levelBuildingEditorIndicator.VerticalAlignment = VerticalAlignment.Center;
 
-        _levelBuildingWorkspaceButton.MinHeight = 36;
-        _levelBuildingWorkspaceButton.Padding = new Thickness(12, 7);
-        _levelBuildingWorkspaceButton.Click += (_, _) =>
-            ActivateEditorShellWorkspace(EditorShellWorkspace.LevelBuildingEditor);
-        ToolTip.SetTip(
-            _levelBuildingWorkspaceButton,
-            "Build terrain, textures, level settings, and environment without opening a second project session.");
-
-        Grid segments = new()
-        {
-            ColumnDefinitions =
-            {
-                new ColumnDefinition(GridLength.Star),
-                new ColumnDefinition(GridLength.Star)
-            }
-        };
-        segments.Children.Add(_objectManagerWorkspaceButton);
-        Grid.SetColumn(_levelBuildingWorkspaceButton, 1);
-        segments.Children.Add(_levelBuildingWorkspaceButton);
-        RefreshEditorWorkspaceButtons();
-
-        return new Border
+        _editorWorkspaceIndicator = new Border
         {
             Name = "EditorWorkspaceSelector",
-            BorderBrush = new SolidColorBrush(Color.FromRgb(188, 197, 207)),
-            BorderThickness = new Thickness(1),
+            Background = new SolidColorBrush(ModernTeal),
             CornerRadius = new CornerRadius(5),
-            ClipToBounds = true,
+            Padding = new Thickness(18, 9),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            Child = segments
+            IsVisible = false,
+            Child = _levelBuildingEditorIndicator
         };
+        ToolTip.SetTip(
+            _editorWorkspaceIndicator,
+            "Fresh blank-level authoring: build terrain, textures, level settings, and environment in one dedicated editor.");
+        return _editorWorkspaceIndicator;
     }
 
     private Control BuildModernViewModeControl()
@@ -517,7 +492,13 @@ public sealed partial class MainWindow
         _modernEnvironmentWorkspaceTab = NewModernWorkspaceTab(
             "Environment",
             BuildModernEnvironmentWorkspace());
-        List<TabItem> objectManagerItems = [_modernObjectWorkspaceTab];
+        List<TabItem> existingLevelItems =
+        [
+            _modernObjectWorkspaceTab,
+            _modernTerrainWorkspaceTab,
+            _modernLevelWorkspaceTab,
+            _modernEnvironmentWorkspaceTab
+        ];
         List<TabItem> levelBuildingItems =
         [
             _modernTerrainWorkspaceTab,
@@ -529,12 +510,12 @@ public sealed partial class MainWindow
             _modernResearchWorkspaceTab = NewModernWorkspaceTab(
                 "Research",
                 BuildModernResearchWorkspace());
-            objectManagerItems.Add(_modernResearchWorkspaceTab);
+            existingLevelItems.Add(_modernResearchWorkspaceTab);
             levelBuildingItems.Add(_modernResearchWorkspaceTab);
         }
-        _objectManagerWorkspaceTabs = objectManagerItems;
+        _existingLevelEditorTabs = existingLevelItems;
         _levelBuildingWorkspaceTabs = levelBuildingItems;
-        _lastObjectManagerWorkspaceTab = _modernObjectWorkspaceTab;
+        _lastExistingLevelEditorTab = _modernObjectWorkspaceTab;
         _lastLevelBuildingWorkspaceTab = _modernTerrainWorkspaceTab;
 
         _modernWorkspaceTabs = new TabControl
@@ -550,10 +531,7 @@ public sealed partial class MainWindow
                 RememberSelectedEditorWorkspaceTab();
             RefreshEditorWorkspaceTerrainFocusMode();
         };
-        ActivateEditorShellWorkspace(
-            EditorShellWorkspace.ObjectManager,
-            _modernObjectWorkspaceTab,
-            announce: false);
+        ApplyEditorExperienceForCurrentLevel(_modernObjectWorkspaceTab);
         Grid.SetRow(_modernWorkspaceTabs, 1);
         layout.Children.Add(_modernWorkspaceTabs);
 
@@ -561,24 +539,28 @@ public sealed partial class MainWindow
         return shell;
     }
 
-    private void ActivateEditorShellWorkspace(
-        EditorShellWorkspace workspace,
-        TabItem? preferredTab = null,
-        bool announce = true)
+    private void ApplyEditorExperienceForCurrentLevel(TabItem? preferredTab = null)
     {
         RememberSelectedEditorWorkspaceTab();
+        TabItem? selectedBefore = _modernWorkspaceTabs?.SelectedItem as TabItem;
+        LevelEditorExperience experience = LevelEditorExperienceResolver.Resolve(_currentLevel);
         _switchingEditorShellWorkspace = true;
         try
         {
-            _activeEditorShellWorkspace = workspace;
+            _activeEditorExperience = experience;
             if (_modernWorkspaceTabs != null)
             {
-                IReadOnlyList<TabItem> tabs = workspace == EditorShellWorkspace.ObjectManager
-                    ? _objectManagerWorkspaceTabs
+                IReadOnlyList<TabItem> tabs = experience == LevelEditorExperience.ExistingLevel
+                    ? _existingLevelEditorTabs
                     : _levelBuildingWorkspaceTabs;
-                TabItem? target = preferredTab ?? (workspace == EditorShellWorkspace.ObjectManager
-                    ? _lastObjectManagerWorkspaceTab
-                    : _lastLevelBuildingWorkspaceTab);
+                TabItem? remembered = experience == LevelEditorExperience.ExistingLevel
+                    ? _lastExistingLevelEditorTab
+                    : _lastLevelBuildingWorkspaceTab;
+                TabItem? target = preferredTab != null && tabs.Contains(preferredTab)
+                    ? preferredTab
+                    : selectedBefore != null && tabs.Contains(selectedBefore)
+                        ? selectedBefore
+                        : remembered;
                 if (target == null || !tabs.Contains(target))
                     target = tabs.FirstOrDefault();
                 _modernWorkspaceTabs.ItemsSource = tabs;
@@ -592,27 +574,23 @@ public sealed partial class MainWindow
             _switchingEditorShellWorkspace = false;
         }
         RememberSelectedEditorWorkspaceTab();
-
-        RefreshEditorWorkspaceButtons();
+        RefreshEditorWorkspaceIndicator();
         RefreshEditorWorkspaceTerrainFocusMode();
-        if (announce)
-        {
-            _statusText.Text = workspace == EditorShellWorkspace.ObjectManager
-                ? "Object Manager active. The loaded level, camera, selection, and unsaved building edits remain shared."
-                : "Level Building Editor active. The loaded level, camera, selection, and unsaved object edits remain shared.";
-        }
     }
+
+    private void SelectEditorToolTab(TabItem? tab) =>
+        ApplyEditorExperienceForCurrentLevel(tab);
 
     private void RememberSelectedEditorWorkspaceTab()
     {
         if (_modernWorkspaceTabs?.SelectedItem is not TabItem selected)
             return;
-        if (_activeEditorShellWorkspace == EditorShellWorkspace.ObjectManager &&
-            _objectManagerWorkspaceTabs.Contains(selected))
+        if (_activeEditorExperience == LevelEditorExperience.ExistingLevel &&
+            _existingLevelEditorTabs.Contains(selected))
         {
-            _lastObjectManagerWorkspaceTab = selected;
+            _lastExistingLevelEditorTab = selected;
         }
-        else if (_activeEditorShellWorkspace == EditorShellWorkspace.LevelBuildingEditor &&
+        else if (_activeEditorExperience == LevelEditorExperience.FreshBlankLevel &&
                  _levelBuildingWorkspaceTabs.Contains(selected))
         {
             _lastLevelBuildingWorkspaceTab = selected;
@@ -622,33 +600,22 @@ public sealed partial class MainWindow
     private void RefreshEditorWorkspaceTerrainFocusMode()
     {
         _viewport.TerrainFocusMode =
-            _activeEditorShellWorkspace == EditorShellWorkspace.LevelBuildingEditor &&
             _modernWorkspaceTabs != null &&
             _modernTerrainWorkspaceTab != null &&
             ReferenceEquals(_modernWorkspaceTabs.SelectedItem, _modernTerrainWorkspaceTab);
     }
 
-    private void RefreshEditorWorkspaceButtons()
+    private void RefreshEditorWorkspaceIndicator()
     {
-        StyleEditorWorkspaceSegment(
-            _objectManagerWorkspaceButton,
-            _activeEditorShellWorkspace == EditorShellWorkspace.ObjectManager);
-        StyleEditorWorkspaceSegment(
-            _levelBuildingWorkspaceButton,
-            _activeEditorShellWorkspace == EditorShellWorkspace.LevelBuildingEditor);
-    }
-
-    private static void StyleEditorWorkspaceSegment(ToggleButton button, bool active)
-    {
-        button.IsChecked = active;
-        button.Background = new SolidColorBrush(active ? ModernTeal : Colors.White);
-        button.Foreground = new SolidColorBrush(active ? Colors.White : ModernInk);
-        button.BorderThickness = new Thickness(0);
-        button.HorizontalContentAlignment = HorizontalAlignment.Center;
+        if (_editorWorkspaceIndicator != null)
+        {
+            _editorWorkspaceIndicator.IsVisible =
+                _activeEditorExperience == LevelEditorExperience.FreshBlankLevel;
+        }
     }
 
     internal EditorShellSessionSnapshot CaptureEditorShellSessionSnapshotForTesting() => new(
-        _activeEditorShellWorkspace,
+        _activeEditorExperience,
         _workspace,
         _catalog,
         _currentLevel,
@@ -1430,14 +1397,8 @@ public sealed partial class MainWindow
     }
 }
 
-internal enum EditorShellWorkspace
-{
-    ObjectManager,
-    LevelBuildingEditor
-}
-
 internal sealed record EditorShellSessionSnapshot(
-    EditorShellWorkspace ActiveWorkspace,
+    LevelEditorExperience ActiveExperience,
     EditorWorkspace Workspace,
     LevelCatalog Catalog,
     LevelDefinition? CurrentLevel,

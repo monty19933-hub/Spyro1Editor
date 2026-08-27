@@ -52,6 +52,7 @@ try
     HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
     if (Application.Current?.RequestedThemeVariant != ThemeVariant.Light)
         throw new InvalidOperationException("The release shell must use the light theme so its white surfaces keep readable controls.");
+    AssertNoWholeLevelWipeSourceActions(sourceWorkspace);
     if (args.Contains("--moby-atlas-only", StringComparer.OrdinalIgnoreCase))
     {
         RunMobyAtlasOnly();
@@ -259,23 +260,29 @@ void RunWorkspaceShellOnly()
     try
     {
         WaitForLevelData(window);
-        ToggleButton objectManager = FindNamedUnique<ToggleButton>(window, "ObjectManagerWorkspaceButton");
-        ToggleButton levelBuilding = FindNamedUnique<ToggleButton>(window, "LevelBuildingEditorWorkspaceButton");
+        Border editorIndicator = FindNamedUnique<Border>(window, "EditorWorkspaceSelector");
+        TextBlock levelBuildingIndicator =
+            FindNamedUnique<TextBlock>(window, "LevelBuildingEditorIndicator");
         TabControl toolTabs = FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs");
-        if (!string.Equals(objectManager.Content?.ToString(), "Object Manager", StringComparison.Ordinal) ||
-            !string.Equals(levelBuilding.Content?.ToString(), "Level Building Editor", StringComparison.Ordinal))
+        if (editorIndicator.IsEffectivelyVisible ||
+            !string.Equals(levelBuildingIndicator.Text, "Level Building Editor", StringComparison.Ordinal) ||
+            window.GetLogicalDescendants().OfType<Button>().Any(button =>
+                string.Equals(button.Content?.ToString(), "Object Manager", StringComparison.Ordinal)))
         {
-            throw new InvalidOperationException("The two top-level editor workspace labels changed.");
+            throw new InvalidOperationException(
+                "A retail level exposed the fresh-level indicator or the retired Object Manager route.");
         }
 
         EditorShellSessionSnapshot initial = window.CaptureEditorShellSessionSnapshotForTesting();
-        if (initial.ActiveWorkspace != EditorShellWorkspace.ObjectManager ||
-            objectManager.IsChecked != true ||
-            levelBuilding.IsChecked == true)
+        if (initial.ActiveExperience != LevelEditorExperience.ExistingLevel)
         {
-            throw new InvalidOperationException("The release shell did not open in Object Manager.");
+            throw new InvalidOperationException("The release shell did not open in the existing-level editor.");
         }
-        AssertWorkspaceTabHeaders(toolTabs, ["Objects"], "Object Manager");
+        AssertWorkspaceTabHeaders(
+            toolTabs,
+            ["Objects", "Terrain", "Level", "Environment"],
+            "existing-level editor");
+        AssertNoWholeLevelWipeAction(window);
         if (window.GetLogicalDescendants().OfType<EditorViewport>().Distinct().Count() != 1)
             throw new InvalidOperationException("The editor shell must own exactly one shared viewport.");
         if (initial.CurrentLevel == null || initial.CurrentGeometry == null || initial.CurrentMobys.Count == 0)
@@ -314,18 +321,19 @@ void RunWorkspaceShellOnly()
             throw new InvalidOperationException("The continuity fixture did not stage both unsaved object and terrain edits.");
         AssertTextContains(window, "unsaved objects/terrain");
 
-        levelBuilding.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, levelBuilding));
-        FlushUi();
+        SelectWorkspaceTab(window, "Terrain");
         EditorShellSessionSnapshot building = window.CaptureEditorShellSessionSnapshotForTesting();
-        AssertWorkspaceTabHeaders(toolTabs, ["Terrain", "Level", "Environment"], "Level Building Editor");
-        if (building.ActiveWorkspace != EditorShellWorkspace.LevelBuildingEditor ||
-            levelBuilding.IsChecked != true ||
-            objectManager.IsChecked == true ||
+        AssertWorkspaceTabHeaders(
+            toolTabs,
+            ["Objects", "Terrain", "Level", "Environment"],
+            "existing-level terrain tools");
+        if (building.ActiveExperience != LevelEditorExperience.ExistingLevel ||
             !initial.Viewport.TerrainFocusMode)
         {
-            throw new InvalidOperationException("Level Building Editor did not activate its terrain workspace.");
+            throw new InvalidOperationException(
+                "Selecting retail Terrain changed editor experience or failed to activate terrain focus.");
         }
-        AssertWorkspaceSessionContinuity(dirtyBeforeSwitch, building, "Object Manager -> Level Building Editor");
+        AssertWorkspaceSessionContinuity(dirtyBeforeSwitch, building, "retail Objects -> Terrain");
 
         Button raiseTerrain = FindNamedUnique<Button>(window, "ReleaseTerrainRaiseSelectedFaceButton");
         Button lowerTerrain = FindNamedUnique<Button>(window, "ReleaseTerrainLowerSelectedFaceButton");
@@ -439,7 +447,7 @@ void RunWorkspaceShellOnly()
         building.Viewport.SelectMoby(moby, focus: false);
         FlushUi();
 
-        object environmentTab = ReadItemsSource(toolTabs, "Level Building Editor tabs")
+        object environmentTab = ReadItemsSource(toolTabs, "existing-level editor tabs")
             .Single(item => item is TabItem tab &&
                 string.Equals((tab.Header as TextBlock)?.Text, "Environment", StringComparison.Ordinal));
         toolTabs.SelectedItem = environmentTab;
@@ -447,23 +455,25 @@ void RunWorkspaceShellOnly()
         if (initial.Viewport.TerrainFocusMode)
             throw new InvalidOperationException("Terrain focus remained enabled on the Environment tab.");
 
-        objectManager.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, objectManager));
-        FlushUi();
+        SelectWorkspaceTab(window, "Objects");
         EditorShellSessionSnapshot returnedObjects = window.CaptureEditorShellSessionSnapshotForTesting();
-        AssertWorkspaceTabHeaders(toolTabs, ["Objects"], "returned Object Manager");
-        AssertWorkspaceSessionContinuity(dirtyBeforeSwitch, returnedObjects, "Level Building Editor -> Object Manager");
+        AssertWorkspaceTabHeaders(
+            toolTabs,
+            ["Objects", "Terrain", "Level", "Environment"],
+            "returned existing-level Objects tab");
+        AssertWorkspaceSessionContinuity(dirtyBeforeSwitch, returnedObjects, "retail Environment -> Objects");
 
-        levelBuilding.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, levelBuilding));
+        toolTabs.SelectedItem = environmentTab;
         FlushUi();
         if (!ReferenceEquals(toolTabs.SelectedItem, environmentTab))
-            throw new InvalidOperationException("Level Building Editor did not restore its last selected inner tab.");
+            throw new InvalidOperationException("The existing-level editor did not retain its selected Environment tab.");
         EditorShellSessionSnapshot returnedBuilding = window.CaptureEditorShellSessionSnapshotForTesting();
-        AssertWorkspaceSessionContinuity(dirtyBeforeSwitch, returnedBuilding, "Object Manager -> restored Level Building Editor");
+        AssertWorkspaceSessionContinuity(dirtyBeforeSwitch, returnedBuilding, "retail Objects -> restored Environment");
 
         SortedDictionary<string, string> projectHashesAfter =
             CaptureTerrainProjectInputHashes(workspace, initial.CurrentLevel.Key);
         if (!projectHashesBefore.SequenceEqual(projectHashesAfter))
-            throw new InvalidOperationException("Switching editor workspaces wrote or changed project data on disk.");
+            throw new InvalidOperationException("Changing existing-level tool tabs wrote or changed project data on disk.");
 
         moby.Position = originalMobyPosition;
         moby.HasLoadedNativeEdit = originalMobyLoadedEdit;
@@ -864,8 +874,8 @@ void RunWorkspaceShellOnly()
         FlushUi();
 
         Console.WriteLine(
-            "Workspace shell smoke passed: one shared session/viewport, exact Object Manager and Level Building Editor tabs, " +
-            "level-load identity, camera/selection, unsaved object and terrain edits, last inner tab, write-free switching, " +
+            "Workspace shell smoke passed: one shared existing-level editor with exact Objects/Terrain/Level/Environment tabs, " +
+            "no Object Manager or wipe route, level-load identity, camera/selection, unsaved object and terrain edits, write-free tab changes, " +
             "non-flattening HP-Z controls, actual height-only Undo/Save state, release shortcut refusals, and release-wide " +
             "research-edit Save/Create BIN gates all remained intact.");
     }
@@ -1008,10 +1018,11 @@ void RunId65BlankLabUiOnly()
             "finishing non-blocking startup ID65 validation");
         window.Id65BlankLabCatalogValidationOverrideForTesting = null;
 
-        ToggleButton levelBuilding = FindNamedUnique<ToggleButton>(window, "LevelBuildingEditorWorkspaceButton");
+        Border editorIndicator = FindNamedUnique<Border>(window, "EditorWorkspaceSelector");
+        TextBlock levelBuildingIndicator =
+            FindNamedUnique<TextBlock>(window, "LevelBuildingEditorIndicator");
         TabControl toolTabs = FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs");
-        levelBuilding.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, levelBuilding));
-        FlushUi();
+        SelectWorkspaceTab(window, "Level");
         Expander disclosure = FindNamedUnique<Expander>(window, "Id65BlankLevelLabDisclosure");
         if (!disclosure.IsVisible)
             throw new InvalidOperationException("The narrow ID65 Blank-Level Lab disclosure is hidden in public release mode.");
@@ -1044,7 +1055,18 @@ void RunId65BlankLabUiOnly()
                 $"The clean public ID65 Lab state is not exact/fail-closed: {initial}");
         }
 
-        AssertWorkspaceTabHeaders(toolTabs, ["Terrain", "Level", "Environment"], "public Level Building Editor");
+        if (editorIndicator.IsEffectivelyVisible || levelBuildingIndicator.IsEffectivelyVisible ||
+            window.CaptureEditorShellSessionSnapshotForTesting().ActiveExperience !=
+            LevelEditorExperience.ExistingLevel)
+        {
+            throw new InvalidOperationException(
+                "Retail setup for the optional ID65 level exposed the fresh blank-level editor early.");
+        }
+        AssertWorkspaceTabHeaders(
+            toolTabs,
+            ["Objects", "Terrain", "Level", "Environment"],
+            "public existing-level editor");
+        AssertNoWholeLevelWipeAction(window);
 
         UnusedLevel65BlankLevelLabWorkspacePaths paths =
             UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(workspace);
@@ -1135,7 +1157,10 @@ void RunId65BlankLabUiOnly()
                 cleanImagePath,
                 cleanCuePath,
                 workspace)));
-        WaitForUiTask(labBootstrapTask, "bootstrapping the isolated locked ID65 workspace");
+        WaitForUiTask(
+            labBootstrapTask,
+            "bootstrapping the isolated locked ID65 workspace",
+            timeoutSeconds: 120);
         UnusedLevel65BlankLevelLabBootstrapResult labBootstrap =
             labBootstrapTask.GetAwaiter().GetResult();
         if (!labBootstrap.SourceImagePreserved ||
@@ -1170,6 +1195,122 @@ void RunId65BlankLabUiOnly()
             "checking the guarded ID65 level transition",
             timeoutSeconds: 60);
         string transitionGuards = transitionTask.GetAwaiter().GetResult();
+        EditorShellSessionSnapshot loadedLab =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        if (loadedLab.ActiveExperience != LevelEditorExperience.FreshBlankLevel ||
+            !UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(loadedLab.CurrentLevel) ||
+            loadedLab.CurrentGeometry == null ||
+            loadedLab.CurrentGeometry.Polygons.Count == 0 ||
+            loadedLab.CurrentMobys.Count == 0 ||
+            !editorIndicator.IsEffectivelyVisible ||
+            !levelBuildingIndicator.IsEffectivelyVisible)
+        {
+            throw new InvalidOperationException(
+                "The exact loaded ID65 identity did not enter the sole visible Level Building Editor experience.");
+        }
+        AssertWorkspaceTabHeaders(
+            toolTabs,
+            ["Terrain", "Level", "Environment"],
+            "loaded fresh blank-level editor");
+        if (window.GetLogicalDescendants().OfType<Button>().Any(button =>
+                string.Equals(button.Content?.ToString(), "Object Manager", StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException("The loaded fresh blank level exposed Object Manager.");
+        }
+        AssertNoWholeLevelWipeAction(window);
+
+        LevelDefinition labRoundTrip = loadedLab.CurrentLevel!;
+        LevelDefinition retailRoundTrip = loadedLab.Catalog.FindByKey("stonehill")
+            ?? throw new InvalidOperationException(
+                "The real ID65 routing round-trip requires the Stone Hill retail level.");
+        SortedDictionary<string, string> routingArtifactsBefore =
+            CaptureLevelRoutingProjectArtifactHashes(workspace, retailRoundTrip.Key);
+        Console.WriteLine("ID65 UI smoke: starting real ID65 -> retail -> ID65 routing round-trip.");
+        Task routeToRetailTask = InvokePrivate<Task>(
+            window,
+            "SelectLevelFromPickerAsync",
+            retailRoundTrip,
+            null);
+        WaitForUiTask(
+            routeToRetailTask,
+            "routing the real ID65 Lab to Stone Hill through the production picker",
+            timeoutSeconds: 60);
+        EditorShellSessionSnapshot routedRetail =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        if (!ReferenceEquals(routedRetail.CurrentLevel, retailRoundTrip) ||
+            routedRetail.ActiveExperience != LevelEditorExperience.ExistingLevel ||
+            routedRetail.CurrentGeometry == null ||
+            routedRetail.CurrentGeometry.Polygons.Count == 0 ||
+            routedRetail.CurrentMobys.Count == 0 ||
+            editorIndicator.IsEffectivelyVisible ||
+            levelBuildingIndicator.IsEffectivelyVisible)
+        {
+            throw new InvalidOperationException(
+                "Routing the real ID65 Lab to Stone Hill did not restore the existing-level editor.");
+        }
+        AssertWorkspaceTabHeaders(
+            toolTabs,
+            ["Objects", "Terrain", "Level", "Environment"],
+            "real ID65 round-trip retail editor");
+        if (window.GetLogicalDescendants().OfType<Button>().Any(button =>
+                string.Equals(button.Content?.ToString(), "Object Manager", StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException(
+                "The retail half of the real ID65 routing round-trip exposed Object Manager.");
+        }
+        AssertNoWholeLevelWipeAction(window);
+
+        Task routeBackToLabTask = InvokePrivate<Task>(
+            window,
+            "SelectLevelFromPickerAsync",
+            labRoundTrip,
+            null);
+        WaitForUiTask(
+            routeBackToLabTask,
+            "routing Stone Hill back to the real ID65 Lab through the production picker",
+            timeoutSeconds: 120);
+        EditorShellSessionSnapshot returnedLab =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        if (!ReferenceEquals(returnedLab.Workspace, loadedLab.Workspace) ||
+            !ReferenceEquals(returnedLab.Catalog, loadedLab.Catalog) ||
+            !ReferenceEquals(returnedLab.Viewport, loadedLab.Viewport) ||
+            !ReferenceEquals(returnedLab.CurrentLevel, labRoundTrip) ||
+            returnedLab.LevelLoadRequestId != loadedLab.LevelLoadRequestId + 2 ||
+            returnedLab.ActiveExperience != LevelEditorExperience.FreshBlankLevel ||
+            returnedLab.CurrentGeometry == null ||
+            returnedLab.CurrentGeometry.Polygons.Count == 0 ||
+            returnedLab.CurrentMobys.Count == 0 ||
+            !string.Equals(
+                returnedLab.CurrentMobyEditSignature,
+                loadedLab.CurrentMobyEditSignature,
+                StringComparison.Ordinal) ||
+            !string.Equals(
+                returnedLab.CurrentTerrainEditSignature,
+                loadedLab.CurrentTerrainEditSignature,
+                StringComparison.Ordinal) ||
+            !editorIndicator.IsEffectivelyVisible ||
+            !levelBuildingIndicator.IsEffectivelyVisible)
+        {
+            throw new InvalidOperationException(
+                "The real ID65 -> retail -> ID65 routing round-trip did not restore the same Lab identity, shared session, source scene, or fresh blank-level editor.");
+        }
+        AssertWorkspaceTabHeaders(
+            toolTabs,
+            ["Terrain", "Level", "Environment"],
+            "returned real ID65 blank-level editor");
+        if (window.GetLogicalDescendants().OfType<Button>().Any(button =>
+                string.Equals(button.Content?.ToString(), "Object Manager", StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException(
+                "The returned real ID65 Lab exposed Object Manager.");
+        }
+        AssertNoWholeLevelWipeAction(window);
+        SortedDictionary<string, string> routingArtifactsAfter =
+            CaptureLevelRoutingProjectArtifactHashes(workspace, retailRoundTrip.Key);
+        AssertArtifactHashesEqual(
+            routingArtifactsBefore,
+            routingArtifactsAfter,
+            "The real ID65 -> retail -> ID65 routing round-trip changed durable project artifacts");
         Console.WriteLine("ID65 UI smoke: starting resident-texture probe.");
         Task<string> residentTextureTask = window.AssertId65ResidentTexturePaintingForTestingAsync();
         WaitForUiTask(
@@ -1271,37 +1412,34 @@ void RunResearchWorkspaceTabMemory()
     try
     {
         WaitForLevelData(researchWindow);
-        ToggleButton researchObjects = FindNamedUnique<ToggleButton>(researchWindow, "ObjectManagerWorkspaceButton");
-        ToggleButton researchBuilding = FindNamedUnique<ToggleButton>(researchWindow, "LevelBuildingEditorWorkspaceButton");
+        Border editorIndicator = FindNamedUnique<Border>(researchWindow, "EditorWorkspaceSelector");
         TabControl researchTabs = FindNamedUnique<TabControl>(researchWindow, "EditorWorkspaceToolTabs");
-
-        researchBuilding.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, researchBuilding));
-        FlushUi();
-        AssertWorkspaceTabHeaders(researchTabs, ["Terrain", "Level", "Environment", "Research"], "research Level Building Editor");
-        TabItem environment = ReadItemsSource(researchTabs, "research Level Building Editor tabs")
+        if (editorIndicator.IsEffectivelyVisible ||
+            researchWindow.CaptureEditorShellSessionSnapshotForTesting().ActiveExperience !=
+            LevelEditorExperience.ExistingLevel)
+        {
+            throw new InvalidOperationException(
+                "The non-release retail shell exposed the fresh blank-level experience.");
+        }
+        AssertWorkspaceTabHeaders(
+            researchTabs,
+            ["Objects", "Terrain", "Level", "Environment", "Research"],
+            "non-release existing-level editor");
+        TabItem environment = ReadItemsSource(researchTabs, "non-release existing-level tabs")
             .OfType<TabItem>()
             .Single(tab => string.Equals((tab.Header as TextBlock)?.Text, "Environment", StringComparison.Ordinal));
         researchTabs.SelectedItem = environment;
         FlushUi();
 
-        researchObjects.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, researchObjects));
-        FlushUi();
-        AssertWorkspaceTabHeaders(researchTabs, ["Objects", "Research"], "research Object Manager");
-        TabItem research = ReadItemsSource(researchTabs, "research Object Manager tabs")
+        TabItem research = ReadItemsSource(researchTabs, "non-release existing-level tabs")
             .OfType<TabItem>()
             .Single(tab => string.Equals((tab.Header as TextBlock)?.Text, "Research", StringComparison.Ordinal));
         researchTabs.SelectedItem = research;
         FlushUi();
-
-        researchBuilding.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, researchBuilding));
-        FlushUi();
-        if (!ReferenceEquals(researchTabs.SelectedItem, environment))
-            throw new InvalidOperationException("Shared Research tab selection overwrote Level Building Editor's remembered Environment tab.");
-        researchObjects.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, researchObjects));
-        FlushUi();
         if (!ReferenceEquals(researchTabs.SelectedItem, research))
-            throw new InvalidOperationException("Level Building Editor switching overwrote Object Manager's remembered Research tab.");
-        Console.WriteLine("Research workspace tab-memory smoke passed: shared Research content did not cross-contaminate either workspace's last selected tab.");
+            throw new InvalidOperationException("The non-release existing-level editor did not select Research directly.");
+        Console.WriteLine(
+            "Research workspace smoke passed: retail kept one unified Objects/Terrain/Level/Environment/Research editor without a mode switch.");
     }
     finally
     {
@@ -1359,6 +1497,110 @@ static void AssertWorkspaceTabHeaders(TabControl tabs, string[] expected, string
     {
         throw new InvalidOperationException(
             $"{workspaceName} exposed [{string.Join(", ", actual)}] instead of [{string.Join(", ", expected)}].");
+    }
+}
+
+static void AssertNoWholeLevelWipeAction(Control root)
+{
+    Control[] controls = root.GetLogicalDescendants()
+        .Prepend(root)
+        .OfType<Control>()
+        .ToArray();
+    List<string> labels = controls
+        .OfType<Button>()
+        .Select(button => ReadUiActionLabel(button.Content))
+        .Concat(controls
+            .OfType<MenuItem>()
+            .Select(menuItem => ReadUiActionLabel(menuItem.Header)))
+        .Concat(controls
+            .OfType<ComboBox>()
+            .SelectMany(menu => new[]
+            {
+                menu.PlaceholderText ?? "",
+                ReadUiActionLabel(menu.SelectedItem)
+            }))
+        .Where(label => !string.IsNullOrWhiteSpace(label))
+        .ToList();
+    foreach (ComboBox menu in controls.OfType<ComboBox>())
+    {
+        System.Collections.IEnumerable items = menu.ItemsSource is System.Collections.IEnumerable source
+            ? source
+            : menu.Items;
+        foreach (object? item in items)
+        {
+            if (item != null)
+                labels.Add(ReadUiActionLabel(item));
+        }
+    }
+    string? blocked = labels.FirstOrDefault(IsWholeLevelDestructiveActionLabel);
+    if (blocked != null)
+    {
+        throw new InvalidOperationException(
+            $"The editor exposed the deferred whole-level wipe action '{blocked}'.");
+    }
+}
+
+static string ReadUiActionLabel(object? value)
+{
+    if (value is null)
+        return "";
+    if (value is string text)
+        return text;
+    if (value is TextBlock textBlock)
+        return textBlock.Text ?? "";
+    if (value is Control control)
+    {
+        string[] descendantText = control.GetLogicalDescendants()
+            .Prepend(control)
+            .OfType<TextBlock>()
+            .Select(text => text.Text ?? "")
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .ToArray();
+        if (descendantText.Length > 0)
+            return string.Join(" ", descendantText);
+    }
+    return value.ToString() ?? "";
+}
+
+static bool IsWholeLevelDestructiveActionLabel(string label)
+{
+    string normalized = string.Join(
+        " ",
+        label.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    return System.Text.RegularExpressions.Regex.IsMatch(
+               normalized,
+               @"\b(?:wipe|clear|delete)\s+(?:the\s+)?(?:(?:entire|whole|current|this)\s+)?level\b",
+               System.Text.RegularExpressions.RegexOptions.IgnoreCase |
+               System.Text.RegularExpressions.RegexOptions.CultureInvariant) ||
+           System.Text.RegularExpressions.Regex.IsMatch(
+               normalized,
+               @"\breset\s+(?:the\s+)?(?:(?:entire|whole|current|this)\s+)?level(?:\s*(?:\.{3}|…)?$|\s+(?:to|into)\s+(?:blank|empty|original)\b)",
+               System.Text.RegularExpressions.RegexOptions.IgnoreCase |
+               System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+}
+
+static void AssertNoWholeLevelWipeSourceActions(string workspaceRoot)
+{
+    string appSourceRoot = Path.Combine(workspaceRoot, "src", "Spyro.Editor.App");
+    if (!Directory.Exists(appSourceRoot))
+        return;
+
+    System.Text.RegularExpressions.Regex literalPattern = new(
+        "\"(?<literal>(?:\\\\.|[^\"\\\\])*)\"",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    foreach (string path in Directory.EnumerateFiles(appSourceRoot, "*.cs", SearchOption.AllDirectories))
+    {
+        string source = File.ReadAllText(path);
+        foreach (System.Text.RegularExpressions.Match match in literalPattern.Matches(source))
+        {
+            string literal = match.Groups["literal"].Value.Replace("\\\"", "\"");
+            if (!IsWholeLevelDestructiveActionLabel(literal))
+                continue;
+            int line = source.Take(match.Index).Count(character => character == '\n') + 1;
+            throw new InvalidOperationException(
+                $"Spyro.Editor.App source exposes deferred whole-level wipe/reset wording '{literal}' at " +
+                $"{Path.GetRelativePath(workspaceRoot, path)}:{line}.");
+        }
     }
 }
 
@@ -3616,11 +3858,11 @@ void AssertAppendedPrivateBuildSafetyTerrainNavigation(MainWindow owner)
             $"Double-click did not select and center terrain {terrain.RuntimeKey}; selected '{selected?.RuntimeKey}', view {viewport.ViewMode}.");
     }
     EditorShellSessionSnapshot navigation = owner.CaptureEditorShellSessionSnapshotForTesting();
-    if (navigation.ActiveWorkspace != EditorShellWorkspace.LevelBuildingEditor ||
+    if (navigation.ActiveExperience != LevelEditorExperience.ExistingLevel ||
         !viewport.TerrainFocusMode)
     {
         throw new InvalidOperationException(
-            "Terrain Build Safety navigation did not activate Level Building Editor / Terrain.");
+            "Terrain Build Safety navigation did not keep the existing-level editor on Terrain.");
     }
     AssertTextContains(
         owner,
@@ -6214,9 +6456,10 @@ void Render(double width, double height, string fileName)
     WaitForLevelData(window);
     AvaloniaHeadlessPlatform.ForceRenderTimerTick(3);
 
-    FindButton(window, "Object Manager");
-    FindButton(window, "Level Building Editor");
     AssertText(window, "Objects");
+    AssertText(window, "Terrain");
+    AssertText(window, "Level");
+    AssertText(window, "Environment");
     AssertText(window, "Add");
     AssertText(window, "Edit");
     AssertText(window, "Replace");
@@ -6233,15 +6476,15 @@ void Render(double width, double height, string fileName)
         throw new InvalidOperationException("The normal release shell exposed a retired terrain-presentation control.");
     }
     AssertWorkspaceTabContrast(window);
-    FindNamedUnique<ToggleButton>(window, "LevelBuildingEditorWorkspaceButton")
-        .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-    FlushUi();
-    AssertText(window, "Terrain");
-    AssertText(window, "Level");
-    AssertText(window, "Environment");
-    FindNamedUnique<ToggleButton>(window, "ObjectManagerWorkspaceButton")
-        .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-    FlushUi();
+    Border editorIndicator = FindNamedUnique<Border>(window, "EditorWorkspaceSelector");
+    if (editorIndicator.IsEffectivelyVisible ||
+        window.GetLogicalDescendants().OfType<Button>().Any(button =>
+            string.Equals(button.Content?.ToString(), "Object Manager", StringComparison.Ordinal)))
+    {
+        throw new InvalidOperationException(
+            "The rendered retail editor exposed a fresh-level mode selector.");
+    }
+    AssertNoWholeLevelWipeAction(window);
 
     using Avalonia.Media.Imaging.Bitmap bitmap = window.CaptureRenderedFrame()
         ?? throw new InvalidOperationException($"Avalonia did not render the {width}x{height} editor frame.");
@@ -6358,26 +6601,17 @@ static void WaitForLevelData(MainWindow window)
 void AssertWorkspaceTabContrast(MainWindow window)
 {
     TabControl workspaceTabs = FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs");
-    ToggleButton objectManager = FindNamedUnique<ToggleButton>(window, "ObjectManagerWorkspaceButton");
-    ToggleButton levelBuilding = FindNamedUnique<ToggleButton>(window, "LevelBuildingEditorWorkspaceButton");
-    foreach (ToggleButton workspaceButton in new[] { objectManager, levelBuilding })
+    foreach (TabItem tab in (IEnumerable<TabItem>)workspaceTabs.ItemsSource!)
     {
-        workspaceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, workspaceButton));
-        FlushUi();
-        foreach (TabItem tab in (IEnumerable<TabItem>)workspaceTabs.ItemsSource!)
-        {
-            if (tab.Header is not TextBlock label || label.Foreground is null)
-                throw new InvalidOperationException("A workspace tab is missing its explicit readable label color.");
-        }
+        if (tab.Header is not TextBlock label || label.Foreground is null)
+            throw new InvalidOperationException("A workspace tab is missing its explicit readable label color.");
     }
-    objectManager.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, objectManager));
-    FlushUi();
 }
 
 void RenderWorkspaceTabs(MainWindow window)
 {
-    RenderWorkspaceTab(window.Width, window.Height, 1, "spyro-editor-level-tab.png");
-    RenderWorkspaceTab(window.Width, window.Height, 2, "spyro-editor-environment-tab.png");
+    RenderWorkspaceTab(window.Width, window.Height, 2, "spyro-editor-level-tab.png");
+    RenderWorkspaceTab(window.Width, window.Height, 3, "spyro-editor-environment-tab.png");
 }
 
 void RenderWorkspaceTab(double width, double height, int selectedIndex, string fileName)
@@ -6393,9 +6627,6 @@ void RenderWorkspaceTab(double width, double height, int selectedIndex, string f
     try
     {
         WaitForLevelData(window);
-        ToggleButton levelBuilding = FindNamedUnique<ToggleButton>(window, "LevelBuildingEditorWorkspaceButton");
-        levelBuilding.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, levelBuilding));
-        FlushUi();
         TabControl workspaceTabs = FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs");
         workspaceTabs.SelectedIndex = selectedIndex;
         FlushUi();
@@ -7480,9 +7711,6 @@ void AssertBuildSafetyInspection(MainWindow owner)
 
 void AssertBuildSafetyIssueNavigation(MainWindow owner)
 {
-    ToggleButton levelBuilding = FindNamedUnique<ToggleButton>(owner, "LevelBuildingEditorWorkspaceButton");
-    levelBuilding.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, levelBuilding));
-    FlushUi();
     SelectWorkspaceTab(owner, "Environment");
     const string targetLevelKey = "darkhollow";
     const string targetLevelName = "Dark Hollow";
@@ -7572,8 +7800,14 @@ void AssertBuildSafetyIssueNavigation(MainWindow owner)
     if (viewport.ViewMode != ViewportViewMode.Fly3D || Equals(flyCameraBefore, flyCameraField.GetValue(viewport)))
         throw new InvalidOperationException("Build Safety navigation did not preserve and recenter the Fly 3D camera.");
     EditorShellSessionSnapshot navigation = owner.CaptureEditorShellSessionSnapshotForTesting();
-    if (navigation.ActiveWorkspace != EditorShellWorkspace.ObjectManager)
-        throw new InvalidOperationException("Object Build Safety navigation did not activate Object Manager.");
+    if (navigation.ActiveExperience != LevelEditorExperience.ExistingLevel)
+        throw new InvalidOperationException("Object Build Safety navigation left the existing-level editor.");
+    TabControl toolTabs = FindNamedUnique<TabControl>(owner, "EditorWorkspaceToolTabs");
+    if (toolTabs.SelectedItem is not TabItem selectedTab ||
+        !string.Equals((selectedTab.Header as TextBlock)?.Text, "Objects", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Object Build Safety navigation did not reveal the Objects tab.");
+    }
 
     ListBox browser = owner.GetLogicalDescendants()
         .OfType<ListBox>()
@@ -8236,12 +8470,6 @@ Window OpenDialog(MainWindow owner, Button button, string description)
 
 void SelectWorkspaceTab(MainWindow owner, string header)
 {
-    string workspaceButtonName = string.Equals(header, "Objects", StringComparison.OrdinalIgnoreCase)
-        ? "ObjectManagerWorkspaceButton"
-        : "LevelBuildingEditorWorkspaceButton";
-    ToggleButton workspaceButton = FindNamedUnique<ToggleButton>(owner, workspaceButtonName);
-    workspaceButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, workspaceButton));
-    FlushUi();
     FieldInfo field = typeof(MainWindow).GetField(
         "_modernWorkspaceTabs",
         BindingFlags.Instance | BindingFlags.NonPublic)
@@ -8518,6 +8746,56 @@ static SortedDictionary<string, string> CaptureTerrainProjectInputHashes(
     }
 
     return result;
+}
+
+static SortedDictionary<string, string> CaptureLevelRoutingProjectArtifactHashes(
+    string workspaceRoot,
+    string retailLevelKey)
+{
+    SortedDictionary<string, string> result = new(StringComparer.Ordinal);
+    foreach ((string path, string sha256) in CaptureTerrainProjectInputHashes(
+                 workspaceRoot,
+                 retailLevelKey))
+    {
+        result[$"project/{path}"] = sha256;
+    }
+
+    UnusedLevel65BlankLevelLabWorkspacePaths id65Paths =
+        UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(workspaceRoot);
+    result["id65/<root>"] = Directory.Exists(id65Paths.RootPath) ? "<present>" : "<missing>";
+    if (Directory.Exists(id65Paths.RootPath))
+    {
+        foreach (string path in Directory.EnumerateFiles(
+                     id65Paths.RootPath,
+                     "*",
+                     SearchOption.AllDirectories))
+        {
+            string relativePath = Path.GetRelativePath(id65Paths.RootPath, path).Replace('\\', '/');
+            result[$"id65/{relativePath}"] = FileSha256(path);
+        }
+    }
+
+    return result;
+}
+
+static void AssertArtifactHashesEqual(
+    IReadOnlyDictionary<string, string> expected,
+    IReadOnlyDictionary<string, string> actual,
+    string context)
+{
+    string[] changed = expected.Keys
+        .Union(actual.Keys, StringComparer.Ordinal)
+        .Where(path =>
+            !expected.TryGetValue(path, out string? expectedHash) ||
+            !actual.TryGetValue(path, out string? actualHash) ||
+            !string.Equals(expectedHash, actualHash, StringComparison.Ordinal))
+        .Order(StringComparer.Ordinal)
+        .ToArray();
+    if (changed.Length > 0)
+    {
+        throw new InvalidOperationException(
+            $"{context}: {string.Join(", ", changed)}.");
+    }
 }
 
 static string CanonicalJsonSha256(string path, params string[] ignoredRootProperties)

@@ -427,6 +427,50 @@ try
         ReleaseProjectBootstrap.FindInstallRoot(appBaseDirectory: standaloneMacAppRoot) == Path.GetFullPath(standaloneMacAppRoot),
         "A standalone Mac app could not identify its internal release support root.");
 
+    string packagedReleaseRoot = Path.Combine(temporaryRoot, "Packaged Spyro Editor Release");
+    string packagedReleaseAppRoot = Path.Combine(
+        packagedReleaseRoot,
+        "Spyro Editor.app",
+        "Contents",
+        "MacOS");
+    Write(Path.Combine(packagedReleaseRoot, "support", "spyro-level-catalog.json"), "{}");
+    Write(Path.Combine(packagedReleaseRoot, "support", "spyro-object-templates.json"), "{}");
+    Write(Path.Combine(packagedReleaseRoot, "support", "outer-only.txt"), "outer support");
+    Write(Path.Combine(packagedReleaseAppRoot, "support", "spyro-level-catalog.json"), "{}");
+    Write(Path.Combine(packagedReleaseAppRoot, "support", "spyro-object-templates.json"), "{}");
+    Write(Path.Combine(packagedReleaseAppRoot, "support", "internal-only.txt"), "internal support");
+    string nestedPackagedEdit = Path.Combine(packagedReleaseAppRoot, "artisans-native-edits.json");
+    Write(nestedPackagedEdit, "{}");
+    Assert(
+        ReleaseProjectBootstrap.FindInstallRoot(appBaseDirectory: packagedReleaseAppRoot) ==
+            Path.GetFullPath(packagedReleaseRoot),
+        "A packaged Mac app did not discover its outer release folder.");
+    Environment.SetEnvironmentVariable(ReleaseProjectBootstrap.WorkspaceEnvironmentVariable, "");
+    ReleaseProjectContext packagedReleaseBootstrap = await ReleaseProjectBootstrap.PrepareAsync(
+        appVersion: "0.1.0-beta.26",
+        appBaseDirectory: packagedReleaseAppRoot,
+        userData: new EditorUserDataLayout(Path.Combine(temporaryRoot, "packaged-release-user-data")),
+        forceReleaseMode: true) ?? throw new InvalidOperationException(
+            "The packaged-release startup regression did not initialize project storage.");
+    Assert(
+        packagedReleaseBootstrap.AutomaticMigration == null,
+        "A launcher-free packaged release recursively scanned its own app bundle for portable project data.");
+    Assert(
+        string.Equals(
+            packagedReleaseBootstrap.ApplicationSupportRoot,
+            Path.Combine(packagedReleaseAppRoot, "support"),
+            StringComparison.Ordinal),
+        "A packaged Mac app did not select its nearest app-internal support root.");
+    Assert(
+        File.Exists(Path.Combine(packagedReleaseBootstrap.Project.RootPath, "support", "internal-only.txt")) &&
+        !File.Exists(Path.Combine(packagedReleaseBootstrap.Project.RootPath, "support", "outer-only.txt")),
+        "Packaged startup synchronized the outer release support tree instead of app-internal support.");
+    Assert(
+        !File.Exists(Path.Combine(
+            packagedReleaseBootstrap.Project.RootPath,
+            Path.GetRelativePath(packagedReleaseRoot, nestedPackagedEdit))),
+        "A launcher-free packaged release migrated a nested file from its own app bundle.");
+
     Environment.SetEnvironmentVariable(ReleaseProjectBootstrap.WorkspaceEnvironmentVariable, portableRoot);
     string rejectedBootstrapDataRoot = Path.Combine(temporaryRoot, "rejected-bootstrap-data");
     await AssertInvalidOperationAsync(

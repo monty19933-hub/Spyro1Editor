@@ -1899,6 +1899,7 @@ public sealed partial class MainWindow : Window
         _lastRemovedMoby = null;
         _lastRemovedMobyBundle.Clear();
         _currentLevel = null;
+        ApplyEditorExperienceForCurrentLevel();
         _currentGeometry = null;
         _currentMobys = [];
         _loadedMobyEdits = 0;
@@ -10407,8 +10408,6 @@ public sealed partial class MainWindow : Window
         RefreshObjectReadinessHint();
 
         _viewport.IsEnabled = !editorMutationOperationActive;
-        _objectManagerWorkspaceButton.IsEnabled = !editorMutationOperationActive;
-        _levelBuildingWorkspaceButton.IsEnabled = !editorMutationOperationActive;
         if (_modernWorkspaceTabs != null)
             _modernWorkspaceTabs.IsEnabled = !editorMutationOperationActive;
         if (_modernObjectWorkspaceTab != null)

@@ -401,6 +401,7 @@ public sealed partial class MainWindow
     {
         ReleaseProjectContext context = ReleaseProjectBootstrap.Current ?? new ReleaseProjectContext(
             InstallRoot: _workspace.RootPath,
+            ApplicationSupportRoot: Path.Combine(_workspace.RootPath, "support"),
             UserData: new EditorUserDataLayout(
                 Path.Combine(_workspace.RootPath, "_local", "ui-smoke-user-data")),
             Project: new EditorProjectLayout(_workspace.RootPath, "ui-smoke-project"),

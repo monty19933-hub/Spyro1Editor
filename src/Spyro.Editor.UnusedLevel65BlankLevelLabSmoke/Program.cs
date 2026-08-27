@@ -8,6 +8,7 @@ using Spyro.Editor.Core.Editing;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Scene;
+using Spyro.Editor.Core.Workspace;
 
 const string ExpectedCleanImageSha256 =
     "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37";
@@ -136,6 +137,43 @@ void VerifyProfileAndCatalog(string root, string catalogHash)
     LevelDefinition lab = augmented.FindByKey("unusedlevel65blank")
         ?? throw new InvalidDataException("The in-memory lab definition cannot be resolved.");
     Require(UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(lab), "The augmented lab row is not exact.");
+    Require(
+        retail.Levels.All(level =>
+            LevelEditorExperienceResolver.Resolve(level) == LevelEditorExperience.ExistingLevel),
+        "A retail level was routed into the fresh blank-level editor.");
+    Require(
+        LevelEditorExperienceResolver.Resolve(lab) == LevelEditorExperience.FreshBlankLevel,
+        "The exact admitted lab was not routed into the fresh blank-level editor.");
+    LevelDefinition blankLookingRetail = retail.Levels[0] with
+    {
+        DisplayName = "Fresh Blank Test",
+        SourceRecordCount = 0,
+        RuntimeMobyPointer = ""
+    };
+    Require(
+        LevelEditorExperienceResolver.Resolve(blankLookingRetail) == LevelEditorExperience.ExistingLevel,
+        "A blank-looking retail definition entered the fresh blank-level editor by content-like metadata.");
+    LevelDefinition exactLab = UnusedLevel65BlankLevelLabProfileRegistry.Definition;
+    LevelDefinition[] forgedLabIdentities =
+    [
+        exactLab with { Key = "stonehill" },
+        exactLab with { ScriptKey = "stonehill" },
+        exactLab with { DisplayName = "Blank Level" },
+        exactLab with { LevelId = 1 },
+        exactLab with { SourceWadEntry = 1 },
+        exactLab with { SourceTableWadOffset = "0x0" },
+        exactLab with { SourceTableRelativeOffset = "0x0" },
+        exactLab with { SourceRecordCount = 0 },
+        exactLab with { Confidence = "spoofed" },
+        exactLab with { RuntimeMobyPointer = "0xDEADBEEF" }
+    ];
+    Require(
+        forgedLabIdentities.All(level =>
+            LevelEditorExperienceResolver.Resolve(level) == LevelEditorExperience.ExistingLevel),
+        "A partial or forged ID65 identity entered the fresh blank-level editor.");
+    Require(
+        LevelEditorExperienceResolver.Resolve(null) == LevelEditorExperience.ExistingLevel,
+        "A missing level identity entered the fresh blank-level editor.");
     Require(UnusedLevel65BlankLevelLabProfileRegistry.Resolve(lab) == profile, "The lab resolver returned a different profile.");
     Require(
         UnusedLevel65BlankLevelLabProfileRegistry.TryResolve(lab, out UnusedLevel65BlankLevelLabProfile? resolved) &&
