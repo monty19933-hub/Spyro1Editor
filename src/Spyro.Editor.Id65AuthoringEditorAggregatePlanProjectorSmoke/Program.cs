@@ -114,7 +114,22 @@ ExpectNotSupported(
         t25Stored,
         null!,
         null!)),
-    "Aggregate planning remains restricted to the frozen T66 document profile.");
+    "Aggregate planning remains restricted to the frozen T66 document profile (legacy schema 1/native-apron T107 only).");
+identityRejects++;
+Id65AuthoringEditorDocument remotePadDocument =
+    Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+        Id65RemotePadGrassT107Catalog.DefaultPositionId);
+Id65AuthoringEditorDocumentStoreResult remotePadStored = stored with
+{
+    Document = remotePadDocument
+};
+ExpectNotSupported(
+    "schema-3 remote-pad aggregate planning before native compilation",
+    () => _ = Id65AuthoringEditorAggregatePlanProjector.Project(new(
+        remotePadStored,
+        null!,
+        null!)),
+    "Aggregate planning remains restricted to the frozen T66 document profile (legacy schema 1/native-apron T107 only).");
 identityRejects++;
 
 byte[] sourceRow = boundSource.LockedSource.CopyRow80();
@@ -491,7 +506,7 @@ Require(publicBoundSourceFactories.Length == 1 && publicBoundSourceFactories[0].
     "The aggregate bound source gained a caller-constructible snapshot or raw-byte factory.");
 VerifySourceTopology(repositoryRoot);
 
-Require(identityRejects == 28, $"The aggregate identity matrix ran {identityRejects}, expected 28.");
+Require(identityRejects == 29, $"The aggregate identity matrix ran {identityRejects}, expected 29.");
 Require(partitionRejects == 11, $"The aggregate partition matrix ran {partitionRejects}, expected 11.");
 Require(aliasCopyChecks == 10, $"The aggregate copy/alias matrix ran {aliasCopyChecks}, expected 10.");
 Require(positivePlans == 2, $"The aggregate positive matrix ran {positivePlans}, expected 2.");

@@ -63,6 +63,7 @@ try
     Id65AuthoringEditorNativeInputProvider.InputSet nativeInputs =
         await Id65AuthoringEditorNativeInputProvider.LoadAsync(paths, manifest);
     Id65AuthoringEditorDocumentProjectionInputs projectionInputs = new(nativeInputs);
+    Id65AuthoringEditorDocumentProjectionInputs staticProjectionInputs = new(null);
     FileState labImageBefore = SnapshotFile(paths.LockedBaseImagePath);
     FileState labCueBefore = SnapshotFile(paths.LockedBaseCuePath);
     FileState labManifestBefore = SnapshotFile(paths.ManifestPath);
@@ -612,6 +613,245 @@ try
     AssertNoOrphans(authoredRoot, documentExpected: true);
 
     AssertClosedResult(final, noTerrainDocument);
+    byte[] stableLegacyEnvelope = await File.ReadAllBytesAsync(documentPath);
+    Id65AuthoringEditorDocument remoteCenterDocument =
+        Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+            Id65RemotePadGrassT107Catalog.CenterPositionId,
+            includeOptionalTerrain: false);
+    await ExpectRejectedAsync(
+        "automatic legacy-to-remote store transition",
+        async () => _ = await Id65AuthoringEditorDocumentStore.SaveAsync(
+            paths,
+            manifest,
+            remoteCenterDocument,
+            staticProjectionInputs,
+            final.EnvelopeCanonicalSha256),
+        requiredText: "explicit migration API");
+    Require(
+        (await File.ReadAllBytesAsync(documentPath)).SequenceEqual(stableLegacyEnvelope),
+        "A refused automatic Store migration changed the legacy envelope.");
+
+    Id65AuthoringEditorDocumentStoreResult migrated =
+        await Id65AuthoringEditorDocumentStore.MigratePreparedAsync(
+            paths,
+            manifest,
+            remoteCenterDocument,
+            projectionInputs,
+            staged =>
+            {
+                AssertClosedResult(staged, remoteCenterDocument);
+                return staged;
+            },
+            final.EnvelopeCanonicalSha256);
+    AssertClosedResult(migrated, remoteCenterDocument);
+    Require(
+        migrated.EnvelopeSchemaVersion ==
+            Id65AuthoringEditorDocumentStore.RemotePadGridEnvelopeSchemaVersion &&
+        migrated.ProjectionContractId ==
+            Id65AuthoringEditorDocumentStore.RemotePadGridProjectionContractId &&
+        migrated.StaticAuthoringProfileId ==
+            Id65AuthoringEditorDocumentStore.RemotePadGridStaticAuthoringProfileId &&
+        migrated.StaticAuthoringCatalogSha256 ==
+            Id65RemotePadGrassT107Catalog.CanonicalSha256 &&
+        migrated.HasStaticAuthoringProjection &&
+        !migrated.HasCompiledCompositeProjection,
+        "The explicit Store migration did not publish one schema-2 static-authoring envelope.");
+
+    string remotePrior = migrated.EnvelopeCanonicalSha256;
+    HashSet<string> remoteDocumentHashes = new(StringComparer.Ordinal);
+    HashSet<string> remoteEnvelopeHashes = new(StringComparer.Ordinal);
+    foreach (Id65RemotePadGrassT107Position position in
+             Id65RemotePadGrassT107Catalog.Positions)
+    {
+        Id65AuthoringEditorDocument remoteDocument =
+            Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+                position.PositionId,
+                includeOptionalTerrain: false);
+        Id65AuthoringEditorDocumentStoreResult remoteResult =
+            await Id65AuthoringEditorDocumentStore.SaveAsync(
+                paths,
+                manifest,
+                remoteDocument,
+                staticProjectionInputs,
+                remotePrior);
+        AssertClosedResult(remoteResult, remoteDocument);
+        Id65AuthoringEditorDocumentStoreResult loadedRemote =
+            await RequireLoadedAsync(paths, manifest, staticProjectionInputs);
+        RequireEquivalent(remoteResult, loadedRemote, position.PositionId);
+        string remoteJson = await File.ReadAllTextAsync(documentPath);
+        Require(
+            remoteResult.Document.T107RemotePadPositionId == position.PositionId &&
+            remoteResult.Document.MobyPlacements
+                .Single(item => item.TargetTrueIndex == 107)
+                .CoordinatesOrDelta is Id65AuthoringEditorCoordinate coordinates &&
+            coordinates.X == position.RawX && coordinates.Y == position.RawY &&
+            coordinates.Z == position.RawZ &&
+            remoteJson.Contains("\"staticAuthoringProjectionSha256\"", StringComparison.Ordinal) &&
+            !remoteJson.Contains("\"compositeOutputRow80Sha256\"", StringComparison.Ordinal) &&
+            remoteDocumentHashes.Add(remoteResult.DocumentCanonicalSha256) &&
+            remoteEnvelopeHashes.Add(remoteResult.EnvelopeCanonicalSha256),
+            $"Remote position {position.PositionId} did not round-trip as a distinct exact schema-2 envelope.");
+        remotePrior = remoteResult.EnvelopeCanonicalSha256;
+    }
+    Require(
+        remoteDocumentHashes.Count == Id65RemotePadGrassT107Catalog.Positions.Count &&
+        remoteEnvelopeHashes.Count == Id65RemotePadGrassT107Catalog.Positions.Count,
+        "The Store did not preserve all nine frozen remote position variants.");
+
+    Id65AuthoringEditorDocument remoteOffDocument =
+        Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+            Id65RemotePadGrassT107Catalog.SouthEastPositionId,
+            includeOptionalTerrain: false,
+            placementIds: []);
+    Id65AuthoringEditorDocumentStoreResult remoteOff =
+        await Id65AuthoringEditorDocumentStore.SaveAsync(
+            paths,
+            manifest,
+            remoteOffDocument,
+            staticProjectionInputs,
+            remotePrior);
+    Require(
+        remoteOff.Document.MobyPlacements.Count == 0 &&
+        remoteOff.Document.T107RemotePadPositionId ==
+            Id65RemotePadGrassT107Catalog.SouthEastPositionId,
+        "The Store discarded a dormant remote position while T107 was off.");
+    remotePrior = remoteOff.EnvelopeCanonicalSha256;
+
+    Id65AuthoringEditorDocument remoteOnDocument =
+        Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+            Id65RemotePadGrassT107Catalog.SouthEastPositionId,
+            includeOptionalTerrain: false,
+            placementIds: [Id65RemotePadGrassT107Catalog.PlacementId]);
+    Id65AuthoringEditorDocumentStoreResult remoteFinal =
+        await Id65AuthoringEditorDocumentStore.SaveAsync(
+            paths,
+            manifest,
+            remoteOnDocument,
+            staticProjectionInputs,
+            remotePrior);
+    AssertClosedResult(remoteFinal, remoteOnDocument);
+    byte[] validRemoteEnvelope = await File.ReadAllBytesAsync(documentPath);
+    Require(
+        remoteFinal.Document.T107RemotePadPositionId ==
+            Id65RemotePadGrassT107Catalog.SouthEastPositionId &&
+        remoteFinal.Document.MobyPlacements.Count == 1,
+        "The Store did not preserve the selected remote position when T107 was re-enabled.");
+
+    await ExpectRejectedAsync(
+        "stale remote-grid CAS",
+        async () => _ = await Id65AuthoringEditorDocumentStore.SaveAsync(
+            paths,
+            manifest,
+            remoteOffDocument,
+            staticProjectionInputs,
+            migrated.EnvelopeCanonicalSha256),
+        requiredText: "changed after its prior envelope identity");
+    await ExpectRejectedAsync(
+        "automatic remote-to-legacy store transition",
+        async () => _ = await Id65AuthoringEditorDocumentStore.SaveAsync(
+            paths,
+            manifest,
+            noTerrainDocument,
+            projectionInputs,
+            remoteFinal.EnvelopeCanonicalSha256),
+        requiredText: "explicit migration API");
+    await ExpectRejectedAsync(
+        "repeated explicit migration against remote prior",
+        async () => _ = await Id65AuthoringEditorDocumentStore.MigratePreparedAsync(
+            paths,
+            manifest,
+            remoteOnDocument,
+            projectionInputs,
+            static staged => staged,
+            remoteFinal.EnvelopeCanonicalSha256),
+        requiredText: "only legacy native-apron");
+    Require(
+        (await File.ReadAllBytesAsync(documentPath)).SequenceEqual(validRemoteEnvelope),
+        "A stale, reverse, or repeated Store migration changed the remote envelope.");
+
+    await RejectStoredEnvelopeAsync(
+        "forged remote static projection",
+        RewriteEnvelope(validRemoteEnvelope, root =>
+            root["staticAuthoringProjectionSha256"] = new string('0', 64)),
+        validRemoteEnvelope,
+        documentPath,
+        paths,
+        manifest,
+        staticProjectionInputs,
+        requiredText: "forged or is stale");
+    await RejectStoredEnvelopeAsync(
+        "remote envelope with legacy schema",
+        RewriteEnvelope(validRemoteEnvelope, root => root["schemaVersion"] = 1),
+        validRemoteEnvelope,
+        documentPath,
+        paths,
+        manifest,
+        staticProjectionInputs,
+        requiredText: "unknown field");
+    await RejectStoredEnvelopeAsync(
+        "remote envelope with fake composite output",
+        RewriteEnvelope(validRemoteEnvelope, root =>
+            root["compositeOutputRow80Sha256"] = new string('a', 64)),
+        validRemoteEnvelope,
+        documentPath,
+        paths,
+        manifest,
+        staticProjectionInputs,
+        requiredText: "unknown field");
+    AssertClosedResult(
+        await RequireLoadedAsync(paths, manifest, staticProjectionInputs),
+        remoteOnDocument);
+    File.Delete(documentPath);
+    string parkedLockedBaseImagePath = Path.Combine(smokeRoot, "parked-locked-base.bin");
+    string parkedLockedBaseCuePath = Path.Combine(smokeRoot, "parked-locked-base.cue");
+    bool lockedBaseImageParked = false;
+    bool lockedBaseCueParked = false;
+    try
+    {
+        File.Move(paths.LockedBaseImagePath, parkedLockedBaseImagePath);
+        lockedBaseImageParked = true;
+        File.Move(paths.LockedBaseCuePath, parkedLockedBaseCuePath);
+        lockedBaseCueParked = true;
+
+        Id65AuthoringEditorDocumentStoreResult freshRemoteCreate =
+            await Id65AuthoringEditorDocumentStore.SaveAsync(
+                paths,
+                manifest,
+                remoteCenterDocument,
+                staticProjectionInputs,
+                expectedPriorEnvelopeCanonicalSha256: null);
+        AssertClosedResult(freshRemoteCreate, remoteCenterDocument);
+        RequireEquivalent(
+            freshRemoteCreate,
+            await RequireLoadedAsync(paths, manifest, staticProjectionInputs),
+            "fresh schema-3 create/load without locked BIN/CUE");
+
+        Id65AuthoringEditorDocumentStoreResult freshRemoteUpdate =
+            await Id65AuthoringEditorDocumentStore.SaveAsync(
+                paths,
+                manifest,
+                remoteOffDocument,
+                staticProjectionInputs,
+                freshRemoteCreate.EnvelopeCanonicalSha256);
+        AssertClosedResult(freshRemoteUpdate, remoteOffDocument);
+        RequireEquivalent(
+            freshRemoteUpdate,
+            await RequireLoadedAsync(paths, manifest, staticProjectionInputs),
+            "schema-3 update/load without locked BIN/CUE");
+    }
+    finally
+    {
+        if (lockedBaseCueParked && File.Exists(parkedLockedBaseCuePath))
+            File.Move(parkedLockedBaseCuePath, paths.LockedBaseCuePath);
+        if (lockedBaseImageParked && File.Exists(parkedLockedBaseImagePath))
+            File.Move(parkedLockedBaseImagePath, paths.LockedBaseImagePath);
+    }
+    Require(
+        !File.Exists(parkedLockedBaseImagePath) &&
+        !File.Exists(parkedLockedBaseCuePath),
+        "The static-only persistence smoke retained parked locked-base inputs.");
+    AssertNoOrphans(authoredRoot, documentExpected: true);
+
     AssertStoreApiBoundary();
     Require(
         Directory.Exists(bootstrapOperationResidue) &&
@@ -629,7 +869,7 @@ try
         "Persistence changed a clean source or catalog fixture.");
 
     Console.WriteLine(
-        "PASS Id65AuthoringEditorDocumentPersistenceSmoke: isolated exact-lab create/load and deterministic CAS replacement, pre-publication result preparation success/null/throw atomicity, stale/wrong/missing/create-only refusal, strict envelope/document/profile/layout/base/projection tamper rejection, 256-KiB bounded reads, pre-cancellation, symlink/escape refusal, persistent exclusive lease reuse, exact stale-temp recovery, read-only workspace validation, immutable BIN/CUE/manifest/source fixtures, and fail-closed production flags passed. Other deterministic injected mid-stage faults remain unavailable; hostile parent-directory swaps remain explicitly unsafe, the Store remains internal and carries no App/Create-BIN authority, and normal Create BIN stays unwired.");
+        "PASS Id65AuthoringEditorDocumentPersistenceSmoke: legacy schema-1 persistence remained exact; explicit schema-2 remote migration, all nine frozen positions, dormant off/on retention, native-input-free fresh/schema-3 saves while locked BIN/CUE were absent, static-authoring roundtrip, forged/malformed/stale/reverse/repeated transition refusal, atomic CAS, immutable BIN/CUE/source fixtures, and fail-closed no-afterimage/Create-BIN/runtime/release boundaries passed.");
 }
 finally
 {
@@ -740,10 +980,34 @@ static void AssertClosedResult(
     Id65AuthoringEditorDocumentStoreResult result,
     Id65AuthoringEditorDocument expectedDocument)
 {
+    bool remote = expectedDocument.UsesRemotePadT107Grid;
     Require(
         result.Document.SerializeUtf8().SequenceEqual(expectedDocument.SerializeUtf8()) &&
         result.DocumentCanonicalSha256 == expectedDocument.CanonicalSha256 &&
-        result.ProjectionContractId == Id65AuthoringEditorDocumentStore.ProjectionContractId &&
+        result.EnvelopeSchemaVersion == (remote
+            ? Id65AuthoringEditorDocumentStore.RemotePadGridEnvelopeSchemaVersion
+            : Id65AuthoringEditorDocumentStore.EnvelopeSchemaVersion) &&
+        result.ProjectionContractId == (remote
+            ? Id65AuthoringEditorDocumentStore.RemotePadGridProjectionContractId
+            : Id65AuthoringEditorDocumentStore.ProjectionContractId) &&
+        result.HasStaticAuthoringProjection == remote &&
+        result.HasCompiledCompositeProjection == !remote &&
+        (remote
+            ? result.StaticAuthoringProfileId ==
+                  Id65AuthoringEditorDocumentStore.RemotePadGridStaticAuthoringProfileId &&
+              result.StaticAuthoringCatalogSha256 ==
+                  Id65RemotePadGrassT107Catalog.CanonicalSha256 &&
+              result.StaticAuthoringSceneGraphSha256.Length == 64 &&
+              result.StaticAuthoringProjectionSha256.Length == 64 &&
+              result.CompositeProfileId.Length == 0 &&
+              result.CompositeManifestSha256.Length == 0 &&
+              result.CompositeOutputRow80Sha256.Length == 0 &&
+              result.CompositeDeterministicPlanSha256.Length == 0
+            : result.StaticAuthoringProfileId.Length == 0 &&
+              result.StaticAuthoringCatalogSha256.Length == 0 &&
+              result.StaticAuthoringSceneGraphSha256.Length == 0 &&
+              result.StaticAuthoringProjectionSha256.Length == 0 &&
+              result.CompositeProfileId == Id65AuthoringCompositeCompiler.ProfileId) &&
         !result.ContainsCompositeAfterimage &&
         !result.ContainsDiscImageBytes &&
         !result.ContainsCueBytes &&
@@ -803,6 +1067,18 @@ static void AssertStoreApiBoundary()
         preparedSave.GetParameters().Count(parameter =>
             typeof(Delegate).IsAssignableFrom(parameter.ParameterType)) == 1,
         "The pre-publication result seam is not one internal generic callback boundary.");
+    MethodInfo migrationSave = typeof(Id65AuthoringEditorDocumentStore)
+        .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+        .Single(method => method.Name == "MigratePreparedAsync");
+    Require(
+        migrationSave.IsAssembly && migrationSave.IsGenericMethodDefinition &&
+        migrationSave.GetGenericArguments().Length == 1 &&
+        migrationSave.GetParameters().Count(parameter =>
+            typeof(Delegate).IsAssignableFrom(parameter.ParameterType)) == 1 &&
+        migrationSave.GetParameters().Any(parameter =>
+            parameter.Name == "expectedPriorEnvelopeCanonicalSha256" &&
+            parameter.ParameterType == typeof(string)),
+        "The explicit migration seam is not one internal generic callback plus required prior identity boundary.");
     Require(
         typeof(Id65AuthoringEditorDocumentStoreResult)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -852,7 +1128,11 @@ static void RequireEquivalent(
         expected.CompositeProfileId == actual.CompositeProfileId &&
         expected.CompositeManifestSha256 == actual.CompositeManifestSha256 &&
         expected.CompositeOutputRow80Sha256 == actual.CompositeOutputRow80Sha256 &&
-        expected.CompositeDeterministicPlanSha256 == actual.CompositeDeterministicPlanSha256,
+        expected.CompositeDeterministicPlanSha256 == actual.CompositeDeterministicPlanSha256 &&
+        expected.StaticAuthoringProfileId == actual.StaticAuthoringProfileId &&
+        expected.StaticAuthoringCatalogSha256 == actual.StaticAuthoringCatalogSha256 &&
+        expected.StaticAuthoringSceneGraphSha256 == actual.StaticAuthoringSceneGraphSha256 &&
+        expected.StaticAuthoringProjectionSha256 == actual.StaticAuthoringProjectionSha256,
         $"Store result identity changed across {label}.");
 }
 

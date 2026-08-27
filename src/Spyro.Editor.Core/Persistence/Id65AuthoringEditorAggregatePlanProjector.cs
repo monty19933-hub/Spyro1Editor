@@ -512,9 +512,14 @@ internal static class Id65AuthoringEditorAggregatePlanProjector
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.StoredDocument);
-        if (request.StoredDocument.Document.MandatoryBaseFaceTextureId != 66)
+        if (request.StoredDocument.Document.SchemaVersion !=
+                Id65AuthoringEditorDocument.CurrentSchemaVersion ||
+            request.StoredDocument.Document.ProfileId !=
+                Id65AuthoringEditorDocument.DocumentProfileId ||
+            request.StoredDocument.Document.MandatoryBaseFaceTextureId != 66)
             throw new NotSupportedException(
-                "Aggregate planning remains restricted to the frozen T66 document profile.");
+                "Aggregate planning remains restricted to the frozen T66 document profile " +
+                "(legacy schema 1/native-apron T107 only).");
         ArgumentNullException.ThrowIfNull(request.LabManifest);
         ArgumentNullException.ThrowIfNull(request.NativeInputs);
         Id65AuthoringEditorNativeInputProvider.ValidateForConsumption(request.NativeInputs);

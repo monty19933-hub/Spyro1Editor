@@ -27,11 +27,14 @@ public sealed partial class MainWindow
     private const string Id65BlankLabTerrainCapability =
         "Exact coupled HP/LP + collision/occlusion/spawn intent is available through the Full Authoring Document. Generic HP-Z, texture, XY, add/remove, undo, and TerrainEditStore persistence are intentionally unavailable on the fresh scene projection.";
     private const string Id65BlankLabTextureCapability =
-        "Every Full Authoring Document requires exactly one base-face texture choice: Resident T25 or Proved private T66. T25 is offline-authoring/viewport-only and cannot create a candidate, BIN, runtime, or release artifact; T66 retains the separately guarded exact-candidate path. Arbitrary cross-level/custom art remains unavailable.";
+        "Every Full Authoring Document requires exactly one base-face texture choice: Resident T25 or Proved private T66. T25 is offline-authoring/viewport-only and cannot create a candidate, BIN, runtime, or release artifact. Only the frozen legacy schema-1 full T66 document retains the separately guarded exact-candidate path; schema-3 remote-pad documents remain static authoring/presentation state for either texture. Arbitrary cross-level/custom art remains unavailable.";
     private const string Id65BlankLabMobyCapability =
-        "The proved Grass placements at T88 and T107 can be included independently. Other resident records remain inspection-only; arbitrary actors and linked families remain unavailable.";
+        "Fresh schema-3 documents may omit all Grass or show one verified Grass T107 bundle at one of nine fixed positions on collision T13995; the dormant position is retained while omitted. Historical T88 remains a non-visible exact document choice. This is static authoring/presentation only until physical runtime acceptance; arbitrary actors and linked families remain unavailable.";
     private const string Id65AuthoringDocumentFileName =
         Id65AuthoringEditorDocumentWorkspaceInspector.DocumentFileName;
+    private const int Id65LegacyT66DocumentSchemaVersion = 1;
+    private const string Id65LegacyT66DocumentProfileId =
+        "id65-authoring-editor-document-exact-composite-v1";
 
     private readonly TextBlock _id65BlankLabStatusText = new();
     private readonly TextBlock _id65BlankLabLockedBaseText = new();
@@ -62,6 +65,8 @@ public sealed partial class MainWindow
     private Button? _id65FreshCreateOptionalTerrainButton;
     private Button? _id65FreshRemoveOptionalTerrainButton;
     private readonly TextBlock _id65FreshOptionalTerrainStatusText = new();
+    private Button? _id65FreshObjectManagerDocumentButton;
+    private readonly TextBlock _id65FreshObjectManagerStatusText = new();
     private string _id65BlankLabValidationFailure = "";
     private CancellationTokenSource? _id65BlankLabCatalogValidationCancellation;
     private int _id65BlankLabCatalogValidationGeneration;
@@ -367,6 +372,70 @@ public sealed partial class MainWindow
         };
         RefreshId65FreshOptionalTerrainUi();
         return _id65FreshOptionalTerrainPanel;
+    }
+
+    private Control BuildId65LevelBuildingObjectManager()
+    {
+        StackPanel panel = new() { Spacing = 12 };
+        panel.Children.Add(ModernSectionHeading("Verified Moby bundles"));
+        panel.Children.Add(new TextBlock
+        {
+            Text =
+                "This Object Manager belongs only to fresh blank levels. It uses the canonical Full Authoring Document so terrain support, object identity, and placement remain one deterministic project state. Existing retail levels keep their normal Objects editor.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(ModernMutedInk),
+            FontSize = 12,
+            LineHeight = 18
+        });
+
+        _id65FreshObjectManagerStatusText.Name =
+            "Id65FreshObjectManagerStatusText";
+        _id65FreshObjectManagerStatusText.TextWrapping = TextWrapping.Wrap;
+        _id65FreshObjectManagerStatusText.Foreground =
+            new SolidColorBrush(Color.FromRgb(34, 71, 106));
+        _id65FreshObjectManagerStatusText.FontSize = 12;
+        _id65FreshObjectManagerStatusText.LineHeight = 18;
+        panel.Children.Add(new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(241, 246, 252)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(185, 205, 224)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10),
+            Child = _id65FreshObjectManagerStatusText
+        });
+
+        _id65FreshObjectManagerDocumentButton = NewAsyncButton(
+            "Edit Verified Moby Bundles…",
+            EditId65AuthoringDocumentAsync,
+            RefreshId65BlankLabUi);
+        _id65FreshObjectManagerDocumentButton.Name =
+            "Id65FreshObjectManagerDocumentButton";
+        StyleModernPrimaryButton(
+            _id65FreshObjectManagerDocumentButton,
+            Color.FromRgb(117, 80, 158));
+        panel.Children.Add(_id65FreshObjectManagerDocumentButton);
+
+        panel.Children.Add(new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(255, 247, 229)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(225, 174, 76)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10),
+            Child = new TextBlock
+            {
+                Text =
+                    "Current safe boundary: one verified Artisans Grass T107 bundle at one of nine fixed positions on collision T13995. This is an offline, presentation-only authoring route until physical runtime acceptance is completed. Arbitrary Mobys, drag placement, normal Create BIN, and release promotion remain locked.",
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Color.FromRgb(107, 70, 17)),
+                FontSize = 11,
+                LineHeight = 16
+            }
+        });
+
+        RefreshId65FreshObjectManagerUi();
+        return panel;
     }
 
     private static Control BuildId65BlankLabCapabilities()
@@ -714,9 +783,14 @@ public sealed partial class MainWindow
                     ? null
                     : Id65AuthoringEditorControlStateCompiler.RecoverControlState(
                         _id65FreshAuthoringDocument);
+            string loadedMobySummary = _currentMobys.Count == 0
+                ? "no visible document-bound Mobys"
+                : _currentMobys.Count == 1
+                    ? $"one read-only document-bound Moby ({_currentMobys[0].DisplayLabel})"
+                    : $"{_currentMobys.Count} document-bound Mobys";
             _statusText.Text =
                 $"Loaded {lab.DisplayName} as a fresh starter scene: the mandatory HP/LP pad with matching collision/occlusion, " +
-                $"{Id65MandatoryBaseTextureLabel(loadedAuthoringState?.MandatoryBaseFaceTextureId ?? Id65FreshLevelSceneProjector.StarterTextureId)}, protected spawn, and no visible user/test Mobys" +
+                $"{Id65MandatoryBaseTextureLabel(loadedAuthoringState?.MandatoryBaseFaceTextureId ?? Id65FreshLevelSceneProjector.StarterTextureId)}, protected spawn, and {loadedMobySummary}" +
                 (loadedAuthoringState == null
                     ? ". No Full Authoring Document exists, so no defaults were persisted and optional terrain is absent"
                     : loadedAuthoringState.IncludeStructuralTerrain
@@ -805,7 +879,7 @@ public sealed partial class MainWindow
                     operation.Cancellation.Token);
             RequireCurrentId65BlankLabManualOperation(operation);
             Id65AuthoringEditorControlState initial = existing == null
-                ? Id65AuthoringEditorControlState.CreateDefault()
+                ? Id65AuthoringEditorControlState.CreateRemotePadDefault()
                 : Id65AuthoringEditorControlStateCompiler.RecoverControlState(existing);
 
             Id65AuthoringEditorControlState? selected =
@@ -889,22 +963,40 @@ public sealed partial class MainWindow
                     operation.Cancellation.Token);
             }
 
-            _statusText.Text =
-                "ID65 Full Authoring Document: revalidating native inputs and publishing with compare-and-swap…";
+            bool explicitLegacyToRemotePadMigration =
+                existing != null &&
+                !initial.UsesRemotePadT107Grid &&
+                selected.UsesRemotePadT107Grid;
+            _statusText.Text = selected.UsesRemotePadT107Grid
+                ? explicitLegacyToRemotePadMigration
+                    ? "ID65 Full Authoring Document: revalidating the exact prior legacy document and provider-owned native inputs before explicit remote-pad migration…"
+                    : "ID65 Full Authoring Document: validating the schema-3 static-authoring projection and publishing with compare-and-swap…"
+                : "ID65 Full Authoring Document: revalidating native inputs and publishing with compare-and-swap…";
             Id65AuthoringEditorControlStateCompilation selectedCompilation =
                 Id65AuthoringEditorControlStateCompiler.Compile(selected);
             Id65AuthoringEditorDocumentWriteResult written =
-                await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
-                    paths,
-                    manifest,
-                    selected,
-                    existing?.EnvelopeCanonicalSha256,
-                    operation.Cancellation.Token);
+                explicitLegacyToRemotePadMigration
+                    ? await Id65AuthoringEditorDocumentWorkspaceWriter
+                        .MigrateLegacyToRemotePadGridExactAsync(
+                            paths,
+                            manifest,
+                            selected,
+                            existing!.EnvelopeCanonicalSha256,
+                            operation.Cancellation.Token)
+                    : await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
+                        paths,
+                        manifest,
+                        selected,
+                        existing?.EnvelopeCanonicalSha256,
+                        operation.Cancellation.Token);
             durableWrite = written;
             RequireCurrentId65BlankLabManualOperation(operation);
             RequireExactId65AuthoringDocumentWriteResult(
                 written,
-                selectedCompilation);
+                selectedCompilation,
+                expectedExplicitLegacyToRemotePadMigration:
+                    explicitLegacyToRemotePadMigration);
+            ClearId65BlankLabRevealBinding();
             _statusText.Text =
                 "ID65 Full Authoring Document: re-inspecting the durable document and preparing its exact fresh-scene projection…";
             (_, LevelLoadData? preparedLevel) =
@@ -922,17 +1014,24 @@ public sealed partial class MainWindow
             RefreshId65BlankLabUi();
             RefreshActionAvailability();
             _statusText.Text =
-                $"{(written.CreatedNewDocument ? "Created" : "Updated")} the canonical ID65 Full Authoring Document " +
+                $"{(written.ExplicitLegacyToRemotePadMigrationPerformed
+                    ? "Migrated"
+                    : written.CreatedNewDocument ? "Created" : "Updated")} the canonical ID65 Full Authoring Document " +
                 $"({written.DocumentCanonicalSha256[..12]}…): structural terrain " +
                 $"{(written.ControlState.IncludeStructuralTerrain ? "included" : "omitted")}; " +
                 $"Grass T88 {(written.ControlState.IncludeGrassAtT88 ? "included" : "omitted")}; " +
                 $"Grass T107 {(written.ControlState.IncludeGrassAtT107 ? "included" : "omitted")}; " +
                 $"mandatory base face {Id65MandatoryBaseTextureLabel(written.ControlState.MandatoryBaseFaceTextureId)}. " +
+                (written.ControlState.UsesRemotePadT107Grid
+                    ? $"Remote-pad T107 position {Id65RemotePadGrassT107Catalog.GetRequiredPosition(written.ControlState.T107RemotePadPositionId!).Label} is retained by schema 3. "
+                    : "Legacy native-apron T107 semantics remain unchanged. ") +
                 "The baseline spawn/music/totals/exit/save handles and every unrelated serialized pin remain fixed. " +
                 (preparedLevel == null
                     ? "Load the exact ID65 Lab to view this canonical document projection. "
                     : "The loaded fresh scene was replaced only after exact post-save readback and projection. ") +
-                (written.ControlState.MandatoryBaseFaceTextureId ==
+                (written.ControlState.UsesRemotePadT107Grid
+                    ? "Remote-pad documents are static authoring/presentation state only; exact candidate, normal Create BIN, runtime, and release paths are refused pending a separate native compiler and physical acceptance."
+                    : written.ControlState.MandatoryBaseFaceTextureId ==
                     Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId
                     ? "Resident T25 is offline-authoring/viewport-only; exact candidate, Create BIN, runtime, and release paths are refused."
                     : "The explicit exact candidate action currently accepts only structural terrain with both Grass placements; normal Create BIN remains blocked pending runtime and atomic retail-composition proof.");
@@ -1105,6 +1204,11 @@ public sealed partial class MainWindow
             }
             Id65AuthoringEditorControlState state =
                 Id65AuthoringEditorControlStateCompiler.RecoverControlState(document);
+            if (state.UsesRemotePadT107Grid)
+            {
+                throw new InvalidDataException(
+                    "Remote-pad 3x3 Grass documents are static authoring/presentation state only. Exact candidate materialization, normal Create BIN, runtime use, release integration, promotion, and publication are refused until a separate schema-3 native compiler and physical runtime acceptance exist.");
+            }
             if (state.MandatoryBaseFaceTextureId ==
                 Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId)
             {
@@ -1327,7 +1431,12 @@ public sealed partial class MainWindow
             File.Exists(result.CandidateImagePath) &&
             File.Exists(result.CandidateCuePath) &&
             File.Exists(result.CandidateReceiptPath);
-        if (expectedDocument.MandatoryBaseFaceTextureId !=
+        if (expectedDocument.SchemaVersion !=
+                Id65LegacyT66DocumentSchemaVersion ||
+            expectedDocument.ProfileId !=
+                Id65LegacyT66DocumentProfileId ||
+            expectedDocument.UsesRemotePadT107Grid ||
+            expectedDocument.MandatoryBaseFaceTextureId !=
                 Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId ||
             !candidateDirectory.StartsWith(expectedPrefix, pathComparison) ||
             !exactFiles ||
@@ -1380,9 +1489,9 @@ public sealed partial class MainWindow
         {
             Title = "ID65 Full Authoring Document",
             Width = 700,
-            Height = 620,
+            Height = 720,
             MinWidth = 560,
-            MinHeight = 480,
+            MinHeight = 560,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = true
         };
@@ -1407,9 +1516,37 @@ public sealed partial class MainWindow
         CheckBox t107 = new()
         {
             Name = "Id65AuthoringGrassT107Box",
-            Content = "Include proved Grass placement at T107",
+            Content = initial.UsesRemotePadT107Grid
+                ? "Include verified Grass T107 on the fresh remote pad"
+                : "Include historical proved Grass placement at T107",
             IsChecked = initial.IncludeGrassAtT107
         };
+        Id65AuthoringEditorT107PlacementSemantics t107PlacementSemantics =
+            initial.T107PlacementSemantics;
+        Id65RemotePadGrassT107Position initialT107Position =
+            Id65RemotePadGrassT107Catalog.GetRequiredPosition(
+                initial.T107RemotePadPositionId ??
+                Id65RemotePadGrassT107Catalog.DefaultPositionId);
+        ComboBox t107Position = new()
+        {
+            Name = "Id65AuthoringGrassT107RemotePadPositionSelector",
+            ItemsSource = Id65RemotePadGrassT107Catalog.Positions,
+            SelectedItem = initialT107Position,
+            IsEnabled = initial.UsesRemotePadT107Grid,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        TextBlock t107SemanticsNotice = new()
+        {
+            Name = "Id65AuthoringGrassT107SemanticsNotice",
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 11,
+            LineHeight = 16
+        };
+        Button migrateT107 = NewButton(
+            "Migrate T107 to Remote-Pad 3x3 Center");
+        migrateT107.Name = "Id65AuthoringGrassT107MigrationButton";
+        StyleModernSecondaryButton(migrateT107);
+        migrateT107.IsVisible = !initial.UsesRemotePadT107Grid;
         Id65AuthoringMandatoryBaseTextureChoice[] mandatoryTextureChoices =
         [
             new(
@@ -1419,7 +1556,7 @@ public sealed partial class MainWindow
             new(
                 Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId,
                 "Proved private T66",
-                "Uses the exact private T66 viewport projection and retains the separately guarded exact full-candidate path when every other candidate requirement is satisfied.")
+                "Uses the exact private T66 viewport projection. The separately guarded exact full-candidate path exists only for a frozen legacy schema-1 document with every candidate requirement satisfied; remote-pad schema 3 remains static authoring/presentation only.")
         ];
         Id65AuthoringMandatoryBaseTextureChoice initialMandatoryTexture =
             mandatoryTextureChoices.Single(choice =>
@@ -1433,7 +1570,7 @@ public sealed partial class MainWindow
         };
         TextBlock validation = new()
         {
-            Text = "Choose at least one proved Grass placement.",
+            Text = "The selected choices cannot form an exact document.",
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(ModernRed),
             IsVisible = false
@@ -1475,10 +1612,17 @@ public sealed partial class MainWindow
             "Adds or removes the one proved HP/LP terrain intent together with its collision and occlusion ownership."));
         body.Children.Add(BuildId65AuthoringChoice(
             t88,
-            "Uses the exact replacement-row policy and preserves the destination coordinate."));
-        body.Children.Add(BuildId65AuthoringChoice(
+            "Retains the exact historical replacement-row choice at T88. It is not presented as a placed object in the fresh blank scene."));
+        StackPanel t107Field = new() { Spacing = 7 };
+        t107Field.Children.Add(BuildId65AuthoringChoice(
             t107,
-            "Uses the exact contiguous append policy, authored coordinate, yaw, and proved support handle."));
+            "Remote-pad documents use exactly one verified Grass bundle, fixed yaw, and the selected point on collision T13995. A dormant position is retained even while Grass is omitted."));
+        t107Field.Children.Add(t107Position);
+        t107Field.Children.Add(t107SemanticsNotice);
+        t107Field.Children.Add(migrateT107);
+        body.Children.Add(BuildModernDialogField(
+            "Grass T107 placement",
+            t107Field));
         body.Children.Add(new Border
         {
             Background = new SolidColorBrush(Color.FromRgb(243, 247, 251)),
@@ -1517,27 +1661,70 @@ public sealed partial class MainWindow
 
             return selectedChoice.TextureId;
         }
+        Id65RemotePadGrassT107Position GetT107Position()
+        {
+            if (t107Position.SelectedItem is not
+                Id65RemotePadGrassT107Position selectedPosition)
+            {
+                throw new InvalidDataException(
+                    "Choose exactly one verified remote-pad T107 position.");
+            }
+            return Id65RemotePadGrassT107Catalog.GetRequiredPosition(
+                selectedPosition.PositionId);
+        }
+        Id65AuthoringEditorControlState BuildSelectedState()
+        {
+            return t107PlacementSemantics ==
+                    Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1
+                ? Id65AuthoringEditorControlState.CreateRemotePad(
+                    terrain.IsChecked == true,
+                    t88.IsChecked == true,
+                    t107.IsChecked == true,
+                    GetT107Position().PositionId,
+                    GetMandatoryTextureId())
+                : new Id65AuthoringEditorControlState(
+                    terrain.IsChecked == true,
+                    t88.IsChecked == true,
+                    t107.IsChecked == true,
+                    GetMandatoryTextureId());
+        }
+        void RefreshT107SemanticsNotice()
+        {
+            bool remote = t107PlacementSemantics ==
+                Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1;
+            t107Position.IsEnabled = remote;
+            migrateT107.IsVisible = !remote;
+            t107.Content = remote
+                ? "Include verified Grass T107 on the fresh remote pad"
+                : "Include historical proved Grass placement at T107";
+            t107SemanticsNotice.Foreground = new SolidColorBrush(
+                remote ? ModernMutedInk : Color.FromRgb(150, 94, 12));
+            t107SemanticsNotice.Text = remote
+                ? "Remote-pad 3x3 semantics are active. The selected point is document-bound, retained while disabled, and presentation-only until runtime acceptance is completed."
+                : "Legacy native-apron semantics are preserved exactly. The historical coordinate is not the new pad center and is never shown on the blank pad. Use the explicit migration button to choose Center for a new schema-3 document; migration is applied only if you save.";
+        }
         void RefreshExactPreview()
         {
             try
             {
                 int mandatoryTextureId = GetMandatoryTextureId();
-                Id65AuthoringEditorControlState selected = new(
-                    terrain.IsChecked == true,
-                    t88.IsChecked == true,
-                    t107.IsChecked == true,
-                    mandatoryTextureId);
+                Id65AuthoringEditorControlState selected = BuildSelectedState();
                 Id65AuthoringEditorControlStateCompilation compilation =
                     Id65AuthoringEditorControlStateCompiler.Compile(selected);
                 string textureRoute = mandatoryTextureId ==
                     Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId
                     ? "Resident T25; ordinary resident close/normal/LQ/HQ viewport caches; offline-authoring-only; exact candidate/Create BIN/runtime/release refused"
-                    : "Proved private T66; exact private viewport projection; separately guarded exact full-candidate path retained";
+                    : selected.UsesRemotePadT107Grid
+                        ? "Proved private T66; exact private viewport projection; schema-3 static authoring only; candidate/Create BIN/runtime/release refused"
+                        : "Proved private T66; exact private viewport projection; separately guarded legacy full-candidate path retained";
                 exactPreview.Text =
                     $"Exact document {compilation.DocumentCanonicalSha256[..12]}…; " +
                     $"mandatory base face {textureRoute}; " +
                     $"terrain intents {compilation.TerrainIntentCount}; Grass targets " +
-                    $"{string.Join(", ", compilation.MobyTargetTrueIndices.Select(index => $"T{index}"))}.";
+                    $"{(compilation.MobyTargetTrueIndices.Count == 0 ? "none" : string.Join(", ", compilation.MobyTargetTrueIndices.Select(index => $"T{index}")))}; " +
+                    (selected.UsesRemotePadT107Grid
+                        ? $"T107 remote-pad position {GetT107Position().Label} ({GetT107Position().EditorX}, {GetT107Position().EditorY}, {GetT107Position().EditorZ}); static authoring only."
+                        : "legacy native-apron T107 semantics; historical exact-candidate route only.");
                 validation.IsVisible = false;
                 save.IsEnabled = true;
             }
@@ -1565,17 +1752,40 @@ public sealed partial class MainWindow
                 RefreshExactPreview();
         };
         mandatoryTexture.SelectionChanged += (_, _) => RefreshExactPreview();
+        t107Position.SelectionChanged += (_, _) => RefreshExactPreview();
+        migrateT107.Click += (_, _) =>
+        {
+            try
+            {
+                Id65AuthoringEditorControlState legacyPreview = new(
+                    terrain.IsChecked == true,
+                    t88.IsChecked == true,
+                    t107.IsChecked == true,
+                    GetMandatoryTextureId());
+                Id65AuthoringEditorControlState migrated =
+                    Id65AuthoringEditorControlState.MigrateLegacyToRemotePadGrid(
+                        legacyPreview,
+                        Id65RemotePadGrassT107Catalog.DefaultPositionId);
+                t107PlacementSemantics = migrated.T107PlacementSemantics;
+                t107Position.SelectedItem =
+                    Id65RemotePadGrassT107Catalog.DefaultPosition;
+                RefreshT107SemanticsNotice();
+                RefreshExactPreview();
+            }
+            catch (Exception ex) when (
+                ex is InvalidDataException or InvalidOperationException)
+            {
+                validation.Text = ex.Message;
+                validation.IsVisible = true;
+            }
+        };
         cancel.Click += (_, _) =>
             dialog.Close((Id65AuthoringEditorControlState?)null);
         save.Click += (_, _) =>
         {
             try
             {
-                Id65AuthoringEditorControlState selected = new(
-                    terrain.IsChecked == true,
-                    t88.IsChecked == true,
-                    t107.IsChecked == true,
-                    GetMandatoryTextureId());
+                Id65AuthoringEditorControlState selected = BuildSelectedState();
                 _ = Id65AuthoringEditorControlStateCompiler.Compile(selected);
                 validation.IsVisible = false;
                 dialog.Close(selected);
@@ -1586,6 +1796,7 @@ public sealed partial class MainWindow
                 validation.IsVisible = true;
             }
         };
+        RefreshT107SemanticsNotice();
         RefreshExactPreview();
         dialog.Content = BuildModernDialogFrame(body, cancel, save);
         return await dialog.ShowDialog<Id65AuthoringEditorControlState?>(this);
@@ -1615,7 +1826,12 @@ public sealed partial class MainWindow
         left.IncludeStructuralTerrain == right.IncludeStructuralTerrain &&
         left.IncludeGrassAtT88 == right.IncludeGrassAtT88 &&
         left.IncludeGrassAtT107 == right.IncludeGrassAtT107 &&
-        left.MandatoryBaseFaceTextureId == right.MandatoryBaseFaceTextureId;
+        left.MandatoryBaseFaceTextureId == right.MandatoryBaseFaceTextureId &&
+        left.T107PlacementSemantics == right.T107PlacementSemantics &&
+        string.Equals(
+            left.T107RemotePadPositionId,
+            right.T107RemotePadPositionId,
+            StringComparison.Ordinal);
 
     private static bool Id65AuthoringDocumentSnapshotsEqual(
         Id65AuthoringEditorDocumentReadModel? left,
@@ -1642,7 +1858,8 @@ public sealed partial class MainWindow
 
     private static void RequireExactId65AuthoringDocumentWriteResult(
         Id65AuthoringEditorDocumentWriteResult written,
-        Id65AuthoringEditorControlStateCompilation expectedCompilation)
+        Id65AuthoringEditorControlStateCompilation expectedCompilation,
+        bool expectedExplicitLegacyToRemotePadMigration = false)
     {
         if (written.DocumentCanonicalSha256 !=
                 expectedCompilation.DocumentCanonicalSha256 ||
@@ -1655,6 +1872,9 @@ public sealed partial class MainWindow
                 Id65AuthoringEditorControlStateCompiler.RecoverControlState(
                     written.Document)) ||
             !written.ExplicitSaveInvocationRequired ||
+            written.ExplicitLegacyToRemotePadMigrationPerformed !=
+                expectedExplicitLegacyToRemotePadMigration ||
+            written.AutomaticMigrationPerformed ||
             !written.CompareAndSwapEnforced ||
             !written.AtomicPublicationCompleted ||
             !written.PersistencePerformed ||
@@ -1763,7 +1983,9 @@ public sealed partial class MainWindow
                 (byte)expectedState.MandatoryBaseFaceTextureId ||
             mandatoryBaseFace.NativeFaceWord2 != expectedMandatoryFaceWord2 ||
             prepared.LoadedTerrainEdits != 0 ||
-            prepared.Mobys.Count != 0 ||
+            !Id65PreparedMobysMatchProjection(
+                prepared.Mobys,
+                projection) ||
             prepared.CustomTerrainTextures.Count != 0 ||
             prepared.NativeTerrainTextureRelocations.Count != 0)
         {
@@ -2132,11 +2354,19 @@ public sealed partial class MainWindow
                     : "Optional structural terrain is already absent; no document or viewport state was changed.";
                 return;
             }
-            Id65AuthoringEditorControlState nextState = new(
-                includeStructuralTerrain,
-                currentState.IncludeGrassAtT88,
-                currentState.IncludeGrassAtT107,
-                currentState.MandatoryBaseFaceTextureId);
+            Id65AuthoringEditorControlState nextState =
+                currentState.UsesRemotePadT107Grid
+                    ? Id65AuthoringEditorControlState.CreateRemotePad(
+                        includeStructuralTerrain,
+                        currentState.IncludeGrassAtT88,
+                        currentState.IncludeGrassAtT107,
+                        currentState.T107RemotePadPositionId!,
+                        currentState.MandatoryBaseFaceTextureId)
+                    : new Id65AuthoringEditorControlState(
+                        includeStructuralTerrain,
+                        currentState.IncludeGrassAtT88,
+                        currentState.IncludeGrassAtT107,
+                        currentState.MandatoryBaseFaceTextureId);
             Id65AuthoringEditorControlStateCompilation compilation =
                 Id65AuthoringEditorControlStateCompiler.Compile(nextState);
             string expectedEnvelope =
@@ -2156,6 +2386,7 @@ public sealed partial class MainWindow
             durableWrite = written;
             RequireCurrentId65BlankLabManualOperation(operation);
             RequireExactId65AuthoringDocumentWriteResult(written, compilation);
+            ClearId65BlankLabRevealBinding();
 
             _statusText.Text =
                 $"ID65 {action}: re-inspecting the durable document and preparing its exact fresh-scene projection…";
@@ -2372,11 +2603,19 @@ public sealed partial class MainWindow
                 Id65AuthoringEditorControlState state =
                     Id65AuthoringEditorControlStateCompiler.RecoverControlState(
                         _id65FreshAuthoringDocument);
-                if (state.MandatoryBaseFaceTextureId !=
-                    Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId)
+                if (state.UsesRemotePadT107Grid ||
+                    _id65FreshAuthoringDocument.SchemaVersion !=
+                        Id65LegacyT66DocumentSchemaVersion ||
+                    _id65FreshAuthoringDocument.ProfileId !=
+                        Id65LegacyT66DocumentProfileId ||
+                    state.MandatoryBaseFaceTextureId !=
+                        Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId ||
+                    !state.IncludeStructuralTerrain ||
+                    !state.IncludeGrassAtT88 ||
+                    !state.IncludeGrassAtT107)
                 {
                     throw new InvalidDataException(
-                        "Resident T25 has no revealable exact candidate.");
+                        "Only the full legacy schema-1 Proved private T66 document has a revealable exact candidate. Remote-pad, Resident T25, partial, and asymmetric documents are refused.");
                 }
                 if (!_viewport.IsId65FreshLevelT66ViewportTextureProjectionBoundForTesting)
                 {
@@ -2458,7 +2697,10 @@ public sealed partial class MainWindow
             Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId;
         bool privateT66Selected = synchronizedAuthoringState?.MandatoryBaseFaceTextureId ==
             Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId;
+        bool remotePadT107Selected =
+            synchronizedAuthoringState?.UsesRemotePadT107Grid == true;
         bool fullPrivateT66CandidateReady = privateT66Selected &&
+            !remotePadT107Selected &&
             synchronizedAuthoringState!.IncludeStructuralTerrain &&
             synchronizedAuthoringState.IncludeGrassAtT88 &&
             synchronizedAuthoringState.IncludeGrassAtT107;
@@ -2481,13 +2723,15 @@ public sealed partial class MainWindow
             : "Not built or not validated.";
         _id65BlankLabAuthoredLayerText.Text = valid
             ? hasAuthoringDocument
-                ? residentT25Selected
-                    ? "Canonical Full Authoring Document is synchronized with mandatory Resident T25. The viewport uses the ordinary resident close/normal/LQ/HQ caches. T25 is offline-authoring-only: exact candidate, normal Create BIN, runtime, release, promotion, and publication are refused. Edit and explicitly save Proved private T66 to reopen the separately guarded exact-candidate path."
-                    : privateT66Selected
-                        ? fullPrivateT66CandidateReady
-                            ? "Canonical Full Authoring Document is synchronized with mandatory Proved private T66 and the full structural-terrain/Grass T88/Grass T107 candidate state. The viewport uses the exact private T66 projection; Create Exact Full Candidate still revalidates every disk and graph identity. Legacy HP-Z save/test actions and normal Create BIN remain disabled."
-                            : "Canonical Full Authoring Document is synchronized with mandatory Proved private T66, but the full exact candidate also requires structural terrain plus both Grass T88 and T107. The private viewport remains available; candidate action is disabled until those controls are explicitly saved. Normal Create BIN remains disabled."
-                        : "Canonical Full Authoring Document filename detected, but no exact synchronized supported selector state is loaded. Candidate creation and reveal are quarantined until Load Lab re-inspects and projects the document."
+                ? remotePadT107Selected
+                    ? "Canonical schema-3 remote-pad document is synchronized with the fresh Object Manager. Its selected Grass T107 point is an offline, read-only scene presentation; exact candidate, normal Create BIN, runtime use, release integration, promotion, and publication are refused until a separate native compiler and physical runtime acceptance exist."
+                    : residentT25Selected
+                        ? "Canonical Full Authoring Document is synchronized with mandatory Resident T25. The viewport uses the ordinary resident close/normal/LQ/HQ caches. T25 is offline-authoring-only: exact candidate, normal Create BIN, runtime, release, promotion, and publication are refused. Edit and explicitly save Proved private T66 to reopen the separately guarded exact-candidate path."
+                        : privateT66Selected
+                            ? fullPrivateT66CandidateReady
+                                ? "Canonical Full Authoring Document is synchronized with mandatory Proved private T66 and the full structural-terrain/Grass T88/Grass T107 candidate state. The viewport uses the exact private T66 projection; Create Exact Full Candidate still revalidates every disk and graph identity. Legacy HP-Z save/test actions and normal Create BIN remain disabled."
+                                : "Canonical Full Authoring Document is synchronized with mandatory Proved private T66, but the full exact candidate also requires structural terrain plus both Grass T88 and T107. The private viewport remains available; candidate action is disabled until those controls are explicitly saved. Normal Create BIN remains disabled."
+                            : "Canonical Full Authoring Document filename detected, but no exact synchronized supported selector state is loaded. Candidate creation and reveal are quarantined until Load Lab re-inspects and projects the document."
                 : $"Isolated by versioned manifest + unique key '{UnusedLevel65BlankLevelLabProfileRegistry.Key}'. " +
                   "The fresh scene is presentation-only: generic HP-Z/texture save and the legacy disposable writer are disabled because they would desynchronize HP, LP, collision, occlusion, and the protected spawn. Use Edit Full Authoring Document… for coupled terrain create/remove work." +
                   (hasUnsupported ? $" Disposable writer blocked: {unsupported}" : "")
@@ -2510,7 +2754,9 @@ public sealed partial class MainWindow
                 fullPrivateT66CandidateReady && OperatingSystem.IsMacOS() && !busy;
             if (!busy)
             {
-                _id65BlankLabAuthoringCandidateButton.Content = residentT25Selected
+                _id65BlankLabAuthoringCandidateButton.Content = remotePadT107Selected
+                    ? "Exact Candidate Unavailable for Remote-Pad Grid"
+                    : residentT25Selected
                     ? "Exact Candidate Unavailable for Resident T25"
                     : privateT66Selected && !fullPrivateT66CandidateReady
                         ? "Exact Candidate Requires Full T66 Document"
@@ -2528,8 +2774,104 @@ public sealed partial class MainWindow
         if (_id65BlankLabRevealButton != null)
             _id65BlankLabRevealButton.IsEnabled =
                 !busy && File.Exists(_id65BlankLabRevealPath) &&
-                (!hasAuthoringDocument || privateT66Selected);
+                (!hasAuthoringDocument ||
+                    (privateT66Selected && !remotePadT107Selected));
+        RefreshId65FreshObjectManagerUi();
         RefreshId65FreshOptionalTerrainUi();
+    }
+
+    private void RefreshId65FreshObjectManagerUi()
+    {
+        bool exactFreshRoute =
+            IsCurrentId65BlankLab() &&
+            Id65FreshLevelSceneProjector.IsProjectionGeometry(_currentGeometry);
+        bool busy = _id65BlankLabBusy ||
+            _id65BlankLabCatalogValidationBusy ||
+            HasConflictingId65BlankLabManualOperationState();
+        bool canOpenDocument =
+            exactFreshRoute && _id65BlankLabManifest != null &&
+            _id65BlankLabPaths != null && !busy;
+        if (_id65FreshObjectManagerDocumentButton != null)
+            _id65FreshObjectManagerDocumentButton.IsEnabled = false;
+
+        if (!exactFreshRoute)
+        {
+            _id65FreshObjectManagerStatusText.Text =
+                "Load a validated fresh ID65 Blank-Level Lab to manage its verified Moby bundles.";
+            return;
+        }
+
+        if (_id65FreshAuthoringDocument == null)
+        {
+            if (_id65FreshObjectManagerDocumentButton != null)
+                _id65FreshObjectManagerDocumentButton.IsEnabled = canOpenDocument;
+            _id65FreshObjectManagerStatusText.Text =
+                "Blank scene: 0 placed objects. No Full Authoring Document exists, so no object choice has been silently persisted.";
+            return;
+        }
+        if (!_id65FreshDocumentProjectionSynchronized)
+        {
+            _id65FreshObjectManagerStatusText.Text =
+                "The canonical document and loaded fresh-scene presentation are not synchronized. Reload the Lab before changing verified objects.";
+            return;
+        }
+
+        Id65AuthoringEditorControlState state;
+        try
+        {
+            state = Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                _id65FreshAuthoringDocument);
+        }
+        catch (Exception exception) when (
+            exception is InvalidDataException or InvalidOperationException)
+        {
+            Debug.WriteLine(exception);
+            _id65FreshObjectManagerStatusText.Text =
+                "The canonical document is not synchronized with a supported Object Manager state. Reload the Lab before editing objects.";
+            return;
+        }
+
+        if (!state.UsesRemotePadT107Grid)
+        {
+            if (_id65FreshObjectManagerDocumentButton != null)
+                _id65FreshObjectManagerDocumentButton.IsEnabled = canOpenDocument;
+            _id65FreshObjectManagerStatusText.Text =
+                "Legacy document detected. Its historical T107 coordinate belongs to the native apron and is never reinterpreted on the blank pad. The fresh scene shows 0 placed objects until you explicitly migrate it to the remote-pad 3×3 grid.";
+            return;
+        }
+
+        Id65RemotePadGrassT107Position position =
+            Id65RemotePadGrassT107Catalog.GetRequiredPosition(
+                state.T107RemotePadPositionId!);
+        int expectedVisibleCount = state.IncludeGrassAtT107 ? 1 : 0;
+        bool loadedPresentationMatches = _currentMobys.Count == expectedVisibleCount;
+        if (loadedPresentationMatches && expectedVisibleCount == 1)
+        {
+            Moby loaded = _currentMobys[0];
+            loadedPresentationMatches =
+                loaded.TrueIndex == Id65RemotePadGrassT107Catalog.TargetTrueIndex &&
+                loaded.Position == new Vector3f(
+                    position.EditorX,
+                    position.EditorY,
+                    position.EditorZ) &&
+                loaded.OriginalPosition == loaded.Position &&
+                !loaded.HasAnyEdit;
+        }
+        if (!loadedPresentationMatches)
+        {
+            _id65FreshObjectManagerStatusText.Text =
+                "The loaded Moby presentation does not match the synchronized canonical document. Object controls are quarantined; reload the Lab before continuing.";
+            return;
+        }
+        if (_id65FreshObjectManagerDocumentButton != null)
+            _id65FreshObjectManagerDocumentButton.IsEnabled = canOpenDocument;
+        _id65FreshObjectManagerStatusText.Text = state.IncludeGrassAtT107
+            ? $"1 placed object: verified Grass T107 at {position.Label} " +
+              $"({position.EditorX}, {position.EditorY}, {position.EditorZ}). " +
+              "The selected position is retained by the canonical document and shown as a read-only scene presentation."
+            : $"Blank scene: 0 placed objects. The dormant Grass T107 position is " +
+              $"{position.Label} ({position.EditorX}, {position.EditorY}, {position.EditorZ}); " +
+              "it will be retained if Grass is enabled later.";
     }
 
     private void RefreshId65FreshOptionalTerrainUi()
@@ -3136,10 +3478,219 @@ public sealed partial class MainWindow
 
         Id65FreshLevelSceneProjection exactProjection =
             projection ?? Id65FreshLevelSceneProjector.ProjectExact(level);
-        if (exactProjection.VisibleMobyCount != 0)
-            throw new InvalidDataException("The ID65 fresh-level scene projection exposed a visible Moby.");
+        if (exactProjection.VisibleMobyCount is < 0 or > 1 ||
+            exactProjection.VisibleMobyPresentations.Count !=
+                exactProjection.VisibleMobyCount ||
+            exactProjection.VisibleMobyTrueIndexes.Count !=
+                exactProjection.VisibleMobyCount)
+        {
+            throw new InvalidDataException(
+                "The ID65 fresh-level scene projection lost its bounded zero-or-one Moby presentation contract.");
+        }
 
-        return new MobyLoadData([], 0, default);
+        List<Moby> mobys = [];
+        foreach (Id65FreshLevelMobyPresentation presentation in
+                 exactProjection.VisibleMobyPresentations)
+        {
+            Id65RemotePadGrassT107Position expectedPosition;
+            try
+            {
+                expectedPosition = Id65RemotePadGrassT107Catalog.GetRequiredPosition(
+                    presentation.PositionId);
+            }
+            catch (Exception exception) when (
+                exception is ArgumentException or KeyNotFoundException)
+            {
+                throw new InvalidDataException(
+                    "The ID65 fresh-level Moby descriptor names an unknown remote-pad position.",
+                    exception);
+            }
+            if (!presentation.IsPresentationOnly || presentation.IsEditable ||
+                presentation.NativePersistenceEnabled ||
+                presentation.RuntimeObserved ||
+                presentation.RuntimeCandidateAuthorized ||
+                presentation.AuthorizesCreateBin ||
+                presentation.AuthorizesReleasePromotion ||
+                presentation.PlacementId !=
+                    Id65RemotePadGrassT107Catalog.PlacementId ||
+                presentation.TargetTrueIndex !=
+                    Id65RemotePadGrassT107Catalog.TargetTrueIndex ||
+                presentation.ActorId != Id65RemotePadGrassT107Catalog.ActorId ||
+                presentation.YawByte != Id65RemotePadGrassT107Catalog.YawByte ||
+                presentation.SupportHandle !=
+                    Id65RemotePadGrassT107Catalog.SupportHandle ||
+                presentation.SupportCollisionTrueIndex !=
+                    Id65RemotePadGrassT107Catalog.SupportCollisionTrueIndex ||
+                presentation.PositionLabel != expectedPosition.Label ||
+                presentation.EditorX != expectedPosition.EditorX ||
+                presentation.EditorY != expectedPosition.EditorY ||
+                presentation.EditorZ != expectedPosition.EditorZ ||
+                presentation.RawX != expectedPosition.RawX ||
+                presentation.RawY != expectedPosition.RawY ||
+                presentation.RawZ != expectedPosition.RawZ ||
+                presentation.RowSha256 != expectedPosition.RowSha256 ||
+                presentation.DocumentCanonicalSha256 !=
+                    exactProjection.DocumentCanonicalSha256 ||
+                presentation.DocumentContentSha256 !=
+                    exactProjection.DocumentContentSha256)
+            {
+                throw new InvalidDataException(
+                    "The ID65 fresh-level Moby descriptor crossed its presentation-only identity boundary.");
+            }
+
+            Vector3f position = new(
+                presentation.EditorX,
+                presentation.EditorY,
+                presentation.EditorZ);
+            const int renderRadius = 0x20;
+            const int wasDrawn = 0x00;
+            const int actorIdLow = 0xF5;
+            const int actorIdHigh = 0x01;
+            const int specularType = 0x00;
+            const int updateDistance = 0x10;
+            const int dropMobyAndClass = 0xFF;
+            string label = $"Grass (remote pad: {presentation.PositionLabel})";
+            string evidence =
+                $"Position {presentation.PositionId}; editor {presentation.EditorX},{presentation.EditorY},{presentation.EditorZ}; " +
+                $"raw {presentation.RawX},{presentation.RawY},{presentation.RawZ}; support {presentation.SupportHandle}; " +
+                $"row {presentation.RowSha256}; document {presentation.DocumentCanonicalSha256}/{presentation.DocumentContentSha256}; " +
+                $"presentation {presentation.CanonicalSha256}.";
+            mobys.Add(new Moby
+            {
+                Index = 0,
+                TrueIndex = presentation.TargetTrueIndex,
+                LegacyIndex = MobyLoader.GetLegacyAliasIndex(
+                    presentation.TargetTrueIndex),
+                Position = position,
+                OriginalPosition = position,
+                Type = renderRadius,
+                OriginalType = renderRadius,
+                State = wasDrawn,
+                OriginalState = wasDrawn,
+                YawByte = presentation.YawByte,
+                OriginalYawByte = presentation.YawByte,
+                RuntimeAddress = 0,
+                PropertiesPointer = 0x00008138,
+                SpecialDataPointer = 0,
+                SourceByte36 = actorIdLow,
+                OriginalSourceByte36 = actorIdLow,
+                SourceByte37 = actorIdHigh,
+                OriginalSourceByte37 = actorIdHigh,
+                SourceByte4F = specularType,
+                OriginalSourceByte4F = specularType,
+                Flag4A = updateDistance,
+                OriginalFlag4A = updateDistance,
+                Flag4B = dropMobyAndClass,
+                OriginalFlag4B = dropMobyAndClass,
+                Color = Moby.ColorForType(renderRadius),
+                Label = label,
+                OriginalLabel = label,
+                CandidateKind = "Verified remote-pad scenery presentation",
+                OriginalCandidateKind = "Verified remote-pad scenery presentation",
+                Confidence = "static-document-bound",
+                OriginalConfidence = "static-document-bound",
+                Evidence = evidence,
+                OriginalEvidence = evidence,
+                BehaviorNote =
+                    "Read-only fresh-scene presentation; native persistence and runtime acceptance are not implemented.",
+                OriginalBehaviorNote =
+                    "Read-only fresh-scene presentation; native persistence and runtime acceptance are not implemented.",
+                ZoneLabel = presentation.PositionLabel,
+                OriginalZoneLabel = presentation.PositionLabel,
+                PatchStatus = "presentation-only",
+                OriginalPatchStatus = "presentation-only",
+                PatchLead =
+                    "Edit placement through the canonical Full Authoring Document. Generic object mutation and all native writers are blocked.",
+                OriginalPatchLead =
+                    "Edit placement through the canonical Full Authoring Document. Generic object mutation and all native writers are blocked.",
+                IsAdded = false,
+                IsRemoved = false
+            });
+        }
+
+        return new MobyLoadData(mobys, 0, default);
+    }
+
+    private static bool Id65PreparedMobysMatchProjection(
+        IReadOnlyList<Moby> mobys,
+        Id65FreshLevelSceneProjection projection)
+    {
+        ArgumentNullException.ThrowIfNull(mobys);
+        ArgumentNullException.ThrowIfNull(projection);
+        if (mobys.Count != projection.VisibleMobyCount ||
+            projection.VisibleMobyPresentations.Count != mobys.Count)
+        {
+            return false;
+        }
+        if (mobys.Count == 0)
+            return true;
+
+        Id65FreshLevelMobyPresentation presentation =
+            projection.VisibleMobyPresentations.Single();
+        Id65RemotePadGrassT107Position expectedCatalogPosition;
+        try
+        {
+            expectedCatalogPosition =
+                Id65RemotePadGrassT107Catalog.GetRequiredPosition(
+                    presentation.PositionId);
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException or KeyNotFoundException)
+        {
+            return false;
+        }
+        Moby moby = mobys.Single();
+        Vector3f expectedPosition = new(
+            presentation.EditorX,
+            presentation.EditorY,
+            presentation.EditorZ);
+        string expectedLabel =
+            $"Grass (remote pad: {presentation.PositionLabel})";
+        string expectedEvidence =
+            $"Position {presentation.PositionId}; editor {presentation.EditorX},{presentation.EditorY},{presentation.EditorZ}; " +
+            $"raw {presentation.RawX},{presentation.RawY},{presentation.RawZ}; support {presentation.SupportHandle}; " +
+            $"row {presentation.RowSha256}; document {presentation.DocumentCanonicalSha256}/{presentation.DocumentContentSha256}; " +
+            $"presentation {presentation.CanonicalSha256}.";
+        return presentation.PositionLabel == expectedCatalogPosition.Label &&
+            presentation.EditorX == expectedCatalogPosition.EditorX &&
+            presentation.EditorY == expectedCatalogPosition.EditorY &&
+            presentation.EditorZ == expectedCatalogPosition.EditorZ &&
+            presentation.RawX == expectedCatalogPosition.RawX &&
+            presentation.RawY == expectedCatalogPosition.RawY &&
+            presentation.RawZ == expectedCatalogPosition.RawZ &&
+            presentation.RowSha256 == expectedCatalogPosition.RowSha256 &&
+            presentation.DocumentCanonicalSha256 ==
+                projection.DocumentCanonicalSha256 &&
+            presentation.DocumentContentSha256 ==
+                projection.DocumentContentSha256 &&
+            moby.Index == 0 &&
+            moby.TrueIndex == presentation.TargetTrueIndex &&
+            moby.LegacyIndex == MobyLoader.GetLegacyAliasIndex(
+                presentation.TargetTrueIndex) &&
+            moby.Position == expectedPosition &&
+            moby.OriginalPosition == expectedPosition &&
+            moby.Type == 0x20 && moby.OriginalType == 0x20 &&
+            moby.State == 0 && moby.OriginalState == 0 &&
+            moby.YawByte == presentation.YawByte &&
+            moby.OriginalYawByte == presentation.YawByte &&
+            moby.RuntimeAddress == 0 &&
+            moby.PropertiesPointer == 0x00008138 &&
+            moby.SpecialDataPointer == 0 &&
+            moby.SourceByte36 == 0xF5 &&
+            moby.OriginalSourceByte36 == 0xF5 &&
+            moby.SourceByte37 == 0x01 &&
+            moby.OriginalSourceByte37 == 0x01 &&
+            moby.SourceByte4F == 0 &&
+            moby.OriginalSourceByte4F == 0 &&
+            moby.Flag4A == 0x10 &&
+            moby.OriginalFlag4A == 0x10 &&
+            moby.Flag4B == 0xFF &&
+            moby.OriginalFlag4B == 0xFF &&
+            moby.Label == expectedLabel &&
+            moby.OriginalLabel == expectedLabel &&
+            moby.Evidence == expectedEvidence &&
+            moby.OriginalEvidence == expectedEvidence &&
+            !moby.IsAdded && !moby.IsRemoved && !moby.HasAnyEdit;
     }
 
     private bool TryGetValidatedId65BlankLabForLoad(
@@ -3675,7 +4226,7 @@ public sealed partial class MainWindow
         if (Id65BlankLabHasAnyAuthoredArtifacts())
         {
             reason =
-                "Normal Create BIN is blocked because the isolated ID65 lab has authored research artifacts that the retail all-saved-edits writer must neither omit nor include. Inspect the Full Authoring Document and its exact offline candidate path; no ID65 artifact is authorized for normal retail composition, runtime use, or release promotion.";
+                "Normal Create BIN is blocked because the isolated ID65 lab has authored research artifacts that the retail all-saved-edits writer must neither omit nor include. Schema-3 remote-pad documents are static Object Manager state only; only the frozen legacy full-T66 document has a separate exact offline candidate path. No ID65 artifact is authorized for normal retail composition, runtime use, or release promotion.";
             return true;
         }
 
@@ -4375,6 +4926,10 @@ public sealed partial class MainWindow
             _id65BlankLabAuthoringCandidateButton?.IsEnabled == true,
         AuthoringCandidateButtonText:
             _id65BlankLabAuthoringCandidateButton?.Content?.ToString() ?? "",
+        ObjectManagerDocumentEnabled:
+            _id65FreshObjectManagerDocumentButton?.IsEnabled == true,
+        ObjectManagerStatusText:
+            _id65FreshObjectManagerStatusText.Text ?? "",
         SaveEnabled: _id65BlankLabSaveButton?.IsEnabled == true,
         CreateCueEnabled: _id65BlankLabCreateCueButton?.IsEnabled == true,
         RevealEnabled: _id65BlankLabRevealButton?.IsEnabled == true,
@@ -4391,6 +4946,11 @@ public sealed partial class MainWindow
             _id65FreshDocumentProjectionSynchronized,
         LoadedMandatoryBaseFaceTextureId:
             CaptureId65MandatoryBaseFaceTextureIdForTesting(),
+        LoadedUsesRemotePadT107Grid:
+            _id65FreshAuthoringDocument?.UsesRemotePadT107Grid == true,
+        LoadedT107RemotePadPositionId:
+            _id65FreshAuthoringDocument?.T107RemotePadPositionId ?? "",
+        VisibleMobyCount: _currentMobys.Count,
         PrivateT66ViewportProjectionBound:
             _viewport.IsId65FreshLevelT66ViewportTextureProjectionBoundForTesting,
         RepairsInvalidWorkspace: true,
@@ -8065,7 +8625,12 @@ public sealed partial class MainWindow
             left.IncludeStructuralTerrain == right.IncludeStructuralTerrain &&
             left.IncludeGrassAtT88 == right.IncludeGrassAtT88 &&
             left.IncludeGrassAtT107 == right.IncludeGrassAtT107 &&
-            left.MandatoryBaseFaceTextureId == right.MandatoryBaseFaceTextureId;
+            left.MandatoryBaseFaceTextureId == right.MandatoryBaseFaceTextureId &&
+            left.T107PlacementSemantics == right.T107PlacementSemantics &&
+            string.Equals(
+                left.T107RemotePadPositionId,
+                right.T107RemotePadPositionId,
+                StringComparison.Ordinal);
 
         try
         {
@@ -8076,7 +8641,7 @@ public sealed partial class MainWindow
                     dialogCount++;
                     if (exists || !Equivalent(
                             initial,
-                            Id65AuthoringEditorControlState.CreateDefault()))
+                            Id65AuthoringEditorControlState.CreateRemotePadDefault()))
                     {
                         throw new InvalidOperationException(
                             "The missing-document dialog did not receive the exact default state.");
@@ -8101,11 +8666,8 @@ public sealed partial class MainWindow
                         throw new InvalidOperationException(
                             "The first canonical save was not based on an inspected absence.");
                     }
-                    return Task.FromResult<Id65AuthoringEditorControlState?>(new(
-                        initial.IncludeStructuralTerrain,
-                        initial.IncludeGrassAtT88,
-                        initial.IncludeGrassAtT107,
-                        initial.MandatoryBaseFaceTextureId));
+                    return Task.FromResult<Id65AuthoringEditorControlState?>(
+                        Id65AuthoringEditorControlState.CreateDefault());
                 };
             await EditId65AuthoringDocumentAsync();
             Id65AuthoringEditorDocumentReadModel created =
@@ -9137,6 +9699,8 @@ public sealed partial class MainWindow
         string AuthoringDocumentButtonText,
         bool AuthoringCandidateEnabled,
         string AuthoringCandidateButtonText,
+        bool ObjectManagerDocumentEnabled,
+        string ObjectManagerStatusText,
         bool SaveEnabled,
         bool CreateCueEnabled,
         bool RevealEnabled,
@@ -9147,6 +9711,9 @@ public sealed partial class MainWindow
         string OptionalTerrainStatusText,
         bool DocumentProjectionSynchronized,
         int LoadedMandatoryBaseFaceTextureId,
+        bool LoadedUsesRemotePadT107Grid,
+        string LoadedT107RemotePadPositionId,
+        int VisibleMobyCount,
         bool PrivateT66ViewportProjectionBound,
         bool RepairsInvalidWorkspace,
         string DisposableExporterRoute);

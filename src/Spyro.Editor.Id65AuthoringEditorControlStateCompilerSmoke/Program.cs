@@ -44,6 +44,8 @@ Dictionary<string, string> observed = new(StringComparer.Ordinal);
 Id65AuthoringEditorPrivateTextureSwap? invariantTexture = null;
 Id65AuthoringEditorBaselineHandles? invariantBaseline = null;
 int validCompilations = 0;
+int remoteGridStates = 0;
+int remoteGridCompilations = 0;
 int rejectionCount = 0;
 
 foreach (Case item in cases)
@@ -164,6 +166,217 @@ foreach (Case item in cases)
     observed[item.Key] = $"{document.CanonicalSha256}|{document.ContentSha256}";
 }
 
+foreach (Id65RemotePadGrassT107Position position in Id65RemotePadGrassT107Catalog.Positions)
+{
+    foreach (int textureId in new[] { 25, 66 })
+    foreach (bool terrain in new[] { false, true })
+    foreach (bool t88 in new[] { false, true })
+    foreach (bool t107 in new[] { false, true })
+    {
+        Id65AuthoringEditorControlState state =
+            Id65AuthoringEditorControlState.CreateRemotePad(
+                terrain,
+                t88,
+                t107,
+                position.PositionId,
+                textureId);
+        Id65AuthoringEditorControlStateCompilation first =
+            Id65AuthoringEditorControlStateCompiler.Compile(state);
+        Id65AuthoringEditorControlStateCompilation repeat =
+            Id65AuthoringEditorControlStateCompiler.Compile(
+                Id65AuthoringEditorControlState.CreateRemotePad(
+                    terrain,
+                    t88,
+                    t107,
+                    position.PositionId,
+                    textureId));
+        remoteGridStates++;
+        remoteGridCompilations += 2;
+
+        string[] placementIds = RemotePlacementIds(t88, t107).ToArray();
+        Id65AuthoringEditorDocument direct =
+            Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+                position.PositionId,
+                terrain,
+                placementIds,
+                textureId);
+        Id65AuthoringEditorDocument document = first.Document;
+        Id65AuthoringEditorDocument reparsed =
+            Id65AuthoringEditorDocument.Parse(document.SerializeUtf8());
+        Id65AuthoringEditorControlState recovered =
+            Id65AuthoringEditorControlStateCompiler.RecoverExactState(reparsed);
+        Id65AuthoringEditorDocumentEnvelopeIdentity identity = new(
+            document,
+            Hash($"remote-envelope:{position.PositionId}:{textureId}:{terrain}:{t88}:{t107}"),
+            Id65AuthoringEditorDocumentStore.RemotePadGridProjectionContractId,
+            Id65AuthoringCompositeCompiler.ProfileId,
+            Hash($"remote-manifest:{position.PositionId}:{textureId}:{terrain}:{t88}:{t107}"),
+            Hash($"remote-row80:{position.PositionId}:{textureId}:{terrain}:{t88}:{t107}"),
+            Hash($"remote-plan:{position.PositionId}:{textureId}:{terrain}:{t88}:{t107}"));
+        Id65AuthoringEditorControlState recoveredFromReadModel =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                new Id65AuthoringEditorDocumentReadModel(identity));
+        int[] expectedTargets =
+            (t88, t107) switch
+            {
+                (false, false) => [],
+                (true, false) => [88],
+                (false, true) => [107],
+                (true, true) => [88, 107]
+            };
+
+        Require(
+            state.UsesRemotePadT107Grid &&
+            state.T107PlacementSemantics ==
+                Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1 &&
+            state.T107RemotePadPositionId == position.PositionId &&
+            first.State.T107RemotePadPositionId == position.PositionId &&
+            Equivalent(state, first.State) && Equivalent(state, recovered) &&
+            Equivalent(state, recoveredFromReadModel) &&
+            document.SchemaVersion == Id65AuthoringEditorDocument.RemotePadGridSchemaVersion &&
+            document.ProfileId == Id65AuthoringEditorDocument.RemotePadGridDocumentProfileId &&
+            document.UsesRemotePadT107Grid &&
+            document.T107RemotePadPositionId == position.PositionId &&
+            document.MandatoryBaseFaceTextureId == textureId &&
+            document.Terrain.Count == (terrain ? 1 : 0) &&
+            document.MobyPlacements.Select(item => item.TargetTrueIndex)
+                .SequenceEqual(expectedTargets) &&
+            first.MobyTargetTrueIndices.SequenceEqual(expectedTargets) &&
+            document.SerializeUtf8().SequenceEqual(direct.SerializeUtf8()) &&
+            document.SerializeUtf8().SequenceEqual(repeat.Document.SerializeUtf8()) &&
+            document.SerializeUtf8().SequenceEqual(reparsed.SerializeUtf8()),
+            $"Remote-grid control state {position.PositionId}/{textureId}/{terrain}/{t88}/{t107} did not round-trip exactly.");
+
+        if (t107)
+        {
+            Id65AuthoringEditorMobyPlacement placement = document.MobyPlacements.Single(item =>
+                item.TargetTrueIndex == Id65RemotePadGrassT107Catalog.TargetTrueIndex);
+            Require(
+                placement.Id == Id65RemotePadGrassT107Catalog.PlacementId &&
+                placement.RowPolicy == Id65AuthoringEditorDocument.AppendContiguousRowPolicy &&
+                placement.CoordinatePolicy == Id65AuthoringEditorDocument.AuthorExactCoordinatePolicy &&
+                placement.CoordinatesOrDelta == new Id65AuthoringEditorCoordinate(
+                    position.RawX,
+                    position.RawY,
+                    position.RawZ) &&
+                placement.YawByte == Id65RemotePadGrassT107Catalog.YawByte &&
+                placement.SupportHandle == Id65RemotePadGrassT107Catalog.SupportHandle,
+                $"Remote-grid T107 placement {position.PositionId} lost its exact catalog semantics.");
+        }
+        else
+        {
+            Require(
+                document.MobyPlacements.All(item =>
+                    item.Id != Id65RemotePadGrassT107Catalog.PlacementId) &&
+                recovered.T107RemotePadPositionId == position.PositionId,
+                $"Disabled remote-grid T107 did not retain dormant position {position.PositionId}.");
+        }
+        AssertFailClosed(first, $"remote-grid {position.PositionId}");
+    }
+}
+
+Require(
+    remoteGridStates == 9 * 2 * 2 * 2 * 2,
+    "The remote-grid control-state matrix did not exhaust nine positions, two textures, terrain on/off, and all four Grass combinations.");
+
+Id65AuthoringEditorControlState remoteDefault =
+    Id65AuthoringEditorControlState.CreateRemotePadDefault();
+Require(
+    remoteDefault.IncludeStructuralTerrain &&
+    !remoteDefault.IncludeGrassAtT88 &&
+    !remoteDefault.IncludeGrassAtT107 &&
+    remoteDefault.MandatoryBaseFaceTextureId == 66 &&
+    remoteDefault.T107RemotePadPositionId == Id65RemotePadGrassT107Catalog.DefaultPositionId &&
+    remoteDefault.UsesRemotePadT107Grid &&
+    Id65AuthoringEditorControlStateCompiler.Compile(remoteDefault)
+        .MobyTargetTrueIndices.Count == 0,
+    "The genuinely new remote-grid workspace default is not structurally present, Grass-empty, and dormant-Center exact.");
+remoteGridCompilations++;
+
+foreach (Id65RemotePadGrassT107Position position in Id65RemotePadGrassT107Catalog.Positions)
+{
+    Id65AuthoringEditorControlState off = Id65AuthoringEditorControlState.CreateRemotePad(
+        includeStructuralTerrain: true,
+        includeGrassAtT88: false,
+        includeGrassAtT107: false,
+        position.PositionId);
+    Id65AuthoringEditorControlState on = Id65AuthoringEditorControlState.CreateRemotePad(
+        includeStructuralTerrain: true,
+        includeGrassAtT88: false,
+        includeGrassAtT107: true,
+        position.PositionId);
+    Id65AuthoringEditorControlState recoveredOff =
+        Id65AuthoringEditorControlStateCompiler.RecoverExactState(
+            Id65AuthoringEditorControlStateCompiler.Compile(off).Document);
+    Id65AuthoringEditorControlState recoveredOn =
+        Id65AuthoringEditorControlStateCompiler.RecoverExactState(
+            Id65AuthoringEditorControlStateCompiler.Compile(on).Document);
+    remoteGridCompilations += 2;
+    Require(
+        recoveredOff.T107RemotePadPositionId == position.PositionId &&
+        recoveredOn.T107RemotePadPositionId == position.PositionId &&
+        !recoveredOff.IncludeGrassAtT107 && recoveredOn.IncludeGrassAtT107,
+        $"Remote-grid T107 off/on toggling lost retained position {position.PositionId}.");
+}
+
+Id65AuthoringEditorControlState legacyMigrationSource = new(
+    includeStructuralTerrain: false,
+    includeGrassAtT88: false,
+    includeGrassAtT107: true,
+    mandatoryBaseFaceTextureId: 25);
+Id65AuthoringEditorControlState centerMigration =
+    Id65AuthoringEditorControlState.MigrateLegacyToRemotePadGrid(legacyMigrationSource);
+Id65AuthoringEditorControlState exactMigration =
+    Id65AuthoringEditorControlState.MigrateLegacyToRemotePadGrid(
+        legacyMigrationSource,
+        Id65RemotePadGrassT107Catalog.Positions[0].PositionId);
+Id65AuthoringEditorControlStateCompilation centerMigrationCompilation =
+    Id65AuthoringEditorControlStateCompiler.Compile(centerMigration);
+Id65AuthoringEditorControlStateCompilation exactMigrationCompilation =
+    Id65AuthoringEditorControlStateCompiler.Compile(exactMigration);
+remoteGridCompilations += 2;
+Require(
+    centerMigration.UsesRemotePadT107Grid &&
+    centerMigration.T107RemotePadPositionId == Id65RemotePadGrassT107Catalog.DefaultPositionId &&
+    exactMigration.T107RemotePadPositionId ==
+        Id65RemotePadGrassT107Catalog.Positions[0].PositionId &&
+    centerMigration.IncludeStructuralTerrain == legacyMigrationSource.IncludeStructuralTerrain &&
+    centerMigration.IncludeGrassAtT88 == legacyMigrationSource.IncludeGrassAtT88 &&
+    centerMigration.IncludeGrassAtT107 == legacyMigrationSource.IncludeGrassAtT107 &&
+    centerMigration.MandatoryBaseFaceTextureId ==
+        legacyMigrationSource.MandatoryBaseFaceTextureId &&
+    centerMigrationCompilation.Document.SchemaVersion ==
+        Id65AuthoringEditorDocument.RemotePadGridSchemaVersion &&
+    centerMigrationCompilation.Document.MobyPlacements.Single().CoordinatesOrDelta ==
+        new Id65AuthoringEditorCoordinate(
+            Id65RemotePadGrassT107Catalog.DefaultPosition.RawX,
+            Id65RemotePadGrassT107Catalog.DefaultPosition.RawY,
+            Id65RemotePadGrassT107Catalog.DefaultPosition.RawZ) &&
+    exactMigrationCompilation.Document.MobyPlacements.Single().CoordinatesOrDelta ==
+        new Id65AuthoringEditorCoordinate(
+            Id65RemotePadGrassT107Catalog.Positions[0].RawX,
+            Id65RemotePadGrassT107Catalog.Positions[0].RawY,
+            Id65RemotePadGrassT107Catalog.Positions[0].RawZ) &&
+    !legacyMigrationSource.UsesRemotePadT107Grid &&
+    legacyMigrationSource.T107RemotePadPositionId is null,
+    "Explicit legacy migration did not preserve choices or require the remote-grid semantic boundary.");
+ExpectReject<InvalidOperationException>(
+    "remote-grid remigration",
+    () => Id65AuthoringEditorControlState.MigrateLegacyToRemotePadGrid(remoteDefault));
+rejectionCount++;
+ExpectReject<ArgumentNullException>(
+    "null remote-grid position",
+    () => Id65AuthoringEditorControlState.CreateRemotePad(true, false, false, null!));
+rejectionCount++;
+ExpectReject<KeyNotFoundException>(
+    "unknown remote-grid position",
+    () => Id65AuthoringEditorControlState.CreateRemotePad(
+        true,
+        false,
+        false,
+        "remote-pad-grid.x999-y999"));
+rejectionCount++;
+
 Task<Id65AuthoringEditorControlStateCompilation>[] parallel = Enumerable.Range(0, 12)
     .Select(_ => Task.Run(() => Id65AuthoringEditorControlStateCompiler.Compile(
         Id65AuthoringEditorControlState.CreateDefault())))
@@ -214,7 +427,9 @@ Console.WriteLine(
     $"ID65_AUTHORING_EDITOR_CONTROL_STATE_COMPILER_SMOKE_HASHES {string.Join(' ', observed.Select(item => $"{item.Key}={item.Value}"))}");
 Console.WriteLine(
     $"ID65_AUTHORING_EDITOR_CONTROL_STATE_COMPILER_SMOKE_OK states={cases.Length} " +
-    $"compilations={validCompilations + parallelResults.Length} rejects={rejectionCount} " +
+    $"legacyCompilations={validCompilations + parallelResults.Length} " +
+    $"remoteGridStates={remoteGridStates} remoteGridCompilations={remoteGridCompilations} " +
+    $"rejects={rejectionCount} migrations=2 " +
     "path-free exact document translation/recovery passed without native derivation, persistence, or App/UI/Create-BIN/runtime/release authority.");
 
 static IEnumerable<string> PlacementIds(Case item)
@@ -225,13 +440,26 @@ static IEnumerable<string> PlacementIds(Case item)
         yield return Id65AuthoringMobyDependencyBundleCompiler.T88PlacementId;
 }
 
+static IEnumerable<string> RemotePlacementIds(bool t88, bool t107)
+{
+    if (t107)
+        yield return Id65RemotePadGrassT107Catalog.PlacementId;
+    if (t88)
+        yield return Id65AuthoringMobyDependencyBundleCompiler.T88PlacementId;
+}
+
 static bool Equivalent(
     Id65AuthoringEditorControlState left,
     Id65AuthoringEditorControlState right) =>
     left.IncludeStructuralTerrain == right.IncludeStructuralTerrain &&
     left.IncludeGrassAtT88 == right.IncludeGrassAtT88 &&
     left.IncludeGrassAtT107 == right.IncludeGrassAtT107 &&
-    left.MandatoryBaseFaceTextureId == right.MandatoryBaseFaceTextureId;
+    left.MandatoryBaseFaceTextureId == right.MandatoryBaseFaceTextureId &&
+    left.T107PlacementSemantics == right.T107PlacementSemantics &&
+    string.Equals(
+        left.T107RemotePadPositionId,
+        right.T107RemotePadPositionId,
+        StringComparison.Ordinal);
 
 static void AssertFailClosed(
     Id65AuthoringEditorControlStateCompilation result,
@@ -259,8 +487,8 @@ static void AssertPublicSurface()
     PropertyInfo[] properties = state.GetProperties(
         BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
     Require(
-        state.IsPublic && state.IsSealed && properties.Length == 4 &&
-        properties.Count(property => property.PropertyType == typeof(bool)) == 3 &&
+        state.IsPublic && state.IsSealed && properties.Length == 7 &&
+        properties.Count(property => property.PropertyType == typeof(bool)) == 4 &&
         properties.Count(property => property.PropertyType == typeof(int)) == 1 &&
         properties.Select(property => property.Name).Order(StringComparer.Ordinal).SequenceEqual(
             new[]
@@ -268,10 +496,13 @@ static void AssertPublicSurface()
                 "IncludeGrassAtT107",
                 "IncludeGrassAtT88",
                 "IncludeStructuralTerrain",
-                "MandatoryBaseFaceTextureId"
+                "MandatoryBaseFaceTextureId",
+                "T107PlacementSemantics",
+                "T107RemotePadPositionId",
+                "UsesRemotePadT107Grid"
             }.Order(StringComparer.Ordinal)) &&
         properties.All(property => !property.CanWrite),
-        "The public control state is not exactly three immutable choices plus the exact texture selector.");
+        "The public control state lost its immutable choices, exact texture selector, or explicit T107 semantics.");
     ConstructorInfo[] constructors = state.GetConstructors(
         BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
     Require(
@@ -279,6 +510,32 @@ static void AssertPublicSurface()
         constructors[0].GetParameters().Select(parameter => parameter.ParameterType)
             .SequenceEqual([typeof(bool), typeof(bool), typeof(bool), typeof(int)]),
         "The public control state constructor lost its exact four-choice contract.");
+    MethodInfo[] stateFactories = state.GetMethods(
+            BindingFlags.Static | BindingFlags.Public | BindingFlags.DeclaredOnly)
+        .OrderBy(method => method.Name, StringComparer.Ordinal)
+        .ToArray();
+    Require(
+        stateFactories.Length == 4 &&
+        stateFactories.Select(method => method.Name).SequenceEqual(
+            new[]
+            {
+                "CreateDefault",
+                "CreateRemotePad",
+                "CreateRemotePadDefault",
+                "MigrateLegacyToRemotePadGrid"
+            }.Order(StringComparer.Ordinal)) &&
+        stateFactories.All(method =>
+            method.ReturnType == typeof(Id65AuthoringEditorControlState)),
+        "The control state lost its legacy default, explicit remote factory/default, or one-way migration surface.");
+    Require(
+        Enum.GetValues<Id65AuthoringEditorT107PlacementSemantics>().SequenceEqual(
+            [
+                Id65AuthoringEditorT107PlacementSemantics.LegacyNativeApronV1,
+                Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1
+            ]) &&
+        Id65AuthoringEditorControlState.SchemaVersion == 1 &&
+        Id65AuthoringEditorControlState.RemotePadGridSchemaVersion == 2,
+        "The exact legacy/remote control-state schema discriminator changed.");
 
     MethodInfo[] compilerMethods = typeof(Id65AuthoringEditorControlStateCompiler).GetMethods(
             BindingFlags.Static | BindingFlags.Public | BindingFlags.DeclaredOnly)

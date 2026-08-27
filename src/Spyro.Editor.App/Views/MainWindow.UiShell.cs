@@ -54,6 +54,7 @@ public sealed partial class MainWindow
     private Button? _modernViewportActionButton;
     private TabControl? _modernWorkspaceTabs;
     private TabItem? _modernObjectWorkspaceTab;
+    private TabItem? _modernLevelBuildingObjectWorkspaceTab;
     private TabItem? _modernTerrainWorkspaceTab;
     private TabItem? _modernLevelWorkspaceTab;
     private TabItem? _modernEnvironmentWorkspaceTab;
@@ -366,7 +367,7 @@ public sealed partial class MainWindow
         };
         ToolTip.SetTip(
             _editorWorkspaceIndicator,
-            "Fresh blank-level authoring: build terrain, textures, level settings, and environment in one dedicated editor.");
+            "Fresh blank-level authoring: manage verified objects, terrain, textures, level settings, and environment in one dedicated editor.");
         return _editorWorkspaceIndicator;
     }
 
@@ -484,6 +485,9 @@ public sealed partial class MainWindow
         _modernObjectWorkspaceTab = NewModernWorkspaceTab(
             "Objects",
             BuildModernObjectWorkspace());
+        _modernLevelBuildingObjectWorkspaceTab = NewModernWorkspaceTab(
+            "Object Manager",
+            BuildId65LevelBuildingObjectManager());
 
         _modernTerrainWorkspaceTab = NewModernWorkspaceTab(
             "Terrain",
@@ -501,6 +505,7 @@ public sealed partial class MainWindow
         ];
         List<TabItem> levelBuildingItems =
         [
+            _modernLevelBuildingObjectWorkspaceTab,
             _modernTerrainWorkspaceTab,
             _modernLevelWorkspaceTab,
             _modernEnvironmentWorkspaceTab
@@ -516,7 +521,7 @@ public sealed partial class MainWindow
         _existingLevelEditorTabs = existingLevelItems;
         _levelBuildingWorkspaceTabs = levelBuildingItems;
         _lastExistingLevelEditorTab = _modernObjectWorkspaceTab;
-        _lastLevelBuildingWorkspaceTab = _modernTerrainWorkspaceTab;
+        _lastLevelBuildingWorkspaceTab = _modernLevelBuildingObjectWorkspaceTab;
 
         _modernWorkspaceTabs = new TabControl
         {

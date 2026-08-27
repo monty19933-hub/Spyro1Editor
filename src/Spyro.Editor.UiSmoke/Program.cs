@@ -1054,8 +1054,8 @@ void RunId65BlankLabUiOnly()
             !initial.CapabilityText.Contains("T25 is offline-authoring/viewport-only", StringComparison.Ordinal) ||
             !initial.CapabilityText.Contains("cannot create a candidate, BIN, runtime, or release artifact", StringComparison.Ordinal) ||
             !initial.CapabilityText.Contains("Arbitrary cross-level/custom art remains unavailable", StringComparison.Ordinal) ||
-            !initial.CapabilityText.Contains("Grass placements at T88 and T107", StringComparison.Ordinal) ||
-            !initial.CapabilityText.Contains("Other resident records remain inspection-only", StringComparison.Ordinal))
+            !initial.CapabilityText.Contains("one verified Grass T107 bundle at one of nine fixed positions", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("static authoring/presentation only until physical runtime acceptance", StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 $"The clean public ID65 Lab state is not exact/fail-closed: {initial}");
@@ -1223,12 +1223,105 @@ void RunId65BlankLabUiOnly()
             label: "loaded ID65 Lab without a canonical document");
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Terrain", "Level", "Environment"],
+            ["Object Manager", "Terrain", "Level", "Environment"],
             "loaded fresh blank-level editor");
-        if (window.GetLogicalDescendants().OfType<Button>().Any(button =>
-                string.Equals(button.Content?.ToString(), "Object Manager", StringComparison.Ordinal)))
+        Button freshObjectManagerButton = FindNamedUnique<Button>(
+            window,
+            "Id65FreshObjectManagerDocumentButton");
+        if (!freshObjectManagerButton.IsEffectivelyVisible ||
+            !freshObjectManagerButton.IsEnabled)
         {
-            throw new InvalidOperationException("The loaded fresh blank level exposed Object Manager.");
+            throw new InvalidOperationException(
+                "The loaded fresh blank level did not expose its enabled, dedicated Object Manager route.");
+        }
+        string absentDocumentPath = Path.Combine(
+            paths.AuthoredEditsDirectoryPath,
+            Id65AuthoringEditorDocumentWorkspaceInspector.DocumentFileName);
+        EditorShellSessionSnapshot absentDefaultSceneBefore =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        Window absentDefaultDialog = OpenAsyncDialog(
+            window,
+            freshObjectManagerButton,
+            "ID65 Full Authoring Document",
+            "ID65 fresh remote-pad default dialog");
+        CheckBox absentTerrain = FindNamedUnique<CheckBox>(
+            absentDefaultDialog,
+            "Id65AuthoringStructuralTerrainBox");
+        CheckBox absentT88 = FindNamedUnique<CheckBox>(
+            absentDefaultDialog,
+            "Id65AuthoringGrassT88Box");
+        CheckBox absentT107 = FindNamedUnique<CheckBox>(
+            absentDefaultDialog,
+            "Id65AuthoringGrassT107Box");
+        ComboBox absentPosition = FindNamedUnique<ComboBox>(
+            absentDefaultDialog,
+            "Id65AuthoringGrassT107RemotePadPositionSelector");
+        Button absentMigration = FindNamedUnique<Button>(
+            absentDefaultDialog,
+            "Id65AuthoringGrassT107MigrationButton");
+        TextBlock absentPreview = FindNamedUnique<TextBlock>(
+            absentDefaultDialog,
+            "Id65AuthoringExactPreviewText");
+        Button absentSave = FindNamedUnique<Button>(
+            absentDefaultDialog,
+            "Id65AuthoringSaveButton");
+        object[] absentPositions = ReadItemsSource(
+            absentPosition,
+            "fresh remote-pad default selector");
+        if (File.Exists(absentDocumentPath) ||
+            absentTerrain.IsChecked != true ||
+            absentT88.IsChecked == true || absentT107.IsChecked == true ||
+            !absentPosition.IsEnabled ||
+            absentPosition.SelectedItem?.ToString() != "Center" ||
+            absentMigration.IsEffectivelyVisible ||
+            absentPositions.Length != 9 ||
+            !absentSave.IsEnabled ||
+            !(absentPreview.Text ?? "").Contains(
+                "Grass targets none",
+                StringComparison.Ordinal) ||
+            !(absentPreview.Text ?? "").Contains(
+                "remote-pad position Center",
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "A missing document did not open as the exact blank schema-3 default: structural terrain, no Grass, dormant Center, and no migration control.");
+        }
+        absentPosition.SelectedItem = absentPositions.Single(item =>
+            string.Equals(item.ToString(), "Bottom right", StringComparison.Ordinal));
+        absentT107.IsChecked = true;
+        FlushUi();
+        if (!(absentPreview.Text ?? "").Contains(
+                "remote-pad position Bottom right",
+                StringComparison.Ordinal) ||
+            File.Exists(absentDocumentPath) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
+                absentDefaultSceneBefore.CurrentGeometry) ||
+            window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys.Count != 0)
+        {
+            throw new InvalidOperationException(
+                "Changing the missing-document remote-pad preview wrote a document or changed the loaded blank scene before Apply/Save.");
+        }
+        Button absentCancel = absentDefaultDialog.GetLogicalDescendants()
+            .OfType<Button>()
+            .Single(button => string.Equals(
+                button.Content?.ToString(),
+                "Cancel",
+                StringComparison.Ordinal));
+        absentCancel.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, absentCancel));
+        WaitForDialogToClose(
+            window,
+            absentDefaultDialog,
+            "ID65 fresh remote-pad default dialog");
+        if (File.Exists(absentDocumentPath) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
+                absentDefaultSceneBefore.CurrentGeometry) ||
+            window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys.Count != 0)
+        {
+            throw new InvalidOperationException(
+                "Canceling the missing-document remote-pad preview changed disk or scene state.");
         }
         AssertNoWholeLevelWipeAction(window);
 
@@ -1341,13 +1434,14 @@ void RunId65BlankLabUiOnly()
             label: "returned ID65 Lab without a canonical document");
         AssertWorkspaceTabHeaders(
             toolTabs,
-            ["Terrain", "Level", "Environment"],
+            ["Object Manager", "Terrain", "Level", "Environment"],
             "returned real ID65 blank-level editor");
-        if (window.GetLogicalDescendants().OfType<Button>().Any(button =>
-                string.Equals(button.Content?.ToString(), "Object Manager", StringComparison.Ordinal)))
+        if (!FindNamedUnique<Button>(
+                window,
+                "Id65FreshObjectManagerDocumentButton").IsEnabled)
         {
             throw new InvalidOperationException(
-                "The returned real ID65 Lab exposed Object Manager.");
+                "The returned real ID65 Lab did not restore its dedicated Object Manager route.");
         }
         AssertNoWholeLevelWipeAction(window);
         SortedDictionary<string, string> routingArtifactsAfter =
@@ -1874,6 +1968,383 @@ void RunId65BlankLabUiOnly()
             CaptureTerrainProjectInputHashes(workspace, retailRoundTrip.Key),
             "Both ID65 optional-terrain button cycles changed retail project persistence");
 
+        Console.WriteLine("ID65 UI smoke: starting explicit remote-pad Object Manager migration probe.");
+        byte[] legacyDocumentBeforeRemoteMigration =
+            File.ReadAllBytes(authoringDocumentPath);
+        GeometryCandidate legacyGeometryBeforeRemoteMigration =
+            window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry ??
+            throw new InvalidOperationException(
+                "The remote-pad migration probe lost the legacy viewport geometry.");
+        string[] candidateOutputsBeforeRemoteMigration = Directory.Exists(candidateOutputRoot)
+            ? Directory.GetFiles(candidateOutputRoot, "*", SearchOption.AllDirectories)
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .Select(path =>
+                    $"{Path.GetRelativePath(candidateOutputRoot, path)}:" +
+                    Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                        File.ReadAllBytes(path))))
+                .ToArray()
+            : [];
+        SelectWorkspaceTab(window, "Object Manager");
+        Button objectManagerDocumentButton = FindNamedUnique<Button>(
+            window,
+            "Id65FreshObjectManagerDocumentButton");
+        if (!objectManagerDocumentButton.IsEffectivelyVisible ||
+            !objectManagerDocumentButton.IsEnabled)
+        {
+            throw new InvalidOperationException(
+                "The fresh-only Object Manager did not expose its canonical document action.");
+        }
+        Window migrationDialog = OpenAsyncDialog(
+            window,
+            objectManagerDocumentButton,
+            "ID65 Full Authoring Document",
+            "ID65 legacy-to-remote-pad migration dialog");
+        ComboBox remotePositionSelector = FindNamedUnique<ComboBox>(
+            migrationDialog,
+            "Id65AuthoringGrassT107RemotePadPositionSelector");
+        Button migrateT107 = FindNamedUnique<Button>(
+            migrationDialog,
+            "Id65AuthoringGrassT107MigrationButton");
+        TextBlock semanticsNotice = FindNamedUnique<TextBlock>(
+            migrationDialog,
+            "Id65AuthoringGrassT107SemanticsNotice");
+        TextBlock migrationPreview = FindNamedUnique<TextBlock>(
+            migrationDialog,
+            "Id65AuthoringExactPreviewText");
+        CheckBox migrationT107 = FindNamedUnique<CheckBox>(
+            migrationDialog,
+            "Id65AuthoringGrassT107Box");
+        Button migrationSave = FindNamedUnique<Button>(
+            migrationDialog,
+            "Id65AuthoringSaveButton");
+        object[] remotePositions = ReadItemsSource(
+            remotePositionSelector,
+            "ID65 remote-pad T107 selector");
+        if (remotePositions.Length != 9 ||
+            remotePositionSelector.IsEnabled ||
+            !migrateT107.IsEffectivelyVisible ||
+            migrationT107.IsChecked != true ||
+            !(semanticsNotice.Text ?? "").Contains(
+                "native-apron",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The legacy document did not open with its historical T107 semantics explicit and the remote 3x3 selector disabled.");
+        }
+
+        migrateT107.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, migrateT107));
+        FlushUi();
+        if (!remotePositionSelector.IsEnabled || migrateT107.IsEffectivelyVisible ||
+            remotePositionSelector.SelectedItem?.ToString() != "Center" ||
+            !(migrationPreview.Text ?? "").Contains(
+                "remote-pad position Center",
+                StringComparison.OrdinalIgnoreCase) ||
+            !File.ReadAllBytes(authoringDocumentPath)
+                .SequenceEqual(legacyDocumentBeforeRemoteMigration) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
+                legacyGeometryBeforeRemoteMigration))
+        {
+            throw new InvalidOperationException(
+                "The explicit legacy-to-remote migration preview changed disk/viewport state or failed to choose the exact Center transiently.");
+        }
+
+        object bottomRight = remotePositions.Single(item =>
+            string.Equals(item.ToString(), "Bottom right", StringComparison.Ordinal));
+        remotePositionSelector.SelectedItem = bottomRight;
+        FlushUi();
+        if (!(migrationPreview.Text ?? "").Contains(
+                "remote-pad position Bottom right",
+                StringComparison.OrdinalIgnoreCase) ||
+            !migrationSave.IsEnabled)
+        {
+            throw new InvalidOperationException(
+                "The remote-pad selector did not preview the exact Bottom right placement.");
+        }
+        migrationSave.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, migrationSave));
+        WaitForDialogToClose(
+            window,
+            migrationDialog,
+            "ID65 legacy-to-remote-pad migration dialog");
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.DocumentProjectionSynchronized &&
+                    snapshot.LoadedUsesRemotePadT107Grid &&
+                    snapshot.LoadedT107RemotePadPositionId ==
+                        Id65RemotePadGrassT107Catalog.SouthEastPositionId &&
+                    snapshot.VisibleMobyCount == 1;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "saving and projecting the explicit Bottom right remote-pad migration");
+
+        Task<Id65AuthoringEditorDocumentReadModel?> migratedDocumentTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(
+            migratedDocumentTask,
+            "re-inspecting the explicitly migrated remote-pad document");
+        Id65AuthoringEditorDocumentReadModel migratedDocument =
+            migratedDocumentTask.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "The explicit remote-pad migration lost its canonical document.");
+        Id65AuthoringEditorControlState migratedState =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                migratedDocument);
+        EditorShellSessionSnapshot migratedLab =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        Id65FreshLevelSceneProjection migratedProjection =
+            Id65FreshLevelSceneProjector.ProjectExact(
+                migratedLab.CurrentLevel ?? throw new InvalidOperationException(
+                    "The migrated remote-pad scene lost its exact level identity."),
+                migratedDocument);
+        Id65FreshLevelMobyPresentation migratedPresentation =
+            migratedProjection.VisibleMobyPresentations.SingleOrDefault() ??
+            throw new InvalidOperationException(
+                "The migrated remote-pad projection did not expose its one immutable presentation descriptor.");
+        Moby migratedGrass = migratedLab.CurrentMobys.SingleOrDefault() ??
+            throw new InvalidOperationException(
+                "The migrated remote-pad document did not project one Grass presentation.");
+        MainWindow.Id65BlankLabUiSnapshot migratedUi =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        if (!migratedState.UsesRemotePadT107Grid ||
+            !migratedState.IncludeGrassAtT107 ||
+            migratedState.T107RemotePadPositionId !=
+                Id65RemotePadGrassT107Catalog.SouthEastPositionId ||
+            migratedPresentation.PositionId !=
+                Id65RemotePadGrassT107Catalog.SouthEastPositionId ||
+            migratedPresentation.PositionLabel != "Bottom right" ||
+            migratedPresentation.EditorX != 400 ||
+            migratedPresentation.EditorY != 368 ||
+            migratedPresentation.EditorZ != 512 ||
+            migratedPresentation.RawX != 6400 ||
+            migratedPresentation.RawY != 5888 ||
+            migratedPresentation.RawZ != 8192 ||
+            migratedPresentation.RowSha256 !=
+                "d49fcb12e028a843e3802084a03228486d451e6786a209f4ca08b5f8a9987451" ||
+            migratedPresentation.DocumentCanonicalSha256 !=
+                migratedDocument.DocumentCanonicalSha256 ||
+            migratedPresentation.DocumentContentSha256 !=
+                migratedDocument.DocumentContentSha256 ||
+            migratedGrass.TrueIndex != Id65RemotePadGrassT107Catalog.TargetTrueIndex ||
+            migratedGrass.Position != new Vector3f(400, 368, 512) ||
+            migratedGrass.OriginalPosition != migratedGrass.Position ||
+            migratedGrass.PropertiesPointer != 0x8138 ||
+            migratedGrass.SourceByte36 != 0xF5 ||
+            migratedGrass.SourceByte37 != 0x01 ||
+            migratedGrass.YawByte != Id65RemotePadGrassT107Catalog.YawByte ||
+            migratedGrass.Label != "Grass (remote pad: Bottom right)" ||
+            !migratedGrass.Evidence.Contains(
+                migratedPresentation.PositionId,
+                StringComparison.Ordinal) ||
+            !migratedGrass.Evidence.Contains(
+                migratedPresentation.RowSha256,
+                StringComparison.Ordinal) ||
+            !migratedGrass.Evidence.Contains(
+                migratedPresentation.DocumentCanonicalSha256,
+                StringComparison.Ordinal) ||
+            !migratedGrass.Evidence.Contains(
+                migratedPresentation.DocumentContentSha256,
+                StringComparison.Ordinal) ||
+            !migratedGrass.Evidence.Contains(
+                migratedPresentation.CanonicalSha256,
+                StringComparison.Ordinal) ||
+            migratedGrass.HasAnyEdit ||
+            migratedUi.AuthoringCandidateEnabled ||
+            migratedUi.RevealEnabled ||
+            !migratedUi.AuthoringCandidateButtonText.Contains(
+                "Unavailable for Remote-Pad Grid",
+                StringComparison.Ordinal) ||
+            !migratedUi.ObjectManagerStatusText.Contains(
+                "1 placed object",
+                StringComparison.Ordinal) ||
+            !migratedUi.ObjectManagerStatusText.Contains(
+                "Bottom right",
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"The explicit remote-pad migration lost its document, presentation, Object Manager, or fail-closed candidate boundary: {migratedUi}");
+        }
+
+        migratedGrass.Position = new Vector3f(416, 368, 512);
+        InvokePrivateVoid(window, "RefreshId65FreshObjectManagerUi");
+        MainWindow.Id65BlankLabUiSnapshot quarantinedObjectManagerUi =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        if (quarantinedObjectManagerUi.ObjectManagerDocumentEnabled ||
+            !quarantinedObjectManagerUi.ObjectManagerStatusText.Contains(
+                "quarantined",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "A mismatched remote-pad Moby presentation reported quarantine without disabling the Object Manager document control.");
+        }
+        migratedGrass.Position = migratedGrass.OriginalPosition;
+        InvokePrivateVoid(window, "RefreshId65FreshObjectManagerUi");
+        MainWindow.Id65BlankLabUiSnapshot restoredObjectManagerUi =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        if (!restoredObjectManagerUi.ObjectManagerDocumentEnabled ||
+            !restoredObjectManagerUi.ObjectManagerStatusText.Contains(
+                "1 placed object",
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Restoring the exact remote-pad Moby presentation did not reopen its Object Manager document control.");
+        }
+
+        byte[] remoteDocumentBeforeBlockedMutations =
+            File.ReadAllBytes(authoringDocumentPath);
+        string remoteMobySignatureBeforeBlockedMutations =
+            migratedLab.CurrentMobyEditSignature;
+        migratedLab.Viewport.SelectMoby(migratedGrass, focus: false);
+        FlushUi();
+        Task blockedRemoteEdit = InvokePrivate<Task>(
+            window,
+            "EditMobyAsync",
+            migratedGrass);
+        WaitForUiTask(
+            blockedRemoteEdit,
+            "refusing generic edit of the remote-pad Moby presentation");
+        Task blockedRemotePaste = InvokePrivate<Task>(
+            window,
+            "PasteMobyClipboardAtViewportAsync",
+            migratedLab.Viewport.LastPointerPosition);
+        WaitForUiTask(
+            blockedRemotePaste,
+            "refusing generic paste into the remote-pad Object Manager");
+        InvokePrivateVoid(
+            window,
+            "MoveMobyFromViewport",
+            new MobyMoveRequestedEventArgs(migratedGrass, 16, 0, 0));
+        InvokePrivateVoid(
+            window,
+            "RotateMobyFromViewport",
+            new MobyRotateRequestedEventArgs(
+                migratedGrass,
+                migratedGrass.YawByte + 1));
+        InvokePrivateVoid(window, "RemoveSelectedMoby");
+        EditorShellSessionSnapshot afterBlockedRemoteMutations =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        if (afterBlockedRemoteMutations.CurrentMobys.Count != 1 ||
+            !ReferenceEquals(
+                afterBlockedRemoteMutations.CurrentMobys[0],
+                migratedGrass) ||
+            migratedGrass.Position != new Vector3f(400, 368, 512) ||
+            migratedGrass.YawByte != Id65RemotePadGrassT107Catalog.YawByte ||
+            migratedGrass.IsRemoved || migratedGrass.HasAnyEdit ||
+            afterBlockedRemoteMutations.CurrentMobyEditSignature !=
+                remoteMobySignatureBeforeBlockedMutations ||
+            !File.ReadAllBytes(authoringDocumentPath)
+                .SequenceEqual(remoteDocumentBeforeBlockedMutations))
+        {
+            throw new InvalidOperationException(
+                "Generic edit/paste/move/rotate/remove mutated the read-only remote-pad Moby presentation or its canonical document.");
+        }
+
+        int remoteCandidateCalls = 0;
+        window.Id65AuthoringCandidateMaterializerOverrideForTesting = (_, _, _) =>
+        {
+            remoteCandidateCalls++;
+            throw new InvalidOperationException(
+                "A schema-3 remote-pad document must refuse before materialization.");
+        };
+        try
+        {
+            Task remoteCandidate = InvokePrivate<Task>(
+                window,
+                "CreateId65AuthoringAggregateCandidateAsync");
+            WaitForUiTask(
+                remoteCandidate,
+                "refusing a schema-3 remote-pad candidate before materialization",
+                timeoutSeconds: 30);
+        }
+        finally
+        {
+            window.Id65AuthoringCandidateMaterializerOverrideForTesting = null;
+        }
+        string[] candidateOutputsAfterRemoteRefusal = Directory.Exists(candidateOutputRoot)
+            ? Directory.GetFiles(candidateOutputRoot, "*", SearchOption.AllDirectories)
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .Select(path =>
+                    $"{Path.GetRelativePath(candidateOutputRoot, path)}:" +
+                    Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                        File.ReadAllBytes(path))))
+                .ToArray()
+            : [];
+        if (remoteCandidateCalls != 0 ||
+            !candidateOutputsAfterRemoteRefusal.SequenceEqual(
+                candidateOutputsBeforeRemoteMigration,
+                StringComparer.Ordinal) ||
+            !(id65Status.Text ?? "").Contains(
+                "static authoring/presentation",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The schema-3 remote-pad candidate refusal reached the materializer, changed candidate outputs, or lost its truthful status.");
+        }
+
+        Window dormantDialog = OpenAsyncDialog(
+            window,
+            objectManagerDocumentButton,
+            "ID65 Full Authoring Document",
+            "ID65 remote-pad dormant-position dialog");
+        ComboBox dormantPositionSelector = FindNamedUnique<ComboBox>(
+            dormantDialog,
+            "Id65AuthoringGrassT107RemotePadPositionSelector");
+        CheckBox dormantT107 = FindNamedUnique<CheckBox>(
+            dormantDialog,
+            "Id65AuthoringGrassT107Box");
+        Button dormantSave = FindNamedUnique<Button>(
+            dormantDialog,
+            "Id65AuthoringSaveButton");
+        Button dormantMigration = FindNamedUnique<Button>(
+            dormantDialog,
+            "Id65AuthoringGrassT107MigrationButton");
+        if (!dormantPositionSelector.IsEnabled ||
+            dormantPositionSelector.SelectedItem?.ToString() != "Bottom right" ||
+            dormantMigration.IsEffectivelyVisible ||
+            dormantT107.IsChecked != true)
+        {
+            throw new InvalidOperationException(
+                "The migrated schema-3 document did not reopen directly in its retained Bottom right remote-pad state.");
+        }
+        dormantT107.IsChecked = false;
+        FlushUi();
+        dormantSave.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, dormantSave));
+        WaitForDialogToClose(
+            window,
+            dormantDialog,
+            "ID65 remote-pad dormant-position dialog");
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.DocumentProjectionSynchronized &&
+                    snapshot.LoadedUsesRemotePadT107Grid &&
+                    snapshot.LoadedT107RemotePadPositionId ==
+                        Id65RemotePadGrassT107Catalog.SouthEastPositionId &&
+                    snapshot.VisibleMobyCount == 0;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "saving the dormant remote-pad position with Grass omitted");
+        MainWindow.Id65BlankLabUiSnapshot dormantUi =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        if (!dormantUi.ObjectManagerStatusText.Contains(
+                "Blank scene: 0 placed objects",
+                StringComparison.Ordinal) ||
+            !dormantUi.ObjectManagerStatusText.Contains(
+                "Bottom right",
+                StringComparison.Ordinal) ||
+            dormantUi.AuthoringCandidateEnabled || dormantUi.RevealEnabled)
+        {
+            throw new InvalidOperationException(
+                "Turning off schema-3 Grass did not retain its dormant Bottom right choice or fail-closed candidate/reveal state.");
+        }
+
         Console.WriteLine("ID65 UI smoke: starting workspace-transition fence probe.");
         Task<string> workspaceTransitionTask =
             window.AssertWorkspaceTransitionFencingForTestingAsync();
@@ -1901,7 +2372,7 @@ void RunId65BlankLabUiOnly()
 
         Console.WriteLine(
             "ID65 Blank-Level Lab public UI smoke passed: clean 35-level startup, visible narrow disclosure, exact named Resident T25 / Proved private T66 selector with null refusal, selection-change preview/no-write and explicit Apply/Save, neutral reveal label, explicit repair contract, Core atomic-export route with 128 unique keys, hidden broad Research tab, and exact-manifest 35+1 in-memory admission passed; " +
-            $"isolated locked workspace bootstrap: exact and source-preserving; mutation guards: {mutationGuards}; stale continuations: {staleContinuations}; transition guards: {transitionGuards}; resident textures: {residentTexture}; canonical document guard: {canonicalDocumentGuard}; reverse persistence: {reversePersistence}; operation fence: {operationFence}; workspace transition: {workspaceTransition}; full authoring editor: {authoringEditor}.");
+            $"isolated locked workspace bootstrap: exact and source-preserving; mutation guards: {mutationGuards}; stale continuations: {staleContinuations}; transition guards: {transitionGuards}; resident textures: {residentTexture}; canonical document guard: {canonicalDocumentGuard}; reverse persistence: {reversePersistence}; operation fence: {operationFence}; remote Object Manager: explicit legacy-to-grid migration, exact Bottom right 0/1 presentation, mismatch quarantine, generic mutation refusal, pre-materializer candidate refusal, and dormant-position retention passed; workspace transition: {workspaceTransition}; full authoring editor: {authoringEditor}.");
     }
     finally
     {

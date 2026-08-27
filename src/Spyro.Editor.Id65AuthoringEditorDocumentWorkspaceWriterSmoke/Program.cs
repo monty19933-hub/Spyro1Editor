@@ -10,6 +10,8 @@ using Spyro.Editor.Core.Persistence;
 const string SmokeRootPrefix =
     "Spyro.Editor.Id65AuthoringEditorDocumentWorkspaceWriterSmoke-";
 const int MaximumLegacyTerrainEditByteCount = 16 * 1024 * 1024;
+const string ExpectedLegacyFinalEnvelopeSha256 =
+    "6892522ac22b13788ea6e66fcc14165baccd9fdedc9ec0ca29752f91b2bc254f";
 
 Case[] cases =
 [
@@ -283,6 +285,10 @@ try
         throw new InvalidOperationException(
             "The writer smoke did not retain its final envelope identity.");
     byte[] stableEnvelope = await File.ReadAllBytesAsync(documentPath);
+    Require(
+        currentEnvelope == ExpectedLegacyFinalEnvelopeSha256 &&
+        SnapshotFile(documentPath).Sha256 == ExpectedLegacyFinalEnvelopeSha256,
+        "The legacy schema-1 final envelope bytes/hash changed during schema-3 persistence work.");
 
     Id65AuthoringEditorDocumentWriteResult deterministic =
         await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
@@ -353,6 +359,205 @@ try
         (await File.ReadAllBytesAsync(documentPath)).SequenceEqual(stableEnvelope) &&
         SnapshotFile(legacyPath) == emptyLegacyBefore,
         "A rejected or cancelled writer call changed the canonical document or empty legacy layer.");
+
+    Id65AuthoringEditorControlState remoteCenter =
+        Id65AuthoringEditorControlState.MigrateLegacyToRemotePadGrid(
+            final.ControlState,
+            Id65RemotePadGrassT107Catalog.CenterPositionId);
+    await ExpectRejectedAsync(
+        "automatic legacy-to-remote save",
+        async () => _ = await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
+            paths,
+            manifest,
+            remoteCenter,
+            currentEnvelope),
+        "explicit migration API");
+    rejects++;
+    Require(
+        (await File.ReadAllBytesAsync(documentPath)).SequenceEqual(stableEnvelope),
+        "A refused automatic legacy-to-remote save changed the legacy envelope.");
+
+    Id65AuthoringEditorControlState changedDuringMigration =
+        Id65AuthoringEditorControlState.CreateRemotePad(
+            final.ControlState.IncludeStructuralTerrain,
+            includeGrassAtT88: true,
+            final.ControlState.IncludeGrassAtT107,
+            Id65RemotePadGrassT107Catalog.CenterPositionId,
+            final.ControlState.MandatoryBaseFaceTextureId);
+    await ExpectRejectedAsync(
+        "migration that changes legacy toggles",
+        async () => _ = await Id65AuthoringEditorDocumentWorkspaceWriter
+            .MigrateLegacyToRemotePadGridExactAsync(
+                paths,
+                manifest,
+                changedDuringMigration,
+                currentEnvelope),
+        "must preserve");
+    rejects++;
+    await ExpectRejectedAsync(
+        "stale explicit legacy-to-remote migration",
+        async () => _ = await Id65AuthoringEditorDocumentWorkspaceWriter
+            .MigrateLegacyToRemotePadGridExactAsync(
+                paths,
+                manifest,
+                remoteCenter,
+                initialEnvelope),
+        "changed after its prior envelope identity");
+    rejects++;
+    Require(
+        (await File.ReadAllBytesAsync(documentPath)).SequenceEqual(stableEnvelope),
+        "A rejected explicit migration changed the legacy envelope.");
+
+    Id65AuthoringEditorDocumentWriteResult migrated =
+        await Id65AuthoringEditorDocumentWorkspaceWriter
+            .MigrateLegacyToRemotePadGridExactAsync(
+                paths,
+                manifest,
+                remoteCenter,
+                currentEnvelope);
+    publications++;
+    AssertRemoteResult(migrated, remoteCenter, explicitMigration: true);
+    Require(
+        !ReferenceEquals(migrated.ControlState, remoteCenter) &&
+        migrated.ReplacedExistingDocument &&
+        migrated.Document.T107RemotePadPositionId ==
+            Id65RemotePadGrassT107Catalog.CenterPositionId,
+        "The explicit migration receipt did not copy and retain the caller-supplied Center state.");
+    currentEnvelope = migrated.EnvelopeCanonicalSha256;
+
+    Id65AuthoringEditorControlState remoteOff =
+        Id65AuthoringEditorControlState.CreateRemotePad(
+            includeStructuralTerrain: false,
+            includeGrassAtT88: false,
+            includeGrassAtT107: false,
+            Id65RemotePadGrassT107Catalog.SouthEastPositionId,
+            mandatoryBaseFaceTextureId: 25);
+    Id65AuthoringEditorDocumentWriteResult offResult =
+        await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
+            paths,
+            manifest,
+            remoteOff,
+            currentEnvelope);
+    publications++;
+    AssertRemoteResult(offResult, remoteOff, explicitMigration: false);
+    currentEnvelope = offResult.EnvelopeCanonicalSha256;
+
+    Id65AuthoringEditorControlState remoteOn =
+        Id65AuthoringEditorControlState.CreateRemotePad(
+            includeStructuralTerrain: false,
+            includeGrassAtT88: false,
+            includeGrassAtT107: true,
+            Id65RemotePadGrassT107Catalog.SouthEastPositionId,
+            mandatoryBaseFaceTextureId: 25);
+    Id65AuthoringEditorDocumentWriteResult remoteFinal =
+        await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
+            paths,
+            manifest,
+            remoteOn,
+            currentEnvelope);
+    publications++;
+    AssertRemoteResult(remoteFinal, remoteOn, explicitMigration: false);
+    currentEnvelope = remoteFinal.EnvelopeCanonicalSha256;
+    byte[] stableRemoteEnvelope = await File.ReadAllBytesAsync(documentPath);
+    Id65AuthoringEditorDocumentReadModel inspectedRemote =
+        await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(paths, manifest)
+        ?? throw new InvalidOperationException("The remote writer result inspected as absent.");
+    Require(
+        Equivalent(remoteOn, remoteFinal.ControlState) &&
+        Equivalent(remoteOn,
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(inspectedRemote)) &&
+        inspectedRemote.T107RemotePadPositionId ==
+            Id65RemotePadGrassT107Catalog.SouthEastPositionId &&
+        inspectedRemote.MobyPlacements.Count == 1,
+        "The public writer/readback path did not preserve dormant-off then active-on remote position semantics.");
+
+    await ExpectRejectedAsync(
+        "stale remote-grid CAS",
+        async () => _ = await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
+            paths,
+            manifest,
+            remoteOff,
+            migrated.EnvelopeCanonicalSha256),
+        "changed after its prior envelope identity");
+    rejects++;
+    await ExpectRejectedAsync(
+        "automatic remote-to-legacy save",
+        async () => _ = await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
+            paths,
+            manifest,
+            final.ControlState,
+            currentEnvelope),
+        "explicit migration API");
+    rejects++;
+    await ExpectRejectedAsync(
+        "second explicit migration from remote state",
+        async () => _ = await Id65AuthoringEditorDocumentWorkspaceWriter
+            .MigrateLegacyToRemotePadGridExactAsync(
+                paths,
+                manifest,
+                remoteOn,
+                currentEnvelope),
+        "only legacy native-apron");
+    rejects++;
+    Require(
+        (await File.ReadAllBytesAsync(documentPath)).SequenceEqual(stableRemoteEnvelope),
+        "A stale, reverse, or repeated migration attempt mutated the remote envelope.");
+    File.Delete(documentPath);
+    Id65AuthoringEditorControlState freshRemoteState =
+        Id65AuthoringEditorControlState.CreateRemotePadDefault();
+    string parkedBin = Path.Combine(smokeRoot, "parked-locked-base.bin");
+    string parkedCue = Path.Combine(smokeRoot, "parked-locked-base.cue");
+    File.Move(paths.LockedBaseImagePath, parkedBin);
+    File.Move(paths.LockedBaseCuePath, parkedCue);
+    Id65AuthoringEditorDocumentWriteResult freshRemote;
+    Id65AuthoringEditorDocumentWriteResult freshRemoteUpdate;
+    try
+    {
+        freshRemote =
+            await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
+                paths,
+                manifest,
+                freshRemoteState,
+                expectedPriorEnvelopeCanonicalSha256: null);
+        publications++;
+        AssertRemoteResult(freshRemote, freshRemoteState, explicitMigration: false);
+
+        Id65AuthoringEditorControlState freshRemoteUpdatedState =
+            Id65AuthoringEditorControlState.CreateRemotePad(
+                includeStructuralTerrain: true,
+                includeGrassAtT88: false,
+                includeGrassAtT107: true,
+                Id65RemotePadGrassT107Catalog.WestPositionId);
+        freshRemoteUpdate =
+            await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
+                paths,
+                manifest,
+                freshRemoteUpdatedState,
+                freshRemote.EnvelopeCanonicalSha256);
+        publications++;
+        AssertRemoteResult(
+            freshRemoteUpdate,
+            freshRemoteUpdatedState,
+            explicitMigration: false);
+    }
+    finally
+    {
+        File.Move(parkedBin, paths.LockedBaseImagePath);
+        File.Move(parkedCue, paths.LockedBaseCuePath);
+    }
+    Require(
+        freshRemote.CreatedNewDocument && !freshRemote.ReplacedExistingDocument &&
+        freshRemote.ControlState.T107RemotePadPositionId ==
+            Id65RemotePadGrassT107Catalog.CenterPositionId &&
+        !freshRemote.ControlState.IncludeGrassAtT107,
+        "A genuinely fresh schema-3 writer create did not preserve its dormant Center default.");
+    Require(
+        freshRemoteUpdate.ReplacedExistingDocument &&
+        freshRemoteUpdate.ControlState.T107RemotePadPositionId ==
+            Id65RemotePadGrassT107Catalog.WestPositionId &&
+        freshRemoteUpdate.ControlState.IncludeGrassAtT107 &&
+        !File.Exists(parkedBin) && !File.Exists(parkedCue),
+        "A schema-3 create/update depended on or recreated the parked native BIN/CUE inputs.");
     Require(
         SnapshotFile(paths.LockedBaseImagePath) == labImageBefore &&
         SnapshotFile(paths.LockedBaseCuePath) == labCueBefore &&
@@ -378,7 +583,10 @@ try
         $"states={cases.Length} publications={publications} rejects={rejects} " +
         $"finalDocument={final.DocumentCanonicalSha256} " +
         $"finalEnvelope={final.EnvelopeCanonicalSha256} " +
-        "explicit provider-owned-input CAS publication, legacy conflict refusal, deterministic readback, path-free receipts, immutable locked inputs, and no App/UI authority or Create-BIN/runtime/release authority passed.");
+        $"remoteFinalEnvelope={remoteFinal.EnvelopeCanonicalSha256} " +
+        $"freshRemoteEnvelope={freshRemote.EnvelopeCanonicalSha256} " +
+        $"freshRemoteUpdateEnvelope={freshRemoteUpdate.EnvelopeCanonicalSha256} " +
+        "legacy bytes pinned; explicit one-way remote migration, native-input-free fresh/remote updates, dormant off/on position retention, stale/reverse CAS refusal, path-free receipts, immutable locked inputs, and no aggregate/App/Create-BIN/runtime/release authority passed.");
 }
 finally
 {
@@ -415,12 +623,16 @@ static void AssertResult(
         result.DocumentContentSha256 == item.ExpectedContentSha256 &&
         result.CreatedNewDocument == created &&
         result.ReplacedExistingDocument != created &&
+        !result.ExplicitLegacyToRemotePadMigrationPerformed &&
+        !result.AutomaticMigrationPerformed &&
         result.ExplicitSaveInvocationRequired &&
         result.LegacyTerrainLayerConflictChecked &&
         result.ExactControlStateCompiled &&
         result.ProviderOwnedNativeInputGenerationValidatedDuringWrite &&
         result.LockedSourceRevalidatedDuringWrite &&
         result.CurrentProjectionRevalidatedDuringWrite &&
+        !result.StaticAuthoringProjectionValidatedDuringWrite &&
+        result.LegacyPriorCompositeProjectionValidatedDuringWrite == !created &&
         result.CompareAndSwapEnforced &&
         result.AtomicPublicationCompleted &&
         result.PersistencePerformed &&
@@ -438,8 +650,61 @@ static void AssertResult(
         !result.HostileFilesystemRaceSafe && !result.CommonWorkspaceLeaseOwned &&
         !result.Document.CurrentProjectionRevalidated &&
         !result.Document.CurrentLockedSourceReprojected &&
-        !result.Document.CurrentOnDiskFreshnessVerified,
+        !result.Document.CurrentOnDiskFreshnessVerified &&
+        result.Document.HasCompiledCompositeProjection &&
+        !result.Document.HasStaticAuthoringProjection,
         $"The {item.Key} write receipt lost an exact identity or fail-closed boundary.");
+}
+
+static void AssertRemoteResult(
+    Id65AuthoringEditorDocumentWriteResult result,
+    Id65AuthoringEditorControlState requested,
+    bool explicitMigration)
+{
+    Require(
+        Equivalent(result.ControlState, requested) &&
+        result.Document.SchemaVersion == 3 &&
+        result.Document.ReadModelSchemaVersion ==
+            Id65AuthoringEditorDocumentReadModel.RemotePadGridReadModelSchemaVersion &&
+        result.Document.EnvelopeSchemaVersion == 2 &&
+        result.Document.ProjectionContractId ==
+            "id65-authoring-editor-document-projector-v2" &&
+        result.Document.StaticAuthoringProfileId ==
+            "id65-authoring-editor-document-remote-pad-static-projection-v1" &&
+        result.Document.StaticAuthoringCatalogSha256 ==
+            Id65RemotePadGrassT107Catalog.CanonicalSha256 &&
+        result.Document.StaticAuthoringSceneGraphSha256.Length == 64 &&
+        result.Document.StaticAuthoringProjectionSha256.Length == 64 &&
+        result.Document.CompositeManifestSha256.Length == 0 &&
+        result.Document.CompositeOutputRow80Sha256.Length == 0 &&
+        result.Document.CompositeDeterministicPlanSha256.Length == 0 &&
+        result.Document.HasStaticAuthoringProjection &&
+        !result.Document.HasCompiledCompositeProjection &&
+        result.ExplicitLegacyToRemotePadMigrationPerformed == explicitMigration &&
+        !result.AutomaticMigrationPerformed &&
+        result.ExplicitSaveInvocationRequired &&
+        result.LegacyTerrainLayerConflictChecked &&
+        result.ExactControlStateCompiled &&
+        result.ProviderOwnedNativeInputGenerationValidatedDuringWrite ==
+            explicitMigration &&
+        result.LockedSourceRevalidatedDuringWrite == explicitMigration &&
+        result.CurrentProjectionRevalidatedDuringWrite &&
+        result.StaticAuthoringProjectionValidatedDuringWrite &&
+        result.LegacyPriorCompositeProjectionValidatedDuringWrite ==
+            explicitMigration &&
+        result.CompareAndSwapEnforced && result.AtomicPublicationCompleted &&
+        result.PersistencePerformed && result.FileSystemMutationPerformed &&
+        result.WritesFileSystem && !result.ContainsFilePaths &&
+        !result.ContainsGameBytes && !result.ContainsNativePayloadBytes &&
+        !result.ContainsPhysicalAddresses && !result.ContainsCompiledAfterimage &&
+        !result.CarriesAppOrUiAuthority && !result.WritesDiscImage &&
+        !result.WritesCue && !result.AggregateMaterializationEnabled &&
+        !result.CreateBinEnabled && !result.NormalCreateBinEnabled &&
+        !result.RuntimeCandidateAuthorized && !result.RuntimeProven &&
+        !result.ReleaseIntegrated && !result.PromotionAuthorized &&
+        !result.Publishable && result.RequiresTrustedExclusiveWorkspaceDirectory &&
+        !result.HostileFilesystemRaceSafe && !result.CommonWorkspaceLeaseOwned,
+        "A schema-3 writer receipt lost its exact static-authoring identity or fail-closed boundary.");
 }
 
 static void AssertPublicSurface()
@@ -471,19 +736,26 @@ static void AssertPublicSurface()
 
     MethodInfo[] methods = writer.GetMethods(
         BindingFlags.Static | BindingFlags.Public | BindingFlags.DeclaredOnly);
+    Type[] exactParameters =
+    [
+        typeof(UnusedLevel65BlankLevelLabWorkspacePaths),
+        typeof(UnusedLevel65BlankLevelLabManifest),
+        typeof(Id65AuthoringEditorControlState),
+        typeof(string),
+        typeof(CancellationToken)
+    ];
+    MethodInfo? save = methods.SingleOrDefault(method => method.Name == "SaveExactAsync");
+    MethodInfo? migrate = methods.SingleOrDefault(method =>
+        method.Name == "MigrateLegacyToRemotePadGridExactAsync");
     Require(
-        methods.Length == 1 && methods[0].Name == "SaveExactAsync" &&
-        methods[0].ReturnType == typeof(Task<Id65AuthoringEditorDocumentWriteResult>) &&
-        methods[0].GetParameters().Select(parameter => parameter.ParameterType)
-            .SequenceEqual(
-            [
-                typeof(UnusedLevel65BlankLevelLabWorkspacePaths),
-                typeof(UnusedLevel65BlankLevelLabManifest),
-                typeof(Id65AuthoringEditorControlState),
-                typeof(string),
-                typeof(CancellationToken)
-            ]),
-        "The writer gained an arbitrary path, byte, stream, delegate, or duplicate save surface.");
+        methods.Length == 2 && save != null && migrate != null &&
+        save.ReturnType == typeof(Task<Id65AuthoringEditorDocumentWriteResult>) &&
+        migrate.ReturnType == typeof(Task<Id65AuthoringEditorDocumentWriteResult>) &&
+        save.GetParameters().Select(parameter => parameter.ParameterType)
+            .SequenceEqual(exactParameters) &&
+        migrate.GetParameters().Select(parameter => parameter.ParameterType)
+            .SequenceEqual(exactParameters),
+        "The writer lost its one normal-save plus one explicit migration surface or exposed arbitrary bytes/paths/delegates.");
     Require(
         result.GetProperties(BindingFlags.Instance | BindingFlags.Public).All(property =>
             !(property.PropertyType == typeof(string) &&
@@ -517,6 +789,14 @@ static void AssertSourceTopology(string repositoryRoot)
         .Select(path => Path.GetRelativePath(repositoryRoot, path))
         .Order(StringComparer.Ordinal)
         .ToArray();
+    Regex migrationSave = new(
+        @"\bId65AuthoringEditorDocumentStore\s*\.\s*MigratePreparedAsync\s*\(",
+        RegexOptions.CultureInvariant);
+    string[] migrationSaveOwners = productionFiles
+        .Where(path => migrationSave.IsMatch(File.ReadAllText(path)))
+        .Select(path => Path.GetRelativePath(repositoryRoot, path))
+        .Order(StringComparer.Ordinal)
+        .ToArray();
     string expectedWriter = Path.Combine(
         "src",
         "Spyro.Editor.Core",
@@ -527,6 +807,13 @@ static void AssertSourceTopology(string repositoryRoot)
     string[] preparedSymbolOwners = productionFiles
         .Where(path => File.ReadAllText(path).Contains(
             "SavePreparedAsync",
+            StringComparison.Ordinal))
+        .Select(path => Path.GetRelativePath(repositoryRoot, path))
+        .Order(StringComparer.Ordinal)
+        .ToArray();
+    string[] migrationSymbolOwners = productionFiles
+        .Where(path => File.ReadAllText(path).Contains(
+            "MigratePreparedAsync",
             StringComparison.Ordinal))
         .Select(path => Path.GetRelativePath(repositoryRoot, path))
         .Order(StringComparer.Ordinal)
@@ -556,7 +843,10 @@ static void AssertSourceTopology(string repositoryRoot)
     Require(
         saveOwners.Length == 0 &&
         preparedSaveOwners.SequenceEqual([expectedWriter]) &&
+        migrationSaveOwners.SequenceEqual([expectedWriter]) &&
         preparedSymbolOwners.SequenceEqual(
+            new[] { expectedStore, expectedWriter }.Order(StringComparer.Ordinal)) &&
+        migrationSymbolOwners.SequenceEqual(
             new[] { expectedStore, expectedWriter }.Order(StringComparer.Ordinal)) &&
         Regex.Matches(
                 writerSource,
@@ -612,7 +902,9 @@ static bool Equivalent(
     left.IncludeStructuralTerrain == right.IncludeStructuralTerrain &&
     left.IncludeGrassAtT88 == right.IncludeGrassAtT88 &&
     left.IncludeGrassAtT107 == right.IncludeGrassAtT107 &&
-    left.MandatoryBaseFaceTextureId == right.MandatoryBaseFaceTextureId;
+    left.MandatoryBaseFaceTextureId == right.MandatoryBaseFaceTextureId &&
+    left.T107PlacementSemantics == right.T107PlacementSemantics &&
+    left.T107RemotePadPositionId == right.T107RemotePadPositionId;
 
 static bool HasPathSegment(string path, string segment) =>
     path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)

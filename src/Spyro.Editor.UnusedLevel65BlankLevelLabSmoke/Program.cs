@@ -119,8 +119,11 @@ void VerifyFreshLevelSceneProjection()
         "The ID65 fresh-level scene projection acquired write, runtime, Create BIN, or release authority.");
     Require(
         first.VisibleMobyCount == 0 &&
+        first.VisibleMobyPresentations.Count == 0 &&
         first.VisibleMobyTrueIndexes.Count == 0,
         "The fresh ID65 authoring scene exposed a user/test Moby.");
+
+    VerifyRemotePadGridMobyPresentation();
 
     Id65AuthoringEditorDocument fullDocument =
         Id65AuthoringEditorDocument.CreateExact(includeOptionalTerrain: true);
@@ -202,6 +205,12 @@ void VerifyFreshLevelSceneProjection()
             Id65FreshLevelSceneProjector.ExpectedDefaultBaseDocumentProjectionSha256 &&
         full.CanonicalSha256 == fullRepeat.CanonicalSha256 &&
         full.CanonicalSha256 != absent.CanonicalSha256 &&
+        full.VisibleMobyCount == 0 && absent.VisibleMobyCount == 0 &&
+        t25Full.VisibleMobyCount == 0 && t25Base.VisibleMobyCount == 0 &&
+        full.VisibleMobyPresentations.Count == 0 &&
+        absent.VisibleMobyPresentations.Count == 0 &&
+        t25Full.VisibleMobyPresentations.Count == 0 &&
+        t25Base.VisibleMobyPresentations.Count == 0 &&
         !full.WritesWorkspace && !absent.WritesWorkspace &&
         !full.AuthorizesCreateBin && !absent.AuthorizesCreateBin &&
         !full.AuthorizesRuntimeCandidate && !absent.AuthorizesRuntimeCandidate &&
@@ -600,6 +609,215 @@ void VerifyFreshLevelSceneProjection()
     ExpectInvalidOperation(
         () => Id65FreshLevelSceneProjector.ProjectExact(null!),
         "missing ID65 projection identity");
+}
+
+void VerifyRemotePadGridMobyPresentation()
+{
+    string centerId = Id65RemotePadGrassT107Catalog.DefaultPositionId;
+    string eastId = Id65RemotePadGrassT107Catalog.EastPositionId;
+    string t88Id = Id65AuthoringMobyDependencyBundleCompiler.T88PlacementId;
+    string t107Id = Id65RemotePadGrassT107Catalog.PlacementId;
+
+    Id65AuthoringEditorDocument omittedDocument =
+        Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+            centerId,
+            includeOptionalTerrain: true,
+            placementIds: []);
+    Id65AuthoringEditorDocument t88OnlyDocument =
+        Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+            centerId,
+            includeOptionalTerrain: true,
+            placementIds: [t88Id]);
+    Id65AuthoringEditorDocument includedDocument =
+        Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+            centerId,
+            includeOptionalTerrain: true,
+            placementIds: [t107Id]);
+    Id65AuthoringEditorDocument bothDocument =
+        Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+            centerId,
+            includeOptionalTerrain: true,
+            placementIds: [t88Id, t107Id]);
+    Id65AuthoringEditorDocument eastIncludedDocument =
+        Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+            eastId,
+            includeOptionalTerrain: true,
+            placementIds: [t107Id]);
+    Id65AuthoringEditorDocument eastOmittedDocument =
+        Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+            eastId,
+            includeOptionalTerrain: true,
+            placementIds: []);
+
+    Id65FreshLevelSceneProjection omitted = Project(omittedDocument);
+    Id65FreshLevelSceneProjection t88Only = Project(t88OnlyDocument);
+    Id65FreshLevelSceneProjection included = Project(includedDocument);
+    Id65FreshLevelSceneProjection includedRepeat = Project(includedDocument);
+    Id65FreshLevelSceneProjection both = Project(bothDocument);
+    Id65FreshLevelSceneProjection eastIncluded = Project(eastIncludedDocument);
+    Id65FreshLevelSceneProjection eastOmitted = Project(eastOmittedDocument);
+
+    Require(
+        omitted.VisibleMobyCount == 0 && omitted.VisibleMobyPresentations.Count == 0 &&
+        omitted.VisibleMobyTrueIndexes.Count == 0 &&
+        t88Only.VisibleMobyCount == 0 && t88Only.VisibleMobyPresentations.Count == 0 &&
+        t88Only.VisibleMobyTrueIndexes.Count == 0 &&
+        eastOmitted.VisibleMobyCount == 0 &&
+        omitted.CanonicalSha256 != t88Only.CanonicalSha256 &&
+        omitted.CanonicalSha256 != eastOmitted.CanonicalSha256,
+        "Schema-3 omitted T107 or T88-only test state leaked a visible Moby or aliased identity.");
+    Require(
+        omitted.CanonicalSha256 ==
+            Id65FreshLevelSceneProjector.ExpectedDefaultRemotePadGridOmittedStructuralProjectionSha256,
+        "The default omitted-T107 schema-3 projection pin changed: " +
+        omitted.CanonicalSha256);
+
+    Require(
+        included.VisibleMobyCount == 1 &&
+        included.VisibleMobyPresentations.Count == 1 &&
+        included.VisibleMobyTrueIndexes.SequenceEqual([107]) &&
+        includedRepeat.VisibleMobyCount == 1 &&
+        included.CanonicalSha256 == includedRepeat.CanonicalSha256 &&
+        included.VisibleMobyPresentationCanonicalSha256 ==
+            includedRepeat.VisibleMobyPresentationCanonicalSha256 &&
+        included.CanonicalSha256 ==
+            Id65FreshLevelSceneProjector.ExpectedDefaultRemotePadGridT107StructuralProjectionSha256,
+        "The exact default schema-3 T107 projection is not deterministic: " +
+        included.CanonicalSha256);
+
+    Id65FreshLevelMobyPresentation presentation =
+        included.VisibleMobyPresentations.Single();
+    Require(
+        presentation.PlacementId == t107Id &&
+        presentation.PositionId == centerId && presentation.PositionLabel == "Center" &&
+        (presentation.EditorX, presentation.EditorY, presentation.EditorZ) == (384, 352, 512) &&
+        (presentation.RawX, presentation.RawY, presentation.RawZ) == (6_144, 5_632, 8_192) &&
+        presentation.TargetTrueIndex == 107 && presentation.ActorId == 0x01F5 &&
+        presentation.YawByte == 0x04 &&
+        presentation.SupportHandle == "collision.remote-pad.t13995" &&
+        presentation.SupportCollisionTrueIndex == 13_995 &&
+        presentation.RowSha256 ==
+            "04f64ddc0b0a8e30c128b0cb1487c5e0a0cded4689e7f18becdbb4723bbc48a2" &&
+        presentation.DocumentCanonicalSha256 == includedDocument.CanonicalSha256 &&
+        presentation.DocumentContentSha256 == includedDocument.ContentSha256 &&
+        presentation.CanonicalSha256 ==
+            Id65FreshLevelSceneProjector.ExpectedDefaultRemotePadGridT107PresentationSha256,
+        "The visible schema-3 T107 descriptor lost an exact catalog/document binding: " +
+        presentation.CanonicalSha256);
+    Require(
+        presentation.IsPresentationOnly && !presentation.IsEditable &&
+        !presentation.NativePersistenceEnabled && !presentation.RuntimeObserved &&
+        !presentation.RuntimeCandidateAuthorized && !presentation.AuthorizesCreateBin &&
+        !presentation.AuthorizesReleasePromotion &&
+        included.IsPresentationOnly && !included.WritesWorkspace &&
+        !included.WritesLockedBase && !included.AuthorizesCreateBin &&
+        !included.AuthorizesRuntimeCandidate && !included.AuthorizesReleasePromotion,
+        "The schema-3 T107 presentation acquired edit, persistence, runtime, candidate, Create BIN, or release authority.");
+
+    Id65FreshLevelMobyPresentation bothPresentation =
+        both.VisibleMobyPresentations.Single();
+    Require(
+        both.VisibleMobyCount == 1 && both.VisibleMobyTrueIndexes.SequenceEqual([107]) &&
+        bothPresentation.PositionId == centerId &&
+        bothPresentation.DocumentCanonicalSha256 == bothDocument.CanonicalSha256 &&
+        bothPresentation.CanonicalSha256 != presentation.CanonicalSha256,
+        "T88 became visible or the descriptor stopped binding the exact containing document.");
+
+    Id65FreshLevelMobyPresentation eastPresentation =
+        eastIncluded.VisibleMobyPresentations.Single();
+    Require(
+        eastPresentation.PositionId == eastId &&
+        eastPresentation.PositionLabel == "Middle right" &&
+        (eastPresentation.EditorX, eastPresentation.EditorY, eastPresentation.EditorZ) ==
+            (400, 352, 512) &&
+        (eastPresentation.RawX, eastPresentation.RawY, eastPresentation.RawZ) ==
+            (6_400, 5_632, 8_192) &&
+        eastPresentation.RowSha256 ==
+            "fc28f4464d42aa0d116b2560cd4d5af0165b7f0cd6e33ef6c0f3b3cdddc25d50" &&
+        eastIncluded.GraphCanonicalSha256 == included.GraphCanonicalSha256 &&
+        eastIncluded.CanonicalSha256 != included.CanonicalSha256 &&
+        eastPresentation.CanonicalSha256 != presentation.CanonicalSha256 &&
+        eastIncluded.VisibleMobyPresentationCanonicalSha256 !=
+            included.VisibleMobyPresentationCanonicalSha256,
+        "Two schema-3 grid positions aliased one presentation or document-bound identity.");
+
+    ICollection<Id65FreshLevelMobyPresentation> immutablePresentations =
+        (ICollection<Id65FreshLevelMobyPresentation>)included.VisibleMobyPresentations;
+    ICollection<int> immutableTrueIndexes =
+        (ICollection<int>)included.VisibleMobyTrueIndexes;
+    ExpectNotSupported(
+        () => immutablePresentations.Add(presentation),
+        "visible Moby presentation collection mutation");
+    ExpectNotSupported(
+        () => immutableTrueIndexes.Add(88),
+        "visible Moby true-index collection mutation");
+
+    Id65AuthoringEditorDocumentReadModel forgedPositionId =
+        CreateSceneProjectionReadModel(includedDocument);
+    SetReadModelBackingField(
+        forgedPositionId,
+        nameof(Id65AuthoringEditorDocumentReadModel.T107RemotePadPositionId),
+        eastId);
+    ExpectInvalidData(
+        () => Id65FreshLevelSceneProjector.ProjectExact(
+            UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+            forgedPositionId),
+        "forged schema-3 position ID");
+
+    Id65AuthoringEditorDocumentReadModel forgedRowHash =
+        CreateSceneProjectionReadModel(includedDocument);
+    SetReadModelBackingField(
+        forgedRowHash.T107RemotePadPosition!,
+        nameof(Id65RemotePadGrassT107PositionReadModel.RowSha256),
+        new string('f', 64));
+    ExpectInvalidData(
+        () => Id65FreshLevelSceneProjector.ProjectExact(
+            UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+            forgedRowHash),
+        "forged schema-3 catalog row hash");
+
+    Id65AuthoringEditorDocumentReadModel forgedCoordinate =
+        CreateSceneProjectionReadModel(includedDocument);
+    Id65AuthoringEditorCoordinateReadModel forgedCoordinateValue = forgedCoordinate
+        .MobyPlacements.Single(item => item.Id == t107Id).CoordinatesOrDelta!;
+    SetReadModelBackingField(
+        forgedCoordinateValue,
+        nameof(Id65AuthoringEditorCoordinateReadModel.X),
+        forgedCoordinateValue.X + 16);
+    ExpectInvalidData(
+        () => Id65FreshLevelSceneProjector.ProjectExact(
+            UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+            forgedCoordinate),
+        "forged schema-3 raw placement coordinate");
+
+    Id65AuthoringEditorDocumentReadModel forgedSupport =
+        CreateSceneProjectionReadModel(includedDocument);
+    SetReadModelBackingField(
+        forgedSupport.MobyPlacements.Single(item => item.Id == t107Id),
+        nameof(Id65AuthoringEditorMobyPlacementReadModel.SupportHandle),
+        "support.native-apron.t1353");
+    ExpectInvalidData(
+        () => Id65FreshLevelSceneProjector.ProjectExact(
+            UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+            forgedSupport),
+        "forged schema-3 support handle");
+
+    Id65AuthoringEditorDocumentReadModel forgedContentHash =
+        CreateSceneProjectionReadModel(includedDocument);
+    SetReadModelBackingField(
+        forgedContentHash,
+        nameof(Id65AuthoringEditorDocumentReadModel.DocumentContentSha256),
+        new string('e', 64));
+    ExpectInvalidData(
+        () => Id65FreshLevelSceneProjector.ProjectExact(
+            UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+            forgedContentHash),
+        "forged schema-3 document-content hash");
+
+    Id65FreshLevelSceneProjection Project(Id65AuthoringEditorDocument document) =>
+        Id65FreshLevelSceneProjector.ProjectExact(
+            UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+            CreateSceneProjectionReadModel(document));
 }
 
 void VerifyFreshLevelT66ViewportTextureProjection(
@@ -2171,6 +2389,18 @@ Id65AuthoringEditorDocumentReadModel CreateSceneProjectionReadModel(
     return new(identity);
 }
 
+void SetReadModelBackingField(object target, string propertyName, object? value)
+{
+    ArgumentNullException.ThrowIfNull(target);
+    System.Reflection.FieldInfo field = target.GetType().GetField(
+        $"<{propertyName}>k__BackingField",
+        System.Reflection.BindingFlags.Instance |
+        System.Reflection.BindingFlags.NonPublic) ??
+        throw new InvalidOperationException(
+            $"Missing read-model backing field '{target.GetType().Name}.{propertyName}'.");
+    field.SetValue(target, value);
+}
+
 void ExpectInvalidData(Action action, string label)
 {
     try
@@ -2179,6 +2409,18 @@ void ExpectInvalidData(Action action, string label)
         throw new InvalidOperationException($"The {label} guard did not reject the input.");
     }
     catch (InvalidDataException)
+    {
+    }
+}
+
+void ExpectNotSupported(Action action, string label)
+{
+    try
+    {
+        action();
+        throw new InvalidOperationException($"The {label} guard did not reject the input.");
+    }
+    catch (NotSupportedException)
     {
     }
 }

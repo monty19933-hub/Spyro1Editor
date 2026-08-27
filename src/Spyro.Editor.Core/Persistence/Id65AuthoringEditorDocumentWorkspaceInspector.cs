@@ -42,7 +42,8 @@ public sealed class Id65AuthoringEditorDocumentReadModel
 {
     private const string ReadModelFormat =
         "spyro-editor-id65-authoring-editor-document-read-model";
-    private const int ReadModelSchemaVersion = 2;
+    public const int LegacyReadModelSchemaVersion = 2;
+    public const int RemotePadGridReadModelSchemaVersion = 3;
 
     private readonly ReadOnlyCollection<Id65AuthoringEditorTerrainReadModel> _terrain;
     private readonly ReadOnlyCollection<Id65AuthoringEditorMobyPlacementReadModel>
@@ -68,6 +69,14 @@ public sealed class Id65AuthoringEditorDocumentReadModel
         SchemaVersion = document.SchemaVersion;
         ProfileId = document.ProfileId;
         MandatoryBaseFaceTextureId = document.MandatoryBaseFaceTextureId;
+        T107PlacementSemantics = document.UsesRemotePadT107Grid
+            ? Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1
+            : Id65AuthoringEditorT107PlacementSemantics.LegacyNativeApronV1;
+        T107RemotePadPositionId = document.T107RemotePadPositionId;
+        T107RemotePadPosition = document.T107RemotePadPositionId is string positionId
+            ? Id65RemotePadGrassT107PositionReadModel.FromCatalog(
+                Id65RemotePadGrassT107Catalog.GetRequiredPosition(positionId))
+            : null;
         LabProfileId = document.LabProfileId;
         LabProfileVersion = document.LabProfileVersion;
         WorkspaceKey = document.WorkspaceKey;
@@ -81,11 +90,19 @@ public sealed class Id65AuthoringEditorDocumentReadModel
         DocumentContentSha256 = document.ContentSha256;
         DocumentCanonicalSha256 = document.CanonicalSha256;
         EnvelopeCanonicalSha256 = identity?.EnvelopeCanonicalSha256 ?? string.Empty;
+        EnvelopeSchemaVersion = identity?.EnvelopeSchemaVersion ?? 0;
         ProjectionContractId = identity?.ProjectionContractId ?? string.Empty;
         CompositeManifestSha256 = identity?.CompositeManifestSha256 ?? string.Empty;
         CompositeOutputRow80Sha256 = identity?.CompositeOutputRow80Sha256 ?? string.Empty;
         CompositeDeterministicPlanSha256 =
             identity?.CompositeDeterministicPlanSha256 ?? string.Empty;
+        StaticAuthoringProfileId = identity?.StaticAuthoringProfileId ?? string.Empty;
+        StaticAuthoringCatalogSha256 =
+            identity?.StaticAuthoringCatalogSha256 ?? string.Empty;
+        StaticAuthoringSceneGraphSha256 =
+            identity?.StaticAuthoringSceneGraphSha256 ?? string.Empty;
+        StaticAuthoringProjectionSha256 =
+            identity?.StaticAuthoringProjectionSha256 ?? string.Empty;
         PersistedProjectionIdentityPresent = identity != null;
 
         _terrain = Array.AsReadOnly(document.Terrain
@@ -103,8 +120,17 @@ public sealed class Id65AuthoringEditorDocumentReadModel
     }
 
     public int SchemaVersion { get; }
+    public int ReadModelSchemaVersion => UsesRemotePadT107Grid
+        ? RemotePadGridReadModelSchemaVersion
+        : LegacyReadModelSchemaVersion;
     public string ProfileId { get; }
     public int MandatoryBaseFaceTextureId { get; }
+    public Id65AuthoringEditorT107PlacementSemantics T107PlacementSemantics { get; }
+    public string? T107RemotePadPositionId { get; }
+    public Id65RemotePadGrassT107PositionReadModel? T107RemotePadPosition { get; }
+    public bool UsesRemotePadT107Grid =>
+        T107PlacementSemantics == Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1;
+    public bool RequiresExplicitRemotePadMigration => !UsesRemotePadT107Grid;
     public string LabProfileId { get; }
     public int LabProfileVersion { get; }
     public string WorkspaceKey { get; }
@@ -118,10 +144,19 @@ public sealed class Id65AuthoringEditorDocumentReadModel
     public string DocumentContentSha256 { get; }
     public string DocumentCanonicalSha256 { get; }
     public string EnvelopeCanonicalSha256 { get; }
+    public int EnvelopeSchemaVersion { get; }
     public string ProjectionContractId { get; }
     public string CompositeManifestSha256 { get; }
     public string CompositeOutputRow80Sha256 { get; }
     public string CompositeDeterministicPlanSha256 { get; }
+    public string StaticAuthoringProfileId { get; }
+    public string StaticAuthoringCatalogSha256 { get; }
+    public string StaticAuthoringSceneGraphSha256 { get; }
+    public string StaticAuthoringProjectionSha256 { get; }
+    public bool HasCompiledCompositeProjection =>
+        PersistedProjectionIdentityPresent && !UsesRemotePadT107Grid;
+    public bool HasStaticAuthoringProjection =>
+        PersistedProjectionIdentityPresent && UsesRemotePadT107Grid;
     public IReadOnlyList<Id65AuthoringEditorTerrainReadModel> Terrain => _terrain;
     public Id65AuthoringEditorPrivateTextureSwapReadModel PrivateTextureSwap { get; }
     public IReadOnlyList<Id65AuthoringEditorMobyPlacementReadModel> MobyPlacements =>
@@ -170,9 +205,19 @@ public sealed class Id65AuthoringEditorDocumentReadModel
         {
             json.WriteStartObject();
             json.WriteString("format", ReadModelFormat);
-            json.WriteNumber("readModelSchemaVersion", ReadModelSchemaVersion);
+            json.WriteNumber(
+                "readModelSchemaVersion",
+                ReadModelSchemaVersion);
             json.WriteNumber("documentSchemaVersion", SchemaVersion);
             json.WriteString("profileId", ProfileId);
+            if (UsesRemotePadT107Grid)
+            {
+                json.WriteNumber("envelopeSchemaVersion", EnvelopeSchemaVersion);
+                json.WriteString(
+                    "t107PlacementSemantics",
+                    Id65RemotePadGrassT107Catalog.ProfileId);
+                WriteRemotePadPosition(json, T107RemotePadPosition!);
+            }
             json.WriteNumber("mandatoryBaseFaceTextureId", MandatoryBaseFaceTextureId);
             json.WriteString("labProfileId", LabProfileId);
             json.WriteNumber("labProfileVersion", LabProfileVersion);
@@ -181,7 +226,11 @@ public sealed class Id65AuthoringEditorDocumentReadModel
             json.WriteString("lockedBaseProfileId", LockedBaseProfileId);
             json.WriteString("lockedBaseImageSha256", LockedBaseImageSha256);
             json.WriteString("lockedRow80Sha256", LockedRow80Sha256);
-            json.WriteString("compositeProfileId", CompositeProfileId);
+            json.WriteString(
+                UsesRemotePadT107Grid
+                    ? "documentCompositeProfileId"
+                    : "compositeProfileId",
+                CompositeProfileId);
             json.WriteString(
                 "privateTextureWitnessSha256",
                 PrivateTextureWitnessSha256);
@@ -190,11 +239,30 @@ public sealed class Id65AuthoringEditorDocumentReadModel
             json.WriteString("documentCanonicalSha256", DocumentCanonicalSha256);
             json.WriteString("envelopeCanonicalSha256", EnvelopeCanonicalSha256);
             json.WriteString("projectionContractId", ProjectionContractId);
-            json.WriteString("compositeManifestSha256", CompositeManifestSha256);
-            json.WriteString("compositeOutputRow80Sha256", CompositeOutputRow80Sha256);
-            json.WriteString(
-                "compositeDeterministicPlanSha256",
-                CompositeDeterministicPlanSha256);
+            if (UsesRemotePadT107Grid)
+            {
+                json.WriteString("staticAuthoringProfileId", StaticAuthoringProfileId);
+                json.WriteString(
+                    "staticAuthoringCatalogSha256",
+                    StaticAuthoringCatalogSha256);
+                json.WriteString(
+                    "staticAuthoringSceneGraphSha256",
+                    StaticAuthoringSceneGraphSha256);
+                json.WriteString(
+                    "staticAuthoringProjectionSha256",
+                    StaticAuthoringProjectionSha256);
+                json.WriteBoolean(
+                    "compiledCompositeProjectionPresent",
+                    HasCompiledCompositeProjection);
+            }
+            else
+            {
+                json.WriteString("compositeManifestSha256", CompositeManifestSha256);
+                json.WriteString("compositeOutputRow80Sha256", CompositeOutputRow80Sha256);
+                json.WriteString(
+                    "compositeDeterministicPlanSha256",
+                    CompositeDeterministicPlanSha256);
+            }
             json.WritePropertyName("terrain");
             json.WriteStartArray();
             foreach (Id65AuthoringEditorTerrainReadModel terrain in Terrain)
@@ -248,6 +316,34 @@ public sealed class Id65AuthoringEditorDocumentReadModel
         json.WriteString("sectorId", value.Occlusion.SectorId);
         json.WriteNumber("groupIndex", value.Occlusion.GroupIndex);
         json.WriteEndObject();
+        json.WriteEndObject();
+    }
+
+    private static void WriteRemotePadPosition(
+        Utf8JsonWriter json,
+        Id65RemotePadGrassT107PositionReadModel value)
+    {
+        json.WritePropertyName("t107RemotePadPosition");
+        json.WriteStartObject();
+        json.WriteNumber("catalogSchemaVersion", Id65RemotePadGrassT107Catalog.SchemaVersion);
+        json.WriteString("catalogProfileId", Id65RemotePadGrassT107Catalog.ProfileId);
+        json.WriteNumber("ordinal", value.Ordinal);
+        json.WriteString("positionId", value.PositionId);
+        json.WriteString("label", value.Label);
+        json.WritePropertyName("editor");
+        json.WriteStartObject();
+        json.WriteNumber("x", value.EditorX);
+        json.WriteNumber("y", value.EditorY);
+        json.WriteNumber("z", value.EditorZ);
+        json.WriteEndObject();
+        json.WritePropertyName("raw");
+        json.WriteStartObject();
+        json.WriteNumber("x", value.RawX);
+        json.WriteNumber("y", value.RawY);
+        json.WriteNumber("z", value.RawZ);
+        json.WriteEndObject();
+        json.WriteString("rowSha256", value.RowSha256);
+        json.WriteBoolean("isDefault", value.IsDefault);
         json.WriteEndObject();
     }
 
@@ -515,6 +611,70 @@ public sealed class Id65AuthoringEditorPrivateTextureSwapReadModel
             value.DonorWadEntry,
             value.DonorTextureId,
             value.MaterialTemplateTextureId);
+}
+
+/// <summary>
+/// Immutable, path-free copy of one frozen remote-pad catalog position. The
+/// read model deliberately carries both editor and raw units so persistence
+/// consumers never need to infer or round a placement coordinate.
+/// </summary>
+public sealed class Id65RemotePadGrassT107PositionReadModel
+{
+    private Id65RemotePadGrassT107PositionReadModel(
+        int ordinal,
+        string positionId,
+        string label,
+        int editorX,
+        int editorY,
+        int editorZ,
+        int rawX,
+        int rawY,
+        int rawZ,
+        string rowSha256,
+        bool isDefault)
+    {
+        Ordinal = ordinal;
+        PositionId = positionId;
+        Label = label;
+        EditorX = editorX;
+        EditorY = editorY;
+        EditorZ = editorZ;
+        RawX = rawX;
+        RawY = rawY;
+        RawZ = rawZ;
+        RowSha256 = rowSha256;
+        IsDefault = isDefault;
+    }
+
+    public int Ordinal { get; }
+    public string PositionId { get; }
+    public string Label { get; }
+    public int EditorX { get; }
+    public int EditorY { get; }
+    public int EditorZ { get; }
+    public int RawX { get; }
+    public int RawY { get; }
+    public int RawZ { get; }
+    public string RowSha256 { get; }
+    public bool IsDefault { get; }
+
+    internal static Id65RemotePadGrassT107PositionReadModel FromCatalog(
+        Id65RemotePadGrassT107Position value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return new(
+            value.Ordinal,
+            value.PositionId,
+            value.Label,
+            value.EditorX,
+            value.EditorY,
+            value.EditorZ,
+            value.RawX,
+            value.RawY,
+            value.RawZ,
+            value.RowSha256,
+            value.IsDefault);
+    }
 }
 
 public sealed class Id65AuthoringEditorCoordinateReadModel

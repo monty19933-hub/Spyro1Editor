@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Spyro.Editor.Core.Exporting;
+using Spyro.Editor.Core.Workspace;
 
 namespace Spyro.Editor.Core.Persistence;
 
@@ -10,7 +11,7 @@ namespace Spyro.Editor.Core.Persistence;
 /// document's projection identity. The store never serializes these inputs.
 /// </summary>
 internal sealed record Id65AuthoringEditorDocumentProjectionInputs(
-    Id65AuthoringEditorNativeInputProvider.InputSet NativeInputs,
+    Id65AuthoringEditorNativeInputProvider.InputSet? NativeInputs,
     Id65AuthoringCompositeCompilerLimits? Limits = null);
 
 /// <summary>
@@ -28,6 +29,15 @@ internal sealed record Id65AuthoringEditorDocumentStoreResult(
     string CompositeDeterministicPlanSha256)
 {
     public string DocumentCanonicalSha256 => Document.CanonicalSha256;
+    public int EnvelopeSchemaVersion => Document.UsesRemotePadT107Grid
+        ? Id65AuthoringEditorDocumentStore.RemotePadGridEnvelopeSchemaVersion
+        : Id65AuthoringEditorDocumentStore.EnvelopeSchemaVersion;
+    public string StaticAuthoringProfileId { get; init; } = string.Empty;
+    public string StaticAuthoringCatalogSha256 { get; init; } = string.Empty;
+    public string StaticAuthoringSceneGraphSha256 { get; init; } = string.Empty;
+    public string StaticAuthoringProjectionSha256 { get; init; } = string.Empty;
+    public bool HasCompiledCompositeProjection => !Document.UsesRemotePadT107Grid;
+    public bool HasStaticAuthoringProjection => Document.UsesRemotePadT107Grid;
     public bool ContainsCompositeAfterimage => false;
     public bool ContainsDiscImageBytes => false;
     public bool ContainsCueBytes => false;
@@ -57,7 +67,18 @@ internal sealed record Id65AuthoringEditorDocumentEnvelopeIdentity(
     string CompositeProfileId,
     string CompositeManifestSha256,
     string CompositeOutputRow80Sha256,
-    string CompositeDeterministicPlanSha256);
+    string CompositeDeterministicPlanSha256)
+{
+    public int EnvelopeSchemaVersion => Document.UsesRemotePadT107Grid
+        ? Id65AuthoringEditorDocumentStore.RemotePadGridEnvelopeSchemaVersion
+        : Id65AuthoringEditorDocumentStore.EnvelopeSchemaVersion;
+    public string StaticAuthoringProfileId { get; init; } = string.Empty;
+    public string StaticAuthoringCatalogSha256 { get; init; } = string.Empty;
+    public string StaticAuthoringSceneGraphSha256 { get; init; } = string.Empty;
+    public string StaticAuthoringProjectionSha256 { get; init; } = string.Empty;
+    public bool HasCompiledCompositeProjection => !Document.UsesRemotePadT107Grid;
+    public bool HasStaticAuthoringProjection => Document.UsesRemotePadT107Grid;
+}
 
 /// <summary>
 /// Internal, Core-only persistence boundary for the exact ID65 authoring editor
@@ -72,6 +93,11 @@ internal static class Id65AuthoringEditorDocumentStore
     public const int EnvelopeSchemaVersion = 1;
     public const string ProjectionContractId =
         "id65-authoring-editor-document-projector-v1";
+    public const int RemotePadGridEnvelopeSchemaVersion = 2;
+    public const string RemotePadGridProjectionContractId =
+        "id65-authoring-editor-document-projector-v2";
+    public const string RemotePadGridStaticAuthoringProfileId =
+        "id65-authoring-editor-document-remote-pad-static-projection-v1";
     public const string FileName =
         "unusedlevel65blank-authoring-document-v1.json";
     public const int MaximumEnvelopeByteCount = 256 * 1024;
@@ -81,7 +107,7 @@ internal static class Id65AuthoringEditorDocumentStore
     internal const string WriterLeaseFileName =
         ".unusedlevel65blank-authoring-document-v1.json.writer.lock";
 
-    private static readonly string[] EnvelopePropertyNames =
+    private static readonly string[] LegacyEnvelopePropertyNames =
     [
         "format",
         "schemaVersion",
@@ -99,6 +125,28 @@ internal static class Id65AuthoringEditorDocumentStore
         "compositeManifestSha256",
         "compositeOutputRow80Sha256",
         "compositeDeterministicPlanSha256",
+        "envelopeContentSha256",
+        "document"
+    ];
+
+    private static readonly string[] RemotePadGridEnvelopePropertyNames =
+    [
+        "format",
+        "schemaVersion",
+        "workspaceKey",
+        "workspaceLayoutVersion",
+        "workspaceLayoutRelativeRoot",
+        "labProfileId",
+        "labProfileVersion",
+        "lockedBaseProfileId",
+        "lockedBaseImageSha256",
+        "documentProfileId",
+        "documentCanonicalSha256",
+        "projectionContractId",
+        "staticAuthoringProfileId",
+        "staticAuthoringCatalogSha256",
+        "staticAuthoringSceneGraphSha256",
+        "staticAuthoringProjectionSha256",
         "envelopeContentSha256",
         "document"
     ];
@@ -142,7 +190,7 @@ internal static class Id65AuthoringEditorDocumentStore
             expectedPriorEnvelopeCanonicalSha256,
             cancellationToken);
 
-    internal static async Task<TPublishedResult> SavePreparedAsync<TPublishedResult>(
+    internal static Task<TPublishedResult> SavePreparedAsync<TPublishedResult>(
         UnusedLevel65BlankLevelLabWorkspacePaths paths,
         UnusedLevel65BlankLevelLabManifest expectedLabManifest,
         Id65AuthoringEditorDocument document,
@@ -150,27 +198,76 @@ internal static class Id65AuthoringEditorDocumentStore
         Func<Id65AuthoringEditorDocumentStoreResult, TPublishedResult>
             preparePublishedResult,
         string? expectedPriorEnvelopeCanonicalSha256,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        SavePreparedCoreAsync(
+            paths,
+            expectedLabManifest,
+            document,
+            projectionInputs,
+            preparePublishedResult,
+            expectedPriorEnvelopeCanonicalSha256,
+            DocumentTransitionPolicy.SameSemanticFamilyOnly,
+            cancellationToken);
+
+    internal static Task<TPublishedResult> MigratePreparedAsync<TPublishedResult>(
+        UnusedLevel65BlankLevelLabWorkspacePaths paths,
+        UnusedLevel65BlankLevelLabManifest expectedLabManifest,
+        Id65AuthoringEditorDocument document,
+        Id65AuthoringEditorDocumentProjectionInputs projectionInputs,
+        Func<Id65AuthoringEditorDocumentStoreResult, TPublishedResult>
+            preparePublishedResult,
+        string expectedPriorEnvelopeCanonicalSha256,
+        CancellationToken cancellationToken = default) =>
+        SavePreparedCoreAsync(
+            paths,
+            expectedLabManifest,
+            document,
+            projectionInputs,
+            preparePublishedResult,
+            expectedPriorEnvelopeCanonicalSha256,
+            DocumentTransitionPolicy.ExplicitLegacyToRemotePadGrid,
+            cancellationToken);
+
+    private static async Task<TPublishedResult> SavePreparedCoreAsync<TPublishedResult>(
+        UnusedLevel65BlankLevelLabWorkspacePaths paths,
+        UnusedLevel65BlankLevelLabManifest expectedLabManifest,
+        Id65AuthoringEditorDocument document,
+        Id65AuthoringEditorDocumentProjectionInputs projectionInputs,
+        Func<Id65AuthoringEditorDocumentStoreResult, TPublishedResult>
+            preparePublishedResult,
+        string? expectedPriorEnvelopeCanonicalSha256,
+        DocumentTransitionPolicy transitionPolicy,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(expectedLabManifest);
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(projectionInputs);
         ArgumentNullException.ThrowIfNull(preparePublishedResult);
-        cancellationToken.ThrowIfCancellationRequested();
-        ArgumentNullException.ThrowIfNull(projectionInputs.NativeInputs);
-        Id65AuthoringEditorNativeInputProvider.ValidateForConsumption(
-            projectionInputs.NativeInputs);
-
-        string path = GetPath(paths);
-        await RequireExpectedPublishedWorkspaceAsync(
-            paths,
-            expectedLabManifest,
-            cancellationToken);
+        if (!Enum.IsDefined(transitionPolicy))
+            throw new ArgumentOutOfRangeException(nameof(transitionPolicy));
+        if (transitionPolicy == DocumentTransitionPolicy.ExplicitLegacyToRemotePadGrid &&
+            string.IsNullOrWhiteSpace(expectedPriorEnvelopeCanonicalSha256))
+        {
+            throw new InvalidDataException(
+                "An explicit legacy-to-remote ID65 document migration requires one exact prior envelope identity.");
+        }
         cancellationToken.ThrowIfCancellationRequested();
         Id65AuthoringEditorDocument canonicalDocument =
             Id65AuthoringEditorDocument.Parse(document.SerializeUtf8());
         RequireDocumentLabIdentity(canonicalDocument, expectedLabManifest);
+        bool requiresLegacyNativeValidation =
+            RequiresLegacyNativeValidation(canonicalDocument, transitionPolicy);
+        if (requiresLegacyNativeValidation)
+            ValidateNativeProjectionInputs(projectionInputs);
+
+        string path = GetPath(paths);
+        await RequireExpectedWorkspaceAsync(
+            paths,
+            expectedLabManifest,
+            requiresLegacyNativeValidation,
+            cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         ProjectionIdentity projection = ProjectAndCaptureIdentity(
             canonicalDocument,
             projectionInputs);
@@ -209,6 +306,8 @@ internal static class Id65AuthoringEditorDocumentStore
                 expectedPriorEnvelopeCanonicalSha256,
                 expectedLabManifest,
                 projectionInputs,
+                canonicalDocument,
+                transitionPolicy,
                 cancellationToken);
             await WriteThroughAsync(temporaryPath, envelope.CanonicalBytes, cancellationToken);
             byte[] stagedBytes = await ReadEnvelopeBytesAsync(
@@ -233,15 +332,18 @@ internal static class Id65AuthoringEditorDocumentStore
                     "The ID65 staged publication result factory returned null.");
             }
 
-            await RequireExpectedPublishedWorkspaceAsync(
+            await RequireExpectedWorkspaceAsync(
                 paths,
                 expectedLabManifest,
+                requiresLegacyNativeValidation,
                 cancellationToken);
             await RequireExpectedPriorAsync(
                 path,
                 expectedPriorEnvelopeCanonicalSha256,
                 expectedLabManifest,
                 projectionInputs,
+                canonicalDocument,
+                transitionPolicy,
                 cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             RefuseSymbolicLink(directory, "authored-edits directory");
@@ -277,31 +379,48 @@ internal static class Id65AuthoringEditorDocumentStore
         ArgumentNullException.ThrowIfNull(expectedLabManifest);
         ArgumentNullException.ThrowIfNull(projectionInputs);
         cancellationToken.ThrowIfCancellationRequested();
-        ArgumentNullException.ThrowIfNull(projectionInputs.NativeInputs);
-        Id65AuthoringEditorNativeInputProvider.ValidateForConsumption(
-            projectionInputs.NativeInputs);
 
         string path = GetPath(paths);
-        await RequireExpectedPublishedWorkspaceAsync(
+        await RequireExpectedManifestWorkspaceAsync(
             paths,
             expectedLabManifest,
             cancellationToken);
         if (!File.Exists(path))
+        {
+            if (projectionInputs.NativeInputs != null)
+            {
+                ValidateNativeProjectionInputs(projectionInputs);
+                await RequireExpectedPublishedWorkspaceAsync(
+                    paths,
+                    expectedLabManifest,
+                    cancellationToken);
+            }
             return null;
+        }
 
         RefuseSymbolicLink(path, "editor-document destination");
         byte[] bytes = await ReadEnvelopeBytesAsync(
             path,
             "persisted editor-document envelope",
             cancellationToken);
-        Id65AuthoringEditorDocumentStoreResult result = ParseAndValidateEnvelope(
-            bytes,
-            path,
-            expectedLabManifest,
-            projectionInputs);
-        await RequireExpectedPublishedWorkspaceAsync(
+        Id65AuthoringEditorDocumentEnvelopeIdentity identity =
+            ParseAndValidateEnvelopeIdentity(bytes, expectedLabManifest);
+        bool requiresLegacyNativeValidation = !identity.Document.UsesRemotePadT107Grid;
+        if (requiresLegacyNativeValidation)
+        {
+            ValidateNativeProjectionInputs(projectionInputs);
+            await RequireExpectedPublishedWorkspaceAsync(
+                paths,
+                expectedLabManifest,
+                cancellationToken);
+        }
+        ValidateProjectionIdentity(identity, projectionInputs);
+        Id65AuthoringEditorDocumentStoreResult result =
+            CreateStoreResult(path, identity);
+        await RequireExpectedWorkspaceAsync(
             paths,
             expectedLabManifest,
+            requiresLegacyNativeValidation,
             cancellationToken);
         return result;
     }
@@ -344,13 +463,13 @@ internal static class Id65AuthoringEditorDocumentStore
         cancellationToken.ThrowIfCancellationRequested();
 
         string path = GetPath(paths);
-        await RequireExpectedPublishedWorkspaceAsync(
+        await RequireExpectedManifestWorkspaceAsync(
             paths,
             expectedLabManifest,
             cancellationToken);
         if (!ExactPathEntryExists(path, "editor-document destination"))
         {
-            await RequireExpectedPublishedWorkspaceAsync(
+            await RequireExpectedManifestWorkspaceAsync(
                 paths,
                 expectedLabManifest,
                 cancellationToken);
@@ -380,14 +499,21 @@ internal static class Id65AuthoringEditorDocumentStore
             ParseAndValidateEnvelopeIdentity(
                 firstBytes,
                 expectedLabManifest);
+        bool requiresLegacyNativeValidation = !first.Document.UsesRemotePadT107Grid;
+        await RequireExpectedWorkspaceAsync(
+            paths,
+            expectedLabManifest,
+            requiresLegacyNativeValidation,
+            cancellationToken);
 
         if (afterFirstReadForTesting != null)
             await afterFirstReadForTesting();
         cancellationToken.ThrowIfCancellationRequested();
 
-        await RequireExpectedPublishedWorkspaceAsync(
+        await RequireExpectedWorkspaceAsync(
             paths,
             expectedLabManifest,
+            requiresLegacyNativeValidation,
             cancellationToken);
         string repeatedPath = GetPath(paths);
         if (!PathsEqual(path, repeatedPath) || !File.Exists(repeatedPath))
@@ -411,9 +537,10 @@ internal static class Id65AuthoringEditorDocumentStore
                 "The persisted ID65 editor-document envelope changed during deterministic inspection readback.");
         }
 
-        await RequireExpectedPublishedWorkspaceAsync(
+        await RequireExpectedWorkspaceAsync(
             paths,
             expectedLabManifest,
+            requiresLegacyNativeValidation,
             cancellationToken);
         string finalPath = GetPath(paths);
         if (!PathsEqual(path, finalPath) || !File.Exists(finalPath))
@@ -433,6 +560,10 @@ internal static class Id65AuthoringEditorDocumentStore
         left.CompositeManifestSha256 == right.CompositeManifestSha256 &&
         left.CompositeOutputRow80Sha256 == right.CompositeOutputRow80Sha256 &&
         left.CompositeDeterministicPlanSha256 == right.CompositeDeterministicPlanSha256 &&
+        left.StaticAuthoringProfileId == right.StaticAuthoringProfileId &&
+        left.StaticAuthoringCatalogSha256 == right.StaticAuthoringCatalogSha256 &&
+        left.StaticAuthoringSceneGraphSha256 == right.StaticAuthoringSceneGraphSha256 &&
+        left.StaticAuthoringProjectionSha256 == right.StaticAuthoringProjectionSha256 &&
         left.Document.SerializeUtf8().SequenceEqual(right.Document.SerializeUtf8());
 
     private static async Task RequireExpectedPriorAsync(
@@ -440,6 +571,8 @@ internal static class Id65AuthoringEditorDocumentStore
         string? expectedPriorEnvelopeCanonicalSha256,
         UnusedLevel65BlankLevelLabManifest expectedLabManifest,
         Id65AuthoringEditorDocumentProjectionInputs projectionInputs,
+        Id65AuthoringEditorDocument desiredDocument,
+        DocumentTransitionPolicy transitionPolicy,
         CancellationToken cancellationToken)
     {
         if (expectedPriorEnvelopeCanonicalSha256 == null)
@@ -468,17 +601,57 @@ internal static class Id65AuthoringEditorDocumentStore
             path,
             "prior editor-document envelope",
             cancellationToken);
-        Id65AuthoringEditorDocumentStoreResult prior = ParseAndValidateEnvelope(
-            priorBytes,
-            path,
-            expectedLabManifest,
-            projectionInputs);
+        Id65AuthoringEditorDocumentEnvelopeIdentity prior =
+            ParseAndValidateEnvelopeIdentity(priorBytes, expectedLabManifest);
         if (!HashEquals(
                 prior.EnvelopeCanonicalSha256,
                 expectedPriorEnvelopeCanonicalSha256))
         {
             throw new InvalidDataException(
                 "The persisted ID65 editor document changed after its prior envelope identity was captured.");
+        }
+        RequireDocumentTransition(prior.Document, desiredDocument, transitionPolicy);
+        ValidateProjectionIdentity(prior, projectionInputs);
+    }
+
+    private static void RequireDocumentTransition(
+        Id65AuthoringEditorDocument prior,
+        Id65AuthoringEditorDocument desired,
+        DocumentTransitionPolicy transitionPolicy)
+    {
+        bool priorRemote = prior.UsesRemotePadT107Grid;
+        bool desiredRemote = desired.UsesRemotePadT107Grid;
+        if (transitionPolicy == DocumentTransitionPolicy.SameSemanticFamilyOnly)
+        {
+            if (priorRemote != desiredRemote)
+            {
+                throw new InvalidDataException(
+                    "Changing between legacy native-apron and schema-3 remote-pad ID65 placement semantics requires the explicit migration API.");
+            }
+            return;
+        }
+
+        if (transitionPolicy != DocumentTransitionPolicy.ExplicitLegacyToRemotePadGrid ||
+            priorRemote || !desiredRemote)
+        {
+            throw new InvalidDataException(
+                "The explicit ID65 document migration supports only legacy native-apron to schema-3 remote-pad semantics.");
+        }
+
+        int[] priorTargets = prior.MobyPlacements
+            .Select(placement => placement.TargetTrueIndex)
+            .Order()
+            .ToArray();
+        int[] desiredTargets = desired.MobyPlacements
+            .Select(placement => placement.TargetTrueIndex)
+            .Order()
+            .ToArray();
+        if (prior.Terrain.Count != desired.Terrain.Count ||
+            prior.MandatoryBaseFaceTextureId != desired.MandatoryBaseFaceTextureId ||
+            !priorTargets.SequenceEqual(desiredTargets))
+        {
+            throw new InvalidDataException(
+                "The explicit ID65 remote-pad migration must preserve terrain, T88/T107 inclusion, and mandatory texture selection.");
         }
     }
 
@@ -616,19 +789,98 @@ internal static class Id65AuthoringEditorDocumentStore
         }
     }
 
+    private static Task RequireExpectedWorkspaceAsync(
+        UnusedLevel65BlankLevelLabWorkspacePaths paths,
+        UnusedLevel65BlankLevelLabManifest expectedLabManifest,
+        bool requiresLegacyNativeValidation,
+        CancellationToken cancellationToken) =>
+        requiresLegacyNativeValidation
+            ? RequireExpectedPublishedWorkspaceAsync(
+                paths,
+                expectedLabManifest,
+                cancellationToken)
+            : RequireExpectedManifestWorkspaceAsync(
+                paths,
+                expectedLabManifest,
+                cancellationToken);
+
+    private static async Task RequireExpectedManifestWorkspaceAsync(
+        UnusedLevel65BlankLevelLabWorkspacePaths paths,
+        UnusedLevel65BlankLevelLabManifest expectedLabManifest,
+        CancellationToken cancellationToken)
+    {
+        UnusedLevel65BlankLevelLabProfileRegistry.ValidateManifest(
+            expectedLabManifest,
+            paths);
+        PersistencePathSafety.EnsureWritePathWithinRoot(
+            paths.RootPath,
+            paths.ManifestPath,
+            "The ID65 lab manifest path escapes its exact workspace root.");
+        RefuseSymbolicLink(paths.RootPath, "lab workspace root");
+        RefuseSymbolicLink(paths.ManifestPath, "lab workspace manifest");
+        if (!File.Exists(paths.ManifestPath))
+            throw new InvalidDataException("The ID65 lab workspace manifest is missing.");
+
+        UnusedLevel65BlankLevelLabManifest published =
+            await UnusedLevel65BlankLevelLabBootstrapper.ReadAndValidateManifestAsync(
+                paths.ManifestPath,
+                paths,
+                cancellationToken);
+        if (published != expectedLabManifest ||
+            published.WorkspaceKey != UnusedLevel65BlankLevelLabProfileRegistry.Key ||
+            published.WorkspaceLayoutVersion !=
+                UnusedLevel65BlankLevelLabProfileRegistry.WorkspaceLayoutVersion ||
+            published.WorkspaceLayoutRelativeRoot !=
+                UnusedLevel65BlankLevelLabProfileRegistry.WorkspaceLayoutRelativeRoot ||
+            published.ProfileId != UnusedLevel65BlankLevelLabProfileRegistry.ProfileId ||
+            published.ProfileVersion !=
+                UnusedLevel65BlankLevelLabProfileRegistry.ProfileVersion ||
+            published.LockedBaseProfileId !=
+                UnusedLevel65BlankLevelLabProfileRegistry.Profile.LockedBaseProfileId ||
+            !HashEquals(
+                published.LockedBaseImageSha256,
+                UnusedLevel65BlankLevelLabProfileRegistry.Profile.LockedBaseImageSha256) ||
+            published.PromotionAuthorized ||
+            published.NormalCreateBinEnabled)
+        {
+            throw new InvalidDataException(
+                "The static ID65 editor-document store is not bound to the exact unpromoted lab manifest identity.");
+        }
+    }
+
+    private static bool RequiresLegacyNativeValidation(
+        Id65AuthoringEditorDocument document,
+        DocumentTransitionPolicy transitionPolicy) =>
+        !document.UsesRemotePadT107Grid ||
+        transitionPolicy == DocumentTransitionPolicy.ExplicitLegacyToRemotePadGrid;
+
+    private static void ValidateNativeProjectionInputs(
+        Id65AuthoringEditorDocumentProjectionInputs projectionInputs)
+    {
+        Id65AuthoringEditorNativeInputProvider.InputSet nativeInputs =
+            projectionInputs.NativeInputs ?? throw new InvalidDataException(
+                "Legacy ID65 persistence requires exact provider-owned native inputs.");
+        Id65AuthoringEditorNativeInputProvider.ValidateForConsumption(nativeInputs);
+    }
+
     private static ProjectionIdentity ProjectAndCaptureIdentity(
         Id65AuthoringEditorDocument document,
         Id65AuthoringEditorDocumentProjectionInputs inputs)
     {
-        ArgumentNullException.ThrowIfNull(inputs.NativeInputs);
-        Id65AuthoringEditorNativeInputProvider.ValidateForConsumption(inputs.NativeInputs);
+        if (document.UsesRemotePadT107Grid)
+            return CaptureRemotePadStaticAuthoringIdentity(document);
+
+        Id65AuthoringEditorNativeInputProvider.InputSet nativeInputs =
+            inputs.NativeInputs ?? throw new InvalidDataException(
+                "Legacy ID65 document projection requires exact provider-owned native inputs.");
+        Id65AuthoringEditorNativeInputProvider.ValidateForConsumption(nativeInputs);
 
         Id65AuthoringEditorProjection projection =
             Id65AuthoringEditorDocumentProjector.Project(new(
                 document,
-                inputs.NativeInputs.LockedSource,
-                inputs.NativeInputs.PrivateTextureWitness,
-                inputs.NativeInputs.GrassBundle,
+                nativeInputs.LockedSource,
+                nativeInputs.PrivateTextureWitness,
+                nativeInputs.GrassBundle,
                 inputs.Limits));
         Id65CompiledAuthoringComposite compiled = projection.Compiled;
         if (!HashEquals(projection.DocumentCanonicalSha256, document.CanonicalSha256) ||
@@ -684,6 +936,107 @@ internal static class Id65AuthoringEditorDocumentStore
             compiled.DeterministicPlanSha256);
     }
 
+    private static ProjectionIdentity CaptureRemotePadStaticAuthoringIdentity(
+        Id65AuthoringEditorDocument document)
+    {
+        if (!document.UsesRemotePadT107Grid ||
+            document.SchemaVersion != Id65AuthoringEditorDocument.RemotePadGridSchemaVersion ||
+            document.ProfileId != Id65AuthoringEditorDocument.RemotePadGridDocumentProfileId ||
+            document.T107RemotePadPositionId is not string positionId)
+        {
+            throw new InvalidDataException(
+                "The static ID65 authoring projector requires one exact schema-3 remote-pad document.");
+        }
+
+        Id65RemotePadGrassT107Position position =
+            Id65RemotePadGrassT107Catalog.GetRequiredPosition(positionId);
+        string sceneGraphSha256 = document.MandatoryBaseFaceTextureId switch
+        {
+            66 => document.Terrain.Count == 1
+                ? Id65FreshLevelSceneProjector.ExpectedStructuralGraphCanonicalSha256
+                : Id65FreshLevelSceneProjector.ExpectedCanonicalSha256,
+            25 => document.Terrain.Count == 1
+                ? Id65FreshLevelSceneProjector.ExpectedResidentT25StructuralGraphCanonicalSha256
+                : Id65FreshLevelSceneProjector.ExpectedResidentT25BaseGraphCanonicalSha256,
+            _ => throw new InvalidDataException(
+                "The static ID65 authoring projector requires exact T25 or T66 scene support.")
+        };
+        if (document.Terrain.Count is < 0 or > 1 ||
+            Id65RemotePadGrassT107Catalog.CanonicalSha256 !=
+                Id65RemotePadGrassT107Catalog.ExpectedCanonicalSha256 ||
+            Id65RemotePadGrassT107Catalog.SupportHandle !=
+                Id65FreshLevelSceneProjector.CollisionStableId ||
+            Id65RemotePadGrassT107Catalog.SupportCollisionTrueIndex !=
+                Id65FreshLevelSceneProjector.CollisionTriangleIndex ||
+            !Id65RemotePadGrassT107Catalog.IsStrictlyInsideSupportTriangle(
+                position.EditorX,
+                position.EditorY,
+                position.EditorZ))
+        {
+            throw new InvalidDataException(
+                "The schema-3 ID65 document lost its exact catalog or fresh-scene T13995 support binding.");
+        }
+
+        byte[] canonical = BuildRemotePadStaticAuthoringProjection(
+            document,
+            position,
+            sceneGraphSha256);
+        return new ProjectionIdentity(string.Empty, string.Empty, string.Empty, string.Empty)
+        {
+            StaticAuthoringProfileId = RemotePadGridStaticAuthoringProfileId,
+            StaticAuthoringCatalogSha256 = Id65RemotePadGrassT107Catalog.CanonicalSha256,
+            StaticAuthoringSceneGraphSha256 = sceneGraphSha256,
+            StaticAuthoringProjectionSha256 = Hash(canonical)
+        };
+    }
+
+    private static byte[] BuildRemotePadStaticAuthoringProjection(
+        Id65AuthoringEditorDocument document,
+        Id65RemotePadGrassT107Position position,
+        string sceneGraphSha256)
+    {
+        using MemoryStream buffer = new();
+        using (Utf8JsonWriter json = new(buffer, new JsonWriterOptions
+        {
+            Indented = false,
+            SkipValidation = false
+        }))
+        {
+            json.WriteStartObject();
+            json.WriteString("profileId", RemotePadGridStaticAuthoringProfileId);
+            json.WriteNumber("schemaVersion", 1);
+            json.WriteString("projectionContractId", RemotePadGridProjectionContractId);
+            json.WriteString("documentProfileId", document.ProfileId);
+            json.WriteString("documentCanonicalSha256", document.CanonicalSha256);
+            json.WriteString("documentContentSha256", document.ContentSha256);
+            json.WriteString("catalogProfileId", Id65RemotePadGrassT107Catalog.ProfileId);
+            json.WriteString("catalogCanonicalSha256", Id65RemotePadGrassT107Catalog.CanonicalSha256);
+            json.WriteString("positionId", position.PositionId);
+            json.WriteString("positionRowSha256", position.RowSha256);
+            json.WriteString("sceneProfileId", Id65FreshLevelSceneProjector.ProfileId);
+            json.WriteNumber("sceneSchemaVersion", Id65FreshLevelSceneProjector.SchemaVersion);
+            json.WriteString("sceneGraphCanonicalSha256", sceneGraphSha256);
+            json.WriteString("supportHandle", Id65RemotePadGrassT107Catalog.SupportHandle);
+            json.WriteNumber(
+                "supportCollisionTrueIndex",
+                Id65RemotePadGrassT107Catalog.SupportCollisionTrueIndex);
+            json.WriteBoolean("structuralTerrainPresent", document.Terrain.Count == 1);
+            json.WriteNumber("mandatoryBaseFaceTextureId", document.MandatoryBaseFaceTextureId);
+            json.WriteBoolean(
+                "grassAtT88Present",
+                document.MobyPlacements.Any(item => item.TargetTrueIndex == 88));
+            json.WriteBoolean(
+                "grassAtT107Present",
+                document.MobyPlacements.Any(item => item.TargetTrueIndex == 107));
+            json.WriteBoolean("compiledAfterimagePresent", false);
+            json.WriteBoolean("runtimeCandidateAuthorized", false);
+            json.WriteBoolean("normalCreateBinEnabled", false);
+            json.WriteBoolean("releaseAuthorized", false);
+            json.WriteEndObject();
+        }
+        return buffer.ToArray();
+    }
+
     private static void RequireDocumentLabIdentity(
         Id65AuthoringEditorDocument document,
         UnusedLevel65BlankLevelLabManifest expectedLabManifest)
@@ -691,10 +1044,16 @@ internal static class Id65AuthoringEditorDocumentStore
         bool supportedDocument =
             (document.SchemaVersion == Id65AuthoringEditorDocument.CurrentSchemaVersion &&
              document.ProfileId == Id65AuthoringEditorDocument.DocumentProfileId &&
-             document.MandatoryBaseFaceTextureId == 66) ||
+             document.MandatoryBaseFaceTextureId == 66 &&
+             !document.UsesRemotePadT107Grid) ||
             (document.SchemaVersion == Id65AuthoringEditorDocument.ResidentT25SchemaVersion &&
              document.ProfileId == Id65AuthoringEditorDocument.ResidentT25DocumentProfileId &&
-             document.MandatoryBaseFaceTextureId == 25);
+             document.MandatoryBaseFaceTextureId == 25 &&
+             !document.UsesRemotePadT107Grid) ||
+            (document.SchemaVersion == Id65AuthoringEditorDocument.RemotePadGridSchemaVersion &&
+             document.ProfileId == Id65AuthoringEditorDocument.RemotePadGridDocumentProfileId &&
+             document.MandatoryBaseFaceTextureId is 25 or 66 &&
+             document.UsesRemotePadT107Grid);
         if (!supportedDocument ||
             document.LabProfileId != expectedLabManifest.ProfileId ||
             document.LabProfileVersion != expectedLabManifest.ProfileVersion ||
@@ -770,7 +1129,7 @@ internal static class Id65AuthoringEditorDocumentStore
         {
             json.WriteStartObject();
             json.WriteString("format", EnvelopeFormat);
-            json.WriteNumber("schemaVersion", EnvelopeSchemaVersion);
+            json.WriteNumber("schemaVersion", GetEnvelopeSchemaVersion(document));
             json.WriteString("workspaceKey", labManifest.WorkspaceKey);
             json.WriteNumber("workspaceLayoutVersion", labManifest.WorkspaceLayoutVersion);
             json.WriteString("workspaceLayoutRelativeRoot", labManifest.WorkspaceLayoutRelativeRoot);
@@ -780,13 +1139,29 @@ internal static class Id65AuthoringEditorDocumentStore
             json.WriteString("lockedBaseImageSha256", labManifest.LockedBaseImageSha256);
             json.WriteString("documentProfileId", document.ProfileId);
             json.WriteString("documentCanonicalSha256", document.CanonicalSha256);
-            json.WriteString("projectionContractId", ProjectionContractId);
-            json.WriteString("compositeProfileId", projection.CompositeProfileId);
-            json.WriteString("compositeManifestSha256", projection.CompositeManifestSha256);
-            json.WriteString("compositeOutputRow80Sha256", projection.CompositeOutputRow80Sha256);
-            json.WriteString(
-                "compositeDeterministicPlanSha256",
-                projection.CompositeDeterministicPlanSha256);
+            json.WriteString("projectionContractId", GetProjectionContractId(document));
+            if (document.UsesRemotePadT107Grid)
+            {
+                json.WriteString("staticAuthoringProfileId", projection.StaticAuthoringProfileId);
+                json.WriteString(
+                    "staticAuthoringCatalogSha256",
+                    projection.StaticAuthoringCatalogSha256);
+                json.WriteString(
+                    "staticAuthoringSceneGraphSha256",
+                    projection.StaticAuthoringSceneGraphSha256);
+                json.WriteString(
+                    "staticAuthoringProjectionSha256",
+                    projection.StaticAuthoringProjectionSha256);
+            }
+            else
+            {
+                json.WriteString("compositeProfileId", projection.CompositeProfileId);
+                json.WriteString("compositeManifestSha256", projection.CompositeManifestSha256);
+                json.WriteString("compositeOutputRow80Sha256", projection.CompositeOutputRow80Sha256);
+                json.WriteString(
+                    "compositeDeterministicPlanSha256",
+                    projection.CompositeDeterministicPlanSha256);
+            }
             if (envelopeContentSha256 != null)
                 json.WriteString("envelopeContentSha256", envelopeContentSha256);
             json.WritePropertyName("document");
@@ -805,25 +1180,29 @@ internal static class Id65AuthoringEditorDocumentStore
     {
         Id65AuthoringEditorDocumentEnvelopeIdentity identity =
             ParseAndValidateEnvelopeIdentity(bytes, expectedLabManifest);
+        ValidateProjectionIdentity(identity, projectionInputs);
+        return CreateStoreResult(path, identity);
+    }
+
+    private static void ValidateProjectionIdentity(
+        Id65AuthoringEditorDocumentEnvelopeIdentity identity,
+        Id65AuthoringEditorDocumentProjectionInputs projectionInputs)
+    {
         ProjectionIdentity projected = ProjectAndCaptureIdentity(
             identity.Document,
             projectionInputs);
-        if (projected.CompositeProfileId != identity.CompositeProfileId ||
-            !HashEquals(
-                projected.CompositeManifestSha256,
-                identity.CompositeManifestSha256) ||
-            !HashEquals(
-                projected.CompositeOutputRow80Sha256,
-                identity.CompositeOutputRow80Sha256) ||
-            !HashEquals(
-                projected.CompositeDeterministicPlanSha256,
-                identity.CompositeDeterministicPlanSha256))
+        ProjectionIdentity persisted = CaptureProjectionIdentity(identity);
+        if (!ProjectionIdentitiesEqual(projected, persisted))
         {
             throw new InvalidDataException(
                 "The persisted ID65 editor-document projection identity does not match current semantic projection.");
         }
+    }
 
-        return new Id65AuthoringEditorDocumentStoreResult(
+    private static Id65AuthoringEditorDocumentStoreResult CreateStoreResult(
+        string path,
+        Id65AuthoringEditorDocumentEnvelopeIdentity identity) =>
+        new(
             path,
             identity.Document,
             identity.EnvelopeCanonicalSha256,
@@ -831,8 +1210,13 @@ internal static class Id65AuthoringEditorDocumentStore
             identity.CompositeProfileId,
             identity.CompositeManifestSha256,
             identity.CompositeOutputRow80Sha256,
-            identity.CompositeDeterministicPlanSha256);
-    }
+            identity.CompositeDeterministicPlanSha256)
+        {
+            StaticAuthoringProfileId = identity.StaticAuthoringProfileId,
+            StaticAuthoringCatalogSha256 = identity.StaticAuthoringCatalogSha256,
+            StaticAuthoringSceneGraphSha256 = identity.StaticAuthoringSceneGraphSha256,
+            StaticAuthoringProjectionSha256 = identity.StaticAuthoringProjectionSha256
+        };
 
     private static Id65AuthoringEditorDocumentEnvelopeIdentity
         ParseAndValidateEnvelopeIdentity(
@@ -855,10 +1239,21 @@ internal static class Id65AuthoringEditorDocumentStore
                     MaxDepth = 64
                 });
             JsonElement root = parsed.RootElement;
-            RequireExactProperties(root, EnvelopePropertyNames);
+            int schemaVersion = RequireInt32(root, "schemaVersion");
+            bool remotePadGridEnvelope = schemaVersion switch
+            {
+                EnvelopeSchemaVersion => false,
+                RemotePadGridEnvelopeSchemaVersion => true,
+                _ => throw new InvalidDataException(
+                    "The ID65 editor-document envelope schema version is unsupported.")
+            };
+            RequireExactProperties(
+                root,
+                remotePadGridEnvelope
+                    ? RemotePadGridEnvelopePropertyNames
+                    : LegacyEnvelopePropertyNames);
 
             string format = RequireString(root, "format");
-            int schemaVersion = RequireInt32(root, "schemaVersion");
             string workspaceKey = RequireString(root, "workspaceKey");
             int workspaceLayoutVersion = RequireInt32(root, "workspaceLayoutVersion");
             string workspaceLayoutRelativeRoot = RequireString(
@@ -871,14 +1266,30 @@ internal static class Id65AuthoringEditorDocumentStore
             string documentProfileId = RequireString(root, "documentProfileId");
             string documentCanonicalSha256 = RequireString(root, "documentCanonicalSha256");
             string projectionContractId = RequireString(root, "projectionContractId");
-            string compositeProfileId = RequireString(root, "compositeProfileId");
-            string compositeManifestSha256 = RequireString(root, "compositeManifestSha256");
-            string compositeOutputRow80Sha256 = RequireString(
-                root,
-                "compositeOutputRow80Sha256");
-            string compositeDeterministicPlanSha256 = RequireString(
-                root,
-                "compositeDeterministicPlanSha256");
+            string compositeProfileId = remotePadGridEnvelope
+                ? string.Empty
+                : RequireString(root, "compositeProfileId");
+            string compositeManifestSha256 = remotePadGridEnvelope
+                ? string.Empty
+                : RequireString(root, "compositeManifestSha256");
+            string compositeOutputRow80Sha256 = remotePadGridEnvelope
+                ? string.Empty
+                : RequireString(root, "compositeOutputRow80Sha256");
+            string compositeDeterministicPlanSha256 = remotePadGridEnvelope
+                ? string.Empty
+                : RequireString(root, "compositeDeterministicPlanSha256");
+            string staticAuthoringProfileId = remotePadGridEnvelope
+                ? RequireString(root, "staticAuthoringProfileId")
+                : string.Empty;
+            string staticAuthoringCatalogSha256 = remotePadGridEnvelope
+                ? RequireString(root, "staticAuthoringCatalogSha256")
+                : string.Empty;
+            string staticAuthoringSceneGraphSha256 = remotePadGridEnvelope
+                ? RequireString(root, "staticAuthoringSceneGraphSha256")
+                : string.Empty;
+            string staticAuthoringProjectionSha256 = remotePadGridEnvelope
+                ? RequireString(root, "staticAuthoringProjectionSha256")
+                : string.Empty;
             string envelopeContentSha256 = RequireString(root, "envelopeContentSha256");
             JsonElement serializedDocument = RequireProperty(root, "document");
             if (serializedDocument.ValueKind != JsonValueKind.Object)
@@ -886,9 +1297,11 @@ internal static class Id65AuthoringEditorDocumentStore
             Id65AuthoringEditorDocument document = Id65AuthoringEditorDocument.Parse(
                 Encoding.UTF8.GetBytes(serializedDocument.GetRawText()));
             RequireDocumentLabIdentity(document, expectedLabManifest);
+            int expectedEnvelopeSchemaVersion = GetEnvelopeSchemaVersion(document);
+            string expectedProjectionContractId = GetProjectionContractId(document);
 
             if (format != EnvelopeFormat ||
-                schemaVersion != EnvelopeSchemaVersion ||
+                schemaVersion != expectedEnvelopeSchemaVersion ||
                 workspaceKey != expectedLabManifest.WorkspaceKey ||
                 workspaceLayoutVersion != expectedLabManifest.WorkspaceLayoutVersion ||
                 workspaceLayoutRelativeRoot != expectedLabManifest.WorkspaceLayoutRelativeRoot ||
@@ -898,22 +1311,67 @@ internal static class Id65AuthoringEditorDocumentStore
                 !HashEquals(lockedBaseImageSha256, expectedLabManifest.LockedBaseImageSha256) ||
                 documentProfileId != document.ProfileId ||
                 !HashEquals(documentCanonicalSha256, document.CanonicalSha256) ||
-                projectionContractId != ProjectionContractId ||
-                compositeProfileId != Id65AuthoringCompositeCompiler.ProfileId ||
-                !IsSha256(compositeManifestSha256) ||
-                !IsSha256(compositeOutputRow80Sha256) ||
-                !IsSha256(compositeDeterministicPlanSha256) ||
+                projectionContractId != expectedProjectionContractId ||
                 !IsSha256(envelopeContentSha256))
             {
                 throw new InvalidDataException(
                     "The ID65 editor-document envelope schema/workspace/base/document/projection identity is unsupported or stale.");
             }
 
-            ProjectionIdentity persisted = new(
-                compositeProfileId,
-                compositeManifestSha256.ToLowerInvariant(),
-                compositeOutputRow80Sha256.ToLowerInvariant(),
-                compositeDeterministicPlanSha256.ToLowerInvariant());
+            ProjectionIdentity persisted;
+            if (remotePadGridEnvelope)
+            {
+                if (staticAuthoringProfileId != RemotePadGridStaticAuthoringProfileId ||
+                    !HashEquals(
+                        staticAuthoringCatalogSha256,
+                        Id65RemotePadGrassT107Catalog.CanonicalSha256) ||
+                    !IsSha256(staticAuthoringSceneGraphSha256) ||
+                    !IsSha256(staticAuthoringProjectionSha256))
+                {
+                    throw new InvalidDataException(
+                        "The schema-2 ID65 editor-document envelope static-authoring identity is unsupported or stale.");
+                }
+
+                persisted = new(
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty)
+                {
+                    StaticAuthoringProfileId = staticAuthoringProfileId,
+                    StaticAuthoringCatalogSha256 =
+                        staticAuthoringCatalogSha256.ToLowerInvariant(),
+                    StaticAuthoringSceneGraphSha256 =
+                        staticAuthoringSceneGraphSha256.ToLowerInvariant(),
+                    StaticAuthoringProjectionSha256 =
+                        staticAuthoringProjectionSha256.ToLowerInvariant()
+                };
+
+                ProjectionIdentity exactStaticProjection =
+                    CaptureRemotePadStaticAuthoringIdentity(document);
+                if (!ProjectionIdentitiesEqual(persisted, exactStaticProjection))
+                {
+                    throw new InvalidDataException(
+                        "The schema-2 ID65 editor-document envelope static-authoring identity was forged or is stale.");
+                }
+            }
+            else
+            {
+                if (compositeProfileId != Id65AuthoringCompositeCompiler.ProfileId ||
+                    !IsSha256(compositeManifestSha256) ||
+                    !IsSha256(compositeOutputRow80Sha256) ||
+                    !IsSha256(compositeDeterministicPlanSha256))
+                {
+                    throw new InvalidDataException(
+                        "The legacy ID65 editor-document envelope composite identity is unsupported or stale.");
+                }
+
+                persisted = new(
+                    compositeProfileId,
+                    compositeManifestSha256.ToLowerInvariant(),
+                    compositeOutputRow80Sha256.ToLowerInvariant(),
+                    compositeDeterministicPlanSha256.ToLowerInvariant());
+            }
             EnvelopeBytes expected = BuildEnvelope(
                 expectedLabManifest,
                 document,
@@ -928,11 +1386,17 @@ internal static class Id65AuthoringEditorDocumentStore
             return new Id65AuthoringEditorDocumentEnvelopeIdentity(
                 document,
                 expected.CanonicalSha256,
-                ProjectionContractId,
+                expectedProjectionContractId,
                 persisted.CompositeProfileId,
                 persisted.CompositeManifestSha256,
                 persisted.CompositeOutputRow80Sha256,
-                persisted.CompositeDeterministicPlanSha256);
+                persisted.CompositeDeterministicPlanSha256)
+            {
+                StaticAuthoringProfileId = persisted.StaticAuthoringProfileId,
+                StaticAuthoringCatalogSha256 = persisted.StaticAuthoringCatalogSha256,
+                StaticAuthoringSceneGraphSha256 = persisted.StaticAuthoringSceneGraphSha256,
+                StaticAuthoringProjectionSha256 = persisted.StaticAuthoringProjectionSha256
+            };
         }
         catch (InvalidDataException)
         {
@@ -1144,11 +1608,59 @@ internal static class Id65AuthoringEditorDocumentStore
         IsSha256(left) && IsSha256(right) &&
         string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 
+    private static int GetEnvelopeSchemaVersion(Id65AuthoringEditorDocument document) =>
+        document.UsesRemotePadT107Grid
+            ? RemotePadGridEnvelopeSchemaVersion
+            : EnvelopeSchemaVersion;
+
+    private static string GetProjectionContractId(Id65AuthoringEditorDocument document) =>
+        document.UsesRemotePadT107Grid
+            ? RemotePadGridProjectionContractId
+            : ProjectionContractId;
+
+    private static ProjectionIdentity CaptureProjectionIdentity(
+        Id65AuthoringEditorDocumentEnvelopeIdentity identity) =>
+        new(
+            identity.CompositeProfileId,
+            identity.CompositeManifestSha256,
+            identity.CompositeOutputRow80Sha256,
+            identity.CompositeDeterministicPlanSha256)
+        {
+            StaticAuthoringProfileId = identity.StaticAuthoringProfileId,
+            StaticAuthoringCatalogSha256 = identity.StaticAuthoringCatalogSha256,
+            StaticAuthoringSceneGraphSha256 = identity.StaticAuthoringSceneGraphSha256,
+            StaticAuthoringProjectionSha256 = identity.StaticAuthoringProjectionSha256
+        };
+
+    private static bool ProjectionIdentitiesEqual(
+        ProjectionIdentity left,
+        ProjectionIdentity right) =>
+        left.CompositeProfileId == right.CompositeProfileId &&
+        left.CompositeManifestSha256 == right.CompositeManifestSha256 &&
+        left.CompositeOutputRow80Sha256 == right.CompositeOutputRow80Sha256 &&
+        left.CompositeDeterministicPlanSha256 == right.CompositeDeterministicPlanSha256 &&
+        left.StaticAuthoringProfileId == right.StaticAuthoringProfileId &&
+        left.StaticAuthoringCatalogSha256 == right.StaticAuthoringCatalogSha256 &&
+        left.StaticAuthoringSceneGraphSha256 == right.StaticAuthoringSceneGraphSha256 &&
+        left.StaticAuthoringProjectionSha256 == right.StaticAuthoringProjectionSha256;
+
+    private enum DocumentTransitionPolicy
+    {
+        SameSemanticFamilyOnly,
+        ExplicitLegacyToRemotePadGrid
+    }
+
     private sealed record ProjectionIdentity(
         string CompositeProfileId,
         string CompositeManifestSha256,
         string CompositeOutputRow80Sha256,
-        string CompositeDeterministicPlanSha256);
+        string CompositeDeterministicPlanSha256)
+    {
+        public string StaticAuthoringProfileId { get; init; } = string.Empty;
+        public string StaticAuthoringCatalogSha256 { get; init; } = string.Empty;
+        public string StaticAuthoringSceneGraphSha256 { get; init; } = string.Empty;
+        public string StaticAuthoringProjectionSha256 { get; init; } = string.Empty;
+    }
 
     private sealed record EnvelopeBytes(
         byte[] CanonicalBytes,

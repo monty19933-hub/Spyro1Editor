@@ -17,7 +17,9 @@ public abstract class Id65AuthoringEditorDocumentWriteResult
     public abstract Id65AuthoringEditorControlState ControlState { get; }
     public abstract Id65AuthoringEditorDocumentReadModel Document { get; }
     public abstract bool CreatedNewDocument { get; }
+    public abstract bool ExplicitLegacyToRemotePadMigrationPerformed { get; }
     public bool ReplacedExistingDocument => !CreatedNewDocument;
+    public bool AutomaticMigrationPerformed => false;
     public string DocumentCanonicalSha256 => Document.DocumentCanonicalSha256;
     public string DocumentContentSha256 => Document.DocumentContentSha256;
     public string EnvelopeCanonicalSha256 => Document.EnvelopeCanonicalSha256;
@@ -25,9 +27,17 @@ public abstract class Id65AuthoringEditorDocumentWriteResult
     public bool ExplicitSaveInvocationRequired => true;
     public bool LegacyTerrainLayerConflictChecked => true;
     public bool ExactControlStateCompiled => true;
-    public bool ProviderOwnedNativeInputGenerationValidatedDuringWrite => true;
-    public bool LockedSourceRevalidatedDuringWrite => true;
+    public bool ProviderOwnedNativeInputGenerationValidatedDuringWrite =>
+        !Document.UsesRemotePadT107Grid ||
+        ExplicitLegacyToRemotePadMigrationPerformed;
+    public bool LockedSourceRevalidatedDuringWrite =>
+        ProviderOwnedNativeInputGenerationValidatedDuringWrite;
     public bool CurrentProjectionRevalidatedDuringWrite => true;
+    public bool StaticAuthoringProjectionValidatedDuringWrite =>
+        Document.UsesRemotePadT107Grid;
+    public bool LegacyPriorCompositeProjectionValidatedDuringWrite =>
+        ExplicitLegacyToRemotePadMigrationPerformed ||
+        (ReplacedExistingDocument && !Document.UsesRemotePadT107Grid);
     public bool CompareAndSwapEnforced => true;
     public bool AtomicPublicationCompleted => true;
     public bool PersistencePerformed => true;
@@ -56,9 +66,10 @@ public abstract class Id65AuthoringEditorDocumentWriteResult
 
 /// <summary>
 /// Explicit, project-bound writer for the exact ID65 authoring document. This
-/// is deliberately expensive: it validates the locked workspace, loads and
-/// validates provider-owned native texture/Moby inputs, reprojects the document,
-/// and then uses the Store's compare-and-swap publication. It must not be called from
+/// validates the exact workspace manifest and then uses the Store's
+/// compare-and-swap publication. Legacy saves and explicit migration additionally
+/// validate provider-owned native inputs; fresh schema-3 creates and schema-3
+/// updates remain document/static-authoring only. It must not be called from
 /// project open, background admission, UI construction, or UI refresh.
 /// </summary>
 public static class Id65AuthoringEditorDocumentWorkspaceWriter
@@ -72,7 +83,52 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         UnusedLevel65BlankLevelLabManifest expectedLabManifest,
         Id65AuthoringEditorControlState state,
         string? expectedPriorEnvelopeCanonicalSha256,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        await SaveCoreAsync(
+            paths,
+            expectedLabManifest,
+            state,
+            expectedPriorEnvelopeCanonicalSha256,
+            explicitLegacyToRemotePadMigration: false,
+            cancellationToken);
+
+    /// <summary>
+    /// Performs the only supported semantic-family transition. The caller must
+    /// explicitly supply a schema-3 remote-pad state and the exact prior legacy
+    /// envelope identity; the store never infers Center or migrates on load/save.
+    /// </summary>
+    public static async Task<Id65AuthoringEditorDocumentWriteResult>
+        MigrateLegacyToRemotePadGridExactAsync(
+            UnusedLevel65BlankLevelLabWorkspacePaths paths,
+            UnusedLevel65BlankLevelLabManifest expectedLabManifest,
+            Id65AuthoringEditorControlState remoteState,
+            string expectedPriorEnvelopeCanonicalSha256,
+            CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(remoteState);
+        if (!remoteState.UsesRemotePadT107Grid ||
+            string.IsNullOrWhiteSpace(expectedPriorEnvelopeCanonicalSha256))
+        {
+            throw new InvalidDataException(
+                "Explicit ID65 migration requires a caller-supplied schema-3 remote-pad state and exact prior envelope identity.");
+        }
+
+        return await SaveCoreAsync(
+            paths,
+            expectedLabManifest,
+            remoteState,
+            expectedPriorEnvelopeCanonicalSha256,
+            explicitLegacyToRemotePadMigration: true,
+            cancellationToken);
+    }
+
+    private static async Task<Id65AuthoringEditorDocumentWriteResult> SaveCoreAsync(
+        UnusedLevel65BlankLevelLabWorkspacePaths paths,
+        UnusedLevel65BlankLevelLabManifest expectedLabManifest,
+        Id65AuthoringEditorControlState state,
+        string? expectedPriorEnvelopeCanonicalSha256,
+        bool explicitLegacyToRemotePadMigration,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(expectedLabManifest);
@@ -87,25 +143,42 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             Id65AuthoringEditorControlStateCompiler.Compile(state);
         cancellationToken.ThrowIfCancellationRequested();
 
-        Id65AuthoringEditorNativeInputProvider.InputSet nativeInputs =
-            await Id65AuthoringEditorNativeInputProvider.LoadAsync(
-                paths,
-                expectedLabManifest,
-                cancellationToken);
+        bool requiresLegacyNativeInputs =
+            !state.UsesRemotePadT107Grid || explicitLegacyToRemotePadMigration;
+        Id65AuthoringEditorNativeInputProvider.InputSet? nativeInputs =
+            requiresLegacyNativeInputs
+                ? await Id65AuthoringEditorNativeInputProvider.LoadAsync(
+                    paths,
+                    expectedLabManifest,
+                    cancellationToken)
+                : null;
         cancellationToken.ThrowIfCancellationRequested();
         await RequireNoConflictingLegacyTerrainLayerAsync(paths, cancellationToken);
 
-        return await Id65AuthoringEditorDocumentStore.SavePreparedAsync(
+        Func<Id65AuthoringEditorDocumentStoreResult, Id65AuthoringEditorDocumentWriteResult>
+            prepareResult = stored => PrepareResult(
+                state,
+                compilation,
+                stored,
+                createdNewDocument: expectedPriorEnvelopeCanonicalSha256 == null,
+                explicitLegacyToRemotePadMigration);
+        Id65AuthoringEditorDocumentProjectionInputs projectionInputs =
+            new(nativeInputs);
+        return explicitLegacyToRemotePadMigration
+            ? await Id65AuthoringEditorDocumentStore.MigratePreparedAsync(
                 paths,
                 expectedLabManifest,
                 compilation.Document,
-                new Id65AuthoringEditorDocumentProjectionInputs(nativeInputs),
-                stored => PrepareResult(
-                    state,
-                    compilation,
-                    stored,
-                    createdNewDocument:
-                        expectedPriorEnvelopeCanonicalSha256 == null),
+                projectionInputs,
+                prepareResult,
+                expectedPriorEnvelopeCanonicalSha256!,
+                cancellationToken)
+            : await Id65AuthoringEditorDocumentStore.SavePreparedAsync(
+                paths,
+                expectedLabManifest,
+                compilation.Document,
+                projectionInputs,
+                prepareResult,
                 expectedPriorEnvelopeCanonicalSha256,
                 cancellationToken);
     }
@@ -114,7 +187,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         Id65AuthoringEditorControlState state,
         Id65AuthoringEditorControlStateCompilation compilation,
         Id65AuthoringEditorDocumentStoreResult stored,
-        bool createdNewDocument)
+        bool createdNewDocument,
+        bool explicitLegacyToRemotePadMigration)
     {
         Id65AuthoringEditorDocumentEnvelopeIdentity identity = new(
             stored.Document,
@@ -123,7 +197,13 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             stored.CompositeProfileId,
             stored.CompositeManifestSha256,
             stored.CompositeOutputRow80Sha256,
-            stored.CompositeDeterministicPlanSha256);
+            stored.CompositeDeterministicPlanSha256)
+        {
+            StaticAuthoringProfileId = stored.StaticAuthoringProfileId,
+            StaticAuthoringCatalogSha256 = stored.StaticAuthoringCatalogSha256,
+            StaticAuthoringSceneGraphSha256 = stored.StaticAuthoringSceneGraphSha256,
+            StaticAuthoringProjectionSha256 = stored.StaticAuthoringProjectionSha256
+        };
         Id65AuthoringEditorDocumentReadModel readModel = new(identity);
         Id65AuthoringEditorControlState recovered =
             Id65AuthoringEditorControlStateCompiler.RecoverControlState(readModel);
@@ -132,8 +212,14 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         Id65AuthoringEditorDocumentWriteResult result = new WorkspaceWriteResult(
             recovered,
             readModel,
-            createdNewDocument);
-        ValidateResult(result, compilation, stored);
+            createdNewDocument,
+            explicitLegacyToRemotePadMigration);
+        ValidateResult(
+            result,
+            compilation,
+            stored,
+            createdNewDocument,
+            explicitLegacyToRemotePadMigration);
         return result;
     }
 
@@ -251,7 +337,12 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         if (expected.IncludeStructuralTerrain != actual.IncludeStructuralTerrain ||
             expected.IncludeGrassAtT88 != actual.IncludeGrassAtT88 ||
             expected.IncludeGrassAtT107 != actual.IncludeGrassAtT107 ||
-            expected.MandatoryBaseFaceTextureId != actual.MandatoryBaseFaceTextureId)
+            expected.MandatoryBaseFaceTextureId != actual.MandatoryBaseFaceTextureId ||
+            expected.T107PlacementSemantics != actual.T107PlacementSemantics ||
+            !string.Equals(
+                expected.T107RemotePadPositionId,
+                actual.T107RemotePadPositionId,
+                StringComparison.Ordinal))
         {
             throw new InvalidDataException(
                 "The saved ID65 document did not recover its requested exact control state.");
@@ -261,18 +352,33 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
     private static void ValidateResult(
         Id65AuthoringEditorDocumentWriteResult result,
         Id65AuthoringEditorControlStateCompilation compilation,
-        Id65AuthoringEditorDocumentStoreResult stored)
+        Id65AuthoringEditorDocumentStoreResult stored,
+        bool createdNewDocument,
+        bool expectedExplicitMigration)
     {
+        bool expectedNativeValidation =
+            !result.Document.UsesRemotePadT107Grid || expectedExplicitMigration;
+        bool expectedLegacyPriorProjectionValidation =
+            expectedExplicitMigration ||
+            (!createdNewDocument && !result.Document.UsesRemotePadT107Grid);
         if (result is not WorkspaceWriteResult ||
             result.DocumentCanonicalSha256 != compilation.DocumentCanonicalSha256 ||
             result.DocumentContentSha256 != compilation.DocumentContentSha256 ||
             result.EnvelopeCanonicalSha256 != stored.EnvelopeCanonicalSha256 ||
+            result.ExplicitLegacyToRemotePadMigrationPerformed !=
+                expectedExplicitMigration ||
+            result.AutomaticMigrationPerformed ||
             !result.ExplicitSaveInvocationRequired ||
             !result.LegacyTerrainLayerConflictChecked ||
             !result.ExactControlStateCompiled ||
-            !result.ProviderOwnedNativeInputGenerationValidatedDuringWrite ||
-            !result.LockedSourceRevalidatedDuringWrite ||
+            result.ProviderOwnedNativeInputGenerationValidatedDuringWrite !=
+                expectedNativeValidation ||
+            result.LockedSourceRevalidatedDuringWrite != expectedNativeValidation ||
             !result.CurrentProjectionRevalidatedDuringWrite ||
+            result.StaticAuthoringProjectionValidatedDuringWrite !=
+                result.Document.UsesRemotePadT107Grid ||
+            result.LegacyPriorCompositeProjectionValidatedDuringWrite !=
+                expectedLegacyPriorProjectionValidation ||
             !result.CompareAndSwapEnforced ||
             !result.AtomicPublicationCompleted ||
             !result.PersistencePerformed ||
@@ -300,7 +406,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         internal WorkspaceWriteResult(
             Id65AuthoringEditorControlState state,
             Id65AuthoringEditorDocumentReadModel document,
-            bool createdNewDocument)
+            bool createdNewDocument,
+            bool explicitLegacyToRemotePadMigration)
         {
             ArgumentNullException.ThrowIfNull(state);
             ArgumentNullException.ThrowIfNull(document);
@@ -308,17 +415,16 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
                 Id65AuthoringEditorControlStateCompiler.RecoverControlState(document);
             RequireEquivalent(state, recovered);
 
-            ControlState = new(
-                recovered.IncludeStructuralTerrain,
-                recovered.IncludeGrassAtT88,
-                recovered.IncludeGrassAtT107,
-                recovered.MandatoryBaseFaceTextureId);
+            ControlState = Id65AuthoringEditorControlState.CopyExact(recovered);
             Document = document;
             CreatedNewDocument = createdNewDocument;
+            ExplicitLegacyToRemotePadMigrationPerformed =
+                explicitLegacyToRemotePadMigration;
         }
 
         public override Id65AuthoringEditorControlState ControlState { get; }
         public override Id65AuthoringEditorDocumentReadModel Document { get; }
         public override bool CreatedNewDocument { get; }
+        public override bool ExplicitLegacyToRemotePadMigrationPerformed { get; }
     }
 }

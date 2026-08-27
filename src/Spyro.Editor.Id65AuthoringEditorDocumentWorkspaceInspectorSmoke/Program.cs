@@ -7,6 +7,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Persistence;
+using Spyro.Editor.Core.Workspace;
 
 const string SmokeRootPrefix =
     "Spyro.Editor.Id65AuthoringEditorDocumentWorkspaceInspectorSmoke-";
@@ -225,11 +226,153 @@ Require(
             ComputeExpectedReadModelSha256(inspectedNoTerrain),
         "A distinct persisted semantic document did not produce a distinct exact read model.");
 
+    HashSet<string> remoteReadModelHashes = new(StringComparer.Ordinal);
+    foreach (Id65RemotePadGrassT107Position position in
+             Id65RemotePadGrassT107Catalog.Positions)
+    {
+        Id65AuthoringEditorDocument remoteDocument =
+            Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+                position.PositionId,
+                includeOptionalTerrain: true);
+        byte[] remoteEnvelope = BuildCanonicalEnvelope(manifest, remoteDocument);
+        await File.WriteAllBytesAsync(documentPath, remoteEnvelope);
+        Id65AuthoringEditorDocumentReadModel remote = RequirePresent(
+            await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                manifest));
+        AssertExactSemantics(remote, remoteDocument);
+        AssertClosedCapabilities(remote);
+        AssertRemotePadPosition(remote, position);
+        Id65AuthoringEditorControlState recoveredRemote =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(remote);
+        Require(
+            remote.ReadModelSchemaVersion ==
+                Id65AuthoringEditorDocumentReadModel.RemotePadGridReadModelSchemaVersion &&
+            remote.EnvelopeSchemaVersion ==
+                Id65AuthoringEditorDocumentStore.RemotePadGridEnvelopeSchemaVersion &&
+            remote.ProjectionContractId ==
+                Id65AuthoringEditorDocumentStore.RemotePadGridProjectionContractId &&
+            remote.StaticAuthoringProfileId ==
+                Id65AuthoringEditorDocumentStore.RemotePadGridStaticAuthoringProfileId &&
+            remote.StaticAuthoringCatalogSha256 ==
+                Id65RemotePadGrassT107Catalog.CanonicalSha256 &&
+            remote.StaticAuthoringSceneGraphSha256 ==
+                Id65FreshLevelSceneProjector.ExpectedStructuralGraphCanonicalSha256 &&
+            remote.StaticAuthoringProjectionSha256.Length == 64 &&
+            remote.HasStaticAuthoringProjection &&
+            !remote.HasCompiledCompositeProjection &&
+            remote.CompositeManifestSha256.Length == 0 &&
+            remote.CompositeOutputRow80Sha256.Length == 0 &&
+            remote.CompositeDeterministicPlanSha256.Length == 0 &&
+            recoveredRemote.UsesRemotePadT107Grid &&
+            recoveredRemote.T107RemotePadPositionId == position.PositionId &&
+            recoveredRemote.IncludeGrassAtT107 &&
+            remote.ReadModelCanonicalSha256 == ComputeExpectedReadModelSha256(remote) &&
+            remoteReadModelHashes.Add(remote.ReadModelCanonicalSha256),
+            $"Remote position {position.PositionId} did not inspect as one exact schema-3 static-authoring read model.");
+    }
+    Require(
+        remoteReadModelHashes.Count == Id65RemotePadGrassT107Catalog.Positions.Count,
+        "The nine frozen remote positions did not produce nine distinct read-model identities.");
+
+    Id65RemotePadGrassT107Position retainedPosition =
+        Id65RemotePadGrassT107Catalog.GetRequiredPosition(
+            Id65RemotePadGrassT107Catalog.SouthEastPositionId);
+    Id65AuthoringEditorDocument remoteOffDocument =
+        Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+            retainedPosition.PositionId,
+            includeOptionalTerrain: false,
+            placementIds: []);
+    await File.WriteAllBytesAsync(
+        documentPath,
+        BuildCanonicalEnvelope(manifest, remoteOffDocument));
+    Id65AuthoringEditorDocumentReadModel remoteOff = RequirePresent(
+        await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(paths, manifest));
+    AssertRemotePadPosition(remoteOff, retainedPosition);
+    Require(
+        remoteOff.MobyPlacements.Count == 0 &&
+        !Id65AuthoringEditorControlStateCompiler
+            .RecoverControlState(remoteOff)
+            .IncludeGrassAtT107,
+        "A dormant remote T107 choice did not retain its exact selected position while off.");
+
+    Id65AuthoringEditorDocument remoteOnDocument =
+        Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+            retainedPosition.PositionId,
+            includeOptionalTerrain: false,
+            placementIds: [Id65RemotePadGrassT107Catalog.PlacementId]);
+    byte[] remoteOnEnvelope = BuildCanonicalEnvelope(manifest, remoteOnDocument);
+    await File.WriteAllBytesAsync(documentPath, remoteOnEnvelope);
+    Id65AuthoringEditorDocumentReadModel remoteOn = RequirePresent(
+        await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(paths, manifest));
+    AssertRemotePadPosition(remoteOn, retainedPosition);
+    Require(
+        remoteOn.MobyPlacements.Count == 1 &&
+        Id65AuthoringEditorControlStateCompiler
+            .RecoverControlState(remoteOn)
+            .IncludeGrassAtT107,
+        "Re-enabling remote T107 did not reuse its exact retained position.");
+
+    string parkedLockedBaseImagePath = Path.Combine(smokeRoot, "parked-locked-base.bin");
+    string parkedLockedBaseCuePath = Path.Combine(smokeRoot, "parked-locked-base.cue");
+    bool lockedBaseImageParked = false;
+    bool lockedBaseCueParked = false;
+    try
+    {
+        File.Move(paths.LockedBaseImagePath, parkedLockedBaseImagePath);
+        lockedBaseImageParked = true;
+        File.Move(paths.LockedBaseCuePath, parkedLockedBaseCuePath);
+        lockedBaseCueParked = true;
+
+        Id65AuthoringEditorDocumentReadModel staticOnlyRemote = RequirePresent(
+            await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(paths, manifest));
+        AssertExactSemantics(staticOnlyRemote, remoteOnDocument);
+        AssertRemotePadPosition(staticOnlyRemote, retainedPosition);
+        AssertClosedCapabilities(staticOnlyRemote);
+
+        await File.WriteAllBytesAsync(documentPath, fullEnvelope);
+        await ExpectRejectedAsync(
+            "legacy inspection without locked BIN/CUE",
+            async () => _ = await Id65AuthoringEditorDocumentWorkspaceInspector
+                .InspectAsync(paths, manifest),
+            "missing its manifest or locked BIN/CUE");
+        await File.WriteAllBytesAsync(documentPath, remoteOnEnvelope);
+    }
+    finally
+    {
+        if (lockedBaseCueParked && File.Exists(parkedLockedBaseCuePath))
+            File.Move(parkedLockedBaseCuePath, paths.LockedBaseCuePath);
+        if (lockedBaseImageParked && File.Exists(parkedLockedBaseImagePath))
+            File.Move(parkedLockedBaseImagePath, paths.LockedBaseImagePath);
+    }
+    Require(
+        !File.Exists(parkedLockedBaseImagePath) &&
+        !File.Exists(parkedLockedBaseCuePath),
+        "The static-only inspector smoke retained parked locked-base inputs.");
+
+    await RejectAndRestoreAsync(
+        "forged remote static projection",
+        RewriteEnvelope(remoteOnEnvelope, root =>
+            root["staticAuthoringProjectionSha256"] = new string('0', 64)),
+        remoteOnEnvelope,
+        documentPath,
+        paths,
+        manifest,
+        "forged or is stale");
+    await RejectAndRestoreAsync(
+        "legacy schema with remote properties",
+        RewriteEnvelope(remoteOnEnvelope, root => root["schemaVersion"] = 1),
+        remoteOnEnvelope,
+        documentPath,
+        paths,
+        manifest,
+        "unknown field");
+
     Require(
         SnapshotFixture(lockedFixturePath) == fixtureBefore,
         "Inspection changed the locked-base fixture.");
     Console.WriteLine(
-        "PASS Id65AuthoringEditorDocumentWorkspaceInspectorSmoke: canonical filename parity, missing/valid deterministic read-only inspection, complete immutable terrain/texture/Moby/baseline projection, independent read-model content address, strict tamper/size/manifest/symlink/race/cancellation refusal, and truthful path/byte plus no App/UI/Create-BIN/runtime/release/promotion/publication authority passed. Current native reprojection and source freshness remain explicitly false.");
+        "PASS Id65AuthoringEditorDocumentWorkspaceInspectorSmoke: legacy schema-1 envelope/read-model behavior plus schema-2 remote static-authoring envelopes, all nine frozen T107 positions, dormant off/on position retention, native-input-free remote inspection with legacy fail-closed contrast, strict forged/malformed refusal, deterministic path-free semantics, and no compiled-afterimage/App/Create-BIN/runtime/release authority passed. Current native reprojection and source freshness remain explicitly false.");
 }
 finally
 {
@@ -274,6 +417,9 @@ static byte[] BuildCanonicalEnvelope(
     UnusedLevel65BlankLevelLabManifest manifest,
     Id65AuthoringEditorDocument document)
 {
+    if (document.UsesRemotePadT107Grid)
+        return BuildRemoteCanonicalEnvelope(manifest, document);
+
     string compositeManifestSha256 = new('a', 64);
     string compositeOutputRow80Sha256 = new('b', 64);
     string compositeDeterministicPlanSha256 = new('c', 64);
@@ -291,6 +437,139 @@ static byte[] BuildCanonicalEnvelope(
         compositeOutputRow80Sha256,
         compositeDeterministicPlanSha256,
         Hash(content));
+}
+
+static byte[] BuildRemoteCanonicalEnvelope(
+    UnusedLevel65BlankLevelLabManifest manifest,
+    Id65AuthoringEditorDocument document)
+{
+    (string sceneGraphSha256, string projectionSha256) =
+        CaptureRemoteStaticIdentity(document);
+    byte[] content = WriteRemoteEnvelope(
+        manifest,
+        document,
+        sceneGraphSha256,
+        projectionSha256,
+        envelopeContentSha256: null);
+    return WriteRemoteEnvelope(
+        manifest,
+        document,
+        sceneGraphSha256,
+        projectionSha256,
+        Hash(content));
+}
+
+static byte[] WriteRemoteEnvelope(
+    UnusedLevel65BlankLevelLabManifest manifest,
+    Id65AuthoringEditorDocument document,
+    string sceneGraphSha256,
+    string projectionSha256,
+    string? envelopeContentSha256)
+{
+    using MemoryStream buffer = new();
+    using (Utf8JsonWriter json = new(buffer, new JsonWriterOptions
+           {
+               Indented = false,
+               SkipValidation = false
+           }))
+    {
+        json.WriteStartObject();
+        json.WriteString("format", Id65AuthoringEditorDocumentStore.EnvelopeFormat);
+        json.WriteNumber(
+            "schemaVersion",
+            Id65AuthoringEditorDocumentStore.RemotePadGridEnvelopeSchemaVersion);
+        json.WriteString("workspaceKey", manifest.WorkspaceKey);
+        json.WriteNumber("workspaceLayoutVersion", manifest.WorkspaceLayoutVersion);
+        json.WriteString("workspaceLayoutRelativeRoot", manifest.WorkspaceLayoutRelativeRoot);
+        json.WriteString("labProfileId", manifest.ProfileId);
+        json.WriteNumber("labProfileVersion", manifest.ProfileVersion);
+        json.WriteString("lockedBaseProfileId", manifest.LockedBaseProfileId);
+        json.WriteString("lockedBaseImageSha256", manifest.LockedBaseImageSha256);
+        json.WriteString("documentProfileId", document.ProfileId);
+        json.WriteString("documentCanonicalSha256", document.CanonicalSha256);
+        json.WriteString(
+            "projectionContractId",
+            Id65AuthoringEditorDocumentStore.RemotePadGridProjectionContractId);
+        json.WriteString(
+            "staticAuthoringProfileId",
+            Id65AuthoringEditorDocumentStore.RemotePadGridStaticAuthoringProfileId);
+        json.WriteString(
+            "staticAuthoringCatalogSha256",
+            Id65RemotePadGrassT107Catalog.CanonicalSha256);
+        json.WriteString("staticAuthoringSceneGraphSha256", sceneGraphSha256);
+        json.WriteString("staticAuthoringProjectionSha256", projectionSha256);
+        if (envelopeContentSha256 != null)
+            json.WriteString("envelopeContentSha256", envelopeContentSha256);
+        json.WritePropertyName("document");
+        using (JsonDocument parsed = JsonDocument.Parse(document.SerializeUtf8()))
+            parsed.RootElement.WriteTo(json);
+        json.WriteEndObject();
+    }
+    return buffer.ToArray();
+}
+
+static (string SceneGraphSha256, string ProjectionSha256)
+    CaptureRemoteStaticIdentity(Id65AuthoringEditorDocument document)
+{
+    string positionId = document.T107RemotePadPositionId
+        ?? throw new InvalidDataException("The remote inspector fixture lost its position.");
+    Id65RemotePadGrassT107Position position =
+        Id65RemotePadGrassT107Catalog.GetRequiredPosition(positionId);
+    string sceneGraphSha256 = document.MandatoryBaseFaceTextureId switch
+    {
+        66 => document.Terrain.Count == 1
+            ? Id65FreshLevelSceneProjector.ExpectedStructuralGraphCanonicalSha256
+            : Id65FreshLevelSceneProjector.ExpectedCanonicalSha256,
+        25 => document.Terrain.Count == 1
+            ? Id65FreshLevelSceneProjector.ExpectedResidentT25StructuralGraphCanonicalSha256
+            : Id65FreshLevelSceneProjector.ExpectedResidentT25BaseGraphCanonicalSha256,
+        _ => throw new InvalidDataException("The remote inspector fixture lost T25/T66 support.")
+    };
+
+    using MemoryStream buffer = new();
+    using (Utf8JsonWriter json = new(buffer))
+    {
+        json.WriteStartObject();
+        json.WriteString(
+            "profileId",
+            Id65AuthoringEditorDocumentStore.RemotePadGridStaticAuthoringProfileId);
+        json.WriteNumber("schemaVersion", 1);
+        json.WriteString(
+            "projectionContractId",
+            Id65AuthoringEditorDocumentStore.RemotePadGridProjectionContractId);
+        json.WriteString("documentProfileId", document.ProfileId);
+        json.WriteString("documentCanonicalSha256", document.CanonicalSha256);
+        json.WriteString("documentContentSha256", document.ContentSha256);
+        json.WriteString("catalogProfileId", Id65RemotePadGrassT107Catalog.ProfileId);
+        json.WriteString(
+            "catalogCanonicalSha256",
+            Id65RemotePadGrassT107Catalog.CanonicalSha256);
+        json.WriteString("positionId", position.PositionId);
+        json.WriteString("positionRowSha256", position.RowSha256);
+        json.WriteString("sceneProfileId", Id65FreshLevelSceneProjector.ProfileId);
+        json.WriteNumber("sceneSchemaVersion", Id65FreshLevelSceneProjector.SchemaVersion);
+        json.WriteString("sceneGraphCanonicalSha256", sceneGraphSha256);
+        json.WriteString("supportHandle", Id65RemotePadGrassT107Catalog.SupportHandle);
+        json.WriteNumber(
+            "supportCollisionTrueIndex",
+            Id65RemotePadGrassT107Catalog.SupportCollisionTrueIndex);
+        json.WriteBoolean("structuralTerrainPresent", document.Terrain.Count == 1);
+        json.WriteNumber(
+            "mandatoryBaseFaceTextureId",
+            document.MandatoryBaseFaceTextureId);
+        json.WriteBoolean(
+            "grassAtT88Present",
+            document.MobyPlacements.Any(item => item.TargetTrueIndex == 88));
+        json.WriteBoolean(
+            "grassAtT107Present",
+            document.MobyPlacements.Any(item => item.TargetTrueIndex == 107));
+        json.WriteBoolean("compiledAfterimagePresent", false);
+        json.WriteBoolean("runtimeCandidateAuthorized", false);
+        json.WriteBoolean("normalCreateBinEnabled", false);
+        json.WriteBoolean("releaseAuthorized", false);
+        json.WriteEndObject();
+    }
+    return (sceneGraphSha256, Hash(buffer.ToArray()));
 }
 
 static byte[] WriteEnvelope(
@@ -357,7 +636,12 @@ static void AssertExactSemantics(
         actual.PrivateTextureWitnessSha256 == expected.PrivateTextureWitnessSha256 &&
         actual.MobyBundleSha256 == expected.MobyBundleSha256 &&
         actual.DocumentContentSha256 == expected.ContentSha256 &&
-        actual.DocumentCanonicalSha256 == expected.CanonicalSha256,
+        actual.DocumentCanonicalSha256 == expected.CanonicalSha256 &&
+        actual.UsesRemotePadT107Grid == expected.UsesRemotePadT107Grid &&
+        actual.T107RemotePadPositionId == expected.T107RemotePadPositionId &&
+        actual.T107PlacementSemantics == (expected.UsesRemotePadT107Grid
+            ? Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1
+            : Id65AuthoringEditorT107PlacementSemantics.LegacyNativeApronV1),
         "The inspector changed a document identity field.");
     Require(actual.Terrain.Count == expected.Terrain.Count, "Terrain count changed.");
     for (int index = 0; index < actual.Terrain.Count; index++)
@@ -423,6 +707,27 @@ static void AssertExactSemantics(
         "The inspector changed baseline ownership handles.");
 }
 
+static void AssertRemotePadPosition(
+    Id65AuthoringEditorDocumentReadModel actual,
+    Id65RemotePadGrassT107Position expected)
+{
+    Id65RemotePadGrassT107PositionReadModel value = actual.T107RemotePadPosition
+        ?? throw new InvalidDataException("The schema-3 read model omitted its remote position.");
+    Require(
+        actual.UsesRemotePadT107Grid &&
+        !actual.RequiresExplicitRemotePadMigration &&
+        actual.T107RemotePadPositionId == expected.PositionId &&
+        value.Ordinal == expected.Ordinal &&
+        value.PositionId == expected.PositionId &&
+        value.Label == expected.Label &&
+        value.EditorX == expected.EditorX && value.EditorY == expected.EditorY &&
+        value.EditorZ == expected.EditorZ && value.RawX == expected.RawX &&
+        value.RawY == expected.RawY && value.RawZ == expected.RawZ &&
+        value.RowSha256 == expected.RowSha256 &&
+        value.IsDefault == expected.IsDefault,
+        $"The schema-3 read model changed frozen position {expected.PositionId}.");
+}
+
 static bool CoordinatesEqual(
     Id65AuthoringEditorCoordinateReadModel? left,
     Id65AuthoringEditorCoordinate? right) =>
@@ -436,7 +741,9 @@ static void AssertClosedCapabilities(Id65AuthoringEditorDocumentReadModel value)
         value.EnvelopeCanonicalIdentityVerified &&
         value.DocumentCanonicalIdentityVerified &&
         value.PersistedProjectionIdentityPresent &&
-        value.DeterministicEnvelopeReadbackVerified,
+        value.DeterministicEnvelopeReadbackVerified &&
+        value.HasCompiledCompositeProjection == !value.UsesRemotePadT107Grid &&
+        value.HasStaticAuthoringProjection == value.UsesRemotePadT107Grid,
         "The inspector omitted a completed canonical-read verification.");
     Require(
         !value.CurrentProjectionRevalidated &&
@@ -485,6 +792,7 @@ static void AssertPublicApiBoundary(Id65AuthoringEditorDocumentReadModel sample)
         typeof(Id65AuthoringEditorOcclusionReadModel),
         typeof(Id65AuthoringEditorTerrainReadModel),
         typeof(Id65AuthoringEditorPrivateTextureSwapReadModel),
+        typeof(Id65RemotePadGrassT107PositionReadModel),
         typeof(Id65AuthoringEditorCoordinateReadModel),
         typeof(Id65AuthoringEditorMobyPlacementReadModel),
         typeof(Id65AuthoringEditorBaselineHandlesReadModel)
@@ -559,9 +867,20 @@ static string ComputeExpectedReadModelSha256(
     {
         json.WriteStartObject();
         json.WriteString("format", "spyro-editor-id65-authoring-editor-document-read-model");
-        json.WriteNumber("readModelSchemaVersion", 2);
+        json.WriteNumber("readModelSchemaVersion", value.ReadModelSchemaVersion);
         json.WriteNumber("documentSchemaVersion", value.SchemaVersion);
         json.WriteString("profileId", value.ProfileId);
+        if (value.UsesRemotePadT107Grid)
+        {
+            json.WriteNumber("envelopeSchemaVersion", value.EnvelopeSchemaVersion);
+            json.WriteString(
+                "t107PlacementSemantics",
+                Id65RemotePadGrassT107Catalog.ProfileId);
+            WriteExpectedRemotePosition(
+                json,
+                value.T107RemotePadPosition ?? throw new InvalidDataException(
+                    "The schema-3 read model lost its remote position."));
+        }
         json.WriteNumber("mandatoryBaseFaceTextureId", value.MandatoryBaseFaceTextureId);
         json.WriteString("labProfileId", value.LabProfileId);
         json.WriteNumber("labProfileVersion", value.LabProfileVersion);
@@ -570,18 +889,41 @@ static string ComputeExpectedReadModelSha256(
         json.WriteString("lockedBaseProfileId", value.LockedBaseProfileId);
         json.WriteString("lockedBaseImageSha256", value.LockedBaseImageSha256);
         json.WriteString("lockedRow80Sha256", value.LockedRow80Sha256);
-        json.WriteString("compositeProfileId", value.CompositeProfileId);
+        json.WriteString(
+            value.UsesRemotePadT107Grid
+                ? "documentCompositeProfileId"
+                : "compositeProfileId",
+            value.CompositeProfileId);
         json.WriteString("privateTextureWitnessSha256", value.PrivateTextureWitnessSha256);
         json.WriteString("mobyBundleSha256", value.MobyBundleSha256);
         json.WriteString("documentContentSha256", value.DocumentContentSha256);
         json.WriteString("documentCanonicalSha256", value.DocumentCanonicalSha256);
         json.WriteString("envelopeCanonicalSha256", value.EnvelopeCanonicalSha256);
         json.WriteString("projectionContractId", value.ProjectionContractId);
-        json.WriteString("compositeManifestSha256", value.CompositeManifestSha256);
-        json.WriteString("compositeOutputRow80Sha256", value.CompositeOutputRow80Sha256);
-        json.WriteString(
-            "compositeDeterministicPlanSha256",
-            value.CompositeDeterministicPlanSha256);
+        if (value.UsesRemotePadT107Grid)
+        {
+            json.WriteString("staticAuthoringProfileId", value.StaticAuthoringProfileId);
+            json.WriteString(
+                "staticAuthoringCatalogSha256",
+                value.StaticAuthoringCatalogSha256);
+            json.WriteString(
+                "staticAuthoringSceneGraphSha256",
+                value.StaticAuthoringSceneGraphSha256);
+            json.WriteString(
+                "staticAuthoringProjectionSha256",
+                value.StaticAuthoringProjectionSha256);
+            json.WriteBoolean(
+                "compiledCompositeProjectionPresent",
+                value.HasCompiledCompositeProjection);
+        }
+        else
+        {
+            json.WriteString("compositeManifestSha256", value.CompositeManifestSha256);
+            json.WriteString("compositeOutputRow80Sha256", value.CompositeOutputRow80Sha256);
+            json.WriteString(
+                "compositeDeterministicPlanSha256",
+                value.CompositeDeterministicPlanSha256);
+        }
         json.WritePropertyName("terrain");
         json.WriteStartArray();
         foreach (Id65AuthoringEditorTerrainReadModel terrain in value.Terrain)
@@ -604,6 +946,34 @@ static string ComputeExpectedReadModelSha256(
         json.WriteEndObject();
     }
     return Hash(buffer.ToArray());
+}
+
+static void WriteExpectedRemotePosition(
+    Utf8JsonWriter json,
+    Id65RemotePadGrassT107PositionReadModel value)
+{
+    json.WritePropertyName("t107RemotePadPosition");
+    json.WriteStartObject();
+    json.WriteNumber("catalogSchemaVersion", Id65RemotePadGrassT107Catalog.SchemaVersion);
+    json.WriteString("catalogProfileId", Id65RemotePadGrassT107Catalog.ProfileId);
+    json.WriteNumber("ordinal", value.Ordinal);
+    json.WriteString("positionId", value.PositionId);
+    json.WriteString("label", value.Label);
+    json.WritePropertyName("editor");
+    json.WriteStartObject();
+    json.WriteNumber("x", value.EditorX);
+    json.WriteNumber("y", value.EditorY);
+    json.WriteNumber("z", value.EditorZ);
+    json.WriteEndObject();
+    json.WritePropertyName("raw");
+    json.WriteStartObject();
+    json.WriteNumber("x", value.RawX);
+    json.WriteNumber("y", value.RawY);
+    json.WriteNumber("z", value.RawZ);
+    json.WriteEndObject();
+    json.WriteString("rowSha256", value.RowSha256);
+    json.WriteBoolean("isDefault", value.IsDefault);
+    json.WriteEndObject();
 }
 
 static void WriteExpectedTerrain(Utf8JsonWriter json, Id65AuthoringEditorTerrainReadModel value)

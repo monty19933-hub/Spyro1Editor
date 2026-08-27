@@ -4,6 +4,17 @@ using Spyro.Editor.Core.Exporting;
 namespace Spyro.Editor.Core.Persistence;
 
 /// <summary>
+/// Names the exact, non-interchangeable meaning of the T107 choice. Legacy
+/// native-apron documents and schema-3 remote-pad-grid documents must never be
+/// inferred from one another.
+/// </summary>
+public enum Id65AuthoringEditorT107PlacementSemantics
+{
+    LegacyNativeApronV1 = 1,
+    RemotePadGridV1 = 2
+}
+
+/// <summary>
 /// Framework-neutral control state for the exact first ID65 authoring document.
 /// It models only choices already proved by the canonical document/compiler
 /// chain. The mandatory base face is exactly Resident T25 or Proved private T66;
@@ -15,6 +26,9 @@ public sealed class Id65AuthoringEditorControlState
     public const string ProfileId =
         "id65-authoring-editor-control-state-exact-document-v1";
     public const int SchemaVersion = 1;
+    public const string RemotePadGridProfileId =
+        "id65-authoring-editor-control-state-t107-placement-v2";
+    public const int RemotePadGridSchemaVersion = 2;
     public const int T88TargetTrueIndex = 88;
     public const int T107TargetTrueIndex = 107;
     public const int ResidentMandatoryBaseFaceTextureId = 25;
@@ -25,20 +39,62 @@ public sealed class Id65AuthoringEditorControlState
         bool includeGrassAtT88,
         bool includeGrassAtT107,
         int mandatoryBaseFaceTextureId = PrivateMandatoryBaseFaceTextureId)
+        : this(
+            includeStructuralTerrain,
+            includeGrassAtT88,
+            includeGrassAtT107,
+            mandatoryBaseFaceTextureId,
+            Id65AuthoringEditorT107PlacementSemantics.LegacyNativeApronV1,
+            t107RemotePadPositionId: null)
+    {
+    }
+
+    private Id65AuthoringEditorControlState(
+        bool includeStructuralTerrain,
+        bool includeGrassAtT88,
+        bool includeGrassAtT107,
+        int mandatoryBaseFaceTextureId,
+        Id65AuthoringEditorT107PlacementSemantics t107PlacementSemantics,
+        string? t107RemotePadPositionId)
     {
         if (mandatoryBaseFaceTextureId is not
             (ResidentMandatoryBaseFaceTextureId or PrivateMandatoryBaseFaceTextureId))
             throw new ArgumentOutOfRangeException(nameof(mandatoryBaseFaceTextureId));
+        if (t107PlacementSemantics == Id65AuthoringEditorT107PlacementSemantics.LegacyNativeApronV1)
+        {
+            if (t107RemotePadPositionId is not null)
+            {
+                throw new ArgumentException(
+                    "Legacy native-apron T107 state cannot carry a remote-pad position.",
+                    nameof(t107RemotePadPositionId));
+            }
+        }
+        else if (t107PlacementSemantics == Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1)
+        {
+            t107RemotePadPositionId = Id65RemotePadGrassT107Catalog
+                .GetRequiredPosition(t107RemotePadPositionId!)
+                .PositionId;
+        }
+        else
+        {
+            throw new ArgumentOutOfRangeException(nameof(t107PlacementSemantics));
+        }
         IncludeStructuralTerrain = includeStructuralTerrain;
         IncludeGrassAtT88 = includeGrassAtT88;
         IncludeGrassAtT107 = includeGrassAtT107;
         MandatoryBaseFaceTextureId = mandatoryBaseFaceTextureId;
+        T107PlacementSemantics = t107PlacementSemantics;
+        T107RemotePadPositionId = t107RemotePadPositionId;
     }
 
     public bool IncludeStructuralTerrain { get; }
     public bool IncludeGrassAtT88 { get; }
     public bool IncludeGrassAtT107 { get; }
     public int MandatoryBaseFaceTextureId { get; }
+    public Id65AuthoringEditorT107PlacementSemantics T107PlacementSemantics { get; }
+    public string? T107RemotePadPositionId { get; }
+    public bool UsesRemotePadT107Grid =>
+        T107PlacementSemantics == Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1;
 
     public static Id65AuthoringEditorControlState CreateDefault() =>
         new(
@@ -46,6 +102,72 @@ public sealed class Id65AuthoringEditorControlState
             includeGrassAtT88: true,
             includeGrassAtT107: true,
             mandatoryBaseFaceTextureId: PrivateMandatoryBaseFaceTextureId);
+
+    /// <summary>
+    /// Creates the genuinely new-workspace default: structural base intent,
+    /// no visible Grass, and a retained dormant Center choice for future T107.
+    /// </summary>
+    public static Id65AuthoringEditorControlState CreateRemotePadDefault() =>
+        CreateRemotePad(
+            includeStructuralTerrain: true,
+            includeGrassAtT88: false,
+            includeGrassAtT107: false,
+            Id65RemotePadGrassT107Catalog.DefaultPositionId,
+            mandatoryBaseFaceTextureId: PrivateMandatoryBaseFaceTextureId);
+
+    public static Id65AuthoringEditorControlState CreateRemotePad(
+        bool includeStructuralTerrain,
+        bool includeGrassAtT88,
+        bool includeGrassAtT107,
+        string t107RemotePadPositionId,
+        int mandatoryBaseFaceTextureId = PrivateMandatoryBaseFaceTextureId) =>
+        new(
+            includeStructuralTerrain,
+            includeGrassAtT88,
+            includeGrassAtT107,
+            mandatoryBaseFaceTextureId,
+            Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1,
+            t107RemotePadPositionId);
+
+    /// <summary>
+    /// Explicit one-way migration. Calling this method is the only API that may
+    /// choose Center for legacy state; ordinary construction/recovery never does.
+    /// </summary>
+    public static Id65AuthoringEditorControlState MigrateLegacyToRemotePadGrid(
+        Id65AuthoringEditorControlState legacyState,
+        string? t107RemotePadPositionId = null)
+    {
+        ArgumentNullException.ThrowIfNull(legacyState);
+        if (legacyState.UsesRemotePadT107Grid)
+        {
+            throw new InvalidOperationException(
+                "Only legacy native-apron T107 control state can be migrated to the remote-pad grid.");
+        }
+        return CreateRemotePad(
+            legacyState.IncludeStructuralTerrain,
+            legacyState.IncludeGrassAtT88,
+            legacyState.IncludeGrassAtT107,
+            t107RemotePadPositionId ?? Id65RemotePadGrassT107Catalog.DefaultPositionId,
+            legacyState.MandatoryBaseFaceTextureId);
+    }
+
+    internal static Id65AuthoringEditorControlState CopyExact(
+        Id65AuthoringEditorControlState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return state.UsesRemotePadT107Grid
+            ? CreateRemotePad(
+                state.IncludeStructuralTerrain,
+                state.IncludeGrassAtT88,
+                state.IncludeGrassAtT107,
+                state.T107RemotePadPositionId!,
+                state.MandatoryBaseFaceTextureId)
+            : new(
+                state.IncludeStructuralTerrain,
+                state.IncludeGrassAtT88,
+                state.IncludeGrassAtT107,
+                state.MandatoryBaseFaceTextureId);
+    }
 }
 
 /// <summary>
@@ -73,17 +195,18 @@ public sealed class Id65AuthoringEditorControlStateCompilation
             state.IncludeGrassAtT88 != recovered.IncludeGrassAtT88 ||
             state.IncludeGrassAtT107 != recovered.IncludeGrassAtT107 ||
             state.MandatoryBaseFaceTextureId != recovered.MandatoryBaseFaceTextureId ||
+            state.T107PlacementSemantics != recovered.T107PlacementSemantics ||
+            !string.Equals(
+                state.T107RemotePadPositionId,
+                recovered.T107RemotePadPositionId,
+                StringComparison.Ordinal) ||
             !canonical.SerializeUtf8().SequenceEqual(expected.SerializeUtf8()))
         {
             throw new InvalidDataException(
                 "The ID65 compilation receipt requires one matching exact control-state/document pair.");
         }
 
-        State = new(
-            state.IncludeStructuralTerrain,
-            state.IncludeGrassAtT88,
-            state.IncludeGrassAtT107,
-            state.MandatoryBaseFaceTextureId);
+        State = Id65AuthoringEditorControlState.CopyExact(state);
         Document = canonical;
         DocumentProfileId = canonical.ProfileId;
         DocumentContentSha256 = canonical.ContentSha256;
@@ -171,13 +294,44 @@ public static class Id65AuthoringEditorControlStateCompiler
         Id65AuthoringEditorDocumentReadModel document)
     {
         ArgumentNullException.ThrowIfNull(document);
-        bool supportedProfile =
-            (document.SchemaVersion == Id65AuthoringEditorDocument.CurrentSchemaVersion &&
-             document.ProfileId == Id65AuthoringEditorDocument.DocumentProfileId &&
-             document.MandatoryBaseFaceTextureId == Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId) ||
-            (document.SchemaVersion == Id65AuthoringEditorDocument.ResidentT25SchemaVersion &&
-             document.ProfileId == Id65AuthoringEditorDocument.ResidentT25DocumentProfileId &&
-             document.MandatoryBaseFaceTextureId == Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId);
+        bool legacyPrivateT66 =
+            document.SchemaVersion == Id65AuthoringEditorDocument.CurrentSchemaVersion &&
+            document.ProfileId == Id65AuthoringEditorDocument.DocumentProfileId &&
+            document.MandatoryBaseFaceTextureId ==
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId &&
+            document.ReadModelSchemaVersion ==
+                Id65AuthoringEditorDocumentReadModel.LegacyReadModelSchemaVersion &&
+            document.T107PlacementSemantics ==
+                Id65AuthoringEditorT107PlacementSemantics.LegacyNativeApronV1 &&
+            !document.UsesRemotePadT107Grid &&
+            document.T107RemotePadPositionId is null &&
+            document.T107RemotePadPosition is null;
+        bool legacyResidentT25 =
+            document.SchemaVersion == Id65AuthoringEditorDocument.ResidentT25SchemaVersion &&
+            document.ProfileId == Id65AuthoringEditorDocument.ResidentT25DocumentProfileId &&
+            document.MandatoryBaseFaceTextureId ==
+                Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId &&
+            document.ReadModelSchemaVersion ==
+                Id65AuthoringEditorDocumentReadModel.LegacyReadModelSchemaVersion &&
+            document.T107PlacementSemantics ==
+                Id65AuthoringEditorT107PlacementSemantics.LegacyNativeApronV1 &&
+            !document.UsesRemotePadT107Grid &&
+            document.T107RemotePadPositionId is null &&
+            document.T107RemotePadPosition is null;
+        bool remotePadGrid =
+            document.SchemaVersion == Id65AuthoringEditorDocument.RemotePadGridSchemaVersion &&
+            document.ProfileId == Id65AuthoringEditorDocument.RemotePadGridDocumentProfileId &&
+            (document.MandatoryBaseFaceTextureId is
+                Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId or
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId) &&
+            document.ReadModelSchemaVersion ==
+                Id65AuthoringEditorDocumentReadModel.RemotePadGridReadModelSchemaVersion &&
+            document.T107PlacementSemantics ==
+                Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1 &&
+            document.UsesRemotePadT107Grid &&
+            document.T107RemotePadPositionId is not null &&
+            document.T107RemotePadPosition is not null;
+        bool supportedProfile = legacyPrivateT66 || legacyResidentT25 || remotePadGrid;
         if (!supportedProfile ||
             document.LabProfileId != UnusedLevel65BlankLevelLabProfileRegistry.ProfileId ||
             document.LabProfileVersion !=
@@ -212,10 +366,12 @@ public static class Id65AuthoringEditorControlStateCompiler
                 "The ID65 read model cannot be translated into an exact control state.");
         }
 
-        Id65AuthoringEditorControlState state = SelectState(
-            document.Terrain.Count,
-            document.MobyPlacements.Select(placement => placement.Id),
-            document.MandatoryBaseFaceTextureId);
+        Id65AuthoringEditorControlState state = remotePadGrid
+            ? SelectRemotePadState(document)
+            : SelectLegacyState(
+                document.Terrain.Count,
+                document.MobyPlacements.Select(placement => placement.Id),
+                document.MandatoryBaseFaceTextureId);
         Id65AuthoringEditorDocument expected = CompileExactDocument(state);
         if (document.DocumentCanonicalSha256 != expected.CanonicalSha256 ||
             document.DocumentContentSha256 != expected.ContentSha256)
@@ -233,7 +389,7 @@ public static class Id65AuthoringEditorControlStateCompiler
         int placementCount =
             (state.IncludeGrassAtT88 ? 1 : 0) +
             (state.IncludeGrassAtT107 ? 1 : 0);
-        if (placementCount is < 1 or > 2)
+        if (placementCount > 2 || (!state.UsesRemotePadT107Grid && placementCount < 1))
         {
             throw new InvalidDataException(
                 "The ID65 control state lost an exact choice or fail-closed boundary.");
@@ -243,11 +399,21 @@ public static class Id65AuthoringEditorControlStateCompiler
         if (state.IncludeGrassAtT88)
             placementIds.Add(Id65AuthoringMobyDependencyBundleCompiler.T88PlacementId);
         if (state.IncludeGrassAtT107)
-            placementIds.Add(Id65AuthoringMobyDependencyBundleCompiler.T107PlacementId);
-        return Id65AuthoringEditorDocument.CreateExact(
-            state.IncludeStructuralTerrain,
-            placementIds,
-            state.MandatoryBaseFaceTextureId);
+        {
+            placementIds.Add(state.UsesRemotePadT107Grid
+                ? Id65RemotePadGrassT107Catalog.PlacementId
+                : Id65AuthoringMobyDependencyBundleCompiler.T107PlacementId);
+        }
+        return state.UsesRemotePadT107Grid
+            ? Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+                state.T107RemotePadPositionId!,
+                state.IncludeStructuralTerrain,
+                placementIds,
+                state.MandatoryBaseFaceTextureId)
+            : Id65AuthoringEditorDocument.CreateExact(
+                state.IncludeStructuralTerrain,
+                placementIds,
+                state.MandatoryBaseFaceTextureId);
     }
 
     internal static Id65AuthoringEditorControlState RecoverExactState(
@@ -256,10 +422,12 @@ public static class Id65AuthoringEditorControlStateCompiler
         ArgumentNullException.ThrowIfNull(document);
         Id65AuthoringEditorDocument canonical =
             Id65AuthoringEditorDocument.Parse(document.SerializeUtf8());
-        Id65AuthoringEditorControlState state = SelectState(
-            canonical.Terrain.Count,
-            canonical.MobyPlacements.Select(placement => placement.Id),
-            canonical.MandatoryBaseFaceTextureId);
+        Id65AuthoringEditorControlState state = canonical.UsesRemotePadT107Grid
+            ? SelectRemotePadState(canonical)
+            : SelectLegacyState(
+                canonical.Terrain.Count,
+                canonical.MobyPlacements.Select(placement => placement.Id),
+                canonical.MandatoryBaseFaceTextureId);
         Id65AuthoringEditorDocument expected = CompileExactDocument(state);
         if (!canonical.SerializeUtf8().SequenceEqual(expected.SerializeUtf8()))
         {
@@ -269,7 +437,7 @@ public static class Id65AuthoringEditorControlStateCompiler
         return state;
     }
 
-    private static Id65AuthoringEditorControlState SelectState(
+    private static Id65AuthoringEditorControlState SelectLegacyState(
         int terrainIntentCount,
         IEnumerable<string> placementIds,
         int mandatoryBaseFaceTextureId)
@@ -300,6 +468,83 @@ public static class Id65AuthoringEditorControlStateCompiler
         return new(terrainIntentCount == 1, t88, t107, mandatoryBaseFaceTextureId);
     }
 
+    private static Id65AuthoringEditorControlState SelectRemotePadState(
+        Id65AuthoringEditorDocument document)
+    {
+        if (!document.UsesRemotePadT107Grid || document.T107RemotePadPositionId is null)
+            throw new InvalidDataException("The schema-3 ID65 document lost its retained T107 position.");
+        if (document.Terrain.Count > 1)
+            throw new InvalidDataException("The schema-3 ID65 control state supports zero or one structural terrain intent.");
+        string[] ids = document.MobyPlacements.Select(item => item.Id).ToArray();
+        if (ids.Length > 2 || ids.Any(string.IsNullOrWhiteSpace) ||
+            ids.Distinct(StringComparer.Ordinal).Count() != ids.Length ||
+            ids.Any(id => id != Id65AuthoringMobyDependencyBundleCompiler.T88PlacementId &&
+                id != Id65RemotePadGrassT107Catalog.PlacementId))
+        {
+            throw new InvalidDataException(
+                "The schema-3 ID65 control state contains an unsupported or duplicate Grass placement.");
+        }
+        return Id65AuthoringEditorControlState.CreateRemotePad(
+            document.Terrain.Count == 1,
+            ids.Contains(
+                Id65AuthoringMobyDependencyBundleCompiler.T88PlacementId,
+                StringComparer.Ordinal),
+            ids.Contains(Id65RemotePadGrassT107Catalog.PlacementId, StringComparer.Ordinal),
+            document.T107RemotePadPositionId,
+            document.MandatoryBaseFaceTextureId);
+    }
+
+    private static Id65AuthoringEditorControlState SelectRemotePadState(
+        Id65AuthoringEditorDocumentReadModel document)
+    {
+        if (!document.UsesRemotePadT107Grid ||
+            document.T107RemotePadPositionId is null ||
+            document.T107RemotePadPosition is null)
+        {
+            throw new InvalidDataException(
+                "The schema-3 ID65 read model lost its retained T107 position.");
+        }
+        Id65RemotePadGrassT107Position expectedPosition =
+            Id65RemotePadGrassT107Catalog.GetRequiredPosition(
+                document.T107RemotePadPositionId);
+        Id65RemotePadGrassT107PositionReadModel actualPosition =
+            document.T107RemotePadPosition;
+        if (actualPosition.Ordinal != expectedPosition.Ordinal ||
+            actualPosition.PositionId != expectedPosition.PositionId ||
+            actualPosition.Label != expectedPosition.Label ||
+            actualPosition.EditorX != expectedPosition.EditorX ||
+            actualPosition.EditorY != expectedPosition.EditorY ||
+            actualPosition.EditorZ != expectedPosition.EditorZ ||
+            actualPosition.RawX != expectedPosition.RawX ||
+            actualPosition.RawY != expectedPosition.RawY ||
+            actualPosition.RawZ != expectedPosition.RawZ ||
+            actualPosition.RowSha256 != expectedPosition.RowSha256 ||
+            actualPosition.IsDefault != expectedPosition.IsDefault)
+        {
+            throw new InvalidDataException(
+                "The schema-3 ID65 read model remote-pad position does not match the frozen catalog.");
+        }
+        if (document.Terrain.Count > 1)
+            throw new InvalidDataException("The schema-3 ID65 control state supports zero or one structural terrain intent.");
+        string[] ids = document.MobyPlacements.Select(item => item.Id).ToArray();
+        if (ids.Length > 2 || ids.Any(string.IsNullOrWhiteSpace) ||
+            ids.Distinct(StringComparer.Ordinal).Count() != ids.Length ||
+            ids.Any(id => id != Id65AuthoringMobyDependencyBundleCompiler.T88PlacementId &&
+                id != Id65RemotePadGrassT107Catalog.PlacementId))
+        {
+            throw new InvalidDataException(
+                "The schema-3 ID65 read model contains an unsupported or duplicate Grass placement.");
+        }
+        return Id65AuthoringEditorControlState.CreateRemotePad(
+            document.Terrain.Count == 1,
+            ids.Contains(
+                Id65AuthoringMobyDependencyBundleCompiler.T88PlacementId,
+                StringComparer.Ordinal),
+            ids.Contains(Id65RemotePadGrassT107Catalog.PlacementId, StringComparer.Ordinal),
+            expectedPosition.PositionId,
+            document.MandatoryBaseFaceTextureId);
+    }
+
     private static void RequireEquivalent(
         Id65AuthoringEditorControlState expected,
         Id65AuthoringEditorControlState actual)
@@ -307,7 +552,12 @@ public static class Id65AuthoringEditorControlStateCompiler
         if (expected.IncludeStructuralTerrain != actual.IncludeStructuralTerrain ||
             expected.IncludeGrassAtT88 != actual.IncludeGrassAtT88 ||
             expected.IncludeGrassAtT107 != actual.IncludeGrassAtT107 ||
-            expected.MandatoryBaseFaceTextureId != actual.MandatoryBaseFaceTextureId)
+            expected.MandatoryBaseFaceTextureId != actual.MandatoryBaseFaceTextureId ||
+            expected.T107PlacementSemantics != actual.T107PlacementSemantics ||
+            !string.Equals(
+                expected.T107RemotePadPositionId,
+                actual.T107RemotePadPositionId,
+                StringComparison.Ordinal))
         {
             throw new InvalidDataException(
                 "The ID65 canonical document did not round-trip to its originating control state.");
@@ -317,10 +567,12 @@ public static class Id65AuthoringEditorControlStateCompiler
     private static void ValidateCompilation(
         Id65AuthoringEditorControlStateCompilation result)
     {
-        string expectedProfile = result.State.MandatoryBaseFaceTextureId ==
-            Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId
-            ? Id65AuthoringEditorDocument.ResidentT25DocumentProfileId
-            : Id65AuthoringEditorDocument.DocumentProfileId;
+        string expectedProfile = result.State.UsesRemotePadT107Grid
+            ? Id65AuthoringEditorDocument.RemotePadGridDocumentProfileId
+            : result.State.MandatoryBaseFaceTextureId ==
+                Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId
+                ? Id65AuthoringEditorDocument.ResidentT25DocumentProfileId
+                : Id65AuthoringEditorDocument.DocumentProfileId;
         if (result.DocumentProfileId != expectedProfile ||
             result.LockedBaseImageSha256 !=
                 UnusedLevel65BlankLevelLabProfileRegistry.Profile.LockedBaseImageSha256 ||

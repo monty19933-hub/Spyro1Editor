@@ -328,6 +328,226 @@ Require(document.SerializeUtf8().SequenceEqual(documentUtf8) &&
         Hash(first.OwnedRanges[0].CopyAfter()) == first.OwnedRanges[0].AfterSha256,
     "Editor-document or projected-composite storage escaped defensive copying.");
 
+int remoteGridDocuments = 0;
+int remoteProjectionRefusals = 0;
+foreach (Id65RemotePadGrassT107Position position in Id65RemotePadGrassT107Catalog.Positions)
+{
+    foreach (int textureId in new[] { 25, 66 })
+    foreach (bool terrainPresent in new[] { false, true })
+    foreach (bool t88Present in new[] { false, true })
+    foreach (bool t107Present in new[] { false, true })
+    {
+        string[] requestedPlacements =
+            RemoteGridPlacementIds(t88Present, t107Present).Reverse().ToArray();
+        Id65AuthoringEditorDocument remoteDocument =
+            Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+                position.PositionId,
+                terrainPresent,
+                requestedPlacements,
+                textureId);
+        Id65AuthoringEditorDocument orderedRemoteDocument =
+            Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+                position.PositionId,
+                terrainPresent,
+                requestedPlacements.Order(StringComparer.Ordinal),
+                textureId);
+        byte[] remoteUtf8 = remoteDocument.SerializeUtf8();
+        Id65AuthoringEditorDocument reparsedRemote =
+            Id65AuthoringEditorDocument.Parse(remoteUtf8);
+        int[] expectedTargets =
+            (t88Present, t107Present) switch
+            {
+                (false, false) => [],
+                (true, false) => [88],
+                (false, true) => [107],
+                (true, true) => [88, 107]
+            };
+        using JsonDocument remoteJson = JsonDocument.Parse(remoteUtf8);
+        JsonElement t107Placement = remoteJson.RootElement.GetProperty("t107Placement");
+        Require(
+            remoteDocument.SchemaVersion == Id65AuthoringEditorDocument.RemotePadGridSchemaVersion &&
+            remoteDocument.ProfileId == Id65AuthoringEditorDocument.RemotePadGridDocumentProfileId &&
+            remoteDocument.UsesRemotePadT107Grid &&
+            remoteDocument.T107RemotePadPositionId == position.PositionId &&
+            remoteDocument.MandatoryBaseFaceTextureId == textureId &&
+            remoteDocument.Terrain.Count == (terrainPresent ? 1 : 0) &&
+            remoteDocument.MobyPlacements.Select(item => item.TargetTrueIndex)
+                .SequenceEqual(expectedTargets) &&
+            t107Placement.GetProperty("schemaVersion").GetInt32() ==
+                Id65RemotePadGrassT107Catalog.SchemaVersion &&
+            t107Placement.GetProperty("profileId").GetString() ==
+                Id65RemotePadGrassT107Catalog.ProfileId &&
+            t107Placement.GetProperty("positionId").GetString() == position.PositionId &&
+            remoteUtf8.SequenceEqual(orderedRemoteDocument.SerializeUtf8()) &&
+            remoteUtf8.SequenceEqual(reparsedRemote.SerializeUtf8()) &&
+            Hash(remoteUtf8) == remoteDocument.CanonicalSha256 &&
+            Hash(DeriveContentPreimageUtf8(remoteUtf8)) == remoteDocument.ContentSha256,
+            $"Schema-3 remote-grid document {position.PositionId}/{textureId}/{terrainPresent}/{t88Present}/{t107Present} was not exact and canonical.");
+
+        if (t107Present)
+        {
+            Id65AuthoringEditorMobyPlacement placement = remoteDocument.MobyPlacements.Single(item =>
+                item.TargetTrueIndex == Id65RemotePadGrassT107Catalog.TargetTrueIndex);
+            Require(
+                placement.Id == Id65RemotePadGrassT107Catalog.PlacementId &&
+                placement.AtomicGroupId == Id65RemotePadGrassT107Catalog.AtomicGroupId &&
+                placement.BundleId == Id65RemotePadGrassT107Catalog.BundleId &&
+                placement.RowTemplateId == Id65RemotePadGrassT107Catalog.RowTemplateId &&
+                placement.RowPolicy == Id65AuthoringEditorDocument.AppendContiguousRowPolicy &&
+                placement.CoordinatePolicy == Id65AuthoringEditorDocument.AuthorExactCoordinatePolicy &&
+                placement.CoordinatesOrDelta == new Id65AuthoringEditorCoordinate(
+                    position.RawX,
+                    position.RawY,
+                    position.RawZ) &&
+                placement.YawByte == Id65RemotePadGrassT107Catalog.YawByte &&
+                placement.SupportHandle == Id65RemotePadGrassT107Catalog.SupportHandle,
+                $"Schema-3 T107 placement {position.PositionId} did not match its frozen catalog tuple.");
+        }
+        else
+        {
+            Require(
+                remoteDocument.MobyPlacements.All(item =>
+                    item.Id != Id65RemotePadGrassT107Catalog.PlacementId) &&
+                reparsedRemote.T107RemotePadPositionId == position.PositionId,
+                $"Disabled schema-3 T107 did not retain dormant position {position.PositionId}.");
+        }
+
+        AssertFailClosedBoundary(remoteDocument, $"schema-3 document {position.PositionId}");
+        ExpectReject(
+            $"schema-3 projection {position.PositionId}/{textureId}/{terrainPresent}/{t88Present}/{t107Present}",
+            () => Project(remoteDocument),
+            "exact composite projection is not implemented");
+        remoteProjectionRefusals++;
+        remoteGridDocuments++;
+    }
+}
+Require(
+    remoteGridDocuments == 9 * 2 * 2 * 2 * 2 &&
+    remoteProjectionRefusals == remoteGridDocuments,
+    "The schema-3 document matrix did not exhaust nine positions, two textures, terrain on/off, all four Grass combinations, and projection refusal.");
+
+Id65AuthoringEditorDocument remoteMismatchDocument =
+    Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+        Id65RemotePadGrassT107Catalog.DefaultPositionId,
+        includeOptionalTerrain: false,
+        placementIds: [Id65RemotePadGrassT107Catalog.PlacementId]);
+byte[] remoteMismatchUtf8 = remoteMismatchDocument.SerializeUtf8();
+Id65V2NativeTextureWitness remoteForgedWitness = CopyWitness(
+    textureWitness,
+    canonicalSha256: new string('0', 64));
+Id65MobyDependencyBundleDescriptor remoteForgedBundle = CopyBundle(
+    bundle,
+    canonicalSha256: new string('0', 64));
+ExpectReject(
+    "schema-3 refusal precedes texture-witness validation",
+    () => Project(remoteMismatchDocument, witness: remoteForgedWitness),
+    "exact composite projection is not implemented");
+ExpectReject(
+    "schema-3 refusal precedes Moby-bundle validation",
+    () => Project(remoteMismatchDocument, suppliedBundle: remoteForgedBundle),
+    "exact composite projection is not implemented");
+int remotePreCompilerGateChecks = 2;
+string alternatePositionId = Id65RemotePadGrassT107Catalog.Positions
+    .First(item => !item.IsDefault)
+    .PositionId;
+int remoteRejectionCount = 0;
+void RejectRemoteJson(string label, string category, Action<JsonObject> mutate)
+{
+    byte[] forged = RewriteJson(remoteMismatchUtf8, mutate);
+    ExpectReject(label, () => Id65AuthoringEditorDocument.Parse(forged), category);
+    remoteRejectionCount++;
+}
+
+RejectRemoteJson("remote catalog schema", "schema/profile", root =>
+    SetRemotePlacementValue(root, "schemaVersion", 2));
+RejectRemoteJson("remote catalog profile", "schema/profile", root =>
+    SetRemotePlacementValue(root, "profileId", "forged-remote-catalog"));
+RejectRemoteJson("missing retained remote position", "missing field", root =>
+    root.Remove("t107Placement"));
+RejectRemoteJson("unknown retained remote position", "strict canonical", root =>
+    SetRemotePlacementValue(root, "positionId", "remote-pad-grid.x999-y999"));
+RejectRemoteJson("remote position/coordinate mismatch", "placement", root =>
+    SetRemotePlacementValue(root, "positionId", alternatePositionId));
+RejectRemoteJson("remote coordinate mismatch", "placement", root =>
+    SetNamedScalar(root, "x", 0));
+RejectRemoteJson("remote support mismatch", "placement", root =>
+    ReplaceStringValue(
+        root,
+        Id65RemotePadGrassT107Catalog.SupportHandle,
+        "collision.remote-pad.stale"));
+RejectRemoteJson("remote placement identity mismatch", "placement", root =>
+    ReplaceStringValue(
+        root,
+        Id65RemotePadGrassT107Catalog.PlacementId,
+        Id65AuthoringMobyDependencyBundleCompiler.T107PlacementId));
+RejectRemoteJson("remote texture selector mismatch", "unsupported", root =>
+    SetNamedScalar(root, "mandatoryBaseFaceTextureId", 24));
+RejectRemoteJson("unknown remote root field", "unknown", root =>
+    root.Add("legacyT107Choice", true));
+
+byte[] forgedLegacyAsRemote = RewriteJson(documentUtf8, root =>
+{
+    root["schemaVersion"] = Id65AuthoringEditorDocument.RemotePadGridSchemaVersion;
+    root["profileId"] = Id65AuthoringEditorDocument.RemotePadGridDocumentProfileId;
+    root["mandatoryBaseFaceTextureId"] = 66;
+    root["t107Placement"] = new JsonObject
+    {
+        ["schemaVersion"] = Id65RemotePadGrassT107Catalog.SchemaVersion,
+        ["profileId"] = Id65RemotePadGrassT107Catalog.ProfileId,
+        ["positionId"] = Id65RemotePadGrassT107Catalog.DefaultPositionId
+    };
+});
+ExpectReject(
+    "silent legacy native-apron to remote-center reinterpretation",
+    () => Id65AuthoringEditorDocument.Parse(forgedLegacyAsRemote),
+    "unsupported");
+remoteRejectionCount++;
+byte[] forgedRemoteAsLegacy = RewriteJson(remoteMismatchUtf8, root =>
+{
+    root["schemaVersion"] = Id65AuthoringEditorDocument.CurrentSchemaVersion;
+    root["profileId"] = Id65AuthoringEditorDocument.DocumentProfileId;
+    root.Remove("mandatoryBaseFaceTextureId");
+    root.Remove("t107Placement");
+});
+ExpectReject(
+    "silent remote-grid to legacy native-apron reinterpretation",
+    () => Id65AuthoringEditorDocument.Parse(forgedRemoteAsLegacy),
+    "unsupported");
+remoteRejectionCount++;
+ExpectReject(
+    "duplicate remote placement factory input",
+    () => Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+        Id65RemotePadGrassT107Catalog.DefaultPositionId,
+        placementIds:
+        [
+            Id65RemotePadGrassT107Catalog.PlacementId,
+            Id65RemotePadGrassT107Catalog.PlacementId
+        ]),
+    "duplicate");
+remoteRejectionCount++;
+ExpectReject(
+    "legacy T107 placement in remote factory",
+    () => Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+        Id65RemotePadGrassT107Catalog.DefaultPositionId,
+        placementIds: [Id65AuthoringMobyDependencyBundleCompiler.T107PlacementId]),
+    "unsupported");
+remoteRejectionCount++;
+ExpectReject(
+    "unknown remote factory position",
+    () => Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+        "remote-pad-grid.x999-y999",
+        placementIds: []),
+    "unknown remote-pad");
+remoteRejectionCount++;
+ExpectReject(
+    "null remote factory position",
+    () => Id65AuthoringEditorDocument.CreateRemotePadGridExact(null!, placementIds: []),
+    "positionId");
+remoteRejectionCount++;
+Require(
+    remoteRejectionCount == 16,
+    $"The schema-3 malformed/migration rejection matrix ran {remoteRejectionCount}, expected 16.");
+
 int rejectionCount = 0;
 void RejectJson(string label, string category, Action<JsonObject> mutate)
 {
@@ -595,8 +815,11 @@ Require(SnapshotFile(lockedImagePath) == lockedBefore &&
 Console.WriteLine(
     "PASS Id65AuthoringEditorDocumentSmoke: canonical/reordered UTF-8 document round-trip, " +
     $"document={firstProjection.DocumentCanonicalSha256}; manifest={first.ManifestSha256}; " +
-    $"row80={first.OutputRow80Sha256}; plan={first.DeterministicPlanSha256}; rejects={rejectionCount}; " +
-    "terrain present/absent, exact T66 + T88/T107 projection, inverse/rollback, defensive copies, " +
+    $"row80={first.OutputRow80Sha256}; plan={first.DeterministicPlanSha256}; " +
+    $"legacyRejects={rejectionCount}; remoteGridDocuments={remoteGridDocuments}; " +
+    $"remoteProjectionRefusals={remoteProjectionRefusals}; " +
+    $"remotePreCompilerGateChecks={remotePreCompilerGateChecks}; remoteRejects={remoteRejectionCount}; " +
+    "terrain present/absent, frozen legacy T66/T25 + native-apron T107, strict schema-3 remote-grid intent, inverse/rollback, defensive copies, " +
     "and no filesystem/BIN/CUE or App/CreateBIN/runtime/release/promotion/publication authority.");
 
 Id65AuthoringEditorProjection Project(
@@ -620,6 +843,14 @@ finally
     }
     Require(!Directory.Exists(smokeRoot),
         "The editor-document smoke retained temporary game data.");
+}
+
+static IEnumerable<string> RemoteGridPlacementIds(bool t88, bool t107)
+{
+    if (t88)
+        yield return Id65AuthoringMobyDependencyBundleCompiler.T88PlacementId;
+    if (t107)
+        yield return Id65RemotePadGrassT107Catalog.PlacementId;
 }
 
 static bool Equivalent(Id65CompiledAuthoringComposite left, Id65CompiledAuthoringComposite right) =>
@@ -781,6 +1012,20 @@ static void SetNamedScalar(JsonObject root, string propertyName, object value)
     if (!TryFindProperty(root, propertyName, out JsonObject? owner, out string? actualName))
         throw new InvalidOperationException($"Missing `{propertyName}` in canonical editor document.");
     owner[actualName] = JsonSerializer.SerializeToNode(value, value.GetType());
+}
+
+static void SetRemotePlacementValue(
+    JsonObject root,
+    string propertyName,
+    object value)
+{
+    if (root["t107Placement"] is not JsonObject placement ||
+        !placement.ContainsKey(propertyName))
+    {
+        throw new InvalidOperationException(
+            $"Missing `t107Placement.{propertyName}` in canonical schema-3 editor document.");
+    }
+    placement[propertyName] = JsonSerializer.SerializeToNode(value, value.GetType());
 }
 
 static void SetFirstMatchingString(JsonObject root, string nameFragment, string value)

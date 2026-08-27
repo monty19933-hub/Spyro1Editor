@@ -119,6 +119,28 @@ try
             .SequenceEqual(beforeT25Refusal),
         "Rejected resident T25 candidate materialization changed output/temp/reuse workspace state.");
 
+    string[] beforeRemotePadRefusal = Directory.EnumerateFileSystemEntries(paths.RootPath)
+        .Select(Path.GetFileName)
+        .Order(StringComparer.Ordinal)
+        .ToArray()!;
+    Id65AuthoringEditorDocumentStoreResult remotePadExpected = stored with
+    {
+        Document = Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+            Id65RemotePadGrassT107Catalog.DefaultPositionId)
+    };
+    await ExpectRejectedAsync(
+        "schema-3 remote-pad candidate before any output/reuse",
+        async () => _ = await Id65AuthoringEditorAggregateCandidateMaterializer
+            .MaterializeAsync(request with { ExpectedStoredDocument = remotePadExpected }),
+        requiredText: "restricted to the frozen T66 document profile");
+    failClosedRejects++;
+    Require(
+        Directory.EnumerateFileSystemEntries(paths.RootPath)
+            .Select(Path.GetFileName)
+            .Order(StringComparer.Ordinal)
+            .SequenceEqual(beforeRemotePadRefusal),
+        "Rejected schema-3 remote-pad candidate materialization changed output/temp/reuse workspace state.");
+
     await ExpectRejectedAsync(
         "smoke-only entrypoint without a fault",
         async () => _ = await Id65AuthoringEditorAggregateCandidateMaterializer
@@ -1168,8 +1190,8 @@ try
     VerifyApiAndTopology(repositoryRoot);
     Require(positiveMaterializations == 12,
         $"The aggregate materializer positive matrix ran {positiveMaterializations}, expected 12.");
-    Require(failClosedRejects == 13,
-        $"The aggregate materializer rejection matrix ran {failClosedRejects}, expected 13.");
+    Require(failClosedRejects == 14,
+        $"The aggregate materializer rejection matrix ran {failClosedRejects}, expected 14.");
     Require(shapeRejects == 3,
         $"The aggregate materializer shape matrix ran {shapeRejects}, expected 3.");
     Require(reprojectionRejects == 1,

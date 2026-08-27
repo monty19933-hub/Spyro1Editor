@@ -3108,6 +3108,9 @@ public sealed partial class MainWindow : Window
             if (!ReferenceEquals(projection.Geometry, loaded.Geometry) ||
                 !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(
                     loaded.Geometry) ||
+                !Id65PreparedMobysMatchProjection(
+                    loaded.Mobys,
+                    projection) ||
                 (loaded.Id65AuthoringDocument == null &&
                  projection.CanonicalDocumentBound) ||
                 (loaded.Id65AuthoringDocument != null &&
@@ -30958,7 +30961,7 @@ public sealed partial class MainWindow : Window
                 geometry.Id65FreshSceneProjection)
             : LoadMobyData(levelKey);
         NativeMovementLoadData nativeMovement = id65BlankLabLevel
-            ? NativeMovementLoadData.Empty("The fresh ID65 starter scene exposes no user/test Mobys or native movement records; its protected spawn is not an editable object.")
+            ? NativeMovementLoadData.Empty("The fresh ID65 starter scene exposes no editable native movement records. A schema-3 remote-pad Grass may appear as a read-only document-bound presentation; its protected spawn is not an editable object.")
             : LoadNativeMovementData(levelKey);
         TerrainCollisionLoadData collision = LoadTerrainCollisionData(levelKey, geometry.Geometry);
         IReadOnlyList<CustomTerrainTextureImport> customTextures = id65BlankLabLevel
