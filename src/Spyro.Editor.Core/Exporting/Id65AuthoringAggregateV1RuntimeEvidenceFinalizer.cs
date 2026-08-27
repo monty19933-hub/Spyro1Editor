@@ -15,12 +15,19 @@ internal sealed record Id65AuthoringAggregateV1RuntimeEvidenceFinalizerStatus(
     string CaptureCoordinatorDeepTestSha256,
     string CaptureSourceClosureSha256,
     string AggregateChecklistSha256,
+    string ExactPlanSha256,
+    string OperationalToolPinsSha256,
     string CaptureRuntimeProfileSha256,
+    string ProfileReceiptClosureSha256,
+    string CaptureSchemaClosureSha256,
+    string WorkflowDeclarationClosureSha256,
     int ProductionCaptureBlockerCount,
     string ProductionCaptureBlockersSha256,
     bool FrozenWorkflowCompatibleWithAggregateScope,
     string FrozenWorkflowSha256,
     bool SaveCapableProfilePinned,
+    bool ProfilePinsVerified,
+    bool ExactCaptureEngineImplemented,
     bool ProductionCaptureEnabled,
     bool FocusedEvidenceHashPinned,
     bool CaptureStagingDirectoryPresent,
@@ -29,6 +36,7 @@ internal sealed record Id65AuthoringAggregateV1RuntimeEvidenceFinalizerStatus(
     bool ReleaseAuthorized,
     bool Publishable,
     string BlockingCheckId,
+    string ProductionCaptureRequiredGate,
     string BlockingReason);
 
 internal sealed record Id65AuthoringAggregateV1RuntimeEvidenceFinalizerSmokeReport(
@@ -85,28 +93,38 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceFinalizer
     private const string FixtureStatement =
         "Offline fixture binding only; no game runtime or acceptance was observed.";
     private const string ExpectedCaptureCoordinatorSha256 =
-        "f0d0baf60f7578174b05ef499cd9f94378f67b85405a5491ec029d4e0f650af3";
-    private const long ExpectedCaptureCoordinatorByteLength = 78_915;
+        "de7ca2b3886fc897f876fb9f53727c19596a188d8882979f60cce16fd3e63c2c";
+    private const long ExpectedCaptureCoordinatorByteLength = 104_888;
     private const string ExpectedFrozenCaptureCoreSha256 =
         "153871778877a8736a1243ce2e84453e4d0d8e2fb945f9e96fdc01fbf00278ec";
     private const long ExpectedFrozenCaptureCoreByteLength = 473_144;
     private const string ExpectedCaptureCoordinatorDeepTestSha256 =
-        "4ddee51100eb4b9108e9aa8d3a68127ec0199c7ee377c4c50c99a732cdc9161a";
-    private const long ExpectedCaptureCoordinatorDeepTestByteLength = 28_214;
+        "10104ab431260fafed5d215d5c16325c6f5792848dbfcb69c77b98cb4cdbfb72";
+    private const long ExpectedCaptureCoordinatorDeepTestByteLength = 77_990;
     private const string ExpectedCaptureSourceClosureSha256 =
-        "2f1fbe145226c7c588fa5150ec65939a04e94fde30d14371a9858c21debb0571";
+        "fa601b2d8aad8a8931ce49e8be9269afdc3bb3105e927d65c70c138e9a832a41";
     private const string ExpectedAggregateChecklistSha256 =
-        "874226d92bd9a86a61cc754938261e4374dfade0067748169f69a86a6d9b8d79";
+        "3fee9f6a9b8aa5e90a846834b29c4d1b3f17683d19f2b9804126d17527eefeef";
+    private const string ExpectedExactPlanSha256 =
+        "23838ecb8f05c62f2d4d2df243fd37553eb5f36579e95d137ac7beb6209c1543";
+    private const string ExpectedOperationalToolPinsSha256 =
+        "ac30470f7741d0273a9d78a63f25fafb0709ce74f430c85256b83173ac7716c7";
     private const string ExpectedCaptureRuntimeProfileSha256 =
-        "9c9154924e0dfb7de57d2a4cbb9ced1fddf046a5bbf4fa53cf1b3e258252b71d";
+        "419b355557a69683e33e254d8609d4dd285ebfeb0529a602b2a22918a8b010f6";
+    private const string ExpectedProfileReceiptClosureSha256 =
+        "7b43c1c81e4ca40148c99c2c0d908891453e2882c9f93b0d0f9d440c52cb5330";
+    private const string ExpectedCaptureSchemaClosureSha256 =
+        "3a30359f741bf31d9be46a168662b4d0cf2f38bbbe86806e304a0744808f01f4";
+    private const string ExpectedWorkflowDeclarationClosureSha256 =
+        "b086b7336c975a59b24cde401d4b5080b260ad9da563c12f2d33518d7096a9c3";
     private const string ExpectedProductionCaptureBlockersSha256 =
-        "b44799a97c8da063bd339fdc9e54b66d29e6a5f075bd95f7146c1311c08c3686";
+        "9069369b35c43da4f6002477b094a8aa5e2be7e0076530c718366ecc95349769";
     private const string ExpectedFrozenWorkflowSha256 =
         "6ae9d047746dba64e0156de1ef547a4c8454654f8aec9f7cd32b0598d6955a69";
     private const string FinalCaptureRunOriginFormat =
-        "spyro-editor-id65-authoring-aggregate-v1-runtime-capture-run-origin";
+        "spyro-id65-authoring-aggregate-exact-v1-capture-run-origin";
     private const string FinalCaptureJournalFormat =
-        "spyro-editor-id65-authoring-aggregate-v1-runtime-capture-event-journal";
+        "spyro-id65-authoring-aggregate-exact-v1-capture-session-journal";
 
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private static readonly JsonSerializerOptions FixtureJson = CreateFixtureJson();
@@ -152,7 +170,12 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceFinalizer
         string ProfileVerifierSha256,
         string RuntimeWatcherSha256,
         string AggregateChecklistSha256,
+        string ExactPlanSha256,
+        string OperationalToolPinsSha256,
         string CaptureRuntimeProfileSha256,
+        string ProfileReceiptClosureSha256,
+        string CaptureSchemaClosureSha256,
+        string WorkflowDeclarationClosureSha256,
         int ProductionCaptureBlockerCount,
         string ProductionCaptureBlockersSha256,
         bool FrozenWorkflowCompatibleWithAggregateScope,
@@ -286,28 +309,43 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceFinalizer
             "0644");
         if (pending.ScopeBoundary.AggregateChecklistSha256 !=
                 ExpectedAggregateChecklistSha256 ||
+            pending.ScopeBoundary.ExactPlanSha256 != ExpectedExactPlanSha256 ||
+            pending.ScopeBoundary.OperationalToolPinsSha256 !=
+                ExpectedOperationalToolPinsSha256 ||
             pending.ScopeBoundary.CaptureRuntimeProfileSha256 !=
                 ExpectedCaptureRuntimeProfileSha256 ||
+            pending.ScopeBoundary.ProfileReceiptClosureSha256 !=
+                ExpectedProfileReceiptClosureSha256 ||
+            pending.RuntimeProfile.HandoffReceiptClosureSha256 !=
+                ExpectedProfileReceiptClosureSha256 ||
+            pending.ScopeBoundary.CaptureSchemaClosureSha256 !=
+                ExpectedCaptureSchemaClosureSha256 ||
             pending.ScopeBoundary.CaptureSourceClosureSha256 !=
                 ExpectedCaptureSourceClosureSha256 ||
+            pending.ScopeBoundary.WorkflowDeclarationClosureSha256 !=
+                ExpectedWorkflowDeclarationClosureSha256 ||
+            !pending.ScopeBoundary.SaveCapableProfilePinned ||
+            pending.ScopeBoundary.ProfilePinsVerified ||
+            pending.ScopeBoundary.ExactCaptureEngineImplemented ||
+            pending.ScopeBoundary.ProductionCaptureEnabled ||
             pending.ScopeBoundary.ProductionCaptureBlockers is null ||
-            pending.ScopeBoundary.ProductionCaptureBlockers.Length != 2 ||
+            pending.ScopeBoundary.ProductionCaptureBlockers.Length != 1 ||
             pending.ScopeBoundary.ProductionCaptureBlockersSha256 !=
                 ExpectedProductionCaptureBlockersSha256 ||
             pending.ScopeBoundary.FrozenWorkflowCompatibleWithAggregateScope ||
-            pending.ScopeBoundary.FrozenWorkflowSha256 != ExpectedFrozenWorkflowSha256)
+            pending.ScopeBoundary.FrozenWorkflowSha256 != ExpectedFrozenWorkflowSha256 ||
+            pending.ScopeBoundary.ProductionCaptureRequiredGate !=
+                "aggregate.exact-three-session-card-aware-capture-engine")
         {
             throw new InvalidDataException("Aggregate final capture schema/profile pins changed.");
         }
         string[] blockerIds =
         [
-            "profile.no-memory-card-save-persistence",
-            "workflow.frozen-v3-seven-session-lone-pad-incompatible"
+            "EXACT_CAPTURE_ENGINE_NOT_IMPLEMENTED"
         ];
         string[] blockerGates =
         [
-            "candidate.save-persistence",
-            "aggregate.exact-17-check-town-square-workflow"
+            "aggregate.exact-three-session-card-aware-capture-engine"
         ];
         if (!pending.ScopeBoundary.ProductionCaptureBlockers
                 .Select(item => item.BlockerId).SequenceEqual(blockerIds) ||
@@ -338,12 +376,19 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceFinalizer
             captureDeepTest.Sha256,
             pending.ScopeBoundary.CaptureSourceClosureSha256,
             pending.ScopeBoundary.AggregateChecklistSha256,
+            pending.ScopeBoundary.ExactPlanSha256,
+            pending.ScopeBoundary.OperationalToolPinsSha256,
             pending.ScopeBoundary.CaptureRuntimeProfileSha256,
+            pending.ScopeBoundary.ProfileReceiptClosureSha256,
+            pending.ScopeBoundary.CaptureSchemaClosureSha256,
+            pending.ScopeBoundary.WorkflowDeclarationClosureSha256,
             pending.ScopeBoundary.ProductionCaptureBlockers.Length,
             pending.ScopeBoundary.ProductionCaptureBlockersSha256,
             pending.ScopeBoundary.FrozenWorkflowCompatibleWithAggregateScope,
             pending.ScopeBoundary.FrozenWorkflowSha256,
             pending.ScopeBoundary.SaveCapableProfilePinned,
+            pending.ScopeBoundary.ProfilePinsVerified,
+            pending.ScopeBoundary.ExactCaptureEngineImplemented,
             pending.ScopeBoundary.ProductionCaptureEnabled,
             focusedHash != "PENDING",
             stagingPresent,
@@ -352,6 +397,7 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceFinalizer
             pending.DerivedResult.ReleaseAuthorized,
             pending.DerivedResult.Publishable,
             pending.ScopeBoundary.ProductionCaptureBlockingCheckId,
+            pending.ScopeBoundary.ProductionCaptureRequiredGate,
             pending.ScopeBoundary.ProductionCaptureBlockingReason);
     }
 
@@ -390,15 +436,27 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceFinalizer
     {
         string root = RequireRepositoryRoot(repositoryRoot);
         Id65AuthoringAggregateV1RuntimeEvidenceFinalizerStatus status = GetStatus(root);
-        if (status.EventualCheckCount != 17 || status.SaveCapableProfilePinned ||
+        if (status.EventualCheckCount != 17 || !status.SaveCapableProfilePinned ||
+            status.ProfilePinsVerified || status.ExactCaptureEngineImplemented ||
             status.ProductionCaptureEnabled || status.FocusedEvidenceHashPinned ||
             status.RuntimeProven || status.CreateBinAuthorized || status.ReleaseAuthorized ||
-            status.Publishable || status.ProductionCaptureBlockerCount != 2 ||
+            status.Publishable || status.ProductionCaptureBlockerCount != 1 ||
             status.ProductionCaptureBlockersSha256 !=
                 ExpectedProductionCaptureBlockersSha256 ||
             status.FrozenWorkflowCompatibleWithAggregateScope ||
             status.FrozenWorkflowSha256 != ExpectedFrozenWorkflowSha256 ||
-            status.CaptureSourceClosureSha256 != ExpectedCaptureSourceClosureSha256)
+            status.CaptureSourceClosureSha256 != ExpectedCaptureSourceClosureSha256 ||
+            status.AggregateChecklistSha256 != ExpectedAggregateChecklistSha256 ||
+            status.ExactPlanSha256 != ExpectedExactPlanSha256 ||
+            status.OperationalToolPinsSha256 != ExpectedOperationalToolPinsSha256 ||
+            status.CaptureRuntimeProfileSha256 != ExpectedCaptureRuntimeProfileSha256 ||
+            status.ProfileReceiptClosureSha256 != ExpectedProfileReceiptClosureSha256 ||
+            status.CaptureSchemaClosureSha256 != ExpectedCaptureSchemaClosureSha256 ||
+            status.WorkflowDeclarationClosureSha256 !=
+                ExpectedWorkflowDeclarationClosureSha256 ||
+            status.BlockingCheckId != "EXACT_CAPTURE_ENGINE_NOT_IMPLEMENTED" ||
+            status.ProductionCaptureRequiredGate !=
+                "aggregate.exact-three-session-card-aware-capture-engine")
         {
             throw new InvalidDataException("Aggregate production boundary unexpectedly opened.");
         }
@@ -406,7 +464,7 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceFinalizer
         int positive = 0;
         int refusals = 0;
         const string productionFixtureRunId =
-            "id65v3-20260825t000000z-0123456789abcdef";
+            "id65agg1-20260825t000000z-0123456789abcdef";
         const string expectedProductionGateMessage =
             "Aggregate V1 runtime finalization is fail-closed";
         bool inspectRefused = ExpectInvalidOperationContaining(
@@ -1002,7 +1060,12 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceFinalizer
             OneTool(pending, "profile-verifier").Sha256,
             OneTool(pending, "runtime-watcher").Sha256,
             pending.ScopeBoundary.AggregateChecklistSha256,
+            pending.ScopeBoundary.ExactPlanSha256,
+            pending.ScopeBoundary.OperationalToolPinsSha256,
             pending.ScopeBoundary.CaptureRuntimeProfileSha256,
+            pending.ScopeBoundary.ProfileReceiptClosureSha256,
+            pending.ScopeBoundary.CaptureSchemaClosureSha256,
+            pending.ScopeBoundary.WorkflowDeclarationClosureSha256,
             pending.ScopeBoundary.ProductionCaptureBlockers.Length,
             pending.ScopeBoundary.ProductionCaptureBlockersSha256,
             pending.ScopeBoundary.FrozenWorkflowCompatibleWithAggregateScope,
@@ -1099,34 +1162,38 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceFinalizer
         Id65AuthoringAggregateV1RuntimeEvidenceFinalizerStatus status = GetStatus(repositoryRoot);
         if (runId is not null && !Regex.IsMatch(
                 runId,
-                "^id65v3-[0-9]{8}t[0-9]{6}z-[0-9a-f]{16}$",
+                "^id65agg1-[0-9]{8}t[0-9]{6}z-[0-9a-f]{16}$",
                 RegexOptions.CultureInvariant))
         {
             throw new ArgumentException(
                 "Production run ID does not match the currently pinned capture schema.",
                 nameof(runId));
         }
-        if (!status.SaveCapableProfilePinned || !status.ProductionCaptureEnabled ||
+        if (!status.SaveCapableProfilePinned || !status.ProfilePinsVerified ||
+            !status.ExactCaptureEngineImplemented || !status.ProductionCaptureEnabled ||
             !status.FocusedEvidenceHashPinned)
         {
             throw new InvalidOperationException(
                 "Aggregate V1 runtime finalization is fail-closed: saveCapableProfilePinned=" +
                 status.SaveCapableProfilePinned.ToString().ToLowerInvariant() +
+                ", profilePinsVerified=" +
+                status.ProfilePinsVerified.ToString().ToLowerInvariant() +
+                ", exactCaptureEngineImplemented=" +
+                status.ExactCaptureEngineImplemented.ToString().ToLowerInvariant() +
                 ", productionCaptureEnabled=" +
                 status.ProductionCaptureEnabled.ToString().ToLowerInvariant() +
                 ", focusedEvidenceHashPinned=" +
                 status.FocusedEvidenceHashPinned.ToString().ToLowerInvariant() +
                 $", productionCaptureBlockerCount={status.ProductionCaptureBlockerCount}, " +
-                "frozenWorkflowCompatibleWithAggregateScope=" +
-                status.FrozenWorkflowCompatibleWithAggregateScope.ToString().ToLowerInvariant() +
-                $", primaryBlockingCheckId={status.BlockingCheckId}; {status.BlockingReason}.");
+                $"primaryBlockingCheckId={status.BlockingCheckId}, " +
+                $"requiredGate={status.ProductionCaptureRequiredGate}; " +
+                $"{status.BlockingReason}.");
         }
-        if (status.ProductionCaptureBlockerCount != 0 ||
-            !status.FrozenWorkflowCompatibleWithAggregateScope)
+        if (status.ProductionCaptureBlockerCount != 0)
         {
             throw new InvalidOperationException(
-                "Aggregate V1 production finalization cannot open while any capture blocker " +
-                "remains or the frozen workflow is incompatible.");
+                "Aggregate V1 production finalization cannot open while any exact capture " +
+                "blocker remains.");
         }
         if (!status.CaptureStagingDirectoryPresent)
             throw new DirectoryNotFoundException("Aggregate V1 capture staging directory is absent.");

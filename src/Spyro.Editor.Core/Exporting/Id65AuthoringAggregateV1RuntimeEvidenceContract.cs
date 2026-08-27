@@ -147,13 +147,21 @@ internal sealed record Id65AuthoringAggregateV1RuntimeEvidenceScopeBoundary(
     string CaptureStagingRelativePath,
     string CaptureCoordinatorAuthorityLockRelativePath,
     string AggregateChecklistSha256,
+    string ExactPlanSha256,
+    string OperationalToolPinsSha256,
     string CaptureRuntimeProfileSha256,
+    string ProfileReceiptClosureSha256,
+    string CaptureSchemaClosureSha256,
     string CaptureSourceClosureSha256,
+    string WorkflowDeclarationClosureSha256,
     bool SaveCapableProfilePinned,
+    bool ProfilePinsVerified,
+    bool ExactCaptureEngineImplemented,
     bool ProductionCaptureEnabled,
     Id65AuthoringAggregateV1RuntimeEvidenceProductionBlocker[] ProductionCaptureBlockers,
     string ProductionCaptureBlockersSha256,
     string ProductionCaptureBlockingCheckId,
+    string ProductionCaptureRequiredGate,
     string ProductionCaptureBlockingReason,
     bool FrozenWorkflowCompatibleWithAggregateScope,
     string FrozenWorkflowSha256,
@@ -218,32 +226,43 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceContract
     internal const int FormatVersion = 1;
     internal const string RequiredSmokeAssemblyName =
         "Spyro.Editor.Id65AuthoringAggregateV1RuntimeEvidenceContractSmoke";
-    internal const string ExpectedProfileId = "duckstation-id65-authoring-aggregate-v1";
+    internal const string ExpectedProfileId =
+        "duckstation-id65-authoring-aggregate-save-v1";
     internal const string FocusedRuntimeEvidenceRelativePath =
-        "docs/runtime-evidence/unused-level-65-authoring-aggregate-v1-runtime-evidence.json";
+        "docs/runtime-evidence/unused-level-65-authoring-aggregate-exact-v1-runtime-evidence.json";
     internal const string RuntimeAssetRelativePrefix =
-        "docs/runtime-evidence/assets/unused-level-65-authoring-aggregate-v1/";
+        "docs/runtime-evidence/assets/unused-level-65-authoring-aggregate-exact-v1/";
     internal const string CaptureStagingRelativePath =
         RuntimeAssetRelativePrefix + "capture-staging";
     internal static readonly string ExpectedFocusedRuntimeEvidenceSha256 = "PENDING";
     internal static readonly string ExpectedCaptureCoordinatorSha256 =
-        "f0d0baf60f7578174b05ef499cd9f94378f67b85405a5491ec029d4e0f650af3";
+        "de7ca2b3886fc897f876fb9f53727c19596a188d8882979f60cce16fd3e63c2c";
     internal const string ExpectedAggregateChecklistSha256 =
-        "874226d92bd9a86a61cc754938261e4374dfade0067748169f69a86a6d9b8d79";
+        "3fee9f6a9b8aa5e90a846834b29c4d1b3f17683d19f2b9804126d17527eefeef";
+    internal const string ExpectedExactPlanSha256 =
+        "23838ecb8f05c62f2d4d2df243fd37553eb5f36579e95d137ac7beb6209c1543";
+    internal const string ExpectedOperationalToolPinsSha256 =
+        "ac30470f7741d0273a9d78a63f25fafb0709ce74f430c85256b83173ac7716c7";
     internal const string ExpectedCaptureRuntimeProfileSha256 =
-        "9c9154924e0dfb7de57d2a4cbb9ced1fddf046a5bbf4fa53cf1b3e258252b71d";
+        "419b355557a69683e33e254d8609d4dd285ebfeb0529a602b2a22918a8b010f6";
+    internal const string ExpectedProfileReceiptClosureSha256 =
+        "7b43c1c81e4ca40148c99c2c0d908891453e2882c9f93b0d0f9d440c52cb5330";
+    internal const string ExpectedCaptureSchemaClosureSha256 =
+        "3a30359f741bf31d9be46a168662b4d0cf2f38bbbe86806e304a0744808f01f4";
     internal const string ExpectedCaptureSourceClosureSha256 =
-        "2f1fbe145226c7c588fa5150ec65939a04e94fde30d14371a9858c21debb0571";
+        "fa601b2d8aad8a8931ce49e8be9269afdc3bb3105e927d65c70c138e9a832a41";
+    internal const string ExpectedWorkflowDeclarationClosureSha256 =
+        "b086b7336c975a59b24cde401d4b5080b260ad9da563c12f2d33518d7096a9c3";
     internal const string ExpectedProductionCaptureBlockersSha256 =
-        "b44799a97c8da063bd339fdc9e54b66d29e6a5f075bd95f7146c1311c08c3686";
+        "9069369b35c43da4f6002477b094a8aa5e2be7e0076530c718366ecc95349769";
     internal const string ExpectedFrozenWorkflowSha256 =
         "6ae9d047746dba64e0156de1ef547a4c8454654f8aec9f7cd32b0598d6955a69";
     internal const string ExpectedSourceClosureSha256 =
         "5f178ebd345424529d4c5d80f40bd7d72ecbf942b1c6fd5d5096c45125533985";
     internal const string ExpectedRuntimeProfileClosureSha256 =
-        "42996f468b9c2f129203b24f400d7244ca361c05fd30e61288011211579996cb";
+        "b9b9454b425bb7b743234f8f9056ea5820f26308989a75a1f19bdc4decd8243d";
     internal const string ExpectedToolSetClosureSha256 =
-        "bc8bccaa102dce9f67ee92a229b62407ff365066c55dfcacbef0b60559078bb3";
+        "3f9a89ab97ad8317eca975a604fb813b3cbc40018a836bb918be58619fa3b61f";
 
     private const string Canonicalization = "rfc8785-jcs-utf8-v1";
     private const string EvidenceId =
@@ -257,7 +276,8 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceContract
         "_local/id65-authoring-aggregate-workspace/_research/unusedlevel65blank/v1/" +
         "authored-edits/unusedlevel65blank-authoring-document-v1.json";
     private const string ProfilePackageRelativePath =
-        "_local/v5-stone-hill-level-replacement/duckstation-id65-authoring-aggregate-v1";
+        "_local/v5-stone-hill-level-replacement/" +
+        "duckstation-id65-authoring-aggregate-save-v1";
     private const string AppRelativePath =
         ProfilePackageRelativePath + "/DuckStation-ID65-Unattended-v1.app";
     private const string ExternalHomeRelativePath = ProfilePackageRelativePath + "/home";
@@ -568,11 +588,11 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceContract
             HandoffReceiptRelativePath: ProfilePackageRelativePath + "/handoff-receipt.json",
             HandoffReceiptFormat: "spyro-id65-unattended-external-home-handoff",
             HandoffReceiptFormatVersion: 1,
-            HandoffReceiptByteLength: 74_510,
+            HandoffReceiptByteLength: 74_525,
             HandoffReceiptSha256:
-                "c35c4c2b74f3481206737fb8f310bb5478a6f00df0d53655d9e4ac14230a1fe2",
+                "17ce1f4fd9394bf4890048f08afe28d97a709fd656e7d262e34553f5cd6e58d3",
             HandoffReceiptClosureSha256:
-                "1f826b36b14ee330330cf574e8080a5f744d7b8c5da6e75475d593ec81b19c7f",
+                ExpectedProfileReceiptClosureSha256,
             CandidateManifestEntryCount: 2,
             CandidateManifestSha256:
                 "44f74dcefab535670d4abe0e1b1bcec35b832dec421d9caea8c6c132b860681d",
@@ -586,16 +606,16 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceContract
                 "08d0a74450b709ab7e702182d64db55f6bc3395728181b052fec307c4d320ba7",
             HomeOutputTreeManifestEntryCount: 12,
             HomeOutputTreeManifestSha256:
-                "b00119fd7647647c81c7571d2507dbbce2075bd10cdcd8af8db8ae1e006fc2b0",
+                "5e3bcd2c9c3bd8b457bbfe613244663d545b90dbc072b132e1e4aee1e3e94cb9",
             PackageEnvelopeFormat: "spyro-id65-package-envelope-manifest-v1",
             PackageEnvelopeEntryCount: 4,
             PackageEnvelopeSha256:
-                "31f24a6d8ea38fa19abeae54392fa96e2494b5cfb0a5621d2cc29771a617f866",
+                "7544e65f34c99d4d78677321ea38e992310386843ddf933f31fce514e2937872",
             OutputXattrPolicyVersion: "apple-provenance-11-prefix-0102-v1",
             ExternalHomeSettingsRelativePath: ExternalHomeDataRelativePath + "/settings.ini",
-            ExternalHomeSettingsByteLength: 2_143,
+            ExternalHomeSettingsByteLength: 2_151,
             ExternalHomeSettingsSha256:
-                "469ef98771f26395352bac1d43f90e4be14693fd4ba5316e4d71e0557a7f74f9",
+                "4ea5cced616c989e3df2be8a6ddb9507a9c295704c1acd2b586ec19fee28e8cb",
             ExternalHomeBiosRelativePath: ExternalHomeDataRelativePath +
                 "/bios/Sony PlayStation SCPH-1001 - DTLH-3000 BIOS v2.2 (1995-12-04)(Sony)(US).bin",
             ExternalHomeBiosByteLength: 524_288,
@@ -617,21 +637,21 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceContract
     [
         new(
             "profile-builder",
-            "tools/Build-SpyroId65AuthoringAggregateV1Profile.py",
-            20_966,
-            "5e344a097b1cd79c50cdd5d07b0a3c818b457f35f33b46d1677fa55487aa85a2",
+            "tools/Build-SpyroId65AuthoringAggregateSaveV1Profile.py",
+            28_304,
+            "759ec6a561166fc3e879db58db56781f757735b0975a5db0768248f276aec297",
             "0644"),
         new(
             "profile-adapter-test",
-            "tools/Test-SpyroId65AuthoringAggregateV1Profile.py",
-            59_073,
-            "4f41a1828f553f3bc6b223ffadf27350c0bd9390065abd9e3b2df3bf6f4d9d2a",
+            "tools/Test-SpyroId65AuthoringAggregateSaveV1Profile.py",
+            20_994,
+            "6eb394181d66261fe7253836ccf866dcbc7b0b07d65f7713f70a11f02bd1e5c1",
             "0644"),
         new(
             "profile-verifier",
-            "tools/Verify-SpyroId65AuthoringAggregateV1Profile.py",
-            35_753,
-            "ba1b461193c7a67fd8522c72fd9141e725ec3063791d44d2a82d96e0a01a344c",
+            "tools/Verify-SpyroId65AuthoringAggregateSaveV1Profile.py",
+            25_873,
+            "36913ca29f4d4bdbb2f7ae539df3f6033f5018f5a39a77affce2638c1ca4042b",
             "0644"),
         new(
             "runtime-watcher",
@@ -647,15 +667,15 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceContract
             "0755"),
         new(
             "capture-coordinator",
-            "tools/Capture-SpyroId65AuthoringAggregateV1RuntimeSession.py",
-            78_915,
+            "tools/Capture-SpyroId65AuthoringAggregateExactV1RuntimeSession.py",
+            104_888,
             ExpectedCaptureCoordinatorSha256,
             "0644"),
         new(
             "capture-deep-test",
-            "tools/Test-Capture-SpyroId65AuthoringAggregateV1RuntimeSession.py",
-            28_214,
-            "4ddee51100eb4b9108e9aa8d3a68127ec0199c7ee377c4c50c99a732cdc9161a",
+            "tools/Test-Capture-SpyroId65AuthoringAggregateExactV1RuntimeSession.py",
+            77_990,
+            "10104ab431260fafed5d215d5c16325c6f5792848dbfcb69c77b98cb4cdbfb72",
             "0644")
     ];
 
@@ -729,16 +749,25 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceContract
                 "unused-level-65-remote-blank-environment-header-repair-v3/" +
                 ".capture-coordinator-authority.lock",
             ExpectedAggregateChecklistSha256,
+            ExpectedExactPlanSha256,
+            ExpectedOperationalToolPinsSha256,
             ExpectedCaptureRuntimeProfileSha256,
+            ExpectedProfileReceiptClosureSha256,
+            ExpectedCaptureSchemaClosureSha256,
             ExpectedCaptureSourceClosureSha256,
-            SaveCapableProfilePinned: false,
+            ExpectedWorkflowDeclarationClosureSha256,
+            SaveCapableProfilePinned: true,
+            ProfilePinsVerified: false,
+            ExactCaptureEngineImplemented: false,
             ProductionCaptureEnabled: false,
             ProductionCaptureBlockers: BuildExpectedProductionCaptureBlockers(),
             ProductionCaptureBlockersSha256: ExpectedProductionCaptureBlockersSha256,
-            ProductionCaptureBlockingCheckId: "candidate.save-persistence",
+            ProductionCaptureBlockingCheckId: "EXACT_CAPTURE_ENGINE_NOT_IMPLEMENTED",
+            ProductionCaptureRequiredGate:
+                "aggregate.exact-three-session-card-aware-capture-engine",
             ProductionCaptureBlockingReason:
-                "the pinned aggregate profile disables both memory-card slots, so an ordinary " +
-                "in-game save cannot survive a clean process restart without save-state use",
+                "the exact plan/card schema exists, but no live engine, DuckStation launch, " +
+                "persistent staging, runtime evidence, or authorization is available",
             FrozenWorkflowCompatibleWithAggregateScope: false,
             FrozenWorkflowSha256: ExpectedFrozenWorkflowSha256,
             CandidateOnly: true,
@@ -755,17 +784,10 @@ internal static partial class Id65AuthoringAggregateV1RuntimeEvidenceContract
         BuildExpectedProductionCaptureBlockers() =>
     [
         new(
-            "profile.no-memory-card-save-persistence",
-            "candidate.save-persistence",
-            "the pinned aggregate profile disables both memory-card slots, so an ordinary " +
-                "in-game save cannot survive a clean process restart without save-state use"),
-        new(
-            "workflow.frozen-v3-seven-session-lone-pad-incompatible",
-            "aggregate.exact-17-check-town-square-workflow",
-            "the frozen capture engine still mandates seven sessions, the legacy lone-pad " +
-                "visibility and triangular E0/E1/E2 workflow, and Gnasty's Loot and Sunny " +
-                "Flight controls; that workflow is not the exact 17-check aggregate and " +
-                "Town Square-only acceptance scope")
+            "EXACT_CAPTURE_ENGINE_NOT_IMPLEMENTED",
+            "aggregate.exact-three-session-card-aware-capture-engine",
+            "the exact plan/card schema exists, but no live engine, DuckStation launch, " +
+                "persistent staging, runtime evidence, or authorization is available")
     ];
 
     private static void RejectDuplicateProperties(

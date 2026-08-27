@@ -54,7 +54,15 @@ Require(pending.SourceIdentity is
     }, "pending source authorization gates must stay false");
 Require(pending.RuntimeProfile is
     {
-        ProfileId: "duckstation-id65-authoring-aggregate-v1",
+        ProfileId: "duckstation-id65-authoring-aggregate-save-v1",
+        HandoffReceiptByteLength: 74_525,
+        HandoffReceiptSha256:
+            "17ce1f4fd9394bf4890048f08afe28d97a709fd656e7d262e34553f5cd6e58d3",
+        HandoffReceiptClosureSha256:
+            "7b43c1c81e4ca40148c99c2c0d908891453e2882c9f93b0d0f9d440c52cb5330",
+        ExternalHomeSettingsByteLength: 2_151,
+        ExternalHomeSettingsSha256:
+            "4ea5cced616c989e3df2be8a6ddb9507a9c295704c1acd2b586ec19fee28e8cb",
         ExternalHomeBiosByteLength: 524_288,
         ExternalHomeBiosSha256:
             "71af94d1e47a68c11e8fdb9f8368040601514a42a5a399cda48c7d3bff1e99d3",
@@ -81,17 +89,37 @@ Require(pending.RuntimeProfile.HandoffReceiptFormat ==
     "runtime profile manifest formats or xattr policy changed");
 Require(pending.ScopeBoundary is
     {
+        FocusedEvidenceRelativePath:
+            "docs/runtime-evidence/unused-level-65-authoring-aggregate-exact-v1-runtime-evidence.json",
+        RuntimeAssetRelativePrefix:
+            "docs/runtime-evidence/assets/unused-level-65-authoring-aggregate-exact-v1/",
+        CaptureStagingRelativePath:
+            "docs/runtime-evidence/assets/unused-level-65-authoring-aggregate-exact-v1/capture-staging",
         AggregateChecklistSha256:
-            "874226d92bd9a86a61cc754938261e4374dfade0067748169f69a86a6d9b8d79",
+            "3fee9f6a9b8aa5e90a846834b29c4d1b3f17683d19f2b9804126d17527eefeef",
+        ExactPlanSha256:
+            "23838ecb8f05c62f2d4d2df243fd37553eb5f36579e95d137ac7beb6209c1543",
+        OperationalToolPinsSha256:
+            "ac30470f7741d0273a9d78a63f25fafb0709ce74f430c85256b83173ac7716c7",
         CaptureRuntimeProfileSha256:
-            "9c9154924e0dfb7de57d2a4cbb9ced1fddf046a5bbf4fa53cf1b3e258252b71d",
+            "419b355557a69683e33e254d8609d4dd285ebfeb0529a602b2a22918a8b010f6",
+        ProfileReceiptClosureSha256:
+            "7b43c1c81e4ca40148c99c2c0d908891453e2882c9f93b0d0f9d440c52cb5330",
+        CaptureSchemaClosureSha256:
+            "3a30359f741bf31d9be46a168662b4d0cf2f38bbbe86806e304a0744808f01f4",
         CaptureSourceClosureSha256:
-            "2f1fbe145226c7c588fa5150ec65939a04e94fde30d14371a9858c21debb0571",
-        SaveCapableProfilePinned: false,
+            "fa601b2d8aad8a8931ce49e8be9269afdc3bb3105e927d65c70c138e9a832a41",
+        WorkflowDeclarationClosureSha256:
+            "b086b7336c975a59b24cde401d4b5080b260ad9da563c12f2d33518d7096a9c3",
+        SaveCapableProfilePinned: true,
+        ProfilePinsVerified: false,
+        ExactCaptureEngineImplemented: false,
         ProductionCaptureEnabled: false,
-        ProductionCaptureBlockingCheckId: "candidate.save-persistence",
+        ProductionCaptureBlockingCheckId: "EXACT_CAPTURE_ENGINE_NOT_IMPLEMENTED",
+        ProductionCaptureRequiredGate:
+            "aggregate.exact-three-session-card-aware-capture-engine",
         ProductionCaptureBlockersSha256:
-            "b44799a97c8da063bd339fdc9e54b66d29e6a5f075bd95f7146c1311c08c3686",
+            "9069369b35c43da4f6002477b094a8aa5e2be7e0076530c718366ecc95349769",
         FrozenWorkflowCompatibleWithAggregateScope: false,
         FrozenWorkflowSha256:
             "6ae9d047746dba64e0156de1ef547a4c8454654f8aec9f7cd32b0598d6955a69",
@@ -104,20 +132,16 @@ Require(pending.ScopeBoundary is
         Publishable: false
     }, "pending scope authorization gates must stay false");
 Require(pending.ScopeBoundary.ProductionCaptureBlockingReason ==
-    "the pinned aggregate profile disables both memory-card slots, so an ordinary " +
-    "in-game save cannot survive a clean process restart without save-state use",
+    "the exact plan/card schema exists, but no live engine, DuckStation launch, " +
+    "persistent staging, runtime evidence, or authorization is available",
     "production capture blocker changed");
 Require(pending.ScopeBoundary.ProductionCaptureBlockers is
     [
         {
-            BlockerId: "profile.no-memory-card-save-persistence",
-            RequiredGate: "candidate.save-persistence"
-        },
-        {
-            BlockerId: "workflow.frozen-v3-seven-session-lone-pad-incompatible",
-            RequiredGate: "aggregate.exact-17-check-town-square-workflow"
+            BlockerId: "EXACT_CAPTURE_ENGINE_NOT_IMPLEMENTED",
+            RequiredGate: "aggregate.exact-three-session-card-aware-capture-engine"
         }
-    ], "the complete two-blocker production gate changed");
+    ], "the exact-engine production blocker changed");
 Require(Id65AuthoringAggregateV1RuntimeEvidenceContract
         .RecomputeProductionCaptureBlockersSha256(
             pending.ScopeBoundary.ProductionCaptureBlockers) ==
@@ -179,6 +203,42 @@ RequireRejected(
         Id65AuthoringAggregateV1RuntimeEvidenceContract.WithRecomputedIntegrity(profileTampered)),
     "runtime profile pin and closure tampering must be rejected after integrity recomputation");
 
+Id65AuthoringAggregateV1RuntimeEvidencePackage exactPlanTampered = pending with
+{
+    ScopeBoundary = pending.ScopeBoundary with { ExactPlanSha256 = new string('3', 64) }
+};
+RequireRejected(
+    Id65AuthoringAggregateV1RuntimeEvidenceContract.SerializeCanonicalUtf8(
+        Id65AuthoringAggregateV1RuntimeEvidenceContract.WithRecomputedIntegrity(
+            exactPlanTampered)),
+    "exact plan pin tampering must be rejected after integrity recomputation");
+
+Id65AuthoringAggregateV1RuntimeEvidencePackage exactSchemaTampered = pending with
+{
+    ScopeBoundary = pending.ScopeBoundary with
+    {
+        CaptureSchemaClosureSha256 = new string('4', 64)
+    }
+};
+RequireRejected(
+    Id65AuthoringAggregateV1RuntimeEvidenceContract.SerializeCanonicalUtf8(
+        Id65AuthoringAggregateV1RuntimeEvidenceContract.WithRecomputedIntegrity(
+            exactSchemaTampered)),
+    "exact schema pin tampering must be rejected after integrity recomputation");
+
+Id65AuthoringAggregateV1RuntimeEvidencePackage exactProfilePinTampered = pending with
+{
+    ScopeBoundary = pending.ScopeBoundary with
+    {
+        CaptureRuntimeProfileSha256 = new string('5', 64)
+    }
+};
+RequireRejected(
+    Id65AuthoringAggregateV1RuntimeEvidenceContract.SerializeCanonicalUtf8(
+        Id65AuthoringAggregateV1RuntimeEvidenceContract.WithRecomputedIntegrity(
+            exactProfilePinTampered)),
+    "exact profile pin-set tampering must be rejected after integrity recomputation");
+
 Id65AuthoringAggregateV1RuntimeEvidenceToolPin[] toolTampered = pending.ToolPins.ToArray();
 toolTampered[0] = toolTampered[0] with { ByteLength = toolTampered[0].ByteLength + 1 };
 Id65AuthoringAggregateV1RuntimeEvidencePackage toolPackageTampered = pending with
@@ -205,7 +265,8 @@ Id65AuthoringAggregateV1RuntimeEvidencePackage scopeGateTampered = pending with
 {
     ScopeBoundary = pending.ScopeBoundary with
     {
-        SaveCapableProfilePinned = true,
+        ProfilePinsVerified = true,
+        ExactCaptureEngineImplemented = true,
         ProductionCaptureEnabled = true,
         PromotionAuthorized = true
     }
@@ -218,7 +279,7 @@ RequireRejected(
 
 Id65AuthoringAggregateV1RuntimeEvidenceProductionBlocker[] blockerTampered =
     pending.ScopeBoundary.ProductionCaptureBlockers.ToArray();
-blockerTampered[1] = blockerTampered[1] with { RequiredGate = "forged-workflow-gate" };
+blockerTampered[0] = blockerTampered[0] with { RequiredGate = "forged-workflow-gate" };
 Id65AuthoringAggregateV1RuntimeEvidencePackage blockerPackageTampered = pending with
 {
     ScopeBoundary = pending.ScopeBoundary with
@@ -281,6 +342,8 @@ Id65AuthoringAggregateV1RuntimeEvidencePackage observed = pending with
     ScopeBoundary = pending.ScopeBoundary with
     {
         SaveCapableProfilePinned = true,
+        ProfilePinsVerified = true,
+        ExactCaptureEngineImplemented = true,
         ProductionCaptureEnabled = true,
         RuntimeObserved = true,
         EditorIntegrated = true,
@@ -320,8 +383,8 @@ Require(pending.EventualChecks.Select(check => check.CheckId).SequenceEqual(expe
     "eventual runtime checklist identity changed");
 Require(pending.ToolPins.Single(pin => pin.Role == "capture-coordinator") is
     {
-        ByteLength: 78_915,
-        Sha256: "f0d0baf60f7578174b05ef499cd9f94378f67b85405a5491ec029d4e0f650af3",
+        ByteLength: 104_888,
+        Sha256: "de7ca2b3886fc897f876fb9f53727c19596a188d8882979f60cce16fd3e63c2c",
         Mode: "0644"
     }, "capture coordinator pin must stay finalized");
 Require(pending.ToolPins.Single(pin => pin.Role == "frozen-capture-core") is
@@ -332,8 +395,8 @@ Require(pending.ToolPins.Single(pin => pin.Role == "frozen-capture-core") is
     }, "frozen capture core pin must stay finalized");
 Require(pending.ToolPins.Single(pin => pin.Role == "capture-deep-test") is
     {
-        ByteLength: 28_214,
-        Sha256: "4ddee51100eb4b9108e9aa8d3a68127ec0199c7ee377c4c50c99a732cdc9161a",
+        ByteLength: 77_990,
+        Sha256: "10104ab431260fafed5d215d5c16325c6f5792848dbfcb69c77b98cb4cdbfb72",
         Mode: "0644"
     }, "capture deep-test pin must stay finalized");
 Require(pending.DerivedResult.ToolPinsFinalized,
