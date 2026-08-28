@@ -1795,8 +1795,11 @@ static void VerifyBundledMacAppWorkspaceBridge(string temporaryRoot)
 {
     string? previousWorkspace = Environment.GetEnvironmentVariable(
         ReleaseProjectBootstrap.WorkspaceEnvironmentVariable);
-    string appBaseDirectory = Path.Combine(
+    string packageRoot = Path.Combine(
         temporaryRoot,
+        "direct-launch-package");
+    string appBaseDirectory = Path.Combine(
+        packageRoot,
         "Direct Launch Fixture.app",
         "Contents",
         "MacOS");
@@ -1810,6 +1813,9 @@ static void VerifyBundledMacAppWorkspaceBridge(string temporaryRoot)
     {
         Write(Path.Combine(appBaseDirectory, "spyro-level-catalog.json"), "{}");
         Write(Path.Combine(appBaseDirectory, "spyro-object-templates.json"), "{}");
+        Write(Path.Combine(packageRoot, "support", "spyro-level-catalog.json"), "{}");
+        Write(Path.Combine(packageRoot, "support", "spyro-object-templates.json"), "{}");
+        Directory.CreateDirectory(Path.Combine(packageRoot, "support", "app"));
         Write(Path.Combine(incompleteAppBaseDirectory, "spyro-level-catalog.json"), "{}");
 
         Environment.SetEnvironmentVariable(
@@ -1822,6 +1828,9 @@ static void VerifyBundledMacAppWorkspaceBridge(string temporaryRoot)
             Environment.GetEnvironmentVariable(ReleaseProjectBootstrap.WorkspaceEnvironmentVariable) ==
             Path.GetFullPath(appBaseDirectory),
             "The direct Mac app bridge did not select its in-bundle catalogs.");
+        Assert(
+            EditorWorkspace.Find().RootPath == Path.GetFullPath(appBaseDirectory),
+            "Workspace discovery escaped an explicit in-bundle workspace to its enclosing portable package.");
 
         string explicitWorkspace = Path.Combine(temporaryRoot, "explicit-workspace");
         Environment.SetEnvironmentVariable(

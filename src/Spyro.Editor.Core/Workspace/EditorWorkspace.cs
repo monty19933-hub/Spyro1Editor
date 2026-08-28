@@ -49,6 +49,14 @@ public sealed class EditorWorkspace
 
     public static EditorWorkspace Find(string? startPath = null)
     {
+        string? configuredWorkspace = Environment.GetEnvironmentVariable(WorkspaceEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(configuredWorkspace))
+        {
+            string? configuredRoot = TryGetFullPath(configuredWorkspace);
+            if (!string.IsNullOrWhiteSpace(configuredRoot) && IsWorkspaceCandidate(configuredRoot))
+                return new EditorWorkspace(configuredRoot);
+        }
+
         foreach (string candidate in EnumerateStartPaths(startPath))
         {
             string? workspace = FindWorkspaceRoot(candidate);
