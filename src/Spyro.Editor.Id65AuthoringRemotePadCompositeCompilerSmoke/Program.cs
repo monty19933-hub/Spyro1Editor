@@ -7,7 +7,9 @@ const int Row80ByteLength = 0x2E2000;
 const int T107Offset = 0x1D2638;
 const int T107Length = 0x58;
 
-string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
+bool emitStatePins = args.Contains("--emit-state-pins", StringComparer.Ordinal);
+string repositoryRoot = FindRepositoryRoot(
+    args.FirstOrDefault(item => !item.StartsWith("--", StringComparison.Ordinal)));
 string lockedImagePath = Path.Combine(
     repositoryRoot,
     "_local",
@@ -136,6 +138,7 @@ foreach (Id65RemotePadGrassT107Position position in
         first.Placement.SupportCollisionTrueIndex ==
             Id65RemotePadGrassT107Catalog.SupportCollisionTrueIndex &&
         first.Placement.RowSha256 == position.RowSha256 &&
+        first.Placement.Present &&
         Hash(output.AsSpan(T107Offset, T107Length)) ==
             position.RowSha256,
         "Position " + position.PositionId +
@@ -293,66 +296,186 @@ Reject(
 int matrixStates = 0;
 int matrixSucceeded = 0;
 int matrixRejected = 0;
+HashSet<string> matrixOutputHashes = new(StringComparer.Ordinal);
+HashSet<string> matrixDeterministicHashes = new(StringComparer.Ordinal);
+HashSet<string> matrixStateKeys = new(StringComparer.Ordinal);
 foreach (bool terrainOn in new[] { false, true })
-foreach (bool t88On in new[] { false, true })
-foreach (bool t107On in new[] { false, true })
-foreach (int mandatoryTextureId in new[] { 25, 66 })
-foreach (Id65RemotePadGrassT107Position position in
-         Id65RemotePadGrassT107Catalog.Positions)
-{
-    matrixStates++;
-    List<string> placements = [];
-    if (t88On)
-        placements.Add(Id65AuthoringMobyDependencyBundleCompiler.T88PlacementId);
-    if (t107On)
-        placements.Add(Id65RemotePadGrassT107Catalog.PlacementId);
-    Id65AuthoringEditorDocument matrixDocument =
-        Id65AuthoringEditorDocument.CreateRemotePadGridExact(
-            position.PositionId,
-            includeOptionalTerrain: terrainOn,
-            placementIds: placements,
-            mandatoryBaseFaceTextureId: mandatoryTextureId);
-    bool supported = terrainOn && !t88On && t107On && mandatoryTextureId == 66;
-    if (supported)
-    {
-        Id65CompiledAuthoringRemotePadComposite matrixCompiled =
-            Compile(matrixDocument);
-        Require(
-            compiledByPosition.TryGetValue(
-                position.PositionId,
-                out Id65CompiledAuthoringRemotePadComposite? existing) &&
-            existing.DocumentCanonicalSha256 == matrixDocument.CanonicalSha256 &&
-            matrixCompiled.OutputRow80Sha256 == existing.OutputRow80Sha256 &&
-            matrixCompiled.OwnedRangeMapSha256 == existing.OwnedRangeMapSha256 &&
-            matrixCompiled.TransactionSha256 == existing.TransactionSha256 &&
-            matrixCompiled.DeterministicPlanSha256 ==
-                existing.DeterministicPlanSha256,
-            "The supported schema-3 matrix state was not compiled exactly.");
-        matrixSucceeded++;
-        continue;
-    }
+    foreach (bool t88On in new[] { false, true })
+        foreach (bool t107On in new[] { false, true })
+            foreach (int mandatoryTextureId in new[] { 25, 66 })
+                foreach (Id65RemotePadGrassT107Position position in
+                         Id65RemotePadGrassT107Catalog.Positions)
+                {
+                    matrixStates++;
+                    List<string> placements = [];
+                    if (t88On)
+                        placements.Add(Id65AuthoringMobyDependencyBundleCompiler.T88PlacementId);
+                    if (t107On)
+                        placements.Add(Id65RemotePadGrassT107Catalog.PlacementId);
+                    Id65AuthoringEditorDocument matrixDocument =
+                        Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+                            position.PositionId,
+                            includeOptionalTerrain: terrainOn,
+                            placementIds: placements,
+                            mandatoryBaseFaceTextureId: mandatoryTextureId);
+                    bool supported = !t88On && mandatoryTextureId == 66;
+                    if (supported)
+                    {
+                        Id65CompiledAuthoringRemotePadComposite matrixCompiled =
+                            Compile(matrixDocument);
+                        Id65CompiledAuthoringRemotePadComposite repeat =
+                            Compile(Id65AuthoringEditorDocument.Parse(
+                                matrixDocument.SerializeUtf8()));
+                        int expectedOwnedRangeCount = t107On
+                            ? Id65AuthoringRemotePadCompositeCompiler.ExpectedOwnedRangeCount
+                            : Id65AuthoringRemotePadCompositeCompiler
+                                .ExpectedOwnedRangeCountWithoutT107;
+                        int expectedGrassRangeCount = t107On
+                            ? Id65AuthoringRemotePadCompositeCompiler.ExpectedGrassOwnedRangeCount
+                            : Id65AuthoringRemotePadCompositeCompiler
+                                .ExpectedGrassOwnedRangeCountWithoutT107;
+                        string expectedModelSha256 = terrainOn
+                            ? Id65AuthoringRemotePadCompositeCompiler.ExpectedOutputModelSha256
+                            : Id65V2NativeTextureCompositionCompiler.ExpectedOutputModelSha256;
+                        int grassRangeCount = CountGrassRanges(matrixCompiled.OwnedRanges);
+                        Id65AuthoringRemotePadCompositeStateFrozenPin stateFrozen =
+                            Id65AuthoringRemotePadCompositeCompiler.GetRequiredStateFrozenPin(
+                                terrainOn,
+                                t107On,
+                                position.PositionId);
+                        Require(
+                            matrixCompiled.DocumentCanonicalSha256 ==
+                                matrixDocument.CanonicalSha256 &&
+                            matrixCompiled.StructuralTerrainPresent == terrainOn &&
+                            matrixCompiled.GrassT107Present == t107On &&
+                            matrixCompiled.Placement.PositionId == position.PositionId &&
+                            matrixCompiled.Placement.Present == t107On &&
+                            matrixCompiled.OutputModelSha256 == expectedModelSha256 &&
+                            matrixCompiled.OwnedRanges.Count == expectedOwnedRangeCount &&
+                            matrixCompiled.InverseRanges.Count == expectedOwnedRangeCount &&
+                            grassRangeCount == expectedGrassRangeCount &&
+                            matrixCompiled.OutputRow80Sha256 == repeat.OutputRow80Sha256 &&
+                            matrixCompiled.OwnedRangeMapSha256 == repeat.OwnedRangeMapSha256 &&
+                            matrixCompiled.TransactionSha256 == repeat.TransactionSha256 &&
+                            matrixCompiled.ProtectedComplementSha256 ==
+                                repeat.ProtectedComplementSha256 &&
+                            matrixCompiled.DeterministicPlanSha256 ==
+                                repeat.DeterministicPlanSha256 &&
+                            stateFrozen.StructuralTerrainPresent == terrainOn &&
+                            stateFrozen.GrassT107Present == t107On &&
+                            stateFrozen.PositionId == position.PositionId &&
+                            stateFrozen.BaselineOutputRow80Sha256 ==
+                                matrixCompiled.BaselineOutputRow80Sha256 &&
+                            stateFrozen.BaselineDeterministicPlanSha256 ==
+                                matrixCompiled.BaselineDeterministicPlanSha256 &&
+                            stateFrozen.OutputRow80Sha256 == matrixCompiled.OutputRow80Sha256 &&
+                            stateFrozen.OutputModelSha256 == matrixCompiled.OutputModelSha256 &&
+                            stateFrozen.OwnedRangeCount == matrixCompiled.OwnedRanges.Count &&
+                            stateFrozen.GrassOwnedRangeCount == grassRangeCount &&
+                            stateFrozen.ChangedByteCount == matrixCompiled.ChangedByteCount &&
+                            stateFrozen.ProtectedComplementSha256 ==
+                                matrixCompiled.ProtectedComplementSha256 &&
+                            stateFrozen.OwnedRangeMapSha256 ==
+                                matrixCompiled.OwnedRangeMapSha256 &&
+                            stateFrozen.TransactionSha256 == matrixCompiled.TransactionSha256 &&
+                            stateFrozen.DeterministicPlanSha256 ==
+                                matrixCompiled.DeterministicPlanSha256,
+                            "The supported schema-3 matrix state was not compiled exactly.");
+                        if (terrainOn && t107On)
+                        {
+                            Require(
+                                compiledByPosition.TryGetValue(
+                                    position.PositionId,
+                                    out Id65CompiledAuthoringRemotePadComposite? existing) &&
+                                existing.DocumentCanonicalSha256 ==
+                                    matrixDocument.CanonicalSha256 &&
+                                matrixCompiled.OutputRow80Sha256 == existing.OutputRow80Sha256 &&
+                                matrixCompiled.OwnedRangeMapSha256 ==
+                                    existing.OwnedRangeMapSha256 &&
+                                matrixCompiled.TransactionSha256 == existing.TransactionSha256 &&
+                                matrixCompiled.DeterministicPlanSha256 ==
+                                    existing.DeterministicPlanSha256,
+                                "The original terrain-plus-Grass state changed during expansion.");
+                        }
+                        VerifyOrderedNonoverlapAndInverse(matrixCompiled);
+                        VerifyEveryChangedByteIsOwned(
+                            matrixCompiled.CopySourceRow80(),
+                            matrixCompiled.CopyOutputRow80(),
+                            matrixCompiled.OwnedRanges);
+                        byte[] matrixApplied =
+                            Id65AuthoringRemotePadCompositeCompiler.ApplyTransactional(
+                                matrixCompiled,
+                                matrixCompiled.CopySourceRow80(),
+                                reverse: false);
+                        byte[] matrixRolledBack =
+                            Id65AuthoringRemotePadCompositeCompiler.ApplyTransactional(
+                                matrixCompiled,
+                                matrixApplied,
+                                reverse: true);
+                        Require(
+                            matrixApplied.SequenceEqual(matrixCompiled.CopyOutputRow80()) &&
+                            matrixRolledBack.SequenceEqual(matrixCompiled.CopySourceRow80()),
+                            "A supported schema-3 state failed exact forward/inverse application.");
 
-    try
-    {
-        _ = Compile(matrixDocument);
-    }
-    catch (InvalidDataException)
-    {
-        matrixRejected++;
-        continue;
-    }
-    throw new InvalidOperationException(
-        "Unsupported schema-3 matrix state compiled: terrain=" + terrainOn +
-        ", t88=" + t88On +
-        ", t107=" + t107On +
-        ", texture=" + mandatoryTextureId +
-        ", position=" + position.PositionId + ".");
-}
+                        string stateKey =
+                            (terrainOn ? "terrain-on" : "terrain-off") + "|" +
+                            (t107On ? "grass-on" : "grass-off") + "|" +
+                            position.PositionId;
+                        Require(matrixStateKeys.Add(stateKey),
+                            "A supported schema-3 state key was compiled twice.");
+                        matrixOutputHashes.Add(matrixCompiled.OutputRow80Sha256);
+                        Require(matrixDeterministicHashes.Add(
+                                matrixCompiled.DeterministicPlanSha256),
+                            "Two supported schema-3 states shared a deterministic plan hash.");
+                        if (emitStatePins && !(terrainOn && t107On))
+                        {
+                            Console.WriteLine(string.Join('|',
+                            [
+                                "STATE_PIN",
+                terrainOn ? "true" : "false",
+                t107On ? "true" : "false",
+                position.PositionId,
+                matrixCompiled.BaselineOutputRow80Sha256,
+                matrixCompiled.BaselineDeterministicPlanSha256,
+                matrixCompiled.OutputRow80Sha256,
+                matrixCompiled.OutputModelSha256,
+                matrixCompiled.OwnedRanges.Count.ToString(),
+                grassRangeCount.ToString(),
+                matrixCompiled.ChangedByteCount.ToString(),
+                matrixCompiled.ProtectedComplementSha256,
+                matrixCompiled.OwnedRangeMapSha256,
+                matrixCompiled.TransactionSha256,
+                matrixCompiled.DeterministicPlanSha256
+                            ]));
+                        }
+                        matrixSucceeded++;
+                        continue;
+                    }
+
+                    try
+                    {
+                        _ = Compile(matrixDocument);
+                    }
+                    catch (InvalidDataException)
+                    {
+                        matrixRejected++;
+                        continue;
+                    }
+                    throw new InvalidOperationException(
+                        "Unsupported schema-3 matrix state compiled: terrain=" + terrainOn +
+                        ", t88=" + t88On +
+                        ", t107=" + t107On +
+                        ", texture=" + mandatoryTextureId +
+                        ", position=" + position.PositionId + ".");
+                }
 Require(
     matrixStates == 144 &&
-    matrixSucceeded == 9 &&
-    matrixRejected == 135,
-    "The full schema-3 state matrix changed from 9 supported / 135 rejected.");
+    matrixSucceeded == 36 &&
+    matrixRejected == 108 &&
+    matrixStateKeys.Count == 36 &&
+    matrixOutputHashes.Count == 20 &&
+    matrixDeterministicHashes.Count == 36,
+    "The full schema-3 state matrix changed from 36 supported / 108 rejected.");
 
 string center = Id65RemotePadGrassT107Catalog.CenterPositionId;
 RejectDocument(
@@ -460,15 +583,18 @@ Require(
 Console.WriteLine(
     "ID65_AUTHORING_REMOTE_PAD_COMPOSITE_COMPILER_SMOKE_OK " +
     "positions=9 " +
-    "owned_ranges=7960 " +
-    "grass_ranges=8 " +
+    "exact_states=36 " +
+    "owned_ranges=7956_or_7960 " +
+    "grass_ranges=4_or_8 " +
     "schema=3 " +
-    "terrain=on " +
+    "terrain=optional " +
     "texture=t66 " +
-    "t107=on " +
+    "t107=optional " +
     "t88=off " +
     "output_hashes=" + outputHashes.Count + " " +
     "deterministic_hashes=" + deterministicHashes.Count + " " +
+    "matrix_output_hashes=" + matrixOutputHashes.Count + " " +
+    "matrix_deterministic_hashes=" + matrixDeterministicHashes.Count + " " +
     "matrix_states=" + matrixStates + " " +
     "matrix_supported=" + matrixSucceeded + " " +
     "matrix_rejected=" + matrixRejected + " " +
@@ -562,6 +688,18 @@ static void VerifyEveryChangedByteIsOwned(
         }
     }
 }
+
+static int CountGrassRanges(
+    IReadOnlyList<Id65AuthoringCompositeOwnedRange> ranges) =>
+    ranges.Count(item => item.StableId is
+        "asset.root37" or
+        "asset.actor-id37" or
+        "asset.package.01f5" or
+        "scene.object-count" or
+        "placement.remote-pad.t107" or
+        "scene.fixup-count" or
+        "scene.fixup.t107-properties" or
+        "asset.properties.grass");
 
 static bool EqualOutsideSpan(
     byte[] left,

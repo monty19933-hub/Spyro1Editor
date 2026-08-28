@@ -958,8 +958,9 @@ internal static class Id65AuthoringCompositeCompiler
         IReadOnlyList<Id65MobyPlacementIntent> supplied,
         Id65MobyDependencyBundleDescriptor bundle)
     {
-        if (supplied.Count is < 1 or > 2)
-            throw new InvalidDataException("The first composite accepts exact T88, T107, or both.");
+        if (supplied.Count > 2)
+            throw new InvalidDataException(
+                "The first composite accepts zero placements, exact T88, exact T107, or both.");
         Id65MobyPlacementIntent[] placements = supplied.OrderBy(item => item.TargetTrueIndex).ToArray();
         if (placements.Select(item => item.TargetTrueIndex).Distinct().Count() != placements.Length ||
             placements.Select(item => item.Id).Distinct(StringComparer.Ordinal).Count() != placements.Length ||
