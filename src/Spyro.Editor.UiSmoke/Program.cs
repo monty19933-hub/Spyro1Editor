@@ -1230,69 +1230,101 @@ void RunId65BlankLabUiOnly()
             window,
             "Id65FreshObjectManagerDocumentButton");
         if (!freshObjectManagerButton.IsEffectivelyVisible ||
-            !freshObjectManagerButton.IsEnabled)
+            !freshObjectManagerButton.IsEnabled ||
+            !string.Equals(
+                freshObjectManagerButton.Content?.ToString(),
+                "Start Blank-Level Editing…",
+                StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                "The loaded fresh blank level did not expose its enabled, dedicated Object Manager route.");
+                "The loaded fresh blank level did not expose its explicit first-run Object Manager action.");
         }
         string absentDocumentPath = Path.Combine(
             paths.AuthoredEditsDirectoryPath,
             Id65AuthoringEditorDocumentWorkspaceInspector.DocumentFileName);
+        string legacyId65TerrainEditPath = Path.Combine(
+            paths.AuthoredEditsDirectoryPath,
+            Id65FreshLevelSceneProjector.TerrainEditFileName);
+        TextBlock firstRunStatus = (TextBlock)(typeof(MainWindow).GetField(
+                "_statusText",
+                BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(window)
+            ?? throw new InvalidOperationException(
+                "The UI smoke could not inspect the first-run status line."));
         EditorShellSessionSnapshot absentDefaultSceneBefore =
             window.CaptureEditorShellSessionSnapshotForTesting();
         Window absentDefaultDialog = OpenAsyncDialog(
             window,
             freshObjectManagerButton,
-            "ID65 Full Authoring Document",
-            "ID65 fresh remote-pad default dialog");
-        CheckBox absentTerrain = FindNamedUnique<CheckBox>(
+            "Start Blank-Level Editing",
+            "ID65 explicit blank-level start dialog");
+        ComboBox absentTexture = FindNamedUnique<ComboBox>(
             absentDefaultDialog,
-            "Id65AuthoringStructuralTerrainBox");
-        CheckBox absentT88 = FindNamedUnique<CheckBox>(
+            "Id65FreshStartMandatoryBaseTextureSelector");
+        TextBlock absentSummary = FindNamedUnique<TextBlock>(
             absentDefaultDialog,
-            "Id65AuthoringGrassT88Box");
-        CheckBox absentT107 = FindNamedUnique<CheckBox>(
-            absentDefaultDialog,
-            "Id65AuthoringGrassT107Box");
-        ComboBox absentPosition = FindNamedUnique<ComboBox>(
-            absentDefaultDialog,
-            "Id65AuthoringGrassT107RemotePadPositionSelector");
-        Button absentMigration = FindNamedUnique<Button>(
-            absentDefaultDialog,
-            "Id65AuthoringGrassT107MigrationButton");
+            "Id65FreshStartSummaryText");
         TextBlock absentPreview = FindNamedUnique<TextBlock>(
             absentDefaultDialog,
-            "Id65AuthoringExactPreviewText");
-        Button absentSave = FindNamedUnique<Button>(
+            "Id65FreshStartPreviewText");
+        Button absentCreate = FindNamedUnique<Button>(
             absentDefaultDialog,
-            "Id65AuthoringSaveButton");
-        object[] absentPositions = ReadItemsSource(
-            absentPosition,
-            "fresh remote-pad default selector");
+            "Id65FreshStartCreateButton");
+        object[] absentTextureChoices = ReadItemsSource(
+            absentTexture,
+            "fresh first-run mandatory texture selector");
+        string[] forbiddenFirstRunControlNames =
+        [
+            "Id65AuthoringStructuralTerrainBox",
+            "Id65AuthoringGrassT88Box",
+            "Id65AuthoringGrassT107Box",
+            "Id65AuthoringGrassT107RemotePadPositionSelector",
+            "Id65AuthoringGrassT107MigrationButton"
+        ];
         if (File.Exists(absentDocumentPath) ||
-            absentTerrain.IsChecked != true ||
-            absentT88.IsChecked == true || absentT107.IsChecked == true ||
-            !absentPosition.IsEnabled ||
-            absentPosition.SelectedItem?.ToString() != "Center" ||
-            absentMigration.IsEffectivelyVisible ||
-            absentPositions.Length != 9 ||
-            !absentSave.IsEnabled ||
-            !(absentPreview.Text ?? "").Contains(
-                "Grass targets none",
+            absentTexture.SelectedItem != null ||
+            absentTexture.SelectedIndex != -1 ||
+            absentCreate.IsEnabled ||
+            !absentTextureChoices.Select(item => item.ToString() ?? "").SequenceEqual(
+                new[] { "Proved private T66", "Resident T25" },
+                StringComparer.Ordinal) ||
+            forbiddenFirstRunControlNames.Any(name =>
+                absentDefaultDialog.GetLogicalDescendants()
+                    .OfType<Control>()
+                    .Any(control => string.Equals(
+                        control.Name,
+                        name,
+                        StringComparison.Ordinal))) ||
+            !(absentSummary.Text ?? "").Contains(
+                "optional terrain OFF",
+                StringComparison.Ordinal) ||
+            !(absentSummary.Text ?? "").Contains(
+                "Grass T88 OFF",
+                StringComparison.Ordinal) ||
+            !(absentSummary.Text ?? "").Contains(
+                "Grass T107 OFF",
+                StringComparison.Ordinal) ||
+            !(absentSummary.Text ?? "").Contains(
+                "dormant Grass position Center",
                 StringComparison.Ordinal) ||
             !(absentPreview.Text ?? "").Contains(
-                "remote-pad position Center",
+                "No texture is preselected",
                 StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                "A missing document did not open as the exact blank schema-3 default: structural terrain, no Grass, dormant Center, and no migration control.");
+                "A missing document did not open the lightweight, no-preselection blank-level start contract.");
         }
-        absentPosition.SelectedItem = absentPositions.Single(item =>
-            string.Equals(item.ToString(), "Bottom right", StringComparison.Ordinal));
-        absentT107.IsChecked = true;
+        absentTexture.SelectedItem = absentTextureChoices.Single(item =>
+            string.Equals(
+                item.ToString(),
+                "Proved private T66",
+                StringComparison.Ordinal));
         FlushUi();
-        if (!(absentPreview.Text ?? "").Contains(
-                "remote-pad position Bottom right",
+        if (!absentCreate.IsEnabled ||
+            !(absentPreview.Text ?? "").Contains(
+                "Proved private T66",
+                StringComparison.Ordinal) ||
+            !(absentPreview.Text ?? "").Contains(
+                "no candidate is created by this action",
                 StringComparison.Ordinal) ||
             File.Exists(absentDocumentPath) ||
             !ReferenceEquals(
@@ -1301,7 +1333,7 @@ void RunId65BlankLabUiOnly()
             window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys.Count != 0)
         {
             throw new InvalidOperationException(
-                "Changing the missing-document remote-pad preview wrote a document or changed the loaded blank scene before Apply/Save.");
+                "Selecting the first-run T66 preview wrote early, changed the blank scene, or failed to enable explicit Create.");
         }
         Button absentCancel = absentDefaultDialog.GetLogicalDescendants()
             .OfType<Button>()
@@ -1314,7 +1346,7 @@ void RunId65BlankLabUiOnly()
         WaitForDialogToClose(
             window,
             absentDefaultDialog,
-            "ID65 fresh remote-pad default dialog");
+            "ID65 explicit blank-level start dialog");
         if (File.Exists(absentDocumentPath) ||
             !ReferenceEquals(
                 window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
@@ -1322,8 +1354,235 @@ void RunId65BlankLabUiOnly()
             window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys.Count != 0)
         {
             throw new InvalidOperationException(
-                "Canceling the missing-document remote-pad preview changed disk or scene state.");
+                "Canceling the explicit blank-level start changed disk or scene state.");
         }
+
+        Console.WriteLine("ID65 UI smoke: starting missing-document null-CAS race probe.");
+        Window racedStartDialog = OpenAsyncDialog(
+            window,
+            freshObjectManagerButton,
+            "Start Blank-Level Editing",
+            "ID65 first-run null-CAS race dialog");
+        ComboBox racedTexture = FindNamedUnique<ComboBox>(
+            racedStartDialog,
+            "Id65FreshStartMandatoryBaseTextureSelector");
+        Button racedCreate = FindNamedUnique<Button>(
+            racedStartDialog,
+            "Id65FreshStartCreateButton");
+        object[] racedChoices = ReadItemsSource(
+            racedTexture,
+            "first-run null-CAS race texture selector");
+        racedTexture.SelectedItem = racedChoices.Single(item =>
+            string.Equals(
+                item.ToString(),
+                "Proved private T66",
+                StringComparison.Ordinal));
+        FlushUi();
+        Id65AuthoringEditorControlState competingState =
+            Id65AuthoringEditorControlState.CreateRemotePad(
+                includeStructuralTerrain: false,
+                includeGrassAtT88: false,
+                includeGrassAtT107: false,
+                Id65RemotePadGrassT107Catalog.DefaultPositionId,
+                Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId);
+        Task<Id65AuthoringEditorDocumentWriteResult> competingWriteTask =
+            Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
+                paths,
+                labBootstrap.Manifest,
+                competingState,
+                expectedPriorEnvelopeCanonicalSha256: null);
+        WaitForUiTask(
+            competingWriteTask,
+            "publishing the competing first-run null-CAS winner");
+        byte[] competingDocumentBytes = File.ReadAllBytes(absentDocumentPath);
+        racedCreate.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, racedCreate));
+        WaitForDialogToClose(
+            window,
+            racedStartDialog,
+            "ID65 first-run null-CAS race dialog");
+        WaitForCondition(
+            () => freshObjectManagerButton.IsEnabled &&
+                (firstRunStatus.Text ?? "").Contains(
+                    "Could not save",
+                    StringComparison.OrdinalIgnoreCase),
+            TimeSpan.FromSeconds(60),
+            () => "refusing a first-run save after another document won the null-CAS race");
+        if (!File.ReadAllBytes(absentDocumentPath)
+                .SequenceEqual(competingDocumentBytes) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
+                absentDefaultSceneBefore.CurrentGeometry) ||
+            window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys.Count != 0 ||
+            !string.Equals(
+                freshObjectManagerButton.Content?.ToString(),
+                "Edit Verified Moby Bundles…",
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "The competing null-CAS document was overwritten, projected, or mislabeled by the stale first-run action.");
+        }
+        File.Delete(absentDocumentPath);
+        InvokePrivateVoid(window, "RefreshId65BlankLabUi");
+        FlushUi();
+        if (!string.Equals(
+                freshObjectManagerButton.Content?.ToString(),
+                "Start Blank-Level Editing…",
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Removing the isolated null-CAS winner did not restore the explicit first-run label.");
+        }
+
+        void CreateAndVerifyBlankFirstRun(
+            string textureLabel,
+            int textureId,
+            bool expectOfflineCandidate)
+        {
+            SortedDictionary<string, string> candidateArtifactsBefore =
+                CaptureId65CandidateArtifactHashes(paths);
+            Window startDialog = OpenAsyncDialog(
+                window,
+                freshObjectManagerButton,
+                "Start Blank-Level Editing",
+                $"ID65 first-run {textureLabel} dialog");
+            ComboBox texture = FindNamedUnique<ComboBox>(
+                startDialog,
+                "Id65FreshStartMandatoryBaseTextureSelector");
+            Button create = FindNamedUnique<Button>(
+                startDialog,
+                "Id65FreshStartCreateButton");
+            object[] choices = ReadItemsSource(
+                texture,
+                $"first-run {textureLabel} selector");
+            texture.SelectedItem = choices.Single(item =>
+                string.Equals(
+                    item.ToString(),
+                    textureLabel,
+                    StringComparison.Ordinal));
+            FlushUi();
+            if (!create.IsEnabled || File.Exists(absentDocumentPath))
+            {
+                throw new InvalidOperationException(
+                    $"The explicit {textureLabel} choice did not enable Create without writing early.");
+            }
+            create.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, create));
+            WaitForDialogToClose(
+                window,
+                startDialog,
+                $"ID65 first-run {textureLabel} dialog");
+            WaitForCondition(
+                () =>
+                {
+                    MainWindow.Id65BlankLabUiSnapshot snapshot =
+                        window.CaptureId65BlankLabUiSnapshotForTesting();
+                    return snapshot.DocumentProjectionSynchronized &&
+                        snapshot.LoadedUsesRemotePadT107Grid &&
+                        snapshot.LoadedT107RemotePadPositionId ==
+                            Id65RemotePadGrassT107Catalog.CenterPositionId &&
+                        snapshot.LoadedMandatoryBaseFaceTextureId == textureId &&
+                        snapshot.VisibleMobyCount == 0 &&
+                        snapshot.CreateOptionalTerrainEnabled &&
+                        !snapshot.RemoveOptionalTerrainEnabled &&
+                        snapshot.ObjectManagerGrassPositionSelectorEnabled &&
+                        snapshot.ObjectManagerAddOrMoveGrassEnabled &&
+                        !snapshot.ObjectManagerRemoveGrassEnabled;
+                },
+                TimeSpan.FromSeconds(60),
+                () => $"creating and projecting the exact blank {textureLabel} document");
+            Task<Id65AuthoringEditorDocumentReadModel?> documentTask =
+                Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                    paths,
+                    labBootstrap.Manifest);
+            WaitForUiTask(
+                documentTask,
+                $"re-inspecting the exact blank {textureLabel} document");
+            Id65AuthoringEditorDocumentReadModel document =
+                documentTask.GetAwaiter().GetResult() ??
+                throw new InvalidOperationException(
+                    $"The exact blank {textureLabel} document disappeared after creation.");
+            Id65AuthoringEditorControlState state =
+                Id65AuthoringEditorControlStateCompiler.RecoverControlState(document);
+            EditorShellSessionSnapshot scene =
+                window.CaptureEditorShellSessionSnapshotForTesting();
+            MainWindow.Id65BlankLabUiSnapshot ui =
+                window.CaptureId65BlankLabUiSnapshotForTesting();
+            if (!state.UsesRemotePadT107Grid ||
+                state.IncludeStructuralTerrain ||
+                state.IncludeGrassAtT88 ||
+                state.IncludeGrassAtT107 ||
+                state.T107RemotePadPositionId !=
+                    Id65RemotePadGrassT107Catalog.CenterPositionId ||
+                state.MandatoryBaseFaceTextureId != textureId ||
+                scene.CurrentGeometry?.Polygons.Count != 1 ||
+                scene.CurrentGeometry.LowDetailPolygons.Count != 1 ||
+                scene.CurrentMobys.Count != 0 ||
+                ui.AuthoringCandidateEnabled != expectOfflineCandidate ||
+                ui.PrivateT66ViewportProjectionBound !=
+                    (textureId ==
+                        Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId) ||
+                !string.Equals(
+                    freshObjectManagerButton.Content?.ToString(),
+                    "Edit Verified Moby Bundles…",
+                    StringComparison.Ordinal) ||
+                File.Exists(legacyId65TerrainEditPath))
+            {
+                throw new InvalidOperationException(
+                    $"The explicit {textureLabel} first-run action lost its exact blank state, direct controls, or candidate boundary: {ui}");
+            }
+            string expectedCandidateText = expectOfflineCandidate
+                ? "Verified Blank-Level Candidate"
+                : "Unavailable for Resident T25";
+            if (!ui.AuthoringCandidateButtonText.Contains(
+                    expectedCandidateText,
+                    StringComparison.Ordinal) ||
+                !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                    candidateArtifactsBefore))
+            {
+                throw new InvalidOperationException(
+                    $"Creating the {textureLabel} blank document crossed or mislabeled the separately guarded candidate boundary.");
+            }
+
+            File.Delete(absentDocumentPath);
+            Task reloadTask = InvokePrivate<Task>(
+                window,
+                "LoadId65BlankLabAsync");
+            WaitForUiTask(
+                reloadTask,
+                $"reloading the no-document Lab after the {textureLabel} first-run probe",
+                timeoutSeconds: 120);
+            WaitForCondition(
+                () =>
+                {
+                    MainWindow.Id65BlankLabUiSnapshot snapshot =
+                        window.CaptureId65BlankLabUiSnapshotForTesting();
+                    return !File.Exists(absentDocumentPath) &&
+                        snapshot.DocumentProjectionSynchronized &&
+                        !snapshot.LoadedUsesRemotePadT107Grid &&
+                        snapshot.VisibleMobyCount == 0 &&
+                        !snapshot.CreateOptionalTerrainEnabled &&
+                        !snapshot.RemoveOptionalTerrainEnabled &&
+                        !snapshot.ObjectManagerGrassPositionSelectorEnabled &&
+                        string.Equals(
+                            freshObjectManagerButton.Content?.ToString(),
+                            "Start Blank-Level Editing…",
+                            StringComparison.Ordinal);
+                },
+                TimeSpan.FromSeconds(60),
+                () => $"restoring the exact no-document scene after {textureLabel}");
+        }
+
+        Console.WriteLine("ID65 UI smoke: starting explicit T66 blank first-run probe.");
+        CreateAndVerifyBlankFirstRun(
+            "Proved private T66",
+            Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId,
+            expectOfflineCandidate: true);
+        Console.WriteLine("ID65 UI smoke: starting explicit T25 blank first-run probe.");
+        CreateAndVerifyBlankFirstRun(
+            "Resident T25",
+            Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId,
+            expectOfflineCandidate: false);
+        loadedLab = window.CaptureEditorShellSessionSnapshotForTesting();
         AssertNoWholeLevelWipeAction(window);
 
         LevelDefinition labRoundTrip = loadedLab.CurrentLevel!;
@@ -1387,11 +1646,20 @@ void RunId65BlankLabUiOnly()
             toolTabs,
             ["Objects", "Terrain", "Level", "Environment"],
             "real ID65 round-trip retail editor");
-        if (window.GetLogicalDescendants().OfType<Button>().Any(button =>
+        bool retailTabsContainFreshStart = ReadItemsSource(
+                toolTabs,
+                "retail round-trip active tabs")
+            .OfType<Control>()
+            .Any(tab => tab.GetLogicalDescendants()
+                .Any(control => ReferenceEquals(
+                    control,
+                    freshObjectManagerButton)));
+        if (retailTabsContainFreshStart ||
+            window.GetLogicalDescendants().OfType<Button>().Any(button =>
                 string.Equals(button.Content?.ToString(), "Object Manager", StringComparison.Ordinal)))
         {
             throw new InvalidOperationException(
-                "The retail half of the real ID65 routing round-trip exposed Object Manager.");
+                "The retail half of the real ID65 routing round-trip exposed Object Manager or its blank-level start action.");
         }
         AssertNoWholeLevelWipeAction(window);
 
@@ -1437,12 +1705,17 @@ void RunId65BlankLabUiOnly()
             toolTabs,
             ["Object Manager", "Terrain", "Level", "Environment"],
             "returned real ID65 blank-level editor");
-        if (!FindNamedUnique<Button>(
-                window,
-                "Id65FreshObjectManagerDocumentButton").IsEnabled)
+        Button returnedStartButton = FindNamedUnique<Button>(
+            window,
+            "Id65FreshObjectManagerDocumentButton");
+        if (!returnedStartButton.IsEnabled ||
+            !string.Equals(
+                returnedStartButton.Content?.ToString(),
+                "Start Blank-Level Editing…",
+                StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                "The returned real ID65 Lab did not restore its dedicated Object Manager route.");
+                "The returned real ID65 Lab did not restore its dedicated first-run Object Manager route.");
         }
         AssertNoWholeLevelWipeAction(window);
         SortedDictionary<string, string> routingArtifactsAfter =
@@ -1725,9 +1998,6 @@ void RunId65BlankLabUiOnly()
             "Id65FreshRemoveOptionalTerrainButton");
         SortedDictionary<string, string> retailArtifactsBeforeButtonToggles =
             CaptureTerrainProjectInputHashes(workspace, retailRoundTrip.Key);
-        string legacyId65TerrainEditPath = Path.Combine(
-            paths.AuthoredEditsDirectoryPath,
-            Id65FreshLevelSceneProjector.TerrainEditFileName);
 
         createOptionalTerrain.RaiseEvent(
             new RoutedEventArgs(Button.ClickEvent, createOptionalTerrain));
@@ -3162,7 +3432,7 @@ static void AssertFreshId65OptionalTerrainControls(
     {
         if (!status.Contains("Mandatory starter pad only", StringComparison.Ordinal) ||
             !status.Contains("no default was silently persisted", StringComparison.OrdinalIgnoreCase) ||
-            !status.Contains("Edit Full Authoring Document", StringComparison.Ordinal))
+            !status.Contains("Start Blank-Level Editing", StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 $"The {label} did not explain the mandatory-base/no-silent-default boundary: {status}");
@@ -10526,6 +10796,34 @@ static SortedDictionary<string, string> CaptureLevelRoutingProjectArtifactHashes
         }
     }
 
+    return result;
+}
+
+static SortedDictionary<string, string> CaptureId65CandidateArtifactHashes(
+    UnusedLevel65BlankLevelLabWorkspacePaths paths)
+{
+    SortedDictionary<string, string> result = new(StringComparer.Ordinal);
+    string[] candidateRoots =
+    [
+        Path.Combine(paths.RootPath, "materialized-candidates"),
+        Path.Combine(paths.RootPath, "materialized-remote-pad-candidates")
+    ];
+    foreach (string root in candidateRoots)
+    {
+        string rootName = Path.GetFileName(root);
+        result[$"{rootName}/<root>"] =
+            Directory.Exists(root) ? "<present>" : "<missing>";
+        if (!Directory.Exists(root))
+            continue;
+        foreach (string path in Directory.EnumerateFiles(
+                     root,
+                     "*",
+                     SearchOption.AllDirectories))
+        {
+            string relativePath = Path.GetRelativePath(root, path).Replace('\\', '/');
+            result[$"{rootName}/{relativePath}"] = FileSha256(path);
+        }
+    }
     return result;
 }
 

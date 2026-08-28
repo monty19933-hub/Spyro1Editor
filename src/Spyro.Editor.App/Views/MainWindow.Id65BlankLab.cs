@@ -160,6 +160,19 @@ public sealed partial class MainWindow
         public override string ToString() => Label;
     }
 
+    private static Id65AuthoringMandatoryBaseTextureChoice[]
+        CreateId65AuthoringMandatoryBaseTextureChoices() =>
+        [
+            new(
+                Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId,
+                "Resident T25",
+                "Uses the ordinary validated resident T25 close, normal, low-detail, and high-detail viewport caches. This choice is offline-authoring-only and cannot create a candidate, BIN, runtime, or release artifact."),
+            new(
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId,
+                "Proved private T66",
+                "Uses the exact private T66 viewport projection. It supports the frozen legacy full-candidate state and every verified schema-3 terrain/Grass combination while T88 remains off; normal Create BIN and runtime/release authority remain separate.")
+        ];
+
     private static string Id65MandatoryBaseTextureLabel(int textureId) => textureId switch
     {
         Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId =>
@@ -962,7 +975,12 @@ public sealed partial class MainWindow
                     operation.Cancellation.Token);
             RequireCurrentId65BlankLabManualOperation(operation);
             Id65AuthoringEditorControlState initial = existing == null
-                ? Id65AuthoringEditorControlState.CreateRemotePadDefault()
+                ? Id65AuthoringEditorControlState.CreateRemotePad(
+                    includeStructuralTerrain: false,
+                    includeGrassAtT88: false,
+                    includeGrassAtT107: false,
+                    Id65RemotePadGrassT107Catalog.DefaultPositionId,
+                    Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId)
                 : Id65AuthoringEditorControlStateCompiler.RecoverControlState(existing);
 
             Id65AuthoringEditorControlState? selected =
@@ -972,9 +990,11 @@ public sealed partial class MainWindow
                             existing != null,
                             operation.Cancellation.Token)
                         .WaitAsync(operation.Cancellation.Token)
-                    : await ShowId65AuthoringDocumentDialogAsync(
-                        initial,
-                        existing != null);
+                    : existing == null
+                        ? await ShowId65FreshStartDialogAsync()
+                        : await ShowId65AuthoringDocumentDialogAsync(
+                            initial,
+                            replacingExistingDocument: true);
             RequireCurrentId65BlankLabManualOperation(operation);
             if (selected == null)
             {
@@ -1673,6 +1693,182 @@ public sealed partial class MainWindow
             character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     private async Task<Id65AuthoringEditorControlState?>
+        ShowId65FreshStartDialogAsync()
+    {
+        Window dialog = new()
+        {
+            Title = "Start Blank-Level Editing",
+            Width = 620,
+            Height = 500,
+            MinWidth = 520,
+            MinHeight = 440,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = true
+        };
+        dialog.Opened += (_, _) =>
+        {
+            dialog.Activate();
+            dialog.Focus();
+        };
+
+        Id65AuthoringMandatoryBaseTextureChoice[] allTextureChoices =
+            CreateId65AuthoringMandatoryBaseTextureChoices();
+        Id65AuthoringMandatoryBaseTextureChoice[] startTextureChoices =
+        [
+            allTextureChoices.Single(choice =>
+                choice.TextureId ==
+                    Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId),
+            allTextureChoices.Single(choice =>
+                choice.TextureId ==
+                    Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId)
+        ];
+        ComboBox mandatoryTexture = new()
+        {
+            Name = "Id65FreshStartMandatoryBaseTextureSelector",
+            ItemsSource = startTextureChoices,
+            SelectedIndex = -1,
+            PlaceholderText = "Choose Proved private T66 or Resident T25",
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        TextBlock summary = new()
+        {
+            Name = "Id65FreshStartSummaryText",
+            Text =
+                "The first document remains blank: optional terrain OFF, Grass T88 OFF, Grass T107 OFF, and dormant Grass position Center. " +
+                "The mandatory starter pad, matching collision/occlusion, and protected spawn remain. Nothing is saved until Create is selected.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(ModernMutedInk),
+            FontSize = 12,
+            LineHeight = 18
+        };
+        TextBlock preview = new()
+        {
+            Name = "Id65FreshStartPreviewText",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(ModernMutedInk),
+            FontSize = 11,
+            LineHeight = 16
+        };
+        TextBlock validation = new()
+        {
+            Text = "Choose exactly one mandatory starter-pad texture.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(ModernRed),
+            IsVisible = false
+        };
+
+        StackPanel body = new()
+        {
+            Spacing = 12,
+            Margin = new Thickness(18)
+        };
+        body.Children.Add(BuildModernDialogHeader(
+            "Create the blank authoring document",
+            "Choose the mandatory starter-pad texture explicitly. This action creates only the canonical schema-3 project document and its synchronized editor projection; it does not create a candidate or claim runtime proof."));
+        body.Children.Add(BuildModernDialogField(
+            "Mandatory starter-pad texture",
+            mandatoryTexture));
+        body.Children.Add(new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(243, 247, 251)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(204, 216, 228)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10),
+            Child = summary
+        });
+        body.Children.Add(preview);
+        body.Children.Add(validation);
+
+        Button cancel = NewButton("Cancel");
+        Button create = NewButton("Create Blank-Level Document");
+        create.Name = "Id65FreshStartCreateButton";
+        create.IsEnabled = false;
+        StyleModernSecondaryButton(cancel);
+        StyleModernPrimaryButton(create, Color.FromRgb(117, 80, 158), 205);
+
+        Id65AuthoringEditorControlState BuildSelectedState()
+        {
+            if (mandatoryTexture.SelectedItem is not
+                Id65AuthoringMandatoryBaseTextureChoice selectedChoice ||
+                selectedChoice.TextureId is not
+                    (Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId or
+                     Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId))
+            {
+                throw new InvalidDataException(
+                    "Choose exactly Proved private T66 or Resident T25 for the mandatory starter pad.");
+            }
+
+            return Id65AuthoringEditorControlState.CreateRemotePad(
+                includeStructuralTerrain: false,
+                includeGrassAtT88: false,
+                includeGrassAtT107: false,
+                Id65RemotePadGrassT107Catalog.DefaultPositionId,
+                selectedChoice.TextureId);
+        }
+
+        void RefreshPreview()
+        {
+            if (mandatoryTexture.SelectedItem is not
+                Id65AuthoringMandatoryBaseTextureChoice selectedChoice)
+            {
+                preview.Text =
+                    "No texture is preselected and no document or viewport state has changed. Choose one mandatory texture to enable Create.";
+                validation.IsVisible = false;
+                create.IsEnabled = false;
+                return;
+            }
+
+            try
+            {
+                Id65AuthoringEditorControlState selected = BuildSelectedState();
+                Id65AuthoringEditorControlStateCompilation compilation =
+                    Id65AuthoringEditorControlStateCompiler.Compile(selected);
+                bool privateT66 = selectedChoice.TextureId ==
+                    Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId;
+                preview.Text =
+                    $"Exact blank document {compilation.DocumentCanonicalSha256[..12]}…; mandatory starter-pad texture {selectedChoice.Label}; " +
+                    "optional terrain OFF; Grass T88 OFF; Grass T107 OFF; dormant position Center. " +
+                    (privateT66
+                        ? "This state is eligible for the separately guarded exact offline candidate after creation, but no candidate is created by this action; normal Create BIN, runtime, and release remain unavailable."
+                        : "Resident T25 is viewport-authoring-only; exact candidate, normal Create BIN, runtime, and release remain unavailable.");
+                validation.IsVisible = false;
+                create.IsEnabled = true;
+            }
+            catch (InvalidDataException exception)
+            {
+                preview.Text = "This transient choice cannot form an exact blank document.";
+                validation.Text = exception.Message;
+                validation.IsVisible = true;
+                create.IsEnabled = false;
+            }
+        }
+
+        mandatoryTexture.SelectionChanged += (_, _) => RefreshPreview();
+        cancel.Click += (_, _) =>
+            dialog.Close((Id65AuthoringEditorControlState?)null);
+        create.Click += (_, _) =>
+        {
+            try
+            {
+                Id65AuthoringEditorControlState selected = BuildSelectedState();
+                _ = Id65AuthoringEditorControlStateCompiler.Compile(selected);
+                validation.IsVisible = false;
+                dialog.Close(selected);
+            }
+            catch (InvalidDataException exception)
+            {
+                validation.Text = exception.Message;
+                validation.IsVisible = true;
+                create.IsEnabled = false;
+            }
+        };
+        RefreshPreview();
+        dialog.Content = BuildModernDialogFrame(body, cancel, create);
+        return await dialog.ShowDialog<Id65AuthoringEditorControlState?>(this);
+    }
+
+    private async Task<Id65AuthoringEditorControlState?>
         ShowId65AuthoringDocumentDialogAsync(
             Id65AuthoringEditorControlState initial,
             bool replacingExistingDocument)
@@ -1740,16 +1936,7 @@ public sealed partial class MainWindow
         StyleModernSecondaryButton(migrateT107);
         migrateT107.IsVisible = !initial.UsesRemotePadT107Grid;
         Id65AuthoringMandatoryBaseTextureChoice[] mandatoryTextureChoices =
-        [
-            new(
-                Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId,
-                "Resident T25",
-                "Uses the ordinary validated resident T25 close, normal, low-detail, and high-detail viewport caches. This choice is offline-authoring-only and cannot create a candidate, BIN, runtime, or release artifact."),
-            new(
-                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId,
-                "Proved private T66",
-                "Uses the exact private T66 viewport projection. It supports the frozen legacy full-candidate state and the schema-3 structural-terrain/T107-on/T88-off remote-pad candidate state; normal Create BIN and runtime/release authority remain separate.")
-        ];
+            CreateId65AuthoringMandatoryBaseTextureChoices();
         Id65AuthoringMandatoryBaseTextureChoice initialMandatoryTexture =
             mandatoryTextureChoices.Single(choice =>
                 choice.TextureId == initial.MandatoryBaseFaceTextureId);
@@ -3189,10 +3376,10 @@ public sealed partial class MainWindow
                 _id65BlankLabAuthoringCandidateButton.Content =
                     remotePadPrivateT66CandidateReady
                     ? "Create Verified Blank-Level Candidate"
-                    : remotePadT107Selected
-                    ? "Exact Candidate Requires T88 Off + T66"
                     : residentT25Selected
                     ? "Exact Candidate Unavailable for Resident T25"
+                    : remotePadT107Selected
+                    ? "Exact Candidate Requires T88 Off + T66"
                     : privateT66Selected && !legacyPrivateT66CandidateReady
                         ? "Exact Candidate Requires Full T66 Document"
                     : "Create Exact Full Candidate";
@@ -3226,12 +3413,20 @@ public sealed partial class MainWindow
         bool canOpenDocument =
             exactFreshRoute && _id65BlankLabManifest != null &&
             _id65BlankLabPaths != null && !busy;
+        bool hasCanonicalDocumentEntry =
+            Id65BlankLabHasCanonicalAuthoringDocument();
         _id65FreshGrassT107ControlsAvailable = false;
         if (_id65FreshGrassT107PositionSelector != null)
             _id65FreshGrassT107PositionSelector.IsEnabled = false;
         RefreshId65FreshGrassT107ActionAvailability();
         if (_id65FreshObjectManagerDocumentButton != null)
+        {
+            _id65FreshObjectManagerDocumentButton.Content =
+                hasCanonicalDocumentEntry
+                    ? "Edit Verified Moby Bundles…"
+                    : "Start Blank-Level Editing…";
             _id65FreshObjectManagerDocumentButton.IsEnabled = false;
+        }
 
         if (!exactFreshRoute)
         {
@@ -3244,8 +3439,9 @@ public sealed partial class MainWindow
         {
             if (_id65FreshObjectManagerDocumentButton != null)
                 _id65FreshObjectManagerDocumentButton.IsEnabled = canOpenDocument;
-            _id65FreshObjectManagerStatusText.Text =
-                "Blank scene: 0 placed objects. No Full Authoring Document exists, so no object choice has been silently persisted.";
+            _id65FreshObjectManagerStatusText.Text = hasCanonicalDocumentEntry
+                ? "A canonical Full Authoring Document entry exists but is not synchronized with this blank presentation. Use Edit Verified Moby Bundles… to inspect it; direct object controls remain quarantined."
+                : "Blank scene: 0 placed objects. No Full Authoring Document exists, so no object choice has been silently persisted. Choose Start Blank-Level Editing… to explicitly select the mandatory starter-pad texture and create the blank document.";
             return;
         }
         if (!_id65FreshDocumentProjectionSynchronized)
@@ -3408,7 +3604,7 @@ public sealed partial class MainWindow
             : !_id65FreshDocumentProjectionSynchronized
                 ? "The canonical document and loaded fresh-scene viewport are not synchronized. Optional terrain and exact candidate actions are quarantined. Use Load Lab to re-inspect and fully project the current exact document before continuing."
             : state == null
-                ? "Mandatory starter pad only. No Full Authoring Document is loaded, so no default was silently persisted. Use Edit Full Authoring Document… to create the canonical document first."
+                ? "Mandatory starter pad only. No Full Authoring Document is loaded, so no default was silently persisted. Open Object Manager and choose Start Blank-Level Editing… to select the mandatory texture and create the blank document first."
                 : state.IncludeStructuralTerrain
                     ? $"Optional structural terrain is present. Remove optional terrain changes only IncludeStructuralTerrain; Grass T88 is {(state.IncludeGrassAtT88 ? "included" : "omitted")}, Grass T107 is {(state.IncludeGrassAtT107 ? "included" : "omitted")}, and mandatory base face {Id65MandatoryBaseTextureLabel(state.MandatoryBaseFaceTextureId)} will be preserved."
                     : $"Optional structural terrain is absent. Create optional terrain changes only IncludeStructuralTerrain; Grass T88 is {(state.IncludeGrassAtT88 ? "included" : "omitted")}, Grass T107 is {(state.IncludeGrassAtT107 ? "included" : "omitted")}, and mandatory base face {Id65MandatoryBaseTextureLabel(state.MandatoryBaseFaceTextureId)} will be preserved.";
@@ -9139,10 +9335,15 @@ public sealed partial class MainWindow
                     dialogCount++;
                     if (exists || !Equivalent(
                             initial,
-                            Id65AuthoringEditorControlState.CreateRemotePadDefault()))
+                            Id65AuthoringEditorControlState.CreateRemotePad(
+                                includeStructuralTerrain: false,
+                                includeGrassAtT88: false,
+                                includeGrassAtT107: false,
+                                Id65RemotePadGrassT107Catalog.DefaultPositionId,
+                                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId)))
                     {
                         throw new InvalidOperationException(
-                            "The missing-document dialog did not receive the exact default state.");
+                            "The missing-document dialog did not receive the exact blank schema-3 starting state.");
                     }
                     return Task.FromResult<Id65AuthoringEditorControlState?>(null);
                 };
