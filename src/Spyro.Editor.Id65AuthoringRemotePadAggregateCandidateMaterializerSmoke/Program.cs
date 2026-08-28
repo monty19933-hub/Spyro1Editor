@@ -360,6 +360,49 @@ try
             !Directory.EnumerateFileSystemEntries(operationsRoot).Any(),
         "Post-rename recovery changed the candidate or retained its journal.");
 
+    Id65AuthoringRemotePadAggregateCandidateWorkspaceResult workspaceResult =
+        await Id65AuthoringRemotePadAggregateCandidateWorkspaceMaterializer
+            .MaterializeExactAsync(paths, manifest);
+    positiveMaterializations++;
+    Require(workspaceResult.ReusedExistingCandidate &&
+            !workspaceResult.CandidateArtifactsWrittenThisCall &&
+            !workspaceResult.FileSystemMutationPerformed &&
+            workspaceResult.CandidateDirectoryPath ==
+                recovered.Paths.CandidateDirectoryPath &&
+            workspaceResult.DocumentEnvelopeSha256 ==
+                recovered.Receipt.DocumentEnvelopeSha256 &&
+            workspaceResult.DocumentCanonicalSha256 ==
+                recovered.Receipt.DocumentCanonicalSha256 &&
+            workspaceResult.StaticAuthoringProjectionSha256 ==
+                recovered.Receipt.StaticAuthoringProjectionSha256 &&
+            workspaceResult.NativeInputSetSha256 ==
+                recovered.Receipt.NativeInputSetSha256 &&
+            workspaceResult.AggregatePlanSha256 ==
+                recovered.Receipt.AggregatePlanSha256 &&
+            workspaceResult.OutputImageSha256 ==
+                recovered.Receipt.OutputImageSha256 &&
+            workspaceResult.ReceiptContentSha256 ==
+                recovered.Receipt.ReceiptContentSha256 &&
+            workspaceResult.PositionId == recovered.Receipt.PositionId &&
+            workspaceResult.ExactStoreReloadVerified &&
+            workspaceResult.ExactStaticAuthoringProjectionReloadVerified &&
+            workspaceResult.ExactNativeInputGenerationRecaptured &&
+            workspaceResult.Schema3CompilerPinsVerified &&
+            workspaceResult.T107PositionReadbackVerified &&
+            workspaceResult.T88ExcludedVerified &&
+            workspaceResult.RepairedT13995SupportVerified &&
+            workspaceResult.RequiresExactRemotePadSchema3Document &&
+            workspaceResult.RequiresFocusedRuntimeValidation &&
+            !workspaceResult.CarriesAppOrUiAuthority &&
+            !workspaceResult.CarriesCreateBinAuthority &&
+            !workspaceResult.NormalRetailCreateBinComposed &&
+            !workspaceResult.RuntimeCandidateAuthorized &&
+            !workspaceResult.RuntimeProven &&
+            !workspaceResult.ReleaseIntegrated &&
+            !workspaceResult.PromotionAuthorized &&
+            !workspaceResult.Publishable,
+        "The public schema-3 workspace bridge lost its exact offline boundary.");
+
     Require(SnapshotFile(paths.LockedBaseImagePath) == workspaceImageBefore &&
             SnapshotFile(paths.LockedBaseCuePath) == workspaceCueBefore &&
             SnapshotFile(paths.ManifestPath) == workspaceManifestBefore,
@@ -479,6 +522,21 @@ static void VerifyApiAndTopology(string repositoryRoot)
                 item.PropertyType != typeof(byte[]) &&
                 item.PropertyType != typeof(Id65AuthoringRemotePadAggregatePlan)),
         "The schema-3 materializer request stopped requiring store/manifest identity only.");
+    MethodInfo[] workspaceFacadeMethods =
+        typeof(Id65AuthoringRemotePadAggregateCandidateWorkspaceMaterializer)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static |
+                BindingFlags.DeclaredOnly);
+    Require(workspaceFacadeMethods.Length == 1 &&
+            workspaceFacadeMethods[0].Name == "MaterializeExactAsync" &&
+            workspaceFacadeMethods[0].GetParameters()
+                .Select(item => item.ParameterType)
+                .SequenceEqual(new[]
+                {
+                    typeof(UnusedLevel65BlankLevelLabWorkspacePaths),
+                    typeof(UnusedLevel65BlankLevelLabManifest),
+                    typeof(CancellationToken)
+                }),
+        "The schema-3 workspace materializer public API surface changed.");
 
     string sourceRoot = Path.Combine(repositoryRoot, "src");
     string materializerRelative = Path.Combine(
@@ -490,6 +548,16 @@ static void VerifyApiAndTopology(string repositoryRoot)
         "src",
         "Spyro.Editor.Id65AuthoringRemotePadAggregateCandidateMaterializerSmoke",
         "Program.cs");
+    string workspaceFacadeRelative = Path.Combine(
+        "src",
+        "Spyro.Editor.Core",
+        "Persistence",
+        "Id65AuthoringRemotePadAggregateCandidateWorkspaceMaterializer.cs");
+    string appRelative = Path.Combine(
+        "src",
+        "Spyro.Editor.App",
+        "Views",
+        "MainWindow.Id65BlankLab.cs");
     List<(string Relative, string Text)> sources = Directory
         .EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
         .Where(path => !path.Split(Path.DirectorySeparatorChar)
@@ -513,18 +581,42 @@ static void VerifyApiAndTopology(string repositoryRoot)
         .Select(item => item.Relative)
         .Order(StringComparer.Ordinal)
         .ToArray();
-    Require(callers.SequenceEqual(new[] { smokeRelative }),
+    Require(callers.SequenceEqual(new[]
+        {
+            workspaceFacadeRelative,
+            smokeRelative
+        }),
         "The isolated schema-3 candidate writer gained an unauthorized caller: " +
         string.Join(", ", callers));
-    Require(!sources
-            .Where(item => item.Relative.StartsWith(
-                Path.Combine("src", "Spyro.Editor.App") +
-                    Path.DirectorySeparatorChar,
-                StringComparison.Ordinal))
-            .Any(item => item.Text.Contains(
+    Regex facadeCall = new(
+        @"\bId65AuthoringRemotePadAggregateCandidateWorkspaceMaterializer\s*\.\s*MaterializeExactAsync\s*\(",
+        RegexOptions.CultureInvariant);
+    string[] facadeCallers = sources
+        .Where(item => facadeCall.IsMatch(item.Text))
+        .Select(item => item.Relative)
+        .Order(StringComparer.Ordinal)
+        .ToArray();
+    Require(facadeCallers.SequenceEqual(new[]
+        {
+            appRelative,
+            smokeRelative
+        }),
+        "The schema-3 workspace facade gained an unauthorized caller: " +
+        string.Join(", ", facadeCallers));
+    string[] appReferences = sources
+        .Where(item => item.Relative.StartsWith(
+            Path.Combine("src", "Spyro.Editor.App") +
+                Path.DirectorySeparatorChar,
+            StringComparison.Ordinal) &&
+            item.Text.Contains(
                 "Id65AuthoringRemotePadAggregateCandidate",
-                StringComparison.Ordinal)),
-        "The schema-3 candidate writer reached the App before its UI promotion gate.");
+                StringComparison.Ordinal))
+        .Select(item => item.Relative)
+        .Order(StringComparer.Ordinal)
+        .ToArray();
+    Require(appReferences.SequenceEqual(new[] { appRelative }),
+        "The schema-3 candidate UI route escaped its one explicit App boundary: " +
+        string.Join(", ", appReferences));
 }
 
 static async Task ExpectRejectedAsync(
