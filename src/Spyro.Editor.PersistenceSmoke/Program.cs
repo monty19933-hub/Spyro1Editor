@@ -51,6 +51,7 @@ try
     Write(Path.Combine(portableRoot, "unowned.bin"), "game image must not migrate");
 
     EditorUserDataLayout userData = new(dataRoot);
+    VerifyBundledMacAppWorkspaceBridge(temporaryRoot);
     VerifyResearchWorkspaceBridge(temporaryRoot, portableRoot);
     Assert(userData.RootPath == Path.GetFullPath(dataRoot), "Explicit data root was not honored.");
     Assert(EditorUserDataLayout.NormalizeProjectId("default-project") == "default-project", "Safe project ID changed unexpectedly.");
@@ -1787,6 +1788,72 @@ static void VerifyResearchWorkspaceBridge(string temporaryRoot, string installRo
         Environment.SetEnvironmentVariable(
             ResearchProjectWorkspaceBridge.UseCurrentReleaseProjectEnvironmentVariable,
             previousBridge);
+    }
+}
+
+static void VerifyBundledMacAppWorkspaceBridge(string temporaryRoot)
+{
+    string? previousWorkspace = Environment.GetEnvironmentVariable(
+        ReleaseProjectBootstrap.WorkspaceEnvironmentVariable);
+    string appBaseDirectory = Path.Combine(
+        temporaryRoot,
+        "Direct Launch Fixture.app",
+        "Contents",
+        "MacOS");
+    string incompleteAppBaseDirectory = Path.Combine(
+        temporaryRoot,
+        "Incomplete Direct Launch Fixture.app",
+        "Contents",
+        "MacOS");
+
+    try
+    {
+        Write(Path.Combine(appBaseDirectory, "spyro-level-catalog.json"), "{}");
+        Write(Path.Combine(appBaseDirectory, "spyro-object-templates.json"), "{}");
+        Write(Path.Combine(incompleteAppBaseDirectory, "spyro-level-catalog.json"), "{}");
+
+        Environment.SetEnvironmentVariable(
+            ReleaseProjectBootstrap.WorkspaceEnvironmentVariable,
+            null);
+        BundledMacAppWorkspaceBridgeResult accepted =
+            BundledMacAppWorkspaceBridge.TryActivate(appBaseDirectory, isMacOs: true);
+        Assert(accepted.Activated, $"A complete bundled Mac workspace was not selected: {accepted.Reason}");
+        Assert(
+            Environment.GetEnvironmentVariable(ReleaseProjectBootstrap.WorkspaceEnvironmentVariable) ==
+            Path.GetFullPath(appBaseDirectory),
+            "The direct Mac app bridge did not select its in-bundle catalogs.");
+
+        string explicitWorkspace = Path.Combine(temporaryRoot, "explicit-workspace");
+        Environment.SetEnvironmentVariable(
+            ReleaseProjectBootstrap.WorkspaceEnvironmentVariable,
+            explicitWorkspace);
+        BundledMacAppWorkspaceBridgeResult explicitRefusal =
+            BundledMacAppWorkspaceBridge.TryActivate(appBaseDirectory, isMacOs: true);
+        Assert(
+            !explicitRefusal.Activated &&
+            Environment.GetEnvironmentVariable(ReleaseProjectBootstrap.WorkspaceEnvironmentVariable) == explicitWorkspace,
+            "The direct Mac app bridge replaced an explicit workspace.");
+
+        Environment.SetEnvironmentVariable(
+            ReleaseProjectBootstrap.WorkspaceEnvironmentVariable,
+            null);
+        Assert(
+            !BundledMacAppWorkspaceBridge.TryActivate(incompleteAppBaseDirectory, isMacOs: true).Activated,
+            "A Mac app missing an embedded object catalog was accepted.");
+        Assert(
+            !BundledMacAppWorkspaceBridge.TryActivate(appBaseDirectory, isMacOs: false).Activated,
+            "The Mac-only direct-launch bridge activated on another platform.");
+        Assert(
+            !BundledMacAppWorkspaceBridge.TryActivate(
+                Path.Combine(temporaryRoot, "ordinary-directory"),
+                isMacOs: true).Activated,
+            "An ordinary directory was accepted as a macOS app bundle.");
+    }
+    finally
+    {
+        Environment.SetEnvironmentVariable(
+            ReleaseProjectBootstrap.WorkspaceEnvironmentVariable,
+            previousWorkspace);
     }
 }
 

@@ -54,6 +54,15 @@ internal static class Program
                         : "Research workspace bridge used package fallback",
                     $"Workspace: {researchProject.WorkspaceRoot}; {researchProject.Reason}");
             }
+
+            BundledMacAppWorkspaceBridgeResult bundledWorkspace =
+                BundledMacAppWorkspaceBridge.TryActivate();
+            if (bundledWorkspace.Activated)
+            {
+                EditorDiagnostics.RecordAction(
+                    "Bundled direct-launch workspace selected",
+                    $"Workspace: {bundledWorkspace.WorkspaceRoot}; {bundledWorkspace.Reason}");
+            }
         }
         catch (Exception exception)
         {

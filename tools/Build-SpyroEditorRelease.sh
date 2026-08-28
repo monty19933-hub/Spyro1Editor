@@ -612,13 +612,17 @@ write_mac_launcher() {
         cat > "$package_dir/Launch Spyro Editor Research.command" <<'LAUNCHER'
 #!/bin/zsh
 set -e
-cd "$(dirname "$0")"
-mkdir -p output
-export SPYRO_EDITOR_WORKSPACE="$PWD"
+launcher_dir="${0:A:h}"
+export SPYRO_EDITOR_WORKSPACE="$launcher_dir"
 export SPYRO_EDITOR_RELEASE=0
 export SPYRO_EDITOR_USE_CURRENT_RELEASE_PROJECT=1
 export SPYRO_EDITOR_ENABLE_APPENDED_PRIVATE_TEXTURES=1
-"./Spyro Editor.app/Contents/MacOS/Spyro.Editor.App"
+# Starting a child process with Documents or Downloads as its current working
+# directory can block dyld behind macOS folder authorization before any window
+# exists. The workspace remains explicit, while the process starts from a
+# neutral system directory.
+cd /tmp
+exec "$launcher_dir/Spyro Editor.app/Contents/MacOS/Spyro.Editor.App"
 LAUNCHER
         chmod +x "$package_dir/Launch Spyro Editor Research.command"
     fi
