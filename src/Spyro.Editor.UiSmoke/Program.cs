@@ -1989,11 +1989,34 @@ void RunId65BlankLabUiOnly()
         Button objectManagerDocumentButton = FindNamedUnique<Button>(
             window,
             "Id65FreshObjectManagerDocumentButton");
+        ComboBox directGrassPositionSelector = FindNamedUnique<ComboBox>(
+            window,
+            "Id65FreshGrassT107PositionSelector");
+        Button directAddOrMoveGrass = FindNamedUnique<Button>(
+            window,
+            "Id65FreshAddOrMoveGrassT107Button");
+        Button directRemoveGrass = FindNamedUnique<Button>(
+            window,
+            "Id65FreshRemoveGrassT107Button");
+        object[] directGrassPositions = ReadItemsSource(
+            directGrassPositionSelector,
+            "fresh Object Manager direct Grass selector");
+        MainWindow.Id65BlankLabUiSnapshot legacyDirectControls =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
         if (!objectManagerDocumentButton.IsEffectivelyVisible ||
-            !objectManagerDocumentButton.IsEnabled)
+            !objectManagerDocumentButton.IsEnabled ||
+            directGrassPositions.Length != 9 ||
+            directGrassPositionSelector.IsEnabled ||
+            directAddOrMoveGrass.IsEnabled || directRemoveGrass.IsEnabled ||
+            legacyDirectControls.ObjectManagerGrassPositionSelectorEnabled ||
+            legacyDirectControls.ObjectManagerAddOrMoveGrassEnabled ||
+            legacyDirectControls.ObjectManagerRemoveGrassEnabled ||
+            !legacyDirectControls.ObjectManagerStatusText.Contains(
+                "Legacy document detected",
+                StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                "The fresh-only Object Manager did not expose its canonical document action.");
+                "The fresh-only Object Manager did not expose its canonical document action while keeping direct Grass controls closed across the legacy migration boundary.");
         }
         Window migrationDialog = OpenAsyncDialog(
             window,
@@ -2244,6 +2267,225 @@ void RunId65BlankLabUiOnly()
             throw new InvalidOperationException(
                 "Generic edit/paste/move/rotate/remove mutated the read-only remote-pad Moby presentation or its canonical document.");
         }
+
+        Console.WriteLine("ID65 UI smoke: starting direct remote-pad Grass control probe.");
+        MainWindow.Id65BlankLabUiSnapshot directInitialUi =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        if (!directGrassPositionSelector.IsEnabled ||
+            directGrassPositionSelector.SelectedItem?.ToString() != "Bottom right" ||
+            directAddOrMoveGrass.IsEnabled || !directRemoveGrass.IsEnabled ||
+            !directInitialUi.ObjectManagerGrassPositionSelectorEnabled ||
+            directInitialUi.ObjectManagerAddOrMoveGrassEnabled ||
+            !directInitialUi.ObjectManagerRemoveGrassEnabled)
+        {
+            throw new InvalidOperationException(
+                $"The migrated schema-3 state did not expose exact direct Grass move/remove controls: {directInitialUi}");
+        }
+
+        byte[] directDocumentBeforeSelector =
+            File.ReadAllBytes(authoringDocumentPath);
+        GeometryCandidate directGeometryBeforeSelector =
+            afterBlockedRemoteMutations.CurrentGeometry ??
+            throw new InvalidOperationException(
+                "The direct Grass selector probe lost its projected geometry.");
+        Moby directGrassBeforeSelector =
+            afterBlockedRemoteMutations.CurrentMobys.Single();
+        object topLeft = directGrassPositions.Single(item =>
+            string.Equals(item.ToString(), "Top left", StringComparison.Ordinal));
+        directGrassPositionSelector.SelectedItem = topLeft;
+        FlushUi();
+        if (!directAddOrMoveGrass.IsEnabled || !directRemoveGrass.IsEnabled ||
+            !File.ReadAllBytes(authoringDocumentPath)
+                .SequenceEqual(directDocumentBeforeSelector) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
+                directGeometryBeforeSelector) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys.Single(),
+                directGrassBeforeSelector) ||
+            directGrassBeforeSelector.Position != new Vector3f(400, 368, 512))
+        {
+            throw new InvalidOperationException(
+                "Selecting a direct remote-pad Grass destination wrote the document or moved the viewport presentation before Add / Move Grass.");
+        }
+
+        directAddOrMoveGrass.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, directAddOrMoveGrass));
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.DocumentProjectionSynchronized &&
+                    snapshot.LoadedT107RemotePadPositionId ==
+                        Id65RemotePadGrassT107Catalog.NorthWestPositionId &&
+                    snapshot.ObjectManagerGrassSelectedPositionId ==
+                        Id65RemotePadGrassT107Catalog.NorthWestPositionId &&
+                    !snapshot.ObjectManagerAddOrMoveGrassEnabled &&
+                    snapshot.ObjectManagerRemoveGrassEnabled &&
+                    snapshot.VisibleMobyCount == 1;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "moving Grass through the direct Object Manager CAS/reprojection action");
+        Task<Id65AuthoringEditorDocumentReadModel?> directMovedDocumentTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(
+            directMovedDocumentTask,
+            "re-inspecting the directly moved Grass document");
+        Id65AuthoringEditorDocumentReadModel directMovedDocument =
+            directMovedDocumentTask.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "The direct Grass move lost its canonical document.");
+        Id65AuthoringEditorControlState directMovedState =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                directMovedDocument);
+        EditorShellSessionSnapshot directMovedLab =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        if (!directMovedState.UsesRemotePadT107Grid ||
+            directMovedState.IncludeStructuralTerrain ||
+            directMovedState.IncludeGrassAtT88 ||
+            !directMovedState.IncludeGrassAtT107 ||
+            directMovedState.T107RemotePadPositionId !=
+                Id65RemotePadGrassT107Catalog.NorthWestPositionId ||
+            directMovedState.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId ||
+            directMovedLab.CurrentMobys.Single().Position !=
+                new Vector3f(368, 336, 512) ||
+            directMovedDocument.EnvelopeCanonicalSha256 ==
+                migratedDocument.EnvelopeCanonicalSha256 ||
+            File.Exists(legacyId65TerrainEditPath))
+        {
+            throw new InvalidOperationException(
+                "Direct Move Grass did not preserve terrain/T88/texture, publish a new exact schema-3 envelope, and reproject Top left without TerrainEditStore.");
+        }
+
+        directRemoveGrass.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, directRemoveGrass));
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.DocumentProjectionSynchronized &&
+                    snapshot.LoadedT107RemotePadPositionId ==
+                        Id65RemotePadGrassT107Catalog.NorthWestPositionId &&
+                    snapshot.ObjectManagerGrassSelectedPositionId ==
+                        Id65RemotePadGrassT107Catalog.NorthWestPositionId &&
+                    snapshot.ObjectManagerAddOrMoveGrassEnabled &&
+                    !snapshot.ObjectManagerRemoveGrassEnabled &&
+                    snapshot.VisibleMobyCount == 0;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "removing Grass while retaining its dormant direct position");
+        Task<Id65AuthoringEditorDocumentReadModel?> directRemovedDocumentTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(
+            directRemovedDocumentTask,
+            "re-inspecting the directly removed Grass document");
+        Id65AuthoringEditorDocumentReadModel directRemovedDocument =
+            directRemovedDocumentTask.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "Direct Remove Grass lost its canonical document.");
+        Id65AuthoringEditorControlState directRemovedState =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                directRemovedDocument);
+        if (!directRemovedState.UsesRemotePadT107Grid ||
+            directRemovedState.IncludeStructuralTerrain ||
+            directRemovedState.IncludeGrassAtT88 ||
+            directRemovedState.IncludeGrassAtT107 ||
+            directRemovedState.T107RemotePadPositionId !=
+                Id65RemotePadGrassT107Catalog.NorthWestPositionId ||
+            directRemovedState.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId ||
+            directRemovedDocument.EnvelopeCanonicalSha256 ==
+                directMovedDocument.EnvelopeCanonicalSha256 ||
+            File.Exists(legacyId65TerrainEditPath))
+        {
+            throw new InvalidOperationException(
+                "Direct Remove Grass did not preserve the dormant Top left position and unrelated exact document choices.");
+        }
+
+        byte[] directRemovedDocumentBytes = File.ReadAllBytes(authoringDocumentPath);
+        object directBottomRight = directGrassPositions.Single(item =>
+            string.Equals(item.ToString(), "Bottom right", StringComparison.Ordinal));
+        directGrassPositionSelector.SelectedItem = directBottomRight;
+        FlushUi();
+        if (!directAddOrMoveGrass.IsEnabled || directRemoveGrass.IsEnabled ||
+            !File.ReadAllBytes(authoringDocumentPath)
+                .SequenceEqual(directRemovedDocumentBytes))
+        {
+            throw new InvalidOperationException(
+                "The dormant direct Grass position selector did not expose Add without enabling Remove.");
+        }
+        directAddOrMoveGrass.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, directAddOrMoveGrass));
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.DocumentProjectionSynchronized &&
+                    snapshot.LoadedT107RemotePadPositionId ==
+                        Id65RemotePadGrassT107Catalog.SouthEastPositionId &&
+                    snapshot.ObjectManagerGrassSelectedPositionId ==
+                        Id65RemotePadGrassT107Catalog.SouthEastPositionId &&
+                    !snapshot.ObjectManagerAddOrMoveGrassEnabled &&
+                    snapshot.ObjectManagerRemoveGrassEnabled &&
+                    snapshot.VisibleMobyCount == 1;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "adding Grass back at Bottom right through the direct Object Manager action");
+        Task<Id65AuthoringEditorDocumentReadModel?> directAddedDocumentTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(
+            directAddedDocumentTask,
+            "re-inspecting the directly added Grass document");
+        migratedDocument = directAddedDocumentTask.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "Direct Add Grass lost its canonical document.");
+        migratedState = Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+            migratedDocument);
+        migratedLab = window.CaptureEditorShellSessionSnapshotForTesting();
+        migratedGrass = migratedLab.CurrentMobys.SingleOrDefault() ??
+            throw new InvalidOperationException(
+                "Direct Add Grass did not restore one viewport presentation.");
+        string[] candidateOutputsAfterDirectGrassActions =
+            Directory.Exists(candidateOutputRoot)
+                ? Directory.GetFiles(candidateOutputRoot, "*", SearchOption.AllDirectories)
+                    .OrderBy(path => path, StringComparer.Ordinal)
+                    .Select(path =>
+                        $"{Path.GetRelativePath(candidateOutputRoot, path)}:" +
+                        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                            File.ReadAllBytes(path))))
+                    .ToArray()
+                : [];
+        if (!migratedState.UsesRemotePadT107Grid ||
+            migratedState.IncludeStructuralTerrain ||
+            migratedState.IncludeGrassAtT88 ||
+            !migratedState.IncludeGrassAtT107 ||
+            migratedState.T107RemotePadPositionId !=
+                Id65RemotePadGrassT107Catalog.SouthEastPositionId ||
+            migratedState.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId ||
+            migratedGrass.Position != new Vector3f(400, 368, 512) ||
+            !candidateOutputsAfterDirectGrassActions.SequenceEqual(
+                candidateOutputsBeforeRemoteMigration,
+                StringComparer.Ordinal) ||
+            File.Exists(legacyId65TerrainEditPath))
+        {
+            throw new InvalidOperationException(
+                "The direct Grass move/remove/add cycle did not end at the exact Bottom right schema-3 state or crossed a candidate/TerrainEditStore boundary.");
+        }
+        AssertArtifactHashesEqual(
+            retailArtifactsBeforeButtonToggles,
+            CaptureTerrainProjectInputHashes(workspace, retailRoundTrip.Key),
+            "Direct ID65 Grass controls changed retail project persistence");
 
         string remoteCandidateRoot = Path.Combine(
             paths.RootPath,
@@ -2715,7 +2957,7 @@ void RunId65BlankLabUiOnly()
 
         Console.WriteLine(
             "ID65 Blank-Level Lab public UI smoke passed: clean 35-level startup, visible narrow disclosure, exact named Resident T25 / Proved private T66 selector with null refusal, selection-change preview/no-write and explicit Apply/Save, neutral reveal label, explicit repair contract, Core atomic-export route with 128 unique keys, hidden broad Research tab, and exact-manifest 35+1 in-memory admission passed; " +
-            $"isolated locked workspace bootstrap: exact and source-preserving; mutation guards: {mutationGuards}; stale continuations: {staleContinuations}; transition guards: {transitionGuards}; resident textures: {residentTexture}; canonical document guard: {canonicalDocumentGuard}; reverse persistence: {reversePersistence}; operation fence: {operationFence}; remote Object Manager: explicit legacy-to-grid migration, exact Bottom right 0/1 presentation, mismatch quarantine, generic mutation refusal, all four T88-off/T66 terrain-and-Grass candidate combinations, and dormant-position retention passed; workspace transition: {workspaceTransition}; full authoring editor: {authoringEditor}.");
+            $"isolated locked workspace bootstrap: exact and source-preserving; mutation guards: {mutationGuards}; stale continuations: {staleContinuations}; transition guards: {transitionGuards}; resident textures: {residentTexture}; canonical document guard: {canonicalDocumentGuard}; reverse persistence: {reversePersistence}; operation fence: {operationFence}; remote Object Manager: explicit legacy-to-grid migration, exact Bottom right 0/1 presentation, mismatch quarantine, generic mutation refusal, selector-only no-write plus direct Top-left move/remove and Bottom-right add through CAS reinspection/reprojection, all four T88-off/T66 terrain-and-Grass candidate combinations, and dormant-position retention passed; workspace transition: {workspaceTransition}; full authoring editor: {authoringEditor}.");
     }
     finally
     {

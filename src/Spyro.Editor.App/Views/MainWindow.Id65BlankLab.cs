@@ -66,6 +66,10 @@ public sealed partial class MainWindow
     private Button? _id65FreshRemoveOptionalTerrainButton;
     private readonly TextBlock _id65FreshOptionalTerrainStatusText = new();
     private Button? _id65FreshObjectManagerDocumentButton;
+    private ComboBox? _id65FreshGrassT107PositionSelector;
+    private Button? _id65FreshAddOrMoveGrassT107Button;
+    private Button? _id65FreshRemoveGrassT107Button;
+    private bool _id65FreshGrassT107ControlsAvailable;
     private readonly TextBlock _id65FreshObjectManagerStatusText = new();
     private string _id65BlankLabValidationFailure = "";
     private CancellationTokenSource? _id65BlankLabCatalogValidationCancellation;
@@ -400,6 +404,71 @@ public sealed partial class MainWindow
             Foreground = new SolidColorBrush(ModernMutedInk),
             FontSize = 12,
             LineHeight = 18
+        });
+
+        StackPanel grassControls = new() { Spacing = 8 };
+        grassControls.Children.Add(new TextBlock
+        {
+            Text = "Grass T107 placement",
+            FontSize = 12,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(42, 61, 79))
+        });
+        grassControls.Children.Add(new TextBlock
+        {
+            Text =
+                "Choose one of the nine verified remote-pad positions, then add or move the one supported Grass bundle. Remove keeps the selected position dormant in the canonical document. Changing the selector alone never saves or moves anything.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(72, 81, 92)),
+            FontSize = 12,
+            LineHeight = 18
+        });
+        _id65FreshGrassT107PositionSelector = new ComboBox
+        {
+            Name = "Id65FreshGrassT107PositionSelector",
+            ItemsSource = Id65RemotePadGrassT107Catalog.Positions,
+            SelectedItem = Id65RemotePadGrassT107Catalog.DefaultPosition,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            IsEnabled = false
+        };
+        _id65FreshGrassT107PositionSelector.SelectionChanged += (_, _) =>
+            RefreshId65FreshGrassT107ActionAvailability();
+        grassControls.Children.Add(_id65FreshGrassT107PositionSelector);
+
+        _id65FreshAddOrMoveGrassT107Button = NewAsyncButton(
+            "Add / Move Grass",
+            () => SetId65FreshRemotePadGrassAsync(includeGrassAtT107: true),
+            RefreshId65BlankLabUi);
+        _id65FreshAddOrMoveGrassT107Button.Name =
+            "Id65FreshAddOrMoveGrassT107Button";
+        _id65FreshRemoveGrassT107Button = NewAsyncButton(
+            "Remove Grass",
+            () => SetId65FreshRemotePadGrassAsync(includeGrassAtT107: false),
+            RefreshId65BlankLabUi);
+        _id65FreshRemoveGrassT107Button.Name =
+            "Id65FreshRemoveGrassT107Button";
+        StyleModernPrimaryButton(
+            _id65FreshAddOrMoveGrassT107Button,
+            Color.FromRgb(117, 80, 158));
+        StyleModernSecondaryButton(_id65FreshRemoveGrassT107Button);
+        Grid grassActions = NewEqualButtonGrid(2);
+        AddModernGridButton(
+            grassActions,
+            _id65FreshAddOrMoveGrassT107Button,
+            0);
+        AddModernGridButton(
+            grassActions,
+            _id65FreshRemoveGrassT107Button,
+            1);
+        grassControls.Children.Add(grassActions);
+        panel.Children.Add(new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(248, 245, 252)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(207, 192, 220)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10),
+            Child = grassControls
         });
 
         _id65FreshObjectManagerStatusText.Name =
@@ -2589,6 +2658,224 @@ public sealed partial class MainWindow
         }
     }
 
+    private async Task SetId65FreshRemotePadGrassAsync(
+        bool includeGrassAtT107)
+    {
+        string action = includeGrassAtT107
+            ? "add or move Grass T107"
+            : "remove Grass T107";
+        if (!IsCurrentId65BlankLab() || _currentLevel == null ||
+            !Id65FreshLevelSceneProjector.IsProjectionGeometry(_currentGeometry) ||
+            _id65BlankLabPaths == null || _id65BlankLabManifest == null)
+        {
+            _statusText.Text =
+                $"Load the exact ID65 Blank-Level Lab before using {action}.";
+            return;
+        }
+        if (_id65FreshAuthoringDocument == null)
+        {
+            _statusText.Text =
+                $"Could not {action}: no canonical Full Authoring Document is loaded. Use Edit Verified Moby Bundles… to create it explicitly; no default was persisted.";
+            return;
+        }
+        if (!_id65FreshDocumentProjectionSynchronized)
+        {
+            _statusText.Text =
+                $"Could not {action}: the canonical document and loaded fresh-scene projection are not synchronized. Reload the Lab first.";
+            return;
+        }
+        if (HasUnsavedTerrainEdits() || HasUnsavedMobyEdits() ||
+            HasUnsavedNativeMovementEdits() || HasUnsavedDragonRunToEdits())
+        {
+            _statusText.Text =
+                $"Could not {action}: save, undo, or reload current scene edits first. No document or viewport state was changed.";
+            return;
+        }
+
+        Id65RemotePadGrassT107Position? requestedPosition = null;
+        if (includeGrassAtT107)
+        {
+            requestedPosition =
+                _id65FreshGrassT107PositionSelector?.SelectedItem as
+                    Id65RemotePadGrassT107Position;
+            if (requestedPosition == null ||
+                !ReferenceEquals(
+                    requestedPosition,
+                    Id65RemotePadGrassT107Catalog.GetRequiredPosition(
+                        requestedPosition.PositionId)))
+            {
+                _statusText.Text =
+                    "Could not add or move Grass T107: choose one exact verified remote-pad position first. No document or viewport state was changed.";
+                return;
+            }
+        }
+
+        if (!TryBeginId65BlankLabManualOperation(
+                action,
+                out Id65BlankLabManualOperation? operation) ||
+            operation == null)
+        {
+            return;
+        }
+
+        UnusedLevel65BlankLevelLabWorkspacePaths? recoveryPaths = null;
+        UnusedLevel65BlankLevelLabManifest? recoveryManifest = null;
+        Id65AuthoringEditorDocumentWriteResult? durableWrite = null;
+
+        try
+        {
+            UnusedLevel65BlankLevelLabWorkspacePaths paths =
+                UnusedLevel65BlankLevelLabProfileRegistry.CreateWorkspacePaths(
+                    operation.WorkspaceRoot);
+            UnusedLevel65BlankLevelLabManifest manifest =
+                _id65BlankLabManifest ?? throw new InvalidDataException(
+                    "The Grass T107 action lost its admitted ID65 manifest.");
+            UnusedLevel65BlankLevelLabProfileRegistry.ValidateManifest(
+                manifest,
+                paths);
+            recoveryPaths = paths;
+            recoveryManifest = manifest;
+            RequireCurrentId65BlankLabManualOperation(operation);
+
+            _statusText.Text =
+                $"ID65 {action}: inspecting the current canonical document…";
+            Id65AuthoringEditorDocumentReadModel current =
+                await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                    paths,
+                    manifest,
+                    operation.Cancellation.Token) ?? throw new InvalidDataException(
+                    "The canonical Full Authoring Document is missing. Use Edit Verified Moby Bundles… to create it explicitly.");
+            RequireCurrentId65BlankLabManualOperation(operation);
+            if (!Id65AuthoringDocumentSnapshotsEqual(
+                    _id65FreshAuthoringDocument,
+                    current))
+            {
+                throw new InvalidDataException(
+                    "The canonical Full Authoring Document changed after this viewport was projected. Reload the Lab before changing Grass T107.");
+            }
+
+            Id65AuthoringEditorControlState currentState =
+                Id65AuthoringEditorControlStateCompiler.RecoverControlState(current);
+            if (!currentState.UsesRemotePadT107Grid)
+            {
+                throw new InvalidDataException(
+                    "This is a legacy native-apron T107 document. Direct Object Manager controls never migrate it. Use Edit Verified Moby Bundles… and explicitly choose the remote-pad migration first.");
+            }
+
+            string nextPositionId = includeGrassAtT107
+                ? requestedPosition!.PositionId
+                : currentState.T107RemotePadPositionId!;
+            Id65RemotePadGrassT107Position nextPosition =
+                Id65RemotePadGrassT107Catalog.GetRequiredPosition(nextPositionId);
+            if (currentState.IncludeGrassAtT107 == includeGrassAtT107 &&
+                string.Equals(
+                    currentState.T107RemotePadPositionId,
+                    nextPosition.PositionId,
+                    StringComparison.Ordinal))
+            {
+                _statusText.Text = includeGrassAtT107
+                    ? $"Grass T107 is already present at {nextPosition.Label}; no document or viewport state was changed."
+                    : $"Grass T107 is already absent and dormant {nextPosition.Label} was retained; no document or viewport state was changed.";
+                return;
+            }
+
+            Id65AuthoringEditorControlState nextState =
+                Id65AuthoringEditorControlState.CreateRemotePad(
+                    currentState.IncludeStructuralTerrain,
+                    currentState.IncludeGrassAtT88,
+                    includeGrassAtT107,
+                    nextPosition.PositionId,
+                    currentState.MandatoryBaseFaceTextureId);
+            Id65AuthoringEditorControlStateCompilation compilation =
+                Id65AuthoringEditorControlStateCompiler.Compile(nextState);
+
+            _statusText.Text =
+                $"ID65 {action}: publishing the canonical document with compare-and-swap…";
+            Id65AuthoringEditorDocumentWriteResult written =
+                await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
+                    paths,
+                    manifest,
+                    nextState,
+                    current.EnvelopeCanonicalSha256,
+                    operation.Cancellation.Token);
+            durableWrite = written;
+            RequireCurrentId65BlankLabManualOperation(operation);
+            RequireExactId65AuthoringDocumentWriteResult(written, compilation);
+            ClearId65BlankLabRevealBinding();
+
+            _statusText.Text =
+                $"ID65 {action}: re-inspecting the durable document and preparing its exact fresh-scene projection…";
+            (_, LevelLoadData? preparedLevel) =
+                await ReinspectAndPrepareId65FreshProjectionAsync(
+                    paths,
+                    manifest,
+                    written,
+                    nextState,
+                    operation);
+            RequireCurrentId65BlankLabManualOperation(operation);
+            ApplyPreparedId65FreshProjection(operation, preparedLevel);
+
+            ClearId65BlankLabRevealBinding();
+            InvalidateBuildSafetySummary();
+            RefreshId65BlankLabUi();
+            RefreshActionAvailability();
+            _statusText.Text = includeGrassAtT107
+                ? $"{(currentState.IncludeGrassAtT107 ? "Moved" : "Added")} the one verified Grass T107 bundle to {nextPosition.Label} through the canonical Full Authoring Document. " +
+                  $"Structural terrain {(nextState.IncludeStructuralTerrain ? "included" : "omitted")}, Grass T88 {(nextState.IncludeGrassAtT88 ? "included" : "omitted")}, and mandatory base face {Id65MandatoryBaseTextureLabel(nextState.MandatoryBaseFaceTextureId)} were preserved. " +
+                  "The viewport was replaced only after durable CAS save, exact readback, and projection succeeded. Arbitrary Mobys, drag placement, normal Create BIN, runtime use, and release promotion remain unavailable."
+                : $"Removed the one verified Grass T107 bundle through the canonical Full Authoring Document. Dormant {nextPosition.Label} was retained. " +
+                  $"Structural terrain {(nextState.IncludeStructuralTerrain ? "included" : "omitted")}, Grass T88 {(nextState.IncludeGrassAtT88 ? "included" : "omitted")}, and mandatory base face {Id65MandatoryBaseTextureLabel(nextState.MandatoryBaseFaceTextureId)} were preserved. " +
+                  "The viewport was replaced only after durable CAS save, exact readback, and projection succeeded. Arbitrary Mobys, normal Create BIN, runtime use, and release promotion remain unavailable.";
+        }
+        catch (OperationCanceledException exception)
+        {
+            if (durableWrite != null && recoveryPaths != null &&
+                recoveryManifest != null &&
+                IsCurrentId65BlankLabManualOperation(
+                    operation,
+                    requireSceneIdentity: false))
+            {
+                _statusText.Text =
+                    await RecoverId65PostWriteProjectionFailureAsync(
+                        operation,
+                        recoveryPaths,
+                        recoveryManifest,
+                        durableWrite,
+                        exception,
+                        action);
+            }
+        }
+        catch (Exception exception)
+        {
+            if (durableWrite != null && recoveryPaths != null &&
+                recoveryManifest != null &&
+                IsCurrentId65BlankLabManualOperation(
+                    operation,
+                    requireSceneIdentity: false))
+            {
+                _statusText.Text =
+                    await RecoverId65PostWriteProjectionFailureAsync(
+                        operation,
+                        recoveryPaths,
+                        recoveryManifest,
+                        durableWrite,
+                        exception,
+                        action);
+            }
+            else if (IsCurrentId65BlankLabManualOperation(
+                         operation,
+                         requireSceneIdentity: false))
+            {
+                _statusText.Text =
+                    $"Could not {action}: {exception.Message} The prior viewport remains active. Reload the Lab if the canonical document was changed by another operation.";
+            }
+        }
+        finally
+        {
+            CompleteId65BlankLabManualOperation(operation);
+        }
+    }
+
     private async Task CreateId65BlankLabDisposableCueAsync()
     {
         if (!IsCurrentId65BlankLab())
@@ -2939,6 +3226,10 @@ public sealed partial class MainWindow
         bool canOpenDocument =
             exactFreshRoute && _id65BlankLabManifest != null &&
             _id65BlankLabPaths != null && !busy;
+        _id65FreshGrassT107ControlsAvailable = false;
+        if (_id65FreshGrassT107PositionSelector != null)
+            _id65FreshGrassT107PositionSelector.IsEnabled = false;
+        RefreshId65FreshGrassT107ActionAvailability();
         if (_id65FreshObjectManagerDocumentButton != null)
             _id65FreshObjectManagerDocumentButton.IsEnabled = false;
 
@@ -2991,6 +3282,8 @@ public sealed partial class MainWindow
         Id65RemotePadGrassT107Position position =
             Id65RemotePadGrassT107Catalog.GetRequiredPosition(
                 state.T107RemotePadPositionId!);
+        if (_id65FreshGrassT107PositionSelector != null)
+            _id65FreshGrassT107PositionSelector.SelectedItem = position;
         int expectedVisibleCount = state.IncludeGrassAtT107 ? 1 : 0;
         bool loadedPresentationMatches = _currentMobys.Count == expectedVisibleCount;
         if (loadedPresentationMatches && expectedVisibleCount == 1)
@@ -3013,6 +3306,10 @@ public sealed partial class MainWindow
         }
         if (_id65FreshObjectManagerDocumentButton != null)
             _id65FreshObjectManagerDocumentButton.IsEnabled = canOpenDocument;
+        _id65FreshGrassT107ControlsAvailable = canOpenDocument;
+        if (_id65FreshGrassT107PositionSelector != null)
+            _id65FreshGrassT107PositionSelector.IsEnabled = canOpenDocument;
+        RefreshId65FreshGrassT107ActionAvailability();
         _id65FreshObjectManagerStatusText.Text = state.IncludeGrassAtT107
             ? $"1 placed object: verified Grass T107 at {position.Label} " +
               $"({position.EditorX}, {position.EditorY}, {position.EditorZ}). " +
@@ -3020,6 +3317,50 @@ public sealed partial class MainWindow
             : $"Blank scene: 0 placed objects. The dormant Grass T107 position is " +
               $"{position.Label} ({position.EditorX}, {position.EditorY}, {position.EditorZ}); " +
               "it will be retained if Grass is enabled later.";
+    }
+
+    private void RefreshId65FreshGrassT107ActionAvailability()
+    {
+        Id65AuthoringEditorControlState? state = null;
+        if (_id65FreshGrassT107ControlsAvailable &&
+            _id65FreshAuthoringDocument != null)
+        {
+            try
+            {
+                state = Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                    _id65FreshAuthoringDocument);
+            }
+            catch (Exception exception) when (
+                exception is InvalidDataException or InvalidOperationException)
+            {
+                Debug.WriteLine(exception);
+            }
+        }
+
+        Id65RemotePadGrassT107Position? selected =
+            _id65FreshGrassT107PositionSelector?.SelectedItem as
+                Id65RemotePadGrassT107Position;
+        bool exactSelection = selected != null &&
+            ReferenceEquals(
+                selected,
+                Id65RemotePadGrassT107Catalog.GetRequiredPosition(
+                    selected.PositionId));
+        if (_id65FreshAddOrMoveGrassT107Button != null)
+        {
+            _id65FreshAddOrMoveGrassT107Button.IsEnabled =
+                state?.UsesRemotePadT107Grid == true && exactSelection &&
+                (!state.IncludeGrassAtT107 ||
+                 !string.Equals(
+                     state.T107RemotePadPositionId,
+                     selected!.PositionId,
+                     StringComparison.Ordinal));
+        }
+        if (_id65FreshRemoveGrassT107Button != null)
+        {
+            _id65FreshRemoveGrassT107Button.IsEnabled =
+                state?.UsesRemotePadT107Grid == true &&
+                state.IncludeGrassAtT107;
+        }
     }
 
     private void RefreshId65FreshOptionalTerrainUi()
@@ -5078,6 +5419,15 @@ public sealed partial class MainWindow
             _id65FreshObjectManagerDocumentButton?.IsEnabled == true,
         ObjectManagerStatusText:
             _id65FreshObjectManagerStatusText.Text ?? "",
+        ObjectManagerGrassPositionSelectorEnabled:
+            _id65FreshGrassT107PositionSelector?.IsEnabled == true,
+        ObjectManagerGrassSelectedPositionId:
+            (_id65FreshGrassT107PositionSelector?.SelectedItem as
+                Id65RemotePadGrassT107Position)?.PositionId ?? "",
+        ObjectManagerAddOrMoveGrassEnabled:
+            _id65FreshAddOrMoveGrassT107Button?.IsEnabled == true,
+        ObjectManagerRemoveGrassEnabled:
+            _id65FreshRemoveGrassT107Button?.IsEnabled == true,
         SaveEnabled: _id65BlankLabSaveButton?.IsEnabled == true,
         CreateCueEnabled: _id65BlankLabCreateCueButton?.IsEnabled == true,
         RevealEnabled: _id65BlankLabRevealButton?.IsEnabled == true,
@@ -9857,6 +10207,10 @@ public sealed partial class MainWindow
         string AuthoringCandidateButtonText,
         bool ObjectManagerDocumentEnabled,
         string ObjectManagerStatusText,
+        bool ObjectManagerGrassPositionSelectorEnabled,
+        string ObjectManagerGrassSelectedPositionId,
+        bool ObjectManagerAddOrMoveGrassEnabled,
+        bool ObjectManagerRemoveGrassEnabled,
         bool SaveEnabled,
         bool CreateCueEnabled,
         bool RevealEnabled,
