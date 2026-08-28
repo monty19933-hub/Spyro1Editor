@@ -459,6 +459,11 @@ static bool Equivalent(
     string.Equals(
         left.T107RemotePadPositionId,
         right.T107RemotePadPositionId,
+        StringComparison.Ordinal) &&
+    left.RemotePadMobyKind == right.RemotePadMobyKind &&
+    string.Equals(
+        left.RemotePadMobyPositionId,
+        right.RemotePadMobyPositionId,
         StringComparison.Ordinal);
 
 static void AssertFailClosed(
@@ -487,18 +492,22 @@ static void AssertPublicSurface()
     PropertyInfo[] properties = state.GetProperties(
         BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
     Require(
-        state.IsPublic && state.IsSealed && properties.Length == 7 &&
-        properties.Count(property => property.PropertyType == typeof(bool)) == 4 &&
+        state.IsPublic && state.IsSealed && properties.Length == 11 &&
+        properties.Count(property => property.PropertyType == typeof(bool)) == 6 &&
         properties.Count(property => property.PropertyType == typeof(int)) == 1 &&
         properties.Select(property => property.Name).Order(StringComparer.Ordinal).SequenceEqual(
             new[]
             {
                 "IncludeGrassAtT107",
                 "IncludeGrassAtT88",
+                "IncludeRedGemAtT21",
                 "IncludeStructuralTerrain",
                 "MandatoryBaseFaceTextureId",
+                "RemotePadMobyKind",
+                "RemotePadMobyPositionId",
                 "T107PlacementSemantics",
                 "T107RemotePadPositionId",
+                "UsesRemotePadMobyChoice",
                 "UsesRemotePadT107Grid"
             }.Order(StringComparer.Ordinal)) &&
         properties.All(property => !property.CanWrite),
@@ -515,14 +524,17 @@ static void AssertPublicSurface()
         .OrderBy(method => method.Name, StringComparer.Ordinal)
         .ToArray();
     Require(
-        stateFactories.Length == 4 &&
+        stateFactories.Length == 7 &&
         stateFactories.Select(method => method.Name).SequenceEqual(
             new[]
             {
                 "CreateDefault",
                 "CreateRemotePad",
                 "CreateRemotePadDefault",
-                "MigrateLegacyToRemotePadGrid"
+                "CreateRemotePadMobyChoice",
+                "CreateRemotePadMobyChoiceDefault",
+                "MigrateLegacyToRemotePadGrid",
+                "MigrateRemotePadGridToMobyChoice"
             }.Order(StringComparer.Ordinal)) &&
         stateFactories.All(method =>
             method.ReturnType == typeof(Id65AuthoringEditorControlState)),
@@ -531,10 +543,12 @@ static void AssertPublicSurface()
         Enum.GetValues<Id65AuthoringEditorT107PlacementSemantics>().SequenceEqual(
             [
                 Id65AuthoringEditorT107PlacementSemantics.LegacyNativeApronV1,
-                Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1
+                Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1,
+                Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1
             ]) &&
         Id65AuthoringEditorControlState.SchemaVersion == 1 &&
-        Id65AuthoringEditorControlState.RemotePadGridSchemaVersion == 2,
+        Id65AuthoringEditorControlState.RemotePadGridSchemaVersion == 2 &&
+        Id65AuthoringEditorControlState.RemotePadMobyChoiceSchemaVersion == 3,
         "The exact legacy/remote control-state schema discriminator changed.");
 
     MethodInfo[] compilerMethods = typeof(Id65AuthoringEditorControlStateCompiler).GetMethods(

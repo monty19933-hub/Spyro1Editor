@@ -11,7 +11,8 @@ namespace Spyro.Editor.Core.Persistence;
 public enum Id65AuthoringEditorT107PlacementSemantics
 {
     LegacyNativeApronV1 = 1,
-    RemotePadGridV1 = 2
+    RemotePadGridV1 = 2,
+    RemotePadMobyChoiceV1 = 3
 }
 
 /// <summary>
@@ -29,6 +30,9 @@ public sealed class Id65AuthoringEditorControlState
     public const string RemotePadGridProfileId =
         "id65-authoring-editor-control-state-t107-placement-v2";
     public const int RemotePadGridSchemaVersion = 2;
+    public const string RemotePadMobyChoiceProfileId =
+        "id65-authoring-editor-control-state-remote-pad-moby-choice-v3";
+    public const int RemotePadMobyChoiceSchemaVersion = 3;
     public const int T88TargetTrueIndex = 88;
     public const int T107TargetTrueIndex = 107;
     public const int ResidentMandatoryBaseFaceTextureId = 25;
@@ -45,7 +49,9 @@ public sealed class Id65AuthoringEditorControlState
             includeGrassAtT107,
             mandatoryBaseFaceTextureId,
             Id65AuthoringEditorT107PlacementSemantics.LegacyNativeApronV1,
-            t107RemotePadPositionId: null)
+            t107RemotePadPositionId: null,
+            remotePadMobyKind: null,
+            remotePadMobyPositionId: null)
     {
     }
 
@@ -55,14 +61,17 @@ public sealed class Id65AuthoringEditorControlState
         bool includeGrassAtT107,
         int mandatoryBaseFaceTextureId,
         Id65AuthoringEditorT107PlacementSemantics t107PlacementSemantics,
-        string? t107RemotePadPositionId)
+        string? t107RemotePadPositionId,
+        Id65RemotePadMobyKind? remotePadMobyKind,
+        string? remotePadMobyPositionId)
     {
         if (mandatoryBaseFaceTextureId is not
             (ResidentMandatoryBaseFaceTextureId or PrivateMandatoryBaseFaceTextureId))
             throw new ArgumentOutOfRangeException(nameof(mandatoryBaseFaceTextureId));
         if (t107PlacementSemantics == Id65AuthoringEditorT107PlacementSemantics.LegacyNativeApronV1)
         {
-            if (t107RemotePadPositionId is not null)
+            if (t107RemotePadPositionId is not null || remotePadMobyKind.HasValue ||
+                remotePadMobyPositionId is not null)
             {
                 throw new ArgumentException(
                     "Legacy native-apron T107 state cannot carry a remote-pad position.",
@@ -71,9 +80,34 @@ public sealed class Id65AuthoringEditorControlState
         }
         else if (t107PlacementSemantics == Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1)
         {
+            if (remotePadMobyKind.HasValue || remotePadMobyPositionId is not null)
+            {
+                throw new ArgumentException(
+                    "Schema-3 remote-pad state cannot carry a schema-4 Moby choice.",
+                    nameof(remotePadMobyKind));
+            }
             t107RemotePadPositionId = Id65RemotePadGrassT107Catalog
                 .GetRequiredPosition(t107RemotePadPositionId!)
                 .PositionId;
+        }
+        else if (t107PlacementSemantics ==
+                 Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1)
+        {
+            if (t107RemotePadPositionId is not null || !remotePadMobyKind.HasValue ||
+                includeGrassAtT88 || mandatoryBaseFaceTextureId != PrivateMandatoryBaseFaceTextureId)
+            {
+                throw new ArgumentException(
+                    "Schema-4 remote-pad Moby-choice state requires T88 off, T66, and no schema-3 position.");
+            }
+            _ = Id65RemotePadMobyChoiceCatalog.GetRequiredChoice(remotePadMobyKind.Value);
+            remotePadMobyPositionId = Id65RemotePadMobyChoiceCatalog.GetRequiredPositionId(
+                remotePadMobyPositionId!);
+            if (includeGrassAtT107 !=
+                (remotePadMobyKind.Value == Id65RemotePadMobyKind.GrassT107))
+            {
+                throw new ArgumentException(
+                    "Schema-4 Grass inclusion must match the mutually exclusive Moby choice.");
+            }
         }
         else
         {
@@ -85,6 +119,8 @@ public sealed class Id65AuthoringEditorControlState
         MandatoryBaseFaceTextureId = mandatoryBaseFaceTextureId;
         T107PlacementSemantics = t107PlacementSemantics;
         T107RemotePadPositionId = t107RemotePadPositionId;
+        RemotePadMobyKind = remotePadMobyKind;
+        RemotePadMobyPositionId = remotePadMobyPositionId;
     }
 
     public bool IncludeStructuralTerrain { get; }
@@ -93,8 +129,15 @@ public sealed class Id65AuthoringEditorControlState
     public int MandatoryBaseFaceTextureId { get; }
     public Id65AuthoringEditorT107PlacementSemantics T107PlacementSemantics { get; }
     public string? T107RemotePadPositionId { get; }
+    public Id65RemotePadMobyKind? RemotePadMobyKind { get; }
+    public string? RemotePadMobyPositionId { get; }
     public bool UsesRemotePadT107Grid =>
         T107PlacementSemantics == Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1;
+    public bool UsesRemotePadMobyChoice =>
+        T107PlacementSemantics ==
+            Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1;
+    public bool IncludeRedGemAtT21 =>
+        RemotePadMobyKind == Id65RemotePadMobyKind.RedGemT21;
 
     public static Id65AuthoringEditorControlState CreateDefault() =>
         new(
@@ -127,7 +170,29 @@ public sealed class Id65AuthoringEditorControlState
             includeGrassAtT107,
             mandatoryBaseFaceTextureId,
             Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1,
-            t107RemotePadPositionId);
+            t107RemotePadPositionId,
+            remotePadMobyKind: null,
+            remotePadMobyPositionId: null);
+
+    public static Id65AuthoringEditorControlState CreateRemotePadMobyChoiceDefault() =>
+        CreateRemotePadMobyChoice(
+            includeStructuralTerrain: true,
+            Id65RemotePadMobyKind.None,
+            Id65RemotePadMobyChoiceCatalog.DefaultPositionId);
+
+    public static Id65AuthoringEditorControlState CreateRemotePadMobyChoice(
+        bool includeStructuralTerrain,
+        Id65RemotePadMobyKind kind,
+        string remotePadMobyPositionId) =>
+        new(
+            includeStructuralTerrain,
+            includeGrassAtT88: false,
+            includeGrassAtT107: kind == Id65RemotePadMobyKind.GrassT107,
+            mandatoryBaseFaceTextureId: PrivateMandatoryBaseFaceTextureId,
+            Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1,
+            t107RemotePadPositionId: null,
+            remotePadMobyKind: kind,
+            remotePadMobyPositionId);
 
     /// <summary>
     /// Explicit one-way migration. Calling this method is the only API that may
@@ -138,7 +203,8 @@ public sealed class Id65AuthoringEditorControlState
         string? t107RemotePadPositionId = null)
     {
         ArgumentNullException.ThrowIfNull(legacyState);
-        if (legacyState.UsesRemotePadT107Grid)
+        if (legacyState.T107PlacementSemantics !=
+            Id65AuthoringEditorT107PlacementSemantics.LegacyNativeApronV1)
         {
             throw new InvalidOperationException(
                 "Only legacy native-apron T107 control state can be migrated to the remote-pad grid.");
@@ -151,11 +217,40 @@ public sealed class Id65AuthoringEditorControlState
             legacyState.MandatoryBaseFaceTextureId);
     }
 
+    /// <summary>
+    /// Explicit schema-3 to schema-4 migration. It is deliberately narrower
+    /// than ordinary editing: T88 must already be off, T66 is retained, the
+    /// grid position is preserved, and T107 maps only to Grass or None.
+    /// </summary>
+    public static Id65AuthoringEditorControlState MigrateRemotePadGridToMobyChoice(
+        Id65AuthoringEditorControlState remotePadGridState)
+    {
+        ArgumentNullException.ThrowIfNull(remotePadGridState);
+        if (!remotePadGridState.UsesRemotePadT107Grid ||
+            remotePadGridState.IncludeGrassAtT88 ||
+            remotePadGridState.MandatoryBaseFaceTextureId != PrivateMandatoryBaseFaceTextureId)
+        {
+            throw new InvalidOperationException(
+                "Only a schema-3 T66 remote-pad state with T88 disabled can migrate to schema 4.");
+        }
+        return CreateRemotePadMobyChoice(
+            remotePadGridState.IncludeStructuralTerrain,
+            remotePadGridState.IncludeGrassAtT107
+                ? Id65RemotePadMobyKind.GrassT107
+                : Id65RemotePadMobyKind.None,
+            remotePadGridState.T107RemotePadPositionId!);
+    }
+
     internal static Id65AuthoringEditorControlState CopyExact(
         Id65AuthoringEditorControlState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        return state.UsesRemotePadT107Grid
+        return state.UsesRemotePadMobyChoice
+            ? CreateRemotePadMobyChoice(
+                state.IncludeStructuralTerrain,
+                state.RemotePadMobyKind!.Value,
+                state.RemotePadMobyPositionId!)
+            : state.UsesRemotePadT107Grid
             ? CreateRemotePad(
                 state.IncludeStructuralTerrain,
                 state.IncludeGrassAtT88,
@@ -199,6 +294,11 @@ public sealed class Id65AuthoringEditorControlStateCompilation
             !string.Equals(
                 state.T107RemotePadPositionId,
                 recovered.T107RemotePadPositionId,
+                StringComparison.Ordinal) ||
+            state.RemotePadMobyKind != recovered.RemotePadMobyKind ||
+            !string.Equals(
+                state.RemotePadMobyPositionId,
+                recovered.RemotePadMobyPositionId,
                 StringComparison.Ordinal) ||
             !canonical.SerializeUtf8().SequenceEqual(expected.SerializeUtf8()))
         {
@@ -305,7 +405,11 @@ public static class Id65AuthoringEditorControlStateCompiler
                 Id65AuthoringEditorT107PlacementSemantics.LegacyNativeApronV1 &&
             !document.UsesRemotePadT107Grid &&
             document.T107RemotePadPositionId is null &&
-            document.T107RemotePadPosition is null;
+            document.T107RemotePadPosition is null &&
+            !document.UsesRemotePadMobyChoice &&
+            document.RemotePadMobyKind is null &&
+            document.RemotePadMobyPositionId is null &&
+            document.RemotePadMobyPosition is null;
         bool legacyResidentT25 =
             document.SchemaVersion == Id65AuthoringEditorDocument.ResidentT25SchemaVersion &&
             document.ProfileId == Id65AuthoringEditorDocument.ResidentT25DocumentProfileId &&
@@ -317,7 +421,11 @@ public static class Id65AuthoringEditorControlStateCompiler
                 Id65AuthoringEditorT107PlacementSemantics.LegacyNativeApronV1 &&
             !document.UsesRemotePadT107Grid &&
             document.T107RemotePadPositionId is null &&
-            document.T107RemotePadPosition is null;
+            document.T107RemotePadPosition is null &&
+            !document.UsesRemotePadMobyChoice &&
+            document.RemotePadMobyKind is null &&
+            document.RemotePadMobyPositionId is null &&
+            document.RemotePadMobyPosition is null;
         bool remotePadGrid =
             document.SchemaVersion == Id65AuthoringEditorDocument.RemotePadGridSchemaVersion &&
             document.ProfileId == Id65AuthoringEditorDocument.RemotePadGridDocumentProfileId &&
@@ -330,8 +438,31 @@ public static class Id65AuthoringEditorControlStateCompiler
                 Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1 &&
             document.UsesRemotePadT107Grid &&
             document.T107RemotePadPositionId is not null &&
-            document.T107RemotePadPosition is not null;
-        bool supportedProfile = legacyPrivateT66 || legacyResidentT25 || remotePadGrid;
+            document.T107RemotePadPosition is not null &&
+            !document.UsesRemotePadMobyChoice &&
+            document.RemotePadMobyKind is null &&
+            document.RemotePadMobyPositionId is null &&
+            document.RemotePadMobyPosition is null;
+        bool remotePadMobyChoice =
+            document.SchemaVersion ==
+                Id65AuthoringEditorDocument.RemotePadMobyChoiceSchemaVersion &&
+            document.ProfileId ==
+                Id65AuthoringEditorDocument.RemotePadMobyChoiceDocumentProfileId &&
+            document.MandatoryBaseFaceTextureId ==
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId &&
+            document.ReadModelSchemaVersion ==
+                Id65AuthoringEditorDocumentReadModel.RemotePadMobyChoiceReadModelSchemaVersion &&
+            document.T107PlacementSemantics ==
+                Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1 &&
+            !document.UsesRemotePadT107Grid &&
+            document.T107RemotePadPositionId is null &&
+            document.T107RemotePadPosition is null &&
+            document.UsesRemotePadMobyChoice &&
+            document.RemotePadMobyKind.HasValue &&
+            document.RemotePadMobyPositionId is not null &&
+            document.RemotePadMobyPosition is not null;
+        bool supportedProfile =
+            legacyPrivateT66 || legacyResidentT25 || remotePadGrid || remotePadMobyChoice;
         if (!supportedProfile ||
             document.LabProfileId != UnusedLevel65BlankLevelLabProfileRegistry.ProfileId ||
             document.LabProfileVersion !=
@@ -366,8 +497,10 @@ public static class Id65AuthoringEditorControlStateCompiler
                 "The ID65 read model cannot be translated into an exact control state.");
         }
 
-        Id65AuthoringEditorControlState state = remotePadGrid
-            ? SelectRemotePadState(document)
+        Id65AuthoringEditorControlState state = remotePadMobyChoice
+            ? SelectRemotePadMobyChoiceState(document)
+            : remotePadGrid
+                ? SelectRemotePadState(document)
             : SelectLegacyState(
                 document.Terrain.Count,
                 document.MobyPlacements.Select(placement => placement.Id),
@@ -389,7 +522,11 @@ public static class Id65AuthoringEditorControlStateCompiler
         int placementCount =
             (state.IncludeGrassAtT88 ? 1 : 0) +
             (state.IncludeGrassAtT107 ? 1 : 0);
-        if (placementCount > 2 || (!state.UsesRemotePadT107Grid && placementCount < 1))
+        if (placementCount > 2 ||
+            (!state.UsesRemotePadT107Grid && !state.UsesRemotePadMobyChoice &&
+                placementCount < 1) ||
+            (state.UsesRemotePadMobyChoice &&
+                (state.IncludeGrassAtT88 || placementCount > 1)))
         {
             throw new InvalidDataException(
                 "The ID65 control state lost an exact choice or fail-closed boundary.");
@@ -404,7 +541,12 @@ public static class Id65AuthoringEditorControlStateCompiler
                 ? Id65RemotePadGrassT107Catalog.PlacementId
                 : Id65AuthoringMobyDependencyBundleCompiler.T107PlacementId);
         }
-        return state.UsesRemotePadT107Grid
+        return state.UsesRemotePadMobyChoice
+            ? Id65AuthoringEditorDocument.CreateRemotePadMobyChoiceExact(
+                state.RemotePadMobyKind!.Value,
+                state.RemotePadMobyPositionId!,
+                state.IncludeStructuralTerrain)
+            : state.UsesRemotePadT107Grid
             ? Id65AuthoringEditorDocument.CreateRemotePadGridExact(
                 state.T107RemotePadPositionId!,
                 state.IncludeStructuralTerrain,
@@ -422,8 +564,10 @@ public static class Id65AuthoringEditorControlStateCompiler
         ArgumentNullException.ThrowIfNull(document);
         Id65AuthoringEditorDocument canonical =
             Id65AuthoringEditorDocument.Parse(document.SerializeUtf8());
-        Id65AuthoringEditorControlState state = canonical.UsesRemotePadT107Grid
-            ? SelectRemotePadState(canonical)
+        Id65AuthoringEditorControlState state = canonical.UsesRemotePadMobyChoice
+            ? SelectRemotePadMobyChoiceState(canonical)
+            : canonical.UsesRemotePadT107Grid
+                ? SelectRemotePadState(canonical)
             : SelectLegacyState(
                 canonical.Terrain.Count,
                 canonical.MobyPlacements.Select(placement => placement.Id),
@@ -494,6 +638,87 @@ public static class Id65AuthoringEditorControlStateCompiler
             document.MandatoryBaseFaceTextureId);
     }
 
+    private static Id65AuthoringEditorControlState SelectRemotePadMobyChoiceState(
+        Id65AuthoringEditorDocument document)
+    {
+        if (!document.UsesRemotePadMobyChoice ||
+            !document.RemotePadMobyKind.HasValue ||
+            document.RemotePadMobyPositionId is null ||
+            document.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId ||
+            document.Terrain.Count > 1)
+        {
+            throw new InvalidDataException(
+                "The schema-4 ID65 document lost its exact T66 Moby-choice semantics.");
+        }
+        string[] actualIds = document.MobyPlacements.Select(item => item.Id).ToArray();
+        string[] expectedIds = document.RemotePadMobyKind.Value switch
+        {
+            Id65RemotePadMobyKind.None => [],
+            Id65RemotePadMobyKind.GrassT107 => [Id65RemotePadGrassT107Catalog.PlacementId],
+            Id65RemotePadMobyKind.RedGemT21 => [Id65RemotePadRedGemT21Catalog.PlacementId],
+            _ => throw new InvalidDataException("The schema-4 ID65 Moby kind is unsupported.")
+        };
+        if (!actualIds.SequenceEqual(expectedIds))
+        {
+            throw new InvalidDataException(
+                "The schema-4 ID65 document Moby placements do not match its exclusive choice.");
+        }
+        return Id65AuthoringEditorControlState.CreateRemotePadMobyChoice(
+            document.Terrain.Count == 1,
+            document.RemotePadMobyKind.Value,
+            document.RemotePadMobyPositionId);
+    }
+
+    private static Id65AuthoringEditorControlState SelectRemotePadMobyChoiceState(
+        Id65AuthoringEditorDocumentReadModel document)
+    {
+        if (!document.UsesRemotePadMobyChoice ||
+            !document.RemotePadMobyKind.HasValue ||
+            document.RemotePadMobyPositionId is null ||
+            document.RemotePadMobyPosition is null ||
+            document.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId ||
+            document.Terrain.Count > 1)
+        {
+            throw new InvalidDataException(
+                "The schema-4 ID65 read model lost its exact T66 Moby-choice semantics.");
+        }
+        Id65RemotePadMobyPositionReadModel actual = document.RemotePadMobyPosition;
+        Id65RemotePadGrassT107Position expected = Id65RemotePadGrassT107Catalog
+            .GetRequiredPosition(document.RemotePadMobyPositionId);
+        string? expectedRowSha256 = Id65RemotePadMobyChoiceCatalog
+            .GetSelectedExactRowSha256(document.RemotePadMobyKind.Value, expected.PositionId);
+        if (actual.Ordinal != expected.Ordinal || actual.PositionId != expected.PositionId ||
+            actual.Label != expected.Label || actual.EditorX != expected.EditorX ||
+            actual.EditorY != expected.EditorY || actual.EditorZ != expected.EditorZ ||
+            actual.RawX != expected.RawX || actual.RawY != expected.RawY ||
+            actual.RawZ != expected.RawZ ||
+            actual.SelectedExactRowSha256 != expectedRowSha256 ||
+            actual.IsDefault != expected.IsDefault)
+        {
+            throw new InvalidDataException(
+                "The schema-4 ID65 read-model position does not match the frozen shared catalog.");
+        }
+        string[] actualIds = document.MobyPlacements.Select(item => item.Id).ToArray();
+        string[] expectedIds = document.RemotePadMobyKind.Value switch
+        {
+            Id65RemotePadMobyKind.None => [],
+            Id65RemotePadMobyKind.GrassT107 => [Id65RemotePadGrassT107Catalog.PlacementId],
+            Id65RemotePadMobyKind.RedGemT21 => [Id65RemotePadRedGemT21Catalog.PlacementId],
+            _ => throw new InvalidDataException("The schema-4 ID65 Moby kind is unsupported.")
+        };
+        if (!actualIds.SequenceEqual(expectedIds))
+        {
+            throw new InvalidDataException(
+                "The schema-4 ID65 read-model placements do not match its exclusive choice.");
+        }
+        return Id65AuthoringEditorControlState.CreateRemotePadMobyChoice(
+            document.Terrain.Count == 1,
+            document.RemotePadMobyKind.Value,
+            expected.PositionId);
+    }
+
     private static Id65AuthoringEditorControlState SelectRemotePadState(
         Id65AuthoringEditorDocumentReadModel document)
     {
@@ -557,6 +782,11 @@ public static class Id65AuthoringEditorControlStateCompiler
             !string.Equals(
                 expected.T107RemotePadPositionId,
                 actual.T107RemotePadPositionId,
+                StringComparison.Ordinal) ||
+            expected.RemotePadMobyKind != actual.RemotePadMobyKind ||
+            !string.Equals(
+                expected.RemotePadMobyPositionId,
+                actual.RemotePadMobyPositionId,
                 StringComparison.Ordinal))
         {
             throw new InvalidDataException(
@@ -567,8 +797,10 @@ public static class Id65AuthoringEditorControlStateCompiler
     private static void ValidateCompilation(
         Id65AuthoringEditorControlStateCompilation result)
     {
-        string expectedProfile = result.State.UsesRemotePadT107Grid
-            ? Id65AuthoringEditorDocument.RemotePadGridDocumentProfileId
+        string expectedProfile = result.State.UsesRemotePadMobyChoice
+            ? Id65AuthoringEditorDocument.RemotePadMobyChoiceDocumentProfileId
+            : result.State.UsesRemotePadT107Grid
+                ? Id65AuthoringEditorDocument.RemotePadGridDocumentProfileId
             : result.State.MandatoryBaseFaceTextureId ==
                 Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId
                 ? Id65AuthoringEditorDocument.ResidentT25DocumentProfileId
@@ -587,7 +819,8 @@ public static class Id65AuthoringEditorControlStateCompiler
                 Id65V2NativeTextureCompositionCompiler.PrivateTextureId ||
             result.MobyTargetTrueIndices.Count !=
                 ((result.State.IncludeGrassAtT88 ? 1 : 0) +
-                 (result.State.IncludeGrassAtT107 ? 1 : 0)) ||
+                 (result.State.IncludeGrassAtT107 ? 1 : 0) +
+                 (result.State.IncludeRedGemAtT21 ? 1 : 0)) ||
             result.MobyTargetTrueIndices.SequenceEqual(
                 result.MobyTargetTrueIndices.Order()) == false ||
             !result.ExactDocumentFactoryVerified ||

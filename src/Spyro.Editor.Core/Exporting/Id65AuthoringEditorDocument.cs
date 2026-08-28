@@ -129,12 +129,15 @@ internal sealed class Id65AuthoringEditorDocument
     public const int CurrentSchemaVersion = 1;
     public const int ResidentT25SchemaVersion = 2;
     public const int RemotePadGridSchemaVersion = 3;
+    public const int RemotePadMobyChoiceSchemaVersion = 4;
     public const int MaximumSerializedByteCount = 64 * 1024;
     public const string DocumentProfileId = "id65-authoring-editor-document-exact-composite-v1";
     public const string ResidentT25DocumentProfileId =
         "id65-authoring-editor-document-resident-t25-v2";
     public const string RemotePadGridDocumentProfileId =
         "id65-authoring-editor-document-remote-pad-grid-v3";
+    public const string RemotePadMobyChoiceDocumentProfileId =
+        "id65-authoring-editor-document-remote-pad-moby-choice-v4";
     public const int ResidentMandatoryBaseFaceTextureId = 25;
     public const int PrivateMandatoryBaseFaceTextureId = 66;
     public const string PrivateTextureSwapId = "swap.remote-pad.face0.private-t66";
@@ -143,6 +146,7 @@ internal sealed class Id65AuthoringEditorDocument
     public const string OptionalTriangleOcclusionId = "occlusion.remote-pad.group0";
     public const string AppendContiguousRowPolicy = "append-contiguous";
     public const string ReplaceExactRowPolicy = "replace-exact";
+    public const string ReuseResidentExactRowPolicy = "reuse-resident-exact";
     public const string PreserveDestinationCoordinatePolicy = "preserve-destination";
     public const string AuthorExactCoordinatePolicy = "author-exact";
 
@@ -159,7 +163,9 @@ internal sealed class Id65AuthoringEditorDocument
         IEnumerable<Id65AuthoringEditorMobyPlacement> mobyPlacements,
         Id65AuthoringEditorBaselineHandles baselineHandles,
         int mandatoryBaseFaceTextureId,
-        string? t107RemotePadPositionId)
+        string? t107RemotePadPositionId,
+        Id65RemotePadMobyKind? remotePadMobyKind,
+        string? remotePadMobyPositionId)
     {
         ArgumentNullException.ThrowIfNull(terrain);
         ArgumentNullException.ThrowIfNull(privateTextureSwap);
@@ -171,6 +177,8 @@ internal sealed class Id65AuthoringEditorDocument
         BaselineHandles = baselineHandles;
         MandatoryBaseFaceTextureId = mandatoryBaseFaceTextureId;
         T107RemotePadPositionId = t107RemotePadPositionId;
+        RemotePadMobyKind = remotePadMobyKind;
+        RemotePadMobyPositionId = remotePadMobyPositionId;
         ValidateExactDocument(this);
 
         byte[] canonicalContent = WriteCanonical(this, contentSha256: null);
@@ -180,19 +188,28 @@ internal sealed class Id65AuthoringEditorDocument
         CanonicalSha256 = Hash(_canonicalUtf8);
     }
 
-    public int SchemaVersion => UsesRemotePadT107Grid
-        ? RemotePadGridSchemaVersion
+    public int SchemaVersion => UsesRemotePadMobyChoice
+        ? RemotePadMobyChoiceSchemaVersion
+        : UsesRemotePadT107Grid
+            ? RemotePadGridSchemaVersion
         : MandatoryBaseFaceTextureId == PrivateMandatoryBaseFaceTextureId
             ? CurrentSchemaVersion
             : ResidentT25SchemaVersion;
-    public string ProfileId => UsesRemotePadT107Grid
-        ? RemotePadGridDocumentProfileId
+    public string ProfileId => UsesRemotePadMobyChoice
+        ? RemotePadMobyChoiceDocumentProfileId
+        : UsesRemotePadT107Grid
+            ? RemotePadGridDocumentProfileId
         : MandatoryBaseFaceTextureId == PrivateMandatoryBaseFaceTextureId
             ? DocumentProfileId
             : ResidentT25DocumentProfileId;
     public int MandatoryBaseFaceTextureId { get; }
     public string? T107RemotePadPositionId { get; }
     public bool UsesRemotePadT107Grid => T107RemotePadPositionId is not null;
+    public Id65RemotePadMobyKind? RemotePadMobyKind { get; }
+    public string? RemotePadMobyPositionId { get; }
+    public bool UsesRemotePadMobyChoice => RemotePadMobyKind.HasValue;
+    public bool UsesStaticRemotePadAuthoring =>
+        UsesRemotePadT107Grid || UsesRemotePadMobyChoice;
     public string LabProfileId => UnusedLevel65BlankLevelLabProfileRegistry.ProfileId;
     public int LabProfileVersion => UnusedLevel65BlankLevelLabProfileRegistry.ProfileVersion;
     public string WorkspaceKey => UnusedLevel65BlankLevelLabProfileRegistry.Key;
@@ -251,7 +268,9 @@ internal sealed class Id65AuthoringEditorDocument
             placements,
             CreateExactBaselineHandles(),
             mandatoryBaseFaceTextureId,
-            t107RemotePadPositionId: null);
+            t107RemotePadPositionId: null,
+            remotePadMobyKind: null,
+            remotePadMobyPositionId: null);
     }
 
     public static Id65AuthoringEditorDocument CreateRemotePadGridExact(
@@ -273,7 +292,37 @@ internal sealed class Id65AuthoringEditorDocument
             placements,
             CreateExactBaselineHandles(),
             mandatoryBaseFaceTextureId,
-            position.PositionId);
+            position.PositionId,
+            remotePadMobyKind: null,
+            remotePadMobyPositionId: null);
+    }
+
+    /// <summary>
+    /// Creates one schema-4, T66-only fresh-ID65 document. The Moby choice is
+    /// mutually exclusive and its position remains canonical even for None.
+    /// </summary>
+    public static Id65AuthoringEditorDocument CreateRemotePadMobyChoiceExact(
+        Id65RemotePadMobyKind kind,
+        string remotePadMobyPositionId,
+        bool includeOptionalTerrain = true)
+    {
+        _ = Id65RemotePadMobyChoiceCatalog.GetRequiredChoice(kind);
+        string positionId =
+            Id65RemotePadMobyChoiceCatalog.GetRequiredPositionId(remotePadMobyPositionId);
+        Id65AuthoringEditorTerrainIntent[] terrain = includeOptionalTerrain
+            ? [CreateExactTerrainIntent()]
+            : [];
+        Id65AuthoringEditorMobyPlacement[] placements =
+            ResolveRemotePadMobyChoicePlacements(kind, positionId);
+        return new(
+            terrain,
+            CreateExactPrivateTextureSwap(),
+            placements,
+            CreateExactBaselineHandles(),
+            PrivateMandatoryBaseFaceTextureId,
+            t107RemotePadPositionId: null,
+            remotePadMobyKind: kind,
+            remotePadMobyPositionId: positionId);
     }
 
     public static Id65AuthoringEditorDocument Parse(string json)
@@ -318,7 +367,22 @@ internal sealed class Id65AuthoringEditorDocument
                 profileId == ResidentT25DocumentProfileId;
             bool remotePadGrid = schemaVersion == RemotePadGridSchemaVersion &&
                 profileId == RemotePadGridDocumentProfileId;
-            if (remotePadGrid)
+            bool remotePadMobyChoice = schemaVersion == RemotePadMobyChoiceSchemaVersion &&
+                profileId == RemotePadMobyChoiceDocumentProfileId;
+            if (remotePadMobyChoice)
+            {
+                RequireObjectProperties(
+                    root,
+                    "root",
+                    "schemaVersion", "profileId", "mandatoryBaseFaceTextureId",
+                    "remotePadMobyChoice", "labProfileId", "labProfileVersion", "workspaceKey",
+                    "workspaceLayoutVersion", "workspaceLayoutRelativeRoot",
+                    "lockedBaseProfileId", "lockedBaseImageSha256", "lockedRow80Sha256",
+                    "compositeProfileId", "privateTextureWitnessSha256", "mobyBundleSha256",
+                    "terrain", "privateTextureSwap", "mobyPlacements", "baselineHandles",
+                    "contentSha256");
+            }
+            else if (remotePadGrid)
             {
                 RequireObjectProperties(
                     root,
@@ -370,16 +434,20 @@ internal sealed class Id65AuthoringEditorDocument
                 RequireString(root, "privateTextureWitnessSha256", "root");
             string mobyBundleSha256 = RequireString(root, "mobyBundleSha256", "root");
             string contentSha256 = RequireString(root, "contentSha256", "root");
-            int mandatoryBaseFaceTextureId = residentT25 || remotePadGrid
+            int mandatoryBaseFaceTextureId = residentT25 || remotePadGrid || remotePadMobyChoice
                 ? RequireInt32(root, "mandatoryBaseFaceTextureId", "root")
                 : PrivateMandatoryBaseFaceTextureId;
             string? t107RemotePadPositionId = remotePadGrid
                 ? ReadRemotePadT107Placement(root)
                 : null;
-            if ((!legacyPrivateT66 && !residentT25 && !remotePadGrid) ||
+            (Id65RemotePadMobyKind Kind, string PositionId)? remotePadMobySelection =
+                remotePadMobyChoice ? ReadRemotePadMobyChoice(root) : null;
+            if ((!legacyPrivateT66 && !residentT25 && !remotePadGrid && !remotePadMobyChoice) ||
                 (residentT25 && mandatoryBaseFaceTextureId != ResidentMandatoryBaseFaceTextureId) ||
                 (remotePadGrid && mandatoryBaseFaceTextureId is not
                     (ResidentMandatoryBaseFaceTextureId or PrivateMandatoryBaseFaceTextureId)) ||
+                (remotePadMobyChoice &&
+                    mandatoryBaseFaceTextureId != PrivateMandatoryBaseFaceTextureId) ||
                 labProfileId != UnusedLevel65BlankLevelLabProfileRegistry.ProfileId ||
                 labProfileVersion != UnusedLevel65BlankLevelLabProfileRegistry.ProfileVersion ||
                 workspaceKey != UnusedLevel65BlankLevelLabProfileRegistry.Key ||
@@ -422,7 +490,9 @@ internal sealed class Id65AuthoringEditorDocument
                 placements,
                 baselineHandles,
                 mandatoryBaseFaceTextureId,
-                t107RemotePadPositionId);
+                t107RemotePadPositionId,
+                remotePadMobySelection?.Kind,
+                remotePadMobySelection?.PositionId);
             if (!HashEquals(contentSha256, document.ContentSha256))
                 throw new InvalidDataException("The ID65 editor document content SHA-256 is invalid or tampered.");
             if (!utf8Json.SequenceEqual(document._canonicalUtf8))
@@ -567,6 +637,15 @@ internal sealed class Id65AuthoringEditorDocument
             .ToArray();
     }
 
+    private static Id65AuthoringEditorMobyPlacement[] ResolveRemotePadMobyChoicePlacements(
+        Id65RemotePadMobyKind kind,
+        string positionId) =>
+        Id65RemotePadMobyChoiceCatalog.CreateExactPlacements(kind, positionId)
+            .Select(ToEditorPlacement)
+            .OrderBy(item => item.TargetTrueIndex)
+            .ThenBy(item => item.Id, StringComparer.Ordinal)
+            .ToArray();
+
     private static Id65AuthoringEditorMobyPlacement ToEditorPlacement(
         Id65MobyPlacementIntent placement)
     {
@@ -574,6 +653,7 @@ internal sealed class Id65AuthoringEditorDocument
         {
             Id65MobyRowAllocationPolicy.AppendContiguous => AppendContiguousRowPolicy,
             Id65MobyRowAllocationPolicy.ReplaceExact => ReplaceExactRowPolicy,
+            Id65MobyRowAllocationPolicy.ReuseResidentExact => ReuseResidentExactRowPolicy,
             _ => throw new InvalidDataException("The exact ID65 Grass placement row policy changed.")
         };
         string coordinatePolicy = placement.CoordinatePolicy switch
@@ -615,11 +695,39 @@ internal sealed class Id65AuthoringEditorDocument
         if (document.PrivateTextureSwap != expectedPrivate)
             throw new InvalidDataException("The ID65 editor document private T66 binding is unsupported or stale.");
 
-        Id65AuthoringEditorMobyPlacement[] expectedPlacements = document.UsesRemotePadT107Grid
-            ? ResolveRemotePadGridPlacements(
-                document._mobyPlacements.Select(item => item.Id),
-                document.T107RemotePadPositionId!)
-            : ResolveExactPlacements(document._mobyPlacements.Select(item => item.Id));
+        if (document.UsesRemotePadT107Grid && document.UsesRemotePadMobyChoice)
+        {
+            throw new InvalidDataException(
+                "An ID65 editor document cannot combine schema-3 and schema-4 placement semantics.");
+        }
+        if (document.UsesRemotePadMobyChoice)
+        {
+            if (document.T107RemotePadPositionId is not null ||
+                document.RemotePadMobyPositionId is null ||
+                document.MandatoryBaseFaceTextureId != PrivateMandatoryBaseFaceTextureId)
+            {
+                throw new InvalidDataException(
+                    "Schema-4 ID65 Moby-choice documents require exactly private T66 and one retained shared-grid position.");
+            }
+            _ = Id65RemotePadMobyChoiceCatalog.GetRequiredChoice(document.RemotePadMobyKind!.Value);
+            _ = Id65RemotePadMobyChoiceCatalog.GetRequiredPositionId(
+                document.RemotePadMobyPositionId);
+        }
+        else if (document.RemotePadMobyPositionId is not null)
+        {
+            throw new InvalidDataException(
+                "A schema-1/2/3 ID65 editor document cannot carry a schema-4 Moby position.");
+        }
+
+        Id65AuthoringEditorMobyPlacement[] expectedPlacements = document.UsesRemotePadMobyChoice
+            ? ResolveRemotePadMobyChoicePlacements(
+                document.RemotePadMobyKind!.Value,
+                document.RemotePadMobyPositionId!)
+            : document.UsesRemotePadT107Grid
+                ? ResolveRemotePadGridPlacements(
+                    document._mobyPlacements.Select(item => item.Id),
+                    document.T107RemotePadPositionId!)
+                : ResolveExactPlacements(document._mobyPlacements.Select(item => item.Id));
         if (document._mobyPlacements.Count != expectedPlacements.Length ||
             !document._mobyPlacements.SequenceEqual(expectedPlacements))
         {
@@ -667,7 +775,7 @@ internal sealed class Id65AuthoringEditorDocument
             json.WriteStartObject();
             json.WriteNumber("schemaVersion", document.SchemaVersion);
             json.WriteString("profileId", document.ProfileId);
-            if (document.UsesRemotePadT107Grid ||
+            if (document.UsesStaticRemotePadAuthoring ||
                 document.MandatoryBaseFaceTextureId == ResidentMandatoryBaseFaceTextureId)
             {
                 json.WriteNumber(
@@ -681,6 +789,19 @@ internal sealed class Id65AuthoringEditorDocument
                 json.WriteNumber("schemaVersion", Id65RemotePadGrassT107Catalog.SchemaVersion);
                 json.WriteString("profileId", Id65RemotePadGrassT107Catalog.ProfileId);
                 json.WriteString("positionId", document.T107RemotePadPositionId);
+                json.WriteEndObject();
+            }
+            if (document.UsesRemotePadMobyChoice)
+            {
+                json.WritePropertyName("remotePadMobyChoice");
+                json.WriteStartObject();
+                json.WriteNumber("schemaVersion", Id65RemotePadMobyChoiceCatalog.SchemaVersion);
+                json.WriteString("profileId", Id65RemotePadMobyChoiceCatalog.ProfileId);
+                json.WriteString(
+                    "kind",
+                    Id65RemotePadMobyChoiceCatalog.GetKindId(
+                        document.RemotePadMobyKind!.Value));
+                json.WriteString("positionId", document.RemotePadMobyPositionId);
                 json.WriteEndObject();
             }
             json.WriteString(
@@ -882,6 +1003,33 @@ internal sealed class Id65AuthoringEditorDocument
                 "The ID65 remote-pad T107 placement schema/profile is unsupported or stale.");
         }
         return Id65RemotePadGrassT107Catalog.GetRequiredPosition(positionId).PositionId;
+    }
+
+    private static (Id65RemotePadMobyKind Kind, string PositionId)
+        ReadRemotePadMobyChoice(JsonElement root)
+    {
+        JsonElement value = RequireProperty(root, "remotePadMobyChoice", "root");
+        const string context = "remotePadMobyChoice";
+        RequireObjectProperties(
+            value,
+            context,
+            "schemaVersion",
+            "profileId",
+            "kind",
+            "positionId");
+        int schemaVersion = RequireInt32(value, "schemaVersion", context);
+        string profileId = RequireString(value, "profileId", context);
+        if (schemaVersion != Id65RemotePadMobyChoiceCatalog.SchemaVersion ||
+            profileId != Id65RemotePadMobyChoiceCatalog.ProfileId)
+        {
+            throw new InvalidDataException(
+                "The ID65 remote-pad Moby-choice schema/profile is unsupported or stale.");
+        }
+        Id65RemotePadMobyKind kind = Id65RemotePadMobyChoiceCatalog.ParseKindId(
+            RequireString(value, "kind", context));
+        string positionId = Id65RemotePadMobyChoiceCatalog.GetRequiredPositionId(
+            RequireString(value, "positionId", context));
+        return (kind, positionId);
     }
 
     private static Id65AuthoringEditorTerrainIntent[] ReadTerrain(JsonElement root)
@@ -1252,10 +1400,10 @@ internal static class Id65AuthoringEditorDocumentProjector
         // path cannot bypass the strict serialized contract.
         Id65AuthoringEditorDocument document =
             Id65AuthoringEditorDocument.Parse(request.Document.SerializeUtf8());
-        if (document.UsesRemotePadT107Grid)
+        if (document.UsesStaticRemotePadAuthoring)
         {
             throw new InvalidDataException(
-                "Schema-3 remote-pad Grass T107 documents are canonical offline intent only; exact composite projection is not implemented.");
+                "Schema-3/4 remote-pad authoring documents are canonical offline intent only; exact composite projection is not implemented.");
         }
         if (!HashEquals(
                 request.PrivateTextureWitness.CanonicalSha256,

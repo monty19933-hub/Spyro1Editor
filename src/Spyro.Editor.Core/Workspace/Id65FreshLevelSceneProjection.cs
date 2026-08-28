@@ -38,7 +38,7 @@ public sealed record Id65FreshLevelProtectedSpawn(
 }
 
 /// <summary>
-/// Immutable presentation-only view of the one schema-3 remote-pad Grass
+/// Immutable presentation-only view of one schema-3/4 remote-pad Moby
 /// placement. It is intentionally not an editable scene object, native
 /// persistence instruction, runtime observation, candidate, or export grant.
 /// </summary>
@@ -57,6 +57,8 @@ public sealed class Id65FreshLevelMobyPresentation
                 "The fresh-level Moby presentation requires exact document hashes.");
         }
 
+        MobyKind = Id65RemotePadMobyKind.GrassT107;
+        MobyTypeName = "Grass";
         PlacementId = Id65RemotePadGrassT107Catalog.PlacementId;
         PositionId = position.PositionId;
         PositionLabel = position.Label;
@@ -69,6 +71,7 @@ public sealed class Id65FreshLevelMobyPresentation
         TargetTrueIndex = Id65RemotePadGrassT107Catalog.TargetTrueIndex;
         ActorId = Id65RemotePadGrassT107Catalog.ActorId;
         YawByte = Id65RemotePadGrassT107Catalog.YawByte;
+        ExactYawByte = Id65RemotePadGrassT107Catalog.YawByte;
         SupportHandle = Id65RemotePadGrassT107Catalog.SupportHandle;
         SupportCollisionTrueIndex = Id65RemotePadGrassT107Catalog.SupportCollisionTrueIndex;
         RowSha256 = position.RowSha256;
@@ -77,6 +80,44 @@ public sealed class Id65FreshLevelMobyPresentation
         CanonicalSha256 = Hash(BuildCanonicalPayload());
     }
 
+    internal Id65FreshLevelMobyPresentation(
+        Id65RemotePadRedGemT21Position position,
+        string documentCanonicalSha256,
+        string documentContentSha256)
+    {
+        ArgumentNullException.ThrowIfNull(position);
+        if (!IsCanonicalSha256(documentCanonicalSha256) ||
+            !IsCanonicalSha256(documentContentSha256))
+        {
+            throw new InvalidDataException(
+                "The fresh-level Moby presentation requires exact document hashes.");
+        }
+
+        MobyKind = Id65RemotePadMobyKind.RedGemT21;
+        MobyTypeName = Id65RemotePadRedGemT21Catalog.MobyTypeName;
+        PlacementId = Id65RemotePadRedGemT21Catalog.PlacementId;
+        PositionId = position.PositionId;
+        PositionLabel = position.Label;
+        EditorX = position.EditorX;
+        EditorY = position.EditorY;
+        EditorZ = position.EditorZ;
+        RawX = position.RawX;
+        RawY = position.RawY;
+        RawZ = position.RawZ;
+        TargetTrueIndex = Id65RemotePadRedGemT21Catalog.TargetTrueIndex;
+        ActorId = Id65RemotePadRedGemT21Catalog.ActorClass;
+        YawByte = 0;
+        ExactYawByte = null;
+        SupportHandle = Id65RemotePadRedGemT21Catalog.SupportHandle;
+        SupportCollisionTrueIndex = Id65RemotePadRedGemT21Catalog.SupportCollisionTrueIndex;
+        RowSha256 = position.OutputRowSha256;
+        DocumentCanonicalSha256 = documentCanonicalSha256;
+        DocumentContentSha256 = documentContentSha256;
+        CanonicalSha256 = Hash(BuildCanonicalPayload());
+    }
+
+    public Id65RemotePadMobyKind MobyKind { get; }
+    public string MobyTypeName { get; }
     public string PlacementId { get; }
     public string PositionId { get; }
     public string PositionLabel { get; }
@@ -89,6 +130,7 @@ public sealed class Id65FreshLevelMobyPresentation
     public int TargetTrueIndex { get; }
     public ushort ActorId { get; }
     public byte YawByte { get; }
+    public byte? ExactYawByte { get; }
     public string SupportHandle { get; }
     public int SupportCollisionTrueIndex { get; }
     public string RowSha256 { get; }
@@ -104,8 +146,8 @@ public sealed class Id65FreshLevelMobyPresentation
     public bool AuthorizesCreateBin => false;
     public bool AuthorizesReleasePromotion => false;
 
-    private string BuildCanonicalPayload() =>
-        "format=id65-fresh-level-visible-moby-presentation-v1\n" +
+    private string BuildCanonicalPayload() => MobyKind == Id65RemotePadMobyKind.GrassT107
+        ? "format=id65-fresh-level-visible-moby-presentation-v1\n" +
         $"placementId={PlacementId}\n" +
         $"positionId={PositionId}\n" +
         $"positionLabel={PositionLabel}\n" +
@@ -114,6 +156,24 @@ public sealed class Id65FreshLevelMobyPresentation
         $"targetTrueIndex={TargetTrueIndex}\n" +
         $"actorId={ActorId}\n" +
         $"yawByte={YawByte}\n" +
+        $"supportHandle={SupportHandle}\n" +
+        $"supportCollisionTrueIndex={SupportCollisionTrueIndex}\n" +
+        $"rowSha256={RowSha256}\n" +
+        $"documentCanonicalSha256={DocumentCanonicalSha256}\n" +
+        $"documentContentSha256={DocumentContentSha256}\n" +
+        "authority=presentation-only|editable=false|nativePersistence=false" +
+        "|runtimeObserved=false|runtimeCandidate=false|createBin=false|releasePromotion=false\n"
+        : "format=id65-fresh-level-visible-moby-presentation-v2\n" +
+        $"mobyKind={Id65RemotePadMobyChoiceCatalog.GetKindId(MobyKind)}\n" +
+        $"mobyTypeName={MobyTypeName}\n" +
+        $"placementId={PlacementId}\n" +
+        $"positionId={PositionId}\n" +
+        $"positionLabel={PositionLabel}\n" +
+        $"editor={EditorX},{EditorY},{EditorZ}\n" +
+        $"raw={RawX},{RawY},{RawZ}\n" +
+        $"targetTrueIndex={TargetTrueIndex}\n" +
+        $"actorClass={ActorId}\n" +
+        "yawByte=null\n" +
         $"supportHandle={SupportHandle}\n" +
         $"supportCollisionTrueIndex={SupportCollisionTrueIndex}\n" +
         $"rowSha256={RowSha256}\n" +
@@ -148,7 +208,8 @@ public sealed class Id65FreshLevelSceneProjection
         string documentCanonicalSha256,
         string documentContentSha256,
         bool structuralTerrainPresent,
-        IEnumerable<Id65FreshLevelMobyPresentation> visibleMobyPresentations)
+        IEnumerable<Id65FreshLevelMobyPresentation> visibleMobyPresentations,
+        Id65RemotePadMobyKind? remotePadMobyKind = null)
     {
         ArgumentNullException.ThrowIfNull(visibleMobyPresentations);
         Id65FreshLevelMobyPresentation[] presentations =
@@ -159,7 +220,11 @@ public sealed class Id65FreshLevelSceneProjection
                 presentations.Length ||
             presentations.Any(item =>
                 item.DocumentCanonicalSha256 != documentCanonicalSha256 ||
-                item.DocumentContentSha256 != documentContentSha256))
+                item.DocumentContentSha256 != documentContentSha256) ||
+            (remotePadMobyKind == Id65RemotePadMobyKind.None && presentations.Length != 0) ||
+            ((remotePadMobyKind == Id65RemotePadMobyKind.GrassT107 ||
+                remotePadMobyKind == Id65RemotePadMobyKind.RedGemT21) &&
+                (presentations.Length != 1 || presentations[0].MobyKind != remotePadMobyKind)))
         {
             throw new InvalidDataException(
                 "The fresh-level scene supports zero or one unique, document-bound visible Moby presentation.");
@@ -172,6 +237,7 @@ public sealed class Id65FreshLevelSceneProjection
         DocumentCanonicalSha256 = documentCanonicalSha256;
         DocumentContentSha256 = documentContentSha256;
         StructuralTerrainPresent = structuralTerrainPresent;
+        RemotePadMobyKind = remotePadMobyKind;
         _visibleMobyPresentations = Array.AsReadOnly(presentations);
         _visibleMobyTrueIndexes = Array.AsReadOnly(presentations
             .Select(item => item.TargetTrueIndex)
@@ -191,6 +257,7 @@ public sealed class Id65FreshLevelSceneProjection
     public string DocumentCanonicalSha256 { get; }
     public string DocumentContentSha256 { get; }
     public bool StructuralTerrainPresent { get; }
+    public Id65RemotePadMobyKind? RemotePadMobyKind { get; }
     public bool CanonicalDocumentBound => IsCanonicalSha256(DocumentCanonicalSha256) &&
         IsCanonicalSha256(DocumentContentSha256);
     public IReadOnlyList<Id65FreshLevelMobyPresentation> VisibleMobyPresentations =>
@@ -431,10 +498,18 @@ public static class Id65FreshLevelSceneProjector
         }
         ArgumentNullException.ThrowIfNull(document);
         bool remotePadGrid = document.UsesRemotePadT107Grid;
+        bool remotePadMobyChoice = document.UsesRemotePadMobyChoice;
         bool includeStructuralTerrain;
         int mandatoryBaseFaceTextureId;
         Id65FreshLevelMobyPresentation[] visibleMobyPresentations;
-        if (remotePadGrid)
+        if (remotePadMobyChoice)
+        {
+            visibleMobyPresentations = BuildRemotePadMobyChoicePresentations(
+                document,
+                out includeStructuralTerrain,
+                out mandatoryBaseFaceTextureId);
+        }
+        else if (remotePadGrid)
         {
             visibleMobyPresentations = BuildRemotePadGridMobyPresentations(
                 document,
@@ -465,7 +540,15 @@ public static class Id65FreshLevelSceneProjector
             : (includeStructuralTerrain
                 ? ExpectedResidentT25StructuralGraphCanonicalSha256
                 : ExpectedResidentT25BaseGraphCanonicalSha256);
-        string identity = remotePadGrid
+        string identity = remotePadMobyChoice
+            ? BindRemotePadMobyChoiceDocumentIdentity(
+                graphCanonicalSha256,
+                document.DocumentCanonicalSha256,
+                document.DocumentContentSha256,
+                includeStructuralTerrain,
+                document.RemotePadMobyKind!.Value,
+                visibleMobyPresentations)
+            : remotePadGrid
             ? BindRemotePadGridDocumentIdentity(
                 graphCanonicalSha256,
                 document.DocumentCanonicalSha256,
@@ -485,7 +568,72 @@ public static class Id65FreshLevelSceneProjector
             document.DocumentCanonicalSha256,
             document.DocumentContentSha256,
             includeStructuralTerrain,
-            visibleMobyPresentations);
+            visibleMobyPresentations,
+            document.RemotePadMobyKind);
+    }
+
+    private static Id65FreshLevelMobyPresentation[]
+        BuildRemotePadMobyChoicePresentations(
+            Id65AuthoringEditorDocumentReadModel document,
+            out bool includeStructuralTerrain,
+            out int mandatoryBaseFaceTextureId)
+    {
+        Id65AuthoringEditorControlState state =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(document);
+        includeStructuralTerrain = state.IncludeStructuralTerrain;
+        mandatoryBaseFaceTextureId = state.MandatoryBaseFaceTextureId;
+        if (!state.UsesRemotePadMobyChoice ||
+            !state.RemotePadMobyKind.HasValue ||
+            state.RemotePadMobyPositionId is null ||
+            document.RemotePadMobyPosition is null ||
+            mandatoryBaseFaceTextureId != Id65AuthoringEditorDocument.PrivateMandatoryBaseFaceTextureId)
+        {
+            throw new InvalidDataException(
+                "The schema-4 ID65 document cannot enter fresh-scene presentation.");
+        }
+
+        Id65RemotePadGrassT107Position sharedPosition =
+            Id65RemotePadGrassT107Catalog.GetRequiredPosition(state.RemotePadMobyPositionId);
+        RequireExactRemotePadMobyPosition(
+            document.RemotePadMobyPosition,
+            state.RemotePadMobyKind.Value,
+            sharedPosition);
+
+        if (state.RemotePadMobyKind == Id65RemotePadMobyKind.None)
+        {
+            if (document.MobyPlacements.Count != 0)
+                throw new InvalidDataException("Schema-4 None must project no visible Moby.");
+            return [];
+        }
+        if (document.MobyPlacements.Count != 1)
+        {
+            throw new InvalidDataException(
+                "Schema-4 Grass or Red Gem must project exactly one visible Moby.");
+        }
+
+        Id65AuthoringEditorMobyPlacementReadModel placement = document.MobyPlacements[0];
+        if (state.RemotePadMobyKind == Id65RemotePadMobyKind.GrassT107)
+        {
+            RequireExactRemotePadPlacement(placement, sharedPosition);
+            return
+            [
+                new Id65FreshLevelMobyPresentation(
+                    sharedPosition,
+                    document.DocumentCanonicalSha256,
+                    document.DocumentContentSha256)
+            ];
+        }
+
+        Id65RemotePadRedGemT21Position redGemPosition =
+            Id65RemotePadRedGemT21Catalog.GetRequiredPosition(sharedPosition.PositionId);
+        RequireExactRemotePadRedGemPlacement(placement, redGemPosition);
+        return
+        [
+            new Id65FreshLevelMobyPresentation(
+                redGemPosition,
+                document.DocumentCanonicalSha256,
+                document.DocumentContentSha256)
+        ];
     }
 
     private static Id65FreshLevelMobyPresentation[] BuildRemotePadGridMobyPresentations(
@@ -633,6 +781,47 @@ public static class Id65FreshLevelSceneProjector
         {
             throw new InvalidDataException(
                 "The schema-3 ID65 T107 placement does not match its selected catalog position.");
+        }
+    }
+
+    private static void RequireExactRemotePadMobyPosition(
+        Id65RemotePadMobyPositionReadModel actual,
+        Id65RemotePadMobyKind kind,
+        Id65RemotePadGrassT107Position expected)
+    {
+        string? expectedRowSha256 = Id65RemotePadMobyChoiceCatalog
+            .GetSelectedExactRowSha256(kind, expected.PositionId);
+        if (actual.Ordinal != expected.Ordinal || actual.PositionId != expected.PositionId ||
+            actual.Label != expected.Label || actual.EditorX != expected.EditorX ||
+            actual.EditorY != expected.EditorY || actual.EditorZ != expected.EditorZ ||
+            actual.RawX != expected.RawX || actual.RawY != expected.RawY ||
+            actual.RawZ != expected.RawZ ||
+            actual.SelectedExactRowSha256 != expectedRowSha256 ||
+            actual.IsDefault != expected.IsDefault)
+        {
+            throw new InvalidDataException(
+                "The schema-4 ID65 shared-grid readback does not match its exact Moby choice.");
+        }
+    }
+
+    private static void RequireExactRemotePadRedGemPlacement(
+        Id65AuthoringEditorMobyPlacementReadModel actual,
+        Id65RemotePadRedGemT21Position position)
+    {
+        if (actual.Id != Id65RemotePadRedGemT21Catalog.PlacementId ||
+            actual.AtomicGroupId != Id65RemotePadRedGemT21Catalog.AtomicGroupId ||
+            actual.BundleId != Id65RemotePadRedGemT21Catalog.BundleId ||
+            actual.RowTemplateId != Id65RemotePadRedGemT21Catalog.RowTemplateId ||
+            actual.RowPolicy != Id65AuthoringEditorDocument.ReuseResidentExactRowPolicy ||
+            actual.TargetTrueIndex != Id65RemotePadRedGemT21Catalog.TargetTrueIndex ||
+            actual.CoordinatePolicy != Id65AuthoringEditorDocument.AuthorExactCoordinatePolicy ||
+            actual.CoordinatesOrDelta is not { } coordinates ||
+            coordinates.X != position.RawX || coordinates.Y != position.RawY ||
+            coordinates.Z != position.RawZ || actual.YawByte.HasValue ||
+            actual.SupportHandle != Id65RemotePadRedGemT21Catalog.SupportHandle)
+        {
+            throw new InvalidDataException(
+                "The schema-4 ID65 Red Gem placement does not match its selected exact row.");
         }
     }
 
@@ -1275,6 +1464,37 @@ public static class Id65FreshLevelSceneProjector
         {
             canonical.Append("visibleMoby=").Append(presentation.CanonicalSha256).Append('\n');
         }
+        canonical.Append(
+            "authority=presentation-only|writesWorkspace=false|writesLockedBase=false" +
+            "|editable=false|nativePersistence=false|runtimeObserved=false" +
+            "|createBin=false|runtimeCandidate=false|releasePromotion=false\n");
+        return Hash(canonical.ToString());
+    }
+
+    private static string BindRemotePadMobyChoiceDocumentIdentity(
+        string graphCanonicalSha256,
+        string documentCanonicalSha256,
+        string documentContentSha256,
+        bool structuralTerrainPresent,
+        Id65RemotePadMobyKind kind,
+        IReadOnlyList<Id65FreshLevelMobyPresentation> visibleMobyPresentations)
+    {
+        StringBuilder canonical = new(
+            "format=id65-fresh-level-authoring-scene-document-binding-remote-pad-moby-choice-v3\n");
+        canonical.Append("profile=").Append(ProfileId).Append('\n');
+        canonical.Append("schema=").Append(SchemaVersion).Append('\n');
+        canonical.Append("choiceCatalogSha256=")
+            .Append(Id65RemotePadMobyChoiceCatalog.CanonicalSha256).Append('\n');
+        canonical.Append("mobyKind=")
+            .Append(Id65RemotePadMobyChoiceCatalog.GetKindId(kind)).Append('\n');
+        canonical.Append("graphCanonicalSha256=").Append(graphCanonicalSha256).Append('\n');
+        canonical.Append("documentCanonicalSha256=").Append(documentCanonicalSha256).Append('\n');
+        canonical.Append("documentContentSha256=").Append(documentContentSha256).Append('\n');
+        canonical.Append("structuralTerrainPresent=")
+            .Append(structuralTerrainPresent ? "true" : "false").Append('\n');
+        canonical.Append("visibleMobyCount=").Append(visibleMobyPresentations.Count).Append('\n');
+        foreach (Id65FreshLevelMobyPresentation presentation in visibleMobyPresentations)
+            canonical.Append("visibleMoby=").Append(presentation.CanonicalSha256).Append('\n');
         canonical.Append(
             "authority=presentation-only|writesWorkspace=false|writesLockedBase=false" +
             "|editable=false|nativePersistence=false|runtimeObserved=false" +

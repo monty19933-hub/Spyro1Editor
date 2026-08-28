@@ -29,15 +29,14 @@ internal sealed record Id65AuthoringEditorDocumentStoreResult(
     string CompositeDeterministicPlanSha256)
 {
     public string DocumentCanonicalSha256 => Document.CanonicalSha256;
-    public int EnvelopeSchemaVersion => Document.UsesRemotePadT107Grid
-        ? Id65AuthoringEditorDocumentStore.RemotePadGridEnvelopeSchemaVersion
-        : Id65AuthoringEditorDocumentStore.EnvelopeSchemaVersion;
+    public int EnvelopeSchemaVersion =>
+        Id65AuthoringEditorDocumentStore.GetEnvelopeSchemaVersionForReadback(Document);
     public string StaticAuthoringProfileId { get; init; } = string.Empty;
     public string StaticAuthoringCatalogSha256 { get; init; } = string.Empty;
     public string StaticAuthoringSceneGraphSha256 { get; init; } = string.Empty;
     public string StaticAuthoringProjectionSha256 { get; init; } = string.Empty;
-    public bool HasCompiledCompositeProjection => !Document.UsesRemotePadT107Grid;
-    public bool HasStaticAuthoringProjection => Document.UsesRemotePadT107Grid;
+    public bool HasCompiledCompositeProjection => !Document.UsesStaticRemotePadAuthoring;
+    public bool HasStaticAuthoringProjection => Document.UsesStaticRemotePadAuthoring;
     public bool ContainsCompositeAfterimage => false;
     public bool ContainsDiscImageBytes => false;
     public bool ContainsCueBytes => false;
@@ -69,15 +68,14 @@ internal sealed record Id65AuthoringEditorDocumentEnvelopeIdentity(
     string CompositeOutputRow80Sha256,
     string CompositeDeterministicPlanSha256)
 {
-    public int EnvelopeSchemaVersion => Document.UsesRemotePadT107Grid
-        ? Id65AuthoringEditorDocumentStore.RemotePadGridEnvelopeSchemaVersion
-        : Id65AuthoringEditorDocumentStore.EnvelopeSchemaVersion;
+    public int EnvelopeSchemaVersion =>
+        Id65AuthoringEditorDocumentStore.GetEnvelopeSchemaVersionForReadback(Document);
     public string StaticAuthoringProfileId { get; init; } = string.Empty;
     public string StaticAuthoringCatalogSha256 { get; init; } = string.Empty;
     public string StaticAuthoringSceneGraphSha256 { get; init; } = string.Empty;
     public string StaticAuthoringProjectionSha256 { get; init; } = string.Empty;
-    public bool HasCompiledCompositeProjection => !Document.UsesRemotePadT107Grid;
-    public bool HasStaticAuthoringProjection => Document.UsesRemotePadT107Grid;
+    public bool HasCompiledCompositeProjection => !Document.UsesStaticRemotePadAuthoring;
+    public bool HasStaticAuthoringProjection => Document.UsesStaticRemotePadAuthoring;
 }
 
 /// <summary>
@@ -98,6 +96,11 @@ internal static class Id65AuthoringEditorDocumentStore
         "id65-authoring-editor-document-projector-v2";
     public const string RemotePadGridStaticAuthoringProfileId =
         "id65-authoring-editor-document-remote-pad-static-projection-v1";
+    public const int RemotePadMobyChoiceEnvelopeSchemaVersion = 3;
+    public const string RemotePadMobyChoiceProjectionContractId =
+        "id65-authoring-editor-document-projector-v3";
+    public const string RemotePadMobyChoiceStaticAuthoringProfileId =
+        "id65-authoring-editor-document-remote-pad-moby-choice-static-projection-v2";
     public const string FileName =
         "unusedlevel65blank-authoring-document-v1.json";
     public const int MaximumEnvelopeByteCount = 256 * 1024;
@@ -150,6 +153,9 @@ internal static class Id65AuthoringEditorDocumentStore
         "envelopeContentSha256",
         "document"
     ];
+
+    private static readonly string[] RemotePadMobyChoiceEnvelopePropertyNames =
+        RemotePadGridEnvelopePropertyNames.ToArray();
 
     public static string GetPath(UnusedLevel65BlankLevelLabWorkspacePaths paths)
     {
@@ -228,6 +234,26 @@ internal static class Id65AuthoringEditorDocumentStore
             DocumentTransitionPolicy.ExplicitLegacyToRemotePadGrid,
             cancellationToken);
 
+    internal static Task<TPublishedResult>
+        MigrateRemotePadGridToMobyChoicePreparedAsync<TPublishedResult>(
+            UnusedLevel65BlankLevelLabWorkspacePaths paths,
+            UnusedLevel65BlankLevelLabManifest expectedLabManifest,
+            Id65AuthoringEditorDocument document,
+            Id65AuthoringEditorDocumentProjectionInputs projectionInputs,
+            Func<Id65AuthoringEditorDocumentStoreResult, TPublishedResult>
+                preparePublishedResult,
+            string expectedPriorEnvelopeCanonicalSha256,
+            CancellationToken cancellationToken = default) =>
+        SavePreparedCoreAsync(
+            paths,
+            expectedLabManifest,
+            document,
+            projectionInputs,
+            preparePublishedResult,
+            expectedPriorEnvelopeCanonicalSha256,
+            DocumentTransitionPolicy.ExplicitRemotePadGridToMobyChoice,
+            cancellationToken);
+
     private static async Task<TPublishedResult> SavePreparedCoreAsync<TPublishedResult>(
         UnusedLevel65BlankLevelLabWorkspacePaths paths,
         UnusedLevel65BlankLevelLabManifest expectedLabManifest,
@@ -246,7 +272,9 @@ internal static class Id65AuthoringEditorDocumentStore
         ArgumentNullException.ThrowIfNull(preparePublishedResult);
         if (!Enum.IsDefined(transitionPolicy))
             throw new ArgumentOutOfRangeException(nameof(transitionPolicy));
-        if (transitionPolicy == DocumentTransitionPolicy.ExplicitLegacyToRemotePadGrid &&
+        if ((transitionPolicy is
+                DocumentTransitionPolicy.ExplicitLegacyToRemotePadGrid or
+                DocumentTransitionPolicy.ExplicitRemotePadGridToMobyChoice) &&
             string.IsNullOrWhiteSpace(expectedPriorEnvelopeCanonicalSha256))
         {
             throw new InvalidDataException(
@@ -405,7 +433,8 @@ internal static class Id65AuthoringEditorDocumentStore
             cancellationToken);
         Id65AuthoringEditorDocumentEnvelopeIdentity identity =
             ParseAndValidateEnvelopeIdentity(bytes, expectedLabManifest);
-        bool requiresLegacyNativeValidation = !identity.Document.UsesRemotePadT107Grid;
+        bool requiresLegacyNativeValidation =
+            !identity.Document.UsesStaticRemotePadAuthoring;
         if (requiresLegacyNativeValidation)
         {
             ValidateNativeProjectionInputs(projectionInputs);
@@ -499,7 +528,8 @@ internal static class Id65AuthoringEditorDocumentStore
             ParseAndValidateEnvelopeIdentity(
                 firstBytes,
                 expectedLabManifest);
-        bool requiresLegacyNativeValidation = !first.Document.UsesRemotePadT107Grid;
+        bool requiresLegacyNativeValidation =
+            !first.Document.UsesStaticRemotePadAuthoring;
         await RequireExpectedWorkspaceAsync(
             paths,
             expectedLabManifest,
@@ -619,41 +649,80 @@ internal static class Id65AuthoringEditorDocumentStore
         Id65AuthoringEditorDocument desired,
         DocumentTransitionPolicy transitionPolicy)
     {
-        bool priorRemote = prior.UsesRemotePadT107Grid;
-        bool desiredRemote = desired.UsesRemotePadT107Grid;
+        DocumentSemanticFamily priorFamily = GetSemanticFamily(prior);
+        DocumentSemanticFamily desiredFamily = GetSemanticFamily(desired);
         if (transitionPolicy == DocumentTransitionPolicy.SameSemanticFamilyOnly)
         {
-            if (priorRemote != desiredRemote)
+            if (priorFamily != desiredFamily)
             {
                 throw new InvalidDataException(
-                    "Changing between legacy native-apron and schema-3 remote-pad ID65 placement semantics requires the explicit migration API.");
+                    "Changing ID65 document semantic families requires the matching explicit migration API.");
             }
             return;
         }
 
-        if (transitionPolicy != DocumentTransitionPolicy.ExplicitLegacyToRemotePadGrid ||
-            priorRemote || !desiredRemote)
+        if (transitionPolicy == DocumentTransitionPolicy.ExplicitLegacyToRemotePadGrid)
         {
-            throw new InvalidDataException(
-                "The explicit ID65 document migration supports only legacy native-apron to schema-3 remote-pad semantics.");
+            if (priorFamily != DocumentSemanticFamily.LegacyNativeApron ||
+                desiredFamily != DocumentSemanticFamily.RemotePadGrid)
+            {
+                throw new InvalidDataException(
+                    "The explicit ID65 document migration supports only legacy native-apron to schema-3 remote-pad semantics.");
+            }
+
+            int[] priorTargets = prior.MobyPlacements
+                .Select(placement => placement.TargetTrueIndex)
+                .Order()
+                .ToArray();
+            int[] desiredTargets = desired.MobyPlacements
+                .Select(placement => placement.TargetTrueIndex)
+                .Order()
+                .ToArray();
+            if (prior.Terrain.Count != desired.Terrain.Count ||
+                prior.MandatoryBaseFaceTextureId != desired.MandatoryBaseFaceTextureId ||
+                !priorTargets.SequenceEqual(desiredTargets))
+            {
+                throw new InvalidDataException(
+                    "The explicit ID65 remote-pad migration must preserve terrain, T88/T107 inclusion, and mandatory texture selection.");
+            }
+            return;
         }
 
-        int[] priorTargets = prior.MobyPlacements
-            .Select(placement => placement.TargetTrueIndex)
-            .Order()
-            .ToArray();
-        int[] desiredTargets = desired.MobyPlacements
-            .Select(placement => placement.TargetTrueIndex)
-            .Order()
-            .ToArray();
-        if (prior.Terrain.Count != desired.Terrain.Count ||
-            prior.MandatoryBaseFaceTextureId != desired.MandatoryBaseFaceTextureId ||
-            !priorTargets.SequenceEqual(desiredTargets))
+        if (transitionPolicy !=
+                DocumentTransitionPolicy.ExplicitRemotePadGridToMobyChoice ||
+            priorFamily != DocumentSemanticFamily.RemotePadGrid ||
+            desiredFamily != DocumentSemanticFamily.RemotePadMobyChoice ||
+            prior.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorDocument.PrivateMandatoryBaseFaceTextureId ||
+            desired.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorDocument.PrivateMandatoryBaseFaceTextureId ||
+            prior.Terrain.Count != desired.Terrain.Count ||
+            prior.MobyPlacements.Any(item => item.TargetTrueIndex == 88) ||
+            prior.T107RemotePadPositionId != desired.RemotePadMobyPositionId)
         {
             throw new InvalidDataException(
-                "The explicit ID65 remote-pad migration must preserve terrain, T88/T107 inclusion, and mandatory texture selection.");
+                "The explicit schema-3-to-4 migration requires T66, T88 off, and exact terrain/position preservation.");
+        }
+        bool priorGrass = prior.MobyPlacements.Any(item =>
+            item.Id == Id65RemotePadGrassT107Catalog.PlacementId);
+        Id65RemotePadMobyKind expectedKind = priorGrass
+            ? Id65RemotePadMobyKind.GrassT107
+            : Id65RemotePadMobyKind.None;
+        if (prior.MobyPlacements.Count != (priorGrass ? 1 : 0) ||
+            desired.RemotePadMobyKind != expectedKind)
+        {
+            throw new InvalidDataException(
+                "The explicit schema-3-to-4 migration must map omitted T107 to None and present T107 to Grass.");
         }
     }
+
+    private static DocumentSemanticFamily GetSemanticFamily(
+        Id65AuthoringEditorDocument document) =>
+        document.UsesRemotePadMobyChoice
+            ? DocumentSemanticFamily.RemotePadMobyChoice
+            : document.UsesRemotePadT107Grid
+                ? DocumentSemanticFamily.RemotePadGrid
+                : DocumentSemanticFamily.LegacyNativeApron;
 
     private static void RecoverOwnedTemporaryResidue(
         string directory,
@@ -851,7 +920,7 @@ internal static class Id65AuthoringEditorDocumentStore
     private static bool RequiresLegacyNativeValidation(
         Id65AuthoringEditorDocument document,
         DocumentTransitionPolicy transitionPolicy) =>
-        !document.UsesRemotePadT107Grid ||
+        !document.UsesStaticRemotePadAuthoring ||
         transitionPolicy == DocumentTransitionPolicy.ExplicitLegacyToRemotePadGrid;
 
     private static void ValidateNativeProjectionInputs(
@@ -867,6 +936,8 @@ internal static class Id65AuthoringEditorDocumentStore
         Id65AuthoringEditorDocument document,
         Id65AuthoringEditorDocumentProjectionInputs inputs)
     {
+        if (document.UsesRemotePadMobyChoice)
+            return CaptureRemotePadMobyChoiceStaticAuthoringIdentity(document);
         if (document.UsesRemotePadT107Grid)
             return CaptureRemotePadStaticAuthoringIdentity(document);
 
@@ -1037,6 +1108,131 @@ internal static class Id65AuthoringEditorDocumentStore
         return buffer.ToArray();
     }
 
+    private static ProjectionIdentity
+        CaptureRemotePadMobyChoiceStaticAuthoringIdentity(
+            Id65AuthoringEditorDocument document)
+    {
+        if (!document.UsesRemotePadMobyChoice ||
+            document.SchemaVersion !=
+                Id65AuthoringEditorDocument.RemotePadMobyChoiceSchemaVersion ||
+            document.ProfileId !=
+                Id65AuthoringEditorDocument.RemotePadMobyChoiceDocumentProfileId ||
+            !document.RemotePadMobyKind.HasValue ||
+            document.RemotePadMobyPositionId is not string positionId ||
+            document.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorDocument.PrivateMandatoryBaseFaceTextureId ||
+            document.Terrain.Count > 1)
+        {
+            throw new InvalidDataException(
+                "The static ID65 Moby-choice projector requires one exact schema-4 T66 document.");
+        }
+
+        string exactPositionId =
+            Id65RemotePadMobyChoiceCatalog.GetRequiredPositionId(positionId);
+        Id65RemotePadGrassT107Position position =
+            Id65RemotePadGrassT107Catalog.GetRequiredPosition(exactPositionId);
+        Id65RemotePadMobyChoice choice = Id65RemotePadMobyChoiceCatalog
+            .GetRequiredChoice(document.RemotePadMobyKind.Value);
+        string sceneGraphSha256 = document.Terrain.Count == 1
+            ? Id65FreshLevelSceneProjector.ExpectedStructuralGraphCanonicalSha256
+            : Id65FreshLevelSceneProjector.ExpectedCanonicalSha256;
+        if (Id65RemotePadMobyChoiceCatalog.CanonicalSha256 !=
+                Id65RemotePadMobyChoiceCatalog.ExpectedCanonicalSha256 ||
+            Id65RemotePadGrassT107Catalog.SupportHandle !=
+                Id65FreshLevelSceneProjector.CollisionStableId ||
+            Id65RemotePadRedGemT21Catalog.SupportHandle !=
+                Id65FreshLevelSceneProjector.CollisionStableId ||
+            Id65RemotePadGrassT107Catalog.SupportCollisionTrueIndex !=
+                Id65FreshLevelSceneProjector.CollisionTriangleIndex ||
+            Id65RemotePadRedGemT21Catalog.SupportCollisionTrueIndex !=
+                Id65FreshLevelSceneProjector.CollisionTriangleIndex ||
+            !Id65RemotePadGrassT107Catalog.IsStrictlyInsideSupportTriangle(
+                position.EditorX,
+                position.EditorY,
+                position.EditorZ) ||
+            document.MobyPlacements.Count != (choice.Kind == Id65RemotePadMobyKind.None ? 0 : 1))
+        {
+            throw new InvalidDataException(
+                "The schema-4 ID65 document lost its exact choice catalog or T13995 support binding.");
+        }
+
+        byte[] canonical = BuildRemotePadMobyChoiceStaticAuthoringProjection(
+            document,
+            choice,
+            position,
+            sceneGraphSha256);
+        return new ProjectionIdentity(string.Empty, string.Empty, string.Empty, string.Empty)
+        {
+            StaticAuthoringProfileId = RemotePadMobyChoiceStaticAuthoringProfileId,
+            StaticAuthoringCatalogSha256 = Id65RemotePadMobyChoiceCatalog.CanonicalSha256,
+            StaticAuthoringSceneGraphSha256 = sceneGraphSha256,
+            StaticAuthoringProjectionSha256 = Hash(canonical)
+        };
+    }
+
+    private static byte[] BuildRemotePadMobyChoiceStaticAuthoringProjection(
+        Id65AuthoringEditorDocument document,
+        Id65RemotePadMobyChoice choice,
+        Id65RemotePadGrassT107Position position,
+        string sceneGraphSha256)
+    {
+        using MemoryStream buffer = new();
+        using (Utf8JsonWriter json = new(buffer, new JsonWriterOptions
+        {
+            Indented = false,
+            SkipValidation = false
+        }))
+        {
+            json.WriteStartObject();
+            json.WriteString("profileId", RemotePadMobyChoiceStaticAuthoringProfileId);
+            json.WriteNumber("schemaVersion", 2);
+            json.WriteString("projectionContractId", RemotePadMobyChoiceProjectionContractId);
+            json.WriteString("documentProfileId", document.ProfileId);
+            json.WriteString("documentCanonicalSha256", document.CanonicalSha256);
+            json.WriteString("documentContentSha256", document.ContentSha256);
+            json.WriteString("catalogProfileId", Id65RemotePadMobyChoiceCatalog.ProfileId);
+            json.WriteString(
+                "catalogCanonicalSha256",
+                Id65RemotePadMobyChoiceCatalog.CanonicalSha256);
+            json.WriteString("mobyKind", choice.KindId);
+            json.WriteString("positionId", position.PositionId);
+            string? selectedRowSha256 = Id65RemotePadMobyChoiceCatalog
+                .GetSelectedExactRowSha256(choice.Kind, position.PositionId);
+            if (selectedRowSha256 is null)
+                json.WriteNull("selectedExactRowSha256");
+            else
+                json.WriteString("selectedExactRowSha256", selectedRowSha256);
+            if (choice.PlacementId is null)
+                json.WriteNull("placementId");
+            else
+                json.WriteString("placementId", choice.PlacementId);
+            if (choice.TargetTrueIndex.HasValue)
+                json.WriteNumber("targetTrueIndex", choice.TargetTrueIndex.Value);
+            else
+                json.WriteNull("targetTrueIndex");
+            json.WriteString("sceneProfileId", Id65FreshLevelSceneProjector.ProfileId);
+            json.WriteNumber("sceneSchemaVersion", Id65FreshLevelSceneProjector.SchemaVersion);
+            json.WriteString("sceneGraphCanonicalSha256", sceneGraphSha256);
+            json.WriteString("supportHandle", Id65FreshLevelSceneProjector.CollisionStableId);
+            json.WriteNumber(
+                "supportCollisionTrueIndex",
+                Id65FreshLevelSceneProjector.CollisionTriangleIndex);
+            json.WriteBoolean("structuralTerrainPresent", document.Terrain.Count == 1);
+            json.WriteNumber(
+                "mandatoryBaseFaceTextureId",
+                document.MandatoryBaseFaceTextureId);
+            json.WriteNumber("mobyPlacementCount", document.MobyPlacements.Count);
+            json.WriteBoolean("grassAtT88Present", false);
+            json.WriteBoolean("compiledAfterimagePresent", false);
+            json.WriteBoolean("physicalMaterializationEnabled", false);
+            json.WriteBoolean("runtimeCandidateAuthorized", false);
+            json.WriteBoolean("normalCreateBinEnabled", false);
+            json.WriteBoolean("releaseAuthorized", false);
+            json.WriteEndObject();
+        }
+        return buffer.ToArray();
+    }
+
     private static void RequireDocumentLabIdentity(
         Id65AuthoringEditorDocument document,
         UnusedLevel65BlankLevelLabManifest expectedLabManifest)
@@ -1053,7 +1249,15 @@ internal static class Id65AuthoringEditorDocumentStore
             (document.SchemaVersion == Id65AuthoringEditorDocument.RemotePadGridSchemaVersion &&
              document.ProfileId == Id65AuthoringEditorDocument.RemotePadGridDocumentProfileId &&
              document.MandatoryBaseFaceTextureId is 25 or 66 &&
-             document.UsesRemotePadT107Grid);
+             document.UsesRemotePadT107Grid &&
+             !document.UsesRemotePadMobyChoice) ||
+            (document.SchemaVersion ==
+                 Id65AuthoringEditorDocument.RemotePadMobyChoiceSchemaVersion &&
+             document.ProfileId ==
+                 Id65AuthoringEditorDocument.RemotePadMobyChoiceDocumentProfileId &&
+             document.MandatoryBaseFaceTextureId == 66 &&
+             !document.UsesRemotePadT107Grid &&
+             document.UsesRemotePadMobyChoice);
         if (!supportedDocument ||
             document.LabProfileId != expectedLabManifest.ProfileId ||
             document.LabProfileVersion != expectedLabManifest.ProfileVersion ||
@@ -1140,7 +1344,7 @@ internal static class Id65AuthoringEditorDocumentStore
             json.WriteString("documentProfileId", document.ProfileId);
             json.WriteString("documentCanonicalSha256", document.CanonicalSha256);
             json.WriteString("projectionContractId", GetProjectionContractId(document));
-            if (document.UsesRemotePadT107Grid)
+            if (document.UsesStaticRemotePadAuthoring)
             {
                 json.WriteString("staticAuthoringProfileId", projection.StaticAuthoringProfileId);
                 json.WriteString(
@@ -1244,13 +1448,18 @@ internal static class Id65AuthoringEditorDocumentStore
             {
                 EnvelopeSchemaVersion => false,
                 RemotePadGridEnvelopeSchemaVersion => true,
+                RemotePadMobyChoiceEnvelopeSchemaVersion => true,
                 _ => throw new InvalidDataException(
                     "The ID65 editor-document envelope schema version is unsupported.")
             };
+            bool remotePadMobyChoiceEnvelope =
+                schemaVersion == RemotePadMobyChoiceEnvelopeSchemaVersion;
             RequireExactProperties(
                 root,
-                remotePadGridEnvelope
-                    ? RemotePadGridEnvelopePropertyNames
+                remotePadMobyChoiceEnvelope
+                    ? RemotePadMobyChoiceEnvelopePropertyNames
+                    : remotePadGridEnvelope
+                        ? RemotePadGridEnvelopePropertyNames
                     : LegacyEnvelopePropertyNames);
 
             string format = RequireString(root, "format");
@@ -1321,10 +1530,17 @@ internal static class Id65AuthoringEditorDocumentStore
             ProjectionIdentity persisted;
             if (remotePadGridEnvelope)
             {
-                if (staticAuthoringProfileId != RemotePadGridStaticAuthoringProfileId ||
+                string expectedStaticProfileId = document.UsesRemotePadMobyChoice
+                    ? RemotePadMobyChoiceStaticAuthoringProfileId
+                    : RemotePadGridStaticAuthoringProfileId;
+                string expectedCatalogSha256 = document.UsesRemotePadMobyChoice
+                    ? Id65RemotePadMobyChoiceCatalog.CanonicalSha256
+                    : Id65RemotePadGrassT107Catalog.CanonicalSha256;
+                if (remotePadMobyChoiceEnvelope != document.UsesRemotePadMobyChoice ||
+                    staticAuthoringProfileId != expectedStaticProfileId ||
                     !HashEquals(
                         staticAuthoringCatalogSha256,
-                        Id65RemotePadGrassT107Catalog.CanonicalSha256) ||
+                        expectedCatalogSha256) ||
                     !IsSha256(staticAuthoringSceneGraphSha256) ||
                     !IsSha256(staticAuthoringProjectionSha256))
                 {
@@ -1348,7 +1564,9 @@ internal static class Id65AuthoringEditorDocumentStore
                 };
 
                 ProjectionIdentity exactStaticProjection =
-                    CaptureRemotePadStaticAuthoringIdentity(document);
+                    document.UsesRemotePadMobyChoice
+                        ? CaptureRemotePadMobyChoiceStaticAuthoringIdentity(document)
+                        : CaptureRemotePadStaticAuthoringIdentity(document);
                 if (!ProjectionIdentitiesEqual(persisted, exactStaticProjection))
                 {
                     throw new InvalidDataException(
@@ -1608,15 +1826,23 @@ internal static class Id65AuthoringEditorDocumentStore
         IsSha256(left) && IsSha256(right) &&
         string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 
+    internal static int GetEnvelopeSchemaVersionForReadback(
+        Id65AuthoringEditorDocument document) =>
+        GetEnvelopeSchemaVersion(document);
+
     private static int GetEnvelopeSchemaVersion(Id65AuthoringEditorDocument document) =>
-        document.UsesRemotePadT107Grid
-            ? RemotePadGridEnvelopeSchemaVersion
-            : EnvelopeSchemaVersion;
+        document.UsesRemotePadMobyChoice
+            ? RemotePadMobyChoiceEnvelopeSchemaVersion
+            : document.UsesRemotePadT107Grid
+                ? RemotePadGridEnvelopeSchemaVersion
+                : EnvelopeSchemaVersion;
 
     private static string GetProjectionContractId(Id65AuthoringEditorDocument document) =>
-        document.UsesRemotePadT107Grid
-            ? RemotePadGridProjectionContractId
-            : ProjectionContractId;
+        document.UsesRemotePadMobyChoice
+            ? RemotePadMobyChoiceProjectionContractId
+            : document.UsesRemotePadT107Grid
+                ? RemotePadGridProjectionContractId
+                : ProjectionContractId;
 
     private static ProjectionIdentity CaptureProjectionIdentity(
         Id65AuthoringEditorDocumentEnvelopeIdentity identity) =>
@@ -1647,7 +1873,15 @@ internal static class Id65AuthoringEditorDocumentStore
     private enum DocumentTransitionPolicy
     {
         SameSemanticFamilyOnly,
-        ExplicitLegacyToRemotePadGrid
+        ExplicitLegacyToRemotePadGrid,
+        ExplicitRemotePadGridToMobyChoice
+    }
+
+    private enum DocumentSemanticFamily
+    {
+        LegacyNativeApron,
+        RemotePadGrid,
+        RemotePadMobyChoice
     }
 
     private sealed record ProjectionIdentity(

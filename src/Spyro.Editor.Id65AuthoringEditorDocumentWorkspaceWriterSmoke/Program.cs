@@ -624,6 +624,7 @@ static void AssertResult(
         result.CreatedNewDocument == created &&
         result.ReplacedExistingDocument != created &&
         !result.ExplicitLegacyToRemotePadMigrationPerformed &&
+        !result.ExplicitRemotePadMobyChoiceMigrationPerformed &&
         !result.AutomaticMigrationPerformed &&
         result.ExplicitSaveInvocationRequired &&
         result.LegacyTerrainLayerConflictChecked &&
@@ -681,6 +682,7 @@ static void AssertRemoteResult(
         result.Document.HasStaticAuthoringProjection &&
         !result.Document.HasCompiledCompositeProjection &&
         result.ExplicitLegacyToRemotePadMigrationPerformed == explicitMigration &&
+        !result.ExplicitRemotePadMobyChoiceMigrationPerformed &&
         !result.AutomaticMigrationPerformed &&
         result.ExplicitSaveInvocationRequired &&
         result.LegacyTerrainLayerConflictChecked &&
@@ -747,15 +749,21 @@ static void AssertPublicSurface()
     MethodInfo? save = methods.SingleOrDefault(method => method.Name == "SaveExactAsync");
     MethodInfo? migrate = methods.SingleOrDefault(method =>
         method.Name == "MigrateLegacyToRemotePadGridExactAsync");
+    MethodInfo? migrateMobyChoice = methods.SingleOrDefault(method =>
+        method.Name == "MigrateRemotePadGridToMobyChoiceExactAsync");
     Require(
-        methods.Length == 2 && save != null && migrate != null &&
+        methods.Length == 3 && save != null && migrate != null && migrateMobyChoice != null &&
         save.ReturnType == typeof(Task<Id65AuthoringEditorDocumentWriteResult>) &&
         migrate.ReturnType == typeof(Task<Id65AuthoringEditorDocumentWriteResult>) &&
+        migrateMobyChoice.ReturnType ==
+            typeof(Task<Id65AuthoringEditorDocumentWriteResult>) &&
         save.GetParameters().Select(parameter => parameter.ParameterType)
             .SequenceEqual(exactParameters) &&
         migrate.GetParameters().Select(parameter => parameter.ParameterType)
+            .SequenceEqual(exactParameters) &&
+        migrateMobyChoice.GetParameters().Select(parameter => parameter.ParameterType)
             .SequenceEqual(exactParameters),
-        "The writer lost its one normal-save plus one explicit migration surface or exposed arbitrary bytes/paths/delegates.");
+        "The writer lost its normal-save plus two explicit migration surfaces or exposed arbitrary bytes/paths/delegates.");
     Require(
         result.GetProperties(BindingFlags.Instance | BindingFlags.Public).All(property =>
             !(property.PropertyType == typeof(string) &&
@@ -855,7 +863,7 @@ static void AssertSourceTopology(string repositoryRoot)
             .Count == 2 &&
         appWriterOwners.SequenceEqual([expectedAppOwner]) &&
         publicWriterCall.Matches(File.ReadAllText(
-            Path.Combine(repositoryRoot, expectedAppOwner))).Count == 3,
+            Path.Combine(repositoryRoot, expectedAppOwner))).Count == 4,
         "The prepared Store publication owner, two-phase legacy check, or explicit App writer boundary changed.");
 }
 

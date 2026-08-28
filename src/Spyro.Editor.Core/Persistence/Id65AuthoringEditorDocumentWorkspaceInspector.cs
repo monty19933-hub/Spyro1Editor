@@ -44,6 +44,7 @@ public sealed class Id65AuthoringEditorDocumentReadModel
         "spyro-editor-id65-authoring-editor-document-read-model";
     public const int LegacyReadModelSchemaVersion = 2;
     public const int RemotePadGridReadModelSchemaVersion = 3;
+    public const int RemotePadMobyChoiceReadModelSchemaVersion = 4;
 
     private readonly ReadOnlyCollection<Id65AuthoringEditorTerrainReadModel> _terrain;
     private readonly ReadOnlyCollection<Id65AuthoringEditorMobyPlacementReadModel>
@@ -69,13 +70,22 @@ public sealed class Id65AuthoringEditorDocumentReadModel
         SchemaVersion = document.SchemaVersion;
         ProfileId = document.ProfileId;
         MandatoryBaseFaceTextureId = document.MandatoryBaseFaceTextureId;
-        T107PlacementSemantics = document.UsesRemotePadT107Grid
-            ? Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1
-            : Id65AuthoringEditorT107PlacementSemantics.LegacyNativeApronV1;
+        T107PlacementSemantics = document.UsesRemotePadMobyChoice
+            ? Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1
+            : document.UsesRemotePadT107Grid
+                ? Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1
+                : Id65AuthoringEditorT107PlacementSemantics.LegacyNativeApronV1;
         T107RemotePadPositionId = document.T107RemotePadPositionId;
         T107RemotePadPosition = document.T107RemotePadPositionId is string positionId
             ? Id65RemotePadGrassT107PositionReadModel.FromCatalog(
                 Id65RemotePadGrassT107Catalog.GetRequiredPosition(positionId))
+            : null;
+        RemotePadMobyKind = document.RemotePadMobyKind;
+        RemotePadMobyPositionId = document.RemotePadMobyPositionId;
+        RemotePadMobyPosition = document.RemotePadMobyPositionId is string mobyPositionId
+            ? Id65RemotePadMobyPositionReadModel.FromCatalog(
+                document.RemotePadMobyKind!.Value,
+                mobyPositionId)
             : null;
         LabProfileId = document.LabProfileId;
         LabProfileVersion = document.LabProfileVersion;
@@ -120,8 +130,10 @@ public sealed class Id65AuthoringEditorDocumentReadModel
     }
 
     public int SchemaVersion { get; }
-    public int ReadModelSchemaVersion => UsesRemotePadT107Grid
-        ? RemotePadGridReadModelSchemaVersion
+    public int ReadModelSchemaVersion => UsesRemotePadMobyChoice
+        ? RemotePadMobyChoiceReadModelSchemaVersion
+        : UsesRemotePadT107Grid
+            ? RemotePadGridReadModelSchemaVersion
         : LegacyReadModelSchemaVersion;
     public string ProfileId { get; }
     public int MandatoryBaseFaceTextureId { get; }
@@ -130,7 +142,15 @@ public sealed class Id65AuthoringEditorDocumentReadModel
     public Id65RemotePadGrassT107PositionReadModel? T107RemotePadPosition { get; }
     public bool UsesRemotePadT107Grid =>
         T107PlacementSemantics == Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1;
-    public bool RequiresExplicitRemotePadMigration => !UsesRemotePadT107Grid;
+    public Id65RemotePadMobyKind? RemotePadMobyKind { get; }
+    public string? RemotePadMobyPositionId { get; }
+    public Id65RemotePadMobyPositionReadModel? RemotePadMobyPosition { get; }
+    public bool UsesRemotePadMobyChoice =>
+        T107PlacementSemantics ==
+            Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1;
+    public bool UsesStaticRemotePadAuthoring =>
+        UsesRemotePadT107Grid || UsesRemotePadMobyChoice;
+    public bool RequiresExplicitRemotePadMigration => !UsesStaticRemotePadAuthoring;
     public string LabProfileId { get; }
     public int LabProfileVersion { get; }
     public string WorkspaceKey { get; }
@@ -154,9 +174,9 @@ public sealed class Id65AuthoringEditorDocumentReadModel
     public string StaticAuthoringSceneGraphSha256 { get; }
     public string StaticAuthoringProjectionSha256 { get; }
     public bool HasCompiledCompositeProjection =>
-        PersistedProjectionIdentityPresent && !UsesRemotePadT107Grid;
+        PersistedProjectionIdentityPresent && !UsesStaticRemotePadAuthoring;
     public bool HasStaticAuthoringProjection =>
-        PersistedProjectionIdentityPresent && UsesRemotePadT107Grid;
+        PersistedProjectionIdentityPresent && UsesStaticRemotePadAuthoring;
     public IReadOnlyList<Id65AuthoringEditorTerrainReadModel> Terrain => _terrain;
     public Id65AuthoringEditorPrivateTextureSwapReadModel PrivateTextureSwap { get; }
     public IReadOnlyList<Id65AuthoringEditorMobyPlacementReadModel> MobyPlacements =>
@@ -210,7 +230,18 @@ public sealed class Id65AuthoringEditorDocumentReadModel
                 ReadModelSchemaVersion);
             json.WriteNumber("documentSchemaVersion", SchemaVersion);
             json.WriteString("profileId", ProfileId);
-            if (UsesRemotePadT107Grid)
+            if (UsesRemotePadMobyChoice)
+            {
+                json.WriteNumber("envelopeSchemaVersion", EnvelopeSchemaVersion);
+                json.WriteString(
+                    "remotePadMobyChoiceProfileId",
+                    Id65RemotePadMobyChoiceCatalog.ProfileId);
+                json.WriteString(
+                    "remotePadMobyKind",
+                    Id65RemotePadMobyChoiceCatalog.GetKindId(RemotePadMobyKind!.Value));
+                WriteRemotePadMobyPosition(json, RemotePadMobyPosition!);
+            }
+            else if (UsesRemotePadT107Grid)
             {
                 json.WriteNumber("envelopeSchemaVersion", EnvelopeSchemaVersion);
                 json.WriteString(
@@ -227,7 +258,7 @@ public sealed class Id65AuthoringEditorDocumentReadModel
             json.WriteString("lockedBaseImageSha256", LockedBaseImageSha256);
             json.WriteString("lockedRow80Sha256", LockedRow80Sha256);
             json.WriteString(
-                UsesRemotePadT107Grid
+                UsesStaticRemotePadAuthoring
                     ? "documentCompositeProfileId"
                     : "compositeProfileId",
                 CompositeProfileId);
@@ -239,7 +270,7 @@ public sealed class Id65AuthoringEditorDocumentReadModel
             json.WriteString("documentCanonicalSha256", DocumentCanonicalSha256);
             json.WriteString("envelopeCanonicalSha256", EnvelopeCanonicalSha256);
             json.WriteString("projectionContractId", ProjectionContractId);
-            if (UsesRemotePadT107Grid)
+            if (UsesStaticRemotePadAuthoring)
             {
                 json.WriteString("staticAuthoringProfileId", StaticAuthoringProfileId);
                 json.WriteString(
@@ -343,6 +374,37 @@ public sealed class Id65AuthoringEditorDocumentReadModel
         json.WriteNumber("z", value.RawZ);
         json.WriteEndObject();
         json.WriteString("rowSha256", value.RowSha256);
+        json.WriteBoolean("isDefault", value.IsDefault);
+        json.WriteEndObject();
+    }
+
+    private static void WriteRemotePadMobyPosition(
+        Utf8JsonWriter json,
+        Id65RemotePadMobyPositionReadModel value)
+    {
+        json.WritePropertyName("remotePadMobyPosition");
+        json.WriteStartObject();
+        json.WriteNumber("catalogSchemaVersion", Id65RemotePadMobyChoiceCatalog.SchemaVersion);
+        json.WriteString("catalogProfileId", Id65RemotePadMobyChoiceCatalog.ProfileId);
+        json.WriteNumber("ordinal", value.Ordinal);
+        json.WriteString("positionId", value.PositionId);
+        json.WriteString("label", value.Label);
+        json.WritePropertyName("editor");
+        json.WriteStartObject();
+        json.WriteNumber("x", value.EditorX);
+        json.WriteNumber("y", value.EditorY);
+        json.WriteNumber("z", value.EditorZ);
+        json.WriteEndObject();
+        json.WritePropertyName("raw");
+        json.WriteStartObject();
+        json.WriteNumber("x", value.RawX);
+        json.WriteNumber("y", value.RawY);
+        json.WriteNumber("z", value.RawZ);
+        json.WriteEndObject();
+        if (value.SelectedExactRowSha256 is null)
+            json.WriteNull("selectedExactRowSha256");
+        else
+            json.WriteString("selectedExactRowSha256", value.SelectedExactRowSha256);
         json.WriteBoolean("isDefault", value.IsDefault);
         json.WriteEndObject();
     }
@@ -674,6 +736,72 @@ public sealed class Id65RemotePadGrassT107PositionReadModel
             value.RawZ,
             value.RowSha256,
             value.IsDefault);
+    }
+}
+
+/// <summary>
+/// Immutable shared-grid readback for a schema-4 Moby choice. The selected row
+/// hash is null for None and exact for Grass or Red Gem.
+/// </summary>
+public sealed class Id65RemotePadMobyPositionReadModel
+{
+    private Id65RemotePadMobyPositionReadModel(
+        int ordinal,
+        string positionId,
+        string label,
+        int editorX,
+        int editorY,
+        int editorZ,
+        int rawX,
+        int rawY,
+        int rawZ,
+        string? selectedExactRowSha256,
+        bool isDefault)
+    {
+        Ordinal = ordinal;
+        PositionId = positionId;
+        Label = label;
+        EditorX = editorX;
+        EditorY = editorY;
+        EditorZ = editorZ;
+        RawX = rawX;
+        RawY = rawY;
+        RawZ = rawZ;
+        SelectedExactRowSha256 = selectedExactRowSha256;
+        IsDefault = isDefault;
+    }
+
+    public int Ordinal { get; }
+    public string PositionId { get; }
+    public string Label { get; }
+    public int EditorX { get; }
+    public int EditorY { get; }
+    public int EditorZ { get; }
+    public int RawX { get; }
+    public int RawY { get; }
+    public int RawZ { get; }
+    public string? SelectedExactRowSha256 { get; }
+    public bool IsDefault { get; }
+
+    internal static Id65RemotePadMobyPositionReadModel FromCatalog(
+        Id65RemotePadMobyKind kind,
+        string positionId)
+    {
+        string exactId = Id65RemotePadMobyChoiceCatalog.GetRequiredPositionId(positionId);
+        Id65RemotePadGrassT107Position position =
+            Id65RemotePadGrassT107Catalog.GetRequiredPosition(exactId);
+        return new(
+            position.Ordinal,
+            position.PositionId,
+            position.Label,
+            position.EditorX,
+            position.EditorY,
+            position.EditorZ,
+            position.RawX,
+            position.RawY,
+            position.RawZ,
+            Id65RemotePadMobyChoiceCatalog.GetSelectedExactRowSha256(kind, exactId),
+            position.IsDefault);
     }
 }
 

@@ -36,6 +36,7 @@
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65ZeroEggRuntimeCandidateSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.UnusedLevel65DragonSaveTriggerRuntimeCandidateSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringTerrainMutationCompilerSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringTerrainSetCompilerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65V2NativeTextureCompositionCompilerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringMobyDependencyBundleCompilerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringCompositeCompilerSmoke" />
@@ -45,6 +46,7 @@
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorDocumentSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorDocumentPersistenceSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorDocumentWorkspaceInspectorSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringRemotePadMobyChoiceCoreSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorControlStateCompilerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorNativeInputProviderSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorAggregatePlanProjectorSmoke" />
