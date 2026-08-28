@@ -425,6 +425,8 @@ try
             workspaceResult.ReceiptContentSha256 ==
                 recovered.Receipt.ReceiptContentSha256 &&
             workspaceResult.PositionId == recovered.Receipt.PositionId &&
+            workspaceResult.StructuralTerrainPresent &&
+            workspaceResult.GrassT107Present &&
             workspaceResult.ExactStoreReloadVerified &&
             workspaceResult.ExactStaticAuthoringProjectionReloadVerified &&
             workspaceResult.ExactNativeInputGenerationRecaptured &&

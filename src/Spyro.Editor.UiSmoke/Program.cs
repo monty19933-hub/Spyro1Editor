@@ -2155,10 +2155,10 @@ void RunId65BlankLabUiOnly()
                 migratedPresentation.CanonicalSha256,
                 StringComparison.Ordinal) ||
             migratedGrass.HasAnyEdit ||
-            migratedUi.AuthoringCandidateEnabled ||
+            !migratedUi.AuthoringCandidateEnabled ||
             migratedUi.RevealEnabled ||
             !migratedUi.AuthoringCandidateButtonText.Contains(
-                "Requires Terrain + T107",
+                "Verified Blank-Level Candidate",
                 StringComparison.Ordinal) ||
             !migratedUi.ObjectManagerStatusText.Contains(
                 "1 placed object",
@@ -2245,12 +2245,85 @@ void RunId65BlankLabUiOnly()
                 "Generic edit/paste/move/rotate/remove mutated the read-only remote-pad Moby presentation or its canonical document.");
         }
 
+        string remoteCandidateRoot = Path.Combine(
+            paths.RootPath,
+            "materialized-remote-pad-candidates");
+        string remoteCandidateDirectory = Path.Combine(
+            remoteCandidateRoot,
+            "ui-smoke-schema3-candidate");
+        string remoteCandidateImage = Path.Combine(
+            remoteCandidateDirectory,
+            "candidate.bin");
+        string remoteCandidateCue = Path.Combine(
+            remoteCandidateDirectory,
+            "candidate.cue");
+        string remoteCandidateReceipt = Path.Combine(
+            remoteCandidateDirectory,
+            "candidate.receipt.json");
+        Directory.CreateDirectory(remoteCandidateDirectory);
+        File.WriteAllBytes(remoteCandidateImage, [1]);
+        File.WriteAllBytes(remoteCandidateCue, [2]);
+        File.WriteAllBytes(remoteCandidateReceipt, [3]);
+
+        MainWindow.Id65BlankLabAuthoringCandidateAppResult
+            BuildRemotePadUiCandidateResult(
+                Id65AuthoringEditorDocumentReadModel expectedDocument,
+                Id65AuthoringEditorControlState expectedState) =>
+            new(
+                CandidateDirectoryPath: remoteCandidateDirectory,
+                CandidateImagePath: remoteCandidateImage,
+                CandidateCuePath: remoteCandidateCue,
+                CandidateReceiptPath: remoteCandidateReceipt,
+                DocumentEnvelopeSha256:
+                    expectedDocument.EnvelopeCanonicalSha256,
+                DocumentCanonicalSha256:
+                    expectedDocument.DocumentCanonicalSha256,
+                UsesRemotePadT107Grid: true,
+                T107RemotePadPositionId:
+                    expectedState.T107RemotePadPositionId,
+                StructuralTerrainPresent:
+                    expectedState.IncludeStructuralTerrain,
+                GrassT107Present: expectedState.IncludeGrassAtT107,
+                AggregatePlanSha256: new string('a', 64),
+                OutputImageSha256: new string('b', 64),
+                CandidateCueSha256: new string('c', 64),
+                ReceiptContentSha256: new string('d', 64),
+                ChangedRawSectorCount:
+                    expectedState.IncludeGrassAtT107 ? 557 : 556,
+                ChangedPhysicalImageBytes: 1_075_175,
+                ReusedExistingCandidate: false,
+                CandidateArtifactsWrittenThisCall: true,
+                FileSystemMutationPerformed: true,
+                ExactReadbackVerified: true,
+                Schema3CompilerPinsVerified: true,
+                T107PositionReadbackVerified: true,
+                T88ExcludedVerified: true,
+                RepairedT13995SupportVerified: true,
+                ProtectedComplementVerified: true,
+                RetailTownSquarePreserved: true,
+                TargetOverlayPreserved: true,
+                ExecutablePreserved: true,
+                AtomicNoReplacePublicationVerified: true,
+                OwnedTemporaryResidueRemoved: true,
+                CarriesAppOrUiAuthority: false,
+                CarriesCreateBinAuthority: false,
+                NormalRetailCreateBinComposed: false,
+                RuntimeCandidateAuthorized: false,
+                RuntimeProven: false,
+                ReleaseIntegrated: false,
+                PromotionAuthorized: false,
+                Publishable: false,
+                CurrentOnDiskFreshnessVerified: false,
+                HostileFilesystemRaceSafe: false,
+                RequiresTrustedExclusiveWorkspaceDirectory: true,
+                CommonWorkspaceLeaseOwned: false);
+
         int remoteCandidateCalls = 0;
         window.Id65AuthoringCandidateMaterializerOverrideForTesting = (_, _, _) =>
         {
             remoteCandidateCalls++;
-            throw new InvalidOperationException(
-                "A schema-3 remote-pad document must refuse before materialization.");
+            return Task.FromResult(
+                BuildRemotePadUiCandidateResult(migratedDocument, migratedState));
         };
         try
         {
@@ -2259,14 +2332,14 @@ void RunId65BlankLabUiOnly()
                 "CreateId65AuthoringAggregateCandidateAsync");
             WaitForUiTask(
                 remoteCandidate,
-                "refusing a schema-3 remote-pad candidate before materialization",
+                "creating the verified schema-3 Moby-only candidate",
                 timeoutSeconds: 30);
         }
         finally
         {
             window.Id65AuthoringCandidateMaterializerOverrideForTesting = null;
         }
-        string[] candidateOutputsAfterRemoteRefusal = Directory.Exists(candidateOutputRoot)
+        string[] candidateOutputsAfterRemoteCandidate = Directory.Exists(candidateOutputRoot)
             ? Directory.GetFiles(candidateOutputRoot, "*", SearchOption.AllDirectories)
                 .OrderBy(path => path, StringComparer.Ordinal)
                 .Select(path =>
@@ -2275,16 +2348,23 @@ void RunId65BlankLabUiOnly()
                         File.ReadAllBytes(path))))
                 .ToArray()
             : [];
-        if (remoteCandidateCalls != 0 ||
-            !candidateOutputsAfterRemoteRefusal.SequenceEqual(
+        MainWindow.Id65BlankLabUiSnapshot mobyOnlyCandidateUi =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        if (remoteCandidateCalls != 1 ||
+            !mobyOnlyCandidateUi.AuthoringCandidateEnabled ||
+            !mobyOnlyCandidateUi.RevealEnabled ||
+            !candidateOutputsAfterRemoteCandidate.SequenceEqual(
                 candidateOutputsBeforeRemoteMigration,
                 StringComparer.Ordinal) ||
             !(id65Status.Text ?? "").Contains(
-                "requires structural terrain ON",
+                "blank terrain state",
+                StringComparison.OrdinalIgnoreCase) ||
+            !(id65Status.Text ?? "").Contains(
+                "Grass T107 at Bottom right",
                 StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                "The schema-3 remote-pad candidate refusal reached the materializer, changed candidate outputs, or lost its truthful status.");
+                "The schema-3 Moby-only state did not route through the verified candidate seam with truthful blank-terrain status and isolated outputs.");
         }
 
         Window eligibleCandidateDialog = OpenAsyncDialog(
@@ -2369,74 +2449,12 @@ void RunId65BlankLabUiOnly()
                 "The promoted schema-3 document is not the exact terrain-on/T107-on/T88-off/T66 state.");
         }
 
-        string remoteCandidateRoot = Path.Combine(
-            paths.RootPath,
-            "materialized-remote-pad-candidates");
-        string remoteCandidateDirectory = Path.Combine(
-            remoteCandidateRoot,
-            "ui-smoke-schema3-candidate");
-        string remoteCandidateImage = Path.Combine(
-            remoteCandidateDirectory,
-            "candidate.bin");
-        string remoteCandidateCue = Path.Combine(
-            remoteCandidateDirectory,
-            "candidate.cue");
-        string remoteCandidateReceipt = Path.Combine(
-            remoteCandidateDirectory,
-            "candidate.receipt.json");
-        Directory.CreateDirectory(remoteCandidateDirectory);
-        File.WriteAllBytes(remoteCandidateImage, [1]);
-        File.WriteAllBytes(remoteCandidateCue, [2]);
-        File.WriteAllBytes(remoteCandidateReceipt, [3]);
         int eligibleRemoteCandidateCalls = 0;
         window.Id65AuthoringCandidateMaterializerOverrideForTesting = (_, _, _) =>
         {
             eligibleRemoteCandidateCalls++;
             return Task.FromResult(
-                new MainWindow.Id65BlankLabAuthoringCandidateAppResult(
-                    CandidateDirectoryPath: remoteCandidateDirectory,
-                    CandidateImagePath: remoteCandidateImage,
-                    CandidateCuePath: remoteCandidateCue,
-                    CandidateReceiptPath: remoteCandidateReceipt,
-                    DocumentEnvelopeSha256:
-                        eligibleDocument.EnvelopeCanonicalSha256,
-                    DocumentCanonicalSha256:
-                        eligibleDocument.DocumentCanonicalSha256,
-                    UsesRemotePadT107Grid: true,
-                    T107RemotePadPositionId:
-                        eligibleState.T107RemotePadPositionId,
-                    AggregatePlanSha256: new string('a', 64),
-                    OutputImageSha256: new string('b', 64),
-                    CandidateCueSha256: new string('c', 64),
-                    ReceiptContentSha256: new string('d', 64),
-                    ChangedRawSectorCount: 557,
-                    ChangedPhysicalImageBytes: 1_075_175,
-                    ReusedExistingCandidate: false,
-                    CandidateArtifactsWrittenThisCall: true,
-                    FileSystemMutationPerformed: true,
-                    ExactReadbackVerified: true,
-                    Schema3CompilerPinsVerified: true,
-                    T107PositionReadbackVerified: true,
-                    T88ExcludedVerified: true,
-                    RepairedT13995SupportVerified: true,
-                    ProtectedComplementVerified: true,
-                    RetailTownSquarePreserved: true,
-                    TargetOverlayPreserved: true,
-                    ExecutablePreserved: true,
-                    AtomicNoReplacePublicationVerified: true,
-                    OwnedTemporaryResidueRemoved: true,
-                    CarriesAppOrUiAuthority: false,
-                    CarriesCreateBinAuthority: false,
-                    NormalRetailCreateBinComposed: false,
-                    RuntimeCandidateAuthorized: false,
-                    RuntimeProven: false,
-                    ReleaseIntegrated: false,
-                    PromotionAuthorized: false,
-                    Publishable: false,
-                    CurrentOnDiskFreshnessVerified: false,
-                    HostileFilesystemRaceSafe: false,
-                    RequiresTrustedExclusiveWorkspaceDirectory: true,
-                    CommonWorkspaceLeaseOwned: false));
+                BuildRemotePadUiCandidateResult(eligibleDocument, eligibleState));
         };
         try
         {
@@ -2524,10 +2542,150 @@ void RunId65BlankLabUiOnly()
             !dormantUi.ObjectManagerStatusText.Contains(
                 "Bottom right",
                 StringComparison.Ordinal) ||
-            dormantUi.AuthoringCandidateEnabled || dormantUi.RevealEnabled)
+            !dormantUi.AuthoringCandidateEnabled || dormantUi.RevealEnabled)
         {
             throw new InvalidOperationException(
-                "Turning off schema-3 Grass did not retain its dormant Bottom right choice or fail-closed candidate/reveal state.");
+                "Turning off schema-3 Grass did not retain its dormant Bottom right choice, keep candidate creation enabled, or clear the stale reveal binding.");
+        }
+
+        Task<Id65AuthoringEditorDocumentReadModel?> dormantDocumentTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(
+            dormantDocumentTask,
+            "inspecting the schema-3 terrain-only candidate document");
+        Id65AuthoringEditorDocumentReadModel dormantDocument =
+            dormantDocumentTask.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "The schema-3 terrain-only candidate document disappeared.");
+        Id65AuthoringEditorControlState dormantState =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                dormantDocument);
+        if (!dormantState.UsesRemotePadT107Grid ||
+            !dormantState.IncludeStructuralTerrain ||
+            dormantState.IncludeGrassAtT88 ||
+            dormantState.IncludeGrassAtT107 ||
+            dormantState.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId)
+        {
+            throw new InvalidOperationException(
+                "Turning off Grass did not produce the exact schema-3 terrain-only/T88-off/T66 state.");
+        }
+
+        int terrainOnlyCandidateCalls = 0;
+        window.Id65AuthoringCandidateMaterializerOverrideForTesting = (_, _, _) =>
+        {
+            terrainOnlyCandidateCalls++;
+            return Task.FromResult(
+                BuildRemotePadUiCandidateResult(dormantDocument, dormantState));
+        };
+        try
+        {
+            Task terrainOnlyCandidate = InvokePrivate<Task>(
+                window,
+                "CreateId65AuthoringAggregateCandidateAsync");
+            WaitForUiTask(
+                terrainOnlyCandidate,
+                "creating the verified schema-3 terrain-only candidate",
+                timeoutSeconds: 30);
+        }
+        finally
+        {
+            window.Id65AuthoringCandidateMaterializerOverrideForTesting = null;
+        }
+        if (terrainOnlyCandidateCalls != 1 ||
+            !window.CaptureId65BlankLabUiSnapshotForTesting().RevealEnabled ||
+            !(id65Status.Text ?? "").Contains(
+                "structural terrain/collision/occlusion",
+                StringComparison.OrdinalIgnoreCase) ||
+            !(id65Status.Text ?? "").Contains(
+                "Grass T107 omitted",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The schema-3 terrain-only state did not route through the verified candidate seam with truthful omitted-Grass status.");
+        }
+
+        if (!removeOptionalTerrain.IsEnabled)
+        {
+            throw new InvalidOperationException(
+                "The schema-3 terrain-only state did not expose Remove optional terrain.");
+        }
+        removeOptionalTerrain.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, removeOptionalTerrain));
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.DocumentProjectionSynchronized &&
+                    snapshot.CreateOptionalTerrainEnabled &&
+                    !snapshot.RemoveOptionalTerrainEnabled &&
+                    snapshot.AuthoringCandidateEnabled &&
+                    snapshot.VisibleMobyCount == 0 &&
+                    !snapshot.RevealEnabled;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "removing schema-3 terrain to create the blank candidate state");
+
+        Task<Id65AuthoringEditorDocumentReadModel?> blankDocumentTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(
+            blankDocumentTask,
+            "inspecting the blank schema-3 candidate document");
+        Id65AuthoringEditorDocumentReadModel blankDocument =
+            blankDocumentTask.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "The blank schema-3 candidate document disappeared.");
+        Id65AuthoringEditorControlState blankState =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                blankDocument);
+        if (!blankState.UsesRemotePadT107Grid ||
+            blankState.IncludeStructuralTerrain ||
+            blankState.IncludeGrassAtT88 ||
+            blankState.IncludeGrassAtT107 ||
+            blankState.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId)
+        {
+            throw new InvalidOperationException(
+                "Remove optional terrain did not produce the exact blank schema-3/T88-off/T66 state.");
+        }
+
+        int blankCandidateCalls = 0;
+        window.Id65AuthoringCandidateMaterializerOverrideForTesting = (_, _, _) =>
+        {
+            blankCandidateCalls++;
+            return Task.FromResult(
+                BuildRemotePadUiCandidateResult(blankDocument, blankState));
+        };
+        try
+        {
+            Task blankCandidate = InvokePrivate<Task>(
+                window,
+                "CreateId65AuthoringAggregateCandidateAsync");
+            WaitForUiTask(
+                blankCandidate,
+                "creating the verified blank schema-3 candidate",
+                timeoutSeconds: 30);
+        }
+        finally
+        {
+            window.Id65AuthoringCandidateMaterializerOverrideForTesting = null;
+        }
+        if (blankCandidateCalls != 1 ||
+            !window.CaptureId65BlankLabUiSnapshotForTesting().RevealEnabled ||
+            !(id65Status.Text ?? "").Contains(
+                "blank terrain state",
+                StringComparison.OrdinalIgnoreCase) ||
+            !(id65Status.Text ?? "").Contains(
+                "Grass T107 omitted",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "The fully blank schema-3 state did not route through the verified candidate seam with truthful blank/omitted status.");
         }
 
         Console.WriteLine("ID65 UI smoke: starting workspace-transition fence probe.");
@@ -2557,7 +2715,7 @@ void RunId65BlankLabUiOnly()
 
         Console.WriteLine(
             "ID65 Blank-Level Lab public UI smoke passed: clean 35-level startup, visible narrow disclosure, exact named Resident T25 / Proved private T66 selector with null refusal, selection-change preview/no-write and explicit Apply/Save, neutral reveal label, explicit repair contract, Core atomic-export route with 128 unique keys, hidden broad Research tab, and exact-manifest 35+1 in-memory admission passed; " +
-            $"isolated locked workspace bootstrap: exact and source-preserving; mutation guards: {mutationGuards}; stale continuations: {staleContinuations}; transition guards: {transitionGuards}; resident textures: {residentTexture}; canonical document guard: {canonicalDocumentGuard}; reverse persistence: {reversePersistence}; operation fence: {operationFence}; remote Object Manager: explicit legacy-to-grid migration, exact Bottom right 0/1 presentation, mismatch quarantine, generic mutation refusal, unsupported-state pre-materializer refusal, exact terrain-on/T107-on/T88-off/T66 candidate routing, and dormant-position retention passed; workspace transition: {workspaceTransition}; full authoring editor: {authoringEditor}.");
+            $"isolated locked workspace bootstrap: exact and source-preserving; mutation guards: {mutationGuards}; stale continuations: {staleContinuations}; transition guards: {transitionGuards}; resident textures: {residentTexture}; canonical document guard: {canonicalDocumentGuard}; reverse persistence: {reversePersistence}; operation fence: {operationFence}; remote Object Manager: explicit legacy-to-grid migration, exact Bottom right 0/1 presentation, mismatch quarantine, generic mutation refusal, all four T88-off/T66 terrain-and-Grass candidate combinations, and dormant-position retention passed; workspace transition: {workspaceTransition}; full authoring editor: {authoringEditor}.");
     }
     finally
     {

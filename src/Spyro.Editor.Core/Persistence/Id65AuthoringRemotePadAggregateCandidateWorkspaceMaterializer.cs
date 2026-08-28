@@ -29,6 +29,8 @@ public sealed class Id65AuthoringRemotePadAggregateCandidateWorkspaceResult
         CandidateCueSha256 = result.Receipt.CandidateCueSha256;
         ReceiptContentSha256 = result.Receipt.ReceiptContentSha256;
         PositionId = result.Receipt.PositionId;
+        StructuralTerrainPresent = result.Plan.StructuralTerrainPresent;
+        GrassT107Present = result.Plan.GrassT107Present;
         EditorX = result.Receipt.EditorX;
         EditorY = result.Receipt.EditorY;
         EditorZ = result.Receipt.EditorZ;
@@ -42,6 +44,7 @@ public sealed class Id65AuthoringRemotePadAggregateCandidateWorkspaceResult
         Id65RemotePadGrassT107Position position =
             Id65RemotePadGrassT107Catalog.GetRequiredPosition(PositionId);
         if (result.Plan.Placement.PositionId != PositionId ||
+            result.Plan.Placement.Present != GrassT107Present ||
             position.EditorX != EditorX || position.EditorY != EditorY ||
             position.EditorZ != EditorZ ||
             result.ReusedExistingCandidate ==
@@ -105,6 +108,8 @@ public sealed class Id65AuthoringRemotePadAggregateCandidateWorkspaceResult
     public string CandidateCueSha256 { get; }
     public string ReceiptContentSha256 { get; }
     public string PositionId { get; }
+    public bool StructuralTerrainPresent { get; }
+    public bool GrassT107Present { get; }
     public int EditorX { get; }
     public int EditorY { get; }
     public int EditorZ { get; }
