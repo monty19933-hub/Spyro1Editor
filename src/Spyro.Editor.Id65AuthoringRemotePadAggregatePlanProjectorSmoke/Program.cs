@@ -7,7 +7,9 @@ using System.Text.RegularExpressions;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Persistence;
 
-string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
+bool emitStatePins = args.Contains("--emit-state-pins", StringComparer.Ordinal);
+string repositoryRoot = FindRepositoryRoot(
+    args.FirstOrDefault(item => !item.StartsWith("--", StringComparison.Ordinal)));
 string lockedImagePath = Path.Combine(
     repositoryRoot,
     "_local",
@@ -67,6 +69,9 @@ try
     int matrixStates = 0;
     int matrixSupported = 0;
     int matrixRejected = 0;
+    HashSet<string> matrixStateKeys = new(StringComparer.Ordinal);
+    HashSet<string> matrixOutputHashes = new(StringComparer.Ordinal);
+    HashSet<string> matrixAggregateHashes = new(StringComparer.Ordinal);
     int identityRejects = 0;
     int partitionRejects = 0;
     int aliasChecks = 0;
@@ -143,52 +148,172 @@ try
         "The schema-3 nine-position aggregate set changed.");
 
     foreach (bool terrainOn in new[] { false, true })
-    foreach (bool t88On in new[] { false, true })
-    foreach (bool t107On in new[] { false, true })
-    foreach (int mandatoryTextureId in new[] { 25, 66 })
-    foreach (Id65RemotePadGrassT107Position position in
-             Id65RemotePadGrassT107Catalog.Positions)
-    {
-        matrixStates++;
-        List<string> placements = [];
-        if (t88On)
-            placements.Add(Id65AuthoringMobyDependencyBundleCompiler.T88PlacementId);
-        if (t107On)
-            placements.Add(Id65RemotePadGrassT107Catalog.PlacementId);
-        Id65AuthoringEditorDocument matrixDocument =
-            Id65AuthoringEditorDocument.CreateRemotePadGridExact(
-                position.PositionId,
-                includeOptionalTerrain: terrainOn,
-                placementIds: placements,
-                mandatoryBaseFaceTextureId: mandatoryTextureId);
-        Id65AuthoringEditorDocumentStoreResult matrixStored =
-            stores[position.PositionId] with { Document = matrixDocument };
-        bool supported = terrainOn && !t88On && t107On &&
-            mandatoryTextureId == 66;
-        try
-        {
-            Id65AuthoringRemotePadAggregatePlan matrixPlan =
-                Id65AuthoringRemotePadAggregatePlanProjector.Project(new(
-                    matrixStored,
-                    manifest,
-                    nativeInputs));
-            if (!supported ||
-                matrixPlan.DeterministicAggregatePlanSha256 !=
-                    plans[position.PositionId].DeterministicAggregatePlanSha256)
-            {
-                throw new InvalidOperationException(
-                    "An unsupported or divergent schema-3 matrix state projected.");
-            }
-            matrixSupported++;
-        }
-        catch (Exception exception) when (
-            !supported && exception is InvalidDataException or NotSupportedException)
-        {
-            matrixRejected++;
-        }
-    }
-    Require(matrixStates == 144 && matrixSupported == 9 && matrixRejected == 135,
-        "The schema-3 aggregate matrix changed from 9 supported / 135 rejected.");
+        foreach (bool t88On in new[] { false, true })
+            foreach (bool t107On in new[] { false, true })
+                foreach (int mandatoryTextureId in new[] { 25, 66 })
+                    foreach (Id65RemotePadGrassT107Position position in
+                             Id65RemotePadGrassT107Catalog.Positions)
+                    {
+                        matrixStates++;
+                        List<string> placements = [];
+                        if (t88On)
+                            placements.Add(Id65AuthoringMobyDependencyBundleCompiler.T88PlacementId);
+                        if (t107On)
+                            placements.Add(Id65RemotePadGrassT107Catalog.PlacementId);
+                        Id65AuthoringEditorDocument matrixDocument =
+                            Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+                                position.PositionId,
+                                includeOptionalTerrain: terrainOn,
+                                placementIds: placements,
+                                mandatoryBaseFaceTextureId: mandatoryTextureId);
+                        bool supported = !t88On && mandatoryTextureId == 66;
+                        Id65AuthoringEditorDocumentStoreResult matrixStored;
+                        if (supported)
+                        {
+                            matrixStored = await Id65AuthoringEditorDocumentStore.SaveAsync(
+                                paths,
+                                manifest,
+                                matrixDocument,
+                                new Id65AuthoringEditorDocumentProjectionInputs(null),
+                                expectedPriorEnvelope);
+                            expectedPriorEnvelope = matrixStored.EnvelopeCanonicalSha256;
+                        }
+                        else
+                        {
+                            matrixStored = stores[position.PositionId] with
+                            {
+                                Document = matrixDocument
+                            };
+                        }
+                        try
+                        {
+                            Id65AuthoringRemotePadAggregatePlan matrixPlan =
+                                Id65AuthoringRemotePadAggregatePlanProjector.Project(new(
+                                    matrixStored,
+                                    manifest,
+                                    nativeInputs));
+                            if (!supported)
+                            {
+                                throw new InvalidOperationException(
+                                    "An unsupported schema-3 matrix state projected.");
+                            }
+                            Id65AuthoringRemotePadAggregatePlan repeat =
+                                Id65AuthoringRemotePadAggregatePlanProjector.Project(new(
+                                    matrixStored with
+                                    {
+                                        Path = Path.Combine(
+                                            Path.GetTempPath(),
+                                            "ignored-schema3-matrix-store-path",
+                                            Id65AuthoringEditorDocumentStore.FileName),
+                                        Document = Id65AuthoringEditorDocument.Parse(
+                                            matrixDocument.SerializeUtf8())
+                                    },
+                                    manifest,
+                                    nativeInputs));
+                            int expectedOwnedRangeCount = t107On ? 7_960 : 7_956;
+                            int expectedProtectedRangeCount = t107On ? 7_961 : 7_957;
+                            int expectedGuardedByteCount = t107On ? 1_010_952 : 1_010_852;
+                            int expectedProtectedByteCount = t107On ? 2_011_896 : 2_011_996;
+                            Id65AuthoringRemotePadAggregatePlanStateFrozenPin stateFrozen =
+                                Id65AuthoringRemotePadAggregatePlanProjector
+                                    .GetRequiredStateFrozenPin(
+                                        terrainOn,
+                                        t107On,
+                                        position.PositionId);
+                            Require(
+                                Equivalent(matrixPlan, repeat) &&
+                                matrixPlan.StructuralTerrainPresent == terrainOn &&
+                                matrixPlan.GrassT107Present == t107On &&
+                                matrixPlan.Placement.Present == t107On &&
+                                matrixPlan.Placement.PositionId == position.PositionId &&
+                                matrixPlan.OwnedRangeCount == expectedOwnedRangeCount &&
+                                matrixPlan.InverseRangeCount == expectedOwnedRangeCount &&
+                                matrixPlan.ProtectedRangeCount == expectedProtectedRangeCount &&
+                                matrixPlan.GuardedByteCount == expectedGuardedByteCount &&
+                                matrixPlan.ProtectedByteCount == expectedProtectedByteCount &&
+                                stateFrozen.StructuralTerrainPresent == terrainOn &&
+                                stateFrozen.GrassT107Present == t107On &&
+                                stateFrozen.PositionId == position.PositionId &&
+                                stateFrozen.EnvelopeCanonicalSha256 ==
+                                    matrixPlan.EnvelopeCanonicalSha256 &&
+                                stateFrozen.StaticAuthoringProjectionSha256 ==
+                                    matrixPlan.StaticAuthoringProjectionSha256 &&
+                                stateFrozen.OutputRow80Sha256 == matrixPlan.OutputRow80Sha256 &&
+                                stateFrozen.OwnedRangeMapSha256 ==
+                                    matrixPlan.OwnedRangeMapSha256 &&
+                                stateFrozen.InverseRangeMapSha256 ==
+                                    matrixPlan.InverseRangeMapSha256 &&
+                                stateFrozen.ProtectedRangeMapSha256 ==
+                                    matrixPlan.ProtectedRangeMapSha256 &&
+                                stateFrozen.AtomicGroupMapSha256 ==
+                                    matrixPlan.AtomicGroupMapSha256 &&
+                                stateFrozen.DeterministicAggregatePlanSha256 ==
+                                    matrixPlan.DeterministicAggregatePlanSha256,
+                                "A supported schema-3 aggregate state lost exact identity.");
+                            if (terrainOn && t107On)
+                            {
+                                Require(
+                                    matrixPlan.DeterministicAggregatePlanSha256 ==
+                                        plans[position.PositionId]
+                                            .DeterministicAggregatePlanSha256,
+                                    "The original aggregate plan changed during expansion.");
+                            }
+                            byte[] matrixSource = nativeInputs.LockedSource.CopyRow80();
+                            byte[] matrixOutput =
+                                Id65AuthoringRemotePadAggregatePlanProjector.ApplyExact(
+                                    matrixPlan,
+                                    matrixSource,
+                                    reverse: false);
+                            byte[] matrixRestored =
+                                Id65AuthoringRemotePadAggregatePlanProjector.ApplyExact(
+                                    matrixPlan,
+                                    matrixOutput,
+                                    reverse: true);
+                            Require(
+                                Hash(matrixOutput) == matrixPlan.OutputRow80Sha256 &&
+                                matrixRestored.SequenceEqual(matrixSource),
+                                "A supported schema-3 aggregate state failed exact apply/rollback.");
+                            string stateKey =
+                                (terrainOn ? "terrain-on" : "terrain-off") + "|" +
+                                (t107On ? "grass-on" : "grass-off") + "|" +
+                                position.PositionId;
+                            Require(matrixStateKeys.Add(stateKey),
+                                "A supported aggregate state key appeared twice.");
+                            matrixOutputHashes.Add(matrixPlan.OutputRow80Sha256);
+                            Require(matrixAggregateHashes.Add(
+                                    matrixPlan.DeterministicAggregatePlanSha256),
+                                "Two supported aggregate states shared a deterministic plan.");
+                            if (emitStatePins && !(terrainOn && t107On))
+                            {
+                                Console.WriteLine(string.Join('|',
+                                [
+                                    "STATE_PLAN_PIN",
+                    terrainOn ? "true" : "false",
+                    t107On ? "true" : "false",
+                    position.PositionId,
+                    matrixPlan.EnvelopeCanonicalSha256,
+                    matrixPlan.StaticAuthoringProjectionSha256,
+                    matrixPlan.OutputRow80Sha256,
+                    matrixPlan.OwnedRangeMapSha256,
+                    matrixPlan.InverseRangeMapSha256,
+                    matrixPlan.ProtectedRangeMapSha256,
+                    matrixPlan.AtomicGroupMapSha256,
+                    matrixPlan.DeterministicAggregatePlanSha256
+                                ]));
+                            }
+                            positivePlans += 2;
+                            matrixSupported++;
+                        }
+                        catch (Exception exception) when (
+                            !supported && exception is InvalidDataException or NotSupportedException)
+                        {
+                            matrixRejected++;
+                        }
+                    }
+    Require(matrixStates == 144 && matrixSupported == 36 &&
+            matrixRejected == 108 && matrixStateKeys.Count == 36 &&
+            matrixOutputHashes.Count == 20 && matrixAggregateHashes.Count == 36,
+        "The schema-3 aggregate matrix changed from 36 supported / 108 rejected.");
 
     Id65AuthoringEditorDocumentStoreResult centerStored =
         stores[Id65RemotePadGrassT107Catalog.CenterPositionId];
@@ -378,7 +503,7 @@ try
         "The schema-3 aggregate request gained caller afterimages or plans.");
     VerifySourceTopology(repositoryRoot);
 
-    Require(positivePlans == 18 && identityRejects == 11 &&
+    Require(positivePlans == 90 && identityRejects == 11 &&
             partitionRejects == 6 && aliasChecks == 4,
         "The schema-3 aggregate positive/rejection/copy matrix changed.");
     Console.WriteLine(
@@ -387,10 +512,12 @@ try
         "matrix_states=" + matrixStates + " " +
         "matrix_supported=" + matrixSupported + " " +
         "matrix_rejected=" + matrixRejected + " " +
+        "matrix_output_hashes=" + matrixOutputHashes.Count + " " +
+        "matrix_aggregate_hashes=" + matrixAggregateHashes.Count + " " +
         "identity_rejects=" + identityRejects + " " +
         "partition_rejects=" + partitionRejects + " " +
         "alias_checks=" + aliasChecks + " " +
-        "owned_ranges=7960 protected_ranges=7961 " +
+        "owned_ranges=7956_or_7960 protected_ranges=7957_or_7961 " +
         "filesystem=false app=false create_bin=false runtime=false release=false");
 }
 finally
