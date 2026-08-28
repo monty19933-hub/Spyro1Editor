@@ -29,6 +29,16 @@ internal sealed record Id65AuthoringRemotePadAggregateCandidateFrozenPin(
     string PhysicalDiffSha256,
     string ReceiptContentSha256);
 
+internal sealed record Id65AuthoringRemotePadAggregateCandidateStateFrozenPin(
+    bool StructuralTerrainPresent,
+    bool GrassT107Present,
+    string PositionId,
+    string OutputImageSha256,
+    long ChangedPhysicalImageBytes,
+    int ChangedRawSectorCount,
+    string PhysicalDiffSha256,
+    string ReceiptContentSha256);
+
 internal sealed record Id65AuthoringRemotePadAggregateCandidateReceipt(
     string Format,
     int SchemaVersion,
@@ -269,6 +279,266 @@ internal static class Id65AuthoringRemotePadAggregateCandidateMaterializer
                 "4864b449cb88e3f0ce6b3d2d52295e6e654bbdaea4df9349b80ddf0dfad51c10")
         };
 
+    private static readonly Id65AuthoringRemotePadAggregateCandidateStateFrozenPin[]
+        AdditionalStateFrozenPinArray =
+    [
+        new(
+            false,
+            false,
+            "remote-pad-grid.x368-y336",
+            "da91a2e6cf5d81f3a1342c8e8d4cfa20ff9b33ac55a4d1ae9327ad499a2f64d4",
+            1_037_724,
+            556,
+            "80dd560c18a24946c4ff2f7af8a0050a20ae9f43cf3ada1ee7932ff0edfb4f9d",
+            "53f82f01111919596a0e3eb8d0cd12e7337abbb5843c04a811b312a7095e4729"),
+        new(
+            false,
+            false,
+            "remote-pad-grid.x384-y336",
+            "da91a2e6cf5d81f3a1342c8e8d4cfa20ff9b33ac55a4d1ae9327ad499a2f64d4",
+            1_037_724,
+            556,
+            "80dd560c18a24946c4ff2f7af8a0050a20ae9f43cf3ada1ee7932ff0edfb4f9d",
+            "6fba4bf277f25ce5167ae1cd6cc8d0b85ed6c71d18ebc253452909f1755b33bd"),
+        new(
+            false,
+            false,
+            "remote-pad-grid.x400-y336",
+            "da91a2e6cf5d81f3a1342c8e8d4cfa20ff9b33ac55a4d1ae9327ad499a2f64d4",
+            1_037_724,
+            556,
+            "80dd560c18a24946c4ff2f7af8a0050a20ae9f43cf3ada1ee7932ff0edfb4f9d",
+            "db7f3f7f07791576dc4e6dca901d66993685f589974fca1c3c5622e9aaca584c"),
+        new(
+            false,
+            false,
+            "remote-pad-grid.x368-y352",
+            "da91a2e6cf5d81f3a1342c8e8d4cfa20ff9b33ac55a4d1ae9327ad499a2f64d4",
+            1_037_724,
+            556,
+            "80dd560c18a24946c4ff2f7af8a0050a20ae9f43cf3ada1ee7932ff0edfb4f9d",
+            "015c118cf18291bbe2944d80e583b1cd03f510c5ab596c7403a67d72d6b748bf"),
+        new(
+            false,
+            false,
+            "remote-pad-grid.x384-y352",
+            "da91a2e6cf5d81f3a1342c8e8d4cfa20ff9b33ac55a4d1ae9327ad499a2f64d4",
+            1_037_724,
+            556,
+            "80dd560c18a24946c4ff2f7af8a0050a20ae9f43cf3ada1ee7932ff0edfb4f9d",
+            "c3b67e4e7a7ede751a6c647f0f6f82998a811074af28d4e5b40fd42a200f49e5"),
+        new(
+            false,
+            false,
+            "remote-pad-grid.x400-y352",
+            "da91a2e6cf5d81f3a1342c8e8d4cfa20ff9b33ac55a4d1ae9327ad499a2f64d4",
+            1_037_724,
+            556,
+            "80dd560c18a24946c4ff2f7af8a0050a20ae9f43cf3ada1ee7932ff0edfb4f9d",
+            "96dcece983f40439d64afbe39a24f681f6c4f6bfb47c9e04d40fcd5e4a2551e1"),
+        new(
+            false,
+            false,
+            "remote-pad-grid.x368-y368",
+            "da91a2e6cf5d81f3a1342c8e8d4cfa20ff9b33ac55a4d1ae9327ad499a2f64d4",
+            1_037_724,
+            556,
+            "80dd560c18a24946c4ff2f7af8a0050a20ae9f43cf3ada1ee7932ff0edfb4f9d",
+            "380d22b0d7949e305166447a0d417591e0d8b1357c88e1ff020cd0690c3a531c"),
+        new(
+            false,
+            false,
+            "remote-pad-grid.x384-y368",
+            "da91a2e6cf5d81f3a1342c8e8d4cfa20ff9b33ac55a4d1ae9327ad499a2f64d4",
+            1_037_724,
+            556,
+            "80dd560c18a24946c4ff2f7af8a0050a20ae9f43cf3ada1ee7932ff0edfb4f9d",
+            "93c549befbcff0a51654b63647a6a24d42facb21f0a5e9788a7d9342ba47ab98"),
+        new(
+            false,
+            false,
+            "remote-pad-grid.x400-y368",
+            "da91a2e6cf5d81f3a1342c8e8d4cfa20ff9b33ac55a4d1ae9327ad499a2f64d4",
+            1_037_724,
+            556,
+            "80dd560c18a24946c4ff2f7af8a0050a20ae9f43cf3ada1ee7932ff0edfb4f9d",
+            "a602bebffa69d5a0763e7ad16ec4b6530c53b700c2adf97087f36cd1f1718548"),
+        new(
+            false,
+            true,
+            "remote-pad-grid.x368-y336",
+            "e2a01d01764ce186f92fad74d47d65b574b12ca11c098482459ae2c2d3035ab3",
+            1_037_884,
+            557,
+            "e60b71ab3ec6202434aa6d537c7af2e85105c4e2ecb63c6479c83f4e9e6708ce",
+            "fa011eab8e24e7f728b0bd100e2f0751df0adf5038613feaddad9e55bfd18cc8"),
+        new(
+            false,
+            true,
+            "remote-pad-grid.x384-y336",
+            "5d18ab27986d4343f5768d9fcf56273b8b5cd08962d89fa69eb5c55ffa7d4acd",
+            1_037_885,
+            557,
+            "8f129b7a97fe42cf16911c48c83d6e495534aa6580beafeb0e6b0bc6387e5c41",
+            "28f9f086d814b5dee23331c85f22cd58df2cf37932f2bd163d97da08c5201ab1"),
+        new(
+            false,
+            true,
+            "remote-pad-grid.x400-y336",
+            "0d00fcfed30b5c767fd9a81ff1e7f7f991062f53609bc9239f7ed286d4e5499e",
+            1_037_884,
+            557,
+            "3844397246a0d36982668626e5628b3c91eb74d440310900029b0fa6e2880411",
+            "e31e5f34fda19c87faa535f81fd1ff873c5b786af5eda5ee27832756b84c5470"),
+        new(
+            false,
+            true,
+            "remote-pad-grid.x368-y352",
+            "52383df38b5b926cd73a4b3127377832f01c58633a68fed83ce630ea8e78e081",
+            1_037_885,
+            557,
+            "20cd0be49984c0bc037b3bcdc71ee80eebd1dc6fc9a14dea2fffce9e06d7c787",
+            "52c24b2eef5d1d8b0c74e869b8fbbf51513d0feb1f1336fd759ae31244e1324e"),
+        new(
+            false,
+            true,
+            "remote-pad-grid.x384-y352",
+            "cc55f1fbbf42c495c719548c3cc85a4691c33bbe35b05cc0b1eab2155f4e885a",
+            1_037_885,
+            557,
+            "a7862b7de83b32b32e742037a428d93cf8242ac384f1c96c122a66abd1ff14dd",
+            "cc4372f8afbee8753d6aff3c2bb32ae59ee3392e9317bdd782d4e4200acef91c"),
+        new(
+            false,
+            true,
+            "remote-pad-grid.x400-y352",
+            "2aecb15aec7fc7c3fbe3eecae7b2378bf6a46dae38d5010795fdc99c83d0b43b",
+            1_037_884,
+            557,
+            "ac2357f6fae29d8e1c75dee9a23742d8d20ceeddd41501df101b579c05bf1a19",
+            "b3752dbae6b0a60ef13530cdded1bc6ae490ece4669b1fde676d50c885ce5b29"),
+        new(
+            false,
+            true,
+            "remote-pad-grid.x368-y368",
+            "9414c3ef8dac82a08789ce30e94cb60561a7d8a231457c97924c3afa62892025",
+            1_037_884,
+            557,
+            "6835b378e78273eff52dc65253d2c30d6ea466284c6b2c59c35717964d67f370",
+            "b36c8b559412aa06f42e2c0a4768879bdaee4b93a6a8f6ea4f03e2fa019c5a7a"),
+        new(
+            false,
+            true,
+            "remote-pad-grid.x384-y368",
+            "bdd09169a1eadea6d3d1ac067d48df23fffab546a2b5c624be28d0e64d7afa65",
+            1_037_885,
+            557,
+            "4e808db3652cbd562e6af790ee9ee3796254d570e8e70a70cd1b59cc9481345d",
+            "2743bb70a0afab657fae3fb4a4e51b5160f1f6ce0dfe3a1a51f22a3af0ac86e2"),
+        new(
+            false,
+            true,
+            "remote-pad-grid.x400-y368",
+            "096727acb732c49f960d48b67ab737425caa8752b0764c41861dd4f03ce08faf",
+            1_037_884,
+            557,
+            "4de405da317a338c0f97da8989e657bc6eebafa406608d20d538d430ace6e975",
+            "67a71b7302e2a22363349a09f4387bb9725bfe06a4b8c2e6d6704b77cc0748c1"),
+        new(
+            true,
+            false,
+            "remote-pad-grid.x368-y336",
+            "9c3fdd520988824086cc9229805df46ecac6714cc0c123a9023bedb746d68d7a",
+            1_075_014,
+            556,
+            "3efc65781d4902c1f2f949a28fc307cead738bcfbba3d3c25d83d90ce66722b0",
+            "535916791603b508a3100dc6ea2090d5744cd5fa99855121a735a349fdbeea36"),
+        new(
+            true,
+            false,
+            "remote-pad-grid.x384-y336",
+            "9c3fdd520988824086cc9229805df46ecac6714cc0c123a9023bedb746d68d7a",
+            1_075_014,
+            556,
+            "3efc65781d4902c1f2f949a28fc307cead738bcfbba3d3c25d83d90ce66722b0",
+            "a7d1490c189f6e6192d181bc498ef9a8701db43c960d50573e439b2a429bfa5e"),
+        new(
+            true,
+            false,
+            "remote-pad-grid.x400-y336",
+            "9c3fdd520988824086cc9229805df46ecac6714cc0c123a9023bedb746d68d7a",
+            1_075_014,
+            556,
+            "3efc65781d4902c1f2f949a28fc307cead738bcfbba3d3c25d83d90ce66722b0",
+            "b84337806cbbe83ed5e81e3118b86fde4a8f4ecf85d0e7c238334bc9779bb856"),
+        new(
+            true,
+            false,
+            "remote-pad-grid.x368-y352",
+            "9c3fdd520988824086cc9229805df46ecac6714cc0c123a9023bedb746d68d7a",
+            1_075_014,
+            556,
+            "3efc65781d4902c1f2f949a28fc307cead738bcfbba3d3c25d83d90ce66722b0",
+            "ba7ec152d15e45d0390710f85aa95cf4a35488b31083789488a0b9b25bf9a794"),
+        new(
+            true,
+            false,
+            "remote-pad-grid.x384-y352",
+            "9c3fdd520988824086cc9229805df46ecac6714cc0c123a9023bedb746d68d7a",
+            1_075_014,
+            556,
+            "3efc65781d4902c1f2f949a28fc307cead738bcfbba3d3c25d83d90ce66722b0",
+            "6ec3967b5ce5496591d48d67a68dabcdb159a9b7f5badbf5df3501f0d431f73c"),
+        new(
+            true,
+            false,
+            "remote-pad-grid.x400-y352",
+            "9c3fdd520988824086cc9229805df46ecac6714cc0c123a9023bedb746d68d7a",
+            1_075_014,
+            556,
+            "3efc65781d4902c1f2f949a28fc307cead738bcfbba3d3c25d83d90ce66722b0",
+            "69c09969938922e929e7a4f19b0c276484bb50a3f4aafd35c9d63f1ba2760a0f"),
+        new(
+            true,
+            false,
+            "remote-pad-grid.x368-y368",
+            "9c3fdd520988824086cc9229805df46ecac6714cc0c123a9023bedb746d68d7a",
+            1_075_014,
+            556,
+            "3efc65781d4902c1f2f949a28fc307cead738bcfbba3d3c25d83d90ce66722b0",
+            "71e9fe75f881436dfc2ce75747ed3e809cc425647c9fd3b78e5f3830ab2e8cd2"),
+        new(
+            true,
+            false,
+            "remote-pad-grid.x384-y368",
+            "9c3fdd520988824086cc9229805df46ecac6714cc0c123a9023bedb746d68d7a",
+            1_075_014,
+            556,
+            "3efc65781d4902c1f2f949a28fc307cead738bcfbba3d3c25d83d90ce66722b0",
+            "966d23aef5bdd66c24b87672b7457d88d6daf93000d159820a6b1bb8076db74b"),
+        new(
+            true,
+            false,
+            "remote-pad-grid.x400-y368",
+            "9c3fdd520988824086cc9229805df46ecac6714cc0c123a9023bedb746d68d7a",
+            1_075_014,
+            556,
+            "3efc65781d4902c1f2f949a28fc307cead738bcfbba3d3c25d83d90ce66722b0",
+            "4d152fc0b9b1e3c810a2a7c7a44ead46f61ca11fad8857904a541c47d9004738")
+    ];
+
+    private static readonly IReadOnlyDictionary<string,
+        Id65AuthoringRemotePadAggregateCandidateStateFrozenPin>
+        AdditionalStateFrozenPins =
+        new Dictionary<string, Id65AuthoringRemotePadAggregateCandidateStateFrozenPin>(
+            AdditionalStateFrozenPinArray.ToDictionary(
+                item => BuildStateKey(
+                    item.StructuralTerrainPresent,
+                    item.GrassT107Present,
+                    item.PositionId),
+                StringComparer.Ordinal),
+            StringComparer.Ordinal);
+
     private const string CandidateRootDirectoryName =
         "materialized-remote-pad-candidates";
     private const string OperationsRootDirectoryName =
@@ -315,6 +585,77 @@ internal static class Id65AuthoringRemotePadAggregateCandidateMaterializer
         WriteIndented = true
     };
 
+    static Id65AuthoringRemotePadAggregateCandidateMaterializer()
+    {
+        const int supportedAdditionalStateCount = 27;
+        if (AdditionalStateFrozenPinArray.Length != supportedAdditionalStateCount ||
+            AdditionalStateFrozenPins.Count != supportedAdditionalStateCount)
+        {
+            throw new InvalidDataException(
+                "The remote-pad candidate additional-state pin matrix must cover exactly 27 states.");
+        }
+
+        List<string> expectedOrder = new(supportedAdditionalStateCount);
+        foreach (bool structuralTerrainPresent in new[] { false, true })
+            foreach (bool grassT107Present in new[] { false, true })
+            {
+                if (structuralTerrainPresent && grassT107Present)
+                    continue;
+                foreach (Id65RemotePadGrassT107Position position in
+                         Id65RemotePadGrassT107Catalog.Positions)
+                {
+                    expectedOrder.Add(BuildStateKey(
+                        structuralTerrainPresent,
+                        grassT107Present,
+                        position.PositionId));
+                }
+            }
+
+        string[] actualOrder = AdditionalStateFrozenPinArray
+            .Select(item => BuildStateKey(
+                item.StructuralTerrainPresent,
+                item.GrassT107Present,
+                item.PositionId))
+            .ToArray();
+        if (!actualOrder.SequenceEqual(expectedOrder, StringComparer.Ordinal))
+        {
+            throw new InvalidDataException(
+                "The remote-pad candidate additional-state pin order changed.");
+        }
+
+        foreach (Id65AuthoringRemotePadAggregateCandidateStateFrozenPin frozen in
+                 AdditionalStateFrozenPinArray)
+        {
+            if ((frozen.StructuralTerrainPresent && frozen.GrassT107Present) ||
+                !IsCanonicalSha256(frozen.OutputImageSha256) ||
+                frozen.ChangedPhysicalImageBytes <= 0 ||
+                frozen.ChangedRawSectorCount <= 0 ||
+                !IsCanonicalSha256(frozen.PhysicalDiffSha256) ||
+                !IsCanonicalSha256(frozen.ReceiptContentSha256))
+            {
+                throw new InvalidDataException(
+                    "The remote-pad candidate additional-state pin matrix is malformed.");
+            }
+        }
+
+        if (AdditionalStateFrozenPinArray
+                .Select(item => item.OutputImageSha256)
+                .Distinct(StringComparer.Ordinal)
+                .Count() != 11 ||
+            AdditionalStateFrozenPinArray
+                .Select(item => item.PhysicalDiffSha256)
+                .Distinct(StringComparer.Ordinal)
+                .Count() != 11 ||
+            AdditionalStateFrozenPinArray
+                .Select(item => item.ReceiptContentSha256)
+                .Distinct(StringComparer.Ordinal)
+                .Count() != supportedAdditionalStateCount)
+        {
+            throw new InvalidDataException(
+                "The remote-pad candidate additional-state identity cardinalities changed.");
+        }
+    }
+
     internal static Id65AuthoringRemotePadAggregateCandidateFrozenPin
         GetRequiredFrozenPin(string positionId)
     {
@@ -335,6 +676,72 @@ internal static class Id65AuthoringRemotePadAggregateCandidateMaterializer
                 "The remote-pad candidate pin matrix must cover exactly nine positions.");
         return frozen;
     }
+
+    internal static Id65AuthoringRemotePadAggregateCandidateStateFrozenPin
+        GetRequiredStateFrozenPin(
+            bool structuralTerrainPresent,
+            bool grassT107Present,
+            string positionId)
+    {
+        _ = Id65RemotePadGrassT107Catalog.GetRequiredPosition(positionId);
+        Id65AuthoringRemotePadAggregateCandidateStateFrozenPin? frozen =
+            TryGetStateFrozenPin(
+                structuralTerrainPresent,
+                grassT107Present,
+                positionId);
+        if (frozen is null ||
+            frozen.StructuralTerrainPresent != structuralTerrainPresent ||
+            frozen.GrassT107Present != grassT107Present ||
+            frozen.PositionId != positionId ||
+            !IsCanonicalSha256(frozen.OutputImageSha256) ||
+            frozen.ChangedPhysicalImageBytes <= 0 ||
+            frozen.ChangedRawSectorCount <= 0 ||
+            !IsCanonicalSha256(frozen.PhysicalDiffSha256) ||
+            !IsCanonicalSha256(frozen.ReceiptContentSha256))
+        {
+            throw new InvalidDataException(
+                "The remote-pad candidate state pin is missing or malformed for terrain=" +
+                structuralTerrainPresent + ", Grass T107=" +
+                grassT107Present + ", position=" + positionId + ".");
+        }
+        return frozen;
+    }
+
+    private static Id65AuthoringRemotePadAggregateCandidateStateFrozenPin?
+        TryGetStateFrozenPin(
+            bool structuralTerrainPresent,
+            bool grassT107Present,
+            string positionId)
+    {
+        if (structuralTerrainPresent && grassT107Present)
+        {
+            Id65AuthoringRemotePadAggregateCandidateFrozenPin current =
+                GetRequiredFrozenPin(positionId);
+            return new(
+                true,
+                true,
+                positionId,
+                current.OutputImageSha256,
+                current.ChangedPhysicalImageBytes,
+                current.ChangedRawSectorCount,
+                current.PhysicalDiffSha256,
+                current.ReceiptContentSha256);
+        }
+        AdditionalStateFrozenPins.TryGetValue(
+            BuildStateKey(
+                structuralTerrainPresent,
+                grassT107Present,
+                positionId),
+            out Id65AuthoringRemotePadAggregateCandidateStateFrozenPin? frozen);
+        return frozen;
+    }
+
+    private static string BuildStateKey(
+        bool structuralTerrainPresent,
+        bool grassT107Present,
+        string positionId) =>
+        (structuralTerrainPresent ? "terrain-on" : "terrain-off") + "|" +
+        (grassT107Present ? "grass-on" : "grass-off") + "|" + positionId;
 
     public static Task<Id65AuthoringRemotePadAggregateCandidateMaterializationResult>
         MaterializeAsync(
@@ -389,13 +796,13 @@ internal static class Id65AuthoringRemotePadAggregateCandidateMaterializer
             expectedDocument.ProfileId !=
                 Id65AuthoringEditorDocument.RemotePadGridDocumentProfileId ||
             expectedDocument.MandatoryBaseFaceTextureId != 66 ||
-            expectedDocument.Terrain.Count != 1 ||
-            expectedDocument.MobyPlacements.Count != 1 ||
-            expectedDocument.MobyPlacements[0].Id !=
-                Id65RemotePadGrassT107Catalog.PlacementId)
+            expectedDocument.Terrain.Count > 1 ||
+            expectedDocument.MobyPlacements.Count > 1 ||
+            expectedDocument.MobyPlacements.Any(item =>
+                item.Id != Id65RemotePadGrassT107Catalog.PlacementId))
             throw new NotSupportedException(
                 "Remote-pad aggregate candidate materialization supports only " +
-                "schema 3, terrain ON, T66, T107 ON, and T88 OFF.");
+                "schema 3, optional terrain, T66, optional T107, and T88 OFF.");
         if (!Enum.IsDefined(faultPoint))
             throw new ArgumentOutOfRangeException(nameof(faultPoint));
         if (!OperatingSystem.IsMacOS())
@@ -406,8 +813,11 @@ internal static class Id65AuthoringRemotePadAggregateCandidateMaterializer
         ProjectionCapture preflight = await CaptureFreshProjectionAsync(
             request,
             cancellationToken);
-        Id65AuthoringRemotePadAggregateCandidateFrozenPin candidatePin =
-            GetRequiredFrozenPin(preflight.Plan.Placement.PositionId);
+        Id65AuthoringRemotePadAggregateCandidateStateFrozenPin candidatePin =
+            GetRequiredStateFrozenPin(
+                preflight.Plan.StructuralTerrainPresent,
+                preflight.Plan.GrassT107Present,
+                preflight.Plan.Placement.PositionId);
         Id65AuthoringRemotePadAggregateCandidatePaths paths = CreatePaths(
             request.Paths,
             preflight.Plan,
@@ -741,7 +1151,7 @@ internal static class Id65AuthoringRemotePadAggregateCandidateMaterializer
     private static Id65AuthoringRemotePadAggregateCandidatePaths CreatePaths(
         UnusedLevel65BlankLevelLabWorkspacePaths workspace,
         Id65AuthoringRemotePadAggregatePlan plan,
-        Id65AuthoringRemotePadAggregateCandidateFrozenPin candidatePin)
+        Id65AuthoringRemotePadAggregateCandidateStateFrozenPin candidatePin)
     {
         string aggregatePlanSha256 = plan.DeterministicAggregatePlanSha256;
         if (!IsCanonicalSha256(aggregatePlanSha256))
@@ -1095,8 +1505,11 @@ internal static class Id65AuthoringRemotePadAggregateCandidateMaterializer
             plan,
             cancellationToken);
         string outputImageSha256 = await HashFileAsync(candidateImagePath, cancellationToken);
-        Id65AuthoringRemotePadAggregateCandidateFrozenPin frozen =
-            GetRequiredFrozenPin(plan.Placement.PositionId);
+        Id65AuthoringRemotePadAggregateCandidateStateFrozenPin frozen =
+            GetRequiredStateFrozenPin(
+                plan.StructuralTerrainPresent,
+                plan.GrassT107Present,
+                plan.Placement.PositionId);
         if (outputImageSha256 != frozen.OutputImageSha256 ||
             physical.ChangedPhysicalBytes != frozen.ChangedPhysicalImageBytes ||
             physical.ChangedRawSectorCount != frozen.ChangedRawSectorCount ||
@@ -1290,8 +1703,11 @@ internal static class Id65AuthoringRemotePadAggregateCandidateMaterializer
         {
             ReceiptContentSha256 = ComputeReceiptContentSha256(receipt)
         };
-        Id65AuthoringRemotePadAggregateCandidateFrozenPin frozen =
-            GetRequiredFrozenPin(projection.Plan.Placement.PositionId);
+        Id65AuthoringRemotePadAggregateCandidateStateFrozenPin frozen =
+            GetRequiredStateFrozenPin(
+                projection.Plan.StructuralTerrainPresent,
+                projection.Plan.GrassT107Present,
+                projection.Plan.Placement.PositionId);
         if (finalized.ReceiptContentSha256 != frozen.ReceiptContentSha256)
             throw new InvalidDataException(
                 $"The aggregate candidate frozen receipt identity changed to " +

@@ -11,7 +11,12 @@ if (!OperatingSystem.IsMacOS())
     throw new PlatformNotSupportedException(
         "The schema-3 Darwin materializer smoke requires macOS.");
 
-string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
+bool emitStatePinsOnly =
+    args.Contains("--emit-state-pins-only", StringComparer.Ordinal);
+bool emitStatePins = emitStatePinsOnly ||
+    args.Contains("--emit-state-pins", StringComparer.Ordinal);
+string repositoryRoot = FindRepositoryRoot(
+    args.FirstOrDefault(item => !item.StartsWith("--", StringComparison.Ordinal)));
 string lockedImagePath = Path.Combine(
     repositoryRoot,
     "_local",
@@ -73,49 +78,81 @@ try
     int failClosedRejects = 0;
     int faultRejects = 0;
     int tamperRejects = 0;
-    foreach (Id65RemotePadGrassT107Position position in
-             Id65RemotePadGrassT107Catalog.Positions)
-    {
-        Id65AuthoringEditorDocument document =
-            Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+    foreach (bool terrainOn in new[] { false, true })
+        foreach (bool t107On in new[] { false, true })
+            foreach (Id65RemotePadGrassT107Position position in
+                     Id65RemotePadGrassT107Catalog.Positions)
+            {
+                Id65AuthoringEditorDocument document =
+                    Id65AuthoringEditorDocument.CreateRemotePadGridExact(
+                        position.PositionId,
+                        includeOptionalTerrain: terrainOn,
+                        placementIds: t107On
+                            ? [Id65RemotePadGrassT107Catalog.PlacementId]
+                            : [],
+                        mandatoryBaseFaceTextureId: 66);
+                Id65AuthoringEditorDocumentStoreResult positionStored =
+                    await Id65AuthoringEditorDocumentStore.SaveAsync(
+                        paths,
+                        manifest,
+                        document,
+                        new Id65AuthoringEditorDocumentProjectionInputs(null),
+                        priorEnvelope);
+                priorEnvelope = positionStored.EnvelopeCanonicalSha256;
+                Id65AuthoringRemotePadAggregateCandidateMaterializationResult result =
+                    await Id65AuthoringRemotePadAggregateCandidateMaterializer
+                        .MaterializeAsync(new(paths, manifest, positionStored));
+                Id65AuthoringRemotePadAggregateCandidateStateFrozenPin statePin =
+                    Id65AuthoringRemotePadAggregateCandidateMaterializer
+                        .GetRequiredStateFrozenPin(terrainOn, t107On, position.PositionId);
+                Require(result.Receipt.PositionId == position.PositionId &&
+                        result.Plan.Placement.PositionId == position.PositionId &&
+                        result.Plan.StructuralTerrainPresent == terrainOn &&
+                        result.Plan.GrassT107Present == t107On &&
+                        result.Plan.Placement.Present == t107On &&
+                        result.Receipt.OutputImageSha256 == statePin.OutputImageSha256 &&
+                        result.Receipt.ChangedPhysicalImageBytes ==
+                            statePin.ChangedPhysicalImageBytes &&
+                        result.Receipt.ChangedRawSectorCount ==
+                            statePin.ChangedRawSectorCount &&
+                        result.Receipt.PhysicalDiffSha256 == statePin.PhysicalDiffSha256 &&
+                        result.Receipt.ReceiptContentSha256 ==
+                            statePin.ReceiptContentSha256 &&
+                        result.CandidateArtifactsWrittenThisCall &&
+                        !result.ReusedExistingCandidate &&
+                        result.WritesDiscImage && result.WritesBin && result.WritesCue &&
+                        File.Exists(result.Paths.CandidateImagePath) &&
+                        File.Exists(result.Paths.CandidateCuePath) &&
+                        File.Exists(result.Paths.CandidateReceiptPath),
+                    "The schema-3 materializer did not publish exact position " +
+                    position.PositionId + ".");
+                if (emitStatePins && !(terrainOn && t107On))
+                {
+                    Console.WriteLine(string.Join('|',
+                    [
+                        "STATE_CANDIDATE_PIN",
+                terrainOn ? "true" : "false",
+                t107On ? "true" : "false",
                 position.PositionId,
-                includeOptionalTerrain: true,
-                placementIds: [Id65RemotePadGrassT107Catalog.PlacementId],
-                mandatoryBaseFaceTextureId: 66);
-        Id65AuthoringEditorDocumentStoreResult positionStored =
-            await Id65AuthoringEditorDocumentStore.SaveAsync(
-                paths,
-                manifest,
-                document,
-                new Id65AuthoringEditorDocumentProjectionInputs(null),
-                priorEnvelope);
-        priorEnvelope = positionStored.EnvelopeCanonicalSha256;
-        Id65AuthoringRemotePadAggregateCandidateMaterializationResult result =
-            await Id65AuthoringRemotePadAggregateCandidateMaterializer
-                .MaterializeAsync(new(paths, manifest, positionStored));
-        Require(result.Receipt.PositionId == position.PositionId &&
-                result.Plan.Placement.PositionId == position.PositionId &&
-                result.CandidateArtifactsWrittenThisCall &&
-                !result.ReusedExistingCandidate &&
-                result.WritesDiscImage && result.WritesBin && result.WritesCue &&
-                File.Exists(result.Paths.CandidateImagePath) &&
-                File.Exists(result.Paths.CandidateCuePath) &&
-                File.Exists(result.Paths.CandidateReceiptPath),
-            "The schema-3 materializer did not publish exact position " +
-            position.PositionId + ".");
+                result.Receipt.OutputImageSha256,
+                result.Receipt.ChangedPhysicalImageBytes.ToString(),
+                result.Receipt.ChangedRawSectorCount.ToString(),
+                result.Receipt.PhysicalDiffSha256,
+                result.Receipt.ReceiptContentSha256
+                    ]));
+                }
+                materialized++;
+                positiveMaterializations++;
+                Directory.Delete(result.Paths.CandidateDirectoryPath, recursive: true);
+            }
+    Require(materialized == 36,
+        "The schema-3 materializer pin matrix did not cover all 36 exact states.");
+    if (emitStatePinsOnly)
+    {
         Console.WriteLine(
-            "PIN " + position.PositionId + " " +
-            result.Receipt.OutputImageSha256 + " " +
-            result.Receipt.ChangedPhysicalImageBytes + " " +
-            result.Receipt.ChangedRawSectorCount + " " +
-            result.Receipt.PhysicalDiffSha256 + " " +
-            result.Receipt.ReceiptContentSha256);
-        materialized++;
-        positiveMaterializations++;
-        Directory.Delete(result.Paths.CandidateDirectoryPath, recursive: true);
+            "ID65_REMOTE_PAD_CANDIDATE_STATE_PIN_GENERATION_OK pins=27 states=36");
+        return;
     }
-    Require(materialized == 9,
-        "The schema-3 materializer pin matrix did not cover nine positions.");
 
     Id65AuthoringEditorDocument defaultDocument =
         Id65AuthoringEditorDocument.CreateRemotePadGridExact(
@@ -145,10 +182,10 @@ try
                     Document = Id65AuthoringEditorDocument.CreateExact()
                 }
             }),
-        "schema 3, terrain ON");
+        "schema 3, optional terrain");
     failClosedRejects++;
     await ExpectRejectedAsync(
-        "schema-3 terrain off",
+        "schema-3 T88 on",
         () => Id65AuthoringRemotePadAggregateCandidateMaterializer.MaterializeAsync(
             request with
             {
@@ -156,12 +193,16 @@ try
                 {
                     Document = Id65AuthoringEditorDocument.CreateRemotePadGridExact(
                         Id65RemotePadGrassT107Catalog.DefaultPositionId,
-                        includeOptionalTerrain: false,
-                        placementIds: [Id65RemotePadGrassT107Catalog.PlacementId],
+                        includeOptionalTerrain: true,
+                        placementIds:
+                        [
+                            Id65AuthoringMobyDependencyBundleCompiler.T88PlacementId,
+                            Id65RemotePadGrassT107Catalog.PlacementId
+                        ],
                         mandatoryBaseFaceTextureId: 66)
                 }
             }),
-        "schema 3, terrain ON");
+        "T88 OFF");
     failClosedRejects++;
     string otherPositionId = Id65RemotePadGrassT107Catalog.Positions
         .Select(item => item.PositionId)
