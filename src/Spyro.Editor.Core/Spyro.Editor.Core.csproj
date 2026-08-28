@@ -47,6 +47,9 @@
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorDocumentPersistenceSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorDocumentWorkspaceInspectorSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringRemotePadMobyChoiceCoreSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringRemotePadMobyChoicePhysicalCompilerSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringRemotePadMobyChoiceAggregatePlanProjectorSmoke" />
+    <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringRemotePadTerrainSetCoreSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorControlStateCompilerSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorNativeInputProviderSmoke" />
     <InternalsVisibleTo Include="Spyro.Editor.Id65AuthoringEditorAggregatePlanProjectorSmoke" />

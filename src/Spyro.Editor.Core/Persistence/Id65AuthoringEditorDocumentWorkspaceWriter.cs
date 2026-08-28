@@ -19,6 +19,7 @@ public abstract class Id65AuthoringEditorDocumentWriteResult
     public abstract bool CreatedNewDocument { get; }
     public abstract bool ExplicitLegacyToRemotePadMigrationPerformed { get; }
     public abstract bool ExplicitRemotePadMobyChoiceMigrationPerformed { get; }
+    public abstract bool ExplicitRemotePadTerrainSetMigrationPerformed { get; }
     public bool ReplacedExistingDocument => !CreatedNewDocument;
     public bool AutomaticMigrationPerformed => false;
     public string DocumentCanonicalSha256 => Document.DocumentCanonicalSha256;
@@ -92,6 +93,7 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             expectedPriorEnvelopeCanonicalSha256,
             explicitLegacyToRemotePadMigration: false,
             explicitRemotePadMobyChoiceMigration: false,
+            explicitRemotePadTerrainSetMigration: false,
             cancellationToken);
 
     /// <summary>
@@ -122,6 +124,7 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             expectedPriorEnvelopeCanonicalSha256,
             explicitLegacyToRemotePadMigration: true,
             explicitRemotePadMobyChoiceMigration: false,
+            explicitRemotePadTerrainSetMigration: false,
             cancellationToken);
     }
 
@@ -155,6 +158,39 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             expectedPriorEnvelopeCanonicalSha256,
             explicitLegacyToRemotePadMigration: false,
             explicitRemotePadMobyChoiceMigration: true,
+            explicitRemotePadTerrainSetMigration: false,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Performs the explicit schema-4 to schema-5 semantic-family transition.
+    /// The state must already be the exact terrain-set migration result; ordinary
+    /// save never upgrades or infers tile-2 selection at this boundary.
+    /// </summary>
+    public static async Task<Id65AuthoringEditorDocumentWriteResult>
+        MigrateRemotePadMobyChoiceToTerrainSetExactAsync(
+            UnusedLevel65BlankLevelLabWorkspacePaths paths,
+            UnusedLevel65BlankLevelLabManifest expectedLabManifest,
+            Id65AuthoringEditorControlState terrainSetState,
+            string expectedPriorEnvelopeCanonicalSha256,
+            CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(terrainSetState);
+        if (!terrainSetState.UsesRemotePadTerrainSet ||
+            string.IsNullOrWhiteSpace(expectedPriorEnvelopeCanonicalSha256))
+        {
+            throw new InvalidDataException(
+                "Explicit schema-4-to-5 migration requires an exact terrain-set state and prior envelope identity.");
+        }
+
+        return await SaveCoreAsync(
+            paths,
+            expectedLabManifest,
+            terrainSetState,
+            expectedPriorEnvelopeCanonicalSha256,
+            explicitLegacyToRemotePadMigration: false,
+            explicitRemotePadMobyChoiceMigration: false,
+            explicitRemotePadTerrainSetMigration: true,
             cancellationToken);
     }
 
@@ -165,6 +201,7 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         string? expectedPriorEnvelopeCanonicalSha256,
         bool explicitLegacyToRemotePadMigration,
         bool explicitRemotePadMobyChoiceMigration,
+        bool explicitRemotePadTerrainSetMigration,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(paths);
@@ -200,7 +237,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
                 stored,
                 createdNewDocument: expectedPriorEnvelopeCanonicalSha256 == null,
                 explicitLegacyToRemotePadMigration,
-                explicitRemotePadMobyChoiceMigration);
+                explicitRemotePadMobyChoiceMigration,
+                explicitRemotePadTerrainSetMigration);
         Id65AuthoringEditorDocumentProjectionInputs projectionInputs =
             new(nativeInputs);
         return explicitLegacyToRemotePadMigration
@@ -215,6 +253,16 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             : explicitRemotePadMobyChoiceMigration
                 ? await Id65AuthoringEditorDocumentStore
                     .MigrateRemotePadGridToMobyChoicePreparedAsync(
+                        paths,
+                        expectedLabManifest,
+                        compilation.Document,
+                        projectionInputs,
+                        prepareResult,
+                        expectedPriorEnvelopeCanonicalSha256!,
+                        cancellationToken)
+            : explicitRemotePadTerrainSetMigration
+                ? await Id65AuthoringEditorDocumentStore
+                    .MigrateRemotePadMobyChoiceToTerrainSetPreparedAsync(
                         paths,
                         expectedLabManifest,
                         compilation.Document,
@@ -238,7 +286,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         Id65AuthoringEditorDocumentStoreResult stored,
         bool createdNewDocument,
         bool explicitLegacyToRemotePadMigration,
-        bool explicitRemotePadMobyChoiceMigration)
+        bool explicitRemotePadMobyChoiceMigration,
+        bool explicitRemotePadTerrainSetMigration)
     {
         Id65AuthoringEditorDocumentEnvelopeIdentity identity = new(
             stored.Document,
@@ -252,7 +301,9 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             StaticAuthoringProfileId = stored.StaticAuthoringProfileId,
             StaticAuthoringCatalogSha256 = stored.StaticAuthoringCatalogSha256,
             StaticAuthoringSceneGraphSha256 = stored.StaticAuthoringSceneGraphSha256,
-            StaticAuthoringProjectionSha256 = stored.StaticAuthoringProjectionSha256
+            StaticAuthoringProjectionSha256 = stored.StaticAuthoringProjectionSha256,
+            StaticAuthoringTerrainManifestSha256 =
+                stored.StaticAuthoringTerrainManifestSha256
         };
         Id65AuthoringEditorDocumentReadModel readModel = new(identity);
         Id65AuthoringEditorControlState recovered =
@@ -264,14 +315,16 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             readModel,
             createdNewDocument,
             explicitLegacyToRemotePadMigration,
-            explicitRemotePadMobyChoiceMigration);
+            explicitRemotePadMobyChoiceMigration,
+            explicitRemotePadTerrainSetMigration);
         ValidateResult(
             result,
             compilation,
             stored,
             createdNewDocument,
             explicitLegacyToRemotePadMigration,
-            explicitRemotePadMobyChoiceMigration);
+            explicitRemotePadMobyChoiceMigration,
+            explicitRemotePadTerrainSetMigration);
         return result;
     }
 
@@ -387,10 +440,12 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         Id65AuthoringEditorControlState actual)
     {
         if (expected.IncludeStructuralTerrain != actual.IncludeStructuralTerrain ||
+            expected.IncludeTerrainTile2 != actual.IncludeTerrainTile2 ||
             expected.IncludeGrassAtT88 != actual.IncludeGrassAtT88 ||
             expected.IncludeGrassAtT107 != actual.IncludeGrassAtT107 ||
             expected.MandatoryBaseFaceTextureId != actual.MandatoryBaseFaceTextureId ||
             expected.T107PlacementSemantics != actual.T107PlacementSemantics ||
+            expected.TerrainSelectionSemantics != actual.TerrainSelectionSemantics ||
             !string.Equals(
                 expected.T107RemotePadPositionId,
                 actual.T107RemotePadPositionId,
@@ -412,7 +467,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         Id65AuthoringEditorDocumentStoreResult stored,
         bool createdNewDocument,
         bool expectedExplicitLegacyMigration,
-        bool expectedExplicitMobyChoiceMigration)
+        bool expectedExplicitMobyChoiceMigration,
+        bool expectedExplicitTerrainSetMigration)
     {
         bool expectedNativeValidation =
             !result.Document.UsesStaticRemotePadAuthoring ||
@@ -428,6 +484,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
                 expectedExplicitLegacyMigration ||
             result.ExplicitRemotePadMobyChoiceMigrationPerformed !=
                 expectedExplicitMobyChoiceMigration ||
+            result.ExplicitRemotePadTerrainSetMigrationPerformed !=
+                expectedExplicitTerrainSetMigration ||
             result.AutomaticMigrationPerformed ||
             !result.ExplicitSaveInvocationRequired ||
             !result.LegacyTerrainLayerConflictChecked ||
@@ -469,7 +527,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             Id65AuthoringEditorDocumentReadModel document,
             bool createdNewDocument,
             bool explicitLegacyToRemotePadMigration,
-            bool explicitRemotePadMobyChoiceMigration)
+            bool explicitRemotePadMobyChoiceMigration,
+            bool explicitRemotePadTerrainSetMigration)
         {
             ArgumentNullException.ThrowIfNull(state);
             ArgumentNullException.ThrowIfNull(document);
@@ -484,6 +543,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
                 explicitLegacyToRemotePadMigration;
             ExplicitRemotePadMobyChoiceMigrationPerformed =
                 explicitRemotePadMobyChoiceMigration;
+            ExplicitRemotePadTerrainSetMigrationPerformed =
+                explicitRemotePadTerrainSetMigration;
         }
 
         public override Id65AuthoringEditorControlState ControlState { get; }
@@ -491,5 +552,6 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         public override bool CreatedNewDocument { get; }
         public override bool ExplicitLegacyToRemotePadMigrationPerformed { get; }
         public override bool ExplicitRemotePadMobyChoiceMigrationPerformed { get; }
+        public override bool ExplicitRemotePadTerrainSetMigrationPerformed { get; }
     }
 }

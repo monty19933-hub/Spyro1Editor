@@ -13,6 +13,7 @@ namespace Spyro.Editor.Core.Exporting;
 internal static class Id65AuthoringTerrainSetCatalog
 {
     public const string ProfileId = "id65-authoring-terrain-set-v3-two-optional-triangles-v1";
+    public const int SchemaVersion = 1;
     public const string Tile1Id = "tile.remote-pad.1";
     public const string Tile2Id = "tile.remote-pad.2";
     public const string Tile1VertexHandle = "vertex.remote-pad.d";

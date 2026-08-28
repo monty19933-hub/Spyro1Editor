@@ -625,6 +625,7 @@ static void AssertResult(
         result.ReplacedExistingDocument != created &&
         !result.ExplicitLegacyToRemotePadMigrationPerformed &&
         !result.ExplicitRemotePadMobyChoiceMigrationPerformed &&
+        !result.ExplicitRemotePadTerrainSetMigrationPerformed &&
         !result.AutomaticMigrationPerformed &&
         result.ExplicitSaveInvocationRequired &&
         result.LegacyTerrainLayerConflictChecked &&
@@ -683,6 +684,7 @@ static void AssertRemoteResult(
         !result.Document.HasCompiledCompositeProjection &&
         result.ExplicitLegacyToRemotePadMigrationPerformed == explicitMigration &&
         !result.ExplicitRemotePadMobyChoiceMigrationPerformed &&
+        !result.ExplicitRemotePadTerrainSetMigrationPerformed &&
         !result.AutomaticMigrationPerformed &&
         result.ExplicitSaveInvocationRequired &&
         result.LegacyTerrainLayerConflictChecked &&
@@ -751,19 +753,26 @@ static void AssertPublicSurface()
         method.Name == "MigrateLegacyToRemotePadGridExactAsync");
     MethodInfo? migrateMobyChoice = methods.SingleOrDefault(method =>
         method.Name == "MigrateRemotePadGridToMobyChoiceExactAsync");
+    MethodInfo? migrateTerrainSet = methods.SingleOrDefault(method =>
+        method.Name == "MigrateRemotePadMobyChoiceToTerrainSetExactAsync");
     Require(
-        methods.Length == 3 && save != null && migrate != null && migrateMobyChoice != null &&
+        methods.Length == 4 && save != null && migrate != null &&
+        migrateMobyChoice != null && migrateTerrainSet != null &&
         save.ReturnType == typeof(Task<Id65AuthoringEditorDocumentWriteResult>) &&
         migrate.ReturnType == typeof(Task<Id65AuthoringEditorDocumentWriteResult>) &&
         migrateMobyChoice.ReturnType ==
+            typeof(Task<Id65AuthoringEditorDocumentWriteResult>) &&
+        migrateTerrainSet.ReturnType ==
             typeof(Task<Id65AuthoringEditorDocumentWriteResult>) &&
         save.GetParameters().Select(parameter => parameter.ParameterType)
             .SequenceEqual(exactParameters) &&
         migrate.GetParameters().Select(parameter => parameter.ParameterType)
             .SequenceEqual(exactParameters) &&
         migrateMobyChoice.GetParameters().Select(parameter => parameter.ParameterType)
+            .SequenceEqual(exactParameters) &&
+        migrateTerrainSet.GetParameters().Select(parameter => parameter.ParameterType)
             .SequenceEqual(exactParameters),
-        "The writer lost its normal-save plus two explicit migration surfaces or exposed arbitrary bytes/paths/delegates.");
+        "The writer lost its normal-save plus three explicit migration surfaces or exposed arbitrary bytes/paths/delegates.");
     Require(
         result.GetProperties(BindingFlags.Instance | BindingFlags.Public).All(property =>
             !(property.PropertyType == typeof(string) &&
@@ -863,7 +872,7 @@ static void AssertSourceTopology(string repositoryRoot)
             .Count == 2 &&
         appWriterOwners.SequenceEqual([expectedAppOwner]) &&
         publicWriterCall.Matches(File.ReadAllText(
-            Path.Combine(repositoryRoot, expectedAppOwner))).Count == 4,
+            Path.Combine(repositoryRoot, expectedAppOwner))).Count == 6,
         "The prepared Store publication owner, two-phase legacy check, or explicit App writer boundary changed.");
 }
 
@@ -908,11 +917,15 @@ static bool Equivalent(
     Id65AuthoringEditorControlState left,
     Id65AuthoringEditorControlState right) =>
     left.IncludeStructuralTerrain == right.IncludeStructuralTerrain &&
+    left.IncludeTerrainTile2 == right.IncludeTerrainTile2 &&
     left.IncludeGrassAtT88 == right.IncludeGrassAtT88 &&
     left.IncludeGrassAtT107 == right.IncludeGrassAtT107 &&
     left.MandatoryBaseFaceTextureId == right.MandatoryBaseFaceTextureId &&
     left.T107PlacementSemantics == right.T107PlacementSemantics &&
-    left.T107RemotePadPositionId == right.T107RemotePadPositionId;
+    left.T107RemotePadPositionId == right.T107RemotePadPositionId &&
+    left.RemotePadMobyKind == right.RemotePadMobyKind &&
+    left.RemotePadMobyPositionId == right.RemotePadMobyPositionId &&
+    left.TerrainSelectionSemantics == right.TerrainSelectionSemantics;
 
 static bool HasPathSegment(string path, string segment) =>
     path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)

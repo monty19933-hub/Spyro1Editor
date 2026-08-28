@@ -45,10 +45,12 @@ public sealed class Id65AuthoringEditorDocumentReadModel
     public const int LegacyReadModelSchemaVersion = 2;
     public const int RemotePadGridReadModelSchemaVersion = 3;
     public const int RemotePadMobyChoiceReadModelSchemaVersion = 4;
+    public const int RemotePadMobyChoiceTerrainSetReadModelSchemaVersion = 5;
 
     private readonly ReadOnlyCollection<Id65AuthoringEditorTerrainReadModel> _terrain;
     private readonly ReadOnlyCollection<Id65AuthoringEditorMobyPlacementReadModel>
         _mobyPlacements;
+    private readonly ReadOnlyCollection<string> _activeTerrainUnitIds;
 
     internal Id65AuthoringEditorDocumentReadModel(
         Id65AuthoringEditorDocumentEnvelopeIdentity identity)
@@ -87,6 +89,11 @@ public sealed class Id65AuthoringEditorDocumentReadModel
                 document.RemotePadMobyKind!.Value,
                 mobyPositionId)
             : null;
+        TerrainSelectionSemantics = document.UsesRemotePadTerrainSet
+            ? Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1
+            : Id65AuthoringEditorTerrainSelectionSemantics.LegacyOptionalTriangleV1;
+        TerrainSetManifestSha256 = document.TerrainSetManifestSha256 ?? string.Empty;
+        _activeTerrainUnitIds = Array.AsReadOnly(document.ActiveTerrainUnitIds.ToArray());
         LabProfileId = document.LabProfileId;
         LabProfileVersion = document.LabProfileVersion;
         WorkspaceKey = document.WorkspaceKey;
@@ -113,6 +120,8 @@ public sealed class Id65AuthoringEditorDocumentReadModel
             identity?.StaticAuthoringSceneGraphSha256 ?? string.Empty;
         StaticAuthoringProjectionSha256 =
             identity?.StaticAuthoringProjectionSha256 ?? string.Empty;
+        StaticAuthoringTerrainManifestSha256 =
+            identity?.StaticAuthoringTerrainManifestSha256 ?? string.Empty;
         PersistedProjectionIdentityPresent = identity != null;
 
         _terrain = Array.AsReadOnly(document.Terrain
@@ -130,7 +139,9 @@ public sealed class Id65AuthoringEditorDocumentReadModel
     }
 
     public int SchemaVersion { get; }
-    public int ReadModelSchemaVersion => UsesRemotePadMobyChoice
+    public int ReadModelSchemaVersion => UsesRemotePadTerrainSet
+        ? RemotePadMobyChoiceTerrainSetReadModelSchemaVersion
+        : UsesRemotePadMobyChoice
         ? RemotePadMobyChoiceReadModelSchemaVersion
         : UsesRemotePadT107Grid
             ? RemotePadGridReadModelSchemaVersion
@@ -148,6 +159,11 @@ public sealed class Id65AuthoringEditorDocumentReadModel
     public bool UsesRemotePadMobyChoice =>
         T107PlacementSemantics ==
             Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1;
+    public Id65AuthoringEditorTerrainSelectionSemantics TerrainSelectionSemantics { get; }
+    public bool UsesRemotePadTerrainSet => TerrainSelectionSemantics ==
+        Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1;
+    public string TerrainSetManifestSha256 { get; }
+    public IReadOnlyList<string> ActiveTerrainUnitIds => _activeTerrainUnitIds;
     public bool UsesStaticRemotePadAuthoring =>
         UsesRemotePadT107Grid || UsesRemotePadMobyChoice;
     public bool RequiresExplicitRemotePadMigration => !UsesStaticRemotePadAuthoring;
@@ -173,6 +189,7 @@ public sealed class Id65AuthoringEditorDocumentReadModel
     public string StaticAuthoringCatalogSha256 { get; }
     public string StaticAuthoringSceneGraphSha256 { get; }
     public string StaticAuthoringProjectionSha256 { get; }
+    public string StaticAuthoringTerrainManifestSha256 { get; }
     public bool HasCompiledCompositeProjection =>
         PersistedProjectionIdentityPresent && !UsesStaticRemotePadAuthoring;
     public bool HasStaticAuthoringProjection =>
@@ -240,6 +257,24 @@ public sealed class Id65AuthoringEditorDocumentReadModel
                     "remotePadMobyKind",
                     Id65RemotePadMobyChoiceCatalog.GetKindId(RemotePadMobyKind!.Value));
                 WriteRemotePadMobyPosition(json, RemotePadMobyPosition!);
+                if (UsesRemotePadTerrainSet)
+                {
+                    json.WritePropertyName("terrainSet");
+                    json.WriteStartObject();
+                    json.WriteNumber(
+                        "catalogSchemaVersion",
+                        Id65AuthoringTerrainSetCatalog.SchemaVersion);
+                    json.WriteString(
+                        "catalogProfileId",
+                        Id65AuthoringTerrainSetCatalog.ProfileId);
+                    json.WritePropertyName("activeUnitIds");
+                    json.WriteStartArray();
+                    foreach (string unitId in ActiveTerrainUnitIds)
+                        json.WriteStringValue(unitId);
+                    json.WriteEndArray();
+                    json.WriteString("manifestSha256", TerrainSetManifestSha256);
+                    json.WriteEndObject();
+                }
             }
             else if (UsesRemotePadT107Grid)
             {
@@ -282,6 +317,12 @@ public sealed class Id65AuthoringEditorDocumentReadModel
                 json.WriteString(
                     "staticAuthoringProjectionSha256",
                     StaticAuthoringProjectionSha256);
+                if (UsesRemotePadTerrainSet)
+                {
+                    json.WriteString(
+                        "staticAuthoringTerrainManifestSha256",
+                        StaticAuthoringTerrainManifestSha256);
+                }
                 json.WriteBoolean(
                     "compiledCompositeProjectionPresent",
                     HasCompiledCompositeProjection);

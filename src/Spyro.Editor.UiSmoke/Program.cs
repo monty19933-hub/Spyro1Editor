@@ -1048,15 +1048,17 @@ void RunId65BlankLabUiOnly()
             initial.DisposableExporterRoute != nameof(UnusedLevel65BlankLevelLabTerrainTestExporter) ||
             !initial.StatusText.Contains("Setup required", StringComparison.Ordinal) ||
             !initial.StatusText.Contains("ID65 stays out of the level picker", StringComparison.Ordinal) ||
-            !initial.CapabilityText.Contains("Exact coupled HP/LP + collision/occlusion/spawn intent", StringComparison.Ordinal) ||
-            !initial.CapabilityText.Contains("Generic HP-Z, texture, XY, add/remove, undo, and TerrainEditStore persistence are intentionally unavailable", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("two independently selectable structural units", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Schema 4 retains its prior single optional-triangle semantics until explicitly migrated", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Generic HP-Z, texture, XY, add/remove, undo, and TerrainEditStore persistence remain unavailable", StringComparison.Ordinal) ||
             !initial.CapabilityText.Contains("Resident T25 or Proved private T66", StringComparison.Ordinal) ||
             !initial.CapabilityText.Contains("T25 is offline-authoring/viewport-only", StringComparison.Ordinal) ||
             !initial.CapabilityText.Contains("cannot create a candidate, BIN, runtime, or release artifact", StringComparison.Ordinal) ||
             !initial.CapabilityText.Contains("Arbitrary cross-level/custom art remains unavailable", StringComparison.Ordinal) ||
-            !initial.CapabilityText.Contains("one verified Grass T107 bundle at one of nine fixed positions", StringComparison.Ordinal) ||
-            !initial.CapabilityText.Contains("exact offline BIN/CUE candidate", StringComparison.Ordinal) ||
-            !initial.CapabilityText.Contains("Physical runtime acceptance", StringComparison.Ordinal))
+            !initial.CapabilityText.Contains("None, verified Grass T107, or resident Red Gem T21", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Schema 3 must be migrated explicitly", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("schema 4 must be explicitly migrated before Tile 2 exists", StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains("Schema-5 physical materialization, Create BIN, runtime acceptance", StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 $"The clean public ID65 Lab state is not exact/fail-closed: {initial}");
@@ -1239,6 +1241,11 @@ void RunId65BlankLabUiOnly()
             throw new InvalidOperationException(
                 "The loaded fresh blank level did not expose its explicit first-run Object Manager action.");
         }
+        AssertText(window, "Schema-4/5 remote-pad Moby choice");
+        AssertTextContains(
+            window,
+            "Canonical schema-4 and schema-5 documents permit at most one visible placement");
+        AssertTextContains(window, "Current schema-4/5 boundary");
         string absentDocumentPath = Path.Combine(
             paths.AuthoredEditsDirectoryPath,
             Id65AuthoringEditorDocumentWorkspaceInspector.DocumentFileName);
@@ -1295,16 +1302,22 @@ void RunId65BlankLabUiOnly()
                         name,
                         StringComparison.Ordinal))) ||
             !(absentSummary.Text ?? "").Contains(
-                "optional terrain OFF",
+                "Terrain Tile 1 OFF",
+                StringComparison.Ordinal) ||
+            !(absentSummary.Text ?? "").Contains(
+                "Terrain Tile 2 OFF",
                 StringComparison.Ordinal) ||
             !(absentSummary.Text ?? "").Contains(
                 "Grass T88 OFF",
                 StringComparison.Ordinal) ||
             !(absentSummary.Text ?? "").Contains(
-                "Grass T107 OFF",
+                "no visible Moby",
                 StringComparison.Ordinal) ||
             !(absentSummary.Text ?? "").Contains(
-                "dormant Grass position Center",
+                "retained position Center",
+                StringComparison.Ordinal) ||
+            !(absentSummary.Text ?? "").Contains(
+                "T66 starts directly in schema 5",
                 StringComparison.Ordinal) ||
             !(absentPreview.Text ?? "").Contains(
                 "No texture is preselected",
@@ -1324,8 +1337,8 @@ void RunId65BlankLabUiOnly()
                 "Proved private T66",
                 StringComparison.Ordinal) ||
             !(absentPreview.Text ?? "").Contains(
-                "no candidate is created by this action",
-                StringComparison.Ordinal) ||
+                "Schema-5 physical materialization",
+                StringComparison.OrdinalIgnoreCase) ||
             File.Exists(absentDocumentPath) ||
             !ReferenceEquals(
                 window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
@@ -1436,9 +1449,10 @@ void RunId65BlankLabUiOnly()
 
         void CreateAndVerifyBlankFirstRun(
             string textureLabel,
-            int textureId,
-            bool expectOfflineCandidate)
+            int textureId)
         {
+            bool expectSchema5 = textureId ==
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId;
             SortedDictionary<string, string> candidateArtifactsBefore =
                 CaptureId65CandidateArtifactHashes(paths);
             Window startDialog = OpenAsyncDialog(
@@ -1477,16 +1491,42 @@ void RunId65BlankLabUiOnly()
                     MainWindow.Id65BlankLabUiSnapshot snapshot =
                         window.CaptureId65BlankLabUiSnapshotForTesting();
                     return snapshot.DocumentProjectionSynchronized &&
-                        snapshot.LoadedUsesRemotePadT107Grid &&
-                        snapshot.LoadedT107RemotePadPositionId ==
-                            Id65RemotePadGrassT107Catalog.CenterPositionId &&
                         snapshot.LoadedMandatoryBaseFaceTextureId == textureId &&
                         snapshot.VisibleMobyCount == 0 &&
-                        snapshot.CreateOptionalTerrainEnabled &&
-                        !snapshot.RemoveOptionalTerrainEnabled &&
-                        snapshot.ObjectManagerGrassPositionSelectorEnabled &&
-                        snapshot.ObjectManagerAddOrMoveGrassEnabled &&
-                        !snapshot.ObjectManagerRemoveGrassEnabled;
+                        (expectSchema5
+                            ? snapshot.LoadedUsesRemotePadMobyChoice &&
+                              snapshot.LoadedUsesRemotePadTerrainSet &&
+                              !snapshot.LoadedTerrainTile1 &&
+                              !snapshot.LoadedTerrainTile2 &&
+                              snapshot.LoadedRemotePadMobyKind ==
+                                Id65RemotePadMobyKind.None &&
+                              snapshot.LoadedRemotePadMobyPositionId ==
+                                Id65RemotePadMobyChoiceCatalog.DefaultPositionId &&
+                              snapshot.ObjectManagerMobyChoicePanelVisible &&
+                              snapshot.ObjectManagerMobyChoiceSelectorEnabled &&
+                              snapshot.ObjectManagerMobyPositionSelectorEnabled &&
+                              !snapshot.ObjectManagerApplyMobyChoiceEnabled &&
+                              !snapshot.ObjectManagerGrassPositionSelectorEnabled &&
+                              snapshot.TerrainSetControlsVisible &&
+                              !snapshot.LegacyOptionalTerrainControlsVisible &&
+                              snapshot.AddTerrainTile1Enabled &&
+                              !snapshot.RemoveTerrainTile1Enabled &&
+                              snapshot.AddTerrainTile2Enabled &&
+                              !snapshot.RemoveTerrainTile2Enabled &&
+                              !snapshot.CreateOptionalTerrainEnabled &&
+                              !snapshot.RemoveOptionalTerrainEnabled
+                            : !snapshot.LoadedUsesRemotePadTerrainSet &&
+                              snapshot.LoadedUsesRemotePadT107Grid &&
+                              snapshot.LoadedT107RemotePadPositionId ==
+                                Id65RemotePadGrassT107Catalog.CenterPositionId &&
+                              snapshot.ObjectManagerGrassPositionSelectorEnabled &&
+                              snapshot.ObjectManagerAddOrMoveGrassEnabled &&
+                              !snapshot.ObjectManagerRemoveGrassEnabled &&
+                              !snapshot.ObjectManagerMobyChoicePanelVisible &&
+                              snapshot.LegacyOptionalTerrainControlsVisible &&
+                              !snapshot.TerrainSetControlsVisible &&
+                              snapshot.CreateOptionalTerrainEnabled &&
+                              !snapshot.RemoveOptionalTerrainEnabled);
                 },
                 TimeSpan.FromSeconds(60),
                 () => $"creating and projecting the exact blank {textureLabel} document");
@@ -1507,17 +1547,24 @@ void RunId65BlankLabUiOnly()
                 window.CaptureEditorShellSessionSnapshotForTesting();
             MainWindow.Id65BlankLabUiSnapshot ui =
                 window.CaptureId65BlankLabUiSnapshotForTesting();
-            if (!state.UsesRemotePadT107Grid ||
+            if (state.UsesRemotePadMobyChoice != expectSchema5 ||
+                state.UsesRemotePadTerrainSet != expectSchema5 ||
+                state.UsesRemotePadT107Grid == expectSchema5 ||
                 state.IncludeStructuralTerrain ||
+                state.IncludeTerrainTile2 ||
                 state.IncludeGrassAtT88 ||
                 state.IncludeGrassAtT107 ||
-                state.T107RemotePadPositionId !=
-                    Id65RemotePadGrassT107Catalog.CenterPositionId ||
+                (expectSchema5
+                    ? state.RemotePadMobyKind != Id65RemotePadMobyKind.None ||
+                      state.RemotePadMobyPositionId !=
+                        Id65RemotePadMobyChoiceCatalog.DefaultPositionId
+                    : state.T107RemotePadPositionId !=
+                        Id65RemotePadGrassT107Catalog.CenterPositionId) ||
                 state.MandatoryBaseFaceTextureId != textureId ||
                 scene.CurrentGeometry?.Polygons.Count != 1 ||
                 scene.CurrentGeometry.LowDetailPolygons.Count != 1 ||
                 scene.CurrentMobys.Count != 0 ||
-                ui.AuthoringCandidateEnabled != expectOfflineCandidate ||
+                ui.AuthoringCandidateEnabled ||
                 ui.PrivateT66ViewportProjectionBound !=
                     (textureId ==
                         Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId) ||
@@ -1530,8 +1577,8 @@ void RunId65BlankLabUiOnly()
                 throw new InvalidOperationException(
                     $"The explicit {textureLabel} first-run action lost its exact blank state, direct controls, or candidate boundary: {ui}");
             }
-            string expectedCandidateText = expectOfflineCandidate
-                ? "Verified Blank-Level Candidate"
+            string expectedCandidateText = expectSchema5
+                ? "Schema 5 Physical Candidate Not Implemented"
                 : "Unavailable for Resident T25";
             if (!ui.AuthoringCandidateButtonText.Contains(
                     expectedCandidateText,
@@ -1575,13 +1622,11 @@ void RunId65BlankLabUiOnly()
         Console.WriteLine("ID65 UI smoke: starting explicit T66 blank first-run probe.");
         CreateAndVerifyBlankFirstRun(
             "Proved private T66",
-            Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId,
-            expectOfflineCandidate: true);
+            Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId);
         Console.WriteLine("ID65 UI smoke: starting explicit T25 blank first-run probe.");
         CreateAndVerifyBlankFirstRun(
             "Resident T25",
-            Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId,
-            expectOfflineCandidate: false);
+            Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId);
         loadedLab = window.CaptureEditorShellSessionSnapshotForTesting();
         AssertNoWholeLevelWipeAction(window);
 
@@ -3200,6 +3245,817 @@ void RunId65BlankLabUiOnly()
                 "The fully blank schema-3 state did not route through the verified candidate seam with truthful blank/omitted status.");
         }
 
+        Console.WriteLine(
+            "ID65 UI smoke: starting explicit schema-4 None/Grass/Red Gem Object Manager probe.");
+        byte[] schema3BeforeSchema4Migration =
+            File.ReadAllBytes(authoringDocumentPath);
+        EditorShellSessionSnapshot sceneBeforeSchema4Migration =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        SortedDictionary<string, string> candidateArtifactsBeforeSchema4 =
+            CaptureId65CandidateArtifactHashes(paths);
+        Window schema4MigrationDialog = OpenAsyncDialog(
+            window,
+            objectManagerDocumentButton,
+            "ID65 Full Authoring Document",
+            "ID65 schema-3-to-4 migration dialog");
+        Button migrateSchema4 = FindNamedUnique<Button>(
+            schema4MigrationDialog,
+            "Id65AuthoringRemotePadMobyChoiceMigrationButton");
+        ComboBox schema4DialogChoice = FindNamedUnique<ComboBox>(
+            schema4MigrationDialog,
+            "Id65AuthoringRemotePadMobyChoiceSelector");
+        ComboBox schema4DialogPosition = FindNamedUnique<ComboBox>(
+            schema4MigrationDialog,
+            "Id65AuthoringRemotePadMobyPositionSelector");
+        TextBlock schema4DialogNotice = FindNamedUnique<TextBlock>(
+            schema4MigrationDialog,
+            "Id65AuthoringRemotePadMobyChoiceNotice");
+        TextBlock schema4MigrationPreview = FindNamedUnique<TextBlock>(
+            schema4MigrationDialog,
+            "Id65AuthoringExactPreviewText");
+        Button schema4MigrationSave = FindNamedUnique<Button>(
+            schema4MigrationDialog,
+            "Id65AuthoringSaveButton");
+        if (!migrateSchema4.IsEffectivelyVisible ||
+            schema4DialogChoice.IsEffectivelyVisible ||
+            schema4DialogPosition.IsEffectivelyVisible)
+        {
+            throw new InvalidOperationException(
+                "The eligible schema-3 document did not expose only its explicit schema-4 migration action before migration was selected.");
+        }
+        migrateSchema4.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, migrateSchema4));
+        FlushUi();
+        Id65RemotePadMobyChoice mappedNone =
+            (Id65RemotePadMobyChoice)(schema4DialogChoice.SelectedItem ??
+                throw new InvalidOperationException(
+                    "The schema-4 migration preview did not select its mapped None choice."));
+        if (migrateSchema4.IsEffectivelyVisible ||
+            !schema4DialogChoice.IsEffectivelyVisible ||
+            !schema4DialogPosition.IsEffectivelyVisible ||
+            schema4DialogChoice.IsEnabled || schema4DialogPosition.IsEnabled ||
+            mappedNone.Kind != Id65RemotePadMobyKind.None ||
+            schema4DialogPosition.SelectedItem?.ToString() != "Bottom right" ||
+            !(schema4DialogNotice.Text ?? "").Contains(
+                "locked to its exact mapped None/Grass choice",
+                StringComparison.Ordinal) ||
+            !(schema4MigrationPreview.Text ?? "").Contains(
+                "schema-4 None choice",
+                StringComparison.OrdinalIgnoreCase) ||
+            !(schema4MigrationPreview.Text ?? "").Contains(
+                "no physical candidate authority",
+                StringComparison.OrdinalIgnoreCase) ||
+            !schema4MigrationSave.IsEnabled ||
+            !File.ReadAllBytes(authoringDocumentPath)
+                .SequenceEqual(schema3BeforeSchema4Migration) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
+                sceneBeforeSchema4Migration.CurrentGeometry) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys,
+                sceneBeforeSchema4Migration.CurrentMobys))
+        {
+            throw new InvalidOperationException(
+                "The explicit schema-4 migration preview changed disk/viewport state, allowed an invalid pre-save choice, or lost its fail-closed explanation.");
+        }
+
+        schema4MigrationSave.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, schema4MigrationSave));
+        WaitForDialogToClose(
+            window,
+            schema4MigrationDialog,
+            "ID65 schema-3-to-4 migration dialog");
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.DocumentProjectionSynchronized &&
+                    snapshot.LoadedUsesRemotePadMobyChoice &&
+                    snapshot.LoadedRemotePadMobyKind ==
+                        Id65RemotePadMobyKind.None &&
+                    snapshot.LoadedRemotePadMobyPositionId ==
+                        Id65RemotePadGrassT107Catalog.SouthEastPositionId &&
+                    snapshot.ObjectManagerMobyChoicePanelVisible &&
+                    snapshot.ObjectManagerMobyChoiceSelectorEnabled &&
+                    snapshot.ObjectManagerMobyPositionSelectorEnabled &&
+                    !snapshot.ObjectManagerApplyMobyChoiceEnabled &&
+                    snapshot.VisibleMobyCount == 0;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "saving and projecting the explicit schema-3-to-4 None migration");
+        Task<Id65AuthoringEditorDocumentReadModel?> schema4NoneDocumentTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(
+            schema4NoneDocumentTask,
+            "re-inspecting the migrated schema-4 None document");
+        Id65AuthoringEditorDocumentReadModel schema4NoneDocument =
+            schema4NoneDocumentTask.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "The migrated schema-4 None document disappeared.");
+        Id65AuthoringEditorControlState schema4NoneState =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                schema4NoneDocument);
+        MainWindow.Id65BlankLabUiSnapshot schema4NoneUi =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        if (!schema4NoneState.UsesRemotePadMobyChoice ||
+            schema4NoneState.RemotePadMobyKind != Id65RemotePadMobyKind.None ||
+            schema4NoneState.RemotePadMobyPositionId !=
+                Id65RemotePadGrassT107Catalog.SouthEastPositionId ||
+            schema4NoneState.IncludeStructuralTerrain ||
+            schema4NoneState.IncludeGrassAtT88 ||
+            schema4NoneState.IncludeGrassAtT107 ||
+            schema4NoneState.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId ||
+            File.ReadAllBytes(authoringDocumentPath)
+                .SequenceEqual(schema3BeforeSchema4Migration) ||
+            schema4NoneUi.AuthoringCandidateEnabled ||
+            schema4NoneUi.RevealEnabled ||
+            !schema4NoneUi.AuthoringCandidateButtonText.Contains(
+                "Schema 4 Physical Candidate Not Implemented",
+                StringComparison.Ordinal) ||
+            !schema4NoneUi.ObjectManagerStatusText.Contains(
+                "Schema-4 None is explicit",
+                StringComparison.Ordinal) ||
+            !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                candidateArtifactsBeforeSchema4))
+        {
+            throw new InvalidOperationException(
+                $"The explicit schema-4 None migration lost its exact mapping, static-only projection, or fail-closed candidate boundary: {schema4NoneUi}");
+        }
+
+        ComboBox directMobyChoice = FindNamedUnique<ComboBox>(
+            window,
+            "Id65FreshMobyChoiceSelector");
+        ComboBox directMobyChoicePosition = FindNamedUnique<ComboBox>(
+            window,
+            "Id65FreshMobyChoicePositionSelector");
+        Button directApplyMobyChoice = FindNamedUnique<Button>(
+            window,
+            "Id65FreshApplyMobyChoiceButton");
+        object[] directMobyChoices = ReadItemsSource(
+            directMobyChoice,
+            "schema-4 direct Moby choice selector");
+        object[] directMobyPositions = ReadItemsSource(
+            directMobyChoicePosition,
+            "schema-4 direct Moby position selector");
+        Id65RemotePadMobyChoice redGemChoice = directMobyChoices
+            .Cast<Id65RemotePadMobyChoice>()
+            .Single(choice => choice.Kind == Id65RemotePadMobyKind.RedGemT21);
+        Id65RemotePadMobyChoice grassChoice = directMobyChoices
+            .Cast<Id65RemotePadMobyChoice>()
+            .Single(choice => choice.Kind == Id65RemotePadMobyKind.GrassT107);
+        Id65RemotePadMobyChoice noneChoice = directMobyChoices
+            .Cast<Id65RemotePadMobyChoice>()
+            .Single(choice => choice.Kind == Id65RemotePadMobyKind.None);
+        object schema4TopLeft = directMobyPositions.Single(item =>
+            string.Equals(item.ToString(), "Top left", StringComparison.Ordinal));
+        object schema4Center = directMobyPositions.Single(item =>
+            string.Equals(item.ToString(), "Center", StringComparison.Ordinal));
+        if (!directMobyChoice.IsEnabled ||
+            !directMobyChoicePosition.IsEnabled ||
+            directMobyChoices.Length != 3 || directMobyPositions.Length != 9 ||
+            ((Id65RemotePadMobyChoice?)directMobyChoice.SelectedItem)?.Kind !=
+                Id65RemotePadMobyKind.None ||
+            directMobyChoicePosition.SelectedItem?.ToString() != "Bottom right" ||
+            directApplyMobyChoice.IsEnabled ||
+            directGrassPositionSelector.IsEnabled ||
+            directAddOrMoveGrass.IsEnabled || directRemoveGrass.IsEnabled)
+        {
+            throw new InvalidOperationException(
+                "The migrated schema-4 document did not swap the schema-3 Grass controls for one exact three-choice/nine-position Object Manager surface.");
+        }
+
+        byte[] schema4BeforeSelectorOnly =
+            File.ReadAllBytes(authoringDocumentPath);
+        EditorShellSessionSnapshot schema4SceneBeforeSelectorOnly =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        directMobyChoice.SelectedItem = redGemChoice;
+        directMobyChoicePosition.SelectedItem = schema4TopLeft;
+        FlushUi();
+        if (!directApplyMobyChoice.IsEnabled ||
+            !File.ReadAllBytes(authoringDocumentPath)
+                .SequenceEqual(schema4BeforeSelectorOnly) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
+                schema4SceneBeforeSelectorOnly.CurrentGeometry) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys,
+                schema4SceneBeforeSelectorOnly.CurrentMobys))
+        {
+            throw new InvalidOperationException(
+                "Selecting schema-4 Red Gem/Top left wrote or changed the viewport before Apply Choice.");
+        }
+
+        window.Id65AuthoringMobyExpectedEnvelopeOverrideForTesting =
+            _ => new string('0', 64);
+        directApplyMobyChoice.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, directApplyMobyChoice));
+        WaitForCondition(
+            () => !window.CaptureId65BlankLabUiSnapshotForTesting()
+                    .ObjectManagerApplyMobyChoiceEnabled &&
+                (id65Status.Text ?? "").Contains(
+                    "Could not apply the Moby choice",
+                    StringComparison.OrdinalIgnoreCase),
+            TimeSpan.FromSeconds(60),
+            () => "refusing a stale schema-4 direct-choice compare-and-swap");
+        window.Id65AuthoringMobyExpectedEnvelopeOverrideForTesting = null;
+        if (!File.ReadAllBytes(authoringDocumentPath)
+                .SequenceEqual(schema4BeforeSelectorOnly) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
+                schema4SceneBeforeSelectorOnly.CurrentGeometry) ||
+            window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys.Count != 0)
+        {
+            throw new InvalidOperationException(
+                "The injected stale schema-4 CAS changed the canonical document or prior viewport.");
+        }
+
+        directMobyChoice.SelectedItem = redGemChoice;
+        directMobyChoicePosition.SelectedItem = schema4TopLeft;
+        FlushUi();
+        directApplyMobyChoice.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, directApplyMobyChoice));
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.DocumentProjectionSynchronized &&
+                    snapshot.LoadedUsesRemotePadMobyChoice &&
+                    snapshot.LoadedRemotePadMobyKind ==
+                        Id65RemotePadMobyKind.RedGemT21 &&
+                    snapshot.LoadedRemotePadMobyPositionId ==
+                        Id65RemotePadGrassT107Catalog.NorthWestPositionId &&
+                    snapshot.VisibleMobyCount == 1 &&
+                    !snapshot.ObjectManagerApplyMobyChoiceEnabled &&
+                    !snapshot.AuthoringCandidateEnabled;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "persisting and projecting schema-4 Red Gem at Top left");
+        Task<Id65AuthoringEditorDocumentReadModel?> redGemDocumentTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(redGemDocumentTask, "re-inspecting schema-4 Red Gem");
+        Id65AuthoringEditorDocumentReadModel redGemDocument =
+            redGemDocumentTask.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "The schema-4 Red Gem document disappeared.");
+        Id65AuthoringEditorControlState redGemState =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                redGemDocument);
+        EditorShellSessionSnapshot redGemScene =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        Moby redGem = redGemScene.CurrentMobys.SingleOrDefault() ??
+            throw new InvalidOperationException(
+                "The schema-4 Red Gem document did not project one visible Moby.");
+        Id65FreshLevelSceneProjection redGemProjection =
+            Id65FreshLevelSceneProjector.ProjectExact(
+                redGemScene.CurrentLevel ?? throw new InvalidOperationException(
+                    "The Red Gem scene lost ID65 identity."),
+                redGemDocument);
+        Id65FreshLevelMobyPresentation redGemPresentation =
+            redGemProjection.VisibleMobyPresentations.Single();
+        if (!redGemState.UsesRemotePadMobyChoice ||
+            redGemState.RemotePadMobyKind != Id65RemotePadMobyKind.RedGemT21 ||
+            redGemState.RemotePadMobyPositionId !=
+                Id65RemotePadGrassT107Catalog.NorthWestPositionId ||
+            redGemProjection.RemotePadMobyKind !=
+                Id65RemotePadMobyKind.RedGemT21 ||
+            redGemPresentation.MobyKind != Id65RemotePadMobyKind.RedGemT21 ||
+            redGemPresentation.TargetTrueIndex !=
+                Id65RemotePadRedGemT21Catalog.TargetTrueIndex ||
+            redGemPresentation.RowSha256 !=
+                Id65RemotePadRedGemT21Catalog.GetRequiredPosition(
+                    Id65RemotePadRedGemT21Catalog.NorthWestPositionId)
+                    .OutputRowSha256 ||
+            redGem.TrueIndex != Id65RemotePadRedGemT21Catalog.TargetTrueIndex ||
+            redGem.Position != new Vector3f(368, 336, 512) ||
+            redGem.Type != 0x18 || redGem.PropertiesPointer != 0x5560 ||
+            redGem.SourceByte36 != GemValue.Red.IdByte ||
+            redGem.SourceByte37 != 0 ||
+            redGem.SourceByte4F != GemValue.Red.ValueByte ||
+            redGem.Flag4A != 0x40 || redGem.Flag4B != 0xFF ||
+            redGem.Gem != GemValue.Red || redGem.HasAnyEdit ||
+            !redGem.Label.Contains("Red Gem", StringComparison.Ordinal) ||
+            !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                candidateArtifactsBeforeSchema4) ||
+            File.Exists(legacyId65TerrainEditPath))
+        {
+            throw new InvalidOperationException(
+                "Schema-4 Red Gem did not persist and reproject its exact presentation-only T21 identity or crossed a candidate/TerrainEditStore boundary.");
+        }
+
+        int schema4CandidateCalls = 0;
+        window.Id65AuthoringCandidateMaterializerOverrideForTesting = (_, _, _) =>
+        {
+            schema4CandidateCalls++;
+            return Task.FromResult(
+                BuildRemotePadUiCandidateResult(blankDocument, blankState));
+        };
+        try
+        {
+            Task refusedSchema4Candidate = InvokePrivate<Task>(
+                window,
+                "CreateId65AuthoringAggregateCandidateAsync");
+            WaitForUiTask(
+                refusedSchema4Candidate,
+                "refusing schema-4 physical candidate materialization");
+        }
+        finally
+        {
+            window.Id65AuthoringCandidateMaterializerOverrideForTesting = null;
+        }
+        if (schema4CandidateCalls != 0 ||
+            !(id65Status.Text ?? "").Contains(
+                "Schema-4 None/Grass/Red Gem documents",
+                StringComparison.Ordinal) ||
+            !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                candidateArtifactsBeforeSchema4))
+        {
+            throw new InvalidOperationException(
+                "Schema-4 state reached the physical candidate seam or lost its explicit refusal status.");
+        }
+
+        Task reloadSchema4RedGem = InvokePrivate<Task>(
+            window,
+            "LoadId65BlankLabAsync");
+        WaitForUiTask(
+            reloadSchema4RedGem,
+            "reloading the persisted schema-4 Red Gem document",
+            timeoutSeconds: 120);
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.LoadedRemotePadMobyKind ==
+                        Id65RemotePadMobyKind.RedGemT21 &&
+                    snapshot.LoadedRemotePadMobyPositionId ==
+                        Id65RemotePadGrassT107Catalog.NorthWestPositionId &&
+                    snapshot.VisibleMobyCount == 1;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "confirming schema-4 Red Gem persistence after Lab reload");
+
+        directMobyChoice.SelectedItem = grassChoice;
+        directMobyChoicePosition.SelectedItem = schema4Center;
+        FlushUi();
+        directApplyMobyChoice.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, directApplyMobyChoice));
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.LoadedRemotePadMobyKind ==
+                        Id65RemotePadMobyKind.GrassT107 &&
+                    snapshot.LoadedRemotePadMobyPositionId ==
+                        Id65RemotePadGrassT107Catalog.CenterPositionId &&
+                    snapshot.VisibleMobyCount == 1;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "switching schema-4 Red Gem to Grass");
+        Task<Id65AuthoringEditorDocumentReadModel?> grassSchema4Task =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(grassSchema4Task, "re-inspecting schema-4 Grass");
+        Id65AuthoringEditorDocumentReadModel grassSchema4Document =
+            grassSchema4Task.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "The schema-4 Grass document disappeared.");
+        Id65AuthoringEditorControlState grassSchema4State =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                grassSchema4Document);
+        Moby grassSchema4Moby =
+            window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys.Single();
+        if (!grassSchema4State.UsesRemotePadMobyChoice ||
+            grassSchema4State.RemotePadMobyKind !=
+                Id65RemotePadMobyKind.GrassT107 ||
+            grassSchema4State.RemotePadMobyPositionId !=
+                Id65RemotePadGrassT107Catalog.CenterPositionId ||
+            grassSchema4Moby.TrueIndex !=
+                Id65RemotePadGrassT107Catalog.TargetTrueIndex ||
+            grassSchema4Moby.Position != new Vector3f(384, 352, 512) ||
+            grassSchema4Moby.PropertiesPointer != 0x8138 ||
+            grassSchema4Moby.SourceByte36 != 0xF5 ||
+            grassSchema4Moby.SourceByte37 != 0x01 ||
+            grassSchema4Moby.HasAnyEdit)
+        {
+            throw new InvalidOperationException(
+                "Switching schema-4 Red Gem to Grass did not persist and replace the exact single presentation.");
+        }
+
+        directMobyChoice.SelectedItem = noneChoice;
+        FlushUi();
+        directApplyMobyChoice.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, directApplyMobyChoice));
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.LoadedRemotePadMobyKind ==
+                        Id65RemotePadMobyKind.None &&
+                    snapshot.LoadedRemotePadMobyPositionId ==
+                        Id65RemotePadGrassT107Catalog.CenterPositionId &&
+                    snapshot.VisibleMobyCount == 0 &&
+                    !snapshot.ObjectManagerApplyMobyChoiceEnabled;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "switching schema-4 Grass to None with dormant Center retained");
+        Task<Id65AuthoringEditorDocumentReadModel?> finalSchema4NoneTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(finalSchema4NoneTask, "re-inspecting final schema-4 None");
+        Id65AuthoringEditorControlState finalSchema4None =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                finalSchema4NoneTask.GetAwaiter().GetResult() ??
+                throw new InvalidOperationException(
+                    "The final schema-4 None document disappeared."));
+        if (!finalSchema4None.UsesRemotePadMobyChoice ||
+            finalSchema4None.UsesRemotePadTerrainSet ||
+            finalSchema4None.RemotePadMobyKind != Id65RemotePadMobyKind.None ||
+            finalSchema4None.RemotePadMobyPositionId !=
+                Id65RemotePadGrassT107Catalog.CenterPositionId ||
+            !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                candidateArtifactsBeforeSchema4))
+        {
+            throw new InvalidOperationException(
+                "Schema-4 Grass-to-None did not retain the dormant Center choice or crossed the physical candidate boundary.");
+        }
+
+        MainWindow.Id65BlankLabUiSnapshot schema4BeforeTerrainSetUi =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        if (!schema4BeforeTerrainSetUi.LegacyOptionalTerrainControlsVisible ||
+            schema4BeforeTerrainSetUi.TerrainSetControlsVisible ||
+            !schema4BeforeTerrainSetUi.CreateOptionalTerrainEnabled ||
+            schema4BeforeTerrainSetUi.RemoveOptionalTerrainEnabled ||
+            schema4BeforeTerrainSetUi.LoadedUsesRemotePadTerrainSet)
+        {
+            throw new InvalidOperationException(
+                $"The existing unmigrated schema-4 document did not retain its prior one-terrain UI semantics: {schema4BeforeTerrainSetUi}");
+        }
+
+        Console.WriteLine("ID65 UI smoke: starting explicit schema-4-to-5 terrain-set migration probe.");
+        byte[] schema4BeforeTerrainSetMigration =
+            File.ReadAllBytes(authoringDocumentPath);
+        EditorShellSessionSnapshot schema4SceneBeforeTerrainSetMigration =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        Window terrainSetMigrationDialog = OpenAsyncDialog(
+            window,
+            freshObjectManagerButton,
+            "ID65 Full Authoring Document",
+            "ID65 explicit schema-4-to-5 terrain-set migration dialog");
+        AssertText(terrainSetMigrationDialog, "Schema-4/5 Moby choice");
+        Button migrateTerrainSet = FindNamedUnique<Button>(
+            terrainSetMigrationDialog,
+            "Id65AuthoringTerrainSetMigrationButton");
+        CheckBox migrationTile1 = FindNamedUnique<CheckBox>(
+            terrainSetMigrationDialog,
+            "Id65AuthoringStructuralTerrainBox");
+        CheckBox migrationTile2 = FindNamedUnique<CheckBox>(
+            terrainSetMigrationDialog,
+            "Id65AuthoringTerrainTile2Box");
+        ComboBox migrationMobyChoice = FindNamedUnique<ComboBox>(
+            terrainSetMigrationDialog,
+            "Id65AuthoringRemotePadMobyChoiceSelector");
+        ComboBox migrationMobyPosition = FindNamedUnique<ComboBox>(
+            terrainSetMigrationDialog,
+            "Id65AuthoringRemotePadMobyPositionSelector");
+        TextBlock terrainSetPreview = FindNamedUnique<TextBlock>(
+            terrainSetMigrationDialog,
+            "Id65AuthoringExactPreviewText");
+        Button saveTerrainSetMigration = FindNamedUnique<Button>(
+            terrainSetMigrationDialog,
+            "Id65AuthoringSaveButton");
+        if (!migrateTerrainSet.IsEffectivelyVisible ||
+            migrationTile2.IsEffectivelyVisible ||
+            !migrationTile1.IsEnabled ||
+            !migrationMobyChoice.IsEnabled ||
+            !migrationMobyPosition.IsEnabled ||
+            migrationTile1.IsChecked == true ||
+            migrationTile2.IsChecked == true)
+        {
+            throw new InvalidOperationException(
+                "The persisted schema-4 dialog did not offer exactly one explicit schema-5 migration while keeping Tile 2 absent.");
+        }
+        migrateTerrainSet.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, migrateTerrainSet));
+        FlushUi();
+        if (migrateTerrainSet.IsEffectivelyVisible ||
+            !migrationTile2.IsEffectivelyVisible ||
+            migrationTile1.IsEnabled || migrationTile2.IsEnabled ||
+            migrationMobyChoice.IsEnabled || migrationMobyPosition.IsEnabled ||
+            migrationTile1.IsChecked == true ||
+            migrationTile2.IsChecked == true ||
+            !saveTerrainSetMigration.IsEnabled ||
+            !(terrainSetPreview.Text ?? "").Contains(
+                "schema-5 terrain Tile 1 OFF, Tile 2 OFF",
+                StringComparison.Ordinal) ||
+            !File.ReadAllBytes(authoringDocumentPath)
+                .SequenceEqual(schema4BeforeTerrainSetMigration) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
+                schema4SceneBeforeTerrainSetMigration.CurrentGeometry) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys,
+                schema4SceneBeforeTerrainSetMigration.CurrentMobys))
+        {
+            throw new InvalidOperationException(
+                "The schema-5 migration preview wrote early, inferred Tile 2, or left mapped schema-4 controls editable before exact save.");
+        }
+        saveTerrainSetMigration.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, saveTerrainSetMigration));
+        WaitForDialogToClose(
+            window,
+            terrainSetMigrationDialog,
+            "ID65 explicit schema-4-to-5 terrain-set migration dialog");
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.DocumentProjectionSynchronized &&
+                    snapshot.LoadedUsesRemotePadTerrainSet &&
+                    !snapshot.LoadedTerrainTile1 &&
+                    !snapshot.LoadedTerrainTile2 &&
+                    snapshot.LoadedRemotePadMobyKind ==
+                        Id65RemotePadMobyKind.None &&
+                    snapshot.LoadedRemotePadMobyPositionId ==
+                        Id65RemotePadGrassT107Catalog.CenterPositionId &&
+                    snapshot.TerrainSetControlsVisible &&
+                    !snapshot.LegacyOptionalTerrainControlsVisible &&
+                    snapshot.AddTerrainTile1Enabled &&
+                    snapshot.AddTerrainTile2Enabled &&
+                    !snapshot.RemoveTerrainTile1Enabled &&
+                    !snapshot.RemoveTerrainTile2Enabled &&
+                    !snapshot.AuthoringCandidateEnabled;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "persisting and projecting the explicit schema-5 empty terrain set");
+        Task<Id65AuthoringEditorDocumentReadModel?> migratedTerrainSetTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(
+            migratedTerrainSetTask,
+            "re-inspecting the explicit schema-5 terrain-set migration");
+        Id65AuthoringEditorControlState migratedTerrainSetState =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                migratedTerrainSetTask.GetAwaiter().GetResult() ??
+                throw new InvalidOperationException(
+                    "The explicitly migrated schema-5 terrain-set document disappeared."));
+        if (!migratedTerrainSetState.UsesRemotePadTerrainSet ||
+            migratedTerrainSetState.IncludeTerrainTile1 ||
+            migratedTerrainSetState.IncludeTerrainTile2 ||
+            migratedTerrainSetState.RemotePadMobyKind !=
+                Id65RemotePadMobyKind.None ||
+            migratedTerrainSetState.RemotePadMobyPositionId !=
+                Id65RemotePadGrassT107Catalog.CenterPositionId ||
+            File.ReadAllBytes(authoringDocumentPath)
+                .SequenceEqual(schema4BeforeTerrainSetMigration) ||
+            !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                candidateArtifactsBeforeSchema4) ||
+            File.Exists(legacyId65TerrainEditPath))
+        {
+            throw new InvalidOperationException(
+                "The explicit schema-4-to-5 migration lost its exact 00/None/Center mapping or crossed a physical/TerrainEditStore boundary.");
+        }
+
+        Button addTerrainTile1 = FindNamedUnique<Button>(
+            window,
+            "Id65FreshAddTerrainTile1Button");
+        Button removeTerrainTile1 = FindNamedUnique<Button>(
+            window,
+            "Id65FreshRemoveTerrainTile1Button");
+        Button addTerrainTile2 = FindNamedUnique<Button>(
+            window,
+            "Id65FreshAddTerrainTile2Button");
+        Button removeTerrainTile2 = FindNamedUnique<Button>(
+            window,
+            "Id65FreshRemoveTerrainTile2Button");
+
+        byte[] schema5BeforeMobySelector =
+            File.ReadAllBytes(authoringDocumentPath);
+        EditorShellSessionSnapshot schema5SceneBeforeMobySelector =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        directMobyChoice.SelectedItem = redGemChoice;
+        directMobyChoicePosition.SelectedItem = schema4TopLeft;
+        FlushUi();
+        if (!directApplyMobyChoice.IsEnabled ||
+            !File.ReadAllBytes(authoringDocumentPath)
+                .SequenceEqual(schema5BeforeMobySelector) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
+                schema5SceneBeforeMobySelector.CurrentGeometry) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys,
+                schema5SceneBeforeMobySelector.CurrentMobys))
+        {
+            throw new InvalidOperationException(
+                "Selecting schema-5 Red Gem/Top left wrote or changed the viewport before Apply Choice.");
+        }
+        directApplyMobyChoice.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, directApplyMobyChoice));
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.DocumentProjectionSynchronized &&
+                    snapshot.LoadedUsesRemotePadTerrainSet &&
+                    !snapshot.LoadedTerrainTile1 &&
+                    !snapshot.LoadedTerrainTile2 &&
+                    snapshot.LoadedRemotePadMobyKind ==
+                        Id65RemotePadMobyKind.RedGemT21 &&
+                    snapshot.LoadedRemotePadMobyPositionId ==
+                        Id65RemotePadGrassT107Catalog.NorthWestPositionId &&
+                    snapshot.VisibleMobyCount == 1 &&
+                    !snapshot.ObjectManagerApplyMobyChoiceEnabled;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "persisting schema-5 Red Gem while preserving both absent terrain tiles");
+
+        void AssertSchema5TerrainState(
+            bool expectedTile1,
+            bool expectedTile2,
+            string label)
+        {
+            WaitForCondition(
+                () =>
+                {
+                    MainWindow.Id65BlankLabUiSnapshot snapshot =
+                        window.CaptureId65BlankLabUiSnapshotForTesting();
+                    return snapshot.DocumentProjectionSynchronized &&
+                        snapshot.LoadedUsesRemotePadTerrainSet &&
+                        snapshot.LoadedTerrainTile1 == expectedTile1 &&
+                        snapshot.LoadedTerrainTile2 == expectedTile2 &&
+                        snapshot.LoadedRemotePadMobyKind ==
+                            Id65RemotePadMobyKind.RedGemT21 &&
+                        snapshot.LoadedRemotePadMobyPositionId ==
+                            Id65RemotePadGrassT107Catalog.NorthWestPositionId &&
+                        snapshot.VisibleMobyCount == 1 &&
+                        snapshot.TerrainSetControlsVisible &&
+                        !snapshot.LegacyOptionalTerrainControlsVisible &&
+                        snapshot.AddTerrainTile1Enabled == !expectedTile1 &&
+                        snapshot.RemoveTerrainTile1Enabled == expectedTile1 &&
+                        snapshot.AddTerrainTile2Enabled == !expectedTile2 &&
+                        snapshot.RemoveTerrainTile2Enabled == expectedTile2 &&
+                        !snapshot.CreateOptionalTerrainEnabled &&
+                        !snapshot.RemoveOptionalTerrainEnabled &&
+                        !snapshot.AuthoringCandidateEnabled &&
+                        !snapshot.RevealEnabled;
+                },
+                TimeSpan.FromSeconds(60),
+                () => label);
+
+            Task<Id65AuthoringEditorDocumentReadModel?> inspectTask =
+                Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                    paths,
+                    labBootstrap.Manifest);
+            WaitForUiTask(inspectTask, $"re-inspecting {label}");
+            Id65AuthoringEditorDocumentReadModel document =
+                inspectTask.GetAwaiter().GetResult() ??
+                throw new InvalidOperationException(
+                    $"The schema-5 document disappeared while checking {label}.");
+            Id65AuthoringEditorControlState state =
+                Id65AuthoringEditorControlStateCompiler.RecoverControlState(document);
+            EditorShellSessionSnapshot scene =
+                window.CaptureEditorShellSessionSnapshotForTesting();
+            Id65FreshLevelSceneProjection projection =
+                Id65FreshLevelSceneProjector.ProjectExact(
+                    scene.CurrentLevel ?? throw new InvalidOperationException(
+                        $"The ID65 scene lost level identity while checking {label}."),
+                    document);
+            int expectedTerrainUnits =
+                (expectedTile1 ? 1 : 0) + (expectedTile2 ? 1 : 0);
+            if (!state.UsesRemotePadTerrainSet ||
+                state.IncludeTerrainTile1 != expectedTile1 ||
+                state.IncludeTerrainTile2 != expectedTile2 ||
+                state.RemotePadMobyKind != Id65RemotePadMobyKind.RedGemT21 ||
+                state.RemotePadMobyPositionId !=
+                    Id65RemotePadGrassT107Catalog.NorthWestPositionId ||
+                !projection.UsesTerrainSetProjection ||
+                projection.ActiveTerrainUnitIds.Count != expectedTerrainUnits ||
+                projection.StructuralTerrainPresent != (expectedTerrainUnits != 0) ||
+                scene.CurrentGeometry?.Polygons.Count != 1 + expectedTerrainUnits ||
+                scene.CurrentGeometry.LowDetailPolygons.Count !=
+                    1 + expectedTerrainUnits ||
+                scene.CurrentMobys.Count != 1 ||
+                scene.CurrentMobys[0].TrueIndex !=
+                    Id65RemotePadRedGemT21Catalog.TargetTrueIndex ||
+                File.Exists(legacyId65TerrainEditPath) ||
+                !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                    candidateArtifactsBeforeSchema4))
+            {
+                throw new InvalidOperationException(
+                    $"Schema-5 state {label} lost an exact terrain unit, Red Gem preservation, static projection, or closed candidate boundary.");
+            }
+        }
+
+        void ClickTerrainAndAssert(
+            Button button,
+            bool expectedTile1,
+            bool expectedTile2,
+            string label)
+        {
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
+            AssertSchema5TerrainState(expectedTile1, expectedTile2, label);
+        }
+
+        AssertSchema5TerrainState(
+            expectedTile1: false,
+            expectedTile2: false,
+            "schema-5 00 state after Red Gem selection");
+        byte[] schema5BeforeStaleTerrainCas =
+            File.ReadAllBytes(authoringDocumentPath);
+        EditorShellSessionSnapshot schema5SceneBeforeStaleTerrainCas =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        window.Id65AuthoringTerrainExpectedEnvelopeOverrideForTesting =
+            _ => new string('0', 64);
+        addTerrainTile1.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, addTerrainTile1));
+        WaitForCondition(
+            () => addTerrainTile1.IsEnabled &&
+                (id65Status.Text ?? "").Contains(
+                    "Could not add Terrain Tile 1",
+                    StringComparison.OrdinalIgnoreCase),
+            TimeSpan.FromSeconds(60),
+            () => "refusing stale schema-5 Tile 1 compare-and-swap");
+        window.Id65AuthoringTerrainExpectedEnvelopeOverrideForTesting = null;
+        if (!File.ReadAllBytes(authoringDocumentPath)
+                .SequenceEqual(schema5BeforeStaleTerrainCas) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
+                schema5SceneBeforeStaleTerrainCas.CurrentGeometry) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys,
+                schema5SceneBeforeStaleTerrainCas.CurrentMobys))
+        {
+            throw new InvalidOperationException(
+                "The stale schema-5 terrain CAS changed document bytes or the prior viewport.");
+        }
+
+        ClickTerrainAndAssert(addTerrainTile1, true, false, "order A 00 to 10");
+        ClickTerrainAndAssert(addTerrainTile2, true, true, "order A 10 to 11");
+        ClickTerrainAndAssert(removeTerrainTile1, false, true, "order A 11 to 01");
+        Task reloadSchema5Tile2Only = InvokePrivate<Task>(
+            window,
+            "LoadId65BlankLabAsync");
+        WaitForUiTask(
+            reloadSchema5Tile2Only,
+            "reloading durable schema-5 Tile-2-only state",
+            timeoutSeconds: 120);
+        AssertSchema5TerrainState(false, true, "reloaded durable schema-5 01 state");
+        ClickTerrainAndAssert(removeTerrainTile2, false, false, "order A 01 to 00");
+
+        ClickTerrainAndAssert(addTerrainTile2, false, true, "order B 00 to 01");
+        ClickTerrainAndAssert(addTerrainTile1, true, true, "order B 01 to 11");
+        ClickTerrainAndAssert(removeTerrainTile2, true, false, "order B 11 to 10");
+        ClickTerrainAndAssert(removeTerrainTile1, false, false, "order B 10 to 00");
+
+        int schema5CandidateCalls = 0;
+        window.Id65AuthoringCandidateMaterializerOverrideForTesting = (_, _, _) =>
+        {
+            schema5CandidateCalls++;
+            return Task.FromResult(
+                BuildRemotePadUiCandidateResult(blankDocument, blankState));
+        };
+        try
+        {
+            Task refusedSchema5Candidate = InvokePrivate<Task>(
+                window,
+                "CreateId65AuthoringAggregateCandidateAsync");
+            WaitForUiTask(
+                refusedSchema5Candidate,
+                "refusing schema-5 physical candidate materialization");
+        }
+        finally
+        {
+            window.Id65AuthoringCandidateMaterializerOverrideForTesting = null;
+        }
+        if (schema5CandidateCalls != 0 ||
+            !(id65Status.Text ?? "").Contains(
+                "Schema-5 two-tile terrain-set documents",
+                StringComparison.Ordinal) ||
+            !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                candidateArtifactsBeforeSchema4))
+        {
+            throw new InvalidOperationException(
+                "Schema-5 state reached the physical candidate seam or lost its explicit refusal status.");
+        }
+
+        AssertArtifactHashesEqual(
+            retailArtifactsBeforeButtonToggles,
+            CaptureTerrainProjectInputHashes(workspace, retailRoundTrip.Key),
+            "Schema-4/5 fresh Level Building Editor controls changed retail project persistence");
+
         Console.WriteLine("ID65 UI smoke: starting workspace-transition fence probe.");
         Task<string> workspaceTransitionTask =
             window.AssertWorkspaceTransitionFencingForTestingAsync();
@@ -3227,7 +4083,7 @@ void RunId65BlankLabUiOnly()
 
         Console.WriteLine(
             "ID65 Blank-Level Lab public UI smoke passed: clean 35-level startup, visible narrow disclosure, exact named Resident T25 / Proved private T66 selector with null refusal, selection-change preview/no-write and explicit Apply/Save, neutral reveal label, explicit repair contract, Core atomic-export route with 128 unique keys, hidden broad Research tab, and exact-manifest 35+1 in-memory admission passed; " +
-            $"isolated locked workspace bootstrap: exact and source-preserving; mutation guards: {mutationGuards}; stale continuations: {staleContinuations}; transition guards: {transitionGuards}; resident textures: {residentTexture}; canonical document guard: {canonicalDocumentGuard}; reverse persistence: {reversePersistence}; operation fence: {operationFence}; remote Object Manager: explicit legacy-to-grid migration, exact Bottom right 0/1 presentation, mismatch quarantine, generic mutation refusal, selector-only no-write plus direct Top-left move/remove and Bottom-right add through CAS reinspection/reprojection, all four T88-off/T66 terrain-and-Grass candidate combinations, and dormant-position retention passed; workspace transition: {workspaceTransition}; full authoring editor: {authoringEditor}.");
+            $"isolated locked workspace bootstrap: exact and source-preserving; mutation guards: {mutationGuards}; stale continuations: {staleContinuations}; transition guards: {transitionGuards}; resident textures: {residentTexture}; canonical document guard: {canonicalDocumentGuard}; reverse persistence: {reversePersistence}; operation fence: {operationFence}; remote Object Manager: explicit legacy-to-grid migration, exact Bottom right 0/1 presentation, mismatch quarantine, generic mutation refusal, selector-only no-write plus direct Top-left move/remove and Bottom-right add through CAS reinspection/reprojection, all four T88-off/T66 terrain-and-Grass candidate combinations, dormant-position retention, explicit schema-3-to-4 migration, schema-4 None/Grass/Red Gem selector-only no-write, stale-CAS refusal, persistence/reload, mutual-exclusion switching, and physical-candidate refusal; explicit schema-4-to-5 migration preview/no-write, exact 00 mapping, independent 00/10/11/01 terrain states in both transition orders, durable reload, stale terrain CAS refusal, Red Gem preservation, and schema-5 physical-candidate refusal passed; workspace transition: {workspaceTransition}; full authoring editor: {authoringEditor}.");
     }
     finally
     {

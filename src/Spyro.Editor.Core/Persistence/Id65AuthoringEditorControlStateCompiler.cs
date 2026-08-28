@@ -16,6 +16,17 @@ public enum Id65AuthoringEditorT107PlacementSemantics
 }
 
 /// <summary>
+/// Separates the legacy zero-or-tile1 structural choice from the schema-5
+/// closed terrain-set selection. A schema-5 empty/tile1 state must not collapse
+/// back into the schema-4 family merely because its visible topology matches.
+/// </summary>
+public enum Id65AuthoringEditorTerrainSelectionSemantics
+{
+    LegacyOptionalTriangleV1 = 1,
+    RemotePadTerrainSetV1 = 2
+}
+
+/// <summary>
 /// Framework-neutral control state for the exact first ID65 authoring document.
 /// It models only choices already proved by the canonical document/compiler
 /// chain. The mandatory base face is exactly Resident T25 or Proved private T66;
@@ -33,6 +44,9 @@ public sealed class Id65AuthoringEditorControlState
     public const string RemotePadMobyChoiceProfileId =
         "id65-authoring-editor-control-state-remote-pad-moby-choice-v3";
     public const int RemotePadMobyChoiceSchemaVersion = 3;
+    public const string RemotePadMobyChoiceTerrainSetProfileId =
+        "id65-authoring-editor-control-state-remote-pad-moby-choice-terrain-set-v4";
+    public const int RemotePadMobyChoiceTerrainSetSchemaVersion = 4;
     public const int T88TargetTrueIndex = 88;
     public const int T107TargetTrueIndex = 107;
     public const int ResidentMandatoryBaseFaceTextureId = 25;
@@ -51,7 +65,9 @@ public sealed class Id65AuthoringEditorControlState
             Id65AuthoringEditorT107PlacementSemantics.LegacyNativeApronV1,
             t107RemotePadPositionId: null,
             remotePadMobyKind: null,
-            remotePadMobyPositionId: null)
+            remotePadMobyPositionId: null,
+            Id65AuthoringEditorTerrainSelectionSemantics.LegacyOptionalTriangleV1,
+            includeTerrainTile2: false)
     {
     }
 
@@ -63,7 +79,9 @@ public sealed class Id65AuthoringEditorControlState
         Id65AuthoringEditorT107PlacementSemantics t107PlacementSemantics,
         string? t107RemotePadPositionId,
         Id65RemotePadMobyKind? remotePadMobyKind,
-        string? remotePadMobyPositionId)
+        string? remotePadMobyPositionId,
+        Id65AuthoringEditorTerrainSelectionSemantics terrainSelectionSemantics,
+        bool includeTerrainTile2)
     {
         if (mandatoryBaseFaceTextureId is not
             (ResidentMandatoryBaseFaceTextureId or PrivateMandatoryBaseFaceTextureId))
@@ -113,7 +131,31 @@ public sealed class Id65AuthoringEditorControlState
         {
             throw new ArgumentOutOfRangeException(nameof(t107PlacementSemantics));
         }
+        if (terrainSelectionSemantics ==
+            Id65AuthoringEditorTerrainSelectionSemantics.LegacyOptionalTriangleV1)
+        {
+            if (includeTerrainTile2)
+                throw new ArgumentException(
+                    "Legacy ID65 terrain selection cannot carry tile 2.",
+                    nameof(includeTerrainTile2));
+        }
+        else if (terrainSelectionSemantics ==
+                 Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1)
+        {
+            if (t107PlacementSemantics !=
+                    Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1 ||
+                mandatoryBaseFaceTextureId != PrivateMandatoryBaseFaceTextureId)
+            {
+                throw new ArgumentException(
+                    "Schema-5 terrain-set selection requires the T66 remote-pad Moby-choice family.");
+            }
+        }
+        else
+        {
+            throw new ArgumentOutOfRangeException(nameof(terrainSelectionSemantics));
+        }
         IncludeStructuralTerrain = includeStructuralTerrain;
+        IncludeTerrainTile2 = includeTerrainTile2;
         IncludeGrassAtT88 = includeGrassAtT88;
         IncludeGrassAtT107 = includeGrassAtT107;
         MandatoryBaseFaceTextureId = mandatoryBaseFaceTextureId;
@@ -121,9 +163,13 @@ public sealed class Id65AuthoringEditorControlState
         T107RemotePadPositionId = t107RemotePadPositionId;
         RemotePadMobyKind = remotePadMobyKind;
         RemotePadMobyPositionId = remotePadMobyPositionId;
+        TerrainSelectionSemantics = terrainSelectionSemantics;
     }
 
     public bool IncludeStructuralTerrain { get; }
+    public bool IncludeTerrainTile1 => IncludeStructuralTerrain;
+    public bool IncludeTerrainTile2 { get; }
+    public bool HasAnyStructuralTerrain => IncludeTerrainTile1 || IncludeTerrainTile2;
     public bool IncludeGrassAtT88 { get; }
     public bool IncludeGrassAtT107 { get; }
     public int MandatoryBaseFaceTextureId { get; }
@@ -131,11 +177,14 @@ public sealed class Id65AuthoringEditorControlState
     public string? T107RemotePadPositionId { get; }
     public Id65RemotePadMobyKind? RemotePadMobyKind { get; }
     public string? RemotePadMobyPositionId { get; }
+    public Id65AuthoringEditorTerrainSelectionSemantics TerrainSelectionSemantics { get; }
     public bool UsesRemotePadT107Grid =>
         T107PlacementSemantics == Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1;
     public bool UsesRemotePadMobyChoice =>
         T107PlacementSemantics ==
             Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1;
+    public bool UsesRemotePadTerrainSet => TerrainSelectionSemantics ==
+        Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1;
     public bool IncludeRedGemAtT21 =>
         RemotePadMobyKind == Id65RemotePadMobyKind.RedGemT21;
 
@@ -172,7 +221,9 @@ public sealed class Id65AuthoringEditorControlState
             Id65AuthoringEditorT107PlacementSemantics.RemotePadGridV1,
             t107RemotePadPositionId,
             remotePadMobyKind: null,
-            remotePadMobyPositionId: null);
+            remotePadMobyPositionId: null,
+            Id65AuthoringEditorTerrainSelectionSemantics.LegacyOptionalTriangleV1,
+            includeTerrainTile2: false);
 
     public static Id65AuthoringEditorControlState CreateRemotePadMobyChoiceDefault() =>
         CreateRemotePadMobyChoice(
@@ -192,7 +243,35 @@ public sealed class Id65AuthoringEditorControlState
             Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1,
             t107RemotePadPositionId: null,
             remotePadMobyKind: kind,
-            remotePadMobyPositionId);
+            remotePadMobyPositionId,
+            Id65AuthoringEditorTerrainSelectionSemantics.LegacyOptionalTriangleV1,
+            includeTerrainTile2: false);
+
+    public static Id65AuthoringEditorControlState
+        CreateRemotePadMobyChoiceTerrainSet(
+            bool includeTerrainTile1,
+            bool includeTerrainTile2,
+            Id65RemotePadMobyKind kind,
+            string remotePadMobyPositionId) =>
+        new(
+            includeTerrainTile1,
+            includeGrassAtT88: false,
+            includeGrassAtT107: kind == Id65RemotePadMobyKind.GrassT107,
+            mandatoryBaseFaceTextureId: PrivateMandatoryBaseFaceTextureId,
+            Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1,
+            t107RemotePadPositionId: null,
+            remotePadMobyKind: kind,
+            remotePadMobyPositionId,
+            Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1,
+            includeTerrainTile2);
+
+    public static Id65AuthoringEditorControlState
+        CreateRemotePadMobyChoiceTerrainSetDefault() =>
+        CreateRemotePadMobyChoiceTerrainSet(
+            includeTerrainTile1: true,
+            includeTerrainTile2: false,
+            Id65RemotePadMobyKind.None,
+            Id65RemotePadMobyChoiceCatalog.DefaultPositionId);
 
     /// <summary>
     /// Explicit one-way migration. Calling this method is the only API that may
@@ -241,11 +320,39 @@ public sealed class Id65AuthoringEditorControlState
             remotePadGridState.T107RemotePadPositionId!);
     }
 
+    /// <summary>
+    /// Explicit one-way schema-4 to schema-5 migration. The exact schema-4
+    /// terrain choice maps only to tile 1; tile 2 is never inferred.
+    /// </summary>
+    public static Id65AuthoringEditorControlState
+        MigrateRemotePadMobyChoiceToTerrainSet(
+            Id65AuthoringEditorControlState remotePadMobyChoiceState)
+    {
+        ArgumentNullException.ThrowIfNull(remotePadMobyChoiceState);
+        if (!remotePadMobyChoiceState.UsesRemotePadMobyChoice ||
+            remotePadMobyChoiceState.UsesRemotePadTerrainSet)
+        {
+            throw new InvalidOperationException(
+                "Only exact schema-4 remote-pad Moby-choice state can migrate to schema 5.");
+        }
+        return CreateRemotePadMobyChoiceTerrainSet(
+            remotePadMobyChoiceState.IncludeTerrainTile1,
+            includeTerrainTile2: false,
+            remotePadMobyChoiceState.RemotePadMobyKind!.Value,
+            remotePadMobyChoiceState.RemotePadMobyPositionId!);
+    }
+
     internal static Id65AuthoringEditorControlState CopyExact(
         Id65AuthoringEditorControlState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        return state.UsesRemotePadMobyChoice
+        return state.UsesRemotePadTerrainSet
+            ? CreateRemotePadMobyChoiceTerrainSet(
+                state.IncludeTerrainTile1,
+                state.IncludeTerrainTile2,
+                state.RemotePadMobyKind!.Value,
+                state.RemotePadMobyPositionId!)
+            : state.UsesRemotePadMobyChoice
             ? CreateRemotePadMobyChoice(
                 state.IncludeStructuralTerrain,
                 state.RemotePadMobyKind!.Value,
@@ -287,10 +394,12 @@ public sealed class Id65AuthoringEditorControlStateCompilation
         Id65AuthoringEditorControlState recovered =
             Id65AuthoringEditorControlStateCompiler.RecoverExactState(canonical);
         if (state.IncludeStructuralTerrain != recovered.IncludeStructuralTerrain ||
+            state.IncludeTerrainTile2 != recovered.IncludeTerrainTile2 ||
             state.IncludeGrassAtT88 != recovered.IncludeGrassAtT88 ||
             state.IncludeGrassAtT107 != recovered.IncludeGrassAtT107 ||
             state.MandatoryBaseFaceTextureId != recovered.MandatoryBaseFaceTextureId ||
             state.T107PlacementSemantics != recovered.T107PlacementSemantics ||
+            state.TerrainSelectionSemantics != recovered.TerrainSelectionSemantics ||
             !string.Equals(
                 state.T107RemotePadPositionId,
                 recovered.T107RemotePadPositionId,
@@ -460,9 +569,33 @@ public static class Id65AuthoringEditorControlStateCompiler
             document.UsesRemotePadMobyChoice &&
             document.RemotePadMobyKind.HasValue &&
             document.RemotePadMobyPositionId is not null &&
+            document.RemotePadMobyPosition is not null &&
+            !document.UsesRemotePadTerrainSet;
+        bool remotePadMobyChoiceTerrainSet =
+            document.SchemaVersion ==
+                Id65AuthoringEditorDocument.RemotePadMobyChoiceTerrainSetSchemaVersion &&
+            document.ProfileId ==
+                Id65AuthoringEditorDocument.RemotePadMobyChoiceTerrainSetDocumentProfileId &&
+            document.MandatoryBaseFaceTextureId ==
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId &&
+            document.ReadModelSchemaVersion ==
+                Id65AuthoringEditorDocumentReadModel
+                    .RemotePadMobyChoiceTerrainSetReadModelSchemaVersion &&
+            document.T107PlacementSemantics ==
+                Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1 &&
+            document.TerrainSelectionSemantics ==
+                Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1 &&
+            !document.UsesRemotePadT107Grid &&
+            document.T107RemotePadPositionId is null &&
+            document.T107RemotePadPosition is null &&
+            document.UsesRemotePadMobyChoice &&
+            document.UsesRemotePadTerrainSet &&
+            document.RemotePadMobyKind.HasValue &&
+            document.RemotePadMobyPositionId is not null &&
             document.RemotePadMobyPosition is not null;
         bool supportedProfile =
-            legacyPrivateT66 || legacyResidentT25 || remotePadGrid || remotePadMobyChoice;
+            legacyPrivateT66 || legacyResidentT25 || remotePadGrid || remotePadMobyChoice ||
+            remotePadMobyChoiceTerrainSet;
         if (!supportedProfile ||
             document.LabProfileId != UnusedLevel65BlankLevelLabProfileRegistry.ProfileId ||
             document.LabProfileVersion !=
@@ -497,7 +630,9 @@ public static class Id65AuthoringEditorControlStateCompiler
                 "The ID65 read model cannot be translated into an exact control state.");
         }
 
-        Id65AuthoringEditorControlState state = remotePadMobyChoice
+        Id65AuthoringEditorControlState state = remotePadMobyChoiceTerrainSet
+            ? SelectRemotePadMobyChoiceTerrainSetState(document)
+            : remotePadMobyChoice
             ? SelectRemotePadMobyChoiceState(document)
             : remotePadGrid
                 ? SelectRemotePadState(document)
@@ -541,7 +676,21 @@ public static class Id65AuthoringEditorControlStateCompiler
                 ? Id65RemotePadGrassT107Catalog.PlacementId
                 : Id65AuthoringMobyDependencyBundleCompiler.T107PlacementId);
         }
-        return state.UsesRemotePadMobyChoice
+        string[] activeTerrainUnitIds =
+        [
+            .. state.IncludeTerrainTile1
+                ? [Id65AuthoringTerrainSetCatalog.Tile1Id]
+                : Array.Empty<string>(),
+            .. state.IncludeTerrainTile2
+                ? [Id65AuthoringTerrainSetCatalog.Tile2Id]
+                : Array.Empty<string>()
+        ];
+        return state.UsesRemotePadTerrainSet
+            ? Id65AuthoringEditorDocument.CreateRemotePadMobyChoiceTerrainSetExact(
+                state.RemotePadMobyKind!.Value,
+                state.RemotePadMobyPositionId!,
+                activeTerrainUnitIds)
+            : state.UsesRemotePadMobyChoice
             ? Id65AuthoringEditorDocument.CreateRemotePadMobyChoiceExact(
                 state.RemotePadMobyKind!.Value,
                 state.RemotePadMobyPositionId!,
@@ -564,7 +713,9 @@ public static class Id65AuthoringEditorControlStateCompiler
         ArgumentNullException.ThrowIfNull(document);
         Id65AuthoringEditorDocument canonical =
             Id65AuthoringEditorDocument.Parse(document.SerializeUtf8());
-        Id65AuthoringEditorControlState state = canonical.UsesRemotePadMobyChoice
+        Id65AuthoringEditorControlState state = canonical.UsesRemotePadTerrainSet
+            ? SelectRemotePadMobyChoiceTerrainSetState(canonical)
+            : canonical.UsesRemotePadMobyChoice
             ? SelectRemotePadMobyChoiceState(canonical)
             : canonical.UsesRemotePadT107Grid
                 ? SelectRemotePadState(canonical)
@@ -646,6 +797,7 @@ public static class Id65AuthoringEditorControlStateCompiler
             document.RemotePadMobyPositionId is null ||
             document.MandatoryBaseFaceTextureId !=
                 Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId ||
+            document.UsesRemotePadTerrainSet ||
             document.Terrain.Count > 1)
         {
             throw new InvalidDataException(
@@ -679,6 +831,7 @@ public static class Id65AuthoringEditorControlStateCompiler
             document.RemotePadMobyPosition is null ||
             document.MandatoryBaseFaceTextureId !=
                 Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId ||
+            document.UsesRemotePadTerrainSet ||
             document.Terrain.Count > 1)
         {
             throw new InvalidDataException(
@@ -717,6 +870,78 @@ public static class Id65AuthoringEditorControlStateCompiler
             document.Terrain.Count == 1,
             document.RemotePadMobyKind.Value,
             expected.PositionId);
+    }
+
+    private static Id65AuthoringEditorControlState
+        SelectRemotePadMobyChoiceTerrainSetState(
+            Id65AuthoringEditorDocument document)
+    {
+        if (!document.UsesRemotePadTerrainSet ||
+            !document.UsesRemotePadMobyChoice ||
+            !document.RemotePadMobyKind.HasValue ||
+            document.RemotePadMobyPositionId is null ||
+            document.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId)
+        {
+            throw new InvalidDataException(
+                "The schema-5 ID65 document lost its exact terrain-set/Moby-choice semantics.");
+        }
+        Id65AuthoringTerrainSetManifest manifest =
+            Id65AuthoringTerrainSetCatalog.Create(document.ActiveTerrainUnitIds);
+        if (!manifest.ActiveUnits.Select(item => item.Id)
+                .SequenceEqual(document.ActiveTerrainUnitIds) ||
+            !string.Equals(
+                manifest.CanonicalSha256,
+                document.TerrainSetManifestSha256,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(
+                "The schema-5 ID65 document terrain-set manifest changed.");
+        }
+        return Id65AuthoringEditorControlState.CreateRemotePadMobyChoiceTerrainSet(
+            document.ActiveTerrainUnitIds.Contains(
+                Id65AuthoringTerrainSetCatalog.Tile1Id,
+                StringComparer.Ordinal),
+            document.ActiveTerrainUnitIds.Contains(
+                Id65AuthoringTerrainSetCatalog.Tile2Id,
+                StringComparer.Ordinal),
+            document.RemotePadMobyKind.Value,
+            document.RemotePadMobyPositionId);
+    }
+
+    private static Id65AuthoringEditorControlState
+        SelectRemotePadMobyChoiceTerrainSetState(
+            Id65AuthoringEditorDocumentReadModel document)
+    {
+        if (!document.UsesRemotePadTerrainSet ||
+            document.ReadModelSchemaVersion !=
+                Id65AuthoringEditorDocumentReadModel
+                    .RemotePadMobyChoiceTerrainSetReadModelSchemaVersion ||
+            !document.RemotePadMobyKind.HasValue ||
+            document.RemotePadMobyPositionId is null ||
+            document.RemotePadMobyPosition is null)
+        {
+            throw new InvalidDataException(
+                "The schema-5 ID65 read model lost its exact terrain-set/Moby-choice semantics.");
+        }
+        Id65AuthoringTerrainSetManifest manifest =
+            Id65AuthoringTerrainSetCatalog.Create(document.ActiveTerrainUnitIds);
+        if (!manifest.ActiveUnits.Select(item => item.Id)
+                .SequenceEqual(document.ActiveTerrainUnitIds) ||
+            manifest.CanonicalSha256 != document.TerrainSetManifestSha256)
+        {
+            throw new InvalidDataException(
+                "The schema-5 ID65 read-model terrain-set manifest changed.");
+        }
+        return Id65AuthoringEditorControlState.CreateRemotePadMobyChoiceTerrainSet(
+            document.ActiveTerrainUnitIds.Contains(
+                Id65AuthoringTerrainSetCatalog.Tile1Id,
+                StringComparer.Ordinal),
+            document.ActiveTerrainUnitIds.Contains(
+                Id65AuthoringTerrainSetCatalog.Tile2Id,
+                StringComparer.Ordinal),
+            document.RemotePadMobyKind.Value,
+            document.RemotePadMobyPositionId);
     }
 
     private static Id65AuthoringEditorControlState SelectRemotePadState(
@@ -775,10 +1000,12 @@ public static class Id65AuthoringEditorControlStateCompiler
         Id65AuthoringEditorControlState actual)
     {
         if (expected.IncludeStructuralTerrain != actual.IncludeStructuralTerrain ||
+            expected.IncludeTerrainTile2 != actual.IncludeTerrainTile2 ||
             expected.IncludeGrassAtT88 != actual.IncludeGrassAtT88 ||
             expected.IncludeGrassAtT107 != actual.IncludeGrassAtT107 ||
             expected.MandatoryBaseFaceTextureId != actual.MandatoryBaseFaceTextureId ||
             expected.T107PlacementSemantics != actual.T107PlacementSemantics ||
+            expected.TerrainSelectionSemantics != actual.TerrainSelectionSemantics ||
             !string.Equals(
                 expected.T107RemotePadPositionId,
                 actual.T107RemotePadPositionId,
@@ -797,7 +1024,9 @@ public static class Id65AuthoringEditorControlStateCompiler
     private static void ValidateCompilation(
         Id65AuthoringEditorControlStateCompilation result)
     {
-        string expectedProfile = result.State.UsesRemotePadMobyChoice
+        string expectedProfile = result.State.UsesRemotePadTerrainSet
+            ? Id65AuthoringEditorDocument.RemotePadMobyChoiceTerrainSetDocumentProfileId
+            : result.State.UsesRemotePadMobyChoice
             ? Id65AuthoringEditorDocument.RemotePadMobyChoiceDocumentProfileId
             : result.State.UsesRemotePadT107Grid
                 ? Id65AuthoringEditorDocument.RemotePadGridDocumentProfileId
@@ -814,7 +1043,9 @@ public static class Id65AuthoringEditorControlStateCompiler
                 Id65V2NativeTextureCompositionCompiler.ExpectedWitnessSha256 ||
             result.MobyBundleSha256 !=
                 Id65AuthoringMobyDependencyBundleCompiler.ExpectedArtisansGrassBundleSha256 ||
-            result.TerrainIntentCount != (result.State.IncludeStructuralTerrain ? 1 : 0) ||
+            result.TerrainIntentCount !=
+                ((result.State.IncludeTerrainTile1 ? 1 : 0) +
+                 (result.State.IncludeTerrainTile2 ? 1 : 0)) ||
             result.PrivateTextureDestinationRecordIndex !=
                 Id65V2NativeTextureCompositionCompiler.PrivateTextureId ||
             result.MobyTargetTrueIndices.Count !=

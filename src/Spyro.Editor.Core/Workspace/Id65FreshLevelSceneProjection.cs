@@ -199,6 +199,7 @@ public sealed class Id65FreshLevelSceneProjection
     private readonly ReadOnlyCollection<Id65FreshLevelMobyPresentation>
         _visibleMobyPresentations;
     private readonly ReadOnlyCollection<int> _visibleMobyTrueIndexes;
+    private readonly ReadOnlyCollection<string> _activeTerrainUnitIds;
 
     internal Id65FreshLevelSceneProjection(
         GeometryCandidate geometry,
@@ -209,11 +210,21 @@ public sealed class Id65FreshLevelSceneProjection
         string documentContentSha256,
         bool structuralTerrainPresent,
         IEnumerable<Id65FreshLevelMobyPresentation> visibleMobyPresentations,
-        Id65RemotePadMobyKind? remotePadMobyKind = null)
+        Id65RemotePadMobyKind? remotePadMobyKind = null,
+        string? profileId = null,
+        int? schemaVersion = null,
+        IEnumerable<string>? activeTerrainUnitIds = null,
+        string? terrainSetManifestSha256 = null)
     {
         ArgumentNullException.ThrowIfNull(visibleMobyPresentations);
         Id65FreshLevelMobyPresentation[] presentations =
             visibleMobyPresentations.ToArray();
+        string[] terrainUnitIds = activeTerrainUnitIds?.ToArray() ?? [];
+        string exactProfileId = profileId ?? Id65FreshLevelSceneProjector.ProfileId;
+        int exactSchemaVersion = schemaVersion ?? Id65FreshLevelSceneProjector.SchemaVersion;
+        bool terrainSetProjection = exactProfileId ==
+            Id65FreshLevelSceneProjector.TerrainSetProfileId &&
+            exactSchemaVersion == Id65FreshLevelSceneProjector.TerrainSetSchemaVersion;
         if (presentations.Any(item => item is null) ||
             presentations.Length > 1 ||
             presentations.Select(item => item.TargetTrueIndex).Distinct().Count() !=
@@ -229,7 +240,39 @@ public sealed class Id65FreshLevelSceneProjection
             throw new InvalidDataException(
                 "The fresh-level scene supports zero or one unique, document-bound visible Moby presentation.");
         }
+        if (terrainSetProjection)
+        {
+            Id65AuthoringTerrainSetManifest manifest =
+                Id65AuthoringTerrainSetCatalog.Create(terrainUnitIds);
+            if (!manifest.ActiveUnits.Select(item => item.Id).SequenceEqual(terrainUnitIds) ||
+                !string.Equals(
+                    manifest.CanonicalSha256,
+                    terrainSetManifestSha256,
+                    StringComparison.Ordinal) ||
+                structuralTerrainPresent != (terrainUnitIds.Length != 0) ||
+                geometry.Name != Id65FreshLevelSceneProjector.TerrainSetGeometryName ||
+                !Id65FreshLevelSceneProjector.IsExactProjectionGeometry(geometry) ||
+                protectedSpawn != Id65FreshLevelSceneProjector.BuildProtectedSpawn() ||
+                graphCanonicalSha256 != Id65FreshLevelSceneProjector
+                    .GetTerrainSetGraphCanonicalSha256(terrainUnitIds) ||
+                !IsCanonicalSha256(canonicalSha256) ||
+                !IsCanonicalSha256(documentCanonicalSha256) ||
+                !IsCanonicalSha256(documentContentSha256))
+            {
+                throw new InvalidDataException(
+                    "The terrain-set scene projection requires one exact canonical terrain manifest.");
+            }
+        }
+        else if (exactProfileId != Id65FreshLevelSceneProjector.ProfileId ||
+                 exactSchemaVersion != Id65FreshLevelSceneProjector.SchemaVersion ||
+                 terrainUnitIds.Length != 0 || terrainSetManifestSha256 is not null)
+        {
+            throw new InvalidDataException(
+                "The fresh-level scene profile/schema or terrain-set identity is unsupported.");
+        }
 
+        ProfileId = exactProfileId;
+        SchemaVersion = exactSchemaVersion;
         Geometry = geometry;
         ProtectedSpawn = protectedSpawn;
         CanonicalSha256 = canonicalSha256;
@@ -238,6 +281,8 @@ public sealed class Id65FreshLevelSceneProjection
         DocumentContentSha256 = documentContentSha256;
         StructuralTerrainPresent = structuralTerrainPresent;
         RemotePadMobyKind = remotePadMobyKind;
+        TerrainSetManifestSha256 = terrainSetManifestSha256;
+        _activeTerrainUnitIds = Array.AsReadOnly(terrainUnitIds);
         _visibleMobyPresentations = Array.AsReadOnly(presentations);
         _visibleMobyTrueIndexes = Array.AsReadOnly(presentations
             .Select(item => item.TargetTrueIndex)
@@ -245,8 +290,8 @@ public sealed class Id65FreshLevelSceneProjection
         VisibleMobyPresentationCanonicalSha256 = HashVisibleMobyPresentations(presentations);
     }
 
-    public string ProfileId => Id65FreshLevelSceneProjector.ProfileId;
-    public int SchemaVersion => Id65FreshLevelSceneProjector.SchemaVersion;
+    public string ProfileId { get; }
+    public int SchemaVersion { get; }
     public string LevelKey => UnusedLevel65BlankLevelLabProfileRegistry.Key;
     public int LevelId => UnusedLevel65BlankLevelLabProfileRegistry.LevelId;
     public int SourceWadEntry => UnusedLevel65BlankLevelLabProfileRegistry.DataWadEntry;
@@ -258,6 +303,10 @@ public sealed class Id65FreshLevelSceneProjection
     public string DocumentContentSha256 { get; }
     public bool StructuralTerrainPresent { get; }
     public Id65RemotePadMobyKind? RemotePadMobyKind { get; }
+    public IReadOnlyList<string> ActiveTerrainUnitIds => _activeTerrainUnitIds;
+    public string? TerrainSetManifestSha256 { get; }
+    public bool UsesTerrainSetProjection =>
+        ProfileId == Id65FreshLevelSceneProjector.TerrainSetProfileId;
     public bool CanonicalDocumentBound => IsCanonicalSha256(DocumentCanonicalSha256) &&
         IsCanonicalSha256(DocumentContentSha256);
     public IReadOnlyList<Id65FreshLevelMobyPresentation> VisibleMobyPresentations =>
@@ -266,6 +315,9 @@ public sealed class Id65FreshLevelSceneProjection
     public int VisibleMobyCount => _visibleMobyPresentations.Count;
     public string VisibleMobyPresentationCanonicalSha256 { get; }
     public bool IsPresentationOnly => true;
+    public bool NativePersistenceEnabled => false;
+    public bool PhysicalMaterializationEnabled => false;
+    public bool RuntimeObserved => false;
     public bool WritesWorkspace => false;
     public bool WritesLockedBase => false;
     public bool AuthorizesCreateBin => false;
@@ -301,13 +353,20 @@ public static class Id65FreshLevelSceneProjector
 {
     public const string ProfileId = "id65-fresh-level-authoring-scene-projection-v1";
     public const int SchemaVersion = 1;
+    public const string TerrainSetProfileId =
+        "id65-fresh-level-authoring-scene-terrain-set-projection-v2";
+    public const int TerrainSetSchemaVersion = 2;
     public const string GeometryName = ProfileId + ":unusedlevel65blank";
+    public const string TerrainSetGeometryName =
+        TerrainSetProfileId + ":unusedlevel65blank";
     public const int AuthoredSectorIndex = 216;
     public const int AuthoredFaceIndex = 0;
     public const int OptionalFaceIndex = 1;
+    public const int SecondOptionalFaceIndex = 2;
     public const int StarterTextureId = 66;
     public const int CollisionTriangleIndex = 13_995;
     public const int OptionalCollisionTriangleIndex = 19_808;
+    public const int SecondOptionalCollisionTriangleIndex = 19_809;
     public const int OcclusionGroupIndex = 0;
     public const string SectorStableId = "sector.remote-pad.216";
     public const string RenderFaceStableId = "terrain.remote-pad.face.0";
@@ -338,6 +397,14 @@ public static class Id65FreshLevelSceneProjector
         "3abd241e4cca72cc4841b31bcf382ababd29de022cd3f9df41d29f7fe77218b0";
     public const string ExpectedDefaultRemotePadGridT107PresentationSha256 =
         "52e7b4653c2dfe03d37603050ee1041aa6e6758c53ed844fbc673fa0f0e051b1";
+    public const string ExpectedTerrainSetZeroGraphCanonicalSha256 =
+        "cd3881a7ce2d00be5fbfd5e43c72ef0424bf6f1f994185092690ddc3c6fd3ff6";
+    public const string ExpectedTerrainSetTile1GraphCanonicalSha256 =
+        "64f20f9841fb6909abcacdbd4acb92ba81ad0b77bc0ad303b3d0b038dad334e5";
+    public const string ExpectedTerrainSetTile2GraphCanonicalSha256 =
+        "deddaf3901596a3baf717742b470a305c976897560c57f928ff0f44228652b36";
+    public const string ExpectedTerrainSetBothGraphCanonicalSha256 =
+        "4f342c7f92da94583e7d71fbdffc3bc3aa40b46f6584d2d8b3ec80ee883e06d0";
 
     private const uint NativeCenterXyWord = 0x01800180;
     private const uint NativeCenterZRadiusFlagsWord = 0x020000C0;
@@ -361,6 +428,13 @@ public static class Id65FreshLevelSceneProjector
     private const uint OptionalCollisionXWord = 0x006401F0;
     private const uint OptionalCollisionYWord = 0x70380110;
     private const uint OptionalCollisionZWord = 0x00000200;
+    private const uint Tile2OnlyLowFaceWord0 = 0x0020C300;
+    private const uint Tile2BothLowFaceWord0 = 0x00210400;
+    private const uint Tile2OnlyHighFaceWord0 = 0x03020000;
+    private const uint Tile2BothHighFaceWord0 = 0x04020000;
+    private const uint Tile2CollisionXWord = 0x38000110;
+    private const uint Tile2CollisionYWord = 0x70380110;
+    private const uint Tile2CollisionZWord = 0x00000200;
     private const int OptionalNativeTextureId = 25;
 
     private const string CanonicalPrefix =
@@ -462,7 +536,113 @@ public static class Id65FreshLevelSceneProjector
                 $"base={baseSha256}; structural={structuralSha256}.");
         }
 
+        string[] terrainSetGraphHashes = TerrainSetTopologySelections()
+            .Select(GetTerrainSetGraphCanonicalSha256)
+            .ToArray();
+        string[] expectedTerrainSetGraphHashes =
+        [
+            ExpectedTerrainSetZeroGraphCanonicalSha256,
+            ExpectedTerrainSetTile1GraphCanonicalSha256,
+            ExpectedTerrainSetTile2GraphCanonicalSha256,
+            ExpectedTerrainSetBothGraphCanonicalSha256
+        ];
+        if (!terrainSetGraphHashes.SequenceEqual(expectedTerrainSetGraphHashes))
+        {
+            throw new InvalidDataException(
+                "The versioned schema-5 ID65 terrain-set presentation graph changed: " +
+                string.Join(',', terrainSetGraphHashes));
+        }
+
         ValidateFrozenAuthoringIntent();
+    }
+
+    internal static string GetTerrainSetGraphCanonicalSha256(
+        IEnumerable<string> activeTerrainUnitIds)
+    {
+        ArgumentNullException.ThrowIfNull(activeTerrainUnitIds);
+        string[] requested = activeTerrainUnitIds.ToArray();
+        Id65AuthoringTerrainSetManifest manifest =
+            Id65AuthoringTerrainSetCatalog.Create(requested);
+        if (!manifest.ActiveUnits.Select(item => item.Id).SequenceEqual(requested))
+        {
+            throw new InvalidDataException(
+                "The fresh-scene terrain-set topology IDs must use canonical catalog order.");
+        }
+
+        bool tile1 = requested.Contains(
+            Id65AuthoringTerrainSetCatalog.Tile1Id,
+            StringComparer.Ordinal);
+        bool tile2 = requested.Contains(
+            Id65AuthoringTerrainSetCatalog.Tile2Id,
+            StringComparer.Ordinal);
+        int faceCount = 1 + requested.Length;
+        int vertexCount = 3 + requested.Length;
+        StringBuilder canonical = new(
+            "format=id65-fresh-level-authoring-scene-terrain-set-graph-v2\n");
+        canonical.Append("profile=").Append(TerrainSetProfileId).Append('\n');
+        canonical.Append("schema=").Append(TerrainSetSchemaVersion).Append('\n');
+        canonical.Append("level=unusedlevel65blank|65|80\n");
+        canonical.Append("legacyBaseGraphCanonicalSha256=")
+            .Append(ExpectedCanonicalSha256).Append('\n');
+        canonical.Append("terrainCatalogProfileId=")
+            .Append(Id65AuthoringTerrainSetCatalog.ProfileId).Append('\n');
+        canonical.Append("terrainCatalogSchemaVersion=")
+            .Append(Id65AuthoringTerrainSetCatalog.SchemaVersion).Append('\n');
+        canonical.Append("terrainSetManifestSha256=")
+            .Append(manifest.CanonicalSha256).Append('\n');
+        canonical.Append("activeUnitCount=").Append(requested.Length).Append('\n');
+        foreach (string id in requested)
+            canonical.Append("activeUnitId=").Append(id).Append('\n');
+        canonical.Append("geometry=").Append(TerrainSetGeometryName)
+            .Append("|bounds=272,272,496,496|z=512,512")
+            .Append("|sector=216|vertices=").Append(vertexCount)
+            .Append("|faces=").Append(faceCount).Append('\n');
+        canonical.Append("baseFace=0|hp=000001020101000242024001080A1000")
+            .Append("|lp=0082100000821000|collision=13995:")
+            .Append("10011C701001380000020000\n");
+        if (tile1)
+        {
+            canonical.Append("terrainUnit=")
+                .Append(Id65AuthoringTerrainSetCatalog.Tile1Id)
+                .Append("|face=1|vertex=496,496,512")
+                .Append("|hp=010103020101000219024001080A1000")
+                .Append("|lp=0082300400821000|collision=19808:")
+                .Append("F00164001001387000020000\n");
+        }
+        if (tile2)
+        {
+            canonical.Append("terrainUnit=")
+                .Append(Id65AuthoringTerrainSetCatalog.Tile2Id)
+                .Append("|face=").Append(tile1 ? 2 : 1)
+                .Append("|vertex=272,496,512|hp=")
+                .Append(tile1
+                    ? "000002040101000219024001080A1000"
+                    : "000002030101000219024001080A1000")
+                .Append("|lp=")
+                .Append(tile1 ? "0004210000821000" : "00C3200000821000")
+                .Append("|collision=")
+                .Append(tile1
+                    ? SecondOptionalCollisionTriangleIndex
+                    : OptionalCollisionTriangleIndex)
+                .Append(":100100381001387000020000\n");
+        }
+        canonical.Append("collisionOrder=");
+        if (tile2)
+        {
+            canonical.Append(tile1
+                ? SecondOptionalCollisionTriangleIndex
+                : OptionalCollisionTriangleIndex).Append(',');
+        }
+        if (tile1)
+            canonical.Append(OptionalCollisionTriangleIndex).Append(',');
+        canonical.Append(CollisionTriangleIndex).Append('\n');
+        canonical.Append("occlusion=group0:216|groups1-15=empty\n");
+        canonical.Append("spawn=spawn.remote-pad|protected=true|T92\n");
+        canonical.Append(
+            "authority=presentation-only|writesWorkspace=false|writesLockedBase=false" +
+            "|nativePersistence=false|physicalMaterialization=false|createBin=false" +
+            "|runtimeCandidate=false|releasePromotion=false\n");
+        return Hash(canonical.ToString());
     }
 
     public static Id65FreshLevelSceneProjection ProjectExact(LevelDefinition level)
@@ -497,6 +677,8 @@ public static class Id65FreshLevelSceneProjector
                 "The fresh-level scene projection accepts only the exact ID65 Blank-Level Lab definition.");
         }
         ArgumentNullException.ThrowIfNull(document);
+        if (document.UsesRemotePadTerrainSet)
+            return ProjectTerrainSetExact(document);
         bool remotePadGrid = document.UsesRemotePadT107Grid;
         bool remotePadMobyChoice = document.UsesRemotePadMobyChoice;
         bool includeStructuralTerrain;
@@ -570,6 +752,85 @@ public static class Id65FreshLevelSceneProjector
             includeStructuralTerrain,
             visibleMobyPresentations,
             document.RemotePadMobyKind);
+    }
+
+    private static Id65FreshLevelSceneProjection ProjectTerrainSetExact(
+        Id65AuthoringEditorDocumentReadModel document)
+    {
+        Id65AuthoringEditorControlState state =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(document);
+        if (!state.UsesRemotePadTerrainSet ||
+            document.SchemaVersion !=
+                Id65AuthoringEditorDocument.RemotePadMobyChoiceTerrainSetSchemaVersion ||
+            document.ProfileId !=
+                Id65AuthoringEditorDocument.RemotePadMobyChoiceTerrainSetDocumentProfileId ||
+            document.MandatoryBaseFaceTextureId != StarterTextureId ||
+            document.TerrainSetManifestSha256 is not string manifestSha256)
+        {
+            throw new InvalidDataException(
+                "The schema-5 ID65 terrain-set document cannot enter fresh-scene presentation.");
+        }
+
+        string[] activeUnitIds =
+        [
+            .. state.IncludeTerrainTile1
+                ? [Id65AuthoringTerrainSetCatalog.Tile1Id]
+                : Array.Empty<string>(),
+            .. state.IncludeTerrainTile2
+                ? [Id65AuthoringTerrainSetCatalog.Tile2Id]
+                : Array.Empty<string>()
+        ];
+        Id65AuthoringTerrainSetManifest manifest =
+            Id65AuthoringTerrainSetCatalog.Create(activeUnitIds);
+        if (!document.ActiveTerrainUnitIds.SequenceEqual(activeUnitIds) ||
+            document.Terrain.Count != activeUnitIds.Length ||
+            !string.Equals(
+                document.TerrainSetManifestSha256,
+                manifest.CanonicalSha256,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(
+                "The schema-5 ID65 terrain-set readback is not its exact canonical selection.");
+        }
+
+        Id65FreshLevelMobyPresentation[] visibleMobyPresentations =
+            BuildRemotePadMobyChoicePresentations(
+                document,
+                out _,
+                out int mandatoryBaseFaceTextureId);
+        if (mandatoryBaseFaceTextureId != StarterTextureId ||
+            !state.RemotePadMobyKind.HasValue)
+        {
+            throw new InvalidDataException(
+                "The schema-5 terrain-set scene requires one exact T66 Moby choice.");
+        }
+
+        GeometryCandidate geometry = BuildTerrainSetGeometry(manifest);
+        Id65FreshLevelProtectedSpawn spawn = BuildProtectedSpawn();
+        ValidateTerrainSetProjectedGraph(geometry, spawn, manifest);
+        string graphCanonicalSha256 =
+            GetTerrainSetGraphCanonicalSha256(activeUnitIds);
+        string identity = BindRemotePadMobyChoiceTerrainSetDocumentIdentity(
+            graphCanonicalSha256,
+            document.DocumentCanonicalSha256,
+            document.DocumentContentSha256,
+            manifest,
+            state.RemotePadMobyKind.Value,
+            visibleMobyPresentations);
+        return new Id65FreshLevelSceneProjection(
+            geometry,
+            spawn,
+            identity,
+            graphCanonicalSha256,
+            document.DocumentCanonicalSha256,
+            document.DocumentContentSha256,
+            structuralTerrainPresent: activeUnitIds.Length != 0,
+            visibleMobyPresentations,
+            state.RemotePadMobyKind,
+            TerrainSetProfileId,
+            TerrainSetSchemaVersion,
+            activeUnitIds,
+            manifestSha256);
     }
 
     private static Id65FreshLevelMobyPresentation[]
@@ -825,7 +1086,7 @@ public static class Id65FreshLevelSceneProjector
         }
     }
 
-    private static Id65FreshLevelProtectedSpawn BuildProtectedSpawn() => new(
+    internal static Id65FreshLevelProtectedSpawn BuildProtectedSpawn() => new(
             SpawnStableId,
             UnusedLevel65FullAuthoringConstructionTemplate.PlayerAnchorTrueIndex,
             UnusedLevel65FullAuthoringConstructionTemplate.LandingWadOffset,
@@ -840,7 +1101,8 @@ public static class Id65FreshLevelSceneProjector
 
     public static bool IsProjectionGeometry(GeometryCandidate? geometry) =>
         geometry != null &&
-        string.Equals(geometry.Name, GeometryName, StringComparison.Ordinal);
+        (string.Equals(geometry.Name, GeometryName, StringComparison.Ordinal) ||
+         string.Equals(geometry.Name, TerrainSetGeometryName, StringComparison.Ordinal));
 
     public static bool IsExactProjectionGeometry(GeometryCandidate? geometry)
     {
@@ -858,6 +1120,28 @@ public static class Id65FreshLevelSceneProjector
                 return false;
             }
 
+            if (string.Equals(
+                    geometry.Name,
+                    TerrainSetGeometryName,
+                    StringComparison.Ordinal))
+            {
+                foreach (string[] activeUnitIds in TerrainSetTopologySelections())
+                {
+                    try
+                    {
+                        ValidateTerrainSetProjectedGraph(
+                            geometry,
+                            BuildProtectedSpawn(),
+                            Id65AuthoringTerrainSetCatalog.Create(activeUnitIds));
+                        return true;
+                    }
+                    catch (Exception exception) when (IsMalformedGraphException(exception))
+                    {
+                    }
+                }
+                return false;
+            }
+
             bool optional = geometry.Polygons.Count == 2;
             if (geometry.Polygons.Count is not (1 or 2))
                 return false;
@@ -872,9 +1156,40 @@ public static class Id65FreshLevelSceneProjector
         }
     }
 
+    private static IReadOnlyList<string[]> TerrainSetTopologySelections() =>
+    [
+        [],
+        [Id65AuthoringTerrainSetCatalog.Tile1Id],
+        [Id65AuthoringTerrainSetCatalog.Tile2Id],
+        [Id65AuthoringTerrainSetCatalog.Tile1Id, Id65AuthoringTerrainSetCatalog.Tile2Id]
+    ];
+
     private static GeometryCandidate BuildGeometry(
         bool includeStructuralTerrain,
-        int mandatoryBaseFaceTextureId)
+        int mandatoryBaseFaceTextureId) =>
+        BuildGeometry(
+            includeTile1: includeStructuralTerrain,
+            includeTile2: false,
+            mandatoryBaseFaceTextureId,
+            GeometryName);
+
+    private static GeometryCandidate BuildTerrainSetGeometry(
+        Id65AuthoringTerrainSetManifest manifest)
+    {
+        ArgumentNullException.ThrowIfNull(manifest);
+        string[] activeUnitIds = manifest.ActiveUnits.Select(item => item.Id).ToArray();
+        return BuildGeometry(
+            activeUnitIds.Contains(Id65AuthoringTerrainSetCatalog.Tile1Id, StringComparer.Ordinal),
+            activeUnitIds.Contains(Id65AuthoringTerrainSetCatalog.Tile2Id, StringComparer.Ordinal),
+            StarterTextureId,
+            TerrainSetGeometryName);
+    }
+
+    private static GeometryCandidate BuildGeometry(
+        bool includeTile1,
+        bool includeTile2,
+        int mandatoryBaseFaceTextureId,
+        string geometryName)
     {
         if (mandatoryBaseFaceTextureId is not (25 or 66))
             throw new InvalidDataException(
@@ -894,7 +1209,7 @@ public static class Id65FreshLevelSceneProjector
 
         GeometryCandidate geometry = new()
         {
-            Name = GeometryName,
+            Name = geometryName,
             Bounds = Rect2f.FromBounds(272, 272, 496, 496),
             MinZ = 512,
             MaxZ = 512,
@@ -957,7 +1272,7 @@ public static class Id65FreshLevelSceneProjector
             blendMode: 0,
             orderingTableBias: 0));
 
-        if (includeStructuralTerrain)
+        if (includeTile1)
         {
             Vector2f[] optionalPoints =
             [
@@ -1017,13 +1332,79 @@ public static class Id65FreshLevelSceneProjector
                 orderingTableBias: 0));
         }
 
+        if (includeTile2)
+        {
+            Vector2f[] tile2Points =
+            [
+                new(272, 272),
+                new(384, 496),
+                new(272, 496)
+            ];
+            float[] tile2Z = [512, 512, 512];
+            int faceIndex = includeTile1 ? SecondOptionalFaceIndex : OptionalFaceIndex;
+            int addedVertexIndex = includeTile1 ? 4 : 3;
+            geometry.Polygons.Add(new TerrainPolygon(
+                tile2Points,
+                tile2Z,
+                OptionalNativeTextureId,
+                AuthoredSectorIndex,
+                faceIndex,
+                "hp",
+                ColorRgba.FromRgb(124, 96, 103),
+                sectorOffset: -1,
+                faceOffset: -1,
+                vertexIndexes: [0, 0, 2, addedVertexIndex],
+                word3: "0x01400219",
+                word4: "0x00100A08",
+                faceFlip: false,
+                faceDepth: 1,
+                colourIndexes: [1, 1, 0, 2],
+                nearColors: nearColors,
+                farColors: farColors,
+                cornerPointIndexes: [0, 0, 1, 2],
+                nativeFaceWord2: OptionalHighFaceWord2,
+                nativeMaterialByte: OptionalNativeTextureId,
+                nativeUntexturedSentinel: false,
+                nativePrimitiveSemiTransparent: false,
+                nativeTextureId: OptionalNativeTextureId,
+                nativeFaceWord0: includeTile1
+                    ? Tile2BothHighFaceWord0
+                    : Tile2OnlyHighFaceWord0,
+                nativeFaceWord1: OptionalHighFaceWord1,
+                nativeFaceWord3: OptionalHighFaceWord3));
+
+            geometry.LowDetailPolygons.Add(new LowDetailTerrainPolygon(
+                tile2Points,
+                tile2Z,
+                AuthoredSectorIndex,
+                faceIndex,
+                sectorOffset: -1,
+                faceOffset: -1,
+                vertexIndexes: [0, 2, addedVertexIndex, addedVertexIndex],
+                cornerPointIndexes: [0, 1, 2, 2],
+                colorIndexes: [0, 1, 2, 2],
+                cornerColors: lowColors,
+                rawWord0: includeTile1 ? Tile2BothLowFaceWord0 : Tile2OnlyLowFaceWord0,
+                rawWord1: OptionalLowFaceWord1,
+                transitionBias: 0,
+                doubleSided: false,
+                semiTransparent: false,
+                blendMode: 0,
+                orderingTableBias: 0));
+        }
+
         geometry.Edges.Add(new TerrainEdge(272, 272, 496, 272));
         geometry.Edges.Add(new TerrainEdge(496, 272, 384, 496));
         geometry.Edges.Add(new TerrainEdge(384, 496, 272, 272));
-        if (includeStructuralTerrain)
+        if (includeTile1)
         {
             geometry.Edges.Add(new TerrainEdge(496, 272, 496, 496));
             geometry.Edges.Add(new TerrainEdge(496, 496, 384, 496));
+        }
+        if (includeTile2)
+        {
+            geometry.Edges.Add(new TerrainEdge(384, 496, 272, 496));
+            geometry.Edges.Add(new TerrainEdge(272, 496, 272, 272));
         }
 
         NativeTerrainHpSectorCoordinatePayload coordinates = new(
@@ -1040,12 +1421,12 @@ public static class Id65FreshLevelSceneProjector
             DisableLowDetail: false,
             DisableHighDetail: false,
             ForceLowDetail: false,
-            LowDetailVertexCount: includeStructuralTerrain ? 4 : 3,
+            LowDetailVertexCount: 3 + (includeTile1 ? 1 : 0) + (includeTile2 ? 1 : 0),
             LowDetailColorCount: 3,
-            LowDetailFaceCount: includeStructuralTerrain ? 2 : 1,
-            HighDetailVertexCount: includeStructuralTerrain ? 4 : 3,
+            LowDetailFaceCount: 1 + (includeTile1 ? 1 : 0) + (includeTile2 ? 1 : 0),
+            HighDetailVertexCount: 3 + (includeTile1 ? 1 : 0) + (includeTile2 ? 1 : 0),
             HighDetailColorCount: 3,
-            HighDetailFaceCount: includeStructuralTerrain ? 2 : 1,
+            HighDetailFaceCount: 1 + (includeTile1 ? 1 : 0) + (includeTile2 ? 1 : 0),
             HighPolyCoordinates: coordinates));
 
         IReadOnlyList<int>[] groups = Enumerable.Range(0, 16)
@@ -1067,11 +1448,150 @@ public static class Id65FreshLevelSceneProjector
                 OptionalCollisionYWord,
                 OptionalCollisionZWord,
                 OcclusionGroupIndex);
+        NativeTerrainOcclusionTriangle tile2Collision =
+            NativeTerrainOcclusionTriangle.FromWords(
+                includeTile1
+                    ? SecondOptionalCollisionTriangleIndex
+                    : OptionalCollisionTriangleIndex,
+                Tile2CollisionXWord,
+                Tile2CollisionYWord,
+                Tile2CollisionZWord,
+                OcclusionGroupIndex);
+        IReadOnlyList<NativeTerrainOcclusionTriangle> collisionTriangles =
+            (includeTile1, includeTile2) switch
+            {
+                (false, false) => [collision],
+                (true, false) => [optionalCollision, collision],
+                (false, true) => [tile2Collision, collision],
+                (true, true) => [tile2Collision, optionalCollision, collision]
+            };
         geometry.NativeTerrainOcclusion = new NativeTerrainOcclusionData(
             groups,
-            includeStructuralTerrain ? [optionalCollision, collision] : [collision]);
+            collisionTriangles);
         return geometry;
     }
+
+    private static void ValidateTerrainSetProjectedGraph(
+        GeometryCandidate geometry,
+        Id65FreshLevelProtectedSpawn spawn,
+        Id65AuthoringTerrainSetManifest manifest)
+    {
+        ArgumentNullException.ThrowIfNull(geometry);
+        ArgumentNullException.ThrowIfNull(spawn);
+        ArgumentNullException.ThrowIfNull(manifest);
+        string[] activeUnitIds = manifest.ActiveUnits.Select(item => item.Id).ToArray();
+        Id65AuthoringTerrainSetManifest exactManifest =
+            Id65AuthoringTerrainSetCatalog.Create(activeUnitIds);
+        GeometryCandidate expected = BuildTerrainSetGeometry(exactManifest);
+        NativeTerrainOcclusionData? collision = geometry.NativeTerrainOcclusion;
+        TerrainPolygon? baseFace = geometry.Polygons.SingleOrDefault(item =>
+            item.FaceIndex == AuthoredFaceIndex);
+        if (manifest.ProfileId != Id65AuthoringTerrainSetCatalog.ProfileId ||
+            manifest.CanonicalSha256 != exactManifest.CanonicalSha256 ||
+            !manifest.ActiveUnits.Select(item => item.Id).SequenceEqual(activeUnitIds) ||
+            !GeometryGraphsEqual(geometry, expected) ||
+            spawn != BuildProtectedSpawn() ||
+            baseFace is null || !baseFace.ContainsXY((float)spawn.X, (float)spawn.Y) ||
+            collision is null ||
+            !collision.TryResolveGroup(
+                384,
+                384,
+                534,
+                out int groupIndex,
+                out int triangleIndex,
+                out double floorZ) ||
+            groupIndex != OcclusionGroupIndex ||
+            triangleIndex != CollisionTriangleIndex || floorZ != 512)
+        {
+            throw new InvalidDataException(
+                "The schema-5 ID65 fresh-scene terrain-set graph is not one exact presentation-only topology.");
+        }
+    }
+
+    private static bool GeometryGraphsEqual(
+        GeometryCandidate actual,
+        GeometryCandidate expected) =>
+        actual.Name == expected.Name &&
+        actual.Bounds == expected.Bounds &&
+        actual.MinZ == expected.MinZ && actual.MaxZ == expected.MaxZ &&
+        actual.HasStaticLowDetailPreview == expected.HasStaticLowDetailPreview &&
+        actual.TerrainLodPreviewContract == expected.TerrainLodPreviewContract &&
+        actual.HasExactHighPolyMaterialState == expected.HasExactHighPolyMaterialState &&
+        actual.HighPolyMaterialContract == expected.HighPolyMaterialContract &&
+        actual.HasExactHighPolyCoordinateState == expected.HasExactHighPolyCoordinateState &&
+        actual.HighPolyCoordinateContract == expected.HighPolyCoordinateContract &&
+        actual.Polygons.Count == expected.Polygons.Count &&
+        actual.Polygons.Zip(expected.Polygons).All(pair =>
+            TerrainPolygonsEqual(pair.First, pair.Second)) &&
+        actual.LowDetailPolygons.Count == expected.LowDetailPolygons.Count &&
+        actual.LowDetailPolygons.Zip(expected.LowDetailPolygons).All(pair =>
+            LowDetailPolygonsEqual(pair.First, pair.Second)) &&
+        actual.Edges.SequenceEqual(expected.Edges) &&
+        actual.SourceSectors.SequenceEqual(expected.SourceSectors) &&
+        OcclusionEqual(actual.NativeTerrainOcclusion, expected.NativeTerrainOcclusion);
+
+    private static bool TerrainPolygonsEqual(TerrainPolygon actual, TerrainPolygon expected) =>
+        actual.Points.SequenceEqual(expected.Points) &&
+        actual.OriginalPoints.SequenceEqual(expected.OriginalPoints) &&
+        actual.ZValues.SequenceEqual(expected.ZValues) &&
+        actual.OriginalZValues.SequenceEqual(expected.OriginalZValues) &&
+        actual.TextureId == expected.TextureId &&
+        actual.OriginalTextureId == expected.OriginalTextureId &&
+        actual.SectorIndex == expected.SectorIndex &&
+        actual.FaceIndex == expected.FaceIndex && actual.Detail == expected.Detail &&
+        actual.SectorOffset == expected.SectorOffset &&
+        actual.FaceOffset == expected.FaceOffset &&
+        actual.VertexIndexes.SequenceEqual(expected.VertexIndexes) &&
+        actual.ColourIndexes.SequenceEqual(expected.ColourIndexes) &&
+        actual.CornerPointIndexes.SequenceEqual(expected.CornerPointIndexes) &&
+        actual.NearColors.SequenceEqual(expected.NearColors) &&
+        actual.FarColors.SequenceEqual(expected.FarColors) &&
+        actual.Word3 == expected.Word3 && actual.Word4 == expected.Word4 &&
+        actual.NativeFaceWord0 == expected.NativeFaceWord0 &&
+        actual.NativeFaceWord1 == expected.NativeFaceWord1 &&
+        actual.NativeFaceWord2 == expected.NativeFaceWord2 &&
+        actual.NativeFaceWord3 == expected.NativeFaceWord3 &&
+        actual.NativeMaterialByte == expected.NativeMaterialByte &&
+        actual.NativeTextureId == expected.NativeTextureId &&
+        actual.IsNativeUntexturedSentinel == expected.IsNativeUntexturedSentinel &&
+        actual.NativePrimitiveSemiTransparent ==
+            expected.NativePrimitiveSemiTransparent &&
+        actual.FaceFlip == expected.FaceFlip && actual.FaceDepth == expected.FaceDepth &&
+        actual.FaceColor == expected.FaceColor &&
+        actual.SurfaceColor == expected.SurfaceColor &&
+        actual.HasCompleteNativeHighPolyFacePayload &&
+        actual.HasNativeHighPolyMaterialPayload && actual.HasNativeCornerPayload &&
+        !actual.IsTerrainEdited;
+
+    private static bool LowDetailPolygonsEqual(
+        LowDetailTerrainPolygon actual,
+        LowDetailTerrainPolygon expected) =>
+        actual.Points.SequenceEqual(expected.Points) &&
+        actual.ZValues.SequenceEqual(expected.ZValues) &&
+        actual.SectorIndex == expected.SectorIndex &&
+        actual.FaceIndex == expected.FaceIndex &&
+        actual.SectorOffset == expected.SectorOffset &&
+        actual.FaceOffset == expected.FaceOffset &&
+        actual.VertexIndexes.SequenceEqual(expected.VertexIndexes) &&
+        actual.CornerPointIndexes.SequenceEqual(expected.CornerPointIndexes) &&
+        actual.ColorIndexes.SequenceEqual(expected.ColorIndexes) &&
+        actual.CornerColors.SequenceEqual(expected.CornerColors) &&
+        actual.RawWord0 == expected.RawWord0 && actual.RawWord1 == expected.RawWord1 &&
+        actual.TransitionBias == expected.TransitionBias &&
+        actual.DoubleSided == expected.DoubleSided &&
+        actual.SemiTransparent == expected.SemiTransparent &&
+        actual.BlendMode == expected.BlendMode &&
+        actual.OrderingTableBias == expected.OrderingTableBias &&
+        actual.HasCompleteNativePayload;
+
+    private static bool OcclusionEqual(
+        NativeTerrainOcclusionData? actual,
+        NativeTerrainOcclusionData? expected) =>
+        actual is not null && expected is not null &&
+        actual.EnvironmentGroups.Count == expected.EnvironmentGroups.Count &&
+        actual.EnvironmentGroups.Zip(expected.EnvironmentGroups).All(pair =>
+            pair.First.SequenceEqual(pair.Second)) &&
+        actual.CollisionTriangles.SequenceEqual(expected.CollisionTriangles);
 
     private static void ValidateProjectedGraph(
         GeometryCandidate geometry,
@@ -1499,6 +2019,48 @@ public static class Id65FreshLevelSceneProjector
             "authority=presentation-only|writesWorkspace=false|writesLockedBase=false" +
             "|editable=false|nativePersistence=false|runtimeObserved=false" +
             "|createBin=false|runtimeCandidate=false|releasePromotion=false\n");
+        return Hash(canonical.ToString());
+    }
+
+    private static string BindRemotePadMobyChoiceTerrainSetDocumentIdentity(
+        string graphCanonicalSha256,
+        string documentCanonicalSha256,
+        string documentContentSha256,
+        Id65AuthoringTerrainSetManifest terrainSet,
+        Id65RemotePadMobyKind kind,
+        IReadOnlyList<Id65FreshLevelMobyPresentation> visibleMobyPresentations)
+    {
+        StringBuilder canonical = new(
+            "format=id65-fresh-level-authoring-scene-document-binding-terrain-set-v4\n");
+        canonical.Append("profile=").Append(TerrainSetProfileId).Append('\n');
+        canonical.Append("schema=").Append(TerrainSetSchemaVersion).Append('\n');
+        canonical.Append("choiceCatalogSha256=")
+            .Append(Id65RemotePadMobyChoiceCatalog.CanonicalSha256).Append('\n');
+        canonical.Append("mobyKind=")
+            .Append(Id65RemotePadMobyChoiceCatalog.GetKindId(kind)).Append('\n');
+        canonical.Append("terrainCatalogProfileId=")
+            .Append(Id65AuthoringTerrainSetCatalog.ProfileId).Append('\n');
+        canonical.Append("terrainCatalogSchemaVersion=")
+            .Append(Id65AuthoringTerrainSetCatalog.SchemaVersion).Append('\n');
+        canonical.Append("terrainSetManifestSha256=")
+            .Append(terrainSet.CanonicalSha256).Append('\n');
+        canonical.Append("activeTerrainUnitCount=")
+            .Append(terrainSet.ActiveUnits.Count).Append('\n');
+        foreach (Id65TerrainTriangleIntent unit in terrainSet.ActiveUnits)
+            canonical.Append("activeTerrainUnitId=").Append(unit.Id).Append('\n');
+        canonical.Append("graphCanonicalSha256=").Append(graphCanonicalSha256).Append('\n');
+        canonical.Append("documentCanonicalSha256=")
+            .Append(documentCanonicalSha256).Append('\n');
+        canonical.Append("documentContentSha256=")
+            .Append(documentContentSha256).Append('\n');
+        canonical.Append("visibleMobyCount=").Append(visibleMobyPresentations.Count).Append('\n');
+        foreach (Id65FreshLevelMobyPresentation presentation in visibleMobyPresentations)
+            canonical.Append("visibleMoby=").Append(presentation.CanonicalSha256).Append('\n');
+        canonical.Append(
+            "authority=presentation-only|writesWorkspace=false|writesLockedBase=false" +
+            "|editable=false|nativePersistence=false|physicalMaterialization=false" +
+            "|runtimeObserved=false|createBin=false|runtimeCandidate=false" +
+            "|releasePromotion=false\n");
         return Hash(canonical.ToString());
     }
 

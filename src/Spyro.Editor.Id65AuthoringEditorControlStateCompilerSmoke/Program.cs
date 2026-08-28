@@ -452,10 +452,12 @@ static bool Equivalent(
     Id65AuthoringEditorControlState left,
     Id65AuthoringEditorControlState right) =>
     left.IncludeStructuralTerrain == right.IncludeStructuralTerrain &&
+    left.IncludeTerrainTile2 == right.IncludeTerrainTile2 &&
     left.IncludeGrassAtT88 == right.IncludeGrassAtT88 &&
     left.IncludeGrassAtT107 == right.IncludeGrassAtT107 &&
     left.MandatoryBaseFaceTextureId == right.MandatoryBaseFaceTextureId &&
     left.T107PlacementSemantics == right.T107PlacementSemantics &&
+    left.TerrainSelectionSemantics == right.TerrainSelectionSemantics &&
     string.Equals(
         left.T107RemotePadPositionId,
         right.T107RemotePadPositionId,
@@ -492,8 +494,8 @@ static void AssertPublicSurface()
     PropertyInfo[] properties = state.GetProperties(
         BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
     Require(
-        state.IsPublic && state.IsSealed && properties.Length == 11 &&
-        properties.Count(property => property.PropertyType == typeof(bool)) == 6 &&
+        state.IsPublic && state.IsSealed && properties.Length == 16 &&
+        properties.Count(property => property.PropertyType == typeof(bool)) == 10 &&
         properties.Count(property => property.PropertyType == typeof(int)) == 1 &&
         properties.Select(property => property.Name).Order(StringComparer.Ordinal).SequenceEqual(
             new[]
@@ -502,12 +504,17 @@ static void AssertPublicSurface()
                 "IncludeGrassAtT88",
                 "IncludeRedGemAtT21",
                 "IncludeStructuralTerrain",
+                "IncludeTerrainTile1",
+                "IncludeTerrainTile2",
+                "HasAnyStructuralTerrain",
                 "MandatoryBaseFaceTextureId",
                 "RemotePadMobyKind",
                 "RemotePadMobyPositionId",
                 "T107PlacementSemantics",
                 "T107RemotePadPositionId",
+                "TerrainSelectionSemantics",
                 "UsesRemotePadMobyChoice",
+                "UsesRemotePadTerrainSet",
                 "UsesRemotePadT107Grid"
             }.Order(StringComparer.Ordinal)) &&
         properties.All(property => !property.CanWrite),
@@ -524,7 +531,7 @@ static void AssertPublicSurface()
         .OrderBy(method => method.Name, StringComparer.Ordinal)
         .ToArray();
     Require(
-        stateFactories.Length == 7 &&
+        stateFactories.Length == 10 &&
         stateFactories.Select(method => method.Name).SequenceEqual(
             new[]
             {
@@ -533,8 +540,11 @@ static void AssertPublicSurface()
                 "CreateRemotePadDefault",
                 "CreateRemotePadMobyChoice",
                 "CreateRemotePadMobyChoiceDefault",
+                "CreateRemotePadMobyChoiceTerrainSet",
+                "CreateRemotePadMobyChoiceTerrainSetDefault",
                 "MigrateLegacyToRemotePadGrid",
-                "MigrateRemotePadGridToMobyChoice"
+                "MigrateRemotePadGridToMobyChoice",
+                "MigrateRemotePadMobyChoiceToTerrainSet"
             }.Order(StringComparer.Ordinal)) &&
         stateFactories.All(method =>
             method.ReturnType == typeof(Id65AuthoringEditorControlState)),
@@ -548,7 +558,13 @@ static void AssertPublicSurface()
             ]) &&
         Id65AuthoringEditorControlState.SchemaVersion == 1 &&
         Id65AuthoringEditorControlState.RemotePadGridSchemaVersion == 2 &&
-        Id65AuthoringEditorControlState.RemotePadMobyChoiceSchemaVersion == 3,
+        Id65AuthoringEditorControlState.RemotePadMobyChoiceSchemaVersion == 3 &&
+        Id65AuthoringEditorControlState.RemotePadMobyChoiceTerrainSetSchemaVersion == 4 &&
+        Enum.GetValues<Id65AuthoringEditorTerrainSelectionSemantics>().SequenceEqual(
+            [
+                Id65AuthoringEditorTerrainSelectionSemantics.LegacyOptionalTriangleV1,
+                Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1
+            ]),
         "The exact legacy/remote control-state schema discriminator changed.");
 
     MethodInfo[] compilerMethods = typeof(Id65AuthoringEditorControlStateCompiler).GetMethods(
