@@ -564,6 +564,11 @@ static void VerifySourceTopology(string repositoryRoot)
         [
             Path.Combine(
                 "src",
+                "Spyro.Editor.Core",
+                "Persistence",
+                "Id65AuthoringRemotePadAggregateCandidateMaterializer.cs"),
+            Path.Combine(
+                "src",
                 "Spyro.Editor.Id65AuthoringRemotePadAggregatePlanProjectorSmoke",
                 "Program.cs")
         ]),

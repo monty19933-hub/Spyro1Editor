@@ -1188,6 +1188,7 @@ static void VerifySourceTopology(string repositoryRoot)
         Path.Combine("src", "Spyro.Editor.Core", "Exporting", "Id65AuthoringEditorDocument.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Exporting", "Id65AuthoringRemotePadCompositeCompiler.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorAggregateCandidateMaterializer.cs"),
+        Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringRemotePadAggregateCandidateMaterializer.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorAggregateCandidateWorkspaceMaterializer.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorAggregatePlanProjector.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorControlStateCompiler.cs"),
