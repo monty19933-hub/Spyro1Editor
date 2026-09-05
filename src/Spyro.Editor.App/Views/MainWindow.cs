@@ -10346,17 +10346,21 @@ public sealed partial class MainWindow : Window
     private IReadOnlyList<string> CollectCombinedExportDiagnosticArtifacts(
         string outputDirectory,
         IReadOnlyList<EditedLevelExportTarget> targets,
-        CombinedTestBinResult result)
+        CombinedTestBinResult result,
+        IReadOnlyList<string>? currentBuildSafetyArtifacts = null)
     {
         List<string> paths = [];
         string finalPrefix = Path.Combine(outputDirectory, "Spyro Editor - All Saved Edits");
         AddIfFile(paths, $"{finalPrefix}.combined-export-summary.json");
         AddIfFile(paths, $"{finalPrefix}.skipped-edits.txt");
-        AddIfFile(paths, $"{finalPrefix}.build-safety.json");
-        AddIfFile(paths, $"{finalPrefix}.build-safety.md");
+        foreach (string path in currentBuildSafetyArtifacts ?? [])
+            AddIfFile(paths, path);
 
-        string buildDirectory = Path.Combine(outputDirectory, "_combined-build");
-        if (Directory.Exists(buildDirectory))
+        // Only this publication's unique run directory is current evidence.
+        // Fixed-prefix safety reports and old shared staging files may belong
+        // to an unrelated build, especially for name/music/sky-only exports.
+        string buildDirectory = result.BuildDirectory;
+        if (!string.IsNullOrWhiteSpace(buildDirectory) && Directory.Exists(buildDirectory))
         {
             paths.AddRange(Directory.EnumerateFiles(buildDirectory, "*.json", SearchOption.TopDirectoryOnly)
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase));
@@ -13134,6 +13138,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        MobyBuildSafetyReport? currentBuildSafetyReport = null;
         if (targets.Any(target =>
                 target.HasObjectEdits ||
                 target.HasTerrainEdits ||
@@ -13167,6 +13172,7 @@ public sealed partial class MainWindow : Window
                     : $"Canceled BIN creation after the object build safety review. Report: {buildSafety.Written.MarkdownPath}";
                 return;
             }
+            currentBuildSafetyReport = buildSafety.Report;
         }
 
         ReportCreateBinProgress(
@@ -13194,50 +13200,14 @@ public sealed partial class MainWindow : Window
             targets.Count == 1
                 ? $"Creating test for {targets[0].Level.DisplayName}..."
                 : $"Creating one test for saved edits across {targets.Count} levels...");
+        CombinedTestBinResult result;
         try
         {
-            CombinedTestBinResult result = await CreateAllSavedEditsTestAsync(
+            result = await CreateAllSavedEditsTestAsync(
                 sourceImage,
                 DiscImageLocator.FindCueForImage(sourceImage),
                 outputDir,
                 targets);
-            if (!result.WroteImage)
-            {
-                string skipped = result.SkippedEdits > 0
-                    ? $" Skipped {result.SkippedEdits} edit(s) that are not export-ready yet."
-                    : " Change a level name, music track, skybox, object, or terrain first.";
-                EditorDiagnostics.RecordWarning("Create BIN produced no output image", $"Targets: {targetSummary}; skipped edits: {result.SkippedEdits}");
-                _statusText.Text = $"No source patches were ready across the saved edits.{skipped} Older All Saved Edits BIN/CUE output was removed so DuckStation cannot load a stale test.";
-                return;
-            }
-
-            string levelSummary = result.PatchedLevelNames.Count == 0
-                ? ""
-                : $" for {FormatShortList(result.PatchedLevelNames, 4)}";
-            string treasureSummary = BuildExportedTreasureStatus(result.ExportedTreasureTargets);
-            string skippedSummary = BuildSkippedExportStatus(result.SkippedEdits, result.SkippedEditDetails);
-            string exportSummary = $"{result.PatchedLevelNames.Count} level(s); {result.ObjectPatches} object, {result.TerrainPatches} terrain, {result.EnvironmentGradePatches} environment, {result.SkyboxPatches} skybox, {result.LevelNamePatches} level-name, {result.MusicLevelPatches} music patch(es); {result.SkippedEdits} skipped edit(s)";
-            IReadOnlyList<string> diagnosticArtifacts = CollectCombinedExportDiagnosticArtifacts(outputDir, targets, result);
-            EditorExportDiagnosticResult diagnostics = EditorDiagnostics.RecordExport(new EditorExportDiagnostic(
-                OutputCuePath: result.OutputCuePath,
-                OutputImagePath: result.OutputImagePath,
-                SourceImagePath: sourceImage,
-                Summary: exportSummary,
-                Details: new Dictionary<string, string>
-                {
-                    ["Edited level detail"] = targetSummary,
-                    ["Patched levels"] = string.Join(", ", result.PatchedLevelNames),
-                    ["Skipped edit detail"] = result.SkippedEditDetails.Count == 0 ? "None" : string.Join("; ", result.SkippedEditDetails),
-                    ["Exported treasure totals"] = result.ExportedTreasureTargets.Count == 0
-                        ? "None"
-                        : string.Join("; ", result.ExportedTreasureTargets.Select(target => $"{target.LevelName}: {target.Before}->{target.After}"))
-                },
-                ArtifactPaths: diagnosticArtifacts));
-            string folderStatus = OpenContainingFolderStatus(result.OutputCuePath);
-            string diagnosticStatus = string.IsNullOrWhiteSpace(diagnostics.BundlePath)
-                ? ""
-                : $" Support ZIP: {Path.GetFileName(diagnostics.BundlePath)}.";
-            _statusText.Text = $"Created all-edits test {Path.GetFileName(result.OutputCuePath)}{levelSummary}: {result.ObjectPatches} object patch(es), {result.TerrainPatches} terrain patch(es), {result.EnvironmentGradePatches} environment patch(es), {result.SkyboxPatches} sky block patch(es), {result.LevelNamePatches} level name(s), {result.MusicLevelPatches} music level(s).{treasureSummary}{skippedSummary}{diagnosticStatus}{folderStatus}";
         }
         catch (Exception ex)
         {
@@ -13246,6 +13216,94 @@ public sealed partial class MainWindow : Window
             _statusText.Text = $"Could not create test: {ex.Message}";
             if (!string.IsNullOrWhiteSpace(reportPath))
                 _statusText.Text += $" Diagnostic report: {reportPath}";
+            return;
+        }
+
+        if (!result.WroteImage)
+        {
+            string skipped = result.SkippedEdits > 0
+                ? $" Skipped {result.SkippedEdits} edit(s) that are not export-ready yet."
+                : " Change a level name, music track, skybox, object, or terrain first.";
+            EditorDiagnostics.RecordWarning("Create BIN produced no output image", $"Targets: {targetSummary}; skipped edits: {result.SkippedEdits}");
+            _statusText.Text = $"No source patches were ready across the saved edits.{skipped} No new test was published; the previous All Saved Edits output is unchanged.";
+            return;
+        }
+
+        // Publication is complete. Optional diagnostics and folder UI cannot
+        // change that outcome or enter the prepublication failure handler.
+        await CompleteCombinedExportPublicationAsync(
+            sourceImage, outputDir, targets, result, targetSummary, currentBuildSafetyReport);
+        try
+        {
+            _statusText.Text += OpenContainingFolderStatus(result.OutputCuePath);
+        }
+        catch (Exception ex)
+        {
+            EditorDiagnostics.RecordWarning("Test BIN published; could not reveal its output folder", ex.Message);
+            _statusText.Text += $" Output folder: {outputDir}";
+        }
+    }
+
+    private async Task CompleteCombinedExportPublicationAsync(
+        string sourceImage,
+        string outputDir,
+        IReadOnlyList<EditedLevelExportTarget> targets,
+        CombinedTestBinResult result,
+        string targetSummary,
+        MobyBuildSafetyReport? currentBuildSafetyReport = null)
+    {
+        string levelSummary = result.PatchedLevelNames.Count == 0
+            ? ""
+            : $" for {FormatShortList(result.PatchedLevelNames, 4)}";
+        string treasureSummary = BuildExportedTreasureStatus(result.ExportedTreasureTargets);
+        string skippedSummary = BuildSkippedExportStatus(result.SkippedEdits, result.SkippedEditDetails);
+        string successStatus = $"Created all-edits test {Path.GetFileName(result.OutputCuePath)}{levelSummary}: {result.ObjectPatches} object patch(es), {result.TerrainPatches} terrain patch(es), {result.EnvironmentGradePatches} environment patch(es), {result.SkyboxPatches} sky block patch(es), {result.LevelNamePatches} level name(s), {result.MusicLevelPatches} music level(s).{treasureSummary}{skippedSummary}";
+        _statusText.Text = successStatus;
+        try
+        {
+            IReadOnlyList<string> currentBuildSafetyArtifacts = [];
+            if (currentBuildSafetyReport != null)
+            {
+                if (string.IsNullOrWhiteSpace(result.BuildDirectory))
+                    throw new InvalidDataException("The published build has no run directory for its current safety report.");
+                // Serialize the report captured for this invocation, not the
+                // reusable UI report paths that another inspection can replace.
+                MobyBuildSafetyWriteResult written = await MobyBuildSafetyReportWriter.WriteAsync(
+                    currentBuildSafetyReport,
+                    Path.Combine(result.BuildDirectory, "current.build-safety.json"),
+                    Path.Combine(result.BuildDirectory, "current.build-safety.md"));
+                currentBuildSafetyArtifacts = [written.JsonPath, written.MarkdownPath];
+            }
+            string exportSummary = $"{result.PatchedLevelNames.Count} level(s); {result.ObjectPatches} object, {result.TerrainPatches} terrain, {result.EnvironmentGradePatches} environment, {result.SkyboxPatches} skybox, {result.LevelNamePatches} level-name, {result.MusicLevelPatches} music patch(es); {result.SkippedEdits} skipped edit(s)";
+            IReadOnlyList<string> diagnosticArtifacts = CollectCombinedExportDiagnosticArtifacts(
+                outputDir, targets, result, currentBuildSafetyArtifacts);
+            EditorExportDiagnosticResult diagnostics = EditorDiagnostics.RecordExport(new EditorExportDiagnostic(
+                OutputCuePath: result.OutputCuePath,
+                OutputImagePath: result.OutputImagePath,
+                SourceImagePath: sourceImage,
+                Summary: exportSummary,
+                Details: new Dictionary<string, string>
+                {
+                    ["Edited level detail"] = targetSummary,
+                    ["Build Safety for this invocation"] = currentBuildSafetyReport == null
+                        ? "Not run; this build did not require the object/terrain safety inspection."
+                        : $"Captured at {currentBuildSafetyReport.GeneratedAt:O}: {currentBuildSafetyReport.StatusLabel}",
+                    ["Patched levels"] = string.Join(", ", result.PatchedLevelNames),
+                    ["Skipped edit detail"] = result.SkippedEditDetails.Count == 0 ? "None" : string.Join("; ", result.SkippedEditDetails),
+                    ["Exported treasure totals"] = result.ExportedTreasureTargets.Count == 0
+                        ? "None"
+                        : string.Join("; ", result.ExportedTreasureTargets.Select(target => $"{target.LevelName}: {target.Before}->{target.After}"))
+                },
+                ArtifactPaths: diagnosticArtifacts));
+            string diagnosticStatus = string.IsNullOrWhiteSpace(diagnostics.BundlePath)
+                ? " Optional diagnostics unavailable; the published BIN/CUE are ready to test."
+                : $" Support ZIP: {Path.GetFileName(diagnostics.BundlePath)}.";
+            _statusText.Text = successStatus + diagnosticStatus;
+        }
+        catch (Exception ex)
+        {
+            EditorDiagnostics.RecordWarning("Test BIN published; optional export diagnostics unavailable", ex.Message);
+            _statusText.Text = successStatus + $" Optional diagnostics unavailable: {ex.Message} The published BIN/CUE are ready to test.";
         }
     }
 
@@ -13354,8 +13412,7 @@ public sealed partial class MainWindow : Window
         if (TryGetId65BlankLabNormalCreateBinBlockReason(out string id65BlockReason))
             throw new InvalidOperationException(id65BlockReason);
 
-        string tempDir = Path.Combine(outputDir, "_combined-build");
-        Directory.CreateDirectory(tempDir);
+        string tempDir = Path.Combine(outputDir, "_combined-build", $"run-{Guid.NewGuid():N}");
         string finalPrefix = Path.Combine(outputDir, "Spyro Editor - All Saved Edits");
         string finalImage = $"{finalPrefix}.bin";
         string finalCue = $"{finalPrefix}.cue";
@@ -13363,18 +13420,12 @@ public sealed partial class MainWindow : Window
         string finalSkipped = $"{finalPrefix}.skipped-edits.txt";
         string finalDiagnostics = $"{finalPrefix}.diagnostics.txt";
         string finalSupportBundle = $"{finalPrefix}.diagnostics.zip";
-        foreach (string staleImage in Directory.EnumerateFiles(tempDir, "*", SearchOption.AllDirectories)
-            .Concat(new[] { finalImage, finalCue, finalSummary, finalSkipped, finalDiagnostics, finalSupportBundle }))
+        if (PathsEqual(sourceImage, finalImage) || PathsEqual(sourceCue, finalCue))
         {
-            try
-            {
-                if (File.Exists(staleImage))
-                    File.Delete(staleImage);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-            }
+            throw new InvalidOperationException(
+                "Create BIN cannot replace its selected source image or CUE. Select the original disc before publishing All Saved Edits.");
         }
+        Directory.CreateDirectory(tempDir);
 
         string currentImage = sourceImage;
         string currentCue = sourceCue;
@@ -13958,13 +14009,18 @@ public sealed partial class MainWindow : Window
         if (objectPatches + terrainPatches + environmentGradePatches + skyboxPatches + levelNamePatches + musicLevelPatches == 0 || !File.Exists(currentImage))
             return new CombinedTestBinResult("", "", objectPatches, terrainPatches, environmentGradePatches, skyboxPatches, levelNamePatches, musicLevelPatches, skippedEdits, skippedEditDetails, exportedTreasureTargets, patchedLevelNames, false);
 
-        await PublishCombinedBuildImageAsync(
+        string stagedPrefix = Path.Combine(tempDir, Path.GetFileName(finalPrefix));
+        string stagedImage = $"{stagedPrefix}.bin";
+        string stagedCue = $"{stagedPrefix}.cue";
+        string stagedSummary = $"{stagedPrefix}.combined-export-summary.json";
+        string stagedSkipped = $"{stagedPrefix}.skipped-edits.txt";
+        string cueText = BuildCueText(currentCue, currentImage, Path.GetFileName(finalImage));
+        await StageCombinedBuildImageAsync(
             currentImage,
-            finalImage,
+            stagedImage,
             tempDir);
-        string cueText = BuildCueText(currentCue, Path.GetFileName(finalImage));
-        await File.WriteAllTextAsync(finalCue, cueText, Encoding.ASCII);
-        await File.WriteAllTextAsync(finalSummary, JsonSerializer.Serialize(new
+        await File.WriteAllTextAsync(stagedCue, cueText, DiscCueSheet.TextEncoding);
+        await File.WriteAllTextAsync(stagedSummary, JsonSerializer.Serialize(new
         {
             generatedAt = DateTime.Now.ToString("s"),
             sourceImage,
@@ -13983,9 +14039,25 @@ public sealed partial class MainWindow : Window
             exportedTreasureTargets,
             steps = stepSummaries
         }, new JsonSerializerOptions { WriteIndented = true }));
-        WriteSkippedExportDetails(finalPrefix, skippedEditDetails);
+        WriteSkippedExportDetails(stagedPrefix, skippedEditDetails);
+        ExportArtifactPublicationResult publication = ExportArtifactTransaction.Publish(outputDir,
+        [
+            new(finalImage, stagedImage),
+            new(finalSummary, stagedSummary),
+            new(finalSkipped, File.Exists(stagedSkipped) ? stagedSkipped : null),
+            new(finalDiagnostics, null),
+            new(finalSupportBundle, null),
+            // Publish the launcher last, after its BIN and summary are present.
+            new(finalCue, stagedCue)
+        ]);
+        if (!string.IsNullOrWhiteSpace(publication.RetainedRecoveryDirectory))
+        {
+            EditorDiagnostics.RecordWarning(
+                "Export completed with previous-output recovery files retained",
+                publication.RetainedRecoveryDirectory);
+        }
 
-        return new CombinedTestBinResult(finalImage, finalCue, objectPatches, terrainPatches, environmentGradePatches, skyboxPatches, levelNamePatches, musicLevelPatches, skippedEdits, skippedEditDetails, exportedTreasureTargets, patchedLevelNames, true);
+        return new CombinedTestBinResult(finalImage, finalCue, objectPatches, terrainPatches, environmentGradePatches, skyboxPatches, levelNamePatches, musicLevelPatches, skippedEdits, skippedEditDetails, exportedTreasureTargets, patchedLevelNames, true, tempDir);
     }
 
     private static bool IsDisposableCombinedBuildImage(
@@ -14005,21 +14077,21 @@ public sealed partial class MainWindow : Window
         return fullImage.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static async Task PublishCombinedBuildImageAsync(
+    private static async Task StageCombinedBuildImageAsync(
         string workingImagePath,
-        string finalImagePath,
+        string stagedImagePath,
         string combinedBuildDirectory)
     {
         if (IsDisposableCombinedBuildImage(
                 workingImagePath,
                 combinedBuildDirectory))
         {
-            File.Move(workingImagePath, finalImagePath, overwrite: true);
+            File.Move(workingImagePath, stagedImagePath);
             return;
         }
 
         await Task.Run(() =>
-            File.Copy(workingImagePath, finalImagePath, overwrite: true));
+            File.Copy(workingImagePath, stagedImagePath));
     }
 
     private static string BuildExportedTreasureStatus(IReadOnlyList<ExportedTreasureTarget> exportedTreasureTargets)
@@ -14108,25 +14180,8 @@ public sealed partial class MainWindow : Window
         File.WriteAllLines(path, lines, Encoding.UTF8);
     }
 
-    private static string BuildCueText(string sourceCuePath, string outputBinName)
-    {
-        if (!File.Exists(sourceCuePath))
-            return $"FILE \"{outputBinName}\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n";
-
-        string[] lines = File.ReadAllLines(sourceCuePath, Encoding.ASCII);
-        bool replaced = false;
-        for (int i = 0; i < lines.Length; i++)
-        {
-            string trimmed = lines[i].Trim();
-            if (!replaced && trimmed.StartsWith("FILE ", StringComparison.OrdinalIgnoreCase) && trimmed.EndsWith(" BINARY", StringComparison.OrdinalIgnoreCase))
-            {
-                lines[i] = $"FILE \"{outputBinName}\" BINARY";
-                replaced = true;
-            }
-        }
-
-        return string.Join('\n', replaced ? lines : new[] { $"FILE \"{outputBinName}\" BINARY" }.Concat(lines)) + "\n";
-    }
+    private static string BuildCueText(string sourceCuePath, string sourceImagePath, string outputBinName) =>
+        DiscCueSheet.BuildForImage(sourceCuePath, sourceImagePath, outputBinName);
 
     private string BuildOtherSavedObjectEditHint()
     {
@@ -31771,7 +31826,8 @@ public sealed partial class MainWindow : Window
         IReadOnlyList<string> SkippedEditDetails,
         IReadOnlyList<ExportedTreasureTarget> ExportedTreasureTargets,
         IReadOnlyList<string> PatchedLevelNames,
-        bool WroteImage);
+        bool WroteImage,
+        string BuildDirectory = "");
 
     private sealed record ExportedTreasureTarget(string LevelName, int Before, int After);
 
