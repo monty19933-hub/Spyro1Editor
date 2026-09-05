@@ -326,7 +326,9 @@ public static class CrossLevelSwapCatalogBuilder
                     CandidateKind: mappedTemplate == null || string.IsNullOrWhiteSpace(mappedTemplate.CandidateKind)
                         ? moby.CandidateKind
                         : mappedTemplate.CandidateKind,
-                    Confidence: moby.Confidence));
+                    Confidence: moby.Confidence,
+                    PropertiesPointer: moby.PropertiesPointer,
+                    PropertiesPointerKnown: moby.HasPropertiesPointerEvidence));
             }
         }
 
@@ -371,6 +373,8 @@ public static class CrossLevelSwapCatalogBuilder
 
     private static SwapSourceClassification Classify(Moby moby)
     {
+        if (moby.SourceByte36 is < 0 or > 255 || moby.SourceByte37 is < 0 or > 255 || moby.Type is < 0 or > 255)
+            return SwapSourceClassification.Excluded;
         string text = $"{moby.DisplayLabel} {moby.CandidateKind} {moby.BehaviorNote}".ToLowerInvariant();
         bool supportedSourceType = moby.Type is 0x18 or 0x20;
         bool uncertain = ContainsAny(text,
@@ -428,8 +432,7 @@ public static class CrossLevelSwapCatalogBuilder
             "dragon",
             "flight target",
             "cutscene");
-        bool linked = moby.Links.Any(MobyLinkTraversal.IsActiveMoveLink);
-        bool hasPerInstanceRuntimeData = moby.SpecialDataPointer != 0;
+        NativeMobyDependencyFacts nativeDependencies = NativeMobyDependencyFacts.FromMoby(moby);
         string candidateKind = moby.CandidateKind.Trim().ToLowerInvariant();
         string confidence = moby.Confidence.Trim().ToLowerInvariant();
         bool explicitEnemyIdentity = candidateKind == "enemy" || candidateKind.EndsWith(" enemy", StringComparison.Ordinal);
@@ -450,23 +453,20 @@ public static class CrossLevelSwapCatalogBuilder
         bool enemyEligible = moby.Type == 0x20 &&
             !uncertain &&
             !passiveOrScripted &&
-            !linked &&
-            !hasPerInstanceRuntimeData &&
+            nativeDependencies.CanUseSelfContainedRowCandidate &&
             explicitEnemyIdentity &&
             trustedEnemyEvidence &&
             !suspiciousActorFamily;
         string enemyReason = enemyEligible
-            ? "No linked companion or runtime special-data pointer was found. The actor package is still level-local, so this remains a disposable existing-slot candidate until tested."
+            ? "No native properties, associated-word or linked-companion dependency was found. The actor package is still level-local, so this remains a disposable existing-slot candidate until tested."
             : moby.Type != 0x20
             ? $"Actor source type 0x{moby.Type:X2} is outside the self-contained enemy candidate writer."
             : uncertain
             ? "Enemy identity is not strong enough for a user-facing swap yet."
             : passiveOrScripted
             ? "Passive, scripted, boss, thief, dragon, or flight actor is outside the self-contained enemy slice."
-            : linked
-            ? "Enemy has linked route, helper, reward, or companion records and needs a dependency bundle."
-            : hasPerInstanceRuntimeData
-            ? "Enemy uses per-instance runtime special data and needs a dependency-aware import."
+            : !nativeDependencies.CanUseSelfContainedRowCandidate
+            ? nativeDependencies.RowOnlyDependencyReason
             : !explicitEnemyIdentity
             ? "Actor is not explicitly identified as an enemy, so it stays out of the self-contained catalogue."
             : !trustedEnemyEvidence
@@ -604,7 +604,7 @@ public static class CrossLevelSwapCatalogBuilder
     }
 
     private static string BuildSignature(Moby moby, CrossLevelSwapCategory category) =>
-        $"{category}:{moby.Type:X2}:{moby.State:X2}:{moby.SourceByte36:X2}:{moby.SourceByte37:X2}:{moby.SourceByte4F:X2}:{moby.Flag4A:X2}:{moby.Flag4B:X2}:{BuildDisplayName(moby, category)}";
+        $"{category}:{moby.Type:X2}:{moby.State:X2}:{moby.SourceByte36:X2}:{moby.SourceByte37:X2}:{moby.SourceByte4F:X2}:{moby.Flag4A:X2}:{moby.Flag4B:X2}:props={moby.HasPropertiesPointerEvidence}/{moby.PropertiesPointer:X8}:associated={moby.SpecialDataPointer:X8}:links={moby.Links.Any(MobyLinkTraversal.IsActiveMoveLink)}:{BuildDisplayName(moby, category)}";
 
     private static string BuildId(LevelDefinition level, Moby moby, CrossLevelSwapCategory category) =>
         $"catalog.{LevelCatalog.NormalizeKey(level.Key)}.{category.ToString().ToLowerInvariant()}.{moby.SourceByte37:X2}{moby.SourceByte36:X2}.t{moby.TrueIndex}";
@@ -736,7 +736,9 @@ public sealed record CrossLevelSwapCatalogEntry(
     string SupportNote,
     string DependencyRisk,
     string CandidateKind,
-    string Confidence)
+    string Confidence,
+    uint PropertiesPointer = 0,
+    bool PropertiesPointerKnown = false)
 {
     public string SearchText => $"{DisplayName} {Category} {SourceLevelName} T{SourceTrueIndex} 0x{ActorId:X4} {CompatibilityTier} {PackageRecipeId} {ShortStatus} {CandidateKind} {Confidence}";
     public string ListText => $"{DisplayName} | {SourceLevelName} T{SourceTrueIndex} | {ShortStatus}";

@@ -90,6 +90,7 @@ public static class MobyLoader
         {
             int trueIndex = JsonValue.GetInt32(item, "trueIndex", JsonValue.GetInt32(item, "index", fallbackIndex));
             int type = JsonValue.GetInt32(item, "typeHex", JsonValue.GetInt32(item, "type", 0));
+            long propertiesPointer = JsonValue.GetInt64(item, "propertiesPointer", -1);
             int yawByte = JsonValue.GetInt32(item, "yawByteHex", JsonValue.GetInt32(item, "facingByteHex", -1));
             string label = Moby.FallbackLabel(type);
             Vector3f position = new(
@@ -111,7 +112,8 @@ public static class MobyLoader
                 YawByte = yawByte,
                 OriginalYawByte = yawByte,
                 RuntimeAddress = (uint)JsonValue.GetInt64(item, "runtimeAddress"),
-                PropertiesPointer = (uint)JsonValue.GetInt64(item, "propertiesPointer"),
+                PropertiesPointer = propertiesPointer is >= 0 and <= uint.MaxValue ? (uint)propertiesPointer : 0,
+                HasPropertiesPointerEvidence = propertiesPointer is >= 0 and <= uint.MaxValue,
                 SpecialDataPointer = (uint)JsonValue.GetInt64(item, "specialDataPointer"),
                 SourceByte36 = JsonValue.GetInt32(item, "sourceByte36Hex"),
                 OriginalSourceByte36 = JsonValue.GetInt32(item, "sourceByte36Hex"),

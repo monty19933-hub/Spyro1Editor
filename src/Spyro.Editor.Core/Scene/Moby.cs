@@ -25,6 +25,9 @@ public sealed class Moby
     /// scene-relative offset.
     /// </summary>
     public uint PropertiesPointer { get; init; }
+    /// <summary>False when an older source cache omitted the native pointer field.</summary>
+    [JsonIgnore]
+    public bool HasPropertiesPointerEvidence { get; init; } = true;
     /// <summary>
     /// Legacy editor field read from record offset +0x08. This is retained for
     /// project/cache compatibility; it is not the native <c>m_Props</c> pointer.

@@ -175,6 +175,67 @@ composed into the authoring document/export path. Custom audio is separate.
 
 ## Prioritized follow-on work
 
+### Native type and instance dependency correction (2026-09-04)
+
+`NativeMobyDependencyFacts` now extracts the full 16-bit native class, render
+radius (not actor class), native properties at +0x00, the legacy associated word
+at +0x08, and active link requirements. The swap catalog and actual row-only
+enemy candidate writer share the facts. Labels remain useful for display and
+provisional category classification, but cannot erase a native properties
+dependency. A nonzero properties pointer does **not** forbid import: it requires
+an explicitly planned properties extent, internal references and loader fixups.
+
+Read-only audit of the current 35 retail caches found 4,877 rows, all with a
+nonzero native properties pointer and zero legacy +0x08 word; none lack native
+pointer evidence. Replaying the prior classification assumption against the
+same enriched records produced 1,022 eligible row-only slots, including 397
+enemies. Corrected eligibility is 625 chest slots and zero self-contained enemy
+slots. The previous 397 enemy classifications were not properties-free and
+were never normal-Create-BIN approvals. This is a material correction to a
+flawed model, not completion of arbitrary enemy import. Existing dedicated
+Wizard/locked-chest composers and same-level cloning are not gated by the new
+generic source predicate. Actual catalog reads still expose the single
+runtime-proven Wizard donor for each of Wizard Peak and Magic Crafters; their
+focused target UI has an independent dedicated-route predicate.
+
+Current `SourceMobyCacheBuilder` and `PortableEditorCacheBuilder` emit the native
+pointer. Older or malformed fields remain unknown rather than becoming a known
+zero, including native-edit save/reload and portable cache serialization. Known
+pointer field names and hexadecimal encoding remain unchanged. Malformed actor
+byte fields are rejected per catalog entry, while the typed facts API rejects
+invalid records explicitly.
+
+Package planning now checks the final authored class after raw source-byte
+overrides against the **staged** destination root arrays. A replaced root no
+longer proves its former class resident. Matching a donor's low class byte, or
+having some unrelated resident root, does not suffice. Only the existing exact
+Town Square T30 controller 0x00C2 -> 0x01FE alias recipe has explicit instance
+remap authority; its 0x0186 helper and 0x0149 shell roots are dependencies, not
+authority to transform the controller into either helper. This preserves that
+guarded alias route without promoting it. Rejected rows roll back newly staged
+package writes, and portal movement bookkeeping is deferred until validation.
+
+Source-free regression markers:
+
+- `NATIVE_MOBY_DEPENDENCY_FACTS_SMOKE_OK`: native +0x00 versus legacy +0x08,
+  full class identity, known-zero/nonzero/sentinel/unknown pointer state,
+  native-edit roundtrip, malformed catalog entry and explicit remap constraints.
+- `MOBY_PLAN_TRANSACTION_SMOKE_OK`: actual synthetic-image `BuildPlan` rejects
+  absent or unrelated final classes (including raw source-byte overrides),
+  preserves valid appends/transforms and shared packages, and checks exact
+  controller alias authority without granting helper classes.
+- `CROSS_LEVEL_CANDIDATE_FINGERPRINT_SMOKE_OK`: source/content approval binding
+  remains intact after the instance checks.
+
+The next dependency-model work is an owned-properties extent/fixup linker, not
+another class allowlist: derive typed scene component bounds, represent shared
+immutable versus private mutable properties, register internal pointer fields,
+reserve per-instance extents, and emit one reversible conflict-checked bundle.
+First port an already proven passive Grass properties bundle and compare its
+exact bytes before generalizing enemy/controller semantics. Complete behavior,
+dynamic-spawn, texture, sound, reward and lifecycle closure still requires
+separate evidence and runtime tests.
+
 1. Extend the now-tested object-scoped transaction to complete multi-object
    behavior/reward dependency groups. A controller and its required companions
    must be accepted or rejected together; partial group success is not a complete

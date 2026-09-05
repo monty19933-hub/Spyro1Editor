@@ -158,7 +158,7 @@ public static class MobyEditStore
                 ["removed"] = moby.IsRemoved,
                 ["added"] = moby.IsAdded,
                 ["runtimeAddress"] = $"0x{moby.RuntimeAddress:X8}",
-                ["propertiesPointer"] = $"0x{moby.PropertiesPointer:X8}",
+                ["propertiesPointer"] = moby.HasPropertiesPointerEvidence ? $"0x{moby.PropertiesPointer:X8}" : null,
                 ["specialDataPointer"] = $"0x{moby.SpecialDataPointer:X8}",
                 ["sourceByte36Hex"] = $"0x{moby.SourceByte36:X2}",
                 ["sourceByte36OriginalHex"] = moby.OriginalSourceByte36 >= 0 ? $"0x{moby.OriginalSourceByte36:X2}" : null,
@@ -280,6 +280,7 @@ public static class MobyEditStore
         if (string.IsNullOrWhiteSpace(label))
             label = Moby.FallbackLabel(type);
         JsonElement? crossLevelTemplate = ReadCrossLevelTemplate(edit);
+        long propertiesPointer = JsonValue.GetInt64(edit, "propertiesPointer", -1);
 
         Moby added = new()
         {
@@ -295,7 +296,8 @@ public static class MobyEditStore
             YawByte = yawByte,
             OriginalYawByte = yawByte,
             RuntimeAddress = ReadUInt32(edit, "runtimeAddress"),
-            PropertiesPointer = ReadUInt32(edit, "propertiesPointer"),
+            PropertiesPointer = propertiesPointer is >= 0 and <= uint.MaxValue ? (uint)propertiesPointer : 0,
+            HasPropertiesPointerEvidence = propertiesPointer is >= 0 and <= uint.MaxValue,
             SpecialDataPointer = ReadUInt32(edit, "specialDataPointer"),
             SourceByte36 = sourceByte36,
             OriginalSourceByte36 = sourceByte36,

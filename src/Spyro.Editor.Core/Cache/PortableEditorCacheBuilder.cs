@@ -2084,7 +2084,7 @@ public static class PortableEditorCacheBuilder
                 typeHex = $"0x{moby.Type:X2}",
                 stateHex = $"0x{moby.State:X2}",
                 runtimeAddress = $"0x{moby.RuntimeAddress:X8}",
-                propertiesPointer = $"0x{moby.PropertiesPointer:X8}",
+                propertiesPointer = moby.HasPropertiesPointerEvidence ? $"0x{moby.PropertiesPointer:X8}" : null,
                 specialDataPointer = $"0x{moby.SpecialDataPointer:X8}",
                 sourceByte36Hex = $"0x{moby.SourceByte36:X2}",
                 sourceByte37Hex = $"0x{moby.SourceByte37:X2}",

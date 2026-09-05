@@ -93,8 +93,8 @@ public static class MobySourcePatchExporter
                 }
             }
 
-            string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath));
-            await File.WriteAllTextAsync(outputCuePath, cueText, Encoding.ASCII, cancellationToken);
+            string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath), request.SourceImagePath, outputImagePath);
+            await File.WriteAllTextAsync(outputCuePath, cueText, DiscCueSheet.TextEncoding, cancellationToken);
 
             if (GreenWizardResidentSwapComposer.CountResidentWizardPatches(plan) > 0)
             {
@@ -404,13 +404,18 @@ public static class MobySourcePatchExporter
                     label,
                     edit,
                     editSafetyFindings);
-                TrackMovedPortalSourceData(level, trueIndex, label, edit, portalSourceData, portalMovements);
                 AddMovedDragonRescueCameraPatches(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, dragonRescueCameras, patches, writtenWadOffsets);
                 AddMovedExistingPlacementSectorPatch(imageStream, layout, level, levelGeometry, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
                 AddChangedBytePatch(imageStream, layout, level, tableWadOffset, trueIndex, label, "type", TypeOffset, edit, "typeOriginalHex", "typeEditedHex", patches, writtenWadOffsets);
                 AddChangedBytePatch(imageStream, layout, level, tableWadOffset, trueIndex, label, "state", StateOffset, edit, "stateOriginalHex", "stateEditedHex", patches, writtenWadOffsets);
                 AddYawPatches(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
                 AddSourceByteEdits(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
+                if (dependencyTransaction != null &&
+                    !TryValidateImportedInstanceActor(imageStream, layout, catalog, level, tableWadOffset,
+                        tableRelativeOffset, trueIndex, label, edit, packageImportPreviews.Skip(packagePreviewStart).ToArray(),
+                        patches, skippedEdits))
+                    continue;
+                TrackMovedPortalSourceData(level, trueIndex, label, edit, portalSourceData, portalMovements);
                 exportedTreasureDelta += ComputeTreasureDelta(edit);
                 dependencyTransaction?.Commit();
             }
@@ -1465,6 +1470,8 @@ public static class MobySourcePatchExporter
         else if (TryParseExeRuntimeAddress(patch.WadRelativeOffset, out uint exeAddress))
         {
             DiscFileRecord executable = FindExecutable(stream, layout);
+            if (patch.Kind == "level-treasure-total")
+                RequireTreasureTableExecutable(executable);
             fileLba = executable.Lba;
             fileOffset = ExeFileOffset(exeAddress, patch.WadRelativeOffset);
             if (fileOffset < 0 || fileOffset > executable.Size - (long)after.Length)
@@ -2490,6 +2497,12 @@ public static class MobySourcePatchExporter
         }
 
         int donorActorId = donorRecord[0x36] | (donorRecord[0x37] << 8);
+        NativeMobyDependencyFacts donorDependencies = NativeMobyDependencyFacts.FromRecord(donorRecord);
+        if (enemySwap && !donorDependencies.CanUseSelfContainedRowCandidate)
+        {
+            skippedEdits.Add($"{label}: {donorDependencies.RowOnlyDependencyReason} Use an explicit dependency-bundle route instead of the self-contained enemy candidate.");
+            return false;
+        }
         uint targetActorRoot = 0;
         bool targetActorRootPresent = targetTableRelativeOffset > 0 &&
             TryFindTargetActorRoot(
@@ -2652,6 +2665,15 @@ public static class MobySourcePatchExporter
         string swapDescription = greenWizardResidentCandidate
             ? $"{(greenWizardResidentRoute!.NormalCreateBinReady ? "Verified" : "Guarded")} {targetLevel.DisplayName} resident-bundle replacement: replace {targetLevel.DisplayName} T{targetTrueIndex} with {sourceLevel.DisplayName} donor T{sourceTrueIndex}. Target-resident actor 0x{donorActorId:X4} uses root 0x{targetActorRoot:X}. Source object count remains {targetLevel.SourceRecordCount}; no row is appended. Registered structural recipe {greenWizardResidentRoute.RecipeId} completes this source-row patch during {(residentBuildMode == GreenWizardResidentSwapBuildMode.Normal ? "normal Create BIN" : "Create Swap Test")}.{placementSectorDescription}{behaviorDescription}{specialDataDescription}"
             : $"Disposable cross-level existing-slot candidate: replace {targetLevel.DisplayName} T{targetTrueIndex} with {sourceLevel.DisplayName} donor T{sourceTrueIndex}. Target-resident actor 0x{donorActorId:X4} uses root 0x{targetActorRoot:X}. Source object count remains {targetLevel.SourceRecordCount}; no row is appended.{placementSectorDescription}{behaviorDescription}{specialDataDescription}";
+        NativeMobyDependencyFacts finalCandidate = NativeMobyDependencyFacts.FromRecord(donorRecord);
+        if (!finalCandidate.TryValidateActorBinding(donorDependencies.ActorId,
+                ReadPlannedActorRoots(stream, layout, targetTableWadOffset - targetTableRelativeOffset, patches),
+                new HashSet<ushort>(), out string finalCandidateReason))
+        {
+            skippedEdits.Add($"{label}: {finalCandidateReason}");
+            return false;
+        }
+
         AddRawPatch(
             stream,
             layout,
@@ -2666,6 +2688,105 @@ public static class MobySourcePatchExporter
             patches,
             writtenWadOffsets);
         return true;
+    }
+
+    private static bool TryValidateImportedInstanceActor(
+        FileStream stream,
+        DiscLayout layout,
+        LevelCatalog catalog,
+        LevelDefinition targetLevel,
+        long tableWadOffset,
+        long tableRelativeOffset,
+        int trueIndex,
+        string label,
+        JsonElement edit,
+        IReadOnlyList<MobyActorPackageImportPreview> previews,
+        IReadOnlyList<MobySourcePatch> patches,
+        List<string> skippedEdits,
+        byte[]? finalRecord = null)
+    {
+        if (!TryGetCrossLevelTemplate(edit, out JsonElement template))
+            return true;
+        string templateId = JsonValue.GetString(template, "id");
+        MobyActorPackageImportPreview[] imports = previews.Where(preview =>
+            preview.CanWriteImage && preview.TemplateId == templateId &&
+            string.Equals(preview.TargetLevelKey, targetLevel.Key, StringComparison.OrdinalIgnoreCase)).ToArray();
+        // Dedicated structural composers and row-only research candidates have
+        // separate dependency contracts; this guard validates actual package plans.
+        if (imports.Length == 0)
+            return true;
+        LevelDefinition? sourceLevel = catalog.FindByKey(JsonValue.GetString(template, "sourceLevelKey"));
+        int sourceTrueIndex = JsonValue.GetInt32(template, "sourceTrueIndex", -1);
+        if (sourceLevel == null || !sourceLevel.HasSourceTable || sourceTrueIndex < 0 ||
+            sourceTrueIndex >= sourceLevel.SourceRecordCount || tableRelativeOffset <= 0)
+        {
+            skippedEdits.Add($"{label}: final actor dependencies have no exact source row or destination actor table.");
+            return false;
+        }
+        long sourceTable = ParseRequiredLong(sourceLevel.SourceTableWadOffset, "sourceTableWadOffset");
+        NativeMobyDependencyFacts donor = NativeMobyDependencyFacts.FromRecord(
+            ReadWadBytes(stream, layout, checked(sourceTable + (long)sourceTrueIndex * RecordStride), RecordStride));
+        finalRecord ??= ReadPlannedWadBytes(stream, layout,
+            checked(tableWadOffset + (long)trueIndex * RecordStride), RecordStride, patches);
+        NativeMobyDependencyFacts authored = NativeMobyDependencyFacts.FromRecord(finalRecord);
+        HashSet<ushort> declaredRemaps = GetDeclaredInstanceActorRemaps(imports, sourceTrueIndex, donor.ActorId);
+        if (authored.TryValidateActorBinding(donor.ActorId,
+                ReadPlannedActorRoots(stream, layout, tableWadOffset - tableRelativeOffset, patches),
+                declaredRemaps, out string reason))
+            return true;
+        skippedEdits.Add($"{label}: {reason}");
+        return false;
+    }
+
+    private static HashSet<ushort> GetDeclaredInstanceActorRemaps(
+        IReadOnlyList<MobyActorPackageImportPreview> imports, int sourceTrueIndex, ushort donorActorId)
+    {
+        // The only existing instance alias route is Town Square T30's native
+        // 00C2 controller -> private 01FE. Its 0186 helper and 0149 shell roots
+        // are dependencies, NOT permission to turn the controller into either
+        // of those actors. Future aliases need an explicit donor-to-class
+        // declaration instead of inferring authorization from loaded roots.
+        bool controllerAlias = donorActorId == 0x00C2 && sourceTrueIndex == 30 && imports.Any(preview =>
+            preview.CanWriteImage &&
+            preview.RecipeId == "stonehill.townsquare.springChest.package.fullControllerAlias01FEZeroGap26928.v14" &&
+            preview.SourceLevelKey == "townsquare" && preview.TargetLevelKey == "stonehill" &&
+            preview.RecipeMode == "RegisterCompanionRootAlias01FEFullDependencyRebase");
+        return controllerAlias ? [0x01FE] : [];
+    }
+
+    private static IReadOnlyList<NativeMobyActorRootBinding> ReadPlannedActorRoots(
+        FileStream stream, DiscLayout layout, long entryBase, IReadOnlyList<MobySourcePatch> patches)
+    {
+        // Actor roots and 16-bit class IDs are adjacent but separate arrays.
+        // Apply staged writes first: a source root replaced by this transaction
+        // is no longer evidence that the former class is resident.
+        byte[] arrays = ReadPlannedWadBytes(stream, layout, checked(entryBase + 0x50), 0x180, patches);
+        return Enumerable.Range(0, 64).Select(index => new NativeMobyActorRootBinding(
+            BinaryPrimitives.ReadUInt16LittleEndian(arrays.AsSpan(0x100 + index * 2, 2)),
+            BinaryPrimitives.ReadUInt32LittleEndian(arrays.AsSpan(index * 4, 4)))).ToArray();
+    }
+
+    private static byte[] ReadPlannedWadBytes(
+        FileStream stream, DiscLayout layout, long start, int length, IReadOnlyList<MobySourcePatch> patches)
+    {
+        byte[] bytes = ReadWadBytes(stream, layout, start, length);
+        long end = checked(start + length);
+        foreach (MobySourcePatch patch in patches)
+        {
+            if (patch.WadRelativeOffset.StartsWith("exe:", StringComparison.OrdinalIgnoreCase))
+                continue;
+            long patchStart = ParseRequiredLong(patch.WadRelativeOffset, "plannedPatch.wadRelativeOffset");
+            long overlapStart = Math.Max(start, patchStart);
+            long overlapEnd = Math.Min(end, checked(patchStart + patch.ByteLength));
+            if (overlapEnd <= overlapStart)
+                continue;
+            byte[] after = Convert.FromHexString(patch.AfterHexPreview.Replace(" ", "", StringComparison.Ordinal));
+            if (after.Length != patch.ByteLength)
+                throw new InvalidDataException("A planned dependency patch does not contain its exact afterimage.");
+            after.AsSpan(checked((int)(overlapStart - patchStart)), checked((int)(overlapEnd - overlapStart)))
+                .CopyTo(bytes.AsSpan(checked((int)(overlapStart - start))));
+        }
+        return bytes;
     }
 
     private static bool TryFindTargetActorRoot(
@@ -3112,6 +3233,11 @@ public static class MobySourcePatchExporter
             recordBytes[0x36] = 0xFE;
             recordBytes[0x37] = 0x01;
         }
+        if (crossLevelDonor != null && !suppressActorPackageImports &&
+            !TryValidateImportedInstanceActor(stream, layout, catalog, level, tableWadOffset,
+                tableRelativeOffset, appendTrueIndex, label, edit, packageImportPreviews,
+                patches, skippedEdits, recordBytes))
+            return false;
         string specialDataDescription = "";
         if (isContainedGemAppend)
         {
@@ -5337,6 +5463,7 @@ public static class MobySourcePatchExporter
 
         DiscLayout layout = DiscImage.DetectLayout(stream.Name);
         DiscFileRecord executable = FindExecutable(stream, layout);
+        RequireTreasureTableExecutable(executable);
         uint runtimeAddress = checked(TreasureTotalTableRuntimeAddress + (uint)(levelIndex * sizeof(ushort)));
         long fileOffset = ExeFileOffset(runtimeAddress, "treasure table");
         if (fileOffset > executable.Size - sizeof(ushort))
@@ -6991,32 +7118,14 @@ public static class MobySourcePatchExporter
 
     private static byte[] ReadWadBytes(FileStream stream, DiscLayout layout, long wadOffset, int length)
     {
-        byte[] result = new byte[length];
-        int remaining = length;
-        int written = 0;
-        long absolute = wadOffset;
-        while (remaining > 0)
-        {
-            int sectorOffset = (int)(absolute % 2048);
-            int toRead = Math.Min(2048 - sectorOffset, remaining);
-            stream.Position = ConvertWadOffsetToImageOffset(layout, absolute);
-            int read = stream.Read(result, written, toRead);
-            if (read != toRead)
-                throw new EndOfStreamException("Could not read WAD bytes.");
-
-            written += toRead;
-            remaining -= toRead;
-            absolute += toRead;
-        }
-
-        return result;
+        // The shared reader validates the complete extent before allocating and
+        // owns integer/raw-sector mapping for every exporter.
+        return DiscImage.ReadFileBytes(stream, layout, WadLba, wadOffset, length);
     }
 
     private static long ConvertWadOffsetToImageOffset(DiscLayout layout, long wadOffset)
     {
-        long sector = WadLba + (long)Math.Floor(wadOffset / 2048d);
-        long sectorOffset = wadOffset % 2048;
-        return (sector * layout.SectorSize) + layout.UserOffset + sectorOffset;
+        return DiscImage.ConvertFileOffsetToImageOffset(layout, WadLba, wadOffset);
     }
 
     private static long ParseRequiredLong(string text, string field)
@@ -7058,15 +7167,31 @@ public static class MobySourcePatchExporter
         return uint.TryParse(addressText, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value);
     }
 
+    private static void RequireTreasureTableExecutable(DiscFileRecord executable)
+    {
+        if (!executable.Name.Equals("SCUS_942.28", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("The treasure target runtime table is verified only for the USA SCUS_942.28 executable.");
+    }
+
     private static DiscFileRecord FindExecutable(FileStream stream, DiscLayout layout)
     {
-        return DiscImage.FindRootFileRecord(stream, layout, name =>
+        DiscFileRecord executable = DiscImage.FindRootFileRecord(stream, layout, name =>
             name.StartsWith("SCUS", StringComparison.OrdinalIgnoreCase) ||
             name.StartsWith("SCES", StringComparison.OrdinalIgnoreCase) ||
             name.StartsWith("SCPS", StringComparison.OrdinalIgnoreCase) ||
             name.StartsWith("SLUS", StringComparison.OrdinalIgnoreCase) ||
             name.StartsWith("SLES", StringComparison.OrdinalIgnoreCase) ||
             name.StartsWith("SLPS", StringComparison.OrdinalIgnoreCase));
+        if (executable.Size < 0x800)
+            throw new InvalidDataException("The executable extent is shorter than its PS-X EXE header.");
+        byte[] header = DiscImage.ReadFileBytes(stream, layout, executable.Lba, 0, 0x20);
+        uint loadAddress = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(0x18, 4));
+        uint textLength = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(0x1C, 4));
+        if (!header.AsSpan(0, 8).SequenceEqual("PS-X EXE"u8) || loadAddress != ExeDestination ||
+            textLength == 0 || textLength > executable.Size - 0x800L)
+            throw new InvalidDataException("Moby executable patches require a valid PS-X EXE loaded at 0x80010000 within its ISO extent.");
+        // Fixed runtime addresses may refer only to bytes the loader actually maps.
+        return executable with { Size = checked(0x800 + (int)textLength) };
     }
 
     private static long ExeFileOffset(uint runtimeAddress, string source)

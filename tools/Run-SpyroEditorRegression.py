@@ -16,8 +16,11 @@ CORE_CASES = (
     ("DiscImageWorkingCopySmoke", "Disc-image working-copy smoke passed."),
     ("DiscImageWriteIntegritySmoke", "DISC_IMAGE_WRITE_INTEGRITY_SMOKE_OK"),
     ("DiscImageReadBoundsSmoke", "DISC_IMAGE_READ_BOUNDS_SMOKE_OK"),
+    ("DiscCueSheetSmoke", "DISC_CUE_SHEET_SMOKE_OK"),
     ("MobyTreasureExportSmoke", "MOBY_TREASURE_EXPORT_SMOKE_OK"),
+    ("MobyWadReaderSmoke", "MOBY_WAD_READER_SMOKE_OK"),
     ("MobyPlanTransactionSmoke", "MOBY_PLAN_TRANSACTION_SMOKE_OK"),
+    ("NativeMobyDependencyFactsSmoke", "NATIVE_MOBY_DEPENDENCY_FACTS_SMOKE_OK"),
     ("CombinedExportPublicationSmoke", "COMBINED_EXPORT_PUBLICATION_SMOKE_OK"),
     ("CrossLevelCandidateFingerprintSmoke", "CROSS_LEVEL_CANDIDATE_FINGERPRINT_SMOKE_OK"),
     ("TextureHistoryWorkspaceSmoke", "TEXTURE_HISTORY_WORKSPACE_SMOKE_OK"),
@@ -33,6 +36,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build-all", action="store_true",
                         help="Build every project, including research tools, before regressions.")
+    parser.add_argument("--with-source-qa", action="store_true",
+                        help="Also run existing source-aware offline QA using this checkout's configured disc/cache; creates disposable readbacks and local reports.")
     parser.add_argument("--configuration", choices=("Debug", "Release"), default="Release")
     parser.add_argument("--timeout", type=int, default=300,
                         help="Maximum seconds per build/test (default: 300).")
@@ -100,6 +105,10 @@ def main():
         execute("run-" + project.stem,
                 ["dotnet", "run", "--project", str(project), "--configuration",
                  options.configuration, "--no-build", "--no-restore"], marker)
+    if options.with_source_qa and all(result["passed"] for result in results):
+        execute("source-offline-qa",
+                ["env", "CONFIGURATION=" + options.configuration, "bash",
+                 str(ROOT / "tools/Run-SpyroEditorOfflineQa.sh")], "Offline QA passed.")
     failed = sum(not result["passed"] for result in results)
     print(f"{len(results)} checks; {failed} failed. Report: {output / 'summary.json'}", flush=True)
     return 1 if failed else 0

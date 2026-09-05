@@ -18,11 +18,38 @@ try
     {
         foreach (int exeLba in new[] { 20, 28 })
             Run($"{size} executable LBA {exeLba}", () => CheckExport(size, offset, exeLba));
+        Run($"{size} corrupt executable magic", () => CheckInvalidHeader(size, offset, 0, [0]));
+        Run($"{size} incompatible executable load base", () => CheckInvalidHeader(size, offset, 0x18, [0, 0, 2, 0x80]));
+        Run($"{size} executable text exceeds extent", () => CheckInvalidHeader(size, offset, 0x1C, [0xFF, 0xFF, 0xFF, 0x7F]));
+        Run($"{size} treasure outside loaded executable text", () => CheckInvalidHeader(size, offset, 0x1C, [0, 0x10, 0, 0]));
+        Run($"{size} unsupported treasure region", () => CheckInvalidHeader(size, offset, 33, Encoding.ASCII.GetBytes("SCES_014.38;1"), 18));
     }
     if (failures.Count != 0) throw new InvalidOperationException($"{failures.Count}/{checks} failed:\n" + string.Join('\n', failures));
     Console.WriteLine($"MOBY_TREASURE_EXPORT_SMOKE_OK checks={checks}; synthetic ISO/executable, native level slot, relocated extent, exact before/after, source preimage and integrity");
 }
 finally { Directory.Delete(temporaryRoot, recursive: true); }
+
+void CheckInvalidHeader(int size, int offset, int headerOffset, byte[] replacement, int mutationLba = 20)
+{
+    string path = Path.Combine(temporaryRoot, $"{Guid.NewGuid():N}.bin");
+    File.WriteAllBytes(path, BuildFixture(size, offset, 20));
+    using FileStream stream = File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+    DiscLayout layout = DiscImage.DetectLayout(path);
+    LevelDefinition level = new() { Key = "artisans", DisplayName = "Artisans", LevelId = 10 };
+    List<MobySourcePatch> originalPatches = [];
+    Invoke("AddTreasureTotalPatch", stream, new LevelCatalog([level]), level, 5, originalPatches, new List<string>());
+    DiscImage.WriteFileBytes(stream, layout, mutationLba, headerOffset, replacement);
+    stream.Flush();
+    byte[] original = File.ReadAllBytes(path);
+    bool rejected = false;
+    try { Invoke("AddTreasureTotalPatch", stream, new LevelCatalog([level]), level, 5, new List<MobySourcePatch>(), new List<string>()); }
+    catch (InvalidDataException) { rejected = true; }
+    Require(rejected && File.ReadAllBytes(path).AsSpan().SequenceEqual(original), "Unsupported executable header was accepted as a source-bound treasure preimage.");
+    rejected = false;
+    try { Invoke("ApplySourcePatch", stream, layout, originalPatches.Single()); }
+    catch (InvalidDataException) { rejected = true; }
+    Require(rejected && File.ReadAllBytes(path).AsSpan().SequenceEqual(original), "A planned runtime patch ignored the changed executable header.");
+}
 
 void Run(string name, Action action)
 {

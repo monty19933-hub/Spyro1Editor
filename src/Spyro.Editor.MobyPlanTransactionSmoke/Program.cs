@@ -62,6 +62,16 @@ try
     Require(baseline.Patches.Any(patch => patch.Kind == "actor-package-copy") &&
             baseline.Patches.Any(patch => patch.Kind == "moby-record-append"),
         "The valid fixture did not exercise shared package installation and Moby append.");
+    Require(Plan(Edit("missing-class-high-byte", 0, actorId: 0x249)).Patches.Count == 0,
+        "A source-bound actor package pass admitted an instance class not supplied by the package or destination roots.");
+    Require(Plan(Edit("missing-class-raw-byte", 0, rawActorHighByte: 2)).Patches.Count == 0,
+        "A final sourceByteEdits class override bypassed actor dependency validation.");
+    Require(Plan(Edit("unrelated-resident-class", 0, actorId: 0x108)).Patches.Count == 0,
+        "An unrelated resident root allowed an undeclared donor class substitution.");
+    Require(Plan(Edit("valid-existing-transform", 0, added: false)).Patches.Any(patch => patch.Kind == "actor-package-copy"),
+        "An exact native existing-slot transform lost its dependency package.");
+    Require(Plan(Edit("missing-class-existing-transform", 0, added: false, actorId: 0x249)).Patches.Count == 0,
+        "Existing-slot transforms bypassed final native class/root dependency validation.");
     MobySourcePatchPlan rejectedThenAccepted = Plan(Edit("rejected", 99), Edit("accepted", 0));
     MobySourcePatchPlan acceptedThenRejected = Plan(Edit("accepted", 0), Edit("rejected", 99));
     Require(Describe(baseline) == Describe(rejectedThenAccepted),
@@ -74,6 +84,21 @@ try
     Require(rejectedThenAccepted.EditOutcomes!.Single(outcome => outcome.MobyLabel == "rejected").PatchKinds.Count == 0,
         "Rejected edit outcome still claims package writes.");
     MobyActorPackageImportPreview diagnostic = rejected.PackageImportPreviews.Single();
+    MobyActorPackageImportPreview multiRootAlias = baseline.PackageImportPreviews.Single() with
+    {
+        RecipeId = "stonehill.townsquare.springChest.package.fullControllerAlias01FEZeroGap26928.v14",
+        SourceLevelKey = "townsquare", RecipeMode = "RegisterCompanionRootAlias01FEFullDependencyRebase",
+        RootEntries = new[] { 0x1FE, 0x186, 0x149 }.Select((actor, index) =>
+            baseline.PackageImportPreviews.Single().RootEntries.Single() with
+            { RootIndex = index, TargetActorId = $"0x{actor:X4}" }).ToArray()
+    };
+    HashSet<ushort> controllerRemaps = InvokeArgs<HashSet<ushort>>("GetDeclaredInstanceActorRemaps",
+        new[] { multiRootAlias }, 30, (ushort)0xC2);
+    Require(controllerRemaps.SetEquals(new ushort[] { 0x1FE }),
+        "Imported helper/shell roots were incorrectly treated as controller class-remap authority.");
+    Require(InvokeArgs<HashSet<ushort>>("GetDeclaredInstanceActorRemaps", new[] { multiRootAlias }, 30, (ushort)0x149).Count == 0 &&
+            InvokeArgs<HashSet<ushort>>("GetDeclaredInstanceActorRemaps", new[] { multiRootAlias }, 31, (ushort)0xC2).Count == 0,
+        "An instance alias escaped its exact donor class and source row.");
     Require(!Invoke<bool>("UsesSpringChestControllerAlias", new[] { diagnostic with { RecipeMode = "Alias01FE" } }),
         "A rolled-back package diagnostic still selected a controller actor alias.");
     Require(Invoke<int>("ResolveStoneHillSpringChestRuntimeVariantId", new[]
@@ -97,10 +122,17 @@ try
 }
 finally { Directory.Delete(temporary, recursive: true); }
 
-static object Edit(string label, int sourceTrueIndex, bool added = true, int type = 0x20) => new
+static object Edit(string label, int sourceTrueIndex, bool added = true, int type = 0x20, int actorId = 0x149, int? rawActorHighByte = null) => new
 {
     label, trueIndex = added ? 2 : 0, added, editKind = added ? "add" : "update", typeHex = $"0x{type:X2}", stateHex = "0x00",
-    sourceByte36Hex = "0x49", sourceByte37Hex = "0x01", sourceByte4FHex = "0x00", flag4AHex = "0x10", flag4BHex = "0xFF",
+    sourceByte36Hex = $"0x{actorId & 255:X2}", sourceByte37Hex = $"0x{actorId >> 8:X2}", sourceByte4FHex = "0x00", flag4AHex = "0x10", flag4BHex = "0xFF",
+    sourceByte36OriginalHex = added ? null : "0x00", sourceByte36EditedHex = $"0x{actorId & 255:X2}",
+    sourceByte37OriginalHex = added ? null : "0x00", sourceByte37EditedHex = $"0x{actorId >> 8:X2}",
+    sourceByteEdits = new[]
+    {
+        new { offset = 0x36, valueHex = $"0x{actorId & 255:X2}" },
+        new { offset = 0x37, valueHex = $"0x{rawActorHighByte ?? (actorId >> 8):X2}" }
+    },
     crossLevelTemplate = new { id = "synthetic.spring", sourceLevelKey = "peacekeepers", sourceLevelName = "Peace Keepers",
         sourceTrueIndex, family = "springChest", recipeId = RecipeId, requiredExporterFeature = "ActorPackageImportAndPointerRebase" }
 };
@@ -151,6 +183,8 @@ static void Require(bool condition, string message)
     if (!condition) throw new InvalidOperationException(message);
 }
 
-static T Invoke<T>(string name, object previews) => (T)(typeof(MobySourcePatchExporter)
+static T Invoke<T>(string name, object previews) => InvokeArgs<T>(name, previews);
+
+static T InvokeArgs<T>(string name, params object[] arguments) => (T)(typeof(MobySourcePatchExporter)
     .GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic)!
-    .Invoke(null, [previews]) ?? throw new InvalidOperationException($"No result from {name}."));
+    .Invoke(null, arguments) ?? throw new InvalidOperationException($"No result from {name}."));
