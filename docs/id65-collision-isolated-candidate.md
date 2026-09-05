@@ -46,6 +46,8 @@ The read-only regression mode injects corrupt views without modifying either
 BIN. It rejects protected-byte changes, owned payload/header/subheader/EDC/ECC
 changes, matching corruption of both input streams, initial and late length
 changes, and cancellation. All 14 cases passed on the exact candidate above.
+Both verification commands verify the BIN only; they do not recertify the input,
+receipt or CUE files. Publication separately verifies all four artifact bytes.
 
 Gameplay still needs cold boot, ID65 entry, stable support, jump/landing,
 movement, falls/respawn and multiple camera directions. On this pass's first

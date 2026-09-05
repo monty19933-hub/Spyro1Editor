@@ -14,7 +14,7 @@ else if (args.Length == 4 && args[0] is "--verify" or "--verify-regressions")
     using var candidate = File.OpenRead(args[3]);
     var readback = Id65CollisionCandidatePublisher.Verify(compiled, parent, candidate);
     Console.WriteLine(JsonSerializer.Serialize(readback));
-    Console.WriteLine("ID65_COLLISION_CANDIDATE_VERIFIED runtime=false");
+    Console.WriteLine("ID65_COLLISION_CANDIDATE_VERIFIED imageOnly=true companionsVerified=false runtime=false");
     if (args[0] == "--verify-regressions")
         CandidateReadbackCases.Run(compiled, args[2], args[3]);
 }

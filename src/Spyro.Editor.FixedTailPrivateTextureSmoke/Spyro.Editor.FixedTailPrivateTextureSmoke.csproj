@@ -10,5 +10,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj" />
+    <Compile Include="../Spyro.Editor.FixedTailPrivateRecordSmoke/FixedTailImageProof.cs" Link="FixedTailImageProof.cs" />
+    <Compile Include="../Spyro.Editor.FixedTailPrivateRecordSmoke/FixedTailImageProofCases.cs" Link="FixedTailImageProofCases.cs" />
+    <Compile Include="../Spyro.Editor.WadGrowthGapSmoke/GapFixture.cs" Link="RawSectorRegressionOracle.cs" />
   </ItemGroup>
 </Project>

@@ -3,6 +3,8 @@ using System.Security.Cryptography;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
 
+if (FixedTailImageProof.TryRunReadOnlyCommand(args)) return;
+
 const int SourceTextureId = 55;
 const int AppendedTextureId = 68;
 const int DonorTextureId = 17;
@@ -148,17 +150,26 @@ AppendedPrivateTerrainTexturePromotionProfile promotionProfile =
 Assert(promotionProfile.RuntimeProven &&
        promotionProfile.RuntimeProvenMaxAppendedRecords == 4 &&
        promotionProfile.StaticProofOutputSha256.Equals(
-           exported.OutputImageSha256,
+           AppendedPrivateTerrainTexturePromotionProfileRegistry.ArtisansFixedTailStaticProofOutputSha256,
+           StringComparison.OrdinalIgnoreCase) &&
+       promotionProfile.RuntimeProofOutputSha256.Equals(
+           AppendedPrivateTerrainTexturePromotionProfileRegistry.ArtisansFixedTailRuntimeProofOutputSha256,
            StringComparison.OrdinalIgnoreCase),
-    "The exact one-row Artisans readback baseline no longer matches the four-record normal-release profile.");
+    "The separate historical one-row static and four-record runtime evidence changed.");
+FixedTailImageProof currentProof = FixedTailImageProof.Verify(
+    sourceImagePath, exported.OutputImagePath, promotionProfile.StaticProofOutputSha256);
+Assert(currentProof.CurrentImageSha256.Equals(exported.OutputImageSha256, StringComparison.OrdinalIgnoreCase) &&
+       plan.RequiresDuckStationRuntimeProof,
+    "Current static byte verification was mistaken for new runtime evidence.");
 
 Console.WriteLine("Fixed-tail private terrain texture record composer smoke passed.");
 Console.WriteLine($"Global pack: {plan.GlobalPacking.OriginalMovableRecords.Count} original movable rows + {plan.GlobalPacking.SyntheticRecords.Count} synthetic row; {plan.TexturePagePatchCount:N0} page patches.");
 Console.WriteLine($"Texture table: T0..T{plan.Append.SourceTextureCount - 1} -> T0..T{plan.Append.OutputTextureCount - 1}; fixed level-data boundary retained.");
 Console.WriteLine($"Face 95:3:hp: WAD 0x{rebasedFace.SourceWadOffset:X} T{SourceTextureId} -> relocated WAD 0x{rebasedFace.OutputWadOffset:X} T{AppendedTextureId}; every other suffix byte preserved.");
-Console.WriteLine($"DuckStation-proven runtime BIN: {exported.OutputImagePath}");
-Console.WriteLine($"DuckStation-proven runtime CUE: {exported.OutputCuePath}");
-Console.WriteLine("Exact one-row static/final-BIN proof and four-record normal-release promotion profile both match.");
+Console.WriteLine($"Current static candidate BIN: {exported.OutputImagePath}");
+Console.WriteLine($"Current static candidate CUE: {exported.OutputCuePath}");
+Console.WriteLine($"Independent raw integrity: {currentProof.IndependentlyVerifiedChangedSectors} changed sectors; exact historical logical/header equivalence retained.");
+Console.WriteLine("RuntimeVerified=false; HistoricalRecipeEvidence=true. Historical promotion is unchanged; this newly parity-repaired image was not played by this smoke.");
 
 static byte[] ReadWadBytes(string imagePath, long wadOffset, int length)
 {

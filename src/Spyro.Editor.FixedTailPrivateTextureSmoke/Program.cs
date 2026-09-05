@@ -9,6 +9,8 @@ using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Scene;
 
+if (FixedTailImageProof.TryRunReadOnlyCommand(args)) return;
+
 const int SourceTextureId = 55;
 const int PrivateTextureId = 68;
 const int DonorTextureId = 17;
@@ -232,14 +234,24 @@ AppendedPrivateTerrainTexturePromotionProfile promotionProfile =
 Assert(promotionProfile.RuntimeProven &&
        promotionProfile.RuntimeProvenMaxAppendedRecords == 4 &&
        promotionProfile.StaticProofOutputSha256.Equals(
-           exported.OutputImageSha256,
+           AppendedPrivateTerrainTexturePromotionProfileRegistry.ArtisansFixedTailStaticProofOutputSha256,
+           StringComparison.OrdinalIgnoreCase) &&
+       promotionProfile.RuntimeProofOutputSha256.Equals(
+           AppendedPrivateTerrainTexturePromotionProfileRegistry.ArtisansFixedTailRuntimeProofOutputSha256,
            StringComparison.OrdinalIgnoreCase),
-    "The exact one-row Artisans readback baseline no longer matches the four-record normal-release profile.");
+    "The separate historical one-row static and four-record runtime evidence changed.");
+FixedTailImageProof currentProof = FixedTailImageProof.Verify(
+    sourceImagePath, exported.OutputImagePath, promotionProfile.StaticProofOutputSha256);
+Assert(currentProof.CurrentImageSha256.Equals(exported.OutputImageSha256, StringComparison.OrdinalIgnoreCase) &&
+       plan.RequiresDuckStationRuntimeProof,
+    "Current static byte verification was mistaken for new runtime evidence.");
 
-string reportPath = outputPrefix + "-runtime-proof.json";
+string reportPath = outputPrefix + "-current-static-proof.json";
 await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(new
 {
-    Status = "runtime-proven-normal-release-up-to-four-private-records",
+    Status = "current-static-readback-historical-recipe-not-runtime-retested",
+    RuntimeVerified = false,
+    HistoricalRecipeEvidence = true,
     RetailSource = new { Path = sourceImagePath, Sha256 = sourceShaBefore, Unchanged = true },
     Output = new { Bin = exported.OutputImagePath, Cue = exported.OutputCuePath, exported.OutputImageSha256 },
     Face = new
@@ -255,18 +267,41 @@ await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(new
     plan.TexturePagePatchCount,
     CombinedPatchCount = plan.CombinedPatches.Count,
     ExactFinalReadback = true,
-    DuckStationRuntimeProof = true,
-    promotionProfile.EvidenceId,
-    promotionProfile.RuntimeProvenMaxAppendedRecords
+    DuckStationRuntimeProof = false,
+    currentProof.PhysicalIntegrityVerified,
+    currentProof.IndependentlyVerifiedChangedSectors,
+    currentProof.HistoricalLogicalAndHeaderEquivalenceVerified,
+    currentProof.LegacyRepresentationSha256,
+    HistoricalEvidence = new
+    {
+        promotionProfile.EvidenceId,
+        promotionProfile.StaticProofOutputSha256,
+        promotionProfile.RuntimeProofOutputSha256,
+        promotionProfile.RuntimeProvenMaxAppendedRecords
+    }
 }, new JsonSerializerOptions { WriteIndented = true }));
+using (JsonDocument writtenProof = JsonDocument.Parse(await File.ReadAllTextAsync(reportPath)))
+{
+    JsonElement report = writtenProof.RootElement;
+    Assert(!report.GetProperty("RuntimeVerified").GetBoolean() &&
+           !report.GetProperty("DuckStationRuntimeProof").GetBoolean() &&
+           report.GetProperty("HistoricalRecipeEvidence").GetBoolean() &&
+           report.GetProperty("PhysicalIntegrityVerified").GetBoolean() &&
+           report.GetProperty("HistoricalLogicalAndHeaderEquivalenceVerified").GetBoolean() &&
+           report.GetProperty("Output").GetProperty("OutputImageSha256").GetString()!
+               .Equals(FixedTailImageProof.CurrentStaticReadbackSha256, StringComparison.OrdinalIgnoreCase) &&
+           report.GetProperty("HistoricalEvidence").GetProperty("RuntimeProofOutputSha256").GetString()!
+               .Equals(promotionProfile.RuntimeProofOutputSha256, StringComparison.OrdinalIgnoreCase),
+        "The new static report conflates the current image with historical runtime evidence.");
+}
 
 Console.WriteLine("Normal-planner + fixed-tail private texture atomic smoke: PASSED");
 Console.WriteLine($"Retail face {TargetFaceRuntimeKey}: 0x{beforeWord:X8}/T55 at WAD 0x{rebasedFace.SourceWadOffset:X}.");
 Console.WriteLine($"Final face: 0x{finalFaceWord:X8}/T68 at WAD 0x{rebasedFace.OutputWadOffset:X} (+184).");
 Console.WriteLine($"DuckStation TEST CUE: {exported.OutputCuePath}");
-Console.WriteLine($"Runtime promotion report: {reportPath}");
+Console.WriteLine($"Current static proof report: {reportPath}");
 Console.WriteLine("Immutable retail donor regression: candidate-self rejected, retail source accepted.");
-Console.WriteLine("The exact Artisans writer is enabled in normal Create BIN for up to four appended private texture records.");
+Console.WriteLine("RuntimeVerified=false; HistoricalRecipeEvidence=true. The existing four-record profile is unchanged; this newly parity-repaired image has no new emulator proof.");
 
 static long ParseOffset(string value)
 {

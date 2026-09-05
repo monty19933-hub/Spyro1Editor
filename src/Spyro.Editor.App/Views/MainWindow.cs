@@ -13507,22 +13507,18 @@ public sealed partial class MainWindow : Window
                 incompatibleStructuralWadRelocationApplied |=
                     privateStep.Export.Plan.WriterKind ==
                     NativeTerrainTexturePrivateImageWriterKind.SectorRelocation;
-                stepSummaries.Add(new
-                {
-                    level = privateTarget.Level.DisplayName,
-                    kind = "terrain-appended-private-exclusive",
-                    writer = privateStep.Export.Plan.WriterKind.ToString(),
-                    appendedRecords = privateStep.Export.Plan.AppendedPrivateEdits.Count,
-                    existingRecordOverrides = privateStep.Export.Plan.ExistingRecordEdits.Count,
-                    ordinaryPatches = privateStep.OrdinaryPlan.PatchCount,
-                    texturePagePatches = privateStep.Export.Plan.FixedTailPlan?.TexturePagePatchCount ??
+                stepSummaries.Add(BuildPrivateTextureExportStepSummary(
+                    privateTarget.Level.DisplayName,
+                    privateStep.Export.Plan,
+                    privateStep.OrdinaryPlan.PatchCount,
+                    privateStep.Export.Plan.FixedTailPlan?.TexturePagePatchCount ??
                         privateStep.Export.Plan.SectorRelocationPlan?.TexturePagePatchCount ?? 0,
-                    exactReadback = privateStep.Export.ExactReadbackVerified,
-                    runtimeReadback = privateStep.Export.RuntimeTargetReadbackVerified,
-                    globalLogicalReadback = privateStep.Export.GlobalLogicalReadbackVerified,
-                    sourcePreserved = privateStep.Export.SourceImagePreserved,
-                    privateGateReason
-                });
+                    multiDestinationCount: null,
+                    exactReadback: privateStep.Export.ExactReadbackVerified,
+                    runtimeTargetReadback: privateStep.Export.RuntimeTargetReadbackVerified,
+                    globalLogicalReadback: privateStep.Export.GlobalLogicalReadbackVerified,
+                    sourcePreserved: privateStep.Export.SourceImagePreserved,
+                    privateGateReason));
             }
             else
             {
@@ -13574,22 +13570,17 @@ public sealed partial class MainWindow : Window
                     {
                         patchedLevelNames.Add(privateTarget.Level.DisplayName);
                     }
-                    stepSummaries.Add(new
-                    {
-                        level = privateTarget.Level.DisplayName,
-                        kind = "terrain-appended-private-multi-level-aggregate",
-                        writer = levelPlan.WriterKind.ToString(),
-                        appendedRecords = levelPlan.AppendedPrivateEdits.Count,
-                        existingRecordOverrides = levelPlan.ExistingRecordEdits.Count,
-                        ordinaryPatches = privatePlan.OrdinaryPlan.PatchCount,
+                    stepSummaries.Add(BuildPrivateTextureExportStepSummary(
+                        privateTarget.Level.DisplayName,
+                        levelPlan,
+                        privatePlan.OrdinaryPlan.PatchCount,
                         texturePagePatches,
-                        multiDestinationCount = privatePlans.Count,
-                        exactReadback = multiExport.ExactReadbackVerified,
-                        runtimeReadback = multiExport.EveryRuntimeTargetReadbackVerified,
-                        globalLogicalReadback = multiExport.EveryGlobalLogicalReadbackVerified,
-                        sourcePreserved = multiExport.SourceImagePreserved,
-                        privateGateReason
-                    });
+                        multiDestinationCount: privatePlans.Count,
+                        exactReadback: multiExport.ExactReadbackVerified,
+                        runtimeTargetReadback: multiExport.EveryRuntimeTargetReadbackVerified,
+                        globalLogicalReadback: multiExport.EveryGlobalLogicalReadbackVerified,
+                        sourcePreserved: multiExport.SourceImagePreserved,
+                        privateGateReason));
                 }
                 incompatibleStructuralWadRelocationApplied |=
                     multiPlan.SectorRelocationDestinationCount > 0;

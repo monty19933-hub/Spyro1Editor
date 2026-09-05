@@ -92,6 +92,15 @@ settings remain separate preservation and runtime acceptance boundaries.
   before replacement. Three growing outputs passed independent whole-disc
   complement/parity/executable readback; source BIN/CUE hashes are unchanged.
   See [the allocation contract and exact hashes](native-wad-growth-allocation-contract.md).
+- Private-texture combined manifests retain legacy `runtimeReadback` as a static
+  target-data alias, add explicit `runtimeTargetReadback` and `runtimeVerified: false`,
+  and distinguish static native-target readback from current-output gameplay.
+  Historical recipe references require an exact registry source/writer/policy/
+  capacity match and never certify the new BIN. Fresh Debug Core/App and
+  `CombinedExportPublicationSmoke` passed all existing checks plus 26 new single/
+  aggregate serialization cases, including research and mismatched inputs.
+  This is diagnostic evidence only; normal authorization and registry entries
+  are unchanged.
 - Typed relocation extraction: 10,153 source-free checks, including an
   independent splice oracle and three actual consumer fixtures. Source-backed
   before/after `cmp` also found these complete BINs byte-identical:
@@ -112,3 +121,25 @@ to hide the assertion. The comparison receipt is retained at
 
 This document is a running checkpoint record, not a claim that universal Moby
 placement, arbitrary geometry, or the finished blank-level UI is complete.
+
+## Fixed-tail historical proof reconciliation
+
+The old one-row static hash mismatch was entirely EDC/ECC repair, not changed
+texture or header bytes. The current static BIN is
+`2d2ccc25b3e5ad301ad11366236fede8673925ebf813b8089a6cb9862c2d7261`.
+Substituting only the original retail trailers **in memory**, without writing
+them, reconstructs the exact historical hash
+`884209f2d8882c57001b4236e5a05a0f7d0ec45d5f2f318eb2e871f852ce98eb`.
+All 539 changed sectors passed independent raw-integrity arithmetic; the full
+image comparison retains exact historical logical/header equivalence.
+
+Both corrected fixed-tail smoke executables passed real-source generation and
+readback. After verifier hardening, both freshly rebuilt Debug executables also
+passed `--verify-retained` without regenerating their BINs. Nine synthetic
+late-growth, truncation, position and source-corruption refusals protect frozen
+lengths, final positions and the whole original-source digest, including matching
+source/output corruption. Evidence is retained in
+`/tmp/spyro-fixed-tail-proof-correction.HB5YQw/verification-receipt.md`.
+Historical registry hashes and authorization remain unchanged. The new reports
+explicitly separate `HistoricalRecipeEvidence=true` from `RuntimeVerified=false`:
+these current parity-repaired images have no new gameplay verification.

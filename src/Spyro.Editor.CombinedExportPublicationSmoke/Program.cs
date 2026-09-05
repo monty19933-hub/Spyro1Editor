@@ -61,7 +61,8 @@ try
     string transactionCoverage = ArtifactTransactionCases.Run(fixtureRoot);
     string newOnlyCoverage = NewArtifactPublicationCases.Run(fixtureRoot);
     string diagnosticCoverage = PublishedDiagnosticsCases.Run(window, fixtureRoot);
-    Console.WriteLine($"COMBINED_EXPORT_PUBLICATION_SMOKE_OK noPatchPreservesPrevious=1 upstreamFailurePreservesPrevious=1 {transactionCoverage} {newOnlyCoverage} {diagnosticCoverage}");
+    string privateTextureEvidenceCoverage = PrivateTextureEvidenceCases.Run();
+    Console.WriteLine($"COMBINED_EXPORT_PUBLICATION_SMOKE_OK noPatchPreservesPrevious=1 upstreamFailurePreservesPrevious=1 {transactionCoverage} {newOnlyCoverage} {diagnosticCoverage} {privateTextureEvidenceCoverage}");
     return 0;
 }
 finally
