@@ -40,6 +40,25 @@ settings remain separate preservation and runtime acceptance boundaries.
   frozen native output hashes with whole-scene inverse/complement checks.
   This is a reusable leaf plus an unchanged positive production route, not yet
   proof of the new cross-level candidate under development.
+- Authored music uses a canonical build-input envelope around the unchanged
+  schema-6 document, not a silent document migration. All six historic schema
+  goldens and 46 built-in track selections pass. A typed WAD/executable disc
+  plan passes two real-source complete-image outputs and 24 refusals, including
+  growth after reading begins. The shared new-only writer passes failure,
+  competing-output, strict four-file reuse, stale-input and receipt-conflict
+  tests. A separate postcommit fault retains the committed set and reports it
+  as published-but-unverified; subsequent exact reuse passes. No editable music
+  sidecar or UI control is exposed before coherent paired persistence is ready.
+
+  Retained music test workspace:
+  `_local/Spyro.Editor.Id65AuthoringMusicCandidateWriterSmoke-34a42c437ef549cebbf67d4bc3f11fbf/workspace`.
+  Its source-verified candidate BIN hashes are:
+  - Track 2 Stone Hill:
+    `223a69b9e041a12a23b5207fe85d8eba61f3a57c3ea84b82a8d2fe4805f086c9`.
+  - Track 26 Town Square:
+    `f7b06d9100fa72e57c9659b50298016d3a19cfb726b72d57c4d328908854c370`.
+  These use the existing schema-6 geometry, not the collision-isolated or
+  collapsed-sky successor, and have no new music-playback runtime evidence.
 - Typed relocation extraction: 10,153 source-free checks, including an
   independent splice oracle and three actual consumer fixtures. Source-backed
   before/after `cmp` also found these complete BINs byte-identical:
