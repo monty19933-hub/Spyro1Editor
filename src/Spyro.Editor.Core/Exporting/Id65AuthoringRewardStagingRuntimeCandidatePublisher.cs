@@ -1325,8 +1325,8 @@ internal static class Id65AuthoringRewardStagingRuntimeCandidatePublisher
             image.Flush(flushToDisk: true);
         }
 
-        string cueText = DiscImage.BuildCueText(preflight.BaseCuePath, Path.GetFileName(stagedImage));
-        await WriteTextAsync(stagedCue, cueText, Encoding.ASCII, cancellationToken);
+        string cueText = DiscImage.BuildCueText(preflight.BaseCuePath, Path.GetFileName(stagedImage), preflight.BaseImagePath);
+        await WriteTextAsync(stagedCue, cueText, DiscCueSheet.TextEncoding, cancellationToken);
         NativeLevelReplacementBaselineExporter.ValidateCue(stagedCue, stagedImage, "MODE2/2352");
         FileIdentity cueIdentity = await ReadFileIdentityAsync(stagedCue, cancellationToken);
         if (cueIdentity.ByteLength != ExpectedOutputCueByteLength ||
@@ -2992,7 +2992,7 @@ internal static class Id65AuthoringRewardStagingRuntimeCandidatePublisher
         if (outputImage.Length != 661_547_040)
             throw new InvalidDataException("The owned Core4 reward BIN length changed.");
         byte[] expectedCue = Encoding.ASCII.GetBytes(
-            DiscImage.BuildCueText(preflight.BaseCuePath, Path.GetFileName(paths.OutputImagePath)));
+            DiscImage.BuildCueText(preflight.BaseCuePath, Path.GetFileName(paths.OutputImagePath), preflight.BaseImagePath));
         byte[] actualCue = ReadBoundedFileBytes(paths.OutputCuePath, MaximumCueBytes, "owned Core4 reward CUE");
         if (!actualCue.SequenceEqual(expectedCue) || actualCue.Length != ExpectedOutputCueByteLength)
             throw new InvalidDataException("The owned Core4 reward CUE bytes changed.");

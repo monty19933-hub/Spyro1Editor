@@ -182,25 +182,12 @@ internal static class DiscImage
         return -1;
     }
 
-    public static string BuildCueText(string sourceCuePath, string outputBinName)
-    {
-        if (!File.Exists(sourceCuePath))
-            return $"FILE \"{outputBinName}\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n";
-
-        string[] lines = File.ReadAllLines(sourceCuePath, Encoding.ASCII);
-        bool replaced = false;
-        for (int i = 0; i < lines.Length; i++)
-        {
-            string trimmed = lines[i].Trim();
-            if (!replaced && trimmed.StartsWith("FILE ", StringComparison.OrdinalIgnoreCase) && trimmed.EndsWith(" BINARY", StringComparison.OrdinalIgnoreCase))
-            {
-                lines[i] = $"FILE \"{outputBinName}\" BINARY";
-                replaced = true;
-            }
-        }
-
-        return string.Join('\n', replaced ? lines : new[] { $"FILE \"{outputBinName}\" BINARY" }.Concat(lines)) + "\n";
-    }
+    public static string BuildCueText(string sourceCuePath, string outputBinName,
+        string? sourceImagePath = null, string? layoutImagePath = null) =>
+        DiscCueSheet.BuildForImage(sourceCuePath,
+            sourceImagePath ?? DiscCueSheet.FindDataImagePath(sourceCuePath)
+                ?? throw new InvalidDataException("A CUE without an explicit source image cannot infer its data layout."),
+            outputBinName, layoutImagePath);
 
     private static DiscLayout? TryReadPrimaryVolumeDescriptor(FileStream stream, int sectorSize, int userOffset)
     {

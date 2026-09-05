@@ -258,8 +258,8 @@ public static class LevelMusicPatchExporter
                 DiscImage.WriteFileBytes(stream, layout, plan.ExeLba, patch.ExeFileOffset, HexToBytes(patch.AfterHexPreview));
         }
 
-        string cueText = DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath));
-        await File.WriteAllTextAsync(outputCuePath, cueText, Encoding.ASCII, cancellationToken);
+        string cueText = DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath), sourceImagePath, outputImagePath);
+        await File.WriteAllTextAsync(outputCuePath, cueText, DiscCueSheet.TextEncoding, cancellationToken);
     }
 
     private static bool IsExecutableName(string name)

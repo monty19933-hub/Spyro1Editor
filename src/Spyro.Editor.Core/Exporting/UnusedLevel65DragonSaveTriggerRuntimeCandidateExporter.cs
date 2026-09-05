@@ -516,7 +516,7 @@ internal static class UnusedLevel65DragonSaveTriggerRuntimeCandidateExporter
 
         string expectedCueText = DiscImage.BuildCueText(
             baseCue,
-            Path.GetFileName(paths.OutputImagePath));
+            Path.GetFileName(paths.OutputImagePath), baseImage);
         VerifyTextReadback(paths.OutputCuePath, expectedCueText, "published dragon save-trigger CUE");
 
         RuntimeCandidateFinderReveal finalReveal = BuildFinalFinderReveal(paths);
@@ -851,8 +851,8 @@ internal static class UnusedLevel65DragonSaveTriggerRuntimeCandidateExporter
             image.Flush(flushToDisk: true);
         }
 
-        string cueText = DiscImage.BuildCueText(baseCue, Path.GetFileName(stagedImage));
-        await WriteTextAsync(stagedCue, cueText, Encoding.ASCII, cancellationToken);
+        string cueText = DiscImage.BuildCueText(baseCue, Path.GetFileName(stagedImage), baseImage);
+        await WriteTextAsync(stagedCue, cueText, DiscCueSheet.TextEncoding, cancellationToken);
         NativeLevelReplacementBaselineExporter.ValidateCue(stagedCue, stagedImage, "MODE2/2352");
 
         CandidateReadback readback = await VerifyImageReadbackAsync(

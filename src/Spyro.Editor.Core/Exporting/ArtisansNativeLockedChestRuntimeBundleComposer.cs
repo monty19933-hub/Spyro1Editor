@@ -334,8 +334,8 @@ public static class ArtisansNativeLockedChestRuntimeBundleComposer
             DiscLayout outputLayout = DiscImage.DetectLayout(outputImagePath);
             (string dataSha, string overlaySha, string executableSha, string verification) =
                 PatchPlacementsAndVerify(outputImagePath, outputLayout, request.Intent);
-            string cueText = BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath));
-            File.WriteAllText(outputCuePath, cueText, Encoding.ASCII);
+            string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath), request.SourceImagePath);
+            File.WriteAllText(outputCuePath, cueText, DiscCueSheet.TextEncoding);
 
             ArtisansNativeLockedChestRuntimeBundlePlan plan = BuildPlan(
                 request,
@@ -795,23 +795,6 @@ public static class ArtisansNativeLockedChestRuntimeBundleComposer
 
     private static string Sha256(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
-    private static string BuildCueText(string sourceCuePath, string outputBinName)
-    {
-        if (!File.Exists(sourceCuePath))
-            return $"FILE \"{outputBinName}\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n";
-        string[] lines = File.ReadAllLines(sourceCuePath, Encoding.ASCII);
-        bool replaced = false;
-        for (int i = 0; i < lines.Length; i++)
-        {
-            string trimmed = lines[i].Trim();
-            if (!replaced && trimmed.StartsWith("FILE ", StringComparison.OrdinalIgnoreCase) && trimmed.EndsWith(" BINARY", StringComparison.OrdinalIgnoreCase))
-            {
-                lines[i] = $"FILE \"{outputBinName}\" BINARY";
-                replaced = true;
-            }
-        }
-        return string.Join('\n', replaced ? lines : new[] { $"FILE \"{outputBinName}\" BINARY" }.Concat(lines)) + "\n";
-    }
 
     private static bool IsWadName(string name) =>
         string.Equals(name, "WAD.WAD", StringComparison.OrdinalIgnoreCase) ||

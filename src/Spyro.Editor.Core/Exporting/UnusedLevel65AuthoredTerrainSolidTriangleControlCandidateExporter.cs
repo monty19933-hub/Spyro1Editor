@@ -352,7 +352,7 @@ public static class UnusedLevel65AuthoredTerrainSolidTriangleControlCandidateExp
                     $"The pinned solid-triangle diff changed: logical={readback.ChangedLogicalWadBytes}, physical={readback.ChangedPhysicalImageBytes}, sectors={readback.ChangedRawSectorCount}.");
             }
 
-            string cueText = DiscImage.BuildCueText(baseCue, Path.GetFileName(outputImage));
+            string cueText = DiscImage.BuildCueText(baseCue, Path.GetFileName(outputImage), baseImage);
             await WriteAsciiAtomicallyStagedAsync(temporaryCue, cueText, cancellationToken);
             if (File.Exists(outputImage))
             {

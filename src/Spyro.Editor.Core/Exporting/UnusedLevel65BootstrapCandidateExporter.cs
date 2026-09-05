@@ -247,8 +247,8 @@ public static class UnusedLevel65BootstrapCandidateExporter
                 prepared,
                 excludeLevel65FromFlightClassification,
                 cancellationToken);
-            string cueText = DiscImage.BuildCueText(sourceCue, Path.GetFileName(outputImage));
-            await File.WriteAllTextAsync(temporaryCue, cueText, Encoding.ASCII, cancellationToken);
+            string cueText = DiscImage.BuildCueText(sourceCue, Path.GetFileName(outputImage), sourceImage);
+            await File.WriteAllTextAsync(temporaryCue, cueText, DiscCueSheet.TextEncoding, cancellationToken);
             string outputImageSha256 = await HashFileAsync(temporaryImage, cancellationToken);
             if (!string.Equals(
                     outputImageSha256,

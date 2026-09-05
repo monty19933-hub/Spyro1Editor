@@ -309,8 +309,8 @@ public static class ToastyNativeLockedChestRuntimeBundleCandidateComposer
             (int changedDataBytes, string dataSha, string overlaySha, string executableSha, string verification) =
                 PatchPlacementsAndVerify(outputImagePath, outputLayout, request.Intent, baseline.Plan);
             string outputSha = Sha256File(outputImagePath);
-            string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath));
-            File.WriteAllText(outputCuePath, cueText, Encoding.ASCII);
+            string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath), request.SourceImagePath);
+            File.WriteAllText(outputCuePath, cueText, DiscCueSheet.TextEncoding);
 
             ToastyNativeLockedChestRuntimeBundleCandidatePlan plan = BuildPlan(
                 request,

@@ -943,8 +943,8 @@ public static class TerrainPatchExporter
                     }
                 }
 
-                string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath));
-                await File.WriteAllTextAsync(temporaryOutputCuePath, cueText, Encoding.ASCII, cancellationToken);
+                string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath), request.SourceImagePath, temporaryOutputImagePath);
+                await File.WriteAllTextAsync(temporaryOutputCuePath, cueText, DiscCueSheet.TextEncoding, cancellationToken);
                 File.Move(temporaryOutputImagePath, outputImagePath, overwrite: true);
                 File.Move(temporaryOutputCuePath, outputCuePath, overwrite: true);
             }

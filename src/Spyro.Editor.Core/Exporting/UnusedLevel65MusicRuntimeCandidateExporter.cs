@@ -434,7 +434,7 @@ internal static class UnusedLevel65MusicRuntimeCandidateExporter
             "published music plan");
         VerifyTextReadback(
             paths.OutputCuePath,
-            DiscImage.BuildCueText(baseCue, Path.GetFileName(paths.OutputImagePath)),
+            DiscImage.BuildCueText(baseCue, Path.GetFileName(paths.OutputImagePath), baseImage),
             "published music CUE");
         RuntimeCandidateFinderReveal reveal = BuildFinalFinderReveal(paths);
         string checklist = BuildRuntimeChecklist(paths, reveal, loadCodes, readback);
@@ -590,8 +590,8 @@ internal static class UnusedLevel65MusicRuntimeCandidateExporter
             image.Flush(flushToDisk: true);
         }
 
-        string cueText = DiscImage.BuildCueText(baseCue, Path.GetFileName(stagedImage));
-        await WriteTextAsync(stagedCue, cueText, Encoding.ASCII, cancellationToken);
+        string cueText = DiscImage.BuildCueText(baseCue, Path.GetFileName(stagedImage), baseImage);
+        await WriteTextAsync(stagedCue, cueText, DiscCueSheet.TextEncoding, cancellationToken);
         NativeLevelReplacementBaselineExporter.ValidateCue(stagedCue, stagedImage, "MODE2/2352");
         CandidateReadback readback = await VerifyImageReadbackAsync(
             baseImage,

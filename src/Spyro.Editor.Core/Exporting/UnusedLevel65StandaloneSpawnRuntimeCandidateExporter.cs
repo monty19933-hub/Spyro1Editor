@@ -864,8 +864,8 @@ internal static class UnusedLevel65StandaloneSpawnRuntimeCandidateExporter
         if (!IsPendingHash(ExpectedRawSectorDiffSha256))
             RequireTextHash(readback.RawSectorDiffSha256, ExpectedRawSectorDiffSha256, "standalone-spawn raw diff");
 
-        string cueText = DiscImage.BuildCueText(foundationCue, Path.GetFileName(imagePath));
-        await WriteTextAsync(cuePath, cueText, Encoding.ASCII, cancellationToken);
+        string cueText = DiscImage.BuildCueText(foundationCue, Path.GetFileName(imagePath), foundation);
+        await WriteTextAsync(cuePath, cueText, DiscCueSheet.TextEncoding, cancellationToken);
         NativeLevelReplacementBaselineExporter.ValidateCue(cuePath, imagePath, "MODE2/2352");
 
         await WriteJsonAsync(planPath, prepared.Plan, cancellationToken);

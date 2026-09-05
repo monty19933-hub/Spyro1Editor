@@ -772,8 +772,8 @@ public static class LevelTextPatchExporter
             }
         }
 
-        string cueText = DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath));
-        await File.WriteAllTextAsync(outputCuePath, cueText, Encoding.ASCII, cancellationToken);
+        string cueText = DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath), sourceImagePath, outputImagePath);
+        await File.WriteAllTextAsync(outputCuePath, cueText, DiscCueSheet.TextEncoding, cancellationToken);
     }
 
     private static async Task WriteBatchImageAsync(
@@ -798,6 +798,7 @@ public static class LevelTextPatchExporter
                     outputImagePath,
                     outputCuePath,
                     sourceCuePath,
+                    sourceImagePath,
                     plan.Patches,
                     cancellationToken);
             }
@@ -832,14 +833,15 @@ public static class LevelTextPatchExporter
             }
         }
 
-        string cueText = DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath));
-        await File.WriteAllTextAsync(outputCuePath, cueText, Encoding.ASCII, cancellationToken);
+        string cueText = DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath), sourceImagePath, outputImagePath);
+        await File.WriteAllTextAsync(outputCuePath, cueText, DiscCueSheet.TextEncoding, cancellationToken);
     }
 
     private static async Task ApplyFixedSlotPatchesAsync(
         string outputImagePath,
         string outputCuePath,
         string sourceCuePath,
+        string sourceImagePath,
         IReadOnlyList<LevelTextPatchPlan> patches,
         CancellationToken cancellationToken)
     {
@@ -862,11 +864,11 @@ public static class LevelTextPatchExporter
 
         string cueText = DiscImage.BuildCueText(
             sourceCuePath,
-            Path.GetFileName(outputImagePath));
+            Path.GetFileName(outputImagePath), sourceImagePath, outputImagePath);
         await File.WriteAllTextAsync(
             outputCuePath,
             cueText,
-            Encoding.ASCII,
+            DiscCueSheet.TextEncoding,
             cancellationToken);
     }
 

@@ -227,8 +227,8 @@ public static class NativeTerrainTextureRecordSectorRelocationComposer
                 throw new InvalidDataException("Relocated final image failed normal texture-table readback.");
             }
 
-            string cue = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath));
-            await File.WriteAllTextAsync(temporaryCuePath, cue, Encoding.ASCII, cancellationToken);
+            string cue = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath), request.SourceImagePath);
+            await File.WriteAllTextAsync(temporaryCuePath, cue, DiscCueSheet.TextEncoding, cancellationToken);
             File.Move(temporaryImagePath, outputImagePath, overwrite: true);
             File.Move(temporaryCuePath, outputCuePath, overwrite: true);
 

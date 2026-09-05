@@ -201,8 +201,8 @@ public static class NativeTerrainTextureRelocationComposer
                 }
             }
 
-            string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(plan.OutputImagePath));
-            await File.WriteAllTextAsync(plan.OutputCuePath, cueText, Encoding.ASCII, cancellationToken);
+            string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(plan.OutputImagePath), request.SourceImagePath);
+            await File.WriteAllTextAsync(plan.OutputCuePath, cueText, DiscCueSheet.TextEncoding, cancellationToken);
             outputSha256 = ComputeSha256(plan.OutputImagePath);
         }
 

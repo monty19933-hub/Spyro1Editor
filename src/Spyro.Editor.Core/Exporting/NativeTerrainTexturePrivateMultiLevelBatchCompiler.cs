@@ -837,8 +837,8 @@ public static class NativeTerrainTexturePrivateMultiLevelBatchCompiler
                 expectedAfter: true);
             VerifyEveryLevel(temporaryImagePath, plan);
 
-            string cue = DiscImage.BuildCueText(plan.SourceCuePath, Path.GetFileName(outputImagePath));
-            await File.WriteAllTextAsync(temporaryCuePath, cue, Encoding.ASCII, cancellationToken);
+            string cue = DiscImage.BuildCueText(plan.SourceCuePath, Path.GetFileName(outputImagePath), plan.SourceImagePath);
+            await File.WriteAllTextAsync(temporaryCuePath, cue, DiscCueSheet.TextEncoding, cancellationToken);
             File.Move(temporaryImagePath, outputImagePath, overwrite: true);
             File.Move(temporaryCuePath, outputCuePath, overwrite: true);
 

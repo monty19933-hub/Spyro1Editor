@@ -518,8 +518,8 @@ public static class NativeTerrainTextureFixedTailPrivateRecordComposer
                 throw new InvalidDataException($"Global logical final-BIN readback failed: {logicalFailure}");
             }
 
-            string cue = DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath));
-            await File.WriteAllTextAsync(temporaryCuePath, cue, Encoding.ASCII, cancellationToken);
+            string cue = DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath), plan.SourceImagePath);
+            await File.WriteAllTextAsync(temporaryCuePath, cue, DiscCueSheet.TextEncoding, cancellationToken);
             File.Move(temporaryImagePath, outputImagePath, overwrite: true);
             File.Move(temporaryCuePath, outputCuePath, overwrite: true);
 

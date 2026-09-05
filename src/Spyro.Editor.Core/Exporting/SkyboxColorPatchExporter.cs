@@ -56,8 +56,8 @@ public static class SkyboxColorPatchExporter
                 }
             }
 
-            string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath));
-            await File.WriteAllTextAsync(outputCuePath, cueText, Encoding.ASCII, cancellationToken);
+            string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath), request.SourceImagePath);
+            await File.WriteAllTextAsync(outputCuePath, cueText, DiscCueSheet.TextEncoding, cancellationToken);
         }
 
         return new SkyboxColorPatchResult(outputImagePath, outputCuePath, outputPlanPath, plan, request.WriteImage);

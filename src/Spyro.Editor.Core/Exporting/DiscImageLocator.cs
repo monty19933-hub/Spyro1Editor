@@ -70,25 +70,24 @@ public static class DiscImageLocator
     public static string FindCueForImage(string imagePath)
     {
         string preferred = Path.ChangeExtension(imagePath, ".cue");
-        if (File.Exists(preferred))
+        if (CueMatchesImage(preferred, imagePath))
             return preferred;
 
         string directory = Path.GetDirectoryName(imagePath) ?? "";
         foreach (string name in new[] { "Spyro the Dragon (USA).cue", "Spyro the Dragon (USA)-CLEAN-ORIGINAL.cue" })
         {
             string path = Path.Combine(directory, name);
-            if (File.Exists(path))
+            if (CueMatchesImage(path, imagePath))
                 return path;
         }
 
         foreach (string cuePath in EnumerateCueFiles(directory))
         {
-            string? cueImage = FindImageForCue(cuePath);
-            if (cueImage != null && PathsEqual(cueImage, imagePath))
+            if (CueMatchesImage(cuePath, imagePath))
                 return cuePath;
         }
 
-        return preferred;
+        return File.Exists(preferred) ? "" : preferred;
     }
 
     private static string FindConfiguredImage(EditorWorkspace workspace)
@@ -132,45 +131,15 @@ public static class DiscImageLocator
     }
 
     private static string? FindImageForCue(string cuePath)
+        => DiscCueSheet.FindDataImagePath(cuePath);
+
+    private static bool CueMatchesImage(string cuePath, string imagePath)
     {
-        if (!File.Exists(cuePath))
-            return null;
-
-        string directory = Path.GetDirectoryName(cuePath) ?? "";
-        foreach (string line in File.ReadLines(cuePath))
-        {
-            string trimmed = line.Trim();
-            if (!trimmed.StartsWith("FILE ", StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            string fileName = ParseCueFileName(trimmed);
-            if (string.IsNullOrWhiteSpace(fileName))
-                continue;
-
-            string resolved = Path.IsPathRooted(fileName)
-                ? fileName
-                : Path.Combine(directory, fileName);
-            return Path.GetFullPath(resolved);
-        }
-
-        return null;
-    }
-
-    private static string ParseCueFileName(string line)
-    {
-        int firstQuote = line.IndexOf('"');
-        if (firstQuote >= 0)
-        {
-            int secondQuote = line.IndexOf('"', firstQuote + 1);
-            if (secondQuote > firstQuote)
-                return line.Substring(firstQuote + 1, secondQuote - firstQuote - 1);
-        }
-
-        string rest = line[5..].Trim();
-        int binaryIndex = rest.LastIndexOf(" BINARY", StringComparison.OrdinalIgnoreCase);
-        if (binaryIndex >= 0)
-            rest = rest[..binaryIndex].Trim();
-        return rest;
+        try { return DiscCueSheet.ReferencesDataImage(cuePath, imagePath); }
+        catch (InvalidDataException) { return false; }
+        catch (IOException) { return false; }
+        catch (ArgumentException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
     }
 
     private static IEnumerable<string> EnumerateCueFiles(string directory)

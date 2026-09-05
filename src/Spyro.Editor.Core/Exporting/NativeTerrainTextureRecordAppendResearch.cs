@@ -359,8 +359,8 @@ public static class NativeTerrainTextureRecordAppendResearch
                 throw new InvalidDataException("Expanded level-data final BIN readback failed.");
         }
 
-        string cue = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath));
-        await File.WriteAllTextAsync(outputCuePath, cue, Encoding.ASCII, cancellationToken);
+        string cue = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath), request.SourceImagePath);
+        await File.WriteAllTextAsync(outputCuePath, cue, DiscCueSheet.TextEncoding, cancellationToken);
         return new NativeTerrainTextureRecordAppendResearchOutput(
             outputImagePath,
             outputCuePath,

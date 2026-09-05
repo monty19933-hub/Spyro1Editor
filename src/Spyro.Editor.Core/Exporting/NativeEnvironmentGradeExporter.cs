@@ -286,8 +286,8 @@ public static class NativeEnvironmentGradeExporter
                     }
                     await image.FlushAsync(cancellationToken);
                 }
-                string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(plan.OutputImagePath));
-                await File.WriteAllTextAsync(temporaryCuePath, cueText, Encoding.ASCII, cancellationToken);
+                string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(plan.OutputImagePath), request.SourceImagePath, temporaryImagePath);
+                await File.WriteAllTextAsync(temporaryCuePath, cueText, DiscCueSheet.TextEncoding, cancellationToken);
             }
             List<(string TemporaryPath, string FinalPath)> stagedOutputs =
             [

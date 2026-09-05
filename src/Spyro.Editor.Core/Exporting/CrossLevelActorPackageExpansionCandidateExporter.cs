@@ -253,8 +253,8 @@ public static class CrossLevelActorPackageExpansionCandidateExporter
             output.Flush();
         }
 
-        string cueText = DiscImage.BuildCueText(request.RetailCuePath, Path.GetFileName(outputImagePath));
-        File.WriteAllText(outputCuePath, cueText, Encoding.ASCII);
+        string cueText = DiscImage.BuildCueText(request.RetailCuePath, Path.GetFileName(outputImagePath), request.RetailImagePath);
+        File.WriteAllText(outputCuePath, cueText, DiscCueSheet.TextEncoding);
 
         VerificationResult verification = Verify(
             request,

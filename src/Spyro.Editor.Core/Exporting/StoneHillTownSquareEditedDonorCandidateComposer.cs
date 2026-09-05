@@ -219,8 +219,8 @@ public static class StoneHillTownSquareEditedDonorCandidateComposer
                 temporaryImage,
                 prepared,
                 cancellationToken);
-            string cueText = DiscImage.BuildCueText(baseCue, Path.GetFileName(outputImage));
-            await File.WriteAllTextAsync(temporaryCue, cueText, Encoding.ASCII, cancellationToken);
+            string cueText = DiscImage.BuildCueText(baseCue, Path.GetFileName(outputImage), baseImage);
+            await File.WriteAllTextAsync(temporaryCue, cueText, DiscCueSheet.TextEncoding, cancellationToken);
             NativeLevelReplacementBaselineExporter.ValidateCue(temporaryCue, outputImage, "MODE2/2352");
 
             if (File.Exists(outputImage))

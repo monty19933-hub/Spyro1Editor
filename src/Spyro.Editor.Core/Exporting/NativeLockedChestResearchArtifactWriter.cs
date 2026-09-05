@@ -101,8 +101,8 @@ public static class NativeLockedChestResearchArtifactWriter
                 throw new InvalidDataException("The destination-specific candidate wrote an unexpected output path.");
 
             cancellationToken.ThrowIfCancellationRequested();
-            string cueText = DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath));
-            await File.WriteAllTextAsync(outputCuePath, cueText, Encoding.ASCII, cancellationToken);
+            string cueText = DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath), sourceImagePath);
+            await File.WriteAllTextAsync(outputCuePath, cueText, DiscCueSheet.TextEncoding, cancellationToken);
             await File.WriteAllTextAsync(
                 outputPlanPath,
                 JsonSerializer.Serialize(candidate.Plan, new JsonSerializerOptions { WriteIndented = true }),

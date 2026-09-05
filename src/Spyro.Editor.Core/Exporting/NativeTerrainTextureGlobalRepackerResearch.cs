@@ -522,8 +522,8 @@ public static class NativeTerrainTextureGlobalRepackerResearch
             }
         }
 
-        string cueText = DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath));
-        await File.WriteAllTextAsync(outputCuePath, cueText, System.Text.Encoding.ASCII, cancellationToken);
+        string cueText = DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath), sourceImagePath);
+        await File.WriteAllTextAsync(outputCuePath, cueText, DiscCueSheet.TextEncoding, cancellationToken);
         bool sourceUnchanged = string.Equals(sourceSha, Sha256File(sourceImagePath), StringComparison.OrdinalIgnoreCase);
         if (!sourceUnchanged)
             throw new InvalidDataException("The global repack writer changed its source BIN.");

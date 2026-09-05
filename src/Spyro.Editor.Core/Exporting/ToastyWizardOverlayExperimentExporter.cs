@@ -485,7 +485,7 @@ public static class ToastyWizardOverlayExperimentExporter
         ValidateWordAtOffset(relocatedExeReadback, ExecutableCopyBufferHiOffset, copyBufferHiWord, "relocated Toasty copy-buffer HI16");
         ValidateWordAtOffset(relocatedExeReadback, ExecutableCopyBufferLoOffset, copyBufferLoWord, "relocated Toasty copy-buffer LO16");
 
-        File.WriteAllText(outputCuePath, DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath)), Encoding.ASCII);
+        File.WriteAllText(outputCuePath, DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath), sourceImagePath), DiscCueSheet.TextEncoding);
         ToastyWizardOverlayExperimentPlan plan = new(
             RecipeId,
             RetiredV8RecipeId,

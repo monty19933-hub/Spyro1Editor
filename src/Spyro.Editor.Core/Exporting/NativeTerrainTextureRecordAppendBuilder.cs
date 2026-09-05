@@ -1039,8 +1039,8 @@ public static class NativeTerrainTextureRecordAppendBuilder
                 throw new InvalidDataException("The appended texture records failed final runtime-control readback.");
             }
 
-            string cueText = DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath));
-            await File.WriteAllTextAsync(temporaryCuePath, cueText, Encoding.ASCII, cancellationToken);
+            string cueText = DiscImage.BuildCueText(sourceCuePath, Path.GetFileName(outputImagePath), sourceImagePath);
+            await File.WriteAllTextAsync(temporaryCuePath, cueText, DiscCueSheet.TextEncoding, cancellationToken);
             File.Move(temporaryImagePath, outputImagePath, overwrite: true);
             File.Move(temporaryCuePath, outputCuePath, overwrite: true);
 

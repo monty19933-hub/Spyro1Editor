@@ -823,8 +823,8 @@ internal static class UnusedLevel65FoundationTerrainAddRemoveRuntimeCandidateExp
             image.Flush(flushToDisk: true);
         }
 
-        string cueText = DiscImage.BuildCueText(baseCue, Path.GetFileName(stagedImage));
-        await WriteTextAsync(stagedCue, cueText, Encoding.ASCII, cancellationToken);
+        string cueText = DiscImage.BuildCueText(baseCue, Path.GetFileName(stagedImage), baseImage);
+        await WriteTextAsync(stagedCue, cueText, DiscCueSheet.TextEncoding, cancellationToken);
         NativeLevelReplacementBaselineExporter.ValidateCue(stagedCue, stagedImage, "MODE2/2352");
         FoundationReadback readback = await VerifyImageReadbackAsync(
             baseImage,

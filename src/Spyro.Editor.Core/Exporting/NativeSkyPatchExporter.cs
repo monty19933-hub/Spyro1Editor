@@ -131,8 +131,8 @@ public static class NativeSkyPatchExporter
             }
             if (occlusionPatch != null)
                 NativeSkyOcclusionPatcher.Apply(plan.OutputImagePath, occlusionPatch);
-            string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(plan.OutputImagePath));
-            await File.WriteAllTextAsync(plan.OutputCuePath, cueText, Encoding.ASCII, cancellationToken);
+            string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(plan.OutputImagePath), request.SourceImagePath, plan.OutputImagePath);
+            await File.WriteAllTextAsync(plan.OutputCuePath, cueText, DiscCueSheet.TextEncoding, cancellationToken);
             wroteImage = true;
         }
 

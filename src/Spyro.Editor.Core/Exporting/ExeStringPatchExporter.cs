@@ -36,8 +36,8 @@ public static class ExeStringPatchExporter
                 DiscImage.WriteFileBytes(stream, new DiscLayout(plan.SectorSize, plan.UserOffset, 0, 0), plan.ExeLba, plan.ExeFileOffset, HexToBytes(plan.AfterHexPreview));
             }
 
-            string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath));
-            await File.WriteAllTextAsync(outputCuePath, cueText, Encoding.ASCII, cancellationToken);
+            string cueText = DiscImage.BuildCueText(request.SourceCuePath, Path.GetFileName(outputImagePath), request.SourceImagePath);
+            await File.WriteAllTextAsync(outputCuePath, cueText, DiscCueSheet.TextEncoding, cancellationToken);
         }
 
         return new ExeStringPatchResult(outputImagePath, outputCuePath, outputPlanPath, plan, request.WriteImage);

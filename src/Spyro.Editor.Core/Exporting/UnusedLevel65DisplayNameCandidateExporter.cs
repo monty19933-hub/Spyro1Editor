@@ -203,8 +203,8 @@ public static class UnusedLevel65DisplayNameCandidateExporter
                     $"ID65 display-name candidate SHA-256 is {outputImageSha256}, expected {ExpectedOutputImageSha256}.");
             }
 
-            string cueText = DiscImage.BuildCueText(baseCue, Path.GetFileName(outputImage));
-            await File.WriteAllTextAsync(temporaryCue, cueText, Encoding.ASCII, cancellationToken);
+            string cueText = DiscImage.BuildCueText(baseCue, Path.GetFileName(outputImage), baseImage);
+            await File.WriteAllTextAsync(temporaryCue, cueText, DiscCueSheet.TextEncoding, cancellationToken);
             if (File.Exists(outputImage))
             {
                 File.Move(outputImage, backupImage);
