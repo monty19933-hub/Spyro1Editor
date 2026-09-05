@@ -271,6 +271,44 @@ internal static class RawMode2Form1SectorIntegrity
             throw new InvalidOperationException("Raw sector integrity requires MODE2/2352 with user offset 24.");
     }
 
+    /// <summary>
+    /// Validates a sector before a logical write. Headerless MODE2/2336 omits
+    /// sync/address/mode but retains the duplicated XA subheader and Form 1 parity.
+    /// Existing parity is deliberately not required: sequential exporters may
+    /// also repair an older image whose payload was patched without new parity.
+    /// </summary>
+    internal static void RequireLogicalWriteSector(ReadOnlySpan<byte> sector, DiscLayout layout, long lba)
+    {
+        if (layout.SectorSize == RawSectorBytes && layout.UserOffset == UserOffset)
+        {
+            RequireMode2Form1(sector, lba);
+            RequireMsfAddress(sector, lba);
+            return;
+        }
+        if (layout.SectorSize != 2336 || layout.UserOffset != 8 || sector.Length != 2336)
+            throw new InvalidOperationException("Logical raw-sector writes require MODE2/2352 or MODE2/2336.");
+        if (!sector.Slice(0, 4).SequenceEqual(sector.Slice(4, 4)) || (sector[2] & 0x20) != 0)
+            throw new InvalidDataException($"Raw sector {lba} is not a duplicated-subheader MODE2 Form 1 sector.");
+    }
+
+    internal static void RebuildLogicalWriteSector(Span<byte> sector, DiscLayout layout, long lba)
+    {
+        RequireLogicalWriteSector(sector, layout, lba);
+        if (layout.SectorSize == RawSectorBytes)
+        {
+            RebuildRawSector(sector);
+            return;
+        }
+
+        // MODE2 Form 1 ECC always treats the missing four address/mode bytes as
+        // zero, so the existing raw codec is also exact for headerless sectors.
+        Span<byte> raw = stackalloc byte[RawSectorBytes];
+        raw.Clear();
+        sector.CopyTo(raw.Slice(16));
+        RebuildRawSector(raw);
+        raw.Slice(16).CopyTo(sector);
+    }
+
     private static void RequireMode2Form1(ReadOnlySpan<byte> raw, long sector)
     {
         if (raw.Length != RawSectorBytes || raw[15] != 2 ||

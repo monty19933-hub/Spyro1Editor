@@ -87,16 +87,65 @@ internal static class DiscImage
 
     public static void WriteFileBytes(FileStream stream, DiscLayout layout, int fileLba, long fileOffset, byte[] bytes)
     {
+        ArgumentNullException.ThrowIfNull(stream);
+        ArgumentNullException.ThrowIfNull(layout);
+        ArgumentNullException.ThrowIfNull(bytes);
+        if (fileLba < 0 || fileOffset < 0)
+            throw new ArgumentOutOfRangeException(nameof(fileOffset), "Disc writes require nonnegative LBA and logical offset.");
+        bool cooked = layout.SectorSize == 2048 && layout.UserOffset == 0;
+        bool raw = (layout.SectorSize == 2352 && layout.UserOffset == 24) ||
+                   (layout.SectorSize == 2336 && layout.UserOffset == 8);
+        if (!cooked && !raw)
+            throw new InvalidOperationException("Disc writes require ISO/2048 or MODE2 Form 1 /2352 or /2336.");
+        if (!stream.CanSeek || !stream.CanWrite || (raw && !stream.CanRead))
+            throw new InvalidOperationException("Disc writes require a seekable writable stream, with read access for raw sectors.");
+        long endOffset = checked(fileOffset + bytes.LongLength);
+        long firstSector = checked(fileLba + fileOffset / 2048);
+        long lastSector = bytes.Length == 0 ? firstSector : checked(fileLba + (endOffset - 1) / 2048);
+        long physicalEnd = bytes.Length == 0
+            ? checked(firstSector * layout.SectorSize + layout.UserOffset + fileOffset % 2048)
+            : checked((lastSector + 1) * layout.SectorSize);
+        if (physicalEnd > stream.Length)
+            throw new EndOfStreamException("The requested disc write exceeds the existing image; logical writes cannot grow a disc.");
+        if (bytes.Length == 0)
+            return;
+
+        byte[]? sectorBytes = raw ? new byte[layout.SectorSize] : null;
+        if (sectorBytes != null)
+        {
+            // Preflight the entire range before touching any payload. In particular,
+            // a later Form 2 or truncated sector must not leave a partial patch.
+            for (long sector = firstSector; sector <= lastSector; sector++)
+            {
+                stream.Position = checked(sector * layout.SectorSize);
+                stream.ReadExactly(sectorBytes);
+                RawMode2Form1SectorIntegrity.RequireLogicalWriteSector(sectorBytes, layout, sector);
+            }
+        }
+
         int remaining = bytes.Length;
         int written = 0;
         long absolute = fileOffset;
         while (remaining > 0)
         {
             int sectorOffset = (int)(absolute % 2048);
-            int sector = fileLba + (int)Math.Floor(absolute / 2048d);
+            long sector = checked(fileLba + absolute / 2048);
             int toWrite = Math.Min(2048 - sectorOffset, remaining);
-            stream.Position = ((long)sector * layout.SectorSize) + layout.UserOffset + sectorOffset;
-            stream.Write(bytes, written, toWrite);
+            long sectorStart = checked(sector * layout.SectorSize);
+            if (sectorBytes == null)
+            {
+                stream.Position = checked(sectorStart + sectorOffset);
+                stream.Write(bytes, written, toWrite);
+            }
+            else
+            {
+                stream.Position = sectorStart;
+                stream.ReadExactly(sectorBytes);
+                bytes.AsSpan(written, toWrite).CopyTo(sectorBytes.AsSpan(layout.UserOffset + sectorOffset));
+                RawMode2Form1SectorIntegrity.RebuildLogicalWriteSector(sectorBytes, layout, sector);
+                stream.Position = sectorStart;
+                stream.Write(sectorBytes);
+            }
             written += toWrite;
             remaining -= toWrite;
             absolute += toWrite;
