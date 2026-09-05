@@ -1893,6 +1893,7 @@ public sealed partial class MainWindow : Window
     {
         StopTerrainTexturePaintMode(announce: false);
         ClearTerrainBrushUndoHistory();
+        _terrainTexturePaintHistory.Clear();
         _selectedMoby = null;
         _selectedTerrain = null;
         _selectedTerrainIndex = -1;

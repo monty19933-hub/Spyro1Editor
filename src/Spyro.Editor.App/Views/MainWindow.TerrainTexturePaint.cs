@@ -5850,6 +5850,8 @@ public sealed partial class MainWindow
             CaptureFile(relocation.PreviewImagePath);
 
         return new TerrainTexturePaintHistoryCheckpoint(
+            _workspace,
+            _workspace.RootPath,
             normalizedLevelKey,
             actionLabel,
             _nativeTerrainTextureRelocations.ToArray(),
@@ -5867,6 +5869,7 @@ public sealed partial class MainWindow
     {
         if (_terrainTexturePaintHistoryRestoreBusy)
             return;
+        RequireCurrentTerrainTextureHistoryWorkspace(checkpoint);
         if (!_terrainTexturePaintHistory.TryGetValue(
                 checkpoint.LevelKey,
                 out List<TerrainTexturePaintHistoryCheckpoint>? history))
@@ -5961,6 +5964,13 @@ public sealed partial class MainWindow
         }
 
         TerrainTexturePaintHistoryCheckpoint target = history[^1];
+        if (!IsCurrentTerrainTextureHistoryWorkspace(target))
+        {
+            history.Clear();
+            _statusText.Text =
+                "Undo Last was cleared because its texture history belongs to a previous workspace session. No project files were changed.";
+            return false;
+        }
         if (!string.Equals(
                 target.ExpectedTextureStateSignature,
                 BuildTerrainTexturePaintHistorySignature(),
@@ -6018,6 +6028,10 @@ public sealed partial class MainWindow
     private async Task RestoreTerrainTexturePaintHistoryCheckpointAsync(
         TerrainTexturePaintHistoryCheckpoint checkpoint)
     {
+        // Checkpoints retain absolute manifest and preview paths. Matching
+        // level keys and texture state in a copied project do not authorize
+        // restoring those files, even after reopening the previous root.
+        RequireCurrentTerrainTextureHistoryWorkspace(checkpoint);
         if (TryBlockTerrainMutationDuringId65BlankLabManualOperation("restoring terrain texture history"))
             throw new InvalidOperationException(_statusText.Text ?? "An ID65 Lab operation is active.");
 
@@ -6095,7 +6109,24 @@ public sealed partial class MainWindow
     private sealed record StagedTerrainTextureListItem(
         NativeTerrainTextureRelocationEdit Edit);
 
+    private bool IsCurrentTerrainTextureHistoryWorkspace(
+        TerrainTexturePaintHistoryCheckpoint checkpoint) =>
+        ReferenceEquals(checkpoint.Workspace, _workspace) &&
+        PathsEqual(checkpoint.WorkspaceRoot, _workspace.RootPath);
+
+    private void RequireCurrentTerrainTextureHistoryWorkspace(
+        TerrainTexturePaintHistoryCheckpoint checkpoint)
+    {
+        if (!IsCurrentTerrainTextureHistoryWorkspace(checkpoint))
+        {
+            throw new InvalidOperationException(
+                "Texture history belongs to a previous workspace session; no project files were changed.");
+        }
+    }
+
     private sealed record TerrainTexturePaintHistoryCheckpoint(
+        Spyro.Editor.Core.Workspace.EditorWorkspace Workspace,
+        string WorkspaceRoot,
         string LevelKey,
         string ActionLabel,
         IReadOnlyList<NativeTerrainTextureRelocationEdit> Relocations,
