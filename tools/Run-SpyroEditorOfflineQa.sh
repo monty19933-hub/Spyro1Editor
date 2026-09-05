@@ -38,6 +38,7 @@ CACHE_DIR="$ROOT_DIR/editor-cache"
 PROOF_BIN_DIR="$ROOT_DIR/_local/objects/control-role-proof-bins"
 
 BUILD_ONLY=0
+RUN_BUILT=0
 WITH_GRADE_WRITE_READBACK=0
 STONEHILL_LEVEL_REPLACEMENT_BASELINE_SMOKE_ONLY=0
 STONEHILL_TOWNSQUARE_IDENTITY_CANDIDATE_SMOKE_ONLY=0
@@ -110,6 +111,11 @@ Default smoke modes:
   --object-smoke-only          object QA with isolated, cleaned disc readbacks
 
 Options:
+  --run-built
+      Run the default suite against existing compiled outputs without rebuilding.
+      Use only after a successful build in the selected configuration. This
+      mode does not establish that binaries match the current working tree.
+
   --build-only
       Build the app, smoke runner, cache tool, identity/icon audits, PSX blend,
       GTE/base projection, terrain collision-fan, raw-material/classifier
@@ -171,6 +177,9 @@ for argument in "$@"; do
         --build-only)
             BUILD_ONLY=1
             ;;
+        --run-built)
+            RUN_BUILT=1
+            ;;
         --with-grade-write-readback)
             WITH_GRADE_WRITE_READBACK=1
             ;;
@@ -196,6 +205,15 @@ for argument in "$@"; do
             ;;
     esac
 done
+
+if [[ "$RUN_BUILT" -eq 1 &&
+      ("$BUILD_ONLY" -eq 1 ||
+       "$STONEHILL_LEVEL_REPLACEMENT_BASELINE_SMOKE_ONLY" -eq 1 ||
+       "$STONEHILL_TOWNSQUARE_IDENTITY_CANDIDATE_SMOKE_ONLY" -eq 1 ||
+       "$STONEHILL_TOWNSQUARE_EDITED_DONOR_CANDIDATE_SMOKE_ONLY" -eq 1 ||
+       "$ID65_BLANK_LEVEL_LAB_SMOKE_ONLY" -eq 1) ]]; then
+    fail "--run-built applies only to the default suite and cannot be combined with a build-only or focused mode."
+fi
 
 if [[ "$BUILD_ONLY" -eq 1 && "$WITH_GRADE_WRITE_READBACK" -eq 1 ]]; then
     fail "--build-only cannot be combined with --with-grade-write-readback."
@@ -271,6 +289,7 @@ if [[ "$ID65_BLANK_LEVEL_LAB_SMOKE_ONLY" -eq 1 ]]; then
     exit 0
 fi
 
+if [[ "$RUN_BUILT" -eq 0 ]]; then
 echo "[1/16] Building Avalonia app (compile only)..."
 dotnet build "$APP_PROJECT" --configuration "$CONFIGURATION" --nologo
 
@@ -335,6 +354,9 @@ dotnet build "$HQ_MATERIAL_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nol
 echo
 echo "[16/16] Building public V5 ID65 Blank-Level Lab smoke..."
 dotnet build "$ID65_BLANK_LEVEL_LAB_SMOKE_PROJECT" --configuration "$CONFIGURATION" --nologo
+else
+    echo "Running existing $CONFIGURATION outputs; build/source freshness is not verified in this mode."
+fi
 
 if [[ "$BUILD_ONLY" -eq 1 ]]; then
     echo

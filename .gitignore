@@ -194,6 +194,9 @@ unsafe-tests/
 !/tools/Build-SpyroEditorRelease.sh
 !/tools/Run-SpyroEditorOfflineQa.sh
 !/tools/Run-SpyroEditorRegression.py
+!/tools/tests/
+/tools/tests/*
+!/tools/tests/test_spyro_regression_runner.py
 !/tools/Verify-SpyroEditorRelease.sh
 !/tools/SpyroEditor.macOS.community.entitlements
 !/tools/Watch-SpyroId65RuntimeState.py
