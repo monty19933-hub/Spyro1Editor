@@ -107,6 +107,7 @@ try
             baseline.PackageImportPreviews.Single() with { RecipeMode = "T70" }
         }) == 0x01A6,
         "A rolled-back package diagnostic still selected the runtime variant before a committed package.");
+    VerifyExistingSlotCandidateAuthoredDependencies(temporary);
     Require(!Directory.EnumerateFiles(temporary, "*.bin").Any() &&
             File.ReadAllBytes(imagePath).AsSpan().SequenceEqual(CreateSyntheticImage()),
         "Plan-only transaction checks changed the source or published a BIN.");
@@ -176,6 +177,152 @@ static byte[] CreateSyntheticImage()
     donor.CopyTo(source.Slice(TableRelative + 0x58, 0x58));
     BinaryPrimitives.WriteUInt32LittleEndian(source[(TableRelative + 0x58)..], uint.MaxValue);
     return image;
+}
+
+static void VerifyExistingSlotCandidateAuthoredDependencies(string parentDirectory)
+{
+    // The complete candidate BuildPlan adds an exact-retail-USA warp patch after
+    // successful rows. Never bypass that provenance guard for a synthetic test:
+    // positive mechanics call its real row planner, while rejected-only cases
+    // also pass through the full BuildPlan and must not reach the warp writer.
+    string directory = Path.Combine(parentDirectory, "authored-candidate-dependencies");
+    Directory.CreateDirectory(directory);
+    File.Copy(Path.Combine(parentDirectory, "spyro-level-catalog.json"), Path.Combine(directory, "spyro-level-catalog.json"));
+    LevelCatalog catalog = LevelCatalog.Load(directory);
+    LevelDefinition target = catalog.FindByKey("stonehill")!;
+    byte[] sourceImage = CreateSyntheticImage();
+    int targetRecordOffset = WadStart + TargetBase + TableRelative;
+    int donorRecordOffset = WadStart + SourceBase + TableRelative;
+    BinaryPrimitives.WriteUInt16LittleEndian(sourceImage.AsSpan(WadStart + TargetBase + 0x150), 0x00C2);
+    Span<byte> targetRecord = sourceImage.AsSpan(targetRecordOffset, 0x58);
+    BinaryPrimitives.WriteUInt32LittleEndian(targetRecord, 0x1300);
+    BinaryPrimitives.WriteInt32LittleEndian(targetRecord[0x0C..], 1000);
+    BinaryPrimitives.WriteInt32LittleEndian(targetRecord[0x10..], 2000);
+    BinaryPrimitives.WriteInt32LittleEndian(targetRecord[0x14..], 3000);
+    targetRecord[0x36] = 0xC2;
+    targetRecord[0x50] = 0x20;
+    targetRecord[0x53] = 0x55;
+    for (int offset = 0x38; offset <= 0x45; offset++) targetRecord[offset] = (byte)(offset + 1);
+    targetRecord.CopyTo(sourceImage.AsSpan(targetRecordOffset + 0x58, 0x58));
+    Span<byte> chestDonor = sourceImage.AsSpan(donorRecordOffset, 0x58);
+    BinaryPrimitives.WriteUInt32LittleEndian(chestDonor, 0x1200);
+    chestDonor[0x36] = 0xC2;
+    chestDonor[0x37] = 0;
+    chestDonor[0x53] = 0x54;
+    chestDonor.Slice(0x38, 0x0E).Fill(0xA5);
+    chestDonor.CopyTo(sourceImage.AsSpan(donorRecordOffset + 0x58, 0x58));
+    sourceImage.AsSpan(donorRecordOffset + 0x58, 4).Clear();
+    byte[] expectedTarget = targetRecord.ToArray();
+    string imagePath = Path.Combine(directory, "synthetic-candidates.iso");
+    File.WriteAllBytes(imagePath, sourceImage);
+    int[] protectedOffsets = Enumerable.Range(0, 4).Concat(Enumerable.Range(0x38, 0x0E)).ToArray();
+
+    object chest = CandidateEdit("accepted-chest", "catalogChest", 0);
+    var positive = Candidate(chest);
+    Require(positive.Accepted && positive.Patches.Count == 1 && positive.Skipped.Count == 0,
+        "The source-free fixture did not exercise an accepted ordinary chest candidate row.");
+    byte[] positiveRecord = Convert.FromHexString(positive.Patches.Single().AfterHexPreview.Replace(" ", ""));
+    Require(protectedOffsets.All(offset => positiveRecord[offset] == expectedTarget[offset]),
+        "The ordinary chest candidate did not preserve both exact target dependency spans.");
+    Require(BinaryPrimitives.ReadInt32LittleEndian(positiveRecord.AsSpan(0x0C)) == 1100 &&
+            BinaryPrimitives.ReadInt32LittleEndian(positiveRecord.AsSpan(0x10)) == 2200 &&
+            BinaryPrimitives.ReadInt32LittleEndian(positiveRecord.AsSpan(0x14)) == 3300 &&
+            positiveRecord[0x46] == 0x40 && positiveRecord[0x53] == 0x54,
+        "Protecting chest dependencies changed the supported XYZ, yaw or reward selection.");
+
+    var identical = Candidate(CandidateEdit("identical-protected-overrides", "catalogChest", 0,
+        protectedOffsets.Select(offset => (offset, (int)expectedTarget[offset])).ToArray()));
+    Require(identical.Accepted && DescribePatches(identical.Patches) == DescribePatches(positive.Patches),
+        "An identical-value protected-field override was incorrectly rejected or changed the candidate bytes.");
+    var allowed = Candidate(CandidateEdit("allowed-adjacent-and-reward-overrides", "catalogChest", 0,
+        (0x04, 0xA1), (0x46, 0x41), (0x53, 0x56)));
+    byte[] allowedRecord = Convert.FromHexString(allowed.Patches.Single().AfterHexPreview.Replace(" ", ""));
+    Require(allowed.Accepted && allowedRecord[0x04] == 0xA1 && allowedRecord[0x46] == 0x41 && allowedRecord[0x53] == 0x56 &&
+            protectedOffsets.All(offset => allowedRecord[offset] == expectedTarget[offset]),
+        "The preservation guard overreached into supported neighboring bytes or the editable reward byte.");
+
+    var enemy = Candidate(CandidateEdit("accepted-self-contained-enemy", "catalogEnemy", 1));
+    Require(enemy.Accepted && enemy.Patches.Count == 1 && enemy.Skipped.Count == 0,
+        "A genuinely properties-free synthetic enemy lost its existing candidate route.");
+    var identicalEnemy = Candidate(CandidateEdit("identical-enemy-dependencies", "catalogEnemy", 1,
+        Enumerable.Range(0, 4).Concat(Enumerable.Range(8, 4)).Select(offset => (offset, 0)).ToArray()));
+    Require(identicalEnemy.Accepted && DescribePatches(enemy.Patches) == DescribePatches(identicalEnemy.Patches),
+        "Identical zero dependency edits rejected or changed a self-contained enemy candidate.");
+
+    foreach (int offset in protectedOffsets)
+        RequireRejected(CandidateEdit($"reject-chest-{offset:X2}", "catalogChest", 0,
+            (offset, expectedTarget[offset] ^ 0x80)), "protected target chest");
+    foreach (int offset in Enumerable.Range(0, 4).Concat(Enumerable.Range(8, 4)))
+        RequireRejected(CandidateEdit($"reject-enemy-{offset:X2}", "catalogEnemy", 1,
+            (offset, 1)), "authored record is not self-contained");
+    foreach ((string family, int sourceIndex) in new[] { ("catalogChest", 0), ("catalogEnemy", 1) })
+    {
+        Require(Candidate(CandidateEdit($"accepted-type-18-{family}", family, sourceIndex, (0x50, 0x18))).Accepted,
+            "The supported authored render type0x18 was rejected.");
+        RequireRejected(CandidateEdit($"reject-raw-type-{family}", family, sourceIndex, (0x50, 0x0A)), "authored render type");
+        var editedType = JsonSerializer.SerializeToNode(CandidateEdit($"reject-edited-type-{family}", family, sourceIndex))!;
+        editedType["typeEditedHex"] = "0x0A";
+        RequireRejected(editedType, "authored render type");
+    }
+
+    Require(File.ReadAllBytes(imagePath).AsSpan().SequenceEqual(sourceImage) &&
+            !Directory.EnumerateFiles(directory, "*.bin").Any() && !Directory.EnumerateFiles(directory, "*.cue").Any(),
+        "Authored candidate dependency tests modified a source or published a game image.");
+    Console.WriteLine("MOBY_EXISTING_SLOT_AUTHORED_DEPENDENCIES_OK protectedChestBytes=18 enemyDependencyBytes=8 authoredTypeNegatives=4; real row planner and full rejected-only BuildPlan; no game image");
+
+    void RequireRejected(object edit, string expectedReason)
+    {
+        var candidate = Candidate(edit);
+        Require(!candidate.Accepted && candidate.Patches.Count == 0 && candidate.WrittenByteCount == 0 && candidate.SharedClusterCount == 0,
+            $"Authored dependency override was accepted or left provisional writes: {JsonSerializer.Serialize(edit)}");
+        Require(candidate.Skipped.Any(reason => reason.Contains(expectedReason, StringComparison.Ordinal)),
+            $"Authored dependency override was not rejected by its explicit ownership guard: {string.Join("; ", candidate.Skipped)}");
+        string editsPath = Path.Combine(directory, "edits.json");
+        File.WriteAllText(editsPath, JsonSerializer.Serialize(new { edits = new[] { edit } }));
+        MobySourcePatchPlan plan = MobySourcePatchExporter.BuildPlan(imagePath, "", Path.Combine(directory, "never-written.bin"),
+            Path.Combine(directory, "never-written.cue"), target, editsPath, allowPlanOnlyActorPackageImports: true);
+        Require(plan.Patches.Count == 0 && plan.PackageImportPreviews.Count == 0 &&
+                plan.EditOutcomes!.Single().PatchKinds.Count == 0 &&
+                plan.EditOutcomes!.Single().SkippedReasons.Any(reason => reason.Contains(expectedReason, StringComparison.Ordinal)),
+            "Full candidate BuildPlan retained patches, dependencies or an accepted outcome after rejecting an authored override.");
+    }
+
+    (bool Accepted, List<MobySourcePatch> Patches, List<string> Skipped, int WrittenByteCount, int SharedClusterCount) Candidate(object edit)
+    {
+        using JsonDocument document = JsonDocument.Parse(JsonSerializer.Serialize(edit));
+        using FileStream source = File.OpenRead(imagePath);
+        MethodInfo method = typeof(MobySourcePatchExporter).GetMethod("TryPatchCrossLevelSourceRecordIntoExistingSlotCandidate", BindingFlags.Static | BindingFlags.NonPublic)!;
+        List<MobySourcePatch> patches = [];
+        HashSet<long> writtenOffsets = [];
+        List<string> skipped = [];
+        System.Collections.IDictionary shared = (System.Collections.IDictionary)Activator.CreateInstance(method.GetParameters()[14].ParameterType)!;
+        object layout = typeof(MobySourcePatchExporter).Assembly.GetType("Spyro.Editor.Core.Exporting.DiscImage")!
+            .GetMethod("DetectLayout", BindingFlags.Static | BindingFlags.Public)!.Invoke(null, [imagePath])!;
+        bool accepted = (bool)method.Invoke(null,
+        [
+            source, layout, catalog, target, null,
+            (long)TargetBase + TableRelative, (long)TableRelative, 0,
+            document.RootElement.GetProperty("label").GetString()!, document.RootElement,
+            document.RootElement.GetProperty("crossLevelTemplate"),
+            Enum.Parse(method.GetParameters()[11].ParameterType, "Candidate"),
+            patches, writtenOffsets, shared, skipped
+        ])!;
+        return (accepted, patches, skipped, writtenOffsets.Count, shared.Count);
+    }
+
+    static object CandidateEdit(string label, string family, int sourceTrueIndex, params (int Offset, int Value)[] overrides) => new
+    {
+        label, trueIndex = 0, editKind = "update", typeHex = "0x20", stateHex = "0x00",
+        sourceByte36Hex = "0xC2", sourceByte37Hex = "0x00", sourceByte4FHex = "0x00",
+        flag4AHex = "0x10", flag4BHex = "0x54", yawByteHex = "0x40",
+        rawEdited = new { x = 1100, y = 2200, z = 3300 },
+        sourceByteEdits = overrides.Select(item => new { offset = item.Offset, value = item.Value }).ToArray(),
+        crossLevelTemplate = new { id = "synthetic.existing-slot", sourceLevelKey = "peacekeepers", sourceLevelName = "Peace Keepers",
+            sourceTrueIndex, family, requiredExporterFeature = CrossLevelSwapCatalogBuilder.CandidateExporterFeature }
+    };
+
+    static string DescribePatches(IEnumerable<MobySourcePatch> patches) => string.Join('\n', patches.Select(patch =>
+        $"{patch.Kind}|{patch.WadRelativeOffset}|{patch.BeforeHexPreview}|{patch.AfterHexPreview}"));
 }
 
 static void Require(bool condition, string message)

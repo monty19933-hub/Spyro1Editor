@@ -2598,31 +2598,27 @@ public static class MobySourcePatchExporter
         if (greenWizardResidentCandidate)
             donorRecord[0x53] = targetRecord[0x53];
 
-        string specialDataDescription = "";
-        if (enemySwap && BitConverter.ToUInt32(donorRecord, 0) != 0)
+        // Authored raw bytes are applied after copying the donor and preserving
+        // target ownership. Recheck this candidate route's exact contract before
+        // staging anything; never silently discard unsupported authored edits.
+        if ((chestSwap || enemySwap) && donorRecord[TypeOffset] is not (0x18 or 0x20))
         {
-            CrossLevelAppendDonor donor = new(
-                sourceLevel,
-                sourceTableWadOffset,
-                sourceTableRelativeOffset,
-                sourceTrueIndex,
-                "ExistingSlotCandidate");
-            if (!TryAppendCrossLevelSpecialData(
-                stream,
-                layout,
-                targetLevel,
-                targetTableWadOffset,
-                targetTableRelativeOffset,
-                donor,
-                targetTrueIndex,
-                label,
-                donorRecord,
-                patches,
-                writtenWadOffsets,
-                sharedCrossLevelSpecialClusters,
-                skippedEdits,
-                out specialDataDescription))
+            skippedEdits.Add($"{label}: authored render type 0x{donorRecord[TypeOffset]:X2} is outside the existing chest/enemy slot candidate writer (0x18 or 0x20).");
+            return false;
+        }
+        if (chestSwap &&
+            (!donorRecord.AsSpan(0x00, 4).SequenceEqual(targetRecord.AsSpan(0x00, 4)) ||
+             !donorRecord.AsSpan(0x38, 0x0E).SequenceEqual(targetRecord.AsSpan(0x38, 0x0E))))
+        {
+            skippedEdits.Add($"{label}: authored override changes protected target chest properties (+0x00..03) or behavior bytes (+0x38..45). Use an explicit dependency-bundle route instead of the ordinary shell candidate.");
+            return false;
+        }
+        if (enemySwap)
+        {
+            NativeMobyDependencyFacts authoredDependencies = NativeMobyDependencyFacts.FromRecord(donorRecord);
+            if (!authoredDependencies.CanUseSelfContainedRowCandidate)
             {
+                skippedEdits.Add($"{label}: authored record is not self-contained: {authoredDependencies.RowOnlyDependencyReason} Use an explicit dependency-bundle route instead of the self-contained enemy candidate.");
                 return false;
             }
         }
@@ -2654,7 +2650,7 @@ public static class MobySourcePatchExporter
         bool wizardPeakInPlaceControl = greenWizardResidentCandidate &&
             string.Equals(LevelCatalog.NormalizeKey(targetLevel.Key), "wizardpeak", StringComparison.OrdinalIgnoreCase);
         string behaviorDescription = chestSwap
-            ? " Target chest behavior/reward bytes were preserved while borrowing the donor chest shell."
+            ? " Target properties pointer (+0x00..03) and behavior bytes (+0x38..45) were preserved while borrowing the donor chest shell; reward byte +0x53 remains independently editable."
             : greenWizardResidentCandidate
             ? magicCraftersWizardInPlaceControl
                 ? $" The selected enemy's XYZ, yaw, culling sector, pod/group, and reward stay in this slot. The v2 control installs donor T{greenWizardResidentRoute!.DonorTrueIndex}'s private 0x{greenWizardResidentRoute.PropertiesBytes:X} {routePointDescription} properties in T{targetTrueIndex}'s existing extent, removes its stale route-padding fixup, and does not resize or shift scene components."
@@ -2663,8 +2659,8 @@ public static class MobySourcePatchExporter
                 : $" The selected enemy's XYZ, yaw, culling sector, pod/group, and reward stay in this slot after the composed {targetLevel.DisplayName} resident-bundle step expands the native properties component for a private 0x{greenWizardResidentRoute!.PropertiesBytes:X} Wizard block, translates donor T{greenWizardResidentRoute.DonorTrueIndex}'s {routePointDescription} route, shifts the pod/collision/fixup components intact, and appends the internal-pointer fixup."
             : " Donor enemy behavior bytes were retained; this self-contained classification still requires DuckStation validation.";
         string swapDescription = greenWizardResidentCandidate
-            ? $"{(greenWizardResidentRoute!.NormalCreateBinReady ? "Verified" : "Guarded")} {targetLevel.DisplayName} resident-bundle replacement: replace {targetLevel.DisplayName} T{targetTrueIndex} with {sourceLevel.DisplayName} donor T{sourceTrueIndex}. Target-resident actor 0x{donorActorId:X4} uses root 0x{targetActorRoot:X}. Source object count remains {targetLevel.SourceRecordCount}; no row is appended. Registered structural recipe {greenWizardResidentRoute.RecipeId} completes this source-row patch during {(residentBuildMode == GreenWizardResidentSwapBuildMode.Normal ? "normal Create BIN" : "Create Swap Test")}.{placementSectorDescription}{behaviorDescription}{specialDataDescription}"
-            : $"Disposable cross-level existing-slot candidate: replace {targetLevel.DisplayName} T{targetTrueIndex} with {sourceLevel.DisplayName} donor T{sourceTrueIndex}. Target-resident actor 0x{donorActorId:X4} uses root 0x{targetActorRoot:X}. Source object count remains {targetLevel.SourceRecordCount}; no row is appended.{placementSectorDescription}{behaviorDescription}{specialDataDescription}";
+            ? $"{(greenWizardResidentRoute!.NormalCreateBinReady ? "Verified" : "Guarded")} {targetLevel.DisplayName} resident-bundle replacement: replace {targetLevel.DisplayName} T{targetTrueIndex} with {sourceLevel.DisplayName} donor T{sourceTrueIndex}. Target-resident actor 0x{donorActorId:X4} uses root 0x{targetActorRoot:X}. Source object count remains {targetLevel.SourceRecordCount}; no row is appended. Registered structural recipe {greenWizardResidentRoute.RecipeId} completes this source-row patch during {(residentBuildMode == GreenWizardResidentSwapBuildMode.Normal ? "normal Create BIN" : "Create Swap Test")}.{placementSectorDescription}{behaviorDescription}"
+            : $"Disposable cross-level existing-slot candidate: replace {targetLevel.DisplayName} T{targetTrueIndex} with {sourceLevel.DisplayName} donor T{sourceTrueIndex}. Target-resident actor 0x{donorActorId:X4} uses root 0x{targetActorRoot:X}. Source object count remains {targetLevel.SourceRecordCount}; no row is appended.{placementSectorDescription}{behaviorDescription}";
         NativeMobyDependencyFacts finalCandidate = NativeMobyDependencyFacts.FromRecord(donorRecord);
         if (!finalCandidate.TryValidateActorBinding(donorDependencies.ActorId,
                 ReadPlannedActorRoots(stream, layout, targetTableWadOffset - targetTableRelativeOffset, patches),
