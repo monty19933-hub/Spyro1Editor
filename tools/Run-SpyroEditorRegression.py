@@ -24,10 +24,15 @@ CORE_CASES = (
     ("MobyWadReaderSmoke", "MOBY_WAD_READER_SMOKE_OK"),
     ("MobyPlanTransactionSmoke", "MOBY_PLAN_TRANSACTION_SMOKE_OK"),
     ("NativeMobyDependencyFactsSmoke", "NATIVE_MOBY_DEPENDENCY_FACTS_SMOKE_OK"),
+    ("NativeCollisionIndexSmoke", "NATIVE_COLLISION_INDEX_SMOKE_OK"),
+    ("NativeRelocationMapSmoke", "NATIVE_RELOCATION_MAP_SMOKE_OK"),
+    ("WadGrowthGapSmoke", "WAD_GROWTH_GAP_SMOKE_OK"),
+    ("FixedTailPrivateRecordSmoke", "FIXED_TAIL_IMAGE_PROOF_CASES_OK"),
     ("Id65AuthoringMobyDependencyBundleCompilerSmoke", "NATIVE_SCENE_PROPERTIES_LINKER_SMOKE_OK"),
     ("CombinedExportPublicationSmoke", "COMBINED_EXPORT_PUBLICATION_SMOKE_OK"),
     ("DiagnosticsBundleSmoke", "DIAGNOSTICS_BUNDLE_SMOKE_OK"),
     ("UnusedLevel65MusicOwnershipClosureSmoke", "ID65_MUSIC_SELECTION_COMPILER_SMOKE_OK"),
+    ("Id65AuthoringMusicBuildInputSmoke", "ID65_AUTHORING_MUSIC_BUILD_INPUT_SMOKE_OK"),
     ("StructuralCompositionSmoke", "STRUCTURAL_COMPOSITION_SMOKE_OK"),
     ("CrossLevelCandidateFingerprintSmoke", "CROSS_LEVEL_CANDIDATE_FINGERPRINT_SMOKE_OK"),
     ("TextureHistoryWorkspaceSmoke", "TEXTURE_HISTORY_WORKSPACE_SMOKE_OK"),
@@ -41,6 +46,7 @@ CORE_CASES = (
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
 CASE_ARGUMENTS = {
+    "FixedTailPrivateRecordSmoke": ["--source-free-image-proof"],
     "Id65AuthoringMobyDependencyBundleCompilerSmoke": ["--source-free-properties-linker"],
     "UnusedLevel65MusicOwnershipClosureSmoke": ["--source-free-music-selection"],
 }

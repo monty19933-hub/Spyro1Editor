@@ -14,6 +14,12 @@ catalogue regression. Universal asset placement and a fully authored blank
 level remain unfinished. No installed application was replaced or release
 published by this stabilization pass.
 
+Development after `c15f3b1` continues in
+[the native asset phase record](native-asset-development-phase.md). That phase
+adds reusable mutable properties linkage, typed relocation, authored collision
+isolation and composed music candidates. The stabilization results below remain
+historical baseline evidence, not acceptance of those new outputs.
+
 ## Architecture
 
 The production application is `src/Spyro.Editor.App`, an Avalonia desktop

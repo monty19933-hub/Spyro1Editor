@@ -143,3 +143,73 @@ source/output corruption. Evidence is retained in
 Historical registry hashes and authorization remain unchanged. The new reports
 explicitly separate `HistoricalRecipeEvidence=true` from `RuntimeVerified=false`:
 these current parity-repaired images have no new gameplay verification.
+
+## Remaining acceptance and next dependency boundary
+
+New Wizard, collision and music artifacts are independently published research
+candidates, not new normal-Create-BIN capabilities. The installed application
+was not replaced. This phase does not claim every Moby/texture in every level,
+an absent actor's executable/model import, arbitrary authored geometry, or a
+finished blank-level UI.
+
+1. Obtain an exclusive DuckStation test window for the exact retained candidates.
+   The [runtime deferral record](runtime-evidence/2026-09-04-native-development-runtime-deferred.md)
+   records the concurrent Soul Reaver session and focused acceptance checks.
+   No emulator settings were changed by this phase, and a preflight copy taken
+   during the other task's session must not be used as a restore baseline.
+2. Extend native owned-properties schemas from the actual C2 chest evidence,
+   proving allocation size, mutability, every internal pointer and all retired
+   destination references before admitting new private instances. Pointer
+   spacing, zero padding and display labels are not ownership certificates.
+3. Model and relocate genuinely absent family resources: executable/overlay
+   behavior, type tables, models/animation, effects and textures. The current
+   Wizard candidate explicitly retains resident Wizard/lightning resources;
+   it imports a private donor properties graph, not those absent resources.
+4. Add coherent project persistence for canonical music intent before exposing
+   its controls. Integrate collision/geometry through shared native compilers
+   and verified publication; do not give a document or UI toggle capabilities
+   that its native output cannot yet implement.
+5. Establish remaining collision/scene consumers before removing source triangle
+   storage or other native structures. Retiring inherited lookup cells is
+   progress toward a blank substrate, not proof of a minimal complete level.
+
+All existing unsafe-dependency refusals, historical promotion identities and
+normal export authorization remain in force. Reusable compiled infrastructure
+is the basis for widening support; catalog availability is not sufficient.
+
+## Integrated acceptance of this source tree
+
+The final serial Release run of
+`python3 tools/Run-SpyroEditorRegression.py --build-all --with-source-qa`
+passed **223 command-level steps with zero failures**:
+
+- All 195 discovered C# projects built successfully.
+- All 26 registered source-free C# suites passed, including the new relocation,
+  collision codec, WAD allocation, music-input and fixed-tail readback cases.
+  The consolidated properties entry point includes immutable, mutable and
+  independent donor/destination regressions.
+- The process runner's eight Python unit cases passed.
+- The complete real-source offline suite passed in 891.79 seconds. This includes
+  35-level/2,070-texture material coverage, blank-lab publication and headless UI,
+  native terrain goldens/refusals, object/catalog/treasure checks, source
+  write/readback, workspace safeguards, and focused headless rendering.
+
+Logs and machine-readable summary are retained at:
+`/var/folders/ly/6mrqskxj60717y5ln83x8yjh0000gn/T/spyro-regression-gjlxm641/summary.json`.
+The exact source-aware log is `222-source-offline-qa.log` in that directory.
+The C# source was frozen for the entire run; the tested implementation is in
+`b2376e8` and preceding phase commits, with the new runner registrations included
+in the final checkpoint. The standalone source-backed new-candidate tests above
+are additional targeted evidence, not implicitly part of every default run.
+
+Offline QA's final source hash guard passed:
+
+- Original BIN: `fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37`.
+- Original CUE: `05142502c75d3a0b6374003a8fe41893d6faf0ad55863ff0b62a265a1b152766`.
+
+The suite cleaned only its disposable object readback images; no large retained
+control-role proof BINs were generated. New immutable Wizard, collision and music
+candidates and the separate fixed-tail/growth forensic outputs remain retained.
+No installed application, original game image, existing candidate set or
+emulator settings were replaced by this phase. Build and source/readback
+acceptance remain separate from the deferred current-candidate gameplay gate.
