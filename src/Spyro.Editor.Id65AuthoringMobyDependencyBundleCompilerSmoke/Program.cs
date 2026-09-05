@@ -2,6 +2,18 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Spyro.Editor.Core.Exporting;
 
+if (args.Length == 2 && args[0] == "--source-backed-native-wizard-disc-plan")
+{
+    NativeGreenWizardCandidateDiscCases.Run(args[1]);
+    return;
+}
+
+if (args.Length == 2 && args[0] == "--source-backed-native-wizard-candidates")
+{
+    NativeGreenWizardPropertiesCandidateCases.Run(args[1]);
+    return;
+}
+
 if (args.SequenceEqual(new[] { "--source-free-cross-scene-properties-linker" }))
 {
     NativeMutableScenePropertiesLinkerCases.RunIndependentDonor();

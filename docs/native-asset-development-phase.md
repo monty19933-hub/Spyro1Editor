@@ -39,7 +39,18 @@ settings remain separate preservation and runtime acceptance boundaries.
   regressions. The existing Wizard Peak T6 -> T24 adapter also matches all four
   frozen native output hashes with whole-scene inverse/complement checks.
   This is a reusable leaf plus an unchanged positive production route, not yet
-  proof of the new cross-level candidate under development.
+  gameplay proof of the new cross-level candidates.
+- The new guarded Wizard compiler/publisher passes four native scene goldens,
+  12 invalid requests, 19 physical-readback corruptions and four publication
+  guards. Two new BIN/CUE/input/receipt sets are published and reverified:
+  Wizard Peak T6 -> Magic Crafters T27 (three changed raw sectors), and T6 ->
+  Wizard Peak T17 + T24 (two private mutable instances, four changed sectors).
+  Both retain destination-native Wizard/lightning resources and behavior;
+  neither imports missing executable/overlay code or claims a new actor family.
+  See [exact dependency contracts and artifact hashes](native-green-wizard-dependency-contract.md).
+  [The next-family investigation](research/next-native-moby-family-evidence.md)
+  identifies ordinary C2 chests as a schema-first next step, not newly approved
+  imports; scenery examples demonstrate why pointer spacing cannot prove size.
 - Authored music uses a canonical build-input envelope around the unchanged
   schema-6 document, not a silent document migration. All six historic schema
   goldens and 46 built-in track selections pass. A typed WAD/executable disc
