@@ -158,8 +158,8 @@ linked props, routes, controllers, rewards, and class initialization still need
 family-specific proof.
 
 The output folder includes `Spyro Editor - All Saved Edits.build-safety.json`
-and `.md`. These are metadata-only reports and are safe to attach to a GitHub
-issue; do not attach the generated BIN/CUE.
+and `.md`. Review reports for private paths and native byte excerpts before
+sharing; do not attach the generated BIN/CUE or full native patch plans.
 
 ## Reporting Issues
 
@@ -168,10 +168,17 @@ your operating system, the level, the editor action, and what happened in-game.
 
 Use `More` > `Diagnostics` to add a short tester note and copy the
 current report. After `Create BIN`, the output folder also contains a matching
-`.diagnostics.txt` report and `.diagnostics.zip` support bundle. The bundle
-includes the relevant editor-generated edit manifests, export summaries, patch
-plans, and session log, but excludes BIN/CUE images and other game data. If the
-editor itself closes unexpectedly, reopen it and use `Copy Last Crash`.
+`.diagnostics.txt` report and `.diagnostics.zip` support bundle. In the current
+development checkout, the ZIP contains only fixed diagnostic counts and an
+opaque hash/size inventory. Raw reports, logs, patch plans, tester notes and
+paths stay local; their hashes allow matching a bundle to exact local files.
+If the editor itself closes unexpectedly, reopen it and use `Copy Last Crash`.
+Copied reports are raw diagnostic text: review them before sharing.
+
+Older packaged builds can include raw JSON/TXT/LOG files in their ZIPs, including
+native byte payloads encoded as text. Do not treat an older bundle's
+"metadata only" label as a guarantee. This checkout's change is not evidence
+that an already-installed or publicly distributed app has been updated.
 
 Do not upload game images, BIOS files, patched BIN/CUE output, emulator saves,
 save states, RAM/VRAM dumps, extracted game files, or texture dumps. Screenshots,

@@ -35801,7 +35801,8 @@ void ReportEditorDiagnosticsSmoke()
             "Object pasted",
             "diagnostics smoke exception",
             outputCue,
-            "does not contain BIN/CUE/ISO/ROM/BIOS data"
+            "native byte excerpts",
+            "review before sharing"
         ];
         foreach (string required in requiredReportText)
         {
@@ -35812,26 +35813,40 @@ void ReportEditorDiagnosticsSmoke()
         using (ZipArchive archive = ZipFile.OpenRead(export.BundlePath))
         {
             string[] entries = archive.Entries.Select(entry => entry.FullName).ToArray();
-            if (!entries.Any(entry => entry.EndsWith("darkhollow-native-edits.json", StringComparison.OrdinalIgnoreCase)) ||
-                !entries.Any(entry => entry.EndsWith("darkhollow-moby-source-patch-plan.json", StringComparison.OrdinalIgnoreCase)))
-            {
-                throw new InvalidOperationException("Diagnostics support ZIP is missing edit or patch-plan JSON metadata.");
-            }
+            if (!entries.Order(StringComparer.Ordinal).SequenceEqual(
+                new[] { "bundle-manifest.txt", "support-inventory.json" }))
+                throw new InvalidOperationException("Diagnostics support ZIP copied raw diagnostic or artifact files.");
 
-            if (entries.Any(entry => entry.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) ||
-                                     entry.EndsWith(".cue", StringComparison.OrdinalIgnoreCase) ||
-                                     entry.EndsWith(".iso", StringComparison.OrdinalIgnoreCase) ||
-                                     entry.EndsWith(".rom", StringComparison.OrdinalIgnoreCase)))
+            using StreamReader reader = new(archive.GetEntry("support-inventory.json")!.Open());
+            string inventoryText = reader.ReadToEnd();
+            using JsonDocument inventory = JsonDocument.Parse(inventoryText);
+            JsonElement root = inventory.RootElement;
+            if (root.GetProperty("schemaVersion").GetInt32() != 1 ||
+                root.GetProperty("policy").GetString() != "inventory-only")
+                throw new InvalidOperationException("Diagnostics support ZIP has an unexpected inventory contract.");
+            foreach (string artifact in new[] { editPath, planPath })
             {
-                throw new InvalidOperationException("Diagnostics support ZIP included a forbidden game/disc file type.");
+                string expectedSha = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(artifact))).ToLowerInvariant();
+                long expectedLength = new FileInfo(artifact).Length;
+                if (!root.GetProperty("entries").EnumerateArray().Any(entry =>
+                    entry.GetProperty("role").GetString() == "artifact" &&
+                    entry.GetProperty("classification").GetString() == "json" &&
+                    entry.GetProperty("state").GetString() == "hashed" &&
+                    entry.GetProperty("sha256").GetString() == expectedSha &&
+                    entry.GetProperty("byteLength").GetInt64() == expectedLength))
+                    throw new InvalidOperationException("Diagnostics support ZIP lost the exact local artifact's hash/size provenance.");
             }
+            if (inventoryText.Contains(tempRoot, StringComparison.Ordinal) ||
+                inventoryText.Contains("diagnostics smoke exception", StringComparison.Ordinal) ||
+                inventoryText.Contains("Dark Hollow", StringComparison.Ordinal))
+                throw new InvalidOperationException("Diagnostics inventory copied raw paths, exception text or context.");
         }
 
         log.MarkCleanShutdown();
         if (File.Exists(log.ActiveSessionMarkerPath))
             throw new InvalidOperationException("Diagnostics smoke did not clear the active-session marker on clean shutdown.");
 
-        Console.WriteLine($"Diagnostics smoke: report, exception capture, interrupted-session detection, and metadata-only ZIP passed. Report: {export.ReportPath}");
+        Console.WriteLine($"Diagnostics smoke: local report, exception capture, interrupted-session detection, and inventory-only ZIP passed. Report: {export.ReportPath}");
     }
     finally
     {

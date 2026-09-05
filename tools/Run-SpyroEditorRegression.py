@@ -26,6 +26,7 @@ CORE_CASES = (
     ("NativeMobyDependencyFactsSmoke", "NATIVE_MOBY_DEPENDENCY_FACTS_SMOKE_OK"),
     ("Id65AuthoringMobyDependencyBundleCompilerSmoke", "NATIVE_SCENE_PROPERTIES_LINKER_SMOKE_OK"),
     ("CombinedExportPublicationSmoke", "COMBINED_EXPORT_PUBLICATION_SMOKE_OK"),
+    ("DiagnosticsBundleSmoke", "DIAGNOSTICS_BUNDLE_SMOKE_OK"),
     ("StructuralCompositionSmoke", "STRUCTURAL_COMPOSITION_SMOKE_OK"),
     ("CrossLevelCandidateFingerprintSmoke", "CROSS_LEVEL_CANDIDATE_FINGERPRINT_SMOKE_OK"),
     ("TextureHistoryWorkspaceSmoke", "TEXTURE_HISTORY_WORKSPACE_SMOKE_OK"),

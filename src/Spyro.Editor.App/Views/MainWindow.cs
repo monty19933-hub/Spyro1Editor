@@ -13297,7 +13297,7 @@ public sealed partial class MainWindow : Window
                 ArtifactPaths: diagnosticArtifacts));
             string diagnosticStatus = string.IsNullOrWhiteSpace(diagnostics.BundlePath)
                 ? " Optional diagnostics unavailable; the published BIN/CUE are ready to test."
-                : $" Support ZIP: {Path.GetFileName(diagnostics.BundlePath)}.";
+                : $" Support ZIP (inventory only): {Path.GetFileName(diagnostics.BundlePath)}.";
             _statusText.Text = successStatus + diagnosticStatus;
         }
         catch (Exception ex)
@@ -26163,8 +26163,9 @@ public sealed partial class MainWindow : Window
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(31, 38, 45))
         });
-        panel.Children.Add(NewSmallNote("The support ZIP contains logs and editor-generated JSON/TXT metadata only. Game BIN/CUE data, textures, and audio are excluded."));
-        panel.Children.Add(SectionLabel("What happened?"));
+        panel.Children.Add(NewSmallNote("The support ZIP contains fixed diagnostic metadata and a file inventory (classifications, sizes, and SHA-256 hashes). Original files, report text, logs, paths, and tester notes are not included. Original files and reports stay on your computer."));
+        panel.Children.Add(NewSmallNote("Local reports and copied crash details may contain paths, notes, and native byte excerpts. Review them before sharing."));
+        panel.Children.Add(SectionLabel("What happened? (local report only)"));
         panel.Children.Add(noteBox);
         panel.Children.Add(pathText);
 
@@ -26187,7 +26188,7 @@ public sealed partial class MainWindow : Window
             }
             await clipboard.SetTextAsync(await File.ReadAllTextAsync(reportPath));
             pathText.Text = BuildDiagnosticsPathText(reportPath);
-            _statusText.Text = $"Copied the diagnostic report. File: {reportPath}";
+            _statusText.Text = $"Copied the local diagnostic report. Review it before sharing. File: {reportPath}";
         }));
 
         Button copyCrash = NewAsyncButton("Copy Last Crash", async () =>
@@ -26206,7 +26207,7 @@ public sealed partial class MainWindow : Window
                 return;
             }
             await clipboard.SetTextAsync(await File.ReadAllTextAsync(crashPath));
-            _statusText.Text = $"Copied the last editor crash report. File: {crashPath}";
+            _statusText.Text = $"Copied the local crash report. Review it before sharing. File: {crashPath}";
         });
         copyCrash.IsEnabled = File.Exists(EditorDiagnostics.Current.LatestCrashPath);
         actions.Children.Add(copyCrash);
@@ -26223,7 +26224,7 @@ public sealed partial class MainWindow : Window
             }
 
             pathText.Text = BuildDiagnosticsPathText(reportPath, bundlePath);
-            _statusText.Text = $"Created support ZIP: {bundlePath}";
+            _statusText.Text = $"Created inventory-only support ZIP: {bundlePath}";
         }));
         actions.Children.Add(NewButton("Open Diagnostics Folder", () => OpenPath(EditorDiagnostics.Current.LogDirectory)));
         actions.Children.Add(NewButton("Open Latest Report", () =>
@@ -26256,7 +26257,7 @@ public sealed partial class MainWindow : Window
             $"Latest report: {reportPath}"
         ];
         if (!string.IsNullOrWhiteSpace(bundlePath))
-            lines.Add($"Support ZIP: {bundlePath}");
+            lines.Add($"Support ZIP (inventory only): {bundlePath}");
         if (File.Exists(EditorDiagnostics.Current.LatestCrashPath))
             lines.Add($"Last crash: {EditorDiagnostics.Current.LatestCrashPath}");
         return string.Join(Environment.NewLine, lines);

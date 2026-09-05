@@ -2,7 +2,9 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using Spyro.Editor.App.Views;
@@ -35,6 +37,8 @@ internal static class PublishedDiagnosticsCases
             string finalPrefix = Path.Combine(output, "Spyro Editor - All Saved Edits");
             foreach (string extension in new[] { ".bin", ".cue", ".build-safety.json", ".build-safety.md" })
                 File.WriteAllText(finalPrefix + extension, "historical unrelated artifact " + extension);
+            string[] historicalSafetyHashes = new[] { ".build-safety.json", ".build-safety.md" }
+                .Select(extension => Sha256(File.ReadAllBytes(finalPrefix + extension))).ToArray();
 
             Type targetType = typeof(MainWindow).GetNestedType("EditedLevelExportTarget", BindingFlags.NonPublic)!;
             Array targets = Array.CreateInstance(targetType, 1);
@@ -60,9 +64,8 @@ internal static class PublishedDiagnosticsCases
 
             Complete((Task)Invoke(window, "CompleteCombinedExportPublicationAsync",
                 sourceImage, output, targets, result, "Artisans [music=true]", null)!);
-            using (ZipArchive bundle = ZipFile.OpenRead(finalPrefix + ".diagnostics.zip"))
-                Require(!bundle.Entries.Any(entry => entry.Name.EndsWith(".build-safety.json", StringComparison.Ordinal)),
-                    "Music-only support ZIP contains a historical Build Safety report.");
+            using (JsonDocument inventory = ReadSupportInventory(finalPrefix + ".diagnostics.zip"))
+                RequireHistoricalSafetyExcluded(inventory.RootElement, historicalSafetyHashes);
 
             // A captured report is serialized from this invocation's object,
             // even if the reusable UI report files contain unrelated content.
@@ -76,13 +79,25 @@ internal static class PublishedDiagnosticsCases
             Require(File.ReadAllText(snapshot).Contains("current-report-provenance", StringComparison.Ordinal) &&
                 File.Exists(Path.Combine(buildDirectory, "current.build-safety.md")),
                 "Current safety snapshot was not serialized into the successful run directory.");
-            using (ZipArchive bundle = ZipFile.OpenRead(finalPrefix + ".diagnostics.zip"))
+            using (JsonDocument inventory = ReadSupportInventory(finalPrefix + ".diagnostics.zip"))
             {
-                ZipArchiveEntry[] safety = bundle.Entries.Where(entry => entry.Name.EndsWith(".build-safety.json", StringComparison.Ordinal)).ToArray();
-                Require(safety.Length == 1, "Support ZIP did not include exactly its current safety snapshot.");
-                using StreamReader reader = new(safety[0].Open());
-                Require(reader.ReadToEnd().Contains("current-report-provenance", StringComparison.Ordinal),
-                    "Support ZIP used a reusable historical report instead of the captured current report.");
+                byte[] snapshotBytes = File.ReadAllBytes(snapshot);
+                string snapshotHash = Sha256(snapshotBytes);
+                JsonElement[] safety = inventory.RootElement.GetProperty("entries").EnumerateArray()
+                    .Where(entry => entry.GetProperty("role").GetString() == "artifact" &&
+                        entry.GetProperty("classification").GetString() == "json" &&
+                        entry.GetProperty("state").GetString() == "hashed" &&
+                        string.Equals(entry.GetProperty("sha256").GetString(), snapshotHash, StringComparison.OrdinalIgnoreCase) &&
+                        entry.GetProperty("byteLength").GetInt64() == snapshotBytes.LongLength)
+                    .ToArray();
+                Require(safety.Length == 1, "Support ZIP did not inventory exactly its captured current safety snapshot by SHA-256 and length.");
+                RequireHistoricalSafetyExcluded(inventory.RootElement, historicalSafetyHashes);
+            }
+            for (int index = 0; index < historicalSafetyHashes.Length; index++)
+            {
+                string extension = index == 0 ? ".build-safety.json" : ".build-safety.md";
+                Require(Sha256(File.ReadAllBytes(finalPrefix + extension)) == historicalSafetyHashes[index],
+                    "Creating an inventory-only support ZIP changed a retained local report.");
             }
 
             // A workspace directory may disappear/unmount after publication.
@@ -106,10 +121,46 @@ internal static class PublishedDiagnosticsCases
             Require(File.ReadAllBytes(finalPrefix + ".bin").AsSpan().SequenceEqual(publishedImage) &&
                 File.ReadAllText(finalPrefix + ".cue") == publishedCue, "Diagnostic failure altered the published BIN/CUE.");
             Require(failures.Count == 0, string.Join("\n", failures));
-            return "successfulCoordinator=1 staleSafetyExcluded=1 currentSafetySnapshotBundled=1 postpublicationDiagnosticFailurePreservesSuccess=1";
+            return "successfulCoordinator=1 staleSafetyExcluded=1 currentSafetySnapshotInventoried=1 postpublicationDiagnosticFailurePreservesSuccess=1";
         }
         finally { workspaceField.SetValue(window, previousWorkspace); }
     }
+
+    private static JsonDocument ReadSupportInventory(string path)
+    {
+        using ZipArchive bundle = ZipFile.OpenRead(path);
+        Require(bundle.Entries.Select(entry => entry.FullName).Order(StringComparer.Ordinal)
+                .SequenceEqual(new[] { "bundle-manifest.txt", "support-inventory.json" }),
+            "Support ZIP copied raw report/log/artifact members instead of its fixed inventory files.");
+        string inventoryText = "";
+        foreach (ZipArchiveEntry entry in bundle.Entries)
+        {
+            using StreamReader reader = new(entry.Open());
+            string contents = reader.ReadToEnd();
+            Require(!contents.Contains("current-report-provenance", StringComparison.Ordinal) &&
+                !contents.Contains("historical unrelated artifact", StringComparison.Ordinal) &&
+                !contents.Contains("Artisans [music=true]", StringComparison.Ordinal),
+                "Support ZIP included raw report content instead of inventory provenance.");
+            if (entry.FullName == "support-inventory.json")
+                inventoryText = contents;
+        }
+        JsonDocument inventory = JsonDocument.Parse(inventoryText);
+        Require(inventory.RootElement.GetProperty("schemaVersion").GetInt32() == 1 &&
+            inventory.RootElement.GetProperty("policy").GetString() == "inventory-only" &&
+            inventory.RootElement.GetProperty("entries").ValueKind == JsonValueKind.Array,
+            "Support ZIP has no recognized inventory-only schema.");
+        return inventory;
+    }
+
+    private static void RequireHistoricalSafetyExcluded(JsonElement inventory, IReadOnlyList<string> historicalHashes)
+    {
+        Require(!inventory.GetProperty("entries").EnumerateArray().Any(entry =>
+                entry.TryGetProperty("sha256", out JsonElement sha) && sha.ValueKind == JsonValueKind.String &&
+                historicalHashes.Contains(sha.GetString()!, StringComparer.OrdinalIgnoreCase)),
+            "Support ZIP inventoried a historical Build Safety report instead of current-build artifacts.");
+    }
+
+    private static string Sha256(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
 
     private static byte[] BuildMusicFixture()
     {

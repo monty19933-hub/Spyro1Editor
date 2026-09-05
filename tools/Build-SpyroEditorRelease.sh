@@ -520,9 +520,12 @@ disc image, then writes patched test BIN/CUE output to the output folder.
 This package does not include game data, BIOS files, emulator files, RAM dumps,
 patched discs, or extracted assets.
 
-Use Diagnostics in the editor to copy a crash/runtime-test report or create a
-metadata-only support ZIP. Create BIN writes a matching diagnostics report and
-support ZIP beside its output and never includes the BIN/CUE in that ZIP.
+Use Diagnostics to create an inventory-only support ZIP containing fixed
+diagnostic counts and file hashes/sizes. Raw report/log/patch-plan contents and
+paths are omitted. Create BIN attempts to write that ZIP and a detailed local
+report beside its output. Copied reports may contain paths, notes and native
+byte excerpts: review them before sharing. Older builds' ZIPs may contain raw
+patch payloads and require separate review.
 
 This research build exposes Advanced tools for disposable candidate tests.
 Unsafe append research BINs bypass normal enemy/chest export guards and may

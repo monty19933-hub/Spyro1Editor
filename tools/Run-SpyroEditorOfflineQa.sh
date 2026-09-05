@@ -80,7 +80,7 @@ Default smoke modes:
                                linked homeworld portal copy or write a BIN/CUE
   --level-text-smoke-only      all 35 level-name slots and longer-name pointers
   --level-music-smoke-only     built-in music choices and copied-BIN bytes
-  --diagnostics-smoke-only     crash/interruption reports and metadata-only ZIP
+  --diagnostics-smoke-only     local crash/interruption reports and inventory-only ZIP
   persistence smoke           external project redirect, non-destructive legacy
                                migration, conflict preservation, and snapshots
   update smoke                GitHub beta selection and SHA-256/tamper rejection
@@ -614,7 +614,7 @@ run_smoke "moby build-safety smoke" "--moby-build-safety-smoke-only"
 run_smoke "linked homeworld portal sky capacity smoke" "--linked-portal-sky-safety-smoke-only"
 run_smoke "level-name smoke" "--level-text-smoke-only"
 run_smoke "level-music smoke" "--level-music-smoke-only"
-run_smoke "diagnostics and metadata-only support ZIP smoke" "--diagnostics-smoke-only"
+run_smoke "diagnostics and inventory-only support ZIP smoke" "--diagnostics-smoke-only"
 run_smoke "object write/readback smoke" "--object-smoke-only" "--clean-object-smoke-bins"
 
 echo

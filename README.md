@@ -143,11 +143,13 @@ Current release features include:
 - Red, green, blue, yellow, and purple loose gems use one consistent red-gem
   icon silhouette in Edit Map and Game Camera; the four alternate colors are exact
   color-only variants of the unchanged red artwork.
-- Built-in diagnostics record editor actions, selected source/level state, edit
-  counts, export plans, and unhandled exceptions. The Diagnostics window can
-  copy the current report or last crash and create a metadata-only support ZIP;
-  every successful `Create BIN` also writes a report and support ZIP beside the
-  generated CUE/BIN without including copyrighted game data.
+- Built-in diagnostics retain detailed reports, patch plans and exceptions
+  locally. These can contain paths, tester notes and native byte excerpts;
+  review them before sharing. In this development checkout, support ZIPs contain
+  only bounded event counts and a hash/size inventory, not raw reports, logs,
+  plans, filenames or game assets. `Create BIN` attempts to write a local report
+  and this inventory ZIP beside the generated CUE/BIN. See the
+  [support-bundle contract](docs/diagnostic-support-bundle-contract.md).
 - A native Moby `Build Safety` inspector shows static rows, projected dynamic
   Moby/props capacity, persistent-index headroom, true appends, slot reuse, and
   skipped edits for every saved object level. `Create BIN` runs it automatically,

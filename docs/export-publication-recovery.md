@@ -20,9 +20,11 @@ untouched and reports success with a diagnostics warning. Build Safety evidence
 comes from the report captured by this Create BIN invocation, serialized into
 its unique run directory. Name/music/sky-only builds do not attach historical
 fixed-prefix Build Safety reports. Those reusable UI reports may remain in the
-output folder, but are not evidence for the new build. The support ZIP includes
-the current JSON snapshot when inspection ran; its Markdown companion remains
-in the run directory under the existing JSON/TXT/LOG-only bundle policy.
+output folder, but are not evidence for the new build. The support ZIP inventories
+the exact current JSON snapshot by hash and size when inspection ran; it does
+not embed that file's contents. The JSON and Markdown originals remain local
+in the run directory. See the [support-bundle contract](diagnostic-support-bundle-contract.md)
+for its bounded, inventory-only content policy.
 
 The previous files are moved into a unique `.export-recovery-<id>` directory
 before any new final file is installed. A flushed `recovery.json` records the
