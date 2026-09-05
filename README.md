@@ -73,6 +73,13 @@ notarization credentials are available.
 
 The active app lives in `src/Spyro.Editor.App`.
 
+For the current development checkout, see the
+[engineering architecture and stabilization plan](docs/engineering-architecture-and-plan.md).
+It distinguishes development-only ID65 work and focused runtime observations
+from the released capabilities below. Run `python3 tools/Run-SpyroEditorRegression.py`
+for the source-free regression gate, or add `--build-all` to compile every
+project without executing research candidate generators.
+
 Current release features include:
 
 - **ID65 Blank-Level Lab (V5 beta):** the Level workspace can build a versioned,
