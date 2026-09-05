@@ -2,9 +2,29 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Spyro.Editor.Core.Exporting;
 
+if (args.SequenceEqual(new[] { "--source-free-cross-scene-properties-linker" }))
+{
+    NativeMutableScenePropertiesLinkerCases.RunIndependentDonor();
+    return;
+}
+
+if (args.Length == 2 && args[0] == "--source-backed-wizard-properties")
+{
+    NativeMutableWizardPropertiesSourceCases.Run(args[1]);
+    return;
+}
+
+if (args.SequenceEqual(new[] { "--source-free-mutable-properties-linker" }))
+{
+    NativeMutableScenePropertiesLinkerCases.Run();
+    return;
+}
+
 if (args.SequenceEqual(new[] { "--source-free-properties-linker" }))
 {
     NativeScenePropertiesLinkerCases.Run();
+    NativeMutableScenePropertiesLinkerCases.Run();
+    NativeMutableScenePropertiesLinkerCases.RunIndependentDonor();
     return;
 }
 

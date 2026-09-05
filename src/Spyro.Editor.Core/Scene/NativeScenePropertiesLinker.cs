@@ -70,7 +70,7 @@ internal sealed class NativeScenePropertiesLinkPlan(
 /// does not discover free space, grow components, move opaque data, prove
 /// behavior closure or authorize publication. Scene-relative addresses only.
 /// </summary>
-internal static class NativeScenePropertiesLinker
+internal static partial class NativeScenePropertiesLinker
 {
     public static NativeScenePropertiesLinkPlan Compile(NativeScenePropertiesLinkRequest request)
     {

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Spyro.Editor.Core.Analysis;
 using Spyro.Editor.Core.Levels;
+using Spyro.Editor.Core.Scene;
 
 namespace Spyro.Editor.Core.Exporting;
 
@@ -92,6 +93,7 @@ public static class WizardPeakGreenWizardNativeSwapExporter
     private const string InstalledExtentSha256 = "0aef88ee09413e5ef08f685049698cca6b3e07846d1bafaf34cbf8627936ad73";
     private const string PointerFixupsInstalledSha256 = "24a9a1e0d22e8b10b480ad1f71fd3b92c234533e43daf0b1d4d238430ea87e5f";
     private const string InstalledRecordSha256 = "4316b75d1f06c73b8a49b545fcfe838dcf91e1b9a38a8cd16936c4371a6a2177";
+    private const string OriginalSceneSha256 = "1e204311534f03f09804d55ca833c62a1a3cc3665dc21d88de743d820103a951";
 
     public static WizardPeakGreenWizardNativeSwapPlan ApplyAndVerify(
         string imagePath,
@@ -239,36 +241,32 @@ public static class WizardPeakGreenWizardNativeSwapExporter
             throw new InvalidDataException("Wizard Peak T24's row, stale private pointer, or replacement fixup contract changed.");
         }
 
-        byte[] installedProperties = donorProperties.ToArray();
-        BinaryPrimitives.WriteUInt32LittleEndian(installedProperties, TargetPropertiesOffset + InternalRouteAnchorOffset);
-        WizardPeakGreenWizardRoutePoint[] translatedRoutes = TranslateRoutes(
-            donorRecord,
-            donorProperties,
-            candidateRecord,
-            installedProperties);
+        byte[] stagedRecord = DiscImage.ReadFileBytes(stream, layout, WadLba,
+            tableWadOffset + (TargetTrueIndex * RecordStride), RecordStride);
+        if (!stagedRecord.AsSpan().SequenceEqual(candidateRecord))
+            throw new InvalidDataException("The staged Wizard Peak T24 row does not match its exact planned precomposition bytes.");
+        // Ownership comes from the actual, hash-pinned original source scene,
+        // not from putting an old owner pointer back into an edited scene. The
+        // currently staged properties/fixups were separately checked above.
+        WizardPeakGreenWizardNativePropertiesCompilation compiledProperties = CompileNativeProperties(
+            ReadOriginalNativeScene(sourcePatchPlan.SourceImagePath), candidateRecord);
+        byte[] installedProperties = Convert.FromHexString(compiledProperties.LinkPlan.Writes
+            .Single(write => write.Offset == TargetPropertiesOffset).AfterHex);
+        WizardPeakGreenWizardRoutePoint[] translatedRoutes = compiledProperties.RoutePoints.ToArray();
         ValidateSha256(installedProperties, InstalledPropertiesSha256, "Wizard Peak installed T24 Green Wizard properties");
 
         byte[] installedExtent = targetExtentBefore.ToArray();
         installedProperties.CopyTo(installedExtent, 0);
         ValidateSha256(installedExtent, InstalledExtentSha256, "Wizard Peak installed T24 properties extent");
 
-        byte[] fixupsAfter = fixupsBefore.ToArray();
-        BinaryPrimitives.WriteUInt32LittleEndian(
-            fixupsAfter.AsSpan(sizeof(uint) + (staleFixupIndex * sizeof(uint)), sizeof(uint)),
-            ReplacementTargetFixup);
+        byte[] fixupsAfter = Convert.FromHexString(compiledProperties.LinkPlan.Writes
+            .Single(write => write.Offset == PointerFixupListOffset).AfterHex);
         ValidateSha256(fixupsAfter, PointerFixupsInstalledSha256, "Wizard Peak installed pointer-fixup list");
 
-        BinaryPrimitives.WriteUInt32LittleEndian(candidateRecord, TargetPropertiesOffset);
         byte donorPodOrGroup = GreenWizardRuntimeBundleCatalog.Manifest.InstanceSchema.PodOrGroupValue;
         if (donorRecord[PodOrGroupOffset] != donorPodOrGroup)
             throw new InvalidDataException($"Wizard Peak T6 pod/group expected 0x{donorPodOrGroup:X2}, found 0x{donorRecord[PodOrGroupOffset]:X2}.");
-        candidateRecord[PodOrGroupOffset] = donorPodOrGroup;
-        candidateRecord[RendererDistanceOffset] = donorRecord[RendererDistanceOffset];
-        candidateRecord[SourceVariantOffset] = donorRecord[SourceVariantOffset];
-        candidateRecord[StateOffset] = donorRecord[StateOffset];
-        candidateRecord[RewardOwnerOffset] = donorRecord[RewardOwnerOffset];
-        candidateRecord[RewardOffset] = beforeRecord[RewardOffset];
-        candidateRecord[YawByteOffset] = beforeRecord[YawByteOffset];
+        candidateRecord = Convert.FromHexString(compiledProperties.InstalledRecordHex);
         ValidateSha256(candidateRecord, InstalledRecordSha256, "Wizard Peak installed T24 Green Wizard row");
 
         DiscImage.WriteFileBytes(stream, layout, WadLba, sceneWadOffset + TargetPropertiesOffset, installedProperties);
@@ -333,6 +331,84 @@ public static class WizardPeakGreenWizardNativeSwapExporter
         Directory.CreateDirectory(Path.GetDirectoryName(outputPlanPath) ?? ".");
         File.WriteAllText(outputPlanPath, JsonSerializer.Serialize(plan, new JsonSerializerOptions { WriteIndented = true }));
         return plan;
+    }
+
+    internal static byte[] ReadOriginalNativeScene(string sourceImagePath)
+    {
+        DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
+        using FileStream source = File.OpenRead(sourceImagePath);
+        (long dataBase, int bytes) = ReadWadEntry(source, layout, DataEntry);
+        if (bytes != ExpectedDataBytes)
+            throw new InvalidDataException("The original Wizard Peak data entry does not match the checked source layout.");
+        byte[] header = DiscImage.ReadFileBytes(source, layout, WadLba, dataBase, 0x20);
+        if (BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(0x18)) != ExpectedSceneBase ||
+            BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(0x1C)) != ExpectedSceneBytes)
+            throw new InvalidDataException("The original Wizard Peak scene descriptor no longer matches its source certificate.");
+        byte[] scene = DiscImage.ReadFileBytes(source, layout, WadLba, dataBase + ExpectedSceneBase, ExpectedSceneBytes);
+        ValidateSha256(scene, OriginalSceneSha256, "original Wizard Peak native scene");
+        return scene;
+    }
+
+    /// <summary>
+    /// Pure native adapter used by the production writer and source-backed
+    /// regression. It grants no runtime/publication authority; the caller still
+    /// checks the exact runtime profile, overlay, roots and staged row preimage.
+    /// </summary>
+    internal static WizardPeakGreenWizardNativePropertiesCompilation CompileNativeProperties(
+        ReadOnlyMemory<byte> originalScene, ReadOnlyMemory<byte> plannedCandidateRecord)
+    {
+        byte[] scene = originalScene.ToArray();
+        byte[] candidate = plannedCandidateRecord.ToArray();
+        ValidateSha256(scene, OriginalSceneSha256, "original Wizard Peak native scene");
+        if (scene.Length != ExpectedSceneBytes || candidate.Length != RecordStride)
+            throw new InvalidDataException("The native Wizard properties adapter requires an exact source scene and one 0x58-byte row.");
+        int tableOffset = ExpectedTargetPointerFieldSceneOffset - TargetTrueIndex * RecordStride;
+        byte[] donor = scene.AsSpan(tableOffset + DonorTrueIndex * RecordStride, RecordStride).ToArray();
+        byte[] before = scene.AsSpan(ExpectedTargetPointerFieldSceneOffset, RecordStride).ToArray();
+        ValidateSha256(donor, DonorRecordSha256, "Wizard Peak T6 native donor row");
+        ValidateSha256(before, TargetRecordSha256, "Wizard Peak T24 native owner row");
+        if (ReadActorId(candidate) != GreenWizardActorId || before[PodOrGroupOffset] != ExpectedTargetPodOrGroup)
+            throw new InvalidDataException("The planned Wizard Peak instance does not match its native class/owner contract.");
+        ValidatePreservedTargetRowFields(before, candidate);
+        byte[] payload = scene.AsSpan(DonorPropertiesOffset, PropertiesBytes).ToArray();
+        ValidateSha256(payload, DonorPropertiesSha256, "Wizard Peak T6 native donor properties");
+        WizardPeakGreenWizardRoutePoint[] routes = TranslateRoutes(donor, payload, candidate, payload);
+        NativePropertiesFixupEnvelope fixups = new(PointerFixupListOffset, PointerFixupCount, PointerFixupCount,
+            PointerFixupsPreimageSha256, Sha256([]));
+        NativeMutablePropertiesInstance instance = new(
+            "wizardpeak.greenWizard.T6-to-T24", DonorPropertiesOffset, DonorPropertiesSha256,
+            payload, Sha256(payload),
+            new(NativePropertiesReservationKind.OwnedComponentExtent, TargetPropertiesOffset, TargetPropertiesExtentBytes,
+                TargetExtentPreimageSha256, OriginalSceneSha256),
+            new("wizardpeak.T24", ExpectedTargetPointerFieldSceneOffset, false),
+            [new(0, InternalRouteAnchorOffset)], [new(StaleTargetFixup, 0)], null);
+        instance = instance with
+        {
+            OwnershipAuthority = NativePropertiesMutableOwnershipAuthority.FromValidatedOwnedInstanceEvidence(
+                OriginalSceneSha256, OriginalSceneSha256, fixups, instance)
+        };
+        NativeMutableScenePropertiesLinkRequest request = new(scene, OriginalSceneSha256, fixups, [instance]);
+        NativeScenePropertiesLinkPlan plan = NativeScenePropertiesLinker.CompileMutable(request);
+        byte[] installedProperties = Convert.FromHexString(plan.Writes.Single(write => write.Offset == TargetPropertiesOffset).AfterHex);
+        byte[] installedFixups = Convert.FromHexString(plan.Writes.Single(write => write.Offset == PointerFixupListOffset).AfterHex);
+        byte[] installedExtent = scene.AsSpan(TargetPropertiesOffset, TargetPropertiesExtentBytes).ToArray();
+        installedProperties.CopyTo(installedExtent, 0);
+        ValidateSha256(installedProperties, InstalledPropertiesSha256, "linked Wizard Peak T24 properties");
+        ValidateSha256(installedExtent, InstalledExtentSha256, "linked Wizard Peak T24 full owned extent");
+        ValidateSha256(installedFixups, PointerFixupsInstalledSha256, "linked Wizard Peak pointer fixups");
+        BinaryPrimitives.WriteUInt32LittleEndian(candidate, plan.Bindings.Single().After);
+        byte pod = GreenWizardRuntimeBundleCatalog.Manifest.InstanceSchema.PodOrGroupValue;
+        if (donor[PodOrGroupOffset] != pod)
+            throw new InvalidDataException("The native Green Wizard donor no longer matches its checked detached pod/group.");
+        candidate[PodOrGroupOffset] = pod;
+        candidate[RendererDistanceOffset] = donor[RendererDistanceOffset];
+        candidate[SourceVariantOffset] = donor[SourceVariantOffset];
+        candidate[StateOffset] = donor[StateOffset];
+        candidate[RewardOwnerOffset] = donor[RewardOwnerOffset];
+        candidate[RewardOffset] = before[RewardOffset];
+        candidate[YawByteOffset] = before[YawByteOffset];
+        ValidateSha256(candidate, InstalledRecordSha256, "linked Wizard Peak T24 native row");
+        return new(request, plan, Convert.ToHexString(candidate), Array.AsReadOnly(routes));
     }
 
     private static void ValidatePreservedTargetRowFields(ReadOnlySpan<byte> before, ReadOnlySpan<byte> candidate)
@@ -560,6 +636,12 @@ public sealed record WizardPeakGreenWizardNativeSwapPlan(
     IReadOnlyList<string> FocusedChecks);
 
 public sealed record WizardPeakGreenWizardRoutePoint(int X, int Y, int Z);
+
+internal sealed record WizardPeakGreenWizardNativePropertiesCompilation(
+    NativeMutableScenePropertiesLinkRequest Request,
+    NativeScenePropertiesLinkPlan LinkPlan,
+    string InstalledRecordHex,
+    IReadOnlyList<WizardPeakGreenWizardRoutePoint> RoutePoints);
 
 public sealed record WizardPeakGreenWizardRetiredCandidate(
     string RecipeId,

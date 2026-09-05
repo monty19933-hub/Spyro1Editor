@@ -32,6 +32,14 @@ settings remain separate preservation and runtime acceptance boundaries.
   suite passes, including 35 added new-only publication checks. Faults at seven
   boundaries, competing destination creation, partial sets, repeat publication,
   forbidden deletion, and cancellation preserve prior/competing files.
+- Mutable native properties now have separately certified donor and destination
+  scenes, full internal-pointer schemas and complete old-owned-fixup rewrites.
+  Equal mutable payloads cannot share private storage. The consolidated
+  source-free properties suite passes immutable, mutable and independent-donor
+  regressions. The existing Wizard Peak T6 -> T24 adapter also matches all four
+  frozen native output hashes with whole-scene inverse/complement checks.
+  This is a reusable leaf plus an unchanged positive production route, not yet
+  proof of the new cross-level candidate under development.
 - Typed relocation extraction: 10,153 source-free checks, including an
   independent splice oracle and three actual consumer fixtures. Source-backed
   before/after `cmp` also found these complete BINs byte-identical:
