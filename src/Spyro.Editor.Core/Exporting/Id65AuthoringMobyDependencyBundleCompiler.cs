@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Spyro.Editor.Core.Scene;
 
 namespace Spyro.Editor.Core.Exporting;
 
@@ -994,8 +995,9 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
     {
         List<Id65MobyOwnedDataRange> ranges = [];
         byte[] package = Convert.FromHexString(bundle.ActorPackages.Single().ExactHex);
-        byte[] properties = Convert.FromHexString(bundle.Properties.Single().ExactHex);
         byte[] rowTemplate = Convert.FromHexString(bundle.Rows.Single().ExactHex);
+        NativeScenePropertiesLinkPlan linkedProperties = NativeScenePropertiesLinker.Compile(
+            CreateGrassPropertiesLinkRequest(source, bundle, placements));
         AddRange(ranges, source, "asset.root37", bundle.Id, Root37Offset, UInt32(GrassPackagePointer));
         AddRange(ranges, source, "asset.actor-id37", bundle.Id, ActorId37Offset, UInt16(GrassActorId));
         AddRange(ranges, source, "asset.package.01f5", bundle.Id, PackageOffset, package);
@@ -1004,7 +1006,8 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
         {
             int rowOffset = placement.TargetTrueIndex == 88 ? T88RowOffset : T107RowOffset;
             byte[] row = rowTemplate.ToArray();
-            BinaryPrimitives.WriteUInt32LittleEndian(row, GrassPropertiesPointer);
+            NativePropertiesPointerBinding binding = linkedProperties.Bindings.Single(item => item.ConsumerId == placement.Id);
+            BinaryPrimitives.WriteUInt32LittleEndian(row, binding.After);
             if (placement.CoordinatePolicy == Id65MobyCoordinatePolicy.PreserveDestination)
                 source.AsSpan(rowOffset + 0x0C, 12).CopyTo(row.AsSpan(0x0C, 12));
             else
@@ -1023,11 +1026,54 @@ internal static class Id65AuthoringMobyDependencyBundleCompiler
         if (appended)
         {
             AddRange(ranges, source, "scene.object-count", "allocation.rows", ObjectCountOffset, UInt32(108));
-            AddRange(ranges, source, "scene.fixup-count", "allocation.fixups", FixupCountOffset, UInt32(0x82));
-            AddRange(ranges, source, "scene.fixup.t107-properties", "allocation.fixups", FixupAppendOffset, UInt32(0x2638));
         }
-        AddRange(ranges, source, "asset.properties.grass", bundle.Id, PropertiesOffset, properties);
+        foreach (NativePropertiesSceneWrite write in linkedProperties.Writes)
+        {
+            int dataOffset = checked(SceneOffset + write.Offset);
+            (string stableId, string ownerId) = dataOffset switch
+            {
+                FixupCountOffset => ("scene.fixup-count", "allocation.fixups"),
+                FixupAppendOffset => ("scene.fixup.t107-properties", "allocation.fixups"),
+                PropertiesOffset => ("asset.properties.grass", bundle.Id),
+                _ => throw new InvalidDataException("The bounded Grass linker returned an undeclared ownership range.")
+            };
+            AddRange(ranges, source, stableId, ownerId, dataOffset, Convert.FromHexString(write.AfterHex));
+        }
         return ranges.OrderBy(item => item.DataRelativeOffset).ToList();
+    }
+
+    // The real compiler and regression harness use this same adapter. A source
+    // hash and full descriptor validation precede authority creation; an edited
+    // metadata flag cannot grant sharing or repurpose a zero-filled gap.
+    internal static NativeScenePropertiesLinkRequest CreateGrassPropertiesLinkRequest(
+        byte[] source, Id65MobyDependencyBundleDescriptor bundle, IReadOnlyList<Id65MobyPlacementIntent> placements)
+    {
+        RequireHash(Hash(source), UnusedLevel65RemoteBlankEnvironmentHeaderRepairV3Construction.ExpectedSourceDataSha256, "Grass linker locked source");
+        _ = ValidateBundles([bundle]);
+        if (placements.Count is < 1 or > 2 ||
+            placements.Select(item => item.TargetTrueIndex).Distinct().Count() != placements.Count ||
+            placements.Any(item => item != CreateT107Placement() && item != CreateZeroEggT88Placement()))
+            throw new InvalidDataException("Grass linker authority requires the exact inspected T88/T107 placement contracts.");
+        byte[] scene = source.AsSpan(SceneOffset, SceneByteLength).ToArray();
+        byte[] payload = Convert.FromHexString(bundle.Properties.Single().ExactHex);
+        string sceneSha256 = Hash(scene);
+        NativePropertiesReservation reservation = new(NativePropertiesReservationKind.ExactPassiveTail,
+            PropertiesOffset - SceneOffset, payload.Length,
+            Hash(scene.AsSpan(PropertiesOffset - SceneOffset, payload.Length)), bundle.FoundationContractSha256);
+        NativePropertiesFixupEnvelope fixups = new(FixupCountOffset - SceneOffset,
+            FixupCountBefore, FixupCountBefore + 1,
+            Hash(scene.AsSpan(FixupCountOffset - SceneOffset, 4 + FixupCountBefore * 4)),
+            Hash(scene.AsSpan(FixupAppendOffset - SceneOffset, 4)));
+        NativePropertiesConsumer[] consumers = placements.Select(placement => new NativePropertiesConsumer(
+            placement.Id,
+            (placement.TargetTrueIndex == 88 ? T88RowOffset : T107RowOffset) - SceneOffset,
+            placement.TargetTrueIndex == 107)).ToArray();
+        NativePropertiesImmutableSharingAuthority authority =
+            NativePropertiesImmutableSharingAuthority.FromValidatedReadOnlyEvidence(bundle.CanonicalSha256,
+                sceneSha256, bundle.Properties.Single().Sha256, reservation, fixups, AtomicPlacementGroupId, consumers);
+        return new(scene, sceneSha256, bundle.CanonicalSha256, payload, bundle.Properties.Single().Sha256,
+            bundle.Properties.Single().InternalScenePointerFieldOffsets, reservation, fixups,
+            AtomicPlacementGroupId, consumers, authority);
     }
 
     private static void AddRange(

@@ -2,6 +2,12 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Spyro.Editor.Core.Exporting;
 
+if (args.SequenceEqual(new[] { "--source-free-properties-linker" }))
+{
+    NativeScenePropertiesLinkerCases.Run();
+    return;
+}
+
 string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
 string baseImagePath = Path.Combine(
     repositoryRoot,
@@ -93,6 +99,13 @@ Id65CompiledMobyDependencyBundles append = Compile(appendManifest, [t107]);
 Id65CompiledMobyDependencyBundles zeroEgg = Compile(zeroEggManifest, [t88]);
 Id65CompiledMobyDependencyBundles combined = Compile(combinedManifest, [t107, t88]);
 Id65CompiledMobyDependencyBundles combinedReordered = Compile(combinedManifest, [t88, t107]);
+foreach (Id65MobyPlacementIntent[] scenario in new[] { new[] { t107 }, new[] { t88 }, new[] { t107, t88 } })
+    NativeScenePropertiesLinkerCases.VerifyIntegratedRequest(
+        Id65AuthoringMobyDependencyBundleCompiler.CreateGrassPropertiesLinkRequest(v3.SourceData.ToArray(), bundle, scenario));
+Require(append.OutputDataSha256 == Id65AuthoringMobyDependencyBundleCompiler.ExpectedAppendOutputDataSha256 &&
+        zeroEgg.OutputDataSha256 == Id65AuthoringMobyDependencyBundleCompiler.ExpectedZeroEggOutputDataSha256 &&
+        combined.OutputDataSha256 == Id65AuthoringMobyDependencyBundleCompiler.ExpectedCombinedOutputDataSha256,
+    "Extracted properties linkage changed an established Grass output golden.");
 
 Require(append.ScenarioId == Id65AuthoringMobyDependencyBundleCompiler.AppendScenarioId &&
         zeroEgg.ScenarioId == Id65AuthoringMobyDependencyBundleCompiler.ZeroEggScenarioId &&
