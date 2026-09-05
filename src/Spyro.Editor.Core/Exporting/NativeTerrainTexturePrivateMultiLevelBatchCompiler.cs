@@ -542,8 +542,9 @@ public static class NativeTerrainTexturePrivateMultiLevelBatchCompiler
             }
         }
 
+        NativeRelocationMap patchMap = CreatePatchMap(entries, insertions, relocation);
         NativeTerrainTexturePrivateAggregatePatch[] relocatedPatches = sourcePatches
-            .Select(patch => MapPatch(patch, entries, insertions, relocation))
+            .Select(patch => MapPatch(patch, entries, patchMap))
             .OrderBy(item => item.RelocatedWadOffset)
             .ThenBy(item => item.ByteLength)
             .ToArray();
@@ -556,46 +557,27 @@ public static class NativeTerrainTexturePrivateMultiLevelBatchCompiler
             expandedWrites);
     }
 
+    private static NativeRelocationMap CreatePatchMap(
+        IReadOnlyList<ArchiveEntryMap> entries,
+        IReadOnlyList<EntryInsertion> insertions,
+        NativeSkyWadRelocationPlan relocation) =>
+        NativeWadRelocationMap.Create(relocation,
+            entries.Select(entry => new NativeWadMappedEntry(entry.Index, entry.Offset, entry.ByteLength)),
+            insertions.Select(insertion => new NativeWadEntryInsertion(insertion.WadEntry, insertion.EntryRelativeOffset, insertion.GrowthBytes)));
+
     private static NativeTerrainTexturePrivateAggregatePatch MapPatch(
         NativeTerrainTexturePrivateStructuralPatch patch,
         IReadOnlyList<ArchiveEntryMap> entries,
-        IReadOnlyList<EntryInsertion> insertions,
-        NativeSkyWadRelocationPlan relocation)
+        NativeRelocationMap map)
     {
+        NativeMappedExtent mapped = map.Map(new NativeByteExtent(map.Original, patch.WadOffset, patch.ByteLength));
         ArchiveEntryMap entry = entries.SingleOrDefault(candidate =>
-                patch.WadOffset >= candidate.Offset &&
-                patch.WadOffset + patch.ByteLength <= candidate.EndExclusive)
+                mapped.Original.Offset >= candidate.Offset && mapped.Original.EndExclusive <= candidate.EndExclusive)
             ?? throw new InvalidDataException(
                 $"Source patch {patch.Kind}/{patch.RuntimeKey} at WAD 0x{patch.WadOffset:X} is outside one analyzed WAD entry.");
-        long relativeStart = patch.WadOffset - entry.Offset;
-        long relativeEnd = checked(relativeStart + patch.ByteLength);
-        if (relativeStart < NestedArchiveHeaderBytes)
-        {
-            throw new InvalidDataException(
-                $"Source patch {patch.Kind}/{patch.RuntimeKey} enters WAD entry {entry.Index}'s structural header.");
-        }
-
-        long internalShift = 0;
-        foreach (EntryInsertion insertion in insertions
-                     .Where(item => item.WadEntry == entry.Index)
-                     .OrderBy(item => item.EntryRelativeOffset))
-        {
-            if (relativeEnd <= insertion.EntryRelativeOffset)
-                continue;
-            if (relativeStart >= insertion.EntryRelativeOffset)
-            {
-                internalShift = checked(internalShift + insertion.GrowthBytes);
-                continue;
-            }
-            throw new InvalidDataException(
-                $"Source patch {patch.Kind}/{patch.RuntimeKey} crosses {insertion.TargetLevelKey}'s +0x{insertion.GrowthBytes:X} insertion point.");
-        }
-
-        long relocatedWadOffset = checked(
-            relocation.RelocatedEntryOffsets[entry.Index] + relativeStart + internalShift);
         return new NativeTerrainTexturePrivateAggregatePatch(
             patch.WadOffset,
-            relocatedWadOffset,
+            mapped.Final.Offset,
             entry.Index,
             patch.ByteLength,
             patch.Before.ToArray(),

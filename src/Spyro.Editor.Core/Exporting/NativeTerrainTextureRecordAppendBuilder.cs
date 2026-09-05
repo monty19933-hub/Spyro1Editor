@@ -1190,6 +1190,17 @@ public static class NativeTerrainTextureRecordAppendBuilder
         int sourceTextureEnd = sourceLayout.TextureComponentByteLength;
         int lowGrowth = checked(appendCount * LowDetailRecordBytes);
         int fullGrowth = checked(appendCount * RecordGrowthBytes);
+        NativeAddressSpace originalSpace = new(NativeAddressKind.LevelData, "private-texture-level-data", NativeAddressRevision.Original, source.Length);
+        NativeAddressSpace finalSpace = new(NativeAddressKind.LevelData, "private-texture-level-data", NativeAddressRevision.Final, composed.Length);
+        NativeRelocationMap map = NativeRelocationMap.ForGrowth(originalSpace, finalSpace,
+        [
+            NativeRelocationMap.Table(new("lq-table", new NativeByteExtent(originalSpace, 8, sourceHighStart - 8), 8,
+                LowDetailRecordBytes, sourceLayout.TextureCount, checked(sourceLayout.TextureCount + appendCount), 4)),
+            NativeRelocationMap.Table(new("hq-table", new NativeByteExtent(originalSpace, sourceHighStart, sourceTextureEnd - sourceHighStart),
+                checked(sourceHighStart + lowGrowth), HighDetailRecordBytes, sourceLayout.TextureCount, checked(sourceLayout.TextureCount + appendCount), 4)),
+            new("following-components", new NativeByteExtent(originalSpace, sourceTextureEnd, sourceLayout.UsedByteLength - sourceTextureEnd),
+                checked(sourceTextureEnd + fullGrowth), [])
+        ]);
         List<(NativeTerrainTextureRecordExistingPatch Patch, int Start, int End, int OutputStart)> normalized = [];
         foreach (NativeTerrainTextureRecordExistingPatch patch in patches)
         {
@@ -1208,13 +1219,11 @@ public static class NativeTerrainTextureRecordAppendBuilder
             int start = (int)relativeLong;
             int end = (int)endLong;
             int outputStart;
-            if (end <= sourceHighStart)
-                outputStart = start;
-            else if (start >= sourceHighStart && end <= sourceTextureEnd)
-                outputStart = checked(start + lowGrowth);
-            else if (start >= sourceTextureEnd && end <= sourceLayout.UsedByteLength)
-                outputStart = checked(start + fullGrowth);
-            else
+            try
+            {
+                outputStart = checked((int)map.Map(new NativeByteExtent(originalSpace, start, patch.Before.Length)).Final.Offset);
+            }
+            catch (InvalidDataException)
             {
                 failureReason = $"Existing {patch.Kind} patch at WAD 0x{patch.WadOffset:X} crosses a texture-table insertion boundary and cannot be rebased atomically.";
                 return false;

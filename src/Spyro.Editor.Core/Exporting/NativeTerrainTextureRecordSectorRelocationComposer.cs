@@ -443,6 +443,10 @@ public static class NativeTerrainTextureRecordSectorRelocationComposer
         int levelDataLength,
         long relocatedLevelData)
     {
+        NativeRelocationMap map = NativeWadRelocationMap.Create(relocation,
+            wadEntries.Select(entry => new NativeWadMappedEntry(entry.Index, entry.Offset, entry.ByteLength)),
+            [new NativeWadEntryInsertion(targetEntry.Index, checked((long)levelDataRelativeOffset + levelDataLength),
+                relocation.EntryGrowthBytes.GetValueOrDefault(targetEntry.Index))]);
         DiscLayout layout = DiscImage.DetectLayout(request.SourceImagePath);
         using FileStream source = File.OpenRead(request.SourceImagePath);
         List<NativeTerrainTextureRecordRelocatedExternalPatch> mapped = [];
@@ -450,9 +454,9 @@ public static class NativeTerrainTextureRecordSectorRelocationComposer
         {
             if (patch.Before == null || patch.After == null || patch.Before.Length == 0 || patch.Before.Length != patch.After.Length)
                 throw new InvalidDataException($"External patch {patch.Kind}/{patch.RuntimeKey} must have equal non-empty before/after bytes.");
+            NativeByteExtent originalExtent = new(map.Original, patch.SourceWadOffset, patch.Before.Length);
             ArchiveEntryMap entry = wadEntries.SingleOrDefault(candidate =>
-                    patch.SourceWadOffset >= candidate.Offset &&
-                    patch.SourceWadOffset + patch.Before.Length <= candidate.EndExclusive)
+                    originalExtent.Offset >= candidate.Offset && originalExtent.EndExclusive <= candidate.EndExclusive)
                 ?? throw new InvalidDataException($"External patch at WAD 0x{patch.SourceWadOffset:X} is outside one analyzed WAD entry.");
             long relative = patch.SourceWadOffset - entry.Offset;
             if (relative < NestedArchiveHeaderBytes)
@@ -470,10 +474,7 @@ public static class NativeTerrainTextureRecordSectorRelocationComposer
                 throw new InvalidDataException(
                     $"External patch {patch.Kind}/{patch.RuntimeKey} overlaps level data and must be supplied to ExistingLevelDataPatches for atomic rebasing.");
             }
-            long internalShift = entry.Index == targetEntry.Index && relative >= levelDataRelativeOffset + levelDataLength
-                ? relocation.EntryGrowthBytes.GetValueOrDefault(targetEntry.Index)
-                : 0;
-            long relocated = checked(relocation.RelocatedEntryOffsets[entry.Index] + relative + internalShift);
+            long relocated = map.Map(originalExtent).Final.Offset;
             if (RangesOverlap(
                     relocated,
                     relocated + patch.Before.Length,

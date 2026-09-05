@@ -1,0 +1,54 @@
+# Native asset development after c15f3b1
+
+This phase continues the completed stabilization checkpoint; it does not repeat
+that audit or treat the remaining import refusals as the final feature.
+Source ROMs, existing candidates, installed applications, and DuckStation user
+settings remain separate preservation and runtime acceptance boundaries.
+
+## Ordered implementation
+
+1. Generalize native mutable properties with source-bound private ownership,
+   complete internal fixups, and independent donor/destination scene domains.
+   Preserve the existing Wizard route byte-for-byte, then prove a genuinely new
+   cross-level candidate without inheriting old runtime approval.
+2. Extract typed native relocation from the three current texture-growth
+   consumers. Preserve old output first; fix newly reproduced owned-gap sector
+   initialization separately, including ISO ownership and end-of-file metadata.
+3. Add a bounded native collision-index codec and retire inherited lookup
+   cells in the authored blank substrate. Preserve triangle storage and all
+   non-lookup components; runtime testing must establish remaining consumers.
+4. Compose canonical lab intent with built-in music through separate WAD and
+   executable address spaces. Publish new immutable test artifacts only after
+   whole-image readback. Do not silently change schema-6 documents or existing
+   candidate receipts that certify an unchanged executable.
+5. Run the source-free suite, source-aware equivalence and negative cases,
+   and focused DuckStation tests on exact new candidates. Expand UI capability
+   through these verified paths; no catalog entry alone grants native write or
+   gameplay approval.
+
+## Checkpoint evidence
+
+- `ce13fe6`: shared new-only artifact publication. The existing combined-export
+  suite passes, including 35 added new-only publication checks. Faults at seven
+  boundaries, competing destination creation, partial sets, repeat publication,
+  forbidden deletion, and cancellation preserve prior/competing files.
+- Typed relocation extraction: 10,153 source-free checks, including an
+  independent splice oracle and three actual consumer fixtures. Source-backed
+  before/after `cmp` also found these complete BINs byte-identical:
+  - One-row Artisans fixed-tail:
+    `2d2ccc25b3e5ad301ad11366236fede8673925ebf813b8089a6cb9862c2d7261`.
+  - Artisans two-donor fixed-tail:
+    `2e8816cd595802f9295c689280e27614adfdb709f33bd46060cc12fafb27417e`.
+  - Artisans + Magic Crafters fixed/fixed aggregate:
+    `02b3ec034a0ef4b78f0862e9c0e5e8f9ed188bbdcf2ebea20f2aa081c7481ba5`.
+
+These equivalence runs are **not complete passes** of the three historical
+source-aware smoke executables. Both old and new code reach an obsolete
+fixed-tail registry assertion, or fail trying to write a growing executable
+into original Form 2 padding sector 54079. That reproducible structural defect
+is being corrected separately; runtime approval hashes are not being updated
+to hide the assertion. The comparison receipt is retained at
+`/tmp/spyro-relocation-source-equivalence.yHL108/comparison-before-gap-fix.md`.
+
+This document is a running checkpoint record, not a claim that universal Moby
+placement, arbitrary geometry, or the finished blank-level UI is complete.
