@@ -311,6 +311,47 @@ internal static class RawMode2Form1SectorIntegrity
         raw.Slice(16).CopyTo(sector);
     }
 
+    /// <summary>
+    /// Geometry/ISO ownership must already prove that this is newly allocated
+    /// gap storage. This codec accepts only canonical zero-data padding, not
+    /// arbitrary Form2/XA content, and returns a detached Form1 initialization.
+    /// Ordinary logical writes deliberately never call this conversion.
+    /// </summary>
+    internal static byte[] PrepareOwnedZeroPaddingSector(ReadOnlySpan<byte> source, DiscLayout layout, long lba)
+    {
+        if (layout.SectorSize == 2048 && layout.UserOffset == 0)
+        {
+            if (source.Length != 2048 || source.ContainsAnyExcept((byte)0))
+                throw new InvalidDataException("Owned ISO growth padding is not an exact zero-data sector.");
+            return source.ToArray();
+        }
+        int subheader = layout.SectorSize == 2352 && layout.UserOffset == 24 ? 16 :
+            layout.SectorSize == 2336 && layout.UserOffset == 8 ? 0 : -1;
+        if (subheader < 0 || source.Length != layout.SectorSize)
+            throw new InvalidDataException("Owned growth padding has an unsupported physical layout.");
+        ReadOnlySpan<byte> xa = source.Slice(subheader, 8);
+        if (!xa[..4].SequenceEqual(xa[4..]) || xa[0] != 0 || xa[1] != 0 || xa[3] != 0 || xa[2] is not (0x08 or 0x20))
+            throw new InvalidDataException("Owned gap storage has non-padding XA file/channel/coding/submode metadata.");
+        bool form2 = xa[2] == 0x20;
+        int payloadLength = form2 ? 2324 : 2048;
+        if (source.Slice(layout.UserOffset, payloadLength).ContainsAnyExcept((byte)0))
+            throw new InvalidDataException("Owned growth gap contains nonzero user data.");
+        byte[] prepared = source.ToArray();
+        if (form2)
+        {
+            if (BinaryPrimitives.ReadUInt32LittleEndian(source[^4..]) != ComputeEdc(source.Slice(subheader, 2332)))
+                throw new InvalidDataException("Owned Form2 padding has invalid EDC.");
+            prepared[subheader + 2] = prepared[subheader + 6] = 0x08;
+            prepared.AsSpan(layout.UserOffset).Clear();
+        }
+        RequireLogicalWriteSector(prepared, layout, lba); // Includes sync/MSF for full raw sectors.
+        byte[] expected = prepared.ToArray();
+        RebuildLogicalWriteSector(expected, layout, lba);
+        if (!form2 && !expected.AsSpan().SequenceEqual(source))
+            throw new InvalidDataException("Owned Form1 padding has invalid EDC/ECC.");
+        return expected;
+    }
+
     private static void RequireMode2Form1(ReadOnlySpan<byte> raw, long sector)
     {
         if (raw.Length != RawSectorBytes || raw[15] != 2 ||

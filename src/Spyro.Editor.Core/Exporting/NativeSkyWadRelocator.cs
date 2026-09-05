@@ -44,6 +44,10 @@ internal static class NativeSkyWadRelocator
         string wadAnalysisPath,
         IReadOnlyList<NativeSkyRelocationPayload> payloads)
     {
+        ArgumentNullException.ThrowIfNull(payloads);
+        if (payloads.Any(payload => payload == null || payload.Bytes == null || payload.OriginalLength < 0 || payload.PatchIndex < 0) ||
+            payloads.Select(payload => payload.PatchIndex).Distinct().Count() != payloads.Count)
+            throw new InvalidDataException("Relocation payloads require unique identities and nonnegative owned lengths.");
         WadLayout wad = LoadWadLayout(wadAnalysisPath);
         DiscLayout discLayout = DiscImage.DetectLayout(imagePath);
         using FileStream image = File.Open(imagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
@@ -89,6 +93,8 @@ internal static class NativeSkyWadRelocator
             int previousEnd = -1;
             foreach (NativeSkyRelocationPayload payload in group.OrderBy(payload => payload.ModelBlockOffset))
             {
+                if (payload.WadLba != wad.WadLba || payload.OriginalWadOffset != checked(entry.Offset + model.Offset + payload.ModelBlockOffset))
+                    throw new InvalidDataException("A relocation payload does not identify its exact source WAD/subfile address.");
                 if (payload.Bytes.Length < payload.OriginalLength)
                     throw new InvalidOperationException("Relocation payloads must preserve or increase each sky block length.");
                 if (payload.ModelBlockOffset < 0 || payload.ModelBlockOffset + (long)payload.OriginalLength > model.Size)
@@ -169,6 +175,22 @@ internal static class NativeSkyWadRelocator
         if (!plan.Required)
             throw new InvalidOperationException("The sky patch plan does not require WAD relocation.");
 
+        ArgumentNullException.ThrowIfNull(payloads);
+        NativeSkyRelocationPayload[] frozenPayloads = payloads.Select(payload =>
+            payload == null || payload.Bytes == null ? throw new InvalidDataException("A relocation payload is missing.") :
+            payload with { Bytes = payload.Bytes.ToArray() }).ToArray();
+        NativeSkyWadRelocationPlan submitted = plan with
+        {
+            EntryGrowthBytes = new Dictionary<int, int>(plan.EntryGrowthBytes),
+            RelocatedEntryOffsets = new Dictionary<int, long>(plan.RelocatedEntryOffsets),
+            RelocatedPatches = plan.RelocatedPatches.ToArray()
+        };
+        string sourcePath = Path.GetFullPath(sourceImagePath), outputPath = Path.GetFullPath(outputImagePath);
+        Persistence.PersistencePathSafety.EnsureTreesDoNotOverlap(sourcePath, outputPath,
+            "Structural output must not replace the source image, including symbolic-link aliases.");
+        Persistence.PersistencePathSafety.EnsureTreesDoNotOverlap(wadAnalysisPath, outputPath,
+            "Structural output must not replace the source WAD analysis, including symbolic-link aliases.");
+
         WadLayout wad = LoadWadLayout(wadAnalysisPath);
         DiscLayout discLayout = DiscImage.DetectLayout(sourceImagePath);
         using FileStream source = File.Open(sourceImagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -180,46 +202,75 @@ internal static class NativeSkyWadRelocator
         if (wadFile.Lba != wad.WadLba || wadFile.Size != wad.WadSize)
             throw new InvalidDataException("The live WAD extent no longer matches the selected WAD analysis.");
         ValidateLiveWadEntryTable(source, discLayout, wad);
-        File.Copy(sourceImagePath, outputImagePath, true);
-        using FileStream output = File.Open(outputImagePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+        RequireSamePlan(submitted, BuildPlan(sourceImagePath, wadAnalysisPath, frozenPayloads));
+        plan = submitted;
+        NativeWadGrowthSectorPreparation preparation = NativeWadGrowthSectorPreparation.Create(source, discLayout, plan);
         byte[] executableBytes = DiscImage.ReadFileBytes(source, discLayout, executable.Lba, 0, executable.Size);
         byte[] wadHeader = DiscImage.ReadFileBytes(source, discLayout, wad.WadLba, 0, SectorBytes);
-        Dictionary<int, NativeSkyRelocationPayload[]> payloadsByEntry = payloads
+        Dictionary<int, NativeSkyRelocationPayload[]> payloadsByEntry = frozenPayloads
             .GroupBy(payload => payload.StorageWadEntry)
             .ToDictionary(group => group.Key, group => group.OrderBy(payload => payload.ModelBlockOffset).ToArray());
+        // Validate/expand every changed nested entry before creating output.
+        // A bad late prefix or fixup must not leave an earlier entry published.
+        Dictionary<int, byte[]> expandedEntries = [];
+        foreach (WadEntry entry in wad.Entries.Where(entry => payloadsByEntry.ContainsKey(entry.Index)))
+            expandedEntries[entry.Index] = ExpandNestedLevelEntry(
+                DiscImage.ReadFileBytes(source, discLayout, wad.WadLba, entry.Offset, entry.Size),
+                payloadsByEntry[entry.Index], plan.EntryGrowthBytes.GetValueOrDefault(entry.Index));
 
-        foreach (WadEntry entry in wad.Entries.OrderBy(entry => entry.Offset))
+        string stagePath = Path.Combine(Path.GetDirectoryName(outputPath)!, $".spyro-wad-growth-{Guid.NewGuid():N}.tmp");
+        try
         {
-            byte[] entryBytes = DiscImage.ReadFileBytes(source, discLayout, wad.WadLba, entry.Offset, entry.Size);
-            byte[] relocated = payloadsByEntry.TryGetValue(entry.Index, out NativeSkyRelocationPayload[]? entryPayloads)
-                ? ExpandNestedLevelEntry(entryBytes, entryPayloads, plan.EntryGrowthBytes.GetValueOrDefault(entry.Index))
-                : entryBytes;
-            long relocatedOffset = plan.RelocatedEntryOffsets[entry.Index];
-            WriteUInt32(wadHeader, entry.Index * 8, checked((uint)relocatedOffset));
-            WriteUInt32(wadHeader, (entry.Index * 8) + 4, checked((uint)relocated.Length));
-            DiscImage.WriteFileBytes(output, discLayout, wad.WadLba, relocatedOffset, relocated);
-        }
-        DiscImage.WriteFileBytes(output, discLayout, wad.WadLba, 0, wadHeader);
-        DiscImage.WriteFileBytes(output, discLayout, plan.RelocatedExecutableLba, 0, executableBytes);
+            using (FileStream output = File.Open(stagePath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+            {
+                source.Position = 0;
+                source.CopyTo(output);
+                preparation.ApplyToExactCopy(output);
+                foreach (WadEntry entry in wad.Entries.OrderBy(entry => entry.Offset))
+                {
+                    byte[] relocated = expandedEntries.TryGetValue(entry.Index, out byte[]? expanded)
+                        ? expanded : DiscImage.ReadFileBytes(source, discLayout, wad.WadLba, entry.Offset, entry.Size);
+                    long relocatedOffset = plan.RelocatedEntryOffsets[entry.Index];
+                    WriteUInt32(wadHeader, entry.Index * 8, checked((uint)relocatedOffset));
+                    WriteUInt32(wadHeader, (entry.Index * 8) + 4, checked((uint)relocated.Length));
+                    DiscImage.WriteFileBytes(output, discLayout, wad.WadLba, relocatedOffset, relocated);
+                }
+                DiscImage.WriteFileBytes(output, discLayout, wad.WadLba, 0, wadHeader);
+                DiscImage.WriteFileBytes(output, discLayout, plan.RelocatedExecutableLba, 0, executableBytes);
 
-        byte[] rootDirectory = DiscImage.ReadFileBytes(output, discLayout, discLayout.RootExtent, 0, discLayout.RootLength);
-        PatchRootRecord(rootDirectory, wadFile.Name, wadFile.Lba, plan.ExpandedWadSize);
-        PatchRootRecord(rootDirectory, executable.Name, plan.RelocatedExecutableLba, executable.Size);
-        DiscImage.WriteFileBytes(output, discLayout, discLayout.RootExtent, 0, rootDirectory);
-        output.Flush();
+                byte[] rootDirectory = DiscImage.ReadFileBytes(output, discLayout, discLayout.RootExtent, 0, discLayout.RootLength);
+                PatchRootRecord(rootDirectory, wadFile.Name, wadFile.Lba, plan.ExpandedWadSize);
+                PatchRootRecord(rootDirectory, executable.Name, plan.RelocatedExecutableLba, executable.Size);
+                DiscImage.WriteFileBytes(output, discLayout, discLayout.RootExtent, 0, rootDirectory);
+                output.Flush();
 
-        IReadOnlyList<IsoRootRecord> relocatedRootFiles = ReadRootFiles(output, discLayout);
-        IsoRootRecord relocatedWad = relocatedRootFiles.Single(file => string.Equals(file.Name, wadFile.Name, StringComparison.OrdinalIgnoreCase));
-        IsoRootRecord relocatedExecutable = relocatedRootFiles.Single(file => string.Equals(file.Name, executable.Name, StringComparison.OrdinalIgnoreCase));
-        if (relocatedWad.Lba != plan.WadLba || relocatedWad.Size != plan.ExpandedWadSize ||
-            relocatedExecutable.Lba != plan.RelocatedExecutableLba || relocatedExecutable.Size != executable.Size ||
-            !relocatedRootFiles.Any(file => file.Lba == plan.NextFileLba))
-        {
-            throw new InvalidDataException("Expanded ISO directory readback does not match the relocation plan.");
+                IReadOnlyList<IsoRootRecord> relocatedRootFiles = ReadRootFiles(output, discLayout);
+                IsoRootRecord relocatedWad = relocatedRootFiles.Single(file => string.Equals(file.Name, wadFile.Name, StringComparison.OrdinalIgnoreCase));
+                IsoRootRecord relocatedExecutable = relocatedRootFiles.Single(file => string.Equals(file.Name, executable.Name, StringComparison.OrdinalIgnoreCase));
+                if (relocatedWad.Lba != plan.WadLba || relocatedWad.Size != plan.ExpandedWadSize ||
+                    relocatedExecutable.Lba != plan.RelocatedExecutableLba || relocatedExecutable.Size != executable.Size ||
+                    !relocatedRootFiles.Any(file => file.Lba == plan.NextFileLba))
+                    throw new InvalidDataException("Expanded ISO directory readback does not match the relocation plan.");
+                byte[] relocatedExecutableBytes = DiscImage.ReadFileBytes(output, discLayout, relocatedExecutable.Lba, 0, relocatedExecutable.Size);
+                if (!relocatedExecutableBytes.AsSpan().SequenceEqual(executableBytes))
+                    throw new InvalidDataException("The relocated executable does not match its original bytes.");
+            }
+            File.Move(stagePath, outputPath, overwrite: true);
         }
-        byte[] relocatedExecutableBytes = DiscImage.ReadFileBytes(output, discLayout, relocatedExecutable.Lba, 0, relocatedExecutable.Size);
-        if (!relocatedExecutableBytes.AsSpan().SequenceEqual(executableBytes))
-            throw new InvalidDataException("The relocated executable does not match its original bytes.");
+        finally { if (File.Exists(stagePath)) File.Delete(stagePath); }
+    }
+
+    private static void RequireSamePlan(NativeSkyWadRelocationPlan submitted, NativeSkyWadRelocationPlan current)
+    {
+        if (submitted.Required != current.Required || submitted.WadLba != current.WadLba ||
+            submitted.OriginalWadSize != current.OriginalWadSize || submitted.ExpandedWadSize != current.ExpandedWadSize ||
+            submitted.WadGrowthBytes != current.WadGrowthBytes || submitted.OriginalExecutableLba != current.OriginalExecutableLba ||
+            submitted.RelocatedExecutableLba != current.RelocatedExecutableLba || submitted.ExecutableSize != current.ExecutableSize ||
+            submitted.NextFileLba != current.NextFileLba || submitted.AvailableGrowthBytes != current.AvailableGrowthBytes ||
+            !submitted.EntryGrowthBytes.OrderBy(pair => pair.Key).SequenceEqual(current.EntryGrowthBytes.OrderBy(pair => pair.Key)) ||
+            !submitted.RelocatedEntryOffsets.OrderBy(pair => pair.Key).SequenceEqual(current.RelocatedEntryOffsets.OrderBy(pair => pair.Key)) ||
+            !submitted.RelocatedPatches.OrderBy(patch => patch.PatchIndex).SequenceEqual(current.RelocatedPatches.OrderBy(patch => patch.PatchIndex)))
+            throw new InvalidDataException("The submitted structural relocation plan no longer matches its exact source and payload geometry.");
     }
 
     internal static byte[] ExpandNestedLevelEntry(
@@ -415,32 +466,8 @@ internal static class NativeSkyWadRelocator
 
     private static IReadOnlyList<IsoRootRecord> ReadRootFiles(FileStream image, DiscLayout layout)
     {
-        byte[] directory = DiscImage.ReadFileBytes(image, layout, layout.RootExtent, 0, layout.RootLength);
-        List<IsoRootRecord> result = new();
-        for (int offset = 0; offset < directory.Length;)
-        {
-            int recordLength = directory[offset];
-            if (recordLength == 0)
-            {
-                offset = ((offset / SectorBytes) + 1) * SectorBytes;
-                continue;
-            }
-            if (recordLength < 34 || offset + recordLength > directory.Length)
-                break;
-            int nameLength = directory[offset + 32];
-            string name = Encoding.ASCII.GetString(directory, offset + 33, nameLength)
-                .Replace(";1", "", StringComparison.OrdinalIgnoreCase);
-            if (name is not "\0" and not "\u0001")
-            {
-                result.Add(new IsoRootRecord(
-                    name,
-                    checked((int)ReadUInt32(directory, offset + 2)),
-                    checked((int)ReadUInt32(directory, offset + 10)),
-                    offset));
-            }
-            offset += recordLength;
-        }
-        return result;
+        return NativeWadGrowthSectorPreparation.ReadFlatRootFiles(image, layout)
+            .Select(file => new IsoRootRecord(file.Name, file.Lba, file.Size, file.RecordOffset)).ToArray();
     }
 
     private static void PatchRootRecord(byte[] directory, string name, int lba, int size)

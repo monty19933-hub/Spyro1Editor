@@ -74,6 +74,13 @@ settings remain separate preservation and runtime acceptance boundaries.
   cancellation cases pass. Its BIN SHA is
   `86ede1c7d0e5219bfc1ea24a655d531c59d07a6ce0c1629ba4d15e066fd71aae`.
   See [candidate details and entry points](id65-collision-isolated-candidate.md).
+- The separate owned-gap correction now passes 3,349 synthetic checks and both
+  real-source growth smoke executables. It inventories descendant files and ISO
+  path tables, validates canonical zero-data padding and compatible owner
+  metadata, moves exact EOF/EOR boundaries, and stages the complete output
+  before replacement. Three growing outputs passed independent whole-disc
+  complement/parity/executable readback; source BIN/CUE hashes are unchanged.
+  See [the allocation contract and exact hashes](native-wad-growth-allocation-contract.md).
 - Typed relocation extraction: 10,153 source-free checks, including an
   independent splice oracle and three actual consumer fixtures. Source-backed
   before/after `cmp` also found these complete BINs byte-identical:
@@ -84,11 +91,11 @@ settings remain separate preservation and runtime acceptance boundaries.
   - Artisans + Magic Crafters fixed/fixed aggregate:
     `02b3ec034a0ef4b78f0862e9c0e5e8f9ed188bbdcf2ebea20f2aa081c7481ba5`.
 
-These equivalence runs are **not complete passes** of the three historical
+The initial equivalence runs were **not complete passes** of the three historical
 source-aware smoke executables. Both old and new code reach an obsolete
 fixed-tail registry assertion, or fail trying to write a growing executable
 into original Form 2 padding sector 54079. That reproducible structural defect
-is being corrected separately; runtime approval hashes are not being updated
+was corrected separately as recorded above; runtime approval hashes are not being updated
 to hide the assertion. The comparison receipt is retained at
 `/tmp/spyro-relocation-source-equivalence.yHL108/comparison-before-gap-fix.md`.
 
