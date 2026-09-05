@@ -59,6 +59,21 @@ settings remain separate preservation and runtime acceptance boundaries.
     `f7b06d9100fa72e57c9659b50298016d3a19cfb726b72d57c4d328908854c370`.
   These use the existing schema-6 geometry, not the collision-isolated or
   collapsed-sky successor, and have no new music-playback runtime evidence.
+- Collision isolation passes all 108 canonical authored states plus the exact
+  collapsed-sky successor (109 checked states, 1,399,669 independent literal
+  cell lookups). The authored intents produce 76 distinct physical outputs:
+  the nine position labels for `None` intentionally share bytes. Each state
+  retires 4,252 of 4,253 occupied cells, preserving only the authored support
+  cell and its declared one to three triangles. Full native triangle tables,
+  assignments and flags remain intact. Exact inverse, protected complement and
+  repeated compilation pass; there is no runtime-consumer proof from this alone.
+
+  A new immutable collapsed-sky/Tile-1/Grass candidate was published through the
+  shared transaction, with exactly 61 owned raw sectors and 121,345 changed
+  physical bytes. Whole-image readback and 14 read-only corruption/length/
+  cancellation cases pass. Its BIN SHA is
+  `86ede1c7d0e5219bfc1ea24a655d531c59d07a6ce0c1629ba4d15e066fd71aae`.
+  See [candidate details and entry points](id65-collision-isolated-candidate.md).
 - Typed relocation extraction: 10,153 source-free checks, including an
   independent splice oracle and three actual consumer fixtures. Source-backed
   before/after `cmp` also found these complete BINs byte-identical:
