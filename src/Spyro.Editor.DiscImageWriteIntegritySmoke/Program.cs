@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
+using System.Security.Cryptography;
 using Spyro.Editor.Core.Exporting;
+using Spyro.Editor.Core.Levels;
 
 string temporaryRoot = Path.Combine(Path.GetTempPath(), $"spyro-disc-integrity-{Guid.NewGuid():N}");
 Directory.CreateDirectory(temporaryRoot);
@@ -32,14 +34,87 @@ try
     Run("unsupported layout rejects before write", () => CheckRejected(2352, 16, 19, 7));
     Run("2352 later wrong MSF rejects whole write", () => CheckRejected(2352, 24, 2043, 2063,
         bytes => bytes[3 * 2352 + 14] = 0x10));
+    Run("2352 corrupt sync byte rejects before write", () => CheckRejected(2352, 24, 19, 7,
+        bytes => bytes[2352 + 1] = 0));
+    Run("2352 later corrupt sync end rejects whole write", () => CheckRejected(2352, 24, 2043, 2063,
+        bytes => bytes[3 * 2352 + 11] = 0xFF));
 
     if (failures.Count > 0)
         throw new InvalidOperationException($"{failures.Count}/{checks} failed:\n" + string.Join('\n', failures));
     Console.WriteLine($"DISC_IMAGE_WRITE_INTEGRITY_SMOKE_OK checks={checks}; exact payload/complement, raw integrity, sequential writes, atomic boundary rejection; no game assets");
+    if (args.Length == 1)
+        await CheckRealMusicAsync(args[0]);
 }
 finally
 {
     Directory.Delete(temporaryRoot, recursive: true);
+}
+
+async Task CheckRealMusicAsync(string sourcePath)
+{
+    string beforeHash = await HashAsync(sourcePath);
+    string outputPrefix = Path.Combine(temporaryRoot, "music-acceptance");
+    LevelMusicBatchPatchResult result = await LevelMusicPatchExporter.ExportBatchAsync(new LevelMusicBatchPatchRequest(
+        sourcePath, DiscImageLocator.FindCueForImage(sourcePath), outputPrefix,
+        [new(new LevelDefinition { Key = "artisans", DisplayName = "Artisans", LevelId = 10 }, 2),
+         new(new LevelDefinition { Key = "stonehill", DisplayName = "Stone Hill", LevelId = 11 }, 17),
+         new(new LevelDefinition { Key = "darkhollow", DisplayName = "Dark Hollow", LevelId = 12 }, 0),
+         new(new LevelDefinition { Key = "townsquare", DisplayName = "Town Square", LevelId = 13 }, 31)], true));
+    Require(result.WroteImage && result.Plan.EditedLevelCount == 4, "Actual music exporter did not publish four edited levels.");
+    DiscLayout layout = DiscImage.DetectLayout(result.OutputImagePath);
+    Require(layout.SectorSize == 2352 && layout.UserOffset == 24, "Actual acceptance expects the selected raw2352 source.");
+    HashSet<long> payloadOffsets = [];
+    HashSet<int> sectors = [];
+    using (FileStream output = File.OpenRead(result.OutputImagePath))
+    {
+        foreach (LevelMusicPatch patch in result.Plan.Patches)
+        {
+            byte[] expected = patch.AfterHexPreview.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(value => Convert.ToByte(value, 16)).ToArray();
+            byte[] actual = DiscImage.ReadFileBytes(output, layout, result.Plan.ExeLba, patch.ExeFileOffset, expected.Length);
+            Require(actual.AsSpan().SequenceEqual(expected), $"Actual music patch {patch.Kind} differs from its plan.");
+            for (int index = 0; index < expected.Length; index++)
+            {
+                long physical = DiscImage.ConvertFileOffsetToImageOffset(layout, result.Plan.ExeLba, patch.ExeFileOffset + index);
+                payloadOffsets.Add(physical);
+                sectors.Add(checked((int)(physical / 2352)));
+            }
+        }
+        Require(RawMode2Form1SectorIntegrity.VerifyAbsoluteSectors(output, layout, sectors.Select(lba => (lba, 1))) == sectors.Count,
+            "Actual music output failed raw-sector integrity.");
+    }
+    long changedBytes = 0;
+    using (FileStream source = File.OpenRead(sourcePath))
+    using (FileStream output = File.OpenRead(result.OutputImagePath))
+    {
+        Require(source.Length == output.Length, "Music export changed physical image length.");
+        byte[] sourceChunk = new byte[128 * 1024];
+        byte[] outputChunk = new byte[sourceChunk.Length];
+        for (long position = 0; position < source.Length; position += sourceChunk.Length)
+        {
+            int count = (int)Math.Min(sourceChunk.Length, source.Length - position);
+            source.ReadExactly(sourceChunk.AsSpan(0, count));
+            output.ReadExactly(outputChunk.AsSpan(0, count));
+            if (sourceChunk.AsSpan(0, count).SequenceEqual(outputChunk.AsSpan(0, count))) continue;
+            for (int index = 0; index < count; index++)
+            {
+                if (sourceChunk[index] == outputChunk[index]) continue;
+                long physical = position + index;
+                bool parity = sectors.Contains(checked((int)(physical / 2352))) && physical % 2352 >= 2072;
+                Require(payloadOffsets.Contains(physical) || parity, $"Actual music export changed an unrelated byte at {physical:X}.");
+                changedBytes++;
+            }
+        }
+    }
+    string afterHash = await HashAsync(sourcePath);
+    Require(beforeHash == afterHash, "Actual music export changed its source image.");
+    string outputHash = await HashAsync(result.OutputImagePath);
+    Console.WriteLine($"REAL_SOURCE_MUSIC_INTEGRITY_OK levels=4 patches={result.Plan.PatchCount} sectors={sectors.Count} changedBytes={changedBytes} sourceSha256={beforeHash} outputSha256={outputHash}; exact source complement preserved; temporary output removed on exit");
+
+    static async Task<string> HashAsync(string path)
+    {
+        await using FileStream stream = File.OpenRead(path);
+        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream));
+    }
 }
 
 void Run(string name, Action action)

@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 
 namespace Spyro.Editor.Core.Exporting;
@@ -23,39 +24,36 @@ internal static class DiscImage
 
     public static DiscFileRecord FindRootFileRecord(FileStream stream, DiscLayout layout, Predicate<string> matchesName)
     {
-        byte[] data = new byte[layout.RootLength];
-        int remaining = data.Length;
-        int written = 0;
-        int sector = layout.RootExtent;
-        while (remaining > 0)
+        ArgumentNullException.ThrowIfNull(layout);
+        ArgumentNullException.ThrowIfNull(matchesName);
+        if (layout.RootLength <= 0)
+            throw new InvalidDataException("The ISO root directory has no readable extent.");
+        RequireReadRange(stream, layout, layout.RootExtent, 0, layout.RootLength);
+        // A source-controlled RootLength must never become a single allocation.
+        // ISO directory records may not cross a logical sector boundary.
+        for (long directoryOffset = 0; directoryOffset < layout.RootLength; directoryOffset += 2048)
         {
-            byte[] sectorBytes = ReadUserSector(stream, layout, sector);
-            int toCopy = Math.Min(2048, remaining);
-            Array.Copy(sectorBytes, 0, data, written, toCopy);
-            written += toCopy;
-            remaining -= toCopy;
-            sector++;
-        }
-
-        int offset = 0;
-        while (offset < data.Length)
-        {
-            int recordLength = data[offset];
-            if (recordLength == 0)
+            int count = (int)Math.Min(2048, layout.RootLength - directoryOffset);
+            byte[] data = ReadFileBytes(stream, layout, layout.RootExtent, directoryOffset, count);
+            for (int offset = 0; offset < data.Length;)
             {
-                offset = ((offset / 2048) + 1) * 2048;
-                continue;
+                int recordLength = data[offset];
+                if (recordLength == 0)
+                    break;
+                if (recordLength < 34 || offset + recordLength > data.Length)
+                    throw new InvalidDataException("An ISO directory record crosses its sector or directory boundary.");
+                int nameLength = data[offset + 32];
+                int minimumLength = 33 + nameLength + (nameLength % 2 == 0 ? 1 : 0);
+                if (nameLength == 0 || minimumLength > recordLength)
+                    throw new InvalidDataException("An ISO directory identifier exceeds its containing record.");
+                int lba = ReadBothEndianInt32(data, offset + 2, "file extent");
+                int size = ReadBothEndianInt32(data, offset + 10, "file length");
+                RequireReadRange(stream, layout, lba, 0, size);
+                string name = Encoding.ASCII.GetString(data, offset + 33, nameLength).Replace(";1", "", StringComparison.OrdinalIgnoreCase);
+                if (matchesName(name))
+                    return new DiscFileRecord(name, lba, size);
+                offset += recordLength;
             }
-
-            if (offset + recordLength > data.Length || recordLength < 34)
-                break;
-
-            int nameLength = data[offset + 32];
-            string name = Encoding.ASCII.GetString(data, offset + 33, nameLength).Replace(";1", "", StringComparison.OrdinalIgnoreCase);
-            if (matchesName(name))
-                return new DiscFileRecord(name, GetUInt32(data, offset + 2), GetUInt32(data, offset + 10));
-
-            offset += recordLength;
         }
 
         throw new InvalidOperationException("Could not find the executable file in the disc root.");
@@ -63,6 +61,7 @@ internal static class DiscImage
 
     public static byte[] ReadFileBytes(FileStream stream, DiscLayout layout, int fileLba, long fileOffset, int length)
     {
+        RequireReadRange(stream, layout, fileLba, fileOffset, length);
         byte[] result = new byte[length];
         int remaining = length;
         int written = 0;
@@ -70,12 +69,9 @@ internal static class DiscImage
         while (remaining > 0)
         {
             int sectorOffset = (int)(absolute % 2048);
-            int sector = fileLba + (int)Math.Floor(absolute / 2048d);
             int toRead = Math.Min(2048 - sectorOffset, remaining);
-            stream.Position = ((long)sector * layout.SectorSize) + layout.UserOffset + sectorOffset;
-            int read = stream.Read(result, written, toRead);
-            if (read != toRead)
-                throw new EndOfStreamException("Could not read the requested disc bytes.");
+            stream.Position = ConvertFileOffsetToImageOffset(layout, fileLba, absolute);
+            stream.ReadExactly(result.AsSpan(written, toRead));
 
             written += toRead;
             remaining -= toRead;
@@ -154,9 +150,12 @@ internal static class DiscImage
 
     public static long ConvertFileOffsetToImageOffset(DiscLayout layout, int fileLba, long fileOffset)
     {
-        long sector = fileLba + (long)Math.Floor(fileOffset / 2048d);
+        RequireLogicalLayout(layout);
+        if (fileLba < 0 || fileOffset < 0)
+            throw new ArgumentOutOfRangeException(nameof(fileOffset), "Disc offsets require a nonnegative file LBA and logical offset.");
+        long sector = checked(fileLba + fileOffset / 2048);
         long sectorOffset = fileOffset % 2048;
-        return (sector * layout.SectorSize) + layout.UserOffset + sectorOffset;
+        return checked(sector * layout.SectorSize + layout.UserOffset + sectorOffset);
     }
 
     public static int IndexOfBytes(byte[] haystack, byte[] needle, int start)
@@ -219,18 +218,54 @@ internal static class DiscImage
         if (buffer[0] != 1 || signature != "CD001")
             return null;
 
-        return new DiscLayout(sectorSize, userOffset, GetUInt32(buffer, 158), GetUInt32(buffer, 166));
+        if (buffer[6] != 1 || buffer[156] < 34 || buffer[188] != 1 || buffer[189] != 0)
+            throw new InvalidDataException("The ISO primary volume descriptor or its root record is malformed.");
+        int blockSizeLittle = BinaryPrimitives.ReadUInt16LittleEndian(buffer.AsSpan(128, 2));
+        int blockSizeBig = BinaryPrimitives.ReadUInt16BigEndian(buffer.AsSpan(130, 2));
+        if (blockSizeLittle != 2048 || blockSizeBig != blockSizeLittle)
+            throw new InvalidDataException("The ISO logical block size must be 2048 with matching endian encodings.");
+        int rootExtent = ReadBothEndianInt32(buffer, 158, "root extent");
+        int rootLength = ReadBothEndianInt32(buffer, 166, "root length");
+        if (rootLength == 0)
+            throw new InvalidDataException("The ISO root directory has zero length.");
+        DiscLayout layout = new(sectorSize, userOffset, rootExtent, rootLength);
+        RequireReadRange(stream, layout, rootExtent, 0, rootLength);
+        return layout;
     }
 
-    private static byte[] ReadUserSector(FileStream stream, DiscLayout layout, int lba)
+    private static void RequireReadRange(FileStream stream, DiscLayout layout, int fileLba, long fileOffset, int length)
     {
-        byte[] buffer = new byte[2048];
-        stream.Position = ((long)lba * layout.SectorSize) + layout.UserOffset;
-        int read = stream.Read(buffer, 0, buffer.Length);
-        if (read != buffer.Length)
-            throw new EndOfStreamException("Could not read a full disc sector.");
-        return buffer;
+        ArgumentNullException.ThrowIfNull(stream);
+        RequireLogicalLayout(layout);
+        if (!stream.CanSeek || !stream.CanRead)
+            throw new InvalidOperationException("Disc reads require a seekable readable stream.");
+        if (fileLba < 0 || fileOffset < 0 || length < 0)
+            throw new ArgumentOutOfRangeException(nameof(fileOffset), "Disc reads require nonnegative LBA, logical offset and length.");
+        long end = checked(fileOffset + length);
+        long physicalEnd = length == 0 && fileOffset % 2048 == 0
+            ? checked((fileLba + fileOffset / 2048) * layout.SectorSize)
+            : length == 0
+                ? ConvertFileOffsetToImageOffset(layout, fileLba, fileOffset)
+                : checked(ConvertFileOffsetToImageOffset(layout, fileLba, end - 1) + 1);
+        if (physicalEnd > stream.Length)
+            throw new EndOfStreamException("The requested logical disc extent exceeds the existing image.");
     }
 
-    private static int GetUInt32(byte[] bytes, int offset) => (int)BitConverter.ToUInt32(bytes, offset);
+    private static void RequireLogicalLayout(DiscLayout layout)
+    {
+        ArgumentNullException.ThrowIfNull(layout);
+        if (!((layout.SectorSize == 2048 && layout.UserOffset == 0) ||
+              (layout.SectorSize == 2352 && layout.UserOffset == 24) ||
+              (layout.SectorSize == 2336 && layout.UserOffset == 8)))
+            throw new InvalidOperationException("Logical disc access requires ISO/2048, MODE2/2352 or MODE2/2336.");
+    }
+
+    private static int ReadBothEndianInt32(ReadOnlySpan<byte> bytes, int offset, string field)
+    {
+        uint little = BinaryPrimitives.ReadUInt32LittleEndian(bytes.Slice(offset, 4));
+        uint big = BinaryPrimitives.ReadUInt32BigEndian(bytes.Slice(offset + 4, 4));
+        if (little != big || little > int.MaxValue)
+            throw new InvalidDataException($"The ISO {field} has mismatched endian encodings or exceeds the supported range.");
+        return (int)little;
+    }
 }

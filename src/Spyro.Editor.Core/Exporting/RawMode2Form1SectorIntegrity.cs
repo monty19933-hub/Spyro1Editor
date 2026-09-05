@@ -282,6 +282,8 @@ internal static class RawMode2Form1SectorIntegrity
         if (layout.SectorSize == RawSectorBytes && layout.UserOffset == UserOffset)
         {
             RequireMode2Form1(sector, lba);
+            if (sector[0] != 0 || sector[11] != 0 || sector.Slice(1, 10).ContainsAnyExcept((byte)0xFF))
+                throw new InvalidDataException($"Raw sector {lba} has an invalid CD sync prefix.");
             RequireMsfAddress(sector, lba);
             return;
         }
