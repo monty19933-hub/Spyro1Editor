@@ -1551,87 +1551,19 @@ internal static class UnusedLevel65RemoteBlankIsolationConstruction
         int usedBlockBytes,
         int triangleCount)
     {
-        if (usedBlockBytes <= 0 || (usedBlockBytes & 1) != 0 || usedBlockBytes > blocksCapacity.Length)
-            throw new InvalidDataException("The collision block used length is invalid.");
-        byte[] blocks = blocksCapacity.ToArray();
-        int usedWords = usedBlockBytes / 2;
-        List<int> groupStarts = [];
-        for (int wordOffset = 0; wordOffset < usedWords; wordOffset++)
-        {
-            if ((ReadUInt16(blocks, wordOffset * 2) & 0x8000) != 0)
-                groupStarts.Add(wordOffset);
-        }
-        if (groupStarts.Count < 2 || groupStarts[^1] != usedWords - 1 ||
-            ReadUInt16(blocks, groupStarts[^1] * 2) != 0x8000)
-        {
-            throw new InvalidDataException("The collision blocks lack their exact terminal sentinel.");
-        }
-        Dictionary<int, int[]> groups = [];
-        for (int group = 0; group < groupStarts.Count - 1; group++)
-        {
-            int start = groupStarts[group];
-            int end = groupStarts[group + 1];
-            int[] sequence = new int[end - start];
-            for (int index = 0; index < sequence.Length; index++)
-            {
-                ushort word = ReadUInt16(blocks, (start + index) * 2);
-                if ((index == 0) != ((word & 0x8000) != 0))
-                    throw new InvalidDataException("A collision group start marker is invalid.");
-                int triangle = word & 0x7FFF;
-                if (triangle >= triangleCount)
-                    throw new InvalidDataException("A collision group references an out-of-range triangle.");
-                sequence[index] = triangle;
-            }
-            groups.Add(start, sequence);
-        }
-
-        int ReadTreeWord(int offset)
-        {
-            if (offset < 0 || (offset & 1) != 0 || offset + 2 > tree.Length)
-                throw new InvalidDataException("A collision tree word is out of range.");
-            return ReadUInt16(tree, offset);
-        }
-        int ReadLength(int offset)
-        {
-            int length = ReadTreeWord(offset);
-            if (length < 0 || length > 256 || offset + ((length + 1L) * 2L) > tree.Length)
-                throw new InvalidDataException("A collision tree segment length is invalid.");
-            return length;
-        }
-
-        Dictionary<UnusedLevel65RemoteBlankCollisionCell, CollisionCellBinding> cells = [];
-        int zLength = ReadLength(0);
-        for (int z = 0; z < zLength; z++)
-        {
-            int yOffset = ReadTreeWord((z + 1) * 2);
-            if (yOffset == 0xFFFF)
-                continue;
-            int yLength = ReadLength(yOffset);
-            for (int y = 0; y < yLength; y++)
-            {
-                int xOffset = ReadTreeWord(yOffset + ((y + 1) * 2));
-                if (xOffset == 0xFFFF)
-                    continue;
-                int xLength = ReadLength(xOffset);
-                for (int x = 0; x < xLength; x++)
-                {
-                    int pointerOffset = xOffset + ((x + 1) * 2);
-                    int blockWord = ReadTreeWord(pointerOffset);
-                    if (blockWord == 0xFFFF)
-                        continue;
-                    if (blockWord == groupStarts[^1] || !groups.TryGetValue(blockWord, out int[]? sequence))
-                        throw new InvalidDataException("A collision tree leaf points outside an exact block group.");
-                    UnusedLevel65RemoteBlankCollisionCell cell = new(x, y, z);
-                    cells.Add(cell, new(cell, pointerOffset, blockWord, sequence.ToArray()));
-                }
-            }
-        }
-        if (!cells.Values.Select(cell => cell.SourceBlockWordOffset).Distinct().Order()
-            .SequenceEqual(groups.Keys.Order()))
-        {
-            throw new InvalidDataException("The collision blocks contain unreferenced groups.");
-        }
-        return new(tree.ToArray(), blocks, cells, groupStarts.Count, groupStarts[^1], usedBlockBytes);
+        Scene.NativeCollisionIndexSnapshot decoded = Scene.NativeCollisionIndexCodec.Decode(
+            tree, blocksCapacity, usedBlockBytes, triangleCount,
+            requireDescendingOrder: false);
+        if (decoded.GroupStartCount < 2)
+            throw new InvalidDataException("The original remote-blank construction requires nonempty native groups.");
+        Dictionary<UnusedLevel65RemoteBlankCollisionCell, CollisionCellBinding> cells = decoded.Cells.Values
+            .ToDictionary(item => new UnusedLevel65RemoteBlankCollisionCell(item.Cell.X, item.Cell.Y, item.Cell.Z),
+                item => new CollisionCellBinding(
+                    new(item.Cell.X, item.Cell.Y, item.Cell.Z),
+                    item.TreePointerByteOffset, item.SourceBlockWordOffset,
+                    item.OrderedTriangleIndexes.ToArray()));
+        return new(decoded.CopyTree(), decoded.CopyBlocks(), cells,
+            decoded.GroupStartCount, decoded.TerminalSentinelWordOffset, decoded.UsedBlockBytes);
     }
 
     private static int FindTreeLeafPointer(byte[] tree, UnusedLevel65RemoteBlankCollisionCell cell)

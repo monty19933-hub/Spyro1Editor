@@ -884,89 +884,17 @@ internal static class Id65AuthoringTerrainSetCompiler
         int usedBlockBytes,
         int triangleCount)
     {
-        if (usedBlockBytes <= 0 || (usedBlockBytes & 1) != 0 || usedBlockBytes > blocks.Length ||
-            blocks.AsSpan(usedBlockBytes).IndexOfAnyExcept((byte)0) >= 0)
-        {
-            throw new InvalidDataException("The collision block used length or zero tail is invalid.");
-        }
-        int usedWords = usedBlockBytes / 2;
-        List<int> starts = [];
-        for (int word = 0; word < usedWords; word++)
-        {
-            if ((ReadUInt16(blocks, word * 2) & 0x8000) != 0)
-                starts.Add(word);
-        }
-        if (starts.Count < 2 || starts[^1] != usedWords - 1 ||
-            ReadUInt16(blocks, starts[^1] * 2) != 0x8000)
-        {
-            throw new InvalidDataException("The collision blocks lack the exact terminal sentinel.");
-        }
-        Dictionary<int, int[]> groups = [];
-        for (int group = 0; group + 1 < starts.Count; group++)
-        {
-            int start = starts[group];
-            int end = starts[group + 1];
-            int[] sequence = new int[end - start];
-            for (int index = 0; index < sequence.Length; index++)
-            {
-                ushort value = ReadUInt16(blocks, (start + index) * 2);
-                if ((index == 0) != ((value & 0x8000) != 0))
-                    throw new InvalidDataException("A collision block group marker is invalid.");
-                int triangle = value & 0x7FFF;
-                if (triangle >= triangleCount)
-                    throw new InvalidDataException("A collision block references an out-of-range triangle.");
-                sequence[index] = triangle;
-            }
-            if (!IsStrictlyDescending(sequence))
-                throw new InvalidDataException("A native collision cell sequence is not strictly descending.");
-            groups.Add(start, sequence);
-        }
-        int TreeWord(int offset)
-        {
-            if (offset < 0 || (offset & 1) != 0 || offset + 2 > tree.Length)
-                throw new InvalidDataException("A collision tree pointer is outside capacity.");
-            return ReadUInt16(tree, offset);
-        }
-        int SegmentLength(int offset)
-        {
-            int length = TreeWord(offset);
-            if (length > 256 || offset + ((length + 1L) * 2L) > tree.Length)
-                throw new InvalidDataException("A collision tree segment is invalid.");
-            return length;
-        }
-        Dictionary<Id65AuthoringCollisionCell, CollisionCellBinding> cells = [];
-        int zLength = SegmentLength(0);
-        for (int z = 0; z < zLength; z++)
-        {
-            int yOffset = TreeWord((z + 1) * 2);
-            if (yOffset == 0xFFFF)
-                continue;
-            int yLength = SegmentLength(yOffset);
-            for (int y = 0; y < yLength; y++)
-            {
-                int xOffset = TreeWord(yOffset + ((y + 1) * 2));
-                if (xOffset == 0xFFFF)
-                    continue;
-                int xLength = SegmentLength(xOffset);
-                for (int x = 0; x < xLength; x++)
-                {
-                    int pointerOffset = xOffset + ((x + 1) * 2);
-                    int groupOffset = TreeWord(pointerOffset);
-                    if (groupOffset == 0xFFFF)
-                        continue;
-                    if (!groups.TryGetValue(groupOffset, out int[]? sequence))
-                        throw new InvalidDataException("A collision leaf points outside a real block group.");
-                    Id65AuthoringCollisionCell cell = new(x, y, z);
-                    cells.Add(cell, new(cell, pointerOffset, groupOffset, sequence.ToArray()));
-                }
-            }
-        }
-        if (!cells.Values.Select(item => item.SourceBlockWordOffset).Distinct().Order()
-                .SequenceEqual(groups.Keys.Order()))
-        {
-            throw new InvalidDataException("The collision blocks contain an unreferenced group.");
-        }
-        return new(tree.ToArray(), blocks.ToArray(), cells);
+        Scene.NativeCollisionIndexSnapshot decoded = Scene.NativeCollisionIndexCodec.Decode(
+            tree, blocks, usedBlockBytes, triangleCount);
+        if (decoded.GroupStartCount < 2)
+            throw new InvalidDataException("The terrain-set source must retain nonempty collision groups.");
+        Dictionary<Id65AuthoringCollisionCell, CollisionCellBinding> cells = decoded.Cells.Values
+            .ToDictionary(item => new Id65AuthoringCollisionCell(item.Cell.X, item.Cell.Y, item.Cell.Z),
+                item => new CollisionCellBinding(
+                    new(item.Cell.X, item.Cell.Y, item.Cell.Z),
+                    item.TreePointerByteOffset, item.SourceBlockWordOffset,
+                    item.OrderedTriangleIndexes.ToArray()));
+        return new(decoded.CopyTree(), decoded.CopyBlocks(), cells);
     }
 
     private static CollisionRepack RepackCollisionIndex(
