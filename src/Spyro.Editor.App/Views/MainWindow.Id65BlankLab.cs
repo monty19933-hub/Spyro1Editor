@@ -25,12 +25,14 @@ namespace Spyro.Editor.App.Views;
 public sealed partial class MainWindow
 {
     private const string Id65BlankLabDisclosureTitle = "ID65 Blank-Level Lab";
+    private const string Id65BlankSlatePresetId = "blank-slate-v1";
+    private const string Id65BlankSlateColorHex = "#263447";
     private const string Id65BlankLabTerrainCapability =
         "Schema-5 T66 documents expose two independently selectable structural units, Tile 1 and Tile 2, through exact canonical-document actions. Schema 4 retains its prior single optional-triangle semantics until explicitly migrated; tile 2 is never inferred. Generic HP-Z, texture, XY, add/remove, undo, and TerrainEditStore persistence remain unavailable on the fresh scene projection.";
     private const string Id65BlankLabTextureCapability =
-        "Every Full Authoring Document requires exactly one base-face texture choice: Resident T25 or Proved private T66. T25 is offline-authoring/viewport-only and cannot create a candidate, BIN, runtime, or release artifact. Proved private T66 supports the frozen legacy and schema-3 offline candidates. Schema 4 is T66-only and currently authorizes only canonical document persistence plus static fresh-scene projection; physical materialization remains closed. Arbitrary cross-level/custom art remains unavailable.";
+        "Every Full Authoring Document requires exactly one base-face texture choice: Resident T25 or Proved private T66. T25 is offline-authoring/viewport-only and cannot create a candidate, BIN, runtime, or release artifact. Proved private T66 supports the frozen legacy, schema-3, and schema-5 offline candidates. Schema 4 is T66-only and currently authorizes only canonical document persistence plus static fresh-scene projection; physical materialization remains closed. Arbitrary cross-level/custom art remains unavailable.";
     private const string Id65BlankLabMobyCapability =
-        "Fresh schema-4 and schema-5 documents make one mutually exclusive canonical choice: None, verified Grass T107, or resident Red Gem T21 at one of nine fixed positions on collision T13995; the position is retained while None is selected. Schema 3 must be migrated explicitly and maps only to None or Grass; schema 4 must be explicitly migrated before Tile 2 exists. Schema-5 physical materialization, Create BIN, runtime acceptance, release promotion, arbitrary actors, and linked families remain unavailable.";
+        "Fresh schema-4 and schema-5 documents make one mutually exclusive canonical choice: None, verified Grass T107, or resident Red Gem T21 at one of nine fixed positions on collision T13995; the position is retained while None is selected. Schema 3 must be migrated explicitly and maps only to None or Grass; schema 4 must be explicitly migrated before Tile 2 exists. Schema 5 can build its separately guarded exact offline candidate; schema-4 physical materialization, normal Create BIN, runtime acceptance, release promotion, arbitrary actors, and linked families remain unavailable.";
     private const string Id65AuthoringDocumentFileName =
         Id65AuthoringEditorDocumentWorkspaceInspector.DocumentFileName;
     private const int Id65LegacyT66DocumentSchemaVersion = 1;
@@ -166,7 +168,49 @@ public sealed partial class MainWindow
         bool CurrentOnDiskFreshnessVerified,
         bool HostileFilesystemRaceSafe,
         bool RequiresTrustedExclusiveWorkspaceDirectory,
-        bool CommonWorkspaceLeaseOwned);
+        bool CommonWorkspaceLeaseOwned,
+        bool UsesRemotePadTerrainSet = false,
+        string ActiveTerrainUnitIdsCanonical = "",
+        Id65RemotePadMobyKind? RemotePadMobyKind = null,
+        string? RemotePadMobyPositionId = null,
+        bool Schema5CompilerPinsVerified = false,
+        bool MobyChoicePositionReadbackVerified = false,
+        bool FourTerrainTopologiesVerified = false,
+        bool UsesBlankCyclorama = false,
+        string BlankCycloramaPresetId = "",
+        string BlankCycloramaColorHex = "",
+        string OutputCycloramaSha256 = "",
+        string CycloramaGeometrySha256 = "",
+        string CycloramaCommandByteSha256 = "",
+        string CycloramaNonPaletteSha256 = "",
+        int CycloramaModelOffset = 0,
+        int CycloramaRow80Offset = 0,
+        long CycloramaWadOffset = 0,
+        int CycloramaByteLength = 0,
+        int PaletteWordCount = 0,
+        int PaletteOwnedRangeCount = 0,
+        bool ExactStoreReloadCasVerifiedThreeTimes = false,
+        bool ExactEnvelopeCasVerifiedThreeTimes = false,
+        bool ExactStaticAuthoringProjectionReloadVerifiedThreeTimes = false,
+        bool ExactNativeInputGenerationRecapturedThreeTimes = false,
+        bool ExactV3TemplateRecapturedThreeTimes = false,
+        bool ExactLockedBaseRecapturedThreeTimes = false,
+        bool ExactRow80ReadbackVerified = false,
+        bool ExactInverseReadbackVerified = false,
+        bool Schema6CompilerPinsVerified = false,
+        bool BlankCycloramaIntentReadbackVerified = false,
+        bool CycloramaLayoutReadbackVerified = false,
+        bool EveryPaletteWordReadbackVerified = false,
+        bool CycloramaGeometryReadbackVerified = false,
+        bool CycloramaCommandBytesReadbackVerified = false,
+        bool CycloramaNonPaletteReadbackVerified = false,
+        bool Wad79Preserved = false,
+        bool RetailTownSquareWad15Preserved = false,
+        bool RetailTownSquareWad16Preserved = false,
+        bool RetailArtisansWad9Preserved = false,
+        bool RetailArtisansWad10Preserved = false,
+        bool RetailTownSquareSkyBlockPreserved = false,
+        bool RetailArtisansLinkedSkyBlockPreserved = false);
 
     private sealed record Id65AuthoringMandatoryBaseTextureChoice(
         int TextureId,
@@ -186,7 +230,7 @@ public sealed partial class MainWindow
             new(
                 Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId,
                 "Proved private T66",
-                "Uses the exact private T66 viewport projection. It supports the frozen legacy full-candidate state and every verified schema-3 terrain/Grass combination while T88 remains off; normal Create BIN and runtime/release authority remain separate.")
+                "Uses the exact private T66 viewport projection. It supports the frozen legacy full-candidate state, every verified schema-3 terrain/Grass combination while T88 remains off, and the guarded schema-5 terrain-set/Moby candidate; normal Create BIN and runtime/release authority remain separate.")
         ];
 
     private static string Id65MandatoryBaseTextureLabel(int textureId) => textureId switch
@@ -702,7 +746,7 @@ public sealed partial class MainWindow
             Child = new TextBlock
             {
                 Text =
-                    "Current schema-4/5 boundary: one canonical None/Grass T107/Red Gem T21 choice at one of nine fixed positions on collision T13995, with T66 fixed and T88 omitted. Schema 5 additionally exposes two independent terrain tiles. These surfaces save and statically project the document only. Physical materialization, arbitrary Mobys, drag placement, normal Create BIN, runtime proof, and release promotion remain locked. Older schema-3 Grass and schema-4 single-terrain documents retain their prior routes until explicitly migrated.",
+                    "Current schema-4/5 boundary: one canonical None/Grass T107/Red Gem T21 choice at one of nine fixed positions on collision T13995, with T66 fixed and T88 omitted. Schema 5 additionally exposes two independent terrain tiles and can build a separately guarded exact offline candidate. Schema 4 remains canonical-document/static-presentation only. Arbitrary Mobys, drag placement, normal Create BIN, runtime proof, and release promotion remain locked. Older schema-3 Grass and schema-4 single-terrain documents retain their prior routes until explicitly migrated.",
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = new SolidColorBrush(Color.FromRgb(107, 70, 17)),
                 FontSize = 11,
@@ -1260,7 +1304,24 @@ public sealed partial class MainWindow
                 initial.UsesRemotePadMobyChoice &&
                 !initial.UsesRemotePadTerrainSet &&
                 selected.UsesRemotePadTerrainSet;
-            _statusText.Text = selected.UsesRemotePadTerrainSet
+            bool explicitBlankCycloramaMigration =
+                existing != null &&
+                initial.UsesRemotePadTerrainSet &&
+                !initial.UsesBlankCyclorama &&
+                selected.UsesBlankCyclorama;
+            if ((initial.UsesBlankCyclorama && !selected.UsesBlankCyclorama) ||
+                (selected.UsesBlankCyclorama &&
+                    !initial.UsesBlankCyclorama &&
+                    !explicitBlankCycloramaMigration))
+            {
+                throw new InvalidDataException(
+                    "Blank Slate schema 6 is an explicit, one-way schema-5 migration. It is never inferred or downgraded by ordinary document edits.");
+            }
+            _statusText.Text = selected.UsesBlankCyclorama
+                ? explicitBlankCycloramaMigration
+                    ? "ID65 Full Authoring Document: revalidating the exact schema-5 document before explicit Blank Slate schema-6 migration (blank-slate-v1, #263447)…"
+                    : "ID65 Full Authoring Document: validating the Blank Slate schema-6 projection (blank-slate-v1, #263447) and publishing with compare-and-swap…"
+                : selected.UsesRemotePadTerrainSet
                 ? explicitRemotePadTerrainSetMigration
                     ? "ID65 Full Authoring Document: revalidating the exact schema-4 document before explicit schema-5 two-tile terrain-set migration…"
                     : "ID65 Full Authoring Document: validating the schema-5 static terrain-set projection and publishing with compare-and-swap…"
@@ -1276,7 +1337,15 @@ public sealed partial class MainWindow
             Id65AuthoringEditorControlStateCompilation selectedCompilation =
                 Id65AuthoringEditorControlStateCompiler.Compile(selected);
             Id65AuthoringEditorDocumentWriteResult written =
-                explicitRemotePadTerrainSetMigration
+                explicitBlankCycloramaMigration
+                    ? await Id65AuthoringEditorDocumentWorkspaceWriter
+                        .MigrateRemotePadMobyChoiceTerrainSetToBlankCycloramaExactAsync(
+                            paths,
+                            manifest,
+                            selected,
+                            existing!.EnvelopeCanonicalSha256,
+                            operation.Cancellation.Token)
+                    : explicitRemotePadTerrainSetMigration
                     ? await Id65AuthoringEditorDocumentWorkspaceWriter
                         .MigrateRemotePadMobyChoiceToTerrainSetExactAsync(
                             paths,
@@ -1316,7 +1385,9 @@ public sealed partial class MainWindow
                 expectedExplicitRemotePadMobyChoiceMigration:
                     explicitRemotePadMobyChoiceMigration,
                 expectedExplicitRemotePadTerrainSetMigration:
-                    explicitRemotePadTerrainSetMigration);
+                    explicitRemotePadTerrainSetMigration,
+                expectedExplicitBlankCycloramaMigration:
+                    explicitBlankCycloramaMigration);
             ClearId65BlankLabRevealBinding();
             _statusText.Text =
                 "ID65 Full Authoring Document: re-inspecting the durable document and preparing its exact fresh-scene projection…";
@@ -1337,7 +1408,8 @@ public sealed partial class MainWindow
             _statusText.Text =
                 $"{(written.ExplicitLegacyToRemotePadMigrationPerformed ||
                     written.ExplicitRemotePadMobyChoiceMigrationPerformed ||
-                    written.ExplicitRemotePadTerrainSetMigrationPerformed
+                    written.ExplicitRemotePadTerrainSetMigrationPerformed ||
+                    written.ExplicitBlankCycloramaMigrationPerformed
                     ? "Migrated"
                     : written.CreatedNewDocument ? "Created" : "Updated")} the canonical ID65 Full Authoring Document " +
                 $"({written.DocumentCanonicalSha256[..12]}…): " +
@@ -1345,11 +1417,14 @@ public sealed partial class MainWindow
                     ? $"Terrain Tile 1 {(written.ControlState.IncludeTerrainTile1 ? "included" : "omitted")}; Terrain Tile 2 {(written.ControlState.IncludeTerrainTile2 ? "included" : "omitted")}; "
                     : $"structural terrain {(written.ControlState.IncludeStructuralTerrain ? "included" : "omitted")}; ") +
                 (written.ControlState.UsesRemotePadMobyChoice
-                    ? $"schema-{(written.ControlState.UsesRemotePadTerrainSet ? "5" : "4")} Moby {Id65RemotePadMobyChoiceCatalog.GetRequiredChoice(written.ControlState.RemotePadMobyKind!.Value).Label}; "
+                    ? $"schema-{(written.ControlState.UsesBlankCyclorama ? "6" : written.ControlState.UsesRemotePadTerrainSet ? "5" : "4")} Moby {Id65RemotePadMobyChoiceCatalog.GetRequiredChoice(written.ControlState.RemotePadMobyKind!.Value).Label}; "
                     : $"Grass T88 {(written.ControlState.IncludeGrassAtT88 ? "included" : "omitted")}; Grass T107 {(written.ControlState.IncludeGrassAtT107 ? "included" : "omitted")}; ") +
                 $"mandatory base face {Id65MandatoryBaseTextureLabel(written.ControlState.MandatoryBaseFaceTextureId)}. " +
                 (written.ControlState.UsesRemotePadMobyChoice
-                    ? $"Schema-{(written.ControlState.UsesRemotePadTerrainSet ? "5" : "4")} retained position {Id65RemotePadGrassT107Catalog.GetRequiredPosition(written.ControlState.RemotePadMobyPositionId!).Label}. "
+                    ? $"Schema-{(written.ControlState.UsesBlankCyclorama ? "6" : written.ControlState.UsesRemotePadTerrainSet ? "5" : "4")} retained position {Id65RemotePadGrassT107Catalog.GetRequiredPosition(written.ControlState.RemotePadMobyPositionId!).Label}. " +
+                      (written.ControlState.UsesBlankCyclorama
+                          ? $"Blank Slate preset {written.ControlState.BlankCycloramaPresetId} with exact color {written.ControlState.BlankCycloramaColorHex} is preserved. "
+                          : "")
                     : written.ControlState.UsesRemotePadT107Grid
                     ? $"Remote-pad T107 position {Id65RemotePadGrassT107Catalog.GetRequiredPosition(written.ControlState.T107RemotePadPositionId!).Label} is retained by schema 3. "
                     : "Legacy native-apron T107 semantics remain unchanged. ") +
@@ -1357,8 +1432,10 @@ public sealed partial class MainWindow
                 (preparedLevel == null
                     ? "Load the exact ID65 Lab to view this canonical document projection. "
                     : "The loaded fresh scene was replaced only after exact post-save readback and projection. ") +
-                (written.ControlState.UsesRemotePadTerrainSet
-                    ? "Schema 5 is saved and statically projected only. Physical materialization, exact candidate creation, normal Create BIN, runtime use, release integration, promotion, and publication remain blocked."
+                (written.ControlState.UsesBlankCyclorama
+                    ? "Blank Slate schema 6 is saved, statically projected, and eligible for the separately guarded exact offline schema-6 candidate. Normal Create BIN, runtime use, release integration, promotion, and publication remain blocked."
+                    : written.ControlState.UsesRemotePadTerrainSet
+                    ? "Schema 5 is saved, statically projected, and eligible for the separately guarded exact offline candidate. Normal Create BIN, runtime use, release integration, promotion, and publication remain blocked."
                     : written.ControlState.UsesRemotePadMobyChoice
                     ? "Schema 4 is saved and statically projected only. Physical materialization, exact candidate creation, normal Create BIN, runtime use, release integration, promotion, and publication remain blocked."
                     : written.ControlState.UsesRemotePadT107Grid
@@ -1540,12 +1617,8 @@ public sealed partial class MainWindow
             }
             Id65AuthoringEditorControlState state =
                 Id65AuthoringEditorControlStateCompiler.RecoverControlState(document);
-            if (state.UsesRemotePadTerrainSet)
-            {
-                throw new InvalidDataException(
-                    "Schema-5 two-tile terrain-set documents currently support canonical persistence and static fresh-scene projection only. Physical materialization, exact candidate creation, normal Create BIN, runtime use, release integration, promotion, and publication are refused.");
-            }
-            if (state.UsesRemotePadMobyChoice)
+            if (state.UsesRemotePadMobyChoice &&
+                !state.UsesRemotePadTerrainSet)
             {
                 throw new InvalidDataException(
                     "Schema-4 None/Grass/Red Gem documents currently support canonical persistence and static fresh-scene projection only. Physical materialization, exact candidate creation, normal Create BIN, runtime use, release integration, promotion, and publication are refused.");
@@ -1573,7 +1646,9 @@ public sealed partial class MainWindow
                 polygon => polygon.FaceIndex ==
                     Id65FreshLevelSceneProjector.AuthoredFaceIndex);
             if (expectedProjection.StructuralTerrainPresent !=
-                    state.IncludeStructuralTerrain ||
+                    state.HasAnyStructuralTerrain ||
+                expectedProjection.RemotePadMobyKind !=
+                    state.RemotePadMobyKind ||
                 document.MandatoryBaseFaceTextureId !=
                     state.MandatoryBaseFaceTextureId ||
                 loadedMandatoryBaseFace.TextureId !=
@@ -1585,12 +1660,15 @@ public sealed partial class MainWindow
                 loadedMandatoryBaseFace.NativeMaterialByte !=
                     (byte)state.MandatoryBaseFaceTextureId ||
                 loadedMandatoryBaseFace.NativeFaceWord2 != 0x01400242u ||
-                (_currentGeometry?.Polygons.Count == 2) !=
-                    state.IncludeStructuralTerrain ||
-                _currentGeometry?.LowDetailPolygons.Count !=
+                loadedGeometry.Polygons.Count !=
+                    expectedProjection.Geometry.Polygons.Count ||
+                loadedGeometry.LowDetailPolygons.Count !=
                     expectedProjection.Geometry.LowDetailPolygons.Count ||
-                BuildTerrainEditSignature(_currentGeometry) !=
-                    BuildTerrainEditSignature(expectedProjection.Geometry))
+                BuildTerrainEditSignature(loadedGeometry) !=
+                    BuildTerrainEditSignature(expectedProjection.Geometry) ||
+                !Id65PreparedMobysMatchProjection(
+                    _currentMobys,
+                    expectedProjection))
             {
                 throw new InvalidDataException(
                     "The loaded fresh-scene graph does not match the exact canonical document projection. Load the ID65 Lab again before creating a candidate.");
@@ -1598,12 +1676,20 @@ public sealed partial class MainWindow
             bool exactRemotePadCandidateState =
                 state.UsesRemotePadT107Grid &&
                 !state.IncludeGrassAtT88;
+            bool exactTerrainSetCandidateState =
+                state.UsesRemotePadTerrainSet &&
+                state.UsesRemotePadMobyChoice &&
+                !state.UsesRemotePadT107Grid &&
+                !state.IncludeGrassAtT88;
             bool exactLegacyCandidateState =
                 !state.UsesRemotePadT107Grid &&
+                !state.UsesRemotePadMobyChoice &&
                 state.IncludeStructuralTerrain &&
                 state.IncludeGrassAtT88 &&
                 state.IncludeGrassAtT107;
-            if (!exactRemotePadCandidateState && !exactLegacyCandidateState)
+            if (!exactTerrainSetCandidateState &&
+                !exactRemotePadCandidateState &&
+                !exactLegacyCandidateState)
             {
                 throw new InvalidDataException(
                     state.UsesRemotePadT107Grid
@@ -1612,9 +1698,13 @@ public sealed partial class MainWindow
             }
 
             if (_id65BlankLabAuthoringCandidateButton != null)
-                _id65BlankLabAuthoringCandidateButton.Content = "Building exact candidate…";
-            _statusText.Text =
-                "ID65 candidate: revalidating the locked base, native texture/Moby inputs, and canonical document before atomic materialization…";
+                _id65BlankLabAuthoringCandidateButton.Content =
+                    state.UsesBlankCyclorama
+                        ? "Building Blank Slate schema-6 candidate…"
+                        : "Building exact candidate…";
+            _statusText.Text = state.UsesBlankCyclorama
+                ? "Blank Slate schema-6 candidate: revalidating exact document CAS, preset blank-slate-v1, color #263447, locked base, WAD80-only destination, and protected retail sky blocks before atomic materialization…"
+                : "ID65 candidate: revalidating the locked base, native texture/Moby inputs, and canonical document before atomic materialization…";
             Id65BlankLabAuthoringCandidateAppResult result =
                 Id65AuthoringCandidateMaterializerOverrideForTesting != null
                     ? await Id65AuthoringCandidateMaterializerOverrideForTesting(
@@ -1625,7 +1715,8 @@ public sealed partial class MainWindow
                     : await MaterializeId65AuthoringCandidateForAppAsync(
                         paths,
                         manifest,
-                        state.UsesRemotePadT107Grid,
+                        state,
+                        document.EnvelopeCanonicalSha256,
                         operation.Cancellation.Token);
             RequireCurrentId65BlankLabManualOperation(operation);
             RequireExactId65AuthoringCandidateAppResult(
@@ -1657,17 +1748,40 @@ public sealed partial class MainWindow
             string verb = result.ReusedExistingCandidate
                 ? "Reused"
                 : "Created";
+            string terrainSetDescription = state.UsesRemotePadTerrainSet
+                ? state.IncludeTerrainTile1 && state.IncludeTerrainTile2
+                    ? "Terrain Tile 1 and Terrain Tile 2"
+                    : state.IncludeTerrainTile1
+                        ? "Terrain Tile 1 only"
+                        : state.IncludeTerrainTile2
+                            ? "Terrain Tile 2 only"
+                            : "empty terrain set"
+                : "";
+            string terrainSetMobyDescription = state.UsesRemotePadTerrainSet
+                ? state.RemotePadMobyKind == Id65RemotePadMobyKind.None
+                    ? $"no visible Moby with dormant {Id65RemotePadGrassT107Catalog.GetRequiredPosition(state.RemotePadMobyPositionId!).Label} position retained"
+                    : $"{Id65RemotePadMobyChoiceCatalog.GetRequiredChoice(state.RemotePadMobyKind!.Value).Label} at {Id65RemotePadGrassT107Catalog.GetRequiredPosition(state.RemotePadMobyPositionId!).Label}"
+                : "";
             _statusText.Text =
-                $"{verb} the exact offline ID65 full-authoring candidate " +
+                $"{verb} the exact offline " +
+                (state.UsesBlankCyclorama
+                    ? "Blank Slate schema-6 candidate "
+                    : "ID65 full-authoring candidate ") +
                 $"{Path.GetFileName(result.CandidateCuePath)} " +
                 $"(image {result.OutputImageSha256[..12]}…, plan {result.AggregatePlanSha256[..12]}…; " +
                 $"{result.ChangedRawSectorCount} changed raw sectors). " +
-                (state.UsesRemotePadT107Grid
+                (state.UsesBlankCyclorama
+                    ? $"Preset {result.BlankCycloramaPresetId} with exact color {result.BlankCycloramaColorHex}, all {result.PaletteWordCount} palette words, cyclorama {result.OutputCycloramaSha256[..12]}…, WAD80 placement/readback, terrain/Moby state, and protected WAD79 plus Town Square/Artisans sky blocks passed exact receipt validation. "
+                    : state.UsesRemotePadTerrainSet
+                    ? $"Its {terrainSetDescription} with matching collision/occlusion, private T66 texture, {terrainSetMobyDescription}, repaired T13995 support, and protected retail complement passed deterministic readback. "
+                    : state.UsesRemotePadT107Grid
                     ? $"Its {(state.IncludeStructuralTerrain ? "structural terrain/collision/occlusion" : "blank terrain state")}, private T66 texture, " +
                       $"{(state.IncludeGrassAtT107 ? $"Grass T107 at {Id65RemotePadGrassT107Catalog.GetRequiredPosition(state.T107RemotePadPositionId!).Label}" : $"Grass T107 omitted with dormant {Id65RemotePadGrassT107Catalog.GetRequiredPosition(state.T107RemotePadPositionId!).Label} position retained")}, " +
                       "repaired T13995 support, and protected retail complement passed deterministic readback. "
                     : "Its structural terrain, private T66 texture, both Grass placements, and protected retail complement passed deterministic readback. ") +
-                "This hash-bound workspace snapshot is not normal Create BIN, runtime proof, or a release artifact yet; use Reveal Test CUE for the focused DuckStation gate.";
+                (state.UsesBlankCyclorama
+                    ? "This hash-bound workspace snapshot is not normal Create BIN, runtime proof, or a release artifact yet; use Reveal Blank Slate schema-6 Test CUE for the focused DuckStation gate."
+                    : "This hash-bound workspace snapshot is not normal Create BIN, runtime proof, or a release artifact yet; use Reveal Test CUE for the focused DuckStation gate.");
         }
         catch (OperationCanceledException) when (
             operation.Cancellation.IsCancellationRequested ||
@@ -1682,8 +1796,25 @@ public sealed partial class MainWindow
                     operation,
                     requireSceneIdentity: true))
             {
-                _statusText.Text =
-                    $"Could not create the exact ID65 full-authoring candidate: {exception.Message}";
+                bool blankSlate = false;
+                if (_id65FreshAuthoringDocument != null)
+                {
+                    try
+                    {
+                        blankSlate = Id65AuthoringEditorControlStateCompiler
+                            .RecoverControlState(_id65FreshAuthoringDocument)
+                            .UsesBlankCyclorama;
+                    }
+                    catch (Exception stateException) when (
+                        stateException is InvalidDataException or
+                            InvalidOperationException)
+                    {
+                        Debug.WriteLine(stateException);
+                    }
+                }
+                _statusText.Text = blankSlate
+                    ? $"Could not create the exact Blank Slate schema-6 candidate: {exception.Message}"
+                    : $"Could not create the exact ID65 full-authoring candidate: {exception.Message}";
             }
         }
         finally
@@ -1707,10 +1838,229 @@ public sealed partial class MainWindow
         MaterializeId65AuthoringCandidateForAppAsync(
             UnusedLevel65BlankLevelLabWorkspacePaths paths,
             UnusedLevel65BlankLevelLabManifest manifest,
-            bool usesRemotePadT107Grid,
+            Id65AuthoringEditorControlState state,
+            string expectedEnvelopeCanonicalSha256,
             CancellationToken cancellationToken)
     {
-        if (usesRemotePadT107Grid)
+        ArgumentNullException.ThrowIfNull(state);
+        if (state.UsesBlankCyclorama)
+        {
+            Id65AuthoringBlankCycloramaAggregateCandidateWorkspaceResult
+                blankSlate = await
+                    Id65AuthoringBlankCycloramaAggregateCandidateWorkspaceMaterializer
+                        .MaterializeExactAsync(
+                            paths,
+                            manifest,
+                            expectedEnvelopeCanonicalSha256,
+                            cancellationToken);
+            return new(
+                blankSlate.CandidateDirectoryPath,
+                blankSlate.CandidateImagePath,
+                blankSlate.CandidateCuePath,
+                blankSlate.CandidateReceiptPath,
+                blankSlate.DocumentEnvelopeSha256,
+                blankSlate.DocumentCanonicalSha256,
+                UsesRemotePadT107Grid: false,
+                T107RemotePadPositionId: null,
+                StructuralTerrainPresent:
+                    blankSlate.ActiveTerrainUnitIds.Count != 0,
+                GrassT107Present:
+                    blankSlate.MobyKind == Id65RemotePadMobyKind.GrassT107,
+                blankSlate.AggregatePlanSha256,
+                blankSlate.OutputImageSha256,
+                blankSlate.CandidateCueSha256,
+                blankSlate.ReceiptContentSha256,
+                blankSlate.ChangedRawSectorCount,
+                blankSlate.ChangedPhysicalImageBytes,
+                blankSlate.ReusedExistingCandidate,
+                blankSlate.CandidateArtifactsWrittenThisCall,
+                blankSlate.FileSystemMutationPerformed,
+                blankSlate.ExactStoreReloadCasVerifiedThreeTimes &&
+                    blankSlate.ExactEnvelopeCasVerifiedThreeTimes &&
+                    blankSlate.ExactStaticAuthoringProjectionReloadVerifiedThreeTimes &&
+                    blankSlate.ExactNativeInputGenerationRecapturedThreeTimes &&
+                    blankSlate.ExactV3TemplateRecapturedThreeTimes &&
+                    blankSlate.ExactLockedBaseRecapturedThreeTimes &&
+                    blankSlate.ExactRow80ReadbackVerified &&
+                    blankSlate.ExactInverseReadbackVerified &&
+                    blankSlate.RawSectorIntegrityVerified &&
+                    blankSlate.PhysicalComplementVerified,
+                Schema3CompilerPinsVerified: false,
+                T107PositionReadbackVerified: false,
+                T88ExcludedVerified: blankSlate.T88ExcludedVerified,
+                RepairedT13995SupportVerified:
+                    blankSlate.RepairedT13995SupportVerified,
+                blankSlate.ProtectedComplementVerified,
+                RetailTownSquarePreserved:
+                    blankSlate.RetailTownSquareWad15Preserved &&
+                    blankSlate.RetailTownSquareWad16Preserved &&
+                    blankSlate.RetailTownSquareSkyBlockPreserved,
+                TargetOverlayPreserved: blankSlate.Wad79Preserved,
+                blankSlate.ExecutablePreserved,
+                blankSlate.AtomicNoReplacePublicationVerified,
+                blankSlate.OwnedTemporaryResidueRemoved,
+                blankSlate.CarriesAppOrUiAuthority,
+                blankSlate.CarriesCreateBinAuthority,
+                blankSlate.NormalRetailCreateBinComposed,
+                blankSlate.RuntimeCandidateAuthorized,
+                blankSlate.RuntimeProven,
+                blankSlate.ReleaseIntegrated,
+                blankSlate.PromotionAuthorized,
+                blankSlate.Publishable,
+                blankSlate.CurrentOnDiskFreshnessVerified,
+                blankSlate.HostileFilesystemRaceSafe,
+                blankSlate.RequiresTrustedExclusiveWorkspaceDirectory,
+                blankSlate.CommonWorkspaceLeaseOwned,
+                UsesRemotePadTerrainSet: true,
+                ActiveTerrainUnitIdsCanonical:
+                    string.Join('\n', blankSlate.ActiveTerrainUnitIds),
+                RemotePadMobyKind: blankSlate.MobyKind,
+                RemotePadMobyPositionId: blankSlate.PositionId,
+                Schema5CompilerPinsVerified: false,
+                MobyChoicePositionReadbackVerified:
+                    blankSlate.MobyChoicePositionReadbackVerified,
+                FourTerrainTopologiesVerified:
+                    blankSlate.FourTerrainTopologiesVerified,
+                UsesBlankCyclorama: true,
+                BlankCycloramaPresetId: blankSlate.PresetId,
+                BlankCycloramaColorHex: blankSlate.ColorHex,
+                OutputCycloramaSha256: blankSlate.OutputCycloramaSha256,
+                CycloramaGeometrySha256: blankSlate.GeometrySha256,
+                CycloramaCommandByteSha256: blankSlate.CommandByteSha256,
+                CycloramaNonPaletteSha256: blankSlate.NonPaletteSha256,
+                CycloramaModelOffset: blankSlate.CycloramaModelOffset,
+                CycloramaRow80Offset: blankSlate.CycloramaRow80Offset,
+                CycloramaWadOffset: blankSlate.CycloramaWadOffset,
+                CycloramaByteLength: blankSlate.CycloramaByteLength,
+                PaletteWordCount: blankSlate.PaletteWordCount,
+                PaletteOwnedRangeCount: blankSlate.PaletteOwnedRangeCount,
+                ExactStoreReloadCasVerifiedThreeTimes:
+                    blankSlate.ExactStoreReloadCasVerifiedThreeTimes,
+                ExactEnvelopeCasVerifiedThreeTimes:
+                    blankSlate.ExactEnvelopeCasVerifiedThreeTimes,
+                ExactStaticAuthoringProjectionReloadVerifiedThreeTimes:
+                    blankSlate.ExactStaticAuthoringProjectionReloadVerifiedThreeTimes,
+                ExactNativeInputGenerationRecapturedThreeTimes:
+                    blankSlate.ExactNativeInputGenerationRecapturedThreeTimes,
+                ExactV3TemplateRecapturedThreeTimes:
+                    blankSlate.ExactV3TemplateRecapturedThreeTimes,
+                ExactLockedBaseRecapturedThreeTimes:
+                    blankSlate.ExactLockedBaseRecapturedThreeTimes,
+                ExactRow80ReadbackVerified:
+                    blankSlate.ExactRow80ReadbackVerified,
+                ExactInverseReadbackVerified:
+                    blankSlate.ExactInverseReadbackVerified,
+                Schema6CompilerPinsVerified:
+                    blankSlate.Schema6CompilerPinsVerified,
+                BlankCycloramaIntentReadbackVerified:
+                    blankSlate.BlankCycloramaIntentReadbackVerified,
+                CycloramaLayoutReadbackVerified:
+                    blankSlate.CycloramaLayoutReadbackVerified,
+                EveryPaletteWordReadbackVerified:
+                    blankSlate.EveryPaletteWordReadbackVerified,
+                CycloramaGeometryReadbackVerified:
+                    blankSlate.CycloramaGeometryReadbackVerified,
+                CycloramaCommandBytesReadbackVerified:
+                    blankSlate.CycloramaCommandBytesReadbackVerified,
+                CycloramaNonPaletteReadbackVerified:
+                    blankSlate.CycloramaNonPaletteReadbackVerified,
+                Wad79Preserved: blankSlate.Wad79Preserved,
+                RetailTownSquareWad15Preserved:
+                    blankSlate.RetailTownSquareWad15Preserved,
+                RetailTownSquareWad16Preserved:
+                    blankSlate.RetailTownSquareWad16Preserved,
+                RetailArtisansWad9Preserved:
+                    blankSlate.RetailArtisansWad9Preserved,
+                RetailArtisansWad10Preserved:
+                    blankSlate.RetailArtisansWad10Preserved,
+                RetailTownSquareSkyBlockPreserved:
+                    blankSlate.RetailTownSquareSkyBlockPreserved,
+                RetailArtisansLinkedSkyBlockPreserved:
+                    blankSlate.RetailArtisansLinkedSkyBlockPreserved);
+        }
+        if (state.UsesRemotePadTerrainSet)
+        {
+            Id65AuthoringRemotePadTerrainSetAggregateCandidateWorkspaceResult
+                terrainSet = await
+                    Id65AuthoringRemotePadTerrainSetAggregateCandidateWorkspaceMaterializer
+                        .MaterializeExactAsync(
+                            paths,
+                            manifest,
+                            expectedEnvelopeCanonicalSha256,
+                            cancellationToken);
+            return new(
+                terrainSet.CandidateDirectoryPath,
+                terrainSet.CandidateImagePath,
+                terrainSet.CandidateCuePath,
+                terrainSet.CandidateReceiptPath,
+                terrainSet.DocumentEnvelopeSha256,
+                terrainSet.DocumentCanonicalSha256,
+                UsesRemotePadT107Grid: false,
+                T107RemotePadPositionId: null,
+                StructuralTerrainPresent:
+                    terrainSet.ActiveTerrainUnitIds.Count != 0,
+                GrassT107Present:
+                    terrainSet.MobyKind == Id65RemotePadMobyKind.GrassT107,
+                terrainSet.AggregatePlanSha256,
+                terrainSet.OutputImageSha256,
+                terrainSet.CandidateCueSha256,
+                terrainSet.ReceiptContentSha256,
+                terrainSet.ChangedRawSectorCount,
+                terrainSet.ChangedPhysicalImageBytes,
+                terrainSet.ReusedExistingCandidate,
+                terrainSet.CandidateArtifactsWrittenThisCall,
+                terrainSet.FileSystemMutationPerformed,
+                terrainSet.ExactStoreReloadCasVerifiedThreeTimes &&
+                    terrainSet.ExactEnvelopeCasVerifiedThreeTimes &&
+                    terrainSet.ExactStaticAuthoringProjectionReloadVerifiedThreeTimes &&
+                    terrainSet.ExactNativeInputGenerationRecapturedThreeTimes &&
+                    terrainSet.ExactV3TemplateRecapturedThreeTimes &&
+                    terrainSet.ExactLockedBaseRecapturedThreeTimes &&
+                    terrainSet.ExactRow80ReadbackVerified &&
+                    terrainSet.ExactInverseReadbackVerified &&
+                    terrainSet.RawSectorIntegrityVerified &&
+                    terrainSet.PhysicalComplementVerified,
+                Schema3CompilerPinsVerified: false,
+                T107PositionReadbackVerified: false,
+                T88ExcludedVerified: terrainSet.T88ExcludedVerified,
+                RepairedT13995SupportVerified:
+                    terrainSet.RepairedT13995SupportVerified,
+                terrainSet.ProtectedComplementVerified,
+                terrainSet.RetailTownSquarePreserved,
+                terrainSet.TargetOverlayPreserved,
+                terrainSet.ExecutablePreserved,
+                terrainSet.AtomicNoReplacePublicationVerified,
+                terrainSet.OwnedTemporaryResidueRemoved,
+                terrainSet.CarriesAppOrUiAuthority,
+                terrainSet.CarriesCreateBinAuthority,
+                terrainSet.NormalRetailCreateBinComposed,
+                terrainSet.RuntimeCandidateAuthorized,
+                terrainSet.RuntimeProven,
+                terrainSet.ReleaseIntegrated,
+                terrainSet.PromotionAuthorized,
+                terrainSet.Publishable,
+                terrainSet.CurrentOnDiskFreshnessVerified,
+                terrainSet.HostileFilesystemRaceSafe,
+                terrainSet.RequiresTrustedExclusiveWorkspaceDirectory,
+                terrainSet.CommonWorkspaceLeaseOwned,
+                UsesRemotePadTerrainSet: true,
+                ActiveTerrainUnitIdsCanonical:
+                    string.Join('\n', terrainSet.ActiveTerrainUnitIds),
+                RemotePadMobyKind: terrainSet.MobyKind,
+                RemotePadMobyPositionId: terrainSet.PositionId,
+                Schema5CompilerPinsVerified:
+                    terrainSet.Schema5CompilerPinsVerified,
+                MobyChoicePositionReadbackVerified:
+                    terrainSet.MobyChoicePositionReadbackVerified,
+                FourTerrainTopologiesVerified:
+                    terrainSet.FourTerrainTopologiesVerified);
+        }
+        if (state.UsesRemotePadMobyChoice)
+        {
+            throw new InvalidDataException(
+                "Schema-4 physical candidate materialization remains unavailable.");
+        }
+        if (state.UsesRemotePadT107Grid)
         {
             Id65AuthoringRemotePadAggregateCandidateWorkspaceResult remote =
                 await Id65AuthoringRemotePadAggregateCandidateWorkspaceMaterializer
@@ -1831,8 +2181,176 @@ public sealed partial class MainWindow
         Id65AuthoringEditorControlState expectedState =
             Id65AuthoringEditorControlStateCompiler.RecoverControlState(
                 expectedDocument);
+        bool blankSlate = expectedState.UsesBlankCyclorama;
+        bool terrainSet = expectedState.UsesRemotePadTerrainSet;
         bool remotePad = expectedState.UsesRemotePadT107Grid;
-        bool expectedDocumentShape = remotePad
+        bool schema6FieldsAbsent =
+            !result.UsesBlankCyclorama &&
+            result.BlankCycloramaPresetId == "" &&
+            result.BlankCycloramaColorHex == "" &&
+            result.OutputCycloramaSha256 == "" &&
+            result.CycloramaGeometrySha256 == "" &&
+            result.CycloramaCommandByteSha256 == "" &&
+            result.CycloramaNonPaletteSha256 == "" &&
+            result.CycloramaModelOffset == 0 &&
+            result.CycloramaRow80Offset == 0 &&
+            result.CycloramaWadOffset == 0 &&
+            result.CycloramaByteLength == 0 &&
+            result.PaletteWordCount == 0 &&
+            result.PaletteOwnedRangeCount == 0 &&
+            !result.ExactStoreReloadCasVerifiedThreeTimes &&
+            !result.ExactEnvelopeCasVerifiedThreeTimes &&
+            !result.ExactStaticAuthoringProjectionReloadVerifiedThreeTimes &&
+            !result.ExactNativeInputGenerationRecapturedThreeTimes &&
+            !result.ExactV3TemplateRecapturedThreeTimes &&
+            !result.ExactLockedBaseRecapturedThreeTimes &&
+            !result.ExactRow80ReadbackVerified &&
+            !result.ExactInverseReadbackVerified &&
+            !result.Schema6CompilerPinsVerified &&
+            !result.BlankCycloramaIntentReadbackVerified &&
+            !result.CycloramaLayoutReadbackVerified &&
+            !result.EveryPaletteWordReadbackVerified &&
+            !result.CycloramaGeometryReadbackVerified &&
+            !result.CycloramaCommandBytesReadbackVerified &&
+            !result.CycloramaNonPaletteReadbackVerified &&
+            !result.Wad79Preserved &&
+            !result.RetailTownSquareWad15Preserved &&
+            !result.RetailTownSquareWad16Preserved &&
+            !result.RetailArtisansWad9Preserved &&
+            !result.RetailArtisansWad10Preserved &&
+            !result.RetailTownSquareSkyBlockPreserved &&
+            !result.RetailArtisansLinkedSkyBlockPreserved;
+        bool schema5FieldsAbsent =
+            !result.UsesRemotePadTerrainSet &&
+            result.ActiveTerrainUnitIdsCanonical == "" &&
+            result.RemotePadMobyKind == null &&
+            result.RemotePadMobyPositionId == null &&
+            !result.Schema5CompilerPinsVerified &&
+            !result.MobyChoicePositionReadbackVerified &&
+            !result.FourTerrainTopologiesVerified &&
+            schema6FieldsAbsent;
+        int expectedCycloramaModelOffset =
+            expectedDocument.ActiveTerrainUnitIds.Count switch
+            {
+                0 => 0x8B9D4,
+                1 => 0x8BA04,
+                2 => 0x8BA30,
+                _ => -1
+            };
+        int expectedCycloramaRow80Offset =
+            expectedCycloramaModelOffset < 0
+                ? -1
+                : expectedCycloramaModelOffset + 0xDE800;
+        bool expectedDocumentShape = blankSlate
+            ? expectedDocument.ReadModelSchemaVersion ==
+                Id65AuthoringEditorDocumentReadModel
+                    .RemotePadMobyChoiceTerrainSetBlankCycloramaReadModelSchemaVersion &&
+              expectedState.UsesRemotePadTerrainSet &&
+              expectedState.UsesRemotePadMobyChoice &&
+              !expectedState.UsesRemotePadT107Grid &&
+              expectedState.MandatoryBaseFaceTextureId ==
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId &&
+              !expectedState.IncludeGrassAtT88 &&
+              expectedState.BlankCycloramaPresetId ==
+                Id65BlankSlatePresetId &&
+              expectedState.BlankCycloramaColorHex ==
+                Id65BlankSlateColorHex &&
+              expectedDocument.BlankCycloramaPresetId ==
+                Id65BlankSlatePresetId &&
+              expectedDocument.BlankCycloramaColorHex ==
+                Id65BlankSlateColorHex &&
+              result.UsesBlankCyclorama &&
+              result.UsesRemotePadTerrainSet &&
+              !result.UsesRemotePadT107Grid &&
+              result.T107RemotePadPositionId == null &&
+              result.ActiveTerrainUnitIdsCanonical ==
+                string.Join('\n', expectedDocument.ActiveTerrainUnitIds) &&
+              result.RemotePadMobyKind == expectedState.RemotePadMobyKind &&
+              result.RemotePadMobyPositionId ==
+                expectedState.RemotePadMobyPositionId &&
+              result.StructuralTerrainPresent ==
+                expectedState.HasAnyStructuralTerrain &&
+              result.GrassT107Present ==
+                (expectedState.RemotePadMobyKind ==
+                    Id65RemotePadMobyKind.GrassT107) &&
+              !result.Schema3CompilerPinsVerified &&
+              !result.Schema5CompilerPinsVerified &&
+              !result.T107PositionReadbackVerified &&
+              result.T88ExcludedVerified &&
+              result.RepairedT13995SupportVerified &&
+              result.MobyChoicePositionReadbackVerified &&
+              result.FourTerrainTopologiesVerified &&
+              result.BlankCycloramaPresetId ==
+                Id65BlankSlatePresetId &&
+              result.BlankCycloramaColorHex ==
+                Id65BlankSlateColorHex &&
+              result.CycloramaModelOffset == expectedCycloramaModelOffset &&
+              result.CycloramaRow80Offset == expectedCycloramaRow80Offset &&
+              result.CycloramaWadOffset ==
+                0x6936800L + expectedCycloramaRow80Offset &&
+              result.CycloramaByteLength == 0x84E4 &&
+              result.PaletteWordCount == 727 &&
+              result.PaletteOwnedRangeCount == 727 &&
+              result.OutputCycloramaSha256 ==
+                "A9DA1343EF6493CD46AB57D84AE78F27495AFFC564BCC9464396752914648AC2" &&
+              result.CycloramaGeometrySha256 ==
+                "405BACB0D5F058C8FF876E14C41FCD7C6C6A0C57535BD451FFA49C5FB82E4B9A" &&
+              result.CycloramaCommandByteSha256 ==
+                "27fb27c2dc1670d5cc3c0a05f406417d7ea033682b99ab5c4d343017b94a524d" &&
+              IsSha256(result.CycloramaNonPaletteSha256) &&
+              result.ExactStoreReloadCasVerifiedThreeTimes &&
+              result.ExactEnvelopeCasVerifiedThreeTimes &&
+              result.ExactStaticAuthoringProjectionReloadVerifiedThreeTimes &&
+              result.ExactNativeInputGenerationRecapturedThreeTimes &&
+              result.ExactV3TemplateRecapturedThreeTimes &&
+              result.ExactLockedBaseRecapturedThreeTimes &&
+              result.ExactRow80ReadbackVerified &&
+              result.ExactInverseReadbackVerified &&
+              result.Schema6CompilerPinsVerified &&
+              result.BlankCycloramaIntentReadbackVerified &&
+              result.CycloramaLayoutReadbackVerified &&
+              result.EveryPaletteWordReadbackVerified &&
+              result.CycloramaGeometryReadbackVerified &&
+              result.CycloramaCommandBytesReadbackVerified &&
+              result.CycloramaNonPaletteReadbackVerified &&
+              result.Wad79Preserved &&
+              result.RetailTownSquareWad15Preserved &&
+              result.RetailTownSquareWad16Preserved &&
+              result.RetailArtisansWad9Preserved &&
+              result.RetailArtisansWad10Preserved &&
+              result.RetailTownSquareSkyBlockPreserved &&
+              result.RetailArtisansLinkedSkyBlockPreserved
+            : terrainSet
+            ? expectedDocument.ReadModelSchemaVersion ==
+                Id65AuthoringEditorDocumentReadModel
+                    .RemotePadMobyChoiceTerrainSetReadModelSchemaVersion &&
+              expectedState.UsesRemotePadMobyChoice &&
+              !expectedState.UsesRemotePadT107Grid &&
+              expectedState.MandatoryBaseFaceTextureId ==
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId &&
+              !expectedState.IncludeGrassAtT88 &&
+              result.UsesRemotePadTerrainSet &&
+              !result.UsesRemotePadT107Grid &&
+              result.T107RemotePadPositionId == null &&
+              result.ActiveTerrainUnitIdsCanonical ==
+                string.Join('\n', expectedDocument.ActiveTerrainUnitIds) &&
+              result.RemotePadMobyKind == expectedState.RemotePadMobyKind &&
+              result.RemotePadMobyPositionId ==
+                expectedState.RemotePadMobyPositionId &&
+              result.StructuralTerrainPresent ==
+                expectedState.HasAnyStructuralTerrain &&
+              result.GrassT107Present ==
+                (expectedState.RemotePadMobyKind ==
+                    Id65RemotePadMobyKind.GrassT107) &&
+              !result.Schema3CompilerPinsVerified &&
+              !result.T107PositionReadbackVerified &&
+              result.T88ExcludedVerified &&
+              result.RepairedT13995SupportVerified &&
+              result.Schema5CompilerPinsVerified &&
+              result.MobyChoicePositionReadbackVerified &&
+              result.FourTerrainTopologiesVerified &&
+              schema6FieldsAbsent
+            : remotePad
             ? expectedState.MandatoryBaseFaceTextureId ==
                 Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId &&
               !expectedState.IncludeGrassAtT88 &&
@@ -1845,7 +2363,8 @@ public sealed partial class MainWindow
               result.Schema3CompilerPinsVerified &&
               result.T107PositionReadbackVerified &&
               result.T88ExcludedVerified &&
-              result.RepairedT13995SupportVerified
+              result.RepairedT13995SupportVerified &&
+              schema5FieldsAbsent
             : expectedDocument.SchemaVersion ==
                 Id65LegacyT66DocumentSchemaVersion &&
               expectedDocument.ProfileId ==
@@ -1862,10 +2381,15 @@ public sealed partial class MainWindow
               !result.Schema3CompilerPinsVerified &&
               !result.T107PositionReadbackVerified &&
               !result.T88ExcludedVerified &&
-              !result.RepairedT13995SupportVerified;
+              !result.RepairedT13995SupportVerified &&
+              schema5FieldsAbsent;
         string candidateRoot = Path.GetFullPath(Path.Combine(
             paths.RootPath,
-            remotePad
+            blankSlate
+                ? "materialized-blank-cyclorama-schema6-candidates"
+                : terrainSet
+                ? "materialized-remote-pad-terrain-set-schema5-candidates"
+                : remotePad
                 ? "materialized-remote-pad-candidates"
                 : "materialized-candidates"));
         string candidateDirectory = Path.GetFullPath(result.CandidateDirectoryPath);
@@ -1930,6 +2454,12 @@ public sealed partial class MainWindow
     private static bool IsCanonicalLowerSha256(string value) =>
         value.Length == 64 && value.All(character =>
             character is >= '0' and <= '9' or >= 'a' and <= 'f');
+
+    private static bool IsSha256(string value) =>
+        value.Length == 64 && value.All(character =>
+            character is >= '0' and <= '9' or
+                >= 'a' and <= 'f' or
+                >= 'A' and <= 'F');
 
     private async Task<Id65AuthoringEditorControlState?>
         ShowId65FreshStartDialogAsync()
@@ -2003,7 +2533,7 @@ public sealed partial class MainWindow
         };
         body.Children.Add(BuildModernDialogHeader(
             "Create the blank authoring document",
-            "Choose the mandatory starter-pad texture explicitly. T66 creates the canonical schema-5 empty terrain set plus None Moby choice; T25 creates the canonical schema-3 blank choice. Both routes save and synchronize only the editor projection; neither action creates a candidate or claims runtime proof."));
+            "Choose the mandatory starter-pad texture explicitly. T66 creates the canonical schema-5 empty terrain set plus None Moby choice; T25 creates the canonical schema-3 blank choice. This action saves and synchronizes only the editor projection; the T66 document then enables the separate exact offline-candidate action, without claiming runtime proof."));
         body.Children.Add(BuildModernDialogField(
             "Mandatory starter-pad texture",
             mandatoryTexture));
@@ -2077,7 +2607,7 @@ public sealed partial class MainWindow
                     $"Exact blank document {compilation.DocumentCanonicalSha256[..12]}…; mandatory starter-pad texture {selectedChoice.Label}; " +
                     "Terrain Tile 1 OFF; Terrain Tile 2 OFF; Grass T88 OFF; no visible Moby; retained position Center. " +
                     (privateT66
-                        ? "This creates schema-5 None with an empty terrain set and opens both two-tile terrain controls and the None/Grass/Red Gem Object Manager after exact save/readback. Schema-5 physical materialization, exact candidate creation, normal Create BIN, runtime, and release remain unavailable."
+                        ? "This creates schema-5 None with an empty terrain set and opens both two-tile terrain controls and the None/Grass/Red Gem Object Manager after exact save/readback. The synchronized document can then build the separately guarded exact offline candidate; normal Create BIN, runtime proof, and release remain unavailable."
                         : "This creates the schema-3 T25 blank route. Resident T25 is viewport-authoring-only; exact candidate, normal Create BIN, runtime, and release remain unavailable.");
                 validation.IsVisible = false;
                 create.IsEnabled = true;
@@ -2161,6 +2691,24 @@ public sealed partial class MainWindow
             "Id65AuthoringTerrainSetMigrationButton";
         StyleModernSecondaryButton(migrateTerrainSet);
         migrateTerrainSet.IsVisible = canOfferTerrainSetMigration;
+        bool blankCycloramaSelected = initial.UsesBlankCyclorama;
+        bool canOfferBlankCycloramaMigration =
+            initial.UsesRemotePadTerrainSet &&
+            !initial.UsesBlankCyclorama;
+        Button migrateBlankCyclorama = NewButton(
+            "Migrate Schema 5 to Blank Slate Schema 6");
+        migrateBlankCyclorama.Name =
+            "Id65AuthoringBlankCycloramaMigrationButton";
+        StyleModernSecondaryButton(migrateBlankCyclorama);
+        migrateBlankCyclorama.IsVisible = canOfferBlankCycloramaMigration;
+        TextBlock blankCycloramaNotice = new()
+        {
+            Name = "Id65AuthoringBlankCycloramaNotice",
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 11,
+            LineHeight = 16,
+            Foreground = new SolidColorBrush(Color.FromRgb(150, 94, 12))
+        };
         CheckBox t88 = new()
         {
             Name = "Id65AuthoringGrassT88Box",
@@ -2308,6 +2856,12 @@ public sealed partial class MainWindow
         body.Children.Add(BuildModernDialogField(
             "Structural terrain",
             terrainField));
+        StackPanel blankCycloramaField = new() { Spacing = 7 };
+        blankCycloramaField.Children.Add(migrateBlankCyclorama);
+        blankCycloramaField.Children.Add(blankCycloramaNotice);
+        body.Children.Add(BuildModernDialogField(
+            "Blank Slate background",
+            blankCycloramaField));
         Control t88ChoiceControl = BuildId65AuthoringChoice(
             t88,
             "Retains the exact historical replacement-row choice at T88. It is not presented as a placed object in the fresh blank scene.");
@@ -2417,12 +2971,19 @@ public sealed partial class MainWindow
                     Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1
                 ? terrainSelectionSemantics ==
                     Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1
-                    ? Id65AuthoringEditorControlState
-                        .CreateRemotePadMobyChoiceTerrainSet(
-                            terrain.IsChecked == true,
-                            terrainTile2.IsChecked == true,
-                            GetMobyChoice().Kind,
-                            GetMobyChoicePosition().PositionId)
+                    ? blankCycloramaSelected
+                        ? Id65AuthoringEditorControlState
+                            .CreateRemotePadMobyChoiceTerrainSetBlankCyclorama(
+                                terrain.IsChecked == true,
+                                terrainTile2.IsChecked == true,
+                                GetMobyChoice().Kind,
+                                GetMobyChoicePosition().PositionId)
+                        : Id65AuthoringEditorControlState
+                            .CreateRemotePadMobyChoiceTerrainSet(
+                                terrain.IsChecked == true,
+                                terrainTile2.IsChecked == true,
+                                GetMobyChoice().Kind,
+                                GetMobyChoicePosition().PositionId)
                     : Id65AuthoringEditorControlState.CreateRemotePadMobyChoice(
                         terrain.IsChecked == true,
                         GetMobyChoice().Kind,
@@ -2447,14 +3008,27 @@ public sealed partial class MainWindow
                 Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1;
             bool transientMigration =
                 terrainSet && !initial.UsesRemotePadTerrainSet;
+            bool transientBlankMigration =
+                blankCycloramaSelected && !initial.UsesBlankCyclorama;
             terrain.Content = terrainSet
                 ? "Include exact structural Terrain Tile 1"
                 : "Include exact structural terrain intent";
             terrainTile2ChoiceControl.IsVisible = terrainSet;
-            terrain.IsEnabled = !transientMigration;
-            terrainTile2.IsEnabled = terrainSet && !transientMigration;
+            terrain.IsEnabled = !transientMigration && !transientBlankMigration;
+            terrainTile2.IsEnabled =
+                terrainSet && !transientMigration && !transientBlankMigration;
             migrateTerrainSet.IsVisible =
                 !terrainSet && canOfferTerrainSetMigration;
+            migrateBlankCyclorama.IsVisible =
+                terrainSet && canOfferBlankCycloramaMigration &&
+                !blankCycloramaSelected;
+            blankCycloramaNotice.Text = blankCycloramaSelected
+                ? initial.UsesBlankCyclorama
+                    ? "Blank Slate schema 6 is active and one-way: preset blank-slate-v1 with exact color #263447. Terrain and Moby edits preserve it; this dialog never offers a downgrade."
+                    : "Explicit schema-5 to schema-6 migration selected. The exact prior terrain and Moby choices are locked for this save; only Blank Slate preset blank-slate-v1 with exact color #263447 is added."
+                : canOfferBlankCycloramaMigration
+                    ? "Schema 5 remains unchanged until you explicitly select the migration above and then Apply and Save Exact Document. No preview, refresh, open, or ordinary terrain/Moby edit infers schema 6."
+                    : "Blank Slate schema 6 becomes available only through the explicit one-way migration from an exact schema-5 terrain-set document.";
         }
         void RefreshT107SemanticsNotice()
         {
@@ -2470,22 +3044,24 @@ public sealed partial class MainWindow
                 remotePadMobyChoice && initial.UsesRemotePadMobyChoice &&
                 !(terrainSelectionSemantics ==
                     Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1 &&
-                  !initial.UsesRemotePadTerrainSet);
+                  !initial.UsesRemotePadTerrainSet) &&
+                !(blankCycloramaSelected && !initial.UsesBlankCyclorama);
             mobyChoicePosition.IsEnabled =
                 remotePadMobyChoice && initial.UsesRemotePadMobyChoice &&
                 !(terrainSelectionSemantics ==
                     Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1 &&
-                  !initial.UsesRemotePadTerrainSet);
+                  !initial.UsesRemotePadTerrainSet) &&
+                !(blankCycloramaSelected && !initial.UsesBlankCyclorama);
             mobyChoiceNotice.Text = remotePadMobyChoice &&
                 !initial.UsesRemotePadMobyChoice
                 ? "This explicit schema-3 migration is locked to its exact mapped None/Grass choice and retained position. Save it first, then use the schema-4 Object Manager to switch None, Grass, or Red Gem. No selector preview performs the migration. Physical materialization and every runtime/release path remain closed."
                 : terrainSelectionSemantics ==
                     Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1 &&
                   !initial.UsesRemotePadTerrainSet
-                    ? "This explicit schema-4 migration is locked to the exact prior Tile 1 and Moby choices; Tile 2 remains off. Save first, then use the schema-5 terrain and Moby controls. Physical materialization and every runtime/release path remain closed."
+                    ? "This explicit schema-4 migration is locked to the exact prior Tile 1 and Moby choices; Tile 2 remains off. Save first, then use the schema-5 terrain and Moby controls or its separately guarded exact offline candidate. Normal Create BIN and every runtime/release path remain closed."
                 : terrainSelectionSemantics ==
                     Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1
-                    ? "Schema 5 is canonical-document and static-presentation only. It fixes T66, excludes T88, combines two independent terrain units with at most one None/Grass/Red Gem choice, and does not authorize physical materialization, Create BIN, runtime use, or release promotion."
+                    ? "Schema 5 fixes T66, excludes T88, combines two independent terrain units with at most one None/Grass/Red Gem choice, and can build the separately guarded exact offline candidate. Normal Create BIN, runtime proof, and release promotion remain unavailable."
                     : "Schema 4 is canonical-document and static-presentation only. It fixes T66, excludes T88, permits at most one None/Grass/Red Gem choice, and does not authorize physical materialization, Create BIN, runtime use, or release promotion.";
             t107Position.IsEnabled = remotePadGrid;
             migrateT107.IsVisible =
@@ -2519,8 +3095,10 @@ public sealed partial class MainWindow
                 string textureRoute = mandatoryTextureId ==
                     Id65AuthoringEditorControlState.ResidentMandatoryBaseFaceTextureId
                     ? "Resident T25; ordinary resident close/normal/LQ/HQ viewport caches; offline-authoring-only; exact candidate/Create BIN/runtime/release refused"
+                    : selected.UsesBlankCyclorama
+                        ? "Proved private T66 fixed by Blank Slate schema 6; preset blank-slate-v1 with exact color #263447; separately guarded exact offline schema-6 candidate eligible; normal Create BIN/runtime/release refused"
                     : selected.UsesRemotePadTerrainSet
-                        ? "Proved private T66 fixed by schema 5; two-unit terrain set plus canonical Moby choice and static fresh-scene presentation only; physical materialization/Create BIN/runtime/release refused"
+                        ? "Proved private T66 fixed by schema 5; two-unit terrain set plus canonical Moby choice; separately guarded exact offline candidate eligible; normal Create BIN/runtime/release refused"
                         : selected.UsesRemotePadMobyChoice
                         ? "Proved private T66 fixed by schema 4; canonical document and static fresh-scene presentation only; physical materialization/Create BIN/runtime/release refused"
                         : selected.UsesRemotePadT107Grid
@@ -2533,8 +3111,10 @@ public sealed partial class MainWindow
                     $"mandatory base face {textureRoute}; " +
                     $"terrain intents {compilation.TerrainIntentCount}; Moby targets " +
                     $"{(compilation.MobyTargetTrueIndices.Count == 0 ? "none" : string.Join(", ", compilation.MobyTargetTrueIndices.Select(index => $"T{index}")))}; " +
-                    (selected.UsesRemotePadTerrainSet
-                        ? $"schema-5 terrain Tile 1 {(selected.IncludeTerrainTile1 ? "ON" : "OFF")}, Tile 2 {(selected.IncludeTerrainTile2 ? "ON" : "OFF")}; {GetMobyChoice().Label} at retained {GetMobyChoicePosition().Label}; static presentation only; no physical candidate authority."
+                    (selected.UsesBlankCyclorama
+                        ? $"Blank Slate schema-6 terrain Tile 1 {(selected.IncludeTerrainTile1 ? "ON" : "OFF")}, Tile 2 {(selected.IncludeTerrainTile2 ? "ON" : "OFF")}; {GetMobyChoice().Label} at retained {GetMobyChoicePosition().Label}; preset {selected.BlankCycloramaPresetId}, color {selected.BlankCycloramaColorHex}; separately guarded exact offline candidate eligible; no normal Create BIN/runtime/release authority."
+                        : selected.UsesRemotePadTerrainSet
+                        ? $"schema-5 terrain Tile 1 {(selected.IncludeTerrainTile1 ? "ON" : "OFF")}, Tile 2 {(selected.IncludeTerrainTile2 ? "ON" : "OFF")}; {GetMobyChoice().Label} at retained {GetMobyChoicePosition().Label}; separately guarded exact offline candidate eligible; no normal Create BIN/runtime/release authority."
                         : selected.UsesRemotePadMobyChoice
                         ? $"schema-4 {GetMobyChoice().Label} choice at retained {GetMobyChoicePosition().Label} " +
                           $"({GetMobyChoicePosition().EditorX}, {GetMobyChoicePosition().EditorY}, {GetMobyChoicePosition().EditorZ}); static presentation only; no physical candidate authority."
@@ -2617,6 +3197,41 @@ public sealed partial class MainWindow
                 terrainSelectionSemantics = migrated.TerrainSelectionSemantics;
                 terrain.IsChecked = migrated.IncludeTerrainTile1;
                 terrainTile2.IsChecked = migrated.IncludeTerrainTile2;
+                RefreshTerrainSemanticsControls();
+                RefreshT107SemanticsNotice();
+                RefreshExactPreview();
+            }
+            catch (Exception ex) when (
+                ex is InvalidDataException or InvalidOperationException)
+            {
+                validation.Text = ex.Message;
+                validation.IsVisible = true;
+            }
+        };
+        migrateBlankCyclorama.Click += (_, _) =>
+        {
+            try
+            {
+                Id65AuthoringEditorControlState schema5Preview =
+                    Id65AuthoringEditorControlState
+                        .CreateRemotePadMobyChoiceTerrainSet(
+                            terrain.IsChecked == true,
+                            terrainTile2.IsChecked == true,
+                            GetMobyChoice().Kind,
+                            GetMobyChoicePosition().PositionId);
+                Id65AuthoringEditorControlState migrated =
+                    Id65AuthoringEditorControlState
+                        .MigrateRemotePadMobyChoiceTerrainSetToBlankCyclorama(
+                            schema5Preview);
+                blankCycloramaSelected = migrated.UsesBlankCyclorama;
+                terrain.IsChecked = migrated.IncludeTerrainTile1;
+                terrainTile2.IsChecked = migrated.IncludeTerrainTile2;
+                mobyChoice.SelectedItem =
+                    Id65RemotePadMobyChoiceCatalog.GetRequiredChoice(
+                        migrated.RemotePadMobyKind!.Value);
+                mobyChoicePosition.SelectedItem =
+                    Id65RemotePadGrassT107Catalog.GetRequiredPosition(
+                        migrated.RemotePadMobyPositionId!);
                 RefreshTerrainSemanticsControls();
                 RefreshT107SemanticsNotice();
                 RefreshExactPreview();
@@ -2719,7 +3334,45 @@ public sealed partial class MainWindow
             right.RemotePadMobyPositionId,
             StringComparison.Ordinal) &&
         left.TerrainSelectionSemantics == right.TerrainSelectionSemantics &&
-        left.IncludeTerrainTile2 == right.IncludeTerrainTile2;
+        left.IncludeTerrainTile2 == right.IncludeTerrainTile2 &&
+        left.UsesBlankCyclorama == right.UsesBlankCyclorama &&
+        string.Equals(
+            left.BlankCycloramaPresetId,
+            right.BlankCycloramaPresetId,
+            StringComparison.Ordinal) &&
+        string.Equals(
+            left.BlankCycloramaColorHex,
+            right.BlankCycloramaColorHex,
+            StringComparison.Ordinal);
+
+    private static Id65AuthoringEditorControlState
+        CreateId65TerrainSetMutationPreservingBlankCyclorama(
+            Id65AuthoringEditorControlState currentState,
+            bool includeTerrainTile1,
+            bool includeTerrainTile2,
+            Id65RemotePadMobyKind mobyKind,
+            string positionId)
+    {
+        ArgumentNullException.ThrowIfNull(currentState);
+        if (!currentState.UsesRemotePadTerrainSet)
+        {
+            throw new InvalidDataException(
+                "Only an exact schema-5 or Blank Slate schema-6 terrain-set document can use this mutation route.");
+        }
+        return currentState.UsesBlankCyclorama
+            ? Id65AuthoringEditorControlState
+                .CreateRemotePadMobyChoiceTerrainSetBlankCyclorama(
+                    includeTerrainTile1,
+                    includeTerrainTile2,
+                    mobyKind,
+                    positionId)
+            : Id65AuthoringEditorControlState
+                .CreateRemotePadMobyChoiceTerrainSet(
+                    includeTerrainTile1,
+                    includeTerrainTile2,
+                    mobyKind,
+                    positionId);
+    }
 
     private static bool Id65AuthoringDocumentSnapshotsEqual(
         Id65AuthoringEditorDocumentReadModel? left,
@@ -2749,7 +3402,8 @@ public sealed partial class MainWindow
         Id65AuthoringEditorControlStateCompilation expectedCompilation,
         bool expectedExplicitLegacyToRemotePadMigration = false,
         bool expectedExplicitRemotePadMobyChoiceMigration = false,
-        bool expectedExplicitRemotePadTerrainSetMigration = false)
+        bool expectedExplicitRemotePadTerrainSetMigration = false,
+        bool expectedExplicitBlankCycloramaMigration = false)
     {
         if (written.DocumentCanonicalSha256 !=
                 expectedCompilation.DocumentCanonicalSha256 ||
@@ -2768,6 +3422,8 @@ public sealed partial class MainWindow
                 expectedExplicitRemotePadMobyChoiceMigration ||
             written.ExplicitRemotePadTerrainSetMigrationPerformed !=
                 expectedExplicitRemotePadTerrainSetMigration ||
+            written.ExplicitBlankCycloramaMigrationPerformed !=
+                expectedExplicitBlankCycloramaMigration ||
             written.AutomaticMigrationPerformed ||
             !written.CompareAndSwapEnforced ||
             !written.AtomicPublicationCompleted ||
@@ -3250,8 +3906,8 @@ public sealed partial class MainWindow
             }
             Id65AuthoringEditorControlState nextState =
                 currentState.UsesRemotePadTerrainSet
-                    ? Id65AuthoringEditorControlState
-                        .CreateRemotePadMobyChoiceTerrainSet(
+                    ? CreateId65TerrainSetMutationPreservingBlankCyclorama(
+                            currentState,
                             includeStructuralTerrain,
                             currentState.IncludeTerrainTile2,
                             currentState.RemotePadMobyKind!.Value,
@@ -3313,7 +3969,10 @@ public sealed partial class MainWindow
             _statusText.Text =
                 $"{(includeStructuralTerrain ? "Created" : "Removed")} optional structural terrain through the canonical Full Authoring Document. " +
                 (nextState.UsesRemotePadMobyChoice
-                    ? $"Schema-{(nextState.UsesRemotePadTerrainSet ? "5" : "4")} {Id65RemotePadMobyChoiceCatalog.GetRequiredChoice(nextState.RemotePadMobyKind!.Value).Label} at retained {Id65RemotePadGrassT107Catalog.GetRequiredPosition(nextState.RemotePadMobyPositionId!).Label} was preserved. "
+                    ? $"Schema-{(nextState.UsesBlankCyclorama ? "6" : nextState.UsesRemotePadTerrainSet ? "5" : "4")} {Id65RemotePadMobyChoiceCatalog.GetRequiredChoice(nextState.RemotePadMobyKind!.Value).Label} at retained {Id65RemotePadGrassT107Catalog.GetRequiredPosition(nextState.RemotePadMobyPositionId!).Label} was preserved. " +
+                      (nextState.UsesBlankCyclorama
+                          ? $"Blank Slate preset {nextState.BlankCycloramaPresetId} and exact color {nextState.BlankCycloramaColorHex} were preserved. "
+                          : "")
                     : $"Grass T88 {(nextState.IncludeGrassAtT88 ? "included" : "omitted")} and Grass T107 {(nextState.IncludeGrassAtT107 ? "included" : "omitted")} were preserved. ") +
                 $"Mandatory base face {Id65MandatoryBaseTextureLabel(nextState.MandatoryBaseFaceTextureId)} was preserved. " +
                 "The viewport was replaced only after durable CAS save, exact readback, and projection succeeded. Generic HP-Z/paint/brush/add/remove/undo/save, normal Create BIN, runtime use, and release promotion remain unavailable.";
@@ -3430,7 +4089,7 @@ public sealed partial class MainWindow
             RequireCurrentId65BlankLabManualOperation(operation);
 
             _statusText.Text =
-                $"ID65 {action}: inspecting the current canonical schema-5 document…";
+                $"ID65 {action}: inspecting the current canonical schema-5/6 terrain-set document…";
             Id65AuthoringEditorDocumentReadModel current =
                 await Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
                     paths,
@@ -3451,7 +4110,7 @@ public sealed partial class MainWindow
             if (!currentState.UsesRemotePadTerrainSet)
             {
                 throw new InvalidDataException(
-                    "This document is not schema 5. Direct Tile 1/Tile 2 controls never migrate older documents. Use Edit Verified Moby Bundles… and explicitly migrate an eligible schema-4 document first.");
+                    "This document is not schema 5 or Blank Slate schema 6. Direct Tile 1/Tile 2 controls never migrate older documents. Use Edit Verified Moby Bundles… and explicitly migrate an eligible schema-4 document first.");
             }
 
             bool currentIncluded = tileNumber == 1
@@ -3472,8 +4131,8 @@ public sealed partial class MainWindow
                 ? includeTile
                 : currentState.IncludeTerrainTile2;
             Id65AuthoringEditorControlState nextState =
-                Id65AuthoringEditorControlState
-                    .CreateRemotePadMobyChoiceTerrainSet(
+                CreateId65TerrainSetMutationPreservingBlankCyclorama(
+                        currentState,
                         includeTile1,
                         includeTile2,
                         currentState.RemotePadMobyKind!.Value,
@@ -3486,7 +4145,7 @@ public sealed partial class MainWindow
                 current.EnvelopeCanonicalSha256;
 
             _statusText.Text =
-                $"ID65 {action}: publishing the canonical schema-5 document with compare-and-swap…";
+                $"ID65 {action}: publishing the canonical schema-{(nextState.UsesBlankCyclorama ? "6" : "5")} document with compare-and-swap…";
             Id65AuthoringEditorDocumentWriteResult written =
                 await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
                     paths,
@@ -3522,10 +4181,13 @@ public sealed partial class MainWindow
                 Id65RemotePadGrassT107Catalog.GetRequiredPosition(
                     nextState.RemotePadMobyPositionId!);
             _statusText.Text =
-                $"{(includeTile ? "Added" : "Removed")} Terrain Tile {tileNumber} through the canonical schema-5 Full Authoring Document. " +
+                $"{(includeTile ? "Added" : "Removed")} Terrain Tile {tileNumber} through the canonical schema-{(nextState.UsesBlankCyclorama ? "6" : "5")} Full Authoring Document. " +
                 $"Tile 1 is {(nextState.IncludeTerrainTile1 ? "present" : "absent")}; Tile 2 is {(nextState.IncludeTerrainTile2 ? "present" : "absent")}. " +
+                (nextState.UsesBlankCyclorama
+                    ? $"Blank Slate preset {nextState.BlankCycloramaPresetId} and exact color {nextState.BlankCycloramaColorHex} were preserved. "
+                    : "") +
                 $"Moby {preservedChoice.Label} at retained {preservedPosition.Label} and mandatory T66 were preserved exactly. " +
-                "The viewport was replaced only after durable CAS save, exact readback, and full static reprojection succeeded. Physical materialization, exact candidate creation, normal Create BIN, runtime use, release promotion, and publication remain unavailable.";
+                "The viewport was replaced only after durable CAS save, exact readback, and full static reprojection succeeded. The separate guarded offline candidate is eligible; normal Create BIN, runtime proof, and release remain locked.";
         }
         catch (OperationCanceledException exception)
         {
@@ -3907,14 +4569,14 @@ public sealed partial class MainWindow
                     StringComparison.Ordinal))
             {
                 _statusText.Text =
-                    $"Schema-{(currentState.UsesRemotePadTerrainSet ? "5" : "4")} {requestedChoice.Label} at retained {requestedPosition.Label} is already the canonical choice; no document or viewport state was changed.";
+                    $"Schema-{(currentState.UsesBlankCyclorama ? "6" : currentState.UsesRemotePadTerrainSet ? "5" : "4")} {requestedChoice.Label} at retained {requestedPosition.Label} is already the canonical choice; no document or viewport state was changed.";
                 return;
             }
 
             Id65AuthoringEditorControlState nextState =
                 currentState.UsesRemotePadTerrainSet
-                    ? Id65AuthoringEditorControlState
-                        .CreateRemotePadMobyChoiceTerrainSet(
+                    ? CreateId65TerrainSetMutationPreservingBlankCyclorama(
+                            currentState,
                             currentState.IncludeTerrainTile1,
                             currentState.IncludeTerrainTile2,
                             requestedChoice.Kind,
@@ -3931,7 +4593,7 @@ public sealed partial class MainWindow
                 current.EnvelopeCanonicalSha256;
 
             _statusText.Text =
-                $"ID65 schema-{(nextState.UsesRemotePadTerrainSet ? "5" : "4")} Moby choice: publishing the canonical document with compare-and-swap…";
+                $"ID65 schema-{(nextState.UsesBlankCyclorama ? "6" : nextState.UsesRemotePadTerrainSet ? "5" : "4")} Moby choice: publishing the canonical document with compare-and-swap…";
             Id65AuthoringEditorDocumentWriteResult written =
                 await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
                     paths,
@@ -3945,7 +4607,7 @@ public sealed partial class MainWindow
             ClearId65BlankLabRevealBinding();
 
             _statusText.Text =
-                $"ID65 schema-{(nextState.UsesRemotePadTerrainSet ? "5" : "4")} Moby choice: re-inspecting the durable document and preparing its exact static fresh-scene projection…";
+                $"ID65 schema-{(nextState.UsesBlankCyclorama ? "6" : nextState.UsesRemotePadTerrainSet ? "5" : "4")} Moby choice: re-inspecting the durable document and preparing its exact static fresh-scene projection…";
             (_, LevelLoadData? preparedLevel) =
                 await ReinspectAndPrepareId65FreshProjectionAsync(
                     paths,
@@ -3961,12 +4623,17 @@ public sealed partial class MainWindow
             RefreshId65BlankLabUi();
             RefreshActionAvailability();
             _statusText.Text =
-                $"Applied schema-{(nextState.UsesRemotePadTerrainSet ? "5" : "4")} {requestedChoice.Label} at retained {requestedPosition.Label} through the canonical Full Authoring Document. " +
+                $"Applied schema-{(nextState.UsesBlankCyclorama ? "6" : nextState.UsesRemotePadTerrainSet ? "5" : "4")} {requestedChoice.Label} at retained {requestedPosition.Label} through the canonical Full Authoring Document. " +
                 (nextState.UsesRemotePadTerrainSet
                     ? $"Terrain Tile 1 {(nextState.IncludeTerrainTile1 ? "included" : "omitted")} and Terrain Tile 2 {(nextState.IncludeTerrainTile2 ? "included" : "omitted")} were preserved. "
                     : $"Structural terrain {(nextState.IncludeStructuralTerrain ? "included" : "omitted")} was preserved. ") +
+                (nextState.UsesBlankCyclorama
+                    ? $"Blank Slate preset {nextState.BlankCycloramaPresetId} and exact color {nextState.BlankCycloramaColorHex} were preserved. "
+                    : "") +
                 "Mandatory T66 and T88 exclusion were preserved. " +
-                "The viewport was replaced only after durable CAS save, exact readback, and static projection succeeded. Physical materialization, arbitrary Mobys, drag placement, normal Create BIN, runtime use, release promotion, and publication remain unavailable.";
+                (nextState.UsesRemotePadTerrainSet
+                    ? "The viewport was replaced only after durable CAS save, exact readback, and static projection succeeded. The separate guarded offline candidate is eligible; arbitrary Mobys and drag placement remain locked, and normal Create BIN, runtime proof, and release remain locked."
+                    : "The viewport was replaced only after durable CAS save, exact readback, and static projection succeeded. Physical materialization, arbitrary Mobys, drag placement, normal Create BIN, runtime use, release promotion, and publication remain unavailable.");
         }
         catch (OperationCanceledException exception)
         {
@@ -4142,6 +4809,7 @@ public sealed partial class MainWindow
             return;
         }
 
+        bool revealingBlankSlateCandidate = false;
         bool candidateBound =
             IsCanonicalLowerSha256(_id65BlankLabRevealDocumentEnvelopeSha256) &&
             IsCanonicalLowerSha256(_id65BlankLabRevealDocumentCanonicalSha256);
@@ -4161,6 +4829,22 @@ public sealed partial class MainWindow
                 Id65AuthoringEditorControlState state =
                     Id65AuthoringEditorControlStateCompiler.RecoverControlState(
                         _id65FreshAuthoringDocument);
+                bool revealableBlankSlate =
+                    state.UsesBlankCyclorama &&
+                    state.BlankCycloramaPresetId ==
+                        Id65BlankSlatePresetId &&
+                    state.BlankCycloramaColorHex ==
+                        Id65BlankSlateColorHex &&
+                    state.MandatoryBaseFaceTextureId ==
+                        Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId &&
+                    !state.IncludeGrassAtT88;
+                bool revealableTerrainSet =
+                    !state.UsesBlankCyclorama &&
+                    state.UsesRemotePadTerrainSet &&
+                    state.UsesRemotePadMobyChoice &&
+                    state.MandatoryBaseFaceTextureId ==
+                        Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId &&
+                    !state.IncludeGrassAtT88;
                 bool revealableRemotePad =
                     state.UsesRemotePadT107Grid &&
                     state.MandatoryBaseFaceTextureId ==
@@ -4168,6 +4852,7 @@ public sealed partial class MainWindow
                     !state.IncludeGrassAtT88;
                 bool revealableLegacy =
                     !state.UsesRemotePadT107Grid &&
+                    !state.UsesRemotePadMobyChoice &&
                     _id65FreshAuthoringDocument.SchemaVersion ==
                         Id65LegacyT66DocumentSchemaVersion &&
                     _id65FreshAuthoringDocument.ProfileId ==
@@ -4177,10 +4862,13 @@ public sealed partial class MainWindow
                     state.IncludeStructuralTerrain &&
                     state.IncludeGrassAtT88 &&
                     state.IncludeGrassAtT107;
-                if (!revealableRemotePad && !revealableLegacy)
+                if (!revealableBlankSlate &&
+                    !revealableTerrainSet &&
+                    !revealableRemotePad &&
+                    !revealableLegacy)
                 {
                     throw new InvalidDataException(
-                        "Only a full legacy T66 candidate state or a verified schema-3 T88-off/T66 terrain-and-Grass combination has a revealable candidate. Resident T25 and unsupported documents are refused.");
+                        "Only a verified Blank Slate schema-6 state, schema-5 terrain-set/Moby state, schema-3 T88-off/T66 terrain-and-Grass combination, or the full legacy T66 candidate state has a revealable candidate. Schema 4, Resident T25, and unsupported documents are refused.");
                 }
                 if (!_viewport.IsId65FreshLevelT66ViewportTextureProjectionBoundForTesting)
                 {
@@ -4204,6 +4892,7 @@ public sealed partial class MainWindow
                     throw new InvalidDataException(
                         "The canonical Full Authoring Document changed after candidate materialization.");
                 }
+                revealingBlankSlateCandidate = revealableBlankSlate;
             }
             catch (Exception exception) when (
                 exception is IOException or UnauthorizedAccessException or
@@ -4223,8 +4912,9 @@ public sealed partial class MainWindow
             string fileManager = OperatingSystem.IsMacOS()
                 ? "Finder"
                 : OperatingSystem.IsWindows() ? "Explorer" : "the file manager";
-            _statusText.Text =
-                $"Revealed the exact ID65 CUE in {fileManager}: {_id65BlankLabRevealPath}";
+            _statusText.Text = revealingBlankSlateCandidate
+                ? $"Revealed the exact Blank Slate schema-6 candidate CUE in {fileManager}: {_id65BlankLabRevealPath}"
+                : $"Revealed the exact ID65 CUE in {fileManager}: {_id65BlankLabRevealPath}";
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
@@ -4268,6 +4958,8 @@ public sealed partial class MainWindow
             synchronizedAuthoringState?.UsesRemotePadMobyChoice == true;
         bool remotePadTerrainSetSelected =
             synchronizedAuthoringState?.UsesRemotePadTerrainSet == true;
+        bool blankSlateSelected =
+            synchronizedAuthoringState?.UsesBlankCyclorama == true;
         bool legacyPrivateT66CandidateReady = privateT66Selected &&
             !remotePadT107Selected &&
             !remotePadMobyChoiceSelected &&
@@ -4278,9 +4970,14 @@ public sealed partial class MainWindow
             remotePadT107Selected &&
             !remotePadMobyChoiceSelected &&
             !synchronizedAuthoringState!.IncludeGrassAtT88;
+        bool terrainSetPrivateT66CandidateReady = privateT66Selected &&
+            remotePadMobyChoiceSelected &&
+            remotePadTerrainSetSelected &&
+            !synchronizedAuthoringState!.IncludeGrassAtT88;
         bool exactCandidateReady =
             legacyPrivateT66CandidateReady ||
-            remotePadPrivateT66CandidateReady;
+            remotePadPrivateT66CandidateReady ||
+            terrainSetPrivateT66CandidateReady;
         bool hasUnsupported = TryGetId65BlankLabUnsupportedArtifact(out string unsupported);
         bool disposableTerrainReady =
             active &&
@@ -4302,7 +4999,9 @@ public sealed partial class MainWindow
             ? hasAuthoringDocument
                 ? remotePadMobyChoiceSelected
                     ? remotePadTerrainSetSelected
-                        ? $"Canonical schema-5 terrain-set/Moby document is synchronized with the fresh Level Building Editor: Terrain Tile 1 {(synchronizedAuthoringState!.IncludeTerrainTile1 ? "present" : "absent")}; Terrain Tile 2 {(synchronizedAuthoringState.IncludeTerrainTile2 ? "present" : "absent")}; {Id65RemotePadMobyChoiceCatalog.GetRequiredChoice(synchronizedAuthoringState.RemotePadMobyKind!.Value).Label} at retained {Id65RemotePadGrassT107Catalog.GetRequiredPosition(synchronizedAuthoringState.RemotePadMobyPositionId!).Label}; Proved private T66 is fixed and Grass T88 is excluded. This is a canonical-document and static-presentation route only. Physical materialization, exact candidate creation, normal Create BIN, runtime proof, release integration, promotion, and publication remain unavailable."
+                        ? blankSlateSelected
+                            ? $"Canonical Blank Slate schema-6 document is synchronized with the fresh Level Building Editor: preset {synchronizedAuthoringState!.BlankCycloramaPresetId}, exact color {synchronizedAuthoringState.BlankCycloramaColorHex}; Terrain Tile 1 {(synchronizedAuthoringState.IncludeTerrainTile1 ? "present" : "absent")}; Terrain Tile 2 {(synchronizedAuthoringState.IncludeTerrainTile2 ? "present" : "absent")}; {Id65RemotePadMobyChoiceCatalog.GetRequiredChoice(synchronizedAuthoringState.RemotePadMobyKind!.Value).Label} at retained {Id65RemotePadGrassT107Catalog.GetRequiredPosition(synchronizedAuthoringState.RemotePadMobyPositionId!).Label}. This exact state can build the separately guarded offline Blank Slate schema-6 candidate. Normal Create BIN, runtime proof, release integration, promotion, and publication remain unavailable."
+                            : $"Canonical schema-5 terrain-set/Moby document is synchronized with the fresh Level Building Editor: Terrain Tile 1 {(synchronizedAuthoringState!.IncludeTerrainTile1 ? "present" : "absent")}; Terrain Tile 2 {(synchronizedAuthoringState.IncludeTerrainTile2 ? "present" : "absent")}; {Id65RemotePadMobyChoiceCatalog.GetRequiredChoice(synchronizedAuthoringState.RemotePadMobyKind!.Value).Label} at retained {Id65RemotePadGrassT107Catalog.GetRequiredPosition(synchronizedAuthoringState.RemotePadMobyPositionId!).Label}; Proved private T66 is fixed and Grass T88 is excluded. This exact state can build the separately guarded offline schema-5 candidate. Normal Create BIN, runtime proof, release integration, promotion, and publication remain unavailable."
                         : $"Canonical schema-4 remote-pad Moby document is synchronized with the fresh Object Manager: {Id65RemotePadMobyChoiceCatalog.GetRequiredChoice(synchronizedAuthoringState!.RemotePadMobyKind!.Value).Label} at retained {Id65RemotePadGrassT107Catalog.GetRequiredPosition(synchronizedAuthoringState.RemotePadMobyPositionId!).Label}; {(synchronizedAuthoringState.IncludeStructuralTerrain ? "structural terrain is present" : "the terrain state is blank")}; Proved private T66 is fixed; Grass T88 is excluded. This is a canonical-document and static-presentation route only. Physical materialization, exact candidate creation, normal Create BIN, runtime proof, release integration, promotion, and publication remain unavailable."
                     : remotePadT107Selected
                     ? remotePadPrivateT66CandidateReady
@@ -4338,8 +5037,10 @@ public sealed partial class MainWindow
             if (!busy)
             {
                 _id65BlankLabAuthoringCandidateButton.Content =
-                    remotePadTerrainSetSelected
-                    ? "Schema 5 Physical Candidate Not Implemented"
+                    blankSlateSelected
+                    ? "Create Blank Slate schema-6 candidate"
+                    : remotePadTerrainSetSelected
+                    ? "Create Verified Schema-5 Candidate"
                     : remotePadMobyChoiceSelected
                     ? "Schema 4 Physical Candidate Not Implemented"
                     : remotePadPrivateT66CandidateReady
@@ -4362,10 +5063,18 @@ public sealed partial class MainWindow
                 valid && active && !busy && !hasUnsupported &&
                 disposableTerrainReady && !freshProjectionActive;
         if (_id65BlankLabRevealButton != null)
+        {
             _id65BlankLabRevealButton.IsEnabled =
                 !busy && File.Exists(_id65BlankLabRevealPath) &&
                 (!hasAuthoringDocument ||
                     (privateT66Selected && exactCandidateReady));
+            if (!busy)
+            {
+                _id65BlankLabRevealButton.Content = blankSlateSelected
+                    ? "Reveal Blank Slate schema-6 Test CUE"
+                    : "Reveal Test CUE";
+            }
+        }
         RefreshId65FreshObjectManagerUi();
         RefreshId65FreshOptionalTerrainUi();
     }
@@ -4456,7 +5165,9 @@ public sealed partial class MainWindow
             Id65RemotePadGrassT107Position mobyChoicePosition =
                 Id65RemotePadGrassT107Catalog.GetRequiredPosition(
                     state.RemotePadMobyPositionId!);
-            string mobySchema = state.UsesRemotePadTerrainSet ? "5" : "4";
+            string mobySchema = state.UsesBlankCyclorama
+                ? "6"
+                : state.UsesRemotePadTerrainSet ? "5" : "4";
             if (_id65FreshMobyChoiceSelector != null)
                 _id65FreshMobyChoiceSelector.SelectedItem = choice;
             if (_id65FreshMobyChoicePositionSelector != null)
@@ -4496,7 +5207,21 @@ public sealed partial class MainWindow
                 _id65FreshMobyChoicePositionSelector.IsEnabled = canOpenDocument;
             RefreshId65FreshMobyChoiceActionAvailability();
             _id65FreshObjectManagerStatusText.Text =
+                state.UsesBlankCyclorama &&
                 choice.Kind == Id65RemotePadMobyKind.None
+                    ? $"Blank Slate schema 6: preset {state.BlankCycloramaPresetId}, exact color {state.BlankCycloramaColorHex}; 0 placed objects. None is explicit and retained position {mobyChoicePosition.Label} ({mobyChoicePosition.EditorX}, {mobyChoicePosition.EditorY}, {mobyChoicePosition.EditorZ}) remains ready for a later choice. The separate guarded offline Blank Slate schema-6 candidate is eligible; normal Create BIN, runtime proof, and release remain locked."
+                : state.UsesBlankCyclorama
+                    ? $"Blank Slate schema 6: preset {state.BlankCycloramaPresetId}, exact color {state.BlankCycloramaColorHex}; 1 placed object: {choice.Label} at {mobyChoicePosition.Label} " +
+                      $"({mobyChoicePosition.EditorX}, {mobyChoicePosition.EditorY}, {mobyChoicePosition.EditorZ}). " +
+                      "The mutually exclusive choice, position, and Blank Slate intent are canonical-document-bound. The separate guarded offline Blank Slate schema-6 candidate is eligible; normal Create BIN, runtime proof, and release remain locked."
+                : state.UsesRemotePadTerrainSet &&
+                choice.Kind == Id65RemotePadMobyKind.None
+                    ? $"Blank scene: 0 placed objects. Schema-5 None is explicit and retained position {mobyChoicePosition.Label} ({mobyChoicePosition.EditorX}, {mobyChoicePosition.EditorY}, {mobyChoicePosition.EditorZ}) remains ready for a later choice. The separate guarded offline candidate is eligible; normal Create BIN, runtime proof, and release remain locked."
+                : state.UsesRemotePadTerrainSet
+                    ? $"1 placed object: schema-5 {choice.Label} at {mobyChoicePosition.Label} " +
+                      $"({mobyChoicePosition.EditorX}, {mobyChoicePosition.EditorY}, {mobyChoicePosition.EditorZ}). " +
+                      "The mutually exclusive choice and position are canonical-document-bound. The separate guarded offline candidate is eligible; arbitrary Mobys and drag placement remain locked, and normal Create BIN, runtime proof, and release remain locked."
+                : choice.Kind == Id65RemotePadMobyKind.None
                     ? $"Blank scene: 0 placed objects. Schema-{mobySchema} None is explicit and retained position {mobyChoicePosition.Label} ({mobyChoicePosition.EditorX}, {mobyChoicePosition.EditorY}, {mobyChoicePosition.EditorZ}) remains ready for a later choice. Physical materialization and all runtime/release paths remain locked."
                     : $"1 placed object: schema-{mobySchema} {choice.Label} at {mobyChoicePosition.Label} " +
                       $"({mobyChoicePosition.EditorX}, {mobyChoicePosition.EditorY}, {mobyChoicePosition.EditorZ}). " +
@@ -4725,7 +5450,11 @@ public sealed partial class MainWindow
             : state == null
                 ? "Mandatory starter pad only. No Full Authoring Document is loaded, so no default was silently persisted. Open Object Manager and choose Start Blank-Level Editing… to select the mandatory texture and create the blank document first."
                 : state.UsesRemotePadTerrainSet
-                    ? $"Schema-5 Terrain Tile 1 is {(state.IncludeTerrainTile1 ? "present" : "absent")}; Terrain Tile 2 is {(state.IncludeTerrainTile2 ? "present" : "absent")}. Each exact Add/Remove action changes only its named tile and preserves Moby {Id65RemotePadMobyChoiceCatalog.GetRequiredChoice(state.RemotePadMobyKind!.Value).Label} at retained {Id65RemotePadGrassT107Catalog.GetRequiredPosition(state.RemotePadMobyPositionId!).Label}. Static projection only; physical materialization, exact candidate, Create BIN, runtime, and release paths remain locked."
+                    ? $"Schema-{(state.UsesBlankCyclorama ? "6 Blank Slate" : "5")} Terrain Tile 1 is {(state.IncludeTerrainTile1 ? "present" : "absent")}; Terrain Tile 2 is {(state.IncludeTerrainTile2 ? "present" : "absent")}. Each exact Add/Remove action changes only its named tile and preserves Moby {Id65RemotePadMobyChoiceCatalog.GetRequiredChoice(state.RemotePadMobyKind!.Value).Label} at retained {Id65RemotePadGrassT107Catalog.GetRequiredPosition(state.RemotePadMobyPositionId!).Label}. " +
+                      (state.UsesBlankCyclorama
+                          ? $"Preset {state.BlankCycloramaPresetId} and exact color {state.BlankCycloramaColorHex} are preserved. "
+                          : "") +
+                      "The synchronized state is eligible for the separately guarded exact offline candidate; normal Create BIN, runtime, and release paths remain locked."
                 : state.IncludeStructuralTerrain
                     ? $"Optional structural terrain is present. Remove optional terrain changes only IncludeStructuralTerrain; Grass T88 is {(state.IncludeGrassAtT88 ? "included" : "omitted")}, Grass T107 is {(state.IncludeGrassAtT107 ? "included" : "omitted")}, and mandatory base face {Id65MandatoryBaseTextureLabel(state.MandatoryBaseFaceTextureId)} will be preserved."
                     : $"Optional structural terrain is absent. Create optional terrain changes only IncludeStructuralTerrain; Grass T88 is {(state.IncludeGrassAtT88 ? "included" : "omitted")}, Grass T107 is {(state.IncludeGrassAtT107 ? "included" : "omitted")}, and mandatory base face {Id65MandatoryBaseTextureLabel(state.MandatoryBaseFaceTextureId)} will be preserved.";
@@ -6124,7 +6853,7 @@ public sealed partial class MainWindow
         if (Id65BlankLabHasAnyAuthoredArtifacts())
         {
             reason =
-                "Normal Create BIN is blocked because the isolated ID65 lab has authored research artifacts that the retail all-saved-edits writer must neither omit nor include. Supported schema-3 remote-pad and frozen legacy T66 documents have separate exact offline candidate paths; neither is authorized for normal retail composition, runtime use, or release promotion.";
+                "Normal Create BIN is blocked because the isolated ID65 lab has authored research artifacts that the retail all-saved-edits writer must neither omit nor include. Supported schema-5 terrain-set/Moby, schema-3 remote-pad, and frozen legacy T66 documents have separate exact offline candidate paths; none is authorized for normal retail composition, runtime use, or release promotion. Schema 4 remains static-presentation only.";
             return true;
         }
 
@@ -6913,6 +7642,12 @@ public sealed partial class MainWindow
             _id65FreshAuthoringDocument?.RemotePadMobyKind,
         LoadedRemotePadMobyPositionId:
             _id65FreshAuthoringDocument?.RemotePadMobyPositionId ?? "",
+        LoadedUsesBlankCyclorama:
+            loadedState?.UsesBlankCyclorama == true,
+        LoadedBlankCycloramaPresetId:
+            loadedState?.BlankCycloramaPresetId ?? "",
+        LoadedBlankCycloramaColorHex:
+            loadedState?.BlankCycloramaColorHex ?? "",
         VisibleMobyCount: _currentMobys.Count,
         PrivateT66ViewportProjectionBound:
             _viewport.IsId65FreshLevelT66ViewportTextureProjectionBoundForTesting,
@@ -11712,6 +12447,9 @@ public sealed partial class MainWindow
         bool LoadedTerrainTile2,
         Id65RemotePadMobyKind? LoadedRemotePadMobyKind,
         string LoadedRemotePadMobyPositionId,
+        bool LoadedUsesBlankCyclorama,
+        string LoadedBlankCycloramaPresetId,
+        string LoadedBlankCycloramaColorHex,
         int VisibleMobyCount,
         bool PrivateT66ViewportProjectionBound,
         bool RepairsInvalidWorkspace,

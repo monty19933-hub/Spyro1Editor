@@ -36,6 +36,7 @@ internal sealed record Id65AuthoringEditorDocumentStoreResult(
     public string StaticAuthoringSceneGraphSha256 { get; init; } = string.Empty;
     public string StaticAuthoringProjectionSha256 { get; init; } = string.Empty;
     public string StaticAuthoringTerrainManifestSha256 { get; init; } = string.Empty;
+    public string StaticAuthoringCycloramaCatalogSha256 { get; init; } = string.Empty;
     public bool HasCompiledCompositeProjection => !Document.UsesStaticRemotePadAuthoring;
     public bool HasStaticAuthoringProjection => Document.UsesStaticRemotePadAuthoring;
     public bool ContainsCompositeAfterimage => false;
@@ -76,6 +77,7 @@ internal sealed record Id65AuthoringEditorDocumentEnvelopeIdentity(
     public string StaticAuthoringSceneGraphSha256 { get; init; } = string.Empty;
     public string StaticAuthoringProjectionSha256 { get; init; } = string.Empty;
     public string StaticAuthoringTerrainManifestSha256 { get; init; } = string.Empty;
+    public string StaticAuthoringCycloramaCatalogSha256 { get; init; } = string.Empty;
     public bool HasCompiledCompositeProjection => !Document.UsesStaticRemotePadAuthoring;
     public bool HasStaticAuthoringProjection => Document.UsesStaticRemotePadAuthoring;
 }
@@ -108,6 +110,12 @@ internal static class Id65AuthoringEditorDocumentStore
         "id65-authoring-editor-document-projector-v4";
     public const string RemotePadMobyChoiceTerrainSetStaticAuthoringProfileId =
         "id65-authoring-editor-document-remote-pad-moby-choice-terrain-set-static-projection-v3";
+    public const int RemotePadMobyChoiceTerrainSetBlankCycloramaEnvelopeSchemaVersion = 5;
+    public const string RemotePadMobyChoiceTerrainSetBlankCycloramaProjectionContractId =
+        "id65-authoring-editor-document-projector-v5";
+    public const string
+        RemotePadMobyChoiceTerrainSetBlankCycloramaStaticAuthoringProfileId =
+        "id65-authoring-editor-document-remote-pad-moby-choice-terrain-set-blank-cyclorama-static-projection-v4";
     public const string FileName =
         "unusedlevel65blank-authoring-document-v1.json";
     public const int MaximumEnvelopeByteCount = 256 * 1024;
@@ -172,6 +180,16 @@ internal static class Id65AuthoringEditorDocumentStore
         "staticAuthoringTerrainManifestSha256",
         .. RemotePadGridEnvelopePropertyNames.Skip(
             RemotePadGridEnvelopePropertyNames.Length - 2)
+    ];
+
+    private static readonly string[]
+        RemotePadMobyChoiceTerrainSetBlankCycloramaEnvelopePropertyNames =
+    [
+        .. RemotePadMobyChoiceTerrainSetEnvelopePropertyNames.Take(
+            RemotePadMobyChoiceTerrainSetEnvelopePropertyNames.Length - 2),
+        "staticAuthoringCycloramaCatalogSha256",
+        .. RemotePadMobyChoiceTerrainSetEnvelopePropertyNames.Skip(
+            RemotePadMobyChoiceTerrainSetEnvelopePropertyNames.Length - 2)
     ];
 
     public static string GetPath(UnusedLevel65BlankLevelLabWorkspacePaths paths)
@@ -291,6 +309,27 @@ internal static class Id65AuthoringEditorDocumentStore
             DocumentTransitionPolicy.ExplicitRemotePadMobyChoiceToTerrainSet,
             cancellationToken);
 
+    internal static Task<TPublishedResult>
+        MigrateRemotePadMobyChoiceTerrainSetToBlankCycloramaPreparedAsync<TPublishedResult>(
+            UnusedLevel65BlankLevelLabWorkspacePaths paths,
+            UnusedLevel65BlankLevelLabManifest expectedLabManifest,
+            Id65AuthoringEditorDocument document,
+            Id65AuthoringEditorDocumentProjectionInputs projectionInputs,
+            Func<Id65AuthoringEditorDocumentStoreResult, TPublishedResult>
+                preparePublishedResult,
+            string expectedPriorEnvelopeCanonicalSha256,
+            CancellationToken cancellationToken = default) =>
+        SavePreparedCoreAsync(
+            paths,
+            expectedLabManifest,
+            document,
+            projectionInputs,
+            preparePublishedResult,
+            expectedPriorEnvelopeCanonicalSha256,
+            DocumentTransitionPolicy
+                .ExplicitRemotePadMobyChoiceTerrainSetToBlankCyclorama,
+            cancellationToken);
+
     private static async Task<TPublishedResult> SavePreparedCoreAsync<TPublishedResult>(
         UnusedLevel65BlankLevelLabWorkspacePaths paths,
         UnusedLevel65BlankLevelLabManifest expectedLabManifest,
@@ -312,7 +351,9 @@ internal static class Id65AuthoringEditorDocumentStore
         if ((transitionPolicy is
                 DocumentTransitionPolicy.ExplicitLegacyToRemotePadGrid or
                 DocumentTransitionPolicy.ExplicitRemotePadGridToMobyChoice or
-                DocumentTransitionPolicy.ExplicitRemotePadMobyChoiceToTerrainSet) &&
+                DocumentTransitionPolicy.ExplicitRemotePadMobyChoiceToTerrainSet or
+                DocumentTransitionPolicy
+                    .ExplicitRemotePadMobyChoiceTerrainSetToBlankCyclorama) &&
             string.IsNullOrWhiteSpace(expectedPriorEnvelopeCanonicalSha256))
         {
             throw new InvalidDataException(
@@ -632,6 +673,10 @@ internal static class Id65AuthoringEditorDocumentStore
         left.StaticAuthoringCatalogSha256 == right.StaticAuthoringCatalogSha256 &&
         left.StaticAuthoringSceneGraphSha256 == right.StaticAuthoringSceneGraphSha256 &&
         left.StaticAuthoringProjectionSha256 == right.StaticAuthoringProjectionSha256 &&
+        left.StaticAuthoringTerrainManifestSha256 ==
+            right.StaticAuthoringTerrainManifestSha256 &&
+        left.StaticAuthoringCycloramaCatalogSha256 ==
+            right.StaticAuthoringCycloramaCatalogSha256 &&
         left.Document.SerializeUtf8().SequenceEqual(right.Document.SerializeUtf8());
 
     private static async Task RequireExpectedPriorAsync(
@@ -695,6 +740,32 @@ internal static class Id65AuthoringEditorDocumentStore
             {
                 throw new InvalidDataException(
                     "Changing ID65 document semantic families requires the matching explicit migration API.");
+            }
+            return;
+        }
+
+        if (transitionPolicy == DocumentTransitionPolicy
+                .ExplicitRemotePadMobyChoiceTerrainSetToBlankCyclorama)
+        {
+            if (priorFamily !=
+                    DocumentSemanticFamily.RemotePadMobyChoiceTerrainSet ||
+                desiredFamily != DocumentSemanticFamily
+                    .RemotePadMobyChoiceTerrainSetBlankCyclorama ||
+                !prior.RemotePadMobyKind.HasValue ||
+                prior.RemotePadMobyPositionId is not string positionId)
+            {
+                throw new InvalidDataException(
+                    "The explicit schema-5-to-6 migration supports only exact terrain-set intent to its code-owned blank-cyclorama extension.");
+            }
+            Id65AuthoringEditorDocument expected = Id65AuthoringEditorDocument
+                .CreateRemotePadMobyChoiceTerrainSetBlankCycloramaExact(
+                    prior.RemotePadMobyKind.Value,
+                    positionId,
+                    prior.ActiveTerrainUnitIds);
+            if (!desired.SerializeUtf8().SequenceEqual(expected.SerializeUtf8()))
+            {
+                throw new InvalidDataException(
+                    "The explicit schema-5-to-6 migration must preserve every terrain, Moby, position, T66, and baseline semantic while adding only blank-slate-v1.");
             }
             return;
         }
@@ -779,7 +850,9 @@ internal static class Id65AuthoringEditorDocumentStore
 
     private static DocumentSemanticFamily GetSemanticFamily(
         Id65AuthoringEditorDocument document) =>
-        document.UsesRemotePadTerrainSet
+        document.UsesBlankCyclorama
+            ? DocumentSemanticFamily.RemotePadMobyChoiceTerrainSetBlankCyclorama
+            : document.UsesRemotePadTerrainSet
             ? DocumentSemanticFamily.RemotePadMobyChoiceTerrainSet
             : document.UsesRemotePadMobyChoice
             ? DocumentSemanticFamily.RemotePadMobyChoice
@@ -999,6 +1072,11 @@ internal static class Id65AuthoringEditorDocumentStore
         Id65AuthoringEditorDocument document,
         Id65AuthoringEditorDocumentProjectionInputs inputs)
     {
+        if (document.UsesBlankCyclorama)
+        {
+            return CaptureRemotePadMobyChoiceTerrainSetBlankCycloramaStaticAuthoringIdentity(
+                document);
+        }
         if (document.UsesRemotePadTerrainSet)
             return CaptureRemotePadMobyChoiceTerrainSetStaticAuthoringIdentity(document);
         if (document.UsesRemotePadMobyChoice)
@@ -1458,6 +1536,205 @@ internal static class Id65AuthoringEditorDocumentStore
         return buffer.ToArray();
     }
 
+    private static ProjectionIdentity
+        CaptureRemotePadMobyChoiceTerrainSetBlankCycloramaStaticAuthoringIdentity(
+            Id65AuthoringEditorDocument document)
+    {
+        if (!document.UsesBlankCyclorama ||
+            !document.UsesRemotePadTerrainSet ||
+            document.SchemaVersion != Id65AuthoringEditorDocument
+                .RemotePadMobyChoiceTerrainSetBlankCycloramaSchemaVersion ||
+            document.ProfileId != Id65AuthoringEditorDocument
+                .RemotePadMobyChoiceTerrainSetBlankCycloramaDocumentProfileId ||
+            !document.RemotePadMobyKind.HasValue ||
+            document.RemotePadMobyPositionId is not string positionId ||
+            document.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorDocument.PrivateMandatoryBaseFaceTextureId ||
+            document.Terrain.Count > Id65AuthoringTerrainSetCatalog.All.Count ||
+            document.TerrainSetManifestSha256 is not string manifestSha256 ||
+            document.BlankCyclorama is not Id65AuthoringBlankCycloramaIntent cyclorama)
+        {
+            throw new InvalidDataException(
+                "The static ID65 blank-cyclorama projector requires one exact schema-6 T66 document.");
+        }
+
+        Id65AuthoringBlankCycloramaCatalog.RequireExact(cyclorama);
+        Id65AuthoringTerrainSetManifest terrainSet =
+            Id65AuthoringTerrainSetCatalog.Create(document.ActiveTerrainUnitIds);
+        if (!terrainSet.ActiveUnits.Select(item => item.Id)
+                .SequenceEqual(document.ActiveTerrainUnitIds) ||
+            !HashEquals(terrainSet.CanonicalSha256, manifestSha256) ||
+            !IsSha256(Id65AuthoringBlankCycloramaCatalog.CanonicalSha256))
+        {
+            throw new InvalidDataException(
+                "The schema-6 ID65 document lost its canonical terrain or blank-cyclorama catalog identity.");
+        }
+
+        string exactPositionId =
+            Id65RemotePadMobyChoiceCatalog.GetRequiredPositionId(positionId);
+        Id65RemotePadGrassT107Position position =
+            Id65RemotePadGrassT107Catalog.GetRequiredPosition(exactPositionId);
+        Id65RemotePadMobyChoice choice = Id65RemotePadMobyChoiceCatalog
+            .GetRequiredChoice(document.RemotePadMobyKind.Value);
+        string sceneGraphSha256 = Id65FreshLevelSceneProjector
+            .GetTerrainSetGraphCanonicalSha256(document.ActiveTerrainUnitIds);
+        if (Id65RemotePadMobyChoiceCatalog.CanonicalSha256 !=
+                Id65RemotePadMobyChoiceCatalog.ExpectedCanonicalSha256 ||
+            Id65RemotePadGrassT107Catalog.SupportHandle !=
+                Id65FreshLevelSceneProjector.CollisionStableId ||
+            Id65RemotePadRedGemT21Catalog.SupportHandle !=
+                Id65FreshLevelSceneProjector.CollisionStableId ||
+            Id65RemotePadGrassT107Catalog.SupportCollisionTrueIndex !=
+                Id65FreshLevelSceneProjector.CollisionTriangleIndex ||
+            Id65RemotePadRedGemT21Catalog.SupportCollisionTrueIndex !=
+                Id65FreshLevelSceneProjector.CollisionTriangleIndex ||
+            !Id65RemotePadGrassT107Catalog.IsStrictlyInsideSupportTriangle(
+                position.EditorX,
+                position.EditorY,
+                position.EditorZ) ||
+            document.MobyPlacements.Count !=
+                (choice.Kind == Id65RemotePadMobyKind.None ? 0 : 1) ||
+            cyclorama.ContainsNativePayloadBytes ||
+            cyclorama.ContainsPhysicalAddresses ||
+            cyclorama.ContainsFilePaths ||
+            cyclorama.ContainsCompiledAfterimage ||
+            cyclorama.WritesFileSystem ||
+            cyclorama.WritesDiscImage ||
+            cyclorama.WritesCue ||
+            cyclorama.NormalCreateBinEnabled ||
+            cyclorama.RuntimeCandidateAuthorized ||
+            cyclorama.ReleaseIntegrated ||
+            cyclorama.Publishable)
+        {
+            throw new InvalidDataException(
+                "The schema-6 ID65 document lost its exact catalog, T13995 support, or closed capability boundary.");
+        }
+
+        byte[] canonical =
+            BuildRemotePadMobyChoiceTerrainSetBlankCycloramaStaticAuthoringProjection(
+                document,
+                choice,
+                position,
+                terrainSet,
+                cyclorama,
+                sceneGraphSha256);
+        return new ProjectionIdentity(string.Empty, string.Empty, string.Empty, string.Empty)
+        {
+            StaticAuthoringProfileId =
+                RemotePadMobyChoiceTerrainSetBlankCycloramaStaticAuthoringProfileId,
+            StaticAuthoringCatalogSha256 =
+                Id65RemotePadMobyChoiceCatalog.CanonicalSha256,
+            StaticAuthoringSceneGraphSha256 = sceneGraphSha256,
+            StaticAuthoringProjectionSha256 = Hash(canonical),
+            StaticAuthoringTerrainManifestSha256 = terrainSet.CanonicalSha256,
+            StaticAuthoringCycloramaCatalogSha256 =
+                Id65AuthoringBlankCycloramaCatalog.CanonicalSha256
+        };
+    }
+
+    private static byte[]
+        BuildRemotePadMobyChoiceTerrainSetBlankCycloramaStaticAuthoringProjection(
+            Id65AuthoringEditorDocument document,
+            Id65RemotePadMobyChoice choice,
+            Id65RemotePadGrassT107Position position,
+            Id65AuthoringTerrainSetManifest terrainSet,
+            Id65AuthoringBlankCycloramaIntent cyclorama,
+            string sceneGraphSha256)
+    {
+        using MemoryStream buffer = new();
+        using (Utf8JsonWriter json = new(buffer, new JsonWriterOptions
+        {
+            Indented = false,
+            SkipValidation = false
+        }))
+        {
+            json.WriteStartObject();
+            json.WriteString(
+                "profileId",
+                RemotePadMobyChoiceTerrainSetBlankCycloramaStaticAuthoringProfileId);
+            json.WriteNumber("schemaVersion", 4);
+            json.WriteString(
+                "projectionContractId",
+                RemotePadMobyChoiceTerrainSetBlankCycloramaProjectionContractId);
+            json.WriteString("documentProfileId", document.ProfileId);
+            json.WriteString("documentCanonicalSha256", document.CanonicalSha256);
+            json.WriteString("documentContentSha256", document.ContentSha256);
+            json.WriteString(
+                "mobyCatalogProfileId",
+                Id65RemotePadMobyChoiceCatalog.ProfileId);
+            json.WriteNumber(
+                "mobyCatalogSchemaVersion",
+                Id65RemotePadMobyChoiceCatalog.SchemaVersion);
+            json.WriteString(
+                "mobyCatalogCanonicalSha256",
+                Id65RemotePadMobyChoiceCatalog.CanonicalSha256);
+            json.WriteString("mobyKind", choice.KindId);
+            json.WriteString("positionId", position.PositionId);
+            string? selectedRowSha256 = Id65RemotePadMobyChoiceCatalog
+                .GetSelectedExactRowSha256(choice.Kind, position.PositionId);
+            if (selectedRowSha256 is null)
+                json.WriteNull("selectedExactRowSha256");
+            else
+                json.WriteString("selectedExactRowSha256", selectedRowSha256);
+            if (choice.PlacementId is null)
+                json.WriteNull("placementId");
+            else
+                json.WriteString("placementId", choice.PlacementId);
+            if (choice.TargetTrueIndex.HasValue)
+                json.WriteNumber("targetTrueIndex", choice.TargetTrueIndex.Value);
+            else
+                json.WriteNull("targetTrueIndex");
+            json.WriteString(
+                "sceneProfileId",
+                Id65FreshLevelSceneProjector.TerrainSetProfileId);
+            json.WriteNumber(
+                "sceneSchemaVersion",
+                Id65FreshLevelSceneProjector.TerrainSetSchemaVersion);
+            json.WriteString("sceneGraphCanonicalSha256", sceneGraphSha256);
+            json.WriteString(
+                "supportHandle",
+                Id65FreshLevelSceneProjector.CollisionStableId);
+            json.WriteNumber(
+                "supportCollisionTrueIndex",
+                Id65FreshLevelSceneProjector.CollisionTriangleIndex);
+            json.WriteString(
+                "terrainCatalogProfileId",
+                Id65AuthoringTerrainSetCatalog.ProfileId);
+            json.WriteNumber(
+                "terrainCatalogSchemaVersion",
+                Id65AuthoringTerrainSetCatalog.SchemaVersion);
+            json.WritePropertyName("activeTerrainUnitIds");
+            json.WriteStartArray();
+            foreach (Id65TerrainTriangleIntent unit in terrainSet.ActiveUnits)
+                json.WriteStringValue(unit.Id);
+            json.WriteEndArray();
+            json.WriteString("terrainSetManifestSha256", terrainSet.CanonicalSha256);
+            json.WriteNumber("terrainUnitCount", terrainSet.ActiveUnits.Count);
+            json.WriteString(
+                "cycloramaCatalogProfileId",
+                Id65AuthoringBlankCycloramaCatalog.ProfileId);
+            json.WriteNumber(
+                "cycloramaCatalogSchemaVersion",
+                Id65AuthoringBlankCycloramaCatalog.SchemaVersion);
+            json.WriteString(
+                "cycloramaCatalogCanonicalSha256",
+                Id65AuthoringBlankCycloramaCatalog.CanonicalSha256);
+            json.WriteString("cycloramaPresetId", cyclorama.PresetId);
+            json.WriteString("cycloramaColorHex", cyclorama.ColorHex);
+            json.WriteNumber(
+                "mandatoryBaseFaceTextureId",
+                document.MandatoryBaseFaceTextureId);
+            json.WriteNumber("mobyPlacementCount", document.MobyPlacements.Count);
+            json.WriteBoolean("compiledAfterimagePresent", false);
+            json.WriteBoolean("physicalMaterializationEnabled", false);
+            json.WriteBoolean("runtimeCandidateAuthorized", false);
+            json.WriteBoolean("normalCreateBinEnabled", false);
+            json.WriteBoolean("releaseAuthorized", false);
+            json.WriteEndObject();
+        }
+        return buffer.ToArray();
+    }
+
     private static void RequireDocumentLabIdentity(
         Id65AuthoringEditorDocument document,
         UnusedLevel65BlankLevelLabManifest expectedLabManifest)
@@ -1491,7 +1768,17 @@ internal static class Id65AuthoringEditorDocumentStore
              document.MandatoryBaseFaceTextureId == 66 &&
              !document.UsesRemotePadT107Grid &&
              document.UsesRemotePadMobyChoice &&
-             document.UsesRemotePadTerrainSet);
+             document.UsesRemotePadTerrainSet &&
+             !document.UsesBlankCyclorama) ||
+            (document.SchemaVersion == Id65AuthoringEditorDocument
+                 .RemotePadMobyChoiceTerrainSetBlankCycloramaSchemaVersion &&
+             document.ProfileId == Id65AuthoringEditorDocument
+                 .RemotePadMobyChoiceTerrainSetBlankCycloramaDocumentProfileId &&
+             document.MandatoryBaseFaceTextureId == 66 &&
+             !document.UsesRemotePadT107Grid &&
+             document.UsesRemotePadMobyChoice &&
+             document.UsesRemotePadTerrainSet &&
+             document.UsesBlankCyclorama);
         if (!supportedDocument ||
             document.LabProfileId != expectedLabManifest.ProfileId ||
             document.LabProfileVersion != expectedLabManifest.ProfileVersion ||
@@ -1596,6 +1883,12 @@ internal static class Id65AuthoringEditorDocumentStore
                         "staticAuthoringTerrainManifestSha256",
                         projection.StaticAuthoringTerrainManifestSha256);
                 }
+                if (document.UsesBlankCyclorama)
+                {
+                    json.WriteString(
+                        "staticAuthoringCycloramaCatalogSha256",
+                        projection.StaticAuthoringCycloramaCatalogSha256);
+                }
             }
             else
             {
@@ -1661,7 +1954,9 @@ internal static class Id65AuthoringEditorDocumentStore
             StaticAuthoringSceneGraphSha256 = identity.StaticAuthoringSceneGraphSha256,
             StaticAuthoringProjectionSha256 = identity.StaticAuthoringProjectionSha256,
             StaticAuthoringTerrainManifestSha256 =
-                identity.StaticAuthoringTerrainManifestSha256
+                identity.StaticAuthoringTerrainManifestSha256,
+            StaticAuthoringCycloramaCatalogSha256 =
+                identity.StaticAuthoringCycloramaCatalogSha256
         };
 
     private static Id65AuthoringEditorDocumentEnvelopeIdentity
@@ -1692,17 +1987,25 @@ internal static class Id65AuthoringEditorDocumentStore
                 RemotePadGridEnvelopeSchemaVersion => true,
                 RemotePadMobyChoiceEnvelopeSchemaVersion => true,
                 RemotePadMobyChoiceTerrainSetEnvelopeSchemaVersion => true,
+                RemotePadMobyChoiceTerrainSetBlankCycloramaEnvelopeSchemaVersion => true,
                 _ => throw new InvalidDataException(
                     "The ID65 editor-document envelope schema version is unsupported.")
             };
+            bool remotePadMobyChoiceTerrainSetBlankCycloramaEnvelope =
+                schemaVersion ==
+                    RemotePadMobyChoiceTerrainSetBlankCycloramaEnvelopeSchemaVersion;
             bool remotePadMobyChoiceTerrainSetEnvelope =
-                schemaVersion == RemotePadMobyChoiceTerrainSetEnvelopeSchemaVersion;
+                schemaVersion is RemotePadMobyChoiceTerrainSetEnvelopeSchemaVersion or
+                    RemotePadMobyChoiceTerrainSetBlankCycloramaEnvelopeSchemaVersion;
             bool remotePadMobyChoiceEnvelope =
                 schemaVersion is RemotePadMobyChoiceEnvelopeSchemaVersion or
-                    RemotePadMobyChoiceTerrainSetEnvelopeSchemaVersion;
+                    RemotePadMobyChoiceTerrainSetEnvelopeSchemaVersion or
+                    RemotePadMobyChoiceTerrainSetBlankCycloramaEnvelopeSchemaVersion;
             RequireExactProperties(
                 root,
-                remotePadMobyChoiceTerrainSetEnvelope
+                remotePadMobyChoiceTerrainSetBlankCycloramaEnvelope
+                    ? RemotePadMobyChoiceTerrainSetBlankCycloramaEnvelopePropertyNames
+                    : remotePadMobyChoiceTerrainSetEnvelope
                     ? RemotePadMobyChoiceTerrainSetEnvelopePropertyNames
                     : remotePadMobyChoiceEnvelope
                     ? RemotePadMobyChoiceEnvelopePropertyNames
@@ -1751,6 +2054,10 @@ internal static class Id65AuthoringEditorDocumentStore
                 remotePadMobyChoiceTerrainSetEnvelope
                     ? RequireString(root, "staticAuthoringTerrainManifestSha256")
                     : string.Empty;
+            string staticAuthoringCycloramaCatalogSha256 =
+                remotePadMobyChoiceTerrainSetBlankCycloramaEnvelope
+                    ? RequireString(root, "staticAuthoringCycloramaCatalogSha256")
+                    : string.Empty;
             string envelopeContentSha256 = RequireString(root, "envelopeContentSha256");
             JsonElement serializedDocument = RequireProperty(root, "document");
             if (serializedDocument.ValueKind != JsonValueKind.Object)
@@ -1782,7 +2089,9 @@ internal static class Id65AuthoringEditorDocumentStore
             ProjectionIdentity persisted;
             if (remotePadGridEnvelope)
             {
-                string expectedStaticProfileId = document.UsesRemotePadTerrainSet
+                string expectedStaticProfileId = document.UsesBlankCyclorama
+                    ? RemotePadMobyChoiceTerrainSetBlankCycloramaStaticAuthoringProfileId
+                    : document.UsesRemotePadTerrainSet
                     ? RemotePadMobyChoiceTerrainSetStaticAuthoringProfileId
                     : document.UsesRemotePadMobyChoice
                     ? RemotePadMobyChoiceStaticAuthoringProfileId
@@ -1793,6 +2102,8 @@ internal static class Id65AuthoringEditorDocumentStore
                 if (remotePadMobyChoiceEnvelope != document.UsesRemotePadMobyChoice ||
                     remotePadMobyChoiceTerrainSetEnvelope !=
                         document.UsesRemotePadTerrainSet ||
+                    remotePadMobyChoiceTerrainSetBlankCycloramaEnvelope !=
+                        document.UsesBlankCyclorama ||
                     staticAuthoringProfileId != expectedStaticProfileId ||
                     !HashEquals(
                         staticAuthoringCatalogSha256,
@@ -1803,7 +2114,12 @@ internal static class Id65AuthoringEditorDocumentStore
                         ? !HashEquals(
                             staticAuthoringTerrainManifestSha256,
                             document.TerrainSetManifestSha256!)
-                        : staticAuthoringTerrainManifestSha256.Length != 0))
+                        : staticAuthoringTerrainManifestSha256.Length != 0) ||
+                    (remotePadMobyChoiceTerrainSetBlankCycloramaEnvelope
+                        ? !HashEquals(
+                            staticAuthoringCycloramaCatalogSha256,
+                            Id65AuthoringBlankCycloramaCatalog.CanonicalSha256)
+                        : staticAuthoringCycloramaCatalogSha256.Length != 0))
                 {
                     throw new InvalidDataException(
                         "The ID65 editor-document envelope static-authoring identity is unsupported or stale.");
@@ -1823,11 +2139,16 @@ internal static class Id65AuthoringEditorDocumentStore
                     StaticAuthoringProjectionSha256 =
                         staticAuthoringProjectionSha256.ToLowerInvariant(),
                     StaticAuthoringTerrainManifestSha256 =
-                        staticAuthoringTerrainManifestSha256.ToLowerInvariant()
+                        staticAuthoringTerrainManifestSha256.ToLowerInvariant(),
+                    StaticAuthoringCycloramaCatalogSha256 =
+                        staticAuthoringCycloramaCatalogSha256.ToLowerInvariant()
                 };
 
                 ProjectionIdentity exactStaticProjection =
-                    document.UsesRemotePadTerrainSet
+                    document.UsesBlankCyclorama
+                        ? CaptureRemotePadMobyChoiceTerrainSetBlankCycloramaStaticAuthoringIdentity(
+                            document)
+                        : document.UsesRemotePadTerrainSet
                         ? CaptureRemotePadMobyChoiceTerrainSetStaticAuthoringIdentity(document)
                         : document.UsesRemotePadMobyChoice
                         ? CaptureRemotePadMobyChoiceStaticAuthoringIdentity(document)
@@ -1880,7 +2201,9 @@ internal static class Id65AuthoringEditorDocumentStore
                 StaticAuthoringSceneGraphSha256 = persisted.StaticAuthoringSceneGraphSha256,
                 StaticAuthoringProjectionSha256 = persisted.StaticAuthoringProjectionSha256,
                 StaticAuthoringTerrainManifestSha256 =
-                    persisted.StaticAuthoringTerrainManifestSha256
+                    persisted.StaticAuthoringTerrainManifestSha256,
+                StaticAuthoringCycloramaCatalogSha256 =
+                    persisted.StaticAuthoringCycloramaCatalogSha256
             };
         }
         catch (InvalidDataException)
@@ -2097,8 +2420,187 @@ internal static class Id65AuthoringEditorDocumentStore
         Id65AuthoringEditorDocument document) =>
         GetEnvelopeSchemaVersion(document);
 
+    /// <summary>
+    /// Recomputes the complete schema-5 static projection and envelope from a
+    /// supplied store result. This is a path-free validation helper for the
+    /// pure aggregate projector; it does not claim that the supplied result is
+    /// a current filesystem readback.
+    /// </summary>
+    internal static Id65AuthoringEditorDocument
+        ValidateRemotePadMobyChoiceTerrainSetStoreResultForAggregate(
+            Id65AuthoringEditorDocumentStoreResult stored,
+            string expectedEnvelopeCanonicalSha256,
+            UnusedLevel65BlankLevelLabManifest expectedLabManifest)
+    {
+        ArgumentNullException.ThrowIfNull(stored);
+        ArgumentException.ThrowIfNullOrWhiteSpace(expectedEnvelopeCanonicalSha256);
+        ArgumentNullException.ThrowIfNull(expectedLabManifest);
+
+        Id65AuthoringEditorDocument document =
+            Id65AuthoringEditorDocument.Parse(stored.Document.SerializeUtf8());
+        RequireDocumentLabIdentity(document, expectedLabManifest);
+        if (document.SchemaVersion !=
+                Id65AuthoringEditorDocument
+                    .RemotePadMobyChoiceTerrainSetSchemaVersion ||
+            document.ProfileId !=
+                Id65AuthoringEditorDocument
+                    .RemotePadMobyChoiceTerrainSetDocumentProfileId ||
+            !document.UsesRemotePadMobyChoice ||
+            !document.UsesRemotePadTerrainSet ||
+            document.UsesBlankCyclorama ||
+            document.UsesRemotePadT107Grid)
+        {
+            throw new NotSupportedException(
+                "The aggregate store validator accepts only the exact schema-5 terrain-set family.");
+        }
+
+        ProjectionIdentity projection =
+            CaptureRemotePadMobyChoiceTerrainSetStaticAuthoringIdentity(document);
+        EnvelopeBytes envelope = BuildEnvelope(
+            expectedLabManifest,
+            document,
+            projection);
+        if (!stored.Document.SerializeUtf8().SequenceEqual(document.SerializeUtf8()) ||
+            stored.DocumentCanonicalSha256 != document.CanonicalSha256 ||
+            stored.EnvelopeSchemaVersion !=
+                RemotePadMobyChoiceTerrainSetEnvelopeSchemaVersion ||
+            !IsSha256(stored.EnvelopeCanonicalSha256) ||
+            !IsSha256(expectedEnvelopeCanonicalSha256) ||
+            stored.EnvelopeCanonicalSha256 !=
+                expectedEnvelopeCanonicalSha256 ||
+            stored.EnvelopeCanonicalSha256 != envelope.CanonicalSha256 ||
+            stored.ProjectionContractId !=
+                RemotePadMobyChoiceTerrainSetProjectionContractId ||
+            stored.CompositeProfileId.Length != 0 ||
+            stored.CompositeManifestSha256.Length != 0 ||
+            stored.CompositeOutputRow80Sha256.Length != 0 ||
+            stored.CompositeDeterministicPlanSha256.Length != 0 ||
+            stored.StaticAuthoringProfileId != projection.StaticAuthoringProfileId ||
+            stored.StaticAuthoringCatalogSha256 !=
+                projection.StaticAuthoringCatalogSha256 ||
+            stored.StaticAuthoringSceneGraphSha256 !=
+                projection.StaticAuthoringSceneGraphSha256 ||
+            stored.StaticAuthoringProjectionSha256 !=
+                projection.StaticAuthoringProjectionSha256 ||
+            stored.StaticAuthoringTerrainManifestSha256 !=
+                projection.StaticAuthoringTerrainManifestSha256 ||
+            stored.StaticAuthoringCycloramaCatalogSha256.Length != 0 ||
+            !stored.HasStaticAuthoringProjection ||
+            stored.HasCompiledCompositeProjection ||
+            stored.ContainsCompositeAfterimage ||
+            stored.ContainsDiscImageBytes ||
+            stored.ContainsCueBytes ||
+            stored.WritesDiscImage ||
+            stored.WritesCue ||
+            stored.AppIntegrated ||
+            stored.CreateBinEnabled ||
+            stored.NormalCreateBinEnabled ||
+            stored.RuntimeCandidateAuthorized ||
+            stored.ReleaseIntegrated ||
+            stored.PromotionAuthorized ||
+            stored.Publishable ||
+            !stored.RequiresTrustedExclusiveWorkspaceDirectory ||
+            stored.HostileFilesystemRaceSafe ||
+            stored.CommonWorkspaceLeaseOwned)
+        {
+            throw new InvalidDataException(
+                "The supplied schema-5 store result does not match its exact recomputed envelope-v4/static-v3 identity.");
+        }
+        return document;
+    }
+
+    /// <summary>
+    /// Recomputes the complete schema-6 static projection and envelope from a
+    /// supplied store result. This aggregate gate is path-free and admits only
+    /// the code-owned blank-slate-v1 intent with all production capabilities
+    /// closed.
+    /// </summary>
+    internal static Id65AuthoringEditorDocument
+        ValidateRemotePadMobyChoiceTerrainSetBlankCycloramaStoreResultForAggregate(
+            Id65AuthoringEditorDocumentStoreResult stored,
+            string expectedEnvelopeCanonicalSha256,
+            UnusedLevel65BlankLevelLabManifest expectedLabManifest)
+    {
+        ArgumentNullException.ThrowIfNull(stored);
+        ArgumentException.ThrowIfNullOrWhiteSpace(expectedEnvelopeCanonicalSha256);
+        ArgumentNullException.ThrowIfNull(expectedLabManifest);
+
+        Id65AuthoringEditorDocument document =
+            Id65AuthoringEditorDocument.Parse(stored.Document.SerializeUtf8());
+        RequireDocumentLabIdentity(document, expectedLabManifest);
+        if (document.SchemaVersion != Id65AuthoringEditorDocument
+                .RemotePadMobyChoiceTerrainSetBlankCycloramaSchemaVersion ||
+            document.ProfileId != Id65AuthoringEditorDocument
+                .RemotePadMobyChoiceTerrainSetBlankCycloramaDocumentProfileId ||
+            !document.UsesRemotePadMobyChoice ||
+            !document.UsesRemotePadTerrainSet ||
+            !document.UsesBlankCyclorama ||
+            document.UsesRemotePadT107Grid)
+        {
+            throw new NotSupportedException(
+                "The blank-cyclorama aggregate store validator accepts only the exact schema-6 family.");
+        }
+
+        ProjectionIdentity projection =
+            CaptureRemotePadMobyChoiceTerrainSetBlankCycloramaStaticAuthoringIdentity(
+                document);
+        EnvelopeBytes envelope = BuildEnvelope(
+            expectedLabManifest,
+            document,
+            projection);
+        if (!stored.Document.SerializeUtf8().SequenceEqual(document.SerializeUtf8()) ||
+            stored.DocumentCanonicalSha256 != document.CanonicalSha256 ||
+            stored.EnvelopeSchemaVersion !=
+                RemotePadMobyChoiceTerrainSetBlankCycloramaEnvelopeSchemaVersion ||
+            !IsSha256(stored.EnvelopeCanonicalSha256) ||
+            !IsSha256(expectedEnvelopeCanonicalSha256) ||
+            stored.EnvelopeCanonicalSha256 != expectedEnvelopeCanonicalSha256 ||
+            stored.EnvelopeCanonicalSha256 != envelope.CanonicalSha256 ||
+            stored.ProjectionContractId !=
+                RemotePadMobyChoiceTerrainSetBlankCycloramaProjectionContractId ||
+            stored.CompositeProfileId.Length != 0 ||
+            stored.CompositeManifestSha256.Length != 0 ||
+            stored.CompositeOutputRow80Sha256.Length != 0 ||
+            stored.CompositeDeterministicPlanSha256.Length != 0 ||
+            stored.StaticAuthoringProfileId != projection.StaticAuthoringProfileId ||
+            stored.StaticAuthoringCatalogSha256 !=
+                projection.StaticAuthoringCatalogSha256 ||
+            stored.StaticAuthoringSceneGraphSha256 !=
+                projection.StaticAuthoringSceneGraphSha256 ||
+            stored.StaticAuthoringProjectionSha256 !=
+                projection.StaticAuthoringProjectionSha256 ||
+            stored.StaticAuthoringTerrainManifestSha256 !=
+                projection.StaticAuthoringTerrainManifestSha256 ||
+            stored.StaticAuthoringCycloramaCatalogSha256 !=
+                projection.StaticAuthoringCycloramaCatalogSha256 ||
+            !stored.HasStaticAuthoringProjection ||
+            stored.HasCompiledCompositeProjection ||
+            stored.ContainsCompositeAfterimage ||
+            stored.ContainsDiscImageBytes ||
+            stored.ContainsCueBytes ||
+            stored.WritesDiscImage ||
+            stored.WritesCue ||
+            stored.AppIntegrated ||
+            stored.CreateBinEnabled ||
+            stored.NormalCreateBinEnabled ||
+            stored.RuntimeCandidateAuthorized ||
+            stored.ReleaseIntegrated ||
+            stored.PromotionAuthorized ||
+            stored.Publishable ||
+            !stored.RequiresTrustedExclusiveWorkspaceDirectory ||
+            stored.HostileFilesystemRaceSafe ||
+            stored.CommonWorkspaceLeaseOwned)
+        {
+            throw new InvalidDataException(
+                "The supplied schema-6 store result does not match its exact recomputed envelope-v5/static-v4 identity.");
+        }
+        return document;
+    }
+
     private static int GetEnvelopeSchemaVersion(Id65AuthoringEditorDocument document) =>
-        document.UsesRemotePadTerrainSet
+        document.UsesBlankCyclorama
+            ? RemotePadMobyChoiceTerrainSetBlankCycloramaEnvelopeSchemaVersion
+            : document.UsesRemotePadTerrainSet
             ? RemotePadMobyChoiceTerrainSetEnvelopeSchemaVersion
             : document.UsesRemotePadMobyChoice
             ? RemotePadMobyChoiceEnvelopeSchemaVersion
@@ -2107,7 +2609,9 @@ internal static class Id65AuthoringEditorDocumentStore
                 : EnvelopeSchemaVersion;
 
     private static string GetProjectionContractId(Id65AuthoringEditorDocument document) =>
-        document.UsesRemotePadTerrainSet
+        document.UsesBlankCyclorama
+            ? RemotePadMobyChoiceTerrainSetBlankCycloramaProjectionContractId
+            : document.UsesRemotePadTerrainSet
             ? RemotePadMobyChoiceTerrainSetProjectionContractId
             : document.UsesRemotePadMobyChoice
             ? RemotePadMobyChoiceProjectionContractId
@@ -2128,7 +2632,9 @@ internal static class Id65AuthoringEditorDocumentStore
             StaticAuthoringSceneGraphSha256 = identity.StaticAuthoringSceneGraphSha256,
             StaticAuthoringProjectionSha256 = identity.StaticAuthoringProjectionSha256,
             StaticAuthoringTerrainManifestSha256 =
-                identity.StaticAuthoringTerrainManifestSha256
+                identity.StaticAuthoringTerrainManifestSha256,
+            StaticAuthoringCycloramaCatalogSha256 =
+                identity.StaticAuthoringCycloramaCatalogSha256
         };
 
     private static bool ProjectionIdentitiesEqual(
@@ -2143,14 +2649,17 @@ internal static class Id65AuthoringEditorDocumentStore
         left.StaticAuthoringSceneGraphSha256 == right.StaticAuthoringSceneGraphSha256 &&
         left.StaticAuthoringProjectionSha256 == right.StaticAuthoringProjectionSha256 &&
         left.StaticAuthoringTerrainManifestSha256 ==
-            right.StaticAuthoringTerrainManifestSha256;
+            right.StaticAuthoringTerrainManifestSha256 &&
+        left.StaticAuthoringCycloramaCatalogSha256 ==
+            right.StaticAuthoringCycloramaCatalogSha256;
 
     private enum DocumentTransitionPolicy
     {
         SameSemanticFamilyOnly,
         ExplicitLegacyToRemotePadGrid,
         ExplicitRemotePadGridToMobyChoice,
-        ExplicitRemotePadMobyChoiceToTerrainSet
+        ExplicitRemotePadMobyChoiceToTerrainSet,
+        ExplicitRemotePadMobyChoiceTerrainSetToBlankCyclorama
     }
 
     private enum DocumentSemanticFamily
@@ -2158,7 +2667,8 @@ internal static class Id65AuthoringEditorDocumentStore
         LegacyNativeApron,
         RemotePadGrid,
         RemotePadMobyChoice,
-        RemotePadMobyChoiceTerrainSet
+        RemotePadMobyChoiceTerrainSet,
+        RemotePadMobyChoiceTerrainSetBlankCyclorama
     }
 
     private sealed record ProjectionIdentity(
@@ -2172,6 +2682,7 @@ internal static class Id65AuthoringEditorDocumentStore
         public string StaticAuthoringSceneGraphSha256 { get; init; } = string.Empty;
         public string StaticAuthoringProjectionSha256 { get; init; } = string.Empty;
         public string StaticAuthoringTerrainManifestSha256 { get; init; } = string.Empty;
+        public string StaticAuthoringCycloramaCatalogSha256 { get; init; } = string.Empty;
     }
 
     private sealed record EnvelopeBytes(

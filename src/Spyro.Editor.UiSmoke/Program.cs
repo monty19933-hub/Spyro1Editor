@@ -1058,7 +1058,12 @@ void RunId65BlankLabUiOnly()
             !initial.CapabilityText.Contains("None, verified Grass T107, or resident Red Gem T21", StringComparison.Ordinal) ||
             !initial.CapabilityText.Contains("Schema 3 must be migrated explicitly", StringComparison.Ordinal) ||
             !initial.CapabilityText.Contains("schema 4 must be explicitly migrated before Tile 2 exists", StringComparison.Ordinal) ||
-            !initial.CapabilityText.Contains("Schema-5 physical materialization, Create BIN, runtime acceptance", StringComparison.Ordinal))
+            !initial.CapabilityText.Contains(
+                "Schema 5 can build its separately guarded exact offline candidate",
+                StringComparison.Ordinal) ||
+            !initial.CapabilityText.Contains(
+                "schema-4 physical materialization, normal Create BIN, runtime acceptance",
+                StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 $"The clean public ID65 Lab state is not exact/fail-closed: {initial}");
@@ -1337,7 +1342,7 @@ void RunId65BlankLabUiOnly()
                 "Proved private T66",
                 StringComparison.Ordinal) ||
             !(absentPreview.Text ?? "").Contains(
-                "Schema-5 physical materialization",
+                "separately guarded exact offline candidate",
                 StringComparison.OrdinalIgnoreCase) ||
             File.Exists(absentDocumentPath) ||
             !ReferenceEquals(
@@ -1564,7 +1569,8 @@ void RunId65BlankLabUiOnly()
                 scene.CurrentGeometry?.Polygons.Count != 1 ||
                 scene.CurrentGeometry.LowDetailPolygons.Count != 1 ||
                 scene.CurrentMobys.Count != 0 ||
-                ui.AuthoringCandidateEnabled ||
+                ui.AuthoringCandidateEnabled != expectSchema5 ||
+                ui.RevealEnabled ||
                 ui.PrivateT66ViewportProjectionBound !=
                     (textureId ==
                         Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId) ||
@@ -1578,7 +1584,7 @@ void RunId65BlankLabUiOnly()
                     $"The explicit {textureLabel} first-run action lost its exact blank state, direct controls, or candidate boundary: {ui}");
             }
             string expectedCandidateText = expectSchema5
-                ? "Schema 5 Physical Candidate Not Implemented"
+                ? "Create Verified Schema-5 Candidate"
                 : "Unavailable for Resident T25";
             if (!ui.AuthoringCandidateButtonText.Contains(
                     expectedCandidateText,
@@ -2817,10 +2823,48 @@ void RunId65BlankLabUiOnly()
         string remoteCandidateReceipt = Path.Combine(
             remoteCandidateDirectory,
             "candidate.receipt.json");
+        string terrainSetCandidateRoot = Path.Combine(
+            paths.RootPath,
+            "materialized-remote-pad-terrain-set-schema5-candidates");
+        string terrainSetCandidateDirectory = Path.Combine(
+            terrainSetCandidateRoot,
+            "ui-smoke-schema5-candidate");
+        string terrainSetCandidateImage = Path.Combine(
+            terrainSetCandidateDirectory,
+            "candidate.bin");
+        string terrainSetCandidateCue = Path.Combine(
+            terrainSetCandidateDirectory,
+            "candidate.cue");
+        string terrainSetCandidateReceipt = Path.Combine(
+            terrainSetCandidateDirectory,
+            "candidate.receipt.json");
+        string blankSlateCandidateRoot = Path.Combine(
+            paths.RootPath,
+            "materialized-blank-cyclorama-schema6-candidates");
+        string blankSlateCandidateDirectory = Path.Combine(
+            blankSlateCandidateRoot,
+            "ui-smoke-schema6-blank-slate-candidate");
+        string blankSlateCandidateImage = Path.Combine(
+            blankSlateCandidateDirectory,
+            "candidate.bin");
+        string blankSlateCandidateCue = Path.Combine(
+            blankSlateCandidateDirectory,
+            "candidate.cue");
+        string blankSlateCandidateReceipt = Path.Combine(
+            blankSlateCandidateDirectory,
+            "candidate.receipt.json");
         Directory.CreateDirectory(remoteCandidateDirectory);
         File.WriteAllBytes(remoteCandidateImage, [1]);
         File.WriteAllBytes(remoteCandidateCue, [2]);
         File.WriteAllBytes(remoteCandidateReceipt, [3]);
+        Directory.CreateDirectory(terrainSetCandidateDirectory);
+        File.WriteAllBytes(terrainSetCandidateImage, [4]);
+        File.WriteAllBytes(terrainSetCandidateCue, [5]);
+        File.WriteAllBytes(terrainSetCandidateReceipt, [6]);
+        Directory.CreateDirectory(blankSlateCandidateDirectory);
+        File.WriteAllBytes(blankSlateCandidateImage, [7]);
+        File.WriteAllBytes(blankSlateCandidateCue, [8]);
+        File.WriteAllBytes(blankSlateCandidateReceipt, [9]);
 
         MainWindow.Id65BlankLabAuthoringCandidateAppResult
             BuildRemotePadUiCandidateResult(
@@ -2873,7 +2917,185 @@ void RunId65BlankLabUiOnly()
                 CurrentOnDiskFreshnessVerified: false,
                 HostileFilesystemRaceSafe: false,
                 RequiresTrustedExclusiveWorkspaceDirectory: true,
-                CommonWorkspaceLeaseOwned: false);
+                CommonWorkspaceLeaseOwned: false,
+                UsesRemotePadTerrainSet: false,
+                ActiveTerrainUnitIdsCanonical: "",
+                RemotePadMobyKind: null,
+                RemotePadMobyPositionId: null,
+                Schema5CompilerPinsVerified: false,
+                MobyChoicePositionReadbackVerified: false,
+                FourTerrainTopologiesVerified: false);
+
+        MainWindow.Id65BlankLabAuthoringCandidateAppResult
+            BuildTerrainSetUiCandidateResult(
+                Id65AuthoringEditorDocumentReadModel expectedDocument,
+                Id65AuthoringEditorControlState expectedState) =>
+            new(
+                CandidateDirectoryPath: terrainSetCandidateDirectory,
+                CandidateImagePath: terrainSetCandidateImage,
+                CandidateCuePath: terrainSetCandidateCue,
+                CandidateReceiptPath: terrainSetCandidateReceipt,
+                DocumentEnvelopeSha256:
+                    expectedDocument.EnvelopeCanonicalSha256,
+                DocumentCanonicalSha256:
+                    expectedDocument.DocumentCanonicalSha256,
+                UsesRemotePadT107Grid: false,
+                T107RemotePadPositionId: null,
+                StructuralTerrainPresent:
+                    expectedState.HasAnyStructuralTerrain,
+                GrassT107Present:
+                    expectedState.RemotePadMobyKind ==
+                        Id65RemotePadMobyKind.GrassT107,
+                AggregatePlanSha256: new string('e', 64),
+                OutputImageSha256: new string('f', 64),
+                CandidateCueSha256: new string('1', 64),
+                ReceiptContentSha256: new string('2', 64),
+                ChangedRawSectorCount: 558,
+                ChangedPhysicalImageBytes: 1_075_276,
+                ReusedExistingCandidate: false,
+                CandidateArtifactsWrittenThisCall: true,
+                FileSystemMutationPerformed: true,
+                ExactReadbackVerified: true,
+                Schema3CompilerPinsVerified: false,
+                T107PositionReadbackVerified: false,
+                T88ExcludedVerified: true,
+                RepairedT13995SupportVerified: true,
+                ProtectedComplementVerified: true,
+                RetailTownSquarePreserved: true,
+                TargetOverlayPreserved: true,
+                ExecutablePreserved: true,
+                AtomicNoReplacePublicationVerified: true,
+                OwnedTemporaryResidueRemoved: true,
+                CarriesAppOrUiAuthority: false,
+                CarriesCreateBinAuthority: false,
+                NormalRetailCreateBinComposed: false,
+                RuntimeCandidateAuthorized: false,
+                RuntimeProven: false,
+                ReleaseIntegrated: false,
+                PromotionAuthorized: false,
+                Publishable: false,
+                CurrentOnDiskFreshnessVerified: false,
+                HostileFilesystemRaceSafe: false,
+                RequiresTrustedExclusiveWorkspaceDirectory: true,
+                CommonWorkspaceLeaseOwned: false,
+                UsesRemotePadTerrainSet: true,
+                ActiveTerrainUnitIdsCanonical:
+                    string.Join('\n', expectedDocument.ActiveTerrainUnitIds),
+                RemotePadMobyKind: expectedState.RemotePadMobyKind,
+                RemotePadMobyPositionId: expectedState.RemotePadMobyPositionId,
+                Schema5CompilerPinsVerified: true,
+                MobyChoicePositionReadbackVerified: true,
+                FourTerrainTopologiesVerified: true);
+
+        MainWindow.Id65BlankLabAuthoringCandidateAppResult
+            BuildBlankSlateUiCandidateResult(
+                Id65AuthoringEditorDocumentReadModel expectedDocument,
+                Id65AuthoringEditorControlState expectedState)
+        {
+            int modelOffset = expectedDocument.ActiveTerrainUnitIds.Count switch
+            {
+                0 => 0x8B9D4,
+                1 => 0x8BA04,
+                2 => 0x8BA30,
+                _ => throw new InvalidOperationException(
+                    "The schema-6 UI fixture requires one of four exact terrain topologies.")
+            };
+            int rowOffset = modelOffset + 0xDE800;
+            return new(
+                CandidateDirectoryPath: blankSlateCandidateDirectory,
+                CandidateImagePath: blankSlateCandidateImage,
+                CandidateCuePath: blankSlateCandidateCue,
+                CandidateReceiptPath: blankSlateCandidateReceipt,
+                DocumentEnvelopeSha256:
+                    expectedDocument.EnvelopeCanonicalSha256,
+                DocumentCanonicalSha256:
+                    expectedDocument.DocumentCanonicalSha256,
+                UsesRemotePadT107Grid: false,
+                T107RemotePadPositionId: null,
+                StructuralTerrainPresent:
+                    expectedState.HasAnyStructuralTerrain,
+                GrassT107Present:
+                    expectedState.RemotePadMobyKind ==
+                        Id65RemotePadMobyKind.GrassT107,
+                AggregatePlanSha256: new string('3', 64),
+                OutputImageSha256: new string('4', 64),
+                CandidateCueSha256: new string('5', 64),
+                ReceiptContentSha256: new string('6', 64),
+                ChangedRawSectorCount: 559,
+                ChangedPhysicalImageBytes: 1_075_376,
+                ReusedExistingCandidate: false,
+                CandidateArtifactsWrittenThisCall: true,
+                FileSystemMutationPerformed: true,
+                ExactReadbackVerified: true,
+                Schema3CompilerPinsVerified: false,
+                T107PositionReadbackVerified: false,
+                T88ExcludedVerified: true,
+                RepairedT13995SupportVerified: true,
+                ProtectedComplementVerified: true,
+                RetailTownSquarePreserved: true,
+                TargetOverlayPreserved: true,
+                ExecutablePreserved: true,
+                AtomicNoReplacePublicationVerified: true,
+                OwnedTemporaryResidueRemoved: true,
+                CarriesAppOrUiAuthority: false,
+                CarriesCreateBinAuthority: false,
+                NormalRetailCreateBinComposed: false,
+                RuntimeCandidateAuthorized: false,
+                RuntimeProven: false,
+                ReleaseIntegrated: false,
+                PromotionAuthorized: false,
+                Publishable: false,
+                CurrentOnDiskFreshnessVerified: false,
+                HostileFilesystemRaceSafe: false,
+                RequiresTrustedExclusiveWorkspaceDirectory: true,
+                CommonWorkspaceLeaseOwned: false,
+                UsesRemotePadTerrainSet: true,
+                ActiveTerrainUnitIdsCanonical:
+                    string.Join('\n', expectedDocument.ActiveTerrainUnitIds),
+                RemotePadMobyKind: expectedState.RemotePadMobyKind,
+                RemotePadMobyPositionId: expectedState.RemotePadMobyPositionId,
+                Schema5CompilerPinsVerified: false,
+                MobyChoicePositionReadbackVerified: true,
+                FourTerrainTopologiesVerified: true,
+                UsesBlankCyclorama: true,
+                BlankCycloramaPresetId: "blank-slate-v1",
+                BlankCycloramaColorHex: "#263447",
+                OutputCycloramaSha256:
+                    "A9DA1343EF6493CD46AB57D84AE78F27495AFFC564BCC9464396752914648AC2",
+                CycloramaGeometrySha256:
+                    "405BACB0D5F058C8FF876E14C41FCD7C6C6A0C57535BD451FFA49C5FB82E4B9A",
+                CycloramaCommandByteSha256:
+                    "27fb27c2dc1670d5cc3c0a05f406417d7ea033682b99ab5c4d343017b94a524d",
+                CycloramaNonPaletteSha256: new string('C', 64),
+                CycloramaModelOffset: modelOffset,
+                CycloramaRow80Offset: rowOffset,
+                CycloramaWadOffset: 0x6936800L + rowOffset,
+                CycloramaByteLength: 0x84E4,
+                PaletteWordCount: 727,
+                PaletteOwnedRangeCount: 727,
+                ExactStoreReloadCasVerifiedThreeTimes: true,
+                ExactEnvelopeCasVerifiedThreeTimes: true,
+                ExactStaticAuthoringProjectionReloadVerifiedThreeTimes: true,
+                ExactNativeInputGenerationRecapturedThreeTimes: true,
+                ExactV3TemplateRecapturedThreeTimes: true,
+                ExactLockedBaseRecapturedThreeTimes: true,
+                ExactRow80ReadbackVerified: true,
+                ExactInverseReadbackVerified: true,
+                Schema6CompilerPinsVerified: true,
+                BlankCycloramaIntentReadbackVerified: true,
+                CycloramaLayoutReadbackVerified: true,
+                EveryPaletteWordReadbackVerified: true,
+                CycloramaGeometryReadbackVerified: true,
+                CycloramaCommandBytesReadbackVerified: true,
+                CycloramaNonPaletteReadbackVerified: true,
+                Wad79Preserved: true,
+                RetailTownSquareWad15Preserved: true,
+                RetailTownSquareWad16Preserved: true,
+                RetailArtisansWad9Preserved: true,
+                RetailArtisansWad10Preserved: true,
+                RetailTownSquareSkyBlockPreserved: true,
+                RetailArtisansLinkedSkyBlockPreserved: true);
+        }
 
         int remoteCandidateCalls = 0;
         window.Id65AuthoringCandidateMaterializerOverrideForTesting = (_, _, _) =>
@@ -3702,6 +3924,14 @@ void RunId65BlankLabUiOnly()
                 $"The existing unmigrated schema-4 document did not retain its prior one-terrain UI semantics: {schema4BeforeTerrainSetUi}");
         }
 
+        static bool HasSchema5CandidateBoundaryText(string text) =>
+            text.Contains(
+                "separate guarded offline candidate is eligible",
+                StringComparison.OrdinalIgnoreCase) &&
+            text.Contains("normal Create BIN", StringComparison.OrdinalIgnoreCase) &&
+            text.Contains("runtime proof", StringComparison.OrdinalIgnoreCase) &&
+            text.Contains("release remain locked", StringComparison.OrdinalIgnoreCase);
+
         Console.WriteLine("ID65 UI smoke: starting explicit schema-4-to-5 terrain-set migration probe.");
         byte[] schema4BeforeTerrainSetMigration =
             File.ReadAllBytes(authoringDocumentPath);
@@ -3795,7 +4025,10 @@ void RunId65BlankLabUiOnly()
                     snapshot.AddTerrainTile2Enabled &&
                     !snapshot.RemoveTerrainTile1Enabled &&
                     !snapshot.RemoveTerrainTile2Enabled &&
-                    !snapshot.AuthoringCandidateEnabled;
+                    snapshot.AuthoringCandidateEnabled &&
+                    !snapshot.RevealEnabled &&
+                    HasSchema5CandidateBoundaryText(
+                        snapshot.ObjectManagerStatusText);
             },
             TimeSpan.FromSeconds(60),
             () => "persisting and projecting the explicit schema-5 empty terrain set");
@@ -3877,10 +4110,16 @@ void RunId65BlankLabUiOnly()
                     snapshot.LoadedRemotePadMobyPositionId ==
                         Id65RemotePadGrassT107Catalog.NorthWestPositionId &&
                     snapshot.VisibleMobyCount == 1 &&
-                    !snapshot.ObjectManagerApplyMobyChoiceEnabled;
+                    !snapshot.ObjectManagerApplyMobyChoiceEnabled &&
+                    HasSchema5CandidateBoundaryText(
+                        snapshot.ObjectManagerStatusText);
             },
             TimeSpan.FromSeconds(60),
             () => "persisting schema-5 Red Gem while preserving both absent terrain tiles");
+        WaitForCondition(
+            () => HasSchema5CandidateBoundaryText(id65Status.Text ?? ""),
+            TimeSpan.FromSeconds(60),
+            () => "reporting the guarded schema-5 post-Moby candidate boundary");
 
         void AssertSchema5TerrainState(
             bool expectedTile1,
@@ -3909,8 +4148,10 @@ void RunId65BlankLabUiOnly()
                         snapshot.RemoveTerrainTile2Enabled == expectedTile2 &&
                         !snapshot.CreateOptionalTerrainEnabled &&
                         !snapshot.RemoveOptionalTerrainEnabled &&
-                        !snapshot.AuthoringCandidateEnabled &&
-                        !snapshot.RevealEnabled;
+                        snapshot.AuthoringCandidateEnabled &&
+                        !snapshot.RevealEnabled &&
+                        HasSchema5CandidateBoundaryText(
+                            snapshot.ObjectManagerStatusText);
                 },
                 TimeSpan.FromSeconds(60),
                 () => label);
@@ -3967,6 +4208,10 @@ void RunId65BlankLabUiOnly()
         {
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
             AssertSchema5TerrainState(expectedTile1, expectedTile2, label);
+            WaitForCondition(
+                () => HasSchema5CandidateBoundaryText(id65Status.Text ?? ""),
+                TimeSpan.FromSeconds(60),
+                () => $"reporting the guarded schema-5 post-terrain boundary for {label}");
         }
 
         AssertSchema5TerrainState(
@@ -4020,35 +4265,679 @@ void RunId65BlankLabUiOnly()
         ClickTerrainAndAssert(removeTerrainTile2, true, false, "order B 11 to 10");
         ClickTerrainAndAssert(removeTerrainTile1, false, false, "order B 10 to 00");
 
+        Task<Id65AuthoringEditorDocumentReadModel?> schema5CandidateDocumentTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(
+            schema5CandidateDocumentTask,
+            "inspecting the schema-5 candidate document");
+        Id65AuthoringEditorDocumentReadModel schema5CandidateDocument =
+            schema5CandidateDocumentTask.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "The schema-5 candidate document disappeared.");
+        Id65AuthoringEditorControlState schema5CandidateState =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                schema5CandidateDocument);
+        if (!schema5CandidateState.UsesRemotePadTerrainSet ||
+            schema5CandidateState.IncludeTerrainTile1 ||
+            schema5CandidateState.IncludeTerrainTile2 ||
+            schema5CandidateState.RemotePadMobyKind !=
+                Id65RemotePadMobyKind.RedGemT21 ||
+            schema5CandidateState.RemotePadMobyPositionId !=
+                Id65RemotePadGrassT107Catalog.NorthWestPositionId)
+        {
+            throw new InvalidOperationException(
+                "The schema-5 candidate probe did not retain exact 00/Red Gem/Top left intent.");
+        }
+
+        FieldInfo normalCreateBinField = typeof(MainWindow).GetField(
+            "_toolbarCreateBinButton",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException(
+                "The schema-5 candidate smoke could not inspect normal Create BIN.");
+        Button normalCreateBinButton =
+            (Button)(normalCreateBinField.GetValue(window) ??
+                throw new InvalidOperationException(
+                    "The schema-5 candidate smoke found no normal Create BIN button."));
+        MethodInfo normalCreateBinBlockMethod = typeof(MainWindow).GetMethod(
+            "TryGetId65BlankLabNormalCreateBinBlockReason",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException(
+                "The schema-5 candidate smoke could not inspect the normal Create BIN guard.");
+        object?[] normalCreateBinBlockArguments = [null];
+        bool normalCreateBinBlocked =
+            (bool)(normalCreateBinBlockMethod.Invoke(
+                window,
+                normalCreateBinBlockArguments) ?? false);
+        string normalCreateBinBlockReason =
+            normalCreateBinBlockArguments[0] as string ?? "";
+        if (!normalCreateBinBlocked || normalCreateBinButton.IsEnabled ||
+            !normalCreateBinBlockReason.Contains(
+                "separate offline candidate action",
+                StringComparison.OrdinalIgnoreCase) ||
+            !normalCreateBinBlockReason.Contains(
+                "not authorized for normal retail composition",
+                StringComparison.OrdinalIgnoreCase) ||
+            !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                candidateArtifactsBeforeSchema4))
+        {
+            throw new InvalidOperationException(
+                "The schema-5 state did not retain its explicit normal Create BIN block reason or crossed the candidate-artifact boundary while checking it.");
+        }
+        MainWindow.Id65BlankLabAuthoringCandidateAppResult validSchema5Result =
+            BuildTerrainSetUiCandidateResult(
+                schema5CandidateDocument,
+                schema5CandidateState);
+        MainWindow.Id65BlankLabAuthoringCandidateAppResult nextSchema5Result =
+            validSchema5Result;
         int schema5CandidateCalls = 0;
         window.Id65AuthoringCandidateMaterializerOverrideForTesting = (_, _, _) =>
         {
             schema5CandidateCalls++;
-            return Task.FromResult(
-                BuildRemotePadUiCandidateResult(blankDocument, blankState));
+            return Task.FromResult(nextSchema5Result);
         };
         try
         {
-            Task refusedSchema5Candidate = InvokePrivate<Task>(
+            Task createdSchema5Candidate = InvokePrivate<Task>(
                 window,
                 "CreateId65AuthoringAggregateCandidateAsync");
             WaitForUiTask(
-                refusedSchema5Candidate,
-                "refusing schema-5 physical candidate materialization");
+                createdSchema5Candidate,
+                "creating the verified schema-5 terrain-set candidate",
+                timeoutSeconds: 30);
+            MainWindow.Id65BlankLabUiSnapshot createdSchema5Ui =
+                window.CaptureId65BlankLabUiSnapshotForTesting();
+            if (schema5CandidateCalls != 1 ||
+                !createdSchema5Ui.AuthoringCandidateEnabled ||
+                !createdSchema5Ui.RevealEnabled ||
+                normalCreateBinButton.IsEnabled ||
+                !(id65Status.Text ?? "").Contains(
+                    "Created the exact offline ID65 full-authoring candidate",
+                    StringComparison.Ordinal) ||
+                !(id65Status.Text ?? "").Contains(
+                    "empty terrain set",
+                    StringComparison.OrdinalIgnoreCase) ||
+                !(id65Status.Text ?? "").Contains(
+                    "Red Gem at Top left",
+                    StringComparison.Ordinal) ||
+                !(id65Status.Text ?? "").Contains(
+                    "not normal Create BIN",
+                    StringComparison.OrdinalIgnoreCase) ||
+                !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                    candidateArtifactsBeforeSchema4))
+            {
+                throw new InvalidOperationException(
+                    "The exact schema-5 state did not dispatch through its guarded candidate seam with truthful receipt, reveal, and normal-Create-BIN isolation.");
+            }
+
+            nextSchema5Result = validSchema5Result with
+            {
+                ActiveTerrainUnitIdsCanonical = "tile.remote-pad.1"
+            };
+            Task forgedTerrainCandidate = InvokePrivate<Task>(
+                window,
+                "CreateId65AuthoringAggregateCandidateAsync");
+            WaitForUiTask(
+                forgedTerrainCandidate,
+                "rejecting a forged schema-5 terrain receipt",
+                timeoutSeconds: 30);
+            if (schema5CandidateCalls != 2 ||
+                window.CaptureId65BlankLabUiSnapshotForTesting().RevealEnabled ||
+                !(id65Status.Text ?? "").Contains(
+                    "Could not create the exact ID65 full-authoring candidate",
+                    StringComparison.OrdinalIgnoreCase) ||
+                !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                    candidateArtifactsBeforeSchema4))
+            {
+                throw new InvalidOperationException(
+                    "A forged schema-5 active-terrain receipt was accepted, retained stale reveal authority, or changed candidate artifacts.");
+            }
+
+            nextSchema5Result = validSchema5Result with
+            {
+                RemotePadMobyKind = Id65RemotePadMobyKind.GrassT107
+            };
+            Task forgedMobyCandidate = InvokePrivate<Task>(
+                window,
+                "CreateId65AuthoringAggregateCandidateAsync");
+            WaitForUiTask(
+                forgedMobyCandidate,
+                "rejecting a forged schema-5 Moby receipt",
+                timeoutSeconds: 30);
+            if (schema5CandidateCalls != 3 ||
+                window.CaptureId65BlankLabUiSnapshotForTesting().RevealEnabled ||
+                normalCreateBinButton.IsEnabled ||
+                !(id65Status.Text ?? "").Contains(
+                    "Could not create the exact ID65 full-authoring candidate",
+                    StringComparison.OrdinalIgnoreCase) ||
+                !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                    candidateArtifactsBeforeSchema4))
+            {
+                throw new InvalidOperationException(
+                    "A forged schema-5 Moby receipt was accepted, retained stale reveal/Create-BIN authority, or changed candidate artifacts.");
+            }
         }
         finally
         {
             window.Id65AuthoringCandidateMaterializerOverrideForTesting = null;
         }
-        if (schema5CandidateCalls != 0 ||
-            !(id65Status.Text ?? "").Contains(
-                "Schema-5 two-tile terrain-set documents",
+
+        Console.WriteLine(
+            "ID65 UI smoke: starting explicit schema-5-to-6 Blank Slate migration and candidate probe.");
+        byte[] schema5BeforeBlankSlateMigration =
+            File.ReadAllBytes(authoringDocumentPath);
+        EditorShellSessionSnapshot sceneBeforeBlankSlateMigration =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        SortedDictionary<string, string> candidateArtifactsBeforeBlankSlate =
+            CaptureId65CandidateArtifactHashes(paths);
+        Window blankSlateMigrationDialog = OpenAsyncDialog(
+            window,
+            freshObjectManagerButton,
+            "ID65 Full Authoring Document",
+            "ID65 explicit schema-5-to-6 Blank Slate migration dialog");
+        AssertText(blankSlateMigrationDialog, "Blank Slate background");
+        Button migrateBlankSlate = FindNamedUnique<Button>(
+            blankSlateMigrationDialog,
+            "Id65AuthoringBlankCycloramaMigrationButton");
+        TextBlock blankSlateNotice = FindNamedUnique<TextBlock>(
+            blankSlateMigrationDialog,
+            "Id65AuthoringBlankCycloramaNotice");
+        TextBlock blankSlatePreview = FindNamedUnique<TextBlock>(
+            blankSlateMigrationDialog,
+            "Id65AuthoringExactPreviewText");
+        CheckBox blankSlateTile1 = FindNamedUnique<CheckBox>(
+            blankSlateMigrationDialog,
+            "Id65AuthoringStructuralTerrainBox");
+        CheckBox blankSlateTile2 = FindNamedUnique<CheckBox>(
+            blankSlateMigrationDialog,
+            "Id65AuthoringTerrainTile2Box");
+        ComboBox blankSlateMobyChoice = FindNamedUnique<ComboBox>(
+            blankSlateMigrationDialog,
+            "Id65AuthoringRemotePadMobyChoiceSelector");
+        ComboBox blankSlateMobyPosition = FindNamedUnique<ComboBox>(
+            blankSlateMigrationDialog,
+            "Id65AuthoringRemotePadMobyPositionSelector");
+        Button saveBlankSlateMigration = FindNamedUnique<Button>(
+            blankSlateMigrationDialog,
+            "Id65AuthoringSaveButton");
+        if (!migrateBlankSlate.IsEffectivelyVisible ||
+            !(blankSlateNotice.Text ?? "").Contains(
+                "explicitly select",
+                StringComparison.OrdinalIgnoreCase) ||
+            !(blankSlateNotice.Text ?? "").Contains(
+                "No preview, refresh, open",
                 StringComparison.Ordinal) ||
-            !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
-                candidateArtifactsBeforeSchema4))
+            blankSlateTile1.IsChecked == true ||
+            blankSlateTile2.IsChecked == true ||
+            !blankSlateTile1.IsEnabled || !blankSlateTile2.IsEnabled ||
+            !blankSlateMobyChoice.IsEnabled ||
+            !blankSlateMobyPosition.IsEnabled)
         {
             throw new InvalidOperationException(
-                "Schema-5 state reached the physical candidate seam or lost its explicit refusal status.");
+                "The schema-5 document did not offer one explicit, non-inferred Blank Slate schema-6 migration.");
+        }
+        migrateBlankSlate.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, migrateBlankSlate));
+        FlushUi();
+        if (migrateBlankSlate.IsEffectivelyVisible ||
+            blankSlateTile1.IsEnabled || blankSlateTile2.IsEnabled ||
+            blankSlateMobyChoice.IsEnabled ||
+            blankSlateMobyPosition.IsEnabled ||
+            !saveBlankSlateMigration.IsEnabled ||
+            !(blankSlatePreview.Text ?? "").Contains(
+                "Blank Slate schema-6",
+                StringComparison.Ordinal) ||
+            !(blankSlatePreview.Text ?? "").Contains(
+                "blank-slate-v1",
+                StringComparison.Ordinal) ||
+            !(blankSlatePreview.Text ?? "").Contains(
+                "#263447",
+                StringComparison.Ordinal) ||
+            !File.ReadAllBytes(authoringDocumentPath)
+                .SequenceEqual(schema5BeforeBlankSlateMigration) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
+                sceneBeforeBlankSlateMigration.CurrentGeometry) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys,
+                sceneBeforeBlankSlateMigration.CurrentMobys) ||
+            !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                candidateArtifactsBeforeBlankSlate))
+        {
+            throw new InvalidOperationException(
+                "The Blank Slate schema-6 migration preview wrote early, changed prior terrain/Moby choices, or crossed the candidate boundary.");
+        }
+        saveBlankSlateMigration.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, saveBlankSlateMigration));
+        WaitForDialogToClose(
+            window,
+            blankSlateMigrationDialog,
+            "ID65 explicit schema-5-to-6 Blank Slate migration dialog");
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.DocumentProjectionSynchronized &&
+                    snapshot.LoadedUsesBlankCyclorama &&
+                    snapshot.LoadedBlankCycloramaPresetId ==
+                        "blank-slate-v1" &&
+                    snapshot.LoadedBlankCycloramaColorHex == "#263447" &&
+                    snapshot.LoadedUsesRemotePadTerrainSet &&
+                    !snapshot.LoadedTerrainTile1 &&
+                    !snapshot.LoadedTerrainTile2 &&
+                    snapshot.LoadedRemotePadMobyKind ==
+                        Id65RemotePadMobyKind.RedGemT21 &&
+                    snapshot.LoadedRemotePadMobyPositionId ==
+                        Id65RemotePadGrassT107Catalog.NorthWestPositionId &&
+                    snapshot.AuthoringCandidateEnabled &&
+                    snapshot.AuthoringCandidateButtonText ==
+                        "Create Blank Slate schema-6 candidate" &&
+                    snapshot.RevealButtonText ==
+                        "Reveal Blank Slate schema-6 Test CUE" &&
+                    snapshot.AuthoredLayerText.Contains(
+                        "blank-slate-v1",
+                        StringComparison.Ordinal) &&
+                    snapshot.AuthoredLayerText.Contains(
+                        "#263447",
+                        StringComparison.Ordinal) &&
+                    snapshot.ObjectManagerStatusText.Contains(
+                        "Blank Slate schema 6",
+                        StringComparison.Ordinal);
+            },
+            TimeSpan.FromSeconds(60),
+            () =>
+                "persisting and projecting the explicit Blank Slate schema-6 migration: " +
+                window.CaptureId65BlankLabUiSnapshotForTesting() +
+                $" status={id65Status.Text}");
+
+        Task<Id65AuthoringEditorDocumentReadModel?> blankSlateDocumentTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(
+            blankSlateDocumentTask,
+            "re-inspecting the Blank Slate schema-6 migration");
+        Id65AuthoringEditorDocumentReadModel blankSlateDocument =
+            blankSlateDocumentTask.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "The Blank Slate schema-6 document disappeared.");
+        Id65AuthoringEditorControlState blankSlateState =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                blankSlateDocument);
+        if (blankSlateDocument.ReadModelSchemaVersion !=
+                Id65AuthoringEditorDocumentReadModel
+                    .RemotePadMobyChoiceTerrainSetBlankCycloramaReadModelSchemaVersion ||
+            !blankSlateState.UsesBlankCyclorama ||
+            blankSlateState.BlankCycloramaPresetId != "blank-slate-v1" ||
+            blankSlateState.BlankCycloramaColorHex != "#263447" ||
+            blankSlateState.IncludeTerrainTile1 ||
+            blankSlateState.IncludeTerrainTile2 ||
+            blankSlateState.RemotePadMobyKind !=
+                Id65RemotePadMobyKind.RedGemT21 ||
+            blankSlateState.RemotePadMobyPositionId !=
+                Id65RemotePadGrassT107Catalog.NorthWestPositionId ||
+            File.ReadAllBytes(authoringDocumentPath)
+                .SequenceEqual(schema5BeforeBlankSlateMigration) ||
+            !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                candidateArtifactsBeforeBlankSlate) ||
+            normalCreateBinButton.IsEnabled)
+        {
+            throw new InvalidOperationException(
+                "The explicit schema-5-to-6 migration lost its exact Blank Slate/preset/color/terrain/Moby mapping or enabled normal Create BIN.");
+        }
+
+        byte[] schema6BeforeStaleTerrainCas =
+            File.ReadAllBytes(authoringDocumentPath);
+        EditorShellSessionSnapshot schema6SceneBeforeStaleTerrainCas =
+            window.CaptureEditorShellSessionSnapshotForTesting();
+        window.Id65AuthoringTerrainExpectedEnvelopeOverrideForTesting =
+            _ => new string('0', 64);
+        addTerrainTile1.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, addTerrainTile1));
+        WaitForCondition(
+            () => addTerrainTile1.IsEnabled &&
+                (id65Status.Text ?? "").Contains(
+                    "Could not add Terrain Tile 1",
+                    StringComparison.OrdinalIgnoreCase),
+            TimeSpan.FromSeconds(60),
+            () => "refusing stale Blank Slate schema-6 terrain compare-and-swap");
+        window.Id65AuthoringTerrainExpectedEnvelopeOverrideForTesting = null;
+        MainWindow.Id65BlankLabUiSnapshot staleSchema6Ui =
+            window.CaptureId65BlankLabUiSnapshotForTesting();
+        if (!File.ReadAllBytes(authoringDocumentPath)
+                .SequenceEqual(schema6BeforeStaleTerrainCas) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentGeometry,
+                schema6SceneBeforeStaleTerrainCas.CurrentGeometry) ||
+            !ReferenceEquals(
+                window.CaptureEditorShellSessionSnapshotForTesting().CurrentMobys,
+                schema6SceneBeforeStaleTerrainCas.CurrentMobys) ||
+            !staleSchema6Ui.LoadedUsesBlankCyclorama ||
+            staleSchema6Ui.LoadedBlankCycloramaPresetId != "blank-slate-v1" ||
+            staleSchema6Ui.LoadedBlankCycloramaColorHex != "#263447")
+        {
+            throw new InvalidOperationException(
+                "The stale schema-6 terrain CAS changed document bytes, viewport identity, or Blank Slate intent.");
+        }
+
+        addTerrainTile1.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, addTerrainTile1));
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.LoadedUsesBlankCyclorama &&
+                    snapshot.LoadedTerrainTile1 &&
+                    !snapshot.LoadedTerrainTile2 &&
+                    snapshot.LoadedBlankCycloramaPresetId ==
+                        "blank-slate-v1" &&
+                    snapshot.LoadedBlankCycloramaColorHex == "#263447" &&
+                    snapshot.RemoveTerrainTile1Enabled;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "preserving Blank Slate through an ordinary Tile 1 mutation");
+        removeTerrainTile1.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, removeTerrainTile1));
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.LoadedUsesBlankCyclorama &&
+                    !snapshot.LoadedTerrainTile1 &&
+                    !snapshot.LoadedTerrainTile2 &&
+                    snapshot.LoadedBlankCycloramaPresetId ==
+                        "blank-slate-v1" &&
+                    snapshot.LoadedBlankCycloramaColorHex == "#263447";
+            },
+            TimeSpan.FromSeconds(60),
+            () => "preserving Blank Slate through a second ordinary Tile 1 mutation");
+
+        directMobyChoice.SelectedItem = grassChoice;
+        directMobyChoicePosition.SelectedItem = schema4Center;
+        FlushUi();
+        byte[] schema6BeforeMobyApply = File.ReadAllBytes(authoringDocumentPath);
+        directApplyMobyChoice.RaiseEvent(
+            new RoutedEventArgs(Button.ClickEvent, directApplyMobyChoice));
+        WaitForCondition(
+            () =>
+            {
+                MainWindow.Id65BlankLabUiSnapshot snapshot =
+                    window.CaptureId65BlankLabUiSnapshotForTesting();
+                return snapshot.LoadedUsesBlankCyclorama &&
+                    snapshot.LoadedBlankCycloramaPresetId ==
+                        "blank-slate-v1" &&
+                    snapshot.LoadedBlankCycloramaColorHex == "#263447" &&
+                    snapshot.LoadedRemotePadMobyKind ==
+                        Id65RemotePadMobyKind.GrassT107 &&
+                    snapshot.LoadedRemotePadMobyPositionId ==
+                        Id65RemotePadGrassT107Catalog.CenterPositionId &&
+                    snapshot.VisibleMobyCount == 1;
+            },
+            TimeSpan.FromSeconds(60),
+            () => "preserving Blank Slate through an ordinary Moby mutation");
+        if (File.ReadAllBytes(authoringDocumentPath)
+                .SequenceEqual(schema6BeforeMobyApply))
+        {
+            throw new InvalidOperationException(
+                "The schema-6 Moby mutation did not publish its explicit choice.");
+        }
+
+        Task<Id65AuthoringEditorDocumentReadModel?> schema6CandidateDocumentTask =
+            Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                paths,
+                labBootstrap.Manifest);
+        WaitForUiTask(
+            schema6CandidateDocumentTask,
+            "inspecting the Blank Slate schema-6 candidate document");
+        Id65AuthoringEditorDocumentReadModel schema6CandidateDocument =
+            schema6CandidateDocumentTask.GetAwaiter().GetResult() ??
+            throw new InvalidOperationException(
+                "The Blank Slate schema-6 candidate document disappeared.");
+        Id65AuthoringEditorControlState schema6CandidateState =
+            Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                schema6CandidateDocument);
+        MainWindow.Id65BlankLabAuthoringCandidateAppResult validSchema6Result =
+            BuildBlankSlateUiCandidateResult(
+                schema6CandidateDocument,
+                schema6CandidateState);
+        MainWindow.Id65BlankLabAuthoringCandidateAppResult nextSchema6Result =
+            validSchema6Result;
+        int schema6CandidateCalls = 0;
+        window.Id65AuthoringCandidateMaterializerOverrideForTesting = (_, _, _) =>
+        {
+            schema6CandidateCalls++;
+            return Task.FromResult(nextSchema6Result);
+        };
+        try
+        {
+            Task createdSchema6Candidate = InvokePrivate<Task>(
+                window,
+                "CreateId65AuthoringAggregateCandidateAsync");
+            WaitForUiTask(
+                createdSchema6Candidate,
+                "creating the Blank Slate schema-6 candidate",
+                timeoutSeconds: 30);
+            MainWindow.Id65BlankLabUiSnapshot createdSchema6Ui =
+                window.CaptureId65BlankLabUiSnapshotForTesting();
+            if (schema6CandidateCalls != 1 ||
+                !createdSchema6Ui.RevealEnabled ||
+                createdSchema6Ui.RevealButtonText !=
+                    "Reveal Blank Slate schema-6 Test CUE" ||
+                createdSchema6Ui.AuthoringCandidateButtonText !=
+                    "Create Blank Slate schema-6 candidate" ||
+                normalCreateBinButton.IsEnabled ||
+                !(id65Status.Text ?? "").Contains(
+                    "Created the exact offline Blank Slate schema-6 candidate",
+                    StringComparison.Ordinal) ||
+                !(id65Status.Text ?? "").Contains(
+                    "blank-slate-v1",
+                    StringComparison.Ordinal) ||
+                !(id65Status.Text ?? "").Contains(
+                    "#263447",
+                    StringComparison.Ordinal) ||
+                !(id65Status.Text ?? "").Contains(
+                    "727 palette words",
+                    StringComparison.Ordinal) ||
+                !(id65Status.Text ?? "").Contains(
+                    "Town Square/Artisans",
+                    StringComparison.Ordinal) ||
+                !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                    candidateArtifactsBeforeBlankSlate))
+            {
+                throw new InvalidOperationException(
+                    "The Blank Slate schema-6 state did not dispatch through its guarded candidate seam with exact status, reveal, and Create BIN isolation.");
+            }
+
+            nextSchema6Result = validSchema6Result with
+            {
+                ReusedExistingCandidate = true,
+                CandidateArtifactsWrittenThisCall = false,
+                FileSystemMutationPerformed = false
+            };
+            Task reusedSchema6Candidate = InvokePrivate<Task>(
+                window,
+                "CreateId65AuthoringAggregateCandidateAsync");
+            WaitForUiTask(
+                reusedSchema6Candidate,
+                "reusing the Blank Slate schema-6 candidate",
+                timeoutSeconds: 30);
+            if (schema6CandidateCalls != 2 ||
+                !window.CaptureId65BlankLabUiSnapshotForTesting().RevealEnabled ||
+                !(id65Status.Text ?? "").Contains(
+                    "Reused the exact offline Blank Slate schema-6 candidate",
+                    StringComparison.Ordinal) ||
+                normalCreateBinButton.IsEnabled)
+            {
+                throw new InvalidOperationException(
+                    "The exact Blank Slate schema-6 reuse receipt did not retain its reveal binding and offline isolation.");
+            }
+
+            Id65AuthoringEditorControlState changedAfterCandidate =
+                Id65AuthoringEditorControlState
+                    .CreateRemotePadMobyChoiceTerrainSetBlankCyclorama(
+                        includeTerrainTile1: true,
+                        includeTerrainTile2: false,
+                        schema6CandidateState.RemotePadMobyKind!.Value,
+                        schema6CandidateState.RemotePadMobyPositionId!);
+            Task<Id65AuthoringEditorDocumentWriteResult> externalSchema6Write =
+                Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
+                    paths,
+                    labBootstrap.Manifest,
+                    changedAfterCandidate,
+                    schema6CandidateDocument.EnvelopeCanonicalSha256);
+            WaitForUiTask(
+                externalSchema6Write,
+                "publishing a newer schema-6 document behind the reveal binding");
+            Task staleReveal = InvokePrivate<Task>(
+                window,
+                "RevealId65BlankLabOutputAsync");
+            WaitForUiTask(
+                staleReveal,
+                "refusing the stale Blank Slate reveal binding",
+                timeoutSeconds: 30);
+            if (window.CaptureId65BlankLabUiSnapshotForTesting().RevealEnabled ||
+                !(id65Status.Text ?? "").Contains(
+                    "Could not reveal the exact ID65 candidate",
+                    StringComparison.Ordinal) ||
+                !(id65Status.Text ?? "").Contains(
+                    "changed after candidate materialization",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "The Blank Slate reveal action accepted a stale document CAS binding.");
+            }
+
+            Task staleViewportCandidate = InvokePrivate<Task>(
+                window,
+                "CreateId65AuthoringAggregateCandidateAsync");
+            WaitForUiTask(
+                staleViewportCandidate,
+                "refusing a stale schema-6 viewport before the materializer",
+                timeoutSeconds: 30);
+            if (schema6CandidateCalls != 2 ||
+                !(id65Status.Text ?? "").Contains(
+                    "not synchronized",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    "A stale schema-6 viewport reached the candidate materializer seam.");
+            }
+
+            Task reloadChangedSchema6 = InvokePrivate<Task>(
+                window,
+                "LoadId65BlankLabAsync");
+            WaitForUiTask(
+                reloadChangedSchema6,
+                "reloading the newer Blank Slate schema-6 document",
+                timeoutSeconds: 120);
+            removeTerrainTile1.RaiseEvent(
+                new RoutedEventArgs(Button.ClickEvent, removeTerrainTile1));
+            WaitForCondition(
+                () =>
+                {
+                    MainWindow.Id65BlankLabUiSnapshot snapshot =
+                        window.CaptureId65BlankLabUiSnapshotForTesting();
+                    return snapshot.LoadedUsesBlankCyclorama &&
+                        !snapshot.LoadedTerrainTile1 &&
+                        snapshot.LoadedBlankCycloramaPresetId ==
+                            "blank-slate-v1" &&
+                        snapshot.LoadedBlankCycloramaColorHex == "#263447";
+                },
+                TimeSpan.FromSeconds(60),
+                () => "restoring schema-6 terrain after stale reveal probe");
+            Task<Id65AuthoringEditorDocumentReadModel?> currentSchema6Task =
+                Id65AuthoringEditorDocumentWorkspaceInspector.InspectAsync(
+                    paths,
+                    labBootstrap.Manifest);
+            WaitForUiTask(currentSchema6Task, "inspecting current schema-6 document");
+            Id65AuthoringEditorDocumentReadModel currentSchema6Document =
+                currentSchema6Task.GetAwaiter().GetResult() ??
+                throw new InvalidOperationException(
+                    "The current schema-6 document disappeared.");
+            Id65AuthoringEditorControlState currentSchema6State =
+                Id65AuthoringEditorControlStateCompiler.RecoverControlState(
+                    currentSchema6Document);
+            validSchema6Result = BuildBlankSlateUiCandidateResult(
+                currentSchema6Document,
+                currentSchema6State);
+
+            void RejectForgedSchema6Receipt(
+                MainWindow.Id65BlankLabAuthoringCandidateAppResult forged,
+                string label)
+            {
+                nextSchema6Result = forged;
+                int expectedCalls = schema6CandidateCalls + 1;
+                Task forgedCandidate = InvokePrivate<Task>(
+                    window,
+                    "CreateId65AuthoringAggregateCandidateAsync");
+                WaitForUiTask(
+                    forgedCandidate,
+                    $"rejecting forged schema-6 {label}",
+                    timeoutSeconds: 30);
+                if (schema6CandidateCalls != expectedCalls ||
+                    window.CaptureId65BlankLabUiSnapshotForTesting().RevealEnabled ||
+                    normalCreateBinButton.IsEnabled ||
+                    !(id65Status.Text ?? "").Contains(
+                        "Could not create the exact Blank Slate schema-6 candidate",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                        candidateArtifactsBeforeBlankSlate))
+                {
+                    throw new InvalidOperationException(
+                        $"A forged schema-6 {label} receipt was accepted, retained stale reveal/Create-BIN authority, or changed candidate artifacts.");
+                }
+            }
+
+            RejectForgedSchema6Receipt(
+                validSchema6Result with
+                {
+                    BlankCycloramaPresetId = "forged-blank"
+                },
+                "preset");
+            RejectForgedSchema6Receipt(
+                validSchema6Result with
+                {
+                    BlankCycloramaColorHex = "#000000"
+                },
+                "color");
+            RejectForgedSchema6Receipt(
+                validSchema6Result with
+                {
+                    OutputCycloramaSha256 = new string('0', 64)
+                },
+                "cyclorama hash");
+            RejectForgedSchema6Receipt(
+                validSchema6Result with
+                {
+                    RetailTownSquareWad15Preserved = false
+                },
+                "protected-retail proof");
+        }
+        finally
+        {
+            window.Id65AuthoringCandidateMaterializerOverrideForTesting = null;
+            window.Id65AuthoringTerrainExpectedEnvelopeOverrideForTesting = null;
+            window.Id65AuthoringMobyExpectedEnvelopeOverrideForTesting = null;
+        }
+
+        object?[] schema6CreateBinBlockArguments = [null];
+        bool schema6CreateBinBlocked =
+            (bool)(normalCreateBinBlockMethod.Invoke(
+                window,
+                schema6CreateBinBlockArguments) ?? false);
+        if (!schema6CreateBinBlocked || normalCreateBinButton.IsEnabled ||
+            !(schema6CreateBinBlockArguments[0] as string ?? "").Contains(
+                "not authorized for normal retail composition",
+                StringComparison.OrdinalIgnoreCase) ||
+            !CaptureId65CandidateArtifactHashes(paths).SequenceEqual(
+                candidateArtifactsBeforeBlankSlate))
+        {
+            throw new InvalidOperationException(
+                "Blank Slate schema 6 crossed normal Create BIN isolation or changed candidate artifacts during UI-only receipt probes.");
         }
 
         AssertArtifactHashesEqual(
@@ -4083,7 +4972,7 @@ void RunId65BlankLabUiOnly()
 
         Console.WriteLine(
             "ID65 Blank-Level Lab public UI smoke passed: clean 35-level startup, visible narrow disclosure, exact named Resident T25 / Proved private T66 selector with null refusal, selection-change preview/no-write and explicit Apply/Save, neutral reveal label, explicit repair contract, Core atomic-export route with 128 unique keys, hidden broad Research tab, and exact-manifest 35+1 in-memory admission passed; " +
-            $"isolated locked workspace bootstrap: exact and source-preserving; mutation guards: {mutationGuards}; stale continuations: {staleContinuations}; transition guards: {transitionGuards}; resident textures: {residentTexture}; canonical document guard: {canonicalDocumentGuard}; reverse persistence: {reversePersistence}; operation fence: {operationFence}; remote Object Manager: explicit legacy-to-grid migration, exact Bottom right 0/1 presentation, mismatch quarantine, generic mutation refusal, selector-only no-write plus direct Top-left move/remove and Bottom-right add through CAS reinspection/reprojection, all four T88-off/T66 terrain-and-Grass candidate combinations, dormant-position retention, explicit schema-3-to-4 migration, schema-4 None/Grass/Red Gem selector-only no-write, stale-CAS refusal, persistence/reload, mutual-exclusion switching, and physical-candidate refusal; explicit schema-4-to-5 migration preview/no-write, exact 00 mapping, independent 00/10/11/01 terrain states in both transition orders, durable reload, stale terrain CAS refusal, Red Gem preservation, and schema-5 physical-candidate refusal passed; workspace transition: {workspaceTransition}; full authoring editor: {authoringEditor}.");
+            $"isolated locked workspace bootstrap: exact and source-preserving; mutation guards: {mutationGuards}; stale continuations: {staleContinuations}; transition guards: {transitionGuards}; resident textures: {residentTexture}; canonical document guard: {canonicalDocumentGuard}; reverse persistence: {reversePersistence}; operation fence: {operationFence}; remote Object Manager: explicit legacy-to-grid migration, exact Bottom right 0/1 presentation, mismatch quarantine, generic mutation refusal, selector-only no-write plus direct Top-left move/remove and Bottom-right add through CAS reinspection/reprojection, all four T88-off/T66 terrain-and-Grass candidate combinations, dormant-position retention, explicit schema-3-to-4 migration, schema-4 None/Grass/Red Gem selector-only no-write, stale-CAS refusal, persistence/reload, mutual-exclusion switching, and physical-candidate refusal; explicit schema-4-to-5 migration preview/no-write, exact 00 mapping, independent 00/10/11/01 terrain states in both transition orders, durable reload, stale terrain CAS refusal, Red Gem preservation, guarded schema-5 candidate dispatch/reveal, forged terrain/Moby receipt rejection, and normal Create BIN isolation passed; explicit schema-5-to-6 Blank Slate migration preview/no-write, durable exact schema-6 projection with preset blank-slate-v1 and #263447, terrain/Moby mutation preservation, guarded schema-6 candidate create/reuse/reveal, stale-operation and document-CAS refusal, forged preset/color/cyclorama-hash/protected-retail receipt rejection, and normal Create BIN isolation passed; workspace transition: {workspaceTransition}; full authoring editor: {authoringEditor}.");
     }
     finally
     {
@@ -11662,7 +12551,10 @@ static SortedDictionary<string, string> CaptureId65CandidateArtifactHashes(
     string[] candidateRoots =
     [
         Path.Combine(paths.RootPath, "materialized-candidates"),
-        Path.Combine(paths.RootPath, "materialized-remote-pad-candidates")
+        Path.Combine(paths.RootPath, "materialized-remote-pad-candidates"),
+        Path.Combine(
+            paths.RootPath,
+            "materialized-remote-pad-terrain-set-schema5-candidates")
     ];
     foreach (string root in candidateRoots)
     {

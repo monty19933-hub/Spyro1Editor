@@ -41,7 +41,7 @@ public sealed partial class MainWindow : Window
     private const float DefaultTerrainAddCopyOffset = 64f;
     private const float DefaultTerrainGroundOffset = 0f;
     private const string Id65FreshProjectionOfflineCandidateGuidance =
-        "No disposable test CUE path exists. Use Edit Full Authoring Document… to choose and explicitly save Resident T25 or Proved private T66. Resident T25 is offline-authoring/viewport-only and refuses candidate, Create BIN, runtime, and release paths. A synchronized legacy full-T66 state or exact schema-3 terrain-on/T107-on/T88-off/T66 state can use the separately guarded Create Exact Full Candidate action. Normal Create BIN, runtime use, and release promotion remain unauthorized.";
+        "No disposable test CUE path exists. Use Edit Full Authoring Document… to choose and explicitly save Resident T25 or Proved private T66. Resident T25 is offline-authoring/viewport-only and refuses candidate, Create BIN, runtime, and release paths. A synchronized schema-5 terrain-set/Moby state, legacy full-T66 state, or exact schema-3 T88-off/T66 terrain-and-Grass state can use the separately guarded Create Exact Full Candidate action. Schema 4, normal Create BIN, runtime use, and release promotion remain unauthorized.";
     private readonly Dictionary<string, TerrainTexturePreviewBundleCacheEntry>
         _terrainTexturePreviewBundleCache = new(StringComparer.OrdinalIgnoreCase);
 

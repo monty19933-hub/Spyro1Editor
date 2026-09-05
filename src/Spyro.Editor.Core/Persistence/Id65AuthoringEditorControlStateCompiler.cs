@@ -47,6 +47,9 @@ public sealed class Id65AuthoringEditorControlState
     public const string RemotePadMobyChoiceTerrainSetProfileId =
         "id65-authoring-editor-control-state-remote-pad-moby-choice-terrain-set-v4";
     public const int RemotePadMobyChoiceTerrainSetSchemaVersion = 4;
+    public const string RemotePadMobyChoiceTerrainSetBlankCycloramaProfileId =
+        "id65-authoring-editor-control-state-remote-pad-moby-choice-terrain-set-blank-cyclorama-v5";
+    public const int RemotePadMobyChoiceTerrainSetBlankCycloramaSchemaVersion = 5;
     public const int T88TargetTrueIndex = 88;
     public const int T107TargetTrueIndex = 107;
     public const int ResidentMandatoryBaseFaceTextureId = 25;
@@ -67,7 +70,8 @@ public sealed class Id65AuthoringEditorControlState
             remotePadMobyKind: null,
             remotePadMobyPositionId: null,
             Id65AuthoringEditorTerrainSelectionSemantics.LegacyOptionalTriangleV1,
-            includeTerrainTile2: false)
+            includeTerrainTile2: false,
+            includeBlankCyclorama: false)
     {
     }
 
@@ -81,7 +85,8 @@ public sealed class Id65AuthoringEditorControlState
         Id65RemotePadMobyKind? remotePadMobyKind,
         string? remotePadMobyPositionId,
         Id65AuthoringEditorTerrainSelectionSemantics terrainSelectionSemantics,
-        bool includeTerrainTile2)
+        bool includeTerrainTile2,
+        bool includeBlankCyclorama)
     {
         if (mandatoryBaseFaceTextureId is not
             (ResidentMandatoryBaseFaceTextureId or PrivateMandatoryBaseFaceTextureId))
@@ -154,6 +159,18 @@ public sealed class Id65AuthoringEditorControlState
         {
             throw new ArgumentOutOfRangeException(nameof(terrainSelectionSemantics));
         }
+        if (includeBlankCyclorama)
+        {
+            if (terrainSelectionSemantics !=
+                    Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1)
+            {
+                throw new ArgumentException(
+                    "The blank cyclorama requires exact schema-5 terrain-set semantics.",
+                    nameof(includeBlankCyclorama));
+            }
+            Id65AuthoringBlankCycloramaCatalog.RequireExact(
+                Id65AuthoringBlankCycloramaCatalog.CreateBlankSlate());
+        }
         IncludeStructuralTerrain = includeStructuralTerrain;
         IncludeTerrainTile2 = includeTerrainTile2;
         IncludeGrassAtT88 = includeGrassAtT88;
@@ -164,6 +181,12 @@ public sealed class Id65AuthoringEditorControlState
         RemotePadMobyKind = remotePadMobyKind;
         RemotePadMobyPositionId = remotePadMobyPositionId;
         TerrainSelectionSemantics = terrainSelectionSemantics;
+        BlankCycloramaPresetId = includeBlankCyclorama
+            ? Id65AuthoringBlankCycloramaCatalog.BlankSlatePresetId
+            : string.Empty;
+        BlankCycloramaColorHex = includeBlankCyclorama
+            ? Id65AuthoringBlankCycloramaCatalog.BlankSlateColorHex
+            : string.Empty;
     }
 
     public bool IncludeStructuralTerrain { get; }
@@ -185,6 +208,9 @@ public sealed class Id65AuthoringEditorControlState
             Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1;
     public bool UsesRemotePadTerrainSet => TerrainSelectionSemantics ==
         Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1;
+    public bool UsesBlankCyclorama => BlankCycloramaPresetId.Length != 0;
+    public string BlankCycloramaPresetId { get; }
+    public string BlankCycloramaColorHex { get; }
     public bool IncludeRedGemAtT21 =>
         RemotePadMobyKind == Id65RemotePadMobyKind.RedGemT21;
 
@@ -223,7 +249,8 @@ public sealed class Id65AuthoringEditorControlState
             remotePadMobyKind: null,
             remotePadMobyPositionId: null,
             Id65AuthoringEditorTerrainSelectionSemantics.LegacyOptionalTriangleV1,
-            includeTerrainTile2: false);
+            includeTerrainTile2: false,
+            includeBlankCyclorama: false);
 
     public static Id65AuthoringEditorControlState CreateRemotePadMobyChoiceDefault() =>
         CreateRemotePadMobyChoice(
@@ -245,7 +272,8 @@ public sealed class Id65AuthoringEditorControlState
             remotePadMobyKind: kind,
             remotePadMobyPositionId,
             Id65AuthoringEditorTerrainSelectionSemantics.LegacyOptionalTriangleV1,
-            includeTerrainTile2: false);
+            includeTerrainTile2: false,
+            includeBlankCyclorama: false);
 
     public static Id65AuthoringEditorControlState
         CreateRemotePadMobyChoiceTerrainSet(
@@ -263,11 +291,39 @@ public sealed class Id65AuthoringEditorControlState
             remotePadMobyKind: kind,
             remotePadMobyPositionId,
             Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1,
-            includeTerrainTile2);
+            includeTerrainTile2,
+            includeBlankCyclorama: false);
 
     public static Id65AuthoringEditorControlState
         CreateRemotePadMobyChoiceTerrainSetDefault() =>
         CreateRemotePadMobyChoiceTerrainSet(
+            includeTerrainTile1: true,
+            includeTerrainTile2: false,
+            Id65RemotePadMobyKind.None,
+            Id65RemotePadMobyChoiceCatalog.DefaultPositionId);
+
+    public static Id65AuthoringEditorControlState
+        CreateRemotePadMobyChoiceTerrainSetBlankCyclorama(
+            bool includeTerrainTile1,
+            bool includeTerrainTile2,
+            Id65RemotePadMobyKind kind,
+            string remotePadMobyPositionId) =>
+        new(
+            includeTerrainTile1,
+            includeGrassAtT88: false,
+            includeGrassAtT107: kind == Id65RemotePadMobyKind.GrassT107,
+            mandatoryBaseFaceTextureId: PrivateMandatoryBaseFaceTextureId,
+            Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1,
+            t107RemotePadPositionId: null,
+            remotePadMobyKind: kind,
+            remotePadMobyPositionId,
+            Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1,
+            includeTerrainTile2,
+            includeBlankCyclorama: true);
+
+    public static Id65AuthoringEditorControlState
+        CreateRemotePadMobyChoiceTerrainSetBlankCycloramaDefault() =>
+        CreateRemotePadMobyChoiceTerrainSetBlankCyclorama(
             includeTerrainTile1: true,
             includeTerrainTile2: false,
             Id65RemotePadMobyKind.None,
@@ -342,11 +398,40 @@ public sealed class Id65AuthoringEditorControlState
             remotePadMobyChoiceState.RemotePadMobyPositionId!);
     }
 
+    /// <summary>
+    /// Explicit one-way schema-5 to schema-6 migration. All terrain and Moby
+    /// choices are preserved exactly; the only added intent is the single
+    /// code-owned blank-cyclorama preset.
+    /// </summary>
+    public static Id65AuthoringEditorControlState
+        MigrateRemotePadMobyChoiceTerrainSetToBlankCyclorama(
+            Id65AuthoringEditorControlState terrainSetState)
+    {
+        ArgumentNullException.ThrowIfNull(terrainSetState);
+        if (!terrainSetState.UsesRemotePadTerrainSet ||
+            terrainSetState.UsesBlankCyclorama)
+        {
+            throw new InvalidOperationException(
+                "Only exact schema-5 terrain-set control state can migrate to schema 6.");
+        }
+        return CreateRemotePadMobyChoiceTerrainSetBlankCyclorama(
+            terrainSetState.IncludeTerrainTile1,
+            terrainSetState.IncludeTerrainTile2,
+            terrainSetState.RemotePadMobyKind!.Value,
+            terrainSetState.RemotePadMobyPositionId!);
+    }
+
     internal static Id65AuthoringEditorControlState CopyExact(
         Id65AuthoringEditorControlState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        return state.UsesRemotePadTerrainSet
+        return state.UsesBlankCyclorama
+            ? CreateRemotePadMobyChoiceTerrainSetBlankCyclorama(
+                state.IncludeTerrainTile1,
+                state.IncludeTerrainTile2,
+                state.RemotePadMobyKind!.Value,
+                state.RemotePadMobyPositionId!)
+            : state.UsesRemotePadTerrainSet
             ? CreateRemotePadMobyChoiceTerrainSet(
                 state.IncludeTerrainTile1,
                 state.IncludeTerrainTile2,
@@ -409,6 +494,15 @@ public sealed class Id65AuthoringEditorControlStateCompilation
                 state.RemotePadMobyPositionId,
                 recovered.RemotePadMobyPositionId,
                 StringComparison.Ordinal) ||
+            state.UsesBlankCyclorama != recovered.UsesBlankCyclorama ||
+            !string.Equals(
+                state.BlankCycloramaPresetId,
+                recovered.BlankCycloramaPresetId,
+                StringComparison.Ordinal) ||
+            !string.Equals(
+                state.BlankCycloramaColorHex,
+                recovered.BlankCycloramaColorHex,
+                StringComparison.Ordinal) ||
             !canonical.SerializeUtf8().SequenceEqual(expected.SerializeUtf8()))
         {
             throw new InvalidDataException(
@@ -424,6 +518,9 @@ public sealed class Id65AuthoringEditorControlStateCompilation
         LockedRow80Sha256 = canonical.LockedRow80Sha256;
         PrivateTextureWitnessSha256 = canonical.PrivateTextureWitnessSha256;
         MobyBundleSha256 = canonical.MobyBundleSha256;
+        UsesBlankCyclorama = canonical.UsesBlankCyclorama;
+        BlankCycloramaPresetId = canonical.BlankCyclorama?.PresetId ?? string.Empty;
+        BlankCycloramaColorHex = canonical.BlankCyclorama?.ColorHex ?? string.Empty;
         TerrainIntentCount = canonical.Terrain.Count;
         PrivateTextureDestinationRecordIndex =
             canonical.PrivateTextureSwap.DestinationRecordIndex;
@@ -440,6 +537,9 @@ public sealed class Id65AuthoringEditorControlStateCompilation
     public string LockedRow80Sha256 { get; }
     public string PrivateTextureWitnessSha256 { get; }
     public string MobyBundleSha256 { get; }
+    public bool UsesBlankCyclorama { get; }
+    public string BlankCycloramaPresetId { get; }
+    public string BlankCycloramaColorHex { get; }
     public int TerrainIntentCount { get; }
     public int PrivateTextureDestinationRecordIndex { get; }
     public IReadOnlyList<int> MobyTargetTrueIndices => _mobyTargetTrueIndices;
@@ -590,12 +690,45 @@ public static class Id65AuthoringEditorControlStateCompiler
             document.T107RemotePadPosition is null &&
             document.UsesRemotePadMobyChoice &&
             document.UsesRemotePadTerrainSet &&
+            !document.UsesBlankCyclorama &&
+            document.BlankCycloramaPresetId.Length == 0 &&
+            document.BlankCycloramaColorHex.Length == 0 &&
+            document.StaticAuthoringCycloramaCatalogSha256.Length == 0 &&
+            document.RemotePadMobyKind.HasValue &&
+            document.RemotePadMobyPositionId is not null &&
+            document.RemotePadMobyPosition is not null;
+        bool remotePadMobyChoiceTerrainSetBlankCyclorama =
+            document.SchemaVersion == Id65AuthoringEditorDocument
+                .RemotePadMobyChoiceTerrainSetBlankCycloramaSchemaVersion &&
+            document.ProfileId == Id65AuthoringEditorDocument
+                .RemotePadMobyChoiceTerrainSetBlankCycloramaDocumentProfileId &&
+            document.MandatoryBaseFaceTextureId ==
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId &&
+            document.ReadModelSchemaVersion == Id65AuthoringEditorDocumentReadModel
+                .RemotePadMobyChoiceTerrainSetBlankCycloramaReadModelSchemaVersion &&
+            document.T107PlacementSemantics ==
+                Id65AuthoringEditorT107PlacementSemantics.RemotePadMobyChoiceV1 &&
+            document.TerrainSelectionSemantics ==
+                Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1 &&
+            !document.UsesRemotePadT107Grid &&
+            document.T107RemotePadPositionId is null &&
+            document.T107RemotePadPosition is null &&
+            document.UsesRemotePadMobyChoice &&
+            document.UsesRemotePadTerrainSet &&
+            document.UsesBlankCyclorama &&
+            document.BlankCycloramaPresetId ==
+                Id65AuthoringBlankCycloramaCatalog.BlankSlatePresetId &&
+            document.BlankCycloramaColorHex ==
+                Id65AuthoringBlankCycloramaCatalog.BlankSlateColorHex &&
+            document.StaticAuthoringCycloramaCatalogSha256 ==
+                Id65AuthoringBlankCycloramaCatalog.CanonicalSha256 &&
             document.RemotePadMobyKind.HasValue &&
             document.RemotePadMobyPositionId is not null &&
             document.RemotePadMobyPosition is not null;
         bool supportedProfile =
             legacyPrivateT66 || legacyResidentT25 || remotePadGrid || remotePadMobyChoice ||
-            remotePadMobyChoiceTerrainSet;
+            remotePadMobyChoiceTerrainSet ||
+            remotePadMobyChoiceTerrainSetBlankCyclorama;
         if (!supportedProfile ||
             document.LabProfileId != UnusedLevel65BlankLevelLabProfileRegistry.ProfileId ||
             document.LabProfileVersion !=
@@ -630,7 +763,10 @@ public static class Id65AuthoringEditorControlStateCompiler
                 "The ID65 read model cannot be translated into an exact control state.");
         }
 
-        Id65AuthoringEditorControlState state = remotePadMobyChoiceTerrainSet
+        Id65AuthoringEditorControlState state =
+            remotePadMobyChoiceTerrainSetBlankCyclorama
+            ? SelectRemotePadMobyChoiceTerrainSetBlankCycloramaState(document)
+            : remotePadMobyChoiceTerrainSet
             ? SelectRemotePadMobyChoiceTerrainSetState(document)
             : remotePadMobyChoice
             ? SelectRemotePadMobyChoiceState(document)
@@ -685,7 +821,13 @@ public static class Id65AuthoringEditorControlStateCompiler
                 ? [Id65AuthoringTerrainSetCatalog.Tile2Id]
                 : Array.Empty<string>()
         ];
-        return state.UsesRemotePadTerrainSet
+        return state.UsesBlankCyclorama
+            ? Id65AuthoringEditorDocument
+                .CreateRemotePadMobyChoiceTerrainSetBlankCycloramaExact(
+                    state.RemotePadMobyKind!.Value,
+                    state.RemotePadMobyPositionId!,
+                    activeTerrainUnitIds)
+            : state.UsesRemotePadTerrainSet
             ? Id65AuthoringEditorDocument.CreateRemotePadMobyChoiceTerrainSetExact(
                 state.RemotePadMobyKind!.Value,
                 state.RemotePadMobyPositionId!,
@@ -713,7 +855,9 @@ public static class Id65AuthoringEditorControlStateCompiler
         ArgumentNullException.ThrowIfNull(document);
         Id65AuthoringEditorDocument canonical =
             Id65AuthoringEditorDocument.Parse(document.SerializeUtf8());
-        Id65AuthoringEditorControlState state = canonical.UsesRemotePadTerrainSet
+        Id65AuthoringEditorControlState state = canonical.UsesBlankCyclorama
+            ? SelectRemotePadMobyChoiceTerrainSetBlankCycloramaState(canonical)
+            : canonical.UsesRemotePadTerrainSet
             ? SelectRemotePadMobyChoiceTerrainSetState(canonical)
             : canonical.UsesRemotePadMobyChoice
             ? SelectRemotePadMobyChoiceState(canonical)
@@ -877,6 +1021,7 @@ public static class Id65AuthoringEditorControlStateCompiler
             Id65AuthoringEditorDocument document)
     {
         if (!document.UsesRemotePadTerrainSet ||
+            document.UsesBlankCyclorama ||
             !document.UsesRemotePadMobyChoice ||
             !document.RemotePadMobyKind.HasValue ||
             document.RemotePadMobyPositionId is null ||
@@ -910,10 +1055,52 @@ public static class Id65AuthoringEditorControlStateCompiler
     }
 
     private static Id65AuthoringEditorControlState
+        SelectRemotePadMobyChoiceTerrainSetBlankCycloramaState(
+            Id65AuthoringEditorDocument document)
+    {
+        if (!document.UsesBlankCyclorama ||
+            !document.UsesRemotePadTerrainSet ||
+            !document.UsesRemotePadMobyChoice ||
+            !document.RemotePadMobyKind.HasValue ||
+            document.RemotePadMobyPositionId is null ||
+            document.MandatoryBaseFaceTextureId !=
+                Id65AuthoringEditorControlState.PrivateMandatoryBaseFaceTextureId ||
+            document.BlankCyclorama is null)
+        {
+            throw new InvalidDataException(
+                "The schema-6 ID65 document lost its exact blank-cyclorama/terrain-set/Moby-choice semantics.");
+        }
+        Id65AuthoringBlankCycloramaCatalog.RequireExact(document.BlankCyclorama);
+        Id65AuthoringTerrainSetManifest manifest =
+            Id65AuthoringTerrainSetCatalog.Create(document.ActiveTerrainUnitIds);
+        if (!manifest.ActiveUnits.Select(item => item.Id)
+                .SequenceEqual(document.ActiveTerrainUnitIds) ||
+            !string.Equals(
+                manifest.CanonicalSha256,
+                document.TerrainSetManifestSha256,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(
+                "The schema-6 ID65 document terrain-set manifest changed.");
+        }
+        return Id65AuthoringEditorControlState
+            .CreateRemotePadMobyChoiceTerrainSetBlankCyclorama(
+                document.ActiveTerrainUnitIds.Contains(
+                    Id65AuthoringTerrainSetCatalog.Tile1Id,
+                    StringComparer.Ordinal),
+                document.ActiveTerrainUnitIds.Contains(
+                    Id65AuthoringTerrainSetCatalog.Tile2Id,
+                    StringComparer.Ordinal),
+                document.RemotePadMobyKind.Value,
+                document.RemotePadMobyPositionId);
+    }
+
+    private static Id65AuthoringEditorControlState
         SelectRemotePadMobyChoiceTerrainSetState(
             Id65AuthoringEditorDocumentReadModel document)
     {
         if (!document.UsesRemotePadTerrainSet ||
+            document.UsesBlankCyclorama ||
             document.ReadModelSchemaVersion !=
                 Id65AuthoringEditorDocumentReadModel
                     .RemotePadMobyChoiceTerrainSetReadModelSchemaVersion ||
@@ -942,6 +1129,48 @@ public static class Id65AuthoringEditorControlStateCompiler
                 StringComparer.Ordinal),
             document.RemotePadMobyKind.Value,
             document.RemotePadMobyPositionId);
+    }
+
+    private static Id65AuthoringEditorControlState
+        SelectRemotePadMobyChoiceTerrainSetBlankCycloramaState(
+            Id65AuthoringEditorDocumentReadModel document)
+    {
+        if (!document.UsesBlankCyclorama ||
+            !document.UsesRemotePadTerrainSet ||
+            document.ReadModelSchemaVersion != Id65AuthoringEditorDocumentReadModel
+                .RemotePadMobyChoiceTerrainSetBlankCycloramaReadModelSchemaVersion ||
+            document.BlankCycloramaPresetId !=
+                Id65AuthoringBlankCycloramaCatalog.BlankSlatePresetId ||
+            document.BlankCycloramaColorHex !=
+                Id65AuthoringBlankCycloramaCatalog.BlankSlateColorHex ||
+            document.StaticAuthoringCycloramaCatalogSha256 !=
+                Id65AuthoringBlankCycloramaCatalog.CanonicalSha256 ||
+            !document.RemotePadMobyKind.HasValue ||
+            document.RemotePadMobyPositionId is null ||
+            document.RemotePadMobyPosition is null)
+        {
+            throw new InvalidDataException(
+                "The schema-6 ID65 read model lost its exact blank-cyclorama/terrain-set/Moby-choice semantics.");
+        }
+        Id65AuthoringTerrainSetManifest manifest =
+            Id65AuthoringTerrainSetCatalog.Create(document.ActiveTerrainUnitIds);
+        if (!manifest.ActiveUnits.Select(item => item.Id)
+                .SequenceEqual(document.ActiveTerrainUnitIds) ||
+            manifest.CanonicalSha256 != document.TerrainSetManifestSha256)
+        {
+            throw new InvalidDataException(
+                "The schema-6 ID65 read-model terrain-set manifest changed.");
+        }
+        return Id65AuthoringEditorControlState
+            .CreateRemotePadMobyChoiceTerrainSetBlankCyclorama(
+                document.ActiveTerrainUnitIds.Contains(
+                    Id65AuthoringTerrainSetCatalog.Tile1Id,
+                    StringComparer.Ordinal),
+                document.ActiveTerrainUnitIds.Contains(
+                    Id65AuthoringTerrainSetCatalog.Tile2Id,
+                    StringComparer.Ordinal),
+                document.RemotePadMobyKind.Value,
+                document.RemotePadMobyPositionId);
     }
 
     private static Id65AuthoringEditorControlState SelectRemotePadState(
@@ -1014,6 +1243,15 @@ public static class Id65AuthoringEditorControlStateCompiler
             !string.Equals(
                 expected.RemotePadMobyPositionId,
                 actual.RemotePadMobyPositionId,
+                StringComparison.Ordinal) ||
+            expected.UsesBlankCyclorama != actual.UsesBlankCyclorama ||
+            !string.Equals(
+                expected.BlankCycloramaPresetId,
+                actual.BlankCycloramaPresetId,
+                StringComparison.Ordinal) ||
+            !string.Equals(
+                expected.BlankCycloramaColorHex,
+                actual.BlankCycloramaColorHex,
                 StringComparison.Ordinal))
         {
             throw new InvalidDataException(
@@ -1024,7 +1262,10 @@ public static class Id65AuthoringEditorControlStateCompiler
     private static void ValidateCompilation(
         Id65AuthoringEditorControlStateCompilation result)
     {
-        string expectedProfile = result.State.UsesRemotePadTerrainSet
+        string expectedProfile = result.State.UsesBlankCyclorama
+            ? Id65AuthoringEditorDocument
+                .RemotePadMobyChoiceTerrainSetBlankCycloramaDocumentProfileId
+            : result.State.UsesRemotePadTerrainSet
             ? Id65AuthoringEditorDocument.RemotePadMobyChoiceTerrainSetDocumentProfileId
             : result.State.UsesRemotePadMobyChoice
             ? Id65AuthoringEditorDocument.RemotePadMobyChoiceDocumentProfileId
@@ -1043,6 +1284,14 @@ public static class Id65AuthoringEditorControlStateCompiler
                 Id65V2NativeTextureCompositionCompiler.ExpectedWitnessSha256 ||
             result.MobyBundleSha256 !=
                 Id65AuthoringMobyDependencyBundleCompiler.ExpectedArtisansGrassBundleSha256 ||
+            result.UsesBlankCyclorama != result.State.UsesBlankCyclorama ||
+            result.BlankCycloramaPresetId != result.State.BlankCycloramaPresetId ||
+            result.BlankCycloramaColorHex != result.State.BlankCycloramaColorHex ||
+            (result.UsesBlankCyclorama &&
+                (result.BlankCycloramaPresetId !=
+                    Id65AuthoringBlankCycloramaCatalog.BlankSlatePresetId ||
+                 result.BlankCycloramaColorHex !=
+                    Id65AuthoringBlankCycloramaCatalog.BlankSlateColorHex)) ||
             result.TerrainIntentCount !=
                 ((result.State.IncludeTerrainTile1 ? 1 : 0) +
                  (result.State.IncludeTerrainTile2 ? 1 : 0)) ||

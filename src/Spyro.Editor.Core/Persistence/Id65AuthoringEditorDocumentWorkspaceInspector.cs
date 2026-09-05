@@ -46,6 +46,7 @@ public sealed class Id65AuthoringEditorDocumentReadModel
     public const int RemotePadGridReadModelSchemaVersion = 3;
     public const int RemotePadMobyChoiceReadModelSchemaVersion = 4;
     public const int RemotePadMobyChoiceTerrainSetReadModelSchemaVersion = 5;
+    public const int RemotePadMobyChoiceTerrainSetBlankCycloramaReadModelSchemaVersion = 6;
 
     private readonly ReadOnlyCollection<Id65AuthoringEditorTerrainReadModel> _terrain;
     private readonly ReadOnlyCollection<Id65AuthoringEditorMobyPlacementReadModel>
@@ -94,6 +95,17 @@ public sealed class Id65AuthoringEditorDocumentReadModel
             : Id65AuthoringEditorTerrainSelectionSemantics.LegacyOptionalTriangleV1;
         TerrainSetManifestSha256 = document.TerrainSetManifestSha256 ?? string.Empty;
         _activeTerrainUnitIds = Array.AsReadOnly(document.ActiveTerrainUnitIds.ToArray());
+        if (document.BlankCyclorama is Id65AuthoringBlankCycloramaIntent blankCyclorama)
+        {
+            Id65AuthoringBlankCycloramaCatalog.RequireExact(blankCyclorama);
+            BlankCycloramaPresetId = blankCyclorama.PresetId;
+            BlankCycloramaColorHex = blankCyclorama.ColorHex;
+        }
+        else
+        {
+            BlankCycloramaPresetId = string.Empty;
+            BlankCycloramaColorHex = string.Empty;
+        }
         LabProfileId = document.LabProfileId;
         LabProfileVersion = document.LabProfileVersion;
         WorkspaceKey = document.WorkspaceKey;
@@ -122,6 +134,8 @@ public sealed class Id65AuthoringEditorDocumentReadModel
             identity?.StaticAuthoringProjectionSha256 ?? string.Empty;
         StaticAuthoringTerrainManifestSha256 =
             identity?.StaticAuthoringTerrainManifestSha256 ?? string.Empty;
+        StaticAuthoringCycloramaCatalogSha256 =
+            identity?.StaticAuthoringCycloramaCatalogSha256 ?? string.Empty;
         PersistedProjectionIdentityPresent = identity != null;
 
         _terrain = Array.AsReadOnly(document.Terrain
@@ -139,7 +153,9 @@ public sealed class Id65AuthoringEditorDocumentReadModel
     }
 
     public int SchemaVersion { get; }
-    public int ReadModelSchemaVersion => UsesRemotePadTerrainSet
+    public int ReadModelSchemaVersion => UsesBlankCyclorama
+        ? RemotePadMobyChoiceTerrainSetBlankCycloramaReadModelSchemaVersion
+        : UsesRemotePadTerrainSet
         ? RemotePadMobyChoiceTerrainSetReadModelSchemaVersion
         : UsesRemotePadMobyChoice
         ? RemotePadMobyChoiceReadModelSchemaVersion
@@ -164,6 +180,9 @@ public sealed class Id65AuthoringEditorDocumentReadModel
         Id65AuthoringEditorTerrainSelectionSemantics.RemotePadTerrainSetV1;
     public string TerrainSetManifestSha256 { get; }
     public IReadOnlyList<string> ActiveTerrainUnitIds => _activeTerrainUnitIds;
+    public bool UsesBlankCyclorama => BlankCycloramaPresetId.Length != 0;
+    public string BlankCycloramaPresetId { get; }
+    public string BlankCycloramaColorHex { get; }
     public bool UsesStaticRemotePadAuthoring =>
         UsesRemotePadT107Grid || UsesRemotePadMobyChoice;
     public bool RequiresExplicitRemotePadMigration => !UsesStaticRemotePadAuthoring;
@@ -190,6 +209,7 @@ public sealed class Id65AuthoringEditorDocumentReadModel
     public string StaticAuthoringSceneGraphSha256 { get; }
     public string StaticAuthoringProjectionSha256 { get; }
     public string StaticAuthoringTerrainManifestSha256 { get; }
+    public string StaticAuthoringCycloramaCatalogSha256 { get; }
     public bool HasCompiledCompositeProjection =>
         PersistedProjectionIdentityPresent && !UsesStaticRemotePadAuthoring;
     public bool HasStaticAuthoringProjection =>
@@ -274,6 +294,23 @@ public sealed class Id65AuthoringEditorDocumentReadModel
                     json.WriteEndArray();
                     json.WriteString("manifestSha256", TerrainSetManifestSha256);
                     json.WriteEndObject();
+                    if (UsesBlankCyclorama)
+                    {
+                        json.WritePropertyName("blankCyclorama");
+                        json.WriteStartObject();
+                        json.WriteNumber(
+                            "catalogSchemaVersion",
+                            Id65AuthoringBlankCycloramaCatalog.SchemaVersion);
+                        json.WriteString(
+                            "catalogProfileId",
+                            Id65AuthoringBlankCycloramaCatalog.ProfileId);
+                        json.WriteString(
+                            "catalogCanonicalSha256",
+                            Id65AuthoringBlankCycloramaCatalog.CanonicalSha256);
+                        json.WriteString("presetId", BlankCycloramaPresetId);
+                        json.WriteString("colorHex", BlankCycloramaColorHex);
+                        json.WriteEndObject();
+                    }
                 }
             }
             else if (UsesRemotePadT107Grid)
@@ -322,6 +359,12 @@ public sealed class Id65AuthoringEditorDocumentReadModel
                     json.WriteString(
                         "staticAuthoringTerrainManifestSha256",
                         StaticAuthoringTerrainManifestSha256);
+                    if (UsesBlankCyclorama)
+                    {
+                        json.WriteString(
+                            "staticAuthoringCycloramaCatalogSha256",
+                            StaticAuthoringCycloramaCatalogSha256);
+                    }
                 }
                 json.WriteBoolean(
                     "compiledCompositeProjectionPresent",

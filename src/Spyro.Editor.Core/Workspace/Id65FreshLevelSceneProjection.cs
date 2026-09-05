@@ -214,7 +214,9 @@ public sealed class Id65FreshLevelSceneProjection
         string? profileId = null,
         int? schemaVersion = null,
         IEnumerable<string>? activeTerrainUnitIds = null,
-        string? terrainSetManifestSha256 = null)
+        string? terrainSetManifestSha256 = null,
+        string? blankCycloramaPresetId = null,
+        string? blankCycloramaColorHex = null)
     {
         ArgumentNullException.ThrowIfNull(visibleMobyPresentations);
         Id65FreshLevelMobyPresentation[] presentations =
@@ -225,6 +227,9 @@ public sealed class Id65FreshLevelSceneProjection
         bool terrainSetProjection = exactProfileId ==
             Id65FreshLevelSceneProjector.TerrainSetProfileId &&
             exactSchemaVersion == Id65FreshLevelSceneProjector.TerrainSetSchemaVersion;
+        bool blankCycloramaProjection =
+            blankCycloramaPresetId is not null ||
+            blankCycloramaColorHex is not null;
         if (presentations.Any(item => item is null) ||
             presentations.Length > 1 ||
             presentations.Select(item => item.TargetTrueIndex).Distinct().Count() !=
@@ -262,10 +267,21 @@ public sealed class Id65FreshLevelSceneProjection
                 throw new InvalidDataException(
                     "The terrain-set scene projection requires one exact canonical terrain manifest.");
             }
+            if (blankCycloramaProjection &&
+                (blankCycloramaPresetId !=
+                    Id65AuthoringBlankCycloramaCatalog.BlankSlatePresetId ||
+                 blankCycloramaColorHex !=
+                    Id65AuthoringBlankCycloramaCatalog.BlankSlateColorHex))
+            {
+                throw new InvalidDataException(
+                    "The schema-6 fresh-scene projection requires the exact Blank Slate preset and color.");
+            }
         }
         else if (exactProfileId != Id65FreshLevelSceneProjector.ProfileId ||
                  exactSchemaVersion != Id65FreshLevelSceneProjector.SchemaVersion ||
-                 terrainUnitIds.Length != 0 || terrainSetManifestSha256 is not null)
+                 terrainUnitIds.Length != 0 ||
+                 terrainSetManifestSha256 is not null ||
+                 blankCycloramaProjection)
         {
             throw new InvalidDataException(
                 "The fresh-level scene profile/schema or terrain-set identity is unsupported.");
@@ -282,6 +298,8 @@ public sealed class Id65FreshLevelSceneProjection
         StructuralTerrainPresent = structuralTerrainPresent;
         RemotePadMobyKind = remotePadMobyKind;
         TerrainSetManifestSha256 = terrainSetManifestSha256;
+        BlankCycloramaPresetId = blankCycloramaPresetId;
+        BlankCycloramaColorHex = blankCycloramaColorHex;
         _activeTerrainUnitIds = Array.AsReadOnly(terrainUnitIds);
         _visibleMobyPresentations = Array.AsReadOnly(presentations);
         _visibleMobyTrueIndexes = Array.AsReadOnly(presentations
@@ -305,6 +323,9 @@ public sealed class Id65FreshLevelSceneProjection
     public Id65RemotePadMobyKind? RemotePadMobyKind { get; }
     public IReadOnlyList<string> ActiveTerrainUnitIds => _activeTerrainUnitIds;
     public string? TerrainSetManifestSha256 { get; }
+    public bool UsesBlankCyclorama => BlankCycloramaPresetId is not null;
+    public string? BlankCycloramaPresetId { get; }
+    public string? BlankCycloramaColorHex { get; }
     public bool UsesTerrainSetProjection =>
         ProfileId == Id65FreshLevelSceneProjector.TerrainSetProfileId;
     public bool CanonicalDocumentBound => IsCanonicalSha256(DocumentCanonicalSha256) &&
@@ -759,16 +780,32 @@ public static class Id65FreshLevelSceneProjector
     {
         Id65AuthoringEditorControlState state =
             Id65AuthoringEditorControlStateCompiler.RecoverControlState(document);
+        bool blankCyclorama = state.UsesBlankCyclorama;
+        bool exactSchema5Document =
+            !blankCyclorama &&
+            document.SchemaVersion ==
+                Id65AuthoringEditorDocument.RemotePadMobyChoiceTerrainSetSchemaVersion &&
+            document.ProfileId ==
+                Id65AuthoringEditorDocument.RemotePadMobyChoiceTerrainSetDocumentProfileId;
+        bool exactSchema6Document =
+            blankCyclorama &&
+            document.SchemaVersion ==
+                Id65AuthoringEditorDocument
+                    .RemotePadMobyChoiceTerrainSetBlankCycloramaSchemaVersion &&
+            document.ProfileId ==
+                Id65AuthoringEditorDocument
+                    .RemotePadMobyChoiceTerrainSetBlankCycloramaDocumentProfileId &&
+            document.BlankCycloramaPresetId ==
+                Id65AuthoringBlankCycloramaCatalog.BlankSlatePresetId &&
+            document.BlankCycloramaColorHex ==
+                Id65AuthoringBlankCycloramaCatalog.BlankSlateColorHex;
         if (!state.UsesRemotePadTerrainSet ||
-            document.SchemaVersion !=
-                Id65AuthoringEditorDocument.RemotePadMobyChoiceTerrainSetSchemaVersion ||
-            document.ProfileId !=
-                Id65AuthoringEditorDocument.RemotePadMobyChoiceTerrainSetDocumentProfileId ||
+            (!exactSchema5Document && !exactSchema6Document) ||
             document.MandatoryBaseFaceTextureId != StarterTextureId ||
             document.TerrainSetManifestSha256 is not string manifestSha256)
         {
             throw new InvalidDataException(
-                "The schema-5 ID65 terrain-set document cannot enter fresh-scene presentation.");
+                "Only an exact schema-5 terrain-set or schema-6 Blank Slate document can enter fresh-scene presentation.");
         }
 
         string[] activeUnitIds =
@@ -810,13 +847,23 @@ public static class Id65FreshLevelSceneProjector
         ValidateTerrainSetProjectedGraph(geometry, spawn, manifest);
         string graphCanonicalSha256 =
             GetTerrainSetGraphCanonicalSha256(activeUnitIds);
-        string identity = BindRemotePadMobyChoiceTerrainSetDocumentIdentity(
-            graphCanonicalSha256,
-            document.DocumentCanonicalSha256,
-            document.DocumentContentSha256,
-            manifest,
-            state.RemotePadMobyKind.Value,
-            visibleMobyPresentations);
+        string identity = blankCyclorama
+            ? BindRemotePadMobyChoiceTerrainSetBlankCycloramaDocumentIdentity(
+                graphCanonicalSha256,
+                document.DocumentCanonicalSha256,
+                document.DocumentContentSha256,
+                manifest,
+                state.RemotePadMobyKind.Value,
+                visibleMobyPresentations,
+                document.BlankCycloramaPresetId,
+                document.BlankCycloramaColorHex)
+            : BindRemotePadMobyChoiceTerrainSetDocumentIdentity(
+                graphCanonicalSha256,
+                document.DocumentCanonicalSha256,
+                document.DocumentContentSha256,
+                manifest,
+                state.RemotePadMobyKind.Value,
+                visibleMobyPresentations);
         return new Id65FreshLevelSceneProjection(
             geometry,
             spawn,
@@ -830,7 +877,9 @@ public static class Id65FreshLevelSceneProjector
             TerrainSetProfileId,
             TerrainSetSchemaVersion,
             activeUnitIds,
-            manifestSha256);
+            manifestSha256,
+            blankCyclorama ? document.BlankCycloramaPresetId : null,
+            blankCyclorama ? document.BlankCycloramaColorHex : null);
     }
 
     private static Id65FreshLevelMobyPresentation[]
@@ -2056,6 +2105,82 @@ public static class Id65FreshLevelSceneProjector
         canonical.Append("visibleMobyCount=").Append(visibleMobyPresentations.Count).Append('\n');
         foreach (Id65FreshLevelMobyPresentation presentation in visibleMobyPresentations)
             canonical.Append("visibleMoby=").Append(presentation.CanonicalSha256).Append('\n');
+        canonical.Append(
+            "authority=presentation-only|writesWorkspace=false|writesLockedBase=false" +
+            "|editable=false|nativePersistence=false|physicalMaterialization=false" +
+            "|runtimeObserved=false|createBin=false|runtimeCandidate=false" +
+            "|releasePromotion=false\n");
+        return Hash(canonical.ToString());
+    }
+
+    private static string
+        BindRemotePadMobyChoiceTerrainSetBlankCycloramaDocumentIdentity(
+            string graphCanonicalSha256,
+            string documentCanonicalSha256,
+            string documentContentSha256,
+            Id65AuthoringTerrainSetManifest terrainSet,
+            Id65RemotePadMobyKind kind,
+            IReadOnlyList<Id65FreshLevelMobyPresentation>
+                visibleMobyPresentations,
+            string blankCycloramaPresetId,
+            string blankCycloramaColorHex)
+    {
+        if (blankCycloramaPresetId !=
+                Id65AuthoringBlankCycloramaCatalog.BlankSlatePresetId ||
+            blankCycloramaColorHex !=
+                Id65AuthoringBlankCycloramaCatalog.BlankSlateColorHex)
+        {
+            throw new InvalidDataException(
+                "The schema-6 scene identity requires the exact Blank Slate intent.");
+        }
+
+        StringBuilder canonical = new(
+            "format=id65-fresh-level-authoring-scene-document-binding-terrain-set-blank-cyclorama-v1\n");
+        canonical.Append("profile=").Append(TerrainSetProfileId).Append('\n');
+        canonical.Append("schema=").Append(TerrainSetSchemaVersion).Append('\n');
+        canonical.Append("documentProfileId=")
+            .Append(Id65AuthoringEditorDocument
+                .RemotePadMobyChoiceTerrainSetBlankCycloramaDocumentProfileId)
+            .Append('\n');
+        canonical.Append("documentSchemaVersion=")
+            .Append(Id65AuthoringEditorDocument
+                .RemotePadMobyChoiceTerrainSetBlankCycloramaSchemaVersion)
+            .Append('\n');
+        canonical.Append("blankCycloramaCatalogSha256=")
+            .Append(Id65AuthoringBlankCycloramaCatalog.CanonicalSha256)
+            .Append('\n');
+        canonical.Append("blankCycloramaPresetId=")
+            .Append(blankCycloramaPresetId).Append('\n');
+        canonical.Append("blankCycloramaColorHex=")
+            .Append(blankCycloramaColorHex).Append('\n');
+        canonical.Append("choiceCatalogSha256=")
+            .Append(Id65RemotePadMobyChoiceCatalog.CanonicalSha256).Append('\n');
+        canonical.Append("mobyKind=")
+            .Append(Id65RemotePadMobyChoiceCatalog.GetKindId(kind)).Append('\n');
+        canonical.Append("terrainCatalogProfileId=")
+            .Append(Id65AuthoringTerrainSetCatalog.ProfileId).Append('\n');
+        canonical.Append("terrainCatalogSchemaVersion=")
+            .Append(Id65AuthoringTerrainSetCatalog.SchemaVersion).Append('\n');
+        canonical.Append("terrainSetManifestSha256=")
+            .Append(terrainSet.CanonicalSha256).Append('\n');
+        canonical.Append("activeTerrainUnitCount=")
+            .Append(terrainSet.ActiveUnits.Count).Append('\n');
+        foreach (Id65TerrainTriangleIntent unit in terrainSet.ActiveUnits)
+            canonical.Append("activeTerrainUnitId=").Append(unit.Id).Append('\n');
+        canonical.Append("graphCanonicalSha256=")
+            .Append(graphCanonicalSha256).Append('\n');
+        canonical.Append("documentCanonicalSha256=")
+            .Append(documentCanonicalSha256).Append('\n');
+        canonical.Append("documentContentSha256=")
+            .Append(documentContentSha256).Append('\n');
+        canonical.Append("visibleMobyCount=")
+            .Append(visibleMobyPresentations.Count).Append('\n');
+        foreach (Id65FreshLevelMobyPresentation presentation in
+                 visibleMobyPresentations)
+        {
+            canonical.Append("visibleMoby=")
+                .Append(presentation.CanonicalSha256).Append('\n');
+        }
         canonical.Append(
             "authority=presentation-only|writesWorkspace=false|writesLockedBase=false" +
             "|editable=false|nativePersistence=false|physicalMaterialization=false" +

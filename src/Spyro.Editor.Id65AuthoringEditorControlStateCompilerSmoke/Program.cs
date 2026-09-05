@@ -466,7 +466,10 @@ static bool Equivalent(
     string.Equals(
         left.RemotePadMobyPositionId,
         right.RemotePadMobyPositionId,
-        StringComparison.Ordinal);
+        StringComparison.Ordinal) &&
+    left.UsesBlankCyclorama == right.UsesBlankCyclorama &&
+    left.BlankCycloramaPresetId == right.BlankCycloramaPresetId &&
+    left.BlankCycloramaColorHex == right.BlankCycloramaColorHex;
 
 static void AssertFailClosed(
     Id65AuthoringEditorControlStateCompilation result,
@@ -494,12 +497,14 @@ static void AssertPublicSurface()
     PropertyInfo[] properties = state.GetProperties(
         BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
     Require(
-        state.IsPublic && state.IsSealed && properties.Length == 16 &&
-        properties.Count(property => property.PropertyType == typeof(bool)) == 10 &&
+        state.IsPublic && state.IsSealed && properties.Length == 19 &&
+        properties.Count(property => property.PropertyType == typeof(bool)) == 11 &&
         properties.Count(property => property.PropertyType == typeof(int)) == 1 &&
         properties.Select(property => property.Name).Order(StringComparer.Ordinal).SequenceEqual(
             new[]
             {
+                "BlankCycloramaColorHex",
+                "BlankCycloramaPresetId",
                 "IncludeGrassAtT107",
                 "IncludeGrassAtT88",
                 "IncludeRedGemAtT21",
@@ -515,7 +520,8 @@ static void AssertPublicSurface()
                 "TerrainSelectionSemantics",
                 "UsesRemotePadMobyChoice",
                 "UsesRemotePadTerrainSet",
-                "UsesRemotePadT107Grid"
+                "UsesRemotePadT107Grid",
+                "UsesBlankCyclorama"
             }.Order(StringComparer.Ordinal)) &&
         properties.All(property => !property.CanWrite),
         "The public control state lost its immutable choices, exact texture selector, or explicit T107 semantics.");
@@ -531,7 +537,7 @@ static void AssertPublicSurface()
         .OrderBy(method => method.Name, StringComparer.Ordinal)
         .ToArray();
     Require(
-        stateFactories.Length == 10 &&
+        stateFactories.Length == 13 &&
         stateFactories.Select(method => method.Name).SequenceEqual(
             new[]
             {
@@ -541,10 +547,13 @@ static void AssertPublicSurface()
                 "CreateRemotePadMobyChoice",
                 "CreateRemotePadMobyChoiceDefault",
                 "CreateRemotePadMobyChoiceTerrainSet",
+                "CreateRemotePadMobyChoiceTerrainSetBlankCyclorama",
+                "CreateRemotePadMobyChoiceTerrainSetBlankCycloramaDefault",
                 "CreateRemotePadMobyChoiceTerrainSetDefault",
                 "MigrateLegacyToRemotePadGrid",
                 "MigrateRemotePadGridToMobyChoice",
-                "MigrateRemotePadMobyChoiceToTerrainSet"
+                "MigrateRemotePadMobyChoiceToTerrainSet",
+                "MigrateRemotePadMobyChoiceTerrainSetToBlankCyclorama"
             }.Order(StringComparer.Ordinal)) &&
         stateFactories.All(method =>
             method.ReturnType == typeof(Id65AuthoringEditorControlState)),
@@ -560,6 +569,8 @@ static void AssertPublicSurface()
         Id65AuthoringEditorControlState.RemotePadGridSchemaVersion == 2 &&
         Id65AuthoringEditorControlState.RemotePadMobyChoiceSchemaVersion == 3 &&
         Id65AuthoringEditorControlState.RemotePadMobyChoiceTerrainSetSchemaVersion == 4 &&
+        Id65AuthoringEditorControlState
+            .RemotePadMobyChoiceTerrainSetBlankCycloramaSchemaVersion == 5 &&
         Enum.GetValues<Id65AuthoringEditorTerrainSelectionSemantics>().SequenceEqual(
             [
                 Id65AuthoringEditorTerrainSelectionSemantics.LegacyOptionalTriangleV1,

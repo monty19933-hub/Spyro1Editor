@@ -101,6 +101,10 @@ foreach (Topology topology in topologies)
 Require(stateCount == 108 && documentHashes.Count == 108,
     "The schema-5 state identity space is incomplete or ambiguous.");
 
+int schema6ProjectionStateCount;
+HashSet<string> schema6DocumentHashes = new(StringComparer.Ordinal);
+HashSet<string> schema6SceneHashes = new(StringComparer.Ordinal);
+
 List<string> mutableIds =
     [Id65AuthoringTerrainSetCatalog.Tile1Id, Id65AuthoringTerrainSetCatalog.Tile2Id];
 Id65AuthoringEditorDocument immutableDocument =
@@ -181,6 +185,13 @@ try
         cleanCuePath,
         Path.Combine(smokeRoot, "migration"),
         topologies);
+    schema6ProjectionStateCount = await VerifySchema6FreshSceneProjectionAsync(
+        cleanImagePath,
+        cleanCuePath,
+        Path.Combine(smokeRoot, "schema6-fresh-scene"),
+        topologies,
+        schema6DocumentHashes,
+        schema6SceneHashes);
 }
 
 finally
@@ -200,11 +211,247 @@ Require(graphHashes.Count == 4 &&
     graphHashes["both"] ==
         Id65FreshLevelSceneProjector.ExpectedTerrainSetBothGraphCanonicalSha256,
     "The four schema-5 scene topologies did not produce distinct graph identities.");
+Require(schema6ProjectionStateCount == 108 &&
+    schema6DocumentHashes.Count == 108 &&
+    schema6SceneHashes.Count == 108,
+    "The schema-6 fresh-scene projection state space is incomplete or ambiguous.");
 
 Console.WriteLine(
     "ID65_AUTHORING_REMOTE_PAD_TERRAIN_SET_CORE_SMOKE_OK " +
-    $"states={stateCount} graphs=" +
+    $"states={stateCount} schema6_projection_states={schema6ProjectionStateCount} " +
+    $"schema6_document_hashes={schema6DocumentHashes.Count} " +
+    $"schema6_scene_hashes={schema6SceneHashes.Count} " +
+    "schema5_unchanged=true schema6_identity_retained=true " +
+    "schema6_preset_color_retained=true forged_schema_profile_preset_color_rejected=true " +
+    "candidate=false create_bin=false graphs=" +
     string.Join(',', topologies.Select(item => $"{item.Key}:{graphHashes[item.Key]}")));
+
+static async Task<int> VerifySchema6FreshSceneProjectionAsync(
+    string cleanImagePath,
+    string cleanCuePath,
+    string workspaceRoot,
+    IReadOnlyList<Topology> topologies,
+    ISet<string> schema6DocumentHashes,
+    ISet<string> schema6SceneHashes)
+{
+    UnusedLevel65BlankLevelLabBootstrapResult schema5Bootstrap =
+        await UnusedLevel65BlankLevelLabBootstrapper.BootstrapAsync(new(
+            cleanImagePath,
+            cleanCuePath,
+            Path.Combine(workspaceRoot, "schema5-reference")));
+    UnusedLevel65BlankLevelLabBootstrapResult schema6Bootstrap =
+        await UnusedLevel65BlankLevelLabBootstrapper.BootstrapAsync(new(
+            cleanImagePath,
+            cleanCuePath,
+            Path.Combine(workspaceRoot, "schema6")));
+    string? schema5EnvelopeSha256 = null;
+    string? schema6EnvelopeSha256 = null;
+    bool schema6Created = false;
+    int stateCount = 0;
+    Id65AuthoringEditorDocument? forgedProjectionSource = null;
+
+    foreach (Topology topology in topologies)
+    {
+        foreach (Id65RemotePadMobyKind kind in Enum.GetValues<Id65RemotePadMobyKind>())
+        {
+            foreach (Id65RemotePadGrassT107Position position in
+                     Id65RemotePadGrassT107Catalog.Positions)
+            {
+                Id65AuthoringEditorControlState schema5State =
+                    Id65AuthoringEditorControlState
+                        .CreateRemotePadMobyChoiceTerrainSet(
+                            topology.Tile1,
+                            topology.Tile2,
+                            kind,
+                            position.PositionId);
+                Id65AuthoringEditorControlState schema6State =
+                    Id65AuthoringEditorControlState
+                        .MigrateRemotePadMobyChoiceTerrainSetToBlankCyclorama(
+                            schema5State);
+                forgedProjectionSource ??=
+                    Id65AuthoringEditorControlStateCompiler.Compile(schema6State).Document;
+
+                Id65AuthoringEditorDocumentWriteResult schema5Write =
+                    await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
+                        schema5Bootstrap.Paths,
+                        schema5Bootstrap.Manifest,
+                        schema5State,
+                        schema5EnvelopeSha256);
+                schema5EnvelopeSha256 = schema5Write.EnvelopeCanonicalSha256;
+
+                Id65AuthoringEditorDocumentWriteResult schema6Write;
+                if (!schema6Created)
+                {
+                    Id65AuthoringEditorDocumentWriteResult schema5Seed =
+                        await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
+                            schema6Bootstrap.Paths,
+                            schema6Bootstrap.Manifest,
+                            schema5State,
+                            expectedPriorEnvelopeCanonicalSha256: null);
+                    schema6Write = await Id65AuthoringEditorDocumentWorkspaceWriter
+                        .MigrateRemotePadMobyChoiceTerrainSetToBlankCycloramaExactAsync(
+                            schema6Bootstrap.Paths,
+                            schema6Bootstrap.Manifest,
+                            schema6State,
+                            schema5Seed.EnvelopeCanonicalSha256);
+                    Require(schema6Write.ExplicitBlankCycloramaMigrationPerformed,
+                        "The first schema-6 scene state was not created by the explicit schema-5-to-6 writer.");
+                    schema6Created = true;
+                }
+                else
+                {
+                    schema6Write =
+                        await Id65AuthoringEditorDocumentWorkspaceWriter.SaveExactAsync(
+                            schema6Bootstrap.Paths,
+                            schema6Bootstrap.Manifest,
+                            schema6State,
+                            schema6EnvelopeSha256);
+                    Require(!schema6Write.ExplicitBlankCycloramaMigrationPerformed,
+                        "An ordinary schema-6 scene mutation claimed another migration.");
+                }
+                schema6EnvelopeSha256 = schema6Write.EnvelopeCanonicalSha256;
+
+                Id65FreshLevelSceneProjection schema5Scene =
+                    Id65FreshLevelSceneProjector.ProjectExact(
+                        UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+                        schema5Write.Document);
+                Id65FreshLevelSceneProjection schema6Scene =
+                    Id65FreshLevelSceneProjector.ProjectExact(
+                        UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+                        schema6Write.Document);
+
+                Require(schema6Write.Document.SchemaVersion ==
+                        Id65AuthoringEditorDocument
+                            .RemotePadMobyChoiceTerrainSetBlankCycloramaSchemaVersion &&
+                    schema6Write.Document.ProfileId ==
+                        Id65AuthoringEditorDocument
+                            .RemotePadMobyChoiceTerrainSetBlankCycloramaDocumentProfileId &&
+                    schema6Write.Document.ReadModelSchemaVersion ==
+                        Id65AuthoringEditorDocumentReadModel
+                            .RemotePadMobyChoiceTerrainSetBlankCycloramaReadModelSchemaVersion &&
+                    schema6Write.Document.UsesBlankCyclorama &&
+                    schema6Write.Document.BlankCycloramaPresetId == "blank-slate-v1" &&
+                    schema6Write.Document.BlankCycloramaColorHex == "#263447" &&
+                    schema6Write.Document.StaticAuthoringCycloramaCatalogSha256 ==
+                        Id65AuthoringBlankCycloramaCatalog.CanonicalSha256 &&
+                    schema6Scene.UsesBlankCyclorama &&
+                    schema6Scene.BlankCycloramaPresetId == "blank-slate-v1" &&
+                    schema6Scene.BlankCycloramaColorHex == "#263447" &&
+                    schema6Scene.DocumentCanonicalSha256 ==
+                        schema6Write.DocumentCanonicalSha256 &&
+                    schema6Scene.DocumentContentSha256 ==
+                        schema6Write.DocumentContentSha256 &&
+                    schema6Scene.CanonicalSha256 != schema5Scene.CanonicalSha256 &&
+                    schema6Scene.GraphCanonicalSha256 ==
+                        schema5Scene.GraphCanonicalSha256 &&
+                    schema6Scene.ActiveTerrainUnitIds.SequenceEqual(
+                        schema5Scene.ActiveTerrainUnitIds) &&
+                    schema6Scene.TerrainSetManifestSha256 ==
+                        schema5Scene.TerrainSetManifestSha256 &&
+                    schema6Scene.StructuralTerrainPresent ==
+                        schema5Scene.StructuralTerrainPresent &&
+                    schema6Scene.RemotePadMobyKind == schema5Scene.RemotePadMobyKind &&
+                    schema6Scene.VisibleMobyCount == schema5Scene.VisibleMobyCount &&
+                    schema6Scene.VisibleMobyTrueIndexes.SequenceEqual(
+                        schema5Scene.VisibleMobyTrueIndexes) &&
+                    schema6Scene.Geometry.Polygons.Count ==
+                        schema5Scene.Geometry.Polygons.Count &&
+                    schema6Scene.Geometry.LowDetailPolygons.Count ==
+                        schema5Scene.Geometry.LowDetailPolygons.Count &&
+                    schema6Scene.ProfileId ==
+                        Id65FreshLevelSceneProjector.TerrainSetProfileId &&
+                    schema6Scene.SchemaVersion ==
+                        Id65FreshLevelSceneProjector.TerrainSetSchemaVersion &&
+                    schema6Scene.UsesTerrainSetProjection &&
+                    schema6Scene.IsPresentationOnly &&
+                    !schema6Scene.NativePersistenceEnabled &&
+                    !schema6Scene.PhysicalMaterializationEnabled &&
+                    !schema6Scene.RuntimeObserved &&
+                    !schema6Scene.WritesWorkspace &&
+                    !schema6Scene.WritesLockedBase &&
+                    !schema6Scene.AuthorizesCreateBin &&
+                    !schema6Scene.AuthorizesRuntimeCandidate &&
+                    !schema6Scene.AuthorizesReleasePromotion &&
+                    !schema5Scene.UsesBlankCyclorama &&
+                    schema5Scene.BlankCycloramaPresetId is null &&
+                    schema5Scene.BlankCycloramaColorHex is null,
+                    $"Schema-6 fresh-scene projection lost identity, exact schema-5-equivalent presentation, or offline authority for {topology.Key}/{kind}/{position.PositionId}.");
+                RequireEquivalentMobyPresentation(schema5Scene, schema6Scene);
+                AssertMobyRowPolicy(schema6Scene, kind);
+                AssertTopologyGeometry(schema6Scene.Geometry, topology);
+                Require(schema6DocumentHashes.Add(
+                        schema6Write.DocumentCanonicalSha256),
+                    "Distinct schema-6 documents aliased one canonical identity.");
+                Require(schema6SceneHashes.Add(schema6Scene.CanonicalSha256),
+                    "Distinct schema-6 documents aliased one fresh-scene identity.");
+                stateCount++;
+            }
+        }
+    }
+
+    string forgedProjectionJson = forgedProjectionSource!.CanonicalJson;
+    ExpectRejected("schema-6 fresh-scene forged document schema", () =>
+        ProjectForgedCanonicalDocument(forgedProjectionJson.Replace(
+            "\"schemaVersion\":6",
+            "\"schemaVersion\":5",
+            StringComparison.Ordinal)));
+    ExpectRejected("schema-6 fresh-scene forged document profile", () =>
+        ProjectForgedCanonicalDocument(forgedProjectionJson.Replace(
+            Id65AuthoringEditorDocument
+                .RemotePadMobyChoiceTerrainSetBlankCycloramaDocumentProfileId,
+            Id65AuthoringEditorDocument
+                .RemotePadMobyChoiceTerrainSetDocumentProfileId,
+            StringComparison.Ordinal)));
+    ExpectRejected("schema-6 fresh-scene forged preset", () =>
+        ProjectForgedCanonicalDocument(forgedProjectionJson.Replace(
+            "blank-slate-v1",
+            "forged-blank",
+            StringComparison.Ordinal)));
+    ExpectRejected("schema-6 fresh-scene forged color", () =>
+        ProjectForgedCanonicalDocument(forgedProjectionJson.Replace(
+            "#263447",
+            "#000000",
+            StringComparison.Ordinal)));
+    return stateCount;
+}
+
+static void ProjectForgedCanonicalDocument(string canonicalJson)
+{
+    Id65AuthoringEditorDocument document = Id65AuthoringEditorDocument.Parse(
+        System.Text.Encoding.UTF8.GetBytes(canonicalJson));
+    _ = Id65FreshLevelSceneProjector.ProjectExact(
+        UnusedLevel65BlankLevelLabProfileRegistry.Definition,
+        Id65AuthoringEditorDocumentWorkspaceInspector.InspectCanonicalDocument(
+            document.SerializeUtf8()));
+}
+
+static void RequireEquivalentMobyPresentation(
+    Id65FreshLevelSceneProjection schema5,
+    Id65FreshLevelSceneProjection schema6)
+{
+    Require(schema5.VisibleMobyCount == schema6.VisibleMobyCount,
+        "Schema-6 changed the schema-5 visible-Moby count.");
+    for (int index = 0; index < schema5.VisibleMobyCount; index++)
+    {
+        Id65FreshLevelMobyPresentation expected = schema5.VisibleMobyPresentations[index];
+        Id65FreshLevelMobyPresentation actual = schema6.VisibleMobyPresentations[index];
+        Require(actual.MobyKind == expected.MobyKind &&
+            actual.MobyTypeName == expected.MobyTypeName &&
+            actual.PlacementId == expected.PlacementId &&
+            actual.PositionId == expected.PositionId &&
+            actual.PositionLabel == expected.PositionLabel &&
+            actual.EditorX == expected.EditorX && actual.EditorY == expected.EditorY &&
+            actual.EditorZ == expected.EditorZ && actual.RawX == expected.RawX &&
+            actual.RawY == expected.RawY && actual.RawZ == expected.RawZ &&
+            actual.TargetTrueIndex == expected.TargetTrueIndex &&
+            actual.ActorId == expected.ActorId && actual.YawByte == expected.YawByte &&
+            actual.ExactYawByte == expected.ExactYawByte &&
+            actual.SupportHandle == expected.SupportHandle &&
+            actual.SupportCollisionTrueIndex == expected.SupportCollisionTrueIndex &&
+            actual.RowSha256 == expected.RowSha256,
+            "Schema-6 changed the schema-5 Moby presentation semantics.");
+    }
+}
 
 static async Task VerifyDirectSchema5PersistenceAsync(
     string cleanImagePath,
@@ -256,7 +503,9 @@ static async Task VerifyDirectSchema5PersistenceAsync(
             write.Document);
         Require(scene.ProfileId == Id65FreshLevelSceneProjector.TerrainSetProfileId &&
             scene.SchemaVersion == Id65FreshLevelSceneProjector.TerrainSetSchemaVersion &&
-            scene.UsesTerrainSetProjection && scene.IsPresentationOnly &&
+            scene.UsesTerrainSetProjection && !scene.UsesBlankCyclorama &&
+            scene.BlankCycloramaPresetId is null &&
+            scene.BlankCycloramaColorHex is null && scene.IsPresentationOnly &&
             !scene.NativePersistenceEnabled &&
             !scene.PhysicalMaterializationEnabled && !scene.RuntimeObserved &&
             !scene.WritesWorkspace && !scene.WritesLockedBase &&

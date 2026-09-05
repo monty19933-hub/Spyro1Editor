@@ -103,6 +103,10 @@ spyro-*.md
 *.jpeg
 *.tga
 *.webp
+!docs/runtime-evidence/assets/unused-level-65-remote-blank-collision-winding-repair-v2/**/*.png
+!docs/runtime-evidence/assets/unused-level-65-remote-blank-collision-winding-repair-v2/**/*.json
+!docs/runtime-evidence/assets/unused-level-65-remote-blank-collision-winding-repair-v2/**/*.ndjson
+!docs/runtime-evidence/assets/unused-level-65-remote-blank-collision-winding-repair-v2/**/*.mov
 !docs/runtime-evidence/assets/unused-level-65-remote-blank-environment-header-repair-v3/**/*.png
 !docs/runtime-evidence/assets/unused-level-65-remote-blank-environment-header-repair-v3/**/*.json
 !docs/runtime-evidence/assets/unused-level-65-remote-blank-environment-header-repair-v3/**/*.ndjson
@@ -133,6 +137,9 @@ release/
 
 # Logs and transient command output
 *.log
+!docs/runtime-evidence/assets/unused-level-65-remote-blank-collision-winding-repair-v2/**/*.log
+docs/runtime-evidence/assets/unused-level-65-remote-blank-collision-winding-repair-v2/capture-staging/id65v2-20260811t235043z-9d4b0adbaf8e3b35/
+docs/runtime-evidence/assets/unused-level-65-remote-blank-collision-winding-repair-v2/capture-staging/.capture-coordinator.lock
 !docs/runtime-evidence/assets/unused-level-65-remote-blank-environment-header-repair-v3/**/*.log
 docs/runtime-evidence/assets/unused-level-65-remote-blank-environment-header-repair-v3/.capture-coordinator-authority.lock
 docs/runtime-evidence/assets/unused-level-65-remote-blank-environment-header-repair-v3/capture-staging/.capture-coordinator.lock
@@ -187,6 +194,7 @@ unsafe-tests/
 !/tools/Build-SpyroEditorRelease.sh
 !/tools/Run-SpyroEditorOfflineQa.sh
 !/tools/Verify-SpyroEditorRelease.sh
+!/tools/SpyroEditor.macOS.community.entitlements
 !/tools/Watch-SpyroId65RuntimeState.py
 !/tools/Capture-SpyroId65V3RuntimeSession.py
 !/tools/Test-Capture-SpyroId65V3RuntimeSession.py

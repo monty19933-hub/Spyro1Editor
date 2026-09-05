@@ -20,6 +20,7 @@ public abstract class Id65AuthoringEditorDocumentWriteResult
     public abstract bool ExplicitLegacyToRemotePadMigrationPerformed { get; }
     public abstract bool ExplicitRemotePadMobyChoiceMigrationPerformed { get; }
     public abstract bool ExplicitRemotePadTerrainSetMigrationPerformed { get; }
+    public abstract bool ExplicitBlankCycloramaMigrationPerformed { get; }
     public bool ReplacedExistingDocument => !CreatedNewDocument;
     public bool AutomaticMigrationPerformed => false;
     public string DocumentCanonicalSha256 => Document.DocumentCanonicalSha256;
@@ -94,6 +95,7 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             explicitLegacyToRemotePadMigration: false,
             explicitRemotePadMobyChoiceMigration: false,
             explicitRemotePadTerrainSetMigration: false,
+            explicitBlankCycloramaMigration: false,
             cancellationToken);
 
     /// <summary>
@@ -125,6 +127,7 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             explicitLegacyToRemotePadMigration: true,
             explicitRemotePadMobyChoiceMigration: false,
             explicitRemotePadTerrainSetMigration: false,
+            explicitBlankCycloramaMigration: false,
             cancellationToken);
     }
 
@@ -159,6 +162,7 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             explicitLegacyToRemotePadMigration: false,
             explicitRemotePadMobyChoiceMigration: true,
             explicitRemotePadTerrainSetMigration: false,
+            explicitBlankCycloramaMigration: false,
             cancellationToken);
     }
 
@@ -191,6 +195,44 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             explicitLegacyToRemotePadMigration: false,
             explicitRemotePadMobyChoiceMigration: false,
             explicitRemotePadTerrainSetMigration: true,
+            explicitBlankCycloramaMigration: false,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Performs the explicit schema-5 to schema-6 semantic-family transition.
+    /// Terrain and Moby choices must already match the prior schema-5 document;
+    /// the only admitted addition is the exact code-owned blank cyclorama.
+    /// </summary>
+    public static async Task<Id65AuthoringEditorDocumentWriteResult>
+        MigrateRemotePadMobyChoiceTerrainSetToBlankCycloramaExactAsync(
+            UnusedLevel65BlankLevelLabWorkspacePaths paths,
+            UnusedLevel65BlankLevelLabManifest expectedLabManifest,
+            Id65AuthoringEditorControlState blankCycloramaState,
+            string expectedPriorEnvelopeCanonicalSha256,
+            CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(blankCycloramaState);
+        if (!blankCycloramaState.UsesBlankCyclorama ||
+            blankCycloramaState.BlankCycloramaPresetId !=
+                Id65AuthoringBlankCycloramaCatalog.BlankSlatePresetId ||
+            blankCycloramaState.BlankCycloramaColorHex !=
+                Id65AuthoringBlankCycloramaCatalog.BlankSlateColorHex ||
+            string.IsNullOrWhiteSpace(expectedPriorEnvelopeCanonicalSha256))
+        {
+            throw new InvalidDataException(
+                "Explicit schema-5-to-6 migration requires the exact blank-cyclorama state and prior envelope identity.");
+        }
+
+        return await SaveCoreAsync(
+            paths,
+            expectedLabManifest,
+            blankCycloramaState,
+            expectedPriorEnvelopeCanonicalSha256,
+            explicitLegacyToRemotePadMigration: false,
+            explicitRemotePadMobyChoiceMigration: false,
+            explicitRemotePadTerrainSetMigration: false,
+            explicitBlankCycloramaMigration: true,
             cancellationToken);
     }
 
@@ -202,6 +244,7 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         bool explicitLegacyToRemotePadMigration,
         bool explicitRemotePadMobyChoiceMigration,
         bool explicitRemotePadTerrainSetMigration,
+        bool explicitBlankCycloramaMigration,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(paths);
@@ -238,7 +281,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
                 createdNewDocument: expectedPriorEnvelopeCanonicalSha256 == null,
                 explicitLegacyToRemotePadMigration,
                 explicitRemotePadMobyChoiceMigration,
-                explicitRemotePadTerrainSetMigration);
+                explicitRemotePadTerrainSetMigration,
+                explicitBlankCycloramaMigration);
         Id65AuthoringEditorDocumentProjectionInputs projectionInputs =
             new(nativeInputs);
         return explicitLegacyToRemotePadMigration
@@ -270,6 +314,16 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
                         prepareResult,
                         expectedPriorEnvelopeCanonicalSha256!,
                         cancellationToken)
+            : explicitBlankCycloramaMigration
+                ? await Id65AuthoringEditorDocumentStore
+                    .MigrateRemotePadMobyChoiceTerrainSetToBlankCycloramaPreparedAsync(
+                        paths,
+                        expectedLabManifest,
+                        compilation.Document,
+                        projectionInputs,
+                        prepareResult,
+                        expectedPriorEnvelopeCanonicalSha256!,
+                        cancellationToken)
             : await Id65AuthoringEditorDocumentStore.SavePreparedAsync(
                 paths,
                 expectedLabManifest,
@@ -287,7 +341,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         bool createdNewDocument,
         bool explicitLegacyToRemotePadMigration,
         bool explicitRemotePadMobyChoiceMigration,
-        bool explicitRemotePadTerrainSetMigration)
+        bool explicitRemotePadTerrainSetMigration,
+        bool explicitBlankCycloramaMigration)
     {
         Id65AuthoringEditorDocumentEnvelopeIdentity identity = new(
             stored.Document,
@@ -303,7 +358,9 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             StaticAuthoringSceneGraphSha256 = stored.StaticAuthoringSceneGraphSha256,
             StaticAuthoringProjectionSha256 = stored.StaticAuthoringProjectionSha256,
             StaticAuthoringTerrainManifestSha256 =
-                stored.StaticAuthoringTerrainManifestSha256
+                stored.StaticAuthoringTerrainManifestSha256,
+            StaticAuthoringCycloramaCatalogSha256 =
+                stored.StaticAuthoringCycloramaCatalogSha256
         };
         Id65AuthoringEditorDocumentReadModel readModel = new(identity);
         Id65AuthoringEditorControlState recovered =
@@ -316,7 +373,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             createdNewDocument,
             explicitLegacyToRemotePadMigration,
             explicitRemotePadMobyChoiceMigration,
-            explicitRemotePadTerrainSetMigration);
+            explicitRemotePadTerrainSetMigration,
+            explicitBlankCycloramaMigration);
         ValidateResult(
             result,
             compilation,
@@ -324,7 +382,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             createdNewDocument,
             explicitLegacyToRemotePadMigration,
             explicitRemotePadMobyChoiceMigration,
-            explicitRemotePadTerrainSetMigration);
+            explicitRemotePadTerrainSetMigration,
+            explicitBlankCycloramaMigration);
         return result;
     }
 
@@ -454,6 +513,15 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             !string.Equals(
                 expected.RemotePadMobyPositionId,
                 actual.RemotePadMobyPositionId,
+                StringComparison.Ordinal) ||
+            expected.UsesBlankCyclorama != actual.UsesBlankCyclorama ||
+            !string.Equals(
+                expected.BlankCycloramaPresetId,
+                actual.BlankCycloramaPresetId,
+                StringComparison.Ordinal) ||
+            !string.Equals(
+                expected.BlankCycloramaColorHex,
+                actual.BlankCycloramaColorHex,
                 StringComparison.Ordinal))
         {
             throw new InvalidDataException(
@@ -468,7 +536,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         bool createdNewDocument,
         bool expectedExplicitLegacyMigration,
         bool expectedExplicitMobyChoiceMigration,
-        bool expectedExplicitTerrainSetMigration)
+        bool expectedExplicitTerrainSetMigration,
+        bool expectedExplicitBlankCycloramaMigration)
     {
         bool expectedNativeValidation =
             !result.Document.UsesStaticRemotePadAuthoring ||
@@ -486,6 +555,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
                 expectedExplicitMobyChoiceMigration ||
             result.ExplicitRemotePadTerrainSetMigrationPerformed !=
                 expectedExplicitTerrainSetMigration ||
+            result.ExplicitBlankCycloramaMigrationPerformed !=
+                expectedExplicitBlankCycloramaMigration ||
             result.AutomaticMigrationPerformed ||
             !result.ExplicitSaveInvocationRequired ||
             !result.LegacyTerrainLayerConflictChecked ||
@@ -528,7 +599,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
             bool createdNewDocument,
             bool explicitLegacyToRemotePadMigration,
             bool explicitRemotePadMobyChoiceMigration,
-            bool explicitRemotePadTerrainSetMigration)
+            bool explicitRemotePadTerrainSetMigration,
+            bool explicitBlankCycloramaMigration)
         {
             ArgumentNullException.ThrowIfNull(state);
             ArgumentNullException.ThrowIfNull(document);
@@ -545,6 +617,8 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
                 explicitRemotePadMobyChoiceMigration;
             ExplicitRemotePadTerrainSetMigrationPerformed =
                 explicitRemotePadTerrainSetMigration;
+            ExplicitBlankCycloramaMigrationPerformed =
+                explicitBlankCycloramaMigration;
         }
 
         public override Id65AuthoringEditorControlState ControlState { get; }
@@ -553,5 +627,6 @@ public static class Id65AuthoringEditorDocumentWorkspaceWriter
         public override bool ExplicitLegacyToRemotePadMigrationPerformed { get; }
         public override bool ExplicitRemotePadMobyChoiceMigrationPerformed { get; }
         public override bool ExplicitRemotePadTerrainSetMigrationPerformed { get; }
+        public override bool ExplicitBlankCycloramaMigrationPerformed { get; }
     }
 }

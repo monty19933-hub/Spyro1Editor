@@ -626,6 +626,7 @@ static void AssertResult(
         !result.ExplicitLegacyToRemotePadMigrationPerformed &&
         !result.ExplicitRemotePadMobyChoiceMigrationPerformed &&
         !result.ExplicitRemotePadTerrainSetMigrationPerformed &&
+        !result.ExplicitBlankCycloramaMigrationPerformed &&
         !result.AutomaticMigrationPerformed &&
         result.ExplicitSaveInvocationRequired &&
         result.LegacyTerrainLayerConflictChecked &&
@@ -685,6 +686,7 @@ static void AssertRemoteResult(
         result.ExplicitLegacyToRemotePadMigrationPerformed == explicitMigration &&
         !result.ExplicitRemotePadMobyChoiceMigrationPerformed &&
         !result.ExplicitRemotePadTerrainSetMigrationPerformed &&
+        !result.ExplicitBlankCycloramaMigrationPerformed &&
         !result.AutomaticMigrationPerformed &&
         result.ExplicitSaveInvocationRequired &&
         result.LegacyTerrainLayerConflictChecked &&
@@ -755,14 +757,20 @@ static void AssertPublicSurface()
         method.Name == "MigrateRemotePadGridToMobyChoiceExactAsync");
     MethodInfo? migrateTerrainSet = methods.SingleOrDefault(method =>
         method.Name == "MigrateRemotePadMobyChoiceToTerrainSetExactAsync");
+    MethodInfo? migrateBlankCyclorama = methods.SingleOrDefault(method =>
+        method.Name ==
+            "MigrateRemotePadMobyChoiceTerrainSetToBlankCycloramaExactAsync");
     Require(
-        methods.Length == 4 && save != null && migrate != null &&
+        methods.Length == 5 && save != null && migrate != null &&
         migrateMobyChoice != null && migrateTerrainSet != null &&
+        migrateBlankCyclorama != null &&
         save.ReturnType == typeof(Task<Id65AuthoringEditorDocumentWriteResult>) &&
         migrate.ReturnType == typeof(Task<Id65AuthoringEditorDocumentWriteResult>) &&
         migrateMobyChoice.ReturnType ==
             typeof(Task<Id65AuthoringEditorDocumentWriteResult>) &&
         migrateTerrainSet.ReturnType ==
+            typeof(Task<Id65AuthoringEditorDocumentWriteResult>) &&
+        migrateBlankCyclorama.ReturnType ==
             typeof(Task<Id65AuthoringEditorDocumentWriteResult>) &&
         save.GetParameters().Select(parameter => parameter.ParameterType)
             .SequenceEqual(exactParameters) &&
@@ -771,8 +779,11 @@ static void AssertPublicSurface()
         migrateMobyChoice.GetParameters().Select(parameter => parameter.ParameterType)
             .SequenceEqual(exactParameters) &&
         migrateTerrainSet.GetParameters().Select(parameter => parameter.ParameterType)
+            .SequenceEqual(exactParameters) &&
+        migrateBlankCyclorama.GetParameters()
+            .Select(parameter => parameter.ParameterType)
             .SequenceEqual(exactParameters),
-        "The writer lost its normal-save plus three explicit migration surfaces or exposed arbitrary bytes/paths/delegates.");
+        "The writer lost its normal-save plus four explicit migration surfaces or exposed arbitrary bytes/paths/delegates.");
     Require(
         result.GetProperties(BindingFlags.Instance | BindingFlags.Public).All(property =>
             !(property.PropertyType == typeof(string) &&
@@ -925,7 +936,10 @@ static bool Equivalent(
     left.T107RemotePadPositionId == right.T107RemotePadPositionId &&
     left.RemotePadMobyKind == right.RemotePadMobyKind &&
     left.RemotePadMobyPositionId == right.RemotePadMobyPositionId &&
-    left.TerrainSelectionSemantics == right.TerrainSelectionSemantics;
+    left.TerrainSelectionSemantics == right.TerrainSelectionSemantics &&
+    left.UsesBlankCyclorama == right.UsesBlankCyclorama &&
+    left.BlankCycloramaPresetId == right.BlankCycloramaPresetId &&
+    left.BlankCycloramaColorHex == right.BlankCycloramaColorHex;
 
 static bool HasPathSegment(string path, string segment) =>
     path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)

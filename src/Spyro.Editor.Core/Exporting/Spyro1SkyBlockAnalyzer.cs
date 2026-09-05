@@ -314,6 +314,19 @@ public static class Spyro1SkyBlockAnalyzer
         return TryParseSkyBlock(bytes, 0, out ParsedSkyBlock? block) && block?.ByteLength == bytes.Length;
     }
 
+    internal static Spyro1SkyBlockLayout AnalyzeStandaloneSkyBlock(byte[] bytes)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        byte[] exact = bytes.ToArray();
+        if (!TryParseSkyBlock(exact, 0, out ParsedSkyBlock? block) ||
+            block is null || block.ByteLength != exact.Length)
+        {
+            throw new InvalidDataException(
+                "The bytes are not one exact standalone Spyro 1 sky block.");
+        }
+        return ToLayout(exact, block, index: 0);
+    }
+
     public static byte[] NormalizeStandaloneSkyFile(byte[] input)
     {
         if (input.Length < 24)

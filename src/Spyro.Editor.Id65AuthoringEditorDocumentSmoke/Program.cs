@@ -1185,9 +1185,14 @@ static void VerifySourceTopology(string repositoryRoot)
         .ToArray();
     string[] expectedOwners =
     [
+        Path.Combine("src", "Spyro.Editor.Core", "Exporting", "Id65AuthoringBlankCycloramaCompiler.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Exporting", "Id65AuthoringEditorDocument.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Exporting", "Id65AuthoringRemotePadCompositeCompiler.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Exporting", "Id65AuthoringRemotePadMobyChoicePhysicalCompiler.cs"),
+        Path.Combine("src", "Spyro.Editor.Core", "Exporting", "Id65AuthoringRemotePadTerrainSetPhysicalCompiler.cs"),
+        Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringBlankCycloramaAggregatePlanProjector.cs"),
+        Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringBlankCycloramaAggregateCandidateMaterializer.cs"),
+        Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringBlankCycloramaAggregateCandidateWorkspaceMaterializer.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringEditorAggregateCandidateMaterializer.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringRemotePadAggregateCandidateMaterializer.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringRemotePadAggregateCandidateWorkspaceMaterializer.cs"),
@@ -1200,6 +1205,9 @@ static void VerifySourceTopology(string repositoryRoot)
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "PortableProjectMigration.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringRemotePadAggregatePlanProjector.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringRemotePadMobyChoiceAggregatePlanProjector.cs"),
+        Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringRemotePadTerrainSetAggregateCandidateMaterializer.cs"),
+        Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringRemotePadTerrainSetAggregateCandidateWorkspaceMaterializer.cs"),
+        Path.Combine("src", "Spyro.Editor.Core", "Persistence", "Id65AuthoringRemotePadTerrainSetAggregatePlanProjector.cs"),
         Path.Combine("src", "Spyro.Editor.Core", "Workspace", "Id65FreshLevelSceneProjection.cs"),
         Path.Combine("src", "Spyro.Editor.Id65AuthoringEditorDocumentSmoke", "Program.cs")
     ];

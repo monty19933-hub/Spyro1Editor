@@ -155,6 +155,44 @@ internal static class RawMode2Form1SectorIntegrity
     }
 
     /// <summary>
+    /// Rebuilds one copied MODE2/2352 Form 1 sector entirely in memory. The
+    /// caller's buffer is never changed. This is used by guarded publication
+    /// planners that must prove exact physical-sector output without writing a
+    /// candidate image.
+    /// </summary>
+    internal static byte[] RebuildRawSectorCopy(
+        ReadOnlySpan<byte> raw,
+        long lba)
+    {
+        RequireMode2Form1(raw, lba);
+        RequireMsfAddress(raw, lba);
+        byte[] output = raw.ToArray();
+        RebuildRawSector(output);
+        RequireRawSectorIntegrity(output, lba);
+        return output;
+    }
+
+    /// <summary>
+    /// Verifies the exact MSF, duplicated MODE2 Form 1 subheader, and EDC/ECC
+    /// bytes for one in-memory raw sector.
+    /// </summary>
+    internal static void RequireRawSectorIntegrity(
+        ReadOnlySpan<byte> raw,
+        long lba)
+    {
+        RequireMode2Form1(raw, lba);
+        RequireMsfAddress(raw, lba);
+        byte[] expected = raw.ToArray();
+        RebuildRawSector(expected);
+        if (!raw.Slice(2072, RawSectorBytes - 2072)
+            .SequenceEqual(expected.AsSpan(2072, RawSectorBytes - 2072)))
+        {
+            throw new InvalidDataException(
+                $"Raw sector {lba} failed in-memory MODE2 Form 1 EDC/ECC verification.");
+        }
+    }
+
+    /// <summary>
     /// Rewrites only explicitly allowed MODE2 XA submode flag bits in both
     /// duplicated subheaders, then rebuilds the sector integrity fields. This
     /// is used when an ISO file grows and its EOR/EOF marker must move from the
