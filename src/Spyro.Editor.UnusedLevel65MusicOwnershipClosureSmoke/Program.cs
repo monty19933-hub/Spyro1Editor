@@ -3,6 +3,12 @@ using System.Text;
 using System.Text.Json;
 using Spyro.Editor.Core.Exporting;
 
+if (args.SequenceEqual(new[] { "--source-free-music-selection" }))
+{
+    Id65MusicSelectionCases.Run();
+    return;
+}
+
 string root = Path.GetFullPath(args.Length > 0 ? args[0] : ".");
 string locked = Path.Combine(
     root,

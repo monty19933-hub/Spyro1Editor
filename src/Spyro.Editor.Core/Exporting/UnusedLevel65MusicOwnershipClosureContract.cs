@@ -218,35 +218,6 @@ internal static class UnusedLevel65MusicOwnershipClosure
         0x238B0, 0x23A88, 0x23EA0, 0x2407C
     ];
 
-    private static readonly (string Name, int Offset, string Before, string After, string Semantics)[]
-        WitnessCodePatchSpecs =
-    [
-        (
-            "preload-scus-high-in-condition-branch-delay",
-            0x1C57C,
-            "00000000",
-            "0780083C",
-            "The existing condition-branch delay slot loads t0=0x80070000; t0 is caller-saved and otherwise dead in this function."),
-        (
-            "preload-continuous-index-in-prng-jal-delay",
-            0x1C584,
-            "00000000",
-            "6459098D",
-            "The existing PRNG JAL delay slot loads t1=[0x80075964]; the exact PRNG callee does not write t0 or t1."),
-        (
-            "select-bounded-row-and-retain-id65-flag",
-            0x1C594,
-            "0780033C6459638C0780043C5CF08424402803002128A300802805002128A400",
-            "2300262D2118260150F00425402803002128A300802805002128A4000100C638",
-            "For retail, (index + 1) against base row -1 equals the original row; ID65 reads row 34, then retains an ID65-only +1 flag."),
-        (
-            "promote-row34-source-to-slot35-and-reload-timer",
-            0x1C5D8,
-            "0780033CC858638C",
-            "21104600C858038D",
-            "Only ID65 adds one to row 34's source value 34, then the unchanged lookup resolves mapping slot 35; the timer reload uses pinned t0.")
-    ];
-
     public static UnusedLevel65MusicOwnershipClosureContract Inspect(
         string workspaceRoot,
         string lockedDisplayNameImagePath,
@@ -420,17 +391,21 @@ internal static class UnusedLevel65MusicOwnershipClosure
 
         byte[] outputExecutable = lockedExecutable.ToArray();
         List<UnusedLevel65MusicClosurePatch> patches = [];
-        foreach ((string name, int offset, string beforeHex, string afterHex, string semantics) in WitnessCodePatchSpecs)
+        Id65MusicSelectionPlan selection = Id65BuiltInMusicSelectionCompiler.Compile(
+            Id65MusicSourceCertificate.FromFrozenExecutable(lockedExecutable), lockedExecutable, WitnessTrackId);
+        foreach (Id65MusicFilePatch patch in selection.Patches)
         {
             patches.Add(ApplyInMemoryPatch(
                 outputExecutable,
                 lockedLayout,
-                name,
-                offset,
-                beforeHex,
-                afterHex,
-                semantics));
+                patch.Name,
+                patch.FileOffset,
+                patch.BeforeHex,
+                patch.AfterHex,
+                patch.Semantics));
         }
+        if (!outputExecutable.SequenceEqual(selection.CopyOutputExecutable()))
+            throw new InvalidDataException("The physical music-closure adapter changed the pure leaf output.");
 
         MusicTrackEntry witnessTrack = MusicTrackCatalog.Find(WitnessTrackId)
             ?? throw new InvalidDataException("The Town Square witness track disappeared from the native catalog.");
@@ -458,14 +433,6 @@ internal static class UnusedLevel65MusicOwnershipClosure
         }
         if (!genericExporterRejected)
             throw new InvalidDataException("The generic LevelMusicPatchExporter no longer fails closed for ID65.");
-        patches.Add(ApplyInMemoryPatch(
-            outputExecutable,
-            lockedLayout,
-            "author-independent-slot35-witness-track",
-            InitialSlotFileOffset,
-            "13000000",
-            ToHex(Int32Bytes(WitnessTrackId)),
-            "The independent ID65 initial slot selects built-in Town Square track 26 for the static witness transaction."));
         RequireHash(Hash(outputExecutable), WitnessOutputExecutableSha256, "in-memory witness executable");
         RequireHash(
             Hash(outputExecutable.AsSpan(LateConsumerFileOffset, LateConsumerByteLength)),
@@ -944,13 +911,6 @@ internal static class UnusedLevel65MusicOwnershipClosure
             .Select(index => BinaryPrimitives.ReadInt32LittleEndian(
                 bytes.AsSpan(offset + index * sizeof(int), sizeof(int))))
             .ToArray();
-
-    private static byte[] Int32Bytes(int value)
-    {
-        byte[] bytes = new byte[sizeof(int)];
-        BinaryPrimitives.WriteInt32LittleEndian(bytes, value);
-        return bytes;
-    }
 
     private static uint Runtime(int fileOffset) => checked(RuntimeBias + (uint)fileOffset);
 

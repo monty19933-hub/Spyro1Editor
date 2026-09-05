@@ -27,6 +27,7 @@ CORE_CASES = (
     ("Id65AuthoringMobyDependencyBundleCompilerSmoke", "NATIVE_SCENE_PROPERTIES_LINKER_SMOKE_OK"),
     ("CombinedExportPublicationSmoke", "COMBINED_EXPORT_PUBLICATION_SMOKE_OK"),
     ("DiagnosticsBundleSmoke", "DIAGNOSTICS_BUNDLE_SMOKE_OK"),
+    ("UnusedLevel65MusicOwnershipClosureSmoke", "ID65_MUSIC_SELECTION_COMPILER_SMOKE_OK"),
     ("StructuralCompositionSmoke", "STRUCTURAL_COMPOSITION_SMOKE_OK"),
     ("CrossLevelCandidateFingerprintSmoke", "CROSS_LEVEL_CANDIDATE_FINGERPRINT_SMOKE_OK"),
     ("TextureHistoryWorkspaceSmoke", "TEXTURE_HISTORY_WORKSPACE_SMOKE_OK"),
@@ -41,6 +42,7 @@ CORE_CASES = (
 # Never execute their fixture/materializer path as part of the default gate.
 CASE_ARGUMENTS = {
     "Id65AuthoringMobyDependencyBundleCompilerSmoke": ["--source-free-properties-linker"],
+    "UnusedLevel65MusicOwnershipClosureSmoke": ["--source-free-music-selection"],
 }
 
 
