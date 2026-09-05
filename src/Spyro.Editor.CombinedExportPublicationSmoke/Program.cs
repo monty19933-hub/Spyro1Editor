@@ -59,8 +59,9 @@ try
                 $"{(upstreamFailure ? "Upstream failure" : "No ready patches")} destroyed previous usable output: {Path.GetFileName(path)}");
     }
     string transactionCoverage = ArtifactTransactionCases.Run(fixtureRoot);
+    string newOnlyCoverage = NewArtifactPublicationCases.Run(fixtureRoot);
     string diagnosticCoverage = PublishedDiagnosticsCases.Run(window, fixtureRoot);
-    Console.WriteLine($"COMBINED_EXPORT_PUBLICATION_SMOKE_OK noPatchPreservesPrevious=1 upstreamFailurePreservesPrevious=1 {transactionCoverage} {diagnosticCoverage}");
+    Console.WriteLine($"COMBINED_EXPORT_PUBLICATION_SMOKE_OK noPatchPreservesPrevious=1 upstreamFailurePreservesPrevious=1 {transactionCoverage} {newOnlyCoverage} {diagnosticCoverage}");
     return 0;
 }
 finally

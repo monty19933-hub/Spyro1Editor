@@ -22,11 +22,31 @@ public static class ExportArtifactTransaction
         CancellationToken cancellationToken = default) =>
         PublishCore(outputDirectory, artifacts, cancellationToken, null);
 
+    /// <summary>
+    /// Publishes an immutable new set. All destinations must remain absent;
+    /// existence is checked under the publication lock and renames never replace.
+    /// Duplicate callers must verify/reuse a complete set outside this primitive.
+    /// Null staged paths (deletion) are not meaningful in this mode.
+    /// </summary>
+    public static ExportArtifactPublicationResult PublishNew(
+        string outputDirectory,
+        IReadOnlyList<ExportArtifactReplacement> artifacts,
+        CancellationToken cancellationToken = default) =>
+        PublishCoreWithPolicy(outputDirectory, artifacts, cancellationToken, null, createNewOnly: true);
+
     private static ExportArtifactPublicationResult PublishCore(
         string outputDirectory,
         IReadOnlyList<ExportArtifactReplacement> artifacts,
         CancellationToken cancellationToken,
-        Action<string>? checkpoint)
+        Action<string>? checkpoint) =>
+        PublishCoreWithPolicy(outputDirectory, artifacts, cancellationToken, checkpoint, createNewOnly: false);
+
+    private static ExportArtifactPublicationResult PublishCoreWithPolicy(
+        string outputDirectory,
+        IReadOnlyList<ExportArtifactReplacement> artifacts,
+        CancellationToken cancellationToken,
+        Action<string>? checkpoint,
+        bool createNewOnly)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
         ArgumentNullException.ThrowIfNull(artifacts);
@@ -52,7 +72,11 @@ public static class ExportArtifactTransaction
                 throw new InvalidDataException("An artifact cannot replace the publication lock or recovery namespace.");
             RequireRegularFileOrAbsent(root, artifact.DestinationPath);
             if (artifact.StagedPath == null)
+            {
+                if (createNewOnly)
+                    throw new InvalidDataException("New-only publication cannot delete companion artifacts.");
                 continue;
+            }
             if (!artifact.StagedPath.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
                 !sources.Add(artifact.StagedPath))
                 throw new InvalidDataException("Each staged artifact must be a distinct file within the output directory.");
@@ -78,6 +102,8 @@ public static class ExportArtifactTransaction
         bool retainRecovery = false;
         try
         {
+            if (createNewOnly && entries.Any(entry => File.Exists(entry.DestinationPath)))
+                throw new IOException("New-only publication refuses an existing or incomplete candidate artifact set.");
             Directory.CreateDirectory(recovery);
             byte[] lockContents = Encoding.UTF8.GetBytes(recovery + "\n");
             publicationLock.Write(lockContents);
@@ -110,6 +136,8 @@ public static class ExportArtifactTransaction
                 RequireRegularFileOrAbsent(root, entries[index].DestinationPath);
                 if (File.Exists(entries[index].DestinationPath))
                 {
+                    if (createNewOnly)
+                        throw new IOException("A candidate destination appeared during new-only publication; no replacement is allowed.");
                     File.Move(entries[index].DestinationPath, backups[index]);
                     backedUp[index] = true;
                 }
