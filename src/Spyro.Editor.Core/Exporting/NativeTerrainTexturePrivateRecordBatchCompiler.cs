@@ -95,17 +95,20 @@ public static class NativeTerrainTexturePrivateRecordBatchCompiler
     /// <summary>
     /// Converts the ordinary portion of a normal terrain preflight into the
     /// retail-preimage patches consumed by the structural composer. The
-    /// preflight must be built without the native relocation manifest; seeing
-    /// legacy relocation/page patches here means two allocators would own the
-    /// same transaction and is therefore a hard failure.
+    /// preflight must be built without the native relocation manifest. The
+    /// separate LP RGB appearance dependency is the only permitted native
+    /// texture patch: legacy relocation/page patches would create two allocators.
     /// </summary>
     public static IReadOnlyList<NativeTerrainTextureRecordExistingPatch>
         ConvertOrdinaryTerrainPlan(TerrainPatchPlan terrainPlan)
     {
         ArgumentNullException.ThrowIfNull(terrainPlan);
-        if (terrainPlan.NativeTextureRelocationBytePatchCount != 0 ||
+        int companionCount = terrainPlan.Patches.Count(patch =>
+            patch.Kind == TerrainPatchExporter.NativeTextureLowDetailCompanionPatchKind);
+        if (terrainPlan.NativeTextureRelocationBytePatchCount != companionCount ||
             terrainPlan.Patches.Any(patch =>
-                (patch.Kind ?? "").StartsWith("native-terrain-texture-", StringComparison.OrdinalIgnoreCase)))
+                (patch.Kind ?? "").StartsWith("native-terrain-texture-", StringComparison.OrdinalIgnoreCase) &&
+                patch.Kind != TerrainPatchExporter.NativeTextureLowDetailCompanionPatchKind))
         {
             throw new InvalidOperationException(
                 "The terrain preflight already contains legacy native-texture relocation patches. Rebuild it without the relocation manifest so the private-record batch is the sole allocator/writer.");
@@ -137,6 +140,7 @@ public static class NativeTerrainTexturePrivateRecordBatchCompiler
                 throw new InvalidDataException(
                     $"Terrain patch {patch.Kind}/{patch.RuntimeKey} does not contain one complete equal-length before/after preimage.");
             }
+            ValidateLowDetailAppearancePatch(patch.Kind, before, after);
             converted.Add(new NativeTerrainTextureRecordExistingPatch(
                 wadOffset,
                 before,
@@ -148,6 +152,21 @@ public static class NativeTerrainTexturePrivateRecordBatchCompiler
             .OrderBy(patch => patch.WadOffset)
             .ThenBy(patch => patch.Before.Length)
             .ToArray();
+    }
+
+    private static void ValidateLowDetailAppearancePatch(string? kind, byte[] before, byte[] after)
+    {
+        if (!(kind ?? "").StartsWith("native-terrain-texture-", StringComparison.OrdinalIgnoreCase))
+            return;
+        if (kind != TerrainPatchExporter.NativeTextureLowDetailCompanionPatchKind)
+            throw new InvalidOperationException("The private texture batch cannot consume another descriptor/page allocator's patches.");
+        if (before.Length == 0 || before.Length != after.Length || before.Length % 4 != 0)
+            throw new InvalidDataException("An LP appearance dependency must contain complete native RGB-command words.");
+        for (int offset = 3; offset < before.Length; offset += 4)
+        {
+            if (before[offset] is not (0 or 0x30) || after[offset] != before[offset])
+                throw new InvalidDataException("An LP appearance dependency must preserve every native command byte.");
+        }
     }
 
     public static NativeTerrainTexturePrivateRecordBatchPlan BuildPlan(
@@ -247,6 +266,8 @@ public static class NativeTerrainTexturePrivateRecordBatchCompiler
 
             foreach (NativeTerrainTextureRelocationEdit edit in request.SavedEdits)
                 ValidateCanonicalSavedEdit(edit);
+            foreach (NativeTerrainTextureRecordExistingPatch patch in request.OrdinaryLevelDataPatches)
+                ValidateLowDetailAppearancePatch(patch.Kind, patch.Before, patch.After);
 
             NativeTerrainTextureRelocationEdit[] existing = request.SavedEdits
                 .Where(edit => !edit.UsesAppendedPrivateRecord)

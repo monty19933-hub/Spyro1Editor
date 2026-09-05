@@ -13369,38 +13369,21 @@ public sealed partial class MainWindow : Window
         IReadOnlyList<PrivateTextureAggregateSavedWriterScope> targets)
     {
         ArgumentNullException.ThrowIfNull(targets);
-        if (sectorRelocationDestinationCount <= 0)
-            return null;
-
-        List<string> blocked = [];
-        foreach (PrivateTextureAggregateSavedWriterScope target in targets)
-        {
-            List<string> writers = [];
-            if (target.HasObjectEdits)
-                writers.Add("object/path/chest edits");
-            if (target.HasCustomTerrainTextures)
-                writers.Add("custom/imported-image terrain textures");
-            if (target.HasSkyboxEdit)
-                writers.Add("skybox/environment edits");
-            if (target.HasLevelTextEdit)
-                writers.Add("level-name edits");
-            if (target.HasLevelMusicEdit)
-                writers.Add("music edits");
-            if (!target.IsPrivateTextureDestination && target.HasTerrainEdits)
-                writers.Add("ordinary terrain edits outside the private-texture transaction");
-            if (!target.IsPrivateTextureDestination && target.HasNativeTerrainTextureRelocations)
-                writers.Add("native texture edits outside the private-texture transaction");
-            if (writers.Count > 0)
-                blocked.Add($"{target.LevelName}: {string.Join(", ", writers)}");
-        }
-
-        if (blocked.Count == 0)
-            return null;
-        return
-            $"The multi-level private-texture build needs one aggregate +0x{wadGrowthBytes:X} WAD/ISO relocation for {sectorRelocationDestinationCount} destination(s), " +
-            "so it cannot safely continue into unrelated exporters that still use retail WAD offsets. " +
-            $"Unrebased saved writers: {string.Join("; ", blocked)}. " +
-            "Temporarily disable those edits and build the private terrain textures alone. Ordinary terrain and native-texture edits for the private destinations are already folded into the aggregate transaction.";
+        if (sectorRelocationDestinationCount < 0 || wadGrowthBytes < 0 ||
+            sectorRelocationDestinationCount == 0 && wadGrowthBytes != 0 ||
+            sectorRelocationDestinationCount > 0 && wadGrowthBytes < (long)sectorRelocationDestinationCount * 2048)
+            throw new InvalidDataException("Invalid aggregate structural-growth summary.");
+        // Compatibility adapter for the existing app regression entrypoint.
+        // Production preflight below derives effects from each exact writer plan.
+        StructuralExportAddressEffect[] effects = Enumerable.Range(0, sectorRelocationDestinationCount)
+            .Select(index => new StructuralExportAddressEffect($"aggregate-{index}",
+                StructuralAddressChanges.LevelDataComponents | StructuralAddressChanges.NativeSceneSubfiles |
+                StructuralAddressChanges.FollowingWadEntries | StructuralAddressChanges.ExecutableExtent,
+                index == 0 ? wadGrowthBytes - (sectorRelocationDestinationCount - 1) * 2048 : 2048)).ToArray();
+        return StructuralExportCompositionPolicy.FindBlocker(effects, targets.Select(target => new StructuralSavedWriterScope(
+            target.LevelName, target.IsPrivateTextureDestination, target.HasObjectEdits, target.HasTerrainEdits,
+            target.HasCustomTerrainTextures, target.HasNativeTerrainTextureRelocations, target.HasLevelTextEdit,
+            target.HasLevelMusicEdit, target.HasSkyboxEdit)).ToArray());
     }
 
     private async Task<CombinedTestBinResult> CreateAllSavedEditsTestAsync(
@@ -13458,28 +13441,41 @@ public sealed partial class MainWindow : Window
             .ToArray();
         if (appendedPrivateTargets.Length > 0)
         {
+            List<(EditedLevelExportTarget Target, string GateReason, AppendedPrivateTerrainTexturePlanStep Step)>
+                privatePlans = [];
+            foreach (EditedLevelExportTarget privateTarget in appendedPrivateTargets)
+            {
+                string privatePrefix = appendedPrivateTargets.Length == 1
+                    ? Path.Combine(tempDir, $"{step + 1:00}-{SafeOutputPart(privateTarget.Level.DisplayName)}-private-terrain")
+                    : Path.Combine(tempDir, $"private-plan-{SafeOutputPart(privateTarget.Level.DisplayName)}");
+                AppendedPrivateTerrainTexturePlanStep privatePlan = await PlanAppendedPrivateTerrainTextureStepAsync(
+                    privateTarget, currentImage, currentCue, tempDir, privatePrefix);
+                if (!AppendedPrivateTerrainTextureResearchGate.TryAllow(
+                        privatePlan.Plan.SourceBinding, privatePlan.Plan.WriterKind,
+                        privatePlan.Plan.AppendedPrivateEdits.Count, privatePlan.Plan.StructuralGrowthPolicy,
+                        out string privateGateReason))
+                    throw new InvalidOperationException(privateGateReason);
+                privatePlans.Add((privateTarget, privateGateReason, privatePlan));
+            }
+            HashSet<string> privateTargetKeys = privatePlans
+                .Select(item => LevelCatalog.NormalizeKey(item.Target.Level.Key))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            StructuralExportAddressEffect[] privateAddressEffects = privatePlans
+                .Select(item => StructuralExportAddressEffect.FromPrivateTexturePlan(item.Step.Plan)).ToArray();
+            // One shared preflight dominates BOTH writer branches and every
+            // downstream writer. No disposable image is mutated before it passes.
+            StructuralExportCompositionPolicy.RequireCompatible(privateAddressEffects,
+                targets.Select(target => new StructuralSavedWriterScope(
+                    target.Level.DisplayName, privateTargetKeys.Contains(LevelCatalog.NormalizeKey(target.Level.Key)),
+                    target.HasObjectEdits, target.HasTerrainEdits, target.HasCustomTerrainTextures,
+                    target.HasNativeTerrainTextureRelocations, target.HasLevelTextEdit,
+                    target.HasLevelMusicEdit, target.HasSkyboxEdit)).ToArray());
             if (appendedPrivateTargets.Length == 1)
             {
-                EditedLevelExportTarget privateTarget = appendedPrivateTargets[0];
-                string outputPrefix = Path.Combine(
-                    tempDir,
-                    $"{++step:00}-{SafeOutputPart(privateTarget.Level.DisplayName)}-private-terrain");
-                AppendedPrivateTerrainTextureBuildStep privateStep =
-                    await ExportAppendedPrivateTerrainTextureStepAsync(
-                        privateTarget,
-                        currentImage,
-                        currentCue,
-                        tempDir,
-                        outputPrefix);
-                if (!AppendedPrivateTerrainTextureResearchGate.TryAllow(
-                        privateStep.Export.Plan.SourceBinding,
-                        privateStep.Export.Plan.WriterKind,
-                        privateStep.Export.Plan.AppendedPrivateEdits.Count,
-                        privateStep.Export.Plan.StructuralGrowthPolicy,
-                        out string privateGateReason))
-                {
-                    throw new InvalidOperationException(privateGateReason);
-                }
+                step++;
+                (EditedLevelExportTarget privateTarget, string privateGateReason, AppendedPrivateTerrainTexturePlanStep privatePlan) = privatePlans[0];
+                AppendedPrivateTerrainTextureBuildStep privateStep = new(privatePlan.OrdinaryPlan,
+                    await NativeTerrainTexturePrivateRecordBatchCompiler.ExportAsync(privatePlan.Plan));
                 if (!privateStep.Export.SourceImagePreserved ||
                     !privateStep.Export.ExactReadbackVerified ||
                     !privateStep.Export.RuntimeTargetReadbackVerified ||
@@ -13530,31 +13526,6 @@ public sealed partial class MainWindow : Window
             }
             else
             {
-                List<(EditedLevelExportTarget Target, string GateReason, AppendedPrivateTerrainTexturePlanStep Step)>
-                    privatePlans = [];
-                foreach (EditedLevelExportTarget privateTarget in appendedPrivateTargets)
-                {
-                    AppendedPrivateTerrainTexturePlanStep privatePlan =
-                        await PlanAppendedPrivateTerrainTextureStepAsync(
-                            privateTarget,
-                            currentImage,
-                            currentCue,
-                            tempDir,
-                            Path.Combine(
-                                tempDir,
-                                $"private-plan-{SafeOutputPart(privateTarget.Level.DisplayName)}"));
-                    if (!AppendedPrivateTerrainTextureResearchGate.TryAllow(
-                            privatePlan.Plan.SourceBinding,
-                            privatePlan.Plan.WriterKind,
-                            privatePlan.Plan.AppendedPrivateEdits.Count,
-                            privatePlan.Plan.StructuralGrowthPolicy,
-                            out string privateGateReason))
-                    {
-                        throw new InvalidOperationException(privateGateReason);
-                    }
-                    privatePlans.Add((privateTarget, privateGateReason, privatePlan));
-                }
-
                 string outputPrefix = Path.Combine(
                     tempDir,
                     $"{++step:00}-multi-level-private-terrain");
@@ -13569,24 +13540,9 @@ public sealed partial class MainWindow : Window
                             .ResolveAggregateStructuralGrowthPolicy(
                                 privatePlans.Select(item =>
                                     item.Step.Plan.StructuralGrowthPolicy))));
-                HashSet<string> privateTargetKeys = privatePlans
-                    .Select(item => LevelCatalog.NormalizeKey(item.Target.Level.Key))
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                string? aggregateWriterBlocker = FindGrowingPrivateTextureAggregateWriterBlocker(
-                    multiPlan.SectorRelocationDestinationCount,
-                    multiPlan.WadGrowthBytes,
-                    targets.Select(target => new PrivateTextureAggregateSavedWriterScope(
-                        target.Level.DisplayName,
-                        privateTargetKeys.Contains(LevelCatalog.NormalizeKey(target.Level.Key)),
-                        target.HasObjectEdits,
-                        target.HasTerrainEdits,
-                        target.HasCustomTerrainTextures,
-                        target.HasNativeTerrainTextureRelocations,
-                        target.HasLevelTextEdit,
-                        target.HasLevelMusicEdit,
-                        target.HasSkyboxEdit)).ToArray());
-                if (!string.IsNullOrWhiteSpace(aggregateWriterBlocker))
-                    throw new InvalidOperationException(aggregateWriterBlocker);
+                if (multiPlan.WadGrowthBytes != privateAddressEffects.Sum(effect => effect.WadGrowthBytes) ||
+                    multiPlan.SectorRelocationDestinationCount != privateAddressEffects.Count(effect => effect.WadGrowthBytes > 0))
+                    throw new InvalidDataException("The aggregate writer changed its preflighted structural address effects.");
                 NativeTerrainTexturePrivateMultiLevelBatchExportResult multiExport =
                     await NativeTerrainTexturePrivateMultiLevelBatchCompiler.ExportAsync(multiPlan);
                 if (!multiExport.SourceImagePreserved ||
@@ -16105,6 +16061,8 @@ public sealed partial class MainWindow : Window
     private readonly Dictionary<string, PrivateTerrainBuildPlanCacheEntry>
         _privateTerrainBuildPlanCache = new(StringComparer.OrdinalIgnoreCase);
 
+    // Dedicated texture-only regression route. Combined saved-edit builds must
+    // use the shared all-destination composition preflight before exporting.
     private async Task<AppendedPrivateTerrainTextureBuildStep>
         ExportAppendedPrivateTerrainTextureStepAsync(
             EditedLevelExportTarget target,
@@ -16115,11 +16073,7 @@ public sealed partial class MainWindow : Window
     {
         AppendedPrivateTerrainTexturePlanStep planned =
             await PlanAppendedPrivateTerrainTextureStepAsync(
-                target,
-                sourceImage,
-                sourceCue,
-                tempDirectory,
-                outputPrefix);
+                target, sourceImage, sourceCue, tempDirectory, outputPrefix);
         NativeTerrainTexturePrivateRecordBatchExportResult export =
             await NativeTerrainTexturePrivateRecordBatchCompiler.ExportAsync(planned.Plan);
         return new AppendedPrivateTerrainTextureBuildStep(planned.OrdinaryPlan, export);
@@ -16208,10 +16162,15 @@ public sealed partial class MainWindow : Window
             throw new InvalidDataException(
                 $"{target.Level.DisplayName}'s private texture rows have no saved face assignments for the structural composer.");
         }
-        TerrainPatchPlan ordinaryPlan = ordinaryResult.Plan;
+        TerrainPatchPlan ordinaryPlan = await Task.Run(() =>
+            TerrainPatchExporter.AddPrivateTextureAppearanceDependencies(
+                ordinaryResult.Plan, target.Level, savedEdits));
         IReadOnlyList<NativeTerrainTextureRecordExistingPatch> ordinaryPatches =
             NativeTerrainTexturePrivateRecordBatchCompiler.ConvertOrdinaryTerrainPlan(
                 ordinaryPlan);
+        await File.WriteAllTextAsync(
+            ordinaryResult.OutputPlanPath,
+            JsonSerializer.Serialize(ordinaryPlan, new JsonSerializerOptions { WriteIndented = true }));
         string wadAnalysisPath = await EnsureSkyboxWadAnalysisAsync(sourceImage);
         NativeTerrainTexturePrivateRecordBatchRequest request = new(
             sourceImage,

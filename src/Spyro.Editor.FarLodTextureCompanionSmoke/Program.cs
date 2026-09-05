@@ -3,6 +3,7 @@ using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Levels;
 
 RunSyntheticCompanionSmoke();
+PrivateAppearanceCases.Run(BuildSyntheticSector);
 if (args.Contains("--live-artisans", StringComparer.OrdinalIgnoreCase))
     RunLiveArtisansPlanSmoke();
 

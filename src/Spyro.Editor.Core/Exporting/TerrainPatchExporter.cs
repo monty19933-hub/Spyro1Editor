@@ -23,6 +23,7 @@ public static class TerrainPatchExporter
     private const int HqFourBitPaletteByteLength = 16 * 2;
     private const int HqEightBitPaletteByteLength = 256 * 2;
     private const string AtomicTerrainSwapBlockPrefix = "[atomic terrain swap blocked] ";
+    public const string NativeTextureLowDetailCompanionPatchKind = "native-terrain-texture-lp-companion";
     private const int MaxSourceDerivedAppendedCollisionTrianglesPerSpan = 64;
     private static readonly int[][] TextureDescriptorMatrices =
     [
@@ -1336,6 +1337,148 @@ public static class TerrainPatchExporter
                             : "Terrain side-wall and structural collision authoring still needs its separate decoded/rebuilt-index research path.",
                 lowDetailTextureCompanion.Note
             ]);
+    }
+
+    /// <summary>
+    /// Completes an ordinary retail-preimage terrain plan with far-LOD colour
+    /// dependencies for the exclusive private-record compiler. This does not
+    /// allocate or transplant texture pages/records and must not be exported
+    /// without the matching source-bound private texture batch.
+    /// </summary>
+    public static TerrainPatchPlan AddPrivateTextureAppearanceDependencies(
+        TerrainPatchPlan ordinaryPlan,
+        LevelDefinition targetLevel,
+        IReadOnlyList<NativeTerrainTextureRelocationEdit> savedEdits)
+    {
+        ArgumentNullException.ThrowIfNull(ordinaryPlan);
+        ArgumentNullException.ThrowIfNull(targetLevel);
+        ArgumentNullException.ThrowIfNull(savedEdits);
+        if (ordinaryPlan.TextureAssetWadIndex != targetLevel.SourceWadEntry ||
+            !string.Equals(ordinaryPlan.LevelKey, targetLevel.Key, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("The private appearance plan belongs to another destination level.");
+        if (ordinaryPlan.NativeTextureRelocationCount != 0 ||
+            ordinaryPlan.NativeTextureRelocationBytePatchCount != 0 ||
+            ordinaryPlan.NativeTextureRelocations.Count != 0 ||
+            ordinaryPlan.Patches.Any(patch => (patch.Kind ?? "").StartsWith("native-terrain-texture-", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("Private appearance dependencies require an ordinary plan without an allocator or an existing LP companion.");
+        if (!savedEdits.Any(edit => edit.UsesAppendedPrivateRecord))
+            throw new InvalidOperationException("Private appearance dependencies require at least one appended-private texture row.");
+        if (savedEdits.Select(edit => edit.TargetTextureId).Distinct().Count() != savedEdits.Count)
+            throw new InvalidDataException("Private appearance dependencies contain duplicate destination texture ids.");
+        foreach (NativeTerrainTextureRelocationEdit edit in savedEdits)
+        {
+            if (edit.TargetTextureId < 0 || edit.TargetTextureId >= NativeTerrainTextureRecordAppendBuilder.MaximumTextureRecordCount ||
+                edit.DonorWadEntry < 0 || edit.DonorTextureId < 0 ||
+                edit.UsesAppendedPrivateRecord &&
+                (edit.TargetWadEntry != targetLevel.SourceWadEntry || edit.MaterialTemplateTextureId < 0 ||
+                 edit.MaterialTemplateTextureId >= edit.SourceTextureRecordCount || edit.TargetTextureId < edit.SourceTextureRecordCount))
+                throw new InvalidDataException("A private appearance dependency has an invalid source/destination material binding.");
+        }
+        if (!File.Exists(ordinaryPlan.SourceSearchPath) ||
+            (!File.Exists(ordinaryPlan.RamPath) && !IsSourceDerivedSourceSearch(ordinaryPlan.SourceSearchPath)))
+            throw new InvalidDataException("Private texture appearance requires an exact source-sector map; far-LOD dependencies cannot be omitted.");
+
+        DiscLayout layout = DiscImage.DetectLayout(ordinaryPlan.SourceImagePath);
+        using FileStream image = File.OpenRead(ordinaryPlan.SourceImagePath);
+        AssetSubfileInfo model = GetAssetSubfileInfo(image, layout, targetLevel.SourceWadEntry, ModelSubfileIndex);
+        byte[] modelBytes = ReadWadBytes(image, layout, model.AbsoluteWadOffset, checked((int)model.SubfileSize));
+        Dictionary<string, SourceSectorLocation> sectors = LoadCompletePrivateTextureSourceSectors(
+            ordinaryPlan.SourceSearchPath, targetLevel, modelBytes, model.AbsoluteWadOffset);
+        Dictionary<long, TerrainPatch> patches = ordinaryPlan.Patches.ToDictionary(
+            patch => ParseRequiredLong(patch.WadRelativeOffset, "patch.wadRelativeOffset"));
+        NativeTerrainTextureLowDetailCompanionSummary summary = AddNativeTerrainTextureAppearancePatches(
+            targetLevel, savedEdits, sectors, image, layout, patches);
+        TerrainPatch[] completed = patches.Values
+            .OrderBy(patch => ParseRequiredLong(patch.WadRelativeOffset, "patch.wadRelativeOffset"))
+            .ToArray();
+        return ordinaryPlan with
+        {
+            PatchCount = completed.Length,
+            TotalPatchedBytes = completed.Sum(patch => patch.ByteLength),
+            NativeTextureRelocationBytePatchCount = completed.Count(patch => patch.Kind == NativeTextureLowDetailCompanionPatchKind),
+            Patches = completed,
+            Notes = ordinaryPlan.Notes.Concat([
+                "Private texture appearance only: LP RGB dependencies are compiled after staged HP assignments. Texture allocation remains exclusively owned by the matching private-record batch; the representative-colour approximation is not runtime acceptance.",
+                summary.Note]).ToArray()
+        };
+    }
+
+    private static Dictionary<string, SourceSectorLocation> LoadCompletePrivateTextureSourceSectors(
+        string sourceSearchPath, LevelDefinition targetLevel, byte[] model, long modelWadOffset)
+    {
+        // The native environment component follows the complete texture table.
+        // Its pointer directory, not a cache's self-reported count or a scan for
+        // plausible headers, is the authority for full destination coverage.
+        if (model.Length < 16)
+            throw new InvalidDataException("Private appearance level data has no native component directory.");
+        int environment = checked((int)ReadUInt32(model, 0));
+        int textureCount = checked((int)ReadUInt32(model, 4));
+        if (textureCount is <= 0 or > 128 || environment != 8 + textureCount * 184 || environment > model.Length - 8)
+            throw new InvalidDataException("Private appearance texture/environment component boundary is invalid.");
+        int environmentLength = checked((int)ReadUInt32(model, environment));
+        int count = checked((int)ReadUInt32(model, environment + 4));
+        if (count is <= 0 or > 4096 || environmentLength < 8L + count * 4L || environmentLength > model.Length - environment)
+            throw new InvalidDataException("Private appearance native environment pointer directory is invalid.");
+        Dictionary<long, int> nativeSectors = [];
+        HashSet<long> nativeLpOnlySectors = [];
+        for (int index = 0; index < count; index++)
+        {
+            int start = checked(environment + 4 + (int)ReadUInt32(model, environment + 8 + index * 4));
+            int end = index + 1 < count
+                ? checked(environment + 4 + (int)ReadUInt32(model, environment + 12 + index * 4))
+                : checked(environment + environmentLength);
+            if (start < environment + 8 + count * 4 || start >= end || end > environment + environmentLength)
+                throw new InvalidDataException("Private appearance native sector pointers are not unique and ordered within the environment component.");
+            Id65EnvironmentSectorHeaderReadback header = Id65EnvironmentSectorHeaderContract.ReadPointerSpan(
+                model.AsSpan(start, end - start), end - start, requireExactEnd: false, $"private appearance native sector {index}");
+            nativeSectors.Add(modelWadOffset + start, header.ExactSectorByteLength);
+            if (header.HighDetailFaceCount == 0)
+                nativeLpOnlySectors.Add(modelWadOffset + start);
+        }
+
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(sourceSearchPath));
+        JsonElement root = document.RootElement;
+        string levelKey = JsonValue.GetString(root, "levelKey");
+        if (!string.IsNullOrWhiteSpace(levelKey) && !string.Equals(levelKey, targetLevel.Key, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("Private appearance source map belongs to another level.");
+        if (!root.TryGetProperty("results", out JsonElement rows) || rows.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("Private appearance source map has no complete sector rows.");
+        Dictionary<string, SourceSectorLocation> result = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<long, long> runtimeToWad = [];
+        Dictionary<long, long> wadToRuntime = [];
+        foreach (JsonElement row in rows.EnumerateArray())
+        {
+            string key = JsonValue.GetString(row, "edit");
+            string runtimeOffsetText = JsonValue.GetString(row, "sectorOffset");
+            if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(runtimeOffsetText) ||
+                !row.TryGetProperty("fullSectorHits", out JsonElement hits) || hits.ValueKind != JsonValueKind.Array || hits.GetArrayLength() != 1)
+                throw new InvalidDataException("Every private appearance source-map row requires exactly one unambiguous native sector hit.");
+            long runtimeOffset = ParseRequiredLong(runtimeOffsetText, "source map sectorOffset");
+            long wadOffset = JsonValue.GetInt64(hits[0], "wadOffset", -1);
+            int size = JsonValue.GetInt32(row, "sectorSizeBytes", -1);
+            if (runtimeOffset < 0 || !nativeSectors.TryGetValue(wadOffset, out int nativeSize) || nativeSize != size ||
+                runtimeToWad.TryGetValue(runtimeOffset, out long existingWad) && existingWad != wadOffset ||
+                wadToRuntime.TryGetValue(wadOffset, out long existingRuntime) && existingRuntime != runtimeOffset ||
+                !result.TryAdd(key, new SourceSectorLocation(key, runtimeOffsetText, wadOffset, size)))
+                throw new InvalidDataException("Private appearance source-map identities/ranges are duplicated, contradictory, or outside the native sector directory.");
+            runtimeToWad[runtimeOffset] = wadOffset;
+            wadToRuntime[wadOffset] = runtimeOffset;
+        }
+        foreach (long wadOffset in nativeSectors.Keys)
+        {
+            if (wadToRuntime.ContainsKey(wadOffset))
+                continue;
+            if (!nativeLpOnlySectors.Contains(wadOffset))
+                throw new InvalidDataException($"Private appearance source map omits native HP sector 0x{wadOffset:X}; refusing incomplete far-LOD dependencies.");
+            // The cached editor geometry is HP-only (Artisans legitimately
+            // omits 34 LP-only sectors). Include those sectors from the native
+            // directory itself: no HP faces means no imported texture binding,
+            // but their exact LP bytes still participate in the full inventory.
+            string key = $"native-directory-lp-only-0x{wadOffset:X}";
+            if (!result.TryAdd(key, new SourceSectorLocation(key, $"0x{wadOffset:X}", wadOffset, nativeSectors[wadOffset])))
+                throw new InvalidDataException("Private appearance source map collides with a native directory identity.");
+        }
+        return result;
     }
 
     private static bool IsStructuralTerrainEdit(string mode)
@@ -4623,6 +4766,18 @@ public static class TerrainPatchExporter
                 "Native texture relocation summaries do not cover every requested target; refusing a partial far-LOD companion.");
         }
 
+        return AddNativeTerrainTextureAppearancePatches(
+            targetLevel, provedEdits, sourceSectorHits, imageStream, layout, patchesByWadOffset);
+    }
+
+    private static NativeTerrainTextureLowDetailCompanionSummary AddNativeTerrainTextureAppearancePatches(
+        LevelDefinition targetLevel,
+        IReadOnlyList<NativeTerrainTextureRelocationEdit> edits,
+        IReadOnlyDictionary<string, SourceSectorLocation> sourceSectorHits,
+        FileStream imageStream,
+        DiscLayout layout,
+        Dictionary<long, TerrainPatch> patchesByWadOffset)
+    {
         if (sourceSectorHits.Count == 0)
         {
             return NativeTerrainTextureLowDetailCompanionSummary.NotNeeded(
@@ -4631,14 +4786,14 @@ public static class TerrainPatchExporter
 
         Dictionary<int, NativeTextureAppearanceAsset> appearanceAssets = [];
         Dictionary<int, NativeTerrainTextureLowDetailReplacement> replacements = [];
-        foreach (NativeTerrainTextureRelocationEdit edit in provedEdits)
+        foreach (NativeTerrainTextureRelocationEdit edit in edits)
         {
             NativeTerrainTextureRepresentativeColor targetAppearance =
                 ReadNativeTextureRepresentativeColor(
                     imageStream,
                     layout,
                     targetLevel.SourceWadEntry,
-                    edit.TargetTextureId,
+                    edit.UsesAppendedPrivateRecord ? edit.MaterialTemplateTextureId : edit.TargetTextureId,
                     appearanceAssets);
             NativeTerrainTextureRepresentativeColor donorAppearance =
                 ReadNativeTextureRepresentativeColor(
@@ -4768,6 +4923,7 @@ public static class TerrainPatchExporter
                     stagedSector);
             }
 
+            ValidatePrivateTextureFaceMaterialProvenance(sourceSector, stagedSector, edits, location.WadOffset);
             NativeTerrainTextureLowDetailCompanionPatch companion =
                 NativeTerrainTextureLowDetailCompanion.Build(
                     stagedSector,
@@ -4825,7 +4981,7 @@ public static class TerrainPatchExporter
                 colorWadOffset,
                 sourceBefore,
                 companion.After,
-                "native-terrain-texture-lp-companion",
+                NativeTextureLowDetailCompanionPatchKind,
                 $"sector-0x{location.WadOffset:X}",
                 $"Keep far/unfocused terrain synchronized with transplanted texture art: recolor {companion.ChangedLowDetailColorCount}/{companion.LowDetailColorCount} native LP colors from {companion.AffectedHighDetailFaceCount} affected HP face(s), target texture id(s) {string.Join(", ", companion.TargetTextureIds)}; preserve LP geometry, face words, command bytes, and LOD flags.");
             patchCount++;
@@ -4842,6 +4998,35 @@ public static class TerrainPatchExporter
             Note: patchCount == 0
                 ? $"Checked {sectors.Length:N0} exact source sectors for native far-LOD synchronization; no LP RGB bytes needed to change."
                 : $"Native texture far-LOD synchronization patched {changedColorCount:N0} LP RGB entries in {patchCount:N0}/{affectedSectorCount:N0} affected sectors ({affectedHighDetailFaceCount:N0} HP face references), composing {composedPatchCount:N0} pre-existing LP color patch(es) without changing LP geometry or LOD flags.");
+    }
+
+    private static void ValidatePrivateTextureFaceMaterialProvenance(
+        byte[] sourceSector, byte[] stagedSector,
+        IReadOnlyList<NativeTerrainTextureRelocationEdit> edits, long sectorWadOffset)
+    {
+        Dictionary<int, NativeTerrainTextureRelocationEdit> appended = edits
+            .Where(edit => edit.UsesAppendedPrivateRecord).ToDictionary(edit => edit.TargetTextureId);
+        if (appended.Count == 0)
+            return;
+        Id65EnvironmentSectorHeaderReadback staged = Id65EnvironmentSectorHeaderContract.ReadExactSector(
+            stagedSector, "private appearance staged sector");
+        int stagedFaces = 28 + staged.HighDetailVertexWordOffset * 4 + staged.HighDetailVertexCount * 4 + staged.HighDetailColorCount * 8;
+        for (int index = 0; index < staged.HighDetailFaceCount; index++)
+        {
+            int faceOffset = stagedFaces + index * 16;
+            int textureId = (int)(ReadUInt32(stagedSector, faceOffset + 8) & 0x7F);
+            if (!appended.TryGetValue(textureId, out NativeTerrainTextureRelocationEdit? edit))
+                continue;
+            // Without an explicit topology provenance map, a changed table or
+            // face's vertex ordering cannot establish which original material
+            // supplied its LP colour. Never guess by matching new face indices.
+            if (!sourceSector.AsSpan(16, 8).SequenceEqual(stagedSector.AsSpan(16, 8)) ||
+                !sourceSector.AsSpan(faceOffset, 4).SequenceEqual(stagedSector.AsSpan(faceOffset, 4)))
+                throw new InvalidDataException($"Private texture T{textureId} at WAD sector 0x{sectorWadOffset:X} has changed face topology without proved original-material provenance.");
+            int originalTextureId = (int)(ReadUInt32(sourceSector, faceOffset + 8) & 0x7F);
+            if (originalTextureId != edit.MaterialTemplateTextureId)
+                throw new InvalidDataException($"Private texture T{textureId} uses material template T{edit.MaterialTemplateTextureId}, but source face {index} at WAD sector 0x{sectorWadOffset:X} originally used T{originalTextureId}; refusing an unproved LP appearance ratio.");
+        }
     }
 
     private static NativeTerrainTextureRepresentativeColor ReadNativeTextureRepresentativeColor(
@@ -4867,10 +5052,16 @@ public static class TerrainPatchExporter
                 layout,
                 modelInfo.AbsoluteWadOffset,
                 checked((int)modelInfo.SubfileSize));
+            NativeTerrainTextureRuntimeControlAudit runtime =
+                NativeTerrainTextureRuntimeControlScanner.Inspect(imageStream.Name, wadEntry);
+            NativeTerrainTextureInitialStateResult initial =
+                NativeTerrainTextureRuntimeControlScanner.InitializeTextureRecords(runtime, modelBytes);
+            if (!initial.Complete)
+                throw new InvalidDataException($"WAD entry {wadEntry} has no proved load-initialized art for its LP companion: {string.Join(" ", initial.SafetyBlockers)}");
             asset = new NativeTextureAppearanceAsset(
                 texturePages,
                 texturePagesInfo.SubfileSize,
-                DecodeTextureRecords(modelBytes));
+                DecodeTextureRecords(initial.InitializedTextureData));
             assets.Add(wadEntry, asset);
         }
 

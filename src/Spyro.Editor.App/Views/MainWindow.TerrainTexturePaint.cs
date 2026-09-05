@@ -2891,6 +2891,38 @@ public sealed partial class MainWindow
                     "Normal Create BIN planning did not authorize the exact four-row Artisans T68-T71 profile.");
             }
 
+            NativeTerrainTextureFixedTailPrivateRecordPlan appearancePlan =
+                fourRowNormalReleasePlan.Plan.FixedTailPlan
+                ?? throw new InvalidOperationException("The private LP regression lost its fixed-tail plan.");
+            NativeTerrainTextureRecordRebasedPatchProof[] lpRebases = appearancePlan.OrdinaryPatchRebaseProofs
+                .Where(patch => patch.Kind == TerrainPatchExporter.NativeTextureLowDetailCompanionPatchKind)
+                .ToArray();
+            if (lpRebases.Length == 0 ||
+                lpRebases.Length != fourRowNormalReleasePlan.OrdinaryPlan.Patches.Count(patch =>
+                    patch.Kind == TerrainPatchExporter.NativeTextureLowDetailCompanionPatchKind) ||
+                appearancePlan.CombinedPatches.Count != buildPlan.FixedTailPlan.CombinedPatches.Count)
+                throw new InvalidOperationException("Normal private Create BIN omitted or duplicated its far-LOD appearance dependencies.");
+            int appearanceChangedBytes = 0;
+            foreach (NativeTerrainTexturePrivateStructuralPatch outputPatch in appearancePlan.CombinedPatches)
+            {
+                NativeTerrainTexturePrivateStructuralPatch baseline = buildPlan.FixedTailPlan.CombinedPatches.Single(
+                    patch => patch.WadOffset == outputPatch.WadOffset && patch.ByteLength == outputPatch.ByteLength);
+                if (!baseline.Before.SequenceEqual(outputPatch.Before))
+                    throw new InvalidOperationException("Private appearance changed a texture/structural source preimage.");
+                for (int index = 0; index < outputPatch.After.Length; index++)
+                {
+                    if (baseline.After[index] == outputPatch.After[index])
+                        continue;
+                    long offset = outputPatch.WadOffset + index;
+                    if (!lpRebases.Any(lp => offset >= lp.OutputWadOffset &&
+                            offset < lp.OutputWadOffset + lp.ByteLength && (offset - lp.OutputWadOffset) % 4 != 3))
+                        throw new InvalidOperationException($"Private appearance changed a non-LP-RGB byte at WAD 0x{offset:X}.");
+                    appearanceChangedBytes++;
+                }
+            }
+            if (appearanceChangedBytes == 0)
+                throw new InvalidOperationException("The four-row native donor fixture did not exercise any private far-LOD RGB changes.");
+
             for (int index = normalReleaseAdditionalRuntimeKeys.Count - 1;
                  index >= 0;
                  index--)
