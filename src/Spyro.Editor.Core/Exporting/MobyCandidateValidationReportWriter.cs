@@ -241,6 +241,8 @@ public static class MobyCandidateValidationReportWriter
                     family = preview.Family,
                     recipeId = preview.RecipeId,
                     recipeStatus = preview.RecipeStatus,
+                    recipeFingerprintVersion = CrossLevelCandidateRecipeFingerprint.CurrentVersion,
+                    sourceImageSha256 = preview.SourceImageSha256,
                     recipeFingerprint = CrossLevelCandidateRecipeFingerprint.Create(preview)
                 }).ToArray(),
                 existingSlotSwaps = existingSlotSwapPatches.Select(patch => new

@@ -250,8 +250,9 @@ Require(
     mainWindow.Contains("if (UnusedLevel65BlankLevelLabProfileRegistry.IsLabLevel(level))\n                continue;", StringComparison.Ordinal) &&
     mainWindow.Contains("ID65 Lab music save refused", StringComparison.Ordinal) &&
     labWindow.Contains("UnusedLevel65BlankLevelLabProfileRegistry.Key,\n                mobys", StringComparison.Ordinal) &&
-    mobyExporter.Contains("private const long TreasureTotalTableImageOffset = 0x7945FB0;", StringComparison.Ordinal),
-    "One source-level generic ID65 fail-closed/stale-address guard changed.");
+    mobyExporter.Contains("private const uint TreasureTotalTableRuntimeAddress = 0x8006F438;", StringComparison.Ordinal) &&
+    mobyExporter.Contains("levelIndex >= 35", StringComparison.Ordinal),
+    "One source-level generic ID65 fail-closed guard or executable-relative treasure mapping changed.");
 Require(
     UnusedLevel65BlankLevelLabProfileRegistry.Capabilities.PortalExitRouting == UnusedLevel65BlankLevelLabCapabilityState.Unavailable &&
     UnusedLevel65BlankLevelLabProfileRegistry.Capabilities.SaveOwnership == UnusedLevel65BlankLevelLabCapabilityState.Unavailable &&

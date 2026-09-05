@@ -2,6 +2,7 @@ using Spyro.Editor.Core.Levels;
 using Spyro.Editor.Core.Exporting;
 using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Workspace;
+using System.Text.Json;
 
 namespace Spyro.Editor.Core.Analysis;
 
@@ -80,15 +81,37 @@ public static class CrossLevelEditorTemplateSupport
         }
 
         CrossLevelCandidateEvidence evidence = CrossLevelCandidateEvidenceStore.FindBestEvidence(workspaceRoot, currentLevel.Key, recipe.Id);
+        string currentSourceEvidenceNote = "";
         if (evidence.Passed)
-            return new CrossLevelTemplateLevelStatus("ready here", $"{currentLevel.DisplayName} has passed in-game evidence for recipe {recipe.Id}. Normal Create BIN can include it.", recipe.Id, true, true, true);
+        {
+            try
+            {
+                EditorWorkspace workspace = new(workspaceRoot);
+                MobyActorPackageImportPreview current = MobySourcePatchExporter.InspectActorPackageImport(
+                    DiscImageLocator.FindImage(workspace), workspaceRoot, currentLevel,
+                    sourceLevelKey, family, recipe.Id);
+                if (current.CanWriteImage && CrossLevelCandidateEvidenceStore.FindPassedEvidence(
+                        workspaceRoot, currentLevel.Key, recipe.Id,
+                        CrossLevelCandidateRecipeFingerprint.Create(current)).Passed)
+                {
+                    return new CrossLevelTemplateLevelStatus("ready here",
+                        $"{currentLevel.DisplayName} has passed in-game evidence matching the current source image and package bytes for recipe {recipe.Id}. Normal Create BIN can include it.",
+                        recipe.Id, true, true, true);
+                }
+                currentSourceEvidenceNote = " Historical evidence does not validate the current source image and exact imported package; create and test a fresh candidate.";
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or JsonException or OverflowException)
+            {
+                currentSourceEvidenceNote = " Historical evidence could not be checked against the current source image. Build Safety must validate the source and package before this recipe is ready.";
+            }
+        }
 
         if (string.Equals(recipe.Status, "experimental-image-write", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(recipe.Status, "experimental-plan-only", StringComparison.OrdinalIgnoreCase))
         {
             string evidenceNote = evidence.Failed
                 ? " The previous in-game test failed, so the editor is keeping this as a guarded candidate."
-                : "";
+                : currentSourceEvidenceNote;
             return new CrossLevelTemplateLevelStatus("candidate here", $"{currentLevel.DisplayName} has recipe {recipe.Id}, but it still needs a passing in-game candidate test before normal Create BIN can use it.{evidenceNote}", recipe.Id, false, true, true);
         }
 

@@ -28,7 +28,7 @@ public static class MobySourcePatchExporter
     private const int TypeOffset = 0x50;
     private const int StateOffset = 0x51;
     private const int HiddenRawCoordinate = -480000;
-    private const long TreasureTotalTableImageOffset = 0x7945FB0;
+    private const uint TreasureTotalTableRuntimeAddress = 0x8006F438;
 
     public static async Task<MobySourcePatchResult> ExportAsync(MobySourcePatchRequest request, CancellationToken cancellationToken = default)
     {
@@ -81,28 +81,9 @@ public static class MobySourcePatchExporter
             DiscLayout layout = DiscImage.DetectLayout(outputImagePath);
             await using (FileStream stream = File.Open(outputImagePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
             {
-                DiscFileRecord? executable = null;
                 foreach (MobySourcePatch patch in plan.Patches)
                 {
-                    byte[] bytes = HexToBytes(patch.AfterHexPreview);
-                    if (TryParseWadRelativeOffset(patch.WadRelativeOffset, out long wadOffset))
-                    {
-                        DiscImage.WriteFileBytes(stream, layout, WadLba, wadOffset, bytes);
-                        continue;
-                    }
-
-                    if (TryParseExeRuntimeAddress(patch.WadRelativeOffset, out uint exeAddress))
-                    {
-                        executable ??= FindExecutable(stream, layout);
-                        long fileOffset = ExeFileOffset(exeAddress, patch.WadRelativeOffset);
-                        if (TestLevelWarpPatch.IsPatch(patch))
-                            TestLevelWarpPatch.VerifyBeforeWrite(stream, layout);
-                        DiscImage.WriteFileBytes(stream, layout, executable.Lba, fileOffset, bytes);
-                        continue;
-                    }
-
-                    stream.Position = ParseRequiredLong(patch.ImageOffset, "patch.imageOffset");
-                    stream.Write(bytes);
+                    ApplySourcePatch(stream, layout, patch);
                 }
 
                 if (plan.Patches.Any(TestLevelWarpPatch.IsPatch))
@@ -181,6 +162,7 @@ public static class MobySourcePatchExporter
             : ParseRequiredLong(level.SourceTableRelativeOffset, "level.sourceTableRelativeOffset");
         DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
         using FileStream imageStream = File.OpenRead(sourceImagePath);
+        Lazy<string> sourceImageSha256 = new(() => HashSourceImage(imageStream));
         using FileStream editStream = File.OpenRead(nativeEditsPath);
         using JsonDocument editDocument = JsonDocument.Parse(editStream);
 
@@ -250,6 +232,13 @@ public static class MobySourcePatchExporter
             int packagePreviewStart = packageImportPreviews.Count;
             int skippedEditStart = skippedEdits.Count;
             List<MobySourceEditSafetyFinding> editSafetyFindings = [];
+            MobyDependencyPlanTransaction? dependencyTransaction =
+                !isLockedChestBundleEdit && !isDragonRunToEdit && !IsFlyInLandingEdit(edit) &&
+                !JsonValue.GetBoolean(edit, "removed") && !string.Equals(editKind, "remove", StringComparison.OrdinalIgnoreCase) &&
+                TryGetCrossLevelTemplate(edit, out JsonElement dependencyTemplate) && !IsSimpleCrossLevelTemplate(dependencyTemplate)
+                    ? new(patches, packageImportPreviews, writtenWadOffsets,
+                        writtenActorPackageRecipes, sharedCrossLevelSpecialClusters)
+                    : null;
             try
             {
                 if (isLockedChestBundleEdit)
@@ -284,6 +273,7 @@ public static class MobySourcePatchExporter
                     if (!allowGuardedNativeCloneAppend &&
                         TryPatchAddedNativeCloneIntoAutoSlot(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, label, edit, protectedSourceSlots, autoReuseTargetSlots, patches, writtenWadOffsets, skippedEdits, out int autoSlotTreasureDelta))
                     {
+                        dependencyTransaction?.Commit();
                         exportedTreasureDelta += autoSlotTreasureDelta;
                         continue;
                     }
@@ -302,8 +292,9 @@ public static class MobySourcePatchExporter
                     }
 
                     int assignedAppendTrueIndex = appendNextTrueIndex;
-                    if (TryAddAppendPatch(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, tableRelativeOffset, appendNextTrueIndex, label, edit, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, suppressActorPackageImports, allowGuardedNativeCloneAppend, patches, packageImportPreviews, writtenWadOffsets, writtenActorPackageRecipes, sharedCrossLevelSpecialClusters, skippedEdits))
+                    if (TryAddAppendPatch(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, tableRelativeOffset, appendNextTrueIndex, label, edit, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, suppressActorPackageImports, allowGuardedNativeCloneAppend, patches, packageImportPreviews, writtenWadOffsets, writtenActorPackageRecipes, sharedCrossLevelSpecialClusters, skippedEdits, sourceImageSha256))
                     {
+                        dependencyTransaction?.Commit();
                         exportedTreasureDelta += ComputeTreasureDelta(edit);
                         TrackSpringChestPairAppend(edit, assignedAppendTrueIndex, packageImportPreviews, ref springChestControllerAppendTrueIndex, ref springChestShellAppendTrueIndex, ref springChestControllerActorId);
                         TrackPeaceKeepersSpringChestAppend(edit, assignedAppendTrueIndex, peaceKeepersSpringChestAnchors);
@@ -375,6 +366,7 @@ public static class MobySourcePatchExporter
                         sharedCrossLevelSpecialClusters,
                         skippedEdits))
                     {
+                        dependencyTransaction?.Commit();
                         exportedTreasureDelta += ComputeTreasureDelta(edit);
                     }
                     continue;
@@ -382,13 +374,14 @@ public static class MobySourcePatchExporter
 
                 if (TryPatchSourceRecordCloneIntoSlot(imageStream, layout, catalog, level, levelGeometry, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets, skippedEdits))
                 {
+                    dependencyTransaction?.Commit();
                     exportedTreasureDelta += ComputeTreasureDelta(edit);
                     continue;
                 }
 
                 if (TryGetCrossLevelTemplate(edit, out JsonElement crossLevelTemplate) && !IsSimpleCrossLevelTemplate(crossLevelTemplate))
                 {
-                    MobyActorPackageImportPreview preview = AddActorPackageImportPreview(imageStream, layout, catalog, level, tableWadOffset, tableRelativeOffset, label, crossLevelTemplate, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, packageImportPreviews, patches, writtenWadOffsets, writtenActorPackageRecipes);
+                    MobyActorPackageImportPreview preview = AddActorPackageImportPreview(imageStream, layout, catalog, level, tableWadOffset, tableRelativeOffset, label, crossLevelTemplate, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, packageImportPreviews, patches, writtenWadOffsets, writtenActorPackageRecipes, sourceImageSha256);
                     string templateId = JsonValue.GetString(crossLevelTemplate, "id", "cross-level template");
                     string requiredFeature = JsonValue.GetString(crossLevelTemplate, "requiredExporterFeature");
                     if (!preview.CanWriteImage)
@@ -419,9 +412,11 @@ public static class MobySourcePatchExporter
                 AddYawPatches(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
                 AddSourceByteEdits(imageStream, layout, level, tableWadOffset, trueIndex, label, edit, patches, writtenWadOffsets);
                 exportedTreasureDelta += ComputeTreasureDelta(edit);
+                dependencyTransaction?.Commit();
             }
             finally
             {
+                dependencyTransaction?.RollbackUnlessCommitted();
                 editOutcomes.Add(new MobySourceEditOutcome(
                     EditorTrueIndex: trueIndex,
                     MobyLabel: label,
@@ -1453,6 +1448,44 @@ public static class MobySourcePatchExporter
             LockedChestRuntimeBundle: lockedChestBundle);
     }
 
+    internal static void ApplySourcePatch(FileStream stream, DiscLayout layout, MobySourcePatch patch)
+    {
+        byte[] before = HexToBytes(patch.BeforeHexPreview);
+        byte[] after = HexToBytes(patch.AfterHexPreview);
+        if (patch.ByteLength <= 0 || before.Length != patch.ByteLength || after.Length != patch.ByteLength)
+            throw new InvalidDataException($"Moby patch '{patch.Label}' has inconsistent preimage/output lengths.");
+
+        int fileLba;
+        long fileOffset;
+        if (TryParseWadRelativeOffset(patch.WadRelativeOffset, out long wadOffset))
+        {
+            fileLba = WadLba;
+            fileOffset = wadOffset;
+        }
+        else if (TryParseExeRuntimeAddress(patch.WadRelativeOffset, out uint exeAddress))
+        {
+            DiscFileRecord executable = FindExecutable(stream, layout);
+            fileLba = executable.Lba;
+            fileOffset = ExeFileOffset(exeAddress, patch.WadRelativeOffset);
+            if (fileOffset < 0 || fileOffset > executable.Size - (long)after.Length)
+                throw new InvalidDataException($"Moby patch '{patch.Label}' exceeds the live executable extent.");
+            if (TestLevelWarpPatch.IsPatch(patch))
+                TestLevelWarpPatch.VerifyBeforeWrite(stream, layout);
+        }
+        else
+        {
+            throw new InvalidDataException($"Moby patch '{patch.Label}' has no WAD-relative or executable runtime address; physical-only patches cannot be safely composed.");
+        }
+
+        byte[] actual = DiscImage.ReadFileBytes(stream, layout, fileLba, fileOffset, before.Length);
+        if (!actual.AsSpan().SequenceEqual(before))
+            throw new InvalidDataException($"Moby patch '{patch.Label}' no longer matches its source-bound preimage.");
+        DiscImage.WriteFileBytes(stream, layout, fileLba, fileOffset, after);
+        byte[] written = DiscImage.ReadFileBytes(stream, layout, fileLba, fileOffset, after.Length);
+        if (!written.AsSpan().SequenceEqual(after))
+            throw new InvalidDataException($"Moby patch '{patch.Label}' failed exact output readback.");
+    }
+
     private static LockedChestRuntimeBundleDestinationProfile? ResolveLockedChestRuntimeBundleProfile(
         LevelDefinition level,
         JsonElement editsElement)
@@ -2003,7 +2036,7 @@ public static class MobySourcePatchExporter
     {
         foreach (MobyActorPackageImportPreview preview in packageImportPreviews)
         {
-            if (!string.Equals(preview.Family, "springChest", StringComparison.OrdinalIgnoreCase))
+            if (!preview.CanWriteImage || !string.Equals(preview.Family, "springChest", StringComparison.OrdinalIgnoreCase))
                 continue;
 
             string mode = preview.RecipeMode;
@@ -2832,7 +2865,8 @@ public static class MobySourcePatchExporter
         HashSet<long> writtenWadOffsets,
         HashSet<string> writtenActorPackageRecipes,
         Dictionary<string, CrossLevelSharedSpecialCluster> sharedCrossLevelSpecialClusters,
-        List<string> skippedEdits)
+        List<string> skippedEdits,
+        Lazy<string> sourceImageSha256)
     {
         int targetType = JsonValue.GetInt32(edit, "typeEditedHex", JsonValue.GetInt32(edit, "typeHex", -1));
         CrossLevelAppendDonor? crossLevelDonor = null;
@@ -2853,7 +2887,7 @@ public static class MobySourcePatchExporter
                 string recipeMode = isSourceRecordCandidate ? CrossLevelSourceRecordCandidateRecipeMode : "";
                 if (!isSourceRecordCandidate && !suppressActorPackageImports)
                 {
-                    MobyActorPackageImportPreview preview = AddActorPackageImportPreview(stream, layout, catalog, level, tableWadOffset, tableRelativeOffset, label, crossLevelTemplate, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, packageImportPreviews, patches, writtenWadOffsets, writtenActorPackageRecipes);
+                    MobyActorPackageImportPreview preview = AddActorPackageImportPreview(stream, layout, catalog, level, tableWadOffset, tableRelativeOffset, label, crossLevelTemplate, sourceImagePath, workspaceRoot, allowPlanOnlyActorPackageImports, packageImportPreviews, patches, writtenWadOffsets, writtenActorPackageRecipes, sourceImageSha256);
                     recipeMode = preview.RecipeMode;
                     string source = sourceTrueIndex >= 0 ? $"{sourceLevelName} T{sourceTrueIndex}" : sourceLevelName;
                     string requiredFeature = JsonValue.GetString(crossLevelTemplate, "requiredExporterFeature");
@@ -3853,6 +3887,7 @@ public static class MobySourcePatchExporter
     private static bool UsesSpringChestControllerAlias(IReadOnlyList<MobyActorPackageImportPreview> packageImportPreviews)
     {
         return packageImportPreviews.Any(preview =>
+            preview.CanWriteImage &&
             string.Equals(preview.Family, "springChest", StringComparison.OrdinalIgnoreCase) &&
             preview.RecipeMode.Contains("Alias01FE", StringComparison.OrdinalIgnoreCase));
     }
@@ -4070,7 +4105,10 @@ public static class MobySourcePatchExporter
         int sourceTrueIndex = JsonValue.GetInt32(crossLevelTemplate, "sourceTrueIndex", -1);
         LevelDefinition? sourceLevel = catalog.FindByKey(JsonValue.GetString(crossLevelTemplate, "sourceLevelKey"));
         if (sourceLevel == null || !sourceLevel.HasSourceTable || sourceTrueIndex < 0 || sourceTrueIndex >= sourceLevel.SourceRecordCount)
-            return true;
+        {
+            skippedEdits.Add($"{label}: cross-level transform donor source record is not mapped; no instance or package was installed.");
+            return false;
+        }
 
         long sourceTableWadOffset = ParseRequiredLong(sourceLevel.SourceTableWadOffset, "sourceLevel.sourceTableWadOffset");
         long sourceTableRelativeOffset = string.IsNullOrWhiteSpace(sourceLevel.SourceTableRelativeOffset)
@@ -4155,6 +4193,53 @@ public static class MobySourcePatchExporter
             string.Equals(supportStatus, CrossLevelSwapCatalogBuilder.CandidateSupportStatus, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Rebuilds the same source-bound package decision used by Create BIN without
+    /// writing files. Catalog availability must not turn a recipe-id-only result
+    /// into approval for a different source image or imported payload.
+    /// </summary>
+    public static MobyActorPackageImportPreview InspectActorPackageImport(
+        string sourceImagePath,
+        string workspaceRoot,
+        LevelDefinition targetLevel,
+        string sourceLevelKey,
+        string family,
+        string recipeId)
+    {
+        DiscLayout layout = DiscImage.DetectLayout(sourceImagePath);
+        using FileStream stream = File.OpenRead(sourceImagePath);
+        Lazy<string> sourceImageSha256 = new(() => HashSourceImage(stream));
+        LevelCatalog catalog = LevelCatalog.Load(workspaceRoot);
+        using JsonDocument template = JsonDocument.Parse(JsonSerializer.Serialize(new
+        {
+            id = recipeId,
+            sourceLevelKey,
+            family,
+            recipeId
+        }));
+        return AddActorPackageImportPreview(
+            stream, layout, catalog, targetLevel,
+            ParseRequiredLong(targetLevel.SourceTableWadOffset, "target source table"),
+            ParseRequiredLong(targetLevel.SourceTableRelativeOffset, "target table-relative offset"),
+            targetLevel.DisplayName, template.RootElement, sourceImagePath, workspaceRoot,
+            allowPlanOnlyActorPackageImports: false, [], [], [],
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase), sourceImageSha256);
+    }
+
+    private static string HashSourceImage(FileStream stream)
+    {
+        long position = stream.Position;
+        try
+        {
+            stream.Position = 0;
+            return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)).ToLowerInvariant();
+        }
+        finally
+        {
+            stream.Position = position;
+        }
+    }
+
     private static MobyActorPackageImportPreview AddActorPackageImportPreview(
         FileStream stream,
         DiscLayout layout,
@@ -4170,7 +4255,8 @@ public static class MobySourcePatchExporter
         List<MobyActorPackageImportPreview> previews,
         List<MobySourcePatch> patches,
         HashSet<long> writtenWadOffsets,
-        HashSet<string> writtenActorPackageRecipes)
+        HashSet<string> writtenActorPackageRecipes,
+        Lazy<string> sourceImageSha256)
     {
         string templateId = JsonValue.GetString(crossLevelTemplate, "id", "cross-level-template");
         string sourceLevelKey = JsonValue.GetString(crossLevelTemplate, "sourceLevelKey");
@@ -4280,7 +4366,9 @@ public static class MobySourcePatchExporter
                 TargetBeforeIsZero: before.All(value => value == 0),
                 TargetSafety: string.IsNullOrWhiteSpace(segment.TargetSafety) ? "zero" : segment.TargetSafety,
                 BeforeHexPreview: ToHexPreview(before),
-                AfterHexPreview: ToHexPreview(after)));
+                AfterHexPreview: ToHexPreview(after),
+                BeforeSha256: Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(before)).ToLowerInvariant(),
+                AfterSha256: Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(after)).ToLowerInvariant()));
         }
 
         List<MobyActorPackageRootPreview> rootPreviews = new();
@@ -4297,7 +4385,8 @@ public static class MobySourcePatchExporter
         bool isBlockedRecipe = recipe.Status.StartsWith("in-game-blocked", StringComparison.OrdinalIgnoreCase) ||
             recipe.Status.StartsWith("blocked", StringComparison.OrdinalIgnoreCase);
         bool isCandidateGatedRecipe = isExperimentalWriteRecipe || isPlanOnlyRecipe;
-        string expectedRecipeFingerprint = CrossLevelCandidateRecipeFingerprint.Create(recipe.Id, recipe.Status, copyPreviews, rootPreviews);
+        string expectedRecipeFingerprint = CrossLevelCandidateRecipeFingerprint.Create(
+            recipe.Id, recipe.Status, copyPreviews, rootPreviews, sourceLevel.Key, targetLevel.Key, sourceImageSha256.Value);
         CrossLevelCandidateEvidence latestRecipeEvidence = isCandidateGatedRecipe
             ? CrossLevelCandidateEvidenceStore.FindBestEvidence(workspaceRoot, targetLevel.Key, recipe.Id)
             : CrossLevelCandidateEvidence.NotFound;
@@ -4335,7 +4424,8 @@ public static class MobySourcePatchExporter
             CanWriteImage: canWriteImage,
             GuardReason: guardReason,
             CopySegments: copyPreviews,
-            RootEntries: rootPreviews);
+            RootEntries: rootPreviews,
+            SourceImageSha256: sourceImageSha256.Value);
         previews.Add(importPreview);
 
         if (canWriteImage && writtenActorPackageRecipes.Add(recipe.Id))
@@ -5232,36 +5322,34 @@ public static class MobySourcePatchExporter
         if (delta == 0)
             return;
 
-        int levelIndex = -1;
-        for (int i = 0; i < catalog.Levels.Count; i++)
-        {
-            if (string.Equals(catalog.Levels[i].Key, level.Key, StringComparison.OrdinalIgnoreCase))
-            {
-                levelIndex = i;
-                break;
-            }
-        }
-
-        if (levelIndex < 0)
+        LevelDefinition? catalogLevel = catalog.FindByKey(level.Key);
+        if (catalogLevel == null)
         {
             notes.Add($"{level.DisplayName}'s in-game treasure target was not updated because the level was not found in the release catalog.");
             return;
         }
 
-        long imageOffset = TreasureTotalTableImageOffset + (levelIndex * 2L);
-        if (imageOffset < 0 || imageOffset + 2 > stream.Length)
-        {
-            notes.Add($"{level.DisplayName}'s in-game treasure target was not updated because the target table offset 0x{imageOffset:X} is outside this disc image.");
-            return;
-        }
+        int realm = level.LevelId / 10 - 1;
+        int slot = level.LevelId % 10;
+        int levelIndex = checked(realm * 6 + slot);
+        if (catalogLevel.LevelId != level.LevelId || realm is < 0 or >= 6 || slot is < 0 or >= 6 || levelIndex >= 35)
+            throw new InvalidDataException($"{level.DisplayName} has no supported retail treasure table slot for level ID {level.LevelId}.");
 
-        byte[] before = ReadImageBytes(stream, imageOffset, 2);
-        int originalTotal = BitConverter.ToUInt16(before, 0);
+        DiscLayout layout = DiscImage.DetectLayout(stream.Name);
+        DiscFileRecord executable = FindExecutable(stream, layout);
+        uint runtimeAddress = checked(TreasureTotalTableRuntimeAddress + (uint)(levelIndex * sizeof(ushort)));
+        long fileOffset = ExeFileOffset(runtimeAddress, "treasure table");
+        if (fileOffset > executable.Size - sizeof(ushort))
+            throw new InvalidDataException("The live executable does not contain the complete treasure target slot.");
+        long imageOffset = DiscImage.ConvertFileOffsetToImageOffset(layout, executable.Lba, fileOffset);
+        byte[] before = DiscImage.ReadFileBytes(stream, layout, executable.Lba, fileOffset, sizeof(ushort));
+        int originalTotal = BinaryPrimitives.ReadUInt16LittleEndian(before);
         int editedTotal = originalTotal + delta;
         if (editedTotal is < 0 or > ushort.MaxValue)
             throw new InvalidOperationException($"{level.DisplayName}'s edited treasure total would be {editedTotal}, which cannot fit in the game's level treasure target table.");
 
-        byte[] after = BitConverter.GetBytes((ushort)editedTotal);
+        byte[] after = new byte[sizeof(ushort)];
+        BinaryPrimitives.WriteUInt16LittleEndian(after, (ushort)editedTotal);
         patches.Add(new MobySourcePatch(
             Label: $"{level.Key}-level-treasure-total",
             Kind: "level-treasure-total",
@@ -5269,7 +5357,7 @@ public static class MobySourcePatchExporter
             MobyLabel: "Inventory treasure total",
             TrueIndex: -1,
             RecordOffset: "",
-            WadRelativeOffset: "",
+            WadRelativeOffset: $"exe:0x{runtimeAddress:X8}",
             ImageOffset: $"0x{imageOffset:X}",
             ByteLength: after.Length,
             BeforeHexPreview: ToHex(before),
@@ -7146,7 +7234,8 @@ public sealed record MobyActorPackageImportPreview(
     bool CanWriteImage,
     string GuardReason,
     IReadOnlyList<MobyActorPackageCopyPreview> CopySegments,
-    IReadOnlyList<MobyActorPackageRootPreview> RootEntries)
+    IReadOnlyList<MobyActorPackageRootPreview> RootEntries,
+    string SourceImageSha256 = "")
 {
     public static MobyActorPackageImportPreview Unmapped(
         string Label,
@@ -7183,7 +7272,9 @@ public sealed record MobyActorPackageCopyPreview(
     bool TargetBeforeIsZero,
     string TargetSafety,
     string BeforeHexPreview,
-    string AfterHexPreview);
+    string AfterHexPreview,
+    string BeforeSha256 = "",
+    string AfterSha256 = "");
 
 public sealed record MobyActorPackageRootPreview(
     string Operation,
