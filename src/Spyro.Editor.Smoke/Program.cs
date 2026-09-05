@@ -27181,7 +27181,7 @@ async Task ReportCrossLevelSwapCatalogSmoke()
     string reportRoot = Path.Combine(workspace.RootPath, "_local", "smoke", "cross-level-swap-catalog");
     Directory.CreateDirectory(reportRoot);
     (string EnemyTargetLevel, int EnemyTargetTrueIndex, string EnemyDonorLevel, int EnemyDonorTrueIndex, string EnemyPlanPath) =
-        await VerifyCrossLevelEnemyExistingSlotCandidate(catalogs, reportRoot);
+        await VerifyCrossLevelEnemyPropertiesGuard(catalogs, reportRoot);
     string nativeEditsPath = Path.Combine(reportRoot, $"{targetLevel.Key}-swap-catalog-smoke-native-edits.json");
     string normalPlanPath = Path.Combine(reportRoot, "normal-create-bin-guard-plan.json");
     string candidatePlanPath = Path.Combine(reportRoot, "candidate-existing-slot-plan.json");
@@ -27286,13 +27286,15 @@ async Task ReportCrossLevelSwapCatalogSmoke()
             TargetTrueIndex = target.TrueIndex,
             TargetCategory = targetCategory.ToString(),
             Donor = new { donor.DisplayName, donor.SourceLevelName, donor.SourceTrueIndex },
-            EnemyCandidate = new
+            EnemyPropertiesGuard = new
             {
                 TargetLevel = EnemyTargetLevel,
                 TargetTrueIndex = EnemyTargetTrueIndex,
                 DonorLevel = EnemyDonorLevel,
                 DonorTrueIndex = EnemyDonorTrueIndex,
-                PlanPath = EnemyPlanPath
+                PlanPath = EnemyPlanPath,
+                CandidatePatchCount = 0,
+                NativePropertiesDependencyBlocked = true
             },
             NormalCreateBinCandidatePatchCount = 0,
             CandidateExistingSlotPatchCount = rowPatches.Count,
@@ -27319,7 +27321,7 @@ async Task ReportCrossLevelSwapCatalogSmoke()
             - Create Swap Test candidate rows: 1
             - Source object count: {targetLevel.SourceRecordCount} -> {targetLevel.SourceRecordCount}
             - Existing XYZ placement: preserved
-            - Enemy-row proof: {EnemyTargetLevel} T{EnemyTargetTrueIndex} -> {EnemyDonorLevel} T{EnemyDonorTrueIndex}
+            - Enemy properties guard: {EnemyTargetLevel} T{EnemyTargetTrueIndex} <- {EnemyDonorLevel} T{EnemyDonorTrueIndex}; native dependency refused, zero patches
             - BIN/CUE written by this smoke: no
 
             Structural guard and row bytes passed. The cross-level candidate remains experimental until its appearance, interaction, reward, and nearby actors are tested in DuckStation.
@@ -27327,7 +27329,7 @@ async Task ReportCrossLevelSwapCatalogSmoke()
 
         Console.WriteLine($"Cross-level swap catalogue: {sourceBackedLevels.Length} target levels, {referenceCatalog.EntryCount} entries for {targetLevel.DisplayName}, {referenceCatalog.CandidateCount} guarded candidates, {referenceCatalog.DeferredCount} deferred.");
         Console.WriteLine($"Existing-slot guard: normal Create BIN wrote 0 candidate rows; candidate mode wrote T{target.TrueIndex} from {donor.SourceLevelName} T{donor.SourceTrueIndex}; source count stayed {targetLevel.SourceRecordCount}.");
-        Console.WriteLine($"Enemy candidate guard: {EnemyTargetLevel} T{EnemyTargetTrueIndex} <- {EnemyDonorLevel} T{EnemyDonorTrueIndex}; source count unchanged.");
+        Console.WriteLine($"Enemy properties guard: {EnemyTargetLevel} T{EnemyTargetTrueIndex} <- {EnemyDonorLevel} T{EnemyDonorTrueIndex}; native +0x00 dependency refused with zero patches even in candidate mode.");
         Console.WriteLine($"JSON: {summaryJsonPath}");
         Console.WriteLine($"Markdown: {summaryMarkdownPath}");
         Console.WriteLine($"Catalogue: {catalogMarkdownPath}");
@@ -27340,10 +27342,16 @@ async Task ReportCrossLevelSwapCatalogSmoke()
     }
 }
 
-async Task<(string TargetLevel, int TargetTrueIndex, string DonorLevel, int DonorTrueIndex, string PlanPath)> VerifyCrossLevelEnemyExistingSlotCandidate(
+async Task<(string TargetLevel, int TargetTrueIndex, string DonorLevel, int DonorTrueIndex, string PlanPath)> VerifyCrossLevelEnemyPropertiesGuard(
     IReadOnlyList<CrossLevelSwapCatalog> catalogs,
     string reportRoot)
 {
+    if (catalogs.SelectMany(item => item.Entries).Any(entry =>
+            entry.Category == CrossLevelSwapCategory.Enemy &&
+            entry.Family == "catalogEnemy" && entry.Eligible &&
+            (!entry.PropertiesPointerKnown || entry.PropertiesPointer != 0)))
+        throw new InvalidOperationException("A generic row-only enemy with unresolved native properties remained eligible.");
+
     foreach (CrossLevelSwapCatalog targetCatalog in catalogs)
     {
         LevelDefinition? level = catalog.FindByKey(targetCatalog.TargetLevelKey);
@@ -27360,11 +27368,13 @@ async Task<(string TargetLevel, int TargetTrueIndex, string DonorLevel, int Dono
             !moby.IsRemoved &&
             moby.TrueIndex >= 0 &&
             moby.TrueIndex < level.SourceRecordCount &&
-            CrossLevelSwapCatalogBuilder.TryGetEligibleTargetCategory(moby, out CrossLevelSwapCategory category, out _) &&
-            category == CrossLevelSwapCategory.Enemy);
+            moby.Type == 0x20);
         CrossLevelSwapCatalogEntry? donor = targetCatalog.Entries
-            .Where(entry => entry.Category == CrossLevelSwapCategory.Enemy && IsResidentRowCandidate(entry))
-            .OrderBy(entry => entry.SourceLevelName, StringComparer.OrdinalIgnoreCase)
+            .Where(entry => entry.Category == CrossLevelSwapCategory.Enemy && !entry.SameLevel &&
+                entry.Family == "catalogEnemy" && entry.Type is 0x18 or 0x20 &&
+                entry.PropertiesPointerKnown && entry.PropertiesPointer != 0)
+            .OrderByDescending(entry => entry.TargetActorRootPresent)
+            .ThenBy(entry => entry.SourceLevelName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(entry => entry.SourceTrueIndex)
             .FirstOrDefault();
         if (target == null || donor == null)
@@ -27379,21 +27389,23 @@ async Task<(string TargetLevel, int TargetTrueIndex, string DonorLevel, int Dono
         edited.Flag4A = donor.Flag4A;
         edited.Flag4B = donor.Flag4B;
         edited.Label = $"Enemy swap smoke {donor.DisplayName}";
-        edited.PatchStatus = donor.SupportStatus;
-        edited.PatchLead = "Guarded self-contained enemy existing-slot smoke.";
+        // Recreate stale pre-fix eligibility metadata deliberately. The exporter
+        // must inspect native +0x00 rather than trusting these authored labels.
+        edited.PatchStatus = CrossLevelSwapCatalogBuilder.CandidateSupportStatus;
+        edited.PatchLead = "Stale row-only enemy metadata must not bypass native properties ownership.";
         edited.CrossLevelTemplateId = donor.Id;
         edited.CrossLevelFamily = donor.Family;
         edited.CrossLevelSourceLevelKey = donor.SourceLevelKey;
         edited.CrossLevelSourceLevelName = donor.SourceLevelName;
         edited.CrossLevelSourceTrueIndex = donor.SourceTrueIndex;
-        edited.CrossLevelRequiredExporterFeature = donor.RequiredExporterFeature;
+        edited.CrossLevelRequiredExporterFeature = CrossLevelSwapCatalogBuilder.CandidateExporterFeature;
         edited.CandidateKind = donor.CandidateKind;
         edited.Confidence = "cross-level-enemy-swap-smoke";
         edited.HasLoadedNativeEdit = true;
         edited.LoadedNativeEditSummary = "Guarded enemy existing-slot swap smoke";
 
         string nativeEditsPath = Path.Combine(reportRoot, $"{level.Key}-enemy-swap-smoke-native-edits.json");
-        string planPath = Path.Combine(reportRoot, "candidate-enemy-existing-slot-plan.json");
+        string planPath = Path.Combine(reportRoot, "candidate-enemy-properties-guard-plan.json");
         try
         {
             await MobyEditStore.SaveAsync(nativeEditsPath, [edited], $"{level.DisplayName} enemy swap catalogue smoke");
@@ -27418,32 +27430,9 @@ async Task<(string TargetLevel, int TargetTrueIndex, string DonorLevel, int Dono
                 level,
                 nativeEditsPath,
                 allowPlanOnlyActorPackageImports: true);
-            MobySourcePatch rowPatch = candidatePlan.Patches.Single(patch =>
-                string.Equals(patch.Kind, "cross-level-existing-slot-candidate", StringComparison.OrdinalIgnoreCase));
-            if (candidatePlan.Patches.Any(patch => string.Equals(patch.Kind, "moby-source-count", StringComparison.OrdinalIgnoreCase)) ||
-                rowPatch.TrueIndex != target.TrueIndex ||
-                rowPatch.ByteLength != 0x58)
-            {
-                throw new InvalidOperationException("Self-contained enemy candidate did not remain a one-row, source-count-neutral replacement.");
-            }
-
-            byte[] before = ParseHexPreview(rowPatch.BeforeHexPreview);
-            byte[] after = ParseHexPreview(rowPatch.AfterHexPreview);
-            foreach (int offset in new[] { 0x0C, 0x10, 0x14 })
-            {
-                if (BitConverter.ToInt32(before, offset) != BitConverter.ToInt32(after, offset))
-                    throw new InvalidOperationException($"Enemy slot candidate changed placement coordinate at offset 0x{offset:X2}.");
-            }
-            if (after[0x50] != donor.Type ||
-                after[0x51] != donor.State ||
-                after[0x36] != donor.SourceByte36 ||
-                after[0x37] != donor.SourceByte37 ||
-                after[0x4F] != donor.SourceByte4F ||
-                after[0x52] != donor.Flag4A ||
-                after[0x53] != donor.Flag4B)
-            {
-                throw new InvalidOperationException("Self-contained enemy candidate did not preserve the donor identity bytes.");
-            }
+            if (candidatePlan.Patches.Count != 0 ||
+                !candidatePlan.SkippedEdits.Any(skip => skip.Contains("Native properties (+0x00)", StringComparison.Ordinal)))
+                throw new InvalidOperationException("Stale enemy metadata bypassed native properties ownership in the actual candidate exporter.");
 
             await File.WriteAllTextAsync(planPath, JsonSerializer.Serialize(candidatePlan, new JsonSerializerOptions { WriteIndented = true }));
             return (level.DisplayName, target.TrueIndex, donor.SourceLevelName, donor.SourceTrueIndex, planPath);
@@ -27455,7 +27444,7 @@ async Task<(string TargetLevel, int TargetTrueIndex, string DonorLevel, int Dono
         }
     }
 
-    throw new InvalidOperationException("No source-backed level exposed both an eligible enemy target slot and a cross-level self-contained enemy donor.");
+    throw new InvalidOperationException("No source-backed native enemy properties obligation was exercised by the negative candidate regression.");
 }
 
 async Task ReportDarkHollowCrashGuardSmoke()
