@@ -35,6 +35,7 @@ CORE_CASES = (
     ("NativeId65CompanionAssetSmoke", "NATIVE_ID65_COMPANION_ASSET_SOURCE_FREE_OK"),
     ("NativeId65AuthoredSurfaceSmoke", "NATIVE_ID65_AUTHORED_SURFACE_SMOKE_OK"),
     ("NativeId65NormalResourceSmoke", "NATIVE_ID65_NORMAL_RESOURCE_SMOKE_OK"),
+    ("NativeId65StaticTerrainTextureSmoke", "NATIVE_ID65_STATIC_TERRAIN_TEXTURE_FREE_OK"),
     ("NativeWizardPlacementSmoke", "NATIVE_WIZARD_PLACEMENT_SMOKE_OK"),
     ("NativeWizardResearchSmoke", "NATIVE_WIZARD_RESEARCH_SOURCE_FREE_OK"),
     ("NativeResourceCompositionSmoke", "NATIVE_RESOURCE_COMPOSITION_SOURCE_FREE_OK"),
@@ -95,6 +96,7 @@ SOURCE_QA_CASES = (
     ("NativeId65CompanionAssetSmoke", "NATIVE_ID65_COMPANION_ASSET_SOURCE_OK", []),
     ("NativeId65AuthoredSurfaceSmoke", "NATIVE_ID65_AUTHORED_SURFACE_SOURCE_OK", []),
     ("NativeId65NormalResourceSmoke", "NATIVE_ID65_NORMAL_RESOURCE_SOURCE_OK", []),
+    ("NativeId65StaticTerrainTextureSmoke", "NATIVE_ID65_STATIC_TERRAIN_TEXTURE_SOURCE_OK", ["--source"]),
     ("NativeWizardPlacementSmoke", "NATIVE_WIZARD_PLACEMENT_SOURCE_OK", []),
     # Capture/readback only; never stage, publish or open an emulator here.
     ("NativeWizardResearchSmoke", "NATIVE_WIZARD_RESEARCH_SOURCE_OK", []),
