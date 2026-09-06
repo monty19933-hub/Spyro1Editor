@@ -64,6 +64,7 @@ public sealed class NativeId65NormalResourceChain
 
     public const string ProfileId = "native-id65-paired-normal-resource-chain-clean-usa-v1";
     public string SourceImageSha256 => _resources.SourceImageSha256;
+    internal NativeId65NormalResourceBundle Resources => _resources;
     public NativeId65ZeroSceneAnimationLists SceneLists { get; }
     public NativeId65SceneListPlacementRequirement ScenePlacementRequirement { get; }
     public IReadOnlyList<NativeId65DataComponentOwner> DataOwners { get; }
