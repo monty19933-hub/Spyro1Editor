@@ -124,6 +124,11 @@ try
         RunObjectGalleryOnly();
         return 0;
     }
+    if (args.Contains("--native-moby-library-only", StringComparer.OrdinalIgnoreCase))
+    {
+        NativeMobyLibraryUiCases.Run(outputDirectory);
+        return 0;
+    }
     if (args.Contains("--create-bin-feedback-only", StringComparer.OrdinalIgnoreCase))
     {
         RunCreateBinFeedbackOnly();
@@ -1223,6 +1228,7 @@ void RunId65BlankLabUiOnly()
                 "The exact loaded ID65 identity did not enter the sole visible Level Building Editor experience.");
         }
         AssertFreshId65StarterScene(loadedLab, "loaded ID65 Lab");
+        NativeMobyLibraryUiCases.AssertBlankLibrary(window, outputDirectory);
         AssertFreshId65Guidance(window, "loaded ID65 Lab");
         AssertFreshId65OptionalTerrainControls(
             window,

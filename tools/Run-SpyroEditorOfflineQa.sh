@@ -566,6 +566,16 @@ dotnet run \
     "$ROOT_DIR" \
     --id65-blank-lab-ui-only
 
+echo
+echo "Running shared retail native Moby library UI smoke..."
+dotnet run \
+    --project "$UI_SMOKE_PROJECT" \
+    --configuration "$CONFIGURATION" \
+    --no-build \
+    -- \
+    "$ROOT_DIR" \
+    --native-moby-library-only
+
 for project in "${TERRAIN_TEXTURE_PROOF_PROJECTS[@]}"; do
     project_name="$(basename "$(dirname "$project")")"
     project_arguments=("$ROOT_DIR")

@@ -862,6 +862,7 @@ public sealed partial class MainWindow
     {
         StackPanel panel = new() { Spacing = 8 };
         panel.Children.Add(ModernSectionHeading("Object browser"));
+        panel.Children.Add(BuildNativeMobyLibraryButton("RetailNativeMobyLibraryButton", allowExistingTemplateSelection: true));
 
         _mobyCategoryBox.ItemsSource = _releaseMode ? EverydayMobyCategoryOptions : MobyCategoryOptions;
         _mobyCategoryBox.SelectedIndex = 0;
@@ -1265,6 +1266,16 @@ public sealed partial class MainWindow
         kindBox.SelectionChanged += (_, _) => RefreshObjectGalleryButton();
         RefreshObjectGalleryButton();
         body.Children.Add(BuildModernDialogField("Object", chooseObjectButton));
+        Button nativeLibraryButton = NewButton("Browse all native source variants…");
+        nativeLibraryButton.Name = "AddNativeMobyLibraryButton";
+        StyleModernSecondaryButton(nativeLibraryButton);
+        nativeLibraryButton.Click += async (_, _) =>
+        {
+            var templates = (kindBox.ItemsSource as IEnumerable<AddMobyTemplate>)?.ToArray() ?? [];
+            var chosen = await ShowNativeMobyLibraryAsync(dialog, templates);
+            if (chosen != null) kindBox.SelectedItem = chosen;
+        };
+        body.Children.Add(nativeLibraryButton);
 
         Control gemField = BuildModernDialogField("Gem value", gemBox);
         gemField.IsVisible = (kindBox.SelectedItem as AddMobyTemplate)?.UsesGem == true;

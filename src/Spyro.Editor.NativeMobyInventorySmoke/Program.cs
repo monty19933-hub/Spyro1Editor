@@ -32,6 +32,23 @@ if (args.Length == 3 && args[0] == "--source")
         "every donor instance has a separate source identity");
     ExpectInvalid(() => inventory.DescribeDestination(ushort.MaxValue, "townsquare"));
     ExpectInvalid(() => inventory.DescribeDestination(0xAE, "unused65"));
+    var catalogue = new NativeMobyCatalogue(inventory);
+    Check(catalogue.Search().Count == 4877, "usable catalogue retains every placed source variant");
+    Check(catalogue.Search(view: NativeMobyCatalogueView.Resources).Count == 1403, "resource browsing is separate from placed templates");
+    Check(catalogue.Search(view: NativeMobyCatalogueView.Resources).Count(e => e.IsSpecialPlayerStream) == 35,
+        "all special player streams explicitly labelled");
+    Check(catalogue.Search().Select(e => e.SourceVariantId).Distinct().Count() == 4877, "catalogue never deduplicates display names");
+    var wizard = catalogue.Search("0x011B", "wizardpeak").First();
+    Check(catalogue.DescribeTarget(wizard, "magiccrafters").LocalModelStatus == NativeMobyLocalModelStatus.Present,
+        "catalogue can inspect a different retail destination");
+    Check(!catalogue.DescribeTarget(wizard, "magiccrafters").NativeImportApproved, "residency is never approval");
+    Check(!catalogue.DescribeTarget(wizard, "unusedlevel65blank").RetailTargetInspected,
+        "blank lab does not borrow retail residency");
+    Check(catalogue.DescribeTarget(wizard, "townsquare").GenericRegistrationTailSlots == 27, "physical tail capacity excludes special slot zero");
+    Check(catalogue.Search("a definitely nonexistent actor phrase").Count == 0, "search has meaningful no-result state");
+    Check(catalogue.Search("wizard", "wizardpeak").All(e => e.SourceLevelKey == "wizardpeak"), "source filter remains independent from destination");
+    var otherCatalogue = new NativeMobyCatalogue(inventory);
+    ExpectInvalid(() => otherCatalogue.DescribeTarget(wizard, "magiccrafters"));
     Console.WriteLine($"NATIVE_MOBY_INVENTORY_SOURCE_SMOKE_OK checks={checks} levels=35 rows=4877 classes=321");
     return;
 }
@@ -39,6 +56,28 @@ if (args.Length != 0) throw new ArgumentException("Use no arguments or --source 
 
 byte[] data = Fixture();
 var level = Parse(data);
+var catalogueEntries = NativeMobyCatalogue.DescribeLevel(level);
+Check(catalogueEntries.Count == 4, "two rows plus two separate resource observations");
+ExpectInvalid(() => NativeMobyCatalogue.SearchEntries(catalogueEntries, new string('x', 257), null, NativeMobyCatalogueView.All));
+ExpectInvalid(() => NativeMobyCatalogue.SearchEntries(catalogueEntries, null, null, (NativeMobyCatalogueView)(-1)));
+Check(NativeMobyCatalogue.SearchEntries(catalogueEntries, "", null, NativeMobyCatalogueView.All).Count == 4,
+    "all view is the exact union without hiding unplaced resources");
+Check(NativeMobyCatalogue.SearchEntries(catalogueEntries, "0x0149 fixture", null, NativeMobyCatalogueView.PlacedRows).Count == 1,
+    "token search matches full native class and source level");
+Check(NativeMobyCatalogue.SearchEntries(catalogueEntries, "0x0149", "elsewhere", NativeMobyCatalogueView.PlacedRows).Count == 0,
+    "source-level filter cannot leak matches");
+Check(catalogueEntries.All(e => !e.NativeImportApproved), "catalogue labels grant no export authority");
+Check(catalogueEntries.Where(e => e.Kind != NativeMobyCatalogueEntryKind.PlacedRow).All(e =>
+    !e.MatchesExistingTemplate("fixture", 0, 0x20, 0, 0x49, 1, 0, 0, 0)), "resource-only entries cannot select a placed template");
+var catalogueRow = catalogueEntries.Single(e => e.Kind == NativeMobyCatalogueEntryKind.PlacedRow && e.TrueIndex == 0);
+Check(catalogueRow.MatchesExistingTemplate("fixture", 0, 0x20, 0, 0x49, 1, 0, 0, 0), "exact existing template metadata can match its source row");
+Check(!catalogueRow.MatchesExistingTemplate("fixture", 1, 0x20, 0, 0x49, 1, 0, 0, 0), "same class never substitutes another source row");
+Check(!catalogueRow.MatchesExistingTemplate("fixture", 0, 0x20, 1, 0x49, 1, 0, 0, 0), "different state cannot borrow template match");
+byte[] sameClassFixture = Fixture();
+BinaryPrimitives.WriteUInt16LittleEndian(sameClassFixture.AsSpan(0x800 + 0xC8 + 88 + 0x36), 0x149);
+var sameClassEntries = NativeMobyCatalogue.DescribeLevel(Parse(sameClassFixture)).Where(e => e.Kind == NativeMobyCatalogueEntryKind.PlacedRow).ToArray();
+Check(sameClassEntries.Length == 2 && sameClassEntries[0].SourceVariantId != sameClassEntries[1].SourceVariantId,
+    "same-class named variants retain distinct native ownership");
 Check(level.Rows.Count == 2 && level.Registrations.Count == 2, "all rows and roots");
 Check(level.Rows[0].ActorId == 0x149 && level.Rows[1].ActorId == 0x249, "full 16-bit classes");
 Check(level.Rows[0].HasLocalModelRegistration && !level.Rows[1].HasLocalModelRegistration, "rootless row retained");

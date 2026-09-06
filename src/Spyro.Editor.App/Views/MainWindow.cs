@@ -23361,7 +23361,9 @@ public sealed partial class MainWindow : Window
             text.Contains("trigger", StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task AddMobyNearSelectionAsync()
+    private Task AddMobyNearSelectionAsync() => AddMobyNearSelectionAsync(null);
+
+    private async Task AddMobyNearSelectionAsync(AddMobyTemplate? preferredTemplate)
     {
         if (TryBlockId65ObjectMutation("Add Object"))
             return;
@@ -23375,6 +23377,11 @@ public sealed partial class MainWindow : Window
         Vector3f position = selectedPlacement.Position;
         IReadOnlyList<AddMobyTemplate> templates = GetCreateBinSafeObjectGalleryTemplates(
             BuildAddMobyTemplates(_selectedMoby, _currentMobys));
+        if (preferredTemplate != null && !templates.Contains(preferredTemplate))
+        {
+            _statusText.Text = "The selected native template is no longer available for this scene. No object was added.";
+            return;
+        }
         ComboBox placementBox = new()
         {
             ItemsSource = placementOptions,
@@ -23384,7 +23391,7 @@ public sealed partial class MainWindow : Window
         ComboBox kindBox = new()
         {
             ItemsSource = templates,
-            SelectedIndex = 0,
+            SelectedItem = preferredTemplate ?? templates[0],
             MinWidth = 260
         };
         ComboBox gemBox = new()

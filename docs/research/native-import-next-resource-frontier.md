@@ -162,7 +162,10 @@ complete RAM budget, publication certificate or gameplay pass.
 
 ## Minimal shared browser integration
 
-There is currently **no App consumer** of `NativeMobySourceInventory`.
+At this audit's baseline there was **no App consumer** of `NativeMobySourceInventory`.
+The subsequent [shared native library](../native-moby-library.md) now implements
+the guarded discovery and existing-template handoff described here; it does not
+promote unknown imports or resource budgets.
 `MainWindow.ObjectGallery.cs:ShowObjectGalleryAsync` filters normal Create BIN
 templates; the earlier `GetCreateBinSafeObjectGalleryTemplates` uses
 `ObjectGalleryDeduplicationKey` to deduplicate display/chest names. Exact native variants must not

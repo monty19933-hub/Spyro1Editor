@@ -561,6 +561,7 @@ public sealed partial class MainWindow
     private Control BuildId65LevelBuildingObjectManager()
     {
         StackPanel panel = new() { Spacing = 12 };
+        panel.Children.Add(BuildNativeMobyLibraryButton("Id65NativeMobyLibraryButton", allowExistingTemplateSelection: false));
         panel.Children.Add(ModernSectionHeading("Verified Moby bundles"));
         panel.Children.Add(new TextBlock
         {
