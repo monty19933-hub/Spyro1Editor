@@ -137,6 +137,7 @@ if (args.Length == 1)
     sourceExe[0] ^= 1;
     Require(source.CopySourceExecutable()[0] != sourceExe[0], "source executable snapshot immutable");
     Console.WriteLine($"SOURCE image={source.SourceImageSha256} bundle={source.BundleSha256} bytes={source.ByteLength}");
+    Console.WriteLine("NATIVE_ID65_AUTHORED_SURFACE_SOURCE_OK");
 }
 Console.WriteLine($"NATIVE_ID65_AUTHORED_SURFACE_SMOKE_OK checks={checks}");
 

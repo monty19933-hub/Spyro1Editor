@@ -82,6 +82,7 @@ class RunnerOptionsTests(unittest.TestCase):
         expected = {
             "NativeResourceCompositionSmoke": ("NATIVE_RESOURCE_COMPOSITION_SOURCE_FREE_OK", "NATIVE_RESOURCE_COMPOSITION_SOURCE_OK", ["--source"]),
             "NativeId65CompanionAssetSmoke": ("NATIVE_ID65_COMPANION_ASSET_SOURCE_FREE_OK", "NATIVE_ID65_COMPANION_ASSET_SOURCE_OK", []),
+            "NativeId65AuthoredSurfaceSmoke": ("NATIVE_ID65_AUTHORED_SURFACE_SMOKE_OK", "NATIVE_ID65_AUTHORED_SURFACE_SOURCE_OK", []),
         }
         for name, (free_marker, source_marker, arguments) in expected.items():
             with self.subTest(project=name):
@@ -308,6 +309,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeGlobalSoundSmoke": ["--source", "/selected original.bin"],
             "NativeId65EngineProfileSmoke": ["/selected original.bin"],
             "NativeId65CompanionAssetSmoke": ["/selected original.bin"],
+            "NativeId65AuthoredSurfaceSmoke": ["/selected original.bin"],
             "NativeResourceCompositionSmoke": ["--source", "/selected original.bin"],
             "NativeFreeFlightResearchSmoke": ["/selected original.bin", "/selected original.cue", str(RUNNER.ROOT)],
         }
