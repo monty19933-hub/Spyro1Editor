@@ -70,6 +70,7 @@ internal static class NativeMipsBehaviorFragmentCases
     internal static void Source(string image,Action<bool,string> check)
     {
         var native=NativeDarkHollowWizardBehaviorSource.Capture(image);
+        NativeWizardSpawn26Cases.Source(native,check);
         check(native.MainInstructionCount==558&&native.MainFragmentCount==7&&native.SpawnFragmentCount==3,"Source-owned native main/spawn frontier changed.");
         check(native.PackageSha256=="a9a8227c74a9c479f7f94c82314813809bd5caa0a5a137b0c18d614b80b3e3df"&&native.DirectExeCalls.Count==26,
             "Source package differs from the independent raw-sector manifest/call oracle.");

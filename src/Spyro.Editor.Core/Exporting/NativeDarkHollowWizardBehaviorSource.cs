@@ -20,6 +20,7 @@ public sealed class NativeDarkHollowWizardBehaviorSource
 {
     private readonly NativeMipsBehaviorFragmentPackage _main,_spawn;
     private readonly IReadOnlyDictionary<string,byte[]> _bytes;
+    private readonly Func<NativeByteExtent,byte[]> _read;
     private NativeDarkHollowWizardBehaviorSource(byte[] wizard,byte[] dark,byte[] executable)
     {
         Require(wizard,"5d3996111567ffac6eca08d340f2f691824bb7969ba2a0cd95e9346ccfe157e1");
@@ -33,6 +34,7 @@ public sealed class NativeDarkHollowWizardBehaviorSource
         NativeAddressSpace exe=new(NativeAddressKind.ExecutableFile,"retail-exe:"+Hash(executable),NativeAddressRevision.Original,executable.Length);
         byte[] Read(NativeByteExtent extent)=>extent.Space==donor?wizard.AsSpan((int)extent.Offset,(int)extent.ByteLength).ToArray():
             extent.Space==exe?executable.AsSpan((int)extent.Offset,(int)extent.ByteLength).ToArray():throw new InvalidDataException("Unbound native behavior source domain.");
+        _read=Read;
         (string Id,uint Pc,int Length,string Hash)[] main=
         [
             ("wizard-death-helper",0x8007D118,0x1C,"cb6c9b201f8e3bae8282fe1805342ed76ae068cc5538de7d027e68f13c80badb"),
@@ -141,6 +143,7 @@ public sealed class NativeDarkHollowWizardBehaviorSource
     public byte[] CopySourceFragment(string id)=>_bytes.TryGetValue(id,out var bytes)?bytes.ToArray():throw new InvalidDataException("Unknown source-owned native behavior fragment.");
     internal NativeMipsBehaviorFragmentPackage MainPackage=>_main;
     internal NativeMipsBehaviorFragmentPackage SpawnPackage=>_spawn;
+    internal byte[] ReadSourceExtent(NativeByteExtent extent)=>_read(extent);
     private static void RequireOriginal(FileStream image)
     {
         image.Position=0;if(image.Length!=NativeMobySourceInventory.OriginalImageByteLength||Convert.ToHexStringLower(SHA256.HashData(image))!=NativeMobySourceInventory.OriginalImageSha256||

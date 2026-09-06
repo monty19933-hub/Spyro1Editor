@@ -103,8 +103,9 @@ The detached result exposes these as `UnmaterializedExternalTargets`, and
 `CompleteInstalledCodeOwnerProven` remains false. All public source package
 closure/runtime/publication flags also remain false.
 
-Next required work is narrow native class-`0x26` dispatch specialization,
-source-certified particle `0x07/0x41` spawn/update integration, actual owned
+The subsequent [private class-`0x26` specialization](native-dark-wizard-class26-specialization.md)
+now carries the exact source-call and single-instruction proof separately.
+Next required work is source-certified particle `0x07/0x41` spawn/update integration, actual owned
 main adapter/callback destinations and active class roots, one final resource
 and code memory layout, valid source-bound route/collider placement, then strict
 candidate readback and runtime attack/hurt/death/re-entry testing. Source-byte
