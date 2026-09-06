@@ -190,6 +190,7 @@ class RunnerOptionsTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory(prefix="spyro-runner-route-modes-") as output:
             with mock.patch.object(RUNNER, "CORE_CASES", ((name, "NATIVE_SCENE_PROPERTIES_LINKER_SMOKE_OK"),)), \
+                    mock.patch.object(RUNNER, "SOURCE_QA_CASES", ((name, "NATIVE_GREEN_WIZARD_ROUTE_SOURCE_SMOKE_OK", ["--source-backed-route-surfaces"]),)), \
                     mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
                     mock.patch.object(RUNNER, "configured_source_image", return_value="/selected original.bin") as source, \
                     mock.patch.object(RUNNER.time, "monotonic", side_effect=lambda: clock[0]), \
@@ -211,6 +212,36 @@ class RunnerOptionsTests(unittest.TestCase):
         self.assertTrue(all("--no-build" in c and "--no-restore" in c for c, _ in runs))
         self.assertTrue(all(r["passed"] for r in summary))
         self.assertEqual(len(summary), len({r["name"] for r in summary}))
+
+    def test_inventory_source_case_binds_selected_image_and_current_workspace(self):
+        calls = []
+        name = "NativeMobyInventorySmoke"
+
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            kwargs["stdout"].write("Offline QA passed.\nNATIVE_MOBY_INVENTORY_SMOKE_OK\nNATIVE_MOBY_INVENTORY_SOURCE_SMOKE_OK\n")
+            return subprocess.CompletedProcess(command, 0)
+
+        with tempfile.TemporaryDirectory(prefix="spyro-runner-native-inventory-") as output:
+            with mock.patch.object(RUNNER, "CORE_CASES", ((name, "NATIVE_MOBY_INVENTORY_SMOKE_OK"),)), \
+                    mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                    mock.patch.object(RUNNER, "SOURCE_QA_CASES", ((name, "NATIVE_MOBY_INVENTORY_SOURCE_SMOKE_OK", ["--source"]),)), \
+                    mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                    mock.patch.object(RUNNER, "configured_source_image", return_value="/selected original.bin") as source, \
+                    mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                    mock.patch.object(sys, "argv", [str(SPEC.origin), "--with-source-qa"]), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(0, RUNNER.main())
+                source.assert_called_once_with()
+            summary = json.loads((Path(output) / "summary.json").read_text())
+        builds = [c for c in calls if c[:2] == ["dotnet", "build"]]
+        self.assertEqual(2, len(builds), "Inventory project builds once, plus App")
+        source_runs = [c for c in calls if "--source" in c]
+        self.assertEqual(1, len(source_runs))
+        command = source_runs[0]
+        self.assertEqual(["--source", "/selected original.bin", str(RUNNER.ROOT)], command[command.index("--") + 1:])
+        self.assertTrue(all(r["passed"] for r in summary))
+        self.assertEqual("source-" + name, summary[-1]["name"])
 
     def test_default_and_list_never_resolve_source_for_route_modes(self):
         for arguments in ([], ["--list"], ["--list", "--with-source-qa"]):

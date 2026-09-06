@@ -26,6 +26,7 @@ CORE_CASES = (
     ("MobyPlanTransactionSmoke", "MOBY_PLAN_TRANSACTION_SMOKE_OK"),
     ("NativeMobyDependencyFactsSmoke", "NATIVE_MOBY_DEPENDENCY_FACTS_SMOKE_OK"),
     ("NativeMobyDependencyClosureSmoke", "NATIVE_MOBY_DEPENDENCY_CLOSURE_SMOKE_OK"),
+    ("NativeMobyInventorySmoke", "NATIVE_MOBY_INVENTORY_SMOKE_OK"),
     ("NativeCollisionIndexSmoke", "NATIVE_COLLISION_INDEX_SMOKE_OK"),
     ("NativeRelocationMapSmoke", "NATIVE_RELOCATION_MAP_SMOKE_OK"),
     ("WadGrowthGapSmoke", "WAD_GROWTH_GAP_SMOKE_OK"),
@@ -62,7 +63,12 @@ ADDITIONAL_CORE_CASES = (
 SOURCE_QA_CASES = (
     ("Id65AuthoringMobyDependencyBundleCompilerSmoke", "NATIVE_GREEN_WIZARD_ROUTE_SOURCE_SMOKE_OK",
      ["--source-backed-route-surfaces"]),
+    ("NativeMobyInventorySmoke", "NATIVE_MOBY_INVENTORY_SOURCE_SMOKE_OK",
+     ["--source"]),
 )
+# These source checks additionally verify the current workspace's catalog against
+# native ownership. Resolve it only in the opted-in, deadline-bound command.
+SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke"})
 
 
 def configured_source_image():
@@ -130,7 +136,7 @@ def parse_options(arguments=None):
     parser.add_argument("--build-all", action="store_true",
                         help="Build every project, including research tools, before regressions.")
     parser.add_argument("--with-source-qa", action="store_true",
-                        help="Also run source-aware offline QA and the read-only native route audit using this checkout's configured disc/cache; offline QA creates disposable readbacks and local reports.")
+                        help="Also run source-aware offline QA and native discovery/route audits using this checkout's configured disc/cache; offline QA creates disposable readbacks and local reports.")
     parser.add_argument("--configuration", choices=("Debug", "Release"), default="Release")
     parser.add_argument("--timeout", type=int, default=600,
                         help="Maximum seconds for each build or source-free test (default: 600).")
@@ -246,11 +252,13 @@ def main():
         if offline_passed:
             for name, marker, arguments in SOURCE_QA_CASES:
                 project = ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
-                if not execute("source-" + name + "-route-surfaces",
-                        lambda project=project, arguments=arguments: [
+                suffix = "-route-surfaces" if arguments == ["--source-backed-route-surfaces"] else ""
+                if not execute("source-" + name + suffix,
+                        lambda project=project, arguments=arguments, name=name: [
                             "dotnet", "run", "--project", str(project), "--configuration",
                             options.configuration, "--no-build", "--no-restore", "--",
-                            *arguments, configured_source_image()], marker,
+                            *arguments, configured_source_image(),
+                            *([str(ROOT)] if name in SOURCE_QA_WORKSPACE_CASES else [])], marker,
                         timeout=options.source_qa_timeout, deadline=source_deadline):
                     break
     failed = sum(not result["passed"] for result in results)
