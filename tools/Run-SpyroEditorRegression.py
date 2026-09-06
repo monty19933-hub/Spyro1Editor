@@ -27,6 +27,9 @@ CORE_CASES = (
     ("NativeMobyDependencyFactsSmoke", "NATIVE_MOBY_DEPENDENCY_FACTS_SMOKE_OK"),
     ("NativeMobyDependencyClosureSmoke", "NATIVE_MOBY_DEPENDENCY_CLOSURE_SMOKE_OK"),
     ("NativeMobyInventorySmoke", "NATIVE_MOBY_INVENTORY_SMOKE_OK"),
+    ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_FREE_OK"),
+    ("NativeFreeFlightSmoke", "NATIVE_FREE_FLIGHT_SOURCE_FREE_OK"),
+    ("FreeFlightSettingsSmoke", "FREE_FLIGHT_SETTINGS_SMOKE_OK"),
     ("NativeGreenWizardMoverSmoke", "NATIVE_GREEN_WIZARD_MOVER_SMOKE_OK"),
     ("NativeLevelSlotOwnershipSmoke", "NATIVE_LEVEL_SLOT_OWNERSHIP_SMOKE_OK"),
     ("NativeCollisionIndexSmoke", "NATIVE_COLLISION_INDEX_SMOKE_OK"),
@@ -73,6 +76,8 @@ SOURCE_QA_CASES = (
      ["--source"]),
     ("NativeGreenWizardMoverSmoke", "NATIVE_GREEN_WIZARD_MOVER_SOURCE_SMOKE_OK", []),
     ("NativeLevelSlotOwnershipSmoke", "NATIVE_LEVEL_SLOT_OWNERSHIP_SOURCE_OK", ["--source"]),
+    ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_OK", ["--source"]),
+    ("NativeFreeFlightSmoke", "NATIVE_FREE_FLIGHT_SOURCE_OK", []),
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.

@@ -78,6 +78,24 @@ class OwnedCommandTests(unittest.TestCase):
 
 
 class RunnerOptionsTests(unittest.TestCase):
+    def test_flight_preferences_are_sourcefree_and_never_a_rom_writer(self):
+        self.assertEqual("FREE_FLIGHT_SETTINGS_SMOKE_OK", dict(RUNNER.CORE_CASES).get("FreeFlightSettingsSmoke"))
+        self.assertFalse(any(case[0] == "FreeFlightSettingsSmoke" for case in RUNNER.SOURCE_QA_CASES))
+        self.assertNotIn("FreeFlightSettingsSmoke", RUNNER.CASE_ARGUMENTS)
+
+    def test_animation_and_flight_have_separate_readonly_source_gates(self):
+        expected = {
+            "NativePlayerAnimationSmoke": ("NATIVE_PLAYER_ANIMATION_SOURCE_FREE_OK", "NATIVE_PLAYER_ANIMATION_SOURCE_OK", ["--source"]),
+            "NativeFreeFlightSmoke": ("NATIVE_FREE_FLIGHT_SOURCE_FREE_OK", "NATIVE_FREE_FLIGHT_SOURCE_OK", []),
+        }
+        core = dict(RUNNER.CORE_CASES)
+        for name, (free_marker, source_marker, arguments) in expected.items():
+            with self.subTest(project=name):
+                self.assertEqual(free_marker, core.get(name))
+                self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
+                self.assertEqual([(name, source_marker, arguments)], [case for case in RUNNER.SOURCE_QA_CASES if case[0] == name])
+                self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+
     def test_timeout_defaults_and_positive_validation(self):
         options = RUNNER.parse_options([])
         self.assertEqual(600, options.timeout)
@@ -250,6 +268,8 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeMobyInventorySmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeGreenWizardMoverSmoke": ["/selected original.bin"],
             "NativeLevelSlotOwnershipSmoke": ["--source", "/selected original.bin"],
+            "NativePlayerAnimationSmoke": ["--source", "/selected original.bin"],
+            "NativeFreeFlightSmoke": ["/selected original.bin"],
         }
         self.assertEqual(set(expected), {c[0] for c in cases})
         calls = []
