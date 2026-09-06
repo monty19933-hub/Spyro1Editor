@@ -232,42 +232,38 @@ internal static class NativeTownSquareLockedChestClosureCompiler
         Add("data.header",NativeMobyDependencyKind.RuntimeBuffer,[],[Read(dataOriginal,0,0x50)],c=>{
             byte[] b=c.Read("native");Put(b,20,0x5E800);for(int i=3;i<10;i++)if(U32(b,i*8)!=0)Put(b,i*8,U32(b,i*8)+0x1800);return b;},dataFinal,0,0x50);
 
-        int[] sourceIndices=[78,79,118,119,120,121,122], propOffsets=[0xEA94,0xEA98,0xEF9C,0xEFC4,0xEFEC,0xF014,0xF03C];
-        int[] propLengths=[4,0x18,0x28,0x28,0x28,0x28,0x28];
-        int donorFixupCount=checked((int)U32(peace,0x1C2800+0x11234));
-        if(donorFixupCount<1||0x11238+donorFixupCount*4>0x11800)throw new InvalidDataException("Donor native fixup envelope changed.");
-        int[] donorFields=Enumerable.Range(0,donorFixupCount).Select(i=>checked((int)U32(peace,0x1C2800+0x11238+i*4))).ToArray();
+        byte[] ReadNative(NativeByteExtent e)=>originals[e.Space].AsSpan((int)e.Offset,(int)e.ByteLength).ToArray();
+        var sharedInstances=NativeMobyDependencyClosureCompiler.Compile(nodes,
+            ["actor.registration","actor.class","behavior.bundle","key.rootless-rendering"],ReadNative);
+        var instances=NativeTownSquareLockedChestInstantiation.Capture(peaceOriginal,sceneOriginal,sceneFinal,exeOriginal,
+            [dataFinal,sceneFinal,overlayFinal,exeFinal],sharedInstances,ReadNative);
+        var allocatedRows=instances.Allocated.Rows;
         NativeTownSquarePlacementPoint[] locations=NativeTownSquareClosurePlacement.Locations(recipe);
         NativeTownSquarePlacementPoint Location(NativeMobyDependencyBuildContext c,int instance)=>recipe==NativeTownSquareClosureRecipe.PropertiesAndSoundV2
             ?locations[instance]:NativeTownSquareClosurePlacement.Decode(c.DependencyPayload("placement.site"),instance);
-        int propCursor=PropertiesEnd;
-        for(int i=0;i<7;i++)
+        for(int i=0;i<allocatedRows.Count;i++)
         {
-            int instance=i, index=107+i, length=propLengths[i], propertyOffset=propCursor;propCursor+=length;
-            string owner="instance."+index, props=owner+".props", row=owner+".row";
-            byte[] donorRow=peace.AsSpan(0x1CAA60+sourceIndices[i]*0x58,0x58).ToArray();
-            if(U32(donorRow,0)!=propOffsets[i]||U16(donorRow,0x36)!=(i==0?0xAD:i==1?0xAE:0xD))throw new InvalidDataException("Native donor row/props ownership changed.");
-            if(!donorFields.Contains(0x8260+sourceIndices[i]*0x58)||donorFields.Any(f=>f>=propOffsets[i]&&f<propOffsets[i]+length))
-                throw new InvalidDataException("Native donor private properties fixup schema changed.");
+            int instance=i;var allocated=allocatedRows[i];
+            string owner=allocated.OwnerId, props=owner+".props", row=owner+".row";
             // These native key/chest/reward blocks have no registered internal pointers.
             // Their integer owner fields are true-instance indices, not scene addresses.
-            Add(props,NativeMobyDependencyKind.InstanceProperties,recipe==NativeTownSquareClosureRecipe.SpatiallySeparatedV3?["placement.site"]:[],[Read(peaceOriginal,0x1C2800+propOffsets[i],length)],c=>{
-                byte[] b=c.Read("native");if(instance==0){if(b.Any(x=>x!=0))throw new InvalidDataException("Key initial props changed.");}
-                else {RequireWord(b,0,instance==1?78u:79u);Put(b,0,instance==1?107u:108u);}
+            Add(props,NativeMobyDependencyKind.InstanceProperties,recipe==NativeTownSquareClosureRecipe.SpatiallySeparatedV3?["placement.site"]:[],[allocated.Source.Properties],c=>{
+                byte[] b=allocated.RemapPrivateOwnerIndices(c.Read("native"));if(instance==0){if(b.Any(x=>x!=0))throw new InvalidDataException("Key initial props changed.");}
                 if(instance>=2){var location=Location(c,instance);Put(b,4,(uint)location.X);Put(b,8,(uint)location.Y);Put(b,12,(uint)location.Z);}return b;
-            },sceneFinal,propertyOffset,length,owner);
-            Add(row,NativeMobyDependencyKind.ObjectIndex,recipe==NativeTownSquareClosureRecipe.SpatiallySeparatedV3?[props,"placement.site"]:[props],[Read(peaceOriginal,0x1CAA60+sourceIndices[i]*0x58,0x58)],c=>{
+            },sceneFinal,(int)allocated.Properties.Offset,(int)allocated.Properties.ByteLength,owner);
+            Add(row,NativeMobyDependencyKind.ObjectIndex,recipe==NativeTownSquareClosureRecipe.SpatiallySeparatedV3?[props,"placement.site"]:[props],[allocated.Source.Row],c=>{
                 var location=Location(c,instance);byte[] b=c.Read("native");Put(b,0x0C,(uint)location.X);Put(b,0x10,(uint)location.Y);Put(b,0x14,(uint)location.Z);return b;
-            },sceneFinal,0x170+index*0x58,0x58,owner,[new("properties",0,props,0,4,(uint)propOffsets[i])]);
+            },sceneFinal,(int)allocated.Row.Offset,(int)allocated.Row.ByteLength,owner,[allocated.PropertiesReference]);
             Aggregate(owner,NativeMobyDependencyKind.Instance,instance==0?[row,props,"key.rootless-rendering"]:
-                instance==1?[row,props,"actor.registration","actor.class","behavior.bundle","instance.107"]:[row,props,"behavior.bundle","instance.108"]);
+                instance==1?[row,props,"actor.registration","actor.class","behavior.bundle",allocatedRows[0].OwnerId]:[row,props,"behavior.bundle",allocatedRows[1].OwnerId]);
         }
-        Add("scene.count",NativeMobyDependencyKind.ObjectIndex,[],[Read(sceneOriginal,0x16C,4)],c=>Word(114),sceneFinal,0x16C,4);
-        Add("scene.properties-length",NativeMobyDependencyKind.InstanceProperties,[],[Read(sceneOriginal,0x4E38,4)],c=>Word(0x11B8),sceneFinal,0x4E38,4);
-        Add("scene.fixups",NativeMobyDependencyKind.SceneFixup,Enumerable.Range(107,7).Select(i=>"instance."+i).ToArray(),[Read(sceneOriginal,OriginalFixup,0x208)],c=>{
-            byte[] before=c.Read("native"),b=new byte[0x224];before.CopyTo(b,0);Put(b,0,136);
-            for(int i=0;i<7;i++)Put(b,0x208+i*4,(uint)(0x170+(107+i)*0x58));return b;
-        },sceneFinal,FinalFixup,0x224);
+        Add("scene.count",NativeMobyDependencyKind.ObjectIndex,[],[Read(sceneOriginal,0x16C,4)],c=>Word((uint)instances.Allocated.FinalRowCount),sceneFinal,0x16C,4);
+        Add("scene.properties-length",NativeMobyDependencyKind.InstanceProperties,[],[Read(sceneOriginal,0x4E38,4)],c=>Word(checked(U32(c.Read("native"),0)+(uint)instances.Allocated.PropertyBytesAllocated)),sceneFinal,0x4E38,4);
+        int finalFixupBytes=checked(0x208+allocatedRows.Count*4);
+        Add("scene.fixups",NativeMobyDependencyKind.SceneFixup,allocatedRows.Select(r=>r.OwnerId).ToArray(),[Read(sceneOriginal,OriginalFixup,0x208)],c=>{
+            byte[] before=c.Read("native"),b=new byte[finalFixupBytes];before.CopyTo(b,0);Put(b,0,checked(U32(before,0)+(uint)allocatedRows.Count));
+            for(int i=0;i<allocatedRows.Count;i++)Put(b,0x208+i*4,(uint)allocatedRows[i].Row.Offset);return b;
+        },sceneFinal,FinalFixup,finalFixupBytes);
         Add("executable.copy-buffer",NativeMobyDependencyKind.RuntimeBuffer,["behavior.bundle"],[Read(exeOriginal,0x4B098,8)],c=>{byte[] b=c.Read("native");RequireWord(b,4,0x24429ECC);Put(b,4,0x2442B238);return b;},exeFinal,0x4B098,8);
         Add("executable.treasure",NativeMobyDependencyKind.ObjectIndex,[],[Read(exeOriginal,0x5FC3E,2)],c=>new byte[]{210,0},exeFinal,0x5FC3E,2);
         Add("executable.navigation",NativeMobyDependencyKind.NativeRoutine,[],[Read(exeOriginal,0x1E034,8)],c=>new byte[]{0x1C,0x06,0x84,0xAF,0x88,0x06,0x80,0xAF},exeFinal,0x1E034,8);
@@ -295,6 +291,7 @@ internal static class NativeTownSquareLockedChestClosureCompiler
         PreserveComplement("executable.preserved",exeOriginal,exeFinal,(0,0,executable.Length));
         Aggregate("bundle",NativeMobyDependencyKind.Bundle,nodes.Select(n=>n.Id).ToArray());
         NativeMobyDependencyClosurePlan graph=NativeMobyDependencyClosureCompiler.Compile(nodes,["bundle"],e=>originals[e.Space].AsSpan((int)e.Offset,(int)e.ByteLength).ToArray());
+        instances.Allocated.RequireSharedBinding(graph);
         byte[] Compose(NativeAddressSpace space)
         {
             byte[] result=new byte[space.ByteLength];
@@ -326,7 +323,7 @@ internal static class NativeTownSquareLockedChestClosureCompiler
         var placement=recipe==NativeTownSquareClosureRecipe.SpatiallySeparatedV3?NativeTownSquareClosurePlacement.CaptureCertificate(data,executable,recipe):null;
         if(placement!=null&&!graph.CopyPayload("placement.site").SequenceEqual(NativeTownSquareClosurePlacement.Encode(placement.Locations)))
             throw new InvalidDataException("Graph-driven placement does not match independently recaptured native site certificate.");
-        return new(sourcePath,layout,header,graph,finalData,finalOverlay,finalExe,Hash(legacy.Entry),recipe,placement);
+        return new(sourcePath,layout,header,graph,finalData,finalOverlay,finalExe,Hash(legacy.Entry),recipe,placement,instances);
     }
     internal static string Hash(ReadOnlySpan<byte> bytes,bool alreadyDigest=false)=>Convert.ToHexStringLower(alreadyDigest?bytes:SHA256.HashData(bytes));
     private static uint U32(byte[] bytes,int offset)=>BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(offset,4));
@@ -339,4 +336,4 @@ internal static class NativeTownSquareLockedChestClosureCompiler
 
 internal sealed record NativeTownSquareLockedChestClosure(string SourcePath,DiscLayout Layout,byte[] OriginalWadHeader,
     NativeMobyDependencyClosurePlan Graph,byte[] Data,byte[] Overlay,byte[] Executable,string LegacyDataSha256,
-    NativeTownSquareClosureRecipe Recipe,NativeTownSquarePlacementCertificate? Placement);
+    NativeTownSquareClosureRecipe Recipe,NativeTownSquarePlacementCertificate? Placement,NativeTownSquareLockedChestInstanceCapture Instances);
