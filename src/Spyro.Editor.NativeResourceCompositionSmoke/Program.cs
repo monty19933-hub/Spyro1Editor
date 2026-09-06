@@ -33,10 +33,12 @@ Check(Word(final, 0x50) == 0x2800 && Word(final, 0x54) == 0x2910, "root0 start a
 Check(new NativeLevelResourceCompositionLayout(source, 0, 0, payloads.Reverse().ToArray(), [], Read).CopyFinalBytes().AsSpan().SequenceEqual(final), "stage enumeration does not choose final bytes");
 NativeResourceCompositionCases.Run(source, original, payloads, Read, Check, Reject);
 NativeParticleDescriptorCases.Run(Check, Reject);
+NativeParticleBehaviorCases.Run(Check, Reject);
 Console.WriteLine($"NATIVE_RESOURCE_COMPOSITION_SOURCE_FREE_OK checks={checks} refused={refusals} publication=false runtime=false");
 if (args.Length == 2 && args[0] == "--source")
 {
     await NativeResourceCompositionSourceCases.RunAsync(args[1], Check, Reject);
+    NativeParticleBehaviorCases.RunSource(args[1], Check, Reject);
     Console.WriteLine($"NATIVE_RESOURCE_COMPOSITION_SOURCE_OK checks={checks} refused={refusals} publication=false runtime=false");
 }
 else if (args.Length != 0) throw new InvalidDataException("Usage: no arguments, or --source <unchanged original BIN>.");
