@@ -108,13 +108,15 @@ class RunnerOptionsTests(unittest.TestCase):
         expected = {
             "NativeGlobalSoundSmoke": ("NATIVE_GLOBAL_SOUND_SOURCE_FREE_OK", "NATIVE_GLOBAL_SOUND_SOURCE_OK", ["--source"]),
             "NativeFreeFlightResearchSmoke": ("NATIVE_FREE_FLIGHT_RESEARCH_SOURCE_FREE_OK", "NATIVE_FREE_FLIGHT_RESEARCH_SOURCE_OK", []),
+            "NativeWizardResearchSmoke": ("NATIVE_WIZARD_RESEARCH_SOURCE_FREE_OK", "NATIVE_WIZARD_RESEARCH_SOURCE_OK", []),
         }
         for name, (free_marker, source_marker, arguments) in expected.items():
             self.assertEqual(free_marker, dict(RUNNER.CORE_CASES).get(name))
             self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
             self.assertEqual([(name, source_marker, arguments)], [case for case in RUNNER.SOURCE_QA_CASES if case[0] == name])
-        self.assertEqual(frozenset({"NativeFreeFlightResearchSmoke"}), RUNNER.SOURCE_QA_CUE_CASES)
-        self.assertIn("NativeFreeFlightResearchSmoke", RUNNER.SOURCE_QA_WORKSPACE_CASES)
+        self.assertEqual(frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke"}), RUNNER.SOURCE_QA_CUE_CASES)
+        for name in RUNNER.SOURCE_QA_CUE_CASES:
+            self.assertIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
 
     def test_flight_preferences_are_sourcefree_and_never_a_rom_writer(self):
         self.assertEqual("FREE_FLIGHT_SETTINGS_SMOKE_OK", dict(RUNNER.CORE_CASES).get("FreeFlightSettingsSmoke"))
@@ -316,6 +318,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeWizardPlacementSmoke": ["/selected original.bin"],
             "NativeResourceCompositionSmoke": ["--source", "/selected original.bin"],
             "NativeFreeFlightResearchSmoke": ["/selected original.bin", "/selected original.cue", str(RUNNER.ROOT)],
+            "NativeWizardResearchSmoke": ["/selected original.bin", "/selected original.cue", str(RUNNER.ROOT)],
         }
         self.assertEqual(set(expected), {c[0] for c in cases})
         calls = []
@@ -337,7 +340,8 @@ class RunnerOptionsTests(unittest.TestCase):
                     contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(0, RUNNER.main())
                 self.assertEqual(len(cases), source.call_count)
-                cue.assert_called_once_with()
+                self.assertEqual(len([c for c in cases if c[0] in RUNNER.SOURCE_QA_CUE_CASES]), cue.call_count)
+                self.assertTrue(all(call == mock.call() for call in cue.call_args_list))
             summary = json.loads((Path(output) / "summary.json").read_text())
         runs = [c for c in calls if c[:2] == ["dotnet", "run"]]
         self.assertEqual(len(cases), len(runs))
