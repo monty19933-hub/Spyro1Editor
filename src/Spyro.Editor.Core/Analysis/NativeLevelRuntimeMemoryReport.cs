@@ -135,6 +135,24 @@ public sealed class NativeLevelRuntimeMemoryReport
             CopyBufferBinding+"; unchanged EXE with source-issued resource composition "+plan.FinalDataSha256);
     }
 
+    public NativeLevelRuntimeMemoryReport AnalyzeDarkWizardOverlay(NativeDarkHollowWizardOverlayPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        byte[] data=plan.CopyFinalLevelData(),originalExe=plan.CopyOriginalExecutable(),executable=plan.CopyExecutable(),overlay=plan.CopyOverlay();
+        if(!NativeSourceCertified||LevelId!=12||Hash(data)!=AnalyzedDataSha256||CopyBufferAddress!=plan.OriginalCopyBufferAddress||
+            Hash(originalExe)!="a533d75cab8afaae6107ec35a02a9a5fe979a92c7c955f9cf1ee50f693a1b998"||
+            DecodeCopyBuffer(originalExe,0x4B048)!=CopyBufferAddress||executable.Length!=originalExe.Length||
+            !executable.AsSpan(0,0x4B048).SequenceEqual(originalExe.AsSpan(0,0x4B048))||
+            !executable.AsSpan(0x4B050).SequenceEqual(originalExe.AsSpan(0x4B050)))
+            throw new InvalidDataException("Native overlay does not own this source-certified resource/copy-buffer report.");
+        uint copy=DecodeCopyBuffer(executable,0x4B048);
+        if(copy!=plan.FinalCopyBufferAddress||overlay.Length<=0xB000||overlay.Length%0x800!=0||copy!=0x8007AA38L+overlay.Length)
+            throw new InvalidDataException("Native overlay copy buffer is not its exact complete final code-owner end.");
+        plan.RequireFinal(overlay,executable,data);
+        return new(LevelId,data,copy,NormalReservedBufferStart,SourceDataSha256,true,
+            CopyBufferBinding+"; source-certified appended Wizard overlay "+plan.OverlaySha256);
+    }
+
     internal static NativeLevelRuntimeMemoryReport AnalyzeTownClosure(NativeTownSquareLockedChestClosure closure)
     {
         // This read-only adapter recognizes the two existing immutable receipts;

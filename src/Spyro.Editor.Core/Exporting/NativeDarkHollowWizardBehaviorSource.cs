@@ -21,17 +21,21 @@ public sealed class NativeDarkHollowWizardBehaviorSource
     private readonly NativeMipsBehaviorFragmentPackage _main,_spawn;
     private readonly IReadOnlyDictionary<string,byte[]> _bytes;
     private readonly Func<NativeByteExtent,byte[]> _read;
+    private readonly byte[] _dark,_executable;
+    private readonly NativeAddressSpace _executableDomain;
     private NativeDarkHollowWizardBehaviorSource(byte[] wizard,byte[] dark,byte[] executable)
     {
         Require(wizard,"5d3996111567ffac6eca08d340f2f691824bb7969ba2a0cd95e9346ccfe157e1");
         Require(dark,"9920aa47b94005166f457b5b36df6dedd1f2400f91698bac21cdb01d8590ef32");
         Require(executable,"a533d75cab8afaae6107ec35a02a9a5fe979a92c7c955f9cf1ee50f693a1b998");
+        _dark=dark.ToArray();_executable=executable.ToArray();
         Require(dark.AsSpan(0x408,0xF4),"56d3261e7e3843e492530f9c4470b1818b3474d275d41325c8de2870a7530a7c");
         Require(wizard.AsSpan(0xD70,0xA0),"352ef40d508106eee9499c0786a0a286bc2e58928df34e1ecba77364a73d8904");
         Require(wizard.AsSpan(0xC354,0x4C),"d8c482d83bfe5091eaa55ab056f74ca2a01f96e846e0aaffcc51fd780ccf129e");
         Require(dark.AsSpan(0x7EDC,0x4C),"93e30da4cb5ceba3232f2ef282fff31f44c453a6833e8aa70f25d5ca7f0f0a36");
         NativeAddressSpace donor=new(NativeAddressKind.LevelData,"wizard-overlay:"+Hash(wizard),NativeAddressRevision.Original,wizard.Length);
         NativeAddressSpace exe=new(NativeAddressKind.ExecutableFile,"retail-exe:"+Hash(executable),NativeAddressRevision.Original,executable.Length);
+        _executableDomain=exe;
         byte[] Read(NativeByteExtent extent)=>extent.Space==donor?wizard.AsSpan((int)extent.Offset,(int)extent.ByteLength).ToArray():
             extent.Space==exe?executable.AsSpan((int)extent.Offset,(int)extent.ByteLength).ToArray():throw new InvalidDataException("Unbound native behavior source domain.");
         _read=Read;
@@ -144,6 +148,16 @@ public sealed class NativeDarkHollowWizardBehaviorSource
     internal NativeMipsBehaviorFragmentPackage MainPackage=>_main;
     internal NativeMipsBehaviorFragmentPackage SpawnPackage=>_spawn;
     internal byte[] ReadSourceExtent(NativeByteExtent extent)=>_read(extent);
+    internal byte[] CopyOriginalDarkOverlay()=>_dark.ToArray();
+    internal byte[] CopyOriginalExecutable()=>_executable.ToArray();
+    internal NativeMipsBehaviorExternalBinding BindExactExecutableCall(uint callPc)
+    {
+        var calls=_main.Transfers.Concat(_spawn.Transfers).Where(t=>t.SourcePc==callPc&&t.Kind==NativeMipsBehaviorTransferKind.Call26).ToArray();
+        if(calls.Length!=1||calls[0].TargetPc is not uint target||!DirectExeCalls.Any(c=>c.RuntimePc==target))
+            throw new InvalidDataException("Unknown source-certified native executable call site.");
+        var evidence=new NativeMobyDependencyRead("retail-executable",new(_executableDomain,0,_executable.Length),Hash(_executable));
+        return new(callPc,target,target,new(_executableDomain,target-0x8000F800,4),evidence,0x8000F800);
+    }
     private static void RequireOriginal(FileStream image)
     {
         image.Position=0;if(image.Length!=NativeMobySourceInventory.OriginalImageByteLength||Convert.ToHexStringLower(SHA256.HashData(image))!=NativeMobySourceInventory.OriginalImageSha256||
