@@ -78,6 +78,62 @@ class OwnedCommandTests(unittest.TestCase):
 
 
 class RunnerOptionsTests(unittest.TestCase):
+    def test_wizard_append_modes_are_readonly_and_require_their_exact_markers(self):
+        name = "NativeWizardAppendSmoke"
+        free_marker = "NATIVE_WIZARD_APPEND_SOURCE_FREE_OK"
+        source_marker = "NATIVE_WIZARD_APPEND_SOURCE_OK"
+        self.assertEqual([(name, free_marker)], [c for c in RUNNER.CORE_CASES if c[0] == name])
+        self.assertEqual([(name, source_marker, ["--source"])],
+                         [c for c in RUNNER.SOURCE_QA_CASES if c[0] == name])
+        self.assertIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
+        for scenario, opted_in, free_ok, source_ok in (
+                ("default", False, True, True), ("opt-in", True, True, True),
+                ("missing-free-marker", True, False, True), ("missing-source-marker", True, True, False)):
+            calls = []
+
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                kwargs["stdout"].write("Offline QA passed.\n")
+                if command[:2] == ["dotnet", "run"]:
+                    marker = source_marker if "--source" in command else free_marker
+                    marker_ok = source_ok if "--source" in command else free_ok
+                    if marker_ok:
+                        kwargs["stdout"].write(marker + "\n")
+                return subprocess.CompletedProcess(command, 0)
+
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory(prefix="spyro-runner-wizard-append-") as output:
+                with mock.patch.object(RUNNER, "CORE_CASES", tuple(c for c in RUNNER.CORE_CASES if c[0] == name)), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "SOURCE_QA_CASES", tuple(c for c in RUNNER.SOURCE_QA_CASES if c[0] == name)), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", return_value="/selected original.bin") as source, \
+                        mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("unowned CUE read")) as cue, \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin), *(["--with-source-qa"] if opted_in else [])]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0 if free_ok and (not opted_in or source_ok) else 1, RUNNER.main())
+                    self.assertEqual(int(opted_in and free_ok), source.call_count)
+                    cue.assert_not_called()
+                summary = json.loads((Path(output) / "summary.json").read_text())
+            self.assertEqual(2, len([c for c in calls if c[:2] == ["dotnet", "build"]]))
+            runs = [c for c in calls if c[:2] == ["dotnet", "run"]]
+            self.assertEqual(1 + int(opted_in and free_ok), len(runs))
+            self.assertNotIn("--", runs[0], "Default mode cannot receive a source image or workspace argument")
+            if opted_in and free_ok:
+                self.assertEqual(["--source", "/selected original.bin", str(RUNNER.ROOT)], runs[1][runs[1].index("--") + 1:])
+                self.assertEqual("source-" + name, summary[-1]["name"])
+                self.assertEqual(source_ok, summary[-1]["passed"])
+            if not free_ok:
+                self.assertFalse(any(c[0] == "env" for c in calls), "Missing source-free marker must stop all source QA")
+                self.assertFalse(summary[-1]["passed"])
+            for command in runs:
+                self.assertIn("--no-build", command)
+                self.assertIn("--no-restore", command)
+                self.assertFalse(any(flag in command for flag in ("--publish", "--verify", "--faults", "--exercise-staging")))
+            self.assertEqual(len(summary), len({row["name"] for row in summary}))
+
     def test_persistent_owner_modes_bind_source_and_workspace_only_when_opted_in(self):
         name = "NativeMobyPersistentOwnerSmoke"
         free_marker = "NATIVE_MOBY_PERSISTENT_OWNER_SOURCE_FREE_OK"
@@ -355,6 +411,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeMobyDependencyClosureSmoke": ["--source-v3", "/selected original.bin"],
             "NativeMobyInventorySmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeMobyPersistentOwnerSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
+            "NativeWizardAppendSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeGreenWizardMoverSmoke": ["/selected original.bin"],
             "NativeLevelSlotOwnershipSmoke": ["--source", "/selected original.bin"],
             "NativePlayerAnimationSmoke": ["--source", "/selected original.bin"],

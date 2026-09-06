@@ -109,6 +109,7 @@ internal sealed class NativeMobySceneAppendPlan
     public NativeMobyDependencyClosurePlan Graph { get; }
     public NativeMobyDependencyInstantiationPlan Allocation { get; }
     public string FinalSha256 { get; }
+    internal byte[] CopyOriginalScene()=>_source.CopyScene();
     public byte[] CopyScene()=>_scene.ToArray();
     public void Verify(ReadOnlySpan<byte> original,ReadOnlySpan<byte> final)
     {
@@ -118,6 +119,24 @@ internal sealed class NativeMobySceneAppendPlan
     public static NativeMobySceneAppendPlan Compile(NativeMobySceneAppendSource source,NativeAddressSpace finalScene,
         IReadOnlyList<NativeAddressSpace> finalDomains,NativeAddressSpace runtimeExe,
         IEnumerable<NativeMobySceneAppendRequest> requests,Func<NativeByteExtent,byte[]> reader)
+        =>CompileCore(source,finalScene,finalDomains,runtimeExe,requests,reader,null,null);
+
+    // The public source profile separately binds the complete donor/private
+    // schema. This seam rebinds exact target row identity and maps its single
+    // role families into current domains; it is not a generic family issuer.
+    internal static NativeMobySceneAppendPlan CompileWithPersistentOwners(NativeMobySceneAppendSource source,
+        NativeAddressSpace finalScene,IReadOnlyList<NativeAddressSpace> finalDomains,NativeAddressSpace runtimeExe,
+        IEnumerable<NativeMobySceneAppendRequest> requests,Func<NativeByteExtent,byte[]> reader,
+        NativeMobyPersistentOwnerSource ownerSource,NativeMobyPersistentOwnerLedger owners)
+    {
+        ArgumentNullException.ThrowIfNull(ownerSource);ArgumentNullException.ThrowIfNull(owners);
+        return CompileCore(source,finalScene,finalDomains,runtimeExe,requests,reader,ownerSource,owners);
+    }
+
+    private static NativeMobySceneAppendPlan CompileCore(NativeMobySceneAppendSource source,NativeAddressSpace finalScene,
+        IReadOnlyList<NativeAddressSpace> finalDomains,NativeAddressSpace runtimeExe,
+        IEnumerable<NativeMobySceneAppendRequest> requests,Func<NativeByteExtent,byte[]> reader,
+        NativeMobyPersistentOwnerSource? ownerSource,NativeMobyPersistentOwnerLedger? owners)
     {
         ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(finalScene);
         ArgumentNullException.ThrowIfNull(finalDomains);ArgumentNullException.ThrowIfNull(requests);ArgumentNullException.ThrowIfNull(reader);
@@ -152,8 +171,37 @@ internal sealed class NativeMobySceneAppendPlan
         long finalFixupEnd=(long)source.FixupEnd+privateBytes+4*(rowCount+refCount);
         if(finalFixupEnd>original.Length)throw new InvalidDataException("Native scene zero-tail capacity is exhausted.");
         var allocation=NativeMobyDependencyInstantiationPlan.Create(new(finalScene,firstRow,rowCount*0x58),
-            new(finalScene,source.PropertiesEnd,privateBytes),source.RowTableOffset,source.PlacedCount,finalDomains,runtimeExe)
-            .Allocate(batch.Select(r=>r.Instances));
+            new(finalScene,source.PropertiesEnd,privateBytes),source.RowTableOffset,source.PlacedCount,finalDomains,runtimeExe);
+        if(owners==null)
+            allocation=allocation.Allocate(batch.Select(r=>r.Instances)); // Preserve the original API's exact batch behavior.
+        else
+        {
+            if(ownerSource==null||!owners.SourceCertified||ownerSource.OriginalRowCount!=source.PlacedCount||
+                ownerSource.Binding.OriginalRowsSha256!=NativeMobySceneAppendSource.Hash(original.AsSpan(source.RowTableOffset,source.PlacedCount*0x58)))
+                throw new InvalidDataException("Persistent scene compilation requires the actual original target row fingerprint and source-issued ledger.");
+            owners=ownerSource.Restore(owners.Serialize());
+            owners.RequireNoUnmaterializedRetirements();
+            if(owners.HighWater!=source.PlacedCount+rowCount||owners.HighWater>256||
+                batch.Any(r=>r.Instances.Template.Rows.Count!=1)||owners.Entries.Count!=batch.Count||
+                owners.Entries.Select(e=>e.FamilyId).Distinct(StringComparer.Ordinal).Count()!=batch.Count||
+                batch.Select(r=>r.Instances.Id).Distinct(StringComparer.Ordinal).Count()!=batch.Count)
+                throw new InvalidDataException("Persistent scene emission requires a complete one-role active-family bijection below256.");
+            foreach(var entry in owners.Entries.OrderBy(e=>e.NativeIndex))
+            {
+                var request=batch.SingleOrDefault(r=>r.Instances.Id==entry.FamilyId)
+                    ??throw new InvalidDataException("Persistent scene cannot omit or compact a reserved active family.");
+                var schema=request.Instances.Template.Rows.Single();
+                if(schema.Role!=entry.RoleId||schema.SourceInstanceIndex!=entry.Role.DonorTrueIndex||schema.NativeClass!=entry.NativeClass)
+                    throw new InvalidDataException("Persistent ordinal is not bound to the current single-role native schema.");
+                // Allocate sorts a NEW batch. A singleton retains the accepted
+                // temporal order without weakening canonical domain/private/
+                // shared/global conflict validation or inventing row indexes.
+                allocation=allocation.Allocate([request.Instances]);
+                var allocated=allocation.Families.Single(f=>f.Id==entry.FamilyId).Rows.Single();
+                if(allocated.Index!=entry.NativeIndex)
+                    throw new InvalidDataException("Current scene allocation changed a persistent native owner ordinal.");
+            }
+        }
         List<NativeMobyDependencyNode> nodes=[];List<NativeByteExtent> writes=[];
         HashSet<string> sharedIds=[];
         foreach(var family in allocation.Families)
