@@ -200,6 +200,46 @@ separately. All source/test files were frozen during the gate. Evidence is
 byte-compared `root-default-report/` copy. This is not the full build-all/source
 QA gate, a new emulator run, a persistence/UI integration or an installed build.
 
+## Document-to-native compilation and usage closeout
+
+`NativeId65FreshDocumentCompilation` now binds the actual immutable fresh
+document, detached canonical bytes/SHA and source-issued native disc plan.
+Every editable field projects through the established native producers. The
+fixed starter factory delegates through the same compiler with its exact old
+defaults; its independent old smoke recipe remains a comparison control.
+No document persistence, new UI, ordinary exporter or publisher permission was
+added. Edited documents still cannot use the exact A/N16/track19 publisher.
+
+Tests-first RED:8 missing API errors, zero warnings. Focused Release build:
+3.66 seconds, zero warnings/errors;81 source-free and182 source-inclusive
+checks passed. Tests compare all five native byte owners, full PlanSHA, CUE
+and receipt for the baseline, then check every relevant native field in two
+edited documents. The first raw-field test missed the actual8-byte texture-
+metadata prefix; its failed log is preserved and the corrected locator checks
+that prefix explicitly. No production bytes or golden expectations changed.
+Root and independent review found no actionable issues. The exact retained
+R02 candidate was reopened again through the document-backed factory with
+unchanged BIN, CUE, receipt, PlanSHA and1253 changed sectors.
+
+The final default Release gate passed113 steps/zero failures,70.59 seconds
+summed, including rebuilding App. Python discovery passed71 tests with one
+explicit-source skip; the five-test original-source observer suite also passed
+separately. Evidence and a byte-compared complete default-report copy are at
+`_local/research/native-fresh-document-compilation-20260906/root-closeout/`.
+This is not another full290-step gate or an installed editor build. No emulator
+session was opened for this final compiler batch; earlier actual LAB gameplay
+remains separately recorded and bounded.
+
+The work is being safely paused for the user's usage reserve, not declared
+complete. The final account reading showed approximately8% remaining, so this
+bounded batch closes with headroom before the requested5% threshold. Root
+independently reran the source compiler's182 checks after the final build and
+rehashed the original BIN/CUE/card, restored INIs and R02 candidate unchanged.
+See [the exact continuation checklist](native-editor-resume-20260906.md)
+and [the user-facing progress report](spyro-progress-for-john-20260906.md).
+Do not consume a reset credit or schedule an automatic resume. Resume only
+after John explicitly asks, preserving existing completed work and test evidence.
+
 ## Preservation and emulator cleanup (prior Wizard session)
 
 The owned Wizard observer and DuckStation session were closed normally. Temporary playback/controller settings were restored from their original backups. The original memory card was never overwritten. Final post-gate SHA-256 checks match the original BIN/CUE, retained Wizard BIN/CUE/receipt, both restored DuckStation INIs, and original memory card.

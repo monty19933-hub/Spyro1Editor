@@ -1,3 +1,5 @@
+using Spyro.Editor.Core.Editing;
+
 namespace Spyro.Editor.Core.Exporting;
 
 /// <summary>
@@ -15,20 +17,10 @@ public static class NativeId65FreshStarterResearchFactory
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceCue);
         string image = Path.GetFullPath(originalBin), cue = Path.GetFullPath(sourceCue);
 
-        var surface = await NativeId65AuthoredSurfaceBundle.CaptureAsync(image,
-            new(8448, 8448, 8704, 1024, 1024, 0x708050, 0x406080), token);
-        var companion = await NativeId65CompanionAssetPlan.CaptureAsync(image, token);
-        var resources = await NativeId65NormalResourceBundle.CaptureAsync(image, surface, companion, token);
-        var lists = await NativeId65ZeroSceneAnimationLists.CaptureAsync(image, token);
-        token.ThrowIfCancellationRequested();
-        var chain = NativeId65NormalResourceChain.Compile(resources, lists);
-        token.ThrowIfCancellationRequested();
-        var scene = await NativeId65FreshSceneBundle.CaptureAsync(image, chain,
-            new(8960, 8960, 9216, 64), 16, token);
-        var staging = await NativeId65NormalUploadStaging.CaptureAsync(image, scene, token);
-        var body = await NativeId65NormalBodyPlan.CaptureAsync(image, scene, staging, token);
-        var disc = await NativeId65FreshDiscPlan.CaptureAsync(image, body, 19, token);
-        var candidate = await NativeId65FreshDiscResearchCandidatePlan.CaptureAsync(image, cue, disc, token);
+        var intent = NativeId65FreshDocumentIntent.Create(8448, 8448, 8704, 1024, 1024,
+            8960, 8960, 64, new(80, 128, 112), new(128, 96, 64), 19);
+        var compiled = await NativeId65FreshDocumentCompilation.CaptureAsync(image, intent, token);
+        var candidate = await NativeId65FreshDiscResearchCandidatePlan.CaptureAsync(image, cue, compiled.DiscPlan, token);
         token.ThrowIfCancellationRequested();
         return candidate;
     }

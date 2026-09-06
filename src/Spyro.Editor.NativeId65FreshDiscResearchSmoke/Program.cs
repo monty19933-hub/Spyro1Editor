@@ -9,7 +9,7 @@ bool verifyMode = args.Length == 4 && args[0] == "--verify";
 if (args.Length != 0 && !sourceMode && !stagingMode && !publicationMode && !verifyMode)
     throw new ArgumentException("Usage: NativeId65FreshDiscResearchSmoke [--source BIN CUE | --stage-faults BIN CUE absent-workspace | --exercise-publication BIN CUE absent-workspace | --verify BIN CUE existing-candidate-directory]");
 
-int checks = ResearchCases.SourceFree() + await FactoryCases.SourceFree();
+int checks = ResearchCases.SourceFree() + await FactoryCases.SourceFree() + await CompilationCases.SourceFree();
 if (sourceMode || stagingMode || publicationMode || verifyMode)
 {
     var plan = await NativeId65FreshStarterResearchFactory.CaptureAsync(args[1], args[2]);
@@ -20,6 +20,8 @@ if (sourceMode || stagingMode || publicationMode || verifyMode)
         NativeId65FreshDiscPlan issued = await BuildDisc(args[1], 8960, 16, 19);
         var control = await NativeId65FreshDiscResearchCandidatePlan.CaptureAsync(args[1], args[2], issued);
         checks += FactoryCases.Source(control, plan);
+        if (sourceMode)
+            checks += await CompilationCases.Source(args[1], args[2], issued, control);
         checks += await ResearchCases.Source(plan, args[1], args[2], issued,
             (x, rows, track) => BuildDisc(args[1], x, rows, track));
         if (stagingMode)

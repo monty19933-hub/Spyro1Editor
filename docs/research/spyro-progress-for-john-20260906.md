@@ -80,10 +80,13 @@ have been verified unchanged.
   than only inside a test program. This is a building block for the editor,
   not yet a new UI action or export of your edited Lab document.
 - **Editable fresh-document foundation:** a separate, immutable document format
-  now holds floor dimensions/position, spawn, display colors and all46 supported
-  music choices. Its strict canonical parser passes160 checks. Existing Lab
-  saves keep their original meaning. File saving, viewport controls and
-  document-bound game compilation are still separate integration steps.
+  now holds floor dimensions/position, spawn, display colors and all 46 supported
+  music choices. Its strict canonical parser passes 160 checks. The document
+  now drives native compilation: two edited examples changed the actual floor,
+  collision, spawn, colors and/or music bytes. The original starter remains
+  byte-exact. Existing Lab saves keep their original meaning. File saving,
+  viewport controls and publication of edited documents are still pending;
+  these new examples have not yet been gameplay-tested.
 - **Fresh-level gameplay diagnostics:** a dedicated, read-only observer now
   checks the new level's actual initialized resource layout. Its 17 tests and
   five original-game source checks pass; the existing Wizard observer's 14
@@ -94,18 +97,19 @@ have been verified unchanged.
 
 ## Next steps
 
-1. Preserve the completed shared textured resource-to-body integration and its
-   tests rejecting mixed/stale resource sets, even when transfer bytes match.
-2. Preserve the completed fresh LAB entry/idle/controlled-walk evidence and
-   expand testing deliberately. Connect the tested starter through shared
-   production code without calling it an export of an editable document.
-   Fresh-native authoring needs its own explicit document/projection contract;
-   existing saved Lab documents must not silently change meaning.
-3. Complete Wizard combat/reward/re-entry and multiple-instance tests before
+1. Complete Wizard combat/reward/re-entry and multiple-instance tests before
    expanding the supported native dependency combinations.
-4. Connect the validated new-level pipeline to practical UI authoring, persistence
-   and export controls. Expose unsupported combinations clearly rather than
-   silently claiming universal compatibility.
+2. Build a practical fresh-level editing workflow around the now-connected
+   document and native compiler: save/reopen, viewport editing and preview,
+   then separately guarded edited-candidate output and DuckStation tests.
+   Preserve existing saved Lab documents and the exact tested starter.
+3. Carry the tested cross-level texture/body work through disc output and UI,
+   retaining complete texture/resource ownership checks. Expand native gameplay
+   action/transition coverage as each new combination becomes available.
+
+Unsupported combinations must remain visible rather than silently claiming
+universal compatibility. The detailed [resume checklist](native-editor-resume-20260906.md)
+records what to do next without repeating the completed investigation.
 
 **There is not yet a new unrestricted, fully editable blank-level editor to
 install.** The current editor remains usable, and the new foundations are
@@ -115,10 +119,13 @@ tracked separately so the eventual editor reflects what has really passed.
 Latest integrated verification: 113 default Release steps passed with zero
 failures, including rebuilding App. All 71 Python tests completed successfully
 (one original-ROM-only case is explicitly skipped there and passed separately).
-The full fresh-disc source checks also passed after the textured-body changes. This did not install
-or launch a new editor, and is separate from the earlier full 290-step gate.
+The final document compiler's 182 source-inclusive checks passed again in the
+lead engineer's independent run. The full fresh-disc source checks also passed
+after the earlier textured-body changes. This did not install or launch a new
+editor, and is separate from the earlier full 290-step gate.
 
-Usage instruction for this work session: continue while budget permits, begin
-safe closeout before roughly 5% remaining, save commits and a precise continuation
-note, then wait for John to reset usage and explicitly resume. Do not redeem a
-reset credit or auto-resume while paused.
+Work is paused at this tested checkpoint with approximately 8% account usage
+remaining, leaving a little extra reserve before the requested 5% limit. The
+editor goal is not complete. The next steps and exact evidence are saved in the
+resume checklist. No reset credit has been consumed; wait for John to explicitly
+resume rather than restarting automatically.
