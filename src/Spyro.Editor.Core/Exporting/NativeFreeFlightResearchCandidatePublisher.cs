@@ -21,9 +21,6 @@ internal enum NativeFreeFlightResearchFault { None, AfterRelocation, AfterExecut
 /// </summary>
 public static class NativeFreeFlightResearchCandidatePublisher
 {
-    private static readonly string[] Names = [NativeFreeFlightResearchCandidatePlan.ImageName,
-        NativeFreeFlightResearchCandidatePlan.ReceiptName, NativeFreeFlightResearchCandidatePlan.CueName];
-
     public static Task<NativeFreeFlightResearchPublication> PublishAsync(NativeFreeFlightResearchCandidatePlan plan,
         string outputDirectory, CancellationToken cancellationToken = default) =>
         PublishCoreAsync(plan, outputDirectory, NativeFreeFlightResearchFault.None, null, cancellationToken);
@@ -37,7 +34,7 @@ public static class NativeFreeFlightResearchCandidatePublisher
     {
         ArgumentNullException.ThrowIfNull(plan);
         string root = ResolveOutput(plan, outputDirectory);
-        if (!IsCompleteSet(root)) throw new InvalidDataException("Research candidate set is missing or incomplete.");
+        if (!IsCompleteSet(plan, root)) throw new InvalidDataException("Research candidate set is missing or incomplete.");
         await plan.RequireFreshAsync(cancellationToken);
         var result = VerifySet(plan, root);
         await plan.RequireFreshAsync(cancellationToken);
@@ -51,7 +48,7 @@ public static class NativeFreeFlightResearchCandidatePublisher
         ArgumentNullException.ThrowIfNull(plan);
         if (!Enum.IsDefined(fault)) throw new ArgumentException("Unknown research fault.", nameof(fault));
         string root = ResolveOutput(plan, outputDirectory);
-        if (IsCompleteSet(root)) return await VerifyAsync(plan, root, cancellationToken);
+        if (IsCompleteSet(plan, root)) return await VerifyAsync(plan, root, cancellationToken);
         await plan.RequireFreshAsync(cancellationToken);
         Directory.CreateDirectory(root);
         RequireNoLink(root);
@@ -70,7 +67,7 @@ public static class NativeFreeFlightResearchCandidatePublisher
             var payload = plan.CopyInsertionPayload();
             NativeSkyWadRelocationPlan relocation = NativeSkyWadRelocator.BuildPlan(plan.SourceImagePath, analysis, [payload]);
             plan.RequireRelocation(relocation);
-            string imagePath = Path.Combine(stage, NativeFreeFlightResearchCandidatePlan.ImageName);
+            string imagePath = Path.Combine(stage, plan.OutputImageName);
             // Shared typed insertion/writer; the separately constructed complete
             // target and raw-sector oracle do not borrow this writer's output.
             NativeSkyWadRelocator.WriteExpandedImage(plan.SourceImagePath, imagePath, analysis, relocation, [payload]);
@@ -82,7 +79,7 @@ public static class NativeFreeFlightResearchCandidatePublisher
                 if (liveExe.Lba != plan.RelocatedExecutableLba || liveExe.Size != 0x66000)
                     throw new InvalidDataException("Research relocation did not install the expected live executable owner.");
                 byte[] current = DiscImage.ReadFileBytes(output, liveLayout, liveExe.Lba, 0, liveExe.Size);
-                byte[] changed = plan.ExecutablePatch.ApplyToExecutable(current);
+                byte[] changed = plan.ApplyToExecutable(current);
                 if (!changed.AsSpan().SequenceEqual(plan.CopyExecutable()))
                     throw new InvalidDataException("Research executable differs from its independently bound byte plan.");
                 DiscImage.WriteFileBytes(output, liveLayout, liveExe.Lba, 0, changed);
@@ -91,14 +88,14 @@ public static class NativeFreeFlightResearchCandidatePublisher
             Checkpoint(NativeFreeFlightResearchFault.AfterExecutable, imagePath);
             var verified = plan.VerifyImage(imagePath);
             WriteNew(Path.Combine(stage, NativeFreeFlightResearchCandidatePlan.ReceiptName), plan.BuildReceipt(verified));
-            WriteNew(Path.Combine(stage, NativeFreeFlightResearchCandidatePlan.CueName), plan.CopyCueBytes());
+            WriteNew(Path.Combine(stage, plan.OutputCueName), plan.CopyCueBytes());
             _ = VerifySet(plan, stage);
             Checkpoint(NativeFreeFlightResearchFault.BeforePublication, imagePath);
             await plan.RequireFreshAsync(cancellationToken);
             if (VerifySet(plan, stage) != verified)
                 throw new InvalidDataException("Research staging changed before publication.");
             ExportArtifactPublicationResult publication = ExportArtifactTransaction.PublishNew(root,
-                Names.Select(name => new ExportArtifactReplacement(Path.Combine(root, name), Path.Combine(stage, name))).ToArray(),
+                plan.OutputNames.Select(name => new ExportArtifactReplacement(Path.Combine(root, name), Path.Combine(stage, name))).ToArray(),
                 cancellationToken);
             published = true;
             retainedRecovery = !string.IsNullOrEmpty(publication.RetainedRecoveryDirectory);
@@ -122,7 +119,7 @@ public static class NativeFreeFlightResearchCandidatePublisher
             if (!retainedRecovery)
             {
                 // Never enumerate/delete another owner's stage or recovery data.
-                foreach (string name in Names.Append("source-wad-analysis.json"))
+                foreach (string name in plan.OutputNames.Append("source-wad-analysis.json"))
                 {
                     string path = Path.Combine(stage, name);
                     if (File.Exists(path)) File.Delete(path);
@@ -143,22 +140,22 @@ public static class NativeFreeFlightResearchCandidatePublisher
 
     private static (string Hash, int Changed) VerifySet(NativeFreeFlightResearchCandidatePlan plan, string directory)
     {
-        foreach (string name in Names) RequireNoLink(Path.Combine(directory, name));
-        var result = plan.VerifyImage(Path.Combine(directory, NativeFreeFlightResearchCandidatePlan.ImageName));
+        foreach (string name in plan.OutputNames) RequireNoLink(Path.Combine(directory, name));
+        var result = plan.VerifyImage(Path.Combine(directory, plan.OutputImageName));
         if (!File.ReadAllBytes(Path.Combine(directory, NativeFreeFlightResearchCandidatePlan.ReceiptName))
                 .AsSpan().SequenceEqual(plan.BuildReceipt(result)) ||
-            !File.ReadAllBytes(Path.Combine(directory, NativeFreeFlightResearchCandidatePlan.CueName))
+            !File.ReadAllBytes(Path.Combine(directory, plan.OutputCueName))
                 .AsSpan().SequenceEqual(plan.CopyCueBytes()) ||
-            !DiscCueSheet.ReferencesDataImage(Path.Combine(directory, NativeFreeFlightResearchCandidatePlan.CueName),
-                Path.Combine(directory, NativeFreeFlightResearchCandidatePlan.ImageName)))
+            !DiscCueSheet.ReferencesDataImage(Path.Combine(directory, plan.OutputCueName),
+                Path.Combine(directory, plan.OutputImageName)))
             throw new InvalidDataException("Research CUE/receipt failed exact companion binding.");
         return result;
     }
 
     private static NativeFreeFlightResearchPublication Result(NativeFreeFlightResearchCandidatePlan plan,
         string root, (string Hash, int Changed) result, string retainedRecovery = "") => new(root,
-            Path.Combine(root, NativeFreeFlightResearchCandidatePlan.ImageName),
-            Path.Combine(root, NativeFreeFlightResearchCandidatePlan.CueName),
+            Path.Combine(root, plan.OutputImageName),
+            Path.Combine(root, plan.OutputCueName),
             Path.Combine(root, NativeFreeFlightResearchCandidatePlan.ReceiptName), result.Hash, plan.PlanSha256, result.Changed,
             retainedRecovery);
 
@@ -173,14 +170,14 @@ public static class NativeFreeFlightResearchCandidatePublisher
         return root;
     }
 
-    private static bool IsCompleteSet(string root)
+    private static bool IsCompleteSet(NativeFreeFlightResearchCandidatePlan plan, string root)
     {
         if (!Directory.Exists(root)) return false;
         string[] names = Directory.EnumerateFileSystemEntries(root).Select(p => Path.GetFileName(p)).Order(StringComparer.Ordinal).ToArray();
         if (names.Length == 0) return false;
-        if (!names.SequenceEqual(Names.Order(StringComparer.Ordinal)))
+        if (!names.SequenceEqual(plan.OutputNames.Order(StringComparer.Ordinal)))
             throw new IOException("Research output is partial, occupied or retains recovery evidence; it will not be replaced.");
-        foreach (string name in Names)
+        foreach (string name in plan.OutputNames)
         {
             string path = Path.Combine(root, name);
             RequireNoLink(path);

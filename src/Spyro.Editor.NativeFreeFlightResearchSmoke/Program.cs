@@ -4,7 +4,7 @@ using System.Text.Json;
 
 int checks = AdversarialCases.Run();
 if (args.Length != 0 && args.Length != 3 && args.Length != 5)
-    throw new ArgumentException("Usage: NativeFreeFlightResearchSmoke [original.bin original.cue workspace [--verify|--exercise-staging|--publish directory]]");
+    throw new ArgumentException("Usage: NativeFreeFlightResearchSmoke [original.bin original.cue workspace [--verify|--exercise-staging|--publish|--verify-fast-entry|--exercise-staging-fast-entry|--publish-fast-entry directory]]");
 
 Require(NativeFreeFlightResearchCandidatePlan.TargetLevelId == 14, "one explicit source profile");
 Require(NativeFreeFlightResearchCandidatePlan.RequiredNormalBufferGap == 0xA780, "known extents exact margin, not runtime fit");
@@ -14,7 +14,12 @@ if (args.Length == 0)
     return;
 }
 
-var plan = await NativeFreeFlightResearchCandidatePlan.CaptureAsync(args[0], args[1], LevelCatalog.Load(args[2]));
+var catalog = LevelCatalog.Load(args[2]);
+var plan = await NativeFreeFlightResearchCandidatePlan.CaptureAsync(args[0], args[1], catalog);
+var fastEntry = await FastEntryCases.RunAsync(args[0], args[1], catalog, plan);
+checks += fastEntry.Checks;
+bool selector = args.Length == 5 && args[3].EndsWith("-fast-entry", StringComparison.Ordinal);
+if (selector) plan = fastEntry.Plan;
 Require(plan.AnimationMerge.RequestedAnimationIds.SequenceEqual(new[] { 33, 34, 35 }), "native root0 dependencies");
 Require(plan.AnimationMerge.SectorRoundedGrowth == 0x3800, "typed insertion sector growth");
 Require(plan.Memory.NormalReservedBufferGapBytes == 0xA780 && plan.Memory.KnownPostLoadExtentsDisjoint,
@@ -26,16 +31,16 @@ Require(plan.RelocatedExecutableLba == 53882, "live executable moves seven secto
 await plan.RequireFreshAsync();
 if (args.Length == 5)
 {
-    if (args[3] == "--verify")
+    if (args[3] is "--verify" or "--verify-fast-entry")
     {
         var verified = await NativeFreeFlightResearchCandidatePublisher.VerifyAsync(plan, args[4]);
         Require(verified.WholeImageReadback && !verified.RuntimeVerified, "published readback distinct from gameplay");
     }
-    else if (args[3] == "--exercise-staging")
+    else if (args[3] is "--exercise-staging" or "--exercise-staging-fast-entry")
     {
-        checks += await StagingCases.RunAsync(args[0], args[2], args[4]);
+        checks += await StagingCases.RunAsync(args[0], args[2], args[4], selector);
     }
-    else if (args[3] == "--publish")
+    else if (args[3] is "--publish" or "--publish-fast-entry")
     {
         // Explicit research invocation only. Default and three-argument modes
         // never publish, and ordinary editor export approval remains false.

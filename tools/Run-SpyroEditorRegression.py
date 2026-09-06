@@ -30,6 +30,8 @@ CORE_CASES = (
     ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_FREE_OK"),
     ("NativeGlobalSoundSmoke", "NATIVE_GLOBAL_SOUND_SOURCE_FREE_OK"),
     ("NativeId65EngineProfileSmoke", "NATIVE_ID65_ENGINE_PROFILE_SOURCE_FREE_OK"),
+    ("NativeId65CompanionAssetSmoke", "NATIVE_ID65_COMPANION_ASSET_SOURCE_FREE_OK"),
+    ("NativeResourceCompositionSmoke", "NATIVE_RESOURCE_COMPOSITION_SOURCE_FREE_OK"),
     ("NativeFreeFlightSmoke", "NATIVE_FREE_FLIGHT_SOURCE_FREE_OK"),
     ("NativeFreeFlightResearchSmoke", "NATIVE_FREE_FLIGHT_RESEARCH_SOURCE_FREE_OK"),
     ("FreeFlightSettingsSmoke", "FREE_FLIGHT_SETTINGS_SMOKE_OK"),
@@ -82,6 +84,8 @@ SOURCE_QA_CASES = (
     ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_OK", ["--source"]),
     ("NativeGlobalSoundSmoke", "NATIVE_GLOBAL_SOUND_SOURCE_OK", ["--source"]),
     ("NativeId65EngineProfileSmoke", "NATIVE_ID65_ENGINE_PROFILE_SOURCE_OK", []),
+    ("NativeId65CompanionAssetSmoke", "NATIVE_ID65_COMPANION_ASSET_SOURCE_OK", []),
+    ("NativeResourceCompositionSmoke", "NATIVE_RESOURCE_COMPOSITION_SOURCE_OK", ["--source"]),
     ("NativeFreeFlightSmoke", "NATIVE_FREE_FLIGHT_SOURCE_OK", []),
     # Plan capture only: never --exercise-staging, --verify or publication.
     ("NativeFreeFlightResearchSmoke", "NATIVE_FREE_FLIGHT_RESEARCH_SOURCE_OK", []),

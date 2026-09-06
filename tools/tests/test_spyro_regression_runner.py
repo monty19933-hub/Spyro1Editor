@@ -78,6 +78,20 @@ class OwnedCommandTests(unittest.TestCase):
 
 
 class RunnerOptionsTests(unittest.TestCase):
+    def test_native_resource_and_companion_modes_never_publish(self):
+        expected = {
+            "NativeResourceCompositionSmoke": ("NATIVE_RESOURCE_COMPOSITION_SOURCE_FREE_OK", "NATIVE_RESOURCE_COMPOSITION_SOURCE_OK", ["--source"]),
+            "NativeId65CompanionAssetSmoke": ("NATIVE_ID65_COMPANION_ASSET_SOURCE_FREE_OK", "NATIVE_ID65_COMPANION_ASSET_SOURCE_OK", []),
+        }
+        for name, (free_marker, source_marker, arguments) in expected.items():
+            with self.subTest(project=name):
+                self.assertEqual(free_marker, dict(RUNNER.CORE_CASES).get(name))
+                self.assertEqual([(name, source_marker, arguments)],
+                                 [case for case in RUNNER.SOURCE_QA_CASES if case[0] == name])
+                self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
+                self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+                self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+
     def test_native_id65_engine_profile_is_read_only_in_both_modes(self):
         name = "NativeId65EngineProfileSmoke"
         self.assertEqual("NATIVE_ID65_ENGINE_PROFILE_SOURCE_FREE_OK", dict(RUNNER.CORE_CASES).get(name))
@@ -293,6 +307,8 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeFreeFlightSmoke": ["/selected original.bin"],
             "NativeGlobalSoundSmoke": ["--source", "/selected original.bin"],
             "NativeId65EngineProfileSmoke": ["/selected original.bin"],
+            "NativeId65CompanionAssetSmoke": ["/selected original.bin"],
+            "NativeResourceCompositionSmoke": ["--source", "/selected original.bin"],
             "NativeFreeFlightResearchSmoke": ["/selected original.bin", "/selected original.cue", str(RUNNER.ROOT)],
         }
         self.assertEqual(set(expected), {c[0] for c in cases})

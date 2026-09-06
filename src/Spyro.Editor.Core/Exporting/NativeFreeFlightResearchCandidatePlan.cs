@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Spyro.Editor.Core.Analysis;
 using Spyro.Editor.Core.Levels;
 
@@ -27,14 +28,16 @@ public sealed class NativeFreeFlightResearchCandidatePlan
     private readonly byte[] _wad, _root, _executable, _analysis;
     private readonly byte _wadFlags, _exeFlags;
     private readonly NativeFreeFlightResearchSourceCue _cue;
+    private readonly MobySourcePatch? _testSelector;
 
     private NativeFreeFlightResearchCandidatePlan(string source, NativeFreeFlightResearchSourceCue cue,
         NativePlayerAnimationMergePlan merge, NativeFreeFlightPatchPlan patch, NativeLevelRuntimeMemoryReport memory,
         DiscLayout layout, byte[] wad, byte[] root, byte[] executable, byte[] analysis,
-        IReadOnlyList<NativeFreeFlightResearchEntry> entries, byte wadFlags, byte exeFlags)
+        IReadOnlyList<NativeFreeFlightResearchEntry> entries, byte wadFlags, byte exeFlags, MobySourcePatch? testSelector)
     {
         SourceImagePath = source;
         _cue = cue;
+        _testSelector = testSelector;
         AnimationMerge = merge;
         ExecutablePatch = patch;
         Memory = memory;
@@ -47,19 +50,24 @@ public sealed class NativeFreeFlightResearchCandidatePlan
         _wadFlags = wadFlags;
         _exeFlags = exeFlags;
         ExpectedExecutableSha256 = Hash(executable);
-        PlanSha256 = Hash(JsonSerializer.SerializeToUtf8Bytes(new
+        PlanSha256 = Hash(AddSelectorMetadata(JsonSerializer.SerializeToUtf8Bytes(new
         {
-            Profile, sourceImageSha256 = NativeFreeFlightPatchPlan.SourceImageSha256,
+            Profile = ProfileId, sourceImageSha256 = NativeFreeFlightPatchPlan.SourceImageSha256,
             SourceImagePath, sourceCueSha256 = cue.SourceSha256, sourceCuePath = cue.CuePath,
             animationPlan = merge.PlanSha256, executablePlan = patch.PlanSha256,
             ExpectedExecutableSha256, expectedWadSha256 = Hash(wad), expectedRootSha256 = Hash(root),
             Memory, Entries, RuntimeVerified, NormalCreateBinApproved
-        }));
+        }), false));
     }
 
     public string SourceImagePath { get; }
     public string PlanSha256 { get; }
     public string ExpectedExecutableSha256 { get; }
+    public bool TestLevelSelectorEnabled => _testSelector != null;
+    public string ProfileId => TestLevelSelectorEnabled ? "native-toasty-free-flight-fast-entry-research-v2" : Profile;
+    public string OutputImageName => TestLevelSelectorEnabled ? "toasty-native-free-flight-fast-entry-r02.bin" : ImageName;
+    public string OutputCueName => TestLevelSelectorEnabled ? "toasty-native-free-flight-fast-entry-r02.cue" : CueName;
+    internal string[] OutputNames => [OutputImageName, ReceiptName, OutputCueName];
     public int RelocatedExecutableLba => 53882;
     public NativePlayerAnimationMergePlan AnimationMerge { get; }
     public NativeFreeFlightPatchPlan ExecutablePatch { get; }
@@ -72,14 +80,26 @@ public sealed class NativeFreeFlightResearchCandidatePlan
     internal byte[] CopyCueBytes() => _cue.CopyOutputBytes();
     internal byte[] CopyAnalysisBytes() => _analysis.ToArray();
     internal byte[] CopyExecutable() => _executable.ToArray();
+    internal byte[] ApplyToExecutable(ReadOnlySpan<byte> original) => ComposeExecutable(original, ExecutablePatch, _testSelector);
     internal NativeSkyRelocationPayload CopyInsertionPayload() => AnimationMerge.CopyInsertionPayload()
         ?? throw new InvalidDataException("Research profile requires its exact player-stream insertion.");
 
-    public static async Task<NativeFreeFlightResearchCandidatePlan> CaptureAsync(string originalImagePath,
-        string originalCuePath, LevelCatalog catalog, CancellationToken cancellationToken = default)
+    public static Task<NativeFreeFlightResearchCandidatePlan> CaptureAsync(string originalImagePath,
+        string originalCuePath, LevelCatalog catalog, CancellationToken cancellationToken = default) =>
+        CaptureCoreAsync(originalImagePath, originalCuePath, catalog, false, cancellationToken);
+
+    /// <summary>Separate opt-in diagnostic profile. Native inventory selection is
+    /// not normal portal-entry evidence and is never included in ordinary export.</summary>
+    public static Task<NativeFreeFlightResearchCandidatePlan> CaptureWithTestLevelSelectorAsync(string originalImagePath,
+        string originalCuePath, LevelCatalog catalog, CancellationToken cancellationToken = default) =>
+        CaptureCoreAsync(originalImagePath, originalCuePath, catalog, true, cancellationToken);
+
+    private static async Task<NativeFreeFlightResearchCandidatePlan> CaptureCoreAsync(string originalImagePath,
+        string originalCuePath, LevelCatalog catalog, bool testLevelSelector, CancellationToken cancellationToken)
     {
         string source = Path.GetFullPath(originalImagePath);
-        var cue = NativeFreeFlightResearchSourceCue.Capture(originalCuePath, source, ImageName);
+        var cue = NativeFreeFlightResearchSourceCue.Capture(originalCuePath, source,
+            testLevelSelector ? "toasty-native-free-flight-fast-entry-r02.bin" : ImageName);
         var patch = await NativeFreeFlightPatchPlan.CaptureAsync(source, TargetLevelId, true, cancellationToken);
         var player = await NativePlayerAnimationSource.CaptureAsync(source, cancellationToken);
         var merge = await player.CompileMergeAsync(source, 64, TargetLevelId, [33, 34, 35], cancellationToken);
@@ -87,8 +107,12 @@ public sealed class NativeFreeFlightResearchCandidatePlan
         var level = inventory.Levels.Single(l => l.LevelId == TargetLevelId);
         using FileStream image = new(source, FileMode.Open, FileAccess.Read, FileShare.Read);
         DiscLayout layout = DiscImage.DetectLayout(source);
+        // Issue the existing guarded selector from the untouched original EXE,
+        // never from the already-patched candidate or caller-authored metadata.
+        MobySourcePatch? selector = testLevelSelector
+            ? TestLevelWarpPatch.CreateGuarded(image, layout, catalog.Levels.Single(l => l.LevelId == TargetLevelId)) : null;
         byte[] originalExe = patch.CopySourceExecutable();
-        byte[] executable = patch.ApplyToExecutable(originalExe);
+        byte[] executable = ComposeExecutable(originalExe, patch, selector);
         byte[] originalData = DiscImage.ReadFileBytes(image, layout, 37, level.DataWadOffset, level.SourceDataByteLength);
         byte[] peteHeader = DiscImage.ReadFileBytes(image, layout, 37, 0x7B8800, 0x800);
         byte[] pete = DiscImage.ReadFileBytes(image, layout, 37, 0x7B9000, 0x39C48);
@@ -104,6 +128,12 @@ public sealed class NativeFreeFlightResearchCandidatePlan
         // The patch is not allowed to change any copy-buffer/loader/normal-PETE
         // instruction or table: all non-window bytes, not selected labels, agree.
         HashSet<int> owned = patch.Instructions.SelectMany(w => Enumerable.Range(w.ExecutableOffset, w.ByteLength)).ToHashSet();
+        if (selector != null)
+        {
+            int[] selectorBytes = Enumerable.Range(checked((int)TestLevelWarpPatch.ExecutableFileOffset), selector.ByteLength).ToArray();
+            if (selectorBytes.Any(owned.Contains)) throw new InvalidDataException("Research executable stages overlap.");
+            owned.UnionWith(selectorBytes);
+        }
         if (Enumerable.Range(0, executable.Length).Any(i => !owned.Contains(i) && originalExe[i] != executable[i]) ||
             patch.Instructions.Any(w => w.ExecutableOffset < 0x31000 || w.ExecutableOffset + w.ByteLength > 0x37000) ||
             !originalExe.AsSpan(0x4B130, 16).SequenceEqual(executable.AsSpan(0x4B130, 16)))
@@ -154,7 +184,7 @@ public sealed class NativeFreeFlightResearchCandidatePlan
             return (byte)(image.ReadByte() & 0x81);
         }
         var result = new NativeFreeFlightResearchCandidatePlan(source, cue, merge, patch, memory, layout,
-            wad, root, executable, analysis, entries, Flags(53874), Flags(54078));
+            wad, root, executable, analysis, entries, Flags(53874), Flags(54078), selector);
         await result.RequireFreshAsync(cancellationToken);
         return result;
     }
@@ -218,9 +248,9 @@ public sealed class NativeFreeFlightResearchCandidatePlan
         return expected.AsSpan().SequenceEqual(before) ? expected : RawMode2Form1SectorIntegrity.RebuildRawSectorCopy(expected, lba);
     }
 
-    internal byte[] BuildReceipt((string Hash, int Changed) verified) => JsonSerializer.SerializeToUtf8Bytes(new
+    internal byte[] BuildReceipt((string Hash, int Changed) verified) => AddSelectorMetadata(JsonSerializer.SerializeToUtf8Bytes(new
     {
-        profile = Profile, planSha256 = PlanSha256, sourceImageSha256 = NativeFreeFlightPatchPlan.SourceImageSha256,
+        profile = ProfileId, planSha256 = PlanSha256, sourceImageSha256 = NativeFreeFlightPatchPlan.SourceImageSha256,
         SourceImagePath, sourceCuePath = SourceCuePath, sourceCueSha256 = _cue.SourceSha256,
         outputImageSha256 = verified.Hash, changedRawSectors = verified.Changed, outputCueSha256 = Hash(CopyCueBytes()),
         ExpectedExecutableSha256, animationMerge = AnimationMerge, executablePatch = ExecutablePatch,
@@ -230,7 +260,35 @@ public sealed class NativeFreeFlightResearchCandidatePlan
         exceptionRollbackPublication = true, crashAtomicPublication = false, hostileFilesystemRaceSafe = false,
         pending = new[] { "peak/transient/alternate-mode RAM", "full flight-state effects and sound closure",
             "native ascent/descent/controls/collision", "landing/death/respawn/level transitions", "ordinary editor integration" }
-    }, new JsonSerializerOptions { WriteIndented = true });
+    }, new JsonSerializerOptions { WriteIndented = true }), true);
+
+    private byte[] AddSelectorMetadata(byte[] bytes, bool indented)
+    {
+        // Keep every existing v1 plan/receipt byte stable, including property
+        // order and whitespace. The separate v2 profile adds explicit evidence.
+        if (_testSelector == null) return bytes;
+        JsonObject document = JsonNode.Parse(bytes)!.AsObject();
+        document.Add("testLevelSelector", JsonSerializer.SerializeToNode(_testSelector));
+        document.Add("normalPortalEntryVerified", false);
+        return JsonSerializer.SerializeToUtf8Bytes(document, new JsonSerializerOptions { WriteIndented = indented });
+    }
+
+    private static byte[] ComposeExecutable(ReadOnlySpan<byte> original, NativeFreeFlightPatchPlan patch, MobySourcePatch? selector)
+    {
+        if (Hash(original) != NativeFreeFlightPatchPlan.SourceExecutableSha256)
+            throw new InvalidDataException("Research executable composition requires the complete original preimage.");
+        byte[] result = patch.ApplyToExecutable(original);
+        if (selector == null) return result;
+        int offset = checked((int)TestLevelWarpPatch.ExecutableFileOffset);
+        byte[] before = Convert.FromHexString(selector.BeforeHexPreview.Replace(" ", "", StringComparison.Ordinal));
+        byte[] after = Convert.FromHexString(selector.AfterHexPreview.Replace(" ", "", StringComparison.Ordinal));
+        if (selector.Kind != TestLevelWarpPatch.PatchKind || before.Length != 8 || after.Length != 8 ||
+            selector.ByteLength != 8 || !result.AsSpan(offset, 8).SequenceEqual(before) ||
+            patch.Instructions.Any(w => w.ExecutableOffset < offset + 8 && w.ExecutableOffset + w.ByteLength > offset))
+            throw new InvalidDataException("Source-issued diagnostic selector does not have a disjoint exact preimage.");
+        after.CopyTo(result, offset);
+        return result;
+    }
 
     internal static string Hash(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
     private static uint Word(byte[] bytes, int offset) => BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(offset));

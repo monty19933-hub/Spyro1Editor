@@ -3,7 +3,7 @@ using Spyro.Editor.Core.Levels;
 
 internal static class StagingCases
 {
-    internal static async Task<int> RunAsync(string image, string workspace, string directory)
+    internal static async Task<int> RunAsync(string image, string workspace, string directory, bool testLevelSelector = false)
     {
         int checks = 0;
         string root = Path.GetFullPath(directory);
@@ -13,7 +13,9 @@ internal static class StagingCases
         string cue = Path.Combine(root, "source-test.cue");
         byte[] cueBytes = DiscCueSheet.TextEncoding.GetBytes($"FILE \"{Path.GetFullPath(image)}\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n");
         File.WriteAllBytes(cue, cueBytes); // Private source binding; original source CUE is never edited.
-        var plan = await NativeFreeFlightResearchCandidatePlan.CaptureAsync(image, cue, LevelCatalog.Load(workspace));
+        var plan = testLevelSelector
+            ? await NativeFreeFlightResearchCandidatePlan.CaptureWithTestLevelSelectorAsync(image, cue, LevelCatalog.Load(workspace))
+            : await NativeFreeFlightResearchCandidatePlan.CaptureAsync(image, cue, LevelCatalog.Load(workspace));
         foreach (var fault in new[] { NativeFreeFlightResearchFault.AfterRelocation, NativeFreeFlightResearchFault.AfterExecutable,
             NativeFreeFlightResearchFault.BeforePublication })
         {
@@ -34,7 +36,7 @@ internal static class StagingCases
                         if (reuse.PlanSha256 != plan.PlanSha256 || reuse.RuntimeVerified)
                             throw new InvalidDataException("Research staged reuse changed identity or authority.");
                         checks++;
-                        foreach (string name in new[] { NativeFreeFlightResearchCandidatePlan.CueName,
+                        foreach (string name in new[] { plan.OutputCueName,
                             NativeFreeFlightResearchCandidatePlan.ReceiptName })
                         {
                             string path = Path.Combine(stage, name);
@@ -90,13 +92,13 @@ internal static class StagingCases
         checks++;
         string directoryArtifact = Path.Combine(root, "directory-artifact");
         MakePartialSet(directoryArtifact);
-        File.Delete(Path.Combine(directoryArtifact, NativeFreeFlightResearchCandidatePlan.ImageName));
-        Directory.CreateDirectory(Path.Combine(directoryArtifact, NativeFreeFlightResearchCandidatePlan.ImageName));
+        File.Delete(Path.Combine(directoryArtifact, plan.OutputImageName));
+        Directory.CreateDirectory(Path.Combine(directoryArtifact, plan.OutputImageName));
         await RejectAsync(() => NativeFreeFlightResearchCandidatePublisher.PublishAsync(plan, directoryArtifact), "artifact is not a file");
         string linkArtifact = Path.Combine(root, "symbolic-artifact");
         MakePartialSet(linkArtifact);
-        File.Delete(Path.Combine(linkArtifact, NativeFreeFlightResearchCandidatePlan.ImageName));
-        File.CreateSymbolicLink(Path.Combine(linkArtifact, NativeFreeFlightResearchCandidatePlan.ImageName), Path.GetFullPath(image));
+        File.Delete(Path.Combine(linkArtifact, plan.OutputImageName));
+        File.CreateSymbolicLink(Path.Combine(linkArtifact, plan.OutputImageName), Path.GetFullPath(image));
         await RejectAsync(() => NativeFreeFlightResearchCandidatePublisher.PublishAsync(plan, linkArtifact), "symbolic link");
         await RejectAsync(() => NativeFreeFlightResearchCandidatePublisher.PublishAsync(plan, Path.GetDirectoryName(Path.GetFullPath(image))!),
             "overlaps source BIN");
@@ -126,8 +128,7 @@ internal static class StagingCases
         void MakePartialSet(string path)
         {
             Directory.CreateDirectory(path);
-            foreach (string name in new[] { NativeFreeFlightResearchCandidatePlan.ImageName,
-                NativeFreeFlightResearchCandidatePlan.CueName, NativeFreeFlightResearchCandidatePlan.ReceiptName })
+            foreach (string name in plan.OutputNames)
                 File.WriteAllBytes(Path.Combine(path, name), []);
         }
     }
