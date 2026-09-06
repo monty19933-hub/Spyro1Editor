@@ -12,44 +12,87 @@ public sealed record NativeWizardResearchPublication(string OutputDirectory,stri
 }
 internal enum NativeWizardResearchFault { None,AfterImageWrite,BeforePublication }
 
-/// <summary>New-only isolated research artifacts. Trusted directory ancestors and cooperating writers are required.</summary>
+/// <summary>Legacy public entry points retain their exact one-Wizard source/profile contract.</summary>
 public static class NativeDarkHollowWizardResearchCandidatePublisher
 {
-    public static Task<NativeWizardResearchPublication> PublishAsync(NativeDarkHollowWizardResearchCandidatePlan plan,string directory,CancellationToken token=default)=>
+    public static async Task<NativeWizardResearchPublication> PublishAsync(NativeDarkHollowWizardResearchCandidatePlan plan,string directory,CancellationToken token=default)=>
+        await NativeWizardResearchPublicationEngine.PublishAsync(NativeWizardResearchPublicationBinding.FromLegacy(plan),directory,token);
+    public static async Task<NativeWizardResearchPublication> VerifyAsync(NativeDarkHollowWizardResearchCandidatePlan plan,string directory,CancellationToken token=default)=>
+        await NativeWizardResearchPublicationEngine.VerifyAsync(NativeWizardResearchPublicationBinding.FromLegacy(plan),directory,token);
+    internal static async Task<NativeWizardResearchPublication> PublishForSmokeAsync(NativeDarkHollowWizardResearchCandidatePlan plan,string directory,
+        NativeWizardResearchFault fault,Action<NativeWizardResearchFault,string>? checkpoint=null,CancellationToken token=default)=>
+        await NativeWizardResearchPublicationEngine.PublishForSmokeAsync(NativeWizardResearchPublicationBinding.FromLegacy(plan),directory,fault,checkpoint,token);
+    internal static void RequireCompanion(Stream input,ReadOnlySpan<byte> expected)=>NativeWizardResearchPublicationEngine.RequireCompanion(input,expected);
+}
+
+/// <summary>
+/// Closed actual-plan binding. Neither public callbacks nor names/hash metadata
+/// can choose a publication profile or supply writer/readback/receipt behavior.
+/// </summary>
+internal sealed class NativeWizardResearchPublicationBinding
+{
+    private readonly NativeDarkHollowWizardResearchCandidatePlan? _legacy;
+    private readonly NativeDarkHollowTwoWizardResearchCandidatePlan? _two;
+    private NativeWizardResearchPublicationBinding(NativeDarkHollowWizardResearchCandidatePlan plan)=>_legacy=plan;
+    private NativeWizardResearchPublicationBinding(NativeDarkHollowTwoWizardResearchCandidatePlan plan)=>_two=plan;
+    internal static NativeWizardResearchPublicationBinding FromLegacy(NativeDarkHollowWizardResearchCandidatePlan plan)
+    {ArgumentNullException.ThrowIfNull(plan);return new(plan);}
+    internal static NativeWizardResearchPublicationBinding FromTwo(NativeDarkHollowTwoWizardResearchCandidatePlan plan)
+    {ArgumentNullException.ThrowIfNull(plan);return new(plan);}
+    internal string SourceImagePath=>_legacy?.SourceImagePath??_two!.SourceImagePath;
+    internal string SourceCuePath=>_legacy?.SourceCuePath??_two!.SourceCuePath;
+    internal string PlanSha256=>_legacy?.PlanSha256??_two!.PlanSha256;
+    internal string ImageName=>_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.ImageName:NativeDarkHollowTwoWizardResearchCandidatePlan.ImageName;
+    internal string CueName=>_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.CueName:NativeDarkHollowTwoWizardResearchCandidatePlan.CueName;
+    internal string ReceiptName=>_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.ReceiptName:NativeDarkHollowTwoWizardResearchCandidatePlan.ReceiptName;
+    internal string[] OutputNames=>_legacy!=null?NativeDarkHollowWizardResearchCandidatePlan.OutputNames:NativeDarkHollowTwoWizardResearchCandidatePlan.OutputNames;
+    internal string LeaseName=>_legacy!=null?".native-wizard.writer.lock":".native-two-wizards.writer.lock";
+    internal string StagePrefix=>_legacy!=null?".native-wizard-stage-":".native-two-wizards-stage-";
+    internal Task RequireFreshAsync(CancellationToken token=default)=>_legacy?.RequireFreshAsync(token)??_two!.RequireFreshAsync(token);
+    internal void RequireStageReversion(){if(_legacy!=null)_legacy.RequireStageReversion();else _two!.RequireStageReversion();}
+    internal void WriteNewImage(string path,CancellationToken token){if(_legacy!=null)_legacy.WriteNewImage(path,token);else _two!.WriteNewImage(path,token);}
+    internal (string Hash,int Changed) VerifyImage(string path)=>_legacy?.VerifyImage(path)??_two!.VerifyImage(path);
+    internal byte[] BuildReceipt((string Hash,int Changed) result)=>_legacy?.BuildReceipt(result)??_two!.BuildReceipt(result);
+    internal byte[] CopyCueBytes()=>_legacy?.CopyCueBytes()??_two!.CopyCueBytes();
+}
+
+internal static class NativeWizardResearchPublicationEngine
+{
+    public static Task<NativeWizardResearchPublication> PublishAsync(NativeWizardResearchPublicationBinding plan,string directory,CancellationToken token=default)=>
         PublishCoreAsync(plan,directory,NativeWizardResearchFault.None,null,token);
-    internal static Task<NativeWizardResearchPublication> PublishForSmokeAsync(NativeDarkHollowWizardResearchCandidatePlan plan,string directory,
+    internal static Task<NativeWizardResearchPublication> PublishForSmokeAsync(NativeWizardResearchPublicationBinding plan,string directory,
         NativeWizardResearchFault fault,Action<NativeWizardResearchFault,string>? checkpoint=null,CancellationToken token=default)=>
         PublishCoreAsync(plan,directory,fault,checkpoint,token);
-    public static async Task<NativeWizardResearchPublication> VerifyAsync(NativeDarkHollowWizardResearchCandidatePlan plan,string directory,CancellationToken token=default)
+    public static async Task<NativeWizardResearchPublication> VerifyAsync(NativeWizardResearchPublicationBinding plan,string directory,CancellationToken token=default)
     {
         ArgumentNullException.ThrowIfNull(plan);string root=Resolve(plan,directory);
-        if(!CompleteSet(root))throw new InvalidDataException("Research candidate set is missing or incomplete.");
+        if(!CompleteSet(plan,root))throw new InvalidDataException("Research candidate set is missing or incomplete.");
         await plan.RequireFreshAsync(token);plan.RequireStageReversion();var result=VerifySet(plan,root);
         await plan.RequireFreshAsync(token);return Result(plan,root,result);
     }
-    private static async Task<NativeWizardResearchPublication> PublishCoreAsync(NativeDarkHollowWizardResearchCandidatePlan plan,string directory,
+    private static async Task<NativeWizardResearchPublication> PublishCoreAsync(NativeWizardResearchPublicationBinding plan,string directory,
         NativeWizardResearchFault fault,Action<NativeWizardResearchFault,string>? checkpoint,CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(plan);if(!Enum.IsDefined(fault))throw new InvalidDataException("Unknown research fault.");
         string root=Resolve(plan,directory);
-        if(CompleteSet(root))return await VerifyAsync(plan,root,token);
+        if(CompleteSet(plan,root))return await VerifyAsync(plan,root,token);
         await plan.RequireFreshAsync(token);plan.RequireStageReversion();Directory.CreateDirectory(root);RequireNoLink(root);
-        string leasePath=Path.Combine(root,".native-wizard.writer.lock");RequireNoLink(leasePath);
+        string leasePath=Path.Combine(root,plan.LeaseName);RequireNoLink(leasePath);
         using FileStream lease=new(leasePath,FileMode.CreateNew,FileAccess.Write,FileShare.None);
-        string stage=Path.Combine(root,".native-wizard-stage-"+Guid.NewGuid().ToString("N"));bool preserve=false,published=false;
+        string stage=Path.Combine(root,plan.StagePrefix+Guid.NewGuid().ToString("N"));bool preserve=false,published=false;
         try
         {
             if(Directory.EnumerateFileSystemEntries(root).Any(p=>p!=leasePath))throw new IOException("Research output became occupied while acquiring its lease.");
-            Directory.CreateDirectory(stage);string image=Path.Combine(stage,NativeDarkHollowWizardResearchCandidatePlan.ImageName);
+            Directory.CreateDirectory(stage);string image=Path.Combine(stage,plan.ImageName);
             plan.WriteNewImage(image,token);Checkpoint(NativeWizardResearchFault.AfterImageWrite,image);
             var verified=plan.VerifyImage(image);
-            WriteNew(Path.Combine(stage,NativeDarkHollowWizardResearchCandidatePlan.ReceiptName),plan.BuildReceipt(verified));
-            WriteNew(Path.Combine(stage,NativeDarkHollowWizardResearchCandidatePlan.CueName),plan.CopyCueBytes());
+            WriteNew(Path.Combine(stage,plan.ReceiptName),plan.BuildReceipt(verified));
+            WriteNew(Path.Combine(stage,plan.CueName),plan.CopyCueBytes());
             if(VerifySet(plan,stage)!=verified)throw new InvalidDataException("Research staging readback changed.");
             Checkpoint(NativeWizardResearchFault.BeforePublication,image);
             await plan.RequireFreshAsync(token);plan.RequireStageReversion();
             if(VerifySet(plan,stage)!=verified)throw new InvalidDataException("Research staging changed before publication.");
-            var publication=ExportArtifactTransaction.PublishNew(root,NativeDarkHollowWizardResearchCandidatePlan.OutputNames.Select(name=>
+            var publication=ExportArtifactTransaction.PublishNew(root,plan.OutputNames.Select(name=>
                 new ExportArtifactReplacement(Path.Combine(root,name),Path.Combine(stage,name))).ToArray(),token);
             published=true;preserve=!string.IsNullOrEmpty(publication.RetainedRecoveryDirectory);
             var final=VerifySet(plan,root);if(final!=verified)throw new InvalidDataException("Research final artifacts differ from verified staging.");
@@ -66,7 +109,7 @@ public static class NativeDarkHollowWizardResearchCandidatePublisher
             {
                 try
                 {
-                    foreach(string name in NativeDarkHollowWizardResearchCandidatePlan.OutputNames)
+                    foreach(string name in plan.OutputNames)
                     {string path=Path.Combine(stage,name);if(File.Exists(path))File.Delete(path);}
                     if(Directory.Exists(stage)&&!Directory.EnumerateFileSystemEntries(stage).Any())Directory.Delete(stage);
                 }
@@ -79,14 +122,14 @@ public static class NativeDarkHollowWizardResearchCandidatePublisher
         void Checkpoint(NativeWizardResearchFault point,string image)
         {checkpoint?.Invoke(point,image);token.ThrowIfCancellationRequested();if(fault==point)throw new IOException("Deliberate research publication fault: "+point);}
     }
-    private static (string Hash,int Changed) VerifySet(NativeDarkHollowWizardResearchCandidatePlan plan,string directory)
+    private static (string Hash,int Changed) VerifySet(NativeWizardResearchPublicationBinding plan,string directory)
     {
-        foreach(string name in NativeDarkHollowWizardResearchCandidatePlan.OutputNames)RequireNoLink(Path.Combine(directory,name));
-        var result=plan.VerifyImage(Path.Combine(directory,NativeDarkHollowWizardResearchCandidatePlan.ImageName));
-        RequireCompanionFile(Path.Combine(directory,NativeDarkHollowWizardResearchCandidatePlan.CueName),plan.CopyCueBytes());
-        RequireCompanionFile(Path.Combine(directory,NativeDarkHollowWizardResearchCandidatePlan.ReceiptName),plan.BuildReceipt(result));
-        if(!DiscCueSheet.ReferencesDataImage(Path.Combine(directory,NativeDarkHollowWizardResearchCandidatePlan.CueName),
-            Path.Combine(directory,NativeDarkHollowWizardResearchCandidatePlan.ImageName)))throw new InvalidDataException("Research output CUE binding changed.");
+        foreach(string name in plan.OutputNames)RequireNoLink(Path.Combine(directory,name));
+        var result=plan.VerifyImage(Path.Combine(directory,plan.ImageName));
+        RequireCompanionFile(Path.Combine(directory,plan.CueName),plan.CopyCueBytes());
+        RequireCompanionFile(Path.Combine(directory,plan.ReceiptName),plan.BuildReceipt(result));
+        if(!DiscCueSheet.ReferencesDataImage(Path.Combine(directory,plan.CueName),
+            Path.Combine(directory,plan.ImageName)))throw new InvalidDataException("Research output CUE binding changed.");
         return result;
     }
     private static void RequireCompanionFile(string path,byte[] expected)
@@ -103,24 +146,24 @@ public static class NativeDarkHollowWizardResearchCandidatePublisher
         if(input.Length!=expected.Length||input.Position!=expected.Length||!actual.AsSpan().SequenceEqual(expected))
             throw new InvalidDataException("Research companion changed exact bytes or length during readback.");
     }
-    private static NativeWizardResearchPublication Result(NativeDarkHollowWizardResearchCandidatePlan plan,string root,(string Hash,int Changed) verified,string recovery="")=>
-        new(root,Path.Combine(root,NativeDarkHollowWizardResearchCandidatePlan.ImageName),Path.Combine(root,NativeDarkHollowWizardResearchCandidatePlan.CueName),
-            Path.Combine(root,NativeDarkHollowWizardResearchCandidatePlan.ReceiptName),verified.Hash,plan.PlanSha256,verified.Changed,recovery);
-    private static string Resolve(NativeDarkHollowWizardResearchCandidatePlan plan,string directory)
+    private static NativeWizardResearchPublication Result(NativeWizardResearchPublicationBinding plan,string root,(string Hash,int Changed) verified,string recovery="")=>
+        new(root,Path.Combine(root,plan.ImageName),Path.Combine(root,plan.CueName),
+            Path.Combine(root,plan.ReceiptName),verified.Hash,plan.PlanSha256,verified.Changed,recovery);
+    private static string Resolve(NativeWizardResearchPublicationBinding plan,string directory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);string root=Path.GetFullPath(directory);
         PersistencePathSafety.EnsureTreesDoNotOverlap(plan.SourceImagePath,root,"Research output overlaps source BIN.");
         PersistencePathSafety.EnsureTreesDoNotOverlap(plan.SourceCuePath,root,"Research output overlaps source CUE.");
         RequireNoLink(root);if(File.Exists(root))throw new InvalidDataException("Research output directory is a file.");return root;
     }
-    private static bool CompleteSet(string root)
+    private static bool CompleteSet(NativeWizardResearchPublicationBinding plan,string root)
     {
         if(!Directory.Exists(root))return false;
         var names=Directory.EnumerateFileSystemEntries(root).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray();
         if(names.Length==0)return false;
-        if(!names.SequenceEqual(NativeDarkHollowWizardResearchCandidatePlan.OutputNames.Order(StringComparer.Ordinal)))
+        if(!names.SequenceEqual(plan.OutputNames.Order(StringComparer.Ordinal)))
             throw new IOException("Research output is partial, occupied, or retains recovery evidence; it cannot be replaced.");
-        foreach(string name in NativeDarkHollowWizardResearchCandidatePlan.OutputNames)
+        foreach(string name in plan.OutputNames)
         {string path=Path.Combine(root,name);RequireNoLink(path);if(!File.Exists(path))throw new InvalidDataException("Research artifact is not a file.");}
         return true;
     }

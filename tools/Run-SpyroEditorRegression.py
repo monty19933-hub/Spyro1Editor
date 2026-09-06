@@ -46,8 +46,10 @@ CORE_CASES = (
     ("NativeId65FreshDiscSmoke", "NATIVE_ID65_FRESH_DISC_SMOKE_OK"),
     ("NativeId65FreshDiscStreamSmoke", "NATIVE_ID65_FRESH_DISC_STREAM_SMOKE_OK"),
     ("NativeId65FreshDiscResearchSmoke", "NATIVE_ID65_FRESH_DISC_RESEARCH_SMOKE_OK"),
+    ("NativeId65FreshEditedDocumentResearchSmoke", "NATIVE_ID65_FRESH_EDITED_DOCUMENT_RESEARCH_SMOKE_OK"),
     ("NativeWizardPlacementSmoke", "NATIVE_WIZARD_PLACEMENT_SMOKE_OK"),
     ("NativeWizardResearchSmoke", "NATIVE_WIZARD_RESEARCH_SOURCE_FREE_OK"),
+    ("NativeTwoWizardResearchSmoke", "NATIVE_TWO_WIZARD_RESEARCH_FREE_OK"),
     ("NativeResourceCompositionSmoke", "NATIVE_RESOURCE_COMPOSITION_SOURCE_FREE_OK"),
     ("NativeFreeFlightSmoke", "NATIVE_FREE_FLIGHT_SOURCE_FREE_OK"),
     ("NativeFreeFlightResearchSmoke", "NATIVE_FREE_FLIGHT_RESEARCH_SOURCE_FREE_OK"),
@@ -123,9 +125,12 @@ SOURCE_QA_CASES = (
     ("NativeId65FreshDiscStreamSmoke", "NATIVE_ID65_FRESH_DISC_STREAM_SOURCE_OK", []),
     # Capture checks only; never stage faults, exercise publication or verify outputs here.
     ("NativeId65FreshDiscResearchSmoke", "NATIVE_ID65_FRESH_DISC_RESEARCH_SOURCE_OK", ["--source"]),
+    ("NativeId65FreshEditedDocumentResearchSmoke", "NATIVE_ID65_FRESH_EDITED_DOCUMENT_RESEARCH_SOURCE_OK", ["--source"]),
     ("NativeWizardPlacementSmoke", "NATIVE_WIZARD_PLACEMENT_SOURCE_OK", []),
     # Capture/readback only; never stage, publish or open an emulator here.
     ("NativeWizardResearchSmoke", "NATIVE_WIZARD_RESEARCH_SOURCE_OK", []),
+    # Exact two-owner plan/source checks only; never --exercise-staging or publication.
+    ("NativeTwoWizardResearchSmoke", "NATIVE_TWO_WIZARD_RESEARCH_SOURCE_OK", ["--source"]),
     ("NativeResourceCompositionSmoke", "NATIVE_RESOURCE_COMPOSITION_SOURCE_OK", ["--source"]),
     ("NativeFreeFlightSmoke", "NATIVE_FREE_FLIGHT_SOURCE_OK", []),
     # Plan capture only: never --exercise-staging, --verify or publication.
@@ -133,8 +138,8 @@ SOURCE_QA_CASES = (
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
-SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke"})
-SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke"})
+SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeTwoWizardResearchSmoke"})
+SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeTwoWizardResearchSmoke"})
 
 
 def configured_source_image():

@@ -193,12 +193,17 @@ class RunnerOptionsTests(unittest.TestCase):
         self.assert_count_placement_modes("NativeWizardCompositionSmoke",
                                          "NATIVE_WIZARD_COMPOSITION_FREE_OK", "NATIVE_WIZARD_COMPOSITION_SOURCE_OK")
 
-    def assert_count_placement_modes(self, name, free_marker, source_marker):
+    def test_two_wizard_research_modes_require_selected_bin_cue_workspace_and_never_publish(self):
+        self.assert_count_placement_modes("NativeTwoWizardResearchSmoke",
+                                         "NATIVE_TWO_WIZARD_RESEARCH_FREE_OK", "NATIVE_TWO_WIZARD_RESEARCH_SOURCE_OK",
+                                         needs_cue=True)
+
+    def assert_count_placement_modes(self, name, free_marker, source_marker, needs_cue=False):
         self.assertEqual([(name, free_marker)], [c for c in RUNNER.CORE_CASES if c[0] == name])
         self.assertEqual([(name, source_marker, ["--source"])],
                          [c for c in RUNNER.SOURCE_QA_CASES if c[0] == name])
         self.assertIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
-        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertEqual(needs_cue, name in RUNNER.SOURCE_QA_CUE_CASES)
         self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
         for scenario, opted_in, free_ok, source_ok in (
                 ("default", False, True, True), ("opt-in", True, True, True),
@@ -222,20 +227,23 @@ class RunnerOptionsTests(unittest.TestCase):
                         mock.patch.object(RUNNER, "SOURCE_QA_CASES", tuple(c for c in RUNNER.SOURCE_QA_CASES if c[0] == name)), \
                         mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
                         mock.patch.object(RUNNER, "configured_source_image", return_value="/selected original.bin") as source, \
-                        mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("unowned CUE read")) as cue, \
+                        mock.patch.object(RUNNER, "configured_source_cue", return_value="/selected original.cue",
+                                          side_effect=None if needs_cue else AssertionError("unowned CUE read")) as cue, \
                         mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
                         mock.patch.object(sys, "argv", [str(SPEC.origin), *(["--with-source-qa"] if opted_in else [])]), \
                         contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(0 if free_ok and (not opted_in or source_ok) else 1, RUNNER.main())
                     self.assertEqual(int(opted_in and free_ok), source.call_count)
-                    cue.assert_not_called()
+                    self.assertEqual(int(opted_in and free_ok and needs_cue), cue.call_count)
                 summary = json.loads((Path(output) / "summary.json").read_text())
             self.assertEqual(2, len([c for c in calls if c[:2] == ["dotnet", "build"]]))
             runs = [c for c in calls if c[:2] == ["dotnet", "run"]]
             self.assertEqual(1 + int(opted_in and free_ok), len(runs))
             self.assertNotIn("--", runs[0], "Default placement mode cannot receive source/workspace arguments")
             if opted_in and free_ok:
-                self.assertEqual(["--source", "/selected original.bin", str(RUNNER.ROOT)], runs[1][runs[1].index("--") + 1:])
+                self.assertEqual(["--source", "/selected original.bin",
+                                  *(["/selected original.cue"] if needs_cue else []), str(RUNNER.ROOT)],
+                                 runs[1][runs[1].index("--") + 1:])
                 self.assertEqual("source-" + name, summary[-1]["name"])
                 self.assertEqual(source_ok, summary[-1]["passed"])
             if not free_ok:
@@ -266,6 +274,10 @@ class RunnerOptionsTests(unittest.TestCase):
 
     def test_fresh_disc_research_modes_bind_only_selected_bin_cue_and_never_publish(self):
         self.assert_texture_modes("NativeId65FreshDiscResearchSmoke", "NATIVE_ID65_FRESH_DISC_RESEARCH",
+                                  ("--source",), "SMOKE", needs_cue=True)
+
+    def test_fresh_edited_document_modes_bind_only_selected_bin_cue_and_never_publish(self):
+        self.assert_texture_modes("NativeId65FreshEditedDocumentResearchSmoke", "NATIVE_ID65_FRESH_EDITED_DOCUMENT_RESEARCH",
                                   ("--source",), "SMOKE", needs_cue=True)
 
     def assert_texture_modes(self, name, marker_prefix, source_flags=("--source",), free_kind="FREE", needs_cue=False):
@@ -504,13 +516,14 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeGlobalSoundSmoke": ("NATIVE_GLOBAL_SOUND_SOURCE_FREE_OK", "NATIVE_GLOBAL_SOUND_SOURCE_OK", ["--source"]),
             "NativeFreeFlightResearchSmoke": ("NATIVE_FREE_FLIGHT_RESEARCH_SOURCE_FREE_OK", "NATIVE_FREE_FLIGHT_RESEARCH_SOURCE_OK", []),
             "NativeWizardResearchSmoke": ("NATIVE_WIZARD_RESEARCH_SOURCE_FREE_OK", "NATIVE_WIZARD_RESEARCH_SOURCE_OK", []),
+            "NativeTwoWizardResearchSmoke": ("NATIVE_TWO_WIZARD_RESEARCH_FREE_OK", "NATIVE_TWO_WIZARD_RESEARCH_SOURCE_OK", ["--source"]),
         }
         for name, (free_marker, source_marker, arguments) in expected.items():
             self.assertEqual(free_marker, dict(RUNNER.CORE_CASES).get(name))
             self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
             self.assertEqual([(name, source_marker, arguments)], [case for case in RUNNER.SOURCE_QA_CASES if case[0] == name])
-        self.assertEqual(frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke"}), RUNNER.SOURCE_QA_CUE_CASES)
-        for name in RUNNER.SOURCE_QA_CUE_CASES - {"NativeId65FreshDiscResearchSmoke"}:
+        self.assertEqual(frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke", "NativeTwoWizardResearchSmoke"}), RUNNER.SOURCE_QA_CUE_CASES)
+        for name in RUNNER.SOURCE_QA_CUE_CASES - {"NativeId65FreshDiscResearchSmoke", "NativeId65FreshEditedDocumentResearchSmoke"}:
             self.assertIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
 
     def test_flight_preferences_are_sourcefree_and_never_a_rom_writer(self):
@@ -721,10 +734,12 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeId65FreshDiscSmoke": ["/selected original.bin"],
             "NativeId65FreshDiscStreamSmoke": ["/selected original.bin"],
             "NativeId65FreshDiscResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],
+            "NativeId65FreshEditedDocumentResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue"],
             "NativeWizardPlacementSmoke": ["/selected original.bin"],
             "NativeResourceCompositionSmoke": ["--source", "/selected original.bin"],
             "NativeFreeFlightResearchSmoke": ["/selected original.bin", "/selected original.cue", str(RUNNER.ROOT)],
             "NativeWizardResearchSmoke": ["/selected original.bin", "/selected original.cue", str(RUNNER.ROOT)],
+            "NativeTwoWizardResearchSmoke": ["--source", "/selected original.bin", "/selected original.cue", str(RUNNER.ROOT)],
         }
         self.assertEqual(set(expected), {c[0] for c in cases})
         calls = []

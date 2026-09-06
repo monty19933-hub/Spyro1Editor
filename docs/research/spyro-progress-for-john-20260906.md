@@ -1,5 +1,14 @@
 # Spyro editor — what is working now
 
+Newest progress: the imported Dark Hollow Wizard has now been defeated by a
+normal charge and its native yellow gem raised the counter from13 to23. Normal
+exit/re-entry is being tested; this does not yet certify every reload/save case.
+The separate two-Wizard and edited fresh-floor exporters also pass complete
+source/image checks, with a121-step/zero-failure default Release gate. Their
+first new research ROM publications and native tests are next. The original
+one-Wizard ROM and fresh starter remain unchanged. These exporters are not yet
+ordinary editor buttons, and the installed editor has not been replaced.
+
 Latest resumed work: a separate **Fresh Level…** document window now has
 floor/spawn/color/music controls, a schematic preview, undo/redo and protected
 save/reopen. It has passed65 headless UI checks and a separate retail-shell

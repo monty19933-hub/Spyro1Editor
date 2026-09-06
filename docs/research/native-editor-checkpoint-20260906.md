@@ -1,5 +1,39 @@
 # Native editor checkpoint — 2026-09-06
 
+## Latest checkpoint: two-Wizard and edited-document physical publishers
+
+The separately named two-Wizard profile now uses the same closed physical
+artifact/transaction implementation as the original one-Wizard profile. The old
+API, complete Plan/receipt and ROM bytes remain unchanged; a regression test
+caught and fixed synchronous-versus-faulted-Task exception timing during the
+extraction. Actual two-owner ancestry derives target120 and the shared89-slot
+arena. The independently reconstructed full BIN is `612e68e1…08cba`.
+
+A separate edited fresh-document research publisher now accepts only the
+actual issued compilation of the fixed 2048x2048 landing, changed spawn/heading,
+colors and track2 recipe. Full BIN `ecc8f61c…5aed16` matches the independent
+source oracle; the original starter remains byte-identical. Both paths use
+new-only guarded transactions, exact companions, full-image readback and source
+freshness. Neither is generic UI export or a universal portability certificate.
+
+Root verification: default Release121/0 (81.08 seconds summed), Python75/one
+explicit-source skip, two-profile source275 plus21 argument checks, edited
+source281804, and unchanged legacy candidate Verify333. The final edited CLI
+then built clean in0.53 seconds, free24 plus43 separate argument checks.
+Independent raw oracles and precommit fault exercises were reviewed separately:
+legacy14 plus two/transaction53, and edited43. Deliberate tiny recovery fixtures
+remain preserved. Prepared explicit publication/verification CLI modes have not
+yet successfully published a candidate at this checkpoint. Postcommit
+cancellation execution, ordinary editor publication and native acceptance of
+both new profiles remain separate gates. Evidence and commands are in the two
+new smoke READMEs and the R03 session directory below.
+
+R03 remains ACTIVE. The unchanged one-Wizard ROM has now shown normal charge
+defeat, a native class56 yellow gem and HUD13→23 at recording14:20–14:25.
+Normal exit/re-entry is in progress, not yet accepted. This input used50-percent
+wall-clock pacing with native CPU unchanged; full audio and peak-resource
+acceptance remain open. Preserve/close/restore the live session as documented.
+
 ## Latest resumed checkpoint: fresh-document UI and two-Wizard composition
 
 John explicitly resumed after a manual usage reset. The new `Fresh Level…`
