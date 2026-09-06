@@ -9,6 +9,22 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Spyro.Editor.Core.Exporting;
 
+internal static class Program
+{
+const string Warning =
+    "WARNING: connecting to this DuckStation GDB server pauses a running game exactly once.";
+const string ReadOnly =
+    "This watcher sends only the three approved m reads and protocol ACKs; it cannot resume the game.";
+const string Connected = "Connected once to 127.0.0.1:2345. DuckStation is now paused.";
+const string Prompt =
+    "Manually Resume in DuckStation, leave this watcher connected, then press Return here to begin the 0.1-second-period watch: ";
+const string Watching =
+    "Watching one numbered near-contemporaneous tuple per period with monotonic elapsed milliseconds; press Ctrl-C to stop cleanly.";
+const string Stopped =
+    "Stopped cleanly; the socket is closed and no control packet was sent. If DuckStation was not manually resumed, it remains paused.";
+
+private static void Main(string[] args)
+{
 string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
 Require(
     Assembly.GetExecutingAssembly().GetName().Name ==
@@ -1056,18 +1072,6 @@ finally
 Require(inputTimingStaticPositiveChecks == 4 && inputTimingStaticRejects == 17,
     $"The input/timing static helper matrix did not execute exactly: " +
     $"positiveChecks={inputTimingStaticPositiveChecks}, rejects={inputTimingStaticRejects}.");
-
-const string Warning =
-    "WARNING: connecting to this DuckStation GDB server pauses a running game exactly once.";
-const string ReadOnly =
-    "This watcher sends only the three approved m reads and protocol ACKs; it cannot resume the game.";
-const string Connected = "Connected once to 127.0.0.1:2345. DuckStation is now paused.";
-const string Prompt =
-    "Manually Resume in DuckStation, leave this watcher connected, then press Return here to begin the 0.1-second-period watch: ";
-const string Watching =
-    "Watching one numbered near-contemporaneous tuple per period with monotonic elapsed milliseconds; press Ctrl-C to stop cleanly.";
-const string Stopped =
-    "Stopped cleanly; the socket is closed and no control packet was sent. If DuckStation was not manually resumed, it remains paused.";
 
 string[] stableLines =
 [
@@ -4144,6 +4148,92 @@ void RejectJournalTamper(
     }
 }
 
+void RejectCopiedVisualBytesAcrossSessions(
+    CompleteFixture fixture,
+    Id65V3RuntimeEvidenceCheck sourceCheck,
+    Id65V3RuntimeEvidenceCheck destinationCheck)
+{
+    Id65V3RuntimeEvidenceSlice sourceReference = sourceCheck.ArtifactRefs.First(reference =>
+        reference.FrameSha256 is not null);
+    Id65V3RuntimeEvidenceSlice destinationReference = destinationCheck.ArtifactRefs.First(reference =>
+        reference.FrameSha256 is not null);
+    string sourcePath = fixture.ArtifactPaths[sourceReference.ArtifactId];
+    string destinationPath = fixture.ArtifactPaths[destinationReference.ArtifactId];
+    byte[] copiedBytes = File.ReadAllBytes(sourcePath);
+    byte[] originalDestinationBytes = File.ReadAllBytes(destinationPath);
+    try
+    {
+        File.WriteAllBytes(destinationPath, copiedBytes);
+        string copiedHash = Hash(copiedBytes);
+        Id65V3RuntimeEvidenceArtifact destinationArtifact = fixture.Package.ArtifactCatalog.Single(artifact =>
+            artifact.ArtifactId == destinationReference.ArtifactId);
+        Id65V3RuntimeEvidencePackage package = ReplaceArtifactMetadata(
+            fixture.Package,
+            destinationArtifact with
+            {
+                Sha256 = copiedHash,
+                ByteLength = copiedBytes.LongLength
+            });
+        Id65V3RuntimeEvidenceCheck changedCheck = destinationCheck with
+        {
+            ArtifactRefs = destinationCheck.ArtifactRefs.Select(reference =>
+                reference.ArtifactId == destinationReference.ArtifactId
+                    ? reference with { FrameSha256 = copiedHash }
+                    : reference).ToArray()
+        };
+        package = ReplaceCheck(package, changedCheck);
+        RejectFullReadback(
+            "copied visual bytes under a distinct cross-session artifact ID",
+            package,
+            fixture,
+            "Visual artifacts with identical bytes are reused across cold processes");
+    }
+    finally
+    {
+        File.WriteAllBytes(destinationPath, originalDestinationBytes);
+    }
+}
+
+void RejectContract(string name, string json)
+{
+    Id65V3RuntimeEvidenceValidation validation = Id65V3RuntimeEvidenceContract.ValidateCanonicalJson(
+        Encoding.UTF8.GetBytes(json),
+        repositoryRoot);
+    Require(!validation.StructurallyValid && validation.State == Id65V3RuntimeEvidenceState.Invalid &&
+            validation.Errors.Length != 0,
+        $"Canonical contract tamper '{name}' did not fail closed.");
+    canonicalRejects++;
+}
+
+void RejectSealedPackage(string name, Id65V3RuntimeEvidencePackage package)
+{
+    Id65V3RuntimeEvidenceValidation validation = Id65V3RuntimeEvidenceContract.ValidateCanonicalJson(
+        Id65V3RuntimeEvidenceContract.SerializeCanonicalUtf8(package),
+        repositoryRoot);
+    Require(!validation.StructurallyValid && validation.State == Id65V3RuntimeEvidenceState.Invalid &&
+            validation.Errors.Length != 0,
+        $"Sealed runtime package '{name}' did not fail closed as invalid.");
+    stateGateRejects++;
+}
+
+void RejectTelemetry(string name, string[] lines) =>
+    RejectTelemetryText(name, WatcherLog(lines, string.Empty));
+
+void RejectTelemetryText(string name, string text)
+{
+    try
+    {
+        _ = Id65V3RuntimeEvidenceContract.ParseTelemetryLog(text);
+        throw new InvalidOperationException($"Telemetry tamper '{name}' did not fail closed.");
+    }
+    catch (InvalidDataException)
+    {
+        telemetryRejects++;
+    }
+}
+
+}
+
 static JsonObject CaptureEvent(JsonObject root, string eventType, int occurrence = 0) =>
     root["events"]!.AsArray()
         .Select(item => item!.AsObject())
@@ -4233,52 +4323,6 @@ static void RechainCaptureJournal(JsonObject root)
     }
 }
 
-void RejectCopiedVisualBytesAcrossSessions(
-    CompleteFixture fixture,
-    Id65V3RuntimeEvidenceCheck sourceCheck,
-    Id65V3RuntimeEvidenceCheck destinationCheck)
-{
-    Id65V3RuntimeEvidenceSlice sourceReference = sourceCheck.ArtifactRefs.First(reference =>
-        reference.FrameSha256 is not null);
-    Id65V3RuntimeEvidenceSlice destinationReference = destinationCheck.ArtifactRefs.First(reference =>
-        reference.FrameSha256 is not null);
-    string sourcePath = fixture.ArtifactPaths[sourceReference.ArtifactId];
-    string destinationPath = fixture.ArtifactPaths[destinationReference.ArtifactId];
-    byte[] copiedBytes = File.ReadAllBytes(sourcePath);
-    byte[] originalDestinationBytes = File.ReadAllBytes(destinationPath);
-    try
-    {
-        File.WriteAllBytes(destinationPath, copiedBytes);
-        string copiedHash = Hash(copiedBytes);
-        Id65V3RuntimeEvidenceArtifact destinationArtifact = fixture.Package.ArtifactCatalog.Single(artifact =>
-            artifact.ArtifactId == destinationReference.ArtifactId);
-        Id65V3RuntimeEvidencePackage package = ReplaceArtifactMetadata(
-            fixture.Package,
-            destinationArtifact with
-            {
-                Sha256 = copiedHash,
-                ByteLength = copiedBytes.LongLength
-            });
-        Id65V3RuntimeEvidenceCheck changedCheck = destinationCheck with
-        {
-            ArtifactRefs = destinationCheck.ArtifactRefs.Select(reference =>
-                reference.ArtifactId == destinationReference.ArtifactId
-                    ? reference with { FrameSha256 = copiedHash }
-                    : reference).ToArray()
-        };
-        package = ReplaceCheck(package, changedCheck);
-        RejectFullReadback(
-            "copied visual bytes under a distinct cross-session artifact ID",
-            package,
-            fixture,
-            "Visual artifacts with identical bytes are reused across cold processes");
-    }
-    finally
-    {
-        File.WriteAllBytes(destinationPath, originalDestinationBytes);
-    }
-}
-
 static Id65V3RuntimeEvidencePackage ReplaceArtifactMetadata(
     Id65V3RuntimeEvidencePackage package,
     Id65V3RuntimeEvidenceArtifact replacement) =>
@@ -4310,7 +4354,7 @@ static Id65V3RuntimeEvidencePackage ReplaceCheck(
             .ToArray()
     });
 
-CompleteFixture BuildCompleteFixture(
+static CompleteFixture BuildCompleteFixture(
     string sourceRepositoryRoot,
     string artifactRepositoryRoot,
     Id65V3RuntimeEvidencePackage pendingPackage,
@@ -5954,44 +5998,6 @@ static void WriteCanonicalArtifactString(StringBuilder builder, string value)
     builder.Append('"');
 }
 
-void RejectContract(string name, string json)
-{
-    Id65V3RuntimeEvidenceValidation validation = Id65V3RuntimeEvidenceContract.ValidateCanonicalJson(
-        Encoding.UTF8.GetBytes(json),
-        repositoryRoot);
-    Require(!validation.StructurallyValid && validation.State == Id65V3RuntimeEvidenceState.Invalid &&
-            validation.Errors.Length != 0,
-        $"Canonical contract tamper '{name}' did not fail closed.");
-    canonicalRejects++;
-}
-
-void RejectSealedPackage(string name, Id65V3RuntimeEvidencePackage package)
-{
-    Id65V3RuntimeEvidenceValidation validation = Id65V3RuntimeEvidenceContract.ValidateCanonicalJson(
-        Id65V3RuntimeEvidenceContract.SerializeCanonicalUtf8(package),
-        repositoryRoot);
-    Require(!validation.StructurallyValid && validation.State == Id65V3RuntimeEvidenceState.Invalid &&
-            validation.Errors.Length != 0,
-        $"Sealed runtime package '{name}' did not fail closed as invalid.");
-    stateGateRejects++;
-}
-
-void RejectTelemetry(string name, string[] lines) =>
-    RejectTelemetryText(name, WatcherLog(lines, string.Empty));
-
-void RejectTelemetryText(string name, string text)
-{
-    try
-    {
-        _ = Id65V3RuntimeEvidenceContract.ParseTelemetryLog(text);
-        throw new InvalidOperationException($"Telemetry tamper '{name}' did not fail closed.");
-    }
-    catch (InvalidDataException)
-    {
-        telemetryRejects++;
-    }
-}
-
 static Id65V3RuntimeEvidenceSession SyntheticSession(
     int? landingSampleOrdinal,
     int? holdStartSampleOrdinal,
@@ -6030,7 +6036,7 @@ static Id65V3RuntimeEvidenceSession SyntheticSession(
     ProfileAfterArtifactId: null,
     SampleSummary: null);
 
-string WatcherLog(IEnumerable<string> samples, string promptSeparator) =>
+static string WatcherLog(IEnumerable<string> samples, string promptSeparator) =>
     Warning + "\n" + ReadOnly + "\n" + Connected + "\n" + Prompt + promptSeparator + Watching + "\n" +
     string.Join('\n', samples) + "\n\n" + Stopped + "\n";
 
@@ -6136,6 +6142,8 @@ static void Require(bool condition, string message)
 {
     if (!condition)
         throw new InvalidOperationException(message);
+}
+
 }
 
 internal sealed record CompleteFixture(

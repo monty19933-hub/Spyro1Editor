@@ -12,6 +12,12 @@ internal static class Program
 {
 private static async Task Main(string[] args)
 {
+if (args.Contains("--source-free-fixture-lookup", StringComparer.Ordinal))
+{
+    Require(args.Length == 1, "The source-free fixture lookup mode accepts no filesystem arguments.");
+    V3FixtureBuilderLookup.RunSourceFree();
+    return;
+}
 string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
 string lockedImagePath = Path.Combine(
     repositoryRoot,
@@ -2287,9 +2293,7 @@ static FullReadbackFixtureInput BuildExistingCompleteFullReadbackFixture(
         ActiveCheatCount = 0
     };
     Assembly fixtureAssembly = Assembly.Load("Spyro.Editor.Id65V3RuntimeEvidenceContractSmoke");
-    MethodInfo builder = fixtureAssembly.GetTypes()
-        .SelectMany(type => type.GetMethods(BindingFlags.Static | BindingFlags.NonPublic))
-        .Single(method => method.Name.Contains("BuildCompleteFixture", StringComparison.Ordinal));
+    MethodInfo builder = V3FixtureBuilderLookup.Resolve(fixtureAssembly);
     ParameterInfo[] builderParameters = builder.GetParameters();
     Require(builderParameters.Length >= 4 &&
             builderParameters[0].ParameterType == typeof(string) &&

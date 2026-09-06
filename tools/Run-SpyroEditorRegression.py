@@ -51,6 +51,7 @@ CORE_CASES = (
     ("WadGrowthGapSmoke", "WAD_GROWTH_GAP_SMOKE_OK"),
     ("FixedTailPrivateRecordSmoke", "FIXED_TAIL_IMAGE_PROOF_CASES_OK"),
     ("Id65AuthoringMobyDependencyBundleCompilerSmoke", "NATIVE_SCENE_PROPERTIES_LINKER_SMOKE_OK"),
+    ("Id65AuthoringRewardStagingRuntimeCandidatePublisherSmoke", "V3_FIXTURE_LOOKUP_SOURCE_FREE_OK"),
     ("CombinedExportPublicationSmoke", "COMBINED_EXPORT_PUBLICATION_SMOKE_OK"),
     ("DiagnosticsBundleSmoke", "DIAGNOSTICS_BUNDLE_SMOKE_OK"),
     ("UnusedLevel65MusicOwnershipClosureSmoke", "ID65_MUSIC_SELECTION_COMPILER_SMOKE_OK"),
@@ -71,6 +72,9 @@ CORE_CASES = (
 CASE_ARGUMENTS = {
     "FixedTailPrivateRecordSmoke": ["--source-free-image-proof"],
     "Id65AuthoringMobyDependencyBundleCompilerSmoke": ["--source-free-properties-linker"],
+    # Bind the compiled fixture only. Never invoke the legacy publisher's
+    # default mode, which constructs fixtures and mutates retained inputs.
+    "Id65AuthoringRewardStagingRuntimeCandidatePublisherSmoke": ["--source-free-fixture-lookup"],
     "UnusedLevel65MusicOwnershipClosureSmoke": ["--source-free-music-selection"],
 }
 # Additional modes retain their own arguments/markers without replacing the

@@ -1,6 +1,6 @@
 # Publisher smoke compiler-scope experiment
 
-The existing `Id65AuthoringRewardStagingRuntimeCandidatePublisherSmoke` now has an explicit `Program` class and `async Task Main`. Its 74 static local helpers become ordinary static members. Only seven nonblank structural/annotation lines were added; no executable body, helper signature/body, assertion, fixture, checkpoint order, native import, or global type was rewritten. The macOS class annotation preserves the existing macOS-only harness contract; the original runtime OS guard remains and no analyzer is suppressed.
+At checkpoint `26c7bf3`, `Id65AuthoringRewardStagingRuntimeCandidatePublisherSmoke` gained an explicit `Program` class and `async Task Main`. Its 74 static local helpers became ordinary static members. Only seven nonblank structural/annotation lines were added at that checkpoint; no executable body, helper signature/body, assertion, fixture, checkpoint order, native import, or global type was rewritten. The macOS class annotation preserved the existing macOS-only harness contract; the original runtime OS guard remained and no analyzer was suppressed. The subsequent V3 dependency change also requires a narrowly tested fixture-lookup update; see `v3-smoke-compiler-scope-experiment.md` for that separate result and its limitations.
 
 ## Measured result
 
