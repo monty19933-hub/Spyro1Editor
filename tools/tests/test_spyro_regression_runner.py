@@ -83,6 +83,8 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeResourceCompositionSmoke": ("NATIVE_RESOURCE_COMPOSITION_SOURCE_FREE_OK", "NATIVE_RESOURCE_COMPOSITION_SOURCE_OK", ["--source"]),
             "NativeId65CompanionAssetSmoke": ("NATIVE_ID65_COMPANION_ASSET_SOURCE_FREE_OK", "NATIVE_ID65_COMPANION_ASSET_SOURCE_OK", []),
             "NativeId65AuthoredSurfaceSmoke": ("NATIVE_ID65_AUTHORED_SURFACE_SMOKE_OK", "NATIVE_ID65_AUTHORED_SURFACE_SOURCE_OK", []),
+            "NativeId65NormalResourceSmoke": ("NATIVE_ID65_NORMAL_RESOURCE_SMOKE_OK", "NATIVE_ID65_NORMAL_RESOURCE_SOURCE_OK", []),
+            "NativeWizardPlacementSmoke": ("NATIVE_WIZARD_PLACEMENT_SMOKE_OK", "NATIVE_WIZARD_PLACEMENT_SOURCE_OK", []),
         }
         for name, (free_marker, source_marker, arguments) in expected.items():
             with self.subTest(project=name):
@@ -310,6 +312,8 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeId65EngineProfileSmoke": ["/selected original.bin"],
             "NativeId65CompanionAssetSmoke": ["/selected original.bin"],
             "NativeId65AuthoredSurfaceSmoke": ["/selected original.bin"],
+            "NativeId65NormalResourceSmoke": ["/selected original.bin"],
+            "NativeWizardPlacementSmoke": ["/selected original.bin"],
             "NativeResourceCompositionSmoke": ["--source", "/selected original.bin"],
             "NativeFreeFlightResearchSmoke": ["/selected original.bin", "/selected original.cue", str(RUNNER.ROOT)],
         }

@@ -32,6 +32,8 @@ CORE_CASES = (
     ("NativeId65EngineProfileSmoke", "NATIVE_ID65_ENGINE_PROFILE_SOURCE_FREE_OK"),
     ("NativeId65CompanionAssetSmoke", "NATIVE_ID65_COMPANION_ASSET_SOURCE_FREE_OK"),
     ("NativeId65AuthoredSurfaceSmoke", "NATIVE_ID65_AUTHORED_SURFACE_SMOKE_OK"),
+    ("NativeId65NormalResourceSmoke", "NATIVE_ID65_NORMAL_RESOURCE_SMOKE_OK"),
+    ("NativeWizardPlacementSmoke", "NATIVE_WIZARD_PLACEMENT_SMOKE_OK"),
     ("NativeResourceCompositionSmoke", "NATIVE_RESOURCE_COMPOSITION_SOURCE_FREE_OK"),
     ("NativeFreeFlightSmoke", "NATIVE_FREE_FLIGHT_SOURCE_FREE_OK"),
     ("NativeFreeFlightResearchSmoke", "NATIVE_FREE_FLIGHT_RESEARCH_SOURCE_FREE_OK"),
@@ -87,6 +89,8 @@ SOURCE_QA_CASES = (
     ("NativeId65EngineProfileSmoke", "NATIVE_ID65_ENGINE_PROFILE_SOURCE_OK", []),
     ("NativeId65CompanionAssetSmoke", "NATIVE_ID65_COMPANION_ASSET_SOURCE_OK", []),
     ("NativeId65AuthoredSurfaceSmoke", "NATIVE_ID65_AUTHORED_SURFACE_SOURCE_OK", []),
+    ("NativeId65NormalResourceSmoke", "NATIVE_ID65_NORMAL_RESOURCE_SOURCE_OK", []),
+    ("NativeWizardPlacementSmoke", "NATIVE_WIZARD_PLACEMENT_SOURCE_OK", []),
     ("NativeResourceCompositionSmoke", "NATIVE_RESOURCE_COMPOSITION_SOURCE_OK", ["--source"]),
     ("NativeFreeFlightSmoke", "NATIVE_FREE_FLIGHT_SOURCE_OK", []),
     # Plan capture only: never --exercise-staging, --verify or publication.
