@@ -294,7 +294,7 @@ This is a genuine absent-model/absent-behavior import interaction, not a
 substituted enemy or manually awarded treasure. Read-only snapshots and native
 screenshots support the result; detailed scope is in the runtime report above.
 
-The Mac locked before a verified normal exit/re-entry; death/reload and audio
+During R01, the Mac locked before a verified normal exit/re-entry; death/reload and audio
 also remain open. Capture failed because of DuckStation's bundled FFmpeg
 architecture/dependency mismatch. The owned test process is now stopped and
 both emulator settings files restored to the fresh pre-test hashes. Original
@@ -302,4 +302,47 @@ ROMs and the exact candidate remain unchanged. This direct interaction result
 does not promote the immutable receipt's broader `runtimeProven=false` gate or
 authorize normal editor export. Resume by unlocking the Mac and finishing the
 same-candidate remaining gates, then addressing the diagnosed Wizard route
-hazard before widening native family support.
+hazard before widening native family support. That historical stop was resumed
+with the user's unlocked-Mac confirmation; the following results supersede its
+re-entry and recording blockers.
+
+### R02/R03 continuation: normal re-entry and recorded native interaction
+
+The unchanged V3 candidate repeated key pickup, automatic chest opening and all
+six rewards in two more fresh no-card runs. R02 then used native Exit Level and
+walked through the actual Artisans Town Square portal. Town treasure stayed10;
+all six destination-index collection bits remained set, and chest/controller
+rows108–113 reconstructed deleted. The key reconstructed active with key state0,
+as the independent native loader trace predicts. No repeat ten-gem award occurred.
+This is a normal in-session re-entry pass, not a memory-card or death/reload pass.
+
+R03 overcame the capture architecture mismatch by running the existing universal
+DuckStation executable under existing Rosetta, with its existing bundled FFmpeg
+libraries scoped to that process. No app files or installed libraries changed.
+Native game audio/video capture succeeded at observed100% game speed. Its
+109.506-second recording retains key pickup, opening/particles/debris and the
+six rewards; the measured total is2→12 because one original green gem was
+collected before opening. Complete H.264/AAC decode passed. Exact cue-specific
+audio analysis is retained separately from subjective listening acceptance.
+
+Both sessions exited normally. Fresh pre-test settings were restored
+byte-for-byte; the one temporary controller preset was moved recoverably into
+retained evidence. Original ROMs and exact V3 BIN hashes are unchanged. See
+[the runtime report](research/native-closure-runtime-20260905.md#r02-fresh-interaction-and-normal-portal-re-entry),
+[persistence consumers](research/native-town-square-persistence-contract.md), and
+[audio ownership and observation scope](research/native-town-square-v3-audio-observation-scope.md).
+
+The next code boundary now has a regression-first, reusable continuous native
+route-surface audit. It rejects the known Wizard corridor crossing damaging
+water even though the initial dry support patch passes, including when the
+origin alone is lifted. Missing descriptors, raw flags, gaps/overlaps, lookup
+membership and bounded resource expansion are explicit refusal cases. It is an
+additive read-only audit: old v1 output bytes and publication policy are preserved.
+An authored test corridor is not a measured native physics body or a corrected
+patrol. See [route audit scope and tests](research/native-wizard-route-surface-audit.md).
+
+Remaining priorities are a separately validated Wizard route/body profile,
+death and memory-card persistence, second-family/two-instance gameplay, and the
+shared allocation needed for larger native resource sets. Neither these runtime
+observations nor the route audit enables arbitrary Moby placement, normal Create
+BIN authorization or a finished independent blank-level UI.
