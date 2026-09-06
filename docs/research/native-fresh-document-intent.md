@@ -51,9 +51,9 @@ UTF-8 serialization with no BOM or newline.
 Parsed data owns only scalar values and typed colors. Mutating the input array
 or a returned serialized array cannot mutate the intent. Old Lab documents
 are rejected rather than implicitly migrated. Filesystem persistence and stale-
-write protection, plus viewport integration, remain separate steps; none is
-inferred from a JSON round trip. Source-bound compilation is now implemented
-as the separate boundary described below.
+write protection are now implemented in the separate store described below;
+viewport integration remains pending. Neither follows from a JSON round trip.
+Source-bound compilation is implemented as another separate boundary below.
 
 ## Regression registration
 
@@ -128,9 +128,40 @@ under `root-closeout/`. No app was installed or new gameplay result inferred.
 
 ## Next integration boundary
 
-Persistence needs an explicit fresh-document identity and stale-write checks
-before being connected to UI authoring. A practical vertical slice must save,
-reopen, preview and compile the same authored document, then separately produce
-and test an appropriately scoped edited candidate. Normal Create BIN and the
+Project-bound persistence and stale-write checks are now implemented. A
+practical UI must save, reopen, preview and compile the same authored document,
+then separately produce and test an appropriately scoped edited candidate. Normal Create BIN and the
 exact fixed-candidate publisher keep their existing scopes; editing a document
 does not silently grant publication approval or export the unchanged starter.
+
+## Project-bound save and reopen
+
+`NativeId65FreshDocumentStore.Capture(EditorProjectLayout)` reads an existing
+project's actual `spyro-project.json` identity/schema header and the fixed
+`native-id65-fresh-document-v1.json`. It validates the header, not every unrelated
+manifest field. Missing documents return an absent snapshot, not default content;
+malformed files refuse without being replaced. The manifest is bounded to 64 KiB,
+the document to 16 KiB, and complete length/position/EOF are checked.
+
+`Save(expectedSnapshot, intent)` binds the same project and exact raw manifest/
+document hashes. External changes, including whitespace or deletion, require
+recapture. A cooperating-writer lease, canonical staged bytes with readback and
+the existing publication transaction provide exception rollback. Final reopen
+after commit is noncancellable; genuine readback failure reports that the save
+committed and retains the writer lease for recovery. Foreign locks are never
+automatically removed. Trusted ancestors/cooperating writers are required;
+hostile filesystem races and crash atomicity are not certified.
+
+Old Lab documents, project manifests, source files and outputs are not edited.
+There is no delete, retarget, migration, native approval or new UI operation.
+Tests use only disposable fixture projects. The tests-first RED had 45 intended
+missing-type errors and zero warnings. Reviewed Release build: 4.92 seconds,
+zero warnings/errors; 83 store checks plus 160 existing checks give 243 total.
+Root and independent review checked the full implementation. Root's default
+Release gate passed 113 steps/zero failures, 72.83 seconds summed; all 71 Python
+tests completed with one explicit-source skip, and the five original-source
+observer cases passed separately.
+
+Focused logs: `_local/research/native-id65-engine-profile-20260906-r01/`, prefix
+`fresh-document-store-`. Root logs and a byte-compared full report:
+`_local/research/native-fresh-document-store-20260906/root-gate/`.

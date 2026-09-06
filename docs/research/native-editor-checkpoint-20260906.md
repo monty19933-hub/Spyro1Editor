@@ -240,7 +240,47 @@ and [the user-facing progress report](spyro-progress-for-john-20260906.md).
 Do not consume a reset credit or schedule an automatic resume. Resume only
 after John explicitly asks, preserving existing completed work and test evidence.
 
-## Preservation and emulator cleanup (prior Wizard session)
+## Resumed project persistence and two-owner regression
+
+After John resumed from `f514085`, the fresh document gained project-bound
+save/reopen using immutable snapshots, raw manifest/document stale-write
+checks, bounded reads, a cooperating-writer lease and the unchanged publication
+transaction. Final readback completes after commit even if cancellation arrives.
+Actual postcommit mismatch reports committed state and retains recovery. Old
+Lab/source/project files are preserved. No UI, normal exporter or installed app
+was changed. See `native-fresh-document-intent.md` for the precise store scope.
+
+Tests-first RED: 45 intended missing-type errors, zero warnings. Final focused
+Release: 4.92 seconds, zero warnings/errors; 83 store checks/243 total. Root and
+independent full review passed. Root default Release:113 steps/zero failures,
+72.83 seconds summed, including App. Python discovery:71 tests/one explicit-
+source skip; all five original-source observer checks passed separately.
+Focused logs are the `fresh-document-store-` files under
+`_local/research/native-id65-engine-profile-20260906-r01/`; root logs and a
+byte-compared report are in `_local/research/native-fresh-document-store-20260906/root-gate/`.
+
+The multi-Wizard review found remaining single-instance resource/overlay/reward
+assumptions despite count-aware scene append. Its next binding design and a
+new source-native two-owner oracle are retained. Root independently replayed
+1,148 assertions, including 929 word checks, 32 reload cases and 8 collection-
+order/mask cases. The tracked oracle is manual/opt-in, not a new default runner
+step. See `native-wizard-two-owner-regression.md`. No two-Wizard Core integration
+or candidate is yet implemented; this is its regression foundation.
+
+An isolated R02 Wizard session booted the unchanged candidate and loaded the
+copied Stone Hill save only. It closed at the usage reserve before Dark Hollow,
+so no new Wizard gameplay pass is claimed. Recording finalized, observer exited 0,
+emulator exited 0 without resume save; original settings/card/BIN/CUE and Wizard
+candidate hashes matched after restoration. Exact closed journal and recording:
+`_local/native-wizard-runtime-20260906-r02.7ypAPr/RUNTIME-SESSION.md`.
+The full 183.600998-second H264/AAC recording decoded without errors; its intended
+combat filename does not establish achieved combat or listening acceptance.
+
+Usage reached 5% during closeout. This checkpoint is paused pending John's
+manual reset/explicit resume, not a completed editor goal. Continue from the
+new store and two-owner regression, rather than repeating the completed audit.
+
+## Preservation and emulator cleanup (earlier Wizard session)
 
 The owned Wizard observer and DuckStation session were closed normally. Temporary playback/controller settings were restored from their original backups. The original memory card was never overwritten. Final post-gate SHA-256 checks match the original BIN/CUE, retained Wizard BIN/CUE/receipt, both restored DuckStation INIs, and original memory card.
 

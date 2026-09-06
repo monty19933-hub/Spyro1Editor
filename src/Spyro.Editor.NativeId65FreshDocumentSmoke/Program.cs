@@ -144,6 +144,7 @@ expected.CopyTo(atCap, 0);
 Check(Serialize(NativeId65FreshDocumentCodec.Parse(atCap)) == canonical, "exact16KiB bound permits valid trailing whitespace");
 Reject(() => NativeId65FreshDocumentCodec.Parse(atCap.Concat(new byte[] { 32 }).ToArray()), "over16KiB input refuses");
 
+checks += StoreCases.Run();
 Console.WriteLine($"NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK checks={checks}");
 
 NativeId65FreshDocumentIntent Make(int x = 8448, int y = 8448, int z = 8704, int width = 1024, int depth = 1024,

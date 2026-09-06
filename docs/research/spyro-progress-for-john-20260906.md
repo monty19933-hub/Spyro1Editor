@@ -84,8 +84,9 @@ have been verified unchanged.
   music choices. Its strict canonical parser passes 160 checks. The document
   now drives native compilation: two edited examples changed the actual floor,
   collision, spawn, colors and/or music bytes. The original starter remains
-  byte-exact. Existing Lab saves keep their original meaning. File saving,
-  viewport controls and publication of edited documents are still pending;
+  byte-exact. Existing Lab saves keep their original meaning. Project-bound
+  save/reopen now works with stale-write protection and 83 additional checks.
+  Viewport controls and publication of edited documents are still pending;
   these new examples have not yet been gameplay-tested.
 - **Fresh-level gameplay diagnostics:** a dedicated, read-only observer now
   checks the new level's actual initialized resource layout. Its 17 tests and
@@ -97,10 +98,12 @@ have been verified unchanged.
 
 ## Next steps
 
-1. Complete Wizard combat/reward/re-entry and multiple-instance tests before
-   expanding the supported native dependency combinations.
+1. Complete Wizard combat/reward/re-entry. Make the remaining native
+   initialization and reward integration count-aware before building and
+   testing the complete multiple-instance candidate; scene allocation alone
+   is not enough. Then expand the supported dependency/destination combinations.
 2. Build a practical fresh-level editing workflow around the now-connected
-   document and native compiler: save/reopen, viewport editing and preview,
+   document and native compiler: connect save/reopen to viewport editing and preview,
    then separately guarded edited-candidate output and DuckStation tests.
    Preserve existing saved Lab documents and the exact tested starter.
 3. Carry the tested cross-level texture/body work through disc output and UI,
@@ -129,3 +132,32 @@ remaining, leaving a little extra reserve before the requested 5% limit. The
 editor goal is not complete. The next steps and exact evidence are saved in the
 resume checklist. No reset credit has been consumed; wait for John to explicitly
 resume rather than restarting automatically.
+
+## Resumed development
+
+John explicitly resumed development later on September 6 and reconfirmed the
+goal of Mobys available across levels. The pause above is historical. Work has
+resumed from clean `f514085`; John will handle his usage reset personally.
+Project-bound fresh-document save/reopen is now implemented and reviewed. The
+final gate again passed 113 steps with no failures; the focused document suite
+now has 243 checks. This did not install a new editor.
+
+For multiple Wizards, new independent native-byte checks cover two separate
+reward/save identities, collection in either order and checkpoint reloads.
+The remaining resource/initialization/reward composition is not implemented yet;
+no two-Wizard candidate or new gameplay pass is claimed. The exact source oracle
+has 1,148 assertions, including 929 source-word consistency checks, not 1,148
+independent gameplay tests.
+
+The new isolated Wizard session cold-booted the unchanged candidate and loaded
+the copied Stone Hill save. It was closed at the usage reserve before reaching
+the imported Wizard. Capture finalized, observer and emulator exited, and the
+original INIs/ROM/card/candidate were rechecked unchanged. The test video's
+intended combat filename is not evidence of completed combat.
+
+Usage reached about 5% during closeout. This tested checkpoint is paused for
+the user's manual reset and explicit resume; the overall editor goal is open.
+
+The [V6 readiness assessment](v6-readiness-20260906.md) explains the distinction
+between a useful V6 beta and universal importing. The latter is not yet a final
+polish step or a defensible percentage/date estimate.

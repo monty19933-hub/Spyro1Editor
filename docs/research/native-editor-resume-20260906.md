@@ -1,5 +1,20 @@
 # Resume after the September 6 usage pause
 
+**Resumed later September 6:** John explicitly asked to continue from this
+checkpoint and toward Mobys available across all levels. The pause instructions
+below record the earlier checkpoint; they do not prohibit the newly authorized
+work. John will perform any reset himself. Preserve the stated originals and
+verification boundaries throughout the resumed work.
+
+**Next safe checkpoint:** that resumed batch completed project-bound fresh
+save/reopen (83 new store checks/243 total), a 113-step/zero-failure default gate,
+and the source-native two-owner regression in
+`native-wizard-two-owner-regression.md`. Its 1,148 assertions are bounded native
+source checks, not gameplay tests. The five-file resource/overlay/reward
+integration remains the next Moby code step. The new R02 emulator session is
+closed with originals restored; it reached the copied Stone Hill save only.
+Usage reached 5% during closeout, so work is paused again for explicit resume.
+
 ## Start here, without repeating the completed audit
 
 Repository:
@@ -19,8 +34,8 @@ commits. Their latest usage instruction requires a safe pause around5% left,
 then waiting for explicit resume. Do not redeem their available reset credit,
 auto-resume, overwrite the original game/save, or replace the installed editor
 silently. The goal is unfinished; a usage pause is not completion.
-This bounded batch closed at approximately8% remaining to leave safe restart
-headroom before the requested5% threshold; no reset credit was used.
+The earlier compilation batch closed at approximately 8% remaining; the resumed
+store/regression batch closed at approximately 5%. No reset credit was used.
 
 All owned emulator/capture/observer sessions are closed. DuckStation's original
 global/game INIs are restored byte-for-byte; original BIN/CUE/card and retained
@@ -47,10 +62,14 @@ parallel. Do not reopen DuckStation merely to inspect its closed UI state.
   The baseline retains every old byte/plan/receipt; two edited documents change
   the actual native fields. Canonical document SHA is identity, not authority.
   The fixed research factory now delegates to this shared compiler.
+- Project-bound fresh-document save/reopen with raw-byte stale-write protection,
+  bounded reads, transactional publication and 83 new store checks.
+- Independent source-native two-Wizard owner/reward regression. The actual
+  multi-Wizard resource/overlay/reward integration is still pending.
 
 No new unrestricted blank-level UI has been installed. Existing Lab schemas1–6
-keep their meaning. Fresh document filesystem persistence, viewport/undo,
-edited-document publication and textured-disc publication are not complete.
+keep their meaning. Viewport/undo, edited-document publication and textured-disc
+publication are not complete.
 Grammar-valid geometry need not fit the current bounded disc resource profile;
 strict spawn-point containment is not safe player-footprint clearance.
 
@@ -58,13 +77,16 @@ strict spawn-point containment is not safe player-footprint clearance.
 
 1. **Complete the outstanding imported-Wizard gameplay sequence.** Reuse the
    exact retained candidate and runtime report below. Test defeat and exact+10
-   reward, then normal exit/re-entry and repeated combat; independently placed
-   multiple Wizards follow after the one-instance result. Record presentation,
+   reward, then normal exit/re-entry and repeated combat. The multiple-instance
+   scene allocator is already implemented, but native resource/overlay and
+   reward composition still bind the single-Wizard profile: generalize those
+   against actual issued count-aware owners before making a complete two-Wizard
+   candidate. Record presentation,
    audio observations and resource behavior honestly. Do not equate model or
    pointer checks with native behavior. A proven root-cause defect should receive
    a focused regression before a fix or further import-scope expansion.
-2. **Deliver a usable fresh-document vertical slice.** Build an explicit
-   project-bound save/reopen path with stale-write protection, then viewport
+2. **Deliver a usable fresh-document vertical slice.** Preserve the now-completed
+   project-bound save/reopen path with stale-write protection, then build viewport
    controls/preview and undo around the current immutable intent. Compile that
    same document through `NativeId65FreshDocumentCompilation`; never send an
    edited document through a function that substitutes the fixed starter.
