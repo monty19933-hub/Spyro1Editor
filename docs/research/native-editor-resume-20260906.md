@@ -1,16 +1,34 @@
 # Resume after the September 6 usage pause
 
+**Start with current state:** commit956ea87 adds generic read-only fresh-document
+research Plan (free35/source2339), plus two89-case publisher timing baselines.
+It does not yet add a generic publisher or UI export. Fresh-only publication
+engine extraction and saved-version UI handoff are active development work;
+check current git status and coordinate the serialized .NET slot with agents.
+
+**All owned emulator sessions are CLOSED.** Edited-fresh R01 passed native LAB
+entry, edited checkpoint/heading, bounded walking, flame, jump/landing, native
+death/respawn and approximately34 seconds normal-speed idle. Its journal is
+`_local/native-fresh-edited-runtime-20260906-r01.WRBwJW/RUNTIME-SESSION.md`;
+all9 protected hashes passed after restoration. Read
+`native-fresh-edited-r01-runtime-observations.md` for the failed speed-edit/
+overshoot and narrow acceptance boundaries. Do not reconnect old PID92969,
+observer25118/69174, or earlier R03 processes. Installed editor is unchanged.
+
+Town host ABI partial source recipe1027/37 passes root and independent peer;
+distinct actor/tick/spawn entry roles are necessary before final installation.
+See `native-fresh-wizard-host-abi.md`. This is not a playable fresh Wizard yet.
+
+## Prior checkpoint chronology (superseded where noted above)
+
 **Newest code:** variable-tree fresh compilation fixed and regression-tested,
 default Release122/0, actual source583188, native loader5945/22. Fixed starter,
 edited and textured body identities remain exact; ordinary/generic publication
 was not enabled. See `native-fresh-variable-data-layout.md`.
 
-**Newest live session:** edited-fresh R01 is ACTIVE at
-`_local/native-fresh-edited-runtime-20260906-r01.WRBwJW/`, PID92969, emulator
-shell32085, observer25118. Use its journal, exact ecc8f61c…5aed16 CUE and fresh
-backups; it is independent of the CLOSED Wizard R03. Root alone owns controls.
-The generic saved-document Plan and a transaction reuse audit are next separate
-work; do not confuse these with the fixed candidate now being tested.
+At that earlier code checkpoint, edited-fresh R01 had just started. It has
+since closed with exact originals restored as described above; its fixed
+candidate remains separate from generic saved-document export development.
 
 **Current runtime state:** R03 is CLOSED, original settings restored and all
 nine protected identities unchanged. The exact one-Wizard case passed native
@@ -23,7 +41,8 @@ Edited fresh observer profile `edited-landing-track02-r01` is separately tested:
 31 observer tests/three explicit-source skips, all8 source/artifact checks,
 whole Python84/three skips. Match actual process/open BIN and full companions
 before connecting; RAM addresses and profile annotations alone are insufficient.
-The two new published candidates still await their own native tests.
+The two-Wizard candidate still awaits its own native test; the edited fresh
+candidate now has the bounded R01 acceptance described above.
 
 **Newest continuation:** the two-Wizard shared physical publisher and a separate
 fixed edited-fresh-document publisher are implemented and independently checked.

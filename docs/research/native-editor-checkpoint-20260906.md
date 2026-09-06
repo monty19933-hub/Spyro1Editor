@@ -1,5 +1,33 @@
 # Native editor checkpoint — 2026-09-06
 
+## Current state: edited LAB native actions, generic source-bound plan
+
+Commit956ea87 adds a read-only plan accepting actual sealed fresh-document
+compilations, deriving the complete expected image rather than accepting caller
+hashes. Release clean, free35/source2339; four full-image readbacks,14 edited
+field alternatives and all46 native music values pass. A malformed UTF8 CUE
+test caught an exception-normalization gap, fixed only in the new plan. There
+is no generic publisher or ordinary editor export action yet. Both existing
+publisher entry contracts now have89-case timing baselines before extraction.
+
+Edited-fresh R01 is CLOSED with originals restored: native LAB entry, edited
+checkpoint/heading, bounded walking, visible flame, jump/landing, native death/
+respawn and approximately34 seconds of normal-speed idle. See
+`native-fresh-edited-r01-runtime-observations.md`. The first attempted speed
+change did not persist and a walk overshot the small floor; retained evidence
+does not call that a collision defect. Capture/observer/emulator are closed;
+all9 protected identities match. Do not reconnect to PID92969 or old observers.
+
+The Town-host Wizard ABI source recipe passes1027 checks/37 refusals, repeated
+independently by peer and root. Exact main and particle register contracts
+require different adapters from Dark Hollow. The prototype has separate-role
+synthetic entries, not a combined installable overlay; see
+`native-fresh-wizard-host-abi.md`. Resource/scene/reward integration is next.
+
+Fresh-only publication-engine extraction is in progress against frozen timing,
+source and exact-candidate readback regressions. Saved-version UI capture/busy
+handling is being designed in parallel. Installed editor remains unchanged.
+
 ## Current code checkpoint: variable collision-tree compilation
 
 Actual current fresh-document compilation now derives the data used end from
@@ -9,11 +37,15 @@ actual textured profiles remain refused. Existing outputs and both fixed
 publishers remain unchanged. Root default Release122/0, source583188 and corrected
 native loader5945/22 pass; see `native-fresh-variable-data-layout.md`.
 
-The next edited-fresh runtime session is ACTIVE under
-`_local/native-fresh-edited-runtime-20260906-r01.WRBwJW/`; its journal owns the
-fresh backups and cleanup. PID92969 opens the exact ecc8f61c…5aed16 BIN, with
-loopback-only2345 observer. Preparation/cold boot is not edited-floor acceptance.
-R03 Wizard below is a separately closed session, not this new one.
+The edited-fresh runtime session described above is now closed. Its journal
+under `_local/native-fresh-edited-runtime-20260906-r01.WRBwJW/` retains its own
+backups, exact ecc8f61c…5aed16 image identity and verified cleanup. R03 Wizard
+below is a separately closed session.
+
+## Historical checkpoints below
+
+These preserve chronology; earlier pending/ACTIVE statements are superseded
+by the current state above and the separately closed runtime reports.
 
 ## Current runtime checkpoint: R03 closed with reward/re-entry evidence
 

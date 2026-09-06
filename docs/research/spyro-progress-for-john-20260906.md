@@ -1,10 +1,22 @@
 # Spyro editor — what is working now
 
+The edited fresh-level ROM now works through a separate native gameplay test:
+LAB entry with the edited floor/colors/checkpoint/heading, controlled walking,
+flame, jump-and-land and normal respawn. It then remained stable through about
+34 seconds of normal-speed idle. Original settings, ROM and memory card are
+restored and verified unchanged. See [the edited LAB report](native-fresh-edited-r01-runtime-observations.md).
+
+The next editor step is exporting a saved fresh document. Its new read-only
+image plan passes2,339 source checks across four complete image readbacks,
+geometry/color/spawn changes and all46 selectable music values. The shared
+export code and saved-version UI safeguards are in progress; there is not yet
+a new installed editor or a generic fresh-document export button.
+
 The fresh-level compiler now handles valid floor positions that previously
 failed because of a fixed collision-data length assumption. Existing test ROMs
 remain byte-identical, and the default Release gate now passes122 steps. The
-edited fresh-floor ROM is entering its own separate gameplay test; ordinary
-export from a saved fresh document is the next editor integration step.
+edited fresh-floor ROM's bounded native test is separate from ordinary export
+from a saved fresh document.
 
 Newest progress: the imported Dark Hollow Wizard has now been defeated by a
 normal charge and its native yellow gem raised the counter from13 to23. Normal
@@ -14,8 +26,8 @@ Every reload/save case is not certified; the exact new evidence is in
 [the R03 report](native-dark-wizard-r03-reward-reentry.md).
 The separate two-Wizard and edited fresh-floor exporters also pass complete
 source/image checks, with a121-step/zero-failure default Release gate. Their
-new research ROMs were created and independently reopened successfully; their
-native tests remain next. The original
+new research ROMs were created and independently reopened successfully; the
+two-Wizard native test remains next. The original
 one-Wizard ROM and fresh starter remain unchanged. These exporters are not yet
 ordinary editor buttons, and the installed editor has not been replaced.
 
@@ -61,6 +73,7 @@ that an older installed app has automatically acquired every source change.
 | Wizard Peak Wizard imported into Dark Hollow | Normal portal entry, visible Wizard/lightning, electric damage, ordinary player death/reload, charge defeat and +10 reward, normal exit/re-entry, second defeat retaining the collected treasure total | Partial-collection death/card persistence, multiple simultaneous imported Wizards, full audio/presentation and peak-resource acceptance |
 | Native Free Flight in Toasty | Ascent/descent, both turn directions, flap, flight exit, collision, death/respawn, normal exit/portal reload and controlled landing | Every level/state; finished editor checkbox and end-to-end disabled-output workflow |
 | Fresh native LAB, without Town Square's terrain or placed scene | Native selector entry, LAB inventory title, visible Spyro and Sparx on the isolated floor, companion particles, a controlled short walk and normal-speed idle | Ordinary portals, jump/flame/death/card persistence, imported actors or exported textures in this fresh scene, complete audio/resource testing and editable UI integration |
+| Edited fresh LAB landing, changed floor/colors/spawn/heading and track2 recipe | Separate native LAB entry, edited checkpoint and heading, bounded walking, visible flame, stationary jump/landing, native fall death/respawn and about34 seconds normal-speed idle | Ordinary portal entry, card persistence, music/effect listening acceptance, arbitrary geometry/textures/foreign actors and generic saved-document UI export |
 
 These results belong to their exact retained candidates, not every possible
 object/level combination. Gameplay permission is already granted. Future tests
@@ -69,7 +82,9 @@ will use DuckStation with isolated test saves/settings and cleanup afterward.
 See the detailed [key/chest report](native-closure-runtime-20260905.md),
 [Wizard report](native-dark-wizard-r01-runtime-observations.md), and
 [Free Flight report](native-free-flight-r02-runtime-observations.md), and
-[fresh LAB report](native-fresh-lab-r02-runtime-observations.md).
+[fresh LAB report](native-fresh-lab-r02-runtime-observations.md). The newer
+[edited LAB report](native-fresh-edited-r01-runtime-observations.md) records its
+own exact candidate, unsuccessful input attempts and closed-session evidence.
 
 The LAB test recording and a short preview are saved in
 `_local/native-fresh-id65-runtime-20260906-r01.LbsgK0/`. The first normal-speed
