@@ -111,6 +111,8 @@ internal static class ArtifactTransactionCases
         string recoveryDirectory = Directory.GetDirectories(recovery.Output, ".export-recovery-*").Single();
         Require(recoveryFailure is IOException && recoveryFailure.Message.Contains(recoveryDirectory, StringComparison.Ordinal),
             "Rollback conflict did not report the exact recovery directory.");
+        Require(recoveryFailure.GetType().GetProperty("RetainedRecoveryDirectory")?.GetValue(recoveryFailure) as string == recoveryDirectory,
+            "Rollback conflict must expose structured retained recovery so callers do not delete its staging evidence or parse an error message.");
         Require(File.ReadAllText(Path.Combine(recoveryDirectory, "previous-000")) == recovery.Previous[recovery.Artifacts[0].DestinationPath],
             "Rollback conflict lost the previous BIN backup.");
         Require(File.Exists(Path.Combine(recoveryDirectory, "recovery.json")) &&

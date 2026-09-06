@@ -8,6 +8,14 @@ public sealed record ExportArtifactReplacement(string DestinationPath, string? S
 
 public sealed record ExportArtifactPublicationResult(string RetainedRecoveryDirectory);
 
+/// <summary>Rollback is incomplete. Preserve staged files, journal, previous artifacts and publication lock for recovery.</summary>
+public sealed class ExportArtifactRollbackException : IOException
+{
+    internal ExportArtifactRollbackException(string message, string retainedRecoveryDirectory, Exception innerException)
+        : base(message, innerException) => RetainedRecoveryDirectory = retainedRecoveryDirectory;
+    public string RetainedRecoveryDirectory { get; }
+}
+
 /// <summary>
 /// Publishes a prepared artifact set using same-volume renames and exception
 /// rollback. Cancellation is observed before the short, noncancellable commit.
@@ -186,8 +194,9 @@ public static class ExportArtifactTransaction
             if (rollbackFailures.Count > 0)
             {
                 retainRecovery = true;
-                throw new IOException(
+                throw new ExportArtifactRollbackException(
                     $"Export publication failed and rollback could not restore every artifact. Previous files and recovery instructions are preserved at {recovery}. The publication lock is retained until recovery is complete.",
+                    recovery,
                     new AggregateException([failure, .. rollbackFailures]));
             }
             throw;
