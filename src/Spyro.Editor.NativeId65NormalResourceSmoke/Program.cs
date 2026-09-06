@@ -9,6 +9,7 @@ if (args.Length > 1)
 int checks = 0;
 SceneListCases.Run(Require, Reject);
 FreshSceneCases.Run(Require, Reject);
+NormalUploadStagingCases.Run(Require, Reject);
 byte[] sourceVram = new byte[0x80000];
 var vram = new NativeId65VramAssembly(sourceVram);
 vram.CopySourceRange(0x100, 16);
@@ -201,6 +202,7 @@ if (args.Length == 1)
     Console.WriteLine($"PAYLOADS upload={bundle.UploadSha256} tail={bundle.DataTailSha256} model={bundle.ModelSha256}");
     await SceneListCases.Source(args[0], bundle, second, Require, Reject);
     await FreshSceneCases.Source(args[0], bundle, second, Require, Reject);
+    await NormalUploadStagingCases.Source(args[0], bundle, second, Require, Reject);
     Console.WriteLine($"NATIVE_ID65_NORMAL_RESOURCE_SOURCE_OK checks={checks}");
 }
 

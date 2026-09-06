@@ -445,6 +445,8 @@ internal sealed class FreshSceneMachine
     private readonly HashSet<uint> _writable = [];
     private uint _hi;
     internal int WordStoreCount { get; private set; }
+    internal int HalfwordReadCount { get; private set; }
+    internal uint LastHalfwordReadAddress { get; private set; }
 
     internal void Code(uint pc, ReadOnlySpan<byte> bytes)
     {
@@ -529,15 +531,25 @@ internal sealed class FreshSceneMachine
                     {
                         case 0: write = (rd, Registers[rt] << shift); break;
                         case 2: write = (rd, Registers[rt] >> shift); break;
+                        case 3: write = (rd, unchecked((uint)((int)Registers[rt] >> shift))); break;
+                        case 4: write = (rd, Registers[rt] << (int)(Registers[rs] & 31)); break;
+                        case 6: write = (rd, Registers[rt] >> (int)(Registers[rs] & 31)); break;
                         case 8: nextBranch = Registers[rs]; break;
                         case 0x10: write = (rd, _hi); break;
                         case 0x19: _hi = (uint)(((ulong)Registers[rs] * Registers[rt]) >> 32); break;
+                        case 0x1B:
+                            if (Registers[rt] == 0) throw new InvalidDataException("Unsupported native fixture division by zero.");
+                            _hi = Registers[rs] % Registers[rt];
+                            break;
                         case 0x20: write = (rd, Add(Registers[rs], Registers[rt])); break;
                         case 0x21: write = (rd, unchecked(Registers[rs] + Registers[rt])); break;
                         case 0x22: write = (rd, Subtract(Registers[rs], Registers[rt])); break;
                         case 0x23: write = (rd, unchecked(Registers[rs] - Registers[rt])); break;
+                        case 0x24: write = (rd, Registers[rs] & Registers[rt]); break;
                         case 0x25: write = (rd, Registers[rs] | Registers[rt]); break;
+                        case 0x27: write = (rd, ~(Registers[rs] | Registers[rt])); break;
                         case 0x2A: write = (rd, (int)Registers[rs] < (int)Registers[rt] ? 1u : 0u); break;
+                        case 0x2B: write = (rd, Registers[rs] < Registers[rt] ? 1u : 0u); break;
                         default: throw new InvalidDataException("Unsupported native fixture SPECIAL.");
                     }
                     break;
@@ -558,12 +570,19 @@ internal sealed class FreshSceneMachine
                 case 8: write = (rt, Add(Registers[rs], unchecked((uint)immediate))); break;
                 case 9: write = (rt, address); break;
                 case 10: write = (rt, (int)Registers[rs] < immediate ? 1u : 0u); break;
+                case 11: write = (rt, Registers[rs] < unchecked((uint)immediate) ? 1u : 0u); break;
                 case 12: write = (rt, Registers[rs] & (ushort)immediate); break;
                 case 13: write = (rt, Registers[rs] | (ushort)immediate); break;
                 case 15: write = (rt, (uint)(ushort)immediate << 16); break;
                 case 32: nextLoad = (rt, unchecked((uint)(sbyte)ReadByte(address))); break;
                 case 35: nextLoad = (rt, ReadWord(address)); break;
                 case 36: nextLoad = (rt, ReadByte(address)); break;
+                case 37:
+                    if (address % 2 != 0) throw new InvalidDataException("Unaligned native halfword read.");
+                    nextLoad = (rt, (uint)(ReadByte(address) | ReadByte(address + 1) << 8));
+                    HalfwordReadCount++;
+                    LastHalfwordReadAddress = address;
+                    break;
                 case 40: WriteByte(address, (byte)Registers[rt]); break;
                 case 41:
                     if (address % 2 != 0) throw new InvalidDataException("Unaligned native halfword write.");
