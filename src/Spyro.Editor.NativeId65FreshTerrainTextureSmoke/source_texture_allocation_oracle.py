@@ -12,12 +12,20 @@ import json
 from pathlib import Path
 import struct
 import sys
+from typing import NamedTuple
 
 sys.dont_write_bytecode = True
-from source_fresh_upload_fixture import capture, sha
+from source_fresh_upload_fixture import capture as capture_fresh, sha
 
 ORIGINAL = "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37"
 ROOT = Path(__file__).resolve().parents[2]
+
+
+class CapturedTextureOutput(NamedTuple):
+    upload: bytes
+    data: bytes
+    records: tuple[bytes, ...]
+    summary_json: str
 
 
 def rectangle(data, x, y, width, rows):
@@ -53,8 +61,8 @@ def contains(parent, child):
         parent[3]+parent[5] >= child[3]+child[5] and parent[4]+parent[6] >= child[4]+child[6]
 
 
-def main(path):
-    fresh = capture(path)
+def capture(path):
+    fresh = capture_fresh(path)
     surface_path = ROOT / "src/Spyro.Editor.NativeId65AuthoredSurfaceSmoke/source_surface_oracle.py"
     oldargv = sys.argv; sys.argv = [str(surface_path)]
     try:
@@ -174,8 +182,13 @@ def main(path):
         assert hashlib.file_digest(final_source, "sha256").hexdigest() == ORIGINAL
         assert final_source.tell() == 661547040 and final_source.seek(0, 2) == 661547040
     assert result == json.loads(Path(__file__).with_name("source_texture_allocation_golden.json").read_text())
-    print(json.dumps(result, indent=2))
-    return result
+    return CapturedTextureOutput(bytes(output), bytes(data_after), tuple(rebased), json.dumps(result, indent=2))
+
+
+def main(path):
+    result = capture(path)
+    print(result.summary_json)
+    return json.loads(result.summary_json)
 
 
 if __name__ == "__main__":

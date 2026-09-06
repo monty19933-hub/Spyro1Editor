@@ -29,6 +29,7 @@ internal sealed class NativeId65NormalBodyLayout
     private NativeId65NormalBodyLayout(ReadOnlySpan<byte> upload, ReadOnlySpan<byte> data,
         ReadOnlySpan<byte> model, ReadOnlySpan<byte> scene, byte[][] auxiliary)
     {
+        DataUsedByteLength = data.Length;
         byte[] paddedData = new byte[DataSectorByteLength];
         data.CopyTo(paddedData);
         byte[][] parts = [upload.ToArray(), paddedData, model.ToArray(), scene.ToArray(), .. auxiliary];
@@ -91,7 +92,7 @@ internal sealed class NativeId65NormalBodyLayout
     }
 
     internal bool SourceCertified => false;
-    internal int DataUsedByteLength => 0x8C8;
+    internal int DataUsedByteLength { get; }
     internal int DataSectorByteLength => 0x1000;
     internal string LevelDataSha256 { get; }
     internal IReadOnlyList<NativeId65NormalBodyDescriptor> Descriptors { get; }
@@ -104,7 +105,7 @@ internal sealed class NativeId65NormalBodyLayout
         ReadOnlySpan<byte> model, ReadOnlySpan<byte> scene, IReadOnlyList<byte[]> auxiliary)
     {
         ArgumentNullException.ThrowIfNull(auxiliary);
-        if (upload.Length != 0xDE000 || data.Length != 0x8C8 || model.Length != 0xF800 ||
+        if (upload.Length != 0xDE000 || data.Length is not (0x8C8 or 0xA38) || model.Length != 0xF800 ||
             scene.Length is not (0x2800 or 0x3000) || auxiliary.Count != 4)
             throw new InvalidDataException("Normal body requires the bounded fixed fresh profile and all four auxiliary allocations.");
         NativeId65FreshSceneLayout.DecodeCanonical(scene);
@@ -174,7 +175,7 @@ public sealed class NativeId65NormalBodyPlan
     private readonly byte[] _overlay;
 
     private NativeId65NormalBodyPlan(NativeId65NormalBodySource source,
-        NativeId65FreshSceneBundle fresh, NativeId65NormalUploadStaging staging)
+        NativeId65NormalResourceRevision fresh, NativeId65NormalUploadStaging staging)
     {
         byte[] upload = fresh.CopyUploadPayload();
         byte[] data = fresh.CopyDataComponents();
@@ -183,6 +184,7 @@ public sealed class NativeId65NormalBodyPlan
         source.RequireIssuedInputs(fresh, staging, upload, data, model, scene);
         _layout = NativeId65NormalBodyLayout.Compile(upload, data, model, scene, source.CopyAuxiliaryAllocations());
         _overlay = source.CopyOverlay();
+        ResourceProfile = fresh.ResourceProfile;
         UpstreamPlanSha256 = fresh.PlanSha256;
         StagingPlanSha256 = staging.PlanSha256;
         CopyBufferAddress = source.CopyBufferAddress;
@@ -241,9 +243,19 @@ public sealed class NativeId65NormalBodyPlan
             IndependentLevelSupported, PublicationApproved, RuntimeVerified, PeakRuntimeMemoryProven,
             TransferTimingProven, SpuWrapSemanticsProven, RescueReplayRuntimeProven, PendingOwners
         }));
+        // Do not append new fields to the old anonymous hash payload. Actual
+        // textured instances carry their own additional source-private branch.
+        if (ResourceProfile == NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials)
+            PlanSha256 = NativeId65NormalResourceSource.Hash(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                Profile = "native-id65-textured-normal-body-direct-LQ-clean-usa-v1",
+                ResourceProfile, ComposedPlanSha256 = PlanSha256,
+                fresh.SourceHandles, fresh.TextureEvidence
+            }));
     }
 
     public const string ProfileId = "native-id65-fresh-normal-body-retained-Town-aux-clean-usa-v1";
+    public NativeId65NormalResourceProfile ResourceProfile { get; }
     public string SourceImageSha256 => NativeId65EngineProfileContract.OriginalImageSha256;
     public string UpstreamPlanSha256 { get; }
     public string StagingPlanSha256 { get; }
@@ -298,10 +310,29 @@ public sealed class NativeId65NormalBodyPlan
         NativeId65FreshSceneBundle issuedFreshScene, NativeId65NormalUploadStaging issuedStaging,
         CancellationToken cancellationToken = default)
     {
-        NativeId65NormalBodySource.RequirePair(issuedFreshScene, issuedStaging);
+        var revision = NativeId65NormalResourceRevision.From(issuedFreshScene);
+        return await CaptureRevisionAsync(originalImagePath, revision, issuedStaging, cancellationToken);
+    }
+
+    public static async Task<NativeId65NormalBodyPlan> CaptureTexturedAsync(string originalImagePath,
+        NativeId65FreshTerrainTexturePlan issuedTexture, NativeId65NormalUploadStaging issuedStaging,
+        CancellationToken cancellationToken = default)
+    {
+        var revision = NativeId65NormalResourceRevision.From(issuedTexture);
+        return await CaptureRevisionAsync(originalImagePath, revision, issuedStaging, cancellationToken);
+    }
+
+    private static async Task<NativeId65NormalBodyPlan> CaptureRevisionAsync(string originalImagePath,
+        NativeId65NormalResourceRevision revision, NativeId65NormalUploadStaging issuedStaging,
+        CancellationToken cancellationToken)
+    {
+        NativeId65NormalBodySource.RequirePair(revision, issuedStaging);
+        cancellationToken.ThrowIfCancellationRequested();
         var source = await NativeId65NormalBodySource.CaptureAsync(originalImagePath, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        return new(source, issuedFreshScene, issuedStaging);
+        var result = new NativeId65NormalBodyPlan(source, revision, issuedStaging);
+        cancellationToken.ThrowIfCancellationRequested();
+        return result;
     }
 
     public byte[] CopyLevelData() => _layout.CopyLevelData();

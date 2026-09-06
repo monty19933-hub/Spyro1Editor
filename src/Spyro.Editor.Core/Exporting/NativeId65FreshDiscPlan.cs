@@ -157,6 +157,8 @@ public sealed class NativeId65FreshDiscPlan
         NativeId65NormalBodyPlan issuedBody, int selectedBuiltInTrack, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(issuedBody);
+        if (issuedBody.ResourceProfile != NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles)
+            throw new InvalidDataException("Fresh-disc issuer does not accept the distinct textured normal resource revision.");
         RequireCurrentUntexturedShape(issuedBody.DataUsedByteLength, issuedBody.DataSectorByteLength,
             issuedBody.Descriptors[0].ByteLength, issuedBody.Descriptors[2].ByteLength,
             issuedBody.Descriptors[3].ByteLength);

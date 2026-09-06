@@ -25,6 +25,7 @@ public sealed class NativeId65FreshTerrainTexturePlan
     private NativeId65FreshTerrainTexturePlan(NativeId65FreshSceneBundle fresh,
         NativeStaticTerrainTextureSource dark, NativeStaticTerrainTextureSource gnasty, byte[] executable)
     {
+        FreshAncestor = fresh;
         // The shared reader already binds the complete original image/EXE. Keep
         // exact small consumer obligations visible, without claiming a full GPU.
         foreach (var span in Consumers)
@@ -56,6 +57,9 @@ public sealed class NativeId65FreshTerrainTexturePlan
     }
 
     public const string ProfileId = "native-id65-fresh-two-static-materials-dark14-gnastyworld70-clean-usa-v1";
+    // The exact private ancestor is retained for closed downstream composition;
+    // it is never reconstructed from caller-visible hashes or profile labels.
+    internal NativeId65FreshSceneBundle FreshAncestor { get; }
     public string SourceImageSha256 => NativeId65AuthoredSurfaceConsumers.ImageSha256;
     public string UpstreamPlanSha256 { get; }
     public string PlanSha256 { get; }

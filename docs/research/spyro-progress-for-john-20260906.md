@@ -53,7 +53,9 @@ See the detailed [key/chest report](native-closure-runtime-20260905.md),
 - **Cross-level texture allocation:** two genuine source materials from Dark
   Hollow and Gnasty's World can be allocated into the fresh resource set while
   preserving complete palettes, descriptors, pixels and protected storage.
-  The old scene/model goldens stay unchanged. This new allocator is backend-only.
+  The old scene/model goldens stay unchanged. The new materials now pass through
+  the shared native body builder with157 focused checks; old plan identities
+  remain exact. This new path is backend-only and not yet a textured disc export.
 - **Fresh disc composition:** reserved level entries, relocated executable,
   bounded `LAB` title,46 built-in music selections, ISO records and raw CD
   error-correction bytes now have an exact read-only builder/verifier. Three
@@ -64,10 +66,12 @@ See the detailed [key/chest report](native-closure-runtime-20260905.md),
 
 ## Next steps
 
-1. Finish the shared textured resource-to-body integration with regression
-   tests that reject mixed/stale resource sets, even when transfer bytes match.
-2. Close the remaining fresh-level native initialization/resource requirements,
-   then produce a separately identified test candidate and exercise it in-game.
+1. Preserve the completed shared textured resource-to-body integration and its
+   tests rejecting mixed/stale resource sets, even when transfer bytes match.
+2. Prepare a separately identified diagnostic fresh-level candidate using the
+   checked normal initialization path. Start with idle/companion/center-floor
+   movement in DuckStation; use observations to resolve remaining resource
+   uncertainties before expanding to other actions or transitions.
 3. Complete Wizard combat/reward/re-entry and multiple-instance tests before
    expanding the supported native dependency combinations.
 4. Connect the validated new-level pipeline to practical UI authoring, persistence
@@ -78,6 +82,11 @@ See the detailed [key/chest report](native-closure-runtime-20260905.md),
 install.** The current editor remains usable, and the new foundations are
 substantially further along. Source tests, actual gameplay and a shipped UI are
 tracked separately so the eventual editor reflects what has really passed.
+
+Latest integrated verification:109 default Release steps passed with zero
+failures, including rebuilding App, plus47 Python tests. The full fresh-disc
+source checks passed again after the textured-body changes. This did not install
+or launch a new editor, and is separate from the earlier full290-step gate.
 
 Usage instruction for this work session: continue while budget permits, begin
 safe closeout before roughly5% remaining, save commits and a precise continuation

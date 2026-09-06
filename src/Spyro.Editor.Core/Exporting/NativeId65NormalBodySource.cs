@@ -103,14 +103,14 @@ internal sealed class NativeId65NormalBodySource
         return new(engine);
     }
 
-    internal void RequireIssuedInputs(NativeId65FreshSceneBundle fresh, NativeId65NormalUploadStaging staging,
+    internal void RequireIssuedInputs(NativeId65NormalResourceRevision fresh, NativeId65NormalUploadStaging staging,
         ReadOnlySpan<byte> upload, ReadOnlySpan<byte> data, ReadOnlySpan<byte> model, ReadOnlySpan<byte> scene)
     {
         RequirePair(fresh, staging);
-        fresh.RequireExactOutputs(scene, upload);
+        fresh.RequireExactOutputs(upload, data, model, scene);
         if (NativeId65NormalResourceSource.Hash(data) != fresh.DataSha256 ||
             NativeId65NormalResourceSource.Hash(model) != fresh.ModelSha256 ||
-            upload.Length != 0xDE000 || data.Length != 0x8C8 || model.Length != 0xF800 ||
+            upload.Length != 0xDE000 || data.Length != fresh.DataUsedByteLength || model.Length != 0xF800 ||
             !model[..0xCC30].SequenceEqual(_townData.AsSpan(0x173000, 0xCC30)) ||
             !upload[0x80000..].SequenceEqual(_townData.AsSpan(0x80800, 0x5E000)) ||
             fresh.EntryProfile.SuperflameAvailable || fresh.EntryProfile.CheckpointStateSupported ||
@@ -123,11 +123,11 @@ internal sealed class NativeId65NormalBodySource
         staging.RequireExactTransferSource(expectedTransfer);
     }
 
-    internal static void RequirePair(NativeId65FreshSceneBundle fresh, NativeId65NormalUploadStaging staging)
+    internal static void RequirePair(NativeId65NormalResourceRevision fresh, NativeId65NormalUploadStaging staging)
     {
         ArgumentNullException.ThrowIfNull(fresh);
         ArgumentNullException.ThrowIfNull(staging);
-        if (!fresh.SourceCertified || !staging.SourceCertified ||
+        if (!staging.SourceCertified || fresh.ResourceProfile != staging.ResourceProfile ||
             fresh.SourceImageSha256 != NativeId65EngineProfileContract.OriginalImageSha256 ||
             staging.SourceImageSha256 != fresh.SourceImageSha256 ||
             staging.UpstreamPlanSha256 != fresh.PlanSha256 || staging.PairedUploadSha256 != fresh.UploadSha256)

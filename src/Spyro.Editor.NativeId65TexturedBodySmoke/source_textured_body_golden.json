@@ -1,0 +1,46 @@
+{
+  "marker": "NATIVE_ID65_TEXTURED_BODY_RAW_ORACLE_OK",
+  "original_sha256": "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37",
+  "source_pins": 16,
+  "old_upload_sha256": "b769a9a298285aa402956fdbd5721132736388c6f3f1dc1bfcd7e15a9afeb66d",
+  "upload_sha256": "2ab548f540fbfadddc38d96e70a9633a1c6f37c37ee2d1a896919ac30f929333",
+  "data_sha256": "c13c21171e5ed4755f1598914eba89b0b31795b91aaeb2605efc6fed9aa17160",
+  "data_used": 2616,
+  "data_sectors": 4096,
+  "used_growth": 368,
+  "old_padding": 1848,
+  "new_padding": 1480,
+  "transfer_sha256": "626ae349b98cb4bea955ac53020586f645f872225085a67bc809f46f4ab0fb07",
+  "transfer_bytes_equal": true,
+  "paired_upload_bytes_equal": false,
+  "outputs": [
+    {
+      "x": 8960,
+      "heading": 64,
+      "bytes": 2078720,
+      "old_body_sha256": "b4abbdd09f794510d9b9341d7c7111ddd0b9068411bab30e70e7477b4f8c096c",
+      "body_sha256": "347ab532881afb3975088e0872792192d8567b0abe05e7708f271741b9568cdd",
+      "scene_sha256": "4a6e7b5c6c53199b8a7aa6ae0d24ac9bce32634aa259d5f49535282080641433",
+      "header_sha256": "cd5658f83da4a953c5a3e66c848a8be606aabde9fea8b32d049c2bcf364c472d",
+      "model_runtime": "0x8008a904",
+      "scene_runtime": "0x8009a104",
+      "known_scene_end": "0x8009d104"
+    },
+    {
+      "x": 8976,
+      "heading": 128,
+      "bytes": 2078720,
+      "old_body_sha256": "1314b299759ad0f66eed054db853c18e8db6dabda7c56a28cabd3fd74ea39643",
+      "body_sha256": "34d8d4c7062c0f84ef14bbbd22f66ba3ae33e68116d0877c82f4517f21622ea5",
+      "scene_sha256": "268b36fdb7136d533c01a93a71fd62a71bc9ec58799558698b14ba1f21b18380",
+      "header_sha256": "cd5658f83da4a953c5a3e66c848a8be606aabde9fea8b32d049c2bcf364c472d",
+      "model_runtime": "0x8008a904",
+      "scene_runtime": "0x8009a104",
+      "known_scene_end": "0x8009d104"
+    }
+  ],
+  "complete_model_scene_aux_complement": true,
+  "overlay_sha256": "9bc923cc8d27703537b81b01f51fde351e58aabee87d38a8afc630f1031878a5",
+  "runtime_verified": false,
+  "publication_approved": false
+}

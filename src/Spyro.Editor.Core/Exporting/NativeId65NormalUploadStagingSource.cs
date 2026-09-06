@@ -51,15 +51,15 @@ internal sealed class NativeId65NormalUploadStagingSource
         return new(source);
     }
 
-    internal void RequireIssuedInput(NativeId65FreshSceneBundle bundle, ReadOnlySpan<byte> upload)
+    internal void RequireIssuedInput(NativeId65NormalResourceRevision bundle, ReadOnlySpan<byte> upload)
     {
         ArgumentNullException.ThrowIfNull(bundle);
-        if (!bundle.SourceCertified || bundle.SourceImageSha256 != NativeId65EngineProfileContract.OriginalImageSha256 ||
+        if (bundle.SourceImageSha256 != NativeId65EngineProfileContract.OriginalImageSha256 ||
             upload.Length != NativeId65NormalUploadTransferLayout.PairedUploadLength ||
             NativeId65NormalResourceSource.Hash(upload) != bundle.UploadSha256 ||
             !upload[NativeId65NormalUploadTransferLayout.VramLength..].SequenceEqual(_bank))
             throw new InvalidDataException("Normal staging requires an exact original-issued paired fresh bundle and its complete retained bank.");
-        bundle.RequireExactOutputs(bundle.CopyScene(), upload);
+        bundle.RequireExactUpload(upload);
     }
 
     internal static void ValidateSourceExecutable(ReadOnlySpan<byte> executable)

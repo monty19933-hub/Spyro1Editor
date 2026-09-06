@@ -177,6 +177,9 @@ class RunnerOptionsTests(unittest.TestCase):
     def test_fresh_texture_modes_use_only_explicit_source_image_and_exact_markers(self):
         self.assert_texture_modes("NativeId65FreshTerrainTextureSmoke", "NATIVE_ID65_FRESH_TERRAIN_TEXTURE")
 
+    def test_textured_body_modes_use_only_exact_read_only_source_and_separate_markers(self):
+        self.assert_texture_modes("NativeId65TexturedBodySmoke", "NATIVE_ID65_TEXTURED_BODY")
+
     def test_fresh_disc_modes_require_their_own_markers_and_only_the_selected_image(self):
         self.assert_texture_modes("NativeId65FreshDiscSmoke", "NATIVE_ID65_FRESH_DISC", (), "SMOKE")
 
@@ -206,7 +209,7 @@ class RunnerOptionsTests(unittest.TestCase):
                     is_source = "--" in command
                     marker = source_marker if is_source else free_marker
                     marker_ok = source_ok if is_source else free_ok
-                    # A source run emits the free marker first. It cannot stand
+                    # A source run may also emit the free marker. It cannot stand
                     # in for the distinct source success marker when missing.
                     if is_source:
                         kwargs["stdout"].write(free_marker + "\n")
@@ -632,6 +635,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeId65NormalBodySmoke": ["/selected original.bin"],
             "NativeId65StaticTerrainTextureSmoke": ["--source", "/selected original.bin"],
             "NativeId65FreshTerrainTextureSmoke": ["--source", "/selected original.bin"],
+            "NativeId65TexturedBodySmoke": ["--source", "/selected original.bin"],
             "NativeId65FreshDiscSmoke": ["/selected original.bin"],
             "NativeId65FreshDiscStreamSmoke": ["/selected original.bin"],
             "NativeWizardPlacementSmoke": ["/selected original.bin"],

@@ -95,13 +95,16 @@ public sealed class NativeId65NormalUploadStaging
     private readonly NativeId65NormalUploadTransferLayout _layout;
 
     private NativeId65NormalUploadStaging(NativeId65NormalUploadStagingSource source,
-        NativeId65FreshSceneBundle bundle)
+        NativeId65NormalResourceRevision bundle)
     {
         byte[] upload = bundle.CopyUploadPayload();
         source.RequireIssuedInput(bundle, upload);
         _layout = NativeId65NormalUploadTransferLayout.Compile(upload);
+        ResourceProfile = bundle.ResourceProfile;
         UpstreamPlanSha256 = bundle.PlanSha256;
-        Evidence = Array.AsReadOnly(source.Evidence.ToArray());
+        Evidence = ResourceProfile == NativeId65NormalResourceProfile.UntexturedGouraudTwoTriangles
+            ? Array.AsReadOnly(source.Evidence.ToArray())
+            : Array.AsReadOnly(source.Evidence.Concat(bundle.Evidence).ToArray());
         PlanSha256 = NativeId65NormalResourceSource.Hash(JsonSerializer.SerializeToUtf8Bytes(new
         {
             ProfileId, SourceImageSha256, UpstreamPlanSha256, PairedUploadSha256, TransferSourceSha256,
@@ -111,9 +114,19 @@ public sealed class NativeId65NormalUploadStaging
             TransferTimingProven, PeakRuntimeMemoryProven, HardwareTransfersProven,
             CompleteLevelResourcesProven, IndependentLevelSupported, RuntimeVerified, PublicationApproved
         }));
+        // Keep the old serialized payload byte-for-byte. Only the actual new
+        // private profile wraps its composed plan with additional provenance.
+        if (ResourceProfile == NativeId65NormalResourceProfile.DirectLqTwoStaticMaterials)
+            PlanSha256 = NativeId65NormalResourceSource.Hash(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                Profile = "native-id65-textured-normal-upload-direct-LQ-clean-usa-v1",
+                ResourceProfile, ComposedPlanSha256 = PlanSha256,
+                bundle.SourceHandles, bundle.TextureEvidence
+            }));
     }
 
     public const string ProfileId = "native-id65-normal-upload-transfer-source-clean-usa-v1";
+    public NativeId65NormalResourceProfile ResourceProfile { get; }
     public string SourceImageSha256 => NativeId65EngineProfileContract.OriginalImageSha256;
     public string UpstreamPlanSha256 { get; }
     public string PairedUploadSha256 => _layout.PairedUploadSha256;
@@ -149,11 +162,27 @@ public sealed class NativeId65NormalUploadStaging
     public static async Task<NativeId65NormalUploadStaging> CaptureAsync(string originalImagePath,
         NativeId65FreshSceneBundle issuedBundle, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(issuedBundle);
+        var revision = NativeId65NormalResourceRevision.From(issuedBundle);
+        return await CaptureRevisionAsync(originalImagePath, revision, cancellationToken);
+    }
+
+    public static async Task<NativeId65NormalUploadStaging> CaptureTexturedAsync(string originalImagePath,
+        NativeId65FreshTerrainTexturePlan issuedTexture, CancellationToken cancellationToken = default)
+    {
+        var revision = NativeId65NormalResourceRevision.From(issuedTexture);
+        return await CaptureRevisionAsync(originalImagePath, revision, cancellationToken);
+    }
+
+    private static async Task<NativeId65NormalUploadStaging> CaptureRevisionAsync(string originalImagePath,
+        NativeId65NormalResourceRevision revision, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         NativeId65NormalUploadStagingSource source =
             await NativeId65NormalUploadStagingSource.CaptureAsync(originalImagePath, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        return new(source, issuedBundle);
+        var result = new NativeId65NormalUploadStaging(source, revision);
+        cancellationToken.ThrowIfCancellationRequested();
+        return result;
     }
 
     public byte[] CopyTransferSourceImage() => _layout.CopyTransferSourceImage();
