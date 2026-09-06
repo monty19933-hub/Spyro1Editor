@@ -3,8 +3,11 @@
 **Start with current state:** commit956ea87 adds generic read-only fresh-document
 research Plan (free35/source2339), plus two89-case publisher timing baselines.
 It does not yet add a generic publisher or UI export. Fresh-only publication
-engine extraction and saved-version UI handoff are active development work;
-check current git status and coordinate the serialized .NET slot with agents.
+engine extraction passes root default Release122/0, Python86/3 skips and the
+unchanged source/retained-candidate/fault gates; see
+`native-fresh-publication-engine.md`. Saved-version publication/UI handoff and
+detached native Wizard assets are next. Check current git status and coordinate
+the serialized .NET slot with agents.
 
 **All owned emulator sessions are CLOSED.** Edited-fresh R01 passed native LAB
 entry, edited checkpoint/heading, bounded walking, flame, jump/landing, native

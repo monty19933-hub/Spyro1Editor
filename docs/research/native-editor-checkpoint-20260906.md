@@ -24,9 +24,12 @@ require different adapters from Dark Hollow. The prototype has separate-role
 synthetic entries, not a combined installable overlay; see
 `native-fresh-wizard-host-abi.md`. Resource/scene/reward integration is next.
 
-Fresh-only publication-engine extraction is in progress against frozen timing,
-source and exact-candidate readback regressions. Saved-version UI capture/busy
-handling is being designed in parallel. Installed editor remains unchanged.
+Fresh-only publication-engine extraction now passes frozen timing/source and
+exact-candidate readback regressions, root default Release122/0 and Python86
+with3 explicit-source skips. See `native-fresh-publication-engine.md`.
+Generic saved-version publication/UI capture/busy handling is next, including a
+Store-owned cooperating-writer lease across final saved-version check/commit.
+Installed editor remains unchanged.
 
 ## Current code checkpoint: variable collision-tree compilation
 
