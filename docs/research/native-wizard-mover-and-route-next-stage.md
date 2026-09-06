@@ -118,7 +118,103 @@ reload remain separate later gates.
 | --- | --- | --- |
 | Mover `0x80039398` | EXE `0x29B98`, `0x2F0` | `bc780cb5dd054b3a0c97fc1b25b1a85f3f0ac5c1c0404b60cb4df1d83bb81eca` |
 | Heading `0x80038EE0` | EXE `0x296E0`, `0xE8` | `d58397320748b47f903d597b0b66e3b56397cad4530443b65c82123e739d63b4` |
+| Angle distance `0x80017908` | EXE `0x8108`, `0x20` | `03690bf77631968cb6e2165178bfce78cef28620e589e78e2f0faa661c850e84` |
+| Angle step `0x800179F0` | EXE `0x81F0`, `0x48` | `719a346d07b7b2e900b2e1a4adc264d599d7e42fcf2eaa371787e078e732399e` |
+| Arrival metric `0x80017990` | EXE `0x8190`, `0x60` | `277c87f0a049389cf5c3e0510eac8b878a516d9f773d44545184f67910815d90` |
 | Root pointer loader `0x800133E0` | EXE `0x3BE0`, `0x268` | `030346c69253fbc971f3a5cea36550afe798a2982070e9da29b6ce8df858fc82` |
 | Collider selection `0x800529E4` | EXE `0x431E4`, `0x80` | `ec41ef500fe7a57b343c8f0bbaf3dc6d1c96d500b2a0bbdf06092e33c784ce73` |
 | Animated sphere branch `0x8004E830` | EXE `0x3F030`, `0x1A8` | `02e8b50f16b4ca67d32253a9dda3f918b10f43aa9615bf146c4d26111c702b6b` |
+| Resident query evidence window `0x8004E3C8` | EXE `0x3EBC8`, `0x7B8` | `5fdc32d3509aa948b0089e4331c1b70dce6132b36067afdd8f8d1e8d1d5a5ea4` |
+| Terrain query evidence window `0x8004BE4C` | EXE `0x3C64C`, `0xD34` | `3d19782b4ad17cffbdb5239dcdd6412a9d25bceaccdb1671a302865edb52589e` |
+| Floor query evidence window `0x8004D5EC` | EXE `0x3DDEC`, `0x524` | `776c332d04a58b2c4eec7f03573cd60a788570decbee27965e0a7fdd18a366ab` |
+| Cosine table `0x8006CC78` | EXE `0x5D478`, `0x200` | `7167a6246b5738b9028a66103a5732873dcf069460d08285bd30d22ecce299da` |
+| Sine table `0x8006CBF8` | EXE `0x5D3F8`, `0x200` | `877872b39150488ce0baad5491d04ec492f0a7d4ba45248244c46a0ea548a82b` |
 | Magic Wizard handler `0x800883A0` | WAD `0x2734968`, `0x668` | `715ddf657c49ffce419ad67f09e846708e48f4197dac4edd644d99d7437280f5` |
+| Magic row-dispatch initialization `0x8007E408` | WAD `0x272A9D0`, `0xA0` | `2ccc7a0ac7330314448da3179d9fe0eeed3613cf9e3e22a0c0ebc204cefece2a` |
+| Magic class-`0x11B` dispatch word `0x8007AF54` | WAD `0x272751C`, `0x4` | `518770377f95138b5a19640d8b0252c488d7c535d35a1aef5f949cfabed56ab4` |
+| Magic row-loop tail `0x8008B274` | WAD `0x273783C`, `0x20` | `f45a5238c44bba3c78041e3ac66820183adbf706ec4531dcb9bf3f2fac259952` |
+
+## Bounded contract implementation, 2026-09-06
+
+The planning investigation above remains historical. A new, read-only
+`Analysis/NativeGreenWizardMoverContract.cs` and separate
+`NativeGreenWizardMoverContractMath.cs` now implement its first arithmetic and
+selector-proof slice under profile `native-green-wizard-mover-source-contract-v1`.
+No v1 compiler/publisher, existing candidate, ROM or runtime state is changed.
+
+`InspectSource` reuses only the immutable original-source inspector, then binds
+the exact ISO/WAD entries, full EXE/overlay/data hashes, the 17 native spans
+above, source model-root/class tables, and the final 16-byte collider. It hashes
+the complete original image again after capture. Magic data entry 34 has SHA256
+`ad34af2e3401514e7db740691c80fd2bbf59057a55bdfedbaaa39b6939141fcb`;
+the exact root-to-next-registered-root package `[0x28F5FDC,0x28F9590)` has
+length `0x35B4` and SHA256
+`8fdc3c77836135cac07864c550b06a5573fb05927f83cb4f05176e37f95821ac`.
+Detached package parsing exposes only bounded metadata: it does not certify
+the entire image, packed vertex streams, transformed body or placement.
+
+The implemented helpers cover step scaling, signed-trig XY arithmetic, native
+wrapped turning with a positive exact-half-turn direction and pre-step `<16`
+result, the XY arrival metric, and signed row+`0x38` settling. A proposal is
+explicitly conditional on a caller-supplied floor and two caller assertions
+that native resident/terrain corrections are absent. Unknown or required
+correction is refused; this code does **not** run either query, certify those
+assertions, or simulate a corrected point. Returned proposals always report
+`PlacementCertified=false`, `BodyEnvelopeCertified=false`, and
+`RuntimeVerified=false`.
+
+Independent review also closed the heading wrapper's fifth-argument provenance:
+Magic `0x8007E420` initializes `$fp=1`; `0x8007E468..4A0` dispatches the row's
+class through `0x8007AAEC + 4*(class-1)`. Class `0x11B` selects `0x800883A0`
+through the source word at `0x8007AF54`. The row-loop tail returns to
+`0x8007E42C`, while `$fp` is restored at `0x8008B290`; no other assignment to
+`$fp` appears in that shared dispatcher body. Thus the `sw $fp,0x10($sp)` at
+`0x800888C0` supplies the nonzero branch: the native helper still turns when
+already inside its threshold. `Turn` represents this fixed caller profile,
+not the helper's distinct fifth-argument-zero mode. The initialization,
+dispatch word and loop-tail spans are now bound and corruption-tested.
+
+All 49 source animation frames are captured with their exact frame-word WAD
+offset/raw word, selector, scale, and nullable collider owner. The 10 native
+null frames remain explicit null states: `RequireActive` refuses them instead
+of inferring a zero-radius body. Unknown selectors, altered selector schedules,
+scales, frame ownership, shape/terminator bytes and a package extending four
+bytes into the next model are refused.
+
+Regression-first evidence is retained in
+`_local/research/native-green-wizard-mover-contract-20260906-r01/`:
+
+| Evidence | Result |
+| --- | --- |
+| `01-red-build.log` | Intentional missing-contract build: exit 1; Core compiled, new smoke could not resolve its not-yet-created contract/friend types. |
+| `02-green-build.log` | Targeted Debug build exit 0, zero warnings/errors. |
+| `03-source-free.log` | `NATIVE_GREEN_WIZARD_MOVER_SMOKE_OK checks=264604`. |
+| `04-source-backed.log` | `NATIVE_GREEN_WIZARD_MOVER_SOURCE_SMOKE_OK checks=265394`. |
+| `05-reviewed-build.log` | Final reviewed targeted Debug build exit 0, zero warnings/errors. |
+| `06-reviewed-source-free.log` | Final `NATIVE_GREEN_WIZARD_MOVER_SMOKE_OK checks=264605`. |
+| `07-reviewed-source-backed.log` | Final `NATIVE_GREEN_WIZARD_MOVER_SOURCE_SMOKE_OK checks=265399`. |
+
+Commands from the repository root:
+
+```sh
+dotnet build src/Spyro.Editor.NativeGreenWizardMoverSmoke/Spyro.Editor.NativeGreenWizardMoverSmoke.csproj -c Debug
+dotnet src/Spyro.Editor.NativeGreenWizardMoverSmoke/bin/Debug/net10.0/Spyro.Editor.NativeGreenWizardMoverSmoke.dll
+dotnet src/Spyro.Editor.NativeGreenWizardMoverSmoke/bin/Debug/net10.0/Spyro.Editor.NativeGreenWizardMoverSmoke.dll 'Spyro the Dragon (USA).bin'
+```
+
+Checks include every current/desired byte-heading pair under four global
+values, both sides of settling differences -1200..1200, 600/601 boundaries,
+signed offsets, arithmetic-right-shift rounding, all 256 source trig headings
+under three speed scales against independently read coefficients/floor
+division, all animation selectors, exact ownership negatives, mutation of
+every bound EXE/overlay span, changed data, repeated source capture and final
+original-image hash. These are engineering checks, not a native instruction
+emulator or gameplay evidence.
+
+Still outside this contract: bearing helper `0x80016AB4`, reachable actor-state
+and route-index transitions, native resident/terrain/floor query execution,
+animation vertex transforms/GTE rounding and complete body envelope. The
+existing strict route-surface certificate separately covers dry flat authored
+corridors and index reachability; this contract grants it no new physics
+authority. No replacement route, new authored-route candidate or runtime pass
+has been produced by this step.
