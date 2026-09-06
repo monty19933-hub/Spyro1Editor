@@ -14,7 +14,8 @@ import time
 
 ROOT = Path(__file__).resolve().parent.parent
 # Each entry was inspected for independence from disc images and local caches.
-# Source-disc and runtime tests remain explicit in Run-SpyroEditorOfflineQa.sh.
+# Source-disc tests remain opt-in below; the existing broader source suite is
+# Run-SpyroEditorOfflineQa.sh. Neither route mode launches the emulator.
 CORE_CASES = (
     ("DiscImageWorkingCopySmoke", "Disc-image working-copy smoke passed."),
     ("DiscImageWriteIntegritySmoke", "DISC_IMAGE_WRITE_INTEGRITY_SMOKE_OK"),
@@ -52,6 +53,31 @@ CASE_ARGUMENTS = {
     "Id65AuthoringMobyDependencyBundleCompilerSmoke": ["--source-free-properties-linker"],
     "UnusedLevel65MusicOwnershipClosureSmoke": ["--source-free-music-selection"],
 }
+# Additional modes retain their own arguments/markers without replacing the
+# established mode of the same executable. Project builds remain deduplicated.
+ADDITIONAL_CORE_CASES = (
+    ("Id65AuthoringMobyDependencyBundleCompilerSmoke", "NATIVE_ROUTE_SURFACE_SMOKE_OK",
+     ["--source-free-route-surfaces"]),
+)
+SOURCE_QA_CASES = (
+    ("Id65AuthoringMobyDependencyBundleCompilerSmoke", "NATIVE_GREEN_WIZARD_ROUTE_SOURCE_SMOKE_OK",
+     ["--source-backed-route-surfaces"]),
+)
+
+
+def configured_source_image():
+    """Read the same local source selection as offline QA, only when opted in."""
+    settings = ROOT / "_local/settings/source-disc.json"
+    data = json.loads(settings.read_text(encoding="utf-8"))
+    image = data.get("imagePath") if isinstance(data, dict) else None
+    if not isinstance(image, str) or not image.strip():
+        raise ValueError(f"{settings} does not contain a non-empty imagePath.")
+    path = Path(image)
+    if not path.is_absolute():
+        path = ROOT / path
+    if not path.is_file():
+        raise FileNotFoundError(f"Configured source BIN is missing: {path}")
+    return str(path)
 
 
 def run_owned_command(command, *, cwd, stdout, timeout, termination_grace=1.0):
@@ -104,7 +130,7 @@ def parse_options(arguments=None):
     parser.add_argument("--build-all", action="store_true",
                         help="Build every project, including research tools, before regressions.")
     parser.add_argument("--with-source-qa", action="store_true",
-                        help="Also run existing source-aware offline QA using this checkout's configured disc/cache; creates disposable readbacks and local reports.")
+                        help="Also run source-aware offline QA and the read-only native route audit using this checkout's configured disc/cache; offline QA creates disposable readbacks and local reports.")
     parser.add_argument("--configuration", choices=("Debug", "Release"), default="Release")
     parser.add_argument("--timeout", type=int, default=600,
                         help="Maximum seconds for each build or source-free test (default: 600).")
@@ -124,6 +150,9 @@ def main():
     cases = [(ROOT / "src" / ("Spyro.Editor." + name) /
               ("Spyro.Editor." + name + ".csproj"), marker, CASE_ARGUMENTS.get(name, []))
              for name, marker in CORE_CASES]
+    cases.extend((ROOT / "src" / ("Spyro.Editor." + name) /
+                  ("Spyro.Editor." + name + ".csproj"), marker, arguments)
+                 for name, marker, arguments in ADDITIONAL_CORE_CASES)
     if options.list:
         for project, marker, arguments in cases:
             print(f"{project.relative_to(ROOT)} {' '.join(arguments)} | {marker}")
@@ -134,31 +163,40 @@ def main():
     print(f"Regression logs: {output}", flush=True)
     results = []
 
-    def execute(name, command, marker=None, timeout=None):
+    def execute(name, command, marker=None, timeout=None, deadline=None):
         command_timeout = options.timeout if timeout is None else timeout
         started = time.monotonic()
         log = output / f"{len(results):03d}-{name}.log"
         passed = False
         detail = ""
+        resolved_command = None
         with log.open("w", encoding="utf-8") as stream:
-            stream.write(json.dumps(command) + "\n")
-            stream.flush()
             try:
-                process = run_owned_command(command, cwd=ROOT, stdout=stream,
+                # Deferred source arguments are resolved inside the logged
+                # failure boundary, never during a default or --list run.
+                resolved_command = command() if callable(command) else command
+                stream.write(json.dumps(resolved_command) + "\n")
+                stream.flush()
+                if deadline is not None:
+                    command_timeout = min(command_timeout, max(0, deadline - time.monotonic()))
+                if command_timeout <= 0:
+                    raise TimeoutError("Source QA deadline exhausted; no command was started.")
+                process = run_owned_command(resolved_command, cwd=ROOT, stdout=stream,
                                             timeout=command_timeout)
                 passed = process.returncode == 0
                 detail = f"exit={process.returncode}"
             except subprocess.TimeoutExpired:
                 detail = f"timeout={command_timeout}s; owned process group stopped; interrupted output cleanup may require recovery"
-            except OSError as error:
+            except (OSError, ValueError) as error:
                 detail = str(error)
+                stream.write(detail + "\n")
         contents = log.read_text(encoding="utf-8", errors="replace")
         if passed and marker is not None and marker not in contents:
             passed = False
             detail = "missing success marker"
         elapsed = round(time.monotonic() - started, 2)
         results.append(dict(name=name, passed=passed, detail=detail, seconds=elapsed,
-                            log=str(log), command=command))
+                            log=str(log), command=resolved_command))
         print(f"{'PASS' if passed else 'FAIL'} {name} ({elapsed}s; {detail})", flush=True)
         if not passed:
             print("\n".join(contents.splitlines()[-20:]), flush=True)
@@ -174,6 +212,10 @@ def main():
 
     app = ROOT / "src/Spyro.Editor.App/Spyro.Editor.App.csproj"
     required_projects = [app] + [project for project, _, _ in cases]
+    if options.with_source_qa:
+        required_projects.extend(ROOT / "src" / ("Spyro.Editor." + name) /
+                                 ("Spyro.Editor." + name + ".csproj")
+                                 for name, _, _ in SOURCE_QA_CASES)
     # Registered regressions remain mandatory when their project was deleted or
     # renamed. A filesystem-only glob would silently skip them and report green.
     projects = (sorted(set(ROOT.glob("src/**/*.csproj")) | set(required_projects))
@@ -189,15 +231,28 @@ def main():
         if not build_results.get(project, False):
             print(f"SKIP {project.stem}: build failed", flush=True)
             continue
-        execute("run-" + project.stem,
+        suffix = "-route-surfaces" if arguments == ["--source-free-route-surfaces"] else ""
+        execute("run-" + project.stem + suffix,
                 ["dotnet", "run", "--project", str(project), "--configuration",
                  options.configuration, "--no-build", "--no-restore"] +
                 (["--"] + arguments if arguments else []), marker)
     if options.with_source_qa and all(result["passed"] for result in results):
-        execute("source-offline-qa",
+        # All opted-in source checks share the existing aggregate deadline.
+        source_deadline = time.monotonic() + options.source_qa_timeout
+        offline_passed = execute("source-offline-qa",
                 ["env", "CONFIGURATION=" + options.configuration, "bash",
                  str(ROOT / "tools/Run-SpyroEditorOfflineQa.sh")], "Offline QA passed.",
                 timeout=options.source_qa_timeout)
+        if offline_passed:
+            for name, marker, arguments in SOURCE_QA_CASES:
+                project = ROOT / "src" / ("Spyro.Editor." + name) / ("Spyro.Editor." + name + ".csproj")
+                if not execute("source-" + name + "-route-surfaces",
+                        lambda project=project, arguments=arguments: [
+                            "dotnet", "run", "--project", str(project), "--configuration",
+                            options.configuration, "--no-build", "--no-restore", "--",
+                            *arguments, configured_source_image()], marker,
+                        timeout=options.source_qa_timeout, deadline=source_deadline):
+                    break
     failed = sum(not result["passed"] for result in results)
     print(f"{len(results)} checks; {failed} failed. Report: {output / 'summary.json'}", flush=True)
     return 1 if failed else 0

@@ -5,7 +5,14 @@ using Spyro.Editor.Core.Persistence;
 
 try
 {
-    if (args.Length == 4 && args[0] == "--plan")
+    if (args.Length == 4 && args[0] == "--audit-route")
+    {
+        NativeGreenWizardRouteAudit audit = NativeGreenWizardRouteSurfaceAudit.Inspect(args[1], Request(args[2], args[3]));
+        Console.WriteLine(JsonSerializer.Serialize(audit, new JsonSerializerOptions { WriteIndented = true }));
+        Console.WriteLine($"NATIVE_GREEN_WIZARD_ROUTE_AUDIT_DONE accepted={audit.AllCorridorsAccepted} noImageWritten=true physicsFootprint=false runtime=false");
+        return audit.AllCorridorsAccepted ? 0 : 3;
+    }
+    else if (args.Length == 4 && args[0] == "--plan")
     {
         NativeGreenWizardCandidateDiscPlan disc = NativeGreenWizardPropertiesCandidatePublisher.Compile(args[1], Request(args[2], args[3]));
         NativeGreenWizardPropertiesCandidatePlan plan = disc.Candidate;
@@ -34,7 +41,8 @@ try
     }
     else
     {
-        Console.Error.WriteLine("Usage:\n  --plan <original.bin> <wizardpeak|magiccrafters> <target-indices>\n" +
+        Console.Error.WriteLine("Usage:\n  --audit-route <original.bin> <wizardpeak|magiccrafters> <target-indices>\n" +
+            "  --plan <original.bin> <wizardpeak|magiccrafters> <target-indices>\n" +
             "  --publish <original.bin> <original.cue> <new-output-root> <wizardpeak|magiccrafters> <target-indices>\n" +
             "  --verify <original.bin> <candidate.bin> <wizardpeak|magiccrafters> <target-indices>\n" +
             "Donor is Wizard Peak T6. Targets are e.g. 17,24 or Magic Crafters 27. Every result remains an unproven candidate.");

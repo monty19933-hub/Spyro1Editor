@@ -3,6 +3,7 @@
 import importlib.util
 import contextlib
 import io
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -98,6 +99,8 @@ class RunnerOptionsTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory(prefix="spyro-runner-options-") as output:
             with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                    mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                    mock.patch.object(RUNNER, "SOURCE_QA_CASES", ()), \
                     mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
                     mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
                     mock.patch.object(sys, "argv", [str(SPEC.origin), "--with-source-qa", "--timeout", "123", "--source-qa-timeout", "456"]), \
@@ -123,6 +126,8 @@ class RunnerOptionsTests(unittest.TestCase):
     def test_timeout_remains_a_failed_gate(self):
         with tempfile.TemporaryDirectory(prefix="spyro-runner-failure-") as output:
             with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                    mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                    mock.patch.object(RUNNER, "SOURCE_QA_CASES", ()), \
                     mock.patch.object(RUNNER, "run_owned_command", side_effect=subprocess.TimeoutExpired(["dotnet"], 1)), \
                     mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
                     mock.patch.object(sys, "argv", [str(SPEC.origin), "--with-source-qa"]), \
@@ -151,6 +156,8 @@ class RunnerOptionsTests(unittest.TestCase):
             logs.mkdir()
             with mock.patch.object(RUNNER, "ROOT", root), \
                     mock.patch.object(RUNNER, "CORE_CASES", (("MissingRegisteredSmoke", "unreachable success"),)), \
+                    mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                    mock.patch.object(RUNNER, "SOURCE_QA_CASES", ()), \
                     mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
                     mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=str(logs)), \
                     mock.patch.object(sys, "argv", [str(SPEC.origin), "--build-all", "--with-source-qa"]), \
@@ -167,6 +174,166 @@ class RunnerOptionsTests(unittest.TestCase):
             with self.assertRaisesRegex(OSError, "POSIX"):
                 RUNNER.run_owned_command(["unused"], cwd=".", stdout=None, timeout=1)
             popen.assert_not_called()
+
+    def test_route_modes_preserve_existing_mode_and_build_once(self):
+        calls = []
+        name = "Id65AuthoringMobyDependencyBundleCompilerSmoke"
+        clock = [100.0]
+
+        def fake_run(command, **kwargs):
+            calls.append((command, kwargs["timeout"]))
+            kwargs["stdout"].write("Offline QA passed.\nNATIVE_SCENE_PROPERTIES_LINKER_SMOKE_OK\n"
+                                   "NATIVE_ROUTE_SURFACE_SMOKE_OK\nNATIVE_GREEN_WIZARD_ROUTE_SOURCE_SMOKE_OK\n")
+            if command[0] == "env":
+                clock[0] += 400
+            return subprocess.CompletedProcess(command, 0)
+
+        with tempfile.TemporaryDirectory(prefix="spyro-runner-route-modes-") as output:
+            with mock.patch.object(RUNNER, "CORE_CASES", ((name, "NATIVE_SCENE_PROPERTIES_LINKER_SMOKE_OK"),)), \
+                    mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                    mock.patch.object(RUNNER, "configured_source_image", return_value="/selected original.bin") as source, \
+                    mock.patch.object(RUNNER.time, "monotonic", side_effect=lambda: clock[0]), \
+                    mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                    mock.patch.object(sys, "argv", [str(SPEC.origin), "--with-source-qa", "--configuration", "Debug",
+                                                    "--timeout", "123", "--source-qa-timeout", "456"]), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(0, RUNNER.main())
+                source.assert_called_once_with()
+            summary = json.loads((Path(output) / "summary.json").read_text())
+        builds = [c for c, _ in calls if c[:2] == ["dotnet", "build"]]
+        self.assertEqual(2, len(builds), "The shared smoke project must build once, plus App")
+        runs = [(c, timeout) for c, timeout in calls if c[:2] == ["dotnet", "run"]]
+        self.assertEqual([["--source-free-properties-linker"], ["--source-free-route-surfaces"],
+                          ["--source-backed-route-surfaces", "/selected original.bin"]],
+                         [c[c.index("--") + 1:] for c, _ in runs])
+        self.assertEqual([123, 123, 56], [timeout for _, timeout in runs])
+        self.assertTrue(all(c[c.index("--configuration") + 1] == "Debug" for c, _ in runs))
+        self.assertTrue(all("--no-build" in c and "--no-restore" in c for c, _ in runs))
+        self.assertTrue(all(r["passed"] for r in summary))
+        self.assertEqual(len(summary), len({r["name"] for r in summary}))
+
+    def test_default_and_list_never_resolve_source_for_route_modes(self):
+        for arguments in ([], ["--list"], ["--list", "--with-source-qa"]):
+            with self.subTest(arguments=arguments), tempfile.TemporaryDirectory(prefix="spyro-runner-route-default-") as output:
+                calls = []
+
+                def fake_run(command, **kwargs):
+                    calls.append(command)
+                    kwargs["stdout"].write("NATIVE_ROUTE_SURFACE_SMOKE_OK\n")
+                    return subprocess.CompletedProcess(command, 0)
+
+                with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("source read")) as source, \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin), *arguments]), \
+                        contextlib.redirect_stdout(io.StringIO()) as text:
+                    self.assertEqual(0, RUNNER.main())
+                    source.assert_not_called()
+                self.assertFalse(any("--source-backed-route-surfaces" in c for c in calls))
+                if "--list" in arguments:
+                    self.assertEqual([], calls)
+                    self.assertIn("--source-free-route-surfaces", text.getvalue())
+                else:
+                    self.assertEqual(1, sum("--source-free-route-surfaces" in c for c in calls))
+
+    def test_route_marker_failure_prevents_source_qa(self):
+        calls = []
+
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0)
+
+        with tempfile.TemporaryDirectory(prefix="spyro-runner-route-marker-") as output:
+            with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                    mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                    mock.patch.object(RUNNER, "configured_source_image") as source, \
+                    mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                    mock.patch.object(sys, "argv", [str(SPEC.origin), "--with-source-qa"]), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(1, RUNNER.main())
+                source.assert_not_called()
+        self.assertFalse(any(c[0] == "env" for c in calls))
+
+    def test_source_resolution_failure_is_recorded_without_running_source_command(self):
+        calls = []
+
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            kwargs["stdout"].write("Offline QA passed.\nNATIVE_ROUTE_SURFACE_SMOKE_OK\n")
+            return subprocess.CompletedProcess(command, 0)
+
+        with tempfile.TemporaryDirectory(prefix="spyro-runner-route-source-failure-") as output:
+            with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                    mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                    mock.patch.object(RUNNER, "configured_source_image", side_effect=FileNotFoundError("missing selection")), \
+                    mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                    mock.patch.object(sys, "argv", [str(SPEC.origin), "--with-source-qa"]), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(1, RUNNER.main())
+            summary = json.loads((Path(output) / "summary.json").read_text())
+        self.assertFalse(summary[-1]["passed"])
+        self.assertIn("missing selection", summary[-1]["detail"])
+        self.assertIsNone(summary[-1]["command"])
+        self.assertFalse(any("--source-backed-route-surfaces" in c for c in calls))
+
+    def test_expired_shared_source_deadline_does_not_launch_route_command(self):
+        for expires_in in ("offline", "source-resolution"):
+            calls = []
+            clock = [100.0]
+
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                kwargs["stdout"].write("Offline QA passed.\nNATIVE_ROUTE_SURFACE_SMOKE_OK\n")
+                if command[0] == "env" and expires_in == "offline":
+                    clock[0] += 1801
+                return subprocess.CompletedProcess(command, 0)
+
+            def fake_source():
+                if expires_in == "source-resolution":
+                    clock[0] += 1801
+                return "/selected.bin"
+
+            with self.subTest(expires_in=expires_in), tempfile.TemporaryDirectory(prefix="spyro-runner-route-deadline-") as output:
+                with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", side_effect=fake_source), \
+                        mock.patch.object(RUNNER.time, "monotonic", side_effect=lambda: clock[0]), \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin), "--with-source-qa"]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(1, RUNNER.main())
+                summary = json.loads((Path(output) / "summary.json").read_text())
+                self.assertIn("no command was started", summary[-1]["detail"])
+                self.assertFalse(any("--source-backed-route-surfaces" in c for c in calls))
+
+    def test_configured_source_image_uses_only_selected_existing_image(self):
+        with tempfile.TemporaryDirectory(prefix="spyro-runner-source-settings-") as directory:
+            root = Path(directory)
+            settings = root / "_local/settings/source-disc.json"
+            settings.parent.mkdir(parents=True)
+            image = root / "selected original.bin"
+            image.write_bytes(b"not a ROM; resolver only checks the selected path")
+            with mock.patch.object(RUNNER, "ROOT", root):
+                with self.assertRaises(FileNotFoundError):
+                    RUNNER.configured_source_image()
+                for value in ({"imagePath": image.name}, {"imagePath": str(image)}):
+                    settings.write_text(json.dumps(value))
+                    self.assertEqual(str(image), RUNNER.configured_source_image())
+                spaced = root / " selected original.bin "
+                spaced.write_bytes(b"distinct selected file")
+                settings.write_text(json.dumps({"imagePath": spaced.name}))
+                self.assertEqual(str(spaced), RUNNER.configured_source_image())
+                for value in ({}, [], {"imagePath": " "}, {"imagePath": 7}):
+                    settings.write_text(json.dumps(value))
+                    with self.assertRaises(ValueError):
+                        RUNNER.configured_source_image()
+                settings.write_text("{")
+                with self.assertRaises(ValueError):
+                    RUNNER.configured_source_image()
+                settings.write_text(json.dumps({"imagePath": "missing.bin"}))
+                with self.assertRaises(FileNotFoundError):
+                    RUNNER.configured_source_image()
 
 
 if __name__ == "__main__":
