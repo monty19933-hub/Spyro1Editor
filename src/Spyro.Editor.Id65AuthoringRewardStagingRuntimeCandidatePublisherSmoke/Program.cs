@@ -7,6 +7,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Spyro.Editor.Core.Exporting;
 
+[System.Runtime.Versioning.SupportedOSPlatform("macos")]
+internal static class Program
+{
+private static async Task Main(string[] args)
+{
 string repositoryRoot = FindRepositoryRoot(args.ElementAtOrDefault(0));
 string lockedImagePath = Path.Combine(
     repositoryRoot,
@@ -788,6 +793,8 @@ finally
         Require(!Directory.Exists(smokeRoot) && !File.Exists(smokeRoot),
             "The publisher smoke left owned temporary debris behind.");
     }
+}
+
 }
 
 static Id65RewardStagingCompileRequest BuildCompileRequest(string lockedImagePath, string foundationImagePath)
@@ -3805,6 +3812,8 @@ static extern ushort NativeUmask(ushort mode);
 static extern int NativeLStat(
     [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
     out SmokeDarwinStat status);
+
+}
 
 [StructLayout(LayoutKind.Explicit, Size = 144)]
 internal struct SmokeDarwinStat
