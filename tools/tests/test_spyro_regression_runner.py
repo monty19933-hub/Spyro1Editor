@@ -172,9 +172,14 @@ class RunnerOptionsTests(unittest.TestCase):
             self.assertEqual(len(summary), len({row["name"] for row in summary}))
 
     def test_static_texture_modes_use_only_explicit_source_image_and_exact_markers(self):
-        name = "NativeId65StaticTerrainTextureSmoke"
-        free_marker = "NATIVE_ID65_STATIC_TERRAIN_TEXTURE_FREE_OK"
-        source_marker = "NATIVE_ID65_STATIC_TERRAIN_TEXTURE_SOURCE_OK"
+        self.assert_texture_modes("NativeId65StaticTerrainTextureSmoke", "NATIVE_ID65_STATIC_TERRAIN_TEXTURE")
+
+    def test_fresh_texture_modes_use_only_explicit_source_image_and_exact_markers(self):
+        self.assert_texture_modes("NativeId65FreshTerrainTextureSmoke", "NATIVE_ID65_FRESH_TERRAIN_TEXTURE")
+
+    def assert_texture_modes(self, name, marker_prefix):
+        free_marker = marker_prefix + "_FREE_OK"
+        source_marker = marker_prefix + "_SOURCE_OK"
         self.assertEqual([(name, free_marker)], [c for c in RUNNER.CORE_CASES if c[0] == name])
         self.assertEqual([(name, source_marker, ["--source"])],
                          [c for c in RUNNER.SOURCE_QA_CASES if c[0] == name])
@@ -618,6 +623,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeId65NormalResourceSmoke": ["/selected original.bin"],
             "NativeId65NormalBodySmoke": ["/selected original.bin"],
             "NativeId65StaticTerrainTextureSmoke": ["--source", "/selected original.bin"],
+            "NativeId65FreshTerrainTextureSmoke": ["--source", "/selected original.bin"],
             "NativeWizardPlacementSmoke": ["/selected original.bin"],
             "NativeResourceCompositionSmoke": ["--source", "/selected original.bin"],
             "NativeFreeFlightResearchSmoke": ["/selected original.bin", "/selected original.cue", str(RUNNER.ROOT)],
