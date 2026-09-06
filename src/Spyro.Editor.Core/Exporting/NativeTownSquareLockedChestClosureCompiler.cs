@@ -46,17 +46,21 @@ internal static class NativeTownSquareLockedChestClosureCompiler
         byte[] executable = DiscImage.ReadFileBytes(source, layout, exe.Lba, 0, exe.Size);
         RequireHash(data, TownDataHash); RequireHash(peace, PeaceDataHash); RequireHash(overlay, TownOverlayHash); RequireHash(executable, ExeHash);
         RequireHash(donorOverlay, "299f4822489c48736c9f46bb9556e82952fc1693f5f9f42bc2e6415c1908aebc");
+        RequireWord(header,0x40,0x7B8800);RequireWord(header,0x44,0x3A000);
+        var modelLoader=NativeMobyModelLoaderCertificate.CaptureRetail(executable,
+            DiscImage.ReadFileBytes(source,layout,37,0x7B8800,0x800),
+            DiscImage.ReadFileBytes(source,layout,37,0x7B9000,0x39C48));
         NativeTexturePageOwnershipReport textureOwnership = NativeTexturePageOwnershipScanner.Scan(sourcePath,
             new LevelDefinition { Key="townsquare", DisplayName="Town Square", LevelId=13, SourceWadEntry=16 });
         if (!textureOwnership.AllConsumerClosureComplete || !textureOwnership.ProvablyPrivatePixelAndClutSpace ||
             textureOwnership.TexturePagesWadOffset != TownDataWad + 0x800)
             throw new InvalidDataException("Native destination texture ownership is incomplete.");
-        return Compile(sourcePath, layout, data, peace, overlay, donorOverlay, executable, header, textureOwnership,recipe);
+        return Compile(sourcePath, layout, data, peace, overlay, donorOverlay, executable, header, textureOwnership,recipe,modelLoader);
     }
 
     private static NativeTownSquareLockedChestClosure Compile(string sourcePath, DiscLayout layout, byte[] data, byte[] peace,
         byte[] overlay, byte[] donorOverlay, byte[] executable, byte[] header, NativeTexturePageOwnershipReport textureOwnership,
-        NativeTownSquareClosureRecipe recipe)
+        NativeTownSquareClosureRecipe recipe,NativeMobyModelLoaderCertificate modelLoader)
     {
         string profile=NativeTownSquareClosurePlacement.ProfileFor(recipe);
         // Native component grammar: Moby rows, properties, pod, collision, then fixups.
@@ -97,6 +101,9 @@ internal static class NativeTownSquareLockedChestClosureCompiler
         NativeAddressSpace exeFinal = new(NativeAddressKind.ExecutableFile,profile+":exe",NativeAddressRevision.Final,executable.Length);
         Dictionary<NativeAddressSpace,byte[]> originals = new(){[dataOriginal]=data,[peaceOriginal]=peace,[sceneOriginal]=scene,
             [overlayOriginal]=overlay,[donorOverlayOriginal]=donorOverlay,[exeOriginal]=executable};
+        byte[] ReadNative(NativeByteExtent e)=>originals[e.Space].AsSpan((int)e.Offset,(int)e.ByteLength).ToArray();
+        var registrationSource=NativeMobyModelRegistrationSource.CaptureExactTown(dataOriginal,ReadNative);
+        var registrationDonor=NativeMobyModelRegistrationSource.CaptureExactPeace(peaceOriginal,ReadNative);
         List<NativeMobyDependencyNode> nodes=[];
         List<(NativeAddressSpace Space,int Offset,int Length)> reservations=[];
         NativeMobyDependencyRead Read(NativeAddressSpace space,int off,int len,string id="native") =>
@@ -225,14 +232,19 @@ internal static class NativeTownSquareLockedChestClosureCompiler
         Add("actor.ae",NativeMobyDependencyKind.ActorPackage,[..textureIds,"sound.chest-local54"],[Read(peaceOriginal,0x1B3978,0x1008)],c=>{
             byte[] b=c.Read("native");RequireWord(b,4,0xFFFFFF2F);
             if(TownSquareNativeLockedChestCandidateExporter.RebaseLockedChestDescriptors(b)!=146)throw new InvalidDataException("Actor face dependency grammar changed.");
-            b[4]=0x36;return b;},dataFinal,0x1D0000,0x1008);
-        Add("actor.registration",NativeMobyDependencyKind.ActorRegistration,["actor.ae"],[Read(dataOriginal,0xE4,4)],c=>c.Read("native"),dataFinal,0xE4,4,
-            references:[new("actor-root",0,"actor.ae",0,4,0)]);
-        Add("actor.class",NativeMobyDependencyKind.ActorRegistration,["actor.ae"],[Read(dataOriginal,0x19A,2)],c=>{byte[] b=c.Read("native");if(U16(b,0)!=0)throw new InvalidDataException("Actor class slot occupied.");BinaryPrimitives.WriteUInt16LittleEndian(b,0xAE);return b;},dataFinal,0x19A,2);
+            b[4]=0x36;return b;},dataFinal,registrationSource.ModelEnd,0x1008);
+        var packageClosure=NativeMobyDependencyClosureCompiler.Compile(nodes,["actor.ae"],ReadNative);
+        var packageBinding=NativeMobyModelPackageBinding.Capture(registrationDonor,0xAE,packageClosure,"actor.ae","native",
+            "peace-ae-model-relative-v2;146-certified-texture-descriptors;local-sound47-to54",ReadNative);
+        var modelRegistration=NativeMobyModelRegistrationPlan.Build(registrationSource,modelLoader,dataFinal,[packageBinding],ReadNative);
+        var registration=modelRegistration.Packages.Single();
+        int rootField=checked((int)registration.RootField.Offset),classField=checked((int)registration.ClassField.Offset);
+        Add("actor.registration",NativeMobyDependencyKind.ActorRegistration,["actor.ae"],[Read(dataOriginal,rootField,4)],c=>c.Read("native"),dataFinal,rootField,4,
+            references:[registration.Reference]);
+        Add("actor.class",NativeMobyDependencyKind.ActorRegistration,["actor.ae"],[Read(dataOriginal,classField,2)],c=>{byte[] b=c.Read("native");if(U16(b,0)!=0)throw new InvalidDataException("Actor class slot occupied.");modelRegistration.CopyHeader().AsSpan(classField,2).CopyTo(b);return b;},dataFinal,classField,2);
         Add("data.header",NativeMobyDependencyKind.RuntimeBuffer,[],[Read(dataOriginal,0,0x50)],c=>{
-            byte[] b=c.Read("native");Put(b,20,0x5E800);for(int i=3;i<10;i++)if(U32(b,i*8)!=0)Put(b,i*8,U32(b,i*8)+0x1800);return b;},dataFinal,0,0x50);
+            _=c.Read("native");return modelRegistration.CopyHeader().AsSpan(0,0x50).ToArray();},dataFinal,0,0x50);
 
-        byte[] ReadNative(NativeByteExtent e)=>originals[e.Space].AsSpan((int)e.Offset,(int)e.ByteLength).ToArray();
         var sharedInstances=NativeMobyDependencyClosureCompiler.Compile(nodes,
             ["actor.registration","actor.class","behavior.bundle","key.rootless-rendering"],ReadNative);
         var instances=NativeTownSquareLockedChestInstantiation.Capture(peaceOriginal,sceneOriginal,sceneFinal,exeOriginal,
@@ -302,6 +314,7 @@ internal static class NativeTownSquareLockedChestClosureCompiler
         }
         byte[] finalData=Compose(dataFinal),finalScene=Compose(sceneFinal);finalScene.CopyTo(finalData,FinalScene);
         byte[] finalOverlay=Compose(overlayFinal),finalExe=Compose(exeFinal);
+        modelRegistration.RequireFinal(finalData,graph);
         // Independent old-recipe comparison is a regression oracle, never the implementation input.
         byte[] ReadWad(long offset,int length)
         {
@@ -323,7 +336,7 @@ internal static class NativeTownSquareLockedChestClosureCompiler
         var placement=recipe==NativeTownSquareClosureRecipe.SpatiallySeparatedV3?NativeTownSquareClosurePlacement.CaptureCertificate(data,executable,recipe):null;
         if(placement!=null&&!graph.CopyPayload("placement.site").SequenceEqual(NativeTownSquareClosurePlacement.Encode(placement.Locations)))
             throw new InvalidDataException("Graph-driven placement does not match independently recaptured native site certificate.");
-        return new(sourcePath,layout,header,graph,finalData,finalOverlay,finalExe,Hash(legacy.Entry),recipe,placement,instances);
+        return new(sourcePath,layout,header,graph,finalData,finalOverlay,finalExe,Hash(legacy.Entry),recipe,placement,instances,modelRegistration);
     }
     internal static string Hash(ReadOnlySpan<byte> bytes,bool alreadyDigest=false)=>Convert.ToHexStringLower(alreadyDigest?bytes:SHA256.HashData(bytes));
     private static uint U32(byte[] bytes,int offset)=>BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(offset,4));
@@ -336,4 +349,5 @@ internal static class NativeTownSquareLockedChestClosureCompiler
 
 internal sealed record NativeTownSquareLockedChestClosure(string SourcePath,DiscLayout Layout,byte[] OriginalWadHeader,
     NativeMobyDependencyClosurePlan Graph,byte[] Data,byte[] Overlay,byte[] Executable,string LegacyDataSha256,
-    NativeTownSquareClosureRecipe Recipe,NativeTownSquarePlacementCertificate? Placement,NativeTownSquareLockedChestInstanceCapture Instances);
+    NativeTownSquareClosureRecipe Recipe,NativeTownSquarePlacementCertificate? Placement,NativeTownSquareLockedChestInstanceCapture Instances,
+    NativeMobyModelRegistrationPlan ModelRegistration);
