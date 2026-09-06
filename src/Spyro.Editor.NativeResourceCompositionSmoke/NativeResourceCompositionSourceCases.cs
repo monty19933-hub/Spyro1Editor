@@ -66,6 +66,10 @@ internal static class NativeResourceCompositionSourceCases
         var emitted = await NativeDarkHollowWizardResourcePlan.CompileWithParticleAsync(path, inventory, player, sound, texture, particle, scene);
         var emittedPlain = await NativeDarkHollowWizardResourcePlan.CompileWithParticleAsync(path, inventory, player, sound, texture, particle);
         var emittedReverse = await NativeDarkHollowWizardResourcePlan.CompileWithParticleReversedForSmokeAsync(path, inventory, player, sound, texture, particle, scene);
+        var lifetime = NativeDarkHollowWizardParticleBehaviorSource.Capture(path).LifetimeContract;
+        lifetime.RequireResources(emitted); lifetime.RequireResources(emittedPlain);
+        check(true, "single-frame proof consumes actual installed descriptor with and without scene stage");
+        reject(() => lifetime.RequireResources(withScene), "pending descriptor metadata cannot replace actual particle installation");
         check(emittedPlain.FinalDataSha256 == "4080e940c46ac9c53712cc97285396ecdcae59e0a369c4e8971eeb49207de8d4" &&
             emitted.FinalDataSha256 == "26e8b7f0bebb49c5c39c0e42ea680428ddd01c6e901ebc53e619d6f39c02be91", "independent original-sector particle stage golden with and without scene");
         check(emitted.FinalDataSha256 == emittedReverse.FinalDataSha256 && emitted.GraphFingerprint == emittedReverse.GraphFingerprint, "particle stage enumeration cannot choose final bytes or registration graph");

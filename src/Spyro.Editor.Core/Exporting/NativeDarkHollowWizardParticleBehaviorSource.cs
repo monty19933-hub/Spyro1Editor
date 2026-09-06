@@ -20,9 +20,10 @@ public sealed class NativeDarkHollowWizardParticleBehaviorSource
     private readonly Func<NativeByteExtent, byte[]> _read;
     private static readonly uint[] BridgeTargets = [0x8008442C, 0x80084448, 0x80084450, 0x8008553C];
 
-    private NativeDarkHollowWizardParticleBehaviorSource(byte[] wizard, byte[] dark, byte[] executable)
+    private NativeDarkHollowWizardParticleBehaviorSource(byte[] wizard, byte[] dark, byte[] executable, byte[] peteHeader, byte[] peteRuntimeCopy)
     {
         Require(wizard, 0x10000, WizardSha); Require(dark, 0xB000, DarkSha); Require(executable, 0x66000, ExeSha);
+        LifetimeContract = NativeDarkHollowWizardParticleLifetimeContract.CaptureRetail(wizard, executable, peteHeader, peteRuntimeCopy);
         var donor = new NativeAddressSpace(NativeAddressKind.LevelData, "particle-donor:" + WizardSha, NativeAddressRevision.Original, wizard.Length);
         var target = new NativeAddressSpace(NativeAddressKind.LevelData, "particle-target:" + DarkSha, NativeAddressRevision.Original, dark.Length);
         var exe = new NativeAddressSpace(NativeAddressKind.ExecutableFile, "particle-exe:" + ExeSha, NativeAddressRevision.Original, executable.Length);
@@ -115,7 +116,9 @@ public sealed class NativeDarkHollowWizardParticleBehaviorSource
         var result = new NativeDarkHollowWizardParticleBehaviorSource(
             DiscImage.ReadFileBytes(image, layout, 37, 0x2F5B000, 0x10000),
             DiscImage.ReadFileBytes(image, layout, 37, 0xEF6000, 0xB000),
-            DiscImage.ReadFileBytes(image, layout, 53875, 0, 0x66000));
+            DiscImage.ReadFileBytes(image, layout, 53875, 0, 0x66000),
+            DiscImage.ReadFileBytes(image, layout, 37, 0x7B8800, 0x800),
+            DiscImage.ReadFileBytes(image, layout, 37, 0x7B9000, 0x39C48));
         RequireImage(image); return result;
     }
     public string SourceImageSha256 => NativeMobySourceInventory.OriginalImageSha256;
@@ -123,6 +126,7 @@ public sealed class NativeDarkHollowWizardParticleBehaviorSource
     public string DonorOverlaySha256 => WizardSha;
     public IReadOnlyList<NativeMobyBehaviorFragmentEvidence> SourceFragments { get; }
     public IReadOnlyList<NativeMobyBehaviorFragmentEvidence> ContextCertificates { get; }
+    public NativeDarkHollowWizardParticleLifetimeContract LifetimeContract { get; }
     public bool CompleteNativeClosureProven => false;
     public bool BehaviorInstalled => false;
     public bool PublicationApproved => false;

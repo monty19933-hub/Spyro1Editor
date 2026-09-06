@@ -32,6 +32,7 @@ internal static class NativeParticleBehaviorCases
     internal static void RunSource(string path, Action<bool, string> check, Action<Action, string> reject)
     {
         var source = NativeDarkHollowWizardParticleBehaviorSource.Capture(path);
+        NativeParticleLifetimeCases.RunSource(source, check, reject);
         check(source.Package.Fragments.Count == 4 && source.Package.InstructionCount == 224 && source.Package.EntryPcs.Count == 5, "four complete native particle owners and five entry points");
         check(source.OperandPatches.Count == 49 && source.OperandPatches.Count(p => p.Kind == NativeParticleBehaviorOperandKind.StackHalfword) == 12, "exact37 base and12 scratch fields");
         check(source.Hooks.Count == 4 && source.Continuations.Count == 6, "only four absent dispatch hooks and six continuation sites");

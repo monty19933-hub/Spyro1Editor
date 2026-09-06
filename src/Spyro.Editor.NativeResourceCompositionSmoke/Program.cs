@@ -34,6 +34,7 @@ Check(new NativeLevelResourceCompositionLayout(source, 0, 0, payloads.Reverse().
 NativeResourceCompositionCases.Run(source, original, payloads, Read, Check, Reject);
 NativeParticleDescriptorCases.Run(Check, Reject);
 NativeParticleBehaviorCases.Run(Check, Reject);
+NativeParticleLifetimeCases.Run(Check, Reject);
 Console.WriteLine($"NATIVE_RESOURCE_COMPOSITION_SOURCE_FREE_OK checks={checks} refused={refusals} publication=false runtime=false");
 if (args.Length == 2 && args[0] == "--source")
 {

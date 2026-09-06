@@ -21,6 +21,7 @@ public sealed class NativeDarkHollowWizardOverlayPlan
         ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(resources);ArgumentNullException.ThrowIfNull(particles);
         if(!resources.IncludesSceneAppend)throw new InvalidDataException("Native overlay requires the source-owned private scene append.");
         if(!resources.ParticleDescriptorInstalled)throw new InvalidDataException("Native overlay requires its native particle descriptor.");
+        particles.LifetimeContract.RequireResources(resources);
         if(source.PackageSha256!="a9a8227c74a9c479f7f94c82314813809bd5caa0a5a137b0c18d614b80b3e3df"||
             resources.TargetLevelId!=12||resources.SourceImageSha256!=NativeMobySourceInventory.OriginalImageSha256||
             resources.SourceDataSha256!="a937aecb3626ffd2311ba136684a34c9f36877054b52557b4524fcacee0e2d97"||

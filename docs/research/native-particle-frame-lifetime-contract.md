@@ -1,0 +1,37 @@
+# Native Wizard particle frame and lifetime ownership
+
+This is an exact original-source normal-level contract for imported effect selectors `0x07` and `0x41`. It closes particle7's single-frame descriptor ownership, including slot reuse and the normal pool's terminal lookahead. It does not certify native gameplay, arbitrary writes by other callbacks, GPU/GTE state, camera/viewport setup, dynamic pool pressure, transient RAM, alternate buffer modes, or publication.
+
+The source image is the unchanged 661,547,040-byte retail BIN, SHA256 `fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37`. `NativeDarkHollowWizardParticleBehaviorSource.Capture` reads the original donor and destination overlays, executable, PETE header and complete native PETE runtime copy within its full-image before/after identity check. The new lifetime contract has no public metadata constructor. Its 21 individual evidence owners are exact length/hash-bound and immutable.
+
+## Actual single-frame consumer
+
+The native kind2 renderer window at `80057D9C..80057DC4` loads the halfword at raw particle `+0x10`, uses its high byte as depth bias, masks its low byte to obtain the frame, multiplies that frame by eight, and reads two words at descriptor `+4` and `+8`. Frame0 therefore owns precisely record bytes `[4,12)`: the appended record's eight-byte payload. Frame1 would read following sound-component bytes and is not accepted.
+
+Particle7 spawn calls the native allocator with kind2 at `80089934/80089938`. Its two conditional paths converge on the original tail at `80089F28`; the jump at `80089F2C` has `sb zero,0x10(s2)` in its delay slot. Every source-bound spawn path clears the frame, including a reused slot whose prior frame was nonzero. A bounded source CFG walk checks both conditional edges and the actual delay slot. It is not a CPU emulator; separately pinned allocator/RNG/vector helper calls are treated as returning.
+
+The complete source tick at `80088370+0x98` writes only raw offsets `02,04..0B`. It does not write raw frame byte `0x10`. The complete kind2 renderer at `80057C08+0x274` changes only the raw visibility byte `+3`; its other stores target GPU output storage. Particle `0x41` uses native kind1 rather than a descriptor-indexed sprite; its retained source spawn/tick and the complete kind1 renderer are separately bound. Descriptor ID `0x41` is neither needed nor inferred.
+
+The native age check is independently bound at `80088370`, `80088378`, and `8008837C`: load raw age `+2`, compare unsigned with25, and branch to deletion when age is not below25. The later reload/increment/store at `800883CC`, `800883EC`, and `800883F0` increments by exactly one. Initial ages are `RNG & 15`. For initial age zero, there are at most25 successful updates and26 age-check calls including deletion; visibility can cause earlier deletion. These are update/check counts, not a promised number of displayed frames. The test's 256 stale-frame by16 initial-age replay is explicitly abstract arithmetic, not native helper/motion/render emulation.
+
+## Native helpers and normal pool boundary
+
+The complete direct helper owners are allocator `80053570+0x98`, RNG `8006272C+0x30`, and vector pack `80017BFC+0x28`. Deletion `80053608+0x9C` is also bound. The allocator manages256 slots of32 bytes in the `0x2000`-byte pool. Its full-pool replacement formula always selects an aligned existing slot. It initializes the kind byte, not the whole slot. Deletion marks a hole or terminal; it does not compact/move live particle records or advance their frame bytes. Vector pack writes only six bytes for XYZ; the RNG's persistent source owner is its native seed global.
+
+Normal PETE loading and buffer initialization place the particle pool at `801C3BB8..801C5BB8`, with the resident PETE runtime copy starting at `801C5BB8`. Scene initialization writes the terminal word at pool `+0x2000`, overlapping the already decoded native shared player package's first word. The renderer's negative-kind path at `80058080+0x2C` performs a speculative next-header halfword read even at this terminal. The read is PETE runtime copy `+0x20..+0x22`, not particle padding. The exact header at WAD `7B8800+800` and full native runtime copy at WAD `7B9000+39C48` are validated through the existing model loader certificate; the lookahead is owned by the actual resident shared-player header. This does not extend the particle pool or permit using PETE bytes as particle slots.
+
+## Consumed installation boundary
+
+The existing overlay planner now calls `particles.LifetimeContract.RequireResources(resources)`. This requires the exact source-issued Dark resource plan with actual particle installation, validates its complete final afterimage, parses the final particle component, and requires descriptor7 to be the twelfth/last record after the eleven originals. The actual installed12-byte record must equal the source-issued relocated texture record. A plan carrying only pending descriptor metadata is refused. No full afterimage layering or new header ownership is introduced.
+
+The contract deliberately leaves `GteStateProven`, `PeakTransientFitProven`, `RuntimeProven`, `CompleteNativeClosureProven`, and `PublicationApproved` false. The original camera, ordering table, primitive-buffer allocation, hardware scratchpad and GTE setup remain shared native engine dependencies, not newly proved complete by this bounded frame check.
+
+## Regression evidence
+
+The tests were written first. The Debug RED build passed with zero warnings/errors; execution then failed at the new unimplemented frame-window decoder. The tracked `src/Spyro.Editor.NativeResourceCompositionSmoke/source_particle_lifetime_oracle.py` independently reads original raw sectors and passed. It binds native increment and deletion words separately, retains source hashes, and reports `nativeCpuEmulated=false` and `nativeGpuEmulated=false`.
+
+Focused C# GREEN passed: Debug build4.98 seconds with zero warnings/errors, source-free179 checks/78 refusals, and source-backed595 checks/140 refusals. The abstract stale-frame/initial-age matrix is separately reported as4,096 samples rather than inflating the assertion count. It starts each raw frame byte with the stale value, decodes the actual source `SB zero` instruction and applies that one abstract store before replaying age arithmetic. Tests cover changed frame byte/stride/read offsets, invalid/truncated frame owners, individually mutated spawn/helper/renderer/pool/PETE certificates, distinct age boundary versus increment mutations, immutable source evidence, and source-issued installed descriptor versus pending metadata.
+
+All four existing combined-resource and particle-stage byte goldens and the registration graph remained exact. The root's separate reward and placement source integration suites also passed the lifetime resource guard without changing their existing overlay/executable bytes. Root and Zeno independently reviewed the source contract with no material finding. Neither the tests nor those reviews execute native GPU operations or establish gameplay acceptance.
+
+Logs and oracle output: `_local/research/native-resource-composition-final-20260906.t1Krlk/14-particle-lifetime-red-build.log`, `15-particle-lifetime-red.log`, `16-particle-lifetime-oracle.json`, `17-particle-lifetime-build.log`, `18-particle-lifetime-free.log`, and `19-particle-lifetime-source.log`.
