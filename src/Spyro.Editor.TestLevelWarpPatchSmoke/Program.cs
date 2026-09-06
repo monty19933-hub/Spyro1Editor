@@ -55,6 +55,12 @@ try
     byte[] expectedBefore = ParseHex(patch.BeforeHexPreview);
     byte[] expectedAfter = ParseHex(patch.AfterHexPreview);
     int differenceCount = 0;
+    int parityDifferenceCount = 0;
+    const int rawSectorBytes = 2352;
+    long patchSector = patchImageOffset / rawSectorBytes;
+    long parityStart = patchSector * rawSectorBytes + 2072;
+    Assert(patchImageOffset % rawSectorBytes >= 24 && patchImageOffset + patch.ByteLength <= parityStart,
+        "The eight-byte warp patch must fit one raw MODE2 Form1 payload.");
     using (FileStream source = File.OpenRead(sourceImagePath))
     using (FileStream candidate = File.OpenRead(candidateImagePath))
     {
@@ -76,6 +82,11 @@ try
                 if (sourceBuffer[index] == candidateBuffer[index])
                     continue;
 
+                if (imageOffset >= parityStart && imageOffset < (patchSector + 1) * rawSectorBytes)
+                {
+                    parityDifferenceCount++;
+                    continue;
+                }
                 differenceCount++;
                 Assert(
                     imageOffset >= patchImageOffset &&
@@ -91,6 +102,12 @@ try
 
             position += count;
         }
+        byte[] raw = new byte[rawSectorBytes];
+        candidate.Position = patchSector * rawSectorBytes;
+        candidate.ReadExactly(raw);
+        // Independent bitwise EDC/GF ECC arithmetic checks every emitted
+        // trailer byte. The streaming loop above protects all other bytes.
+        GapFixture.CheckPhysicalSector(raw, rawSectorBytes, checked((int)patchSector), Assert);
     }
     Assert(
         differenceCount == patch.ByteLength,
@@ -115,7 +132,7 @@ try
 
     Console.WriteLine(
         "Standalone diagnostic level warp: PASS exact-USA executable guard, " +
-        "exact 8-byte delta, Tree Tops selector Right then Triangle, " +
+        $"exact 8-byte payload delta + {parityDifferenceCount} independently verified EDC/ECC byte changes, protected disc complement, Tree Tops selector Right then Triangle, " +
         "second-apply rejection, and no normal Create BIN integration.");
 }
 finally

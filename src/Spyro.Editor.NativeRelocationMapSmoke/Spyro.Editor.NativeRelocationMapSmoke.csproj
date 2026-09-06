@@ -17,4 +17,7 @@
   <ItemGroup Condition="'$(FrozenCorePath)' != ''">
     <Reference Include="Spyro.Editor.Core"><HintPath>$(FrozenCorePath)</HintPath></Reference>
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../Spyro.Editor.WadGrowthGapSmoke/GapFixture.cs" Link="NestedGrowthDiscFixture.cs" />
+  </ItemGroup>
 </Project>

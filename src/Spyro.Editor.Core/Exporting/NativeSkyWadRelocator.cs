@@ -74,6 +74,7 @@ internal static class NativeSkyWadRelocator
 
         Dictionary<int, int> entryGrowth = new();
         Dictionary<int, int> modelOffsets = new();
+        Dictionary<int, NativeLevelDataGrowthLayout> multiSubfileLayouts = new();
         foreach (IGrouping<int, NativeSkyRelocationPayload> group in payloads.GroupBy(payload => payload.StorageWadEntry))
         {
             WadEntry entry = wad.EntriesByIndex.TryGetValue(group.Key, out WadEntry? found)
@@ -82,8 +83,18 @@ internal static class NativeSkyWadRelocator
             byte[] header = DiscImage.ReadFileBytes(image, discLayout, wad.WadLba, entry.Offset, SectorBytes);
             IReadOnlyList<NestedSubfile> subfiles = ParseNestedSubfiles(header, entry.Size);
             int[] requestedSubfiles = group.Select(payload => payload.SubfileIndex).Distinct().ToArray();
-            if (requestedSubfiles.Length != 1)
-                throw new InvalidOperationException($"WAD entry {group.Key} relocation payloads must target one nested subfile at a time.");
+            if (requestedSubfiles.Length > 1)
+            {
+                NativeLevelDataGrowthLayout native = new(header, entry.Size, group.ToArray());
+                foreach (NativeLevelDataSubfileGrowth subfile in native.Subfiles)
+                    foreach (NativeSkyRelocationPayload payload in subfile.Payloads)
+                        if (payload.WadLba != wad.WadLba || payload.OriginalWadOffset !=
+                            checked(entry.Offset + subfile.OriginalOffset + payload.ModelBlockOffset))
+                            throw new InvalidDataException("A multi-subfile payload does not identify its exact source WAD/subfile address.");
+                multiSubfileLayouts[group.Key] = native;
+                entryGrowth[group.Key] = native.Growth;
+                continue;
+            }
             int requestedSubfile = requestedSubfiles[0];
             NestedSubfile model = subfiles.SingleOrDefault(subfile => subfile.Index == requestedSubfile)
                 ?? throw new InvalidDataException($"WAD entry {group.Key} has no nested subfile {requestedSubfile}.");
@@ -135,6 +146,18 @@ internal static class NativeSkyWadRelocator
         List<NativeSkyRelocatedPatch> relocatedPatches = new();
         foreach (IGrouping<int, NativeSkyRelocationPayload> group in payloads.GroupBy(payload => payload.StorageWadEntry))
         {
+            if (multiSubfileLayouts.TryGetValue(group.Key, out NativeLevelDataGrowthLayout? native))
+            {
+                foreach (NativeLevelDataSubfileGrowth subfile in native.Subfiles)
+                    foreach (NativeSkyRelocationPayload payload in subfile.Payloads)
+                    {
+                        int blockOffset = native.PayloadOffset(payload);
+                        long wadOffset = checked(relocatedEntryOffsets[group.Key] + subfile.FinalOffset + blockOffset);
+                        relocatedPatches.Add(new(payload.PatchIndex, blockOffset, wadOffset,
+                            DiscImage.ConvertFileOffsetToImageOffset(discLayout, wad.WadLba, wadOffset)));
+                    }
+                continue;
+            }
             int cumulativeDelta = 0;
             foreach (NativeSkyRelocationPayload payload in group.OrderBy(payload => payload.ModelBlockOffset))
             {
@@ -278,6 +301,13 @@ internal static class NativeSkyWadRelocator
         IReadOnlyList<NativeSkyRelocationPayload> payloads,
         int entryGrowth)
     {
+        if (payloads.Select(payload => payload.SubfileIndex).Distinct().Skip(1).Any())
+        {
+            NativeLevelDataGrowthLayout native = new(entry, entry.Length, payloads);
+            if (native.Growth != entryGrowth)
+                throw new InvalidDataException("Multi-subfile entry growth must equal the sum of separately sector-rounded subfile growth.");
+            return native.Expand(entry);
+        }
         IReadOnlyList<NestedSubfile> subfiles = ParseNestedSubfiles(entry.AsSpan(0, Math.Min(entry.Length, SectorBytes)).ToArray(), entry.Length);
         int[] requestedSubfiles = payloads.Select(payload => payload.SubfileIndex).Distinct().ToArray();
         if (requestedSubfiles.Length != 1)
