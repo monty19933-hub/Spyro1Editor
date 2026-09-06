@@ -7,6 +7,7 @@ if (args.Length > 1)
     throw new ArgumentException("Usage: NativeId65NormalResourceSmoke [original.bin]");
 
 int checks = 0;
+SceneListCases.Run(Require, Reject);
 byte[] sourceVram = new byte[0x80000];
 var vram = new NativeId65VramAssembly(sourceVram);
 vram.CopySourceRange(0x100, 16);
@@ -197,6 +198,8 @@ if (args.Length == 1)
     Require(repeat.UploadSha256 == bundle.UploadSha256 && repeat.DataTailSha256 == bundle.DataTailSha256 &&
         repeat.ModelSha256 == bundle.ModelSha256, "repeat original-source compilation is deterministic");
     Console.WriteLine($"PAYLOADS upload={bundle.UploadSha256} tail={bundle.DataTailSha256} model={bundle.ModelSha256}");
+    await SceneListCases.Source(args[0], bundle, second, Require, Reject);
+    Console.WriteLine($"NATIVE_ID65_NORMAL_RESOURCE_SOURCE_OK checks={checks}");
 }
 
 Console.WriteLine($"NATIVE_ID65_NORMAL_RESOURCE_SMOKE_OK checks={checks}");
