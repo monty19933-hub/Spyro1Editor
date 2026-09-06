@@ -3,7 +3,9 @@
 Newest progress: the imported Dark Hollow Wizard has now been defeated by a
 normal charge and its native yellow gem raised the counter from13 to23. Normal
 exit/portal re-entry also worked, retaining23 and marking the reward collected;
-a second defeat/drop is being tested, and every reload/save case is not certified.
+a second charge defeat also kept treasure at23 instead of awarding another10.
+Every reload/save case is not certified; the exact new evidence is in
+[the R03 report](native-dark-wizard-r03-reward-reentry.md).
 The separate two-Wizard and edited fresh-floor exporters also pass complete
 source/image checks, with a121-step/zero-failure default Release gate. Their
 new research ROMs were created and independently reopened successfully; their
@@ -16,11 +18,9 @@ floor/spawn/color/music controls, a schematic preview, undo/redo and protected
 save/reopen. It has passed65 headless UI checks and a separate retail-shell
 integration check. It is not installed yet and does not publish edited ROMs.
 Two independently placed Wizards now compose through the native resource and
-reward chain in source tests, sharing class resources while retaining separate
-native identities. Their physical test ROM and gameplay acceptance are next.
-The current default Release gate passes117 steps; the exact old one-Wizard
-candidate still passes333 readback checks. R03 gameplay testing is active with
-private saves/settings; earlier closed-session statements below are historical.
+reward chain, sharing class resources while retaining separate native identities.
+Their physical test ROM is published; gameplay acceptance is next. R03 is closed,
+and original settings, ROM, memory card and candidate hashes are restored/unchanged.
 
 Updated September 6, 2026. This is a progress report, not a new release. The
 installed editor has not been replaced by today's backend work. The original
@@ -52,7 +52,7 @@ that an older installed app has automatically acquired every source change.
 | Exact research case | Observed working | Still not established |
 | --- | --- | --- |
 | Imported key and locked chest in Town Square | Key pickup, native opening/effects, six rewards worth exactly 10 gems, correct reward bits and normal exit/portal re-entry; recorded source-matched sound cues | Arbitrary duplicates, every level, partial-reward/death/card-persistence combinations |
-| Wizard Peak Wizard imported into Dark Hollow | Normal portal entry, visible Wizard and lightning, native electric damage/animation, ordinary player death and level reload | Wizard defeat/+10 reward, post-defeat re-entry, multiple simultaneous imported Wizards, full audio/presentation and peak-resource acceptance |
+| Wizard Peak Wizard imported into Dark Hollow | Normal portal entry, visible Wizard/lightning, electric damage, ordinary player death/reload, charge defeat and +10 reward, normal exit/re-entry, second defeat retaining the collected treasure total | Partial-collection death/card persistence, multiple simultaneous imported Wizards, full audio/presentation and peak-resource acceptance |
 | Native Free Flight in Toasty | Ascent/descent, both turn directions, flap, flight exit, collision, death/respawn, normal exit/portal reload and controlled landing | Every level/state; finished editor checkbox and end-to-end disabled-output workflow |
 | Fresh native LAB, without Town Square's terrain or placed scene | Native selector entry, LAB inventory title, visible Spyro and Sparx on the isolated floor, companion particles, a controlled short walk and normal-speed idle | Ordinary portals, jump/flame/death/card persistence, imported actors or exported textures in this fresh scene, complete audio/resource testing and editable UI integration |
 

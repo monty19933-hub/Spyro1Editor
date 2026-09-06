@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manual m-only observations for the fixed untextured fresh-ID65 A/N16 profile.
+"""Manual m-only observations for two separately selected exact fresh-ID65 profiles.
 
 Identify the actual process/open BIN and verify its published companions outside
 this tool before opting in. The SHA annotations and matching RAM layout do NOT
@@ -42,8 +42,10 @@ CAPACITY = 16
 # This is an observation-scope boundary, NOT a player footprint, safe inset,
 # Z/ground-state certificate or authentication of the loaded candidate.
 AUTHORED_FLOOR_XY_BOUNDS = (8448, 8448, 9472, 9472)
+PROFILE_CHOICES = ("starter-a-n16", "edited-landing-track02-r01")
 
-# These gates describe the single issued A/N16 layout, not arbitrary level65.
+# Both exact untextured N16 bodies retain this address layout. Equal RAM gates
+# cannot distinguish their geometry/document/music or authenticate either disc.
 # 785E0 uses the native used-data length8C8 rather than the CD length1000.
 # The exact-source fixture executes the complete native generic model helper,
 # six animations/90 paired frames, then the real store76558=800973C4.
@@ -163,7 +165,11 @@ def scan_particles(pool):
             "companion_effect_samples": samples, "all256_slots_visited": terminal is None}
 
 
-def capture(client, label):
+def capture(client, label, *, profile="starter-a-n16"):
+    if type(profile) is not str or profile not in PROFILE_CHOICES:
+        raise ValueError("Only a fixed code-owned observer profile may be selected.")
+    edited = profile == "edited-landing-track02-r01"
+    bounds = (8192, 8192, 10240, 10240) if edited else AUTHORED_FLOOR_XY_BOUNDS
     result = {
         "utc": datetime.now(timezone.utc).isoformat(), "label": label[:120],
         "expected_profile_annotation": PROFILE,
@@ -174,6 +180,23 @@ def capture(client, label):
         "candidate_authenticated": False, "sequential_reads_not_atomic": True,
         "runtime_pass": False, "payload_valid": False, "gate_reread_consistent": False,
     }
+    if edited:
+        # These exact reviewed publication/document identities are ANNOTATIONS.
+        # They neither authenticate a process/open BIN nor approve an editor UI
+        # result. Initial spawn/heading/Z/music are not moving-player RAM gates.
+        result.update(
+            expected_profile_annotation="fresh-id65-edited-landing-track02-r01-idle-center-walk-research-v1",
+            expected_candidate_sha256_annotation="ecc8f61cc16bf86a2f5117b327c49aede18f5c1e6a602c0e67f2ba58565aed16",
+            expected_body_sha256_annotation="bae43882a39dfc1604f4e6d578a354f34f99107f97faa9330600b3e01f34b15b",
+            expected_scene_sha256_annotation="13e3674859b79ff45fa950cb1c2f788a368f89d70bb24599dfbccf061a75c0de",
+            expected_exe_sha256_annotation="2c1fd87e9fa8ce5c5f16be53e738405cec90c0bfc10ac9cb8cf1ce979b2e5c57",
+            expected_cue_sha256_annotation="1fcb9bade2f3c9c59b6e6d7b57bd8a2bd0773534d151374d62fcb2ce442e663c",
+            expected_receipt_sha256_annotation="3b545c4dd0e2102586e9f520dec96fda3ea8e84a088003d5b7a7a5ef701373d7",
+            expected_canonical_document_sha256_annotation="b3f10d40db88cbfa3d3393e0d9c9e5e49e9a829f3fd311bcfa005082016e4cf1",
+            expected_plan_sha256_annotation="fba3e61a3f93b9dff27d9a5304eb746b7c2ef9aa95a71cfeda6adaee62b571c2",
+            expected_spawn_xyz_annotation=[9216, 9216, 9216], expected_spawn_heading_u8_annotation=96,
+            expected_floor_z_annotation=8704, expected_music_track_id_annotation=2,
+            ui_result_approved=False, normal_export_approved=False)
     try:
         result.update(read_fields(client, FIELDS))
         require_baseline(result)
@@ -201,15 +224,15 @@ def capture(client, label):
         result["primitive_sampled_slack"] = slack
         result["primitive_sampled_slack_unavailable_reason"] = reason
         attention = []
-        min_x, min_y, max_x, max_y = AUTHORED_FLOOR_XY_BOUNDS
+        min_x, min_y, max_x, max_y = bounds
         x, y, _ = result["player_xyz"]
         inside = min_x <= x <= max_x and min_y <= y <= max_y
-        result["authored_floor_xy_bounds_annotation"] = list(AUTHORED_FLOOR_XY_BOUNDS)
+        result["authored_floor_xy_bounds_annotation"] = list(bounds)
         result["sampled_player_xy_inside_authored_floor"] = inside
         if not inside:
             attention.append(
                 "Pause in UI: sampled player XY is outside the authored floor "
-                "[8448,9472] x [8448,9472]; outside this idle/center-walk observation "
+                f"[{min_x},{max_x}] x [{min_y},{max_y}]; outside this idle/center-walk observation "
                 "scope, not a collision-bug diagnosis.")
         if result["dynamic_count"] == CAPACITY or dynamic["no_in_range_terminal"]:
             attention.append("Pause in UI: dynamic capacity or in-range terminal requires inspection; not proof of N+1 allocation.")
@@ -228,8 +251,10 @@ def capture(client, label):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile", choices=PROFILE_CHOICES, default="starter-a-n16",
+                        help="Fixed expected source profile only; matching RAM does not authenticate its disc.")
     parser.add_argument("--connect-identified-test-session", action="store_true",
-                        help="Confirm exact process/open A/N16 BIN was independently identified; only localhost2345 is used.")
+                        help="Confirm the selected exact process/open BIN was independently identified; only localhost2345 is used.")
     args = parser.parse_args()
     if not args.connect_identified_test_session:
         parser.error("Independently identify the process/open fixed candidate, then explicitly opt in.")
@@ -241,7 +266,7 @@ def main():
             command = line.strip()
             if command == "q": break
             if command == "p" or command.startswith("p "):
-                sample = capture(client, command[1:].strip())
+                sample = capture(client, command[1:].strip(), profile=args.profile)
                 if sample["payload_valid"]:
                     if previous_lives is not None and sample["lives"] < previous_lives:
                         sample.setdefault("attention", []).append("Pause in UI: lives decreased since the prior valid sample.")

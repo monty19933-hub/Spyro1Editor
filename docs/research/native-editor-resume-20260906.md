@@ -1,5 +1,18 @@
 # Resume after the September 6 usage pause
 
+**Current runtime state:** R03 is CLOSED, original settings restored and all
+nine protected identities unchanged. The exact one-Wizard case passed native
+charge defeat/+10, ordinary exit/portal re-entry, and second defeat with no
+duplicate10-gem reward (native class0F; HUD23). Read
+`native-dark-wizard-r03-reward-reentry.md`. Earlier ACTIVE paragraphs below are
+historical, not instructions to reconnect to a departed process.
+
+Edited fresh observer profile `edited-landing-track02-r01` is separately tested:
+31 observer tests/three explicit-source skips, all8 source/artifact checks,
+whole Python84/three skips. Match actual process/open BIN and full companions
+before connecting; RAM addresses and profile annotations alone are insufficient.
+The two new published candidates still await their own native tests.
+
 **Newest continuation:** the two-Wizard shared physical publisher and a separate
 fixed edited-fresh-document publisher are implemented and independently checked.
 Default Release121/0, Python75/one source skip, two-source275, edited-source281804

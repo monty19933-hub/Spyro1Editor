@@ -8,6 +8,7 @@ checks only the zero-animation path; it is not the source-package result.
 import argparse
 import hashlib
 import importlib.util
+import json
 from pathlib import Path
 import struct
 import sys
@@ -15,10 +16,13 @@ import unittest
 
 sys.dont_write_bytecode = True
 SOURCE = None
+EDITED_CANDIDATE = None
 BIN_SHA = "fc866b2a02e010a6658f8af2de28bb3001eb33513e5924af014e35643c6dee37"
 EXE_SHA = "a533d75cab8afaae6107ec35a02a9a5fe979a92c7c955f9cf1ee50f693a1b998"
 PACKAGE_SHA = "8e0d1cf58e8b164734f4aa3e91a60a1d04e78bb1f5e4cd5c4432b2e3e1e743f1"
 PINS = {
+    "authored_spawn": (0x8001377C, "6b7d387efa46a06550a5784b4e9329337b763718e08e5440e05b87012ba01e66",
+        "0000028e0780033cd056638c0780013cd87822ac0400028e0780013cdc7822ac0800028e0780013ce07822ac0e0002920780013ce47822ac35006014"),
     "registration": (0x80015ACC, "1c53991c914bb7205a9cbd9041be413c3b1248e2c035551d7a2ec6c10408008d",
         "010010240780143c786394260780133c506c732602017226040071260000238e00000000100060180400312601001026c0ff648e0880023ce085428c23206400f84c000c2120440000004386000000008018030021187400000062ac4000022aeeff4014020052260880023ce085428cc4ff648eccff658ec8ff668e0780033c6458638c21104400010063240880013ce48522ac0880013c048625ac0880013c008626ac0780013c645823acef58000800000000"),
     "generic_helper": (0x800133E0, "fede3c414aea2dce0372fce574549d961123cf6456a7a291acef48b9c4af8598",
@@ -156,6 +160,19 @@ def register_package(package):
 
 
 class SourceFixtureTests(unittest.TestCase):
+    def test_native_authored_spawn_xyz_and_unsigned_heading_widths(self):
+        # Stops before the following branch. This is the real authored scene
+        # header -> initial/checkpoint position consumer, not a moving-player gate.
+        for heading in (0, 96, 255):
+            machine = NativeScalar(("authored_spawn",))
+            machine.map(0x80075000, bytes(0x4000))
+            machine.map(0x80099F94, struct.pack("<iiiBBBB", 9216, 9216, 9216, 0xA5, 0x5A, heading, 0xEE))
+            machine.r[16] = 0x80099F94
+            machine.run(0x8001377C, 0x800137B4)
+            self.assertEqual((9216, 9216, 9216, heading),
+                             tuple(machine.read(at, 4) for at in (0x800778D8, 0x800778DC, 0x800778E0, 0x800778E4)))
+            self.assertEqual([(at, 4) for at in (0x800778D8, 0x800778DC, 0x800778E0, 0x800778E4)], machine.writes)
+
     def test_all_pins_have_complete_exact_sha_and_instruction_owners(self):
         for pc, sha, literal in PINS.values():
             code = bytes.fromhex(literal)
@@ -277,10 +294,146 @@ class SourceFixtureTests(unittest.TestCase):
             self.assertEqual(BIN_SHA, hashlib.file_digest(stream, "sha256").hexdigest())
         print("FRESH_ID65_OBSERVER_SOURCE_OK full_native_model_helper=True runtime_pass=False")
 
+    def test_edited_body_reconstructed_from_original_preserves_layout_and_decodes_exact_floor(self):
+        if SOURCE is None: self.skipTest("Explicit --source required for the edited source body.")
+        body = self.edited_body_from_original()
+        self.require_edited_body(body)
+        scene = struct.unpack_from("<I", body, 24)[0]
+        machine = NativeScalar(("authored_spawn",))
+        machine.map(0x80075000, bytes(0x4000))
+        machine.map(0x80099F94, body[scene:scene + 16])
+        machine.r[16] = 0x80099F94
+        machine.run(0x8001377C, 0x800137B4)
+        self.assertEqual((9216, 9216, 9216, 96), tuple(machine.read(at, 4) for at in (0x800778D8, 0x800778DC, 0x800778E0, 0x800778E4)))
+        for offset in (scene, scene + 14, 0xDE808 + 92):
+            changed = bytearray(body); changed[offset] ^= 1
+            with self.assertRaises(AssertionError): self.require_edited_body(changed)
+        print("FRESH_ID65_EDITED_OBSERVER_SOURCE_BODY_OK source_native_spawn=True loaded_disc_authenticated=False runtime_pass=False")
+
+    def test_exact_edited_published_artifact_and_companions_are_not_ram_authentication(self):
+        if SOURCE is None or EDITED_CANDIDATE is None:
+            self.skipTest("Explicit --source and --edited-candidate required for artifact readback.")
+        candidate = Path(EDITED_CANDIDATE)
+        self.assertEqual("native-id65-fresh-edited-landing-track02-r01.bin", candidate.name)
+        cue = candidate.with_suffix(".cue")
+        receipt = candidate.with_suffix(".receipt.json")
+        for path in (candidate, cue, receipt):
+            self.assertTrue(path.is_file()); self.assertFalse(path.is_symlink())
+        with candidate.open("rb") as stream:
+            self.assertEqual(661547040, stream.seek(0, 2)); stream.seek(0)
+            self.assertEqual("ecc8f61cc16bf86a2f5117b327c49aede18f5c1e6a602c0e67f2ba58565aed16", hashlib.file_digest(stream, "sha256").hexdigest())
+            def read(offset, size):
+                result = bytearray()
+                while len(result) < size:
+                    at = offset + len(result); count = min(size - len(result), 2048 - at % 2048)
+                    stream.seek(at // 2048 * 2352 + 24 + at % 2048)
+                    data = stream.read(count); self.assertEqual(count, len(data)); result.extend(data)
+                return bytes(result)
+            header = read(37 * 2048, 2048)
+            self.assertEqual((0x6936800, 0x1FB800), struct.unpack_from("<II", header, 80 * 8))
+            actual = read(37 * 2048 + 0x6936800, 0x1FB800)
+            self.assertEqual(self.edited_body_from_original(), actual)
+            self.require_edited_body(actual)
+            executable = read(54921 * 2048, 0x66000)
+            self.assertEqual("2c1fd87e9fa8ce5c5f16be53e738405cec90c0bfc10ac9cb8cf1ce979b2e5c57", hashlib.sha256(executable).hexdigest())
+            for pc, _, literal in PINS.values():
+                data = bytes.fromhex(literal)
+                self.assertEqual(data, executable[pc - 0x8000F800:pc - 0x8000F800 + len(data)])
+            stream.seek(0)
+            self.assertEqual("ecc8f61cc16bf86a2f5117b327c49aede18f5c1e6a602c0e67f2ba58565aed16", hashlib.file_digest(stream, "sha256").hexdigest())
+            self.assertEqual(b"", stream.read(1)); self.assertEqual(661547040, stream.tell())
+        self.assertEqual(107, cue.stat().st_size); self.assertEqual(4027, receipt.stat().st_size)
+        cue_bytes, receipt_bytes = cue.read_bytes(), receipt.read_bytes()
+        self.require_edited_companions(cue_bytes, receipt_bytes)
+        for which in (0, 1):
+            values = [cue_bytes, receipt_bytes]; changed = bytearray(values[which]); changed[-1] ^= 1; values[which] = bytes(changed)
+            with self.assertRaises(AssertionError): self.require_edited_companions(*values)
+        self.assertEqual(cue_bytes, cue.read_bytes()); self.assertEqual(receipt_bytes, receipt.read_bytes())
+        print("FRESH_ID65_EDITED_OBSERVER_ARTIFACT_OK exact_document_image_receipt=True candidate_files_written=0 loaded_disc_authenticated=False runtime_pass=False")
+
+    def edited_body_from_original(self):
+        root = Path(__file__).resolve().parents[2]
+        helpers = {
+            "src/Spyro.Editor.NativeId65FreshDiscSmoke/source_fresh_disc_body.py": "e69619f391814c270c9c28bc588f432f79f8a6cd3f61301e3a1c483a8645ad07",
+            "src/Spyro.Editor.NativeId65AuthoredSurfaceSmoke/source_surface_oracle.py": "bcaa7349277bc5150cd17cf3e8cebbc689b68a58e9dee21a2709841c899aa592",
+            "src/Spyro.Editor.NativeId65NormalResourceSmoke/source_resource_oracle.py": "280087ec3b80e005872b6ec2fe793c9bbbbd69bde70ea6c64de234afa37ad76d",
+            "src/Spyro.Editor.NativeId65NormalBodySmoke/NativeBodySourceWindows.cs": "674ac959cd1b451fc11c3945c1446059a2d09b505e03ddda27e6fbe3851594ec",
+        }
+        for relative, digest in helpers.items(): self.assertEqual(digest, hashlib.sha256((root / relative).read_bytes()).hexdigest())
+        def load(relative, name):
+            spec = importlib.util.spec_from_file_location(name, root / relative)
+            module = importlib.util.module_from_spec(spec)
+            previous = sys.argv
+            sys.argv = [str(root / relative)]
+            try:
+                spec.loader.exec_module(module)
+            finally:
+                sys.argv = previous
+            return module
+        raw = load(next(iter(helpers)), "edited_observer_raw_body")
+        surface = load("src/Spyro.Editor.NativeId65AuthoredSurfaceSmoke/source_surface_oracle.py", "edited_observer_raw_surface")
+        baseline, _ = raw.build_bodies(SOURCE)[0]
+        self.assertEqual("b4abbdd09f794510d9b9341d7c7111ddd0b9068411bab30e70e7477b4f8c096c", hashlib.sha256(baseline).hexdigest())
+        body = bytearray(baseline)
+        data, _, _, _, scene = struct.unpack_from("<5I", body, 8)
+        old = surface.fresh(8448, 8448, 8704, 1024, 1024, 0x708050, 0x406080)
+        edited = surface.fresh(8192, 8192, 8704, 2048, 2048, 0x788448, 0x64422C)
+        self.assertEqual(len(old), len(edited)); self.assertEqual(old, body[data + 8:data + 8 + len(old)])
+        body[data + 8:data + 8 + len(old)] = edited
+        body[scene:scene + 16] = struct.pack("<iiiBBBB", 9216, 9216, 9216, 0, 0, 96, 0)
+        reverted = body.copy(); reverted[data + 8:data + 8 + len(old)] = old; reverted[scene:scene + 16] = baseline[scene:scene + 16]
+        self.assertEqual(baseline, reverted, "every unowned complete body byte is preserved")
+        for relative, digest in helpers.items(): self.assertEqual(digest, hashlib.sha256((root / relative).read_bytes()).hexdigest())
+        return bytes(body)
+
+    def require_edited_body(self, body):
+        self.assertEqual("bae43882a39dfc1604f4e6d578a354f34f99107f97faa9330600b3e01f34b15b", hashlib.sha256(body).hexdigest())
+        self.assertEqual((0xDF800, 0xF800, 0xEF000, 0x3000), struct.unpack_from("<4I", body, 16))
+        data, data_length = struct.unpack_from("<II", body, 8); self.assertEqual(0x1000, data_length)
+        environment = data + struct.unpack_from("<I", body, data)[0]
+        self.assertEqual((172, 1, 8), struct.unpack_from("<3I", body, environment))
+        sector = environment + 4 + struct.unpack_from("<I", body, environment + 8)[0]
+        xy, z = struct.unpack_from("<II", body, sector + 8)
+        origin = ((xy >> 16) * 16, (xy & 65535) * 16, (z >> 16) * 16)
+        self.assertEqual((4, 4, 2, 12), tuple(body[sector + 20:sector + 24]))
+        vertices = [(origin[0] + ((word >> 21) & 2047) * 16, origin[1] + ((word >> 10) & 2047) * 16,
+                     origin[2] + (word & 1023) * 16) for word in struct.unpack_from("<4I", body, sector + 76)]
+        self.assertEqual([(8192, 8192, 8704), (10240, 8192, 8704), (8192, 10240, 8704), (10240, 10240, 8704)], vertices)
+        faces = []
+        for index in range(2):
+            word = struct.unpack_from("<I", body, sector + 124 + index * 16)[0]
+            self.assertEqual(word & 255, (word >> 8) & 255)
+            faces.append((word & 255, (word >> 16) & 255, (word >> 24) & 255))
+        self.assertEqual([(0, 1, 2), (1, 3, 2)], faces)
+        scene, length = struct.unpack_from("<II", body, 24)
+        self.assertEqual("13e3674859b79ff45fa950cb1c2f788a368f89d70bb24599dfbccf061a75c0de", hashlib.sha256(body[scene:scene + length]).hexdigest())
+        self.assertEqual(struct.pack("<iiiBBBB", 9216, 9216, 9216, 0, 0, 96, 0), body[scene:scene + 16])
+        installed = register_package(body[0xEC430:0xEC430 + 0x2930])
+        self.assertEqual(0x800973C4, installed.read(0x80076558, 4)); self.assertEqual(90, installed.trace.count(0x800135C0))
+
+    def require_edited_companions(self, cue, receipt):
+        self.assertEqual("1fcb9bade2f3c9c59b6e6d7b57bd8a2bd0773534d151374d62fcb2ce442e663c", hashlib.sha256(cue).hexdigest())
+        self.assertEqual("3b545c4dd0e2102586e9f520dec96fda3ea8e84a088003d5b7a7a5ef701373d7", hashlib.sha256(receipt).hexdigest())
+        parsed = json.loads(receipt)
+        expected = {"kind": "spyro-native-fresh-intent", "schema": 1,
+                    "floor": {"x": 8192, "y": 8192, "z": 8704, "width": 2048, "depth": 2048},
+                    "spawn": {"x": 9216, "y": 9216, "heading": 96},
+                    "display": {"floorRgb": [72, 132, 120], "skyRgb": [44, 66, 100]}, "musicTrackId": 2}
+        canonical = json.dumps(expected, separators=(",", ":")).encode()
+        self.assertEqual(canonical.decode(), parsed["canonicalDocumentJson"])
+        self.assertEqual("b3f10d40db88cbfa3d3393e0d9c9e5e49e9a829f3fd311bcfa005082016e4cf1", hashlib.sha256(canonical).hexdigest())
+        self.assertEqual(hashlib.sha256(canonical).hexdigest(), parsed["canonicalDocumentSha256"])
+        self.assertEqual("fba3e61a3f93b9dff27d9a5304eb746b7c2ef9aa95a71cfeda6adaee62b571c2", parsed["planSha256"])
+        for name in ("runtimeVerified", "normalCreateBinApproved", "projectSaveBindingClaimed"):
+            self.assertIs(False, parsed[name])
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source")
+    parser.add_argument("--edited-candidate", help="Read-only exact edited artifact check, only together with --source.")
     args = parser.parse_args()
+    if args.edited_candidate and not args.source: parser.error("--edited-candidate requires --source.")
     SOURCE = args.source
+    EDITED_CANDIDATE = args.edited_candidate
     unittest.main(argv=[sys.argv[0]])

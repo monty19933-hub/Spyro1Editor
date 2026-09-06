@@ -1,5 +1,20 @@
 # Native editor checkpoint — 2026-09-06
 
+## Current runtime checkpoint: R03 closed with reward/re-entry evidence
+
+The unchanged one-Wizard candidate now has actual normal charge defeat/+10,
+ordinary exit/original-portal re-entry, and a second defeat retaining HUD23.
+The second native spawn was class0F, not another class56 reward. See
+`native-dark-wizard-r03-reward-reentry.md` for exact scope, recording and hashes.
+Capture/observer/emulator are closed and all nine protected original identities
+pass after restoration. Earlier ACTIVE entries below are historical snapshots.
+
+The edited-fresh observer now has a separate exact profile. Root passed31
+observer tests (three explicit-source skips), all8 source/artifact checks and
+complete Python84 (three skips). The original starter's complete normalized
+sample/read trace remains exact. Equal RAM layouts do not identify the loaded
+disc; neither observer profile grants runtime or ordinary export approval.
+
 ## Latest checkpoint: two-Wizard and edited-document physical publishers
 
 The separately named two-Wizard profile now uses the same closed physical
@@ -31,13 +46,13 @@ cancellation execution, ordinary editor publication and native acceptance of
 both new profiles remain separate gates. Evidence and commands are in the two
 new smoke READMEs and the R03 session directory below.
 
-R03 remains ACTIVE. The unchanged one-Wizard ROM has now shown normal charge
+At this earlier publication checkpoint, R03 remained ACTIVE. The unchanged one-Wizard ROM had shown normal charge
 defeat, a native class56 yellow gem and HUD13→23 at recording14:20–14:25.
 Normal exit and original-portal re-entry then completed, retaining HUD23 and
 reloading row128 with selectorFF rather than56. Second defeat/drop behavior is
-still being tested. This input used50-percent
+still being tested; it subsequently passed as recorded above. This input used50-percent
 wall-clock pacing with native CPU unchanged; full audio and peak-resource
-acceptance remain open. Preserve/close/restore the live session as documented.
+acceptance remain open. The session has since closed with originals restored.
 
 New allocator/reuse source evidence passes462/12 expected refusals, with root
 and independent peer review. It demonstrates real89-slot recycling and also
