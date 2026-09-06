@@ -213,3 +213,93 @@ candidates and the separate fixed-tail/growth forensic outputs remain retained.
 No installed application, original game image, existing candidate set or
 emulator settings were replaced by this phase. Build and source/readback
 acceptance remain separate from the deferred current-candidate gameplay gate.
+
+## Resumed phase from de1e809 — 2026-09-05
+
+The earlier emulator deferral and 223-step gate above describe the previous
+checkpoint. The resumed phase has exclusive DuckStation access and separate
+fresh settings backups; see [current runtime findings](research/native-closure-runtime-20260905.md).
+
+New scoped checkpoints:
+
+- `44769bf`: actual native multi-subfile growth through typed relocation, with
+  10,484 source-free checks and a 35-header/2,859-check source audit. Exact
+  single-subfile output behavior remains preserved. See
+  [simultaneous-growth contract](native-multi-subfile-growth-contract.md).
+- `0cb62f7`: recursive source-bound native dependency closure and the first
+  absent-model/behavior Town Square locked-chest factory. Private storage,
+  actual property-component/fixup growth, native animation, textures, effects,
+  callbacks and the correct local sound descriptor are explicitly bound.
+  New source-free68, retained-candidate350 and fault-path354 checks pass.
+  The v2 candidate cold-boots and loads Town Square, but its authored chest
+  overlaps a retained native charge chest. It is not gameplay-certified.
+  A separately source-generated clear-placement variant is the next gate;
+  do not mutate or promote the v2 artifact.
+- `d0eba10`: canonical terrain/collision/music intent now composes into one
+  source-bound physical plan with exact inverse, protected complement, strict
+  publication/reuse and coherent saved input. Source-free62 checks, the fresh
+  35-check/34-refusal composition run and six real late-CUE mutation/reuse
+  refusals pass. Independent review found and reproduced the late-CUE bug
+  before the fix. This backend still retains inherited native triangle and
+  scene resources and does not claim an independent minimal level. See
+  [composition evidence](id65-source-bound-composition-plan.md).
+- `486717d`: both new source-free suites are part of the default regression
+  entry point.
+
+The integrated serial Release gate for those implementations passed **227
+command-level steps, zero failures**:197 C# project builds,28 registered core
+suites, Python runner tests and the full source-aware offline suite (879.67s).
+The source CUE/BIN hash guard passed. Source-tree Release output, including the
+app project, was rebuilt; no installed editor bundle was replaced.
+
+Durable gate evidence:
+`_local/runtime-native-closure-20260905/resumed-session-20260905/spyro-regression-py4coxhz/summary.json`.
+The exact source-aware log is `226-source-offline-qa.log` in that directory.
+Later clear-placement changes require their own fresh build and regression
+evidence; they cannot inherit this pre-change gate automatically.
+
+The Wizard gameplay investigation shows why native-resource closure and
+placement validity are separate requirements. Its transferred route crosses a
+native damaging-water surface. An initial-height-only diagnostic still follows
+that route; a source-valid model/properties graph does not make a hazardous
+destination patrol correct. Record this before widening enemy support.
+
+Next priorities remain: absent-resource chest reload/re-entry and audio,
+validated destination patrol semantics, a second independently
+proved imported family/two-instance case, and shared nested address-space
+allocation. The [complexity roadmap](native-moby-dependency-closure-contract.md#portability-complexity-roadmap)
+distinguishes current exact source factories from the eventual general importer.
+No catalog, normal Create BIN authorization or finished blank-level UI is
+enabled merely by these research checkpoints.
+
+### Clear-site checkpoint and current gameplay result
+
+`ade340a` adds a closed V3 clear-site source factory while preserving default V2
+graph/data/receipt bytes. Source-free82, source386, three-stage rollback392,
+retained V2 verification368 and retained V3 verification389 checks pass.
+The final full serial Release run, with all C# source stable throughout, also
+passes **227 steps / zero failures**; its complete source QA took876.40s.
+Retained evidence:
+`_local/runtime-native-closure-20260905/resumed-session-20260905/spyro-regression-1gct85o5/summary.json`.
+Its `226-source-offline-qa.log` ends with the unchanged original BIN/CUE guard.
+This is the fresh post-V3 gate, not the earlier pre-change result.
+
+Exact V3 BIN `15df0ee1edba6cb48fe1d34df5a5f51a7d6f289de387c499ca0ff04e99b443bf`
+was then exercised directly in DuckStation from the unchanged normal Town spawn.
+Observed: locked flame/charge reaction, native key pickup, front-facing automatic
+opening, key/lock animation, metal debris/particles, and all **six native gems
+(four green, two red), +10 actual global and Town totals, HUD10**. All five
+reward controllers and the chest complete their native deletion lifecycle.
+This is a genuine absent-model/absent-behavior import interaction, not a
+substituted enemy or manually awarded treasure. Read-only snapshots and native
+screenshots support the result; detailed scope is in the runtime report above.
+
+The Mac locked before a verified normal exit/re-entry; death/reload and audio
+also remain open. Capture failed because of DuckStation's bundled FFmpeg
+architecture/dependency mismatch. The owned test process is now stopped and
+both emulator settings files restored to the fresh pre-test hashes. Original
+ROMs and the exact candidate remain unchanged. This direct interaction result
+does not promote the immutable receipt's broader `runtimeProven=false` gate or
+authorize normal editor export. Resume by unlocking the Mac and finishing the
+same-candidate remaining gates, then addressing the diagnosed Wizard route
+hazard before widening native family support.
