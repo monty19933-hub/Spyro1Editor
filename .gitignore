@@ -199,11 +199,14 @@ unsafe-tests/
 /tools/tests/*
 !/tools/tests/test_spyro_regression_runner.py
 !/tools/tests/test_native_wizard_observer.py
+!/tools/tests/test_fresh_id65_observer.py
+!/tools/tests/test_fresh_id65_observer_source.py
 !/tools/Verify-SpyroEditorRelease.sh
 !/tools/Verify-SpyroV3SmokeCompilerScope.mjs
 !/tools/SpyroEditor.macOS.community.entitlements
 !/tools/Watch-SpyroId65RuntimeState.py
 !/tools/Observe-SpyroNativeWizard.py
+!/tools/Observe-SpyroFreshId65.py
 !/tools/Capture-SpyroId65V3RuntimeSession.py
 !/tools/Test-Capture-SpyroId65V3RuntimeSession.py
 !/tools/Automate-SpyroId65V3RuntimeSession.py
