@@ -6,6 +6,10 @@ namespace Spyro.Editor.Core.Exporting;
 public sealed record NativeDarkHollowWizardAppendFamily(string FamilyId, string RoleId, int NativeIndex,
     int DonorLevelId, int DonorTrueIndex, string SourceVariantId, int RowOffset, int PropertiesOffset);
 
+internal sealed record NativeWizardAppendPlacementOwner(string FamilyId, string RoleId, int NativeIndex,
+    NativeByteExtent Row, NativeByteExtent Properties, string SourceRowSha256, string SourcePropertiesSha256,
+    int SourcePropertiesPointer);
+
 /// <summary>
 /// Detached original-address scene bytes and proposed logical identities only.
 /// All native donor coordinates/routes remain unchanged and may overlap. Existing
@@ -61,6 +65,17 @@ public sealed class NativeDarkHollowWizardAppendPlan
     public byte[] CopyOriginalScene() => _originalScene.ToArray();
     public byte[] CopyScene() => _plan.CopyScene();
     public void VerifyOriginalAndFinal(ReadOnlySpan<byte> original, ReadOnlySpan<byte> final) => _plan.Verify(original, final);
+
+    // Source-created extents retain the allocator's actual canonical Final
+    // domain. Public integer receipts/hashes cannot substitute for these owners.
+    internal IReadOnlyList<NativeWizardAppendPlacementOwner> CopyPlacementOwners() =>
+        Array.AsReadOnly(_plan.Allocation.Families.Select(f =>
+        {
+            var row = f.Rows.Single();
+            return new NativeWizardAppendPlacementOwner(f.Id, row.Source.Role, row.Index, row.Row, row.Properties,
+                row.Source.Row.ExpectedSha256, row.Source.Properties.ExpectedSha256,
+                checked((int)(row.Source.Properties.Extent.Offset - row.Source.PropertiesPointerBaseOffset)));
+        }).ToArray());
 
     // One exact existing subfile3 replacement, not a full-retail afterimage.
     // Consumers must bind this original extent with every other authored owner.
