@@ -68,6 +68,7 @@ stonehill-*.md
 !docs/runtime-evidence/unused-level-65-remote-blank-environment-header-repair-v3-runtime-evidence.json
 spyro-*.json
 spyro-*.md
+!/docs/research/spyro-progress-for-john-20260906.md
 !spyro-level-catalog.json
 !spyro-object-templates.json
 !alpineridge-behavior-links.json
