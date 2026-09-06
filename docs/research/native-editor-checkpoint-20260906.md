@@ -127,7 +127,56 @@ copy of the default report are under
 `fresh-disc-research-`. This is not a new full build-all/source-QA gate or app
 installation. The candidate has not yet been booted at this checkpoint.
 
-## Preservation and emulator cleanup (prior session)
+## Fresh LAB native runtime follow-up
+
+The exact R02 BIN has now booted in DuckStation and reached LAB through the
+native inventory selector. Spyro, Sparx, companion particles and the isolated
+floor were visible without Town Square scenery; the native inventory showed
+LAB. The first movement overshot the small authored rectangle and is explicitly
+not a passing center walk. Native selector re-entry restored the center, then
+10% wall-clock input pacing allowed short on-floor movement. Pacing returned
+to100% for roughly50 seconds of idle. Ten matching read-only layout samples,
+the original recording and screenshots are retained.
+
+See [exact sequence, evidence and limits](native-fresh-lab-r02-runtime-observations.md).
+This establishes limited entry/idle/controlled-walk observations, not ordinary
+portal/death/persistence, arbitrary geometry/Mobys/textures, music/listening or
+peak-resource acceptance. The observer's historical false runtime flags remain
+unchanged; matching addresses are not full resource authentication.
+
+A test-first observer follow-up now warns when sampled XY leaves the exact
+authored floor. Root review also removed an unrelated floor warning from the
+synthetic baseline, so older resource-warning tests cannot be accidentally
+satisfied by the new warning. Root replay passed22 default tests/one source
+skip and all five exact-source checks. Historical recordings are unchanged.
+
+Both fresh sessions are closed: capture finalized, observers quit, DuckStation
+exited normally without resume saves, original INIs restored byte-for-byte.
+Original card, BIN/CUE and R02 candidate hashes were rechecked unchanged.
+The installed editor was not replaced or launched.
+
+## Fixed starter factory integration
+
+The exact A/N16/untextured/track19 recipe is now composed by
+`NativeId65FreshStarterResearchFactory`, not only by smoke-local code. Its sole
+public operation accepts original BIN/CUE and a cancellation token, forwarding
+that token through the existing privately issuing producers. No automatic
+publication, arbitrary profile or document-export authority was added.
+
+Test-first missing-API RED was followed by a zero-warning/error4.86-second
+focused build,73 free and87 source checks. The old source recipe remains a
+negative/comparison control; full old/new PlanSHA, CUE and receipt agree. A
+fresh factory-backed process fully verified retained R02 again without writing
+it. Root and a separate reviewer found no source-identity/authority expansion.
+
+Integrated default Release gate:111 steps/zero failures,70.59 seconds summed;
+App rebuilt but was not installed/launched. Complete Python discovery:70 tests,
+one source skip; the five-test exact-source observer run separately passed.
+Evidence and byte-compared default report:
+`_local/research/fresh-native-starter-factory-20260906/`.
+This is not a second full build-all/source-QA gate.
+
+## Preservation and emulator cleanup (prior Wizard session)
 
 The owned Wizard observer and DuckStation session were closed normally. Temporary playback/controller settings were restored from their original backups. The original memory card was never overwritten. Final post-gate SHA-256 checks match the original BIN/CUE, retained Wizard BIN/CUE/receipt, both restored DuckStation INIs, and original memory card.
 
@@ -137,7 +186,7 @@ The finalized runtime recording is `_local/native-wizard-runtime-20260906-r01.rS
 
 1. Preserve the completed compiler scope/metadata/strict fixture-lookup checkpoint at `0fa2490`; its exact source-free regression must never invoke the legacy fixture builder.
 2. Preserve the now-published and separately verified R02 A/N16/LAB/track19 candidate, original source and retained test evidence. Keep normal exporter and general runtime approval separate.
-3. Use the now-tested fixed ID65 observer for cold native entry/idle/short center-walk smoke. Retain native sequencing and actual callbacks. The known global game/transition state12 bypass remains excluded; unresolved hardware/resource lifetimes are observation priorities, not claims of demonstrated failure.
+3. Preserve the actual fixed-ID65 native entry/idle/controlled-walk milestone and its off-floor diagnostic regression. Expand action/transition tests deliberately. The known global game/transition state12 bypass remains excluded; unresolved hardware/resource lifetimes are observation priorities, not claims of demonstrated failure.
 4. Preserve the now-tested two-texture staging/body composition, including exact legacy identities and mixed-revision refusals. Do not silently pass the new profile through the untextured disc issuer.
 5. Finish Wizard defeat/reward, post-defeat exit/re-entry, repeated combat, rendering/audio and peak resource checks; then test independently placed multiple instances. Only widen native importing when dependency and gameplay evidence support the additional combinations.
 

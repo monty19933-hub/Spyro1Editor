@@ -37,6 +37,11 @@ EXPECTED_SCENE_SHA256 = "4a6e7b5c6c53199b8a7aa6ae0d24ac9bce32634aa259d5f49535282
 EXPECTED_EXE_SHA256 = "3473dc92e087c87858434125d5fb1ec879450682e3be64c508de6805029ce7a2"
 BASE, ARENA_END, POOL, PETE = 0x8009A068, 0x8009A7C0, 0x801C3BB8, 0x801C5BB8
 CAPACITY = 16
+# Closed XY extent of the two authored floor triangles in the exact A body.
+# The source fixture decodes their HP vertices/faces from that pinned body.
+# This is an observation-scope boundary, NOT a player footprint, safe inset,
+# Z/ground-state certificate or authentication of the loaded candidate.
+AUTHORED_FLOOR_XY_BOUNDS = (8448, 8448, 9472, 9472)
 
 # These gates describe the single issued A/N16 layout, not arbitrary level65.
 # 785E0 uses the native used-data length8C8 rather than the CD length1000.
@@ -196,6 +201,16 @@ def capture(client, label):
         result["primitive_sampled_slack"] = slack
         result["primitive_sampled_slack_unavailable_reason"] = reason
         attention = []
+        min_x, min_y, max_x, max_y = AUTHORED_FLOOR_XY_BOUNDS
+        x, y, _ = result["player_xyz"]
+        inside = min_x <= x <= max_x and min_y <= y <= max_y
+        result["authored_floor_xy_bounds_annotation"] = list(AUTHORED_FLOOR_XY_BOUNDS)
+        result["sampled_player_xy_inside_authored_floor"] = inside
+        if not inside:
+            attention.append(
+                "Pause in UI: sampled player XY is outside the authored floor "
+                "[8448,9472] x [8448,9472]; outside this idle/center-walk observation "
+                "scope, not a collision-bug diagnosis.")
         if result["dynamic_count"] == CAPACITY or dynamic["no_in_range_terminal"]:
             attention.append("Pause in UI: dynamic capacity or in-range terminal requires inspection; not proof of N+1 allocation.")
         if particles["all256_slots_visited"]:

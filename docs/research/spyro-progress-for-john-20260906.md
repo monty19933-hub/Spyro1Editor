@@ -32,6 +32,7 @@ that an older installed app has automatically acquired every source change.
 | Imported key and locked chest in Town Square | Key pickup, native opening/effects, six rewards worth exactly 10 gems, correct reward bits and normal exit/portal re-entry; recorded source-matched sound cues | Arbitrary duplicates, every level, partial-reward/death/card-persistence combinations |
 | Wizard Peak Wizard imported into Dark Hollow | Normal portal entry, visible Wizard and lightning, native electric damage/animation, ordinary player death and level reload | Wizard defeat/+10 reward, post-defeat re-entry, multiple simultaneous imported Wizards, full audio/presentation and peak-resource acceptance |
 | Native Free Flight in Toasty | Ascent/descent, both turn directions, flap, flight exit, collision, death/respawn, normal exit/portal reload and controlled landing | Every level/state; finished editor checkbox and end-to-end disabled-output workflow |
+| Fresh native LAB, without Town Square's terrain or placed scene | Native selector entry, LAB inventory title, visible Spyro and Sparx on the isolated floor, companion particles, a controlled short walk and normal-speed idle | Ordinary portals, jump/flame/death/card persistence, imported actors or exported textures in this fresh scene, complete audio/resource testing and editable UI integration |
 
 These results belong to their exact retained candidates, not every possible
 object/level combination. Gameplay permission is already granted. Future tests
@@ -39,7 +40,16 @@ will use DuckStation with isolated test saves/settings and cleanup afterward.
 
 See the detailed [key/chest report](native-closure-runtime-20260905.md),
 [Wizard report](native-dark-wizard-r01-runtime-observations.md), and
-[Free Flight report](native-free-flight-r02-runtime-observations.md).
+[Free Flight report](native-free-flight-r02-runtime-observations.md), and
+[fresh LAB report](native-fresh-lab-r02-runtime-observations.md).
+
+The LAB test recording and a short preview are saved in
+`_local/native-fresh-id65-runtime-20260906-r01.LbsgK0/`. The first normal-speed
+walk overshot the deliberately tiny floor; that attempt is not marked as a
+successful center walk. After native re-entry, slower input pacing allowed
+bounded movement, followed by roughly 50 seconds of normal-speed idle.
+DuckStation is now closed and your original settings, ROM and memory card
+have been verified unchanged.
 
 ## New engineering work behind the editor
 
@@ -63,21 +73,29 @@ See the detailed [key/chest report](native-closure-runtime-20260905.md),
   reconstruct the complete original exactly. Focused tests passed 2,182
   source-free and 566,016 total exact-source checks. An exact fresh-level BIN
   has now been published and independently reopened, with 20 publication and
-  corruption checks passing. It has not been booted yet.
+  corruption checks passing. This exact candidate has now reached LAB and
+  passed the limited entry/idle/controlled-walk observations described above.
+- **Shared starter integration:** the exact tested starter recipe now lives in
+  production code with cancellation and unchanged verification guards, rather
+  than only inside a test program. This is a building block for the editor,
+  not yet a new UI action or export of your edited Lab document.
 - **Fresh-level gameplay diagnostics:** a dedicated, read-only observer now
-  checks the new level's actual initialized resource layout. Its 15 tests and
+  checks the new level's actual initialized resource layout. Its 17 tests and
   five original-game source checks pass; the existing Wizard observer's 14
-  tests remain green. It is ready to support testing, but this does not mean
-  the new level has been played yet. See the [observer notes](native-fresh-id65-observer.md).
+  tests remain green. It supported the actual LAB session; the observed
+  off-floor movement now has a regression-tested scope warning. Matching
+  sampled resource addresses still does not certify every gameplay state.
+  See the [observer notes](native-fresh-id65-observer.md).
 
 ## Next steps
 
 1. Preserve the completed shared textured resource-to-body integration and its
    tests rejecting mixed/stale resource sets, even when transfer bytes match.
-2. Prepare a separately identified diagnostic fresh-level candidate using the
-   checked normal initialization path. Start with idle/companion/center-floor
-   movement in DuckStation; use observations to resolve remaining resource
-   uncertainties before expanding to other actions or transitions.
+2. Preserve the completed fresh LAB entry/idle/controlled-walk evidence and
+   expand testing deliberately. Connect the tested starter through shared
+   production code without calling it an export of an editable document.
+   Fresh-native authoring needs its own explicit document/projection contract;
+   existing saved Lab documents must not silently change meaning.
 3. Complete Wizard combat/reward/re-entry and multiple-instance tests before
    expanding the supported native dependency combinations.
 4. Connect the validated new-level pipeline to practical UI authoring, persistence
@@ -90,7 +108,7 @@ substantially further along. Source tests, actual gameplay and a shipped UI are
 tracked separately so the eventual editor reflects what has really passed.
 
 Latest integrated verification: 111 default Release steps passed with zero
-failures, including rebuilding App. All 68 Python tests completed successfully
+failures, including rebuilding App. All 70 Python tests completed successfully
 (one original-ROM-only case is explicitly skipped there and passed separately).
 The full fresh-disc source checks also passed after the textured-body changes. This did not install
 or launch a new editor, and is separate from the earlier full 290-step gate.

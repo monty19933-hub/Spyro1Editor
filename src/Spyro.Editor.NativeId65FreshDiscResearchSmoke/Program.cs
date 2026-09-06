@@ -9,19 +9,25 @@ bool verifyMode = args.Length == 4 && args[0] == "--verify";
 if (args.Length != 0 && !sourceMode && !stagingMode && !publicationMode && !verifyMode)
     throw new ArgumentException("Usage: NativeId65FreshDiscResearchSmoke [--source BIN CUE | --stage-faults BIN CUE absent-workspace | --exercise-publication BIN CUE absent-workspace | --verify BIN CUE existing-candidate-directory]");
 
-int checks = ResearchCases.SourceFree();
+int checks = ResearchCases.SourceFree() + await FactoryCases.SourceFree();
 if (sourceMode || stagingMode || publicationMode || verifyMode)
 {
-    NativeId65FreshDiscPlan issued = await BuildDisc(args[1]);
-    var plan = await NativeId65FreshDiscResearchCandidatePlan.CaptureAsync(args[1], args[2], issued);
+    var plan = await NativeId65FreshStarterResearchFactory.CaptureAsync(args[1], args[2]);
     if (sourceMode || stagingMode)
+    {
+        // Retain the pre-extraction recipe only as an independent source/fault
+        // comparison control and the builder for deliberately refused variants.
+        NativeId65FreshDiscPlan issued = await BuildDisc(args[1], 8960, 16, 19);
+        var control = await NativeId65FreshDiscResearchCandidatePlan.CaptureAsync(args[1], args[2], issued);
+        checks += FactoryCases.Source(control, plan);
         checks += await ResearchCases.Source(plan, args[1], args[2], issued,
             (x, rows, track) => BuildDisc(args[1], x, rows, track));
-    if (stagingMode)
-        checks += await StagingCases.Run(args[1], args[3], issued);
+        if (stagingMode)
+            checks += await StagingCases.Run(args[1], args[3], issued);
+    }
     if (publicationMode)
-        checks += await SuccessCases.Run(plan, args[3], async () =>
-            await NativeId65FreshDiscResearchCandidatePlan.CaptureAsync(args[1], args[2], await BuildDisc(args[1])));
+        checks += await SuccessCases.Run(plan, args[3], () =>
+            NativeId65FreshStarterResearchFactory.CaptureAsync(args[1], args[2]));
     if (verifyMode)
     {
         var result = await NativeId65FreshDiscResearchCandidatePublisher.VerifyAsync(plan, args[3]);
@@ -33,7 +39,7 @@ if (sourceMode || stagingMode || publicationMode || verifyMode)
 }
 Console.WriteLine($"NATIVE_ID65_FRESH_DISC_RESEARCH_SMOKE_OK checks={checks}");
 
-static async Task<NativeId65FreshDiscPlan> BuildDisc(string original, int x = 8960, int rows = 16, int track = 19)
+static async Task<NativeId65FreshDiscPlan> BuildDisc(string original, int x, int rows, int track)
 {
     var surface = await NativeId65AuthoredSurfaceBundle.CaptureAsync(original,
         new(8448, 8448, 8704, 1024, 1024, 0x708050, 0x406080));

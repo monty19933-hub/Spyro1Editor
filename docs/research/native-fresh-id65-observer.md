@@ -29,6 +29,11 @@ and printed hash annotations cannot authenticate the loaded disc.
   primitive slack request attention rather than granting acceptance.
 - Scope is initial idle and a short center-floor walk. Foreign entry, combat,
   power grants, rescue, checkpoint transitions and peak usage remain separate.
+- After valid payload rereads, sampled XY outside the exact authored rectangle
+  `[8448,9472] x [8448,9472]` requests attention without discarding the payload.
+  These bounds are decoded from the pinned body's four vertices and two faces
+  in the source fixture. They are not a player radius, safe inset, Z/contact or
+  swept-path certificate. Even an inside point never grants runtime approval.
 
 Once the exact test process is independently identified:
 
@@ -59,8 +64,27 @@ Run source-free tests with:
 python3 -m unittest discover -s tools/tests -p 'test_fresh_id65_observer*.py' -v
 ```
 
-This runs 20 tests with one explicit-source case skipped. Run that case with
+This now runs 22 tests with one explicit-source case skipped. Run that case with
 `python3 tools/tests/test_fresh_id65_observer_source.py --source /path/to/original.bin`.
 Passing either command is not a runtime pass. Root and an independent reviewer
 also replayed the exact-source checks. Local RED/GREEN logs are retained under
 `_local/research/native-id65-engine-profile-20260906-r01/`.
+
+## First runtime follow-up
+
+The exact R02 candidate entered LAB in DuckStation; see the
+[runtime report](native-fresh-lab-r02-runtime-observations.md). The original
+observer correctly reported matching resource gates but did not warn when the
+first Down hold left the tiny floor. That recorded XYZ8848,7537,8882 case was
+reproduced RED before adding the XY-only scope warning. Two new tests cover
+the actual outside case, all closed edges/center, one-unit outside coordinates,
+and Z-independence. No historical observation bytes were rewritten.
+
+Root review caught an interaction with the old synthetic fixture's unrelated
+8192,8192 coordinates: the new floor warning could mask existing assertions
+that merely required some attention. A second real RED required a clean baseline;
+the fixture now uses the actual center, and capacity, particle, PETE, renderer,
+invalid-slack and changed-gate tests require their specific warning reasons.
+Root replay passed22 default tests (one source-only skip) and all five exact
+source checks. Logs use `fresh-id65-observer-floor-` and
+`fresh-id65-observer-clean-baseline-` prefixes in the same evidence directory.

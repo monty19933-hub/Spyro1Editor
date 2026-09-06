@@ -74,7 +74,7 @@ CURSORS = {
 }
 REPORT = {
     "lives": (0x8007582C, "<I", 4),
-    "player_xyz": (0x80078A58, "<iii", (8192, 8192, 10240)),
+    "player_xyz": (0x80078A58, "<iii", (8960, 8960, 9061)),
     "player_heading_u8": (0x80078A66, "<B", 255),
     "camera_control_angle_s16": (0x80076E20, "<h", -1024),
     "player_desired_bearing_u32": (0x80078B24, "<I", 3072),
@@ -192,6 +192,8 @@ class FreshObserverTests(unittest.TestCase):
         self.assertEqual(0, sample["particles"]["active_count"])
         self.assertEqual("ffffffff", sample["particle_terminal_word_not_record257"])
         self.assertEqual(0xC00, sample["primitive_sampled_slack"])
+        self.assertNotIn("attention", sample, "a clean center baseline must not mask warning regressions")
+        self.assertTrue(sample["sampled_player_xy_inside_authored_floor"])
         self.assertNotIn("wizard128", sample)
         self.assertNotIn("wizard_effect_samples", sample["particles"])
         self.assertNotIn((0xDEADBEEF, 4), reader.reads)
@@ -211,6 +213,46 @@ class FreshObserverTests(unittest.TestCase):
             reader = fixture(); reader.set("game_state", state)
             self.assertFalse(OBSERVER.capture(reader, "transition")["payload_valid"])
             self.assertEqual([], heap_reads(reader))
+
+    def test_recorded_outside_floor_warns_without_invalidating_read_or_diagnosing_collision(self):
+        # Actual first short-walk overshoot, 2026-09-06 17:41:35 UTC.
+        reader = fixture()
+        reader.set("player_xyz", (8848, 7537, 8882))
+        reader.set("player_state", 6)
+        sample = OBSERVER.capture(reader, "recorded-short-walk-outside")
+        self.assertTrue(sample["payload_valid"])
+        self.assertTrue(sample["gate_reread_consistent"])
+        self.assertTrue(any("outside the authored floor" in item for item in sample.get("attention", [])))
+        self.assertFalse(sample["sampled_player_xy_inside_authored_floor"])
+        self.assertEqual([8448, 8448, 9472, 9472], sample["authored_floor_xy_bounds_annotation"])
+        self.assertEqual([8848, 7537, 8882], sample["player_xyz"])
+        self.assertEqual(6, sample["player_state"])
+        self.assertNotIn("actor_scan_refused", sample)
+        self.assertFalse(sample["runtime_pass"])
+        self.assertFalse(sample["candidate_authenticated"])
+        self.assertTrue(any("not a collision-bug diagnosis" in item for item in sample["attention"]))
+
+    def test_closed_floor_edges_center_and_one_unit_outside_are_xy_scope_only(self):
+        # Bounds come from the pinned A body HP vertices, not a player radius.
+        self.assertEqual((8448, 8448, 9472, 9472), OBSERVER.AUTHORED_FLOOR_XY_BOUNDS)
+        for x in (8448, 8960, 9472):
+            for y in (8448, 8960, 9472):
+                for z in (-2147483648, 8704, 9216, 2147483647):
+                    with self.subTest(x=x, y=y, z=z):
+                        reader = fixture(); reader.set("player_xyz", (x, y, z))
+                        sample = OBSERVER.capture(reader, "inside-xy-only")
+                        self.assertTrue(sample["payload_valid"])
+                        self.assertTrue(sample["sampled_player_xy_inside_authored_floor"])
+                        self.assertFalse(sample["runtime_pass"])
+                        self.assertFalse(any("authored floor" in item for item in sample.get("attention", [])))
+        for x, y in ((8447, 8960), (9473, 8960), (8960, 8447), (8960, 9473),
+                     (-2147483648, 8960), (2147483647, 8960)):
+            with self.subTest(x=x, y=y):
+                reader = fixture(); reader.set("player_xyz", (x, y, 8704))
+                sample = OBSERVER.capture(reader, "outside-xy-only")
+                self.assertTrue(sample["payload_valid"])
+                self.assertFalse(sample["sampled_player_xy_inside_authored_floor"])
+                self.assertTrue(any("outside the authored floor" in item for item in sample["attention"]))
 
     def test_wrong_n1_and_textured_owners_refuse(self):
         for name, value in [("dynamic_capacity", 1), ("arena_end", BASE + 0xC8),
@@ -273,7 +315,9 @@ class FreshObserverTests(unittest.TestCase):
         sample = OBSERVER.capture(reader, "full")
         self.assertEqual(16, len(sample["dynamic_rows"]["active"]))
         self.assertTrue(sample["dynamic_rows"]["no_in_range_terminal"])
-        self.assertTrue(sample["attention"])
+        self.assertEqual([
+            "Pause in UI: dynamic capacity or in-range terminal requires inspection; not proof of N+1 allocation."
+        ], sample["attention"])
         self.assertNotIn((BASE + 16 * 88, 88), reader.reads)
         self.assertFalse(sample["runtime_pass"])
 
@@ -288,7 +332,9 @@ class FreshObserverTests(unittest.TestCase):
         self.assertTrue(sample["particles"]["all256_slots_visited"])
         self.assertEqual({"42/kind2": 128, "0C/kind2": 128}, sample["particles"]["selector_kind_counts"])
         self.assertEqual(16, len(sample["particles"]["companion_effect_samples"]))
-        self.assertTrue(sample["attention"])
+        self.assertEqual([
+            "Pause in UI: full256 particle pool; no257th record was read."
+        ], sample["attention"])
         for i, kind in enumerate(range(0x80, 0xFF)): pool[i * 32 + 1] = kind
         pool[127 * 32 + 1] = 0xFF
         reader = fixture(); reader.map(POOL, pool)
@@ -300,7 +346,9 @@ class FreshObserverTests(unittest.TestCase):
     def test_pete_word_attention_is_not_complete_pete_authentication(self):
         reader = fixture(); reader.map(PETE, bytes(4))
         sample = OBSERVER.capture(reader, "terminal-changed")
-        self.assertTrue(sample["attention"])
+        self.assertEqual([
+            "Pause in UI: separate PETE first-word terminal differs; complete PETE integrity is not inferred."
+        ], sample["attention"])
         self.assertFalse(sample["runtime_pass"])
         self.assertNotIn((PETE + 0x20, 4), reader.reads)
 
@@ -312,7 +360,9 @@ class FreshObserverTests(unittest.TestCase):
             self.assertFalse(sample["gate_reread_consistent"], name)
             self.assertFalse(sample["payload_valid"], name)
             self.assertTrue(sample["sequential_reads_not_atomic"])
-            self.assertTrue(sample["attention"])
+            self.assertEqual(["Pause in UI; this sample is not a native-layout or gameplay pass."],
+                             sample["attention"])
+            self.assertIn("Baseline gates changed", sample["actor_scan_refused"])
             for key in ("companion", "dynamic_rows", "particles"):
                 self.assertNotIn(key, sample, name)
 
@@ -329,8 +379,13 @@ class FreshObserverTests(unittest.TestCase):
             sample = OBSERVER.capture(reader, "primitive-invalid")
             self.assertIsNone(sample["primitive_sampled_slack"])
             self.assertTrue(sample["primitive_sampled_slack_unavailable_reason"])
+            self.assertEqual([
+                "Pause in UI: renderer flag or sampled primitive slack requires inspection; not a peak measurement."
+            ], sample["attention"])
         reader = fixture(); reader.set("renderer_exhaustion_flag", 1)
-        self.assertTrue(OBSERVER.capture(reader, "exhaustion")["attention"])
+        self.assertEqual([
+            "Pause in UI: renderer flag or sampled primitive slack requires inspection; not a peak measurement."
+        ], OBSERVER.capture(reader, "exhaustion")["attention"])
 
     def test_original_wizard_still_rejects_level65_without_actor_reads(self):
         reader = MemoryReader()

@@ -245,6 +245,31 @@ class SourceFixtureTests(unittest.TestCase):
             self.assertEqual((0xDF800, 0xF800, 0xEF000, 0x3000), struct.unpack_from("<4I", body, 16))
             self.assertEqual((0xDF800, 0xEC430), struct.unpack_from("<2I", body, 0x50))
             self.assertEqual(0x78, struct.unpack_from("<H", body, 0x152)[0])
+            # Bind the observer's XY-only walk-scope annotation to actual
+            # emitted HP floor vertices/faces, not a caller-declared radius.
+            data_offset, data_length = struct.unpack_from("<II", body, 8)
+            self.assertEqual(0x1000, data_length)
+            environment = data_offset + struct.unpack_from("<I", body, data_offset)[0]
+            self.assertEqual((172, 1, 8), struct.unpack_from("<3I", body, environment))
+            sector = environment + 4 + struct.unpack_from("<I", body, environment + 8)[0]
+            xy, z = struct.unpack_from("<II", body, sector + 8)
+            origin = ((xy >> 16) * 16, (xy & 65535) * 16, (z >> 16) * 16)
+            self.assertEqual((4, 4, 2, 12), tuple(body[sector + 20:sector + 24]))
+            vertices = [(origin[0] + ((word >> 21) & 2047) * 16,
+                         origin[1] + ((word >> 10) & 2047) * 16,
+                         origin[2] + (word & 1023) * 16)
+                        for word in struct.unpack_from("<4I", body, sector + 76)]
+            self.assertEqual([(8448, 8448, 8704), (9472, 8448, 8704),
+                              (8448, 9472, 8704), (9472, 9472, 8704)], vertices)
+            faces = []
+            for index in range(2):
+                word = struct.unpack_from("<I", body, sector + 124 + index * 16)[0]
+                self.assertEqual(word & 255, (word >> 8) & 255)
+                faces.append((word & 255, (word >> 16) & 255, (word >> 24) & 255))
+            self.assertEqual([(0, 1, 2), (1, 3, 2)], faces)
+            scene_offset, scene_length = struct.unpack_from("<II", body, 24)
+            self.assertEqual("4a6e7b5c6c53199b8a7aa6ae0d24ac9bce32634aa259d5f49535282080641433",
+                             hashlib.sha256(body[scene_offset:scene_offset + scene_length]).hexdigest())
             installed = register_package(body[0xEC430:0xEC430 + 0x2930])
             self.assertEqual(0x800973C4, installed.read(0x80076558, 4))
             self.assertEqual(90, installed.trace.count(0x800135C0))

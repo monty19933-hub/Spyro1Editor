@@ -127,3 +127,33 @@ Exact supported whole image: 661547040 bytes, 1253 changed raw sectors, SHA-256
 `1818fe50a132901b9ad670769d4967ccc0a5120897637efa2ad709b8f1d53188`.
 No other body shape, track, textured revision or caller-declared acceptance can
 inherit this research profile.
+
+## Fixed production starter recipe
+
+`NativeId65FreshStarterResearchFactory.CaptureAsync(BIN, CUE, token)` now owns
+the exact A/N16/untextured/track19 composition formerly confined to this smoke's
+`BuildDisc`. It returns the existing private-issued candidate plan, never
+publishes, exposes no arbitrary profile parameters, and forwards the caller's
+cancellation token through every source issuer. It is not authoring-document
+export or a new UI action. No new instance properties or receipt fields exist.
+
+Default capture, publication recapture and independent verification use this
+factory. The old recipe remains only in source/fault tests as a comparison
+control and to build deliberately refused variants. Test-first RED produced
+five intended missing-factory compiler errors. Final focused build:4.86 seconds,
+zero warnings/errors;73 source-free and87 total source checks. Six source
+comparisons preserve full PlanSHA, source identities, CUE, receipt, independent
+whole-image golden and all false approval flags. Cancellation tests exercise
+pre-cancellation/token identity; mid-pipeline forwarding was also independently
+reviewed, not newly exercised through a synthetic authority seam.
+
+A separate factory-backed `--verify` fully reopened the retained R02 candidate
+without publication. BIN, PlanSHA, CUE and receipt remained exact,1253 changed
+sectors, no retained recovery, and no approval expansion. Evidence is
+`_local/research/fresh-native-starter-factory-20260906/`.
+
+The subsequent default Release gate passed111 steps/zero failures, including
+App. Complete Python discovery passed70 tests with one explicit-source skip;
+the skipped source case passed separately. The same folder retains the full
+console logs and a byte-compared `root-default-report/` copy. This is not a
+second full build-all/source-QA gate or an installed editor release.
