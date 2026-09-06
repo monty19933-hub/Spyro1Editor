@@ -78,6 +78,43 @@ class OwnedCommandTests(unittest.TestCase):
 
 
 class RunnerOptionsTests(unittest.TestCase):
+    def test_fresh_document_is_sourcefree_only_and_requires_its_own_marker(self):
+        name = "NativeId65FreshDocumentSmoke"
+        marker = "NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK"
+        self.assertEqual([(name, marker)], [c for c in RUNNER.CORE_CASES if c[0] == name])
+        self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
+        self.assertFalse(any(c[0] == name for c in RUNNER.SOURCE_QA_CASES))
+        self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+        for emit_marker in (False, True):
+            calls = []
+
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                if command[:2] == ["dotnet", "run"]:
+                    kwargs["stdout"].write(marker if emit_marker else "NATIVE_ID65_FRESH_DISC_RESEARCH_SMOKE_OK")
+                return subprocess.CompletedProcess(command, 0)
+
+            with self.subTest(emit_marker=emit_marker), tempfile.TemporaryDirectory(prefix="spyro-fresh-document-runner-") as output:
+                with mock.patch.object(RUNNER, "CORE_CASES", ((name, marker),)), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "SOURCE_QA_CASES", ()), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("document source read")), \
+                        mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("document CUE read")), \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin)]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0 if emit_marker else 1, RUNNER.main())
+                summary = json.loads((Path(output) / "summary.json").read_text())
+            runs = [c for c in calls if c[:2] == ["dotnet", "run"]]
+            self.assertEqual(1, len(runs))
+            self.assertNotIn("--", runs[0], "neutral document must receive no source/output/publish arguments")
+            self.assertIn("--no-build", runs[0])
+            self.assertIn("--no-restore", runs[0])
+            self.assertEqual(emit_marker, summary[-1]["passed"])
+            self.assertFalse(any(c[0] == "env" for c in calls))
+
     def test_fixture_lookup_registers_only_the_noninvoking_source_free_mode(self):
         name = "Id65AuthoringRewardStagingRuntimeCandidatePublisherSmoke"
         marker = "V3_FIXTURE_LOOKUP_SOURCE_FREE_OK"

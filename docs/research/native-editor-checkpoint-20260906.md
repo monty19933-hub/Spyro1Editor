@@ -176,6 +176,30 @@ Evidence and byte-compared default report:
 `_local/research/fresh-native-starter-factory-20260906/`.
 This is not a second full build-all/source-QA gate.
 
+## Explicit color boundary and neutral fresh-document checkpoint
+
+Checkpoint `3de7d90` adds only the explicit opaque display-color adapter and its
+tests/docs. Existing raw `0x00BBGGRR` words, instance-property shape and all
+native goldens remain unchanged. Source-free681/source707 checks passed, and a
+rebuilt fresh research verifier reopened retained R02 unchanged again. The
+first root invocation used an absent net8.0 DLL path; the corrected net10.0
+invocation passed, with both logs retained rather than hiding that command error.
+
+The new Core/Editing intent and codec define a distinct fresh-native document
+family, not an implicit migration of old Lab schemas. Shared geometry/color/
+spawn/music validators are reused. Exact JSON fields, bounded UTF8/depth,
+immutable scalar ownership, strict interior point containment and all46 music
+choices have160 source-free checks. A reproduced escaped-surrogate exception
+is handled only at the actual JSON string/property decoding boundaries.
+See [document contract and limits](native-fresh-document-intent.md).
+
+Integrated default Release:113 steps/zero failures, including App. Complete
+Python discovery:71 tests, one explicit-source skip; that source case passed
+separately. All source/test files were frozen during the gate. Evidence is
+`_local/research/native-fresh-document-20260906/`, including full logs and a
+byte-compared `root-default-report/` copy. This is not the full build-all/source
+QA gate, a new emulator run, a persistence/UI integration or an installed build.
+
 ## Preservation and emulator cleanup (prior Wizard session)
 
 The owned Wizard observer and DuckStation session were closed normally. Temporary playback/controller settings were restored from their original backups. The original memory card was never overwritten. Final post-gate SHA-256 checks match the original BIN/CUE, retained Wizard BIN/CUE/receipt, both restored DuckStation INIs, and original memory card.

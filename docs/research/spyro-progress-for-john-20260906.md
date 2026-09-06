@@ -79,6 +79,11 @@ have been verified unchanged.
   production code with cancellation and unchanged verification guards, rather
   than only inside a test program. This is a building block for the editor,
   not yet a new UI action or export of your edited Lab document.
+- **Editable fresh-document foundation:** a separate, immutable document format
+  now holds floor dimensions/position, spawn, display colors and all46 supported
+  music choices. Its strict canonical parser passes160 checks. Existing Lab
+  saves keep their original meaning. File saving, viewport controls and
+  document-bound game compilation are still separate integration steps.
 - **Fresh-level gameplay diagnostics:** a dedicated, read-only observer now
   checks the new level's actual initialized resource layout. Its 17 tests and
   five original-game source checks pass; the existing Wizard observer's 14
@@ -107,8 +112,8 @@ install.** The current editor remains usable, and the new foundations are
 substantially further along. Source tests, actual gameplay and a shipped UI are
 tracked separately so the eventual editor reflects what has really passed.
 
-Latest integrated verification: 111 default Release steps passed with zero
-failures, including rebuilding App. All 70 Python tests completed successfully
+Latest integrated verification: 113 default Release steps passed with zero
+failures, including rebuilding App. All 71 Python tests completed successfully
 (one original-ROM-only case is explicitly skipped there and passed separately).
 The full fresh-disc source checks also passed after the textured-body changes. This did not install
 or launch a new editor, and is separate from the earlier full 290-step gate.
