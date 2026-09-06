@@ -297,7 +297,8 @@ static void VerifyExistingSlotCandidateAuthoredDependencies(string parentDirecto
         List<string> skipped = [];
         System.Collections.IDictionary shared = (System.Collections.IDictionary)Activator.CreateInstance(method.GetParameters()[14].ParameterType)!;
         object layout = typeof(MobySourcePatchExporter).Assembly.GetType("Spyro.Editor.Core.Exporting.DiscImage")!
-            .GetMethod("DetectLayout", BindingFlags.Static | BindingFlags.Public)!.Invoke(null, [imagePath])!;
+            .GetMethod("DetectLayout", BindingFlags.Static | BindingFlags.Public,
+                binder: null, types: [typeof(string)], modifiers: null)!.Invoke(null, [imagePath])!;
         bool accepted = (bool)method.Invoke(null,
         [
             source, layout, catalog, target, null,

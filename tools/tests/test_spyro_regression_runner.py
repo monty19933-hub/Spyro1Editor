@@ -177,11 +177,19 @@ class RunnerOptionsTests(unittest.TestCase):
     def test_fresh_texture_modes_use_only_explicit_source_image_and_exact_markers(self):
         self.assert_texture_modes("NativeId65FreshTerrainTextureSmoke", "NATIVE_ID65_FRESH_TERRAIN_TEXTURE")
 
-    def assert_texture_modes(self, name, marker_prefix):
-        free_marker = marker_prefix + "_FREE_OK"
+    def test_fresh_disc_modes_require_their_own_markers_and_only_the_selected_image(self):
+        self.assert_texture_modes("NativeId65FreshDiscSmoke", "NATIVE_ID65_FRESH_DISC", (), "SMOKE")
+
+    def test_fresh_disc_stream_modes_build_independently_and_require_their_own_markers(self):
+        self.assert_texture_modes("NativeId65FreshDiscStreamSmoke", "NATIVE_ID65_FRESH_DISC_STREAM", (), "SMOKE")
+        project = RUNNER.ROOT / "src/Spyro.Editor.NativeId65FreshDiscStreamSmoke/Spyro.Editor.NativeId65FreshDiscStreamSmoke.csproj"
+        self.assertIn('../Spyro.Editor.NativeId65FreshDiscSmoke/StreamReaderProbe.cs', project.read_text())
+
+    def assert_texture_modes(self, name, marker_prefix, source_flags=("--source",), free_kind="FREE"):
+        free_marker = marker_prefix + "_" + free_kind + "_OK"
         source_marker = marker_prefix + "_SOURCE_OK"
         self.assertEqual([(name, free_marker)], [c for c in RUNNER.CORE_CASES if c[0] == name])
-        self.assertEqual([(name, source_marker, ["--source"])],
+        self.assertEqual([(name, source_marker, list(source_flags))],
                          [c for c in RUNNER.SOURCE_QA_CASES if c[0] == name])
         self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
         self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
@@ -195,7 +203,7 @@ class RunnerOptionsTests(unittest.TestCase):
                 calls.append(command)
                 kwargs["stdout"].write("Offline QA passed.\n")
                 if command[:2] == ["dotnet", "run"]:
-                    is_source = "--source" in command
+                    is_source = "--" in command
                     marker = source_marker if is_source else free_marker
                     marker_ok = source_ok if is_source else free_ok
                     # A source run emits the free marker first. It cannot stand
@@ -225,7 +233,7 @@ class RunnerOptionsTests(unittest.TestCase):
             self.assertEqual(1 + int(opted_in and free_ok), len(runs))
             self.assertNotIn("--", runs[0], "Default mode cannot receive source, workspace or publication arguments")
             if opted_in and free_ok:
-                self.assertEqual(["--source", "/selected original.bin"], runs[1][runs[1].index("--") + 1:])
+                self.assertEqual([*source_flags, "/selected original.bin"], runs[1][runs[1].index("--") + 1:])
                 self.assertEqual("source-" + name, summary[-1]["name"])
                 self.assertEqual(source_ok, summary[-1]["passed"])
             if not free_ok:
@@ -624,6 +632,8 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeId65NormalBodySmoke": ["/selected original.bin"],
             "NativeId65StaticTerrainTextureSmoke": ["--source", "/selected original.bin"],
             "NativeId65FreshTerrainTextureSmoke": ["--source", "/selected original.bin"],
+            "NativeId65FreshDiscSmoke": ["/selected original.bin"],
+            "NativeId65FreshDiscStreamSmoke": ["/selected original.bin"],
             "NativeWizardPlacementSmoke": ["/selected original.bin"],
             "NativeResourceCompositionSmoke": ["--source", "/selected original.bin"],
             "NativeFreeFlightResearchSmoke": ["/selected original.bin", "/selected original.cue", str(RUNNER.ROOT)],

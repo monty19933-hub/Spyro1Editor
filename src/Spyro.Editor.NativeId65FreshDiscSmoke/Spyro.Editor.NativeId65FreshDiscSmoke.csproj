@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <FreshDiscProbe Condition="'$(FreshDiscProbe)' == ''">Contracts</FreshDiscProbe>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(FreshDiscProbe)' == 'StreamSeam'">
+    <AssemblyName>Spyro.Editor.NativeId65FreshDiscStreamSmoke</AssemblyName>
+    <OutputPath>bin/$(Configuration)/stream-seam/</OutputPath>
+    <IntermediateOutputPath>obj/$(Configuration)/stream-seam/</IntermediateOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Spyro.Editor.Core/Spyro.Editor.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(FreshDiscProbe)' == 'Contracts'">
+    <Compile Include="Program.cs" />
+    <Compile Include="FreshDiscCases.cs" />
+    <Compile Include="CaptureBoundaryCases.cs" />
+    <Compile Include="NativeFreshDiscScalarMachine.cs" />
+    <Compile Include="NativeFreshDiscScalarCases.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(FreshDiscProbe)' == 'StreamSeam'">
+    <Compile Include="StreamReaderProbe.cs" />
+  </ItemGroup>
+  <Target Name="RequireFreshDiscProbe" BeforeTargets="BeforeBuild"
+          Condition="'$(FreshDiscProbe)' != 'Contracts' and '$(FreshDiscProbe)' != 'StreamSeam'">
+    <Error Text="FreshDiscProbe must be Contracts or StreamSeam; neither probe may be silently omitted." />
+  </Target>
+</Project>

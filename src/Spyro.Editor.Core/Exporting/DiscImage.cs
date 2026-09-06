@@ -12,6 +12,14 @@ internal static class DiscImage
     public static DiscLayout DetectLayout(string path)
     {
         using FileStream stream = File.OpenRead(path);
+        return DetectLayout((Stream)stream);
+    }
+
+    public static DiscLayout DetectLayout(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        if (!stream.CanRead || !stream.CanSeek)
+            throw new InvalidOperationException("Disc layout detection requires a readable seekable stream.");
         foreach ((int sectorSize, int userOffset) in new[] { (2048, 0), (2352, 24), (2336, 8) })
         {
             DiscLayout? layout = TryReadPrimaryVolumeDescriptor(stream, sectorSize, userOffset);
@@ -23,6 +31,9 @@ internal static class DiscImage
     }
 
     public static DiscFileRecord FindRootFileRecord(FileStream stream, DiscLayout layout, Predicate<string> matchesName)
+        => FindRootFileRecord((Stream)stream, layout, matchesName);
+
+    public static DiscFileRecord FindRootFileRecord(Stream stream, DiscLayout layout, Predicate<string> matchesName)
     {
         ArgumentNullException.ThrowIfNull(layout);
         ArgumentNullException.ThrowIfNull(matchesName);
@@ -60,6 +71,9 @@ internal static class DiscImage
     }
 
     public static byte[] ReadFileBytes(FileStream stream, DiscLayout layout, int fileLba, long fileOffset, int length)
+        => ReadFileBytes((Stream)stream, layout, fileLba, fileOffset, length);
+
+    public static byte[] ReadFileBytes(Stream stream, DiscLayout layout, int fileLba, long fileOffset, int length)
     {
         RequireReadRange(stream, layout, fileLba, fileOffset, length);
         byte[] result = new byte[length];
@@ -189,7 +203,7 @@ internal static class DiscImage
                 ?? throw new InvalidDataException("A CUE without an explicit source image cannot infer its data layout."),
             outputBinName, layoutImagePath);
 
-    private static DiscLayout? TryReadPrimaryVolumeDescriptor(FileStream stream, int sectorSize, int userOffset)
+    private static DiscLayout? TryReadPrimaryVolumeDescriptor(Stream stream, int sectorSize, int userOffset)
     {
         long offset = (16L * sectorSize) + userOffset;
         if (stream.Length < offset + 2048)
@@ -220,7 +234,7 @@ internal static class DiscImage
         return layout;
     }
 
-    private static void RequireReadRange(FileStream stream, DiscLayout layout, int fileLba, long fileOffset, int length)
+    private static void RequireReadRange(Stream stream, DiscLayout layout, int fileLba, long fileOffset, int length)
     {
         ArgumentNullException.ThrowIfNull(stream);
         RequireLogicalLayout(layout);

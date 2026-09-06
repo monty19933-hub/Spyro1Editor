@@ -22,6 +22,9 @@ internal sealed class NativeWadGrowthSectorPreparation
     { _layout = layout; _sourceLength = length; _sectors = Array.AsReadOnly(sectors.ToArray()); }
 
     internal static NativeWadGrowthSectorPreparation Create(FileStream source, DiscLayout layout, NativeSkyWadRelocationPlan plan)
+        => Create((Stream)source, layout, plan);
+
+    internal static NativeWadGrowthSectorPreparation Create(Stream source, DiscLayout layout, NativeSkyWadRelocationPlan plan)
     {
         ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(layout); ArgumentNullException.ThrowIfNull(plan);
         bool cooked = layout.SectorSize == 2048 && layout.UserOffset == 0;
@@ -132,11 +135,14 @@ internal sealed class NativeWadGrowthSectorPreparation
     }
 
     internal static IReadOnlyList<NativeFlatIsoFile> ReadFlatRootFiles(FileStream image, DiscLayout layout)
+        => ReadFlatRootFiles((Stream)image, layout);
+
+    internal static IReadOnlyList<NativeFlatIsoFile> ReadFlatRootFiles(Stream image, DiscLayout layout)
     {
         return ReadDirectory(image, layout, layout.RootExtent, layout.RootLength, layout.RootExtent);
     }
 
-    private static IReadOnlyList<NativeFlatIsoFile> ReadDirectory(FileStream image, DiscLayout layout, int directoryLba, int directoryLength, int parentLba)
+    private static IReadOnlyList<NativeFlatIsoFile> ReadDirectory(Stream image, DiscLayout layout, int directoryLba, int directoryLength, int parentLba)
     {
         if (directoryLength <= 0 || directoryLength > 64 * 1024)
             throw new InvalidDataException("The structural writer requires bounded ISO directories.");
@@ -184,7 +190,7 @@ internal sealed class NativeWadGrowthSectorPreparation
         return files.AsReadOnly();
     }
 
-    private static IReadOnlyList<NativeFlatIsoFile> ReadCompleteInventory(FileStream image, DiscLayout layout, IReadOnlyList<NativeFlatIsoFile> root)
+    private static IReadOnlyList<NativeFlatIsoFile> ReadCompleteInventory(Stream image, DiscLayout layout, IReadOnlyList<NativeFlatIsoFile> root)
     {
         List<NativeFlatIsoFile> inventory = [new("", layout.RootExtent, layout.RootLength, 0, true, layout.RootExtent)];
         inventory.AddRange(root);
@@ -202,7 +208,7 @@ internal sealed class NativeWadGrowthSectorPreparation
         return inventory.AsReadOnly();
     }
 
-    private static void ValidateMetadata(FileStream image, DiscLayout layout, IReadOnlyList<NativeFlatIsoFile> files, long start, long end)
+    private static void ValidateMetadata(Stream image, DiscLayout layout, IReadOnlyList<NativeFlatIsoFile> files, long start, long end)
     {
         byte[] pvd = DiscImage.ReadFileBytes(image, layout, 16, 0, 2048);
         int volumeSectors = Both(pvd, 80), pathBytes = Both(pvd, 132);
@@ -259,7 +265,7 @@ internal sealed class NativeWadGrowthSectorPreparation
         }
     }
 
-    private static byte[] ReadCheckedForm1(FileStream source, DiscLayout layout, int lba)
+    private static byte[] ReadCheckedForm1(Stream source, DiscLayout layout, int lba)
     { byte[] bytes = ReadSector(source, layout, lba); RequireForm1Integrity(bytes, layout, lba); return bytes; }
     private static void RequireForm1Integrity(byte[] bytes, DiscLayout layout, int lba)
     {
@@ -269,7 +275,7 @@ internal sealed class NativeWadGrowthSectorPreparation
         byte[] rebuilt = bytes.ToArray(); RawMode2Form1SectorIntegrity.RebuildLogicalWriteSector(rebuilt, layout, lba);
         if (!rebuilt.AsSpan().SequenceEqual(bytes)) throw new InvalidDataException("A structural file boundary has invalid EDC/ECC.");
     }
-    private static byte[] ReadSector(FileStream stream, DiscLayout layout, int lba)
+    private static byte[] ReadSector(Stream stream, DiscLayout layout, int lba)
     {
         long offset = checked((long)lba * layout.SectorSize);
         if (lba < 0 || offset > stream.Length - layout.SectorSize) throw new InvalidDataException("A structural sector is outside the exact image.");
