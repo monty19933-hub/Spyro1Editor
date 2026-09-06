@@ -1,5 +1,41 @@
 # Native editor checkpoint — 2026-09-06
 
+## Latest resumed checkpoint: fresh-document UI and two-Wizard composition
+
+John explicitly resumed after a manual usage reset. The new `Fresh Level…`
+toolbar action opens a separate project-bound fresh-document window with a
+two-triangle schematic preview, floor/spawn/heading, opaque colors, all46 native
+music choices, undo/redo and guarded save/reopen. Invalid unapplied fields and
+dirty close/reopen decisions are preserved. Tests caught and fixed the first-
+save/null-undo boundary; the neutral UI mode now runs without retail caches.
+This is source UI, not an installed app, native viewport or edited-ROM publisher.
+
+The resource/overlay/reward chain now accepts actual issued one- or two-Wizard
+append/placement ancestors. Two private owners retain native indices128/129,
+130 placed rows,151 fixups,89 dynamic slots and a120-gem treasure target.
+Class-wide resources/code remain shared. An independently reconstructed raw
+source image matches the complete new data hash
+`375b9dc41a76d507ded9ffdf442e4febbb1916e68bb5d4597477bb9031e2fd90`.
+The oracle and source smoke compare complete bytes, not just counts. A separate
+two-Wizard physical candidate is still pending; no runtime approval was widened.
+
+Verification: default Release117 steps/zero failures (73.04 seconds summed),
+Python73 tests/one explicit-source skip, neutral fresh UI65 checks, bounded
+retail-shell UI regression, composition7 free/69 source checks, raw-source
+oracle229 checks, and unchanged legacy candidate readback333 checks. Source and
+receipt goldens remain exact. This is not a new full build-all/source-QA gate.
+Root logs and byte-compared default report are under
+`_local/native-wizard-runtime-20260906-r03.7xUAjK/`; focused UI logs are under
+`_local/research/native-id65-engine-profile-20260906-r01/` and composition logs
+under `_local/research/dark-wizard-native-closure-20260906/`.
+
+The isolated R03 one-Wizard gameplay session is ACTIVE at this checkpoint.
+Normal Dark Hollow portal entry is recorded; defeat/reward remains pending.
+Original settings have fresh backups and test settings are temporarily active;
+do not mistake earlier closed-session statements below for R03 cleanup.
+Use its `RUNTIME-SESSION.md` for the current lifecycle and restore originals
+when closing. The installed editor and original ROM/card remain untouched.
+
 The frozen source at `b50c9a83f03175c77979af339595e1e48ecf0f23` passes the complete Release gate: **290 steps, zero failures**. This is source/build/readback evidence, not universal Moby or new-level gameplay certification. The installed editor was not replaced or launched by this gate.
 
 ## Completed, separately bounded work

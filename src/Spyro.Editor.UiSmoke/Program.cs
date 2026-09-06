@@ -23,6 +23,19 @@ using Spyro.Editor.Core.Scene;
 using Spyro.Editor.Core.Updates;
 using Spyro.Editor.Core.Workspace;
 
+// Neutral fresh-document UI needs no editor cache, catalog, source disc or
+// legacy workspace setup. Keep this dispatch before any workspace discovery.
+if (args.Contains("--fresh-native-document-only", StringComparer.OrdinalIgnoreCase))
+{
+    if (args.Length != 1)
+        throw new ArgumentException("Usage: UiSmoke --fresh-native-document-only (no workspace/source arguments)");
+    HeadlessEntryPoint.BuildAvaloniaApp().SetupWithoutStarting();
+    string freshArtifacts = Directory.CreateTempSubdirectory("spyro-fresh-document-ui-artifacts-").FullName;
+    NativeFreshDocumentUiCases.Run(freshArtifacts);
+    Console.WriteLine($"FRESH_NATIVE_DOCUMENT_UI_ARTIFACTS path={freshArtifacts}");
+    return 0;
+}
+
 string sourceWorkspace = FindWorkspace(args.FirstOrDefault(argument =>
     !argument.StartsWith("--", StringComparison.Ordinal)));
 bool sourceFreeViewportSmoke =
@@ -144,6 +157,11 @@ try
         RunWorkspaceShellOnly();
         return 0;
     }
+    if (args.Contains("--fresh-native-shell-only", StringComparer.OrdinalIgnoreCase))
+    {
+        RunFreshNativeShellOnly();
+        return 0;
+    }
     if (args.Contains("--id65-blank-lab-ui-only", StringComparer.OrdinalIgnoreCase) ||
         args.Contains("--id65-blank-lab-only", StringComparer.OrdinalIgnoreCase))
     {
@@ -248,6 +266,87 @@ void RunTerrainAtomicOnly()
     }
     finally
     {
+        window.Close();
+        FlushUi();
+    }
+}
+
+void RunFreshNativeShellOnly()
+{
+    // Source/cache-aware shell regression, deliberately separate from the
+    // neutral document mode and the old shell's terrain/candidate mutations.
+    var project = new EditorProjectLayout(workspace, "fresh-shell");
+    File.WriteAllText(project.ManifestPath, "{\"schemaVersion\":1,\"projectId\":\"fresh-shell\"}");
+    string oldLab = Path.Combine(workspace, "unusedlevel65blank-authoring-document-v1.json");
+    File.WriteAllText(oldLab, "old Lab document sentinel, not reinterpreted");
+    ReleaseProjectContext? previousContext = ReleaseProjectBootstrap.Current;
+    PropertyInfo currentProperty = typeof(ReleaseProjectBootstrap).GetProperty(nameof(ReleaseProjectBootstrap.Current))!;
+    MainWindow window = new() { Width = 1320, Height = 860 };
+    NativeFreshDocumentWindow? fresh = null;
+    window.Show();
+    try
+    {
+        WaitForLevelData(window);
+        EditorShellSessionSnapshot before = window.CaptureEditorShellSessionSnapshotForTesting();
+        var inputs = CaptureTerrainProjectInputHashes(workspace, before.CurrentLevel!.Key);
+        AssertWorkspaceTabHeaders(FindNamedUnique<TabControl>(window, "EditorWorkspaceToolTabs"),
+            ["Objects", "Terrain", "Level", "Environment"], "retail before separate fresh document");
+        AssertNoWholeLevelWipeAction(window);
+        AssertWorkspaceTabContrast(window);
+        Button open = FindNamedUnique<Button>(window, "FreshNativeDocumentButton");
+        if (ReferenceEquals(open, FindButton(window, "Create BIN")))
+            throw new InvalidDataException("Fresh document replaced normal Create BIN.");
+        open.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, open));
+        FlushUi();
+        if (window.OwnedWindows.OfType<NativeFreshDocumentWindow>().Any())
+            throw new InvalidDataException("Missing protected project silently created a fresh workspace.");
+
+        // Only test setup changes this process-local context. The actual button
+        // still resolves Current and Store validates the actual private manifest.
+        var context = new ReleaseProjectContext(workspace, workspace,
+            new EditorUserDataLayout(Path.Combine(workspace, "_local", "fresh-shell-user-data")), project, "ui-smoke", null);
+        currentProperty.SetValue(null, context);
+        open.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, open));
+        FlushUi();
+        fresh = window.OwnedWindows.OfType<NativeFreshDocumentWindow>().Single();
+        if (fresh.CurrentIntent != null) throw new InvalidDataException("Toolbar open inferred a starter.");
+        FindNamedUnique<Button>(fresh, "FreshDocumentNew").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        FindNamedUnique<TextBox>(fresh, "FreshFloorColor").Text = "#305070";
+        FindNamedUnique<Button>(fresh, "FreshDocumentApply").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        FlushUi();
+        AssertWorkspaceSessionContinuity(before, window.CaptureEditorShellSessionSnapshotForTesting(), "opening/applying separate fresh document");
+        currentProperty.SetValue(null, context with { Project = new EditorProjectLayout(workspace, "different-project-id") });
+        FindNamedUnique<Button>(fresh, "FreshDocumentSave").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        FlushUi();
+        if (File.Exists(Path.Combine(workspace, NativeId65FreshDocumentStore.FileName)) ||
+            !FindNamedUnique<TextBlock>(fresh, "FreshDocumentStatus").Text!.Contains("project identity changed", StringComparison.Ordinal))
+            throw new InvalidDataException("Actual toolbar continuation failed to bind the project ID as well as root.");
+        currentProperty.SetValue(null, context);
+        fresh.DecisionForTesting = _ => Task.FromResult(FreshDocumentDecision.Discard);
+        fresh.Close();
+        FlushUi();
+        AssertWorkspaceSessionContinuity(before, window.CaptureEditorShellSessionSnapshotForTesting(), "discarding separate fresh document");
+        var after = CaptureTerrainProjectInputHashes(workspace, before.CurrentLevel.Key);
+        if (!inputs.SequenceEqual(after)) throw new InvalidDataException("Separate fresh preview mutated retail/old-Lab/source inputs.");
+        SaveFrame(window, "fresh-native-toolbar-retail-1320.png");
+        window.Width = 1024;
+        window.Height = 720;
+        FlushUi();
+        SaveFrame(window, "fresh-native-toolbar-retail-1024.png");
+        Point? at = open.TranslatePoint(default, window);
+        if (at == null || at.Value.X < 0 || at.Value.X + open.Bounds.Width > window.ClientSize.Width)
+            throw new InvalidDataException("Fresh Level toolbar action is clipped at the supported compact window size.");
+        Console.WriteLine("FRESH_NATIVE_SHELL_UI_OK: actual toolbar open/refusal, root+ID continuation, retail session/input/old-Lab preservation, legacy shell assertions and1320/1024 renders; no legacy mutating fixtures or native outputs.");
+    }
+    finally
+    {
+        if (fresh?.IsVisible == true)
+        {
+            fresh.DecisionForTesting = _ => Task.FromResult(FreshDocumentDecision.Discard);
+            fresh.Close();
+            FlushUi();
+        }
+        currentProperty.SetValue(null, previousContext);
         window.Close();
         FlushUi();
     }

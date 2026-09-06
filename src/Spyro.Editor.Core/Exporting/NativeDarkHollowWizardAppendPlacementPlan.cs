@@ -58,6 +58,7 @@ public sealed class NativeDarkHollowWizardAppendPlacementPlan
         // atomic: only after every family passes do we copy and modify bytes.
         var evaluated = source.Evaluate(requests);
         var appended = source.Appended;
+        Appended = appended;
         _baseScene = appended.CopyScene(); _finalScene = _baseScene.ToArray();
         ProposedOwners = appended.ProposedOwners;
         SourceImageSha256 = source.SourceImageSha256; SourceDataSha256 = source.SourceDataSha256;
@@ -111,6 +112,7 @@ public sealed class NativeDarkHollowWizardAppendPlacementPlan
 
     internal static NativeDarkHollowWizardAppendPlacementPlan Build(NativeDarkHollowWizardAppendPlacementSource source,
         IEnumerable<NativeWizardFamilyPlacementIntent> requests) => new(source, requests);
+    internal NativeDarkHollowWizardAppendPlan Appended { get; }
     public const string ProfileId = "native-dark-wizard-append-authored-placement-research-v1";
     public const string Scope = "Coordinate-only original-source append scene. Authored dry square corridors and closed-route center separation, not native physical shapes, visible body, mover trajectories, lifetime/resource/reward independence, accepted export/save history or runtime.";
     public NativeMobyPersistentOwnerLedger ProposedOwners { get; }

@@ -30,12 +30,14 @@ CORE_CASES = (
     ("NativeMobyPersistentOwnerSmoke", "NATIVE_MOBY_PERSISTENT_OWNER_SOURCE_FREE_OK"),
     ("NativeWizardAppendSmoke", "NATIVE_WIZARD_APPEND_SOURCE_FREE_OK"),
     ("NativeWizardAppendPlacementSmoke", "NATIVE_WIZARD_APPEND_PLACEMENT_FREE_OK"),
+    ("NativeWizardCompositionSmoke", "NATIVE_WIZARD_COMPOSITION_FREE_OK"),
     ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_FREE_OK"),
     ("NativeGlobalSoundSmoke", "NATIVE_GLOBAL_SOUND_SOURCE_FREE_OK"),
     ("NativeId65EngineProfileSmoke", "NATIVE_ID65_ENGINE_PROFILE_SOURCE_FREE_OK"),
     ("NativeId65CompanionAssetSmoke", "NATIVE_ID65_COMPANION_ASSET_SOURCE_FREE_OK"),
     ("NativeId65AuthoredSurfaceSmoke", "NATIVE_ID65_AUTHORED_SURFACE_SMOKE_OK"),
     ("NativeId65FreshDocumentSmoke", "NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK"),
+    ("UiSmoke", "FRESH_NATIVE_DOCUMENT_UI_OK"),
     ("NativeId65NormalResourceSmoke", "NATIVE_ID65_NORMAL_RESOURCE_SMOKE_OK"),
     ("NativeId65NormalBodySmoke", "NATIVE_ID65_NORMAL_BODY_SMOKE_OK"),
     ("NativeId65StaticTerrainTextureSmoke", "NATIVE_ID65_STATIC_TERRAIN_TEXTURE_FREE_OK"),
@@ -76,6 +78,9 @@ CORE_CASES = (
 # Some source-aware executables expose an explicitly isolated source-free mode.
 # Never execute their fixture/materializer path as part of the default gate.
 CASE_ARGUMENTS = {
+    # This exact mode dispatches before workspace/cache/source initialization.
+    # Do not invoke the broad, source-aware UI fixture as a default regression.
+    "UiSmoke": ["--fresh-native-document-only"],
     "FixedTailPrivateRecordSmoke": ["--source-free-image-proof"],
     "Id65AuthoringMobyDependencyBundleCompilerSmoke": ["--source-free-properties-linker"],
     # Bind the compiled fixture only. Never invoke the legacy publisher's
@@ -101,6 +106,7 @@ SOURCE_QA_CASES = (
     ("NativeMobyPersistentOwnerSmoke", "NATIVE_MOBY_PERSISTENT_OWNER_SOURCE_OK", ["--source"]),
     ("NativeWizardAppendSmoke", "NATIVE_WIZARD_APPEND_SOURCE_OK", ["--source"]),
     ("NativeWizardAppendPlacementSmoke", "NATIVE_WIZARD_APPEND_PLACEMENT_SOURCE_OK", ["--source"]),
+    ("NativeWizardCompositionSmoke", "NATIVE_WIZARD_COMPOSITION_SOURCE_OK", ["--source"]),
     ("NativeGreenWizardMoverSmoke", "NATIVE_GREEN_WIZARD_MOVER_SOURCE_SMOKE_OK", []),
     ("NativeLevelSlotOwnershipSmoke", "NATIVE_LEVEL_SLOT_OWNERSHIP_SOURCE_OK", ["--source"]),
     ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_OK", ["--source"]),
@@ -127,7 +133,7 @@ SOURCE_QA_CASES = (
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
-SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke"})
+SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke", "NativeMobyPersistentOwnerSmoke", "NativeWizardAppendSmoke", "NativeWizardAppendPlacementSmoke", "NativeWizardCompositionSmoke", "NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke"})
 SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke", "NativeWizardResearchSmoke", "NativeId65FreshDiscResearchSmoke"})
 
 

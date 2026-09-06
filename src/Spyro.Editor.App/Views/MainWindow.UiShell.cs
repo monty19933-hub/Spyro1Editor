@@ -213,6 +213,7 @@ public sealed partial class MainWindow
         _toolbarOpenDiscImageButton = NewAsyncButton("Open BIN/CUE", ChooseSourceDiscImageAsync);
         StyleModernToolbarButton(_toolbarOpenDiscImageButton, 118);
         fileActions.Children.Add(_toolbarOpenDiscImageButton);
+        fileActions.Children.Add(BuildNativeFreshDocumentButton());
 
         _toolbarCreateBinButton = NewAsyncButton("Create BIN", CreateObjectTestBinAsync);
         StyleModernPrimaryButton(_toolbarCreateBinButton, ModernBlue, 110);

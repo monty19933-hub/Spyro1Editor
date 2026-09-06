@@ -1,5 +1,20 @@
 # Resume after the September 6 usage pause
 
+**Current status after John's manual reset:** resumed from `725d71d`.
+Fresh-document UI/preview/undo and the source-bound two-Wizard resource,
+overlay and reward composition are now implemented and tested. Default
+Release117/0, Python73/one source skip, neutral UI65, composition7 free/69
+source, independent oracle229 and legacy exact candidate333 checks pass.
+See the newest section of `native-editor-checkpoint-20260906.md`.
+The separate two-Wizard physical candidate and edited fresh-document publisher
+remain next implementation work. The installed editor is not replaced.
+
+R03 DuckStation/observer/capture are ACTIVE with isolated saves and temporary
+settings; normal Dark Hollow entry has occurred, but no new Wizard defeat or
+reward result is claimed. Its live journal is
+`_local/native-wizard-runtime-20260906-r03.7xUAjK/RUNTIME-SESSION.md`.
+The closed-session and pause statements below refer to earlier batches only.
+
 **Resumed later September 6:** John explicitly asked to continue from this
 checkpoint and toward Mobys available across all levels. The pause instructions
 below record the earlier checkpoint; they do not prohibit the newly authorized

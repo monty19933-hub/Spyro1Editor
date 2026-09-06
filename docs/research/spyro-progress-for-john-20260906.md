@@ -1,5 +1,16 @@
 # Spyro editor — what is working now
 
+Latest resumed work: a separate **Fresh Level…** document window now has
+floor/spawn/color/music controls, a schematic preview, undo/redo and protected
+save/reopen. It has passed65 headless UI checks and a separate retail-shell
+integration check. It is not installed yet and does not publish edited ROMs.
+Two independently placed Wizards now compose through the native resource and
+reward chain in source tests, sharing class resources while retaining separate
+native identities. Their physical test ROM and gameplay acceptance are next.
+The current default Release gate passes117 steps; the exact old one-Wizard
+candidate still passes333 readback checks. R03 gameplay testing is active with
+private saves/settings; earlier closed-session statements below are historical.
+
 Updated September 6, 2026. This is a progress report, not a new release. The
 installed editor has not been replaced by today's backend work. The original
 ROM, saved edits, old candidates and original memory card are being preserved.

@@ -11,6 +11,7 @@ public sealed record NativeWizardDeathRewardEvidence(string Owner,long SourceOff
 public sealed class NativeDarkHollowWizardDeathRewardPlan
 {
     private readonly NativeWizardTreasureTargetPatch _patch;
+    private readonly NativeDarkHollowWizardSceneRevision _revision;
     private readonly byte[] _final;
     private NativeDarkHollowWizardDeathRewardPlan(byte[] executable,byte[] dark,byte[] wizardData,byte[] peteHeader,byte[] peteCopy,
         NativeDarkHollowWizardOverlayPlan overlay)
@@ -23,7 +24,11 @@ public sealed class NativeDarkHollowWizardDeathRewardPlan
             !overlay.CopyOriginalOverlay().AsSpan().SequenceEqual(dark))
             throw new InvalidDataException("Native death reward source is not this overlay's exact shared/source owner.");
         byte[] baseExe=overlay.CopyExecutable(),data=overlay.CopyFinalLevelData(),activeOverlay=overlay.CopyOverlay();
-        overlay.RequireFinal(activeOverlay,baseExe,data);RequireSingleRewardWizard(data);
+        overlay.RequireFinal(activeOverlay,baseExe,data);
+        var revision=overlay.SceneRevision;_revision=revision;
+        revision.RequireInstalled(data);
+        if(!revision.PersistentOwners)RequireSingleRewardWizard(data);
+        TreasureTargetAfter=checked(TreasureTargetBefore+NativeGemValue*revision.RewardOwnerCount);
         List<NativeWizardDeathRewardEvidence> evidence=[];
         void Certificate(string owner,byte[] bytes,int offset,int length,long sourceOffset,string expected)
         {
@@ -63,8 +68,9 @@ public sealed class NativeDarkHollowWizardDeathRewardPlan
                 Require(activeOverlay.AsSpan((int)c.SourceOffset-0xEF6000,c.ByteLength),c.ByteLength,c.Sha256);
         }
         var original=new NativeAddressSpace(NativeAddressKind.ExecutableFile,"retail-reward:"+Hash(executable),NativeAddressRevision.Original,executable.Length);
-        var final=new NativeAddressSpace(NativeAddressKind.ExecutableFile,"dark-one-wizard-reward:"+Hash(baseExe),NativeAddressRevision.Final,baseExe.Length);
-        _patch=NativeWizardTreasureTargetPatch.Create(new(original,0x5FC3C,2),new(final,0x5FC3C,2),executable,baseExe);
+        string finalId=revision.PersistentOwners&&revision.RewardOwnerCount==2?"dark-two-persistent-wizard-reward:":"dark-one-wizard-reward:";
+        var final=new NativeAddressSpace(NativeAddressKind.ExecutableFile,finalId+Hash(baseExe),NativeAddressRevision.Final,baseExe.Length);
+        _patch=NativeWizardTreasureTargetPatch.CreateWithTarget(new(original,0x5FC3C,2),new(final,0x5FC3C,2),executable,baseExe,TreasureTargetAfter);
         _final=_patch.CopyExecutable();BaseExecutableSha256=Hash(baseExe);ExecutableSha256=Hash(_final);
         SourceCertificates=Array.AsReadOnly(evidence.ToArray());
     }
@@ -82,7 +88,7 @@ public sealed class NativeDarkHollowWizardDeathRewardPlan
     public int RewardSelector=>0x56;
     public int NativeGemValue=>10;
     public int TreasureTargetBefore=>100;
-    public int TreasureTargetAfter=>110;
+    public int TreasureTargetAfter { get; }
     public bool CompleteNativeClosureProven=>false;
     public bool RuntimeVerified=>false;
     public bool PublicationApproved=>false;
@@ -131,7 +137,7 @@ public sealed class NativeDarkHollowWizardDeathRewardPlan
 internal sealed class NativeWizardTreasureTargetPatch
 {
     private readonly byte[] _base,_final;
-    private NativeWizardTreasureTargetPatch(NativeByteExtent original,NativeByteExtent final,ReadOnlySpan<byte> retailExe,ReadOnlySpan<byte> overlayExe)
+    private NativeWizardTreasureTargetPatch(NativeByteExtent original,NativeByteExtent final,ReadOnlySpan<byte> retailExe,ReadOnlySpan<byte> overlayExe,int target)
     {
         ArgumentNullException.ThrowIfNull(original);ArgumentNullException.ThrowIfNull(final);
         if(original.Space.Kind!=NativeAddressKind.ExecutableFile||original.Space.Revision!=NativeAddressRevision.Original||
@@ -143,11 +149,14 @@ internal sealed class NativeWizardTreasureTargetPatch
             throw new InvalidDataException("Native reward executable owner length changed before copying.");
         if(BinaryPrimitives.ReadUInt16LittleEndian(retailExe[0x5FC3C..])!=100||BinaryPrimitives.ReadUInt16LittleEndian(overlayExe[0x5FC3C..])!=100)
             throw new InvalidDataException("Native reward target preimage is not the original unmodified100.");
+        if(target is not (110 or 120))throw new InvalidDataException("Native reward target is outside the bounded one/two-owner profile.");
         Original=original;Final=final;_base=overlayExe.ToArray();_final=_base.ToArray();
-        BinaryPrimitives.WriteUInt16LittleEndian(_final.AsSpan(0x5FC3C),110);
+        BinaryPrimitives.WriteUInt16LittleEndian(_final.AsSpan(0x5FC3C),checked((ushort)target));
     }
     internal static NativeWizardTreasureTargetPatch Create(NativeByteExtent original,NativeByteExtent final,
-        ReadOnlySpan<byte> retailExe,ReadOnlySpan<byte> overlayExe)=>new(original,final,retailExe,overlayExe);
+        ReadOnlySpan<byte> retailExe,ReadOnlySpan<byte> overlayExe)=>new(original,final,retailExe,overlayExe,110);
+    internal static NativeWizardTreasureTargetPatch CreateWithTarget(NativeByteExtent original,NativeByteExtent final,
+        ReadOnlySpan<byte> retailExe,ReadOnlySpan<byte> overlayExe,int target)=>new(original,final,retailExe,overlayExe,target);
     internal NativeByteExtent Original { get; }
     internal NativeByteExtent Final { get; }
     internal byte[] CopyExecutable()=>_final.ToArray();

@@ -78,6 +78,40 @@ class OwnedCommandTests(unittest.TestCase):
 
 
 class RunnerOptionsTests(unittest.TestCase):
+    def test_fresh_ui_uses_only_the_isolated_headless_mode_and_its_own_marker(self):
+        name, marker, flag = "UiSmoke", "FRESH_NATIVE_DOCUMENT_UI_OK", "--fresh-native-document-only"
+        self.assertEqual([(name, marker)], [c for c in RUNNER.CORE_CASES if c[0] == name])
+        self.assertEqual([flag], RUNNER.CASE_ARGUMENTS.get(name))
+        self.assertFalse(any(c[0] == name for c in RUNNER.SOURCE_QA_CASES))
+        for emit_marker in (False, True):
+            calls = []
+
+            def fake_run(command, **kwargs):
+                calls.append(command)
+                if command[:2] == ["dotnet", "run"]:
+                    kwargs["stdout"].write(marker if emit_marker else "some other UI test passed")
+                return subprocess.CompletedProcess(command, 0)
+
+            with self.subTest(emit_marker=emit_marker), tempfile.TemporaryDirectory(prefix="spyro-fresh-ui-runner-") as output:
+                with mock.patch.object(RUNNER, "CORE_CASES", ((name, marker),)), \
+                        mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                        mock.patch.object(RUNNER, "SOURCE_QA_CASES", ()), \
+                        mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                        mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("neutral UI source read")), \
+                        mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("neutral UI CUE read")), \
+                        mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                        mock.patch.object(sys, "argv", [str(SPEC.origin)]), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0 if emit_marker else 1, RUNNER.main())
+                summary = json.loads((Path(output) / "summary.json").read_text())
+            runs = [c for c in calls if c[:2] == ["dotnet", "run"]]
+            self.assertEqual(1, len(runs))
+            self.assertEqual([flag], runs[0][runs[0].index("--") + 1:])
+            self.assertIn("--no-build", runs[0])
+            self.assertIn("--no-restore", runs[0])
+            self.assertEqual(emit_marker, summary[-1]["passed"])
+            self.assertFalse(any(c[0] == "env" for c in calls))
+
     def test_fresh_document_is_sourcefree_only_and_requires_its_own_marker(self):
         name = "NativeId65FreshDocumentSmoke"
         marker = "NATIVE_ID65_FRESH_DOCUMENT_SMOKE_OK"
@@ -152,9 +186,14 @@ class RunnerOptionsTests(unittest.TestCase):
             self.assertFalse(any(c[0] == "env" for c in calls))
 
     def test_count_placement_modes_keep_exact_markers_and_opt_in_workspace(self):
-        name = "NativeWizardAppendPlacementSmoke"
-        free_marker = "NATIVE_WIZARD_APPEND_PLACEMENT_FREE_OK"
-        source_marker = "NATIVE_WIZARD_APPEND_PLACEMENT_SOURCE_OK"
+        self.assert_count_placement_modes("NativeWizardAppendPlacementSmoke",
+                                         "NATIVE_WIZARD_APPEND_PLACEMENT_FREE_OK", "NATIVE_WIZARD_APPEND_PLACEMENT_SOURCE_OK")
+
+    def test_count_composition_modes_keep_exact_markers_and_opt_in_workspace(self):
+        self.assert_count_placement_modes("NativeWizardCompositionSmoke",
+                                         "NATIVE_WIZARD_COMPOSITION_FREE_OK", "NATIVE_WIZARD_COMPOSITION_SOURCE_OK")
+
+    def assert_count_placement_modes(self, name, free_marker, source_marker):
         self.assertEqual([(name, free_marker)], [c for c in RUNNER.CORE_CASES if c[0] == name])
         self.assertEqual([(name, source_marker, ["--source"])],
                          [c for c in RUNNER.SOURCE_QA_CASES if c[0] == name])
@@ -665,6 +704,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeMobyPersistentOwnerSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeWizardAppendSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeWizardAppendPlacementSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
+            "NativeWizardCompositionSmoke": ["--source", "/selected original.bin", str(RUNNER.ROOT)],
             "NativeGreenWizardMoverSmoke": ["/selected original.bin"],
             "NativeLevelSlotOwnershipSmoke": ["--source", "/selected original.bin"],
             "NativePlayerAnimationSmoke": ["--source", "/selected original.bin"],

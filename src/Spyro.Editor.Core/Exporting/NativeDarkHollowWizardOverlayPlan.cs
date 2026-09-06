@@ -22,12 +22,13 @@ public sealed class NativeDarkHollowWizardOverlayPlan
         if(!resources.IncludesSceneAppend)throw new InvalidDataException("Native overlay requires the source-owned private scene append.");
         if(!resources.ParticleDescriptorInstalled)throw new InvalidDataException("Native overlay requires its native particle descriptor.");
         particles.LifetimeContract.RequireResources(resources);
+        var sceneRevision=resources.SceneRevision??throw new InvalidDataException("Native overlay requires an actual privately issued scene revision.");
         if(source.PackageSha256!="a9a8227c74a9c479f7f94c82314813809bd5caa0a5a137b0c18d614b80b3e3df"||
             resources.TargetLevelId!=12||resources.SourceImageSha256!=NativeMobySourceInventory.OriginalImageSha256||
             resources.SourceDataSha256!="a937aecb3626ffd2311ba136684a34c9f36877054b52557b4524fcacee0e2d97"||
             resources.DonorDataSha256!="9973493f865b5e86bc17b32c5af9e3d7596e25615618c007ed28e0379161f2d8"||
             !resources.Resources.Select(r=>r.ActorClassId).Order().SequenceEqual(new ushort[]{0x26,0x11B})||
-            resources.RuntimeMemory.PlacedMobyCount!=129||resources.RuntimeMemory.DynamicMobyCapacity!=90||
+            resources.RuntimeMemory.PlacedMobyCount!=sceneRevision.PlacedCount||resources.RuntimeMemory.DynamicMobyCapacity!=sceneRevision.DynamicCapacity||
             resources.RuntimeMemory.PlacedMobyCount+resources.RuntimeMemory.DynamicMobyCapacity>256||
             resources.RuntimeMemory.CopyBufferAddress!=OriginalCopyBufferAddress)
             throw new InvalidDataException("Native overlay resource/source or byte-sized dynamic owner binding changed.");
@@ -145,7 +146,7 @@ public sealed class NativeDarkHollowWizardOverlayPlan
             Pc(b.Owner),(int)b.Owner.ByteLength,Hash(b.Bytes))).ToArray());
         RequireFinal(_overlay,_executable,_data);
         RuntimeMemory=resources.RuntimeMemory.AnalyzeDarkWizardOverlay(this);
-        if(!RuntimeMemory.KnownPostLoadExtentsDisjoint||RuntimeMemory.DynamicMobyCapacity!=90)
+        if(!RuntimeMemory.KnownPostLoadExtentsDisjoint||RuntimeMemory.DynamicMobyCapacity!=sceneRevision.DynamicCapacity||RuntimeMemory.PlacedMobyCount!=sceneRevision.PlacedCount)
             throw new InvalidDataException("Native appended code exceeds known resident-memory ownership.");
     }
     public static NativeDarkHollowWizardOverlayPlan Compile(NativeDarkHollowWizardBehaviorSource source,
@@ -176,6 +177,7 @@ public sealed class NativeDarkHollowWizardOverlayPlan
     public string OverlaySha256 { get; }
     public string ExecutableSha256 { get; }
     public IReadOnlyList<NativeWizardOverlayCodeOwner> CodeOwners { get; }
+    internal NativeDarkHollowWizardSceneRevision SceneRevision=>_resources.SceneRevision!;
     internal static byte[] BuildDispatch(ReadOnlySpan<byte> originalWindow,NativeByteExtent owner,
         NativeByteExtent lightningEntry,NativeByteExtent wizardEntry)
     {
