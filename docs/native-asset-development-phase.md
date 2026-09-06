@@ -310,18 +310,18 @@ re-entry and recording blockers.
 
 The unchanged V3 candidate repeated key pickup, automatic chest opening and all
 six rewards in two more fresh no-card runs. R02 then used native Exit Level and
-walked through the actual Artisans Town Square portal. Town treasure stayed10;
+walked through the actual Artisans Town Square portal. Town treasure stayed 10;
 all six destination-index collection bits remained set, and chest/controller
-rows108–113 reconstructed deleted. The key reconstructed active with key state0,
+rows 108–113 reconstructed deleted. The key reconstructed active with key state0,
 as the independent native loader trace predicts. No repeat ten-gem award occurred.
 This is a normal in-session re-entry pass, not a memory-card or death/reload pass.
 
 R03 overcame the capture architecture mismatch by running the existing universal
 DuckStation executable under existing Rosetta, with its existing bundled FFmpeg
 libraries scoped to that process. No app files or installed libraries changed.
-Native game audio/video capture succeeded at observed100% game speed. Its
+Native game audio/video capture succeeded at observed 100% game speed. Its
 109.506-second recording retains key pickup, opening/particles/debris and the
-six rewards; the measured total is2→12 because one original green gem was
+six rewards; the measured total is 2→12 because one original green gem was
 collected before opening. Complete H.264/AAC decode passed. Exact cue-specific
 audio analysis is retained separately from subjective listening acceptance.
 
@@ -332,17 +332,52 @@ retained evidence. Original ROMs and exact V3 BIN hashes are unchanged. See
 [persistence consumers](research/native-town-square-persistence-contract.md), and
 [audio ownership and observation scope](research/native-town-square-v3-audio-observation-scope.md).
 
-The next code boundary now has a regression-first, reusable continuous native
+Source checkpoint `96ec93d` adds a regression-first, reusable continuous native
 route-surface audit. It rejects the known Wizard corridor crossing damaging
 water even though the initial dry support patch passes, including when the
 origin alone is lifted. Missing descriptors, raw flags, gaps/overlaps, lookup
 membership and bounded resource expansion are explicit refusal cases. It is an
 additive read-only audit: old v1 output bytes and publication policy are preserved.
+Its 48 source-free checks and 14 source-backed checks plus unchanged v1 goldens
+and 12 rejected requests pass; the runner's 14 Python checks pass. Runtime and
+audio documentation is checkpointed separately at `0a3100b`.
 An authored test corridor is not a measured native physics body or a corrected
 patrol. See [route audit scope and tests](research/native-wizard-route-surface-audit.md).
 
-Remaining priorities are a separately validated Wizard route/body profile,
+The [next-stage native mover/body trace](research/native-wizard-mover-and-route-next-stage.md)
+identifies separate movement probes, animated collision shapes and native
+ground settling; it does not select or certify a corrected patrol. Remaining
+priorities are a separately validated Wizard route/body profile,
 death and memory-card persistence, second-family/two-instance gameplay, and the
 shared allocation needed for larger native resource sets. Neither these runtime
 observations nor the route audit enables arbitrary Moby placement, normal Create
 BIN authorization or a finished independent blank-level UI.
+
+### Final integrated checkpoint after R03
+
+With C# and regression-runner source frozen at `96ec93d`, the complete serial
+Release gate passed **229 command-level steps, zero failures**: 197 project
+builds, 29 registered core suites, the 14-test Python runner suite, the full
+source-aware offline QA (885.65 seconds), and the added source-backed Wizard
+route suite (2.36 seconds). All new route checks and old v1 goldens pass; the
+original BIN/CUE guard also passed. Later commits in this checkpoint only add
+documentation. One large existing smoke dependency took 259.26 seconds to
+compile successfully; its observed compiler memory retention is recorded
+separately, not misreported as a test failure.
+
+Durable full-gate report:
+`_local/runtime-native-closure-20260905/final-verification-20260905/spyro-regression-adf_5thx/summary.json`,
+SHA256 `e5e83299b99b01894f8273a560d2485874f635941826524fc226953c583b7484`.
+The source-aware logs are `227-source-offline-qa.log` and
+`228-source-Id65AuthoringMobyDependencyBundleCompilerSmoke-route-surfaces.log`.
+The fresh Release retained-V3 verifier additionally passes all 389 checks;
+`retained-v3-release.log` is alongside the full-gate directory. R02/R03 evidence
+manifests independently recheck all 19 retained files. Emulator settings were
+rehashed after the full gate and still match the fresh pre-test originals.
+
+The phase's first true portable-family milestone is now demonstrated: the
+absent-model/absent-behavior key/chest dependency family runs in Town Square,
+produces its native six-gem reward, remains collected on normal portal re-entry,
+and executes the intended remapped native sound and release-pitch sequence.
+This is exact-candidate gameplay evidence, not universal-import completion or
+a replacement for the still-open death/save and further-family gates.

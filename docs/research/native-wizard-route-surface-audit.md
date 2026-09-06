@@ -156,3 +156,15 @@ The next engineering gate is an independently source-bound mover/body and
 rendered-terrain model before extending to slopes, banks, actual physical
 footprints or automatic route selection. A guarded publication profile would
 require separate explicit integration; this audit does not change old v1.
+
+## Integrated verification
+
+Committed source `96ec93d` subsequently passed the parent-owned full serial
+Release gate: 229 command-level steps / zero failures, including 197 builds,
+29 core suites, Python runner tests and both source-aware stages. This includes
+the 48 source-free route checks and 14 source-backed route checks with preserved
+v1 goldens. Durable logs are under
+`_local/runtime-native-closure-20260905/final-verification-20260905/spyro-regression-adf_5thx/`.
+No C# or runner changes were made during that gate. The source-bound next-stage
+[mover and animated-collider trace](native-wizard-mover-and-route-next-stage.md)
+is a roadmap, not an expansion of this audit's declared geometry scope.

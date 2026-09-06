@@ -281,9 +281,9 @@ key pickup and the native automatic opening, with all six gems collected.
 | 03:46:52 | Walked through the normal Town portal; Town13 reloaded | 13 / 10 / 10 | `0x3F000` |
 | 03:47:34 | Inspected the cleared chest site after re-entry | 13 / 10 / 10 | `0x3F000` |
 
-The menu HUD visibly settled to10 before Exit Level. The three additional global
+The menu HUD visibly settled to 10 before Exit Level. The three additional global
 gems were original Artisans gems encountered while walking into its Town portal,
-not another chest award. On re-entry, key state reset to0; T107 reconstructed
+not another chest award. On re-entry, key state reset to 0; T107 reconstructed
 active, while chest T108 and all five reward controllers T109–T113 reconstructed
 with native deletion byte `+0x48 = 0xFD`. The transient deletion word reset to0,
 but the durable destination-index reward mask at `0x80077974` stayed `0x3F000`.
@@ -292,7 +292,7 @@ See the [source-backed persistence contract](native-town-square-persistence-cont
 
 Subsequent attempts to reach the courtyard cliff did **not** lose a life and
 are not a death/reload pass. They collected one original red gem, raising Town
-to11/global14; the six imported reward bits remained unchanged. No saved state
+to 11/global 14; the six imported reward bits remained unchanged. No saved state
 or memory-card test was performed. Normal menu exit plus portal re-entry is now
 directly observed; death, partial-reward reload and card persistence remain open.
 
@@ -306,7 +306,7 @@ through DuckStation's Quit command with exit0.
 
 The earlier ARM64 recording failure was investigated without changing any app
 bundle or installing libraries. Existing Rosetta could load all five bundled
-FFmpeg libraries and resolve all69 required symbols in a bounded x86_64 helper.
+FFmpeg libraries and resolve all 69 required symbols in a bounded x86_64 helper.
 Its missing runner install paths did not prevent loading once the bundled
 dependencies were loaded in order. DuckStation was then launched explicitly
 under `arch -x86_64`, with `DYLD_LIBRARY_PATH` scoped to that single process and
@@ -314,21 +314,21 @@ the existing `/Applications/DuckStation.app/Contents/Frameworks` directory.
 This is an emulator capture workaround, not an editor or candidate change.
 
 DuckStation's native Start Capture successfully recorded game audio and video.
-The game displayed approximately30 game FPS /60 video FPS at100% speed during
+The game displayed approximately 30 game FPS / 60 video FPS at 100% speed during
 the run. A fresh no-card game entered Town through the existing test-only native
 navigation path. The recorded interaction includes a pre-key red flame reaction,
 key pickup, automatic opening, sparkling key/lock animation, metal debris and
 all six rewards. One original green gem was collected on the approach, so this
-run's measured chest award is **Town/global2 →12**, not an unexplained12-gem
-reward. At `03:59:50.721480 UTC`, actual global/Town/HUD were12, key3, lives4,
+run's measured chest award is **Town/global 2 → 12**, not an unexplained 12-gem
+reward. At `03:59:50.721480 UTC`, actual global/Town/HUD were 12, key3, lives4,
 and all six imported saved reward bits were set (`0x3F000`).
 
 Evidence: `_local/runtime-native-closure-20260905/recorded-session-r03-20260905/`.
 The original native recording is `Spyro the Dragon 2026-09-05-20-54-23.mp4`:
-109.506009 seconds,81,793,020 bytes, H.264640×480 at approximately59.8173 FPS
-(6,549 frames), with44.1kHz stereo AAC audio at approximately128kbit/s.
+109.506009 seconds, 81,793,020 bytes, H.264 640×480 at approximately 59.8173 FPS
+(6,549 frames), with 44.1kHz stereo AAC audio at approximately 128kbit/s.
 Both streams decode completely with `ffmpeg -xerror -err_detect explode`, exit0.
-Decoded frames5210,5384 and5504 were independently inspected: key/lock animation,
+Decoded frames 5210, 5384 and 5504 were independently inspected: key/lock animation,
 debris and rewards, then gem award numerals. Native PNGs `20-58-27` and `20-59-57`
 and complete read-only RAM snapshots accompany the recording. Pauses used for
 observation stop game/capture time; the file duration is not elapsed wall time.
@@ -339,11 +339,11 @@ The independent source-bound waveform audit now supplies that cue-specific
 evidence. The original, V3 and MP4 hashes are checked before extracting the
 exact native ADPCM templates. Town's entire sound bank/component still equals
 retail, and imported chest model-local slot0 is correctly remapped to Town
-descriptor54. Native-pitch templates match the key pickup at80.233s, the correct
-chest break at89.363s, six post-break pickup cues, and the source-prescribed
+descriptor 54. Native-pitch templates match the key pickup at 80.233s, the correct
+chest break at 89.363s, six post-break pickup cues, and the source-prescribed
 release pitches `0x0800,0x0880,0x0900,0x0980,0x0A00,0x0A80` in chronological
-order from89.363 to90.143s. The chest's first-difference waveform correlation
-is0.712 at the event versus at most0.054 outside the opening interval. These
+order from 89.363 to 90.143s. The chest's first-difference waveform correlation
+is 0.712 at the event versus at most 0.054 outside the opening interval. These
 coefficients measure similarity, not confidence percentages; the pitch matrix
 is descriptive rather than a held-out statistical test.
 

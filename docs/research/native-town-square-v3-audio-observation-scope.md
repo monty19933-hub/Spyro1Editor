@@ -84,7 +84,7 @@ code or candidate was modified by this investigation.
 
 The [recorded runtime report](native-closure-runtime-20260905.md#r03-native-audiovideo-capture-on-the-exact-same-candidate)
 now adds actual, source-bound waveform detections for these expected cues. Its
-retained R03 directory contains the immutable109.506-second native MP4,
+retained R03 directory contains the immutable 109.506-second native MP4,
 `audit-native-audio.py`, full JSON results and a concise methodological summary.
 The correctly remapped break, pickup cues and increasing release pitches match
 the recording. Independent review checked descriptor/sample/pitch ownership and
