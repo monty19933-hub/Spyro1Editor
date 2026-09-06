@@ -28,7 +28,9 @@ CORE_CASES = (
     ("NativeMobyDependencyClosureSmoke", "NATIVE_MOBY_DEPENDENCY_CLOSURE_SMOKE_OK"),
     ("NativeMobyInventorySmoke", "NATIVE_MOBY_INVENTORY_SMOKE_OK"),
     ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_FREE_OK"),
+    ("NativeGlobalSoundSmoke", "NATIVE_GLOBAL_SOUND_SOURCE_FREE_OK"),
     ("NativeFreeFlightSmoke", "NATIVE_FREE_FLIGHT_SOURCE_FREE_OK"),
+    ("NativeFreeFlightResearchSmoke", "NATIVE_FREE_FLIGHT_RESEARCH_SOURCE_FREE_OK"),
     ("FreeFlightSettingsSmoke", "FREE_FLIGHT_SETTINGS_SMOKE_OK"),
     ("NativeGreenWizardMoverSmoke", "NATIVE_GREEN_WIZARD_MOVER_SMOKE_OK"),
     ("NativeLevelSlotOwnershipSmoke", "NATIVE_LEVEL_SLOT_OWNERSHIP_SMOKE_OK"),
@@ -77,25 +79,38 @@ SOURCE_QA_CASES = (
     ("NativeGreenWizardMoverSmoke", "NATIVE_GREEN_WIZARD_MOVER_SOURCE_SMOKE_OK", []),
     ("NativeLevelSlotOwnershipSmoke", "NATIVE_LEVEL_SLOT_OWNERSHIP_SOURCE_OK", ["--source"]),
     ("NativePlayerAnimationSmoke", "NATIVE_PLAYER_ANIMATION_SOURCE_OK", ["--source"]),
+    ("NativeGlobalSoundSmoke", "NATIVE_GLOBAL_SOUND_SOURCE_OK", ["--source"]),
     ("NativeFreeFlightSmoke", "NATIVE_FREE_FLIGHT_SOURCE_OK", []),
+    # Plan capture only: never --exercise-staging, --verify or publication.
+    ("NativeFreeFlightResearchSmoke", "NATIVE_FREE_FLIGHT_RESEARCH_SOURCE_OK", []),
 )
 # These source checks additionally verify the current workspace's catalog against
 # native ownership. Resolve it only in the opted-in, deadline-bound command.
-SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke"})
+SOURCE_QA_WORKSPACE_CASES = frozenset({"NativeMobyInventorySmoke", "NativeFreeFlightResearchSmoke"})
+SOURCE_QA_CUE_CASES = frozenset({"NativeFreeFlightResearchSmoke"})
 
 
 def configured_source_image():
     """Read the same local source selection as offline QA, only when opted in."""
+    return configured_source_path("imagePath", "BIN")
+
+
+def configured_source_cue():
+    """Use the explicitly selected CUE; never infer a sibling or track layout."""
+    return configured_source_path("cuePath", "CUE")
+
+
+def configured_source_path(key, label):
     settings = ROOT / "_local/settings/source-disc.json"
     data = json.loads(settings.read_text(encoding="utf-8"))
-    image = data.get("imagePath") if isinstance(data, dict) else None
+    image = data.get(key) if isinstance(data, dict) else None
     if not isinstance(image, str) or not image.strip():
-        raise ValueError(f"{settings} does not contain a non-empty imagePath.")
+        raise ValueError(f"{settings} does not contain a non-empty {key}.")
     path = Path(image)
     if not path.is_absolute():
         path = ROOT / path
     if not path.is_file():
-        raise FileNotFoundError(f"Configured source BIN is missing: {path}")
+        raise FileNotFoundError(f"Configured source {label} is missing: {path}")
     return str(path)
 
 
@@ -271,6 +286,7 @@ def main():
                             "dotnet", "run", "--project", str(project), "--configuration",
                             options.configuration, "--no-build", "--no-restore", "--",
                             *arguments, configured_source_image(),
+                            *([configured_source_cue()] if name in SOURCE_QA_CUE_CASES else []),
                             *([str(ROOT)] if name in SOURCE_QA_WORKSPACE_CASES else [])], marker,
                         timeout=options.source_qa_timeout, deadline=source_deadline):
                     break

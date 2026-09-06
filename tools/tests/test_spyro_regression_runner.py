@@ -78,6 +78,18 @@ class OwnedCommandTests(unittest.TestCase):
 
 
 class RunnerOptionsTests(unittest.TestCase):
+    def test_sound_and_research_candidate_use_separate_nonpublishing_modes(self):
+        expected = {
+            "NativeGlobalSoundSmoke": ("NATIVE_GLOBAL_SOUND_SOURCE_FREE_OK", "NATIVE_GLOBAL_SOUND_SOURCE_OK", ["--source"]),
+            "NativeFreeFlightResearchSmoke": ("NATIVE_FREE_FLIGHT_RESEARCH_SOURCE_FREE_OK", "NATIVE_FREE_FLIGHT_RESEARCH_SOURCE_OK", []),
+        }
+        for name, (free_marker, source_marker, arguments) in expected.items():
+            self.assertEqual(free_marker, dict(RUNNER.CORE_CASES).get(name))
+            self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
+            self.assertEqual([(name, source_marker, arguments)], [case for case in RUNNER.SOURCE_QA_CASES if case[0] == name])
+        self.assertEqual(frozenset({"NativeFreeFlightResearchSmoke"}), RUNNER.SOURCE_QA_CUE_CASES)
+        self.assertIn("NativeFreeFlightResearchSmoke", RUNNER.SOURCE_QA_WORKSPACE_CASES)
+
     def test_flight_preferences_are_sourcefree_and_never_a_rom_writer(self):
         self.assertEqual("FREE_FLIGHT_SETTINGS_SMOKE_OK", dict(RUNNER.CORE_CASES).get("FreeFlightSettingsSmoke"))
         self.assertFalse(any(case[0] == "FreeFlightSettingsSmoke" for case in RUNNER.SOURCE_QA_CASES))
@@ -270,6 +282,8 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativeLevelSlotOwnershipSmoke": ["--source", "/selected original.bin"],
             "NativePlayerAnimationSmoke": ["--source", "/selected original.bin"],
             "NativeFreeFlightSmoke": ["/selected original.bin"],
+            "NativeGlobalSoundSmoke": ["--source", "/selected original.bin"],
+            "NativeFreeFlightResearchSmoke": ["/selected original.bin", "/selected original.cue", str(RUNNER.ROOT)],
         }
         self.assertEqual(set(expected), {c[0] for c in cases})
         calls = []
@@ -285,11 +299,13 @@ class RunnerOptionsTests(unittest.TestCase):
                     mock.patch.object(RUNNER, "SOURCE_QA_CASES", cases), \
                     mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
                     mock.patch.object(RUNNER, "configured_source_image", return_value="/selected original.bin") as source, \
+                    mock.patch.object(RUNNER, "configured_source_cue", return_value="/selected original.cue") as cue, \
                     mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
                     mock.patch.object(sys, "argv", [str(SPEC.origin), "--with-source-qa"]), \
                     contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(0, RUNNER.main())
                 self.assertEqual(len(cases), source.call_count)
+                cue.assert_called_once_with()
             summary = json.loads((Path(output) / "summary.json").read_text())
         runs = [c for c in calls if c[:2] == ["dotnet", "run"]]
         self.assertEqual(len(cases), len(runs))
@@ -298,6 +314,7 @@ class RunnerOptionsTests(unittest.TestCase):
             self.assertEqual(expected[name], command[command.index("--") + 1:])
             self.assertNotIn("--publish", command)
             self.assertNotIn("--faults", command)
+            self.assertNotIn("--exercise-staging", command)
         self.assertEqual(len(summary), len({r["name"] for r in summary}))
 
     def test_default_and_list_never_resolve_source_for_route_modes(self):
@@ -313,11 +330,13 @@ class RunnerOptionsTests(unittest.TestCase):
                 with mock.patch.object(RUNNER, "CORE_CASES", ()), \
                         mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
                         mock.patch.object(RUNNER, "configured_source_image", side_effect=AssertionError("source read")) as source, \
+                        mock.patch.object(RUNNER, "configured_source_cue", side_effect=AssertionError("cue read")) as cue, \
                         mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
                         mock.patch.object(sys, "argv", [str(SPEC.origin), *arguments]), \
                         contextlib.redirect_stdout(io.StringIO()) as text:
                     self.assertEqual(0, RUNNER.main())
                     source.assert_not_called()
+                    cue.assert_not_called()
                 self.assertFalse(any("--source-backed-route-surfaces" in c for c in calls))
                 if "--list" in arguments:
                     self.assertEqual([], calls)
@@ -364,6 +383,33 @@ class RunnerOptionsTests(unittest.TestCase):
         self.assertIn("missing selection", summary[-1]["detail"])
         self.assertIsNone(summary[-1]["command"])
         self.assertFalse(any("--source-backed-route-surfaces" in c for c in calls))
+
+    def test_research_cue_failure_is_logged_without_starting_candidate_command(self):
+        calls = []
+        name = "NativeFreeFlightResearchSmoke"
+
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            kwargs["stdout"].write("Offline QA passed.\n")
+            return subprocess.CompletedProcess(command, 0)
+
+        with tempfile.TemporaryDirectory(prefix="spyro-runner-research-cue-failure-") as output:
+            with mock.patch.object(RUNNER, "CORE_CASES", ()), \
+                    mock.patch.object(RUNNER, "ADDITIONAL_CORE_CASES", ()), \
+                    mock.patch.object(RUNNER, "SOURCE_QA_CASES", ((name, "unreachable marker", []),)), \
+                    mock.patch.object(RUNNER, "run_owned_command", side_effect=fake_run), \
+                    mock.patch.object(RUNNER, "configured_source_image", return_value="/selected.bin"), \
+                    mock.patch.object(RUNNER, "configured_source_cue", side_effect=FileNotFoundError("missing selected CUE")), \
+                    mock.patch.object(RUNNER.tempfile, "mkdtemp", return_value=output), \
+                    mock.patch.object(sys, "argv", [str(SPEC.origin), "--with-source-qa"]), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(1, RUNNER.main())
+            summary = json.loads((Path(output) / "summary.json").read_text())
+        self.assertFalse(summary[-1]["passed"])
+        self.assertEqual("source-" + name, summary[-1]["name"])
+        self.assertIn("missing selected CUE", summary[-1]["detail"])
+        self.assertIsNone(summary[-1]["command"])
+        self.assertFalse(any(c[:2] == ["dotnet", "run"] for c in calls))
 
     def test_expired_shared_source_deadline_does_not_launch_route_command(self):
         for expires_in in ("offline", "source-resolution"):
@@ -422,6 +468,26 @@ class RunnerOptionsTests(unittest.TestCase):
                 settings.write_text(json.dumps({"imagePath": "missing.bin"}))
                 with self.assertRaises(FileNotFoundError):
                     RUNNER.configured_source_image()
+
+    def test_configured_cue_never_guesses_a_sibling_or_selected_path(self):
+        with tempfile.TemporaryDirectory(prefix="spyro-runner-cue-settings-") as directory:
+            root = Path(directory)
+            settings = root / "_local/settings/source-disc.json"
+            settings.parent.mkdir(parents=True)
+            cue = root / " chosen original.cue "
+            cue.write_text("resolver fixture only")
+            with mock.patch.object(RUNNER, "ROOT", root):
+                for value in ({"cuePath": cue.name}, {"cuePath": str(cue)}):
+                    settings.write_text(json.dumps(value))
+                    self.assertEqual(str(cue), RUNNER.configured_source_cue())
+                for value in ({}, [], {"cuePath": " "}, {"cuePath": 7}, {"selectedPath": str(cue)},
+                              {"imagePath": str(cue.with_suffix('.bin'))}):
+                    settings.write_text(json.dumps(value))
+                    with self.assertRaises(ValueError):
+                        RUNNER.configured_source_cue()
+                settings.write_text(json.dumps({"cuePath": "missing.cue"}))
+                with self.assertRaises(FileNotFoundError):
+                    RUNNER.configured_source_cue()
 
 
 if __name__ == "__main__":
