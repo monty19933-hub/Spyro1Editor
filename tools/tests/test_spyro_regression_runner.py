@@ -78,6 +78,15 @@ class OwnedCommandTests(unittest.TestCase):
 
 
 class RunnerOptionsTests(unittest.TestCase):
+    def test_native_id65_engine_profile_is_read_only_in_both_modes(self):
+        name = "NativeId65EngineProfileSmoke"
+        self.assertEqual("NATIVE_ID65_ENGINE_PROFILE_SOURCE_FREE_OK", dict(RUNNER.CORE_CASES).get(name))
+        self.assertEqual([(name, "NATIVE_ID65_ENGINE_PROFILE_SOURCE_OK", [])],
+                         [case for case in RUNNER.SOURCE_QA_CASES if case[0] == name])
+        self.assertNotIn(name, RUNNER.CASE_ARGUMENTS)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_WORKSPACE_CASES)
+        self.assertNotIn(name, RUNNER.SOURCE_QA_CUE_CASES)
+
     def test_sound_and_research_candidate_use_separate_nonpublishing_modes(self):
         expected = {
             "NativeGlobalSoundSmoke": ("NATIVE_GLOBAL_SOUND_SOURCE_FREE_OK", "NATIVE_GLOBAL_SOUND_SOURCE_OK", ["--source"]),
@@ -283,6 +292,7 @@ class RunnerOptionsTests(unittest.TestCase):
             "NativePlayerAnimationSmoke": ["--source", "/selected original.bin"],
             "NativeFreeFlightSmoke": ["/selected original.bin"],
             "NativeGlobalSoundSmoke": ["--source", "/selected original.bin"],
+            "NativeId65EngineProfileSmoke": ["/selected original.bin"],
             "NativeFreeFlightResearchSmoke": ["/selected original.bin", "/selected original.cue", str(RUNNER.ROOT)],
         }
         self.assertEqual(set(expected), {c[0] for c in cases})
