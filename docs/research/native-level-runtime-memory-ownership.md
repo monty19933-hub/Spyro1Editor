@@ -158,6 +158,14 @@ baseline under `NATIVE_RAM_NORMAL_BASELINE`. Source-free fixtures cover malforme
 component/portal/padding/placed-row ownership, known overlap and dynamic pool
 shrink. No candidate or emulator state is changed by these reports.
 
+Final focused Debug gate: **198 source-free checks; 686 combined source-backed
+checks**, zero build warnings/errors, with all existing Town V2/V3 byte goldens
+unchanged. Independent native-disassembly review confirmed the 88+24 arena
+formula and the normal-load endpoint arithmetic. The neutral parser also
+refuses zero-point portals after review; signed ADDIU decoding is covered by
+all 35 native initializer cases, including the relocated Town negative low
+immediate.
+
 ## Native instruction certificates
 
 | EXE file offset + length | Meaning | SHA-256 |

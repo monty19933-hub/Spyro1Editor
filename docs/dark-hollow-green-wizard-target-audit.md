@@ -1,5 +1,12 @@
 # Dark Hollow Green Wizard target audit
 
+Historical audit: its raw-handler register-swap and `B838` properties-scratch
+conclusions are superseded by the source-backed corrections in
+[the native texture/ABI contract](research/native-dark-wizard-texture-and-abi-contract.md).
+Do not use the “already-compatible shim” language below as authority for a new
+intact-native transplant; this document and its old profile are retained as
+historical evidence.
+
 Status: **NeedsTargetProfile / Blocked**. `CanStageInstance=false`; no candidate BIN was emitted.
 
 The complete Toasty v11 Green Wizard bundle is not safe to install in Dark Hollow yet. The behavior-overlay ABI, particle ABI, RAM headroom, target enemy row, properties scratch, and pointer-fixup path all check out. Independent actor-package storage and descriptor-aware VRAM allocation do not.
