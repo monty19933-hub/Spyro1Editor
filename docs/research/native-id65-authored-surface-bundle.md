@@ -17,8 +17,16 @@ or runtime acceptance is changed.
 `NativeId65AuthoredFloor` uses actual native world units. Origins and extents are
 multiples of16; origins are0..262128 and widths/depths16..2048. The entire closed
 rectangle must remain inside one native4096-unit collision cell. An endpoint
-exactly on the next cell boundary refuses. RGB values are24-bit. There is no
+exactly on the next cell boundary refuses. Color words are24-bit. There is no
 caller-supplied arbitrary mesh, special material, texture number, or body radius.
+
+The existing constructor's `FloorRgb` and `SkyRgb` are raw native
+`0x00BBGGRR` words, emitted little-endian as R, G, B, 0 bytes; they are not display
+hex `0xRRGGBB`. `NativeId65AuthoredFloor.FromDisplayColors` explicitly accepts
+typed `ColorRgba` channels and packs that native byte order. Either alpha other
+than255 refuses rather than being silently discarded. The static adapter adds
+no instance properties and does not change geometry validation, serialization,
+the original constructor, or any existing word/golden semantics.
 
 The deterministic output contains:
 
@@ -41,6 +49,9 @@ is324 bytes, independently encoded by the Python oracle as SHA-256
 `ee82c4d3bb2589eb821028337499d062762c47d3f6af2267f6b0fabee8df58b9`.
 Different supported positions, extents, heights and colors remain distinct and
 round-trip; there is no collapse to a retained fixture row.
+The same fixture is expressed through the display adapter with floor channels
+`(0x50,0x80,0x70)` and sky channels`(0x80,0x60,0x40)`, i.e. nominal display colors
+`#508070` and`#806040`. No renderer channel swap is required or introduced.
 
 ## Native consumer requirements, not guessed empty structures
 
@@ -147,3 +158,15 @@ found no material ownership, parser or resource-budget issue. That review was
 static, not a second native-renderer execution or gameplay pass. Final wording
 clarifies that zero origins are supported; no encoding change followed the
 reported GREEN runs.
+
+The later explicit display-color boundary was also regression-first: Release
+RED failed only on four missing `FromDisplayColors` references (3.97 seconds,
+zero warnings). Release GREEN then completed in3.83 seconds with zero
+warnings/errors; source-free681 and exact-source707 checks passed. Logs
+`01-red-build.log` through`04-green-source.log` are retained under
+`_local/research/native-id65-display-colors-20260906-r01.mKZ3EM/`.
+The added cases cover red/blue swaps, asymmetric channels, all twelve LP/HP
+near/HP far color words, sky bytes, unsupported floor/sky alpha, unchanged
+instance-property shape, and exact original-source equivalence. The original
+324-byte golden above remains unchanged. Independent read-only peer review
+found no material issue; this conversion test is not visual/runtime acceptance.

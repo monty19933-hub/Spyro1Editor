@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Spyro.Editor.Core.Exporting;
+using Spyro.Editor.Core.Primitives;
 
 if (args.Length > 1)
     throw new ArgumentException("Usage: NativeId65AuthoredSurfaceSmoke [original.bin]");
@@ -18,6 +19,48 @@ Require(bundle.CopyBundle().SequenceEqual(NativeId65AuthoredSurfaceLayout.Compil
     "deterministic fresh compilation");
 Require(NativeId65AuthoredSurfaceLayout.DecodeAndValidate(bundle.CopyBundle()) == floor, "strict independent readback");
 Oracle(bundle, floor);
+
+// Display channels are not packed native words: native storage is R, G, B, 0.
+var displayEquivalent = NativeId65AuthoredFloor.FromDisplayColors(8448, 8448, 8704, 1024, 1024,
+    new ColorRgba(0x50, 0x80, 0x70), new ColorRgba(0x80, 0x60, 0x40));
+Require(displayEquivalent == floor, "typed display colors retain the original raw-word fixture exactly");
+Require(NativeId65AuthoredSurfaceLayout.Compile(displayEquivalent).CopyBundle().SequenceEqual(bundle.CopyBundle()),
+    "display adapter preserves the original complete bundle golden");
+Require(typeof(NativeId65AuthoredFloor).GetProperties(System.Reflection.BindingFlags.Instance |
+    System.Reflection.BindingFlags.Public).Select(p => p.Name).Order().SequenceEqual(
+        new[] { "Depth", "FloorRgb", "SkyRgb", "Width", "X", "Y", "Z" }),
+    "static adapter adds no serialized instance properties");
+foreach (var colors in new[]
+{
+    (Floor: new ColorRgba(255, 0, 0), Sky: new ColorRgba(0, 0, 255), FloorWord: 0x0000FFu, SkyWord: 0xFF0000u),
+    (Floor: new ColorRgba(0, 0, 255), Sky: new ColorRgba(255, 0, 0), FloorWord: 0xFF0000u, SkyWord: 0x0000FFu),
+    (Floor: new ColorRgba(0x12, 0x34, 0x56), Sky: new ColorRgba(0xA1, 0xB2, 0xC3), FloorWord: 0x563412u, SkyWord: 0xC3B2A1u)
+})
+{
+    var intent = NativeId65AuthoredFloor.FromDisplayColors(floor.X, floor.Y, floor.Z, floor.Width, floor.Depth,
+        colors.Floor, colors.Sky);
+    Require(intent.FloorRgb == colors.FloorWord && intent.SkyRgb == colors.SkyWord,
+        "red/blue/asymmetric display channels pack to exact native words");
+    var colored = NativeId65AuthoredSurfaceLayout.Compile(intent);
+    byte[] environment = colored.CopyComponent(NativeId65SurfaceComponentKind.Environment);
+    foreach (int table in new[] { 44, 92, 108 })
+        for (int i = 0; i < 4; i++)
+            Require(environment.AsSpan(12 + table + 4 * i, 4).SequenceEqual(
+                new byte[] { colors.Floor.R, colors.Floor.G, colors.Floor.B, 0 }),
+                "all LP/HP near/HP far native words preserve display R/G/B byte order");
+    Require(colored.CopyComponent(NativeId65SurfaceComponentKind.Cyclorama).AsSpan(4, 4).SequenceEqual(
+        new byte[] { colors.Sky.R, colors.Sky.G, colors.Sky.B, 0 }),
+        "cyclorama native bytes preserve display R/G/B order and zero upper byte");
+    Require(NativeId65AuthoredSurfaceLayout.DecodeAndValidate(colored.CopyBundle()) == intent,
+        "display-color bundle independently roundtrips native words");
+}
+foreach (byte alpha in new byte[] { 0, 1, 128, 254 })
+{
+    Reject(() => NativeId65AuthoredFloor.FromDisplayColors(8448, 8448, 8704, 1024, 1024,
+        new ColorRgba(1, 2, 3, alpha), new ColorRgba(4, 5, 6)), "nonopaque floor color refuses without dropping alpha");
+    Reject(() => NativeId65AuthoredFloor.FromDisplayColors(8448, 8448, 8704, 1024, 1024,
+        new ColorRgba(1, 2, 3), new ColorRgba(4, 5, 6, alpha)), "nonopaque sky color refuses without dropping alpha");
+}
 
 foreach (var alternative in new[]
 {
@@ -121,6 +164,11 @@ if (args.Length == 1)
     var source = await NativeId65AuthoredSurfaceBundle.CaptureAsync(args[0], floor);
     Require(source.SourceCertified, "actual original source issuer");
     Require(source.CopyBundle().SequenceEqual(exact), "source binding introduces no donor surface storage");
+    var displaySource = await NativeId65AuthoredSurfaceBundle.CaptureAsync(args[0], displayEquivalent);
+    Require(displaySource.SourceCertified && displaySource.SourceImageSha256 == source.SourceImageSha256 &&
+        displaySource.Floor == source.Floor && displaySource.BundleSha256 == source.BundleSha256 &&
+        displaySource.CopyBundle().SequenceEqual(source.CopyBundle()),
+        "typed display equivalent preserves exact original source certification and existing native golden");
     Require(source.ConsumerEvidence.Count >= 8, "loader/render/index consumer evidence bound");
     Require(!source.IndependentLevelSupported && !source.PublicationApproved && !source.RuntimeVerified &&
         !source.CompleteLevelResourcesProven, "source certification does not widen acceptance");

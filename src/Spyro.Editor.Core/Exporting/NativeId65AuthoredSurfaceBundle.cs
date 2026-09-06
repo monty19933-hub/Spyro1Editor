@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
+using Spyro.Editor.Core.Primitives;
 using Spyro.Editor.Core.Scene;
 
 [assembly: InternalsVisibleTo("Spyro.Editor.NativeId65AuthoredSurfaceSmoke")]
@@ -8,8 +9,28 @@ using Spyro.Editor.Core.Scene;
 namespace Spyro.Editor.Core.Exporting;
 
 /// <summary>Actual native world units, not editor preview or screen units.</summary>
+/// <param name="FloorRgb">Raw native color word 0x00BBGGRR, not display hex 0xRRGGBB.</param>
+/// <param name="SkyRgb">Raw native color word 0x00BBGGRR, not display hex 0xRRGGBB.</param>
 public sealed record NativeId65AuthoredFloor(int X, int Y, int Z, int Width, int Depth,
-    uint FloorRgb, uint SkyRgb);
+    uint FloorRgb, uint SkyRgb)
+{
+    /// <summary>
+    /// Converts opaque display-color channels to native R, G, B, 0 byte order.
+    /// Geometry validation remains the responsibility of surface compilation.
+    /// </summary>
+    /// <exception cref="ArgumentException">Either color has unsupported nonopaque alpha.</exception>
+    public static NativeId65AuthoredFloor FromDisplayColors(int x, int y, int z, int width, int depth,
+        ColorRgba floorColor, ColorRgba skyColor)
+    {
+        if (floorColor.A != 255)
+            throw new ArgumentException("Authored floor colors must be opaque; alpha is unsupported.", nameof(floorColor));
+        if (skyColor.A != 255)
+            throw new ArgumentException("Authored sky colors must be opaque; alpha is unsupported.", nameof(skyColor));
+        return new(x, y, z, width, depth,
+            (uint)(floorColor.R | floorColor.G << 8 | floorColor.B << 16),
+            (uint)(skyColor.R | skyColor.G << 8 | skyColor.B << 16));
+    }
+}
 
 public enum NativeId65SurfaceComponentKind
 {
