@@ -61,6 +61,10 @@ The real source has 4,877 placed rows and 1,403 local model registrations:
 205 placed classes, 298 locally registered classes and a union of 321. Of these,
 116 have registrations but no placed row anywhere in the inspected levels.
 Those are discoverable resources, **not automatically placeable templates**.
+This union also retains slot 0/class 0, the special Spyro animation stream,
+as a discovered resource identity; it is not an ordinary placeable Moby. Native
+generic model registration starts at slot 1. Do not market this count as 321
+independently placeable Moby templates.
 Global-only and dynamically emitted actors outside these two inventories remain
 an explicit discovery gap. The 1,990 rows without a local model root include
 special/rootless rendering; absence of a root is not absence of native behavior.
@@ -98,3 +102,88 @@ Independent review added three public-capture catalog refusal cases; the final
 focused Debug inventory run passed 53 source-free and 17 source-backed checks.
 Integrated/final phase verification must be recorded separately after all
 parallel changes have been reviewed and frozen.
+
+## Completed implementation and frozen Release gate
+
+Code checkpoint: `b9bcdfb`. The following implementation commits were reviewed
+across the parallel workstreams before the repository-wide freeze:
+
+| Commit | Implemented behavior |
+| --- | --- |
+| `d7933ec` | Exact-source, game-wide placed-row and local-registration inventory, plus a read-only CLI |
+| `1129b41` | Source-bound Wizard movement arithmetic, heading initialization and animation-dependent collider contracts |
+| `f04346b` | Source-bound retail level-slot, resource, portal-descriptor and persistent-identity ownership preflight |
+| `e8d22a1` | Reusable private family allocation and context-bound shared resources, consumed by the actual native Town chest compiler |
+| `b9bcdfb` | Regression-runner integration, read-only source checks and runner regressions |
+
+The full frozen Release command completed successfully on 2026-09-06 UTC:
+
+```sh
+python3 tools/Run-SpyroEditorRegression.py --build-all --with-source-qa
+```
+
+**240 command-level steps, zero failures:** 201 project builds, 32 registered
+source-free smoke commands, one Python command containing 16 runner tests,
+source-aware offline QA, and five explicitly opted-in native source checks.
+All 201 build logs report zero warnings/errors. Offline QA took 908.31 seconds
+and passed its original BIN/CUE hash guard. Research tools included by
+`--build-all` were compiled; this does not imply that every research executable
+was run. The runner's source checks did not invoke candidate publication modes.
+
+| New or expanded suite | Release source-free checks | Release source-backed mode |
+| --- | ---: | ---: |
+| Native Moby inventory | 53 | 17 additional source checks |
+| Native family closure/instantiation | 147 | 496 combined checks, including unchanged V2 and V3 goldens |
+| Native Wizard mover | 264,605 | 265,399 combined checks |
+| Native level-slot ownership | 73 | 86 combined checks / 60 expected refusals |
+
+These are engineering assertions, not a corresponding count of gameplay cases.
+The strict source route audit still identifies the old unsafe Wizard route;
+no replacement route or new gameplay approval was manufactured by this gate.
+
+After the gate, the freshly compiled Release closure smoke reverified the exact
+retained V3 BIN/CUE/receipt with **499 checks**. Its BIN remains
+`15df0ee1edba6cb48fe1d34df5a5f51a7d6f289de387c499ca0ff04e99b443bf`.
+The compiler's allocator refactor preserves the existing V2/V3 graph/data,
+overlay and executable goldens. It has not published a second native chest
+family or changed the recorded R03 gameplay evidence.
+
+Durable evidence directory:
+`_local/native-portability-20260906-r01.mwO7ic/`.
+Its `spyro-regression-daddcfmq/summary.json` has SHA-256
+`55f8f57f2507325734e769bd5c5fe232d6f90d761db63c6eef199ff19247e3ab`.
+It also contains `retained-v3-release-readback.log` and the freshly emitted
+`native-source-inventory.json` (35 levels, 4,877 rows, 1,403 registrations,
+321 discovered identities, zero inventory-derived approvals). The original
+temporary paths inside the preserved summary map to same-named retained logs.
+
+The installed editor, DuckStation, memory cards/save states, original source
+disc and retained gameplay candidate were not replaced or changed. Offline QA
+used its existing isolated workspaces/disposable readbacks and headless UI
+captures. A fresh Town Square editor capture was visually inspected. No new
+emulator gameplay or release/installation acceptance is claimed.
+
+## Next implementation sequence
+
+1. Add an append-only local model-registration producer through the shared
+   relocation layer, retaining the Town AE byte oracle and every existing root.
+   In parallel, implement the special player-animation stream codec and exact
+   source-bound animation-8 merge contract. Neither is an export permission alone.
+2. Close electric-hit sound/sample ownership, native RAM allocation and remaining
+   particle/child callbacks. The full enemy lifecycle must work without the
+   Toasty experiment's suppressed lightning or substituted generic hurt response.
+3. Complete safe native mover/query/body-envelope placement, then publish a new
+   immutable enemy candidate and test spawn, movement, attack, damage, recovery,
+   death/reload and re-entry. Preserve the old candidate and its evidence.
+4. Integrate a shared source-variant browser into both editors without name-based
+   variant loss or discovery-based export approval. Existing approved mutations,
+   Undo, source-patch plans and lab compare-and-swap/migrations remain authoritative.
+5. Expand independently owned level identity consumers together: loader/resource
+   allocation, portals, music, classification and save/return/re-entry behavior.
+   The new retail-slot preflight is a prerequisite, not the ID65 expansion itself.
+
+Exact next-resource findings and UI seams are retained in
+[the native import resource frontier](research/native-import-next-resource-frontier.md).
+The independently diagnosed high-memory smoke compilation is a separate
+[test-maintainability task](research/runtime-evidence-smoke-compile-cost.md), not
+evidence of an in-game memory regression.
